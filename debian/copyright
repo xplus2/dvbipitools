@@ -1,0 +1,9 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: dvbipitools
+
+Files: *
+Copyright: 2026 dvbipitools authors
+License: GPL-3.0-or-later
+
+License: GPL-3.0-or-later
+ See /usr/share/common-licenses/GPL-3 for the full license text.

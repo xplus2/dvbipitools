@@ -1,0 +1,37 @@
+# configure artifacts
+/config.mk
+
+# build artifacts
+*.o
+src/*.o
+
+# result binaries
+/dipirec
+/dipiscan
+/dipicam
+
+# cmake generic and profile builds
+/build*/
+/cmake-*/
+
+# dist
+/CMakeFiles
+/obj-x86_64-linux-gnu
+
+# test samples
+*.ts
+*.mkv
+*.mka
+
+*.m3u
+*.xspf
+*.csv
+
+# packaging
+*.deb
+/debian/.debhelper
+/debian/dvbipitools
+/debian/files
+/debian/debhelper-build-stamp
+
+#EOF

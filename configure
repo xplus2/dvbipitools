@@ -1,0 +1,58 @@
+#!/bin/sh
+# Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
+# See NOTICE and LICENSE for details and authorship information.
+
+set -eu
+
+BUILD_TYPE=Debug
+BUILD_LINK=dynamic
+CC=${CC:-cc}
+
+usage() {
+    cat <<EOF
+usage: ./configure [options]
+  --debug        debug build (default)
+  --release      optimized build, binaries stripped
+  --static       link statically
+  --cc=CC        C compiler (default: cc, or \$CC)
+  -h, --help     this help
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --debug)   BUILD_TYPE=Debug ;;
+        --release) BUILD_TYPE=Release ;;
+        --static)  BUILD_LINK=static ;;
+        --cc=*)    CC=${1#--cc=} ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "configure: unknown option: $1" >&2; usage >&2; exit 1 ;;
+    esac
+    shift
+done
+
+BUILD_ARCH=$(uname -m)
+
+CFLAGS="-std=gnu11 -Wall -Wextra -Werror -Isrc"
+CFLAGS="$CFLAGS -DBUILD_ARCH=\\\"$BUILD_ARCH\\\""
+CFLAGS="$CFLAGS -DBUILD_TYPE=\\\"$BUILD_TYPE\\\""
+CFLAGS="$CFLAGS -DBUILD_LINK=\\\"$BUILD_LINK\\\""
+if [ "$BUILD_TYPE" = Release ]; then
+    CFLAGS="$CFLAGS -O2 -DNDEBUG"
+else
+    CFLAGS="$CFLAGS -g -O0"
+fi
+
+LDFLAGS=""
+[ "$BUILD_LINK" = static ] && LDFLAGS="$LDFLAGS -static"
+[ "$BUILD_TYPE" = Release ] && LDFLAGS="$LDFLAGS -s"
+
+cat > config.mk <<EOF
+# generated - do not edit
+CC := $CC
+CFLAGS := $CFLAGS
+LDFLAGS :=$LDFLAGS
+EOF
+
+echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC)"
+echo "run 'make' to build."
