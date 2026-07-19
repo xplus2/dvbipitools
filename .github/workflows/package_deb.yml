@@ -24,7 +24,7 @@ jobs:
             crosspkg: crossbuild-essential-riscv64
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: build dependencies
       run: sudo apt-get update && sudo apt-get install -y build-essential cmake debhelper devscripts ${{ matrix.crosspkg }}
     - name: packaging
@@ -35,7 +35,7 @@ jobs:
           dpkg-buildpackage -us -uc -b -a${{ matrix.arch }} -d
         fi
         mv ../*.deb .
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       with:
         name: deb-${{ matrix.arch }}
         path: '*.deb'
@@ -44,7 +44,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v5
       with:
         pattern: deb-*
         merge-multiple: true

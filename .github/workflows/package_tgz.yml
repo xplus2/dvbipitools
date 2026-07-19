@@ -14,6 +14,14 @@ jobs:
       matrix:
         include:
           - arch: amd64
+          - arch: i386
+            triplet: i686-linux-gnu
+            sysproc: i686
+            crosspkg: crossbuild-essential-i386
+          - arch: armel
+            triplet: arm-linux-gnueabi
+            sysproc: arm
+            crosspkg: crossbuild-essential-armel
           - arch: armhf
             triplet: arm-linux-gnueabihf
             sysproc: arm
@@ -32,7 +40,7 @@ jobs:
             crosspkg: crossbuild-essential-riscv64
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: build dependencies
       run: sudo apt-get update && sudo apt-get install -y build-essential cmake ${{ matrix.crosspkg }}
     - name: configure
@@ -51,7 +59,7 @@ jobs:
         install -m 0755 build/src/dipirec/dipirec "${PKGDIR}/"
         install -m 0755 build/src/dipiscan/dipiscan "${PKGDIR}/"
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       with:
         name: tarball-${{ matrix.arch }}
         path: dvbipitools-*.tar.gz
@@ -60,7 +68,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v5
       with:
         pattern: tarball-*
         merge-multiple: true
