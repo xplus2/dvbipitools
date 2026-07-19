@@ -30,10 +30,11 @@ jobs:
         else
           dpkg-buildpackage -us -uc -b -a${{ matrix.arch }} -d
         fi
+        mv ../*.deb .
     - uses: actions/upload-artifact@v4
       with:
         name: deb-${{ matrix.arch }}
-        path: ../*.deb
+        path: '*.deb'
 
   release:
     needs: build
