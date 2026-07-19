@@ -18,6 +18,10 @@ jobs:
             crosspkg: crossbuild-essential-armhf
           - arch: arm64
             crosspkg: crossbuild-essential-arm64
+          - arch: ppc64el
+            crosspkg: crossbuild-essential-ppc64el
+          - arch: riscv64
+            crosspkg: crossbuild-essential-riscv64
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

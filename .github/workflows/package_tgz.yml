@@ -22,6 +22,14 @@ jobs:
             triplet: aarch64-linux-gnu
             sysproc: aarch64
             crosspkg: crossbuild-essential-arm64
+          - arch: ppc64el
+            triplet: powerpc64le-linux-gnu
+            sysproc: ppc64le
+            crosspkg: crossbuild-essential-ppc64el
+          - arch: riscv64
+            triplet: riscv64-linux-gnu
+            sysproc: riscv64
+            crosspkg: crossbuild-essential-riscv64
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
