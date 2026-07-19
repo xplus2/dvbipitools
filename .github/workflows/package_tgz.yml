@@ -10,24 +10,54 @@ permissions:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+          - arch: armhf
+            triplet: arm-linux-gnueabihf
+            sysproc: arm
+            crosspkg: crossbuild-essential-armhf
+          - arch: arm64
+            triplet: aarch64-linux-gnu
+            sysproc: aarch64
+            crosspkg: crossbuild-essential-arm64
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: build dependencies
-      run: sudo apt-get update && sudo apt-get install -y build-essential cmake
+      run: sudo apt-get update && sudo apt-get install -y build-essential cmake ${{ matrix.crosspkg }}
     - name: configure
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON
+      run: |
+        CROSS_ARGS=""
+        if [ -n "${{ matrix.triplet }}" ]; then
+          CROSS_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc"
+        fi
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS
     - name: make
       run: cmake --build ${{github.workspace}}/build --config Release
     - name: packaging
       run: |
-        ARCH="$(uname -m)"
-        PKGDIR="dvbipitools-${{github.ref_name}}-linux-${ARCH}"
+        PKGDIR="dvbipitools-${{github.ref_name}}-linux-${{ matrix.arch }}"
         mkdir "${PKGDIR}"
         install -m 0755 build/src/dipirec/dipirec "${PKGDIR}/"
         install -m 0755 build/src/dipiscan/dipiscan "${PKGDIR}/"
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: tarball-${{ matrix.arch }}
+        path: dvbipitools-*.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: tarball-*
+        merge-multiple: true
+        path: dist
     - name: assets
       uses: softprops/action-gh-release@v2
       with:
-        files: dvbipitools-*.tar.gz
+        files: dist/*.tar.gz
