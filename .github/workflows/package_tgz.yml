@@ -1,0 +1,33 @@
+name: Release tarball
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: build dependencies
+      run: sudo apt-get update && sudo apt-get install -y build-essential cmake
+    - name: configure
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON
+    - name: make
+      run: cmake --build ${{github.workspace}}/build --config Release
+    - name: packaging
+      run: |
+        ARCH="$(uname -m)"
+        PKGDIR="dvbipitools-${{github.ref_name}}-linux-${ARCH}"
+        mkdir "${PKGDIR}"
+        install -m 0755 build/src/dipirec/dipirec "${PKGDIR}/"
+        install -m 0755 build/src/dipiscan/dipiscan "${PKGDIR}/"
+        tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
+    - name: assets
+      uses: softprops/action-gh-release@v2
+      with:
+        files: dvbipitools-*.tar.gz
