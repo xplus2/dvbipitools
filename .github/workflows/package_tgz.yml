@@ -69,6 +69,8 @@ jobs:
         TLS_ARGS=""
         case "${{ matrix.arch }}" in
           i386|armel) TLS_ARGS="-DDIPIRADIOHEAD_TLS=OFF" ;;
+          amd64) ;;
+          *) TLS_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a" ;;
         esac
         cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS $TLS_ARGS
     - name: make

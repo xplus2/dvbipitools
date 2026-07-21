@@ -8,7 +8,8 @@ BUILDDIR := obj-$(DEB_HOST_GNU_TYPE)
 	dh $@ --buildsystem=cmake
 
 override_dh_auto_configure:
-	dh_auto_configure -- -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON -DCMAKE_LIBRARY_ARCHITECTURE=$(DEB_HOST_MULTIARCH)
+	dh_auto_configure -- -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON -DCMAKE_LIBRARY_ARCHITECTURE=$(DEB_HOST_MULTIARCH) \
+		-DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libssl.a
 
 override_dh_auto_install:
 	install -D -m 0755 $(BUILDDIR)/src/dipirec/dipirec debian/dvbipitools/usr/bin/dipirec
