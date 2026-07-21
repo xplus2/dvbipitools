@@ -22,9 +22,13 @@ Every address/port combination in range gets probed once.
 | format | description                                        |
 |--------|----------------------------------------------------|
 | `m3u`  | `#EXTM3U` playlist, `#EXTINF` name + URI per entry |
-| `csv`  | `name,uri` per line                                |
+| `csv`  | `name,uri,tsid,onid,sid` per line                  |
 | `xspf` | XSPF playlist                                      |
 | `null` | no playlist output, just the stderr log            |
+
+Every format also carries the DVB triplet (`transport_stream_id`, `original_network_id`, `service_id`)
+read from PAT/SDT: `csv` as three extra columns, `m3u` as `tsid`/`onid`/`sid` attributes on the
+`#EXTINF` line, `xspf` as a `<extension application="urn:dvbipitools:dvb-triplet">` element per track.
 
 ## Probe time budget (`-t`)
 

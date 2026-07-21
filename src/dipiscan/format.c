@@ -44,10 +44,10 @@ void format_init(FILE *f, out_fmt_t fmt, const char *invocation) {
   }
 }
 
-void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri) {
+void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid) {
   switch (fmt) {
     case OUT_M3U:
-      fprintf(f, "#EXTINF:-1,%s\n%s\n", name, uri);
+      fprintf(f, "#EXTINF:-1 tsid=\"%u\" onid=\"%u\" sid=\"%u\",%s\n%s\n", tsid, onid, sid, name, uri);
       break;
     case OUT_CSV: {
       /* comma is the field separator, keep it out of the name */
@@ -55,7 +55,7 @@ void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri) {
       for (p = name; *p; p++)
         if (*p != ',')
           fputc(*p, f);
-      fprintf(f, ",%s\n", uri);
+      fprintf(f, ",%s,%u,%u,%u\n", uri, tsid, onid, sid);
       break;
     }
     case OUT_XSPF:
@@ -63,7 +63,7 @@ void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri) {
       xml_escape(f, uri);
       fputs("</location><title>", f);
       xml_escape(f, name);
-      fputs("</title></track>\n", f);
+      fprintf(f, "</title><extension application=\"urn:dvbipitools:dvb-triplet\" tsid=\"%u\" onid=\"%u\" sid=\"%u\"/></track>\n", tsid, onid, sid);
       break;
     case OUT_NULL:
       break;

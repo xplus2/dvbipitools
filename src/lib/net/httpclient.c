@@ -290,7 +290,7 @@ fail:
 http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure) {
   http_url_t url = *url_in;
   int redirects;
-  const char *ua = user_agent ? user_agent : "dipiradiohead";
+  const char *ua = user_agent ? user_agent : "dvbipitools";
 
   for (redirects = 0; redirects <= HTTP_REDIRECT_MAX; redirects++) {
     struct http *h = fetch_once(&url, ua, insecure);

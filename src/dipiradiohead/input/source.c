@@ -111,7 +111,7 @@ source_t *source_open(const char *uri, int insecure, source_meta_cb cb, void *ct
       log_line("source: invalid uri: %s", cur_uri);
       return NULL;
     }
-    h = http_get(&u, "dipiradiohead/" TOOL_VERSION, insecure);
+    h = http_get(&u, TOOL_NAME "/" TOOL_VERSION, insecure);
     if (!h)
       return NULL;
 

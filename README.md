@@ -4,9 +4,10 @@ Command line tools for DVB-IPI streams.
 
 ## Tools
 
+* [dipiradiohead](src/dipiradiohead/README.md) - use Ice-/Shoutcast radio sources for multicast distribution
 * [dipirec](src/dipirec/README.md) - record a DVB-IPI multicast
 * [dipiscan](src/dipiscan/README.md) - scan an IP range for DVB-IPI multicasts
-* [dipiradiohead](src/dipiradiohead/README.md) - use public Ice-/Shoutcast radio sources for multicast distribution
+* [dipisds](src/dipisds/README.md) - DVBSTP/SD&S service discovery: announce/listen to a service list on multicast
 
 ## Build
 
@@ -28,7 +29,7 @@ Options:
 dpkg-buildpackage -b -us -uc
 ```
 Build-Depends: `debhelper (>= 13)`, `cmake`, `libssl-dev` (`libssl-dev` is only needed for
-dipiradiohead's HTTPS support; dipirec/dipiscan don't use it)
+dipiradiohead's HTTPS support)
 
 ## Licence
 

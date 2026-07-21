@@ -12,3 +12,4 @@ Description: command line tools for DVB-IPI streams
  dipirec records a DVB-IPI multicast.
  dipiscan scans and reports on DVB-IPI multicast streams.
  dipiradiohead re-muxes an Icecast/Shoutcast stream as a DVB-IPI multicast.
+ dipisds announces or discovers DVB-IPI services via DVBSTP/SD&S (ETSI TS 102 034).

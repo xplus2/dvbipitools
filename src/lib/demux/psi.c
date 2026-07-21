@@ -18,6 +18,7 @@ struct psi {
   sect_asm_t pat, pmt, sdt, nit;
   int have_pat, have_pmt, have_sdt, have_nit;
   unsigned program_number, pmt_pid, pcr_pid, nit_pid;
+  unsigned tsid, onid;
   psi_es_t es[PSI_MAX_ES];
   int es_count, audio_count;
   unsigned ecm[PSI_MAX_ES];
@@ -207,6 +208,7 @@ static void parse_pat(psi_t *c) {
     return;
   c->pmt_pid = 0;
   c->nit_pid = 0;
+  c->tsid = ((unsigned)b[3] << 8) | b[4];
   end = n - 4;
   for (i = 8; i + 4 <= end; i += 4) {
     unsigned prog = ((unsigned)b[i] << 8) | b[i + 1];
@@ -276,6 +278,7 @@ static void parse_sdt(psi_t *c) {
 
   if (n < 12 || b[0] != 0x42 || crc32_mpeg(b, n) != 0)
     return;
+  c->onid = ((unsigned)b[8] << 8) | b[9];
   end = n - 4;
   i = 11;
   while (i + 5 <= end) {
@@ -369,6 +372,8 @@ unsigned psi_program_number(const psi_t *c) { return c->program_number; }
 unsigned psi_pmt_pid(const psi_t *c) { return c->pmt_pid; }
 unsigned psi_pcr_pid(const psi_t *c) { return c->pcr_pid; }
 unsigned psi_nit_pid(const psi_t *c) { return c->nit_pid; }
+unsigned psi_transport_stream_id(const psi_t *c) { return c->tsid; }
+unsigned psi_original_network_id(const psi_t *c) { return c->onid; }
 
 const psi_es_t *psi_es(const psi_t *c, int *count) {
   if (count)

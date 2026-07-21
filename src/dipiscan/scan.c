@@ -38,6 +38,7 @@ typedef struct {
   int rtp_wrapped; /* -1 unknown (no data), 0 udp, 1 rtp */
   char name[PSI_NAME];
   unsigned pkts;
+  unsigned tsid, onid, sid;
 } probe_result_t;
 
 typedef struct {
@@ -100,8 +101,15 @@ static void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, probe_resu
     r->kind = PROBE_NAMED;
     strncpy(r->name, psi_service_name(pc.psi), sizeof r->name - 1);
     r->name[sizeof r->name - 1] = '\0';
+    r->tsid = psi_transport_stream_id(pc.psi);
+    r->onid = psi_original_network_id(pc.psi);
+    r->sid = psi_program_number(pc.psi);
   } else {
     r->kind = PROBE_UNNAMED;
+    if (psi_have_pat(pc.psi)) {
+      r->tsid = psi_transport_stream_id(pc.psi);
+      r->sid = psi_program_number(pc.psi);
+    }
   }
   psi_free(pc.psi);
 }
@@ -168,7 +176,7 @@ int scan_run(const config_t *cfg, FILE *out) {
           log_line("%3u/254 %-28s %-32s [%u pkts]", i, uri, name, r.pkts);
         else
           log_line("%3u/254 %-28s %s", i, uri, name);
-        format_item(out, cfg->format, name, uri);
+        format_item(out, cfg->format, name, uri, r.tsid, r.onid, r.sid);
       }
       if (signal_stop_requested()) {
         interrupted = 1;

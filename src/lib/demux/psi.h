@@ -65,6 +65,8 @@ unsigned psi_program_number(const psi_t *c);
 unsigned psi_pmt_pid(const psi_t *c);
 unsigned psi_pcr_pid(const psi_t *c);
 unsigned psi_nit_pid(const psi_t *c);
+unsigned psi_transport_stream_id(const psi_t *c);
+unsigned psi_original_network_id(const psi_t *c);
 
 const psi_es_t *psi_es(const psi_t *c, int *count);
 int psi_audio_count(const psi_t *c);

@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../version.h"
 #include "pes.h"
 #include "psi.h"
 #include "tspacketizer.h"
@@ -139,7 +140,7 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, const unsigned cha
       count += emit_stream(PID_PMT, &t->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
   }
   if (due(pts_90k, &t->last_sdt, INTERVAL_SDT)) {
-    n = psi_build_sdt(t->ver_sdt, t->cfg.tsid, t->cfg.onid, t->cfg.sid, "dipiradiohead", t->cfg.service_name, sec, sizeof sec);
+    n = psi_build_sdt(t->ver_sdt, t->cfg.tsid, t->cfg.onid, t->cfg.sid, TOOL_NAME, t->cfg.service_name, sec, sizeof sec);
     if (n)
       count += emit_stream(PID_SDT, &t->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
   }

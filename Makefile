@@ -7,7 +7,7 @@ include config.mk
 
 .DEFAULT_GOAL := all
 
-TOOLS := dipirec dipiscan dipiradiohead
+TOOLS := dipirec dipiscan dipiradiohead dipisds
 
 dipirec_SRCS := \
 	src/dipirec/main.c \
@@ -40,6 +40,20 @@ dipiscan_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/demux/psi.c \
 	src/lib/demux/tspack.c
+
+dipisds_SRCS := \
+	src/dipisds/main.c \
+	src/dipisds/args.c \
+	src/dipisds/input.c \
+	src/dipisds/sds_xml.c \
+	src/dipisds/format_out.c \
+	src/dipisds/announce.c \
+	src/dipisds/listen.c \
+	src/lib/log.c \
+	src/lib/signal.c \
+	src/lib/net/multicast.c \
+	src/lib/net/dvbstp.c \
+	src/lib/demux/crc32.c
 
 HAVE_OPENSSL := $(shell pkg-config --exists openssl && echo yes)
 
@@ -95,7 +109,11 @@ $(foreach t,$(TOOLS),$(eval $(call TOOL_template,$(t))))
 all: $(TOOLS)
 
 %.o: %.c config.mk
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+
+-include $(ALL_OBJS:.o=.d)
+
+TLS_VARIANTS := src/lib/net/tls.o src/lib/net/tls_stub.o
 
 clean:
-	rm -f $(ALL_OBJS) $(TOOLS)
+	rm -f $(ALL_OBJS) $(ALL_OBJS:.o=.d) $(TLS_VARIANTS) $(TLS_VARIANTS:.o=.d) $(TOOLS)
