@@ -143,7 +143,7 @@ static int map_lookup(const enum_map_t *m, size_t n, const char *s, int *out) {
 }
 
 static int fmt_from_name(const char *s, out_fmt_t *f) {
-  static const enum_map_t map[] = {{"m3u", OUT_M3U}, {"csv", OUT_CSV}, {"xspf", OUT_XSPF}, {"null", OUT_NULL}};
+  static const enum_map_t map[] = {{"m3u", OUT_M3U}, {"csv", OUT_CSV}, {"xspf", OUT_XSPF}, {"xml", OUT_XML}, {"null", OUT_NULL}};
   int v;
   if (map_lookup(map, sizeof map / sizeof map[0], s, &v))
     return -1;
@@ -160,7 +160,8 @@ static void print_help(void) {
       "  -m, --mcast <addr>     base multicast group, v4 or v6; the last\n"
       "                         byte is swept 1..254               [239.2.16.0]\n"
       "  -p, --port <port[-port]> port or inclusive port range      [8208]\n"
-      "  -f, --format <fmt>     m3u|csv|xspf|null                   [m3u]\n"
+      "  -f, --format <fmt>     m3u|csv|xspf|xml|null               [m3u]\n"
+      "  -P, --provider <name>  DomainName for -f xml (required if xml)\n"
       "  -o, --out <path>       output file, or \"-\" for stdout      [stdout]\n"
       "  -t, --timeout <secs>   wall-clock budget per candidate     [1]\n"
       "  -u, --udpxy <ip:port>  use udpxy instead of a direct IGMP/MLD join\n"
@@ -171,8 +172,9 @@ static void print_help(void) {
       "examples:\n"
       "  %s -m 239.2.24.0 -p 8208-8229 >hd.m3u\n"
       "  %s -v -f csv -o scan.csv\n"
-      "  %s -u 127.0.0.1:8080 -m 239.2.16.0 -f xspf >playlist.xspf\n\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+      "  %s -u 127.0.0.1:8080 -m 239.2.16.0 -f xspf >playlist.xspf\n"
+      "  %s -f xml -P example.org -o scan.xml    # feed straight into dipisds -a -i\n\n",
+      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -180,6 +182,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"mcast", required_argument, 0, 'm'},
       {"port", required_argument, 0, 'p'},
       {"format", required_argument, 0, 'f'},
+      {"provider", required_argument, 0, 'P'},
       {"out", required_argument, 0, 'o'},
       {"timeout", required_argument, 0, 't'},
       {"udpxy", required_argument, 0, 'u'},
@@ -199,7 +202,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->format = OUT_M3U;
   cfg->timeout_ms = 1000;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "m:p:f:o:t:u:I:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "m:p:f:P:o:t:u:I:vh", longopts, NULL)) != -1) {
     switch (c) {
       case 'm':
         if (base_parse(optarg, &cfg->family, cfg->base)) {
@@ -215,9 +218,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 'f':
         if (fmt_from_name(optarg, &cfg->format)) {
-          argerr("invalid -f format: %s (m3u|csv|xspf|null)", optarg);
+          argerr("invalid -f format: %s (m3u|csv|xspf|xml|null)", optarg);
           return ARGS_ERR;
         }
+        break;
+      case 'P':
+        cfg->provider = optarg;
         break;
       case 'o':
         cfg->out_path = optarg;
@@ -264,6 +270,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (optind < argc) {
     argerr("unexpected argument: %s", argv[optind]);
+    return ARGS_ERR;
+  }
+  if (cfg->format == OUT_XML && !cfg->provider) {
+    argerr("missing -P provider (required for -f xml)");
     return ARGS_ERR;
   }
   return ARGS_OK;

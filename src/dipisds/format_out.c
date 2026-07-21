@@ -14,19 +14,6 @@ static void stamp(char *buf, size_t n) {
   strftime(buf, n, "%Y-%m-%d %H:%M", &tm);
 }
 
-static void xml_escape(FILE *f, const char *s) {
-  for (; *s; s++) {
-    switch (*s) {
-    case '&': fputs("&amp;", f); break;
-    case '<': fputs("&lt;", f); break;
-    case '>': fputs("&gt;", f); break;
-    case '"': fputs("&quot;", f); break;
-    case '\'': fputs("&apos;", f); break;
-    default: fputc(*s, f); break;
-    }
-  }
-}
-
 void format_out_init(FILE *f, out_fmt_t fmt, const char *invocation) {
   char ts[24];
   stamp(ts, sizeof ts);
@@ -65,7 +52,7 @@ void format_out_item(FILE *f, out_fmt_t fmt, const sds_service_t *s) {
     else
       fprintf(f, "%s://@%s:%u", scheme, s->address, s->port);
     fputs("</location><title>", f);
-    xml_escape(f, s->name);
+    sds_xml_escape(f, s->name);
     fprintf(f, "</title><extension application=\"urn:dvbipitools:dvb-triplet\" tsid=\"%u\" onid=\"%u\" sid=\"%u\"/></track>\n", s->tsid, s->onid, s->sid);
     break;
   case OUT_XML:

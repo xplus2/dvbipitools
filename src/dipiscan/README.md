@@ -24,11 +24,18 @@ Every address/port combination in range gets probed once.
 | `m3u`  | `#EXTM3U` playlist, `#EXTINF` name + URI per entry |
 | `csv`  | `name,uri,tsid,onid,sid` per line                  |
 | `xspf` | XSPF playlist                                      |
+| `xml`  | SD&S Broadcast Discovery (ETSI TS 102 034)         |
 | `null` | no playlist output, just the stderr log            |
 
 Every format also carries the DVB triplet (`transport_stream_id`, `original_network_id`, `service_id`)
 read from PAT/SDT: `csv` as three extra columns, `m3u` as `tsid`/`onid`/`sid` attributes on the
-`#EXTINF` line, `xspf` as a `<extension application="urn:dvbipitools:dvb-triplet">` element per track.
+`#EXTINF` line, `xspf` as a `<extension application="urn:dvbipitools:dvb-triplet">` element per
+track, `xml` as the `DVBTriplet` element the schema already defines for it.
+
+`-f xml` also needs `-P <name>` (`--provider`): the schema's `DomainName` is required, and dipiscan
+has no identity of its own to put there - the scan output isn't claiming to be a service provider,
+it's just reporting what it found under whatever name you give it. Feed the result straight into
+`dipisds -a -i scan.xml -m ...` to announce it.
 
 ## Probe time budget (`-t`)
 
@@ -69,4 +76,8 @@ dipiscan -v -f csv -o scan.csv
 
 # through a udpxy gateway
 dipiscan -u 127.0.0.1:8080 -m 239.2.16.0 -f xspf >playlist.xspf
+
+# SD&S xml, ready for dipisds
+dipiscan -f xml -P example.org -o scan.xml
+dipisds -a -i scan.xml -m 239.255.0.1:3937
 ```

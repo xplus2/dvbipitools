@@ -13,7 +13,7 @@
 #include "format_out.h"
 #include "input.h"
 #include "listen.h"
-#include "sds_xml.h"
+#include "lib/sds_xml.h"
 #include "version.h"
 
 #define RECV_BUF 65536

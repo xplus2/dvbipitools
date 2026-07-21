@@ -6,12 +6,12 @@ add_executable(dipisds
     main.c
     args.c
     input.c
-    sds_xml.c
     format_out.c
     announce.c
     listen.c
     ../lib/log.c
     ../lib/signal.c
+    ../lib/sds_xml.c
     ../lib/net/multicast.c
     ../lib/net/dvbstp.c
     ../lib/demux/crc32.c)

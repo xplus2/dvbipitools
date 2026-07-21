@@ -34,6 +34,7 @@ dipiscan_SRCS := \
 	src/dipiscan/scan.c \
 	src/lib/log.c \
 	src/lib/signal.c \
+	src/lib/sds_xml.c \
 	src/lib/net/multicast.c \
 	src/lib/net/udpxy.c \
 	src/lib/demux/rtp.c \
@@ -45,12 +46,12 @@ dipisds_SRCS := \
 	src/dipisds/main.c \
 	src/dipisds/args.c \
 	src/dipisds/input.c \
-	src/dipisds/sds_xml.c \
 	src/dipisds/format_out.c \
 	src/dipisds/announce.c \
 	src/dipisds/listen.c \
 	src/lib/log.c \
 	src/lib/signal.c \
+	src/lib/sds_xml.c \
 	src/lib/net/multicast.c \
 	src/lib/net/dvbstp.c \
 	src/lib/demux/crc32.c

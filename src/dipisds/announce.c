@@ -10,7 +10,7 @@
 #include "lib/signal.h"
 #include "announce.h"
 #include "input.h"
-#include "sds_xml.h"
+#include "lib/sds_xml.h"
 
 #define DOC_CAP 65536
 

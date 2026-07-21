@@ -150,7 +150,7 @@ int scan_run(const config_t *cfg, FILE *out) {
     snprintf(invocation, sizeof invocation, "%s --mcast %s --port %u --timeout %d", TOOL_NAME, basestr, cfg->port_lo, cfg->timeout_ms / 1000);
   else
     snprintf(invocation, sizeof invocation, "%s --mcast %s --port %u-%u --timeout %d", TOOL_NAME, basestr, cfg->port_lo, cfg->port_hi, cfg->timeout_ms / 1000);
-  format_init(out, cfg->format, invocation);
+  format_init(out, cfg->format, invocation, cfg->provider);
   for (i = 1; i < 255 && !interrupted; i++) {
     char group[64];
     addr_at(cfg, i, group, sizeof group);
@@ -176,7 +176,7 @@ int scan_run(const config_t *cfg, FILE *out) {
           log_line("%3u/254 %-28s %-32s [%u pkts]", i, uri, name, r.pkts);
         else
           log_line("%3u/254 %-28s %s", i, uri, name);
-        format_item(out, cfg->format, name, uri, r.tsid, r.onid, r.sid);
+        format_item(out, cfg->format, name, uri, cfg->family, group, port, r.rtp_wrapped == 1, r.tsid, r.onid, r.sid);
       }
       if (signal_stop_requested()) {
         interrupted = 1;

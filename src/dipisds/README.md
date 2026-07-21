@@ -21,7 +21,7 @@ keep `-t` comfortably under that.
 | `.csv`  | `name,uri[,tsid,onid,sid]`, same as dipiscan's own csv output                     |
 | `.m3u`  | `#EXTINF` with optional `tsid=".." onid=".." sid=".."` attributes, same as dipiscan |
 | `.xspf` | XSPF, triplet in a `<extension application="urn:dvbipitools:dvb-triplet">`        |
-| `.xml`  | a hand-authored SD&S document, sent as-is (payload id read from its root element) |
+| `.xml`  | a hand-authored SD&S document, or dipiscan's own `-f xml` output - sent as-is (payload id read from its root element) |
 
 `uri` is `rtp://[@]<addr>:<port>` or `udp://[@]<addr>:<port>`, matching dipirec/dipiscan's own
 convention. Missing `tsid`/`onid` default to 1, missing `sid` auto-increments from 1.
@@ -110,6 +110,7 @@ dipisds -a -i channels.csv -p example.org -O "My Headend" -m 239.255.0.1:3937
 # listen and write an m3u
 dipisds -l -m 239.255.0.1:3937 -o discovered.m3u
 
-# hand-authored SD&S document, sent as-is
-dipisds -a -i broadcast.xml -m 239.255.0.1:3937
+# dipiscan's own SD&S xml output, or a hand-authored document, sent as-is
+dipiscan -f xml -P example.org -o scan.xml
+dipisds -a -i scan.xml -m 239.255.0.1:3937
 ```

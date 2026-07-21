@@ -7,7 +7,7 @@
 #include <stdio.h>
 
 #include "args.h"
-#include "sds_xml.h"
+#include "lib/sds_xml.h"
 
 void format_out_init(FILE *f, out_fmt_t fmt, const char *invocation);
 void format_out_item(FILE *f, out_fmt_t fmt, const sds_service_t *s);

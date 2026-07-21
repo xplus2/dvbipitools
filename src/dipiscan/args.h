@@ -6,13 +6,14 @@
 
 #include <stddef.h>
 
-typedef enum { OUT_M3U, OUT_CSV, OUT_XSPF, OUT_NULL } out_fmt_t;
+typedef enum { OUT_M3U, OUT_CSV, OUT_XSPF, OUT_XML, OUT_NULL } out_fmt_t;
 
 typedef struct {
   int family;             /* AF_INET or AF_INET6 */
   unsigned char base[16]; /* base group address, last byte swept 1..254 */
   unsigned port_lo, port_hi; /* inclusive port range probed per address */
   out_fmt_t format;
+  const char *provider; /* -P, DomainName for -f xml; required if format==OUT_XML */
   const char *out_path; /* NULL/"-" = stdout */
   int timeout_ms;       /* wall-clock budget per candidate address */
   int udpxy;            /* nonzero: use udpxy instead of direct join */

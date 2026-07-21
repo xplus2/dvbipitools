@@ -5,6 +5,6 @@
 #define DIPISCAN_VERSION_H
 
 #define TOOL_NAME    "dipiscan"
-#define TOOL_VERSION "2.1.0"
+#define TOOL_VERSION "2.2.0"
 
 #endif

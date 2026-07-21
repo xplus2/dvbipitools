@@ -4,7 +4,7 @@
 #ifndef DIPISDS_INPUT_H
 #define DIPISDS_INPUT_H
 
-#include "sds_xml.h"
+#include "lib/sds_xml.h"
 
 typedef enum { INPUT_SERVICES, INPUT_RAW_XML } input_kind_t;
 
