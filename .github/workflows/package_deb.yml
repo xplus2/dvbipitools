@@ -26,7 +26,14 @@ jobs:
     steps:
     - uses: actions/checkout@v5
     - name: build dependencies
-      run: sudo apt-get update && sudo apt-get install -y build-essential cmake debhelper devscripts ${{ matrix.crosspkg }}
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake debhelper devscripts libssl-dev ${{ matrix.crosspkg }}
+        if [ "${{ matrix.arch }}" != "amd64" ]; then
+          sudo dpkg --add-architecture ${{ matrix.arch }}
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev:${{ matrix.arch }}
+        fi
     - name: packaging
       run: |
         if [ "${{ matrix.arch }}" = "amd64" ]; then

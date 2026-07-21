@@ -2,7 +2,7 @@ Source: dvbipitools
 Section: utils
 Priority: optional
 Maintainer: dvbipitools authors <unspecified@example.com>
-Build-Depends: debhelper-compat (= 13), cmake
+Build-Depends: debhelper-compat (= 13), cmake, libssl-dev
 Standards-Version: 4.7.0
 
 Package: dvbipitools
@@ -11,3 +11,4 @@ Recommends: udpxy
 Description: command line tools for DVB-IPI streams
  dipirec records a DVB-IPI multicast.
  dipiscan scans and reports on DVB-IPI multicast streams.
+ dipiradiohead re-muxes an Icecast/Shoutcast stream as a DVB-IPI multicast.

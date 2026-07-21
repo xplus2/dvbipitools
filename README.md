@@ -6,6 +6,7 @@ Command line tools for DVB-IPI streams.
 
 * [dipirec](src/dipirec/README.md) - record a DVB-IPI multicast
 * [dipiscan](src/dipiscan/README.md) - scan an IP range for DVB-IPI multicasts
+* [dipiradiohead](src/dipiradiohead/README.md) - use public Ice-/Shoutcast radio sources for multicast distribution
 
 ## Build
 
@@ -23,7 +24,7 @@ Options:
 ```sh
 dpkg-buildpackage -b -us -uc
 ```
-Build-Depends: `debhelper (>= 14)`, `cmake`
+Build-Depends: `debhelper (>= 13)`, `cmake`, `libssl-dev`
 
 ## Licence
 

@@ -15,7 +15,13 @@ mcast_t *mcast_open(int family, const char *group, unsigned port, const char *if
 /* one datagram. >0 len, 0 timeout, -1 error */
 ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap);
 
-/* leave and close */
+/* send-side: no join, no bind. iface NULL = kernel default route. ttl 0 = kernel default (1) */
+mcast_t *mcast_open_send(int family, const char *group, unsigned port, const char *iface, int ttl);
+
+/* one datagram to the group:port given to mcast_open_send. >=0 sent, -1 error */
+ssize_t mcast_send(mcast_t *m, const void *buf, size_t len);
+
+/* leave (recv side) and close */
 void mcast_close(mcast_t *m);
 
 #endif

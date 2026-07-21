@@ -7,7 +7,7 @@ include config.mk
 
 .DEFAULT_GOAL := all
 
-TOOLS := dipirec dipiscan
+TOOLS := dipirec dipiscan dipiradiohead
 
 dipirec_SRCS := \
 	src/dipirec/main.c \
@@ -41,13 +41,44 @@ dipiscan_SRCS := \
 	src/lib/demux/psi.c \
 	src/lib/demux/tspack.c
 
+dipiradiohead_SRCS := \
+	src/dipiradiohead/main.c \
+	src/dipiradiohead/args.c \
+	src/dipiradiohead/radiohead.c \
+	src/lib/log.c \
+	src/lib/signal.c \
+	src/lib/net/multicast.c \
+	src/lib/net/tls.c \
+	src/lib/net/httpclient.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/bitreader.c \
+	src/dipiradiohead/input/playlist.c \
+	src/dipiradiohead/input/icy.c \
+	src/dipiradiohead/input/id3.c \
+	src/dipiradiohead/input/source.c \
+	src/dipiradiohead/framer/mpegaudio.c \
+	src/dipiradiohead/framer/aac_adts.c \
+	src/dipiradiohead/framer/aac_latm.c \
+	src/dipiradiohead/mux/psi.c \
+	src/dipiradiohead/mux/pes.c \
+	src/dipiradiohead/mux/tspacketizer.c \
+	src/dipiradiohead/mux/rtpheader.c
+
+dipiradiohead_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipiradiohead_EXTRA_LDFLAGS := $(shell pkg-config --static --libs openssl)
+else
+dipiradiohead_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+endif
+
 ALL_OBJS :=
 
 define TOOL_template
 $(1)_OBJS := $$($(1)_SRCS:.c=.o)
 ALL_OBJS += $$($(1)_OBJS)
+$$($(1)_OBJS): CFLAGS += $$($(1)_EXTRA_CFLAGS)
 $(1): $$($(1)_OBJS)
-	$$(CC) $$^ $$(LDFLAGS) -o $$@
+	$$(CC) $$^ $$(LDFLAGS) $$($(1)_EXTRA_LDFLAGS) -o $$@
 endef
 
 $(foreach t,$(TOOLS),$(eval $(call TOOL_template,$(t))))

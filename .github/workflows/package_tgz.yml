@@ -42,12 +42,19 @@ jobs:
     steps:
     - uses: actions/checkout@v5
     - name: build dependencies
-      run: sudo apt-get update && sudo apt-get install -y build-essential cmake ${{ matrix.crosspkg }}
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libssl-dev ${{ matrix.crosspkg }}
+        if [ -n "${{ matrix.triplet }}" ]; then
+          sudo dpkg --add-architecture ${{ matrix.arch }}
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev:${{ matrix.arch }}
+        fi
     - name: configure
       run: |
         CROSS_ARGS=""
         if [ -n "${{ matrix.triplet }}" ]; then
-          CROSS_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc"
+          CROSS_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_LIBRARY_ARCHITECTURE=${{ matrix.triplet }}"
         fi
         cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS
     - name: make
@@ -58,6 +65,7 @@ jobs:
         mkdir "${PKGDIR}"
         install -m 0755 build/src/dipirec/dipirec "${PKGDIR}/"
         install -m 0755 build/src/dipiscan/dipiscan "${PKGDIR}/"
+        install -m 0755 build/src/dipiradiohead/dipiradiohead "${PKGDIR}/"
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
     - uses: actions/upload-artifact@v5
       with:

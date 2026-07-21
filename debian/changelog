@@ -1,3 +1,9 @@
+dvbipitools (1.1.0-1) unstable; urgency=medium
+
+  * add dipiradiohead: icecast/shoutcast to DVB-IPI multicast
+
+ -- dvbipitools authors <unspecified@example.com>  Tue, 21 Jul 2026 00:00:00 +0200
+
 dvbipitools (1.0.7-1) unstable; urgency=medium
 
   * cross-platform builds
