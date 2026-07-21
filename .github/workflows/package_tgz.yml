@@ -45,12 +45,21 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential cmake libssl-dev ${{ matrix.crosspkg }}
-        # i386's Ubuntu archive is deprecated and may lack libssl-dev:i386; see -DDIPIRADIOHEAD_TLS=OFF below
-        if [ -n "${{ matrix.triplet }}" ] && [ "${{ matrix.arch }}" != "i386" ]; then
-          sudo dpkg --add-architecture ${{ matrix.arch }}
-          sudo apt-get update
-          sudo apt-get install -y libssl-dev:${{ matrix.arch }}
-        fi
+        # i386/armel: no libssl-dev on Ubuntu, see -DDIPIRADIOHEAD_TLS=OFF below. others: ports arches, scoped update from ports.ubuntu.com
+        case "${{ matrix.arch }}" in
+          i386|armel|amd64) ;;
+          *)
+            sudo dpkg --add-architecture ${{ matrix.arch }}
+            CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+            cat <<EOF | sudo tee /etc/apt/sources.list.d/ports-${{ matrix.arch }}.list
+        deb [arch=${{ matrix.arch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME main universe restricted multiverse
+        deb [arch=${{ matrix.arch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME-updates main universe restricted multiverse
+        deb [arch=${{ matrix.arch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME-security main universe restricted multiverse
+        EOF
+            sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/ports-${{ matrix.arch }}.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
+            sudo apt-get install -y libssl-dev:${{ matrix.arch }}
+            ;;
+        esac
     - name: configure
       run: |
         CROSS_ARGS=""
@@ -58,9 +67,9 @@ jobs:
           CROSS_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_LIBRARY_ARCHITECTURE=${{ matrix.triplet }}"
         fi
         TLS_ARGS=""
-        if [ "${{ matrix.arch }}" = "i386" ]; then
-          TLS_ARGS="-DDIPIRADIOHEAD_TLS=OFF"
-        fi
+        case "${{ matrix.arch }}" in
+          i386|armel) TLS_ARGS="-DDIPIRADIOHEAD_TLS=OFF" ;;
+        esac
         cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS $TLS_ARGS
     - name: make
       run: cmake --build ${{github.workspace}}/build --config Release
