@@ -41,6 +41,21 @@ dipiscan_SRCS := \
 	src/lib/demux/psi.c \
 	src/lib/demux/tspack.c
 
+HAVE_OPENSSL := $(shell pkg-config --exists openssl && echo yes)
+
+ifeq ($(HAVE_OPENSSL),yes)
+dipiradiohead_TLS_SRC := src/lib/net/tls.c
+dipiradiohead_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipiradiohead_EXTRA_LDFLAGS := $(shell pkg-config --static --libs openssl)
+else
+dipiradiohead_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+endif
+else
+dipiradiohead_TLS_SRC := src/lib/net/tls_stub.c
+$(warning dipiradiohead: OpenSSL not found via pkg-config, building without HTTPS support)
+endif
+
 dipiradiohead_SRCS := \
 	src/dipiradiohead/main.c \
 	src/dipiradiohead/args.c \
@@ -48,7 +63,7 @@ dipiradiohead_SRCS := \
 	src/lib/log.c \
 	src/lib/signal.c \
 	src/lib/net/multicast.c \
-	src/lib/net/tls.c \
+	$(dipiradiohead_TLS_SRC) \
 	src/lib/net/httpclient.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/bitreader.c \
@@ -63,13 +78,6 @@ dipiradiohead_SRCS := \
 	src/dipiradiohead/mux/pes.c \
 	src/dipiradiohead/mux/tspacketizer.c \
 	src/dipiradiohead/mux/rtpheader.c
-
-dipiradiohead_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
-ifneq (,$(findstring -static,$(LDFLAGS)))
-dipiradiohead_EXTRA_LDFLAGS := $(shell pkg-config --static --libs openssl)
-else
-dipiradiohead_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
-endif
 
 ALL_OBJS :=
 

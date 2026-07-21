@@ -45,7 +45,8 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential cmake libssl-dev ${{ matrix.crosspkg }}
-        if [ -n "${{ matrix.triplet }}" ]; then
+        # i386's Ubuntu archive is deprecated and may lack libssl-dev:i386; see -DDIPIRADIOHEAD_TLS=OFF below
+        if [ -n "${{ matrix.triplet }}" ] && [ "${{ matrix.arch }}" != "i386" ]; then
           sudo dpkg --add-architecture ${{ matrix.arch }}
           sudo apt-get update
           sudo apt-get install -y libssl-dev:${{ matrix.arch }}
@@ -56,7 +57,11 @@ jobs:
         if [ -n "${{ matrix.triplet }}" ]; then
           CROSS_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_LIBRARY_ARCHITECTURE=${{ matrix.triplet }}"
         fi
-        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS
+        TLS_ARGS=""
+        if [ "${{ matrix.arch }}" = "i386" ]; then
+          TLS_ARGS="-DDIPIRADIOHEAD_TLS=OFF"
+        fi
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS $TLS_ARGS
     - name: make
       run: cmake --build ${{github.workspace}}/build --config Release
     - name: packaging

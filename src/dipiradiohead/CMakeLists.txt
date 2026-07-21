@@ -1,10 +1,26 @@
 # Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
 # See NOTICE and LICENSE for details and authorship information.
 
-if (DVBIPITOOLS_STATIC)
-    set(OPENSSL_USE_STATIC_LIBS TRUE)
+option(DIPIRADIOHEAD_TLS "build dipiradiohead with HTTPS/TLS support (requires OpenSSL)" ON)
+
+set(DIPIRADIOHEAD_HAVE_TLS FALSE)
+if (DIPIRADIOHEAD_TLS)
+    if (DVBIPITOOLS_STATIC)
+        set(OPENSSL_USE_STATIC_LIBS TRUE)
+    endif ()
+    find_package(OpenSSL)
+    if (OpenSSL_FOUND)
+        set(DIPIRADIOHEAD_HAVE_TLS TRUE)
+    else ()
+        message(WARNING "dipiradiohead: OpenSSL not found, building without HTTPS support")
+    endif ()
 endif ()
-find_package(OpenSSL REQUIRED)
+
+if (DIPIRADIOHEAD_HAVE_TLS)
+    set(TLS_SRC ../lib/net/tls.c)
+else ()
+    set(TLS_SRC ../lib/net/tls_stub.c)
+endif ()
 
 # keep in sync with CMakeLists/Makefile
 add_executable(dipiradiohead
@@ -14,7 +30,7 @@ add_executable(dipiradiohead
     ../lib/log.c
     ../lib/signal.c
     ../lib/net/multicast.c
-    ../lib/net/tls.c
+    ${TLS_SRC}
     ../lib/net/httpclient.c
     ../lib/demux/crc32.c
     ../lib/demux/bitreader.c
@@ -30,4 +46,6 @@ add_executable(dipiradiohead
     mux/tspacketizer.c
     mux/rtpheader.c)
 
-target_link_libraries(dipiradiohead PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+if (DIPIRADIOHEAD_HAVE_TLS)
+    target_link_libraries(dipiradiohead PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+endif ()

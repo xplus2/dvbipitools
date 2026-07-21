@@ -33,6 +33,9 @@ dipiradiohead -i <uri> -m <mcast>:<port> [options]
 
 `https://` verifies the cert chain, hostname and expiry by default; `-k` skips all three (self-signed lab/test sources).
 
+HTTPS support is a build-time option (`-DDIPIRADIOHEAD_TLS=OFF`, or auto-off if OpenSSL isn't
+found); a build without it fails cleanly on any `https://` source instead of connecting.
+
 Response body sniff (not URL suffix):
 * audio (ID3 tag or MPEG/ADTS/LATM sync at offset 0) -> used as-is.
 * M3U (`#EXTM3U` or bare `http(s)://` line) -> first URL line followed.
