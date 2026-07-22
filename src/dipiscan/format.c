@@ -6,6 +6,7 @@
 
 #include "format.h"
 #include "lib/sds_xml.h"
+#include "lib/xml_util.h"
 
 static void stamp(char *buf, size_t n) {
   time_t now = time(NULL);
@@ -50,9 +51,9 @@ void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri, int 
     }
     case OUT_XSPF:
       fputs("  <track><location>", f);
-      sds_xml_escape(f, uri);
+      xml_escape(f, uri);
       fputs("</location><title>", f);
-      sds_xml_escape(f, name);
+      xml_escape(f, name);
       fprintf(f, "</title><extension application=\"urn:dvbipitools:dvb-triplet\" tsid=\"%u\" onid=\"%u\" sid=\"%u\"/></track>\n", tsid, onid, sid);
       break;
     case OUT_XML: {

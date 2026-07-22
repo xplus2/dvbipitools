@@ -2,17 +2,16 @@
 # See NOTICE and LICENSE for details and authorship information.
 
 # keep in sync with CMakeLists/Makefile
-add_executable(dipisds
+add_executable(dipixmltv
     main.c
     args.c
-    input.c
-    format_out.c
-    announce.c
-    listen.c
+    revmap.c
+    suggest.c
     ../lib/log.c
-    ../lib/signal.c
-    ../lib/sds_xml.c
     ../lib/xml_util.c
-    ../lib/net/multicast.c
-    ../lib/net/dvbstp.c
-    ../lib/demux/crc32.c)
+    ../lib/ioutil.c
+    ../lib/tva/epg_doc.c
+    ../lib/tva/tva_xml.c
+    ../lib/tva/mapping.c
+    ../lib/tva/xmltv.c
+    ../lib/tva/timefmt.c)

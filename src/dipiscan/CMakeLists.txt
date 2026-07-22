@@ -10,6 +10,7 @@ add_executable(dipiscan
     ../lib/log.c
     ../lib/signal.c
     ../lib/sds_xml.c
+    ../lib/xml_util.c
     ../lib/net/multicast.c
     ../lib/net/udpxy.c
     ../lib/demux/rtp.c

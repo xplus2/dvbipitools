@@ -6,6 +6,7 @@
 #include <time.h>
 
 #include "format_out.h"
+#include "lib/xml_util.h"
 
 static void stamp(char *buf, size_t n) {
   time_t now = time(NULL);
@@ -52,7 +53,7 @@ void format_out_item(FILE *f, out_fmt_t fmt, const sds_service_t *s) {
     else
       fprintf(f, "%s://@%s:%u", scheme, s->address, s->port);
     fputs("</location><title>", f);
-    sds_xml_escape(f, s->name);
+    xml_escape(f, s->name);
     fprintf(f, "</title><extension application=\"urn:dvbipitools:dvb-triplet\" tsid=\"%u\" onid=\"%u\" sid=\"%u\"/></track>\n", s->tsid, s->onid, s->sid);
     break;
   case OUT_XML:

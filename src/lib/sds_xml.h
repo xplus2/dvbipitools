@@ -20,8 +20,6 @@ typedef struct {
   unsigned tsid, onid, sid;
 } sds_service_t;
 
-void sds_xml_escape(FILE *f, const char *s);
-
 /* streaming BroadcastDiscovery (payload 0x02), one <SingleService> per item call */
 void sds_broadcast_open(FILE *f, const char *domain, unsigned version);
 void sds_broadcast_item(FILE *f, const sds_service_t *s);
@@ -35,8 +33,5 @@ size_t sds_build_sp(const char *domain, const char *display_name, const char *la
 
 /* xml must be null-terminated. fills out[0..return), tsid/onid default 1, sid defaults to 1-based index if absent */
 int sds_parse_broadcast(const char *xml, sds_service_t *out, int max);
-
-/* name="..." bounded to [s,end). 0 ok, -1 not found */
-int sds_xml_attr(const char *s, const char *end, const char *name, char *out, size_t outcap);
 
 #endif

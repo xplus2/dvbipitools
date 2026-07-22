@@ -16,3 +16,6 @@ override_dh_auto_install:
 	install -D -m 0755 $(BUILDDIR)/src/dipiscan/dipiscan debian/dvbipitools/usr/bin/dipiscan
 	install -D -m 0755 $(BUILDDIR)/src/dipiradiohead/dipiradiohead debian/dvbipitools/usr/bin/dipiradiohead
 	install -D -m 0755 $(BUILDDIR)/src/dipisds/dipisds debian/dvbipitools/usr/bin/dipisds
+	install -D -m 0755 $(BUILDDIR)/src/dipixmltv/dipixmltv debian/dvbipitools/usr/bin/dipixmltv
+	install -D -m 0755 $(BUILDDIR)/src/dipibim/dipibim debian/dvbipitools/usr/bin/dipibim
+	install -D -m 0755 $(BUILDDIR)/src/dipiepg/dipiepg debian/dvbipitools/usr/bin/dipiepg

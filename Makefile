@@ -7,7 +7,7 @@ include config.mk
 
 .DEFAULT_GOAL := all
 
-TOOLS := dipirec dipiscan dipiradiohead dipisds
+TOOLS := dipirec dipiscan dipiradiohead dipisds dipixmltv dipibim dipiepg
 
 dipirec_SRCS := \
 	src/dipirec/main.c \
@@ -35,6 +35,7 @@ dipiscan_SRCS := \
 	src/lib/log.c \
 	src/lib/signal.c \
 	src/lib/sds_xml.c \
+	src/lib/xml_util.c \
 	src/lib/net/multicast.c \
 	src/lib/net/udpxy.c \
 	src/lib/demux/rtp.c \
@@ -52,9 +53,64 @@ dipisds_SRCS := \
 	src/lib/log.c \
 	src/lib/signal.c \
 	src/lib/sds_xml.c \
+	src/lib/xml_util.c \
 	src/lib/net/multicast.c \
 	src/lib/net/dvbstp.c \
 	src/lib/demux/crc32.c
+
+dipixmltv_SRCS := \
+	src/dipixmltv/main.c \
+	src/dipixmltv/args.c \
+	src/dipixmltv/revmap.c \
+	src/dipixmltv/suggest.c \
+	src/lib/log.c \
+	src/lib/xml_util.c \
+	src/lib/ioutil.c \
+	src/lib/tva/epg_doc.c \
+	src/lib/tva/tva_xml.c \
+	src/lib/tva/mapping.c \
+	src/lib/tva/xmltv.c \
+	src/lib/tva/timefmt.c
+
+dipibim_SRCS := \
+	src/dipibim/main.c \
+	src/dipibim/args.c \
+	src/lib/log.c \
+	src/lib/xml_util.c \
+	src/lib/ioutil.c \
+	src/lib/tva/epg_doc.c \
+	src/lib/tva/tva_xml.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bitreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec.c \
+	src/lib/bim/fragment.c \
+	src/lib/bim/accessunit.c
+
+dipiepg_SRCS := \
+	src/dipiepg/main.c \
+	src/dipiepg/args.c \
+	src/dipiepg/announce.c \
+	src/dipiepg/listen.c \
+	src/dipiepg/container.c \
+	src/lib/log.c \
+	src/lib/signal.c \
+	src/lib/xml_util.c \
+	src/lib/ioutil.c \
+	src/lib/net/multicast.c \
+	src/lib/net/dvbstp.c \
+	src/lib/demux/crc32.c \
+	src/lib/tva/epg_doc.c \
+	src/lib/tva/tva_xml.c \
+	src/lib/tva/mapping.c \
+	src/lib/tva/xmltv.c \
+	src/lib/tva/timefmt.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bitreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec.c \
+	src/lib/bim/fragment.c \
+	src/lib/bim/accessunit.c
 
 HAVE_OPENSSL := $(shell pkg-config --exists openssl && echo yes)
 

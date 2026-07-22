@@ -83,6 +83,9 @@ jobs:
         install -m 0755 build/src/dipiscan/dipiscan "${PKGDIR}/"
         install -m 0755 build/src/dipiradiohead/dipiradiohead "${PKGDIR}/"
         install -m 0755 build/src/dipisds/dipisds "${PKGDIR}/"
+        install -m 0755 build/src/dipixmltv/dipixmltv "${PKGDIR}/"
+        install -m 0755 build/src/dipibim/dipibim "${PKGDIR}/"
+        install -m 0755 build/src/dipiepg/dipiepg "${PKGDIR}/"
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
     - uses: actions/upload-artifact@v5
       with:

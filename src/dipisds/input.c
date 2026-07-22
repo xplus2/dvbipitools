@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "lib/net/dvbstp.h"
+#include "lib/xml_util.h"
 #include "input.h"
 #include "version.h"
 
@@ -166,11 +167,11 @@ static int load_m3u(FILE *f, input_t *in) {
       snprintf(pending_name, sizeof pending_name, "%s", comma + 1);
       pending_tsid = pending_onid = 1;
       pending_sid = 0;
-      if (sds_xml_attr(line, comma, "tsid", tmp, sizeof tmp) == 0)
+      if (xml_attr(line, comma, "tsid", tmp, sizeof tmp) == 0)
         pending_tsid = (unsigned)strtoul(tmp, NULL, 10);
-      if (sds_xml_attr(line, comma, "onid", tmp, sizeof tmp) == 0)
+      if (xml_attr(line, comma, "onid", tmp, sizeof tmp) == 0)
         pending_onid = (unsigned)strtoul(tmp, NULL, 10);
-      if (sds_xml_attr(line, comma, "sid", tmp, sizeof tmp) == 0)
+      if (xml_attr(line, comma, "sid", tmp, sizeof tmp) == 0)
         pending_sid = (unsigned)strtoul(tmp, NULL, 10);
       have_pending = 1;
       continue;
@@ -261,9 +262,9 @@ static int load_xspf(input_t *in, const unsigned char *buf) {
       fprintf(stderr, TOOL_NAME ": bad uri: %s\n", loc);
       return -1;
     }
-    s->tsid = sds_xml_attr(tag, end, "tsid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
-    s->onid = sds_xml_attr(tag, end, "onid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
-    s->sid = sds_xml_attr(tag, end, "sid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : (unsigned)(idx + 1);
+    s->tsid = xml_attr(tag, end, "tsid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
+    s->onid = xml_attr(tag, end, "onid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
+    s->sid = xml_attr(tag, end, "sid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : (unsigned)(idx + 1);
     idx++;
     p = end + 8;
   }
