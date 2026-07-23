@@ -71,7 +71,7 @@ crid://dipixmltv.invalid/<percent-encoded-channel-id>/<programme-start-timestamp
 
 One line: channels and programmes read.
 
-## Some examples
+## Examples
 
 ```sh
 # build a mapping from a real scan + your guide, then review it

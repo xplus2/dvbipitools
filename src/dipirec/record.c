@@ -18,12 +18,14 @@
 #include "lib/signal.h"
 #include "mux/mkv.h"
 #include "record.h"
+#include "ret_client.h"
 #include "version.h"
 
 typedef struct {
   uri_kind_t kind;
   mcast_t *m;
   udpxy_t *u;
+  ret_client_t *ret; /* NULL unless --ret */
 } src_t;
 
 static double mono(void) {
@@ -40,7 +42,16 @@ static int src_open(const config_t *cfg, src_t *s) {
     return s->u ? 0 : -1;
   }
   s->m = mcast_open(cfg->source.family, cfg->source.group, cfg->source.port, cfg->iface, 1000);
-  return s->m ? 0 : -1;
+  if (!s->m)
+    return -1;
+  if (cfg->ret.enabled) {
+    s->ret = ret_client_open(cfg);
+    if (!s->ret) {
+      mcast_close(s->m);
+      return -1;
+    }
+  }
+  return 0;
 }
 
 /* TS bytes, RTP stripped. >0 len, 0 timeout, -1 end */
@@ -50,6 +61,8 @@ static ssize_t src_read(src_t *s, unsigned char *buf, size_t cap) {
 
   if (s->kind == URI_UDPXY)
     return udpxy_read(s->u, buf, cap);
+  if (s->ret)
+    return ret_client_read(s->ret, s->m, buf, cap);
   n = mcast_recv(s->m, buf, cap);
   if (n <= 0)
     return n;
@@ -62,6 +75,8 @@ static ssize_t src_read(src_t *s, unsigned char *buf, size_t cap) {
 }
 
 static void src_close(src_t *s) {
+  if (s->ret)
+    ret_client_close(s->ret);
   if (s->m)
     mcast_close(s->m);
   if (s->u)

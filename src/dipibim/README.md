@@ -50,7 +50,7 @@ A non-UTC source time round-trips to a different-looking CRID (same instant).
 
 One line: channels and programmes converted.
 
-## Some examples
+## Examples
 
 ```sh
 dipixmltv -f xmltv -M mapping.csv -i guide.xml -o guide.tva.xml

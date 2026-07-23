@@ -6,15 +6,18 @@ add_executable(dipirec
     main.c
     args.c
     record.c
+    ret_client.c
     ../lib/log.c
     ../lib/signal.c
     ../lib/net/multicast.c
     ../lib/net/udpxy.c
     ../lib/demux/rtp.c
+    ../lib/demux/rtx.c
     ../lib/demux/crc32.c
     ../lib/demux/psi.c
     ../lib/demux/tspack.c
     ../lib/demux/pes.c
+    ../lib/mux/rtcp_build.c
     filter/ts.c
     mux/ebml.c
     mux/mkv.c

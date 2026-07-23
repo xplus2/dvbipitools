@@ -90,9 +90,6 @@ One self-updating line on stderr, about once a second.
 
 ```sh
 dipiradiohead -i https://orf-live.ors-shoutcast.at/oe1-q2a.m3u -m 239.1.1.1:5000 -r -s "OE1"
-
 dipiradiohead -i http://radio886.at/streams/radio_88.6/aac -m 239.1.1.2:5000 -e 5
-
-dipiradiohead -i http://onair.krone.at/kronehit.mp3 -m 239.5.5.5:6000 &
-dipirec -i udp://@239.5.5.5:6000 -o kronehit.mka
+dipiradiohead -i http://onair.krone.at/kronehit.mp3 -m 239.5.5.5:6000 & dipirec -i udp://@239.5.5.5:6000 -o kronehit.mka
 ```

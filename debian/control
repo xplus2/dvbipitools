@@ -2,7 +2,7 @@ Source: dvbipitools
 Section: utils
 Priority: optional
 Maintainer: dvbipitools authors <unspecified@example.com>
-Build-Depends: debhelper-compat (= 13), cmake, libssl-dev
+Build-Depends: debhelper-compat (= 13), cmake, libssl-dev, libpcap-dev
 Standards-Version: 4.7.0
 
 Package: dvbipitools
@@ -17,3 +17,4 @@ Description: command line tools for DVB-IPI streams
  dipibim converts between the plain TVA xml shape and its BiM binary encoding.
  dipiepg announces an xmltv guide as BiM-encoded TVA fragments via DVBSTP/BCG (ETSI TS 102 539), or listens for one.
  dipitvhead re-packages a transport stream (multicast, http(s), or stdin) as a DVB-IPI multicast, with target-bitrate control and optional HbbTV AIT injection.
+ dipiret is an RTP retransmission (RET) server for DVB-IPI Annex F, passively watching a mirrored multicast segment via libpcap and repairing packet loss on request.

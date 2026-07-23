@@ -29,6 +29,17 @@ typedef enum { FMT_RAW, FMT_TS, FMT_MKV, FMT_MKA } out_fmt_t;
 typedef enum { SUB_KEEP, SUB_STRIP, SUB_SRT } sub_mode_t;
 
 typedef struct {
+  int enabled;     /* --ret given; RET client off otherwise, no behavior change */
+  int family;      /* AF_INET or AF_INET6 */
+  char addr[64];   /* RET server unicast address */
+  unsigned port;
+  int mc_enabled;  /* join the MC repair session; default on, --no-ret-mc clears */
+  unsigned mc_port; /* --ret-mc-port; 0 = reuse -i's port, per F.6.2.2 */
+  unsigned char rtx_pt; /* --ret-pt; must match the RET server's -R */
+  unsigned wait_ms; /* --ret-wait; hold budget after a NACK before giving up on a gap */
+} ret_cfg_t;
+
+typedef struct {
   const char *out_path; /* -o; "-" = stdout */
   source_t source;      /* -i */
   int audio_all;        /* -a all */
@@ -40,6 +51,7 @@ typedef struct {
   int verbose;          /* -v */
   long sub_lead_ms;     /* --sub-lead; subtitles shifted earlier */
   int color_mode;       /* --color; log_color_t */
+  ret_cfg_t ret;        /* --ret and friends; RTP source only */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

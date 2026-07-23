@@ -41,7 +41,7 @@ Announce: one line per cycle. Listen: one line per segment.
 
 `^C`, SIGINT or SIGTERM.
 
-## Some examples
+## Examples
 
 ```sh
 dipiepg -a -i guide.xml -M mapping.csv -m 239.255.0.2:3938

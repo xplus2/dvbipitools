@@ -67,7 +67,7 @@ void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri, int 
       s.tsid = tsid;
       s.onid = onid;
       s.sid = sid;
-      sds_broadcast_item(f, &s);
+      sds_broadcast_item(f, &s, NULL);
       break;
     }
     case OUT_NULL:

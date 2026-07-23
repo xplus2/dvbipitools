@@ -44,8 +44,9 @@ jobs:
     - name: build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libssl-dev ${{ matrix.crosspkg }}
+        sudo apt-get install -y build-essential cmake libssl-dev libpcap-dev ${{ matrix.crosspkg }}
         # i386/armel: no libssl-dev on Ubuntu, see -DDIPIRADIOHEAD_TLS=OFF below. others: ports arches, scoped update from ports.ubuntu.com
+        # dipiret (libpcap+pthread edge daemon) makes no sense on i386/armel either - skipped there too
         case "${{ matrix.arch }}" in
           i386|armel|amd64) ;;
           *)
@@ -57,7 +58,7 @@ jobs:
         deb [arch=${{ matrix.arch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME-security main universe restricted multiverse
         EOF
             sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/ports-${{ matrix.arch }}.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
-            sudo apt-get install -y libssl-dev:${{ matrix.arch }}
+            sudo apt-get install -y libssl-dev:${{ matrix.arch }} libpcap-dev:${{ matrix.arch }} || sudo apt-get install -y libssl-dev:${{ matrix.arch }}
             ;;
         esac
     - name: configure
@@ -87,6 +88,8 @@ jobs:
         install -m 0755 build/src/dipibim/dipibim "${PKGDIR}/"
         install -m 0755 build/src/dipiepg/dipiepg "${PKGDIR}/"
         install -m 0755 build/src/dipitvhead/dipitvhead "${PKGDIR}/"
+        # dipiret needs libpcap and is skipped by its own CMakeLists.txt if not found for this arch - don't fail packaging of the other 8 tools if so
+        [ -f build/src/dipiret/dipiret ] && install -m 0755 build/src/dipiret/dipiret "${PKGDIR}/"
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
     - uses: actions/upload-artifact@v5
       with:

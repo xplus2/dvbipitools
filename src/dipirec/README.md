@@ -93,6 +93,26 @@ Teletext subs are transmitted after the speech they describe, so they run late.
 A cue held on screen with no following subtitle stays for at least 1.2 s and at most 7 s, since teletext
 carries no signal for clearing the screen.
 
+## RET repair (`--ret`)
+
+Optional `--ret <addr>:<port>` points at a [dipiret](../dipiret/README.md) edge server's `-l` address.
+If set, `-i rtp://` gap detection kicks in: a hole in the RTP sequence gets one NACK sent to that address, 
+and whatever repair comes back (unicast reply, or the multicast repair session per Annex F.6.2.2) gets spliced 
+back into the recording in order.
+No RSI/SD&S discovery for this (`dipisds` can send it), so address+port have to be known and passed explicitly.
+
+Off by default. Without `--ret` nothing changes, no added latency, no new sockets.
+
+| flag                   | effect                                                                             |
+|------------------------|------------------------------------------------------------------------------------|
+| `--no-ret-mc`          | skip joining the RET server's multicast repair session, unicast reply only         |
+| `--ret-mc-port <port>` | repair session port, if it differs from `-i`'s (default: same port)                |
+| `--ret-pt <n>`         | RTX payload type, must match the RET server's `-R` (default: 99)                   |
+| `--ret-wait <ms>`      | how long to hold a gap open waiting for the repair before giving up (default: 200) |
+
+A gap gets exactly one NACK, no retries. Past `--ret-wait`, the hole is let through.
+This trades a small amount of latency for a chance at a complete recording, while it's not a guarantee.
+
 ## Recording duration (`-t`)
 
 A plain number is seconds. Also accepted: `90`, `5m`, `5m30s`, `1h`, `1h3m`, `1h3m20s`, `10:20` (minutes:seconds) and `01:20:03`
@@ -112,7 +132,7 @@ Prints a single, self updating line to stderr about once a second.
 
 `^C` SIGINT or SIGTERM stops the recording, closes the output properly and leaves the multicast group.
 
-## Some examples
+## Examples
 
 ```sh
 # 30 minutes to a transport stream
@@ -129,4 +149,7 @@ dipirec -i http://10.0.0.1:4022/rtp/239.2.24.1~8208 -o dump.ts -f raw
 
 # pipe to another tool
 dipirec -i rtp://@239.2.24.1:8208 -o - -f ts | ffplay -
+
+# with RET gap repair against a dipiret edge server
+dipirec -i rtp://@239.2.24.1:8208 -o show.ts --ret 10.0.0.1:6000
 ```

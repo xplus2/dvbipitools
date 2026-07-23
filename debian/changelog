@@ -1,3 +1,13 @@
+dvbipitools (1.5.0-1) unstable; urgency=medium
+
+  * consolidated/merged RET (Annex F) codebase, resulting in "dipiret" as the (edge/headend companion) server.
+    Only actually joined multicasts get cached in a ring buffer (needs a mirror port),
+    supports unicast and multicast RET.
+  * dipisds got additional optional args to properly accounce RET services.
+  * dipirec got optional client support for RET.
+
+ -- dvbipitools authors <unspecified@example.com>  Fri, 24 Jul 2026 00:00:00 +0200
+
 dvbipitools (1.4.0-1) unstable; urgency=medium
 
   * merged dipitvhead to use dipiradiohead and src/lib/ commons. brought basic MPTS (multi PMT) support with it.

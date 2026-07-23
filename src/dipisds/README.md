@@ -70,6 +70,39 @@ and a minimal Broadcast Discovery record (payload 0x02):
 </ServiceDiscovery>
 ```
 
+## Advertising dipiret RET service (`--ret-addr`)
+
+Off by default. `--ret-addr <addr>:<port>` (see `dipiret -l`) adds an
+`RTPRetransmission` record (ETSI TS 102 034#5.2.12.26, `RETInfoType`) to every service in
+the Broadcast Discovery.
+
+> Note: `.xml` passthrough is an exception. The provided XML will not get changed.
+
+### Example
+```xml
+<IPMulticastAddress Address="239.2.24.1" Port="8208" Streaming="rtp">
+  <RTPRetransmission>
+    <RTCPReporting DestinationAddress="10.0.0.1" DestinationPort="6000"/>
+    <UnicastRET rtx-time="2000" RTPPayloadTypeNumber="99"/>
+    <MulticastRET GroupAddress="239.2.24.1" DestinationPort="8208" rtx-time="2000" RTPPayloadTypeNumber="99"/>
+  </RTPRetransmission>
+</IPMulticastAddress>
+```
+
+### Parameters
+
+- `--ret-rtx-time <ms>` / `--ret-rtx-pt <n>` should be the same as dipiret's `-B`/`-R` values (or defaults). requires `--ret-addr`.
+- `--ret-mc` adds `MulticastRET`, like running dipiret _without_ `--no-mc-ret`;
+  its group:port always match this service's own `IPMulticastAddress`, per Annex F.6.2.2's
+  same-group:port reuse. `--ret-mc-port` overrides the port, see `dipiret -F`.
+- Left out on purpose, each because the schema's own "if absent" meaning already matches
+  dipiret's actual behaviour: 
+  + RET `ssrc` is unknown until dipiret sees live packets
+  + unicast `DestinationPort`/`SourcePort` because `dipiret` replies from the same socket the NACK arrived on
+  + `SourceAddress` on both RET types: CoD/trick-mode only
+  + `RTSPControlURL`, RTCP RR fields
+
+
 ## Listen (`-l`)
 
 Joins `-m`, reassembles DVBSTP segments, and after `-t` (`--timeout`) seconds (default 35, just
@@ -100,7 +133,7 @@ tool itself produces (`ServiceProviderDiscovery`/`BroadcastDiscovery`, `SingleSe
 record types (CoD, packages, BCG, regionalisation) are out of scope. Compression is always
 "none": gzip is spec-restricted to other payload ids, and BiM is not implemented.
 
-## Some examples
+## Examples
 
 ```sh
 # announce dipiscan's own scan output

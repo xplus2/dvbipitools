@@ -12,6 +12,7 @@ Command line tools for DVB-IPI streams.
 * [dipiscan](src/dipiscan/README.md) - scan an IP range for DVB-IPI multicasts
 * [dipisds](src/dipisds/README.md) - DVBSTP/SD&S service discovery: announce/listen to a service list on multicast
 * [dipixmltv](src/dipixmltv/README.md) - convert between XMLTV and the DVB-IPI TVA XML
+* [dipiret](src/dipiret/README.md) - RTP retransmission (RET) server, DVB-IPI Annex F
 
 ## Build
 
@@ -28,26 +29,30 @@ Options:
   (no OpenSSL needed); default is `ON` for both, auto-falls back to off if OpenSSL isn't found
   (same via the legacy Makefile, detected through `pkg-config`)
 
+`dipiret` needs libpcap; unlike the OpenSSL options above this isn't optional. 
+If libpcap isn't found, dipiret is skipped entirely rather than built without its core feature.
+
 ## Packaging
 ```sh
 dpkg-buildpackage -b -us -uc
 ```
-Build-Depends: `debhelper (>= 13)`, `cmake`, `libssl-dev` (`libssl-dev` is only needed for
-dipiradiohead's and dipitvhead's HTTPS support)
+Build-Depends: `debhelper (>= 13)`, `cmake`, `libssl-dev`, `libpcap-dev` (`libssl-dev` is only
+needed for dipiradiohead's and dipitvhead's HTTPS support; `libpcap-dev` for dipiret's capture)
 
 ## Location of deployment
 
-| Tool          | Headend      | Edge | Client     | Reason                                       |
-|---------------|--------------|------|------------|----------------------------------------------|
-| dipiradiohead | ✔️           |      |            | Provides multicasts                          |
-| dipitvhead    | ✔️           |      |            | Provides multicasts                          |
-| dipisds       | `--announce` |      | `--listen` | Service accouncements / reader               |
-| dipiepg       | `--announce` |      | `--listen` | EPG publisher / reader                       |
-| dipixmltv     | (maybe)      |      | ✔️         | XMLTV converter (from/to)                    |
-| dipifccret    | ✔️           | ✔️   |            | FCC/RET service, depends on network topology |
-| dipirec       |              |      | ✔️         | Multicast recorder                           |
-| dipiscan      |              |      | ✔️         | Scan for services (if no SD&S is in use)     |
-| dipibim       |              |      | ✔️         | Debugging tool                               |
+| Tool          | Headend      | Edge | Client     | Reason                                   |
+|---------------|--------------|------|------------|------------------------------------------|
+| dipiradiohead | ✔️           |      |            | Provides multicasts                      |
+| dipitvhead    | ✔️           |      |            | Provides multicasts                      |
+| dipisds       | `--announce` |      | `--listen` | Service accouncements / reader           |
+| dipiepg       | `--announce` |      | `--listen` | EPG publisher / reader                   |
+| dipixmltv     | (maybe)      |      | ✔️         | XMLTV converter (from/to)                |
+| dipifcc       | ✔️           | ✔️   |            | FCC service, depends on network topology |
+| dipiret       | ✔️           | ✔️   |            | Retransmission (Annex F), pcap-based     |
+| dipirec       |              |      | ✔️         | Multicast recorder                       |
+| dipiscan      |              |      | ✔️         | Scan for services (if no SD&S is in use) |
+| dipibim       |              |      | ✔️         | Debugging tool                           |
 
 ## Editorial notes
 
@@ -79,7 +84,7 @@ between real-world usage of media formats and the standard.
 ### Known gaps
 On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 
-* FEC & FCC/RET: Annex E, Annex F, Annex I/J
+* FEC & FCC: Annex E, Annex I/J
 * RMS-FUS, Remote Management and Firmware Update
 * DVB Companion Screens and Streams
 * DVB Home Network, ETSI TS 102 905

@@ -18,10 +18,12 @@ struct mcast {
   int fd;
   int family;
   int sender; /* nonzero: send-side, mreq unused, no leave on close */
+  int ssm; /* nonzero: joined via gsr below, not mreq */
   union {
     struct ip_mreqn v4;
     struct ipv6_mreq v6;
-  } mreq; /* for leave on close */
+  } mreq; /* for leave on close, ASM join */
+  struct group_source_req gsr; /* for leave on close, SSM join */
   union {
     struct sockaddr_in v4;
     struct sockaddr_in6 v6;
@@ -102,6 +104,101 @@ fail:
   return NULL;
 }
 
+mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char *source_addr, const char *iface, int recv_timeout_ms) {
+  mcast_t *m = calloc(1, sizeof *m);
+  unsigned ifidx = 0;
+  int on = 1;
+  int level = (family == AF_INET) ? IPPROTO_IP : IPPROTO_IPV6;
+  struct timeval tv;
+
+  tv.tv_sec = recv_timeout_ms / 1000;
+  tv.tv_usec = (recv_timeout_ms % 1000) * 1000;
+
+  if (!m)
+    return NULL;
+  m->family = family;
+  m->ssm = 1;
+  m->fd = socket(family, SOCK_DGRAM, IPPROTO_UDP);
+  if (m->fd < 0) {
+    log_line("socket: %s", strerror(errno));
+    free(m);
+    return NULL;
+  }
+  setsockopt(m->fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
+  {
+    int rcvbuf = 4 * 1024 * 1024;
+    setsockopt(m->fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf);
+  }
+  if (iface) {
+    ifidx = if_nametoindex(iface);
+    if (!ifidx) {
+      log_line("unknown interface: %s", iface);
+      goto fail;
+    }
+  }
+
+  memset(&m->gsr, 0, sizeof m->gsr);
+  m->gsr.gsr_interface = ifidx;
+  if (family == AF_INET) {
+    struct sockaddr_in a;
+    struct sockaddr_in *gp = (struct sockaddr_in *)&m->gsr.gsr_group;
+    struct sockaddr_in *sp = (struct sockaddr_in *)&m->gsr.gsr_source;
+    memset(&a, 0, sizeof a);
+    a.sin_family = AF_INET;
+    a.sin_port = htons((unsigned short)port);
+    a.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (bind(m->fd, (struct sockaddr *)&a, sizeof a) < 0) {
+      log_line("bind: %s", strerror(errno));
+      goto fail;
+    }
+    gp->sin_family = AF_INET;
+    gp->sin_port = htons((unsigned short)port);
+    if (inet_pton(AF_INET, group, &gp->sin_addr) != 1) {
+      log_line("bad group address: %s", group);
+      goto fail;
+    }
+    sp->sin_family = AF_INET;
+    if (inet_pton(AF_INET, source_addr, &sp->sin_addr) != 1) {
+      log_line("bad source address: %s", source_addr);
+      goto fail;
+    }
+  } else {
+    struct sockaddr_in6 a;
+    struct sockaddr_in6 *gp = (struct sockaddr_in6 *)&m->gsr.gsr_group;
+    struct sockaddr_in6 *sp = (struct sockaddr_in6 *)&m->gsr.gsr_source;
+    memset(&a, 0, sizeof a);
+    a.sin6_family = AF_INET6;
+    a.sin6_port = htons((unsigned short)port);
+    if (bind(m->fd, (struct sockaddr *)&a, sizeof a) < 0) {
+      log_line("bind: %s", strerror(errno));
+      goto fail;
+    }
+    gp->sin6_family = AF_INET6;
+    gp->sin6_port = htons((unsigned short)port);
+    if (inet_pton(AF_INET6, group, &gp->sin6_addr) != 1) {
+      log_line("bad group address: %s", group);
+      goto fail;
+    }
+    sp->sin6_family = AF_INET6;
+    if (inet_pton(AF_INET6, source_addr, &sp->sin6_addr) != 1) {
+      log_line("bad source address: %s", source_addr);
+      goto fail;
+    }
+  }
+  if (setsockopt(m->fd, level, MCAST_JOIN_SOURCE_GROUP, &m->gsr, sizeof m->gsr) < 0) {
+    log_line("join %s from %s: %s", group, source_addr, strerror(errno));
+    goto fail;
+  }
+  setsockopt(m->fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+  return m;
+
+fail:
+  if (m->fd >= 0)
+    close(m->fd);
+  free(m);
+  return NULL;
+}
+
 ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap) {
   ssize_t n = recv(m->fd, buf, cap, 0);
   if (n < 0) {
@@ -112,6 +209,8 @@ ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap) {
   }
   return n;
 }
+
+int mcast_fd(const mcast_t *m) { return m->fd; }
 
 mcast_t *mcast_open_send(int family, const char *group, unsigned port, const char *iface, int ttl) {
   mcast_t *m = calloc(1, sizeof *m);
@@ -200,11 +299,20 @@ ssize_t mcast_send(mcast_t *m, const void *buf, size_t len) {
   return n;
 }
 
+int mcast_set_tos(mcast_t *m, int tos) {
+  if (m->family == AF_INET)
+    return setsockopt(m->fd, IPPROTO_IP, IP_TOS, &tos, sizeof tos);
+  return setsockopt(m->fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof tos);
+}
+
 void mcast_close(mcast_t *m) {
   if (!m)
     return;
   if (m->fd >= 0) {
-    if (!m->sender) {
+    if (m->ssm) {
+      int level = (m->family == AF_INET) ? IPPROTO_IP : IPPROTO_IPV6;
+      setsockopt(m->fd, level, MCAST_LEAVE_SOURCE_GROUP, &m->gsr, sizeof m->gsr);
+    } else if (!m->sender) {
       if (m->family == AF_INET)
         setsockopt(m->fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &m->mreq.v4, sizeof m->mreq.v4);
       else

@@ -13,15 +13,18 @@ dipirec_SRCS := \
 	src/dipirec/main.c \
 	src/dipirec/args.c \
 	src/dipirec/record.c \
+	src/dipirec/ret_client.c \
 	src/lib/log.c \
 	src/lib/signal.c \
 	src/lib/net/multicast.c \
 	src/lib/net/udpxy.c \
 	src/lib/demux/rtp.c \
+	src/lib/demux/rtx.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/psi.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/pes.c \
+	src/lib/mux/rtcp_build.c \
 	src/dipirec/filter/ts.c \
 	src/dipirec/mux/ebml.c \
 	src/dipirec/mux/mkv.c \
@@ -186,6 +189,31 @@ dipitvhead_SRCS := \
 	src/lib/mux/rtpheader.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c
+
+HAVE_LIBPCAP := $(shell pkg-config --exists libpcap && echo yes)
+
+ifeq ($(HAVE_LIBPCAP),yes)
+TOOLS += dipiret
+dipiret_EXTRA_CFLAGS := -pthread $(shell pkg-config --cflags libpcap)
+dipiret_EXTRA_LDFLAGS := -pthread $(shell pkg-config --libs libpcap)
+dipiret_SRCS := \
+	src/dipiret/main.c \
+	src/dipiret/args.c \
+	src/dipiret/capture.c \
+	src/dipiret/channel.c \
+	src/dipiret/mcsend.c \
+	src/dipiret/ret.c \
+	src/dipiret/listen.c \
+	src/lib/log.c \
+	src/lib/signal.c \
+	src/lib/net/multicast.c \
+	src/lib/demux/rtp.c \
+	src/lib/demux/rtcp.c \
+	src/lib/mux/rtcp_build.c \
+	src/lib/mux/rtx.c
+else
+$(warning dipiret: libpcap not found via pkg-config, skipping this tool entirely (not an optional-feature degrade, capture is its whole purpose))
+endif
 
 ALL_OBJS :=
 

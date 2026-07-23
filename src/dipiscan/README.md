@@ -62,7 +62,7 @@ Prints packet counts per candidate on stderr, in addition to the name.
 
 `^C` SIGINT or SIGTERM stops the scan after the current candidate and closes the playlist properly.
 
-## Some examples
+## Examples
 
 ```sh
 # default range, m3u to stdout

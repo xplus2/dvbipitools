@@ -25,6 +25,14 @@ typedef struct {
   out_fmt_t format;        /* -f, listen */
   int verbose;             /* -v */
   int color_mode;          /* --color; log_color_t */
+
+  int ret_enabled;      /* --ret-addr given, announce */
+  char ret_addr[64];     /* --ret-addr host part */
+  unsigned ret_port;     /* --ret-addr port part */
+  unsigned ret_rtx_time; /* --ret-rtx-time, default 2000 */
+  unsigned char ret_rtx_pt; /* --ret-rtx-pt, default 99 */
+  int ret_mc;            /* --ret-mc */
+  unsigned ret_mc_port;  /* --ret-mc-port, 0 = reuse each service's own port */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

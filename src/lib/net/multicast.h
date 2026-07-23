@@ -12,14 +12,23 @@ typedef struct mcast mcast_t;
 /* join group:port (ASM) on iface, NULL = kernel default. recv_timeout_ms bounds mcast_recv()'s wait */
 mcast_t *mcast_open(int family, const char *group, unsigned port, const char *iface, int recv_timeout_ms);
 
+/* join group:port, filtered to source_addr only (SSM, RFC 4607); same family for group and source_addr */
+mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char *source_addr, const char *iface, int recv_timeout_ms);
+
 /* one datagram. >0 len, 0 timeout, -1 error */
 ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap);
+
+/* underlying fd, for poll()/select() alongside other sockets */
+int mcast_fd(const mcast_t *m);
 
 /* send-side: no join, no bind. iface NULL = kernel default route. ttl 0 = kernel default (1) */
 mcast_t *mcast_open_send(int family, const char *group, unsigned port, const char *iface, int ttl);
 
 /* one datagram to the group:port given to mcast_open_send. >=0 sent, -1 error */
 ssize_t mcast_send(mcast_t *m, const void *buf, size_t len);
+
+/* IP_TOS (v4) / IPV6_TCLASS (v6) on the send-side socket, e.g. per-packet DSCP marking; 0 on success */
+int mcast_set_tos(mcast_t *m, int tos);
 
 /* leave (recv side) and close */
 void mcast_close(mcast_t *m);

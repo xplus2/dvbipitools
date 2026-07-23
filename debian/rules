@@ -20,3 +20,4 @@ override_dh_auto_install:
 	install -D -m 0755 $(BUILDDIR)/src/dipibim/dipibim debian/dvbipitools/usr/bin/dipibim
 	install -D -m 0755 $(BUILDDIR)/src/dipiepg/dipiepg debian/dvbipitools/usr/bin/dipiepg
 	install -D -m 0755 $(BUILDDIR)/src/dipitvhead/dipitvhead debian/dvbipitools/usr/bin/dipitvhead
+	install -D -m 0755 $(BUILDDIR)/src/dipiret/dipiret debian/dvbipitools/usr/bin/dipiret

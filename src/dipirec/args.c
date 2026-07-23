@@ -94,6 +94,53 @@ static int parse_direct(const char *rest, source_t *s) {
   return 0;
 }
 
+/* [addr]:<port> or <addr4>:<port>, unicast, no multicast restriction (unlike parse_direct above) */
+static int unicast_addr_port_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
+  char addr[64];
+  if (*s == '[') {
+    const char *close = strchr(s, ']');
+    size_t len;
+    if (!close)
+      return -1;
+    len = (size_t)(close - (s + 1));
+    if (len == 0 || len >= sizeof addr)
+      return -1;
+    memcpy(addr, s + 1, len);
+    addr[len] = '\0';
+    if (close[1] != ':' || port_parse(close + 2, port_out))
+      return -1;
+    *family = AF_INET6;
+  } else {
+    const char *colon = strrchr(s, ':');
+    size_t len;
+    if (!colon)
+      return -1;
+    len = (size_t)(colon - s);
+    if (len == 0 || len >= sizeof addr)
+      return -1;
+    memcpy(addr, s, len);
+    addr[len] = '\0';
+    if (port_parse(colon + 1, port_out))
+      return -1;
+    *family = AF_INET;
+  }
+
+  if (*family == AF_INET) {
+    struct in_addr a;
+    if (inet_pton(AF_INET, addr, &a) != 1)
+      return -1;
+  } else {
+    struct in6_addr a6;
+    if (inet_pton(AF_INET6, addr, &a6) != 1)
+      return -1;
+  }
+
+  if (strlen(addr) >= addr_out_sz)
+    return -1;
+  strcpy(addr_out, addr);
+  return 0;
+}
+
 /* rest: host[:port]/cmd/... */
 static int parse_udpxy(const char *rest, source_t *s) {
   const char *p = rest;
@@ -365,6 +412,11 @@ static void print_help(void) {
       "  -v, --verbose          periodic recording stats on stderr\n"
       "      --sub-lead <ms>    shift subtitles earlier (default 1000)\n"
       "      --color <when>     auto|always|never (default auto)\n"
+      "      --ret <addr>:<port>   RET server unicast address (rtp:// only; enables gap repair)\n"
+      "      --no-ret-mc        skip joining the RET server's multicast repair session\n"
+      "      --ret-mc-port <port>  override the repair session port (default: -i's port)\n"
+      "      --ret-pt <n>       RTX payload type, must match the RET server (default 99)\n"
+      "      --ret-wait <ms>    hold budget after a NACK before giving up on a gap (default 200)\n"
       "  -h, --help             this help\n\n"
       "formats:\n"
       "  raw   unwrap RTP only, transport stream otherwise untouched\n"
@@ -392,6 +444,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"verbose", no_argument, 0, 'v'},
       {"sub-lead", required_argument, 0, 1000},
       {"color", required_argument, 0, 1001},
+      {"ret", required_argument, 0, 1002},
+      {"no-ret-mc", no_argument, 0, 1003},
+      {"ret-mc-port", required_argument, 0, 1004},
+      {"ret-pt", required_argument, 0, 1005},
+      {"ret-wait", required_argument, 0, 1006},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   const char *fmt_arg = NULL;
@@ -404,6 +461,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->audio_all = 1;
   cfg->subs = SUB_KEEP;
   cfg->sub_lead_ms = 1000;   /* teletext trails speech */
+  cfg->ret.mc_enabled = 1;
+  cfg->ret.rtx_pt = 99;
+  cfg->ret.wait_ms = 200;
   optind = 1;
   while ((c = getopt_long(argc, argv, "o:i:a:f:s:t:I:vh", longopts, NULL)) !=
          -1) {
@@ -459,6 +519,46 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     case 'v':
         cfg->verbose = 1;
         break;
+      case 1002:
+        if (unicast_addr_port_parse(optarg, &cfg->ret.family, cfg->ret.addr, sizeof cfg->ret.addr, &cfg->ret.port)) {
+          argerr("invalid --ret addr:port: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->ret.enabled = 1;
+        break;
+      case 1003:
+        cfg->ret.mc_enabled = 0;
+        break;
+      case 1004: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 65535) {
+          argerr("invalid --ret-mc-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->ret.mc_port = (unsigned)v;
+        break;
+      }
+      case 1005: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v > 127) {
+          argerr("invalid --ret-pt: %s (0..127)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->ret.rtx_pt = (unsigned char)v;
+        break;
+      }
+      case 1006: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0) {
+          argerr("invalid --ret-wait: %s (ms)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->ret.wait_ms = (unsigned)v;
+        break;
+      }
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -476,6 +576,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (!have_in) {
     argerr("missing -i input");
+    return ARGS_ERR;
+  }
+  if (cfg->ret.enabled && cfg->source.kind != URI_RTP) {
+    argerr("--ret requires -i rtp://, no RTP sequence numbers otherwise");
+    return ARGS_ERR;
+  }
+  if (cfg->ret.enabled && cfg->ret.mc_enabled && cfg->ret.family != cfg->source.family) {
+    argerr("--ret family must match -i's for the SSM repair join; use --no-ret-mc otherwise");
     return ARGS_ERR;
   }
   if (sub_arg) {

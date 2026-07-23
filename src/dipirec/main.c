@@ -95,7 +95,8 @@ int main(int argc, char **argv) {
   n = app(line, sizeof line, n, " \e[1ms:\e[0m\e[0;37m%s\e[0m", sub_name(cfg.subs));
   if (cfg.duration_s) n = app(line, sizeof line, n, " \e[1md:\e[0m\e[0;37m%ld\e[0m s", cfg.duration_s);
   else n = app(line, sizeof line, n, " \e[1md:\e[0m\e[0;37mforever\e[0m");
-  if (cfg.iface) app(line, sizeof line, n, " \e[1mif:\e[0m\e[0;37m%s\e[0m", cfg.iface);
+  if (cfg.iface) n = app(line, sizeof line, n, " \e[1mif:\e[0m\e[0;37m%s\e[0m", cfg.iface);
+  if (cfg.ret.enabled) app(line, sizeof line, n, " \e[1mret:\e[0m\e[0;37m%s:%u%s\e[0m", cfg.ret.addr, cfg.ret.port, cfg.ret.mc_enabled ? "+mc" : "");
   log_line_ansi("%s", line);
   signals_install();
   return record_run(&cfg);
