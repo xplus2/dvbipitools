@@ -28,7 +28,12 @@ jobs:
     - name: build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake debhelper devscripts libssl-dev libpcap-dev ${{ matrix.crosspkg }}
+        sudo apt-get install -y build-essential cmake debhelper devscripts libssl-dev ${{ matrix.crosspkg }}
+        # native libpcap-dev only for amd64: it ships /usr/bin/pcap-config with arch-specific content,
+        # so it can't coexist with a foreign-arch libpcap-dev:$arch in the same job
+        if [ "${{ matrix.arch }}" = "amd64" ]; then
+          sudo apt-get install -y libpcap-dev
+        fi
         # ports arches aren't on the default mirrors; scoped update from ports.ubuntu.com only
         if [ "${{ matrix.arch }}" != "amd64" ]; then
           sudo dpkg --add-architecture ${{ matrix.arch }}
