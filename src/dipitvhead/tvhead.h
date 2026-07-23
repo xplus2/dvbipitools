@@ -1,10 +1,11 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIRADIOHEAD_VERSION_H
-#define DIPIRADIOHEAD_VERSION_H
+#ifndef DIPITVHEAD_TVHEAD_H
+#define DIPITVHEAD_TVHEAD_H
 
-#define TOOL_NAME    "dipiradiohead"
-#define TOOL_VERSION "2.2.0"
+#include "args.h"
+
+int tvhead_run(const config_t *cfg);
 
 #endif

@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIRADIOHEAD_MUX_RTPHEADER_H
-#define DIPIRADIOHEAD_MUX_RTPHEADER_H
+#ifndef DVBIPITOOLS_LIB_MUX_RTPHEADER_H
+#define DVBIPITOOLS_LIB_MUX_RTPHEADER_H
 
 #include <stddef.h>
 #include <stdint.h>

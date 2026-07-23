@@ -13,6 +13,7 @@ typedef struct {
   unsigned mcast_port;   /* -m port */
   const char *iface;     /* -I; NULL = kernel default route */
   int rtp;               /* -r */
+  unsigned ttl;          /* -T; 0 = kernel default (1) */
   char nit_text[256];    /* -n; empty = no NIT network_name descriptor */
   char sdt_text[256];    /* -s; empty = "dipiradiohead" */
   long error_retry_s;    /* -e; 0 = no retry, fail on first input error */

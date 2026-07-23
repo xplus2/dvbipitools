@@ -126,6 +126,7 @@ static void print_help(void) {
       "  -m, --mcast <g>:<p>    output multicast group:port ([addr6]:port for v6)\n"
       "  -I, --iface <iface>    outgoing multicast interface\n"
       "  -r, --rtp              wrap output in RTP (default: plain UDP)\n"
+      "  -T, --ttl <n>          multicast TTL / hop limit (default: 1)\n"
       "  -n, --nit <text>       NIT network_name\n"
       "  -s, --sdt <text>       SDT service_name\n"
       "  -e, --error <seconds>  on input error, reconnect after N s (default: fail once)\n"
@@ -148,6 +149,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"mcast", required_argument, 0, 'm'},
       {"iface", required_argument, 0, 'I'},
       {"rtp", no_argument, 0, 'r'},
+      {"ttl", required_argument, 0, 'T'},
       {"nit", required_argument, 0, 'n'},
       {"sdt", required_argument, 0, 's'},
       {"error", required_argument, 0, 'e'},
@@ -167,7 +169,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->onid = 1;
   cfg->sid = 1;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "i:m:I:rn:s:e:kvh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "i:m:I:rT:n:s:e:kvh", longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
         cfg->input_uri = optarg;
@@ -186,6 +188,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'r':
         cfg->rtp = 1;
         break;
+      case 'T': {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 255) {
+          argerr("invalid -T ttl: %s (1..255)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->ttl = (unsigned)v;
+        break;
+      }
       case 'n':
         snprintf(cfg->nit_text, sizeof cfg->nit_text, "%s", optarg);
         break;

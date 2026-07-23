@@ -14,8 +14,13 @@ typedef struct {
   unsigned char buf[4096];
 } sect_asm_t;
 
+typedef struct {
+  unsigned program_number, pmt_pid;
+  sect_asm_t asm_;
+} pmt_cand_t;
+
 struct psi {
-  sect_asm_t pat, pmt, sdt, nit;
+  sect_asm_t pat, sdt, nit;
   int have_pat, have_pmt, have_sdt, have_nit;
   unsigned program_number, pmt_pid, pcr_pid, nit_pid;
   unsigned tsid, onid;
@@ -24,10 +29,17 @@ struct psi {
   unsigned ecm[PSI_MAX_ES];
   int ecm_count;
   char service_name[PSI_NAME], provider_name[PSI_NAME], network_name[PSI_NAME];
+  psi_program_t pat_programs[PSI_MAX_PROGRAMS];
+  int pat_program_count;
+  pmt_cand_t pmt_cand[PSI_MAX_PROGRAMS];
+  int pmt_cand_count;
+  unsigned preferred_pmt_pid; /* 0 = none, auto-select whichever candidate resolves first */
+  int pmt_locked;             /* program_number/pmt_pid finalized, pmt_cand[pmt_lock_idx] is the live one */
+  int pmt_lock_idx;
 };
 
 static void parse_pat(psi_t *c);
-static void parse_pmt(psi_t *c);
+static int parse_pmt(psi_t *c, pmt_cand_t *cand);
 static void parse_sdt(psi_t *c);
 static void parse_nit(psi_t *c);
 
@@ -174,9 +186,18 @@ static void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
           if (ty == 2 || ty == 5)
             break;
         }
-      } else if (find_desc(desc, dlen, 0x59, &l))
+      } else if ((ld = find_desc(desc, dlen, 0x59, &l)) != NULL) {
         e->cls = PID_SUBTITLE;
-      else if (find_desc(desc, dlen, 0x6A, &l)) {
+        if (l >= 8) {
+          e->sub_type = ld[3];
+          e->sub_composition_page = ((unsigned)ld[4] << 8) | ld[5];
+          e->sub_ancillary_page = ((unsigned)ld[6] << 8) | ld[7];
+          if (!e->lang[0]) {
+            memcpy(e->lang, ld, 3);
+            e->lang[3] = '\0';
+          }
+        }
+      } else if (find_desc(desc, dlen, 0x6A, &l)) {
         e->cls = PID_AUDIO;
         e->codec = CODEC_AC3;
       } else if (find_desc(desc, dlen, 0x7A, &l)) {
@@ -201,40 +222,68 @@ static void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
   }
 }
 
+/* existing candidate for this pmt_pid, or NULL */
+static pmt_cand_t *find_cand(psi_t *c, unsigned pmt_pid) {
+  int k;
+  for (k = 0; k < c->pmt_cand_count; k++)
+    if (c->pmt_cand[k].pmt_pid == pmt_pid)
+      return &c->pmt_cand[k];
+  return NULL;
+}
+
 static void parse_pat(psi_t *c) {
   const unsigned char *b = c->pat.buf;
   size_t n = c->pat.expect, i, end;
   if (n < 12 || b[0] != 0x00 || crc32_mpeg(b, n) != 0)
     return;
-  c->pmt_pid = 0;
   c->nit_pid = 0;
+  c->pat_program_count = 0;
+  /* pmt_cand[] is deliberately NOT reset here: a candidate's PMT may still
+   * be mid-assembly, and the PAT repeats far more often than that takes. */
   c->tsid = ((unsigned)b[3] << 8) | b[4];
   end = n - 4;
   for (i = 8; i + 4 <= end; i += 4) {
     unsigned prog = ((unsigned)b[i] << 8) | b[i + 1];
     unsigned pid = (((unsigned)b[i + 2] & 0x1F) << 8) | b[i + 3];
-    if (prog == 0)
+    if (prog == 0) {
       c->nit_pid = pid;
-    else if (!c->pmt_pid) {
-      c->pmt_pid = pid;
-      c->program_number = prog;
+      continue;
+    }
+    if (c->pat_program_count < PSI_MAX_PROGRAMS) {
+      c->pat_programs[c->pat_program_count].program_number = prog;
+      c->pat_programs[c->pat_program_count].pmt_pid = pid;
+      c->pat_program_count++;
+    }
+    if (c->pmt_locked)
+      continue;
+    if (c->preferred_pmt_pid && pid != c->preferred_pmt_pid)
+      continue;
+    if (!find_cand(c, pid) && c->pmt_cand_count < PSI_MAX_PROGRAMS) {
+      pmt_cand_t *cand = &c->pmt_cand[c->pmt_cand_count];
+      memset(cand, 0, sizeof *cand);
+      cand->program_number = prog;
+      cand->pmt_pid = pid;
+      c->pmt_cand_count++;
     }
   }
   c->have_pat = 1;
 }
 
-static void parse_pmt(psi_t *c) {
-  const unsigned char *b = c->pmt.buf;
-  size_t n = c->pmt.expect, i, end, pil, l;
+/* 1 if this candidate's section parsed into a valid, complete PMT */
+static int parse_pmt(psi_t *c, pmt_cand_t *cand) {
+  const unsigned char *b = cand->asm_.buf;
+  size_t n = cand->asm_.expect, i, end, pil, l;
   unsigned prog;
   const unsigned char *ca;
   int k;
   if (n < 16 || b[0] != 0x02 || crc32_mpeg(b, n) != 0)
-    return;
+    return 0;
   prog = ((unsigned)b[3] << 8) | b[4];
-  if (prog != c->program_number)
-    return;
+  if (prog != cand->program_number)
+    return 0;
 
+  c->program_number = prog;
+  c->pmt_pid = cand->pmt_pid;
   c->pcr_pid = (((unsigned)b[8] & 0x1F) << 8) | b[9];
   pil = (((size_t)b[10] & 0x0F) << 8) | b[11];
   c->es_count = 0;
@@ -270,6 +319,7 @@ static void parse_pmt(psi_t *c) {
     if (c->es[k].cls == PID_AUDIO)
       c->es[k].audio_index = ++c->audio_count;
   c->have_pmt = 1;
+  return 1;
 }
 
 static void parse_sdt(psi_t *c) {
@@ -357,10 +407,30 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
   } else if (pid == 0x0011) {
     if (asm_feed(&c->sdt, pl, plen, pusi))
       parse_sdt(c);
-  } else if (c->have_pat && pid == c->pmt_pid) {
-    if (asm_feed(&c->pmt, pl, plen, pusi))
-      parse_pmt(c);
+  } else if (c->pmt_locked) {
+    if (pid == c->pmt_pid && asm_feed(&c->pmt_cand[c->pmt_lock_idx].asm_, pl, plen, pusi))
+      parse_pmt(c, &c->pmt_cand[c->pmt_lock_idx]);
+  } else if (c->have_pat) {
+    int k;
+    for (k = 0; k < c->pmt_cand_count; k++) {
+      pmt_cand_t *cand = &c->pmt_cand[k];
+      if (cand->pmt_pid != pid)
+        continue;
+      if (asm_feed(&cand->asm_, pl, plen, pusi) && parse_pmt(c, cand)) {
+        c->pmt_locked = 1;
+        c->pmt_lock_idx = k;
+      }
+      break;
+    }
   }
+}
+
+void psi_select_pmt_pid(psi_t *c, unsigned pmt_pid) { c->preferred_pmt_pid = pmt_pid; }
+
+const psi_program_t *psi_pat_programs(const psi_t *c, int *count) {
+  if (count)
+    *count = c->pat_program_count;
+  return c->pat_programs;
 }
 
 int psi_have_pat(const psi_t *c) { return c->have_pat; }
@@ -435,14 +505,14 @@ const unsigned char *psi_pat_section(const psi_t *c, size_t *len) {
 }
 
 const unsigned char *psi_pmt_section(const psi_t *c, size_t *len) {
-  if (!c->have_pmt) {
+  if (!c->have_pmt || !c->pmt_locked) {
     if (len)
       *len = 0;
     return NULL;
   }
   if (len)
-    *len = c->pmt.expect;
-  return c->pmt.buf;
+    *len = c->pmt_cand[c->pmt_lock_idx].asm_.expect;
+  return c->pmt_cand[c->pmt_lock_idx].asm_.buf;
 }
 
 const char *pid_class_name(pid_class_t k) {

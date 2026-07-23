@@ -6,7 +6,8 @@ Command line tools for DVB-IPI streams.
 
 * [dipibim](src/dipibim/README.md) - convert between the plain TVA XML shape and its BiM binary encoding
 * [dipiepg](src/dipiepg/README.md) - DVBSTP TVA EPG publisher / listener
-* [dipiradiohead](src/dipiradiohead/README.md) - use Ice-/Shoutcast radio sources for multicast distribution
+* [dipiradiohead](src/dipiradiohead/README.md) - use Ice-/Shoutcast radio sources for multicast radio distribution
+* [dipitvhead](src/dipitvhead/README.md) - use pre-encoded video streams as sources for multicast tv distribution
 * [dipirec](src/dipirec/README.md) - record a DVB-IPI multicast
 * [dipiscan](src/dipiscan/README.md) - scan an IP range for DVB-IPI multicasts
 * [dipisds](src/dipisds/README.md) - DVBSTP/SD&S service discovery: announce/listen to a service list on multicast
@@ -23,16 +24,30 @@ cmake --build build
 Options: 
 * `-DCMAKE_BUILD_TYPE=Debug|Release` / `--debug|--release`
 * `-DDVBIPITOOLS_STATIC=ON` / `--static` for a static link
-* `-DDIPIRADIOHEAD_TLS=OFF` to build dipiradiohead without HTTPS support (no OpenSSL needed);
-  default is `ON`, auto-falls back to off if OpenSSL isn't found (same via the legacy Makefile,
-  detected through `pkg-config`)
+* `-DDIPIRADIOHEAD_TLS=OFF` / `-DDIPITVHEAD_TLS=OFF` to build either tool without HTTPS support
+  (no OpenSSL needed); default is `ON` for both, auto-falls back to off if OpenSSL isn't found
+  (same via the legacy Makefile, detected through `pkg-config`)
 
 ## Packaging
 ```sh
 dpkg-buildpackage -b -us -uc
 ```
 Build-Depends: `debhelper (>= 13)`, `cmake`, `libssl-dev` (`libssl-dev` is only needed for
-dipiradiohead's HTTPS support)
+dipiradiohead's and dipitvhead's HTTPS support)
+
+## Location of deployment
+
+| Tool          | Headend      | Edge | Client     | Reason                                       |
+|---------------|--------------|------|------------|----------------------------------------------|
+| dipiradiohead | ✔️           |      |            | Provides multicasts                          |
+| dipitvhead    | ✔️           |      |            | Provides multicasts                          |
+| dipisds       | `--announce` |      | `--listen` | Service accouncements / reader               |
+| dipiepg       | `--announce` |      | `--listen` | EPG publisher / reader                       |
+| dipixmltv     | (maybe)      |      | ✔️         | XMLTV converter (from/to)                    |
+| dipifccret    | ✔️           | ✔️   |            | FCC/RET service, depends on network topology |
+| dipirec       |              |      | ✔️         | Multicast recorder                           |
+| dipiscan      |              |      | ✔️         | Scan for services (if no SD&S is in use)     |
+| dipibim       |              |      | ✔️         | Debugging tool                               |
 
 ## Editorial notes
 
@@ -43,6 +58,9 @@ between real-world usage of media formats and the standard.
 * dipiradiohead
   - Icecast/Shoutcast as an input source - none of this is part of DVB.
   - ICY `StreamTitle`, inline ID3v2 `TIT2`/`TPE1` mapping into EIT.
+* dipitvhead
+  - HbbTV AIT injection (`--hbbtv`, ETSI TS 102 809) is hybrid broadcast/broadband signalling,
+    a separate spec from DVB-IPI itself.
 * dipirec
   - `mkv` and `mka` containers.
   - `srt` subtitles from EBU Teletext (ETSI EN 300 706). SRT isn't a DVB format at all.

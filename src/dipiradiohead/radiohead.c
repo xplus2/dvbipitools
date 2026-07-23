@@ -11,7 +11,7 @@
 #include "lib/signal.h"
 
 #include "input/source.h"
-#include "mux/rtpheader.h"
+#include "lib/mux/rtpheader.h"
 #include "mux/tspacketizer.h"
 #include "radiohead.h"
 
@@ -93,7 +93,7 @@ int radiohead_run(const config_t *cfg) {
   int rc = 0;
   memset(&meta, 0, sizeof meta);
   memset(&out, 0, sizeof out);
-  mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, 0);
+  mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, (int)cfg->ttl);
   if (!mc)
     return 1;
   out.mc = mc;

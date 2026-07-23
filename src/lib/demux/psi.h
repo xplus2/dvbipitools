@@ -48,7 +48,17 @@ typedef struct {
   unsigned ttx_page;   /* teletext page (e.g. 777), 0 if none */
   int ttx_type;        /* teletext_type; 2/5 = subtitle */
   char ttx_lang[4];    /* teletext ISO 639 language */
+  unsigned sub_composition_page; /* subtitling_descriptor composition_page_id, 0 if none */
+  unsigned sub_ancillary_page;   /* subtitling_descriptor ancillary_page_id, 0 if none */
+  unsigned sub_type;             /* subtitling_descriptor subtitling_type, 0 if none */
 } psi_es_t;
+
+#define PSI_MAX_PROGRAMS 64
+
+typedef struct {
+  unsigned program_number;
+  unsigned pmt_pid;
+} psi_program_t;
 
 typedef struct psi psi_t;
 
@@ -56,10 +66,19 @@ psi_t *psi_new(void);
 void psi_free(psi_t *c);
 void psi_feed(psi_t *c, const unsigned char *pkt); /* one 188-byte packet */
 
+/* call any time before the PMT locks in, to force one program's PMT PID
+ * instead of auto-selecting whichever PAT-listed candidate resolves first.
+ * caller should cross-check against psi_pat_programs() to catch a pid not
+ * actually present in the PAT - psi_ready() simply never becomes true. */
+void psi_select_pmt_pid(psi_t *c, unsigned pmt_pid);
+
 int psi_have_pat(const psi_t *c);
 int psi_have_pmt(const psi_t *c);
 int psi_have_sdt(const psi_t *c);
 int psi_ready(const psi_t *c); /* pat + pmt seen */
+
+/* every program the PAT listed (network_pid entry excluded), valid once psi_have_pat() */
+const psi_program_t *psi_pat_programs(const psi_t *c, int *count);
 
 unsigned psi_program_number(const psi_t *c);
 unsigned psi_pmt_pid(const psi_t *c);

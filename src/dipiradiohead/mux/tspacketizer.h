@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "lib/mux/tspacket_write.h"
+
 typedef struct {
   unsigned tsid, onid, sid;
   unsigned stream_type; /* PMT stream_type of the detected codec */
@@ -21,8 +23,6 @@ void tspacketizer_free(tspacketizer_t *t);
 
 /* bumps the EIT version and forces an immediate re-send on the next feed */
 void tspacketizer_set_metadata(tspacketizer_t *t, const char *artist, const char *title);
-
-typedef void (*ts_packet_cb)(void *ctx, const unsigned char *pkt188);
 
 /* packetizes one audio frame as PES (with PCR), plus any PSI due by schedule/change. returns packet count */
 size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, const unsigned char *frame, size_t frame_len, ts_packet_cb cb, void *ctx);

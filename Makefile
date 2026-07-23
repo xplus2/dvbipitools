@@ -7,7 +7,7 @@ include config.mk
 
 .DEFAULT_GOAL := all
 
-TOOLS := dipirec dipiscan dipiradiohead dipisds dipixmltv dipibim dipiepg
+TOOLS := dipirec dipiscan dipiradiohead dipisds dipixmltv dipibim dipiepg dipitvhead
 
 dipirec_SRCS := \
 	src/dipirec/main.c \
@@ -148,7 +148,44 @@ dipiradiohead_SRCS := \
 	src/dipiradiohead/mux/psi.c \
 	src/dipiradiohead/mux/pes.c \
 	src/dipiradiohead/mux/tspacketizer.c \
-	src/dipiradiohead/mux/rtpheader.c
+	src/lib/mux/rtpheader.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c
+
+ifeq ($(HAVE_OPENSSL),yes)
+dipitvhead_TLS_SRC := src/lib/net/tls.c
+dipitvhead_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipitvhead_EXTRA_LDFLAGS := $(shell pkg-config --static --libs openssl)
+else
+dipitvhead_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+endif
+else
+dipitvhead_TLS_SRC := src/lib/net/tls_stub.c
+$(warning dipitvhead: OpenSSL not found via pkg-config, building without HTTPS support)
+endif
+
+dipitvhead_SRCS := \
+	src/dipitvhead/main.c \
+	src/dipitvhead/args.c \
+	src/dipitvhead/tvhead.c \
+	src/dipitvhead/input/source.c \
+	src/dipitvhead/mux/pmtbuild.c \
+	src/dipitvhead/mux/aitbuild.c \
+	src/dipitvhead/mux/remux.c \
+	src/dipitvhead/mux/bitrate.c \
+	src/lib/log.c \
+	src/lib/signal.c \
+	src/lib/net/multicast.c \
+	$(dipitvhead_TLS_SRC) \
+	src/lib/net/httpclient.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/psi.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/rtp.c \
+	src/lib/mux/rtpheader.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c
 
 ALL_OBJS :=
 

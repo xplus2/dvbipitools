@@ -6,11 +6,9 @@
 
 #include <stddef.h>
 
-/* each builds one section (table_id..CRC32 inclusive), matching lib/demux/psi.c's parser layout. 0 on overflow */
-size_t psi_build_pat(unsigned tsid, unsigned version, unsigned program_number, unsigned pmt_pid, unsigned char *out, size_t cap);
+/* psi_build_pat/sdt/nit moved to lib/mux/psi_build.h (shared, content-identical for radio/tv).
+ * each builds one section (table_id..CRC32 inclusive), matching lib/demux/psi.c's parser layout. 0 on overflow */
 size_t psi_build_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, unsigned stream_type, unsigned es_pid, unsigned char *out, size_t cap);
-size_t psi_build_sdt(unsigned version, unsigned tsid, unsigned onid, unsigned service_id, const char *provider, const char *service, unsigned char *out, size_t cap);
-size_t psi_build_nit(unsigned version, unsigned onid, unsigned tsid, const char *network_name, unsigned char *out, size_t cap);
 /* present event only (no following); duration_s is a nominal placeholder, real remaining time is unknown */
 size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, const char *artist, const char *title, unsigned duration_s, unsigned char *out, size_t cap);
 

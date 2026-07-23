@@ -15,6 +15,7 @@ src/*.o
 /dipixmltv
 /dipibim
 /dipiepg
+/dipitvhead
 
 # cmake generic and profile builds
 /build*/

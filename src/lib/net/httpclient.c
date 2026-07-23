@@ -139,11 +139,19 @@ static int raw_send_all(struct http *h, const char *buf, size_t n) {
   return 0;
 }
 
-static char *find_crlf2(char *b, size_t n) {
+/* end of headers: CRLFCRLF or bare LFLF (some servers skip \r). termlen: 4 or 2 */
+static char *find_header_end(char *b, size_t n, size_t *termlen) {
   size_t i;
-  for (i = 0; i + 3 < n; i++)
-    if (b[i] == '\r' && b[i + 1] == '\n' && b[i + 2] == '\r' && b[i + 3] == '\n')
+  for (i = 0; i + 1 < n; i++) {
+    if (b[i] == '\n' && b[i + 1] == '\n') {
+      *termlen = 2;
       return b + i;
+    }
+    if (i + 3 < n && b[i] == '\r' && b[i + 1] == '\n' && b[i + 2] == '\r' && b[i + 3] == '\n') {
+      *termlen = 4;
+      return b + i;
+    }
+  }
   return NULL;
 }
 
@@ -234,47 +242,58 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
     }
   }
 
-  rl = snprintf(req, sizeof req, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nIcy-MetaData: 1\r\nConnection: close\r\n\r\n", h->url.path, h->url.host, user_agent);
+  {
+    char hostport[300];
+    unsigned default_port = h->url.tls ? 443 : 80;
+    if (h->url.port == default_port)
+      snprintf(hostport, sizeof hostport, "%s", h->url.host);
+    else
+      snprintf(hostport, sizeof hostport, "%s:%u", h->url.host, h->url.port);
+    rl = snprintf(req, sizeof req, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nIcy-MetaData: 1\r\nConnection: close\r\n\r\n", h->url.path, hostport, user_agent);
+  }
   if (rl < 0 || rl >= (int)sizeof req) {
     log_line("http request too long");
     goto fail;
   }
   if (raw_send_all(h, req, (size_t)rl))
     goto fail;
-  while (got < sizeof h->hold) {
-    ssize_t n = raw_recv(h, h->hold + got, sizeof h->hold - got);
-    if (n < 0) {
-      log_line("http: connection closed while reading headers");
-      goto fail;
-    }
-    if (n == 0) {
-      log_line("http: timed out waiting for response headers");
-      goto fail;
-    }
-    got += (size_t)n;
-    term = find_crlf2((char *)h->hold, got);
-    if (term)
-      break;
-  }
-  if (got >= sizeof h->hold) {
-    log_line("http: response headers too large");
-    goto fail;
-  }
-  term = find_crlf2((char *)h->hold, got);
-  if (!term) {
-    log_line("http: no header terminator");
-    goto fail;
-  }
   {
-    size_t hdrlen = (size_t)(term - (char *)h->hold);
-    size_t consumed = hdrlen + 4;
-    char block[sizeof h->hold];
-    memcpy(block, h->hold, hdrlen);
-    block[hdrlen] = '\0';
-    parse_headers(h, block);
-    h->hlen = got - consumed;
-    memmove(h->hold, h->hold + consumed, h->hlen);
-    h->hpos = 0;
+    size_t termlen = 0;
+    while (got < sizeof h->hold) {
+      ssize_t n = raw_recv(h, h->hold + got, sizeof h->hold - got);
+      if (n < 0) {
+        log_line("http: connection closed while reading headers");
+        goto fail;
+      }
+      if (n == 0) {
+        log_line("http: timed out waiting for response headers");
+        goto fail;
+      }
+      got += (size_t)n;
+      term = find_header_end((char *)h->hold, got, &termlen);
+      if (term)
+        break;
+    }
+    if (got >= sizeof h->hold) {
+      log_line("http: response headers too large");
+      goto fail;
+    }
+    term = find_header_end((char *)h->hold, got, &termlen);
+    if (!term) {
+      log_line("http: no header terminator");
+      goto fail;
+    }
+    {
+      size_t hdrlen = (size_t)(term - (char *)h->hold);
+      size_t consumed = hdrlen + termlen;
+      char block[sizeof h->hold];
+      memcpy(block, h->hold, hdrlen);
+      block[hdrlen] = '\0';
+      parse_headers(h, block);
+      h->hlen = got - consumed;
+      memmove(h->hold, h->hold + consumed, h->hlen);
+      h->hpos = 0;
+    }
   }
   return h;
 

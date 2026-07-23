@@ -16,6 +16,7 @@ dipiradiohead -i <uri> -m <mcast>:<port> [options]
 | `-m` | `--mcast` | `<group>:<port>` / `[<group6>]:<port>` | required |
 | `-I` | `--iface` | `<iface>` | kernel route |
 | `-r` | `--rtp` | - | off (plain UDP) |
+| `-T` | `--ttl` | `<n>` | 1 (kernel default) |
 | `-n` | `--nit` | `<text>` | none |
 | `-s` | `--sdt` | `<text>` | `dipiradiohead` |
 | `-e` | `--error` | `<seconds>` | fail once, no retry |
@@ -47,7 +48,8 @@ Max 5 playlist hops, each re-sniffed.
 
 `-m <group>:<port>` / `-m [<group6>]:<port>`. `-I` sets the outgoing interface (default: kernel
 route). `-r` wraps output in RTP, matching `dipirec -i rtp://`; without it, plain UDP, matching
-`-i udp://`. 7 TS packets (1316 B) per datagram either way.
+`-i udp://`. 7 TS packets (1316 B) per datagram either way. `-T` sets the multicast TTL / hop
+limit (default 1, i.e. link-local only - raise it to route beyond the first hop).
 
 ## Now-playing metadata
 

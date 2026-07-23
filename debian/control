@@ -16,3 +16,4 @@ Description: command line tools for DVB-IPI streams
  dipixmltv converts between xmltv and the DVB-IPI EPG (TVA) xml shape.
  dipibim converts between the plain TVA xml shape and its BiM binary encoding.
  dipiepg announces an xmltv guide as BiM-encoded TVA fragments via DVBSTP/BCG (ETSI TS 102 539), or listens for one.
+ dipitvhead re-packages a transport stream (multicast, http(s), or stdin) as a DVB-IPI multicast, with target-bitrate control and optional HbbTV AIT injection.

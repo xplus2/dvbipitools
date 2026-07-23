@@ -1,3 +1,9 @@
+dvbipitools (1.4.0-1) unstable; urgency=medium
+
+  * merged dipitvhead to use dipiradiohead and src/lib/ commons. brought basic MPTS (multi PMT) support with it.
+
+ -- dvbipitools authors <unspecified@example.com>  Thu, 23 Jul 2026 00:00:00 +0200
+
 dvbipitools (1.3.0-1) unstable; urgency=medium
 
   * merged DVBSTP tools: dipixmltv, dipibim and dipiepg (EPG/BCG, ETSI TS 102 539, using the other two)
@@ -21,7 +27,6 @@ dvbipitools (1.0.7-1) unstable; urgency=medium
   * cross-platform builds
 
  -- dvbipitools authors <unspecified@example.com>  Sun, 19 Jul 2026 00:00:00 +0200
-
 
 dvbipitools (1.0.3-1) unstable; urgency=medium
 

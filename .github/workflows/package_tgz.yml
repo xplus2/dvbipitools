@@ -68,7 +68,7 @@ jobs:
         fi
         TLS_ARGS=""
         case "${{ matrix.arch }}" in
-          i386|armel) TLS_ARGS="-DDIPIRADIOHEAD_TLS=OFF" ;;
+          i386|armel) TLS_ARGS="-DDIPIRADIOHEAD_TLS=OFF -DDIPITVHEAD_TLS=OFF" ;;
           amd64) ;;
           *) TLS_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a" ;;
         esac
@@ -86,6 +86,7 @@ jobs:
         install -m 0755 build/src/dipixmltv/dipixmltv "${PKGDIR}/"
         install -m 0755 build/src/dipibim/dipibim "${PKGDIR}/"
         install -m 0755 build/src/dipiepg/dipiepg "${PKGDIR}/"
+        install -m 0755 build/src/dipitvhead/dipitvhead "${PKGDIR}/"
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
     - uses: actions/upload-artifact@v5
       with:
