@@ -3,7 +3,7 @@
 
 find_package(PkgConfig)
 if (PkgConfig_FOUND)
-    pkg_check_modules(PCAP libpcap) # always populates both PCAP_* (dynamic) and PCAP_STATIC_* (static) - no STATIC keyword exists here
+    pkg_check_modules(PCAP libpcap)
 endif ()
 
 if (PCAP_FOUND)
@@ -27,14 +27,17 @@ if (PCAP_FOUND)
         ../lib/mux/rtcp_build.c
         ../lib/mux/rtx.c)
 
+    target_include_directories(dipiret PRIVATE ${PCAP_INCLUDE_DIRS})
+    target_compile_options(dipiret PRIVATE ${PCAP_CFLAGS_OTHER})
+    target_link_libraries(dipiret PRIVATE ${PCAP_LIBRARIES} Threads::Threads)
+
     if (DVBIPITOOLS_STATIC)
-        target_include_directories(dipiret PRIVATE ${PCAP_STATIC_INCLUDE_DIRS})
-        target_compile_options(dipiret PRIVATE ${PCAP_STATIC_CFLAGS_OTHER})
-        target_link_libraries(dipiret PRIVATE ${PCAP_STATIC_LIBRARIES} Threads::Threads)
-    else ()
-        target_include_directories(dipiret PRIVATE ${PCAP_INCLUDE_DIRS})
-        target_compile_options(dipiret PRIVATE ${PCAP_CFLAGS_OTHER})
-        target_link_libraries(dipiret PRIVATE ${PCAP_LIBRARIES} Threads::Threads)
+        # this libpcap is built --with-dbus; static pulls dbus/systemd/libcap for a capture backend dipiret never uses - keep this one dynamic
+        if (CMAKE_BUILD_TYPE STREQUAL "Release")
+            set_target_properties(dipiret PROPERTIES LINK_OPTIONS "-s")
+        else ()
+            set_target_properties(dipiret PROPERTIES LINK_OPTIONS "")
+        endif ()
     endif ()
 else ()
     message(WARNING "dipiret: libpcap not found via pkg-config, skipping this tool entirely (capture is its purpose)")
