@@ -44,8 +44,7 @@ jobs:
     - name: build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libssl-dev libpcap-dev libdbus-1-dev libsystemd-dev ${{ matrix.crosspkg }}
-        # libdbus-1-dev/libsystemd-dev: this libpcap.a was built with dbus support, static link needs their .a too
+        sudo apt-get install -y build-essential cmake libssl-dev libpcap-dev ${{ matrix.crosspkg }}
         # i386/armel: no libssl-dev on Ubuntu, see -DDIPIRADIOHEAD_TLS=OFF below. others: ports arches, scoped update from ports.ubuntu.com
         # dipiret (libpcap+pthread edge daemon) makes no sense on i386/armel either - skipped there too
         case "${{ matrix.arch }}" in
@@ -59,7 +58,7 @@ jobs:
         deb [arch=${{ matrix.arch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME-security main universe restricted multiverse
         EOF
             sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/ports-${{ matrix.arch }}.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
-            sudo apt-get install -y libssl-dev:${{ matrix.arch }} libpcap-dev:${{ matrix.arch }} libdbus-1-dev:${{ matrix.arch }} libsystemd-dev:${{ matrix.arch }} || sudo apt-get install -y libssl-dev:${{ matrix.arch }}
+            sudo apt-get install -y libssl-dev:${{ matrix.arch }} libpcap-dev:${{ matrix.arch }} || sudo apt-get install -y libssl-dev:${{ matrix.arch }}
             ;;
         esac
     - name: configure
