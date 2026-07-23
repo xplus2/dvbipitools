@@ -67,6 +67,9 @@ jobs:
         CROSS_ARGS=""
         if [ -n "${{ matrix.triplet }}" ]; then
           CROSS_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_LIBRARY_ARCHITECTURE=${{ matrix.triplet }}"
+          # else pkg_check_modules(libpcap) resolves to the native amd64 package regardless of target
+          export PKG_CONFIG_LIBDIR="/usr/lib/${{ matrix.triplet }}/pkgconfig:/usr/share/pkgconfig"
+          unset PKG_CONFIG_PATH
         fi
         TLS_ARGS=""
         case "${{ matrix.arch }}" in
