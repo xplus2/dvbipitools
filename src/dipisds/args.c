@@ -172,13 +172,17 @@ static void print_help(void) {
       "  -f, --format <fmt>     listen: m3u|csv|xspf|xml|null (default from -o suffix)\n"
       "  -v, --verbose          periodic stats on stderr\n"
       "      --color <when>     auto|always|never (default auto)\n"
-      "      --ret-addr <a>:<p> announce: advertise a dipiret RET server (its -l value);\n"
+      "      --ret-addr <a>:<p> announce: advertise a dipifccret RET server (its -l value);\n"
       "                         opt-in, adds RTPRetransmission to every announced service\n"
-      "      --ret-rtx-time <ms> announce: RET rtx-time, matches dipiret -B (default 2000)\n"
-      "      --ret-rtx-pt <n>   announce: RET RTP payload type, matches dipiret -R (default 99)\n"
-      "      --ret-mc           announce: also advertise multicast RET (dipiret without --no-mc-ret)\n"
-      "      --ret-mc-port <p>  announce: multicast RET port, matches dipiret -F (default: each\n"
+      "      --ret-rtx-time <ms> announce: RET rtx-time, matches dipifccret -B (default 2000)\n"
+      "      --ret-rtx-pt <n>   announce: RET RTP payload type, matches dipifccret -R (default 99)\n"
+      "      --ret-mc           announce: also advertise multicast RET (dipifccret without --no-mc-ret)\n"
+      "      --ret-mc-port <p>  announce: multicast RET port, matches dipifccret -F (default: each\n"
       "                         service's own port)\n"
+      "      --fcc-addr <a>:<p> announce: advertise a dipifccret FCC server (its -l value);\n"
+      "                         opt-in, adds ServerBasedEnhancementServiceInfo to every service\n"
+      "      --fcc-rtx-time <ms> announce: FCC Retransmission_session rtx-time (default 2000)\n"
+      "      --fcc-rtx-pt <n>   announce: FCC RTP payload type, matches dipifccret -R (default 99)\n"
       "  -h, --help             this help\n\n"
       "examples:\n"
       "  %s -a -i channels.csv -p example.org -O \"My Headend\" -m 239.255.0.1:3937\n"
@@ -207,10 +211,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"ret-rtx-pt", required_argument, 0, 1003},
       {"ret-mc", no_argument, 0, 1004},
       {"ret-mc-port", required_argument, 0, 1005},
+      {"fcc-addr", required_argument, 0, 1006},
+      {"fcc-rtx-time", required_argument, 0, 1007},
+      {"fcc-rtx-pt", required_argument, 0, 1008},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_a = 0, have_l = 0, have_mcast = 0, have_t = 0;
   int have_ret_rtx_time = 0, have_ret_rtx_pt = 0, have_ret_mc_port = 0;
+  int have_fcc_rtx_time = 0, have_fcc_rtx_pt = 0;
   long t_value = 0;
   int c;
 
@@ -332,6 +340,35 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       have_ret_mc_port = 1;
       break;
     }
+    case 1006:
+      if (ret_addr_parse(optarg, cfg->fcc_addr, sizeof cfg->fcc_addr, &cfg->fcc_port)) {
+        argerr("invalid --fcc-addr: %s", optarg);
+        return ARGS_ERR;
+      }
+      cfg->fcc_enabled = 1;
+      break;
+    case 1007: {
+      char *end;
+      unsigned long v = strtoul(optarg, &end, 10);
+      if (*end != '\0' || v == 0) {
+        argerr("invalid --fcc-rtx-time: %s", optarg);
+        return ARGS_ERR;
+      }
+      cfg->fcc_rtx_time = (unsigned)v;
+      have_fcc_rtx_time = 1;
+      break;
+    }
+    case 1008: {
+      char *end;
+      unsigned long v = strtoul(optarg, &end, 10);
+      if (*end != '\0' || v > 127) {
+        argerr("invalid --fcc-rtx-pt: %s (0..127)", optarg);
+        return ARGS_ERR;
+      }
+      cfg->fcc_rtx_pt = (unsigned char)v;
+      have_fcc_rtx_pt = 1;
+      break;
+    }
     case 'h':
       print_help();
       return ARGS_HELP;
@@ -384,9 +421,27 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       if (!have_ret_rtx_pt)
         cfg->ret_rtx_pt = 99;
     }
+    if (cfg->fcc_enabled && has_suffix(cfg->input_path, ".xml")) {
+      argerr("--fcc-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
+      return ARGS_ERR;
+    }
+    if (!cfg->fcc_enabled && (have_fcc_rtx_time || have_fcc_rtx_pt)) {
+      argerr("--fcc-rtx-time/--fcc-rtx-pt require --fcc-addr");
+      return ARGS_ERR;
+    }
+    if (cfg->fcc_enabled) {
+      if (!have_fcc_rtx_time)
+        cfg->fcc_rtx_time = 2000;
+      if (!have_fcc_rtx_pt)
+        cfg->fcc_rtx_pt = 99;
+    }
   } else {
     if (cfg->ret_enabled || have_ret_rtx_time || have_ret_rtx_pt || cfg->ret_mc || have_ret_mc_port) {
       argerr("--ret-* options are announce-only");
+      return ARGS_ERR;
+    }
+    if (cfg->fcc_enabled || have_fcc_rtx_time || have_fcc_rtx_pt) {
+      argerr("--fcc-* options are announce-only");
       return ARGS_ERR;
     }
     if (!cfg->output_path)

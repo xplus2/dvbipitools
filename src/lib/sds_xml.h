@@ -30,13 +30,21 @@ typedef struct {
   unsigned mc_port;        /* MulticastRET DestinationPort, 0 = reuse the service's own port */
 } sds_ret_t;
 
-/* streaming BroadcastDiscovery (payload 0x02), one <SingleService> per item call. ret NULL = no RET record */
+/* ServerBasedEnhancementServiceInfo (Annex I.2.14); EnhancementService always "FCC" (2-value enum, maxOccurs=1, no combined value) */
+typedef struct {
+  char addr[SDS_MAX_ADDR]; /* RTCPReporting/Retransmission_session DestinationAddress */
+  unsigned port;           /* RTCPReporting/Retransmission_session DestinationPort */
+  unsigned rtx_time_ms;    /* Retransmission_session rtx-time */
+  unsigned char rtx_pt;    /* Retransmission_session RTPPayloadTypeNumber */
+} sds_fcc_t;
+
+/* streaming BroadcastDiscovery (payload 0x02), one <SingleService> per item call. ret/fcc NULL = no such record */
 void sds_broadcast_open(FILE *f, const char *domain, unsigned version);
-void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret);
+void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc);
 void sds_broadcast_close(FILE *f);
 
 /* same document, single-shot into a memory buffer (e.g. for DVBSTP transmission). 0 = didn't fit cap */
-size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, unsigned char *buf, size_t cap);
+size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, unsigned char *buf, size_t cap);
 
 /* payload 0x01 doc, self-pointing Push at push_addr:push_port. lang is the 3-letter ISO 639-2 for display_name. 0 = didn't fit cap */
 size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, unsigned char *buf, size_t cap);

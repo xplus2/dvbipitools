@@ -1,3 +1,11 @@
+dvbipitools (1.6.0-1) unstable; urgency=medium
+
+  * merged "dipiret" (RET, Annex F) and "dipifccrams" (FCC/RAMS, Annex I) into a single
+    "dipifccret" edge server: one capture thread and one listen socket serve both protocols,
+    each independently disable-able via --no-ret/--no-fcc.
+
+ -- dvbipitools authors <unspecified@example.com>  Fri, 24 Jul 2026 00:00:00 +0200
+
 dvbipitools (1.5.0-1) unstable; urgency=medium
 
   * consolidated/merged RET (Annex F) codebase, resulting in "dipiret" as the (edge/headend companion) server.

@@ -4,15 +4,16 @@ Command line tools for DVB-IPI streams.
 
 ## Tools
 
-* [dipibim](src/dipibim/README.md) - convert between the plain TVA XML shape and its BiM binary encoding
-* [dipiepg](src/dipiepg/README.md) - DVBSTP TVA EPG publisher / listener
-* [dipiradiohead](src/dipiradiohead/README.md) - use Ice-/Shoutcast radio sources for multicast radio distribution
 * [dipitvhead](src/dipitvhead/README.md) - use pre-encoded video streams as sources for multicast tv distribution
+* [dipiradiohead](src/dipiradiohead/README.md) - use Ice-/Shoutcast radio sources for multicast radio distribution
+* [dipifccret](src/dipifccret/README.md) - RTP retransmission (RET) and RAMS (FCC) server, DVB-IPI Annex F+I
+* [dipisds](src/dipisds/README.md) - DVBSTP/SD&S service discovery: announce/listen to a service list on multicast
+* [dipiepg](src/dipiepg/README.md) - DVBSTP TVA EPG publisher / listener
+* [dipixmltv](src/dipixmltv/README.md) - convert between XMLTV and the DVB-IPI TVA XML
+* [dipibim](src/dipibim/README.md) - convert between the plain TVA XML shape and its BiM binary encoding
 * [dipirec](src/dipirec/README.md) - record a DVB-IPI multicast
 * [dipiscan](src/dipiscan/README.md) - scan an IP range for DVB-IPI multicasts
-* [dipisds](src/dipisds/README.md) - DVBSTP/SD&S service discovery: announce/listen to a service list on multicast
-* [dipixmltv](src/dipixmltv/README.md) - convert between XMLTV and the DVB-IPI TVA XML
-* [dipiret](src/dipiret/README.md) - RTP retransmission (RET) server, DVB-IPI Annex F
+
 
 ## Build
 
@@ -29,46 +30,49 @@ Options:
   (no OpenSSL needed); default is `ON` for both, auto-falls back to off if OpenSSL isn't found
   (same via the legacy Makefile, detected through `pkg-config`)
 
-`dipiret` needs libpcap; unlike the OpenSSL options above this isn't optional. 
-If libpcap isn't found, dipiret is skipped entirely rather than built without its core feature.
+`dipifccret` needs libpcap; unlike the OpenSSL options above this isn't optional. 
+If libpcap isn't found, dipifccret is skipped entirely rather than built without its core feature.
+
 
 ## Packaging
 ```sh
 dpkg-buildpackage -b -us -uc
 ```
 Build-Depends: `debhelper (>= 13)`, `cmake`, `libssl-dev`, `libpcap-dev` (`libssl-dev` is only
-needed for dipiradiohead's and dipitvhead's HTTPS support; `libpcap-dev` for dipiret's capture)
+needed for `dipiradiohead`'s and `dipitvhead`'s HTTPS contrib support; `libpcap-dev` for `dipifccret`'s capture)
+
 
 ## Location of deployment
 
-| Tool          | Headend      | Edge | Client     | Reason                                   |
-|---------------|--------------|------|------------|------------------------------------------|
-| dipiradiohead | ✔️           |      |            | Provides multicasts                      |
-| dipitvhead    | ✔️           |      |            | Provides multicasts                      |
-| dipisds       | `--announce` |      | `--listen` | Service accouncements / reader           |
-| dipiepg       | `--announce` |      | `--listen` | EPG publisher / reader                   |
-| dipixmltv     | (maybe)      |      | ✔️         | XMLTV converter (from/to)                |
-| dipifcc       | ✔️           | ✔️   |            | FCC service, depends on network topology |
-| dipiret       | ✔️           | ✔️   |            | Retransmission (Annex F), pcap-based     |
-| dipirec       |              |      | ✔️         | Multicast recorder                       |
-| dipiscan      |              |      | ✔️         | Scan for services (if no SD&S is in use) |
-| dipibim       |              |      | ✔️         | Debugging tool                           |
+| Tool                                           | Headend | Edge | Client | Reason                                      |
+|------------------------------------------------|---------|------|--------|---------------------------------------------|
+| [dipitvhead](src/dipitvhead/README.md)         | ✔️      |      |        | Provides TV multicasts                      |
+| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      |      |        | Provides radio multicasts                   |
+| [dipifccret](src/dipifccret/README.md)         | ✔️      | ✔️   |        | FCC RAMS (Annex I) and RET (Annex F) server |
+| [dipisds](src/dipisds/README.md)               | ✔️      |      | ✔️     | Service accouncements / reader              |
+| [dipiepg](src/dipiepg/README.md)               | ✔️      |      | ✔️     | EPG publisher / reader                      |
+| [dipixmltv](src/dipixmltv/README.md)           | ✔️      |      | ✔️     | XMLTV converter (from/to)                   |
+| [dipibim](src/dipibim/README.md)               |         |      | ✔️     | EPG BiM Debugging tool                      |
+| [dipirec](src/dipirec/README.md)               |         |      | ✔️     | Multicast recorder                          |
+| [dipiscan](src/dipiscan/README.md)             |         |      | ✔️     | Scan for services (if no SD&S is in use)    |
+
+
 
 ## Editorial notes
 
 Some of the implemented formats are _not_ part of DVB-IPI. They exist for convenience and to bridge
 between real-world usage of media formats and the standard.
 
+
 ### Notable additions
 * dipiradiohead
   - Icecast/Shoutcast as an input source - none of this is part of DVB.
   - ICY `StreamTitle`, inline ID3v2 `TIT2`/`TPE1` mapping into EIT.
 * dipitvhead
-  - HbbTV AIT injection (`--hbbtv`, ETSI TS 102 809) is hybrid broadcast/broadband signalling,
-    a separate spec from DVB-IPI itself.
+  - HbbTV AIT injection (`--hbbtv`, ETSI TS 102 809) is hybrid broadcast/broadband signaling, a separate spec.
 * dipirec
   - `mkv` and `mka` containers.
-  - `srt` subtitles from EBU Teletext (ETSI EN 300 706). SRT isn't a DVB format at all.
+  - `srt` subtitles from EBU Teletext (ETSI EN 300 706). SRT isn't a DVB format.
   - udpxy is not part of any DVB/ETSI specification.
 * dipiscan
   - This tool, as a whole, would not be needed if deployments would cover DVBSTP/DS&S like `dipisds` does.
@@ -79,24 +83,26 @@ between real-world usage of media formats and the standard.
   - `xmltv` doesn't exist in the DVB world. TVA XML in BiM does.
   - CRIDs under TLD `crid://dipixmltv.invalid/...` - (RFC 2606) we're not a registered CRID authority.
 * dipibim
-  - Uncompressed representations of TVA EPG data are not specified in TS 102 539#7.2
+  - Uncompressed representation of TVA EPG data is not specified in TS 102 539#7.2
+
 
 ### Known gaps
 On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 
-* FEC & FCC: Annex E, Annex I/J
+* FEC (Annex E) and Companion Stream FCC (Annex J)
 * RMS-FUS, Remote Management and Firmware Update
 * DVB Companion Screens and Streams
 * DVB Home Network, ETSI TS 102 905
 * SD&S record types other than Broadcast Discovery / Service Provider Discovery (-5). `dipisds` only does those two.
   No CoD discovery, Package, Regionalisation or RMS-FUS discovery records.
 * RTSP command/control for CoD services and multicast join (-6) - no CoD playback control here.
-* DHCP-based IP address assignment for the HNED (-8).
+* DHCP-based IP address assignment for the HNED (-8)
 * FUSS, the mandatory File Upload System Stub (-9)
 * Content Download Services / CDS, push or pull (-10)
 * QoS / DiffServ marking (-11)
 * SRM delivery for Content Protection revocation (-12)
 * Dynamic Service Management (-13)
+
 
 ## Licence
 

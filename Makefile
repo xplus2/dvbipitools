@@ -193,26 +193,29 @@ dipitvhead_SRCS := \
 HAVE_LIBPCAP := $(shell pkg-config --exists libpcap && echo yes)
 
 ifeq ($(HAVE_LIBPCAP),yes)
-TOOLS += dipiret
-dipiret_EXTRA_CFLAGS := -pthread $(shell pkg-config --cflags libpcap)
-dipiret_EXTRA_LDFLAGS := -pthread $(shell pkg-config --libs libpcap)
-dipiret_SRCS := \
-	src/dipiret/main.c \
-	src/dipiret/args.c \
-	src/dipiret/capture.c \
-	src/dipiret/channel.c \
-	src/dipiret/mcsend.c \
-	src/dipiret/ret.c \
-	src/dipiret/listen.c \
+TOOLS += dipifccret
+dipifccret_EXTRA_CFLAGS := -pthread $(shell pkg-config --cflags libpcap)
+dipifccret_EXTRA_LDFLAGS := -pthread $(shell pkg-config --libs libpcap)
+dipifccret_SRCS := \
+	src/dipifccret/main.c \
+	src/dipifccret/args.c \
+	src/dipifccret/capture.c \
+	src/dipifccret/channel.c \
+	src/dipifccret/listen.c \
+	src/dipifccret/ret/ret.c \
+	src/dipifccret/ret/mcsend.c \
+	src/dipifccret/fcc/burst.c \
 	src/lib/log.c \
 	src/lib/signal.c \
 	src/lib/net/multicast.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/rtcp.c \
+	src/lib/demux/psi.c \
+	src/lib/demux/crc32.c \
 	src/lib/mux/rtcp_build.c \
 	src/lib/mux/rtx.c
 else
-$(warning dipiret: libpcap not found via pkg-config, skipping this tool entirely (not an optional-feature degrade, capture is its whole purpose))
+$(warning dipifccret: libpcap not found via pkg-config, skipping this tool entirely (not an optional-feature degrade, capture is its whole purpose))
 endif
 
 ALL_OBJS :=

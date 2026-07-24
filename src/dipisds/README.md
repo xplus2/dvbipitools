@@ -70,9 +70,9 @@ and a minimal Broadcast Discovery record (payload 0x02):
 </ServiceDiscovery>
 ```
 
-## Advertising dipiret RET service (`--ret-addr`)
+## Advertising dipifccret RET service (`--ret-addr`)
 
-Off by default. `--ret-addr <addr>:<port>` (see `dipiret -l`) adds an
+Off by default. `--ret-addr <addr>:<port>` (see `dipifccret -l`) adds an
 `RTPRetransmission` record (ETSI TS 102 034#5.2.12.26, `RETInfoType`) to every service in
 the Broadcast Discovery.
 
@@ -91,16 +91,53 @@ the Broadcast Discovery.
 
 ### Parameters
 
-- `--ret-rtx-time <ms>` / `--ret-rtx-pt <n>` should be the same as dipiret's `-B`/`-R` values (or defaults). requires `--ret-addr`.
-- `--ret-mc` adds `MulticastRET`, like running dipiret _without_ `--no-mc-ret`;
+- `--ret-rtx-time <ms>` / `--ret-rtx-pt <n>` should be the same as dipifccret's `-B`/`-R` values (or defaults). requires `--ret-addr`.
+- `--ret-mc` adds `MulticastRET`, like running dipifccret _without_ `--no-mc-ret`;
   its group:port always match this service's own `IPMulticastAddress`, per Annex F.6.2.2's
-  same-group:port reuse. `--ret-mc-port` overrides the port, see `dipiret -F`.
+  same-group:port reuse. `--ret-mc-port` overrides the port, see `dipifccret -F`.
 - Left out on purpose, each because the schema's own "if absent" meaning already matches
-  dipiret's actual behaviour: 
-  + RET `ssrc` is unknown until dipiret sees live packets
-  + unicast `DestinationPort`/`SourcePort` because `dipiret` replies from the same socket the NACK arrived on
+  dipifccret's actual behaviour: 
+  + RET `ssrc` is unknown until dipifccret sees live packets
+  + unicast `DestinationPort`/`SourcePort` because `dipifccret` replies from the same socket the NACK arrived on
   + `SourceAddress` on both RET types: CoD/trick-mode only
   + `RTSPControlURL`, RTCP RR fields
+
+
+## Advertising dipifccret FCC/RAMS service (`--fcc-addr`)
+
+Off by default. `--fcc-addr <addr>:<port>` (see `dipifccret -l`) adds a
+`ServerBasedEnhancementServiceInfo` record (ETSI TS 102 034 Annex I.2.14,
+`ServerBasedEnhancementServiceInfoType`) to every service in the Broadcast Discovery. This is a
+separate, newer element from `--ret-addr`'s `RTPRetransmission` - both can be given together, and
+per the spec an HNED using both services is meant to use only this element, ignoring
+`RTPRetransmission`.
+
+> Note: `.xml` passthrough is an exception. The provided XML will not get changed.
+
+### Example
+```xml
+<IPMulticastAddress Address="239.2.24.1" Port="8208" Streaming="rtp">
+  <ServerBasedEnhancementServiceInfo>
+    <EnhancementService>FCC</EnhancementService>
+    <RTCPReporting DestinationAddress="10.0.0.1" DestinationPort="6000"/>
+    <Retransmission_session DestinationPort="6000" rtx-time="2000" RTPPayloadTypeNumber="99"/>
+  </ServerBasedEnhancementServiceInfo>
+</IPMulticastAddress>
+```
+
+### Parameters
+
+- `--fcc-rtx-time <ms>` requires `--fcc-addr`. No corresponding dipifccret flag - this is the
+  schema's own `Retransmission_session` session-depth attribute, independent of dipifccret's own
+  burst-rate/duration tuning.
+- `--fcc-rtx-pt <n>` requires `--fcc-addr`, should match dipifccret's `-R` value (or default).
+- `EnhancementService` is always `"FCC"`, never a combined value - the XSD only defines two
+  enumerated values (`"FCC"`, `"RET"`) and the element occurs at most once; per Annex I.2.3 the
+  FCC and RET server coincide, so `"FCC"` already implies combined capability when both are
+  offered by the same server.
+- Left out on purpose, matching `--ret-addr`'s own scope: `SourcePort`, `rtcp-mux`,
+  `DestinationPort-ForRTCPReporting`, `trr-int`, `RTSPControlURL`, and the RTCPReporting-side
+  `rtcp-bandwidth`/`rtcp-rsize`/`dvb-*` attributes.
 
 
 ## Listen (`-l`)

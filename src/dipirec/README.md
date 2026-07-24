@@ -95,7 +95,7 @@ carries no signal for clearing the screen.
 
 ## RET repair (`--ret`)
 
-Optional `--ret <addr>:<port>` points at a [dipiret](../dipiret/README.md) edge server's `-l` address.
+Optional `--ret <addr>:<port>` points at a [dipifccret](../dipifccret/README.md) edge server's `-l` address.
 If set, `-i rtp://` gap detection kicks in: a hole in the RTP sequence gets one NACK sent to that address, 
 and whatever repair comes back (unicast reply, or the multicast repair session per Annex F.6.2.2) gets spliced 
 back into the recording in order.
@@ -150,6 +150,6 @@ dipirec -i http://10.0.0.1:4022/rtp/239.2.24.1~8208 -o dump.ts -f raw
 # pipe to another tool
 dipirec -i rtp://@239.2.24.1:8208 -o - -f ts | ffplay -
 
-# with RET gap repair against a dipiret edge server
+# with RET gap repair against a dipifccret edge server
 dipirec -i rtp://@239.2.24.1:8208 -o show.ts --ret 10.0.0.1:6000
 ```

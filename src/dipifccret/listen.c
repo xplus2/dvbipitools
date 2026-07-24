@@ -3,22 +3,24 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
-#include <sys/socket.h>
 #include <unistd.h>
 
 #include "lib/log.h"
 #include "lib/signal.h"
 
 #include "listen.h"
+#include "version.h"
 
 typedef struct {
   int fd;
   int epfd;
-  ret_ctx_t *r;
+  listen_rtcp_cb cb;
+  void *user;
   pthread_t thread;
 } worker_t;
 
@@ -45,10 +47,11 @@ static void *worker_main(void *arg) {
           break;
         if (errno == EINTR)
           continue;
-        log_line("dipiret: recv: %s", strerror(errno));
+        log_line(TOOL_NAME ": recv: %s", strerror(errno));
         break;
       }
-      ret_on_rtcp(w->r, buf, (size_t)r, w->fd, (struct sockaddr *)&from, fromlen);
+      if (w->cb)
+        w->cb(buf, (size_t)r, w->fd, (struct sockaddr *)&from, fromlen, w->user);
     }
   }
   return NULL;
@@ -61,7 +64,7 @@ static int bind_dgram(int fd, int family, const char *addr, unsigned port) {
     a.sin_family = AF_INET;
     a.sin_port = htons((unsigned short)port);
     if (inet_pton(AF_INET, addr, &a.sin_addr) != 1) {
-      log_line("dipiret: bad listen address: %s", addr);
+      log_line(TOOL_NAME ": bad listen address: %s", addr);
       return -1;
     }
     return bind(fd, (struct sockaddr *)&a, sizeof a);
@@ -71,7 +74,7 @@ static int bind_dgram(int fd, int family, const char *addr, unsigned port) {
     a.sin6_family = AF_INET6;
     a.sin6_port = htons((unsigned short)port);
     if (inet_pton(AF_INET6, addr, &a.sin6_addr) != 1) {
-      log_line("dipiret: bad listen address: %s", addr);
+      log_line(TOOL_NAME ": bad listen address: %s", addr);
       return -1;
     }
     return bind(fd, (struct sockaddr *)&a, sizeof a);
@@ -83,23 +86,28 @@ static int open_reuseport_socket(int family, const char *addr, unsigned port) {
 
   fd = socket(family, SOCK_DGRAM, 0);
   if (fd < 0) {
-    log_line("dipiret: socket: %s", strerror(errno));
+    log_line(TOOL_NAME ": socket: %s", strerror(errno));
     return -1;
   }
   if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof on) < 0) {
-    log_line("dipiret: SO_REUSEPORT: %s", strerror(errno));
+    log_line(TOOL_NAME ": SO_REUSEPORT: %s", strerror(errno));
+    close(fd);
+    return -1;
+  }
+  if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) { /* required: drain loop below relies on EAGAIN to stop */
+    log_line(TOOL_NAME ": fcntl O_NONBLOCK: %s", strerror(errno));
     close(fd);
     return -1;
   }
   if (bind_dgram(fd, family, addr, port) < 0) {
-    log_line("dipiret: bind: %s", strerror(errno));
+    log_line(TOOL_NAME ": bind: %s", strerror(errno));
     close(fd);
     return -1;
   }
   return fd;
 }
 
-listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, unsigned workers, ret_ctx_t *r) {
+listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, unsigned workers, listen_rtcp_cb cb, void *user) {
   listen_pool_t *p;
   unsigned i;
 
@@ -126,7 +134,7 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
     }
     w->epfd = epoll_create1(0);
     if (w->epfd < 0) {
-      log_line("dipiret: epoll_create1: %s", strerror(errno));
+      log_line(TOOL_NAME ": epoll_create1: %s", strerror(errno));
       close(w->fd);
       free(p->workers);
       free(p);
@@ -135,16 +143,17 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
     ev.events = EPOLLIN;
     ev.data.fd = w->fd;
     if (epoll_ctl(w->epfd, EPOLL_CTL_ADD, w->fd, &ev) < 0) {
-      log_line("dipiret: epoll_ctl: %s", strerror(errno));
+      log_line(TOOL_NAME ": epoll_ctl: %s", strerror(errno));
       close(w->epfd);
       close(w->fd);
       free(p->workers);
       free(p);
       return NULL;
     }
-    w->r = r;
+    w->cb = cb;
+    w->user = user;
     if (pthread_create(&w->thread, NULL, worker_main, w) != 0) {
-      log_line("dipiret: pthread_create: %s", strerror(errno));
+      log_line(TOOL_NAME ": pthread_create: %s", strerror(errno));
       close(w->epfd);
       close(w->fd);
       free(p->workers);

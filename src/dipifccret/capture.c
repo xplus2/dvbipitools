@@ -4,10 +4,12 @@
 #include <arpa/inet.h>
 #include <grp.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <pcap.h>
@@ -20,7 +22,7 @@
 struct capture {
   pcap_t *pcap;
   int dlt;
-  const char *const *ranges; /* borrowed from the capture_open caller, must outlive this capture_t */
+  const char *const *ranges; /* borrowed from capture_open caller, must outlive this capture_t */
   size_t range_count;
 };
 
@@ -216,17 +218,15 @@ int capture_drop_privileges(const char *user) {
   return 0;
 }
 
-void capture_handle_frame(int dlt, const unsigned char *pkt, size_t len, const char *const *ranges, size_t range_count, channel_table_t *t, mcsend_table_t *mt, unsigned ff_port) {
-  size_t off, ip_off, udp_off, rtp_off, payload_off;
+void capture_handle_frame(int dlt, const unsigned char *pkt, size_t len, const char *const *ranges, size_t range_count, capture_frame_cb cb, void *user) {
+  size_t off, ip_off, udp_off, rtp_off;
   unsigned ethertype, dport;
   int family;
   struct in_addr dst4;
   struct in6_addr dst6;
   const void *dst_bytes;
   char group[64];
-  uint16_t seq;
-  uint32_t timestamp, ssrc;
-  channel_t *c;
+  rtp_hdr_t rtp;
 
   if (dlt == DLT_EN10MB) {
     if (len < 14)
@@ -304,7 +304,7 @@ void capture_handle_frame(int dlt, const unsigned char *pkt, size_t len, const c
     return; /* not IPv4 or IPv6 */
   }
 
-  if (!in_ranges(family, dst_bytes, ranges, range_count)) /* userspace whitelist, authoritative regardless of the BPF filter */
+  if (!in_ranges(family, dst_bytes, ranges, range_count)) /* userspace whitelist, authoritative regardless of installed BPF filter */
     return;
 
   dport = ((unsigned)pkt[udp_off + 2] << 8) | pkt[udp_off + 3];
@@ -312,52 +312,54 @@ void capture_handle_frame(int dlt, const unsigned char *pkt, size_t len, const c
   if (rtp_off > len)
     return;
 
-  {
-    size_t payload_rel = rtp_payload_offset(pkt + rtp_off, len - rtp_off);
-    if (payload_rel == 0) /* not RTP-wrapped TS */
-      return;
-    payload_off = rtp_off + payload_rel;
-  }
-
-  seq = (uint16_t)(((unsigned)pkt[rtp_off + 2] << 8) | pkt[rtp_off + 3]);
-  timestamp = ((uint32_t)pkt[rtp_off + 4] << 24) | ((uint32_t)pkt[rtp_off + 5] << 16) | ((uint32_t)pkt[rtp_off + 6] << 8) | pkt[rtp_off + 7];
-  ssrc = ((uint32_t)pkt[rtp_off + 8] << 24) | ((uint32_t)pkt[rtp_off + 9] << 16) | ((uint32_t)pkt[rtp_off + 10] << 8) | pkt[rtp_off + 11];
+  if (rtp_payload_offset(pkt + rtp_off, len - rtp_off) == 0) /* not RTP-wrapped TS */
+    return;
+  if (!rtp_parse_header(pkt + rtp_off, len - rtp_off, &rtp))
+    return;
 
   if (!inet_ntop(family, dst_bytes, group, sizeof group))
     return;
-  c = channel_lookup(t, family, group, dport);
-  if (!c) /* max-channels cap, already logged by channel_lookup */
+  if (!cb)
     return;
-  if (mt)
-    mcsend_ensure(mt, c, ff_port); /* cheap no-op if c already has a socket - safe to call every frame */
-  channel_store(c, ssrc, seq, timestamp, pkt + payload_off, len - payload_off);
+  cb(family, group, dport, rtp.ssrc, rtp.seq, rtp.timestamp, pkt + rtp_off + rtp.payload_off, len - rtp_off - rtp.payload_off, user);
 }
 
 typedef struct {
   int dlt;
   const char *const *ranges;
   size_t range_count;
-  channel_table_t *t;
-  mcsend_table_t *mt;
-  unsigned ff_port;
+  capture_frame_cb cb;
+  void *user;
 } cb_ctx_t;
 
 static void pcap_cb(unsigned char *user, const struct pcap_pkthdr *hdr, const unsigned char *pkt) {
   cb_ctx_t *ctx = (cb_ctx_t *)user;
-  capture_handle_frame(ctx->dlt, pkt, hdr->caplen, ctx->ranges, ctx->range_count, ctx->t, ctx->mt, ctx->ff_port);
+  capture_handle_frame(ctx->dlt, pkt, hdr->caplen, ctx->ranges, ctx->range_count, ctx->cb, ctx->user);
 }
 
-void capture_run(capture_t *cap, channel_table_t *t, mcsend_table_t *mt, unsigned ff_port) {
+/* pcap_set_timeout unreliable on idle "any" - breakloop from another thread instead */
+static void *breaker_main(void *arg) {
+  pcap_t *pcap = (pcap_t *)arg;
+  struct timespec poll_iv = {0, 50 * 1000 * 1000};
+  while (!signal_stop_requested())
+    nanosleep(&poll_iv, NULL);
+  pcap_breakloop(pcap);
+  return NULL;
+}
+
+void capture_run(capture_t *cap, capture_frame_cb cb, void *user) {
   cb_ctx_t ctx;
+  pthread_t breaker;
   ctx.dlt = cap->dlt;
-  ctx.t = t;
   ctx.ranges = cap->ranges;
   ctx.range_count = cap->range_count;
-  ctx.mt = mt;
-  ctx.ff_port = ff_port;
+  ctx.cb = cb;
+  ctx.user = user;
+  pthread_create(&breaker, NULL, breaker_main, cap->pcap);
   while (!signal_stop_requested()) {
     int rc = pcap_dispatch(cap->pcap, -1, pcap_cb, (unsigned char *)&ctx);
     if (rc < 0)
       break;
   }
+  pthread_join(breaker, NULL);
 }

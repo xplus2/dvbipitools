@@ -51,7 +51,7 @@ jobs:
           sudo apt-get install -y libpcap-dev
         fi
         # i386/armel: no libssl-dev on Ubuntu, see -DDIPIRADIOHEAD_TLS=OFF below. others: ports arches, scoped update from ports.ubuntu.com
-        # dipiret (libpcap+pthread edge daemon) makes no sense on i386/armel either - skipped there too
+        # dipifccret (libpcap+pthread edge daemon) makes no sense on i386/armel either - skipped there too
         case "${{ matrix.arch }}" in
           i386|armel|amd64) ;;
           *)
@@ -96,8 +96,8 @@ jobs:
         install -m 0755 build/src/dipibim/dipibim "${PKGDIR}/"
         install -m 0755 build/src/dipiepg/dipiepg "${PKGDIR}/"
         install -m 0755 build/src/dipitvhead/dipitvhead "${PKGDIR}/"
-        # dipiret needs libpcap and is skipped by its own CMakeLists.txt if not found for this arch - don't fail packaging of the other 8 tools if so
-        [ -f build/src/dipiret/dipiret ] && install -m 0755 build/src/dipiret/dipiret "${PKGDIR}/"
+        # dipifccret needs libpcap and is skipped by its own CMakeLists.txt if not found for this arch - don't fail packaging of the other tools if so
+        [ -f build/src/dipifccret/dipifccret ] && install -m 0755 build/src/dipifccret/dipifccret "${PKGDIR}/"
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
     - uses: actions/upload-artifact@v5
       with:

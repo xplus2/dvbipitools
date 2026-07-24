@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIRET_ARGS_H
-#define DIPIRET_ARGS_H
+#ifndef DIPIFCCRET_ARGS_H
+#define DIPIFCCRET_ARGS_H
 
 #include <stddef.h>
 
@@ -19,15 +19,23 @@ typedef struct {
 
   const char *iface; /* NULL = libpcap "any" */
   const char *bpf_expr; /* NULL = auto-built from ranges */
-  unsigned buffer_ms;
   size_t max_channels; /* 0 = CHANNEL_DEFAULT_MAX */
-  unsigned char rtx_pt;
-  unsigned ff_port; /* 0 = reuse the original channel's port */
-  int no_mc_ret;
-  unsigned workers; /* 0 = online CPU count, min 1 */
+  unsigned char rtx_pt; /* shared RET/FCC RTP payload type */
+  unsigned workers; /* -l socket worker threads, 0 = CPU cores */
   const char *user; /* NULL = no privilege drop */
   int verbose;
   int color_mode;
+
+  int no_ret; /* --no-ret */
+  unsigned buffer_ms; /* -B, RET ring depth */
+  unsigned ff_port; /* -F, 0 = reuse the original channel's port */
+  int no_mc_ret; /* --no-mc-ret */
+
+  int no_fcc; /* --no-fcc */
+  unsigned gop_cap_ms; /* -G */
+  size_t max_bursts; /* -C */
+  double burst_multiplier; /* -X */
+  unsigned duration_cap_ms; /* -D */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

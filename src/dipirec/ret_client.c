@@ -21,7 +21,7 @@
 #define RET_HOLD_CAP 1500    /* held slot size, one Ethernet MTU; a bigger datagram bypasses holding entirely */
 #define RET_OUTQ_SLOTS (RET_GAP_MAX + 1)
 #define RET_OUTQ_CAP 65536   /* must fit any real received datagram, unlike RET_HOLD_CAP */
-#define RET_DSCP_RTCP (0x1A << 2) /* Annex F.9 signalling mark, mirrors dipiret/ret.h */
+#define RET_DSCP_RTCP (0x1A << 2) /* Annex F.9 signalling mark, mirrors dipifccret/ret.h */
 
 typedef struct {
   int used;

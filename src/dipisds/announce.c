@@ -51,6 +51,8 @@ int announce_run(const config_t *cfg) {
   } else {
     sds_ret_t ret_val;
     const sds_ret_t *ret = NULL;
+    sds_fcc_t fcc_val;
+    const sds_fcc_t *fcc = NULL;
     if (cfg->ret_enabled) {
       memset(&ret_val, 0, sizeof ret_val);
       snprintf(ret_val.addr, sizeof ret_val.addr, "%s", cfg->ret_addr);
@@ -61,9 +63,17 @@ int announce_run(const config_t *cfg) {
       ret_val.mc_port = cfg->ret_mc_port;
       ret = &ret_val;
     }
+    if (cfg->fcc_enabled) {
+      memset(&fcc_val, 0, sizeof fcc_val);
+      snprintf(fcc_val.addr, sizeof fcc_val.addr, "%s", cfg->fcc_addr);
+      fcc_val.port = cfg->fcc_port;
+      fcc_val.rtx_time_ms = cfg->fcc_rtx_time;
+      fcc_val.rtx_pt = cfg->fcc_rtx_pt;
+      fcc = &fcc_val;
+    }
     broadcast_doc = malloc(DOC_CAP);
     sp_doc = malloc(DOC_CAP);
-    broadcast_len = sds_build_broadcast(cfg->provider, 1, in.services, in.service_count, ret, broadcast_doc, DOC_CAP);
+    broadcast_len = sds_build_broadcast(cfg->provider, 1, in.services, in.service_count, ret, fcc, broadcast_doc, DOC_CAP);
     sp_len = sds_build_sp(cfg->provider, cfg->offering, cfg->lang, 1, cfg->mcast_group, cfg->mcast_port, sp_doc, DOC_CAP);
     if (!broadcast_len || !sp_len) {
       log_line("SD&S document too large (max %d bytes), reduce the service list", DOC_CAP);

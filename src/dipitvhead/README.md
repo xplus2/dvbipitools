@@ -17,7 +17,7 @@ dipitvhead -i <uri> -m <mcast>:<port> [options]
 | `-p` | `--pmt-pid` | `<pid>` | auto: first PAT program whose PMT actually arrives |
 | `-m` | `--mcast` | `<group>:<port>` / `[<group6>]:<port>` | required |
 | `-I` | `--iface` | `<iface>` | kernel route |
-| `-r` | `--rtp` | - | off (plain UDP) |
+| `-u` | `--udp` | - | off (RTP) |
 | `-T` | `--ttl` | `<n>` | 1 |
 | `-n` | `--nit` | `<text>` / `-` | passthrough source NIT if present |
 | `-s` | `--sdt` | `<text>` / `-` | passthrough source SDT if present |
@@ -36,6 +36,9 @@ dipitvhead -i <uri> -m <mcast>:<port> [options]
 | `-v` | `--verbose` | - | off |
 | | `--color` | `auto\|always\|never` | `auto` |
 | `-h` | `--help` | - | |
+
+> Note that the default output changed from _plain UDP_ to _RTP_, since neither FCC nor RET would work
+> on plain streams. You can restore the old behavior by setting `-u`|`--udp`.
 
 ## Input (`-i`)
 

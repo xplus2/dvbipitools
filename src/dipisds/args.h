@@ -33,6 +33,12 @@ typedef struct {
   unsigned char ret_rtx_pt; /* --ret-rtx-pt, default 99 */
   int ret_mc;            /* --ret-mc */
   unsigned ret_mc_port;  /* --ret-mc-port, 0 = reuse each service's own port */
+
+  int fcc_enabled;       /* --fcc-addr given, announce */
+  char fcc_addr[64];     /* --fcc-addr host part */
+  unsigned fcc_port;     /* --fcc-addr port part */
+  unsigned fcc_rtx_time; /* --fcc-rtx-time, default 2000 */
+  unsigned char fcc_rtx_pt; /* --fcc-rtx-pt, default 99 */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

@@ -195,7 +195,7 @@ static void print_help(void) {
       "  -p, --pmt-pid <pid>        select program by PMT PID (dec or 0x-hex; default: first live one)\n"
       "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
       "  -I, --iface <iface>        outgoing multicast interface\n"
-      "  -r, --rtp                  wrap output in RTP (default: plain UDP)\n"
+      "  -u, --udp                  plain UDP output (default: RTP-wrapped)\n"
       "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
       "  -n, --nit <text|->         NIT: default passthrough source; \"-\" drops it; text = our own\n"
       "  -s, --sdt <text|->         SDT: default passthrough source; \"-\" drops it; text = our own\n"
@@ -226,7 +226,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"pmt-pid", required_argument, 0, 'p'},
       {"mcast", required_argument, 0, 'm'},
       {"iface", required_argument, 0, 'I'},
-      {"rtp", no_argument, 0, 'r'},
+      {"udp", no_argument, 0, 'u'},
       {"ttl", required_argument, 0, 'T'},
       {"nit", required_argument, 0, 'n'},
       {"sdt", required_argument, 0, 's'},
@@ -253,8 +253,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->tsid = 1;
   cfg->onid = 1;
   cfg->sid = 1;
+  cfg->rtp = 1;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "i:p:m:I:rT:n:s:b:SBe:kvh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "i:p:m:I:uT:n:s:b:SBe:kvh", longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
         if (source_parse(optarg, &cfg->input)) {
@@ -279,8 +280,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'I':
         cfg->iface = optarg;
         break;
-      case 'r':
-        cfg->rtp = 1;
+      case 'u':
+        cfg->rtp = 0;
         break;
       case 'T': {
         char *end;

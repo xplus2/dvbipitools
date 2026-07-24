@@ -35,7 +35,7 @@ typedef struct {
   char mcast_group[64];    /* -m group */
   unsigned mcast_port;     /* -m port */
   const char *iface;       /* -I; NULL = kernel default route */
-  int rtp;                 /* -r */
+  int rtp;                 /* default on; -u/--udp forces plain UDP output */
   unsigned ttl;             /* -T; 0 = kernel default (1) */
   table_mode_t nit_mode;   /* -n */
   char nit_text[256];      /* -n <text> */

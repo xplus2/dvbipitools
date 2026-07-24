@@ -35,7 +35,7 @@ static int port_parse(const char *p, unsigned *out) {
   return 0;
 }
 
-/* [addr]:<port> or <addr4>:<port>, unicast, no multicast restriction (unlike dipitvhead's mcast_group_parse) */
+/* [addr]:<port> or <addr4>:<port>, unicast, no multicast restriction */
 static int addr_port_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
   char addr[64];
   if (*s == '[') {
@@ -135,22 +135,30 @@ static int map_lookup(const enum_map_t *m, size_t n, const char *s, int *out) {
 static void print_help(void) {
   printf(
       "usage: %s -g <range> -l <addr>:<port> [options]\n\n"
-      "RTP retransmission (RET) server, DVB-IPI Annex F\n\n"
+      "RTP retransmission (RET, Annex F) and Fast Channel Change (FCC/RAMS, Annex I) server\n\n"
       "options:\n"
-      "  -g, --range <cidr>[,<cidr>...]  multicast destination range(s) to buffer, IPv4 or IPv6\n"
-      "  -l, --listen <addr>:<port>      unicast bind for client NACK requests / RTX replies\n"
-      "  -I, --iface <iface>             capture interface (default: \"any\")\n"
-      "      --bpf <expr>                raw BPF capture filter, overrides the -g auto-build\n"
-      "  -B, --buffer <ms>                per-channel retransmission buffer depth (default: 2000)\n"
-      "  -M, --max-channels <n>           preallocated channel slots (default: 0 = 384)\n"
-      "  -R, --rtx-pt <n>                 RTP payload type for retransmitted packets (default: 99)\n"
-      "  -F, --ff-port <port>             multicast RET session port (default: 0 = original channel's port)\n"
-      "      --no-mc-ret                  disable the multicast RET session, unicast-only repair\n"
-      "  -w, --workers <n>                -l socket worker threads (default: 0 = online CPU count)\n"
+      "  -g, --range <cidr>[,<cidr>...]   multicast range(s) to capture, IPv4 or IPv6\n"
+      "  -l, --listen <addr>:<port>       unicast bind, shared by RET and FCC traffic\n"
+      "  -I, --iface <iface>              capture interface (default: \"any\")\n"
+      "      --bpf <expr>                 raw BPF capture filter, overrides the -g auto-build\n"
+      "  -M, --max-channels <n>           pre-allocated channel slots (default: 0 = 384)\n"
+      "  -R, --rtx-pt <n>                 RTP payload type for retransmitted/burst packets (default: 99)\n"
+      "  -w, --workers <n>                -l socket worker threads (default: 0 = online CPU cores)\n"
       "  -u, --user <user>                drop privileges to this user after opening the capture handle\n"
       "  -v, --verbose                    periodic stats on stderr\n"
       "      --color <when>               auto|always|never (default auto)\n"
       "  -h, --help                       this help\n\n"
+      "RET (Annex F) options:\n"
+      "      --no-ret                     disable RET entirely\n"
+      "  -B, --buffer <ms>                per-channel retransmission buffer depth (default: 2000)\n"
+      "  -F, --ff-port <port>             multicast RET session port (default: 0 = original channel's port)\n"
+      "      --no-mc-ret                  disable the multicast RET session, unicast-only repair\n\n"
+      "FCC (Annex I) options:\n"
+      "      --no-fcc                     disable FCC entirely\n"
+      "  -G, --gop-cap <ms>               safety cap on cached GOP-in-progress duration (default: 8000)\n"
+      "  -C, --max-bursts <n>             pre-allocated concurrent burst-session slots (default: 4096)\n"
+      "  -X, --burst-multiplier <n>       burst rate as multiple of observed nominal bitrate (default: 1.5)\n"
+      "  -D, --burst-duration-cap <ms>    hard max burst duration regardless of signaling (default: 10000)\n\n"
       "example:\n"
       "  %s -g 239.0.0.0/8 -l 10.0.0.1:6000\n",
       TOOL_NAME, TOOL_NAME);
@@ -162,15 +170,21 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"listen", required_argument, 0, 'l'},
       {"iface", required_argument, 0, 'I'},
       {"bpf", required_argument, 0, 1000},
-      {"buffer", required_argument, 0, 'B'},
       {"max-channels", required_argument, 0, 'M'},
       {"rtx-pt", required_argument, 0, 'R'},
-      {"ff-port", required_argument, 0, 'F'},
-      {"no-mc-ret", no_argument, 0, 1001},
       {"workers", required_argument, 0, 'w'},
       {"user", required_argument, 0, 'u'},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1002},
+      {"no-ret", no_argument, 0, 1003},
+      {"buffer", required_argument, 0, 'B'},
+      {"ff-port", required_argument, 0, 'F'},
+      {"no-mc-ret", no_argument, 0, 1001},
+      {"no-fcc", no_argument, 0, 1004},
+      {"gop-cap", required_argument, 0, 'G'},
+      {"max-bursts", required_argument, 0, 'C'},
+      {"burst-multiplier", required_argument, 0, 'X'},
+      {"burst-duration-cap", required_argument, 0, 'D'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_range = 0, have_listen = 0;
@@ -179,8 +193,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
   cfg->buffer_ms = 2000;
   cfg->rtx_pt = 99;
+  cfg->gop_cap_ms = 8000;
+  cfg->max_bursts = 4096;
+  cfg->burst_multiplier = 1.5;
+  cfg->duration_cap_ms = 10000;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "g:l:I:B:M:R:F:w:u:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "g:l:I:M:R:w:u:vhB:F:G:C:X:D:", longopts, NULL)) != -1) {
     switch (c) {
       case 'g':
         if (ranges_parse(optarg, cfg)) {
@@ -202,16 +220,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1000:
         cfg->bpf_expr = optarg;
         break;
-      case 'B': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0) {
-          argerr("invalid -B buffer: %s (ms)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->buffer_ms = (unsigned)v;
-        break;
-      }
       case 'M': {
         char *end;
         unsigned long v = strtoul(optarg, &end, 10);
@@ -232,19 +240,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->rtx_pt = (unsigned char)v;
         break;
       }
-      case 'F': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v > 65535) {
-          argerr("invalid -F ff-port: %s", optarg);
-          return ARGS_ERR;
-        }
-        cfg->ff_port = (unsigned)v;
-        break;
-      }
-      case 1001:
-        cfg->no_mc_ret = 1;
-        break;
       case 'w': {
         char *end;
         unsigned long v = strtoul(optarg, &end, 10);
@@ -271,6 +266,75 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->color_mode = v;
         break;
       }
+      case 1003:
+        cfg->no_ret = 1;
+        break;
+      case 'B': {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0) {
+          argerr("invalid -B buffer: %s (ms)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->buffer_ms = (unsigned)v;
+        break;
+      }
+      case 'F': {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v > 65535) {
+          argerr("invalid -F ff-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->ff_port = (unsigned)v;
+        break;
+      }
+      case 1001:
+        cfg->no_mc_ret = 1;
+        break;
+      case 1004:
+        cfg->no_fcc = 1;
+        break;
+      case 'G': {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0) {
+          argerr("invalid -G gop-cap: %s (ms)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->gop_cap_ms = (unsigned)v;
+        break;
+      }
+      case 'C': {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0) {
+          argerr("invalid -C max-bursts: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->max_bursts = (size_t)v;
+        break;
+      }
+      case 'X': {
+        char *end;
+        double v = strtod(optarg, &end);
+        if (*end != '\0' || v <= 1.0) {
+          argerr("invalid -X burst-multiplier: %s (must be > 1.0)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->burst_multiplier = v;
+        break;
+      }
+      case 'D': {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0) {
+          argerr("invalid -D burst-duration-cap: %s (ms)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->duration_cap_ms = (unsigned)v;
+        break;
+      }
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -288,6 +352,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (!have_listen) {
     argerr("missing -l listen");
+    return ARGS_ERR;
+  }
+  if (cfg->no_ret && cfg->no_fcc) {
+    argerr("--no-ret and --no-fcc together leave nothing to run");
     return ARGS_ERR;
   }
   if (cfg->workers == 0) {

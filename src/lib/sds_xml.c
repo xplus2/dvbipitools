@@ -14,14 +14,24 @@ void sds_broadcast_open(FILE *f, const char *domain, unsigned version) {
   fprintf(f, "\" Version=\"%u\">\n<ServiceList>\n", version);
 }
 
-void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret) {
+void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc) {
   fprintf(f, "<SingleService><ServiceLocation><IPMulticastAddress Address=\"%s\" Port=\"%u\" Streaming=\"%s\"", s->address, s->port, s->rtp ? "rtp" : "udp");
-  if (ret) {
-    fprintf(f, "><RTPRetransmission><RTCPReporting DestinationAddress=\"%s\" DestinationPort=\"%u\"/>", ret->addr, ret->port);
-    fprintf(f, "<UnicastRET rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", ret->rtx_time_ms, ret->rtx_pt);
-    if (ret->mc)
-      fprintf(f, "<MulticastRET GroupAddress=\"%s\" DestinationPort=\"%u\" rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", s->address, ret->mc_port ? ret->mc_port : s->port, ret->rtx_time_ms, ret->rtx_pt);
-    fputs("</RTPRetransmission></IPMulticastAddress>", f);
+  if (ret || fcc) {
+    fputs(">", f);
+    if (ret) {
+      fprintf(f, "<RTPRetransmission><RTCPReporting DestinationAddress=\"%s\" DestinationPort=\"%u\"/>", ret->addr, ret->port);
+      fprintf(f, "<UnicastRET rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", ret->rtx_time_ms, ret->rtx_pt);
+      if (ret->mc)
+        fprintf(f, "<MulticastRET GroupAddress=\"%s\" DestinationPort=\"%u\" rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", s->address, ret->mc_port ? ret->mc_port : s->port, ret->rtx_time_ms, ret->rtx_pt);
+      fputs("</RTPRetransmission>", f);
+    }
+    if (fcc) {
+      fputs("<ServerBasedEnhancementServiceInfo><EnhancementService>FCC</EnhancementService>", f);
+      fprintf(f, "<RTCPReporting DestinationAddress=\"%s\" DestinationPort=\"%u\"/>", fcc->addr, fcc->port);
+      fprintf(f, "<Retransmission_session DestinationPort=\"%u\" rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", fcc->port, fcc->rtx_time_ms, fcc->rtx_pt);
+      fputs("</ServerBasedEnhancementServiceInfo>", f);
+    }
+    fputs("</IPMulticastAddress>", f);
   } else {
     fputs("/>", f);
   }
@@ -34,7 +44,7 @@ void sds_broadcast_close(FILE *f) {
   fputs("</ServiceList>\n</BroadcastDiscovery>\n</ServiceDiscovery>\n", f);
 }
 
-size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, unsigned char *buf, size_t cap) {
+size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, unsigned char *buf, size_t cap) {
   char *ptr;
   size_t len;
   int i;
@@ -43,7 +53,7 @@ size_t sds_build_broadcast(const char *domain, unsigned version, const sds_servi
     return 0;
   sds_broadcast_open(f, domain, version);
   for (i = 0; i < count; i++)
-    sds_broadcast_item(f, &svcs[i], ret);
+    sds_broadcast_item(f, &svcs[i], ret, fcc);
   sds_broadcast_close(f);
   fclose(f);
   if (len > cap) {
