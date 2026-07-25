@@ -102,20 +102,24 @@ static char *build_bpf(const char *const *ranges, size_t count) {
   out[0] = '\0';
   for (i = 0; i < count; i++) {
     const char *proto = strchr(ranges[i], ':') ? "ip6" : "ip";
-    size_t need = len + strlen(ranges[i]) + 32;
-    int n;
-    if (need > cap) {
-      char *grown;
-      cap = need * 2;
-      grown = realloc(out, cap);
+    for (;;) {
+      int n = snprintf(out + len, cap - len, "%s(%s and dst net %s)", i ? " or " : "", proto, ranges[i]);
+      if (n < 0) {
+        free(out);
+        return NULL;
+      }
+      if ((size_t)n < cap - len) {
+        len += (size_t)n;
+        break;
+      }
+      cap = len + (size_t)n + 1;
+      char *grown = realloc(out, cap);
       if (!grown) {
         free(out);
         return NULL;
       }
       out = grown;
     }
-    n = snprintf(out + len, cap - len, "%s(%s and dst net %s)", i ? " or " : "", proto, ranges[i]);
-    len += (size_t)n;
   }
   return out;
 }
