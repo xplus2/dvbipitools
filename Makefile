@@ -561,7 +561,10 @@ dipifccret_ret_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
-ifeq ($(TESTS),yes)
+# _BIN/_SRCS/TEST_BINS stay unconditional (unlike the TESTS=yes gate below)
+# so 'make clean' finds these paths regardless of current config.mk state -
+# a prior '--tests' build's artifacts must clean up even after
+# reconfiguring without --tests.
 define UNIT_TEST_template
 $(1)_OBJS := $$($(1)_SRCS:.c=.o)
 ALL_OBJS += $$($(1)_OBJS)
@@ -575,11 +578,10 @@ $(foreach t,$(UNIT_TESTS),$(eval $(call UNIT_TEST_template,$(t))))
 TEST_BINS := $(foreach t,$(UNIT_TESTS),$($(t)_BIN))
 
 .PHONY: test
+ifeq ($(TESTS),yes)
 test: $(TEST_BINS)
 	@set -e; for t in $(TEST_BINS); do echo "running $$t"; ./$$t; done
 else
-TEST_BINS :=
-.PHONY: test
 test:
 	@echo "test: reconfigure with './configure --tests' to enable" >&2; exit 1
 endif

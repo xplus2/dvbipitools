@@ -1,3 +1,9 @@
+dvbipitools (1.6.1-1) unstable; urgency=medium
+
+  * automated testing and fuzzing revealed 2 major + 4 minor bugs -> fixed
+
+ -- dvbipitools authors <unspecified@example.com>  Sat, 25 Jul 2026 00:00:00 +0200
+
 dvbipitools (1.6.0-1) unstable; urgency=medium
 
   * merged "dipiret" (RET, Annex F) and "dipifccrams" (FCC/RAMS, Annex I) into a single
