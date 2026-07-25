@@ -65,6 +65,7 @@ static int load_scan(FILE *f, scan_entry_t **out, int *out_n) {
     }
     e = &scan[n++];
     memset(e, 0, sizeof *e);
+    /* cppcheck-suppress uninitvar -- nf starts 0, first loop pass always sets fields[0] */
     snprintf(e->name, sizeof e->name, "%s", fields[0]);
     snprintf(e->uri, sizeof e->uri, "%s", fields[1]);
     e->tsid = nf > 2 ? (unsigned)strtoul(fields[2], NULL, 10) : 0;

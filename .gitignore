@@ -26,6 +26,16 @@ src/*.o
 /CMakeFiles
 /obj-x86_64-linux-gnu
 
+# test binaries (Makefile builds)
+tests/**/test_*
+!tests/**/test_*.c
+
+# fuzz harness binaries (Makefile builds)
+tests/fuzz/fuzz_*
+!tests/fuzz/fuzz_*.c
+tests/fuzz/gen_seeds
+!tests/fuzz/gen_seeds.c
+
 # test samples
 *.ts
 *.mkv

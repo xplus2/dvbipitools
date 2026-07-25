@@ -166,7 +166,7 @@ static unsigned br_ue(br_t *b) {
   int lz = 0;
   while (lz < 32 && !b->err && !br_u(b, 1))
     lz++;
-  return lz ? ((1u << lz) - 1 + br_u(b, lz)) : 0;
+  return lz ? (unsigned)((1ull << lz) - 1 + br_u(b, lz)) : 0;
 }
 
 static int br_se(br_t *b) {

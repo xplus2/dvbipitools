@@ -32,6 +32,7 @@ static double mono(void) {
 static int already_seen(seen_t *seen, int *count, const dvbstp_header_t *h) {
   int i;
   for (i = 0; i < *count; i++)
+    /* cppcheck-suppress uninitvar -- seen[i] for i<count always written by an earlier call */
     if (seen[i].payload_id == h->payload_id && seen[i].segment_id == h->segment_id && seen[i].version == h->segment_version)
       return 1;
   if (*count < SEEN_MAX) {
@@ -96,6 +97,8 @@ int listen_run(const config_t *cfg) {
       char *xml = malloc(len + 1);
       sds_service_t entries[SDS_MAX_SERVICES];
       int i, count;
+      if (!xml)
+        continue;
       memcpy(xml, data, len);
       xml[len] = '\0';
       count = sds_parse_broadcast(xml, entries, SDS_MAX_SERVICES);

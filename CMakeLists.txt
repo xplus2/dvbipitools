@@ -9,6 +9,9 @@ if (NOT CMAKE_BUILD_TYPE)
 endif ()
 
 option(DVBIPITOOLS_STATIC "link tools statically" OFF)
+option(DVBIPITOOLS_SANITIZE "build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+option(DVBIPITOOLS_TESTS "build unit tests (requires Check via pkg-config)" OFF)
+option(DVBIPITOOLS_FUZZING "build AFL++ fuzz harnesses (configure with -DCMAKE_C_COMPILER=afl-clang-fast for instrumentation)" OFF)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -30,6 +33,14 @@ else ()
     set(BUILD_LINK "dynamic")
 endif ()
 
+if (DVBIPITOOLS_SANITIZE)
+    if (DVBIPITOOLS_STATIC)
+        message(FATAL_ERROR "DVBIPITOOLS_SANITIZE and DVBIPITOOLS_STATIC cannot be combined")
+    endif ()
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif ()
+
 set(BUILD_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
 
 add_compile_definitions(
@@ -46,3 +57,12 @@ foreach (d ${tool_dirs})
         add_subdirectory("${d}")
     endif ()
 endforeach ()
+
+if (DVBIPITOOLS_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif ()
+
+if (DVBIPITOOLS_FUZZING)
+    add_subdirectory(tests/fuzz)
+endif ()

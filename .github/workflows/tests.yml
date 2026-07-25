@@ -1,0 +1,89 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  unit-tests:
+    strategy:
+      matrix:
+        include:
+          - name: plain
+            sanitize: OFF
+          - name: asan-ubsan
+            sanitize: ON
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - name: dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake pkg-config libssl-dev libpcap-dev libcheck-dev
+    - name: configure
+      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DDVBIPITOOLS_SANITIZE=${{ matrix.sanitize }}
+    - name: build
+      run: cmake --build build -j"$(nproc)"
+    - name: test
+      run: ctest --test-dir build --output-on-failure
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - name: dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck
+    - name: cppcheck
+      run: |
+        cppcheck --enable=warning,performance,portability --std=c11 --inline-suppr \
+          --suppress=missingIncludeSystem -I src --quiet src/ \
+          2>&1 | tee cppcheck-report.txt
+        echo "findings: $(grep -c 'warning:' cppcheck-report.txt || true)"
+    - name: upload report
+      if: always()
+      uses: actions/upload-artifact@v5
+      with:
+        name: cppcheck-report
+        path: cppcheck-report.txt
+
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - name: dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake pkg-config libssl-dev libpcap-dev afl++
+    - name: configure (afl-clang-fast)
+      run: cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_FUZZING=ON -DCMAKE_C_COMPILER=afl-clang-fast
+    - name: build harnesses
+      run: cmake --build build-fuzz -j"$(nproc)" --target fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_gen_seeds
+    - name: generate seeds
+      run: |
+        mkdir -p afl-in
+        build-fuzz/tests/fuzz/fuzz_gen_seeds afl-in
+    - name: fuzz smoke (60s per harness)
+      env:
+        AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES: "1"
+      run: |
+        fail=0
+        for h in fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp; do
+          echo "=== $h ==="
+          mkdir -p "afl-out/$h"
+          timeout 90 afl-fuzz -i afl-in -o "afl-out/$h" -V 60 -- "build-fuzz/tests/fuzz/$h" @@ || true
+          if [ -n "$(ls -A "afl-out/$h/default/crashes" 2>/dev/null)" ]; then
+            echo "$h: crash found"
+            fail=1
+          fi
+        done
+        exit $fail
+    - name: upload crashes
+      if: always()
+      uses: actions/upload-artifact@v5
+      with:
+        name: fuzz-smoke-crashes
+        path: afl-out/*/default/crashes
+        if-no-files-found: ignore

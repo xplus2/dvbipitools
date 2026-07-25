@@ -31,15 +31,15 @@ size_t psi_finish_section(unsigned char *out, size_t len, size_t cap, unsigned c
 
   if (len + 4 > cap)
     return 0;
+  seclen = (unsigned)(len + 4 - 3); /* section_length is itself CRC-protected, patch before hashing */
+  out[1] = (unsigned char)(flags_nibble | ((seclen >> 8) & 0x0F));
+  out[2] = (unsigned char)seclen;
   crc = crc32_mpeg(out, len);
   out[len] = (unsigned char)(crc >> 24);
   out[len + 1] = (unsigned char)(crc >> 16);
   out[len + 2] = (unsigned char)(crc >> 8);
   out[len + 3] = (unsigned char)crc;
   len += 4;
-  seclen = (unsigned)(len - 3);
-  out[1] = (unsigned char)(flags_nibble | ((seclen >> 8) & 0x0F));
-  out[2] = (unsigned char)seclen;
   return len;
 }
 

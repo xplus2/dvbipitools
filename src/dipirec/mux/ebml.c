@@ -37,6 +37,7 @@ static void eb_be(ebuf_t *b, uint64_t v, int n) {
   int i;
   for (i = 0; i < n; i++)
     t[n - 1 - i] = (unsigned char)(v >> (8 * i));
+  /* cppcheck-suppress uninitvar -- loop above writes t[0..n-1] via n-1-i */
   eb_bytes(b, t, (size_t)n);
 }
 

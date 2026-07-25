@@ -7,6 +7,9 @@ set -eu
 BUILD_TYPE=Debug
 BUILD_LINK=dynamic
 CC=${CC:-cc}
+SANITIZE=no
+TESTS=no
+FUZZING=no
 
 usage() {
     cat <<EOF
@@ -14,6 +17,10 @@ usage: ./configure [options]
   --debug        debug build (default)
   --release      optimized build, binaries stripped
   --static       link statically
+  --sanitize     build with AddressSanitizer + UndefinedBehaviorSanitizer
+  --tests        enable the 'make test' target (requires Check via pkg-config)
+  --fuzz         enable the 'make fuzz-harnesses' target (AFL++ standalone harnesses;
+                 pass --cc=afl-clang-fast for real instrumentation)
   --cc=CC        C compiler (default: cc, or \$CC)
   -h, --help     this help
 EOF
@@ -21,15 +28,23 @@ EOF
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --debug)   BUILD_TYPE=Debug ;;
-        --release) BUILD_TYPE=Release ;;
-        --static)  BUILD_LINK=static ;;
-        --cc=*)    CC=${1#--cc=} ;;
-        -h|--help) usage; exit 0 ;;
+        --debug)    BUILD_TYPE=Debug ;;
+        --release)  BUILD_TYPE=Release ;;
+        --static)   BUILD_LINK=static ;;
+        --sanitize) SANITIZE=yes ;;
+        --tests)    TESTS=yes ;;
+        --fuzz)     FUZZING=yes ;;
+        --cc=*)     CC=${1#--cc=} ;;
+        -h|--help)  usage; exit 0 ;;
         *) echo "configure: unknown option: $1" >&2; usage >&2; exit 1 ;;
     esac
     shift
 done
+
+if [ "$SANITIZE" = yes ] && [ "$BUILD_LINK" = static ]; then
+    echo "configure: --sanitize and --static cannot be combined" >&2
+    exit 1
+fi
 
 BUILD_ARCH=$(uname -m)
 
@@ -47,12 +62,32 @@ LDFLAGS=""
 [ "$BUILD_LINK" = static ] && LDFLAGS="$LDFLAGS -static"
 [ "$BUILD_TYPE" = Release ] && LDFLAGS="$LDFLAGS -s"
 
+if [ "$SANITIZE" = yes ]; then
+    CFLAGS="$CFLAGS -fsanitize=address,undefined -fno-omit-frame-pointer"
+    LDFLAGS="$LDFLAGS -fsanitize=address,undefined"
+fi
+
+CHECK_CFLAGS=""
+CHECK_LIBS=""
+if [ "$TESTS" = yes ]; then
+    if ! pkg-config --exists check; then
+        echo "configure: --tests requires Check (pkg-config module 'check') which was not found" >&2
+        exit 1
+    fi
+    CHECK_CFLAGS=$(pkg-config --cflags check)
+    CHECK_LIBS=$(pkg-config --libs check)
+fi
+
 cat > config.mk <<EOF
 # generated - do not edit
 CC := $CC
 CFLAGS := $CFLAGS
 LDFLAGS :=$LDFLAGS
+TESTS := $TESTS
+CHECK_CFLAGS := $CHECK_CFLAGS
+CHECK_LIBS := $CHECK_LIBS
+FUZZING := $FUZZING
 EOF
 
-echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC)"
+echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tests=$TESTS fuzz=$FUZZING"
 echo "run 'make' to build."

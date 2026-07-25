@@ -159,7 +159,7 @@ static void handle_original_seq(ret_client_t *r, uint16_t seq, const unsigned ch
         r->expected_seq++;
         return;
       }
-      if (missing > RET_GAP_MAX || len > RET_HOLD_CAP) {
+      if (missing >= RET_GAP_MAX || len > RET_HOLD_CAP) {
         log_line("ret: gap of %zu too large to track, resyncing at seq %u", missing, (unsigned)seq);
         r->expected_seq = (uint16_t)(seq + 1);
         outq_push(r, payload, len);
