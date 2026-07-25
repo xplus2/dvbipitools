@@ -8,6 +8,7 @@ BUILD_TYPE=Debug
 BUILD_LINK=dynamic
 CC=${CC:-cc}
 SANITIZE=no
+TSAN=no
 TESTS=no
 FUZZING=no
 
@@ -18,6 +19,7 @@ usage: ./configure [options]
   --release      optimized build, binaries stripped
   --static       link statically
   --sanitize     build with AddressSanitizer + UndefinedBehaviorSanitizer
+  --tsan         build with ThreadSanitizer (cannot combine with --sanitize)
   --tests        enable the 'make test' target (requires Check via pkg-config)
   --fuzz         enable the 'make fuzz-harnesses' target (AFL++ standalone harnesses;
                  pass --cc=afl-clang-fast for real instrumentation)
@@ -32,6 +34,7 @@ while [ $# -gt 0 ]; do
         --release)  BUILD_TYPE=Release ;;
         --static)   BUILD_LINK=static ;;
         --sanitize) SANITIZE=yes ;;
+        --tsan)     TSAN=yes ;;
         --tests)    TESTS=yes ;;
         --fuzz)     FUZZING=yes ;;
         --cc=*)     CC=${1#--cc=} ;;
@@ -43,6 +46,16 @@ done
 
 if [ "$SANITIZE" = yes ] && [ "$BUILD_LINK" = static ]; then
     echo "configure: --sanitize and --static cannot be combined" >&2
+    exit 1
+fi
+
+if [ "$TSAN" = yes ] && [ "$BUILD_LINK" = static ]; then
+    echo "configure: --tsan and --static cannot be combined" >&2
+    exit 1
+fi
+
+if [ "$SANITIZE" = yes ] && [ "$TSAN" = yes ]; then
+    echo "configure: --sanitize and --tsan cannot be combined" >&2
     exit 1
 fi
 
@@ -67,6 +80,11 @@ if [ "$SANITIZE" = yes ]; then
     LDFLAGS="$LDFLAGS -fsanitize=address,undefined"
 fi
 
+if [ "$TSAN" = yes ]; then
+    CFLAGS="$CFLAGS -fsanitize=thread -fno-omit-frame-pointer"
+    LDFLAGS="$LDFLAGS -fsanitize=thread"
+fi
+
 CHECK_CFLAGS=""
 CHECK_LIBS=""
 if [ "$TESTS" = yes ]; then
@@ -87,7 +105,8 @@ TESTS := $TESTS
 CHECK_CFLAGS := $CHECK_CFLAGS
 CHECK_LIBS := $CHECK_LIBS
 FUZZING := $FUZZING
+TSAN := $TSAN
 EOF
 
-echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tests=$TESTS fuzz=$FUZZING"
+echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING"
 echo "run 'make' to build."

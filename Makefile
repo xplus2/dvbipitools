@@ -240,7 +240,7 @@ UNIT_TESTS := lib_demux_crc32 lib_demux_psi lib_demux_bitreader lib_demux_rtp li
 	dipiradiohead_psi dipiradiohead_pes dipiradiohead_tspacketizer \
 	dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_bitrate dipitvhead_remux \
 	dipirec_ebml dipirec_ts_filter dipirec_teletext dipirec_mkv \
-	dipifccret_channel dipifccret_burst dipifccret_ret
+	dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_ret
 
 lib_demux_crc32_BIN := tests/unit/lib/demux/test_crc32
 lib_demux_crc32_SRCS := \
@@ -533,6 +533,13 @@ dipifccret_channel_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
+dipifccret_ret_mcsend_BIN := tests/unit/dipifccret/ret/test_mcsend
+dipifccret_ret_mcsend_SRCS := \
+	tests/unit/dipifccret/ret/test_mcsend.c \
+	src/dipifccret/ret/mcsend.c \
+	src/lib/net/multicast.c \
+	src/lib/log.c
+
 dipifccret_burst_BIN := tests/unit/dipifccret/test_burst
 dipifccret_burst_SRCS := \
 	tests/unit/dipifccret/test_burst.c \
@@ -561,8 +568,8 @@ dipifccret_ret_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
-# _BIN/_SRCS/TEST_BINS stay unconditional (unlike the TESTS=yes gate below)
-# so 'make clean' finds these paths regardless of current config.mk state -
+# _BIN/_SRCS/TEST_BINS stay unconditional (unlike TESTS=yes gate below),
+# 'make clean' finds these paths regardless of current config.mk state -
 # a prior '--tests' build's artifacts must clean up even after
 # reconfiguring without --tests.
 define UNIT_TEST_template
@@ -570,7 +577,7 @@ $(1)_OBJS := $$($(1)_SRCS:.c=.o)
 ALL_OBJS += $$($(1)_OBJS)
 $$($(1)_OBJS): CFLAGS += $(CHECK_CFLAGS)
 $$($(1)_BIN): $$($(1)_OBJS)
-	$$(CC) $$^ $$(LDFLAGS) $(CHECK_LIBS) -o $$@
+	$$(CC) $$^ $$(LDFLAGS) $(CHECK_LIBS) -pthread -o $$@
 endef
 
 $(foreach t,$(UNIT_TESTS),$(eval $(call UNIT_TEST_template,$(t))))
@@ -607,8 +614,8 @@ FUZZ_BIM_DEPS := \
 	src/lib/xml_util.c \
 	src/lib/ioutil.c
 
-# _BIN/_SRCS and FUZZ_BINS stay unconditional (unlike the FUZZING=yes gate
-# below) so 'make clean' finds these paths regardless of current config.mk
+# _BIN/_SRCS and FUZZ_BINS stay unconditional (unlike FUZZING=yes gate
+# below), 'make clean' finds these paths regardless of current config.mk
 # state - a prior '--fuzz' build's artifacts must clean up even after
 # reconfiguring without --fuzz.
 FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp

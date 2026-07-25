@@ -12,8 +12,13 @@ jobs:
         include:
           - name: plain
             sanitize: OFF
+            tsan: OFF
           - name: asan-ubsan
             sanitize: ON
+            tsan: OFF
+          - name: tsan
+            sanitize: OFF
+            tsan: ON
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v5
@@ -22,7 +27,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential cmake pkg-config libssl-dev libpcap-dev check
     - name: configure
-      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DDVBIPITOOLS_SANITIZE=${{ matrix.sanitize }}
+      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DDVBIPITOOLS_SANITIZE=${{ matrix.sanitize }} -DDVBIPITOOLS_TSAN=${{ matrix.tsan }}
     - name: build
       run: cmake --build build -j"$(nproc)"
     - name: test
@@ -38,10 +43,10 @@ jobs:
         sudo apt-get install -y cppcheck
     - name: cppcheck
       run: |
+        set -o pipefail
         cppcheck --enable=warning,performance,portability --std=c11 --inline-suppr \
-          --suppress=missingIncludeSystem -I src --quiet src/ \
+          --suppress=missingIncludeSystem --error-exitcode=1 -I src --quiet src/ \
           2>&1 | tee cppcheck-report.txt
-        echo "findings: $(grep -c 'warning:' cppcheck-report.txt || true)"
     - name: upload report
       if: always()
       uses: actions/upload-artifact@v5

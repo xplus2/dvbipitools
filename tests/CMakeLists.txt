@@ -3,10 +3,12 @@
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(CHECK REQUIRED IMPORTED_TARGET check)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
 function(dvbipitools_add_unit_test name)
     add_executable(test_${name} ${ARGN})
-    target_link_libraries(test_${name} PRIVATE PkgConfig::CHECK)
+    target_link_libraries(test_${name} PRIVATE PkgConfig::CHECK Threads::Threads)
     add_test(NAME ${name} COMMAND test_${name})
 endfunction()
 
@@ -256,6 +258,12 @@ dvbipitools_add_unit_test(dipifccret_channel
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
+dvbipitools_add_unit_test(dipifccret_ret_mcsend
+    unit/dipifccret/ret/test_mcsend.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/mcsend.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(dipifccret_burst

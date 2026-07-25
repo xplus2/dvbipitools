@@ -2,6 +2,8 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -213,6 +215,167 @@ START_TEST(channel_table_reap_frees_stale_channels) {
 }
 END_TEST
 
+/* race tests: concurrent pthreads on seqlock/CAS paths, TSan-checked */
+
+#define RET_RACE_SEQS 2000
+#define RET_RACE_READER_THREADS 4
+#define RET_RACE_READER_ITERS 20000
+
+static channel_t *g_ret_race_chan;
+static _Atomic int g_ret_race_bad;
+
+static void *ret_race_writer(void *arg) {
+  uint16_t seq;
+  (void)arg;
+  for (seq = 0; seq < RET_RACE_SEQS; seq++) {
+    unsigned char payload[16];
+    memset(payload, 0, sizeof payload);
+    payload[0] = (unsigned char)(seq >> 8);
+    payload[1] = (unsigned char)seq;
+    payload[2] = (unsigned char)(seq >> 8);
+    payload[3] = (unsigned char)seq;
+    channel_store(g_ret_race_chan, 0xAAAAAAAAu, seq, (uint32_t)seq * 90000u, payload, sizeof payload);
+  }
+  return NULL;
+}
+
+static void *ret_race_reader(void *arg) {
+  long idx = (long)arg;
+  int i;
+  for (i = 0; i < RET_RACE_READER_ITERS; i++) {
+    uint16_t seq = (uint16_t)((i * 7 + idx * 13) % RET_RACE_SEQS);
+    channel_slot_t out;
+    if (channel_find(g_ret_race_chan, seq, &out)) {
+      if (out.payload[0] != (unsigned char)(out.seq >> 8) ||
+          out.payload[1] != (unsigned char)out.seq ||
+          out.payload[2] != (unsigned char)(out.seq >> 8) ||
+          out.payload[3] != (unsigned char)out.seq ||
+          out.timestamp != (uint32_t)out.seq * 90000u)
+        atomic_store_explicit(&g_ret_race_bad, 1, memory_order_relaxed);
+    }
+  }
+  return NULL;
+}
+
+START_TEST(channel_seqlock_race_no_torn_reads) {
+  channel_table_t *t = channel_table_new(1, 64, 0); /* small ring: wraps under writer */
+  pthread_t writer, readers[RET_RACE_READER_THREADS];
+  long i;
+
+  g_ret_race_chan = channel_lookup(t, AF_INET, "239.7.7.7", 5000);
+  atomic_store_explicit(&g_ret_race_bad, 0, memory_order_relaxed);
+
+  pthread_create(&writer, NULL, ret_race_writer, NULL);
+  for (i = 0; i < RET_RACE_READER_THREADS; i++)
+    pthread_create(&readers[i], NULL, ret_race_reader, (void *)i);
+
+  pthread_join(writer, NULL);
+  for (i = 0; i < RET_RACE_READER_THREADS; i++)
+    pthread_join(readers[i], NULL);
+
+  ck_assert_int_eq(atomic_load_explicit(&g_ret_race_bad, memory_order_relaxed), 0);
+  channel_table_free(t);
+}
+END_TEST
+
+#define FCC_RACE_APPENDS 2000
+#define FCC_RACE_READER_THREADS 4
+#define FCC_RACE_READER_ITERS 20000
+
+static channel_t *g_fcc_race_chan;
+static _Atomic int g_fcc_race_bad;
+
+static void *fcc_race_writer(void *arg) {
+  uint16_t seq;
+  (void)arg;
+  for (seq = 1; seq <= FCC_RACE_APPENDS; seq++) {
+    unsigned char payload[16];
+    memset(payload, 0, sizeof payload);
+    payload[0] = (unsigned char)(seq >> 8);
+    payload[1] = (unsigned char)seq;
+    payload[2] = (unsigned char)(seq >> 8);
+    payload[3] = (unsigned char)seq;
+    channel_store(g_fcc_race_chan, 0xBBBBBBBBu, seq, (uint32_t)seq * 90000u, payload, sizeof payload);
+  }
+  return NULL;
+}
+
+static void *fcc_race_reader(void *arg) {
+  int i;
+  (void)arg;
+  for (i = 0; i < FCC_RACE_READER_ITERS; i++) {
+    size_t count = channel_cache_count(g_fcc_race_chan);
+    rap_cache_entry_t e;
+    if (count == 0)
+      continue;
+    if (!channel_cache_get(g_fcc_race_chan, (size_t)(i % (int)count), &e))
+      continue;
+    if (e.seq == 0) /* seed entry, unformatted, skip */
+      continue;
+    if (e.payload[0] != (unsigned char)(e.seq >> 8) ||
+        e.payload[1] != (unsigned char)e.seq ||
+        e.payload[2] != (unsigned char)(e.seq >> 8) ||
+        e.payload[3] != (unsigned char)e.seq ||
+        e.timestamp != (uint32_t)e.seq * 90000u)
+      atomic_store_explicit(&g_fcc_race_bad, 1, memory_order_relaxed);
+  }
+  return NULL;
+}
+
+START_TEST(channel_fcc_cache_race_no_torn_reads) {
+  channel_table_t *t = channel_table_new(1, 0, 8); /* small cache: wraps under writer */
+  unsigned char discovery[3 * 188];
+  size_t dlen;
+  pthread_t writer, readers[FCC_RACE_READER_THREADS];
+  long i;
+
+  g_fcc_race_chan = channel_lookup(t, AF_INET, "239.8.8.8", 5000);
+  dlen = build_pat_pmt_rai(discovery, 101, 0x0100, 0x0101);
+  channel_store(g_fcc_race_chan, 0xBBBBBBBBu, 0, 0, discovery, dlen); /* seeds have_rap before threads start */
+  atomic_store_explicit(&g_fcc_race_bad, 0, memory_order_relaxed);
+
+  pthread_create(&writer, NULL, fcc_race_writer, NULL);
+  for (i = 0; i < FCC_RACE_READER_THREADS; i++)
+    pthread_create(&readers[i], NULL, fcc_race_reader, NULL);
+
+  pthread_join(writer, NULL);
+  for (i = 0; i < FCC_RACE_READER_THREADS; i++)
+    pthread_join(readers[i], NULL);
+
+  ck_assert_int_eq(atomic_load_explicit(&g_fcc_race_bad, memory_order_relaxed), 0);
+  channel_table_free(t);
+}
+END_TEST
+
+#define LOOKUP_RACE_THREADS 8
+
+static channel_table_t *g_lookup_race_table;
+static channel_t *g_lookup_race_results[LOOKUP_RACE_THREADS];
+
+static void *lookup_race_worker(void *arg) {
+  long idx = (long)arg;
+  g_lookup_race_results[idx] = channel_lookup(g_lookup_race_table, AF_INET, "239.6.6.6", 5000);
+  return NULL;
+}
+
+START_TEST(channel_lookup_race_single_winner) {
+  pthread_t th[LOOKUP_RACE_THREADS];
+  long i;
+
+  g_lookup_race_table = channel_table_new(4, 0, 0);
+  for (i = 0; i < LOOKUP_RACE_THREADS; i++)
+    pthread_create(&th[i], NULL, lookup_race_worker, (void *)i);
+  for (i = 0; i < LOOKUP_RACE_THREADS; i++)
+    pthread_join(th[i], NULL);
+
+  ck_assert_ptr_nonnull(g_lookup_race_results[0]);
+  for (i = 1; i < LOOKUP_RACE_THREADS; i++)
+    ck_assert_ptr_eq(g_lookup_race_results[i], g_lookup_race_results[0]);
+
+  channel_table_free(g_lookup_race_table);
+}
+END_TEST
+
 static Suite *channel_suite(void) {
   Suite *s = suite_create("channel");
   TCase *tc = tcase_create("core");
@@ -224,6 +387,9 @@ static Suite *channel_suite(void) {
   tcase_add_test(tc, channel_fcc_cache_tracks_rap_and_entries);
   tcase_add_test(tc, channel_has_rap_stays_zero_when_fcc_disabled);
   tcase_add_test(tc, channel_table_reap_frees_stale_channels);
+  tcase_add_test(tc, channel_seqlock_race_no_torn_reads);
+  tcase_add_test(tc, channel_fcc_cache_race_no_torn_reads);
+  tcase_add_test(tc, channel_lookup_race_single_winner);
   suite_add_tcase(s, tc);
   return s;
 }

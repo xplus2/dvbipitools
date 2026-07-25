@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -56,12 +57,57 @@ START_TEST(rtx_build_rejects_small_cap) {
 }
 END_TEST
 
+/* race test: concurrent rtx_build() callers, TSan-checked, no dup seq */
+
+#define RTX_RACE_THREADS 8
+#define RTX_RACE_PER_THREAD 2000
+
+static rtx_ctx_t *g_rtx_race_ctx;
+static uint16_t g_rtx_race_seqs[RTX_RACE_THREADS][RTX_RACE_PER_THREAD];
+
+static void *rtx_race_worker(void *arg) {
+  long idx = (long)arg;
+  int i;
+  for (i = 0; i < RTX_RACE_PER_THREAD; i++) {
+    unsigned char buf[16];
+    rtx_build(g_rtx_race_ctx, 0x99u, 96, 0, 0, NULL, 0, buf, sizeof buf);
+    g_rtx_race_seqs[idx][i] = (uint16_t)((buf[2] << 8) | buf[3]);
+  }
+  return NULL;
+}
+
+START_TEST(rtx_build_race_never_duplicates_seq) {
+  pthread_t th[RTX_RACE_THREADS];
+  static unsigned char seen[65536];
+  long i;
+  int j;
+
+  g_rtx_race_ctx = rtx_ctx_new();
+  memset(seen, 0, sizeof seen);
+
+  for (i = 0; i < RTX_RACE_THREADS; i++)
+    pthread_create(&th[i], NULL, rtx_race_worker, (void *)i);
+  for (i = 0; i < RTX_RACE_THREADS; i++)
+    pthread_join(th[i], NULL);
+
+  for (i = 0; i < RTX_RACE_THREADS; i++)
+    for (j = 0; j < RTX_RACE_PER_THREAD; j++) {
+      uint16_t seq = g_rtx_race_seqs[i][j];
+      ck_assert_uint_eq(seen[seq], 0u);
+      seen[seq] = 1;
+    }
+
+  rtx_ctx_free(g_rtx_race_ctx);
+}
+END_TEST
+
 static Suite *rtx_suite(void) {
   Suite *s = suite_create("mux_rtx");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, rtx_build_round_trips_through_rtx_parse);
   tcase_add_test(tc, rtx_build_increments_seq_independent_of_orig_seq);
   tcase_add_test(tc, rtx_build_rejects_small_cap);
+  tcase_add_test(tc, rtx_build_race_never_duplicates_seq);
   suite_add_tcase(s, tc);
   return s;
 }
