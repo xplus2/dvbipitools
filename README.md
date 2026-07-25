@@ -1,18 +1,27 @@
 # dvbipitools
 
-Command line tools for DVB-IPI streams.
+Tools for handling DVB-IPI streams.
 
-## Tools
+They kept piling up in private VCS over many years, so I finally decided to polish, consolidate, and publish them.
+GitHub is not the primary development repository, but releases are published here and pull requests are welcome.
 
-* [dipitvhead](src/dipitvhead/README.md) - use pre-encoded video streams as sources for multicast tv distribution
-* [dipiradiohead](src/dipiradiohead/README.md) - use Ice-/Shoutcast radio sources for multicast radio distribution
-* [dipifccret](src/dipifccret/README.md) - RTP retransmission (RET) and RAMS (FCC) server, DVB-IPI Annex F+I
-* [dipisds](src/dipisds/README.md) - DVBSTP/SD&S service discovery: announce/listen to a service list on multicast
-* [dipiepg](src/dipiepg/README.md) - DVBSTP TVA EPG publisher / listener
-* [dipixmltv](src/dipixmltv/README.md) - convert between XMLTV and the DVB-IPI TVA XML
-* [dipibim](src/dipibim/README.md) - convert between the plain TVA XML shape and its BiM binary encoding
-* [dipirec](src/dipirec/README.md) - record a DVB-IPI multicast
-* [dipiscan](src/dipiscan/README.md) - scan an IP range for DVB-IPI multicasts
+AI helped with the README files, `-h` boilerplate, and test scaffolding they never had before.
+I did not let it mess up the hard parts.
+
+
+## Fantastic tools and where to deploy them
+
+| Tool                                           | Headend | Edge | Client | Purpose                                            |
+|------------------------------------------------|---------|------|--------|----------------------------------------------------|
+| [dipitvhead](src/dipitvhead/README.md)         | ✔️      |      |        | Provide IPTV multicasts                            |
+| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      |      |        | Provide radio multicasts                           |
+| [dipifccret](src/dipifccret/README.md)         | ✔️      | ✔️   |        | RAMS-based FCC (Annex I) and RET (Annex F) server  |
+| [dipisds](src/dipisds/README.md)               | ✔️      |      | ✔️     | DVBSTP/SD&S service discovery (announce & listen)  |
+| [dipiepg](src/dipiepg/README.md)               | ✔️      |      | ✔️     | DVBSTP/TVA EPG (publisher & reader)                |
+| [dipixmltv](src/dipixmltv/README.md)           | ✔️      |      | ✔️     | XMLTV to/from DVB-IPI TVA XML converter            |
+| [dipibim](src/dipibim/README.md)               |         |      | ✔️     | TVA XML BiM encoder/decoder (to debug `dipiepg`)   |
+| [dipirec](src/dipirec/README.md)               |         |      | ✔️     | DVB-IPI Multicast to file/stdout recorder          |
+| [dipiscan](src/dipiscan/README.md)             |         |      | ✔️     | Scan for multicast TV/radio services (w/o SD&S)    |
 
 
 ## Build
@@ -23,39 +32,27 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-Options: 
-* `-DCMAKE_BUILD_TYPE=Debug|Release` / `--debug|--release`
-* `-DDVBIPITOOLS_STATIC=ON` / `--static` for a static link
-* `-DDIPIRADIOHEAD_TLS=OFF` / `-DDIPITVHEAD_TLS=OFF` to build either tool without HTTPS support
-  (no OpenSSL needed); default is `ON` for both, auto-falls back to off if OpenSSL isn't found
-  (same via the legacy Makefile, detected through `pkg-config`)
+### Options
+| CMake                               | configure              |                                                      |
+|-------------------------------------|------------------------|------------------------------------------------------|
+| `-DCMAKE_BUILD_TYPE=Debug\|Release` | `--debug`\|`--release` | Build type                                           |
+| `-DDVBIPITOOLS_STATIC=ON`           | `--static` | Static linking                                       |
+| `-DDIPIRADIOHEAD_TLS=OFF` / `-DDIPITVHEAD_TLS=OFF` | — | Build the respective tool without TLS source support |
 
-`dipifccret` needs libpcap; unlike the OpenSSL options above this isn't optional. 
-If libpcap isn't found, dipifccret is skipped entirely rather than built without its core feature.
+> Note: The build automatically disables TLS support if OpenSSL is not found.
+
+### Dependencies
+
+* If you want to use _HTTPS_ sources in `dipitvhead` and `dipiradiohead`, you'll need `libssl-dev`.
+* `dipifccret` needs libpcap. If libpcap isn't found, dipifccret is skipped entirely rather than built without its core feature.
 
 
 ## Packaging
 ```sh
 dpkg-buildpackage -b -us -uc
 ```
-Build-Depends: `debhelper (>= 13)`, `cmake`, `libssl-dev`, `libpcap-dev` (`libssl-dev` is only
-needed for `dipiradiohead`'s and `dipitvhead`'s HTTPS contrib support; `libpcap-dev` for `dipifccret`'s capture)
 
-
-## Location of deployment
-
-| Tool                                           | Headend | Edge | Client | Reason                                      |
-|------------------------------------------------|---------|------|--------|---------------------------------------------|
-| [dipitvhead](src/dipitvhead/README.md)         | ✔️      |      |        | Provides TV multicasts                      |
-| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      |      |        | Provides radio multicasts                   |
-| [dipifccret](src/dipifccret/README.md)         | ✔️      | ✔️   |        | FCC RAMS (Annex I) and RET (Annex F) server |
-| [dipisds](src/dipisds/README.md)               | ✔️      |      | ✔️     | Service accouncements / reader              |
-| [dipiepg](src/dipiepg/README.md)               | ✔️      |      | ✔️     | EPG publisher / reader                      |
-| [dipixmltv](src/dipixmltv/README.md)           | ✔️      |      | ✔️     | XMLTV converter (from/to)                   |
-| [dipibim](src/dipibim/README.md)               |         |      | ✔️     | EPG BiM Debugging tool                      |
-| [dipirec](src/dipirec/README.md)               |         |      | ✔️     | Multicast recorder                          |
-| [dipiscan](src/dipiscan/README.md)             |         |      | ✔️     | Scan for services (if no SD&S is in use)    |
-
+Build-Depends: `debhelper (>= 13)`, `cmake`, `libssl-dev`, `libpcap-dev`.
 
 
 ## Editorial notes
@@ -75,21 +72,21 @@ between real-world usage of media formats and the standard.
   - `srt` subtitles from EBU Teletext (ETSI EN 300 706). SRT isn't a DVB format.
   - udpxy is not part of any DVB/ETSI specification.
 * dipiscan
-  - This tool, as a whole, would not be needed if deployments would cover DVBSTP/DS&S like `dipisds` does.
-  - `m3u`, `xspf` and our own "lcoal" `csv` format.
+  - This tool would largely be unnecessary if deployments consistently used DVBSTP/SD&S as implemented by `dipisds`.
+  - `m3u`, `xspf` and our own "local" `csv` format.
 * dipisds
-  - Every format besides SD&S XML.
+  - All supported formats other than SD&S XML/BiM are convenience additions.
 * dipixmltv
-  - `xmltv` doesn't exist in the DVB world. TVA XML in BiM does.
-  - CRIDs under TLD `crid://dipixmltv.invalid/...` - (RFC 2606) we're not a registered CRID authority.
+  - XMLTV is not part of DVB-IPI; TVA XML encoded as BiM is.
+  - CRIDs using the authority `dipixmltv.invalid`, reserved under RFC 2606 because this project is not a registered CRID authority.
 * dipibim
-  - Uncompressed representation of TVA EPG data is not specified in TS 102 539#7.2
+  - An uncompressed representation of TVA EPG data is not specified by ETSI TS 102 539, §7.2.
 
 
 ### Known gaps
 On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 
-* FEC (Annex E) and Companion Stream FCC (Annex J)
+* FEC (Annex E) and Companion Stream FCC (Annex J). RAMS-based FCC is provided by `dipifccret`.
 * RMS-FUS, Remote Management and Firmware Update
 * DVB Companion Screens and Streams
 * DVB Home Network, ETSI TS 102 905
@@ -99,7 +96,7 @@ On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 * DHCP-based IP address assignment for the HNED (-8)
 * FUSS, the mandatory File Upload System Stub (-9)
 * Content Download Services / CDS, push or pull (-10)
-* QoS / DiffServ marking (-11)
+* Full QoS/DiffServ behavior (-11): Only limited or fixed DSCP handling is implemented.
 * SRM delivery for Content Protection revocation (-12)
 * Dynamic Service Management (-13)
 
