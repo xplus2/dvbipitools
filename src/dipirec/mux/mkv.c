@@ -66,6 +66,8 @@ typedef struct {
   size_t cpriv_len;
   int hdr_parsed;
   int64_t ts_ms;
+  uint64_t pts_ext, last_raw; /* 33-bit PTS unwrap state */
+  int pts_seen;
   unsigned char *rem; /* audio: partial frame carry-over */
   size_t remlen, remcap;
   int latm_cfg_ok, latm_flt;
@@ -1004,6 +1006,28 @@ static size_t find_startcode(const unsigned char *d, size_t len, size_t from, si
   return len;
 }
 
+#define PTS_MOD 0x200000000ULL  /* 2^33: PTS clock period */
+#define PTS_HALF 0x100000000ULL /* 2^32: wrap/backstep threshold */
+
+/* unwrap 33-bit PTS into a monotonic tick count, ms = return/90 */
+static int64_t pts_unwrap(track_t *t, uint64_t raw) {
+  uint64_t d;
+  int64_t diff;
+
+  raw &= PTS_MOD - 1;
+  if (!t->pts_seen) {
+    t->pts_ext = raw;
+    t->last_raw = raw;
+    t->pts_seen = 1;
+  } else {
+    d = (raw - t->last_raw) & (PTS_MOD - 1);
+    diff = (d >= PTS_HALF) ? (int64_t)d - (int64_t)PTS_MOD : (int64_t)d;
+    t->pts_ext = (uint64_t)((int64_t)t->pts_ext + diff);
+    t->last_raw = raw;
+  }
+  return (int64_t)(t->pts_ext / 90);
+}
+
 /* one video PES = one Annex-B access unit */
 static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   size_t p, scl = 0;
@@ -1013,7 +1037,7 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   if (m->flushing)
     return;
   if (has_pts)
-    t->ts_ms = (int64_t)(pts / 90);
+    t->ts_ms = pts_unwrap(t, pts);
   t->vbuflen = 0;
 
   p = find_startcode(d, len, 0, &scl);
@@ -1094,7 +1118,7 @@ static void handle_mpeg2(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   if (m->flushing)
     return;
   if (has_pts)
-    t->ts_ms = (int64_t)(pts / 90);
+    t->ts_ms = pts_unwrap(t, pts);
 
   p = find_startcode(d, len, 0, &scl);
   while (p < len) {
@@ -1130,7 +1154,7 @@ static void handle_audio(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   size_t pos = 0;
 
   if (has_pts && t->remlen == 0) /* anchor on frame boundary */
-    t->ts_ms = (int64_t)(pts / 90);
+    t->ts_ms = pts_unwrap(t, pts);
   if (t->remlen > MKV_REM_MAX)
     t->remlen = 0;
   if (rem_append(t, data, len))

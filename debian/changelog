@@ -1,3 +1,10 @@
+dvbipitools (1.6.3-1) unstable; urgency=high
+
+  * mkv muxer: 33-bit pts wraparound
+
+ -- dvbipitools authors <unspecified@example.com>  Thu, 30 Jul 2026 00:00:00 +0200
+
+
 dvbipitools (1.6.2-1) unstable; urgency=high
 
   * analyzers found a real overflow in dipifccret

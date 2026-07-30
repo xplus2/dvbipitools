@@ -45,6 +45,8 @@ struct ttx {
   char cur[TTX_TEXT_MAX]; /* on screen now */
   int64_t cur_start;
   int have_cur;
+  uint64_t pts_ext, last_raw; /* 33-bit PTS unwrap state */
+  int pts_seen;
 };
 
 /* teletext bytes: LSB first (EN 300 706 7.1) */
@@ -262,13 +264,35 @@ ttx_t *ttx_new(unsigned page, const char *lang, long lead_ms, ttx_cb cb, void *c
 
 void ttx_free(ttx_t *t) { free(t); }
 
+#define PTS_MOD 0x200000000ULL  /* 2^33: PTS clock period */
+#define PTS_HALF 0x100000000ULL /* 2^32: wrap/backstep threshold */
+
+/* unwrap 33-bit PTS into a monotonic tick count, ms = return/90 */
+static int64_t pts_unwrap(ttx_t *t, uint64_t raw) {
+  uint64_t d;
+  int64_t diff;
+
+  raw &= PTS_MOD - 1;
+  if (!t->pts_seen) {
+    t->pts_ext = raw;
+    t->last_raw = raw;
+    t->pts_seen = 1;
+  } else {
+    d = (raw - t->last_raw) & (PTS_MOD - 1);
+    diff = (d >= PTS_HALF) ? (int64_t)d - (int64_t)PTS_MOD : (int64_t)d;
+    t->pts_ext = (uint64_t)((int64_t)t->pts_ext + diff);
+    t->last_raw = raw;
+  }
+  return (int64_t)(t->pts_ext / 90);
+}
+
 void ttx_pes(ttx_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   size_t i = 1; /* skip data_identifier */
 
   if (len < 1 || d[0] < 0x10 || d[0] > 0x1F)
     return;
   if (has_pts)
-    t->last_ms = (int64_t)(pts / 90);
+    t->last_ms = pts_unwrap(t, pts);
 
   while (i + 2 <= len) {
     unsigned id = d[i], ul = d[i + 1];
