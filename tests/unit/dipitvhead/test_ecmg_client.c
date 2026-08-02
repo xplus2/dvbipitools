@@ -1,9 +1,17 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <arpa/inet.h>
 #include <check.h>
+#include <netinet/in.h>
+#include <poll.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "dipitvhead/cas/ecmg_client.h"
 #include "dipitvhead/cas/simulcrypt_msg.h"
@@ -319,6 +327,259 @@ START_TEST(target_parity_cycling_disconnected_within_cp_unchanged) {
 }
 END_TEST
 
+/* below: standalone integration tests. no swampcastle - a small fake ECMG server
+   (this process, a loopback socket, a real accept/reply thread) drives the REAL ecmg_client.c
+   state machine end to end: connect, handshake, CW_provision/ECM_response, version
+   fallback, reconnect after a dropped connection. */
+
+typedef struct {
+  int listen_fd;
+  unsigned port;
+  pthread_t thread;
+  atomic_int stop;
+  atomic_int reject_first_version; /* channel_error once, then accept the retry */
+  atomic_int close_after_first_ecm; /* drop the connection right after one ECM_response */
+  atomic_int connections_seen;
+} fake_ecmg_t;
+
+static size_t fake_build_channel_status(unsigned char *out, size_t cap, unsigned char version) {
+  simulcrypt_writer_t w;
+  unsigned char cw_per_msg = 1;
+  simulcrypt_writer_begin(&w, out, cap, version, ECMG_MSG_CHANNEL_STATUS);
+  simulcrypt_writer_put_tlv(&w, ECMG_P_CW_PER_MSG, &cw_per_msg, 1);
+  return simulcrypt_writer_finish(&w);
+}
+
+static size_t fake_build_stream_status(unsigned char *out, size_t cap, unsigned char version) {
+  simulcrypt_writer_t w;
+  simulcrypt_writer_begin(&w, out, cap, version, ECMG_MSG_STREAM_STATUS);
+  return simulcrypt_writer_finish(&w);
+}
+
+static size_t fake_build_channel_error_bad_version(unsigned char *out, size_t cap, unsigned char version) {
+  simulcrypt_writer_t w;
+  unsigned char err[2];
+  err[0] = (unsigned char)(ECMG_ERR_UNSUPPORTED_PROTOCOL_VERSION >> 8);
+  err[1] = (unsigned char)ECMG_ERR_UNSUPPORTED_PROTOCOL_VERSION;
+  simulcrypt_writer_begin(&w, out, cap, version, ECMG_MSG_CHANNEL_ERROR);
+  simulcrypt_writer_put_tlv(&w, ECMG_P_ERROR_STATUS, err, 2);
+  return simulcrypt_writer_finish(&w);
+}
+
+static size_t fake_build_ecm_response(unsigned char *out, size_t cap, unsigned char version) {
+  simulcrypt_writer_t w;
+  static const unsigned char fake_ecm[] = {0x80, 0x70, 0x05, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
+  simulcrypt_writer_begin(&w, out, cap, version, ECMG_MSG_ECM_RESPONSE);
+  simulcrypt_writer_put_tlv(&w, ECMG_P_ECM_DATAGRAM, fake_ecm, sizeof fake_ecm);
+  return simulcrypt_writer_finish(&w);
+}
+
+static void *fake_ecmg_thread(void *arg) {
+  fake_ecmg_t *fe = arg;
+
+  while (!atomic_load_explicit(&fe->stop, memory_order_relaxed)) {
+    struct pollfd pfd;
+    int pr, fd;
+    simulcrypt_reader_t rd;
+    simulcrypt_hdr_t hdr;
+    const unsigned char *payload;
+    unsigned char msg[512];
+    size_t len;
+    unsigned char version;
+
+    pfd.fd = fe->listen_fd;
+    pfd.events = POLLIN;
+    pr = poll(&pfd, 1, 150);
+    if (pr <= 0)
+      continue;
+    fd = accept(fe->listen_fd, NULL, NULL);
+    if (fd < 0)
+      continue;
+    atomic_fetch_add_explicit(&fe->connections_seen, 1, memory_order_relaxed);
+    simulcrypt_reader_init(&rd);
+
+    if (simulcrypt_reader_poll(&rd, fd, 3000, &hdr, &payload) != 1 || hdr.type != ECMG_MSG_CHANNEL_SETUP) {
+      close(fd);
+      continue;
+    }
+    version = hdr.version;
+    if (atomic_load_explicit(&fe->reject_first_version, memory_order_relaxed)) {
+      atomic_store_explicit(&fe->reject_first_version, 0, memory_order_relaxed);
+      len = fake_build_channel_error_bad_version(msg, sizeof msg, version);
+      simulcrypt_send_all(fd, msg, len, 3000);
+      close(fd);
+      continue; /* client retries on a fresh connection with version_min */
+    }
+    len = fake_build_channel_status(msg, sizeof msg, version);
+    simulcrypt_send_all(fd, msg, len, 3000);
+
+    if (simulcrypt_reader_poll(&rd, fd, 3000, &hdr, &payload) != 1 || hdr.type != ECMG_MSG_STREAM_SETUP) {
+      close(fd);
+      continue;
+    }
+    len = fake_build_stream_status(msg, sizeof msg, version);
+    simulcrypt_send_all(fd, msg, len, 3000);
+
+    while (!atomic_load_explicit(&fe->stop, memory_order_relaxed)) {
+      int rc = simulcrypt_reader_poll(&rd, fd, 500, &hdr, &payload);
+      if (rc < 0)
+        break;
+      if (rc == 0)
+        continue;
+      if (hdr.type != ECMG_MSG_CW_PROVISION)
+        continue;
+      len = fake_build_ecm_response(msg, sizeof msg, version);
+      simulcrypt_send_all(fd, msg, len, 3000);
+      if (atomic_load_explicit(&fe->close_after_first_ecm, memory_order_relaxed)) {
+        atomic_store_explicit(&fe->close_after_first_ecm, 0, memory_order_relaxed);
+        break;
+      }
+    }
+    close(fd);
+  }
+  return NULL;
+}
+
+static void fake_ecmg_start(fake_ecmg_t *fe) {
+  struct sockaddr_in addr;
+  socklen_t alen = sizeof addr;
+
+  memset(fe, 0, sizeof *fe);
+  fe->listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_port = 0;
+  bind(fe->listen_fd, (struct sockaddr *)&addr, sizeof addr);
+  listen(fe->listen_fd, 4);
+  getsockname(fe->listen_fd, (struct sockaddr *)&addr, &alen);
+  fe->port = ntohs(addr.sin_port);
+  pthread_create(&fe->thread, NULL, fake_ecmg_thread, fe);
+}
+
+static void fake_ecmg_stop(fake_ecmg_t *fe) {
+  atomic_store_explicit(&fe->stop, 1, memory_order_relaxed);
+  pthread_join(fe->thread, NULL);
+  close(fe->listen_fd);
+}
+
+/* next_boundary is computed relative to *counter at connect time*, not zero, so a one-shot
+   bump before ecmg_client_start() doesn't reliably cross it - keep advancing it while waiting */
+static int wait_for_epoch_above(ecmg_client_t *c, atomic_ulong *counter, unsigned long floor, int timeout_ms) {
+  int waited = 0;
+  while (waited < timeout_ms) {
+    struct timespec ts = {0, 50L * 1000000L};
+    if (ecmg_client_cw_epoch(c) > floor)
+      return 1;
+    atomic_fetch_add_explicit(counter, 1000, memory_order_relaxed);
+    nanosleep(&ts, NULL);
+    waited += 50;
+  }
+  return ecmg_client_cw_epoch(c) > floor;
+}
+
+START_TEST(ecmg_client_completes_real_handshake_and_gets_cw) {
+  fake_ecmg_t fe;
+  ecmg_client_cfg_t cfg;
+  ecmg_client_t *c;
+  atomic_ulong counter;
+  unsigned char cw[ECMG_MAX_CW_LEN];
+  size_t cw_len;
+
+  fake_ecmg_start(&fe);
+  atomic_init(&counter, 100); /* already past packets_per_cp: CW_provision fires immediately */
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.host = "127.0.0.1";
+  cfg.port = fe.port;
+  cfg.version_min = cfg.version_max = 3;
+  cfg.super_cas_id = 0x4A750001;
+  cfg.ecm_id = 1;
+  cfg.cp_duration_ms = 1000;
+  cfg.algo = SCRAMBLE_ALGO_CSA2;
+  cfg.resilience = ECMG_RESILIENCE_FROZEN;
+
+  c = ecmg_client_start(&cfg, &counter, 5, 1);
+  ck_assert_ptr_nonnull(c);
+  ck_assert_int_eq(wait_for_epoch_above(c, &counter, 0, 4000), 1);
+  ck_assert_int_eq(ecmg_client_get_cw(c, (int)(ecmg_client_cw_epoch(c) & 1UL), cw, sizeof cw, &cw_len), 0);
+  ck_assert_uint_eq(cw_len, 8); /* CSA2 */
+
+  ecmg_client_stop(c);
+  fake_ecmg_stop(&fe);
+  ck_assert_int_eq(atomic_load_explicit(&fe.connections_seen, memory_order_relaxed), 1);
+}
+END_TEST
+
+START_TEST(ecmg_client_falls_back_to_version_min_on_rejection) {
+  fake_ecmg_t fe;
+  ecmg_client_cfg_t cfg;
+  ecmg_client_t *c;
+  atomic_ulong counter;
+
+  fake_ecmg_start(&fe);
+  atomic_store_explicit(&fe.reject_first_version, 1, memory_order_relaxed);
+  atomic_init(&counter, 100);
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.host = "127.0.0.1";
+  cfg.port = fe.port;
+  cfg.version_min = 2;
+  cfg.version_max = 3;
+  cfg.super_cas_id = 0x4A750001;
+  cfg.ecm_id = 1;
+  cfg.cp_duration_ms = 1000;
+  cfg.algo = SCRAMBLE_ALGO_CSA2;
+  cfg.resilience = ECMG_RESILIENCE_FROZEN;
+
+  c = ecmg_client_start(&cfg, &counter, 5, 1);
+  ck_assert_ptr_nonnull(c);
+  ck_assert_int_eq(wait_for_epoch_above(c, &counter, 0, 4000), 1);
+
+  ecmg_client_stop(c);
+  fake_ecmg_stop(&fe);
+  /* rejected on the first connection (version 3), succeeded on a second (version_min=2) */
+  ck_assert_int_eq(atomic_load_explicit(&fe.connections_seen, memory_order_relaxed), 2);
+}
+END_TEST
+
+START_TEST(ecmg_client_reconnects_after_dropped_connection) {
+  fake_ecmg_t fe;
+  ecmg_client_cfg_t cfg;
+  ecmg_client_t *c;
+  atomic_ulong counter;
+  unsigned long first_epoch;
+
+  fake_ecmg_start(&fe);
+  atomic_store_explicit(&fe.close_after_first_ecm, 1, memory_order_relaxed);
+  atomic_init(&counter, 100);
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.host = "127.0.0.1";
+  cfg.port = fe.port;
+  cfg.version_min = cfg.version_max = 3;
+  cfg.super_cas_id = 0x4A750001;
+  cfg.ecm_id = 1;
+  cfg.cp_duration_ms = 1000;
+  cfg.algo = SCRAMBLE_ALGO_CSA2;
+  cfg.resilience = ECMG_RESILIENCE_FROZEN;
+
+  c = ecmg_client_start(&cfg, &counter, 5, 1);
+  ck_assert_ptr_nonnull(c);
+  ck_assert_int_eq(wait_for_epoch_above(c, &counter, 0, 4000), 1);
+  first_epoch = ecmg_client_cw_epoch(c);
+
+  /* fake server dropped the connection after replying once; bump the counter again so the
+     reconnected client has a fresh CP boundary to react to, then wait for a second CW */
+  atomic_fetch_add_explicit(&counter, 100, memory_order_relaxed);
+  ck_assert_int_eq(wait_for_epoch_above(c, &counter, first_epoch, 4000), 1);
+
+  ecmg_client_stop(c);
+  fake_ecmg_stop(&fe);
+  ck_assert_int_eq(atomic_load_explicit(&fe.connections_seen, memory_order_relaxed), 2);
+}
+END_TEST
+
 static Suite *ecmg_client_suite(void) {
   Suite *s = suite_create("ecmg_client");
   TCase *tc = tcase_create("core");
@@ -347,6 +608,17 @@ static Suite *ecmg_client_suite(void) {
   tcase_add_test(tc, target_parity_cycling_disconnected_flips_back_after_two_cp);
   tcase_add_test(tc, target_parity_cycling_disconnected_within_cp_unchanged);
   suite_add_tcase(s, tc);
+
+  {
+    /* real sockets/reconnect timing: give this tcase more headroom than the default */
+    TCase *tc_integ = tcase_create("integration");
+    tcase_set_timeout(tc_integ, 15);
+    tcase_add_test(tc_integ, ecmg_client_completes_real_handshake_and_gets_cw);
+    tcase_add_test(tc_integ, ecmg_client_falls_back_to_version_min_on_rejection);
+    tcase_add_test(tc_integ, ecmg_client_reconnects_after_dropped_connection);
+    suite_add_tcase(s, tc_integ);
+  }
+
   return s;
 }
 

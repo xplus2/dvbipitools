@@ -1,9 +1,14 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <arpa/inet.h>
 #include <check.h>
+#include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "dipitvhead/cas/emmg_server.h"
 #include "dipitvhead/cas/simulcrypt_msg.h"
@@ -207,6 +212,157 @@ START_TEST(extract_datagrams_rejects_malformed) {
 }
 END_TEST
 
+/* below: standalone integration tests. no swampcastle - a synchronous fake EMMG client
+   (this process, a loopback socket) connects to the REAL emmg_server.c listener and drives
+   its actual accept/worker state machine end to end. */
+
+static int fake_connect(unsigned port) {
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_port = htons((unsigned short)port);
+  if (connect(fd, (struct sockaddr *)&addr, sizeof addr) < 0) {
+    close(fd);
+    return -1;
+  }
+  return fd;
+}
+
+static size_t fake_build_channel_setup(unsigned char *out, size_t cap, unsigned char version, unsigned client_id, unsigned data_channel_id) {
+  simulcrypt_writer_t w;
+  unsigned char cid[4];
+  cid[0] = (unsigned char)(client_id >> 24);
+  cid[1] = (unsigned char)(client_id >> 16);
+  cid[2] = (unsigned char)(client_id >> 8);
+  cid[3] = (unsigned char)client_id;
+  simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_CHANNEL_SETUP);
+  simulcrypt_writer_put_tlv(&w, EMMG_P_CLIENT_ID, cid, 4);
+  simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_CHANNEL_ID, (unsigned char[]){(unsigned char)(data_channel_id >> 8), (unsigned char)data_channel_id}, 2);
+  return simulcrypt_writer_finish(&w);
+}
+
+static size_t fake_build_stream_setup(unsigned char *out, size_t cap, unsigned char version, unsigned data_stream_id, unsigned data_id, unsigned data_type) {
+  simulcrypt_writer_t w;
+  simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_STREAM_SETUP);
+  simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_STREAM_ID, (unsigned char[]){(unsigned char)(data_stream_id >> 8), (unsigned char)data_stream_id}, 2);
+  simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_ID, (unsigned char[]){(unsigned char)(data_id >> 8), (unsigned char)data_id}, 2);
+  simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_TYPE, (unsigned char[]){(unsigned char)data_type}, 1);
+  return simulcrypt_writer_finish(&w);
+}
+
+static size_t fake_build_stream_bw_request(unsigned char *out, size_t cap, unsigned char version, unsigned bandwidth_kbps) {
+  simulcrypt_writer_t w;
+  simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_STREAM_BW_REQUEST);
+  simulcrypt_writer_put_tlv(&w, EMMG_P_BANDWIDTH, (unsigned char[]){(unsigned char)(bandwidth_kbps >> 8), (unsigned char)bandwidth_kbps}, 2);
+  return simulcrypt_writer_finish(&w);
+}
+
+static size_t fake_build_data_provision(unsigned char *out, size_t cap, unsigned char version, const unsigned char *dg, size_t dg_len) {
+  simulcrypt_writer_t w;
+  simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_DATA_PROVISION);
+  simulcrypt_writer_put_tlv(&w, EMMG_P_DATAGRAM, dg, (unsigned short)dg_len);
+  return simulcrypt_writer_finish(&w);
+}
+
+static int fake_read_reply(int fd, simulcrypt_hdr_t *hdr, unsigned char *payload_out, size_t cap) {
+  simulcrypt_reader_t rd;
+  const unsigned char *payload;
+  int rc;
+  simulcrypt_reader_init(&rd);
+  rc = simulcrypt_reader_poll(&rd, fd, 3000, hdr, &payload);
+  if (rc != 1)
+    return -1;
+  if (hdr->payload_len > cap)
+    return -1;
+  memcpy(payload_out, payload, hdr->payload_len);
+  return 0;
+}
+
+START_TEST(emmg_server_completes_real_handshake_and_queues_datagram) {
+  emmg_server_cfg_t cfg;
+  emmg_server_t *s;
+  unsigned port;
+  int fd;
+  unsigned char msg[512], payload[512];
+  simulcrypt_hdr_t hdr;
+  size_t n;
+  static const unsigned char dg[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x01};
+  unsigned char got[64];
+  size_t got_len;
+  int waited;
+
+  cfg.port = 0; /* kernel-assigned ephemeral port */
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+  port = emmg_server_port(s);
+  ck_assert_uint_ne(port, 0u);
+
+  fd = fake_connect(port);
+  ck_assert_int_ge(fd, 0);
+
+  n = fake_build_channel_setup(msg, sizeof msg, 3, 0x4A750001, 1);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+  ck_assert_int_eq(fake_read_reply(fd, &hdr, payload, sizeof payload), 0);
+  ck_assert_uint_eq(hdr.type, EMMG_MSG_CHANNEL_STATUS);
+
+  n = fake_build_stream_setup(msg, sizeof msg, 3, 1, 1, 0);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+  ck_assert_int_eq(fake_read_reply(fd, &hdr, payload, sizeof payload), 0);
+  ck_assert_uint_eq(hdr.type, EMMG_MSG_STREAM_STATUS);
+
+  n = fake_build_stream_bw_request(msg, sizeof msg, 3, 512);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+  ck_assert_int_eq(fake_read_reply(fd, &hdr, payload, sizeof payload), 0);
+  ck_assert_uint_eq(hdr.type, EMMG_MSG_STREAM_BW_ALLOCATION);
+
+  n = fake_build_data_provision(msg, sizeof msg, 3, dg, sizeof dg);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+
+  waited = 0;
+  while (emmg_server_dequeue_emm(s, got, sizeof got, &got_len) != 0 && waited < 3000) {
+    struct timespec ts = {0, 20L * 1000000L};
+    nanosleep(&ts, NULL);
+    waited += 20;
+  }
+  ck_assert_uint_eq(got_len, sizeof dg);
+  ck_assert_mem_eq(got, dg, sizeof dg);
+
+  close(fd);
+  emmg_server_stop(s);
+}
+END_TEST
+
+START_TEST(emmg_server_rejects_stream_setup_before_channel_setup) {
+  emmg_server_cfg_t cfg;
+  emmg_server_t *s;
+  unsigned port;
+  int fd;
+  unsigned char msg[512];
+  size_t n;
+  ssize_t rn;
+
+  cfg.port = 0;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+  port = emmg_server_port(s);
+
+  fd = fake_connect(port);
+  ck_assert_int_ge(fd, 0);
+
+  n = fake_build_stream_setup(msg, sizeof msg, 3, 1, 1, 0);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+
+  /* server closes the connection (should_close) instead of replying: read() sees EOF */
+  rn = read(fd, msg, sizeof msg);
+  ck_assert_int_eq(rn, 0);
+
+  close(fd);
+  emmg_server_stop(s);
+}
+END_TEST
+
 static Suite *emmg_server_suite(void) {
   Suite *s = suite_create("emmg_server");
   TCase *tc = tcase_create("core");
@@ -222,6 +378,16 @@ static Suite *emmg_server_suite(void) {
   tcase_add_test(tc, extract_datagrams_multiple_in_order);
   tcase_add_test(tc, extract_datagrams_rejects_malformed);
   suite_add_tcase(s, tc);
+
+  {
+    /* real sockets: give this tcase more headroom than the default */
+    TCase *tc_integ = tcase_create("integration");
+    tcase_set_timeout(tc_integ, 15);
+    tcase_add_test(tc_integ, emmg_server_completes_real_handshake_and_queues_datagram);
+    tcase_add_test(tc_integ, emmg_server_rejects_stream_setup_before_channel_setup);
+    suite_add_tcase(s, tc_integ);
+  }
+
   return s;
 }
 

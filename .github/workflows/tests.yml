@@ -68,7 +68,7 @@ jobs:
     - name: configure (afl-clang-fast)
       run: cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_FUZZING=ON -DCMAKE_C_COMPILER=afl-clang-fast
     - name: build harnesses
-      run: cmake --build build-fuzz -j"$(nproc)" --target fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_gen_seeds
+      run: cmake --build build-fuzz -j"$(nproc)" --target fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_gen_seeds
     - name: generate seeds
       run: |
         mkdir -p afl-in
@@ -78,7 +78,7 @@ jobs:
         AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES: "1"
       run: |
         fail=0
-        for h in fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp; do
+        for h in fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams; do
           echo "=== $h ==="
           mkdir -p "afl-out/$h"
           timeout 90 afl-fuzz -i afl-in -o "afl-out/$h" -V 60 -- "build-fuzz/tests/fuzz/$h" @@ || true

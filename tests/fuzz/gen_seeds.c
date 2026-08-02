@@ -2,12 +2,13 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 /* writes one valid starter seed per fuzz target into directory argv[1].
- * not part of any normal build; run manually before afl-fuzz. */
+   not part of any normal build; run manually before afl-fuzz. */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "dipitvhead/cas/simulcrypt_msg.h"
 #include "lib/bim/accessunit.h"
 #include "lib/bim/bitwriter.h"
 #include "lib/demux/rtcp.h"
@@ -139,6 +140,32 @@ static void gen_rtcp(const char *dir) {
     write_file(dir, "rtcp_nack.bin", buf, n);
 }
 
+static void gen_simulcrypt_msg(const char *dir) {
+  unsigned char buf[32];
+  simulcrypt_writer_t w;
+  static const unsigned char val[] = {0xAA, 0xBB, 0xCC, 0xDD};
+  size_t n;
+
+  simulcrypt_writer_begin(&w, buf, sizeof buf, 3, 0x0201 /* ECMG_MSG_CW_PROVISION */);
+  simulcrypt_writer_put_tlv(&w, 0x0015 /* ECMG_P_ECM_DATAGRAM */, val, sizeof val);
+  n = simulcrypt_writer_finish(&w);
+  if (n)
+    write_file(dir, "simulcrypt_msg_min.bin", buf, n);
+}
+
+static void gen_ecmg_channel_status(const char *dir) {
+  /* ecmg_parse_channel_status() takes the message BODY directly, no generic_message
+     header - ECMG_P_CW_PER_MSG (tag 0x000B) is the only required field */
+  static const unsigned char body[] = {0x00, 0x0B, 0x00, 0x01, 0x01};
+  write_file(dir, "ecmg_channel_status_min.bin", body, sizeof body);
+}
+
+static void gen_emmg_datagrams(const char *dir) {
+  /* emmg_extract_datagrams() takes the data_provision BODY directly - one EMMG_P_DATAGRAM (tag 0x0005) TLV */
+  static const unsigned char body[] = {0x00, 0x05, 0x00, 0x03, 0xAA, 0xBB, 0xCC};
+  write_file(dir, "emmg_datagrams_min.bin", body, sizeof body);
+}
+
 int main(int argc, char **argv) {
   if (argc != 2) {
     fprintf(stderr, "usage: %s <output-dir>\n", argv[0]);
@@ -148,5 +175,8 @@ int main(int argc, char **argv) {
   gen_bim(argv[1]);
   gen_sds(argv[1]);
   gen_rtcp(argv[1]);
+  gen_simulcrypt_msg(argv[1]);
+  gen_ecmg_channel_status(argv[1]);
+  gen_emmg_datagrams(argv[1]);
   return 0;
 }

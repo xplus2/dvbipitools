@@ -745,7 +745,7 @@ FUZZ_BIM_DEPS := \
 # below), 'make clean' finds these paths regardless of current config.mk
 # state - a prior '--fuzz' build's artifacts must clean up even after
 # reconfiguring without --fuzz.
-FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp
+FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams
 
 fuzz_psi_BIN := tests/fuzz/fuzz_psi
 fuzz_psi_SRCS := \
@@ -769,6 +769,40 @@ fuzz_rtcp_SRCS := \
 	tests/fuzz/fuzz_rtcp.c \
 	src/lib/demux/rtcp.c
 
+fuzz_simulcrypt_msg_BIN := tests/fuzz/fuzz_simulcrypt_msg
+fuzz_simulcrypt_msg_SRCS := \
+	tests/fuzz/fuzz_simulcrypt_msg.c \
+	src/dipitvhead/cas/simulcrypt_msg.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/crc32.c
+
+# ecmg_client.c/emmg_server.c pull in real pthread usage even though the fuzzed functions
+# themselves are pure - link pthread on both like dipitvhead itself does
+fuzz_ecmg_channel_status_BIN := tests/fuzz/fuzz_ecmg_channel_status
+fuzz_ecmg_channel_status_SRCS := \
+	tests/fuzz/fuzz_ecmg_channel_status.c \
+	src/dipitvhead/cas/ecmg_client.c \
+	src/dipitvhead/cas/simulcrypt_msg.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/crc32.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/log.c \
+	src/lib/signal.c
+fuzz_ecmg_channel_status_EXTRA_LDFLAGS := -pthread
+
+fuzz_emmg_datagrams_BIN := tests/fuzz/fuzz_emmg_datagrams
+fuzz_emmg_datagrams_SRCS := \
+	tests/fuzz/fuzz_emmg_datagrams.c \
+	src/dipitvhead/cas/emmg_server.c \
+	src/dipitvhead/cas/simulcrypt_msg.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/crc32.c \
+	src/lib/log.c \
+	src/lib/signal.c
+fuzz_emmg_datagrams_EXTRA_LDFLAGS := -pthread
+
 fuzz_gen_seeds_BIN := tests/fuzz/gen_seeds
 fuzz_gen_seeds_SRCS := \
 	tests/fuzz/gen_seeds.c \
@@ -777,13 +811,14 @@ fuzz_gen_seeds_SRCS := \
 	src/lib/mux/rtcp_build.c \
 	src/lib/demux/rtcp.c \
 	src/lib/demux/crc32.c \
-	src/lib/sds_xml.c
+	src/lib/sds_xml.c \
+	src/dipitvhead/cas/simulcrypt_msg.c
 
 define FUZZ_TARGET_template
 $(1)_OBJS := $$($(1)_SRCS:.c=.o)
 ALL_OBJS += $$($(1)_OBJS)
 $$($(1)_BIN): $$($(1)_OBJS)
-	$$(CC) $$^ $$(LDFLAGS) -o $$@
+	$$(CC) $$^ $$(LDFLAGS) $$($(1)_EXTRA_LDFLAGS) -o $$@
 endef
 
 $(foreach t,$(FUZZ_HARNESSES) fuzz_gen_seeds,$(eval $(call FUZZ_TARGET_template,$(t))))
