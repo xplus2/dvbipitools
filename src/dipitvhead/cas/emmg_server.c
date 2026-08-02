@@ -486,6 +486,15 @@ emmg_server_t *emmg_server_start(const emmg_server_cfg_t *cfg) {
   return s;
 }
 
+/* useful when cfg.port was 0 (kernel-assigned ephemeral port) */
+unsigned emmg_server_port(emmg_server_t *s) {
+  struct sockaddr_in6 addr;
+  socklen_t alen = sizeof addr;
+  if (getsockname(s->listen_fd, (struct sockaddr *)&addr, &alen) < 0)
+    return 0;
+  return ntohs(addr.sin6_port);
+}
+
 void emmg_server_stop(emmg_server_t *s) {
   int waited_ms = 0;
   if (!s)

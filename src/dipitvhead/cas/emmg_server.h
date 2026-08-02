@@ -16,6 +16,9 @@ emmg_server_t *emmg_server_start(const emmg_server_cfg_t *cfg);
 /* stops the accept thread and every worker, joins all of them */
 void emmg_server_stop(emmg_server_t *s);
 
+/* actual bound port; useful when cfg.port was 0 (kernel-assigned) */
+unsigned emmg_server_port(emmg_server_t *s);
+
 /* dequeues one received EMM datagram (raw bytes, ready to packetize on --cas-emm-pid).
    0 = filled out/len_out, -1 = queue empty */
 int emmg_server_dequeue_emm(emmg_server_t *s, unsigned char *out, size_t cap, size_t *len_out);
