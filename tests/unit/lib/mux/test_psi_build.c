@@ -114,6 +114,31 @@ START_TEST(psi_build_sdt_round_trips_through_psi_feed) {
 }
 END_TEST
 
+START_TEST(psi_build_cat_builds_valid_section) {
+  static const unsigned char desc[] = {0x09, 4, 0x4A, 0x75, 0xE0, 0x20};
+  unsigned char section[32];
+  size_t slen;
+
+  slen = psi_build_cat(2, desc, sizeof desc, section, sizeof section);
+  ck_assert_uint_ne(slen, 0u);
+  ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
+
+  ck_assert_uint_eq(section[0], 0x01);
+  ck_assert_uint_eq(section[3], 0xFF);
+  ck_assert_uint_eq(section[4], 0xFF);
+  ck_assert_uint_eq(section[5], (unsigned char)(0xC0 | (2 << 1) | 0x01));
+  ck_assert_uint_eq(section[6], 0x00);
+  ck_assert_uint_eq(section[7], 0x00);
+  ck_assert_mem_eq(section + 8, desc, sizeof desc);
+}
+END_TEST
+
+START_TEST(psi_build_cat_rejects_small_cap) {
+  unsigned char section[8];
+  ck_assert_uint_eq(psi_build_cat(0, NULL, 0, section, sizeof section), 0u);
+}
+END_TEST
+
 static Suite *psi_build_suite(void) {
   Suite *s = suite_create("psi_build");
   TCase *tc = tcase_create("core");
@@ -123,6 +148,8 @@ static Suite *psi_build_suite(void) {
   tcase_add_test(tc, psi_build_pat_rejects_small_cap);
   tcase_add_test(tc, psi_build_nit_round_trips_through_psi_feed);
   tcase_add_test(tc, psi_build_sdt_round_trips_through_psi_feed);
+  tcase_add_test(tc, psi_build_cat_builds_valid_section);
+  tcase_add_test(tc, psi_build_cat_rejects_small_cap);
   suite_add_tcase(s, tc);
   return s;
 }

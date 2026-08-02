@@ -17,8 +17,14 @@ typedef void (*remux_packet_cb)(void *ctx, const unsigned char *pkt188);
 remux_t *remux_new(const config_t *cfg, const psi_t *psi);
 void remux_free(remux_t *r);
 
-/* feed one source-pid 188B packet. emits 0+ output packets (our pids/cc) via cb.
- * also drives PAT/PMT/SDT/NIT resend by wall clock. */
+/* output pid chosen for PCR */
+unsigned remux_pcr_pid_out(const remux_t *r);
+
+struct cas;
+/* attach/detach CAS orchestrator; NULL by default */
+void remux_set_cas(remux_t *r, struct cas *cas);
+
+/* feed one source-pid 188B packet. emits 0+ output packets (our pids/cc) via cb. also drives PAT/PMT/SDT/NIT resend by wall clock */
 void remux_feed(remux_t *r, const unsigned char *pkt188, remux_packet_cb cb, void *ctx);
 
 #endif

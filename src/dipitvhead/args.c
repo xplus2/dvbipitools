@@ -186,6 +186,83 @@ static int pid_parse(const char *s, unsigned *out) {
   return 0;
 }
 
+/* 32-bit Super_CAS_id, conventionally written in hex; decimal also accepted */
+static int cas_super_id_parse(const char *s, unsigned *out) {
+  char *end;
+  unsigned long v = strtoul(s, &end, 0);
+  if (*end != '\0' || v == 0 || v > 0xFFFFFFFFUL)
+    return -1;
+  *out = (unsigned)v;
+  return 0;
+}
+
+/* tcp://host:port/ or host:port; brackets required for a literal IPv6 host, e.g. [::1]:2222 */
+static int cas_endpoint_parse(const char *s, char *host_out, size_t host_out_sz, unsigned *port_out) {
+  const char *p = s, *host, *colon;
+  size_t hostlen;
+  char *end;
+  unsigned long port;
+
+  if (!strncmp(p, "tcp://", 6))
+    p += 6;
+  if (*p == '[') {
+    const char *close = strchr(p, ']');
+    if (!close)
+      return -1;
+    host = p + 1;
+    hostlen = (size_t)(close - host);
+    if (close[1] != ':')
+      return -1;
+    colon = close + 1;
+  } else {
+    host = p;
+    colon = strrchr(p, ':');
+    if (!colon)
+      return -1;
+    hostlen = (size_t)(colon - host);
+  }
+  if (hostlen == 0 || hostlen >= host_out_sz)
+    return -1;
+  memcpy(host_out, host, hostlen);
+  host_out[hostlen] = '\0';
+
+  port = strtoul(colon + 1, &end, 10);
+  if (end == colon + 1 || port == 0 || port > 65535)
+    return -1;
+  if (*end != '\0' && *end != '/')
+    return -1;
+  *port_out = (unsigned)port;
+  return 0;
+}
+
+/* 2 or 3, ETSI TS 103 197 Simulcrypt protocol versions; no other value is valid */
+static int cas_version_parse(const char *s, unsigned *out) {
+  char *end;
+  unsigned long v = strtoul(s, &end, 10);
+  if (*end != '\0' || (v != 2 && v != 3))
+    return -1;
+  *out = (unsigned)v;
+  return 0;
+}
+
+static int cas_pids_parse(const char *s, config_t *cfg) {
+  char buf[ARGS_MAX_CAS_PIDS * 8];
+  char *tok, *save = NULL;
+  if (strlen(s) >= sizeof buf)
+    return -1;
+  strcpy(buf, s);
+  cfg->cas_pid_count = 0;
+  for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+    unsigned pid;
+    if (cfg->cas_pid_count >= ARGS_MAX_CAS_PIDS)
+      return -1;
+    if (pid_parse(tok, &pid) || pid == 0)
+      return -1;
+    cfg->cas_pids[cfg->cas_pid_count++] = pid;
+  }
+  return cfg->cas_pid_count ? 0 : -1;
+}
+
 static void print_help(void) {
   printf(
       "usage: %s -i <uri> -m <mcast>:<port> [options]\n\n"
@@ -194,7 +271,8 @@ static void print_help(void) {
       "  -i, --input <uri>          udp://, rtp://, http(s)://, or \"-\" for stdin\n"
       "  -p, --pmt-pid <pid>        select program by PMT PID (dec or 0x-hex; default: first live one)\n"
       "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
-      "  -I, --iface <iface>        outgoing multicast interface\n"
+      "  -I, --iface <iface>        incoming multicast interface\n"
+      "  -O, --out-iface <iface>    outgoing multicast interface\n"
       "  -u, --udp                  plain UDP output (default: RTP-wrapped)\n"
       "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
       "  -n, --nit <text|->         NIT: default passthrough source; \"-\" drops it; text = our own\n"
@@ -213,6 +291,18 @@ static void print_help(void) {
       "      --sid <n>              service_id / program_number (default 1)\n"
       "  -v, --verbose              periodic stats on stderr\n"
       "      --color <when>         auto|always|never (default auto)\n"
+      "      --cas-algo <a>         enable CAS: cissa|csa2 (default: disabled)\n"
+      "      --cas-ecmg <ep>        ECMG address, tcp://host:port (required with --cas-algo)\n"
+      "      --cas-ecmg-version <n> ECMG protocol version 2|3 (default: auto-negotiate)\n"
+      "      --cas-super-id <n>     Super_CAS_id sent to the ECMG, dec or 0x-hex (required with --cas-algo)\n"
+      "      --cas-ecm-id <n>       ECM_id sent to the ECMG (required with --cas-algo)\n"
+      "      --cas-ecm-pid <pid>    output PID for the ECM stream (default: 0x0020)\n"
+      "      --cas-emmg-port <n>    our EMMG listener port (default: 8002)\n"
+      "      --cas-emmg-version <n> EMMG protocol version 2|3 (default: accept client's proposal)\n"
+      "      --cas-emm-pid <pid>    output PID for the EMM stream (default: 0x0021)\n"
+      "      --cas-pids <list>      comma-separated PIDs to scramble (required with --cas-algo)\n"
+      "      --cas-cp-duration <ms> crypto-period duration in ms (default: 10000)\n"
+      "      --cas-resilience <r>   on ECMG loss: frozen|cycling|unscrambled (default: frozen)\n"
       "  -h, --help                 this help\n\n"
       "examples:\n"
       "  %s -i rtp://@239.2.24.1:8208 -m 239.1.1.1:5000 -s \"My Channel\"\n"
@@ -226,6 +316,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"pmt-pid", required_argument, 0, 'p'},
       {"mcast", required_argument, 0, 'm'},
       {"iface", required_argument, 0, 'I'},
+      {"out-iface", required_argument, 0, 'O'},
       {"udp", no_argument, 0, 'u'},
       {"ttl", required_argument, 0, 'T'},
       {"nit", required_argument, 0, 'n'},
@@ -244,9 +335,22 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"sid", required_argument, 0, 1006},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1007},
+      {"cas-algo", required_argument, 0, 1008},
+      {"cas-ecmg", required_argument, 0, 1009},
+      {"cas-ecmg-version", required_argument, 0, 1010},
+      {"cas-super-id", required_argument, 0, 1011},
+      {"cas-ecm-id", required_argument, 0, 1012},
+      {"cas-ecm-pid", required_argument, 0, 1013},
+      {"cas-emmg-port", required_argument, 0, 1014},
+      {"cas-emmg-version", required_argument, 0, 1015},
+      {"cas-emm-pid", required_argument, 0, 1016},
+      {"cas-pids", required_argument, 0, 1017},
+      {"cas-cp-duration", required_argument, 0, 1018},
+      {"cas-resilience", required_argument, 0, 1019},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_in = 0, have_mcast = 0, have_hbbtv_org = 0, have_hbbtv_app = 0;
+  int have_cas_ecmg = 0, have_cas_super_id = 0, have_cas_ecm_id = 0, have_cas_pids = 0, any_cas_flag = 0;
   int c;
 
   memset(cfg, 0, sizeof *cfg);
@@ -254,8 +358,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->onid = 1;
   cfg->sid = 1;
   cfg->rtp = 1;
+  cfg->cas_ecm_pid = 0x0020;
+  cfg->cas_emmg_port = 8002;
+  cfg->cas_emm_pid = 0x0021;
+  cfg->cas_cp_duration_ms = 10000;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "i:p:m:I:uT:n:s:b:SBe:kvh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "i:p:m:I:O:uT:n:s:b:SBe:kvh", longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
         if (source_parse(optarg, &cfg->input)) {
@@ -278,7 +386,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         have_mcast = 1;
         break;
       case 'I':
-        cfg->iface = optarg;
+        cfg->iface_in = optarg;
+        break;
+      case 'O':
+        cfg->iface_out = optarg;
         break;
       case 'u':
         cfg->rtp = 0;
@@ -386,6 +497,107 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->color_mode = v;
         break;
       }
+      case 1008: {
+        static const enum_map_t map[] = {{"cissa", CAS_ALGO_CISSA}, {"csa2", CAS_ALGO_CSA2}};
+        int v;
+        any_cas_flag = 1;
+        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+          argerr("invalid --cas-algo: %s (cissa|csa2)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->cas_algo = (cas_algo_t)v;
+        break;
+      }
+      case 1009:
+        any_cas_flag = 1;
+        if (cas_endpoint_parse(optarg, cfg->cas_ecmg_host, sizeof cfg->cas_ecmg_host, &cfg->cas_ecmg_port)) {
+          argerr("invalid --cas-ecmg endpoint: %s", optarg);
+          return ARGS_ERR;
+        }
+        have_cas_ecmg = 1;
+        break;
+      case 1010:
+        any_cas_flag = 1;
+        if (cas_version_parse(optarg, &cfg->cas_ecmg_version)) {
+          argerr("invalid --cas-ecmg-version: %s (2|3)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1011:
+        any_cas_flag = 1;
+        if (cas_super_id_parse(optarg, &cfg->cas_super_cas_id)) {
+          argerr("invalid --cas-super-id: %s", optarg);
+          return ARGS_ERR;
+        }
+        have_cas_super_id = 1;
+        break;
+      case 1012:
+        any_cas_flag = 1;
+        if (id_parse(optarg, &cfg->cas_ecm_id)) {
+          argerr("invalid --cas-ecm-id: %s (1..65535)", optarg);
+          return ARGS_ERR;
+        }
+        have_cas_ecm_id = 1;
+        break;
+      case 1013:
+        any_cas_flag = 1;
+        if (pid_parse(optarg, &cfg->cas_ecm_pid) || cfg->cas_ecm_pid == 0) {
+          argerr("invalid --cas-ecm-pid: %s (0x0001..0x1FFE)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1014:
+        any_cas_flag = 1;
+        if (port_parse(optarg, &cfg->cas_emmg_port)) {
+          argerr("invalid --cas-emmg-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1015:
+        any_cas_flag = 1;
+        if (cas_version_parse(optarg, &cfg->cas_emmg_version)) {
+          argerr("invalid --cas-emmg-version: %s (2|3)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1016:
+        any_cas_flag = 1;
+        if (pid_parse(optarg, &cfg->cas_emm_pid) || cfg->cas_emm_pid == 0) {
+          argerr("invalid --cas-emm-pid: %s (0x0001..0x1FFE)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1017:
+        any_cas_flag = 1;
+        if (cas_pids_parse(optarg, cfg)) {
+          argerr("invalid --cas-pids: %s", optarg);
+          return ARGS_ERR;
+        }
+        have_cas_pids = 1;
+        break;
+      case 1018: {
+        char *end;
+        unsigned long v;
+        any_cas_flag = 1;
+        v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 86400000UL) {
+          argerr("invalid --cas-cp-duration: %s (ms, 1..86400000)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->cas_cp_duration_ms = (unsigned)v;
+        break;
+      }
+      case 1019: {
+        static const enum_map_t map[] = {{"frozen", CAS_RESILIENCE_FROZEN}, {"cycling", CAS_RESILIENCE_CYCLING}, {"unscrambled", CAS_RESILIENCE_UNSCRAMBLED}};
+        int v;
+        any_cas_flag = 1;
+        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+          argerr("invalid --cas-resilience: %s (frozen|cycling|unscrambled)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->cas_resilience = (cas_resilience_t)v;
+        break;
+      }
       case 'v':
         cfg->verbose = 1;
         break;
@@ -419,6 +631,32 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   if ((have_hbbtv_org || have_hbbtv_app) && !cfg->hbbtv_url) {
     argerr("--hbbtv-org-id/--hbbtv-app-id need --hbbtv");
     return ARGS_ERR;
+  }
+  if (any_cas_flag && cfg->cas_algo == CAS_ALGO_NONE) {
+    argerr("--cas-* options require --cas-algo");
+    return ARGS_ERR;
+  }
+  if (cfg->cas_algo != CAS_ALGO_NONE) {
+    if (!have_cas_ecmg) {
+      argerr("--cas-algo requires --cas-ecmg");
+      return ARGS_ERR;
+    }
+    if (!have_cas_super_id) {
+      argerr("--cas-algo requires --cas-super-id");
+      return ARGS_ERR;
+    }
+    if (!have_cas_ecm_id) {
+      argerr("--cas-algo requires --cas-ecm-id");
+      return ARGS_ERR;
+    }
+    if (!have_cas_pids) {
+      argerr("--cas-algo requires --cas-pids");
+      return ARGS_ERR;
+    }
+    if (cfg->cas_ecm_pid == cfg->cas_emm_pid) {
+      argerr("--cas-ecm-pid and --cas-emm-pid must differ");
+      return ARGS_ERR;
+    }
   }
   return ARGS_OK;
 }

@@ -2,15 +2,18 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <signal.h>
+#include <stdatomic.h>
 #include <string.h>
 
 #include "signal.h"
 
-static volatile sig_atomic_t g_stop = 0;
+/* atomic, not just volatile sig_atomic_t: readers run on other threads now (CAS worker
+   threads), and volatile alone gives no cross-thread ordering under the C11 model */
+static atomic_int g_stop = 0;
 
 static void on_stop(int sig) {
   (void)sig;
-  g_stop = 1;
+  atomic_store_explicit(&g_stop, 1, memory_order_relaxed);
 }
 
 void signals_install(void) {
@@ -22,4 +25,4 @@ void signals_install(void) {
   signal(SIGPIPE, SIG_IGN); /* closed stdout pipe -> EPIPE */
 }
 
-int signal_stop_requested(void) { return g_stop; }
+int signal_stop_requested(void) { return atomic_load_explicit(&g_stop, memory_order_relaxed); }

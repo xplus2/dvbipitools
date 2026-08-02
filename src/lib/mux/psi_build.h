@@ -13,11 +13,13 @@ size_t psi_put_text(unsigned char *out, size_t cap, const char *s);
 /* appends CRC32 and patches the section_length field. flags_nibble: 0xB0 (PAT/PMT) or 0xF0 (others) */
 size_t psi_finish_section(unsigned char *out, size_t len, size_t cap, unsigned char flags_nibble);
 
-/* each builds one section (table_id..CRC32 inclusive). single-program-out shape, content-identical
- * whether the caller is dipiradiohead or dipitvhead. 0 on overflow */
+/* each builds one section (table_id..CRC32 incl.). single-program-out shape, content-identical
+   whether caller is dipiradiohead or dipitvhead. 0 on overflow */
 size_t psi_build_pat(unsigned tsid, unsigned version, unsigned program_number, unsigned pmt_pid, unsigned char *out, size_t cap);
 /* service_type: DVB SI table, e.g. 0x01 digital television, 0x02 digital radio sound */
 size_t psi_build_sdt(unsigned version, unsigned tsid, unsigned onid, unsigned service_id, unsigned service_type, const char *provider, const char *service, unsigned char *out, size_t cap);
 size_t psi_build_nit(unsigned version, unsigned onid, unsigned tsid, const char *network_name, unsigned char *out, size_t cap);
+/* table_id 0x01, program-level descriptor loop only (CA_descriptor etc). desc/desc_len: NULL/0 if none */
+size_t psi_build_cat(unsigned version, const unsigned char *desc, size_t desc_len, unsigned char *out, size_t cap);
 
 #endif

@@ -68,6 +68,34 @@ dvbipitools_add_unit_test(lib_mux_tspacket_write
     unit/lib/mux/test_tspacket_write.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c)
 
+find_package(OpenSSL)
+if (OpenSSL_FOUND)
+    dvbipitools_add_unit_test(lib_scrambler_cissa
+        unit/lib/scrambler/test_cissa.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+    target_link_libraries(test_lib_scrambler_cissa PRIVATE OpenSSL::Crypto)
+else ()
+    message(WARNING "tests: OpenSSL not found, skipping lib_scrambler_cissa unit test")
+endif ()
+
+find_path(DVBCSA_INCLUDE_DIR dvbcsa/dvbcsa.h)
+find_library(DVBCSA_LIBRARY dvbcsa)
+if (DVBCSA_INCLUDE_DIR AND DVBCSA_LIBRARY)
+    dvbipitools_add_unit_test(lib_scrambler_csa2
+        unit/lib/scrambler/test_csa2.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+    target_include_directories(test_lib_scrambler_csa2 PRIVATE ${DVBCSA_INCLUDE_DIR})
+    target_link_libraries(test_lib_scrambler_csa2 PRIVATE ${DVBCSA_LIBRARY})
+else ()
+    message(WARNING "tests: libdvbcsa not found, skipping lib_scrambler_csa2 unit test")
+endif ()
+
 dvbipitools_add_unit_test(lib_bim_bitwriter
     unit/lib/bim/test_bitwriter.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
@@ -211,6 +239,12 @@ dvbipitools_add_unit_test(dipitvhead_aitbuild
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
 
+dvbipitools_add_unit_test(dipitvhead_cadescbuild
+    unit/dipitvhead/test_cadescbuild.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/cadescbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+
 dvbipitools_add_unit_test(dipitvhead_bitrate
     unit/dipitvhead/test_bitrate.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/bitrate.c)
@@ -220,11 +254,66 @@ dvbipitools_add_unit_test(dipitvhead_remux
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/pmtbuild.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/aitbuild.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/cadescbuild.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
-    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
+
+dvbipitools_add_unit_test(dipitvhead_simulcrypt_msg
+    unit/dipitvhead/test_simulcrypt_msg.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/simulcrypt_msg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+
+dvbipitools_add_unit_test(dipitvhead_ecmg_client
+    unit/dipitvhead/test_ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/simulcrypt_msg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
+
+dvbipitools_add_unit_test(dipitvhead_emmg_server
+    unit/dipitvhead/test_emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/simulcrypt_msg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
+
+dvbipitools_add_unit_test(dipitvhead_cas
+    unit/dipitvhead/test_cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/simulcrypt_msg.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/cadescbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
 dvbipitools_add_unit_test(dipirec_ebml
     unit/dipirec/test_ebml.c

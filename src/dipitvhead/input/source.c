@@ -27,7 +27,7 @@ tvsrc_t *tvsrc_open(const config_t *cfg) {
   switch (s->kind) {
     case SRC_RTP:
     case SRC_UDP:
-      s->m = mcast_open(cfg->input.family, cfg->input.group, cfg->input.port, cfg->iface, 1000);
+      s->m = mcast_open(cfg->input.family, cfg->input.group, cfg->input.port, cfg->iface_in, 1000);
       if (!s->m) {
         free(s);
         return NULL;

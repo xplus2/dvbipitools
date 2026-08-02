@@ -41,11 +41,18 @@ cmake --build build
 
 > Note: The build automatically disables TLS support if OpenSSL is not found.
 
+
 ### Dependencies
 
-* If you want to use _HTTPS_ sources in `dipitvhead` and `dipiradiohead`, you'll need `libssl-dev`.
-* `dipifccret` needs libpcap. If libpcap isn't found, dipifccret is skipped entirely rather than built without its core feature.
+* **libssl-dev**
+  + Required for HTTPS sources in `dipitvhead` and `dipiradiohead`.
+  + Enables _CISSA/AES-128_ Conditional Access in `dipitvhead`.
+* **libdvbcsa**
+  + Optional; required only if you need _CSA2_ support in `dipitvhead`.
+* **libpcap**
+  + Required for `dipifccret`. If not found, the tool is skipped to ensure build integrity.
 
+Release builds in this repository do not contain libdvbcsa.
 
 ## Packaging
 ```sh

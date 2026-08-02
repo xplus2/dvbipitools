@@ -16,5 +16,5 @@ Description: command line tools for DVB-IPI streams
  dipixmltv converts between xmltv and the DVB-IPI EPG (TVA) xml shape.
  dipibim converts between the plain TVA xml shape and its BiM binary encoding.
  dipiepg announces an xmltv guide as BiM-encoded TVA fragments via DVBSTP/BCG (ETSI TS 102 539), or listens for one.
- dipitvhead re-packages a transport stream (multicast, http(s), or stdin) as a DVB-IPI multicast, with target-bitrate control and optional HbbTV AIT injection.
+ dipitvhead re-packages a transport stream (multicast, http(s), or stdin) as a DVB-IPI multicast, with target-bitrate control, optional HbbTV AIT injection, and optional DVB Simulcrypt CAS scrambling (CISSA; CSA2 only when built from source against libdvbcsa, not in this package).
  dipifccret is an RTP retransmission (RET, Annex F) and server-based Fast Channel Change (FCC/RAMS, Annex I) server, passively watching a mirrored multicast segment via libpcap to repair packet loss and burst cached RTP data to a HNED on request.

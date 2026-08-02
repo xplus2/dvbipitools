@@ -9,6 +9,7 @@
 #include "lib/demux/psi.h"
 
 #define OUT_PID_PAT 0x0000
+#define OUT_PID_CAT 0x0001
 #define OUT_PID_NIT 0x0010
 #define OUT_PID_SDT 0x0011
 #define OUT_PID_EIT 0x0012
@@ -25,11 +26,11 @@ typedef struct {
 } out_es_t;
 
 /* video -> OUT_PID_VIDEO, rest -> OUT_PID_ES_BASE.. in order. drops unsupported ES.
- * returns count, *pcr_pid = mapped output pid of the PCR ES (or first ES as fallback) */
+   retval: count, *pcr_pid = mapped output pid of the PCR ES (or first ES fallback) */
 int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned src_pcr_pid, out_es_t *out_es, int cap, unsigned *pcr_pid);
 
-/* builds our multi-ES PMT section. extra/extra_len: pre-built ES-loop bytes
- * appended before the CRC (e.g. aitbuild_pmt_entry()), NULL/0 if none. 0 on overflow */
-size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, const out_es_t *es, int es_count, const unsigned char *extra, size_t extra_len, unsigned char *out, size_t cap);
+/* build multi-ES PMT section. prog_desc/prog_desc_len: program_info descriptor bytes (e.g. cadescbuild_ca_descriptor()), NULL/0 if none.
+   extra/extra_len: pre-built ES-loop bytes appended before the CRC (e.g. aitbuild_pmt_entry()), NULL/0 if none. 0 on overflow */
+size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, const unsigned char *prog_desc, size_t prog_desc_len, const out_es_t *es, int es_count, const unsigned char *extra, size_t extra_len, unsigned char *out, size_t cap);
 
 #endif

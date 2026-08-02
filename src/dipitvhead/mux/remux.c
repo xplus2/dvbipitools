@@ -10,6 +10,7 @@
 #include "lib/mux/psi_build.h"
 #include "lib/mux/tspacket_write.h"
 
+#include "../cas/cas.h"
 #include "../version.h"
 
 #include "aitbuild.h"
@@ -26,6 +27,7 @@ struct remux {
   out_es_t es[OUT_MAX_ES];
   int es_count;
   unsigned pcr_pid_out;
+  cas_t *cas;
 
   int send_sdt, send_nit, send_ait;
   char service_name[256], provider_name[PSI_NAME], network_name[256];
@@ -34,10 +36,10 @@ struct remux {
   unsigned char ait_section[300];
   size_t ait_section_len;
 
-  unsigned char cc_pat, cc_pmt, cc_sdt, cc_nit, cc_eit, cc_ait;
+  unsigned char cc_pat, cc_pmt, cc_sdt, cc_nit, cc_eit, cc_ait, cc_cat, cc_ecm, cc_emm;
   unsigned char cc_es[OUT_MAX_ES];
 
-  double last_pat, last_sdt, last_nit, last_ait;
+  double last_pat, last_sdt, last_nit, last_ait, last_cat;
 };
 
 static double mono(void) {
@@ -97,11 +99,15 @@ remux_t *remux_new(const config_t *cfg, const psi_t *psi) {
     if (!r->send_ait)
       log_line("--hbbtv: AIT build failed (url too long?), not sending it");
   }
-  r->last_pat = r->last_sdt = r->last_nit = r->last_ait = -1.0;
+  r->last_pat = r->last_sdt = r->last_nit = r->last_ait = r->last_cat = -1.0;
   return r;
 }
 
 void remux_free(remux_t *r) { free(r); }
+
+unsigned remux_pcr_pid_out(const remux_t *r) { return r->pcr_pid_out; }
+
+void remux_set_cas(remux_t *r, cas_t *cas) { r->cas = cas; }
 
 static int due(double now, double *last, double interval) {
   if (*last < 0.0 || now - *last >= interval) {
@@ -127,12 +133,19 @@ static void send_psi_tables(remux_t *r, remux_packet_cb cb, void *ctx) {
   size_t n;
 
   if (due(now, &r->last_pat, INTERVAL_PAT_PMT_S)) {
+    unsigned char prog_desc[32];
+    size_t prog_desc_len = r->cas ? cas_prog_desc(r->cas, prog_desc, sizeof prog_desc) : 0;
     n = psi_build_pat(r->cfg.tsid, 0, r->cfg.sid, OUT_PID_PMT, sec, sizeof sec);
     if (n)
       ts_packet_emit(OUT_PID_PAT, &r->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
-    n = pmtbuild_pmt(0, r->cfg.sid, r->pcr_pid_out, r->es, r->es_count, r->send_ait ? r->ait_pmt_entry : NULL, r->send_ait ? r->ait_pmt_entry_len : 0, sec, sizeof sec);
+    n = pmtbuild_pmt(0, r->cfg.sid, r->pcr_pid_out, prog_desc_len ? prog_desc : NULL, prog_desc_len, r->es, r->es_count, r->send_ait ? r->ait_pmt_entry : NULL, r->send_ait ? r->ait_pmt_entry_len : 0, sec, sizeof sec);
     if (n)
       ts_packet_emit(OUT_PID_PMT, &r->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
+    if (r->cas && due(now, &r->last_cat, INTERVAL_PAT_PMT_S)) {
+      n = cas_build_cat(r->cas, sec, sizeof sec);
+      if (n)
+        ts_packet_emit(OUT_PID_CAT, &r->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);
+    }
   }
   if (r->send_sdt && due(now, &r->last_sdt, INTERVAL_SDT_S)) {
     n = psi_build_sdt(0, r->cfg.tsid, r->cfg.onid, r->cfg.sid, 0x01, r->provider_name, r->service_name, sec, sizeof sec);
@@ -146,15 +159,27 @@ static void send_psi_tables(remux_t *r, remux_packet_cb cb, void *ctx) {
   }
   if (r->send_ait && due(now, &r->last_ait, INTERVAL_AIT_S))
     ts_packet_emit(OUT_PID_AIT, &r->cc_ait, &ptr0, r->ait_section, r->ait_section_len, 0, 0, cb, ctx);
+
+  if (r->cas) {
+    size_t len;
+    if (cas_ecm_due(r->cas, sec, sizeof sec, &len) == 0)
+      ts_packet_emit(r->cfg.cas_ecm_pid, &r->cc_ecm, &ptr0, sec, len, 0, 0, cb, ctx);
+    while (cas_next_emm(r->cas, sec, sizeof sec, &len) == 0)
+      ts_packet_emit(r->cfg.cas_emm_pid, &r->cc_emm, &ptr0, sec, len, 0, 0, cb, ctx);
+  }
 }
 
-static void forward_packet(unsigned out_pid, unsigned char *cc, const unsigned char *pkt188, remux_packet_cb cb, void *ctx) {
+static void forward_packet(remux_t *r, unsigned out_pid, unsigned char *cc, const unsigned char *pkt188, remux_packet_cb cb, void *ctx) {
   unsigned char out[188];
   memcpy(out, pkt188, 188);
   out[1] = (unsigned char)((out[1] & 0xE0) | ((out_pid >> 8) & 0x1F));
   out[2] = (unsigned char)out_pid;
   *cc = (unsigned char)((*cc + 1) & 0x0F);
   out[3] = (unsigned char)((out[3] & 0xF0) | *cc);
+  if (r->cas) {
+    cas_pcr_tick(r->cas, out_pid, out);
+    cas_scramble_packet(r->cas, out_pid, out);
+  }
   cb(ctx, out);
 }
 
@@ -170,12 +195,12 @@ void remux_feed(remux_t *r, const unsigned char *pkt188, remux_packet_cb cb, voi
 
   if (in_pid == 0x0012) { /* EIT: passthrough verbatim, own cc track */
     if (!r->cfg.strip_eit)
-      forward_packet(OUT_PID_EIT, &r->cc_eit, pkt188, cb, ctx);
+      forward_packet(r, OUT_PID_EIT, &r->cc_eit, pkt188, cb, ctx);
     return;
   }
 
   idx = find_es(r, in_pid);
   if (idx < 0)
     return; /* PAT/PMT/SDT/NIT/unrecognized: not carried, we build our own or drop */
-  forward_packet(r->es[idx].out_pid, &r->cc_es[idx], pkt188, cb, ctx);
+  forward_packet(r, r->es[idx].out_pid, &r->cc_es[idx], pkt188, cb, ctx);
 }

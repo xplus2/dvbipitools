@@ -101,12 +101,12 @@ static size_t put_subtitling(unsigned char *out, const psi_es_t *e) {
   return 10;
 }
 
-size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, const out_es_t *es, int es_count, const unsigned char *extra, size_t extra_len, unsigned char *out, size_t cap) {
+size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, const unsigned char *prog_desc, size_t prog_desc_len, const out_es_t *es, int es_count, const unsigned char *extra, size_t extra_len, unsigned char *out, size_t cap) {
   size_t n = 0, es_info_pos;
   int i;
   unsigned esinfo;
 
-  if (cap < 20)
+  if (cap < 20 + prog_desc_len)
     return 0;
   out[n++] = 0x02;
   n += 2;
@@ -117,8 +117,12 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
   out[n++] = 0x00;
   psi_put16(out + n, 0xE000 | (pcr_pid & 0x1FFF));
   n += 2;
-  psi_put16(out + n, 0xF000); /* program_info_length = 0 */
+  psi_put16(out + n, (unsigned)(0xF000 | prog_desc_len));
   n += 2;
+  if (prog_desc_len) {
+    memcpy(out + n, prog_desc, prog_desc_len);
+    n += prog_desc_len;
+  }
 
   for (i = 0; i < es_count; i++) {
     const out_es_t *e = &es[i];

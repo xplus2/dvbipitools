@@ -63,6 +63,27 @@ size_t psi_build_pat(unsigned tsid, unsigned version, unsigned program_number, u
   return psi_finish_section(out, n, cap, 0xB0);
 }
 
+size_t psi_build_cat(unsigned version, const unsigned char *desc, size_t desc_len, unsigned char *out, size_t cap) {
+  size_t n = 0;
+
+  if (cap < 12)
+    return 0;
+  out[n++] = 0x01;
+  n += 2;
+  psi_put16(out + n, 0xFFFF);
+  n += 2;
+  out[n++] = (unsigned char)(0xC0 | ((version & 0x1F) << 1) | 0x01);
+  out[n++] = 0x00;
+  out[n++] = 0x00;
+  if (desc_len) {
+    if (n + desc_len > cap)
+      return 0;
+    memcpy(out + n, desc, desc_len);
+    n += desc_len;
+  }
+  return psi_finish_section(out, n, cap, 0xB0);
+}
+
 size_t psi_build_sdt(unsigned version, unsigned tsid, unsigned onid, unsigned service_id, unsigned service_type, const char *provider, const char *service, unsigned char *out, size_t cap) {
   size_t n = 0, f16_pos, desc_start, dlen_pos, plen_pos, slen_pos, plen, slen;
   unsigned dll, field16;

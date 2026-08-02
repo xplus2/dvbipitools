@@ -14,6 +14,7 @@
 #include "lib/net/multicast.h"
 #include "lib/signal.h"
 
+#include "cas/cas.h"
 #include "input/source.h"
 #include "mux/bitrate.h"
 #include "mux/remux.h"
@@ -168,7 +169,7 @@ static int remux_cb(void *v, const unsigned char *pkt) {
 }
 
 /* steady-state: read, remux, send, until stop/hard error. returns 0 clean stop, -1 error */
-static int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg) {
+static int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, cas_t *cas) {
   unsigned char buf[65536];
   tspack_t pz;
   feed_ctx_t fc;
@@ -187,6 +188,10 @@ static int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t 
       tspack_feed(&pz, buf, (size_t)n, remux_cb, &fc);
     if (out->had_error)
       return -1;
+    if (cas && cas_failed(cas)) {
+      log_line("cas: fatal error, stopping");
+      return -1;
+    }
     stuff_n = bitrate_stuff_due(out->pacer);
     for (k = 0; k < stuff_n; k++)
       send_null_packet(out);
@@ -207,7 +212,7 @@ int tvhead_run(const config_t *cfg) {
   out_ctx_t out;
 
   memset(&out, 0, sizeof out);
-  outmc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, (int)cfg->ttl);
+  outmc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface_out, (int)cfg->ttl);
   if (!outmc)
     return 1;
   out.mc = outmc;
@@ -255,8 +260,23 @@ int tvhead_run(const config_t *cfg) {
           remux_free(rx);
           r = -1;
         } else {
-          print_discovered(psi);
-          run_output(src, rx, &out, cfg);
+          int cas_wanted = cfg->cas_algo != CAS_ALGO_NONE;
+          cas_t *cas = NULL;
+          if (cas_wanted) {
+            cas = cas_start(cfg, psi, remux_pcr_pid_out(rx));
+            if (cas)
+              remux_set_cas(rx, cas);
+            else
+              log_line("cas setup failed");
+          }
+          if (cas_wanted && !cas) {
+            r = -1;
+          } else {
+            print_discovered(psi);
+            run_output(src, rx, &out, cfg, cas);
+            if (cas)
+              cas_stop(cas);
+          }
           bitrate_pacer_free(out.pacer);
           out.pacer = NULL;
           remux_free(rx);

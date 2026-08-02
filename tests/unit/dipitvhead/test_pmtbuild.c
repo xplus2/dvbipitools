@@ -113,7 +113,7 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
   n = pmtbuild_map_es(es, 4, 0x0101, out_es, 8, &pcr_pid);
   ck_assert_int_eq(n, 4);
 
-  slen = pmtbuild_pmt(1, 55, pcr_pid, out_es, n, NULL, 0, section, sizeof section);
+  slen = pmtbuild_pmt(1, 55, pcr_pid, NULL, 0, out_es, n, NULL, 0, section, sizeof section);
   ck_assert_uint_ne(slen, 0u);
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
 
@@ -155,7 +155,31 @@ START_TEST(pmtbuild_pmt_rejects_small_cap) {
   out_es_t es[1];
   unsigned char out[8];
   memset(es, 0, sizeof es);
-  ck_assert_uint_eq(pmtbuild_pmt(0, 1, 0x100, es, 0, NULL, 0, out, sizeof out), 0u);
+  ck_assert_uint_eq(pmtbuild_pmt(0, 1, 0x100, NULL, 0, es, 0, NULL, 0, out, sizeof out), 0u);
+}
+END_TEST
+
+START_TEST(pmtbuild_pmt_places_prog_desc_in_program_info) {
+  static const unsigned char ca_desc[] = {0x09, 4, 0x4A, 0x75, 0xE0, 0x20};
+  psi_es_t src;
+  out_es_t es[1];
+  unsigned char out[64];
+  size_t slen;
+
+  memset(&src, 0, sizeof src);
+  src.cls = PID_VIDEO;
+  memset(es, 0, sizeof es);
+  es[0].out_pid = OUT_PID_VIDEO;
+  es[0].stream_type = 0x1B;
+  es[0].src = &src;
+
+  slen = pmtbuild_pmt(0, 1, OUT_PID_VIDEO, ca_desc, sizeof ca_desc, es, 1, NULL, 0, out, sizeof out);
+  ck_assert_uint_ne(slen, 0u);
+
+  ck_assert_uint_eq(out[10], (unsigned char)(0xF0 | ((sizeof ca_desc >> 8) & 0x0F)));
+  ck_assert_uint_eq(out[11], (unsigned char)sizeof ca_desc);
+  ck_assert_mem_eq(out + 12, ca_desc, sizeof ca_desc);
+  ck_assert_uint_eq(out[12 + sizeof ca_desc], 0x1B); /* ES loop starts right after program_info */
 }
 END_TEST
 
@@ -166,6 +190,7 @@ static Suite *pmtbuild_suite(void) {
   tcase_add_test(tc, pmtbuild_map_es_defaults_pcr_to_first_es_when_no_match);
   tcase_add_test(tc, pmtbuild_pmt_round_trips_video_audio_subtitle_teletext);
   tcase_add_test(tc, pmtbuild_pmt_rejects_small_cap);
+  tcase_add_test(tc, pmtbuild_pmt_places_prog_desc_in_program_info);
   suite_add_tcase(s, tc);
   return s;
 }

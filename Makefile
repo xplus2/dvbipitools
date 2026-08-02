@@ -168,6 +168,29 @@ dipitvhead_TLS_SRC := src/lib/net/tls_stub.c
 $(warning dipitvhead: OpenSSL not found via pkg-config, building without HTTPS support)
 endif
 
+ifeq ($(HAVE_OPENSSL),yes)
+dipitvhead_CISSA_SRC := src/lib/scrambler/cissa.c
+else
+dipitvhead_CISSA_SRC := src/lib/scrambler/cissa_stub.c
+$(warning dipitvhead: OpenSSL not found via pkg-config, building without CISSA support)
+endif
+
+HAVE_DVBCSA := $(shell printf '#include <dvbcsa/dvbcsa.h>\nint main(void){return 0;}\n' | $(CC) -xc - -ldvbcsa -o /dev/null >/dev/null 2>&1 && echo yes)
+
+ifeq ($(HAVE_DVBCSA),yes)
+dipitvhead_CSA2_SRC := src/lib/scrambler/csa2.c
+dipitvhead_CSA2_EXTRA_LDFLAGS := -ldvbcsa
+else
+dipitvhead_CSA2_SRC := src/lib/scrambler/csa2_stub.c
+$(warning dipitvhead: libdvbcsa not found (no pkg-config file, probed directly), building without CSA2 support)
+endif
+
+dipitvhead_EXTRA_LDFLAGS += $(dipitvhead_CSA2_EXTRA_LDFLAGS)
+
+# ECMG client thread: pthread is a hard dependency from here on, not optional
+dipitvhead_EXTRA_CFLAGS += -pthread
+dipitvhead_EXTRA_LDFLAGS += -pthread
+
 dipitvhead_SRCS := \
 	src/dipitvhead/main.c \
 	src/dipitvhead/args.c \
@@ -175,8 +198,13 @@ dipitvhead_SRCS := \
 	src/dipitvhead/input/source.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
+	src/dipitvhead/mux/cadescbuild.c \
 	src/dipitvhead/mux/remux.c \
 	src/dipitvhead/mux/bitrate.c \
+	src/dipitvhead/cas/simulcrypt_msg.c \
+	src/dipitvhead/cas/ecmg_client.c \
+	src/dipitvhead/cas/emmg_server.c \
+	src/dipitvhead/cas/cas.c \
 	src/lib/log.c \
 	src/lib/signal.c \
 	src/lib/net/multicast.c \
@@ -188,7 +216,10 @@ dipitvhead_SRCS := \
 	src/lib/demux/rtp.c \
 	src/lib/mux/rtpheader.c \
 	src/lib/mux/psi_build.c \
-	src/lib/mux/tspacket_write.c
+	src/lib/mux/tspacket_write.c \
+	src/lib/scrambler/scrambler.c \
+	$(dipitvhead_CISSA_SRC) \
+	$(dipitvhead_CSA2_SRC)
 
 HAVE_LIBPCAP := $(shell pkg-config --exists libpcap && echo yes)
 
@@ -238,9 +269,39 @@ UNIT_TESTS := lib_demux_crc32 lib_demux_psi lib_demux_bitreader lib_demux_rtp li
 	lib_sds_xml dipiscan_format dipixmltv_revmap dipixmltv_suggest \
 	dipiradiohead_mpegaudio dipiradiohead_aac_adts dipiradiohead_aac_latm \
 	dipiradiohead_psi dipiradiohead_pes dipiradiohead_tspacketizer \
-	dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_bitrate dipitvhead_remux \
+	dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_cadescbuild dipitvhead_bitrate dipitvhead_remux \
+	dipitvhead_simulcrypt_msg dipitvhead_ecmg_client dipitvhead_emmg_server dipitvhead_cas \
 	dipirec_ebml dipirec_ts_filter dipirec_teletext dipirec_mkv \
 	dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_ret
+
+ifeq ($(HAVE_OPENSSL),yes)
+UNIT_TESTS += lib_scrambler_cissa
+lib_scrambler_cissa_BIN := tests/unit/lib/scrambler/test_cissa
+lib_scrambler_cissa_SRCS := \
+	tests/unit/lib/scrambler/test_cissa.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/log.c
+lib_scrambler_cissa_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+lib_scrambler_cissa_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+else
+$(warning tests: OpenSSL not found via pkg-config, skipping lib_scrambler_cissa unit test)
+endif
+
+ifeq ($(HAVE_DVBCSA),yes)
+UNIT_TESTS += lib_scrambler_csa2
+lib_scrambler_csa2_BIN := tests/unit/lib/scrambler/test_csa2
+lib_scrambler_csa2_SRCS := \
+	tests/unit/lib/scrambler/test_csa2.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/csa2.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/log.c
+lib_scrambler_csa2_EXTRA_LDFLAGS := -ldvbcsa
+else
+$(warning tests: libdvbcsa not found, skipping lib_scrambler_csa2 unit test)
+endif
 
 lib_demux_crc32_BIN := tests/unit/lib/demux/test_crc32
 lib_demux_crc32_SRCS := \
@@ -477,6 +538,13 @@ dipitvhead_aitbuild_SRCS := \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c
 
+dipitvhead_cadescbuild_BIN := tests/unit/dipitvhead/test_cadescbuild
+dipitvhead_cadescbuild_SRCS := \
+	tests/unit/dipitvhead/test_cadescbuild.c \
+	src/dipitvhead/mux/cadescbuild.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/crc32.c
+
 dipitvhead_bitrate_BIN := tests/unit/dipitvhead/test_bitrate
 dipitvhead_bitrate_SRCS := \
 	tests/unit/dipitvhead/test_bitrate.c \
@@ -488,11 +556,70 @@ dipitvhead_remux_SRCS := \
 	src/dipitvhead/mux/remux.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
+	src/dipitvhead/mux/cadescbuild.c \
+	src/dipitvhead/cas/cas.c \
+	src/dipitvhead/cas/ecmg_client.c \
+	src/dipitvhead/cas/emmg_server.c \
+	src/dipitvhead/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/psi.c \
 	src/lib/demux/crc32.c \
-	src/lib/log.c
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/log.c \
+	src/lib/signal.c
+
+dipitvhead_ecmg_client_BIN := tests/unit/dipitvhead/test_ecmg_client
+dipitvhead_ecmg_client_SRCS := \
+	tests/unit/dipitvhead/test_ecmg_client.c \
+	src/dipitvhead/cas/ecmg_client.c \
+	src/dipitvhead/cas/simulcrypt_msg.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/psi.c \
+	src/lib/demux/crc32.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/log.c \
+	src/lib/signal.c
+
+dipitvhead_emmg_server_BIN := tests/unit/dipitvhead/test_emmg_server
+dipitvhead_emmg_server_SRCS := \
+	tests/unit/dipitvhead/test_emmg_server.c \
+	src/dipitvhead/cas/emmg_server.c \
+	src/dipitvhead/cas/simulcrypt_msg.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/psi.c \
+	src/lib/demux/crc32.c \
+	src/lib/log.c \
+	src/lib/signal.c
+
+dipitvhead_simulcrypt_msg_BIN := tests/unit/dipitvhead/test_simulcrypt_msg
+dipitvhead_simulcrypt_msg_SRCS := \
+	tests/unit/dipitvhead/test_simulcrypt_msg.c \
+	src/dipitvhead/cas/simulcrypt_msg.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/psi.c \
+	src/lib/demux/crc32.c
+
+dipitvhead_cas_BIN := tests/unit/dipitvhead/test_cas
+dipitvhead_cas_SRCS := \
+	tests/unit/dipitvhead/test_cas.c \
+	src/dipitvhead/cas/cas.c \
+	src/dipitvhead/cas/ecmg_client.c \
+	src/dipitvhead/cas/emmg_server.c \
+	src/dipitvhead/cas/simulcrypt_msg.c \
+	src/dipitvhead/mux/cadescbuild.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/psi.c \
+	src/lib/demux/crc32.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/log.c \
+	src/lib/signal.c
 
 dipirec_ebml_BIN := tests/unit/dipirec/test_ebml
 dipirec_ebml_SRCS := \
@@ -575,9 +702,9 @@ dipifccret_ret_SRCS := \
 define UNIT_TEST_template
 $(1)_OBJS := $$($(1)_SRCS:.c=.o)
 ALL_OBJS += $$($(1)_OBJS)
-$$($(1)_OBJS): CFLAGS += $(CHECK_CFLAGS)
+$$($(1)_OBJS): CFLAGS += $(CHECK_CFLAGS) $$($(1)_EXTRA_CFLAGS)
 $$($(1)_BIN): $$($(1)_OBJS)
-	$$(CC) $$^ $$(LDFLAGS) $(CHECK_LIBS) -pthread -o $$@
+	$$(CC) $$^ $$(LDFLAGS) $(CHECK_LIBS) -pthread $$($(1)_EXTRA_LDFLAGS) -o $$@
 endef
 
 $(foreach t,$(UNIT_TESTS),$(eval $(call UNIT_TEST_template,$(t))))
