@@ -58,7 +58,9 @@ uint32_t crc32_mpeg_generic(const unsigned char *data, size_t len) {
 __attribute__((target("sse4.1,pclmul")))
 static inline uint64_t crc32_mpeg_clmul_lo(uint64_t a, uint64_t b) {
   __m128i r = _mm_clmulepi64_si128(_mm_set_epi64x(0, (long long)a), _mm_set_epi64x(0, (long long)b), 0x00);
-  return (uint64_t)_mm_extract_epi64(r, 0);
+  uint64_t out;
+  _mm_storel_epi64((__m128i *)&out, r);
+  return out;
 }
 
 __attribute__((target("sse4.1,pclmul")))
