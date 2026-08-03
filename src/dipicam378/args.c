@@ -12,7 +12,7 @@
 #include "args.h"
 #include "version.h"
 
-#define ARGS_DEFAULT_PORT 27500
+#define ARGS_DEFAULT_PORT 27500u
 #define ARGS_DEFAULT_PASSWORD TOOL_NAME
 
 static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
