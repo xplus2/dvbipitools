@@ -229,7 +229,7 @@ void cas_pcr_tick(cas_t *c, unsigned out_pid, const unsigned char pkt188[188]) {
   pcr_sample(c, pcr27);
 }
 
-static void refresh_cw_cache(cas_t *c) {
+static void refresh_cw_cache(cas_t *c, scrambler_emit_cb emit, void *ctx) {
   unsigned long epoch = ecmg_client_cw_epoch(c->ecmg);
   if (epoch == c->cw_cache_epoch)
     return;
@@ -239,24 +239,41 @@ static void refresh_cw_cache(cas_t *c) {
   if (ecmg_client_get_cw(c->ecmg, 1, c->cw_cache[1], sizeof c->cw_cache[1], &c->cw_cache_len[1]) < 0)
     c->cw_cache_len[1] = 0;
   if (c->cw_cache_len[0])
-    scrambler_set_key(c->scr, SCRAMBLE_PARITY_EVEN, c->cw_cache[0], c->cw_cache_len[0]);
+    scrambler_set_key(c->scr, SCRAMBLE_PARITY_EVEN, c->cw_cache[0], c->cw_cache_len[0], emit, ctx);
   if (c->cw_cache_len[1])
-    scrambler_set_key(c->scr, SCRAMBLE_PARITY_ODD, c->cw_cache[1], c->cw_cache_len[1]);
+    scrambler_set_key(c->scr, SCRAMBLE_PARITY_ODD, c->cw_cache[1], c->cw_cache_len[1], emit, ctx);
 }
 
-void cas_scramble_packet(cas_t *c, unsigned out_pid, unsigned char pkt188[188]) {
+void cas_scramble_packet(cas_t *c, unsigned out_pid, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx) {
   cas_pid_state_t *ps = find_pid_state(c, out_pid);
   int pusi;
 
-  if (!ps || !c->ecmg)
+  if (!ps || !c->ecmg) {
+    emit(ctx, pkt188);
     return;
-  refresh_cw_cache(c);
+  }
+  refresh_cw_cache(c, emit, ctx);
   pusi = (pkt188[1] & 0x40) != 0;
-  cas_pid_apply(ps, c->cw_cache_epoch != 0, ecmg_client_target_parity(c->ecmg), pusi, mono(), CAS_FORCE_FLIP_S);
+  /* have_target on ecm_epoch, not cw_cache_epoch: a CW can be cached locally before its ECM
+     is confirmed published (see ecmg_client_target_parity()) - don't flip live scrambling
+     to it until the receiver could plausibly already have that ECM too. */
+  cas_pid_apply(ps, ecmg_client_ecm_epoch(c->ecmg) != 0, ecmg_client_target_parity(c->ecmg), pusi, mono(), CAS_FORCE_FLIP_S);
 
-  if (!c->cw_cache_len[ps->current_parity] || !ecmg_client_cw_valid(c->ecmg))
+  if (!c->cw_cache_len[ps->current_parity] || !ecmg_client_cw_valid(c->ecmg)) {
+    /* same pid may already be mid-batch (key was valid moments ago): keep
+       this passthrough packet in its correct position rather than letting
+       it jump ahead of still-queued earlier ones */
+    scrambler_passthrough_queued(c->scr, pkt188, emit, ctx);
     return;
-  scrambler_encrypt_packet(c->scr, pkt188, ps->current_parity);
+  }
+  scrambler_encrypt_packet_queued(c->scr, pkt188, ps->current_parity, emit, ctx);
+  if (out_pid == c->pcr_out_pid)
+    scrambler_flush(c->scr, emit, ctx); /* never let batching delay PCR delivery */
+}
+
+void cas_flush(cas_t *c, scrambler_emit_cb emit, void *ctx) {
+  if (c)
+    scrambler_flush(c->scr, emit, ctx);
 }
 
 size_t cas_prog_desc(cas_t *c, unsigned char *out, size_t cap) {

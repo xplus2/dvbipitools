@@ -14,4 +14,7 @@
    len must be a nonzero multiple of 16. 0 on success, -1 on error. */
 int cissa_encrypt_block(const unsigned char key[CISSA_CW_LEN], unsigned char *data, size_t len);
 
+/* inverse of cissa_encrypt_block. len must be a nonzero multiple of 16. 0 on success, -1 on error. */
+int cissa_decrypt_block(const unsigned char key[CISSA_CW_LEN], unsigned char *data, size_t len);
+
 #endif

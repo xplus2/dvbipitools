@@ -16,7 +16,7 @@ struct ret_ctx {
   void *send_mc_user;
   ret_send_unicast_fn send_unicast;
   void *send_unicast_user;
-  rtx_ctx_t *rtx; /* shared by every send, not true per-session per F.3.2.1 - no per-client tracking exists yet, flagged in the plan */
+  rtx_ctx_t *rtx; /* shared by every send, not true per-session per F.3.2.1. no per-client tracking exists. yet */
 };
 
 ret_ctx_t *ret_ctx_new(channel_table_t *channels, unsigned char rtx_pt, ret_send_fn send_mc, ret_send_unicast_fn send_unicast, void *user) {

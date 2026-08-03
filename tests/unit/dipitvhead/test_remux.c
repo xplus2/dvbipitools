@@ -153,6 +153,60 @@ START_TEST(remux_forwards_mapped_es_and_sends_pat_pmt_on_first_feed) {
 }
 END_TEST
 
+/* ISO 13818-1 2.4.3.3: cc must not advance on adaptation_field_control '10'
+   (adaptation field only, no payload) - video's PCR pid uses these for pacing */
+START_TEST(remux_does_not_advance_cc_on_payloadless_adaptation_field_packet) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  remux_t *r;
+  unsigned char pkt[188];
+  int i, video_idx;
+
+  base_cfg(&cfg);
+  r = remux_new(&cfg, psi);
+  ck_assert_ptr_nonnull(r);
+
+  memset(pkt, 0xAB, sizeof pkt);
+  pkt[0] = 0x47;
+  pkt[1] = (unsigned char)((0x0101 >> 8) & 0x1F);
+  pkt[2] = (unsigned char)0x0101;
+  pkt[3] = 0x10; /* AFC=01, payload only */
+
+  g_count = 0;
+  remux_feed(r, pkt, capture_cb, NULL);
+  video_idx = -1;
+  for (i = 0; i < g_count && i < MAX_SEEN; i++)
+    if (g_pids[i] == 0x0100)
+      video_idx = i;
+  ck_assert_int_ge(video_idx, 0);
+  ck_assert_uint_eq(g_cc[video_idx], 1u);
+
+  pkt[3] = 0x20; /* AFC=10, adaptation field only, no payload */
+  pkt[4] = 183;
+  g_count = 0;
+  remux_feed(r, pkt, capture_cb, NULL);
+  video_idx = -1;
+  for (i = 0; i < g_count && i < MAX_SEEN; i++)
+    if (g_pids[i] == 0x0100)
+      video_idx = i;
+  ck_assert_int_ge(video_idx, 0);
+  ck_assert_uint_eq(g_cc[video_idx], 1u); /* unchanged: no payload to lose */
+
+  pkt[3] = 0x10; /* AFC=01 again */
+  g_count = 0;
+  remux_feed(r, pkt, capture_cb, NULL);
+  video_idx = -1;
+  for (i = 0; i < g_count && i < MAX_SEEN; i++)
+    if (g_pids[i] == 0x0100)
+      video_idx = i;
+  ck_assert_int_ge(video_idx, 0);
+  ck_assert_uint_eq(g_cc[video_idx], 2u); /* advanced once from the last payload packet, not skipped */
+
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
 START_TEST(remux_drops_unrecognized_pid_and_does_not_resend_psi_immediately) {
   psi_t *psi = build_discovery_psi();
   config_t cfg;
@@ -258,6 +312,7 @@ static Suite *remux_suite(void) {
   Suite *s = suite_create("remux");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, remux_forwards_mapped_es_and_sends_pat_pmt_on_first_feed);
+  tcase_add_test(tc, remux_does_not_advance_cc_on_payloadless_adaptation_field_packet);
   tcase_add_test(tc, remux_drops_unrecognized_pid_and_does_not_resend_psi_immediately);
   tcase_add_test(tc, remux_eit_passthrough_respects_strip_eit);
   tcase_add_test(tc, remux_sdt_nit_ait_sent_when_configured);

@@ -21,3 +21,24 @@ void csa2_encrypt_block(csa2_key_t *k, unsigned char *data, size_t len) {
   (void)data;
   (void)len;
 }
+
+void csa2_decrypt_block(csa2_key_t *k, unsigned char *data, size_t len) {
+  (void)k;
+  (void)data;
+  (void)len;
+}
+
+/* 0: no libdvbcsa built, csa2_key_new already fails first so scrambler.c never calls batch functions below */
+unsigned csa2_batch_size(void) { return 0; }
+
+void csa2_encrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n) {
+  (void)k;
+  (void)entries;
+  (void)n;
+}
+
+void csa2_decrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n) {
+  (void)k;
+  (void)entries;
+  (void)n;
+}

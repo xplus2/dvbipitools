@@ -10,21 +10,18 @@
 
 #include "filter/ts.h"
 #include "lib/demux/psi.h"
-#include "lib/demux/rtp.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
-#include "lib/net/multicast.h"
-#include "lib/net/udpxy.h"
+#include "lib/net/tssource.h"
+#include "lib/mux/mkv.h"
 #include "lib/signal.h"
-#include "mux/mkv.h"
 #include "record.h"
 #include "ret_client.h"
 #include "version.h"
 
 typedef struct {
   uri_kind_t kind;
-  mcast_t *m;
-  udpxy_t *u;
+  tssrc_t *t;
   ret_client_t *ret; /* NULL unless --ret */
 } src_t;
 
@@ -35,19 +32,34 @@ static double mono(void) {
 }
 
 static int src_open(const config_t *cfg, src_t *s) {
+  tssrc_cfg_t tc;
+
   memset(s, 0, sizeof *s);
   s->kind = cfg->source.kind;
+
+  memset(&tc, 0, sizeof tc);
+  tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
   if (s->kind == URI_UDPXY) {
-    s->u = udpxy_open(cfg->source.http_host, cfg->source.http_port, cfg->source.http_path, TOOL_NAME "/" TOOL_VERSION);
-    return s->u ? 0 : -1;
+    tc.kind = TSSRC_UDPXY;
+    tc.udpxy_host = cfg->source.http_host;
+    tc.udpxy_port = cfg->source.http_port;
+    tc.udpxy_path = cfg->source.http_path;
+  } else {
+    tc.kind = (s->kind == URI_RTP) ? TSSRC_RTP : TSSRC_UDP;
+    tc.family = cfg->source.family;
+    tc.group = cfg->source.group;
+    tc.port = cfg->source.port;
+    tc.iface = cfg->iface;
   }
-  s->m = mcast_open(cfg->source.family, cfg->source.group, cfg->source.port, cfg->iface, 1000);
-  if (!s->m)
+
+  s->t = tssrc_open(&tc);
+  if (!s->t)
     return -1;
-  if (cfg->ret.enabled) {
+
+  if (s->kind != URI_UDPXY && cfg->ret.enabled) {
     s->ret = ret_client_open(cfg);
     if (!s->ret) {
-      mcast_close(s->m);
+      tssrc_close(s->t);
       return -1;
     }
   }
@@ -56,31 +68,15 @@ static int src_open(const config_t *cfg, src_t *s) {
 
 /* TS bytes, RTP stripped. >0 len, 0 timeout, -1 end */
 static ssize_t src_read(src_t *s, unsigned char *buf, size_t cap) {
-  ssize_t n;
-  size_t off;
-
-  if (s->kind == URI_UDPXY)
-    return udpxy_read(s->u, buf, cap);
   if (s->ret)
-    return ret_client_read(s->ret, s->m, buf, cap);
-  n = mcast_recv(s->m, buf, cap);
-  if (n <= 0)
-    return n;
-  off = rtp_payload_offset(buf, (size_t)n);
-  if (off) {
-    memmove(buf, buf + off, (size_t)n - off);
-    n -= (ssize_t)off;
-  }
-  return n;
+    return ret_client_read(s->ret, tssrc_mcast(s->t), buf, cap);
+  return tssrc_read(s->t, buf, cap);
 }
 
 static void src_close(src_t *s) {
   if (s->ret)
     ret_client_close(s->ret);
-  if (s->m)
-    mcast_close(s->m);
-  if (s->u)
-    udpxy_close(s->u);
+  tssrc_close(s->t);
 }
 
 static int open_output(const char *path) {
@@ -274,13 +270,24 @@ static int mkv_pkt_cb(void *v, const unsigned char *pkt) {
 /* mkv/mka: packetize, demux PES, mux */
 static int run_mkv(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start, int video_ok) {
   unsigned char buf[65536];
+  char app_name[64], srcuri[1024];
   tspack_t pz;
+  mkv_opts_t opts;
   mkv_t *m;
   double last_stat = 0;
   int rc = 0;
 
   memset(&pz, 0, sizeof pz);
-  m = mkv_new(out, cfg, video_ok, bytes);
+  snprintf(app_name, sizeof app_name, "%s %s", TOOL_NAME, TOOL_VERSION);
+  source_describe(&cfg->source, srcuri, sizeof srcuri);
+  memset(&opts, 0, sizeof opts);
+  opts.audio_all = cfg->audio_all;
+  opts.audio_track = cfg->audio_track;
+  opts.subs_srt = (cfg->subs == SUB_SRT);
+  opts.sub_lead_ms = cfg->sub_lead_ms;
+  opts.app_name = app_name;
+  opts.source_desc = srcuri;
+  m = mkv_new(out, &opts, video_ok, bytes);
   if (!m)
     return 1;
 

@@ -98,6 +98,8 @@ jobs:
         install -m 0755 build/src/dipitvhead/dipitvhead "${PKGDIR}/"
         # dipifccret needs libpcap and is skipped by its own CMakeLists.txt if not found for this arch - don't fail packaging of the other tools if so
         [ -f build/src/dipifccret/dipifccret ] && install -m 0755 build/src/dipifccret/dipifccret "${PKGDIR}/"
+        # dipicam378 needs OpenSSL, unavailable on i386/armel here - same skip-if-missing pattern
+        [ -f build/src/dipicam378/dipicam378 ] && install -m 0755 build/src/dipicam378/dipicam378 "${PKGDIR}/"
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
     - uses: actions/upload-artifact@v5
       with:

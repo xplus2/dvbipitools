@@ -1,9 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-/* AFL++ harness: NUL-terminates file argv[1] and feeds it to
- * sds_parse_broadcast(). Build with afl-cc/afl-clang-fast for
- * instrumentation. */
+/* AFL++ harness: NUL-terminates file argv[1] and feeds it to sds_parse_broadcast().
+   Build with afl-cc/afl-clang-fast for instrumentation. */
 
 #include <stdio.h>
 #include <stdlib.h>

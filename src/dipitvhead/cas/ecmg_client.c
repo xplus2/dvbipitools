@@ -178,9 +178,12 @@ int ecmg_client_cw_valid(ecmg_client_t *c) {
 
 /* frozen: always the last published parity. cycling, while disconnected: keeps alternating
    on the normal crypto-period schedule between the two last-known CWs, computed from how many
-   whole periods have elapsed since the last publish - no waiting on the ECMG to come back. */
+   whole periods have elapsed since the last publish - no waiting on the ECMG to come back.
+   uses ecm_epoch, not cw_epoch: cw_epoch bumps the instant a CW_provision is sent, before the
+   ECMG round trip; switching live scrambling on that would flip parity before the matching ECM
+   is even on the wire. ecm_epoch only bumps once the ECM_response actually arrived. */
 int ecmg_client_target_parity(ecmg_client_t *c) {
-  unsigned long epoch = atomic_load_explicit(&c->cw_epoch, memory_order_relaxed);
+  unsigned long epoch = atomic_load_explicit(&c->ecm_epoch, memory_order_relaxed);
   unsigned long cur = atomic_load_explicit(c->packet_counter, memory_order_relaxed);
   unsigned long published_at = atomic_load_explicit(&c->cw_published_at, memory_order_relaxed);
   int connected = atomic_load_explicit(&c->connected, memory_order_relaxed);

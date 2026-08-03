@@ -182,27 +182,35 @@ static int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t 
   while (!signal_stop_requested()) {
     int stuff_n, k;
     ssize_t n = tvsrc_read(src, buf, sizeof buf);
-    if (n < 0)
+    if (n < 0) {
+      cas_flush(cas, packet_cb, out);
       return -1;
+    }
     if (n > 0)
       tspack_feed(&pz, buf, (size_t)n, remux_cb, &fc);
-    if (out->had_error)
+    if (out->had_error) {
+      cas_flush(cas, packet_cb, out);
       return -1;
+    }
     if (cas && cas_failed(cas)) {
       log_line("cas: fatal error, stopping");
+      cas_flush(cas, packet_cb, out);
       return -1;
     }
     stuff_n = bitrate_stuff_due(out->pacer);
     for (k = 0; k < stuff_n; k++)
       send_null_packet(out);
-    if (out->had_error)
+    if (out->had_error) {
+      cas_flush(cas, packet_cb, out);
       return -1;
+    }
     if (cfg->verbose && mono() - last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", mono() - start, out->packets);
       fflush(stderr);
       last_stat = mono();
     }
   }
+  cas_flush(cas, packet_cb, out);
   return 0;
 }
 

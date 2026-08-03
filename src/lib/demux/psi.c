@@ -20,9 +20,11 @@ typedef struct {
 } pmt_cand_t;
 
 struct psi {
-  sect_asm_t pat, sdt, nit;
-  int have_pat, have_pmt, have_sdt, have_nit;
+  sect_asm_t pat, sdt, nit, cat;
+  int have_pat, have_pmt, have_sdt, have_nit, have_cat;
   unsigned program_number, pmt_pid, pcr_pid, nit_pid;
+  unsigned emm_pid, ca_system_id; /* from CAT's first CA_descriptor, 0 if none */
+  unsigned char scrambling_mode; /* from PMT program_info's scrambling_descriptor, 0 if none */
   unsigned tsid, onid;
   psi_es_t es[PSI_MAX_ES];
   int es_count, audio_count;
@@ -42,6 +44,7 @@ static void parse_pat(psi_t *c);
 static int parse_pmt(psi_t *c, pmt_cand_t *cand);
 static void parse_sdt(psi_t *c);
 static void parse_nit(psi_t *c);
+static void parse_cat(psi_t *c);
 
 /* collect section; 1 when complete */
 static int asm_feed(sect_asm_t *a, const unsigned char *pl, size_t plen, int pusi) {
@@ -289,10 +292,15 @@ static int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   c->es_count = 0;
   c->audio_count = 0;
   c->ecm_count = 0;
+  c->scrambling_mode = 0;
   if (12 + pil <= n) {
+    const unsigned char *sd;
     ca = find_desc(b + 12, pil, 0x09, &l);
     if (ca && l >= 4)
       add_ecm(c, (((unsigned)ca[2] & 0x1F) << 8) | ca[3]);
+    sd = find_desc(b + 12, pil, 0x65, &l);
+    if (sd && l >= 1)
+      c->scrambling_mode = sd[0];
   }
 
   end = n - 4;
@@ -372,6 +380,26 @@ static void parse_nit(psi_t *c) {
   c->have_nit = 1;
 }
 
+/* ISO/IEC 13818-1 table 2-30: table_id + 7 more header bytes (same shape as PAT's
+   program loop header), then a plain descriptor loop up to the CRC - no program-like
+   entries. Takes the first CA_descriptor found (tag 0x09), single-CAS assumption. */
+static void parse_cat(psi_t *c) {
+  const unsigned char *b = c->cat.buf;
+  size_t n = c->cat.expect, l;
+  const unsigned char *ca;
+
+  if (n < 12 || b[0] != 0x01 || crc32_mpeg(b, n) != 0)
+    return;
+  c->emm_pid = 0;
+  c->ca_system_id = 0;
+  ca = find_desc(b + 8, n - 12, 0x09, &l);
+  if (ca && l >= 4) {
+    c->ca_system_id = ((unsigned)ca[0] << 8) | ca[1];
+    c->emm_pid = (((unsigned)ca[2] & 0x1F) << 8) | ca[3];
+  }
+  c->have_cat = 1;
+}
+
 psi_t *psi_new(void) { return calloc(1, sizeof(psi_t)); }
 
 void psi_free(psi_t *c) { free(c); }
@@ -407,6 +435,9 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
   } else if (pid == 0x0011) {
     if (asm_feed(&c->sdt, pl, plen, pusi))
       parse_sdt(c);
+  } else if (pid == 0x0001) {
+    if (asm_feed(&c->cat, pl, plen, pusi))
+      parse_cat(c);
   } else if (c->pmt_locked) {
     if (pid == c->pmt_pid && asm_feed(&c->pmt_cand[c->pmt_lock_idx].asm_, pl, plen, pusi))
       parse_pmt(c, &c->pmt_cand[c->pmt_lock_idx]);
@@ -436,6 +467,7 @@ const psi_program_t *psi_pat_programs(const psi_t *c, int *count) {
 int psi_have_pat(const psi_t *c) { return c->have_pat; }
 int psi_have_pmt(const psi_t *c) { return c->have_pmt; }
 int psi_have_sdt(const psi_t *c) { return c->have_sdt; }
+int psi_have_cat(const psi_t *c) { return c->have_cat; }
 int psi_ready(const psi_t *c) { return c->have_pat && c->have_pmt; }
 
 unsigned psi_program_number(const psi_t *c) { return c->program_number; }
@@ -444,6 +476,9 @@ unsigned psi_pcr_pid(const psi_t *c) { return c->pcr_pid; }
 unsigned psi_nit_pid(const psi_t *c) { return c->nit_pid; }
 unsigned psi_transport_stream_id(const psi_t *c) { return c->tsid; }
 unsigned psi_original_network_id(const psi_t *c) { return c->onid; }
+unsigned psi_emm_pid(const psi_t *c) { return c->emm_pid; }
+unsigned psi_ca_system_id(const psi_t *c) { return c->ca_system_id; }
+unsigned char psi_scrambling_mode(const psi_t *c) { return c->scrambling_mode; }
 
 const psi_es_t *psi_es(const psi_t *c, int *count) {
   if (count)

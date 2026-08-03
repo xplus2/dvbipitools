@@ -18,3 +18,5 @@ Description: command line tools for DVB-IPI streams
  dipiepg announces an xmltv guide as BiM-encoded TVA fragments via DVBSTP/BCG (ETSI TS 102 539), or listens for one.
  dipitvhead re-packages a transport stream (multicast, http(s), or stdin) as a DVB-IPI multicast, with target-bitrate control, optional HbbTV AIT injection, and optional DVB Simulcrypt CAS scrambling (CISSA; CSA2 only when built from source against libdvbcsa, not in this package).
  dipifccret is an RTP retransmission (RET, Annex F) and server-based Fast Channel Change (FCC/RAMS, Annex I) server, passively watching a mirrored multicast segment via libpcap to repair packet loss and burst cached RTP data to a HNED on request.
+ dipicam378 is a cs378x (camd35/TCP) key server for testing dipitvhead's CAS output: holds a device's RSA private key, answers ECM/EMM requests with a control word, a software smartcard for oscam.
+ dipidescramble is a standalone CAS validation client for testing dipitvhead's CAS output: reads a scrambled transport stream, decrypts the RSA -> BK -> SK -> CW chain with the device's private key, and descrambles it in place.

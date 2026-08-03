@@ -11,6 +11,8 @@ SANITIZE=no
 TSAN=no
 TESTS=no
 FUZZING=no
+TLS=auto
+CSA2=auto
 
 usage() {
     cat <<EOF
@@ -23,6 +25,10 @@ usage: ./configure [options]
   --tests        enable the 'make test' target (requires Check via pkg-config)
   --fuzz         enable the 'make fuzz-harnesses' target (AFL++ standalone harnesses;
                  pass --cc=afl-clang-fast for real instrumentation)
+  --no-tls       build dipirec, dipiradiohead, dipitvhead without HTTPS/TLS
+                 support (default: auto-detect OpenSSL via pkg-config)
+  --no-csa2      build dipitvhead, dipidescramble without DVB-CSA2 support
+                 (default: auto-detect libdvbcsa)
   --cc=CC        C compiler (default: cc, or \$CC)
   -h, --help     this help
 EOF
@@ -37,6 +43,8 @@ while [ $# -gt 0 ]; do
         --tsan)     TSAN=yes ;;
         --tests)    TESTS=yes ;;
         --fuzz)     FUZZING=yes ;;
+        --no-tls)   TLS=no ;;
+        --no-csa2)  CSA2=no ;;
         --cc=*)     CC=${1#--cc=} ;;
         -h|--help)  usage; exit 0 ;;
         *) echo "configure: unknown option: $1" >&2; usage >&2; exit 1 ;;
@@ -106,7 +114,9 @@ CHECK_CFLAGS := $CHECK_CFLAGS
 CHECK_LIBS := $CHECK_LIBS
 FUZZING := $FUZZING
 TSAN := $TSAN
+TLS := $TLS
+CSA2 := $CSA2
 EOF
 
-echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING"
+echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING tls=$TLS csa2=$CSA2"
 echo "run 'make' to build."

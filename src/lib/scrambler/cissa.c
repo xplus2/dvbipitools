@@ -34,3 +34,30 @@ done:
   EVP_CIPHER_CTX_free(ctx);
   return ok ? 0 : -1;
 }
+
+int cissa_decrypt_block(const unsigned char key[CISSA_CW_LEN], unsigned char *data, size_t len) {
+  EVP_CIPHER_CTX *ctx;
+  int outlen, totlen;
+  int ok = 0;
+
+  if (len == 0 || len % 16 != 0)
+    return -1;
+
+  ctx = EVP_CIPHER_CTX_new();
+  if (!ctx)
+    return -1;
+
+  if (EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, cissa_iv) != 1)
+    goto done;
+  EVP_CIPHER_CTX_set_padding(ctx, 0);
+  if (EVP_DecryptUpdate(ctx, data, &outlen, data, (int)len) != 1 || (size_t)outlen != len)
+    goto done;
+  totlen = outlen;
+  if (EVP_DecryptFinal_ex(ctx, data + totlen, &outlen) != 1)
+    goto done;
+  ok = 1;
+
+done:
+  EVP_CIPHER_CTX_free(ctx);
+  return ok ? 0 : -1;
+}

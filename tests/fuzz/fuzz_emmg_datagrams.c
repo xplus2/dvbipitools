@@ -2,9 +2,8 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 /* AFL++ harness: feeds file argv[1] as the payload of an EMMG data_provision message
- * (TS 103 197 clause 6.4.7) into emmg_extract_datagrams(). Reachable from any TCP client
- * that connects to our EMMG listener, not just a trusted muxer. Build with
- * afl-cc/afl-clang-fast for instrumentation. */
+   (TS 103 197 clause 6.4.7) into emmg_extract_datagrams(). Reachable from any TCP client
+   that connects to our EMMG listener, not just a trusted muxer. Build with afl-cc/afl-clang-fast for instrumentation. */
 
 #include <stdio.h>
 #include <stdlib.h>

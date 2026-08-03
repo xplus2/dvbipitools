@@ -171,16 +171,21 @@ static void send_psi_tables(remux_t *r, remux_packet_cb cb, void *ctx) {
 
 static void forward_packet(remux_t *r, unsigned out_pid, unsigned char *cc, const unsigned char *pkt188, remux_packet_cb cb, void *ctx) {
   unsigned char out[188];
+  /* ISO 13818-1 2.4.3.3: cc must not advance on AFC '10' (adaptation field only, no payload).
+     video's PCR pid uses these for pacing - bumping cc on them fakes a discontinuity. */
+  int has_payload = (pkt188[3] & 0x10) != 0;
   memcpy(out, pkt188, 188);
   out[1] = (unsigned char)((out[1] & 0xE0) | ((out_pid >> 8) & 0x1F));
   out[2] = (unsigned char)out_pid;
-  *cc = (unsigned char)((*cc + 1) & 0x0F);
+  if (has_payload)
+    *cc = (unsigned char)((*cc + 1) & 0x0F);
   out[3] = (unsigned char)((out[3] & 0xF0) | *cc);
   if (r->cas) {
     cas_pcr_tick(r->cas, out_pid, out);
-    cas_scramble_packet(r->cas, out_pid, out);
+    cas_scramble_packet(r->cas, out_pid, out, cb, ctx);
+  } else {
+    cb(ctx, out);
   }
-  cb(ctx, out);
 }
 
 void remux_feed(remux_t *r, const unsigned char *pkt188, remux_packet_cb cb, void *ctx) {

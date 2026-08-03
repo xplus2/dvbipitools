@@ -1,3 +1,12 @@
+dvbipitools (2.1.0-1) unstable; urgency=medium
+  * dipitvhead: fixed encryption gap on key rotation (CA 0x4A75 test finding)
+  * remux: fixed (dis-)continuity
+  * x86_64 pclmulqdq and ARMv8 PMULL CRC32 calculations
+  * CSA2 optimized: dvbcsa_encrypt to dvbcsa_bs_encrypt (flush on PCR keeps jitter in check)
+  * merged dipidescramble CAS test tool - e2e tested
+  * merged dipicam378 CAS test tool - e2e tested on vu+
+ -- dvbipitools authors <unspecified@example.com>  Tue, 04 Aug 2026 00:00:00 +0200
+
 dvbipitools (2.0.0-1) unstable; urgency=medium
   * Simulcrypt Synchronizer and scrambler for dipitvhead
  -- dvbipitools authors <unspecified@example.com>  Sat, 01 Aug 2026 00:00:00 +0200

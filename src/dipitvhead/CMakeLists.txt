@@ -80,6 +80,8 @@ add_executable(dipitvhead
     ../lib/log.c
     ../lib/signal.c
     ../lib/net/multicast.c
+    ../lib/net/udpxy.c
+    ../lib/net/tssource.c
     ${TLS_SRC}
     ../lib/net/httpclient.c
     ../lib/demux/crc32.c

@@ -97,7 +97,7 @@ START_TEST(cissa_vectors_scramble_full_packet) {
 
   s = scrambler_new(SCRAMBLE_ALGO_CISSA);
   ck_assert_ptr_nonnull(s);
-  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw), 0);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, NULL, NULL), 0);
   ck_assert_int_eq(scrambler_encrypt_packet(s, got, SCRAMBLE_PARITY_EVEN), 0);
   ck_assert_mem_eq(got, scrambled, 188);
   scrambler_free(s);
@@ -108,6 +108,68 @@ START_TEST(cissa_encrypt_block_rejects_bad_length) {
   unsigned char buf[15];
   ck_assert_int_eq(cissa_encrypt_block(cw, buf, 0), -1);
   ck_assert_int_eq(cissa_encrypt_block(cw, buf, 15), -1);
+}
+END_TEST
+
+START_TEST(cissa_vectors_descramble_full_packet) {
+  const cissa_vector_t *v = &vectors[_i];
+  unsigned char clear[188], scrambled[188], got[188];
+  scrambler_t *s;
+
+  hex_decode(v->clear_hex, clear, 188);
+  hex_decode(v->scrambled_hex, scrambled, 188);
+  memcpy(got, scrambled, 188);
+
+  s = scrambler_new(SCRAMBLE_ALGO_CISSA);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, NULL, NULL), 0);
+  ck_assert_int_eq(scrambler_decrypt_packet(s, got), 0);
+  ck_assert_mem_eq(got, clear, 188);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(cissa_decrypt_block_rejects_bad_length) {
+  unsigned char buf[15];
+  ck_assert_int_eq(cissa_decrypt_block(cw, buf, 0), -1);
+  ck_assert_int_eq(cissa_decrypt_block(cw, buf, 15), -1);
+}
+END_TEST
+
+START_TEST(scrambler_decrypt_packet_passes_through_unscrambled) {
+  unsigned char pkt[188], orig[188];
+  scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CISSA);
+
+  memset(pkt, 0xAA, 188);
+  pkt[0] = 0x47;
+  pkt[3] = 0x10; /* afc=1 payload only, scrambling control 00 (not scrambled) */
+  memcpy(orig, pkt, 188);
+
+  ck_assert_int_eq(scrambler_decrypt_packet(s, pkt), 0);
+  ck_assert_mem_eq(pkt, orig, 188); /* untouched */
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(scrambler_decrypt_packet_rejects_unset_key) {
+  unsigned char pkt[188];
+  scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CISSA);
+  memset(pkt, 0, sizeof pkt);
+  pkt[0] = 0x47;
+  pkt[3] = 0x90; /* afc=1, scrambling control 10 (even) - but no key loaded */
+  ck_assert_int_eq(scrambler_decrypt_packet(s, pkt), -1);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(scrambler_decrypt_packet_rejects_reserved_control_value) {
+  unsigned char pkt[188];
+  scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CISSA);
+  memset(pkt, 0, sizeof pkt);
+  pkt[0] = 0x47;
+  pkt[3] = 0x50; /* afc=1, scrambling control 01 (reserved) */
+  ck_assert_int_eq(scrambler_decrypt_packet(s, pkt), -1);
+  scrambler_free(s);
 }
 END_TEST
 
@@ -138,10 +200,61 @@ START_TEST(scrambler_encrypt_packet_leaves_control_bits_clear_when_payload_too_s
 
   s = scrambler_new(SCRAMBLE_ALGO_CISSA);
   ck_assert_ptr_nonnull(s);
-  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw), 0);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, NULL, NULL), 0);
   ck_assert_int_eq(scrambler_encrypt_packet(s, pkt, SCRAMBLE_PARITY_EVEN), 0);
   ck_assert_int_eq((pkt[3] >> 6) & 0x3, 0); /* still clear, not marked scrambled */
   ck_assert_mem_eq(pkt, orig, 188);         /* and genuinely untouched */
+  scrambler_free(s);
+}
+END_TEST
+
+static unsigned char captured[188];
+static unsigned captured_n;
+
+static void capture_emit(void *ctx, const unsigned char pkt[188]) {
+  (void)ctx;
+  memcpy(captured, pkt, 188);
+  captured_n++;
+}
+
+/* CISSA has no batching backend: *_queued must behave exactly like the
+ * non-queued calls, emitting inline before returning */
+START_TEST(cissa_encrypt_packet_queued_emits_immediately) {
+  const cissa_vector_t *v = &vectors[0];
+  unsigned char clear[188], scrambled[188], pkt[188];
+  scrambler_t *s;
+
+  hex_decode(v->clear_hex, clear, 188);
+  hex_decode(v->scrambled_hex, scrambled, 188);
+  memcpy(pkt, clear, 188);
+
+  s = scrambler_new(SCRAMBLE_ALGO_CISSA);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, NULL, NULL), 0);
+  captured_n = 0;
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(s, pkt, SCRAMBLE_PARITY_EVEN, capture_emit, NULL), 0);
+  ck_assert_uint_eq(captured_n, 1);
+  ck_assert_mem_eq(captured, scrambled, 188);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(cissa_decrypt_packet_queued_emits_immediately) {
+  const cissa_vector_t *v = &vectors[0];
+  unsigned char clear[188], scrambled[188], pkt[188];
+  scrambler_t *s;
+
+  hex_decode(v->clear_hex, clear, 188);
+  hex_decode(v->scrambled_hex, scrambled, 188);
+  memcpy(pkt, scrambled, 188);
+
+  s = scrambler_new(SCRAMBLE_ALGO_CISSA);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, NULL, NULL), 0);
+  captured_n = 0;
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(s, pkt, capture_emit, NULL), 0);
+  ck_assert_uint_eq(captured_n, 1);
+  ck_assert_mem_eq(captured, clear, 188);
   scrambler_free(s);
 }
 END_TEST
@@ -150,9 +263,16 @@ static Suite *cissa_suite(void) {
   Suite *s = suite_create("cissa");
   TCase *tc = tcase_create("core");
   tcase_add_loop_test(tc, cissa_vectors_scramble_full_packet, 0, sizeof vectors / sizeof vectors[0]);
+  tcase_add_loop_test(tc, cissa_vectors_descramble_full_packet, 0, sizeof vectors / sizeof vectors[0]);
   tcase_add_test(tc, cissa_encrypt_block_rejects_bad_length);
+  tcase_add_test(tc, cissa_decrypt_block_rejects_bad_length);
   tcase_add_test(tc, scrambler_encrypt_packet_rejects_unset_key);
   tcase_add_test(tc, scrambler_encrypt_packet_leaves_control_bits_clear_when_payload_too_small);
+  tcase_add_test(tc, scrambler_decrypt_packet_passes_through_unscrambled);
+  tcase_add_test(tc, scrambler_decrypt_packet_rejects_unset_key);
+  tcase_add_test(tc, scrambler_decrypt_packet_rejects_reserved_control_value);
+  tcase_add_test(tc, cissa_encrypt_packet_queued_emits_immediately);
+  tcase_add_test(tc, cissa_decrypt_packet_queued_emits_immediately);
   suite_add_tcase(s, tc);
   return s;
 }

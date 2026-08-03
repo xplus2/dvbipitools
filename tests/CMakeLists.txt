@@ -68,6 +68,25 @@ dvbipitools_add_unit_test(lib_mux_tspacket_write
     unit/lib/mux/test_tspacket_write.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c)
 
+dvbipitools_add_unit_test(lib_mux_ebml
+    unit/lib/mux/test_ebml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c)
+
+dvbipitools_add_unit_test(lib_mux_teletext
+    unit/lib/mux/test_teletext.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c)
+
+dvbipitools_add_unit_test(lib_mux_mkv
+    unit/lib/mux/test_mkv.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
 find_package(OpenSSL)
 if (OpenSSL_FOUND)
     dvbipitools_add_unit_test(lib_scrambler_cissa
@@ -95,6 +114,45 @@ if (DVBCSA_INCLUDE_DIR AND DVBCSA_LIBRARY)
 else ()
     message(WARNING "tests: libdvbcsa not found, skipping lib_scrambler_csa2 unit test")
 endif ()
+
+if (OpenSSL_FOUND)
+    dvbipitools_add_unit_test(dipicam378_crypto
+        unit/dipicam378/test_crypto.c
+        ${CMAKE_SOURCE_DIR}/src/dipicam378/crypto.c)
+    target_link_libraries(test_dipicam378_crypto PRIVATE OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(dipicam378_device
+        unit/dipicam378/test_device.c
+        ${CMAKE_SOURCE_DIR}/src/dipicam378/device.c
+        ${CMAKE_SOURCE_DIR}/src/dipicam378/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+    target_link_libraries(test_dipicam378_device PRIVATE OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(dipicam378_cs378x
+        unit/dipicam378/test_cs378x.c
+        ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
+    target_link_libraries(test_dipicam378_cs378x PRIVATE OpenSSL::Crypto Threads::Threads)
+
+    dvbipitools_add_unit_test(dipidescramble_crypto
+        unit/dipidescramble/test_crypto.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c)
+    target_link_libraries(test_dipidescramble_crypto PRIVATE OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(dipidescramble_device
+        unit/dipidescramble/test_device.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+    target_link_libraries(test_dipidescramble_device PRIVATE OpenSSL::Crypto)
+else ()
+    message(WARNING "tests: OpenSSL not found, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device unit tests")
+endif ()
+
+dvbipitools_add_unit_test(dipidescramble_secasm
+    unit/dipidescramble/test_secasm.c
+    ${CMAKE_SOURCE_DIR}/src/dipidescramble/secasm.c)
 
 dvbipitools_add_unit_test(lib_bim_bitwriter
     unit/lib/bim/test_bitwriter.c
@@ -315,31 +373,11 @@ dvbipitools_add_unit_test(dipitvhead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
-dvbipitools_add_unit_test(dipirec_ebml
-    unit/dipirec/test_ebml.c
-    ${CMAKE_SOURCE_DIR}/src/dipirec/mux/ebml.c)
-
 dvbipitools_add_unit_test(dipirec_ts_filter
     unit/dipirec/test_ts_filter.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
-
-dvbipitools_add_unit_test(dipirec_teletext
-    unit/dipirec/test_teletext.c
-    ${CMAKE_SOURCE_DIR}/src/dipirec/mux/teletext.c)
-
-dvbipitools_add_unit_test(dipirec_mkv
-    unit/dipirec/test_mkv.c
-    ${CMAKE_SOURCE_DIR}/src/dipirec/mux/mkv.c
-    ${CMAKE_SOURCE_DIR}/src/dipirec/mux/ebml.c
-    ${CMAKE_SOURCE_DIR}/src/dipirec/mux/teletext.c
-    ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
-    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
-    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(dipifccret_channel
     unit/dipifccret/test_channel.c

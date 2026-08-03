@@ -2,9 +2,9 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 /* AFL++ harness: feeds file argv[1] as one generic_message (TS 103 197 clause 4.4.1)
- * through simulcrypt_hdr_parse() + simulcrypt_tlv_reader_next(). Both ecmg_client.c and
- * emmg_server.c depend on this parser for bytes straight off a TCP peer. Build with
- * afl-cc/afl-clang-fast for instrumentation. */
+   through simulcrypt_hdr_parse() + simulcrypt_tlv_reader_next(). Both ecmg_client.c and
+   emmg_server.c depend on this parser for bytes straight off a TCP peer. Build with
+   afl-cc/afl-clang-fast for instrumentation. */
 
 #include <stdio.h>
 #include <stdlib.h>

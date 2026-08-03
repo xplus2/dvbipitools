@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "lib/demux/psi.h"
+#include "lib/scrambler/scrambler.h"
 
 #include "../args.h"
 
@@ -24,9 +25,17 @@ unsigned cas_pcr_pid(cas_t *c);
 
 /* call per emitted packet, in this order:
    1) cas_pcr_tick() - no-op unless out_pid == cas_pcr_pid(c)
-   2) cas_scramble_packet() - no-op unless out_pid is in --cas-pids */
+   2) cas_scramble_packet() - no-op unless out_pid is in --cas-pids. calls
+      emit(ctx, pkt188) itself, exactly once, either immediately or (CSA2
+      with a SIMD batching backend) once a batch of same-parity packets
+      fills - see scrambler_encrypt_packet_queued. Always emits immediately
+      when out_pid == cas_pcr_pid(c), so batching never delays PCR delivery. */
 void cas_pcr_tick(cas_t *c, unsigned out_pid, const unsigned char pkt188[188]);
-void cas_scramble_packet(cas_t *c, unsigned out_pid, unsigned char pkt188[188]);
+void cas_scramble_packet(cas_t *c, unsigned out_pid, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx);
+
+/* flushes any packets cas_scramble_packet is still holding for a batch,
+   emitting them via emit/ctx in original order. call at end of stream. */
+void cas_flush(cas_t *c, scrambler_emit_cb emit, void *ctx);
 
 /* CA_descriptor(ecm)+scrambling_descriptor for PMT program_info. 0 on overflow. */
 size_t cas_prog_desc(cas_t *c, unsigned char *out, size_t cap);

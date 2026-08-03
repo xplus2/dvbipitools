@@ -114,6 +114,10 @@ int simulcrypt_reader_poll(simulcrypt_reader_t *r, int fd, int timeout_ms, simul
     if (!r->need && r->have >= SIMULCRYPT_HDR_LEN) {
       simulcrypt_hdr_parse(r->buf, r->have, &r->hdr);
       r->need = SIMULCRYPT_HDR_LEN + r->hdr.payload_len;
+      /* payload_len is 16-bit so this can't happen with today's SIMULCRYPT_MAX_PAYLOAD,
+         but the buffer write below relies on it - check locally, don't just trust that */
+      if (r->need > sizeof r->buf)
+        return -1;
     }
     if (r->need && r->have >= r->need) {
       *hdr = r->hdr;

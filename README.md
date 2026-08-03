@@ -11,33 +11,36 @@ I did not let it mess up the hard parts.
 
 ## Fantastic tools and where to deploy them
 
-| Tool                                           | Headend | Edge | Client | Purpose                                            |
-|------------------------------------------------|---------|------|--------|----------------------------------------------------|
-| [dipitvhead](src/dipitvhead/README.md)         | ✔️      |      |        | Provide IPTV multicasts                            |
-| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      |      |        | Provide radio multicasts                           |
-| [dipifccret](src/dipifccret/README.md)         | ✔️      | ✔️   |        | RAMS-based FCC (Annex I) and RET (Annex F) server  |
-| [dipisds](src/dipisds/README.md)               | ✔️      |      | ✔️     | DVBSTP/SD&S service discovery (announce & listen)  |
-| [dipiepg](src/dipiepg/README.md)               | ✔️      |      | ✔️     | DVBSTP/TVA EPG (publisher & reader)                |
-| [dipixmltv](src/dipixmltv/README.md)           | ✔️      |      | ✔️     | XMLTV to/from DVB-IPI TVA XML converter            |
-| [dipibim](src/dipibim/README.md)               |         |      | ✔️     | TVA XML BiM encoder/decoder (to debug `dipiepg`)   |
-| [dipirec](src/dipirec/README.md)               |         |      | ✔️     | DVB-IPI Multicast to file/stdout recorder          |
-| [dipiscan](src/dipiscan/README.md)             |         |      | ✔️     | Scan for multicast TV/radio services (w/o SD&S)    |
+| Tool                                                    | Headend | Edge | Client | Lab | Purpose                                           |
+|---------------------------------------------------------|---------|------|--------|-----|---------------------------------------------------|
+| [dipitvhead](src/dipitvhead/README.md)                  | ✔️      |      |        | ✔️  | Provide IPTV multicasts                           |
+| [dipiradiohead](src/dipiradiohead/README.md)            | ✔️      |      |        | ✔️  | Provide radio multicasts                          |
+| [dipifccret](src/dipifccret/README.md)                  | ✔️      | ✔️   |        | ✔️  | RAMS-based FCC (Annex I) and RET (Annex F) server |
+| [dipisds](src/dipisds/README.md)                        | ✔️      |      | ✔️     | ✔️  | DVBSTP/SD&S service discovery (announce & listen) |
+| [dipiepg](src/dipiepg/README.md)                        | ✔️      |      | ✔️     | ✔️  | DVBSTP/TVA EPG (publisher & reader)               |
+| [dipixmltv](src/dipixmltv/README.md)                    | ✔️      |      | ✔️     | ✔️  |  XMLTV to/from DVB-IPI TVA XML converter          |
+| [dipirec](src/dipirec/README.md)                        |         |      | ✔️     | ✔️  | DVB-IPI Multicast to file/stdout recorder         |
+| [dipiscan](src/dipiscan/README.md)                      |         |      | ✔️     | ✔️  | Scan for multicast TV/radio services (w/o SD&S)   |
+| [dipibim](src/dipibim/README.md)                        |         |      |        | ✔️  | TVA XML BiM encoder/decoder (to debug `dipiepg`)  |
+| [dipicam378](src/dipicam378/README.md)                  |         |      |        | ✔️  | cs378x CAS test smartcard emulator                |
+| [dipidescramble](src/dipidescramble/README.md)          |         |      |        | ✔️  | CAS validation client / descrambler               |
 
 
 ## Build
 
-Your choice. Go for the classics: `./configure --release && make` or use CMake:
+Your choice. Go for the classics: `./configure --release && make -j"$(nproc)"` or use CMake:
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
 ### Options
-| CMake                               | configure              |                                                      |
-|-------------------------------------|------------------------|------------------------------------------------------|
-| `-DCMAKE_BUILD_TYPE=Debug\|Release` | `--debug`\|`--release` | Build type                                           |
-| `-DDVBIPITOOLS_STATIC=ON`           | `--static` | Static linking                                       |
-| `-DDIPIRADIOHEAD_TLS=OFF` / `-DDIPITVHEAD_TLS=OFF` | — | Build the respective tool without TLS source support |
+| CMake                                                                    | configure               |                                                      |
+|--------------------------------------------------------------------------|-------------------------|------------------------------------------------------|
+| `-DCMAKE_BUILD_TYPE=Debug\|Release`                                      | `--debug` / `--release` | Build type                                           |
+| `-DDVBIPITOOLS_STATIC=ON`                                                | `--static`              | Static linking                                       |
+| `-DDIPIRADIOHEAD_TLS=OFF` / `-DDIPITVHEAD_TLS=OFF` / `-DDIPIREC_TLS=OFF` | `--no-tls`              | Build the respective tool without TLS source support |
+| `-DDIPITVHEAD_CSA2=OFF` / `-DDIPIDESCRAMBLE_CSA2=OFF`                    | `--no-csa2`             | Build the respective tool without CSA2               | 
 
 > Note: The build automatically disables TLS support if OpenSSL is not found.
 
@@ -47,8 +50,10 @@ cmake --build build
 * **libssl-dev**
   + Required for HTTPS sources in `dipitvhead` and `dipiradiohead`.
   + Enables _CISSA/AES-128_ Conditional Access in `dipitvhead`.
+  + Required to build `dipicam378`/`dipidescramble` at all - RSA/AES crypto is their
+    whole purpose, so both are skipped entirely if not found.
 * **libdvbcsa**
-  + Optional; required only if you need _CSA2_ support in `dipitvhead`.
+  + Optional; required only if you need _CSA2_ support in `dipitvhead` or `dipidescramble`.
 * **libpcap**
   + Required for `dipifccret`. If not found, the tool is skipped to ensure build integrity.
 
@@ -107,6 +112,9 @@ On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 * SRM delivery for Content Protection revocation (-12)
 * Dynamic Service Management (-13)
 
+Indirectly related: 
+
+* `dipitvhead` and `dipidescramble` don't support ETSI TS 103 197 CAS3
 
 ## Licence
 

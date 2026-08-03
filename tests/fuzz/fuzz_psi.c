@@ -2,7 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 /* AFL++ harness: feeds file argv[1] as consecutive 188-byte TS packets
- * into psi_feed(). Build with afl-cc/afl-clang-fast for instrumentation. */
+   into psi_feed(). Build with afl-cc/afl-clang-fast for instrumentation. */
 
 #include <stdio.h>
 #include <stdlib.h>

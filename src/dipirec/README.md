@@ -61,7 +61,7 @@ Possibly, MPEG2 will work too, but finding it in the wild today is a bit of a ch
 Audio covers AC3, E-AC3, mpeg layer 1/2/3, AAC (ADTS) and AAC_LATM. Each audio track keeps the ISO 639
 language from the PMT, or `und` when the stream does not signal one.
 
-> TV stations and IPI providers get creative on audio flagging. Who cares about ISO 639-2 anyway. Do not wonder if ...
+> TV stations and IPTV providers are creative on audio flagging. Who cares about ISO 639-2 anyway. Do not wonder if ...
 > - "OLA" is used for "original language, we just dump what we've got, deal with it"
 > - "MLT" is not Maltese, but the audio-description for visually impaired
 

@@ -1,87 +1,61 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
-#include "lib/demux/rtp.h"
-#include "lib/net/httpclient.h"
-#include "lib/net/multicast.h"
+#include "lib/net/tssource.h"
 
 #include "../version.h"
 #include "source.h"
 
 struct tvsrc {
-  src_kind_t kind;
-  mcast_t *m;
-  http_t *h;
+  tssrc_t *t;
 };
 
+static tssrc_kind_t tssrc_kind_of(src_kind_t k) {
+  switch (k) {
+  case SRC_RTP:
+    return TSSRC_RTP;
+  case SRC_UDP:
+    return TSSRC_UDP;
+  case SRC_HTTP:
+    return TSSRC_HTTP;
+  case SRC_STDIN:
+    return TSSRC_STDIN;
+  }
+  return TSSRC_STDIN;
+}
+
 tvsrc_t *tvsrc_open(const config_t *cfg) {
+  tssrc_cfg_t tc;
   tvsrc_t *s = calloc(1, sizeof *s);
   if (!s)
     return NULL;
-  s->kind = cfg->input.kind;
-  switch (s->kind) {
-    case SRC_RTP:
-    case SRC_UDP:
-      s->m = mcast_open(cfg->input.family, cfg->input.group, cfg->input.port, cfg->iface_in, 1000);
-      if (!s->m) {
-        free(s);
-        return NULL;
-      }
-      return s;
-    case SRC_HTTP:
-      s->h = http_get(&cfg->input.http, TOOL_NAME "/" TOOL_VERSION, cfg->insecure_tls);
-      if (!s->h) {
-        free(s);
-        return NULL;
-      }
-      return s;
-    case SRC_STDIN:
-      return s;
+
+  memset(&tc, 0, sizeof tc);
+  tc.kind = tssrc_kind_of(cfg->input.kind);
+  tc.family = cfg->input.family;
+  tc.group = cfg->input.group;
+  tc.port = cfg->input.port;
+  tc.iface = cfg->iface_in;
+  tc.http = cfg->input.http;
+  tc.insecure_tls = cfg->insecure_tls;
+  tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
+
+  s->t = tssrc_open(&tc);
+  if (!s->t) {
+    free(s);
+    return NULL;
   }
-  free(s);
-  return NULL;
+  return s;
 }
 
-ssize_t tvsrc_read(tvsrc_t *s, unsigned char *buf, size_t cap) {
-  ssize_t n;
-  size_t off;
-
-  switch (s->kind) {
-    case SRC_RTP:
-    case SRC_UDP:
-      n = mcast_recv(s->m, buf, cap);
-      if (n <= 0)
-        return n;
-      off = rtp_payload_offset(buf, (size_t)n);
-      if (off) {
-        memmove(buf, buf + off, (size_t)n - off);
-        n -= (ssize_t)off;
-      }
-      return n;
-    case SRC_HTTP:
-      return http_read(s->h, buf, cap);
-    case SRC_STDIN:
-      n = read(STDIN_FILENO, buf, cap);
-      if (n == 0)
-        return -1; /* EOF */
-      if (n < 0)
-        return (errno == EINTR) ? 0 : -1;
-      return n;
-  }
-  return -1;
-}
+ssize_t tvsrc_read(tvsrc_t *s, unsigned char *buf, size_t cap) { return tssrc_read(s->t, buf, cap); }
 
 void tvsrc_close(tvsrc_t *s) {
   if (!s)
     return;
-  if (s->m)
-    mcast_close(s->m);
-  if (s->h)
-    http_close(s->h);
+  tssrc_close(s->t);
   free(s);
 }

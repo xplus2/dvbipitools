@@ -9,27 +9,6 @@ include config.mk
 
 TOOLS := dipirec dipiscan dipiradiohead dipisds dipixmltv dipibim dipiepg dipitvhead
 
-dipirec_SRCS := \
-	src/dipirec/main.c \
-	src/dipirec/args.c \
-	src/dipirec/record.c \
-	src/dipirec/ret_client.c \
-	src/lib/log.c \
-	src/lib/signal.c \
-	src/lib/net/multicast.c \
-	src/lib/net/udpxy.c \
-	src/lib/demux/rtp.c \
-	src/lib/demux/rtx.c \
-	src/lib/demux/crc32.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/tspack.c \
-	src/lib/demux/pes.c \
-	src/lib/mux/rtcp_build.c \
-	src/dipirec/filter/ts.c \
-	src/dipirec/mux/ebml.c \
-	src/dipirec/mux/mkv.c \
-	src/dipirec/mux/teletext.c
-
 dipiscan_SRCS := \
 	src/dipiscan/main.c \
 	src/dipiscan/args.c \
@@ -117,7 +96,52 @@ dipiepg_SRCS := \
 
 HAVE_OPENSSL := $(shell pkg-config --exists openssl && echo yes)
 
-ifeq ($(HAVE_OPENSSL),yes)
+ifeq ($(TLS),no)
+HAVE_TLS := no
+else
+HAVE_TLS := $(HAVE_OPENSSL)
+endif
+
+ifeq ($(HAVE_TLS),yes)
+dipirec_TLS_SRC := src/lib/net/tls.c
+dipirec_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipirec_EXTRA_LDFLAGS := $(shell pkg-config --static --libs openssl)
+else
+dipirec_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+endif
+else
+dipirec_TLS_SRC := src/lib/net/tls_stub.c
+ifneq ($(TLS),no)
+$(warning dipirec: OpenSSL not found via pkg-config, building without HTTPS support)
+endif
+endif
+
+dipirec_SRCS := \
+	src/dipirec/main.c \
+	src/dipirec/args.c \
+	src/dipirec/record.c \
+	src/dipirec/ret_client.c \
+	src/lib/log.c \
+	src/lib/signal.c \
+	src/lib/net/multicast.c \
+	src/lib/net/udpxy.c \
+	src/lib/net/tssource.c \
+	$(dipirec_TLS_SRC) \
+	src/lib/net/httpclient.c \
+	src/lib/demux/rtp.c \
+	src/lib/demux/rtx.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/psi.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/pes.c \
+	src/lib/mux/rtcp_build.c \
+	src/lib/mux/ebml.c \
+	src/lib/mux/mkv.c \
+	src/lib/mux/teletext.c \
+	src/dipirec/filter/ts.c
+
+ifeq ($(HAVE_TLS),yes)
 dipiradiohead_TLS_SRC := src/lib/net/tls.c
 dipiradiohead_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 ifneq (,$(findstring -static,$(LDFLAGS)))
@@ -127,7 +151,9 @@ dipiradiohead_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 endif
 else
 dipiradiohead_TLS_SRC := src/lib/net/tls_stub.c
+ifneq ($(TLS),no)
 $(warning dipiradiohead: OpenSSL not found via pkg-config, building without HTTPS support)
+endif
 endif
 
 dipiradiohead_SRCS := \
@@ -156,16 +182,21 @@ dipiradiohead_SRCS := \
 	src/lib/mux/tspacket_write.c
 
 ifeq ($(HAVE_OPENSSL),yes)
-dipitvhead_TLS_SRC := src/lib/net/tls.c
 dipitvhead_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipitvhead_EXTRA_LDFLAGS := $(shell pkg-config --static --libs openssl)
 else
 dipitvhead_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 endif
+endif
+
+ifeq ($(HAVE_TLS),yes)
+dipitvhead_TLS_SRC := src/lib/net/tls.c
 else
 dipitvhead_TLS_SRC := src/lib/net/tls_stub.c
+ifneq ($(TLS),no)
 $(warning dipitvhead: OpenSSL not found via pkg-config, building without HTTPS support)
+endif
 endif
 
 ifeq ($(HAVE_OPENSSL),yes)
@@ -177,12 +208,20 @@ endif
 
 HAVE_DVBCSA := $(shell printf '#include <dvbcsa/dvbcsa.h>\nint main(void){return 0;}\n' | $(CC) -xc - -ldvbcsa -o /dev/null >/dev/null 2>&1 && echo yes)
 
-ifeq ($(HAVE_DVBCSA),yes)
+ifeq ($(CSA2),no)
+HAVE_CSA2 := no
+else
+HAVE_CSA2 := $(HAVE_DVBCSA)
+endif
+
+ifeq ($(HAVE_CSA2),yes)
 dipitvhead_CSA2_SRC := src/lib/scrambler/csa2.c
 dipitvhead_CSA2_EXTRA_LDFLAGS := -ldvbcsa
 else
 dipitvhead_CSA2_SRC := src/lib/scrambler/csa2_stub.c
+ifneq ($(CSA2),no)
 $(warning dipitvhead: libdvbcsa not found (no pkg-config file, probed directly), building without CSA2 support)
+endif
 endif
 
 dipitvhead_EXTRA_LDFLAGS += $(dipitvhead_CSA2_EXTRA_LDFLAGS)
@@ -208,6 +247,8 @@ dipitvhead_SRCS := \
 	src/lib/log.c \
 	src/lib/signal.c \
 	src/lib/net/multicast.c \
+	src/lib/net/udpxy.c \
+	src/lib/net/tssource.c \
 	$(dipitvhead_TLS_SRC) \
 	src/lib/net/httpclient.c \
 	src/lib/demux/crc32.c \
@@ -249,6 +290,75 @@ else
 $(warning dipifccret: libpcap not found via pkg-config, skipping this tool entirely (not an optional-feature degrade, capture is its whole purpose))
 endif
 
+ifeq ($(HAVE_OPENSSL),yes)
+TOOLS += dipicam378
+dipicam378_EXTRA_CFLAGS := -pthread $(shell pkg-config --cflags openssl)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipicam378_EXTRA_LDFLAGS := -pthread $(shell pkg-config --static --libs openssl)
+else
+dipicam378_EXTRA_LDFLAGS := -pthread $(shell pkg-config --libs openssl)
+endif
+dipicam378_SRCS := \
+	src/dipicam378/main.c \
+	src/dipicam378/args.c \
+	src/dipicam378/cs378x.c \
+	src/dipicam378/crypto.c \
+	src/dipicam378/device.c \
+	src/lib/log.c \
+	src/lib/signal.c
+else
+$(warning dipicam378: OpenSSL not found via pkg-config, skipping this tool entirely (RSA/AES crypto is its whole purpose))
+endif
+
+ifeq ($(HAVE_OPENSSL),yes)
+TOOLS += dipidescramble
+dipidescramble_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipidescramble_EXTRA_LDFLAGS := $(shell pkg-config --static --libs openssl)
+else
+dipidescramble_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+endif
+
+ifeq ($(HAVE_CSA2),yes)
+dipidescramble_CSA2_SRC := src/lib/scrambler/csa2.c
+dipidescramble_EXTRA_LDFLAGS += -ldvbcsa
+else
+dipidescramble_CSA2_SRC := src/lib/scrambler/csa2_stub.c
+ifneq ($(CSA2),no)
+$(warning dipidescramble: libdvbcsa not found (no pkg-config file, probed directly), building without CSA2 support)
+endif
+endif
+
+dipidescramble_SRCS := \
+	src/dipidescramble/main.c \
+	src/dipidescramble/args.c \
+	src/dipidescramble/crypto.c \
+	src/dipidescramble/device.c \
+	src/dipidescramble/emmcache.c \
+	src/dipidescramble/ipiclient.c \
+	src/dipidescramble/secasm.c \
+	src/lib/log.c \
+	src/lib/signal.c \
+	src/lib/net/multicast.c \
+	src/lib/net/udpxy.c \
+	src/lib/net/tssource.c \
+	src/lib/net/tls.c \
+	src/lib/net/httpclient.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/psi.c \
+	src/lib/demux/rtp.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/pes.c \
+	src/lib/mux/ebml.c \
+	src/lib/mux/mkv.c \
+	src/lib/mux/teletext.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa.c \
+	$(dipidescramble_CSA2_SRC)
+else
+$(warning dipidescramble: OpenSSL not found via pkg-config, skipping this tool entirely (RSA/AES crypto is its whole purpose))
+endif
+
 ALL_OBJS :=
 
 define TOOL_template
@@ -263,6 +373,7 @@ $(foreach t,$(TOOLS),$(eval $(call TOOL_template,$(t))))
 
 UNIT_TESTS := lib_demux_crc32 lib_demux_psi lib_demux_bitreader lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
 	lib_mux_psi_build lib_mux_rtpheader lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
+	lib_mux_ebml lib_mux_teletext lib_mux_mkv \
 	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec \
 	lib_xml_util lib_tva_timefmt lib_tva_epg_doc lib_tva_mapping lib_tva_xmltv lib_tva_tva_xml \
 	lib_bim_fragment lib_bim_accessunit \
@@ -271,7 +382,7 @@ UNIT_TESTS := lib_demux_crc32 lib_demux_psi lib_demux_bitreader lib_demux_rtp li
 	dipiradiohead_psi dipiradiohead_pes dipiradiohead_tspacketizer \
 	dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_cadescbuild dipitvhead_bitrate dipitvhead_remux \
 	dipitvhead_simulcrypt_msg dipitvhead_ecmg_client dipitvhead_emmg_server dipitvhead_cas \
-	dipirec_ebml dipirec_ts_filter dipirec_teletext dipirec_mkv \
+	dipirec_ts_filter \
 	dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_ret
 
 ifeq ($(HAVE_OPENSSL),yes)
@@ -289,7 +400,7 @@ else
 $(warning tests: OpenSSL not found via pkg-config, skipping lib_scrambler_cissa unit test)
 endif
 
-ifeq ($(HAVE_DVBCSA),yes)
+ifeq ($(HAVE_CSA2),yes)
 UNIT_TESTS += lib_scrambler_csa2
 lib_scrambler_csa2_BIN := tests/unit/lib/scrambler/test_csa2
 lib_scrambler_csa2_SRCS := \
@@ -300,8 +411,66 @@ lib_scrambler_csa2_SRCS := \
 	src/lib/log.c
 lib_scrambler_csa2_EXTRA_LDFLAGS := -ldvbcsa
 else
+ifneq ($(CSA2),no)
 $(warning tests: libdvbcsa not found, skipping lib_scrambler_csa2 unit test)
 endif
+endif
+
+ifeq ($(HAVE_OPENSSL),yes)
+UNIT_TESTS += dipicam378_crypto
+dipicam378_crypto_BIN := tests/unit/dipicam378/test_crypto
+dipicam378_crypto_SRCS := \
+	tests/unit/dipicam378/test_crypto.c \
+	src/dipicam378/crypto.c
+dipicam378_crypto_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+dipicam378_crypto_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += dipicam378_device
+dipicam378_device_BIN := tests/unit/dipicam378/test_device
+dipicam378_device_SRCS := \
+	tests/unit/dipicam378/test_device.c \
+	src/dipicam378/device.c \
+	src/dipicam378/crypto.c \
+	src/lib/log.c
+dipicam378_device_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+dipicam378_device_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += dipicam378_cs378x
+dipicam378_cs378x_BIN := tests/unit/dipicam378/test_cs378x
+dipicam378_cs378x_SRCS := \
+	tests/unit/dipicam378/test_cs378x.c \
+	src/dipicam378/cs378x.c \
+	src/lib/log.c \
+	src/lib/signal.c
+dipicam378_cs378x_EXTRA_CFLAGS := -pthread $(shell pkg-config --cflags openssl)
+dipicam378_cs378x_EXTRA_LDFLAGS := -pthread $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += dipidescramble_crypto
+dipidescramble_crypto_BIN := tests/unit/dipidescramble/test_crypto
+dipidescramble_crypto_SRCS := \
+	tests/unit/dipidescramble/test_crypto.c \
+	src/dipidescramble/crypto.c
+dipidescramble_crypto_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+dipidescramble_crypto_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += dipidescramble_device
+dipidescramble_device_BIN := tests/unit/dipidescramble/test_device
+dipidescramble_device_SRCS := \
+	tests/unit/dipidescramble/test_device.c \
+	src/dipidescramble/device.c \
+	src/dipidescramble/crypto.c \
+	src/lib/log.c
+dipidescramble_device_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+dipidescramble_device_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+else
+$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device unit tests)
+endif
+
+UNIT_TESTS += dipidescramble_secasm
+dipidescramble_secasm_BIN := tests/unit/dipidescramble/test_secasm
+dipidescramble_secasm_SRCS := \
+	tests/unit/dipidescramble/test_secasm.c \
+	src/dipidescramble/secasm.c
 
 lib_demux_crc32_BIN := tests/unit/lib/demux/test_crc32
 lib_demux_crc32_SRCS := \
@@ -370,6 +539,28 @@ lib_mux_tspacket_write_BIN := tests/unit/lib/mux/test_tspacket_write
 lib_mux_tspacket_write_SRCS := \
 	tests/unit/lib/mux/test_tspacket_write.c \
 	src/lib/mux/tspacket_write.c
+
+lib_mux_ebml_BIN := tests/unit/lib/mux/test_ebml
+lib_mux_ebml_SRCS := \
+	tests/unit/lib/mux/test_ebml.c \
+	src/lib/mux/ebml.c
+
+lib_mux_teletext_BIN := tests/unit/lib/mux/test_teletext
+lib_mux_teletext_SRCS := \
+	tests/unit/lib/mux/test_teletext.c \
+	src/lib/mux/teletext.c
+
+lib_mux_mkv_BIN := tests/unit/lib/mux/test_mkv
+lib_mux_mkv_SRCS := \
+	tests/unit/lib/mux/test_mkv.c \
+	src/lib/mux/mkv.c \
+	src/lib/mux/ebml.c \
+	src/lib/mux/teletext.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/pes.c \
+	src/lib/demux/psi.c \
+	src/lib/demux/crc32.c \
+	src/lib/log.c
 
 lib_bim_bitwriter_BIN := tests/unit/lib/bim/test_bitwriter
 lib_bim_bitwriter_SRCS := \
@@ -621,35 +812,12 @@ dipitvhead_cas_SRCS := \
 	src/lib/log.c \
 	src/lib/signal.c
 
-dipirec_ebml_BIN := tests/unit/dipirec/test_ebml
-dipirec_ebml_SRCS := \
-	tests/unit/dipirec/test_ebml.c \
-	src/dipirec/mux/ebml.c
-
 dipirec_ts_filter_BIN := tests/unit/dipirec/test_ts_filter
 dipirec_ts_filter_SRCS := \
 	tests/unit/dipirec/test_ts_filter.c \
 	src/dipirec/filter/ts.c \
 	src/lib/demux/psi.c \
 	src/lib/demux/crc32.c
-
-dipirec_teletext_BIN := tests/unit/dipirec/test_teletext
-dipirec_teletext_SRCS := \
-	tests/unit/dipirec/test_teletext.c \
-	src/dipirec/mux/teletext.c
-
-dipirec_mkv_BIN := tests/unit/dipirec/test_mkv
-dipirec_mkv_SRCS := \
-	tests/unit/dipirec/test_mkv.c \
-	src/dipirec/mux/mkv.c \
-	src/dipirec/mux/ebml.c \
-	src/dipirec/mux/teletext.c \
-	src/dipirec/args.c \
-	src/lib/mux/psi_build.c \
-	src/lib/demux/pes.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/crc32.c \
-	src/lib/log.c
 
 dipifccret_channel_BIN := tests/unit/dipifccret/test_channel
 dipifccret_channel_SRCS := \

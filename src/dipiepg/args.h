@@ -10,9 +10,9 @@ typedef enum { MODE_ANNOUNCE, MODE_LISTEN } epg_mode_t;
 
 typedef struct {
   epg_mode_t mode;
-  const char *input_path;  /* -i, announce: xmltv source */
-  const char *map_path;    /* -M, announce: xmltv id -> uri,tsid,onid,sid csv */
-  long window_hours;       /* -w, announce: only include events starting within this, default 24 */
+  const char *input_path;   /* -i, announce: xmltv source */
+  const char *map_path;     /* -M, announce: xmltv id -> uri,tsid,onid,sid csv */
+  long window_hours;        /* -w, announce: only include events starting within this, default 24 */
   int family;               /* AF_INET or AF_INET6, from -m group */
   char mcast_group[64];     /* -m group */
   unsigned mcast_port;      /* -m port */

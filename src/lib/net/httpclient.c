@@ -204,6 +204,8 @@ const char *http_header(const http_t *h, const char *name) {
 
 const http_url_t *http_final_url(const http_t *h) { return &h->url; }
 
+int http_status(const http_t *h) { return h->status; }
+
 static int resolve_location(http_url_t *u, const char *loc) {
   if (!strncmp(loc, "http://", 7) || !strncmp(loc, "https://", 8))
     return http_url_parse(loc, u);
@@ -216,10 +218,10 @@ static int resolve_location(http_url_t *u, const char *loc) {
   return -1;
 }
 
-static struct http *fetch_once(const http_url_t *url, const char *user_agent, int insecure) {
+static struct http *fetch_once(const http_url_t *url, const char *user_agent, int insecure, const char *extra_header) {
   struct http *h = calloc(1, sizeof *h);
   struct timeval tv = {5, 0};
-  char req[1200];
+  char req[2048], hdrline[512] = "";
   int rl;
   size_t got = 0;
   char *term;
@@ -242,6 +244,8 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
     }
   }
 
+  if (extra_header)
+    snprintf(hdrline, sizeof hdrline, "%s\r\n", extra_header);
   {
     char hostport[300];
     unsigned default_port = h->url.tls ? 443 : 80;
@@ -249,7 +253,7 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
       snprintf(hostport, sizeof hostport, "%s", h->url.host);
     else
       snprintf(hostport, sizeof hostport, "%s:%u", h->url.host, h->url.port);
-    rl = snprintf(req, sizeof req, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nIcy-MetaData: 1\r\nConnection: close\r\n\r\n", h->url.path, hostport, user_agent);
+    rl = snprintf(req, sizeof req, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nIcy-MetaData: 1\r\n%sConnection: close\r\n\r\n", h->url.path, hostport, user_agent, hdrline);
   }
   if (rl < 0 || rl >= (int)sizeof req) {
     log_line("http request too long");
@@ -306,13 +310,13 @@ fail:
   return NULL;
 }
 
-http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure) {
+http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure, const char *extra_header) {
   http_url_t url = *url_in;
   int redirects;
   const char *ua = user_agent ? user_agent : "dvbipitools";
 
   for (redirects = 0; redirects <= HTTP_REDIRECT_MAX; redirects++) {
-    struct http *h = fetch_once(&url, ua, insecure);
+    struct http *h = fetch_once(&url, ua, insecure, extra_header);
     if (!h)
       return NULL;
     if ((h->status == 301 || h->status == 302 || h->status == 303 || h->status == 307 || h->status == 308) && redirects < HTTP_REDIRECT_MAX) {
@@ -327,6 +331,8 @@ http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure)
       url = next;
       continue;
     }
+    if (h->status == 304)
+      return h; /* not-modified: caller checks http_status(), body is empty */
     if (h->status < 200 || h->status >= 300) {
       log_line("http %d fetching %s%s", h->status, h->url.host, h->url.path);
       http_close(h);

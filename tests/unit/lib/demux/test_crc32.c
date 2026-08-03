@@ -6,6 +6,13 @@
 
 #include "lib/demux/crc32.h"
 
+/* internal backends, not part of the public API - declared here to cross
+ * check them directly against each other and against known vectors. */
+extern uint32_t crc32_mpeg_generic(const unsigned char *data, size_t len);
+#if defined(__x86_64__) || defined(__i386__)
+extern uint32_t crc32_mpeg_pclmul(const unsigned char *data, size_t len);
+#endif
+
 START_TEST(crc32_empty_input) {
   ck_assert_uint_eq(crc32_mpeg((const unsigned char *)"", 0), 0xFFFFFFFFu);
 }
@@ -30,12 +37,31 @@ START_TEST(crc32_appended_own_crc_is_zero) {
 }
 END_TEST
 
+START_TEST(crc32_backends_agree) {
+  unsigned char buf[4099];
+  int trial;
+  for (trial = 0; trial < 20000; trial++) {
+    size_t len = (size_t)(rand() % (int)(sizeof buf));
+    size_t i;
+    for (i = 0; i < len; i++)
+      buf[i] = (unsigned char)rand();
+    uint32_t pub = crc32_mpeg(buf, len);
+    uint32_t gen = crc32_mpeg_generic(buf, len);
+    ck_assert_uint_eq(pub, gen);
+#if defined(__x86_64__) || defined(__i386__)
+    ck_assert_uint_eq(crc32_mpeg_pclmul(buf, len), gen);
+#endif
+  }
+}
+END_TEST
+
 static Suite *crc32_suite(void) {
   Suite *s = suite_create("crc32");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, crc32_empty_input);
   tcase_add_test(tc, crc32_known_vector);
   tcase_add_test(tc, crc32_appended_own_crc_is_zero);
+  tcase_add_test(tc, crc32_backends_agree);
   suite_add_tcase(s, tc);
   return s;
 }

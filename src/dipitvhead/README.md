@@ -146,13 +146,14 @@ CISSA and CSA2 only - no CSA3. One ECMG connection, one EMMG listener, one Super
 
 ### Dependencies
 
-CAS support is a CMake/configure-time option (`DIPITVHEAD_CAS`, on by default). CISSA needs
-OpenSSL (same dependency as HTTPS input); CSA2 needs libdvbcsa (`DIPITVHEAD_CSA2` /
-`HAVE_DVBCSA`) - missing either degrades gracefully to "that algorithm unavailable", not a
-build failure.
+CAS support is a CMake/configure-time option (`DIPITVHEAD_CAS`, on by default). 
+* CISSA needs OpenSSL (same dependency as HTTPS input)
+* CSA2 needs libdvbcsa (`DIPITVHEAD_CSA2` / `HAVE_DVBCSA`). 
 
-Release builds and the packaged `.deb` in this repository do not contain libdvbcsa. Build
-against it yourself if you want CSA2.
+Missing either degrades gracefully to "that algorithm unavailable", not a build failure.
+
+Release builds and the packaged `.deb` in this repository do not contain libdvbcsa. 
+Build against it yourself if you want CSA2.
 
 
 ## Stopping

@@ -75,6 +75,7 @@ void psi_select_pmt_pid(psi_t *c, unsigned pmt_pid);
 int psi_have_pat(const psi_t *c);
 int psi_have_pmt(const psi_t *c);
 int psi_have_sdt(const psi_t *c);
+int psi_have_cat(const psi_t *c);
 int psi_ready(const psi_t *c); /* pat + pmt seen */
 
 /* every program the PAT listed (network_pid entry excluded), valid once psi_have_pat() */
@@ -86,6 +87,16 @@ unsigned psi_pcr_pid(const psi_t *c);
 unsigned psi_nit_pid(const psi_t *c);
 unsigned psi_transport_stream_id(const psi_t *c);
 unsigned psi_original_network_id(const psi_t *c);
+
+/* CAT's first CA_descriptor (single-CAS assumption): EMM pid / ca_system_id, 0 if none
+   seen yet or the CAT carried no CA_descriptor */
+unsigned psi_emm_pid(const psi_t *c);
+unsigned psi_ca_system_id(const psi_t *c);
+
+/* PMT program_info's scrambling_descriptor (ETSI TS 103 127 clause 7) mode byte,
+   0 if no PMT seen yet or it carried none. Common values: 0x02 CSA2, 0x10 CISSA -
+   this header doesn't define those, they're not PSI/SI, just where the byte lives */
+unsigned char psi_scrambling_mode(const psi_t *c);
 
 const psi_es_t *psi_es(const psi_t *c, int *count);
 int psi_audio_count(const psi_t *c);

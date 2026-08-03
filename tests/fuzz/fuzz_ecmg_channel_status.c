@@ -40,9 +40,7 @@ int main(int argc, char **argv) {
   }
   n = fread(buf, 1, (size_t)len, f);
   fclose(f);
-
   ecmg_parse_channel_status(buf, n, &lead_cw, &cw_per_msg, &max_comp_time_ms, &min_cp_100ms, &ecm_rep_period_ms);
-
   free(buf);
   return 0;
 }

@@ -1,8 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-/* AFL++ harness: feeds file argv[1] to rtcp_parse(). Build with
- * afl-cc/afl-clang-fast for instrumentation. */
+/* AFL++ harness: feeds file argv[1] to rtcp_parse(). Build with afl-cc/afl-clang-fast for instrumentation. */
 
 #include <stdio.h>
 #include <stdlib.h>

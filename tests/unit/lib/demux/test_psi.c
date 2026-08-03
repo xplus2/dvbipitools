@@ -84,6 +84,108 @@ static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid,
   return crc_at + 4;
 }
 
+/* builds a one-program, zero-ES PMT section with a scrambling_descriptor (tag 0x65,
+ * one mode byte) in program_info, CRC included, returns length. mode == 0: omit the
+ * descriptor entirely (program_info_length = 0) */
+static size_t build_pmt_with_scrambling(unsigned char *out, unsigned prog_num, unsigned pcr_pid, unsigned char mode) {
+  unsigned char body[32];
+  size_t n = 0, hdr, crc_at;
+  uint32_t crc;
+
+  body[n++] = (unsigned char)(prog_num >> 8);
+  body[n++] = (unsigned char)prog_num;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = (unsigned char)(0xE0 | ((pcr_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)pcr_pid;
+  if (mode) {
+    body[n++] = 0xF0; /* program_info_length hi nibble + top bits */
+    body[n++] = 0x03;
+    body[n++] = 0x65; /* scrambling_descriptor tag */
+    body[n++] = 0x01; /* descriptor_length */
+    body[n++] = mode;
+  } else {
+    body[n++] = 0xF0; /* program_info_length = 0 */
+    body[n++] = 0x00;
+  }
+
+  hdr = n + 4;
+  out[0] = 0x02;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
+/* builds a CAT section (table_id 0x01) with one CA_descriptor (tag 0x09,
+ * ca_system_id + ca_pid, no private data), CRC included, returns length */
+static size_t build_cat(unsigned char *out, unsigned ca_system_id, unsigned emm_pid) {
+  unsigned char body[16];
+  size_t n = 0, hdr, crc_at;
+  uint32_t crc;
+
+  body[n++] = 0xFF; /* reserved */
+  body[n++] = 0xFF; /* reserved */
+  body[n++] = 0xC1; /* reserved + version 0 + current_next_indicator */
+  body[n++] = 0x00; /* section_number */
+  body[n++] = 0x00; /* last_section_number */
+  body[n++] = 0x09; /* CA_descriptor tag */
+  body[n++] = 0x04; /* descriptor_length */
+  body[n++] = (unsigned char)(ca_system_id >> 8);
+  body[n++] = (unsigned char)ca_system_id;
+  body[n++] = (unsigned char)(0xE0 | ((emm_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)emm_pid;
+
+  hdr = n + 4;
+  out[0] = 0x01;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
+/* builds a CAT section with no descriptors at all, CRC included, returns length */
+static size_t build_cat_empty(unsigned char *out) {
+  unsigned char body[8];
+  size_t n = 0, hdr, crc_at;
+  uint32_t crc;
+
+  body[n++] = 0xFF;
+  body[n++] = 0xFF;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+
+  hdr = n + 4;
+  out[0] = 0x01;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
 /* wraps one PSI section (pusi=1, pointer_field=0) into a single 188-byte TS packet */
 static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, unsigned char cc,
                             const unsigned char *section, size_t slen) {
@@ -176,12 +278,106 @@ START_TEST(psi_ignores_pointer_field_beyond_payload) {
 }
 END_TEST
 
+START_TEST(psi_parses_cat_ca_descriptor) {
+  psi_t *p = psi_new();
+  unsigned char section[64], pkt[188];
+  size_t slen;
+
+  slen = build_cat(section, 0x0B75, 0x0021);
+  wrap_ts_packet(pkt, 0x0001, 0, section, slen);
+  psi_feed(p, pkt);
+
+  ck_assert_int_eq(psi_have_cat(p), 1);
+  ck_assert_uint_eq(psi_ca_system_id(p), 0x0B75u);
+  ck_assert_uint_eq(psi_emm_pid(p), 0x0021u);
+  ck_assert_int_eq(psi_classify(p, 0x0001), PID_CAT);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_cat_with_no_ca_descriptor_leaves_emm_pid_zero) {
+  psi_t *p = psi_new();
+  unsigned char section[64], pkt[188];
+  size_t slen = build_cat_empty(section);
+
+  wrap_ts_packet(pkt, 0x0001, 0, section, slen);
+  psi_feed(p, pkt);
+
+  ck_assert_int_eq(psi_have_cat(p), 1);
+  ck_assert_uint_eq(psi_ca_system_id(p), 0u);
+  ck_assert_uint_eq(psi_emm_pid(p), 0u);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_rejects_cat_with_bad_crc) {
+  psi_t *p = psi_new();
+  unsigned char section[64], pkt[188];
+  size_t slen = build_cat(section, 0x0B75, 0x0021);
+  section[slen - 1] ^= 0xFF; /* corrupt the CRC */
+  wrap_ts_packet(pkt, 0x0001, 0, section, slen);
+
+  psi_feed(p, pkt);
+
+  ck_assert_int_eq(psi_have_cat(p), 0);
+  ck_assert_uint_eq(psi_emm_pid(p), 0u);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_parses_pmt_scrambling_descriptor) {
+  psi_t *p = psi_new();
+  unsigned char section[64], pkt[188];
+  size_t slen;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pmt_with_scrambling(section, 1, 0x0101, 0x02); /* CSA2 */
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  ck_assert_int_eq(psi_ready(p), 1);
+  ck_assert_uint_eq(psi_scrambling_mode(p), 0x02u);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_pmt_with_no_scrambling_descriptor_leaves_mode_zero) {
+  psi_t *p = psi_new();
+  unsigned char section[64], pkt[188];
+  size_t slen;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pmt_with_scrambling(section, 1, 0x0101, 0x00); /* no descriptor */
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  ck_assert_int_eq(psi_ready(p), 1);
+  ck_assert_uint_eq(psi_scrambling_mode(p), 0u);
+
+  psi_free(p);
+}
+END_TEST
+
 static Suite *psi_suite(void) {
   Suite *s = suite_create("psi");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, psi_parses_pat_and_pmt);
   tcase_add_test(tc, psi_rejects_pat_with_bad_crc);
   tcase_add_test(tc, psi_ignores_pointer_field_beyond_payload);
+  tcase_add_test(tc, psi_parses_cat_ca_descriptor);
+  tcase_add_test(tc, psi_cat_with_no_ca_descriptor_leaves_emm_pid_zero);
+  tcase_add_test(tc, psi_rejects_cat_with_bad_crc);
+  tcase_add_test(tc, psi_parses_pmt_scrambling_descriptor);
+  tcase_add_test(tc, psi_pmt_with_no_scrambling_descriptor_leaves_mode_zero);
   suite_add_tcase(s, tc);
   return s;
 }
