@@ -117,6 +117,7 @@ static uint32_t crc32_mpeg_bitrev32(uint32_t x) {
   return x;
 }
 
+__attribute__((target("+crc")))
 static uint32_t crc32_mpeg_armcrc(const unsigned char *data, size_t len) {
   uint32_t crc = 0xFFFFFFFFu;
   size_t i;
