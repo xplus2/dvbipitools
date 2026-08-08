@@ -51,7 +51,20 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
   store_slot_t *slot;
   int restarted;
 
-  if (len > METRICS_MAX_SNAPSHOT_BYTES || metrics_reader_init(&r, buf, len, &hdr)) {
+  if (len > METRICS_MAX_SNAPSHOT_BYTES) {
+    st->stats.snapshots_rejected_malformed++;
+    if (verbose)
+      log_line("dipimetrics: rejected malformed snapshot (%zu bytes)", len);
+    return;
+  }
+  if (len >= 1 && buf[0] != METRICS_PROTO_VERSION) {
+    st->stats.snapshots_rejected_version++;
+    if (verbose)
+      log_line("dipimetrics: rejected snapshot with unsupported protocol version %u", (unsigned)buf[0]);
+    return;
+  }
+  if (metrics_reader_init(&r, buf, len, &hdr)) {
+    st->stats.snapshots_rejected_malformed++;
     if (verbose)
       log_line("dipimetrics: rejected malformed snapshot (%zu bytes)", len);
     return;
@@ -60,6 +73,7 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
   slot = find_slot(st, hdr.component, hdr.metrics_id);
   restarted = slot && hdr.process_start_time != slot->process_start_time;
   if (slot && !restarted && hdr.sequence <= slot->sequence) {
+    st->stats.snapshots_rejected_stale++;
     if (verbose)
       log_line("dipimetrics: dropped stale snapshot for %s/%s (seq %llu <= %llu)", metrics_component_name(hdr.component), hdr.metrics_id,
                 (unsigned long long)hdr.sequence, (unsigned long long)slot->sequence);
@@ -68,6 +82,7 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
   if (!slot) {
     slot = find_free_slot(st);
     if (!slot) {
+      st->stats.snapshots_rejected_full++;
       if (verbose)
         log_line("dipimetrics: dropped snapshot from new instance %s/%s, store full (%d slots)", metrics_component_name(hdr.component), hdr.metrics_id,
                   STORE_MAX_INSTANCES);
@@ -83,6 +98,7 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
   slot->snapshot_time = hdr.snapshot_time;
   slot->received_mono = now_mono;
   slot->entry_count = 0;
+  st->stats.snapshots_received_total++;
 
   for (;;) {
     metrics_id_t id;

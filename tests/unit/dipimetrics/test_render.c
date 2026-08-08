@@ -28,14 +28,20 @@ static void add_entry(store_slot_t *s, metrics_id_t id, const char *label, uint6
   e->value = value;
 }
 
-START_TEST(empty_store_renders_only_eof) {
+START_TEST(empty_store_renders_only_self_metrics) {
   store_t st;
   char *out;
   size_t len;
   memset(&st, 0, sizeof st);
 
   render_openmetrics(&st, 0.0, &out, &len);
-  ck_assert_str_eq(out, "# EOF\n");
+  ck_assert(strstr(out, "dvbipi_metrics_instances 0") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_snapshots_received_total 0") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_snapshots_rejected_total{reason=\"malformed\"} 0") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_http_requests_total{status=\"200\"} 0") != NULL);
+  /* no exporter-supplied family should appear with nothing tracked */
+  ck_assert(strstr(out, "dvbipi_sds_services") == NULL);
+  ck_assert(strstr(out, "# EOF\n") != NULL);
   free(out);
 }
 END_TEST
@@ -52,7 +58,7 @@ START_TEST(family_present_only_with_live_samples) {
 
   render_openmetrics(&st, 10.0, &out, &len);
   ck_assert(strstr(out, "# TYPE dvbipi_sds_services gauge") != NULL);
-  ck_assert(strstr(out, "dvbipi_sds_services{component=\"sds\",instance=\"inst1\"} 3") != NULL);
+  ck_assert(strstr(out, "dvbipi_sds_services{component=\"sds\",headend_id=\"inst1\"} 3") != NULL);
   /* a family with zero live samples must not appear at all */
   ck_assert(strstr(out, "dvbipi_sds_service_providers") == NULL);
   free(out);
@@ -95,7 +101,7 @@ START_TEST(composite_input_reason_label_is_split) {
 }
 END_TEST
 
-START_TEST(instance_label_is_escaped) {
+START_TEST(headend_id_label_is_escaped) {
   store_t st;
   store_slot_t *s;
   char *out;
@@ -106,7 +112,7 @@ START_TEST(instance_label_is_escaped) {
   add_entry(s, METRICS_ID_SDS_SERVICES, NULL, 1);
 
   render_openmetrics(&st, 10.0, &out, &len);
-  ck_assert(strstr(out, "instance=\"weird\\\"name\\\\x\"") != NULL);
+  ck_assert(strstr(out, "headend_id=\"weird\\\"name\\\\x\"") != NULL);
   free(out);
 }
 END_TEST
@@ -123,7 +129,7 @@ START_TEST(snapshot_age_reflects_now_minus_received) {
 
   render_openmetrics(&st, 12.5, &out, &len);
   ck_assert(strstr(out, "# TYPE dvbipi_metrics_snapshot_age_seconds gauge") != NULL);
-  ck_assert(strstr(out, "dvbipi_metrics_snapshot_age_seconds{component=\"sds\",instance=\"inst1\"} 7.500") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_snapshot_age_seconds{component=\"sds\",headend_id=\"inst1\"} 7.500") != NULL);
   free(out);
 }
 END_TEST
@@ -145,16 +151,46 @@ START_TEST(output_ends_with_eof_marker) {
 }
 END_TEST
 
+START_TEST(self_metrics_reflect_stats_and_instance_count) {
+  store_t st;
+  char *out;
+  size_t len;
+  memset(&st, 0, sizeof st);
+
+  st.slots[0].used = 1;
+  st.slots[1].used = 1;
+  st.stats.snapshots_received_total = 7;
+  st.stats.snapshots_rejected_malformed = 1;
+  st.stats.snapshots_rejected_stale = 2;
+  st.stats.snapshots_rejected_full = 3;
+  st.stats.snapshots_rejected_version = 4;
+  st.stats.http_requests_200 = 9;
+  st.stats.http_requests_404 = 5;
+
+  render_openmetrics(&st, 0.0, &out, &len);
+  ck_assert(strstr(out, "dvbipi_metrics_instances 2") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_snapshots_received_total 7") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_snapshots_rejected_total{reason=\"malformed\"} 1") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_snapshots_rejected_total{reason=\"stale\"} 2") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_snapshots_rejected_total{reason=\"full\"} 3") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_snapshots_rejected_total{reason=\"version\"} 4") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_http_requests_total{status=\"200\"} 9") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_http_requests_total{status=\"404\"} 5") != NULL);
+  free(out);
+}
+END_TEST
+
 static Suite *render_suite(void) {
   Suite *s = suite_create("dipimetrics_render");
   TCase *tc = tcase_create("core");
-  tcase_add_test(tc, empty_store_renders_only_eof);
+  tcase_add_test(tc, empty_store_renders_only_self_metrics);
   tcase_add_test(tc, family_present_only_with_live_samples);
   tcase_add_test(tc, headend_info_uses_version_label_and_info_type);
   tcase_add_test(tc, composite_input_reason_label_is_split);
-  tcase_add_test(tc, instance_label_is_escaped);
+  tcase_add_test(tc, headend_id_label_is_escaped);
   tcase_add_test(tc, snapshot_age_reflects_now_minus_received);
   tcase_add_test(tc, output_ends_with_eof_marker);
+  tcase_add_test(tc, self_metrics_reflect_stats_and_instance_count);
   suite_add_tcase(s, tc);
   return s;
 }

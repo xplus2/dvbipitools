@@ -53,17 +53,21 @@ START_TEST(valid_snapshot_creates_slot) {
   ck_assert_int_eq(slot->entries[0].id, METRICS_ID_SDS_SERVICES);
   ck_assert_uint_eq(slot->entries[0].value, 5u);
   ck_assert(slot->received_mono == 10.0);
+  ck_assert_uint_eq(st.stats.snapshots_received_total, 1u);
 }
 END_TEST
 
 START_TEST(malformed_datagram_creates_no_slot) {
   store_t st;
   unsigned char garbage[20];
-  memset(garbage, 0xAA, sizeof garbage);
+  memset(garbage, 0, sizeof garbage);
+  garbage[0] = METRICS_PROTO_VERSION; /* correct version, but too short to be a real header */
 
   store_init(&st);
   store_ingest(&st, garbage, sizeof garbage, 1.0, 0);
   ck_assert_ptr_null(only_used_slot(&st));
+  ck_assert_uint_eq(st.stats.snapshots_rejected_malformed, 1u);
+  ck_assert_uint_eq(st.stats.snapshots_received_total, 0u);
 }
 END_TEST
 
@@ -75,6 +79,21 @@ START_TEST(oversized_datagram_rejected) {
   store_init(&st);
   store_ingest(&st, buf, sizeof buf, 1.0, 0);
   ck_assert_ptr_null(only_used_slot(&st));
+  ck_assert_uint_eq(st.stats.snapshots_rejected_malformed, 1u);
+}
+END_TEST
+
+START_TEST(unsupported_version_is_rejected) {
+  store_t st;
+  unsigned char buf[METRICS_MAX_SNAPSHOT_BYTES];
+  size_t len = build_snapshot(buf, METRICS_COMPONENT_SDS, "inst1", 100, 1, 5);
+  buf[0] = METRICS_PROTO_VERSION + 1;
+
+  store_init(&st);
+  store_ingest(&st, buf, len, 1.0, 0);
+  ck_assert_ptr_null(only_used_slot(&st));
+  ck_assert_uint_eq(st.stats.snapshots_rejected_version, 1u);
+  ck_assert_uint_eq(st.stats.snapshots_received_total, 0u);
 }
 END_TEST
 
@@ -95,6 +114,7 @@ START_TEST(stale_sequence_is_dropped) {
   ck_assert_uint_eq(slot->sequence, 5u); /* the stale seq=3 update never applied */
   ck_assert_uint_eq(slot->entries[0].value, 1u);
   ck_assert(slot->received_mono == 10.0); /* not bumped by the rejected datagram */
+  ck_assert_uint_eq(st.stats.snapshots_rejected_stale, 1u);
 }
 END_TEST
 
@@ -185,6 +205,7 @@ START_TEST(store_full_drops_new_instance) {
     }
   }
   ck_assert_int_eq(used, STORE_MAX_INSTANCES);
+  ck_assert_uint_eq(st.stats.snapshots_rejected_full, 1u);
 }
 END_TEST
 
@@ -220,6 +241,7 @@ static Suite *store_suite(void) {
   tcase_add_test(tc, valid_snapshot_creates_slot);
   tcase_add_test(tc, malformed_datagram_creates_no_slot);
   tcase_add_test(tc, oversized_datagram_rejected);
+  tcase_add_test(tc, unsupported_version_is_rejected);
   tcase_add_test(tc, stale_sequence_is_dropped);
   tcase_add_test(tc, equal_sequence_is_dropped);
   tcase_add_test(tc, process_restart_accepted_despite_lower_sequence);

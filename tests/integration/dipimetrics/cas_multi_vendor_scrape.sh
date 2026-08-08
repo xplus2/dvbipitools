@@ -63,17 +63,17 @@ code=$(curl -s -o "$body" -w "%{http_code}" "http://127.0.0.1:$HTTPPORT/metrics"
 kill $TVPID $ECMG_A_PID $ECMG_B_PID $MPID 2>/dev/null
 wait $TVPID $ECMG_A_PID $ECMG_B_PID $MPID 2>/dev/null
 
-assert_contains "$body" 'dvbipi_cas_ecmg_connected{component="tvhead",instance="tv-cas-it",cas="0x4a750002"} 1' "vendor A ecmg_connected"
-assert_contains "$body" 'dvbipi_cas_ecmg_connected{component="tvhead",instance="tv-cas-it",cas="0x0d960001"} 1' "vendor B ecmg_connected"
+assert_contains "$body" 'dvbipi_cas_ecmg_connected{component="tvhead",headend_id="tv-cas-it",cas="0x4a750002"} 1' "vendor A ecmg_connected"
+assert_contains "$body" 'dvbipi_cas_ecmg_connected{component="tvhead",headend_id="tv-cas-it",cas="0x0d960001"} 1' "vendor B ecmg_connected"
 
-ecm_a=$(metric_value "$body" 'dvbipi_cas_ecm_total{component="tvhead",instance="tv-cas-it",cas="0x4a750002"}')
+ecm_a=$(metric_value "$body" 'dvbipi_cas_ecm_total{component="tvhead",headend_id="tv-cas-it",cas="0x4a750002"}')
 [ "${ecm_a:-0}" -ge 1 ] || fail "expected at least one ECM generated for vendor A, got '$ecm_a'"
-ecm_b=$(metric_value "$body" 'dvbipi_cas_ecm_total{component="tvhead",instance="tv-cas-it",cas="0x0d960001"}')
+ecm_b=$(metric_value "$body" 'dvbipi_cas_ecm_total{component="tvhead",headend_id="tv-cas-it",cas="0x0d960001"}')
 [ "${ecm_b:-0}" -ge 1 ] || fail "expected at least one ECM generated for vendor B, got '$ecm_b'"
 
 # shared scramble engine counters: one series, no per-vendor label
-assert_contains "$body" 'dvbipi_cas_scrambled_packets_total{component="tvhead",instance="tv-cas-it"} ' "scrambled_packets_total has no cas label"
-assert_not_contains "$body" 'dvbipi_cas_scrambled_packets_total{component="tvhead",instance="tv-cas-it",cas=' "scrambled_packets_total must not be split per-cas"
+assert_contains "$body" 'dvbipi_cas_scrambled_packets_total{component="tvhead",headend_id="tv-cas-it"} ' "scrambled_packets_total has no cas label"
+assert_not_contains "$body" 'dvbipi_cas_scrambled_packets_total{component="tvhead",headend_id="tv-cas-it",cas=' "scrambled_packets_total must not be split per-cas"
 
 echo "OK"
 

@@ -46,16 +46,25 @@ a general-purpose web server. There is no TLS and no authentication.
 
 Output is `application/openmetrics-text`: one `# TYPE`/`# HELP` pair per metric family actually
 present (families with zero live samples are omitted), samples labeled
-`component="tvhead|radiohead|sds|bcg"` and `instance="<the exporter's --metrics-id>"` plus
+`component="tvhead|radiohead|sds|bcg"` and `headend_id="<the exporter's --metrics-id>"` plus
 whatever label the metric itself carries (`reason`, `input`, `table`, `codec`, `transport`,
-`version`). One extra, collector-computed series is added per tracked instance:
+`version`). The label is deliberately not called `instance`: Prometheus assigns its own
+`instance` label per scrape target (the `host:port` of `dipimetrics` itself), which would
+collide with and rename an exporter-supplied `instance` label to `exported_instance`.
+One extra, collector-computed series is added per tracked instance:
 `dvbipi_metrics_snapshot_age_seconds`: seconds since that instance's last accepted snapshot,
 independent of anything the exporter itself reports.
 
+`dipimetrics` also reports on itself, always present regardless of what's currently tracked:
+`dvbipi_metrics_instances` (gauge, exporter instances currently held in the store),
+`dvbipi_metrics_snapshots_received_total` (counter), `dvbipi_metrics_snapshots_rejected_total{reason="malformed|stale|full|version"}`
+(counter, one series per reason) and `dvbipi_metrics_http_requests_total{status="200|404"}`
+(counter, one series per status).
+
 ## Live stats (`-v`)
 
-Logs every rejected/dropped snapshot (malformed, stale sequence, store full) and every `404`, with
-enough detail to diagnose a misbehaving exporter or a stray HTTP client.
+Logs every rejected/dropped snapshot (malformed, unsupported protocol version, stale sequence, store full)
+and every `404`, with enough detail to diagnose a misbehaving exporter or a stray HTTP client.
 
 ## Signals
 

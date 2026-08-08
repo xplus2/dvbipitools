@@ -64,10 +64,10 @@ body="$WORK/metrics.txt"
 code=$(curl -s -o "$body" -w "%{http_code}" "http://127.0.0.1:$HTTPPORT/metrics")
 [ "$code" = "200" ] || fail "GET /metrics: expected HTTP 200, got $code"
 
-assert_contains "$body" 'dvbipi_headend_info{component="sds",instance="sds-multi",version="' "sds headend_info present"
-assert_contains "$body" 'dvbipi_headend_info{component="bcg",instance="bcg-multi",version="' "bcg headend_info present"
-assert_contains "$body" 'dvbipi_sds_services{component="sds",instance="sds-multi"} 1' "sds services value"
-assert_contains "$body" 'dvbipi_bcg_services{component="bcg",instance="bcg-multi"} 1' "bcg services value"
+assert_contains "$body" 'dvbipi_headend_info{component="sds",headend_id="sds-multi",version="' "sds headend_info present"
+assert_contains "$body" 'dvbipi_headend_info{component="bcg",headend_id="bcg-multi",version="' "bcg headend_info present"
+assert_contains "$body" 'dvbipi_sds_services{component="sds",headend_id="sds-multi"} 1' "sds services value"
+assert_contains "$body" 'dvbipi_bcg_services{component="bcg",headend_id="bcg-multi"} 1' "bcg services value"
 
 # the same family must group both instances' samples together, not interleave
 # with other families - one TYPE/HELP pair for dvbipi_headend_info total

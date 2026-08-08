@@ -56,17 +56,17 @@ body="$WORK/metrics.txt"
 code=$(curl -s -o "$body" -w "%{http_code}" "http://127.0.0.1:$HTTPPORT/metrics")
 [ "$code" = "200" ] || fail "GET /metrics: expected HTTP 200, got $code"
 
-assert_contains "$body" 'dvbipi_bcg_sources_configured{component="bcg",instance="bcg-it"} 1' "sources_configured value"
-assert_contains "$body" 'dvbipi_bcg_sources_up{component="bcg",instance="bcg-it"} 1' "sources_up value"
-assert_contains "$body" 'dvbipi_bcg_services{component="bcg",instance="bcg-it"} 1' "services value"
-assert_contains "$body" 'dvbipi_bcg_services_with_events{component="bcg",instance="bcg-it"} 1' "services_with_events value"
-assert_contains "$body" 'dvbipi_bcg_events{component="bcg",instance="bcg-it"} 1' "events value"
-assert_contains "$body" "dvbipi_bcg_schedule_start_time_seconds{component=\"bcg\",instance=\"bcg-it\"} $start_epoch" "schedule_start_time_seconds value"
-assert_contains "$body" "dvbipi_bcg_schedule_end_time_seconds{component=\"bcg\",instance=\"bcg-it\"} $stop_epoch" "schedule_end_time_seconds value"
+assert_contains "$body" 'dvbipi_bcg_sources_configured{component="bcg",headend_id="bcg-it"} 1' "sources_configured value"
+assert_contains "$body" 'dvbipi_bcg_sources_up{component="bcg",headend_id="bcg-it"} 1' "sources_up value"
+assert_contains "$body" 'dvbipi_bcg_services{component="bcg",headend_id="bcg-it"} 1' "services value"
+assert_contains "$body" 'dvbipi_bcg_services_with_events{component="bcg",headend_id="bcg-it"} 1' "services_with_events value"
+assert_contains "$body" 'dvbipi_bcg_events{component="bcg",headend_id="bcg-it"} 1' "events value"
+assert_contains "$body" "dvbipi_bcg_schedule_start_time_seconds{component=\"bcg\",headend_id=\"bcg-it\"} $start_epoch" "schedule_start_time_seconds value"
+assert_contains "$body" "dvbipi_bcg_schedule_end_time_seconds{component=\"bcg\",headend_id=\"bcg-it\"} $stop_epoch" "schedule_end_time_seconds value"
 
-publications=$(metric_value "$body" 'dvbipi_bcg_publications_total{component="bcg",instance="bcg-it"}')
+publications=$(metric_value "$body" 'dvbipi_bcg_publications_total{component="bcg",headend_id="bcg-it"}')
 [ "${publications:-0}" -ge 1 ] || fail "expected at least one published document, got '$publications'"
-doc_errors=$(metric_value "$body" 'dvbipi_bcg_document_errors_total{component="bcg",instance="bcg-it"}')
+doc_errors=$(metric_value "$body" 'dvbipi_bcg_document_errors_total{component="bcg",headend_id="bcg-it"}')
 [ "${doc_errors:-1}" = "0" ] || fail "expected zero document errors, got '$doc_errors'"
 
 kill $BPID 2>/dev/null

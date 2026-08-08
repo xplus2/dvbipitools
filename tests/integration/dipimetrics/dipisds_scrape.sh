@@ -40,14 +40,14 @@ body="$WORK/metrics.txt"
 code=$(curl -s -o "$body" -w "%{http_code}" "http://127.0.0.1:$HTTPPORT/metrics")
 [ "$code" = "200" ] || fail "GET /metrics: expected HTTP 200, got $code"
 
-assert_contains "$body" 'dvbipi_headend_info{component="sds",instance="sds-it",version="' "headend_info present"
-assert_contains "$body" 'dvbipi_sds_service_providers{component="sds",instance="sds-it"} 1' "sds_service_providers value"
-assert_contains "$body" 'dvbipi_sds_services{component="sds",instance="sds-it"} 2' "sds_services value"
-assert_contains "$body" 'dvbipi_sds_announcements_total{component="sds",instance="sds-it",transport="multicast"}' "announcements_total present"
-assert_contains "$body" 'dvbipi_metrics_snapshot_age_seconds{component="sds",instance="sds-it"}' "snapshot_age present"
+assert_contains "$body" 'dvbipi_headend_info{component="sds",headend_id="sds-it",version="' "headend_info present"
+assert_contains "$body" 'dvbipi_sds_service_providers{component="sds",headend_id="sds-it"} 1' "sds_service_providers value"
+assert_contains "$body" 'dvbipi_sds_services{component="sds",headend_id="sds-it"} 2' "sds_services value"
+assert_contains "$body" 'dvbipi_sds_announcements_total{component="sds",headend_id="sds-it",transport="multicast"}' "announcements_total present"
+assert_contains "$body" 'dvbipi_metrics_snapshot_age_seconds{component="sds",headend_id="sds-it"}' "snapshot_age present"
 assert_contains "$body" '# EOF' "EOF terminator"
 
-announcements=$(metric_value "$body" 'dvbipi_sds_announcements_total{component="sds",instance="sds-it",transport="multicast"}')
+announcements=$(metric_value "$body" 'dvbipi_sds_announcements_total{component="sds",headend_id="sds-it",transport="multicast"}')
 [ "${announcements:-0}" -ge 1 ] || fail "expected at least one completed announcement cycle, got '$announcements'"
 
 code404=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$HTTPPORT/nope")

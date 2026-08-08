@@ -119,7 +119,7 @@ static const char *strip_query(char *path) {
   return path;
 }
 
-void http_accept_and_serve(int listen_fd, const store_t *st, double now_mono, int verbose) {
+void http_accept_and_serve(int listen_fd, store_t *st, double now_mono, int verbose) {
   int fd;
   struct timeval tv;
   char reqbuf[REQ_BUF_CAP];
@@ -156,10 +156,12 @@ void http_accept_and_serve(int listen_fd, const store_t *st, double now_mono, in
   sscanf(reqbuf, "%15s %255s", method, path);
 
   if (!strcmp(method, "GET") && !strcmp(strip_query(path), "/metrics")) {
+    st->stats.http_requests_200++;
     respond_metrics(fd, st, now_mono);
   } else {
     if (verbose && method[0])
       log_line("dipimetrics: 404 %s %s", method, path);
+    st->stats.http_requests_404++;
     respond_404(fd);
   }
   close(fd);

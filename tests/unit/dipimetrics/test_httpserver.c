@@ -152,6 +152,42 @@ START_TEST(sequential_scrapes_each_get_a_correct_independent_response) {
 }
 END_TEST
 
+START_TEST(request_counters_reflect_status_and_include_current_request) {
+  store_t st;
+  int lfd, c1, c2, c3;
+  char buf1[8192], buf2[8192], buf3[8192];
+
+  store_init(&st);
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+
+  c1 = connect_to(lfd);
+  ck_assert_int_gt((int)send(c1, "GET /metrics HTTP/1.1\r\n\r\n", 26, 0), 0);
+  http_accept_and_serve(lfd, &st, 10.0, 0);
+  recv_all(c1, buf1, sizeof buf1);
+  ck_assert(strstr(buf1, "dvbipi_metrics_http_requests_total{status=\"200\"} 1") != NULL);
+  ck_assert(strstr(buf1, "dvbipi_metrics_http_requests_total{status=\"404\"} 0") != NULL);
+
+  c2 = connect_to(lfd);
+  ck_assert_int_gt((int)send(c2, "GET /nope HTTP/1.1\r\n\r\n", 23, 0), 0);
+  http_accept_and_serve(lfd, &st, 10.0, 0);
+  recv_all(c2, buf2, sizeof buf2);
+  ck_assert_uint_eq(st.stats.http_requests_200, 1u);
+  ck_assert_uint_eq(st.stats.http_requests_404, 1u);
+
+  c3 = connect_to(lfd);
+  ck_assert_int_gt((int)send(c3, "GET /metrics HTTP/1.1\r\n\r\n", 26, 0), 0);
+  http_accept_and_serve(lfd, &st, 10.0, 0);
+  recv_all(c3, buf3, sizeof buf3);
+  ck_assert(strstr(buf3, "dvbipi_metrics_http_requests_total{status=\"200\"} 2") != NULL);
+  ck_assert(strstr(buf3, "dvbipi_metrics_http_requests_total{status=\"404\"} 1") != NULL);
+
+  close(c1);
+  close(c2);
+  close(c3);
+  close(lfd);
+}
+END_TEST
+
 static Suite *httpserver_suite(void) {
   Suite *s = suite_create("dipimetrics_httpserver");
   TCase *tc = tcase_create("core");
@@ -160,6 +196,7 @@ static Suite *httpserver_suite(void) {
   tcase_add_test(tc, post_to_metrics_also_returns_404);
   tcase_add_test(tc, query_string_is_stripped_before_matching);
   tcase_add_test(tc, sequential_scrapes_each_get_a_correct_independent_response);
+  tcase_add_test(tc, request_counters_reflect_status_and_include_current_request);
   suite_add_tcase(s, tc);
   return s;
 }

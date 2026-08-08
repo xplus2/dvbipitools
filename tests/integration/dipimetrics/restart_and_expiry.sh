@@ -39,7 +39,7 @@ sleep 4
 
 body1="$WORK/metrics_before_restart.txt"
 curl -s -o "$body1" "http://127.0.0.1:$HTTPPORT/metrics"
-before=$(metric_value "$body1" 'dvbipi_sds_announcements_total{component="sds",instance="restart-it",transport="multicast"}')
+before=$(metric_value "$body1" 'dvbipi_sds_announcements_total{component="sds",headend_id="restart-it",transport="multicast"}')
 [ "${before:-0}" -ge 2 ] || fail "expected several announcements before restart, got '$before'"
 
 kill $S1PID 2>/dev/null
@@ -55,7 +55,7 @@ sleep 1.5
 
 body2="$WORK/metrics_after_restart.txt"
 curl -s -o "$body2" "http://127.0.0.1:$HTTPPORT/metrics"
-after=$(metric_value "$body2" 'dvbipi_sds_announcements_total{component="sds",instance="restart-it",transport="multicast"}')
+after=$(metric_value "$body2" 'dvbipi_sds_announcements_total{component="sds",headend_id="restart-it",transport="multicast"}')
 [ "${after:-0}" -lt "$before" ] || fail "restart should reset the counter (was $before, now $after) - looks like the stale-sequence datagram got rejected instead of accepted as a restart"
 
 kill $S2PID 2>/dev/null
@@ -67,7 +67,7 @@ sleep 3
 
 body3="$WORK/metrics_after_expiry.txt"
 curl -s -o "$body3" "http://127.0.0.1:$HTTPPORT/metrics"
-assert_not_contains "$body3" 'instance="restart-it"' "instance still present after expiry"
+assert_not_contains "$body3" 'headend_id="restart-it"' "instance still present after expiry"
 
 kill $MPID 2>/dev/null
 wait $MPID 2>/dev/null

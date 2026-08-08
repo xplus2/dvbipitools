@@ -32,13 +32,25 @@ typedef struct {
 } store_slot_t;
 
 typedef struct {
+  uint64_t snapshots_received_total;
+  uint64_t snapshots_rejected_malformed;
+  uint64_t snapshots_rejected_stale;
+  uint64_t snapshots_rejected_full;
+  uint64_t snapshots_rejected_version;
+  uint64_t http_requests_200;
+  uint64_t http_requests_404;
+} store_stats_t;
+
+typedef struct {
   store_slot_t slots[STORE_MAX_INSTANCES];
+  store_stats_t stats;
 } store_t;
 
 void store_init(store_t *st);
 
 /* decodes+validates one datagram and updates (or creates) a (component, metrics_id) slot.
-   rejects + logs (if -v). changed process_start_time is treated as an exporter restart */
+   rejects + logs (if -v) and counts into st->stats. changed process_start_time is treated
+   as an exporter restart */
 void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_mono, int verbose);
 
 /* frees slots idle longer than expiry_s so a new instance can reuse them */
