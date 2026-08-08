@@ -5,17 +5,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/demux/psi_section_asm.h"
+#include "lib/ioutil.h"
 #include "lib/log.h"
 #include "lib/net/httpclient.h"
 
 #include "ipiclient.h"
-#include "secasm.h"
 #include "version.h"
 
 #define IPICLIENT_TOKEN_MAX 256
 #define IPICLIENT_ETAG_MAX 128
 #define IPICLIENT_STALL_MAX 3 /* recv() timeouts to tolerate before giving up on one poll */
-#define IPICLIENT_BODY_MAX (33 * SECASM_BUF_LEN) /* one EMM-U + up to 32 EMM-G, matches emmcache.c's cap */
+#define IPICLIENT_BODY_MAX (33 * PSI_SECTION_ASM_BUF_LEN) /* one EMM-U + up to 32 EMM-G, matches emmcache.c's cap */
 
 struct ipiclient {
   http_url_t url;
@@ -91,7 +92,7 @@ int ipiclient_poll(ipiclient_t *c, emmcache_t *cache, device_state_t *d) {
   else
     snprintf(hdr, sizeof hdr, "X-Device-Token: %s", c->token);
 
-  h = http_get(&c->url, TOOL_NAME "/" TOOL_VERSION, c->insecure, hdr);
+  h = http_get(&c->url, TOOL_NAME "/" TOOL_VERSION, c->insecure, hdr, NULL);
   if (!h)
     return 0; /* fetch failed, already logged by httpclient */
 
@@ -102,10 +103,10 @@ int ipiclient_poll(ipiclient_t *c, emmcache_t *cache, device_state_t *d) {
 
   etag = http_header(h, "etag");
   if (etag)
-    snprintf(c->etag, sizeof c->etag, "%s", etag);
+    bufcpy(c->etag, sizeof c->etag, etag);
 
   for (;;) {
-    ssize_t n = http_read(h, body + len, sizeof body - len);
+    ssize_t n = http_read(h, body + len, sizeof body - len, NULL);
     if (n < 0)
       break;
     if (n == 0) {

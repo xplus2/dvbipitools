@@ -20,9 +20,8 @@ void csa2_encrypt_block(csa2_key_t *k, unsigned char *data, size_t len);
 /* inverse of csa2_encrypt_block: decrypts len bytes in place, any length */
 void csa2_decrypt_block(csa2_key_t *k, unsigned char *data, size_t len);
 
-/* max entries per csa2_encrypt_batch/csa2_decrypt_batch call. 0 if this
-   build has no libdvbcsa (csa2_key_new already fails first in that case,
-   so the batch functions are unreachable). */
+/* max entries per csa2_encrypt_batch/csa2_decrypt_batch call. 0 if this build has no libdvbcsa
+   (csa2_key_new already fails first in that case, batch functions are unreachable). */
 unsigned csa2_batch_size(void);
 
 typedef struct {

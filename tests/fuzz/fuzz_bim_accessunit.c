@@ -10,7 +10,7 @@
 
 #include "lib/bim/accessunit.h"
 #include "lib/bim/bitreader.h"
-#include "lib/tva/epg_doc.h"
+#include "lib/tva/bcg_doc.h"
 
 int main(int argc, char **argv) {
   FILE *f;
@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
   size_t n, bits_len;
   bitreader_t br;
   strrepo_reader_t sr;
-  epg_doc_t doc;
+  bcg_doc_t doc;
   int nfuu = 0;
 
   if (argc != 2) {
@@ -56,11 +56,11 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  epg_doc_init(&doc);
+  bcg_doc_init(&doc);
   bitreader_init(&br, buf + 4, bits_len);
   if (!strrepo_reader_init(&sr, buf + 4 + bits_len, n - 4 - bits_len))
     accessunit_decode(&br, &sr, &doc, &nfuu);
-  epg_doc_free(&doc);
+  bcg_doc_free(&doc);
 
   free(buf);
   return 0;

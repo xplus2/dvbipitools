@@ -2,31 +2,58 @@
 
 IPI Radio Headend
 
-Fetches an Icecast/Shoutcast stream and re-muxes it as a DVB-IPI multicast. No transcoding.
+Fetches one or more Icecast/Shoutcast streams and re-muxes them as one DVB-IPI multicast. No
+transcoding. A single `-i` gives a normal SPTS; more than one gives an MPTS, one program per input.
 
 ```
-dipiradiohead -i <uri> -m <mcast>:<port> [options]
+dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] -m <mcast>:<port> [options]
 ```
 
 ## Options
 
-| flag | long form | argument | default |
-|---|---|---|---|
-| `-i` | `--input` | `<uri>` | required |
-| `-m` | `--mcast` | `<group>:<port>` / `[<group6>]:<port>` | required |
-| `-I` | `--iface` | `<iface>` | kernel route |
-| `-r` | `--rtp` | - | off (plain UDP) |
-| `-T` | `--ttl` | `<n>` | 1 (kernel default) |
-| `-n` | `--nit` | `<text>` | none |
-| `-s` | `--sdt` | `<text>` | `dipiradiohead` |
-| `-e` | `--error` | `<seconds>` | fail once, no retry |
-| `-k` | `--insecure` | - | off (TLS verified) |
-| | `--tsid` | `<n>` | 1 |
-| | `--onid` | `<n>` | 1 |
-| | `--sid` | `<n>` | 1 |
-| `-v` | `--verbose` | - | off |
-| | `--color` | `auto\|always\|never` | `auto` |
-| `-h` | `--help` | - | |
+| flag  | long form            | argument                               | default              | scope      |
+|-------|----------------------|----------------------------------------|----------------------|------------|
+| `-i`  | `--input`            | `<uri>`                                | required, repeatable |            |
+|       | `--sid`              | `<n>`                                  | auto (see below)     | per-input  |
+| `-s`  | `--sdt`              | `<name>`                               | auto (see below)     | per-input  |
+| `-m`  | `--mcast`            | `<group>:<port>` / `[<group6>]:<port>` | required             |            |
+| `-I`  | `--iface`            | `<iface>`                              | kernel route         |            |
+| `-r`  | `--rtp`              |                                        | off (plain UDP)      |            |
+| `-T`  | `--ttl`              | `<n>`                                  | 1 (kernel default)   |            |
+| `-n`  | `--nit`              | `<text>`                               | none                 |            |
+| `-e`  | `--error`            | `<seconds>`                            | see below            |            |
+| `-k`  | `--insecure`         |                                        | off (TLS verified)   |            |
+|       | `--tsid`             | `<n>`                                  | 1                    |            |
+|       | `--onid`             | `<n>`                                  | 1                    |            |
+| `-v`  | `--verbose`          |                                        | off                  |            |
+|       | `--color`            | `auto\|always\|never`                  | `auto`               |            |
+| `-h`  | `--help`             |                                        |                      |            |
+
+`--sid`/`-s` pair with whichever `-i` came right before them - like ffmpeg's per-input options,
+not global flags. Order matters: `--sid`/`-s` before the first `-i` is an error.
+
+### Related to Conditional Access
+
+`--cas-ecmg` is repeatable, one CAS vendor per `--cas-ecmg`. Flags marked **per-vendor** pair
+with the `--cas-ecmg` immediately before them, same convention as `-i`'s `--sid`/`-s` above -
+using one before any `--cas-ecmg` is an error. Everything else is shared across every vendor.
+
+| long form               | argument                  | default                                    | scope      |
+|--------------------------|---------------------------|--------------------------------------------|------------|
+| `--cas-algo`             | `cissa\|csa2`              | disabled                                   |            |
+| `--cas-ecmg`             | `tcp://host:port`          | at least one required with `--cas-algo`    |            |
+| `--cas-ecmg-version`     | `2\|3`                     | auto-negotiate                             | per-vendor |
+| `--cas-super-id`         | `<n>`                      | required per vendor                        | per-vendor |
+| `--cas-ecm-id`           | `<n>`                      | required per vendor                        | per-vendor |
+| `--cas-ecm-pid`          | `<pid>`                    | `0x0020`                                   | per-vendor |
+| `--cas-emmg-port`        | `<n>`                      | `8002`                                     | per-vendor |
+| `--cas-emmg-version`     | `2\|3`                     | accept client's proposal                   | per-vendor |
+| `--cas-emm-pid`          | `<pid>`                    | `0x0021`                                   | per-vendor |
+| `--cas-resilience`       | `frozen\|cycling\|silent`  | `frozen`                                   | per-vendor |
+| `--cas-required`         |                            | off                                        | per-vendor |
+| `--cas-cp-duration`      | `<ms>`                     | `10000`                                    |            |
+| `--cas-fallback-clear`   |                            | off (stay scrambled on last known-good CW) |            |
+
 
 ## Input (`-i`)
 
@@ -43,6 +70,28 @@ Response body sniff (not URL suffix):
 * PLS (`[playlist]`, `FileN=<url>`) -> first `FileN=` followed.
 
 Max 5 playlist hops, each re-sniffed.
+
+## Multiple inputs (MPTS)
+
+Repeat `-i` for more stations; each becomes its own program in one output MPTS. Every input is
+opened and retried fully independently - one station being down never affects, delays or stops
+any other, and never stops the output itself. PAT always lists every configured program,
+including ones currently down; a down program just stops contributing PMT/audio/SDT/EIT until
+it reconnects, everything else keeps going (including CAS, see below). If every input is down
+at once, the output keeps running with PSI tables only, no audio, rather than exiting.
+
+PIDs are assigned by input order, not configurable: PMT `0x1000 + i`, audio `0x0100 + i` for the
+i-th `-i` (0-based) - matching the ffmpeg mpegts muxer's own default PID bases (`pmt_start_pid`/
+`start_pid`), so an MPTS from dipiradiohead lines up with what other common tooling would produce.
+`--sid`/`-s` per input as above; if omitted, `--sid` auto-assigns the lowest free number and
+`--sdt` defaults to `dipiradiohead <n>` (1-based) so stations aren't silently given identical
+names.
+
+A single `-i` is unaffected by any of this: same fixed PMT `0x0100`/audio `0x0101` as before,
+same `-s` default of plain `dipiradiohead`.
+
+> Note: Multi Program Transport Streams rely on your local clock reference.
+> It is not something you would usually run on a Raspberry Pi.
 
 ## Output (`-m`, `-I`, `-r`)
 
@@ -61,30 +110,151 @@ Source, auto-detected per stream:
 * no `icy-metaint` -> inline ID3v2: `ID3` sync checked only at audio frame boundaries (never
   mid-frame). `TIT2`/`TPE1` (v2.3+v2.4, text or UTF-16) read, tag stripped from the ES.
 
-Repetition: PAT/PMT 100ms, SDT 2s, NIT 10s (only if `-n` set), EIT 1s or immediately on change.
-Fixed PIDs: PAT 0x0000, NIT 0x0010, SDT 0x0011, EIT 0x0012, PMT 0x0100, audio 0x0101.
+Repetition: PAT/PMT 100ms, SDT 2s, NIT 10s (only if `-n` set), EIT 1s or immediately on change -
+per program with more than one `-i`, all sharing one PAT/NIT and one continuity counter per
+table type (SDT/EIT sections cycle across programs on those shared PIDs, not duplicated per
+program). Fixed PIDs (single `-i`): PAT 0x0000, NIT 0x0010, SDT 0x0011, EIT 0x0012, PMT 0x0100,
+audio 0x0101. Per-program PIDs (multiple `-i`): see "Multiple inputs" above.
 
 ## Service info (`-n`, `-s`)
 
-`-n` NIT `network_name`. `-s` SDT `service_name` (provider name is fixed: `dipiradiohead`). UTF-8.
+`-n` NIT `network_name`, one for the whole output. `-s` SDT `service_name` per program (provider
+name is fixed: `dipiradiohead`). UTF-8.
 
 ## Identifiers (`--tsid`, `--onid`, `--sid`)
 
-transport_stream_id / original_network_id / service_id, default 1. Only matters with several
-instances on one network.
+transport_stream_id / original_network_id, default 1, one for the whole output. `--sid`
+(service_id/program_number) is per input - see "Multiple inputs" above.
 
 ## Reconnecting (`-e`)
 
-No `-e`: any fetch error stops the tool. `-e <seconds>`: reopens the input after the delay;
-multicast socket, continuity counters and PSI versions stay up across the gap.
+Single `-i`: no `-e` means any fetch error stops the tool; `-e <seconds>` reopens the input after
+the delay, with multicast socket, continuity counters and PSI versions staying up across the gap.
+
+Multiple `-i`: each input always retries independently (the tool can't just stop because the
+whole point of several inputs is that the output keeps going) - `-e <seconds>` sets the interval
+for all of them; if omitted, a 5s default is used instead of failing.
 
 ## Live stats (`-v`)
 
 One self-updating line on stderr, about once a second.
 
+## CAS SCS and Scrambler (`--cas-*`)
+
+Acts as a DVB Simulcrypt SCS towards one or more ECMGs (one per `--cas-ecmg`), and as the
+EMMG-side MUX towards each one's EMMG client, per ETSI TS 103 197 (protocol versions 2 and 3,
+auto-negotiated per vendor unless that vendor's `--cas-ecmg-version` / `--cas-emmg-version`
+pins one). Scrambles CISSA (ETSI TS 103 127, 128-bit AES-CBC, needs OpenSSL) or CSA2 (needs
+libdvbcsa) content and emits one `CA_descriptor` per vendor plus one shared
+`scrambling_descriptor` in each program's PMT, a CAT with one `CA_descriptor` per vendor, and
+each vendor's own ECM (`--cas-ecm-pid`) and EMM (`--cas-emm-pid`) streams. There's no
+`--cas-pids` here: every configured audio PID is scrambled, always - with a single `-i` that's
+the one audio PID; with several, every program's audio, all under **one shared control
+word/crypto-period** for the whole output regardless of vendor count, not independent
+per-program crypto. (The one exception: with CSA2's SIMD batching, only the first `-i`'s audio
+is guaranteed never delayed by a batch window - the others may see negligible, bounded PCR
+jitter under CSA2 specifically; CISSA doesn't batch.)
+
+> Note: Adding an EMM stream to a single radio channel will quickly add more overhead than the actual payload.
+> With multiple `-i`, this is handled automatically - one EMM stream covers every program, not one
+> per station. Further options if EMM overhead is still a concern:
+> * If you have an IPTV platform, use unicast EMMs all the way.
+> * If you have TV and radio sharing a bouquet, let the EMM carousel spin on TV channels only.
+> * If you do not have many subscribers (like a contribution use-case), keep the EMMG bitrate low.
+> * If you are broadcasting this (not IPTV), consider collecting multiple radio stations into a single MPTS output.
+
+### Crypto-period clock
+
+With a single `-i`, dipiradiohead builds the whole stream itself, so unlike dipitvhead it
+doesn't need to observe a PCR or defend against a stray source clock: crypto-period cadence
+tracks the tool's own sample-accurate audio clock directly, always present from the first frame.
+With multiple `-i`, there's no single audio clock to share across independent programs, so the
+crypto-period instead tracks wall-clock time directly - unaffected by any one program
+connecting, dropping or reconnecting.
+
+### On ECMG loss (`--cas-resilience`)
+
+* `frozen` (default): keeps scrambling with the last known-good CW indefinitely until the ECMG
+comes back. The crypto period stays put on whatever it was, the service never blacks out.
+* `cycling`: keeps flipping parity on the normal crypto-period schedule, alternating between
+the last two known CWs (even/odd), instead of freezing on one.
+* `silent`: stops sending the ECM PID once the ECMG becomes unreachable, instead of resending
+the last known-good ECM. Content stays scrambled with the last known-good CW, same as `frozen` -
+only the ECM stream itself goes quiet.
+
+### EMMG (`--cas-emmg-port`, `--cas-emmg-version`)
+
+dipiradiohead is the EMMG-side MUX: it listens (`--cas-emmg-port`, default 8002) and the EMMG
+client connects to it, once per `--cas-ecmg` vendor (each with its own `--cas-emmg-port`), not
+the reversed topology. Accepts whichever protocol version the client proposes unless that
+vendor's `--cas-emmg-version` is set. EMM datagrams are queued and drained onto that vendor's
+own `--cas-emm-pid` on arrival.
+
+### Multi-CAS (`--cas-required`, `--cas-fallback-clear`)
+
+Content is scrambled exactly once, with one shared control word handed to every configured
+vendor's ECMG - `--cas-resilience` only decides what a single vendor's own ECM stream does
+while its ECMG is unreachable, not whether the content itself keeps playing. That's a
+separate, global decision:
+
+* Default: content stays scrambled on the last known-good CW no matter how many vendors are
+down, same as `frozen` at the content level - as long as at least one vendor is up, or (if
+none are marked `--cas-required`) even if all of them are down.
+* `--cas-fallback-clear`: switches that default to clear-to-air (`transport_scrambling_control`
+= 00) once every vendor is down, or once any vendor marked `--cas-required` is down
+specifically - regardless of whether other, non-required vendors are still up.
+
+### Limitations
+
+CISSA and CSA2 only - no CSA3.
+
+### Dependencies
+
+CAS support is a CMake/configure-time option (`DIPIRADIOHEAD_CAS`, on by default).
+* CISSA needs OpenSSL (same dependency as HTTPS input)
+* CSA2 needs libdvbcsa (`DIPIRADIOHEAD_CSA2` / `HAVE_DVBCSA`).
+
+Missing either degrades gracefully to "that algorithm unavailable", not a build failure.
+
+Release builds and the packaged `.deb` in this repository do not contain libdvbcsa.
+Build against it yourself if you want CSA2.
+
 ## Stopping
 
 `^C`, SIGINT or SIGTERM.
+
+## Running under systemd
+
+For a systemd-managed deployment, the unit below is a reasonable starting point.
+`-e` is included so a dropped input reopens itself instead of relying on a full process restart.
+
+> Note: This service is a micro SCS/muxer/scrambler. How many of them you want to pack on a host is entirely yours.
+> Make sure to do integration tests particularly addressing how the load resulting from this decision is handled.
+> Replace `instancename` to make them easier to distinguish.
+
+```ini
+[Unit]
+Description=dipiradiohead-instancename
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/dipiradiohead -i https://example.com/radiostation.m3u -e 5 -m 239.1.1.1:5000 -r -s "Best Hits Ever Radio"
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ## Examples
 
@@ -92,4 +262,23 @@ One self-updating line on stderr, about once a second.
 dipiradiohead -i https://orf-live.ors-shoutcast.at/oe1-q2a.m3u -m 239.1.1.1:5000 -r -s "OE1"
 dipiradiohead -i http://radio886.at/streams/radio_88.6/aac -m 239.1.1.2:5000 -e 5
 dipiradiohead -i http://onair.krone.at/kronehit.mp3 -m 239.5.5.5:6000 & dipirec -i udp://@239.5.5.5:6000 -o kronehit.mka
+
+# MPTS: two stations, one output, independently retried
+dipiradiohead -i https://orf-live.ors-shoutcast.at/oe1-q2a.m3u --sdt "OE1" \
+              -i http://radio886.at/streams/radio_88.6/aac --sdt "Radio 88.6" \
+              -m 239.1.1.3:5000 -r -e 5
+
+# scrambled (CISSA), ECMG at ecmg.example:2222
+dipiradiohead -i https://orf-live.ors-shoutcast.at/oe1-q2a.m3u -m 239.1.1.1:5000 -r -s "OE1" \
+  --cas-algo cissa --cas-ecmg tcp://ecmg.example:2222 --cas-super-id 0x4A750002 --cas-ecm-id 1
+
+# multi-CAS: two vendors, one required. --cas-ecmg opens a slot; the flags after it
+# (version/super-id/ecm-id/pid/resilience/required) pair with that --cas-ecmg.
+dipiradiohead -i https://orf-live.ors-shoutcast.at/oe1-q2a.m3u -m 239.1.1.1:5000 -r -s "OE1" \
+  --cas-algo cissa \
+  --cas-ecmg tcp://ecmg-a.example:2222 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
+             --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port 8002 --cas-required \
+  --cas-ecmg tcp://ecmg-b.example:2222 --cas-super-id 0x0D960001 --cas-ecm-id 1 \
+             --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-port 8003 --cas-resilience silent \
+  --cas-fallback-clear
 ```

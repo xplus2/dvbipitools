@@ -12,6 +12,18 @@ tls_t *tls_connect(int fd, const char *host, int insecure) {
   return NULL;
 }
 
+tls_t *tls_connect_start(int fd, const char *host, int insecure) {
+  (void)fd;
+  (void)insecure;
+  log_line("tls: this build has no TLS support, cannot connect to %s over https", host);
+  return NULL;
+}
+
+tls_handshake_status_t tls_handshake_step(tls_t *t) {
+  (void)t;
+  return TLS_HANDSHAKE_ERROR;
+}
+
 ssize_t tls_read(tls_t *t, void *buf, size_t cap) {
   (void)t;
   (void)buf;

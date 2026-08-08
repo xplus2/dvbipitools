@@ -1,10 +1,10 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/demux/pes.h"
 #include "teletext.h"
 
 #define TTX_ROWS 24
@@ -45,8 +45,7 @@ struct ttx {
   char cur[TTX_TEXT_MAX]; /* on screen now */
   int64_t cur_start;
   int have_cur;
-  uint64_t pts_ext, last_raw; /* 33-bit PTS unwrap state */
-  int pts_seen;
+  pts_unwrap_t pts;
 };
 
 /* teletext bytes: LSB first (EN 300 706 7.1) */
@@ -161,7 +160,7 @@ static void emit_cue(ttx_t *t, int64_t end) {
   cue.end_ms = end - t->lead;
   if (cue.start_ms < 0)
     cue.start_ms = 0;
-  snprintf(cue.text, sizeof cue.text, "%s", t->cur);
+  memcpy(cue.text, t->cur, strlen(t->cur) + 1); /* same-size buffers, sizeof cue.text == sizeof t->cur */
   t->cb(t->ctx, &cue);
 }
 
@@ -176,22 +175,35 @@ static void group_done(ttx_t *t) {
   if (t->have_cur && strcmp(text, t->cur) == 0)
     return;                  /* carousel repeat */
   emit_cue(t, t->group_start); /* previous ends where this begins */
-  snprintf(t->cur, sizeof t->cur, "%s", text);
+  memcpy(t->cur, text, strlen(text) + 1); /* same-size buffers */
   t->cur_start = t->group_start;
   t->have_cur = 1;
+}
+
+static int digit_count(unsigned v) {
+  int n = 1;
+  while (v >= 10) {
+    v /= 10;
+    n++;
+  }
+  return n;
 }
 
 /* subtitle pages: display rows in EBU subtitle units, no page-0 header.
    per-cycle ident row (leads with page number) = boundary, not text */
 static int is_ident_row(const ttx_t *t, const char *text) {
-  char pg[8];
-  size_t n;
+  int n = digit_count(t->page);
+  unsigned v = 0;
+  int i;
 
-  snprintf(pg, sizeof pg, "%u", t->page);
-  n = strlen(pg);
   while (*text == ' ')
     text++;
-  return strncmp(text, pg, n) == 0;
+  for (i = 0; i < n; i++) {
+    if (text[i] < '0' || text[i] > '9')
+      return 0;
+    v = v * 10 + (unsigned)(text[i] - '0');
+  }
+  return v == t->page;
 }
 
 /* rows of one subtitle arrive together; a gap starts the next */
@@ -212,7 +224,7 @@ static void add_row(ttx_t *t, const unsigned char *d, int64_t ts) {
       return; /* already in this group */
   if (t->nrows >= TTX_ROWS)
     return;
-  snprintf(t->row[t->nrows], sizeof t->row[0], "%s", text);
+  memcpy(t->row[t->nrows], text, strlen(text) + 1); /* same-size buffers */
   t->nrows++;
 }
 
@@ -264,35 +276,13 @@ ttx_t *ttx_new(unsigned page, const char *lang, long lead_ms, ttx_cb cb, void *c
 
 void ttx_free(ttx_t *t) { free(t); }
 
-#define PTS_MOD 0x200000000ULL  /* 2^33: PTS clock period */
-#define PTS_HALF 0x100000000ULL /* 2^32: wrap/backstep threshold */
-
-/* unwrap 33-bit PTS into a monotonic tick count, ms = return/90 */
-static int64_t pts_unwrap(ttx_t *t, uint64_t raw) {
-  uint64_t d;
-  int64_t diff;
-
-  raw &= PTS_MOD - 1;
-  if (!t->pts_seen) {
-    t->pts_ext = raw;
-    t->last_raw = raw;
-    t->pts_seen = 1;
-  } else {
-    d = (raw - t->last_raw) & (PTS_MOD - 1);
-    diff = (d >= PTS_HALF) ? (int64_t)d - (int64_t)PTS_MOD : (int64_t)d;
-    t->pts_ext = (uint64_t)((int64_t)t->pts_ext + diff);
-    t->last_raw = raw;
-  }
-  return (int64_t)(t->pts_ext / 90);
-}
-
 void ttx_pes(ttx_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   size_t i = 1; /* skip data_identifier */
 
   if (len < 1 || d[0] < 0x10 || d[0] > 0x1F)
     return;
   if (has_pts)
-    t->last_ms = pts_unwrap(t, pts);
+    t->last_ms = pts_unwrap(&t->pts, pts);
 
   while (i + 2 <= len) {
     unsigned id = d[i], ul = d[i + 1];

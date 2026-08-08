@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/argutil.h"
 #include "lib/log.h"
 
 #include "args.h"
@@ -17,93 +18,60 @@ static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 static void argerr(const char *fmt, ...) {
   va_list ap;
-  fputs(TOOL_NAME ": ", stderr);
   va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
+  argutil_verr(TOOL_NAME, fmt, ap);
   va_end(ap);
-  fputc('\n', stderr);
 }
 
-static int port_parse(const char *p, unsigned *out) {
-  char *end;
-  unsigned long v;
-  if (*p == '\0')
+/* [@]<addr>:<port> or [@][<addr6>]:<port>, multicast literal required */
+static int mcast_group_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
+  if (*s == '@')
+    s++;
+  if (argutil_addrport_parse(s, family, addr_out, addr_out_sz, port_out))
     return -1;
-  v = strtoul(p, &end, 10);
-  if (*end != '\0' || v == 0 || v > 65535)
+
+  if (*family == AF_INET) {
+    struct in_addr a;
+    inet_pton(AF_INET, addr_out, &a);
+    if ((ntohl(a.s_addr) >> 28) != 0xE) /* 224.0.0.0/4 */
+      return -1;
+  } else {
+    struct in6_addr a6;
+    inet_pton(AF_INET6, addr_out, &a6);
+    if (a6.s6_addr[0] != 0xFF) /* ff00::/8 */
+      return -1;
+  }
+  return 0;
+}
+
+static int fmt_from_name(const char *s, out_fmt_t *f) {
+  static const enum_map_t map[] = {{"ts", FMT_TS}, {"mkv", FMT_MKV}, {"mka", FMT_MKA}};
+  int v;
+  if (map_lookup(map, sizeof map / sizeof map[0], s, &v))
+    return -1;
+  *f = (out_fmt_t)v;
+  return 0;
+}
+
+/* decimal or 0x-hex, PMT pid range 0x0010..0x1FFE */
+static int pid_parse(const char *s, unsigned *out) {
+  char *end;
+  unsigned long v = strtoul(s, &end, 0);
+  if (*end != '\0' || v < 0x0010 || v > 0x1FFE)
     return -1;
   *out = (unsigned)v;
   return 0;
 }
 
-/* [@]<addr>:<port> or [@][<addr6>]:<port>, multicast literal required */
-static int mcast_group_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
-  char addr[64];
-
-  if (*s == '@')
-    s++;
-  if (*s == '[') {
-    const char *close = strchr(s, ']');
-    size_t len;
-    if (!close)
-      return -1;
-    len = (size_t)(close - (s + 1));
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, s + 1, len);
-    addr[len] = '\0';
-    if (close[1] != ':' || port_parse(close + 2, port_out))
-      return -1;
-    *family = AF_INET6;
-  } else {
-    const char *colon = strrchr(s, ':');
-    size_t len;
-    if (!colon)
-      return -1;
-    len = (size_t)(colon - s);
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, s, len);
-    addr[len] = '\0';
-    if (port_parse(colon + 1, port_out))
-      return -1;
-    *family = AF_INET;
+static int parse_pmt_sel(const char *s, config_t *cfg) {
+  if (strcmp(s, "all") == 0) {
+    cfg->pmt_sel = PMT_SEL_ALL;
+    return 0;
   }
-
-  if (*family == AF_INET) {
-    struct in_addr a;
-    if (inet_pton(AF_INET, addr, &a) != 1)
-      return -1;
-    if ((ntohl(a.s_addr) >> 28) != 0xE) /* 224.0.0.0/4 */
-      return -1;
-  } else {
-    struct in6_addr a6;
-    if (inet_pton(AF_INET6, addr, &a6) != 1)
-      return -1;
-    if (a6.s6_addr[0] != 0xFF) /* ff00::/8 */
-      return -1;
-  }
-
-  if (strlen(addr) >= addr_out_sz)
+  if (pid_parse(s, &cfg->pmt_pid))
     return -1;
-  strcpy(addr_out, addr);
+  cfg->pmt_sel = PMT_SEL_PID;
   return 0;
-}
-
-static int fmt_from_name(const char *s, out_fmt_t *f) {
-  if (!strcmp(s, "ts")) {
-    *f = FMT_TS;
-    return 0;
-  }
-  if (!strcmp(s, "mkv")) {
-    *f = FMT_MKV;
-    return 0;
-  }
-  if (!strcmp(s, "mka")) {
-    *f = FMT_MKA;
-    return 0;
-  }
-  return -1;
 }
 
 static int input_parse(const char *uri, input_t *s) {
@@ -156,6 +124,9 @@ static void print_help(void) {
       "  %-27sskip TLS verification for -u/--unicast-emm (self-signed, hostname, expiry)\n"
       "  %-27sdescrambled output, file or \"-\" for stdout (required)\n"
       "  %-27sts|mkv|mka output container (default ts)\n"
+      "  %-27sMPTS source only: pin one PMT pid, or descramble every program\n"
+      "  %-27s(\"all\"; rejected with -f mkv). ignored (warned) on an SPTS\n"
+      "  %-27ssource. omitted on an MPTS source: fails early, lists programs\n"
       "  %-27sincoming multicast interface\n"
       "  %-27speriodic stats + BK/SK/CW update lines on stderr\n"
       "  %-27sauto|always|never (default auto)\n"
@@ -165,7 +136,8 @@ static void print_help(void) {
       TOOL_NAME,
       "-i, --input <uri>", "-k, --key <path>", "-s, --serial <id>", "-e, --emm-file <path>",
       "-u, --unicast-emm <uri>", "", "    --insecure",
-      "-o, --output <path|->", "-f, --format <fmt>", "-I, --iface <iface>", "-v, --verbose",
+      "-o, --output <path|->", "-f, --format <fmt>", "-p, --pmt-pid <pid|all>", "", "",
+      "-I, --iface <iface>", "-v, --verbose",
       "    --color <when>", "-h, --help",
       TOOL_NAME);
 }
@@ -180,6 +152,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"insecure", no_argument, 0, 1003},
       {"output", required_argument, 0, 'o'},
       {"format", required_argument, 0, 'f'},
+      {"pmt-pid", required_argument, 0, 'p'},
       {"iface", required_argument, 0, 'I'},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1000},
@@ -190,7 +163,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
 
   memset(cfg, 0, sizeof *cfg);
   optind = 1;
-  while ((c = getopt_long(argc, argv, "i:k:s:e:u:o:f:I:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "i:k:s:e:u:o:f:p:I:vh", longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
         if (input_parse(optarg, &cfg->input)) {
@@ -227,6 +200,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
+      case 'p':
+        if (parse_pmt_sel(optarg, cfg)) {
+          argerr("invalid -p pmt-pid: %s (0x0010..0x1FFE, or \"all\")", optarg);
+          return ARGS_ERR;
+        }
+        break;
       case 'I':
         cfg->iface_in = optarg;
         break;
@@ -234,15 +213,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->verbose = 1;
         break;
       case 1000:
-        if (!strcmp(optarg, "always"))
-          cfg->color_mode = LOG_COLOR_ALWAYS;
-        else if (!strcmp(optarg, "never"))
-          cfg->color_mode = LOG_COLOR_NEVER;
-        else if (!strcmp(optarg, "auto"))
-          cfg->color_mode = LOG_COLOR_AUTO;
-        else {
-          argerr("invalid --color: %s (auto|always|never)", optarg);
-          return ARGS_ERR;
+        {
+          log_color_t v;
+          if (log_color_from_string(optarg, &v)) {
+            argerr("invalid --color: %s (auto|always|never)", optarg);
+            return ARGS_ERR;
+          }
+          cfg->color_mode = v;
         }
         break;
       case 'h':

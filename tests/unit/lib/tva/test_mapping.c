@@ -25,19 +25,19 @@ START_TEST(mapping_load_and_lookup_round_trips) {
   unsigned tsid, onid, sid;
 
   write_temp_csv(path, "# comment line, ignored\n\n"
-                  "orf1,rtp://239.1.1.1:5000,1,2,101\n"
-                  "orf2,rtp://239.1.1.2:5000,1,2,102\n");
+                  "channel1,rtp://239.1.1.1:5000,1,2,101\n"
+                  "channel2,rtp://239.1.1.2:5000,1,2,102\n");
 
   ck_assert_int_eq(mapping_load(path, &m), 0);
   ck_assert_int_eq(m.count, 2);
 
-  ck_assert_int_eq(mapping_lookup(&m, "orf1", uri, sizeof uri, &tsid, &onid, &sid), 0);
+  ck_assert_int_eq(mapping_lookup(&m, "channel1", uri, sizeof uri, &tsid, &onid, &sid), 0);
   ck_assert_str_eq(uri, "rtp://239.1.1.1:5000");
   ck_assert_uint_eq(tsid, 1u);
   ck_assert_uint_eq(onid, 2u);
   ck_assert_uint_eq(sid, 101u);
 
-  ck_assert_int_eq(mapping_lookup(&m, "orf2", uri, sizeof uri, &tsid, &onid, &sid), 0);
+  ck_assert_int_eq(mapping_lookup(&m, "channel2", uri, sizeof uri, &tsid, &onid, &sid), 0);
   ck_assert_uint_eq(sid, 102u);
 
   ck_assert_int_eq(mapping_lookup(&m, "nope", uri, sizeof uri, &tsid, &onid, &sid), -1);

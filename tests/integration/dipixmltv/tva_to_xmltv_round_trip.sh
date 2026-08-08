@@ -12,17 +12,17 @@ cat > "$WORK/in.tva.xml" <<'EOF'
 <MetadataOriginationInformationTable/>
 <ClassificationSchemeTable/>
 <ProgramInformationTable>
-<ProgramInformation programId="crid://dipixmltv.invalid/orf1/20201215120000"><BasicDescription><Title>News</Title><Synopsis>Evening news</Synopsis></BasicDescription></ProgramInformation>
+<ProgramInformation programId="crid://dipixmltv.invalid/channel1/20201215120000"><BasicDescription><Title>News</Title><Synopsis>Evening news</Synopsis></BasicDescription></ProgramInformation>
 </ProgramInformationTable>
 <GroupInformationTable/>
 <ProgramLocationTable>
-<Schedule serviceIDRef="orf1">
-<ScheduleEvent><Program crid="crid://dipixmltv.invalid/orf1/20201215120000"/><PublishedStartTime>2020-12-15T12:00:00Z</PublishedStartTime></ScheduleEvent>
+<Schedule serviceIDRef="channel1">
+<ScheduleEvent><Program crid="crid://dipixmltv.invalid/channel1/20201215120000"/><PublishedStartTime>2020-12-15T12:00:00Z</PublishedStartTime></ScheduleEvent>
 </Schedule>
 </ProgramLocationTable>
 <ServiceInformationTable>
-<ServiceInformation serviceId="orf1">
-<Name>ORFeins</Name>
+<ServiceInformation serviceId="channel1">
+<Name>Channel One</Name>
 <ServiceURL name="IPTV">rtp://239.1.1.1:5000</ServiceURL>
 <ServiceURL name="DTT">dvb://2.1.101</ServiceURL>
 </ServiceInformation>
@@ -35,7 +35,7 @@ cat > "$WORK/in.tva.xml" <<'EOF'
 EOF
 
 run_expect_rc 0 "tva->xmltv" "$BIN" -f tva -i "$WORK/in.tva.xml" -o "$WORK/out.xmltv"
-assert_contains "$WORK/out.xmltv" "ORFeins" "tva->xmltv"
+assert_contains "$WORK/out.xmltv" "Channel One" "tva->xmltv"
 assert_contains "$WORK/out.xmltv" "News" "tva->xmltv"
 assert_contains "$WORK/out.xmltv" "20201215120000" "tva->xmltv"
 

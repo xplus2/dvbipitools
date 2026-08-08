@@ -10,8 +10,8 @@ typedef struct {
   const char *input_path;  /* -i; NULL/"-" = stdin */
   const char *output_path; /* -o; NULL/"-" = stdout */
   input_fmt_t format;      /* -f, names the INPUT format */
-  int verbose;              /* -v */
-  int color_mode;           /* --color; log_color_t */
+  int verbose;             /* -v */
+  int color_mode;          /* --color; log_color_t */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

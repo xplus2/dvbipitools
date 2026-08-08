@@ -29,6 +29,36 @@ static log_color_t color_mode = LOG_COLOR_AUTO;
 
 void log_set_color(log_color_t mode) { color_mode = mode; }
 
+int log_color_from_string(const char *s, log_color_t *out) {
+  if (!strcmp(s, "auto"))
+    *out = LOG_COLOR_AUTO;
+  else if (!strcmp(s, "always"))
+    *out = LOG_COLOR_ALWAYS;
+  else if (!strcmp(s, "never"))
+    *out = LOG_COLOR_NEVER;
+  else
+    return -1;
+  return 0;
+}
+
+log_color_t log_color_prescan(int argc, char **argv) {
+  int i;
+  for (i = 1; i < argc; i++) {
+    const char *v = NULL;
+    if (!strcmp(argv[i], "--color") && i + 1 < argc)
+      v = argv[i + 1];
+    else if (!strncmp(argv[i], "--color=", 8))
+      v = argv[i] + 8;
+    if (!v)
+      continue;
+    if (!strcmp(v, "always"))
+      return LOG_COLOR_ALWAYS;
+    if (!strcmp(v, "never"))
+      return LOG_COLOR_NEVER;
+  }
+  return LOG_COLOR_AUTO;
+}
+
 /* let's have nice things */
 int log_colors_enabled(void) {
   static int on = -1;

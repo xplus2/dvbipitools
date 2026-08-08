@@ -29,24 +29,38 @@ static int supported(const psi_es_t *e) {
   return e->cls == PID_TELETEXT || e->cls == PID_SUBTITLE;
 }
 
-int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned src_pcr_pid, out_es_t *out_es, int cap, unsigned *pcr_pid) {
+void out_program_pids(unsigned idx, out_program_pids_t *out) {
+  unsigned block_base = OUT_PROGRAM_BLOCK_BASE + idx * OUT_MAX_ES;
+  out->pmt_pid = OUT_PID_PMT_BASE + idx;
+  out->video_pid = block_base;
+  out->es_pid_base = block_base + 1;
+  out->ait_pid = block_base + OUT_PROGRAM_ES_CAP;
+}
+
+int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned src_pcr_pid, unsigned video_pid, unsigned es_pid_base, out_es_t *out_es, int cap, unsigned *pcr_pid, int *dropped) {
   int i, n = 0;
-  unsigned next_pid = OUT_PID_ES_BASE;
+  unsigned next_pid = es_pid_base;
+
+  *dropped = 0;
 
   /* video first, fixed pid, so PCR (usually the video pid) lands somewhere predictable */
   for (i = 0; i < in_count && n < cap; i++) {
     if (in_es[i].cls != PID_VIDEO || !supported(&in_es[i]))
       continue;
     out_es[n].in_pid = in_es[i].pid;
-    out_es[n].out_pid = OUT_PID_VIDEO;
+    out_es[n].out_pid = video_pid;
     out_es[n].stream_type = out_stream_type(in_es[i].codec);
     out_es[n].src = &in_es[i];
     n++;
     break; /* one video track */
   }
-  for (i = 0; i < in_count && n < cap; i++) {
+  for (i = 0; i < in_count; i++) {
     if (in_es[i].cls == PID_VIDEO || !supported(&in_es[i]))
       continue;
+    if (n >= cap) {
+      (*dropped)++;
+      continue;
+    }
     out_es[n].in_pid = in_es[i].pid;
     out_es[n].out_pid = next_pid++;
     out_es[n].stream_type = (in_es[i].cls == PID_TELETEXT || in_es[i].cls == PID_SUBTITLE) ? 0x06 : out_stream_type(in_es[i].codec);

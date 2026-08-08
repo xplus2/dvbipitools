@@ -7,13 +7,13 @@
 typedef struct {
   const char *key_path;  /* -k, RSA private key PEM, required */
   const char *serial;    /* -s, matched against EMM-U addressing; NULL = no filter */
-  unsigned port;          /* -p, cs378x TCP listen port */
+  unsigned port;         /* -p, cs378x TCP listen port */
   const char *username;  /* -a's "user:" part; matches reader's "user ="; NULL = no check */
   const char *password;  /* -a's password part; matches reader's "password ="; default "dipicam378" */
-  unsigned caid;          /* --caid, hex; 0 = no filter */
-  int cw_len;             /* --algo cissa|csa2; 16 or 8 */
-  int verbose;            /* -v */
-  int color_mode;         /* --color; log_color_t */
+  unsigned caid;         /* --caid, hex; 0 = no filter */
+  int cw_len;            /* --algo cissa|csa2; 16 or 8 */
+  int verbose;           /* -v */
+  int color_mode;        /* --color; log_color_t */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

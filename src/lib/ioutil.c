@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "ioutil.h"
 
@@ -31,4 +32,14 @@ int read_all(FILE *f, char **out, size_t *out_len) {
   *out = buf;
   *out_len = len;
   return 0;
+}
+
+size_t bufcpy(char *dst, size_t dstsz, const char *src) {
+  size_t len = strlen(src);
+  if (dstsz) {
+    size_t n = len < dstsz - 1 ? len : dstsz - 1;
+    memcpy(dst, src, n);
+    dst[n] = '\0';
+  }
+  return len;
 }

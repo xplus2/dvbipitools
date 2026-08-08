@@ -6,9 +6,31 @@ Records a DVB-IPI stream to a file or to stdout.
 dipirec -i <uri> -o <path> [options]
 ```
 
+## Options
+
+| flag | long form         | argument              | default                       |
+|------|-------------------|-----------------------|-------------------------------|
+| `-i` | `--in`            | `<uri>`               | required                      |
+| `-o` | `--out`           | `<path>` / `-`        | required                      |
+| `-a` | `--audio`         | `<track>` / `all`     | `all`                         |
+| `-f` | `--format`        | `raw\|ts\|mkv\|mka`   | from `-o` suffix, else `ts`   |
+| `-p` | `--pmt-pid`       | `<pid>` / `all`       | none (see below)              |
+| `-s` | `--subtitles`     | `strip\|keep\|srt`    | `keep`                        |
+| `-t` | `--time`          | `<duration>`          | no limit (runs until stopped) |
+| `-I` | `--iface`         | `<iface>`             | kernel route                  |
+| `-v` | `--verbose`       |                       | off                           |
+|      | `--sub-lead`      | `<ms>`                | `1000`                        |
+|      | `--color`         | `auto\|always\|never` | `auto`                        |
+|      | `--ret`           | `<addr>:<port>`       | off (no gap repair)           |
+|      | `--no-ret-mc`     |                       | off (joins repair session)    |
+|      | `--ret-mc-port`   | `<port>`              | same as `-i`'s port           |
+|      | `--ret-pt`        | `<n>`                 | `99`                          |
+|      | `--ret-wait`      | `<ms>`                | `200`                         |
+| `-h` | `--help`          |                       |                               |
+
 ## Input (`-i`)
 
-| schema                                   | what's this?                       |
+| schema                                       | what's this?                   |
 |----------------------------------------------|--------------------------------|
 | `rtp://@<group>:<port>`                      | RTP wrapped SPTS               |
 | `udp://@<group>:<port>`                      | plain SPTS                     |
@@ -18,6 +40,28 @@ dipirec -i <uri> -o <path> [options]
 
 For `rtp://` and `udp://` the tool joins the group itself (IGMPv2 / MLD, any source) and leaves on exit.
 RTP headers are detected and removed automatically, so a source that is actually plain TS works even when given as `rtp://`.
+
+The source can be a single-program stream (SPTS) or a multi-program mux (MPTS, e.g. one produced by
+`dipitvhead`'s own multi-`-i` output). See `-p` below for how an MPTS is handled.
+
+## MPTS input (`-p`)
+
+On connect, dipirec waits for the PAT and checks how many programs the source actually carries.
+
+* **SPTS** (one program): `-p` is ignored - a warning is logged if it was given - and recording proceeds
+  exactly as always.
+* **MPTS**, `-p <pid>` given: pins that one program's PMT pid, then everything else works as if it were
+  an SPTS (all formats, `-a`/`-s` included). Rejected if that pid isn't actually in the PAT.
+* **MPTS**, `-p all` given: record every program at once.
+  * `-f raw`/`-f ts`: forwarded unfiltered - with nothing selected there's nothing left to filter.
+  * `-f mka`: every program's audio becomes its own track (forces `-a all`, since a single `-a N` has no
+    coherent meaning across differently-numbered programs), each track labeled with that program's own
+    SDT name once it arrives.
+  * `-f mkv`: rejected. Matroska has no way to say which audio track belongs to which of several video
+    tracks (there's no such association in the format yet), so `-f mkv` always needs a single `-p <pid>`.
+* **MPTS**, neither given: fails early, after a brief wait for each program's SDT name, listing the
+  available `sid`/PMT pid/name so you can choose. A program whose name never arrives in that window is
+  listed as `(no SDT)` rather than blocking further.
 
 ## Output (`-o`)
 
@@ -136,20 +180,26 @@ Prints a single, self updating line to stderr about once a second.
 
 ```sh
 # 30 minutes to a transport stream
-dipirec -i rtp://@239.2.24.1:8208 -o show.ts -t 30m -I eth0
+dipirec -i rtp://@239.19.75.1:8700 -o show.ts -t 30m -I eth0
 
 # Matroska, second audio track only, subtitles as SRT
-dipirec -i rtp://@239.2.24.1:8208 -o show.mkv -a 2 -s srt
+dipirec -i rtp://@239.19.75.1:8700 -o show.mkv -a 2 -s srt
 
 # radio to Matroska audio
-dipirec -i udp://@239.0.144.1:8208 -o radio.mka -t 1h
+dipirec -i udp://@239.0.175.1:8700 -o radio.mka -t 1h
 
 # untouched transport stream through a udpxy gateway
-dipirec -i http://10.0.0.1:4022/rtp/239.2.24.1~8208 -o dump.ts -f raw
+dipirec -i http://10.0.0.1:4022/rtp/239.19.75.1~8700 -o dump.ts -f raw
 
 # pipe to another tool
-dipirec -i rtp://@239.2.24.1:8208 -o - -f ts | ffplay -
+dipirec -i rtp://@239.19.75.1:8700 -o - -f ts | ffplay -
 
 # with RET gap repair against a dipifccret edge server
-dipirec -i rtp://@239.2.24.1:8208 -o show.ts --ret 10.0.0.1:6000
+dipirec -i rtp://@239.19.75.1:8700 -o show.ts --ret 10.0.0.1:6000
+
+# MPTS source: pin one program
+dipirec -i rtp://@239.1.1.3:5000 -p 0x1000 -o show.ts
+
+# MPTS source: every program's audio into one MKA
+dipirec -i rtp://@239.1.1.3:5000 -p all -o all_channels.mka
 ```

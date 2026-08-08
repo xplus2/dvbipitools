@@ -60,6 +60,13 @@ typedef struct {
   unsigned pmt_pid;
 } psi_program_t;
 
+typedef struct {
+  unsigned program_number; /* == service_id */
+  unsigned pmt_pid;
+  int resolved; /* own PMT parsed ok */
+  char service_name[PSI_NAME], provider_name[PSI_NAME]; /* "" until own SDT entry seen */
+} psi_multi_program_t;
+
 typedef struct psi psi_t;
 
 psi_t *psi_new(void);
@@ -71,6 +78,19 @@ void psi_feed(psi_t *c, const unsigned char *pkt); /* one 188-byte packet */
  * caller should cross-check against psi_pat_programs() to catch a pid not
  * actually present in the PAT - psi_ready() simply never becomes true. */
 void psi_select_pmt_pid(psi_t *c, unsigned pmt_pid);
+
+/* call before feeding: every candidate's PMT resolves independently, no
+ * single-first lock. SDT-actual names captured per program too. not
+ * enforced mutually exclusive with psi_select_pmt_pid().
+ * side effect: single-current-program accessors (psi_program_number,
+ * psi_pmt_pid, psi_pcr_pid, psi_es, psi_audio_count, psi_scrambling_mode,
+ * psi_service_name, psi_provider_name) then track whichever program most
+ * recently resolved, not a stable one - use psi_multi_programs() instead. */
+void psi_enable_multi_program(psi_t *c);
+
+/* one entry per PAT-listed program, valid once psi_have_pat().
+ * empty unless psi_enable_multi_program() was called. */
+const psi_multi_program_t *psi_multi_programs(const psi_t *c, int *count);
 
 int psi_have_pat(const psi_t *c);
 int psi_have_pmt(const psi_t *c);
@@ -94,7 +114,7 @@ unsigned psi_emm_pid(const psi_t *c);
 unsigned psi_ca_system_id(const psi_t *c);
 
 /* PMT program_info's scrambling_descriptor (ETSI TS 103 127 clause 7) mode byte,
-   0 if no PMT seen yet or it carried none. Common values: 0x02 CSA2, 0x10 CISSA -
+   0 if no PMT seen yet or it carried none. Common values: 0x02 CSA2, 0x10 CISSA.
    this header doesn't define those, they're not PSI/SI, just where the byte lives */
 unsigned char psi_scrambling_mode(const psi_t *c);
 
@@ -106,6 +126,9 @@ const char *psi_provider_name(const psi_t *c);
 const char *psi_network_name(const psi_t *c);
 
 pid_class_t psi_classify(const psi_t *c, unsigned pid);
+
+/* 1 if psi_feed() would act on this pid (table pid, locked pmt, or a pmt candidate), 0: no-op */
+int psi_wants_pid(const psi_t *c, unsigned pid);
 
 /* last section incl. CRC, for ts filter edits. NULL until seen */
 const unsigned char *psi_pat_section(const psi_t *c, size_t *len);

@@ -70,26 +70,37 @@ add_executable(dipitvhead
     input/source.c
     mux/pmtbuild.c
     mux/aitbuild.c
-    mux/cadescbuild.c
     mux/remux.c
     mux/bitrate.c
-    cas/simulcrypt_msg.c
-    cas/ecmg_client.c
-    cas/emmg_server.c
     cas/cas.c
+    ../lib/mux/cadescbuild.c
+    ../lib/cas/cas_args.c
+    ../lib/cas/simulcrypt_msg.c
+    ../lib/cas/ecmg_client.c
+    ../lib/cas/emmg_server.c
+    ../lib/cas/cas_group.c
+    ../lib/cas/cas_scramble_engine.c
     ../lib/log.c
+    ../lib/argutil.c
     ../lib/signal.c
+    ../lib/metrics/protocol.c
+    ../lib/metrics/export.c
     ../lib/net/multicast.c
+    ../lib/net/netconnect.c
     ../lib/net/udpxy.c
     ../lib/net/tssource.c
+    ../lib/net/retryset.c
     ${TLS_SRC}
     ../lib/net/httpclient.c
+    ../lib/ioutil.c
     ../lib/demux/crc32.c
     ../lib/demux/psi.c
+    ../lib/demux/psi_section_asm.c
     ../lib/demux/tspack.c
     ../lib/demux/rtp.c
     ../lib/mux/rtpheader.c
     ../lib/mux/psi_build.c
+    ../lib/mux/mpts.c
     ../lib/mux/tspacket_write.c
     ../lib/scrambler/scrambler.c
     ${CISSA_SRC}

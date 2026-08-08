@@ -9,7 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
+
+#include "lib/argutil.h"
+#include "lib/log.h"
 
 #include "args.h"
 #include "version.h"
@@ -18,126 +20,31 @@ static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 static void argerr(const char *fmt, ...) {
   va_list ap;
-  fputs(TOOL_NAME ": ", stderr);
   va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
+  argutil_verr(TOOL_NAME, fmt, ap);
   va_end(ap);
-  fputc('\n', stderr);
 }
 
-/* port 1..65535, digits only */
-static int port_parse(const char *p, unsigned *out) {
-  char *end;
-  unsigned long v;
-  if (*p == '\0')
-    return -1;
-  errno = 0;
-  v = strtoul(p, &end, 10);
-  if (errno || *end != '\0' || v == 0 || v > 65535)
-    return -1;
-  *out = (unsigned)v;
-  return 0;
-}
-
-/* rest: [@]addr:port */
+/* rest: [@]addr:port, multicast literal required */
 static int parse_direct(const char *rest, source_t *s) {
   const char *p = rest;
-  char addr[64];
 
   if (*p == '@')
     p++;
-  if (*p == '[') {
-    const char *close = strchr(p, ']');
-    size_t len;
-    if (!close)
-      return -1;
-    len = (size_t)(close - (p + 1));
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, p + 1, len);
-    addr[len] = '\0';
-    if (close[1] != ':' || port_parse(close + 2, &s->port))
-      return -1;
-    s->family = AF_INET6;
-  } else {
-    const char *colon = strrchr(p, ':');
-    size_t len;
-    if (!colon)
-      return -1;
-    len = (size_t)(colon - p);
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, p, len);
-    addr[len] = '\0';
-    if (port_parse(colon + 1, &s->port))
-      return -1;
-    s->family = AF_INET;
-  }
+  if (argutil_addrport_parse(p, &s->family, s->group, sizeof s->group, &s->port))
+    return -1;
 
-  /* multicast literal required */
   if (s->family == AF_INET) {
     struct in_addr a;
-    if (inet_pton(AF_INET, addr, &a) != 1)
-      return -1;
+    inet_pton(AF_INET, s->group, &a);
     if ((ntohl(a.s_addr) >> 28) != 0xE) /* 224.0.0.0/4 */
       return -1;
   } else {
     struct in6_addr a6;
-    if (inet_pton(AF_INET6, addr, &a6) != 1)
-      return -1;
+    inet_pton(AF_INET6, s->group, &a6);
     if (a6.s6_addr[0] != 0xFF) /* ff00::/8 */
       return -1;
   }
-
-  strncpy(s->group, addr, sizeof s->group - 1);
-  s->group[sizeof s->group - 1] = '\0';
-  return 0;
-}
-
-/* [addr]:<port> or <addr4>:<port>, unicast, no multicast restriction (unlike parse_direct above) */
-static int unicast_addr_port_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
-  char addr[64];
-  if (*s == '[') {
-    const char *close = strchr(s, ']');
-    size_t len;
-    if (!close)
-      return -1;
-    len = (size_t)(close - (s + 1));
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, s + 1, len);
-    addr[len] = '\0';
-    if (close[1] != ':' || port_parse(close + 2, port_out))
-      return -1;
-    *family = AF_INET6;
-  } else {
-    const char *colon = strrchr(s, ':');
-    size_t len;
-    if (!colon)
-      return -1;
-    len = (size_t)(colon - s);
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, s, len);
-    addr[len] = '\0';
-    if (port_parse(colon + 1, port_out))
-      return -1;
-    *family = AF_INET;
-  }
-
-  if (*family == AF_INET) {
-    struct in_addr a;
-    if (inet_pton(AF_INET, addr, &a) != 1)
-      return -1;
-  } else {
-    struct in6_addr a6;
-    if (inet_pton(AF_INET6, addr, &a6) != 1)
-      return -1;
-  }
-
-  if (strlen(addr) >= addr_out_sz)
-    return -1;
-  strcpy(addr_out, addr);
   return 0;
 }
 
@@ -179,7 +86,7 @@ static int parse_udpxy(const char *rest, source_t *s) {
       return -1;
     memcpy(portbuf, p, len);
     portbuf[len] = '\0';
-    if (port_parse(portbuf, &s->http_port))
+    if (argutil_port_parse(portbuf, &s->http_port))
       return -1;
     p = pe;
   } else {
@@ -328,6 +235,27 @@ long duration_parse(const char *s) {
   }
 }
 
+/* decimal or 0x-hex, PMT pid range 0x0010..0x1FFE */
+static int pid_parse(const char *s, unsigned *out) {
+  char *end;
+  unsigned long v = strtoul(s, &end, 0);
+  if (*end != '\0' || v < 0x0010 || v > 0x1FFE)
+    return -1;
+  *out = (unsigned)v;
+  return 0;
+}
+
+static int parse_pmt_sel(const char *s, config_t *cfg) {
+  if (strcmp(s, "all") == 0) {
+    cfg->pmt_sel = PMT_SEL_ALL;
+    return 0;
+  }
+  if (pid_parse(s, &cfg->pmt_pid))
+    return -1;
+  cfg->pmt_sel = PMT_SEL_PID;
+  return 0;
+}
+
 static int parse_audio(const char *s, config_t *cfg) {
   char *end;
   long v;
@@ -344,21 +272,6 @@ static int parse_audio(const char *s, config_t *cfg) {
   return 0;
 }
 
-typedef struct {
-  const char *name;
-  int value;
-} enum_map_t;
-
-static int map_lookup(const enum_map_t *m, size_t n, const char *s, int *out) {
-  size_t i;
-  for (i = 0; i < n; i++)
-    if (strcmp(s, m[i].name) == 0) {
-      *out = m[i].value;
-      return 0;
-    }
-  return -1;
-}
-
 static int fmt_from_name(const char *s, out_fmt_t *f) {
   static const enum_map_t map[] = {{"raw", FMT_RAW}, {"ts", FMT_TS}, {"mkv", FMT_MKV}, {"mka", FMT_MKA}};
   int v;
@@ -368,25 +281,26 @@ static int fmt_from_name(const char *s, out_fmt_t *f) {
   return 0;
 }
 
-/* 1 if suffix gave format */
+/* 1 if suffix gave format. no "raw": not a meaningful file extension, name-only via -f */
 static int fmt_from_suffix(const char *path, out_fmt_t *f) {
+  static const enum_map_t map[] = {{"ts", FMT_TS}, {"mkv", FMT_MKV}, {"mka", FMT_MKA}};
   const char *dot = strrchr(path, '.');
+  char lower[8];
+  size_t i;
+  int v;
+
   if (!dot)
     return 0;
   dot++;
-  if (strcasecmp(dot, "ts") == 0) {
-    *f = FMT_TS;
-    return 1;
-  }
-  if (strcasecmp(dot, "mkv") == 0) {
-    *f = FMT_MKV;
-    return 1;
-  }
-  if (strcasecmp(dot, "mka") == 0) {
-    *f = FMT_MKA;
-    return 1;
-  }
-  return 0;
+  for (i = 0; i < sizeof lower - 1 && dot[i]; i++)
+    lower[i] = (char)tolower((unsigned char)dot[i]);
+  if (dot[i]) /* too long to be any known suffix */
+    return 0;
+  lower[i] = '\0';
+  if (map_lookup(map, sizeof map / sizeof map[0], lower, &v))
+    return 0;
+  *f = (out_fmt_t)v;
+  return 1;
 }
 
 static void print_help(void) {
@@ -394,30 +308,31 @@ static void print_help(void) {
       "usage: %s -i <uri> -o <path> [options]\n\n"
       "record a DVB-IPI stream to a file or stdout\n\n"
       "sources (-i):\n"
-      "  rtp://@<group>:<port>              RTP wrapped SPTS multicast (@ "
-      "optional)\n"
-      "  udp://@<group>:<port>              raw SPTS multicast (@ optional)\n"
-      "  http://<host>:<port>/<cmd>/<group>:<port>/   udpxy proxy (cmd = "
-      "rtp|udp; also %% ~)\n"
-      "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8208\n\n"
+      "  rtp://@<group>:<port>    RTP wrapped SPTS multicast (@ optional)\n"
+      "  udp://@<group>:<port>    raw SPTS multicast (@ optional)\n"
+      "  http://<host>:<port>/<cmd>/<group>:<port>/   udpxy proxy (cmd = rtp|udp; also %% ~)\n"
+      "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8700\n\n"
       "options:\n"
-      "  -o, --out <path>       output file, or \"-\" for stdout\n"
-      "  -i, --in <uri>         input source (see above)\n"
-      "  -a, --audio <track>    audio track from 1, or \"all\" (default: all)\n"
-      "  -f, --format <format>  raw|ts|mkv|mka (default: from -o suffix, else "
-      "ts)\n"
-      "  -s, --subtitles <mode> strip|keep|srt (srt: mkv/mka only; default: keep)\n"
-      "  -t, --time <duration>  e.g. 90, 5m, 5m30s, 1h3m20s, 01:20:03, 10:20\n"
-      "  -I, --iface <iface>   interface for the multicast join\n"
-      "  -v, --verbose          periodic recording stats on stderr\n"
-      "      --sub-lead <ms>    shift subtitles earlier (default 1000)\n"
-      "      --color <when>     auto|always|never (default auto)\n"
-      "      --ret <addr>:<port>   RET server unicast address (rtp:// only; enables gap repair)\n"
-      "      --no-ret-mc        skip joining the RET server's multicast repair session\n"
-      "      --ret-mc-port <port>  override the repair session port (default: -i's port)\n"
-      "      --ret-pt <n>       RTX payload type, must match the RET server (default 99)\n"
-      "      --ret-wait <ms>    hold budget after a NACK before giving up on a gap (default 200)\n"
-      "  -h, --help             this help\n\n"
+      "  -o, --out <path>         output file, or \"-\" for stdout\n"
+      "  -i, --in <uri>           input source (see above)\n"
+      "  -a, --audio <track>      audio track from 1, or \"all\" (default: all)\n"
+      "  -f, --format <format>    raw|ts|mkv|mka (default: from -o suffix, else ts)\n"
+      "  -p, --pmt-pid <pid|all>  MPTS source only: pin one PMT pid, or record\n"
+      "                           every program (\"all\"; rejected with -f mkv).\n"
+      "                           ignored (warned) on an SPTS source. omitted on\n"
+      "                           an MPTS source: fails early, lists programs\n"
+      "  -s, --subtitles <mode>   strip|keep|srt (srt: mkv/mka only; default: keep)\n"
+      "  -t, --time <duration>    e.g. 90, 5m, 5m30s, 1h3m20s, 01:20:03, 10:20\n"
+      "  -I, --iface <iface>      interface for the multicast join\n"
+      "  -v, --verbose            periodic recording stats on stderr\n"
+      "      --sub-lead <ms>      shift subtitles earlier (default 1000)\n"
+      "      --color <when>       auto|always|never (default auto)\n"
+      "      --ret <addr>:<port>  RET server unicast address (rtp:// only; enables gap repair)\n"
+      "      --no-ret-mc          skip joining the RET server's multicast repair session\n"
+      "      --ret-mc-port <port> override the repair session port (default: -i's port)\n"
+      "      --ret-pt <n>         RTX payload type, must match the RET server (default 99)\n"
+      "      --ret-wait <ms>      hold budget after a NACK before giving up on a gap (default 200)\n"
+      "  -h, --help               this help\n\n"
       "formats:\n"
       "  raw   unwrap RTP only, transport stream otherwise untouched\n"
       "  ts    single program transport stream; drops stuffing, NIT, EIT,\n"
@@ -425,10 +340,10 @@ static void print_help(void) {
       "  mkv   Matroska: H.264/HEVC video, AC3/EAC3/MP2/MP3/AAC/AAC-LATM audio\n"
       "  mka   same, audio only\n\n"
       "examples:\n"
-      "  %s -i rtp://@239.2.24.1:8208 -o show.ts\n"
-      "  %s -i rtp://@239.2.24.1:8208 -o show.mkv -s srt -t 1h30m -v\n"
-      "  %s -i udp://@239.0.144.1:8208 -o radio.mka -I eth0\n"
-      "  %s -i http://10.0.0.1:4022/rtp/239.2.24.1:8208 -o show.ts\n",
+      "  %s -i rtp://@239.19.75.1:8700 -o show.ts\n"
+      "  %s -i rtp://@239.19.75.1:8700 -o show.mkv -s srt -t 1h30m -v\n"
+      "  %s -i udp://@239.0.175.1:8700 -o radio.mka -I eth0\n"
+      "  %s -i http://10.0.0.1:4022/rtp/239.19.75.1:8700 -o show.ts\n",
       TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
@@ -438,6 +353,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"in", required_argument, 0, 'i'},
       {"audio", required_argument, 0, 'a'},
       {"format", required_argument, 0, 'f'},
+      {"pmt-pid", required_argument, 0, 'p'},
       {"subtitles", required_argument, 0, 's'},
       {"time", required_argument, 0, 't'},
       {"iface", required_argument, 0, 'I'},
@@ -465,7 +381,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->ret.rtx_pt = 99;
   cfg->ret.wait_ms = 200;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "o:i:a:f:s:t:I:vh", longopts, NULL)) !=
+  while ((c = getopt_long(argc, argv, "o:i:a:f:p:s:t:I:vh", longopts, NULL)) !=
          -1) {
     switch (c) {
       case 'o':
@@ -487,6 +403,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'f':
         fmt_arg = optarg;
         break;
+      case 'p':
+        if (parse_pmt_sel(optarg, cfg)) {
+          argerr("invalid -p pmt-pid: %s (0x0010..0x1FFE, or \"all\")", optarg);
+          return ARGS_ERR;
+        }
+        break;
       case 's':
         sub_arg = optarg;
         break;
@@ -497,9 +419,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->iface = optarg;
         break;
       case 1001: {
-        static const enum_map_t map[] = {{"auto", 0}, {"always", 1}, {"never", 2}};
-        int v;
-        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+        log_color_t v;
+        if (log_color_from_string(optarg, &v)) {
           argerr("invalid --color: %s (auto|always|never)", optarg);
           return ARGS_ERR;
         }
@@ -520,7 +441,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->verbose = 1;
         break;
       case 1002:
-        if (unicast_addr_port_parse(optarg, &cfg->ret.family, cfg->ret.addr, sizeof cfg->ret.addr, &cfg->ret.port)) {
+        if (argutil_addrport_parse(optarg, &cfg->ret.family, cfg->ret.addr, sizeof cfg->ret.addr, &cfg->ret.port)) {
           argerr("invalid --ret addr:port: %s", optarg);
           return ARGS_ERR;
         }

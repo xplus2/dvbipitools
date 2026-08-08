@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <arpa/inet.h>
 #include <check.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -13,21 +14,28 @@
 
 static channel_table_t *g_table;
 
+/* channel_lookup() takes raw address bytes now, not text */
+static channel_t *lookup_ip(channel_table_t *t, const char *ip, unsigned port) {
+  unsigned char addr[4];
+  inet_pton(AF_INET, ip, addr);
+  return channel_lookup(t, AF_INET, addr, sizeof addr, port);
+}
+
 static channel_t *make_channel_with_rap(size_t cache_cap, int n_extra_entries) {
   channel_t *c;
   unsigned char pkt[188];
   int i;
 
   g_table = channel_table_new(1, 0, cache_cap);
-  c = channel_lookup(g_table, AF_INET, "239.1.1.1", 5000);
+  c = lookup_ip(g_table, "239.1.1.1", 5000);
 
   /* fake RAP: channel.c already covers detection, just need have_rap=1 */
   memset(pkt, 0xAB, sizeof pkt);
   pkt[0] = 0x47;
   atomic_store_explicit(&c->cache.have_rap, 1, memory_order_relaxed);
-  channel_store(c, 0x1234, 1, 0, pkt, sizeof pkt); /* entry 0: becomes "RAP" once have_rap seen */
+  channel_store(g_table, c, 0x1234, 1, 0, pkt, sizeof pkt); /* entry 0: becomes "RAP" once have_rap seen */
   for (i = 0; i < n_extra_entries; i++)
-    channel_store(c, 0x1234, (uint16_t)(2 + i), 0, pkt, sizeof pkt);
+    channel_store(g_table, c, 0x1234, (uint16_t)(2 + i), 0, pkt, sizeof pkt);
   return c;
 }
 
@@ -40,7 +48,7 @@ END_TEST
 
 START_TEST(burst_decide_rejects_when_no_rap) {
   channel_table_t *t = channel_table_new(1, 0, 8); /* FCC cache, but nothing stored yet */
-  channel_t *c = channel_lookup(t, AF_INET, "239.1.1.1", 5000);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
   rtcp_rams_r_t req;
   memset(&req, 0, sizeof req);
   ck_assert_int_eq(burst_decide(c, &req), BURST_REJECT);

@@ -17,8 +17,8 @@ static int get_bit(bitreader_t *br) {
   return (int)v;
 }
 
-int fragment_encode_program_information(const epg_programme_t *pr, bitwriter_t *bw, strrepo_writer_t *sw) {
-  char crid[EPG_ID_LEN * 3 + 64];
+int fragment_encode_program_information(const bcg_programme_t *pr, bitwriter_t *bw, strrepo_writer_t *sw) {
+  char crid[BCG_ID_LEN * 3 + 64];
   tva_build_crid(pr->channel_id, pr->start, crid, sizeof crid);
   if (dvb_locator_encode(bw, sw, crid))
     return -1;
@@ -41,7 +41,7 @@ int fragment_encode_program_information(const epg_programme_t *pr, bitwriter_t *
   return 0;
 }
 
-int fragment_decode_program_information(bitreader_t *br, strrepo_reader_t *sr, char *crid_out, size_t crid_cap, epg_programme_t *pr_out) {
+int fragment_decode_program_information(bitreader_t *br, strrepo_reader_t *sr, char *crid_out, size_t crid_cap, bcg_programme_t *pr_out) {
   int present;
   memset(pr_out, 0, sizeof *pr_out);
   if (dvb_locator_decode(br, sr, crid_out, crid_cap))
@@ -66,13 +66,13 @@ int fragment_decode_program_information(bitreader_t *br, strrepo_reader_t *sr, c
   return 0;
 }
 
-int fragment_encode_schedule(const char *channel_id, const epg_programme_t *programmes, int count, bitwriter_t *bw, strrepo_writer_t *sw) {
+int fragment_encode_schedule(const char *channel_id, const bcg_programme_t *programmes, int count, bitwriter_t *bw, strrepo_writer_t *sw) {
   int j;
   if (dvb_string_encode(sw, channel_id))
     return -1;
   for (j = 0; j < count; j++) {
-    const epg_programme_t *pr = &programmes[j];
-    char crid[EPG_ID_LEN * 3 + 64];
+    const bcg_programme_t *pr = &programmes[j];
+    char crid[BCG_ID_LEN * 3 + 64];
     if (strcmp(pr->channel_id, channel_id))
       continue;
     if (put_bit(bw, 1))
@@ -90,14 +90,14 @@ int fragment_encode_schedule(const char *channel_id, const epg_programme_t *prog
   return put_bit(bw, 0);
 }
 
-int fragment_decode_schedule(bitreader_t *br, strrepo_reader_t *sr, epg_doc_t *doc, fragment_text_lookup_fn lookup, void *ctx) {
-  char channel[EPG_ID_LEN];
+int fragment_decode_schedule(bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, fragment_text_lookup_fn lookup, void *ctx) {
+  char channel[BCG_ID_LEN];
   if (dvb_string_decode(sr, channel, sizeof channel))
     return -1;
   for (;;) {
     int more = get_bit(br);
-    char crid[EPG_ID_LEN * 3 + 64];
-    epg_programme_t *pr;
+    char crid[BCG_ID_LEN * 3 + 64];
+    bcg_programme_t *pr;
     int present;
     if (more < 0)
       return -1;
@@ -105,7 +105,7 @@ int fragment_decode_schedule(bitreader_t *br, strrepo_reader_t *sr, epg_doc_t *d
       return 0;
     if (dvb_locator_decode(br, sr, crid, sizeof crid))
       return -1;
-    pr = epg_add_programme(doc);
+    pr = bcg_add_programme(doc);
     if (!pr)
       return -1;
     snprintf(pr->channel_id, sizeof pr->channel_id, "%s", channel);
@@ -124,7 +124,7 @@ int fragment_decode_schedule(bitreader_t *br, strrepo_reader_t *sr, epg_doc_t *d
   }
 }
 
-int fragment_encode_service_information(const epg_channel_t *c, bitwriter_t *bw, strrepo_writer_t *sw) {
+int fragment_encode_service_information(const bcg_channel_t *c, bitwriter_t *bw, strrepo_writer_t *sw) {
   int j;
   char dtt[64];
   if (dvb_string_encode(sw, c->id))
@@ -143,7 +143,7 @@ int fragment_encode_service_information(const epg_channel_t *c, bitwriter_t *bw,
   return dvb_locator_encode(bw, sw, dtt);
 }
 
-int fragment_decode_service_information(bitreader_t *br, strrepo_reader_t *sr, epg_channel_t *c_out) {
+int fragment_decode_service_information(bitreader_t *br, strrepo_reader_t *sr, bcg_channel_t *c_out) {
   char dtt[64];
   unsigned onid, tsid, sid;
   memset(c_out, 0, sizeof *c_out);
@@ -151,14 +151,14 @@ int fragment_decode_service_information(bitreader_t *br, strrepo_reader_t *sr, e
     return -1;
   for (;;) {
     int more = get_bit(br);
-    char name[EPG_ID_LEN];
+    char name[BCG_ID_LEN];
     if (more < 0)
       return -1;
     if (!more)
       break;
     if (dvb_string_decode(sr, name, sizeof name))
       return -1;
-    epg_channel_add_name(c_out, name);
+    bcg_channel_add_name(c_out, name);
   }
   if (dvb_locator_decode(br, sr, c_out->uri, sizeof c_out->uri))
     return -1;

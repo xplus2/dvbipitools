@@ -72,3 +72,21 @@ size_t ts_packet_emit(unsigned pid, unsigned char *cc, const unsigned char *poin
   }
   return count;
 }
+
+size_t ts_packet_emit_partial(unsigned pid, unsigned char *cc, const unsigned char *pointer_byte, const unsigned char *data, size_t len, size_t *offset, size_t max_packets, ts_packet_cb cb, void *ctx) {
+  size_t sent = *offset, count = 0;
+  int first = (sent == 0);
+  while (count < max_packets && sent < len) {
+    size_t remaining = len - sent;
+    size_t ptr_overhead = (first && pointer_byte) ? 1 : 0;
+    size_t space = 184 - ptr_overhead;
+    size_t take = remaining < space ? remaining : space;
+    size_t pad = space - take;
+    write_packet(pid, cc, first, first ? pointer_byte : NULL, data + sent, take, 0, 0, pad, cb, ctx);
+    sent += take;
+    first = 0;
+    count++;
+  }
+  *offset = sent;
+  return count;
+}

@@ -1,6 +1,34 @@
+dvbipitools (2.2.0-1) unstable; urgency=medium
+  * dipiradiohead: same CAS treatment as dipitvhead
+  * dipitvhead:
+    + moved out common components to lib/cas/
+    + --cas-pids usability improvements
+  * perf track w32 findings (that were not _that_ performance related at all this time):
+    + CAS_CORE_MAX_PIDS > 15 didn't scramble (>15)
+    + dipifccret:
+      - discard unused channels fixed
+      - O(N) channel_lookup is off the (hash-)table
+    + httpclient.c resiliency: didn't have our own timeout enforcement
+    + some minor "snprintf() concat has no place on a hot path" hunting
+  * merged 2nd (and largest) part of Multi-Program TS scripts & tools (writers)
+    + multiple concurrent inputs in dipiradiohead & dipitvhead -> MPTS writer
+    + 2 steps forward, 1 back for proper non-blocking states on opening client contrib conns ... and back again
+  * fixed charset mapping bug in dipiradiohead's EIT tagger
+  * dipifccret: direct TPACKET_V3 and BPF instead of pcap
+  * dipisds and dipiepg: reload source/mapping files on SIGHUP
+  * deduplication of args parsers, ts packers and section assembly
+  * fixed double-memcpy in dipi*head
+  * dipiepg renamed to dipibcg (ETSI TS 102 539 calls it Broadcast Content Guide, not EPG)
+  * MPTS and CAS needed better metrics for testing = priority lane for OpenMetrics
+    + welcome dipimetrics collector, providing a per-host HTTP /metrics Prometheus endpoint
+  * consolidating metrics opened the next door: multi-cas reporting
+    + so, initial multi-cas support also found its way to dipitvhead and dipiradiohead (merge complete)
+  * http_client lib: chunked support
+  * deb package: dynamic linking instead of static; dipiradiohead/dipitvhead/dipidescramble (tar.gz stays static)
+ -- dvbipitools authors <unspecified@example.com>  Sun, 09 Aug 2026 00:00:00 +0200
+
 dvbipitools (2.1.1-1) unstable; urgency=medium
   * test fixes
-
  -- dvbipitools authors <unspecified@example.com>  Tue, 04 Aug 2026 00:00:00 +0200
 
 dvbipitools (2.1.0-1) unstable; urgency=medium

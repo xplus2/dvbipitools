@@ -15,6 +15,8 @@
 #include "lib/demux/rtx.h"
 #include "lib/log.h"
 #include "lib/mux/rtcp_build.h"
+#include "lib/net/netconnect.h"
+#include "lib/signal.h"
 #include "ret_client.h"
 
 #define RET_GAP_MAX 32       /* missing seqs tracked per gap; a bigger one just resyncs, matching no-RET behavior */
@@ -53,12 +55,6 @@ struct ret_client {
   ret_outq_t outq[RET_OUTQ_SLOTS];
   size_t outq_head, outq_count;
 };
-
-static double mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
 
 static void outq_push(ret_client_t *r, const unsigned char *data, size_t len) {
   size_t idx;
@@ -233,6 +229,8 @@ static void on_repair(ret_client_t *r, const unsigned char *pkt, size_t len, dou
 
 static int uni_socket_open(const config_t *cfg) {
   int fd, on = 1, tos = RET_DSCP_RTCP;
+  struct sockaddr_storage ss;
+  socklen_t sslen;
 
   fd = socket(cfg->ret.family, SOCK_DGRAM, IPPROTO_UDP);
   if (fd < 0) {
@@ -241,39 +239,17 @@ static int uni_socket_open(const config_t *cfg) {
   }
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
 
-  if (cfg->ret.family == AF_INET) {
-    struct sockaddr_in a;
-    memset(&a, 0, sizeof a);
-    a.sin_family = AF_INET;
-    a.sin_port = htons((unsigned short)cfg->ret.port);
-    if (inet_pton(AF_INET, cfg->ret.addr, &a.sin_addr) != 1) {
-      log_line("ret: bad --ret address: %s", cfg->ret.addr);
-      close(fd);
-      return -1;
-    }
-    if (connect(fd, (struct sockaddr *)&a, sizeof a) < 0) {
-      log_line("ret: connect: %s", strerror(errno));
-      close(fd);
-      return -1;
-    }
-    setsockopt(fd, IPPROTO_IP, IP_TOS, &tos, sizeof tos);
-  } else {
-    struct sockaddr_in6 a;
-    memset(&a, 0, sizeof a);
-    a.sin6_family = AF_INET6;
-    a.sin6_port = htons((unsigned short)cfg->ret.port);
-    if (inet_pton(AF_INET6, cfg->ret.addr, &a.sin6_addr) != 1) {
-      log_line("ret: bad --ret address: %s", cfg->ret.addr);
-      close(fd);
-      return -1;
-    }
-    if (connect(fd, (struct sockaddr *)&a, sizeof a) < 0) {
-      log_line("ret: connect: %s", strerror(errno));
-      close(fd);
-      return -1;
-    }
-    setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof tos);
+  if (netaddr_fill(cfg->ret.family, cfg->ret.addr, cfg->ret.port, &ss, &sslen)) {
+    log_line("ret: bad --ret address: %s", cfg->ret.addr);
+    close(fd);
+    return -1;
   }
+  if (connect(fd, (struct sockaddr *)&ss, sslen) < 0) {
+    log_line("ret: connect: %s", strerror(errno));
+    close(fd);
+    return -1;
+  }
+  net_set_dscp(fd, cfg->ret.family, tos);
   return fd;
 }
 
@@ -316,7 +292,7 @@ ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size
   if (n > 0)
     return n;
 
-  now = mono();
+  now = mono_seconds();
   timeout_ms = 1000;
   if (r->gap_pending) {
     double remain_ms = (r->gap_deadline - now) * 1000.0;
@@ -339,11 +315,11 @@ ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size
     return -1;
   }
 
-  now = mono();
+  now = mono_seconds();
 
   if (pfd[mi].revents & POLLIN) {
     unsigned char raw[65536];
-    ssize_t rn = mcast_recv(main, raw, sizeof raw);
+    ssize_t rn = mcast_recv(main, raw, sizeof raw, NULL);
     if (rn < 0)
       return -1;
     if (rn > 0) {
@@ -362,7 +338,7 @@ ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size
 
   if (ri >= 0 && (pfd[ri].revents & POLLIN)) {
     unsigned char raw[65536];
-    ssize_t rn = mcast_recv(r->repair, raw, sizeof raw);
+    ssize_t rn = mcast_recv(r->repair, raw, sizeof raw, NULL);
     if (rn > 0)
       on_repair(r, raw, (size_t)rn, now);
   }

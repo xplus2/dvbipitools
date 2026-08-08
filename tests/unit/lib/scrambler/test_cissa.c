@@ -106,8 +106,11 @@ END_TEST
 
 START_TEST(cissa_encrypt_block_rejects_bad_length) {
   unsigned char buf[15];
-  ck_assert_int_eq(cissa_encrypt_block(cw, buf, 0), -1);
-  ck_assert_int_eq(cissa_encrypt_block(cw, buf, 15), -1);
+  cissa_key_t *k = cissa_key_new(cw);
+  ck_assert_ptr_nonnull(k);
+  ck_assert_int_eq(cissa_encrypt_block(k, buf, 0), -1);
+  ck_assert_int_eq(cissa_encrypt_block(k, buf, 15), -1);
+  cissa_key_free(k);
 }
 END_TEST
 
@@ -131,8 +134,11 @@ END_TEST
 
 START_TEST(cissa_decrypt_block_rejects_bad_length) {
   unsigned char buf[15];
-  ck_assert_int_eq(cissa_decrypt_block(cw, buf, 0), -1);
-  ck_assert_int_eq(cissa_decrypt_block(cw, buf, 15), -1);
+  cissa_key_t *k = cissa_key_new(cw);
+  ck_assert_ptr_nonnull(k);
+  ck_assert_int_eq(cissa_decrypt_block(k, buf, 0), -1);
+  ck_assert_int_eq(cissa_decrypt_block(k, buf, 15), -1);
+  cissa_key_free(k);
 }
 END_TEST
 
@@ -208,6 +214,47 @@ START_TEST(scrambler_encrypt_packet_leaves_control_bits_clear_when_payload_too_s
 }
 END_TEST
 
+/* one shared key across all vectors: proves ctx reuse still resets IV per packet */
+START_TEST(cissa_reuses_key_schedule_correctly_across_packets) {
+  scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CISSA);
+  size_t i;
+
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, NULL, NULL), 0);
+  for (i = 0; i < sizeof vectors / sizeof vectors[0]; i++) {
+    unsigned char clear[188], scrambled[188], got[188];
+    hex_decode(vectors[i].clear_hex, clear, 188);
+    hex_decode(vectors[i].scrambled_hex, scrambled, 188);
+    memcpy(got, clear, 188);
+    ck_assert_int_eq(scrambler_encrypt_packet(s, got, SCRAMBLE_PARITY_EVEN), 0);
+    ck_assert_mem_eq(got, scrambled, 188);
+  }
+  scrambler_free(s);
+}
+END_TEST
+
+/* exercises the enc->dec direction switch path (full re-init, not just IV reset) */
+START_TEST(cissa_key_round_trips_after_direction_switch) {
+  const cissa_vector_t *v = &vectors[0];
+  unsigned char clear[188], scrambled[188], buf[188];
+  cissa_key_t *k = cissa_key_new(cw);
+
+  ck_assert_ptr_nonnull(k);
+  hex_decode(v->clear_hex, clear, 188);
+  hex_decode(v->scrambled_hex, scrambled, 188);
+
+  memcpy(buf, clear + 4, 184);
+  ck_assert_int_eq(cissa_encrypt_block(k, buf, 176), 0);
+  ck_assert_mem_eq(buf, scrambled + 4, 176);
+
+  memcpy(buf, scrambled + 4, 184);
+  ck_assert_int_eq(cissa_decrypt_block(k, buf, 176), 0);
+  ck_assert_mem_eq(buf, clear + 4, 176);
+
+  cissa_key_free(k);
+}
+END_TEST
+
 static unsigned char captured[188];
 static unsigned captured_n;
 
@@ -266,6 +313,8 @@ static Suite *cissa_suite(void) {
   tcase_add_loop_test(tc, cissa_vectors_descramble_full_packet, 0, sizeof vectors / sizeof vectors[0]);
   tcase_add_test(tc, cissa_encrypt_block_rejects_bad_length);
   tcase_add_test(tc, cissa_decrypt_block_rejects_bad_length);
+  tcase_add_test(tc, cissa_reuses_key_schedule_correctly_across_packets);
+  tcase_add_test(tc, cissa_key_round_trips_after_direction_switch);
   tcase_add_test(tc, scrambler_encrypt_packet_rejects_unset_key);
   tcase_add_test(tc, scrambler_encrypt_packet_leaves_control_bits_clear_when_payload_too_small);
   tcase_add_test(tc, scrambler_decrypt_packet_passes_through_unscrambled);

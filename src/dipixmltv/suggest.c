@@ -5,13 +5,14 @@
 #include <string.h>
 #include <strings.h>
 
-#include "lib/tva/epg_doc.h"
-#include "suggest.h"
+#include "lib/ioutil.h"
+#include "lib/tva/bcg_doc.h"
 #include "lib/tva/xmltv.h"
+#include "suggest.h"
 
 typedef struct {
-  char name[EPG_ID_LEN];
-  char uri[EPG_ID_LEN];
+  char name[BCG_ID_LEN];
+  char uri[BCG_ID_LEN];
   unsigned tsid, onid, sid;
 } scan_entry_t;
 
@@ -34,7 +35,7 @@ static int load_scan(FILE *f, scan_entry_t **out, int *out_n) {
   int n = 0, cap = 0;
 
   while (fgets(line, sizeof line, f)) {
-    char *fields[5];
+    char *fields[5] = {0};
     int nf = 0;
     char *p = line;
     size_t l = strlen(line);
@@ -65,9 +66,8 @@ static int load_scan(FILE *f, scan_entry_t **out, int *out_n) {
     }
     e = &scan[n++];
     memset(e, 0, sizeof *e);
-    /* cppcheck-suppress uninitvar -- nf starts 0, first loop pass always sets fields[0] */
-    snprintf(e->name, sizeof e->name, "%s", fields[0]);
-    snprintf(e->uri, sizeof e->uri, "%s", fields[1]);
+    bufcpy(e->name, sizeof e->name, fields[0]);
+    bufcpy(e->uri, sizeof e->uri, fields[1]);
     e->tsid = nf > 2 ? (unsigned)strtoul(fields[2], NULL, 10) : 0;
     e->onid = nf > 3 ? (unsigned)strtoul(fields[3], NULL, 10) : 0;
     e->sid = nf > 4 ? (unsigned)strtoul(fields[4], NULL, 10) : 0;
@@ -78,24 +78,24 @@ static int load_scan(FILE *f, scan_entry_t **out, int *out_n) {
 }
 
 int suggest_map(FILE *xmltv_f, FILE *scan_f, FILE *out) {
-  epg_doc_t doc;
+  bcg_doc_t doc;
   scan_entry_t *scan;
   int scan_n, i, j, k;
 
-  epg_doc_init(&doc);
+  bcg_doc_init(&doc);
   if (xmltv_read(xmltv_f, &doc)) {
-    epg_doc_free(&doc);
+    bcg_doc_free(&doc);
     return -1;
   }
   if (load_scan(scan_f, &scan, &scan_n)) {
-    epg_doc_free(&doc);
+    bcg_doc_free(&doc);
     return -1;
   }
 
   fputs("# suggested mapping - review before use\n# live lines are exact name matches; commented lines need manual confirmation\n", out);
 
   for (i = 0; i < doc.channel_count; i++) {
-    epg_channel_t *c = &doc.channels[i];
+    bcg_channel_t *c = &doc.channels[i];
     int exact = -1, fuzzy = -1;
     const char *first_name = c->name_count ? c->names[0] : "?";
     for (j = 0; j < scan_n && exact < 0; j++)
@@ -120,6 +120,6 @@ int suggest_map(FILE *xmltv_f, FILE *scan_f, FILE *out) {
       fprintf(out, "# UNMATCHED: %s (%s)\n", c->id, first_name);
   }
   free(scan);
-  epg_doc_free(&doc);
+  bcg_doc_free(&doc);
   return 0;
 }

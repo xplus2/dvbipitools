@@ -29,18 +29,23 @@ add_executable(dipirec
     record.c
     ret_client.c
     ../lib/log.c
+    ../lib/argutil.c
     ../lib/signal.c
     ../lib/net/multicast.c
+    ../lib/net/netconnect.c
     ../lib/net/udpxy.c
     ../lib/net/tssource.c
     ${TLS_SRC}
     ../lib/net/httpclient.c
+    ../lib/ioutil.c
     ../lib/demux/rtp.c
     ../lib/demux/rtx.c
     ../lib/demux/crc32.c
     ../lib/demux/psi.c
+    ../lib/demux/psi_section_asm.c
     ../lib/demux/tspack.c
     ../lib/demux/pes.c
+    ../lib/demux/mpts_probe.c
     ../lib/mux/rtcp_build.c
     ../lib/mux/ebml.c
     ../lib/mux/mkv.c

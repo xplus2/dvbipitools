@@ -13,13 +13,25 @@ void psi_put16(unsigned char *p, unsigned v) {
   p[1] = (unsigned char)v;
 }
 
+size_t psi_utf8_clamp(const char *s, size_t len, size_t max_bytes) {
+  size_t i = 0;
+  if (len <= max_bytes)
+    return len;
+  while (i < max_bytes) {
+    unsigned char b = (unsigned char)s[i];
+    size_t seqlen = (b < 0x80) ? 1 : ((b & 0xE0) == 0xC0) ? 2 : ((b & 0xF0) == 0xE0) ? 3 : ((b & 0xF8) == 0xF0) ? 4 : 1;
+    if (i + seqlen > max_bytes)
+      break;
+    i += seqlen;
+  }
+  return i;
+}
+
 size_t psi_put_text(unsigned char *out, size_t cap, const char *s) {
   size_t len;
   if (cap < 1)
     return 0;
-  len = strlen(s);
-  if (len > cap - 1)
-    len = cap - 1;
+  len = psi_utf8_clamp(s, strlen(s), cap - 1);
   out[0] = 0x15;
   memcpy(out + 1, s, len);
   return len + 1;
@@ -59,6 +71,28 @@ size_t psi_build_pat(unsigned tsid, unsigned version, unsigned program_number, u
   n += 2;
   psi_put16(out + n, 0xE000 | (pmt_pid & 0x1FFF));
   n += 2;
+
+  return psi_finish_section(out, n, cap, 0xB0);
+}
+
+size_t psi_build_pat_multi(unsigned tsid, unsigned version, const psi_pat_entry_t *programs, size_t n_programs, unsigned char *out, size_t cap) {
+  size_t n = 0, i;
+
+  if (cap < 12 + n_programs * 4)
+    return 0;
+  out[n++] = 0x00;
+  n += 2;
+  psi_put16(out + n, tsid);
+  n += 2;
+  out[n++] = (unsigned char)(0xC0 | ((version & 0x1F) << 1) | 0x01);
+  out[n++] = 0x00;
+  out[n++] = 0x00;
+  for (i = 0; i < n_programs; i++) {
+    psi_put16(out + n, programs[i].program_number);
+    n += 2;
+    psi_put16(out + n, 0xE000 | (programs[i].pmt_pid & 0x1FFF));
+    n += 2;
+  }
 
   return psi_finish_section(out, n, cap, 0xB0);
 }
@@ -128,6 +162,60 @@ size_t psi_build_sdt(unsigned version, unsigned tsid, unsigned onid, unsigned se
   field16 = ((4u & 0x7) << 13) | (0u << 12) | (dll & 0x0FFF); /* running_status=running, free_CA=0 */
   out[f16_pos] = (unsigned char)(field16 >> 8);
   out[f16_pos + 1] = (unsigned char)field16;
+  return psi_finish_section(out, n, cap, 0xF0);
+}
+
+size_t psi_build_sdt_multi(unsigned version, unsigned tsid, unsigned onid, const psi_sdt_entry_t *services, size_t n_services, unsigned char *out, size_t cap) {
+  size_t n = 0, i;
+
+  if (cap < 12 || n_services == 0)
+    return 0;
+  out[n++] = 0x42;
+  n += 2;
+  psi_put16(out + n, tsid);
+  n += 2;
+  out[n++] = (unsigned char)(0xC0 | ((version & 0x1F) << 1) | 0x01);
+  out[n++] = 0x00;
+  out[n++] = 0x00;
+  psi_put16(out + n, onid);
+  n += 2;
+  out[n++] = 0xFF;
+
+  for (i = 0; i < n_services; i++) {
+    size_t f16_pos, desc_start, dlen_pos, plen_pos, slen_pos, plen, slen;
+    unsigned dll, field16;
+
+    if (n + 9 > cap)
+      return 0;
+    psi_put16(out + n, services[i].service_id);
+    n += 2;
+    out[n++] = 0xFD; /* reserved(6)=111111, EIT_schedule=0, EIT_present_following=1 */
+
+    f16_pos = n;
+    n += 2;
+    desc_start = n;
+    out[n++] = 0x48; /* service_descriptor */
+    dlen_pos = n;
+    n++;
+    out[n++] = (unsigned char)services[i].service_type;
+    plen_pos = n;
+    n++;
+    plen = psi_put_text(out + n, cap - n, services[i].provider);
+    n += plen;
+    out[plen_pos] = (unsigned char)plen;
+    slen_pos = n;
+    n++;
+    slen = psi_put_text(out + n, cap - n, services[i].service_name);
+    n += slen;
+    out[slen_pos] = (unsigned char)slen;
+    out[dlen_pos] = (unsigned char)(n - (dlen_pos + 1));
+
+    dll = (unsigned)(n - desc_start);
+    field16 = ((4u & 0x7) << 13) | (0u << 12) | (dll & 0x0FFF); /* running_status=running, free_CA=0 */
+    out[f16_pos] = (unsigned char)(field16 >> 8);
+    out[f16_pos + 1] = (unsigned char)field16;
+  }
+
   return psi_finish_section(out, n, cap, 0xF0);
 }
 

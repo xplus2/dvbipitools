@@ -19,12 +19,12 @@ START_TEST(format_m3u_writes_header_item_footer) {
   FILE *f = open_capture(&buf, &len);
 
   format_init(f, OUT_M3U, "dipiscan -f m3u", NULL);
-  format_item(f, OUT_M3U, "ORFeins", "rtp://239.1.1.1:5000", AF_INET, "239.1.1.1", 5000, 1, 1, 2, 101);
+  format_item(f, OUT_M3U, "Channel One", "rtp://239.1.1.1:5000", AF_INET, "239.1.1.1", 5000, 1, 1, 2, 101);
   format_close(f, OUT_M3U);
   fclose(f);
 
   ck_assert_ptr_nonnull(strstr(buf, "#EXTM3U"));
-  ck_assert_ptr_nonnull(strstr(buf, "tsid=\"1\" onid=\"2\" sid=\"101\",ORFeins"));
+  ck_assert_ptr_nonnull(strstr(buf, "tsid=\"1\" onid=\"2\" sid=\"101\",Channel One"));
   ck_assert_ptr_nonnull(strstr(buf, "rtp://239.1.1.1:5000"));
   ck_assert_ptr_nonnull(strstr(buf, "#EXT-X-ENDLIST"));
   free(buf);
@@ -72,18 +72,18 @@ START_TEST(format_xml_produces_parseable_sds_broadcast_doc) {
   int n;
 
   format_init(f, OUT_XML, "inv", "example.invalid");
-  format_item(f, OUT_XML, "ORFeins", "unused", AF_INET, "239.1.1.1", 5000, 1, 1, 2, 101);
-  format_item(f, OUT_XML, "ORF 2 HD", "unused", AF_INET, "239.1.1.2", 5001, 0, 1, 2, 102);
+  format_item(f, OUT_XML, "Channel One", "unused", AF_INET, "239.1.1.1", 5000, 1, 1, 2, 101);
+  format_item(f, OUT_XML, "Channel 2 HD", "unused", AF_INET, "239.1.1.2", 5001, 0, 1, 2, 102);
   format_close(f, OUT_XML);
   fclose(f);
 
   n = sds_parse_broadcast(buf, out, 4);
   ck_assert_int_eq(n, 2);
-  ck_assert_str_eq(out[0].name, "ORFeins");
+  ck_assert_str_eq(out[0].name, "Channel One");
   ck_assert_str_eq(out[0].address, "239.1.1.1");
   ck_assert_uint_eq(out[0].port, 5000u);
   ck_assert_int_eq(out[0].rtp, 1);
-  ck_assert_str_eq(out[1].name, "ORF 2 HD");
+  ck_assert_str_eq(out[1].name, "Channel 2 HD");
   ck_assert_uint_eq(out[1].sid, 102u);
   ck_assert_int_eq(out[1].rtp, 0);
   free(buf);

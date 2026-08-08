@@ -10,21 +10,21 @@
 #include "timefmt.h"
 #include "xmltv.h"
 
-static void scan_display_names(const char *s, const char *end, epg_channel_t *c) {
+static void scan_display_names(const char *s, const char *end, bcg_channel_t *c) {
   const char *p = s;
   for (;;) {
-    char name[EPG_ID_LEN];
+    char name[BCG_ID_LEN];
     const char *hit = strstr(p, "<display-name");
     if (!hit || hit >= end)
       break;
     if (xml_elem_text(hit, end, "display-name", name, sizeof name))
       break;
-    epg_channel_add_name(c, name);
+    bcg_channel_add_name(c, name);
     p = hit + 1;
   }
 }
 
-int xmltv_read(FILE *f, epg_doc_t *doc) {
+int xmltv_read(FILE *f, bcg_doc_t *doc) {
   char *buf;
   size_t len;
   const char *p, *end;
@@ -39,15 +39,15 @@ int xmltv_read(FILE *f, epg_doc_t *doc) {
   for (;;) {
     const char *tag = strstr(p, "<channel");
     const char *blk_end;
-    epg_channel_t *c;
-    char id[EPG_ID_LEN];
+    bcg_channel_t *c;
+    char id[BCG_ID_LEN];
     if (!tag || tag >= end)
       break;
     blk_end = strstr(tag, "</channel>");
     if (!blk_end)
       break;
     if (xml_attr(tag, blk_end, "id", id, sizeof id) == 0) {
-      c = epg_add_channel(doc);
+      c = bcg_add_channel(doc);
       if (!c) {
         free(buf);
         return -1;
@@ -62,15 +62,15 @@ int xmltv_read(FILE *f, epg_doc_t *doc) {
   for (;;) {
     const char *tag = strstr(p, "<programme");
     const char *blk_end;
-    epg_programme_t *pr;
-    char start[EPG_TIME_LEN], stop[EPG_TIME_LEN], channel[EPG_ID_LEN];
+    bcg_programme_t *pr;
+    char start[BCG_TIME_LEN], stop[BCG_TIME_LEN], channel[BCG_ID_LEN];
     if (!tag || tag >= end)
       break;
     blk_end = strstr(tag, "</programme>");
     if (!blk_end)
       break;
     if (xml_attr(tag, blk_end, "start", start, sizeof start) == 0 && xml_attr(tag, blk_end, "channel", channel, sizeof channel) == 0) {
-      pr = epg_add_programme(doc);
+      pr = bcg_add_programme(doc);
       if (!pr) {
         free(buf);
         return -1;
@@ -98,13 +98,13 @@ int xmltv_read(FILE *f, epg_doc_t *doc) {
   return 0;
 }
 
-void xmltv_write(FILE *f, const epg_doc_t *doc, const char *generator_name) {
+void xmltv_write(FILE *f, const bcg_doc_t *doc, const char *generator_name) {
   int i;
   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE tv SYSTEM \"xmltv.dtd\">\n<tv generator-info-name=\"", f);
   xml_escape(f, generator_name);
   fputs("\">\n", f);
   for (i = 0; i < doc->channel_count; i++) {
-    const epg_channel_t *c = &doc->channels[i];
+    const bcg_channel_t *c = &doc->channels[i];
     int j;
     fputs("  <channel id=\"", f);
     xml_escape(f, c->id);
@@ -122,8 +122,8 @@ void xmltv_write(FILE *f, const epg_doc_t *doc, const char *generator_name) {
     fputs("  </channel>\n", f);
   }
   for (i = 0; i < doc->programme_count; i++) {
-    const epg_programme_t *pr = &doc->programmes[i];
-    char start[EPG_TIME_LEN], stop[EPG_TIME_LEN];
+    const bcg_programme_t *pr = &doc->programmes[i];
+    char start[BCG_TIME_LEN], stop[BCG_TIME_LEN];
     if (iso8601_to_xmltv_time(pr->start, start, sizeof start))
       continue;
     fprintf(f, "  <programme start=\"%s\"", start);

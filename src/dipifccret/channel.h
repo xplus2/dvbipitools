@@ -46,11 +46,14 @@ typedef struct {
 typedef struct {
   _Atomic int in_use;
   int family;
-  char group[64];
+  unsigned char addr[16]; /* raw dst bytes, 4 (v4) or 16 (v6), see addr_len - hash/lookup key */
+  size_t addr_len;
+  char group[64]; /* printable form of addr, for logging / mcsend.c's mcast_open_send */
   unsigned port;
   _Atomic uint32_t ssrc;
   _Atomic int ssrc_known;
   _Atomic time_t last_seen;
+  _Atomic unsigned generation; /* bumped on every reclaim: lets mcsend.c detect a reused slot */
   time_t bitrate_window_start;
   uint64_t bitrate_window_bytes;
   _Atomic double nominal_bps;
@@ -66,12 +69,14 @@ typedef struct channel_table channel_table_t;
 channel_table_t *channel_table_new(size_t max_channels, size_t ring_slots, size_t cache_cap);
 void channel_table_free(channel_table_t *t);
 
-channel_t *channel_lookup(channel_table_t *t, int family, const char *group, unsigned port);
+channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size_t addr_len, unsigned port);
 
 channel_t *channel_find_by_ssrc(channel_table_t *t, uint32_t ssrc);
 
-/* single write path for both RET ring and FCC cache, one call per captured packet */
-void channel_store(channel_t *c, uint32_t ssrc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len);
+/* single write path for both RET ring and FCC cache, one call per captured packet.
+   also maintains t's ssrc->channel index (channel_find_by_ssrc), taking t->lock only
+   when ssrc actually changed since the last call for this channel */
+void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len);
 
 int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out); /* RET; 0 if ring inactive */
 
@@ -80,5 +85,8 @@ size_t channel_cache_count(const channel_t *c);
 int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out);
 
 void channel_table_reap(channel_table_t *t, time_t max_age_s);
+
+/* bounded per-call slice of channel_table_reap - see channel.c */
+void channel_table_reap_step(channel_table_t *t, time_t max_age_s, size_t max_scan);
 
 #endif

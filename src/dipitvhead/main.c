@@ -6,35 +6,20 @@
 
 #include "args.h"
 #include "lib/log.h"
+#include "lib/metrics/export.h"
 #include "lib/signal.h"
 #include "tvhead.h"
 #include "version.h"
 
 /* banner prints before parsing: --color read early */
-static log_color_t color_prescan(int argc, char **argv) {
-  int i;
-  for (i = 1; i < argc; i++) {
-    const char *v = NULL;
-    if (!strcmp(argv[i], "--color") && i + 1 < argc)
-      v = argv[i + 1];
-    else if (!strncmp(argv[i], "--color=", 8))
-      v = argv[i] + 8;
-    if (!v)
-      continue;
-    if (!strcmp(v, "always"))
-      return LOG_COLOR_ALWAYS;
-    if (!strcmp(v, "never"))
-      return LOG_COLOR_NEVER;
-  }
-  return LOG_COLOR_AUTO;
-}
-
 int main(int argc, char **argv) {
   config_t cfg;
   char src[600], mcast[80];
   args_status_t st;
+  metrics_exporter_t mx;
+  int rc;
 
-  log_set_color(color_prescan(argc, argv));
+  log_set_color(log_color_prescan(argc, argv));
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
   if (st == ARGS_OK)
@@ -46,11 +31,18 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  source_describe(&cfg.input, src, sizeof src);
   mcast_describe(&cfg, mcast, sizeof mcast);
-  log_line_ansi("\e[1mi:\e[0m\e[0;37m%s\e[0m \e[1mm:\e[0m\e[0;37m%s\e[0m \e[1mrtp:\e[0m\e[0;37m%s\e[0m", src, mcast, cfg.rtp ? "yes" : "no");
+  if (cfg.n_inputs == 1) {
+    source_describe(&cfg.inputs[0].input, src, sizeof src);
+    log_line_ansi("\e[1mi:\e[0m\e[0;37m%s\e[0m \e[1mm:\e[0m\e[0;37m%s\e[0m \e[1mrtp:\e[0m\e[0;37m%s\e[0m", src, mcast, cfg.rtp ? "yes" : "no");
+  } else {
+    log_line_ansi("\e[1minputs:\e[0m\e[0;37m%u\e[0m \e[1mm:\e[0m\e[0;37m%s\e[0m \e[1mrtp:\e[0m\e[0;37m%s\e[0m", cfg.n_inputs, mcast, cfg.rtp ? "yes" : "no");
+  }
 
   signals_install();
 
-  return tvhead_run(&cfg);
+  metrics_exporter_init(&mx, METRICS_COMPONENT_TVHEAD, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
+  rc = tvhead_run(&cfg, &mx);
+  metrics_exporter_close(&mx);
+  return rc;
 }

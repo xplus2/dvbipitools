@@ -17,9 +17,9 @@ typedef struct {
   char listen_addr[64];
   unsigned listen_port;
 
-  const char *iface; /* NULL = libpcap "any" */
-  const char *bpf_expr; /* NULL = auto-built from ranges */
+  const char *iface; /* required, single Ethernet capture interface */
   size_t max_channels; /* 0 = CHANNEL_DEFAULT_MAX */
+  unsigned channel_idle_timeout_s; /* 0 = reaping disabled, default 120 */
   unsigned char rtx_pt; /* shared RET/FCC RTP payload type */
   unsigned workers; /* -l socket worker threads, 0 = CPU cores */
   const char *user; /* NULL = no privilege drop */

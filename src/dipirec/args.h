@@ -27,6 +27,7 @@ typedef struct {
 
 typedef enum { FMT_RAW, FMT_TS, FMT_MKV, FMT_MKA } out_fmt_t;
 typedef enum { SUB_KEEP, SUB_STRIP, SUB_SRT } sub_mode_t;
+typedef enum { PMT_SEL_AUTO, PMT_SEL_PID, PMT_SEL_ALL } pmt_sel_t;
 
 typedef struct {
   int enabled;     /* --ret given; RET client off otherwise, no behavior change */
@@ -45,6 +46,8 @@ typedef struct {
   int audio_all;        /* -a all */
   unsigned audio_track; /* -a N, 1-based, !audio_all */
   out_fmt_t format;     /* -f resolved */
+  pmt_sel_t pmt_sel;    /* -p; AUTO if not given */
+  unsigned pmt_pid;     /* -p <pid>; valid iff pmt_sel == PMT_SEL_PID */
   sub_mode_t subs;      /* -s */
   long duration_s;      /* -t seconds; 0 = until stopped */
   const char *iface;    /* -I; NULL = kernel default */

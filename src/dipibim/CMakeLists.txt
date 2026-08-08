@@ -6,9 +6,10 @@ add_executable(dipibim
     main.c
     args.c
     ../lib/log.c
+    ../lib/argutil.c
     ../lib/xml_util.c
     ../lib/ioutil.c
-    ../lib/tva/epg_doc.c
+    ../lib/tva/bcg_doc.c
     ../lib/tva/tva_xml.c
     ../lib/bim/bitwriter.c
     ../lib/bim/bitreader.c

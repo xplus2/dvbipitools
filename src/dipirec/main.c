@@ -50,31 +50,13 @@ static int app(char *b, size_t cap, int n, const char *fmt, ...) {
 }
 
 /* banner prints before parsing: --color read early */
-static log_color_t color_prescan(int argc, char **argv) {
-  int i;
-  for (i = 1; i < argc; i++) {
-    const char *v = NULL;
-    if (!strcmp(argv[i], "--color") && i + 1 < argc)
-      v = argv[i + 1];
-    else if (!strncmp(argv[i], "--color=", 8))
-      v = argv[i] + 8;
-    if (!v)
-      continue;
-    if (!strcmp(v, "always"))
-      return LOG_COLOR_ALWAYS;
-    if (!strcmp(v, "never"))
-      return LOG_COLOR_NEVER;
-  }
-  return LOG_COLOR_AUTO;
-}
-
 int main(int argc, char **argv) {
   config_t cfg;
   char src[1024], line[2048];
   args_status_t st;
   int n = 0;
 
-  log_set_color(color_prescan(argc, argv));
+  log_set_color(log_color_prescan(argc, argv));
 
   /* banner */
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);

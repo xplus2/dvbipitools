@@ -11,17 +11,35 @@
 #include "ebml.h"
 #include "lib/demux/pes.h"
 #include "lib/demux/psi.h"
+#include "lib/demux/tspack.h"
+#include "lib/ioutil.h"
 #include "lib/log.h"
 #include "mkv.h"
 #include "teletext.h"
 
 #define MKV_MAX_TRACKS 8
+#define MKV_MAX_PROGRAMS 8
 #define MKV_PEND_MAX 1024
 #define MKV_PEND_BYTES (8u * 1024 * 1024)
 #define MKV_REM_MAX 65536
 #define MKV_AU_MAX 8192
 #define MKV_PS_MAX 512 /* SPS/PPS/VPS */
 #define CLUSTER_MS 30000
+
+/* Annex B NAL unit types */
+#define H264_NAL_IDR 5
+#define H264_NAL_SPS 7
+#define H264_NAL_PPS 8
+#define H264_NAL_AUD 9
+#define H264_NAL_FILLER 12
+
+#define HEVC_NAL_IRAP_FIRST 16 /* BLA_W_LP */
+#define HEVC_NAL_IRAP_LAST 21  /* CRA_NUT */
+#define HEVC_NAL_VPS 32
+#define HEVC_NAL_SPS 33
+#define HEVC_NAL_PPS 34
+#define HEVC_NAL_AUD 35
+#define HEVC_NAL_FILLER 38
 
 /* AC-3 frame size in words: [frmsizecod][fscod 48/44.1/32k] */
 static const unsigned short ac3_fsz[38][3] = {
@@ -65,8 +83,8 @@ typedef struct {
   size_t cpriv_len;
   int hdr_parsed;
   int64_t ts_ms;
-  uint64_t pts_ext, last_raw; /* 33-bit PTS unwrap state */
-  int pts_seen;
+  pts_unwrap_t pts;
+  int psi_idx; /* owning m->psi[] index; TrackName looked up live at write_head(), not setup() - sdt may still be inbound */
   unsigned char *rem; /* audio: partial frame carry-over */
   size_t remlen, remcap;
   int latm_cfg_ok, latm_flt;
@@ -94,7 +112,8 @@ struct mkv {
   const mkv_opts_t *opts;
   int video_ok;
   unsigned long long *bytes;
-  psi_t *psi;
+  psi_t *psi[MKV_MAX_PROGRAMS];
+  int npsi;
   pes_t *pes;
   track_t trk[MKV_MAX_TRACKS];
   int ntrk;
@@ -668,17 +687,17 @@ static track_t *find_track(mkv_t *m, unsigned pid) {
 }
 
 static void cluster_flush(mkv_t *m) {
-  ebuf_t out;
+  ebuf_t hdr;
 
   if (!m->cl_open)
     return;
-  memset(&out, 0, sizeof out);
-  eb_id(&out, 0x1F43B675);
-  eb_size(&out, m->cl.len);
-  eb_bytes(&out, m->cl.p, m->cl.len);
-  wfd(m, out.p, out.len);
-  ebuf_free(&out);
-  ebuf_free(&m->cl);
+  memset(&hdr, 0, sizeof hdr);
+  eb_id(&hdr, 0x1F43B675);
+  eb_size(&hdr, m->cl.len);
+  wfd(m, hdr.p, hdr.len);
+  ebuf_free(&hdr);
+  wfd(m, m->cl.p, m->cl.len); /* straight to output, no throwaway copy of the whole cluster */
+  m->cl.len = 0;              /* keep m->cl's allocation, next cluster reuses it */
   m->cl_open = 0;
 }
 
@@ -761,8 +780,8 @@ static void write_head(mkv_t *m) {
   eb_str(&e, 0x4D80, app);
   eb_str(&e, 0x5741, app);
   eb_uint(&e, 0x4461, (uint64_t)((int64_t)(now - 978307200) * 1000000000LL));
-  if (*psi_service_name(m->psi))
-    eb_str(&e, 0x7BA9, psi_service_name(m->psi));
+  if (*psi_service_name(m->psi[0]))
+    eb_str(&e, 0x7BA9, psi_service_name(m->psi[0])); /* first program if -p all */
   eb_master(&b, 0x1549A966, &e);
   wfd(m, b.p, b.len);
   ebuf_free(&b);
@@ -780,6 +799,11 @@ static void write_head(mkv_t *m) {
     eb_uint(&te, 0x83, (t->cls == PID_TELETEXT) ? 17 : (video ? 1 : 2));
     eb_uint(&te, 0x9C, 0);
     eb_str(&te, 0x22B59C, t->lang[0] ? t->lang : "und");
+    if (m->npsi > 1) {
+      const char *name = psi_service_name(m->psi[t->psi_idx]);
+      if (name[0])
+        eb_str(&te, 0x536E, name);
+    }
     eb_str(&te, 0x86, t->codecid);
     if (t->cpriv_len)
       eb_bin(&te, 0x63A2, t->cpriv, t->cpriv_len);
@@ -807,9 +831,9 @@ static void write_head(mkv_t *m) {
     memset(&tgt, 0, sizeof tgt);
     eb_uint(&tgt, 0x68CA, 50);
     eb_master(&tag, 0x63C0, &tgt);
-    simpletag(&tag, "TITLE", psi_service_name(m->psi));
-    simpletag(&tag, "NETWORK", psi_network_name(m->psi));
-    simpletag(&tag, "PROVIDER", psi_provider_name(m->psi));
+    simpletag(&tag, "TITLE", psi_service_name(m->psi[0]));
+    simpletag(&tag, "NETWORK", psi_network_name(m->psi[0]));
+    simpletag(&tag, "PROVIDER", psi_provider_name(m->psi[0]));
     simpletag(&tag, "SOURCE", srcuri);
     simpletag(&tag, "DATE_RECORDED", date);
     eb_master(&e, 0x7373, &tag);
@@ -919,10 +943,21 @@ static void on_cue(void *ctx, const ttx_cue_t *cue) {
   }
 }
 
+/* psi_have_sdt() means "a section arrived", not "ours was in it" - programs cycle
+ * independently. check the name itself. */
+static int all_psi_named(const mkv_t *m) {
+  int i;
+  for (i = 0; i < m->npsi; i++)
+    if (!psi_service_name(m->psi[i])[0])
+      return 0;
+  return 1;
+}
+
 /* start: all track headers present, video keyframe seen.
-   brief SDT wait -> service name for Title/tags */
+   brief SDT wait -> service name for Title/tags. multi-program: longer grace, per-program cycles skew */
 static void all_ready(mkv_t *m) {
   int i;
+  int64_t grace_ms = (m->npsi > 1) ? 3000 : 2000;
 
   for (i = 0; i < m->ntrk; i++) {
     const track_t *t = &m->trk[i];
@@ -935,7 +970,7 @@ static void all_ready(mkv_t *m) {
     m->ready_seen = 1;
     m->ready_ms = now_ms();
   }
-  if (!psi_have_sdt(m->psi) && now_ms() - m->ready_ms < 2000)
+  if (!all_psi_named(m) && now_ms() - m->ready_ms < grace_ms)
     return;
   start(m);
 }
@@ -1005,28 +1040,6 @@ static size_t find_startcode(const unsigned char *d, size_t len, size_t from, si
   return len;
 }
 
-#define PTS_MOD 0x200000000ULL  /* 2^33: PTS clock period */
-#define PTS_HALF 0x100000000ULL /* 2^32: wrap/backstep threshold */
-
-/* unwrap 33-bit PTS into a monotonic tick count, ms = return/90 */
-static int64_t pts_unwrap(track_t *t, uint64_t raw) {
-  uint64_t d;
-  int64_t diff;
-
-  raw &= PTS_MOD - 1;
-  if (!t->pts_seen) {
-    t->pts_ext = raw;
-    t->last_raw = raw;
-    t->pts_seen = 1;
-  } else {
-    d = (raw - t->last_raw) & (PTS_MOD - 1);
-    diff = (d >= PTS_HALF) ? (int64_t)d - (int64_t)PTS_MOD : (int64_t)d;
-    t->pts_ext = (uint64_t)((int64_t)t->pts_ext + diff);
-    t->last_raw = raw;
-  }
-  return (int64_t)(t->pts_ext / 90);
-}
-
 /* one video PES = one Annex-B access unit */
 static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   size_t p, scl = 0;
@@ -1036,7 +1049,7 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   if (m->flushing)
     return;
   if (has_pts)
-    t->ts_ms = pts_unwrap(t, pts);
+    t->ts_ms = pts_unwrap(&t->pts, pts);
   t->vbuflen = 0;
 
   p = find_startcode(d, len, 0, &scl);
@@ -1053,27 +1066,40 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
     }
     if (t->codec == CODEC_H264) {
       type = d[ns] & 0x1F;
-      if (type == 7)
-        ps_store(t->sps, &t->spslen, d + ns, n);
-      else if (type == 8)
-        ps_store(t->pps, &t->ppslen, d + ns, n);
-      else if (type != 9 && type != 12) {
-        if (type == 5)
-          key = 1;
-        vbuf_add(t, d + ns, n);
+      switch (type) {
+        case H264_NAL_SPS:
+          ps_store(t->sps, &t->spslen, d + ns, n);
+          break;
+        case H264_NAL_PPS:
+          ps_store(t->pps, &t->ppslen, d + ns, n);
+          break;
+        case H264_NAL_AUD:
+        case H264_NAL_FILLER:
+          break;
+        default:
+          if (type == H264_NAL_IDR)
+            key = 1;
+          vbuf_add(t, d + ns, n);
       }
     } else {
       type = (d[ns] >> 1) & 0x3F;
-      if (type == 32)
-        ps_store(t->vps, &t->vpslen, d + ns, n);
-      else if (type == 33)
-        ps_store(t->sps, &t->spslen, d + ns, n);
-      else if (type == 34)
-        ps_store(t->pps, &t->ppslen, d + ns, n);
-      else if (type != 35 && type != 38) {
-        if (type >= 16 && type <= 21)
-          key = 1;
-        vbuf_add(t, d + ns, n);
+      switch (type) {
+        case HEVC_NAL_VPS:
+          ps_store(t->vps, &t->vpslen, d + ns, n);
+          break;
+        case HEVC_NAL_SPS:
+          ps_store(t->sps, &t->spslen, d + ns, n);
+          break;
+        case HEVC_NAL_PPS:
+          ps_store(t->pps, &t->ppslen, d + ns, n);
+          break;
+        case HEVC_NAL_AUD:
+        case HEVC_NAL_FILLER:
+          break;
+        default:
+          if (type >= HEVC_NAL_IRAP_FIRST && type <= HEVC_NAL_IRAP_LAST)
+            key = 1;
+          vbuf_add(t, d + ns, n);
       }
     }
     p = q;
@@ -1085,7 +1111,7 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
       if (h264_dims(t->sps, t->spslen, &t->width, &t->height) == 0) {
         t->cpriv_len = build_avcc(t, t->cpriv, sizeof t->cpriv);
         if (t->cpriv_len) {
-          snprintf(t->codecid, sizeof t->codecid, "%s", codec_id_for(t, NULL));
+          bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t, NULL));
           t->hdr_parsed = 1;
           all_ready(m);
         }
@@ -1094,7 +1120,7 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
       if (hevc_info(t->sps, t->spslen, t->ptl, &t->chroma, &t->width,&t->height) == 0) {
         t->cpriv_len = build_hvcc(t, t->cpriv, sizeof t->cpriv);
         if (t->cpriv_len) {
-          snprintf(t->codecid, sizeof t->codecid, "%s", codec_id_for(t, NULL));
+          bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t, NULL));
           t->hdr_parsed = 1;
           all_ready(m);
         }
@@ -1117,7 +1143,7 @@ static void handle_mpeg2(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   if (m->flushing)
     return;
   if (has_pts)
-    t->ts_ms = pts_unwrap(t, pts);
+    t->ts_ms = pts_unwrap(&t->pts, pts);
 
   p = find_startcode(d, len, 0, &scl);
   while (p < len) {
@@ -1131,7 +1157,7 @@ static void handle_mpeg2(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
       if (w && h) {
         t->width = w;
         t->height = h;
-        snprintf(t->codecid, sizeof t->codecid, "%s", codec_id_for(t, NULL));
+        bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t, NULL));
         t->hdr_parsed = 1;
         all_ready(m);
       }
@@ -1153,7 +1179,7 @@ static void handle_audio(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   size_t pos = 0;
 
   if (has_pts && t->remlen == 0) /* anchor on frame boundary */
-    t->ts_ms = pts_unwrap(t, pts);
+    t->ts_ms = pts_unwrap(&t->pts, pts);
   if (t->remlen > MKV_REM_MAX)
     t->remlen = 0;
   if (rem_append(t, data, len))
@@ -1173,7 +1199,7 @@ static void handle_audio(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
         t->rate = f.rate;
       if (f.ch)
         t->channels = f.ch;
-      snprintf(t->codecid, sizeof t->codecid, "%s", codec_id_for(t, &f));
+      bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t, &f));
       t->hdr_parsed = 1;
       all_ready(m);
     }
@@ -1209,7 +1235,7 @@ static int audio_supported(codec_t c) {
   return c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_MP2A || c == CODEC_AAC || c == CODEC_AAC_LATM;
 }
 
-static void add_track(mkv_t *m, const psi_es_t *es) {
+static void add_track(mkv_t *m, const psi_es_t *es, int psi_idx) {
   track_t *t = &m->trk[m->ntrk];
 
   memset(t, 0, sizeof *t);
@@ -1217,6 +1243,7 @@ static void add_track(mkv_t *m, const psi_es_t *es) {
   t->num = m->ntrk + 1;
   t->codec = es->codec;
   t->cls = es->cls;
+  t->psi_idx = psi_idx;
   memcpy(t->lang, es->lang, sizeof t->lang);
   pes_track(m->pes, t->pid);
   m->ntrk++;
@@ -1224,10 +1251,10 @@ static void add_track(mkv_t *m, const psi_es_t *es) {
 
 static void setup(mkv_t *m) {
   const psi_es_t *es;
-  int c, k;
+  int c, k, p;
 
-  es = psi_es(m->psi, &c);
   if (m->video_ok) {
+    es = psi_es(m->psi[0], &c);
     for (k = 0; k < c && m->ntrk < MKV_MAX_TRACKS; k++) {
       if (es[k].cls != PID_VIDEO)
         continue;
@@ -1236,26 +1263,30 @@ static void setup(mkv_t *m) {
         log_line("mkv=no_vc(%s)", codec_name(es[k].codec));
         continue;
       }
-      add_track(m, &es[k]);
+      add_track(m, &es[k], 0);
     }
   }
-  for (k = 0; k < c && m->ntrk < MKV_MAX_TRACKS; k++) {
-    if (es[k].cls != PID_AUDIO)
-      continue;
-    if (!m->opts->audio_all && es[k].audio_index != (int)m->opts->audio_track)
-      continue;
-    if (!audio_supported(es[k].codec)) {
-      log_line("mkv=no_ac(%s)", codec_name(es[k].codec));
-      continue;
+  for (p = 0; p < m->npsi; p++) {
+    es = psi_es(m->psi[p], &c);
+    for (k = 0; k < c && m->ntrk < MKV_MAX_TRACKS; k++) {
+      if (es[k].cls != PID_AUDIO)
+        continue;
+      if (!m->opts->audio_all && es[k].audio_index != (int)m->opts->audio_track)
+        continue;
+      if (!audio_supported(es[k].codec)) {
+        log_line("mkv=no_ac(%s)", codec_name(es[k].codec));
+        continue;
+      }
+      add_track(m, &es[k], p);
     }
-    add_track(m, &es[k]);
   }
-  if (m->opts->subs_srt) {
+  if (m->opts->subs_srt && m->npsi == 1) {
+    es = psi_es(m->psi[0], &c);
     for (k = 0; k < c && m->ntrk < MKV_MAX_TRACKS; k++) {
       track_t *t;
       if (es[k].cls != PID_TELETEXT || !es[k].ttx_page)
         continue;
-      add_track(m, &es[k]);
+      add_track(m, &es[k], 0);
       t = &m->trk[m->ntrk - 1];
       t->ttx = ttx_new(es[k].ttx_page, es[k].ttx_lang, m->opts->sub_lead_ms, on_cue, m);
       if (!t->ttx) {
@@ -1263,7 +1294,7 @@ static void setup(mkv_t *m) {
         continue;
       }
       memcpy(t->lang, es[k].ttx_lang, sizeof t->lang);
-      snprintf(t->codecid, sizeof t->codecid, "S_TEXT/UTF8");
+      bufcpy(t->codecid, sizeof t->codecid, "S_TEXT/UTF8");
       t->hdr_parsed = 1; /* no setup data */
       log_line("mkv=txtsub(%u=%s)", es[k].ttx_page, es[k].ttx_lang);
       break;
@@ -1274,8 +1305,10 @@ static void setup(mkv_t *m) {
   m->setup = 1;
 }
 
-mkv_t *mkv_new(int fd, const mkv_opts_t *opts, int video_ok, unsigned long long *bytes) {
+mkv_t *mkv_new(int fd, const mkv_opts_t *opts, int video_ok, unsigned long long *bytes,
+               const unsigned *pmt_pids, int n_pids) {
   mkv_t *m = calloc(1, sizeof *m);
+  int i;
 
   if (!m)
     return NULL;
@@ -1283,20 +1316,44 @@ mkv_t *mkv_new(int fd, const mkv_opts_t *opts, int video_ok, unsigned long long 
   m->opts = opts;
   m->video_ok = video_ok;
   m->bytes = bytes;
-  m->psi = psi_new();
+  if (n_pids > MKV_MAX_PROGRAMS)
+    n_pids = MKV_MAX_PROGRAMS;
+  m->npsi = (n_pids > 0) ? n_pids : 1;
+  for (i = 0; i < m->npsi; i++) {
+    m->psi[i] = psi_new();
+    if (!m->psi[i]) {
+      mkv_close(m);
+      return NULL;
+    }
+    if (n_pids > 0)
+      psi_select_pmt_pid(m->psi[i], pmt_pids[i]);
+  }
   m->pes = pes_new(on_pes, m);
-  if (!m->psi || !m->pes) {
+  if (!m->pes) {
     mkv_close(m);
     return NULL;
   }
   return m;
 }
 
+static int all_psi_ready(const mkv_t *m) {
+  int i;
+  for (i = 0; i < m->npsi; i++)
+    if (!psi_ready(m->psi[i]))
+      return 0;
+  return 1;
+}
+
 void mkv_feed(mkv_t *m, const unsigned char *pkt) {
+  unsigned pid;
+  int i;
   if (m->err)
     return;
-  psi_feed(m->psi, pkt);
-  if (!m->setup && psi_ready(m->psi))
+  pid = tspack_pid(pkt);
+  for (i = 0; i < m->npsi; i++)
+    if (psi_wants_pid(m->psi[i], pid))
+      psi_feed(m->psi[i], pkt);
+  if (!m->setup && all_psi_ready(m))
     setup(m);
   if (m->setup)
     pes_feed(m->pes, pkt);
@@ -1304,7 +1361,7 @@ void mkv_feed(mkv_t *m, const unsigned char *pkt) {
     all_ready(m); /* re-check: SDT may arrive later */
 }
 
-const psi_t *mkv_psi(const mkv_t *m) { return m->psi; }
+const psi_t *mkv_psi(const mkv_t *m) { return m->psi[0]; }
 
 int mkv_error(const mkv_t *m) { return m->err; }
 
@@ -1331,6 +1388,7 @@ void mkv_close(mkv_t *m) {
   }
   ebuf_free(&m->cl);
   pes_free(m->pes);
-  psi_free(m->psi);
+  for (i = 0; i < m->npsi; i++)
+    psi_free(m->psi[i]);
   free(m);
 }

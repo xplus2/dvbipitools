@@ -15,8 +15,11 @@ src/*.o
 /dipisds
 /dipixmltv
 /dipibim
-/dipiepg
+/dipibcg
 /dipifccret
+/dipicam378
+/dipidescramble
+/dipimetrics
 
 # cmake generic and profile builds
 /build*/

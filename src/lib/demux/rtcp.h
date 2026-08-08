@@ -51,8 +51,7 @@ typedef struct {
 /* called per RAMS-T termination found */
 typedef void (*rtcp_rams_t_cb)(const rtcp_rams_t_t *term, void *user);
 
-/* skips SR/RR/SDES/BYE/RAMS-I; stops on malformed length, no misparse.
- * any cb may be NULL to ignore that message type. */
+/* skips SR/RR/SDES/BYE/RAMS-I; stops on malformed length, no misparse. any cb may be NULL to ignore that mtype. */
 void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_t_cb rams_t_cb, void *user);
 
 #endif

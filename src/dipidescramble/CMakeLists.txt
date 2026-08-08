@@ -34,19 +34,23 @@ if (OpenSSL_FOUND)
         device.c
         emmcache.c
         ipiclient.c
-        secasm.c
         ../lib/log.c
+        ../lib/argutil.c
         ../lib/signal.c
         ../lib/net/multicast.c
+        ../lib/net/netconnect.c
         ../lib/net/udpxy.c
         ../lib/net/tssource.c
         ../lib/net/tls.c
         ../lib/net/httpclient.c
+        ../lib/ioutil.c
         ../lib/demux/crc32.c
         ../lib/demux/psi.c
+        ../lib/demux/psi_section_asm.c
         ../lib/demux/rtp.c
         ../lib/demux/tspack.c
         ../lib/demux/pes.c
+        ../lib/demux/mpts_probe.c
         ../lib/mux/ebml.c
         ../lib/mux/mkv.c
         ../lib/mux/teletext.c

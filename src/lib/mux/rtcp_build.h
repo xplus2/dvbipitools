@@ -29,8 +29,8 @@ typedef struct {
   uint64_t max_transmit_bitrate_bps; /* type 35 */
 } rtcp_rams_i_tlvs_t;
 
-/* RAMS-I (Annex I.2.7.3 / RFC 6285 7.3); msn starts at 0, increments per updated RAMS-I same burst.
- * tlvs may be NULL (no optional TLVs). 0 if cap too small. */
+/* RAMS-I (Annex I.2.7.3 / RFC 6285 §7.3); msn starts at 0, increments per updated RAMS-I same burst.
+   TLVs may be NULL (no optional TLVs). 0 if cap too small. */
 size_t rtcp_build_rams_i(uint32_t sender_ssrc, uint32_t media_ssrc, uint8_t msn, uint16_t response, const rtcp_rams_i_tlvs_t *tlvs, unsigned char *out, size_t cap);
 
 #endif

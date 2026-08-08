@@ -8,6 +8,8 @@ endfunction()
 dvbipitools_add_fuzz_harness(psi
     fuzz_psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
 
 set(FUZZ_BIM_DEPS
@@ -17,7 +19,7 @@ set(FUZZ_BIM_DEPS
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
-    ${CMAKE_SOURCE_DIR}/src/lib/tva/epg_doc.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
     ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
 
@@ -37,14 +39,14 @@ dvbipitools_add_fuzz_harness(rtcp
 
 dvbipitools_add_fuzz_harness(simulcrypt_msg
     fuzz_simulcrypt_msg.c
-    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/simulcrypt_msg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
 
 dvbipitools_add_fuzz_harness(ecmg_channel_status
     fuzz_ecmg_channel_status.c
-    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/ecmg_client.c
-    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/simulcrypt_msg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
@@ -55,15 +57,15 @@ dvbipitools_add_fuzz_harness(ecmg_channel_status
 
 dvbipitools_add_fuzz_harness(emmg_datagrams
     fuzz_emmg_datagrams.c
-    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/emmg_server.c
-    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/simulcrypt_msg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
-# ecmg_client.c/emmg_server.c pull in real pthread usage even though the fuzzed
-# functions themselves are pure - link Threads on both like dipitvhead itself does
+# ecmg_client.c/emmg_server.c pull in real pthread usage even though fuzzed
+# functions themselves are pure. link Threads on both like dipitvhead itself does
 find_package(Threads REQUIRED)
 target_link_libraries(fuzz_ecmg_channel_status PRIVATE Threads::Threads)
 target_link_libraries(fuzz_emmg_datagrams PRIVATE Threads::Threads)
@@ -77,4 +79,4 @@ add_executable(fuzz_gen_seeds
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtcp.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/sds_xml.c
-    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/simulcrypt_msg.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c)

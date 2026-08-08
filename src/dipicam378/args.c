@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/argutil.h"
 #include "lib/log.h"
 
 #include "args.h"
@@ -19,23 +20,9 @@ static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 static void argerr(const char *fmt, ...) {
   va_list ap;
-  fputs(TOOL_NAME ": ", stderr);
   va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
+  argutil_verr(TOOL_NAME, fmt, ap);
   va_end(ap);
-  fputc('\n', stderr);
-}
-
-static int port_parse(const char *p, unsigned *out) {
-  char *end;
-  unsigned long v;
-  if (*p == '\0')
-    return -1;
-  v = strtoul(p, &end, 10);
-  if (*end != '\0' || v == 0 || v > 65535)
-    return -1;
-  *out = (unsigned)v;
-  return 0;
 }
 
 static int caid_parse(const char *p, unsigned *out) {
@@ -102,7 +89,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->serial = optarg;
         break;
       case 'p':
-        if (port_parse(optarg, &cfg->port)) {
+        if (argutil_port_parse(optarg, &cfg->port)) {
           argerr("invalid -p port: %s", optarg);
           return ARGS_ERR;
         }
@@ -138,15 +125,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->verbose = 1;
         break;
       case 1000:
-        if (!strcmp(optarg, "always"))
-          cfg->color_mode = LOG_COLOR_ALWAYS;
-        else if (!strcmp(optarg, "never"))
-          cfg->color_mode = LOG_COLOR_NEVER;
-        else if (!strcmp(optarg, "auto"))
-          cfg->color_mode = LOG_COLOR_AUTO;
-        else {
-          argerr("invalid --color: %s (auto|always|never)", optarg);
-          return ARGS_ERR;
+        {
+          log_color_t v;
+          if (log_color_from_string(optarg, &v)) {
+            argerr("invalid --color: %s (auto|always|never)", optarg);
+            return ARGS_ERR;
+          }
+          cfg->color_mode = v;
         }
         break;
       case 'h':

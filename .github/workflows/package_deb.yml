@@ -14,46 +14,48 @@ jobs:
       matrix:
         include:
           - arch: amd64
-          - arch: armhf
-            crosspkg: crossbuild-essential-armhf
+            runner: ubuntu-latest
+            image: debian:trixie
           - arch: arm64
-            crosspkg: crossbuild-essential-arm64
+            runner: ubuntu-24.04-arm
+            image: debian:trixie
+          - arch: armhf
+            runner: ubuntu-latest
+            image: debian:bookworm
+            platform: linux/arm/v7
           - arch: ppc64el
-            crosspkg: crossbuild-essential-ppc64el
+            runner: ubuntu-latest
+            image: debian:trixie
+            platform: linux/ppc64le
           - arch: riscv64
-            crosspkg: crossbuild-essential-riscv64
-    runs-on: ubuntu-latest
+            runner: ubuntu-latest
+            image: debian:trixie
+            platform: linux/riscv64
+    runs-on: ${{ matrix.runner }}
     steps:
     - uses: actions/checkout@v5
-    - name: build dependencies
+    - uses: docker/setup-qemu-action@v3
+      if: matrix.platform
+    - name: build in container
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake debhelper devscripts libssl-dev ${{ matrix.crosspkg }}
-        # native libpcap-dev only for amd64: it ships /usr/bin/pcap-config with arch-specific content,
-        # so it can't coexist with a foreign-arch libpcap-dev:$arch in the same job
-        if [ "${{ matrix.arch }}" = "amd64" ]; then
-          sudo apt-get install -y libpcap-dev
+        PARENT="$(dirname "${{ github.workspace }}")"
+        NAME="$(basename "${{ github.workspace }}")"
+        PLATFORM_ARGS=""
+        if [ -n "${{ matrix.platform }}" ]; then
+          PLATFORM_ARGS="--platform ${{ matrix.platform }}"
         fi
-        # ports arches aren't on the default mirrors; scoped update from ports.ubuntu.com only
-        if [ "${{ matrix.arch }}" != "amd64" ]; then
-          sudo dpkg --add-architecture ${{ matrix.arch }}
-          CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
-          {
-            echo "deb [arch=${{ matrix.arch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME main universe restricted multiverse"
-            echo "deb [arch=${{ matrix.arch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME-updates main universe restricted multiverse"
-            echo "deb [arch=${{ matrix.arch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME-security main universe restricted multiverse"
-          } | sudo tee /etc/apt/sources.list.d/ports-${{ matrix.arch }}.list
-          sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/ports-${{ matrix.arch }}.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
-          sudo apt-get install -y libssl-dev:${{ matrix.arch }} libpcap-dev:${{ matrix.arch }}
-        fi
-    - name: packaging
-      run: |
-        if [ "${{ matrix.arch }}" = "amd64" ]; then
-          dpkg-buildpackage -us -uc -b
-        else
-          dpkg-buildpackage -us -uc -b -a${{ matrix.arch }} -d
-        fi
-        mv ../*.deb .
+        docker run --rm $PLATFORM_ARGS \
+          -v "$PARENT:/work" -w "/work/$NAME" \
+          ${{ matrix.image }} \
+          bash -c '
+            set -ex
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y build-essential cmake debhelper devscripts libssl-dev
+            apt-get install -y libdvbcsa-dev || echo "::warning::libdvbcsa-dev not available for ${{ matrix.arch }}/${{ matrix.image }}, dipidescramble/dipitvhead/dipiradiohead will build with the CSA2 stub"
+            dpkg-buildpackage -us -uc -b
+          '
+        mv "$PARENT"/*.deb .
     - uses: actions/upload-artifact@v5
       with:
         name: deb-${{ matrix.arch }}

@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "lib/log.h"
+#include "lib/net/netconnect.h"
 #include "lib/signal.h"
 
 #include "listen.h"
@@ -58,27 +59,13 @@ static void *worker_main(void *arg) {
 }
 
 static int bind_dgram(int fd, int family, const char *addr, unsigned port) {
-  if (family == AF_INET) {
-    struct sockaddr_in a;
-    memset(&a, 0, sizeof a);
-    a.sin_family = AF_INET;
-    a.sin_port = htons((unsigned short)port);
-    if (inet_pton(AF_INET, addr, &a.sin_addr) != 1) {
-      log_line(TOOL_NAME ": bad listen address: %s", addr);
-      return -1;
-    }
-    return bind(fd, (struct sockaddr *)&a, sizeof a);
-  } else {
-    struct sockaddr_in6 a;
-    memset(&a, 0, sizeof a);
-    a.sin6_family = AF_INET6;
-    a.sin6_port = htons((unsigned short)port);
-    if (inet_pton(AF_INET6, addr, &a.sin6_addr) != 1) {
-      log_line(TOOL_NAME ": bad listen address: %s", addr);
-      return -1;
-    }
-    return bind(fd, (struct sockaddr *)&a, sizeof a);
+  struct sockaddr_storage ss;
+  socklen_t sslen;
+  if (netaddr_fill(family, addr, port, &ss, &sslen)) {
+    log_line(TOOL_NAME ": bad listen address: %s", addr);
+    return -1;
   }
+  return bind(fd, (struct sockaddr *)&ss, sslen);
 }
 
 static int open_reuseport_socket(int family, const char *addr, unsigned port) {

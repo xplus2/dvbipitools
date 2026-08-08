@@ -4,10 +4,19 @@
 #ifndef DIPIREC_SIGNAL_H
 #define DIPIREC_SIGNAL_H
 
-/* SIGINT/SIGTERM request stop; SIGPIPE ignored */
+/* SIGINT/SIGTERM request stop; SIGHUP requests reload; SIGPIPE ignored */
 void signals_install(void);
 
 /* nonzero once stop requested */
 int signal_stop_requested(void);
+
+/* nonzero if SIGHUP arrived since the last call; clears on read */
+int signal_reload_requested(void);
+
+/* CLOCK_MONOTONIC, seconds as a double */
+double mono_seconds(void);
+
+/* sleeps secs, in 100ms steps, checking signal_stop_requested() each step */
+void sleep_interruptible(double secs);
 
 #endif

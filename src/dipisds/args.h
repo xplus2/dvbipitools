@@ -26,7 +26,7 @@ typedef struct {
   int verbose;             /* -v */
   int color_mode;          /* --color; log_color_t */
 
-  int ret_enabled;      /* --ret-addr given, announce */
+  int ret_enabled;       /* --ret-addr given, announce */
   char ret_addr[64];     /* --ret-addr host part */
   unsigned ret_port;     /* --ret-addr port part */
   unsigned ret_rtx_time; /* --ret-rtx-time, default 2000 */
@@ -39,6 +39,10 @@ typedef struct {
   unsigned fcc_port;     /* --fcc-addr port part */
   unsigned fcc_rtx_time; /* --fcc-rtx-time, default 2000 */
   unsigned char fcc_rtx_pt; /* --fcc-rtx-pt, default 99 */
+
+  const char *metrics_sock;    /* --metrics; NULL = default socket path */
+  const char *metrics_id;      /* --metrics-id; NULL = metrics disabled */
+  unsigned metrics_interval_s; /* --metrics-interval; 0 = default */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

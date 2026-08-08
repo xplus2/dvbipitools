@@ -11,6 +11,9 @@
 #include <string.h>
 #include <strings.h>
 
+#include "lib/argutil.h"
+#include "lib/log.h"
+
 #include "args.h"
 #include "version.h"
 
@@ -18,15 +21,12 @@ static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 static void argerr(const char *fmt, ...) {
   va_list ap;
-  fputs(TOOL_NAME ": ", stderr);
   va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
+  argutil_verr(TOOL_NAME, fmt, ap);
   va_end(ap);
-  fputc('\n', stderr);
 }
 
-/* full multicast address, family from ':' presence. last byte becomes the
- * sweep counter in scan.c */
+/* full multicast address, family from ':' presence. last byte becomes sweep counter in scan.c */
 static int base_parse(const char *s, int *family, unsigned char *base) {
   if (strchr(s, ':')) {
     struct in6_addr a6;
@@ -127,21 +127,6 @@ static int udpxy_parse(const char *s, config_t *cfg) {
   return 0;
 }
 
-typedef struct {
-  const char *name;
-  int value;
-} enum_map_t;
-
-static int map_lookup(const enum_map_t *m, size_t n, const char *s, int *out) {
-  size_t i;
-  for (i = 0; i < n; i++)
-    if (strcmp(s, m[i].name) == 0) {
-      *out = m[i].value;
-      return 0;
-    }
-  return -1;
-}
-
 static int fmt_from_name(const char *s, out_fmt_t *f) {
   static const enum_map_t map[] = {{"m3u", OUT_M3U}, {"csv", OUT_CSV}, {"xspf", OUT_XSPF}, {"xml", OUT_XML}, {"null", OUT_NULL}};
   int v;
@@ -157,24 +142,27 @@ static void print_help(void) {
       "sweep a multicast /24 (or the analogous IPv6 range) for DVB-IPI\n"
       "services and write a playlist of what answered\n\n"
       "options:\n"
-      "  -m, --mcast <addr>     base multicast group, v4 or v6; the last\n"
-      "                         byte is swept 1..254               [239.2.16.0]\n"
-      "  -p, --port <port[-port]> port or inclusive port range      [8208]\n"
-      "  -f, --format <fmt>     m3u|csv|xspf|xml|null               [m3u]\n"
-      "  -P, --provider <name>  DomainName for -f xml (required if xml)\n"
-      "  -o, --out <path>       output file, or \"-\" for stdout      [stdout]\n"
-      "  -t, --timeout <secs>   wall-clock budget per candidate     [1]\n"
-      "  -u, --udpxy <ip:port>  use udpxy instead of a direct IGMP/MLD join\n"
-      "  -I, --iface <iface>    interface for the multicast join   [kernel default]\n"
-      "  -v, --verbose          per-candidate diagnostics on stderr\n"
-      "      --color <when>     auto|always|never                  [auto]\n"
-      "  -h, --help             this help\n\n"
+      "  -m, --mcast <addr>       base multicast group, v4 or v6; the last\n"
+      "                           byte is swept 1..254                  [239.19.75.0]\n"
+      "  -p, --port <port[-port]> port or inclusive port range          [8700]\n"
+      "  -f, --format <fmt>       m3u|csv|xspf|xml|null                 [m3u]\n"
+      "  -P, --provider <name>    DomainName (required on -f xml)\n"
+      "  -o, --out <path>         output file, or \"-\" for stdout      [stdout]\n"
+      "  -t, --timeout <secs>     wall-clock budget per candidate       [1]\n"
+      "  -M, --mpts               report every program at an address,\n"
+      "                           waits out the whole timeout budget per address\n"
+      "  -u, --udpxy <ip:port>    use udpxy instead of a direct IGMP/MLD join\n"
+      "  -I, --iface <iface>      interface for the multicast join      [kernel default]\n"
+      "  -v, --verbose            per-candidate diagnostics on stderr\n"
+      "      --color <when>       auto|always|never                     [auto]\n"
+      "  -h, --help               this help\n\n"
       "examples:\n"
-      "  %s -m 239.2.24.0 -p 8208-8229 >hd.m3u\n"
+      "  %s -m 239.19.75.0 -p 8700-8705 >hd.m3u\n"
       "  %s -v -f csv -o scan.csv\n"
-      "  %s -u 127.0.0.1:8080 -m 239.2.16.0 -f xspf >playlist.xspf\n"
-      "  %s -f xml -P example.org -o scan.xml    # feed straight into dipisds -a -i\n\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+      "  %s -u 127.0.0.1:8080 -m 239.19.75.0 -f xspf >playlist.xspf\n"
+      "  %s -f xml -P example.org -o scan.xml    # feed straight into dipisds -a -i\n"
+      "  %s -M -t 3 -f xml -P example.org -o scan.xml  # MPTS addresses too\n\n",
+      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -185,6 +173,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"provider", required_argument, 0, 'P'},
       {"out", required_argument, 0, 'o'},
       {"timeout", required_argument, 0, 't'},
+      {"mpts", no_argument, 0, 'M'},
       {"udpxy", required_argument, 0, 'u'},
       {"iface", required_argument, 0, 'I'},
       {"verbose", no_argument, 0, 'v'},
@@ -197,12 +186,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_NOARGS;
 
   memset(cfg, 0, sizeof *cfg);
-  base_parse("239.2.16.0", &cfg->family, cfg->base);
-  cfg->port_lo = cfg->port_hi = 8208;
+  base_parse("239.19.75.0", &cfg->family, cfg->base);
+  cfg->port_lo = cfg->port_hi = 8700;
   cfg->format = OUT_M3U;
   cfg->timeout_ms = 1000;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "m:p:f:P:o:t:u:I:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "m:p:f:P:o:t:Mu:I:vh", longopts, NULL)) != -1) {
     switch (c) {
       case 'm':
         if (base_parse(optarg, &cfg->family, cfg->base)) {
@@ -238,6 +227,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->timeout_ms = (int)(v * 1000);
         break;
       }
+      case 'M':
+        cfg->mpts = 1;
+        break;
       case 'u':
         if (udpxy_parse(optarg, cfg)) {
           argerr("invalid -u udpxy address: %s", optarg);
@@ -252,9 +244,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->verbose = 1;
         break;
       case 1001: {
-        static const enum_map_t map[] = {{"auto", 0}, {"always", 1}, {"never", 2}};
-        int v;
-        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+        log_color_t v;
+        if (log_color_from_string(optarg, &v)) {
           argerr("invalid --color: %s (auto|always|never)", optarg);
           return ARGS_ERR;
         }

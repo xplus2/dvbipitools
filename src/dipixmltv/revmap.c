@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/ioutil.h"
+
 #include "revmap.h"
 #include "version.h"
 
@@ -55,8 +57,8 @@ int revmap_load(const char *path, revmap_t *m) {
       m->cap = newcap;
     }
     e = &m->entries[m->count++];
-    snprintf(e->uri, sizeof e->uri, "%s", uri);
-    snprintf(e->id, sizeof e->id, "%s", id);
+    bufcpy(e->uri, sizeof e->uri, uri);
+    bufcpy(e->id, sizeof e->id, id);
   }
   fclose(f);
   return 0;

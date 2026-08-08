@@ -13,6 +13,7 @@
 
 #include "../log.h"
 #include "multicast.h"
+#include "netconnect.h"
 
 struct mcast {
   int fd;
@@ -141,8 +142,6 @@ mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char
   m->gsr.gsr_interface = ifidx;
   if (family == AF_INET) {
     struct sockaddr_in a;
-    struct sockaddr_in *gp = (struct sockaddr_in *)&m->gsr.gsr_group;
-    struct sockaddr_in *sp = (struct sockaddr_in *)&m->gsr.gsr_source;
     memset(&a, 0, sizeof a);
     a.sin_family = AF_INET;
     a.sin_port = htons((unsigned short)port);
@@ -151,21 +150,8 @@ mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char
       log_line("bind: %s", strerror(errno));
       goto fail;
     }
-    gp->sin_family = AF_INET;
-    gp->sin_port = htons((unsigned short)port);
-    if (inet_pton(AF_INET, group, &gp->sin_addr) != 1) {
-      log_line("bad group address: %s", group);
-      goto fail;
-    }
-    sp->sin_family = AF_INET;
-    if (inet_pton(AF_INET, source_addr, &sp->sin_addr) != 1) {
-      log_line("bad source address: %s", source_addr);
-      goto fail;
-    }
   } else {
     struct sockaddr_in6 a;
-    struct sockaddr_in6 *gp = (struct sockaddr_in6 *)&m->gsr.gsr_group;
-    struct sockaddr_in6 *sp = (struct sockaddr_in6 *)&m->gsr.gsr_source;
     memset(&a, 0, sizeof a);
     a.sin6_family = AF_INET6;
     a.sin6_port = htons((unsigned short)port);
@@ -173,14 +159,14 @@ mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char
       log_line("bind: %s", strerror(errno));
       goto fail;
     }
-    gp->sin6_family = AF_INET6;
-    gp->sin6_port = htons((unsigned short)port);
-    if (inet_pton(AF_INET6, group, &gp->sin6_addr) != 1) {
+  }
+  {
+    socklen_t sslen;
+    if (netaddr_fill(family, group, port, &m->gsr.gsr_group, &sslen)) {
       log_line("bad group address: %s", group);
       goto fail;
     }
-    sp->sin6_family = AF_INET6;
-    if (inet_pton(AF_INET6, source_addr, &sp->sin6_addr) != 1) {
+    if (netaddr_fill(family, source_addr, 0, &m->gsr.gsr_source, &sslen)) {
       log_line("bad source address: %s", source_addr);
       goto fail;
     }
@@ -199,12 +185,14 @@ fail:
   return NULL;
 }
 
-ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap) {
+ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_out) {
   ssize_t n = recv(m->fd, buf, cap, 0);
   if (n < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
       return 0;
     log_line("recv: %s", strerror(errno));
+    if (reason_out)
+      *reason_out = NET_ERR_READ;
     return -1;
   }
   return n;
@@ -226,6 +214,8 @@ mcast_t *mcast_open_send(int family, const char *group, unsigned port, const cha
     free(m);
     return NULL;
   }
+  /* no SO_SNDBUF bump: blocking socket + small backlog caps burst size below
+     policer drop threshold. deliberate. */
   if (iface) {
     ifidx = if_nametoindex(iface);
     if (!ifidx) {
@@ -236,6 +226,8 @@ mcast_t *mcast_open_send(int family, const char *group, unsigned port, const cha
 
   if (family == AF_INET) {
     struct ip_mreqn mif;
+    struct sockaddr_storage ss;
+    socklen_t sslen;
     memset(&mif, 0, sizeof mif);
     mif.imr_ifindex = (int)ifidx;
     if (ifidx && setsockopt(m->fd, IPPROTO_IP, IP_MULTICAST_IF, &mif, sizeof mif) < 0) {
@@ -246,14 +238,14 @@ mcast_t *mcast_open_send(int family, const char *group, unsigned port, const cha
       log_line("set ttl: %s", strerror(errno));
       goto fail;
     }
-    memset(&m->dest.v4, 0, sizeof m->dest.v4);
-    m->dest.v4.sin_family = AF_INET;
-    m->dest.v4.sin_port = htons((unsigned short)port);
-    if (inet_pton(AF_INET, group, &m->dest.v4.sin_addr) != 1) {
+    if (netaddr_fill(AF_INET, group, port, &ss, &sslen)) {
       log_line("bad group address: %s", group);
       goto fail;
     }
+    memcpy(&m->dest.v4, &ss, sslen);
   } else {
+    struct sockaddr_storage ss;
+    socklen_t sslen;
     if (ifidx && setsockopt(m->fd, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifidx, sizeof ifidx) < 0) {
       log_line("set outgoing interface: %s", strerror(errno));
       goto fail;
@@ -262,13 +254,11 @@ mcast_t *mcast_open_send(int family, const char *group, unsigned port, const cha
       log_line("set hop limit: %s", strerror(errno));
       goto fail;
     }
-    memset(&m->dest.v6, 0, sizeof m->dest.v6);
-    m->dest.v6.sin6_family = AF_INET6;
-    m->dest.v6.sin6_port = htons((unsigned short)port);
-    if (inet_pton(AF_INET6, group, &m->dest.v6.sin6_addr) != 1) {
+    if (netaddr_fill(AF_INET6, group, port, &ss, &sslen)) {
       log_line("bad group address: %s", group);
       goto fail;
     }
+    memcpy(&m->dest.v6, &ss, sslen);
   }
   return m;
 
@@ -300,9 +290,7 @@ ssize_t mcast_send(mcast_t *m, const void *buf, size_t len) {
 }
 
 int mcast_set_tos(mcast_t *m, int tos) {
-  if (m->family == AF_INET)
-    return setsockopt(m->fd, IPPROTO_IP, IP_TOS, &tos, sizeof tos);
-  return setsockopt(m->fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof tos);
+  return net_set_dscp(m->fd, m->family, tos);
 }
 
 void mcast_close(mcast_t *m) {

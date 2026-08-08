@@ -186,15 +186,24 @@ typedef struct {
   double burst_multiplier;
   unsigned duration_cap_ms;
   unsigned char rtx_pt;
+
+  unsigned idle_timeout_s; /* 0 = reaping disabled */
 } dispatch_ctx_t;
 
+#define CHANNEL_REAP_STEP_SLOTS 8 /* slots checked per packet - bounds reap cost instead of one O(max_channels) sweep per interval */
+
 /* fed by capture.c per whitelisted RTP-carried-TS packet; single demux feeds both RET ring and FCC cache */
-static void capture_cb(int family, const char *group, unsigned port, uint32_t ssrc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len, void *user) {
+static void capture_cb(int family, const void *addr, size_t addr_len, unsigned port, uint32_t ssrc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len, void *user) {
   dispatch_ctx_t *ctx = (dispatch_ctx_t *)user;
-  channel_t *c = channel_lookup(ctx->channels, family, group, port);
+  channel_t *c;
+
+  if (ctx->idle_timeout_s)
+    channel_table_reap_step(ctx->channels, (time_t)ctx->idle_timeout_s, CHANNEL_REAP_STEP_SLOTS);
+
+  c = channel_lookup(ctx->channels, family, addr, addr_len, port);
   if (!c)
     return; /* max-channels cap, already logged by channel_lookup */
-  channel_store(c, ssrc, seq, timestamp, payload, payload_len);
+  channel_store(ctx->channels, c, ssrc, seq, timestamp, payload, payload_len);
   if (ctx->mt)
     mcsend_ensure(ctx->mt, c, ctx->ff_port); /* cheap no-op if c already has a socket */
 }
@@ -279,52 +288,63 @@ typedef struct {
   unsigned duration_cap_ms;
 } pacer_ctx_t;
 
+typedef struct {
+  size_t idx;
+  int fd;
+  struct sockaddr_storage addr;
+  socklen_t addrlen;
+  burst_t *b;
+} pacer_snap_t;
+
+/* lock covers only the slot scan/copy and done-cleanup, never the sends below */
 static void *pacer_main(void *arg) {
   pacer_ctx_t *pc = (pacer_ctx_t *)arg;
   struct timespec tick = {0, 20 * 1000 * 1000}; /* 20ms */
+  pacer_snap_t *snap = calloc(pc->bursts->cap, sizeof *snap);
+
+  if (!snap) {
+    log_line(TOOL_NAME ": pacer: out of memory, burst pacing disabled");
+    return NULL;
+  }
 
   while (!signal_stop_requested()) {
-    size_t i;
+    size_t i, n = 0;
+
     nanosleep(&tick, NULL);
+
     pthread_mutex_lock(&pc->bursts->lock);
     for (i = 0; i < pc->bursts->cap; i++) {
       burst_slot_t *slot = &pc->bursts->slots[i];
-      unicast_dest_t dst;
-      burst_tick_result_t r;
       if (!slot->in_use)
         continue;
-
-      dst.fd = slot->fd;
-      dst.to = (const struct sockaddr *)&slot->addr;
-      dst.tolen = slot->addrlen;
-      r = burst_tick(slot->b, pc->duration_cap_ms, burst_send_cb, &dst);
-      if (r == BURST_TICK_DONE) {
-        send_rams_i(&dst, 0, 0, 201, NULL);
-        burst_free(slot->b);
-        slot->in_use = 0;
-      }
+      snap[n].idx = i;
+      snap[n].fd = slot->fd;
+      snap[n].addr = slot->addr;
+      snap[n].addrlen = slot->addrlen;
+      snap[n].b = slot->b;
+      n++;
     }
     pthread_mutex_unlock(&pc->bursts->lock);
-  }
-  return NULL;
-}
 
-static log_color_t color_prescan(int argc, char **argv) {
-  int i;
-  for (i = 1; i < argc; i++) {
-    const char *v = NULL;
-    if (!strcmp(argv[i], "--color") && i + 1 < argc)
-      v = argv[i + 1];
-    else if (!strncmp(argv[i], "--color=", 8))
-      v = argv[i] + 8;
-    if (!v)
-      continue;
-    if (!strcmp(v, "always"))
-      return LOG_COLOR_ALWAYS;
-    if (!strcmp(v, "never"))
-      return LOG_COLOR_NEVER;
+    for (i = 0; i < n; i++) {
+      unicast_dest_t dst;
+      burst_tick_result_t r;
+
+      dst.fd = snap[i].fd;
+      dst.to = (const struct sockaddr *)&snap[i].addr;
+      dst.tolen = snap[i].addrlen;
+      r = burst_tick(snap[i].b, pc->duration_cap_ms, burst_send_cb, &dst);
+      if (r == BURST_TICK_DONE) {
+        send_rams_i(&dst, 0, 0, 201, NULL);
+        pthread_mutex_lock(&pc->bursts->lock);
+        burst_free(snap[i].b);
+        pc->bursts->slots[snap[i].idx].in_use = 0;
+        pthread_mutex_unlock(&pc->bursts->lock);
+      }
+    }
   }
-  return LOG_COLOR_AUTO;
+  free(snap);
+  return NULL;
 }
 
 int main(int argc, char **argv) {
@@ -344,7 +364,7 @@ int main(int argc, char **argv) {
   pthread_t pacer_thread;
   int pacer_started = 0;
 
-  log_set_color(color_prescan(argc, argv));
+  log_set_color(log_color_prescan(argc, argv));
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
   if (st == ARGS_OK)
@@ -380,7 +400,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  cap = capture_open(cfg.iface, cfg.bpf_expr, cfg.range_ptrs, cfg.range_count, errbuf, sizeof errbuf);
+  cap = capture_open(cfg.iface, cfg.range_ptrs, cfg.range_count, errbuf, sizeof errbuf);
   if (!cap) {
     fprintf(stderr, "%s: %s\n", TOOL_NAME, errbuf);
     return 1;
@@ -407,6 +427,7 @@ int main(int argc, char **argv) {
   dispatch_ctx.burst_multiplier = cfg.burst_multiplier;
   dispatch_ctx.duration_cap_ms = cfg.duration_cap_ms;
   dispatch_ctx.rtx_pt = cfg.rtx_pt;
+  dispatch_ctx.idle_timeout_s = cfg.channel_idle_timeout_s;
 
   pool = listen_pool_start(cfg.listen_family, cfg.listen_addr, cfg.listen_port, cfg.workers, listen_cb, &dispatch_ctx);
   if (!pool) {

@@ -116,12 +116,66 @@ START_TEST(ts_packet_emit_first_packet_carries_pcr) {
 }
 END_TEST
 
+START_TEST(ts_packet_emit_partial_bounds_to_max_packets_per_call) {
+  unsigned char data[190];
+  unsigned char cc = 0;
+  size_t offset = 0, i, n;
+  const unsigned char pointer_byte = 0x00;
+
+  for (i = 0; i < sizeof data; i++)
+    data[i] = (unsigned char)(i & 0xFF);
+
+  g_count = 0;
+  n = ts_packet_emit_partial(0x0200, &cc, &pointer_byte, data, sizeof data, &offset, 1, capture_cb, NULL);
+  ck_assert_uint_eq(n, 1u); /* capped at 1, 2 needed */
+  ck_assert_int_eq(g_count, 1);
+  ck_assert_uint_ne(offset, sizeof data);
+
+  n = ts_packet_emit_partial(0x0200, &cc, &pointer_byte, data, sizeof data, &offset, 1, capture_cb, NULL);
+  ck_assert_uint_eq(n, 1u);
+  ck_assert_int_eq(g_count, 2);
+  ck_assert_uint_eq(offset, sizeof data);
+
+  n = ts_packet_emit_partial(0x0200, &cc, &pointer_byte, data, sizeof data, &offset, 1, capture_cb, NULL);
+  ck_assert_uint_eq(n, 0u);
+  ck_assert_int_eq(g_count, 2);
+}
+END_TEST
+
+START_TEST(ts_packet_emit_partial_matches_ts_packet_emit_byte_for_byte) {
+  unsigned char data[190];
+  unsigned char cc_full = 0, cc_partial = 0;
+  unsigned char full_pkts[2][188], partial_pkts[2][188];
+  size_t offset = 0, i;
+  const unsigned char pointer_byte = 0x00;
+
+  for (i = 0; i < sizeof data; i++)
+    data[i] = (unsigned char)((i * 7) & 0xFF);
+
+  g_count = 0;
+  ts_packet_emit(0x0300, &cc_full, &pointer_byte, data, sizeof data, 0, 0, capture_cb, NULL);
+  ck_assert_int_eq(g_count, 2);
+  memcpy(full_pkts, g_pkts, sizeof full_pkts);
+
+  g_count = 0;
+  while (ts_packet_emit_partial(0x0300, &cc_partial, &pointer_byte, data, sizeof data, &offset, 1, capture_cb, NULL))
+    ;
+  ck_assert_int_eq(g_count, 2);
+  memcpy(partial_pkts, g_pkts, sizeof partial_pkts);
+
+  ck_assert_mem_eq(full_pkts, partial_pkts, sizeof full_pkts);
+  ck_assert_uint_eq(cc_full, cc_partial);
+}
+END_TEST
+
 static Suite *tspacket_write_suite(void) {
   Suite *s = suite_create("tspacket_write");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, ts_packet_emit_single_packet_reassembles_via_standard_offset);
   tcase_add_test(tc, ts_packet_emit_splits_across_packets_with_pointer_on_first_only);
   tcase_add_test(tc, ts_packet_emit_first_packet_carries_pcr);
+  tcase_add_test(tc, ts_packet_emit_partial_bounds_to_max_packets_per_call);
+  tcase_add_test(tc, ts_packet_emit_partial_matches_ts_packet_emit_byte_for_byte);
   suite_add_tcase(s, tc);
   return s;
 }

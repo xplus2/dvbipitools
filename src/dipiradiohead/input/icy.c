@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/ioutil.h"
+
 #include "icy.h"
 
 #define ICY_META_CAP (255 * 16)
@@ -70,9 +72,9 @@ static void handle_meta_block(icy_t *c) {
         alen = sizeof artist - 1;
       memcpy(artist, c->last_title, alen);
       artist[alen] = '\0';
-      snprintf(title, sizeof title, "%s", sep + 3);
+      bufcpy(title, sizeof title, sep + 3);
     } else {
-      snprintf(title, sizeof title, "%s", c->last_title);
+      bufcpy(title, sizeof title, c->last_title);
     }
     c->cb(c->ctx, artist, title);
   }

@@ -8,7 +8,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "dipitvhead/cas/simulcrypt_msg.h"
+#include "lib/cas/simulcrypt_msg.h"
 
 START_TEST(hdr_write_then_parse_round_trip) {
   unsigned char buf[SIMULCRYPT_HDR_LEN];

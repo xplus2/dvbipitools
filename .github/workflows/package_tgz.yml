@@ -45,13 +45,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential cmake libssl-dev ${{ matrix.crosspkg }}
-        # native libpcap-dev only for the native (no triplet) job: it ships /usr/bin/pcap-config with
-        # arch-specific content, so it can't coexist with a foreign-arch libpcap-dev:$arch in the same job
-        if [ -z "${{ matrix.triplet }}" ]; then
-          sudo apt-get install -y libpcap-dev
-        fi
         # i386/armel: no libssl-dev on Ubuntu, see -DDIPIRADIOHEAD_TLS=OFF below. others: ports arches, scoped update from ports.ubuntu.com
-        # dipifccret (libpcap+pthread edge daemon) makes no sense on i386/armel either - skipped there too
         case "${{ matrix.arch }}" in
           i386|armel|amd64) ;;
           *)
@@ -63,7 +57,7 @@ jobs:
               echo "deb [arch=${{ matrix.arch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME-security main universe restricted multiverse"
             } | sudo tee /etc/apt/sources.list.d/ports-${{ matrix.arch }}.list
             sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/ports-${{ matrix.arch }}.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
-            sudo apt-get install -y libssl-dev:${{ matrix.arch }} libpcap-dev:${{ matrix.arch }} || sudo apt-get install -y libssl-dev:${{ matrix.arch }}
+            sudo apt-get install -y libssl-dev:${{ matrix.arch }}
             ;;
         esac
     - name: configure
@@ -71,13 +65,10 @@ jobs:
         CROSS_ARGS=""
         if [ -n "${{ matrix.triplet }}" ]; then
           CROSS_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_LIBRARY_ARCHITECTURE=${{ matrix.triplet }}"
-          # else pkg_check_modules(libpcap) resolves to the native amd64 package regardless of target
-          export PKG_CONFIG_LIBDIR="/usr/lib/${{ matrix.triplet }}/pkgconfig:/usr/share/pkgconfig"
-          unset PKG_CONFIG_PATH
         fi
         TLS_ARGS=""
         case "${{ matrix.arch }}" in
-          i386|armel) TLS_ARGS="-DDIPIRADIOHEAD_TLS=OFF -DDIPITVHEAD_TLS=OFF" ;;
+          i386|armel) TLS_ARGS="-DDIPIRADIOHEAD_TLS=OFF -DDIPITVHEAD_TLS=OFF -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON" ;;
           amd64) ;;
           *) TLS_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a" ;;
         esac
@@ -94,10 +85,9 @@ jobs:
         install -m 0755 build/src/dipisds/dipisds "${PKGDIR}/"
         install -m 0755 build/src/dipixmltv/dipixmltv "${PKGDIR}/"
         install -m 0755 build/src/dipibim/dipibim "${PKGDIR}/"
-        install -m 0755 build/src/dipiepg/dipiepg "${PKGDIR}/"
+        install -m 0755 build/src/dipibcg/dipibcg "${PKGDIR}/"
         install -m 0755 build/src/dipitvhead/dipitvhead "${PKGDIR}/"
-        # dipifccret needs libpcap and is skipped by its own CMakeLists.txt if not found for this arch - don't fail packaging of the other tools if so
-        [ -f build/src/dipifccret/dipifccret ] && install -m 0755 build/src/dipifccret/dipifccret "${PKGDIR}/"
+        install -m 0755 build/src/dipifccret/dipifccret "${PKGDIR}/"
         # dipicam378 needs OpenSSL, unavailable on i386/armel here - same skip-if-missing pattern
         [ -f build/src/dipicam378/dipicam378 ] && install -m 0755 build/src/dipicam378/dipicam378 "${PKGDIR}/"
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"

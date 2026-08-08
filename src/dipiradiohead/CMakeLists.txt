@@ -22,32 +22,105 @@ else ()
     set(TLS_SRC ../lib/net/tls_stub.c)
 endif ()
 
+option(DIPIRADIOHEAD_CAS "build dipiradiohead with CAS/scrambler support (CISSA requires OpenSSL)" ON)
+
+set(DIPIRADIOHEAD_HAVE_CISSA FALSE)
+if (DIPIRADIOHEAD_CAS)
+    if (DVBIPITOOLS_STATIC)
+        set(OPENSSL_USE_STATIC_LIBS TRUE)
+    endif ()
+    find_package(OpenSSL)
+    if (OpenSSL_FOUND)
+        set(DIPIRADIOHEAD_HAVE_CISSA TRUE)
+    else ()
+        message(WARNING "dipiradiohead: OpenSSL not found, building without CISSA support")
+    endif ()
+endif ()
+
+if (DIPIRADIOHEAD_HAVE_CISSA)
+    set(CISSA_SRC ../lib/scrambler/cissa.c)
+else ()
+    set(CISSA_SRC ../lib/scrambler/cissa_stub.c)
+endif ()
+
+option(DIPIRADIOHEAD_CSA2 "build dipiradiohead with DVB-CSA2 support (requires libdvbcsa)" ON)
+
+set(DIPIRADIOHEAD_HAVE_CSA2 FALSE)
+if (DIPIRADIOHEAD_CSA2)
+    find_path(DVBCSA_INCLUDE_DIR dvbcsa/dvbcsa.h)
+    find_library(DVBCSA_LIBRARY dvbcsa)
+    if (DVBCSA_INCLUDE_DIR AND DVBCSA_LIBRARY)
+        set(DIPIRADIOHEAD_HAVE_CSA2 TRUE)
+    else ()
+        message(WARNING "dipiradiohead: libdvbcsa not found, building without CSA2 support")
+    endif ()
+endif ()
+
+if (DIPIRADIOHEAD_HAVE_CSA2)
+    set(CSA2_SRC ../lib/scrambler/csa2.c)
+else ()
+    set(CSA2_SRC ../lib/scrambler/csa2_stub.c)
+endif ()
+
 # keep in sync with CMakeLists/Makefile
 add_executable(dipiradiohead
     main.c
     args.c
     radiohead.c
     ../lib/log.c
+    ../lib/argutil.c
     ../lib/signal.c
+    ../lib/metrics/protocol.c
+    ../lib/metrics/export.c
     ../lib/net/multicast.c
+    ../lib/net/netconnect.c
     ${TLS_SRC}
     ../lib/net/httpclient.c
+    ../lib/ioutil.c
     ../lib/demux/crc32.c
     ../lib/demux/bitreader.c
     input/playlist.c
     input/icy.c
     input/id3.c
     input/source.c
+    input/inputset.c
+    ../lib/net/retryset.c
     framer/mpegaudio.c
     framer/aac_adts.c
     framer/aac_latm.c
     mux/psi.c
     mux/pes.c
     mux/tspacketizer.c
+    cas/cas.c
+    ../lib/mux/cadescbuild.c
+    ../lib/cas/cas_args.c
+    ../lib/cas/simulcrypt_msg.c
+    ../lib/cas/ecmg_client.c
+    ../lib/cas/emmg_server.c
+    ../lib/cas/cas_group.c
+    ../lib/cas/cas_scramble_engine.c
     ../lib/mux/rtpheader.c
     ../lib/mux/psi_build.c
-    ../lib/mux/tspacket_write.c)
+    ../lib/mux/mpts.c
+    ../lib/mux/tspacket_write.c
+    ../lib/scrambler/scrambler.c
+    ${CISSA_SRC}
+    ${CSA2_SRC})
 
 if (DIPIRADIOHEAD_HAVE_TLS)
     target_link_libraries(dipiradiohead PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 endif ()
+
+if (DIPIRADIOHEAD_HAVE_CISSA AND NOT DIPIRADIOHEAD_HAVE_TLS)
+    target_link_libraries(dipiradiohead PRIVATE OpenSSL::Crypto)
+endif ()
+
+if (DIPIRADIOHEAD_HAVE_CSA2)
+    target_include_directories(dipiradiohead PRIVATE ${DVBCSA_INCLUDE_DIR})
+    target_link_libraries(dipiradiohead PRIVATE ${DVBCSA_LIBRARY})
+endif ()
+
+# ECMG client thread: pthread is a hard dependency from here on, not optional
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+target_link_libraries(dipiradiohead PRIVATE Threads::Threads)

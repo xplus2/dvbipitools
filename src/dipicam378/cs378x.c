@@ -74,8 +74,7 @@ int cs378x_aes128_ecb(const unsigned char key[16], unsigned char *buf, size_t le
               : EVP_DecryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL) != 1)
     goto done;
   EVP_CIPHER_CTX_set_padding(ctx, 0);
-  if (encrypt ? EVP_EncryptUpdate(ctx, buf, &outlen, buf, (int)len) != 1
-              : EVP_DecryptUpdate(ctx, buf, &outlen, buf, (int)len) != 1)
+  if (encrypt ? EVP_EncryptUpdate(ctx, buf, &outlen, buf, (int)len) != 1 : EVP_DecryptUpdate(ctx, buf, &outlen, buf, (int)len) != 1)
     goto done;
   ok = ((size_t)outlen == len);
 done:
@@ -342,11 +341,16 @@ static void *worker_main(void *arg) {
         break;
       default:
         if (s->verbose) {
+          static const char hex_nib[] = "0123456789ABCDEF";
           size_t dumplen = buflen + 20 > 32 ? 32 : buflen + 20;
           char hex[32 * 3 + 1];
           size_t i;
-          for (i = 0; i < dumplen; i++)
-            snprintf(hex + i * 3, 4, "%02X ", body[i]);
+          for (i = 0; i < dumplen; i++) {
+            hex[i * 3] = hex_nib[(body[i] >> 4) & 0xF];
+            hex[i * 3 + 1] = hex_nib[body[i] & 0xF];
+            hex[i * 3 + 2] = ' ';
+          }
+          hex[dumplen * 3] = '\0';
           log_line(TOOL_NAME ": unknown command %d, len=%zu, bytes=%s(slot %d)", body[0], buflen, hex, slot);
         }
         break;

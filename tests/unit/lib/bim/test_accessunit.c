@@ -8,34 +8,34 @@
 
 #include "lib/bim/accessunit.h"
 
-static epg_doc_t *build_doc(void) {
-  static epg_doc_t doc;
-  epg_channel_t *c;
-  epg_programme_t *pr;
+static bcg_doc_t *build_doc(void) {
+  static bcg_doc_t doc;
+  bcg_channel_t *c;
+  bcg_programme_t *pr;
 
-  epg_doc_init(&doc);
+  bcg_doc_init(&doc);
 
-  c = epg_add_channel(&doc);
-  snprintf(c->id, sizeof c->id, "orf1");
+  c = bcg_add_channel(&doc);
+  snprintf(c->id, sizeof c->id, "channel1");
   snprintf(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
   c->onid = 2;
   c->tsid = 1;
   c->sid = 101;
-  epg_channel_add_name(c, "ORFeins");
+  bcg_channel_add_name(c, "Channel One");
 
-  c = epg_add_channel(&doc); /* no uri: must be excluded entirely */
+  c = bcg_add_channel(&doc); /* no uri: must be excluded entirely */
   snprintf(c->id, sizeof c->id, "nouri");
 
-  pr = epg_add_programme(&doc);
-  snprintf(pr->channel_id, sizeof pr->channel_id, "orf1");
+  pr = bcg_add_programme(&doc);
+  snprintf(pr->channel_id, sizeof pr->channel_id, "channel1");
   snprintf(pr->start, sizeof pr->start, "2020-12-15T12:00:00Z");
   snprintf(pr->stop, sizeof pr->stop, "2020-12-15T12:30:00Z");
   snprintf(pr->title, sizeof pr->title, "News");
   snprintf(pr->desc, sizeof pr->desc, "Evening news");
   snprintf(pr->category, sizeof pr->category, "Current affairs");
 
-  pr = epg_add_programme(&doc);
-  snprintf(pr->channel_id, sizeof pr->channel_id, "orf1");
+  pr = bcg_add_programme(&doc);
+  snprintf(pr->channel_id, sizeof pr->channel_id, "channel1");
   snprintf(pr->start, sizeof pr->start, "2020-12-15T13:00:00Z");
   snprintf(pr->title, sizeof pr->title, "Weather");
 
@@ -43,8 +43,8 @@ static epg_doc_t *build_doc(void) {
 }
 
 START_TEST(accessunit_encode_decode_round_trips_full_doc) {
-  epg_doc_t *doc = build_doc();
-  epg_doc_t doc2;
+  bcg_doc_t *doc = build_doc();
+  bcg_doc_t doc2;
   bitwriter_t bw;
   bitreader_t br;
   strrepo_writer_t sw;
@@ -64,21 +64,21 @@ START_TEST(accessunit_encode_decode_round_trips_full_doc) {
 
   bitreader_init(&br, bwdata, bwlen);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
-  epg_doc_init(&doc2);
+  bcg_doc_init(&doc2);
   ck_assert_int_eq(accessunit_decode(&br, &sr, &doc2, &nfuu2), 0);
 
   ck_assert_int_eq(nfuu2, 4);
   ck_assert_int_eq(doc2.channel_count, 1); /* nouri channel never round-trips */
-  ck_assert_str_eq(doc2.channels[0].id, "orf1");
+  ck_assert_str_eq(doc2.channels[0].id, "channel1");
   ck_assert_str_eq(doc2.channels[0].uri, "rtp://239.1.1.1:5000");
   ck_assert_uint_eq(doc2.channels[0].onid, 2u);
   ck_assert_uint_eq(doc2.channels[0].tsid, 1u);
   ck_assert_uint_eq(doc2.channels[0].sid, 101u);
   ck_assert_int_eq(doc2.channels[0].name_count, 1);
-  ck_assert_str_eq(doc2.channels[0].names[0], "ORFeins");
+  ck_assert_str_eq(doc2.channels[0].names[0], "Channel One");
 
   ck_assert_int_eq(doc2.programme_count, 2);
-  ck_assert_str_eq(doc2.programmes[0].channel_id, "orf1");
+  ck_assert_str_eq(doc2.programmes[0].channel_id, "channel1");
   ck_assert_str_eq(doc2.programmes[0].start, "2020-12-15T12:00:00Z");
   ck_assert_str_eq(doc2.programmes[0].stop, "2020-12-15T12:30:00Z");
   ck_assert_str_eq(doc2.programmes[0].title, "News");
@@ -87,15 +87,15 @@ START_TEST(accessunit_encode_decode_round_trips_full_doc) {
   ck_assert_str_eq(doc2.programmes[1].start, "2020-12-15T13:00:00Z");
   ck_assert_str_eq(doc2.programmes[1].title, "Weather");
 
-  epg_doc_free(doc);
-  epg_doc_free(&doc2);
+  bcg_doc_free(doc);
+  bcg_doc_free(&doc2);
   bitwriter_free(&bw);
   strrepo_writer_free(&sw);
 }
 END_TEST
 
 START_TEST(accessunit_encode_empty_doc_has_zero_fuus) {
-  epg_doc_t doc, doc2;
+  bcg_doc_t doc, doc2;
   bitwriter_t bw;
   bitreader_t br;
   strrepo_writer_t sw;
@@ -104,7 +104,7 @@ START_TEST(accessunit_encode_empty_doc_has_zero_fuus) {
   size_t bwlen, swlen;
   int nfuu, nfuu2;
 
-  epg_doc_init(&doc);
+  bcg_doc_init(&doc);
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
   ck_assert_int_eq(accessunit_encode(&doc, &bw, &sw, &nfuu), 0);
@@ -114,14 +114,14 @@ START_TEST(accessunit_encode_empty_doc_has_zero_fuus) {
   swdata = strrepo_writer_data(&sw, &swlen);
   bitreader_init(&br, bwdata, bwlen);
   strrepo_reader_init(&sr, swdata, swlen);
-  epg_doc_init(&doc2);
+  bcg_doc_init(&doc2);
   ck_assert_int_eq(accessunit_decode(&br, &sr, &doc2, &nfuu2), 0);
   ck_assert_int_eq(nfuu2, 0);
   ck_assert_int_eq(doc2.channel_count, 0);
   ck_assert_int_eq(doc2.programme_count, 0);
 
-  epg_doc_free(&doc);
-  epg_doc_free(&doc2);
+  bcg_doc_free(&doc);
+  bcg_doc_free(&doc2);
   bitwriter_free(&bw);
   strrepo_writer_free(&sw);
 }

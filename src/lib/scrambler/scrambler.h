@@ -16,63 +16,43 @@ typedef enum { SCRAMBLE_ALGO_CISSA, SCRAMBLE_ALGO_CSA2 } scramble_algo_t;
 scrambler_t *scrambler_new(scramble_algo_t algo);
 void scrambler_free(scrambler_t *s);
 
-/* control word length for algo, in bytes: 16 for CISSA, 8 for CSA2 */
+/* CW length, bytes: 16 CISSA, 8 CSA2 */
 size_t scrambler_cw_len(scramble_algo_t algo);
 
-/* invoked once per packet, in original order, whenever a *_queued call below
-   emits (immediately, or later via a batch flush). pkt is a fully finished,
-   188-byte packet ready to send/write/mux onward. */
+/* fires once per packet, in order, on *_queued emit (immediate or batched). pkt: complete
+   188B, ready to send */
 typedef void (*scrambler_emit_cb)(void *ctx, const unsigned char pkt[188]);
 
-/* load control word for 1 parity slot (SCRAMBLE_PARITY_EVEN/_ODD). if a
-   *_queued batch is still pending for this same parity, flushes it first
-   (via emit/ctx) under the key still in effect - otherwise those packets
-   would silently pick up the new key at flush time instead of the one
-   they were queued under.
-   0 on success, -1 on bad parity/length or backend unavailable */
+/* flushes any pending queued batch for this parity first, under the still-current key -
+   else those packets would silently pick up the new key at flush time. 0: ok. -1: bad
+   parity/length or backend unavailable */
 int scrambler_set_key(scrambler_t *s, int parity, const unsigned char *cw, size_t cw_len, scrambler_emit_cb emit, void *ctx);
 
-/* scrambles one 188-byte TS packet in place with given parity's key,
-   sets transport_scrambling_control bits. ret: -1 if that parity has no key loaded or backend fails */
+/* -1: no key loaded for parity, or backend fail */
 int scrambler_encrypt_packet(scrambler_t *s, unsigned char pkt[188], int parity);
 
-/* descrambles one 188-byte TS packet in place, using whichever parity slot its own
-   transport_scrambling_control bits (byte 3, top 2 bits) select. 00 = not scrambled,
-   no-op, returns 0. Clears the control bits to 00 on a successful decrypt.
-   ret: 0 not scrambled or successfully decrypted, -1 marked scrambled but that
-   parity has no key loaded, the control value is the reserved "01", or the
-   backend fails - packet left untouched in all -1 cases */
+/* parity read from pkt's own control bits. 0: unscrambled (untouched) or decrypted (control
+   bits cleared). -1: no key for that parity, reserved control value 01, or backend fail -
+   packet untouched */
 int scrambler_decrypt_packet(scrambler_t *s, unsigned char pkt[188]);
 
-/* CSA2 with a SIMD bitslice backend available: queues pkt (a copy - the
-   caller's buffer is free to reuse right after this call returns) for
-   batched hardware-accelerated encryption, calling emit() for it (and any
-   other packets in the same batch) once the batch fills, the parity
-   changes, or scrambler_flush() is called - NOT necessarily before this
-   call returns. CISSA, or CSA2 without libdvbcsa: encrypts immediately and
-   calls emit() before returning (batching gives these no benefit).
-   ret: -1 if that parity has no key loaded, packet not queued/emitted in
-   that case; 0 otherwise. */
+/* pkt copied, caller's buffer reusable on return. CSA2+SIMD backend: queued, emitted with
+   its batch on fill / parity change / scrambler_flush() - not necessarily before this
+   returns. CISSA, or CSA2 w/o libdvbcsa: emitted immediately, no batching benefit.
+   -1: no key loaded, not queued/emitted. 0 otherwise */
 int scrambler_encrypt_packet_queued(scrambler_t *s, unsigned char pkt[188], int parity, scrambler_emit_cb emit, void *ctx);
 
-/* same queued/immediate split as scrambler_encrypt_packet_queued, for
-   descrambling - parity is read from pkt's own scrambling control bits,
-   same as scrambler_decrypt_packet. ret: -1 same failure cases as
-   scrambler_decrypt_packet, packet not queued/emitted; 0 otherwise. */
+/* same queued/immediate split as scrambler_encrypt_packet_queued. parity from pkt's own
+   control bits, same failure cases as scrambler_decrypt_packet */
 int scrambler_decrypt_packet_queued(scrambler_t *s, unsigned char pkt[188], scrambler_emit_cb emit, void *ctx);
 
-/* pkt needs no crypto (caller already decided) but must still keep its
-   position relative to whatever *_queued above is currently batching for
-   this scrambler, e.g. a CAS-registered pid whose key isn't loaded yet -
-   without this, a byte-identical passthrough packet emitted directly could
-   jump ahead of still-queued earlier packets on the same pid. */
+/* no crypto needed, but keeps pkt's position in whatever *_queued batch is pending - else
+   it could jump ahead of still-queued earlier packets on the same pid */
 void scrambler_passthrough_queued(scrambler_t *s, const unsigned char pkt[188], scrambler_emit_cb emit, void *ctx);
 
-/* forces an immediate flush+emit of any packets held by *_queued/
-   *_passthrough_queued calls, in original order. call at end of stream, and
-   at any point where held-back latency is unacceptable (e.g. right after a
-   PCR-bearing packet, so batching never delays PCR delivery). safe to call
-   with nothing queued, or with s NULL. */
+/* flushes+emits anything held by *_queued/passthrough_queued, in order. call at stream end,
+   or wherever held-back latency is unacceptable (e.g. after a PCR packet). safe: nothing
+   queued, or s NULL */
 void scrambler_flush(scrambler_t *s, scrambler_emit_cb emit, void *ctx);
 
 #endif

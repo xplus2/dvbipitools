@@ -15,17 +15,15 @@ START_TEST(suggest_map_classifies_exact_fuzzy_and_unmatched) {
 
   xmltv_f = tmpfile();
   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<tv>\n"
-        "<channel id=\"orf1\"><display-name>ORFeins</display-name></channel>\n"
-        "<channel id=\"orf2\"><display-name>ORF 2</display-name></channel>\n"
+        "<channel id=\"channel1\"><display-name>Channel One</display-name></channel>\n"
+        "<channel id=\"channel2\"><display-name>Channel 2</display-name></channel>\n"
         "<channel id=\"mystery\"><display-name>Mystery Channel</display-name></channel>\n"
         "</tv>\n",
         xmltv_f);
   rewind(xmltv_f);
 
   scan_f = tmpfile();
-  fputs("ORFeins,rtp://239.1.1.1:5000,1,2,101\n"
-        "ORF 2 HD,rtp://239.1.1.2:5000,1,2,102\n",
-        scan_f);
+  fputs("Channel One,rtp://239.1.1.1:5000,1,2,101\nChannel 2 HD,rtp://239.1.1.2:5000,1,2,102\n", scan_f);
   rewind(scan_f);
 
   out_f = open_memstream(&buf, &len);
@@ -34,8 +32,8 @@ START_TEST(suggest_map_classifies_exact_fuzzy_and_unmatched) {
   fclose(xmltv_f);
   fclose(scan_f);
 
-  ck_assert_ptr_nonnull(strstr(buf, "orf1,rtp://239.1.1.1:5000,1,2,101\n"));
-  ck_assert_ptr_nonnull(strstr(buf, "# orf2 (ORF 2) -> closest: ORF 2 HD, rtp://239.1.1.2:5000,1,2,102\n"));
+  ck_assert_ptr_nonnull(strstr(buf, "channel1,rtp://239.1.1.1:5000,1,2,101\n"));
+  ck_assert_ptr_nonnull(strstr(buf, "# channel2 (Channel 2) -> closest: Channel 2 HD, rtp://239.1.1.2:5000,1,2,102\n"));
   ck_assert_ptr_nonnull(strstr(buf, "# UNMATCHED: mystery (Mystery Channel)\n"));
 
   free(buf);

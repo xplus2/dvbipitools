@@ -14,24 +14,6 @@
 #include "version.h"
 
 /* banner prints before parsing: --color read early */
-static log_color_t color_prescan(int argc, char **argv) {
-  int i;
-  for (i = 1; i < argc; i++) {
-    const char *v = NULL;
-    if (!strcmp(argv[i], "--color") && i + 1 < argc)
-      v = argv[i + 1];
-    else if (!strncmp(argv[i], "--color=", 8))
-      v = argv[i] + 8;
-    if (!v)
-      continue;
-    if (!strcmp(v, "always"))
-      return LOG_COLOR_ALWAYS;
-    if (!strcmp(v, "never"))
-      return LOG_COLOR_NEVER;
-  }
-  return LOG_COLOR_AUTO;
-}
-
 static int ecm_cb(const unsigned char *ecm, size_t ecm_len, unsigned srvid, unsigned caid, unsigned prid, unsigned char cw_out[16], void *user) {
   (void)prid;
   return device_resolve_cw((device_state_t *)user, ecm, ecm_len, srvid, caid, cw_out);
@@ -50,7 +32,7 @@ int main(int argc, char **argv) {
   cs378x_cfg_t srv_cfg;
   cs378x_server_t *srv;
 
-  log_set_color(color_prescan(argc, argv));
+  log_set_color(log_color_prescan(argc, argv));
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
   if (st == ARGS_OK)
@@ -83,7 +65,7 @@ int main(int argc, char **argv) {
   log_line(TOOL_NAME ": listening on port %u", cfg.port);
 
   while (!signal_stop_requested())
-    usleep(200 * 1000);
+    pause();
 
   cs378x_server_stop(srv);
   device_state_free(dev);

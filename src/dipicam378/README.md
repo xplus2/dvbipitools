@@ -21,7 +21,7 @@ dipicam378 -k <keyfile> [options]
 |      | `--color`   | `auto\|always\|never` | `auto`              |
 | `-h` | `--help`    |                       |                     |
 
-This tool is for debugging only. A password is required because the
+This tool is for debugging and validation only. A password is required because the
 protocol's encryption relies on it. A username is optional, give one only if you
 want this server to reject connections that don't send it.
 

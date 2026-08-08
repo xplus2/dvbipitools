@@ -6,7 +6,7 @@
 
 #include "args.h"
 #include "lib/log.h"
-#include "lib/tva/epg_doc.h"
+#include "lib/tva/bcg_doc.h"
 #include "lib/tva/mapping.h"
 #include "lib/tva/tva_xml.h"
 #include "lib/tva/xmltv.h"
@@ -14,35 +14,17 @@
 #include "suggest.h"
 #include "version.h"
 
-static log_color_t color_prescan(int argc, char **argv) {
-  int i;
-  for (i = 1; i < argc; i++) {
-    const char *v = NULL;
-    if (!strcmp(argv[i], "--color") && i + 1 < argc)
-      v = argv[i + 1];
-    else if (!strncmp(argv[i], "--color=", 8))
-      v = argv[i] + 8;
-    if (!v)
-      continue;
-    if (!strcmp(v, "always"))
-      return LOG_COLOR_ALWAYS;
-    if (!strcmp(v, "never"))
-      return LOG_COLOR_NEVER;
-  }
-  return LOG_COLOR_AUTO;
-}
-
 static FILE *open_input(const char *path) { return strcmp(path, "-") ? fopen(path, "r") : stdin; }
 static FILE *open_output(const char *path) { return strcmp(path, "-") ? fopen(path, "w") : stdout; }
 
 int main(int argc, char **argv) {
   config_t cfg;
   args_status_t st;
-  epg_doc_t doc;
+  bcg_doc_t doc;
   FILE *in, *out;
   int rc = 0;
 
-  log_set_color(color_prescan(argc, argv));
+  log_set_color(log_color_prescan(argc, argv));
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
   if (st == ARGS_OK)
@@ -83,7 +65,7 @@ int main(int argc, char **argv) {
     return rc;
   }
 
-  epg_doc_init(&doc);
+  bcg_doc_init(&doc);
 
   if (cfg.format == FMT_XMLTV) {
     mapping_t map;
@@ -95,8 +77,8 @@ int main(int argc, char **argv) {
       } else {
         int i;
         for (i = 0; i < doc.channel_count; i++) {
-          epg_channel_t *c = &doc.channels[i];
-          char uri[EPG_ID_LEN];
+          bcg_channel_t *c = &doc.channels[i];
+          char uri[BCG_ID_LEN];
           unsigned tsid, onid, sid;
           if (!mapping_lookup(&map, c->id, uri, sizeof uri, &tsid, &onid, &sid)) {
             snprintf(c->uri, sizeof c->uri, "%s", uri);
@@ -128,9 +110,9 @@ int main(int argc, char **argv) {
         if (have_rev) {
           int i;
           for (i = 0; i < doc.channel_count; i++) {
-            epg_channel_t *c = &doc.channels[i];
+            bcg_channel_t *c = &doc.channels[i];
             const char *preferred = revmap_lookup(&rev, c->uri);
-            char old_id[EPG_ID_LEN];
+            char old_id[BCG_ID_LEN];
             int j;
             if (!preferred)
               continue;
@@ -150,7 +132,7 @@ int main(int argc, char **argv) {
       revmap_free(&rev);
   }
 
-  epg_doc_free(&doc);
+  bcg_doc_free(&doc);
   if (in != stdin)
     fclose(in);
   if (out != stdout)

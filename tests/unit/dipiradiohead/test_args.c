@@ -1,0 +1,139 @@
+/* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
+ * See NOTICE and LICENSE for details and authorship information. */
+
+#include <check.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "dipiradiohead/args.h"
+
+#define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
+
+START_TEST(single_input_matches_legacy_defaults) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.n_inputs, 1u);
+  ck_assert_str_eq(cfg.inputs[0].uri, "http://a");
+  ck_assert_uint_eq(cfg.inputs[0].sid, 1u);
+  ck_assert_str_eq(cfg.inputs[0].sdt_text, "dipiradiohead");
+}
+END_TEST
+
+START_TEST(multi_input_sid_auto_assign_skips_explicit) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "--sid", "5",
+                  "-i", "http://b",
+                  "-i", "http://c", "--sid", "2",
+                  "-m", "239.1.1.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.n_inputs, 3u);
+  ck_assert_uint_eq(cfg.inputs[0].sid, 5u);
+  ck_assert_uint_eq(cfg.inputs[1].sid, 1u); /* lowest free id, 5 and 2 are taken */
+  ck_assert_uint_eq(cfg.inputs[2].sid, 2u);
+}
+END_TEST
+
+START_TEST(multi_input_sdt_auto_default_is_numbered) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-i", "http://b", "-i", "http://c",
+                  "-m", "239.1.1.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.inputs[0].sdt_text, "dipiradiohead 1");
+  ck_assert_str_eq(cfg.inputs[1].sdt_text, "dipiradiohead 2");
+  ck_assert_str_eq(cfg.inputs[2].sdt_text, "dipiradiohead 3");
+}
+END_TEST
+
+START_TEST(paired_sid_and_sdt_apply_to_preceding_input) {
+  char *argv[] = {"dipiradiohead",
+                  "-i", "http://a", "--sid", "10", "--sdt", "Radio A",
+                  "-i", "http://b", "--sid", "20", "--sdt", "Radio B",
+                  "-m", "239.1.1.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.inputs[0].sid, 10u);
+  ck_assert_str_eq(cfg.inputs[0].sdt_text, "Radio A");
+  ck_assert_uint_eq(cfg.inputs[1].sid, 20u);
+  ck_assert_str_eq(cfg.inputs[1].sdt_text, "Radio B");
+}
+END_TEST
+
+START_TEST(sid_before_any_input_is_rejected) {
+  char *argv[] = {"dipiradiohead", "--sid", "5", "-i", "http://a", "-m", "239.1.1.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(sdt_before_any_input_is_rejected) {
+  char *argv[] = {"dipiradiohead", "--sdt", "x", "-i", "http://a", "-m", "239.1.1.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(duplicate_explicit_sid_is_rejected) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "--sid", "10",
+                  "-i", "http://b", "--sid", "10",
+                  "-m", "239.1.1.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(missing_input_is_rejected) {
+  char *argv[] = {"dipiradiohead", "-m", "239.1.1.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(missing_mcast_is_rejected) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(too_many_inputs_is_rejected) {
+  char *argv[1 + (RADIOHEAD_MAX_INPUTS + 1) * 2 + 2 + 1];
+  int n = 0;
+  int i;
+  config_t cfg;
+  argv[n++] = "dipiradiohead";
+  for (i = 0; i < RADIOHEAD_MAX_INPUTS + 1; i++) {
+    argv[n++] = "-i";
+    argv[n++] = "http://x";
+  }
+  argv[n++] = "-m";
+  argv[n++] = "239.1.1.1:5000";
+  argv[n] = NULL;
+  ck_assert_int_eq(args_parse(n, argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+static Suite *args_suite(void) {
+  Suite *s = suite_create("args");
+  TCase *tc = tcase_create("core");
+  tcase_add_test(tc, single_input_matches_legacy_defaults);
+  tcase_add_test(tc, multi_input_sid_auto_assign_skips_explicit);
+  tcase_add_test(tc, multi_input_sdt_auto_default_is_numbered);
+  tcase_add_test(tc, paired_sid_and_sdt_apply_to_preceding_input);
+  tcase_add_test(tc, sid_before_any_input_is_rejected);
+  tcase_add_test(tc, sdt_before_any_input_is_rejected);
+  tcase_add_test(tc, duplicate_explicit_sid_is_rejected);
+  tcase_add_test(tc, missing_input_is_rejected);
+  tcase_add_test(tc, missing_mcast_is_rejected);
+  tcase_add_test(tc, too_many_inputs_is_rejected);
+  suite_add_tcase(s, tc);
+  return s;
+}
+
+int main(void) {
+  SRunner *sr = srunner_create(args_suite());
+  srunner_run_all(sr, CK_NORMAL);
+  int failed = srunner_ntests_failed(sr);
+  srunner_free(sr);
+  return failed == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+}

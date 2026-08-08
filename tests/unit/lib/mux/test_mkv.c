@@ -200,7 +200,7 @@ START_TEST(mkv_pts_wraparound_is_rebased_not_dropped) {
   static const unsigned char marker[16] = {0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD};
 
   ck_assert_int_ge(fd, 0);
-  m = mkv_new(fd, &cfg, 0, &bytes);
+  m = mkv_new(fd, &cfg, 0, &bytes, NULL, 0);
   ck_assert_ptr_nonnull(m);
 
   feed_discovery_two_audio(m);
@@ -268,7 +268,7 @@ START_TEST(mkv_writes_a_valid_container_for_audio_only) {
   long fsize;
 
   ck_assert_int_ge(fd, 0);
-  m = mkv_new(fd, &cfg, 0 /* audio-only, mka */, &bytes);
+  m = mkv_new(fd, &cfg, 0 /* audio-only, mka */, &bytes, NULL, 0);
   ck_assert_ptr_nonnull(m);
 
   feed_discovery(m);
@@ -317,7 +317,7 @@ START_TEST(mkv_no_supported_tracks_writes_nothing_and_no_error) {
   cfg.audio_track = 99; /* no such track: the one AAC ES won't be selected */
 
   ck_assert_int_ge(fd, 0);
-  m = mkv_new(fd, &cfg, 0, &bytes);
+  m = mkv_new(fd, &cfg, 0, &bytes, NULL, 0);
 
   /* PAT+PMT only: no track selected, so mkv never reaches the SDT wait */
   slen = psi_build_pat(0x1234, 0, 101, 0x0100, sec, sizeof sec);
@@ -370,11 +370,159 @@ START_TEST(mkv_no_supported_tracks_writes_nothing_and_no_error) {
 }
 END_TEST
 
+/* one-AAC-ES PMT for prog_num, ES pid = pmt_pid+1 */
+static size_t build_pmt_aac(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
+  unsigned char body[16];
+  size_t n = 0, hdr, crc_at;
+  uint32_t crc;
+  unsigned es_pid = pmt_pid + 1;
+
+  body[n++] = (unsigned char)(prog_num >> 8);
+  body[n++] = (unsigned char)prog_num;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)es_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  body[n++] = 0x0F; /* AAC */
+  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)es_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  hdr = n + 4;
+  out[0] = 0x02;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
+START_TEST(mkv_multi_program_labels_tracks_with_program_names) {
+  char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mkv_opts_t cfg = base_cfg();
+  mkv_t *m;
+  unsigned char sec[256], pkt[188], adts[64], pes[128];
+  size_t slen, alen, plen;
+  psi_pat_entry_t progs[2];
+  unsigned pmt_pids[2] = {0x0100, 0x0200};
+  FILE *f;
+  unsigned char *buf;
+  long fsize;
+
+  ck_assert_int_ge(fd, 0);
+  m = mkv_new(fd, &cfg, 0, &bytes, pmt_pids, 2);
+  ck_assert_ptr_nonnull(m);
+
+  progs[0].program_number = 101;
+  progs[0].pmt_pid = 0x0100;
+  progs[1].program_number = 102;
+  progs[1].pmt_pid = 0x0200;
+  slen = psi_build_pat_multi(0x1234, 0, progs, 2, sec, sizeof sec);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
+  mkv_feed(m, pkt);
+
+  slen = build_pmt_aac(sec, 101, 0x0100);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
+  mkv_feed(m, pkt);
+  slen = build_pmt_aac(sec, 102, 0x0200);
+  wrap_section_packet(pkt, 0x0200, sec, slen);
+  mkv_feed(m, pkt);
+
+  slen = psi_build_sdt(0, 0x1234, 5, 101, 0x01, "P", "One", sec, sizeof sec);
+  wrap_section_packet(pkt, 0x0011, sec, slen);
+  mkv_feed(m, pkt);
+  slen = psi_build_sdt(0, 0x1234, 5, 102, 0x01, "P", "Two", sec, sizeof sec);
+  wrap_section_packet(pkt, 0x0011, sec, slen);
+  mkv_feed(m, pkt);
+
+  alen = build_adts_frame(adts, 50);
+  plen = build_pes_with_pts(pes, 90000, adts, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  mkv_feed(m, pkt);
+  alen = build_adts_frame(adts, 50);
+  plen = build_pes_with_pts(pes, 90000, adts, alen);
+  wrap_ts_packet(pkt, 0x0201, 1, pes, plen);
+  mkv_feed(m, pkt);
+
+  ck_assert_int_eq(mkv_error(m), 0);
+  mkv_close(m);
+  close(fd);
+
+  f = fopen(path, "rb");
+  ck_assert_ptr_nonnull(f);
+  fseek(f, 0, SEEK_END);
+  fsize = ftell(f);
+  rewind(f);
+  ck_assert(fsize > 0);
+  buf = malloc((size_t)fsize);
+  ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
+  fclose(f);
+
+  ck_assert_ptr_nonnull(memmem(buf, (size_t)fsize, "One", 3));
+  ck_assert_ptr_nonnull(memmem(buf, (size_t)fsize, "Two", 3));
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(mkv_single_program_still_omits_track_name) {
+  char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mkv_opts_t cfg = base_cfg();
+  mkv_t *m;
+  unsigned char adts[64], pes[128], pkt[188];
+  size_t alen, plen;
+  FILE *f;
+  unsigned char *buf;
+  long fsize;
+
+  ck_assert_int_ge(fd, 0);
+  m = mkv_new(fd, &cfg, 0, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+
+  feed_discovery(m);
+  alen = build_adts_frame(adts, 50);
+  plen = build_pes_with_pts(pes, 90000, adts, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  mkv_feed(m, pkt);
+  ck_assert_int_eq(mkv_error(m), 0);
+  mkv_close(m);
+  close(fd);
+
+  f = fopen(path, "rb");
+  ck_assert_ptr_nonnull(f);
+  fseek(f, 0, SEEK_END);
+  fsize = ftell(f);
+  rewind(f);
+  buf = malloc((size_t)fsize);
+  ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
+  fclose(f);
+
+  /* single-program mux: no TrackName (0x536E) element, output unchanged */
+  ck_assert_ptr_null(memmem(buf, (size_t)fsize, "\x53\x6E", 2));
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
 static Suite *mkv_suite(void) {
   Suite *s = suite_create("mkv");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, mkv_writes_a_valid_container_for_audio_only);
   tcase_add_test(tc, mkv_no_supported_tracks_writes_nothing_and_no_error);
+  tcase_add_test(tc, mkv_multi_program_labels_tracks_with_program_names);
+  tcase_add_test(tc, mkv_single_program_still_omits_track_name);
   tcase_add_test(tc, mkv_pts_wraparound_is_rebased_not_dropped);
   suite_add_tcase(s, tc);
   return s;

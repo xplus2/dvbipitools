@@ -23,12 +23,6 @@ typedef struct {
   unsigned payload_id, segment_id, version;
 } seen_t;
 
-static double mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
-
 static int already_seen(seen_t *seen, int *count, const dvbstp_header_t *h) {
   int i;
   for (i = 0; i < *count; i++)
@@ -73,10 +67,10 @@ int listen_run(const config_t *cfg) {
   format_out_init(f, cfg->format, invocation);
   log_line("listening on %s for %lds", mcast, cfg->timeout_s);
 
-  deadline = mono() + (double)cfg->timeout_s;
-  while (mono() < deadline && !signal_stop_requested()) {
+  deadline = mono_seconds() + (double)cfg->timeout_s;
+  while (mono_seconds() < deadline && !signal_stop_requested()) {
     unsigned char buf[RECV_BUF];
-    ssize_t n = mcast_recv(m, buf, sizeof buf);
+    ssize_t n = mcast_recv(m, buf, sizeof buf, NULL);
     dvbstp_header_t hdr;
     const unsigned char *data;
     size_t len;

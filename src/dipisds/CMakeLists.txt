@@ -9,10 +9,16 @@ add_executable(dipisds
     format_out.c
     announce.c
     listen.c
+    ../lib/playlist_out.c
     ../lib/log.c
+    ../lib/argutil.c
     ../lib/signal.c
+    ../lib/metrics/protocol.c
+    ../lib/metrics/export.c
     ../lib/sds_xml.c
     ../lib/xml_util.c
+    ../lib/ioutil.c
     ../lib/net/multicast.c
+    ../lib/net/netconnect.c
     ../lib/net/dvbstp.c
     ../lib/demux/crc32.c)

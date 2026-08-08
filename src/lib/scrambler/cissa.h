@@ -9,12 +9,17 @@
 /* only 16 for now, legacy = backlog */
 #define CISSA_CW_LEN 16
 
-/* AES-128-CBC per ETSI TS 103 127 clause 6.3: fixed IV, CBC state resets every call
-   (each TS packet scrambled independently, for random access).
+typedef struct cissa_key cissa_key_t;
+
+/* AES-128 key schedule for one CW, built once, reused per packet. NULL on error / no OpenSSL. */
+cissa_key_t *cissa_key_new(const unsigned char cw[CISSA_CW_LEN]);
+void cissa_key_free(cissa_key_t *k);
+
+/* AES-128-CBC per ETSI TS 103 127 $6.3: fixed IV, CBC state resets every call (each TS packet scrambled independently, for random access).
    len must be a nonzero multiple of 16. 0 on success, -1 on error. */
-int cissa_encrypt_block(const unsigned char key[CISSA_CW_LEN], unsigned char *data, size_t len);
+int cissa_encrypt_block(cissa_key_t *k, unsigned char *data, size_t len);
 
 /* inverse of cissa_encrypt_block. len must be a nonzero multiple of 16. 0 on success, -1 on error. */
-int cissa_decrypt_block(const unsigned char key[CISSA_CW_LEN], unsigned char *data, size_t len);
+int cissa_decrypt_block(cissa_key_t *k, unsigned char *data, size_t len);
 
 #endif

@@ -16,12 +16,6 @@
 #include "scan.h"
 #include "version.h"
 
-static double mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
-
 /* candidate group address at sweep index i (1..254): base with last byte/octet replaced */
 static void addr_at(const config_t *cfg, unsigned i, char *buf, size_t n) {
   unsigned char a[16];
@@ -34,35 +28,61 @@ static void addr_at(const config_t *cfg, unsigned i, char *buf, size_t n) {
 typedef enum { PROBE_NONE, PROBE_UNNAMED, PROBE_NAMED } probe_kind_t;
 
 typedef struct {
+  unsigned sid;
+  char name[PSI_NAME]; /* "(no SDT)" if this program's name never arrived */
+} scan_program_t;
+
+typedef struct {
   probe_kind_t kind;
   int rtp_wrapped; /* -1 unknown (no data), 0 udp, 1 rtp */
   char name[PSI_NAME];
   unsigned pkts;
   unsigned tsid, onid, sid;
+  scan_program_t programs[PSI_MAX_PROGRAMS]; /* -M only */
+  int program_count;                         /* -M only */
 } probe_result_t;
 
 typedef struct {
   psi_t *psi;
   unsigned pkts;
+  int multi;
 } probe_ctx_t;
+
+/* -M: every PAT-listed program named. a program stuck at pmt-resolved-but-nameless still exits early once
+   quiet/timeout deadline hits. this only short-circuits when everything's in. */
+static int multi_all_named(const psi_t *psi) {
+  int i, count;
+  const psi_multi_program_t *m;
+  if (!psi_have_pat(psi))
+    return 0;
+  m = psi_multi_programs(psi, &count);
+  if (count == 0)
+    return 0;
+  for (i = 0; i < count; i++)
+    if (!m[i].resolved || !m[i].service_name[0])
+      return 0;
+  return 1;
+}
 
 static int probe_cb(void *v, const unsigned char *pkt) {
   probe_ctx_t *pc = v;
   pc->pkts++;
   psi_feed(pc->psi, pkt);
+  if (pc->multi)
+    return multi_all_named(pc->psi) ? 1 : 0;
   return (psi_have_pat(pc->psi) && psi_service_name(pc->psi)[0]) ? 1 : 0;
 }
 
 typedef ssize_t (*chan_read_fn)(void *ctx, unsigned char *buf, size_t cap);
 
-static ssize_t mcast_read_adapter(void *ctx, unsigned char *buf, size_t cap) { return mcast_recv((mcast_t *)ctx, buf, cap); }
-static ssize_t udpxy_read_adapter(void *ctx, unsigned char *buf, size_t cap) { return udpxy_read((udpxy_t *)ctx, buf, cap); }
+static ssize_t mcast_read_adapter(void *ctx, unsigned char *buf, size_t cap) { return mcast_recv((mcast_t *)ctx, buf, cap, NULL); }
+static ssize_t udpxy_read_adapter(void *ctx, unsigned char *buf, size_t cap) { return udpxy_read((udpxy_t *)ctx, buf, cap, NULL); }
 
 /* budget until first packet, dead addrs bail early */
 #define PROBE_QUIET_MS 300
 
-/* read until named, timeout, or interrupted */
-static void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, probe_result_t *r) {
+/* read until named (or, with multi, every PAT program resolved), timeout, or interrupted */
+static void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_result_t *r) {
   unsigned char buf[65536];
   tspack_t pz;
   probe_ctx_t pc;
@@ -73,11 +93,14 @@ static void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, probe_resu
   r->rtp_wrapped = -1;
   pc.psi = psi_new();
   pc.pkts = 0;
-  deadline = mono() + (double)timeout_ms / 1000.0;
-  quiet_deadline = mono() + (double)PROBE_QUIET_MS / 1000.0;
+  pc.multi = multi;
+  if (multi)
+    psi_enable_multi_program(pc.psi);
+  deadline = mono_seconds() + (double)timeout_ms / 1000.0;
+  quiet_deadline = mono_seconds() + (double)PROBE_QUIET_MS / 1000.0;
   if (quiet_deadline > deadline)
     quiet_deadline = deadline;
-  while (mono() < (pc.pkts ? deadline : quiet_deadline) && !signal_stop_requested()) {
+  while (mono_seconds() < (pc.pkts ? deadline : quiet_deadline) && !signal_stop_requested()) {
     ssize_t n = rf(rctx, buf, sizeof buf);
     size_t off;
     if (n < 0)
@@ -97,6 +120,20 @@ static void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, probe_resu
   r->pkts = pc.pkts;
   if (pc.pkts == 0) {
     r->kind = PROBE_NONE;
+  } else if (multi) {
+    int i, count;
+    const psi_multi_program_t *m = psi_multi_programs(pc.psi, &count);
+    r->tsid = psi_transport_stream_id(pc.psi);
+    r->onid = psi_original_network_id(pc.psi);
+    for (i = 0; i < count && r->program_count < PSI_MAX_PROGRAMS; i++) {
+      scan_program_t *p;
+      if (!m[i].resolved)
+        continue;
+      p = &r->programs[r->program_count++];
+      p->sid = m[i].program_number;
+      snprintf(p->name, sizeof p->name, "%s", m[i].service_name[0] ? m[i].service_name : "(no SDT)");
+    }
+    r->kind = r->program_count ? PROBE_NAMED : PROBE_UNNAMED;
   } else if (psi_have_pat(pc.psi) && psi_service_name(pc.psi)[0]) {
     r->kind = PROBE_NAMED;
     strncpy(r->name, psi_service_name(pc.psi), sizeof r->name - 1);
@@ -119,13 +156,13 @@ static void probe_address(const config_t *cfg, const char *group, unsigned port,
     char path[300];
     udpxy_t *u;
     snprintf(path, sizeof path, "/udp/%s:%u/", group, port);
-    u = udpxy_open(cfg->udpxy_host, cfg->udpxy_port, path, TOOL_NAME "/" TOOL_VERSION);
+    u = udpxy_open(cfg->udpxy_host, cfg->udpxy_port, path, TOOL_NAME "/" TOOL_VERSION, NULL);
     if (!u) {
       memset(r, 0, sizeof *r);
       r->kind = PROBE_NONE;
       return;
     }
-    probe_common(udpxy_read_adapter, u, cfg->timeout_ms, r);
+    probe_common(udpxy_read_adapter, u, cfg->timeout_ms, cfg->mpts, r);
     udpxy_close(u);
   } else {
     mcast_t *m = mcast_open(cfg->family, group, port, cfg->iface, 200);
@@ -134,7 +171,7 @@ static void probe_address(const config_t *cfg, const char *group, unsigned port,
       r->kind = PROBE_NONE;
       return;
     }
-    probe_common(mcast_read_adapter, m, cfg->timeout_ms, r);
+    probe_common(mcast_read_adapter, m, cfg->timeout_ms, cfg->mpts, r);
     mcast_close(m);
   }
 }
@@ -142,7 +179,7 @@ static void probe_address(const config_t *cfg, const char *group, unsigned port,
 int scan_run(const config_t *cfg, FILE *out) {
   char invocation[256], basestr[64];
   unsigned i, port, total = 0, found = 0;
-  double start = mono();
+  double start = mono_seconds();
   int interrupted = 0;
 
   args_base_describe(cfg, basestr, sizeof basestr);
@@ -169,6 +206,18 @@ int scan_run(const config_t *cfg, FILE *out) {
 
       if (r.kind == PROBE_NONE) {
         log_line_ansi("%3u/254 %-28s \e[0;31mno stream\e[0m", i, uri);
+      } else if (cfg->mpts) {
+        int k;
+        for (k = 0; k < r.program_count; k++) {
+          found++;
+          if (cfg->verbose)
+            log_line("%3u/254 %-28s %-32s sid=%u [%u pkts]", i, uri, r.programs[k].name, r.programs[k].sid, r.pkts);
+          else
+            log_line("%3u/254 %-28s %s (sid=%u)", i, uri, r.programs[k].name, r.programs[k].sid);
+          format_item(out, cfg->format, r.programs[k].name, uri, cfg->family, group, port, r.rtp_wrapped == 1, r.tsid, r.onid, r.programs[k].sid);
+        }
+        if (r.program_count == 0)
+          log_line_ansi("%3u/254 %-28s \e[0;33mstream present, no program resolved\e[0m", i, uri);
       } else {
         name = (r.kind == PROBE_NAMED) ? r.name : "(no SDT)";
         found++;
@@ -186,8 +235,8 @@ int scan_run(const config_t *cfg, FILE *out) {
   }
   format_close(out, cfg->format);
   if (interrupted)
-    log_line("interrupted: found %u station%s (of %u probed) in %.1fs", found, found == 1 ? "" : "s", total, mono() - start);
+    log_line("interrupted: found %u station%s (of %u probed) in %.1fs", found, found == 1 ? "" : "s", total, mono_seconds() - start);
   else
-    log_line("found %u station%s in %.1fs", found, found == 1 ? "" : "s", mono() - start);
+    log_line("found %u station%s in %.1fs", found, found == 1 ? "" : "s", mono_seconds() - start);
   return interrupted;
 }

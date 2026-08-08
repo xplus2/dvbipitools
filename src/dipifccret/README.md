@@ -4,7 +4,7 @@ An RTP Retransmission (RET) and Server-based Fast Channel Change (FCC) **edge se
 DVB-IPI Annex F (ETSI TS 102 034) and Annex I, built on IETF RFC 6285 (RAMS - Rapid
 Acquisition of Multicast RTP Sessions).
 
-Passively watches a mirrored/SPAN-ported multicast segment via libpcap, then keeps two
+Passively watches a mirrored/SPAN-ported multicast segment via a raw AF_PACKET capture, then keeps two
 kinds of per-channel state from the same captured packets: a short seq-keyed ring for RET loss repair, 
 and a Random Access Point (RAP)-anchored cache for FCC bursts. One capture thread and one `-l` listen socket 
 serve both protocols - a client NACK always gets a direct unicast reply *and*, when the multicast RET session 
@@ -19,15 +19,14 @@ want distributed deployments.
 ## Usage
 
 ```
-dipifccret -g <range> -l <addr>:<port> [options]
+dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 ```
 
 ## Options
 ```
   -g, --range <cidr>[,<cidr>...]   multicast range(s) to capture, IPv4 or IPv6
   -l, --listen <addr>:<port>       unicast bind, shared by RET and FCC traffic
-  -I, --iface <iface>              capture interface (default: "any")
-      --bpf <expr>                 raw BPF capture filter, overrides the -g auto-build
+  -I, --iface <iface>              capture interface (required, single Ethernet NIC)
   -M, --max-channels <n>           preallocated channel slots (default: 0 = 384)
   -R, --rtx-pt <n>                 RTP payload type for retransmitted/burst packets (default: 99)
   -w, --workers <n>                -l socket worker threads (default: 0 = online CPU cores)
@@ -60,11 +59,11 @@ Joining every channel would mitigate all benefits of multicast distribution.
 A mirror/SPAN port gives a read-only copy of exactly what's actually consumed, with zero footprint
 on the distribution tree for the channels themselves.
 
-`-g` is the authoritative multicast range whitelist (enforced in userspace regardless of the
-actual capture filter). Channels are discovered dynamically within, not configured one by one.
+`-g` is the authoritative multicast range whitelist, enforced in userspace regardless of the
+installed kernel filter. Channels are discovered dynamically within, not configured one by one.
 
-`--bpf` can override the auto-built capture filter for mirror ports that need a `vlan` qualifier or other
-trunk-specific handling. `-g` still applies afterwards either way.
+The kernel-side pre-filter (built from `-g`) always unwraps a single VLAN tag before matching,
+so 802.1Q-tagged trunk mirror ports need no separate configuration.
 
 ## Multicast RET session
 
@@ -104,10 +103,41 @@ use `-u` to drop to an unprivileged user right after the capture handle opens.
 `^C`, SIGINT or SIGTERM - all worker threads, the pacing thread (if FCC is active) and the
 capture loop shut down gracefully.
 
+## Running under systemd
+
+Since dipifccret only needs `CAP_NET_RAW`, not root, a unit granting just that capability
+(instead of `-u`) is a reasonable starting point:
+
+```ini
+[Unit]
+Description=dipifccret
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/dipifccret -g 239.19.0.0/16 -l 10.0.0.1:6000 -I eth0
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
+DynamicUser=yes
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ## Known gaps
 
-* Single VLAN tag only (no QinQ); only Ethernet and Linux "any" (cooked) capture link types.
-* RTX sequence numbers are shared across every RET send (MC and unicast, every channel and client)
+* Single VLAN tag only (no QinQ).
+* RTX sequence numbers are shared across every RET sent (MC and unicast, every channel and client)
   rather than a true per-session space per F.3.2.1 (one independent sequence per RET session).
 * Self-detected upstream loss (dipifccret noticing a gap in its own capture, independent of any
   client NACK) will not trigger any RET repair. This is a server-only implementation, not a
@@ -123,22 +153,23 @@ capture loop shut down gracefully.
 * Only RAMS-I response codes 200, 201, 400, 403 and 510 are implemented - the others RFC 6285
   defines (401, 402, 404, 504-506, 511, 100) aren't implemented.
 * Only ever sends one RAMS-I per request (the initial accept/reject). RFC 6285's "RAMS-I update"
-  mechanism, for changing burst parameters mid-flight, isn't implemented.
+  mechanism for changing burst parameters mid-flight isn't implemented.
 * RAMS-T always stops the burst immediately, ignoring the optional Extended RTP Seqnum TLV a
   client may include - no seqnum-based clipping of the tail end of the burst.
+* While MPTS support in RET is a given, FCC can (by its definition) only work on SPTS.
 
 ## Examples
 
 ```sh
 # edge box on a SPAN port mirroring the access switch, RET and FCC both on
-dipifccret -g 239.0.0.0/8 -l 10.0.0.1:6000
+dipifccret -g 239.0.0.0/8 -l 10.0.0.1:6000 -I eth0
 
 # fixed worker count, privilege drop after opening the capture handle
-dipifccret -g 239.0.0.0/8,224.1.2.0/24 -l 10.0.0.1:6000 -w 4 -u dipifccret
+dipifccret -g 239.0.0.0/8,224.1.2.0/24 -l 10.0.0.1:6000 -I eth0 -w 4 -u dipifccret
 
 # RET only, no FCC
-dipifccret -g 239.0.0.0/8 -l 10.0.0.1:6000 --no-fcc
+dipifccret -g 239.0.0.0/8 -l 10.0.0.1:6000 -I eth0 --no-fcc
 
 # FCC only, tighter GOP-cache and burst-rate tuning
-dipifccret -g 239.0.0.0/8 -l 10.0.0.1:6000 --no-ret -G 4000 -X 2.0
+dipifccret -g 239.0.0.0/8 -l 10.0.0.1:6000 -I eth0 --no-ret -G 4000 -X 2.0
 ```

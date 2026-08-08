@@ -120,6 +120,51 @@ static size_t build_pmt_2audio_1sub(unsigned char *out, unsigned prog_num) {
   return n + 4;
 }
 
+/* PAT with two real programs, no NIT entry */
+static size_t build_pat_2programs(unsigned char *out, unsigned tsid, unsigned prog1, unsigned pmt1, unsigned prog2, unsigned pmt2) {
+  size_t n = 0;
+  out[n++] = 0x00;
+  n += 2;
+  out[n++] = (unsigned char)(tsid >> 8);
+  out[n++] = (unsigned char)tsid;
+  out[n++] = 0xC1;
+  out[n++] = 0x00;
+  out[n++] = 0x00;
+  out[n++] = (unsigned char)(prog1 >> 8);
+  out[n++] = (unsigned char)prog1;
+  out[n++] = (unsigned char)(0xE0 | ((pmt1 >> 8) & 0x1F));
+  out[n++] = (unsigned char)pmt1;
+  out[n++] = (unsigned char)(prog2 >> 8);
+  out[n++] = (unsigned char)prog2;
+  out[n++] = (unsigned char)(0xE0 | ((pmt2 >> 8) & 0x1F));
+  out[n++] = (unsigned char)pmt2;
+  finish(out, n, 0xB0);
+  return n + 4;
+}
+
+/* PMT: one AAC audio ES at audio_pid, PCR = same pid */
+static size_t build_pmt_1audio(unsigned char *out, unsigned prog_num, unsigned audio_pid) {
+  size_t n = 0;
+  out[n++] = 0x02;
+  n += 2;
+  out[n++] = (unsigned char)(prog_num >> 8);
+  out[n++] = (unsigned char)prog_num;
+  out[n++] = 0xC1;
+  out[n++] = 0x00;
+  out[n++] = 0x00;
+  out[n++] = (unsigned char)(0xE0 | ((audio_pid >> 8) & 0x1F));
+  out[n++] = (unsigned char)audio_pid;
+  out[n++] = 0xF0;
+  out[n++] = 0x00;
+  out[n++] = 0x0F; /* AAC */
+  out[n++] = (unsigned char)(0xE0 | ((audio_pid >> 8) & 0x1F));
+  out[n++] = (unsigned char)audio_pid;
+  out[n++] = 0xF0;
+  out[n++] = 0x00;
+  finish(out, n, 0xB0);
+  return n + 4;
+}
+
 static void feed_pat_pmt(ts_filter_t *f) {
   unsigned char sec[256], pkt[188], out[188];
   size_t slen;
@@ -144,7 +189,7 @@ static int filter_pid(ts_filter_t *f, unsigned pid) {
 }
 
 START_TEST(ts_filter_pat_rewrite_drops_nit_only_program) {
-  ts_filter_t *f = ts_filter_new(1, 0, 0);
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0);
   unsigned char sec[256], pkt[188], out[188];
   size_t slen;
   psi_t *check;
@@ -170,7 +215,7 @@ START_TEST(ts_filter_pat_rewrite_drops_nit_only_program) {
 END_TEST
 
 START_TEST(ts_filter_selects_single_audio_track) {
-  ts_filter_t *f = ts_filter_new(0, 1, 0); /* audio_all=0, track 1 */
+  ts_filter_t *f = ts_filter_new(0, 1, 0, 0); /* audio_all=0, track 1 */
   feed_pat_pmt(f);
 
   ck_assert_int_eq(filter_pid(f, 0x0101), 1); /* video always kept */
@@ -183,7 +228,7 @@ START_TEST(ts_filter_selects_single_audio_track) {
 END_TEST
 
 START_TEST(ts_filter_audio_all_and_strip_subs) {
-  ts_filter_t *f = ts_filter_new(1, 0, 1); /* audio_all=1, strip_subs=1 */
+  ts_filter_t *f = ts_filter_new(1, 0, 1, 0); /* audio_all=1, strip_subs=1 */
   feed_pat_pmt(f);
 
   ck_assert_int_eq(filter_pid(f, 0x0102), 1); /* both audio tracks kept */
@@ -195,7 +240,7 @@ START_TEST(ts_filter_audio_all_and_strip_subs) {
 END_TEST
 
 START_TEST(ts_filter_flags_bad_track_when_out_of_range) {
-  ts_filter_t *f = ts_filter_new(0, 5, 0); /* only 2 audio tracks exist */
+  ts_filter_t *f = ts_filter_new(0, 5, 0, 0); /* only 2 audio tracks exist */
   ck_assert_int_eq(ts_filter_bad_track(f), 0);
   feed_pat_pmt(f);
   ck_assert_int_eq(ts_filter_bad_track(f), 1);
@@ -204,9 +249,34 @@ START_TEST(ts_filter_flags_bad_track_when_out_of_range) {
 END_TEST
 
 START_TEST(ts_filter_drops_null_packets) {
-  ts_filter_t *f = ts_filter_new(1, 0, 0);
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0);
   feed_pat_pmt(f);
   ck_assert_int_eq(filter_pid(f, 0x1FFF), 0);
+  ts_filter_free(f);
+}
+END_TEST
+
+START_TEST(ts_filter_preferred_pmt_pid_pins_non_first_candidate) {
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0x0200); /* pin program 102, not the first-resolving one */
+  unsigned char sec[256], pkt[188], out[188];
+  size_t slen;
+
+  slen = build_pat_2programs(sec, 0x1234, 101, 0x0100, 102, 0x0200);
+  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  slen = build_pmt_1audio(sec, 101, 0x0102);
+  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  slen = build_pmt_1audio(sec, 102, 0x0202);
+  wrap_ts_packet(pkt, 0x0200, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  ck_assert_uint_eq(psi_pmt_pid(ts_filter_psi(f)), 0x0200u);
+  ck_assert_uint_eq(psi_program_number(ts_filter_psi(f)), 102u);
+  ck_assert_int_eq(filter_pid(f, 0x0202), 1); /* program 102's own audio: kept */
+
   ts_filter_free(f);
 }
 END_TEST
@@ -219,6 +289,7 @@ static Suite *ts_filter_suite(void) {
   tcase_add_test(tc, ts_filter_audio_all_and_strip_subs);
   tcase_add_test(tc, ts_filter_flags_bad_track_when_out_of_range);
   tcase_add_test(tc, ts_filter_drops_null_packets);
+  tcase_add_test(tc, ts_filter_preferred_pmt_pid_pins_non_first_candidate);
   suite_add_tcase(s, tc);
   return s;
 }

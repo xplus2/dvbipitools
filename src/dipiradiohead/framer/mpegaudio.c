@@ -13,6 +13,17 @@ static const unsigned br_v1l3[16] = {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 16
 static const unsigned br_v2l1[16] = {0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256, 0};
 static const unsigned br_v2l23[16] = {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0};
 
+/* version: 0=v2.5 1=rsv 2=v2 3=v1. index 1 unused, rejected before lookup */
+static const unsigned *const sr_table_by_version[4] = {rate_mpeg25, NULL, rate_mpeg2, rate_mpeg1};
+
+/* [version][layer], layer: 0=rsv 1=L3 2=L2 3=L1. unused cells rejected before lookup */
+static const unsigned *const br_table_by_version_layer[4][4] = {
+    {NULL, br_v2l23, br_v2l23, br_v2l1}, /* v2.5 */
+    {NULL, NULL, NULL, NULL},            /* reserved */
+    {NULL, br_v2l23, br_v2l23, br_v2l1}, /* v2 */
+    {NULL, br_v1l3, br_v1l2, br_v1l1},   /* v1 */
+};
+
 int mpegaudio_is_sync(const unsigned char *p, size_t avail) {
   if (avail < 2)
     return 0;
@@ -38,24 +49,10 @@ int mpegaudio_probe(const unsigned char *p, size_t avail, mpegaudio_info_t *info
   if (version == 1 || layer == 0 || sr_idx == 3 || br_idx == 0 || br_idx == 15)
     return -1;
 
-  if (version == 3)
-    sr_table = rate_mpeg1;
-  else if (version == 2)
-    sr_table = rate_mpeg2;
-  else
-    sr_table = rate_mpeg25;
+  sr_table = sr_table_by_version[version];
   sample_rate = sr_table[sr_idx];
 
-  if (version == 3 && layer == 3)
-    br_table = br_v1l1;
-  else if (version == 3 && layer == 2)
-    br_table = br_v1l2;
-  else if (version == 3 && layer == 1)
-    br_table = br_v1l3;
-  else if (layer == 3)
-    br_table = br_v2l1;
-  else
-    br_table = br_v2l23;
+  br_table = br_table_by_version_layer[version][layer];
   bitrate = br_table[br_idx] * 1000;
   if (bitrate == 0)
     return -1;

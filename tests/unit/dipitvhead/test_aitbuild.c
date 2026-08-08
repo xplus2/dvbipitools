@@ -12,17 +12,17 @@
 
 START_TEST(aitbuild_pmt_entry_has_stream_type_and_ait_pid) {
   unsigned char out[16];
-  size_t n = aitbuild_pmt_entry(0, out, sizeof out);
+  size_t n = aitbuild_pmt_entry(0, 0x11F, out, sizeof out);
   ck_assert_uint_ne(n, 0u);
   ck_assert_uint_eq(out[0], 0x05u); /* stream_type: private sections */
-  ck_assert_uint_eq((((unsigned)out[1] & 0x1F) << 8) | out[2], (unsigned)OUT_PID_AIT);
+  ck_assert_uint_eq((((unsigned)out[1] & 0x1F) << 8) | out[2], 0x11Fu);
   ck_assert_uint_eq(out[5], 0x6Fu); /* application_signalling_descriptor tag */
 }
 END_TEST
 
 START_TEST(aitbuild_pmt_entry_rejects_small_cap) {
   unsigned char out[4];
-  ck_assert_uint_eq(aitbuild_pmt_entry(0, out, sizeof out), 0u);
+  ck_assert_uint_eq(aitbuild_pmt_entry(0, 0x11F, out, sizeof out), 0u);
 }
 END_TEST
 

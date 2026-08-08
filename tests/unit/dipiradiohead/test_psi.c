@@ -41,7 +41,7 @@ START_TEST(psi_build_pmt_round_trips_through_psi_feed) {
   psi_feed(p, pkt);
   ck_assert_int_eq(psi_have_pat(p), 1);
 
-  slen = psi_build_pmt(3, 101, 0x0101, 0x0F, 0x0101, section, sizeof section);
+  slen = psi_build_pmt(3, 101, 0x0101, 0x0F, 0x0101, NULL, 0, section, sizeof section);
   ck_assert_uint_ne(slen, 0u);
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
 
@@ -63,7 +63,7 @@ END_TEST
 
 START_TEST(psi_build_pmt_rejects_small_cap) {
   unsigned char section[16];
-  ck_assert_uint_eq(psi_build_pmt(0, 1, 0x100, 0x0F, 0x101, section, sizeof section), 0u);
+  ck_assert_uint_eq(psi_build_pmt(0, 1, 0x100, 0x0F, 0x101, NULL, 0, section, sizeof section), 0u);
 }
 END_TEST
 
@@ -101,6 +101,30 @@ START_TEST(psi_build_eit_rejects_small_cap) {
 }
 END_TEST
 
+START_TEST(psi_build_eit_bounds_descriptor_length_for_long_metadata) {
+  /* short_event_descriptor's own length byte is 1 byte (<=255) - long artist+title
+     must clamp instead of silently wrapping */
+  char artist[301], title[301];
+  unsigned char section[2048];
+  size_t slen;
+  const size_t desc_start = 27; /* fixed offset of the 0x4D tag, per psi_build_eit's header layout */
+  unsigned dlen;
+
+  memset(artist, 'A', sizeof artist - 1);
+  artist[sizeof artist - 1] = '\0';
+  memset(title, 'B', sizeof title - 1);
+  title[sizeof title - 1] = '\0';
+
+  slen = psi_build_eit(0, 1, 1, 1, artist, title, 0, section, sizeof section);
+  ck_assert_uint_ne(slen, 0u);
+  ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
+  ck_assert_uint_eq(section[desc_start], 0x4Du);
+
+  dlen = section[desc_start + 1];
+  ck_assert_uint_eq(desc_start + 2 + dlen, slen - 4); /* length byte matches real content, not wrapped */
+}
+END_TEST
+
 static Suite *psi_suite(void) {
   Suite *s = suite_create("dipiradiohead_psi");
   TCase *tc = tcase_create("core");
@@ -109,6 +133,7 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_build_eit_has_valid_header_and_crc);
   tcase_add_test(tc, psi_build_eit_uses_title_only_when_no_artist);
   tcase_add_test(tc, psi_build_eit_rejects_small_cap);
+  tcase_add_test(tc, psi_build_eit_bounds_descriptor_length_for_long_metadata);
   suite_add_tcase(s, tc);
   return s;
 }

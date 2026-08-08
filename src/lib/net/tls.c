@@ -28,7 +28,8 @@ static void log_ssl_error(const char *what) {
   }
 }
 
-tls_t *tls_connect(int fd, const char *host, int insecure) {
+/* shared by tls_connect() and tls_connect_start(): everything up to (not incl.) SSL_connect() */
+static tls_t *tls_setup(int fd, const char *host, int insecure) {
   tls_t *t = calloc(1, sizeof *t);
   if (!t)
     return NULL;
@@ -64,11 +65,6 @@ tls_t *tls_connect(int fd, const char *host, int insecure) {
     log_ssl_error("SSL_set_fd");
     goto fail;
   }
-  if (SSL_connect(t->ssl) != 1) {
-    log_line("tls handshake with %s failed", host);
-    log_ssl_error("SSL_connect");
-    goto fail;
-  }
   return t;
 
 fail:
@@ -78,6 +74,41 @@ fail:
     SSL_CTX_free(t->ctx);
   free(t);
   return NULL;
+}
+
+tls_t *tls_connect(int fd, const char *host, int insecure) {
+  tls_t *t = tls_setup(fd, host, insecure);
+  if (!t)
+    return NULL;
+  if (SSL_connect(t->ssl) != 1) {
+    log_line("tls handshake with %s failed", host);
+    log_ssl_error("SSL_connect");
+    SSL_free(t->ssl);
+    SSL_CTX_free(t->ctx);
+    free(t);
+    return NULL;
+  }
+  return t;
+}
+
+tls_t *tls_connect_start(int fd, const char *host, int insecure) {
+  return tls_setup(fd, host, insecure);
+}
+
+tls_handshake_status_t tls_handshake_step(tls_t *t) {
+  int r = SSL_connect(t->ssl);
+  int err;
+
+  if (r == 1)
+    return TLS_HANDSHAKE_DONE;
+  err = SSL_get_error(t->ssl, r);
+  if (err == SSL_ERROR_WANT_READ)
+    return TLS_HANDSHAKE_WANT_READ;
+  if (err == SSL_ERROR_WANT_WRITE)
+    return TLS_HANDSHAKE_WANT_WRITE;
+  log_line("tls handshake failed");
+  log_ssl_error("SSL_connect");
+  return TLS_HANDSHAKE_ERROR;
 }
 
 ssize_t tls_read(tls_t *t, void *buf, size_t cap) {

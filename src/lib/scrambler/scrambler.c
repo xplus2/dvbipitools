@@ -26,8 +26,8 @@ typedef struct {
 
 struct scrambler {
   scramble_algo_t algo;
-  unsigned char cw[2][CISSA_CW_LEN]; /* CISSA only, CSA2 keeps state in csa2_key */
-  csa2_key_t *csa2_key[2];
+  cissa_key_t *cissa_key[2]; /* CISSA only */
+  csa2_key_t *csa2_key[2];   /* CSA2 only */
   int have_key[2];
 
   scrambler_queue_entry_t *queue;
@@ -67,6 +67,8 @@ void scrambler_free(scrambler_t *s) {
     return;
   csa2_key_free(s->csa2_key[SCRAMBLE_PARITY_EVEN]);
   csa2_key_free(s->csa2_key[SCRAMBLE_PARITY_ODD]);
+  cissa_key_free(s->cissa_key[SCRAMBLE_PARITY_EVEN]);
+  cissa_key_free(s->cissa_key[SCRAMBLE_PARITY_ODD]);
   free(s->queue);
   free(s);
 }
@@ -88,7 +90,11 @@ int scrambler_set_key(scrambler_t *s, int parity, const unsigned char *cw, size_
     scrambler_queue_flush(s, emit, ctx);
 
   if (s->algo == SCRAMBLE_ALGO_CISSA) {
-    memcpy(s->cw[parity], cw, cw_len);
+    cissa_key_t *k = cissa_key_new(cw);
+    if (!k)
+      return -1;
+    cissa_key_free(s->cissa_key[parity]);
+    s->cissa_key[parity] = k;
   } else {
     csa2_key_t *k = csa2_key_new(cw);
     if (!k)
@@ -132,7 +138,7 @@ int scrambler_encrypt_packet(scrambler_t *s, unsigned char pkt[188], int parity)
     if (enc_size == 0)
       return 0; /* payload smaller than one cipher block: nothing to scramble, leave control bits at 00 */
     pkt[3] = (unsigned char)((pkt[3] & 0x3F) | (parity == SCRAMBLE_PARITY_ODD ? 0xC0 : 0x80));
-    return cissa_encrypt_block(s->cw[parity], pkt + payload_off, enc_size);
+    return cissa_encrypt_block(s->cissa_key[parity], pkt + payload_off, enc_size);
   }
 }
 
@@ -158,8 +164,7 @@ int scrambler_decrypt_packet(scrambler_t *s, unsigned char pkt[188]) {
   payload_size = 188 - payload_off;
 
   if (s->algo == SCRAMBLE_ALGO_CSA2) {
-    /* mirrors scrambler_encrypt_packet: libdvbcsa's residue termination covers
-       any length, no block alignment needed */
+    /* mirrors scrambler_encrypt_packet: libdvbcsa's residue termination covers any length, no block alignment needed */
     csa2_decrypt_block(s->csa2_key[parity], pkt + payload_off, payload_size);
     pkt[3] &= 0x3F;
     return 0;
@@ -169,7 +174,7 @@ int scrambler_decrypt_packet(scrambler_t *s, unsigned char pkt[188]) {
       pkt[3] &= 0x3F; /* payload smaller than one cipher block: never scrambled */
       return 0;
     }
-    if (cissa_decrypt_block(s->cw[parity], pkt + payload_off, dec_size) != 0)
+    if (cissa_decrypt_block(s->cissa_key[parity], pkt + payload_off, dec_size) != 0)
       return -1;
     pkt[3] &= 0x3F;
     return 0;
@@ -203,9 +208,8 @@ static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *
   s->queue_mode = SCRAMBLER_QUEUE_MODE_NONE;
 }
 
-/* queue_cap == 0 (CISSA, or CSA2 without libdvbcsa): no batching backend,
-   emit immediately - needs_crypto entries never reach here, see
-   scrambler_encrypt_packet_queued/scrambler_decrypt_packet_queued. */
+/* queue_cap == 0 (CISSA, or CSA2 without libdvbcsa): no batching backend, emit immediately.
+   needs_crypto entries never reach here, @see scrambler_encrypt_packet_queued/scrambler_decrypt_packet_queued. */
 static void scrambler_queue_push(scrambler_t *s, const unsigned char pkt[188], int needs_crypto, size_t payload_off, size_t payload_size, scrambler_emit_cb emit, void *ctx) {
   scrambler_queue_entry_t *e;
   if (s->queue_cap == 0) {

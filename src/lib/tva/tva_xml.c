@@ -36,8 +36,8 @@ static void iso8601_compact_prefix(const char *iso, char *out, size_t outcap) {
 }
 
 void tva_build_crid(const char *channel_id, const char *start_iso, char *out, size_t outcap) {
-  char enc[EPG_ID_LEN * 3];
-  char ts[EPG_TIME_LEN];
+  char enc[BCG_ID_LEN * 3];
+  char ts[BCG_TIME_LEN];
   percent_encode(channel_id, enc, sizeof enc);
   iso8601_compact_prefix(start_iso, ts, sizeof ts);
   if (strlen(ts) >= 14)
@@ -45,16 +45,16 @@ void tva_build_crid(const char *channel_id, const char *start_iso, char *out, si
   snprintf(out, outcap, "crid://dipixmltv.invalid/%s/%s", enc, ts);
 }
 
-void tva_xml_write(FILE *f, const epg_doc_t *doc) {
+void tva_xml_write(FILE *f, const bcg_doc_t *doc) {
   int i, j;
 
   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<TVAMain xmlns=\"urn:tva:metadata:2004\">\n<ProgramDescription>\n", f);
   fputs("<MetadataOriginationInformationTable/>\n<ClassificationSchemeTable/>\n", f);
   fputs("<ProgramInformationTable>\n", f);
   for (i = 0; i < doc->programme_count; i++) {
-    const epg_programme_t *pr = &doc->programmes[i];
-    const epg_channel_t *c = epg_find_channel(doc, pr->channel_id);
-    char crid[EPG_ID_LEN * 3 + 64];
+    const bcg_programme_t *pr = &doc->programmes[i];
+    const bcg_channel_t *c = bcg_find_channel(doc, pr->channel_id);
+    char crid[BCG_ID_LEN * 3 + 64];
     if (!c || !c->uri[0])
       continue;
     tva_build_crid(pr->channel_id, pr->start, crid, sizeof crid);
@@ -83,7 +83,7 @@ void tva_xml_write(FILE *f, const epg_doc_t *doc) {
 
   fputs("<ProgramLocationTable>\n", f);
   for (i = 0; i < doc->channel_count; i++) {
-    const epg_channel_t *c = &doc->channels[i];
+    const bcg_channel_t *c = &doc->channels[i];
     int any = 0;
     if (!c->uri[0])
       continue;
@@ -98,8 +98,8 @@ void tva_xml_write(FILE *f, const epg_doc_t *doc) {
     xml_escape(f, c->id);
     fputs("\">\n", f);
     for (j = 0; j < doc->programme_count; j++) {
-      const epg_programme_t *pr = &doc->programmes[j];
-      char crid[EPG_ID_LEN * 3 + 64];
+      const bcg_programme_t *pr = &doc->programmes[j];
+      char crid[BCG_ID_LEN * 3 + 64];
       if (strcmp(pr->channel_id, c->id))
         continue;
       tva_build_crid(pr->channel_id, pr->start, crid, sizeof crid);
@@ -116,7 +116,7 @@ void tva_xml_write(FILE *f, const epg_doc_t *doc) {
 
   fputs("<ServiceInformationTable>\n", f);
   for (i = 0; i < doc->channel_count; i++) {
-    const epg_channel_t *c = &doc->channels[i];
+    const bcg_channel_t *c = &doc->channels[i];
     if (!c->uri[0])
       continue;
     fputs("<ServiceInformation serviceId=\"", f);
@@ -141,10 +141,10 @@ void tva_xml_write(FILE *f, const epg_doc_t *doc) {
 }
 
 typedef struct {
-  char crid[EPG_ID_LEN * 3 + 64];
-  char title[EPG_TEXT_LEN];
-  char desc[EPG_TEXT_LEN];
-  char category[EPG_ID_LEN];
+  char crid[BCG_ID_LEN * 3 + 64];
+  char title[BCG_TEXT_LEN];
+  char desc[BCG_TEXT_LEN];
+  char category[BCG_ID_LEN];
 } progtext_t;
 
 static progtext_t *find_progtext(progtext_t *arr, int n, const char *crid) {
@@ -155,7 +155,7 @@ static progtext_t *find_progtext(progtext_t *arr, int n, const char *crid) {
   return NULL;
 }
 
-int tva_xml_read(FILE *f, epg_doc_t *doc) {
+int tva_xml_read(FILE *f, bcg_doc_t *doc) {
   char *buf;
   size_t len;
   const char *p, *end;
@@ -170,7 +170,7 @@ int tva_xml_read(FILE *f, epg_doc_t *doc) {
   for (;;) {
     const char *tag = strstr(p, "<ProgramInformation ");
     const char *blk_end;
-    char crid[EPG_ID_LEN * 3 + 64];
+    char crid[BCG_ID_LEN * 3 + 64];
     progtext_t *pt;
     if (!tag || tag >= end)
       break;
@@ -191,7 +191,7 @@ int tva_xml_read(FILE *f, epg_doc_t *doc) {
       }
       pt = &ptext[ptext_n++];
       memset(pt, 0, sizeof *pt);
-      snprintf(pt->crid, sizeof pt->crid, "%s", crid);
+      bufcpy(pt->crid, sizeof pt->crid, crid);
       if (xml_elem_text(tag, blk_end, "Title", pt->title, sizeof pt->title))
         pt->title[0] = '\0';
       if (xml_elem_text(tag, blk_end, "Synopsis", pt->desc, sizeof pt->desc))
@@ -206,8 +206,8 @@ int tva_xml_read(FILE *f, epg_doc_t *doc) {
   for (;;) {
     const char *tag = strstr(p, "<ServiceInformation ");
     const char *blk_end;
-    epg_channel_t *c;
-    char sid[EPG_ID_LEN], name[EPG_ID_LEN];
+    bcg_channel_t *c;
+    char sid[BCG_ID_LEN], name[BCG_ID_LEN];
     const char *np;
     if (!tag || tag >= end)
       break;
@@ -215,13 +215,13 @@ int tva_xml_read(FILE *f, epg_doc_t *doc) {
     if (!blk_end)
       break;
     if (xml_attr(tag, blk_end, "serviceId", sid, sizeof sid) == 0) {
-      c = epg_add_channel(doc);
+      c = bcg_add_channel(doc);
       if (!c) {
         free(buf);
         free(ptext);
         return -1;
       }
-      snprintf(c->id, sizeof c->id, "%s", sid);
+      bufcpy(c->id, sizeof c->id, sid);
       np = tag;
       for (;;) {
         const char *hit = strstr(np, "<Name>");
@@ -229,7 +229,7 @@ int tva_xml_read(FILE *f, epg_doc_t *doc) {
           break;
         if (xml_elem_text(hit, blk_end, "Name", name, sizeof name))
           break;
-        epg_channel_add_name(c, name);
+        bcg_channel_add_name(c, name);
         np = hit + 1;
       }
       {
@@ -259,7 +259,7 @@ int tva_xml_read(FILE *f, epg_doc_t *doc) {
   for (;;) {
     const char *tag = strstr(p, "<Schedule ");
     const char *blk_end;
-    char channel[EPG_ID_LEN];
+    char channel[BCG_ID_LEN];
     const char *ep;
     if (!tag || tag >= end)
       break;
@@ -271,10 +271,10 @@ int tva_xml_read(FILE *f, epg_doc_t *doc) {
       for (;;) {
         const char *etag = strstr(ep, "<ScheduleEvent>");
         const char *eend;
-        char crid[EPG_ID_LEN * 3 + 64];
-        char start[EPG_TIME_LEN], stop[EPG_TIME_LEN];
+        char crid[BCG_ID_LEN * 3 + 64];
+        char start[BCG_TIME_LEN], stop[BCG_TIME_LEN];
         progtext_t *pt;
-        epg_programme_t *pr;
+        bcg_programme_t *pr;
         if (!etag || etag >= blk_end)
           break;
         eend = strstr(etag, "</ScheduleEvent>");
@@ -282,23 +282,23 @@ int tva_xml_read(FILE *f, epg_doc_t *doc) {
           break;
         if (xml_attr(etag, eend, "crid", crid, sizeof crid) == 0 &&
             xml_elem_text(etag, eend, "PublishedStartTime", start, sizeof start) == 0) {
-          pr = epg_add_programme(doc);
+          pr = bcg_add_programme(doc);
           if (!pr) {
             free(buf);
             free(ptext);
             return -1;
           }
-          snprintf(pr->channel_id, sizeof pr->channel_id, "%s", channel);
-          snprintf(pr->start, sizeof pr->start, "%s", start);
+          bufcpy(pr->channel_id, sizeof pr->channel_id, channel);
+          bufcpy(pr->start, sizeof pr->start, start);
           if (xml_elem_text(etag, eend, "PublishedEndTime", stop, sizeof stop) == 0)
-            snprintf(pr->stop, sizeof pr->stop, "%s", stop);
+            bufcpy(pr->stop, sizeof pr->stop, stop);
           else
             pr->stop[0] = '\0';
           pt = find_progtext(ptext, ptext_n, crid);
           if (pt) {
-            snprintf(pr->title, sizeof pr->title, "%s", pt->title);
-            snprintf(pr->desc, sizeof pr->desc, "%s", pt->desc);
-            snprintf(pr->category, sizeof pr->category, "%s", pt->category);
+            bufcpy(pr->title, sizeof pr->title, pt->title);
+            bufcpy(pr->desc, sizeof pr->desc, pt->desc);
+            bufcpy(pr->category, sizeof pr->category, pt->category);
           }
         }
         ep = eend + 1;

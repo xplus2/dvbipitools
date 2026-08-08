@@ -8,7 +8,9 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "lib/demux/mpts_probe.h"
 #include "lib/demux/psi.h"
+#include "lib/demux/psi_section_asm.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
 #include "lib/mux/mkv.h"
@@ -20,11 +22,11 @@
 #include "device.h"
 #include "emmcache.h"
 #include "ipiclient.h"
-#include "secasm.h"
 #include "version.h"
 
 #define SC_SECTION_TID_ECM_EVEN 0x80
 #define SC_SECTION_TID_ECM_ODD 0x81
+#define MPTS_NAME_WAIT_MS 3000
 
 typedef struct {
   int out;
@@ -37,7 +39,7 @@ typedef struct {
   device_state_t *dev;
   emmcache_t *cache;
   const char *emm_file;
-  secasm_t ecm_asm, emm_asm;
+  psi_section_asm_t ecm_asm, emm_asm;
   scrambler_t *scr; /* NULL until scrambling_mode resolved */
   int cw_len;
   int have_cw[2]; /* indexed by SCRAMBLE_PARITY_EVEN/_ODD */
@@ -45,12 +47,6 @@ typedef struct {
   /* set by emit_downstream(). a void scrambler_emit_cb can't return an error code. this is how a failed mkv_feed/write reaches pkt_cb's int return */
   int emit_failed;
 } loop_ctx_t;
-
-static double mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
 
 static int open_output(const char *path) {
   int fd;
@@ -60,25 +56,6 @@ static int open_output(const char *path) {
   if (fd < 0)
     log_line(TOOL_NAME ": cannot open -o %s: %s", path, strerror(errno));
   return fd;
-}
-
-/* adaptation-field-aware payload extraction, mirrors psi_feed()'s own inline logic. not exposed by psi.h */
-static int extract_payload(const unsigned char *pkt, const unsigned char **pl, size_t *plen, int *pusi) {
-  unsigned afc = (pkt[3] >> 4) & 0x3;
-  size_t off;
-
-  if (afc == 0 || afc == 2)
-    return 0;
-  off = 4;
-  if (afc == 3) {
-    off = 5 + (size_t)pkt[4];
-    if (off >= 188)
-      return 0;
-  }
-  *pl = pkt + off;
-  *plen = 188 - off;
-  *pusi = pkt[1] & 0x40;
-  return 1;
 }
 
 static int algo_from_mode(unsigned char mode, scramble_algo_t *out) {
@@ -96,8 +73,8 @@ static int algo_from_mode(unsigned char mode, scramble_algo_t *out) {
 static void emit_downstream(void *ctx, const unsigned char pkt[188]);
 
 static void handle_ecm_section(loop_ctx_t *lc) {
-  size_t seclen;
-  const unsigned char *sec = secasm_section(&lc->ecm_asm, &seclen);
+  const unsigned char *sec = lc->ecm_asm.buf;
+  size_t seclen = lc->ecm_asm.expect;
   int parity;
   unsigned char cw[16];
 
@@ -146,7 +123,7 @@ static int pkt_cb(void *v, const unsigned char *pkt) {
   int pusi;
 
   psi_feed(lc->psi, pkt);
-  pid = (((unsigned)pkt[1] & 0x1F) << 8) | pkt[2];
+  pid = tspack_pid(pkt);
 
   if (!lc->ecm_pid && psi_classify(lc->psi, pid) == PID_ECM)
     lc->ecm_pid = pid;
@@ -166,13 +143,11 @@ static int pkt_cb(void *v, const unsigned char *pkt) {
   }
 
   /* lc->scr may have just been created above - checked here so this pid's first-ever ECM section isn't missed */
-  if (lc->ecm_pid && pid == lc->ecm_pid && extract_payload(pkt, &pl, &plen, &pusi) && secasm_feed(&lc->ecm_asm, pl, plen, pusi) && lc->scr)
+  if (lc->ecm_pid && pid == lc->ecm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_feed(&lc->ecm_asm, pl, plen, pusi) && lc->scr)
     handle_ecm_section(lc);
 
-  if (lc->emm_pid && pid == lc->emm_pid && extract_payload(pkt, &pl, &plen, &pusi) && secasm_feed(&lc->emm_asm, pl, plen, pusi)) {
-    size_t seclen;
-    const unsigned char *sec = secasm_section(&lc->emm_asm, &seclen);
-    if (emmcache_feed(lc->cache, lc->dev, sec, seclen))
+  if (lc->emm_pid && pid == lc->emm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_feed(&lc->emm_asm, pl, plen, pusi)) {
+    if (emmcache_feed(lc->cache, lc->dev, lc->emm_asm.buf, lc->emm_asm.expect))
       emmcache_save(lc->cache, lc->emm_file);
   }
 
@@ -187,24 +162,6 @@ static int pkt_cb(void *v, const unsigned char *pkt) {
   return lc->emit_failed ? 1 : 0;
 }
 
-static log_color_t color_prescan(int argc, char **argv) {
-  int i;
-  for (i = 1; i < argc; i++) {
-    const char *v = NULL;
-    if (!strcmp(argv[i], "--color") && i + 1 < argc)
-      v = argv[i + 1];
-    else if (!strncmp(argv[i], "--color=", 8))
-      v = argv[i] + 8;
-    if (!v)
-      continue;
-    if (!strcmp(v, "always"))
-      return LOG_COLOR_ALWAYS;
-    if (!strcmp(v, "never"))
-      return LOG_COLOR_NEVER;
-  }
-  return LOG_COLOR_AUTO;
-}
-
 static tssrc_kind_t tssrc_kind_of(input_kind_t k) {
   switch (k) {
   case INPUT_RTP:
@@ -215,6 +172,52 @@ static tssrc_kind_t tssrc_kind_of(input_kind_t k) {
     return TSSRC_STDIN;
   }
   return TSSRC_STDIN;
+}
+
+/* mpts discovery + -p decision. 0: proceed (pmt_pid/all_pids/n_all_pids
+ * filled in). 1: abort, message already printed. */
+static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pmt_pid,
+                                  unsigned *all_pids, int *n_all_pids) {
+  mpts_probe_result_t probe;
+  int k;
+
+  *pmt_pid = 0;
+  *n_all_pids = 0;
+
+  probe = mpts_probe_run(src, MPTS_NAME_WAIT_MS);
+  if (probe.kind == MPTS_PROBE_FAIL) {
+    log_line(TOOL_NAME ": no PAT received, giving up");
+    return 1;
+  }
+  if (probe.kind == MPTS_PROBE_SPTS) {
+    if (cfg->pmt_sel != PMT_SEL_AUTO)
+      log_line(TOOL_NAME ": -p ignored, single-program source");
+    return 0;
+  }
+
+  if (cfg->pmt_sel == PMT_SEL_AUTO) {
+    mpts_probe_print_programs(TOOL_NAME, &probe);
+    log_line(TOOL_NAME ": MPTS source - pick one with -p <pid>, or -p all");
+    return 1;
+  }
+  if (cfg->pmt_sel == PMT_SEL_ALL) {
+    if (cfg->format == FMT_MKV) {
+      log_line(TOOL_NAME ": -f mkv can't hold multiple programs, pick one with -p <pid>");
+      mpts_probe_print_programs(TOOL_NAME, &probe);
+      return 1;
+    }
+    for (k = 0; k < probe.program_count; k++)
+      all_pids[(*n_all_pids)++] = probe.programs[k].pmt_pid;
+    return 0;
+  }
+  for (k = 0; k < probe.program_count; k++)
+    if (probe.programs[k].pmt_pid == cfg->pmt_pid) {
+      *pmt_pid = cfg->pmt_pid;
+      return 0;
+    }
+  log_line(TOOL_NAME ": -p 0x%04x not found in this MPTS", cfg->pmt_pid);
+  mpts_probe_print_programs(TOOL_NAME, &probe);
+  return 1;
 }
 
 int main(int argc, char **argv) {
@@ -230,8 +233,10 @@ int main(int argc, char **argv) {
   mkv_opts_t mkv_opts;
   double start, last_stat;
   char in_desc[128];
+  unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
+  int n_all_pids;
 
-  log_set_color(color_prescan(argc, argv));
+  log_set_color(log_color_prescan(argc, argv));
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
   if (st == ARGS_OK)
@@ -265,9 +270,16 @@ int main(int argc, char **argv) {
   tc.iface = cfg.iface_in;
   tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
 
-  src = tssrc_open(&tc);
+  src = tssrc_open(&tc, NULL);
   if (!src) {
     log_line(TOOL_NAME ": cannot open -i %s", in_desc);
+    emmcache_free(lc.cache);
+    device_state_free(lc.dev);
+    return 1;
+  }
+
+  if (resolve_pmt_selection(&cfg, src, &pmt_pid, all_pids, &n_all_pids)) {
+    tssrc_close(src);
     emmcache_free(lc.cache);
     device_state_free(lc.dev);
     return 1;
@@ -288,7 +300,12 @@ int main(int argc, char **argv) {
     mkv_opts.audio_all = 1;
     mkv_opts.app_name = mkv_app_name;
     mkv_opts.source_desc = in_desc;
-    lc.mkv = mkv_new(lc.out, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes);
+    if (n_all_pids > 0)
+      lc.mkv = mkv_new(lc.out, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, all_pids, n_all_pids);
+    else if (pmt_pid)
+      lc.mkv = mkv_new(lc.out, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, &pmt_pid, 1);
+    else
+      lc.mkv = mkv_new(lc.out, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, NULL, 0);
     if (!lc.mkv) {
       log_line(TOOL_NAME ": cannot start mkv/mka mux");
       if (lc.out != STDOUT_FILENO)
@@ -319,6 +336,8 @@ int main(int argc, char **argv) {
     device_state_free(lc.dev);
     return 1;
   }
+  if (pmt_pid)
+    psi_select_pmt_pid(lc.psi, pmt_pid); /* CW derivation is mux-wide either way; nicer stats only */
 
   if (emmcache_load(lc.cache, lc.dev, cfg.emm_file) != 0)
     log_line(TOOL_NAME ": failed to read emm cache %s, continuing without it", cfg.emm_file);
@@ -334,19 +353,19 @@ int main(int argc, char **argv) {
 
   memset(&pz, 0, sizeof pz);
   signals_install();
-  start = last_stat = mono();
+  start = last_stat = mono_seconds();
 
   while (!signal_stop_requested()) {
-    ssize_t n = tssrc_read(src, buf, sizeof buf);
+    ssize_t n = tssrc_read(src, buf, sizeof buf, NULL);
     if (n < 0)
       break;
     if (n == 0)
       continue;
     if (tspack_feed(&pz, buf, (size_t)n, pkt_cb, &lc))
       break;
-    if (cfg.verbose && mono() - last_stat >= 1.0) {
-      log_line(TOOL_NAME ": %llu packets, %.0fs elapsed", lc.packets, mono() - start);
-      last_stat = mono();
+    if (cfg.verbose && mono_seconds() - last_stat >= 1.0) {
+      log_line(TOOL_NAME ": %llu packets, %.0fs elapsed", lc.packets, mono_seconds() - start);
+      last_stat = mono_seconds();
     }
   }
 

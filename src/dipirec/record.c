@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "filter/ts.h"
+#include "lib/demux/mpts_probe.h"
 #include "lib/demux/psi.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
@@ -19,17 +20,13 @@
 #include "ret_client.h"
 #include "version.h"
 
+#define MPTS_NAME_WAIT_MS 3000
+
 typedef struct {
   uri_kind_t kind;
   tssrc_t *t;
   ret_client_t *ret; /* NULL unless --ret */
 } src_t;
-
-static double mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
 
 static int src_open(const config_t *cfg, src_t *s) {
   tssrc_cfg_t tc;
@@ -52,7 +49,7 @@ static int src_open(const config_t *cfg, src_t *s) {
     tc.iface = cfg->iface;
   }
 
-  s->t = tssrc_open(&tc);
+  s->t = tssrc_open(&tc, NULL);
   if (!s->t)
     return -1;
 
@@ -70,7 +67,7 @@ static int src_open(const config_t *cfg, src_t *s) {
 static ssize_t src_read(src_t *s, unsigned char *buf, size_t cap) {
   if (s->ret)
     return ret_client_read(s->ret, tssrc_mcast(s->t), buf, cap);
-  return tssrc_read(s->t, buf, cap);
+  return tssrc_read(s->t, buf, cap, NULL);
 }
 
 static void src_close(src_t *s) {
@@ -108,7 +105,7 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
 static int stop_now(const config_t *cfg, double start) {
   if (signal_stop_requested())
     return 1;
-  return cfg->duration_s && mono() - start >= (double)cfg->duration_s;
+  return cfg->duration_s && mono_seconds() - start >= (double)cfg->duration_s;
 }
 
 static int psi_cb(void *v, const unsigned char *pkt) {
@@ -193,9 +190,9 @@ static int run_raw(src_t *s, const config_t *cfg, int out, unsigned long long *b
     *bytes += (unsigned long long)n;
     if (psi)
       tspack_feed(&pz, buf, (size_t)n, psi_cb, psi);
-    if (cfg->verbose && mono() - last_stat >= 1.0) {
-      stats_show(cfg, mono() - start, *bytes, psi);
-      last_stat = mono();
+    if (cfg->verbose && mono_seconds() - last_stat >= 1.0) {
+      stats_show(cfg, mono_seconds() - start, *bytes, psi);
+      last_stat = mono_seconds();
     }
   }
   psi_free(psi);
@@ -226,10 +223,10 @@ static int ts_cb(void *v, const unsigned char *pkt) {
 }
 
 /* ts: packetize, filter, write */
-static int run_ts(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start) {
+static int run_ts(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start, unsigned pmt_pid) {
   unsigned char buf[65536];
   tspack_t pz = {{0}, 0};
-  ts_filter_t *f = ts_filter_new(cfg->audio_all, cfg->audio_track, cfg->subs == SUB_STRIP);
+  ts_filter_t *f = ts_filter_new(cfg->audio_all, cfg->audio_track, cfg->subs == SUB_STRIP, pmt_pid);
   ts_ctx_t tc;
   double last_stat = 0;
   int rc = 0;
@@ -253,9 +250,9 @@ static int run_ts(src_t *s, const config_t *cfg, int out, unsigned long long *by
       rc = 1;
       break;
     }
-    if (cfg->verbose && mono() - last_stat >= 1.0) {
-      stats_show(cfg, mono() - start, *bytes, ts_filter_psi(f));
-      last_stat = mono();
+    if (cfg->verbose && mono_seconds() - last_stat >= 1.0) {
+      stats_show(cfg, mono_seconds() - start, *bytes, ts_filter_psi(f));
+      last_stat = mono_seconds();
     }
   }
   ts_filter_free(f);
@@ -267,8 +264,9 @@ static int mkv_pkt_cb(void *v, const unsigned char *pkt) {
   return mkv_error((mkv_t *)v);
 }
 
-/* mkv/mka: packetize, demux PES, mux */
-static int run_mkv(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start, int video_ok) {
+/* mkv/mka: packetize, demux PES, mux. pmt_pid: 0 or -p <pid>. all_pids/n_all_pids: -p all */
+static int run_mkv(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start, int video_ok,
+                    unsigned pmt_pid, const unsigned *all_pids, int n_all_pids) {
   unsigned char buf[65536];
   char app_name[64], srcuri[1024];
   tspack_t pz;
@@ -281,13 +279,18 @@ static int run_mkv(src_t *s, const config_t *cfg, int out, unsigned long long *b
   snprintf(app_name, sizeof app_name, "%s %s", TOOL_NAME, TOOL_VERSION);
   source_describe(&cfg->source, srcuri, sizeof srcuri);
   memset(&opts, 0, sizeof opts);
-  opts.audio_all = cfg->audio_all;
+  opts.audio_all = n_all_pids > 0 ? 1 : cfg->audio_all; /* -p all: no single "-a N" across programs */
   opts.audio_track = cfg->audio_track;
   opts.subs_srt = (cfg->subs == SUB_SRT);
   opts.sub_lead_ms = cfg->sub_lead_ms;
   opts.app_name = app_name;
   opts.source_desc = srcuri;
-  m = mkv_new(out, &opts, video_ok, bytes);
+  if (n_all_pids > 0)
+    m = mkv_new(out, &opts, video_ok, bytes, all_pids, n_all_pids);
+  else if (pmt_pid)
+    m = mkv_new(out, &opts, video_ok, bytes, &pmt_pid, 1);
+  else
+    m = mkv_new(out, &opts, video_ok, bytes, NULL, 0);
   if (!m)
     return 1;
 
@@ -301,13 +304,64 @@ static int run_mkv(src_t *s, const config_t *cfg, int out, unsigned long long *b
       rc = 1;
       break;
     }
-    if (cfg->verbose && mono() - last_stat >= 1.0) {
-      stats_show(cfg, mono() - start, *bytes, mkv_psi(m));
-      last_stat = mono();
+    if (cfg->verbose && mono_seconds() - last_stat >= 1.0) {
+      stats_show(cfg, mono_seconds() - start, *bytes, mkv_psi(m));
+      last_stat = mono_seconds();
     }
   }
   mkv_close(m);
   return rc;
+}
+
+/* mpts discovery + -p decision. 0: proceed (pmt_pid/all_pids/n_all_pids filled in).
+   1: abort, message already printed. raw skips this - nothing to select there. */
+static int resolve_pmt_selection(const config_t *cfg, src_t *s, unsigned *pmt_pid, unsigned *all_pids, int *n_all_pids) {
+  mpts_probe_result_t probe;
+  int k;
+
+  *pmt_pid = 0;
+  *n_all_pids = 0;
+
+  if (cfg->format == FMT_RAW) {
+    if (cfg->pmt_sel != PMT_SEL_AUTO)
+      log_line(TOOL_NAME ": -p has no effect with -f raw (whole stream always forwarded)");
+    return 0;
+  }
+
+  probe = mpts_probe_run(s->t, MPTS_NAME_WAIT_MS);
+  if (probe.kind == MPTS_PROBE_FAIL) {
+    log_line(TOOL_NAME ": no PAT received, giving up");
+    return 1;
+  }
+  if (probe.kind == MPTS_PROBE_SPTS) {
+    if (cfg->pmt_sel != PMT_SEL_AUTO)
+      log_line(TOOL_NAME ": -p ignored, single-program source");
+    return 0;
+  }
+
+  if (cfg->pmt_sel == PMT_SEL_AUTO) {
+    mpts_probe_print_programs(TOOL_NAME, &probe);
+    log_line(TOOL_NAME ": MPTS source - pick one with -p <pid>, or -p all");
+    return 1;
+  }
+  if (cfg->pmt_sel == PMT_SEL_ALL) {
+    if (cfg->format == FMT_MKV) {
+      log_line(TOOL_NAME ": -f mkv can't hold multiple programs, pick one with -p <pid>");
+      mpts_probe_print_programs(TOOL_NAME, &probe);
+      return 1;
+    }
+    for (k = 0; k < probe.program_count; k++)
+      all_pids[(*n_all_pids)++] = probe.programs[k].pmt_pid;
+    return 0;
+  }
+  for (k = 0; k < probe.program_count; k++)
+    if (probe.programs[k].pmt_pid == cfg->pmt_pid) {
+      *pmt_pid = cfg->pmt_pid;
+      return 0;
+    }
+  log_line(TOOL_NAME ": -p 0x%04x not found in this MPTS", cfg->pmt_pid);
+  mpts_probe_print_programs(TOOL_NAME, &probe);
+  return 1;
 }
 
 int record_run(const config_t *cfg) {
@@ -315,6 +369,8 @@ int record_run(const config_t *cfg) {
   double start;
   src_t s;
   int out, rc;
+  unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
+  int n_all_pids;
 
   out = open_output(cfg->out_path);
   if (out < 0)
@@ -325,11 +381,19 @@ int record_run(const config_t *cfg) {
     return 1;
   }
 
-  start = mono();
+  if (resolve_pmt_selection(cfg, &s, &pmt_pid, all_pids, &n_all_pids)) {
+    src_close(&s);
+    if (out != STDOUT_FILENO)
+      close(out);
+    return 1;
+  }
+
+  start = mono_seconds();
   if (cfg->format == FMT_MKV || cfg->format == FMT_MKA)
-    rc = run_mkv(&s, cfg, out, &bytes, start, cfg->format == FMT_MKV);
+    rc = run_mkv(&s, cfg, out, &bytes, start, cfg->format == FMT_MKV, pmt_pid, all_pids, n_all_pids);
   else if (cfg->format == FMT_TS)
-    rc = run_ts(&s, cfg, out, &bytes, start);
+    /* -p all: nothing left to filter */
+    rc = (n_all_pids > 0) ? run_raw(&s, cfg, out, &bytes, start) : run_ts(&s, cfg, out, &bytes, start, pmt_pid);
   else
     rc = run_raw(&s, cfg, out, &bytes, start);
 
@@ -340,7 +404,7 @@ int record_run(const config_t *cfg) {
   if (cfg->verbose && log_stderr_is_tty())
     fputc('\n', stderr); /* off stats line */
   if (rc == 0) {
-    log_line_ansi("recorded for \e[0;33m%.1f\e[0ms, \e[0;33m%.1f\e[0mMB written", mono() - start, (double)bytes / 1048576.0);
+    log_line_ansi("recorded for \e[0;33m%.1f\e[0ms, \e[0;33m%.1f\e[0mMB written", mono_seconds() - start, (double)bytes / 1048576.0);
     log_line("done.");
   }
   return rc;

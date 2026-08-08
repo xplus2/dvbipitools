@@ -8,6 +8,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/argutil.h"
+#include "lib/cas/cas_args.h"
+#include "lib/log.h"
+
 #include "args.h"
 #include "version.h"
 
@@ -15,73 +19,27 @@ static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 static void argerr(const char *fmt, ...) {
   va_list ap;
-  fputs(TOOL_NAME ": ", stderr);
   va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
+  argutil_verr(TOOL_NAME, fmt, ap);
   va_end(ap);
-  fputc('\n', stderr);
-}
-
-static int port_parse(const char *p, unsigned *out) {
-  char *end;
-  unsigned long v;
-  if (*p == '\0')
-    return -1;
-  v = strtoul(p, &end, 10);
-  if (*end != '\0' || v == 0 || v > 65535)
-    return -1;
-  *out = (unsigned)v;
-  return 0;
 }
 
 /* <addr>:<port> or [<addr6>]:<port>, multicast literal required */
 static int mcast_parse(const char *s, config_t *cfg) {
-  char addr[64];
-
-  if (*s == '[') {
-    const char *close = strchr(s, ']');
-    size_t len;
-    if (!close)
-      return -1;
-    len = (size_t)(close - (s + 1));
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, s + 1, len);
-    addr[len] = '\0';
-    if (close[1] != ':' || port_parse(close + 2, &cfg->mcast_port))
-      return -1;
-    cfg->family = AF_INET6;
-  } else {
-    const char *colon = strrchr(s, ':');
-    size_t len;
-    if (!colon)
-      return -1;
-    len = (size_t)(colon - s);
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, s, len);
-    addr[len] = '\0';
-    if (port_parse(colon + 1, &cfg->mcast_port))
-      return -1;
-    cfg->family = AF_INET;
-  }
+  if (argutil_addrport_parse(s, &cfg->family, cfg->mcast_group, sizeof cfg->mcast_group, &cfg->mcast_port))
+    return -1;
 
   if (cfg->family == AF_INET) {
     struct in_addr a;
-    if (inet_pton(AF_INET, addr, &a) != 1)
-      return -1;
+    inet_pton(AF_INET, cfg->mcast_group, &a);
     if ((ntohl(a.s_addr) >> 28) != 0xE) /* 224.0.0.0/4 */
       return -1;
   } else {
     struct in6_addr a6;
-    if (inet_pton(AF_INET6, addr, &a6) != 1)
-      return -1;
+    inet_pton(AF_INET6, cfg->mcast_group, &a6);
     if (a6.s6_addr[0] != 0xFF) /* ff00::/8 */
       return -1;
   }
-
-  strncpy(cfg->mcast_group, addr, sizeof cfg->mcast_group - 1);
-  cfg->mcast_group[sizeof cfg->mcast_group - 1] = '\0';
   return 0;
 }
 
@@ -90,21 +48,6 @@ void mcast_describe(const config_t *cfg, char *buf, size_t n) {
     snprintf(buf, n, "[%s]:%u", cfg->mcast_group, cfg->mcast_port);
   else
     snprintf(buf, n, "%s:%u", cfg->mcast_group, cfg->mcast_port);
-}
-
-typedef struct {
-  const char *name;
-  int value;
-} enum_map_t;
-
-static int map_lookup(const enum_map_t *m, size_t n, const char *s, int *out) {
-  size_t i;
-  for (i = 0; i < n; i++)
-    if (strcmp(s, m[i].name) == 0) {
-      *out = m[i].value;
-      return 0;
-    }
-  return -1;
 }
 
 static int id_parse(const char *s, unsigned *out) {
@@ -117,29 +60,67 @@ static int id_parse(const char *s, unsigned *out) {
   return 0;
 }
 
+/* decimal or 0x-hex pid, 0x0001..0x1FFE */
+static int pid_parse(const char *s, unsigned *out) {
+  char *end;
+  unsigned long v = strtoul(s, &end, 0);
+  if (*end != '\0' || v == 0 || v > 0x1FFE)
+    return -1;
+  *out = (unsigned)v;
+  return 0;
+}
+
 static void print_help(void) {
   printf(
-      "usage: %s -i <uri> -m <mcast>:<port> [options]\n\n"
-      "fetch an icecast/shoutcast stream and re-mux it as a DVB-IPI multicast\n\n"
+      "usage: %s -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] -m <mcast>:<port> [options]\n\n"
+      "fetch one or more icecast/shoutcast streams and re-mux them as one DVB-IPI multicast\n"
+      "(a single -i: normal SPTS. multiple -i: MPTS, one program per input)\n\n"
       "options:\n"
-      "  -i, --input <uri>      icecast/shoutcast source, http:// or https://\n"
-      "  -m, --mcast <g>:<p>    output multicast group:port ([addr6]:port for v6)\n"
-      "  -I, --iface <iface>    outgoing multicast interface\n"
-      "  -r, --rtp              wrap output in RTP (default: plain UDP)\n"
-      "  -T, --ttl <n>          multicast TTL / hop limit (default: 1)\n"
-      "  -n, --nit <text>       NIT network_name\n"
-      "  -s, --sdt <text>       SDT service_name\n"
-      "  -e, --error <seconds>  on input error, reconnect after N s (default: fail once)\n"
-      "  -k, --insecure         skip TLS verification (self-signed, hostname, expiry)\n"
-      "      --tsid <n>         transport_stream_id (default 1)\n"
-      "      --onid <n>         original_network_id (default 1)\n"
-      "      --sid <n>          service_id / program_number (default 1)\n"
-      "  -v, --verbose          periodic stats on stderr\n"
-      "      --color <when>     auto|always|never (default auto)\n"
-      "  -h, --help             this help\n\n"
+      "  -i, --input <uri>          icecast/shoutcast source, http:// or https://; repeatable\n"
+      "      --sid <n>              service_id/program_number for the -i right before this (default: auto)\n"
+      "      --sdt <name>           SDT service_name for the -i right before this (default: auto)\n"
+      "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
+      "  -I, --iface <iface>        outgoing multicast interface\n"
+      "  -r, --rtp                  wrap output in RTP (default: plain UDP)\n"
+      "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
+      "  -n, --nit <text>           NIT network_name\n"
+      "  -e, --error <seconds>      on input error, reconnect after N s (default: fail once;\n"
+      "                             always retries when more than one -i is given)\n"
+      "  -k, --insecure             skip TLS verification (self-signed, hostname, expiry)\n"
+      "      --tsid <n>             transport_stream_id (default 1)\n"
+      "      --onid <n>             original_network_id (default 1)\n"
+      "  -v, --verbose              periodic stats on stderr\n"
+      "      --color <when>         auto|always|never (default auto)\n"
+      "      --metrics <path>       Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+      "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
+      "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
+      "      --cas-algo <a>         enable CAS: cissa|csa2 (default: disabled)\n"
+      "      --cas-ecmg <ep>        ECMG address, tcp://host:port; repeatable, one CAS vendor\n"
+      "                             per --cas-ecmg (required with --cas-algo)\n"
+      "      --cas-ecmg-version <n> for the --cas-ecmg right before this: protocol version 2|3\n"
+      "                             (default: auto-negotiate)\n"
+      "      --cas-super-id <n>     for the --cas-ecmg right before this: Super_CAS_id, dec or\n"
+      "                             0x-hex (required per vendor)\n"
+      "      --cas-ecm-id <n>       for the --cas-ecmg right before this: ECM_id (required per vendor)\n"
+      "      --cas-ecm-pid <pid>    for the --cas-ecmg right before this: output PID for its ECM\n"
+      "                             stream (default: 0x0020)\n"
+      "      --cas-emmg-port <n>    for the --cas-ecmg right before this: our EMMG listener port\n"
+      "                             (default: 8002)\n"
+      "      --cas-emmg-version <n> for the --cas-ecmg right before this: EMMG protocol version\n"
+      "                             2|3 (default: accept client's proposal)\n"
+      "      --cas-emm-pid <pid>    for the --cas-ecmg right before this: output PID for its EMM\n"
+      "                             stream (default: 0x0021)\n"
+      "      --cas-resilience <r>   for the --cas-ecmg right before this: on its own ECMG loss,\n"
+      "                             frozen|cycling|silent (default: frozen)\n"
+      "      --cas-required         for the --cas-ecmg right before this: its outage forces the\n"
+      "                             global fallback regardless of other vendors\n"
+      "      --cas-cp-duration <ms> crypto-period duration in ms, shared by every vendor (default: 10000)\n"
+      "      --cas-fallback-clear   on total outage (or a --cas-required vendor down): clear\n"
+      "                             instead of staying scrambled on the last known-good CW\n"
+      "  -h, --help                 this help\n\n"
       "examples:\n"
-      "  %s -i https://orf-live.ors-shoutcast.at/oe1-q2a.m3u -m 239.1.1.1:5000 -s \"OE1\"\n"
-      "  %s -i http://radio886.at/streams/radio_88.6/aac -m 239.1.1.2:5000 -r -e 5\n",
+      "  %s -i https://example.com/radio.m3u --sdt \"Channel 1\" -m 239.1.1.1:5000\n"
+      "  %s -i http://example.com/somechannel/aac --sdt \"Some Channel\" -i https://example.com/radio.m3u --sdt \"Channel 1\" -m 239.1.1.2:5000 -r -e 5\n",
       TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
@@ -159,21 +140,45 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"sid", required_argument, 0, 1002},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1003},
+      {"cas-algo", required_argument, 0, 1004},
+      {"cas-ecmg", required_argument, 0, 1005},
+      {"cas-ecmg-version", required_argument, 0, 1006},
+      {"cas-super-id", required_argument, 0, 1007},
+      {"cas-ecm-id", required_argument, 0, 1008},
+      {"cas-ecm-pid", required_argument, 0, 1009},
+      {"cas-emmg-port", required_argument, 0, 1010},
+      {"cas-emmg-version", required_argument, 0, 1011},
+      {"cas-emm-pid", required_argument, 0, 1012},
+      {"cas-cp-duration", required_argument, 0, 1013},
+      {"cas-resilience", required_argument, 0, 1014},
+      {"metrics", required_argument, 0, 1015},
+      {"metrics-id", required_argument, 0, 1016},
+      {"metrics-interval", required_argument, 0, 1017},
+      {"cas-required", no_argument, 0, 1018},
+      {"cas-fallback-clear", no_argument, 0, 1019},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
-  int have_in = 0, have_mcast = 0;
+  int have_mcast = 0;
+  int any_cas_flag = 0;
   int c;
+  unsigned i;
 
   memset(cfg, 0, sizeof *cfg);
   cfg->tsid = 1;
   cfg->onid = 1;
-  cfg->sid = 1;
+  cfg->cas_cp_duration_ms = 10000;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "i:m:I:rT:n:s:e:kvh", longopts, NULL)) != -1) {
+  /* leading '+': disable GNU getopt argument permutation, so --sid/--sdt stay paired with
+     whichever -i preceded them on the command line instead of being reordered */
+  while ((c = getopt_long(argc, argv, "+i:m:I:rT:n:s:e:kvh", longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
-        cfg->input_uri = optarg;
-        have_in = 1;
+        if (cfg->n_inputs >= RADIOHEAD_MAX_INPUTS) {
+          argerr("too many -i inputs (max %d)", RADIOHEAD_MAX_INPUTS);
+          return ARGS_ERR;
+        }
+        cfg->inputs[cfg->n_inputs].uri = optarg;
+        cfg->n_inputs++;
         break;
       case 'm':
         if (mcast_parse(optarg, cfg)) {
@@ -202,7 +207,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         snprintf(cfg->nit_text, sizeof cfg->nit_text, "%s", optarg);
         break;
       case 's':
-        snprintf(cfg->sdt_text, sizeof cfg->sdt_text, "%s", optarg);
+        if (cfg->n_inputs == 0) {
+          argerr("--sdt/-s must follow the -i it names");
+          return ARGS_ERR;
+        }
+        snprintf(cfg->inputs[cfg->n_inputs - 1].sdt_text, sizeof cfg->inputs[0].sdt_text, "%s", optarg);
         break;
       case 'e': {
         char *end;
@@ -230,21 +239,186 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 1002:
-        if (id_parse(optarg, &cfg->sid)) {
+        if (cfg->n_inputs == 0) {
+          argerr("--sid must follow the -i it names");
+          return ARGS_ERR;
+        }
+        if (id_parse(optarg, &cfg->inputs[cfg->n_inputs - 1].sid)) {
           argerr("invalid --sid: %s (1..65535)", optarg);
           return ARGS_ERR;
         }
         break;
       case 1003: {
-        static const enum_map_t map[] = {{"auto", 0}, {"always", 1}, {"never", 2}};
-        int v;
-        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+        log_color_t v;
+        if (log_color_from_string(optarg, &v)) {
           argerr("invalid --color: %s (auto|always|never)", optarg);
           return ARGS_ERR;
         }
         cfg->color_mode = v;
         break;
       }
+      case 1004: {
+        static const enum_map_t map[] = {{"cissa", CAS_ALGO_CISSA}, {"csa2", CAS_ALGO_CSA2}};
+        int v;
+        any_cas_flag = 1;
+        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+          argerr("invalid --cas-algo: %s (cissa|csa2)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->cas_algo = (cas_algo_t)v;
+        break;
+      }
+      case 1005: {
+        cas_vendor_t *vend;
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors >= ARGS_MAX_CAS_VENDORS) {
+          argerr("too many --cas-ecmg vendors (max %d)", ARGS_MAX_CAS_VENDORS);
+          return ARGS_ERR;
+        }
+        vend = &cfg->cas_vendors[cfg->n_cas_vendors];
+        memset(vend, 0, sizeof *vend);
+        vend->ecm_pid = 0x0020;
+        vend->emmg_port = 8002;
+        vend->emm_pid = 0x0021;
+        if (cas_endpoint_parse(optarg, vend->ecmg_host, sizeof vend->ecmg_host, &vend->ecmg_port)) {
+          argerr("invalid --cas-ecmg endpoint: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->n_cas_vendors++;
+        break;
+      }
+      case 1006:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-ecmg-version must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (cas_version_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].ecmg_version)) {
+          argerr("invalid --cas-ecmg-version: %s (2|3)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1007:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-super-id must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (cas_super_id_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].super_cas_id)) {
+          argerr("invalid --cas-super-id: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1008:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-ecm-id must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (id_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].ecm_id)) {
+          argerr("invalid --cas-ecm-id: %s (1..65535)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1009:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-ecm-pid must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (pid_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].ecm_pid)) {
+          argerr("invalid --cas-ecm-pid: %s (0x0001..0x1FFE)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1010:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-emmg-port must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (argutil_port_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].emmg_port)) {
+          argerr("invalid --cas-emmg-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1011:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-emmg-version must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (cas_version_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].emmg_version)) {
+          argerr("invalid --cas-emmg-version: %s (2|3)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1012:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-emm-pid must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (pid_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].emm_pid)) {
+          argerr("invalid --cas-emm-pid: %s (0x0001..0x1FFE)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1013: {
+        char *end;
+        unsigned long v;
+        any_cas_flag = 1;
+        v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 86400000UL) {
+          argerr("invalid --cas-cp-duration: %s (ms, 1..86400000)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->cas_cp_duration_ms = (unsigned)v;
+        break;
+      }
+      case 1014: {
+        static const enum_map_t map[] = {{"frozen", CAS_OUTAGE_FROZEN}, {"cycling", CAS_OUTAGE_CYCLING}, {"silent", CAS_OUTAGE_SILENT}};
+        int v;
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-resilience must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+          argerr("invalid --cas-resilience: %s (frozen|cycling|silent)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->cas_vendors[cfg->n_cas_vendors - 1].resilience = (cas_outage_mode_t)v;
+        break;
+      }
+      case 1015:
+        cfg->metrics_sock = optarg;
+        break;
+      case 1016:
+        cfg->metrics_id = optarg;
+        break;
+      case 1017: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 86400UL) {
+          argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->metrics_interval_s = (unsigned)v;
+        break;
+      }
+      case 1018:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-required must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        cfg->cas_vendors[cfg->n_cas_vendors - 1].required = 1;
+        break;
+      case 1019:
+        any_cas_flag = 1;
+        cfg->cas_fallback_clear = 1;
+        break;
       case 'v':
         cfg->verbose = 1;
         break;
@@ -259,7 +433,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  if (!have_in) {
+  if (cfg->n_inputs == 0) {
     argerr("missing -i input");
     return ARGS_ERR;
   }
@@ -267,7 +441,89 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -m output multicast");
     return ARGS_ERR;
   }
-  if (!cfg->sdt_text[0])
-    snprintf(cfg->sdt_text, sizeof cfg->sdt_text, "%s", TOOL_NAME);
+  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
+    argerr("--metrics/--metrics-interval require --metrics-id");
+    return ARGS_ERR;
+  }
+  if (any_cas_flag && cfg->cas_algo == CAS_ALGO_NONE) {
+    argerr("--cas-* options require --cas-algo");
+    return ARGS_ERR;
+  }
+  if (cfg->cas_algo != CAS_ALGO_NONE) {
+    unsigned vi, vj;
+    if (cfg->n_cas_vendors == 0) {
+      argerr("--cas-algo requires --cas-ecmg");
+      return ARGS_ERR;
+    }
+    for (vi = 0; vi < cfg->n_cas_vendors; vi++) {
+      const cas_vendor_t *v = &cfg->cas_vendors[vi];
+      if (!v->super_cas_id) {
+        argerr("--cas-ecmg %s:%u requires --cas-super-id", v->ecmg_host, v->ecmg_port);
+        return ARGS_ERR;
+      }
+      if (!v->ecm_id) {
+        argerr("--cas-ecmg %s:%u requires --cas-ecm-id", v->ecmg_host, v->ecmg_port);
+        return ARGS_ERR;
+      }
+      if (v->ecm_pid == v->emm_pid) {
+        argerr("--cas-ecm-pid and --cas-emm-pid must differ (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
+        return ARGS_ERR;
+      }
+      for (vj = vi + 1; vj < cfg->n_cas_vendors; vj++) {
+        const cas_vendor_t *o = &cfg->cas_vendors[vj];
+        if (v->ecm_pid == o->ecm_pid || v->ecm_pid == o->emm_pid || v->emm_pid == o->ecm_pid || v->emm_pid == o->emm_pid) {
+          argerr("--cas-ecm-pid/--cas-emm-pid collide across --cas-ecmg vendors");
+          return ARGS_ERR;
+        }
+        if (v->emmg_port == o->emmg_port) {
+          argerr("--cas-emmg-port %u used by more than one --cas-ecmg vendor (each needs its own EMMG listener)", v->emmg_port);
+          return ARGS_ERR;
+        }
+      }
+    }
+  }
+  {
+    unsigned used[RADIOHEAD_MAX_INPUTS];
+    unsigned n_used = 0;
+    unsigned next = 1;
+    unsigned j;
+
+    for (i = 0; i < cfg->n_inputs; i++) {
+      if (cfg->inputs[i].sid == 0)
+        continue;
+      for (j = 0; j < n_used; j++)
+        if (used[j] == cfg->inputs[i].sid) {
+          argerr("duplicate --sid %u", cfg->inputs[i].sid);
+          return ARGS_ERR;
+        }
+      used[n_used++] = cfg->inputs[i].sid;
+    }
+    for (i = 0; i < cfg->n_inputs; i++) {
+      if (cfg->inputs[i].sid != 0)
+        continue;
+      for (;;) {
+        int taken = 0;
+        for (j = 0; j < n_used; j++)
+          if (used[j] == next) {
+            taken = 1;
+            break;
+          }
+        if (!taken)
+          break;
+        next++;
+      }
+      cfg->inputs[i].sid = next;
+      used[n_used++] = next;
+      next++;
+    }
+  }
+  for (i = 0; i < cfg->n_inputs; i++) {
+    if (cfg->inputs[i].sdt_text[0])
+      continue;
+    if (cfg->n_inputs == 1)
+      snprintf(cfg->inputs[i].sdt_text, sizeof cfg->inputs[i].sdt_text, "%s", TOOL_NAME);
+    else
+      snprintf(cfg->inputs[i].sdt_text, sizeof cfg->inputs[i].sdt_text, "%s %u", TOOL_NAME, i + 1);
+  }
   return ARGS_OK;
 }

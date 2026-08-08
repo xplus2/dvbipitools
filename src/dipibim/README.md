@@ -22,7 +22,7 @@ Each `ProgramInformation`, `Schedule` (with its own `ScheduleEvent`s) and `Servi
 its own separately BiM-encoded fragment (TS 102 822-3-2 4.3.1.1: elements below TVAMain's own
 child tables "form fragments of their own"). 
 No DVBSTP container, index structures or versioning (TS 102 822-3-2#4.5/4.6). 
-See `dipiepg` for distribution.
+See `dipibcg` for distribution.
 
 ## BiM output layout
 

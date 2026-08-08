@@ -1,10 +1,12 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <arpa/inet.h>
 #include <check.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -12,6 +14,13 @@
 #include "dipifccret/channel.h"
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
+
+/* channel_lookup() takes raw address bytes now, not text - tests still deal in IPv4 literals */
+static channel_t *lookup_ip(channel_table_t *t, const char *ip, unsigned port) {
+  unsigned char addr[4];
+  inet_pton(AF_INET, ip, addr);
+  return channel_lookup(t, AF_INET, addr, sizeof addr, port);
+}
 
 static void wrap_section_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
   size_t i;
@@ -84,15 +93,32 @@ static size_t build_pat_pmt_rai(unsigned char *out, unsigned prog_num, unsigned 
 START_TEST(channel_lookup_allocates_finds_and_exhausts) {
   channel_table_t *t = channel_table_new(2, 0, 0);
   channel_t *a, *b, *a_again, *c;
-  a = channel_lookup(t, AF_INET, "239.1.1.1", 5000);
+  a = lookup_ip(t, "239.1.1.1", 5000);
   ck_assert_ptr_nonnull(a);
-  b = channel_lookup(t, AF_INET, "239.1.1.2", 5000);
+  b = lookup_ip(t, "239.1.1.2", 5000);
   ck_assert_ptr_nonnull(b);
   ck_assert_ptr_ne(a, b);
-  a_again = channel_lookup(t, AF_INET, "239.1.1.1", 5000);
+  a_again = lookup_ip(t, "239.1.1.1", 5000);
   ck_assert_ptr_eq(a, a_again);
-  c = channel_lookup(t, AF_INET, "239.1.1.3", 5000); /* table only has 2 slots */
+  c = lookup_ip(t, "239.1.1.3", 5000); /* table only has 2 slots */
   ck_assert_ptr_null(c);
+
+  channel_table_free(t);
+}
+END_TEST
+
+/* group/addr/addr_len are populated on claim - mcsend.c's mcast_open_send() needs c->group text */
+START_TEST(channel_lookup_populates_addr_and_text_group) {
+  channel_table_t *t = channel_table_new(1, 0, 0);
+  channel_t *c = lookup_ip(t, "239.5.6.7", 5000);
+  unsigned char expect[4];
+
+  ck_assert_ptr_nonnull(c);
+  inet_pton(AF_INET, "239.5.6.7", expect);
+  ck_assert_int_eq(c->family, AF_INET);
+  ck_assert_uint_eq(c->addr_len, sizeof expect);
+  ck_assert_mem_eq(c->addr, expect, sizeof expect);
+  ck_assert_str_eq(c->group, "239.5.6.7");
 
   channel_table_free(t);
 }
@@ -100,10 +126,10 @@ END_TEST
 
 START_TEST(channel_store_and_find_ret_ring_round_trips) {
   channel_table_t *t = channel_table_new(1, 4, 0); /* RET only, 4 slots */
-  channel_t *c = channel_lookup(t, AF_INET, "239.1.1.1", 5000);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
   unsigned char payload[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
   channel_slot_t out;
-  channel_store(c, 0xAABBCCDD, 100, 900000, payload, sizeof payload);
+  channel_store(t, c, 0xAABBCCDD, 100, 900000, payload, sizeof payload);
   ck_assert_int_eq(channel_find(c, 100, &out), 1);
   ck_assert_uint_eq(out.seq, 100u);
   ck_assert_uint_eq(out.timestamp, 900000u);
@@ -117,10 +143,10 @@ END_TEST
 
 START_TEST(channel_find_returns_zero_when_ring_disabled) {
   channel_table_t *t = channel_table_new(1, 0, 0); /* no RET */
-  channel_t *c = channel_lookup(t, AF_INET, "239.1.1.1", 5000);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
   channel_slot_t out;
   unsigned char payload[4] = {1, 2, 3, 4};
-  channel_store(c, 1, 1, 1, payload, sizeof payload);
+  channel_store(t, c, 1, 1, 1, payload, sizeof payload);
   ck_assert_int_eq(channel_find(c, 1, &out), 0);
   channel_table_free(t);
 }
@@ -128,12 +154,12 @@ END_TEST
 
 START_TEST(channel_ring_wraps_and_overwrites_oldest) {
   channel_table_t *t = channel_table_new(1, 2, 0); /* only 2 ring slots */
-  channel_t *c = channel_lookup(t, AF_INET, "239.1.1.1", 5000);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
   unsigned char p1[1] = {1}, p2[1] = {2}, p3[1] = {3};
   channel_slot_t out;
-  channel_store(c, 1, 10, 0, p1, 1); /* slot 10%2=0 */
-  channel_store(c, 1, 11, 0, p2, 1); /* slot 11%2=1 */
-  channel_store(c, 1, 12, 0, p3, 1); /* slot 12%2=0, overwrites seq 10's slot */
+  channel_store(t, c, 1, 10, 0, p1, 1); /* slot 10%2=0 */
+  channel_store(t, c, 1, 11, 0, p2, 1); /* slot 11%2=1 */
+  channel_store(t, c, 1, 12, 0, p3, 1); /* slot 12%2=0, overwrites seq 10's slot */
   ck_assert_int_eq(channel_find(c, 10, &out), 0); /* overwritten: slot now holds seq 12 */
   ck_assert_int_eq(channel_find(c, 11, &out), 1);
   ck_assert_int_eq(channel_find(c, 12, &out), 1);
@@ -144,11 +170,11 @@ END_TEST
 
 START_TEST(channel_find_by_ssrc_locates_the_right_channel) {
   channel_table_t *t = channel_table_new(2, 1, 0);
-  channel_t *a = channel_lookup(t, AF_INET, "239.1.1.1", 5000);
-  channel_t *b = channel_lookup(t, AF_INET, "239.1.1.2", 5000);
+  channel_t *a = lookup_ip(t, "239.1.1.1", 5000);
+  channel_t *b = lookup_ip(t, "239.1.1.2", 5000);
   unsigned char payload[1] = {0};
-  channel_store(a, 0x1111, 1, 0, payload, 1);
-  channel_store(b, 0x2222, 1, 0, payload, 1);
+  channel_store(t, a, 0x1111, 1, 0, payload, 1);
+  channel_store(t, b, 0x2222, 1, 0, payload, 1);
   ck_assert_ptr_eq(channel_find_by_ssrc(t, 0x1111), a);
   ck_assert_ptr_eq(channel_find_by_ssrc(t, 0x2222), b);
   ck_assert_ptr_null(channel_find_by_ssrc(t, 0x9999));
@@ -158,7 +184,7 @@ END_TEST
 
 START_TEST(channel_fcc_cache_tracks_rap_and_entries) {
   channel_table_t *t = channel_table_new(1, 0, 8); /* FCC only, 8-entry cache */
-  channel_t *c = channel_lookup(t, AF_INET, "239.1.1.1", 5000);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
   unsigned char discovery[3 * 188];
   unsigned char plain[188];
   size_t dlen;
@@ -169,14 +195,14 @@ START_TEST(channel_fcc_cache_tracks_rap_and_entries) {
   /* before any RAP: stored but not cached */
   memset(plain, 0xAB, sizeof plain);
   plain[0] = 0x47;
-  channel_store(c, 1, 1, 0, plain, sizeof plain);
+  channel_store(t, c, 1, 1, 0, plain, sizeof plain);
   ck_assert_int_eq(channel_has_rap(c), 0);
   ck_assert_uint_eq(channel_cache_count(c), 0u);
   dlen = build_pat_pmt_rai(discovery, 101, 0x0100, 0x0101);
-  channel_store(c, 1, 2, 0, discovery, dlen); /* PAT+PMT+RAI video in one call */
+  channel_store(t, c, 1, 2, 0, discovery, dlen); /* PAT+PMT+RAI video in one call */
   ck_assert_int_eq(channel_has_rap(c), 1);
   ck_assert_uint_eq(channel_cache_count(c), 1u); /* the RAP entry itself */
-  channel_store(c, 1, 3, 0, plain, sizeof plain);
+  channel_store(t, c, 1, 3, 0, plain, sizeof plain);
   ck_assert_uint_eq(channel_cache_count(c), 2u);
   {
     rap_cache_entry_t e;
@@ -192,10 +218,10 @@ END_TEST
 
 START_TEST(channel_has_rap_stays_zero_when_fcc_disabled) {
   channel_table_t *t = channel_table_new(1, 0, 0); /* cache_cap 0: FCC off */
-  channel_t *c = channel_lookup(t, AF_INET, "239.1.1.1", 5000);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
   unsigned char discovery[3 * 188];
   size_t dlen = build_pat_pmt_rai(discovery, 101, 0x0100, 0x0101);
-  channel_store(c, 1, 1, 0, discovery, dlen);
+  channel_store(t, c, 1, 1, 0, discovery, dlen);
   ck_assert_int_eq(channel_has_rap(c), 0);
   ck_assert_uint_eq(channel_cache_count(c), 0u);
   channel_table_free(t);
@@ -205,12 +231,64 @@ END_TEST
 START_TEST(channel_table_reap_frees_stale_channels) {
   channel_table_t *t = channel_table_new(1, 0, 0);
   channel_t *a, *b;
-  a = channel_lookup(t, AF_INET, "239.1.1.1", 5000);
+  a = lookup_ip(t, "239.1.1.1", 5000);
   ck_assert_ptr_nonnull(a);
   channel_table_reap(t, -1); /* max_age -1: always "older" than now */
-  b = channel_lookup(t, AF_INET, "239.1.1.2", 5000); /* slot should be free again */
+  b = lookup_ip(t, "239.1.1.2", 5000); /* slot should be free again */
   ck_assert_ptr_nonnull(b);
   ck_assert_ptr_eq(a, b); /* same underlying slot, reused */
+  channel_table_free(t);
+}
+END_TEST
+
+/* max_scan bounds work per call: a full table only frees slots as the cursor visits them,
+ * never all at once - and the cursor keeps advancing across calls until it covers the table */
+START_TEST(channel_table_reap_step_bounds_work_per_call) {
+  channel_table_t *t = channel_table_new(4, 0, 0);
+  channel_t *a, *e;
+
+  a = lookup_ip(t, "239.2.2.1", 5000);
+  ck_assert_ptr_nonnull(a);
+  ck_assert_ptr_nonnull(lookup_ip(t, "239.2.2.2", 5000));
+  ck_assert_ptr_nonnull(lookup_ip(t, "239.2.2.3", 5000));
+  ck_assert_ptr_nonnull(lookup_ip(t, "239.2.2.4", 5000));
+  ck_assert_ptr_null(lookup_ip(t, "239.2.2.5", 5000)); /* table full */
+
+  channel_table_reap_step(t, -1, 1); /* max_age -1: always stale; scans 1 slot */
+  e = lookup_ip(t, "239.2.2.5", 5000);
+  ck_assert_ptr_nonnull(e);
+  ck_assert_ptr_eq(e, a); /* reused the one slot the cursor visited */
+
+  ck_assert_ptr_null(lookup_ip(t, "239.2.2.6", 5000)); /* full again: cursor hasn't reached the rest yet */
+
+  channel_table_reap_step(t, -1, 1);
+  channel_table_reap_step(t, -1, 1);
+  channel_table_reap_step(t, -1, 1);
+  ck_assert_ptr_nonnull(lookup_ip(t, "239.2.2.7", 5000));
+  ck_assert_ptr_nonnull(lookup_ip(t, "239.2.2.8", 5000));
+
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(channel_lookup_churn_triggers_rebuild_without_hanging) {
+  channel_table_t *t = channel_table_new(2, 0, 0); /* hash_size 4: tombstones cross 75% fast */
+  char group[32];
+  int i;
+
+  for (i = 0; i < 20; i++) {
+    channel_t *c;
+    snprintf(group, sizeof group, "239.9.9.%d", i + 1);
+    c = lookup_ip(t, group, 5000);
+    ck_assert_ptr_nonnull(c);
+    channel_table_reap(t, -1); /* expire immediately: piles up tombstones */
+  }
+
+  {
+    channel_t *fresh = lookup_ip(t, "239.9.9.200", 5000);
+    ck_assert_ptr_nonnull(fresh);
+    ck_assert_ptr_eq(lookup_ip(t, "239.9.9.200", 5000), fresh);
+  }
   channel_table_free(t);
 }
 END_TEST
@@ -221,6 +299,7 @@ END_TEST
 #define RET_RACE_READER_THREADS 4
 #define RET_RACE_READER_ITERS 20000
 
+static channel_table_t *g_ret_race_table;
 static channel_t *g_ret_race_chan;
 static _Atomic int g_ret_race_bad;
 
@@ -234,7 +313,7 @@ static void *ret_race_writer(void *arg) {
     payload[1] = (unsigned char)seq;
     payload[2] = (unsigned char)(seq >> 8);
     payload[3] = (unsigned char)seq;
-    channel_store(g_ret_race_chan, 0xAAAAAAAAu, seq, (uint32_t)seq * 90000u, payload, sizeof payload);
+    channel_store(g_ret_race_table, g_ret_race_chan, 0xAAAAAAAAu, seq, (uint32_t)seq * 90000u, payload, sizeof payload);
   }
   return NULL;
 }
@@ -262,7 +341,8 @@ START_TEST(channel_seqlock_race_no_torn_reads) {
   pthread_t writer, readers[RET_RACE_READER_THREADS];
   long i;
 
-  g_ret_race_chan = channel_lookup(t, AF_INET, "239.7.7.7", 5000);
+  g_ret_race_table = t;
+  g_ret_race_chan = lookup_ip(t, "239.7.7.7", 5000);
   atomic_store_explicit(&g_ret_race_bad, 0, memory_order_relaxed);
 
   pthread_create(&writer, NULL, ret_race_writer, NULL);
@@ -282,6 +362,7 @@ END_TEST
 #define FCC_RACE_READER_THREADS 4
 #define FCC_RACE_READER_ITERS 20000
 
+static channel_table_t *g_fcc_race_table;
 static channel_t *g_fcc_race_chan;
 static _Atomic int g_fcc_race_bad;
 
@@ -295,7 +376,7 @@ static void *fcc_race_writer(void *arg) {
     payload[1] = (unsigned char)seq;
     payload[2] = (unsigned char)(seq >> 8);
     payload[3] = (unsigned char)seq;
-    channel_store(g_fcc_race_chan, 0xBBBBBBBBu, seq, (uint32_t)seq * 90000u, payload, sizeof payload);
+    channel_store(g_fcc_race_table, g_fcc_race_chan, 0xBBBBBBBBu, seq, (uint32_t)seq * 90000u, payload, sizeof payload);
   }
   return NULL;
 }
@@ -329,9 +410,10 @@ START_TEST(channel_fcc_cache_race_no_torn_reads) {
   pthread_t writer, readers[FCC_RACE_READER_THREADS];
   long i;
 
-  g_fcc_race_chan = channel_lookup(t, AF_INET, "239.8.8.8", 5000);
+  g_fcc_race_table = t;
+  g_fcc_race_chan = lookup_ip(t, "239.8.8.8", 5000);
   dlen = build_pat_pmt_rai(discovery, 101, 0x0100, 0x0101);
-  channel_store(g_fcc_race_chan, 0xBBBBBBBBu, 0, 0, discovery, dlen); /* seeds have_rap before threads start */
+  channel_store(g_fcc_race_table, g_fcc_race_chan, 0xBBBBBBBBu, 0, 0, discovery, dlen); /* seeds have_rap before threads start */
   atomic_store_explicit(&g_fcc_race_bad, 0, memory_order_relaxed);
 
   pthread_create(&writer, NULL, fcc_race_writer, NULL);
@@ -347,6 +429,67 @@ START_TEST(channel_fcc_cache_race_no_torn_reads) {
 }
 END_TEST
 
+/* ssrc_hash is new: channel_store() now takes t->lock whenever a channel's ssrc changes,
+   concurrently with channel_find_by_ssrc() (real callers: capture thread vs. RET's NACK
+   listener thread). Exercise both changing ssrc under a writer while readers hash-lookup it. */
+#define SSRC_RACE_ITERS 20000
+#define SSRC_RACE_READER_THREADS 4
+#define SSRC_RACE_READER_ITERS 20000
+#define SSRC_RACE_SPAN 8 /* distinct ssrcs cycled per channel */
+
+static channel_table_t *g_ssrc_race_table;
+static channel_t *g_ssrc_race_a, *g_ssrc_race_b;
+static _Atomic int g_ssrc_race_bad;
+
+static void *ssrc_race_writer(void *arg) {
+  unsigned char payload[4] = {0};
+  int i;
+  (void)arg;
+  for (i = 0; i < SSRC_RACE_ITERS; i++) {
+    channel_store(g_ssrc_race_table, g_ssrc_race_a, 0x10000000u + (uint32_t)(i % SSRC_RACE_SPAN), (uint16_t)i, 0, payload, sizeof payload);
+    channel_store(g_ssrc_race_table, g_ssrc_race_b, 0x20000000u + (uint32_t)(i % SSRC_RACE_SPAN), (uint16_t)i, 0, payload, sizeof payload);
+  }
+  return NULL;
+}
+
+static void *ssrc_race_reader(void *arg) {
+  long idx = (long)arg;
+  int i;
+  for (i = 0; i < SSRC_RACE_READER_ITERS; i++) {
+    uint32_t base = ((i + idx) % 2) ? 0x10000000u : 0x20000000u;
+    uint32_t ssrc = base + (uint32_t)((i * 3 + idx) % SSRC_RACE_SPAN);
+    channel_t *r = channel_find_by_ssrc(g_ssrc_race_table, ssrc);
+    /* ssrc can change between the match and this check (real race, not a bug) - the only
+       thing that must never happen is the index returning a slot outside the known set */
+    if (r && r != g_ssrc_race_a && r != g_ssrc_race_b)
+      atomic_store_explicit(&g_ssrc_race_bad, 1, memory_order_relaxed);
+  }
+  return NULL;
+}
+
+START_TEST(channel_find_by_ssrc_race_no_corruption) {
+  channel_table_t *t = channel_table_new(2, 0, 0);
+  pthread_t writer, readers[SSRC_RACE_READER_THREADS];
+  long i;
+
+  g_ssrc_race_table = t;
+  g_ssrc_race_a = lookup_ip(t, "239.9.9.1", 5000);
+  g_ssrc_race_b = lookup_ip(t, "239.9.9.2", 5000);
+  atomic_store_explicit(&g_ssrc_race_bad, 0, memory_order_relaxed);
+
+  pthread_create(&writer, NULL, ssrc_race_writer, NULL);
+  for (i = 0; i < SSRC_RACE_READER_THREADS; i++)
+    pthread_create(&readers[i], NULL, ssrc_race_reader, (void *)i);
+
+  pthread_join(writer, NULL);
+  for (i = 0; i < SSRC_RACE_READER_THREADS; i++)
+    pthread_join(readers[i], NULL);
+
+  ck_assert_int_eq(atomic_load_explicit(&g_ssrc_race_bad, memory_order_relaxed), 0);
+  channel_table_free(t);
+}
+END_TEST
+
 #define LOOKUP_RACE_THREADS 8
 
 static channel_table_t *g_lookup_race_table;
@@ -354,7 +497,7 @@ static channel_t *g_lookup_race_results[LOOKUP_RACE_THREADS];
 
 static void *lookup_race_worker(void *arg) {
   long idx = (long)arg;
-  g_lookup_race_results[idx] = channel_lookup(g_lookup_race_table, AF_INET, "239.6.6.6", 5000);
+  g_lookup_race_results[idx] = lookup_ip(g_lookup_race_table, "239.6.6.6", 5000);
   return NULL;
 }
 
@@ -380,6 +523,7 @@ static Suite *channel_suite(void) {
   Suite *s = suite_create("channel");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, channel_lookup_allocates_finds_and_exhausts);
+  tcase_add_test(tc, channel_lookup_populates_addr_and_text_group);
   tcase_add_test(tc, channel_store_and_find_ret_ring_round_trips);
   tcase_add_test(tc, channel_find_returns_zero_when_ring_disabled);
   tcase_add_test(tc, channel_ring_wraps_and_overwrites_oldest);
@@ -387,8 +531,11 @@ static Suite *channel_suite(void) {
   tcase_add_test(tc, channel_fcc_cache_tracks_rap_and_entries);
   tcase_add_test(tc, channel_has_rap_stays_zero_when_fcc_disabled);
   tcase_add_test(tc, channel_table_reap_frees_stale_channels);
+  tcase_add_test(tc, channel_table_reap_step_bounds_work_per_call);
+  tcase_add_test(tc, channel_lookup_churn_triggers_rebuild_without_hanging);
   tcase_add_test(tc, channel_seqlock_race_no_torn_reads);
   tcase_add_test(tc, channel_fcc_cache_race_no_torn_reads);
+  tcase_add_test(tc, channel_find_by_ssrc_race_no_corruption);
   tcase_add_test(tc, channel_lookup_race_single_winner);
   suite_add_tcase(s, tc);
   return s;

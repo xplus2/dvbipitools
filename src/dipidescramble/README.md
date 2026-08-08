@@ -24,6 +24,7 @@ can be preloaded with the decrypted EMM-U/EMM-G sections from a previous run.
 |       | `--insecure`    |                       | off            |
 | `-o`  | `--output`      | `<path\|->`           | required       |
 | `-f`  | `--format`      | `ts\|mkv\|mka`        | `ts`           |
+| `-p`  | `--pmt-pid`     | `<pid>` / `all`       | none (see below) |
 | `-I`  | `--iface`       | `<iface>`             | kernel default |
 | `-v`  | `--verbose`     |                       | off            |
 |       | `--color`       | `auto\|always\|never` | `auto`         |
@@ -34,6 +35,28 @@ can be preloaded with the decrypted EMM-U/EMM-G sections from a previous run.
 ### Input (`-i`)
 
 `udp://`/`rtp://` multicast, or `-` for stdin (already-demuxed `.ts` on stdin, e.g. piped from `dipirec`/`ffmpeg`).
+Can be a single-program stream (SPTS) or a multi-program mux (MPTS) - see `-p` below.
+
+### MPTS input (`-p`)
+
+On connect, the tool waits for the PAT and checks how many programs the source carries.
+The CW derived from the ECM/EMM chain applies mux-wide either way (dipitvhead's own CAS design uses one
+shared ECM pid/CW for an entire MPTS, not one per program), so descrambling itself needs nothing extra -
+`-p` only decides what gets selected/labeled in the output:
+
+* **SPTS**: `-p` is ignored (warned) and the tool proceeds as always.
+* **MPTS**, `-p <pid>`: pins that one program. Doesn't change `-f ts` bytes (see below), but drives which
+  program's tracks a `mkv`/`mka` output builds. Rejected if the pid isn't in the PAT.
+* **MPTS**, `-p all`: descramble the whole mux.
+  * `-f ts`: already whole-mux by default - every packet is decrypted and forwarded regardless of program,
+    so `-p all` changes nothing about the bytes written, just skips the fail-early check below.
+  * `-f mka`: every program's audio becomes its own track, each labeled with that program's own SDT name
+    once it arrives.
+  * `-f mkv`: rejected - pick one program with `-p <pid>` instead (Matroska has no video/audio track
+    association across several programs).
+* **MPTS**, neither given: fails early, after a brief wait for each program's SDT name, listing the
+  available `sid`/PMT pid/name. A program whose name never arrives in that window shows as `(no SDT)`
+  rather than blocking further.
 
 ### Device key (`-k`)
 
@@ -80,4 +103,7 @@ directly rather than feeding the raw `.ts` through a separate remux step. All au
 ```sh
 dipidescramble -i rtp://@239.0.0.1:1975 -k device.key -s mysmartcardserial-01 -e emm.cache -o out.ts -v
 dipidescramble -i rtp://@239.0.0.1:1975 -k device.key -s mysmartcardserial-01 -e emm.cache -o out.mkv -f mkv -v
+
+# MPTS source: descramble the whole mux, one audio track per program
+dipidescramble -i rtp://@239.0.0.1:1975 -k device.key -s mysmartcardserial-01 -e emm.cache -o out.mka -f mka -p all
 ```

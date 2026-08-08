@@ -10,4 +10,8 @@
 /* null-terminated, malloc'd. 0 ok, -1 error */
 int read_all(FILE *f, char **out, size_t *out_len);
 
+/* bounded strcpy: copies at most dstsz-1 bytes of src, always NUL-terminates dst.
+   returns strlen(src) - >= dstsz means truncated, same convention as BSD strlcpy */
+size_t bufcpy(char *dst, size_t dstsz, const char *src);
+
 #endif

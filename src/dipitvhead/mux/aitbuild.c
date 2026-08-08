@@ -14,13 +14,13 @@ static void put32(unsigned char *p, unsigned v) {
   p[3] = (unsigned char)v;
 }
 
-size_t aitbuild_pmt_entry(unsigned version, unsigned char *out, size_t cap) {
+size_t aitbuild_pmt_entry(unsigned version, unsigned ait_pid, unsigned char *out, size_t cap) {
   size_t n = 0;
   (void)version;
   if (cap < 9)
     return 0;
   out[n++] = 0x05; /* stream_type: private sections */
-  psi_put16(out + n, 0xE000 | (OUT_PID_AIT & 0x1FFF));
+  psi_put16(out + n, 0xE000 | (ait_pid & 0x1FFF));
   n += 2;
   psi_put16(out + n, 0xF000 | 5); /* ES_info_length = 5 */
   n += 2;
@@ -41,14 +41,14 @@ size_t aitbuild_ait(unsigned version, unsigned org_id, unsigned app_id, const ch
   if (url_len > 200 || cap < 60 + url_len)
     return 0;
 
-  out[n++] = 0x74; /* table_id: AIT */
-  n += 2;          /* section_syntax_indicator/reserved/section_length, patched below */
+  out[n++] = 0x74;  /* table_id: AIT */
+  n += 2;           /* section_syntax_indicator/reserved/section_length, patched below */
   out[n++] = 0x00;  /* test_application_flag=0, application_type high 7 bits */
   out[n++] = 0x10;  /* application_type low 8 bits: 0x0010 = HbbTV */
   out[n++] = (unsigned char)(0xC0 | ((version & 0x1F) << 1) | 0x01);
-  out[n++] = 0x00; /* section_number */
-  out[n++] = 0x00; /* last_section_number */
-  out[n++] = 0xF0; /* reserved(4)=1111, common_descriptors_length=0 */
+  out[n++] = 0x00;  /* section_number */
+  out[n++] = 0x00;  /* last_section_number */
+  out[n++] = 0xF0;  /* reserved(4)=1111, common_descriptors_length=0 */
   out[n++] = 0x00;
 
   app_loop_len_pos = n;

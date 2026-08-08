@@ -8,6 +8,7 @@
 
 typedef enum { INPUT_RTP, INPUT_UDP, INPUT_STDIN } input_kind_t;
 typedef enum { FMT_TS, FMT_MKV, FMT_MKA } out_fmt_t;
+typedef enum { PMT_SEL_AUTO, PMT_SEL_PID, PMT_SEL_ALL } pmt_sel_t;
 
 typedef struct {
   input_kind_t kind;
@@ -18,17 +19,19 @@ typedef struct {
 } input_t;
 
 typedef struct {
-  input_t input;          /* -i, required */
-  const char *key_path;   /* -k, device RSA private key PEM, required */
-  const char *serial;     /* -s, matched against EMM-U addressing, required */
-  const char *emm_file;   /* -e, EMM cache file, required */
+  input_t input;               /* -i, required */
+  const char *key_path;        /* -k, device RSA private key PEM, required */
+  const char *serial;          /* -s, matched against EMM-U addressing, required */
+  const char *emm_file;        /* -e, EMM cache file, required */
   const char *unicast_emm_uri; /* -u/--unicast-emm; NULL = not set. auth token as URI userinfo */
-  int insecure_tls;       /* --insecure; skip TLS verification for -u/--unicast-emm */
-  const char *out_path;   /* -o, descrambled output, "-" = stdout, required */
-  out_fmt_t format;       /* -f; ts|mkv|mka, default ts */
-  const char *iface_in;   /* -I; NULL = kernel default route */
-  int verbose;            /* -v */
-  int color_mode;         /* --color; log_color_t */
+  int insecure_tls;            /* --insecure; skip TLS verification for -u/--unicast-emm */
+  const char *out_path;        /* -o, descrambled output, "-" = stdout, required */
+  out_fmt_t format;            /* -f; ts|mkv|mka, default ts */
+  pmt_sel_t pmt_sel;           /* -p; AUTO if not given */
+  unsigned pmt_pid;            /* -p <pid>; valid iff pmt_sel == PMT_SEL_PID */
+  const char *iface_in;        /* -I; NULL = kernel default route */
+  int verbose;                 /* -v */
+  int color_mode;              /* --color; log_color_t */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

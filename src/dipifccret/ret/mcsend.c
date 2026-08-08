@@ -2,32 +2,52 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdatomic.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #include "mcsend.h"
 
+/* keys come from a fixed preallocated array: bounded key space, no tombstones needed. */
 struct mcsend_entry {
   _Atomic(channel_t *) key;
+  unsigned generation; /* published alongside key: see channel_t.generation */
   mcast_t *sock;
 };
 
 struct mcsend_table {
   struct mcsend_entry *entries;
-  size_t max_channels;
+  size_t hash_size;
+  size_t hash_mask;
   const char *iface;
   int ttl;
 };
+
+static size_t next_pow2(size_t n) {
+  size_t p = 1;
+  while (p < n)
+    p <<= 1;
+  return p;
+}
+
+static size_t ptr_hash(const void *p) {
+  size_t h = (size_t)(uintptr_t)p >> 4; /* channel_t entries are array-strided, low bits are dead weight */
+  h *= 1099511628211ULL; /* FNV prime, cheap avalanche */
+  return h;
+}
 
 mcsend_table_t *mcsend_table_new(size_t max_channels, const char *iface, int ttl) {
   mcsend_table_t *t = calloc(1, sizeof *t);
   if (!t)
     return NULL;
-  t->entries = calloc(max_channels, sizeof *t->entries);
+  t->hash_size = next_pow2(max_channels * 2);
+  if (t->hash_size < 4)
+    t->hash_size = 4;
+  t->hash_mask = t->hash_size - 1;
+  t->entries = calloc(t->hash_size, sizeof *t->entries);
   if (!t->entries) {
     free(t);
     return NULL;
   }
-  t->max_channels = max_channels;
   t->iface = iface;
   t->ttl = ttl;
   return t;
@@ -37,7 +57,7 @@ void mcsend_table_free(mcsend_table_t *t) {
   size_t i;
   if (!t)
     return;
-  for (i = 0; i < t->max_channels; i++) {
+  for (i = 0; i < t->hash_size; i++) {
     if (t->entries[i].sock)
       mcast_close(t->entries[i].sock);
   }
@@ -46,13 +66,24 @@ void mcsend_table_free(mcsend_table_t *t) {
 }
 
 void mcsend_ensure(mcsend_table_t *t, channel_t *c, unsigned ff_port) {
-  size_t i;
+  size_t h = ptr_hash(c) & t->hash_mask;
+  size_t start = h;
+  unsigned gen = atomic_load_explicit(&c->generation, memory_order_relaxed);
   unsigned port;
   mcast_t *m;
 
-  for (i = 0; i < t->max_channels; i++) {
-    if (atomic_load_explicit(&t->entries[i].key, memory_order_acquire) == c)
-      return; /* already have a socket for this channel */
+  for (;;) {
+    channel_t *cur = atomic_load_explicit(&t->entries[h].key, memory_order_acquire);
+    if (cur == c) {
+      if (t->entries[h].generation == gen)
+        return;   /* already have a current socket for this channel */
+      break;      /* stale entry from a reaped/reclaimed slot: reopen below, same bucket */
+    }
+    if (cur == NULL)
+      break; /* free bucket: not tracked yet */
+    h = (h + 1) & t->hash_mask;
+    if (h == start)
+      return; /* table full - can't happen, sized 2x the bounded key space */
   }
 
   port = ff_port ? ff_port : c->port;
@@ -60,21 +91,26 @@ void mcsend_ensure(mcsend_table_t *t, channel_t *c, unsigned ff_port) {
   if (!m)
     return; /* mcast_open_send already logged the reason */
 
-  for (i = 0; i < t->max_channels; i++) {
-    if (atomic_load_explicit(&t->entries[i].key, memory_order_relaxed) == NULL) {
-      t->entries[i].sock = m; /* plain write: single writer, not yet published */
-      atomic_store_explicit(&t->entries[i].key, c, memory_order_release);
-      return;
-    }
-  }
-  mcast_close(m); /* table full - shouldn't happen when sized to match channel_table_t */
+  if (t->entries[h].sock)
+    mcast_close(t->entries[h].sock); /* stale socket from a reaped/reclaimed channel */
+  t->entries[h].sock = m; /* plain write: single writer, not yet published */
+  t->entries[h].generation = gen;
+  atomic_store_explicit(&t->entries[h].key, c, memory_order_release);
 }
 
 mcast_t *mcsend_get(mcsend_table_t *t, channel_t *c) {
-  size_t i;
-  for (i = 0; i < t->max_channels; i++) {
-    if (atomic_load_explicit(&t->entries[i].key, memory_order_acquire) == c)
-      return t->entries[i].sock;
+  size_t h = ptr_hash(c) & t->hash_mask;
+  size_t start = h;
+  unsigned gen = atomic_load_explicit(&c->generation, memory_order_relaxed);
+
+  for (;;) {
+    channel_t *cur = atomic_load_explicit(&t->entries[h].key, memory_order_acquire);
+    if (cur == c)
+      return (t->entries[h].generation == gen) ? t->entries[h].sock : NULL;
+    if (cur == NULL)
+      return NULL;
+    h = (h + 1) & t->hash_mask;
+    if (h == start)
+      return NULL;
   }
-  return NULL;
 }

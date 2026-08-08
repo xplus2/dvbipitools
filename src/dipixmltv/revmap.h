@@ -4,11 +4,11 @@
 #ifndef DIPIXMLTV_REVMAP_H
 #define DIPIXMLTV_REVMAP_H
 
-#include "lib/tva/epg_doc.h"
+#include "lib/tva/bcg_doc.h"
 
 typedef struct {
-  char uri[EPG_ID_LEN];
-  char id[EPG_ID_LEN]; /* may contain commas */
+  char uri[BCG_ID_LEN];
+  char id[BCG_ID_LEN]; /* may contain commas */
 } revmap_entry_t;
 
 typedef struct {

@@ -13,8 +13,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "dipitvhead/cas/ecmg_client.h"
-#include "dipitvhead/cas/simulcrypt_msg.h"
+#include "lib/cas/ecmg_client.h"
+#include "lib/cas/simulcrypt_msg.h"
 
 static int find_tlv(const unsigned char *payload, size_t payload_len, unsigned short want_tag, const unsigned char **val_out, unsigned short *len_out) {
   simulcrypt_tlv_reader_t r;
@@ -269,61 +269,53 @@ START_TEST(parse_channel_status_rejects_out_of_range_cw_per_msg) {
 }
 END_TEST
 
-START_TEST(cw_valid_frozen_always_valid) {
-  ck_assert_int_eq(ecmg_cw_valid_calc(ECMG_RESILIENCE_FROZEN, 0, 10, 1000, 0), 1);
+START_TEST(ecm_available_frozen_always_available) {
+  ck_assert_int_eq(ecmg_ecm_available_calc(ECMG_OUTAGE_FROZEN, 0), 1);
+  ck_assert_int_eq(ecmg_ecm_available_calc(ECMG_OUTAGE_FROZEN, 1), 1);
 }
 END_TEST
 
-START_TEST(cw_valid_cycling_always_valid) {
-  ck_assert_int_eq(ecmg_cw_valid_calc(ECMG_RESILIENCE_CYCLING, 0, 10, 1000, 0), 1);
+START_TEST(ecm_available_cycling_always_available) {
+  ck_assert_int_eq(ecmg_ecm_available_calc(ECMG_OUTAGE_CYCLING, 0), 1);
+  ck_assert_int_eq(ecmg_ecm_available_calc(ECMG_OUTAGE_CYCLING, 1), 1);
 }
 END_TEST
 
-START_TEST(cw_valid_unscrambled_connected_is_valid) {
-  ck_assert_int_eq(ecmg_cw_valid_calc(ECMG_RESILIENCE_UNSCRAMBLED, 1, 10, 1000, 0), 1);
+START_TEST(ecm_available_silent_connected_is_available) {
+  ck_assert_int_eq(ecmg_ecm_available_calc(ECMG_OUTAGE_SILENT, 1), 1);
 }
 END_TEST
 
-START_TEST(cw_valid_unscrambled_within_one_cp_is_valid) {
-  ck_assert_int_eq(ecmg_cw_valid_calc(ECMG_RESILIENCE_UNSCRAMBLED, 0, 10, 109, 100), 1);
-}
-END_TEST
-
-START_TEST(cw_valid_unscrambled_past_one_cp_is_invalid) {
-  ck_assert_int_eq(ecmg_cw_valid_calc(ECMG_RESILIENCE_UNSCRAMBLED, 0, 10, 110, 100), 0);
-}
-END_TEST
-
-START_TEST(cw_valid_unscrambled_no_cadence_is_valid) {
-  ck_assert_int_eq(ecmg_cw_valid_calc(ECMG_RESILIENCE_UNSCRAMBLED, 0, 0, 100000, 0), 1);
+START_TEST(ecm_available_silent_disconnected_is_unavailable) {
+  ck_assert_int_eq(ecmg_ecm_available_calc(ECMG_OUTAGE_SILENT, 0), 0);
 }
 END_TEST
 
 START_TEST(target_parity_frozen_ignores_elapsed_time) {
-  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_RESILIENCE_FROZEN, 0, 10, 1000, 0, 5), 1);
-  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_RESILIENCE_FROZEN, 0, 10, 1000, 0, 4), 0);
+  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_OUTAGE_FROZEN, 0, 10, 1000, 0, 5), 1);
+  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_OUTAGE_FROZEN, 0, 10, 1000, 0, 4), 0);
 }
 END_TEST
 
 START_TEST(target_parity_cycling_connected_uses_epoch_directly) {
-  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_RESILIENCE_CYCLING, 1, 10, 100000, 0, 3), 1);
+  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_OUTAGE_CYCLING, 1, 10, 100000, 0, 3), 1);
 }
 END_TEST
 
 START_TEST(target_parity_cycling_disconnected_flips_after_one_cp) {
   /* epoch=3 (odd/1), one whole CP elapsed since publish -> flips to even/0 */
-  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_RESILIENCE_CYCLING, 0, 10, 110, 100, 3), 0);
+  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_OUTAGE_CYCLING, 0, 10, 110, 100, 3), 0);
 }
 END_TEST
 
 START_TEST(target_parity_cycling_disconnected_flips_back_after_two_cp) {
   /* two whole CPs elapsed -> back to the original parity */
-  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_RESILIENCE_CYCLING, 0, 10, 120, 100, 3), 1);
+  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_OUTAGE_CYCLING, 0, 10, 120, 100, 3), 1);
 }
 END_TEST
 
 START_TEST(target_parity_cycling_disconnected_within_cp_unchanged) {
-  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_RESILIENCE_CYCLING, 0, 10, 105, 100, 3), 1);
+  ck_assert_int_eq(ecmg_target_parity_calc(ECMG_OUTAGE_CYCLING, 0, 10, 105, 100, 3), 1);
 }
 END_TEST
 
@@ -497,7 +489,7 @@ START_TEST(ecmg_client_completes_real_handshake_and_gets_cw) {
   cfg.ecm_id = 1;
   cfg.cp_duration_ms = 1000;
   cfg.algo = SCRAMBLE_ALGO_CSA2;
-  cfg.resilience = ECMG_RESILIENCE_FROZEN;
+  cfg.outage_mode = ECMG_OUTAGE_FROZEN;
 
   c = ecmg_client_start(&cfg, &counter, 5, 1);
   ck_assert_ptr_nonnull(c);
@@ -530,7 +522,7 @@ START_TEST(ecmg_client_falls_back_to_version_min_on_rejection) {
   cfg.ecm_id = 1;
   cfg.cp_duration_ms = 1000;
   cfg.algo = SCRAMBLE_ALGO_CSA2;
-  cfg.resilience = ECMG_RESILIENCE_FROZEN;
+  cfg.outage_mode = ECMG_OUTAGE_FROZEN;
 
   c = ecmg_client_start(&cfg, &counter, 5, 1);
   ck_assert_ptr_nonnull(c);
@@ -562,7 +554,7 @@ START_TEST(ecmg_client_reconnects_after_dropped_connection) {
   cfg.ecm_id = 1;
   cfg.cp_duration_ms = 1000;
   cfg.algo = SCRAMBLE_ALGO_CSA2;
-  cfg.resilience = ECMG_RESILIENCE_FROZEN;
+  cfg.outage_mode = ECMG_OUTAGE_FROZEN;
 
   c = ecmg_client_start(&cfg, &counter, 5, 1);
   ck_assert_ptr_nonnull(c);
@@ -596,12 +588,10 @@ static Suite *ecmg_client_suite(void) {
   tcase_add_test(tc, parse_channel_status_full_message);
   tcase_add_test(tc, parse_channel_status_missing_cw_per_msg_fails);
   tcase_add_test(tc, parse_channel_status_rejects_out_of_range_cw_per_msg);
-  tcase_add_test(tc, cw_valid_frozen_always_valid);
-  tcase_add_test(tc, cw_valid_cycling_always_valid);
-  tcase_add_test(tc, cw_valid_unscrambled_connected_is_valid);
-  tcase_add_test(tc, cw_valid_unscrambled_within_one_cp_is_valid);
-  tcase_add_test(tc, cw_valid_unscrambled_past_one_cp_is_invalid);
-  tcase_add_test(tc, cw_valid_unscrambled_no_cadence_is_valid);
+  tcase_add_test(tc, ecm_available_frozen_always_available);
+  tcase_add_test(tc, ecm_available_cycling_always_available);
+  tcase_add_test(tc, ecm_available_silent_connected_is_available);
+  tcase_add_test(tc, ecm_available_silent_disconnected_is_unavailable);
   tcase_add_test(tc, target_parity_frozen_ignores_elapsed_time);
   tcase_add_test(tc, target_parity_cycling_connected_uses_epoch_directly);
   tcase_add_test(tc, target_parity_cycling_disconnected_flips_after_one_cp);

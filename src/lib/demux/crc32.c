@@ -31,8 +31,8 @@ static void crc32_table_init(void) {
 }
 
 /* MPEG-2 CRC32 update from an arbitrary running state, table-driven.
- * used both as the portable fallback and as the tail path after a chunked
- * accelerated backend has consumed the bulk of the buffer. */
+   used both as portable fallback and as tail path after a chunked
+   accelerated backend has consumed bulk of buffer. */
 static uint32_t crc32_mpeg_table_update(uint32_t crc, const unsigned char *data, size_t len) {
   size_t i;
   for (i = 0; i < len; i++)
@@ -40,17 +40,16 @@ static uint32_t crc32_mpeg_table_update(uint32_t crc, const unsigned char *data,
   return crc;
 }
 
-/* not static: cross-checked directly against the accelerated backends in
- * tests/unit/lib/demux/test_crc32.c. not part of the public API (crc32.h). */
+/* not static: cross-checked directly against accelerated backends in
+ * tests/unit/lib/demux/test_crc32.c. not part of public API (crc32.h). */
 uint32_t crc32_mpeg_generic(const unsigned char *data, size_t len) {
   return crc32_mpeg_table_update(0xFFFFFFFFu, data, len);
 }
 
 #ifdef CRC32_MPEG_HAVE_X86
-/* K = x^64 mod G, MU = floor(x^64 / G), G = CRC-32/MPEG generator
- * (0x104C11DB7, degree 32). Barrett-style reduction, derived and
- * cross-checked against the bit-serial algorithm over 200000 randomized
- * buffers plus the standard "123456789" check vector before use. */
+/* K = x^64 mod G, MU = floor(x^64 / G), G = CRC-32/MPEG generator (0x104C11DB7, degree 32).
+   Barrett-style reduction, derived and cross-checked against bit-serial algorithm over 200000 randomized
+   buffers plus standard "123456789" check vector before use. */
 #define CRC32_MPEG_K  0x490d678dULL
 #define CRC32_MPEG_MU 0x104d101dfULL
 #define CRC32_MPEG_G  0x104C11DB7ULL
@@ -70,8 +69,7 @@ static inline uint32_t crc32_mpeg_barrett(uint64_t t) {
   return (uint32_t)((t ^ prod) & 0xFFFFFFFFu);
 }
 
-/* not static: cross-checked directly in tests/unit/lib/demux/test_crc32.c.
- * not part of the public API (crc32.h). */
+/* not static: cross-checked directly in tests/unit/lib/demux/test_crc32.c. not public. */
 __attribute__((target("sse4.1,pclmul")))
 uint32_t crc32_mpeg_pclmul(const unsigned char *data, size_t len) {
   uint32_t state = 0xFFFFFFFFu;

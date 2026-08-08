@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "lib/demux/crc32.h"
+#include "lib/demux/tspack.h"
 #include "ts.h"
 
 struct ts_filter {
@@ -148,7 +149,7 @@ static int emit_section(unsigned char *out, unsigned pid, unsigned char cc, cons
   return 1;
 }
 
-ts_filter_t *ts_filter_new(int audio_all, unsigned audio_track, int strip_subs) {
+ts_filter_t *ts_filter_new(int audio_all, unsigned audio_track, int strip_subs, unsigned preferred_pmt_pid) {
   ts_filter_t *f = calloc(1, sizeof *f);
   if (!f)
     return NULL;
@@ -157,6 +158,8 @@ ts_filter_t *ts_filter_new(int audio_all, unsigned audio_track, int strip_subs) 
     free(f);
     return NULL;
   }
+  if (preferred_pmt_pid)
+    psi_select_pmt_pid(f->psi, preferred_pmt_pid);
   f->audio_all = audio_all;
   f->audio_track = audio_track;
   f->strip_subs = strip_subs;
@@ -177,7 +180,7 @@ int ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out
   psi_feed(f->psi, in);
   if (in[0] != 0x47)
     return 0;
-  pid = (((unsigned)in[1] & 0x1F) << 8) | in[2];
+  pid = tspack_pid(in);
   pusi = in[1] & 0x40;
   if (!f->audio_all && psi_have_pmt(f->psi) && (int)f->audio_track > psi_audio_count(f->psi))
     f->bad_track = 1;

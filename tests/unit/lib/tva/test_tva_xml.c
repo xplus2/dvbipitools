@@ -9,21 +9,21 @@
 #include "lib/tva/tva_xml.h"
 
 START_TEST(tva_xml_write_read_round_trips) {
-  epg_doc_t doc, doc2;
-  epg_channel_t *c;
-  epg_programme_t *pr;
+  bcg_doc_t doc, doc2;
+  bcg_channel_t *c;
+  bcg_programme_t *pr;
   FILE *f;
 
-  epg_doc_init(&doc);
-  c = epg_add_channel(&doc);
+  bcg_doc_init(&doc);
+  c = bcg_add_channel(&doc);
   snprintf(c->id, sizeof c->id, "bbc1");
   snprintf(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
   c->tsid = 1;
   c->onid = 2;
   c->sid = 101;
-  epg_channel_add_name(c, "BBC One");
+  bcg_channel_add_name(c, "BBC One");
 
-  pr = epg_add_programme(&doc);
+  pr = bcg_add_programme(&doc);
   snprintf(pr->channel_id, sizeof pr->channel_id, "bbc1");
   snprintf(pr->start, sizeof pr->start, "2024-03-15T12:30:45Z");
   snprintf(pr->stop, sizeof pr->stop, "2024-03-15T13:00:00Z");
@@ -36,7 +36,7 @@ START_TEST(tva_xml_write_read_round_trips) {
   tva_xml_write(f, &doc);
   rewind(f);
 
-  epg_doc_init(&doc2);
+  bcg_doc_init(&doc2);
   ck_assert_int_eq(tva_xml_read(f, &doc2), 0);
   fclose(f);
 
@@ -57,21 +57,21 @@ START_TEST(tva_xml_write_read_round_trips) {
   ck_assert_str_eq(doc2.programmes[0].desc, "Today's \"top\" stories");
   ck_assert_str_eq(doc2.programmes[0].category, "News");
 
-  epg_doc_free(&doc);
-  epg_doc_free(&doc2);
+  bcg_doc_free(&doc);
+  bcg_doc_free(&doc2);
 }
 END_TEST
 
 START_TEST(tva_xml_write_drops_channels_without_uri) {
-  epg_doc_t doc, doc2;
-  epg_channel_t *c;
-  epg_programme_t *pr;
+  bcg_doc_t doc, doc2;
+  bcg_channel_t *c;
+  bcg_programme_t *pr;
   FILE *f;
 
-  epg_doc_init(&doc);
-  c = epg_add_channel(&doc); /* no uri set */
+  bcg_doc_init(&doc);
+  c = bcg_add_channel(&doc); /* no uri set */
   snprintf(c->id, sizeof c->id, "noturi");
-  pr = epg_add_programme(&doc);
+  pr = bcg_add_programme(&doc);
   snprintf(pr->channel_id, sizeof pr->channel_id, "noturi");
   snprintf(pr->start, sizeof pr->start, "2024-03-15T12:30:45Z");
   snprintf(pr->title, sizeof pr->title, "Should be dropped");
@@ -80,15 +80,15 @@ START_TEST(tva_xml_write_drops_channels_without_uri) {
   tva_xml_write(f, &doc);
   rewind(f);
 
-  epg_doc_init(&doc2);
+  bcg_doc_init(&doc2);
   ck_assert_int_eq(tva_xml_read(f, &doc2), 0);
   fclose(f);
 
   ck_assert_int_eq(doc2.channel_count, 0);
   ck_assert_int_eq(doc2.programme_count, 0);
 
-  epg_doc_free(&doc);
-  epg_doc_free(&doc2);
+  bcg_doc_free(&doc);
+  bcg_doc_free(&doc2);
 }
 END_TEST
 

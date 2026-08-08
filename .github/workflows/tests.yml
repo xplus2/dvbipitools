@@ -28,7 +28,11 @@ jobs:
     - name: dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake pkg-config libssl-dev libpcap-dev check
+        sudo apt-get install -y build-essential cmake pkg-config libssl-dev check ffmpeg
+    - name: install tsduck
+      run: |
+        curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu24_amd64.deb
+        sudo apt-get install -y ./tsduck.deb
     - name: configure
       run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DDVBIPITOOLS_SANITIZE=${{ matrix.sanitize }} -DDVBIPITOOLS_TSAN=${{ matrix.tsan }}
     - name: build
@@ -64,7 +68,7 @@ jobs:
     - name: dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake pkg-config libssl-dev libpcap-dev afl++
+        sudo apt-get install -y build-essential cmake pkg-config libssl-dev afl++
     - name: configure (afl-clang-fast)
       run: cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_FUZZING=ON -DCMAKE_C_COMPILER=afl-clang-fast
     - name: build harnesses

@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "dipitvhead/cas/simulcrypt_msg.h"
+#include "lib/cas/simulcrypt_msg.h"
 
 int main(int argc, char **argv) {
   FILE *f;

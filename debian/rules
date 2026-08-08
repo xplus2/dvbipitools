@@ -8,8 +8,7 @@ BUILDDIR := obj-$(DEB_HOST_GNU_TYPE)
 	dh $@ --buildsystem=cmake
 
 override_dh_auto_configure:
-	dh_auto_configure -- -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON -DCMAKE_LIBRARY_ARCHITECTURE=$(DEB_HOST_MULTIARCH) \
-		-DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libssl.a
+	dh_auto_configure -- -DCMAKE_BUILD_TYPE=Release -DCMAKE_LIBRARY_ARCHITECTURE=$(DEB_HOST_MULTIARCH)
 
 override_dh_auto_install:
 	install -D -m 0755 $(BUILDDIR)/src/dipirec/dipirec debian/dvbipitools/usr/bin/dipirec
@@ -18,8 +17,9 @@ override_dh_auto_install:
 	install -D -m 0755 $(BUILDDIR)/src/dipisds/dipisds debian/dvbipitools/usr/bin/dipisds
 	install -D -m 0755 $(BUILDDIR)/src/dipixmltv/dipixmltv debian/dvbipitools/usr/bin/dipixmltv
 	install -D -m 0755 $(BUILDDIR)/src/dipibim/dipibim debian/dvbipitools/usr/bin/dipibim
-	install -D -m 0755 $(BUILDDIR)/src/dipiepg/dipiepg debian/dvbipitools/usr/bin/dipiepg
+	install -D -m 0755 $(BUILDDIR)/src/dipibcg/dipibcg debian/dvbipitools/usr/bin/dipibcg
 	install -D -m 0755 $(BUILDDIR)/src/dipitvhead/dipitvhead debian/dvbipitools/usr/bin/dipitvhead
+	install -D -m 0755 $(BUILDDIR)/src/dipimetrics/dipimetrics debian/dvbipitools/usr/bin/dipimetrics
 	install -D -m 0755 $(BUILDDIR)/src/dipifccret/dipifccret debian/dvbipitools/usr/bin/dipifccret
 	install -D -m 0755 $(BUILDDIR)/src/dipicam378/dipicam378 debian/dvbipitools/usr/bin/dipicam378
 	install -D -m 0755 $(BUILDDIR)/src/dipidescramble/dipidescramble debian/dvbipitools/usr/bin/dipidescramble

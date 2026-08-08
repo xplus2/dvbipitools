@@ -6,11 +6,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/demux/psi_section_asm.h"
+#include "lib/demux/tspack.h"
 #include "lib/log.h"
 
 #include "crypto.h"
 #include "emmcache.h"
-#include "secasm.h"
 #include "version.h"
 
 #define EMMCACHE_MAX_SERVICES 32 /* matches device.c's DEVICE_MAX_SERVICES */
@@ -18,7 +19,7 @@
 #define EMM_G_PAYLOAD_LEN (4 + CRYPTO_EMM_G_LEN) /* mirrors device.c's own classification */
 
 typedef struct {
-  unsigned char raw[SECASM_BUF_LEN];
+  unsigned char raw[PSI_SECTION_ASM_BUF_LEN];
   size_t len;
 } raw_sec_t;
 
@@ -52,7 +53,7 @@ static emm_g_slot_t *slot_for(struct emmcache *c, unsigned service_id) {
 int emmcache_feed(emmcache_t *c, device_state_t *d, const unsigned char *emm, size_t emm_len) {
   size_t payload_len;
 
-  if (emm_len < 3 || emm_len > SECASM_BUF_LEN)
+  if (emm_len < 3 || emm_len > PSI_SECTION_ASM_BUF_LEN)
     return 0;
   if (!device_on_emm(d, emm, emm_len))
     return 0;
@@ -61,8 +62,10 @@ int emmcache_feed(emmcache_t *c, device_state_t *d, const unsigned char *emm, si
   if (payload_len == EMM_G_PAYLOAD_LEN) {
     unsigned service_id = ((unsigned)emm[3] << 8) | emm[4];
     emm_g_slot_t *sl = slot_for(c, service_id);
-    if (!sl)
+    if (!sl) {
+      log_line(TOOL_NAME ": emm cache full (%d services), dropping EMM-G for service_id 0x%04x", EMMCACHE_MAX_SERVICES, service_id);
       return 0;
+    }
     if (sl->sec.len == emm_len && memcmp(sl->sec.raw, emm, emm_len) == 0)
       return 0; /* unchanged repeat */
     memcpy(sl->sec.raw, emm, emm_len);
@@ -123,8 +126,7 @@ int emmcache_load(emmcache_t *c, device_state_t *d, const char *path) {
 
   off = 0;
   while (off + 3 <= len) {
-    size_t sl = (((size_t)buf[off + 1] & 0x0F) << 8) | buf[off + 2];
-    size_t total = sl + 3;
+    size_t total = tspack_length12(buf + off + 1) + 3;
     if (off + total > len)
       break;
     emmcache_feed(c, d, buf + off, total);
@@ -135,7 +137,7 @@ int emmcache_load(emmcache_t *c, device_state_t *d, const char *path) {
 }
 
 int emmcache_save(const emmcache_t *c, const char *path) {
-  unsigned char buf[(EMMCACHE_MAX_SERVICES + 1) * SECASM_BUF_LEN];
+  unsigned char buf[(EMMCACHE_MAX_SERVICES + 1) * PSI_SECTION_ASM_BUF_LEN];
   size_t off = 0, i;
   FILE *f;
 

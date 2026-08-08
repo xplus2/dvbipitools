@@ -12,7 +12,7 @@
 void format_init(FILE *f, out_fmt_t fmt, const char *invocation, const char *provider);
 
 /* station entry. tsid/onid/sid are the DVB triplet (transport_stream_id, original_network_id, service_id).
- * family/group/port/rtp are the same address parsed into uri, needed separately for OUT_XML */
+   family/group/port/rtp are the same address parsed into uri, needed separately for OUT_XML */
 void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri, int family, const char *group, unsigned port, int rtp, unsigned tsid, unsigned onid, unsigned sid);
 
 /* playlist footer */

@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include <sys/types.h>
 
+#include "netconnect.h"
+
 typedef struct mcast mcast_t;
 
 /* join group:port (ASM) on iface, NULL = kernel default. recv_timeout_ms bounds mcast_recv()'s wait */
@@ -15,8 +17,8 @@ mcast_t *mcast_open(int family, const char *group, unsigned port, const char *if
 /* join group:port, filtered to source_addr only (SSM, RFC 4607); same family for group and source_addr */
 mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char *source_addr, const char *iface, int recv_timeout_ms);
 
-/* one datagram. >0 len, 0 timeout, -1 error */
-ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap);
+/* one datagram. >0 len, 0 timeout, -1 error. reason_out: nullable, set only on -1 */
+ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_out);
 
 /* underlying fd, for poll()/select() alongside other sockets */
 int mcast_fd(const mcast_t *m);

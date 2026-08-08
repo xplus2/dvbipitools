@@ -66,6 +66,56 @@ START_TEST(mcsend_ensure_different_channels_get_different_sockets) {
 }
 END_TEST
 
+START_TEST(mcsend_many_entries_all_findable) {
+#define MCSEND_MANY_N 50
+  mcsend_table_t *t = mcsend_table_new(MCSEND_MANY_N, NULL, 1);
+  channel_t chans[MCSEND_MANY_N];
+  int i;
+
+  for (i = 0; i < MCSEND_MANY_N; i++) {
+    memset(&chans[i], 0, sizeof chans[i]);
+    chans[i].family = AF_INET;
+    snprintf(chans[i].group, sizeof chans[i].group, "239.5.%d.1", i);
+    chans[i].port = (unsigned)(6000 + i);
+    mcsend_ensure(t, &chans[i], 0);
+  }
+  for (i = 0; i < MCSEND_MANY_N; i++) {
+    mcast_t *m = mcsend_get(t, &chans[i]);
+    int j;
+    ck_assert_ptr_nonnull(m);
+    for (j = 0; j < i; j++)
+      ck_assert_ptr_ne(m, mcsend_get(t, &chans[j]));
+  }
+  mcsend_table_free(t);
+#undef MCSEND_MANY_N
+}
+END_TEST
+
+START_TEST(mcsend_stale_generation_reopens_socket) {
+  mcsend_table_t *t = mcsend_table_new(4, NULL, 1);
+  channel_t c;
+  mcast_t *m1, *m2;
+  memset(&c, 0, sizeof c);
+  c.family = AF_INET;
+  snprintf(c.group, sizeof c.group, "239.1.1.5");
+  c.port = 5005;
+
+  mcsend_ensure(t, &c, 0);
+  m1 = mcsend_get(t, &c);
+  ck_assert_ptr_nonnull(m1);
+
+  c.generation++; /* simulates channel.c reclaiming this slot for a new channel */
+  ck_assert_ptr_null(mcsend_get(t, &c)); /* old socket must not leak through */
+
+  mcsend_ensure(t, &c, 0);
+  m2 = mcsend_get(t, &c);
+  ck_assert_ptr_nonnull(m2);
+  ck_assert_ptr_ne(m1, m2);
+
+  mcsend_table_free(t);
+}
+END_TEST
+
 /* race test: writer publish vs reader lookup, TSan-checked */
 
 #define MCSEND_RACE_READERS 4
@@ -124,6 +174,8 @@ static Suite *mcsend_suite(void) {
   tcase_add_test(tc, mcsend_ensure_then_get_returns_socket);
   tcase_add_test(tc, mcsend_ensure_is_idempotent);
   tcase_add_test(tc, mcsend_ensure_different_channels_get_different_sockets);
+  tcase_add_test(tc, mcsend_many_entries_all_findable);
+  tcase_add_test(tc, mcsend_stale_generation_reopens_socket);
   tcase_add_test(tc, mcsend_publish_race_no_torn_pointer);
   suite_add_tcase(s, tc);
   return s;

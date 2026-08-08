@@ -7,13 +7,17 @@ add_executable(dipiscan
     args.c
     format.c
     scan.c
+    ../lib/playlist_out.c
     ../lib/log.c
+    ../lib/argutil.c
     ../lib/signal.c
     ../lib/sds_xml.c
     ../lib/xml_util.c
     ../lib/net/multicast.c
+    ../lib/net/netconnect.c
     ../lib/net/udpxy.c
     ../lib/demux/rtp.c
     ../lib/demux/crc32.c
     ../lib/demux/psi.c
+    ../lib/demux/psi_section_asm.c
     ../lib/demux/tspack.c)

@@ -8,14 +8,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dipitvhead/cas/simulcrypt_msg.h"
+#include "lib/cas/simulcrypt_msg.h"
 #include "lib/bim/accessunit.h"
 #include "lib/bim/bitwriter.h"
 #include "lib/demux/rtcp.h"
 #include "lib/mux/psi_build.h"
 #include "lib/mux/rtcp_build.h"
 #include "lib/sds_xml.h"
-#include "lib/tva/epg_doc.h"
+#include "lib/tva/bcg_doc.h"
 
 static int write_file(const char *dir, const char *name, const unsigned char *data, size_t len) {
   char path[512];
@@ -51,9 +51,9 @@ static void gen_psi(const char *dir) {
 }
 
 static void gen_bim(const char *dir) {
-  epg_doc_t doc;
-  epg_channel_t *c;
-  epg_programme_t *pr;
+  bcg_doc_t doc;
+  bcg_channel_t *c;
+  bcg_programme_t *pr;
   bitwriter_t bw;
   strrepo_writer_t sw;
   const unsigned char *bits, *strs;
@@ -62,17 +62,17 @@ static void gen_bim(const char *dir) {
   size_t cap, off;
   int nfuu = 0;
 
-  epg_doc_init(&doc);
-  c = epg_add_channel(&doc);
-  snprintf(c->id, sizeof c->id, "orf1");
+  bcg_doc_init(&doc);
+  c = bcg_add_channel(&doc);
+  snprintf(c->id, sizeof c->id, "channel1");
   snprintf(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
   c->onid = 2;
   c->tsid = 1;
   c->sid = 101;
-  epg_channel_add_name(c, "ORFeins");
+  bcg_channel_add_name(c, "Channel One");
 
-  pr = epg_add_programme(&doc);
-  snprintf(pr->channel_id, sizeof pr->channel_id, "orf1");
+  pr = bcg_add_programme(&doc);
+  snprintf(pr->channel_id, sizeof pr->channel_id, "channel1");
   snprintf(pr->start, sizeof pr->start, "2020-12-15T12:00:00Z");
   snprintf(pr->stop, sizeof pr->stop, "2020-12-15T12:30:00Z");
   snprintf(pr->title, sizeof pr->title, "News");
@@ -82,7 +82,7 @@ static void gen_bim(const char *dir) {
   if (accessunit_encode(&doc, &bw, &sw, &nfuu)) {
     strrepo_writer_free(&sw);
     bitwriter_free(&bw);
-    epg_doc_free(&doc);
+    bcg_doc_free(&doc);
     return;
   }
 
@@ -105,7 +105,7 @@ static void gen_bim(const char *dir) {
 
   strrepo_writer_free(&sw);
   bitwriter_free(&bw);
-  epg_doc_free(&doc);
+  bcg_doc_free(&doc);
 }
 
 static void gen_sds(const char *dir) {
@@ -114,7 +114,7 @@ static void gen_sds(const char *dir) {
   size_t n;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.name, sizeof svc.name, "ORF 1 HD");
+  snprintf(svc.name, sizeof svc.name, "Channel One HD");
   snprintf(svc.address, sizeof svc.address, "239.1.1.1");
   svc.family = 2; /* AF_INET */
   svc.port = 5000;

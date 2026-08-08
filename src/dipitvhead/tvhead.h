@@ -4,8 +4,10 @@
 #ifndef DIPITVHEAD_TVHEAD_H
 #define DIPITVHEAD_TVHEAD_H
 
+#include "lib/metrics/export.h"
+
 #include "args.h"
 
-int tvhead_run(const config_t *cfg);
+int tvhead_run(const config_t *cfg, metrics_exporter_t *mx);
 
 #endif

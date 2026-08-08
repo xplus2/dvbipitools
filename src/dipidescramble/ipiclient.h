@@ -13,7 +13,7 @@ ipiclient_t *ipiclient_new(const char *uri, int insecure);
 void ipiclient_free(ipiclient_t *c);
 
 /* one-shot fetch (ETag conditional), feeds returned units through emmcache_feed().
-   Not a poll loop. 1 if the cache file is now stale (caller should emmcache_save()), else 0 */
+   No poll loop. 1 if cache is now stale (caller should emmcache_save()), else 0 */
 int ipiclient_poll(ipiclient_t *c, emmcache_t *cache, device_state_t *d);
 
 #endif

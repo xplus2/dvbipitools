@@ -4,11 +4,11 @@
 #ifndef LIB_TVA_MAPPING_H
 #define LIB_TVA_MAPPING_H
 
-#include "epg_doc.h"
+#include "bcg_doc.h"
 
 typedef struct {
-  char id[EPG_ID_LEN]; /* may contain commas */
-  char uri[EPG_ID_LEN]; /* key, not the triplet */
+  char id[BCG_ID_LEN]; /* may contain commas */
+  char uri[BCG_ID_LEN]; /* key, not the triplet */
   unsigned tsid, onid, sid; /* best-effort, never a key */
 } mapping_entry_t;
 

@@ -16,6 +16,7 @@ typedef struct {
   const char *provider; /* -P, DomainName for -f xml; required if format==OUT_XML */
   const char *out_path; /* NULL/"-" = stdout */
   int timeout_ms;       /* wall-clock budget per candidate address */
+  int mpts;             /* -M: report every PAT-listed program at each address, not just the first */
   int udpxy;            /* nonzero: use udpxy instead of direct join */
   char udpxy_host[256];
   unsigned udpxy_port;

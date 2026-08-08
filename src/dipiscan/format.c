@@ -2,37 +2,16 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <string.h>
-#include <time.h>
 
 #include "format.h"
+#include "lib/playlist_out.h"
 #include "lib/sds_xml.h"
 #include "lib/xml_util.h"
 
-static void stamp(char *buf, size_t n) {
-  time_t now = time(NULL);
-  struct tm tm;
-  gmtime_r(&now, &tm);
-  strftime(buf, n, "%Y-%m-%d %H:%M", &tm);
-}
-
 void format_init(FILE *f, out_fmt_t fmt, const char *invocation, const char *provider) {
-  char ts[24];
-  stamp(ts, sizeof ts);
-  switch (fmt) {
-    case OUT_M3U:
-      fprintf(f, "#EXTM3U\n# %s UTC\n# %s\n\n", ts, invocation);
-      break;
-    case OUT_XSPF:
-      fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<playlist version=\"1\" xmlns=\"http://xspf.org/ns/0/\">\n", f);
-      fprintf(f, "  <title>dipiscan %s UTC</title>\n", ts);
-      break;
-    case OUT_XML:
-      sds_broadcast_open(f, provider, 1);
-      break;
-    case OUT_CSV:
-    case OUT_NULL:
-      break;
-  }
+  playlist_out_init(f, (playlist_out_fmt_t)fmt, invocation, "dipiscan ");
+  if (fmt == OUT_XML)
+    sds_broadcast_open(f, provider, 1);
 }
 
 void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri, int family, const char *group, unsigned port, int rtp, unsigned tsid, unsigned onid, unsigned sid) {
@@ -76,11 +55,7 @@ void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri, int 
 }
 
 void format_close(FILE *f, out_fmt_t fmt) {
-  switch (fmt) {
-    case OUT_M3U:       fputs("\n#EXT-X-ENDLIST\n", f); break;
-    case OUT_XSPF:      fputs("</playlist>\n", f);      break;
-    case OUT_XML:       sds_broadcast_close(f);          break;
-    case OUT_CSV:
-    case OUT_NULL:      break;
-  }
+  playlist_out_close(f, (playlist_out_fmt_t)fmt);
+  if (fmt == OUT_XML)
+    sds_broadcast_close(f);
 }

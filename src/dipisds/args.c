@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/argutil.h"
+#include "lib/log.h"
+
 #include "args.h"
 #include "version.h"
 
@@ -15,113 +18,32 @@ static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 static void argerr(const char *fmt, ...) {
   va_list ap;
-  fputs(TOOL_NAME ": ", stderr);
   va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
+  argutil_verr(TOOL_NAME, fmt, ap);
   va_end(ap);
-  fputc('\n', stderr);
-}
-
-static int port_parse(const char *p, unsigned *out) {
-  char *end;
-  unsigned long v;
-  if (*p == '\0')
-    return -1;
-  v = strtoul(p, &end, 10);
-  if (*end != '\0' || v == 0 || v > 65535)
-    return -1;
-  *out = (unsigned)v;
-  return 0;
 }
 
 static int mcast_parse(const char *s, config_t *cfg) {
-  char addr[64];
-
-  if (*s == '[') {
-    const char *close = strchr(s, ']');
-    size_t len;
-    if (!close)
-      return -1;
-    len = (size_t)(close - (s + 1));
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, s + 1, len);
-    addr[len] = '\0';
-    if (close[1] != ':' || port_parse(close + 2, &cfg->mcast_port))
-      return -1;
-    cfg->family = AF_INET6;
-  } else {
-    const char *colon = strrchr(s, ':');
-    size_t len;
-    if (!colon)
-      return -1;
-    len = (size_t)(colon - s);
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, s, len);
-    addr[len] = '\0';
-    if (port_parse(colon + 1, &cfg->mcast_port))
-      return -1;
-    cfg->family = AF_INET;
-  }
+  if (argutil_addrport_parse(s, &cfg->family, cfg->mcast_group, sizeof cfg->mcast_group, &cfg->mcast_port))
+    return -1;
 
   if (cfg->family == AF_INET) {
     struct in_addr a;
-    if (inet_pton(AF_INET, addr, &a) != 1)
-      return -1;
+    inet_pton(AF_INET, cfg->mcast_group, &a);
     if ((ntohl(a.s_addr) >> 28) != 0xE)
       return -1;
   } else {
     struct in6_addr a6;
-    if (inet_pton(AF_INET6, addr, &a6) != 1)
-      return -1;
+    inet_pton(AF_INET6, cfg->mcast_group, &a6);
     if (a6.s6_addr[0] != 0xFF)
       return -1;
   }
-
-  strncpy(cfg->mcast_group, addr, sizeof cfg->mcast_group - 1);
-  cfg->mcast_group[sizeof cfg->mcast_group - 1] = '\0';
   return 0;
 }
 
 static int ret_addr_parse(const char *s, char *addr_out, size_t addr_cap, unsigned *port_out) {
-  char addr[64];
-
-  if (*s == '[') {
-    const char *close = strchr(s, ']');
-    struct in6_addr a6;
-    size_t len;
-    if (!close)
-      return -1;
-    len = (size_t)(close - (s + 1));
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, s + 1, len);
-    addr[len] = '\0';
-    if (close[1] != ':' || port_parse(close + 2, port_out))
-      return -1;
-    if (inet_pton(AF_INET6, addr, &a6) != 1)
-      return -1;
-  } else {
-    const char *colon = strrchr(s, ':');
-    struct in_addr a4;
-    size_t len;
-    if (!colon)
-      return -1;
-    len = (size_t)(colon - s);
-    if (len == 0 || len >= sizeof addr)
-      return -1;
-    memcpy(addr, s, len);
-    addr[len] = '\0';
-    if (port_parse(colon + 1, port_out))
-      return -1;
-    if (inet_pton(AF_INET, addr, &a4) != 1)
-      return -1;
-  }
-  if (strlen(addr) >= addr_cap)
-    return -1;
-  strcpy(addr_out, addr);
-  return 0;
+  int family;
+  return argutil_addrport_parse(s, &family, addr_out, addr_cap, port_out);
 }
 
 void mcast_describe(const config_t *cfg, char *buf, size_t n) {
@@ -129,21 +51,6 @@ void mcast_describe(const config_t *cfg, char *buf, size_t n) {
     snprintf(buf, n, "[%s]:%u", cfg->mcast_group, cfg->mcast_port);
   else
     snprintf(buf, n, "%s:%u", cfg->mcast_group, cfg->mcast_port);
-}
-
-typedef struct {
-  const char *name;
-  int value;
-} enum_map_t;
-
-static int map_lookup(const enum_map_t *m, size_t n, const char *s, int *out) {
-  size_t i;
-  for (i = 0; i < n; i++)
-    if (strcmp(s, m[i].name) == 0) {
-      *out = m[i].value;
-      return 0;
-    }
-  return -1;
 }
 
 static int has_suffix(const char *s, const char *sfx) {
@@ -158,32 +65,35 @@ static void print_help(void) {
       "DVBSTP / SD&S (ETSI TS 102 034) service discovery: announce a service list on\n"
       "multicast, or listen for one and write a playlist\n\n"
       "options:\n"
-      "  -a, --announce         headend mode: read -i, transmit on -m\n"
-      "  -l, --listen           client mode: receive on -m, write -o\n"
-      "  -i, --input <path>     announce: .csv/.m3u/.xspf playlist or raw SD&S .xml\n"
-      "  -p, --provider <name>  announce: DomainName (required unless -i is .xml)\n"
-      "  -O, --offering <name>  announce: display name (required unless -i is .xml)\n"
-      "  -L, --lang <code>      announce: ISO 639-2 for the display name (default deu)\n"
-      "  -m, --mcast <g>:<p>    multicast group:port ([addr6]:port for v6)\n"
-      "  -I, --iface <iface>    multicast interface\n"
-      "  -t, --interval <s>     announce: repeat interval (default 5)\n"
-      "  -t, --timeout <s>      listen: stop after N seconds (default 35)\n"
-      "  -o, --output <path>    listen: output path, - for stdout (default)\n"
-      "  -f, --format <fmt>     listen: m3u|csv|xspf|xml|null (default from -o suffix)\n"
-      "  -v, --verbose          periodic stats on stderr\n"
-      "      --color <when>     auto|always|never (default auto)\n"
-      "      --ret-addr <a>:<p> announce: advertise a dipifccret RET server (its -l value);\n"
-      "                         opt-in, adds RTPRetransmission to every announced service\n"
-      "      --ret-rtx-time <ms> announce: RET rtx-time, matches dipifccret -B (default 2000)\n"
-      "      --ret-rtx-pt <n>   announce: RET RTP payload type, matches dipifccret -R (default 99)\n"
-      "      --ret-mc           announce: also advertise multicast RET (dipifccret without --no-mc-ret)\n"
-      "      --ret-mc-port <p>  announce: multicast RET port, matches dipifccret -F (default: each\n"
-      "                         service's own port)\n"
-      "      --fcc-addr <a>:<p> announce: advertise a dipifccret FCC server (its -l value);\n"
-      "                         opt-in, adds ServerBasedEnhancementServiceInfo to every service\n"
-      "      --fcc-rtx-time <ms> announce: FCC Retransmission_session rtx-time (default 2000)\n"
-      "      --fcc-rtx-pt <n>   announce: FCC RTP payload type, matches dipifccret -R (default 99)\n"
-      "  -h, --help             this help\n\n"
+      "  -a, --announce          headend mode: read -i, transmit on -m\n"
+      "  -l, --listen            client mode: receive on -m, write -o\n"
+      "  -i, --input <path>      a: .csv/.m3u/.xspf playlist or raw SD&S .xml\n"
+      "  -p, --provider <name>   a: DomainName (required unless -i is .xml)\n"
+      "  -O, --offering <name>   a: display name (required unless -i is .xml)\n"
+      "  -L, --lang <code>       a: ISO 639-2 for the display name (default deu)\n"
+      "  -m, --mcast <g>:<p>     multicast group:port ([addr6]:port for v6)\n"
+      "  -I, --iface <iface>     multicast interface\n"
+      "  -t, --interval <s>      a: repeat interval (default 5)\n"
+      "  -t, --timeout <s>       l: stop after N seconds (default 35)\n"
+      "  -o, --output <path>     l: output path, - for stdout (default)\n"
+      "  -f, --format <fmt>      l: m3u|csv|xspf|xml|null (default from -o suffix)\n"
+      "  -v, --verbose           periodic stats on stderr\n"
+      "      --color <when>      auto|always|never (default auto)\n"
+      "      --ret-addr <a>:<p>  a: advertise a dipifccret RET server (its -l value);\n"
+      "                          opt-in, adds RTPRetransmission to every announced service\n"
+      "      --ret-rtx-time <ms> a: RET rtx-time, matches dipifccret -B (default 2000)\n"
+      "      --ret-rtx-pt <n>    a: RET RTP payload type, matches dipifccret -R (default 99)\n"
+      "      --ret-mc            a: also advertise multicast RET (dipifccret without --no-mc-ret)\n"
+      "      --ret-mc-port <p>   a: multicast RET port, matches dipifccret -F (default: each\n"
+      "                          service's own port)\n"
+      "      --fcc-addr <a>:<p>  a: advertise a dipifccret FCC server (its -l value);\n"
+      "                          opt-in, adds ServerBasedEnhancementServiceInfo to every service\n"
+      "      --fcc-rtx-time <ms> a: FCC Retransmission_session rtx-time (default 2000)\n"
+      "      --fcc-rtx-pt <n>    a: FCC RTP payload type, matches dipifccret -R (default 99)\n"
+      "      --metrics <path>    a: Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+      "      --metrics-id <name> a: stable instance id; metrics disabled unless set\n"
+      "      --metrics-interval <s> a: snapshot interval in seconds (default: 5)\n"
+      "  -h, --help              this help\n\n"
       "examples:\n"
       "  %s -a -i channels.csv -p example.org -O \"My Headend\" -m 239.255.0.1:3937\n"
       "  %s -l -m 239.255.0.1:3937 -o discovered.m3u\n",
@@ -214,6 +124,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"fcc-addr", required_argument, 0, 1006},
       {"fcc-rtx-time", required_argument, 0, 1007},
       {"fcc-rtx-pt", required_argument, 0, 1008},
+      {"metrics", required_argument, 0, 1009},
+      {"metrics-id", required_argument, 0, 1010},
+      {"metrics-interval", required_argument, 0, 1011},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_a = 0, have_l = 0, have_mcast = 0, have_t = 0;
@@ -289,9 +202,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       cfg->verbose = 1;
       break;
     case 1000: {
-      static const enum_map_t map[] = {{"auto", 0}, {"always", 1}, {"never", 2}};
-      int v;
-      if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+      log_color_t v;
+      if (log_color_from_string(optarg, &v)) {
         argerr("invalid --color: %s (auto|always|never)", optarg);
         return ARGS_ERR;
       }
@@ -332,7 +244,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       break;
     case 1005: {
       unsigned v;
-      if (port_parse(optarg, &v)) {
+      if (argutil_port_parse(optarg, &v)) {
         argerr("invalid --ret-mc-port: %s", optarg);
         return ARGS_ERR;
       }
@@ -369,6 +281,22 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       have_fcc_rtx_pt = 1;
       break;
     }
+    case 1009:
+      cfg->metrics_sock = optarg;
+      break;
+    case 1010:
+      cfg->metrics_id = optarg;
+      break;
+    case 1011: {
+      char *end;
+      unsigned long v = strtoul(optarg, &end, 10);
+      if (*end != '\0' || v == 0 || v > 86400UL) {
+        argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
+        return ARGS_ERR;
+      }
+      cfg->metrics_interval_s = (unsigned)v;
+      break;
+    }
     case 'h':
       print_help();
       return ARGS_HELP;
@@ -386,6 +314,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (!have_mcast) {
     argerr("missing -m multicast group:port");
+    return ARGS_ERR;
+  }
+  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
+    argerr("--metrics/--metrics-interval require --metrics-id");
     return ARGS_ERR;
   }
 
@@ -442,6 +374,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
     if (cfg->fcc_enabled || have_fcc_rtx_time || have_fcc_rtx_pt) {
       argerr("--fcc-* options are announce-only");
+      return ARGS_ERR;
+    }
+    if (cfg->metrics_id) {
+      argerr("--metrics-id is announce-only");
       return ARGS_ERR;
     }
     if (!cfg->output_path)

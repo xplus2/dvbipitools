@@ -22,13 +22,13 @@ START_TEST(revmap_load_and_lookup_round_trips) {
   char path[] = "/tmp/dvbipitools_test_revmap_XXXXXX";
   revmap_t m;
   write_temp_csv(path, "# comment\n\n"
-                  "rtp://239.1.1.1:5000,orf1\n"
-                  "rtp://239.1.1.2:5000,orf2\n");
+                  "rtp://239.1.1.1:5000,channel1\n"
+                  "rtp://239.1.1.2:5000,channel2\n");
 
   ck_assert_int_eq(revmap_load(path, &m), 0);
   ck_assert_int_eq(m.count, 2);
-  ck_assert_str_eq(revmap_lookup(&m, "rtp://239.1.1.1:5000"), "orf1");
-  ck_assert_str_eq(revmap_lookup(&m, "rtp://239.1.1.2:5000"), "orf2");
+  ck_assert_str_eq(revmap_lookup(&m, "rtp://239.1.1.1:5000"), "channel1");
+  ck_assert_str_eq(revmap_lookup(&m, "rtp://239.1.1.2:5000"), "channel2");
   ck_assert_ptr_null(revmap_lookup(&m, "rtp://nope:5000"));
 
   revmap_free(&m);
@@ -39,10 +39,10 @@ END_TEST
 START_TEST(revmap_load_id_may_contain_commas) {
   char path[] = "/tmp/dvbipitools_test_revmap_XXXXXX";
   revmap_t m;
-  write_temp_csv(path, "rtp://239.1.1.1:5000,orf1,at,extra\n");
+  write_temp_csv(path, "rtp://239.1.1.1:5000,channel1,at,extra\n");
 
   ck_assert_int_eq(revmap_load(path, &m), 0);
-  ck_assert_str_eq(revmap_lookup(&m, "rtp://239.1.1.1:5000"), "orf1,at,extra");
+  ck_assert_str_eq(revmap_lookup(&m, "rtp://239.1.1.1:5000"), "channel1,at,extra");
 
   revmap_free(&m);
   unlink(path);

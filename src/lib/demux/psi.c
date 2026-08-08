@@ -6,21 +6,21 @@
 
 #include "crc32.h"
 #include "psi.h"
+#include "psi_section_asm.h"
+#include "tspack.h"
 
-typedef struct {
-  int active;
-  size_t len;
-  size_t expect; /* total section length, 0 until known */
-  unsigned char buf[4096];
-} sect_asm_t;
+#define TS_PID_PAT 0x0000
+#define TS_PID_CAT 0x0001
+#define TS_PID_NIT 0x0010
+#define TS_PID_SDT 0x0011
 
 typedef struct {
   unsigned program_number, pmt_pid;
-  sect_asm_t asm_;
+  psi_section_asm_t asm_;
 } pmt_cand_t;
 
 struct psi {
-  sect_asm_t pat, sdt, nit, cat;
+  psi_section_asm_t pat, sdt, nit, cat;
   int have_pat, have_pmt, have_sdt, have_nit, have_cat;
   unsigned program_number, pmt_pid, pcr_pid, nit_pid;
   unsigned emm_pid, ca_system_id; /* from CAT's first CA_descriptor, 0 if none */
@@ -38,6 +38,12 @@ struct psi {
   unsigned preferred_pmt_pid; /* 0 = none, auto-select whichever candidate resolves first */
   int pmt_locked;             /* program_number/pmt_pid finalized, pmt_cand[pmt_lock_idx] is the live one */
   int pmt_lock_idx;
+
+  int multi_mode; /* every candidate resolves independently, see psi_enable_multi_program() */
+  psi_multi_program_t multi[PSI_MAX_PROGRAMS];
+  int multi_count;
+
+  pid_class_t class_by_pid[8192]; /* direct pid->class, rebuilt on parse_pat/parse_pmt */
 };
 
 static void parse_pat(psi_t *c);
@@ -45,45 +51,6 @@ static int parse_pmt(psi_t *c, pmt_cand_t *cand);
 static void parse_sdt(psi_t *c);
 static void parse_nit(psi_t *c);
 static void parse_cat(psi_t *c);
-
-/* collect section; 1 when complete */
-static int asm_feed(sect_asm_t *a, const unsigned char *pl, size_t plen, int pusi) {
-  size_t i = 0;
-
-  if (pusi) {
-    unsigned ptr;
-    if (plen < 1)
-      return 0;
-    ptr = pl[0];
-    i = 1 + (size_t)ptr;
-    if (i > plen) {
-      a->active = 0;
-      return 0;
-    }
-    a->len = 0;
-    a->expect = 0;
-    a->active = 1;
-  } else if (!a->active) {
-    return 0;
-  }
-  for (; i < plen; i++) {
-    if (a->len < sizeof a->buf)
-      a->buf[a->len++] = pl[i];
-    if (a->expect == 0 && a->len >= 3) {
-      unsigned sl = (((unsigned)a->buf[1] & 0x0F) << 8) | a->buf[2];
-      a->expect = (size_t)sl + 3;
-      if (a->expect > sizeof a->buf) {
-        a->active = 0;
-        return 0;
-      }
-    }
-    if (a->expect != 0 && a->len >= a->expect) {
-      a->active = 0;
-      return 1;
-    }
-  }
-  return 0;
-}
 
 /* find descriptor by tag; returns data */
 static const unsigned char *find_desc(const unsigned char *d, size_t len, unsigned tag, size_t *dlen) {
@@ -234,6 +201,25 @@ static pmt_cand_t *find_cand(psi_t *c, unsigned pmt_pid) {
   return NULL;
 }
 
+/* precedence nit>pmt>es>ecm>pcr, stamped lowest-first so higher overwrites (PCR often shares video pid) */
+static void rebuild_class_table(psi_t *c) {
+  int i;
+
+  memset(c->class_by_pid, 0, sizeof c->class_by_pid); /* PID_UNKNOWN == 0 */
+  if (c->have_pmt) {
+    c->class_by_pid[c->pcr_pid] = PID_PCR;
+    for (i = 0; i < c->ecm_count; i++)
+      c->class_by_pid[c->ecm[i]] = PID_ECM;
+    for (i = 0; i < c->es_count; i++)
+      c->class_by_pid[c->es[i].pid] = c->es[i].cls;
+    c->class_by_pid[c->pmt_pid] = PID_PMT;
+  } else if (c->have_pat) {
+    c->class_by_pid[c->pmt_pid] = PID_PMT;
+  }
+  if (c->have_pat && c->nit_pid)
+    c->class_by_pid[c->nit_pid] = PID_NIT;
+}
+
 static void parse_pat(psi_t *c) {
   const unsigned char *b = c->pat.buf;
   size_t n = c->pat.expect, i, end;
@@ -267,9 +253,17 @@ static void parse_pat(psi_t *c) {
       cand->program_number = prog;
       cand->pmt_pid = pid;
       c->pmt_cand_count++;
+      if (c->multi_mode) {
+        psi_multi_program_t *m = &c->multi[c->multi_count];
+        memset(m, 0, sizeof *m);
+        m->program_number = prog;
+        m->pmt_pid = pid;
+        c->multi_count++;
+      }
     }
   }
   c->have_pat = 1;
+  rebuild_class_table(c);
 }
 
 /* 1 if this candidate's section parsed into a valid, complete PMT */
@@ -288,7 +282,7 @@ static int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   c->program_number = prog;
   c->pmt_pid = cand->pmt_pid;
   c->pcr_pid = (((unsigned)b[8] & 0x1F) << 8) | b[9];
-  pil = (((size_t)b[10] & 0x0F) << 8) | b[11];
+  pil = tspack_length12(b + 10);
   c->es_count = 0;
   c->audio_count = 0;
   c->ecm_count = 0;
@@ -307,7 +301,7 @@ static int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   i = 12 + pil;
   while (i + 5 <= end && c->es_count < PSI_MAX_ES) {
     psi_es_t *e = &c->es[c->es_count];
-    size_t esil = (((size_t)b[i + 3] & 0x0F) << 8) | b[i + 4];
+    size_t esil = tspack_length12(b + i + 3);
     const unsigned char *desc = b + i + 5;
     if (i + 5 + esil > end)
       break;
@@ -327,12 +321,40 @@ static int parse_pmt(psi_t *c, pmt_cand_t *cand) {
     if (c->es[k].cls == PID_AUDIO)
       c->es[k].audio_index = ++c->audio_count;
   c->have_pmt = 1;
+  rebuild_class_table(c);
   return 1;
+}
+
+/* service_descriptor (0x48): provider then service name, DVB-text
+   length-prefixed. dst untouched if absent/malformed. */
+static void decode_service_desc(const unsigned char *d, size_t dll, char *provider_dst, char *service_dst) {
+  size_t l, pnl, snl;
+  const unsigned char *sd = find_desc(d, dll, 0x48, &l);
+  if (!sd || l < 2)
+    return;
+  pnl = sd[1];
+  if (2 + pnl > l)
+    return;
+  copy_name(provider_dst, PSI_NAME, sd + 2, pnl);
+  if (2 + pnl >= l)
+    return;
+  snl = sd[2 + pnl];
+  if (3 + pnl + snl <= l)
+    copy_name(service_dst, PSI_NAME, sd + 3 + pnl, snl);
+}
+
+/* index into pmt_cand[]/multi[] for program_number, -1 if unknown */
+static int find_multi_index(const psi_t *c, unsigned program_number) {
+  int k;
+  for (k = 0; k < c->pmt_cand_count; k++)
+    if (c->pmt_cand[k].program_number == program_number)
+      return k;
+  return -1;
 }
 
 static void parse_sdt(psi_t *c) {
   const unsigned char *b = c->sdt.buf;
-  size_t n = c->sdt.expect, i, end, dll, l;
+  size_t n = c->sdt.expect, i, end, dll;
 
   if (n < 12 || b[0] != 0x42 || crc32_mpeg(b, n) != 0)
     return;
@@ -342,22 +364,15 @@ static void parse_sdt(psi_t *c) {
   while (i + 5 <= end) {
     unsigned sid = ((unsigned)b[i] << 8) | b[i + 1];
     const unsigned char *d = b + i + 5;
-    dll = (((size_t)b[i + 3] & 0x0F) << 8) | b[i + 4];
+    dll = tspack_length12(b + i + 3);
     if (i + 5 + dll > end)
       break;
-    if (sid == c->program_number) {
-      const unsigned char *sd = find_desc(d, dll, 0x48, &l);
-      if (sd && l >= 2) {
-        size_t pnl = sd[1];
-        if (2 + pnl <= l) {
-          copy_name(c->provider_name, sizeof c->provider_name, sd + 2, pnl);
-          if (2 + pnl < l) {
-            size_t snl = sd[2 + pnl];
-            if (3 + pnl + snl <= l)
-              copy_name(c->service_name, sizeof c->service_name, sd + 3 + pnl, snl);
-          }
-        }
-      }
+    if (sid == c->program_number)
+      decode_service_desc(d, dll, c->provider_name, c->service_name);
+    if (c->multi_mode) {
+      int k = find_multi_index(c, sid);
+      if (k >= 0)
+        decode_service_desc(d, dll, c->multi[k].provider_name, c->multi[k].service_name);
     }
     i += 5 + dll;
   }
@@ -371,7 +386,7 @@ static void parse_nit(psi_t *c) {
 
   if (n < 12 || b[0] != 0x40 || crc32_mpeg(b, n) != 0)
     return;
-  ndl = (((size_t)b[8] & 0x0F) << 8) | b[9];
+  ndl = tspack_length12(b + 8);
   if (10 + ndl > n)
     return;
   nn = find_desc(b + 10, ndl, 0x40, &l);
@@ -405,41 +420,40 @@ psi_t *psi_new(void) { return calloc(1, sizeof(psi_t)); }
 void psi_free(psi_t *c) { free(c); }
 
 void psi_feed(psi_t *c, const unsigned char *pkt) {
-  unsigned pid, afc;
+  unsigned pid;
   int pusi;
-  size_t off, plen;
+  size_t plen;
   const unsigned char *pl;
 
   if (pkt[0] != 0x47)
     return;
-  pid = (((unsigned)pkt[1] & 0x1F) << 8) | pkt[2];
-  pusi = pkt[1] & 0x40;
-  afc = (pkt[3] >> 4) & 0x3;
-  if (afc == 0 || afc == 2) /* no payload */
+  pid = tspack_pid(pkt);
+  if (!tspack_payload(pkt, &pl, &plen, &pusi))
     return;
-  off = 4;
-  if (afc == 3) {
-    off = 5 + (size_t)pkt[4];
-    if (off >= 188)
-      return;
-  }
-  pl = pkt + off;
-  plen = 188 - off;
 
-  if (pid == 0x0000) {
-    if (asm_feed(&c->pat, pl, plen, pusi))
-      parse_pat(c);
-  } else if (pid == 0x0010) {
-    if (asm_feed(&c->nit, pl, plen, pusi))
-      parse_nit(c);
-  } else if (pid == 0x0011) {
-    if (asm_feed(&c->sdt, pl, plen, pusi))
-      parse_sdt(c);
-  } else if (pid == 0x0001) {
-    if (asm_feed(&c->cat, pl, plen, pusi))
-      parse_cat(c);
-  } else if (c->pmt_locked) {
-    if (pid == c->pmt_pid && asm_feed(&c->pmt_cand[c->pmt_lock_idx].asm_, pl, plen, pusi))
+  switch (pid) {
+    case TS_PID_PAT:
+      if (psi_section_asm_feed(&c->pat, pl, plen, pusi))
+        parse_pat(c);
+      return;
+    case TS_PID_NIT:
+      if (psi_section_asm_feed(&c->nit, pl, plen, pusi))
+        parse_nit(c);
+      return;
+    case TS_PID_SDT:
+      if (psi_section_asm_feed(&c->sdt, pl, plen, pusi))
+        parse_sdt(c);
+      return;
+    case TS_PID_CAT:
+      if (psi_section_asm_feed(&c->cat, pl, plen, pusi))
+        parse_cat(c);
+      return;
+    default:
+      break;
+  }
+
+  if (c->pmt_locked && !c->multi_mode) {
+    if (pid == c->pmt_pid && psi_section_asm_feed(&c->pmt_cand[c->pmt_lock_idx].asm_, pl, plen, pusi))
       parse_pmt(c, &c->pmt_cand[c->pmt_lock_idx]);
   } else if (c->have_pat) {
     int k;
@@ -447,16 +461,49 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
       pmt_cand_t *cand = &c->pmt_cand[k];
       if (cand->pmt_pid != pid)
         continue;
-      if (asm_feed(&cand->asm_, pl, plen, pusi) && parse_pmt(c, cand)) {
-        c->pmt_locked = 1;
-        c->pmt_lock_idx = k;
+      if (psi_section_asm_feed(&cand->asm_, pl, plen, pusi) && parse_pmt(c, cand)) {
+        if (!c->pmt_locked) {
+          c->pmt_locked = 1;
+          c->pmt_lock_idx = k;
+        }
+        if (c->multi_mode)
+          c->multi[k].resolved = 1;
       }
       break;
     }
   }
 }
 
+int psi_wants_pid(const psi_t *c, unsigned pid) {
+  int k;
+
+  switch (pid) {
+    case TS_PID_PAT:
+    case TS_PID_NIT:
+    case TS_PID_SDT:
+    case TS_PID_CAT:
+      return 1;
+    default:
+      break;
+  }
+  if (c->pmt_locked && !c->multi_mode)
+    return pid == c->pmt_pid;
+  if (c->have_pat)
+    for (k = 0; k < c->pmt_cand_count; k++)
+      if (c->pmt_cand[k].pmt_pid == pid)
+        return 1;
+  return 0;
+}
+
 void psi_select_pmt_pid(psi_t *c, unsigned pmt_pid) { c->preferred_pmt_pid = pmt_pid; }
+
+void psi_enable_multi_program(psi_t *c) { c->multi_mode = 1; }
+
+const psi_multi_program_t *psi_multi_programs(const psi_t *c, int *count) {
+  if (count)
+    *count = c->multi_count;
+  return c->multi;
+}
 
 const psi_program_t *psi_pat_programs(const psi_t *c, int *count) {
   if (count)
@@ -493,8 +540,6 @@ const char *psi_provider_name(const psi_t *c) { return c->provider_name; }
 const char *psi_network_name(const psi_t *c) { return c->network_name; }
 
 pid_class_t psi_classify(const psi_t *c, unsigned pid) {
-  int k;
-
   if (pid == 0x0000)
     return PID_PAT;
   if (pid == 0x0001)
@@ -509,23 +554,7 @@ pid_class_t psi_classify(const psi_t *c, unsigned pid) {
     return PID_OTHER_SI;
   if (pid == 0x1FFF)
     return PID_NULL;
-  if (c->have_pat && c->nit_pid && pid == c->nit_pid)
-    return PID_NIT;
-  if (c->have_pmt) {
-    if (pid == c->pmt_pid)
-      return PID_PMT;
-    for (k = 0; k < c->es_count; k++)
-      if (c->es[k].pid == pid)
-        return c->es[k].cls;
-    for (k = 0; k < c->ecm_count; k++)
-      if (c->ecm[k] == pid)
-        return PID_ECM;
-    if (pid == c->pcr_pid)
-      return PID_PCR;
-  } else if (c->have_pat && pid == c->pmt_pid) {
-    return PID_PMT;
-  }
-  return PID_UNKNOWN;
+  return c->class_by_pid[pid];
 }
 
 const unsigned char *psi_pat_section(const psi_t *c, size_t *len) {

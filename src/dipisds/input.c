@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/ioutil.h"
 #include "lib/net/dvbstp.h"
 #include "lib/xml_util.h"
 #include "input.h"
@@ -94,7 +95,7 @@ static int parse_mcast_uri(const char *uri, sds_service_t *s) {
       return -1;
     s->port = (unsigned)v;
   }
-  snprintf(s->address, sizeof s->address, "%s", addr);
+  bufcpy(s->address, sizeof s->address, addr);
   return 0;
 }
 
@@ -131,7 +132,7 @@ static int load_csv(FILE *f, input_t *in) {
     }
     s = &in->services[idx];
     memset(s, 0, sizeof *s);
-    snprintf(s->name, sizeof s->name, "%s", fields[0]);
+    bufcpy(s->name, sizeof s->name, fields[0]);
     if (parse_mcast_uri(fields[1], s)) {
       fprintf(stderr, TOOL_NAME ": line %d: bad uri: %s\n", lineno, fields[1]);
       return -1;
@@ -164,7 +165,7 @@ static int load_m3u(FILE *f, input_t *in) {
         fprintf(stderr, TOOL_NAME ": malformed #EXTINF line: %s\n", line);
         return -1;
       }
-      snprintf(pending_name, sizeof pending_name, "%s", comma + 1);
+      bufcpy(pending_name, sizeof pending_name, comma + 1);
       pending_tsid = pending_onid = 1;
       pending_sid = 0;
       if (xml_attr(line, comma, "tsid", tmp, sizeof tmp) == 0)
@@ -185,7 +186,7 @@ static int load_m3u(FILE *f, input_t *in) {
     {
       sds_service_t *s = &in->services[idx];
       memset(s, 0, sizeof *s);
-      snprintf(s->name, sizeof s->name, "%s", pending_name);
+      bufcpy(s->name, sizeof s->name, pending_name);
       if (parse_mcast_uri(line, s)) {
         fprintf(stderr, TOOL_NAME ": bad uri: %s\n", line);
         return -1;
@@ -257,7 +258,7 @@ static int load_xspf(input_t *in, const unsigned char *buf) {
 
     s = &in->services[idx];
     memset(s, 0, sizeof *s);
-    snprintf(s->name, sizeof s->name, "%s", title);
+    bufcpy(s->name, sizeof s->name, title);
     if (parse_mcast_uri(loc, s)) {
       fprintf(stderr, TOOL_NAME ": bad uri: %s\n", loc);
       return -1;

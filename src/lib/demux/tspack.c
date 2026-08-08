@@ -45,3 +45,29 @@ int tspack_feed(tspack_t *pz, const unsigned char *d, size_t len, int (*cb)(void
   }
   return 0;
 }
+
+unsigned tspack_pid(const unsigned char *pkt) {
+  return (((unsigned)pkt[1] & 0x1F) << 8) | pkt[2];
+}
+
+size_t tspack_length12(const unsigned char *p) {
+  return (((size_t)p[0] & 0x0F) << 8) | p[1];
+}
+
+int tspack_payload(const unsigned char *pkt, const unsigned char **pl, size_t *plen, int *pusi) {
+  unsigned afc = (pkt[3] >> 4) & 0x3;
+  size_t off;
+
+  if (afc == 0 || afc == 2)
+    return 0;
+  off = 4;
+  if (afc == 3) {
+    off = 5 + (size_t)pkt[4];
+    if (off >= 188)
+      return 0;
+  }
+  *pl = pkt + off;
+  *plen = 188 - off;
+  *pusi = pkt[1] & 0x40;
+  return 1;
+}

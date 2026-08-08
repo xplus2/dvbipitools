@@ -19,6 +19,7 @@ typedef void (*ttx_cb)(void *ctx, const ttx_cue_t *cue);
 typedef struct ttx ttx_t;
 
 /* decode subs from teletext page */
+
 /* lead_ms shifts cues earlier; txt usually lags behind speech */
 ttx_t *ttx_new(unsigned page, const char *lang, long lead_ms, ttx_cb cb, void *ctx);
 void ttx_free(ttx_t *t);

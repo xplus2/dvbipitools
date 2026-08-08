@@ -16,4 +16,12 @@ int  pes_track(pes_t *p, unsigned pid);               /* pid */
 void pes_feed(pes_t *p, const unsigned char *pkt);    /* 188 B */
 void pes_flush(pes_t *p);                             /* pending PES */
 
+typedef struct {
+  uint64_t pts_ext, last_raw; /* 33-bit PTS unwrap state */
+  int pts_seen;
+} pts_unwrap_t;
+
+/* unwrap a 33-bit PTS into a monotonic tick count, ms = return/90 */
+int64_t pts_unwrap(pts_unwrap_t *st, uint64_t raw);
+
 #endif

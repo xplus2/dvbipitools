@@ -15,6 +15,13 @@ typedef enum { LOG_COLOR_AUTO, LOG_COLOR_ALWAYS, LOG_COLOR_NEVER } log_color_t;
 /* auto = tty and not NO_COLOR / TERM=dumb */
 void log_set_color(log_color_t mode);
 
+/* "auto"/"always"/"never" -> log_color_t. 0 ok, -1 invalid */
+int log_color_from_string(const char *s, log_color_t *out);
+
+/* scans argv for --color/--color=<val>, before full arg parsing (so early
+   argerr()s color correctly too). LOG_COLOR_AUTO if absent or unrecognized */
+log_color_t log_color_prescan(int argc, char **argv);
+
 int log_stderr_is_tty(void);
 int log_colors_enabled(void);
 

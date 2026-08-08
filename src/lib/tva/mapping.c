@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/ioutil.h"
+
 #include "mapping.h"
 
 static int split_last4(char *line, char **id, char **uri, char **a, char **b, char **c) {
@@ -70,8 +72,8 @@ int mapping_load(const char *path, mapping_t *m) {
       m->cap = newcap;
     }
     e = &m->entries[m->count++];
-    snprintf(e->id, sizeof e->id, "%s", id);
-    snprintf(e->uri, sizeof e->uri, "%s", uri);
+    bufcpy(e->id, sizeof e->id, id);
+    bufcpy(e->uri, sizeof e->uri, uri);
     e->tsid = (unsigned)strtoul(tsid_s, NULL, 10);
     e->onid = (unsigned)strtoul(onid_s, NULL, 10);
     e->sid = (unsigned)strtoul(sid_s, NULL, 10);
@@ -89,7 +91,7 @@ int mapping_lookup(const mapping_t *m, const char *id, char *uri, size_t uri_cap
   int i;
   for (i = 0; i < m->count; i++)
     if (!strcmp(m->entries[i].id, id)) {
-      snprintf(uri, uri_cap, "%s", m->entries[i].uri);
+      bufcpy(uri, uri_cap, m->entries[i].uri);
       *tsid = m->entries[i].tsid;
       *onid = m->entries[i].onid;
       *sid = m->entries[i].sid;

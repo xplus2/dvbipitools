@@ -14,7 +14,7 @@ START_TEST(sds_broadcast_round_trips_multiple_services) {
   int n;
 
   memset(svcs, 0, sizeof svcs);
-  snprintf(svcs[0].name, sizeof svcs[0].name, "ORFeins");
+  snprintf(svcs[0].name, sizeof svcs[0].name, "Channel One");
   snprintf(svcs[0].address, sizeof svcs[0].address, "239.1.1.1");
   svcs[0].port = 5000;
   svcs[0].rtp = 1;
@@ -22,7 +22,7 @@ START_TEST(sds_broadcast_round_trips_multiple_services) {
   svcs[0].onid = 2;
   svcs[0].sid = 101;
 
-  snprintf(svcs[1].name, sizeof svcs[1].name, "ORF2 Bundesland");
+  snprintf(svcs[1].name, sizeof svcs[1].name, "Channel 2 Regional");
   snprintf(svcs[1].address, sizeof svcs[1].address, "ff15::1");
   svcs[1].port = 5001;
   svcs[1].rtp = 0;
@@ -36,7 +36,7 @@ START_TEST(sds_broadcast_round_trips_multiple_services) {
   n = sds_parse_broadcast((const char *)buf, out, 8);
   ck_assert_int_eq(n, 2);
 
-  ck_assert_str_eq(out[0].name, "ORFeins");
+  ck_assert_str_eq(out[0].name, "Channel One");
   ck_assert_str_eq(out[0].address, "239.1.1.1");
   ck_assert_uint_eq(out[0].port, 5000u);
   ck_assert_int_eq(out[0].rtp, 1);
@@ -44,7 +44,7 @@ START_TEST(sds_broadcast_round_trips_multiple_services) {
   ck_assert_uint_eq(out[0].onid, 2u);
   ck_assert_uint_eq(out[0].sid, 101u);
 
-  ck_assert_str_eq(out[1].name, "ORF2 Bundesland");
+  ck_assert_str_eq(out[1].name, "Channel 2 Regional");
   ck_assert_str_eq(out[1].address, "ff15::1");
   ck_assert_uint_eq(out[1].port, 5001u);
   ck_assert_int_eq(out[1].rtp, 0);

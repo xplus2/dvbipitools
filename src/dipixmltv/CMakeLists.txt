@@ -8,9 +8,10 @@ add_executable(dipixmltv
     revmap.c
     suggest.c
     ../lib/log.c
+    ../lib/argutil.c
     ../lib/xml_util.c
     ../lib/ioutil.c
-    ../lib/tva/epg_doc.c
+    ../lib/tva/bcg_doc.c
     ../lib/tva/tva_xml.c
     ../lib/tva/mapping.c
     ../lib/tva/xmltv.c

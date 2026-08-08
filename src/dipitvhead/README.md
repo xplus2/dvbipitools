@@ -2,56 +2,75 @@
 
 IPI TV Headend
 
-Takes a transport stream (multicast, http(s), or stdin ("-") and re-packages it as a DVB-IPI multicast under our own PAT/PMT/SDT.
-No transcoding.
+Takes one or more transport streams (multicast, http(s), or stdin ("-") and re-packages them as
+one DVB-IPI multicast under our own PAT/NIT (shared, whole mux) and one PMT/SDT per program (its
+own service_name, not shared with the others). A single `-i`: normal SPTS. Multiple `-i`: MPTS,
+one program per input, each independently connected and retried - one input being down never
+stops output for the others. No transcoding.
 
 ```
-dipitvhead -i <uri> -m <mcast>:<port> [options]
+dipitvhead -i <uri> [per-input options] [-i <uri> ...] -m <mcast>:<port> [options]
 ```
 
 ## Options
 
-| flag | long form | argument | default |
-|---|---|---|---|
-| `-i` | `--input` | `<uri>` / `-` | required |
-| `-p` | `--pmt-pid` | `<pid>` | auto: first PAT program whose PMT actually arrives |
-| `-m` | `--mcast` | `<group>:<port>` / `[<group6>]:<port>` | required |
-| `-I` | `--iface` | `<iface>` | kernel route (incoming) |
-| `-O` | `--out-iface` | `<iface>` | kernel route (outgoing) |
-| `-u` | `--udp` | - | off (RTP) |
-| `-T` | `--ttl` | `<n>` | 1 |
-| `-n` | `--nit` | `<text>` / `-` | passthrough source NIT if present |
-| `-s` | `--sdt` | `<text>` / `-` | passthrough source SDT if present |
-| `-b` | `--bitrate` | `<kbps>` | none (no shaping) |
-| `-S` | `--stuff` | - | off (needs `-b`) |
-| `-B` | `--burst-limit` | - | off (needs `-b`) |
-| | `--strip-eit` | - | off (source EIT passed through) |
-| | `--hbbtv` | `<url>` | none (no AIT sent) |
-| | `--hbbtv-org-id` | `<n>` | required with `--hbbtv` |
-| | `--hbbtv-app-id` | `<n>` | required with `--hbbtv` |
-| `-e` | `--error` | `<seconds>` | fail once, no retry |
-| `-k` | `--insecure` | - | off (TLS verified) |
-| | `--tsid` | `<n>` | 1 |
-| | `--onid` | `<n>` | 1 |
-| | `--sid` | `<n>` | 1 |
-| `-v` | `--verbose` | - | off |
-| | `--color` | `auto\|always\|never` | `auto` |
-| | `--cas-algo` | `cissa\|csa2` | disabled |
-| | `--cas-ecmg` | `tcp://host:port` | required with `--cas-algo` |
-| | `--cas-ecmg-version` | `2\|3` | auto-negotiate |
-| | `--cas-super-id` | `<n>` | required with `--cas-algo` |
-| | `--cas-ecm-id` | `<n>` | required with `--cas-algo` |
-| | `--cas-ecm-pid` | `<pid>` | `0x0020` |
-| | `--cas-emmg-port` | `<n>` | `8002` |
-| | `--cas-emmg-version` | `2\|3` | accept client's proposal |
-| | `--cas-emm-pid` | `<pid>` | `0x0021` |
-| | `--cas-pids` | `<list>` | required with `--cas-algo` |
-| | `--cas-cp-duration` | `<ms>` | `10000` |
-| | `--cas-resilience` | `frozen\|cycling\|unscrambled` | `frozen` |
-| `-h` | `--help` | - | |
+`-i` is repeatable. Flags marked **per-input** pair with the `-i` immediately before them
+(ffmpeg-style) - using one before any `-i` is an error. Everything else is mux-wide, shared
+across every input.
+
+| flag | long form            | argument              | default                                   | scope      |
+|------|----------------------|-----------------------|-------------------------------------------|------------|
+| `-i` | `--input`            | `<uri>` / `-`         | required                                  |            |
+| `-p` | `--pmt-pid`          | `<pid>`               | auto: first PAT program whose PMT arrives | per-input  |
+|      | `--sid`              | `<n>`                 | auto-assigned (lowest free integer)       | per-input  |
+| `-s` | `--sdt`              | `<text>` / `-`        | set SDT, see below                        | per-input  |
+| `-I` | `--iface`            | `<iface>`             | kernel route (incoming)                   | per-input  |
+|      | `--strip-eit`        |                       | off (source EIT passed through)           | per-input  |
+|      | `--hbbtv`            | `<url>`               | none (no AIT sent)                        | per-input  |
+|      | `--hbbtv-org-id`     | `<n>`                 | required with `--hbbtv`                   | per-input  |
+|      | `--hbbtv-app-id`     | `<n>`                 | required with `--hbbtv`                   | per-input  |
+| `-m` | `--mcast`            | `<group(6)>:<port>`   | required                                  |            |
+| `-O` | `--out-iface`        | `<iface>`             | kernel route (outgoing)                   |            |
+| `-u` | `--udp`              |                       | off (RTP)                                 |            |
+| `-T` | `--ttl`              | `<n>`                 | 1                                         |            |
+| `-n` | `--nit`              | `<text>` / `-`        | set NIT, see below                        |            |
+| `-b` | `--bitrate`          | `<kbps>`              | none (no shaping)                         |            |
+| `-S` | `--stuff`            |                       | off (needs `-b`)                          |            |
+| `-B` | `--burst-limit`      |                       | off (needs `-b`)                          |            |
+| `-e` | `--error`            | `<seconds>`           | fail once (always retries in MPTS mode)   |            |
+| `-k` | `--insecure`         |                       | off (TLS verified)                        |            |
+|      | `--tsid`             | `<n>`                 | 1                                         |            |
+|      | `--onid`             | `<n>`                 | 1                                         |            |
+| `-v` | `--verbose`          |                       | off                                       |            |
+|      | `--color`            | `auto\|always\|never` | `auto`                                    |            |
+| `-h` | `--help`             |                       |                                           |            |
 
 > Note that the default output changed from _plain UDP_ to _RTP_, since neither FCC nor RET would work
 > on plain streams. You can restore the old behavior by setting `-u`|`--udp`.
+
+### Related to Conditional Access
+
+`--cas-ecmg` is repeatable, one CAS vendor per `--cas-ecmg`. Flags marked **per-vendor** pair
+with the `--cas-ecmg` immediately before them, same convention as `-i`'s per-input flags above -
+using one before any `--cas-ecmg` is an error. Everything else is shared across every vendor.
+
+| long form               | argument                  | default                                            | scope      |
+|--------------------------|---------------------------|-----------------------------------------------------|------------|
+| `--cas-algo`             | `cissa\|csa2`              | disabled                                            |            |
+| `--cas-ecmg`             | `tcp://host:port`          | at least one required with `--cas-algo`             |            |
+| `--cas-ecmg-version`     | `2\|3`                     | auto-negotiate                                      | per-vendor |
+| `--cas-super-id`         | `<n>`                      | required per vendor                                 | per-vendor |
+| `--cas-ecm-id`           | `<n>`                      | required per vendor                                 | per-vendor |
+| `--cas-ecm-pid`          | `<pid>`                    | `0x0020`                                             | per-vendor |
+| `--cas-emmg-port`        | `<n>`                      | `8002`                                               | per-vendor |
+| `--cas-emmg-version`     | `2\|3`                     | accept client's proposal                            | per-vendor |
+| `--cas-emm-pid`          | `<pid>`                    | `0x0021`                                             | per-vendor |
+| `--cas-resilience`       | `frozen\|cycling\|silent`  | `frozen`                                             | per-vendor |
+| `--cas-required`         |                            | off                                                  | per-vendor |
+| `--cas-pids`             | `<list>`                   | `video,audio`                                        |            |
+| `--cas-cp-duration`      | `<ms>`                     | `10000`                                              |            |
+| `--cas-fallback-clear`   |                            | off (stay scrambled on last known-good CW)           |            |
+
 
 ## Parameters
 
@@ -70,17 +89,54 @@ wins (real MPTS sources often list many services, stream one). `-p <pid>` forces
 
 Video: MPEG-2, H.264, HEVC. Audio: MPEG-1/2 (layer 1/2/3), AC-3, E-AC-3, AAC (ADTS/LATM).
 Subtitles: EBU teletext, DVB bitmap. Everything else (carousels, SCTE-35, CA/ECM) dropped.
-Output PIDs: PAT `0x0000`, PMT `0x1000`, video `0x0100`, other ES `0x0101..` in discovery order,
-NIT `0x0010`, SDT `0x0011`, EIT `0x0012`, AIT `0x0020`.
+
+Output PIDs: PAT `0x0000`, NIT `0x0010`, SDT `0x0011`, EIT `0x0012`, CAT `0x0001` - fixed,
+mux-wide, shared by every program (real DVB-SI reserved PIDs, per ETSI EN 300 468). Every other
+table is per-program, in a fixed 32-PID block per input's position among the `-i` flags (0-based
+index `i`): PMT `0x1000 + i`, video `0x0100 + i*32`, other ES `0x0101 + i*32 ..` in discovery
+order, AIT `0x011F + i*32`. With a single `-i` this is identical to before (`i` = 0).
+
+### Multiple inputs (MPTS)
+
+If you apply more than one `-i` input definition, the output will be a Multi Program Transport Stream (MPTS).
+
+Servicing is one poll loop, not one thread per input, taken in round-robin order so no input is
+always serviced last. each is capped at 32 TS packets read per tick so one busy source can't
+starve the others that tick. There's no de-jitter buffering beyond that. 
+
+Each program keeps forwarding its own source's PCR untouched. There is no synthesized mux-wide
+clock, so a program's timing stays accurate to its own source regardless of what the others are doing.
+
+The per-program ES cap is fixed at 31 real streams, one slot always reserved for AIT whether `--hbbtv` is used on that input or not.
+Extras beyond that are dropped in discovery order, logged once per program setup as "ES cap (31) reached, dropping N stream(s)".
+
+It's one process, one thread doing the demux/remux/CAS work for every program on a running instance of `dipitvhead`.
+Capacity is a CPU budget question, not a thread or connection limit, so plan program count per instance 
+(and instance count per host) with that in mind.
 
 ### Service info (`-n`, `-s`)
 
-Default: passthrough the source's own NIT/SDT text if present. `<text>`: our own (provider name
-fixed to `dipitvhead`). `-`: drop the table outright.
+`-s <text>` sets a per-input Service Description Table (SDT)
+* Default is a passthrough of that program's own source SDT if present. 
+* `-s -` drops the SDT entirely. 
+
+> Note: Going without an SDT might lead to problems with some receiver implementations.
+
+`-n` sets a mux-wide Network Information Table
+* SPTS: the default to pass the source's own NIT if present. `-n -` to drop it.
+* MPTS: default is no NIT.
+* `-n <text>` sets a mux-wide Network Information Table
 
 ### EIT (`--strip-eit`)
 
-No EIT reconstruction - source EIT forwarded verbatim (PID remapped, own CC) unless stripped.
+No EIT reconstruction - source EIT forwarded unless stripped.
+
+SPTS: every packet on the source's EIT pid gets forwarded verbatim (PID remapped, own CC),
+whichever services it describes.
+
+MPTS: reassembled into sections, filtered to that program's own service_id (the
+source's EIT PID otherwise carries every service in its own multiplex, not just the one being
+remuxed), merged onto a shared output EIT.
 
 ### Target bitrate (`-b`, `-S`, `-B`)
 
@@ -95,13 +151,18 @@ identify it, `--hbbtv` is its entry-point URL (`transport_protocol_descriptor`, 
 
 ### Identifiers (`--tsid`, `--onid`, `--sid`)
 
-transport_stream_id / original_network_id / service_id, default 1. `--sid` doubles as the PMT
-program_number.
+`--tsid`/`--onid` (transport_stream_id/original_network_id): mux-wide, default 1. `--sid`
+(service_id, per-input, doubles as the PMT program_number): default auto-assigns the lowest
+integer not already used explicitly by another `-i`; explicit duplicates are a startup error.
 
 ### Reconnecting (`-e`)
 
-No `-e`: any input error stops the tool. `-e <seconds>`: reopens after the delay, output socket
-and continuity counters stay up across the gap.
+SPTS: no `-e` means any input error stops the tool; `-e <seconds>` reopens after the
+delay, you handle restarts yourself.
+
+MPTS: every input always retries independently. Default: 5 seconds.
+One input being down never stops output for the others. Output socket and
+continuity counters stay up across any gap.
 
 ### Live stats (`-v`)
 
@@ -109,19 +170,47 @@ One self-updating line on stderr, about once a second.
 
 ## CAS SCS and Scrambler (`--cas-*`)
 
-Acts as a DVB Simulcrypt SCS towards an ECMG, and as the EMMG-side MUX towards an EMMG client,
-per ETSI TS 103 197 (protocol versions 2 and 3, auto-negotiated unless `--cas-ecmg-version` /
-`--cas-emmg-version` pins one). Scrambles CISSA (ETSI TS 103 127, 128-bit AES-CBC, needs
-OpenSSL) or CSA2 (needs libdvbcsa) content on the PIDs listed in `--cas-pids` and emits the
-matching `CA_descriptor`/`scrambling_descriptor` in the PMT and a CAT, and its own ECM
-(`--cas-ecm-pid`) and EMM (`--cas-emm-pid`) streams.
+Acts as a DVB Simulcrypt SCS towards one or more ECMGs (one per `--cas-ecmg`), and as the
+EMMG-side MUX towards each one's EMMG client, per ETSI TS 103 197 (protocol versions 2 and 3,
+auto-negotiated per vendor unless that vendor's `--cas-ecmg-version` / `--cas-emmg-version`
+pins one). Scrambles CISSA (ETSI TS 103 127, 128-bit AES-CBC, needs OpenSSL) or CSA2 (needs
+libdvbcsa) content on the PIDs listed in `--cas-pids`, exactly once regardless of vendor count -
+every vendor's ECMG gets the same control word. Emits one `CA_descriptor` per vendor plus one
+shared `scrambling_descriptor` in the PMT, a CAT with one `CA_descriptor` per vendor, and each
+vendor's own ECM (`--cas-ecm-pid`) and EMM (`--cas-emm-pid`) streams.
 
-### Requires a real PCR
+### Selecting PIDs to scramble (`--cas-pids`)
 
-Crypto-period cadence is driven by the source's own PCR, not wall-clock or a configured bitrate (VBR support).
-DVB time is king. `dipitvhead` fails fast if no PCR is observed on the PCR_PID within a few seconds of startup. 
-PCR discontinuities (splice, failover) are handled gracefully at runtime, using wall-clock only 
-as a plausibility fence to reject bogus jumps.
+Comma-separated list, each entry is either an output PID (dec or `0x`-hex) or one of the keywords
+`video`/`audio`, meaning every video/audio elementary stream on the output. Freely mixable:
+
+* `--cas-pids video,audio`: all video and audio streams (same as the default)
+* `--cas-pids video`: just the video stream
+* `--cas-pids 0x0103,video`: PID 0x0103 plus every video stream
+* `--cas-pids audio,0x0104,0x0106`: all audio streams plus PIDs 0x0104 and 0x0106
+
+Omit `--cas-pids` entirely and it defaults to `video,audio`. PIDs are given/resolved on the
+*output* side (see the remapped PIDs under Codec support above), matched against the source
+PMT's `stream_type` once it's known - resolving to nothing (e.g. `video` requested but the
+source has no video ES) is a startup error.
+
+With multiple `-i`, `video`/`audio` resolve against *every* program's own discovered ES, so
+every input must be discovered within 15s of startup for CAS to start at all - past that,
+`dipitvhead` fails fast and names whichever input(s) never made it, rather than start
+scrambling with an incomplete pid list or block forever. Numeric PIDs sidestep this entirely
+(no discovery dependency, same as single-input).
+
+### Crypto-period timing: PCR or wall-clock
+
+SPTS: crypto-period cadence is driven by the source's own PCR, not wall-clock or a
+configured bitrate (VBR support). DVB time is king. `dipitvhead` fails fast if no PCR is
+observed on the PCR_PID within a few seconds of startup. PCR discontinuities (splice, failover)
+are handled gracefully at runtime, using the wall-clock only as a plausibility fence to reject
+bogus jumps.
+
+MPTS: No single program's PCR is trustworthy as the whole mux's clock, so crypto-period cadence
+is wall-clock driven instead. It keeps advancing through the all-down steady state, 
+unaffected by which programs currently have live data.
 
 ### On ECMG loss (`--cas-resilience`)
 
@@ -129,20 +218,35 @@ as a plausibility fence to reject bogus jumps.
 comes back. The crypto period stays put on whatever it was, the service never blacks out.
 * `cycling`: keeps flipping parity on the normal crypto-period schedule, alternating between
 the last two known CWs (even/odd), instead of freezing on one.
-* `unscrambled`: the CW expires one crypto period after the ECMG becomes unreachable. Affected
-PIDs fall back to clear (`transport_scrambling_control` = 00) until a fresh CW arrives.
+* `silent`: stops sending this ECM PID once the ECMG becomes unreachable, instead of resending
+the last known-good ECM. Content stays scrambled with the last known-good CW, same as `frozen` -
+only the ECM stream itself goes quiet.
 
 ### EMMG (`--cas-emmg-port`, `--cas-emmg-version`)
 
 dipitvhead is the EMMG-side MUX: it listens (`--cas-emmg-port`, default 8002) and the EMMG
-client connects to it. For now, the only topology, not the reversed one where the MUX
-dials out to the EMMG. Accepts whichever protocol version the client proposes unless
-`--cas-emmg-version` is set. EMM datagrams are queued and drained onto `--cas-emm-pid` on
-arrival.
+client connects to it, once per `--cas-ecmg` vendor (each with its own `--cas-emmg-port`).
+For now, the only topology, not the reversed one where the MUX dials out to the EMMG. Accepts
+whichever protocol version the client proposes unless `--cas-emmg-version` is set. EMM
+datagrams are queued and drained onto that vendor's own `--cas-emm-pid` on arrival.
+
+### Multi-CAS (`--cas-required`, `--cas-fallback-clear`)
+
+Content is scrambled exactly once, with one shared control word handed to every configured
+vendor's ECMG - `--cas-resilience` only decides what a single vendor's own ECM stream does
+while its ECMG is unreachable, not whether the content itself keeps playing. That's a
+separate, global decision:
+
+* Default: content stays scrambled on the last known-good CW no matter how many vendors are
+down, same as `frozen` at the content level - as long as at least one vendor is up, or (if
+none are marked `--cas-required`) even if all of them are down.
+* `--cas-fallback-clear`: switches that default to clear-to-air (`transport_scrambling_control`
+= 00) once every vendor is down, or once any vendor marked `--cas-required` is down
+specifically - regardless of whether other, non-required vendors are still up.
 
 ### Limitations
 
-CISSA and CSA2 only - no CSA3. One ECMG connection, one EMMG listener, one Super_CAS_id.
+CISSA and CSA2 only - no CSA3.
 
 ### Dependencies
 
@@ -160,25 +264,73 @@ Build against it yourself if you want CSA2.
 
 `^C`, SIGINT or SIGTERM.
 
+## Running under systemd
+
+If you intend to run `dipitvhead` as a systemd service, the unit below is a reasonable starting point.
+`-e` is included so a dropped SPTS input reopens itself instead of relying on a full process restart.
+
+> Note: This service is a micro SCS/muxer/scrambler. How many of them you want to pack on a host is entirely yours.
+> Make sure to do integration tests particularly addressing how the load resulting from this decision is handled.
+> Replace `instancename` to make them easier to distinguish.
+
+```ini
+[Unit]
+Description=dipitvhead-instancename
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/dipitvhead -i rtp://@239.19.75.1:8700 -e 5 -m 239.1.1.1:5000 -s "My Channel"
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ## Examples
 
 ```sh
-dipitvhead -i rtp://@239.2.24.1:8208 -m 239.1.1.1:5000 -s "My Channel"
+dipitvhead -i rtp://@239.19.75.1:8700 -m 239.1.1.1:5000 -s "My Channel"
 
 dipitvhead -i https://host/live/x/y.ts -k -m 239.1.1.2:5000 -b 8000 -S -B
 
 dipitvhead -i udp://@239.0.0.1:5000 -m 239.5.5.5:6000 \
   --hbbtv https://example.org/hbbtv/ --hbbtv-org-id 1 --hbbtv-app-id 100
 
-# enigma2 DVB-S2 MPTS source (would need "-p" in reality)
+# MPTS: two independent SPTS sources merged into one output, each its own program.
+# --sid/--sdt pair with the -i right before them.
+dipitvhead -i udp://@239.0.0.1:5000 --sid 101 --sdt "Channel One" \
+           -i udp://@239.0.0.2:5001 --sid 102 --sdt "Channel Two" \
+           -m 239.5.5.5:6000
+
+# enigma2 DVB-S2 MPTS source (would need "-p" if you don't just want _any_ channel)
 dipitvhead -i http://receiver:8001/1:0:10:10:3EF:1:C00000:0:0:0: -m 239.5.5.5:6000
 
 # enigma2 + oscam relay: MPTS, live program picked automatically
 dipitvhead -i http://receiver:17555/1:0:CA:CA:C:85:C00000:0:0:0: -m 239.5.5.6:6000
 
 # scramble an SPTS and re-stream it
-dipitvhead -i rtp://@239.2.24.1:8208 -m 239.1.1.1:5000 \
+dipitvhead -i rtp://@239.19.75.1:8700 -m 239.1.1.1:5000 \
   --cas-algo cissa --cas-ecmg tcp://ecmg.example:2222 --cas-super-id 0x4A750002 --cas-ecm-id 1 --cas-pids 0x0100,0x0101
+
+# multi-CAS: two vendors, one required. --cas-ecmg opens a slot; the flags after it
+# (version/super-id/ecm-id/pid/resilience/required) pair with that --cas-ecmg.
+dipitvhead -i rtp://@239.19.75.1:8700 -m 239.1.1.1:5000 --cas-algo cissa \
+  --cas-ecmg tcp://ecmg-a.example:2222 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
+             --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port 8002 --cas-required \
+  --cas-ecmg tcp://ecmg-b.example:2222 --cas-super-id 0x0D960001 --cas-ecm-id 1 \
+             --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-port 8003 --cas-resilience silent \
+  --cas-pids 0x0100,0x0101 --cas-fallback-clear
 
 # transcoding: not our job, but ffmpeg pipes straight in
 ffmpeg -i <source> -c:v libx264 -c:a aac -f mpegts - | dipitvhead -i - -m 239.5.5.5:6000

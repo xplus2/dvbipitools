@@ -12,38 +12,20 @@
 #include "lib/bim/strrepo.h"
 #include "lib/ioutil.h"
 #include "lib/log.h"
-#include "lib/tva/epg_doc.h"
+#include "lib/tva/bcg_doc.h"
 #include "lib/tva/tva_xml.h"
 #include "version.h"
-
-static log_color_t color_prescan(int argc, char **argv) {
-  int i;
-  for (i = 1; i < argc; i++) {
-    const char *v = NULL;
-    if (!strcmp(argv[i], "--color") && i + 1 < argc)
-      v = argv[i + 1];
-    else if (!strncmp(argv[i], "--color=", 8))
-      v = argv[i] + 8;
-    if (!v)
-      continue;
-    if (!strcmp(v, "always"))
-      return LOG_COLOR_ALWAYS;
-    if (!strcmp(v, "never"))
-      return LOG_COLOR_NEVER;
-  }
-  return LOG_COLOR_AUTO;
-}
 
 static FILE *open_input(const char *path) { return strcmp(path, "-") ? fopen(path, "r") : stdin; }
 static FILE *open_output(const char *path) { return strcmp(path, "-") ? fopen(path, "w") : stdout; }
 
 static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
-  epg_doc_t doc;
+  bcg_doc_t doc;
   bitwriter_t bw;
   strrepo_writer_t sw;
   int rc = 0, nfuu = 0;
 
-  epg_doc_init(&doc);
+  bcg_doc_init(&doc);
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
 
@@ -69,17 +51,17 @@ static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
 
   strrepo_writer_free(&sw);
   bitwriter_free(&bw);
-  epg_doc_free(&doc);
+  bcg_doc_free(&doc);
   return rc;
 }
 
 static int decode_bim_to_xml(FILE *in, FILE *out, int verbose) {
-  epg_doc_t doc;
+  bcg_doc_t doc;
   char *buf = NULL;
   size_t len;
   int rc = 0, nfuu = 0;
 
-  epg_doc_init(&doc);
+  bcg_doc_init(&doc);
   if (read_all(in, &buf, &len) || len < 4) {
     rc = -1;
     goto done;
@@ -110,7 +92,7 @@ static int decode_bim_to_xml(FILE *in, FILE *out, int verbose) {
 
 done:
   free(buf);
-  epg_doc_free(&doc);
+  bcg_doc_free(&doc);
   return rc;
 }
 
@@ -120,7 +102,7 @@ int main(int argc, char **argv) {
   FILE *in, *out;
   int rc;
 
-  log_set_color(color_prescan(argc, argv));
+  log_set_color(log_color_prescan(argc, argv));
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
   if (st == ARGS_OK)

@@ -8,20 +8,48 @@ dipisds -a -i <path> -m <mcast>:<port> [options]
 dipisds -l -m <mcast>:<port> [options]
 ```
 
+## Options
+
+| flag | long form         | argument                    | default                                   |
+|------|-------------------|-----------------------------|--------------------------------------------|
+| `-a` | `--announce`      |                             | headend mode: read `-i`, transmit on `-m`  |
+| `-l` | `--listen`        |                             | client mode: receive on `-m`, write `-o`   |
+| `-i` | `--input`         | `<path>`                    | announce: required                         |
+| `-p` | `--provider`      | `<name>`                    | announce: required unless `-i` is `.xml`   |
+| `-O` | `--offering`      | `<name>`                    | announce: required unless `-i` is `.xml`   |
+| `-L` | `--lang`          | `<code>`                    | announce: `deu`                            |
+| `-m` | `--mcast`         | `<g>:<p>`                   | required                                   |
+| `-I` | `--iface`         | `<iface>`                   | kernel default                             |
+| `-t` | `--interval`      | `<s>`                       | announce: `5`                              |
+| `-t` | `--timeout`       | `<s>`                       | listen: `35`                               |
+| `-o` | `--output`        | `<path>` / `-`              | listen: `-` (stdout)                       |
+| `-f` | `--format`        | `m3u\|csv\|xspf\|xml\|null` | listen: from `-o` suffix                  |
+| `-v` | `--verbose`       |                             | off                                        |
+|      | `--color`         | `auto\|always\|never`       | `auto`                                     |
+|      | `--ret-addr`      | `<addr>:<port>`             | announce: off (no RET advertised)          |
+|      | `--ret-rtx-time`  | `<ms>`                      | announce: `2000`                           |
+|      | `--ret-rtx-pt`    | `<n>`                       | announce: `99`                             |
+|      | `--ret-mc`        |                             | announce: off (unicast RET only)           |
+|      | `--ret-mc-port`   | `<port>`                    | announce: each service's own port          |
+|      | `--fcc-addr`      | `<addr>:<port>`             | announce: off (no FCC advertised)          |
+|      | `--fcc-rtx-time`  | `<ms>`                      | announce: `2000`                           |
+|      | `--fcc-rtx-pt`    | `<n>`                       | announce: `99`                             |
+| `-h` | `--help`          |                             |                                             |
+
 ## Announce (`-a`)
 
 Reads `-i` and transmits it as DVBSTP-carried SD&S records on `-m`, repeating every `-t`
 (`--interval`) seconds, default 5. ETSI TS 102 034 caps the full announce cycle at 30 seconds;
-keep `-t` comfortably under that.
+keep `-t` comfortably under that. SIGHUP re-reads `-i` (see [Signals](#signals)).
 
 `-i` format is taken from the path suffix:
 
-| suffix  | content                                                                          |
-|---------|-----------------------------------------------------------------------------------|
-| `.csv`  | `name,uri[,tsid,onid,sid]`, same as dipiscan's own csv output                     |
+| suffix  | content                                                                             |
+|---------|-------------------------------------------------------------------------------------|
+| `.csv`  | `name,uri[,tsid,onid,sid]`, same as dipiscan's own csv output                       |
 | `.m3u`  | `#EXTINF` with optional `tsid=".." onid=".." sid=".."` attributes, same as dipiscan |
-| `.xspf` | XSPF, triplet in a `<extension application="urn:dvbipitools:dvb-triplet">`        |
-| `.xml`  | a hand-authored SD&S document, or dipiscan's own `-f xml` output - sent as-is (payload id read from its root element) |
+| `.xspf` | XSPF, triplet in a `<extension application="urn:dvbipitools:dvb-triplet">`          |
+| `.xml`  | a hand-authored SD&S document, or dipiscan's own `-f xml` output                    |
 
 `uri` is `rtp://[@]<addr>:<port>` or `udp://[@]<addr>:<port>`, matching dipirec/dipiscan's own
 convention. Missing `tsid`/`onid` default to 1, missing `sid` auto-increments from 1.
@@ -60,7 +88,7 @@ and a minimal Broadcast Discovery record (payload 0x02):
     <ServiceList>
       <SingleService>
         <ServiceLocation>
-          <IPMulticastAddress Address="239.2.24.1" Port="8208" Streaming="rtp"/>
+          <IPMulticastAddress Address="239.19.75.1" Port="8700" Streaming="rtp"/>
         </ServiceLocation>
         <TextualIdentifier ServiceName="channel1"/>
         <DVBTriplet OrigNetId="1" TSId="1" ServiceId="1"/>
@@ -80,11 +108,11 @@ the Broadcast Discovery.
 
 ### Example
 ```xml
-<IPMulticastAddress Address="239.2.24.1" Port="8208" Streaming="rtp">
+<IPMulticastAddress Address="239.19.75.1" Port="8700" Streaming="rtp">
   <RTPRetransmission>
     <RTCPReporting DestinationAddress="10.0.0.1" DestinationPort="6000"/>
     <UnicastRET rtx-time="2000" RTPPayloadTypeNumber="99"/>
-    <MulticastRET GroupAddress="239.2.24.1" DestinationPort="8208" rtx-time="2000" RTPPayloadTypeNumber="99"/>
+    <MulticastRET GroupAddress="239.19.75.1" DestinationPort="8700" rtx-time="2000" RTPPayloadTypeNumber="99"/>
   </RTPRetransmission>
 </IPMulticastAddress>
 ```
@@ -116,7 +144,7 @@ per the spec an HNED using both services is meant to use only this element, igno
 
 ### Example
 ```xml
-<IPMulticastAddress Address="239.2.24.1" Port="8208" Streaming="rtp">
+<IPMulticastAddress Address="239.19.75.1" Port="8700" Streaming="rtp">
   <ServerBasedEnhancementServiceInfo>
     <EnhancementService>FCC</EnhancementService>
     <RTCPReporting DestinationAddress="10.0.0.1" DestinationPort="6000"/>
@@ -158,9 +186,11 @@ route is used.
 
 Announce: one line per cycle. Listen: one line per segment received.
 
-## Stopping
+## Signals
 
-`^C`, SIGINT or SIGTERM.
+* `^C`, SIGINT or SIGTERM: stop the process
+* SIGHUP: re-read `-i` from disk. On error, the previous input keeps being announced and the error
+  is logged. (No effect in `-l` mode).
 
 ## Scope
 
@@ -169,6 +199,36 @@ tool itself produces (`ServiceProviderDiscovery`/`BroadcastDiscovery`, `SingleSe
 `ServiceLocation`/`TextualIdentifier`/`DVBTriplet`). It is not a general SD&S client - other
 record types (CoD, packages, BCG, regionalisation) are out of scope. Compression is always
 "none": gzip is spec-restricted to other payload ids, and BiM is not implemented.
+
+## Running under systemd
+
+If you want dipisds announcing continuously under systemd, the unit below is a reasonable
+starting point for `-a` mode; `-l` mode works the same way, swapped for `-l`/`-o` and a
+writable path instead of `ReadOnlyPaths`.
+
+```ini
+[Unit]
+Description=dipisds
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/dipisds -a -i /etc/dipisds/channels.csv -p example.org -O "My Headend" -m 239.255.0.1:3937
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/etc/dipisds
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ## Examples
 

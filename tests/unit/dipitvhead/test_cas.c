@@ -114,79 +114,198 @@ START_TEST(pcr_plausible_rejects_zero_wall_delta) {
 }
 END_TEST
 
-START_TEST(pid_apply_no_target_is_noop) {
-  cas_pid_state_t ps;
-  memset(&ps, 0, sizeof ps);
-  ps.current_parity = 0;
-  cas_pid_apply(&ps, 0, 1, 1, 100.0, CAS_FORCE_FLIP_S);
-  ck_assert_int_eq(ps.current_parity, 0);
-  ck_assert_int_eq(ps.flip_pending, 0);
+static void set_es(out_es_t *es, psi_es_t *psi_es, unsigned out_pid, pid_class_t cls) {
+  memset(psi_es, 0, sizeof *psi_es);
+  psi_es->cls = cls;
+  es->out_pid = out_pid;
+  es->src = psi_es;
+}
+
+START_TEST(resolve_pids_explicit_only) {
+  config_t cfg;
+  unsigned out[16];
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pid_count = 2;
+  cfg.cas_pids[0] = 0x0104;
+  cfg.cas_pids[1] = 0x0106;
+  ck_assert_uint_eq(cas_resolve_pids(&cfg, NULL, 0, out, 16), 2);
+  ck_assert_uint_eq(out[0], 0x0104);
+  ck_assert_uint_eq(out[1], 0x0106);
 }
 END_TEST
 
-START_TEST(pid_apply_same_target_stays_put) {
-  cas_pid_state_t ps;
-  memset(&ps, 0, sizeof ps);
-  ps.current_parity = 1;
-  cas_pid_apply(&ps, 1, 1, 1, 100.0, CAS_FORCE_FLIP_S);
-  ck_assert_int_eq(ps.current_parity, 1);
-  ck_assert_int_eq(ps.flip_pending, 0);
+START_TEST(resolve_pids_video_keyword) {
+  config_t cfg;
+  psi_es_t pe[2];
+  out_es_t es[2];
+  unsigned out[16];
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pids_video = 1;
+  set_es(&es[0], &pe[0], 0x0100, PID_VIDEO);
+  set_es(&es[1], &pe[1], 0x0101, PID_AUDIO);
+  ck_assert_uint_eq(cas_resolve_pids(&cfg, es, 2, out, 16), 1);
+  ck_assert_uint_eq(out[0], 0x0100);
 }
 END_TEST
 
-START_TEST(pid_apply_flip_lands_exactly_on_pusi) {
-  cas_pid_state_t ps;
+START_TEST(resolve_pids_audio_keyword_multiple) {
+  config_t cfg;
+  psi_es_t pe[3];
+  out_es_t es[3];
+  unsigned out[16];
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pids_audio = 1;
+  set_es(&es[0], &pe[0], 0x0100, PID_VIDEO);
+  set_es(&es[1], &pe[1], 0x0101, PID_AUDIO);
+  set_es(&es[2], &pe[2], 0x0102, PID_AUDIO);
+  ck_assert_uint_eq(cas_resolve_pids(&cfg, es, 3, out, 16), 2);
+  ck_assert_uint_eq(out[0], 0x0101);
+  ck_assert_uint_eq(out[1], 0x0102);
+}
+END_TEST
+
+START_TEST(resolve_pids_mixed_explicit_and_keyword_dedupes) {
+  config_t cfg;
+  psi_es_t pe[2];
+  out_es_t es[2];
+  unsigned out[16];
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pid_count = 1;
+  cfg.cas_pids[0] = 0x0100; /* same as the video out_pid below */
+  cfg.cas_pids_video = 1;
+  set_es(&es[0], &pe[0], 0x0100, PID_VIDEO);
+  set_es(&es[1], &pe[1], 0x0101, PID_AUDIO);
+  ck_assert_uint_eq(cas_resolve_pids(&cfg, es, 2, out, 16), 1);
+  ck_assert_uint_eq(out[0], 0x0100);
+}
+END_TEST
+
+START_TEST(resolve_pids_default_video_and_audio) {
+  config_t cfg;
+  psi_es_t pe[2];
+  out_es_t es[2];
+  unsigned out[16];
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pids_video = 1;
+  cfg.cas_pids_audio = 1;
+  set_es(&es[0], &pe[0], 0x0100, PID_VIDEO);
+  set_es(&es[1], &pe[1], 0x0101, PID_AUDIO);
+  ck_assert_uint_eq(cas_resolve_pids(&cfg, es, 2, out, 16), 2);
+  ck_assert_uint_eq(out[0], 0x0100);
+  ck_assert_uint_eq(out[1], 0x0101);
+}
+END_TEST
+
+START_TEST(resolve_pids_caps_at_limit) {
+  config_t cfg;
+  psi_es_t pe[3];
+  out_es_t es[3];
+  unsigned out[2];
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pids_audio = 1;
+  set_es(&es[0], &pe[0], 0x0101, PID_AUDIO);
+  set_es(&es[1], &pe[1], 0x0102, PID_AUDIO);
+  set_es(&es[2], &pe[2], 0x0103, PID_AUDIO);
+  ck_assert_uint_eq(cas_resolve_pids(&cfg, es, 3, out, 2), 2);
+}
+END_TEST
+
+START_TEST(resolve_pids_nothing_requested_yields_none) {
+  config_t cfg;
+  unsigned out[16];
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_uint_eq(cas_resolve_pids(&cfg, NULL, 0, out, 16), 0);
+}
+END_TEST
+
+START_TEST(resolve_pids_exceeds_old_16_limit) {
+  config_t cfg;
+  psi_es_t pe[20];
+  out_es_t es[20];
+  unsigned out[CAS_CORE_MAX_PIDS];
   int i;
-  memset(&ps, 0, sizeof ps);
-  ps.current_parity = 0;
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pids_audio = 1;
+  for (i = 0; i < 20; i++)
+    set_es(&es[i], &pe[i], (unsigned)(0x0100 + i), PID_AUDIO);
+  ck_assert_uint_eq(cas_resolve_pids(&cfg, es, 20, out, CAS_CORE_MAX_PIDS), 20);
+}
+END_TEST
 
-  /* target flips to 1; several PUSI=0 packets must not flip it yet */
-  for (i = 0; i < 5; i++) {
-    cas_pid_apply(&ps, 1, 1, 0, 100.0 + i * 0.01, CAS_FORCE_FLIP_S);
-    ck_assert_int_eq(ps.current_parity, 0);
-    ck_assert_int_eq(ps.flip_pending, 1);
+START_TEST(resolve_pids_multi_across_programs) {
+  config_t cfg;
+  psi_es_t pe0[2], pe1[2];
+  out_es_t es0[2], es1[2];
+  const out_es_t *es_lists[2];
+  int es_counts[2];
+  unsigned out[16];
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pids_video = 1;
+  cfg.cas_pids_audio = 1;
+  set_es(&es0[0], &pe0[0], 0x1100, PID_VIDEO);
+  set_es(&es0[1], &pe0[1], 0x1101, PID_AUDIO);
+  set_es(&es1[0], &pe1[0], 0x1200, PID_VIDEO);
+  set_es(&es1[1], &pe1[1], 0x1201, PID_AUDIO);
+  es_lists[0] = es0;
+  es_lists[1] = es1;
+  es_counts[0] = 2;
+  es_counts[1] = 2;
+
+  ck_assert_uint_eq(cas_resolve_pids_multi(&cfg, es_lists, es_counts, 2, out, 16), 4);
+  ck_assert_uint_eq(out[0], 0x1100u);
+  ck_assert_uint_eq(out[1], 0x1101u);
+  ck_assert_uint_eq(out[2], 0x1200u);
+  ck_assert_uint_eq(out[3], 0x1201u);
+}
+END_TEST
+
+START_TEST(resolve_pids_multi_dedupes_across_programs) {
+  config_t cfg;
+  psi_es_t pe0[1], pe1[1];
+  out_es_t es0[1], es1[1];
+  const out_es_t *es_lists[2];
+  int es_counts[2];
+  unsigned out[16];
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pid_count = 1;
+  cfg.cas_pids[0] = 0x1300; /* same pid program 1 also resolves via --cas-pids-video */
+  cfg.cas_pids_video = 1;
+  set_es(&es0[0], &pe0[0], 0x1400, PID_VIDEO);
+  set_es(&es1[0], &pe1[0], 0x1300, PID_VIDEO);
+  es_lists[0] = es0;
+  es_lists[1] = es1;
+  es_counts[0] = 1;
+  es_counts[1] = 1;
+
+  ck_assert_uint_eq(cas_resolve_pids_multi(&cfg, es_lists, es_counts, 2, out, 16), 2);
+  ck_assert_uint_eq(out[0], 0x1300u);
+  ck_assert_uint_eq(out[1], 0x1400u);
+}
+END_TEST
+
+START_TEST(resolve_pids_multi_caps_across_programs) {
+  config_t cfg;
+  psi_es_t pe0[3], pe1[3];
+  out_es_t es0[3], es1[3];
+  const out_es_t *es_lists[2];
+  int es_counts[2];
+  unsigned out[4];
+  int i;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pids_audio = 1;
+  for (i = 0; i < 3; i++) {
+    set_es(&es0[i], &pe0[i], (unsigned)(0x1500 + i), PID_AUDIO);
+    set_es(&es1[i], &pe1[i], (unsigned)(0x1600 + i), PID_AUDIO);
   }
-  /* first PUSI=1 packet: flip lands exactly here */
-  cas_pid_apply(&ps, 1, 1, 1, 100.06, CAS_FORCE_FLIP_S);
-  ck_assert_int_eq(ps.current_parity, 1);
-  ck_assert_int_eq(ps.flip_pending, 0);
-}
-END_TEST
+  es_lists[0] = es0;
+  es_lists[1] = es1;
+  es_counts[0] = 3;
+  es_counts[1] = 3;
 
-START_TEST(pid_apply_forced_after_deadline_without_pusi) {
-  cas_pid_state_t ps;
-  memset(&ps, 0, sizeof ps);
-  ps.current_parity = 0;
-
-  cas_pid_apply(&ps, 1, 1, 0, 100.0, 2.0); /* pending set, deadline = 102.0 */
-  ck_assert_int_eq(ps.current_parity, 0);
-  ck_assert_int_eq(ps.flip_pending, 1);
-
-  cas_pid_apply(&ps, 1, 1, 0, 101.9, 2.0); /* still before deadline, no PUSI: no flip */
-  ck_assert_int_eq(ps.current_parity, 0);
-
-  cas_pid_apply(&ps, 1, 1, 0, 102.1, 2.0); /* past deadline, still no PUSI: forced */
-  ck_assert_int_eq(ps.current_parity, 1);
-  ck_assert_int_eq(ps.flip_pending, 0);
-}
-END_TEST
-
-START_TEST(pid_apply_retargets_while_pending_without_extending_deadline) {
-  cas_pid_state_t ps;
-  memset(&ps, 0, sizeof ps);
-  ps.current_parity = 0;
-
-  cas_pid_apply(&ps, 1, 1, 0, 100.0, 2.0); /* pending, target 1, deadline 102.0 */
-  ck_assert_double_eq_tol(ps.flip_deadline_wall, 102.0, 1e-9);
-
-  /* target changes again to 0 while still pending: deadline must not reset */
-  cas_pid_apply(&ps, 1, 0, 0, 101.0, 2.0);
-  ck_assert_double_eq_tol(ps.flip_deadline_wall, 102.0, 1e-9);
-
-  /* forced flip at the ORIGINAL deadline lands on the LATEST target (0), not the first (1) */
-  cas_pid_apply(&ps, 1, 0, 0, 102.1, 2.0);
-  ck_assert_int_eq(ps.current_parity, 0);
-  ck_assert_int_eq(ps.flip_pending, 0);
+  ck_assert_uint_eq(cas_resolve_pids_multi(&cfg, es_lists, es_counts, 2, out, 4), 4);
 }
 END_TEST
 
@@ -203,11 +322,17 @@ static Suite *cas_suite(void) {
   tcase_add_test(tc, pcr_plausible_rejects_huge_discontinuity);
   tcase_add_test(tc, pcr_plausible_rejects_backward_jump);
   tcase_add_test(tc, pcr_plausible_rejects_zero_wall_delta);
-  tcase_add_test(tc, pid_apply_no_target_is_noop);
-  tcase_add_test(tc, pid_apply_same_target_stays_put);
-  tcase_add_test(tc, pid_apply_flip_lands_exactly_on_pusi);
-  tcase_add_test(tc, pid_apply_forced_after_deadline_without_pusi);
-  tcase_add_test(tc, pid_apply_retargets_while_pending_without_extending_deadline);
+  tcase_add_test(tc, resolve_pids_explicit_only);
+  tcase_add_test(tc, resolve_pids_video_keyword);
+  tcase_add_test(tc, resolve_pids_audio_keyword_multiple);
+  tcase_add_test(tc, resolve_pids_mixed_explicit_and_keyword_dedupes);
+  tcase_add_test(tc, resolve_pids_default_video_and_audio);
+  tcase_add_test(tc, resolve_pids_caps_at_limit);
+  tcase_add_test(tc, resolve_pids_nothing_requested_yields_none);
+  tcase_add_test(tc, resolve_pids_exceeds_old_16_limit);
+  tcase_add_test(tc, resolve_pids_multi_across_programs);
+  tcase_add_test(tc, resolve_pids_multi_dedupes_across_programs);
+  tcase_add_test(tc, resolve_pids_multi_caps_across_programs);
   suite_add_tcase(s, tc);
   return s;
 }

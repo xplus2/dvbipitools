@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <arpa/inet.h>
 #include <check.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -10,6 +11,13 @@
 #include "dipifccret/ret/ret.h"
 #include "lib/demux/rtcp.h"
 #include "lib/demux/rtx.h"
+
+/* channel_lookup() takes raw address bytes now, not text */
+static channel_t *lookup_ip(channel_table_t *t, const char *ip, unsigned port) {
+  unsigned char addr[4];
+  inet_pton(AF_INET, ip, addr);
+  return channel_lookup(t, AF_INET, addr, sizeof addr, port);
+}
 
 #define MAX_MC 32
 #define MAX_UNI 32
@@ -58,12 +66,12 @@ static void reset_capture(void) {
    payload[0] == entry index for identification */
 static channel_t *make_channel(channel_table_t **out_table, uint32_t ssrc, uint16_t base_seq, int n) {
   channel_table_t *t = channel_table_new(1, 32, 0);
-  channel_t *c = channel_lookup(t, AF_INET, "239.1.1.1", 5000);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
   int i;
 
   for (i = 0; i < n; i++) {
     unsigned char payload[4] = {(unsigned char)i, 0, 0, 0};
-    channel_store(c, ssrc, (uint16_t)(base_seq + i), (uint32_t)i, payload, sizeof payload);
+    channel_store(t, c, ssrc, (uint16_t)(base_seq + i), (uint32_t)i, payload, sizeof payload);
   }
   *out_table = t;
   return c;

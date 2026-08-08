@@ -7,13 +7,15 @@
 #include <stddef.h>
 #include <sys/types.h>
 
+#include "netconnect.h"
+
 typedef struct udpxy udpxy_t;
 
-/* connect + GET; positioned at TS body */
-udpxy_t *udpxy_open(const char *host, unsigned port, const char *path, const char *user_agent);
+/* connect + GET; positioned at TS body. reason_out: nullable, set only on NULL return */
+udpxy_t *udpxy_open(const char *host, unsigned port, const char *path, const char *user_agent, net_err_reason_t *reason_out);
 
-/* body bytes. >0 len, 0 timeout, -1 closed */
-ssize_t udpxy_read(udpxy_t *u, void *buf, size_t cap);
+/* body bytes. >0 len, 0 timeout, -1 closed. reason_out: nullable, set only on -1 */
+ssize_t udpxy_read(udpxy_t *u, void *buf, size_t cap, net_err_reason_t *reason_out);
 
 void udpxy_close(udpxy_t *u);
 

@@ -1,0 +1,105 @@
+# dipimetrics
+
+Host-level metrics collector for `dipitvhead`, `dipiradiohead`, `dipisds` and `dipibcg`. 
+Each of those tools, if started with `--metrics-id`, periodically sends a snapshot of its own counters
+over a Unix datagram socket. `dipimetrics` retains the latest snapshot per (component, instance),
+and serves them all as one Prometheus/OpenMetrics document over plain HTTP.
+
+```
+dipimetrics [options]
+```
+
+## Options
+
+| flag | long form    | argument              | default                         |
+|------|--------------|-----------------------|---------------------------------|
+| `-S` | `--sock`     | `<path>`              | `/run/dvbipitools/metrics.sock` |
+| `-l` | `--listen`   | `<addr>:<port>`       | `127.0.0.1:9109`                |
+| `-e` | `--expiry`   | `<s>`                 | `30`                            |
+| `-v` | `--verbose`  |                       | off                             |
+|      | `--color`    | `auto\|always\|never` | `auto`                          |
+| `-h` | `--help`     |                       |                                 |
+
+## How it works
+
+- `-S`/`--sock` is a `SOCK_DGRAM` Unix socket. `dipimetrics` binds it and never blocks on it. 
+  A slow or absent collector never affects the exporters, which are already best-effort senders themselves.
+- Each datagram is a self-contained snapshot: a header (component, the exporter's own
+  `--metrics-id`, its process start time, a per-process sequence number, and the snapshot's own
+  timestamp) followed by its metric entries. `dipimetrics` rejects anything malformed, oversized, or
+  from an unsupported protocol version outright.
+- A snapshot with a lower-or-equal sequence number than the last one seen for the same
+  (component, instance) is dropped as stale/out of order. A *different* process start time is treated as the exporter
+  having restarted, and is always accepted, replacing all prior state for that instance.
+- An instance that hasn't sent a snapshot in `-e`/`--expiry` seconds (default 30, i.e. 6 missed sends at an exporter's 
+  own default 5s interval) is dropped entirely - it stops appearing in `/metrics`, rather than serving an arbitrarily stale last-known value.
+- Up to 64 concurrently tracked instances; a 65th distinct (component, instance) pair is dropped and logged under `-v`.
+
+## HTTP endpoint
+
+`-l`/`--listen` is the address:port `GET /metrics` is served on, default `127.0.0.1:9109` (loopback
+only, pass e.g. `-l 0.0.0.0:9109` for "any"). Every other path returns `404`. 
+The server is intentionally minimal: one request handled at a time, `Connection: close` on every response, 
+a several-second read/write budget per connection so a stalled client can't wedge the collector. 
+This is a local diagnostics endpoint meant for infrequent scraping, not
+a general-purpose web server. There is no TLS and no authentication.
+
+Output is `application/openmetrics-text`: one `# TYPE`/`# HELP` pair per metric family actually
+present (families with zero live samples are omitted), samples labeled
+`component="tvhead|radiohead|sds|bcg"` and `instance="<the exporter's --metrics-id>"` plus
+whatever label the metric itself carries (`reason`, `input`, `table`, `codec`, `transport`,
+`version`). One extra, collector-computed series is added per tracked instance:
+`dvbipi_metrics_snapshot_age_seconds`: seconds since that instance's last accepted snapshot,
+independent of anything the exporter itself reports.
+
+## Live stats (`-v`)
+
+Logs every rejected/dropped snapshot (malformed, stale sequence, store full) and every `404`, with
+enough detail to diagnose a misbehaving exporter or a stray HTTP client.
+
+## Signals
+
+`^C`, SIGINT or SIGTERM: stop the process (closes sockets, removes the Unix socket file).
+
+## Running under systemd
+
+Make sure that the processes reporting to the metrics.sock have the according permissions to do so.
+
+For example, use `User=dvbipitools` in their systemd units.
+
+```ini
+[Unit]
+Description=dipimetrics
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dvbipitools
+RuntimeDirectory=dvbipitools
+ExecStart=/usr/bin/dipimetrics --sock /run/dvbipitools/metrics.sock --listen 127.0.0.1:9109
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+
+## Examples
+
+```sh
+# start the collector with defaults
+dipimetrics
+
+# reachable from another host, custom expiry
+dipimetrics -l 0.0.0.0:9109 -e 60
+
+# let dipitvhead report in
+dipitvhead ... --metrics-id headend1-tv1 --metrics-interval 5
+```

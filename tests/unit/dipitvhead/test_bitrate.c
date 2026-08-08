@@ -81,6 +81,67 @@ START_TEST(bitrate_pace_sleeps_when_far_ahead_of_schedule) {
 }
 END_TEST
 
+START_TEST(bitrate_pacer_shares_budget_regardless_of_source_order) {
+  /* one pacer instance, fed packets "from" two different programs in different interleavings -
+     only the total count should matter, never which program or in what order */
+  bitrate_pacer_t *a = bitrate_pacer_new(100000, 1, 1);
+  bitrate_pacer_t *b = bitrate_pacer_new(100000, 1, 1);
+  int i;
+
+  for (i = 0; i < 3; i++)
+    bitrate_account(a); /* simulates program 1's packets */
+  for (i = 0; i < 3; i++)
+    bitrate_account(a); /* simulates program 2's packets, same pacer */
+
+  for (i = 0; i < 3; i++) {
+    bitrate_account(b); /* interleaved: 1, 2, 1, 2, 1, 2 */
+    bitrate_account(b);
+  }
+
+  ck_assert_int_eq(bitrate_stuff_due(a), bitrate_stuff_due(b));
+
+  bitrate_pacer_free(a);
+  bitrate_pacer_free(b);
+}
+END_TEST
+
+START_TEST(bitrate_pacer_logs_sustained_overage_without_crashing) {
+  /* far more content accounted than the target allows: exercises the overage-warning path
+     (not asserted on directly, log_line has no test-capturable sink - just must not crash and
+     must not affect stuff_due()'s own correctness) */
+  bitrate_pacer_t *p = bitrate_pacer_new(1000, 1, 1); /* 1 kbps: trivial to exceed */
+  int i;
+
+  for (i = 0; i < 50; i++)
+    bitrate_account(p);
+  ck_assert_int_eq(bitrate_stuff_due(p), 0); /* far ahead, never behind - no stuffing due */
+
+  bitrate_pacer_free(p);
+}
+END_TEST
+
+START_TEST(bitrate_account_n_matches_n_single_calls) {
+  bitrate_pacer_t *a = bitrate_pacer_new(100000, 1, 1);
+  bitrate_pacer_t *b = bitrate_pacer_new(100000, 1, 1);
+  int i;
+
+  for (i = 0; i < 6; i++)
+    bitrate_account(a);
+  bitrate_account_n(b, 6);
+
+  ck_assert_int_eq(bitrate_stuff_due(a), bitrate_stuff_due(b));
+
+  bitrate_pacer_free(a);
+  bitrate_pacer_free(b);
+}
+END_TEST
+
+START_TEST(bitrate_pace_and_account_n_tolerate_null_pacer) {
+  bitrate_pace(NULL);
+  bitrate_account_n(NULL, 7);
+}
+END_TEST
+
 static Suite *bitrate_suite(void) {
   Suite *s = suite_create("bitrate");
   TCase *tc = tcase_create("core");
@@ -90,6 +151,10 @@ static Suite *bitrate_suite(void) {
   tcase_add_test(tc, bitrate_stuff_due_disabled_when_stuff_zero);
   tcase_add_test(tc, bitrate_stuff_due_reports_deficit_after_falling_behind);
   tcase_add_test(tc, bitrate_pace_sleeps_when_far_ahead_of_schedule);
+  tcase_add_test(tc, bitrate_pacer_shares_budget_regardless_of_source_order);
+  tcase_add_test(tc, bitrate_pacer_logs_sustained_overage_without_crashing);
+  tcase_add_test(tc, bitrate_account_n_matches_n_single_calls);
+  tcase_add_test(tc, bitrate_pace_and_account_n_tolerate_null_pacer);
   suite_add_tcase(s, tc);
   return s;
 }

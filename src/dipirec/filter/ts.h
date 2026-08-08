@@ -8,7 +8,8 @@
 
 typedef struct ts_filter ts_filter_t;
 
-ts_filter_t *ts_filter_new(int audio_all, unsigned audio_track, int strip_subs);
+/* preferred_pmt_pid: 0 = auto (first candidate), else pin via psi_select_pmt_pid() */
+ts_filter_t *ts_filter_new(int audio_all, unsigned audio_track, int strip_subs, unsigned preferred_pmt_pid);
 void ts_filter_free(ts_filter_t *f);
 
 /* filter one pkg: 1 = keep (out filled), 0 = strip */

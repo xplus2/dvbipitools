@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "lib/argutil.h"
+#include "lib/log.h"
+
 #include "args.h"
 #include "version.h"
 
@@ -13,26 +16,9 @@ static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 static void argerr(const char *fmt, ...) {
   va_list ap;
-  fputs(TOOL_NAME ": ", stderr);
   va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
+  argutil_verr(TOOL_NAME, fmt, ap);
   va_end(ap);
-  fputc('\n', stderr);
-}
-
-typedef struct {
-  const char *name;
-  int value;
-} enum_map_t;
-
-static int map_lookup(const enum_map_t *m, size_t n, const char *s, int *out) {
-  size_t i;
-  for (i = 0; i < n; i++)
-    if (!strcmp(s, m[i].name)) {
-      *out = m[i].value;
-      return 0;
-    }
-  return -1;
 }
 
 static void print_help(void) {
@@ -42,16 +28,16 @@ static void print_help(void) {
       "       %s -S <scan.csv> [-i <guide.xml>] [-o <path>] [options]\n\n"
       "convert between xmltv and the DVB-IPI EPG (TVA) xml shape\n\n"
       "options:\n"
-      "  -i, --input <path>     input path, - for stdin (default)\n"
-      "  -o, --output <path>    output path, - for stdout (default)\n"
-      "  -f, --format <fmt>     xmltv|tva - names the INPUT format\n"
-      "  -M, --map <path>       xmltv id -> uri,tsid,onid,sid (required for -f xmltv)\n"
+      "  -i, --input <path>       input path, - for stdin (default)\n"
+      "  -o, --output <path>      output path, - for stdout (default)\n"
+      "  -f, --format <fmt>       xmltv|tva - names the INPUT format\n"
+      "  -M, --map <path>         xmltv id -> uri,tsid,onid,sid (required for -f xmltv)\n"
       "  -R, --reverse-map <path> uri -> preferred xmltv id (optional, -f tva only)\n"
       "  -S, --suggest-map <path> dipiscan csv - write a suggested -M mapping to -o,\n"
-      "                         matched by channel name (review before use)\n"
-      "  -v, --verbose          progress on stderr\n"
-      "      --color <when>     auto|always|never (default auto)\n"
-      "  -h, --help             this help\n\n"
+      "                           matched by channel name (review before use)\n"
+      "  -v, --verbose            progress on stderr\n"
+      "      --color <when>       auto|always|never (default auto)\n"
+      "  -h, --help               this help\n\n"
       "examples:\n"
       "  %s -f xmltv -M mapping.csv -i guide.xml -o guide.tva.xml\n"
       "  %s -f tva -i guide.tva.xml -o guide.xml\n"
@@ -108,9 +94,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       cfg->verbose = 1;
       break;
     case 1000: {
-      static const enum_map_t map[] = {{"auto", 0}, {"always", 1}, {"never", 2}};
-      int v;
-      if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+      log_color_t v;
+      if (log_color_from_string(optarg, &v)) {
         argerr("invalid --color: %s (auto|always|never)", optarg);
         return ARGS_ERR;
       }
