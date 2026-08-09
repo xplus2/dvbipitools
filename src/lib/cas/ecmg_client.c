@@ -259,7 +259,12 @@ static int tcp_dial(ecmg_client_t *c, const char *host, unsigned port) {
     if (fd < 0)
       continue;
     flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+      save_errno = errno;
+      close(fd);
+      fd = -1;
+      continue;
+    }
     if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0)
       break;
     if (errno != EINPROGRESS) {

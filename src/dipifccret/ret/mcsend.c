@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "lib/log.h"
+
+#include "../version.h"
+
 #include "mcsend.h"
 
 /* keys come from a fixed preallocated array: bounded key space, no tombstones needed. */
@@ -82,8 +86,10 @@ void mcsend_ensure(mcsend_table_t *t, channel_t *c, unsigned ff_port) {
     if (cur == NULL)
       break; /* free bucket: not tracked yet */
     h = (h + 1) & t->hash_mask;
-    if (h == start)
-      return; /* table full - can't happen, sized 2x the bounded key space */
+    if (h == start) {
+      log_line(TOOL_NAME ": mcsend table full, dropping RET multicast for a channel - accounting invariant violated");
+      return; /* can't happen, sized 2x the bounded key space */
+    }
   }
 
   port = ff_port ? ff_port : c->port;

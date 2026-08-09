@@ -226,6 +226,7 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *ou
   metrics_writer_put(&w, METRICS_ID_TV_REMUX_PACKETS_TOTAL, NULL, tsm->remux_packets_total);
   metrics_writer_put(&w, METRICS_ID_TV_REMUX_DROPPED_PACKETS_TOTAL, NULL, tsm->remux_dropped_packets_total);
   metrics_writer_put(&w, METRICS_ID_TV_AIT_SECTIONS_TOTAL, NULL, tsm->ait_sections_total);
+  metrics_writer_put(&w, METRICS_ID_TV_EIT_QUEUE_DROPS_TOTAL, NULL, tsm->eit_queue_drops_total);
   if (cas) {
     cas_metrics_t cm;
     size_t i, n = cas_vendor_count(cas);
@@ -243,6 +244,7 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *ou
       metrics_writer_put(&w, METRICS_ID_CAS_ECM_TOTAL, label, vm.ecm_total);
       metrics_writer_put(&w, METRICS_ID_CAS_ECM_ERRORS_TOTAL, label, vm.ecm_errors_total);
       metrics_writer_put(&w, METRICS_ID_CAS_EMM_TOTAL, label, vm.emm_total);
+      metrics_writer_put(&w, METRICS_ID_CAS_EMM_DROPPED_TOTAL, label, vm.emm_dropped_total);
     }
   }
   metrics_exporter_send(mx, &w);
@@ -712,6 +714,10 @@ static int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
 
         if (!progs[i].psi) {
           progs[i].psi = psi_new();
+          if (!progs[i].psi) {
+            log_line("input %u: out of memory allocating psi state, retrying next poll", i);
+            continue;
+          }
           progs[i].discover_start = mono_seconds();
           if (cfg->inputs[i].pmt_pid)
             psi_select_pmt_pid(progs[i].psi, cfg->inputs[i].pmt_pid);

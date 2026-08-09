@@ -25,8 +25,13 @@ int read_all(FILE *f, char **out, size_t *out_len) {
     }
     n = fread(buf + len, 1, 4096, f);
     len += n;
-    if (n < 4096)
+    if (n < 4096) {
+      if (ferror(f)) {
+        free(buf);
+        return -1;
+      }
       break;
+    }
   }
   buf[len] = '\0';
   *out = buf;

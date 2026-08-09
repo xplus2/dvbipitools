@@ -45,6 +45,7 @@ burst_t *burst_new(const channel_t *c, double multiplier, double client_max_bps,
     target = client_max_bps;
 
   b->channel = c;
+  b->generation = atomic_load_explicit(&c->generation, memory_order_relaxed);
   b->rtx_pt = rtx_pt;
   b->target_bps = target;
   clock_gettime(CLOCK_MONOTONIC, &b->start_time);
@@ -65,6 +66,11 @@ burst_tick_result_t burst_tick(burst_t *b, unsigned duration_cap_ms, burst_send_
   if (atomic_load_explicit(&b->done, memory_order_acquire))
     return BURST_TICK_DONE;
 
+  if (atomic_load_explicit(&b->channel->generation, memory_order_acquire) != b->generation) {
+    atomic_store_explicit(&b->done, 1, memory_order_release);
+    return BURST_TICK_DONE; /* slot recycled under us: channel identity no longer ours */
+  }
+
   elapsed_s = elapsed_seconds(&b->start_time);
   if (elapsed_s * 1000.0 >= (double)duration_cap_ms) {
     atomic_store_explicit(&b->done, 1, memory_order_release);
@@ -82,6 +88,11 @@ burst_tick_result_t burst_tick(burst_t *b, unsigned duration_cap_ms, burst_send_
 
     if (atomic_load_explicit(&b->done, memory_order_acquire))
       return BURST_TICK_DONE; /* terminated mid-tick by another thread */
+
+    if (atomic_load_explicit(&b->channel->generation, memory_order_acquire) != b->generation) {
+      atomic_store_explicit(&b->done, 1, memory_order_release);
+      return BURST_TICK_DONE; /* slot recycled mid-tick */
+    }
 
     if (!channel_cache_get(b->channel, b->cursor, &e))
       break; /* raced with reap/reclaim, stop rather than misread */

@@ -391,7 +391,11 @@ static int tcp_listen_dualstack(unsigned port) {
     return -1;
   }
   flags = fcntl(fd, F_GETFL, 0);
-  fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    log_line(TOOL_NAME ": fcntl O_NONBLOCK: %s", strerror(errno));
+    close(fd);
+    return -1;
+  }
   return fd;
 }
 

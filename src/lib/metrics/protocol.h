@@ -63,6 +63,7 @@ typedef enum {
   METRICS_ID_CAS_EMM_TOTAL = 55,                       /* label = cas */
   METRICS_ID_CAS_SCRAMBLED_PACKETS_TOTAL = 56,         /* shared scramble engine, one value across all cas */
   METRICS_ID_CAS_UNEXPECTED_CLEAR_PACKETS_TOTAL = 57,  /* shared scramble engine, one value across all cas */
+  METRICS_ID_CAS_EMM_DROPPED_TOTAL = 58,               /* label = cas; oversized or evicted from a full send queue */
 
   METRICS_ID_RADIO_AUDIO_FRAMES_TOTAL = 60,       /* label = codec */
   METRICS_ID_RADIO_AUDIO_FRAMING_ERRORS_TOTAL = 61,
@@ -76,6 +77,7 @@ typedef enum {
   METRICS_ID_TV_REMUX_DROPPED_PACKETS_TOTAL = 74,
   METRICS_ID_TV_AIT_SECTIONS_TOTAL = 75,
   METRICS_ID_TV_AIT_ERRORS_TOTAL = 76,
+  METRICS_ID_TV_EIT_QUEUE_DROPS_TOTAL = 77,
 
   METRICS_ID_SDS_SERVICE_PROVIDERS = 80,
   METRICS_ID_SDS_SERVICES = 81,

@@ -1245,7 +1245,8 @@ static void add_track(mkv_t *m, const psi_es_t *es, int psi_idx) {
   t->cls = es->cls;
   t->psi_idx = psi_idx;
   memcpy(t->lang, es->lang, sizeof t->lang);
-  pes_track(m->pes, t->pid);
+  if (pes_track(m->pes, t->pid))
+    log_line("mkv: pes tracker full, pid 0x%04x will not be reassembled", t->pid);
   m->ntrk++;
 }
 

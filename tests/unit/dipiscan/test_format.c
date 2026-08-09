@@ -77,7 +77,7 @@ START_TEST(format_xml_produces_parseable_sds_broadcast_doc) {
   format_close(f, OUT_XML);
   fclose(f);
 
-  n = sds_parse_broadcast(buf, out, 4);
+  n = sds_parse_broadcast(buf, out, 4, NULL);
   ck_assert_int_eq(n, 2);
   ck_assert_str_eq(out[0].name, "Channel One");
   ck_assert_str_eq(out[0].address, "239.1.1.1");

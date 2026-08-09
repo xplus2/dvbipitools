@@ -42,11 +42,12 @@ static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
     lenbuf[1] = (unsigned char)(bits_len >> 16);
     lenbuf[2] = (unsigned char)(bits_len >> 8);
     lenbuf[3] = (unsigned char)bits_len;
-    fwrite(lenbuf, 1, 4, out);
-    fwrite(bits, 1, bits_len, out);
-    fwrite(strs, 1, strs_len, out);
-    if (verbose)
+    if (fwrite(lenbuf, 1, 4, out) != 4 || fwrite(bits, 1, bits_len, out) != bits_len || fwrite(strs, 1, strs_len, out) != strs_len) {
+      log_line("write failed");
+      rc = -1;
+    } else if (verbose) {
       log_line("%d channels, %d programmes, %d fragments -> %zu+%zu bytes", doc.channel_count, doc.programme_count, nfuu, bits_len, strs_len);
+    }
   }
 
   strrepo_writer_free(&sw);

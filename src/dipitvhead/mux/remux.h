@@ -36,6 +36,7 @@ typedef struct {
   unsigned long long remux_dropped_packets_total;
   unsigned long long ait_sections_total;
   unsigned long long pmt_updates_total;
+  unsigned long long eit_queue_drops_total; /* eit_queue_put: EIT_QUEUE_CAP reached, section discarded */
 } ts_metrics_t;
 
 /* pids: borrowed. standalone: SPTS, +PAT/CAT/SDT/NIT/AIT/ECM/EMM. non-standalone (MPTS): only

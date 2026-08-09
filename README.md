@@ -95,6 +95,8 @@ between real-world usage of media formats and the standard.
   - CRIDs using the authority `dipixmltv.invalid`, reserved under RFC 2606 because this project is not a registered CRID authority.
 * dipibim
   - An uncompressed representation of TVA EPG data is not specified by ETSI TS 102 539, §7.2.
+* dipimetrics
+  - OpenMetrics is not part of any DVB/ETSI specification.
 
 
 ### Known gaps

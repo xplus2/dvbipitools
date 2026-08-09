@@ -74,6 +74,11 @@ int listen_run(const config_t *cfg) {
     return 1;
   }
   r = dvbstp_reasm_new();
+  if (!r) {
+    log_line("out of memory");
+    mcast_close(m);
+    return 1;
+  }
   bcg_doc_init(&doc);
 
   log_line("listening on %s for %lds", mcast, cfg->timeout_s);

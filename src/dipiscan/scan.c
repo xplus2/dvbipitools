@@ -92,6 +92,10 @@ static void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi,
   memset(r, 0, sizeof *r);
   r->rtp_wrapped = -1;
   pc.psi = psi_new();
+  if (!pc.psi) {
+    log_line("out of memory");
+    return;
+  }
   pc.pkts = 0;
   pc.multi = multi;
   if (multi)

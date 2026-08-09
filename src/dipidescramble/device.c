@@ -99,8 +99,10 @@ static int handle_emm_g(device_state_t *d, const unsigned char *p, size_t len) {
   service_id = ((unsigned)p[0] << 8) | p[1];
 
   sk = service_slot(d, service_id, 1);
-  if (!sk)
+  if (!sk) {
+    log_line(TOOL_NAME ": service key cache full (%d services), dropping EMM-G for service %04X", DEVICE_MAX_SERVICES, service_id);
     return 0;
+  }
   if (device_emm_g_decrypt(d->bk, p + 4, sk->sk) == 0) {
     sk->have = 1;
     log_line(TOOL_NAME ": EMM-G decrypted, SK updated for service %04X", service_id);

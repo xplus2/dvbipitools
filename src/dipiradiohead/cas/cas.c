@@ -55,6 +55,8 @@ cas_t *cas_start(const config_t *cfg, const unsigned *audio_pids, size_t n_audio
   gcfg.algo = (cfg->cas_algo == CAS_ALGO_CISSA) ? SCRAMBLE_ALGO_CISSA : SCRAMBLE_ALGO_CSA2;
   gcfg.cp_duration_ms = cfg->cas_cp_duration_ms;
   gcfg.fallback_clear = cfg->cas_fallback_clear;
+  if (cfg->n_cas_vendors > CAS_GROUP_MAX_VENDORS)
+    log_line("cas: %u vendors configured, only the first %d will be started", cfg->n_cas_vendors, CAS_GROUP_MAX_VENDORS);
   gcfg.vendor_count = cfg->n_cas_vendors < CAS_GROUP_MAX_VENDORS ? cfg->n_cas_vendors : CAS_GROUP_MAX_VENDORS;
   for (i = 0; i < gcfg.vendor_count; i++) {
     const cas_vendor_t *v = &cfg->cas_vendors[i];

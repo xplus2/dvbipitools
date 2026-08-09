@@ -10,7 +10,8 @@ dvbipitools_add_fuzz_harness(psi
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 set(FUZZ_BIM_DEPS
     ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment.c
@@ -21,7 +22,8 @@ set(FUZZ_BIM_DEPS
     ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
     ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
-    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_fuzz_harness(bim_accessunit
     fuzz_bim_accessunit.c

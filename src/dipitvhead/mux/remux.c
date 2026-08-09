@@ -281,7 +281,7 @@ static void forward_packet(remux_t *r, unsigned out_pid, unsigned char *cc, cons
 }
 
 /* key: table_id+section_number. updates if present, appends if room, else drops */
-static void eit_queue_put(remux_t *r, unsigned char table_id, unsigned char section_number, const unsigned char *data, size_t len) {
+static void eit_queue_put(remux_t *r, unsigned char table_id, unsigned char section_number, const unsigned char *data, size_t len, ts_metrics_t *tsm) {
   int i;
 
   for (i = 0; i < r->eit_queue_count; i++) {
@@ -291,8 +291,11 @@ static void eit_queue_put(remux_t *r, unsigned char table_id, unsigned char sect
       return;
     }
   }
-  if (r->eit_queue_count >= EIT_QUEUE_CAP)
+  if (r->eit_queue_count >= EIT_QUEUE_CAP) {
+    if (tsm)
+      tsm->eit_queue_drops_total++;
     return;
+  }
   r->eit_queue[r->eit_queue_count].table_id = table_id;
   r->eit_queue[r->eit_queue_count].section_number = section_number;
   memcpy(r->eit_queue[r->eit_queue_count].data, data, len);
@@ -301,7 +304,7 @@ static void eit_queue_put(remux_t *r, unsigned char table_id, unsigned char sect
 }
 
 /* non-standalone: reassemble source EIT, filter to own service_id, enqueue */
-static void capture_eit_section(remux_t *r, const unsigned char *pkt188) {
+static void capture_eit_section(remux_t *r, const unsigned char *pkt188, ts_metrics_t *tsm) {
   const unsigned char *pl;
   size_t plen;
   int pusi;
@@ -318,7 +321,7 @@ static void capture_eit_section(remux_t *r, const unsigned char *pkt188) {
   service_id = ((unsigned)sec[3] << 8) | sec[4];
   if (service_id != r->src_service_id)
     return;
-  eit_queue_put(r, sec[0], sec[6], sec, r->eit_asm.len);
+  eit_queue_put(r, sec[0], sec[6], sec, r->eit_asm.len, tsm);
 }
 
 /* continuity_counter gap/discontinuity_indicator, source-side. CC only advances on
@@ -394,7 +397,7 @@ void remux_feed(remux_t *r, double now_s, const unsigned char *pkt188, remux_pac
       if (r->standalone)
         forward_packet(r, OUT_PID_EIT, &r->cc_eit, pkt188, now_s, cb, ctx);
       else
-        capture_eit_section(r, pkt188);
+        capture_eit_section(r, pkt188, tsm);
       if (tsm)
         tsm->remux_packets_total++;
     } else if (tsm) {

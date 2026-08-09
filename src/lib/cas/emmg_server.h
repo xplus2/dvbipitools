@@ -26,6 +26,8 @@ int emmg_server_dequeue_emm(emmg_server_t *s, unsigned char *out, size_t cap, si
 /* metrics accessors */
 unsigned emmg_server_client_count(emmg_server_t *s);
 unsigned long emmg_server_emm_total(emmg_server_t *s);
+/* oversized datagrams + datagrams evicted for a full queue */
+unsigned long emmg_server_emm_dropped_total(emmg_server_t *s);
 
 /* ETSI TS 103 197 clause 6.2: EMMG<->MUX message_type/parameter_type values. wire-format
    internals, exposed (with the builders/parsers below) only so unit tests can exercise them

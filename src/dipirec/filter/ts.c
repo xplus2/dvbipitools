@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "lib/demux/crc32.h"
+#include "lib/demux/psi_section_asm.h"
 #include "lib/demux/tspack.h"
 #include "ts.h"
 
@@ -186,7 +187,8 @@ int ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out
     f->bad_track = 1;
 
   if (pid == 0x0000) {
-    unsigned char rw[512];
+    /* output is never larger than input, sized to psi.c's section cap */
+    unsigned char rw[PSI_SECTION_ASM_BUF_LEN];
     size_t sl, rl;
     const unsigned char *sec = psi_pat_section(f->psi, &sl);
     if (!sec || !pusi)
@@ -199,7 +201,8 @@ int ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out
   }
 
   if (psi_have_pat(f->psi) && pid == psi_pmt_pid(f->psi)) {
-    unsigned char rw[1024];
+    /* output is never larger than input, sized to psi.c's section cap */
+    unsigned char rw[PSI_SECTION_ASM_BUF_LEN];
     size_t sl, rl;
     const unsigned char *sec = psi_pmt_section(f->psi, &sl);
     if (!sec || !pusi)

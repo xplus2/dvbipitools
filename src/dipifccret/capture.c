@@ -431,6 +431,8 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
     if (len < ip_off + 20 || (pkt[ip_off] >> 4) != 4)
       return;
     ihl = (unsigned)(pkt[ip_off] & 0x0F) * 4;
+    if (ihl < 20) /* RFC 791 min IHL is 5 (20 bytes) */
+      return;
     proto = pkt[ip_off + 9];
     if (proto != 17 || len < ip_off + ihl + 8) /* UDP only */
       return;

@@ -56,6 +56,7 @@ typedef struct {
   _Atomic unsigned generation; /* bumped on every reclaim: lets mcsend.c detect a reused slot */
   time_t bitrate_window_start;
   uint64_t bitrate_window_bytes;
+  int oversized_logged; /* channel_store: re-armed once a payload is back within CHANNEL_MAX_PAYLOAD */
   _Atomic double nominal_bps;
   psi_t *psi; /* FCC RAP detection only */
   void *ring; /* RET ring */

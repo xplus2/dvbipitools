@@ -86,9 +86,12 @@ size_t sds_build_sp(const char *domain, const char *display_name, const char *la
   return len;
 }
 
-int sds_parse_broadcast(const char *xml, sds_service_t *out, int max) {
+int sds_parse_broadcast(const char *xml, sds_service_t *out, int max, int *truncated) {
   const char *p = xml;
   int n = 0;
+
+  if (truncated)
+    *truncated = 0;
   while (n < max) {
     const char *tag = strstr(p, "<SingleService");
     const char *end;
@@ -114,5 +117,7 @@ int sds_parse_broadcast(const char *xml, sds_service_t *out, int max) {
     }
     p = end + 16;
   }
+  if (truncated && n == max && strstr(p, "<SingleService"))
+    *truncated = 1;
   return n;
 }

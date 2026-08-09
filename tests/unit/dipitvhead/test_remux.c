@@ -828,6 +828,37 @@ START_TEST(remux_non_standalone_eit_drops_other_service_ids) {
 }
 END_TEST
 
+START_TEST(remux_non_standalone_eit_queue_full_counts_drops) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  unsigned char pkt[188], section[40];
+  ts_metrics_t tsm;
+  int i;
+
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 0);
+  ck_assert_ptr_nonnull(r);
+  memset(&tsm, 0, sizeof tsm);
+
+  /* EIT_QUEUE_CAP is 16: 16 distinct section_numbers fill it, the 17th must be dropped */
+  for (i = 0; i < 17; i++) {
+    build_fake_eit_section(section, 101, (unsigned char)i, 20);
+    wrap_eit_packet(pkt, section, 23);
+    remux_feed(r, 0.0, pkt, capture_cb, NULL, &tsm);
+  }
+
+  ck_assert_uint_eq(tsm.eit_queue_drops_total, 1u);
+
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
 START_TEST(remux_non_standalone_eit_queues_distinct_sections) {
   psi_t *psi = build_discovery_psi();
   config_t cfg;
@@ -895,6 +926,7 @@ static Suite *remux_suite(void) {
   tcase_add_test(tc, remux_non_standalone_eit_spans_ticks_when_bounded);
   tcase_add_test(tc, remux_non_standalone_eit_drops_other_service_ids);
   tcase_add_test(tc, remux_non_standalone_eit_queues_distinct_sections);
+  tcase_add_test(tc, remux_non_standalone_eit_queue_full_counts_drops);
   suite_add_tcase(s, tc);
   return s;
 }

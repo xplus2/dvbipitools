@@ -19,6 +19,7 @@ typedef struct {
   uint32_t media_ssrc;
   rtcp_nack_entry_t entry[RTCP_NACK_MAX_ENTRIES];
   size_t entry_count;
+  int truncated; /* more FCI entries were present than RTCP_NACK_MAX_ENTRIES could hold */
 } rtcp_nack_t;
 
 /* called per Generic NACK found */

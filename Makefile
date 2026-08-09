@@ -574,6 +574,7 @@ lib_metrics_protocol_BIN := tests/unit/lib/metrics/test_protocol
 lib_metrics_protocol_SRCS := \
 	tests/unit/lib/metrics/test_protocol.c \
 	src/lib/metrics/protocol.c \
+	src/lib/log.c \
 	src/lib/ioutil.c
 
 lib_metrics_export_BIN := tests/unit/lib/metrics/test_export
@@ -625,7 +626,8 @@ lib_demux_psi_SRCS := \
 	src/lib/demux/psi.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi_section_asm.c \
-	src/lib/demux/crc32.c
+	src/lib/demux/crc32.c \
+	src/lib/log.c
 
 lib_demux_psi_section_asm_BIN := tests/unit/lib/demux/test_psi_section_asm
 lib_demux_psi_section_asm_SRCS := \
@@ -687,7 +689,8 @@ lib_mux_psi_build_SRCS := \
 	src/lib/demux/psi.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi_section_asm.c \
-	src/lib/demux/crc32.c
+	src/lib/demux/crc32.c \
+	src/lib/log.c
 
 lib_mux_rtpheader_BIN := tests/unit/lib/mux/test_rtpheader
 lib_mux_rtpheader_SRCS := \
@@ -783,7 +786,8 @@ lib_tva_timefmt_SRCS := \
 lib_tva_bcg_doc_BIN := tests/unit/lib/tva/test_bcg_doc
 lib_tva_bcg_doc_SRCS := \
 	tests/unit/lib/tva/test_bcg_doc.c \
-	src/lib/tva/bcg_doc.c
+	src/lib/tva/bcg_doc.c \
+	src/lib/log.c
 
 lib_tva_mapping_BIN := tests/unit/lib/tva/test_mapping
 lib_tva_mapping_SRCS := \
@@ -798,7 +802,8 @@ lib_tva_xmltv_SRCS := \
 	src/lib/tva/timefmt.c \
 	src/lib/tva/bcg_doc.c \
 	src/lib/xml_util.c \
-	src/lib/ioutil.c
+	src/lib/ioutil.c \
+	src/lib/log.c
 
 lib_tva_tva_xml_BIN := tests/unit/lib/tva/test_tva_xml
 lib_tva_tva_xml_SRCS := \
@@ -806,7 +811,8 @@ lib_tva_tva_xml_SRCS := \
 	src/lib/tva/tva_xml.c \
 	src/lib/tva/bcg_doc.c \
 	src/lib/xml_util.c \
-	src/lib/ioutil.c
+	src/lib/ioutil.c \
+	src/lib/log.c
 
 BIM_FRAGMENT_DEPS := \
 	src/lib/bim/fragment.c \
@@ -817,7 +823,8 @@ BIM_FRAGMENT_DEPS := \
 	src/lib/tva/tva_xml.c \
 	src/lib/tva/bcg_doc.c \
 	src/lib/xml_util.c \
-	src/lib/ioutil.c
+	src/lib/ioutil.c \
+	src/lib/log.c
 
 lib_bim_fragment_BIN := tests/unit/lib/bim/test_fragment
 lib_bim_fragment_SRCS := \
@@ -852,7 +859,8 @@ dipixmltv_suggest_SRCS := \
 	src/lib/tva/timefmt.c \
 	src/lib/tva/bcg_doc.c \
 	src/lib/xml_util.c \
-	src/lib/ioutil.c
+	src/lib/ioutil.c \
+	src/lib/log.c
 
 dipiradiohead_mpegaudio_BIN := tests/unit/dipiradiohead/test_mpegaudio
 dipiradiohead_mpegaudio_SRCS := \
@@ -879,7 +887,8 @@ dipiradiohead_psi_SRCS := \
 	src/lib/demux/psi.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi_section_asm.c \
-	src/lib/demux/crc32.c
+	src/lib/demux/crc32.c \
+	src/lib/log.c
 
 dipiradiohead_id3_BIN := tests/unit/dipiradiohead/test_id3
 dipiradiohead_id3_SRCS := \
@@ -1020,7 +1029,8 @@ dipitvhead_pmtbuild_SRCS := \
 	src/lib/demux/psi.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi_section_asm.c \
-	src/lib/demux/crc32.c
+	src/lib/demux/crc32.c \
+	src/lib/log.c
 
 dipitvhead_aitbuild_BIN := tests/unit/dipitvhead/test_aitbuild
 dipitvhead_aitbuild_SRCS := \
@@ -1097,7 +1107,8 @@ dipitvhead_simulcrypt_msg_SRCS := \
 	src/lib/demux/psi.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi_section_asm.c \
-	src/lib/demux/crc32.c
+	src/lib/demux/crc32.c \
+	src/lib/log.c
 
 dipitvhead_cas_BIN := tests/unit/dipitvhead/test_cas
 dipitvhead_cas_SRCS := \
@@ -1191,7 +1202,8 @@ dipirec_ts_filter_SRCS := \
 	src/lib/demux/psi.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi_section_asm.c \
-	src/lib/demux/crc32.c
+	src/lib/demux/crc32.c \
+	src/lib/log.c
 
 dipifccret_channel_BIN := tests/unit/dipifccret/test_channel
 dipifccret_channel_SRCS := \
@@ -1299,7 +1311,8 @@ FUZZ_BIM_DEPS := \
 	src/lib/tva/tva_xml.c \
 	src/lib/tva/bcg_doc.c \
 	src/lib/xml_util.c \
-	src/lib/ioutil.c
+	src/lib/ioutil.c \
+	src/lib/log.c
 
 # _BIN/_SRCS and FUZZ_BINS stay unconditional (unlike FUZZING=yes gate
 # below), 'make clean' finds these paths regardless of current config.mk
@@ -1313,7 +1326,8 @@ fuzz_psi_SRCS := \
 	src/lib/demux/psi.c \
 	src/lib/demux/psi_section_asm.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/crc32.c
+	src/lib/demux/crc32.c \
+	src/lib/log.c
 
 fuzz_bim_accessunit_BIN := tests/fuzz/fuzz_bim_accessunit
 fuzz_bim_accessunit_SRCS := \

@@ -86,7 +86,12 @@ int netconnect_tcp(const char *host, unsigned port, int timeout_ms, net_err_reas
     if (fd < 0)
       continue;
     flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+      save_errno = errno;
+      close(fd);
+      fd = -1;
+      continue;
+    }
     if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0)
       break;
     if (errno != EINPROGRESS) {
@@ -135,7 +140,12 @@ int netconnect_tcp_start(const char *host, unsigned port, net_err_reason_t *reas
     if (fd < 0)
       continue;
     flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+      save_errno = errno;
+      close(fd);
+      fd = -1;
+      continue;
+    }
     if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0)
       break; /* rare, e.g. loopback: already connected */
     if (errno == EINPROGRESS)

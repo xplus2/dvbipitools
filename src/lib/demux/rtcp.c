@@ -40,6 +40,7 @@ static void parse_nack(const unsigned char *p, size_t len, rtcp_nack_cb cb, void
   nack.sender_ssrc = rd32(p + 4);
   nack.media_ssrc = rd32(p + 8);
   nack.entry_count = 0;
+  nack.truncated = 0;
 
   fci_off = 12;
   fci_len = len - fci_off; /* may include RFC 3550 padding, worst case one bogus trailing entry */
@@ -48,6 +49,8 @@ static void parse_nack(const unsigned char *p, size_t len, rtcp_nack_cb cb, void
     nack.entry[nack.entry_count].blp = rd16(p + fci_off + i + 2);
     nack.entry_count++;
   }
+  if (nack.entry_count == RTCP_NACK_MAX_ENTRIES && i + 4 <= fci_len)
+    nack.truncated = 1;
   if (nack.entry_count > 0)
     cb(&nack, user);
 }

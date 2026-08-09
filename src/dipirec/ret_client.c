@@ -54,12 +54,16 @@ struct ret_client {
 
   ret_outq_t outq[RET_OUTQ_SLOTS];
   size_t outq_head, outq_count;
+
+  int oversized_payload_logged; /* re-armed once a payload is back within RET_HOLD_CAP */
 };
 
 static void outq_push(ret_client_t *r, const unsigned char *data, size_t len) {
   size_t idx;
-  if (r->outq_count >= RET_OUTQ_SLOTS)
+  if (r->outq_count >= RET_OUTQ_SLOTS) {
+    log_line("ret: outq full (%d slots), dropping packet - accounting invariant violated", RET_OUTQ_SLOTS);
     return; /* can't happen per the call-site accounting, kept as a backstop */
+  }
   if (len > RET_OUTQ_CAP)
     len = RET_OUTQ_CAP;
   idx = (r->outq_head + r->outq_count) % RET_OUTQ_SLOTS;
@@ -177,19 +181,32 @@ static void handle_original_seq(ret_client_t *r, uint16_t seq, const unsigned ch
       if (delta < 0)
         return; /* stale duplicate */
       if ((size_t)delta < r->hold_n) {
-        if (!r->hold[delta].used && len <= RET_HOLD_CAP) {
-          r->hold[delta].used = 1;
-          r->hold[delta].len = len;
-          memcpy(r->hold[delta].data, payload, len);
+        if (!r->hold[delta].used) {
+          if (len <= RET_HOLD_CAP) {
+            r->oversized_payload_logged = 0;
+            r->hold[delta].used = 1;
+            r->hold[delta].len = len;
+            memcpy(r->hold[delta].data, payload, len);
+          } else if (!r->oversized_payload_logged) {
+            log_line("ret: payload %zu exceeds hold cap (%d), dropping until it fits again", len, RET_HOLD_CAP);
+            r->oversized_payload_logged = 1;
+          }
         }
         return;
       }
-      if ((size_t)delta == r->hold_n && r->hold_n < RET_GAP_MAX && len <= RET_HOLD_CAP) {
-        r->hold[r->hold_n].used = 1;
-        r->hold[r->hold_n].len = len;
-        memcpy(r->hold[r->hold_n].data, payload, len);
-        r->hold_n++;
-        return;
+      if ((size_t)delta == r->hold_n && r->hold_n < RET_GAP_MAX) {
+        if (len <= RET_HOLD_CAP) {
+          r->oversized_payload_logged = 0;
+          r->hold[r->hold_n].used = 1;
+          r->hold[r->hold_n].len = len;
+          memcpy(r->hold[r->hold_n].data, payload, len);
+          r->hold_n++;
+          return;
+        }
+        if (!r->oversized_payload_logged) {
+          log_line("ret: payload %zu exceeds hold cap (%d), dropping until it fits again", len, RET_HOLD_CAP);
+          r->oversized_payload_logged = 1;
+        }
       }
       abandon_gap(r); /* disjoint from the current window, or oversized: retry fresh below */
     }
@@ -216,11 +233,19 @@ static void on_repair(ret_client_t *r, const unsigned char *pkt, size_t len, dou
 
   if (!r->have_ssrc || !r->gap_pending)
     return;
-  if (!rtx_parse(pkt, len, r->rtx_pt, &rx) || rx.ssrc != r->ssrc || rx.payload_len > RET_HOLD_CAP)
+  if (!rtx_parse(pkt, len, r->rtx_pt, &rx) || rx.ssrc != r->ssrc)
     return;
+  if (rx.payload_len > RET_HOLD_CAP) {
+    if (!r->oversized_payload_logged) {
+      log_line("ret: repair payload %zu exceeds hold cap (%d), dropping until it fits again", rx.payload_len, RET_HOLD_CAP);
+      r->oversized_payload_logged = 1;
+    }
+    return;
+  }
   delta = (int16_t)(rx.osn - r->expected_seq);
   if (delta < 0 || (size_t)delta >= r->hold_n || r->hold[delta].used)
     return;
+  r->oversized_payload_logged = 0;
   r->hold[delta].used = 1;
   r->hold[delta].len = rx.payload_len;
   memcpy(r->hold[delta].data, rx.payload, rx.payload_len);

@@ -49,7 +49,8 @@ size_t sds_build_broadcast(const char *domain, unsigned version, const sds_servi
 /* payload 0x01 doc, self-pointing Push at push_addr:push_port. lang is the 3-letter ISO 639-2 for display_name. 0 = didn't fit cap */
 size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, unsigned char *buf, size_t cap);
 
-/* xml must be null-terminated. fills out[0..return), tsid/onid default 1, sid defaults to 1-based index if absent */
-int sds_parse_broadcast(const char *xml, sds_service_t *out, int max);
+/* xml must be null-terminated. fills out[0..return), tsid/onid default 1, sid defaults to 1-based index if absent.
+   truncated may be NULL; else set to 1 if more <SingleService> entries existed past max */
+int sds_parse_broadcast(const char *xml, sds_service_t *out, int max, int *truncated);
 
 #endif

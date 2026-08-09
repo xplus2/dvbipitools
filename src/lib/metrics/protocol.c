@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "lib/ioutil.h"
+#include "lib/log.h"
 
 #include "protocol.h"
 
@@ -52,8 +53,10 @@ int metrics_writer_put(metrics_writer_t *w, metrics_id_t id, const char *label, 
   if (w->len == 0)
     return -1;
   label_len = label ? strlen(label) : 0;
-  if (label_len > METRICS_LABEL_MAX)
+  if (label_len > METRICS_LABEL_MAX) {
+    log_line("metrics: label for id %u truncated to %d bytes: %s", (unsigned)id, METRICS_LABEL_MAX, label);
     label_len = METRICS_LABEL_MAX;
+  }
   need = 2 + 1 + label_len + 8;
   if (w->len + need > sizeof w->buf) {
     w->len = 0;

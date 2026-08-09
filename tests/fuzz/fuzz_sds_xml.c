@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
   fclose(f);
   buf[n] = '\0';
 
-  sds_parse_broadcast(buf, out, SDS_MAX_SERVICES);
+  sds_parse_broadcast(buf, out, SDS_MAX_SERVICES, NULL);
 
   free(buf);
   return 0;

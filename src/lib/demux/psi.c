@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../log.h"
 #include "crc32.h"
 #include "psi.h"
 #include "psi_section_asm.h"
@@ -44,6 +45,12 @@ struct psi {
   int multi_count;
 
   pid_class_t class_by_pid[8192]; /* direct pid->class, rebuilt on parse_pat/parse_pmt */
+
+  /* overflow logging, edge-triggered: logged once when a repeat first exceeds
+     a cap, cleared once a repeat no longer does - avoids spamming every PAT/PMT cycle */
+  int pat_program_overflow_logged;
+  int pmt_cand_overflow_logged;
+  int es_overflow_logged;
 };
 
 static void parse_pat(psi_t *c);
@@ -242,26 +249,38 @@ static void parse_pat(psi_t *c) {
       c->pat_programs[c->pat_program_count].program_number = prog;
       c->pat_programs[c->pat_program_count].pmt_pid = pid;
       c->pat_program_count++;
+    } else if (!c->pat_program_overflow_logged) {
+      log_line("psi: PAT has more than %d programs, dropping the rest", PSI_MAX_PROGRAMS);
+      c->pat_program_overflow_logged = 1;
     }
     if (c->pmt_locked)
       continue;
     if (c->preferred_pmt_pid && pid != c->preferred_pmt_pid)
       continue;
-    if (!find_cand(c, pid) && c->pmt_cand_count < PSI_MAX_PROGRAMS) {
-      pmt_cand_t *cand = &c->pmt_cand[c->pmt_cand_count];
-      memset(cand, 0, sizeof *cand);
-      cand->program_number = prog;
-      cand->pmt_pid = pid;
-      c->pmt_cand_count++;
-      if (c->multi_mode) {
-        psi_multi_program_t *m = &c->multi[c->multi_count];
-        memset(m, 0, sizeof *m);
-        m->program_number = prog;
-        m->pmt_pid = pid;
-        c->multi_count++;
+    if (!find_cand(c, pid)) {
+      if (c->pmt_cand_count < PSI_MAX_PROGRAMS) {
+        pmt_cand_t *cand = &c->pmt_cand[c->pmt_cand_count];
+        memset(cand, 0, sizeof *cand);
+        cand->program_number = prog;
+        cand->pmt_pid = pid;
+        c->pmt_cand_count++;
+        if (c->multi_mode) {
+          psi_multi_program_t *m = &c->multi[c->multi_count];
+          memset(m, 0, sizeof *m);
+          m->program_number = prog;
+          m->pmt_pid = pid;
+          c->multi_count++;
+        }
+      } else if (!c->pmt_cand_overflow_logged) {
+        log_line("psi: more than %d PMT candidates, dropping the rest", PSI_MAX_PROGRAMS);
+        c->pmt_cand_overflow_logged = 1;
       }
     }
   }
+  if (c->pat_program_count < PSI_MAX_PROGRAMS)
+    c->pat_program_overflow_logged = 0;
+  if (c->pmt_cand_count < PSI_MAX_PROGRAMS)
+    c->pmt_cand_overflow_logged = 0;
   c->have_pat = 1;
   rebuild_class_table(c);
 }
@@ -316,6 +335,14 @@ static int parse_pmt(psi_t *c, pmt_cand_t *cand) {
     }
     c->es_count++;
     i += 5 + esil;
+  }
+  if (c->es_count >= PSI_MAX_ES && i + 5 <= end) {
+    if (!c->es_overflow_logged) {
+      log_line("psi: PMT for program %u has more than %d ES entries, dropping the rest", prog, PSI_MAX_ES);
+      c->es_overflow_logged = 1;
+    }
+  } else {
+    c->es_overflow_logged = 0;
   }
   for (k = 0; k < c->es_count; k++)
     if (c->es[k].cls == PID_AUDIO)

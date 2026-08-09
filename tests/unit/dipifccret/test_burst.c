@@ -198,6 +198,28 @@ START_TEST(burst_terminate_marks_done_immediately) {
 }
 END_TEST
 
+START_TEST(burst_tick_detects_slot_reuse) {
+  channel_t *c = make_channel_with_rap(8, 3);
+  burst_t *b;
+  unsigned gen;
+
+  atomic_store_explicit(&c->nominal_bps, 100000000.0, memory_order_relaxed);
+  b = burst_new(c, 1.0, 0, 99);
+
+  /* simulate channel_lookup() recycling this slot for a different channel mid-burst */
+  gen = atomic_load_explicit(&c->generation, memory_order_relaxed);
+  atomic_store_explicit(&c->generation, gen + 1, memory_order_relaxed);
+
+  g_send_calls = 0;
+  ck_assert_int_eq(burst_tick(b, 60000, capture_send, NULL), BURST_TICK_DONE);
+  ck_assert_int_eq(g_send_calls, 0); /* must not stream the new occupant's data under the old identity */
+  ck_assert_int_eq(burst_is_done(b), 1);
+
+  burst_free(b);
+  channel_table_free(g_table);
+}
+END_TEST
+
 START_TEST(burst_tick_built_packets_round_trip_through_rtx_parse) {
   channel_t *c = make_channel_with_rap(8, 0); /* just RAP entry, seq 1 */
   burst_t *b;
@@ -236,6 +258,7 @@ static Suite *burst_suite(void) {
   tcase_add_test(tc, burst_new_caps_target_to_client_max);
   tcase_add_test(tc, burst_tick_delivers_cached_packets_and_completes);
   tcase_add_test(tc, burst_tick_stops_at_duration_cap);
+  tcase_add_test(tc, burst_tick_detects_slot_reuse);
   tcase_add_test(tc, burst_terminate_marks_done_immediately);
   tcase_add_test(tc, burst_tick_built_packets_round_trip_through_rtx_parse);
   suite_add_tcase(s, tc);

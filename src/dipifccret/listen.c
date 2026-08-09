@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
@@ -23,18 +24,20 @@ typedef struct {
   listen_rtcp_cb cb;
   void *user;
   pthread_t thread;
+  atomic_int *stop;
 } worker_t;
 
 struct listen_pool {
   worker_t *workers;
   unsigned count;
+  atomic_int stop;
 };
 
 static void *worker_main(void *arg) {
   worker_t *w = (worker_t *)arg;
   unsigned char buf[2048];
 
-  while (!signal_stop_requested()) {
+  while (!signal_stop_requested() && !atomic_load_explicit(w->stop, memory_order_relaxed)) {
     struct epoll_event ev;
     int n = epoll_wait(w->epfd, &ev, 1, 100);
     if (n <= 0)
@@ -97,6 +100,7 @@ static int open_reuseport_socket(int family, const char *addr, unsigned port) {
 listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, unsigned workers, listen_rtcp_cb cb, void *user) {
   listen_pool_t *p;
   unsigned i;
+  int fd, epfd, rc;
 
   if (workers == 0)
     workers = 1;
@@ -108,48 +112,56 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
     free(p);
     return NULL;
   }
+  atomic_init(&p->stop, 0);
 
   for (i = 0; i < workers; i++) {
     struct epoll_event ev;
     worker_t *w = &p->workers[i];
 
-    w->fd = open_reuseport_socket(family, addr, port);
-    if (w->fd < 0) {
-      free(p->workers);
-      free(p);
-      return NULL;
-    }
-    w->epfd = epoll_create1(0);
-    if (w->epfd < 0) {
+    fd = open_reuseport_socket(family, addr, port);
+    if (fd < 0)
+      goto fail;
+    epfd = epoll_create1(0);
+    if (epfd < 0) {
       log_line(TOOL_NAME ": epoll_create1: %s", strerror(errno));
-      close(w->fd);
-      free(p->workers);
-      free(p);
-      return NULL;
+      close(fd);
+      goto fail;
     }
     ev.events = EPOLLIN;
-    ev.data.fd = w->fd;
-    if (epoll_ctl(w->epfd, EPOLL_CTL_ADD, w->fd, &ev) < 0) {
+    ev.data.fd = fd;
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) < 0) {
       log_line(TOOL_NAME ": epoll_ctl: %s", strerror(errno));
-      close(w->epfd);
-      close(w->fd);
-      free(p->workers);
-      free(p);
-      return NULL;
+      close(epfd);
+      close(fd);
+      goto fail;
     }
+    w->fd = fd;
+    w->epfd = epfd;
     w->cb = cb;
     w->user = user;
-    if (pthread_create(&w->thread, NULL, worker_main, w) != 0) {
-      log_line(TOOL_NAME ": pthread_create: %s", strerror(errno));
-      close(w->epfd);
-      close(w->fd);
-      free(p->workers);
-      free(p);
-      return NULL;
+    w->stop = &p->stop;
+    rc = pthread_create(&w->thread, NULL, worker_main, w);
+    if (rc != 0) {
+      log_line(TOOL_NAME ": pthread_create: %s", strerror(rc));
+      close(epfd);
+      close(fd);
+      goto fail;
     }
     p->count = i + 1;
   }
   return p;
+
+fail:
+  atomic_store_explicit(&p->stop, 1, memory_order_relaxed);
+  for (i = 0; i < p->count; i++)
+    pthread_join(p->workers[i].thread, NULL);
+  for (i = 0; i < p->count; i++) {
+    close(p->workers[i].epfd);
+    close(p->workers[i].fd);
+  }
+  free(p->workers);
+  free(p);
+  return NULL;
 }
 
 void listen_pool_stop(listen_pool_t *p) {

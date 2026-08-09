@@ -77,8 +77,10 @@ static void pcr_sample(cas_t *c, uint64_t pcr27) {
 
 static void add_pid(unsigned *pids, size_t *count, size_t cap, unsigned pid) {
   size_t i;
-  if (*count >= cap)
+  if (*count >= cap) {
+    log_line(TOOL_NAME ": cas: pid 0x%x dropped, already at the %zu pid cap", pid, cap);
     return;
+  }
   for (i = 0; i < *count; i++)
     if (pids[i] == pid)
       return;
@@ -126,6 +128,8 @@ static void fill_group_cfg(const config_t *cfg, cas_group_cfg_t *gcfg) {
   gcfg->algo = (cfg->cas_algo == CAS_ALGO_CISSA) ? SCRAMBLE_ALGO_CISSA : SCRAMBLE_ALGO_CSA2;
   gcfg->cp_duration_ms = cfg->cas_cp_duration_ms;
   gcfg->fallback_clear = cfg->cas_fallback_clear;
+  if (cfg->n_cas_vendors > CAS_GROUP_MAX_VENDORS)
+    log_line(TOOL_NAME ": cas: %u vendors configured, only the first %d will be started", cfg->n_cas_vendors, CAS_GROUP_MAX_VENDORS);
   gcfg->vendor_count = cfg->n_cas_vendors < CAS_GROUP_MAX_VENDORS ? cfg->n_cas_vendors : CAS_GROUP_MAX_VENDORS;
   for (i = 0; i < gcfg->vendor_count; i++) {
     const cas_vendor_t *v = &cfg->cas_vendors[i];

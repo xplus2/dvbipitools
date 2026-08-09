@@ -43,6 +43,7 @@ struct emmg_server {
   atomic_size_t queue_len; /* mutex-protected writes, lock-free read for dequeue's empty pre-check */
 
   atomic_ulong emm_total;
+  atomic_ulong emm_dropped;
 };
 
 typedef struct {
@@ -192,6 +193,7 @@ static void publish_datagram_cb(const unsigned char *data, unsigned short len, v
   emmg_server_t *s = user;
   if (len > EMMG_MAX_DATAGRAM_LEN) {
     log_line("emmg: dropping oversized EMM datagram (%u bytes)", (unsigned)len);
+    atomic_fetch_add_explicit(&s->emm_dropped, 1, memory_order_relaxed);
     return;
   }
   pthread_mutex_lock(&s->queue_lock);
@@ -199,6 +201,7 @@ static void publish_datagram_cb(const unsigned char *data, unsigned short len, v
     s->queue_head = (s->queue_head + 1) % EMMG_QUEUE_CAP;
     atomic_fetch_sub_explicit(&s->queue_len, 1, memory_order_relaxed);
     log_line("emmg: EMM queue full, dropping oldest datagram");
+    atomic_fetch_add_explicit(&s->emm_dropped, 1, memory_order_relaxed);
   }
   {
     size_t idx = (s->queue_head + atomic_load_explicit(&s->queue_len, memory_order_relaxed)) % EMMG_QUEUE_CAP;
@@ -233,6 +236,8 @@ int emmg_server_dequeue_emm(emmg_server_t *s, unsigned char *out, size_t cap, si
   pthread_mutex_unlock(&s->queue_lock);
   return have ? 0 : -1;
 }
+
+unsigned long emmg_server_emm_dropped_total(emmg_server_t *s) { return atomic_load_explicit(&s->emm_dropped, memory_order_relaxed); }
 
 unsigned emmg_server_client_count(emmg_server_t *s) {
   int i, n = 0;
@@ -357,7 +362,13 @@ static void *worker_main(void *arg) {
   memset(&cs, 0, sizeof cs);
   simulcrypt_reader_init(&rd);
   flags = fcntl(fd, F_GETFL, 0);
-  fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    log_line("emmg: fcntl O_NONBLOCK (slot %d): %s", slot, strerror(errno));
+    close(fd);
+    free(wa);
+    atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
+    return NULL;
+  }
   log_line("emmg: connection accepted (slot %d)", slot);
 
   while (!atomic_load_explicit(&s->stop, memory_order_relaxed) && !signal_stop_requested()) {
@@ -420,7 +431,11 @@ static int tcp_listen_dualstack(unsigned port) {
     return -1;
   }
   flags = fcntl(fd, F_GETFL, 0);
-  fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    log_line("emmg: fcntl O_NONBLOCK: %s", strerror(errno));
+    close(fd);
+    return -1;
+  }
   return fd;
 }
 

@@ -33,7 +33,7 @@ START_TEST(sds_broadcast_round_trips_multiple_services) {
   len = sds_build_broadcast("example.invalid", 1, svcs, 2, NULL, NULL, buf, sizeof buf);
   ck_assert_uint_gt(len, 0u);
 
-  n = sds_parse_broadcast((const char *)buf, out, 8);
+  n = sds_parse_broadcast((const char *)buf, out, 8, NULL);
   ck_assert_int_eq(n, 2);
 
   ck_assert_str_eq(out[0].name, "Channel One");
@@ -137,11 +137,39 @@ START_TEST(sds_parse_broadcast_defaults_missing_ids) {
       "<SingleService><ServiceLocation><IPMulticastAddress Address=\"239.1.1.1\" Port=\"5000\" Streaming=\"udp\"/>"
       "</ServiceLocation><TextualIdentifier ServiceName=\"X\"/></SingleService>";
   sds_service_t out[4];
-  int n = sds_parse_broadcast(xml, out, 4);
+  int n = sds_parse_broadcast(xml, out, 4, NULL);
   ck_assert_int_eq(n, 1);
   ck_assert_uint_eq(out[0].onid, 1u);
   ck_assert_uint_eq(out[0].tsid, 1u);
   ck_assert_uint_eq(out[0].sid, 1u); /* 1-based index */
+}
+END_TEST
+
+START_TEST(sds_parse_broadcast_reports_truncation) {
+  static const char xml[] =
+      "<SingleService><ServiceLocation><IPMulticastAddress Address=\"239.1.1.1\" Port=\"5000\"/>"
+      "</ServiceLocation></SingleService>"
+      "<SingleService><ServiceLocation><IPMulticastAddress Address=\"239.1.1.2\" Port=\"5001\"/>"
+      "</ServiceLocation></SingleService>"
+      "<SingleService><ServiceLocation><IPMulticastAddress Address=\"239.1.1.3\" Port=\"5002\"/>"
+      "</ServiceLocation></SingleService>";
+  sds_service_t out[2];
+  int truncated = -1;
+  int n = sds_parse_broadcast(xml, out, 2, &truncated);
+  ck_assert_int_eq(n, 2);
+  ck_assert_int_eq(truncated, 1);
+}
+END_TEST
+
+START_TEST(sds_parse_broadcast_not_truncated_when_it_fits) {
+  static const char xml[] =
+      "<SingleService><ServiceLocation><IPMulticastAddress Address=\"239.1.1.1\" Port=\"5000\"/>"
+      "</ServiceLocation></SingleService>";
+  sds_service_t out[2];
+  int truncated = -1;
+  int n = sds_parse_broadcast(xml, out, 2, &truncated);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(truncated, 0);
 }
 END_TEST
 
@@ -155,6 +183,8 @@ static Suite *sds_xml_suite(void) {
   tcase_add_test(tc, sds_build_sp_contains_expected_fields);
   tcase_add_test(tc, sds_build_sp_rejects_small_cap);
   tcase_add_test(tc, sds_parse_broadcast_defaults_missing_ids);
+  tcase_add_test(tc, sds_parse_broadcast_reports_truncation);
+  tcase_add_test(tc, sds_parse_broadcast_not_truncated_when_it_fits);
   suite_add_tcase(s, tc);
   return s;
 }

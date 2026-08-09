@@ -100,23 +100,34 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
   slot->entry_count = 0;
   st->stats.snapshots_received_total++;
 
-  for (;;) {
-    metrics_id_t id;
-    char label[METRICS_LABEL_MAX + 1];
-    uint64_t value;
-    int rc = metrics_reader_next(&r, &id, label, sizeof label, &value);
-    if (rc == 0)
-      break;
-    if (rc < 0) {
-      if (verbose)
-        log_line("dipimetrics: truncated entry, discarding rest of snapshot for %s/%s", metrics_component_name(hdr.component), hdr.metrics_id);
-      break;
-    }
-    if (slot->entry_count < STORE_MAX_ENTRIES) {
-      stored_entry_t *e = &slot->entries[slot->entry_count++];
-      e->id = id;
-      bufcpy(e->label, sizeof e->label, label);
-      e->value = value;
+  {
+    int over_cap_logged = 0;
+    for (;;) {
+      metrics_id_t id;
+      char label[METRICS_LABEL_MAX + 1];
+      uint64_t value;
+      int rc = metrics_reader_next(&r, &id, label, sizeof label, &value);
+      if (rc == 0)
+        break;
+      if (rc < 0) {
+        if (verbose)
+          log_line("dipimetrics: truncated entry, discarding rest of snapshot for %s/%s", metrics_component_name(hdr.component), hdr.metrics_id);
+        break;
+      }
+      if (slot->entry_count < STORE_MAX_ENTRIES) {
+        stored_entry_t *e = &slot->entries[slot->entry_count++];
+        e->id = id;
+        bufcpy(e->label, sizeof e->label, label);
+        e->value = value;
+      } else {
+        if (!over_cap_logged) {
+          if (verbose)
+            log_line("dipimetrics: snapshot for %s/%s has more than %d entries, dropping the rest", metrics_component_name(hdr.component), hdr.metrics_id,
+                      STORE_MAX_ENTRIES);
+          over_cap_logged = 1;
+        }
+        st->stats.snapshot_entries_dropped++;
+      }
     }
   }
 }

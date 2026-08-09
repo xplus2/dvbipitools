@@ -132,6 +132,7 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *ou
       metrics_writer_put(&w, METRICS_ID_CAS_ECM_TOTAL, label, vm.ecm_total);
       metrics_writer_put(&w, METRICS_ID_CAS_ECM_ERRORS_TOTAL, label, vm.ecm_errors_total);
       metrics_writer_put(&w, METRICS_ID_CAS_EMM_TOTAL, label, vm.emm_total);
+      metrics_writer_put(&w, METRICS_ID_CAS_EMM_DROPPED_TOTAL, label, vm.emm_dropped_total);
     }
   }
   metrics_exporter_send(mx, &w);

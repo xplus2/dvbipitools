@@ -37,6 +37,7 @@ typedef struct {
   uint64_t snapshots_rejected_stale;
   uint64_t snapshots_rejected_full;
   uint64_t snapshots_rejected_version;
+  uint64_t snapshot_entries_dropped; /* entries beyond STORE_MAX_ENTRIES within an accepted snapshot */
   uint64_t http_requests_200;
   uint64_t http_requests_404;
 } store_stats_t;

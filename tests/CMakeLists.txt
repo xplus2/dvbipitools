@@ -21,7 +21,8 @@ dvbipitools_add_unit_test(lib_demux_psi
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(lib_demux_psi_section_asm
     unit/lib/demux/test_psi_section_asm.c
@@ -56,7 +57,8 @@ dvbipitools_add_unit_test(lib_mux_psi_build
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(lib_demux_mpts_probe
     unit/lib/demux/test_mpts_probe.c
@@ -258,7 +260,8 @@ dvbipitools_add_unit_test(lib_tva_timefmt
 
 dvbipitools_add_unit_test(lib_tva_bcg_doc
     unit/lib/tva/test_bcg_doc.c
-    ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(lib_tva_mapping
     unit/lib/tva/test_mapping.c
@@ -271,14 +274,16 @@ dvbipitools_add_unit_test(lib_tva_xmltv
     ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
     ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
-    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(lib_tva_tva_xml
     unit/lib/tva/test_tva_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
     ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
-    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 set(BIM_FRAGMENT_DEPS
     ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment.c
@@ -289,7 +294,8 @@ set(BIM_FRAGMENT_DEPS
     ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
     ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
-    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(lib_bim_fragment
     unit/lib/bim/test_fragment.c
@@ -319,7 +325,8 @@ dvbipitools_add_unit_test(dipixmltv_suggest
     ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
     ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
-    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(dipiradiohead_mpegaudio
     unit/dipiradiohead/test_mpegaudio.c
@@ -342,7 +349,8 @@ dvbipitools_add_unit_test(dipiradiohead_psi
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(dipiradiohead_id3
     unit/dipiradiohead/test_id3.c
@@ -473,7 +481,8 @@ dvbipitools_add_unit_test(dipitvhead_pmtbuild
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(dipitvhead_aitbuild
     unit/dipitvhead/test_aitbuild.c
@@ -517,7 +526,8 @@ dvbipitools_add_unit_test(dipitvhead_simulcrypt_msg
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(dipitvhead_ecmg_client
     unit/dipitvhead/test_ecmg_client.c
@@ -591,7 +601,8 @@ dvbipitools_add_unit_test(dipirec_ts_filter
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(dipifccret_channel
     unit/dipifccret/test_channel.c
@@ -690,6 +701,7 @@ dvbipitools_add_unit_test(dipifccret_ret
 dvbipitools_add_unit_test(lib_metrics_protocol
     unit/lib/metrics/test_protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
 
 dvbipitools_add_unit_test(lib_metrics_export

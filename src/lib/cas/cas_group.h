@@ -22,6 +22,7 @@ typedef struct {
   unsigned long ecm_total;
   unsigned long ecm_errors_total;
   unsigned long emm_total;
+  unsigned long emm_dropped_total; /* oversized or evicted from a full send queue */
   unsigned long long scrambled_packets_total;
   unsigned long long unexpected_clear_packets_total;
 } cas_metrics_t;

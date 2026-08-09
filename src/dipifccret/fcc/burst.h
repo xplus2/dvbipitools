@@ -24,9 +24,12 @@ typedef enum {
 /* c NULL/no RAP -> reject; min>max buffer-fill -> malformed; client max bitrate <= nominal -> insufficient */
 burst_response_t burst_decide(const channel_t *c, const rtcp_rams_r_t *req);
 
-/* channel borrowed, not reap-protected; cursor/bytes_sent single-ticker-thread only; done is cross-thread atomic */
+/* channel borrowed: generation snapshotted at burst_new, rechecked each tick to detect
+ * slot reuse (see channel_t.generation). cursor/bytes_sent single-ticker-thread only;
+ * done is cross-thread atomic */
 typedef struct {
   const channel_t *channel;
+  unsigned generation;
   rtx_ctx_t *rtx;
   unsigned char rtx_pt;
   size_t cursor;

@@ -384,6 +384,7 @@ void cas_group_vendor_metrics(cas_group_t *g, size_t idx, cas_metrics_t *out) {
   if (v->emmg) {
     out->emmg_clients = emmg_server_client_count(v->emmg);
     out->emm_total = emmg_server_emm_total(v->emmg);
+    out->emm_dropped_total = emmg_server_emm_dropped_total(v->emmg);
   }
   cas_scramble_engine_get_metrics(g->engine, &out->scrambled_packets_total, &out->unexpected_clear_packets_total);
 }

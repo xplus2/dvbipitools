@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "../demux/crc32.h"
+#include "../log.h"
 #include "dvbstp.h"
 
 size_t dvbstp_parse_header(const unsigned char *buf, size_t len, dvbstp_header_t *h) {
@@ -117,10 +118,21 @@ typedef struct {
 struct dvbstp_reasm {
   reasm_slot_t slots[REASM_SLOTS];
   unsigned char assembled[REASM_MAX_LEN];
+  int malformed_logged; /* re-armed on next accepted packet */
+  int slots_full_logged; /* re-armed once a slot is free again */
 };
 
 dvbstp_reasm_t *dvbstp_reasm_new(void) { return calloc(1, sizeof(dvbstp_reasm_t)); }
 void dvbstp_reasm_free(dvbstp_reasm_t *r) { free(r); }
+
+/* first malformed/oversized packet after a run of healthy ones; re-armed once
+   a packet is accepted again, so a persistent bad sender logs once, not per packet */
+static void log_malformed_once(dvbstp_reasm_t *r, const char *reason) {
+  if (r->malformed_logged)
+    return;
+  log_line("dvbstp: rejecting malformed packet (%s)", reason);
+  r->malformed_logged = 1;
+}
 
 static void slot_reset(reasm_slot_t *s, const dvbstp_header_t *h) {
   memset(s, 0, sizeof *s);
@@ -139,22 +151,32 @@ int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, d
   int i, free_slot = -1;
 
   hdrlen = dvbstp_parse_header(pkt, len, &h);
-  if (!hdrlen)
+  if (!hdrlen) {
+    log_malformed_once(r, "bad header");
     return 0;
-  if (h.last_section_number >= REASM_MAX_SECTIONS || h.section_number > h.last_section_number)
+  }
+  if (h.last_section_number >= REASM_MAX_SECTIONS || h.section_number > h.last_section_number) {
+    log_malformed_once(r, "bad section numbering");
     return 0;
-  if (h.crc_present && h.section_number != h.last_section_number)
-    return 0; /* crc flag only valid on the final section, clause 5.4.1.2 */
+  }
+  if (h.crc_present && h.section_number != h.last_section_number) {
+    log_malformed_once(r, "crc flag on non-final section"); /* clause 5.4.1.2 */
+    return 0;
+  }
 
   payload = pkt + hdrlen;
   paylen = len - hdrlen;
   if (h.crc_present) {
-    if (paylen < 4)
+    if (paylen < 4) {
+      log_malformed_once(r, "truncated crc");
       return 0;
+    }
     paylen -= 4;
   }
-  if (paylen > DVBSTP_MAX_SECTION)
+  if (paylen > DVBSTP_MAX_SECTION) {
+    log_malformed_once(r, "oversized section");
     return 0;
+  }
 
   for (i = 0; i < REASM_SLOTS; i++) {
     if (r->slots[i].used && r->slots[i].payload_id == h.payload_id && r->slots[i].segment_id == h.segment_id) {
@@ -165,7 +187,17 @@ int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, d
       free_slot = i;
   }
   if (!s) {
-    s = &r->slots[free_slot >= 0 ? free_slot : 0];
+    if (free_slot >= 0) {
+      s = &r->slots[free_slot];
+      r->slots_full_logged = 0;
+    } else {
+      s = &r->slots[0];
+      if (!r->slots_full_logged) {
+        log_line("dvbstp: reassembly slots full (%d), evicting in-progress payload_id=0x%02x segment_id=%u",
+                  REASM_SLOTS, s->payload_id, s->segment_id);
+        r->slots_full_logged = 1;
+      }
+    }
     slot_reset(s, &h);
   } else if (s->version != h.segment_version || s->last_section_number != h.last_section_number) {
     slot_reset(s, &h);
@@ -176,6 +208,7 @@ int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, d
   memcpy(s->buf + (size_t)h.section_number * DVBSTP_MAX_SECTION, payload, paylen);
   s->sec_len[h.section_number] = (unsigned)paylen;
   s->have[h.section_number] = 1;
+  r->malformed_logged = 0;
 
   for (i = 0; i <= (int)s->last_section_number; i++)
     if (!s->have[i])
@@ -192,6 +225,7 @@ int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, d
     uint32_t got = ((unsigned)crcp[0] << 24) | ((unsigned)crcp[1] << 16) | ((unsigned)crcp[2] << 8) | crcp[3];
     if (want != got) {
       s->used = 0;
+      log_malformed_once(r, "crc mismatch on reassembled segment");
       return 0;
     }
   }

@@ -188,6 +188,8 @@ typedef struct {
   unsigned char rtx_pt;
 
   unsigned idle_timeout_s; /* 0 = reaping disabled */
+
+  int nack_truncated_logged; /* re-armed once a NACK arrives that isn't truncated */
 } dispatch_ctx_t;
 
 #define CHANNEL_REAP_STEP_SLOTS 8 /* slots checked per packet - bounds reap cost instead of one O(max_channels) sweep per interval */
@@ -217,6 +219,14 @@ typedef struct {
 
 static void nack_cb(const rtcp_nack_t *nack, void *user) {
   listen_req_ctx_t *rc = (listen_req_ctx_t *)user;
+  if (nack->truncated) {
+    if (!rc->ctx->nack_truncated_logged) {
+      log_line(TOOL_NAME ": NACK has more than %d FCI entries, dropping the rest", RTCP_NACK_MAX_ENTRIES);
+      rc->ctx->nack_truncated_logged = 1;
+    }
+  } else {
+    rc->ctx->nack_truncated_logged = 0;
+  }
   ret_handle_nack(rc->ctx->ret, nack, rc->fd, rc->from, rc->fromlen);
 }
 
@@ -428,6 +438,7 @@ int main(int argc, char **argv) {
   dispatch_ctx.duration_cap_ms = cfg.duration_cap_ms;
   dispatch_ctx.rtx_pt = cfg.rtx_pt;
   dispatch_ctx.idle_timeout_s = cfg.channel_idle_timeout_s;
+  dispatch_ctx.nack_truncated_logged = 0;
 
   pool = listen_pool_start(cfg.listen_family, cfg.listen_addr, cfg.listen_port, cfg.workers, listen_cb, &dispatch_ctx);
   if (!pool) {

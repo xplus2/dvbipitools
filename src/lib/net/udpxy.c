@@ -63,7 +63,12 @@ udpxy_t *udpxy_open(const char *host, unsigned port, const char *path, const cha
     return NULL;
   /* clear O_NONBLOCK: recv() loop below expects a blocking socket paced by SO_RCVTIMEO */
   flags = fcntl(fd, F_GETFL, 0);
-  fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
+    log_line("udpxy: fcntl O_NONBLOCK: %s", strerror(errno));
+    if (reason_out)
+      *reason_out = NET_ERR_OTHER;
+    goto fail;
+  }
   setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
   u = calloc(1, sizeof *u);
   if (!u)

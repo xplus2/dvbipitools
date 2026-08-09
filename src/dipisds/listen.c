@@ -62,6 +62,13 @@ int listen_run(const config_t *cfg) {
     return 1;
   }
   r = dvbstp_reasm_new();
+  if (!r) {
+    log_line("out of memory");
+    mcast_close(m);
+    if (f != stdout)
+      fclose(f);
+    return 1;
+  }
 
   snprintf(invocation, sizeof invocation, "%s --listen --mcast %s --timeout %ld", TOOL_NAME, mcast, cfg->timeout_s);
   format_out_init(f, cfg->format, invocation);
@@ -90,17 +97,19 @@ int listen_run(const config_t *cfg) {
     } else {
       char *xml = malloc(len + 1);
       sds_service_t entries[SDS_MAX_SERVICES];
-      int i, count;
+      int i, count, truncated;
       if (!xml)
         continue;
       memcpy(xml, data, len);
       xml[len] = '\0';
-      count = sds_parse_broadcast(xml, entries, SDS_MAX_SERVICES);
+      count = sds_parse_broadcast(xml, entries, SDS_MAX_SERVICES, &truncated);
       for (i = 0; i < count; i++)
         format_out_item(f, cfg->format, &entries[i]);
       total_services += (unsigned)count;
       free(xml);
-      if (cfg->verbose)
+      if (truncated)
+        log_line("segment %u: %d services, more present beyond the %d cap", segments, count, SDS_MAX_SERVICES);
+      else if (cfg->verbose)
         log_line("segment %u: %d service%s", segments, count, count == 1 ? "" : "s");
     }
   }

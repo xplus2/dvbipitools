@@ -47,6 +47,7 @@ static const metric_def_t DEFS[] = {
     {METRICS_ID_CAS_ECM_TOTAL, "dvbipi_cas_ecm_total", M_COUNTER, "ECMs generated", "cas", 0},
     {METRICS_ID_CAS_ECM_ERRORS_TOTAL, "dvbipi_cas_ecm_errors_total", M_COUNTER, "ECM generation errors", "cas", 0},
     {METRICS_ID_CAS_EMM_TOTAL, "dvbipi_cas_emm_total", M_COUNTER, "EMMs published", "cas", 0},
+    {METRICS_ID_CAS_EMM_DROPPED_TOTAL, "dvbipi_cas_emm_dropped_total", M_COUNTER, "EMMs dropped, oversized or send queue full", "cas", 0},
     {METRICS_ID_CAS_SCRAMBLED_PACKETS_TOTAL, "dvbipi_cas_scrambled_packets_total", M_COUNTER, "packets scrambled", NULL, 0},
     {METRICS_ID_CAS_UNEXPECTED_CLEAR_PACKETS_TOTAL, "dvbipi_cas_unexpected_clear_packets_total", M_COUNTER, "clear packets on a managed pid before the ECMG was up", NULL, 0},
     {METRICS_ID_RADIO_AUDIO_FRAMES_TOTAL, "dvbipi_radio_audio_frames_total", M_COUNTER, "audio frames processed by codec", "codec", 0},
@@ -60,6 +61,7 @@ static const metric_def_t DEFS[] = {
     {METRICS_ID_TV_REMUX_DROPPED_PACKETS_TOTAL, "dvbipi_tv_remux_dropped_packets_total", M_COUNTER, "packets dropped by the remux", NULL, 0},
     {METRICS_ID_TV_AIT_SECTIONS_TOTAL, "dvbipi_tv_ait_sections_total", M_COUNTER, "AIT sections sent", NULL, 0},
     {METRICS_ID_TV_AIT_ERRORS_TOTAL, "dvbipi_tv_ait_errors_total", M_COUNTER, "AIT build errors", NULL, 0},
+    {METRICS_ID_TV_EIT_QUEUE_DROPS_TOTAL, "dvbipi_tv_eit_queue_drops_total", M_COUNTER, "EIT sections discarded, reassembly queue full", NULL, 0},
     {METRICS_ID_SDS_SERVICE_PROVIDERS, "dvbipi_sds_service_providers", M_GAUGE, "service providers announced", NULL, 0},
     {METRICS_ID_SDS_SERVICES, "dvbipi_sds_services", M_GAUGE, "services announced", NULL, 0},
     {METRICS_ID_SDS_DOCUMENTS_GENERATED_TOTAL, "dvbipi_sds_documents_generated_total", M_COUNTER, "SD&S documents (re)generated", NULL, 0},
@@ -88,17 +90,25 @@ typedef struct {
   size_t len, cap;
 } strbuf_t;
 
+/* out of memory: sb->buf stays NULL, every sb_appendf becomes a no-op */
 static void sb_init(strbuf_t *sb) {
   sb->cap = 8192;
-  sb->buf = malloc(sb->cap);
   sb->len = 0;
+  sb->buf = malloc(sb->cap);
+  if (!sb->buf) {
+    sb->cap = 0;
+    return;
+  }
   sb->buf[0] = '\0';
 }
 
 static void sb_appendf(strbuf_t *sb, const char *fmt, ...) {
+  if (!sb->buf)
+    return;
   for (;;) {
     va_list ap;
     int n;
+    char *p;
     va_start(ap, fmt);
     n = vsnprintf(sb->buf + sb->len, sb->cap - sb->len, fmt, ap);
     va_end(ap);
@@ -110,7 +120,15 @@ static void sb_appendf(strbuf_t *sb, const char *fmt, ...) {
     }
     while (sb->cap - sb->len <= (size_t)n)
       sb->cap *= 2;
-    sb->buf = realloc(sb->buf, sb->cap);
+    p = realloc(sb->buf, sb->cap);
+    if (!p) {
+      free(sb->buf);
+      sb->buf = NULL;
+      sb->len = 0;
+      sb->cap = 0;
+      return;
+    }
+    sb->buf = p;
   }
 }
 
@@ -236,6 +254,10 @@ static void render_self_metrics(strbuf_t *sb, const store_t *st) {
   sb_appendf(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"stale\"} %llu\n", (unsigned long long)st->stats.snapshots_rejected_stale);
   sb_appendf(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"full\"} %llu\n", (unsigned long long)st->stats.snapshots_rejected_full);
   sb_appendf(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"version\"} %llu\n", (unsigned long long)st->stats.snapshots_rejected_version);
+
+  sb_appendf(sb, "# HELP dvbipi_metrics_snapshot_entries_dropped_total entries dropped from accepted snapshots exceeding the per-snapshot entry cap\n");
+  sb_appendf(sb, "# TYPE dvbipi_metrics_snapshot_entries_dropped_total counter\n");
+  sb_appendf(sb, "dvbipi_metrics_snapshot_entries_dropped_total %llu\n", (unsigned long long)st->stats.snapshot_entries_dropped);
 
   sb_appendf(sb, "# HELP dvbipi_metrics_http_requests_total /metrics HTTP requests by response status\n");
   sb_appendf(sb, "# TYPE dvbipi_metrics_http_requests_total counter\n");

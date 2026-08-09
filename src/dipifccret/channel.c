@@ -445,8 +445,14 @@ void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq
   uint32_t old_ssrc = atomic_load_explicit(&c->ssrc, memory_order_relaxed);
   int had_ssrc = atomic_load_explicit(&c->ssrc_known, memory_order_relaxed);
 
-  if (payload_len > CHANNEL_MAX_PAYLOAD)
+  if (payload_len > CHANNEL_MAX_PAYLOAD) {
+    if (!c->oversized_logged) {
+      log_line(TOOL_NAME ": %s:%u payload %zu exceeds cap (%d), dropping until it fits again", c->group, c->port, payload_len, CHANNEL_MAX_PAYLOAD);
+      c->oversized_logged = 1;
+    }
     return;
+  }
+  c->oversized_logged = 0;
 
   if (!had_ssrc || old_ssrc != ssrc) {
     size_t slot_idx = (size_t)(c - t->chan);
@@ -477,11 +483,15 @@ void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq
     ret_ring_store(c, seq, timestamp, payload, payload_len);
 
   if (c->cache.cap > 0) {
-    int is_rap;
-    if (!c->psi)
+    if (!c->psi) {
       c->psi = psi_new();
-    is_rap = scan_ts_packets(c->psi, payload, payload_len);
-    rap_cache_append(&c->cache, seq, timestamp, payload, payload_len, is_rap);
+      if (!c->psi)
+        log_line(TOOL_NAME ": out of memory allocating psi state for %s:%u, RAP detection disabled for this packet", c->group, c->port);
+    }
+    if (c->psi) {
+      int is_rap = scan_ts_packets(c->psi, payload, payload_len);
+      rap_cache_append(&c->cache, seq, timestamp, payload, payload_len, is_rap);
+    }
   }
 }
 

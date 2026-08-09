@@ -98,7 +98,13 @@ static int tcp_connect(const char *host, unsigned port, net_err_reason_t *reason
     return -1;
   /* clear O_NONBLOCK: raw_recv/raw_send_all expect a blocking socket paced by SO_RCVTIMEO */
   flags = fcntl(fd, F_GETFL, 0);
-  fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
+    log_line("httpclient: fcntl O_NONBLOCK: %s", strerror(errno));
+    if (reason_out)
+      *reason_out = NET_ERR_OTHER;
+    close(fd);
+    return -1;
+  }
   return fd;
 }
 
@@ -180,12 +186,16 @@ static void parse_headers(struct http *h, char *block) {
     char *sp = strchr(line, ' ');
     h->status = sp ? atoi(sp + 1) : 0;
   }
-  while ((line = strtok_r(NULL, "\r\n", &save)) != NULL && h->hdr_count < HTTP_HDR_MAX) {
+  while ((line = strtok_r(NULL, "\r\n", &save)) != NULL) {
     char *colon = strchr(line, ':');
     char *v;
     size_t nlen;
     if (!colon)
       continue;
+    if (h->hdr_count >= HTTP_HDR_MAX) {
+      log_line("http: response has more than %d headers, dropping the rest", HTTP_HDR_MAX);
+      break;
+    }
     nlen = (size_t)(colon - line);
     if (nlen >= sizeof h->hdr[0].name)
       nlen = sizeof h->hdr[0].name - 1;
