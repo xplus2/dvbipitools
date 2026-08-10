@@ -41,7 +41,7 @@ cmake --build build
 | `-DCMAKE_BUILD_TYPE=Debug\|Release`                                      | `--debug` / `--release` | Build type                                           |
 | `-DDVBIPITOOLS_STATIC=ON`                                                | `--static`              | Static linking                                       |
 | `-DDIPIRADIOHEAD_TLS=OFF` / `-DDIPITVHEAD_TLS=OFF` / `-DDIPIREC_TLS=OFF` | `--no-tls`              | Build the respective tool without TLS source support |
-| `-DDIPITVHEAD_CSA2=OFF` / `-DDIPIRADIOHEAD_CSA2=OFF` / `-DDIPIDESCRAMBLE_CSA2=OFF` | `--no-csa2`   | Build the respective tool without CSA2               | 
+| `-DDIPITVHEAD_CSA2=OFF` / `-DDIPIRADIOHEAD_CSA2=OFF` / `-DDIPIDESCRAMBLE_CSA2=OFF` | `--no-csa2`   | Build the respective tool without CSA1/CSA2/BISS1    | 
 
 > Note: The build automatically disables TLS support if OpenSSL is not found.
 
@@ -50,12 +50,13 @@ cmake --build build
 
 * **libssl-dev**
   + Required for HTTPS sources in `dipitvhead` and `dipiradiohead`.
-  + Enables _CISSA/AES-128_ Conditional Access in `dipitvhead` and `dipiradiohead`.
+  + Enables _CISSA/AES-128_ Conditional Access, and BISS2 (Mode 1/E Session Word AES-128,
+    Mode CA RSA-OAEP receiver keys) in `dipitvhead` and `dipiradiohead`.
   + Required to build `dipicam378`/`dipidescramble` at all - RSA/AES crypto is their
     whole purpose, so both are skipped entirely if not found.
 * **libdvbcsa-dev**
-  + Optional; required only if you need CSA support in `dipitvhead`, `dipiradiohead`
-    or `dipidescramble`.
+  + Optional: required only if you need CSA1, CSA2 or BISS1 support in `dipitvhead`,
+    `dipiradiohead` or `dipidescramble`.
 
 ## Packaging
 ```sh
@@ -78,7 +79,8 @@ between real-world usage of media formats and the standard.
     ETSI TS 102 034 v2.1.1 mentions Multi Program Transport Streams (MPTS) exactly twice:
     + In the abbreviation list
     + According to §7.1.0, Content Service Providers can use them
-  - BISS (EBU Tech 3292). DVB-IPI prioritizes SimulCrypt.
+  - BISS (EBU Tech 3292): BISS1 Mode 1 (CSA1), BISS2 Mode 1/E (CISSA) and BISS2 Mode CA
+    (RSA-OAEP receiver entitlement). DVB-IPI prioritizes SimulCrypt.
 * dipiradiohead
   - Icecast/Shoutcast as an input source - none of this is part of DVB.
   - ICY `StreamTitle`, inline ID3v2 `TIT2`/`TPE1` mapping into EIT.
