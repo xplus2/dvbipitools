@@ -25,7 +25,15 @@ dvbipitools (2.2.0-1) unstable; urgency=medium
     + so, initial multi-cas support also found its way to dipitvhead and dipiradiohead (merge complete)
   * http_client lib: chunked support
   * deb package: dynamic linking instead of static; dipiradiohead/dipitvhead/dipidescramble (tar.gz stays static)
- -- dvbipitools authors <unspecified@example.com>  Sun, 09 Aug 2026 00:00:00 +0200
+  * BISS1 and BISS2 support (excl. BISS1-E and BISS2-CA group keys)
+  * legacy CSA(1) support (mostly added signaling)
+  * explicit logging/metrics for previously silent drops/clamping
+  * fixed scrambler "full queue" segfault (mpts long-run test loop finding)
+  * fixed dipidescramble ECM resolution in (partially) scrambled mpts
+  * dipirec: added --pace and file+stdin input for burstless "-o -" replay
+  * dipirec: changed hardcoded stripper to "--strip NUL,AIT,EIT,..."
+    + note: defaults, if not set, changed to keep CAT,ECM,EMM (if present)
+ -- dvbipitools authors <unspecified@example.com>  Tue, 11 Aug 2026 00:00:00 +0200
 
 dvbipitools (2.1.1-1) unstable; urgency=medium
   * test fixes

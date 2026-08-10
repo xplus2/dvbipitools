@@ -87,6 +87,11 @@ static unsigned long group_current_epoch(cas_group_t *g) {
   return atomic_load_explicit(&g->cp_clock_ms, memory_order_relaxed) / g->cfg.cp_duration_ms;
 }
 
+void csa1_apply_cw_checksum(unsigned char cw[8]) {
+  cw[3] = (unsigned char)(((unsigned)cw[0] + cw[1] + cw[2]) % 256);
+  cw[7] = (unsigned char)(((unsigned)cw[4] + cw[5] + cw[6]) % 256);
+}
+
 static int group_cw_for_epoch(cas_group_t *g, unsigned long epoch, unsigned char *out, size_t cw_len) {
   int idx = (int)(epoch % CAS_GROUP_CW_HIST);
   int rc = 0;
@@ -96,6 +101,8 @@ static int group_cw_for_epoch(cas_group_t *g, unsigned long epoch, unsigned char
     if (cw_gen(g->hist[idx].cw, cw_len) < 0) {
       rc = -1;
     } else {
+      if (g->cfg.legacy_csa1 && cw_len == 8)
+        csa1_apply_cw_checksum(g->hist[idx].cw);
       g->hist[idx].epoch = epoch;
       g->hist[idx].valid = 1;
     }
@@ -210,7 +217,9 @@ cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
     return NULL;
   g->cfg = *cfg;
   g->flush_pid = flush_pid;
-  g->scrambling_mode = (cfg->algo == SCRAMBLE_ALGO_CISSA) ? CADESC_SCRAMBLING_MODE_CISSA : CADESC_SCRAMBLING_MODE_CSA2;
+  g->scrambling_mode = (cfg->algo == SCRAMBLE_ALGO_CISSA) ? CADESC_SCRAMBLING_MODE_CISSA
+                       : cfg->legacy_csa1                 ? CADESC_SCRAMBLING_MODE_CSA1
+                                                           : CADESC_SCRAMBLING_MODE_CSA2;
   g->engine = cas_scramble_engine_start(cfg->algo, cfg->pids, cfg->pid_count, flush_pid);
   if (!g->engine) {
     free(g);

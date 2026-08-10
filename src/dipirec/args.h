@@ -9,7 +9,8 @@
 typedef enum {
   URI_RTP,  /* multicast, RTP wrapped */
   URI_UDP,  /* multicast, plain ts */
-  URI_UDPXY /* udpxy http */
+  URI_UDPXY, /* udpxy http */
+  URI_FILE  /* stdin ("-") or a local file path; RTP-vs-raw auto-detected */
 } uri_kind_t;
 
 typedef struct {
@@ -23,6 +24,8 @@ typedef struct {
   char http_host[256];
   unsigned http_port;
   char http_path[512]; /* GET path, leading '/' */
+  /* URI_FILE; "" means stdin */
+  char file_path[512];
 } source_t;
 
 typedef enum { FMT_RAW, FMT_TS, FMT_MKV, FMT_MKA } out_fmt_t;
@@ -55,6 +58,8 @@ typedef struct {
   long sub_lead_ms;     /* --sub-lead; subtitles shifted earlier */
   int color_mode;       /* --color; log_color_t */
   ret_cfg_t ret;        /* --ret and friends; RTP source only */
+  int pace;             /* --pace; URI_FILE source only */
+  unsigned strip_mask;  /* --strip; STRIP_* bits from filter/ts.h, -f ts only */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

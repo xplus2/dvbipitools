@@ -36,7 +36,10 @@ add_executable(dipirec
     ../lib/net/udpxy.c
     ../lib/net/tssource.c
     ${TLS_SRC}
-    ../lib/net/httpclient.c
+    ../lib/net/httpclient/httpclient.c
+    ../lib/net/httpclient/url.c
+    ../lib/net/httpclient/read.c
+    ../lib/net/httpclient/async.c
     ../lib/ioutil.c
     ../lib/demux/rtp.c
     ../lib/demux/rtx.c
@@ -48,9 +51,15 @@ add_executable(dipirec
     ../lib/demux/mpts_probe.c
     ../lib/mux/rtcp_build.c
     ../lib/mux/ebml.c
-    ../lib/mux/mkv.c
+    ../lib/mux/mkv/mkv.c
+    ../lib/mux/mkv/bitreader.c
+    ../lib/mux/mkv/audio.c
+    ../lib/mux/mkv/video.c
+    ../lib/mux/mkv/write.c
+    ../lib/mux/mkv/feed.c
     ../lib/mux/teletext.c
-    filter/ts.c)
+    filter/ts.c
+    filter/pace.c)
 
 if (DIPIREC_HAVE_TLS)
     target_link_libraries(dipirec PRIVATE OpenSSL::SSL OpenSSL::Crypto)

@@ -139,7 +139,11 @@ int device_resolve_cw(device_state_t *d, const unsigned char *ecm, size_t ecm_le
   /* section header(3) + CP_CW_COMBINATION's cp_number(2), then the encrypted CW block */
   if (ecm_len < 5 + CRYPTO_CW_ENC_LEN)
     return -1;
+  /* srvid = local PAT program_number, not CAS's service_id. MPTS CW is mux-wide,
+     --sid unrelated. one session per process: lone cached key unambiguous. */
   sk = service_slot(d, srvid, 0);
+  if (!sk && d->service_count == 1)
+    sk = &d->services[0];
   if (!sk || !sk->have)
     return -1;
   if (device_ecm_decrypt(sk->sk, ecm + 5, cw_len, cw) != 0)

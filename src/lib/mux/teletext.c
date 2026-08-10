@@ -11,7 +11,7 @@
 #define TTX_COLS 40
 #define TTX_GAP_MS 500      /* rows further apart start a new subtitle */
 #define TTX_MIN_MS 1200     /* on-screen floor when nothing follows */
-#define TTX_MAX_MS 7000     /* cap, subtitles carry no clear signal */
+#define TTX_MAX_MS 5000     /* cap, subtitles carry no clear signal */
 
 /* G0 national subsets, Latin region 0 (EN 300 706 table 36). 13 differing code
  * points, UTF-8 escaped, sucks on purpose */

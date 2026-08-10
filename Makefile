@@ -166,7 +166,10 @@ dipirec_SRCS := \
 	src/lib/net/udpxy.c \
 	src/lib/net/tssource.c \
 	$(dipirec_TLS_SRC) \
-	src/lib/net/httpclient.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/rtx.c \
@@ -178,9 +181,15 @@ dipirec_SRCS := \
 	src/lib/demux/mpts_probe.c \
 	src/lib/mux/rtcp_build.c \
 	src/lib/mux/ebml.c \
-	src/lib/mux/mkv.c \
+	src/lib/mux/mkv/mkv.c \
+	src/lib/mux/mkv/bitreader.c \
+	src/lib/mux/mkv/audio.c \
+	src/lib/mux/mkv/video.c \
+	src/lib/mux/mkv/write.c \
+	src/lib/mux/mkv/feed.c \
 	src/lib/mux/teletext.c \
-	src/dipirec/filter/ts.c
+	src/dipirec/filter/ts.c \
+	src/dipirec/filter/pace.c
 
 ifeq ($(HAVE_OPENSSL),yes)
 dipiradiohead_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
@@ -202,8 +211,12 @@ endif
 
 ifeq ($(HAVE_OPENSSL),yes)
 dipiradiohead_CISSA_SRC := src/lib/scrambler/cissa.c
+dipiradiohead_BISS_SRC := src/lib/cas/biss/biss.c
+dipiradiohead_BISS_CA_SRC := src/lib/cas/biss/ca.c
 else
 dipiradiohead_CISSA_SRC := src/lib/scrambler/cissa_stub.c
+dipiradiohead_BISS_SRC := src/lib/cas/biss/stub.c
+dipiradiohead_BISS_CA_SRC := src/lib/cas/biss/ca_stub.c
 $(warning dipiradiohead: OpenSSL not found via pkg-config, building without CISSA support)
 endif
 
@@ -235,7 +248,10 @@ dipiradiohead_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	$(dipiradiohead_TLS_SRC) \
-	src/lib/net/httpclient.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/bitreader.c \
@@ -265,7 +281,11 @@ dipiradiohead_SRCS := \
 	src/lib/mux/tspacket_write.c \
 	src/lib/scrambler/scrambler.c \
 	$(dipiradiohead_CISSA_SRC) \
-	$(dipiradiohead_CSA2_SRC)
+	$(dipiradiohead_CSA2_SRC) \
+	$(dipiradiohead_BISS_SRC) \
+	$(dipiradiohead_BISS_CA_SRC) \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/cas/biss/ca_engine.c
 
 ifeq ($(HAVE_OPENSSL),yes)
 dipitvhead_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
@@ -287,8 +307,12 @@ endif
 
 ifeq ($(HAVE_OPENSSL),yes)
 dipitvhead_CISSA_SRC := src/lib/scrambler/cissa.c
+dipitvhead_BISS_SRC := src/lib/cas/biss/biss.c
+dipitvhead_BISS_CA_SRC := src/lib/cas/biss/ca.c
 else
 dipitvhead_CISSA_SRC := src/lib/scrambler/cissa_stub.c
+dipitvhead_BISS_SRC := src/lib/cas/biss/stub.c
+dipitvhead_BISS_CA_SRC := src/lib/cas/biss/ca_stub.c
 $(warning dipitvhead: OpenSSL not found via pkg-config, building without CISSA support)
 endif
 
@@ -312,6 +336,10 @@ dipitvhead_SRCS := \
 	src/dipitvhead/main.c \
 	src/dipitvhead/args.c \
 	src/dipitvhead/tvhead.c \
+	src/dipitvhead/tvhead_discover.c \
+	src/dipitvhead/tvhead_output.c \
+	src/dipitvhead/tvhead_single.c \
+	src/dipitvhead/tvhead_mpts.c \
 	src/dipitvhead/input/source.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
@@ -336,7 +364,10 @@ dipitvhead_SRCS := \
 	src/lib/net/tssource.c \
 	src/lib/net/retryset.c \
 	$(dipitvhead_TLS_SRC) \
-	src/lib/net/httpclient.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/psi.c \
@@ -349,7 +380,11 @@ dipitvhead_SRCS := \
 	src/lib/mux/tspacket_write.c \
 	src/lib/scrambler/scrambler.c \
 	$(dipitvhead_CISSA_SRC) \
-	$(dipitvhead_CSA2_SRC)
+	$(dipitvhead_CSA2_SRC) \
+	$(dipitvhead_BISS_SRC) \
+	$(dipitvhead_BISS_CA_SRC) \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/cas/biss/ca_engine.c
 
 TOOLS += dipifccret
 dipifccret_EXTRA_CFLAGS := -pthread
@@ -427,6 +462,7 @@ dipidescramble_SRCS := \
 	src/dipidescramble/args.c \
 	src/dipidescramble/crypto.c \
 	src/dipidescramble/device.c \
+	src/dipidescramble/biss_ca_state.c \
 	src/dipidescramble/emmcache.c \
 	src/dipidescramble/ipiclient.c \
 	src/lib/log.c \
@@ -437,7 +473,10 @@ dipidescramble_SRCS := \
 	src/lib/net/udpxy.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tls.c \
-	src/lib/net/httpclient.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/psi.c \
@@ -447,10 +486,19 @@ dipidescramble_SRCS := \
 	src/lib/demux/pes.c \
 	src/lib/demux/mpts_probe.c \
 	src/lib/mux/ebml.c \
-	src/lib/mux/mkv.c \
+	src/lib/mux/mkv/mkv.c \
+	src/lib/mux/mkv/bitreader.c \
+	src/lib/mux/mkv/audio.c \
+	src/lib/mux/mkv/video.c \
+	src/lib/mux/mkv/write.c \
+	src/lib/mux/mkv/feed.c \
 	src/lib/mux/teletext.c \
+	src/lib/mux/psi_build.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa.c \
+	src/lib/cas/biss/biss.c \
+	src/lib/cas/biss/ca.c \
+	src/lib/cas/biss/ca_sections.c \
 	$(dipidescramble_CSA2_SRC)
 else
 $(warning dipidescramble: OpenSSL not found via pkg-config, skipping this tool entirely (RSA/AES crypto is its whole purpose))
@@ -472,7 +520,7 @@ UNIT_TESTS := lib_demux_crc32 lib_demux_psi lib_demux_psi_section_asm lib_demux_
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_rtpheader lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_cadescbuild \
-	lib_net_netconnect lib_net_httpclient_async lib_net_tssource_async lib_net_retryset \
+	lib_net_netconnect lib_net_httpclient_async lib_net_tssource_async lib_net_tssource_file lib_net_retryset \
 	lib_mux_mpts \
 	lib_cas_cas_group \
 	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec \
@@ -484,7 +532,7 @@ UNIT_TESTS := lib_demux_crc32 lib_demux_psi lib_demux_psi_section_asm lib_demux_
 	dipiradiohead_source_async dipiradiohead_inputset \
 	dipitvhead_args dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_bitrate dipitvhead_remux \
 	dipitvhead_simulcrypt_msg dipitvhead_ecmg_client dipitvhead_emmg_server dipitvhead_cas \
-	dipirec_ts_filter \
+	dipirec_ts_filter dipirec_pace \
 	dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_ret \
 	lib_metrics_protocol lib_metrics_export \
 	dipimetrics_store dipimetrics_render dipimetrics_httpserver
@@ -500,9 +548,51 @@ lib_scrambler_cissa_SRCS := \
 	src/lib/log.c
 lib_scrambler_cissa_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_scrambler_cissa_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += lib_cas_biss
+lib_cas_biss_BIN := tests/unit/lib/cas/test_biss
+lib_cas_biss_SRCS := \
+	tests/unit/lib/cas/test_biss.c \
+	src/lib/cas/biss/biss.c
+lib_cas_biss_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+lib_cas_biss_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += lib_cas_biss_ca
+lib_cas_biss_ca_BIN := tests/unit/lib/cas/test_biss_ca
+lib_cas_biss_ca_SRCS := \
+	tests/unit/lib/cas/test_biss_ca.c \
+	src/lib/cas/biss/ca.c
+lib_cas_biss_ca_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+lib_cas_biss_ca_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += lib_cas_biss_ca_engine
+lib_cas_biss_ca_engine_BIN := tests/unit/lib/cas/test_biss_ca_engine
+lib_cas_biss_ca_engine_SRCS := \
+	tests/unit/lib/cas/test_biss_ca_engine.c \
+	src/lib/cas/biss/ca_engine.c \
+	src/lib/cas/biss/ca.c \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/cas/cas_scramble_engine.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/mux/cadescbuild.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/crc32.c \
+	src/lib/log.c
+lib_cas_biss_ca_engine_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+lib_cas_biss_ca_engine_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 else
-$(warning tests: OpenSSL not found via pkg-config, skipping lib_scrambler_cissa unit test)
+$(warning tests: OpenSSL not found via pkg-config, skipping lib_scrambler_cissa/lib_cas_biss/lib_cas_biss_ca/lib_cas_biss_ca_engine unit tests)
 endif
+
+UNIT_TESTS += lib_cas_biss_ca_sections
+lib_cas_biss_ca_sections_BIN := tests/unit/lib/cas/test_biss_ca_sections
+lib_cas_biss_ca_sections_SRCS := \
+	tests/unit/lib/cas/test_biss_ca_sections.c \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/crc32.c
 
 ifeq ($(HAVE_CSA2),yes)
 UNIT_TESTS += lib_scrambler_csa2
@@ -566,8 +656,20 @@ dipidescramble_device_SRCS := \
 	src/lib/log.c
 dipidescramble_device_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_device_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += dipidescramble_biss_ca_state
+dipidescramble_biss_ca_state_BIN := tests/unit/dipidescramble/test_biss_ca_state
+dipidescramble_biss_ca_state_SRCS := \
+	tests/unit/dipidescramble/test_biss_ca_state.c \
+	src/dipidescramble/biss_ca_state.c \
+	src/lib/cas/biss/ca.c \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/crc32.c
+dipidescramble_biss_ca_state_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+dipidescramble_biss_ca_state_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 else
-$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device unit tests)
+$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_biss_ca_state unit tests)
 endif
 
 lib_metrics_protocol_BIN := tests/unit/lib/metrics/test_protocol
@@ -645,7 +747,10 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/mux/psi_build.c \
 	src/lib/net/tssource.c \
-	src/lib/net/httpclient.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
@@ -731,7 +836,12 @@ lib_mux_teletext_SRCS := \
 lib_mux_mkv_BIN := tests/unit/lib/mux/test_mkv
 lib_mux_mkv_SRCS := \
 	tests/unit/lib/mux/test_mkv.c \
-	src/lib/mux/mkv.c \
+	src/lib/mux/mkv/mkv.c \
+	src/lib/mux/mkv/bitreader.c \
+	src/lib/mux/mkv/audio.c \
+	src/lib/mux/mkv/video.c \
+	src/lib/mux/mkv/write.c \
+	src/lib/mux/mkv/feed.c \
 	src/lib/ioutil.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/teletext.c \
@@ -926,6 +1036,10 @@ dipiradiohead_tspacketizer_SRCS := \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/cas/biss/ca_engine.c \
 	src/lib/log.c \
 	src/lib/signal.c
 
@@ -947,6 +1061,10 @@ dipiradiohead_cas_SRCS := \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/cas/biss/ca_engine.c \
 	src/lib/log.c \
 	src/lib/signal.c
 
@@ -956,6 +1074,8 @@ dipiradiohead_args_SRCS := \
 	src/dipiradiohead/args.c \
 	src/lib/argutil.c \
 	src/lib/cas/cas_args.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/ca_stub.c \
 	src/lib/log.c
 
 dipiradiohead_source_async_BIN := tests/unit/dipiradiohead/input/test_source_async
@@ -969,7 +1089,10 @@ dipiradiohead_source_async_SRCS := \
 	src/dipiradiohead/framer/aac_adts.c \
 	src/dipiradiohead/framer/aac_latm.c \
 	src/lib/demux/bitreader.c \
-	src/lib/net/httpclient.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
@@ -989,7 +1112,10 @@ dipiradiohead_inputset_SRCS := \
 	src/dipiradiohead/framer/aac_adts.c \
 	src/dipiradiohead/framer/aac_latm.c \
 	src/lib/demux/bitreader.c \
-	src/lib/net/httpclient.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
@@ -1014,7 +1140,12 @@ dipitvhead_args_SRCS := \
 	src/dipitvhead/args.c \
 	src/lib/argutil.c \
 	src/lib/cas/cas_args.c \
-	src/lib/net/httpclient.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
@@ -1067,6 +1198,10 @@ dipitvhead_remux_SRCS := \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/cas/biss/ca_engine.c \
 	src/lib/log.c \
 	src/lib/signal.c
 
@@ -1128,6 +1263,10 @@ dipitvhead_cas_SRCS := \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/cas/biss/ca_engine.c \
 	src/lib/log.c \
 	src/lib/signal.c
 
@@ -1148,7 +1287,10 @@ lib_net_netconnect_SRCS := \
 lib_net_httpclient_async_BIN := tests/unit/lib/net/test_httpclient_async
 lib_net_httpclient_async_SRCS := \
 	tests/unit/lib/net/test_httpclient_async.c \
-	src/lib/net/httpclient.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
@@ -1159,7 +1301,27 @@ lib_net_tssource_async_BIN := tests/unit/lib/net/test_tssource_async
 lib_net_tssource_async_SRCS := \
 	tests/unit/lib/net/test_tssource_async.c \
 	src/lib/net/tssource.c \
-	src/lib/net/httpclient.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/multicast.c \
+	src/lib/net/udpxy.c \
+	src/lib/demux/rtp.c \
+	src/lib/signal.c \
+	src/lib/log.c
+
+lib_net_tssource_file_BIN := tests/unit/lib/net/test_tssource_file
+lib_net_tssource_file_SRCS := \
+	tests/unit/lib/net/test_tssource_file.c \
+	src/lib/net/tssource.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
@@ -1204,6 +1366,12 @@ dipirec_ts_filter_SRCS := \
 	src/lib/demux/psi_section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
+
+dipirec_pace_BIN := tests/unit/dipirec/test_pace
+dipirec_pace_SRCS := \
+	tests/unit/dipirec/test_pace.c \
+	src/dipirec/filter/pace.c \
+	src/lib/signal.c
 
 dipifccret_channel_BIN := tests/unit/dipifccret/test_channel
 dipifccret_channel_SRCS := \

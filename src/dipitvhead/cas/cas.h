@@ -65,6 +65,10 @@ int cas_vendor_ecm_due(cas_t *c, size_t idx, double now, unsigned char *out, siz
 /* 0: filled. -1: queue empty */
 int cas_vendor_next_emm(cas_t *c, size_t idx, unsigned char *out, size_t cap, size_t *out_len);
 
+/* SIGHUP: rescan --biss2-ca-receivers, force an SK rotation if the entitled set changed
+   (revocation). no-op outside BISS-CA mode - caller decides when SIGHUP fired */
+void cas_reload_receivers(cas_t *c);
+
 /* below: pure helpers, exposed for unit tests only - remux.c has no business calling these */
 
 /* resolves --cas-pids (pids + video/audio keywords) against es to a deduped output-pid

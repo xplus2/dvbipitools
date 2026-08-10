@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 
-#include "netconnect.h"
+#include "../netconnect.h"
 
 typedef struct http http_t;
 

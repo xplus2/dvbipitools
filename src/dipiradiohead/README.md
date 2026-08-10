@@ -1,7 +1,5 @@
 # dipiradiohead
 
-IPI Radio Headend
-
 Fetches one or more Icecast/Shoutcast streams and re-muxes them as one DVB-IPI multicast. No
 transcoding. A single `-i` gives a normal SPTS; more than one gives an MPTS, one program per input.
 
@@ -32,27 +30,39 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] -m <mcast>:<por
 `--sid`/`-s` pair with whichever `-i` came right before them - like ffmpeg's per-input options,
 not global flags. Order matters: `--sid`/`-s` before the first `-i` is an error.
 
-### Related to Conditional Access
+### Conditional Access: SimulCrypt
 
 `--cas-ecmg` is repeatable, one CAS vendor per `--cas-ecmg`. Flags marked **per-vendor** pair
 with the `--cas-ecmg` immediately before them, same convention as `-i`'s `--sid`/`-s` above -
 using one before any `--cas-ecmg` is an error. Everything else is shared across every vendor.
 
-| long form               | argument                  | default                                    | scope      |
-|--------------------------|---------------------------|--------------------------------------------|------------|
-| `--cas-algo`             | `cissa\|csa2`              | disabled                                   |            |
-| `--cas-ecmg`             | `tcp://host:port`          | at least one required with `--cas-algo`    |            |
-| `--cas-ecmg-version`     | `2\|3`                     | auto-negotiate                             | per-vendor |
-| `--cas-super-id`         | `<n>`                      | required per vendor                        | per-vendor |
-| `--cas-ecm-id`           | `<n>`                      | required per vendor                        | per-vendor |
-| `--cas-ecm-pid`          | `<pid>`                    | `0x0020`                                   | per-vendor |
-| `--cas-emmg-port`        | `<n>`                      | `8002`                                     | per-vendor |
-| `--cas-emmg-version`     | `2\|3`                     | accept client's proposal                   | per-vendor |
-| `--cas-emm-pid`          | `<pid>`                    | `0x0021`                                   | per-vendor |
-| `--cas-resilience`       | `frozen\|cycling\|silent`  | `frozen`                                   | per-vendor |
-| `--cas-required`         |                            | off                                        | per-vendor |
-| `--cas-cp-duration`      | `<ms>`                     | `10000`                                    |            |
-| `--cas-fallback-clear`   |                            | off (stay scrambled on last known-good CW) |            |
+| long form              | argument                  | default                                    | scope      |
+|------------------------|---------------------------|--------------------------------------------|------------|
+| `--cas-algo`           | `cissa\|csa2\|csa1`       | disabled                                   |            |
+| `--cas-ecmg`           | `tcp://host:port`         | at least one required with `--cas-algo`    |            |
+| `--cas-ecmg-version`   | `2\|3`                    | auto-negotiate                             | per-vendor |
+| `--cas-super-id`       | `<n>`                     | required per vendor                        | per-vendor |
+| `--cas-ecm-id`         | `<n>`                     | required per vendor                        | per-vendor |
+| `--cas-ecm-pid`        | `<pid>`                   | `0x0020`                                   | per-vendor |
+| `--cas-emmg-port`      | `<n>`                     | `8002`                                     | per-vendor |
+| `--cas-emmg-version`   | `2\|3`                    | accept client's proposal                   | per-vendor |
+| `--cas-emm-pid`        | `<pid>`                   | `0x0021`                                   | per-vendor |
+| `--cas-resilience`     | `frozen\|cycling\|silent` | `frozen`                                   | per-vendor |
+| `--cas-required`       |                           | off                                        | per-vendor |
+| `--cas-cp-duration`    | `<ms>`                    | `10000`                                    |            |
+| `--cas-fallback-clear` |                           | off (stay scrambled on last known-good CW) |            |
+
+### Conditional Access: BISS
+
+BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each other.
+
+| long form                | argument   | default                                             |
+|--------------------------|------------|------------------------------------------------------|
+| `--biss1-sw`             | `<hex12>`  | BISS1 Mode 1                                        |
+| `--biss2-sw`             | `<hex32>`  | BISS2 Mode 1/E                                      |
+| `--biss2-emit-esw`       | `<hex32>`  | log the Encrypted Session Word for this receiver ID |
+| `--biss2-ca-receivers`   | `<dir>`    | BISS2 Mode CA: directory of receiver PEM pubkeys    |
+| `--biss2-ca-session-id`  | `<n>`      | dec or 0x-hex, 16 bit; random if not given          |
 
 
 ## Input (`-i`)
@@ -143,17 +153,17 @@ One self-updating line on stderr, about once a second.
 
 Acts as a DVB Simulcrypt SCS towards one or more ECMGs (one per `--cas-ecmg`), and as the
 EMMG-side MUX towards each one's EMMG client, per ETSI TS 103 197 (protocol versions 2 and 3,
-auto-negotiated per vendor unless that vendor's `--cas-ecmg-version` / `--cas-emmg-version`
-pins one). Scrambles CISSA (ETSI TS 103 127, 128-bit AES-CBC, needs OpenSSL) or CSA2 (needs
-libdvbcsa) content and emits one `CA_descriptor` per vendor plus one shared
-`scrambling_descriptor` in each program's PMT, a CAT with one `CA_descriptor` per vendor, and
-each vendor's own ECM (`--cas-ecm-pid`) and EMM (`--cas-emm-pid`) streams. There's no
-`--cas-pids` here: every configured audio PID is scrambled, always - with a single `-i` that's
-the one audio PID; with several, every program's audio, all under **one shared control
-word/crypto-period** for the whole output regardless of vendor count, not independent
-per-program crypto. (The one exception: with CSA2's SIMD batching, only the first `-i`'s audio
-is guaranteed never delayed by a batch window - the others may see negligible, bounded PCR
-jitter under CSA2 specifically; CISSA doesn't batch.)
+auto-negotiated per vendor unless that vendor's `--cas-ecmg-version` / `--cas-emmg-version` pins one).
+Scrambles CISSA (ETSI TS 103 127, 128-bit AES-CBC, needs OpenSSL) or CSA1+2 (need libdvbcsa) content
+and emits one `CA_descriptor` per vendor plus one shared `scrambling_descriptor` in each program's PMT,
+a CAT with one `CA_descriptor` per vendor, and each vendor's own ECM (`--cas-ecm-pid`) and EMM (`--cas-emm-pid`) streams. 
+
+There's no `--cas-pids` here (like in `dipitvhead`): every configured audio PID is scrambled, always.
+With a single `-i` that's the one audio PID; with several, every program's audio, all under one shared CW/crypto-period
+for the whole output regardless of vendor count, not independent per-program crypto.
+
+The one exception: with CSA1/2's SIMD batching, only the first `-i`'s
+audio is guaranteed never delayed by a batch window. The others may see minimal bounded PCR jitter under CSA1/2.
 
 > Note: Adding an EMM stream to a single radio channel will quickly add more overhead than the actual payload.
 > With multiple `-i`, this is handled automatically - one EMM stream covers every program, not one
@@ -204,24 +214,63 @@ none are marked `--cas-required`) even if all of them are down.
 = 00) once every vendor is down, or once any vendor marked `--cas-required` is down
 specifically - regardless of whether other, non-required vendors are still up.
 
+### BISS (`--biss1-sw`, `--biss2-sw`, `--biss2-emit-esw`)
+
+`--biss1-sw <hex12>` scrambles with legacy BISS1 Mode 1: a static 12 hex char Session Word, no ECMG/EMMG.
+Mutually exclusive with `--biss2-sw`/`--cas-algo`/`--cas-ecmg`.
+Same `CA_descriptor`/CAT signaling as BISS2 Mode 1/E, only the cipher (CSA1, not CISSA) differs. BISS1 Mode E (DES) is not supported.
+
+`--biss2-sw <hex32>` scrambles with BISS2 Mode 1/E (EBU Tech 3292) instead: a static 32 hex  Session Word used directly
+as the CISSA key, no ECMG/EMMG at all. Mutually exclusive with `--cas-algo`/`--cas-ecmg`.
+Emits a `CA_descriptor` (`CA_system_id 0x2602`, no real ECM PID) and an empty CAT, no `scrambling_descriptor`.
+
+`--biss2-emit-esw <hex32>` (needs `--biss2-sw`) logs the AES-128-ECB Encrypted Session Word for the given 32 hex
+receiver ID once at startup, for operators distributing the SW to receivers out of band (BISS2 Mode E).
+
+### BISS-CA (`--biss2-ca-receivers`, `--biss2-ca-session-id`)
+
+`--biss2-ca-receivers <dir>` enables BISS2 Mode CA (EBU Tech 3292-s1, `CA_system_id 0x2610`): real
+RSA-2048-OAEP + AES-128-CBC key exchange with per-receiver entitlement, in place of a single static SW.
+Mutually exclusive with `--cas-algo`/`--cas-ecmg`/`--biss1-sw`/`--biss2-sw`.
+
+`<dir>` holds one PKCS#8 PEM public key per entitled receiver/group. Rescanned on `SIGHUP`; removing a
+key revokes that receiver (forces an immediate Session Key change). `--cas-cp-duration` sets the Session
+Word rotation period (minimum 1000ms here); the Session Key rotates every 6th SW period.
+
+`--biss2-ca-session-id <n>` sets the administrative `entitlement_session_id` (dec or 0x-hex, 16 bit);
+random at startup if omitted.
+
+Emits a real `CA_descriptor` (`CA_system_id 0x2610`, real ECM PID) with a
+`bissca_entitlement_session_id_descriptor`, a real (non-empty) CAT, and a `scrambling_descriptor` (CISSA).
+ECM/EMM PIDs are auto-allocated.
+
 ### Limitations
 
-CISSA and CSA2 only - no CSA3.
+CISSA, CSA1/CSA2, BISS1 Mode 1, BISS2 Mode 1/E, BISS2 Mode CA.
+
+* No CSA3/CSA-ALT
+* No BISS1 Mode E (DES)
+* BISS2 Mode CA: no group key pairs, but one keypair per file in receivers-dir.
+  No `entitlement_priv_data_loop` vendor extensions, `prevent_descrambled_forward`/
+  `prevent_decoded_forward`/`insert_watermark` entitlement flags always 0 (unenforced)
+
 
 ### Dependencies
 
 CAS support is a CMake/configure-time option (`DIPIRADIOHEAD_CAS`, on by default).
 * CISSA needs OpenSSL (same dependency as HTTPS input)
-* CSA2 needs libdvbcsa (`DIPIRADIOHEAD_CSA2` / `HAVE_DVBCSA`).
+* CSA1 and CSA2 need libdvbcsa (`DIPIRADIOHEAD_CSA2` / `HAVE_DVBCSA`).
 
 Missing either degrades gracefully to "that algorithm unavailable", not a build failure.
 
 Release builds and the packaged `.deb` in this repository do not contain libdvbcsa.
-Build against it yourself if you want CSA2.
+Build against it yourself if you want CSA1/CSA2.
 
-## Stopping
+## Signals
 
-`^C`, SIGINT or SIGTERM.
+* `^C`, SIGINT or SIGTERM: Stop
+* SIGHUP: re-read BISS2-CA ceritficates directory (in case you added/removed/changed them)
+
 
 ## Running under systemd
 
@@ -259,26 +308,38 @@ WantedBy=multi-user.target
 ## Examples
 
 ```sh
-dipiradiohead -i https://orf-live.ors-shoutcast.at/oe1-q2a.m3u -m 239.1.1.1:5000 -r -s "OE1"
-dipiradiohead -i http://radio886.at/streams/radio_88.6/aac -m 239.1.1.2:5000 -e 5
-dipiradiohead -i http://onair.krone.at/kronehit.mp3 -m 239.5.5.5:6000 & dipirec -i udp://@239.5.5.5:6000 -o kronehit.mka
+dipiradiohead -i https://radio.example.com/channel1.m3u -m 239.1.1.1:5000 -r -s "Channel 1"
+dipiradiohead -i http://radio.example.com/stream.aac -m 239.1.1.2:5000 -e 5
+dipiradiohead -i http://radio.example.com/stream.mp3 -m 239.5.5.5:6000 & dipirec -i udp://@239.5.5.5:6000 -o kronehit.mka
 
 # MPTS: two stations, one output, independently retried
-dipiradiohead -i https://orf-live.ors-shoutcast.at/oe1-q2a.m3u --sdt "OE1" \
-              -i http://radio886.at/streams/radio_88.6/aac --sdt "Radio 88.6" \
+dipiradiohead -i https://radio.example.com/channel1.m3u --sdt "Channel 1" \
+              -i http://radio.example.org/channel2.aac --sdt "Channel 2" \
               -m 239.1.1.3:5000 -r -e 5
 
 # scrambled (CISSA), ECMG at ecmg.example:2222
-dipiradiohead -i https://orf-live.ors-shoutcast.at/oe1-q2a.m3u -m 239.1.1.1:5000 -r -s "OE1" \
+dipiradiohead -i https://radio.example.com/channel1.m3u -m 239.1.1.1:5000 -r -s "Channel 1" \
   --cas-algo cissa --cas-ecmg tcp://ecmg.example:2222 --cas-super-id 0x4A750002 --cas-ecm-id 1
 
 # multi-CAS: two vendors, one required. --cas-ecmg opens a slot; the flags after it
 # (version/super-id/ecm-id/pid/resilience/required) pair with that --cas-ecmg.
-dipiradiohead -i https://orf-live.ors-shoutcast.at/oe1-q2a.m3u -m 239.1.1.1:5000 -r -s "OE1" \
+dipiradiohead -i https://radio.example.com/channel1.m3u -m 239.1.1.1:5000 -r -s "Channel 1" \
   --cas-algo cissa \
   --cas-ecmg tcp://ecmg-a.example:2222 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
              --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port 8002 --cas-required \
   --cas-ecmg tcp://ecmg-b.example:2222 --cas-super-id 0x0D960001 --cas-ecm-id 1 \
              --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-port 8003 --cas-resilience silent \
   --cas-fallback-clear
+
+# legacy BISS1 Mode 1: 12 hex char Session Word, CSA1
+dipiradiohead -i https://radio.example.com/channel1.m3u -m 239.1.1.1:5000 -r -s "Channel 1" \
+  --biss1-sw 0123456789ab
+
+# BISS2 Mode 1/E: no ECMG/EMMG needed
+dipiradiohead -i https://radio.example.com/channel1.m3u -m 239.1.1.1:5000 -r -s "Channel 1" \
+  --biss2-sw 00112233445566778899aabbccddeeff
+
+# BISS2 Mode CA: per-receiver RSA entitlement, one pubkey per file under the dir
+dipiradiohead -i https://radio.example.com/channel1.m3u -m 239.1.1.1:5000 -r -s "Channel 1" \
+  --biss2-ca-receivers /etc/biss-ca/receivers
 ```

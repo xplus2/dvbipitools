@@ -165,6 +165,55 @@ static size_t build_pmt_1audio(unsigned char *out, unsigned prog_num, unsigned a
   return n + 4;
 }
 
+/* CAT with one CA_descriptor: ca_system_id, emm_pid */
+static size_t build_cat_with_emm(unsigned char *out, unsigned emm_pid) {
+  size_t n = 0;
+  out[n++] = 0x01;
+  n += 2;
+  out[n++] = 0xFF; /* reserved, CAT has no table_id_extension of its own */
+  out[n++] = 0xFF;
+  out[n++] = 0xC1;
+  out[n++] = 0x00;
+  out[n++] = 0x00;
+  out[n++] = 0x09; /* CA_descriptor */
+  out[n++] = 4;
+  out[n++] = 0x26;
+  out[n++] = 0x02;
+  out[n++] = (unsigned char)(0xE0 | ((emm_pid >> 8) & 0x1F));
+  out[n++] = (unsigned char)emm_pid;
+  finish(out, n, 0xB0);
+  return n + 4;
+}
+
+/* PMT: one AAC audio ES at audio_pid, with an ES-level CA_descriptor (ecm_pid) */
+static size_t build_pmt_1audio_with_ecm(unsigned char *out, unsigned prog_num, unsigned audio_pid, unsigned ecm_pid) {
+  size_t n = 0;
+  out[n++] = 0x02;
+  n += 2;
+  out[n++] = (unsigned char)(prog_num >> 8);
+  out[n++] = (unsigned char)prog_num;
+  out[n++] = 0xC1;
+  out[n++] = 0x00;
+  out[n++] = 0x00;
+  out[n++] = (unsigned char)(0xE0 | ((audio_pid >> 8) & 0x1F));
+  out[n++] = (unsigned char)audio_pid;
+  out[n++] = 0xF0;
+  out[n++] = 0x00;
+  out[n++] = 0x0F; /* AAC */
+  out[n++] = (unsigned char)(0xE0 | ((audio_pid >> 8) & 0x1F));
+  out[n++] = (unsigned char)audio_pid;
+  out[n++] = 0xF0;
+  out[n++] = 0x06;
+  out[n++] = 0x09; /* CA_descriptor */
+  out[n++] = 4;
+  out[n++] = 0x26;
+  out[n++] = 0x02;
+  out[n++] = (unsigned char)(0xE0 | ((ecm_pid >> 8) & 0x1F));
+  out[n++] = (unsigned char)ecm_pid;
+  finish(out, n, 0xB0);
+  return n + 4;
+}
+
 static void feed_pat_pmt(ts_filter_t *f) {
   unsigned char sec[256], pkt[188], out[188];
   size_t slen;
@@ -189,7 +238,7 @@ static int filter_pid(ts_filter_t *f, unsigned pid) {
 }
 
 START_TEST(ts_filter_pat_rewrite_drops_nit_only_program) {
-  ts_filter_t *f = ts_filter_new(1, 0, 0, 0);
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_DEFAULT);
   unsigned char sec[256], pkt[188], out[188];
   size_t slen;
   psi_t *check;
@@ -215,7 +264,7 @@ START_TEST(ts_filter_pat_rewrite_drops_nit_only_program) {
 END_TEST
 
 START_TEST(ts_filter_selects_single_audio_track) {
-  ts_filter_t *f = ts_filter_new(0, 1, 0, 0); /* audio_all=0, track 1 */
+  ts_filter_t *f = ts_filter_new(0, 1, 0, 0, STRIP_DEFAULT); /* audio_all=0, track 1 */
   feed_pat_pmt(f);
 
   ck_assert_int_eq(filter_pid(f, 0x0101), 1); /* video always kept */
@@ -228,7 +277,7 @@ START_TEST(ts_filter_selects_single_audio_track) {
 END_TEST
 
 START_TEST(ts_filter_audio_all_and_strip_subs) {
-  ts_filter_t *f = ts_filter_new(1, 0, 1, 0); /* audio_all=1, strip_subs=1 */
+  ts_filter_t *f = ts_filter_new(1, 0, 1, 0, STRIP_DEFAULT); /* audio_all=1, strip_subs=1 */
   feed_pat_pmt(f);
 
   ck_assert_int_eq(filter_pid(f, 0x0102), 1); /* both audio tracks kept */
@@ -240,7 +289,7 @@ START_TEST(ts_filter_audio_all_and_strip_subs) {
 END_TEST
 
 START_TEST(ts_filter_flags_bad_track_when_out_of_range) {
-  ts_filter_t *f = ts_filter_new(0, 5, 0, 0); /* only 2 audio tracks exist */
+  ts_filter_t *f = ts_filter_new(0, 5, 0, 0, STRIP_DEFAULT); /* only 2 audio tracks exist */
   ck_assert_int_eq(ts_filter_bad_track(f), 0);
   feed_pat_pmt(f);
   ck_assert_int_eq(ts_filter_bad_track(f), 1);
@@ -249,7 +298,7 @@ START_TEST(ts_filter_flags_bad_track_when_out_of_range) {
 END_TEST
 
 START_TEST(ts_filter_drops_null_packets) {
-  ts_filter_t *f = ts_filter_new(1, 0, 0, 0);
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_DEFAULT);
   feed_pat_pmt(f);
   ck_assert_int_eq(filter_pid(f, 0x1FFF), 0);
   ts_filter_free(f);
@@ -257,7 +306,7 @@ START_TEST(ts_filter_drops_null_packets) {
 END_TEST
 
 START_TEST(ts_filter_preferred_pmt_pid_pins_non_first_candidate) {
-  ts_filter_t *f = ts_filter_new(1, 0, 0, 0x0200); /* pin program 102, not the first-resolving one */
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0x0200, STRIP_DEFAULT); /* pin program 102, not the first-resolving one */
   unsigned char sec[256], pkt[188], out[188];
   size_t slen;
 
@@ -281,6 +330,119 @@ START_TEST(ts_filter_preferred_pmt_pid_pins_non_first_candidate) {
 }
 END_TEST
 
+START_TEST(ts_filter_strip_none_keeps_nit_and_null) {
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0, 0); /* strip nothing */
+  unsigned char sec[256], pkt[188], out[188];
+  size_t slen;
+  psi_t *check;
+
+  slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  ck_assert_int_eq(ts_filter_packet(f, pkt, out), 1);
+  ck_assert_int_eq(memcmp(pkt, out, 188), 0); /* not stripping NIT: PAT untouched */
+
+  check = psi_new();
+  psi_feed(check, out);
+  ck_assert_uint_eq(psi_nit_pid(check), 0x0010u); /* NIT entry still there */
+  psi_free(check);
+
+  ck_assert_int_eq(filter_pid(f, 0x1FFF), 1); /* NUL not stripped */
+  ts_filter_free(f);
+}
+END_TEST
+
+START_TEST(ts_filter_strip_cat_ecm_emm_drops_ca_pids) {
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_CAT | STRIP_ECM | STRIP_EMM);
+  unsigned char sec[256], pkt[188], out[188];
+  size_t slen;
+
+  slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  slen = build_cat_with_emm(sec, 0x0121);
+  wrap_ts_packet(pkt, 0x0001, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  slen = build_pmt_1audio_with_ecm(sec, 101, 0x0102, 0x0122);
+  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  ck_assert_int_eq(filter_pid(f, 0x0001), 0); /* CAT dropped */
+  ck_assert_int_eq(filter_pid(f, 0x0121), 0); /* EMM dropped */
+  ck_assert_int_eq(filter_pid(f, 0x0122), 0); /* ECM dropped */
+  ck_assert_int_eq(filter_pid(f, 0x0102), 1); /* audio still kept */
+
+  ts_filter_free(f);
+}
+END_TEST
+
+START_TEST(ts_filter_strip_none_keeps_ca_pids) {
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0, 0);
+  unsigned char sec[256], pkt[188], out[188];
+  size_t slen;
+
+  slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  slen = build_cat_with_emm(sec, 0x0121);
+  wrap_ts_packet(pkt, 0x0001, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  slen = build_pmt_1audio_with_ecm(sec, 101, 0x0102, 0x0122);
+  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  ck_assert_int_eq(filter_pid(f, 0x0001), 1); /* CAT kept */
+  ck_assert_int_eq(filter_pid(f, 0x0121), 1); /* EMM kept */
+  ck_assert_int_eq(filter_pid(f, 0x0122), 1); /* ECM kept */
+
+  ts_filter_free(f);
+}
+END_TEST
+
+START_TEST(ts_filter_strip_tdt_drops_pid_0x14) {
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_TDT);
+  feed_pat_pmt(f);
+  ck_assert_int_eq(filter_pid(f, 0x0014), 0);
+  ts_filter_free(f);
+}
+END_TEST
+
+START_TEST(ts_filter_strip_tot_also_drops_pid_0x14) {
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_TOT); /* TDT/TOT share a pid, not split */
+  feed_pat_pmt(f);
+  ck_assert_int_eq(filter_pid(f, 0x0014), 0);
+  ts_filter_free(f);
+}
+END_TEST
+
+START_TEST(ts_filter_strip_none_keeps_pid_0x14) {
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0, 0);
+  feed_pat_pmt(f);
+  ck_assert_int_eq(filter_pid(f, 0x0014), 1);
+  ts_filter_free(f);
+}
+END_TEST
+
+START_TEST(ts_filter_strip_int_drops_by_table_id_and_latches) {
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_INT);
+  unsigned char sec[16], pkt[188], out[188];
+  feed_pat_pmt(f);
+
+  memset(sec, 0, sizeof sec);
+  sec[0] = 0x4C; /* INT table_id */
+  wrap_ts_packet(pkt, 0x0150, sec, 12);
+  ck_assert_int_eq(ts_filter_packet(f, pkt, out), 0);
+
+  pkt[1] &= (unsigned char)~0x40; /* continuation packet, no PUSI: still caught by latch */
+  ck_assert_int_eq(ts_filter_packet(f, pkt, out), 0);
+
+  ts_filter_free(f);
+}
+END_TEST
+
 static Suite *ts_filter_suite(void) {
   Suite *s = suite_create("ts_filter");
   TCase *tc = tcase_create("core");
@@ -290,6 +452,13 @@ static Suite *ts_filter_suite(void) {
   tcase_add_test(tc, ts_filter_flags_bad_track_when_out_of_range);
   tcase_add_test(tc, ts_filter_drops_null_packets);
   tcase_add_test(tc, ts_filter_preferred_pmt_pid_pins_non_first_candidate);
+  tcase_add_test(tc, ts_filter_strip_none_keeps_nit_and_null);
+  tcase_add_test(tc, ts_filter_strip_cat_ecm_emm_drops_ca_pids);
+  tcase_add_test(tc, ts_filter_strip_none_keeps_ca_pids);
+  tcase_add_test(tc, ts_filter_strip_tdt_drops_pid_0x14);
+  tcase_add_test(tc, ts_filter_strip_tot_also_drops_pid_0x14);
+  tcase_add_test(tc, ts_filter_strip_none_keeps_pid_0x14);
+  tcase_add_test(tc, ts_filter_strip_int_drops_by_table_id_and_latches);
   suite_add_tcase(s, tc);
   return s;
 }

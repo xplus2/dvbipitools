@@ -32,6 +32,7 @@ if (OpenSSL_FOUND)
         args.c
         crypto.c
         device.c
+        biss_ca_state.c
         emmcache.c
         ipiclient.c
         ../lib/log.c
@@ -42,7 +43,10 @@ if (OpenSSL_FOUND)
         ../lib/net/udpxy.c
         ../lib/net/tssource.c
         ../lib/net/tls.c
-        ../lib/net/httpclient.c
+        ../lib/net/httpclient/httpclient.c
+        ../lib/net/httpclient/url.c
+        ../lib/net/httpclient/read.c
+        ../lib/net/httpclient/async.c
         ../lib/ioutil.c
         ../lib/demux/crc32.c
         ../lib/demux/psi.c
@@ -52,10 +56,19 @@ if (OpenSSL_FOUND)
         ../lib/demux/pes.c
         ../lib/demux/mpts_probe.c
         ../lib/mux/ebml.c
-        ../lib/mux/mkv.c
+        ../lib/mux/mkv/mkv.c
+        ../lib/mux/mkv/bitreader.c
+        ../lib/mux/mkv/audio.c
+        ../lib/mux/mkv/video.c
+        ../lib/mux/mkv/write.c
+        ../lib/mux/mkv/feed.c
         ../lib/mux/teletext.c
+        ../lib/mux/psi_build.c
         ../lib/scrambler/scrambler.c
         ../lib/scrambler/cissa.c
+        ../lib/cas/biss/biss.c
+        ../lib/cas/biss/ca.c
+        ../lib/cas/biss/ca_sections.c
         ${CSA2_SRC})
 
     target_link_libraries(dipidescramble PRIVATE OpenSSL::SSL OpenSSL::Crypto)

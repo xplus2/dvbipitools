@@ -26,6 +26,7 @@ struct psi {
   unsigned program_number, pmt_pid, pcr_pid, nit_pid;
   unsigned emm_pid, ca_system_id; /* from CAT's first CA_descriptor, 0 if none */
   unsigned char scrambling_mode; /* from PMT program_info's scrambling_descriptor, 0 if none */
+  unsigned pmt_ca_system_id; /* PMT program_info's own first CA_descriptor, 0 if none */
   unsigned tsid, onid;
   psi_es_t es[PSI_MAX_ES];
   int es_count, audio_count;
@@ -306,11 +307,14 @@ static int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   c->audio_count = 0;
   c->ecm_count = 0;
   c->scrambling_mode = 0;
+  c->pmt_ca_system_id = 0;
   if (12 + pil <= n) {
     const unsigned char *sd;
     ca = find_desc(b + 12, pil, 0x09, &l);
-    if (ca && l >= 4)
+    if (ca && l >= 4) {
+      c->pmt_ca_system_id = ((unsigned)ca[0] << 8) | ca[1];
       add_ecm(c, (((unsigned)ca[2] & 0x1F) << 8) | ca[3]);
+    }
     sd = find_desc(b + 12, pil, 0x65, &l);
     if (sd && l >= 1)
       c->scrambling_mode = sd[0];
@@ -553,6 +557,7 @@ unsigned psi_original_network_id(const psi_t *c) { return c->onid; }
 unsigned psi_emm_pid(const psi_t *c) { return c->emm_pid; }
 unsigned psi_ca_system_id(const psi_t *c) { return c->ca_system_id; }
 unsigned char psi_scrambling_mode(const psi_t *c) { return c->scrambling_mode; }
+unsigned psi_pmt_ca_system_id(const psi_t *c) { return c->pmt_ca_system_id; }
 
 const psi_es_t *psi_es(const psi_t *c, int *count) {
   if (count)

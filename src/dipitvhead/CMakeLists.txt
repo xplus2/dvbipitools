@@ -39,8 +39,12 @@ endif ()
 
 if (DIPITVHEAD_HAVE_CISSA)
     set(CISSA_SRC ../lib/scrambler/cissa.c)
+    set(BISS_SRC ../lib/cas/biss/biss.c)
+    set(BISS_CA_SRC ../lib/cas/biss/ca.c)
 else ()
     set(CISSA_SRC ../lib/scrambler/cissa_stub.c)
+    set(BISS_SRC ../lib/cas/biss/stub.c)
+    set(BISS_CA_SRC ../lib/cas/biss/ca_stub.c)
 endif ()
 
 option(DIPITVHEAD_CSA2 "build dipitvhead with DVB-CSA2 support (requires libdvbcsa)" ON)
@@ -67,6 +71,10 @@ add_executable(dipitvhead
     main.c
     args.c
     tvhead.c
+    tvhead_discover.c
+    tvhead_output.c
+    tvhead_single.c
+    tvhead_mpts.c
     input/source.c
     mux/pmtbuild.c
     mux/aitbuild.c
@@ -91,7 +99,10 @@ add_executable(dipitvhead
     ../lib/net/tssource.c
     ../lib/net/retryset.c
     ${TLS_SRC}
-    ../lib/net/httpclient.c
+    ../lib/net/httpclient/httpclient.c
+    ../lib/net/httpclient/url.c
+    ../lib/net/httpclient/read.c
+    ../lib/net/httpclient/async.c
     ../lib/ioutil.c
     ../lib/demux/crc32.c
     ../lib/demux/psi.c
@@ -104,7 +115,11 @@ add_executable(dipitvhead
     ../lib/mux/tspacket_write.c
     ../lib/scrambler/scrambler.c
     ${CISSA_SRC}
-    ${CSA2_SRC})
+    ${CSA2_SRC}
+    ${BISS_SRC}
+    ${BISS_CA_SRC}
+    ../lib/cas/biss/ca_sections.c
+    ../lib/cas/biss/ca_engine.c)
 
 if (DIPITVHEAD_HAVE_TLS)
     target_link_libraries(dipitvhead PRIVATE OpenSSL::SSL OpenSSL::Crypto)

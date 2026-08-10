@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "lib/argutil.h"
+#include "lib/cas/biss/biss.h"
 #include "lib/cas/cas_args.h"
 #include "lib/log.h"
 
@@ -94,7 +95,7 @@ static void print_help(void) {
       "      --metrics <path>       Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
       "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
-      "      --cas-algo <a>         enable CAS: cissa|csa2 (default: disabled)\n"
+      "      --cas-algo <a>         enable CAS: cissa|csa2|csa1 (default: disabled)\n"
       "      --cas-ecmg <ep>        ECMG address, tcp://host:port; repeatable, one CAS vendor\n"
       "                             per --cas-ecmg (required with --cas-algo)\n"
       "      --cas-ecmg-version <n> for the --cas-ecmg right before this: protocol version 2|3\n"
@@ -117,6 +118,18 @@ static void print_help(void) {
       "      --cas-cp-duration <ms> crypto-period duration in ms, shared by every vendor (default: 10000)\n"
       "      --cas-fallback-clear   on total outage (or a --cas-required vendor down): clear\n"
       "                             instead of staying scrambled on the last known-good CW\n"
+      "      --biss2-sw <hex32>      enable BISS2 Mode 1/E: 32 hex char Session Word, scrambles\n"
+      "                             with CISSA. No ECMG/EMMG. Mutually exclusive with --cas-algo\n"
+      "      --biss2-emit-esw <id>   with --biss2-sw: log the AES-128-ECB Encrypted Session Word\n"
+      "                             for this 32 hex char receiver ID, for out-of-band distribution\n"
+      "      --biss1-sw <hex12>     enable legacy BISS1 Mode 1: 12 hex char Session Word,\n"
+      "                             scrambles with CSA1. Mutually exclusive with --biss2-sw/--cas-algo\n"
+      "      --biss2-ca-receivers <dir> enable BISS2 Mode CA: directory of PEM public keys, one\n"
+      "                             per entitled receiver/group. Rescanned on SIGHUP; a receiver\n"
+      "                             removed from the directory is revoked (forces a Session Key\n"
+      "                             change). Mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo\n"
+      "      --biss2-ca-session-id <n> administratively unique entitlement_session_id, dec or\n"
+      "                             0x-hex, 16 bit (default: random at startup)\n"
       "  -h, --help                 this help\n\n"
       "examples:\n"
       "  %s -i https://example.com/radio.m3u --sdt \"Channel 1\" -m 239.1.1.1:5000\n"
@@ -156,6 +169,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics-interval", required_argument, 0, 1017},
       {"cas-required", no_argument, 0, 1018},
       {"cas-fallback-clear", no_argument, 0, 1019},
+      {"biss2-sw", required_argument, 0, 1020},
+      {"biss2-emit-esw", required_argument, 0, 1021},
+      {"biss1-sw", required_argument, 0, 1022},
+      {"biss2-ca-receivers", required_argument, 0, 1023},
+      {"biss2-ca-session-id", required_argument, 0, 1024},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_mcast = 0;
@@ -258,11 +276,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1004: {
-        static const enum_map_t map[] = {{"cissa", CAS_ALGO_CISSA}, {"csa2", CAS_ALGO_CSA2}};
+        static const enum_map_t map[] = {{"cissa", CAS_ALGO_CISSA}, {"csa2", CAS_ALGO_CSA2}, {"csa1", CAS_ALGO_CSA1}};
         int v;
         any_cas_flag = 1;
         if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-          argerr("invalid --cas-algo: %s (cissa|csa2)", optarg);
+          argerr("invalid --cas-algo: %s (cissa|csa2|csa1)", optarg);
           return ARGS_ERR;
         }
         cfg->cas_algo = (cas_algo_t)v;
@@ -419,6 +437,42 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         any_cas_flag = 1;
         cfg->cas_fallback_clear = 1;
         break;
+      case 1020:
+        if (biss_parse_hex16(optarg, cfg->biss2_sw)) {
+          argerr("invalid --biss2-sw: %s (32 hex chars)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->biss2_enabled = 1;
+        break;
+      case 1021:
+        if (biss_parse_hex16(optarg, cfg->biss2_esw_id)) {
+          argerr("invalid --biss2-emit-esw: %s (32 hex chars)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->biss2_emit_esw = 1;
+        break;
+      case 1022:
+        if (biss1_parse_sw(optarg, cfg->biss1_cw)) {
+          argerr("invalid --biss1-sw: %s (12 hex chars)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->biss1_enabled = 1;
+        break;
+      case 1023:
+        cfg->biss2_ca_receivers_dir = optarg;
+        cfg->biss2_ca_enabled = 1;
+        break;
+      case 1024: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 0);
+        if (*end != '\0' || v > 0xFFFFUL) {
+          argerr("invalid --biss2-ca-session-id: %s (16 bit, dec or 0x-hex)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->biss2_ca_session_id = (unsigned)v;
+        cfg->biss2_ca_session_id_given = 1;
+        break;
+      }
       case 'v':
         cfg->verbose = 1;
         break;
@@ -447,6 +501,38 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (any_cas_flag && cfg->cas_algo == CAS_ALGO_NONE) {
     argerr("--cas-* options require --cas-algo");
+    return ARGS_ERR;
+  }
+  if (cfg->biss2_enabled && (cfg->cas_algo != CAS_ALGO_NONE || cfg->n_cas_vendors > 0)) {
+    argerr("--biss2-sw is mutually exclusive with --cas-algo/--cas-ecmg");
+    return ARGS_ERR;
+  }
+  if (cfg->biss2_emit_esw && !cfg->biss2_enabled) {
+    argerr("--biss2-emit-esw requires --biss2-sw");
+    return ARGS_ERR;
+  }
+  if (cfg->biss1_enabled && (cfg->cas_algo != CAS_ALGO_NONE || cfg->n_cas_vendors > 0)) {
+    argerr("--biss1-sw is mutually exclusive with --cas-algo/--cas-ecmg");
+    return ARGS_ERR;
+  }
+  if (cfg->biss2_enabled && cfg->biss1_enabled) {
+    argerr("--biss2-sw and --biss1-sw are mutually exclusive");
+    return ARGS_ERR;
+  }
+  if (cfg->biss2_ca_enabled && (cfg->cas_algo != CAS_ALGO_NONE || cfg->n_cas_vendors > 0)) {
+    argerr("--biss2-ca-receivers is mutually exclusive with --cas-algo/--cas-ecmg");
+    return ARGS_ERR;
+  }
+  if (cfg->biss2_ca_enabled && (cfg->biss2_enabled || cfg->biss1_enabled)) {
+    argerr("--biss2-ca-receivers is mutually exclusive with --biss2-sw/--biss1-sw");
+    return ARGS_ERR;
+  }
+  if (cfg->biss2_ca_session_id_given && !cfg->biss2_ca_enabled) {
+    argerr("--biss2-ca-session-id requires --biss2-ca-receivers");
+    return ARGS_ERR;
+  }
+  if (cfg->biss2_ca_enabled && cfg->cas_cp_duration_ms < 1000) {
+    argerr("--biss2-ca-receivers needs --cas-cp-duration >= 1000 (Tech 3292-s1 T_ECM_change_min)");
     return ARGS_ERR;
   }
   if (cfg->cas_algo != CAS_ALGO_NONE) {

@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #include "lib/demux/crc32.h"
-#include "lib/mux/mkv.h"
+#include "lib/mux/mkv/mkv.h"
 #include "lib/mux/psi_build.h"
 
 /* Only audio path (video needs H.264/HEVC SPS bitstreams). mkv.c discovers PAT/PMT/SDT itself via mkv_feed */

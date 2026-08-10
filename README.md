@@ -20,7 +20,7 @@ I did not let it mess up the hard parts.
 | [dipisds](src/dipisds/README.md)                  | ✔️      |      | ✔️     | ✔️  | DVBSTP/SD&S service discovery (announce & listen) |
 | [dipibcg](src/dipibcg/README.md)                  | ✔️      |      | ✔️     | ✔️  | DVBSTP/TVA BCG (publisher & reader)               |
 | [dipixmltv](src/dipixmltv/README.md)              | ✔️      |      | ✔️     | ✔️  | XMLTV to/from DVB-IPI TVA XML converter           |
-| [dipirec](src/dipirec/README.md)                  |         |      | ✔️     | ✔️  | DVB-IPI Multicast to file/stdout recorder         |
+| [dipirec](src/dipirec/README.md)                  |         |      | ✔️     | ✔️  | Multicast to file/stdout recorder                 |
 | [dipiscan](src/dipiscan/README.md)                |         |      | ✔️     | ✔️  | Scan for multicast TV/radio services (w/o SD&S)   |
 | [dipibim](src/dipibim/README.md)                  |         |      |        | ✔️  | TVA XML BiM encoder/decoder (to debug `dipibcg`)  |
 | [dipicam378](src/dipicam378/README.md)            |         |      |        | ✔️  | cs378x CAS test smartcard emulator                |
@@ -53,8 +53,8 @@ cmake --build build
   + Enables _CISSA/AES-128_ Conditional Access in `dipitvhead` and `dipiradiohead`.
   + Required to build `dipicam378`/`dipidescramble` at all - RSA/AES crypto is their
     whole purpose, so both are skipped entirely if not found.
-* **libdvbcsa**
-  + Optional; required only if you need _CSA2_ support in `dipitvhead`, `dipiradiohead`
+* **libdvbcsa-dev**
+  + Optional; required only if you need CSA support in `dipitvhead`, `dipiradiohead`
     or `dipidescramble`.
 
 ## Packaging
@@ -72,15 +72,16 @@ between real-world usage of media formats and the standard.
 
 
 ### Notable additions
-* dipiradiohead
-  - Icecast/Shoutcast as an input source - none of this is part of DVB.
-  - ICY `StreamTitle`, inline ID3v2 `TIT2`/`TPE1` mapping into EIT.
 * dipitvhead
   - HbbTV AIT injection (`--hbbtv`, ETSI TS 102 809) is hybrid broadcast/broadband signaling, a separate spec.
   - MPTS support is more like an interpretation than "specs driven".
     ETSI TS 102 034 v2.1.1 mentions Multi Program Transport Streams (MPTS) exactly twice:
     + In the abbreviation list
     + According to §7.1.0, Content Service Providers can use them
+  - BISS (EBU Tech 3292). DVB-IPI prioritizes SimulCrypt.
+* dipiradiohead
+  - Icecast/Shoutcast as an input source - none of this is part of DVB.
+  - ICY `StreamTitle`, inline ID3v2 `TIT2`/`TPE1` mapping into EIT.
 * dipirec
   - `mkv` and `mka` containers.
   - `srt` subtitles from EBU Teletext (ETSI EN 300 706). SRT isn't a DVB format.
@@ -107,7 +108,7 @@ On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 * RMS-FUS, Remote Management and Firmware Update
 * DVB Companion Screens and Streams
 * DVB Home Network, ETSI TS 102 905
-* SD&S record types other than Broadcast Discovery / Service Provider Discovery (§5). `dipisds` only does those two
+* SD&S record types other than Broadcast Discovery / Service Provider Discovery (§5). `dipisds` only does those two.
   No CoD discovery, Package, Regionalisation or RMS-FUS discovery records
 * RTSP command/control for CoD services and multicast join (§6)
 * DHCP-based IP address assignment for the HNED (§8)

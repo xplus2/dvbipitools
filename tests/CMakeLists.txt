@@ -69,7 +69,10 @@ dvbipitools_add_unit_test(lib_demux_mpts_probe
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
-    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
@@ -111,7 +114,12 @@ dvbipitools_add_unit_test(lib_mux_teletext
 
 dvbipitools_add_unit_test(lib_mux_mkv
     unit/lib/mux/test_mkv.c
-    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/audio.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/video.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/write.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/feed.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
@@ -137,7 +145,10 @@ dvbipitools_add_unit_test(lib_net_netconnect
 
 dvbipitools_add_unit_test(lib_net_httpclient_async
     unit/lib/net/test_httpclient_async.c
-    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
@@ -147,7 +158,26 @@ dvbipitools_add_unit_test(lib_net_httpclient_async
 dvbipitools_add_unit_test(lib_net_tssource_async
     unit/lib/net/test_tssource_async.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
-    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/udpxy.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
+dvbipitools_add_unit_test(lib_net_tssource_file
+    unit/lib/net/test_tssource_file.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
@@ -171,9 +201,40 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/log.c)
     target_link_libraries(test_lib_scrambler_cissa PRIVATE OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(lib_cas_biss
+        unit/lib/cas/test_biss.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c)
+    target_link_libraries(test_lib_cas_biss PRIVATE OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(lib_cas_biss_ca
+        unit/lib/cas/test_biss_ca.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c)
+    target_link_libraries(test_lib_cas_biss_ca PRIVATE OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(lib_cas_biss_ca_engine
+        unit/lib/cas/test_biss_ca_engine.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/cadescbuild.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+    target_link_libraries(test_lib_cas_biss_ca_engine PRIVATE OpenSSL::Crypto)
 else ()
-    message(WARNING "tests: OpenSSL not found, skipping lib_scrambler_cissa unit test")
+    message(WARNING "tests: OpenSSL not found, skipping lib_scrambler_cissa/lib_cas_biss/lib_cas_biss_ca/lib_cas_biss_ca_engine unit tests")
 endif ()
+
+dvbipitools_add_unit_test(lib_cas_biss_ca_sections
+    unit/lib/cas/test_biss_ca_sections.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
 
 find_path(DVBCSA_INCLUDE_DIR dvbcsa/dvbcsa.h)
 find_library(DVBCSA_LIBRARY dvbcsa)
@@ -221,8 +282,17 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/log.c)
     target_link_libraries(test_dipidescramble_device PRIVATE OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(dipidescramble_biss_ca_state
+        unit/dipidescramble/test_biss_ca_state.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/biss_ca_state.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+    target_link_libraries(test_dipidescramble_biss_ca_state PRIVATE OpenSSL::Crypto)
 else ()
-    message(WARNING "tests: OpenSSL not found, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device unit tests")
+    message(WARNING "tests: OpenSSL not found, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_biss_ca_state unit tests")
 endif ()
 
 dvbipitools_add_unit_test(lib_bim_bitwriter
@@ -385,6 +455,10 @@ dvbipitools_add_unit_test(dipiradiohead_tspacketizer
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
@@ -393,6 +467,8 @@ dvbipitools_add_unit_test(dipiradiohead_args
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(dipiradiohead_source_async
@@ -405,7 +481,10 @@ dvbipitools_add_unit_test(dipiradiohead_source_async
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/framer/aac_adts.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/framer/aac_latm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
-    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
@@ -424,7 +503,10 @@ dvbipitools_add_unit_test(dipiradiohead_inputset
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/framer/aac_adts.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/framer/aac_latm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
-    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
@@ -459,6 +541,10 @@ dvbipitools_add_unit_test(dipiradiohead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
@@ -467,7 +553,12 @@ dvbipitools_add_unit_test(dipitvhead_args
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
-    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
@@ -516,6 +607,10 @@ dvbipitools_add_unit_test(dipitvhead_remux
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
@@ -573,6 +668,10 @@ dvbipitools_add_unit_test(dipitvhead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
@@ -603,6 +702,11 @@ dvbipitools_add_unit_test(dipirec_ts_filter
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
+dvbipitools_add_unit_test(dipirec_pace
+    unit/dipirec/test_pace.c
+    ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c
+    ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
 dvbipitools_add_unit_test(dipifccret_channel
     unit/dipifccret/test_channel.c

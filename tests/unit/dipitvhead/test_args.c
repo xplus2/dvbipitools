@@ -166,6 +166,73 @@ START_TEST(global_flags_are_not_per_input) {
 }
 END_TEST
 
+START_TEST(biss2_ca_receivers_enables_and_sets_dir) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "--biss2-ca-receivers", "/etc/biss-ca/receivers", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.biss2_ca_enabled, 1);
+  ck_assert_str_eq(cfg.biss2_ca_receivers_dir, "/etc/biss-ca/receivers");
+  ck_assert_int_eq(cfg.biss2_ca_session_id_given, 0);
+}
+END_TEST
+
+START_TEST(biss2_ca_session_id_parses_hex_and_dec) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "--biss2-ca-receivers", "/etc/biss-ca/receivers",
+                  "--biss2-ca-session-id", "0x1234", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.biss2_ca_session_id_given, 1);
+  ck_assert_uint_eq(cfg.biss2_ca_session_id, 0x1234u);
+}
+END_TEST
+
+START_TEST(biss2_ca_session_id_without_receivers_is_rejected) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "--biss2-ca-session-id", "1", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(biss2_ca_receivers_rejects_out_of_range_session_id) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "--biss2-ca-receivers", "/etc/biss-ca/receivers",
+                  "--biss2-ca-session-id", "0x10000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(biss2_ca_receivers_mutually_exclusive_with_cas_algo) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "--cas-algo", "cissa",
+                  "--biss2-ca-receivers", "/etc/biss-ca/receivers", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(biss2_ca_receivers_mutually_exclusive_with_biss2_sw) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "--biss2-sw", "00112233445566778899aabbccddeeff",
+                  "--biss2-ca-receivers", "/etc/biss-ca/receivers", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(biss2_ca_receivers_defaults_cas_pids_to_video_audio) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "--biss2-ca-receivers", "/etc/biss-ca/receivers", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.cas_pids_video, 1);
+  ck_assert_int_eq(cfg.cas_pids_audio, 1);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("args");
   TCase *tc = tcase_create("core");
@@ -184,6 +251,13 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, missing_mcast_is_rejected);
   tcase_add_test(tc, too_many_inputs_is_rejected);
   tcase_add_test(tc, global_flags_are_not_per_input);
+  tcase_add_test(tc, biss2_ca_receivers_enables_and_sets_dir);
+  tcase_add_test(tc, biss2_ca_session_id_parses_hex_and_dec);
+  tcase_add_test(tc, biss2_ca_session_id_without_receivers_is_rejected);
+  tcase_add_test(tc, biss2_ca_receivers_rejects_out_of_range_session_id);
+  tcase_add_test(tc, biss2_ca_receivers_mutually_exclusive_with_cas_algo);
+  tcase_add_test(tc, biss2_ca_receivers_mutually_exclusive_with_biss2_sw);
+  tcase_add_test(tc, biss2_ca_receivers_defaults_cas_pids_to_video_audio);
   suite_add_tcase(s, tc);
   return s;
 }

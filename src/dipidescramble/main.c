@@ -8,17 +8,23 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "lib/cas/biss/biss.h"
+#include "lib/cas/biss/ca.h"
 #include "lib/demux/mpts_probe.h"
 #include "lib/demux/psi.h"
 #include "lib/demux/psi_section_asm.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
-#include "lib/mux/mkv.h"
+#include "lib/mux/mkv/mkv.h"
 #include "lib/net/tssource.h"
 #include "lib/scrambler/scrambler.h"
 #include "lib/signal.h"
 
+#define BISS_CA_SYSTEM_ID 0x2602
+#define BISS_CA_SYSTEM_ID_CA 0x2610
+
 #include "args.h"
+#include "biss_ca_state.h"
 #include "device.h"
 #include "emmcache.h"
 #include "ipiclient.h"
@@ -36,9 +42,12 @@ typedef struct {
   psi_t *psi;
   unsigned ecm_pid, emm_pid; /* 0 = not yet resolved */
   int cas_logged;
-  device_state_t *dev;
+  device_state_t *dev; /* NULL until classic ECM/EMM CAS resolved */
+  biss_ca_state_t *biss_ca; /* NULL unless BISS Mode CA resolved */
   emmcache_t *cache;
   const char *emm_file;
+  ipiclient_t *ipi; /* NULL unless -u given and classic CAS resolved */
+  const config_t *cfg;
   psi_section_asm_t ecm_asm, emm_asm;
   scrambler_t *scr; /* NULL until scrambling_mode resolved */
   int cw_len;
@@ -46,6 +55,7 @@ typedef struct {
   unsigned char last_cw[2][16];
   /* set by emit_downstream(). a void scrambler_emit_cb can't return an error code. this is how a failed mkv_feed/write reaches pkt_cb's int return */
   int emit_failed;
+  int fatal; /* CAS/BISS scheme could not be resolved (missing key material, unsupported mode) */
 } loop_ctx_t;
 
 static int open_output(const char *path) {
@@ -59,7 +69,8 @@ static int open_output(const char *path) {
 }
 
 static int algo_from_mode(unsigned char mode, scramble_algo_t *out) {
-  if (mode == 0x02) {
+  if (mode == 0x01 || mode == 0x02) {
+    /* 0x01 DVB-CSA1, 0x02 DVB-CSA2: same cipher (libdvbcsa), differ only in CW convention */
     *out = SCRAMBLE_ALGO_CSA2;
     return 1;
   }
@@ -96,6 +107,27 @@ static void handle_ecm_section(loop_ctx_t *lc) {
   log_line(TOOL_NAME ": CW updated (parity=%s)", parity == SCRAMBLE_PARITY_EVEN ? "even" : "odd");
 }
 
+/* one ECM update carries both parities' SW at once (Tech 3292-s1 Table 13), unlike the
+   even/odd-table_id-split ECM handled by handle_ecm_section() above */
+static void handle_biss_ca_ecm_section(loop_ctx_t *lc) {
+  unsigned char sw[2][BISS_CA_SW_LEN];
+
+  if (biss_ca_state_resolve_ecm(lc->biss_ca, lc->ecm_asm.buf, lc->ecm_asm.expect, sw[SCRAMBLE_PARITY_EVEN], sw[SCRAMBLE_PARITY_ODD]) != 0)
+    return;
+  if (!lc->have_cw[SCRAMBLE_PARITY_EVEN] || memcmp(lc->last_cw[SCRAMBLE_PARITY_EVEN], sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN) != 0) {
+    memcpy(lc->last_cw[SCRAMBLE_PARITY_EVEN], sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN);
+    lc->have_cw[SCRAMBLE_PARITY_EVEN] = 1;
+    scrambler_set_key(lc->scr, SCRAMBLE_PARITY_EVEN, sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN, emit_downstream, lc);
+    log_line(TOOL_NAME ": biss-ca: CW updated (parity=even)");
+  }
+  if (!lc->have_cw[SCRAMBLE_PARITY_ODD] || memcmp(lc->last_cw[SCRAMBLE_PARITY_ODD], sw[SCRAMBLE_PARITY_ODD], BISS_CA_SW_LEN) != 0) {
+    memcpy(lc->last_cw[SCRAMBLE_PARITY_ODD], sw[SCRAMBLE_PARITY_ODD], BISS_CA_SW_LEN);
+    lc->have_cw[SCRAMBLE_PARITY_ODD] = 1;
+    scrambler_set_key(lc->scr, SCRAMBLE_PARITY_ODD, sw[SCRAMBLE_PARITY_ODD], BISS_CA_SW_LEN, emit_downstream, lc);
+    log_line(TOOL_NAME ": biss-ca: CW updated (parity=odd)");
+  }
+}
+
 /* stops writing after first fail within one flush. once emit_failed is set, later packets (same batch) must not still land on disk/mux */
 static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
   loop_ctx_t *lc = ctx;
@@ -130,25 +162,116 @@ static int pkt_cb(void *v, const unsigned char *pkt) {
   if (!lc->emm_pid && psi_have_cat(lc->psi))
     lc->emm_pid = psi_emm_pid(lc->psi);
 
-  if (!lc->cas_logged && psi_ready(lc->psi) && psi_have_cat(lc->psi) && lc->ecm_pid && psi_emm_pid(lc->psi) && psi_scrambling_mode(lc->psi)) {
-    scramble_algo_t algo;
-    log_line(TOOL_NAME ": CAS parameters resolved: ecm_pid=0x%04x emm_pid=0x%04x ca_system_id=0x%04x scrambling_mode=0x%02x", lc->ecm_pid, psi_emm_pid(lc->psi), psi_ca_system_id(lc->psi), psi_scrambling_mode(lc->psi));
-    lc->cas_logged = 1;
-    if (algo_from_mode(psi_scrambling_mode(lc->psi), &algo)) {
+  if (!lc->cas_logged && psi_ready(lc->psi)) {
+    unsigned pmt_ca = psi_pmt_ca_system_id(lc->psi);
+
+    if (pmt_ca == BISS_CA_SYSTEM_ID_CA) {
+      lc->cas_logged = 1;
+      log_line(TOOL_NAME ": BISS Mode CA detected (ca_system_id=0x%04x)", BISS_CA_SYSTEM_ID_CA);
+      if (!lc->cfg->biss2_ca_key_path) {
+        log_line(TOOL_NAME ": BISS Mode CA stream detected, no --biss2-ca-key given");
+        lc->fatal = 1;
+        return 1;
+      }
+      lc->biss_ca = biss_ca_state_new(lc->cfg->biss2_ca_key_path);
+      if (!lc->biss_ca) {
+        log_line(TOOL_NAME ": cannot load RSA private key from --biss2-ca-key %s", lc->cfg->biss2_ca_key_path);
+        lc->fatal = 1;
+        return 1;
+      }
+      lc->scr = scrambler_new(SCRAMBLE_ALGO_CISSA);
+      if (!lc->scr) {
+        log_line(TOOL_NAME ": failed to set up BISS-CA descrambler");
+        lc->fatal = 1;
+        return 1;
+      }
+      lc->cw_len = (int)scrambler_cw_len(SCRAMBLE_ALGO_CISSA);
+    } else if (pmt_ca == BISS_CA_SYSTEM_ID) {
+      unsigned char sw[BISS_KEY_LEN];
+      scramble_algo_t algo;
+      const unsigned char *cw;
+      size_t cw_len;
+      lc->cas_logged = 1;
+      log_line(TOOL_NAME ": BISS Mode 1/E detected (ca_system_id=0x%04x)", BISS_CA_SYSTEM_ID);
+      if (!lc->cfg->biss1_sw_given && !lc->cfg->biss2_sw_given && !lc->cfg->biss2_esw_given) {
+        log_line(TOOL_NAME ": BISS stream detected, no --biss1-sw/--biss2-sw/--biss2-esw given");
+        lc->fatal = 1;
+        return 1;
+      }
+      if (lc->cfg->biss1_sw_given) {
+        algo = SCRAMBLE_ALGO_CSA2;
+        cw = lc->cfg->biss1_sw;
+        cw_len = BISS1_KEY_LEN;
+      } else {
+        algo = SCRAMBLE_ALGO_CISSA;
+        cw = sw;
+        cw_len = BISS_KEY_LEN;
+        if (lc->cfg->biss2_sw_given) {
+          memcpy(sw, lc->cfg->biss2_sw, BISS_KEY_LEN);
+        } else if (biss_esw_decrypt(lc->cfg->biss2_id, lc->cfg->biss2_esw, sw) != 0) {
+          log_line(TOOL_NAME ": failed to decrypt --biss2-esw (no OpenSSL in this build?)");
+          lc->fatal = 1;
+          return 1;
+        }
+      }
       lc->scr = scrambler_new(algo);
+      if (!lc->scr) {
+        log_line(TOOL_NAME ": failed to set up BISS descrambler");
+        lc->fatal = 1;
+        return 1;
+      }
       lc->cw_len = (int)scrambler_cw_len(algo);
-    } else {
-      log_line(TOOL_NAME ": unrecognized scrambling_mode 0x%02x, cannot descramble", psi_scrambling_mode(lc->psi));
+      scrambler_set_key(lc->scr, SCRAMBLE_PARITY_EVEN, cw, cw_len, NULL, NULL);
+      scrambler_set_key(lc->scr, SCRAMBLE_PARITY_ODD, cw, cw_len, NULL, NULL);
+    } else if (psi_have_cat(lc->psi) && lc->ecm_pid && psi_emm_pid(lc->psi) && psi_scrambling_mode(lc->psi)) {
+      scramble_algo_t algo;
+      log_line(TOOL_NAME ": CAS parameters resolved: ecm_pid=0x%04x emm_pid=0x%04x ca_system_id=0x%04x scrambling_mode=0x%02x", lc->ecm_pid, psi_emm_pid(lc->psi), psi_ca_system_id(lc->psi), psi_scrambling_mode(lc->psi));
+      lc->cas_logged = 1;
+      if (!lc->cfg->key_path || !lc->cfg->serial || !lc->cfg->emm_file) {
+        log_line(TOOL_NAME ": ECM/EMM CAS detected, no -k/-s/-e given, giving up");
+        lc->fatal = 1;
+        return 1;
+      }
+      lc->dev = device_state_new(lc->cfg->key_path, lc->cfg->serial);
+      if (!lc->dev) {
+        log_line(TOOL_NAME ": cannot load RSA private key from -k %s", lc->cfg->key_path);
+        lc->fatal = 1;
+        return 1;
+      }
+      if (emmcache_load(lc->cache, lc->dev, lc->emm_file) != 0)
+        log_line(TOOL_NAME ": failed to read emm cache %s, continuing without it", lc->emm_file);
+      if (lc->cfg->unicast_emm_uri) {
+        lc->ipi = ipiclient_new(lc->cfg->unicast_emm_uri, lc->cfg->insecure_tls);
+        if (!lc->ipi)
+          log_line(TOOL_NAME ": invalid -u/--unicast-emm uri, ignoring: %s", lc->cfg->unicast_emm_uri);
+        else if (ipiclient_poll(lc->ipi, lc->cache, lc->dev))
+          emmcache_save(lc->cache, lc->emm_file);
+      }
+      if (algo_from_mode(psi_scrambling_mode(lc->psi), &algo)) {
+        lc->scr = scrambler_new(algo);
+        lc->cw_len = (int)scrambler_cw_len(algo);
+      } else {
+        log_line(TOOL_NAME ": unrecognized scrambling_mode 0x%02x, cannot descramble", psi_scrambling_mode(lc->psi));
+        lc->fatal = 1;
+        return 1;
+      }
     }
   }
 
   /* lc->scr may have just been created above - checked here so this pid's first-ever ECM section isn't missed */
-  if (lc->ecm_pid && pid == lc->ecm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_feed(&lc->ecm_asm, pl, plen, pusi) && lc->scr)
-    handle_ecm_section(lc);
+  if (lc->ecm_pid && pid == lc->ecm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_feed(&lc->ecm_asm, pl, plen, pusi) && lc->scr) {
+    if (lc->biss_ca)
+      handle_biss_ca_ecm_section(lc);
+    else
+      handle_ecm_section(lc);
+  }
 
   if (lc->emm_pid && pid == lc->emm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_feed(&lc->emm_asm, pl, plen, pusi)) {
-    if (emmcache_feed(lc->cache, lc->dev, lc->emm_asm.buf, lc->emm_asm.expect))
+    if (lc->biss_ca) {
+      biss_ca_state_on_emm(lc->biss_ca, lc->emm_asm.buf, lc->emm_asm.expect);
+    } else if (emmcache_feed(lc->cache, lc->dev, lc->emm_asm.buf, lc->emm_asm.expect)) {
       emmcache_save(lc->cache, lc->emm_file);
+    }
   }
 
   /* pkt is always genuinely mutable (tspack_t's acc[] or main()'s buffer). const is just tspack_feed()'s callback contract */
@@ -227,7 +350,6 @@ int main(int argc, char **argv) {
   tssrc_t *src;
   tspack_t pz;
   loop_ctx_t lc;
-  ipiclient_t *ipi;
   unsigned char buf[65536];
   char mkv_app_name[64];
   mkv_opts_t mkv_opts;
@@ -249,18 +371,14 @@ int main(int argc, char **argv) {
   }
 
   input_describe(&cfg.input, in_desc, sizeof in_desc);
-  log_line(TOOL_NAME ": i:%s k:%s s:%s e:%s o:%s%s", in_desc, cfg.key_path, cfg.serial, cfg.emm_file, cfg.out_path, cfg.unicast_emm_uri ? " unicast-emm:yes" : "");
+  log_line(TOOL_NAME ": i:%s k:%s s:%s e:%s o:%s%s", in_desc, cfg.key_path ? cfg.key_path : "(none)", cfg.serial ? cfg.serial : "(none)", cfg.emm_file ? cfg.emm_file : "(none)", cfg.out_path, cfg.unicast_emm_uri ? " unicast-emm:yes" : "");
 
-  lc.dev = device_state_new(cfg.key_path, cfg.serial);
-  if (!lc.dev) {
-    log_line(TOOL_NAME ": cannot load RSA private key from -k %s", cfg.key_path);
-    return 1;
-  }
+  lc.dev = NULL; /* lazily created once the stream reveals it needs ECM/EMM-driven CAS */
+  lc.biss_ca = NULL; /* lazily created once the stream reveals BISS Mode CA */
+  lc.ipi = NULL;
   lc.cache = emmcache_new();
-  if (!lc.cache) {
-    device_state_free(lc.dev);
+  if (!lc.cache)
     return 1;
-  }
 
   memset(&tc, 0, sizeof tc);
   tc.kind = tssrc_kind_of(cfg.input.kind);
@@ -275,6 +393,7 @@ int main(int argc, char **argv) {
     log_line(TOOL_NAME ": cannot open -i %s", in_desc);
     emmcache_free(lc.cache);
     device_state_free(lc.dev);
+    biss_ca_state_free(lc.biss_ca);
     return 1;
   }
 
@@ -282,6 +401,7 @@ int main(int argc, char **argv) {
     tssrc_close(src);
     emmcache_free(lc.cache);
     device_state_free(lc.dev);
+    biss_ca_state_free(lc.biss_ca);
     return 1;
   }
 
@@ -290,6 +410,7 @@ int main(int argc, char **argv) {
     tssrc_close(src);
     emmcache_free(lc.cache);
     device_state_free(lc.dev);
+    biss_ca_state_free(lc.biss_ca);
     return 1;
   }
   lc.mkv = NULL;
@@ -313,6 +434,7 @@ int main(int argc, char **argv) {
       tssrc_close(src);
       emmcache_free(lc.cache);
       device_state_free(lc.dev);
+      biss_ca_state_free(lc.biss_ca);
       return 1;
     }
   }
@@ -321,12 +443,14 @@ int main(int argc, char **argv) {
   lc.emm_pid = 0;
   lc.cas_logged = 0;
   lc.emm_file = cfg.emm_file;
+  lc.cfg = &cfg;
   memset(&lc.ecm_asm, 0, sizeof lc.ecm_asm);
   memset(&lc.emm_asm, 0, sizeof lc.emm_asm);
   lc.scr = NULL;
   lc.cw_len = 0;
   lc.have_cw[0] = lc.have_cw[1] = 0;
   lc.emit_failed = 0;
+  lc.fatal = 0;
   lc.psi = psi_new();
   if (!lc.psi) {
     if (lc.out != STDOUT_FILENO)
@@ -334,22 +458,11 @@ int main(int argc, char **argv) {
     tssrc_close(src);
     emmcache_free(lc.cache);
     device_state_free(lc.dev);
+    biss_ca_state_free(lc.biss_ca);
     return 1;
   }
   if (pmt_pid)
     psi_select_pmt_pid(lc.psi, pmt_pid); /* CW derivation is mux-wide either way; nicer stats only */
-
-  if (emmcache_load(lc.cache, lc.dev, cfg.emm_file) != 0)
-    log_line(TOOL_NAME ": failed to read emm cache %s, continuing without it", cfg.emm_file);
-
-  ipi = NULL;
-  if (cfg.unicast_emm_uri) {
-    ipi = ipiclient_new(cfg.unicast_emm_uri, cfg.insecure_tls);
-    if (!ipi)
-      log_line(TOOL_NAME ": invalid -u/--unicast-emm uri, ignoring: %s", cfg.unicast_emm_uri);
-    else if (ipiclient_poll(ipi, lc.cache, lc.dev))
-      emmcache_save(lc.cache, cfg.emm_file);
-  }
 
   memset(&pz, 0, sizeof pz);
   signals_install();
@@ -370,7 +483,7 @@ int main(int argc, char **argv) {
   }
 
   scrambler_flush(lc.scr, emit_downstream, &lc);
-  ipiclient_free(ipi);
+  ipiclient_free(lc.ipi);
   scrambler_free(lc.scr);
   psi_free(lc.psi);
   if (lc.mkv)
@@ -380,5 +493,6 @@ int main(int argc, char **argv) {
   tssrc_close(src);
   emmcache_free(lc.cache);
   device_state_free(lc.dev);
-  return 0;
+  biss_ca_state_free(lc.biss_ca);
+  return (lc.fatal || lc.emit_failed) ? 1 : 0;
 }

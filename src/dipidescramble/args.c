@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "lib/argutil.h"
+#include "lib/cas/biss/biss.h"
 #include "lib/log.h"
 
 #include "args.h"
@@ -112,16 +113,24 @@ static void print_help(void) {
   printf(
       "usage: %s -i <uri> -k <keyfile> -s <serial> -e <emmfile> -o <output> [options]\n\n"
       "standalone CAS validation client: descrambles a dipitvhead-produced (or any\n"
-      "wire-compatible) DVB-CSA2/CISSA transport stream, given the device's RSA\n"
-      "private key - a client-side counterpart to dipitvhead's CAS muxer/scrambler.\n\n"
+      "wire-compatible) DVB-CSA1/CSA2/CISSA/BISS transport stream, given the device's\n"
+      "RSA private key or a BISS session word - a client-side counterpart to\n"
+      "dipitvhead's CAS muxer/scrambler. The CAS scheme is auto-detected from the\n"
+      "stream; -k/-s/-e or --biss-* are only required once the stream turns out to\n"
+      "need them.\n\n"
       "options:\n"
       "  %-27sudp://, rtp://, or \"-\" for stdin (required)\n"
-      "  %-27sdevice RSA private key, PEM (required)\n"
-      "  %-27sthis device's serial, matched against EMM-U addressing (required)\n"
-      "  %-27sEMM cache: loaded on startup, rewritten on update (required)\n"
+      "  %-27sdevice RSA private key, PEM (required for ECM/EMM-driven CAS)\n"
+      "  %-27sthis device's serial, matched against EMM-U addressing (required for ECM/EMM-driven CAS)\n"
+      "  %-27sEMM cache: loaded on startup, rewritten on update (required for ECM/EMM-driven CAS)\n"
       "  %-27sunicast EMM pull endpoint, auth token as URI userinfo\n"
       "  %-27s(e.g. https://<token>@<host>:<port>/device/<serial>/emm)\n"
       "  %-27sskip TLS verification for -u/--unicast-emm (self-signed, hostname, expiry)\n"
+      "  %-27sBISS2 Mode 1: 32 hex char Session Word\n"
+      "  %-27sBISS2 Mode E: 32 hex char Encrypted Session Word (needs --biss2-id)\n"
+      "  %-27sBISS2 Mode E: 32 hex char receiver ID for --biss2-esw\n"
+      "  %-27slegacy BISS1 Mode 1: 12 hex char Session Word\n"
+      "  %-27sBISS Mode CA: receiver RSA private key, PEM\n"
       "  %-27sdescrambled output, file or \"-\" for stdout (required)\n"
       "  %-27sts|mkv|mka output container (default ts)\n"
       "  %-27sMPTS source only: pin one PMT pid, or descramble every program\n"
@@ -131,15 +140,19 @@ static void print_help(void) {
       "  %-27speriodic stats + BK/SK/CW update lines on stderr\n"
       "  %-27sauto|always|never (default auto)\n"
       "  %-27sthis help\n\n"
-      "example:\n"
-      "  %s -i rtp://@239.0.0.1:1975 -k device.key -s e2e-01 -e emm.cache -o out.ts -v\n",
+      "examples:\n"
+      "  %s -i rtp://@239.0.0.1:1975 -k device.key -s e2e-01 -e emm.cache -o out.ts -v\n"
+      "  %s -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o out.ts\n",
       TOOL_NAME,
       "-i, --input <uri>", "-k, --key <path>", "-s, --serial <id>", "-e, --emm-file <path>",
       "-u, --unicast-emm <uri>", "", "    --insecure",
+      "    --biss2-sw <hex32>", "    --biss2-esw <hex32>", "    --biss2-id <hex32>",
+      "    --biss1-sw <hex12>",
+      "    --biss2-ca-key <path>",
       "-o, --output <path|->", "-f, --format <fmt>", "-p, --pmt-pid <pid|all>", "", "",
       "-I, --iface <iface>", "-v, --verbose",
       "    --color <when>", "-h, --help",
-      TOOL_NAME);
+      TOOL_NAME, TOOL_NAME);
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -156,9 +169,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"iface", required_argument, 0, 'I'},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1000},
+      {"biss2-sw", required_argument, 0, 1004},
+      {"biss2-esw", required_argument, 0, 1005},
+      {"biss2-id", required_argument, 0, 1006},
+      {"biss1-sw", required_argument, 0, 1007},
+      {"biss2-ca-key", required_argument, 0, 1008},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
-  int have_input = 0, have_key = 0, have_serial = 0, have_emm = 0, have_out = 0;
+  int have_input = 0, have_out = 0, have_biss_id = 0;
   int c;
 
   memset(cfg, 0, sizeof *cfg);
@@ -174,15 +192,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 'k':
         cfg->key_path = optarg;
-        have_key = 1;
         break;
       case 's':
         cfg->serial = optarg;
-        have_serial = 1;
         break;
       case 'e':
         cfg->emm_file = optarg;
-        have_emm = 1;
         break;
       case 'u':
         cfg->unicast_emm_uri = optarg;
@@ -222,6 +237,37 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           cfg->color_mode = v;
         }
         break;
+      case 1004:
+        if (biss_parse_hex16(optarg, cfg->biss2_sw)) {
+          argerr("invalid --biss2-sw: %s (32 hex chars)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->biss2_sw_given = 1;
+        break;
+      case 1005:
+        if (biss_parse_hex16(optarg, cfg->biss2_esw)) {
+          argerr("invalid --biss2-esw: %s (32 hex chars)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->biss2_esw_given = 1;
+        break;
+      case 1006:
+        if (biss_parse_hex16(optarg, cfg->biss2_id)) {
+          argerr("invalid --biss2-id: %s (32 hex chars)", optarg);
+          return ARGS_ERR;
+        }
+        have_biss_id = 1;
+        break;
+      case 1007:
+        if (biss1_parse_sw(optarg, cfg->biss1_sw)) {
+          argerr("invalid --biss1-sw: %s (12 hex chars)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->biss1_sw_given = 1;
+        break;
+      case 1008:
+        cfg->biss2_ca_key_path = optarg;
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -237,20 +283,24 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -i input");
     return ARGS_ERR;
   }
-  if (!have_key) {
-    argerr("missing -k device key");
-    return ARGS_ERR;
-  }
-  if (!have_serial) {
-    argerr("missing -s device serial");
-    return ARGS_ERR;
-  }
-  if (!have_emm) {
-    argerr("missing -e emm-file");
-    return ARGS_ERR;
-  }
   if (!have_out) {
     argerr("missing -o output");
+    return ARGS_ERR;
+  }
+  if (cfg->biss2_sw_given && cfg->biss2_esw_given) {
+    argerr("--biss2-sw and --biss2-esw are mutually exclusive");
+    return ARGS_ERR;
+  }
+  if (cfg->biss2_esw_given && !have_biss_id) {
+    argerr("--biss2-esw requires --biss2-id");
+    return ARGS_ERR;
+  }
+  if (have_biss_id && !cfg->biss2_esw_given) {
+    argerr("--biss2-id requires --biss2-esw");
+    return ARGS_ERR;
+  }
+  if (cfg->biss1_sw_given && (cfg->biss2_sw_given || cfg->biss2_esw_given)) {
+    argerr("--biss1-sw is mutually exclusive with --biss2-sw/--biss2-esw");
     return ARGS_ERR;
   }
   return ARGS_OK;

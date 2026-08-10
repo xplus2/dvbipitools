@@ -212,12 +212,22 @@ static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *
    needs_crypto entries never reach here, @see scrambler_encrypt_packet_queued/scrambler_decrypt_packet_queued. */
 static void scrambler_queue_push(scrambler_t *s, const unsigned char pkt[188], int needs_crypto, size_t payload_off, size_t payload_size, scrambler_emit_cb emit, void *ctx) {
   scrambler_queue_entry_t *e;
+  int mode, parity;
   if (s->queue_cap == 0) {
     emit(ctx, pkt);
     return;
   }
-  if (s->queue_len == s->queue_cap)
+  mode = s->queue_mode;
+  parity = s->queue_parity;
+  if (s->queue_len == s->queue_cap) {
+    /* flush resets mode/parity to (NONE,-1): restore ensure_batch's commit, else
+       push below lands under reset */
     scrambler_queue_flush(s, emit, ctx);
+    if (needs_crypto) {
+      s->queue_mode = mode;
+      s->queue_parity = parity;
+    }
+  }
   e = &s->queue[s->queue_len];
   memcpy(e->pkt, pkt, 188);
   e->needs_crypto = needs_crypto;

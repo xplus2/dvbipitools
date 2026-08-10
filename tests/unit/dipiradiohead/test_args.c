@@ -113,6 +113,53 @@ START_TEST(too_many_inputs_is_rejected) {
 }
 END_TEST
 
+START_TEST(biss2_ca_receivers_enables_and_sets_dir) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000",
+                  "--biss2-ca-receivers", "/etc/biss-ca/receivers", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.biss2_ca_enabled, 1);
+  ck_assert_str_eq(cfg.biss2_ca_receivers_dir, "/etc/biss-ca/receivers");
+}
+END_TEST
+
+START_TEST(biss2_ca_session_id_parses_hex) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000",
+                  "--biss2-ca-receivers", "/etc/biss-ca/receivers",
+                  "--biss2-ca-session-id", "0x1234", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.biss2_ca_session_id_given, 1);
+  ck_assert_uint_eq(cfg.biss2_ca_session_id, 0x1234u);
+}
+END_TEST
+
+START_TEST(biss2_ca_receivers_mutually_exclusive_with_cas_algo) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000",
+                  "--cas-algo", "cissa",
+                  "--biss2-ca-receivers", "/etc/biss-ca/receivers", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(biss2_ca_receivers_mutually_exclusive_with_biss2_sw) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000",
+                  "--biss2-sw", "00112233445566778899aabbccddeeff",
+                  "--biss2-ca-receivers", "/etc/biss-ca/receivers", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(biss2_ca_session_id_without_receivers_is_rejected) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000",
+                  "--biss2-ca-session-id", "1", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("args");
   TCase *tc = tcase_create("core");
@@ -126,6 +173,11 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, missing_input_is_rejected);
   tcase_add_test(tc, missing_mcast_is_rejected);
   tcase_add_test(tc, too_many_inputs_is_rejected);
+  tcase_add_test(tc, biss2_ca_receivers_enables_and_sets_dir);
+  tcase_add_test(tc, biss2_ca_session_id_parses_hex);
+  tcase_add_test(tc, biss2_ca_receivers_mutually_exclusive_with_cas_algo);
+  tcase_add_test(tc, biss2_ca_receivers_mutually_exclusive_with_biss2_sw);
+  tcase_add_test(tc, biss2_ca_session_id_without_receivers_is_rejected);
   suite_add_tcase(s, tc);
   return s;
 }

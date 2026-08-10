@@ -114,9 +114,13 @@ unsigned psi_emm_pid(const psi_t *c);
 unsigned psi_ca_system_id(const psi_t *c);
 
 /* PMT program_info's scrambling_descriptor (ETSI TS 103 127 clause 7) mode byte,
-   0 if no PMT seen yet or it carried none. Common values: 0x02 CSA2, 0x10 CISSA.
+   0 if no PMT seen yet or it carried none. Common values: 0x01 CSA1, 0x02 CSA2, 0x10 CISSA.
    this header doesn't define those, they're not PSI/SI, just where the byte lives */
 unsigned char psi_scrambling_mode(const psi_t *c);
+
+/* PMT program_info's own first CA_descriptor CA_system_id, 0 if none - not the CAT's
+   (psi_ca_system_id above). BISS: 0x2602 Mode 1/E, 0x2610 Mode CA, no CAT/scrambling_descriptor */
+unsigned psi_pmt_ca_system_id(const psi_t *c);
 
 const psi_es_t *psi_es(const psi_t *c, int *count);
 int psi_audio_count(const psi_t *c);

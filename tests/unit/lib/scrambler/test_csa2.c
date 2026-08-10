@@ -251,7 +251,7 @@ START_TEST(csa2_batch_matches_single_packet_api_mixed_lengths) {
 }
 END_TEST
 
-#define CAPTURE_MAX 300
+#define CAPTURE_MAX 2200
 static unsigned char captured[CAPTURE_MAX][188];
 static unsigned captured_n;
 
@@ -423,6 +423,63 @@ START_TEST(scrambler_set_key_flushes_pending_batch_under_old_key) {
 }
 END_TEST
 
+START_TEST(scrambler_encrypt_queued_survives_flush_at_queue_capacity) {
+  scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CSA2);
+  unsigned char pkt[188], ref_a[188], ref_b[188];
+  struct dvbcsa_key_s *dk;
+  unsigned bs = csa2_batch_size();
+  unsigned cap = bs * 16; /* SCRAMBLER_QUEUE_CAP_MULTIPLIER in scrambler.c */
+  unsigned i;
+
+  ck_assert_ptr_nonnull(s);
+  captured_n = 0;
+
+  /* fills queue via passthrough (no key yet): mirrors MPTS pid waiting on
+     its parity's CW */
+  for (i = 0; i < cap; i++) {
+    memset(pkt, 0x66, 188);
+    pkt[0] = 0x47;
+    pkt[3] = 0x10; /* not scrambled */
+    scrambler_passthrough_queued(s, pkt, capture_emit, NULL);
+  }
+  ck_assert_uint_eq(captured_n, 0);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, capture_emit, NULL), 0);
+
+  /* lands on full queue: resulting flush must not lose ensure_batch's
+     committed mode/parity */
+  memset(pkt, 0, 188);
+  pkt[0] = 0x47;
+  pkt[3] = 0x10;
+  pkt[4] = 0xAA;
+  memcpy(ref_a, pkt, 188);
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(s, pkt, SCRAMBLE_PARITY_EVEN, capture_emit, NULL), 0);
+  ck_assert_uint_eq(captured_n, cap); /* passthrough batch flushed, new entry held */
+
+  /* second same-parity packet must flush first cleanly, not crash on state
+     flush above corrupted */
+  memset(pkt, 0, 188);
+  pkt[0] = 0x47;
+  pkt[3] = 0x10;
+  pkt[4] = 0xBB;
+  memcpy(ref_b, pkt, 188);
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(s, pkt, SCRAMBLE_PARITY_EVEN, capture_emit, NULL), 0);
+
+  scrambler_flush(s, capture_emit, NULL);
+  ck_assert_uint_eq(captured_n, cap + 2);
+
+  dk = dvbcsa_key_alloc();
+  ck_assert_ptr_nonnull(dk);
+  dvbcsa_key_set(cw, dk);
+  dvbcsa_decrypt(dk, captured[cap] + 4, 184);
+  dvbcsa_decrypt(dk, captured[cap + 1] + 4, 184);
+  dvbcsa_key_free(dk);
+  ck_assert_mem_eq(captured[cap] + 4, ref_a + 4, 184);
+  ck_assert_mem_eq(captured[cap + 1] + 4, ref_b + 4, 184);
+
+  scrambler_free(s);
+}
+END_TEST
+
 START_TEST(scrambler_passthrough_queued_preserves_order) {
   scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CSA2);
   unsigned char pkt[188], side[188];
@@ -466,6 +523,7 @@ static Suite *csa2_suite(void) {
   tcase_add_test(tc, scrambler_encrypt_queued_flushes_on_parity_change);
   tcase_add_test(tc, scrambler_decrypt_queued_preserves_order_with_passthrough);
   tcase_add_test(tc, scrambler_set_key_flushes_pending_batch_under_old_key);
+  tcase_add_test(tc, scrambler_encrypt_queued_survives_flush_at_queue_capacity);
   tcase_add_test(tc, scrambler_passthrough_queued_preserves_order);
   suite_add_tcase(s, tc);
   return s;

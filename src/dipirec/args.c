@@ -14,6 +14,7 @@
 #include "lib/log.h"
 
 #include "args.h"
+#include "filter/ts.h"
 #include "version.h"
 
 static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -115,6 +116,10 @@ static int parse_udpxy(const char *rest, source_t *s) {
 
 static int parse_uri(const char *uri, source_t *s) {
   memset(s, 0, sizeof *s);
+  if (strcmp(uri, "-") == 0) {
+    s->kind = URI_FILE; /* file_path[0] == '\0': stdin */
+    return 0;
+  }
   if (strncmp(uri, "rtp://", 6) == 0) {
     s->kind = URI_RTP;
     s->rtp_wrapped = 1;
@@ -129,7 +134,11 @@ static int parse_uri(const char *uri, source_t *s) {
     s->kind = URI_UDPXY;
     return parse_udpxy(uri + 7, s);
   }
-  return -1;
+  if (strlen(uri) >= sizeof s->file_path)
+    return -1;
+  s->kind = URI_FILE;
+  strcpy(s->file_path, uri);
+  return 0;
 }
 
 void source_describe(const source_t *s, char *buf, size_t n) {
@@ -145,6 +154,9 @@ void source_describe(const source_t *s, char *buf, size_t n) {
   }
   case URI_UDPXY:
     snprintf(buf, n, "http://%s:%u%s (%s)", s->http_host, s->http_port, s->http_path, s->rtp_wrapped ? "rtp" : "udp");
+    break;
+  case URI_FILE:
+    snprintf(buf, n, "%s", s->file_path[0] ? s->file_path : "- (stdin)");
     break;
   }
 }
@@ -256,6 +268,41 @@ static int parse_pmt_sel(const char *s, config_t *cfg) {
   return 0;
 }
 
+/* comma-separated STRIP_* tokens, or "none".
+   SDT/BAT: keep. hw receivers likely need SDT as much as PAT/PMT.
+   TDT/TOT: both mean "drop pid 0x14" */
+static int parse_strip(const char *s, config_t *cfg) {
+  static const enum_map_t map[] = {
+      {"NUL", STRIP_NUL}, {"NIT", STRIP_NIT}, {"AIT", STRIP_AIT}, {"EIT", STRIP_EIT},
+      {"CAT", STRIP_CAT}, {"ECM", STRIP_ECM}, {"EMM", STRIP_EMM}, {"RST", STRIP_RST},
+      {"TDT", STRIP_TDT}, {"TOT", STRIP_TOT}, {"INT", STRIP_INT}};
+  unsigned mask = 0;
+  const char *p = s;
+
+  if (strcmp(s, "none") == 0) {
+    cfg->strip_mask = 0;
+    return 0;
+  }
+  while (*p) {
+    const char *comma = strchr(p, ',');
+    size_t len = comma ? (size_t)(comma - p) : strlen(p);
+    char tok[8];
+    int v;
+    if (len == 0 || len >= sizeof tok)
+      return -1;
+    memcpy(tok, p, len);
+    tok[len] = '\0';
+    if (map_lookup(map, sizeof map / sizeof map[0], tok, &v))
+      return -1;
+    mask |= (unsigned)v;
+    p += len;
+    if (*p == ',')
+      p++;
+  }
+  cfg->strip_mask = mask;
+  return 0;
+}
+
 static int parse_audio(const char *s, config_t *cfg) {
   char *end;
   long v;
@@ -311,6 +358,8 @@ static void print_help(void) {
       "  rtp://@<group>:<port>    RTP wrapped SPTS multicast (@ optional)\n"
       "  udp://@<group>:<port>    raw SPTS multicast (@ optional)\n"
       "  http://<host>:<port>/<cmd>/<group>:<port>/   udpxy proxy (cmd = rtp|udp; also %% ~)\n"
+      "  -                        stdin, TS or RTP-wrapped TS (auto-detected)\n"
+      "  <path>                   a file, TS or RTP-wrapped TS (auto-detected)\n"
       "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8700\n\n"
       "options:\n"
       "  -o, --out <path>         output file, or \"-\" for stdout\n"
@@ -332,6 +381,10 @@ static void print_help(void) {
       "      --ret-mc-port <port> override the repair session port (default: -i's port)\n"
       "      --ret-pt <n>         RTX payload type, must match the RET server (default 99)\n"
       "      --ret-wait <ms>      hold budget after a NACK before giving up on a gap (default 200)\n"
+      "      --pace               file/stdin source only: pace output to the input's own\n"
+      "                           timing (RTP timestamp if RTP-framed, else PCR)\n"
+      "      --strip <list>       -f ts only: comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,\n"
+      "                           RST,TDT,TOT,INT to drop, or \"none\" (default: NUL,NIT,AIT,EIT)\n"
       "  -h, --help               this help\n\n"
       "formats:\n"
       "  raw   unwrap RTP only, transport stream otherwise untouched\n"
@@ -365,11 +418,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"ret-mc-port", required_argument, 0, 1004},
       {"ret-pt", required_argument, 0, 1005},
       {"ret-wait", required_argument, 0, 1006},
+      {"strip", required_argument, 0, 1007},
+      {"pace", no_argument, 0, 1008},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   const char *fmt_arg = NULL;
   const char *sub_arg = NULL;
   const char *time_arg = NULL;
+  const char *strip_arg = NULL;
   int have_in = 0;
   int c;
 
@@ -380,6 +436,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->ret.mc_enabled = 1;
   cfg->ret.rtx_pt = 99;
   cfg->ret.wait_ms = 200;
+  cfg->strip_mask = STRIP_DEFAULT;
   optind = 1;
   while ((c = getopt_long(argc, argv, "o:i:a:f:p:s:t:I:vh", longopts, NULL)) !=
          -1) {
@@ -480,6 +537,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->ret.wait_ms = (unsigned)v;
         break;
       }
+      case 1007:
+        strip_arg = optarg;
+        break;
+      case 1008:
+        cfg->pace = 1;
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -505,6 +568,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (cfg->ret.enabled && cfg->ret.mc_enabled && cfg->ret.family != cfg->source.family) {
     argerr("--ret family must match -i's for the SSM repair join; use --no-ret-mc otherwise");
+    return ARGS_ERR;
+  }
+  if (cfg->pace && cfg->source.kind != URI_FILE) {
+    argerr("--pace requires -i - or -i <path>");
+    return ARGS_ERR;
+  }
+  if (strip_arg && parse_strip(strip_arg, cfg)) {
+    argerr("invalid --strip: %s (comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT, or \"none\")", strip_arg);
     return ARGS_ERR;
   }
   if (sub_arg) {
@@ -534,6 +605,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     if (strcmp(cfg->out_path, "-") != 0)
       fmt_from_suffix(cfg->out_path, &cfg->format);
   }
+  if (strip_arg && cfg->format != FMT_TS)
+    log_line(TOOL_NAME ": --strip has no effect outside -f ts");
   if (cfg->subs == SUB_SRT && cfg->format != FMT_MKV &&
       cfg->format != FMT_MKA) {
     argerr("-s srt requires -f mkv or mka");

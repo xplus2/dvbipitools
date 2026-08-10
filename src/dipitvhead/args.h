@@ -6,7 +6,8 @@
 
 #include <stddef.h>
 
-#include "lib/net/httpclient.h"
+#include "lib/cas/biss/biss.h"
+#include "lib/net/httpclient/httpclient.h"
 
 typedef enum {
   SRC_RTP,  /* multicast, RTP wrapped */
@@ -29,7 +30,7 @@ typedef struct {
 typedef enum { TABLE_PASSTHROUGH, TABLE_DROP, TABLE_OVERRIDE } table_mode_t;
 
 /* NONE = --cas-algo not given, CAS disabled */
-typedef enum { CAS_ALGO_NONE, CAS_ALGO_CISSA, CAS_ALGO_CSA2 } cas_algo_t;
+typedef enum { CAS_ALGO_NONE, CAS_ALGO_CISSA, CAS_ALGO_CSA2, CAS_ALGO_CSA1 } cas_algo_t;
 
 typedef enum { CAS_OUTAGE_FROZEN, CAS_OUTAGE_CYCLING, CAS_OUTAGE_SILENT } cas_outage_mode_t;
 
@@ -93,6 +94,16 @@ typedef struct {
   int cas_pids_video; /* --cas-pids "video" token, or default when --cas-pids omitted */
   int cas_pids_audio; /* --cas-pids "audio" token, or default when --cas-pids omitted */
   unsigned cas_cp_duration_ms;     /* --cas-cp-duration; default 10000 */
+  int biss2_enabled;                /* --biss2-sw given; mutually exclusive with --cas-algo/--cas-ecmg */
+  unsigned char biss2_sw[BISS_KEY_LEN]; /* --biss2-sw, parsed */
+  int biss2_emit_esw;               /* --biss2-emit-esw given; requires --biss2-sw */
+  unsigned char biss2_esw_id[BISS_KEY_LEN]; /* --biss2-emit-esw <id>, parsed */
+  int biss1_enabled;                /* --biss1-sw given; mutually exclusive with --biss2-sw/--cas-algo/--cas-ecmg */
+  unsigned char biss1_cw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into the full checksummed CSA1 CW */
+  int biss2_ca_enabled;              /* --biss2-ca-receivers given; mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo/--cas-ecmg */
+  const char *biss2_ca_receivers_dir; /* --biss2-ca-receivers <dir>: PEM public keys, one per receiver/group */
+  unsigned biss2_ca_session_id;      /* --biss2-ca-session-id <hex16>; random at startup if not given */
+  int biss2_ca_session_id_given;     /* --biss2-ca-session-id given */
   const char *metrics_sock;        /* --metrics; NULL = default socket path */
   const char *metrics_id;          /* --metrics-id; NULL = metrics disabled */
   unsigned metrics_interval_s;     /* --metrics-interval; 0 = default */

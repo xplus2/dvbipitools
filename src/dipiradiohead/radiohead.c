@@ -239,7 +239,7 @@ static int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     goto done;
   }
 
-  if (cfg->cas_algo != CAS_ALGO_NONE) {
+  if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled) {
     unsigned audio_pids[RADIOHEAD_MAX_INPUTS];
     for (i = 0; i < n; i++)
       audio_pids[i] = inputset_audio_pid(is, i);
@@ -395,6 +395,8 @@ static int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
         rc = 1;
         goto done;
       }
+      if (signal_reload_requested())
+        cas_reload_receivers(cas);
     }
     if (out.had_error) {
       rc = 1;
@@ -472,7 +474,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     }
   }
 
-  if (cfg->cas_algo != CAS_ALGO_NONE) {
+  if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled) {
     unsigned audio_pid = TSPACKETIZER_PID_AUDIO;
     cas = cas_start(cfg, &audio_pid, 1);
     if (!cas) {
@@ -565,6 +567,8 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
           rc = 1;
           goto done;
         }
+        if (signal_reload_requested())
+          cas_reload_receivers(cas);
       }
       tspacketizer_feed(tsp, pts, now, f.data, f.len, packet_cb, &out);
       if (out.had_error) {

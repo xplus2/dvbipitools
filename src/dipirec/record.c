@@ -8,13 +8,14 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "filter/pace.h"
 #include "filter/ts.h"
 #include "lib/demux/mpts_probe.h"
 #include "lib/demux/psi.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
 #include "lib/net/tssource.h"
-#include "lib/mux/mkv.h"
+#include "lib/mux/mkv/mkv.h"
 #include "lib/signal.h"
 #include "record.h"
 #include "ret_client.h"
@@ -41,6 +42,13 @@ static int src_open(const config_t *cfg, src_t *s) {
     tc.udpxy_host = cfg->source.http_host;
     tc.udpxy_port = cfg->source.http_port;
     tc.udpxy_path = cfg->source.http_path;
+  } else if (s->kind == URI_FILE) {
+    if (cfg->source.file_path[0]) {
+      tc.kind = TSSRC_FILE;
+      tc.file_path = cfg->source.file_path;
+    } else {
+      tc.kind = TSSRC_STDIN;
+    }
   } else {
     tc.kind = (s->kind == URI_RTP) ? TSSRC_RTP : TSSRC_UDP;
     tc.family = cfg->source.family;
@@ -108,8 +116,18 @@ static int stop_now(const config_t *cfg, double start) {
   return cfg->duration_s && mono_seconds() - start >= (double)cfg->duration_s;
 }
 
-static int psi_cb(void *v, const unsigned char *pkt) {
-  psi_feed((psi_t *)v, pkt);
+typedef struct {
+  psi_t *psi;        /* NULL unless -v or --pace */
+  pace_ctrl_t *pace;  /* NULL unless --pace */
+  int pace_pcr;       /* 1: this chunk wasn't RTP-framed, pace per packet */
+} raw_ctx_t;
+
+static int raw_cb(void *v, const unsigned char *pkt) {
+  raw_ctx_t *r = v;
+  if (r->pace_pcr)
+    pace_feed_pcr_pkt(r->pace, pkt, psi_pcr_pid(r->psi));
+  if (r->psi)
+    psi_feed(r->psi, pkt);
   return 0;
 }
 
@@ -170,12 +188,16 @@ static void stats_show(const config_t *cfg, double elapsed, unsigned long long b
 }
 
 /* raw: write TS */
-static int run_raw(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start) {
+static int run_raw(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start, pace_ctrl_t *pace) {
   unsigned char buf[65536];
   tspack_t pz = {{0}, 0};
-  psi_t *psi = cfg->verbose ? psi_new() : NULL;
+  raw_ctx_t ctx;
   double last_stat = 0;
   int rc = 0;
+
+  ctx.psi = (cfg->verbose || pace) ? psi_new() : NULL;
+  ctx.pace = pace;
+  ctx.pace_pcr = 0;
 
   while (!stop_now(cfg, start)) {
     ssize_t n = src_read(s, buf, sizeof buf);
@@ -183,19 +205,27 @@ static int run_raw(src_t *s, const config_t *cfg, int out, unsigned long long *b
       break;
     if (n == 0)
       continue;
+    if (pace) {
+      if (tssrc_is_rtp_framed(s->t)) {
+        pace_feed_rtp_ts(pace, tssrc_last_rtp_ts(s->t));
+        ctx.pace_pcr = 0;
+      } else {
+        ctx.pace_pcr = 1;
+      }
+    }
+    if (ctx.psi)
+      tspack_feed(&pz, buf, (size_t)n, raw_cb, &ctx);
     if (write_all(out, buf, (size_t)n)) {
       rc = 1;
       break;
     }
     *bytes += (unsigned long long)n;
-    if (psi)
-      tspack_feed(&pz, buf, (size_t)n, psi_cb, psi);
     if (cfg->verbose && mono_seconds() - last_stat >= 1.0) {
-      stats_show(cfg, mono_seconds() - start, *bytes, psi);
+      stats_show(cfg, mono_seconds() - start, *bytes, ctx.psi);
       last_stat = mono_seconds();
     }
   }
-  psi_free(psi);
+  psi_free(ctx.psi);
   return rc;
 }
 
@@ -204,12 +234,16 @@ typedef struct {
   int out;
   unsigned long long *bytes;
   int bad;
+  pace_ctrl_t *pace; /* NULL unless --pace */
+  int pace_pcr;       /* 1: this chunk wasn't RTP-framed, pace per packet */
 } ts_ctx_t;
 
 static int ts_cb(void *v, const unsigned char *pkt) {
   ts_ctx_t *t = v;
   unsigned char o[188];
 
+  if (t->pace_pcr)
+    pace_feed_pcr_pkt(t->pace, pkt, psi_pcr_pid(ts_filter_psi(t->f)));
   if (ts_filter_packet(t->f, pkt, o)) {
     if (write_all(t->out, o, 188))
       return 1;
@@ -223,10 +257,11 @@ static int ts_cb(void *v, const unsigned char *pkt) {
 }
 
 /* ts: packetize, filter, write */
-static int run_ts(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start, unsigned pmt_pid) {
+static int run_ts(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start, unsigned pmt_pid,
+                   pace_ctrl_t *pace) {
   unsigned char buf[65536];
   tspack_t pz = {{0}, 0};
-  ts_filter_t *f = ts_filter_new(cfg->audio_all, cfg->audio_track, cfg->subs == SUB_STRIP, pmt_pid);
+  ts_filter_t *f = ts_filter_new(cfg->audio_all, cfg->audio_track, cfg->subs == SUB_STRIP, pmt_pid, cfg->strip_mask);
   ts_ctx_t tc;
   double last_stat = 0;
   int rc = 0;
@@ -237,6 +272,8 @@ static int run_ts(src_t *s, const config_t *cfg, int out, unsigned long long *by
   tc.out = out;
   tc.bytes = bytes;
   tc.bad = 0;
+  tc.pace = pace;
+  tc.pace_pcr = 0;
 
   while (!stop_now(cfg, start)) {
     ssize_t n = src_read(s, buf, sizeof buf);
@@ -244,6 +281,14 @@ static int run_ts(src_t *s, const config_t *cfg, int out, unsigned long long *by
       break;
     if (n == 0)
       continue;
+    if (pace) {
+      if (tssrc_is_rtp_framed(s->t)) {
+        pace_feed_rtp_ts(pace, tssrc_last_rtp_ts(s->t));
+        tc.pace_pcr = 0;
+      } else {
+        tc.pace_pcr = 1;
+      }
+    }
     if (tspack_feed(&pz, buf, (size_t)n, ts_cb, &tc)) {
       if (tc.bad)
         log_line_ansi("audio track \e[0;31m%u\e[0;33m not found (\e[0;33m%d\e[0;33m present)", cfg->audio_track, psi_audio_count(ts_filter_psi(f)));
@@ -259,18 +304,28 @@ static int run_ts(src_t *s, const config_t *cfg, int out, unsigned long long *by
   return rc;
 }
 
+typedef struct {
+  mkv_t *m;
+  pace_ctrl_t *pace; /* NULL unless --pace */
+  int pace_pcr;       /* 1: this chunk wasn't RTP-framed, pace per packet */
+} mkv_ctx_t;
+
 static int mkv_pkt_cb(void *v, const unsigned char *pkt) {
-  mkv_feed((mkv_t *)v, pkt);
-  return mkv_error((mkv_t *)v);
+  mkv_ctx_t *c = v;
+  if (c->pace_pcr)
+    pace_feed_pcr_pkt(c->pace, pkt, psi_pcr_pid(mkv_psi(c->m)));
+  mkv_feed(c->m, pkt);
+  return mkv_error(c->m);
 }
 
 /* mkv/mka: packetize, demux PES, mux. pmt_pid: 0 or -p <pid>. all_pids/n_all_pids: -p all */
 static int run_mkv(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start, int video_ok,
-                    unsigned pmt_pid, const unsigned *all_pids, int n_all_pids) {
+                    unsigned pmt_pid, const unsigned *all_pids, int n_all_pids, pace_ctrl_t *pace) {
   unsigned char buf[65536];
   char app_name[64], srcuri[1024];
   tspack_t pz;
   mkv_opts_t opts;
+  mkv_ctx_t ctx;
   mkv_t *m;
   double last_stat = 0;
   int rc = 0;
@@ -293,6 +348,9 @@ static int run_mkv(src_t *s, const config_t *cfg, int out, unsigned long long *b
     m = mkv_new(out, &opts, video_ok, bytes, NULL, 0);
   if (!m)
     return 1;
+  ctx.m = m;
+  ctx.pace = pace;
+  ctx.pace_pcr = 0;
 
   while (!stop_now(cfg, start)) {
     ssize_t n = src_read(s, buf, sizeof buf);
@@ -300,7 +358,15 @@ static int run_mkv(src_t *s, const config_t *cfg, int out, unsigned long long *b
       break;
     if (n == 0)
       continue;
-    if (tspack_feed(&pz, buf, (size_t)n, mkv_pkt_cb, m)) {
+    if (pace) {
+      if (tssrc_is_rtp_framed(s->t)) {
+        pace_feed_rtp_ts(pace, tssrc_last_rtp_ts(s->t));
+        ctx.pace_pcr = 0;
+      } else {
+        ctx.pace_pcr = 1;
+      }
+    }
+    if (tspack_feed(&pz, buf, (size_t)n, mkv_pkt_cb, &ctx)) {
       rc = 1;
       break;
     }
@@ -371,6 +437,7 @@ int record_run(const config_t *cfg) {
   int out, rc;
   unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
   int n_all_pids;
+  pace_ctrl_t *pace;
 
   out = open_output(cfg->out_path);
   if (out < 0)
@@ -387,15 +454,19 @@ int record_run(const config_t *cfg) {
       close(out);
     return 1;
   }
+  if (cfg->source.kind == URI_FILE) /* probing above consumed bytes it can't give back */
+    tssrc_rewind(s.t);
 
+  pace = cfg->pace ? pace_new() : NULL;
   start = mono_seconds();
   if (cfg->format == FMT_MKV || cfg->format == FMT_MKA)
-    rc = run_mkv(&s, cfg, out, &bytes, start, cfg->format == FMT_MKV, pmt_pid, all_pids, n_all_pids);
+    rc = run_mkv(&s, cfg, out, &bytes, start, cfg->format == FMT_MKV, pmt_pid, all_pids, n_all_pids, pace);
   else if (cfg->format == FMT_TS)
     /* -p all: nothing left to filter */
-    rc = (n_all_pids > 0) ? run_raw(&s, cfg, out, &bytes, start) : run_ts(&s, cfg, out, &bytes, start, pmt_pid);
+    rc = (n_all_pids > 0) ? run_raw(&s, cfg, out, &bytes, start, pace) : run_ts(&s, cfg, out, &bytes, start, pmt_pid, pace);
   else
-    rc = run_raw(&s, cfg, out, &bytes, start);
+    rc = run_raw(&s, cfg, out, &bytes, start, pace);
+  pace_free(pace);
 
   src_close(&s); /* IGMP/MLD leave */
   if (out != STDOUT_FILENO)

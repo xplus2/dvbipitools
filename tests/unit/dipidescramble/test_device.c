@@ -174,6 +174,38 @@ START_TEST(full_chain_csa2_recovers_cw) {
 }
 END_TEST
 
+START_TEST(resolve_cw_ignores_srvid_mismatch_with_one_cached_service) {
+  /* --sid need not equal the CAS's service_id - mux-wide CW, one session per process */
+  EVP_PKEY *pub;
+  device_state_t *d = make_device(&pub);
+  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char cw[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
+  unsigned char buf[1024];
+  unsigned char cw_out[16];
+  size_t n;
+  int i;
+
+  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+    bk[i] = (unsigned char)(i + 10);
+    sk[i] = (unsigned char)(200 - i);
+  }
+
+  n = build_emm_u(pub, bk, buf, sizeof buf);
+  ck_assert_int_eq(device_on_emm(d, buf, n), 1);
+
+  n = build_emm_g(bk, sk, 0x0064, buf, sizeof buf); /* CAS-side service_id 0x0064 */
+  ck_assert_int_eq(device_on_emm(d, buf, n), 1);
+
+  n = build_ecm(sk, cw, 8, buf, sizeof buf);
+  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x012D, 8, cw_out), 0); /* mismatched srvid 0x012D (301) */
+  ck_assert_mem_eq(cw_out, cw, 8);
+  ck_assert_mem_eq(cw_out + 8, cw, 8);
+
+  EVP_PKEY_free(pub);
+  device_state_free(d);
+}
+END_TEST
+
 START_TEST(full_chain_cissa_recovers_cw) {
   EVP_PKEY *pub;
   device_state_t *d = make_device(&pub);
@@ -330,6 +362,7 @@ static Suite *device_suite(void) {
   Suite *s = suite_create("device");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, full_chain_csa2_recovers_cw);
+  tcase_add_test(tc, resolve_cw_ignores_srvid_mismatch_with_one_cached_service);
   tcase_add_test(tc, full_chain_cissa_recovers_cw);
   tcase_add_test(tc, resolve_cw_fails_for_unknown_service);
   tcase_add_test(tc, resolve_cw_fails_before_any_emm_g);

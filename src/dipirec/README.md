@@ -26,46 +26,68 @@ dipirec -i <uri> -o <path> [options]
 |      | `--ret-mc-port`   | `<port>`              | same as `-i`'s port           |
 |      | `--ret-pt`        | `<n>`                 | `99`                          |
 |      | `--ret-wait`      | `<ms>`                | `200`                         |
+|      | `--pace`          |                       | off (file/stdin source only)  |
+|      | `--strip`         | `<list>` / `none`     | `NUL,NIT,AIT,EIT`             |
 | `-h` | `--help`          |                       |                               |
 
 ## Input (`-i`)
 
 | schema                                       | what's this?                   |
 |----------------------------------------------|--------------------------------|
-| `rtp://@<group>:<port>`                      | RTP wrapped SPTS               |
-| `udp://@<group>:<port>`                      | plain SPTS                     |
+| `rtp://@<group>:<port>`                      | RTP wrapped SPTS or MPTS       |
+| `udp://@<group>:<port>`                      | plain SPTS or MPTS             |
 | `http://<host>:<port>/<cmd>/<group>:<port>/` | udpxy, `cmd` is `rtp` or `udp` |
+| `-`                                          | stdin, TS or RTP wrapped TS    |
+| `<path>`                                     | a file, TS or RTP wrapped TS   |
 
 `@` is optional. `<group>` can be an IPv4 or IPv6 multicast address.
 
 For `rtp://` and `udp://` the tool joins the group itself (IGMPv2 / MLD, any source) and leaves on exit.
 RTP headers are detected and removed automatically, so a source that is actually plain TS works even when given as `rtp://`.
 
+`-i -` reads stdin, `-i <path>` reads a file - anything not matching `rtp://`/`udp://`/`http://` is treated
+as a path. Both cases auto-detect RTP-wrapped vs. plain TS from the first bytes: fine either way, no need to
+know which one a captured dump actually is. Ambiguous or too-short input falls back to plain TS.
+
 The source can be a single-program stream (SPTS) or a multi-program mux (MPTS, e.g. one produced by
 `dipitvhead`'s own multi-`-i` output). See `-p` below for how an MPTS is handled.
 
+## Real-time pacing (`--pace`)
+
+`-i -`/`-i <path>` read as fast as the file/pipe allows, not at broadcast speed - fine for a straight
+conversion, not fine for `-o -` into something that expects a live-ish feed and can't absorb a burst.
+
+`--pace` throttles reading to the source's own original timing: the RTP timestamp when the input turned
+out to be RTP-wrapped, the stream's own PCR otherwise (once the PMT resolves - nothing to pace against
+before that). Only valid with `-i -`/`-i <path>`; rejected on a network source, which is already real-time.
+
+A jump of more than 2 seconds between expected and actual time (a real discontinuity, not scheduler
+jitter) resyncs instead of trying to sleep-catch-up.
+
 ## MPTS input (`-p`)
 
-On connect, dipirec waits for the PAT and checks how many programs the source actually carries.
+`dipirec` waits for the PAT and checks how many programs the source actually carries.
 
-* **SPTS** (one program): `-p` is ignored - a warning is logged if it was given - and recording proceeds
-  exactly as always.
-* **MPTS**, `-p <pid>` given: pins that one program's PMT pid, then everything else works as if it were
-  an SPTS (all formats, `-a`/`-s` included). Rejected if that pid isn't actually in the PAT.
-* **MPTS**, `-p all` given: record every program at once.
-  * `-f raw`/`-f ts`: forwarded unfiltered - with nothing selected there's nothing left to filter.
-  * `-f mka`: every program's audio becomes its own track (forces `-a all`, since a single `-a N` has no
-    coherent meaning across differently-numbered programs), each track labeled with that program's own
-    SDT name once it arrives.
-  * `-f mkv`: rejected. Matroska has no way to say which audio track belongs to which of several video
-    tracks (there's no such association in the format yet), so `-f mkv` always needs a single `-p <pid>`.
-* **MPTS**, neither given: fails early, after a brief wait for each program's SDT name, listing the
-  available `sid`/PMT pid/name so you can choose. A program whose name never arrives in that window is
-  listed as `(no SDT)` rather than blocking further.
+* **SPTS** (one program): `-p` is ignored - a warning is logged if it was given
+* **MPTS**:
+  * `-p <pid>` given: pins that one program's PMT pid, then everything else works as if it were
+     an SPTS (all formats, `-a`/`-s` included). Rejected if that pid isn't actually in the PAT.
+  * `-p all` given: record every program at once.
+    * `-f raw`/`-f ts`: forwarded unfiltered - with nothing selected there's nothing left to filter.
+    * `-f mka`: every program's audio becomes its own track (forces `-a all`, since a single `-a N` has no
+      coherent meaning across differently-numbered programs), each track labeled with that program's own
+      SDT name once it arrives.
+    * `-f mkv`: rejected. Matroska has no way to say which audio track belongs to which of several video
+      tracks (there's no such association in the format - yet), so `-f mkv` always needs a single `-p <pid>`.
+  * neither given: fails early, after a brief wait for each program's SDT name, listing the
+    available `sid`/PMT pid/name so you can choose. A program whose name never arrives in that window is
+    listed as `(no SDT)` rather than blocking further.
 
 ## Output (`-o`)
 
-A file path, or `-` for stdout. Don't worry, status outout and `-v` alwayxs go to stderr.
+A file path, or `-` for stdout. Don't worry, status output and `-v` always go to stderr.
+
+`-o -` can be used to pipe the output directly to [dipidescramble](../dipidescramble/README.md).
 
 ## Formats (`-f`)
 
@@ -78,31 +100,38 @@ If `-f` is omitted the format is taken from the `-o` suffix (`.ts`, `.mkv`, `.mk
 | `mkv`    | Matroska video, audio and optional subtitles       |
 | `mka`    | Matroska audio                                     | 
 
-### TS Stripper
+### TS Stripper (`--strip`)
 
-The following get removed from TS:
-* CBR stuffing (null packet)
-* NIT (network information table)
-* AIT (it's sort of a trojan anyway)
-* EIT (now/next. does anyone besides the French use it in IPI?)
-* CAT, CA/ECM (not that it would be there. It's usually on a second port)
+`-f ts` drops a configurable set of tables/pids. Default, with no `--strip` given: `NUL,NIT,AIT,EIT`.
 
-What survives:
-* PAT/PMT - rewritten, but there's no TS without
-* SDT - service description table (usually the tv station name)
-* Video/Audio elementary stream
+| token  | what                                                                                        |
+|--------|---------------------------------------------------------------------------------------------|
+| `NUL`  | CBR stuffing (null packets, pid 0x1FFF)                                                     |
+| `NIT`  | network info table, and its entry in the PAT                                                |
+| `AIT`  | application signalling table, and its PMT ES entry                                          |
+| `EIT`  | event info (EPG)                                                                            |
+| `CAT`  | conditional access table                                                                    |
+| `ECM`  | entitlement control messages, and the PMT's ES-level CA descriptor referencing them         |
+| `EMM`  | entitlement management messages, and the PMT's program-level CA descriptor referencing them |
+| `RST`  | running status table                                                                        |
+| `TDT`  | time/date table - shares a pid with TOT, either token drops both                            |
+| `TOT`  | time offset table - shares a pid with TDT, either token drops both                          |
+| `INT`  | IP/MAC notification table (identified by table_id, not a fixed pid)                         |
 
-What's changed:
-* Continuity counters
-* CRC32 recalculation
+`--strip none` disables stripping entirely.
+Given `--strip` with any format other than `-f ts`, it's ignored with a warning.
+
+What always survives: `PAT`/`PMT` (rewritten to drop whatever their own entries pointed at, but there's no
+TS without them), `SDT`, and every `PES` stream.
+
+What's changed regardless: continuity counters, CRC32 recalculation on any rewritten section.
 
 
 ### Matroska details
 
-Video doesn't get transcoded. H.264 (`V_MPEG4/ISO/AVC`) and HEVC (`V_MPEGH/ISO/HEVC`) get handled properly.
-Possibly, MPEG2 will work too, but finding it in the wild today is a bit of a challenge.
+Video doesn't get transcoded. MPEG2, H.264 (`V_MPEG4/ISO/AVC`) and HEVC (`V_MPEGH/ISO/HEVC`) get handled properly.
 
-Audio covers AC3, E-AC3, mpeg layer 1/2/3, AAC (ADTS) and AAC_LATM. Each audio track keeps the ISO 639
+Audio covers AC3, E-AC3, MPEG layer 1/2/3, AAC (ADTS) and AAC_LATM. Each audio track keeps the ISO 639
 language from the PMT, or `und` when the stream does not signal one.
 
 > TV stations and IPTV providers are creative on audio flagging. Who cares about ISO 639-2 anyway. Do not wonder if ...
@@ -123,27 +152,29 @@ If the stream has fewer tracks the tool reports a mismatch and exits.
 
 ## Subtitles (`-s`)
 
-| mode | effect |
-| --- | --- |
-| `keep` | default; teletext and DVB subtitle streams are passed through in `ts` |
-| `strip` | those streams are removed, including from the PMT |
-| `srt` | teletext subtitles are decoded and stored as an SRT track (`mkv`/`mka` only) |
+| mode    | effect                                                                       |
+|---------|------------------------------------------------------------------------------|
+| `keep`  | default; teletext and DVB subtitle streams are passed through in `ts`        |
+| `strip` | those streams are removed, including from the PMT                            |
+| `srt`   | teletext subtitles are decoded and stored as an SRT track (`mkv`/`mka` only) |
 
 `-s srt` uses the subtitle page advertised in the teletext descriptor.
 DVB bitmap subtitles are not converted, no OCR here.
 
 Teletext subs are transmitted after the speech they describe, so they run late.
 `--sub-lead <ms>` shifts every cue earlier; the default is 1000 ms. Use `--sub-lead 0` to keep the broadcast timing.
-A cue held on screen with no following subtitle stays for at least 1.2 s and at most 7 s, since teletext
+A cue held on screen with no following subtitle stays for at least 1.2 s and at most 5 s, since teletext
 carries no signal for clearing the screen.
 
 ## RET repair (`--ret`)
 
-Optional `--ret <addr>:<port>` points at a [dipifccret](../dipifccret/README.md) edge server's `-l` address.
+Optional `--ret <addr>:<port>` points at an ETSI TS 102 034 Annex F (like [dipifccret](../dipifccret/README.md))  edge server's address.
+
 If set, `-i rtp://` gap detection kicks in: a hole in the RTP sequence gets one NACK sent to that address, 
 and whatever repair comes back (unicast reply, or the multicast repair session per Annex F.6.2.2) gets spliced 
 back into the recording in order.
-No RSI/SD&S discovery for this (`dipisds` can send it), so address+port have to be known and passed explicitly.
+
+No RSI/SD&S discovery for this (like `dipisds` would send), so address+port have to be known and passed explicitly.
 
 Off by default. Without `--ret` nothing changes, no added latency, no new sockets.
 
@@ -172,7 +203,7 @@ which is usually wrong in multi-homing.
 
 Prints a single, self updating line to stderr about once a second.
 
-## Stopping
+## Signals
 
 `^C` SIGINT or SIGTERM stops the recording, closes the output properly and leaves the multicast group.
 
@@ -202,4 +233,10 @@ dipirec -i rtp://@239.1.1.3:5000 -p 0x1000 -o show.ts
 
 # MPTS source: every program's audio into one MKA
 dipirec -i rtp://@239.1.1.3:5000 -p all -o all_channels.mka
+
+# replay a file at its own original speed, into something that expects a live feed
+dipirec -i show.ts --pace -o - -f ts | some-live-consumer
+
+# from stdin, also strip CAT/ECM/EMM on top of the default set
+dipirec -i - -o show.ts --strip NUL,NIT,AIT,EIT,CAT,ECM,EMM < capture.ts
 ```

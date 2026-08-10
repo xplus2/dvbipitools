@@ -52,6 +52,10 @@ int cas_vendor_ecm_due(cas_t *c, size_t idx, double now, unsigned char *out, siz
 /* 0 = filled, -1 = queue empty */
 int cas_vendor_next_emm(cas_t *c, size_t idx, unsigned char *out, size_t cap, size_t *out_len);
 
+/* SIGHUP: rescan --biss2-ca-receivers, force an SK rotation if the entitled set changed
+   (revocation). no-op outside BISS-CA mode - caller decides when SIGHUP fired */
+void cas_reload_receivers(cas_t *c);
+
 /* exact 90kHz -> ms via remainder carry (*rem_inout, starts at 0): no drift over time.
    pure, exposed for unit tests only. */
 unsigned long cas_90k_to_ms(uint64_t delta_90k, uint64_t *rem_inout);

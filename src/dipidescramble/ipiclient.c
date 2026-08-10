@@ -8,7 +8,7 @@
 #include "lib/demux/psi_section_asm.h"
 #include "lib/ioutil.h"
 #include "lib/log.h"
-#include "lib/net/httpclient.h"
+#include "lib/net/httpclient/httpclient.h"
 
 #include "ipiclient.h"
 #include "version.h"

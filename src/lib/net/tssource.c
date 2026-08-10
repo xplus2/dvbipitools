@@ -2,22 +2,39 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "../demux/rtp.h"
 
-#include "httpclient.h"
+#include "httpclient/httpclient.h"
 #include "multicast.h"
 #include "tssource.h"
 #include "udpxy.h"
+
+/* max plausible RTP/MPEGTS record under a 1500-byte MTU: 12 + 7*188 */
+#define TSSRC_RTP_MAX_RECORD (12 + 7 * 188)
+/* bytes buffered before deciding raw vs RTP framing, TSSRC_STDIN/TSSRC_FILE */
+#define TSSRC_DETECT_CAP (2 * TSSRC_RTP_MAX_RECORD + 20)
+#define TSSRC_RAWBUF_CAP 65536
+
+typedef enum { DEFRAME_DETECT, DEFRAME_RAW, DEFRAME_RTP } deframe_state_t;
 
 struct tssrc {
   tssrc_kind_t kind;
   mcast_t *m;
   http_t *h;
   udpxy_t *u;
+  int fd; /* TSSRC_FILE */
+  /* TSSRC_STDIN/TSSRC_FILE byte-stream framing */
+  deframe_state_t deframe_state;
+  unsigned char rawbuf[TSSRC_RAWBUF_CAP];
+  size_t raw_len;
+  size_t rtp_stride; /* DEFRAME_RTP: 12 + 188*N */
+  size_t rtp_pos;     /* DEFRAME_RTP: offset within current stride, carried across reads */
+  uint32_t last_rtp_ts;
 };
 
 tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
@@ -53,9 +70,163 @@ tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
     return s;
   case TSSRC_STDIN:
     return s;
+  case TSSRC_FILE:
+    s->fd = open(cfg->file_path, O_RDONLY);
+    if (s->fd < 0) {
+      free(s);
+      if (reason_out)
+        *reason_out = NET_ERR_OTHER;
+      return NULL;
+    }
+    return s;
   }
   free(s);
   return NULL;
+}
+
+static ssize_t raw_fd_read(int fd, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
+  ssize_t n = read(fd, buf, cap);
+  if (n == 0) {
+    if (reason_out)
+      *reason_out = NET_ERR_EOF;
+    return -1;
+  }
+  if (n < 0) {
+    if (errno == EINTR)
+      return 0;
+    if (reason_out)
+      *reason_out = NET_ERR_READ;
+    return -1;
+  }
+  return n;
+}
+
+/* raw: sync at every 188. RTP: v2 header, N (1..7) TS packets in sync,
+   next record's first TS packet in sync too. else: raw, matches old
+   TSSRC_STDIN behavior. */
+static void detect_framing(tssrc_t *s) {
+  const unsigned char *b = s->rawbuf;
+  size_t n = s->raw_len;
+  int nn;
+
+  if (n >= 3 * 188 && b[0] == 0x47 && b[188] == 0x47 && b[376] == 0x47) {
+    s->deframe_state = DEFRAME_RAW;
+    return;
+  }
+  if (n >= 12 + 188 && (b[0] >> 6) == 2) {
+    for (nn = 1; nn <= 7; nn++) {
+      size_t stride = 12 + (size_t)nn * 188;
+      size_t k;
+      int ok = 1;
+      if (n < stride + 12 + 1)
+        break;
+      for (k = 0; k < (size_t)nn; k++)
+        if (b[12 + 188 * k] != 0x47) {
+          ok = 0;
+          break;
+        }
+      if (ok && b[stride + 12] == 0x47) {
+        s->deframe_state = DEFRAME_RTP;
+        s->rtp_stride = stride;
+        s->rtp_pos = 0;
+        return;
+      }
+    }
+  }
+  s->deframe_state = DEFRAME_RAW;
+}
+
+/* strips leading 12 bytes of every rtp_stride window from s->rawbuf, into
+   dst up to dstcap. advances rtp_pos across calls, shifts leftover to
+   front. returns bytes written. */
+static size_t rtp_deframe_step(tssrc_t *s, unsigned char *dst, size_t dstcap) {
+  size_t i = 0, o = 0;
+
+  while (i < s->raw_len && o < dstcap) {
+    size_t in_stride = s->rtp_pos % s->rtp_stride;
+    if (in_stride < 12) {
+      size_t need = 12 - in_stride;
+      size_t avail = s->raw_len - i;
+      if (in_stride == 0 && avail >= 12)
+        s->last_rtp_ts = ((uint32_t)s->rawbuf[i + 4] << 24) | ((uint32_t)s->rawbuf[i + 5] << 16) |
+                          ((uint32_t)s->rawbuf[i + 6] << 8) | s->rawbuf[i + 7];
+      if (need > avail)
+        need = avail;
+      i += need;
+      s->rtp_pos += need;
+      continue;
+    }
+    {
+      size_t chunk = s->rtp_stride - in_stride;
+      size_t avail = s->raw_len - i;
+      size_t room = dstcap - o;
+      size_t take = chunk < avail ? chunk : avail;
+      if (take > room)
+        take = room;
+      memcpy(dst + o, s->rawbuf + i, take);
+      i += take;
+      o += take;
+      s->rtp_pos += take;
+    }
+  }
+  memmove(s->rawbuf, s->rawbuf + i, s->raw_len - i);
+  s->raw_len -= i;
+  return o;
+}
+
+/* TSSRC_STDIN/TSSRC_FILE byte-stream read: detect once, then raw passthrough or RTP header strip after.
+   uses local reason always (dipirec's own caller passes reason_out NULL).
+   EOF-vs-error branch below needs it anyway */
+static ssize_t deframe_read(tssrc_t *s, int fd, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
+  net_err_reason_t r;
+
+  if (s->deframe_state == DEFRAME_DETECT) {
+    ssize_t got = raw_fd_read(fd, s->rawbuf + s->raw_len, TSSRC_DETECT_CAP - s->raw_len, &r);
+    if (got < 0) {
+      if (r == NET_ERR_EOF && s->raw_len > 0) {
+        detect_framing(s);
+      } else {
+        if (reason_out)
+          *reason_out = r;
+        return -1;
+      }
+    } else {
+      s->raw_len += (size_t)got;
+      if (s->raw_len < TSSRC_DETECT_CAP)
+        return 0;
+      detect_framing(s);
+    }
+  }
+
+  if (s->deframe_state == DEFRAME_RAW) {
+    ssize_t got;
+    if (s->raw_len > 0) {
+      size_t take = s->raw_len < cap ? s->raw_len : cap;
+      memcpy(buf, s->rawbuf, take);
+      memmove(s->rawbuf, s->rawbuf + take, s->raw_len - take);
+      s->raw_len -= take;
+      return (ssize_t)take;
+    }
+    got = raw_fd_read(fd, buf, cap, &r);
+    if (got < 0 && reason_out)
+      *reason_out = r;
+    return got;
+  }
+
+  {
+    size_t out = rtp_deframe_step(s, buf, cap);
+    if (out == 0) {
+      ssize_t got = raw_fd_read(fd, s->rawbuf + s->raw_len, sizeof s->rawbuf - s->raw_len, &r);
+      if (got < 0) {
+        if (reason_out)
+          *reason_out = r;
+        return -1;
+      }
+      s->raw_len += (size_t)got;
+      out = rtp_deframe_step(s, buf, cap);
+    }
+    return (ssize_t)out;
+  }
 }
 
 ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
@@ -70,8 +241,7 @@ ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t 
       return n;
     off = rtp_payload_offset(buf, (size_t)n);
     if (off) {
-      /* offset+len contract instead of copy: needs a tssrc_read() API change
-         across both tools, saves a sub-us memmove. not worth it. */
+      /* offset+len contract instead of copy: needs a tssrc_read() API change across both tools, saves a sub-us memmove. not worth it. */
       memmove(buf, buf + off, (size_t)n - off);
       n -= (ssize_t)off;
     }
@@ -81,22 +251,26 @@ ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t 
   case TSSRC_UDPXY:
     return udpxy_read(s->u, buf, cap, reason_out);
   case TSSRC_STDIN:
-    n = read(STDIN_FILENO, buf, cap);
-    if (n == 0) {
-      if (reason_out)
-        *reason_out = NET_ERR_EOF;
-      return -1;
-    }
-    if (n < 0) {
-      if (errno == EINTR)
-        return 0;
-      if (reason_out)
-        *reason_out = NET_ERR_READ;
-      return -1;
-    }
-    return n;
+    return deframe_read(s, STDIN_FILENO, buf, cap, reason_out);
+  case TSSRC_FILE:
+    return deframe_read(s, s->fd, buf, cap, reason_out);
   }
   return -1;
+}
+
+int tssrc_is_rtp_framed(const tssrc_t *s) { return s->deframe_state == DEFRAME_RTP; }
+uint32_t tssrc_last_rtp_ts(const tssrc_t *s) { return s->last_rtp_ts; }
+
+void tssrc_rewind(tssrc_t *s) {
+  int fd;
+
+  if (s->kind != TSSRC_FILE && s->kind != TSSRC_STDIN)
+    return;
+  fd = (s->kind == TSSRC_FILE) ? s->fd : STDIN_FILENO;
+  if (lseek(fd, 0, SEEK_SET) < 0)
+    return;
+  s->raw_len = 0;
+  s->rtp_pos = 0;
 }
 
 mcast_t *tssrc_mcast(tssrc_t *s) { return s->m; }
@@ -110,6 +284,8 @@ int tssrc_fd(const tssrc_t *s) {
     return http_fd(s->h);
   case TSSRC_STDIN:
     return STDIN_FILENO;
+  case TSSRC_FILE:
+    return s->fd;
   case TSSRC_UDPXY:
     return -1;
   }
@@ -125,6 +301,8 @@ void tssrc_close(tssrc_t *s) {
     http_close(s->h);
   if (s->u)
     udpxy_close(s->u);
+  if (s->kind == TSSRC_FILE)
+    close(s->fd);
   free(s);
 }
 
@@ -147,7 +325,7 @@ tssrc_open_t *tssrc_open_async_start(const tssrc_cfg_t *cfg, net_err_reason_t *r
     }
     return o;
   }
-  o->result = tssrc_open(cfg, reason_out); /* RTP/UDP/STDIN/UDPXY: cheap, local-only work, done synchronously */
+  o->result = tssrc_open(cfg, reason_out); /* RTP/UDP/STDIN/UDPXY/FILE: cheap, local-only, done synchronously */
   if (!o->result) {
     free(o);
     return NULL;

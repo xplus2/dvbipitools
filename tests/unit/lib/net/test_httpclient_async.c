@@ -13,7 +13,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "lib/net/httpclient.h"
+#include "lib/net/httpclient/httpclient.h"
 
 typedef struct {
   int listen_fd;

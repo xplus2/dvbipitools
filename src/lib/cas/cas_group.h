@@ -42,6 +42,7 @@ typedef struct {
 
 typedef struct {
   scramble_algo_t algo;    /* global: one scrambler, one CW, one algorithm */
+  int legacy_csa1;         /* signal mode 0x01 not 0x02, checksum CW[3]/CW[7]. same cipher */
   unsigned cp_duration_ms; /* global: one crypto-period clock */
   unsigned pids[CAS_CORE_MAX_PIDS];
   size_t pid_count;
@@ -81,5 +82,8 @@ void cas_group_shared_metrics(cas_group_t *g, unsigned long long *scrambled_pack
 
 /* pure logic, exposed for unit tests. required[i]/alive[i] parallel arrays, vendor_count long. */
 int cas_group_fallback_active_calc(size_t vendor_count, const int *required, const int *alive);
+
+/* CW[3]=(CW[0]+CW[1]+CW[2])%256, CW[7] same for CW[4..6]. Pure logic, exposed for tests. */
+void csa1_apply_cw_checksum(unsigned char cw[8]);
 
 #endif

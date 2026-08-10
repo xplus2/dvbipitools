@@ -39,8 +39,12 @@ endif ()
 
 if (DIPIRADIOHEAD_HAVE_CISSA)
     set(CISSA_SRC ../lib/scrambler/cissa.c)
+    set(BISS_SRC ../lib/cas/biss/biss.c)
+    set(BISS_CA_SRC ../lib/cas/biss/ca.c)
 else ()
     set(CISSA_SRC ../lib/scrambler/cissa_stub.c)
+    set(BISS_SRC ../lib/cas/biss/stub.c)
+    set(BISS_CA_SRC ../lib/cas/biss/ca_stub.c)
 endif ()
 
 option(DIPIRADIOHEAD_CSA2 "build dipiradiohead with DVB-CSA2 support (requires libdvbcsa)" ON)
@@ -75,7 +79,10 @@ add_executable(dipiradiohead
     ../lib/net/multicast.c
     ../lib/net/netconnect.c
     ${TLS_SRC}
-    ../lib/net/httpclient.c
+    ../lib/net/httpclient/httpclient.c
+    ../lib/net/httpclient/url.c
+    ../lib/net/httpclient/read.c
+    ../lib/net/httpclient/async.c
     ../lib/ioutil.c
     ../lib/demux/crc32.c
     ../lib/demux/bitreader.c
@@ -105,7 +112,11 @@ add_executable(dipiradiohead
     ../lib/mux/tspacket_write.c
     ../lib/scrambler/scrambler.c
     ${CISSA_SRC}
-    ${CSA2_SRC})
+    ${CSA2_SRC}
+    ${BISS_SRC}
+    ${BISS_CA_SRC}
+    ../lib/cas/biss/ca_sections.c
+    ../lib/cas/biss/ca_engine.c)
 
 if (DIPIRADIOHEAD_HAVE_TLS)
     target_link_libraries(dipiradiohead PRIVATE OpenSSL::SSL OpenSSL::Crypto)

@@ -8,7 +8,7 @@
 
 #include "lib/ioutil.h"
 #include "lib/log.h"
-#include "lib/net/httpclient.h"
+#include "lib/net/httpclient/httpclient.h"
 
 #include "../framer/aac_adts.h"
 #include "../framer/aac_latm.h"
