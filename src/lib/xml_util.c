@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -111,7 +112,9 @@ int xml_attr(const char *s, const char *end, const char *name, char *out, size_t
     const char *v, *q;
     if (!hit || hit >= end)
       return -1;
-    if (hit[namelen] != '=' || hit[namelen + 1] != '"') {
+    /* reject a hit inside a longer name, e.g. "sid" inside "tsid=" */
+    if ((hit > s && (isalnum((unsigned char)hit[-1]) || hit[-1] == '_')) ||
+        hit[namelen] != '=' || hit[namelen + 1] != '"') {
       p = hit + 1;
       continue;
     }

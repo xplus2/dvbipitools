@@ -14,6 +14,7 @@
 #include "lib/demux/rtcp.h"
 #include "lib/mux/psi_build.h"
 #include "lib/mux/rtcp_build.h"
+#include "lib/net/dvbstp.h"
 #include "lib/sds_xml.h"
 #include "lib/tva/bcg_doc.h"
 
@@ -160,6 +161,24 @@ static void gen_ecmg_channel_status(const char *dir) {
   write_file(dir, "ecmg_channel_status_min.bin", body, sizeof body);
 }
 
+static void gen_dvbstp(const char *dir) {
+  /* single-section segment, no CRC, no provider id, no private words - clause 5.4.1.3 */
+  static const unsigned char payload[] = "hello";
+  unsigned char pkt[12 + sizeof payload - 1];
+
+  pkt[0] = 0x00; /* version 0, crc_present 0 */
+  pkt[1] = 0x00; pkt[2] = 0x00; pkt[3] = 0x00; /* total_segment_size, informational */
+  pkt[4] = DVBSTP_PAYLOAD_BROADCAST_DISCOVERY;
+  pkt[5] = 0x00; pkt[6] = 0x01; /* segment_id */
+  pkt[7] = 0x01; /* segment_version */
+  pkt[8] = 0x00; pkt[9] = 0x00; /* section_number 0, last_section_number top nibble 0 */
+  pkt[10] = 0x00; /* last_section_number low byte 0 */
+  pkt[11] = 0x00; /* compr 0, has_provider_id 0, priv_words 0 */
+  memcpy(pkt + 12, payload, sizeof payload - 1);
+
+  write_file(dir, "dvbstp_min.bin", pkt, sizeof pkt);
+}
+
 static void gen_emmg_datagrams(const char *dir) {
   /* emmg_extract_datagrams() takes the data_provision BODY directly - one EMMG_P_DATAGRAM (tag 0x0005) TLV */
   static const unsigned char body[] = {0x00, 0x05, 0x00, 0x03, 0xAA, 0xBB, 0xCC};
@@ -178,5 +197,6 @@ int main(int argc, char **argv) {
   gen_simulcrypt_msg(argv[1]);
   gen_ecmg_channel_status(argv[1]);
   gen_emmg_datagrams(argv[1]);
+  gen_dvbstp(argv[1]);
   return 0;
 }

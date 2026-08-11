@@ -17,19 +17,14 @@
 #include "version.h"
 
 #define RECV_BUF 65536
-#define SEEN_MAX 16
 
-typedef struct {
-  unsigned payload_id, segment_id, version;
-} seen_t;
-
-static int already_seen(seen_t *seen, int *count, const dvbstp_header_t *h) {
+int already_seen(seen_t *seen, int *count, const dvbstp_header_t *h) {
   int i;
   for (i = 0; i < *count; i++)
     /* cppcheck-suppress uninitvar -- seen[i] for i<count always written by an earlier call */
     if (seen[i].payload_id == h->payload_id && seen[i].segment_id == h->segment_id && seen[i].version == h->segment_version)
       return 1;
-  if (*count < SEEN_MAX) {
+  if (*count < LISTEN_SEEN_MAX) {
     seen[*count].payload_id = h->payload_id;
     seen[*count].segment_id = h->segment_id;
     seen[*count].version = h->segment_version;
@@ -43,7 +38,7 @@ int listen_run(const config_t *cfg) {
   FILE *f;
   mcast_t *m;
   dvbstp_reasm_t *r;
-  seen_t seen[SEEN_MAX];
+  seen_t seen[LISTEN_SEEN_MAX];
   int seen_count = 0;
   unsigned segments = 0, total_services = 0;
   double deadline;

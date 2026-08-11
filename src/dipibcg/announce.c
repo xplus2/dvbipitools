@@ -23,8 +23,7 @@
 #include "lib/tva/xmltv.h"
 #include "version.h"
 
-/* EN 300 468 annex C, same formula as lib/bim/codec.c's dvbDateTimeCodec */
-static long date_to_mjd(int y, int mo, int d) {
+long date_to_mjd(int y, int mo, int d) {
   int yy = mo <= 2 ? y - 1 : y;
   int mm = mo <= 2 ? mo + 12 : mo;
   return 14956L + d + (long)((yy - 1900) * 365.25) + (long)((mm + 1) * 30.6001);
@@ -39,7 +38,7 @@ static int all_digits(const char *s, int n) {
 }
 
 /* "YYYY-MM-DDTHH:MM:SS[Z|+HH:MM|-HH:MM]" -> minutes since the MJD epoch, UTC-normalized */
-static int iso8601_to_minutes(const char *in, long *out) {
+int iso8601_to_minutes(const char *in, long *out) {
   size_t l = strlen(in);
   int y, mo, d, h, mi, off_min = 0;
   long mjd, total;
@@ -82,7 +81,7 @@ static long now_minutes(void) {
 }
 
 /* MJD epoch (date_to_mjd 1970-01-01) is day 40587 */
-static long minutes_to_unix(long mjd_minutes) {
+long minutes_to_unix(long mjd_minutes) {
   return (mjd_minutes - 40587L * 1440L) * 60L;
 }
 
@@ -154,7 +153,7 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *do
   metrics_exporter_send(mx, &w);
 }
 
-static int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long window_min) {
+int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long window_min) {
   int i;
   bcg_doc_init(dst);
   for (i = 0; i < src->channel_count; i++) {
@@ -185,7 +184,7 @@ static int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, lo
   return 0;
 }
 
-static int load_doc(const config_t *cfg, bcg_doc_t *out) {
+int load_doc(const config_t *cfg, bcg_doc_t *out) {
   mapping_t map;
   FILE *in;
   int i;

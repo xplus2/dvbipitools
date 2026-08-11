@@ -551,22 +551,25 @@ UNIT_TESTS := lib_demux_crc32 lib_demux_psi lib_demux_psi_section_asm lib_demux_
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_rtpheader lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_cadescbuild \
-	lib_net_netconnect lib_net_httpclient_async lib_net_tssource_async lib_net_tssource_file lib_net_retryset \
+	lib_net_netconnect lib_net_httpclient_async lib_net_tssource_async lib_net_tssource_file lib_net_retryset lib_net_dvbstp \
 	lib_mux_mpts \
 	lib_cas_cas_group \
 	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec \
 	lib_xml_util lib_tva_timefmt lib_tva_bcg_doc lib_tva_mapping lib_tva_xmltv lib_tva_tva_xml \
 	lib_bim_fragment lib_bim_accessunit \
-	lib_sds_xml dipiscan_format dipixmltv_revmap dipixmltv_suggest \
+	lib_sds_xml dipibim_args dipiscan_format dipiscan_scan dipixmltv_args dipixmltv_revmap dipixmltv_suggest \
 	dipiradiohead_mpegaudio dipiradiohead_aac_adts dipiradiohead_aac_latm \
-	dipiradiohead_psi dipiradiohead_id3 dipiradiohead_pes dipiradiohead_tspacketizer dipiradiohead_cas dipiradiohead_args \
+	dipiradiohead_psi dipiradiohead_id3 dipiradiohead_pes dipiradiohead_tspacketizer dipiradiohead_radiohead dipiradiohead_cas dipiradiohead_args \
 	dipiradiohead_source_async dipiradiohead_inputset \
-	dipitvhead_args dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_bitrate dipitvhead_remux \
+	dipitvhead_source dipitvhead_args dipitvhead_discover dipitvhead_output dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_bitrate dipitvhead_remux \
 	dipitvhead_simulcrypt_msg dipitvhead_ecmg_client dipitvhead_emmg_server dipitvhead_cas \
-	dipirec_ts_filter dipirec_pace \
-	dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_ret \
+	dipirec_ts_filter dipirec_pace dipirec_ret_client dipirec_record \
+	dipifccret_args dipifccret_listen dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_ret \
 	lib_metrics_protocol lib_metrics_export \
-	dipimetrics_store dipimetrics_render dipimetrics_httpserver
+	dipimetrics_args dipimetrics_store dipimetrics_render dipimetrics_httpserver \
+	dipibcg_container dipibcg_args dipibcg_announce dipibcg_listen \
+	dipicam378_args \
+	dipisds_args dipisds_input dipisds_format_out dipisds_announce dipisds_listen
 
 ifeq ($(HAVE_OPENSSL),yes)
 UNIT_TESTS += lib_scrambler_cissa
@@ -640,6 +643,13 @@ ifneq ($(CSA2),no)
 $(warning tests: libdvbcsa not found, skipping lib_scrambler_csa2 unit test)
 endif
 endif
+
+dipicam378_args_BIN := tests/unit/dipicam378/test_args
+dipicam378_args_SRCS := \
+	tests/unit/dipicam378/test_args.c \
+	src/dipicam378/args.c \
+	src/lib/argutil.c \
+	src/lib/log.c
 
 ifeq ($(HAVE_OPENSSL),yes)
 UNIT_TESTS += dipicam378_crypto
@@ -767,6 +777,14 @@ lib_metrics_export_SRCS := \
 	src/lib/log.c \
 	src/lib/ioutil.c
 
+dipimetrics_args_BIN := tests/unit/dipimetrics/test_args
+dipimetrics_args_SRCS := \
+	tests/unit/dipimetrics/test_args.c \
+	src/dipimetrics/args.c \
+	src/lib/argutil.c \
+	src/lib/ioutil.c \
+	src/lib/log.c
+
 dipimetrics_store_BIN := tests/unit/dipimetrics/test_store
 dipimetrics_store_SRCS := \
 	tests/unit/dipimetrics/test_store.c \
@@ -784,6 +802,61 @@ dipimetrics_render_SRCS := \
 	src/lib/log.c \
 	src/lib/ioutil.c
 
+dipisds_args_BIN := tests/unit/dipisds/test_args
+dipisds_args_SRCS := \
+	tests/unit/dipisds/test_args.c \
+	src/dipisds/args.c \
+	src/lib/argutil.c \
+	src/lib/log.c
+
+dipisds_input_BIN := tests/unit/dipisds/test_input
+dipisds_input_SRCS := \
+	tests/unit/dipisds/test_input.c \
+	src/dipisds/input.c \
+	src/lib/ioutil.c \
+	src/lib/xml_util.c
+
+dipisds_format_out_BIN := tests/unit/dipisds/test_format_out
+dipisds_format_out_SRCS := \
+	tests/unit/dipisds/test_format_out.c \
+	src/dipisds/format_out.c \
+	src/lib/playlist_out.c \
+	src/lib/xml_util.c
+
+dipisds_listen_BIN := tests/unit/dipisds/test_listen
+dipisds_listen_SRCS := \
+	tests/unit/dipisds/test_listen.c \
+	src/dipisds/listen.c \
+	src/dipisds/args.c \
+	src/lib/argutil.c \
+	src/dipisds/format_out.c \
+	src/lib/playlist_out.c \
+	src/lib/sds_xml.c \
+	src/lib/xml_util.c \
+	src/lib/net/dvbstp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/demux/crc32.c \
+	src/lib/signal.c \
+	src/lib/log.c
+
+dipisds_announce_BIN := tests/unit/dipisds/test_announce
+dipisds_announce_SRCS := \
+	tests/unit/dipisds/test_announce.c \
+	src/dipisds/announce.c \
+	src/dipisds/input.c \
+	src/lib/sds_xml.c \
+	src/lib/xml_util.c \
+	src/lib/ioutil.c \
+	src/lib/metrics/export.c \
+	src/lib/metrics/protocol.c \
+	src/lib/net/dvbstp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/demux/crc32.c \
+	src/lib/signal.c \
+	src/lib/log.c
+
 dipimetrics_httpserver_BIN := tests/unit/dipimetrics/test_httpserver
 dipimetrics_httpserver_SRCS := \
 	tests/unit/dipimetrics/test_httpserver.c \
@@ -794,6 +867,73 @@ dipimetrics_httpserver_SRCS := \
 	src/lib/signal.c \
 	src/lib/log.c \
 	src/lib/ioutil.c
+
+dipibcg_container_BIN := tests/unit/dipibcg/test_container
+dipibcg_container_SRCS := \
+	tests/unit/dipibcg/test_container.c \
+	src/dipibcg/container.c
+
+dipibcg_args_BIN := tests/unit/dipibcg/test_args
+dipibcg_args_SRCS := \
+	tests/unit/dipibcg/test_args.c \
+	src/dipibcg/args.c \
+	src/lib/argutil.c \
+	src/lib/log.c
+
+dipibcg_announce_BIN := tests/unit/dipibcg/test_announce
+dipibcg_announce_SRCS := \
+	tests/unit/dipibcg/test_announce.c \
+	src/dipibcg/announce.c \
+	src/dipibcg/args.c \
+	src/lib/argutil.c \
+	src/lib/tva/bcg_doc.c \
+	src/lib/tva/xmltv.c \
+	src/lib/tva/timefmt.c \
+	src/lib/tva/mapping.c \
+	src/lib/tva/tva_xml.c \
+	src/lib/xml_util.c \
+	src/lib/ioutil.c \
+	src/lib/bim/accessunit.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bitreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/fragment.c \
+	src/lib/bim/codec.c \
+	src/lib/demux/crc32.c \
+	src/dipibcg/container.c \
+	src/lib/metrics/export.c \
+	src/lib/metrics/protocol.c \
+	src/lib/net/dvbstp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/signal.c \
+	src/lib/log.c
+
+dipibcg_listen_BIN := tests/unit/dipibcg/test_listen
+dipibcg_listen_SRCS := \
+	tests/unit/dipibcg/test_listen.c \
+	src/dipibcg/listen.c \
+	src/dipibcg/args.c \
+	src/lib/argutil.c \
+	src/dipibcg/container.c \
+	src/lib/tva/bcg_doc.c \
+	src/lib/tva/xmltv.c \
+	src/lib/tva/timefmt.c \
+	src/lib/xml_util.c \
+	src/lib/ioutil.c \
+	src/lib/bim/accessunit.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bitreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/fragment.c \
+	src/lib/bim/codec.c \
+	src/lib/tva/tva_xml.c \
+	src/lib/demux/crc32.c \
+	src/lib/net/dvbstp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/signal.c \
+	src/lib/log.c
 
 lib_demux_crc32_BIN := tests/unit/lib/demux/test_crc32
 lib_demux_crc32_SRCS := \
@@ -1033,6 +1173,13 @@ lib_bim_accessunit_SRCS := \
 	src/lib/bim/accessunit.c \
 	$(BIM_FRAGMENT_DEPS)
 
+dipibim_args_BIN := tests/unit/dipibim/test_args
+dipibim_args_SRCS := \
+	tests/unit/dipibim/test_args.c \
+	src/dipibim/args.c \
+	src/lib/argutil.c \
+	src/lib/log.c
+
 dipiscan_format_BIN := tests/unit/dipiscan/test_format
 dipiscan_format_SRCS := \
 	tests/unit/dipiscan/test_format.c \
@@ -1040,6 +1187,43 @@ dipiscan_format_SRCS := \
 	src/lib/playlist_out.c \
 	src/lib/sds_xml.c \
 	src/lib/xml_util.c
+
+dipiscan_scan_BIN := tests/unit/dipiscan/test_scan
+dipiscan_scan_SRCS := \
+	tests/unit/dipiscan/test_scan.c \
+	src/dipiscan/scan.c \
+	src/dipiscan/args.c \
+	src/lib/argutil.c \
+	src/dipiscan/format.c \
+	src/lib/playlist_out.c \
+	src/lib/sds_xml.c \
+	src/lib/xml_util.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/rtp.c \
+	src/lib/demux/crc32.c \
+	src/lib/mux/psi_build.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/udpxy.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/tls_stub.c \
+	src/lib/ioutil.c \
+	src/lib/signal.c \
+	src/lib/log.c
+
+dipixmltv_args_BIN := tests/unit/dipixmltv/test_args
+dipixmltv_args_SRCS := \
+	tests/unit/dipixmltv/test_args.c \
+	src/dipixmltv/args.c \
+	src/lib/argutil.c \
+	src/lib/log.c
 
 dipixmltv_revmap_BIN := tests/unit/dipixmltv/test_revmap
 dipixmltv_revmap_SRCS := \
@@ -1135,6 +1319,63 @@ dipiradiohead_tspacketizer_SRCS := \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
+	src/lib/log.c \
+	src/lib/signal.c
+
+dipiradiohead_radiohead_BIN := tests/unit/dipiradiohead/test_radiohead
+dipiradiohead_radiohead_SRCS := \
+	tests/unit/dipiradiohead/test_radiohead.c \
+	src/dipiradiohead/radiohead/radiohead.c \
+	src/dipiradiohead/radiohead/mpts.c \
+	src/dipiradiohead/radiohead/metrics.c \
+	src/dipiradiohead/mux/tspacketizer.c \
+	src/dipiradiohead/mux/psi.c \
+	src/dipiradiohead/mux/pes.c \
+	src/dipiradiohead/cas/cas.c \
+	src/lib/mux/cadescbuild.c \
+	src/lib/mux/rtpheader.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/mux/mpts.c \
+	src/lib/cas/ecmg_client/ecmg_client.c \
+	src/lib/cas/ecmg_client/protocol.c \
+	src/lib/cas/ecmg_client/connect.c \
+	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/emmg_server/emmg_server.c \
+	src/lib/cas/emmg_server/protocol.c \
+	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/simulcrypt_msg.c \
+	src/lib/cas/cas_group.c \
+	src/lib/cas/cas_scramble_engine.c \
+	src/lib/demux/rtp.c \
+	src/lib/demux/crc32.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/cas/biss/ca_engine.c \
+	src/lib/net/multicast.c \
+	src/lib/net/retryset.c \
+	src/dipiradiohead/input/source.c \
+	src/dipiradiohead/input/inputset.c \
+	src/dipiradiohead/input/playlist.c \
+	src/dipiradiohead/input/icy.c \
+	src/dipiradiohead/input/id3.c \
+	src/dipiradiohead/framer/mpegaudio.c \
+	src/dipiradiohead/framer/aac_adts.c \
+	src/dipiradiohead/framer/aac_latm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tls_stub.c \
+	src/lib/ioutil.c \
+	src/lib/metrics/export.c \
+	src/lib/metrics/protocol.c \
 	src/lib/log.c \
 	src/lib/signal.c
 
@@ -1238,6 +1479,24 @@ lib_mux_mpts_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
+dipitvhead_source_BIN := tests/unit/dipitvhead/input/test_source
+dipitvhead_source_SRCS := \
+	tests/unit/dipitvhead/input/test_source.c \
+	src/dipitvhead/input/source.c \
+	src/lib/net/tssource.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/udpxy.c \
+	src/lib/demux/rtp.c \
+	src/lib/ioutil.c \
+	src/lib/signal.c \
+	src/lib/log.c
+
 dipitvhead_args_BIN := tests/unit/dipitvhead/test_args
 dipitvhead_args_SRCS := \
 	tests/unit/dipitvhead/test_args.c \
@@ -1255,6 +1514,34 @@ dipitvhead_args_SRCS := \
 	src/lib/net/tls_stub.c \
 	src/lib/log.c \
 	src/lib/signal.c
+
+dipitvhead_discover_BIN := tests/unit/dipitvhead/test_discover
+dipitvhead_discover_SRCS := \
+	tests/unit/dipitvhead/test_discover.c \
+	src/dipitvhead/tvhead/discover.c \
+	src/dipitvhead/input/source.c \
+	src/lib/net/tssource.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/udpxy.c \
+	src/lib/demux/rtp.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/crc32.c \
+	src/lib/mux/psi_build.c \
+	src/lib/metrics/export.c \
+	src/lib/metrics/protocol.c \
+	src/lib/ioutil.c \
+	src/lib/signal.c \
+	src/lib/log.c
 
 dipitvhead_pmtbuild_BIN := tests/unit/dipitvhead/test_pmtbuild
 dipitvhead_pmtbuild_SRCS := \
@@ -1315,6 +1602,60 @@ dipitvhead_remux_SRCS := \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
+	src/lib/log.c \
+	src/lib/signal.c
+
+dipitvhead_output_BIN := tests/unit/dipitvhead/test_output
+dipitvhead_output_SRCS := \
+	tests/unit/dipitvhead/test_output.c \
+	src/dipitvhead/tvhead/output.c \
+	src/dipitvhead/mux/remux.c \
+	src/dipitvhead/mux/pmtbuild.c \
+	src/dipitvhead/mux/aitbuild.c \
+	src/dipitvhead/mux/bitrate.c \
+	src/dipitvhead/cas/cas.c \
+	src/lib/mux/cadescbuild.c \
+	src/lib/mux/rtpheader.c \
+	src/lib/demux/rtp.c \
+	src/lib/cas/ecmg_client/ecmg_client.c \
+	src/lib/cas/ecmg_client/protocol.c \
+	src/lib/cas/ecmg_client/connect.c \
+	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/emmg_server/emmg_server.c \
+	src/lib/cas/emmg_server/protocol.c \
+	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/simulcrypt_msg.c \
+	src/lib/cas/cas_group.c \
+	src/lib/cas/cas_scramble_engine.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/crc32.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/cas/biss/ca_engine.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/dipitvhead/input/source.c \
+	src/lib/net/tssource.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/udpxy.c \
+	src/lib/ioutil.c \
+	src/lib/argutil.c \
+	src/lib/metrics/export.c \
+	src/lib/metrics/protocol.c \
 	src/lib/log.c \
 	src/lib/signal.c
 
@@ -1468,6 +1809,16 @@ lib_net_retryset_SRCS := \
 	src/lib/net/retryset.c \
 	src/lib/log.c
 
+lib_net_dvbstp_BIN := tests/unit/lib/net/test_dvbstp
+lib_net_dvbstp_SRCS := \
+	tests/unit/lib/net/test_dvbstp.c \
+	src/lib/net/dvbstp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/demux/crc32.c \
+	src/lib/signal.c \
+	src/lib/log.c
+
 lib_cas_cas_group_BIN := tests/unit/lib/cas/test_cas_group
 lib_cas_cas_group_SRCS := \
 	tests/unit/lib/cas/test_cas_group.c \
@@ -1512,6 +1863,79 @@ dipirec_pace_SRCS := \
 	tests/unit/dipirec/test_pace.c \
 	src/dipirec/filter/pace.c \
 	src/lib/signal.c
+
+dipirec_record_BIN := tests/unit/dipirec/test_record
+dipirec_record_SRCS := \
+	tests/unit/dipirec/test_record.c \
+	src/dipirec/record.c \
+	src/dipirec/ret_client.c \
+	src/dipirec/args.c \
+	src/lib/log.c \
+	src/lib/argutil.c \
+	src/lib/signal.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/udpxy.c \
+	src/lib/net/tssource.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/ioutil.c \
+	src/lib/demux/rtp.c \
+	src/lib/demux/rtx.c \
+	src/lib/demux/rtcp.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/pes.c \
+	src/lib/demux/mpts_probe.c \
+	src/lib/mux/rtx.c \
+	src/lib/mux/rtcp_build.c \
+	src/lib/mux/ebml.c \
+	src/lib/mux/mkv/mkv.c \
+	src/lib/mux/mkv/bitreader.c \
+	src/lib/mux/mkv/audio.c \
+	src/lib/mux/mkv/video.c \
+	src/lib/mux/mkv/write.c \
+	src/lib/mux/mkv/feed.c \
+	src/lib/mux/teletext.c \
+	src/dipirec/filter/ts.c \
+	src/dipirec/filter/pace.c
+
+dipirec_ret_client_BIN := tests/unit/dipirec/test_ret_client
+dipirec_ret_client_SRCS := \
+	tests/unit/dipirec/test_ret_client.c \
+	src/dipirec/ret_client.c \
+	src/lib/demux/rtp.c \
+	src/lib/demux/rtx.c \
+	src/lib/demux/rtcp.c \
+	src/lib/mux/rtx.c \
+	src/lib/mux/rtcp_build.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/signal.c \
+	src/lib/log.c
+
+dipifccret_args_BIN := tests/unit/dipifccret/test_args
+dipifccret_args_SRCS := \
+	tests/unit/dipifccret/test_args.c \
+	src/dipifccret/args.c \
+	src/lib/argutil.c \
+	src/lib/log.c
+
+dipifccret_listen_BIN := tests/unit/dipifccret/test_listen
+dipifccret_listen_SRCS := \
+	tests/unit/dipifccret/test_listen.c \
+	src/dipifccret/listen.c \
+	src/lib/net/netconnect.c \
+	src/lib/signal.c \
+	src/lib/log.c
+dipifccret_listen_EXTRA_LDFLAGS := -pthread
 
 dipifccret_channel_BIN := tests/unit/dipifccret/test_channel
 dipifccret_channel_SRCS := \
@@ -1609,9 +2033,16 @@ INTEGRATION_DIPIRADIOHEAD_SCRIPTS := $(wildcard tests/integration/dipiradiohead/
 INTEGRATION_DIPIREC_SCRIPTS := $(wildcard tests/integration/dipirec/*.sh)
 INTEGRATION_DIPIDESCRAMBLE_SCRIPTS := $(wildcard tests/integration/dipidescramble/*.sh)
 INTEGRATION_DIPIMETRICS_SCRIPTS := $(wildcard tests/integration/dipimetrics/*.sh)
+INTEGRATION_DIPICAM378_SCRIPTS := $(wildcard tests/integration/dipicam378/*.sh)
+INTEGRATION_DIPIFCCRET_SCRIPTS := $(wildcard tests/integration/dipifccret/*.sh)
+
+INTEGRATION_TEST_DEPS := dipibim dipixmltv dipitvhead dipiradiohead dipirec dipidescramble dipisds dipibcg dipimetrics dipifccret
+ifeq ($(HAVE_OPENSSL),yes)
+INTEGRATION_TEST_DEPS += dipicam378
+endif
 
 .PHONY: integration-test
-integration-test: dipibim dipixmltv dipitvhead dipiradiohead dipirec dipidescramble dipisds dipibcg dipimetrics
+integration-test: $(INTEGRATION_TEST_DEPS)
 	@set -e; \
 	for s in $(INTEGRATION_DIPIBIM_SCRIPTS); do echo "running $$s"; sh $$s ./dipibim; done; \
 	for s in $(INTEGRATION_DIPIXMLTV_SCRIPTS); do echo "running $$s"; sh $$s ./dipixmltv; done; \
@@ -1619,7 +2050,13 @@ integration-test: dipibim dipixmltv dipitvhead dipiradiohead dipirec dipidescram
 	for s in $(INTEGRATION_DIPIRADIOHEAD_SCRIPTS); do echo "running $$s"; sh $$s ./dipiradiohead; done; \
 	for s in $(INTEGRATION_DIPIREC_SCRIPTS); do echo "running $$s"; sh $$s ./dipirec; done; \
 	for s in $(INTEGRATION_DIPIDESCRAMBLE_SCRIPTS); do echo "running $$s"; sh $$s ./dipidescramble; done; \
-	for s in $(INTEGRATION_DIPIMETRICS_SCRIPTS); do echo "running $$s"; sh $$s ./dipimetrics; done
+	for s in $(INTEGRATION_DIPIMETRICS_SCRIPTS); do echo "running $$s"; sh $$s ./dipimetrics; done; \
+	for s in $(INTEGRATION_DIPIFCCRET_SCRIPTS); do echo "running $$s"; sh $$s ./dipifccret; done
+ifeq ($(HAVE_OPENSSL),yes)
+	@set -e; for s in $(INTEGRATION_DIPICAM378_SCRIPTS); do echo "running $$s"; sh $$s ./dipicam378; done
+else
+	@echo "integration-test: OpenSSL not found, skipped dipicam378 integration tests" >&2
+endif
 
 FUZZ_BIM_DEPS := \
 	src/lib/bim/accessunit.c \
@@ -1638,7 +2075,7 @@ FUZZ_BIM_DEPS := \
 # below), 'make clean' finds these paths regardless of current config.mk
 # state - a prior '--fuzz' build's artifacts must clean up even after
 # reconfiguring without --fuzz.
-FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams
+FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_dvbstp
 
 fuzz_psi_BIN := tests/fuzz/fuzz_psi
 fuzz_psi_SRCS := \
@@ -1706,6 +2143,16 @@ fuzz_emmg_datagrams_SRCS := \
 	src/lib/signal.c
 fuzz_emmg_datagrams_EXTRA_LDFLAGS := -pthread
 
+fuzz_dvbstp_BIN := tests/fuzz/fuzz_dvbstp
+fuzz_dvbstp_SRCS := \
+	tests/fuzz/fuzz_dvbstp.c \
+	src/lib/net/dvbstp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/demux/crc32.c \
+	src/lib/signal.c \
+	src/lib/log.c
+
 fuzz_gen_seeds_BIN := tests/fuzz/gen_seeds
 fuzz_gen_seeds_SRCS := \
 	tests/fuzz/gen_seeds.c \
@@ -1715,7 +2162,11 @@ fuzz_gen_seeds_SRCS := \
 	src/lib/demux/rtcp.c \
 	src/lib/demux/crc32.c \
 	src/lib/sds_xml.c \
-	src/lib/cas/simulcrypt_msg.c
+	src/lib/cas/simulcrypt_msg.c \
+	src/lib/net/dvbstp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/signal.c
 
 define FUZZ_TARGET_template
 $(1)_OBJS := $$($(1)_SRCS:.c=.o)

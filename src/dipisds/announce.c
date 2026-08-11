@@ -19,14 +19,6 @@
 #define DOC_CAP 65536
 
 typedef struct {
-  input_t in;
-  unsigned char *broadcast_doc;
-  unsigned char *sp_doc;
-  size_t broadcast_len;
-  size_t sp_len;
-} sds_state_t;
-
-typedef struct {
   unsigned long long documents_generated_total;
   unsigned long long document_errors_total;
   unsigned long long announcements_total;
@@ -52,13 +44,13 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const sds_state_t *
   metrics_exporter_send(mx, &w);
 }
 
-static void state_free(sds_state_t *st) {
+void state_free(sds_state_t *st) {
   free(st->broadcast_doc);
   free(st->sp_doc);
   input_free(&st->in);
 }
 
-static int state_load(const config_t *cfg, sds_state_t *st) {
+int state_load(const config_t *cfg, sds_state_t *st) {
   memset(st, 0, sizeof *st);
   if (input_load(cfg->input_path, &st->in))
     return -1;

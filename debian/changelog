@@ -33,7 +33,7 @@ dvbipitools (2.2.0-1) unstable; urgency=medium
   * dipirec: added --pace and file+stdin input for burstless "-o -" replay
   * dipirec: changed hardcoded stripper to "--strip NUL,AIT,EIT,..."
     + note: defaults, if not set, changed to keep CAT,ECM,EMM (if present)
- -- dvbipitools authors <unspecified@example.com>  Tue, 11 Aug 2026 00:00:00 +0200
+ -- dvbipitools authors <unspecified@example.com>  Wed, 12 Aug 2026 00:00:00 +0200
 
 dvbipitools (2.1.1-1) unstable; urgency=medium
   * test fixes

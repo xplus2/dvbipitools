@@ -17,7 +17,7 @@
 #include "version.h"
 
 /* candidate group address at sweep index i (1..254): base with last byte/octet replaced */
-static void addr_at(const config_t *cfg, unsigned i, char *buf, size_t n) {
+void addr_at(const config_t *cfg, unsigned i, char *buf, size_t n) {
   unsigned char a[16];
   size_t alen = (cfg->family == AF_INET6) ? 16 : 4;
   memcpy(a, cfg->base, alen);
@@ -25,32 +25,9 @@ static void addr_at(const config_t *cfg, unsigned i, char *buf, size_t n) {
   inet_ntop(cfg->family, a, buf, (socklen_t)n);
 }
 
-typedef enum { PROBE_NONE, PROBE_UNNAMED, PROBE_NAMED } probe_kind_t;
-
-typedef struct {
-  unsigned sid;
-  char name[PSI_NAME]; /* "(no SDT)" if this program's name never arrived */
-} scan_program_t;
-
-typedef struct {
-  probe_kind_t kind;
-  int rtp_wrapped; /* -1 unknown (no data), 0 udp, 1 rtp */
-  char name[PSI_NAME];
-  unsigned pkts;
-  unsigned tsid, onid, sid;
-  scan_program_t programs[PSI_MAX_PROGRAMS]; /* -M only */
-  int program_count;                         /* -M only */
-} probe_result_t;
-
-typedef struct {
-  psi_t *psi;
-  unsigned pkts;
-  int multi;
-} probe_ctx_t;
-
 /* -M: every PAT-listed program named. a program stuck at pmt-resolved-but-nameless still exits early once
    quiet/timeout deadline hits. this only short-circuits when everything's in. */
-static int multi_all_named(const psi_t *psi) {
+int multi_all_named(const psi_t *psi) {
   int i, count;
   const psi_multi_program_t *m;
   if (!psi_have_pat(psi))
@@ -64,7 +41,7 @@ static int multi_all_named(const psi_t *psi) {
   return 1;
 }
 
-static int probe_cb(void *v, const unsigned char *pkt) {
+int probe_cb(void *v, const unsigned char *pkt) {
   probe_ctx_t *pc = v;
   pc->pkts++;
   psi_feed(pc->psi, pkt);
@@ -73,16 +50,13 @@ static int probe_cb(void *v, const unsigned char *pkt) {
   return (psi_have_pat(pc->psi) && psi_service_name(pc->psi)[0]) ? 1 : 0;
 }
 
-typedef ssize_t (*chan_read_fn)(void *ctx, unsigned char *buf, size_t cap);
-
 static ssize_t mcast_read_adapter(void *ctx, unsigned char *buf, size_t cap) { return mcast_recv((mcast_t *)ctx, buf, cap, NULL); }
 static ssize_t udpxy_read_adapter(void *ctx, unsigned char *buf, size_t cap) { return udpxy_read((udpxy_t *)ctx, buf, cap, NULL); }
 
 /* budget until first packet, dead addrs bail early */
 #define PROBE_QUIET_MS 300
 
-/* read until named (or, with multi, every PAT program resolved), timeout, or interrupted */
-static void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_result_t *r) {
+void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_result_t *r) {
   unsigned char buf[65536];
   tspack_t pz;
   probe_ctx_t pc;

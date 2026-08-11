@@ -95,7 +95,7 @@ static void gap_shift(ret_client_t *r) {
   r->expected_seq++;
 }
 
-static void flush_ready(ret_client_t *r, double now) {
+void flush_ready(ret_client_t *r, double now) {
   while (r->gap_pending) {
     if (r->hold[0].used) {
       outq_push(r, r->hold[0].data, r->hold[0].len);
@@ -213,7 +213,7 @@ static void handle_original_seq(ret_client_t *r, uint16_t seq, const unsigned ch
   }
 }
 
-static void on_original(ret_client_t *r, const rtp_hdr_t *hdr, const unsigned char *payload, size_t len, double now) {
+void on_original(ret_client_t *r, const rtp_hdr_t *hdr, const unsigned char *payload, size_t len, double now) {
   if (!r->have_ssrc || hdr->ssrc != r->ssrc) {
     if (r->have_ssrc)
       log_line("ret: ssrc changed (0x%08x -> 0x%08x), resetting gap tracking", (unsigned)r->ssrc, (unsigned)hdr->ssrc);
@@ -227,7 +227,7 @@ static void on_original(ret_client_t *r, const rtp_hdr_t *hdr, const unsigned ch
   flush_ready(r, now);
 }
 
-static void on_repair(ret_client_t *r, const unsigned char *pkt, size_t len, double now) {
+void on_repair(ret_client_t *r, const unsigned char *pkt, size_t len, double now) {
   rtx_pkt_t rx;
   int16_t delta;
 

@@ -110,7 +110,7 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
   return 0;
 }
 
-static int stop_now(const config_t *cfg, double start) {
+int stop_now(const config_t *cfg, double start) {
   if (signal_stop_requested())
     return 1;
   return cfg->duration_s && mono_seconds() - start >= (double)cfg->duration_s;
@@ -132,7 +132,7 @@ static int raw_cb(void *v, const unsigned char *pkt) {
 }
 
 /* clamp: keeps formatted length bounded */
-static void fmt_dur(double secs, char *buf, size_t n) {
+void fmt_dur(double secs, char *buf, size_t n) {
   long s, h, m;
   s = (secs > 0.0) ? (long)secs : 0;
   if (s < 0)

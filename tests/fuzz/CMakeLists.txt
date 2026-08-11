@@ -73,6 +73,15 @@ dvbipitools_add_fuzz_harness(emmg_datagrams
     ${CMAKE_SOURCE_DIR}/src/lib/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
+dvbipitools_add_fuzz_harness(dvbstp
+    fuzz_dvbstp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
 # ecmg_client.c/emmg_server.c pull in real pthread usage even though fuzzed
 # functions themselves are pure. link Threads on both like dipitvhead itself does
 find_package(Threads REQUIRED)
@@ -88,4 +97,8 @@ add_executable(fuzz_gen_seeds
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtcp.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/sds_xml.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
