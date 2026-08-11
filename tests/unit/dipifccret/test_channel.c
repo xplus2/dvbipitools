@@ -11,7 +11,7 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#include "dipifccret/channel.h"
+#include "dipifccret/channel/channel.h"
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
 

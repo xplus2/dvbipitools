@@ -9,7 +9,7 @@
 #include "lib/signal.h"
 
 #include "args.h"
-#include "cs378x.h"
+#include "cs378x/cs378x.h"
 #include "device.h"
 #include "version.h"
 

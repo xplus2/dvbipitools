@@ -15,7 +15,7 @@
 
 #include "cas_group.h"
 #include "cas_scramble_engine.h"
-#include "emmg_server.h"
+#include "emmg_server/emmg_server.h"
 
 #define CAS_GROUP_CW_HIST 8 /* rolling cache, keyed by shared epoch - lookahead depth across vendors */
 

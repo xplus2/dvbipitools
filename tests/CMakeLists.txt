@@ -18,15 +18,17 @@ dvbipitools_add_unit_test(lib_demux_crc32
 
 dvbipitools_add_unit_test(lib_demux_psi
     unit/lib/demux/test_psi.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(lib_demux_psi_section_asm
     unit/lib/demux/test_psi_section_asm.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c)
 
 dvbipitools_add_unit_test(lib_demux_bitreader
@@ -54,17 +56,21 @@ dvbipitools_add_unit_test(lib_demux_pes
 dvbipitools_add_unit_test(lib_mux_psi_build
     unit/lib/mux/test_psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(lib_demux_mpts_probe
     unit/lib/demux/test_mpts_probe.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/mpts_probe.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
@@ -125,9 +131,11 @@ dvbipitools_add_unit_test(lib_mux_mkv
     ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
@@ -266,7 +274,10 @@ if (OpenSSL_FOUND)
 
     dvbipitools_add_unit_test(dipicam378_cs378x
         unit/dipicam378/test_cs378x.c
-        ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x.c
+        ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/cs378x.c
+        ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/protocol.c
+        ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/worker.c
         ${CMAKE_SOURCE_DIR}/src/lib/log.c
         ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
     target_link_libraries(test_dipicam378_cs378x PRIVATE OpenSSL::Crypto Threads::Threads)
@@ -416,9 +427,11 @@ dvbipitools_add_unit_test(dipiradiohead_psi
     unit/dipiradiohead/test_psi.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/mux/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
@@ -441,16 +454,23 @@ dvbipitools_add_unit_test(dipiradiohead_tspacketizer
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/mux/pes.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cas/cas.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/cadescbuild.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
@@ -518,9 +538,11 @@ dvbipitools_add_unit_test(lib_mux_mpts
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mpts.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
@@ -528,15 +550,22 @@ dvbipitools_add_unit_test(dipiradiohead_cas
     unit/dipiradiohead/test_cas.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cas/cas.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/cadescbuild.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
@@ -569,9 +598,11 @@ dvbipitools_add_unit_test(dipitvhead_pmtbuild
     unit/dipitvhead/test_pmtbuild.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/pmtbuild.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
@@ -593,16 +624,23 @@ dvbipitools_add_unit_test(dipitvhead_remux
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/aitbuild.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/cas.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/cadescbuild.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
@@ -618,20 +656,27 @@ dvbipitools_add_unit_test(dipitvhead_simulcrypt_msg
     unit/dipitvhead/test_simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(dipitvhead_ecmg_client
     unit/dipitvhead/test_ecmg_client.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
@@ -641,12 +686,16 @@ dvbipitools_add_unit_test(dipitvhead_ecmg_client
 
 dvbipitools_add_unit_test(dipitvhead_emmg_server
     unit/dipitvhead/test_emmg_server.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
@@ -654,16 +703,23 @@ dvbipitools_add_unit_test(dipitvhead_emmg_server
 dvbipitools_add_unit_test(dipitvhead_cas
     unit/dipitvhead/test_cas.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/cas.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/cadescbuild.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
@@ -678,15 +734,22 @@ dvbipitools_add_unit_test(dipitvhead_cas
 dvbipitools_add_unit_test(lib_cas_cas_group
     unit/lib/cas/test_cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/cadescbuild.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
@@ -697,9 +760,11 @@ dvbipitools_add_unit_test(lib_cas_cas_group
 dvbipitools_add_unit_test(dipirec_ts_filter
     unit/dipirec/test_ts_filter.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
@@ -710,10 +775,14 @@ dvbipitools_add_unit_test(dipirec_pace
 
 dvbipitools_add_unit_test(dipifccret_channel
     unit/dipifccret/test_channel.c
-    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/hash.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/ring.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
@@ -728,20 +797,27 @@ dvbipitools_add_unit_test(dipifccret_ret_mcsend
 
 dvbipitools_add_unit_test(dipifccret_capture
     unit/dipifccret/test_capture.c
-    ${CMAKE_SOURCE_DIR}/src/dipifccret/capture.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/capture.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/ranges.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/bpf.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/frame.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
 dvbipitools_add_unit_test(dipifccret_burst
     unit/dipifccret/test_burst.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/fcc/burst.c
-    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/hash.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/ring.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtx.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtx.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
@@ -789,15 +865,19 @@ endforeach()
 dvbipitools_add_unit_test(dipifccret_ret
     unit/dipifccret/test_ret.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ret.c
-    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/hash.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/ring.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtcp.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtcp_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtx.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtx.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)

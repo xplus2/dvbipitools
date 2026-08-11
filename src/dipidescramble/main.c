@@ -11,8 +11,8 @@
 #include "lib/cas/biss/biss.h"
 #include "lib/cas/biss/ca.h"
 #include "lib/demux/mpts_probe.h"
-#include "lib/demux/psi.h"
-#include "lib/demux/psi_section_asm.h"
+#include "lib/demux/psi/psi.h"
+#include "lib/demux/psi/section_asm.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
 #include "lib/mux/mkv/mkv.h"
@@ -258,18 +258,18 @@ static int pkt_cb(void *v, const unsigned char *pkt) {
     }
   }
 
-  /* lc->scr may have just been created above - checked here so this pid's first-ever ECM section isn't missed */
+  /* BISS 1/E signaling pid also classifies PID_ECM. guard lc->dev, not just lc->biss_ca */
   if (lc->ecm_pid && pid == lc->ecm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_feed(&lc->ecm_asm, pl, plen, pusi) && lc->scr) {
     if (lc->biss_ca)
       handle_biss_ca_ecm_section(lc);
-    else
+    else if (lc->dev)
       handle_ecm_section(lc);
   }
 
   if (lc->emm_pid && pid == lc->emm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_feed(&lc->emm_asm, pl, plen, pusi)) {
     if (lc->biss_ca) {
       biss_ca_state_on_emm(lc->biss_ca, lc->emm_asm.buf, lc->emm_asm.expect);
-    } else if (emmcache_feed(lc->cache, lc->dev, lc->emm_asm.buf, lc->emm_asm.expect)) {
+    } else if (lc->dev && emmcache_feed(lc->cache, lc->dev, lc->emm_asm.buf, lc->emm_asm.expect)) {
       emmcache_save(lc->cache, lc->emm_file);
     }
   }

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/demux/psi_section_asm.h"
+#include "lib/demux/psi/section_asm.h"
 #include "lib/ioutil.h"
 #include "lib/log.h"
 #include "lib/net/httpclient/httpclient.h"

@@ -7,8 +7,10 @@ endfunction()
 
 dvbipitools_add_fuzz_harness(psi
     fuzz_psi.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi_section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
@@ -47,7 +49,10 @@ dvbipitools_add_fuzz_harness(simulcrypt_msg
 
 dvbipitools_add_fuzz_harness(ecmg_channel_status
     fuzz_ecmg_channel_status.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -59,7 +64,9 @@ dvbipitools_add_fuzz_harness(ecmg_channel_status
 
 dvbipitools_add_fuzz_harness(emmg_datagrams
     fuzz_emmg_datagrams.c
-    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c

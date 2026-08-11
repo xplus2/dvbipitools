@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dipicam378/cs378x.h"
+#include "dipicam378/cs378x/cs378x.h"
 
 START_TEST(crc32_matches_standard_check_value) {
   /* "123456789" -> 0xCBF43926 is the universal CRC-32/ISO-HDLC check value,

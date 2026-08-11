@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "../channel.h"
+#include "../channel/channel.h"
 #include "lib/net/multicast.h"
 
 typedef struct mcsend_table mcsend_table_t;

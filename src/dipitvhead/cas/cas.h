@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 #include "lib/cas/cas_group.h"
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 #include "lib/scrambler/scrambler.h"
 
 #include "../args.h"

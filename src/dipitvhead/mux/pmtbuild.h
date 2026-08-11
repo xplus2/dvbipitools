@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 
 #define OUT_PID_PAT 0x0000
 #define OUT_PID_CAT 0x0001

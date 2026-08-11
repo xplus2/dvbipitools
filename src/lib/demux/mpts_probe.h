@@ -5,7 +5,7 @@
 #define DVBIPITOOLS_LIB_DEMUX_MPTS_PROBE_H
 
 #include "lib/net/tssource.h"
-#include "psi.h"
+#include "psi/psi.h"
 
 typedef struct {
   unsigned program_number;

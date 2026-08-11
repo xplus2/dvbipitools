@@ -9,7 +9,7 @@
 
 #include "dipiradiohead/mux/psi.h"
 #include "lib/demux/crc32.h"
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 #include "lib/mux/psi_build.h"
 
 /* wraps one PSI section into a single 188-byte TS packet, pusi=1, pointer=0 */

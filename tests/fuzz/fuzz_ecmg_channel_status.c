@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "lib/cas/ecmg_client.h"
+#include "lib/cas/ecmg_client/ecmg_client.h"
 
 int main(int argc, char **argv) {
   FILE *f;

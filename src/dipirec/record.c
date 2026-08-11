@@ -11,7 +11,7 @@
 #include "filter/pace.h"
 #include "filter/ts.h"
 #include "lib/demux/mpts_probe.h"
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
 #include "lib/net/tssource.h"

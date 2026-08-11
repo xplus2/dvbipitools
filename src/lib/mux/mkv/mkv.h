@@ -4,7 +4,7 @@
 #ifndef DVBIPITOOLS_LIB_MUX_MKV_H
 #define DVBIPITOOLS_LIB_MUX_MKV_H
 
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 
 typedef struct {
   int audio_all;           /* mux every audio track, not just audio_track */

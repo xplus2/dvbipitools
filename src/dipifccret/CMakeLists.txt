@@ -8,8 +8,13 @@ find_package(Threads REQUIRED)
 add_executable(dipifccret
     main.c
     args.c
-    capture.c
-    channel.c
+    capture/capture.c
+    capture/ranges.c
+    capture/bpf.c
+    capture/frame.c
+    channel/channel.c
+    channel/hash.c
+    channel/ring.c
     listen.c
     ret/ret.c
     ret/mcsend.c
@@ -21,8 +26,10 @@ add_executable(dipifccret
     ../lib/net/netconnect.c
     ../lib/demux/rtp.c
     ../lib/demux/rtcp.c
-    ../lib/demux/psi.c
-    ../lib/demux/psi_section_asm.c
+    ../lib/demux/psi/psi.c
+    ../lib/demux/psi/parse.c
+    ../lib/demux/psi/descriptors.c
+    ../lib/demux/psi/section_asm.c
     ../lib/demux/tspack.c
     ../lib/demux/crc32.c
     ../lib/mux/rtcp_build.c

@@ -70,7 +70,9 @@ endif ()
 add_executable(dipiradiohead
     main.c
     args.c
-    radiohead.c
+    radiohead/radiohead.c
+    radiohead/metrics.c
+    radiohead/mpts.c
     ../lib/log.c
     ../lib/argutil.c
     ../lib/signal.c
@@ -102,8 +104,13 @@ add_executable(dipiradiohead
     ../lib/mux/cadescbuild.c
     ../lib/cas/cas_args.c
     ../lib/cas/simulcrypt_msg.c
-    ../lib/cas/ecmg_client.c
-    ../lib/cas/emmg_server.c
+    ../lib/cas/ecmg_client/ecmg_client.c
+    ../lib/cas/ecmg_client/protocol.c
+    ../lib/cas/ecmg_client/connect.c
+    ../lib/cas/ecmg_client/run.c
+    ../lib/cas/emmg_server/emmg_server.c
+    ../lib/cas/emmg_server/protocol.c
+    ../lib/cas/emmg_server/worker.c
     ../lib/cas/cas_group.c
     ../lib/cas/cas_scramble_engine.c
     ../lib/mux/rtpheader.c

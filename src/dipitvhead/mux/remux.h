@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 #include "lib/mux/psi_build.h"
 
 #include "../args.h"

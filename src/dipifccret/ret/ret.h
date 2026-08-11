@@ -10,7 +10,7 @@
 
 #include "lib/demux/rtcp.h"
 
-#include "../channel.h"
+#include "../channel/channel.h"
 
 /* F.9 IP_TOS byte values (DSCP << 2); fixed video-bearer mark, not a mirror of the original packet's own DSCP */
 #define RET_DSCP_RTX  (0x22 << 2) /* 0b100010 */

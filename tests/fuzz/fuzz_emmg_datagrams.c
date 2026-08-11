@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "lib/cas/emmg_server.h"
+#include "lib/cas/emmg_server/emmg_server.h"
 
 static void noop_cb(const unsigned char *data, unsigned short len, void *user) {
   (void)data;

@@ -11,7 +11,7 @@
 #include "lib/demux/rtcp.h"
 #include "lib/mux/rtx.h"
 
-#include "../channel.h"
+#include "../channel/channel.h"
 
 /* RAMS-I codes used; 401/402/404/504-506/511/100 unimplemented */
 typedef enum {

@@ -10,7 +10,7 @@
 #include "lib/cas/biss/ca_engine.h"
 #include "lib/cas/cas_group.h"
 #include "lib/cas/cas_scramble_engine.h"
-#include "lib/cas/ecmg_client.h"
+#include "lib/cas/ecmg_client/ecmg_client.h"
 #include "lib/log.h"
 #include "lib/mux/cadescbuild.h"
 #include "lib/mux/psi_build.h"

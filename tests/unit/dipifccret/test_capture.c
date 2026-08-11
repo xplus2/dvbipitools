@@ -10,7 +10,7 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#include "dipifccret/capture.h"
+#include "dipifccret/capture/capture.h"
 
 typedef struct {
   int called;

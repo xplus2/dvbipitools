@@ -1,0 +1,59 @@
+/* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
+ * See NOTICE and LICENSE for details and authorship information. */
+
+#ifndef DIPIRADIOHEAD_RADIOHEAD_PRIV_H
+#define DIPIRADIOHEAD_RADIOHEAD_PRIV_H
+
+#include <stdint.h>
+
+#include "lib/mux/mpts.h"
+#include "lib/mux/rtpheader.h"
+#include "lib/net/multicast.h"
+
+#include "../cas/cas.h"
+#include "../input/source.h"
+#include "radiohead.h"
+
+#define TS_PER_DGRAM 7
+
+typedef struct {
+  mcast_t *mc;
+  int rtp;
+  rtpheader_t *rtph;
+  uint64_t cur_pts;
+  unsigned char batch[12 + TS_PER_DGRAM * 188]; /* [0,12): RTP header headroom, unused if !rtp */
+  int batch_count;
+  int had_error;
+  unsigned long long packets;
+  unsigned long long errors;
+} out_ctx_t;
+
+/* tool-wide, not per-input - matches the spec's unlabeled radio_* metric names */
+typedef struct {
+  unsigned long long frames_total[3]; /* indexed by source_codec_t */
+  unsigned long long framing_errors_total;
+  unsigned long long metadata_updates_total;
+} radio_metrics_t;
+
+typedef struct {
+  char artist[256], title[256];
+  int dirty;
+  radio_metrics_t *rm; /* shared, not owned */
+} meta_state_t;
+
+/* radiohead.c */
+void meta_cb(void *ctx, const char *artist, const char *title);
+void flush_batch(out_ctx_t *o);
+void packet_cb(void *ctx, const unsigned char *pkt188);
+const char *codec_name(source_codec_t c);
+
+/* metrics.c */
+void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
+                   const input_metrics_t *inputs, unsigned n_inputs, const radio_metrics_t *rm, cas_t *cas);
+void radiohead_mpts_set_cas(mpts_t *mpts, cas_t *cas);
+extern const mpts_program_ops_t mpts_program_ops;
+
+/* mpts.c */
+int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx);
+
+#endif

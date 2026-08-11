@@ -18,6 +18,8 @@ add_executable(dipiscan
     ../lib/net/udpxy.c
     ../lib/demux/rtp.c
     ../lib/demux/crc32.c
-    ../lib/demux/psi.c
-    ../lib/demux/psi_section_asm.c
+    ../lib/demux/psi/psi.c
+    ../lib/demux/psi/parse.c
+    ../lib/demux/psi/descriptors.c
+    ../lib/demux/psi/section_asm.c
     ../lib/demux/tspack.c)

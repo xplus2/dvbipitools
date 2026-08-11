@@ -17,8 +17,8 @@
 #include "lib/signal.h"
 
 #include "args.h"
-#include "capture.h"
-#include "channel.h"
+#include "capture/capture.h"
+#include "channel/channel.h"
 #include "fcc/burst.h"
 #include "listen.h"
 #include "ret/mcsend.h"

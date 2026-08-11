@@ -4,7 +4,7 @@
 #ifndef DIPIREC_FILTER_TS_H
 #define DIPIREC_FILTER_TS_H
 
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 
 typedef struct ts_filter ts_filter_t;
 

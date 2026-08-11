@@ -37,8 +37,10 @@ dipiscan_SRCS := \
 	src/lib/net/udpxy.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/crc32.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c
 
 dipisds_SRCS := \
@@ -174,8 +176,10 @@ dipirec_SRCS := \
 	src/lib/demux/rtp.c \
 	src/lib/demux/rtx.c \
 	src/lib/demux/crc32.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/pes.c \
 	src/lib/demux/mpts_probe.c \
@@ -239,7 +243,9 @@ dipiradiohead_EXTRA_LDFLAGS += -pthread
 dipiradiohead_SRCS := \
 	src/dipiradiohead/main.c \
 	src/dipiradiohead/args.c \
-	src/dipiradiohead/radiohead.c \
+	src/dipiradiohead/radiohead/radiohead.c \
+	src/dipiradiohead/radiohead/metrics.c \
+	src/dipiradiohead/radiohead/mpts.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/signal.c \
@@ -271,8 +277,13 @@ dipiradiohead_SRCS := \
 	src/lib/mux/cadescbuild.c \
 	src/lib/cas/cas_args.c \
 	src/lib/cas/simulcrypt_msg.c \
-	src/lib/cas/ecmg_client.c \
-	src/lib/cas/emmg_server.c \
+	src/lib/cas/ecmg_client/ecmg_client.c \
+	src/lib/cas/ecmg_client/protocol.c \
+	src/lib/cas/ecmg_client/connect.c \
+	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/emmg_server/emmg_server.c \
+	src/lib/cas/emmg_server/protocol.c \
+	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/mux/rtpheader.c \
@@ -335,11 +346,11 @@ dipitvhead_EXTRA_LDFLAGS += -pthread
 dipitvhead_SRCS := \
 	src/dipitvhead/main.c \
 	src/dipitvhead/args.c \
-	src/dipitvhead/tvhead.c \
-	src/dipitvhead/tvhead_discover.c \
-	src/dipitvhead/tvhead_output.c \
-	src/dipitvhead/tvhead_single.c \
-	src/dipitvhead/tvhead_mpts.c \
+	src/dipitvhead/tvhead/tvhead.c \
+	src/dipitvhead/tvhead/discover.c \
+	src/dipitvhead/tvhead/output.c \
+	src/dipitvhead/tvhead/single.c \
+	src/dipitvhead/tvhead/mpts.c \
 	src/dipitvhead/input/source.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
@@ -349,8 +360,13 @@ dipitvhead_SRCS := \
 	src/lib/mux/cadescbuild.c \
 	src/lib/cas/cas_args.c \
 	src/lib/cas/simulcrypt_msg.c \
-	src/lib/cas/ecmg_client.c \
-	src/lib/cas/emmg_server.c \
+	src/lib/cas/ecmg_client/ecmg_client.c \
+	src/lib/cas/ecmg_client/protocol.c \
+	src/lib/cas/ecmg_client/connect.c \
+	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/emmg_server/emmg_server.c \
+	src/lib/cas/emmg_server/protocol.c \
+	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/log.c \
@@ -370,8 +386,10 @@ dipitvhead_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/demux/crc32.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/rtp.c \
 	src/lib/mux/rtpheader.c \
@@ -397,8 +415,13 @@ dipifccret_EXTRA_LDFLAGS := -pthread -latomic
 dipifccret_SRCS := \
 	src/dipifccret/main.c \
 	src/dipifccret/args.c \
-	src/dipifccret/capture.c \
-	src/dipifccret/channel.c \
+	src/dipifccret/capture/capture.c \
+	src/dipifccret/capture/ranges.c \
+	src/dipifccret/capture/bpf.c \
+	src/dipifccret/capture/frame.c \
+	src/dipifccret/channel/channel.c \
+	src/dipifccret/channel/hash.c \
+	src/dipifccret/channel/ring.c \
 	src/dipifccret/listen.c \
 	src/dipifccret/ret/ret.c \
 	src/dipifccret/ret/mcsend.c \
@@ -410,8 +433,10 @@ dipifccret_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/rtcp.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/mux/rtcp_build.c \
@@ -428,7 +453,10 @@ endif
 dipicam378_SRCS := \
 	src/dipicam378/main.c \
 	src/dipicam378/args.c \
-	src/dipicam378/cs378x.c \
+	src/dipicam378/cs378x/cs378x.c \
+	src/dipicam378/cs378x/crypto.c \
+	src/dipicam378/cs378x/protocol.c \
+	src/dipicam378/cs378x/worker.c \
 	src/dipicam378/crypto.c \
 	src/dipicam378/device.c \
 	src/lib/log.c \
@@ -479,8 +507,10 @@ dipidescramble_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/ioutil.c \
 	src/lib/demux/crc32.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/pes.c \
@@ -633,7 +663,10 @@ UNIT_TESTS += dipicam378_cs378x
 dipicam378_cs378x_BIN := tests/unit/dipicam378/test_cs378x
 dipicam378_cs378x_SRCS := \
 	tests/unit/dipicam378/test_cs378x.c \
-	src/dipicam378/cs378x.c \
+	src/dipicam378/cs378x/cs378x.c \
+	src/dipicam378/cs378x/crypto.c \
+	src/dipicam378/cs378x/protocol.c \
+	src/dipicam378/cs378x/worker.c \
 	src/lib/log.c \
 	src/lib/signal.c
 dipicam378_cs378x_EXTRA_CFLAGS := -pthread $(shell pkg-config --cflags openssl)
@@ -725,24 +758,28 @@ lib_demux_crc32_SRCS := \
 lib_demux_psi_BIN := tests/unit/lib/demux/test_psi
 lib_demux_psi_SRCS := \
 	tests/unit/lib/demux/test_psi.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
 lib_demux_psi_section_asm_BIN := tests/unit/lib/demux/test_psi_section_asm
 lib_demux_psi_section_asm_SRCS := \
 	tests/unit/lib/demux/test_psi_section_asm.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c
 
 lib_demux_mpts_probe_BIN := tests/unit/lib/demux/test_mpts_probe
 lib_demux_mpts_probe_SRCS := \
 	tests/unit/lib/demux/test_mpts_probe.c \
 	src/lib/demux/mpts_probe.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/mux/psi_build.c \
@@ -791,9 +828,11 @@ lib_mux_psi_build_BIN := tests/unit/lib/mux/test_psi_build
 lib_mux_psi_build_SRCS := \
 	tests/unit/lib/mux/test_psi_build.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
@@ -847,9 +886,11 @@ lib_mux_mkv_SRCS := \
 	src/lib/mux/teletext.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/pes.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
@@ -994,9 +1035,11 @@ dipiradiohead_psi_SRCS := \
 	tests/unit/dipiradiohead/test_psi.c \
 	src/dipiradiohead/mux/psi.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
@@ -1022,16 +1065,23 @@ dipiradiohead_tspacketizer_SRCS := \
 	src/dipiradiohead/mux/pes.c \
 	src/dipiradiohead/cas/cas.c \
 	src/lib/mux/cadescbuild.c \
-	src/lib/cas/ecmg_client.c \
-	src/lib/cas/emmg_server.c \
+	src/lib/cas/ecmg_client/ecmg_client.c \
+	src/lib/cas/ecmg_client/protocol.c \
+	src/lib/cas/ecmg_client/connect.c \
+	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/emmg_server/emmg_server.c \
+	src/lib/cas/emmg_server/protocol.c \
+	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
@@ -1048,15 +1098,22 @@ dipiradiohead_cas_SRCS := \
 	tests/unit/dipiradiohead/test_cas.c \
 	src/dipiradiohead/cas/cas.c \
 	src/lib/mux/cadescbuild.c \
-	src/lib/cas/ecmg_client.c \
-	src/lib/cas/emmg_server.c \
+	src/lib/cas/ecmg_client/ecmg_client.c \
+	src/lib/cas/ecmg_client/protocol.c \
+	src/lib/cas/ecmg_client/connect.c \
+	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/emmg_server/emmg_server.c \
+	src/lib/cas/emmg_server/protocol.c \
+	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
@@ -1128,9 +1185,11 @@ lib_mux_mpts_SRCS := \
 	src/lib/mux/mpts.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
@@ -1157,9 +1216,11 @@ dipitvhead_pmtbuild_SRCS := \
 	tests/unit/dipitvhead/test_pmtbuild.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
@@ -1184,16 +1245,23 @@ dipitvhead_remux_SRCS := \
 	src/dipitvhead/mux/aitbuild.c \
 	src/dipitvhead/cas/cas.c \
 	src/lib/mux/cadescbuild.c \
-	src/lib/cas/ecmg_client.c \
-	src/lib/cas/emmg_server.c \
+	src/lib/cas/ecmg_client/ecmg_client.c \
+	src/lib/cas/ecmg_client/protocol.c \
+	src/lib/cas/ecmg_client/connect.c \
+	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/emmg_server/emmg_server.c \
+	src/lib/cas/emmg_server/protocol.c \
+	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
@@ -1208,12 +1276,17 @@ dipitvhead_remux_SRCS := \
 dipitvhead_ecmg_client_BIN := tests/unit/dipitvhead/test_ecmg_client
 dipitvhead_ecmg_client_SRCS := \
 	tests/unit/dipitvhead/test_ecmg_client.c \
-	src/lib/cas/ecmg_client.c \
+	src/lib/cas/ecmg_client/ecmg_client.c \
+	src/lib/cas/ecmg_client/protocol.c \
+	src/lib/cas/ecmg_client/connect.c \
+	src/lib/cas/ecmg_client/run.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
@@ -1224,12 +1297,16 @@ dipitvhead_ecmg_client_SRCS := \
 dipitvhead_emmg_server_BIN := tests/unit/dipitvhead/test_emmg_server
 dipitvhead_emmg_server_SRCS := \
 	tests/unit/dipitvhead/test_emmg_server.c \
-	src/lib/cas/emmg_server.c \
+	src/lib/cas/emmg_server/emmg_server.c \
+	src/lib/cas/emmg_server/protocol.c \
+	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c \
 	src/lib/signal.c
@@ -1239,9 +1316,11 @@ dipitvhead_simulcrypt_msg_SRCS := \
 	tests/unit/dipitvhead/test_simulcrypt_msg.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
@@ -1249,16 +1328,23 @@ dipitvhead_cas_BIN := tests/unit/dipitvhead/test_cas
 dipitvhead_cas_SRCS := \
 	tests/unit/dipitvhead/test_cas.c \
 	src/dipitvhead/cas/cas.c \
-	src/lib/cas/ecmg_client.c \
-	src/lib/cas/emmg_server.c \
+	src/lib/cas/ecmg_client/ecmg_client.c \
+	src/lib/cas/ecmg_client/protocol.c \
+	src/lib/cas/ecmg_client/connect.c \
+	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/emmg_server/emmg_server.c \
+	src/lib/cas/emmg_server/protocol.c \
+	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/mux/cadescbuild.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
@@ -1341,15 +1427,22 @@ lib_cas_cas_group_BIN := tests/unit/lib/cas/test_cas_group
 lib_cas_cas_group_SRCS := \
 	tests/unit/lib/cas/test_cas_group.c \
 	src/lib/cas/cas_group.c \
-	src/lib/cas/ecmg_client.c \
-	src/lib/cas/emmg_server.c \
+	src/lib/cas/ecmg_client/ecmg_client.c \
+	src/lib/cas/ecmg_client/protocol.c \
+	src/lib/cas/ecmg_client/connect.c \
+	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/emmg_server/emmg_server.c \
+	src/lib/cas/emmg_server/protocol.c \
+	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/mux/cadescbuild.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
@@ -1361,9 +1454,11 @@ dipirec_ts_filter_BIN := tests/unit/dipirec/test_ts_filter
 dipirec_ts_filter_SRCS := \
 	tests/unit/dipirec/test_ts_filter.c \
 	src/dipirec/filter/ts.c \
-	src/lib/demux/psi.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/tspack.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
 
@@ -1376,10 +1471,14 @@ dipirec_pace_SRCS := \
 dipifccret_channel_BIN := tests/unit/dipifccret/test_channel
 dipifccret_channel_SRCS := \
 	tests/unit/dipifccret/test_channel.c \
-	src/dipifccret/channel.c \
+	src/dipifccret/channel/channel.c \
+	src/dipifccret/channel/hash.c \
+	src/dipifccret/channel/ring.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
@@ -1397,13 +1496,17 @@ dipifccret_burst_BIN := tests/unit/dipifccret/test_burst
 dipifccret_burst_SRCS := \
 	tests/unit/dipifccret/test_burst.c \
 	src/dipifccret/fcc/burst.c \
-	src/dipifccret/channel.c \
+	src/dipifccret/channel/channel.c \
+	src/dipifccret/channel/hash.c \
+	src/dipifccret/channel/ring.c \
 	src/lib/mux/rtx.c \
 	src/lib/demux/rtx.c \
 	src/lib/demux/rtp.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
@@ -1412,15 +1515,19 @@ dipifccret_ret_BIN := tests/unit/dipifccret/test_ret
 dipifccret_ret_SRCS := \
 	tests/unit/dipifccret/test_ret.c \
 	src/dipifccret/ret/ret.c \
-	src/dipifccret/channel.c \
+	src/dipifccret/channel/channel.c \
+	src/dipifccret/channel/hash.c \
+	src/dipifccret/channel/ring.c \
 	src/lib/demux/rtcp.c \
 	src/lib/mux/rtcp_build.c \
 	src/lib/mux/rtx.c \
 	src/lib/demux/rtx.c \
 	src/lib/demux/rtp.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
@@ -1491,8 +1598,10 @@ FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simul
 fuzz_psi_BIN := tests/fuzz/fuzz_psi
 fuzz_psi_SRCS := \
 	tests/fuzz/fuzz_psi.c \
-	src/lib/demux/psi.c \
-	src/lib/demux/psi_section_asm.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
@@ -1525,7 +1634,10 @@ fuzz_simulcrypt_msg_SRCS := \
 fuzz_ecmg_channel_status_BIN := tests/fuzz/fuzz_ecmg_channel_status
 fuzz_ecmg_channel_status_SRCS := \
 	tests/fuzz/fuzz_ecmg_channel_status.c \
-	src/lib/cas/ecmg_client.c \
+	src/lib/cas/ecmg_client/ecmg_client.c \
+	src/lib/cas/ecmg_client/protocol.c \
+	src/lib/cas/ecmg_client/connect.c \
+	src/lib/cas/ecmg_client/run.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c \
@@ -1539,7 +1651,9 @@ fuzz_ecmg_channel_status_EXTRA_LDFLAGS := -pthread
 fuzz_emmg_datagrams_BIN := tests/fuzz/fuzz_emmg_datagrams
 fuzz_emmg_datagrams_SRCS := \
 	tests/fuzz/fuzz_emmg_datagrams.c \
-	src/lib/cas/emmg_server.c \
+	src/lib/cas/emmg_server/emmg_server.c \
+	src/lib/cas/emmg_server/protocol.c \
+	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c \

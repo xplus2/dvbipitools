@@ -8,7 +8,7 @@
 #include "lib/log.h"
 #include "lib/metrics/export.h"
 #include "lib/signal.h"
-#include "tvhead.h"
+#include "tvhead/tvhead.h"
 #include "version.h"
 
 /* banner prints before parsing: --color read early */

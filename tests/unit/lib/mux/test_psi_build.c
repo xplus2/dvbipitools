@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "lib/demux/crc32.h"
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 #include "lib/mux/psi_build.h"
 
 START_TEST(psi_put16_writes_big_endian) {

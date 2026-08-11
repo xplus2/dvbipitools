@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "lib/demux/crc32.h"
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 
 /* builds a one-program PAT section (table_id 0x00), CRC included, returns length */
 static size_t build_pat(unsigned char *out, unsigned tsid, unsigned prog_num, unsigned pmt_pid) {

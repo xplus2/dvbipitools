@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/demux/psi_section_asm.h"
+#include "lib/demux/psi/section_asm.h"
 
 /* table_id(1) + 2-byte length field (top nibble 0x7) + payload, no CRC - matches
    the plain MPEG-2 private sections ECM/EMM carry on the wire */

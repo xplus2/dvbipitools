@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "lib/cas/ecmg_client.h"
+#include "lib/cas/ecmg_client/ecmg_client.h"
 #include "lib/scrambler/scrambler.h"
 
 #define CAS_GROUP_MAX_VENDORS 8

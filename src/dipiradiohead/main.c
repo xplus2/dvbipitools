@@ -9,7 +9,7 @@
 #include "lib/log.h"
 #include "lib/metrics/export.h"
 #include "lib/signal.h"
-#include "radiohead.h"
+#include "radiohead/radiohead.h"
 #include "version.h"
 
 /* banner prints before parsing: --color read early */

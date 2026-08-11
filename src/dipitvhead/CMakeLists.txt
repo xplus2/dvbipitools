@@ -70,11 +70,11 @@ endif ()
 add_executable(dipitvhead
     main.c
     args.c
-    tvhead.c
-    tvhead_discover.c
-    tvhead_output.c
-    tvhead_single.c
-    tvhead_mpts.c
+    tvhead/tvhead.c
+    tvhead/discover.c
+    tvhead/output.c
+    tvhead/single.c
+    tvhead/mpts.c
     input/source.c
     mux/pmtbuild.c
     mux/aitbuild.c
@@ -84,8 +84,13 @@ add_executable(dipitvhead
     ../lib/mux/cadescbuild.c
     ../lib/cas/cas_args.c
     ../lib/cas/simulcrypt_msg.c
-    ../lib/cas/ecmg_client.c
-    ../lib/cas/emmg_server.c
+    ../lib/cas/ecmg_client/ecmg_client.c
+    ../lib/cas/ecmg_client/protocol.c
+    ../lib/cas/ecmg_client/connect.c
+    ../lib/cas/ecmg_client/run.c
+    ../lib/cas/emmg_server/emmg_server.c
+    ../lib/cas/emmg_server/protocol.c
+    ../lib/cas/emmg_server/worker.c
     ../lib/cas/cas_group.c
     ../lib/cas/cas_scramble_engine.c
     ../lib/log.c
@@ -105,8 +110,10 @@ add_executable(dipitvhead
     ../lib/net/httpclient/async.c
     ../lib/ioutil.c
     ../lib/demux/crc32.c
-    ../lib/demux/psi.c
-    ../lib/demux/psi_section_asm.c
+    ../lib/demux/psi/psi.c
+    ../lib/demux/psi/parse.c
+    ../lib/demux/psi/descriptors.c
+    ../lib/demux/psi/section_asm.c
     ../lib/demux/tspack.c
     ../lib/demux/rtp.c
     ../lib/mux/rtpheader.c

@@ -1,0 +1,295 @@
+/* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
+ * See NOTICE and LICENSE for details and authorship information. */
+
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "lib/demux/tspack.h"
+#include "lib/log.h"
+
+#include "../version.h"
+#include "priv.h"
+
+channel_table_t *channel_table_new(size_t max_channels, size_t ring_slots, size_t cache_cap) {
+  channel_table_t *t;
+  size_t i;
+
+  if (max_channels == 0)
+    max_channels = CHANNEL_DEFAULT_MAX;
+  t = calloc(1, sizeof *t);
+  if (!t)
+    return NULL;
+  t->max_channels = max_channels;
+  t->ring_slots = ring_slots;
+  t->cache_cap = cache_cap;
+  t->chan = calloc(max_channels, sizeof(channel_t));
+  if (!t->chan) {
+    free(t);
+    return NULL;
+  }
+  t->hash_size = next_pow2(max_channels * 2);
+  if (t->hash_size < 4)
+    t->hash_size = 4;
+  t->hash_mask = t->hash_size - 1;
+  t->hash = calloc(t->hash_size, sizeof *t->hash);
+  if (!t->hash) {
+    free(t->chan);
+    free(t);
+    return NULL;
+  }
+  t->ssrc_hash_size = t->hash_size;
+  t->ssrc_hash_mask = t->hash_mask;
+  t->ssrc_hash = calloc(t->ssrc_hash_size, sizeof *t->ssrc_hash);
+  if (!t->ssrc_hash) {
+    free(t->hash);
+    free(t->chan);
+    free(t);
+    return NULL;
+  }
+  for (i = 0; i < max_channels; i++) {
+    if (ring_slots > 0) {
+      t->chan[i].ring = calloc(ring_slots, sizeof(ret_ring_entry_t));
+      if (!t->chan[i].ring)
+        goto fail;
+    }
+    t->chan[i].ring_size = ring_slots;
+    if (cache_cap > 0) {
+      t->chan[i].cache.entries = calloc(cache_cap, sizeof(fcc_ring_entry_t));
+      if (!t->chan[i].cache.entries)
+        goto fail;
+    }
+    t->chan[i].cache.cap = cache_cap;
+  }
+  pthread_mutex_init(&t->lock, NULL);
+  return t;
+
+fail: {
+    size_t j;
+    for (j = 0; j <= i; j++) {
+      free(t->chan[j].ring);
+      free(t->chan[j].cache.entries);
+    }
+    free(t->ssrc_hash);
+    free(t->hash);
+    free(t->chan);
+    free(t);
+    return NULL;
+  }
+}
+
+void channel_table_free(channel_table_t *t) {
+  size_t i;
+  if (!t)
+    return;
+  for (i = 0; i < t->max_channels; i++) {
+    if (t->chan[i].psi)
+      psi_free(t->chan[i].psi);
+    free(t->chan[i].ring);
+    free(t->chan[i].cache.entries);
+  }
+  pthread_mutex_destroy(&t->lock);
+  free(t->ssrc_hash);
+  free(t->hash);
+  free(t->chan);
+  free(t);
+}
+
+/* hash[] is non-atomic shared state: lock covers probe+claim+insert */
+channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size_t addr_len, unsigned port) {
+  size_t i, avail;
+  channel_t *result;
+
+  pthread_mutex_lock(&t->lock);
+  result = chan_hash_probe(t, family, addr, addr_len, port, &avail);
+
+  for (i = 0; !result && i < t->max_channels; i++) {
+    channel_t *c = &t->chan[i];
+    int expected = 0;
+    if (!atomic_compare_exchange_strong_explicit(&c->in_use, &expected, 2, memory_order_acq_rel, memory_order_relaxed))
+      continue;
+
+    {
+      void *saved_ring = c->ring;
+      size_t saved_ring_size = c->ring_size;
+      void *saved_cache_entries = c->cache.entries;
+      size_t saved_cache_cap = c->cache.cap;
+      unsigned saved_generation = atomic_load_explicit(&c->generation, memory_order_relaxed);
+      int was_empty = (t->hash[avail] == 0);
+
+      if (c->psi)
+        psi_free(c->psi);
+      memset(c, 0, sizeof *c);
+      c->ring = saved_ring;
+      c->ring_size = saved_ring_size;
+      c->cache.entries = saved_cache_entries;
+      c->cache.cap = saved_cache_cap;
+      atomic_store_explicit(&c->generation, saved_generation + 1, memory_order_relaxed);
+
+      if (saved_ring) {
+        ret_ring_entry_t *ring = (ret_ring_entry_t *)saved_ring;
+        size_t j;
+        for (j = 0; j < saved_ring_size; j++) {
+          atomic_store_explicit(&ring[j].valid, 0, memory_order_relaxed);
+          atomic_store_explicit(&ring[j].gen, 0, memory_order_relaxed);
+        }
+      }
+      /* FCC cache needs no explicit reset: have_rap/write_count zeroed by memset above */
+
+      c->family = family;
+      c->addr_len = addr_len;
+      memcpy(c->addr, addr, addr_len);
+      if (!inet_ntop(family, addr, c->group, sizeof c->group))
+        c->group[0] = '\0';
+      c->port = port;
+      atomic_store_explicit(&c->last_seen, time(NULL), memory_order_relaxed);
+      atomic_store_explicit(&c->in_use, 1, memory_order_release);
+
+      t->hash[avail] = i + 1;
+      if (was_empty && ++t->hash_used > (t->hash_size / 4) * 3)
+        chan_hash_rebuild(t);
+
+      result = c;
+    }
+  }
+
+  if (!result) {
+    char addrbuf[64];
+    if (!inet_ntop(family, addr, addrbuf, sizeof addrbuf))
+      snprintf(addrbuf, sizeof addrbuf, "?");
+    log_line(TOOL_NAME ": max-channels (%zu) reached, rejecting %s:%u", t->max_channels, addrbuf, port);
+  }
+  pthread_mutex_unlock(&t->lock);
+  return result;
+}
+
+channel_t *channel_find_by_ssrc(channel_table_t *t, uint32_t ssrc) {
+  size_t h;
+  channel_t *result = NULL;
+
+  pthread_mutex_lock(&t->lock);
+  h = chan_ssrc_hash(ssrc) & t->ssrc_hash_mask;
+  for (;;) {
+    size_t slot_plus1 = t->ssrc_hash[h];
+    if (slot_plus1 == 0)
+      break;
+    if (slot_plus1 != CHANNEL_HASH_TOMBSTONE) {
+      channel_t *c = &t->chan[slot_plus1 - 1];
+      if (atomic_load_explicit(&c->in_use, memory_order_acquire) == 1 && atomic_load_explicit(&c->ssrc_known, memory_order_acquire) && atomic_load_explicit(&c->ssrc, memory_order_acquire) == ssrc) {
+        result = c;
+        break;
+      }
+    }
+    h = (h + 1) & t->ssrc_hash_mask;
+  }
+  pthread_mutex_unlock(&t->lock);
+  return result;
+}
+
+void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len) {
+  time_t now = time(NULL);
+  time_t elapsed;
+  uint32_t old_ssrc = atomic_load_explicit(&c->ssrc, memory_order_relaxed);
+  int had_ssrc = atomic_load_explicit(&c->ssrc_known, memory_order_relaxed);
+
+  if (payload_len > CHANNEL_MAX_PAYLOAD) {
+    if (!c->oversized_logged) {
+      log_line(TOOL_NAME ": %s:%u payload %zu exceeds cap (%d), dropping until it fits again", c->group, c->port, payload_len, CHANNEL_MAX_PAYLOAD);
+      c->oversized_logged = 1;
+    }
+    return;
+  }
+  c->oversized_logged = 0;
+
+  if (!had_ssrc || old_ssrc != ssrc) {
+    size_t slot_idx = (size_t)(c - t->chan);
+    pthread_mutex_lock(&t->lock);
+    if (had_ssrc)
+      ssrc_hash_remove(t, slot_idx, old_ssrc);
+    ssrc_hash_insert(t, slot_idx, ssrc);
+    pthread_mutex_unlock(&t->lock);
+  }
+
+  atomic_store_explicit(&c->ssrc, ssrc, memory_order_relaxed);
+  atomic_store_explicit(&c->ssrc_known, 1, memory_order_release);
+  atomic_store_explicit(&c->last_seen, now, memory_order_relaxed);
+
+  if (c->bitrate_window_start == 0)
+    c->bitrate_window_start = now;
+  c->bitrate_window_bytes += payload_len;
+
+  elapsed = now - c->bitrate_window_start;
+  if (elapsed >= CHANNEL_BITRATE_WINDOW_S) {
+    double bps = (double)c->bitrate_window_bytes * 8.0 / (double)elapsed;
+    atomic_store_explicit(&c->nominal_bps, bps, memory_order_relaxed);
+    c->bitrate_window_bytes = 0;
+    c->bitrate_window_start = now;
+  }
+
+  if (c->ring_size > 0)
+    ret_ring_store(c, seq, timestamp, payload, payload_len);
+
+  if (c->cache.cap > 0) {
+    if (!c->psi) {
+      c->psi = psi_new();
+      if (!c->psi)
+        log_line(TOOL_NAME ": out of memory allocating psi state for %s:%u, RAP detection disabled for this packet", c->group, c->port);
+    }
+    if (c->psi) {
+      int is_rap = scan_ts_packets(c->psi, payload, payload_len);
+      rap_cache_append(&c->cache, seq, timestamp, payload, payload_len, is_rap);
+    }
+  }
+}
+
+/* checks+reclaims one slot if stale. caller holds t->lock */
+static void reap_slot(channel_table_t *t, size_t i, time_t now, time_t max_age_s) {
+  channel_t *c = &t->chan[i];
+  time_t last;
+
+  if (atomic_load_explicit(&c->in_use, memory_order_acquire) != 1)
+    return;
+  last = atomic_load_explicit(&c->last_seen, memory_order_relaxed);
+  if (now - last <= max_age_s)
+    return;
+  {
+    size_t h = chan_key_hash(c->family, c->addr, c->addr_len, c->port) & t->hash_mask;
+    for (;;) {
+      size_t slot_plus1 = t->hash[h];
+      if (slot_plus1 == 0)
+        break; /* shouldn't happen: an in-use channel always has a hash entry */
+      if (slot_plus1 == i + 1) {
+        t->hash[h] = CHANNEL_HASH_TOMBSTONE;
+        break;
+      }
+      h = (h + 1) & t->hash_mask;
+    }
+  }
+  if (atomic_load_explicit(&c->ssrc_known, memory_order_relaxed))
+    ssrc_hash_remove(t, i, atomic_load_explicit(&c->ssrc, memory_order_relaxed));
+  atomic_store_explicit(&c->in_use, 0, memory_order_release);
+}
+
+void channel_table_reap(channel_table_t *t, time_t max_age_s) {
+  time_t now = time(NULL);
+  size_t i;
+  pthread_mutex_lock(&t->lock);
+  for (i = 0; i < t->max_channels; i++)
+    reap_slot(t, i, now, max_age_s);
+  pthread_mutex_unlock(&t->lock);
+}
+
+/* amortized reap: at most max_scan slots per call, from an internal wrapping cursor.
+   caller drives it often (e.g. once per packet) with a small max_scan, so no single call ever costs O(max_channels).  */
+void channel_table_reap_step(channel_table_t *t, time_t max_age_s, size_t max_scan) {
+  time_t now = time(NULL);
+  size_t i, n;
+  pthread_mutex_lock(&t->lock);
+  n = max_scan < t->max_channels ? max_scan : t->max_channels;
+  for (i = 0; i < n; i++) {
+    reap_slot(t, t->reap_cursor, now, max_age_s);
+    t->reap_cursor = (t->reap_cursor + 1) % t->max_channels;
+  }
+  pthread_mutex_unlock(&t->lock);
+}

@@ -9,7 +9,7 @@
 #include "../ebml.h"
 #include "../teletext.h"
 #include "lib/demux/pes.h"
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 #include "mkv.h"
 
 #define MKV_MAX_TRACKS 8

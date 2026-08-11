@@ -10,7 +10,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "lib/cas/emmg_server.h"
+#include "lib/cas/emmg_server/emmg_server.h"
 #include "lib/cas/simulcrypt_msg.h"
 
 static int find_tlv(const unsigned char *payload, size_t payload_len, unsigned short want_tag, const unsigned char **val_out, unsigned short *len_out) {

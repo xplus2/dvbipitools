@@ -6,7 +6,7 @@
 #include <time.h>
 
 #include "format.h"
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 #include "lib/demux/rtp.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"

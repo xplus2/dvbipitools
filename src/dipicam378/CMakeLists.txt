@@ -10,7 +10,10 @@ if (OpenSSL_FOUND)
     add_executable(dipicam378
         main.c
         args.c
-        cs378x.c
+        cs378x/cs378x.c
+        cs378x/crypto.c
+        cs378x/protocol.c
+        cs378x/worker.c
         crypto.c
         device.c
         ../lib/log.c

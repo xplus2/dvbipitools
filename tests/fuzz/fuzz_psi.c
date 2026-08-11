@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "lib/demux/psi.h"
+#include "lib/demux/psi/psi.h"
 
 #define TS_PACKET_LEN 188
 

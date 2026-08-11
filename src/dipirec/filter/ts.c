@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "lib/demux/crc32.h"
-#include "lib/demux/psi_section_asm.h"
+#include "lib/demux/psi/section_asm.h"
 #include "lib/demux/tspack.h"
 #include "ts.h"
 
