@@ -487,6 +487,7 @@ endif
 
 dipidescramble_SRCS := \
 	src/dipidescramble/main.c \
+	src/dipidescramble/pipeline.c \
 	src/dipidescramble/args.c \
 	src/dipidescramble/crypto.c \
 	src/dipidescramble/device.c \
@@ -701,8 +702,52 @@ dipidescramble_biss_ca_state_SRCS := \
 	src/lib/demux/crc32.c
 dipidescramble_biss_ca_state_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_biss_ca_state_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += dipidescramble_pipeline
+dipidescramble_pipeline_BIN := tests/unit/dipidescramble/test_pipeline
+dipidescramble_pipeline_SRCS := \
+	tests/unit/dipidescramble/test_pipeline.c \
+	src/dipidescramble/pipeline.c \
+	src/dipidescramble/device.c \
+	src/dipidescramble/crypto.c \
+	src/dipidescramble/biss_ca_state.c \
+	src/dipidescramble/emmcache.c \
+	src/dipidescramble/ipiclient.c \
+	src/lib/log.c \
+	src/lib/ioutil.c \
+	src/lib/signal.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/pes.c \
+	src/lib/mux/ebml.c \
+	src/lib/mux/teletext.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/mkv/mkv.c \
+	src/lib/mux/mkv/bitreader.c \
+	src/lib/mux/mkv/audio.c \
+	src/lib/mux/mkv/video.c \
+	src/lib/mux/mkv/write.c \
+	src/lib/mux/mkv/feed.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/biss/biss.c \
+	src/lib/cas/biss/ca.c \
+	src/lib/cas/biss/ca_sections.c \
+	src/lib/net/tls.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c
+dipidescramble_pipeline_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+dipidescramble_pipeline_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 else
-$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_biss_ca_state unit tests)
+$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_biss_ca_state/dipidescramble_pipeline unit tests)
 endif
 
 lib_metrics_protocol_BIN := tests/unit/lib/metrics/test_protocol

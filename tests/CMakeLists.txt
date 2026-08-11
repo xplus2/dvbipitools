@@ -302,8 +302,49 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
     target_link_libraries(test_dipidescramble_biss_ca_state PRIVATE OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(dipidescramble_pipeline
+        unit/dipidescramble/test_pipeline.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/pipeline.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/biss_ca_state.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/emmcache.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ipiclient.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/bitreader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/audio.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/video.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/write.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/feed.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c)
+    target_link_libraries(test_dipidescramble_pipeline PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 else ()
-    message(WARNING "tests: OpenSSL not found, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_biss_ca_state unit tests")
+    message(WARNING "tests: OpenSSL not found, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_biss_ca_state/dipidescramble_pipeline unit tests")
 endif ()
 
 dvbipitools_add_unit_test(lib_bim_bitwriter

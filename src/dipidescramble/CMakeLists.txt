@@ -29,6 +29,7 @@ if (OpenSSL_FOUND)
     # keep in sync with CMakeLists/Makefile
     add_executable(dipidescramble
         main.c
+        pipeline.c
         args.c
         crypto.c
         device.c
