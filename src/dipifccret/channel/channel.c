@@ -79,6 +79,7 @@ fail: {
       free(t->chan[j].ring);
       free(t->chan[j].cache.entries);
     }
+    free(t->resolve_hash);
     free(t->ssrc_hash);
     free(t->hash);
     free(t->chan);
@@ -98,6 +99,7 @@ void channel_table_free(channel_table_t *t) {
     free(t->chan[i].cache.entries);
   }
   pthread_mutex_destroy(&t->lock);
+  free(t->resolve_hash);
   free(t->ssrc_hash);
   free(t->hash);
   free(t->chan);
