@@ -22,15 +22,15 @@ typedef struct {
 int http_url_parse(const char *uri, http_url_t *u);
 
 /* GET, sends Icy-MetaData: 1, follows up to 5 redirects. insecure skips TLS verification.
-   extra_header: one raw "Name: value" line added to the request, no trailing CRLF - NULL for none.
-   NULL on failure (logged). reason_out: nullable, set only on NULL return */
+   extra_header: one raw "Name: value" line added to the request, no trailing CRLF. NULL for none.
+   NULL on failure. reason_out: nullable, set only on NULL return */
 http_t *http_get(const http_url_t *url, const char *user_agent, int insecure, const char *extra_header, net_err_reason_t *reason_out);
 
 /* response header lookup, case-insensitive name. NULL if absent */
 const char *http_header(const http_t *h, const char *name);
 
-/* HTTP status of the (possibly redirected-to) response. Includes 304 Not Modified
-   when extra_header carried If-None-Match and the server confirmed no change.
+/* HTTP status of (possibly redirected-to) response. includes 304 Not Modified
+   when extra_header carried If-None-Match and server confirmed no change.
    http_get() returns that too (body empty) instead of treating it as failure */
 int http_status(const http_t *h);
 
@@ -41,7 +41,7 @@ const http_url_t *http_final_url(const http_t *h);
    reason_out: nullable, set only on -1 */
 ssize_t http_read(http_t *h, void *buf, size_t cap, net_err_reason_t *reason_out);
 
-/* underlying socket fd, for a caller's own poll(); valid for the life of h */
+/* underlying socket fd, for caller's own poll(); valid for life of h */
 int http_fd(const http_t *h);
 
 void http_close(http_t *h);
@@ -60,11 +60,11 @@ http_async_t *http_async_start(const http_url_t *url, const char *user_agent, in
 int http_async_poll_fd(const http_async_t *a);
 short http_async_poll_events(const http_async_t *a);
 
-/* call after poll() readiness (harmless speculatively too - PENDING if nothing ready).
+/* call after poll() readiness (harmless speculatively too, PENDING if nothing ready).
    reason_out: nullable, set only on HTTP_ASYNC_ERROR */
 http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out);
 
-/* DONE only: hands over the http_t http_get() would've returned, frees the async handle */
+/* DONE only: hands over http_t http_get() would've returned, frees async handle */
 http_t *http_async_take(http_async_t *a);
 
 /* frees handle + owned state; safe at any state incl. PENDING */

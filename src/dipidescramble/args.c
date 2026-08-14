@@ -131,6 +131,7 @@ static void print_help(void) {
       "  %-27sBISS2 Mode E: 32 hex char receiver ID for --biss2-esw\n"
       "  %-27slegacy BISS1 Mode 1: 12 hex char Session Word\n"
       "  %-27sBISS Mode CA: receiver RSA private key, PEM\n"
+      "  %-27secm_profile template, comma key=value (see README)\n"
       "  %-27sdescrambled output, file or \"-\" for stdout (required)\n"
       "  %-27sts|mkv|mka output container (default ts)\n"
       "  %-27sMPTS source only: pin one PMT pid, or descramble every program\n"
@@ -149,6 +150,7 @@ static void print_help(void) {
       "    --biss2-sw <hex32>", "    --biss2-esw <hex32>", "    --biss2-id <hex32>",
       "    --biss1-sw <hex12>",
       "    --biss2-ca-key <path>",
+      "    --ecm-profile <spec>",
       "-o, --output <path|->", "-f, --format <fmt>", "-p, --pmt-pid <pid|all>", "", "",
       "-I, --iface <iface>", "-v, --verbose",
       "    --color <when>", "-h, --help",
@@ -174,6 +176,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"biss2-id", required_argument, 0, 1006},
       {"biss1-sw", required_argument, 0, 1007},
       {"biss2-ca-key", required_argument, 0, 1008},
+      {"ecm-profile", required_argument, 0, 1009},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_input = 0, have_out = 0, have_biss_id = 0;
@@ -267,6 +270,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1008:
         cfg->biss2_ca_key_path = optarg;
+        break;
+      case 1009:
+        if (ecm_profile_parse(optarg, &cfg->ecm_profile) != 0 || ecm_profile_validate(&cfg->ecm_profile) != 0) {
+          argerr("invalid --ecm-profile: %s", optarg);
+          return ARGS_ERR;
+        }
         break;
       case 'h':
         print_help();

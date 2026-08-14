@@ -12,7 +12,7 @@
 #include "../args.h"
 #include "source.h"
 
-/* sentinel retry_deadline meaning "don't retry this slot" - reproduces the single-input
+/* sentinel retry_deadline meaning "don't retry this slot". reproduces single-input
    -e-not-given contract (fail once, don't reconnect) for whichever slot hits it */
 #define INPUTSET_NEVER RETRYSET_NEVER
 
@@ -20,7 +20,7 @@ typedef struct inputset inputset_t;
 
 /* slot per cfg->inputs[i], retried independently. cfg must outlive inputset (borrowed uri/service_name).
    ctxs[i] (or ctxs itself) may be NULL: per-input source_meta_cb ctx, cb shared.
-   retry: error_retry_s > 0 -> that interval, always. == 0 && n_inputs > 1 -> 5s default (logged). == 0 && n_inputs == 1 -> never
+   retry: error_retry_s > 0 -> that interval, always. == 0 && n_inputs > 1 -> 5s default == 0 && n_inputs == 1 -> never
    input_stats[i] (or input_stats itself): nullable, one input_metrics_t per slot, caller-owned - must outlive inputset, survives reconnects. */
 inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ctxs, input_metrics_t *input_stats);
 void inputset_free(inputset_t *is);
@@ -39,10 +39,10 @@ source_t *inputset_source(const inputset_t *is, unsigned idx);
 int inputset_poll_fd(const inputset_t *is, unsigned idx);
 short inputset_poll_events(const inputset_t *is, unsigned idx);
 
-/* soonest retry deadline across down slots, for the caller's poll() timeout. INPUTSET_NEVER if none due. */
+/* soonest retry deadline across down slots, for caller's poll() timeout. INPUTSET_NEVER if none due. */
 time_t inputset_next_deadline(const inputset_t *is);
 
-/* advances slot idx: steps the async open if connecting, starts one if down and due. call
+/* advances slot idx: steps async open if connecting, starts one if down and due. call
    after poll() readiness or on a timeout tick (harmless no-op otherwise). */
 void inputset_service(inputset_t *is, unsigned idx, time_t now);
 

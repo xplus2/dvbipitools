@@ -11,7 +11,7 @@ typedef struct cs378x_server cs378x_server_t;
 
 typedef struct {
   unsigned port;
-  const char *password;  /* must match the reader's "password ="; its MD5 is the AES-128 key */
+  const char *password;  /* must match reader's "password ="; MD5 is AES-128 key */
   const char *username;  /* must match reader's "user ="; empty/NULL = no check, accept any */
   int verbose;
 } cs378x_cfg_t;

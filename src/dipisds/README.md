@@ -34,6 +34,9 @@ dipisds -l -m <mcast>:<port> [options]
 |      | `--fcc-addr`      | `<addr>:<port>`             | announce: off (no FCC advertised)          |
 |      | `--fcc-rtx-time`  | `<ms>`                      | announce: `2000`                           |
 |      | `--fcc-rtx-pt`    | `<n>`                       | announce: `99`                             |
+|      | `--metrics`       | `<path>`                    | announce: `/run/dvbipitools/metrics.sock`  |
+|      | `--metrics-id`    | `<name>`                    | announce: none (metrics disabled unless set) |
+|      | `--metrics-interval` | `<s>`                    | announce: `5`                              |
 | `-h` | `--help`          |                             |                                             |
 
 ## Announce (`-a`)

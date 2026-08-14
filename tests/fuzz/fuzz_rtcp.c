@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
   n = fread(buf, 1, (size_t)len, f);
   fclose(f);
 
-  rtcp_parse(buf, n, on_nack, on_rams_r, on_rams_t, NULL);
+  rtcp_parse(buf, n, on_nack, on_rams_r, on_rams_t, NULL, NULL, NULL);
 
   free(buf);
   return 0;

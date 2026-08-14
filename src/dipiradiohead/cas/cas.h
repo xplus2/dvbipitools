@@ -14,9 +14,8 @@
 
 typedef struct cas cas_t;
 
-/* audio_pids: every program's audio pid, one shared CW across all vendors. audio_pids[0] is the
-   flush pid (cas_group.h). only pid never CSA2-batch-delayed. NULL if n_audio_pids 0 or over
-   CAS_CORE_MAX_PIDS (logged). */
+/* audio_pids: every program's audio pid, one shared CW across all vendors. audio_pids[0] is
+   flush pid (cas_group.h). only pid never CSA2-batch-delayed. NULL if n_audio_pids 0 or over CAS_CORE_MAX_PIDS. */
 cas_t *cas_start(const config_t *cfg, const unsigned *audio_pids, size_t n_audio_pids);
 void cas_stop(cas_t *c);
 
@@ -27,7 +26,7 @@ int cas_failed(cas_t *c);
    first call lazy-starts ECMG/EMMG. */
 void cas_clock_tick(cas_t *c, uint64_t pts_90k);
 
-/* no-op unless out_pid is the audio pid or ECMG hasn't started. emits exactly once. */
+/* no-op unless out_pid is audio pid or ECMG hasn't started. emits exactly once. */
 void cas_scramble_packet(cas_t *c, unsigned out_pid, double now, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx);
 
 /* flushes any batched packet. call at end of stream. */
@@ -47,13 +46,13 @@ size_t cas_build_cat(cas_t *c, unsigned char *out, size_t cap);
 size_t cas_vendor_count(cas_t *c);
 unsigned cas_vendor_ecm_pid(cas_t *c, size_t idx);
 unsigned cas_vendor_emm_pid(cas_t *c, size_t idx);
-/* 0 = filled out/out_len with the current ECM (due for resend), -1 = not due / none yet / silent+disconnected */
+/* 0 = filled out/out_len with current ECM (due for resend), -1 = not due / none yet / silent+disconnected */
 int cas_vendor_ecm_due(cas_t *c, size_t idx, double now, unsigned char *out, size_t cap, size_t *out_len);
 /* 0 = filled, -1 = queue empty */
 int cas_vendor_next_emm(cas_t *c, size_t idx, unsigned char *out, size_t cap, size_t *out_len);
 
-/* SIGHUP: rescan --biss2-ca-receivers, force an SK rotation if the entitled set changed
-   (revocation). no-op outside BISS-CA mode - caller decides when SIGHUP fired */
+/* SIGHUP: rescan --biss2-ca-receivers, force an SK rotation if entitled set changed
+   (revocation). no-op outside BISS-CA mode. caller decides when SIGHUP fired */
 void cas_reload_receivers(cas_t *c);
 
 /* exact 90kHz -> ms via remainder carry (*rem_inout, starts at 0): no drift over time.

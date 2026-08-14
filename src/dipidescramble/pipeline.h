@@ -43,7 +43,7 @@ typedef struct {
    0 ok, 1 stop (lc->fatal or lc->emit_failed explains why) */
 int pkt_cb(void *v, const unsigned char *pkt);
 
-/* drains any packets scrambler_set_key() queued for the last crypto-period's batch */
+/* drains any packets scrambler_set_key() queued for last crypto-period's batch */
 void pipeline_flush(loop_ctx_t *lc);
 
 #endif

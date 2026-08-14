@@ -99,6 +99,25 @@ START_TEST(parse_header_rejects_nonzero_compression) {
 }
 END_TEST
 
+START_TEST(parse_header_rejects_nonzero_compression_broadcast_discovery) {
+  unsigned char buf[12];
+  dvbstp_header_t h;
+  build_header(buf, 2, 1, 1, 0, 0, 0, 0, 0, 0);
+  buf[11] |= 0x20; /* compr = 1 */
+  ck_assert_uint_eq(dvbstp_parse_header(buf, sizeof buf, &h), 0u);
+}
+END_TEST
+
+START_TEST(parse_header_accepts_compression_for_bcg_payload) {
+  unsigned char buf[12];
+  dvbstp_header_t h;
+  build_header(buf, 0xA3, 1, 1, 0, 0, 0, 0, 0, 0);
+  buf[11] |= 0x20; /* compr = 1 (BiM/binary, TS 102 539 table 3) */
+  ck_assert_uint_eq(dvbstp_parse_header(buf, sizeof buf, &h), 12u);
+  ck_assert_uint_eq(h.compr, 1u);
+}
+END_TEST
+
 START_TEST(parse_header_rejects_truncated_provider_id) {
   unsigned char buf[15];
   dvbstp_header_t h;
@@ -330,6 +349,8 @@ static Suite *dvbstp_suite(void) {
   tcase_add_test(tc, parse_header_rejects_short_buffer);
   tcase_add_test(tc, parse_header_rejects_nonzero_version);
   tcase_add_test(tc, parse_header_rejects_nonzero_compression);
+  tcase_add_test(tc, parse_header_rejects_nonzero_compression_broadcast_discovery);
+  tcase_add_test(tc, parse_header_accepts_compression_for_bcg_payload);
   tcase_add_test(tc, parse_header_rejects_truncated_provider_id);
   tcase_add_test(tc, parse_header_rejects_truncated_private_words);
   tcase_add_test(tc, reasm_feed_single_section_completes_immediately);

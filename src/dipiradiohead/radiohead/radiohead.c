@@ -22,6 +22,36 @@ void meta_cb(void *ctx, const char *artist, const char *title) {
     m->rm->metadata_updates_total++;
 }
 
+ristout_t *radiohead_rist_open(const config_t *cfg) {
+  ristout_cfg_t rc;
+  unsigned i;
+
+  memset(&rc, 0, sizeof rc);
+  for (i = 0; i < cfg->n_rist; i++)
+    rc.peer_uri[i] = cfg->rist_uri[i];
+  rc.npeers = (int)cfg->n_rist;
+  rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
+  rc.secret = cfg->rist_secret;
+  rc.cname = cfg->rist_cname;
+  rc.buffer_ms = cfg->rist_buffer_ms;
+  rc.verbose = cfg->verbose;
+  return ristout_open(&rc);
+}
+
+/* a failed output is never fatal; log only on the failure/recovery edge, keep retrying every batch */
+static void note_send_result(int ok, int *had_error, unsigned long long *errors, const char *label) {
+  if (!ok) {
+    (*errors)++;
+    if (!*had_error) {
+      log_line("%s output: send failed, will keep retrying", label);
+      *had_error = 1;
+    }
+  } else if (*had_error) {
+    log_line("%s output: recovered", label);
+    *had_error = 0;
+  }
+}
+
 void flush_batch(out_ctx_t *o) {
   size_t n = (size_t)o->batch_count * 188;
 
@@ -29,14 +59,12 @@ void flush_batch(out_ctx_t *o) {
     return;
   if (o->rtp) {
     rtpheader_build(o->rtph, (uint32_t)o->cur_pts, o->batch, 12);
-    if (mcast_send(o->mc, o->batch, 12 + n) < 0) {
-      o->had_error = 1;
-      o->errors++;
-    }
-  } else if (mcast_send(o->mc, o->batch + 12, n) < 0) {
-    o->had_error = 1;
-    o->errors++;
+    note_send_result(mcast_send(o->mc, o->batch, 12 + n) >= 0, &o->mc_had_error, &o->errors, "mcast");
+  } else {
+    note_send_result(mcast_send(o->mc, o->batch + 12, n) >= 0, &o->mc_had_error, &o->errors, "mcast");
   }
+  if (o->rist)
+    note_send_result(ristout_write(o->rist, o->batch + 12, n) >= 0, &o->rist_had_error, &o->errors, "rist");
   o->batch_count = 0;
 }
 
@@ -87,6 +115,15 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   if (cfg->rtp) {
     out.rtph = rtpheader_new();
     if (!out.rtph) {
+      mcast_close(mc);
+      return 1;
+    }
+  }
+  if (cfg->n_rist > 0) {
+    out.rist = radiohead_rist_open(cfg);
+    if (!out.rist) {
+      if (out.rtph)
+        rtpheader_free(out.rtph);
       mcast_close(mc);
       return 1;
     }
@@ -189,10 +226,6 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
           cas_reload_receivers(cas);
       }
       tspacketizer_feed(tsp, pts, now, f.data, f.len, packet_cb, &out);
-      if (out.had_error) {
-        rc = 1;
-        goto done;
-      }
       if (cfg->verbose && now - last_stat >= 1.0) {
         fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - start, out.packets);
         fflush(stderr);
@@ -230,6 +263,8 @@ done:
     cas_stop(cas);
   if (out.rtph)
     rtpheader_free(out.rtph);
+  if (out.rist)
+    ristout_close(out.rist);
   mcast_close(mc);
 
   if (cfg->verbose && log_stderr_is_tty())

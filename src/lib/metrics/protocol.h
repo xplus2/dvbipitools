@@ -13,7 +13,7 @@
 
 #define METRICS_PROTO_VERSION 1
 #define METRICS_MAX_SNAPSHOT_BYTES 4096
-#define METRICS_ID_MAX 32   /* metrics-id field width on the wire, incl NUL */
+#define METRICS_ID_MAX 32   /* incl NUL */
 #define METRICS_LABEL_MAX 63
 #define METRICS_HDR_LEN (4 + METRICS_ID_MAX + 8 + 8 + 8)
 
@@ -25,7 +25,8 @@ typedef enum {
   METRICS_COMPONENT_TVHEAD = 1,
   METRICS_COMPONENT_RADIOHEAD = 2,
   METRICS_COMPONENT_SDS = 3,
-  METRICS_COMPONENT_BCG = 4
+  METRICS_COMPONENT_BCG = 4,
+  METRICS_COMPONENT_RIST = 5
 } metrics_component_t;
 
 /* wire values: append only, never renumber/reuse */
@@ -99,7 +100,17 @@ typedef enum {
   METRICS_ID_BCG_PUBLICATION_ERRORS_TOTAL = 99,
   METRICS_ID_BCG_LAST_SUCCESS_TIME_SECONDS = 100,
   METRICS_ID_BCG_SCHEDULE_START_TIME_SECONDS = 101,
-  METRICS_ID_BCG_SCHEDULE_END_TIME_SECONDS = 102
+  METRICS_ID_BCG_SCHEDULE_END_TIME_SECONDS = 102,
+
+  METRICS_ID_RIST_SENDER_SENT_TOTAL = 110,          /* label = peer; sender only */
+  METRICS_ID_RIST_SENDER_RETRANSMITTED_TOTAL = 111, /* label = peer; sender only */
+  METRICS_ID_RIST_SENDER_RTT_MILLISECONDS = 112,    /* label = peer; sender only */
+  METRICS_ID_RIST_RECEIVER_RECEIVED_TOTAL = 120,    /* receiver only, flow aggregate */
+  METRICS_ID_RIST_RECEIVER_MISSING_TOTAL = 121,     /* receiver only */
+  METRICS_ID_RIST_RECEIVER_RECOVERED_TOTAL = 122,   /* receiver only */
+  METRICS_ID_RIST_RECEIVER_LOST_TOTAL = 123,        /* receiver only */
+  METRICS_ID_RIST_RECEIVER_RTT_MILLISECONDS = 124,  /* receiver only */
+  METRICS_ID_RIST_RECEIVER_BUFFER_MILLISECONDS = 125 /* receiver only */
 } metrics_id_t;
 
 /* joins input+reason into METRICS_ID_INPUT_ERRORS_TOTAL's one label field */

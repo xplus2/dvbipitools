@@ -60,7 +60,7 @@ void simulcrypt_reader_init(simulcrypt_reader_t *r);
 /* 1 = frame ready (hdr/payload valid till next call, reader reset), 0 = timeout/partial, -1 = EOF/error */
 int simulcrypt_reader_poll(simulcrypt_reader_t *r, int fd, int timeout_ms, simulcrypt_hdr_t *hdr, const unsigned char **payload);
 
-/* non-blocking send loop, poll()-with-timeout when the socket buffer is full. 0 ok, -1 on error/timeout */
+/* non-blocking send loop, poll()-with-timeout when socket buffer full. 0 ok, -1 on error/timeout */
 int simulcrypt_send_all(int fd, const unsigned char *buf, size_t len, int timeout_ms);
 
 #endif

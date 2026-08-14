@@ -5,6 +5,6 @@
 #define DIPITVHEAD_VERSION_H
 
 #define TOOL_NAME    "dipitvhead"
-#define TOOL_VERSION "2.3.2"
+#define TOOL_VERSION "2.4.0"
 
 #endif

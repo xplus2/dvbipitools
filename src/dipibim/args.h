@@ -9,7 +9,7 @@ typedef enum { FMT_XML, FMT_BIM } input_fmt_t;
 typedef struct {
   const char *input_path;  /* -i; NULL/"-" = stdin */
   const char *output_path; /* -o; NULL/"-" = stdout */
-  input_fmt_t format;      /* -f, names the INPUT format */
+  input_fmt_t format;      /* -f, names INPUT format */
   int verbose;             /* -v */
   int color_mode;          /* --color; log_color_t */
 } config_t;

@@ -10,7 +10,7 @@ void signals_install(void);
 /* nonzero once stop requested */
 int signal_stop_requested(void);
 
-/* nonzero if SIGHUP arrived since the last call; clears on read */
+/* SIGHUP-triggered, clears on read (edge, not level) */
 int signal_reload_requested(void);
 
 /* CLOCK_MONOTONIC, seconds as a double */

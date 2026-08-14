@@ -45,8 +45,7 @@ void mpts_free(mpts_t *m);
    forces immediate composite-SDT resend (version bump). active set changed. */
 void mpts_set_program(mpts_t *m, unsigned idx, void *program_ctx);
 
-/* one shared CW/crypto-period for all programs, not per-program - but one ECM/EMM PID pair
-   per CAS vendor. cas_ops/vendors must outlive mpts. n_vendors capped at MPTS_MAX_CAS_VENDORS. */
+/* cas_ops/vendors must outlive mpts. n_vendors capped at MPTS_MAX_CAS_VENDORS. */
 void mpts_set_cas(mpts_t *m, void *cas_ctx, const mpts_cas_ops_t *cas_ops, const mpts_cas_vendor_pid_t *vendors, size_t n_vendors);
 
 /* emits whatever's due: PAT/CAT/NIT/composite-SDT on fixed interval, each program's EIT on its own interval (or now, if eit_pending()), CAS ECM/EMM.

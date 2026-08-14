@@ -21,6 +21,7 @@ typedef struct {
   long timeout_s;           /* -t, listen: default 35 (> 30s max cycle time) */
   const char *output_path;  /* -o, listen; NULL = stdout */
   const char *csvmap_path;  /* -C, listen: optional companion mapping csv */
+  int compress;             /* -Z, announce: zlib-compress BCG containers (RFC 1950) */
   int verbose;              /* -v */
   int color_mode;           /* --color; log_color_t */
 

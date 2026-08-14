@@ -1,3 +1,21 @@
+dvbipitools (2.3.0-1) unstable; urgency=medium
+  * merged dipirist sender and receiver
+  * dipirec replay to multicast
+  * rist branch: output for:
+    + dipitvhead
+    + dipiradiohead
+    + dipirec
+  * dipifccret
+    + added/mapped (some) missing status code handlers
+    + rsi self announcement (F 5.3)
+    + per-session sequence numbers
+  * dipidescramble ecm_profile
+  * dipibcg: optional zlib compression
+    + fixed a flagging error on the way
+  * dipitvhead + dipiradiohead: support for parallel outputs
+
+ -- dvbipitools authors <unspecified@example.com>  Wed, 19 Aug 2026 00:00:00 +0200
+
 dvbipitools (2.2.0-1) unstable; urgency=medium
   * dipiradiohead: same CAS treatment as dipitvhead
   * dipitvhead:

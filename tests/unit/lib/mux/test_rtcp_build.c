@@ -25,7 +25,7 @@ START_TEST(rtcp_build_ff_round_trips_through_rtcp_parse) {
   ck_assert_uint_eq(n, 12u + 2u * 4u);
 
   g_nack_calls = 0;
-  rtcp_parse(buf, n, nack_cb, NULL, NULL, NULL);
+  rtcp_parse(buf, n, nack_cb, NULL, NULL, NULL, NULL, NULL);
 
   ck_assert_int_eq(g_nack_calls, 1);
   ck_assert_uint_eq(g_nack.sender_ssrc, 0x11111111u);
@@ -46,23 +46,98 @@ START_TEST(rtcp_build_ff_rejects_zero_entries_and_small_cap) {
 }
 END_TEST
 
-START_TEST(rtcp_build_rsi_addr_ipv4_layout) {
+START_TEST(rtcp_build_rsi_header_and_addr_layout) {
   unsigned char buf[32];
   static const unsigned char addr[4] = {192, 168, 1, 1};
-  size_t n = rtcp_build_rsi_addr(0xAAAAAAAAu, 0xBBBBBBBBu, 111, 222, 5000, addr, 4, buf, sizeof buf);
+  size_t hdr_n, addr_n;
 
-  ck_assert_uint_eq(n, 20u + 4u + 4u);
+  hdr_n = rtcp_build_rsi_header(0xAAAAAAAAu, 0xBBBBBBBBu, 111, 222, 20 + 8, buf, sizeof buf);
+  addr_n = rtcp_build_rsi_srbt_addr(addr, 4, 5000, buf + hdr_n, sizeof(buf) - hdr_n);
+
+  ck_assert_uint_eq(hdr_n, 20u);
+  ck_assert_uint_eq(addr_n, 4u + 4u);
   ck_assert_uint_eq(buf[0], 0x80);
   ck_assert_uint_eq(buf[1], 208u); /* RTCP_PT_RSI */
+  ck_assert_uint_eq(((unsigned)buf[2] << 8) | buf[3], (20u + 8u) / 4u - 1u); /* length words */
+  ck_assert_uint_eq(((unsigned)buf[4] << 24) | ((unsigned)buf[5] << 16) | ((unsigned)buf[6] << 8) | buf[7], 0xAAAAAAAAu);
+  ck_assert_uint_eq(((unsigned)buf[8] << 24) | ((unsigned)buf[9] << 16) | ((unsigned)buf[10] << 8) | buf[11], 0xBBBBBBBBu);
   ck_assert_uint_eq(buf[20], 0u); /* SRBT = IPv4 */
   ck_assert_uint_eq(((unsigned)buf[22] << 8) | buf[23], 5000u); /* port */
   ck_assert_mem_eq(buf + 24, addr, 4);
 }
 END_TEST
 
-START_TEST(rtcp_build_rsi_addr_rejects_bad_addr_len) {
+START_TEST(rtcp_build_rsi_srbt_addr_rejects_bad_addr_len) {
   unsigned char buf[32], addr[6] = {0};
-  ck_assert_uint_eq(rtcp_build_rsi_addr(1, 1, 0, 0, 0, addr, 6, buf, sizeof buf), 0u);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_addr(addr, 6, 0, buf, sizeof buf), 0u);
+}
+END_TEST
+
+START_TEST(rtcp_build_rsi_header_rejects_small_cap_or_bad_total) {
+  unsigned char buf[32];
+  ck_assert_uint_eq(rtcp_build_rsi_header(1, 1, 0, 0, 28, buf, 10), 0u); /* cap too small */
+  ck_assert_uint_eq(rtcp_build_rsi_header(1, 1, 0, 0, 10, buf, sizeof buf), 0u); /* total_len < 20 */
+  ck_assert_uint_eq(rtcp_build_rsi_header(1, 1, 0, 0, 21, buf, sizeof buf), 0u); /* not a multiple of 4 */
+}
+END_TEST
+
+START_TEST(rtcp_build_rsi_srbt_dns_layout) {
+  unsigned char buf[32];
+  size_t n = rtcp_build_rsi_srbt_dns("host.example.com", 17, 5000, buf, sizeof buf);
+
+  ck_assert_uint_eq(n, 4u + 20u); /* 17 + NUL = 18, padded to 20 */
+  ck_assert_uint_eq(buf[0], 2u); /* SRBT */
+  ck_assert_uint_eq(buf[1], 6u); /* length words: (4+20)/4 */
+  ck_assert_uint_eq(((unsigned)buf[2] << 8) | buf[3], 5000u); /* port */
+  ck_assert_mem_eq(buf + 4, "host.example.com", 17);
+  ck_assert_uint_eq(buf[4 + 17], 0u); /* NUL terminator */
+  ck_assert_uint_eq(buf[4 + 19], 0u); /* trailing pad byte */
+}
+END_TEST
+
+START_TEST(rtcp_build_rsi_srbt_dns_rejects_bad_input) {
+  unsigned char buf[300];
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_dns("host", 0, 0, buf, sizeof buf), 0u);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_dns("host", 4, 0, buf, 4), 0u); /* cap too small */
+}
+END_TEST
+
+START_TEST(rtcp_build_rsi_srbt_bandwidth_layout) {
+  unsigned char buf[8];
+  size_t n = rtcp_build_rsi_srbt_bandwidth(1.5, buf, sizeof buf);
+  uint32_t fixed_point = ((uint32_t)buf[4] << 24) | ((uint32_t)buf[5] << 16) | ((uint32_t)buf[6] << 8) | buf[7];
+
+  ck_assert_uint_eq(n, 8u);
+  ck_assert_uint_eq(buf[0], 11u); /* SRBT */
+  ck_assert_uint_eq(buf[1], 2u);  /* length words */
+  ck_assert_uint_eq(((unsigned)buf[2] << 8) | buf[3], 0x4000u); /* S=0,R=1,Reserved=0 */
+  ck_assert_uint_eq(fixed_point, (uint32_t)(1.5 * 65536.0));
+}
+END_TEST
+
+START_TEST(rtcp_build_rsi_srbt_bandwidth_rejects_out_of_range) {
+  unsigned char buf[8];
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_bandwidth(-1.0, buf, sizeof buf), 0u);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_bandwidth(65536.0, buf, sizeof buf), 0u);
+}
+END_TEST
+
+START_TEST(rtcp_build_rsi_srbt_collision_layout) {
+  unsigned char buf[32];
+  uint32_t ssrcs[2] = {0x11111111u, 0x22222222u};
+  size_t n = rtcp_build_rsi_srbt_collision(ssrcs, 2, buf, sizeof buf);
+
+  ck_assert_uint_eq(n, 4u + 8u);
+  ck_assert_uint_eq(buf[0], 8u); /* SRBT */
+  ck_assert_uint_eq(buf[1], 3u); /* length words: 1 + count */
+  ck_assert_uint_eq(((unsigned)buf[4] << 24) | ((unsigned)buf[5] << 16) | ((unsigned)buf[6] << 8) | buf[7], 0x11111111u);
+  ck_assert_uint_eq(((unsigned)buf[8] << 24) | ((unsigned)buf[9] << 16) | ((unsigned)buf[10] << 8) | buf[11], 0x22222222u);
+}
+END_TEST
+
+START_TEST(rtcp_build_rsi_srbt_collision_rejects_zero_count) {
+  unsigned char buf[32];
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_collision(NULL, 0, buf, sizeof buf), 0u);
 }
 END_TEST
 
@@ -105,8 +180,15 @@ static Suite *rtcp_build_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, rtcp_build_ff_round_trips_through_rtcp_parse);
   tcase_add_test(tc, rtcp_build_ff_rejects_zero_entries_and_small_cap);
-  tcase_add_test(tc, rtcp_build_rsi_addr_ipv4_layout);
-  tcase_add_test(tc, rtcp_build_rsi_addr_rejects_bad_addr_len);
+  tcase_add_test(tc, rtcp_build_rsi_header_and_addr_layout);
+  tcase_add_test(tc, rtcp_build_rsi_srbt_addr_rejects_bad_addr_len);
+  tcase_add_test(tc, rtcp_build_rsi_header_rejects_small_cap_or_bad_total);
+  tcase_add_test(tc, rtcp_build_rsi_srbt_dns_layout);
+  tcase_add_test(tc, rtcp_build_rsi_srbt_dns_rejects_bad_input);
+  tcase_add_test(tc, rtcp_build_rsi_srbt_bandwidth_layout);
+  tcase_add_test(tc, rtcp_build_rsi_srbt_bandwidth_rejects_out_of_range);
+  tcase_add_test(tc, rtcp_build_rsi_srbt_collision_layout);
+  tcase_add_test(tc, rtcp_build_rsi_srbt_collision_rejects_zero_count);
   tcase_add_test(tc, rtcp_build_rams_i_header_with_no_tlvs);
   tcase_add_test(tc, rtcp_build_rams_i_appends_requested_tlvs);
   suite_add_tcase(s, tc);

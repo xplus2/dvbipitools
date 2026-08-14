@@ -19,7 +19,7 @@
    1:1 with one bcg_doc_t record. 0 ok, -1 oom. */
 
 int fragment_encode_program_information(const bcg_programme_t *pr, bitwriter_t *bw, strrepo_writer_t *sw);
-/* crid_out is the fragment's own programId, not carried in bcg_programme_t */
+/* crid_out: fragment's own programId, not carried in bcg_programme_t */
 int fragment_decode_program_information(bitreader_t *br, strrepo_reader_t *sr, char *crid_out, size_t crid_cap, bcg_programme_t *pr_out);
 
 int fragment_encode_schedule(const char *channel_id, const bcg_programme_t *programmes, int count, bitwriter_t *bw, strrepo_writer_t *sw);

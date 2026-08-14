@@ -11,6 +11,36 @@
 #include "../version.h"
 #include "priv.h"
 
+ristout_t *tvhead_rist_open(const config_t *cfg) {
+  ristout_cfg_t rc;
+  unsigned i;
+
+  memset(&rc, 0, sizeof rc);
+  for (i = 0; i < cfg->n_rist; i++)
+    rc.peer_uri[i] = cfg->rist_uri[i];
+  rc.npeers = (int)cfg->n_rist;
+  rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
+  rc.secret = cfg->rist_secret;
+  rc.cname = cfg->rist_cname;
+  rc.buffer_ms = cfg->rist_buffer_ms;
+  rc.verbose = cfg->verbose;
+  return ristout_open(&rc);
+}
+
+/* a failed output is never fatal; log only on the failure/recovery edge, keep retrying every batch */
+static void note_send_result(int ok, int *had_error, unsigned long long *errors, const char *label) {
+  if (!ok) {
+    (*errors)++;
+    if (!*had_error) {
+      log_line("%s output: send failed, will keep retrying", label);
+      *had_error = 1;
+    }
+  } else if (*had_error) {
+    log_line("%s output: recovered", label);
+    *had_error = 0;
+  }
+}
+
 /* pace/account once per datagram not per packet; keeps burst_limit's sleep off per-packet path */
 void flush_batch(out_ctx_t *o) {
   size_t n = (size_t)o->batch_count * 188;
@@ -20,14 +50,12 @@ void flush_batch(out_ctx_t *o) {
   bitrate_pace(o->pacer);
   if (o->rtp) {
     rtpheader_build(o->rtph, (uint32_t)(mono_seconds() * 90000.0), o->batch, 12);
-    if (mcast_send(o->mc, o->batch, 12 + n) < 0) {
-      o->had_error = 1;
-      o->errors++;
-    }
-  } else if (mcast_send(o->mc, o->batch + 12, n) < 0) {
-    o->had_error = 1;
-    o->errors++;
+    note_send_result(mcast_send(o->mc, o->batch, 12 + n) >= 0, &o->mc_had_error, &o->errors, "mcast");
+  } else {
+    note_send_result(mcast_send(o->mc, o->batch + 12, n) >= 0, &o->mc_had_error, &o->errors, "mcast");
   }
+  if (o->rist)
+    note_send_result(ristout_write(o->rist, o->batch + 12, n) >= 0, &o->rist_had_error, &o->errors, "rist");
   bitrate_account_n(o->pacer, (unsigned)o->batch_count);
   o->batch_count = 0;
 }
@@ -144,10 +172,6 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
       fc.now = now;
       tspack_feed(&pz, buf, (size_t)n, remux_cb, &fc);
     }
-    if (out->had_error) {
-      cas_flush(cas, packet_cb, out);
-      return -1;
-    }
     if (cas && cas_failed(cas)) {
       log_line("cas: fatal error, stopping");
       cas_flush(cas, packet_cb, out);
@@ -158,10 +182,6 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
     stuff_n = bitrate_stuff_due(out->pacer);
     for (k = 0; k < stuff_n; k++)
       send_null_packet(out);
-    if (out->had_error) {
-      cas_flush(cas, packet_cb, out);
-      return -1;
-    }
     if (cfg->verbose && now - last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - start, out->packets);
       fflush(stderr);

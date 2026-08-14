@@ -8,8 +8,8 @@
 
 #include "store.h"
 
-/* renders the current store as OpenMetrics text. mallocs *out (caller frees
-   via free()), sets *out_len (excludes the NUL terminator). */
+/* renders current store as OpenMetrics text. mallocs *out (caller frees
+   via free()), sets *out_len (excludes NUL terminator). */
 void render_openmetrics(const store_t *st, double now_mono, char **out, size_t *out_len);
 
 #endif

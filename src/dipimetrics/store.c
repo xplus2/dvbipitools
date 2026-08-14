@@ -18,6 +18,8 @@ const char *metrics_component_name(metrics_component_t c) {
     return "sds";
   case METRICS_COMPONENT_BCG:
     return "bcg";
+  case METRICS_COMPONENT_RIST:
+    return "rist";
   default:
     return "unknown";
   }

@@ -33,6 +33,7 @@ if (OpenSSL_FOUND)
         args.c
         crypto.c
         device.c
+        ecm_profile.c
         biss_ca_state.c
         emmcache.c
         ipiclient.c

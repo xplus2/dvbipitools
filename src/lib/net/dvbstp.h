@@ -30,15 +30,19 @@ typedef struct {
   unsigned last_section_number;
   unsigned total_segment_size;
   int crc_present;
+  unsigned compr; /* 3 bit compression field, clause 5.4.1.3.4 table 12 */
   int has_provider_id;
   unsigned provider_id;
 } dvbstp_header_t;
 
-/* one packet's header. returns header len, 0 if malformed */
+/* one packet's header. returns header len, 0 if malformed. rejects nonzero compression
+   for payload ids 0x01/0x02 only (table 12). payload-specific compression semantics
+   (e.g. TS 102 539 table 3 for BCG ids) are caller's job */
 size_t dvbstp_parse_header(const unsigned char *buf, size_t len, dvbstp_header_t *h);
 
-/* splits data into sections, sends each. no compression. crc on last section if want_crc */
-int dvbstp_send_segment(mcast_t *m, unsigned payload_id, unsigned segment_id, unsigned segment_version, int has_provider_id, unsigned provider_id, int want_crc, const unsigned char *data, size_t len);
+/* splits data into sections, sends each. compr written into header as-is,
+   caller must pass value legal for payload_id. crc on last section if want_crc */
+int dvbstp_send_segment(mcast_t *m, unsigned payload_id, unsigned segment_id, unsigned segment_version, unsigned compr, int has_provider_id, unsigned provider_id, int want_crc, const unsigned char *data, size_t len);
 
 typedef struct dvbstp_reasm dvbstp_reasm_t;
 

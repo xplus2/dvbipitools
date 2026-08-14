@@ -66,6 +66,7 @@ static void print_help(void) {
       "  -t, --timeout <s>      listen: stop after N seconds (default 35)\n"
       "  -o, --output <path>    listen: xmltv output path, - for stdout (default)\n"
       "  -C, --csv-map <path>   listen: also write a mapping csv (feeds back into -M)\n"
+      "  -Z, --compress         announce: zlib-compress BCG containers (RFC 1950)\n"
       "  -v, --verbose          periodic stats on stderr\n"
       "      --color <when>     auto|always|never (default auto)\n"
       "      --metrics <path>   announce: Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
@@ -91,6 +92,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"timeout", required_argument, 0, 't'},
       {"output", required_argument, 0, 'o'},
       {"csv-map", required_argument, 0, 'C'},
+      {"compress", no_argument, 0, 'Z'},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1000},
       {"metrics", required_argument, 0, 1001},
@@ -104,7 +106,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
 
   memset(cfg, 0, sizeof *cfg);
   optind = 1;
-  while ((c = getopt_long(argc, argv, "ali:M:w:m:I:t:o:C:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "ali:M:w:m:I:t:o:C:Zvh", longopts, NULL)) != -1) {
     switch (c) {
     case 'a':
       have_a = 1;
@@ -157,6 +159,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       break;
     case 'C':
       cfg->csvmap_path = optarg;
+      break;
+    case 'Z':
+      cfg->compress = 1;
       break;
     case 'v':
       cfg->verbose = 1;
@@ -224,6 +229,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   } else {
     if (cfg->metrics_id) {
       argerr("--metrics-id is announce-only");
+      return ARGS_ERR;
+    }
+    if (cfg->compress) {
+      argerr("-Z/--compress is announce-only");
       return ARGS_ERR;
     }
     if (!cfg->output_path)

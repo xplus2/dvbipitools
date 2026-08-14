@@ -2,29 +2,18 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdatomic.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "rtx.h"
 
-struct rtx_ctx {
-  _Atomic uint16_t seq; /* starts at 0, no random-start requirement for RTX */
-};
-
-rtx_ctx_t *rtx_ctx_new(void) {
-  return calloc(1, sizeof(rtx_ctx_t));
-}
-
-void rtx_ctx_free(rtx_ctx_t *ctx) { free(ctx); }
-
-size_t rtx_build(rtx_ctx_t *ctx, uint32_t ssrc, unsigned char pt, uint32_t timestamp, uint16_t orig_seq, const unsigned char *orig_payload, size_t orig_payload_len, unsigned char *out, size_t cap) {
+size_t rtx_build(_Atomic uint16_t *seq, uint32_t ssrc, unsigned char pt, uint32_t timestamp, uint16_t orig_seq, const unsigned char *orig_payload, size_t orig_payload_len, unsigned char *out, size_t cap) {
   size_t total = 12 + 2 + orig_payload_len;
   uint16_t my_seq;
 
   if (cap < total)
     return 0;
 
-  my_seq = atomic_fetch_add_explicit(&ctx->seq, 1, memory_order_relaxed); /* single atomic op: no two callers can get the same seq */
+  my_seq = atomic_fetch_add_explicit(seq, 1, memory_order_relaxed); /* single atomic op: no two callers get same seq */
   out[0] = 0x80; /* V=2, P=0, X=0, CC=0 */
   out[1] = (unsigned char)(pt & 0x7F); /* M=0 */
   out[2] = (unsigned char)(my_seq >> 8);

@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "lib/argutil.h"
+#include "lib/ioutil.h"
 #include "lib/log.h"
 
 #include "args.h"
@@ -27,26 +28,30 @@ static void argerr(const char *fmt, ...) {
 }
 
 /* rest: [@]addr:port, multicast literal required */
-static int parse_direct(const char *rest, source_t *s) {
+static int parse_mcast_addrport(const char *rest, int *family, char *group, size_t groupsz, unsigned *port) {
   const char *p = rest;
 
   if (*p == '@')
     p++;
-  if (argutil_addrport_parse(p, &s->family, s->group, sizeof s->group, &s->port))
+  if (argutil_addrport_parse(p, family, group, groupsz, port))
     return -1;
 
-  if (s->family == AF_INET) {
+  if (*family == AF_INET) {
     struct in_addr a;
-    inet_pton(AF_INET, s->group, &a);
+    inet_pton(AF_INET, group, &a);
     if ((ntohl(a.s_addr) >> 28) != 0xE) /* 224.0.0.0/4 */
       return -1;
   } else {
     struct in6_addr a6;
-    inet_pton(AF_INET6, s->group, &a6);
+    inet_pton(AF_INET6, group, &a6);
     if (a6.s6_addr[0] != 0xFF) /* ff00::/8 */
       return -1;
   }
   return 0;
+}
+
+static int parse_direct(const char *rest, source_t *s) {
+  return parse_mcast_addrport(rest, &s->family, s->group, sizeof s->group, &s->port);
 }
 
 /* rest: host[:port]/cmd/... */
@@ -157,6 +162,50 @@ void source_describe(const source_t *s, char *buf, size_t n) {
     break;
   case URI_FILE:
     snprintf(buf, n, "%s", s->file_path[0] ? s->file_path : "- (stdin)");
+    break;
+  }
+}
+
+static int parse_out_uri(const char *uri, out_target_t *o) {
+  memset(o, 0, sizeof *o);
+  if (strncmp(uri, "rtp://", 6) == 0) {
+    o->kind = OUT_RTP;
+    return parse_mcast_addrport(uri + 6, &o->family, o->group, sizeof o->group, &o->port);
+  }
+  if (strncmp(uri, "udp://", 6) == 0) {
+    o->kind = OUT_UDP;
+    return parse_mcast_addrport(uri + 6, &o->family, o->group, sizeof o->group, &o->port);
+  }
+  if (strncmp(uri, "rist://", 7) == 0) {
+    if (strlen(uri) >= sizeof o->rist_uri)
+      return -1;
+    o->kind = OUT_RIST;
+    strcpy(o->rist_uri, uri);
+    return 0;
+  }
+  if (strlen(uri) >= sizeof o->file_path)
+    return -1;
+  o->kind = OUT_FILE;
+  strcpy(o->file_path, uri);
+  return 0;
+}
+
+void out_describe(const out_target_t *o, char *buf, size_t n) {
+  switch (o->kind) {
+  case OUT_RTP:
+  case OUT_UDP: {
+    const char *scheme = (o->kind == OUT_RTP) ? "rtp" : "udp";
+    if (o->family == AF_INET6)
+      snprintf(buf, n, "%s://@[%s]:%u", scheme, o->group, o->port);
+    else
+      snprintf(buf, n, "%s://@%s:%u", scheme, o->group, o->port);
+    break;
+  }
+  case OUT_RIST:
+    snprintf(buf, n, "%s", o->rist_uri);
+    break;
+  case OUT_FILE:
+    snprintf(buf, n, "%s", strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
     break;
   }
 }
@@ -352,7 +401,7 @@ static int fmt_from_suffix(const char *path, out_fmt_t *f) {
 
 static void print_help(void) {
   printf(
-      "usage: %s -i <uri> -o <path> [options]\n\n"
+      "usage: %s -i <uri> -o <target> [options]\n\n"
       "record a DVB-IPI stream to a file or stdout\n\n"
       "sources (-i):\n"
       "  rtp://@<group>:<port>    RTP wrapped SPTS multicast (@ optional)\n"
@@ -361,18 +410,30 @@ static void print_help(void) {
       "  -                        stdin, TS or RTP-wrapped TS (auto-detected)\n"
       "  <path>                   a file, TS or RTP-wrapped TS (auto-detected)\n"
       "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8700\n\n"
+      "outputs (-o), beyond a file path or \"-\" for stdout:\n"
+      "  rtp://@<group>:<port>    RTP-wrapped multicast (-f raw|ts only)\n"
+      "  udp://@<group>:<port>    raw multicast, no RTP header (-f raw|ts only)\n"
+      "  rist://<host>:<port>[?query]  RIST sender, single peer (-f raw|ts only,\n"
+      "                           requires librist)\n\n"
       "options:\n"
-      "  -o, --out <path>         output file, or \"-\" for stdout\n"
+      "  -o, --out <target>       output file, \"-\" for stdout, or rtp://udp://rist:// (see below)\n"
       "  -i, --in <uri>           input source (see above)\n"
       "  -a, --audio <track>      audio track from 1, or \"all\" (default: all)\n"
-      "  -f, --format <format>    raw|ts|mkv|mka (default: from -o suffix, else ts)\n"
+      "  -f, --format <format>    raw|ts|mkv|mka (default: from -o suffix, else ts;\n"
+      "                           mkv/mka rejected with -o rtp://udp://)\n"
       "  -p, --pmt-pid <pid|all>  MPTS source only: pin one PMT pid, or record\n"
       "                           every program (\"all\"; rejected with -f mkv).\n"
       "                           ignored (warned) on an SPTS source. omitted on\n"
       "                           an MPTS source: fails early, lists programs\n"
       "  -s, --subtitles <mode>   strip|keep|srt (srt: mkv/mka only; default: keep)\n"
       "  -t, --time <duration>    e.g. 90, 5m, 5m30s, 1h3m20s, 01:20:03, 10:20\n"
-      "  -I, --iface <iface>      interface for the multicast join\n"
+      "  -I, --iface <iface>      interface for -i's multicast join\n"
+      "  -O, --out-iface <iface>  interface for -o rtp://udp://'s multicast send\n"
+      "      --ttl <n>            multicast TTL/hop-limit for -o rtp://udp:// (default: kernel, 1)\n"
+      "      --profile <p>        simple|main; -o rist:// only (default: simple)\n"
+      "      --secret <psk>       -o rist:// pre-shared key; requires --profile main\n"
+      "      --cname <name>       -o rist:// cname (default: library default)\n"
+      "      --buffer <ms>        -o rist:// recovery buffer (default: library default)\n"
       "  -v, --verbose            periodic recording stats on stderr\n"
       "      --sub-lead <ms>      shift subtitles earlier (default 1000)\n"
       "      --color <when>       auto|always|never (default auto)\n"
@@ -396,8 +457,9 @@ static void print_help(void) {
       "  %s -i rtp://@239.19.75.1:8700 -o show.ts\n"
       "  %s -i rtp://@239.19.75.1:8700 -o show.mkv -s srt -t 1h30m -v\n"
       "  %s -i udp://@239.0.175.1:8700 -o radio.mka -I eth0\n"
-      "  %s -i http://10.0.0.1:4022/rtp/239.19.75.1:8700 -o show.ts\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+      "  %s -i http://10.0.0.1:4022/rtp/239.19.75.1:8700 -o show.ts\n"
+      "  %s -i show.ts --pace -o rtp://@239.9.9.9:6000 -O eth1 --ttl 16\n",
+      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -420,13 +482,24 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"ret-wait", required_argument, 0, 1006},
       {"strip", required_argument, 0, 1007},
       {"pace", no_argument, 0, 1008},
+      {"out-iface", required_argument, 0, 'O'},
+      {"ttl", required_argument, 0, 1010},
+      {"profile", required_argument, 0, 1011},
+      {"secret", required_argument, 0, 1012},
+      {"cname", required_argument, 0, 1013},
+      {"buffer", required_argument, 0, 1014},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   const char *fmt_arg = NULL;
   const char *sub_arg = NULL;
   const char *time_arg = NULL;
   const char *strip_arg = NULL;
+  const char *profile_arg = NULL;
   int have_in = 0;
+  int have_out = 0;
+  int have_secret = 0;
+  int have_cname = 0;
+  int have_buffer = 0;
   int c;
 
   memset(cfg, 0, sizeof *cfg);
@@ -438,11 +511,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->ret.wait_ms = 200;
   cfg->strip_mask = STRIP_DEFAULT;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "o:i:a:f:p:s:t:I:vh", longopts, NULL)) !=
+  while ((c = getopt_long(argc, argv, "o:i:a:f:p:s:t:I:O:vh", longopts, NULL)) !=
          -1) {
     switch (c) {
       case 'o':
-        cfg->out_path = optarg;
+        if (parse_out_uri(optarg, &cfg->out)) {
+          argerr("invalid -o target: %s", optarg);
+          return ARGS_ERR;
+        }
+        have_out = 1;
         break;
       case 'i':
         if (parse_uri(optarg, &cfg->source)) {
@@ -473,7 +550,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         time_arg = optarg;
         break;
       case 'I':
-        cfg->iface = optarg;
+        cfg->iface_in = optarg;
         break;
       case 1001: {
         log_color_t v;
@@ -543,6 +620,47 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1008:
         cfg->pace = 1;
         break;
+      case 'O':
+        cfg->iface_out = optarg;
+        break;
+      case 1010: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v > 255) {
+          argerr("invalid --ttl: %s (0..255)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->out_ttl = (int)v;
+        break;
+      }
+      case 1011:
+        profile_arg = optarg;
+        break;
+      case 1012:
+        if (bufcpy(cfg->rist_secret, sizeof cfg->rist_secret, optarg) >= sizeof cfg->rist_secret) {
+          argerr("--secret too long");
+          return ARGS_ERR;
+        }
+        have_secret = 1;
+        break;
+      case 1013:
+        if (bufcpy(cfg->rist_cname, sizeof cfg->rist_cname, optarg) >= sizeof cfg->rist_cname) {
+          argerr("--cname too long");
+          return ARGS_ERR;
+        }
+        have_cname = 1;
+        break;
+      case 1014: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0) {
+          argerr("invalid --buffer: %s (ms)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->rist_buffer_ms = (unsigned)v;
+        have_buffer = 1;
+        break;
+      }
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -554,7 +672,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  if (!cfg->out_path) {
+  if (!have_out) {
     argerr("missing -o output");
     return ARGS_ERR;
   }
@@ -602,14 +720,37 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
   } else {
     cfg->format = FMT_TS;
-    if (strcmp(cfg->out_path, "-") != 0)
-      fmt_from_suffix(cfg->out_path, &cfg->format);
+    if (cfg->out.kind == OUT_FILE && strcmp(cfg->out.file_path, "-") != 0)
+      fmt_from_suffix(cfg->out.file_path, &cfg->format);
   }
+  if (cfg->out.kind != OUT_FILE && (cfg->format == FMT_MKV || cfg->format == FMT_MKA)) {
+    argerr("-f mkv/mka requires -o to a file or stdout, not rtp://udp://rist://");
+    return ARGS_ERR;
+  }
+  if (cfg->iface_out && cfg->out.kind != OUT_RTP && cfg->out.kind != OUT_UDP)
+    log_line(TOOL_NAME ": --out-iface has no effect, -o is not rtp:// or udp://");
+  if (cfg->out_ttl && cfg->out.kind != OUT_RTP && cfg->out.kind != OUT_UDP)
+    log_line(TOOL_NAME ": --ttl has no effect, -o is not rtp:// or udp://");
   if (strip_arg && cfg->format != FMT_TS)
     log_line(TOOL_NAME ": --strip has no effect outside -f ts");
   if (cfg->subs == SUB_SRT && cfg->format != FMT_MKV &&
       cfg->format != FMT_MKA) {
     argerr("-s srt requires -f mkv or mka");
+    return ARGS_ERR;
+  }
+  if (profile_arg) {
+    static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
+    int v;
+    if (map_lookup(map, sizeof map / sizeof map[0], profile_arg, &v)) {
+      argerr("invalid --profile: %s (simple|main)", profile_arg);
+      return ARGS_ERR;
+    }
+    cfg->rist_profile = (rist_profile_sel_t)v;
+  }
+  if (cfg->out.kind != OUT_RIST && (profile_arg || have_secret || have_cname || have_buffer))
+    log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer have no effect, -o is not rist://");
+  if (cfg->out.kind == OUT_RIST && have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
+    argerr("--secret requires --profile main");
     return ARGS_ERR;
   }
   return ARGS_OK;

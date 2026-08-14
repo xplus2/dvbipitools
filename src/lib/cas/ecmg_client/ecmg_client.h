@@ -30,7 +30,7 @@ typedef struct {
   unsigned super_cas_id;     /* 32 bit */
   unsigned ecm_id;           /* 16 bit */
   unsigned cp_duration_ms;   /* sent as nominal_CP_duration (n x 100ms) in stream_setup */
-  scramble_algo_t algo;      /* picks the wire CW length via scrambler_cw_len() */
+  scramble_algo_t algo;      /* picks wire CW length via scrambler_cw_len() */
   ecmg_outage_mode_t outage_mode;
   ecmg_cw_source_t cw_source; /* zero-init: self-generate, see above */
 } ecmg_client_cfg_t;
@@ -40,7 +40,7 @@ typedef struct ecmg_client ecmg_client_t;
 /* packet_counter: whole-stream output packet count, incremented by caller's hot path.
    packets_per_cp/lookahead_margin_packets: crypto-period cadence in packets, caller's thing */
 ecmg_client_t *ecmg_client_start(const ecmg_client_cfg_t *cfg, const atomic_ulong *packet_counter, unsigned long packets_per_cp, unsigned long lookahead_margin_packets);
-/* joins the thread */
+/* joins thread */
 void ecmg_client_stop(ecmg_client_t *c);
 
 /* scrambling key for slot (0/1, picked by caller as cp_number & 1). 0 = filled cw_out/cw_len_out, -1 = not provisioned yet */
@@ -53,8 +53,8 @@ unsigned long ecmg_client_cw_epoch(ecmg_client_t *c);
 int ecmg_client_get_ecm(ecmg_client_t *c, unsigned char *out, size_t cap, size_t *len_out);
 unsigned long ecmg_client_ecm_epoch(ecmg_client_t *c);
 
-/* ECM_rep_period from channel_status: how often the ECMG wants the current ECM section
- * repeated on the output. 0 = channel not established yet. */
+/* ECM_rep_period from channel_status: how often ECMG wants current ECM section
+   repeated on output. 0 = channel not established yet. */
 unsigned ecmg_client_ecm_rep_period_ms(ecmg_client_t *c);
 
 /* metrics accessors, all lock-free atomic reads */
@@ -63,18 +63,18 @@ unsigned long ecmg_client_cryptoperiod_transitions(ecmg_client_t *c);
 unsigned long ecmg_client_ecm_total(ecmg_client_t *c);
 unsigned long ecmg_client_ecm_errors(ecmg_client_t *c);
 
-/* which cw_slot (0/1) cas.c should scramble with right now. frozen: always the last published
-   parity. cycling, while disconnected: keeps alternating on the normal crypto-period schedule
-   between the two last-known CWs, using the PCR-derived clock rather than waiting on the ECMG. */
+/* which cw_slot (0/1) cas.c should scramble with right now. frozen: always last published
+   parity. cycling, while disconnected: keeps alternating on normal crypto-period schedule
+   between two last-known CWs, using PCR-derived clock rather than waiting on ECMG. */
 int ecmg_client_target_parity(ecmg_client_t *c);
 
 /* pure logic behind ecmg_client_target_parity(), exposed only for unit tests to exercise
-   directly with synthetic values - cas.c has no business calling this, use the accessor instead */
+   directly with synthetic values. cas.c has no business calling this, use accessor instead */
 int ecmg_target_parity_calc(ecmg_outage_mode_t outage_mode, int connected, unsigned long packets_per_cp, unsigned long cur, unsigned long published_at, unsigned long epoch);
 
-/* outage_mode=silent, disconnected: 0, stop muxing this vendor's ECM PID - a receiver on a
-   multi-CAS mux can move to another vendor instead of hanging on a stale key. frozen/cycling:
-   always 1, they keep resending known-good ECM material indefinitely. pure, unit-testable. */
+/* outage_mode=silent, disconnected: 0, stop muxing this vendor's ECM PID. receiver on
+   multi-CAS mux can move to another vendor instead of hanging on stale key. frozen/cycling:
+   always 1, keep resending known-good ECM material indefinitely. pure, unit-testable. */
 int ecmg_ecm_available_calc(ecmg_outage_mode_t outage_mode, int connected);
 
 /* ETSI TS 103 197 clause 5: ECMG<->SCS message_type/parameter_type values.

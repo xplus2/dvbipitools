@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -17,6 +18,7 @@
 #include "lib/tva/xmltv.h"
 #include "listen.h"
 #include "version.h"
+#include "wrapper.h"
 
 #define RECV_BUF 65536
 
@@ -87,6 +89,8 @@ int listen_run(const config_t *cfg) {
     size_t len;
     const unsigned char *au, *sr_bytes;
     size_t au_len, sr_len;
+    unsigned char *unwrapped;
+    size_t unwrapped_len;
     bitreader_t br;
     strrepo_reader_t sr;
     bcg_doc_t candidate;
@@ -102,16 +106,24 @@ int listen_run(const config_t *cfg) {
       continue;
     segments++;
 
-    if (container_parse(data, len, &au, &au_len, &sr_bytes, &sr_len))
+    if (wrapper_parse(data, len, &unwrapped, &unwrapped_len))
       continue;
+    if (container_parse(unwrapped, unwrapped_len, &au, &au_len, &sr_bytes, &sr_len)) {
+      free(unwrapped);
+      continue;
+    }
     bitreader_init(&br, au, au_len);
-    if (strrepo_reader_init(&sr, sr_bytes, sr_len))
+    if (strrepo_reader_init(&sr, sr_bytes, sr_len)) {
+      free(unwrapped);
       continue;
+    }
     bcg_doc_init(&candidate);
     if (accessunit_decode(&br, &sr, &candidate, &nfuu)) {
       bcg_doc_free(&candidate);
+      free(unwrapped);
       continue;
     }
+    free(unwrapped);
     if (have_doc)
       bcg_doc_free(&doc);
     doc = candidate;

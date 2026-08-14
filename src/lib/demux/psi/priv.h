@@ -35,7 +35,7 @@ struct psi {
   pmt_cand_t pmt_cand[PSI_MAX_PROGRAMS];
   int pmt_cand_count;
   unsigned preferred_pmt_pid; /* 0 = none, auto-select whichever candidate resolves first */
-  int pmt_locked;             /* program_number/pmt_pid finalized, pmt_cand[pmt_lock_idx] is the live one */
+  int pmt_locked;             /* program_number/pmt_pid finalized: pmt_cand[pmt_lock_idx] wins */
   int pmt_lock_idx;
 
   int multi_mode; /* every candidate resolves independently, see psi_enable_multi_program() */

@@ -21,7 +21,7 @@ typedef struct cas cas_t;
 cas_t *cas_start(const config_t *cfg, const psi_t *psi, const out_es_t *es, int es_count, unsigned pcr_out_pid);
 void cas_stop(cas_t *c);
 
-/* MPTS: no single program's PCR is trustworthy as mux clock (any one can drop) - crypto-period
+/* MPTS: no single program's PCR is trustworthy as mux clock (any one can drop). crypto-period
    timing runs off cas_wall_tick() instead. es_lists[p]/es_counts[p]: program p's remux_es().
    NULL: --cas-pids resolves to 0 pids everywhere. */
 cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, const int *es_counts, unsigned n_programs);
@@ -30,7 +30,7 @@ cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, con
    call every tick regardless of live programs - keeps ticking through all-down. */
 void cas_wall_tick(cas_t *c, double now_s);
 
-/* 1: PCR-detection grace period passed, none seen - fatal, caller stops */
+/* 1: PCR-detection grace period passed, none seen. fatal, caller stops */
 int cas_failed(cas_t *c);
 unsigned cas_pcr_pid(cas_t *c);
 
@@ -65,11 +65,11 @@ int cas_vendor_ecm_due(cas_t *c, size_t idx, double now, unsigned char *out, siz
 /* 0: filled. -1: queue empty */
 int cas_vendor_next_emm(cas_t *c, size_t idx, unsigned char *out, size_t cap, size_t *out_len);
 
-/* SIGHUP: rescan --biss2-ca-receivers, force an SK rotation if the entitled set changed
-   (revocation). no-op outside BISS-CA mode - caller decides when SIGHUP fired */
+/* SIGHUP: rescan --biss2-ca-receivers, force an SK rotation if entitled set changed
+   (revocation). no-op outside BISS-CA mode. caller decides when SIGHUP fired */
 void cas_reload_receivers(cas_t *c);
 
-/* below: pure helpers, exposed for unit tests only - remux.c has no business calling these */
+/* below: pure helpers, exposed for unit tests only. remux.c has no business calling these */
 
 /* resolves --cas-pids (pids + video/audio keywords) against es to a deduped output-pid
    list, capped at cap. returns count written. */

@@ -17,8 +17,10 @@ add_executable(dipifccret
     channel/ring.c
     listen.c
     ret/ret.c
+    ret/rtx_session_table.c
     ret/mcsend.c
     fcc/burst.c
+    fcc/burst_table.c
     ../lib/log.c
     ../lib/argutil.c
     ../lib/signal.c

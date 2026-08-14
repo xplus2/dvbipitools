@@ -10,7 +10,7 @@
 typedef struct {
   uint32_t ssrc; /* original stream's, Annex F.6.2.2 */
   uint16_t osn; /* original seq, RFC 4588 */
-  const unsigned char *payload; /* points into the input buffer */
+  const unsigned char *payload; /* points into input buffer */
   size_t payload_len;
 } rtx_pkt_t;
 

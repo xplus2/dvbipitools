@@ -17,8 +17,8 @@ int tspack_feed(tspack_t *pz, const unsigned char *d, size_t len, int (*cb)(void
 /* 13-bit PID from a 188 B TS packet's header (pkt[1],pkt[2]) */
 unsigned tspack_pid(const unsigned char *pkt);
 
-/* payload past the adaptation field: pl, plen, pusi set on success.
-   0 if afc indicates no payload (0 or 2) or the adaptation field length is malformed. */
+/* payload past adaptation field: pl, plen, pusi set on success.
+   0 if afc indicates no payload (0 or 2) or adaptation field length malformed. */
 int tspack_payload(const unsigned char *pkt, const unsigned char **pl, size_t *plen, int *pusi);
 
 /* 12-bit length field from 2 adjacent bytes: (p[0]&0x0F)<<8 | p[1] */

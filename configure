@@ -13,6 +13,8 @@ TESTS=no
 FUZZING=no
 TLS=auto
 CSA2=auto
+RIST=auto
+ZLIB=auto
 
 usage() {
     cat <<EOF
@@ -29,6 +31,8 @@ usage: ./configure [options]
                  support (default: auto-detect OpenSSL via pkg-config)
   --no-csa2      build dipitvhead, dipidescramble without DVB-CSA2 support
                  (default: auto-detect libdvbcsa)
+  --no-rist      skip dipirist (default: auto-detect librist)
+  --no-zlib      build dipibcg without BCG container compression support
   --cc=CC        C compiler (default: cc, or \$CC)
   -h, --help     this help
 EOF
@@ -45,6 +49,8 @@ while [ $# -gt 0 ]; do
         --fuzz)     FUZZING=yes ;;
         --no-tls)   TLS=no ;;
         --no-csa2)  CSA2=no ;;
+        --no-rist)  RIST=no ;;
+        --no-zlib)  ZLIB=no ;;
         --cc=*)     CC=${1#--cc=} ;;
         -h|--help)  usage; exit 0 ;;
         *) echo "configure: unknown option: $1" >&2; usage >&2; exit 1 ;;
@@ -116,7 +122,9 @@ FUZZING := $FUZZING
 TSAN := $TSAN
 TLS := $TLS
 CSA2 := $CSA2
+RIST := $RIST
+ZLIB := $ZLIB
 EOF
 
-echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING tls=$TLS csa2=$CSA2"
+echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING tls=$TLS csa2=$CSA2 rist=$RIST zlib=$ZLIB"
 echo "run 'make' to build."

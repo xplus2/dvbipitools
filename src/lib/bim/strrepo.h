@@ -25,9 +25,9 @@ typedef struct {
   size_t pos; /* next unread byte */
 } strrepo_reader_t;
 
-/* checks/skips the encoding_type byte. returns 0 ok, -1 empty or unsupported encoding */
+/* checks/skips encoding_type byte. returns 0 ok, -1 empty or unsupported encoding */
 int strrepo_reader_init(strrepo_reader_t *sr, const unsigned char *buf, size_t len);
-/* reads the next terminator-delimited string, truncates silently like xml_elem_text.
+/* reads next terminator-delimited string, truncates silently like xml_elem_text.
    0 ok, -1 no more strings (no terminator found before end of buffer) */
 int strrepo_reader_next(strrepo_reader_t *sr, char *out, size_t outcap);
 

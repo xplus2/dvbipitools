@@ -1,6 +1,6 @@
 # dipimetrics
 
-Host-level metrics collector for `dipitvhead`, `dipiradiohead`, `dipisds` and `dipibcg`. 
+Host-level metrics collector for `dipitvhead`, `dipiradiohead`, `dipisds`, `dipibcg` and `dipirist`. 
 Each of those tools, if started with `--metrics-id`, periodically sends a snapshot of its own counters
 over a Unix datagram socket. `dipimetrics` retains the latest snapshot per (component, instance),
 and serves them all as one Prometheus/OpenMetrics document over plain HTTP.

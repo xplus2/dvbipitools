@@ -319,7 +319,7 @@ START_TEST(target_parity_cycling_disconnected_within_cp_unchanged) {
 }
 END_TEST
 
-/* below: standalone integration tests. no swampcastle - a small fake ECMG server
+/* below: standalone integration tests. a small fake ECMG server
    (this process, a loopback socket, a real accept/reply thread) drives the REAL ecmg_client.c
    state machine end to end: connect, handshake, CW_provision/ECM_response, version
    fallback, reconnect after a dropped connection. */

@@ -14,7 +14,7 @@ typedef struct {
   const char *input_path;  /* -i, announce */
   const char *provider;    /* -p, announce: DomainName */
   const char *offering;    /* -O, announce: display Name */
-  char lang[4];            /* -L, announce: ISO 639-2 for the Name; default "deu" */
+  char lang[4];            /* -L, announce: ISO 639-2 for Name; default "deu" */
   int family;              /* AF_INET or AF_INET6, from -m group */
   char mcast_group[64];    /* -m group */
   unsigned mcast_port;     /* -m port */
@@ -33,12 +33,16 @@ typedef struct {
   unsigned char ret_rtx_pt; /* --ret-rtx-pt, default 99 */
   int ret_mc;            /* --ret-mc */
   unsigned ret_mc_port;  /* --ret-mc-port, 0 = reuse each service's own port */
+  int ret_rsi_mc_ret;    /* --ret-rsi-mc-ret, requires --ret-mc */
 
   int fcc_enabled;       /* --fcc-addr given, announce */
   char fcc_addr[64];     /* --fcc-addr host part */
   unsigned fcc_port;     /* --fcc-addr port part */
   unsigned fcc_rtx_time; /* --fcc-rtx-time, default 2000 */
   unsigned char fcc_rtx_pt; /* --fcc-rtx-pt, default 99 */
+  int fcc_resolve_by_port;      /* --fcc-resolve-by-port, matches dipifccret flag of same name */
+  unsigned fcc_resolve_base_port; /* --fcc-resolve-base-port, matches dipifccret */
+  size_t fcc_resolve_max_channels; /* --fcc-resolve-max-channels, must match dipifccret -M, default 384 */
 
   const char *metrics_sock;    /* --metrics; NULL = default socket path */
   const char *metrics_id;      /* --metrics-id; NULL = metrics disabled */

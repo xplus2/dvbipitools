@@ -6,7 +6,4 @@
 
 #include "capture.h"
 
-/* ranges.c: userspace whitelist check, used by frame.c regardless of the installed kernel filter */
-int in_ranges(int family, const void *addr, const cidr_t *ranges, size_t range_count);
-
 #endif

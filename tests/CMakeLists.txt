@@ -16,6 +16,11 @@ dvbipitools_add_unit_test(lib_demux_crc32
     unit/lib/demux/test_crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
 
+dvbipitools_add_unit_test(lib_demux_rtcp
+    unit/lib/demux/test_rtcp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/rtcp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/rtcp_build.c)
+
 dvbipitools_add_unit_test(lib_demux_psi
     unit/lib/demux/test_psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
@@ -306,8 +311,18 @@ if (OpenSSL_FOUND)
         unit/dipidescramble/test_device.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c)
     target_link_libraries(test_dipidescramble_device PRIVATE OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(dipidescramble_ecm_profile
+        unit/dipidescramble/test_ecm_profile.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c)
+    target_link_libraries(test_dipidescramble_ecm_profile PRIVATE OpenSSL::Crypto)
 
     dvbipitools_add_unit_test(dipidescramble_biss_ca_state
         unit/dipidescramble/test_biss_ca_state.c
@@ -323,10 +338,12 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/pipeline.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/biss_ca_state.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/emmcache.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ipiclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/signal.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -359,7 +376,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c)
     target_link_libraries(test_dipidescramble_pipeline PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 else ()
-    message(WARNING "tests: OpenSSL not found, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_biss_ca_state/dipidescramble_pipeline unit tests")
+    message(WARNING "tests: OpenSSL not found, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_ecm_profile/dipidescramble_biss_ca_state/dipidescramble_pipeline unit tests")
 endif ()
 
 dvbipitools_add_unit_test(lib_bim_bitwriter
@@ -583,6 +600,7 @@ dvbipitools_add_unit_test(dipiradiohead_args
     unit/dipiradiohead/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
@@ -643,6 +661,7 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/retryset.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/ristout_stub.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/inputset.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
@@ -887,6 +906,7 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/ristout_stub.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -1035,7 +1055,9 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/udpxy.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/ristout_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -1054,6 +1076,7 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/demux/mpts_probe.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtx.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtcp_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/bitreader.c
@@ -1078,9 +1101,17 @@ dvbipitools_add_unit_test(dipirec_ret_client
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
+dvbipitools_add_unit_test(dipirec_args
+    unit/dipirec/test_args.c
+    ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
 dvbipitools_add_unit_test(dipifccret_args
     unit/dipifccret/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/ranges.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
@@ -1123,6 +1154,25 @@ dvbipitools_add_unit_test(dipifccret_capture
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
+dvbipitools_add_unit_test(dipifccret_burst_table
+    unit/dipifccret/test_burst_table.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/fcc/burst_table.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/fcc/burst.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/hash.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/ring.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/rtx.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/rtx.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
 dvbipitools_add_unit_test(dipifccret_burst
     unit/dipifccret/test_burst.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/fcc/burst.c
@@ -1143,7 +1193,11 @@ dvbipitools_add_unit_test(dipifccret_burst
 
 function(dvbipitools_add_integration_test tool script_path)
     get_filename_component(case_name ${script_path} NAME_WE)
-    add_test(NAME integration_${tool}_${case_name} COMMAND sh ${script_path} $<TARGET_FILE:${tool}>)
+    set(extra_bins "")
+    foreach(extra ${ARGN})
+        list(APPEND extra_bins $<TARGET_FILE:${extra}>)
+    endforeach()
+    add_test(NAME integration_${tool}_${case_name} COMMAND sh ${script_path} $<TARGET_FILE:${tool}> ${extra_bins})
 endfunction()
 
 file(GLOB DIPIBIM_INTEGRATION_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/dipibim/*.sh")
@@ -1195,9 +1249,19 @@ foreach(script ${DIPIFCCRET_INTEGRATION_SCRIPTS})
     dvbipitools_add_integration_test(dipifccret ${script})
 endforeach()
 
+if (TARGET dipirist)
+    file(GLOB DIPIRIST_INTEGRATION_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/dipirist/*.sh")
+    foreach(script ${DIPIRIST_INTEGRATION_SCRIPTS})
+        dvbipitools_add_integration_test(dipirist ${script} dipirec)
+    endforeach()
+else ()
+    message(WARNING "tests: dipirist not built (librist missing), skipping its integration tests")
+endif ()
+
 dvbipitools_add_unit_test(dipifccret_ret
     unit/dipifccret/test_ret.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ret.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/rtx_session_table.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/hash.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/ring.c
@@ -1214,6 +1278,10 @@ dvbipitools_add_unit_test(dipifccret_ret
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
+dvbipitools_add_unit_test(dipifccret_rtx_session_table
+    unit/dipifccret/test_rtx_session_table.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/rtx_session_table.c)
 
 dvbipitools_add_unit_test(lib_metrics_protocol
     unit/lib/metrics/test_protocol.c
@@ -1282,6 +1350,7 @@ dvbipitools_add_unit_test(dipibcg_announce
     ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/dipibcg/container.c
+    ${CMAKE_SOURCE_DIR}/src/dipibcg/wrapper_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
@@ -1296,6 +1365,7 @@ dvbipitools_add_unit_test(dipibcg_listen
     ${CMAKE_SOURCE_DIR}/src/dipibcg/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
     ${CMAKE_SOURCE_DIR}/src/dipibcg/container.c
+    ${CMAKE_SOURCE_DIR}/src/dipibcg/wrapper_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/xmltv.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c
@@ -1315,10 +1385,27 @@ dvbipitools_add_unit_test(dipibcg_listen
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
+find_package(ZLIB)
+if (ZLIB_FOUND)
+    dvbipitools_add_unit_test(dipibcg_wrapper
+        unit/dipibcg/test_wrapper.c
+        ${CMAKE_SOURCE_DIR}/src/dipibcg/wrapper.c)
+    target_link_libraries(test_dipibcg_wrapper PRIVATE ZLIB::ZLIB)
+else ()
+    message(WARNING "tests: zlib not found, skipping dipibcg_wrapper unit test")
+endif ()
+
 dvbipitools_add_unit_test(dipisds_args
     unit/dipisds/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
+dvbipitools_add_unit_test(dipirist_args
+    unit/dipirist/test_args.c
+    ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(dipisds_input

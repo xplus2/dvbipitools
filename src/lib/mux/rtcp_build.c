@@ -58,35 +58,98 @@ size_t rtcp_build_ff(uint32_t sender_ssrc, uint32_t media_ssrc, const rtcp_nack_
   return total;
 }
 
-size_t rtcp_build_rsi_addr(uint32_t ssrc, uint32_t summarized_ssrc, uint32_t ntp_sec, uint32_t ntp_frac, uint16_t port, const unsigned char *addr, size_t addr_len, unsigned char *out, size_t cap) {
-  unsigned srbt;
-  size_t sub_len, total, words;
+size_t rtcp_build_rsi_header(uint32_t ssrc, uint32_t summarized_ssrc, uint32_t ntp_sec, uint32_t ntp_frac, size_t total_len, unsigned char *out, size_t cap) {
+  size_t words;
 
-  if (addr_len == 4)
-    srbt = 0; /* SRBT 0 = IPv4 unicast feedback address, F.5.3 */
-  else if (addr_len == 16)
-    srbt = 1; /* SRBT 1 = IPv6 */
-  else
-    return 0;
-
-  sub_len = 4 + addr_len; /* SRBT+Length+Port header, then the address */
-  total = 20 + sub_len;
-  if (cap < total)
+  if (cap < 20 || total_len < 20 || total_len % 4 != 0)
     return 0;
 
   out[0] = 0x80; /* V=2, P=0, reserved=0 */
   out[1] = RTCP_PT_RSI;
-  words = total / 4 - 1;
+  words = total_len / 4 - 1;
   wr16(out + 2, (uint16_t)words);
   wr32(out + 4, ssrc);
   wr32(out + 8, summarized_ssrc);
   wr32(out + 12, ntp_sec);
   wr32(out + 16, ntp_frac);
 
-  out[20] = (unsigned char)srbt;
-  out[21] = (unsigned char)(sub_len / 4);
-  wr16(out + 22, port);
-  memcpy(out + 24, addr, addr_len);
+  return 20;
+}
+
+size_t rtcp_build_rsi_srbt_addr(const unsigned char *addr, size_t addr_len, uint16_t port, unsigned char *out, size_t cap) {
+  unsigned srbt;
+  size_t sub_len;
+
+  if (addr_len == 4)
+    srbt = 0; /* SRBT 0 = IPv4 unicast feedback address, F.5.3 Figure F.8 */
+  else if (addr_len == 16)
+    srbt = 1; /* SRBT 1 = IPv6, Figure F.8, "not supported in DVB", caller policy to withhold */
+  else
+    return 0;
+
+  sub_len = 4 + addr_len; /* SRBT(1)+Length(1)+Port(2)+address */
+  if (cap < sub_len)
+    return 0;
+
+  out[0] = (unsigned char)srbt;
+  out[1] = (unsigned char)(sub_len / 4);
+  wr16(out + 2, port);
+  memcpy(out + 4, addr, addr_len);
+
+  return sub_len;
+}
+
+size_t rtcp_build_rsi_srbt_dns(const char *name, size_t name_len, uint16_t port, unsigned char *out, size_t cap) {
+  size_t data_len, padded, total;
+
+  if (name_len == 0 || name_len > 250)
+    return 0;
+
+  data_len = name_len + 1; /* NUL terminator, Figure F.8 DNS-name padding rule */
+  padded = (data_len + 3) & ~(size_t)3;
+  total = 4 + padded;
+  if (cap < total)
+    return 0;
+
+  out[0] = 2; /* SRBT 2 = DNS name unicast feedback, Figure F.8 */
+  out[1] = (unsigned char)(total / 4);
+  wr16(out + 2, port);
+  memset(out + 4, 0, padded);
+  memcpy(out + 4, name, name_len);
+
+  return total;
+}
+
+size_t rtcp_build_rsi_srbt_bandwidth(double kbps, unsigned char *out, size_t cap) {
+  uint32_t fixed_point;
+
+  if (cap < 8 || kbps < 0.0 || kbps >= 65536.0)
+    return 0;
+
+  out[0] = 11; /* SRBT 11 = "Receiver Bandwidth", Figure F.10 */
+  out[1] = 2;  /* sub-report length: 2 32-bit words */
+  wr16(out + 2, 0x4000); /* S=0, R=1 (applies per RET-enabled HNED), Reserved=0 */
+  fixed_point = (uint32_t)(kbps * 65536.0); /* Q16.16, binary point between byte 2 and 3 */
+  wr32(out + 4, fixed_point);
+
+  return 8;
+}
+
+size_t rtcp_build_rsi_srbt_collision(const uint32_t *ssrcs, size_t count, unsigned char *out, size_t cap) {
+  size_t total, i;
+
+  if (count == 0 || count > 255)
+    return 0;
+
+  total = 4 + count * 4; /* SRBT(1)+Length(1)+Reserved(2), then n x 32-bit Collision SSRC, Figure F.9 */
+  if (cap < total)
+    return 0;
+
+  out[0] = 8; /* SRBT 8 = SSRC collision list */
+  out[1] = (unsigned char)(total / 4);
+  wr16(out + 2, 0); /* Reserved */
+  for (i = 0; i < count; i++)
+    wr32(out + 4 + i * 4, ssrcs[i]);
 
   return total;
 }

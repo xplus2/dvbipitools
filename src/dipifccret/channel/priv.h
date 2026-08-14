@@ -21,6 +21,7 @@ typedef struct {
   _Atomic unsigned gen; /* seqlock: odd = write in progress, even = stable */
   _Atomic uint16_t seq;
   _Atomic uint32_t timestamp;
+  _Atomic unsigned char dscp;
   _Atomic uint64_t payload[RET_PAYLOAD_WORDS];
   _Atomic size_t payload_len;
   _Atomic int valid;
@@ -30,6 +31,7 @@ typedef struct {
   _Atomic unsigned gen; /* odd = write in progress, even = stable */
   _Atomic uint16_t seq;
   _Atomic uint32_t timestamp;
+  _Atomic unsigned char dscp;
   _Atomic uint64_t payload[FCC_PAYLOAD_WORDS];
   _Atomic size_t payload_len;
 } fcc_ring_entry_t;
@@ -52,6 +54,8 @@ struct channel_table {
   size_t ssrc_hash_mask;
   size_t ssrc_hash_used;
 
+  size_t *resolve_hash; /* hash(family,addr,port)%max_channels -> slot+1, no probe, sized max_channels not padded */
+
   pthread_mutex_t lock; /* guards hash/hash_used and ssrc_hash/ssrc_hash_used above */
 
   size_t reap_cursor; /* channel_table_reap_step()'s scan position, wraps at max_channels */
@@ -70,8 +74,8 @@ void ssrc_hash_remove(channel_table_t *t, size_t slot_idx, uint32_t ssrc);
 void ssrc_hash_insert(channel_table_t *t, size_t slot_idx, uint32_t ssrc);
 
 /* ring.c */
-void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len);
+void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len);
 int scan_ts_packets(psi_t *psi, const unsigned char *payload, size_t payload_len);
-void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len, int is_rap);
+void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len, int is_rap);
 
 #endif

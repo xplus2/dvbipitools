@@ -10,7 +10,7 @@
 typedef struct {
   unsigned program_number;
   unsigned pmt_pid;
-  char name[PSI_NAME]; /* "" if not resolved within the name-wait budget */
+  char name[PSI_NAME]; /* "" if not resolved within name-wait budget */
 } mpts_probe_program_t;
 
 typedef enum {

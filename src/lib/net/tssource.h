@@ -35,7 +35,7 @@ typedef struct {
 
 typedef struct tssrc tssrc_t;
 
-/* opens per cfg->kind. NULL on failure (logged). reason_out: nullable, set only on NULL return */
+/* opens per cfg->kind. NULL on failure. reason_out: nullable, set only on NULL return */
 tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out);
 
 /* TS bytes, RTP payload unwrapped if present. >0 len, 0 transient (retry), -1 hard error/EOF.
@@ -55,8 +55,8 @@ uint32_t tssrc_last_rtp_ts(const tssrc_t *s);
    on top of the joined group. NULL unless the kind is TSSRC_RTP/TSSRC_UDP. */
 mcast_t *tssrc_mcast(tssrc_t *s);
 
-/* underlying fd, for a caller's own poll(); valid for the life of s. -1 for TSSRC_UDPXY (no
-   fd accessor exists there yet - unreachable from any tool's CLI today, so not added). */
+/* underlying fd, for caller's own poll(); valid for life of s. -1 for TSSRC_UDPXY
+   (no fd accessor). */
 int tssrc_fd(const tssrc_t *s);
 
 /* TSSRC_FILE/TSSRC_STDIN, seekable underlying fd only (best-effort, silent no-op otherwise):
@@ -80,7 +80,7 @@ short tssrc_open_async_poll_events(const tssrc_open_t *o);
 /* reason_out: nullable, set only on TSSRC_OPEN_ERROR */
 tssrc_open_state_t tssrc_open_async_step(tssrc_open_t *o, net_err_reason_t *reason_out);
 
-/* DONE only: hands over the tssrc_t, frees the async handle */
+/* DONE only: hands over tssrc_t, frees async handle */
 tssrc_t *tssrc_open_async_take(tssrc_open_t *o);
 
 /* frees handle + owned state; safe at any state incl. PENDING */

@@ -38,7 +38,6 @@ typedef struct {
 void bcg_doc_init(bcg_doc_t *d);
 void bcg_doc_free(bcg_doc_t *d);
 
-/* grows the backing array as needed, returns a zeroed new entry */
 bcg_channel_t *bcg_add_channel(bcg_doc_t *d);
 bcg_programme_t *bcg_add_programme(bcg_doc_t *d);
 

@@ -66,6 +66,12 @@ else ()
     set(CSA2_SRC ../lib/scrambler/csa2_stub.c)
 endif ()
 
+if (DVBIPITOOLS_HAVE_RIST)
+    set(RIST_SRC ../lib/net/ristout.c)
+else ()
+    set(RIST_SRC ../lib/net/ristout_stub.c)
+endif ()
+
 # keep in sync with CMakeLists/Makefile
 add_executable(dipiradiohead
     main.c
@@ -81,6 +87,7 @@ add_executable(dipiradiohead
     ../lib/net/multicast.c
     ../lib/net/netconnect.c
     ${TLS_SRC}
+    ${RIST_SRC}
     ../lib/net/httpclient/httpclient.c
     ../lib/net/httpclient/url.c
     ../lib/net/httpclient/read.c
@@ -136,6 +143,10 @@ endif ()
 if (DIPIRADIOHEAD_HAVE_CSA2)
     target_include_directories(dipiradiohead PRIVATE ${DVBCSA_INCLUDE_DIR})
     target_link_libraries(dipiradiohead PRIVATE ${DVBCSA_LIBRARY})
+endif ()
+
+if (DVBIPITOOLS_HAVE_RIST)
+    target_link_libraries(dipiradiohead PRIVATE PkgConfig::RIST)
 endif ()
 
 # ECMG client thread: pthread is a hard dependency from here on, not optional

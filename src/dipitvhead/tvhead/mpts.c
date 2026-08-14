@@ -215,6 +215,13 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       goto done;
     }
   }
+  if (cfg->n_rist > 0) {
+    out.rist = tvhead_rist_open(cfg);
+    if (!out.rist) {
+      rc = 1;
+      goto done;
+    }
+  }
   out.pacer = bitrate_pacer_new(cfg->bitrate_kbps ? (double)cfg->bitrate_kbps * 1000.0 : 0.0, cfg->stuff, cfg->burst_limit);
   if (!out.pacer) {
     log_line("bitrate pacer setup failed");
@@ -381,10 +388,6 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
         bl->off += chunk;
         if (bl->off >= bl->len)
           bl->len = bl->off = 0;
-        if (out.had_error) {
-          rc = 1;
-          goto done;
-        }
       }
     }
     rr_start = n ? (rr_start + 1) % n : 0;
@@ -438,10 +441,6 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       for (k = 0; k < (unsigned)stuff_n; k++)
         send_null_packet(&out);
     }
-    if (out.had_error) {
-      rc = 1;
-      goto done;
-    }
     if (cfg->verbose && now - last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - run_start, out.packets);
       fflush(stderr);
@@ -473,6 +472,8 @@ done:
   if (outmc) {
     if (out.rtph)
       rtpheader_free(out.rtph);
+    if (out.rist)
+      ristout_close(out.rist);
     if (out.pacer)
       bitrate_pacer_free(out.pacer);
     mcast_close(outmc);
@@ -480,7 +481,7 @@ done:
 
   if (cfg->verbose && outmc && log_stderr_is_tty())
     fputc('\n', stderr);
-  if (rc == 0 && outmc && !out.had_error)
+  if (rc == 0 && outmc)
     log_line("stopped.");
-  return (rc || (outmc && out.had_error)) ? 1 : 0;
+  return rc ? 1 : 0;
 }

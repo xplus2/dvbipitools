@@ -29,7 +29,7 @@ int biss_ca_entitlement_key_id(const biss_ca_key_t *k, unsigned char out[BISS_CA
    out always BISS_CA_RSA_BYTES. 0 ok, -1 bad args/no backend/oversized input */
 int biss_ca_rsa_encrypt(const biss_ca_key_t *pub, const unsigned char *in, size_t in_len, unsigned char out[BISS_CA_RSA_BYTES]);
 
-/* out_len receives the recovered plaintext length (<= BISS_CA_SESSION_DATA_MAX). 0 ok, -1 fail */
+/* out_len receives recovered plaintext length (<= BISS_CA_SESSION_DATA_MAX). 0 ok, -1 fail */
 int biss_ca_rsa_decrypt(const biss_ca_key_t *priv, const unsigned char in[BISS_CA_RSA_BYTES], unsigned char *out, size_t out_cap, size_t *out_len);
 
 /* AES-128-CBC, single 16-byte block, no padding. 0 ok, -1 bad args/no backend */

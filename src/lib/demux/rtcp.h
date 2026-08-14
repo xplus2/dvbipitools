@@ -9,6 +9,9 @@
 
 #define RTCP_NACK_MAX_ENTRIES 32 /* FCI entries per RTPFB packet, defensive cap */
 
+#define RTCP_SFMT_RAMS_R 1 /* RFC 6285 7.2 */
+#define RTCP_SFMT_RAMS_T 3 /* RFC 6285 7.4 */
+
 typedef struct {
   uint16_t pid; /* seq of first lost packet */
   uint16_t blp; /* bit n set = seq pid+n+1 also lost */
@@ -45,14 +48,30 @@ typedef void (*rtcp_rams_r_cb)(const rtcp_rams_r_t *req, void *user);
 typedef struct {
   uint32_t sender_ssrc;
   uint32_t media_ssrc;
-  int has_first_mc_seqnum; /* type 61 present - client already joined, got primary MC packet */
-  uint32_t first_mc_seqnum; /* extended RTP seqnum of first multicast packet received */
+  int has_first_mc_seqnum; /* type 61: client already on primary MC */
+  uint32_t first_mc_seqnum; /* 32-bit extended, not raw 16-bit RTP seq */
 } rtcp_rams_t_t;
 
 /* called per RAMS-T termination found */
 typedef void (*rtcp_rams_t_cb)(const rtcp_rams_t_t *term, void *user);
 
-/* skips SR/RR/SDES/BYE/RAMS-I; stops on malformed length, no misparse. any cb may be NULL to ignore that mtype. */
-void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_t_cb rams_t_cb, void *user);
+#define RTCP_CNAME_MAX 64 /* SDES CNAME, truncated if longer. only uniqueness matters here */
+
+/* RFC 3550 6.5, one SDES chunk with a CNAME item */
+typedef struct {
+  uint32_t ssrc;
+  char cname[RTCP_CNAME_MAX];
+  size_t cname_len;
+} rtcp_sdes_t;
+
+/* called per SDES chunk that carries a CNAME item (chunks without one are skipped) */
+typedef void (*rtcp_sdes_cb)(const rtcp_sdes_t *sdes, void *user);
+
+/* sfmt: RFC 6285 7.1 (1=RAMS-R, 3=RAMS-T). fires alongside normal callback, doesn't
+   suppress it. malformed TLV region still yields whatever parsed before corruption hit */
+typedef void (*rtcp_malformed_cb)(unsigned sfmt, uint32_t sender_ssrc, uint32_t media_ssrc, void *user);
+
+/* skips SR/RR/BYE/RAMS-I; parses SDES CNAME items if sdes_cb given. stops on malformed length, no misparse. any cb may be NULL to ignore that mtype. */
+void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_t_cb rams_t_cb, rtcp_sdes_cb sdes_cb, rtcp_malformed_cb malformed_cb, void *user);
 
 #endif

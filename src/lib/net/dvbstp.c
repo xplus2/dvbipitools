@@ -10,21 +10,23 @@
 #include "dvbstp.h"
 
 size_t dvbstp_parse_header(const unsigned char *buf, size_t len, dvbstp_header_t *h) {
-  unsigned ver, priv_words, compr;
+  unsigned ver, priv_words, compr, payload_id;
   size_t hdrlen;
   if (len < 12)
     return 0;
   ver = (buf[0] >> 6) & 0x03;
   if (ver != 0)
     return 0;
+  payload_id = buf[4];
   compr = (buf[11] >> 5) & 0x07;
-  if (compr != 0) /* only "none" is valid for payload ids 0x01/0x02, clause 5.4.1.3.4 table 12 */
-    return 0;
+  if (compr != 0 && (payload_id == DVBSTP_PAYLOAD_SP_DISCOVERY || payload_id == DVBSTP_PAYLOAD_BROADCAST_DISCOVERY))
+    return 0; /* only "none" is valid for these two, clause 5.4.1.3.4 table 12 */
 
   memset(h, 0, sizeof *h);
   h->crc_present = buf[0] & 0x01;
   h->total_segment_size = ((unsigned)buf[1] << 16) | ((unsigned)buf[2] << 8) | buf[3];
-  h->payload_id = buf[4];
+  h->payload_id = payload_id;
+  h->compr = compr;
   h->segment_id = ((unsigned)buf[5] << 8) | buf[6];
   h->segment_version = buf[7];
   h->section_number = ((unsigned)buf[8] << 4) | (buf[9] >> 4);
@@ -45,7 +47,7 @@ size_t dvbstp_parse_header(const unsigned char *buf, size_t len, dvbstp_header_t
   return hdrlen;
 }
 
-int dvbstp_send_segment(mcast_t *m, unsigned payload_id, unsigned segment_id, unsigned segment_version, int has_provider_id, unsigned provider_id, int want_crc, const unsigned char *data, size_t len) {
+int dvbstp_send_segment(mcast_t *m, unsigned payload_id, unsigned segment_id, unsigned segment_version, unsigned compr, int has_provider_id, unsigned provider_id, int want_crc, const unsigned char *data, size_t len) {
   size_t nsections, i;
   unsigned last_section;
   uint32_t crc = 0;
@@ -79,7 +81,7 @@ int dvbstp_send_segment(mcast_t *m, unsigned payload_id, unsigned segment_id, un
     pkt[8] = (unsigned char)((i >> 4) & 0xFF);
     pkt[9] = (unsigned char)(((i & 0x0F) << 4) | ((last_section >> 8) & 0x0F));
     pkt[10] = (unsigned char)(last_section & 0xFF);
-    pkt[11] = (unsigned char)(has_provider_id ? 0x10 : 0x00);
+    pkt[11] = (unsigned char)(((compr & 0x07) << 5) | (has_provider_id ? 0x10 : 0x00));
     hpos = 12;
     if (has_provider_id) {
       pkt[12] = (unsigned char)((provider_id >> 24) & 0xFF);

@@ -34,6 +34,7 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 |       | `--biss2-esw`   | `<hex32>`             | BISS2 Mode E                                        |
 |       | `--biss2-id`    | `<hex32>`             | required with `--biss2-esw`                         |
 |       | `--biss2-ca-key`| `<path>`              | BISS2 Mode CA: receiver RSA private key, PEM        |
+|       | `--ecm-profile` | `<spec>`              | `ecm_profile` templating, see below                 |
 | `-v`  | `--verbose`     |                       | off                                                 |
 |       | `--color`       | `auto\|always\|never` | `auto`                                              |
 | `-h`  | `--help`        |                       |                                                     |
@@ -121,6 +122,42 @@ it and matched against the stream's EMM; the Session Key it decrypts then decryp
 Word(s), same as `-k` does for the generic ECM/EMM CAS path but with BISS-CA's own RSA-OAEP/AES-CBC/CISSA
 key hierarchy, not that CAS's.
 
+### ECM profile (`--ecm-profile`)
+
+Define a flexible template to match the special ECM crafting of a CAS you want to test.
+`<spec>` is comma-separated `key=value`; `+` separates ordered-list values,
+`:` separates a header id from its hex bytes, `header=` repeats (up to 4):
+
+```
+--ecm-profile cipher=<c>,iv=<src>,padding=<p>,
+  hkdf=<0|1>,enc_info=<s>,mac_info=<s>,short_key_source=<truncate|separate_info>,short_key_info=<s>,
+  header=<id>:<hex>[,header=<id>:<hex> ...],
+  include_cp_number=<0|1>,include_ecm_id=<0|1>,
+  field_order=<tok+tok+...>,wire_order=<tok+tok+...>,
+  cp_number_layout=<back|front>,
+  integrity=<none|crc32|hmac-sha256>,integrity_order=<after-encrypt|before-encrypt>,
+  truncate_tag=<4|8>,truncate_from=<left|right>,
+  bind_ecm_id=<0|1>,bind_cp_number=<0|1>,crc32_variant=<ieee|castagnoli>,crc32_endian=<big|little>,
+  cw_count=<n>,cw_group=<tok+tok>,
+  ecm_id=<val>
+```
+
+`cipher`: `aes128-ecb|aes256-ecb|aes128-cbc|aes256-cbc|aes128-gcm|aes256-gcm|des-ede3-ecb|des-ede3-cbc|des-ede-ecb|des-ede-cbc`
+default=`aes256-ecb`. 
+Inclusion of DES is for preservational and educational reasons only. You are encouraged not to pull an _Isla Nubla_ by
+unleashing a dinosaur in modern day.
+
+Tokens (`field_order`/`wire_order`/`cw_group`): the fixed keywords
+`ecm_id`/`cp_number`/`cw`/`cw_group`/`integrity_tag`/`iv`/`ciphertext`/`gcm_tag`, plus any declared
+header id. 
+
+`ecm_id` isn't on the wire and isn't derivable from the transport stream by a Simulcrypt-blind receiver,
+so it's an explicit param. Unset, it falls back to the stream's own ECM PID whenever `include_ecm_id`/`bind_ecm_id` need a value.
+
+Under `cw_count > 1` (lead-CW packing), every combo in the ciphertext still gets fully decrypted and 
+checked for integrity, but only the first (current) one is applied. There is no pre-fetch of the lead/next combo(s).
+
+
 ## Examples
 
 ```sh
@@ -138,4 +175,14 @@ dipidescramble -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccdde
 
 # BISS2 Mode CA: this receiver's own RSA private key
 dipidescramble -i rtp://@239.0.0.1:1975 --biss2-ca-key receiver1.key -o out.ts -v
+
+# complex ECM profile
+dipidescramble -i rtp://@239.0.0.1:1975 -k device.key -s mysmartcardserial-01 -e emm.cache -o out.ts \
+  --ecm-profile cipher=aes128-cbc,iv=cp_number,padding=pkcs7,header=h1:AABB,include_cp_number=1,include_ecm_id=1,integrity=hmac-sha256,truncate_tag=8
+
 ```
+
+## Notes
+
+* ECM/EMM-driven CAS descrambling assumes `AES-256-ECB` for ECMs by default (mathematically
+  identical to `AES-256-CBC` with an empty IV), unless `--ecm-profile` overrides it.

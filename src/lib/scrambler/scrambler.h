@@ -23,8 +23,8 @@ size_t scrambler_cw_len(scramble_algo_t algo);
    188B, ready to send */
 typedef void (*scrambler_emit_cb)(void *ctx, const unsigned char pkt[188]);
 
-/* flushes any pending queued batch for this parity first, under the still-current key -
-   else those packets would silently pick up the new key at flush time. 0: ok. -1: bad
+/* flushes pending queued batch for this parity first, under still-current key.
+   else those packets would silently pick up new key at flush time. 0: ok. -1: bad
    parity/length or backend unavailable */
 int scrambler_set_key(scrambler_t *s, int parity, const unsigned char *cw, size_t cw_len, scrambler_emit_cb emit, void *ctx);
 
@@ -32,7 +32,7 @@ int scrambler_set_key(scrambler_t *s, int parity, const unsigned char *cw, size_
 int scrambler_encrypt_packet(scrambler_t *s, unsigned char pkt[188], int parity);
 
 /* parity read from pkt's own control bits. 0: unscrambled (untouched) or decrypted (control
-   bits cleared). -1: no key for that parity, reserved control value 01, or backend fail -
+   bits cleared). -1: no key for that parity, reserved control value 01, or backend fail.
    packet untouched */
 int scrambler_decrypt_packet(scrambler_t *s, unsigned char pkt[188]);
 
@@ -46,8 +46,8 @@ int scrambler_encrypt_packet_queued(scrambler_t *s, unsigned char pkt[188], int 
    control bits, same failure cases as scrambler_decrypt_packet */
 int scrambler_decrypt_packet_queued(scrambler_t *s, unsigned char pkt[188], scrambler_emit_cb emit, void *ctx);
 
-/* no crypto needed, but keeps pkt's position in whatever *_queued batch is pending - else
-   it could jump ahead of still-queued earlier packets on the same pid */
+/* no crypto needed, but keeps pkt's position in whatever *_queued batch is pending.
+   else it could jump ahead of still-queued earlier packets on same pid */
 void scrambler_passthrough_queued(scrambler_t *s, const unsigned char pkt[188], scrambler_emit_cb emit, void *ctx);
 
 /* flushes+emits anything held by *_queued/passthrough_queued, in order. call at stream end,

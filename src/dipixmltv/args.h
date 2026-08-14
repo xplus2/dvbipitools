@@ -9,7 +9,7 @@ typedef enum { FMT_XMLTV, FMT_TVA } input_fmt_t;
 typedef struct {
   const char *input_path;  /* -i; NULL/"-" = stdin */
   const char *output_path; /* -o; NULL/"-" = stdout */
-  input_fmt_t format;      /* -f, names the INPUT format */
+  input_fmt_t format;      /* -f, names INPUT format */
   const char *map_path;    /* -M, required when format==FMT_XMLTV */
   const char *revmap_path; /* -R, optional, format==FMT_TVA only */
   const char *suggest_scan_path; /* -S, switches to suggest-map mode entirely */

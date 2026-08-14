@@ -49,7 +49,7 @@ START_TEST(packet_cb_batches_until_ts_per_dgram_then_flushes) {
   packet_cb(&o, pkt); /* Nth packet: auto-flush */
   ck_assert_int_eq(o.batch_count, 0);
   ck_assert_uint_eq(o.packets, (unsigned)TS_PER_DGRAM);
-  ck_assert_int_eq(o.had_error, 0);
+  ck_assert_int_eq(o.mc_had_error, 0);
 
   n = mcast_recv(recv, rbuf, sizeof rbuf, NULL);
   ck_assert_int_eq(n, TS_PER_DGRAM * 188);
@@ -72,7 +72,7 @@ START_TEST(flush_batch_is_a_no_op_when_empty) {
   flush_batch(&o); /* batch_count == 0: must not touch mc or pacer */
   ck_assert_int_eq(o.batch_count, 0);
   ck_assert_uint_eq(o.packets, 0u);
-  ck_assert_int_eq(o.had_error, 0);
+  ck_assert_int_eq(o.mc_had_error, 0);
 
   bitrate_pacer_free(pacer);
   mcast_close(send);

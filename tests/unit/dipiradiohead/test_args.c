@@ -160,6 +160,43 @@ START_TEST(biss2_ca_session_id_without_receivers_is_rejected) {
 }
 END_TEST
 
+START_TEST(rist_peer_is_repeatable_and_bonded) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000",
+                  "-R", "rist://1.2.3.4:6000", "-R", "rist://5.6.7.8:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.n_rist, 2u);
+  ck_assert_str_eq(cfg.rist_uri[0], "rist://1.2.3.4:6000");
+  ck_assert_str_eq(cfg.rist_uri[1], "rist://5.6.7.8:6000");
+}
+END_TEST
+
+START_TEST(rist_peer_without_rist_scheme_is_rejected) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000",
+                  "-R", "udp://1.2.3.4:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(rist_secret_without_profile_main_is_rejected) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000",
+                  "-R", "rist://1.2.3.4:6000", "--secret", "hunter2", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(rist_secret_with_profile_main_is_accepted) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000",
+                  "-R", "rist://1.2.3.4:6000", "--profile", "main", "--secret", "hunter2", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.rist_profile, RIST_PROF_MAIN);
+  ck_assert_str_eq(cfg.rist_secret, "hunter2");
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("args");
   TCase *tc = tcase_create("core");
@@ -178,6 +215,10 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, biss2_ca_receivers_mutually_exclusive_with_cas_algo);
   tcase_add_test(tc, biss2_ca_receivers_mutually_exclusive_with_biss2_sw);
   tcase_add_test(tc, biss2_ca_session_id_without_receivers_is_rejected);
+  tcase_add_test(tc, rist_peer_is_repeatable_and_bonded);
+  tcase_add_test(tc, rist_peer_without_rist_scheme_is_rejected);
+  tcase_add_test(tc, rist_secret_without_profile_main_is_rejected);
+  tcase_add_test(tc, rist_secret_with_profile_main_is_accepted);
   suite_add_tcase(s, tc);
   return s;
 }

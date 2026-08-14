@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 
+#include "ecm_profile.h"
 #include "lib/cas/biss/biss.h"
 
 typedef enum { INPUT_RTP, INPUT_UDP, INPUT_STDIN } input_kind_t;
@@ -40,8 +41,9 @@ typedef struct {
   unsigned char biss2_esw[BISS_KEY_LEN]; /* --biss2-esw, parsed */
   unsigned char biss2_id[BISS_KEY_LEN];  /* --biss2-id, required with --biss2-esw */
   int biss1_sw_given;                    /* --biss1-sw; mutually exclusive with --biss2-sw/--biss2-esw */
-  unsigned char biss1_sw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into the full checksummed CSA1 CW */
-  const char *biss2_ca_key_path;         /* --biss2-ca-key, receiver RSA private key PEM; required only if the stream turns out to be BISS Mode CA */
+  unsigned char biss1_sw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into full checksummed CSA1 CW */
+  const char *biss2_ca_key_path;         /* --biss2-ca-key, receiver RSA private key PEM; required only if stream turns out to be BISS Mode CA */
+  ecm_profile_t ecm_profile;             /* --ecm-profile; ecm_profile.set == 0 = AES-256-ECB/CBCnoIV, unchanged */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

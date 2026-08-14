@@ -291,7 +291,7 @@ ret_client_t *ret_client_open(const config_t *cfg) {
 
   if (cfg->ret.mc_enabled) {
     unsigned port = cfg->ret.mc_port ? cfg->ret.mc_port : cfg->source.port;
-    r->repair = mcast_open_ssm(cfg->source.family, cfg->source.group, port, cfg->ret.addr, cfg->iface, 0);
+    r->repair = mcast_open_ssm(cfg->source.family, cfg->source.group, port, cfg->ret.addr, cfg->iface_in, 0);
     if (!r->repair) {
       close(r->uni_fd);
       free(r);

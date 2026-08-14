@@ -123,8 +123,7 @@ static size_t build_emm_g(const unsigned char bk[CRYPTO_KEY_LEN], const unsigned
 }
 
 /* builds a real ECM section: header + CP_CW_COMBINATION's cp_number(2) +
-   AES-256-ECB(cw zero-padded to 16 bytes, under sk) - matches the real
-   Simulcrypt ECMG's ECM payload layout (example: swampcastle's ECMG) */
+   AES-256-ECB(cw zero-padded to 16 bytes, under sk), matches Simulcrypt ECMG's ECM payload layout */
 static size_t build_ecm(const unsigned char sk[CRYPTO_KEY_LEN], const unsigned char *cw, int cw_len, unsigned char *out, size_t cap) {
   unsigned char block[CRYPTO_CW_ENC_LEN];
   EVP_CIPHER_CTX *ctx;

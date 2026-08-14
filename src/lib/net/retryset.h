@@ -29,7 +29,7 @@ typedef struct {
 typedef struct retryset retryset_t;
 
 /* slot_ctxs[i]/labels[i] borrowed (labels/entries may be NULL, log only). NULL if n too big or alloc failure.
-   retry: error_retry_s > 0 -> that interval. == 0 && n > 1 -> 5s default (logged). 0 && n == 1 -> never. */
+   retry: error_retry_s > 0 -> that interval. == 0 && n > 1 -> 5s default. 0 && n == 1 -> never. */
 retryset_t *retryset_new(unsigned n, void *const *slot_ctxs, const char *const *labels,
                           const retryset_ops_t *ops, long error_retry_s);
 void retryset_free(retryset_t *rs);
@@ -46,7 +46,7 @@ short retryset_poll_events(const retryset_t *rs, unsigned idx);
 /* soonest retry deadline across down slots, RETRYSET_NEVER if none due */
 time_t retryset_next_deadline(const retryset_t *rs);
 
-/* steps the open if connecting, starts one if down and due. call after poll() or on a tick */
+/* steps open if connecting, starts one if down and due. call after poll() or on a tick */
 void retryset_service(retryset_t *rs, unsigned idx, time_t now);
 
 /* call on a hard read error for a connected slot: closes result, reschedules retry */

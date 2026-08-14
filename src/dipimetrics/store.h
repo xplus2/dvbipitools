@@ -25,7 +25,7 @@ typedef struct {
   char metrics_id[METRICS_ID_MAX];
   uint64_t process_start_time;
   uint64_t sequence;
-  uint64_t snapshot_time; /* unix seconds, from the sender */
+  uint64_t snapshot_time; /* unix seconds, from sender */
   double received_mono;   /* mono_seconds() at receipt, for age/expiry */
   stored_entry_t entries[STORE_MAX_ENTRIES];
   int entry_count;

@@ -26,10 +26,10 @@ int mcast_fd(const mcast_t *m);
 /* send-side: no join, no bind. iface NULL = kernel default route. ttl 0 = kernel default (1) */
 mcast_t *mcast_open_send(int family, const char *group, unsigned port, const char *iface, int ttl);
 
-/* one datagram to the group:port given to mcast_open_send. >=0 sent, -1 error */
+/* one datagram to group:port given to mcast_open_send. >=0 sent, -1 error */
 ssize_t mcast_send(mcast_t *m, const void *buf, size_t len);
 
-/* IP_TOS (v4) / IPV6_TCLASS (v6) on the send-side socket, e.g. per-packet DSCP marking; 0 on success */
+/* IP_TOS (v4) / IPV6_TCLASS (v6) on send-side socket, e.g. per-packet DSCP marking; 0 on success */
 int mcast_set_tos(mcast_t *m, int tos);
 
 /* leave (recv side) and close */

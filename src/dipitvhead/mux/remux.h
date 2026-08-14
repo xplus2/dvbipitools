@@ -16,14 +16,14 @@
 typedef struct remux remux_t;
 typedef void (*remux_packet_cb)(void *ctx, const unsigned char *pkt188);
 
-/* tables remux.c itself can build - PAT/CAT/SDT/NIT only apply standalone (SPTS);
+/* tables remux.c itself can build. PAT/CAT/SDT/NIT only apply standalone (SPTS);
    MPTS's own PAT/NIT are mpts.c's responsibility, not counted here */
 typedef enum { PSI_TABLE_PAT, PSI_TABLE_PMT, PSI_TABLE_CAT, PSI_TABLE_SDT, PSI_TABLE_NIT, PSI_TABLE_COUNT } psi_table_t;
 
 const char *psi_table_name(psi_table_t table);
 
-/* cumulative, caller-owned (survives remux_t reconnects - a fresh remux_t's
-   per-pid CC/PCR tracking state does not, and should not, carry over) */
+/* cumulative, caller-owned. survives remux_t reconnects: fresh remux_t's
+   per-pid CC/PCR tracking state does not, and should not. */
 typedef struct {
   unsigned long long ts_packets;
   unsigned long long ts_sync_errors;
@@ -40,7 +40,7 @@ typedef struct {
 } ts_metrics_t;
 
 /* pids: borrowed. standalone: SPTS, +PAT/CAT/SDT/NIT/AIT/ECM/EMM. non-standalone (MPTS): only
-   PMT/AIT/ES, SDT via remux_get_sdt_info(). EIT: see remux_emit_eit(). NULL: failed (logged) */
+   PMT/AIT/ES, SDT via remux_get_sdt_info(). EIT: see remux_emit_eit(). NULL: failed */
 remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const psi_t *psi, const out_program_pids_t *pids, int standalone);
 void remux_free(remux_t *r);
 
@@ -53,8 +53,8 @@ struct cas;
 /* NULL detaches */
 void remux_set_cas(remux_t *r, struct cas *cas);
 
-/* now_s: caller's clock, not read internally - testability, avoids a clock read per packet
-   (see mpts_tick()). also drives PMT/AIT (standalone: +PAT/CAT/SDT/NIT) resend.
+/* now_s: caller's clock, not read internally (testability, avoids clock read per packet,
+   see mpts_tick()). also drives PMT/AIT (standalone: +PAT/CAT/SDT/NIT) resend.
    tsm: accumulates this call's TS-integrity counters (nullable) */
 void remux_feed(remux_t *r, double now_s, const unsigned char *pkt188, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm);
 

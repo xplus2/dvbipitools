@@ -14,14 +14,14 @@
 typedef struct tvsrc tvsrc_t;
 
 /* opens per input->input (rtp/udp multicast, http(s), or stdin); cfg->insecure_tls applies to
-   all inputs. NULL on failure (logged). reason_out: nullable, set only on NULL return */
+   all inputs. NULL on failure. reason_out: nullable, set only on NULL return */
 tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_err_reason_t *reason_out);
 
 /* TS bytes, RTP unwrapped if present. >0 len, 0 transient (retry), -1 hard error/EOF.
    reason_out: nullable, set only on -1 */
 ssize_t tvsrc_read(tvsrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out);
 
-/* underlying fd, for a caller's own poll(); valid for the life of s */
+/* underlying fd, for caller's own poll(); valid for life of s */
 int tvsrc_fd(const tvsrc_t *s);
 
 void tvsrc_close(tvsrc_t *s);
@@ -38,7 +38,7 @@ short tvsrc_open_async_poll_events(const tvsrc_open_t *o);
 /* reason_out: nullable, set only on TVSRC_OPEN_ERROR */
 tvsrc_open_state_t tvsrc_open_async_step(tvsrc_open_t *o, net_err_reason_t *reason_out);
 
-/* DONE only: hands over the tvsrc_t, frees the async handle */
+/* DONE only: hands over tvsrc_t, frees async handle */
 tvsrc_t *tvsrc_open_async_take(tvsrc_open_t *o);
 
 /* frees handle + owned state; safe at any state incl. PENDING */

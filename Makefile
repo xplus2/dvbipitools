@@ -95,12 +95,36 @@ dipibim_SRCS := \
 	src/lib/bim/fragment.c \
 	src/lib/bim/accessunit.c
 
+HAVE_LIBZ := $(shell pkg-config --exists zlib && echo yes)
+
+ifeq ($(ZLIB),no)
+HAVE_ZLIB := no
+else
+HAVE_ZLIB := $(HAVE_LIBZ)
+endif
+
+ifeq ($(HAVE_ZLIB),yes)
+dipibcg_ZLIB_SRC := src/dipibcg/wrapper.c
+dipibcg_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipibcg_EXTRA_LDFLAGS := $(shell pkg-config --static --libs zlib)
+else
+dipibcg_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib)
+endif
+else
+dipibcg_ZLIB_SRC := src/dipibcg/wrapper_stub.c
+ifneq ($(ZLIB),no)
+$(warning dipibcg: zlib not found via pkg-config, building without BCG container compression support)
+endif
+endif
+
 dipibcg_SRCS := \
 	src/dipibcg/main.c \
 	src/dipibcg/args.c \
 	src/dipibcg/announce.c \
 	src/dipibcg/listen.c \
 	src/dipibcg/container.c \
+	$(dipibcg_ZLIB_SRC) \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/signal.c \
@@ -140,6 +164,14 @@ else
 HAVE_CSA2 := $(HAVE_DVBCSA)
 endif
 
+HAVE_LIBRIST := $(shell pkg-config --exists librist && echo yes)
+
+ifeq ($(RIST),no)
+HAVE_RIST := no
+else
+HAVE_RIST := $(HAVE_LIBRIST)
+endif
+
 ifeq ($(HAVE_TLS),yes)
 dipirec_TLS_SRC := src/lib/net/tls.c
 dipirec_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
@@ -155,6 +187,18 @@ $(warning dipirec: OpenSSL not found via pkg-config, building without HTTPS supp
 endif
 endif
 
+ifeq ($(HAVE_RIST),yes)
+dipirec_RIST_SRC := src/lib/net/ristout.c
+dipirec_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipirec_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
+else
+dipirec_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
+endif
+else
+dipirec_RIST_SRC := src/lib/net/ristout_stub.c
+endif
+
 dipirec_SRCS := \
 	src/dipirec/main.c \
 	src/dipirec/args.c \
@@ -167,7 +211,11 @@ dipirec_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/udpxy.c \
 	src/lib/net/tssource.c \
+	src/lib/net/tssink.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c \
 	$(dipirec_TLS_SRC) \
+	$(dipirec_RIST_SRC) \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -184,6 +232,7 @@ dipirec_SRCS := \
 	src/lib/demux/pes.c \
 	src/lib/demux/mpts_probe.c \
 	src/lib/mux/rtcp_build.c \
+	src/lib/mux/rtpheader.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/mkv/mkv.c \
 	src/lib/mux/mkv/bitreader.c \
@@ -240,6 +289,18 @@ dipiradiohead_EXTRA_LDFLAGS += $(dipiradiohead_CSA2_EXTRA_LDFLAGS)
 dipiradiohead_EXTRA_CFLAGS += -pthread
 dipiradiohead_EXTRA_LDFLAGS += -pthread
 
+ifeq ($(HAVE_RIST),yes)
+dipiradiohead_RIST_SRC := src/lib/net/ristout.c
+dipiradiohead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
+else
+dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
+endif
+else
+dipiradiohead_RIST_SRC := src/lib/net/ristout_stub.c
+endif
+
 dipiradiohead_SRCS := \
 	src/dipiradiohead/main.c \
 	src/dipiradiohead/args.c \
@@ -254,6 +315,7 @@ dipiradiohead_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	$(dipiradiohead_TLS_SRC) \
+	$(dipiradiohead_RIST_SRC) \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -343,6 +405,18 @@ dipitvhead_EXTRA_LDFLAGS += $(dipitvhead_CSA2_EXTRA_LDFLAGS)
 dipitvhead_EXTRA_CFLAGS += -pthread
 dipitvhead_EXTRA_LDFLAGS += -pthread
 
+ifeq ($(HAVE_RIST),yes)
+dipitvhead_RIST_SRC := src/lib/net/ristout.c
+dipitvhead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
+else
+dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
+endif
+else
+dipitvhead_RIST_SRC := src/lib/net/ristout_stub.c
+endif
+
 dipitvhead_SRCS := \
 	src/dipitvhead/main.c \
 	src/dipitvhead/args.c \
@@ -380,6 +454,7 @@ dipitvhead_SRCS := \
 	src/lib/net/tssource.c \
 	src/lib/net/retryset.c \
 	$(dipitvhead_TLS_SRC) \
+	$(dipitvhead_RIST_SRC) \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -424,8 +499,10 @@ dipifccret_SRCS := \
 	src/dipifccret/channel/ring.c \
 	src/dipifccret/listen.c \
 	src/dipifccret/ret/ret.c \
+	src/dipifccret/ret/rtx_session_table.c \
 	src/dipifccret/ret/mcsend.c \
 	src/dipifccret/fcc/burst.c \
+	src/dipifccret/fcc/burst_table.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/signal.c \
@@ -491,6 +568,7 @@ dipidescramble_SRCS := \
 	src/dipidescramble/args.c \
 	src/dipidescramble/crypto.c \
 	src/dipidescramble/device.c \
+	src/dipidescramble/ecm_profile.c \
 	src/dipidescramble/biss_ca_state.c \
 	src/dipidescramble/emmcache.c \
 	src/dipidescramble/ipiclient.c \
@@ -535,6 +613,54 @@ else
 $(warning dipidescramble: OpenSSL not found via pkg-config, skipping this tool entirely (RSA/AES crypto is its whole purpose))
 endif
 
+ifeq ($(HAVE_RIST),yes)
+TOOLS += dipirist
+dipirist_EXTRA_CFLAGS := $(shell pkg-config --cflags librist)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipirist_EXTRA_LDFLAGS := $(shell pkg-config --static --libs librist)
+else
+dipirist_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
+endif
+
+ifeq ($(HAVE_TLS),yes)
+dipirist_TLS_SRC := src/lib/net/tls.c
+dipirist_EXTRA_CFLAGS += $(shell pkg-config --cflags openssl)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipirist_EXTRA_LDFLAGS += $(shell pkg-config --static --libs openssl)
+else
+dipirist_EXTRA_LDFLAGS += $(shell pkg-config --libs openssl)
+endif
+else
+dipirist_TLS_SRC := src/lib/net/tls_stub.c
+endif
+
+dipirist_SRCS := \
+	src/dipirist/main.c \
+	src/dipirist/args.c \
+	src/dipirist/bridge.c \
+	src/lib/log.c \
+	src/lib/argutil.c \
+	src/lib/ioutil.c \
+	src/lib/signal.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/udpxy.c \
+	src/lib/net/tssource.c \
+	src/lib/net/tssink.c \
+	src/lib/net/ristout.c \
+	$(dipirist_TLS_SRC) \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/demux/rtp.c \
+	src/lib/mux/rtpheader.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c
+else
+$(warning dipirist: librist not found via pkg-config, skipping this tool entirely (RIST support is its whole purpose))
+endif
+
 ALL_OBJS :=
 
 define TOOL_template
@@ -547,7 +673,7 @@ endef
 
 $(foreach t,$(TOOLS),$(eval $(call TOOL_template,$(t))))
 
-UNIT_TESTS := lib_demux_crc32 lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
+UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_rtpheader lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_cadescbuild \
@@ -563,13 +689,14 @@ UNIT_TESTS := lib_demux_crc32 lib_demux_psi lib_demux_psi_section_asm lib_demux_
 	dipiradiohead_source_async dipiradiohead_inputset \
 	dipitvhead_source dipitvhead_args dipitvhead_discover dipitvhead_output dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_bitrate dipitvhead_remux \
 	dipitvhead_simulcrypt_msg dipitvhead_ecmg_client dipitvhead_emmg_server dipitvhead_cas \
-	dipirec_ts_filter dipirec_pace dipirec_ret_client dipirec_record \
-	dipifccret_args dipifccret_listen dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_ret \
+	dipirec_ts_filter dipirec_pace dipirec_ret_client dipirec_record dipirec_args \
+	dipifccret_args dipifccret_listen dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_burst_table dipifccret_ret dipifccret_rtx_session_table dipifccret_capture \
 	lib_metrics_protocol lib_metrics_export \
 	dipimetrics_args dipimetrics_store dipimetrics_render dipimetrics_httpserver \
 	dipibcg_container dipibcg_args dipibcg_announce dipibcg_listen \
 	dipicam378_args \
-	dipisds_args dipisds_input dipisds_format_out dipisds_announce dipisds_listen
+	dipisds_args dipisds_input dipisds_format_out dipisds_announce dipisds_listen \
+	dipirist_args
 
 ifeq ($(HAVE_OPENSSL),yes)
 UNIT_TESTS += lib_scrambler_cissa
@@ -627,6 +754,18 @@ lib_cas_biss_ca_sections_SRCS := \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c
+
+ifeq ($(HAVE_ZLIB),yes)
+UNIT_TESTS += dipibcg_wrapper
+dipibcg_wrapper_BIN := tests/unit/dipibcg/test_wrapper
+dipibcg_wrapper_SRCS := \
+	tests/unit/dipibcg/test_wrapper.c \
+	src/dipibcg/wrapper.c
+dipibcg_wrapper_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib)
+dipibcg_wrapper_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib)
+else
+$(warning tests: zlib not found via pkg-config, skipping dipibcg_wrapper unit test)
+endif
 
 ifeq ($(HAVE_CSA2),yes)
 UNIT_TESTS += lib_scrambler_csa2
@@ -697,9 +836,22 @@ dipidescramble_device_SRCS := \
 	tests/unit/dipidescramble/test_device.c \
 	src/dipidescramble/device.c \
 	src/dipidescramble/crypto.c \
-	src/lib/log.c
+	src/dipidescramble/ecm_profile.c \
+	src/lib/log.c \
+	src/lib/argutil.c
 dipidescramble_device_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_device_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += dipidescramble_ecm_profile
+dipidescramble_ecm_profile_BIN := tests/unit/dipidescramble/test_ecm_profile
+dipidescramble_ecm_profile_SRCS := \
+	tests/unit/dipidescramble/test_ecm_profile.c \
+	src/dipidescramble/ecm_profile.c \
+	src/dipidescramble/crypto.c \
+	src/lib/log.c \
+	src/lib/argutil.c
+dipidescramble_ecm_profile_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+dipidescramble_ecm_profile_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
 UNIT_TESTS += dipidescramble_biss_ca_state
 dipidescramble_biss_ca_state_BIN := tests/unit/dipidescramble/test_biss_ca_state
@@ -720,10 +872,12 @@ dipidescramble_pipeline_SRCS := \
 	src/dipidescramble/pipeline.c \
 	src/dipidescramble/device.c \
 	src/dipidescramble/crypto.c \
+	src/dipidescramble/ecm_profile.c \
 	src/dipidescramble/biss_ca_state.c \
 	src/dipidescramble/emmcache.c \
 	src/dipidescramble/ipiclient.c \
 	src/lib/log.c \
+	src/lib/argutil.c \
 	src/lib/ioutil.c \
 	src/lib/signal.c \
 	src/lib/demux/crc32.c \
@@ -757,7 +911,7 @@ dipidescramble_pipeline_SRCS := \
 dipidescramble_pipeline_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_pipeline_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 else
-$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_biss_ca_state/dipidescramble_pipeline unit tests)
+$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_ecm_profile/dipidescramble_biss_ca_state/dipidescramble_pipeline unit tests)
 endif
 
 lib_metrics_protocol_BIN := tests/unit/lib/metrics/test_protocol
@@ -807,6 +961,14 @@ dipisds_args_SRCS := \
 	tests/unit/dipisds/test_args.c \
 	src/dipisds/args.c \
 	src/lib/argutil.c \
+	src/lib/log.c
+
+dipirist_args_BIN := tests/unit/dipirist/test_args
+dipirist_args_SRCS := \
+	tests/unit/dipirist/test_args.c \
+	src/dipirist/args.c \
+	src/lib/argutil.c \
+	src/lib/ioutil.c \
 	src/lib/log.c
 
 dipisds_input_BIN := tests/unit/dipisds/test_input
@@ -901,6 +1063,7 @@ dipibcg_announce_SRCS := \
 	src/lib/bim/codec.c \
 	src/lib/demux/crc32.c \
 	src/dipibcg/container.c \
+	src/dipibcg/wrapper_stub.c \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
 	src/lib/net/dvbstp.c \
@@ -916,6 +1079,7 @@ dipibcg_listen_SRCS := \
 	src/dipibcg/args.c \
 	src/lib/argutil.c \
 	src/dipibcg/container.c \
+	src/dipibcg/wrapper_stub.c \
 	src/lib/tva/bcg_doc.c \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
@@ -939,6 +1103,12 @@ lib_demux_crc32_BIN := tests/unit/lib/demux/test_crc32
 lib_demux_crc32_SRCS := \
 	tests/unit/lib/demux/test_crc32.c \
 	src/lib/demux/crc32.c
+
+lib_demux_rtcp_BIN := tests/unit/lib/demux/test_rtcp
+lib_demux_rtcp_SRCS := \
+	tests/unit/lib/demux/test_rtcp.c \
+	src/lib/demux/rtcp.c \
+	src/lib/mux/rtcp_build.c
 
 lib_demux_psi_BIN := tests/unit/lib/demux/test_psi
 lib_demux_psi_SRCS := \
@@ -1358,6 +1528,7 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/cas/biss/ca_engine.c \
 	src/lib/net/multicast.c \
 	src/lib/net/retryset.c \
+	src/lib/net/ristout_stub.c \
 	src/dipiradiohead/input/source.c \
 	src/dipiradiohead/input/inputset.c \
 	src/dipiradiohead/input/playlist.c \
@@ -1416,6 +1587,7 @@ dipiradiohead_args_SRCS := \
 	tests/unit/dipiradiohead/test_args.c \
 	src/dipiradiohead/args.c \
 	src/lib/argutil.c \
+	src/lib/ioutil.c \
 	src/lib/cas/cas_args.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/ca_stub.c \
@@ -1644,6 +1816,7 @@ dipitvhead_output_SRCS := \
 	src/lib/cas/biss/ca_engine.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
+	src/lib/net/ristout_stub.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -1877,7 +2050,9 @@ dipirec_record_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/udpxy.c \
 	src/lib/net/tssource.c \
+	src/lib/net/tssink.c \
 	src/lib/net/tls_stub.c \
+	src/lib/net/ristout_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -1896,6 +2071,7 @@ dipirec_record_SRCS := \
 	src/lib/demux/mpts_probe.c \
 	src/lib/mux/rtx.c \
 	src/lib/mux/rtcp_build.c \
+	src/lib/mux/rtpheader.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/mkv/mkv.c \
 	src/lib/mux/mkv/bitreader.c \
@@ -1921,10 +2097,19 @@ dipirec_ret_client_SRCS := \
 	src/lib/signal.c \
 	src/lib/log.c
 
+dipirec_args_BIN := tests/unit/dipirec/test_args
+dipirec_args_SRCS := \
+	tests/unit/dipirec/test_args.c \
+	src/dipirec/args.c \
+	src/lib/argutil.c \
+	src/lib/ioutil.c \
+	src/lib/log.c
+
 dipifccret_args_BIN := tests/unit/dipifccret/test_args
 dipifccret_args_SRCS := \
 	tests/unit/dipifccret/test_args.c \
 	src/dipifccret/args.c \
+	src/dipifccret/capture/ranges.c \
 	src/lib/argutil.c \
 	src/lib/log.c
 
@@ -1961,6 +2146,26 @@ dipifccret_ret_mcsend_SRCS := \
 	src/lib/signal.c \
 	src/lib/log.c
 
+dipifccret_burst_table_BIN := tests/unit/dipifccret/test_burst_table
+dipifccret_burst_table_SRCS := \
+	tests/unit/dipifccret/test_burst_table.c \
+	src/dipifccret/fcc/burst_table.c \
+	src/dipifccret/fcc/burst.c \
+	src/dipifccret/channel/channel.c \
+	src/dipifccret/channel/hash.c \
+	src/dipifccret/channel/ring.c \
+	src/lib/mux/rtx.c \
+	src/lib/demux/rtx.c \
+	src/lib/demux/rtp.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/crc32.c \
+	src/lib/log.c
+
 dipifccret_burst_BIN := tests/unit/dipifccret/test_burst
 dipifccret_burst_SRCS := \
 	tests/unit/dipifccret/test_burst.c \
@@ -1984,6 +2189,7 @@ dipifccret_ret_BIN := tests/unit/dipifccret/test_ret
 dipifccret_ret_SRCS := \
 	tests/unit/dipifccret/test_ret.c \
 	src/dipifccret/ret/ret.c \
+	src/dipifccret/ret/rtx_session_table.c \
 	src/dipifccret/channel/channel.c \
 	src/dipifccret/channel/hash.c \
 	src/dipifccret/channel/ring.c \
@@ -2000,6 +2206,21 @@ dipifccret_ret_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/log.c
+
+dipifccret_rtx_session_table_BIN := tests/unit/dipifccret/test_rtx_session_table
+dipifccret_rtx_session_table_SRCS := \
+	tests/unit/dipifccret/test_rtx_session_table.c \
+	src/dipifccret/ret/rtx_session_table.c
+
+dipifccret_capture_BIN := tests/unit/dipifccret/test_capture
+dipifccret_capture_SRCS := \
+	tests/unit/dipifccret/test_capture.c \
+	src/dipifccret/capture/capture.c \
+	src/dipifccret/capture/ranges.c \
+	src/dipifccret/capture/bpf.c \
+	src/dipifccret/capture/frame.c \
+	src/lib/demux/rtp.c \
+	src/lib/signal.c
 
 # _BIN/_SRCS/TEST_BINS stay unconditional (unlike TESTS=yes gate below),
 # 'make clean' finds these paths regardless of current config.mk state -
@@ -2035,10 +2256,14 @@ INTEGRATION_DIPIDESCRAMBLE_SCRIPTS := $(wildcard tests/integration/dipidescrambl
 INTEGRATION_DIPIMETRICS_SCRIPTS := $(wildcard tests/integration/dipimetrics/*.sh)
 INTEGRATION_DIPICAM378_SCRIPTS := $(wildcard tests/integration/dipicam378/*.sh)
 INTEGRATION_DIPIFCCRET_SCRIPTS := $(wildcard tests/integration/dipifccret/*.sh)
+INTEGRATION_DIPIRIST_SCRIPTS := $(wildcard tests/integration/dipirist/*.sh)
 
 INTEGRATION_TEST_DEPS := dipibim dipixmltv dipitvhead dipiradiohead dipirec dipidescramble dipisds dipibcg dipimetrics dipifccret
 ifeq ($(HAVE_OPENSSL),yes)
 INTEGRATION_TEST_DEPS += dipicam378
+endif
+ifeq ($(HAVE_RIST),yes)
+INTEGRATION_TEST_DEPS += dipirist
 endif
 
 .PHONY: integration-test
@@ -2056,6 +2281,11 @@ ifeq ($(HAVE_OPENSSL),yes)
 	@set -e; for s in $(INTEGRATION_DIPICAM378_SCRIPTS); do echo "running $$s"; sh $$s ./dipicam378; done
 else
 	@echo "integration-test: OpenSSL not found, skipped dipicam378 integration tests" >&2
+endif
+ifeq ($(HAVE_RIST),yes)
+	@set -e; for s in $(INTEGRATION_DIPIRIST_SCRIPTS); do echo "running $$s"; sh $$s ./dipirist ./dipirec; done
+else
+	@echo "integration-test: librist not found, skipped dipirist integration tests" >&2
 endif
 
 FUZZ_BIM_DEPS := \

@@ -50,7 +50,7 @@ int tspacketizer_get_sdt_info(tspacketizer_t *t, psi_sdt_entry_t *out);
    own shared pid+cc. 0 on overflow. */
 size_t tspacketizer_build_eit(tspacketizer_t *t, unsigned char *out, size_t cap);
 
-/* 1 if metadata changed since last build_eit() - mux should refresh now, not wait for its
+/* 1 if metadata changed since last build_eit(). mux should refresh now, not wait for its
    schedule. cleared by build_eit(). */
 int tspacketizer_eit_pending(const tspacketizer_t *t);
 

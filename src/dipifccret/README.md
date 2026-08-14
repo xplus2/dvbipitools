@@ -7,9 +7,9 @@ Acquisition of Multicast RTP Sessions).
 Passively watches a mirrored/SPAN-ported multicast segment via a raw AF_PACKET capture, then keeps two
 kinds of per-channel state from the same captured packets: a short seq-keyed ring for RET loss repair, 
 and a Random Access Point (RAP)-anchored cache for FCC bursts. One capture thread and one `-l` listen socket 
-serve both protocols - a client NACK always gets a direct unicast reply *and*, when the multicast RET session 
+serve both protocols. A client NACK always gets a direct unicast reply *and*, when the multicast RET session 
 is enabled, is additionally repaired over that session (F.5.2); a RAMS-R request just before a channel join 
-gets a burst of cached data at an accelerated rate so the client can start decoding immediately.
+gets a burst of cached data at a faster rate so the client can start decoding immediately.
 
 RET and FCC can each be run alone or together: `--no-ret` disables RET, `--no-fcc` disables FCC.
 
@@ -42,6 +42,12 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
   -B, --buffer <ms>                per-channel retransmission buffer depth (default: 2000)
   -F, --ff-port <port>             multicast RET session port (default: 0 = original channel's port)
       --no-mc-ret                  disable the multicast RET session, unicast-only repair
+      --max-ret-clients <n>        pre-allocated unicast RTX per-client sequence slots,
+                                   F.3.2.1 (default: 16384)
+      --ret-client-idle-timeout <s> free a unicast RTX client slot after this many
+                                   seconds with no NACKs (default: 300, 0 = never reap)
+      --no-rsi                     disable RSI self-announcement
+      --rsi-interval <s>           RSI self-announcement interval (default: 5 seconds)
 ```
 
 ### FCC (Annex I)
@@ -51,6 +57,16 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
   -C, --max-bursts <n>             preallocated concurrent burst-session slots (default: 4096)
   -X, --burst-multiplier <n>       burst rate as multiple of observed nominal bitrate (default: 1.5)
   -D, --burst-duration-cap <ms>    hard max burst duration regardless of signaling (default: 10000)
+      --max-buffer-fill-bound <ms> reject a RAMS-R Min RAMS Buffer Fill Requirement above this
+                                   (default: 30000, 0 = none)
+      --fcc-resolve-by-port        resolve ignore-media-ssrc RAMS-R by dedicated per-channel
+                                   port instead of rejecting with 510 (default: off)
+      --fcc-resolve-base-port <p>  base port for --fcc-resolve-by-port (default: 0 = -l port + 1)
+      --congestion-nack-threshold <n>  NACKs during one burst before terminating it as
+                                   congested (default: 5, 0 = disabled)
+      --fcc-range <cidr>[,...]     restrict FCC to these -g sub-ranges (default: all of -g)
+      --fcc-client-range <cidr>[,...] restrict FCC requests to these client source ranges
+                                   (default: any client)
 ```
 
 ## Why passive capture, not an IGMP join
@@ -72,6 +88,23 @@ channel. SSM already distinguishes it by source address, so no separate address 
 
 `-F` overrides the port if required; `--no-mc-ret` disables the session entirely - the always-on
 unicast reply path (see above) keeps working exactly the same either way.
+
+## RSI self-announcement
+
+This periodically sends an RTCP RSI packet per channel over its MC RET session, advertising `-l` as the
+unicast NACK target. Use `--rsi-interval` (default 5s) to define the interval, `--no-rsi` to disable.
+
+## FCC channel resolution by dedicated port
+
+Per DVB Annex I.2.7.2, a RAMS-R that can't include the media sender SSRC (the "ignore media SSRC"
+TLV) needs to be resolved by which FCC server IP:port it arrived on, not by content. With
+`--fcc-resolve-by-port`, every channel slot gets its own dedicated listen port -
+`--fcc-resolve-base-port` (default `-l`'s port + 1) plus `hash(family,address,port) % -M` - bound
+once at startup, independent of discovery order. RSI announces each channel's own port once known.
+Off by default: this replaces SSRC-based dispatch for every channel, not just the ignore-SSRC case,
+so it's an explicit opt-in. `dipisds` has matching `--fcc-resolve-by-port`/`--fcc-resolve-base-port`/
+`--fcc-resolve-max-channels` flags to advertise the same ports via SD&S; RSI alone is sufficient
+without it.
 
 ## Burst rate
 
@@ -100,8 +133,7 @@ use `-u` to drop to an unprivileged user right after the capture handle opens.
 
 ## Stopping
 
-`^C`, SIGINT or SIGTERM - all worker threads, the pacing thread (if FCC is active) and the
-capture loop shut down gracefully.
+`^C`, SIGINT or SIGTERM: stop the tool.
 
 ## Running under systemd
 
@@ -137,26 +169,6 @@ WantedBy=multi-user.target
 ## Known gaps
 
 * Single VLAN tag only (no QinQ).
-* RTX sequence numbers are shared across every RET sent (MC and unicast, every channel and client)
-  rather than a true per-session space per F.3.2.1 (one independent sequence per RET session).
-* Self-detected upstream loss (dipifccret noticing a gap in its own capture, independent of any
-  client NACK) will not trigger any RET repair. This is a server-only implementation, not a
-  stacked client.
-* RTX/burst packets use a fixed video-bearer DSCP class (F.9/I.2.12), not a byte-for-byte mirror
-  of each original packet's own DSCP.
-* RSI self-announcement (F.5.3) is not implemented. A client has to already know dipifccret's `-l`
-  address by some other means - either dogmatically or by using SD&S RET/FCC records. `dipisds`
-  supports this via `--ret-addr`/`--fcc-addr`.
-* No transport-address-based FCC channel resolution: if a client's RAMS-R sets the "ignore media
-  SSRC" TLV (asking the server to identify the channel by source address instead), the request is
-  rejected (response 510) rather than resolved another way.
-* Only RAMS-I response codes 200, 201, 400, 403 and 510 are implemented - the others RFC 6285
-  defines (401, 402, 404, 504-506, 511, 100) aren't implemented.
-* Only ever sends one RAMS-I per request (the initial accept/reject). RFC 6285's "RAMS-I update"
-  mechanism for changing burst parameters mid-flight isn't implemented.
-* RAMS-T always stops the burst immediately, ignoring the optional Extended RTP Seqnum TLV a
-  client may include - no seqnum-based clipping of the tail end of the burst.
-* While MPTS support in RET is a given, FCC can (by its definition) only work on SPTS.
 
 ## Examples
 

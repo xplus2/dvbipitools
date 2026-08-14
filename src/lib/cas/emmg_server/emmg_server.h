@@ -13,7 +13,7 @@ typedef struct {
 typedef struct emmg_server emmg_server_t;
 
 emmg_server_t *emmg_server_start(const emmg_server_cfg_t *cfg);
-/* stops the accept thread and every worker, joins all of them */
+/* stops accept thread and every worker, joins all */
 void emmg_server_stop(emmg_server_t *s);
 
 /* actual bound port; useful when cfg.port was 0 (kernel-assigned) */
@@ -63,7 +63,7 @@ unsigned long emmg_server_emm_dropped_total(emmg_server_t *s);
 size_t emmg_build_channel_status(unsigned char *out, size_t cap, unsigned char version, unsigned client_id, unsigned data_channel_id);
 size_t emmg_build_stream_status(unsigned char *out, size_t cap, unsigned char version, unsigned client_id, unsigned data_channel_id, unsigned data_stream_id, unsigned data_id, unsigned data_type);
 size_t emmg_build_stream_close_response(unsigned char *out, size_t cap, unsigned char version, unsigned client_id, unsigned data_channel_id, unsigned data_stream_id);
-/* have_bandwidth: 0 = omit the bandwidth field ("allocated bandwidth not known" per spec) */
+/* have_bandwidth: 0 = omit bandwidth field ("allocated bandwidth not known" per spec) */
 size_t emmg_build_stream_bw_allocation(unsigned char *out, size_t cap, unsigned char version, unsigned client_id, unsigned data_channel_id, unsigned data_stream_id, int have_bandwidth, unsigned bandwidth_kbps);
 
 /* iterates every "datagram" (0x0005) TLV in a data_provision payload. cb returns nonzero to stop early. returns count handed to cb, or -1 = malformed */

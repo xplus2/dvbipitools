@@ -35,6 +35,11 @@ across every input.
 | `-O` | `--out-iface`        | `<iface>`             | kernel route (outgoing)                   |            |
 | `-u` | `--udp`              |                       | off (RTP)                                 |            |
 | `-T` | `--ttl`              | `<n>`                 | 1                                         |            |
+| `-R` | `--rist`             | `rist://host:port`    | none, repeatable (bonded)                 |            |
+|      | `--profile`          | `simple\|main`        | `simple` (`-R` peers only)                |            |
+|      | `--secret`           | `<psk>`               | none (`-R` peers only)                    |            |
+|      | `--cname`            | `<name>`              | library default (`-R` peers only)         |            |
+|      | `--buffer`           | `<ms>`                | library default (`-R` peers only)         |            |
 | `-n` | `--nit`              | `<text>` / `-`        | set NIT, see below                        |            |
 | `-b` | `--bitrate`          | `<kbps>`              | none (no shaping)                         |            |
 | `-S` | `--stuff`            |                       | off (needs `-b`)                          |            |
@@ -45,6 +50,9 @@ across every input.
 |      | `--onid`             | `<n>`                 | 1                                         |            |
 | `-v` | `--verbose`          |                       | off                                       |            |
 |      | `--color`            | `auto\|always\|never` | `auto`                                    |            |
+|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`           |            |
+|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)        |            |
+|      | `--metrics-interval` | `<s>`                 | `5`                                       |            |
 | `-h` | `--help`             |                       |                                           |            |
 
 > Note that the default output changed from _plain UDP_ to _RTP_, since neither FCC nor RET would work
@@ -156,6 +164,17 @@ remuxed), merged onto a shared output EIT.
 
 No `-b`: source rate passes straight through. `-S`: null-packet padding when output falls behind
 target. `-B`: paces sending so output never runs ahead of target. Combinable.
+
+### RIST output (`-R`)
+
+Sends the same TS the `-m` multicast output carries to one or more RIST peers at the same time
+(requires librist; built without it, `-R` fails cleanly at startup). `-R` is repeatable and every
+peer is bonded onto a single RIST sender context, same bonding model as
+[dipirist](../dipirist/README.md). `-m` stays required - `-R` is an additional, simultaneous
+output, not a replacement.
+
+`--profile`/`--secret`/`--cname`/`--buffer` configure the RIST peers (profile, pre-shared key,
+cname, recovery buffer); `--secret` requires `--profile main`.
 
 ### HbbTV signalling (`--hbbtv`)
 
@@ -305,8 +324,9 @@ CISSA, CSA1/CSA2, BISS1 Mode 1, BISS2 Mode 1/E, BISS2 Mode CA.
 CAS support is a CMake/configure-time option (`DIPITVHEAD_CAS`, on by default). 
 * CISSA needs OpenSSL
 * CSA1 and CSA2 need libdvbcsa (`DIPITVHEAD_CSA2` / `HAVE_DVBCSA`). 
+* `-R`/RIST output needs librist (`DVBIPITOOLS_RIST` / `HAVE_RIST`, toolkit-wide).
 
-Missing either degrades gracefully to "that algorithm unavailable", not a build failure.
+Missing any of these degrades gracefully to "that feature unavailable", not a build failure.
 
 Static releases (`.tar.gz`) in this repository do not contain libdvbcsa. 
 Build against it yourself if you want CSA1/CSA2 in a static build.

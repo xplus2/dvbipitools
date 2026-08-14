@@ -73,23 +73,19 @@ psi_t *psi_new(void);
 void psi_free(psi_t *c);
 void psi_feed(psi_t *c, const unsigned char *pkt); /* one 188-byte packet */
 
-/* call any time before the PMT locks in, to force one program's PMT PID
- * instead of auto-selecting whichever PAT-listed candidate resolves first.
- * caller should cross-check against psi_pat_programs() to catch a pid not
- * actually present in the PAT - psi_ready() simply never becomes true. */
+/* call before PMT locks in: forces one program's PMT PID instead of
+   auto-selecting first PAT-listed candidate. bad pid (not in PAT):
+   psi_ready() just never becomes true, cross-check psi_pat_programs(). */
 void psi_select_pmt_pid(psi_t *c, unsigned pmt_pid);
 
-/* call before feeding: every candidate's PMT resolves independently, no
- * single-first lock. SDT-actual names captured per program too. not
- * enforced mutually exclusive with psi_select_pmt_pid().
- * side effect: single-current-program accessors (psi_program_number,
- * psi_pmt_pid, psi_pcr_pid, psi_es, psi_audio_count, psi_scrambling_mode,
- * psi_service_name, psi_provider_name) then track whichever program most
- * recently resolved, not a stable one - use psi_multi_programs() instead. */
+/* call before feeding: each candidate's PMT resolves independently, no
+   single-first lock. SDT-actual names captured per program too, combinable
+   with psi_select_pmt_pid(). warning: single-current-program accessors track
+   whichever program resolved last, unstable. use psi_multi_programs() instead. */
 void psi_enable_multi_program(psi_t *c);
 
 /* one entry per PAT-listed program, valid once psi_have_pat().
- * empty unless psi_enable_multi_program() was called. */
+   empty unless psi_enable_multi_program() was called. */
 const psi_multi_program_t *psi_multi_programs(const psi_t *c, int *count);
 
 int psi_have_pat(const psi_t *c);
@@ -98,7 +94,7 @@ int psi_have_sdt(const psi_t *c);
 int psi_have_cat(const psi_t *c);
 int psi_ready(const psi_t *c); /* pat + pmt seen */
 
-/* every program the PAT listed (network_pid entry excluded), valid once psi_have_pat() */
+/* every program PAT listed (network_pid entry excluded), valid once psi_have_pat() */
 const psi_program_t *psi_pat_programs(const psi_t *c, int *count);
 
 unsigned psi_program_number(const psi_t *c);
@@ -118,7 +114,7 @@ unsigned psi_ca_system_id(const psi_t *c);
    this header doesn't define those, they're not PSI/SI, just where the byte lives */
 unsigned char psi_scrambling_mode(const psi_t *c);
 
-/* PMT program_info's own first CA_descriptor CA_system_id, 0 if none - not the CAT's
+/* PMT program_info's own first CA_descriptor CA_system_id, 0 if none, not CAT's
    (psi_ca_system_id above). BISS: 0x2602 Mode 1/E, 0x2610 Mode CA, no CAT/scrambling_descriptor */
 unsigned psi_pmt_ca_system_id(const psi_t *c);
 

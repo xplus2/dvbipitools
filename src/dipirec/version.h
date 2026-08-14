@@ -5,6 +5,6 @@
 #define DIPIREC_VERSION_H
 
 #define TOOL_NAME    "dipirec"
-#define TOOL_VERSION "2.1.0"
+#define TOOL_VERSION "2.2.1"
 
 #endif

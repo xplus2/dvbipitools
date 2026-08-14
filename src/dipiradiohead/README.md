@@ -18,6 +18,11 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] -m <mcast>:<por
 | `-I`  | `--iface`            | `<iface>`                              | kernel route         |            |
 | `-r`  | `--rtp`              |                                        | off (plain UDP)      |            |
 | `-T`  | `--ttl`              | `<n>`                                  | 1 (kernel default)   |            |
+| `-R`  | `--rist`             | `rist://host:port`                     | none, repeatable (bonded) |       |
+|       | `--profile`          | `simple\|main`                         | `simple` (`-R` peers only) |      |
+|       | `--secret`           | `<psk>`                                | none (`-R` peers only) |          |
+|       | `--cname`            | `<name>`                               | library default (`-R` peers only) | |
+|       | `--buffer`           | `<ms>`                                 | library default (`-R` peers only) | |
 | `-n`  | `--nit`              | `<text>`                               | none                 |            |
 | `-e`  | `--error`            | `<seconds>`                            | see below            |            |
 | `-k`  | `--insecure`         |                                        | off (TLS verified)   |            |
@@ -25,6 +30,9 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] -m <mcast>:<por
 |       | `--onid`             | `<n>`                                  | 1                    |            |
 | `-v`  | `--verbose`          |                                        | off                  |            |
 |       | `--color`            | `auto\|always\|never`                  | `auto`               |            |
+|       | `--metrics`          | `<path>`                               | `/run/dvbipitools/metrics.sock` |   |
+|       | `--metrics-id`       | `<name>`                               | none (metrics disabled unless set) | |
+|       | `--metrics-interval` | `<s>`                                  | `5`                  |            |
 | `-h`  | `--help`             |                                        |                      |            |
 
 `--sid`/`-s` pair with whichever `-i` came right before them - like ffmpeg's per-input options,
@@ -103,12 +111,19 @@ same `-s` default of plain `dipiradiohead`.
 > Note: Multi Program Transport Streams rely on your local clock reference.
 > It is not something you would usually run on a Raspberry Pi.
 
-## Output (`-m`, `-I`, `-r`)
+## Output (`-m`, `-I`, `-r`, `-R`)
 
 `-m <group>:<port>` / `-m [<group6>]:<port>`. `-I` sets the outgoing interface (default: kernel
 route). `-r` wraps output in RTP, matching `dipirec -i rtp://`; without it, plain UDP, matching
 `-i udp://`. 7 TS packets (1316 B) per datagram either way. `-T` sets the multicast TTL / hop
 limit (default 1, i.e. link-local only - raise it to route beyond the first hop).
+
+`-R rist://host:port[?query]` sends the same TS to one or more RIST peers at the same time as
+the `-m` multicast output (requires librist; built without it, `-R` fails cleanly at startup).
+Repeatable - every peer bonds onto a single RIST sender context, same bonding model as
+[dipirist](../dipirist/README.md). `-m` stays required; `-R` is additional, not a replacement.
+`--profile`/`--secret`/`--cname`/`--buffer` configure the RIST peers; `--secret` requires
+`--profile main`.
 
 ## Now-playing metadata
 
@@ -260,8 +275,9 @@ CISSA, CSA1/CSA2, BISS1 Mode 1, BISS2 Mode 1/E, BISS2 Mode CA.
 CAS support is a CMake/configure-time option (`DIPIRADIOHEAD_CAS`, on by default).
 * CISSA needs OpenSSL (same dependency as HTTPS input)
 * CSA1 and CSA2 need libdvbcsa (`DIPIRADIOHEAD_CSA2` / `HAVE_DVBCSA`).
+* `-R`/RIST output needs librist (`DVBIPITOOLS_RIST` / `HAVE_RIST`, toolkit-wide).
 
-Missing either degrades gracefully to "that algorithm unavailable", not a build failure.
+Missing any of these degrades gracefully to "that feature unavailable", not a build failure.
 
 Release builds and the packaged `.deb` in this repository do not contain libdvbcsa.
 Build against it yourself if you want CSA1/CSA2.

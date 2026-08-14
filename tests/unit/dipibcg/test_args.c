@@ -167,6 +167,22 @@ START_TEST(invalid_color_mode_is_rejected) {
 }
 END_TEST
 
+START_TEST(compress_flag_enables_in_announce_mode) {
+  char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000",
+                  "-Z", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.compress, 1);
+}
+END_TEST
+
+START_TEST(compress_flag_is_announce_only) {
+  char *argv[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", "--compress", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 START_TEST(mcast_describe_formats_ipv4) {
   config_t cfg;
   char buf[64];
@@ -214,6 +230,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, metrics_id_enables_metrics_in_announce_mode);
   tcase_add_test(tc, metrics_interval_out_of_range_is_rejected);
   tcase_add_test(tc, invalid_color_mode_is_rejected);
+  tcase_add_test(tc, compress_flag_enables_in_announce_mode);
+  tcase_add_test(tc, compress_flag_is_announce_only);
   tcase_add_test(tc, mcast_describe_formats_ipv4);
   tcase_add_test(tc, mcast_describe_formats_ipv6);
   suite_add_tcase(s, tc);

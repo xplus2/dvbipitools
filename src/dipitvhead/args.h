@@ -37,6 +37,9 @@ typedef enum { CAS_OUTAGE_FROZEN, CAS_OUTAGE_CYCLING, CAS_OUTAGE_SILENT } cas_ou
 #define ARGS_MAX_CAS_PIDS 16
 #define ARGS_MAX_CAS_VENDORS 8 /* matches CAS_GROUP_MAX_VENDORS */
 #define ARGS_MAX_INPUTS 32 /* matches MPTS_MAX_PROGRAMS: one input becomes one mux program */
+#define ARGS_MAX_RIST_PEERS 8 /* matches RISTOUT_MAX_PEERS */
+
+typedef enum { RIST_PROF_SIMPLE, RIST_PROF_MAIN } rist_profile_sel_t;
 
 typedef struct {
   char ecmg_host[256];       /* --cas-ecmg */
@@ -66,7 +69,7 @@ typedef struct {
 } dipitvhead_input_t;
 
 typedef struct {
-  dipitvhead_input_t inputs[ARGS_MAX_INPUTS]; /* -i, repeatable; per-input options pair with the -i right before them */
+  dipitvhead_input_t inputs[ARGS_MAX_INPUTS]; /* -i, repeatable; per-input options pair with -i right before them */
   unsigned n_inputs;
   int family;                /* AF_INET or AF_INET6, from -m group */
   char mcast_group[64];      /* -m group */
@@ -74,9 +77,9 @@ typedef struct {
   const char *iface_out;     /* -O; NULL = kernel default route */
   int rtp;                   /* default on; -u/--udp forces plain UDP output */
   unsigned ttl;              /* -T; 0 = kernel default (1) */
-  table_mode_t nit_mode;     /* -n; one NIT for the whole output */
+  table_mode_t nit_mode;     /* -n; one NIT for whole output */
   char nit_text[256];        /* -n <text> */
-  unsigned bitrate_kbps;     /* -b; 0 = no shaping, passthrough rate; one shared budget for the whole output */
+  unsigned bitrate_kbps;     /* -b; 0 = no shaping, passthrough rate; one shared budget for whole output */
   int stuff;                 /* -S; needs -b */
   int burst_limit;           /* -B; needs -b */
   long error_retry_s;        /* -e; 0 = no retry, fail on first input error (single input only) */
@@ -86,7 +89,7 @@ typedef struct {
   int verbose;               /* -v */
   int color_mode;            /* --color; log_color_t */
   cas_algo_t cas_algo;       /* --cas-algo; NONE = CAS disabled */
-  cas_vendor_t cas_vendors[ARGS_MAX_CAS_VENDORS]; /* --cas-ecmg, repeatable; per-vendor options pair with the --cas-ecmg right before them */
+  cas_vendor_t cas_vendors[ARGS_MAX_CAS_VENDORS]; /* --cas-ecmg, repeatable; per-vendor options pair with --cas-ecmg right before them */
   unsigned n_cas_vendors;
   int cas_fallback_clear; /* --cas-fallback-clear: clear instead of frozen on total outage / a required vendor down */
   unsigned cas_pids[ARGS_MAX_CAS_PIDS]; /* --cas-pids explicit numeric PIDs (output-side) */
@@ -99,7 +102,7 @@ typedef struct {
   int biss2_emit_esw;               /* --biss2-emit-esw given; requires --biss2-sw */
   unsigned char biss2_esw_id[BISS_KEY_LEN]; /* --biss2-emit-esw <id>, parsed */
   int biss1_enabled;                /* --biss1-sw given; mutually exclusive with --biss2-sw/--cas-algo/--cas-ecmg */
-  unsigned char biss1_cw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into the full checksummed CSA1 CW */
+  unsigned char biss1_cw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into full checksummed CSA1 CW */
   int biss2_ca_enabled;              /* --biss2-ca-receivers given; mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo/--cas-ecmg */
   const char *biss2_ca_receivers_dir; /* --biss2-ca-receivers <dir>: PEM public keys, one per receiver/group */
   unsigned biss2_ca_session_id;      /* --biss2-ca-session-id <hex16>; random at startup if not given */
@@ -107,6 +110,12 @@ typedef struct {
   const char *metrics_sock;        /* --metrics; NULL = default socket path */
   const char *metrics_id;          /* --metrics-id; NULL = metrics disabled */
   unsigned metrics_interval_s;     /* --metrics-interval; 0 = default */
+  char rist_uri[ARGS_MAX_RIST_PEERS][256]; /* -R/--rist, repeatable; bonded onto one sender, simultaneous with -m */
+  unsigned n_rist;
+  rist_profile_sel_t rist_profile; /* --profile; n_rist>0 only */
+  char rist_secret[128];  /* --secret; n_rist>0 + --profile main only, "" = none */
+  char rist_cname[128];   /* --cname; n_rist>0 only, "" = library default */
+  unsigned rist_buffer_ms; /* --buffer; n_rist>0 only, 0 = library default */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

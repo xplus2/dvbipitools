@@ -48,6 +48,14 @@ channel_table_t *channel_table_new(size_t max_channels, size_t ring_slots, size_
     free(t);
     return NULL;
   }
+  t->resolve_hash = calloc(max_channels, sizeof *t->resolve_hash);
+  if (!t->resolve_hash) {
+    free(t->ssrc_hash);
+    free(t->hash);
+    free(t->chan);
+    free(t);
+    return NULL;
+  }
   for (i = 0; i < max_channels; i++) {
     if (ring_slots > 0) {
       t->chan[i].ring = calloc(ring_slots, sizeof(ret_ring_entry_t));
@@ -143,6 +151,13 @@ channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size
       if (!inet_ntop(family, addr, c->group, sizeof c->group))
         c->group[0] = '\0';
       c->port = port;
+      c->resolve_slot = chan_key_hash(family, addr, addr_len, port) % t->max_channels;
+      {
+        size_t rb = c->resolve_slot;
+        size_t cur = t->resolve_hash[rb];
+        if (cur == 0 || atomic_load_explicit(&t->chan[cur - 1].in_use, memory_order_relaxed) != 1)
+          t->resolve_hash[rb] = i + 1;
+      }
       atomic_store_explicit(&c->last_seen, time(NULL), memory_order_relaxed);
       atomic_store_explicit(&c->in_use, 1, memory_order_release);
 
@@ -162,6 +177,29 @@ channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size
   }
   pthread_mutex_unlock(&t->lock);
   return result;
+}
+
+size_t channel_table_capacity(const channel_table_t *t) {
+  return t->max_channels;
+}
+/* i must be < channel_table_capacity(t). NULL if slot isn't in use */
+channel_t *channel_table_at(channel_table_t *t, size_t i) {
+  if (atomic_load_explicit(&t->chan[i].in_use, memory_order_acquire) != 1)
+    return NULL;
+  return &t->chan[i];
+}
+
+channel_t *channel_lookup_by_resolve_slot(channel_table_t *t, size_t slot) {
+  size_t slot_plus1;
+  channel_t *c;
+
+  if (slot >= t->max_channels)
+    return NULL;
+  slot_plus1 = t->resolve_hash[slot];
+  if (slot_plus1 == 0)
+    return NULL;
+  c = &t->chan[slot_plus1 - 1];
+  return atomic_load_explicit(&c->in_use, memory_order_acquire) == 1 ? c : NULL;
 }
 
 channel_t *channel_find_by_ssrc(channel_table_t *t, uint32_t ssrc) {
@@ -187,7 +225,7 @@ channel_t *channel_find_by_ssrc(channel_table_t *t, uint32_t ssrc) {
   return result;
 }
 
-void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len) {
+void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len) {
   time_t now = time(NULL);
   time_t elapsed;
   uint32_t old_ssrc = atomic_load_explicit(&c->ssrc, memory_order_relaxed);
@@ -228,7 +266,7 @@ void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq
   }
 
   if (c->ring_size > 0)
-    ret_ring_store(c, seq, timestamp, payload, payload_len);
+    ret_ring_store(c, seq, timestamp, dscp, payload, payload_len);
 
   if (c->cache.cap > 0) {
     if (!c->psi) {
@@ -238,9 +276,102 @@ void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq
     }
     if (c->psi) {
       int is_rap = scan_ts_packets(c->psi, payload, payload_len);
-      rap_cache_append(&c->cache, seq, timestamp, payload, payload_len, is_rap);
+      rap_cache_append(&c->cache, seq, timestamp, dscp, payload, payload_len, is_rap);
     }
   }
+}
+
+static void hned_collision_note(channel_t *c, uint32_t ssrc, time_t now) {
+  size_t i, oldest = 0;
+  time_t oldest_time = now;
+
+  for (i = 0; i < CHANNEL_HNED_COLLISION_MAX; i++) {
+    if (c->hned_collisions[i].valid && c->hned_collisions[i].ssrc == ssrc) {
+      c->hned_collisions[i].last_detected = now;
+      return;
+    }
+    if (!c->hned_collisions[i].valid) {
+      c->hned_collisions[i].valid = 1;
+      c->hned_collisions[i].ssrc = ssrc;
+      c->hned_collisions[i].last_detected = now;
+      return;
+    }
+    if (c->hned_collisions[i].last_detected <= oldest_time) {
+      oldest_time = c->hned_collisions[i].last_detected;
+      oldest = i;
+    }
+  }
+  /* table full, all still active: evict longest-untouched entry */
+  c->hned_collisions[oldest].ssrc = ssrc;
+  c->hned_collisions[oldest].last_detected = now;
+}
+
+void channel_hned_seen(channel_table_t *t, channel_t *c, uint32_t ssrc, const struct sockaddr *from, socklen_t fromlen, const char *cname, size_t cname_len) {
+  size_t i, free_slot = CHANNEL_HNED_TRACK_MAX, oldest = 0;
+  time_t now = time(NULL);
+  time_t oldest_time = now;
+  int have_cname = cname && cname_len > 0;
+
+  if (have_cname && cname_len >= RTCP_CNAME_MAX)
+    cname_len = RTCP_CNAME_MAX - 1;
+
+  pthread_mutex_lock(&t->lock);
+
+  for (i = 0; i < CHANNEL_HNED_TRACK_MAX; i++) {
+    if (c->hned[i].valid && c->hned[i].ssrc == ssrc) {
+      int collided;
+      if (have_cname && c->hned[i].has_cname)
+        collided = c->hned[i].cname_len != cname_len || memcmp(c->hned[i].cname, cname, cname_len) != 0;
+      else
+        collided = !(c->hned[i].addrlen == fromlen && memcmp(&c->hned[i].addr, from, fromlen) == 0);
+      if (collided)
+        hned_collision_note(c, ssrc, now);
+
+      memcpy(&c->hned[i].addr, from, fromlen);
+      c->hned[i].addrlen = fromlen;
+      if (have_cname) {
+        memcpy(c->hned[i].cname, cname, cname_len);
+        c->hned[i].cname_len = cname_len;
+        c->hned[i].has_cname = 1;
+      }
+      c->hned[i].last_seen = now;
+      pthread_mutex_unlock(&t->lock);
+      return;
+    }
+    if (!c->hned[i].valid && free_slot == CHANNEL_HNED_TRACK_MAX)
+      free_slot = i;
+    if (c->hned[i].valid && c->hned[i].last_seen <= oldest_time) {
+      oldest_time = c->hned[i].last_seen;
+      oldest = i;
+    }
+  }
+
+  i = (free_slot != CHANNEL_HNED_TRACK_MAX) ? free_slot : oldest;
+  c->hned[i].valid = 1;
+  c->hned[i].ssrc = ssrc;
+  memcpy(&c->hned[i].addr, from, fromlen);
+  c->hned[i].addrlen = fromlen;
+  c->hned[i].has_cname = have_cname;
+  if (have_cname) {
+    memcpy(c->hned[i].cname, cname, cname_len);
+    c->hned[i].cname_len = cname_len;
+  }
+  c->hned[i].last_seen = now;
+
+  pthread_mutex_unlock(&t->lock);
+}
+
+size_t channel_hned_collisions(channel_table_t *t, channel_t *c, uint32_t *out, size_t cap, time_t max_age_s) {
+  size_t i, n = 0;
+  time_t now = time(NULL);
+
+  pthread_mutex_lock(&t->lock);
+  for (i = 0; i < CHANNEL_HNED_COLLISION_MAX && n < cap; i++) {
+    if (c->hned_collisions[i].valid && now - c->hned_collisions[i].last_detected <= max_age_s)
+      out[n++] = c->hned_collisions[i].ssrc;
+  }
+  pthread_mutex_unlock(&t->lock);
+  return n;
 }
 
 /* checks+reclaims one slot if stale. caller holds t->lock */

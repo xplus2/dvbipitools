@@ -14,6 +14,8 @@
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
+#include "lib/net/ristout.h"
+#include "lib/net/tssink.h"
 #include "lib/net/tssource.h"
 #include "lib/mux/mkv/mkv.h"
 #include "lib/signal.h"
@@ -54,7 +56,7 @@ static int src_open(const config_t *cfg, src_t *s) {
     tc.family = cfg->source.family;
     tc.group = cfg->source.group;
     tc.port = cfg->source.port;
-    tc.iface = cfg->iface;
+    tc.iface = cfg->iface_in;
   }
 
   s->t = tssrc_open(&tc, NULL);
@@ -108,6 +110,89 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
     n -= (size_t)w;
   }
   return 0;
+}
+
+/* file/stdout via a plain fd, rtp/udp via tssink, rist:// via ristout.
+   fd valid: run_mkv needs it directly, always file/stdout case there (args rejects mkv/mka with net -o) */
+typedef struct {
+  int fd;
+  tssink_t *net;   /* NULL unless -o rtp:// or udp:// */
+  ristout_t *rist; /* NULL unless -o rist:// */
+  int net_had_error;  /* edge-log gate; a net send failure never stops recording */
+  int rist_had_error; /* edge-log gate; a rist write failure never stops recording */
+} out_sink_t;
+
+static int sink_open(const config_t *cfg, out_sink_t *o) {
+  o->net = NULL;
+  o->rist = NULL;
+  if (cfg->out.kind == OUT_FILE) {
+    o->fd = open_output(cfg->out.file_path);
+    return o->fd < 0 ? -1 : 0;
+  }
+  o->fd = -1;
+  if (cfg->out.kind == OUT_RIST) {
+    ristout_cfg_t rc;
+    memset(&rc, 0, sizeof rc);
+    rc.peer_uri[0] = cfg->out.rist_uri;
+    rc.npeers = 1;
+    rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
+    rc.secret = cfg->rist_secret;
+    rc.cname = cfg->rist_cname;
+    rc.buffer_ms = cfg->rist_buffer_ms;
+    rc.verbose = cfg->verbose;
+    o->rist = ristout_open(&rc);
+    return o->rist ? 0 : -1;
+  }
+  {
+    tssink_cfg_t tc;
+    memset(&tc, 0, sizeof tc);
+    tc.kind = (cfg->out.kind == OUT_RTP) ? TSSINK_RTP : TSSINK_UDP;
+    tc.family = cfg->out.family;
+    tc.group = cfg->out.group;
+    tc.port = cfg->out.port;
+    tc.iface = cfg->iface_out;
+    tc.ttl = cfg->out_ttl;
+    o->net = tssink_open(&tc);
+  }
+  return o->net ? 0 : -1;
+}
+
+/* a failed network sink is never fatal; log only on the failure/recovery edge, keep retrying every write */
+static void note_send_result(int ok, int *had_error, const char *label) {
+  if (!ok) {
+    if (!*had_error) {
+      log_line("%s output: write failed, will keep retrying", label);
+      *had_error = 1;
+    }
+  } else if (*had_error) {
+    log_line("%s output: recovered", label);
+    *had_error = 0;
+  }
+}
+
+static int sink_write(out_sink_t *o, const unsigned char *p, size_t n) {
+  if (o->rist) {
+    note_send_result(ristout_write(o->rist, p, n) >= 0, &o->rist_had_error, "rist");
+    return 0;
+  }
+  if (o->net) {
+    note_send_result(tssink_write(o->net, p, n) >= 0, &o->net_had_error, "net");
+    return 0;
+  }
+  return write_all(o->fd, p, n);
+}
+
+static void sink_close(out_sink_t *o) {
+  if (o->rist) {
+    ristout_close(o->rist);
+    return;
+  }
+  if (o->net) {
+    tssink_close(o->net);
+    return;
+  }
+  if (o->fd >= 0 && o->fd != STDOUT_FILENO)
+    close(o->fd);
 }
 
 int stop_now(const config_t *cfg, double start) {
@@ -188,7 +273,7 @@ static void stats_show(const config_t *cfg, double elapsed, unsigned long long b
 }
 
 /* raw: write TS */
-static int run_raw(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start, pace_ctrl_t *pace) {
+static int run_raw(src_t *s, const config_t *cfg, out_sink_t *out, unsigned long long *bytes, double start, pace_ctrl_t *pace) {
   unsigned char buf[65536];
   tspack_t pz = {{0}, 0};
   raw_ctx_t ctx;
@@ -215,7 +300,7 @@ static int run_raw(src_t *s, const config_t *cfg, int out, unsigned long long *b
     }
     if (ctx.psi)
       tspack_feed(&pz, buf, (size_t)n, raw_cb, &ctx);
-    if (write_all(out, buf, (size_t)n)) {
+    if (sink_write(out, buf, (size_t)n)) {
       rc = 1;
       break;
     }
@@ -231,7 +316,7 @@ static int run_raw(src_t *s, const config_t *cfg, int out, unsigned long long *b
 
 typedef struct {
   ts_filter_t *f;
-  int out;
+  out_sink_t *out;
   unsigned long long *bytes;
   int bad;
   pace_ctrl_t *pace; /* NULL unless --pace */
@@ -245,7 +330,7 @@ static int ts_cb(void *v, const unsigned char *pkt) {
   if (t->pace_pcr)
     pace_feed_pcr_pkt(t->pace, pkt, psi_pcr_pid(ts_filter_psi(t->f)));
   if (ts_filter_packet(t->f, pkt, o)) {
-    if (write_all(t->out, o, 188))
+    if (sink_write(t->out, o, 188))
       return 1;
     *t->bytes += 188;
   }
@@ -257,7 +342,7 @@ static int ts_cb(void *v, const unsigned char *pkt) {
 }
 
 /* ts: packetize, filter, write */
-static int run_ts(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start, unsigned pmt_pid,
+static int run_ts(src_t *s, const config_t *cfg, out_sink_t *out, unsigned long long *bytes, double start, unsigned pmt_pid,
                    pace_ctrl_t *pace) {
   unsigned char buf[65536];
   tspack_t pz = {{0}, 0};
@@ -434,24 +519,22 @@ int record_run(const config_t *cfg) {
   unsigned long long bytes = 0;
   double start;
   src_t s;
-  int out, rc;
+  out_sink_t out;
+  int rc;
   unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
   int n_all_pids;
   pace_ctrl_t *pace;
 
-  out = open_output(cfg->out_path);
-  if (out < 0)
+  if (sink_open(cfg, &out))
     return 1;
   if (src_open(cfg, &s)) {
-    if (out != STDOUT_FILENO)
-      close(out);
+    sink_close(&out);
     return 1;
   }
 
   if (resolve_pmt_selection(cfg, &s, &pmt_pid, all_pids, &n_all_pids)) {
     src_close(&s);
-    if (out != STDOUT_FILENO)
-      close(out);
+    sink_close(&out);
     return 1;
   }
   if (cfg->source.kind == URI_FILE) /* probing above consumed bytes it can't give back */
@@ -460,17 +543,16 @@ int record_run(const config_t *cfg) {
   pace = cfg->pace ? pace_new() : NULL;
   start = mono_seconds();
   if (cfg->format == FMT_MKV || cfg->format == FMT_MKA)
-    rc = run_mkv(&s, cfg, out, &bytes, start, cfg->format == FMT_MKV, pmt_pid, all_pids, n_all_pids, pace);
+    rc = run_mkv(&s, cfg, out.fd, &bytes, start, cfg->format == FMT_MKV, pmt_pid, all_pids, n_all_pids, pace);
   else if (cfg->format == FMT_TS)
     /* -p all: nothing left to filter */
-    rc = (n_all_pids > 0) ? run_raw(&s, cfg, out, &bytes, start, pace) : run_ts(&s, cfg, out, &bytes, start, pmt_pid, pace);
+    rc = (n_all_pids > 0) ? run_raw(&s, cfg, &out, &bytes, start, pace) : run_ts(&s, cfg, &out, &bytes, start, pmt_pid, pace);
   else
-    rc = run_raw(&s, cfg, out, &bytes, start, pace);
+    rc = run_raw(&s, cfg, &out, &bytes, start, pace);
   pace_free(pace);
 
   src_close(&s); /* IGMP/MLD leave */
-  if (out != STDOUT_FILENO)
-    close(out);
+  sink_close(&out);
 
   if (cfg->verbose && log_stderr_is_tty())
     fputc('\n', stderr); /* off stats line */

@@ -11,7 +11,7 @@
 
 typedef struct mcsend_table mcsend_table_t;
 
-/* max_channels must match the channel_table_t it's paired with, or entries can run out before channels do */
+/* max_channels must match channel_table_t it's paired with, or entries can run out before channels do */
 mcsend_table_t *mcsend_table_new(size_t max_channels, const char *iface, int ttl);
 void mcsend_table_free(mcsend_table_t *t);
 

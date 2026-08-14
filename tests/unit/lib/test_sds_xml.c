@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 
 #include "lib/sds_xml.h"
 
@@ -84,6 +85,129 @@ START_TEST(sds_broadcast_includes_ret_and_fcc_elements_when_present) {
   ck_assert_ptr_nonnull(strstr((char *)buf, "DestinationAddress=\"10.0.0.1\""));
   ck_assert_ptr_nonnull(strstr((char *)buf, "<ServerBasedEnhancementServiceInfo>"));
   ck_assert_ptr_nonnull(strstr((char *)buf, "DestinationAddress=\"10.0.0.2\""));
+}
+END_TEST
+
+START_TEST(sds_broadcast_omits_dvb_rsi_mc_ret_by_default) {
+  sds_service_t svc;
+  sds_ret_t ret;
+  unsigned char buf[4096];
+  size_t len;
+
+  memset(&svc, 0, sizeof svc);
+  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  svc.port = 5000;
+
+  memset(&ret, 0, sizeof ret);
+  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  ret.port = 6000;
+
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_null(strstr((char *)buf, "dvb-rsi-mc-ret"));
+}
+END_TEST
+
+START_TEST(sds_broadcast_includes_dvb_rsi_mc_ret_when_set) {
+  sds_service_t svc;
+  sds_ret_t ret;
+  unsigned char buf[4096];
+  size_t len;
+
+  memset(&svc, 0, sizeof svc);
+  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  svc.port = 5000;
+
+  memset(&ret, 0, sizeof ret);
+  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  ret.port = 6000;
+  ret.mc = 1;
+  ret.rsi_mc_ret = 1;
+
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "dvb-rsi-mc-ret=\"true\""));
+}
+END_TEST
+
+START_TEST(sds_broadcast_fcc_resolve_by_port_stays_in_range) {
+  sds_service_t svc;
+  sds_fcc_t fcc;
+  unsigned char buf[4096];
+  char needle[32];
+  size_t len, i;
+  unsigned port = 0;
+
+  memset(&svc, 0, sizeof svc);
+  svc.family = AF_INET;
+  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  svc.port = 5000;
+
+  memset(&fcc, 0, sizeof fcc);
+  fcc.resolve_by_port = 1;
+  fcc.resolve_base_port = 7000;
+  fcc.resolve_max_channels = 16;
+
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+
+  for (i = 0; i < fcc.resolve_max_channels; i++) {
+    snprintf(needle, sizeof needle, "DestinationPort=\"%u\"", (unsigned)(fcc.resolve_base_port + i));
+    if (strstr((char *)buf, needle)) {
+      port = fcc.resolve_base_port + (unsigned)i;
+      break;
+    }
+  }
+  ck_assert_uint_ne(port, 0u);
+  ck_assert_uint_ge(port, fcc.resolve_base_port);
+  ck_assert_uint_lt(port, fcc.resolve_base_port + fcc.resolve_max_channels);
+  ck_assert_ptr_null(strstr((char *)buf, "DestinationPort=\"0\""));
+}
+END_TEST
+
+START_TEST(sds_broadcast_fcc_resolve_by_port_is_deterministic) {
+  sds_service_t svc;
+  sds_fcc_t fcc;
+  unsigned char buf1[4096], buf2[4096];
+  size_t len1, len2;
+
+  memset(&svc, 0, sizeof svc);
+  svc.family = AF_INET;
+  snprintf(svc.address, sizeof svc.address, "239.5.6.7");
+  svc.port = 5001;
+
+  memset(&fcc, 0, sizeof fcc);
+  fcc.resolve_by_port = 1;
+  fcc.resolve_base_port = 7000;
+  fcc.resolve_max_channels = 384;
+
+  len1 = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, buf1, sizeof buf1);
+  len2 = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, buf2, sizeof buf2);
+  ck_assert_uint_eq(len1, len2);
+  ck_assert_mem_eq(buf1, buf2, len1);
+}
+END_TEST
+
+START_TEST(sds_broadcast_fcc_resolve_by_port_ignores_literal_port) {
+  sds_service_t svc;
+  sds_fcc_t fcc;
+  unsigned char buf[4096];
+  size_t len;
+
+  memset(&svc, 0, sizeof svc);
+  svc.family = AF_INET;
+  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  svc.port = 5000;
+
+  memset(&fcc, 0, sizeof fcc);
+  fcc.port = 6001; /* must not appear: resolve_by_port overrides it */
+  fcc.resolve_by_port = 1;
+  fcc.resolve_base_port = 7000;
+  fcc.resolve_max_channels = 16;
+
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_null(strstr((char *)buf, "DestinationPort=\"6001\""));
 }
 END_TEST
 
@@ -178,7 +302,12 @@ static Suite *sds_xml_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, sds_broadcast_round_trips_multiple_services);
   tcase_add_test(tc, sds_broadcast_includes_ret_and_fcc_elements_when_present);
+  tcase_add_test(tc, sds_broadcast_fcc_resolve_by_port_stays_in_range);
+  tcase_add_test(tc, sds_broadcast_fcc_resolve_by_port_is_deterministic);
+  tcase_add_test(tc, sds_broadcast_fcc_resolve_by_port_ignores_literal_port);
   tcase_add_test(tc, sds_broadcast_omits_ret_fcc_elements_when_absent);
+  tcase_add_test(tc, sds_broadcast_omits_dvb_rsi_mc_ret_by_default);
+  tcase_add_test(tc, sds_broadcast_includes_dvb_rsi_mc_ret_when_set);
   tcase_add_test(tc, sds_build_broadcast_rejects_small_cap);
   tcase_add_test(tc, sds_build_sp_contains_expected_fields);
   tcase_add_test(tc, sds_build_sp_rejects_small_cap);

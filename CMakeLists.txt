@@ -53,6 +53,26 @@ if (DVBIPITOOLS_TSAN)
     add_link_options(-fsanitize=thread)
 endif ()
 
+option(DVBIPITOOLS_RIST "detect librist for rist:// support (dipirist, and rist:// output in dipirec/dipitvhead/dipiradiohead)" ON)
+
+set(DVBIPITOOLS_HAVE_RIST FALSE)
+if (DVBIPITOOLS_RIST)
+    find_package(PkgConfig)
+    if (PkgConfig_FOUND)
+        if (DVBIPITOOLS_STATIC)
+            pkg_check_modules(RIST IMPORTED_TARGET STATIC librist)
+        else ()
+            pkg_check_modules(RIST IMPORTED_TARGET librist)
+        endif ()
+        if (RIST_FOUND)
+            set(DVBIPITOOLS_HAVE_RIST TRUE)
+        endif ()
+    endif ()
+    if (NOT DVBIPITOOLS_HAVE_RIST)
+        message(WARNING "librist not found: dipirist skipped, rist:// output unavailable in dipirec/dipitvhead/dipiradiohead")
+    endif ()
+endif ()
+
 set(BUILD_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
 
 add_compile_definitions(

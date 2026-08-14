@@ -233,6 +233,65 @@ START_TEST(biss2_ca_receivers_defaults_cas_pids_to_video_audio) {
 }
 END_TEST
 
+START_TEST(rist_peer_is_repeatable_and_bonded) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "-R", "rist://1.2.3.4:6000", "-R", "rist://5.6.7.8:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.n_rist, 2u);
+  ck_assert_str_eq(cfg.rist_uri[0], "rist://1.2.3.4:6000");
+  ck_assert_str_eq(cfg.rist_uri[1], "rist://5.6.7.8:6000");
+}
+END_TEST
+
+START_TEST(rist_peer_without_rist_scheme_is_rejected) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "-R", "udp://1.2.3.4:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(rist_and_mcast_output_coexist) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "-R", "rist://1.2.3.4:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.mcast_group, "239.1.2.1");
+  ck_assert_uint_eq(cfg.n_rist, 1u);
+}
+END_TEST
+
+START_TEST(rist_secret_without_profile_main_is_rejected) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "-R", "rist://1.2.3.4:6000", "--secret", "hunter2", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(rist_secret_with_profile_main_is_accepted) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "-R", "rist://1.2.3.4:6000", "--profile", "main", "--secret", "hunter2", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.rist_profile, RIST_PROF_MAIN);
+  ck_assert_str_eq(cfg.rist_secret, "hunter2");
+}
+END_TEST
+
+START_TEST(rist_options_without_any_rist_peer_are_rejected_by_profile_check_only) {
+  /* --secret without --profile main still fails validation even with no -R;
+     the no-op warning (logged, not fatal) doesn't change ARGS_OK/ARGS_ERR here */
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
+                  "--buffer", "500", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.n_rist, 0u);
+  ck_assert_uint_eq(cfg.rist_buffer_ms, 500u);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("args");
   TCase *tc = tcase_create("core");
@@ -258,6 +317,12 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, biss2_ca_receivers_mutually_exclusive_with_cas_algo);
   tcase_add_test(tc, biss2_ca_receivers_mutually_exclusive_with_biss2_sw);
   tcase_add_test(tc, biss2_ca_receivers_defaults_cas_pids_to_video_audio);
+  tcase_add_test(tc, rist_peer_is_repeatable_and_bonded);
+  tcase_add_test(tc, rist_peer_without_rist_scheme_is_rejected);
+  tcase_add_test(tc, rist_and_mcast_output_coexist);
+  tcase_add_test(tc, rist_secret_without_profile_main_is_rejected);
+  tcase_add_test(tc, rist_secret_with_profile_main_is_accepted);
+  tcase_add_test(tc, rist_options_without_any_rist_peer_are_rejected_by_profile_check_only);
   suite_add_tcase(s, tc);
   return s;
 }

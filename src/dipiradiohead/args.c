@@ -11,6 +11,7 @@
 #include "lib/argutil.h"
 #include "lib/cas/biss/biss.h"
 #include "lib/cas/cas_args.h"
+#include "lib/ioutil.h"
 #include "lib/log.h"
 
 #include "args.h"
@@ -85,6 +86,12 @@ static void print_help(void) {
       "  -r, --rtp                  wrap output in RTP (default: plain UDP)\n"
       "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
       "  -n, --nit <text>           NIT network_name\n"
+      "  -R, --rist <uri>           rist://host:port[?query] additional output, bonded with any\n"
+      "                             other -R given; simultaneous with -m (requires librist)\n"
+      "      --profile <p>          simple|main; -R peers only (default: simple)\n"
+      "      --secret <psk>         -R pre-shared key; requires --profile main\n"
+      "      --cname <name>         -R cname (default: library default)\n"
+      "      --buffer <ms>          -R recovery buffer (default: library default)\n"
       "  -e, --error <seconds>      on input error, reconnect after N s (default: fail once;\n"
       "                             always retries when more than one -i is given)\n"
       "  -k, --insecure             skip TLS verification (self-signed, hostname, expiry)\n"
@@ -174,10 +181,17 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"biss1-sw", required_argument, 0, 1022},
       {"biss2-ca-receivers", required_argument, 0, 1023},
       {"biss2-ca-session-id", required_argument, 0, 1024},
+      {"rist", required_argument, 0, 'R'},
+      {"profile", required_argument, 0, 1025},
+      {"secret", required_argument, 0, 1026},
+      {"cname", required_argument, 0, 1027},
+      {"buffer", required_argument, 0, 1028},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_mcast = 0;
   int any_cas_flag = 0;
+  const char *profile_arg = NULL;
+  int have_secret = 0;
   int c;
   unsigned i;
 
@@ -188,7 +202,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   optind = 1;
   /* leading '+': disable GNU getopt argument permutation, so --sid/--sdt stay paired with
      whichever -i preceded them on the command line instead of being reordered */
-  while ((c = getopt_long(argc, argv, "+i:m:I:rT:n:s:e:kvh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "+i:m:I:rT:n:s:e:kvhR:", longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
         if (cfg->n_inputs >= RADIOHEAD_MAX_INPUTS) {
@@ -476,6 +490,47 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'v':
         cfg->verbose = 1;
         break;
+      case 'R':
+        if (strncmp(optarg, "rist://", 7) != 0) {
+          argerr("invalid -R rist uri: %s (must start with rist://)", optarg);
+          return ARGS_ERR;
+        }
+        if (cfg->n_rist >= ARGS_MAX_RIST_PEERS) {
+          argerr("too many -R peers (max %d)", ARGS_MAX_RIST_PEERS);
+          return ARGS_ERR;
+        }
+        if (bufcpy(cfg->rist_uri[cfg->n_rist], sizeof cfg->rist_uri[0], optarg) >= sizeof cfg->rist_uri[0]) {
+          argerr("-R rist uri too long: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->n_rist++;
+        break;
+      case 1025:
+        profile_arg = optarg;
+        break;
+      case 1026:
+        if (bufcpy(cfg->rist_secret, sizeof cfg->rist_secret, optarg) >= sizeof cfg->rist_secret) {
+          argerr("--secret too long");
+          return ARGS_ERR;
+        }
+        have_secret = 1;
+        break;
+      case 1027:
+        if (bufcpy(cfg->rist_cname, sizeof cfg->rist_cname, optarg) >= sizeof cfg->rist_cname) {
+          argerr("--cname too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1028: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0) {
+          argerr("invalid --buffer: %s (ms)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->rist_buffer_ms = (unsigned)v;
+        break;
+      }
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -497,6 +552,21 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
     argerr("--metrics/--metrics-interval require --metrics-id");
+    return ARGS_ERR;
+  }
+  if (profile_arg) {
+    static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
+    int v;
+    if (map_lookup(map, sizeof map / sizeof map[0], profile_arg, &v)) {
+      argerr("invalid --profile: %s (simple|main)", profile_arg);
+      return ARGS_ERR;
+    }
+    cfg->rist_profile = (rist_profile_sel_t)v;
+  }
+  if (cfg->n_rist == 0 && (profile_arg || have_secret || cfg->rist_cname[0] || cfg->rist_buffer_ms))
+    log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer have no effect without -R");
+  if (cfg->n_rist > 0 && have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
+    argerr("--secret requires --profile main");
     return ARGS_ERR;
   }
   if (any_cas_flag && cfg->cas_algo == CAS_ALGO_NONE) {

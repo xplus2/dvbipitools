@@ -12,8 +12,28 @@
 /* F.5.2, same shape as Generic NACK; sender_ssrc = triggering client, not us; 0 if entry_count 0 or cap small */
 size_t rtcp_build_ff(uint32_t sender_ssrc, uint32_t media_ssrc, const rtcp_nack_entry_t *entries, size_t entry_count, unsigned char *out, size_t cap);
 
-/* F.5.3 unicast-feedback-address sub-report; addr_len 4=IPv4, 16=IPv6; ntp_sec/frac = NTP epoch 1900, not Unix; 0 on bad addr_len/cap */
-size_t rtcp_build_rsi_addr(uint32_t ssrc, uint32_t summarized_ssrc, uint32_t ntp_sec, uint32_t ntp_frac, uint16_t port, const unsigned char *addr, size_t addr_len, unsigned char *out, size_t cap);
+/* F.5.3 Figure F.6 RSI header only, no sub-reports; total_len = this header + every sub-report
+   that will follow it (caller writes those separately, back-to-back, right after this header's
+   20 bytes) - needed up front for the length field. ntp_sec/frac = NTP epoch 1900, not Unix.
+   0 if cap<20 or total_len isn't a multiple of 4 that's >= 20. */
+size_t rtcp_build_rsi_header(uint32_t ssrc, uint32_t summarized_ssrc, uint32_t ntp_sec, uint32_t ntp_frac, size_t total_len, unsigned char *out, size_t cap);
+
+/* F.5.3 Figure F.8, SRBT 0/1/2: unicast feedback address sub-report. addr_len 4=IPv4 (SRBT 0),
+   16=IPv6 (SRBT 1, "not supported in DVB" - caller's policy whether to build this at all).
+   0 on bad addr_len or cap. */
+size_t rtcp_build_rsi_srbt_addr(const unsigned char *addr, size_t addr_len, uint16_t port, unsigned char *out, size_t cap);
+
+/* F.5.3 Figure F.8, SRBT 2: DNS name unicast feedback address, UTF-8, NUL-padded to 32-bit.
+   0 if name_len is 0/too long (>250) or cap too small. */
+size_t rtcp_build_rsi_srbt_dns(const char *name, size_t name_len, uint16_t port, unsigned char *out, size_t cap);
+
+/* F.5.3 Figure F.10, SRBT 11: max RTCP bandwidth per RET-enabled HNED, in kbit/s (Q16.16),
+   range [0, 65536). 0 on out-of-range kbps or cap. */
+size_t rtcp_build_rsi_srbt_bandwidth(double kbps, unsigned char *out, size_t cap);
+
+/* F.5.3 Figure F.9, SRBT 8: list of HNED SSRCs currently believed to collide. 0 if count is
+   0/too large (>255 sub-report-length bytes) or cap too small. */
+size_t rtcp_build_rsi_srbt_collision(const uint32_t *ssrcs, size_t count, unsigned char *out, size_t cap);
 
 /* RAMS-I optional TLVs (Annex I.2.7.3 types 31-35), server->client only, never parsed by us */
 typedef struct {

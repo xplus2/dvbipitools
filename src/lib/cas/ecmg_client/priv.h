@@ -33,7 +33,7 @@ struct ecmg_client {
   atomic_ulong cw_epoch;
 
   atomic_int connected; /* 1 while a CW_provision/ECM_response cycle is live */
-  atomic_ulong cw_published_at; /* packet_counter value when the cached CW was last (re)published */
+  atomic_ulong cw_published_at; /* packet_counter value when cached CW was last (re)published */
 
   pthread_mutex_t ecm_lock;
   unsigned char ecm[SIMULCRYPT_MAX_PAYLOAD];

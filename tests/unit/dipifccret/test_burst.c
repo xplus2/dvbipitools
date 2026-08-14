@@ -33,25 +33,47 @@ static channel_t *make_channel_with_rap(size_t cache_cap, int n_extra_entries) {
   memset(pkt, 0xAB, sizeof pkt);
   pkt[0] = 0x47;
   atomic_store_explicit(&c->cache.have_rap, 1, memory_order_relaxed);
-  channel_store(g_table, c, 0x1234, 1, 0, pkt, sizeof pkt); /* entry 0: becomes "RAP" once have_rap seen */
+  channel_store(g_table, c, 0x1234, 1, 0, 0, pkt, sizeof pkt); /* entry 0: becomes "RAP" once have_rap seen */
   for (i = 0; i < n_extra_entries; i++)
-    channel_store(g_table, c, 0x1234, (uint16_t)(2 + i), 0, pkt, sizeof pkt);
+    channel_store(g_table, c, 0x1234, (uint16_t)(2 + i), 0, 0, pkt, sizeof pkt);
   return c;
 }
 
-START_TEST(burst_decide_rejects_null_channel) {
+/* single RAP entry, caller-chosen DSCP, asserts burst packets mirror it (F.9/I.2.12) */
+static channel_t *make_channel_with_rap_dscp(unsigned char dscp) {
+  channel_t *c;
+  unsigned char pkt[188];
+
+  g_table = channel_table_new(1, 0, 8);
+  c = lookup_ip(g_table, "239.1.1.1", 5000);
+  memset(pkt, 0xAB, sizeof pkt);
+  pkt[0] = 0x47;
+  atomic_store_explicit(&c->cache.have_rap, 1, memory_order_relaxed);
+  channel_store(g_table, c, 0x1234, 1, 0, dscp, pkt, sizeof pkt);
+  return c;
+}
+
+START_TEST(burst_decide_reports_ssrc_not_found_for_null_channel) {
   rtcp_rams_r_t req;
   memset(&req, 0, sizeof req);
-  ck_assert_int_eq(burst_decide(NULL, &req), BURST_REJECT);
+  ck_assert_int_eq(burst_decide(NULL, &req, 0), BURST_SSRC_NOT_FOUND);
 }
 END_TEST
 
-START_TEST(burst_decide_rejects_when_no_rap) {
+START_TEST(burst_decide_rejects_null_channel_for_whole_session_request) {
+  rtcp_rams_r_t req;
+  memset(&req, 0, sizeof req);
+  req.ignore_media_ssrc = 1;
+  ck_assert_int_eq(burst_decide(NULL, &req, 0), BURST_REJECT);
+}
+END_TEST
+
+START_TEST(burst_decide_reports_no_rap_when_no_rap) {
   channel_table_t *t = channel_table_new(1, 0, 8); /* FCC cache, but nothing stored yet */
   channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
   rtcp_rams_r_t req;
   memset(&req, 0, sizeof req);
-  ck_assert_int_eq(burst_decide(c, &req), BURST_REJECT);
+  ck_assert_int_eq(burst_decide(c, &req, 0), BURST_NO_RAP);
   channel_table_free(t);
 }
 END_TEST
@@ -64,7 +86,74 @@ START_TEST(burst_decide_flags_malformed_buffer_fill_range) {
   req.min_buffer_fill_ms = 500;
   req.has_max_buffer_fill = 1;
   req.max_buffer_fill_ms = 100; /* min > max */
-  ck_assert_int_eq(burst_decide(c, &req), BURST_MALFORMED);
+  ck_assert_int_eq(burst_decide(c, &req, 0), BURST_MALFORMED);
+  channel_table_free(g_table);
+}
+END_TEST
+
+START_TEST(burst_decide_rejects_min_buffer_fill_above_bound) {
+  channel_t *c = make_channel_with_rap(8, 0);
+  rtcp_rams_r_t req;
+  memset(&req, 0, sizeof req);
+  req.has_min_buffer_fill = 1;
+  req.min_buffer_fill_ms = 5000;
+  ck_assert_int_eq(burst_decide(c, &req, 1000 /* bound */), BURST_MIN_BUFFER_INVALID);
+  channel_table_free(g_table);
+}
+END_TEST
+
+START_TEST(burst_decide_allows_min_buffer_fill_at_or_under_bound) {
+  channel_t *c = make_channel_with_rap(8, 0);
+  rtcp_rams_r_t req;
+  memset(&req, 0, sizeof req);
+  req.has_min_buffer_fill = 1;
+  req.min_buffer_fill_ms = 1000;
+  /* single RAP entry, timestamp span 0: nonzero min still fails 507, not 401 */
+  ck_assert_int_eq(burst_decide(c, &req, 1000 /* bound */), BURST_NO_VALID_START);
+  channel_table_free(g_table);
+}
+END_TEST
+
+START_TEST(burst_decide_zero_bound_disables_min_buffer_fill_check) {
+  channel_t *c = make_channel_with_rap(8, 0);
+  rtcp_rams_r_t req;
+  memset(&req, 0, sizeof req);
+  req.has_min_buffer_fill = 1;
+  req.min_buffer_fill_ms = 1000000; /* absurd, but bound is disabled */
+  ck_assert_int_eq(burst_decide(c, &req, 0 /* no bound */), BURST_NO_VALID_START);
+  channel_table_free(g_table);
+}
+END_TEST
+
+START_TEST(burst_decide_rejects_zero_max_buffer_fill) {
+  channel_t *c = make_channel_with_rap(8, 0);
+  rtcp_rams_r_t req;
+  memset(&req, 0, sizeof req);
+  req.has_max_buffer_fill = 1;
+  req.max_buffer_fill_ms = 0;
+  ck_assert_int_eq(burst_decide(c, &req, 0), BURST_MAX_BUFFER_INVALID);
+  channel_table_free(g_table);
+}
+END_TEST
+
+START_TEST(burst_decide_rejects_cache_shallower_than_requested_min) {
+  channel_t *c = make_channel_with_rap(8, 0); /* one RAP entry only, 0ms cached span */
+  rtcp_rams_r_t req;
+  memset(&req, 0, sizeof req);
+  req.has_min_buffer_fill = 1;
+  req.min_buffer_fill_ms = 1; /* any nonzero minimum exceeds a 0ms-deep cache */
+  ck_assert_int_eq(burst_decide(c, &req, 0), BURST_NO_VALID_START);
+  channel_table_free(g_table);
+}
+END_TEST
+
+START_TEST(burst_decide_accepts_when_cache_meets_requested_min) {
+  channel_t *c = make_channel_with_rap(8, 0);
+  rtcp_rams_r_t req;
+  memset(&req, 0, sizeof req);
+  req.has_min_buffer_fill = 1;
+  req.min_buffer_fill_ms = 0; /* trivially satisfied */
+  ck_assert_int_eq(burst_decide(c, &req, 0), BURST_ACCEPT);
   channel_table_free(g_table);
 }
 END_TEST
@@ -76,7 +165,7 @@ START_TEST(burst_decide_rejects_insufficient_client_bitrate) {
   memset(&req, 0, sizeof req);
   req.has_max_bitrate = 1;
   req.max_bitrate_bps = 1000000; /* == nominal: can never catch up */
-  ck_assert_int_eq(burst_decide(c, &req), BURST_BITRATE_INSUFFICIENT);
+  ck_assert_int_eq(burst_decide(c, &req, 0), BURST_BITRATE_INSUFFICIENT);
   channel_table_free(g_table);
 }
 END_TEST
@@ -88,17 +177,19 @@ START_TEST(burst_decide_accepts_valid_request) {
   memset(&req, 0, sizeof req);
   req.has_max_bitrate = 1;
   req.max_bitrate_bps = 5000000; /* well above nominal */
-  ck_assert_int_eq(burst_decide(c, &req), BURST_ACCEPT);
+  ck_assert_int_eq(burst_decide(c, &req, 0), BURST_ACCEPT);
   channel_table_free(g_table);
 }
 END_TEST
 
 static int g_send_calls;
 static unsigned char g_last_pkt[2048];
+static int g_last_dscp;
 
-static void capture_send(const unsigned char *pkt, size_t len, void *user) {
+static void capture_send(const unsigned char *pkt, size_t len, int dscp, void *user) {
   (void)user;
   g_send_calls++;
+  g_last_dscp = dscp;
   if (len <= sizeof g_last_pkt)
     memcpy(g_last_pkt, pkt, len);
 }
@@ -189,9 +280,57 @@ START_TEST(burst_terminate_marks_done_immediately) {
   burst_t *b = burst_new(c, 1.0, 0, 99);
 
   ck_assert_int_eq(burst_is_done(b), 0);
-  burst_terminate(b);
+  burst_terminate(b, 0, 0);
   ck_assert_int_eq(burst_is_done(b), 1);
   ck_assert_int_eq(burst_tick(b, 60000, capture_send, NULL), BURST_TICK_DONE);
+
+  burst_free(b);
+  channel_table_free(g_table);
+}
+END_TEST
+
+/* RFC 6285 Sec 7.5 Extended RTP Seqnum TLV: burst keeps sending up to (not
+   including) client's first-received multicast seqnum, instead of stopping now */
+START_TEST(burst_terminate_with_stop_seq_clips_instead_of_stopping_immediately) {
+  channel_t *c = make_channel_with_rap(8, 5); /* RAP + 5 = 6 entries, seq 1..6 */
+  burst_t *b;
+  struct timespec ts;
+
+  atomic_store_explicit(&c->nominal_bps, 100000000.0, memory_order_relaxed);
+  b = burst_new(c, 1.0, 0, 99);
+  burst_terminate(b, 1, 4); /* client already got multicast seq 4 */
+
+  ts.tv_sec = 0;
+  ts.tv_nsec = 20000000;
+  nanosleep(&ts, NULL);
+
+  g_send_calls = 0;
+  ck_assert_int_eq(burst_tick(b, 60000, capture_send, NULL), BURST_TICK_DONE);
+  ck_assert_int_eq(g_send_calls, 3); /* seq 1,2,3 sent; seq 4, client's own, held back */
+  ck_assert_int_eq(burst_is_done(b), 1);
+
+  burst_free(b);
+  channel_table_free(g_table);
+}
+END_TEST
+
+START_TEST(burst_terminate_with_already_reached_stop_seq_sends_nothing) {
+  channel_t *c = make_channel_with_rap(8, 5); /* RAP + 5 = 6 entries, seq 1..6 */
+  burst_t *b;
+  struct timespec ts;
+
+  atomic_store_explicit(&c->nominal_bps, 100000000.0, memory_order_relaxed);
+  b = burst_new(c, 1.0, 0, 99);
+  burst_terminate(b, 1, 1); /* client already got multicast seq 1, burst's own first entry */
+
+  ts.tv_sec = 0;
+  ts.tv_nsec = 20000000;
+  nanosleep(&ts, NULL);
+
+  g_send_calls = 0;
+  ck_assert_int_eq(burst_tick(b, 60000, capture_send, NULL), BURST_TICK_DONE);
+  ck_assert_int_eq(g_send_calls, 0);
+  ck_assert_int_eq(burst_is_done(b), 1);
 
   burst_free(b);
   channel_table_free(g_table);
@@ -212,7 +351,7 @@ START_TEST(burst_tick_detects_slot_reuse) {
 
   g_send_calls = 0;
   ck_assert_int_eq(burst_tick(b, 60000, capture_send, NULL), BURST_TICK_DONE);
-  ck_assert_int_eq(g_send_calls, 0); /* must not stream the new occupant's data under the old identity */
+  ck_assert_int_eq(g_send_calls, 0); /* must not stream new occupant's data under old identity */
   ck_assert_int_eq(burst_is_done(b), 1);
 
   burst_free(b);
@@ -247,12 +386,44 @@ START_TEST(burst_tick_built_packets_round_trip_through_rtx_parse) {
 }
 END_TEST
 
+/* F.9/I.2.12: burst packets mirror channel's captured per-entry DSCP */
+START_TEST(burst_tick_sends_with_channel_captured_dscp) {
+  channel_t *c = make_channel_with_rap_dscp(0x90); /* 0b100100 << 2: video bearer, lower priority */
+  burst_t *b;
+  burst_tick_result_t r;
+  struct timespec ts;
+
+  atomic_store_explicit(&c->nominal_bps, 100000000.0, memory_order_relaxed);
+  b = burst_new(c, 1.0, 0, 99);
+
+  ts.tv_sec = 0;
+  ts.tv_nsec = 20000000;
+  nanosleep(&ts, NULL);
+
+  g_send_calls = 0;
+  r = burst_tick(b, 60000, capture_send, NULL);
+  ck_assert_int_eq(r, BURST_TICK_DONE);
+  ck_assert_int_eq(g_send_calls, 1);
+  ck_assert_int_eq(g_last_dscp, 0x90);
+
+  burst_free(b);
+  channel_table_free(g_table);
+}
+END_TEST
+
 static Suite *burst_suite(void) {
   Suite *s = suite_create("burst");
   TCase *tc = tcase_create("core");
-  tcase_add_test(tc, burst_decide_rejects_null_channel);
-  tcase_add_test(tc, burst_decide_rejects_when_no_rap);
+  tcase_add_test(tc, burst_decide_reports_ssrc_not_found_for_null_channel);
+  tcase_add_test(tc, burst_decide_rejects_null_channel_for_whole_session_request);
+  tcase_add_test(tc, burst_decide_reports_no_rap_when_no_rap);
   tcase_add_test(tc, burst_decide_flags_malformed_buffer_fill_range);
+  tcase_add_test(tc, burst_decide_rejects_min_buffer_fill_above_bound);
+  tcase_add_test(tc, burst_decide_allows_min_buffer_fill_at_or_under_bound);
+  tcase_add_test(tc, burst_decide_zero_bound_disables_min_buffer_fill_check);
+  tcase_add_test(tc, burst_decide_rejects_zero_max_buffer_fill);
+  tcase_add_test(tc, burst_decide_rejects_cache_shallower_than_requested_min);
+  tcase_add_test(tc, burst_decide_accepts_when_cache_meets_requested_min);
   tcase_add_test(tc, burst_decide_rejects_insufficient_client_bitrate);
   tcase_add_test(tc, burst_decide_accepts_valid_request);
   tcase_add_test(tc, burst_new_caps_target_to_client_max);
@@ -260,7 +431,10 @@ static Suite *burst_suite(void) {
   tcase_add_test(tc, burst_tick_stops_at_duration_cap);
   tcase_add_test(tc, burst_tick_detects_slot_reuse);
   tcase_add_test(tc, burst_terminate_marks_done_immediately);
+  tcase_add_test(tc, burst_terminate_with_stop_seq_clips_instead_of_stopping_immediately);
+  tcase_add_test(tc, burst_terminate_with_already_reached_stop_seq_sends_nothing);
   tcase_add_test(tc, burst_tick_built_packets_round_trip_through_rtx_parse);
+  tcase_add_test(tc, burst_tick_sends_with_channel_captured_dscp);
   suite_add_tcase(s, tc);
   return s;
 }

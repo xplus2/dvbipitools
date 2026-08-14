@@ -8,7 +8,7 @@
 
 typedef struct {
   char id[BCG_ID_LEN]; /* may contain commas */
-  char uri[BCG_ID_LEN]; /* key, not the triplet */
+  char uri[BCG_ID_LEN]; /* key, not triplet */
   unsigned tsid, onid, sid; /* best-effort, never a key */
 } mapping_entry_t;
 
@@ -17,7 +17,7 @@ typedef struct {
   int count, cap;
 } mapping_t;
 
-/* csv: id,uri,tsid,onid,sid - dipiscan's own csv shape, col 1 = xmltv id */
+/* csv: id,uri,tsid,onid,sid. dipiscan's own csv shape, col 1 = xmltv id */
 int mapping_load(const char *path, mapping_t *m);
 void mapping_free(mapping_t *m);
 

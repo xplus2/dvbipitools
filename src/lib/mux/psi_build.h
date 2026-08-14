@@ -15,7 +15,7 @@ size_t psi_utf8_clamp(const char *s, size_t len, size_t max_bytes);
 
 /* DVB text: 0x15 (UTF-8) prefix + bytes, truncated to fit cap without splitting a codepoint */
 size_t psi_put_text(unsigned char *out, size_t cap, const char *s);
-/* appends CRC32 and patches the section_length field. flags_nibble: 0xB0 (PAT/PMT) or 0xF0 (others) */
+/* appends CRC32, patches section_length. flags_nibble: 0xB0 (PAT/PMT) or 0xF0 (others) */
 size_t psi_finish_section(unsigned char *out, size_t len, size_t cap, unsigned char flags_nibble);
 
 /* each builds one section (table_id..CRC32 incl.). single-program-out shape, content-identical

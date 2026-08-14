@@ -212,7 +212,7 @@ START_TEST(extract_datagrams_rejects_malformed) {
 }
 END_TEST
 
-/* below: standalone integration tests. no swampcastle - a synchronous fake EMMG client
+/* below: standalone integration tests. a synchronous fake EMMG client
    (this process, a loopback socket) connects to the REAL emmg_server.c listener and drives
    its actual accept/worker state machine end to end. */
 

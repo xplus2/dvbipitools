@@ -22,6 +22,7 @@
 #include "lib/tva/mapping.h"
 #include "lib/tva/xmltv.h"
 #include "version.h"
+#include "wrapper.h"
 
 long date_to_mjd(int y, int mo, int d) {
   int yy = mo <= 2 ? y - 1 : y;
@@ -300,7 +301,13 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
       const unsigned char *strs = strrepo_writer_data(&sw, &strs_len);
       unsigned char *cont;
       if (container_build(bits, bits_len, strs, strs_len, &cont, &cont_len) == 0) {
-        int ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_BCG_DATA_CONTAINER, 1, (unsigned)(cycles % 256), 0, 0, 1, cont, cont_len) == 0;
+        unsigned char *wrapped;
+        size_t wrapped_len;
+        int ok = 0;
+        if (wrapper_build(cont, cont_len, cfg->compress, &wrapped, &wrapped_len) == 0) {
+          ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_BCG_DATA_CONTAINER, 1, (unsigned)(cycles % 256), 1, 0, 0, 1, wrapped, wrapped_len) == 0;
+          free(wrapped);
+        }
         free(cont);
         if (metrics_on) {
           bm.documents_generated_total++;

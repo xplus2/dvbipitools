@@ -17,13 +17,14 @@ typedef struct {
   int family;
   char group[64];
   unsigned port;
+  unsigned char dscp;
   uint32_t ssrc;
   uint16_t seq;
   uint32_t timestamp;
   unsigned char payload[16];
 } record_t;
 
-static void record_cb(int family, const void *addr, size_t addr_len, unsigned port, uint32_t ssrc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len, void *user) {
+static void record_cb(int family, const void *addr, size_t addr_len, unsigned port, unsigned char dscp, uint32_t ssrc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len, void *user) {
   record_t *r = (record_t *)user;
   (void)addr_len;
   r->called = 1;
@@ -31,6 +32,7 @@ static void record_cb(int family, const void *addr, size_t addr_len, unsigned po
   if (!inet_ntop(family, addr, r->group, sizeof r->group))
     r->group[0] = '\0';
   r->port = port;
+  r->dscp = dscp;
   r->ssrc = ssrc;
   r->seq = seq;
   r->timestamp = timestamp;
@@ -77,13 +79,14 @@ static size_t put_rtp_ts(unsigned char *p, uint16_t seq, uint32_t timestamp, uin
   return 12 + 188;
 }
 
-static size_t put_ipv4_udp_rtp(unsigned char *p, const char *dst_ip, unsigned dst_port, int rtp_valid) {
+static size_t put_ipv4_udp_rtp(unsigned char *p, const char *dst_ip, unsigned dst_port, unsigned char tos, int rtp_valid) {
   size_t udp_off = 20, rtp_off = udp_off + 8;
   size_t rtp_len = put_rtp_ts(p + rtp_off, 1, 0x1000, 0xdeadbeef, rtp_valid);
   struct in_addr dst;
 
   memset(p, 0, 20);
   p[0] = 0x45; /* version 4, IHL 5 */
+  p[1] = tos;
   p[8] = 64;   /* ttl */
   p[9] = 17;   /* udp */
   inet_pton(AF_INET, "192.0.2.1", p + 12);
@@ -100,12 +103,13 @@ static size_t put_ipv4_udp_rtp(unsigned char *p, const char *dst_ip, unsigned ds
   return rtp_off + rtp_len;
 }
 
-static size_t put_ipv6_udp_rtp(unsigned char *p, const char *dst_ip, unsigned dst_port, int hopbyhop, int rtp_valid) {
+static size_t put_ipv6_udp_rtp(unsigned char *p, const char *dst_ip, unsigned dst_port, unsigned char tc, int hopbyhop, int rtp_valid) {
   size_t off = 40, udp_off, rtp_off, rtp_len;
   struct in6_addr src, dst;
 
   memset(p, 0, 40);
-  p[0] = 0x60; /* version 6 */
+  p[0] = (unsigned char)(0x60 | (tc >> 4)); /* version 6, high nibble of Traffic Class */
+  p[1] = (unsigned char)(tc << 4); /* low nibble of Traffic Class, flow label 0 */
   p[6] = hopbyhop ? 0 : 17;
   p[7] = 64; /* hop limit */
   inet_pton(AF_INET6, "::1", &src);
@@ -134,14 +138,14 @@ static size_t put_ipv6_udp_rtp(unsigned char *p, const char *dst_ip, unsigned ds
   return rtp_off + rtp_len;
 }
 
-static size_t build_ipv4_frame(unsigned char *buf, int vlan, const char *dst_ip, unsigned dst_port, int rtp_valid) {
+static size_t build_ipv4_frame(unsigned char *buf, int vlan, const char *dst_ip, unsigned dst_port, unsigned char tos, int rtp_valid) {
   size_t off = put_eth(buf, vlan, 0x0800);
-  return off + put_ipv4_udp_rtp(buf + off, dst_ip, dst_port, rtp_valid);
+  return off + put_ipv4_udp_rtp(buf + off, dst_ip, dst_port, tos, rtp_valid);
 }
 
-static size_t build_ipv6_frame(unsigned char *buf, int vlan, const char *dst_ip, unsigned dst_port, int hopbyhop, int rtp_valid) {
+static size_t build_ipv6_frame(unsigned char *buf, int vlan, const char *dst_ip, unsigned dst_port, unsigned char tc, int hopbyhop, int rtp_valid) {
   size_t off = put_eth(buf, vlan, 0x86DD);
-  return off + put_ipv6_udp_rtp(buf + off, dst_ip, dst_port, hopbyhop, rtp_valid);
+  return off + put_ipv6_udp_rtp(buf + off, dst_ip, dst_port, tc, hopbyhop, rtp_valid);
 }
 
 START_TEST(capture_ipv4_novlan_accepted) {
@@ -152,7 +156,7 @@ START_TEST(capture_ipv4_novlan_accepted) {
 
   make_ranges(ranges);
   memset(&rec, 0, sizeof rec);
-  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 1);
+  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 0, 1);
   capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
 
   ck_assert_int_eq(rec.called, 1);
@@ -174,7 +178,7 @@ START_TEST(capture_ipv4_vlan_tagged_accepted) {
 
   make_ranges(ranges);
   memset(&rec, 0, sizeof rec);
-  len = build_ipv4_frame(pkt, 1, "239.1.2.5", 5000, 1);
+  len = build_ipv4_frame(pkt, 1, "239.1.2.5", 5000, 0, 1);
   capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
 
   ck_assert_int_eq(rec.called, 1);
@@ -190,13 +194,63 @@ START_TEST(capture_ipv6_hopbyhop_accepted) {
 
   make_ranges(ranges);
   memset(&rec, 0, sizeof rec);
-  len = build_ipv6_frame(pkt, 0, "ff3e::5", 6000, 1, 1);
+  len = build_ipv6_frame(pkt, 0, "ff3e::5", 6000, 0, 1, 1);
   capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
 
   ck_assert_int_eq(rec.called, 1);
   ck_assert_int_eq(rec.family, AF_INET6);
   ck_assert_str_eq(rec.group, "ff3e::5");
   ck_assert_uint_eq(rec.port, 6000);
+}
+END_TEST
+
+/* F.9/I.2.12: DSCP extraction feeds RTX/burst DSCP mirroring, top 6 bits of TOS byte */
+START_TEST(capture_ipv4_dscp_extracted) {
+  unsigned char pkt[512];
+  cidr_t ranges[2];
+  record_t rec;
+  size_t len;
+
+  make_ranges(ranges);
+  memset(&rec, 0, sizeof rec);
+  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 0x88, 1); /* 0b100010 << 2 */
+  capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
+
+  ck_assert_int_eq(rec.called, 1);
+  ck_assert_uint_eq(rec.dscp, 0x88);
+}
+END_TEST
+
+/* ECN bits (low 2 bits of TOS) must not leak into extracted DSCP */
+START_TEST(capture_ipv4_dscp_masks_ecn_bits) {
+  unsigned char pkt[512];
+  cidr_t ranges[2];
+  record_t rec;
+  size_t len;
+
+  make_ranges(ranges);
+  memset(&rec, 0, sizeof rec);
+  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 0x8B, 1); /* DSCP 0x88 + ECN 0b11 */
+  capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
+
+  ck_assert_int_eq(rec.called, 1);
+  ck_assert_uint_eq(rec.dscp, 0x88);
+}
+END_TEST
+
+START_TEST(capture_ipv6_traffic_class_extracted) {
+  unsigned char pkt[512];
+  cidr_t ranges[2];
+  record_t rec;
+  size_t len;
+
+  make_ranges(ranges);
+  memset(&rec, 0, sizeof rec);
+  len = build_ipv6_frame(pkt, 0, "ff3e::5", 6000, 0x90, 0, 1); /* 0b100100 << 2 */
+  capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
+
+  ck_assert_int_eq(rec.called, 1);
+  ck_assert_uint_eq(rec.dscp, 0x90);
 }
 END_TEST
 
@@ -208,7 +262,7 @@ START_TEST(capture_out_of_range_rejected) {
 
   make_ranges(ranges);
   memset(&rec, 0, sizeof rec);
-  len = build_ipv4_frame(pkt, 0, "10.0.0.5", 5000, 1);
+  len = build_ipv4_frame(pkt, 0, "10.0.0.5", 5000, 0, 1);
   capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
 
   ck_assert_int_eq(rec.called, 0);
@@ -223,7 +277,7 @@ START_TEST(capture_non_rtp_payload_rejected) {
 
   make_ranges(ranges);
   memset(&rec, 0, sizeof rec);
-  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 0);
+  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 0, 0);
   capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
 
   ck_assert_int_eq(rec.called, 0);
@@ -237,14 +291,14 @@ START_TEST(capture_truncated_frame_rejected) {
 
   make_ranges(ranges);
   memset(&rec, 0, sizeof rec);
-  build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 1);
+  build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 0, 1);
   capture_handle_frame(pkt, 10, ranges, 2, record_cb, &rec); /* shorter than an ethernet header */
 
   ck_assert_int_eq(rec.called, 0);
 }
 END_TEST
 
-/* minimal classic-BPF interpreter covering exactly the opcodes capture_build_bpf emits */
+/* minimal classic-BPF interpreter covering exactly opcodes capture_build_bpf emits */
 static uint32_t bpf_run(const struct sock_filter *insns, size_t n, const unsigned char *pkt, size_t len) {
   size_t pc = 0;
   uint32_t a = 0;
@@ -295,19 +349,19 @@ START_TEST(bpf_accepts_in_range_v4_v6_rejects_others) {
   prog = capture_build_bpf(ranges, 2, &prog_len);
   ck_assert_ptr_nonnull(prog);
 
-  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 1);
+  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 0, 1);
   ck_assert_uint_ne(bpf_run(prog, prog_len, pkt, len), 0);
 
-  len = build_ipv4_frame(pkt, 1, "239.1.2.5", 5000, 1);
+  len = build_ipv4_frame(pkt, 1, "239.1.2.5", 5000, 0, 1);
   ck_assert_uint_ne(bpf_run(prog, prog_len, pkt, len), 0);
 
-  len = build_ipv6_frame(pkt, 0, "ff3e::5", 6000, 0, 1);
+  len = build_ipv6_frame(pkt, 0, "ff3e::5", 6000, 0, 0, 1);
   ck_assert_uint_ne(bpf_run(prog, prog_len, pkt, len), 0);
 
-  len = build_ipv4_frame(pkt, 0, "10.0.0.5", 5000, 1);
+  len = build_ipv4_frame(pkt, 0, "10.0.0.5", 5000, 0, 1);
   ck_assert_uint_eq(bpf_run(prog, prog_len, pkt, len), 0);
 
-  len = build_ipv6_frame(pkt, 0, "ff3e::5", 6000, 1, 1); /* hop-by-hop: filter doesn't walk ext headers, dst still matches at fixed offset */
+  len = build_ipv6_frame(pkt, 0, "ff3e::5", 6000, 0, 1, 1); /* hop-by-hop: filter doesn't walk ext headers, dst still matches at fixed offset */
   ck_assert_uint_ne(bpf_run(prog, prog_len, pkt, len), 0);
 
   free(prog);
@@ -337,6 +391,9 @@ static Suite *capture_suite(void) {
   tcase_add_test(tc, capture_ipv4_novlan_accepted);
   tcase_add_test(tc, capture_ipv4_vlan_tagged_accepted);
   tcase_add_test(tc, capture_ipv6_hopbyhop_accepted);
+  tcase_add_test(tc, capture_ipv4_dscp_extracted);
+  tcase_add_test(tc, capture_ipv4_dscp_masks_ecn_bits);
+  tcase_add_test(tc, capture_ipv6_traffic_class_extracted);
   tcase_add_test(tc, capture_out_of_range_rejected);
   tcase_add_test(tc, capture_non_rtp_payload_rejected);
   tcase_add_test(tc, capture_truncated_frame_rejected);

@@ -17,8 +17,8 @@ typedef struct {
   double flip_deadline_wall;
 } cas_pid_state_t;
 
-/* one step of the per-pid PUSI-deferred-flip state machine, pure/testable. have_target=0:
-   no CW published yet, no-op. force_flip_s: CAS_FORCE_FLIP_S at the real call site, a
+/* one step of per-pid PUSI-deferred-flip state machine, pure/testable. have_target=0:
+   no CW published yet, no-op. force_flip_s: CAS_FORCE_FLIP_S at real call site,
    param here for testing. */
 #define CAS_FORCE_FLIP_S 2.0
 void cas_pid_apply(cas_pid_state_t *ps, int have_target, int target_parity, int pusi, double now, double force_flip_s);
@@ -34,8 +34,8 @@ void cas_scramble_engine_stop(cas_scramble_engine_t *e);
 /* parity: SCRAMBLE_PARITY_EVEN/ODD. len 0: mark that slot unusable (no key material yet). */
 void cas_scramble_engine_set_cw(cas_scramble_engine_t *e, int parity, const unsigned char *cw, size_t len, scrambler_emit_cb emit, void *ctx);
 
-/* have_source 0: no CW source (ecmg not started / group not generating) - passthrough,
-   no unexpected-clear bump. have_target/target_parity: caller's policy result - see
+/* have_source 0: no CW source (ecmg not started / group not generating): passthrough,
+   no unexpected-clear bump. have_target/target_parity: caller's policy result, see
    ecmg_client_target_parity(). cw_valid: caller's own outage-fallback decision.
    now: caller's own mono_seconds(), fed straight to cas_pid_apply(). */
 void cas_scramble_engine_scramble_packet(cas_scramble_engine_t *e, unsigned out_pid, int have_source, int have_target, int target_parity, int cw_valid, double now, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx);

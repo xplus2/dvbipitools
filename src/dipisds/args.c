@@ -86,10 +86,16 @@ static void print_help(void) {
       "      --ret-mc            a: also advertise multicast RET (dipifccret without --no-mc-ret)\n"
       "      --ret-mc-port <p>   a: multicast RET port, matches dipifccret -F (default: each\n"
       "                          service's own port)\n"
+      "      --ret-rsi-mc-ret    a: RSI (F.5.3) rides the MC RET session, not the default\n"
+      "                          session; requires --ret-mc, matches dipifccret --rsi-mc-ret\n"
       "      --fcc-addr <a>:<p>  a: advertise a dipifccret FCC server (its -l value);\n"
       "                          opt-in, adds ServerBasedEnhancementServiceInfo to every service\n"
       "      --fcc-rtx-time <ms> a: FCC Retransmission_session rtx-time (default 2000)\n"
       "      --fcc-rtx-pt <n>    a: FCC RTP payload type, matches dipifccret -R (default 99)\n"
+      "      --fcc-resolve-by-port     a: per-service FCC port instead of --fcc-addr's port,\n"
+      "                          matches dipifccret --fcc-resolve-by-port\n"
+      "      --fcc-resolve-base-port <p> a: matches dipifccret --fcc-resolve-base-port\n"
+      "      --fcc-resolve-max-channels <n> a: must match dipifccret -M (default 384)\n"
       "      --metrics <path>    a: Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
       "      --metrics-id <name> a: stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s> a: snapshot interval in seconds (default: 5)\n"
@@ -121,9 +127,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"ret-rtx-pt", required_argument, 0, 1003},
       {"ret-mc", no_argument, 0, 1004},
       {"ret-mc-port", required_argument, 0, 1005},
+      {"ret-rsi-mc-ret", no_argument, 0, 1012},
       {"fcc-addr", required_argument, 0, 1006},
       {"fcc-rtx-time", required_argument, 0, 1007},
       {"fcc-rtx-pt", required_argument, 0, 1008},
+      {"fcc-resolve-by-port", no_argument, 0, 1013},
+      {"fcc-resolve-base-port", required_argument, 0, 1014},
+      {"fcc-resolve-max-channels", required_argument, 0, 1015},
       {"metrics", required_argument, 0, 1009},
       {"metrics-id", required_argument, 0, 1010},
       {"metrics-interval", required_argument, 0, 1011},
@@ -131,7 +141,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {0, 0, 0, 0}};
   int have_a = 0, have_l = 0, have_mcast = 0, have_t = 0;
   int have_ret_rtx_time = 0, have_ret_rtx_pt = 0, have_ret_mc_port = 0;
-  int have_fcc_rtx_time = 0, have_fcc_rtx_pt = 0;
+  int have_fcc_rtx_time = 0, have_fcc_rtx_pt = 0, have_fcc_resolve_max_channels = 0;
   long t_value = 0;
   int c;
 
@@ -252,6 +262,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       have_ret_mc_port = 1;
       break;
     }
+    case 1012:
+      cfg->ret_rsi_mc_ret = 1;
+      break;
     case 1006:
       if (ret_addr_parse(optarg, cfg->fcc_addr, sizeof cfg->fcc_addr, &cfg->fcc_port)) {
         argerr("invalid --fcc-addr: %s", optarg);
@@ -279,6 +292,29 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       }
       cfg->fcc_rtx_pt = (unsigned char)v;
       have_fcc_rtx_pt = 1;
+      break;
+    }
+    case 1013:
+      cfg->fcc_resolve_by_port = 1;
+      break;
+    case 1014: {
+      unsigned v;
+      if (argutil_port_parse(optarg, &v)) {
+        argerr("invalid --fcc-resolve-base-port: %s", optarg);
+        return ARGS_ERR;
+      }
+      cfg->fcc_resolve_base_port = v;
+      break;
+    }
+    case 1015: {
+      char *end;
+      unsigned long v = strtoul(optarg, &end, 10);
+      if (*end != '\0' || v == 0) {
+        argerr("invalid --fcc-resolve-max-channels: %s", optarg);
+        return ARGS_ERR;
+      }
+      cfg->fcc_resolve_max_channels = (size_t)v;
+      have_fcc_resolve_max_channels = 1;
       break;
     }
     case 1009:
@@ -343,8 +379,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       argerr("--ret-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
       return ARGS_ERR;
     }
-    if (!cfg->ret_enabled && (have_ret_rtx_time || have_ret_rtx_pt || cfg->ret_mc || have_ret_mc_port)) {
-      argerr("--ret-rtx-time/--ret-rtx-pt/--ret-mc/--ret-mc-port require --ret-addr");
+    if (!cfg->ret_enabled && (have_ret_rtx_time || have_ret_rtx_pt || cfg->ret_mc || have_ret_mc_port || cfg->ret_rsi_mc_ret)) {
+      argerr("--ret-rtx-time/--ret-rtx-pt/--ret-mc/--ret-mc-port/--ret-rsi-mc-ret require --ret-addr");
+      return ARGS_ERR;
+    }
+    if (cfg->ret_rsi_mc_ret && !cfg->ret_mc) {
+      argerr("--ret-rsi-mc-ret requires --ret-mc");
       return ARGS_ERR;
     }
     if (cfg->ret_enabled) {
@@ -357,8 +397,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       argerr("--fcc-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
       return ARGS_ERR;
     }
-    if (!cfg->fcc_enabled && (have_fcc_rtx_time || have_fcc_rtx_pt)) {
-      argerr("--fcc-rtx-time/--fcc-rtx-pt require --fcc-addr");
+    if (!cfg->fcc_enabled && (have_fcc_rtx_time || have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || have_fcc_resolve_max_channels)) {
+      argerr("--fcc-rtx-time/--fcc-rtx-pt/--fcc-resolve-* require --fcc-addr");
       return ARGS_ERR;
     }
     if (cfg->fcc_enabled) {
@@ -366,13 +406,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->fcc_rtx_time = 2000;
       if (!have_fcc_rtx_pt)
         cfg->fcc_rtx_pt = 99;
+      if (!have_fcc_resolve_max_channels)
+        cfg->fcc_resolve_max_channels = 384;
     }
   } else {
-    if (cfg->ret_enabled || have_ret_rtx_time || have_ret_rtx_pt || cfg->ret_mc || have_ret_mc_port) {
+    if (cfg->ret_enabled || have_ret_rtx_time || have_ret_rtx_pt || cfg->ret_mc || have_ret_mc_port || cfg->ret_rsi_mc_ret) {
       argerr("--ret-* options are announce-only");
       return ARGS_ERR;
     }
-    if (cfg->fcc_enabled || have_fcc_rtx_time || have_fcc_rtx_pt) {
+    if (cfg->fcc_enabled || have_fcc_rtx_time || have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || have_fcc_resolve_max_channels) {
       argerr("--fcc-* options are announce-only");
       return ARGS_ERR;
     }

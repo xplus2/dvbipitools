@@ -52,7 +52,7 @@ static int app(char *b, size_t cap, int n, const char *fmt, ...) {
 /* banner prints before parsing: --color read early */
 int main(int argc, char **argv) {
   config_t cfg;
-  char src[1024], line[2048];
+  char src[1024], out[1024], line[2048];
   args_status_t st;
   int n = 0;
 
@@ -71,13 +71,15 @@ int main(int argc, char **argv) {
   }
 
   source_describe(&cfg.source, src, sizeof src);
-  n = app(line, sizeof line, n, "\e[1mi:\e[0m\e[0;37m%s\e[0m \e[1mo:\e[0m\e[0;37m%s\e[0m \e[1mf:\e[0m\e[0;37m%s\e[0m", src, cfg.out_path, fmt_name(cfg.format));
+  out_describe(&cfg.out, out, sizeof out);
+  n = app(line, sizeof line, n, "\e[1mi:\e[0m\e[0;37m%s\e[0m \e[1mo:\e[0m\e[0;37m%s\e[0m \e[1mf:\e[0m\e[0;37m%s\e[0m", src, out, fmt_name(cfg.format));
   if (cfg.audio_all) n = app(line, sizeof line, n, " \e[1ma:\e[0m\e[0;37mall\e[0m");
   else n = app(line, sizeof line, n, " \e[1ma:\e[0m\e[0;37m%u\e[0m", cfg.audio_track);
   n = app(line, sizeof line, n, " \e[1ms:\e[0m\e[0;37m%s\e[0m", sub_name(cfg.subs));
   if (cfg.duration_s) n = app(line, sizeof line, n, " \e[1md:\e[0m\e[0;37m%ld\e[0m s", cfg.duration_s);
   else n = app(line, sizeof line, n, " \e[1md:\e[0m\e[0;37mforever\e[0m");
-  if (cfg.iface) n = app(line, sizeof line, n, " \e[1mif:\e[0m\e[0;37m%s\e[0m", cfg.iface);
+  if (cfg.iface_in) n = app(line, sizeof line, n, " \e[1mif:\e[0m\e[0;37m%s\e[0m", cfg.iface_in);
+  if (cfg.iface_out) n = app(line, sizeof line, n, " \e[1mof:\e[0m\e[0;37m%s\e[0m", cfg.iface_out);
   if (cfg.ret.enabled) app(line, sizeof line, n, " \e[1mret:\e[0m\e[0;37m%s:%u%s\e[0m", cfg.ret.addr, cfg.ret.port, cfg.ret.mc_enabled ? "+mc" : "");
   log_line_ansi("%s", line);
   signals_install();

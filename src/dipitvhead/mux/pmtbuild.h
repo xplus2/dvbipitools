@@ -30,8 +30,8 @@ void out_program_pids(unsigned idx, out_program_pids_t *out);
 typedef struct {
   unsigned in_pid;  /* source pid, for remux's packet -> out_es_t lookup */
   unsigned out_pid;
-  unsigned stream_type; /* our own output stream_type, not the source's */
-  const psi_es_t *src;  /* borrowed, valid as long as the discovery psi_t is alive */
+  unsigned stream_type; /* our own output stream_type, not source's */
+  const psi_es_t *src;  /* borrowed, valid as long as discovery psi_t is alive */
 } out_es_t;
 
 /* video -> video_pid, rest -> es_pid_base.. in order. drops unsupported ES.

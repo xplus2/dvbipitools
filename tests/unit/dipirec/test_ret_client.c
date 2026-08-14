@@ -3,6 +3,7 @@
 
 #include <arpa/inet.h>
 #include <check.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,19 +36,14 @@ static rtp_hdr_t make_hdr(uint32_t ssrc, uint16_t seq) {
   return h;
 }
 
-/* ret_client_read() dereferences main unconditionally once it falls through the
-   (empty) outq fast path, so callers always need a real mcast_t - never NULL, even
-   for "assert nothing is queued" checks. distinct scratch port per test, never fed
-   any data, so a call that reaches it just times out (5ms) and returns 0. */
+/* ret_client_read() needs non-NULL mcast_t always. scratch port: no data,
+   5ms timeout, returns 0. */
 static mcast_t *open_scratch_main(unsigned port) {
   return mcast_open(AF_INET, "239.7.9.71", port, NULL, 5);
 }
 
-/* ret_client_read() always re-checks the gap deadline against real mono_seconds()
-   internally (not whatever "now" the test last passed to on_original/on_repair), so
-   every timestamp fed into this state machine must be real wall-clock-monotonic, not
-   an arbitrary fixed value - otherwise a real "now" instantly looks like it's past a
-   fake near-zero deadline and every pending gap reads back as already timed out. */
+/* timestamps fed to on_original/on_repair must be real mono_seconds(): deadline
+   checks use real time internally. */
 
 START_TEST(in_order_packets_pass_straight_through) {
   ret_client_t *r = open_client(15401, 50);
@@ -86,7 +82,7 @@ START_TEST(stale_duplicate_is_dropped) {
   on_original(r, &h, (const unsigned char *)"pkt10", 5, now);
   ret_client_read(r, main_, buf, sizeof buf); /* consume it, expected_seq now 11 */
 
-  h = make_hdr(0xAAAA, 10); /* replay of the same seq */
+  h = make_hdr(0xAAAA, 10); /* replay, same seq */
   on_original(r, &h, (const unsigned char *)"stale", 5, mono_seconds());
 
   ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 0); /* nothing queued */
@@ -101,13 +97,12 @@ START_TEST(gap_repaired_by_rtx_packet_flushes_in_order) {
   mcast_t *main_ = open_scratch_main(15503);
   unsigned char buf[64];
   unsigned char rtx[128];
-  rtx_ctx_t *rxc = rtx_ctx_new();
+  _Atomic uint16_t rxc_seq = 0;
   size_t rtxlen;
   rtp_hdr_t h;
   double now = mono_seconds();
   ck_assert_ptr_nonnull(r);
   ck_assert_ptr_nonnull(main_);
-  ck_assert_ptr_nonnull(rxc);
 
   h = make_hdr(0xBBBB, 5);
   on_original(r, &h, (const unsigned char *)"seq5", 4, now); /* expected_seq -> 6 */
@@ -115,9 +110,9 @@ START_TEST(gap_repaired_by_rtx_packet_flushes_in_order) {
   on_original(r, &h, (const unsigned char *)"seq7", 4, now);
   ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 4); /* seq5, released immediately */
   ck_assert_mem_eq(buf, "seq5", 4);
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 0); /* seq7 held behind the gap */
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 0); /* seq7 held, gap pending */
 
-  rtxlen = rtx_build(rxc, 0xBBBB, 99, 90000, 6, (const unsigned char *)"seq6", 4, rtx, sizeof rtx);
+  rtxlen = rtx_build(&rxc_seq, 0xBBBB, 99, 90000, 6, (const unsigned char *)"seq6", 4, rtx, sizeof rtx);
   ck_assert_uint_gt(rtxlen, 0u);
   on_repair(r, rtx, rtxlen, mono_seconds());
 
@@ -126,7 +121,6 @@ START_TEST(gap_repaired_by_rtx_packet_flushes_in_order) {
   ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 4);
   ck_assert_mem_eq(buf, "seq7", 4);
 
-  rtx_ctx_free(rxc);
   ret_client_close(r);
   mcast_close(main_);
 }
@@ -138,7 +132,7 @@ START_TEST(gap_not_repaired_in_time_drops_the_lost_seq_only) {
   unsigned char buf[64];
   rtp_hdr_t h;
   double now = mono_seconds();
-  struct timespec wait = {0, 30 * 1000 * 1000}; /* 30ms: past the 10ms budget */
+  struct timespec wait = {0, 30 * 1000 * 1000}; /* 30ms: past 10ms budget */
   ck_assert_ptr_nonnull(r);
   ck_assert_ptr_nonnull(main_);
 
@@ -148,12 +142,11 @@ START_TEST(gap_not_repaired_in_time_drops_the_lost_seq_only) {
   on_original(r, &h, (const unsigned char *)"seq22", 5, now);
   ret_client_read(r, main_, buf, sizeof buf); /* seq20 */
 
-  nanosleep(&wait, NULL); /* let the real hold deadline actually elapse */
+  nanosleep(&wait, NULL); /* hold deadline elapses */
 
-  /* ret_client_read()'s own internal flush_ready(now=mono_seconds()) notices the
-     elapsed deadline and gives up on seq21 before delivering the rest of the queue */
+  /* flush_ready() drops timed-out seq21 before flushing rest of queue */
   ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 5);
-  ck_assert_mem_eq(buf, "seq22", 5); /* seq21 never shows up - lost, not corrupted */
+  ck_assert_mem_eq(buf, "seq22", 5); /* seq21 lost, not corrupted */
   ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 0);
 
   ret_client_close(r);
@@ -175,13 +168,12 @@ START_TEST(ssrc_change_resets_tracking_and_abandons_pending_gap) {
   h = make_hdr(0x1111, 3); /* seq 2 missing: gap opens on ssrc 0x1111, a3 held pending its repair */
   on_original(r, &h, (const unsigned char *)"a3", 2, now);
   ret_client_read(r, main_, buf, sizeof buf); /* a1 */
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 0); /* a3 held behind the gap */
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 0); /* a3 held, gap pending */
 
   h = make_hdr(0x2222, 50); /* new ssrc: gap forced closed, tracking restarts at 50 */
   on_original(r, &h, (const unsigned char *)"b50", 3, mono_seconds());
 
-  /* abandon_gap() still flushes a3 - it was fully received, only seq2 (never
-     received) is the one given up on - then the new-ssrc packet follows */
+  /* abandon_gap() flushes a3 (received), drops seq2 (never received) */
   ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 2);
   ck_assert_mem_eq(buf, "a3", 2);
   ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 3);
@@ -281,7 +273,7 @@ START_TEST(a_gap_sends_a_real_nack_on_the_wire) {
   ck_assert_int_gt(n, 0);
 
   g_nack_count = 0;
-  rtcp_parse(rbuf, (size_t)n, nack_cb, NULL, NULL, NULL);
+  rtcp_parse(rbuf, (size_t)n, nack_cb, NULL, NULL, NULL, NULL, NULL);
   ck_assert_int_eq(g_nack_count, 1);
   ck_assert_uint_eq(g_last_nack.entry_count, 1u);
   ck_assert_uint_eq(g_last_nack.entry[0].pid, 101u);

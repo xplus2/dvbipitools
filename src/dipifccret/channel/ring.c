@@ -7,7 +7,7 @@
 
 #include "priv.h"
 
-void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len) {
+void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len) {
   ret_ring_entry_t *slot;
   unsigned g;
   uint64_t words[RET_PAYLOAD_WORDS];
@@ -21,6 +21,7 @@ void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, const unsign
   atomic_store_explicit(&slot->gen, g + 1, memory_order_relaxed); /* odd: write starting */
   atomic_store_explicit(&slot->seq, seq, memory_order_relaxed);
   atomic_store_explicit(&slot->timestamp, timestamp, memory_order_relaxed);
+  atomic_store_explicit(&slot->dscp, dscp, memory_order_relaxed);
   for (i = 0; i < RET_PAYLOAD_WORDS; i++)
     atomic_store_explicit(&slot->payload[i], words[i], memory_order_relaxed);
   atomic_store_explicit(&slot->payload_len, payload_len, memory_order_relaxed);
@@ -56,7 +57,7 @@ int scan_ts_packets(psi_t *psi, const unsigned char *payload, size_t payload_len
 }
 
 /* single writer only */
-void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len, int is_rap) {
+void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len, int is_rap) {
   fcc_ring_entry_t *ring = (fcc_ring_entry_t *)rc->entries;
   fcc_ring_entry_t *e;
   uint64_t wc;
@@ -78,6 +79,7 @@ void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, const u
   atomic_store_explicit(&e->gen, g + 1, memory_order_relaxed); /* odd: write starting */
   atomic_store_explicit(&e->seq, seq, memory_order_relaxed);
   atomic_store_explicit(&e->timestamp, timestamp, memory_order_relaxed);
+  atomic_store_explicit(&e->dscp, dscp, memory_order_relaxed);
   memset(words, 0, sizeof words);
   memcpy(words, payload, payload_len);
   for (i = 0; i < FCC_PAYLOAD_WORDS; i++)
@@ -105,6 +107,7 @@ int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out) {
       continue; /* write in progress, retry */
     out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
     out->timestamp = atomic_load_explicit(&slot->timestamp, memory_order_relaxed);
+    out->dscp = atomic_load_explicit(&slot->dscp, memory_order_relaxed);
     for (i = 0; i < RET_PAYLOAD_WORDS; i++)
       words[i] = atomic_load_explicit(&slot->payload[i], memory_order_relaxed);
     out->payload_len = atomic_load_explicit(&slot->payload_len, memory_order_relaxed);
@@ -164,6 +167,7 @@ int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out) 
       continue; /* write in progress, retry */
     out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
     out->timestamp = atomic_load_explicit(&slot->timestamp, memory_order_relaxed);
+    out->dscp = atomic_load_explicit(&slot->dscp, memory_order_relaxed);
     for (i = 0; i < FCC_PAYLOAD_WORDS; i++)
       words[i] = atomic_load_explicit(&slot->payload[i], memory_order_relaxed);
     out->payload_len = atomic_load_explicit(&slot->payload_len, memory_order_relaxed);

@@ -46,8 +46,11 @@ static void handle_ecm_section(loop_ctx_t *lc) {
   else
     return;
 
-  if (device_resolve_cw(lc->dev, sec, seclen, psi_program_number(lc->psi), lc->cw_len, cw) != 0)
+  if (device_resolve_cw(lc->dev, sec, seclen, psi_program_number(lc->psi), lc->cw_len, lc->ecm_pid, cw) != 0) {
+    if (lc->cfg->ecm_profile.set)
+      log_line(TOOL_NAME ": ecm_profile: CW resolve failed for this ECM section");
     return;
+  }
   if (lc->have_cw[parity] && memcmp(lc->last_cw[parity], cw, sizeof cw) == 0)
     return; /* unchanged, same crypto-period repeat */
 
@@ -181,7 +184,7 @@ int pkt_cb(void *v, const unsigned char *pkt) {
         lc->fatal = 1;
         return 1;
       }
-      lc->dev = device_state_new(lc->cfg->key_path, lc->cfg->serial);
+      lc->dev = device_state_new(lc->cfg->key_path, lc->cfg->serial, &lc->cfg->ecm_profile);
       if (!lc->dev) {
         log_line(TOOL_NAME ": cannot load RSA private key from -k %s", lc->cfg->key_path);
         lc->fatal = 1;

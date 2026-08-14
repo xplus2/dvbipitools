@@ -140,6 +140,23 @@ START_TEST(ret_options_are_announce_only) {
 }
 END_TEST
 
+START_TEST(ret_rsi_mc_ret_requires_ret_mc) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--ret-addr", "10.0.0.1:6000", "--ret-rsi-mc-ret", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(ret_rsi_mc_ret_accepted_with_ret_mc) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--ret-addr", "10.0.0.1:6000", "--ret-mc", "--ret-rsi-mc-ret", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.ret_rsi_mc_ret, 1);
+}
+END_TEST
+
 START_TEST(fcc_addr_enables_fcc_with_defaults) {
   char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
                   "-m", "239.1.2.3:5000", "--fcc-addr", "10.0.0.1:7000", NULL};
@@ -163,6 +180,41 @@ END_TEST
 
 START_TEST(fcc_options_are_announce_only) {
   char *argv[] = {"dipisds", "-l", "-m", "239.1.2.3:5000", "--fcc-rtx-time", "1000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(fcc_resolve_by_port_enables_with_default_max_channels) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--fcc-addr", "10.0.0.1:7000", "--fcc-resolve-by-port", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.fcc_resolve_by_port, 1);
+  ck_assert_uint_eq(cfg.fcc_resolve_max_channels, 384u);
+}
+END_TEST
+
+START_TEST(fcc_resolve_max_channels_overrides_default) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--fcc-addr", "10.0.0.1:7000",
+                  "--fcc-resolve-by-port", "--fcc-resolve-max-channels", "512", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.fcc_resolve_max_channels, 512u);
+}
+END_TEST
+
+START_TEST(fcc_resolve_by_port_requires_fcc_addr) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--fcc-resolve-by-port", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(fcc_resolve_by_port_is_announce_only) {
+  char *argv[] = {"dipisds", "-l", "-m", "239.1.2.3:5000", "--fcc-resolve-by-port", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
 }
@@ -216,9 +268,15 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, ret_addr_rejected_with_raw_xml_input);
   tcase_add_test(tc, ret_rtx_time_without_ret_addr_is_rejected);
   tcase_add_test(tc, ret_options_are_announce_only);
+  tcase_add_test(tc, ret_rsi_mc_ret_requires_ret_mc);
+  tcase_add_test(tc, ret_rsi_mc_ret_accepted_with_ret_mc);
   tcase_add_test(tc, fcc_addr_enables_fcc_with_defaults);
   tcase_add_test(tc, fcc_rtx_pt_out_of_range_is_rejected);
   tcase_add_test(tc, fcc_options_are_announce_only);
+  tcase_add_test(tc, fcc_resolve_by_port_enables_with_default_max_channels);
+  tcase_add_test(tc, fcc_resolve_max_channels_overrides_default);
+  tcase_add_test(tc, fcc_resolve_by_port_requires_fcc_addr);
+  tcase_add_test(tc, fcc_resolve_by_port_is_announce_only);
   tcase_add_test(tc, metrics_options_require_metrics_id);
   tcase_add_test(tc, metrics_id_is_announce_only);
   tcase_add_test(tc, help_returns_help_status);

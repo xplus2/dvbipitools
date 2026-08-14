@@ -22,6 +22,12 @@ else ()
     set(TLS_SRC ../lib/net/tls_stub.c)
 endif ()
 
+if (DVBIPITOOLS_HAVE_RIST)
+    set(RIST_SRC ../lib/net/ristout.c)
+else ()
+    set(RIST_SRC ../lib/net/ristout_stub.c)
+endif ()
+
 # keep in sync with CMakeLists/Makefile
 add_executable(dipirec
     main.c
@@ -35,7 +41,11 @@ add_executable(dipirec
     ../lib/net/netconnect.c
     ../lib/net/udpxy.c
     ../lib/net/tssource.c
+    ../lib/net/tssink.c
+    ../lib/metrics/protocol.c
+    ../lib/metrics/export.c
     ${TLS_SRC}
+    ${RIST_SRC}
     ../lib/net/httpclient/httpclient.c
     ../lib/net/httpclient/url.c
     ../lib/net/httpclient/read.c
@@ -52,6 +62,7 @@ add_executable(dipirec
     ../lib/demux/pes.c
     ../lib/demux/mpts_probe.c
     ../lib/mux/rtcp_build.c
+    ../lib/mux/rtpheader.c
     ../lib/mux/ebml.c
     ../lib/mux/mkv/mkv.c
     ../lib/mux/mkv/bitreader.c
@@ -65,4 +76,8 @@ add_executable(dipirec
 
 if (DIPIREC_HAVE_TLS)
     target_link_libraries(dipirec PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+endif ()
+
+if (DVBIPITOOLS_HAVE_RIST)
+    target_link_libraries(dipirec PRIVATE PkgConfig::RIST)
 endif ()

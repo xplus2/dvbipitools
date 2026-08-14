@@ -1,6 +1,24 @@
 # Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
 # See NOTICE and LICENSE for details and authorship information.
 
+option(DIPIBCG_ZLIB "build dipibcg with zlib compression support for BCG containers" ON)
+
+set(DIPIBCG_HAVE_ZLIB FALSE)
+if (DIPIBCG_ZLIB)
+    find_package(ZLIB)
+    if (ZLIB_FOUND)
+        set(DIPIBCG_HAVE_ZLIB TRUE)
+    else ()
+        message(WARNING "dipibcg: zlib not found, building without BCG container compression support")
+    endif ()
+endif ()
+
+if (DIPIBCG_HAVE_ZLIB)
+    set(ZLIB_SRC wrapper.c)
+else ()
+    set(ZLIB_SRC wrapper_stub.c)
+endif ()
+
 # keep in sync with CMakeLists/Makefile
 add_executable(dipibcg
     main.c
@@ -8,6 +26,7 @@ add_executable(dipibcg
     announce.c
     listen.c
     container.c
+    ${ZLIB_SRC}
     ../lib/log.c
     ../lib/argutil.c
     ../lib/signal.c
@@ -30,3 +49,7 @@ add_executable(dipibcg
     ../lib/bim/codec.c
     ../lib/bim/fragment.c
     ../lib/bim/accessunit.c)
+
+if (DIPIBCG_HAVE_ZLIB)
+    target_link_libraries(dipibcg PRIVATE ZLIB::ZLIB)
+endif ()

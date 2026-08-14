@@ -15,6 +15,7 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
   struct in_addr dst4;
   struct in6_addr dst6;
   const void *dst_bytes;
+  unsigned char dscp;
   rtp_hdr_t rtp;
 
   if (len < 14)
@@ -37,6 +38,7 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
     ihl = (unsigned)(pkt[ip_off] & 0x0F) * 4;
     if (ihl < 20) /* RFC 791 min IHL is 5 (20 bytes) */
       return;
+    dscp = pkt[ip_off + 1] & 0xFC; /* TOS byte, top 6 bits (DSCP), ECN masked off */
     proto = pkt[ip_off + 9];
     if (proto != 17 || len < ip_off + ihl + 8) /* UDP only */
       return;
@@ -52,6 +54,8 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
     ip_off = off;
     if (len < ip_off + 40 || (pkt[ip_off] >> 4) != 6)
       return;
+    dscp = (unsigned char)(((pkt[ip_off] & 0x0F) << 4) | (pkt[ip_off + 1] >> 4)); /* Traffic Class split across both bytes */
+    dscp &= 0xFC; /* top 6 bits (DSCP), ECN masked off */
     next_header = pkt[ip_off + 6];
     memcpy(&dst6, pkt + ip_off + 24, 16);
     hdr_off = ip_off + 40;
@@ -76,7 +80,7 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
         hdr_off += 8;
         continue;
       }
-      return; /* AH/ESP or anything else unsupported - documented scope limit */
+      return; /* AH/ESP or anything else unsupported: documented scope limit */
     }
     if (len < hdr_off + 8)
       return;
@@ -88,7 +92,7 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
     return; /* not IPv4 or IPv6 */
   }
 
-  if (!in_ranges(family, dst_bytes, ranges, range_count)) /* userspace whitelist, authoritative regardless of the installed kernel filter */
+  if (!in_ranges(family, dst_bytes, ranges, range_count)) /* userspace whitelist, authoritative regardless of installed kernel filter */
     return;
 
   dport = ((unsigned)pkt[udp_off + 2] << 8) | pkt[udp_off + 3];
@@ -103,5 +107,5 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
 
   if (!cb)
     return;
-  cb(family, dst_bytes, addr_len, dport, rtp.ssrc, rtp.seq, rtp.timestamp, pkt + rtp_off + rtp.payload_off, len - rtp_off - rtp.payload_off, user);
+  cb(family, dst_bytes, addr_len, dport, dscp, rtp.ssrc, rtp.seq, rtp.timestamp, pkt + rtp_off + rtp.payload_off, len - rtp_off - rtp.payload_off, user);
 }

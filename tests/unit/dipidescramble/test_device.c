@@ -17,8 +17,10 @@
 #define SC_SECTION_TID_EMM 0x82
 #define SC_SECTION_TID_ECM_EVEN 0x80
 #define TEST_SERIAL "test-serial-01"
+#define TEST_ECM_PID 0x0020
 
 static char g_key_path[] = "/tmp/dipidescramble_test_device_key_XXXXXX";
+static const ecm_profile_t no_profile; /* zero-initialized: profile.set == 0, legacy path */
 
 static void section_header(unsigned char table_id, size_t payload_len, unsigned char out[3]) {
   out[0] = table_id;
@@ -45,7 +47,7 @@ static device_state_t *make_device_serial(EVP_PKEY **pub_out, const char *serial
   ck_assert_int_eq(PEM_write_PrivateKey(f, pkey, NULL, NULL, 0, NULL, NULL), 1);
   fclose(f);
 
-  d = device_state_new(g_key_path, serial);
+  d = device_state_new(g_key_path, serial, &no_profile);
   ck_assert_ptr_nonnull(d);
   remove(g_key_path);
 
@@ -121,7 +123,7 @@ static size_t build_emm_g(const unsigned char bk[CRYPTO_KEY_LEN], const unsigned
 
 /* builds a real ECM section: header + CP_CW_COMBINATION's cp_number(2) +
    AES-256-ECB(cw zero-padded to 16 bytes, under sk) - matches the real
-   Simulcrypt ECMG's ECM payload layout (example: swampcastle's ECMG) */
+   Simulcrypt ECMG's ECM payload layout */
 static size_t build_ecm(const unsigned char sk[CRYPTO_KEY_LEN], const unsigned char *cw, int cw_len, unsigned char *out, size_t cap) {
   unsigned char block[CRYPTO_CW_ENC_LEN];
   EVP_CIPHER_CTX *ctx;
@@ -165,7 +167,7 @@ START_TEST(full_chain_csa2_recovers_cw) {
   ck_assert_int_eq(device_on_emm(d, buf, n), 1);
 
   n = build_ecm(sk, cw, 8, buf, sizeof buf);
-  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 8, cw_out), 0);
+  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 8, TEST_ECM_PID, cw_out), 0);
   ck_assert_mem_eq(cw_out, cw, 8);
   ck_assert_mem_eq(cw_out + 8, cw, 8); /* CSA2: duplicated into both halves */
 
@@ -197,7 +199,7 @@ START_TEST(resolve_cw_ignores_srvid_mismatch_with_one_cached_service) {
   ck_assert_int_eq(device_on_emm(d, buf, n), 1);
 
   n = build_ecm(sk, cw, 8, buf, sizeof buf);
-  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x012D, 8, cw_out), 0); /* mismatched srvid 0x012D (301) */
+  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x012D, 8, TEST_ECM_PID, cw_out), 0); /* mismatched srvid 0x012D (301) */
   ck_assert_mem_eq(cw_out, cw, 8);
   ck_assert_mem_eq(cw_out + 8, cw, 8);
 
@@ -230,7 +232,7 @@ START_TEST(full_chain_cissa_recovers_cw) {
   ck_assert_int_eq(device_on_emm(d, buf, n), 1);
 
   n = build_ecm(sk, cw, 16, buf, sizeof buf);
-  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x00C8, 16, cw_out), 0);
+  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x00C8, 16, TEST_ECM_PID, cw_out), 0);
   ck_assert_mem_eq(cw_out, cw, 16);
 
   EVP_PKEY_free(pub);
@@ -247,7 +249,7 @@ START_TEST(resolve_cw_fails_for_unknown_service) {
   unsigned char cw_out[16];
   size_t n = build_ecm(sk, cw, 8, buf, sizeof buf);
 
-  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x9999, 8, cw_out), -1);
+  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x9999, 8, TEST_ECM_PID, cw_out), -1);
 
   EVP_PKEY_free(pub);
   device_state_free(d);
@@ -268,7 +270,7 @@ START_TEST(resolve_cw_fails_before_any_emm_g) {
   ck_assert_int_eq(device_on_emm(d, buf, n), 1);
 
   n = build_ecm(sk, cw, 8, buf, sizeof buf);
-  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 8, cw_out), -1);
+  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 8, TEST_ECM_PID, cw_out), -1);
 
   EVP_PKEY_free(pub);
   device_state_free(d);
@@ -295,7 +297,7 @@ START_TEST(resolve_cw_rejects_bad_cw_len) {
   ck_assert_int_eq(device_on_emm(d, buf, n), 1);
 
   n = build_ecm(sk, cw, 8, buf, sizeof buf);
-  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 12, cw_out), -1);
+  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 12, TEST_ECM_PID, cw_out), -1);
 
   EVP_PKEY_free(pub);
   device_state_free(d);
@@ -317,7 +319,7 @@ START_TEST(emm_g_ignored_before_emm_u_sets_bk) {
   ck_assert_int_eq(device_on_emm(d, buf, n), 0);
 
   n = build_ecm(sk, cw, 8, buf, sizeof buf);
-  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 8, cw_out), -1);
+  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 8, TEST_ECM_PID, cw_out), -1);
 
   EVP_PKEY_free(pub);
   device_state_free(d);
@@ -341,7 +343,7 @@ START_TEST(emm_u_for_another_serial_is_ignored) {
   ck_assert_int_eq(device_on_emm(d, buf, n), 0); /* SK cache needs a BK first - stays unset */
 
   n = build_ecm(sk, cw, 8, buf, sizeof buf);
-  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 8, cw_out), -1);
+  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 8, TEST_ECM_PID, cw_out), -1);
 
   EVP_PKEY_free(pub);
   device_state_free(d);
@@ -353,7 +355,7 @@ START_TEST(device_state_new_rejects_empty_serial) {
   int fd = mkstemp(path);
   ck_assert_int_ge(fd, 0);
   close(fd);
-  ck_assert_ptr_null(device_state_new(path, ""));
+  ck_assert_ptr_null(device_state_new(path, "", &no_profile));
   remove(path);
 }
 END_TEST

@@ -22,20 +22,24 @@ typedef struct {
 
 /* McastType/RTPRetransmission (RETInfoType), same for every service in one announce run */
 typedef struct {
-  char addr[SDS_MAX_ADDR]; /* RTCPReporting DestinationAddress - RET server's NACK listener */
+  char addr[SDS_MAX_ADDR]; /* RTCPReporting DestinationAddress */
   unsigned port;           /* RTCPReporting DestinationPort */
   unsigned rtx_time_ms;    /* UnicastRET/MulticastRET rtx-time */
   unsigned char rtx_pt;    /* UnicastRET/MulticastRET RTPPayloadTypeNumber */
   int mc;                  /* also emit MulticastRET */
-  unsigned mc_port;        /* MulticastRET DestinationPort, 0 = reuse the service's own port */
+  unsigned mc_port;        /* MulticastRET DestinationPort, 0 = reuse service's own port */
+  int rsi_mc_ret;          /* dvb-rsi-mc-ret: RSI (F.5.3) rides MulticastRET, not default session */
 } sds_ret_t;
 
 /* ServerBasedEnhancementServiceInfo (Annex I.2.14); EnhancementService always "FCC" (2-value enum, maxOccurs=1, no combined value) */
 typedef struct {
   char addr[SDS_MAX_ADDR]; /* RTCPReporting/Retransmission_session DestinationAddress */
-  unsigned port;           /* RTCPReporting/Retransmission_session DestinationPort */
+  unsigned port;           /* RTCPReporting/Retransmission_session DestinationPort, unused if resolve_by_port */
   unsigned rtx_time_ms;    /* Retransmission_session rtx-time */
   unsigned char rtx_pt;    /* Retransmission_session RTPPayloadTypeNumber */
+  int resolve_by_port;     /* per-service port instead of port above, matches dipifccret --fcc-resolve-by-port */
+  unsigned resolve_base_port;
+  size_t resolve_max_channels; /* must match dipifccret -M */
 } sds_fcc_t;
 
 /* streaming BroadcastDiscovery (payload 0x02), one <SingleService> per item call. ret/fcc NULL = no such record */
@@ -46,7 +50,7 @@ void sds_broadcast_close(FILE *f);
 /* same document, single-shot into a memory buffer (e.g. for DVBSTP transmission). 0 = didn't fit cap */
 size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, unsigned char *buf, size_t cap);
 
-/* payload 0x01 doc, self-pointing Push at push_addr:push_port. lang is the 3-letter ISO 639-2 for display_name. 0 = didn't fit cap */
+/* payload 0x01 doc, self-pointing Push at push_addr:push_port. lang: 3-letter ISO 639-2 for display_name. 0 = didn't fit cap */
 size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, unsigned char *buf, size_t cap);
 
 /* xml must be null-terminated. fills out[0..return), tsid/onid default 1, sid defaults to 1-based index if absent.

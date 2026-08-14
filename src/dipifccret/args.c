@@ -59,6 +59,21 @@ static int ranges_parse(const char *s, config_t *cfg) {
   return cfg->range_count ? 0 : -1;
 }
 
+static int cidr_list_parse(const char *s, cidr_t *out, size_t *count, size_t max) {
+  char buf[ARGS_MAX_RANGES * 64];
+  char *tok, *save = NULL;
+  if (strlen(s) >= sizeof buf)
+    return -1;
+  strcpy(buf, s);
+  *count = 0;
+  for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+    if (*count >= max || cidr_parse(tok, &out[*count]) != 0)
+      return -1;
+    (*count)++;
+  }
+  return *count ? 0 : -1;
+}
+
 static void print_help(void) {
   printf(
       "usage: %s -g <range> -l <addr>:<port> -I <iface> [options]\n\n"
@@ -80,13 +95,33 @@ static void print_help(void) {
       "      --no-ret                     disable RET entirely\n"
       "  -B, --buffer <ms>                per-channel retransmission buffer depth (default: 2000)\n"
       "  -F, --ff-port <port>             multicast RET session port (default: 0 = original channel's port)\n"
-      "      --no-mc-ret                  disable the multicast RET session, unicast-only repair\n\n"
+      "      --no-mc-ret                  disable the multicast RET session, unicast-only repair\n"
+      "      --max-ret-clients <n>        pre-allocated unicast RTX per-client sequence slots,\n"
+      "                                   F.3.2.1 (default: 16384)\n"
+      "      --ret-client-idle-timeout <s> free a unicast RTX client slot after this many\n"
+      "                                   seconds with no NACKs (default: 300, 0 = never reap)\n"
+      "      --no-rsi                     disable RSI self-announcement\n"
+      "      --rsi-interval <s>           RSI self-announcement interval, IPv4 -l only (default: 5)\n"
+      "      --rsi-mc-ret                 RSI (F.5.3) rides MC RET session, not default session,\n"
+      "                                   requires MC RET, matches dipisds --ret-rsi-mc-ret\n"
+      "      --rsi-hostname <name>        announce this DNS name (SRBT 2) instead of -l's IPv4\n"
+      "                                   address (SRBT 0) in RSI\n\n"
       "FCC (Annex I) options:\n"
       "      --no-fcc                     disable FCC entirely\n"
       "  -G, --gop-cap <ms>               safety cap on cached GOP-in-progress duration (default: 8000)\n"
       "  -C, --max-bursts <n>             pre-allocated concurrent burst-session slots (default: 4096)\n"
       "  -X, --burst-multiplier <n>       burst rate as multiple of observed nominal bitrate (default: 1.5)\n"
-      "  -D, --burst-duration-cap <ms>    hard max burst duration regardless of signaling (default: 10000)\n\n"
+      "  -D, --burst-duration-cap <ms>    hard max burst duration regardless of signaling (default: 10000)\n"
+      "      --max-buffer-fill-bound <ms> reject a RAMS-R Min RAMS Buffer Fill Requirement above this\n"
+      "                                   (RFC 6285 Sec 10 DoS mitigation, default: 30000, 0 = no bound)\n"
+      "      --fcc-resolve-by-port        resolve ignore-media-ssrc RAMS-R by dedicated per-channel\n"
+      "                                   port instead of rejecting with 510 (default: off)\n"
+      "      --fcc-resolve-base-port <p>  base port for --fcc-resolve-by-port (default: 0 = -l port + 1)\n"
+      "      --congestion-nack-threshold <n>  NACKs during one burst before terminating it as\n"
+      "                                   congested (RFC 6285 Sec 6.4, default: 5, 0 = disabled)\n"
+      "      --fcc-range <cidr>[,...]     restrict FCC to these -g sub-ranges (default: all of -g)\n"
+      "      --fcc-client-range <cidr>[,...] restrict FCC requests to these client source ranges\n"
+      "                                   (default: any client)\n\n"
       "example:\n"
       "  %s -g 239.0.0.0/8 -l 10.0.0.1:6000 -I eth0\n",
       TOOL_NAME, TOOL_NAME);
@@ -108,11 +143,23 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"buffer", required_argument, 0, 'B'},
       {"ff-port", required_argument, 0, 'F'},
       {"no-mc-ret", no_argument, 0, 1001},
+      {"max-ret-clients", required_argument, 0, 1020},
+      {"ret-client-idle-timeout", required_argument, 0, 1021},
+      {"no-rsi", no_argument, 0, 1006},
+      {"rsi-interval", required_argument, 0, 1007},
+      {"rsi-mc-ret", no_argument, 0, 1008},
+      {"rsi-hostname", required_argument, 0, 1013},
       {"no-fcc", no_argument, 0, 1004},
       {"gop-cap", required_argument, 0, 'G'},
       {"max-bursts", required_argument, 0, 'C'},
       {"burst-multiplier", required_argument, 0, 'X'},
       {"burst-duration-cap", required_argument, 0, 'D'},
+      {"max-buffer-fill-bound", required_argument, 0, 1014},
+      {"fcc-resolve-by-port", no_argument, 0, 1015},
+      {"fcc-resolve-base-port", required_argument, 0, 1016},
+      {"congestion-nack-threshold", required_argument, 0, 1017},
+      {"fcc-range", required_argument, 0, 1018},
+      {"fcc-client-range", required_argument, 0, 1019},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_range = 0, have_listen = 0, have_iface = 0;
@@ -125,7 +172,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->max_bursts = 4096;
   cfg->burst_multiplier = 1.5;
   cfg->duration_cap_ms = 10000;
+  cfg->max_buffer_fill_bound_ms = 30000;
+  cfg->congestion_nack_threshold = 5;
   cfg->channel_idle_timeout_s = 120;
+  cfg->max_ret_clients = 16384;
+  cfg->ret_client_idle_timeout_s = 300;
+  cfg->rsi_interval_s = 5;
   optind = 1;
   while ((c = getopt_long(argc, argv, "g:l:I:M:R:w:u:vhB:F:G:C:X:D:", longopts, NULL)) != -1) {
     switch (c) {
@@ -228,6 +280,49 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1001:
         cfg->no_mc_ret = 1;
         break;
+      case 1020: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0) {
+          argerr("invalid --max-ret-clients: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->max_ret_clients = (size_t)v;
+        break;
+      }
+      case 1021: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0') {
+          argerr("invalid --ret-client-idle-timeout: %s (s)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->ret_client_idle_timeout_s = (unsigned)v;
+        break;
+      }
+      case 1006:
+        cfg->no_rsi = 1;
+        break;
+      case 1007: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0) {
+          argerr("invalid --rsi-interval: %s (s)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->rsi_interval_s = (unsigned)v;
+        break;
+      }
+      case 1008:
+        cfg->rsi_mc_ret = 1;
+        break;
+      case 1013:
+        if (strlen(optarg) >= sizeof cfg->rsi_hostname) {
+          argerr("--rsi-hostname too long: %s", optarg);
+          return ARGS_ERR;
+        }
+        snprintf(cfg->rsi_hostname, sizeof cfg->rsi_hostname, "%s", optarg);
+        break;
       case 1004:
         cfg->no_fcc = 1;
         break;
@@ -271,6 +366,51 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->duration_cap_ms = (unsigned)v;
         break;
       }
+      case 1014: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0') {
+          argerr("invalid --max-buffer-fill-bound: %s (ms, 0 = no bound)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->max_buffer_fill_bound_ms = (unsigned)v;
+        break;
+      }
+      case 1015:
+        cfg->fcc_resolve_by_port = 1;
+        break;
+      case 1016: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v > 65535) {
+          argerr("invalid --fcc-resolve-base-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->fcc_resolve_base_port = (unsigned)v;
+        break;
+      }
+      case 1017: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0') {
+          argerr("invalid --congestion-nack-threshold: %s (0 = disabled)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->congestion_nack_threshold = (unsigned)v;
+        break;
+      }
+      case 1018:
+        if (cidr_list_parse(optarg, cfg->fcc_ranges, &cfg->fcc_range_count, ARGS_MAX_RANGES)) {
+          argerr("invalid --fcc-range: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1019:
+        if (cidr_list_parse(optarg, cfg->fcc_client_ranges, &cfg->fcc_client_range_count, ARGS_MAX_RANGES)) {
+          argerr("invalid --fcc-client-range: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -296,6 +436,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (cfg->no_ret && cfg->no_fcc) {
     argerr("--no-ret and --no-fcc together leave nothing to run");
+    return ARGS_ERR;
+  }
+  if (cfg->rsi_mc_ret && (cfg->no_mc_ret || cfg->no_ret)) {
+    argerr("--rsi-mc-ret requires RET and MC RET (--no-ret/--no-mc-ret not given)");
     return ARGS_ERR;
   }
   if (cfg->workers == 0) {

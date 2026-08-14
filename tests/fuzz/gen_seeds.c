@@ -179,6 +179,25 @@ static void gen_dvbstp(const char *dir) {
   write_file(dir, "dvbstp_min.bin", pkt, sizeof pkt);
 }
 
+static void gen_dvbstp_bcg_compressed(const char *dir) {
+  /* BCG payload id with compr=1 (BiM/binary, TS 102 539 table 3). parse_header
+     only rejects nonzero compr for payload ids 0x01/0x02, this path is reachable */
+  static const unsigned char payload[] = "wrapped";
+  unsigned char pkt[12 + sizeof payload - 1];
+
+  pkt[0] = 0x00;
+  pkt[1] = 0x00; pkt[2] = 0x00; pkt[3] = 0x00;
+  pkt[4] = DVBSTP_PAYLOAD_BCG_DATA_CONTAINER;
+  pkt[5] = 0x00; pkt[6] = 0x01;
+  pkt[7] = 0x01;
+  pkt[8] = 0x00; pkt[9] = 0x00;
+  pkt[10] = 0x00;
+  pkt[11] = 0x20; /* compr 1, has_provider_id 0, priv_words 0 */
+  memcpy(pkt + 12, payload, sizeof payload - 1);
+
+  write_file(dir, "dvbstp_bcg_compr_min.bin", pkt, sizeof pkt);
+}
+
 static void gen_emmg_datagrams(const char *dir) {
   /* emmg_extract_datagrams() takes the data_provision BODY directly - one EMMG_P_DATAGRAM (tag 0x0005) TLV */
   static const unsigned char body[] = {0x00, 0x05, 0x00, 0x03, 0xAA, 0xBB, 0xCC};
@@ -198,5 +217,6 @@ int main(int argc, char **argv) {
   gen_ecmg_channel_status(argv[1]);
   gen_emmg_datagrams(argv[1]);
   gen_dvbstp(argv[1]);
+  gen_dvbstp_bcg_compressed(argv[1]);
   return 0;
 }

@@ -14,21 +14,46 @@ void sds_broadcast_open(FILE *f, const char *domain, unsigned version) {
   fprintf(f, "\" Version=\"%u\">\n<ServiceList>\n", version);
 }
 
+/* must match chan_key_hash() in src/dipifccret/channel/hash.c exactly: same constants, same
+   xor/mul order (addr bytes, then family, then port), or the two tools disagree on the port */
+static unsigned fcc_resolve_port(const sds_service_t *s, const sds_fcc_t *fcc) {
+  unsigned char addr[16];
+  size_t addr_len = s->family == AF_INET6 ? 16 : 4;
+  uint64_t h = 1469598103934665603ULL;
+  size_t i;
+
+  if (inet_pton(s->family, s->address, addr) != 1)
+    return fcc->port;
+  for (i = 0; i < addr_len; i++) {
+    h ^= addr[i];
+    h *= 1099511628211ULL;
+  }
+  h ^= (unsigned)s->family;
+  h *= 1099511628211ULL;
+  h ^= s->port;
+  h *= 1099511628211ULL;
+  return fcc->resolve_base_port + (unsigned)((size_t)h % fcc->resolve_max_channels);
+}
+
 void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc) {
   fprintf(f, "<SingleService><ServiceLocation><IPMulticastAddress Address=\"%s\" Port=\"%u\" Streaming=\"%s\"", s->address, s->port, s->rtp ? "rtp" : "udp");
   if (ret || fcc) {
     fputs(">", f);
     if (ret) {
-      fprintf(f, "<RTPRetransmission><RTCPReporting DestinationAddress=\"%s\" DestinationPort=\"%u\"/>", ret->addr, ret->port);
+      fprintf(f, "<RTPRetransmission><RTCPReporting DestinationAddress=\"%s\" DestinationPort=\"%u\"", ret->addr, ret->port);
+      if (ret->rsi_mc_ret)
+        fputs(" dvb-rsi-mc-ret=\"true\"", f);
+      fputs("/>", f);
       fprintf(f, "<UnicastRET rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", ret->rtx_time_ms, ret->rtx_pt);
       if (ret->mc)
         fprintf(f, "<MulticastRET GroupAddress=\"%s\" DestinationPort=\"%u\" rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", s->address, ret->mc_port ? ret->mc_port : s->port, ret->rtx_time_ms, ret->rtx_pt);
       fputs("</RTPRetransmission>", f);
     }
     if (fcc) {
+      unsigned port = fcc->resolve_by_port ? fcc_resolve_port(s, fcc) : fcc->port;
       fputs("<ServerBasedEnhancementServiceInfo><EnhancementService>FCC</EnhancementService>", f);
-      fprintf(f, "<RTCPReporting DestinationAddress=\"%s\" DestinationPort=\"%u\"/>", fcc->addr, fcc->port);
-      fprintf(f, "<Retransmission_session DestinationPort=\"%u\" rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", fcc->port, fcc->rtx_time_ms, fcc->rtx_pt);
+      fprintf(f, "<RTCPReporting DestinationAddress=\"%s\" DestinationPort=\"%u\"/>", fcc->addr, port);
+      fprintf(f, "<Retransmission_session DestinationPort=\"%u\" rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", port, fcc->rtx_time_ms, fcc->rtx_pt);
       fputs("</ServerBasedEnhancementServiceInfo>", f);
     }
     fputs("</IPMulticastAddress>", f);

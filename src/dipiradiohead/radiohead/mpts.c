@@ -59,6 +59,15 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       return 1;
     }
   }
+  if (cfg->n_rist > 0) {
+    out.rist = radiohead_rist_open(cfg);
+    if (!out.rist) {
+      if (out.rtph)
+        rtpheader_free(out.rtph);
+      mcast_close(mc);
+      return 1;
+    }
+  }
 
   for (i = 0; i < n; i++) {
     meta_ctxs[i] = &metas[i];
@@ -212,10 +221,6 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
         samples_total[i] += f.samples;
         out.cur_pts = pts;
         tspacketizer_feed(tsps[i], pts, now, f.data, f.len, packet_cb, &out);
-        if (out.had_error) {
-          rc = 1;
-          goto done;
-        }
       }
       if (metrics_on) {
         unsigned long long sb = source_bytes_total(src);
@@ -237,10 +242,6 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       }
       if (signal_reload_requested())
         cas_reload_receivers(cas);
-    }
-    if (out.had_error) {
-      rc = 1;
-      goto done;
     }
     if (cfg->verbose && now - last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - start, out.packets);
@@ -271,6 +272,8 @@ done:
     cas_stop(cas);
   if (out.rtph)
     rtpheader_free(out.rtph);
+  if (out.rist)
+    ristout_close(out.rist);
   mcast_close(mc);
 
   if (cfg->verbose && log_stderr_is_tty())

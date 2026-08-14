@@ -68,6 +68,7 @@ int state_load(const config_t *cfg, sds_state_t *st) {
       ret_val.rtx_pt = cfg->ret_rtx_pt;
       ret_val.mc = cfg->ret_mc;
       ret_val.mc_port = cfg->ret_mc_port;
+      ret_val.rsi_mc_ret = cfg->ret_rsi_mc_ret;
       ret = &ret_val;
     }
     if (cfg->fcc_enabled) {
@@ -76,6 +77,9 @@ int state_load(const config_t *cfg, sds_state_t *st) {
       fcc_val.port = cfg->fcc_port;
       fcc_val.rtx_time_ms = cfg->fcc_rtx_time;
       fcc_val.rtx_pt = cfg->fcc_rtx_pt;
+      fcc_val.resolve_by_port = cfg->fcc_resolve_by_port;
+      fcc_val.resolve_base_port = cfg->fcc_resolve_base_port ? cfg->fcc_resolve_base_port : cfg->fcc_port + 1;
+      fcc_val.resolve_max_channels = cfg->fcc_resolve_max_channels;
       fcc = &fcc_val;
     }
     st->broadcast_doc = malloc(DOC_CAP);
@@ -137,10 +141,10 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
     }
 
     if (st.in.kind == INPUT_RAW_XML) {
-      ok = dvbstp_send_segment(m, st.in.raw_payload_id, 1, 1, 0, 0, 1, st.in.raw_xml, st.in.raw_xml_len) == 0;
+      ok = dvbstp_send_segment(m, st.in.raw_payload_id, 1, 1, 0, 0, 0, 1, st.in.raw_xml, st.in.raw_xml_len) == 0;
     } else {
-      ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_BROADCAST_DISCOVERY, 1, 1, 0, 0, 1, st.broadcast_doc, st.broadcast_len) == 0;
-      ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_SP_DISCOVERY, 1, 1, 0, 0, 1, st.sp_doc, st.sp_len) == 0 && ok;
+      ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_BROADCAST_DISCOVERY, 1, 1, 0, 0, 0, 1, st.broadcast_doc, st.broadcast_len) == 0;
+      ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_SP_DISCOVERY, 1, 1, 0, 0, 0, 1, st.sp_doc, st.sp_len) == 0 && ok;
     }
     if (metrics_on) {
       if (ok) {

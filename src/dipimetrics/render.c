@@ -82,6 +82,15 @@ static const metric_def_t DEFS[] = {
     {METRICS_ID_BCG_LAST_SUCCESS_TIME_SECONDS, "dvbipi_bcg_last_success_time_seconds", M_GAUGE, "unix time of the last successful publication", NULL, 0},
     {METRICS_ID_BCG_SCHEDULE_START_TIME_SECONDS, "dvbipi_bcg_schedule_start_time_seconds", M_GAUGE, "earliest event start in the current window", NULL, 0},
     {METRICS_ID_BCG_SCHEDULE_END_TIME_SECONDS, "dvbipi_bcg_schedule_end_time_seconds", M_GAUGE, "latest event end in the current window", NULL, 0},
+    {METRICS_ID_RIST_SENDER_SENT_TOTAL, "dvbipi_rist_sender_sent_total", M_COUNTER, "packets sent to this RIST peer", "peer", 0},
+    {METRICS_ID_RIST_SENDER_RETRANSMITTED_TOTAL, "dvbipi_rist_sender_retransmitted_total", M_COUNTER, "packets retransmitted to this RIST peer", "peer", 0},
+    {METRICS_ID_RIST_SENDER_RTT_MILLISECONDS, "dvbipi_rist_sender_rtt_milliseconds", M_GAUGE, "current RTT to this RIST peer", "peer", 0},
+    {METRICS_ID_RIST_RECEIVER_RECEIVED_TOTAL, "dvbipi_rist_receiver_received_total", M_COUNTER, "packets received on the RIST flow", NULL, 0},
+    {METRICS_ID_RIST_RECEIVER_MISSING_TOTAL, "dvbipi_rist_receiver_missing_total", M_COUNTER, "packets missing on the RIST flow, incl reordered", NULL, 0},
+    {METRICS_ID_RIST_RECEIVER_RECOVERED_TOTAL, "dvbipi_rist_receiver_recovered_total", M_COUNTER, "packets recovered via retransmit", NULL, 0},
+    {METRICS_ID_RIST_RECEIVER_LOST_TOTAL, "dvbipi_rist_receiver_lost_total", M_COUNTER, "packets never recovered", NULL, 0},
+    {METRICS_ID_RIST_RECEIVER_RTT_MILLISECONDS, "dvbipi_rist_receiver_rtt_milliseconds", M_GAUGE, "average RTT across the flow's peers", NULL, 0},
+    {METRICS_ID_RIST_RECEIVER_BUFFER_MILLISECONDS, "dvbipi_rist_receiver_buffer_milliseconds", M_GAUGE, "current recovery buffer fill", NULL, 0},
 };
 #define N_DEFS (sizeof DEFS / sizeof DEFS[0])
 

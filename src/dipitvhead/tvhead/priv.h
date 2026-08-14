@@ -11,6 +11,7 @@
 #include "lib/metrics/export.h"
 #include "lib/mux/rtpheader.h"
 #include "lib/net/multicast.h"
+#include "lib/net/ristout.h"
 
 #include "../cas/cas.h"
 #include "../input/source.h"
@@ -31,10 +32,12 @@ typedef struct {
   mcast_t *mc;
   int rtp;
   rtpheader_t *rtph;
+  ristout_t *rist; /* NULL unless -R given; bonded peers, sent alongside mc */
   bitrate_pacer_t *pacer;
   unsigned char batch[12 + TS_PER_DGRAM * 188]; /* [0,12): RTP header headroom, unused if !rtp */
   int batch_count;
-  int had_error;
+  int mc_had_error;   /* edge-log gate; a send failure here never stops process */
+  int rist_had_error; /* edge-log gate; a write failure here never stops process */
   unsigned long long packets;
   unsigned long long errors;
 } out_ctx_t;
@@ -52,14 +55,15 @@ int discover_step(discover_state_t *ds, tvsrc_t *src, const dipitvhead_input_t *
 int discover(tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, input_metrics_t *im);
 
 /* output.c */
+/* caller only calls this when cfg->n_rist > 0; NULL on err */
+ristout_t *tvhead_rist_open(const config_t *cfg);
 void flush_batch(out_ctx_t *o);
 void packet_cb(void *ctx, const unsigned char *pkt188);
 void send_null_packet(out_ctx_t *o);
 int remux_cb(void *v, const unsigned char *pkt);
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
                    const input_metrics_t *inputs, unsigned n_inputs, const ts_metrics_t *tsm, cas_t *cas);
-int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, cas_t *cas, metrics_exporter_t *mx, input_metrics_t *im,
-                ts_metrics_t *tsm);
+int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, cas_t *cas, metrics_exporter_t *mx, input_metrics_t *im, ts_metrics_t *tsm);
 
 /* single.c */
 int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx);

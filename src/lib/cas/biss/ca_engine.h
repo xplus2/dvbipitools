@@ -36,7 +36,7 @@ unsigned biss_ca_engine_emm_pid(const biss_ca_engine_t *e);
 
 /* PMT program_info CA_descriptor: real ECM_PID + bissca_entitlement_session_id_descriptor. 0 on overflow */
 size_t biss_ca_engine_prog_desc(const biss_ca_engine_t *e, unsigned char *out, size_t cap);
-/* CAT: CA_descriptor pointing at the EMM_PID + bissca_entitlement_session_id_descriptor. 0 on overflow */
+/* CAT: CA_descriptor pointing at EMM_PID + bissca_entitlement_session_id_descriptor. 0 on overflow */
 size_t biss_ca_engine_build_cat(const biss_ca_engine_t *e, unsigned char *out, size_t cap);
 
 /* -1 not due/no data, 0 ok, section in out */
@@ -47,7 +47,7 @@ int biss_ca_engine_emm_due(biss_ca_engine_t *e, double now, unsigned char *out, 
    0 unchanged, -1 dir unreadable, old list kept */
 int biss_ca_engine_reload_receivers(biss_ca_engine_t *e);
 
-/* skips ahead to the next scramble_packet() call rotating SK, forcing new EMMs out sooner */
+/* skips ahead to next scramble_packet() call rotating SK, forcing new EMMs out sooner */
 void biss_ca_engine_force_sk_rotation(biss_ca_engine_t *e);
 
 size_t biss_ca_engine_receiver_count(const biss_ca_engine_t *e);

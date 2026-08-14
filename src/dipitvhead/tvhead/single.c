@@ -33,6 +33,15 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
       return 1;
     }
   }
+  if (cfg->n_rist > 0) {
+    out.rist = tvhead_rist_open(cfg);
+    if (!out.rist) {
+      if (out.rtph)
+        rtpheader_free(out.rtph);
+      mcast_close(outmc);
+      return 1;
+    }
+  }
 
   while (!signal_stop_requested()) {
     net_err_reason_t reason = NET_ERR_OTHER;
@@ -115,7 +124,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     tvsrc_close(src);
     if (metrics_on)
       im.up = 0;
-    if (signal_stop_requested() || out.had_error)
+    if (signal_stop_requested())
       break;
     if (cfg->error_retry_s <= 0) {
       rc = 1;
@@ -128,11 +137,13 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   flush_batch(&out);
   if (out.rtph)
     rtpheader_free(out.rtph);
+  if (out.rist)
+    ristout_close(out.rist);
   mcast_close(outmc);
 
   if (cfg->verbose && log_stderr_is_tty())
     fputc('\n', stderr);
-  if (rc == 0 && !out.had_error)
+  if (rc == 0)
     log_line("stopped.");
-  return (rc || out.had_error) ? 1 : 0;
+  return rc ? 1 : 0;
 }

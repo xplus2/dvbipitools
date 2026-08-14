@@ -46,11 +46,11 @@ int metrics_exporter_begin(metrics_exporter_t *exp, metrics_writer_t *w, const c
 /* nonblocking. any failure (oversized/full buffer/no collector) counts as dropped, no retry */
 void metrics_exporter_send(metrics_exporter_t *exp, metrics_writer_t *w);
 
-/* caller keeps outside the per-input connection object - must survive its
+/* caller keeps outside per-input connection object: must survive
    reconnect teardown/recreate */
 typedef struct {
   int up;
-  int seen_open; /* has ever opened successfully - gates reconnects_total */
+  int seen_open; /* has ever opened successfully: gates reconnects_total */
   uint64_t bytes_total;
   uint64_t reconnects_total;
   uint64_t errors_total[NET_ERR_COUNT];

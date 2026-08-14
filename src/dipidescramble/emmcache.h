@@ -20,7 +20,7 @@ int emmcache_load(emmcache_t *c, device_state_t *d, const char *path);
    1 if the cache file is now stale (caller should emmcache_save()), else 0 */
 int emmcache_feed(emmcache_t *c, device_state_t *d, const unsigned char *emm, size_t emm_len);
 
-/* whole-file rewrite of the current tracked section set. 0 ok, -1 w fail */
+/* whole-file rewrite of current tracked section set. 0 ok, -1 w fail */
 int emmcache_save(const emmcache_t *c, const char *path);
 
 #endif

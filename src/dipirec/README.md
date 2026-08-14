@@ -1,9 +1,9 @@
 # dipirec
 
-Records a DVB-IPI stream to a file or to stdout.
+Records a DVB-IPI stream to a file, to stdout, or out onto multicast.
 
 ```
-dipirec -i <uri> -o <path> [options]
+dipirec -i <uri> -o <target> [options]
 ```
 
 ## Options
@@ -11,13 +11,15 @@ dipirec -i <uri> -o <path> [options]
 | flag | long form         | argument              | default                       |
 |------|-------------------|-----------------------|-------------------------------|
 | `-i` | `--in`            | `<uri>`               | required                      |
-| `-o` | `--out`           | `<path>` / `-`        | required                      |
+| `-o` | `--out`           | `<target>`            | required                      |
 | `-a` | `--audio`         | `<track>` / `all`     | `all`                         |
 | `-f` | `--format`        | `raw\|ts\|mkv\|mka`   | from `-o` suffix, else `ts`   |
 | `-p` | `--pmt-pid`       | `<pid>` / `all`       | none (see below)              |
 | `-s` | `--subtitles`     | `strip\|keep\|srt`    | `keep`                        |
 | `-t` | `--time`          | `<duration>`          | no limit (runs until stopped) |
 | `-I` | `--iface`         | `<iface>`             | kernel route                  |
+| `-O` | `--out-iface`     | `<iface>`             | kernel route                  |
+|      | `--ttl`           | `<n>`                 | kernel default (`1`)          |
 | `-v` | `--verbose`       |                       | off                           |
 |      | `--sub-lead`      | `<ms>`                | `1000`                        |
 |      | `--color`         | `auto\|always\|never` | `auto`                        |
@@ -28,6 +30,10 @@ dipirec -i <uri> -o <path> [options]
 |      | `--ret-wait`      | `<ms>`                | `200`                         |
 |      | `--pace`          |                       | off (file/stdin source only)  |
 |      | `--strip`         | `<list>` / `none`     | `NUL,NIT,AIT,EIT`             |
+|      | `--profile`       | `simple\|main`        | `simple` (`-o rist://` only)  |
+|      | `--secret`        | `<psk>`               | none (`-o rist://` only)      |
+|      | `--cname`         | `<name>`              | library default (`-o rist://` only) |
+|      | `--buffer`        | `<ms>`                | library default (`-o rist://` only) |
 | `-h` | `--help`          |                       |                               |
 
 ## Input (`-i`)
@@ -85,9 +91,28 @@ jitter) resyncs instead of trying to sleep-catch-up.
 
 ## Output (`-o`)
 
-A file path, or `-` for stdout. Don't worry, status output and `-v` always go to stderr.
+A file path, `-` for stdout, `rtp://@<group>:<port>` / `udp://@<group>:<port>` to send the
+recording out onto multicast, or `rist://<host>:<port>[?query]` to send it to a single RIST
+peer (requires librist; built without it, `-o rist://` fails cleanly at startup). Don't worry,
+status output and `-v` always go to stderr.
 
 `-o -` can be used to pipe the output directly to [dipidescramble](../dipidescramble/README.md).
+
+`-o rtp://`/`-o udp://` joins nothing, it just sends: each 188-byte TS packet is repacked into
+7-packet (1316-byte) datagrams, RTP-wrapped for `rtp://` with a fresh SSRC/sequence/timestamp
+(unrelated to whatever framing the input had, if any), unwrapped plain TS for `udp://`. `-o rist://`
+sends the same 1316-byte chunks through librist instead, no RTP wrapping (RIST has its own framing).
+Only `-f raw` and `-f ts` are allowed for any of these three - `mkv`/`mka` are a container, not a
+byte-aligned transport stream, so they're rejected early rather than producing a stream nothing could
+parse.
+
+`--profile`/`--secret`/`--cname`/`--buffer` configure the RIST peer (profile, pre-shared key,
+cname, recovery buffer); `--secret` requires `--profile main`. `-o rist://` is a single peer, not
+bonded - see [dipirist](../dipirist/README.md) if you need to bond multiple RIST peers.
+
+Combined with [`--pace`](#real-time-pacing---pace), this turns a captured/filtered file back into
+a live-looking multicast feed - handy for replaying a debug sample or a `--strip`ped/`-p`-selected
+recording into whatever downstream tooling expects a real multicast source.
 
 ## Formats (`-f`)
 
@@ -194,10 +219,16 @@ A plain number is seconds. Also accepted: `90`, `5m`, `5m30s`, `1h`, `1h3m`, `1h
 (hours:minutes:seconds, hours may exceed 24). 
 Without `-t` the recording runs until stopped.
 
-## Network interface (`-I`)
+## Network interface (`-I`, `-O`, `--ttl`)
 
-Picks the interface for the multicast join. Without it, the kernel's default multicast route is used,
-which is usually wrong in multi-homing.
+`-I` picks the interface for `-i`'s multicast join. `-O`/`--out-iface` picks the interface for
+`-o rtp://`/`-o udp://`'s multicast send; ignored (with a warning) if `-o` isn't one of those.
+Without them, the kernel's default multicast route is used, which is usually wrong in multi-homing.
+They're independent, so a box bridging two segments can join on one NIC and send on the other.
+
+`--ttl <n>` sets the TTL (IPv4) / hop limit (IPv6) on `-o rtp://`/`-o udp://` packets; default is
+the kernel's (`1`, i.e. link-local only). Also ignored (with a warning) outside `-o rtp://`/`-o udp://`.
+Needed for a replay to cross a router - `1` won't leave the sending segment.
 
 ## Live stats (`-v`)
 
@@ -236,6 +267,9 @@ dipirec -i rtp://@239.1.1.3:5000 -p all -o all_channels.mka
 
 # replay a file at its own original speed, into something that expects a live feed
 dipirec -i show.ts --pace -o - -f ts | some-live-consumer
+
+# replay a filtered recording back onto multicast, at its own original speed
+dipirec -i show.ts --pace -o rtp://@239.9.9.9:6000 -O eth1 --ttl 16
 
 # from stdin, also strip CAT/ECM/EMM on top of the default set
 dipirec -i - -o show.ts --strip NUL,NIT,AIT,EIT,CAT,ECM,EMM < capture.ts

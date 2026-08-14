@@ -66,6 +66,12 @@ else ()
     set(CSA2_SRC ../lib/scrambler/csa2_stub.c)
 endif ()
 
+if (DVBIPITOOLS_HAVE_RIST)
+    set(RIST_SRC ../lib/net/ristout.c)
+else ()
+    set(RIST_SRC ../lib/net/ristout_stub.c)
+endif ()
+
 # keep in sync with CMakeLists/Makefile
 add_executable(dipitvhead
     main.c
@@ -104,6 +110,7 @@ add_executable(dipitvhead
     ../lib/net/tssource.c
     ../lib/net/retryset.c
     ${TLS_SRC}
+    ${RIST_SRC}
     ../lib/net/httpclient/httpclient.c
     ../lib/net/httpclient/url.c
     ../lib/net/httpclient/read.c
@@ -139,6 +146,10 @@ endif ()
 if (DIPITVHEAD_HAVE_CSA2)
     target_include_directories(dipitvhead PRIVATE ${DVBCSA_INCLUDE_DIR})
     target_link_libraries(dipitvhead PRIVATE ${DVBCSA_LIBRARY})
+endif ()
+
+if (DVBIPITOOLS_HAVE_RIST)
+    target_link_libraries(dipitvhead PRIVATE PkgConfig::RIST)
 endif ()
 
 # ECMG client thread: pthread is a hard dependency from here on, not optional

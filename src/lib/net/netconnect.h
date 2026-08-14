@@ -24,7 +24,7 @@ typedef enum {
 
 const char *net_err_reason_name(net_err_reason_t reason);
 
-/* nonblocking connect+poll, avoids the multi-minute blocking-connect ceiling.
+/* nonblocking connect+poll, avoids multi-minute blocking-connect ceiling.
    fd stays O_NONBLOCK. -1 on failure/timeout/stop (logged, errno set).
    reason_out: nullable, set only on -1 */
 int netconnect_tcp(const char *host, unsigned port, int timeout_ms, net_err_reason_t *reason_out);
@@ -37,11 +37,11 @@ int net_set_dscp(int fd, int family, int tos);
 
 /* async pair: for callers running their own poll() loop over many connections at once (netconnect_tcp's own wait_connect() would serialize them).
    resolves + starts connect() on first usable address, fd stays O_NONBLOCK. does not wait, does not try further addresses if this one later fails
-   (caller's own retry cycle will re-resolve). -1 on immediate failure (logged), else poll fd for POLLOUT, then call netconnect_tcp_finish().
+   (caller's own retry cycle will re-resolve). -1 on immediate failure, else poll fd for POLLOUT, then call netconnect_tcp_finish().
    reason_out: nullable, set only on -1 */
 int netconnect_tcp_start(const char *host, unsigned port, net_err_reason_t *reason_out);
 
-/* call once the started fd is POLLOUT-ready. 1 connected, -1 failed (logged, errno set).
+/* call once started fd is POLLOUT-ready. 1 connected, -1 failed (logged, errno set).
    reason_out: nullable, set only on -1 */
 int netconnect_tcp_finish(int fd, net_err_reason_t *reason_out);
 
