@@ -43,6 +43,17 @@ static void recv_cb(const unsigned char *pkt, size_t len, int fd, const struct s
   pthread_mutex_unlock(&r->mu);
 }
 
+static void recorder_snapshot(recorder_t *r, recorder_t *out) {
+  pthread_mutex_lock(&r->mu);
+  out->count = r->count;
+  out->last_len = r->last_len;
+  memcpy(out->last_pkt, r->last_pkt, sizeof out->last_pkt);
+  out->last_from = r->last_from;
+  out->last_fromlen = r->last_fromlen;
+  out->last_slot = r->last_slot;
+  pthread_mutex_unlock(&r->mu);
+}
+
 static int recorder_wait_count(recorder_t *r, int want, double timeout_s) {
   struct timespec deadline;
   clock_gettime(CLOCK_MONOTONIC, &deadline);
@@ -89,7 +100,7 @@ static int send_udp(unsigned port, const unsigned char *data, size_t len) {
 }
 
 START_TEST(listen_pool_delivers_datagram_to_callback) {
-  recorder_t rec;
+  recorder_t rec, snap;
   listen_pool_t *p;
   const unsigned char msg[] = "hello listen pool";
 
@@ -99,9 +110,10 @@ START_TEST(listen_pool_delivers_datagram_to_callback) {
 
   ck_assert_int_eq(send_udp(TEST_PORT, msg, sizeof msg - 1), 1);
   ck_assert_int_eq(recorder_wait_count(&rec, 1, 2.0), 1);
-  ck_assert_uint_eq(rec.last_len, sizeof msg - 1);
-  ck_assert_mem_eq(rec.last_pkt, msg, sizeof msg - 1);
-  ck_assert_int_eq(rec.last_from.ss_family, AF_INET);
+  recorder_snapshot(&rec, &snap);
+  ck_assert_uint_eq(snap.last_len, sizeof msg - 1);
+  ck_assert_mem_eq(snap.last_pkt, msg, sizeof msg - 1);
+  ck_assert_int_eq(snap.last_from.ss_family, AF_INET);
 
   signals_install();
   raise(SIGTERM); /* listen_pool_stop() only returns once signal_stop_requested() is true */
@@ -136,7 +148,7 @@ START_TEST(listen_pool_start_fails_on_bad_address) {
 END_TEST
 
 START_TEST(listen_multi_delivers_datagram_with_correct_slot) {
-  recorder_t rec;
+  recorder_t rec, snap;
   listen_multi_t *p;
   const unsigned char msg[] = "hello listen multi";
 
@@ -146,9 +158,10 @@ START_TEST(listen_multi_delivers_datagram_with_correct_slot) {
 
   ck_assert_int_eq(send_udp(TEST_PORT + 3 + 2, msg, sizeof msg - 1), 1); /* slot 2's dedicated port */
   ck_assert_int_eq(recorder_wait_count(&rec, 1, 2.0), 1);
-  ck_assert_uint_eq(rec.last_len, sizeof msg - 1);
-  ck_assert_mem_eq(rec.last_pkt, msg, sizeof msg - 1);
-  ck_assert_uint_eq(rec.last_slot, 2);
+  recorder_snapshot(&rec, &snap);
+  ck_assert_uint_eq(snap.last_len, sizeof msg - 1);
+  ck_assert_mem_eq(snap.last_pkt, msg, sizeof msg - 1);
+  ck_assert_uint_eq(snap.last_slot, 2);
 
   signals_install();
   raise(SIGTERM);
@@ -157,7 +170,7 @@ START_TEST(listen_multi_delivers_datagram_with_correct_slot) {
 END_TEST
 
 START_TEST(listen_multi_distinguishes_slots) {
-  recorder_t rec;
+  recorder_t rec, snap;
   listen_multi_t *p;
   const unsigned char a[] = "a";
   const unsigned char b[] = "b";
@@ -168,11 +181,13 @@ START_TEST(listen_multi_distinguishes_slots) {
 
   ck_assert_int_eq(send_udp(TEST_PORT + 10 + 0, a, sizeof a - 1), 1);
   ck_assert_int_eq(recorder_wait_count(&rec, 1, 2.0), 1);
-  ck_assert_uint_eq(rec.last_slot, 0);
+  recorder_snapshot(&rec, &snap);
+  ck_assert_uint_eq(snap.last_slot, 0);
 
   ck_assert_int_eq(send_udp(TEST_PORT + 10 + 3, b, sizeof b - 1), 1);
   ck_assert_int_eq(recorder_wait_count(&rec, 2, 2.0), 1);
-  ck_assert_uint_eq(rec.last_slot, 3);
+  recorder_snapshot(&rec, &snap);
+  ck_assert_uint_eq(snap.last_slot, 3);
 
   signals_install();
   raise(SIGTERM);
