@@ -90,9 +90,10 @@ size_t sds_build_broadcast(const char *domain, unsigned version, const sds_servi
   return len;
 }
 
-size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, unsigned char *buf, size_t cap) {
+size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, const unsigned *extra_payload_ids, int extra_count, unsigned char *buf, size_t cap) {
   char *ptr;
   size_t len;
+  int i;
   FILE *f = open_memstream(&ptr, &len);
   if (!f)
     return 0;
@@ -100,7 +101,162 @@ size_t sds_build_sp(const char *domain, const char *display_name, const char *la
   xml_escape(f, domain);
   fprintf(f, "\" Version=\"%u\">\n<Name Language=\"%.3s\">", version, lang);
   xml_escape(f, display_name);
-  fprintf(f, "</Name>\n<Offering><Push Address=\"%s\" Port=\"%u\"><PayloadId Id=\"2\"/></Push></Offering>\n</ServiceProvider>\n</ServiceProviderDiscovery>\n</ServiceDiscovery>\n", push_addr, push_port);
+  fprintf(f, "</Name>\n<Offering><Push Address=\"%s\" Port=\"%u\"><PayloadId Id=\"2\"/>", push_addr, push_port);
+  for (i = 0; i < extra_count; i++)
+    fprintf(f, "<PayloadId Id=\"%u\"/>", extra_payload_ids[i]);
+  fputs("</Push></Offering>\n</ServiceProvider>\n</ServiceProviderDiscovery>\n</ServiceDiscovery>\n", f);
+  fclose(f);
+  if (len > cap) {
+    free(ptr);
+    return 0;
+  }
+  memcpy(buf, ptr, len);
+  free(ptr);
+  return len;
+}
+
+void sds_package_open(FILE *f, const char *domain, unsigned version) {
+  fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<PackageDiscovery DomainName=\"", f);
+  xml_escape(f, domain);
+  fprintf(f, "\" Version=\"%u\">\n", version);
+}
+
+static const sds_service_t *sds_find_service(const char *name, const sds_service_t *svcs, int svc_count) {
+  int i;
+  for (i = 0; i < svc_count; i++)
+    if (!strcmp(svcs[i].name, name))
+      return &svcs[i];
+  return NULL;
+}
+
+void sds_package_item(FILE *f, const sds_package_t *pkg, const sds_service_t *svcs, int svc_count) {
+  int i;
+  fprintf(f, "<Package Id=\"%u\" Visible=\"%s\">\n<PackageName Language=\"%.3s\">", pkg->id, pkg->visible ? "true" : "false", pkg->lang);
+  xml_escape(f, pkg->name);
+  fputs("</PackageName>\n", f);
+  for (i = 0; i < pkg->service_count; i++) {
+    const sds_service_t *s = sds_find_service(pkg->service_names[i], svcs, svc_count);
+    fputs("<Service><TextualID ServiceName=\"", f);
+    xml_escape(f, pkg->service_names[i]);
+    fputs("\"/>", f);
+    if (s)
+      fprintf(f, "<DVBTriplet OrigNetId=\"%u\" TSId=\"%u\" ServiceId=\"%u\"/>", s->onid, s->tsid, s->sid);
+    fputs("</Service>\n", f);
+  }
+  fputs("</Package>\n", f);
+}
+
+void sds_package_close(FILE *f) {
+  fputs("</PackageDiscovery>\n</ServiceDiscovery>\n", f);
+}
+
+size_t sds_build_package(const char *domain, unsigned version, const sds_package_t *pkgs, int pkg_count, const sds_service_t *svcs, int svc_count, unsigned char *buf, size_t cap) {
+  char *ptr;
+  size_t len;
+  int i;
+  FILE *f = open_memstream(&ptr, &len);
+  if (!f)
+    return 0;
+  sds_package_open(f, domain, version);
+  for (i = 0; i < pkg_count; i++)
+    sds_package_item(f, &pkgs[i], svcs, svc_count);
+  sds_package_close(f);
+  fclose(f);
+  if (len > cap) {
+    free(ptr);
+    return 0;
+  }
+  memcpy(buf, ptr, len);
+  free(ptr);
+  return len;
+}
+
+void sds_regionalisation_open(FILE *f, const char *domain, unsigned version) {
+  fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<RegionalisationDiscovery DomainName=\"", f);
+  xml_escape(f, domain);
+  fprintf(f, "\" Version=\"%u\">\n", version);
+}
+
+void sds_regionalisation_item(FILE *f, const sds_cell_t *cell) {
+  int i;
+  fputs("<Cell Id=\"", f);
+  xml_escape(f, cell->id);
+  fputs("\">\n<CountryCode>", f);
+  xml_escape(f, cell->country);
+  fputs("</CountryCode>\n", f);
+  for (i = 0; i < cell->ca_depth; i++) {
+    fprintf(f, "<CA Type=\"%u\" Value=\"", cell->ca[i].type);
+    xml_escape(f, cell->ca[i].value);
+    fputs("\">", f);
+  }
+  for (i = 0; i < cell->ca_depth; i++)
+    fputs("</CA>", f);
+  fputs("\n</Cell>\n", f);
+}
+
+void sds_regionalisation_close(FILE *f) {
+  fputs("</RegionalisationDiscovery>\n</ServiceDiscovery>\n", f);
+}
+
+size_t sds_build_regionalisation(const char *domain, unsigned version, const sds_cell_t *cells, int count, unsigned char *buf, size_t cap) {
+  char *ptr;
+  size_t len;
+  int i;
+  FILE *f = open_memstream(&ptr, &len);
+  if (!f)
+    return 0;
+  sds_regionalisation_open(f, domain, version);
+  for (i = 0; i < count; i++)
+    sds_regionalisation_item(f, &cells[i]);
+  sds_regionalisation_close(f);
+  fclose(f);
+  if (len > cap) {
+    free(ptr);
+    return 0;
+  }
+  memcpy(buf, ptr, len);
+  free(ptr);
+  return len;
+}
+
+size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *rms, int rms_count, const sds_fus_t *fus, int fus_count, unsigned char *buf, size_t cap) {
+  char *ptr;
+  size_t len;
+  int i;
+  FILE *f = open_memstream(&ptr, &len);
+  if (!f)
+    return 0;
+  fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<RMSFUSDiscovery DomainName=\"", f);
+  xml_escape(f, domain);
+  fprintf(f, "\" Version=\"%u\">\n", version);
+  for (i = 0; i < rms_count; i++) {
+    fputs("<RMSProvider RMSLocation=\"", f);
+    xml_escape(f, rms[i].location);
+    fputs("\"", f);
+    if (rms[i].logo_uri) {
+      fputs(" LogoURI=\"", f);
+      xml_escape(f, rms[i].logo_uri);
+      fputs("\"", f);
+    }
+    fprintf(f, "><RMSName Language=\"%.3s\">", rms[i].lang);
+    xml_escape(f, rms[i].name);
+    fputs("</RMSName></RMSProvider>\n", f);
+  }
+  for (i = 0; i < fus_count; i++) {
+    fputs("<FUSProvider", f);
+    if (fus[i].logo_uri) {
+      fputs(" LogoURI=\"", f);
+      xml_escape(f, fus[i].logo_uri);
+      fputs("\"", f);
+    }
+    fprintf(f, "><FUSName Language=\"%.3s\">", fus[i].lang);
+    xml_escape(f, fus[i].name);
+    fprintf(f, "</FUSName><FUSID>%lu</FUSID><FUSAnnouncement>", fus[i].fus_id);
+    if (fus[i].announce_addr)
+      fprintf(f, "<MulticastAnnouncementAddress Address=\"%s\" Port=\"%u\"/>", fus[i].announce_addr, fus[i].announce_port);
+    fputs("</FUSAnnouncement></FUSProvider>\n", f);
+  }
+  fputs("</RMSFUSDiscovery>\n</ServiceDiscovery>\n", f);
   fclose(f);
   if (len > cap) {
     free(ptr);

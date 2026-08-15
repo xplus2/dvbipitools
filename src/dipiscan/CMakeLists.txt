@@ -13,6 +13,7 @@ add_executable(dipiscan
     ../lib/signal.c
     ../lib/sds_xml.c
     ../lib/xml_util.c
+    ../lib/ioutil.c
     ../lib/net/multicast.c
     ../lib/net/netconnect.c
     ../lib/net/udpxy.c

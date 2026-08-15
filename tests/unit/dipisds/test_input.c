@@ -194,6 +194,42 @@ START_TEST(xml_detects_service_provider_discovery_root) {
 }
 END_TEST
 
+START_TEST(xml_detects_package_discovery_root) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".xml", "<PackageDiscovery>content</PackageDiscovery>\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.kind, INPUT_RAW_XML);
+  ck_assert_uint_eq(in.raw_payload_id, DVBSTP_PAYLOAD_PACKAGE_DISCOVERY);
+  input_free(&in);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(xml_detects_regionalisation_discovery_root) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".xml", "<RegionalisationDiscovery>content</RegionalisationDiscovery>\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.kind, INPUT_RAW_XML);
+  ck_assert_uint_eq(in.raw_payload_id, DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY);
+  input_free(&in);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(xml_detects_rms_fus_discovery_root) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".xml", "<RMSFUSDiscovery>content</RMSFUSDiscovery>\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.kind, INPUT_RAW_XML);
+  ck_assert_uint_eq(in.raw_payload_id, DVBSTP_PAYLOAD_RMSFUS_DISCOVERY);
+  input_free(&in);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(xml_rejects_unknown_root_element) {
   char path[160];
   input_t in;
@@ -218,6 +254,85 @@ START_TEST(missing_file_is_rejected) {
 }
 END_TEST
 
+START_TEST(packages_file_parses_id_name_lang_visible_and_services) {
+  char path[160];
+  sds_package_t pkgs[4];
+  int count = -1;
+  write_temp_file(path, ".csv",
+                   "1,Bundle One,eng,1,Channel One|Channel Two\n"
+                   "2,Bundle Two,deu,,Channel Three\n");
+  ck_assert_int_eq(input_load_packages(path, pkgs, 4, &count), 0);
+  ck_assert_int_eq(count, 2);
+  ck_assert_uint_eq(pkgs[0].id, 1u);
+  ck_assert_str_eq(pkgs[0].name, "Bundle One");
+  ck_assert_int_eq(memcmp(pkgs[0].lang, "eng", 3), 0);
+  ck_assert_int_eq(pkgs[0].visible, 1);
+  ck_assert_int_eq(pkgs[0].service_count, 2);
+  ck_assert_str_eq(pkgs[0].service_names[0], "Channel One");
+  ck_assert_str_eq(pkgs[0].service_names[1], "Channel Two");
+  ck_assert_int_eq(pkgs[1].visible, 1); /* empty field defaults to visible */
+  unlink(path);
+}
+END_TEST
+
+START_TEST(packages_file_rejects_missing_field) {
+  char path[160];
+  sds_package_t pkgs[4];
+  int count = -1;
+  write_temp_file(path, ".csv", "1,Bundle One,eng,1\n"); /* no services field */
+  ck_assert_int_eq(input_load_packages(path, pkgs, 4, &count), -1);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(packages_file_rejects_no_services) {
+  char path[160];
+  sds_package_t pkgs[4];
+  int count = -1;
+  write_temp_file(path, ".csv", "1,Bundle One,eng,1,\n");
+  ck_assert_int_eq(input_load_packages(path, pkgs, 4, &count), -1);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(cells_file_parses_id_country_and_ca_chain) {
+  char path[160];
+  sds_cell_t cells[4];
+  int count = -1;
+  write_temp_file(path, ".csv", "Paris East,FR,1:IDF,3:Paris\n");
+  ck_assert_int_eq(input_load_cells(path, cells, 4, &count), 0);
+  ck_assert_int_eq(count, 1);
+  ck_assert_str_eq(cells[0].id, "Paris East");
+  ck_assert_int_eq(memcmp(cells[0].country, "FR", 2), 0);
+  ck_assert_int_eq(cells[0].ca_depth, 2);
+  ck_assert_uint_eq(cells[0].ca[0].type, 1u);
+  ck_assert_str_eq(cells[0].ca[0].value, "IDF");
+  ck_assert_uint_eq(cells[0].ca[1].type, 3u);
+  ck_assert_str_eq(cells[0].ca[1].value, "Paris");
+  unlink(path);
+}
+END_TEST
+
+START_TEST(cells_file_rejects_no_ca_entries) {
+  char path[160];
+  sds_cell_t cells[4];
+  int count = -1;
+  write_temp_file(path, ".csv", "Paris East,FR\n");
+  ck_assert_int_eq(input_load_cells(path, cells, 4, &count), -1);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(cells_file_rejects_bad_country_code) {
+  char path[160];
+  sds_cell_t cells[4];
+  int count = -1;
+  write_temp_file(path, ".csv", "Paris East,France,1:IDF\n");
+  ck_assert_int_eq(input_load_cells(path, cells, 4, &count), -1);
+  unlink(path);
+}
+END_TEST
+
 static Suite *input_suite(void) {
   Suite *s = suite_create("dipisds_input");
   TCase *tc = tcase_create("core");
@@ -232,9 +347,18 @@ static Suite *input_suite(void) {
   tcase_add_test(tc, xspf_rejects_track_without_location);
   tcase_add_test(tc, xml_detects_broadcast_discovery_root);
   tcase_add_test(tc, xml_detects_service_provider_discovery_root);
+  tcase_add_test(tc, xml_detects_package_discovery_root);
+  tcase_add_test(tc, xml_detects_regionalisation_discovery_root);
+  tcase_add_test(tc, xml_detects_rms_fus_discovery_root);
   tcase_add_test(tc, xml_rejects_unknown_root_element);
   tcase_add_test(tc, unrecognized_suffix_is_rejected);
   tcase_add_test(tc, missing_file_is_rejected);
+  tcase_add_test(tc, packages_file_parses_id_name_lang_visible_and_services);
+  tcase_add_test(tc, packages_file_rejects_missing_field);
+  tcase_add_test(tc, packages_file_rejects_no_services);
+  tcase_add_test(tc, cells_file_parses_id_country_and_ca_chain);
+  tcase_add_test(tc, cells_file_rejects_no_ca_entries);
+  tcase_add_test(tc, cells_file_rejects_bad_country_code);
   suite_add_tcase(s, tc);
   return s;
 }

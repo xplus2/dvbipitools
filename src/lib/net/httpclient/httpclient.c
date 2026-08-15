@@ -14,8 +14,18 @@
 
 #include "../../ioutil.h"
 #include "../../log.h"
+#include "../../signal.h"
 #include "../netconnect.h"
 #include "priv.h"
+
+static void set_rcvtimeo(int fd, double secs) {
+  struct timeval tv;
+  if (secs < 0)
+    secs = 0;
+  tv.tv_sec = (time_t)secs;
+  tv.tv_usec = (suseconds_t)((secs - (double)tv.tv_sec) * 1e6);
+  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+}
 
 static int tcp_connect(const char *host, unsigned port, net_err_reason_t *reason_out) {
   int fd = netconnect_tcp(host, port, HTTP_CONNECT_TIMEOUT_MS, reason_out);
@@ -178,7 +188,6 @@ int http_status(const http_t *h) { return h->status; }
 
 static struct http *fetch_once(const http_url_t *url, const char *user_agent, int insecure, const char *extra_header, net_err_reason_t *reason_out) {
   struct http *h = calloc(1, sizeof *h);
-  struct timeval tv = {5, 0};
   char req[2048], hdrline[512] = "";
   int rl;
   size_t got = 0;
@@ -192,7 +201,7 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
     free(h);
     return NULL;
   }
-  setsockopt(h->fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+  set_rcvtimeo(h->fd, (double)HTTP_HEADER_TIMEOUT_MS / 1000.0);
   if (h->url.tls) {
     h->tls = tls_connect(h->fd, h->url.host, insecure);
     if (!h->tls) {
@@ -228,8 +237,18 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
   }
   {
     size_t termlen = 0;
+    double deadline = mono_seconds() + (double)HTTP_HEADER_TIMEOUT_MS / 1000.0;
     while (got < sizeof h->hold) {
-      ssize_t n = raw_recv(h, h->hold + got, sizeof h->hold - got, reason_out);
+      double remain = deadline - mono_seconds();
+      ssize_t n;
+      if (remain <= 0) {
+        log_line("http: timed out waiting for response headers");
+        if (reason_out)
+          *reason_out = NET_ERR_TIMEOUT;
+        goto fail;
+      }
+      set_rcvtimeo(h->fd, remain);
+      n = raw_recv(h, h->hold + got, sizeof h->hold - got, reason_out);
       if (n < 0) {
         log_line("http: connection closed while reading headers");
         goto fail;
@@ -245,6 +264,7 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
       if (term)
         break;
     }
+    set_rcvtimeo(h->fd, (double)HTTP_HEADER_TIMEOUT_MS / 1000.0);
     if (!term) {
       log_line("http: response headers too large");
       if (reason_out)

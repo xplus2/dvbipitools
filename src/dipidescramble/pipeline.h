@@ -4,6 +4,8 @@
 #ifndef DIPIDESCRAMBLE_PIPELINE_H
 #define DIPIDESCRAMBLE_PIPELINE_H
 
+#include <stdint.h>
+
 #include "args.h"
 #include "biss_ca_state.h"
 #include "device.h"
@@ -11,13 +13,20 @@
 #include "ipiclient.h"
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/psi/section_asm.h"
+#include "lib/mux/flv/flv.h"
 #include "lib/mux/mkv/mkv.h"
+#include "lib/net/rtmpout.h"
 #include "lib/scrambler/scrambler.h"
 
 typedef struct {
-  int out;
+  int outfd[DIPIDESCRAMBLE_MAX_OUT]; /* plain file targets, unused (mkv_t owns fd) under -f mkv/mka */
+  int n_outfd;
   mkv_t *mkv; /* NULL unless -f mkv|mka */
   unsigned long long mkv_bytes;
+  flv_t *flv; /* NULL: no rtmp(s) target */
+  rtmpout_t *rtmp[DIPIDESCRAMBLE_MAX_OUT];
+  int rtmp_had_error[DIPIDESCRAMBLE_MAX_OUT];
+  int n_rtmp;
   unsigned long long packets;
   psi_t *psi;
   unsigned ecm_pid, emm_pid; /* 0 = not yet resolved */
@@ -39,11 +48,15 @@ typedef struct {
 } loop_ctx_t;
 
 /* CAS resolve -> ECM/EMM reassembly -> CW resolve -> descramble in place. lc must be
-   zero-initialized by caller before first calling it (lc->psi/lc->cache/lc->cfg/lc->out set up first).
+   zero-initialized by caller before first calling it (lc->psi/lc->cache/lc->cfg/lc->outfd
+   or lc->mkv/lc->flv set up first).
    0 ok, 1 stop (lc->fatal or lc->emit_failed explains why) */
 int pkt_cb(void *v, const unsigned char *pkt);
 
 /* drains any packets scrambler_set_key() queued for last crypto-period's batch */
 void pipeline_flush(loop_ctx_t *lc);
+
+/* flv_tag_cb, fans out to lc->rtmp[0..n_rtmp), registered on lc->flv by main() */
+void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len);
 
 #endif

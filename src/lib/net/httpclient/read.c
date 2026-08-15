@@ -1,6 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <ctype.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -80,9 +82,11 @@ static ssize_t http_read_chunked(struct http *h, void *buf, size_t cap, net_err_
         if (c == '\n') {
           char *end;
           unsigned long long size;
-          h->sizeline[h->sizeline_len < sizeof h->sizeline ? h->sizeline_len : sizeof h->sizeline - 1] = '\0';
+          h->sizeline[h->sizeline_len] = '\0';
+          errno = 0;
           size = strtoull(h->sizeline, &end, 16);
-          if (end == h->sizeline) {
+          if (h->sizeline_bad || end == h->sizeline || !isxdigit((unsigned char)h->sizeline[0]) ||
+              (*end != '\0' && *end != ';') || errno == ERANGE) {
             log_line("http: malformed chunk size line");
             if (reason_out)
               *reason_out = NET_ERR_FORMAT;
@@ -90,11 +94,16 @@ static ssize_t http_read_chunked(struct http *h, void *buf, size_t cap, net_err_
           }
           h->chunk_remaining = size;
           h->sizeline_len = 0;
+          h->sizeline_bad = 0;
           h->cstate = size == 0 ? CHUNK_TRAILER : CHUNK_DATA;
           continue;
         }
-        if (c != '\r' && h->sizeline_len < sizeof h->sizeline - 1)
-          h->sizeline[h->sizeline_len++] = (char)c;
+        if (c != '\r') {
+          if (h->sizeline_len < sizeof h->sizeline - 1)
+            h->sizeline[h->sizeline_len++] = (char)c;
+          else
+            h->sizeline_bad = 1;
+        }
         continue;
       }
 

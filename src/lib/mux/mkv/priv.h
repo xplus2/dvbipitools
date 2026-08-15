@@ -8,6 +8,7 @@
 
 #include "../ebml.h"
 #include "../teletext.h"
+#include "lib/demux/escodec/escodec.h"
 #include "lib/demux/pes.h"
 #include "lib/demux/psi/psi.h"
 #include "mkv.h"
@@ -17,38 +18,26 @@
 #define MKV_PEND_MAX 1024
 #define MKV_PEND_BYTES (8u * 1024 * 1024)
 #define MKV_REM_MAX 65536
-#define MKV_AU_MAX 8192
-#define MKV_PS_MAX 512 /* SPS/PPS/VPS */
 #define CLUSTER_MS 30000
 
 typedef struct {
   unsigned pid;
   int num;
-  codec_t codec;
   pid_class_t cls;
   char lang[4];
   char codecid[24];
-  unsigned rate, channels;   /* a */
   unsigned width, height;    /* v */
-  unsigned char cpriv[1024]; /* codecpriv: ASC/avcC/hvcC */
-  size_t cpriv_len;
   int hdr_parsed;
   int64_t ts_ms;
   pts_unwrap_t pts;
-  int psi_idx; /* owning m->psi[] index; TrackName looked up live at write_head(), not setup(); sdt may still be inbound */
+  int psi_idx; /* m->psi[] index. TrackName resolved late in write_head(), sdt may lag setup() */
   unsigned char *rem; /* audio: partial frame carry-over */
   size_t remlen, remcap;
-  int latm_cfg_ok, latm_flt;
-  unsigned char au[MKV_AU_MAX];
-  /* video parameter sets */
-  unsigned char vps[MKV_PS_MAX], sps[MKV_PS_MAX], pps[MKV_PS_MAX];
-  size_t vpslen, spslen, ppslen;
-  unsigned char ptl[12]; /* HEVC profile_tier_level */
-  unsigned chroma;
   unsigned char *vbuf; /* video: length-prefixed AU */
   size_t vbuflen, vbufcap;
   int got_key; /* first keyframe seen */
   ttx_t *ttx;  /* damn teletext */
+  esc_track_t es; /* avcC/hvcC/ASC, param sets, LATM cache */
 } track_t;
 
 typedef struct {
@@ -81,36 +70,8 @@ struct mkv {
   int cl_open;
 };
 
-typedef struct {
-  size_t consumed;
-  const unsigned char *out;
-  size_t outlen;
-  unsigned rate, ch, samples;
-  int layer;
-} frame_t;
-
-typedef struct {
-  const unsigned char *d;
-  size_t len, bit;
-  int err;
-} br_t;
-
-/* bitreader.c */
-unsigned br_u(br_t *b, int n);
-unsigned br_ue(br_t *b);
-int br_se(br_t *b);
-size_t br_slice(const br_t *b, size_t from, size_t to, unsigned char *out, size_t cap);
-size_t rbsp_unescape(const unsigned char *s, size_t len, unsigned char *d, size_t cap);
-
-/* audio.c */
-int next_frame(track_t *t, const unsigned char *d, size_t len, frame_t *f);
-
-/* video.c */
-const char *codec_id_for(const track_t *t, const frame_t *f);
-int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h);
-int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned *chroma, unsigned *w, unsigned *h);
-size_t build_avcc(const track_t *t, unsigned char *o, size_t cap);
-size_t build_hvcc(const track_t *t, unsigned char *o, size_t cap);
+/* video.c: codec_id_for only, rest -> lib/demux/escodec */
+const char *codec_id_for(codec_t codec, const esc_frame_t *f);
 
 /* write.c */
 void wfd(mkv_t *m, const void *p, size_t n);

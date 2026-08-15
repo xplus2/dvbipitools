@@ -10,6 +10,7 @@
 #define HTTP_HDR_MAX 32
 #define HTTP_REDIRECT_MAX 5
 #define HTTP_CONNECT_TIMEOUT_MS 5000
+#define HTTP_HEADER_TIMEOUT_MS 5000
 
 /* chunked transfer-coding (RFC 7230 4.1) decode state, driven byte-by-byte for
    framing (size line, CRLFs, trailer) and in bulk for chunk data itself */
@@ -32,6 +33,7 @@ struct http {
   unsigned long long chunk_remaining;
   char sizeline[64];
   size_t sizeline_len;
+  int sizeline_bad; /* size line exceeded sizeline[], reject at LF instead of using truncated value */
 };
 
 typedef enum { HA_CONNECTING, HA_TLS_HANDSHAKE, HA_SENDING, HA_READING_HEADERS } http_async_phase_t;
@@ -39,6 +41,7 @@ typedef enum { HA_CONNECTING, HA_TLS_HANDSHAKE, HA_SENDING, HA_READING_HEADERS }
 struct http_async {
   http_async_phase_t phase;
   short want_events;
+  netconnect_pending_t *connect_pending;
   http_url_t url; /* current hop; redirects update this */
   char user_agent[128];
   int insecure;

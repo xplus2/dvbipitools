@@ -183,6 +183,13 @@ static int parse_out_uri(const char *uri, out_target_t *o) {
     strcpy(o->rist_uri, uri);
     return 0;
   }
+  if (strncmp(uri, "rtmps://", 8) == 0 || strncmp(uri, "rtmp://", 7) == 0) {
+    if (strlen(uri) >= sizeof o->rtmp_url)
+      return -1;
+    o->kind = (uri[4] == 's') ? OUT_RTMPS : OUT_RTMP;
+    strcpy(o->rtmp_url, uri);
+    return 0;
+  }
   if (strlen(uri) >= sizeof o->file_path)
     return -1;
   o->kind = OUT_FILE;
@@ -203,6 +210,10 @@ void out_describe(const out_target_t *o, char *buf, size_t n) {
   }
   case OUT_RIST:
     snprintf(buf, n, "%s", o->rist_uri);
+    break;
+  case OUT_RTMP:
+  case OUT_RTMPS:
+    snprintf(buf, n, "%s", o->rtmp_url);
     break;
   case OUT_FILE:
     snprintf(buf, n, "%s", strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
@@ -410,17 +421,22 @@ static void print_help(void) {
       "  -                        stdin, TS or RTP-wrapped TS (auto-detected)\n"
       "  <path>                   a file, TS or RTP-wrapped TS (auto-detected)\n"
       "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8700\n\n"
-      "outputs (-o), beyond a file path or \"-\" for stdout:\n"
+      "outputs (-o, repeatable for multiple destinations at once), beyond a\n"
+      "file path or \"-\" for stdout:\n"
       "  rtp://@<group>:<port>    RTP-wrapped multicast (-f raw|ts only)\n"
       "  udp://@<group>:<port>    raw multicast, no RTP header (-f raw|ts only)\n"
       "  rist://<host>:<port>[?query]  RIST sender, single peer (-f raw|ts only,\n"
-      "                           requires librist)\n\n"
+      "                           requires librist)\n"
+      "  rtmp(s)://<host>[:port]/<app>/<key>  RTMP(S) publish, H.264/HEVC video,\n"
+      "                           AC-3/E-AC-3/AAC audio\n\n"
       "options:\n"
-      "  -o, --out <target>       output file, \"-\" for stdout, or rtp://udp://rist:// (see below)\n"
+      "  -o, --out <target>       output, repeatable: file, \"-\" for stdout, or\n"
+      "                           rtp://udp://rist://rtmp://rtmps:// (see below)\n"
       "  -i, --in <uri>           input source (see above)\n"
       "  -a, --audio <track>      audio track from 1, or \"all\" (default: all)\n"
       "  -f, --format <format>    raw|ts|mkv|mka (default: from -o suffix, else ts;\n"
-      "                           mkv/mka rejected with -o rtp://udp://)\n"
+      "                           mkv/mka rejected with a network -o; raw rejected\n"
+      "                           alongside any -o rtmp://rtmps:// target)\n"
       "  -p, --pmt-pid <pid|all>  MPTS source only: pin one PMT pid, or record\n"
       "                           every program (\"all\"; rejected with -f mkv).\n"
       "                           ignored (warned) on an SPTS source. omitted on\n"
@@ -434,6 +450,7 @@ static void print_help(void) {
       "      --secret <psk>       -o rist:// pre-shared key; requires --profile main\n"
       "      --cname <name>       -o rist:// cname (default: library default)\n"
       "      --buffer <ms>        -o rist:// recovery buffer (default: library default)\n"
+      "      --insecure           skip TLS verification for -o rtmps://\n"
       "  -v, --verbose            periodic recording stats on stderr\n"
       "      --sub-lead <ms>      shift subtitles earlier (default 1000)\n"
       "      --color <when>       auto|always|never (default auto)\n"
@@ -458,8 +475,9 @@ static void print_help(void) {
       "  %s -i rtp://@239.19.75.1:8700 -o show.mkv -s srt -t 1h30m -v\n"
       "  %s -i udp://@239.0.175.1:8700 -o radio.mka -I eth0\n"
       "  %s -i http://10.0.0.1:4022/rtp/239.19.75.1:8700 -o show.ts\n"
-      "  %s -i show.ts --pace -o rtp://@239.9.9.9:6000 -O eth1 --ttl 16\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+      "  %s -i show.ts --pace -o rtp://@239.9.9.9:6000 -O eth1 --ttl 16\n"
+      "  %s -i rtp://@239.19.75.1:8700 -o rtmp://live.example.com/app/key\n",
+      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -488,6 +506,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"secret", required_argument, 0, 1012},
       {"cname", required_argument, 0, 1013},
       {"buffer", required_argument, 0, 1014},
+      {"insecure", no_argument, 0, 1015},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   const char *fmt_arg = NULL;
@@ -496,7 +515,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *strip_arg = NULL;
   const char *profile_arg = NULL;
   int have_in = 0;
-  int have_out = 0;
   int have_secret = 0;
   int have_cname = 0;
   int have_buffer = 0;
@@ -515,11 +533,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
          -1) {
     switch (c) {
       case 'o':
-        if (parse_out_uri(optarg, &cfg->out)) {
+        if (cfg->n_out >= DIPIREC_MAX_OUT) {
+          argerr("too many -o targets (max %d)", DIPIREC_MAX_OUT);
+          return ARGS_ERR;
+        }
+        if (parse_out_uri(optarg, &cfg->out[cfg->n_out])) {
           argerr("invalid -o target: %s", optarg);
           return ARGS_ERR;
         }
-        have_out = 1;
+        cfg->n_out++;
         break;
       case 'i':
         if (parse_uri(optarg, &cfg->source)) {
@@ -661,6 +683,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         have_buffer = 1;
         break;
       }
+      case 1015:
+        cfg->insecure_tls = 1;
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -672,7 +697,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  if (!have_out) {
+  if (!cfg->n_out) {
     argerr("missing -o output");
     return ARGS_ERR;
   }
@@ -719,18 +744,45 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       return ARGS_ERR;
     }
   } else {
+    int i;
     cfg->format = FMT_TS;
-    if (cfg->out.kind == OUT_FILE && strcmp(cfg->out.file_path, "-") != 0)
-      fmt_from_suffix(cfg->out.file_path, &cfg->format);
+    for (i = 0; i < cfg->n_out; i++)
+      if (cfg->out[i].kind == OUT_FILE && strcmp(cfg->out[i].file_path, "-") != 0) {
+        fmt_from_suffix(cfg->out[i].file_path, &cfg->format);
+        break;
+      }
   }
-  if (cfg->out.kind != OUT_FILE && (cfg->format == FMT_MKV || cfg->format == FMT_MKA)) {
-    argerr("-f mkv/mka requires -o to a file or stdout, not rtp://udp://rist://");
-    return ARGS_ERR;
+  {
+    int i, has_rtp_udp = 0, has_rtmp = 0, has_rtmps = 0, has_non_file = 0, n_non_rtmp = 0;
+    for (i = 0; i < cfg->n_out; i++) {
+      out_kind_t k = cfg->out[i].kind;
+      if (k == OUT_RTP || k == OUT_UDP)
+        has_rtp_udp = 1;
+      if (k == OUT_RTMP || k == OUT_RTMPS) {
+        has_rtmp = 1;
+      } else {
+        n_non_rtmp++;
+        if (k != OUT_FILE)
+          has_non_file = 1;
+      }
+      if (k == OUT_RTMPS)
+        has_rtmps = 1;
+    }
+    if ((cfg->format == FMT_MKV || cfg->format == FMT_MKA) && (has_non_file || n_non_rtmp != 1)) {
+      argerr("-f mkv/mka requires exactly one -o file target (plus optional rtmp(s) targets)");
+      return ARGS_ERR;
+    }
+    if (cfg->format == FMT_RAW && has_rtmp) {
+      argerr("-f raw is incompatible with an -o rtmp://rtmps:// target");
+      return ARGS_ERR;
+    }
+    if (cfg->iface_out && !has_rtp_udp)
+      log_line(TOOL_NAME ": --out-iface has no effect, no -o rtp:// or udp:// target");
+    if (cfg->out_ttl && !has_rtp_udp)
+      log_line(TOOL_NAME ": --ttl has no effect, no -o rtp:// or udp:// target");
+    if (cfg->insecure_tls && !has_rtmps)
+      log_line(TOOL_NAME ": --insecure has no effect, no -o rtmps:// target");
   }
-  if (cfg->iface_out && cfg->out.kind != OUT_RTP && cfg->out.kind != OUT_UDP)
-    log_line(TOOL_NAME ": --out-iface has no effect, -o is not rtp:// or udp://");
-  if (cfg->out_ttl && cfg->out.kind != OUT_RTP && cfg->out.kind != OUT_UDP)
-    log_line(TOOL_NAME ": --ttl has no effect, -o is not rtp:// or udp://");
   if (strip_arg && cfg->format != FMT_TS)
     log_line(TOOL_NAME ": --strip has no effect outside -f ts");
   if (cfg->subs == SUB_SRT && cfg->format != FMT_MKV &&
@@ -747,11 +799,17 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
     cfg->rist_profile = (rist_profile_sel_t)v;
   }
-  if (cfg->out.kind != OUT_RIST && (profile_arg || have_secret || have_cname || have_buffer))
-    log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer have no effect, -o is not rist://");
-  if (cfg->out.kind == OUT_RIST && have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
-    argerr("--secret requires --profile main");
-    return ARGS_ERR;
+  {
+    int i, has_rist = 0;
+    for (i = 0; i < cfg->n_out; i++)
+      if (cfg->out[i].kind == OUT_RIST)
+        has_rist = 1;
+    if (!has_rist && (profile_arg || have_secret || have_cname || have_buffer))
+      log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer have no effect, no -o rist:// target");
+    if (has_rist && have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
+      argerr("--secret requires --profile main");
+      return ARGS_ERR;
+    }
   }
   return ARGS_OK;
 }

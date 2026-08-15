@@ -13,8 +13,8 @@ START_TEST(rist_out_uri_is_parsed) {
   char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
-  ck_assert_int_eq(cfg.out.kind, OUT_RIST);
-  ck_assert_str_eq(cfg.out.rist_uri, "rist://1.2.3.4:6000");
+  ck_assert_int_eq(cfg.out[0].kind, OUT_RIST);
+  ck_assert_str_eq(cfg.out[0].rist_uri, "rist://1.2.3.4:6000");
 }
 END_TEST
 
@@ -94,7 +94,7 @@ START_TEST(rist_options_without_rist_out_are_harmless) {
   char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts", "--cname", "x", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
-  ck_assert_int_eq(cfg.out.kind, OUT_FILE);
+  ck_assert_int_eq(cfg.out[0].kind, OUT_FILE);
 }
 END_TEST
 

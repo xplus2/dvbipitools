@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -32,6 +33,26 @@ static int algo_from_mode(unsigned char mode, scramble_algo_t *out) {
 }
 
 static void emit_downstream(void *ctx, const unsigned char pkt[188]);
+
+/* edge-log gate, one rtmp target down never affects others */
+static void rtmp_note_result(int ok, int *had_error, int idx) {
+  if (!ok) {
+    if (!*had_error) {
+      log_line(TOOL_NAME ": rtmp[%d] output: write failed, will keep retrying", idx);
+      *had_error = 1;
+    }
+  } else if (*had_error) {
+    log_line(TOOL_NAME ": rtmp[%d] output: recovered", idx);
+    *had_error = 0;
+  }
+}
+
+void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len) {
+  loop_ctx_t *lc = ctx;
+  int i;
+  for (i = 0; i < lc->n_rtmp; i++)
+    rtmp_note_result(rtmpout_write(lc->rtmp[i], type, timestamp_ms, data, len) >= 0, &lc->rtmp_had_error[i], i);
+}
 
 static void handle_ecm_section(loop_ctx_t *lc) {
   const unsigned char *sec = lc->ecm_asm.buf;
@@ -84,6 +105,7 @@ static void handle_biss_ca_ecm_section(loop_ctx_t *lc) {
 /* stops writing after first fail within one flush. once emit_failed is set, later packets (same batch) must not still land on disk/mux */
 static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
   loop_ctx_t *lc = ctx;
+  int i;
   if (lc->emit_failed)
     return;
   if (lc->mkv) {
@@ -92,9 +114,19 @@ static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
       lc->emit_failed = 1;
       return;
     }
-  } else if (write(lc->out, pkt, 188) != 188) {
-    lc->emit_failed = 1;
-    return;
+  } else {
+    for (i = 0; i < lc->n_outfd; i++)
+      if (write(lc->outfd[i], pkt, 188) != 188) {
+        lc->emit_failed = 1;
+        return;
+      }
+  }
+  if (lc->flv) {
+    flv_feed(lc->flv, pkt);
+    if (flv_error(lc->flv)) {
+      lc->emit_failed = 1;
+      return;
+    }
   }
   lc->packets++;
 }

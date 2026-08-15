@@ -45,7 +45,8 @@ dvbipitools_add_fuzz_harness(simulcrypt_msg
     fuzz_simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
 dvbipitools_add_fuzz_harness(ecmg_channel_status
     fuzz_ecmg_channel_status.c
@@ -78,6 +79,7 @@ dvbipitools_add_fuzz_harness(dvbstp
     ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)

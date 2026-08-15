@@ -47,6 +47,23 @@ typedef struct {
   const char *metrics_sock;    /* --metrics; NULL = default socket path */
   const char *metrics_id;      /* --metrics-id; NULL = metrics disabled */
   unsigned metrics_interval_s; /* --metrics-interval; 0 = default */
+
+  const char *packages_path; /* --packages, announce, NULL = no Package Discovery */
+  const char *cells_path;    /* --cells, announce, NULL = no Regionalisation Discovery */
+
+  int rms_enabled;          /* --rms-name given, announce */
+  const char *rms_name;     /* --rms-name */
+  char rms_lang[4];         /* --rms-lang, default deu */
+  const char *rms_location; /* --rms-location, required with --rms-name */
+  const char *rms_logo;     /* --rms-logo */
+
+  int fus_enabled;            /* --fus-name given, announce */
+  const char *fus_name;       /* --fus-name */
+  char fus_lang[4];           /* --fus-lang, default deu */
+  unsigned long fus_id;       /* --fus-id, required with --fus-name */
+  char fus_announce_addr[64]; /* --fus-announce host part, empty = omit MulticastAnnouncementAddress */
+  unsigned fus_announce_port; /* --fus-announce port part */
+  const char *fus_logo;       /* --fus-logo */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

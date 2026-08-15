@@ -24,6 +24,7 @@ add_executable(dipifccret
     ../lib/log.c
     ../lib/argutil.c
     ../lib/signal.c
+    ../lib/ioutil.c
     ../lib/net/multicast.c
     ../lib/net/netconnect.c
     ../lib/demux/rtp.c

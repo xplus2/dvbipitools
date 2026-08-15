@@ -65,12 +65,23 @@ add_executable(dipirec
     ../lib/mux/rtpheader.c
     ../lib/mux/ebml.c
     ../lib/mux/mkv/mkv.c
-    ../lib/mux/mkv/bitreader.c
-    ../lib/mux/mkv/audio.c
+    ../lib/demux/escodec/bitreader.c
+    ../lib/demux/escodec/audio.c
     ../lib/mux/mkv/video.c
+    ../lib/demux/escodec/video.c
     ../lib/mux/mkv/write.c
     ../lib/mux/mkv/feed.c
     ../lib/mux/teletext.c
+    ../lib/mux/amf.c
+    ../lib/mux/flv/flv.c
+    ../lib/mux/flv/feed.c
+    ../lib/mux/flv/write.c
+    ../lib/net/rtmp/handshake.c
+    ../lib/net/rtmp/chunk.c
+    ../lib/net/rtmp/session.c
+    ../lib/net/rtmp/command.c
+    ../lib/net/rtmp/rtmp.c
+    ../lib/net/rtmpout.c
     filter/ts.c
     filter/pace.c)
 

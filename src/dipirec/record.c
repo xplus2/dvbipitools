@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -15,8 +16,10 @@
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
 #include "lib/net/ristout.h"
+#include "lib/net/rtmpout.h"
 #include "lib/net/tssink.h"
 #include "lib/net/tssource.h"
+#include "lib/mux/flv/flv.h"
 #include "lib/mux/mkv/mkv.h"
 #include "lib/signal.h"
 #include "record.h"
@@ -118,22 +121,24 @@ typedef struct {
   int fd;
   tssink_t *net;   /* NULL unless -o rtp:// or udp:// */
   ristout_t *rist; /* NULL unless -o rist:// */
-  int net_had_error;  /* edge-log gate; a net send failure never stops recording */
-  int rist_had_error; /* edge-log gate; a rist write failure never stops recording */
+  int net_had_error;  /* edge-log gate, net send failure never stops recording */
+  int rist_had_error; /* edge-log gate, rist write failure never stops recording */
 } out_sink_t;
 
-static int sink_open(const config_t *cfg, out_sink_t *o) {
+static int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
   o->net = NULL;
   o->rist = NULL;
-  if (cfg->out.kind == OUT_FILE) {
-    o->fd = open_output(cfg->out.file_path);
+  o->net_had_error = 0;
+  o->rist_had_error = 0;
+  if (t->kind == OUT_FILE) {
+    o->fd = open_output(t->file_path);
     return o->fd < 0 ? -1 : 0;
   }
   o->fd = -1;
-  if (cfg->out.kind == OUT_RIST) {
+  if (t->kind == OUT_RIST) {
     ristout_cfg_t rc;
     memset(&rc, 0, sizeof rc);
-    rc.peer_uri[0] = cfg->out.rist_uri;
+    rc.peer_uri[0] = t->rist_uri;
     rc.npeers = 1;
     rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
     rc.secret = cfg->rist_secret;
@@ -146,10 +151,10 @@ static int sink_open(const config_t *cfg, out_sink_t *o) {
   {
     tssink_cfg_t tc;
     memset(&tc, 0, sizeof tc);
-    tc.kind = (cfg->out.kind == OUT_RTP) ? TSSINK_RTP : TSSINK_UDP;
-    tc.family = cfg->out.family;
-    tc.group = cfg->out.group;
-    tc.port = cfg->out.port;
+    tc.kind = (t->kind == OUT_RTP) ? TSSINK_RTP : TSSINK_UDP;
+    tc.family = t->family;
+    tc.group = t->group;
+    tc.port = t->port;
     tc.iface = cfg->iface_out;
     tc.ttl = cfg->out_ttl;
     o->net = tssink_open(&tc);
@@ -157,7 +162,7 @@ static int sink_open(const config_t *cfg, out_sink_t *o) {
   return o->net ? 0 : -1;
 }
 
-/* a failed network sink is never fatal; log only on the failure/recovery edge, keep retrying every write */
+/* failed network sink never fatal, log only on failure/recovery edge, retry every write */
 static void note_send_result(int ok, int *had_error, const char *label) {
   if (!ok) {
     if (!*had_error) {
@@ -193,6 +198,48 @@ static void sink_close(out_sink_t *o) {
   }
   if (o->fd >= 0 && o->fd != STDOUT_FILENO)
     close(o->fd);
+}
+
+/* N rtmpout_t, independently paced: one target down doesn't block others */
+typedef struct {
+  rtmpout_t *out[DIPIREC_MAX_OUT];
+  int had_error[DIPIREC_MAX_OUT];
+  int n;
+} rtmp_fanout_t;
+
+static int rtmp_fanout_open(const config_t *cfg, rtmp_fanout_t *r) {
+  int i;
+  r->n = 0;
+  for (i = 0; i < cfg->n_out; i++) {
+    rtmpout_cfg_t rc;
+    if (cfg->out[i].kind != OUT_RTMP && cfg->out[i].kind != OUT_RTMPS)
+      continue;
+    memset(&rc, 0, sizeof rc);
+    rc.url = cfg->out[i].rtmp_url;
+    rc.insecure = cfg->insecure_tls;
+    r->out[r->n] = rtmpout_open(&rc);
+    if (!r->out[r->n])
+      return -1;
+    r->had_error[r->n] = 0;
+    r->n++;
+  }
+  return 0;
+}
+
+static void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len) {
+  rtmp_fanout_t *r = ctx;
+  int i;
+  char label[16];
+  for (i = 0; i < r->n; i++) {
+    snprintf(label, sizeof label, "rtmp[%d]", i);
+    note_send_result(rtmpout_write(r->out[i], type, timestamp_ms, data, len) >= 0, &r->had_error[i], label);
+  }
+}
+
+static void rtmp_fanout_close(rtmp_fanout_t *r) {
+  int i;
+  for (i = 0; i < r->n; i++)
+    rtmpout_close(r->out[i]);
 }
 
 int stop_now(const config_t *cfg, double start) {
@@ -272,8 +319,8 @@ static void stats_show(const config_t *cfg, double elapsed, unsigned long long b
   fflush(stderr);
 }
 
-/* raw: write TS */
-static int run_raw(src_t *s, const config_t *cfg, out_sink_t *out, unsigned long long *bytes, double start, pace_ctrl_t *pace) {
+/* no flv/rtmp path here, args.c already rejects -f raw + an rtmp(s) target */
+static int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, unsigned long long *bytes, double start, pace_ctrl_t *pace) {
   unsigned char buf[65536];
   tspack_t pz = {{0}, 0};
   raw_ctx_t ctx;
@@ -286,6 +333,7 @@ static int run_raw(src_t *s, const config_t *cfg, out_sink_t *out, unsigned long
 
   while (!stop_now(cfg, start)) {
     ssize_t n = src_read(s, buf, sizeof buf);
+    int i;
     if (n < 0)
       break;
     if (n == 0)
@@ -300,10 +348,13 @@ static int run_raw(src_t *s, const config_t *cfg, out_sink_t *out, unsigned long
     }
     if (ctx.psi)
       tspack_feed(&pz, buf, (size_t)n, raw_cb, &ctx);
-    if (sink_write(out, buf, (size_t)n)) {
-      rc = 1;
+    for (i = 0; i < n_sinks; i++)
+      if (sink_write(&sinks[i], buf, (size_t)n)) {
+        rc = 1;
+        break;
+      }
+    if (rc)
       break;
-    }
     *bytes += (unsigned long long)n;
     if (cfg->verbose && mono_seconds() - last_stat >= 1.0) {
       stats_show(cfg, mono_seconds() - start, *bytes, ctx.psi);
@@ -315,127 +366,109 @@ static int run_raw(src_t *s, const config_t *cfg, out_sink_t *out, unsigned long
 }
 
 typedef struct {
-  ts_filter_t *f;
-  out_sink_t *out;
+  ts_filter_t *f; /* NULL: no plain ts/rtp/udp/rist sink to feed */
+  out_sink_t *sinks;
+  int n_sinks;
+  mkv_t *m;   /* NULL unless -f mkv/mka */
+  flv_t *flv; /* NULL: no rtmp(s) target */
   unsigned long long *bytes;
   int bad;
   pace_ctrl_t *pace; /* NULL unless --pace */
   int pace_pcr;       /* 1: this chunk wasn't RTP-framed, pace per packet */
-} ts_ctx_t;
+} stream_ctx_t;
 
-static int ts_cb(void *v, const unsigned char *pkt) {
-  ts_ctx_t *t = v;
-  unsigned char o[188];
+static int stream_cb(void *v, const unsigned char *pkt) {
+  stream_ctx_t *c = v;
 
-  if (t->pace_pcr)
-    pace_feed_pcr_pkt(t->pace, pkt, psi_pcr_pid(ts_filter_psi(t->f)));
-  if (ts_filter_packet(t->f, pkt, o)) {
-    if (sink_write(t->out, o, 188))
-      return 1;
-    *t->bytes += 188;
+  if (c->pace_pcr) {
+    const psi_t *p = c->f ? ts_filter_psi(c->f) : c->m ? mkv_psi(c->m) : flv_psi(c->flv);
+    pace_feed_pcr_pkt(c->pace, pkt, psi_pcr_pid(p));
   }
-  if (ts_filter_bad_track(t->f)) {
-    t->bad = 1;
-    return 1;
+  if (c->f) {
+    unsigned char o[188];
+    int i;
+    if (ts_filter_packet(c->f, pkt, o)) {
+      for (i = 0; i < c->n_sinks; i++)
+        if (sink_write(&c->sinks[i], o, 188))
+          return 1;
+      *c->bytes += 188;
+    }
+    if (ts_filter_bad_track(c->f)) {
+      c->bad = 1;
+      return 1;
+    }
+  }
+  if (c->m) {
+    mkv_feed(c->m, pkt);
+    if (mkv_error(c->m))
+      return 1;
+  }
+  if (c->flv) {
+    flv_feed(c->flv, pkt);
+    if (flv_error(c->flv))
+      return 1;
   }
   return 0;
 }
 
-/* ts: packetize, filter, write */
-static int run_ts(src_t *s, const config_t *cfg, out_sink_t *out, unsigned long long *bytes, double start, unsigned pmt_pid,
-                   pace_ctrl_t *pace) {
-  unsigned char buf[65536];
-  tspack_t pz = {{0}, 0};
-  ts_filter_t *f = ts_filter_new(cfg->audio_all, cfg->audio_track, cfg->subs == SUB_STRIP, pmt_pid, cfg->strip_mask);
-  ts_ctx_t tc;
-  double last_stat = 0;
-  int rc = 0;
-
-  if (!f)
-    return 1;
-  tc.f = f;
-  tc.out = out;
-  tc.bytes = bytes;
-  tc.bad = 0;
-  tc.pace = pace;
-  tc.pace_pcr = 0;
-
-  while (!stop_now(cfg, start)) {
-    ssize_t n = src_read(s, buf, sizeof buf);
-    if (n < 0)
-      break;
-    if (n == 0)
-      continue;
-    if (pace) {
-      if (tssrc_is_rtp_framed(s->t)) {
-        pace_feed_rtp_ts(pace, tssrc_last_rtp_ts(s->t));
-        tc.pace_pcr = 0;
-      } else {
-        tc.pace_pcr = 1;
-      }
-    }
-    if (tspack_feed(&pz, buf, (size_t)n, ts_cb, &tc)) {
-      if (tc.bad)
-        log_line_ansi("audio track \e[0;31m%u\e[0;33m not found (\e[0;33m%d\e[0;33m present)", cfg->audio_track, psi_audio_count(ts_filter_psi(f)));
-      rc = 1;
-      break;
-    }
-    if (cfg->verbose && mono_seconds() - last_stat >= 1.0) {
-      stats_show(cfg, mono_seconds() - start, *bytes, ts_filter_psi(f));
-      last_stat = mono_seconds();
-    }
-  }
-  ts_filter_free(f);
-  return rc;
-}
-
-typedef struct {
-  mkv_t *m;
-  pace_ctrl_t *pace; /* NULL unless --pace */
-  int pace_pcr;       /* 1: this chunk wasn't RTP-framed, pace per packet */
-} mkv_ctx_t;
-
-static int mkv_pkt_cb(void *v, const unsigned char *pkt) {
-  mkv_ctx_t *c = v;
-  if (c->pace_pcr)
-    pace_feed_pcr_pkt(c->pace, pkt, psi_pcr_pid(mkv_psi(c->m)));
-  mkv_feed(c->m, pkt);
-  return mkv_error(c->m);
-}
-
-/* mkv/mka: packetize, demux PES, mux. pmt_pid: 0 or -p <pid>. all_pids/n_all_pids: -p all */
-static int run_mkv(src_t *s, const config_t *cfg, int out, unsigned long long *bytes, double start, int video_ok,
-                    unsigned pmt_pid, const unsigned *all_pids, int n_all_pids, pace_ctrl_t *pace) {
+/* ts and/or mkv/mka sinks, plus an optional flv+rtmp fan-out, one shared packet feed.
+   mkv_fd < 0: no mkv/mka target. rf->n == 0: no rtmp(s) target.
+   pmt_pid/all_pids/n_all_pids: as resolve_pmt_selection filled them in */
+static int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, int mkv_fd, rtmp_fanout_t *rf,
+                       unsigned long long *bytes, double start, int video_ok, unsigned pmt_pid, const unsigned *all_pids,
+                       int n_all_pids, pace_ctrl_t *pace) {
   unsigned char buf[65536];
   char app_name[64], srcuri[1024];
-  tspack_t pz;
-  mkv_opts_t opts;
-  mkv_ctx_t ctx;
-  mkv_t *m;
+  tspack_t pz = {{0}, 0};
+  stream_ctx_t ctx;
   double last_stat = 0;
+  int is_mkv = mkv_fd >= 0;
   int rc = 0;
 
-  memset(&pz, 0, sizeof pz);
-  snprintf(app_name, sizeof app_name, "%s %s", TOOL_NAME, TOOL_VERSION);
-  source_describe(&cfg->source, srcuri, sizeof srcuri);
-  memset(&opts, 0, sizeof opts);
-  opts.audio_all = n_all_pids > 0 ? 1 : cfg->audio_all; /* -p all: no single "-a N" across programs */
-  opts.audio_track = cfg->audio_track;
-  opts.subs_srt = (cfg->subs == SUB_SRT);
-  opts.sub_lead_ms = cfg->sub_lead_ms;
-  opts.app_name = app_name;
-  opts.source_desc = srcuri;
-  if (n_all_pids > 0)
-    m = mkv_new(out, &opts, video_ok, bytes, all_pids, n_all_pids);
-  else if (pmt_pid)
-    m = mkv_new(out, &opts, video_ok, bytes, &pmt_pid, 1);
-  else
-    m = mkv_new(out, &opts, video_ok, bytes, NULL, 0);
-  if (!m)
-    return 1;
-  ctx.m = m;
+  memset(&ctx, 0, sizeof ctx);
+  ctx.sinks = sinks;
+  ctx.n_sinks = n_sinks;
+  ctx.bytes = bytes;
   ctx.pace = pace;
-  ctx.pace_pcr = 0;
+
+  if (n_sinks > 0 && !is_mkv) {
+    ctx.f = ts_filter_new(cfg->audio_all, cfg->audio_track, cfg->subs == SUB_STRIP, pmt_pid, cfg->strip_mask);
+    if (!ctx.f)
+      return 1;
+  }
+  if (is_mkv) {
+    mkv_opts_t opts;
+    snprintf(app_name, sizeof app_name, "%s %s", TOOL_NAME, TOOL_VERSION);
+    source_describe(&cfg->source, srcuri, sizeof srcuri);
+    memset(&opts, 0, sizeof opts);
+    opts.audio_all = n_all_pids > 0 ? 1 : cfg->audio_all; /* -p all: no single "-a N" across programs */
+    opts.audio_track = cfg->audio_track;
+    opts.subs_srt = (cfg->subs == SUB_SRT);
+    opts.sub_lead_ms = cfg->sub_lead_ms;
+    opts.app_name = app_name;
+    opts.source_desc = srcuri;
+    if (n_all_pids > 0)
+      ctx.m = mkv_new(mkv_fd, &opts, video_ok, bytes, all_pids, n_all_pids);
+    else if (pmt_pid)
+      ctx.m = mkv_new(mkv_fd, &opts, video_ok, bytes, &pmt_pid, 1);
+    else
+      ctx.m = mkv_new(mkv_fd, &opts, video_ok, bytes, NULL, 0);
+    if (!ctx.m) {
+      ts_filter_free(ctx.f);
+      return 1;
+    }
+  }
+  if (rf->n > 0) {
+    flv_opts_t fo;
+    memset(&fo, 0, sizeof fo);
+    fo.audio_track = cfg->audio_all ? 0 : cfg->audio_track;
+    ctx.flv = flv_new(&fo, pmt_pid, rtmp_fanout_cb, rf, bytes);
+    if (!ctx.flv) {
+      mkv_close(ctx.m);
+      ts_filter_free(ctx.f);
+      return 1;
+    }
+  }
 
   while (!stop_now(cfg, start)) {
     ssize_t n = src_read(s, buf, sizeof buf);
@@ -451,21 +484,36 @@ static int run_mkv(src_t *s, const config_t *cfg, int out, unsigned long long *b
         ctx.pace_pcr = 1;
       }
     }
-    if (tspack_feed(&pz, buf, (size_t)n, mkv_pkt_cb, &ctx)) {
+    if (tspack_feed(&pz, buf, (size_t)n, stream_cb, &ctx)) {
+      if (ctx.bad)
+        log_line_ansi("audio track \e[0;31m%u\e[0;33m not found (\e[0;33m%d\e[0;33m present)", cfg->audio_track, psi_audio_count(ts_filter_psi(ctx.f)));
       rc = 1;
       break;
     }
     if (cfg->verbose && mono_seconds() - last_stat >= 1.0) {
-      stats_show(cfg, mono_seconds() - start, *bytes, mkv_psi(m));
+      const psi_t *p = ctx.f ? ts_filter_psi(ctx.f) : ctx.m ? mkv_psi(ctx.m) : flv_psi(ctx.flv);
+      stats_show(cfg, mono_seconds() - start, *bytes, p);
       last_stat = mono_seconds();
     }
   }
-  mkv_close(m);
+  if (ctx.flv)
+    flv_close(ctx.flv);
+  if (ctx.m)
+    mkv_close(ctx.m);
+  ts_filter_free(ctx.f);
   return rc;
 }
 
+static int cfg_has_rtmp(const config_t *cfg) {
+  int i;
+  for (i = 0; i < cfg->n_out; i++)
+    if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS)
+      return 1;
+  return 0;
+}
+
 /* mpts discovery + -p decision. 0: proceed (pmt_pid/all_pids/n_all_pids filled in).
-   1: abort, message already printed. raw skips this - nothing to select there. */
+   1: abort, message already printed. raw skips this, nothing to select there. */
 static int resolve_pmt_selection(const config_t *cfg, src_t *s, unsigned *pmt_pid, unsigned *all_pids, int *n_all_pids) {
   mpts_probe_result_t probe;
   int k;
@@ -496,8 +544,8 @@ static int resolve_pmt_selection(const config_t *cfg, src_t *s, unsigned *pmt_pi
     return 1;
   }
   if (cfg->pmt_sel == PMT_SEL_ALL) {
-    if (cfg->format == FMT_MKV) {
-      log_line(TOOL_NAME ": -f mkv can't hold multiple programs, pick one with -p <pid>");
+    if (cfg->format == FMT_MKV || cfg_has_rtmp(cfg)) {
+      log_line(TOOL_NAME ": -f mkv/-o rtmp:// can't hold multiple programs, pick one with -p <pid>");
       mpts_probe_print_programs(TOOL_NAME, &probe);
       return 1;
     }
@@ -519,40 +567,68 @@ int record_run(const config_t *cfg) {
   unsigned long long bytes = 0;
   double start;
   src_t s;
-  out_sink_t out;
-  int rc;
+  int have_src = 0;
+  out_sink_t sinks[DIPIREC_MAX_OUT];
+  int n_sinks = 0;
+  int mkv_fd = -1;
+  rtmp_fanout_t rf;
+  int is_mkv_fmt = (cfg->format == FMT_MKV || cfg->format == FMT_MKA);
+  int rc = 0;
   unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
   int n_all_pids;
   pace_ctrl_t *pace;
+  int i;
 
-  if (sink_open(cfg, &out))
-    return 1;
-  if (src_open(cfg, &s)) {
-    sink_close(&out);
+  rf.n = 0;
+  for (i = 0; i < cfg->n_out && !rc; i++) {
+    if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS)
+      continue;
+    if (is_mkv_fmt) {
+      mkv_fd = open_output(cfg->out[i].file_path);
+      rc = mkv_fd < 0;
+      continue;
+    }
+    rc = sink_open(cfg, &cfg->out[i], &sinks[n_sinks]);
+    if (!rc)
+      n_sinks++;
+  }
+  if (!rc)
+    rc = rtmp_fanout_open(cfg, &rf);
+  if (!rc)
+    rc = src_open(cfg, &s);
+  have_src = !rc;
+  if (!rc)
+    rc = resolve_pmt_selection(cfg, &s, &pmt_pid, all_pids, &n_all_pids);
+
+  if (rc) {
+    if (have_src)
+      src_close(&s);
+    rtmp_fanout_close(&rf);
+    for (i = 0; i < n_sinks; i++)
+      sink_close(&sinks[i]);
+    if (mkv_fd >= 0 && mkv_fd != STDOUT_FILENO)
+      close(mkv_fd);
     return 1;
   }
 
-  if (resolve_pmt_selection(cfg, &s, &pmt_pid, all_pids, &n_all_pids)) {
-    src_close(&s);
-    sink_close(&out);
-    return 1;
-  }
   if (cfg->source.kind == URI_FILE) /* probing above consumed bytes it can't give back */
     tssrc_rewind(s.t);
 
   pace = cfg->pace ? pace_new() : NULL;
   start = mono_seconds();
-  if (cfg->format == FMT_MKV || cfg->format == FMT_MKA)
-    rc = run_mkv(&s, cfg, out.fd, &bytes, start, cfg->format == FMT_MKV, pmt_pid, all_pids, n_all_pids, pace);
-  else if (cfg->format == FMT_TS)
-    /* -p all: nothing left to filter */
-    rc = (n_all_pids > 0) ? run_raw(&s, cfg, &out, &bytes, start, pace) : run_ts(&s, cfg, &out, &bytes, start, pmt_pid, pace);
+  if (cfg->format == FMT_RAW || (cfg->format == FMT_TS && n_all_pids > 0))
+    /* -p all under -f ts: nothing left to filter, mkv/flv both need one fixed program anyway */
+    rc = run_raw(&s, cfg, sinks, n_sinks, &bytes, start, pace);
   else
-    rc = run_raw(&s, cfg, &out, &bytes, start, pace);
+    rc = run_stream(&s, cfg, sinks, n_sinks, mkv_fd, &rf, &bytes, start, cfg->format == FMT_MKV, pmt_pid, all_pids, n_all_pids, pace);
   pace_free(pace);
 
   src_close(&s); /* IGMP/MLD leave */
-  sink_close(&out);
+  rtmp_fanout_close(&rf);
+  for (i = 0; i < n_sinks; i++)
+    sink_close(&sinks[i]);
+  if (mkv_fd >= 0 && mkv_fd != STDOUT_FILENO)
+    close(mkv_fd);
 
   if (cfg->verbose && log_stderr_is_tty())
     fputc('\n', stderr); /* off stats line */

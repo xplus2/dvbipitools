@@ -11,9 +11,12 @@
 /* ETSI TS 102 034 clause 5.4.1. recommended max to stay under ethernet MTU */
 #define DVBSTP_MAX_SECTION 1452
 
-/* payload ids used by SD&S, table 1 */
+/* payload ids used by SD&S, TS 102 034 V2.1.1 table 12a */
 #define DVBSTP_PAYLOAD_SP_DISCOVERY 0x01
 #define DVBSTP_PAYLOAD_BROADCAST_DISCOVERY 0x02
+#define DVBSTP_PAYLOAD_PACKAGE_DISCOVERY 0x05
+#define DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY 0x07
+#define DVBSTP_PAYLOAD_RMSFUS_DISCOVERY 0x08
 
 /* BCG over IP payload ids, TS 102 539 table 2 */
 #define DVBSTP_PAYLOAD_BCG_TVA_INIT 0xA1

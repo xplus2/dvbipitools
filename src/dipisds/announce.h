@@ -17,6 +17,12 @@ typedef struct {
   unsigned char *sp_doc;
   size_t broadcast_len;
   size_t sp_len;
+  unsigned char *package_doc; /* NULL = --packages not given */
+  size_t package_len;
+  unsigned char *cell_doc; /* NULL = --cells not given */
+  size_t cell_len;
+  unsigned char *rmsfus_doc; /* NULL = --rms-name/--fus-name not given */
+  size_t rmsfus_len;
 } sds_state_t;
 
 /* loads cfg->input_path via input_load; INPUT_SERVICES also builds broadcast_doc/sp_doc. 0 ok, -1 error on stderr */

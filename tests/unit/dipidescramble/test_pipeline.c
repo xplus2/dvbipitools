@@ -155,7 +155,8 @@ static void setup_biss1e(void) {
   ck_assert_ptr_nonnull(g_lc.psi);
   g_devnull = open("/dev/null", O_WRONLY);
   ck_assert_int_ge(g_devnull, 0);
-  g_lc.out = g_devnull;
+  g_lc.outfd[0] = g_devnull;
+  g_lc.n_outfd = 1;
 }
 
 static void teardown(void) {

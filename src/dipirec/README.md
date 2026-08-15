@@ -1,6 +1,6 @@
 # dipirec
 
-Records a DVB-IPI stream to a file, to stdout, or out onto multicast.
+Records or replays a DVB-IPI stream to a file, stdout, multicast, or an RTMP(S) ingest server.
 
 ```
 dipirec -i <uri> -o <target> [options]
@@ -11,7 +11,7 @@ dipirec -i <uri> -o <target> [options]
 | flag | long form         | argument              | default                       |
 |------|-------------------|-----------------------|-------------------------------|
 | `-i` | `--in`            | `<uri>`               | required                      |
-| `-o` | `--out`           | `<target>`            | required                      |
+| `-o` | `--out`           | `<target>`            | required, repeatable          |
 | `-a` | `--audio`         | `<track>` / `all`     | `all`                         |
 | `-f` | `--format`        | `raw\|ts\|mkv\|mka`   | from `-o` suffix, else `ts`   |
 | `-p` | `--pmt-pid`       | `<pid>` / `all`       | none (see below)              |
@@ -34,6 +34,7 @@ dipirec -i <uri> -o <target> [options]
 |      | `--secret`        | `<psk>`               | none (`-o rist://` only)      |
 |      | `--cname`         | `<name>`              | library default (`-o rist://` only) |
 |      | `--buffer`        | `<ms>`                | library default (`-o rist://` only) |
+|      | `--insecure`      |                       | off (`-o rtmps://` only)      |
 | `-h` | `--help`          |                       |                               |
 
 ## Input (`-i`)
@@ -91,28 +92,38 @@ jitter) resyncs instead of trying to sleep-catch-up.
 
 ## Output (`-o`)
 
-A file path, `-` for stdout, `rtp://@<group>:<port>` / `udp://@<group>:<port>` to send the
-recording out onto multicast, or `rist://<host>:<port>[?query]` to send it to a single RIST
-peer (requires librist; built without it, `-o rist://` fails cleanly at startup). Don't worry,
-status output and `-v` always go to stderr.
+Repeatable: a file plus one or more RTMP(S) pushes, or several RTMP(S) targets at once.
 
-`-o -` can be used to pipe the output directly to [dipidescramble](../dipidescramble/README.md).
+| schema                              | what's this?                                    |
+|--------------------------------------|--------------------------------------------------|
+| `<path>`                             | a file                                            |
+| `-`                                   | stdout, also pipeable into [dipidescramble](../dipidescramble/README.md) |
+| `rtp://@<group>:<port>`              | RTP-wrapped multicast, `-f raw`/`ts` only         |
+| `udp://@<group>:<port>`              | plain multicast, no RTP header, `-f raw`/`ts` only |
+| `rist://<host>:<port>[?query]`       | single RIST peer, requires librist, `-f raw`/`ts` only |
+| `rtmp://<host>[:port]/<app>/<key>`   | RTMP publish, default port `1935`                 |
+| `rtmps://<host>[:port]/<app>/<key>`  | RTMP over TLS, default port `443`                 |
 
-`-o rtp://`/`-o udp://` joins nothing, it just sends: each 188-byte TS packet is repacked into
-7-packet (1316-byte) datagrams, RTP-wrapped for `rtp://` with a fresh SSRC/sequence/timestamp
-(unrelated to whatever framing the input had, if any), unwrapped plain TS for `udp://`. `-o rist://`
-sends the same 1316-byte chunks through librist instead, no RTP wrapping (RIST has its own framing).
-Only `-f raw` and `-f ts` are allowed for any of these three - `mkv`/`mka` are a container, not a
-byte-aligned transport stream, so they're rejected early rather than producing a stream nothing could
-parse.
+`rtp://`/`udp://` join nothing, they just send: 7-packet (1316-byte) datagrams, RTP-wrapped with
+a fresh SSRC/sequence/timestamp for `rtp://`, plain for `udp://`. `rist://` sends the same
+1316-byte chunks through librist (own framing, no RTP), one peer, not bonded. See
+[dipirist](../dipirist/README.md) for bonding. `--profile`/`--secret`/`--cname`/`--buffer`
+configure it (`--secret` requires `--profile main`). Combined with
+[`--pace`](#real-time-pacing---pace): replay a file back onto multicast at its original speed.
 
-`--profile`/`--secret`/`--cname`/`--buffer` configure the RIST peer (profile, pre-shared key,
-cname, recovery buffer); `--secret` requires `--profile main`. `-o rist://` is a single peer, not
-bonded - see [dipirist](../dipirist/README.md) if you need to bond multiple RIST peers.
+### RTMP(S)
 
-Combined with [`--pace`](#real-time-pacing---pace), this turns a captured/filtered file back into
-a live-looking multicast feed - handy for replaying a debug sample or a `--strip`ped/`-p`-selected
-recording into whatever downstream tooling expects a real multicast source.
+RTMP output ignores `-f`: H.264/HEVC video. Unsupported video (MPEG-2) or audio
+(MP2) is dropped from that push.
+
+`-f raw` can't be combined with an `rtmp(s)://` target. `-f
+mkv`/`mka` can, given exactly one plain file target for the Matroska mux itself. `-p all` can't,
+same reason as `-f mkv`: RTMP is one program.
+
+`--insecure` skips cert/hostname/expiry checks, for `rtmps://`. 
+
+A push target reconnects on its own on a drop, other `-o` targets keep going regardless. After a
+(re)connect it waits for the next keyframe, same as any live encoder joining mid-GOP.
 
 ## Formats (`-f`)
 
@@ -273,4 +284,10 @@ dipirec -i show.ts --pace -o rtp://@239.9.9.9:6000 -O eth1 --ttl 16
 
 # from stdin, also strip CAT/ECM/EMM on top of the default set
 dipirec -i - -o show.ts --strip NUL,NIT,AIT,EIT,CAT,ECM,EMM < capture.ts
+
+# push live to an RTMP ingest server
+dipirec -i rtp://@239.19.75.1:8700 -o rtmp://live.example.com/app/key
+
+# record to disk and push live at the same time, self-signed ingest cert
+dipirec -i rtp://@239.19.75.1:8700 -o show.mkv -o rtmps://ingest.example.com/app/key --insecure
 ```

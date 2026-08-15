@@ -10,6 +10,10 @@
 #define SDS_MAX_SERVICES 256
 #define SDS_MAX_NAME 128
 #define SDS_MAX_ADDR 64
+#define SDS_MAX_PACKAGES 64
+#define SDS_MAX_PKG_SERVICES 64
+#define SDS_MAX_CELLS 64
+#define SDS_MAX_CA_DEPTH 8
 
 typedef struct {
   char name[SDS_MAX_NAME];
@@ -42,6 +46,48 @@ typedef struct {
   size_t resolve_max_channels; /* must match dipifccret -M */
 } sds_fcc_t;
 
+/* Package (PackagedServices/Package, TS 102 034 clause 5.2.13.4) */
+typedef struct {
+  unsigned id;                                     /* @Id */
+  char name[SDS_MAX_NAME];                         /* PackageName */
+  char lang[4];                                    /* @Language, ISO 639-2 */
+  int visible;                                     /* @Visible, default true */
+  char service_names[SDS_MAX_PKG_SERVICES][SDS_MAX_NAME]; /* Service/TextualID, matched into announced service list by name */
+  int service_count;
+} sds_package_t;
+
+/* nested civic address, RFC 4676. regionalisation Cell: single outer-to-inner chain, not general tree */
+typedef struct {
+  unsigned type;            /* CA/@Type */
+  char value[SDS_MAX_NAME]; /* CA/@Value */
+} sds_civic_addr_t;
+
+/* Cell (RegionalisationOffering/Cell, clause 5.2.13.8) */
+typedef struct {
+  char id[SDS_MAX_NAME];              /* Cell/@Id */
+  char country[4];                    /* CountryCode, ISO 3166 2-letter */
+  sds_civic_addr_t ca[SDS_MAX_CA_DEPTH]; /* ca[0] outermost, nested inward */
+  int ca_depth;
+} sds_cell_t;
+
+/* RMSType (clause 5.2.12.28) */
+typedef struct {
+  char name[SDS_MAX_NAME]; /* RMSName */
+  char lang[4];             /* @Language */
+  const char *location;     /* @RMSLocation, required */
+  const char *logo_uri;     /* @LogoURI, NULL = omit */
+} sds_rms_t;
+
+/* FUSType (clause 5.2.12.12), minus Description. FUSAnnouncement reduced to MulticastAnnouncementAddress */
+typedef struct {
+  char name[SDS_MAX_NAME]; /* FUSName */
+  char lang[4];             /* @Language */
+  unsigned long fus_id;     /* FUSID, decimal */
+  const char *announce_addr; /* MulticastAnnouncementAddress/@Address, NULL = omit */
+  unsigned announce_port;    /* MulticastAnnouncementAddress/@Port */
+  const char *logo_uri;      /* @LogoURI, NULL = omit */
+} sds_fus_t;
+
 /* streaming BroadcastDiscovery (payload 0x02), one <SingleService> per item call. ret/fcc NULL = no such record */
 void sds_broadcast_open(FILE *f, const char *domain, unsigned version);
 void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc);
@@ -50,8 +96,26 @@ void sds_broadcast_close(FILE *f);
 /* same document, single-shot into a memory buffer (e.g. for DVBSTP transmission). 0 = didn't fit cap */
 size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, unsigned char *buf, size_t cap);
 
-/* payload 0x01 doc, self-pointing Push at push_addr:push_port. lang: 3-letter ISO 639-2 for display_name. 0 = didn't fit cap */
-size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, unsigned char *buf, size_t cap);
+/* payload 0x01 doc, self-pointing Push at push_addr:push_port. lang: 3-letter ISO 639-2 for display_name.
+   extra_payload_ids/extra_count: additional <PayloadId> entries advertised alongside 0x02, e.g. package/
+   regionalisation/rms-fus also running on same push socket. 0 = didn't fit cap */
+size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, const unsigned *extra_payload_ids, int extra_count, unsigned char *buf, size_t cap);
+
+/* streaming PackageDiscovery (payload 0x05), one <Package> per item call. svcs/svc_count for DVBTriplet lookup */
+void sds_package_open(FILE *f, const char *domain, unsigned version);
+void sds_package_item(FILE *f, const sds_package_t *pkg, const sds_service_t *svcs, int svc_count);
+void sds_package_close(FILE *f);
+size_t sds_build_package(const char *domain, unsigned version, const sds_package_t *pkgs, int pkg_count, const sds_service_t *svcs, int svc_count, unsigned char *buf, size_t cap);
+
+/* streaming RegionalisationDiscovery (payload 0x07), one <Cell> per item call */
+void sds_regionalisation_open(FILE *f, const char *domain, unsigned version);
+void sds_regionalisation_item(FILE *f, const sds_cell_t *cell);
+void sds_regionalisation_close(FILE *f);
+size_t sds_build_regionalisation(const char *domain, unsigned version, const sds_cell_t *cells, int count, unsigned char *buf, size_t cap);
+
+/* single-shot RMSFUSDiscovery (payload 0x08). exactly one of rms_count/fus_count nonzero: XSD choice,
+   FUSProvider+ or RMSProvider+, never both. 0 = didn't fit cap */
+size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *rms, int rms_count, const sds_fus_t *fus, int fus_count, unsigned char *buf, size_t cap);
 
 /* xml must be null-terminated. fills out[0..return), tsid/onid default 1, sid defaults to 1-based index if absent.
    truncated may be NULL; else set to 1 if more <SingleService> entries existed past max */

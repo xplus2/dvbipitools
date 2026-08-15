@@ -1,16 +1,17 @@
 # dipidescramble
 
-Standalone counterpart to `dipitvhead`'s CAS scrambling: 
-reads a (possibly scrambled) transport stream, extracts CAT/PMT, 
+Standalone counterpart to `dipitvhead`'s scrambling: 
+It reads a (possibly scrambled) transport stream, extracts CAT/PMT, 
 pulls ECM/EMM off their PIDs (or once at startup via unicast interface),
 matches if it's ours (`-s`), decrypts the RSA -> BK -> SK -> CW chain with the device's private key
-and descrambles the stream in place, writing plain `.ts` or `.mkv/mka`.
+and descrambles the stream in place, writing plain `.ts`/`.mkv`/`.mka`, or pushing it live to an 
+RTMP(S) ingest server. 
 
 This tool is mainly meant for automated tests.
 Since it uses/needs the device's private key, end-users can hardly ever provide what's needed.
 
 To speed up tests and/or to simulate an already provisioned client, the EMM cache
-can be preloaded with the decrypted EMM-U/EMM-G sections from a previous run.
+can be preloaded with the decrypted EMM-U/EMM-G sections from a previous run (`--emm-file`).
 
 The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scrambling_descriptor`).
 `-k`/`-s`/`-e` or `--biss-*` are only required once the stream turns out to need them.
@@ -24,8 +25,8 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 | `-s`  | `--serial`      | `<id>`                | required for ECM/EMM-driven CAS                     |
 | `-e`  | `--emm-file`    | `<path>`              | required for ECM/EMM-driven CAS (cache file)        |
 | `-u`  | `--unicast-emm` | `<uri>`               |                                                     |
-|       | `--insecure`    |                       | off                                                 |
-| `-o`  | `--output`      | `<path\|->`           | required                                            |
+|       | `--insecure`    |                       | off (`-u`, or `-o rtmps://`)                        |
+| `-o`  | `--output`      | `<target>`            | required, repeatable                                |
 | `-f`  | `--format`      | `ts\|mkv\|mka`        | `ts`                                                |
 | `-p`  | `--pmt-pid`     | `<pid>` / `all`       | none (see below)                                    |
 | `-I`  | `--iface`       | `<iface>`             | kernel default                                      |
@@ -57,11 +58,11 @@ The CW derived from the ECM/EMM chain applies mux-wide either way, so descrambli
   * `-p <pid>`: pins that one program. Doesn't change `-f ts` bytes (see below), but drives which
     program's tracks a `mkv`/`mka` output builds. Rejected if the pid isn't in the PAT.
   * `-p all`: descramble the whole mux.
-  * `-f ts`: already whole-mux by default - every packet is decrypted and forwarded regardless of program,
-    so `-p all` changes nothing about the bytes written, just skips the fail-early check below.
-  * `-f mka`: every program's audio becomes its own track, each labeled with that program's own SDT name once it arrives.
-  * `-f mkv`: rejected - pick one program with `-p <pid>` instead (Matroska has no video/audio track
-    association across several programs).
+    * `-f ts`: already whole-mux by default - every packet is decrypted and forwarded regardless of program,
+      so `-p all` changes nothing about the bytes written, just skips the fail-early check below.
+    * `-f mka`: every program's audio becomes its own track, each labeled with that program's own SDT name once it arrives.
+    * `-f mkv`: rejected - pick one program with `-p <pid>` instead (Matroska has no video/audio track
+      association across several programs).
   * neither given: fails early, after a brief wait for each program's SDT name, listing the available `sid`/PMT pid/name.
     A program whose name never arrives in that window shows as `(no SDT)` rather than blocking further.
 
@@ -96,7 +97,25 @@ Fetched once at startup only, not polled.
 
 ### Output (`-o`)
 
-Descrambled output, file or `-` for stdout.
+Repeatable: e.g. a file plus one or more RTMP(S) pushes.
+
+| schema                              | what's this?                       |
+|--------------------------------------|-------------------------------------|
+| `<path>`                             | a file                              |
+| `-`                                   | stdout                              |
+| `rtmp://<host>[:port]/<app>/<key>`   | RTMP publish, default port `1935`   |
+| `rtmps://<host>[:port]/<app>/<key>`  | RTMP over TLS, default port `443`   |
+
+RTMP output ignores `-f`: descrambled H.264/HEVC video. Unsupported video (MPEG-2) or audio
+(MP2) is dropped from that push.
+
+`-f mkv`/`mka` can combine with an `rtmp(s)://` target, given exactly one plain file target for
+the Matroska mux itself. `-p all` can't, same reason as `-f mkv`: RTMP is one program.
+
+`--insecure` (also `-u`, above) skips cert/hostname/expiry checks, for `rtmps://`.
+
+A push target reconnects on its own on a drop, other `-o` targets keep going regardless. After a
+(re)connect it waits for the next keyframe, same as any live encoder joining mid-GOP.
 
 ### Output format (`-f`)
 
@@ -104,6 +123,8 @@ Descrambled output, file or `-` for stdout.
 
 `mkv`/`mka`: demuxes the descrambled stream and writes a Matroska container instead - useful for eyeballing/playing back a test capture
 directly rather than feeding the raw `.ts` through a separate remux step. All audio tracks are muxed, no subtitle output.
+
+This only applies to plain file `-o` targets; an `rtmp(s)://` target always gets FLV, see above.
 
 ### BISS (`--biss1-sw`, `--biss2-sw`, `--biss2-esw`/`--biss2-id`)
 
@@ -124,7 +145,15 @@ key hierarchy, not that CAS's.
 
 ### ECM profile (`--ecm-profile`)
 
-Define a flexible template to match the special ECM crafting of a CAS you want to test.
+Define a flexible template to match the ECM formatting of a CAS you want to test/integrate/develop/debug.
+
+While the DVB-SimulCrypt standard defines the transport, it leaves the internal formatting of an ECM undefined.
+Since `dipitvhead` and `dipiradiohead` treat these payloads as transparent blobs, 
+this profile provides the parsing logic necessary for a consistent lab setup and automated verification.
+Since hardcoding defaults would defeat the purpose of integration and the specifics needed for handling these payloads correctly are out of scope here,
+the following mechanics allow the configuration to be driven by the most authoritative source: you.
+
+
 `<spec>` is comma-separated `key=value`; `+` separates ordered-list values,
 `:` separates a header id from its hex bytes, `header=` repeats (up to 4):
 
@@ -151,8 +180,8 @@ Tokens (`field_order`/`wire_order`/`cw_group`): the fixed keywords
 `ecm_id`/`cp_number`/`cw`/`cw_group`/`integrity_tag`/`iv`/`ciphertext`/`gcm_tag`, plus any declared
 header id. 
 
-`ecm_id` isn't on the wire and isn't derivable from the transport stream by a Simulcrypt-blind receiver,
-so it's an explicit param. Unset, it falls back to the stream's own ECM PID whenever `include_ecm_id`/`bind_ecm_id` need a value.
+`ecm_id` isn't on the wire and isn't derivable from the transport stream by a standardized receiver,
+so it's an explicit configuration parameter. Unset, it falls back to the stream's own ECM PID whenever `include_ecm_id`/`bind_ecm_id` need a value.
 
 Under `cw_count > 1` (lead-CW packing), every combo in the ciphertext still gets fully decrypted and 
 checked for integrity, but only the first (current) one is applied. There is no pre-fetch of the lead/next combo(s).
@@ -175,6 +204,9 @@ dipidescramble -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccdde
 
 # BISS2 Mode CA: this receiver's own RSA private key
 dipidescramble -i rtp://@239.0.0.1:1975 --biss2-ca-key receiver1.key -o out.ts -v
+
+# descramble and push live, keeping a local copy too
+dipidescramble -i rtp://@239.0.0.1:1975 --biss1-sw 0123456789ab -o out.ts -o rtmp://live.example.com/app/key
 
 # complex ECM profile
 dipidescramble -i rtp://@239.0.0.1:1975 -k device.key -s mysmartcardserial-01 -e emm.cache -o out.ts \

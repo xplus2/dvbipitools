@@ -52,7 +52,7 @@ static int async_build_request(http_async_t *a) {
 
 /* (re)starts connect for a->url into a->h, fresh each hop (initial + every redirect) */
 static int async_start_connect(http_async_t *a, net_err_reason_t *reason_out) {
-  int fd = netconnect_tcp_start(a->url.host, a->url.port, reason_out);
+  int fd = netconnect_tcp_start(a->url.host, a->url.port, &a->connect_pending, reason_out);
   if (fd < 0)
     return -1;
   memset(a->h, 0, sizeof *a->h);
@@ -139,7 +139,10 @@ http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out
   struct http *h = a->h;
 
   if (a->phase == HA_CONNECTING) {
-    if (netconnect_tcp_finish(h->fd, reason_out) < 0) {
+    int cr = netconnect_tcp_finish(&a->connect_pending, &h->fd, reason_out);
+    if (cr == 0)
+      return HTTP_ASYNC_PENDING; /* this address failed, next candidate connecting on h->fd */
+    if (cr < 0) {
       log_line("connect %s:%u: %s", h->url.host, h->url.port, strerror(errno));
       return HTTP_ASYNC_ERROR;
     }
@@ -260,6 +263,8 @@ http_t *http_async_take(http_async_t *a) {
 void http_async_free(http_async_t *a) {
   if (!a)
     return;
+  if (a->connect_pending)
+    netconnect_tcp_abort(a->connect_pending);
   if (a->h) {
     if (a->h->tls)
       tls_close(a->h->tls);

@@ -59,8 +59,7 @@ static void on_cue(void *ctx, const ttx_cue_t *cue) {
   }
 }
 
-/* psi_have_sdt() means "a section arrived", not "ours was in it": programs cycle
- * independently; check name itself. */
+/* psi_have_sdt(): "arrived", not "ours". programs cycle independently, check name itself */
 static int all_psi_named(const mkv_t *m) {
   int i;
   for (i = 0; i < m->npsi; i++)
@@ -132,7 +131,7 @@ static int vbuf_add(track_t *t, const unsigned char *nal, size_t n) {
 }
 
 static void ps_store(unsigned char *dst, size_t *dlen, const unsigned char *s, size_t n) {
-  if (n && n <= MKV_PS_MAX) {
+  if (n && n <= ESCODEC_PS_MAX) {
     memcpy(dst, s, n);
     *dlen = n;
   }
@@ -180,14 +179,14 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
       scl = scl2;
       continue;
     }
-    if (t->codec == CODEC_H264) {
+    if (t->es.codec == CODEC_H264) {
       type = d[ns] & 0x1F;
       switch (type) {
         case H264_NAL_SPS:
-          ps_store(t->sps, &t->spslen, d + ns, n);
+          ps_store(t->es.sps, &t->es.spslen, d + ns, n);
           break;
         case H264_NAL_PPS:
-          ps_store(t->pps, &t->ppslen, d + ns, n);
+          ps_store(t->es.pps, &t->es.ppslen, d + ns, n);
           break;
         case H264_NAL_AUD:
         case H264_NAL_FILLER:
@@ -201,13 +200,13 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
       type = (d[ns] >> 1) & 0x3F;
       switch (type) {
         case HEVC_NAL_VPS:
-          ps_store(t->vps, &t->vpslen, d + ns, n);
+          ps_store(t->es.vps, &t->es.vpslen, d + ns, n);
           break;
         case HEVC_NAL_SPS:
-          ps_store(t->sps, &t->spslen, d + ns, n);
+          ps_store(t->es.sps, &t->es.spslen, d + ns, n);
           break;
         case HEVC_NAL_PPS:
-          ps_store(t->pps, &t->ppslen, d + ns, n);
+          ps_store(t->es.pps, &t->es.ppslen, d + ns, n);
           break;
         case HEVC_NAL_AUD:
         case HEVC_NAL_FILLER:
@@ -223,20 +222,20 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   }
 
   if (!t->hdr_parsed) {
-    if (t->codec == CODEC_H264 && t->spslen && t->ppslen) {
-      if (h264_dims(t->sps, t->spslen, &t->width, &t->height) == 0) {
-        t->cpriv_len = build_avcc(t, t->cpriv, sizeof t->cpriv);
-        if (t->cpriv_len) {
-          bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t, NULL));
+    if (t->es.codec == CODEC_H264 && t->es.spslen && t->es.ppslen) {
+      if (h264_dims(t->es.sps, t->es.spslen, &t->width, &t->height) == 0) {
+        t->es.cpriv_len = build_avcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
+        if (t->es.cpriv_len) {
+          bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, NULL));
           t->hdr_parsed = 1;
           all_ready(m);
         }
       }
-    } else if (t->codec == CODEC_HEVC && t->vpslen && t->spslen && t->ppslen) {
-      if (hevc_info(t->sps, t->spslen, t->ptl, &t->chroma, &t->width,&t->height) == 0) {
-        t->cpriv_len = build_hvcc(t, t->cpriv, sizeof t->cpriv);
-        if (t->cpriv_len) {
-          bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t, NULL));
+    } else if (t->es.codec == CODEC_HEVC && t->es.vpslen && t->es.spslen && t->es.ppslen) {
+      if (hevc_info(t->es.sps, t->es.spslen, t->es.ptl, &t->es.chroma, &t->width, &t->height) == 0) {
+        t->es.cpriv_len = build_hvcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
+        if (t->es.cpriv_len) {
+          bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, NULL));
           t->hdr_parsed = 1;
           all_ready(m);
         }
@@ -273,7 +272,7 @@ static void handle_mpeg2(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
       if (w && h) {
         t->width = w;
         t->height = h;
-        bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t, NULL));
+        bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, NULL));
         t->hdr_parsed = 1;
         all_ready(m);
       }
@@ -302,8 +301,8 @@ static void handle_audio(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
     return;
 
   while (pos < t->remlen) {
-    frame_t f;
-    int r = next_frame(t, t->rem + pos, t->remlen - pos, &f);
+    esc_frame_t f;
+    int r = next_frame(&t->es, t->rem + pos, t->remlen - pos, &f);
     if (r > 0)
       break;
     if (r < 0) {
@@ -312,17 +311,17 @@ static void handle_audio(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
     }
     if (!t->hdr_parsed) {
       if (f.rate)
-        t->rate = f.rate;
+        t->es.rate = f.rate;
       if (f.ch)
-        t->channels = f.ch;
-      bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t, &f));
+        t->es.channels = f.ch;
+      bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, &f));
       t->hdr_parsed = 1;
       all_ready(m);
     }
     if (f.outlen)
       emit(m, t, f.out, f.outlen, 1);
-    if (t->rate && f.samples)
-      t->ts_ms += (int64_t)f.samples * 1000 / (int64_t)t->rate;
+    if (t->es.rate && f.samples)
+      t->ts_ms += (int64_t)f.samples * 1000 / (int64_t)t->es.rate;
     pos += f.consumed;
   }
   if (pos) {
@@ -339,7 +338,7 @@ void on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, const unsigned c
     return;
   if (t->cls == PID_TELETEXT)
     ttx_pes(t->ttx, has_pts, pts, data, len);
-  else if (t->cls == PID_VIDEO && t->codec == CODEC_MPEG2V)
+  else if (t->cls == PID_VIDEO && t->es.codec == CODEC_MPEG2V)
     handle_mpeg2(m, t, has_pts, pts, data, len);
   else if (t->cls == PID_VIDEO)
     handle_video(m, t, has_pts, pts, data, len);
@@ -357,7 +356,7 @@ static void add_track(mkv_t *m, const psi_es_t *es, int psi_idx) {
   memset(t, 0, sizeof *t);
   t->pid = es->pid;
   t->num = m->ntrk + 1;
-  t->codec = es->codec;
+  t->es.codec = es->codec;
   t->cls = es->cls;
   t->psi_idx = psi_idx;
   memcpy(t->lang, es->lang, sizeof t->lang);

@@ -274,13 +274,13 @@ CISSA, CSA1/CSA2, BISS1 Mode 1, BISS2 Mode 1/E, BISS2 Mode CA.
 
 CAS support is a CMake/configure-time option (`DIPIRADIOHEAD_CAS`, on by default).
 * CISSA needs OpenSSL (same dependency as HTTPS input)
-* CSA1 and CSA2 need libdvbcsa (`DIPIRADIOHEAD_CSA2` / `HAVE_DVBCSA`).
+* CSA1, CSA2 and BISS1 dlopen libdvbcsa at runtime, if it is present. It is not built against it and does not bundle it.
 * `-R`/RIST output needs librist (`DVBIPITOOLS_RIST` / `HAVE_RIST`, toolkit-wide).
 
 Missing any of these degrades gracefully to "that feature unavailable", not a build failure.
 
 Release builds and the packaged `.deb` in this repository do not contain libdvbcsa.
-Build against it yourself if you want CSA1/CSA2.
+Install it on the machine running the tool if you want CSA1/CSA2/BISS1.
 
 ## Signals
 

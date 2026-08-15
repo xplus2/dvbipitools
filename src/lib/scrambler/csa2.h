@@ -10,7 +10,7 @@
 
 typedef struct csa2_key csa2_key_t;
 
-/* NULL on error (or if this build has no libdvbcsa) */
+/* NULL on error, or if libdvbcsa isn't available at runtime */
 csa2_key_t *csa2_key_new(const unsigned char cw[CSA2_CW_LEN]);
 void csa2_key_free(csa2_key_t *k);
 
@@ -20,8 +20,8 @@ void csa2_encrypt_block(csa2_key_t *k, unsigned char *data, size_t len);
 /* inverse of csa2_encrypt_block: decrypts len bytes in place, any length */
 void csa2_decrypt_block(csa2_key_t *k, unsigned char *data, size_t len);
 
-/* max entries per csa2_encrypt_batch/csa2_decrypt_batch call. 0 if this build has no libdvbcsa
-   (csa2_key_new already fails first in that case, batch functions are unreachable). */
+/* max entries per csa2_encrypt_batch/csa2_decrypt_batch call. 0 if libdvbcsa isn't available at
+   runtime (or if CSA2 was compiled out). csa2_key_new already fails first in that case */
 unsigned csa2_batch_size(void);
 
 typedef struct {

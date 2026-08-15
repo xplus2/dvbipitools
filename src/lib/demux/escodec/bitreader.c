@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "priv.h"
+#include "escodec.h"
 
 unsigned br_u(br_t *b, int n) {
   unsigned v = 0;

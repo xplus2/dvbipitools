@@ -305,6 +305,7 @@ static int build_default_field_order(ecm_profile_t *p) {
   if (p->format.header_count == 1) {
     l->tok[l->count].kind = ECM_TOK_HEADER;
     strncpy(l->tok[l->count].id, p->format.headers[0].id, ECM_PROFILE_ID_MAX - 1);
+    l->tok[l->count].id[ECM_PROFILE_ID_MAX - 1] = 0;
     l->count++;
   } else if (p->format.header_count > 1) {
     log_line(TOOL_NAME ": --ecm-profile: more than one format.headers entry has no default position, set field_order explicitly");

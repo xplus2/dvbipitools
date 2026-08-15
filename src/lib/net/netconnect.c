@@ -8,10 +8,12 @@
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "../ioutil.h"
 #include "../log.h"
 #include "../signal.h"
 
@@ -119,10 +121,44 @@ int netconnect_tcp(const char *host, unsigned port, int timeout_ms, net_err_reas
   return fd; /* already O_NONBLOCK, set before connect() */
 }
 
-int netconnect_tcp_start(const char *host, unsigned port, net_err_reason_t *reason_out) {
-  struct addrinfo hints, *res, *ai;
+struct netconnect_pending {
+  struct addrinfo *res, *ai; /* res: full list, for freeaddrinfo(). ai: candidate fd is connecting on */
+  char host[256];
+  unsigned port;
+};
+
+/* tries ai onward, first usable candidate wins. -1 if none work (save_errno set) */
+static int try_addrs(struct addrinfo *ai, struct addrinfo **used, int *save_errno) {
+  for (; ai; ai = ai->ai_next) {
+    int fd, flags;
+    fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+    if (fd < 0)
+      continue;
+    flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+      *save_errno = errno;
+      close(fd);
+      continue;
+    }
+    if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0) {
+      *used = ai;
+      return fd; /* rare, e.g. loopback: already connected */
+    }
+    if (errno == EINPROGRESS) {
+      *used = ai;
+      return fd; /* caller polls POLLOUT, then netconnect_tcp_finish() */
+    }
+    *save_errno = errno;
+    close(fd);
+  }
+  return -1;
+}
+
+int netconnect_tcp_start(const char *host, unsigned port, netconnect_pending_t **pending_out, net_err_reason_t *reason_out) {
+  struct addrinfo hints, *res, *used;
   char portstr[6];
-  int fd = -1, e, save_errno = 0;
+  int fd, e, save_errno = 0;
+  netconnect_pending_t *p;
 
   snprintf(portstr, sizeof portstr, "%u", port);
   memset(&hints, 0, sizeof hints);
@@ -134,48 +170,74 @@ int netconnect_tcp_start(const char *host, unsigned port, net_err_reason_t *reas
     set_reason(reason_out, NET_ERR_DNS);
     return -1;
   }
-  for (ai = res; ai; ai = ai->ai_next) {
-    int flags;
-    fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-    if (fd < 0)
-      continue;
-    flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-      save_errno = errno;
-      close(fd);
-      fd = -1;
-      continue;
-    }
-    if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0)
-      break; /* rare, e.g. loopback: already connected */
-    if (errno == EINPROGRESS)
-      break; /* caller polls POLLOUT, then netconnect_tcp_finish() */
-    save_errno = errno;
-    close(fd);
-    fd = -1;
-  }
-  freeaddrinfo(res);
+  fd = try_addrs(res, &used, &save_errno);
   if (fd < 0) {
+    freeaddrinfo(res);
     log_line("connect %s:%u: %s", host, port, strerror(save_errno));
     set_reason(reason_out, NET_ERR_CONNECT);
+    return -1;
   }
-  return fd;
-}
-
-int netconnect_tcp_finish(int fd, net_err_reason_t *reason_out) {
-  int soerr = 0;
-  socklen_t sl = sizeof soerr;
-
-  if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &soerr, &sl) < 0) {
+  p = malloc(sizeof *p);
+  if (!p) {
+    close(fd);
+    freeaddrinfo(res);
     set_reason(reason_out, NET_ERR_OTHER);
     return -1;
   }
-  if (soerr != 0) {
-    errno = soerr;
-    set_reason(reason_out, NET_ERR_CONNECT);
+  p->res = res;
+  p->ai = used;
+  bufcpy(p->host, sizeof p->host, host);
+  p->port = port;
+  *pending_out = p;
+  return fd;
+}
+
+int netconnect_tcp_finish(netconnect_pending_t **pending, int *fd, net_err_reason_t *reason_out) {
+  netconnect_pending_t *p = *pending;
+  int soerr = 0, save_errno;
+  socklen_t sl = sizeof soerr;
+  struct addrinfo *used;
+  int nfd;
+
+  if (getsockopt(*fd, SOL_SOCKET, SO_ERROR, &soerr, &sl) < 0) {
+    save_errno = errno;
+    close(*fd);
+    *fd = -1;
+    freeaddrinfo(p->res);
+    free(p);
+    *pending = NULL;
+    errno = save_errno;
+    set_reason(reason_out, NET_ERR_OTHER);
     return -1;
   }
-  return 1;
+  if (soerr == 0) {
+    freeaddrinfo(p->res);
+    free(p);
+    *pending = NULL;
+    return 1;
+  }
+  close(*fd);
+  save_errno = soerr;
+  nfd = try_addrs(p->ai->ai_next, &used, &save_errno);
+  if (nfd >= 0) {
+    p->ai = used;
+    *fd = nfd;
+    return 0;
+  }
+  *fd = -1;
+  freeaddrinfo(p->res);
+  free(p);
+  *pending = NULL;
+  errno = save_errno;
+  set_reason(reason_out, NET_ERR_CONNECT);
+  return -1;
+}
+
+void netconnect_tcp_abort(netconnect_pending_t *pending) {
+  if (!pending)
+    return;
+  freeaddrinfo(pending->res);
+  free(pending);
 }
 
 int netaddr_fill(int family, const char *addr, unsigned port, struct sockaddr_storage *ss, socklen_t *sslen) {

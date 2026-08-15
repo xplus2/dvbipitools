@@ -126,14 +126,35 @@ dvbipitools_add_unit_test(lib_mux_teletext
 dvbipitools_add_unit_test(lib_mux_mkv
     unit/lib/mux/test_mkv.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
-    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/bitreader.c
-    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/audio.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/video.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/write.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/feed.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
+dvbipitools_add_unit_test(lib_mux_flv
+    unit/lib/mux/test_flv.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/flv.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/write.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/feed.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
@@ -152,7 +173,35 @@ dvbipitools_add_unit_test(lib_mux_cadescbuild
 
 dvbipitools_add_unit_test(lib_net_netconnect
     unit/lib/net/test_netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
+dvbipitools_add_unit_test(lib_net_rtmp
+    unit/lib/net/test_rtmp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/session.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/chunk.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/handshake.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
+
+dvbipitools_add_unit_test(lib_net_rtmpout
+    unit/lib/net/test_rtmpout.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmpout.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/session.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/chunk.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/handshake.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
@@ -204,6 +253,7 @@ dvbipitools_add_unit_test(lib_net_dvbstp
     unit/lib/net/test_dvbstp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c
@@ -268,7 +318,7 @@ if (DVBCSA_INCLUDE_DIR AND DVBCSA_LIBRARY)
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/log.c)
     target_include_directories(test_lib_scrambler_csa2 PRIVATE ${DVBCSA_INCLUDE_DIR})
-    target_link_libraries(test_lib_scrambler_csa2 PRIVATE ${DVBCSA_LIBRARY})
+    target_link_libraries(test_lib_scrambler_csa2 PRIVATE ${DVBCSA_LIBRARY} ${CMAKE_DL_LIBS})
 else ()
     message(WARNING "tests: libdvbcsa not found, skipping lib_scrambler_csa2 unit test")
 endif ()
@@ -357,11 +407,22 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
-        ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/bitreader.c
-        ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/audio.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/bitreader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/video.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/write.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/feed.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/flv.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/feed.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/write.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/handshake.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/chunk.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/session.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmpout.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
@@ -932,7 +993,8 @@ dvbipitools_add_unit_test(dipitvhead_simulcrypt_msg
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
-    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/signal.c)
 
 dvbipitools_add_unit_test(dipitvhead_ecmg_client
     unit/dipitvhead/test_ecmg_client.c
@@ -1079,12 +1141,23 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
-    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/bitreader.c
-    ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/audio.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/video.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/write.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/feed.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/flv.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/feed.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/write.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/handshake.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/chunk.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/session.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmpout.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c)
 
@@ -1097,6 +1170,7 @@ dvbipitools_add_unit_test(dipirec_ret_client
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtx.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtcp_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
@@ -1118,6 +1192,7 @@ dvbipitools_add_unit_test(dipifccret_args
 dvbipitools_add_unit_test(dipifccret_listen
     unit/dipifccret/test_listen.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/listen.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
@@ -1141,6 +1216,7 @@ dvbipitools_add_unit_test(dipifccret_ret_mcsend
     unit/dipifccret/ret/test_mcsend.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/mcsend.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
@@ -1431,6 +1507,7 @@ dvbipitools_add_unit_test(dipisds_listen
     ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c

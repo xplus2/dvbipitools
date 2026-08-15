@@ -32,6 +32,7 @@ dipiscan_SRCS := \
 	src/lib/signal.c \
 	src/lib/sds_xml.c \
 	src/lib/xml_util.c \
+	src/lib/ioutil.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/udpxy.c \
@@ -156,13 +157,14 @@ else
 HAVE_TLS := $(HAVE_OPENSSL)
 endif
 
-HAVE_DVBCSA := $(shell printf '#include <dvbcsa/dvbcsa.h>\nint main(void){return 0;}\n' | $(CC) -xc - -ldvbcsa -o /dev/null >/dev/null 2>&1 && echo yes)
-
-ifeq ($(CSA2),no)
-HAVE_CSA2 := no
+ifeq ($(CSA),no)
+HAVE_CSA := no
 else
-HAVE_CSA2 := $(HAVE_DVBCSA)
+HAVE_CSA := yes
 endif
+
+# real libdvbcsa-dev, only for lib_scrambler_csa2's correctness. no build-time dependency
+HAVE_DVBCSA := $(shell printf '#include <dvbcsa/dvbcsa.h>\nint main(void){return 0;}\n' | $(CC) -xc - -ldvbcsa -o /dev/null >/dev/null 2>&1 && echo yes)
 
 HAVE_LIBRIST := $(shell pkg-config --exists librist && echo yes)
 
@@ -235,12 +237,23 @@ dipirec_SRCS := \
 	src/lib/mux/rtpheader.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/mkv/mkv.c \
-	src/lib/mux/mkv/bitreader.c \
-	src/lib/mux/mkv/audio.c \
+	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
 	src/lib/mux/mkv/write.c \
 	src/lib/mux/mkv/feed.c \
 	src/lib/mux/teletext.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/flv/flv.c \
+	src/lib/mux/flv/feed.c \
+	src/lib/mux/flv/write.c \
+	src/lib/net/rtmp/handshake.c \
+	src/lib/net/rtmp/chunk.c \
+	src/lib/net/rtmp/session.c \
+	src/lib/net/rtmp/command.c \
+	src/lib/net/rtmp/rtmp.c \
+	src/lib/net/rtmpout.c \
 	src/dipirec/filter/ts.c \
 	src/dipirec/filter/pace.c
 
@@ -273,14 +286,11 @@ dipiradiohead_BISS_CA_SRC := src/lib/cas/biss/ca_stub.c
 $(warning dipiradiohead: OpenSSL not found via pkg-config, building without CISSA support)
 endif
 
-ifeq ($(HAVE_CSA2),yes)
+ifeq ($(HAVE_CSA),yes)
 dipiradiohead_CSA2_SRC := src/lib/scrambler/csa2.c
-dipiradiohead_CSA2_EXTRA_LDFLAGS := -ldvbcsa
+dipiradiohead_CSA2_EXTRA_LDFLAGS := -ldl
 else
 dipiradiohead_CSA2_SRC := src/lib/scrambler/csa2_stub.c
-ifneq ($(CSA2),no)
-$(warning dipiradiohead: libdvbcsa not found (no pkg-config file, probed directly), building without CSA2 support)
-endif
 endif
 
 dipiradiohead_EXTRA_LDFLAGS += $(dipiradiohead_CSA2_EXTRA_LDFLAGS)
@@ -389,14 +399,11 @@ dipitvhead_BISS_CA_SRC := src/lib/cas/biss/ca_stub.c
 $(warning dipitvhead: OpenSSL not found via pkg-config, building without CISSA support)
 endif
 
-ifeq ($(HAVE_CSA2),yes)
+ifeq ($(HAVE_CSA),yes)
 dipitvhead_CSA2_SRC := src/lib/scrambler/csa2.c
-dipitvhead_CSA2_EXTRA_LDFLAGS := -ldvbcsa
+dipitvhead_CSA2_EXTRA_LDFLAGS := -ldl
 else
 dipitvhead_CSA2_SRC := src/lib/scrambler/csa2_stub.c
-ifneq ($(CSA2),no)
-$(warning dipitvhead: libdvbcsa not found (no pkg-config file, probed directly), building without CSA2 support)
-endif
 endif
 
 dipitvhead_EXTRA_LDFLAGS += $(dipitvhead_CSA2_EXTRA_LDFLAGS)
@@ -506,6 +513,7 @@ dipifccret_SRCS := \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/signal.c \
+	src/lib/ioutil.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/demux/rtp.c \
@@ -552,14 +560,11 @@ else
 dipidescramble_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 endif
 
-ifeq ($(HAVE_CSA2),yes)
+ifeq ($(HAVE_CSA),yes)
 dipidescramble_CSA2_SRC := src/lib/scrambler/csa2.c
-dipidescramble_EXTRA_LDFLAGS += -ldvbcsa
+dipidescramble_EXTRA_LDFLAGS += -ldl
 else
 dipidescramble_CSA2_SRC := src/lib/scrambler/csa2_stub.c
-ifneq ($(CSA2),no)
-$(warning dipidescramble: libdvbcsa not found (no pkg-config file, probed directly), building without CSA2 support)
-endif
 endif
 
 dipidescramble_SRCS := \
@@ -596,13 +601,24 @@ dipidescramble_SRCS := \
 	src/lib/demux/mpts_probe.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/mkv/mkv.c \
-	src/lib/mux/mkv/bitreader.c \
-	src/lib/mux/mkv/audio.c \
+	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
 	src/lib/mux/mkv/write.c \
 	src/lib/mux/mkv/feed.c \
 	src/lib/mux/teletext.c \
 	src/lib/mux/psi_build.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/flv/flv.c \
+	src/lib/mux/flv/feed.c \
+	src/lib/mux/flv/write.c \
+	src/lib/net/rtmp/handshake.c \
+	src/lib/net/rtmp/chunk.c \
+	src/lib/net/rtmp/session.c \
+	src/lib/net/rtmp/command.c \
+	src/lib/net/rtmp/rtmp.c \
+	src/lib/net/rtmpout.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa.c \
 	src/lib/cas/biss/biss.c \
@@ -676,8 +692,8 @@ $(foreach t,$(TOOLS),$(eval $(call TOOL_template,$(t))))
 UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_rtpheader lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
-	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_cadescbuild \
-	lib_net_netconnect lib_net_httpclient_async lib_net_tssource_async lib_net_tssource_file lib_net_retryset lib_net_dvbstp \
+	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_flv lib_mux_cadescbuild \
+	lib_net_netconnect lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_tssource_async lib_net_tssource_file lib_net_retryset lib_net_dvbstp \
 	lib_mux_mpts \
 	lib_cas_cas_group \
 	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec \
@@ -767,7 +783,7 @@ else
 $(warning tests: zlib not found via pkg-config, skipping dipibcg_wrapper unit test)
 endif
 
-ifeq ($(HAVE_CSA2),yes)
+ifeq ($(HAVE_DVBCSA),yes)
 UNIT_TESTS += lib_scrambler_csa2
 lib_scrambler_csa2_BIN := tests/unit/lib/scrambler/test_csa2
 lib_scrambler_csa2_SRCS := \
@@ -776,11 +792,9 @@ lib_scrambler_csa2_SRCS := \
 	src/lib/scrambler/csa2.c \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/log.c
-lib_scrambler_csa2_EXTRA_LDFLAGS := -ldvbcsa
+lib_scrambler_csa2_EXTRA_LDFLAGS := -ldvbcsa -ldl
 else
-ifneq ($(CSA2),no)
 $(warning tests: libdvbcsa not found, skipping lib_scrambler_csa2 unit test)
-endif
 endif
 
 dipicam378_args_BIN := tests/unit/dipicam378/test_args
@@ -891,11 +905,22 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/mux/teletext.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/mkv/mkv.c \
-	src/lib/mux/mkv/bitreader.c \
-	src/lib/mux/mkv/audio.c \
+	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
 	src/lib/mux/mkv/write.c \
 	src/lib/mux/mkv/feed.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/flv/flv.c \
+	src/lib/mux/flv/feed.c \
+	src/lib/mux/flv/write.c \
+	src/lib/net/rtmp/handshake.c \
+	src/lib/net/rtmp/chunk.c \
+	src/lib/net/rtmp/session.c \
+	src/lib/net/rtmp/command.c \
+	src/lib/net/rtmp/rtmp.c \
+	src/lib/net/rtmpout.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa.c \
 	src/lib/scrambler/csa2_stub.c \
@@ -997,6 +1022,7 @@ dipisds_listen_SRCS := \
 	src/lib/xml_util.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
+	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/demux/crc32.c \
 	src/lib/signal.c \
@@ -1231,14 +1257,36 @@ lib_mux_mkv_BIN := tests/unit/lib/mux/test_mkv
 lib_mux_mkv_SRCS := \
 	tests/unit/lib/mux/test_mkv.c \
 	src/lib/mux/mkv/mkv.c \
-	src/lib/mux/mkv/bitreader.c \
-	src/lib/mux/mkv/audio.c \
+	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
 	src/lib/mux/mkv/write.c \
 	src/lib/mux/mkv/feed.c \
 	src/lib/ioutil.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/teletext.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/pes.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/crc32.c \
+	src/lib/log.c
+
+lib_mux_flv_BIN := tests/unit/lib/mux/test_flv
+lib_mux_flv_SRCS := \
+	tests/unit/lib/mux/test_flv.c \
+	src/lib/mux/flv/flv.c \
+	src/lib/mux/flv/write.c \
+	src/lib/mux/flv/feed.c \
+	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/video.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/ebml.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/pes.c \
 	src/lib/demux/psi/psi.c \
@@ -1881,7 +1929,8 @@ dipitvhead_simulcrypt_msg_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
-	src/lib/log.c
+	src/lib/log.c \
+	src/lib/signal.c
 
 dipitvhead_cas_BIN := tests/unit/dipitvhead/test_cas
 dipitvhead_cas_SRCS := \
@@ -1925,7 +1974,37 @@ lib_mux_cadescbuild_SRCS := \
 lib_net_netconnect_BIN := tests/unit/lib/net/test_netconnect
 lib_net_netconnect_SRCS := \
 	tests/unit/lib/net/test_netconnect.c \
+	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/signal.c \
+	src/lib/log.c
+
+lib_net_rtmp_BIN := tests/unit/lib/net/test_rtmp
+lib_net_rtmp_SRCS := \
+	tests/unit/lib/net/test_rtmp.c \
+	src/lib/net/rtmp/rtmp.c \
+	src/lib/net/rtmp/session.c \
+	src/lib/net/rtmp/command.c \
+	src/lib/net/rtmp/chunk.c \
+	src/lib/net/rtmp/handshake.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/ebml.c \
+	src/lib/ioutil.c
+
+lib_net_rtmpout_BIN := tests/unit/lib/net/test_rtmpout
+lib_net_rtmpout_SRCS := \
+	tests/unit/lib/net/test_rtmpout.c \
+	src/lib/net/rtmpout.c \
+	src/lib/net/rtmp/rtmp.c \
+	src/lib/net/rtmp/session.c \
+	src/lib/net/rtmp/command.c \
+	src/lib/net/rtmp/chunk.c \
+	src/lib/net/rtmp/handshake.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/ebml.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tls_stub.c \
+	src/lib/ioutil.c \
 	src/lib/signal.c \
 	src/lib/log.c
 
@@ -1987,6 +2066,7 @@ lib_net_dvbstp_SRCS := \
 	tests/unit/lib/net/test_dvbstp.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
+	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/demux/crc32.c \
 	src/lib/signal.c \
@@ -2074,12 +2154,23 @@ dipirec_record_SRCS := \
 	src/lib/mux/rtpheader.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/mkv/mkv.c \
-	src/lib/mux/mkv/bitreader.c \
-	src/lib/mux/mkv/audio.c \
+	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
 	src/lib/mux/mkv/write.c \
 	src/lib/mux/mkv/feed.c \
 	src/lib/mux/teletext.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/flv/flv.c \
+	src/lib/mux/flv/feed.c \
+	src/lib/mux/flv/write.c \
+	src/lib/net/rtmp/handshake.c \
+	src/lib/net/rtmp/chunk.c \
+	src/lib/net/rtmp/session.c \
+	src/lib/net/rtmp/command.c \
+	src/lib/net/rtmp/rtmp.c \
+	src/lib/net/rtmpout.c \
 	src/dipirec/filter/ts.c \
 	src/dipirec/filter/pace.c
 
@@ -2093,6 +2184,7 @@ dipirec_ret_client_SRCS := \
 	src/lib/mux/rtx.c \
 	src/lib/mux/rtcp_build.c \
 	src/lib/net/multicast.c \
+	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/signal.c \
 	src/lib/log.c
@@ -2117,6 +2209,7 @@ dipifccret_listen_BIN := tests/unit/dipifccret/test_listen
 dipifccret_listen_SRCS := \
 	tests/unit/dipifccret/test_listen.c \
 	src/dipifccret/listen.c \
+	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/signal.c \
 	src/lib/log.c
@@ -2142,6 +2235,7 @@ dipifccret_ret_mcsend_SRCS := \
 	tests/unit/dipifccret/ret/test_mcsend.c \
 	src/dipifccret/ret/mcsend.c \
 	src/lib/net/multicast.c \
+	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/signal.c \
 	src/lib/log.c
@@ -2339,7 +2433,8 @@ fuzz_simulcrypt_msg_SRCS := \
 	tests/fuzz/fuzz_simulcrypt_msg.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/crc32.c
+	src/lib/demux/crc32.c \
+	src/lib/signal.c
 
 # ecmg_client.c/emmg_server.c pull in real pthread usage even though the fuzzed functions
 # themselves are pure - link pthread on both like dipitvhead itself does
@@ -2378,6 +2473,7 @@ fuzz_dvbstp_SRCS := \
 	tests/fuzz/fuzz_dvbstp.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
+	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/demux/crc32.c \
 	src/lib/signal.c \
@@ -2395,6 +2491,7 @@ fuzz_gen_seeds_SRCS := \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
+	src/lib/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/signal.c
 

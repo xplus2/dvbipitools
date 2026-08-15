@@ -11,6 +11,8 @@
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
+#include "lib/mux/flv/flv.h"
+#include "lib/net/rtmpout.h"
 #include "lib/net/tssource.h"
 #include "lib/signal.h"
 
@@ -46,6 +48,14 @@ static tssrc_kind_t tssrc_kind_of(input_kind_t k) {
   return TSSRC_STDIN;
 }
 
+static int cfg_has_rtmp(const config_t *cfg) {
+  int i;
+  for (i = 0; i < cfg->n_out; i++)
+    if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS)
+      return 1;
+  return 0;
+}
+
 /* mpts discovery + -p decision. 0: proceed (pmt_pid/all_pids/n_all_pids
  * filled in). 1: abort, message already printed. */
 static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pmt_pid,
@@ -69,12 +79,12 @@ static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pm
 
   if (cfg->pmt_sel == PMT_SEL_AUTO) {
     mpts_probe_print_programs(TOOL_NAME, &probe);
-    log_line(TOOL_NAME ": MPTS source - pick one with -p <pid>, or -p all");
+    log_line(TOOL_NAME ": MPTS source, pick one with -p <pid>, or -p all");
     return 1;
   }
   if (cfg->pmt_sel == PMT_SEL_ALL) {
-    if (cfg->format == FMT_MKV) {
-      log_line(TOOL_NAME ": -f mkv can't hold multiple programs, pick one with -p <pid>");
+    if (cfg->format == FMT_MKV || cfg_has_rtmp(cfg)) {
+      log_line(TOOL_NAME ": -f mkv/-o rtmp:// can't hold multiple programs, pick one with -p <pid>");
       mpts_probe_print_programs(TOOL_NAME, &probe);
       return 1;
     }
@@ -92,6 +102,57 @@ static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pm
   return 1;
 }
 
+/* opens every -o target: plain files into lc->outfd[] (or one -f mkv/mka
+   file into *mkv_fd), rtmp(s) targets into lc->rtmp[]. 0 ok, -1 fail
+   (message already logged, caller closes whatever this left open via lc) */
+static int open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
+  int is_mkv_fmt = (cfg->format == FMT_MKV || cfg->format == FMT_MKA);
+  int i;
+
+  lc->n_outfd = 0;
+  lc->n_rtmp = 0;
+  *mkv_fd = -1;
+
+  for (i = 0; i < cfg->n_out; i++) {
+    const out_target_t *o = &cfg->out[i];
+
+    if (o->kind == OUT_RTMP || o->kind == OUT_RTMPS) {
+      rtmpout_cfg_t rc;
+      memset(&rc, 0, sizeof rc);
+      rc.url = o->rtmp_url;
+      rc.insecure = cfg->insecure_tls;
+      lc->rtmp[lc->n_rtmp] = rtmpout_open(&rc);
+      if (!lc->rtmp[lc->n_rtmp])
+        return -1;
+      lc->rtmp_had_error[lc->n_rtmp] = 0;
+      lc->n_rtmp++;
+      continue;
+    }
+    if (is_mkv_fmt) {
+      *mkv_fd = open_output(o->file_path);
+      if (*mkv_fd < 0)
+        return -1;
+      continue;
+    }
+    lc->outfd[lc->n_outfd] = open_output(o->file_path);
+    if (lc->outfd[lc->n_outfd] < 0)
+      return -1;
+    lc->n_outfd++;
+  }
+  return 0;
+}
+
+static void close_outputs(loop_ctx_t *lc, int mkv_fd) {
+  int i;
+  for (i = 0; i < lc->n_rtmp; i++)
+    rtmpout_close(lc->rtmp[i]);
+  for (i = 0; i < lc->n_outfd; i++)
+    if (lc->outfd[i] != STDOUT_FILENO)
+      close(lc->outfd[i]);
+  if (mkv_fd >= 0 && mkv_fd != STDOUT_FILENO)
+    close(mkv_fd);
+}
+
 int main(int argc, char **argv) {
   config_t cfg;
   args_status_t st;
@@ -102,10 +163,12 @@ int main(int argc, char **argv) {
   unsigned char buf[65536];
   char mkv_app_name[64];
   mkv_opts_t mkv_opts;
+  flv_opts_t flv_opts;
   double start, last_stat;
-  char in_desc[128];
+  char in_desc[128], outdesc[2048];
   unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
   int n_all_pids;
+  int mkv_fd;
 
   log_set_color(log_color_prescan(argc, argv));
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
@@ -119,11 +182,22 @@ int main(int argc, char **argv) {
     return 2;
   }
 
+  {
+    int i, on = 0;
+    for (i = 0; i < cfg.n_out; i++) {
+      char one[600];
+      int r;
+      out_describe(&cfg.out[i], one, sizeof one);
+      r = snprintf(outdesc + on, sizeof outdesc - (size_t)on, "%s%s", i ? "," : "", one);
+      if (r > 0 && (size_t)on + (size_t)r < sizeof outdesc)
+        on += r;
+    }
+  }
   input_describe(&cfg.input, in_desc, sizeof in_desc);
-  log_line(TOOL_NAME ": i:%s k:%s s:%s e:%s o:%s%s", in_desc, cfg.key_path ? cfg.key_path : "(none)", cfg.serial ? cfg.serial : "(none)", cfg.emm_file ? cfg.emm_file : "(none)", cfg.out_path, cfg.unicast_emm_uri ? " unicast-emm:yes" : "");
+  log_line(TOOL_NAME ": i:%s k:%s s:%s e:%s o:%s%s", in_desc, cfg.key_path ? cfg.key_path : "(none)", cfg.serial ? cfg.serial : "(none)", cfg.emm_file ? cfg.emm_file : "(none)", outdesc, cfg.unicast_emm_uri ? " unicast-emm:yes" : "");
 
-  lc.dev = NULL; /* lazily created once the stream reveals it needs ECM/EMM-driven CAS */
-  lc.biss_ca = NULL; /* lazily created once the stream reveals BISS Mode CA */
+  lc.dev = NULL; /* lazily created once stream reveals it needs ECM/EMM-driven CAS */
+  lc.biss_ca = NULL; /* lazily created once stream reveals BISS Mode CA */
   lc.ipi = NULL;
   lc.cache = emmcache_new();
   if (!lc.cache)
@@ -154,8 +228,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  lc.out = open_output(cfg.out_path);
-  if (lc.out < 0) {
+  if (open_outputs(&cfg, &lc, &mkv_fd)) {
+    close_outputs(&lc, mkv_fd);
     tssrc_close(src);
     emmcache_free(lc.cache);
     device_state_free(lc.dev);
@@ -171,15 +245,29 @@ int main(int argc, char **argv) {
     mkv_opts.app_name = mkv_app_name;
     mkv_opts.source_desc = in_desc;
     if (n_all_pids > 0)
-      lc.mkv = mkv_new(lc.out, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, all_pids, n_all_pids);
+      lc.mkv = mkv_new(mkv_fd, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, all_pids, n_all_pids);
     else if (pmt_pid)
-      lc.mkv = mkv_new(lc.out, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, &pmt_pid, 1);
+      lc.mkv = mkv_new(mkv_fd, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, &pmt_pid, 1);
     else
-      lc.mkv = mkv_new(lc.out, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, NULL, 0);
+      lc.mkv = mkv_new(mkv_fd, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, NULL, 0);
     if (!lc.mkv) {
       log_line(TOOL_NAME ": cannot start mkv/mka mux");
-      if (lc.out != STDOUT_FILENO)
-        close(lc.out);
+      close_outputs(&lc, mkv_fd);
+      tssrc_close(src);
+      emmcache_free(lc.cache);
+      device_state_free(lc.dev);
+      biss_ca_state_free(lc.biss_ca);
+      return 1;
+    }
+  }
+  if (lc.n_rtmp > 0) {
+    memset(&flv_opts, 0, sizeof flv_opts);
+    lc.flv = flv_new(&flv_opts, pmt_pid, rtmp_fanout_cb, &lc, NULL);
+    if (!lc.flv) {
+      log_line(TOOL_NAME ": cannot start flv mux");
+      if (lc.mkv)
+        mkv_close(lc.mkv);
+      close_outputs(&lc, mkv_fd);
       tssrc_close(src);
       emmcache_free(lc.cache);
       device_state_free(lc.dev);
@@ -202,8 +290,11 @@ int main(int argc, char **argv) {
   lc.fatal = 0;
   lc.psi = psi_new();
   if (!lc.psi) {
-    if (lc.out != STDOUT_FILENO)
-      close(lc.out);
+    if (lc.flv)
+      flv_close(lc.flv);
+    if (lc.mkv)
+      mkv_close(lc.mkv);
+    close_outputs(&lc, mkv_fd);
     tssrc_close(src);
     emmcache_free(lc.cache);
     device_state_free(lc.dev);
@@ -211,7 +302,7 @@ int main(int argc, char **argv) {
     return 1;
   }
   if (pmt_pid)
-    psi_select_pmt_pid(lc.psi, pmt_pid); /* CW derivation is mux-wide either way; nicer stats only */
+    psi_select_pmt_pid(lc.psi, pmt_pid); /* CW derivation is mux-wide either way, nicer stats only */
 
   memset(&pz, 0, sizeof pz);
   signals_install();
@@ -235,10 +326,11 @@ int main(int argc, char **argv) {
   ipiclient_free(lc.ipi);
   scrambler_free(lc.scr);
   psi_free(lc.psi);
+  if (lc.flv)
+    flv_close(lc.flv);
   if (lc.mkv)
     mkv_close(lc.mkv);
-  if (lc.out != STDOUT_FILENO)
-    close(lc.out);
+  close_outputs(&lc, mkv_fd);
   tssrc_close(src);
   emmcache_free(lc.cache);
   device_state_free(lc.dev);

@@ -99,6 +99,17 @@ static void print_help(void) {
       "      --metrics <path>    a: Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
       "      --metrics-id <name> a: stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s> a: snapshot interval in seconds (default: 5)\n"
+      "      --packages <path>   a: Package Discovery from id,name,lang,visible,svc1|svc2|... lines\n"
+      "      --cells <path>      a: Regionalisation Discovery from id,country,type:value,... lines\n"
+      "      --rms-name <name>   a: RMS Discovery display name; requires --rms-location\n"
+      "      --rms-lang <code>   a: ISO 639-2 for --rms-name (default deu)\n"
+      "      --rms-location <uri> a: RMSType RMSLocation\n"
+      "      --rms-logo <uri>    a: RMSType LogoURI\n"
+      "      --fus-name <name>   a: FUS Discovery display name; requires --fus-id\n"
+      "      --fus-lang <code>   a: ISO 639-2 for --fus-name (default deu)\n"
+      "      --fus-id <n>        a: FUSID (decimal)\n"
+      "      --fus-announce <a>:<p> a: FUS MulticastAnnouncementAddress\n"
+      "      --fus-logo <uri>    a: FUSType LogoURI\n"
       "  -h, --help              this help\n\n"
       "examples:\n"
       "  %s -a -i channels.csv -p example.org -O \"My Headend\" -m 239.255.0.1:3937\n"
@@ -137,11 +148,23 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics", required_argument, 0, 1009},
       {"metrics-id", required_argument, 0, 1010},
       {"metrics-interval", required_argument, 0, 1011},
+      {"packages", required_argument, 0, 1016},
+      {"cells", required_argument, 0, 1017},
+      {"rms-name", required_argument, 0, 1018},
+      {"rms-lang", required_argument, 0, 1019},
+      {"rms-location", required_argument, 0, 1020},
+      {"rms-logo", required_argument, 0, 1021},
+      {"fus-name", required_argument, 0, 1022},
+      {"fus-lang", required_argument, 0, 1023},
+      {"fus-id", required_argument, 0, 1024},
+      {"fus-announce", required_argument, 0, 1025},
+      {"fus-logo", required_argument, 0, 1026},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_a = 0, have_l = 0, have_mcast = 0, have_t = 0;
   int have_ret_rtx_time = 0, have_ret_rtx_pt = 0, have_ret_mc_port = 0;
   int have_fcc_rtx_time = 0, have_fcc_rtx_pt = 0, have_fcc_resolve_max_channels = 0;
+  int have_rms_lang = 0, have_fus_lang = 0, have_fus_id = 0;
   long t_value = 0;
   int c;
 
@@ -333,6 +356,62 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       cfg->metrics_interval_s = (unsigned)v;
       break;
     }
+    case 1016:
+      cfg->packages_path = optarg;
+      break;
+    case 1017:
+      cfg->cells_path = optarg;
+      break;
+    case 1018:
+      cfg->rms_name = optarg;
+      cfg->rms_enabled = 1;
+      break;
+    case 1019:
+      if (strlen(optarg) != 3) {
+        argerr("invalid --rms-lang: %s (3-letter ISO 639-2 code)", optarg);
+        return ARGS_ERR;
+      }
+      memcpy(cfg->rms_lang, optarg, 3);
+      have_rms_lang = 1;
+      break;
+    case 1020:
+      cfg->rms_location = optarg;
+      break;
+    case 1021:
+      cfg->rms_logo = optarg;
+      break;
+    case 1022:
+      cfg->fus_name = optarg;
+      cfg->fus_enabled = 1;
+      break;
+    case 1023:
+      if (strlen(optarg) != 3) {
+        argerr("invalid --fus-lang: %s (3-letter ISO 639-2 code)", optarg);
+        return ARGS_ERR;
+      }
+      memcpy(cfg->fus_lang, optarg, 3);
+      have_fus_lang = 1;
+      break;
+    case 1024: {
+      char *end;
+      unsigned long v = strtoul(optarg, &end, 10);
+      if (*end != '\0') {
+        argerr("invalid --fus-id: %s", optarg);
+        return ARGS_ERR;
+      }
+      cfg->fus_id = v;
+      have_fus_id = 1;
+      break;
+    }
+    case 1025:
+      if (ret_addr_parse(optarg, cfg->fus_announce_addr, sizeof cfg->fus_announce_addr, &cfg->fus_announce_port)) {
+        argerr("invalid --fus-announce: %s", optarg);
+        return ARGS_ERR;
+      }
+      break;
+    case 1026:
+      cfg->fus_logo = optarg;
+      break;
     case 'h':
       print_help();
       return ARGS_HELP;
@@ -409,6 +488,38 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       if (!have_fcc_resolve_max_channels)
         cfg->fcc_resolve_max_channels = 384;
     }
+    if ((cfg->packages_path || cfg->cells_path || cfg->rms_enabled || cfg->fus_enabled) && has_suffix(cfg->input_path, ".xml")) {
+      argerr("--packages/--cells/--rms-name/--fus-name have no effect with a raw .xml -i input (that path is sent through unparsed)");
+      return ARGS_ERR;
+    }
+    if (cfg->rms_enabled && cfg->fus_enabled) {
+      argerr("--rms-name and --fus-name are mutually exclusive (RMSFUSDiscovery carries one or the other, never both)");
+      return ARGS_ERR;
+    }
+    if (!cfg->rms_enabled && (have_rms_lang || cfg->rms_location || cfg->rms_logo)) {
+      argerr("--rms-lang/--rms-location/--rms-logo require --rms-name");
+      return ARGS_ERR;
+    }
+    if (cfg->rms_enabled) {
+      if (!cfg->rms_location) {
+        argerr("--rms-name requires --rms-location");
+        return ARGS_ERR;
+      }
+      if (!have_rms_lang)
+        memcpy(cfg->rms_lang, "deu", 3);
+    }
+    if (!cfg->fus_enabled && (have_fus_lang || have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo)) {
+      argerr("--fus-lang/--fus-id/--fus-announce/--fus-logo require --fus-name");
+      return ARGS_ERR;
+    }
+    if (cfg->fus_enabled) {
+      if (!have_fus_id) {
+        argerr("--fus-name requires --fus-id");
+        return ARGS_ERR;
+      }
+      if (!have_fus_lang)
+        memcpy(cfg->fus_lang, "deu", 3);
+    }
   } else {
     if (cfg->ret_enabled || have_ret_rtx_time || have_ret_rtx_pt || cfg->ret_mc || have_ret_mc_port || cfg->ret_rsi_mc_ret) {
       argerr("--ret-* options are announce-only");
@@ -420,6 +531,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
     if (cfg->metrics_id) {
       argerr("--metrics-id is announce-only");
+      return ARGS_ERR;
+    }
+    if (cfg->packages_path || cfg->cells_path || cfg->rms_enabled || have_rms_lang || cfg->rms_location || cfg->rms_logo ||
+        cfg->fus_enabled || have_fus_lang || have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo) {
+      argerr("--packages/--cells/--rms-*/--fus-* options are announce-only");
       return ARGS_ERR;
     }
     if (!cfg->output_path)

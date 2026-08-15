@@ -288,8 +288,14 @@ int input_load(const char *path, input_t *in) {
       in->raw_payload_id = DVBSTP_PAYLOAD_BROADCAST_DISCOVERY;
     else if (strstr((char *)buf, "<ServiceProviderDiscovery"))
       in->raw_payload_id = DVBSTP_PAYLOAD_SP_DISCOVERY;
+    else if (strstr((char *)buf, "<PackageDiscovery"))
+      in->raw_payload_id = DVBSTP_PAYLOAD_PACKAGE_DISCOVERY;
+    else if (strstr((char *)buf, "<RegionalisationDiscovery"))
+      in->raw_payload_id = DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY;
+    else if (strstr((char *)buf, "<RMSFUSDiscovery"))
+      in->raw_payload_id = DVBSTP_PAYLOAD_RMSFUS_DISCOVERY;
     else {
-      fprintf(stderr, TOOL_NAME ": %s: no BroadcastDiscovery/ServiceProviderDiscovery root element\n", path);
+      fprintf(stderr, TOOL_NAME ": %s: no recognized SD&S root element\n", path);
       free(buf);
       return -1;
     }
@@ -336,4 +342,156 @@ int input_load(const char *path, input_t *in) {
 void input_free(input_t *in) {
   free(in->raw_xml);
   in->raw_xml = NULL;
+}
+
+int input_load_packages(const char *path, sds_package_t *out, int max, int *count) {
+  FILE *f = fopen(path, "r");
+  char line[1024];
+  int idx = 0, lineno = 0;
+
+  if (!f) {
+    fprintf(stderr, TOOL_NAME ": cannot open %s\n", path);
+    return -1;
+  }
+  while (fgets(line, sizeof line, f)) {
+    char *fields[5];
+    int nf = 0;
+    char *p = line;
+    char *end, *svc;
+    sds_package_t *pkg;
+    size_t l = strlen(line);
+    lineno++;
+    while (l && (line[l - 1] == '\n' || line[l - 1] == '\r'))
+      line[--l] = '\0';
+    if (!line[0])
+      continue;
+    while (nf < 5) {
+      fields[nf++] = p;
+      p = strchr(p, ',');
+      if (!p)
+        break;
+      *p = '\0';
+      p++;
+    }
+    if (nf < 5) {
+      fprintf(stderr, TOOL_NAME ": %s: line %d: expected id,name,lang,visible,svc1|svc2|...\n", path, lineno);
+      fclose(f);
+      return -1;
+    }
+    if (idx >= max) {
+      fprintf(stderr, TOOL_NAME ": %s: too many packages (max %d)\n", path, max);
+      fclose(f);
+      return -1;
+    }
+    pkg = &out[idx];
+    memset(pkg, 0, sizeof *pkg);
+    pkg->id = (unsigned)strtoul(fields[0], &end, 10);
+    if (*end != '\0') {
+      fprintf(stderr, TOOL_NAME ": %s: line %d: bad package id: %s\n", path, lineno, fields[0]);
+      fclose(f);
+      return -1;
+    }
+    bufcpy(pkg->name, sizeof pkg->name, fields[1]);
+    if (strlen(fields[2]) != 3) {
+      fprintf(stderr, TOOL_NAME ": %s: line %d: bad lang: %s\n", path, lineno, fields[2]);
+      fclose(f);
+      return -1;
+    }
+    memcpy(pkg->lang, fields[2], 3);
+    pkg->visible = fields[3][0] == '\0' || fields[3][0] == '1';
+    svc = strtok(fields[4], "|");
+    while (svc) {
+      if (pkg->service_count >= SDS_MAX_PKG_SERVICES) {
+        fprintf(stderr, TOOL_NAME ": %s: line %d: too many services in package (max %d)\n", path, lineno, SDS_MAX_PKG_SERVICES);
+        fclose(f);
+        return -1;
+      }
+      bufcpy(pkg->service_names[pkg->service_count], sizeof pkg->service_names[0], svc);
+      pkg->service_count++;
+      svc = strtok(NULL, "|");
+    }
+    if (pkg->service_count == 0) {
+      fprintf(stderr, TOOL_NAME ": %s: line %d: package has no services\n", path, lineno);
+      fclose(f);
+      return -1;
+    }
+    idx++;
+  }
+  *count = idx;
+  fclose(f);
+  return 0;
+}
+
+int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
+  FILE *f = fopen(path, "r");
+  char line[512];
+  int idx = 0, lineno = 0;
+
+  if (!f) {
+    fprintf(stderr, TOOL_NAME ": cannot open %s\n", path);
+    return -1;
+  }
+  while (fgets(line, sizeof line, f)) {
+    char *tok;
+    sds_cell_t *cell;
+    size_t l = strlen(line);
+    lineno++;
+    while (l && (line[l - 1] == '\n' || line[l - 1] == '\r'))
+      line[--l] = '\0';
+    if (!line[0])
+      continue;
+    if (idx >= max) {
+      fprintf(stderr, TOOL_NAME ": %s: too many cells (max %d)\n", path, max);
+      fclose(f);
+      return -1;
+    }
+    cell = &out[idx];
+    memset(cell, 0, sizeof *cell);
+    tok = strtok(line, ",");
+    if (!tok) {
+      fprintf(stderr, TOOL_NAME ": %s: line %d: expected id,country,type:value,...\n", path, lineno);
+      fclose(f);
+      return -1;
+    }
+    bufcpy(cell->id, sizeof cell->id, tok);
+    tok = strtok(NULL, ",");
+    if (!tok || strlen(tok) != 2) {
+      fprintf(stderr, TOOL_NAME ": %s: line %d: bad country code: %s\n", path, lineno, tok ? tok : "(missing)");
+      fclose(f);
+      return -1;
+    }
+    bufcpy(cell->country, sizeof cell->country, tok);
+    while ((tok = strtok(NULL, ",")) != NULL) {
+      char *colon = strchr(tok, ':');
+      char *end;
+      if (!colon) {
+        fprintf(stderr, TOOL_NAME ": %s: line %d: bad CA entry: %s\n", path, lineno, tok);
+        fclose(f);
+        return -1;
+      }
+      if (cell->ca_depth >= SDS_MAX_CA_DEPTH) {
+        fprintf(stderr, TOOL_NAME ": %s: line %d: too many CA entries (max %d)\n", path, lineno, SDS_MAX_CA_DEPTH);
+        fclose(f);
+        return -1;
+      }
+      *colon = '\0';
+      cell->ca[cell->ca_depth].type = (unsigned)strtoul(tok, &end, 10);
+      if (*end != '\0') {
+        fprintf(stderr, TOOL_NAME ": %s: line %d: bad CA type: %s\n", path, lineno, tok);
+        fclose(f);
+        return -1;
+      }
+      bufcpy(cell->ca[cell->ca_depth].value, sizeof cell->ca[cell->ca_depth].value, colon + 1);
+      cell->ca_depth++;
+    }
+    if (cell->ca_depth == 0) {
+      fprintf(stderr, TOOL_NAME ": %s: line %d: cell has no CA entries\n", path, lineno);
+      fclose(f);
+      return -1;
+    }
+    idx++;
+  }
+  *count = idx;
+  fclose(f);
+  return 0;
 }

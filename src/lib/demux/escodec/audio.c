@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "priv.h"
+#include "escodec.h"
 
 /* AC-3 frame size in words: [frmsizecod][fscod 48/44.1/32k] */
 static const unsigned short ac3_fsz[38][3] = {
@@ -34,7 +34,7 @@ static const unsigned short mpa_br[2][3][16] = {
 static const unsigned mpa_sample_rates[4][3] = {{11025, 12000, 8000},{0, 0, 0},{22050, 24000, 16000},{44100, 48000, 32000}};
 static const unsigned aac_sample_rates[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000,  7350};
 
-static int next_ac3(track_t *t, const unsigned char *d, size_t len, frame_t *f) {
+static int next_ac3(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   unsigned fscod, frmsizecod;
 
   (void)t;
@@ -57,7 +57,7 @@ static int next_ac3(track_t *t, const unsigned char *d, size_t len, frame_t *f) 
   return 0;
 }
 
-static int next_eac3(track_t *t, const unsigned char *d, size_t len, frame_t *f) {
+static int next_eac3(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   static const unsigned blk[4] = {1, 2, 3, 6};
   static const unsigned rate2[3] = {24000, 22050, 16000};
   unsigned frmsiz, fscod, numblkscod;
@@ -90,7 +90,7 @@ static int next_eac3(track_t *t, const unsigned char *d, size_t len, frame_t *f)
   return 0;
 }
 
-static int next_mpa(track_t *t, const unsigned char *d, size_t len, frame_t *f) {
+static int next_mpa(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   unsigned ver, lay, bri, sri, pad, br, sr;
   int mpeg1, ly;
 
@@ -131,7 +131,7 @@ static int next_mpa(track_t *t, const unsigned char *d, size_t len, frame_t *f) 
   return 0;
 }
 
-static int next_aac(track_t *t, const unsigned char *d, size_t len, frame_t *f) {
+static int next_aac(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   unsigned prof, sfi, chcfg, fl, hl;
 
   if (len < 7)
@@ -162,7 +162,7 @@ static int next_aac(track_t *t, const unsigned char *d, size_t len, frame_t *f) 
   return 0;
 }
 
-static int latm_cfg(br_t *b, track_t *t) {
+static int latm_cfg(br_t *b, esc_track_t *t) {
   unsigned amv, sfi, ch, aot;
   size_t asc_start, asc_end;
 
@@ -229,7 +229,7 @@ static int latm_cfg(br_t *b, track_t *t) {
   return b->err ? -1 : 0;
 }
 
-static int next_latm(track_t *t, const unsigned char *d, size_t len, frame_t *f) {
+static int next_latm(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   br_t b;
   size_t total, plen = 0, i;
   unsigned v;
@@ -271,7 +271,7 @@ static int next_latm(track_t *t, const unsigned char *d, size_t len, frame_t *f)
   return 0;
 }
 
-int next_frame(track_t *t, const unsigned char *d, size_t len, frame_t *f) {
+int next_frame(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   memset(f, 0, sizeof *f);
   f->layer = 2;
   switch (t->codec) {

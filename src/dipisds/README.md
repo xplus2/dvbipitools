@@ -37,6 +37,17 @@ dipisds -l -m <mcast>:<port> [options]
 |      | `--metrics`       | `<path>`                    | announce: `/run/dvbipitools/metrics.sock`  |
 |      | `--metrics-id`    | `<name>`                    | announce: none (metrics disabled unless set) |
 |      | `--metrics-interval` | `<s>`                    | announce: `5`                              |
+|      | `--packages`      | `<path>`                    | announce: off (no Package Discovery)       |
+|      | `--cells`         | `<path>`                    | announce: off (no Regionalisation Discovery) |
+|      | `--rms-name`      | `<name>`                    | announce: off (no RMS-FUS Discovery)       |
+|      | `--rms-lang`      | `<code>`                    | announce: `deu`                            |
+|      | `--rms-location`  | `<uri>`                     | announce: required with `--rms-name`       |
+|      | `--rms-logo`      | `<uri>`                     | announce: off                              |
+|      | `--fus-name`      | `<name>`                    | announce: off (no RMS-FUS Discovery)       |
+|      | `--fus-lang`      | `<code>`                    | announce: `deu`                            |
+|      | `--fus-id`        | `<n>`                       | announce: required with `--fus-name`       |
+|      | `--fus-announce`  | `<addr>:<port>`             | announce: off                              |
+|      | `--fus-logo`      | `<uri>`                     | announce: off                              |
 | `-h` | `--help`          |                             |                                             |
 
 ## Announce (`-a`)
@@ -171,6 +182,67 @@ per the spec an HNED using both services is meant to use only this element, igno
   `rtcp-bandwidth`/`rtcp-rsize`/`dvb-*` attributes.
 
 
+## Package Discovery (`--packages`)
+
+Off by default. `--packages <path>` (announce, requires a `.csv`/`.m3u`/`.xspf` `-i`, same
+restriction as `--ret-addr`/`--fcc-addr`) adds a Package Discovery record (payload 0x05, ETSI
+TS 102 034 clause 5.2.13.4, `PackagedServices`).
+
+One line per package:
+```
+id,name,lang,visible,svc1|svc2|svc3
+```
+`id` is the numeric `Id`. `name` and `lang` set the `PackageName` text and its language (ISO 639-2).
+`visible` is `0` or `1` (default=1). 
+Service names are matched against `-i` entries by `ServiceName`. Matches get a `DVBTriplet`, unmatched names are emitted without one.
+
+Known gaps: 
+`PackageDescription` (BCG linkage), `LogicalChannelNumber`, `PackageReference`, `PackageAvailability`, `URILinkage`,
+`ciAncillaryData`, deprecated `CountryAvailability`.
+
+## Regionalisation Discovery (`--cells`)
+
+Off by default. `--cells <path>` (announce, same `-i` restriction as `--packages`) adds a
+Regionalisation Discovery record (payload 0x07, clause 5.2.13.8, `RegionalisationOffering`).
+
+One line per cell:
+```
+id,country,type:value,type:value,...
+```
+`id` is the `Cell`'s `Id`, matched against `ServiceAvailability`/`PackageAvailability` `Cells`
+elsewhere. `country` is the 2-letter ISO 3166 `CountryCode`. The `type:value` pairs are RFC 4676 civic address types,
+nested outer to inner in the order given.
+
+Only a single outer-to-inner chain per cell, not a general branching `CA` tree.
+
+## RMS-FUS Discovery (`--rms-name` / `--fus-name`)
+
+Off by default. Adds an RMS-FUS Discovery record (payload 0x08, clause 5.2.13.6, `RMSFUSDiscoveryType`), 
+same `-i` restriction as `--packages`. `--rms-name`/`--fus-name` are mutually exclusive:
+the XSD models this record as a choice, RMS provider or FUS provider, never both.
+
+`--rms-name <name>` (requires `--rms-location <uri>`):
+```xml
+<RMSProvider RMSLocation="https://rms.example/">
+  <RMSName Language="deu">My RMS</RMSName>
+</RMSProvider>
+```
+`--fus-name <name>` (requires `--fus-id <n>`, optional `--fus-announce <addr>:<port>`):
+```xml
+<FUSProvider>
+  <FUSName Language="deu">My FUS</FUSName>
+  <FUSID>1</FUSID>
+  <FUSAnnouncement>
+    <MulticastAnnouncementAddress Address="239.1.1.1" Port="5000"/>
+  </FUSAnnouncement>
+</FUSProvider>
+```
+`--rms-lang` and `--fus-lang` set the display name's language, and `--rms-logo` and `--fus-logo` set the optional `LogoURI`.
+
+Known gaps: 
+`DSMProvider`, `RMSID`, `Description`, and `FUSAnnouncement`'s `FUSUnicastAnnouncement`/`QRCLocation`.
+
+
 ## Listen (`-l`)
 
 Joins `-m`, reassembles DVBSTP segments, and after `-t` (`--timeout`) seconds (default 35, just
@@ -197,11 +269,15 @@ Announce: one line per cycle. Listen: one line per segment received.
 
 ## Scope
 
-DVBSTP framing is generic; the XML side only understands the subset of the SD&S schema this
-tool itself produces (`ServiceProviderDiscovery`/`BroadcastDiscovery`, `SingleService` with
-`ServiceLocation`/`TextualIdentifier`/`DVBTriplet`). It is not a general SD&S client - other
-record types (CoD, packages, BCG, regionalisation) are out of scope. Compression is always
-"none": gzip is spec-restricted to other payload ids, and BiM is not implemented.
+DVBSTP framing is generic; on announce, the structured (non-`.xml`) side understands Service
+Provider Discovery, Broadcast Discovery, Package Discovery, Regionalisation Discovery, and
+RMS-FUS Discovery (payloads 0x01/0x02/0x05/0x07/0x08), each a minimal producer subset of its
+ETSI TS 102 034 clause 5.2.13 type. Anything wider goes through `.xml` passthrough (see
+Announce, above). Listen (`-l`) remains Broadcast Discovery only.
+
+It is not a general SD&S client: CoD and BCG-carriage records (BCG has its own tool, `dipibcg`)
+remain out of scope. Compression is always "none": gzip is spec-restricted to other payload ids,
+and BiM is not implemented.
 
 ## Running under systemd
 

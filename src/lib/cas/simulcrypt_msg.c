@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "lib/mux/psi_build.h"
+#include "lib/signal.h"
 
 #include "simulcrypt_msg.h"
 
@@ -131,6 +132,7 @@ int simulcrypt_reader_poll(simulcrypt_reader_t *r, int fd, int timeout_ms, simul
 
 int simulcrypt_send_all(int fd, const unsigned char *buf, size_t len, int timeout_ms) {
   size_t sent = 0;
+  double deadline = mono_seconds() + (double)timeout_ms / 1000.0;
   while (sent < len) {
     ssize_t n = send(fd, buf + sent, len - sent, MSG_NOSIGNAL);
     if (n > 0) {
@@ -138,8 +140,9 @@ int simulcrypt_send_all(int fd, const unsigned char *buf, size_t len, int timeou
       continue;
     }
     if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      double remain = (deadline - mono_seconds()) * 1000.0;
       struct pollfd pfd = {fd, POLLOUT, 0};
-      if (poll(&pfd, 1, timeout_ms) <= 0)
+      if (remain <= 0 || poll(&pfd, 1, (int)remain) <= 0)
         return -1;
       continue;
     }

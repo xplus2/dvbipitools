@@ -12,7 +12,7 @@ TSAN=no
 TESTS=no
 FUZZING=no
 TLS=auto
-CSA2=auto
+CSA=yes
 RIST=auto
 ZLIB=auto
 
@@ -24,13 +24,12 @@ usage: ./configure [options]
   --static       link statically
   --sanitize     build with AddressSanitizer + UndefinedBehaviorSanitizer
   --tsan         build with ThreadSanitizer (cannot combine with --sanitize)
-  --tests        enable the 'make test' target (requires Check via pkg-config)
-  --fuzz         enable the 'make fuzz-harnesses' target (AFL++ standalone harnesses;
+  --tests        enable 'make test' target
+  --fuzz         enable 'make fuzz-harnesses' target (AFL++ standalone harnesses;
                  pass --cc=afl-clang-fast for real instrumentation)
   --no-tls       build dipirec, dipiradiohead, dipitvhead without HTTPS/TLS
-                 support (default: auto-detect OpenSSL via pkg-config)
-  --no-csa2      build dipitvhead, dipidescramble without DVB-CSA2 support
-                 (default: auto-detect libdvbcsa)
+                 support
+  --no-csa       build dipitvhead, dipiradiohead, dipidescramble w/o CSA1/CSA2/BISS1
   --no-rist      skip dipirist (default: auto-detect librist)
   --no-zlib      build dipibcg without BCG container compression support
   --cc=CC        C compiler (default: cc, or \$CC)
@@ -48,7 +47,7 @@ while [ $# -gt 0 ]; do
         --tests)    TESTS=yes ;;
         --fuzz)     FUZZING=yes ;;
         --no-tls)   TLS=no ;;
-        --no-csa2)  CSA2=no ;;
+        --no-csa)   CSA=no ;;
         --no-rist)  RIST=no ;;
         --no-zlib)  ZLIB=no ;;
         --cc=*)     CC=${1#--cc=} ;;
@@ -121,10 +120,10 @@ CHECK_LIBS := $CHECK_LIBS
 FUZZING := $FUZZING
 TSAN := $TSAN
 TLS := $TLS
-CSA2 := $CSA2
+CSA := $CSA
 RIST := $RIST
 ZLIB := $ZLIB
 EOF
 
-echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING tls=$TLS csa2=$CSA2 rist=$RIST zlib=$ZLIB"
+echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING tls=$TLS csa=$CSA rist=$RIST zlib=$ZLIB"
 echo "run 'make' to build."

@@ -6,20 +6,9 @@ if (DVBIPITOOLS_STATIC)
 endif ()
 find_package(OpenSSL)
 
-option(DIPIDESCRAMBLE_CSA2 "build dipidescramble with DVB-CSA2 support (requires libdvbcsa)" ON)
+option(DIPIDESCRAMBLE_CSA "build dipidescramble with DVB-CSA (CSA1/CSA2/BISS1) support" ON)
 
-set(DIPIDESCRAMBLE_HAVE_CSA2 FALSE)
-if (DIPIDESCRAMBLE_CSA2)
-    find_path(DVBCSA_INCLUDE_DIR dvbcsa/dvbcsa.h)
-    find_library(DVBCSA_LIBRARY dvbcsa)
-    if (DVBCSA_INCLUDE_DIR AND DVBCSA_LIBRARY)
-        set(DIPIDESCRAMBLE_HAVE_CSA2 TRUE)
-    else ()
-        message(WARNING "dipidescramble: libdvbcsa not found, building without CSA2 support")
-    endif ()
-endif ()
-
-if (DIPIDESCRAMBLE_HAVE_CSA2)
+if (DIPIDESCRAMBLE_CSA)
     set(CSA2_SRC ../lib/scrambler/csa2.c)
 else ()
     set(CSA2_SRC ../lib/scrambler/csa2_stub.c)
@@ -61,13 +50,24 @@ if (OpenSSL_FOUND)
         ../lib/demux/mpts_probe.c
         ../lib/mux/ebml.c
         ../lib/mux/mkv/mkv.c
-        ../lib/mux/mkv/bitreader.c
-        ../lib/mux/mkv/audio.c
+        ../lib/demux/escodec/bitreader.c
+        ../lib/demux/escodec/audio.c
         ../lib/mux/mkv/video.c
+        ../lib/demux/escodec/video.c
         ../lib/mux/mkv/write.c
         ../lib/mux/mkv/feed.c
         ../lib/mux/teletext.c
         ../lib/mux/psi_build.c
+        ../lib/mux/amf.c
+        ../lib/mux/flv/flv.c
+        ../lib/mux/flv/feed.c
+        ../lib/mux/flv/write.c
+        ../lib/net/rtmp/handshake.c
+        ../lib/net/rtmp/chunk.c
+        ../lib/net/rtmp/session.c
+        ../lib/net/rtmp/command.c
+        ../lib/net/rtmp/rtmp.c
+        ../lib/net/rtmpout.c
         ../lib/scrambler/scrambler.c
         ../lib/scrambler/cissa.c
         ../lib/cas/biss/biss.c
@@ -77,9 +77,8 @@ if (OpenSSL_FOUND)
 
     target_link_libraries(dipidescramble PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 
-    if (DIPIDESCRAMBLE_HAVE_CSA2)
-        target_include_directories(dipidescramble PRIVATE ${DVBCSA_INCLUDE_DIR})
-        target_link_libraries(dipidescramble PRIVATE ${DVBCSA_LIBRARY})
+    if (DIPIDESCRAMBLE_CSA)
+        target_link_libraries(dipidescramble PRIVATE ${CMAKE_DL_LIBS})
     endif ()
 else ()
     message(WARNING "dipidescramble: OpenSSL not found, skipping this tool entirely (RSA/AES crypto is its whole purpose)")

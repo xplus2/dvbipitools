@@ -240,7 +240,7 @@ END_TEST
 
 START_TEST(sds_build_sp_contains_expected_fields) {
   unsigned char buf[2048];
-  size_t len = sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, buf, sizeof buf);
+  size_t len = sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, NULL, 0, buf, sizeof buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((char *)buf, "DomainName=\"example.invalid\""));
   ck_assert_ptr_nonnull(strstr((char *)buf, "Language=\"deu\""));
@@ -251,7 +251,16 @@ END_TEST
 
 START_TEST(sds_build_sp_rejects_small_cap) {
   unsigned char buf[8];
-  ck_assert_uint_eq(sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, buf, sizeof buf), 0u);
+  ck_assert_uint_eq(sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, NULL, 0, buf, sizeof buf), 0u);
+}
+END_TEST
+
+START_TEST(sds_build_sp_lists_extra_payload_ids) {
+  unsigned char buf[2048];
+  unsigned extra[2] = {5, 7};
+  size_t len = sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, extra, 2, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<PayloadId Id=\"2\"/><PayloadId Id=\"5\"/><PayloadId Id=\"7\"/>"));
 }
 END_TEST
 
@@ -297,6 +306,93 @@ START_TEST(sds_parse_broadcast_not_truncated_when_it_fits) {
 }
 END_TEST
 
+START_TEST(sds_build_package_resolves_dvb_triplet_by_name) {
+  sds_service_t svcs[1];
+  sds_package_t pkg;
+  unsigned char buf[2048];
+  size_t len;
+
+  memset(svcs, 0, sizeof svcs);
+  snprintf(svcs[0].name, sizeof svcs[0].name, "Channel One");
+  svcs[0].tsid = 1;
+  svcs[0].onid = 2;
+  svcs[0].sid = 101;
+
+  memset(&pkg, 0, sizeof pkg);
+  pkg.id = 7;
+  snprintf(pkg.name, sizeof pkg.name, "Bundle");
+  memcpy(pkg.lang, "eng", 3);
+  pkg.visible = 1;
+  snprintf(pkg.service_names[0], sizeof pkg.service_names[0], "Channel One");
+  snprintf(pkg.service_names[1], sizeof pkg.service_names[1], "Unknown Channel");
+  pkg.service_count = 2;
+
+  len = sds_build_package("example.invalid", 1, &pkg, 1, svcs, 1, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<Package Id=\"7\" Visible=\"true\">"));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<DVBTriplet OrigNetId=\"2\" TSId=\"1\" ServiceId=\"101\"/>"));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "ServiceName=\"Unknown Channel\"/></Service>"));
+}
+END_TEST
+
+START_TEST(sds_build_regionalisation_nests_ca_chain) {
+  sds_cell_t cell;
+  unsigned char buf[2048];
+  size_t len;
+
+  memset(&cell, 0, sizeof cell);
+  snprintf(cell.id, sizeof cell.id, "Paris East");
+  memcpy(cell.country, "FR", 2);
+  cell.ca[0].type = 1;
+  snprintf(cell.ca[0].value, sizeof cell.ca[0].value, "IDF");
+  cell.ca[1].type = 3;
+  snprintf(cell.ca[1].value, sizeof cell.ca[1].value, "Paris");
+  cell.ca_depth = 2;
+
+  len = sds_build_regionalisation("example.invalid", 1, &cell, 1, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<Cell Id=\"Paris East\">"));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<CA Type=\"1\" Value=\"IDF\"><CA Type=\"3\" Value=\"Paris\"></CA></CA>"));
+}
+END_TEST
+
+START_TEST(sds_build_rms_fus_emits_rms_provider) {
+  sds_rms_t rms;
+  unsigned char buf[2048];
+  size_t len;
+
+  memset(&rms, 0, sizeof rms);
+  snprintf(rms.name, sizeof rms.name, "RMS One");
+  memcpy(rms.lang, "eng", 3);
+  rms.location = "https://rms.example/";
+
+  len = sds_build_rms_fus("example.invalid", 1, &rms, 1, NULL, 0, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<RMSProvider RMSLocation=\"https://rms.example/\">"));
+  ck_assert_ptr_null(strstr((char *)buf, "<FUSProvider"));
+}
+END_TEST
+
+START_TEST(sds_build_rms_fus_emits_fus_provider) {
+  sds_fus_t fus;
+  unsigned char buf[2048];
+  size_t len;
+
+  memset(&fus, 0, sizeof fus);
+  snprintf(fus.name, sizeof fus.name, "FUS One");
+  memcpy(fus.lang, "eng", 3);
+  fus.fus_id = 42;
+  fus.announce_addr = "239.1.1.1";
+  fus.announce_port = 5000;
+
+  len = sds_build_rms_fus("example.invalid", 1, NULL, 0, &fus, 1, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<FUSID>42</FUSID>"));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<MulticastAnnouncementAddress Address=\"239.1.1.1\" Port=\"5000\"/>"));
+  ck_assert_ptr_null(strstr((char *)buf, "<RMSProvider"));
+}
+END_TEST
+
 static Suite *sds_xml_suite(void) {
   Suite *s = suite_create("sds_xml");
   TCase *tc = tcase_create("core");
@@ -311,6 +407,11 @@ static Suite *sds_xml_suite(void) {
   tcase_add_test(tc, sds_build_broadcast_rejects_small_cap);
   tcase_add_test(tc, sds_build_sp_contains_expected_fields);
   tcase_add_test(tc, sds_build_sp_rejects_small_cap);
+  tcase_add_test(tc, sds_build_sp_lists_extra_payload_ids);
+  tcase_add_test(tc, sds_build_package_resolves_dvb_triplet_by_name);
+  tcase_add_test(tc, sds_build_regionalisation_nests_ca_chain);
+  tcase_add_test(tc, sds_build_rms_fus_emits_rms_provider);
+  tcase_add_test(tc, sds_build_rms_fus_emits_fus_provider);
   tcase_add_test(tc, sds_parse_broadcast_defaults_missing_ids);
   tcase_add_test(tc, sds_parse_broadcast_reports_truncation);
   tcase_add_test(tc, sds_parse_broadcast_not_truncated_when_it_fits);

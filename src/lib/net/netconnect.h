@@ -35,14 +35,26 @@ int netaddr_fill(int family, const char *addr, unsigned port, struct sockaddr_st
 /* IP_TOS (v4) or IPV6_TCLASS (v6) on fd */
 int net_set_dscp(int fd, int family, int tos);
 
-/* async pair: for callers running their own poll() loop over many connections at once (netconnect_tcp's own wait_connect() would serialize them).
-   resolves + starts connect() on first usable address, fd stays O_NONBLOCK. does not wait, does not try further addresses if this one later fails
-   (caller's own retry cycle will re-resolve). -1 on immediate failure, else poll fd for POLLOUT, then call netconnect_tcp_finish().
-   reason_out: nullable, set only on -1 */
-int netconnect_tcp_start(const char *host, unsigned port, net_err_reason_t *reason_out);
+/* holds the resolved addrinfo list + position for netconnect_tcp_start/finish's
+   fallback to the next address when one fails */
+typedef struct netconnect_pending netconnect_pending_t;
 
-/* call once started fd is POLLOUT-ready. 1 connected, -1 failed (logged, errno set).
+/* async pair: for callers running their own poll() loop over many connections at once (netconnect_tcp's own wait_connect() would serialize them).
+   resolves host, starts connect() on first usable address, fd stays O_NONBLOCK. does not wait.
+   *pending_out receives remaining-address state on success, pass it to netconnect_tcp_finish().
+   -1 on immediate failure (*pending_out untouched), else poll fd for POLLOUT, then call netconnect_tcp_finish().
    reason_out: nullable, set only on -1 */
-int netconnect_tcp_finish(int fd, net_err_reason_t *reason_out);
+int netconnect_tcp_start(const char *host, unsigned port, netconnect_pending_t **pending_out, net_err_reason_t *reason_out);
+
+/* call once *fd is POLLOUT-ready. 1: connected, *pending freed and set NULL, *fd unchanged.
+   0: this address failed, old *fd closed internally, next candidate from the same resolved
+   list opened and connecting, *fd updated to it - poll *fd for POLLOUT and call again.
+   -1: every address failed (not logged, caller's job), *pending freed and set NULL, *fd
+   closed and set to -1, errno set. reason_out: nullable, set only on -1 */
+int netconnect_tcp_finish(netconnect_pending_t **pending, int *fd, net_err_reason_t *reason_out);
+
+/* give up on a pending connect before netconnect_tcp_finish() reaches a terminal result
+   (1 or -1). frees the remaining-address state; does not touch fd, caller closes that itself. */
+void netconnect_tcp_abort(netconnect_pending_t *pending);
 
 #endif

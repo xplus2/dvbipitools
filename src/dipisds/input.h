@@ -21,4 +21,10 @@ typedef struct {
 int input_load(const char *path, input_t *in);
 void input_free(input_t *in);
 
+/* --packages file, one line per package: id,name,lang,visible,svc1|svc2|... 0 ok, -1 error on stderr */
+int input_load_packages(const char *path, sds_package_t *out, int max, int *count);
+
+/* --cells file, one line per cell: id,country,type:value,type:value,... 0 ok, -1 error on stderr */
+int input_load_cells(const char *path, sds_cell_t *out, int max, int *count);
+
 #endif

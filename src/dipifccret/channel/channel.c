@@ -399,8 +399,9 @@ static void reap_slot(channel_table_t *t, size_t i, time_t now, time_t max_age_s
       h = (h + 1) & t->hash_mask;
     }
   }
-  if (atomic_load_explicit(&c->ssrc_known, memory_order_relaxed))
+  if (atomic_load_explicit(&c->ssrc_known, memory_order_relaxed)) {
     ssrc_hash_remove(t, i, atomic_load_explicit(&c->ssrc, memory_order_relaxed));
+  }
   atomic_store_explicit(&c->in_use, 0, memory_order_release);
 }
 
@@ -413,8 +414,9 @@ void channel_table_reap(channel_table_t *t, time_t max_age_s) {
   pthread_mutex_unlock(&t->lock);
 }
 
-/* amortized reap: at most max_scan slots per call, from an internal wrapping cursor.
-   caller drives it often (e.g. once per packet) with a small max_scan, so no single call ever costs O(max_channels).  */
+/* amortized reap: at most max_scan slots per call, from internal wrapping cursor.
+   caller drives it often (~once per packet) with small max_scan.
+   no single call ever costs O(max_channels). */
 void channel_table_reap_step(channel_table_t *t, time_t max_age_s, size_t max_scan) {
   time_t now = time(NULL);
   size_t i, n;

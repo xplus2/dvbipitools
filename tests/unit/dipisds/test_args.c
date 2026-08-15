@@ -235,6 +235,106 @@ START_TEST(metrics_id_is_announce_only) {
 }
 END_TEST
 
+START_TEST(packages_path_rejected_with_raw_xml_input) {
+  char *argv[] = {"dipisds", "-a", "-i", "raw.xml", "-m", "239.1.2.3:5000",
+                  "--packages", "pkgs.csv", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(packages_path_accepted_with_playlist_input) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--packages", "pkgs.csv", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.packages_path, "pkgs.csv");
+}
+END_TEST
+
+START_TEST(cells_path_rejected_with_raw_xml_input) {
+  char *argv[] = {"dipisds", "-a", "-i", "raw.xml", "-m", "239.1.2.3:5000",
+                  "--cells", "cells.csv", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(rms_name_enables_rms_with_lang_default) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--rms-name", "My RMS", "--rms-location", "https://rms.example/", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.rms_enabled, 1);
+  ck_assert_str_eq(cfg.rms_name, "My RMS");
+  ck_assert_str_eq(cfg.rms_location, "https://rms.example/");
+  ck_assert_int_eq(memcmp(cfg.rms_lang, "deu", 3), 0);
+}
+END_TEST
+
+START_TEST(rms_name_requires_rms_location) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--rms-name", "My RMS", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(rms_location_without_rms_name_is_rejected) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--rms-location", "https://rms.example/", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(fus_name_enables_fus_with_lang_default) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--fus-name", "My FUS", "--fus-id", "42", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.fus_enabled, 1);
+  ck_assert_str_eq(cfg.fus_name, "My FUS");
+  ck_assert_uint_eq((unsigned)cfg.fus_id, 42u);
+  ck_assert_int_eq(memcmp(cfg.fus_lang, "deu", 3), 0);
+}
+END_TEST
+
+START_TEST(fus_name_requires_fus_id) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--fus-name", "My FUS", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(fus_announce_is_parsed) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--fus-name", "My FUS", "--fus-id", "1",
+                  "--fus-announce", "239.1.1.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.fus_announce_addr, "239.1.1.1");
+  ck_assert_uint_eq(cfg.fus_announce_port, 5000u);
+}
+END_TEST
+
+START_TEST(rms_name_and_fus_name_are_mutually_exclusive) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--rms-name", "R", "--rms-location", "https://r/",
+                  "--fus-name", "F", "--fus-id", "1", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(rms_and_fus_options_are_announce_only) {
+  char *argv[] = {"dipisds", "-l", "-m", "239.1.2.3:5000", "--rms-name", "R", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 START_TEST(help_returns_help_status) {
   char *argv[] = {"dipisds", "-h", NULL};
   config_t cfg;
@@ -279,6 +379,17 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, fcc_resolve_by_port_is_announce_only);
   tcase_add_test(tc, metrics_options_require_metrics_id);
   tcase_add_test(tc, metrics_id_is_announce_only);
+  tcase_add_test(tc, packages_path_rejected_with_raw_xml_input);
+  tcase_add_test(tc, packages_path_accepted_with_playlist_input);
+  tcase_add_test(tc, cells_path_rejected_with_raw_xml_input);
+  tcase_add_test(tc, rms_name_enables_rms_with_lang_default);
+  tcase_add_test(tc, rms_name_requires_rms_location);
+  tcase_add_test(tc, rms_location_without_rms_name_is_rejected);
+  tcase_add_test(tc, fus_name_enables_fus_with_lang_default);
+  tcase_add_test(tc, fus_name_requires_fus_id);
+  tcase_add_test(tc, fus_announce_is_parsed);
+  tcase_add_test(tc, rms_name_and_fus_name_are_mutually_exclusive);
+  tcase_add_test(tc, rms_and_fus_options_are_announce_only);
   tcase_add_test(tc, help_returns_help_status);
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
   suite_add_tcase(s, tc);

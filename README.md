@@ -42,7 +42,7 @@ cmake --build build
 | `-DCMAKE_BUILD_TYPE=Debug\|Release`                                      | `--debug` / `--release` | Build type                                           |
 | `-DDVBIPITOOLS_STATIC=ON`                                                | `--static`              | Static linking                                       |
 | `-DDIPIRADIOHEAD_TLS=OFF` / `-DDIPITVHEAD_TLS=OFF` / `-DDIPIREC_TLS=OFF` | `--no-tls`              | Build the respective tool without TLS source support |
-| `-DDIPITVHEAD_CSA2=OFF` / `-DDIPIRADIOHEAD_CSA2=OFF` / `-DDIPIDESCRAMBLE_CSA2=OFF` | `--no-csa2`   | Build the respective tool without CSA1/CSA2/BISS1    | 
+| `-DDIPITVHEAD_CSA=OFF` / `-DDIPIRADIOHEAD_CSA=OFF` / `-DDIPIDESCRAMBLE_CSA=OFF` | `--no-csa`   | Build the respective tool without CSA1/CSA2/BISS1    | 
 | `-DDIPIBCG_ZLIB=OFF`                                                     | `--no-zlib`             | Build `dipibcg` without BCG container compression support |
 
 > Note: The build automatically disables TLS support if OpenSSL is not found.
@@ -56,21 +56,21 @@ cmake --build build
     Mode CA RSA-OAEP receiver keys) in `dipitvhead` and `dipiradiohead`.
   + Required to build `dipicam378`/`dipidescramble` at all - RSA/AES crypto is their
     whole purpose, so both are skipped entirely if not found.
-* **libdvbcsa**
-  + Optional: required only if you need CSA1, CSA2 or BISS1 support in `dipitvhead`,
-    `dipiradiohead` or `dipidescramble`.
 * **librist**
   + Required to build `dipirist` at all.
   + Optional: adds RIST support to `dipitvhead`, `dipiradiohead` and `dipirec`.
 * **zlib**
   * Optional: `-Z`/`--compress` in `dipibcg` (zlib/RFC 1950 compression of BCG containers)
+* **libdvbcsa**
+  + Not a build dependency: If present, `dipitvhead`, `dipiradiohead` and `dipidescramble` can use it to enable CSA1/CSA2/BISS1 support.
+
 
 ## Packaging
 ```sh
 dpkg-buildpackage -b -us -uc
 ```
 
-Build-Depends: `debhelper (>= 13)`, `cmake`, `libssl-dev`.
+Build-Depends: `debhelper-compat (= 13)`, `cmake`, `libssl-dev`, `librist-dev`.
 
 
 ## Editorial notes
@@ -115,12 +115,10 @@ between real-world usage of media formats and the standard.
 On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 
 * FEC (Annex E) 
-* Companion Stream FCC (Annex J). RAMS-based FCC is provided by `dipifccret`.
-* RMS-FUS, Remote Management and Firmware Update
+* Companion Stream FCC (Annex J). RAMS-based FCC is provided by `dipifccret`
 * DVB Companion Screens and Streams
 * DVB Home Network, ETSI TS 102 905
-* SD&S record types other than Broadcast Discovery / Service Provider Discovery (§5). `dipisds` only does those two.
-  No CoD discovery, Package, Regionalisation or RMS-FUS discovery records
+* SD&S record type "CoD Discovery" and "Services From Other SPs"
 * RTSP command/control for CoD services and multicast join (§6)
 * DHCP-based IP address assignment for the HNED (§8)
 * FUSS, the mandatory File Upload System Stub (§9)

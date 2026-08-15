@@ -70,8 +70,15 @@ int main(int argc, char **argv) {
     return 2;
   }
 
+  {
+    int i, on = 0;
+    for (i = 0; i < cfg.n_out; i++) {
+      char one[600];
+      out_describe(&cfg.out[i], one, sizeof one);
+      on = app(out, sizeof out, on, "%s%s", i ? "," : "", one);
+    }
+  }
   source_describe(&cfg.source, src, sizeof src);
-  out_describe(&cfg.out, out, sizeof out);
   n = app(line, sizeof line, n, "\e[1mi:\e[0m\e[0;37m%s\e[0m \e[1mo:\e[0m\e[0;37m%s\e[0m \e[1mf:\e[0m\e[0;37m%s\e[0m", src, out, fmt_name(cfg.format));
   if (cfg.audio_all) n = app(line, sizeof line, n, " \e[1ma:\e[0m\e[0;37mall\e[0m");
   else n = app(line, sizeof line, n, " \e[1ma:\e[0m\e[0;37m%u\e[0m", cfg.audio_track);

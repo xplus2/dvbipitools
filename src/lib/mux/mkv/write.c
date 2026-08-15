@@ -155,8 +155,8 @@ static void write_head(mkv_t *m) {
         eb_str(&te, 0x536E, name);
     }
     eb_str(&te, 0x86, t->codecid);
-    if (t->cpriv_len)
-      eb_bin(&te, 0x63A2, t->cpriv, t->cpriv_len);
+    if (t->es.cpriv_len)
+      eb_bin(&te, 0x63A2, t->es.cpriv, t->es.cpriv_len);
     if (t->cls == PID_TELETEXT) {
       ebuf_free(&sub); /* no settings element */
     } else if (video) {
@@ -164,8 +164,8 @@ static void write_head(mkv_t *m) {
       eb_uint(&sub, 0xBA, t->height ? t->height : 576);
       eb_master(&te, 0xE0, &sub);
     } else {
-      eb_float(&sub, 0xB5, (double)(t->rate ? t->rate : 48000));
-      eb_uint(&sub, 0x9F, t->channels ? t->channels : 2);
+      eb_float(&sub, 0xB5, (double)(t->es.rate ? t->es.rate : 48000));
+      eb_uint(&sub, 0x9F, t->es.channels ? t->es.channels : 2);
       eb_master(&te, 0xE1, &sub);
     }
     eb_master(&e, 0xAE, &te);

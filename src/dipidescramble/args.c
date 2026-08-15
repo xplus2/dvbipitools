@@ -109,6 +109,34 @@ void input_describe(const input_t *s, char *buf, size_t n) {
   }
 }
 
+static int parse_out_uri(const char *uri, out_target_t *o) {
+  memset(o, 0, sizeof *o);
+  if (strncmp(uri, "rtmps://", 8) == 0 || strncmp(uri, "rtmp://", 7) == 0) {
+    if (strlen(uri) >= sizeof o->rtmp_url)
+      return -1;
+    o->kind = (uri[4] == 's') ? OUT_RTMPS : OUT_RTMP;
+    strcpy(o->rtmp_url, uri);
+    return 0;
+  }
+  if (strlen(uri) >= sizeof o->file_path)
+    return -1;
+  o->kind = OUT_FILE;
+  strcpy(o->file_path, uri);
+  return 0;
+}
+
+void out_describe(const out_target_t *o, char *buf, size_t n) {
+  switch (o->kind) {
+  case OUT_RTMP:
+  case OUT_RTMPS:
+    snprintf(buf, n, "%s", o->rtmp_url);
+    break;
+  case OUT_FILE:
+    snprintf(buf, n, "%s", strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
+    break;
+  }
+}
+
 static void print_help(void) {
   printf(
       "usage: %s -i <uri> -k <keyfile> -s <serial> -e <emmfile> -o <output> [options]\n\n"
@@ -125,15 +153,17 @@ static void print_help(void) {
       "  %-27sEMM cache: loaded on startup, rewritten on update (required for ECM/EMM-driven CAS)\n"
       "  %-27sunicast EMM pull endpoint, auth token as URI userinfo\n"
       "  %-27s(e.g. https://<token>@<host>:<port>/device/<serial>/emm)\n"
-      "  %-27sskip TLS verification for -u/--unicast-emm (self-signed, hostname, expiry)\n"
+      "  %-27sskip TLS verification for -u/--unicast-emm and -o rtmps:// (self-signed, hostname, expiry)\n"
       "  %-27sBISS2 Mode 1: 32 hex char Session Word\n"
       "  %-27sBISS2 Mode E: 32 hex char Encrypted Session Word (needs --biss2-id)\n"
       "  %-27sBISS2 Mode E: 32 hex char receiver ID for --biss2-esw\n"
       "  %-27slegacy BISS1 Mode 1: 12 hex char Session Word\n"
       "  %-27sBISS Mode CA: receiver RSA private key, PEM\n"
       "  %-27secm_profile template, comma key=value (see README)\n"
-      "  %-27sdescrambled output, file or \"-\" for stdout (required)\n"
-      "  %-27sts|mkv|mka output container (default ts)\n"
+      "  %-27sdescrambled output, repeatable: file, \"-\" for stdout, or rtmp(s)://\n"
+      "  %-27srtmp(s)://<host>[:port]/<app>/<key>, H.264/HEVC + AC-3/E-AC-3/AAC\n"
+      "  %-27sts|mkv|mka output container (default ts; raw ts and rtmp(s) targets\n"
+      "  %-27smay mix, mkv/mka needs exactly one plain file target)\n"
       "  %-27sMPTS source only: pin one PMT pid, or descramble every program\n"
       "  %-27s(\"all\"; rejected with -f mkv). ignored (warned) on an SPTS\n"
       "  %-27ssource. omitted on an MPTS source: fails early, lists programs\n"
@@ -143,7 +173,8 @@ static void print_help(void) {
       "  %-27sthis help\n\n"
       "examples:\n"
       "  %s -i rtp://@239.0.0.1:1975 -k device.key -s e2e-01 -e emm.cache -o out.ts -v\n"
-      "  %s -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o out.ts\n",
+      "  %s -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o out.ts\n"
+      "  %s -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o rtmp://live.example.com/app/key\n",
       TOOL_NAME,
       "-i, --input <uri>", "-k, --key <path>", "-s, --serial <id>", "-e, --emm-file <path>",
       "-u, --unicast-emm <uri>", "", "    --insecure",
@@ -151,10 +182,10 @@ static void print_help(void) {
       "    --biss1-sw <hex12>",
       "    --biss2-ca-key <path>",
       "    --ecm-profile <spec>",
-      "-o, --output <path|->", "-f, --format <fmt>", "-p, --pmt-pid <pid|all>", "", "",
+      "-o, --output <target>", "", "-f, --format <fmt>", "", "-p, --pmt-pid <pid|all>", "", "",
       "-I, --iface <iface>", "-v, --verbose",
       "    --color <when>", "-h, --help",
-      TOOL_NAME, TOOL_NAME);
+      TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -179,7 +210,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"ecm-profile", required_argument, 0, 1009},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
-  int have_input = 0, have_out = 0, have_biss_id = 0;
+  int have_input = 0, have_biss_id = 0;
   int c;
 
   memset(cfg, 0, sizeof *cfg);
@@ -209,8 +240,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->insecure_tls = 1;
         break;
       case 'o':
-        cfg->out_path = optarg;
-        have_out = 1;
+        if (cfg->n_out >= DIPIDESCRAMBLE_MAX_OUT) {
+          argerr("too many -o targets (max %d)", DIPIDESCRAMBLE_MAX_OUT);
+          return ARGS_ERR;
+        }
+        if (parse_out_uri(optarg, &cfg->out[cfg->n_out])) {
+          argerr("invalid -o target: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->n_out++;
         break;
       case 'f':
         if (fmt_from_name(optarg, &cfg->format)) {
@@ -292,9 +330,24 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -i input");
     return ARGS_ERR;
   }
-  if (!have_out) {
+  if (!cfg->n_out) {
     argerr("missing -o output");
     return ARGS_ERR;
+  }
+  {
+    int i, has_rtmps = 0, n_file = 0;
+    for (i = 0; i < cfg->n_out; i++) {
+      if (cfg->out[i].kind == OUT_FILE)
+        n_file++;
+      if (cfg->out[i].kind == OUT_RTMPS)
+        has_rtmps = 1;
+    }
+    if ((cfg->format == FMT_MKV || cfg->format == FMT_MKA) && n_file != 1) {
+      argerr("-f mkv/mka requires exactly one -o file target (plus optional rtmp(s) targets)");
+      return ARGS_ERR;
+    }
+    if (cfg->insecure_tls && !has_rtmps && !cfg->unicast_emm_uri)
+      log_line(TOOL_NAME ": --insecure has no effect, no -u or -o rtmps:// target");
   }
   if (cfg->biss2_sw_given && cfg->biss2_esw_given) {
     argerr("--biss2-sw and --biss2-esw are mutually exclusive");
