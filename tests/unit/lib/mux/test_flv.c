@@ -177,9 +177,8 @@ START_TEST(flv_aac_emits_metadata_seqhdr_and_raw_frame_tags) {
   plen = build_pes_with_pts(pes, 90000, adts, alen);
   wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
   flv_feed(f, pkt);
-  flv_close(f); /* flush: single-frame test, no follow-up PES */
-
   ck_assert_int_eq(flv_error(f), 0);
+  flv_close(f); /* flush: single-frame test, no follow-up PES */
   ck_assert_int_eq(cap.n, 3);
   ck_assert_int_eq(cap.type[0], FLV_TAG_SCRIPT);
   ck_assert_ptr_nonnull(memmem(cap.data[0], cap.len[0], "onMetaData", 10));
@@ -215,9 +214,8 @@ START_TEST(flv_ac3_uses_enhanced_rtmp_tag_with_fourcc) {
   plen = build_pes_with_pts(pes, 90000, ac3, clen);
   wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
   flv_feed(f, pkt);
-  flv_close(f); /* flush: single-frame test, no follow-up PES */
-
   ck_assert_int_eq(flv_error(f), 0);
+  flv_close(f); /* flush: single-frame test, no follow-up PES */
   ck_assert_int_eq(cap.n, 3);
 
   ck_assert_int_eq(cap.type[1], FLV_TAG_AUDIO);
