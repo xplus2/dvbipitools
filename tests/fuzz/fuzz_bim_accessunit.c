@@ -20,6 +20,7 @@ int main(int argc, char **argv) {
   bitreader_t br;
   strrepo_reader_t sr;
   bcg_doc_t doc;
+  accessunit_scratch_t sc;
   int nfuu = 0;
 
   if (argc != 2) {
@@ -57,9 +58,11 @@ int main(int argc, char **argv) {
   }
 
   bcg_doc_init(&doc);
+  accessunit_scratch_init(&sc);
   bitreader_init(&br, buf + 4, bits_len);
   if (!strrepo_reader_init(&sr, buf + 4 + bits_len, n - 4 - bits_len))
-    accessunit_decode(&br, &sr, &doc, &nfuu);
+    accessunit_decode(&sc, &br, &sr, &doc, &nfuu);
+  accessunit_scratch_free(&sc);
   bcg_doc_free(&doc);
 
   free(buf);
