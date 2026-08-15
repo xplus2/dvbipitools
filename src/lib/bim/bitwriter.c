@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <limits.h>
 #include <stdlib.h>
 
 #include "bitwriter.h"
@@ -72,8 +73,9 @@ const unsigned char *bitwriter_data(bitwriter_t *bw, size_t *out_len) {
 }
 
 int bitwriter_put_vluimsbf8(bitwriter_t *bw, uint64_t value) {
+  int maxgroups = (int)((sizeof(value) * CHAR_BIT + 6) / 7);
   int ngroups = 1, i;
-  while ((value >> (7 * ngroups)) != 0)
+  while (ngroups < maxgroups && (value >> (7 * ngroups)) != 0)
     ngroups++;
   for (i = ngroups - 1; i >= 0; i--) {
     if (bitwriter_put(bw, i != 0, 1))
@@ -85,8 +87,9 @@ int bitwriter_put_vluimsbf8(bitwriter_t *bw, uint64_t value) {
 }
 
 int bitwriter_put_vluimsbf4(bitwriter_t *bw, uint64_t value) {
+  int maxgroups = (int)((sizeof(value) * CHAR_BIT + 3) / 4);
   int n = 1, i;
-  while ((value >> (4 * n)) != 0)
+  while (n < maxgroups && (value >> (4 * n)) != 0)
     n++;
   for (i = 0; i < n - 1; i++)
     if (bitwriter_put(bw, 1, 1))

@@ -141,28 +141,17 @@ unsigned emmg_server_port(emmg_server_t *s) {
 }
 
 void emmg_server_stop(emmg_server_t *s) {
-  int waited_ms = 0;
   if (!s)
     return;
   atomic_store_explicit(&s->stop, 1, memory_order_relaxed);
   pthread_join(s->accept_thread, NULL);
   close(s->listen_fd);
 
-  /* workers are detached (slots can be reused across a connection's lifetime, unsafe to join by stored handle)
-     wait for worker_active to clear. workers check stop flag < every EMMG_POLL_INTERVAL_MS */
-  for (;;) {
-    int i, any_active = 0;
-    struct timespec ts;
-    for (i = 0; i < EMMG_MAX_CONNS; i++)
-      if (atomic_load_explicit(&s->worker_active[i], memory_order_acquire))
-        any_active = 1;
-    if (!any_active || waited_ms >= 2000)
-      break;
-    ts.tv_sec = 0;
-    ts.tv_nsec = 50 * 1000000L;
-    nanosleep(&ts, NULL);
-    waited_ms += 50;
-  }
+  for (int i = 0; i < EMMG_MAX_CONNS; i++)
+    if (s->worker_thread_joinable[i]) {
+      pthread_join(s->worker_thread[i], NULL);
+      s->worker_thread_joinable[i] = 0;
+    }
   pthread_mutex_destroy(&s->queue_lock);
   free(s);
 }

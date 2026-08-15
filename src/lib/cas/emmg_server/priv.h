@@ -25,7 +25,9 @@ struct emmg_server {
   atomic_int stop;
   pthread_t accept_thread;
 
-  atomic_int worker_active[EMMG_MAX_CONNS]; /* detached threads; stop waits on this, doesn't join */
+  atomic_int worker_active[EMMG_MAX_CONNS];
+  pthread_t worker_thread[EMMG_MAX_CONNS];
+  int worker_thread_joinable[EMMG_MAX_CONNS];
 
   pthread_mutex_t queue_lock;
   emmg_queued_datagram_t queue[EMMG_QUEUE_CAP];

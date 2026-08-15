@@ -2,26 +2,58 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <errno.h>
+#include <poll.h>
 #include <string.h>
 #include <sys/socket.h>
 
 #include "lib/log.h"
+#include "lib/signal.h"
 
 #include "../version.h"
 #include "priv.h"
 
-static ssize_t send_all(int fd, const unsigned char *buf, size_t n) {
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+
+static int send_all(int fd, const unsigned char *buf, size_t n, atomic_int *stop) {
   size_t sent = 0;
+  double deadline = mono_seconds() + (double)CS378X_SEND_TIMEOUT_MS / 1000.0;
+
   while (sent < n) {
-    ssize_t w = send(fd, buf + sent, n - sent, 0);
+    ssize_t w;
+
+    if (atomic_load_explicit(stop, memory_order_relaxed) || signal_stop_requested()) {
+      errno = ECANCELED;
+      return -1;
+    }
+
+    w = send(fd, buf + sent, n - sent, MSG_DONTWAIT | MSG_NOSIGNAL);
     if (w <= 0) {
-      if (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+      if (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        double remain = (deadline - mono_seconds()) * 1000.0;
+        struct pollfd pfd = {fd, POLLOUT, 0};
+        int prc;
+        if (remain <= 0) {
+          errno = ETIMEDOUT;
+          return -1;
+        }
+        prc = poll(&pfd, 1, (int)remain);
+        if (prc == 0) {
+          errno = ETIMEDOUT;
+          return -1;
+        }
+        if (prc < 0)
+          return -1;
+        continue;
+      }
+      if (w < 0 && errno == EINTR)
         continue;
       return -1;
     }
     sent += (size_t)w;
   }
-  return (ssize_t)sent;
+  return 0;
 }
 
 /* body decrypted in place; mutated into the CMD01 answer. conn_ucrc echoed verbatim */
@@ -48,7 +80,7 @@ static void send_ecm_response(cs378x_server_t *s, int fd, const unsigned char co
     unsigned char frame[4 + CS378X_BUF_CAP];
     memcpy(frame, conn_ucrc, 4);
     memcpy(frame + 4, body, total);
-    if (send_all(fd, frame, 4 + total) < 0)
+    if (send_all(fd, frame, 4 + total, &s->stop) < 0)
       log_line(TOOL_NAME ": send ECM response failed: %s", strerror(errno));
   }
 }
@@ -79,7 +111,7 @@ static void send_cmd08(cs378x_server_t *s, int fd, const unsigned char conn_ucrc
     unsigned char frame[4 + CS378X_BUF_CAP];
     memcpy(frame, conn_ucrc, 4);
     memcpy(frame + 4, body, total);
-    if (send_all(fd, frame, 4 + total) < 0)
+    if (send_all(fd, frame, 4 + total, &s->stop) < 0)
       log_line(TOOL_NAME ": send CMD08 failed: %s", strerror(errno));
   }
 }
@@ -102,7 +134,7 @@ void send_keepalive_answer(cs378x_server_t *s, int fd, const unsigned char conn_
     unsigned char frame[4 + 32];
     memcpy(frame, conn_ucrc, 4);
     memcpy(frame + 4, body, sizeof body);
-    send_all(fd, frame, sizeof frame);
+    send_all(fd, frame, sizeof frame, &s->stop);
   }
 }
 

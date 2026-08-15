@@ -15,6 +15,13 @@
 #include "../simulcrypt_msg.h"
 #include "priv.h"
 
+static void reap_worker_slot(emmg_server_t *s, int slot) {
+  if (!s->worker_thread_joinable[slot])
+    return;
+  pthread_join(s->worker_thread[slot], NULL);
+  s->worker_thread_joinable[slot] = 0;
+}
+
 static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned char version, unsigned short type,
                             const unsigned char *body, size_t body_len, unsigned char *reply, size_t *reply_len, int *should_close) {
   *reply_len = 0;
@@ -124,7 +131,6 @@ static void *worker_main(void *arg) {
   simulcrypt_reader_t rd;
   int flags;
 
-  pthread_detach(pthread_self());
   memset(&cs, 0, sizeof cs);
   simulcrypt_reader_init(&rd);
   flags = fcntl(fd, F_GETFL, 0);
@@ -213,6 +219,7 @@ void *accept_main(void *arg) {
         atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
         continue;
       }
+      reap_worker_slot(s, slot);
       wa->s = s;
       wa->fd = fd;
       wa->slot = slot;
@@ -221,6 +228,9 @@ void *accept_main(void *arg) {
         close(fd);
         free(wa);
         atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
+      } else {
+        s->worker_thread[slot] = th;
+        s->worker_thread_joinable[slot] = 1;
       }
     }
   }

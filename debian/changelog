@@ -18,11 +18,12 @@ dvbipitools (2.3.0-1) unstable; urgency=medium
   * ported rtmp(s)/flv container support
     + dipirec rtmp(s) output
     + dipidescramble rtmp(s) output
-    + automatically switches to enhanced rtmp if the codec need it
+    + automatically switches to enhanced rtmp if the codecs need it
   * linking of optional dependencies moved to dlopen()
   * hardened httpclient's chunk parser
   * getaddrinfo() resilience (handle stalls after EINPROGRESS)
   * added monotonic absolute deadlines to 2 possibly stalling poll()s
+  * dipicam378/cs378x: stop/join workers before free; bounded reply send for slow clients
   * dipisds support for Package Discovery, Regionalisation Discovery, RMS-FUS Discovery record types
  -- dvbipitools authors <unspecified@example.com>  Wed, 19 Aug 2026 00:00:00 +0200
 

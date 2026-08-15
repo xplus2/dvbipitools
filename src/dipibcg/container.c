@@ -7,6 +7,7 @@
 #include "container.h"
 
 #define HEADER_LEN (1 + 2 * 8) /* num_structures + 2 entries of 8 bytes each */
+#define UINT24_MAX 0xFFFFFFu
 
 static void put24(unsigned char *p, size_t v) {
   p[0] = (unsigned char)(v >> 16);
@@ -19,9 +20,19 @@ static size_t get24(const unsigned char *p) {
 }
 
 int container_build(const unsigned char *access_unit, size_t au_len, const unsigned char *string_repo, size_t sr_len, unsigned char **out, size_t *out_len) {
-  size_t total = HEADER_LEN + au_len + sr_len;
-  unsigned char *buf = malloc(total);
+  size_t sr_offset;
+  size_t total;
+  unsigned char *buf;
   unsigned char *p;
+
+  if (au_len > UINT24_MAX || sr_len > UINT24_MAX)
+    return -1;
+  sr_offset = HEADER_LEN + au_len;
+  if (sr_offset > UINT24_MAX)
+    return -1;
+
+  total = HEADER_LEN + au_len + sr_len;
+  buf = malloc(total);
   if (!buf)
     return -1;
 
@@ -34,7 +45,7 @@ int container_build(const unsigned char *access_unit, size_t au_len, const unsig
   p += 8;
   p[0] = CONTAINER_STRUCT_DATA_REPOSITORY;
   p[1] = CONTAINER_DATAREPO_STRINGS;
-  put24(p + 2, HEADER_LEN + au_len);
+  put24(p + 2, sr_offset);
   put24(p + 5, sr_len);
 
   memcpy(buf + HEADER_LEN, access_unit, au_len);

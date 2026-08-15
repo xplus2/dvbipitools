@@ -30,7 +30,7 @@ void burst_table_free(burst_table_t *t) {
     return;
   for (i = 0; i < t->cap; i++)
     if (t->slots[i].in_use)
-      burst_free(t->slots[i].b);
+      burst_release(t->slots[i].b);
   pthread_mutex_destroy(&t->lock);
   free(t->slots);
   free(t);
@@ -86,6 +86,87 @@ burst_slot_t *burst_table_find(burst_table_t *t, const struct sockaddr *addr, so
   }
   pthread_mutex_unlock(&t->lock);
   return found;
+}
+
+int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int fd, burst_t *b, uint8_t *msn_out) {
+  size_t i;
+  burst_t *old = NULL;
+  int updated = 0;
+
+  pthread_mutex_lock(&t->lock);
+  for (i = 0; i < t->cap; i++) {
+    if (t->slots[i].in_use && sockaddr_eq(&t->slots[i].addr, t->slots[i].addrlen, addr, addrlen)) {
+      old = t->slots[i].b;
+      t->slots[i].fd = fd;
+      t->slots[i].b = b;
+      *msn_out = ++t->slots[i].msn;
+      updated = 1;
+      break;
+    }
+  }
+  if (!updated) {
+    for (i = 0; i < t->cap; i++) {
+      if (!t->slots[i].in_use) {
+        memcpy(&t->slots[i].addr, addr, addrlen);
+        t->slots[i].addrlen = addrlen;
+        t->slots[i].fd = fd;
+        t->slots[i].b = b;
+        t->slots[i].msn = 0;
+        t->slots[i].nack_count = 0;
+        t->slots[i].congestion_adapted = 0;
+        t->slots[i].in_use = 1;
+        *msn_out = 0;
+        pthread_mutex_unlock(&t->lock);
+        return 0;
+      }
+    }
+  }
+  pthread_mutex_unlock(&t->lock);
+
+  if (updated) {
+    burst_terminate(old, 0, 0);
+    burst_release(old);
+    return 1;
+  }
+
+  log_line(TOOL_NAME ": max-bursts (%zu) reached, rejecting new burst session", t->cap);
+  return -1;
+}
+
+int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, unsigned threshold, burst_table_nack_result_t *out) {
+  size_t i;
+
+  memset(out, 0, sizeof *out);
+  pthread_mutex_lock(&t->lock);
+  for (i = 0; i < t->cap; i++) {
+    burst_slot_t *slot = &t->slots[i];
+    unsigned adapt_at;
+
+    if (!slot->in_use || !sockaddr_eq(&slot->addr, slot->addrlen, addr, addrlen))
+      continue;
+
+    slot->nack_count++;
+    if (threshold == 0) {
+      pthread_mutex_unlock(&t->lock);
+      return 1;
+    }
+
+    adapt_at = threshold / 2;
+    if (slot->nack_count >= threshold) {
+      burst_terminate(slot->b, 0, 0);
+      out->action = BURST_TABLE_NACK_TERMINATED;
+    } else if (!slot->congestion_adapted && adapt_at > 0 && slot->nack_count >= adapt_at) {
+      out->new_bps = atomic_load_explicit(&slot->b->target_bps, memory_order_relaxed) * 0.5;
+      atomic_store_explicit(&slot->b->target_bps, out->new_bps, memory_order_relaxed);
+      slot->congestion_adapted = 1;
+      out->action = BURST_TABLE_NACK_ADAPTED;
+      out->msn = ++slot->msn;
+    }
+    pthread_mutex_unlock(&t->lock);
+    return 1;
+  }
+  pthread_mutex_unlock(&t->lock);
+  return 0;
 }
 
 int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int has_stop_seq, uint32_t stop_seqnum) {

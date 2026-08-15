@@ -44,6 +44,25 @@ START_TEST(container_build_handles_empty_payloads) {
 }
 END_TEST
 
+START_TEST(container_build_rejects_oversized_24bit_fields) {
+  static const unsigned char dummy[1] = {0};
+  unsigned char *buf = NULL;
+  size_t buf_len = 0;
+
+  ck_assert_int_eq(container_build(dummy, 0x1000000u, dummy, 0, &buf, &buf_len), -1);
+  ck_assert_ptr_null(buf);
+  ck_assert_uint_eq(buf_len, 0);
+
+  ck_assert_int_eq(container_build(dummy, 0, dummy, 0x1000000u, &buf, &buf_len), -1);
+  ck_assert_ptr_null(buf);
+  ck_assert_uint_eq(buf_len, 0);
+
+  ck_assert_int_eq(container_build(dummy, 0x1000000u - 17u + 1u, dummy, 0, &buf, &buf_len), -1);
+  ck_assert_ptr_null(buf);
+  ck_assert_uint_eq(buf_len, 0);
+}
+END_TEST
+
 START_TEST(container_parse_rejects_empty_buffer) {
   const unsigned char *out_au, *out_sr;
   size_t out_au_len, out_sr_len;
@@ -125,6 +144,7 @@ static Suite *container_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, container_build_round_trips_through_parse);
   tcase_add_test(tc, container_build_handles_empty_payloads);
+  tcase_add_test(tc, container_build_rejects_oversized_24bit_fields);
   tcase_add_test(tc, container_parse_rejects_empty_buffer);
   tcase_add_test(tc, container_parse_rejects_truncated_header);
   tcase_add_test(tc, container_parse_rejects_out_of_bounds_pointer);

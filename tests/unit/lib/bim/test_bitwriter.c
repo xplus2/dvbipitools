@@ -80,7 +80,7 @@ START_TEST(bitwriter_put_bytes_round_trips) {
 END_TEST
 
 START_TEST(bitwriter_vluimsbf8_round_trips_across_group_boundaries) {
-  static const uint64_t values[] = {0, 5, 100, 127, 128, 20000, 1000000};
+  static const uint64_t values[] = {0, 5, 100, 127, 128, 20000, 1000000, UINT64_MAX};
   size_t i;
   for (i = 0; i < sizeof values / sizeof values[0]; i++) {
     bitwriter_t bw;
@@ -96,6 +96,21 @@ START_TEST(bitwriter_vluimsbf8_round_trips_across_group_boundaries) {
     ck_assert(got == values[i]);
     bitwriter_free(&bw);
   }
+}
+END_TEST
+
+START_TEST(bitwriter_vluimsbf8_encodes_uint64_max_without_overflow) {
+  bitwriter_t bw;
+  const unsigned char *data;
+  size_t len;
+  bitwriter_init(&bw);
+
+  ck_assert_int_eq(bitwriter_put_vluimsbf8(&bw, UINT64_MAX), 0);
+  data = bitwriter_data(&bw, &len);
+  ck_assert_ptr_nonnull(data);
+  ck_assert_uint_eq(len, 10u);
+
+  bitwriter_free(&bw);
 }
 END_TEST
 
@@ -116,7 +131,7 @@ START_TEST(bitwriter_vluimsbf8_matches_known_encoding) {
 END_TEST
 
 START_TEST(bitwriter_vluimsbf4_round_trips_across_group_boundaries) {
-  static const uint64_t values[] = {0, 5, 15, 16, 1000, 100000};
+  static const uint64_t values[] = {0, 5, 15, 16, 1000, 100000, UINT64_MAX};
   size_t i;
   for (i = 0; i < sizeof values / sizeof values[0]; i++) {
     bitwriter_t bw;
@@ -135,6 +150,21 @@ START_TEST(bitwriter_vluimsbf4_round_trips_across_group_boundaries) {
 }
 END_TEST
 
+START_TEST(bitwriter_vluimsbf4_encodes_uint64_max_without_overflow) {
+  bitwriter_t bw;
+  const unsigned char *data;
+  size_t len;
+  bitwriter_init(&bw);
+
+  ck_assert_int_eq(bitwriter_put_vluimsbf4(&bw, UINT64_MAX), 0);
+  data = bitwriter_data(&bw, &len);
+  ck_assert_ptr_nonnull(data);
+  ck_assert_uint_eq(len, 10u);
+
+  bitwriter_free(&bw);
+}
+END_TEST
+
 static Suite *bitwriter_suite(void) {
   Suite *s = suite_create("bitwriter");
   TCase *tc = tcase_create("core");
@@ -142,8 +172,10 @@ static Suite *bitwriter_suite(void) {
   tcase_add_test(tc, bitwriter_put_round_trips_through_bitreader);
   tcase_add_test(tc, bitwriter_put_bytes_round_trips);
   tcase_add_test(tc, bitwriter_vluimsbf8_round_trips_across_group_boundaries);
+  tcase_add_test(tc, bitwriter_vluimsbf8_encodes_uint64_max_without_overflow);
   tcase_add_test(tc, bitwriter_vluimsbf8_matches_known_encoding);
   tcase_add_test(tc, bitwriter_vluimsbf4_round_trips_across_group_boundaries);
+  tcase_add_test(tc, bitwriter_vluimsbf4_encodes_uint64_max_without_overflow);
   suite_add_tcase(s, tc);
   return s;
 }

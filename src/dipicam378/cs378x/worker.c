@@ -16,6 +16,13 @@
 #include "../version.h"
 #include "priv.h"
 
+static void reap_worker_slot(cs378x_server_t *s, int slot) {
+  if (!s->worker_thread_joinable[slot])
+    return;
+  pthread_join(s->worker_thread[slot], NULL);
+  s->worker_thread_joinable[slot] = 0;
+}
+
 /* read n bytes, honoring stop flag between recv() timeouts. 1 ok, 0 stopped, -1 closed/error */
 static int read_exact(int fd, unsigned char *buf, size_t n, atomic_int *stop) {
   size_t got = 0;
@@ -46,7 +53,6 @@ static void *worker_main(void *arg) {
   unsigned char conn_ucrc[4];
   int have_ucrc = 0;
 
-  pthread_detach(pthread_self());
   tv.tv_sec = 0;
   tv.tv_usec = CS378X_RECV_TIMEOUT_MS * 1000;
   setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
@@ -130,6 +136,7 @@ static void *worker_main(void *arg) {
   }
 
   log_line(TOOL_NAME ": connection closed (slot %d)", slot);
+  atomic_store_explicit(&s->worker_fd[slot], -1, memory_order_release);
   close(fd);
   free(wa);
   atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
@@ -214,14 +221,20 @@ void *accept_main(void *arg) {
         atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
         continue;
       }
+      reap_worker_slot(s, slot);
       wa->s = s;
       wa->fd = fd;
       wa->slot = slot;
+      atomic_store_explicit(&s->worker_fd[slot], fd, memory_order_release);
       if (pthread_create(&th, NULL, worker_main, wa) != 0) {
         log_line(TOOL_NAME ": pthread_create: %s", strerror(errno));
         close(fd);
         free(wa);
+        atomic_store_explicit(&s->worker_fd[slot], -1, memory_order_release);
         atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
+      } else {
+        s->worker_thread[slot] = th;
+        s->worker_thread_joinable[slot] = 1;
       }
     }
   }

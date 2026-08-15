@@ -191,32 +191,26 @@ static void nack_cb(const rtcp_nack_t *nack, void *user) {
   ret_handle_nack(rc->ctx->ret, nack, rc->fd, rc->from, rc->fromlen);
 
   if (rc->ctx->bursts && rc->ctx->congestion_nack_threshold > 0) {
-    burst_slot_t *slot = burst_table_find(rc->ctx->bursts, rc->from, rc->fromlen);
-    unsigned adapt_at = rc->ctx->congestion_nack_threshold / 2;
+    burst_table_nack_result_t result;
 
-    if (slot)
-      ++slot->nack_count;
-    if (slot && slot->nack_count >= rc->ctx->congestion_nack_threshold) {
+    if (burst_table_note_nack(rc->ctx->bursts, rc->from, rc->fromlen, rc->ctx->congestion_nack_threshold, &result) &&
+        result.action == BURST_TABLE_NACK_TERMINATED) {
       unicast_dest_t dst;
       dst.fd = rc->fd;
       dst.to = rc->from;
       dst.tolen = rc->fromlen;
-      burst_terminate(slot->b, 0, 0); /* congestion: unrelated to RAMS-T seqnum TLV, immediate stop */
       send_rams_i(&dst, 0, 0, (uint16_t)BURST_CONGESTION, NULL);
-    } else if (slot && !slot->congestion_adapted && adapt_at > 0 && slot->nack_count >= adapt_at) {
+    } else if (result.action == BURST_TABLE_NACK_ADAPTED) {
       unicast_dest_t dst;
       rtcp_rams_i_tlvs_t tlvs;
-      double new_bps = atomic_load_explicit(&slot->b->target_bps, memory_order_relaxed) * 0.5;
 
-      atomic_store_explicit(&slot->b->target_bps, new_bps, memory_order_relaxed);
-      slot->congestion_adapted = 1;
       dst.fd = rc->fd;
       dst.to = rc->from;
       dst.tolen = rc->fromlen;
       memset(&tlvs, 0, sizeof tlvs);
       tlvs.has_max_transmit_bitrate = 1;
-      tlvs.max_transmit_bitrate_bps = (uint64_t)new_bps;
-      send_rams_i_msn(&dst, 0, 0, ++slot->msn, (uint16_t)BURST_UPDATE, &tlvs);
+      tlvs.max_transmit_bitrate_bps = (uint64_t)result.new_bps;
+      send_rams_i_msn(&dst, 0, 0, result.msn, (uint16_t)BURST_UPDATE, &tlvs);
     }
   }
 }
@@ -270,29 +264,22 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
   {
     burst_t *b = burst_new(c, rc->ctx->burst_multiplier, req->has_max_bitrate ? (double)req->max_bitrate_bps : 0.0, rc->ctx->rtx_pt);
     rap_cache_entry_t first;
-    burst_slot_t *slot = burst_table_find(rc->ctx->bursts, rc->from, rc->fromlen);
     uint8_t msn;
     uint16_t response;
+    int start_result;
 
     if (!b) {
       send_rams_i(&dst, req->media_ssrc, req->media_ssrc, (uint16_t)BURST_INTERNAL_ERROR, NULL);
       return;
     }
-    if (slot) {
-      burst_free(slot->b);
-      slot->b = b;
-      msn = ++slot->msn;
-      response = (uint16_t)BURST_UPDATE;
-    } else {
-      slot = burst_table_claim(rc->ctx->bursts, rc->from, rc->fromlen, rc->fd, b);
-      if (!slot) {
-        burst_free(b);
-        send_rams_i(&dst, req->media_ssrc, req->media_ssrc, (uint16_t)BURST_TABLE_FULL, NULL);
-        return;
-      }
-      msn = 0;
-      response = (uint16_t)BURST_ACCEPT;
+
+    start_result = burst_table_start(rc->ctx->bursts, rc->from, rc->fromlen, rc->fd, b, &msn);
+    if (start_result < 0) {
+      burst_free(b);
+      send_rams_i(&dst, req->media_ssrc, req->media_ssrc, (uint16_t)BURST_TABLE_FULL, NULL);
+      return;
     }
+    response = start_result ? (uint16_t)BURST_UPDATE : (uint16_t)BURST_ACCEPT;
 
     if (channel_cache_get(c, 0, &first)) {
       tlvs.has_first_packet_seqnum = 1;
@@ -405,6 +392,7 @@ static void *pacer_main(void *arg) {
       burst_slot_t *slot = &pc->bursts->slots[i];
       if (!slot->in_use)
         continue;
+      burst_acquire(slot->b);
       snap[n].idx = i;
       snap[n].fd = slot->fd;
       snap[n].addr = slot->addr;
@@ -417,26 +405,33 @@ static void *pacer_main(void *arg) {
     for (i = 0; i < n; i++) {
       unicast_dest_t dst;
       burst_tick_result_t r;
+      int owns_slot = 0;
+      int remove_slot = 0;
 
       dst.fd = snap[i].fd;
       dst.to = (const struct sockaddr *)&snap[i].addr;
       dst.tolen = snap[i].addrlen;
       dst.congestion = 0;
       r = burst_tick(snap[i].b, pc->duration_cap_ms, burst_send_cb, &dst);
-      if (dst.congestion) {
-        burst_terminate(snap[i].b, 0, 0); /* congestion: unrelated to RAMS-T seqnum TLV, immediate stop */
-        send_rams_i(&dst, 0, 0, (uint16_t)BURST_CONGESTION, NULL);
-        pthread_mutex_lock(&pc->bursts->lock);
-        burst_free(snap[i].b);
-        pc->bursts->slots[snap[i].idx].in_use = 0;
-        pthread_mutex_unlock(&pc->bursts->lock);
-      } else if (r == BURST_TICK_DONE) {
-        send_rams_i(&dst, 0, 0, (uint16_t)BURST_DONE, NULL);
-        pthread_mutex_lock(&pc->bursts->lock);
-        burst_free(snap[i].b);
-        pc->bursts->slots[snap[i].idx].in_use = 0;
-        pthread_mutex_unlock(&pc->bursts->lock);
+      pthread_mutex_lock(&pc->bursts->lock);
+      if (pc->bursts->slots[snap[i].idx].in_use && pc->bursts->slots[snap[i].idx].b == snap[i].b) {
+        owns_slot = 1;
+        if (dst.congestion || r == BURST_TICK_DONE) {
+          pc->bursts->slots[snap[i].idx].b = NULL;
+          pc->bursts->slots[snap[i].idx].in_use = 0;
+          remove_slot = 1;
+        }
       }
+      pthread_mutex_unlock(&pc->bursts->lock);
+
+      if (owns_slot && dst.congestion)
+        send_rams_i(&dst, 0, 0, (uint16_t)BURST_CONGESTION, NULL);
+      else if (owns_slot && r == BURST_TICK_DONE)
+        send_rams_i(&dst, 0, 0, (uint16_t)BURST_DONE, NULL);
+
+      if (remove_slot)
+        burst_release(snap[i].b); /* drop slot ownership */
+      burst_release(snap[i].b); /* drop pacer snapshot */
     }
   }
   free(snap);

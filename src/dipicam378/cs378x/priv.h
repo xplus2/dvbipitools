@@ -13,6 +13,7 @@
 #define CS378X_MAX_CONNS 4
 #define CS378X_POLL_INTERVAL_MS 150
 #define CS378X_RECV_TIMEOUT_MS 200
+#define CS378X_SEND_TIMEOUT_MS 3000
 #define CS378X_BUF_CAP 2048
 #define CS378X_MIN_FRAME 36 /* 4-byte ucrc + 2 AES blocks */
 
@@ -29,6 +30,9 @@ struct cs378x_server {
   atomic_int stop;
   pthread_t accept_thread;
   atomic_int worker_active[CS378X_MAX_CONNS];
+  pthread_t worker_thread[CS378X_MAX_CONNS];
+  int worker_thread_joinable[CS378X_MAX_CONNS];
+  atomic_int worker_fd[CS378X_MAX_CONNS];
 
   unsigned char aes_key[16]; /* MD5(password) */
   unsigned char expected_ucrc[4]; /* crc32(MD5(username)); only checked if check_ucrc */

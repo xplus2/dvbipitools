@@ -173,7 +173,7 @@ the following mechanics allow the configuration to be driven by the most authori
 
 `cipher`: `aes128-ecb|aes256-ecb|aes128-cbc|aes256-cbc|aes128-gcm|aes256-gcm|des-ede3-ecb|des-ede3-cbc|des-ede-ecb|des-ede-cbc`
 default=`aes256-ecb`. 
-Inclusion of DES is for preservational and educational reasons only. You are encouraged not to pull an _Isla Nubla_ by
+Inclusion of DES is for preservational and educational reasons only. You are encouraged not to pull an _Isla Nublar_ by
 unleashing a dinosaur in modern day.
 
 Tokens (`field_order`/`wire_order`/`cw_group`): the fixed keywords

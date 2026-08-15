@@ -3,7 +3,9 @@
 
 #include <arpa/inet.h>
 #include <check.h>
+#include <errno.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -450,6 +452,86 @@ START_TEST(emmg_server_rejects_stream_setup_before_channel_setup) {
 }
 END_TEST
 
+static double monotonic_seconds(void) {
+  struct timespec ts;
+  ck_assert_int_eq(clock_gettime(CLOCK_MONOTONIC, &ts), 0);
+  return (double)ts.tv_sec + (double)ts.tv_nsec / 1000000000.0;
+}
+
+/* some fds still hold an unread reply: drain it before expecting EOF */
+static void assert_closed_by_server(int fd) {
+  double deadline = monotonic_seconds() + 2.0;
+  for (;;) {
+    struct pollfd pfd = {fd, POLLIN, 0};
+    unsigned char buf[256];
+    ssize_t rn;
+    int remain_ms = (int)((deadline - monotonic_seconds()) * 1000.0);
+    int pr;
+    if (remain_ms <= 0)
+      ck_abort_msg("fd %d: server never closed the connection", fd);
+    pr = poll(&pfd, 1, remain_ms);
+    ck_assert_msg(pr > 0, "fd %d: expected server-side close to be observable, poll returned %d", fd, pr);
+    rn = read(fd, buf, sizeof buf);
+    if (rn == 0)
+      return;
+    if (rn < 0 && errno == ECONNRESET)
+      return;
+    ck_assert_msg(rn > 0, "fd %d: unexpected read error, rn=%zd errno=%d", fd, rn, errno);
+  }
+}
+
+/* fills EMMG_MAX_CONNS (8) slots: idle, post-handshake idle, and parked
+   mid-header (fewer than SIMULCRYPT_HDR_LEN bytes, rest never arrives).
+   confirms stop reaps every worker promptly and closes each fd */
+START_TEST(emmg_server_stop_reaps_all_max_conns_in_mixed_states) {
+  emmg_server_cfg_t cfg;
+  emmg_server_t *s;
+  unsigned port;
+  int fd[8];
+  int i;
+  unsigned char msg[512], payload[512];
+  simulcrypt_hdr_t hdr;
+  size_t n;
+  double start, elapsed;
+  struct timespec settle = {0, 100L * 1000000L};
+  static const unsigned char partial_hdr[2] = {3, 0};
+
+  cfg.port = 0;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+  port = emmg_server_port(s);
+
+  for (i = 0; i < 8; i++) {
+    fd[i] = fake_connect(port);
+    ck_assert_int_ge(fd[i], 0);
+  }
+
+  for (i = 2; i < 4; i++) {
+    n = fake_build_channel_setup(msg, sizeof msg, 3, 0x4A750200u + (unsigned)i, 1);
+    ck_assert_int_eq(simulcrypt_send_all(fd[i], msg, n, 3000), 0);
+    ck_assert_int_eq(fake_read_reply(fd[i], &hdr, payload, sizeof payload), 0);
+  }
+  for (i = 4; i < 6; i++)
+    ck_assert_int_eq(simulcrypt_send_all(fd[i], partial_hdr, sizeof partial_hdr, 3000), 0);
+  for (i = 6; i < 8; i++) {
+    n = fake_build_channel_setup(msg, sizeof msg, 3, 0x4A750300u + (unsigned)i, 1);
+    ck_assert_int_eq(simulcrypt_send_all(fd[i], msg, n, 3000), 0);
+  }
+
+  nanosleep(&settle, NULL); /* workers reach parked state */
+
+  start = monotonic_seconds();
+  emmg_server_stop(s);
+  elapsed = monotonic_seconds() - start;
+  ck_assert_msg(elapsed < 2.0, "emmg_server_stop took %.2fs with 8 concurrent workers", elapsed);
+
+  for (i = 0; i < 8; i++) {
+    assert_closed_by_server(fd[i]);
+    close(fd[i]);
+  }
+}
+END_TEST
+
 static Suite *emmg_server_suite(void) {
   Suite *s = suite_create("emmg_server");
   TCase *tc = tcase_create("core");
@@ -474,6 +556,7 @@ static Suite *emmg_server_suite(void) {
     tcase_add_test(tc_integ, emmg_server_rejects_stream_setup_before_channel_setup);
     tcase_add_test(tc_integ, emmg_server_accepts_up_to_new_conn_cap);
     tcase_add_test(tc_integ, emmg_server_queue_holds_more_than_old_64_cap);
+    tcase_add_test(tc_integ, emmg_server_stop_reaps_all_max_conns_in_mixed_states);
     suite_add_tcase(s, tc_integ);
   }
 

@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -135,8 +136,12 @@ int accessunit_decode(bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int
   fuu_index_t *fuus = NULL;
   int nfuu, i, rc = 0;
   uint64_t n64;
+  size_t bytes_left;
 
   if (bitreader_get_vluimsbf8(br, &n64))
+    return -1;
+  bytes_left = bitreader_bits_left(br) / 8;
+  if (n64 > (uint64_t)INT_MAX || n64 > (uint64_t)(bytes_left / 3) || n64 > (uint64_t)(SIZE_MAX / sizeof *fuus))
     return -1;
   nfuu = (int)n64;
   fuus = malloc((size_t)(nfuu > 0 ? nfuu : 1) * sizeof *fuus);

@@ -27,6 +27,18 @@ typedef struct {
   pthread_mutex_t lock;
 } burst_table_t;
 
+typedef enum {
+  BURST_TABLE_NACK_NONE,
+  BURST_TABLE_NACK_ADAPTED,
+  BURST_TABLE_NACK_TERMINATED
+} burst_table_nack_action_t;
+
+typedef struct {
+  burst_table_nack_action_t action;
+  uint8_t msn;
+  double new_bps;
+} burst_table_nack_result_t;
+
 burst_table_t *burst_table_new(size_t cap);
 void burst_table_free(burst_table_t *t);
 
@@ -35,6 +47,13 @@ burst_slot_t *burst_table_claim(burst_table_t *t, const struct sockaddr *addr, s
 
 /* existing burst session for this client address, or NULL */
 burst_slot_t *burst_table_find(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen);
+
+/* starts a new burst or swaps an existing session to b.
+   returns 1 if an existing session was updated, 0 if a new slot was claimed, -1 if full. */
+int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int fd, burst_t *b, uint8_t *msn_out);
+
+/* note a NACK on an existing session. threshold 0 disables all actions. 1 found, 0 not found. */
+int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, unsigned threshold, burst_table_nack_result_t *out);
 
 /* terminates matching session if found; 1 found, 0 not. has_stop_seq/stop_seqnum: see burst_terminate() */
 int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int has_stop_seq, uint32_t stop_seqnum);

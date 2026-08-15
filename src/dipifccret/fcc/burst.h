@@ -48,6 +48,7 @@ burst_response_t burst_decide(const channel_t *c, const rtcp_rams_r_t *req, unsi
 typedef struct {
   const channel_t *channel;
   unsigned generation;
+  _Atomic unsigned refs; /* slot ownership + transient pacer snapshots */
   _Atomic uint16_t rtx_seq;
   unsigned char rtx_pt;
   size_t cursor;
@@ -64,6 +65,8 @@ typedef enum { BURST_TICK_CONTINUE, BURST_TICK_DONE } burst_tick_result_t;
 /* client_max_bps 0 = no cap. call only after burst_decide == BURST_ACCEPT */
 burst_t *burst_new(const channel_t *c, double multiplier, double client_max_bps, unsigned char rtx_pt);
 void burst_free(burst_t *b);
+void burst_acquire(burst_t *b);
+void burst_release(burst_t *b);
 
 /* no socket ownership, same as capture.c/ret.c. dscp: sent entry's own mirrored DSCP, F.9/I.2.12 */
 typedef void (*burst_send_fn)(const unsigned char *pkt, size_t len, int dscp, void *user);

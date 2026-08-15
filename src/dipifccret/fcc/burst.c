@@ -64,6 +64,7 @@ burst_t *burst_new(const channel_t *c, double multiplier, double client_max_bps,
 
   b->channel = c;
   b->generation = atomic_load_explicit(&c->generation, memory_order_relaxed);
+  atomic_init(&b->refs, 1u);
   b->rtx_pt = rtx_pt;
   atomic_store_explicit(&b->target_bps, target, memory_order_relaxed);
   clock_gettime(CLOCK_MONOTONIC, &b->start_time);
@@ -72,6 +73,15 @@ burst_t *burst_new(const channel_t *c, double multiplier, double client_max_bps,
 
 void burst_free(burst_t *b) {
   free(b);
+}
+
+void burst_acquire(burst_t *b) {
+  atomic_fetch_add_explicit(&b->refs, 1u, memory_order_acquire);
+}
+
+void burst_release(burst_t *b) {
+  if (atomic_fetch_sub_explicit(&b->refs, 1u, memory_order_acq_rel) == 1u)
+    burst_free(b);
 }
 
 burst_tick_result_t burst_tick(burst_t *b, unsigned duration_cap_ms, burst_send_fn send_cb, void *user) {

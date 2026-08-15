@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "lib/log.h"
@@ -19,6 +20,8 @@ cs378x_server_t *cs378x_server_start(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_
   s = calloc(1, sizeof *s);
   if (!s)
     return NULL;
+  for (int i = 0; i < CS378X_MAX_CONNS; i++)
+    atomic_init(&s->worker_fd[i], -1);
 
   if (cs378x_md5((const unsigned char *)cfg->password, strlen(cfg->password), s->aes_key) != 0) {
     free(s);
@@ -59,22 +62,21 @@ cs378x_server_t *cs378x_server_start(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_
 }
 
 void cs378x_server_stop(cs378x_server_t *s) {
-  int waited_ms = 0;
   if (!s)
     return;
   atomic_store_explicit(&s->stop, 1, memory_order_relaxed);
   pthread_join(s->accept_thread, NULL);
   close(s->listen_fd);
 
-  for (;;) {
-    int i, any_active = 0;
-    for (i = 0; i < CS378X_MAX_CONNS; i++)
-      if (atomic_load_explicit(&s->worker_active[i], memory_order_acquire))
-        any_active = 1;
-    if (!any_active || waited_ms > 5000)
-      break;
-    usleep(50 * 1000);
-    waited_ms += 50;
+  for (int i = 0; i < CS378X_MAX_CONNS; i++) {
+    int fd = atomic_load_explicit(&s->worker_fd[i], memory_order_acquire);
+    if (fd >= 0)
+      shutdown(fd, SHUT_RDWR);
   }
+  for (int i = 0; i < CS378X_MAX_CONNS; i++)
+    if (s->worker_thread_joinable[i]) {
+      pthread_join(s->worker_thread[i], NULL);
+      s->worker_thread_joinable[i] = 0;
+    }
   free(s);
 }

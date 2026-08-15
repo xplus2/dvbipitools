@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -127,11 +128,140 @@ START_TEST(accessunit_encode_empty_doc_has_zero_fuus) {
 }
 END_TEST
 
+START_TEST(accessunit_decode_rejects_fuu_count_above_int_max) {
+  bcg_doc_t doc;
+  bitwriter_t bw;
+  bitreader_t br;
+  strrepo_writer_t sw;
+  strrepo_reader_t sr;
+  const unsigned char *bwdata, *swdata;
+  size_t bwlen, swlen;
+  int nfuu = -1;
+
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(bitwriter_put_vluimsbf8(&bw, (uint64_t)INT_MAX + 1u), 0);
+
+  bwdata = bitwriter_data(&bw, &bwlen);
+  swdata = strrepo_writer_data(&sw, &swlen);
+  bitreader_init(&br, bwdata, bwlen);
+  ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
+  bcg_doc_init(&doc);
+  ck_assert_int_eq(accessunit_decode(&br, &sr, &doc, &nfuu), -1);
+
+  bcg_doc_free(&doc);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
+START_TEST(accessunit_decode_rejects_implausible_fuu_count_for_remaining_bytes) {
+  bcg_doc_t doc;
+  bitwriter_t bw;
+  bitreader_t br;
+  strrepo_writer_t sw;
+  strrepo_reader_t sr;
+  const unsigned char payload[3] = {0, 0, 0};
+  const unsigned char *bwdata, *swdata;
+  size_t bwlen, swlen;
+  int nfuu = -1;
+
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(bitwriter_put_vluimsbf8(&bw, 2), 0);
+  ck_assert_int_eq(bitwriter_put_bytes(&bw, payload, sizeof payload), 0);
+
+  bwdata = bitwriter_data(&bw, &bwlen);
+  swdata = strrepo_writer_data(&sw, &swlen);
+  bitreader_init(&br, bwdata, bwlen);
+  ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
+  bcg_doc_init(&doc);
+  ck_assert_int_eq(accessunit_decode(&br, &sr, &doc, &nfuu), -1);
+
+  bcg_doc_free(&doc);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
+/* bytes_left/3 plausibility boundary: minimum-size fuus (flen 0, 1+2 header
+   bytes each) must decode at exact fit, reject 1 byte short */
+
+START_TEST(accessunit_decode_accepts_fuu_count_at_exact_byte_boundary) {
+  bcg_doc_t doc;
+  bitwriter_t bw;
+  bitreader_t br;
+  strrepo_writer_t sw;
+  strrepo_reader_t sr;
+  const unsigned char *bwdata, *swdata;
+  size_t bwlen, swlen;
+  int nfuu = -1;
+  int i;
+
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(bitwriter_put_vluimsbf8(&bw, 4), 0);
+  for (i = 0; i < 4; i++) {
+    ck_assert_int_eq(bitwriter_put_vluimsbf8(&bw, 0), 0);
+    ck_assert_int_eq(bitwriter_put(&bw, 0xFFFF, 16), 0); /* unmatched ctxpath, skipped by later passes */
+  }
+
+  bwdata = bitwriter_data(&bw, &bwlen);
+  swdata = strrepo_writer_data(&sw, &swlen);
+  bitreader_init(&br, bwdata, bwlen);
+  ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
+  bcg_doc_init(&doc);
+  ck_assert_int_eq(accessunit_decode(&br, &sr, &doc, &nfuu), 0);
+  ck_assert_int_eq(nfuu, 4);
+
+  bcg_doc_free(&doc);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
+START_TEST(accessunit_decode_rejects_fuu_count_one_byte_short_of_boundary) {
+  bcg_doc_t doc;
+  bitwriter_t bw;
+  bitreader_t br;
+  strrepo_writer_t sw;
+  strrepo_reader_t sr;
+  const unsigned char *bwdata, *swdata;
+  size_t bwlen, swlen;
+  int nfuu = -1;
+  int i;
+
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(bitwriter_put_vluimsbf8(&bw, 4), 0);
+  for (i = 0; i < 4; i++) {
+    ck_assert_int_eq(bitwriter_put_vluimsbf8(&bw, 0), 0);
+    ck_assert_int_eq(bitwriter_put(&bw, 0xFFFF, 16), 0);
+  }
+
+  bwdata = bitwriter_data(&bw, &bwlen);
+  swdata = strrepo_writer_data(&sw, &swlen);
+  ck_assert_uint_gt(bwlen, 0u);
+  bitreader_init(&br, bwdata, bwlen - 1);
+  ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
+  bcg_doc_init(&doc);
+  ck_assert_int_eq(accessunit_decode(&br, &sr, &doc, &nfuu), -1);
+
+  bcg_doc_free(&doc);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
 static Suite *accessunit_suite(void) {
   Suite *s = suite_create("accessunit");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, accessunit_encode_decode_round_trips_full_doc);
   tcase_add_test(tc, accessunit_encode_empty_doc_has_zero_fuus);
+  tcase_add_test(tc, accessunit_decode_rejects_fuu_count_above_int_max);
+  tcase_add_test(tc, accessunit_decode_rejects_implausible_fuu_count_for_remaining_bytes);
+  tcase_add_test(tc, accessunit_decode_accepts_fuu_count_at_exact_byte_boundary);
+  tcase_add_test(tc, accessunit_decode_rejects_fuu_count_one_byte_short_of_boundary);
   suite_add_tcase(s, tc);
   return s;
 }
