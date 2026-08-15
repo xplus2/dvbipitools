@@ -40,7 +40,7 @@ jobs:
             crosspkg: crossbuild-essential-riscv64
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: build dependencies
       run: |
         sudo apt-get update
@@ -91,7 +91,7 @@ jobs:
         # dipicam378 needs OpenSSL, unavailable on i386/armel here - same skip-if-missing pattern
         [ -f build/src/dipicam378/dipicam378 ] && install -m 0755 build/src/dipicam378/dipicam378 "${PKGDIR}/"
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
       with:
         name: tarball-${{ matrix.arch }}
         path: dvbipitools-*.tar.gz
@@ -100,12 +100,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/download-artifact@v5
+    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dec800d1 # v5.0.0
       with:
         pattern: tarball-*
         merge-multiple: true
         path: dist
     - name: assets
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@c95fe1489396fe5a219ad6e302466378ecece42b # v2.0.8
       with:
         files: dist/*.tar.gz
