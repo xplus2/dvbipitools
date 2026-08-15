@@ -27,7 +27,9 @@ if (OpenSSL_FOUND)
         emmcache.c
         ipiclient.c
         ../lib/log.c
+        ../lib/secure_zero.c
         ../lib/argutil.c
+        ../lib/uriparse.c
         ../lib/signal.c
         ../lib/net/multicast.c
         ../lib/net/netconnect.c

@@ -190,6 +190,19 @@ static void psi_note(ts_metrics_t *tsm, psi_table_t table, size_t n) {
     tsm->psi_errors_total[table]++;
 }
 
+/* tracks PMT change metrics and caches sec[0..n) as the last-seen PMT for next diff.
+   have_last_pmt false (fresh remux_t, nothing to compare against) -> never "changed" */
+static void track_pmt_metrics(remux_t *r, ts_metrics_t *tsm, const unsigned char *sec, size_t n) {
+  int changed = r->have_last_pmt && (n != r->last_pmt_len || memcmp(sec, r->last_pmt, n) != 0);
+  if (changed)
+    tsm->pmt_updates_total++;
+  if (n <= sizeof r->last_pmt) {
+    memcpy(r->last_pmt, sec, n);
+    r->last_pmt_len = n;
+    r->have_last_pmt = 1;
+  }
+}
+
 static void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm) {
   unsigned char sec[4096];
   unsigned char ptr0 = 0x00;
@@ -210,17 +223,8 @@ static void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ct
       /* diffing itself is metrics-only work, skipped entirely when tsm is NULL - not just
          its counter write. "updated" is relative to this remux_t's own history - a fresh
          remux_t (reconnect) starts with no prior PMT, so its first build here never counts */
-      if (tsm) {
-        /* have_last_pmt false (fresh remux_t, nothing to compare against) -> never "changed" */
-        int changed = r->have_last_pmt && (n != r->last_pmt_len || memcmp(sec, r->last_pmt, n) != 0);
-        if (changed)
-          tsm->pmt_updates_total++;
-        if (n <= sizeof r->last_pmt) {
-          memcpy(r->last_pmt, sec, n);
-          r->last_pmt_len = n;
-          r->have_last_pmt = 1;
-        }
-      }
+      if (tsm)
+        track_pmt_metrics(r, tsm, sec, n);
       ts_packet_emit(r->pids.pmt_pid, &r->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     if (r->standalone && r->cas && due(now, &r->last_cat, INTERVAL_PAT_PMT_S)) {

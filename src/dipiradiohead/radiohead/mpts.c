@@ -17,6 +17,123 @@
 #define MPTS_POLL_MAX_MS 100
 #define MPTS_MAX_FRAMES_PER_TICK 32 /* per input, per tick. caps one input's backlog from delaying the rest */
 
+typedef struct {
+  inputset_t *is;
+  mpts_t *mpts;
+  cas_t *cas;
+  const config_t *cfg;
+  tspacketizer_t **tsps;
+  meta_state_t *metas;
+  uint64_t *samples_total;
+  int *was_connected;
+  input_metrics_t *input_stats;
+  unsigned long long *last_synced_bytes;
+  radio_metrics_t *rm;
+  out_ctx_t *out;
+  int metrics_on;
+  double now;
+  time_t now_t;
+  const unsigned *pfd_slot;
+  const struct pollfd *pfds;
+  nfds_t npfd;
+} mpts_tick_t;
+
+/* processes one input slot for this poll tick: reads up to MPTS_MAX_FRAMES_PER_TICK frames,
+   feeds the packetizer, updates metrics. -1: fatal (tspacketizer_new() OOM), caller must abort */
+static int process_input_slot(mpts_tick_t *tk, unsigned i) {
+  unsigned frames_this_visit = 0;
+  source_t *src;
+  int connected_now;
+  unsigned pfd_i;
+  int ready = 0;
+
+  src = inputset_source(tk->is, i);
+  connected_now = src != NULL;
+
+  if (connected_now && !tk->was_connected[i]) {
+    tk->samples_total[i] = 0;
+    tk->last_synced_bytes[i] = 0;
+  }
+  tk->was_connected[i] = connected_now;
+  if (!src)
+    return 0;
+
+  /* only read a slot poll() actually reported ready. source_next_frame() can block for several seconds
+     (http_read()'s SO_RCVTIMEO) on a connected-but-currently-silent source, which would otherwise stall other inputs */
+  for (pfd_i = 0; pfd_i < tk->npfd; pfd_i++)
+    if (tk->pfd_slot[pfd_i] == i && (tk->pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP))) {
+      ready = 1;
+      break;
+    }
+  if (!ready)
+    return 0;
+
+  while (frames_this_visit < MPTS_MAX_FRAMES_PER_TICK) {
+    source_frame_t f;
+    uint64_t pts;
+    net_err_reason_t reason = NET_ERR_OTHER;
+    int r = source_next_frame(src, &f, &reason);
+
+    if (r == 0)
+      break;
+    if (r < 0) {
+      input_metrics_note_read(tk->metrics_on ? &tk->input_stats[i] : NULL, -1, reason);
+      if (tk->metrics_on && reason == NET_ERR_FORMAT)
+        tk->rm->framing_errors_total++;
+      if (tk->metrics_on)
+        tk->input_stats[i].up = 0;
+      inputset_mark_down(tk->is, i, tk->now_t);
+      mpts_set_program(tk->mpts, i, NULL);
+      break;
+    }
+    frames_this_visit++;
+    if (tk->metrics_on) {
+      tk->input_stats[i].last_data_time = (double)time(NULL);
+      tk->rm->frames_total[f.codec]++;
+    }
+
+    if (!tk->tsps[i]) {
+      tspacketizer_cfg_t tc;
+      tc.tsid = tk->cfg->tsid;
+      tc.onid = tk->cfg->onid;
+      tc.sid = inputset_sid(tk->is, i);
+      tc.stream_type = f.stream_type;
+      tc.network_name = "";
+      tc.service_name = inputset_service_name(tk->is, i);
+      tc.pmt_pid = inputset_pmt_pid(tk->is, i);
+      tc.audio_pid = inputset_audio_pid(tk->is, i);
+      tc.standalone = 0;
+      tk->tsps[i] = tspacketizer_new(&tc);
+      if (!tk->tsps[i])
+        return -1;
+      if (tk->cas)
+        tspacketizer_set_cas(tk->tsps[i], tk->cas);
+      log_line("input %u (%s): codec detected: %s, %u Hz", i, inputset_service_name(tk->is, i), codec_name(f.codec), f.sample_rate);
+    }
+    mpts_set_program(tk->mpts, i, tk->tsps[i]);
+
+    if (tk->metas[i].dirty) {
+      tspacketizer_set_metadata(tk->tsps[i], tk->metas[i].artist, tk->metas[i].title);
+      tk->metas[i].dirty = 0;
+      log_line("input %u (%s): now playing: %s%s%s", i, inputset_service_name(tk->is, i), tk->metas[i].artist,
+                (tk->metas[i].artist[0] && tk->metas[i].title[0]) ? " - " : "", tk->metas[i].title);
+    }
+
+    pts = tk->samples_total[i] * 90000ULL / f.sample_rate;
+    tk->samples_total[i] += f.samples;
+    tk->out->cur_pts = pts;
+    tspacketizer_feed(tk->tsps[i], pts, tk->now, f.data, f.len, packet_cb, tk->out);
+  }
+  if (tk->metrics_on) {
+    unsigned long long sb = source_bytes_total(src);
+    if (sb > tk->last_synced_bytes[i]) {
+      tk->input_stats[i].bytes_total += sb - tk->last_synced_bytes[i];
+      tk->last_synced_bytes[i] = sb;
+    }
+  }
+  return 0;
+}
+
 int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   mcast_t *mc;
   out_ctx_t out;
@@ -136,101 +253,37 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     for (i = 0; i < n; i++)
       inputset_service(is, i, now_t);
 
-    for (k = 0; k < n; k++) {
-      unsigned frames_this_visit = 0;
-      source_t *src;
-      int connected_now;
-      unsigned pfd_i;
-      int ready = 0;
+    {
+      mpts_tick_t tk;
+      tk.is = is;
+      tk.mpts = mpts;
+      tk.cas = cas;
+      tk.cfg = cfg;
+      tk.tsps = tsps;
+      tk.metas = metas;
+      tk.samples_total = samples_total;
+      tk.was_connected = was_connected;
+      tk.input_stats = input_stats;
+      tk.last_synced_bytes = last_synced_bytes;
+      tk.rm = &rm;
+      tk.out = &out;
+      tk.metrics_on = metrics_on;
+      tk.now = now;
+      tk.now_t = now_t;
+      tk.pfd_slot = pfd_slot;
+      tk.pfds = pfds;
+      tk.npfd = npfd;
 
-      i = (rr_start + k) % n;
-      src = inputset_source(is, i);
-      connected_now = src != NULL;
-
-      if (connected_now && !was_connected[i]) {
-        samples_total[i] = 0;
-        last_synced_bytes[i] = 0;
-      }
-      was_connected[i] = connected_now;
-      if (!src)
-        continue;
-
-      /* only read a slot poll() actually reported ready. source_next_frame() can block for several seconds
-         (http_read()'s SO_RCVTIMEO) on a connected-but-currently-silent source, which would otherwise stall other inputs */
-      for (pfd_i = 0; pfd_i < npfd; pfd_i++)
-        if (pfd_slot[pfd_i] == i && (pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP))) {
-          ready = 1;
-          break;
-        }
-      if (!ready)
-        continue;
-
-      while (frames_this_visit < MPTS_MAX_FRAMES_PER_TICK) {
-        source_frame_t f;
-        uint64_t pts;
-        net_err_reason_t reason = NET_ERR_OTHER;
-        int r = source_next_frame(src, &f, &reason);
-
-        if (r == 0)
-          break;
-        if (r < 0) {
-          input_metrics_note_read(metrics_on ? &input_stats[i] : NULL, -1, reason);
-          if (metrics_on && reason == NET_ERR_FORMAT)
-            rm.framing_errors_total++;
-          if (metrics_on)
-            input_stats[i].up = 0;
-          inputset_mark_down(is, i, now_t);
-          mpts_set_program(mpts, i, NULL);
-          break;
-        }
-        frames_this_visit++;
-        if (metrics_on) {
-          input_stats[i].last_data_time = (double)time(NULL);
-          rm.frames_total[f.codec]++;
-        }
-
-        if (!tsps[i]) {
-          tspacketizer_cfg_t tc;
-          tc.tsid = cfg->tsid;
-          tc.onid = cfg->onid;
-          tc.sid = inputset_sid(is, i);
-          tc.stream_type = f.stream_type;
-          tc.network_name = "";
-          tc.service_name = inputset_service_name(is, i);
-          tc.pmt_pid = inputset_pmt_pid(is, i);
-          tc.audio_pid = inputset_audio_pid(is, i);
-          tc.standalone = 0;
-          tsps[i] = tspacketizer_new(&tc);
-          if (!tsps[i]) {
-            rc = 1;
-            goto done;
-          }
-          if (cas)
-            tspacketizer_set_cas(tsps[i], cas);
-          log_line("input %u (%s): codec detected: %s, %u Hz", i, inputset_service_name(is, i), codec_name(f.codec), f.sample_rate);
-        }
-        mpts_set_program(mpts, i, tsps[i]);
-
-        if (metas[i].dirty) {
-          tspacketizer_set_metadata(tsps[i], metas[i].artist, metas[i].title);
-          metas[i].dirty = 0;
-          log_line("input %u (%s): now playing: %s%s%s", i, inputset_service_name(is, i), metas[i].artist, (metas[i].artist[0] && metas[i].title[0]) ? " - " : "", metas[i].title);
-        }
-
-        pts = samples_total[i] * 90000ULL / f.sample_rate;
-        samples_total[i] += f.samples;
-        out.cur_pts = pts;
-        tspacketizer_feed(tsps[i], pts, now, f.data, f.len, packet_cb, &out);
-      }
-      if (metrics_on) {
-        unsigned long long sb = source_bytes_total(src);
-        if (sb > last_synced_bytes[i]) {
-          input_stats[i].bytes_total += sb - last_synced_bytes[i];
-          last_synced_bytes[i] = sb;
+      for (k = 0; k < n; k++) {
+        i = (rr_start + k) % n;
+        if (process_input_slot(&tk, i) != 0) {
+          rc = 1;
+          goto done;
         }
       }
     }
-    rr_start = (rr_start + 1) % n;
+    if (n)
+      rr_start = (rr_start + 1) % n;
 
     mpts_tick(mpts, now, packet_cb, &out);
     if (cas) {

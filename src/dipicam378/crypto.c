@@ -6,6 +6,8 @@
 
 #include <openssl/pem.h>
 
+#include "lib/secure_zero.h"
+
 #include "crypto.h"
 
 int device_key_load(const char *path, EVP_PKEY **out) {
@@ -65,7 +67,7 @@ int device_emm_g_decrypt(const unsigned char bk[CRYPTO_KEY_LEN], const unsigned 
 
   EVP_CIPHER_CTX_free(ctx);
   if (!ok) {
-    memset(sk_out, 0, CRYPTO_KEY_LEN);
+    secure_zero(sk_out, CRYPTO_KEY_LEN);
     return -1;
   }
   return 0;
@@ -86,10 +88,10 @@ int device_ecm_decrypt(const unsigned char sk[CRYPTO_KEY_LEN], const unsigned ch
 
   EVP_CIPHER_CTX_free(ctx);
   if (!ok || len != CRYPTO_CW_ENC_LEN) {
-    memset(block, 0, sizeof block);
+    secure_zero(block, sizeof block);
     return -1;
   }
   memcpy(cw_out, block, (size_t)cw_len);
-  memset(block, 0, sizeof block);
+  secure_zero(block, sizeof block);
   return 0;
 }

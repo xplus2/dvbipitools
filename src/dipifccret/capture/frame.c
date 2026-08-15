@@ -8,6 +8,33 @@
 
 #include "priv.h"
 
+/* walks IPv6 extension headers from *hdr_off to find the L4 header, updating *next_header
+   as it goes. 1: found UDP (next_header==17). 0: unsupported header or truncated packet */
+static int walk_ipv6_ext_headers(const unsigned char *pkt, size_t len, size_t *hdr_off, unsigned *next_header) {
+  for (;;) {
+    if (*next_header == 17) /* UDP */
+      return 1;
+    if (*next_header == 0 || *next_header == 60 || *next_header == 43) {
+      /* Hop-by-Hop / Destination Options / Routing: next-header(1) + len-in-8-octet-units-minus-1(1) + data */
+      unsigned ext_len;
+      if (len < *hdr_off + 2)
+        return 0;
+      ext_len = pkt[*hdr_off + 1];
+      *next_header = pkt[*hdr_off];
+      *hdr_off += ((size_t)ext_len + 1) * 8;
+      continue;
+    }
+    if (*next_header == 44) { /* Fragment header: fixed 8 bytes */
+      if (len < *hdr_off + 8)
+        return 0;
+      *next_header = pkt[*hdr_off];
+      *hdr_off += 8;
+      continue;
+    }
+    return 0; /* AH/ESP or anything else unsupported: documented scope limit */
+  }
+}
+
 void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ranges, size_t range_count, capture_frame_cb cb, void *user) {
   size_t off, ip_off, udp_off, rtp_off, addr_len;
   unsigned ethertype, dport;
@@ -60,28 +87,8 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
     memcpy(&dst6, pkt + ip_off + 24, 16);
     hdr_off = ip_off + 40;
 
-    for (;;) {
-      if (next_header == 17) /* UDP */
-        break;
-      if (next_header == 0 || next_header == 60 || next_header == 43) {
-        /* Hop-by-Hop / Destination Options / Routing: next-header(1) + len-in-8-octet-units-minus-1(1) + data */
-        unsigned ext_len;
-        if (len < hdr_off + 2)
-          return;
-        ext_len = pkt[hdr_off + 1];
-        next_header = pkt[hdr_off];
-        hdr_off += ((size_t)ext_len + 1) * 8;
-        continue;
-      }
-      if (next_header == 44) { /* Fragment header: fixed 8 bytes */
-        if (len < hdr_off + 8)
-          return;
-        next_header = pkt[hdr_off];
-        hdr_off += 8;
-        continue;
-      }
-      return; /* AH/ESP or anything else unsupported: documented scope limit */
-    }
+    if (!walk_ipv6_ext_headers(pkt, len, &hdr_off, &next_header))
+      return;
     if (len < hdr_off + 8)
       return;
     family = AF_INET6;

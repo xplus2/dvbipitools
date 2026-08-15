@@ -151,6 +151,167 @@ static void program_reset(mpts_program_t *p) {
   memset(p, 0, sizeof *p);
 }
 
+/* resolves the fd/events to poll for this input: its retry-connect fd, or once connected,
+   its live source fd (POLLIN only) */
+static int poll_fd_for_input(retryset_t *rs, unsigned i, short *events_out) {
+  int fd = retryset_poll_fd(rs, i);
+  *events_out = retryset_poll_events(rs, i);
+  if (fd < 0) {
+    tvsrc_t *src = retryset_result(rs, i);
+    if (src) {
+      fd = tvsrc_fd(src);
+      *events_out = POLLIN;
+    }
+  }
+  return fd;
+}
+
+static int input_poll_ready(unsigned i, const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd) {
+  unsigned pfd_i;
+  for (pfd_i = 0; pfd_i < npfd; pfd_i++)
+    if (pfd_slot[pfd_i] == i && (pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP)))
+      return 1;
+  return 0;
+}
+
+typedef struct {
+  retryset_t *rs;
+  const config_t *cfg;
+  mpts_program_t *progs;
+  mpts_t *mpts;
+  cas_t *cas;
+  input_metrics_t *input_stats;
+  int metrics_on;
+  out_ctx_t *out;
+  ts_metrics_t *tsm;
+  double now;
+  time_t now_t;
+} mpts_tick_t;
+
+/* runs (or continues) PSI discovery for input i until a remux_t can be built. always
+   settles this visit (never falls through to feed_input() in the same tick) */
+static void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
+  int r;
+
+  if (!tk->progs[i].psi) {
+    tk->progs[i].psi = psi_new();
+    if (!tk->progs[i].psi) {
+      log_line("input %u: out of memory allocating psi state, retrying next poll", i);
+      return;
+    }
+    tk->progs[i].discover_start = mono_seconds();
+    if (tk->cfg->inputs[i].pmt_pid)
+      psi_select_pmt_pid(tk->progs[i].psi, tk->cfg->inputs[i].pmt_pid);
+  }
+  r = discover_step(&tk->progs[i].ds, src, &tk->cfg->inputs[i], tk->progs[i].psi, tk->metrics_on ? &tk->input_stats[i] : NULL);
+  if (r == 0 && mono_seconds() - tk->progs[i].discover_start < DISCOVERY_TIMEOUT_S)
+    return;
+  if (r <= 0) {
+    if (r == 0)
+      log_line("input %u: no live PMT found within %.0fs", i, DISCOVERY_TIMEOUT_S);
+    program_reset(&tk->progs[i]);
+    retryset_mark_down(tk->rs, i, tk->now_t);
+    if (tk->metrics_on)
+      tk->input_stats[i].up = 0;
+    return;
+  }
+
+  {
+    out_program_pids_t pids;
+    out_program_pids(i, &pids);
+    log_line("input %u:", i);
+    print_discovered(tk->progs[i].psi);
+    tk->progs[i].rx = remux_new(tk->cfg, &tk->cfg->inputs[i], tk->progs[i].psi, &pids, 0);
+  }
+  if (!tk->progs[i].rx) {
+    log_line("input %u: remux setup failed", i);
+    psi_free(tk->progs[i].psi);
+    tk->progs[i].psi = NULL;
+    retryset_mark_down(tk->rs, i, tk->now_t);
+    if (tk->metrics_on)
+      tk->input_stats[i].up = 0;
+    return;
+  }
+  /* cas already running (non-keyword --cas-pids, or a reconnect after it started):
+     this new remux_t needs it too, same as initial attach below for
+     keyword-discovery path. without this, packets never get scrambled. */
+  if (tk->cas)
+    remux_set_cas(tk->progs[i].rx, tk->cas);
+  /* psi stays alive: remux_t's out_es_t[].src borrows pointers into it for its
+     entire lifetime (see pmtbuild.h); freed alongside rx in program_reset() */
+  mpts_set_program(tk->mpts, i, tk->progs[i].rx);
+}
+
+/* feeds already-buffered/newly-read bytes for input i's live remux_t into tspack_feed() */
+static void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
+  feed_ctx_t fc;
+  read_backlog_t *bl = &tk->progs[i].backlog;
+  size_t remaining = bl->len - bl->off;
+  size_t chunk;
+
+  if (remaining == 0) {
+    net_err_reason_t reason = NET_ERR_OTHER;
+    ssize_t rn = tvsrc_read(src, bl->buf, sizeof bl->buf, &reason);
+    input_metrics_note_read(tk->metrics_on ? &tk->input_stats[i] : NULL, rn, reason);
+    if (rn < 0) {
+      mpts_set_program(tk->mpts, i, NULL);
+      program_reset(&tk->progs[i]);
+      retryset_mark_down(tk->rs, i, tk->now_t);
+      if (tk->metrics_on)
+        tk->input_stats[i].up = 0;
+      return;
+    }
+    if (rn == 0)
+      return;
+    bl->len = (size_t)rn;
+    bl->off = 0;
+    remaining = bl->len;
+  }
+  chunk = remaining < MPTS_READ_CHUNK_BYTES ? remaining : MPTS_READ_CHUNK_BYTES;
+  fc.rx = tk->progs[i].rx;
+  fc.out = tk->out;
+  fc.now = tk->now;
+  fc.tsm = tk->tsm;
+  tspack_feed(&tk->progs[i].pz, bl->buf + bl->off, chunk, remux_cb, &fc);
+  bl->off += chunk;
+  if (bl->off >= bl->len)
+    bl->len = bl->off = 0;
+}
+
+/* once every input's rx exists (all keyword-CAS pids resolved), starts CAS with the full
+   pid list. past the gate deadline without that, fails fast naming the stragglers.
+   0: ok (*cas_out set if cas just started). -1: fatal, caller must abort */
+static int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, unsigned n, mpts_t *mpts,
+                                     double cas_gate_deadline, cas_t **cas_out) {
+  unsigned i, ready_count = 0;
+  for (i = 0; i < n; i++)
+    if (progs[i].rx)
+      ready_count++;
+  if (ready_count == n) {
+    const out_es_t *es_lists[ARGS_MAX_INPUTS];
+    int es_counts[ARGS_MAX_INPUTS];
+    cas_t *cas;
+    for (i = 0; i < n; i++)
+      es_lists[i] = remux_es(progs[i].rx, &es_counts[i]);
+    cas = cas_start_multi(cfg, es_lists, es_counts, n);
+    if (!cas) {
+      log_line("cas: failed to start");
+      return -1;
+    }
+    tvhead_mpts_set_cas(mpts, cas);
+    for (i = 0; i < n; i++)
+      remux_set_cas(progs[i].rx, cas);
+    *cas_out = cas;
+  } else if (mono_seconds() >= cas_gate_deadline) {
+    log_line("cas: --cas-pids-video/--cas-pids-audio need every -i discovered within %.0fs:", CAS_KEYWORD_DISCOVERY_TIMEOUT_S);
+    for (i = 0; i < n; i++)
+      if (!progs[i].rx)
+        log_line("  input %u: %s", i, progs[i].psi ? "still discovering" : "not connected");
+    return -1;
+  }
+  return 0;
+}
+
 int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   unsigned n = cfg->n_inputs;
   tv_slot_ctx_t slot_ctxs[ARGS_MAX_INPUTS];
@@ -259,19 +420,10 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
         timeout_ms = remain_ms;
     }
     for (i = 0; i < n; i++) {
-      int fd = retryset_poll_fd(rs, i);
-      short events = retryset_poll_events(rs, i);
-      if (fd < 0) {
-        tvsrc_t *src = retryset_result(rs, i);
-        if (src) {
-          fd = tvsrc_fd(src);
-          events = POLLIN;
-        }
-      }
+      int fd = poll_fd_for_input(rs, i, &pfds[npfd].events);
       if (fd < 0)
         continue;
       pfds[npfd].fd = fd;
-      pfds[npfd].events = events;
       pfds[npfd].revents = 0;
       pfd_slot[npfd] = i;
       npfd++;
@@ -285,109 +437,34 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     for (i = 0; i < n; i++)
       retryset_service(rs, i, now_t);
 
-    for (k = 0; k < n; k++) {
-      tvsrc_t *src;
-      unsigned pfd_i;
-      int ready = 0;
+    {
+      mpts_tick_t tk;
+      tk.rs = rs;
+      tk.cfg = cfg;
+      tk.progs = progs;
+      tk.mpts = mpts;
+      tk.cas = cas;
+      tk.input_stats = input_stats;
+      tk.metrics_on = metrics_on;
+      tk.out = &out;
+      tk.tsm = tsm_p;
+      tk.now = now;
+      tk.now_t = now_t;
 
-      i = (rr_start + k) % n;
-      src = retryset_result(rs, i);
-      if (!src)
-        continue;
-      for (pfd_i = 0; pfd_i < npfd; pfd_i++)
-        if (pfd_slot[pfd_i] == i && (pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP))) {
-          ready = 1;
-          break;
-        }
-      if (!ready)
-        continue;
+      for (k = 0; k < n; k++) {
+        tvsrc_t *src;
 
-      if (!progs[i].rx) {
-        int r;
-
-        if (!progs[i].psi) {
-          progs[i].psi = psi_new();
-          if (!progs[i].psi) {
-            log_line("input %u: out of memory allocating psi state, retrying next poll", i);
-            continue;
-          }
-          progs[i].discover_start = mono_seconds();
-          if (cfg->inputs[i].pmt_pid)
-            psi_select_pmt_pid(progs[i].psi, cfg->inputs[i].pmt_pid);
-        }
-        r = discover_step(&progs[i].ds, src, &cfg->inputs[i], progs[i].psi, metrics_on ? &input_stats[i] : NULL);
-        if (r == 0 && mono_seconds() - progs[i].discover_start < DISCOVERY_TIMEOUT_S)
+        i = (rr_start + k) % n;
+        src = retryset_result(rs, i);
+        if (!src)
           continue;
-        if (r <= 0) {
-          if (r == 0)
-            log_line("input %u: no live PMT found within %.0fs", i, DISCOVERY_TIMEOUT_S);
-          program_reset(&progs[i]);
-          retryset_mark_down(rs, i, now_t);
-          if (metrics_on)
-            input_stats[i].up = 0;
+        if (!input_poll_ready(i, pfd_slot, pfds, npfd))
           continue;
-        }
 
-        {
-          out_program_pids_t pids;
-          out_program_pids(i, &pids);
-          log_line("input %u:", i);
-          print_discovered(progs[i].psi);
-          progs[i].rx = remux_new(cfg, &cfg->inputs[i], progs[i].psi, &pids, 0);
-        }
-        if (!progs[i].rx) {
-          log_line("input %u: remux setup failed", i);
-          psi_free(progs[i].psi);
-          progs[i].psi = NULL;
-          retryset_mark_down(rs, i, now_t);
-          if (metrics_on)
-            input_stats[i].up = 0;
-          continue;
-        }
-        /* cas already running (non-keyword --cas-pids, or a reconnect after it started):
-           this new remux_t needs it too, same as initial attach below for
-           keyword-discovery path. without this, packets never get scrambled. */
-        if (cas)
-          remux_set_cas(progs[i].rx, cas);
-        /* psi stays alive: remux_t's out_es_t[].src borrows pointers into it for its
-           entire lifetime (see pmtbuild.h); freed alongside rx in program_reset() */
-        mpts_set_program(mpts, i, progs[i].rx);
-        continue; /* steady-state starts next visit */
-      }
-
-      {
-        feed_ctx_t fc;
-        read_backlog_t *bl = &progs[i].backlog;
-        size_t remaining = bl->len - bl->off;
-        size_t chunk;
-
-        if (remaining == 0) {
-          net_err_reason_t reason = NET_ERR_OTHER;
-          ssize_t rn = tvsrc_read(src, bl->buf, sizeof bl->buf, &reason);
-          input_metrics_note_read(metrics_on ? &input_stats[i] : NULL, rn, reason);
-          if (rn < 0) {
-            mpts_set_program(mpts, i, NULL);
-            program_reset(&progs[i]);
-            retryset_mark_down(rs, i, now_t);
-            if (metrics_on)
-              input_stats[i].up = 0;
-            continue;
-          }
-          if (rn == 0)
-            continue;
-          bl->len = (size_t)rn;
-          bl->off = 0;
-          remaining = bl->len;
-        }
-        chunk = remaining < MPTS_READ_CHUNK_BYTES ? remaining : MPTS_READ_CHUNK_BYTES;
-        fc.rx = progs[i].rx;
-        fc.out = &out;
-        fc.now = now;
-        fc.tsm = tsm_p;
-        tspack_feed(&progs[i].pz, bl->buf + bl->off, chunk, remux_cb, &fc);
-        bl->off += chunk;
-        if (bl->off >= bl->len)
-          bl->len = bl->off = 0;
+        if (!progs[i].rx)
+          discover_input(&tk, i, src);
+        else
+          feed_input(&tk, i, src);
       }
     }
     rr_start = n ? (rr_start + 1) % n : 0;
@@ -397,29 +474,7 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
         remux_emit_eit(progs[i].rx, OUT_PID_EIT, &eit_cc, 1, packet_cb, &out);
 
     if (cas_needs_discovery && !cas) {
-      unsigned ready_count = 0;
-      for (i = 0; i < n; i++)
-        if (progs[i].rx)
-          ready_count++;
-      if (ready_count == n) {
-        const out_es_t *es_lists[ARGS_MAX_INPUTS];
-        int es_counts[ARGS_MAX_INPUTS];
-        for (i = 0; i < n; i++)
-          es_lists[i] = remux_es(progs[i].rx, &es_counts[i]);
-        cas = cas_start_multi(cfg, es_lists, es_counts, n);
-        if (!cas) {
-          log_line("cas: failed to start");
-          rc = 1;
-          goto done;
-        }
-        tvhead_mpts_set_cas(mpts, cas);
-        for (i = 0; i < n; i++)
-          remux_set_cas(progs[i].rx, cas);
-      } else if (mono_seconds() >= cas_gate_deadline) {
-        log_line("cas: --cas-pids-video/--cas-pids-audio need every -i discovered within %.0fs:", CAS_KEYWORD_DISCOVERY_TIMEOUT_S);
-        for (i = 0; i < n; i++)
-          if (!progs[i].rx)
-            log_line("  input %u: %s", i, progs[i].psi ? "still discovering" : "not connected");
+      if (check_cas_discovery_gate(cfg, progs, n, mpts, cas_gate_deadline, &cas) != 0) {
         rc = 1;
         goto done;
       }

@@ -129,11 +129,19 @@ typedef struct {
   size_t length;
 } fuu_index_t;
 
-int accessunit_decode(bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int *out_nfuu) {
+void accessunit_scratch_init(accessunit_scratch_t *sc) { memset(sc, 0, sizeof *sc); }
+
+void accessunit_scratch_free(accessunit_scratch_t *sc) {
+  free(sc->fuus);
+  free(sc->ptext);
+  memset(sc, 0, sizeof *sc);
+}
+
+int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int *out_nfuu) {
   const unsigned char *base = br->buf;
-  ptext_t *ptext = NULL;
-  int ptext_n = 0, ptext_cap = 0;
-  fuu_index_t *fuus = NULL;
+  ptext_t *ptext;
+  int ptext_n = 0;
+  fuu_index_t *fuus;
   int nfuu, i, rc = 0;
   uint64_t n64;
   size_t bytes_left;
@@ -144,9 +152,19 @@ int accessunit_decode(bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int
   if (n64 > (uint64_t)INT_MAX || n64 > (uint64_t)(bytes_left / 3) || n64 > (uint64_t)(SIZE_MAX / sizeof *fuus))
     return -1;
   nfuu = (int)n64;
-  fuus = malloc((size_t)(nfuu > 0 ? nfuu : 1) * sizeof *fuus);
-  if (!fuus)
-    return -1;
+  if (nfuu > sc->fuus_cap) {
+    int newcap = sc->fuus_cap ? sc->fuus_cap * 2 : 32;
+    void *np;
+    if (newcap < nfuu)
+      newcap = nfuu;
+    np = realloc(sc->fuus, (size_t)newcap * sizeof *fuus);
+    if (!np)
+      return -1;
+    sc->fuus = np;
+    sc->fuus_cap = newcap;
+  }
+  fuus = sc->fuus;
+  ptext = sc->ptext;
 
   for (i = 0; i < nfuu; i++) {
     uint64_t flen, ctxpath;
@@ -167,15 +185,16 @@ int accessunit_decode(bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int
     if (fuus[i].context_path != DVBCTXPATH_PROGRAM_INFORMATION)
       continue;
     bitreader_init(&fbr, base + fuus[i].offset, fuus[i].length);
-    if (ptext_n >= ptext_cap) {
-      int newcap = ptext_cap ? ptext_cap * 2 : 32;
-      void *np = realloc(ptext, (size_t)newcap * sizeof *ptext);
+    if (ptext_n >= sc->ptext_cap) {
+      int newcap = sc->ptext_cap ? sc->ptext_cap * 2 : 32;
+      void *np = realloc(sc->ptext, (size_t)newcap * sizeof *ptext);
       if (!np) {
         rc = -1;
         goto done;
       }
-      ptext = np;
-      ptext_cap = newcap;
+      sc->ptext = np;
+      sc->ptext_cap = newcap;
+      ptext = sc->ptext;
     }
     if (fragment_decode_program_information(&fbr, sr, ptext[ptext_n].crid, sizeof ptext[ptext_n].crid, &tmp)) {
       rc = -1;
@@ -215,7 +234,5 @@ int accessunit_decode(bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int
   *out_nfuu = nfuu;
 
 done:
-  free(fuus);
-  free(ptext);
   return rc;
 }

@@ -44,6 +44,26 @@ static void publish_ecm(ecmg_client_t *c, const unsigned char *dg, size_t dg_len
 }
 
 /* run CW_provision cadence until disconnect/error. returns -1 to trigger reconn */
+static void log_ecm_wait_failed(ecmg_client_t *c, unsigned short cp_number) {
+  if (!ecmg_stopping(c))
+    log_line("ecmg: no ECM_response for CP %u", cp_number);
+}
+
+/* scans an ECM_response's TLVs for the ECM datagram and publishes it if found */
+static void publish_ecm_response(ecmg_client_t *c, const unsigned char *payload, unsigned short payload_len) {
+  simulcrypt_tlv_reader_t it;
+  unsigned short tag, vlen;
+  const unsigned char *val;
+  simulcrypt_tlv_reader_init(&it, payload, payload_len);
+  while (simulcrypt_tlv_reader_next(&it, &tag, &val, &vlen) == 1) {
+    if (tag == ECMG_P_ECM_DATAGRAM) {
+      publish_ecm(c, val, vlen);
+      atomic_fetch_add_explicit(&c->ecm_total, 1, memory_order_relaxed);
+      break;
+    }
+  }
+}
+
 static int run_steady_state(ecmg_client_t *c, int fd, unsigned char version, unsigned lead_cw, unsigned cw_per_msg, unsigned max_comp_time_ms) {
   cw_hist_entry_t hist[ECMG_CW_HIST];
   simulcrypt_reader_t rd;
@@ -85,23 +105,12 @@ static int run_steady_state(ecmg_client_t *c, int fd, unsigned char version, uns
         return -1;
       }
       if (wait_for_message(c, &rd, fd, (int)max_comp_time_ms + ECMG_HANDSHAKE_TIMEOUT_MS, &hdr, &payload) != 1) {
-        if (!ecmg_stopping(c))
-          log_line("ecmg: no ECM_response for CP %u", cp_number);
+        log_ecm_wait_failed(c, cp_number);
         atomic_fetch_add_explicit(&c->ecm_errors_total, 1, memory_order_relaxed);
         return -1;
       }
       if (hdr.type == ECMG_MSG_ECM_RESPONSE) {
-        simulcrypt_tlv_reader_t it;
-        unsigned short tag, vlen;
-        const unsigned char *val;
-        simulcrypt_tlv_reader_init(&it, payload, hdr.payload_len);
-        while (simulcrypt_tlv_reader_next(&it, &tag, &val, &vlen) == 1) {
-          if (tag == ECMG_P_ECM_DATAGRAM) {
-            publish_ecm(c, val, vlen);
-            atomic_fetch_add_explicit(&c->ecm_total, 1, memory_order_relaxed);
-            break;
-          }
-        }
+        publish_ecm_response(c, payload, hdr.payload_len);
       } else {
         unsigned short err = 0;
         ecmg_find_error_status(payload, hdr.payload_len, &err);

@@ -70,6 +70,7 @@ add_executable(dipiradiohead
     radiohead/mpts.c
     ../lib/log.c
     ../lib/argutil.c
+    ../lib/uriparse.c
     ../lib/signal.c
     ../lib/metrics/protocol.c
     ../lib/metrics/export.c

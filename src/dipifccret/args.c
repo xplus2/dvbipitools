@@ -24,13 +24,14 @@ static void argerr(const char *fmt, ...) {
   va_end(ap);
 }
 
-/* comma-separated CIDR list (IPv4 or IPv6); light validation here, capture.c re-validates at BPF-build time */
+/* comma-separated CIDR list (IPv4 or IPv6), light validation here, capture.c re-validates at BPF-build time */
 static int ranges_parse(const char *s, config_t *cfg) {
   char buf[ARGS_MAX_RANGES * 64];
   char *tok, *save = NULL;
-  if (strlen(s) >= sizeof buf)
+  size_t slen = strlen(s);
+  if (slen >= sizeof buf)
     return -1;
-  strcpy(buf, s);
+  memcpy(buf, s, slen + 1);
   cfg->range_count = 0;
   for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
     char *slash = strchr(tok, '/');
@@ -50,9 +51,12 @@ static int ranges_parse(const char *s, config_t *cfg) {
     if (*end != '\0' || prefix < 0 || prefix > (is_v6 ? 128 : 32))
       return -1;
     *slash = '/';
-    if (strlen(tok) >= sizeof cfg->ranges[0])
-      return -1;
-    strcpy(cfg->ranges[cfg->range_count], tok);
+    {
+      size_t tlen = strlen(tok);
+      if (tlen >= sizeof cfg->ranges[0])
+        return -1;
+      memcpy(cfg->ranges[cfg->range_count], tok, tlen + 1);
+    }
     cfg->range_ptrs[cfg->range_count] = cfg->ranges[cfg->range_count];
     cfg->range_count++;
   }
@@ -62,9 +66,10 @@ static int ranges_parse(const char *s, config_t *cfg) {
 static int cidr_list_parse(const char *s, cidr_t *out, size_t *count, size_t max) {
   char buf[ARGS_MAX_RANGES * 64];
   char *tok, *save = NULL;
-  if (strlen(s) >= sizeof buf)
+  size_t slen = strlen(s);
+  if (slen >= sizeof buf)
     return -1;
-  strcpy(buf, s);
+  memcpy(buf, s, slen + 1);
   *count = 0;
   for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
     if (*count >= max || cidr_parse(tok, &out[*count]) != 0)

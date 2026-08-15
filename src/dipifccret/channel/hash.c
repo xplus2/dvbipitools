@@ -122,6 +122,9 @@ void ssrc_hash_insert(channel_table_t *t, size_t slot_idx, uint32_t ssrc) {
     h = (h + 1) & t->ssrc_hash_mask;
   was_empty = (t->ssrc_hash[h] == 0);
   t->ssrc_hash[h] = slot_idx + 1;
-  if (was_empty && ++t->ssrc_hash_used > (t->ssrc_hash_size / 4) * 3)
-    ssrc_hash_rebuild(t);
+  if (was_empty) {
+    t->ssrc_hash_used++;
+    if (t->ssrc_hash_used > (t->ssrc_hash_size / 4) * 3)
+      ssrc_hash_rebuild(t);
+  }
 }

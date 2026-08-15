@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../../ioutil.h"
+
 #include "priv.h"
 
 int http_url_parse(const char *uri, http_url_t *u) {
@@ -41,11 +43,10 @@ int http_url_parse(const char *uri, http_url_t *u) {
     rest = strchr(rest, '/');
   }
   if (rest) {
-    if (strlen(rest) >= sizeof u->path)
+    if (bufcpy(u->path, sizeof u->path, rest) >= sizeof u->path)
       return -1;
-    strcpy(u->path, rest);
   } else {
-    strcpy(u->path, "/");
+    bufcpy(u->path, sizeof u->path, "/");
   }
   return 0;
 }
@@ -54,9 +55,8 @@ int resolve_location(http_url_t *u, const char *loc) {
   if (!strncmp(loc, "http://", 7) || !strncmp(loc, "https://", 8))
     return http_url_parse(loc, u);
   if (loc[0] == '/') {
-    if (strlen(loc) >= sizeof u->path)
+    if (bufcpy(u->path, sizeof u->path, loc) >= sizeof u->path)
       return -1;
-    strcpy(u->path, loc);
     return 0;
   }
   return -1;

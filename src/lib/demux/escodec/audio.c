@@ -162,6 +162,13 @@ static int next_aac(esc_track_t *t, const unsigned char *d, size_t len, esc_fram
   return 0;
 }
 
+static void parse_sbr_ext(br_t *b) {
+  unsigned ext = br_u(b, 5);
+  if (ext == 5 && br_u(b, 1))
+    if (br_u(b, 4) == 15)
+      br_u(b, 24);
+}
+
 static int latm_cfg(br_t *b, esc_track_t *t) {
   unsigned amv, sfi, ch, aot;
   size_t asc_start, asc_end;
@@ -195,13 +202,8 @@ static int latm_cfg(br_t *b, esc_track_t *t) {
   if (br_u(b, 1))
     return -1;
   if (aot == 5 || aot == 29) {
-    if (br_u(b, 11) == 0x2B7) {
-      unsigned ext = br_u(b, 5);
-      if (ext == 5 && br_u(b, 1)) {
-        if (br_u(b, 4) == 15)
-          br_u(b, 24);
-      }
-    }
+    if (br_u(b, 11) == 0x2B7)
+      parse_sbr_ext(b);
   }
   asc_end = b->bit;
   if (b->err || sfi > 12)

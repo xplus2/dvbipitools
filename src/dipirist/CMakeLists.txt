@@ -37,6 +37,7 @@ if (DIPIRIST_HAVE_RIST)
         bridge.c
         ../lib/log.c
         ../lib/argutil.c
+        ../lib/uriparse.c
         ../lib/ioutil.c
         ../lib/signal.c
         ../lib/net/multicast.c

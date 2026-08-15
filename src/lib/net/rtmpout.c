@@ -125,6 +125,34 @@ static void start_rtmp(rtmpout_t *o) {
   rtmp_start(o->rtmp);
 }
 
+/* reads one chunk (via TLS or plain fd) and feeds it to rtmp_feed().
+   1: got a chunk, caller keeps looping. 0: transient/EAGAIN/short read, caller stops.
+   -1: fatal for this connection, caller stops and marks o->failed */
+static int protocol_read_step(rtmpout_t *o) {
+  unsigned char buf[RTMPOUT_READBUF];
+  ssize_t n;
+
+  if (o->tls) {
+    n = tls_read(o->tls, buf, sizeof buf);
+    if (n < 0)
+      return -1;
+    if (0 == n)
+      return 0; /* transient */
+  } else {
+    n = read(o->fd, buf, sizeof buf);
+    if (0 == n)
+      return -1; /* peer closed */
+    if (n < 0) {
+      if (EAGAIN == errno || EWOULDBLOCK == errno)
+        return 0;
+      return -1;
+    }
+  }
+  if (rtmp_feed(o->rtmp, buf, (size_t)n) != 0)
+    return -1;
+  return (size_t)n < sizeof buf ? 0 : 1;
+}
+
 static void service(rtmpout_t *o) {
   double now = mono_seconds();
   struct pollfd pfd;
@@ -188,39 +216,17 @@ static void service(rtmpout_t *o) {
     }
 
     case RTMPOUT_PROTOCOL: {
-      unsigned char buf[RTMPOUT_READBUF];
       pfd.fd = o->fd;
       pfd.events = POLLIN;
       if (poll(&pfd, 1, 0) <= 0)
         return;
       for (;;) {
-        ssize_t n;
-        if (o->tls) {
-          n = tls_read(o->tls, buf, sizeof buf);
-          if (n < 0) {
-            o->failed = 1;
-            break;
-          }
-          if (0 == n)
-            break; /* transient */
-        } else {
-          n = read(o->fd, buf, sizeof buf);
-          if (0 == n) {
-            o->failed = 1; /* peer closed */
-            break;
-          }
-          if (n < 0) {
-            if (EAGAIN == errno || EWOULDBLOCK == errno)
-              break;
-            o->failed = 1;
-            break;
-          }
-        }
-        if (rtmp_feed(o->rtmp, buf, (size_t)n) != 0) {
+        int r = protocol_read_step(o);
+        if (r < 0) {
           o->failed = 1;
           break;
         }
-        if ((size_t)n < sizeof buf)
+        if (r == 0)
           break;
       }
       if (o->failed)

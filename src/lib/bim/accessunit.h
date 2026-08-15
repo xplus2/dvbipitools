@@ -12,7 +12,18 @@
 /* TS 102 323 table 56/57 DVBBiMAccessUnit for every channel/programme with non-empty uri. bw/sw must be initialized */
 int accessunit_encode(const bcg_doc_t *doc, bitwriter_t *bw, strrepo_writer_t *sw, int *out_nfuu);
 
+/* accessunit_decode()'s reusable scratch space. zero-init, accessunit_scratch_free() when done */
+typedef struct {
+  void *fuus;
+  int fuus_cap;
+  void *ptext;
+  int ptext_cap;
+} accessunit_scratch_t;
+
+void accessunit_scratch_init(accessunit_scratch_t *sc);
+void accessunit_scratch_free(accessunit_scratch_t *sc);
+
 /* 0 ok, -1 malformed */
-int accessunit_decode(bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int *out_nfuu);
+int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int *out_nfuu);
 
 #endif

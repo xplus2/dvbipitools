@@ -43,6 +43,34 @@ void xml_escape(FILE *f, const char *s) {
   }
 }
 
+/* decodes one &#NNN;/&#xHH; numeric char reference at src[*ip..), advancing *ip past it
+   and appending to out (bumping *oip). 0 ok, -1: caller must stop (output full) */
+static int decode_numeric_ref(const char *src, size_t n, size_t *ip, char *out, size_t outcap, size_t *oip) {
+  size_t i = *ip, oi = *oip;
+  size_t j = i + 2;
+  int hex = 0;
+  unsigned long cp;
+  char *endp;
+
+  if (j < n && (src[j] == 'x' || src[j] == 'X')) { hex = 1; j++; }
+  cp = strtoul(src + j, &endp, hex ? 16 : 10);
+  if (endp != src + j && *endp == ';' && (size_t)(endp - src) < n) {
+    char utf8[4];
+    int len = utf8_encode(cp, utf8);
+    if (oi + (size_t)len + 1 > outcap)
+      return -1;
+    memcpy(out + oi, utf8, (size_t)len);
+    oi += (size_t)len;
+    i = (size_t)(endp - src) + 1;
+  } else {
+    out[oi++] = src[i];
+    i++;
+  }
+  *ip = i;
+  *oip = oi;
+  return 0;
+}
+
 static void decode_copy(const char *src, size_t n, char *out, size_t outcap) {
   size_t i, oi = 0;
   for (i = 0; i < n && oi + 1 < outcap;) {
@@ -52,24 +80,8 @@ static void decode_copy(const char *src, size_t n, char *out, size_t outcap) {
     else if (!strncmp(src + i, "&quot;", 6)) { out[oi++] = '"'; i += 6; }
     else if (!strncmp(src + i, "&apos;", 6)) { out[oi++] = '\''; i += 6; }
     else if (src[i] == '&' && i + 2 < n && src[i + 1] == '#') {
-      size_t j = i + 2;
-      int hex = 0;
-      unsigned long cp;
-      char *endp;
-      if (j < n && (src[j] == 'x' || src[j] == 'X')) { hex = 1; j++; }
-      cp = strtoul(src + j, &endp, hex ? 16 : 10);
-      if (endp != src + j && *endp == ';' && (size_t)(endp - src) < n) {
-        char utf8[4];
-        int len = utf8_encode(cp, utf8);
-        if (oi + (size_t)len + 1 > outcap)
-          break;
-        memcpy(out + oi, utf8, (size_t)len);
-        oi += (size_t)len;
-        i = (size_t)(endp - src) + 1;
-      } else {
-        out[oi++] = src[i];
-        i++;
-      }
+      if (decode_numeric_ref(src, n, &i, out, outcap, &oi) != 0)
+        break;
     }
     else { out[oi++] = src[i]; i++; }
   }

@@ -50,6 +50,7 @@ START_TEST(accessunit_encode_decode_round_trips_full_doc) {
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
+  accessunit_scratch_t sc;
   const unsigned char *bwdata, *swdata;
   size_t bwlen, swlen;
   int nfuu, nfuu2;
@@ -66,7 +67,9 @@ START_TEST(accessunit_encode_decode_round_trips_full_doc) {
   bitreader_init(&br, bwdata, bwlen);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
   bcg_doc_init(&doc2);
-  ck_assert_int_eq(accessunit_decode(&br, &sr, &doc2, &nfuu2), 0);
+  accessunit_scratch_init(&sc);
+  ck_assert_int_eq(accessunit_decode(&sc, &br, &sr, &doc2, &nfuu2), 0);
+  accessunit_scratch_free(&sc);
 
   ck_assert_int_eq(nfuu2, 4);
   ck_assert_int_eq(doc2.channel_count, 1); /* nouri channel never round-trips */
@@ -101,6 +104,7 @@ START_TEST(accessunit_encode_empty_doc_has_zero_fuus) {
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
+  accessunit_scratch_t sc;
   const unsigned char *bwdata, *swdata;
   size_t bwlen, swlen;
   int nfuu, nfuu2;
@@ -116,7 +120,9 @@ START_TEST(accessunit_encode_empty_doc_has_zero_fuus) {
   bitreader_init(&br, bwdata, bwlen);
   strrepo_reader_init(&sr, swdata, swlen);
   bcg_doc_init(&doc2);
-  ck_assert_int_eq(accessunit_decode(&br, &sr, &doc2, &nfuu2), 0);
+  accessunit_scratch_init(&sc);
+  ck_assert_int_eq(accessunit_decode(&sc, &br, &sr, &doc2, &nfuu2), 0);
+  accessunit_scratch_free(&sc);
   ck_assert_int_eq(nfuu2, 0);
   ck_assert_int_eq(doc2.channel_count, 0);
   ck_assert_int_eq(doc2.programme_count, 0);
@@ -134,6 +140,7 @@ START_TEST(accessunit_decode_rejects_fuu_count_above_int_max) {
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
+  accessunit_scratch_t sc;
   const unsigned char *bwdata, *swdata;
   size_t bwlen, swlen;
   int nfuu = -1;
@@ -147,7 +154,9 @@ START_TEST(accessunit_decode_rejects_fuu_count_above_int_max) {
   bitreader_init(&br, bwdata, bwlen);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
   bcg_doc_init(&doc);
-  ck_assert_int_eq(accessunit_decode(&br, &sr, &doc, &nfuu), -1);
+  accessunit_scratch_init(&sc);
+  ck_assert_int_eq(accessunit_decode(&sc, &br, &sr, &doc, &nfuu), -1);
+  accessunit_scratch_free(&sc);
 
   bcg_doc_free(&doc);
   bitwriter_free(&bw);
@@ -161,6 +170,7 @@ START_TEST(accessunit_decode_rejects_implausible_fuu_count_for_remaining_bytes) 
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
+  accessunit_scratch_t sc;
   const unsigned char payload[3] = {0, 0, 0};
   const unsigned char *bwdata, *swdata;
   size_t bwlen, swlen;
@@ -176,7 +186,9 @@ START_TEST(accessunit_decode_rejects_implausible_fuu_count_for_remaining_bytes) 
   bitreader_init(&br, bwdata, bwlen);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
   bcg_doc_init(&doc);
-  ck_assert_int_eq(accessunit_decode(&br, &sr, &doc, &nfuu), -1);
+  accessunit_scratch_init(&sc);
+  ck_assert_int_eq(accessunit_decode(&sc, &br, &sr, &doc, &nfuu), -1);
+  accessunit_scratch_free(&sc);
 
   bcg_doc_free(&doc);
   bitwriter_free(&bw);
@@ -193,6 +205,7 @@ START_TEST(accessunit_decode_accepts_fuu_count_at_exact_byte_boundary) {
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
+  accessunit_scratch_t sc;
   const unsigned char *bwdata, *swdata;
   size_t bwlen, swlen;
   int nfuu = -1;
@@ -211,7 +224,9 @@ START_TEST(accessunit_decode_accepts_fuu_count_at_exact_byte_boundary) {
   bitreader_init(&br, bwdata, bwlen);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
   bcg_doc_init(&doc);
-  ck_assert_int_eq(accessunit_decode(&br, &sr, &doc, &nfuu), 0);
+  accessunit_scratch_init(&sc);
+  ck_assert_int_eq(accessunit_decode(&sc, &br, &sr, &doc, &nfuu), 0);
+  accessunit_scratch_free(&sc);
   ck_assert_int_eq(nfuu, 4);
 
   bcg_doc_free(&doc);
@@ -226,6 +241,7 @@ START_TEST(accessunit_decode_rejects_fuu_count_one_byte_short_of_boundary) {
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
+  accessunit_scratch_t sc;
   const unsigned char *bwdata, *swdata;
   size_t bwlen, swlen;
   int nfuu = -1;
@@ -245,7 +261,9 @@ START_TEST(accessunit_decode_rejects_fuu_count_one_byte_short_of_boundary) {
   bitreader_init(&br, bwdata, bwlen - 1);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
   bcg_doc_init(&doc);
-  ck_assert_int_eq(accessunit_decode(&br, &sr, &doc, &nfuu), -1);
+  accessunit_scratch_init(&sc);
+  ck_assert_int_eq(accessunit_decode(&sc, &br, &sr, &doc, &nfuu), -1);
+  accessunit_scratch_free(&sc);
 
   bcg_doc_free(&doc);
   bitwriter_free(&bw);

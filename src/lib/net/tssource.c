@@ -104,6 +104,16 @@ static ssize_t raw_fd_read(int fd, unsigned char *buf, size_t cap, net_err_reaso
 /* raw: sync at every 188. RTP: v2 header, N (1..7) TS packets in sync,
    next record's first TS packet in sync too. else: raw, matches old
    TSSRC_STDIN behavior. */
+/* checks that the first nn 188-byte TS packets in this candidate RTP-framed stride
+   are sync-aligned (0x47 at their start) */
+static int rtp_stride_candidate_ok(const unsigned char *b, int nn) {
+  size_t k;
+  for (k = 0; k < (size_t)nn; k++)
+    if (b[12 + 188 * k] != 0x47)
+      return 0;
+  return 1;
+}
+
 static void detect_framing(tssrc_t *s) {
   const unsigned char *b = s->rawbuf;
   size_t n = s->raw_len;
@@ -116,16 +126,9 @@ static void detect_framing(tssrc_t *s) {
   if (n >= 12 + 188 && (b[0] >> 6) == 2) {
     for (nn = 1; nn <= 7; nn++) {
       size_t stride = 12 + (size_t)nn * 188;
-      size_t k;
-      int ok = 1;
       if (n < stride + 12 + 1)
         break;
-      for (k = 0; k < (size_t)nn; k++)
-        if (b[12 + 188 * k] != 0x47) {
-          ok = 0;
-          break;
-        }
-      if (ok && b[stride + 12] == 0x47) {
+      if (rtp_stride_candidate_ok(b, nn) && b[stride + 12] == 0x47) {
         s->deframe_state = DEFRAME_RTP;
         s->rtp_stride = stride;
         s->rtp_pos = 0;
@@ -177,19 +180,25 @@ static size_t rtp_deframe_step(tssrc_t *s, unsigned char *dst, size_t dstcap) {
 /* TSSRC_STDIN/TSSRC_FILE byte-stream read: detect once, then raw passthrough or RTP header strip after.
    uses local reason always (dipirec's own caller passes reason_out NULL).
    EOF-vs-error branch below needs it anyway */
+/* handles a failed raw_fd_read() during framing detection. 1: EOF with data buffered
+   (caller should detect framing from what's there). 0: real error (reason_out set) */
+static int handle_detect_read_error(tssrc_t *s, net_err_reason_t r, net_err_reason_t *reason_out) {
+  if (r == NET_ERR_EOF && s->raw_len > 0)
+    return 1;
+  if (reason_out)
+    *reason_out = r;
+  return 0;
+}
+
 static ssize_t deframe_read(tssrc_t *s, int fd, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
   net_err_reason_t r;
 
   if (s->deframe_state == DEFRAME_DETECT) {
     ssize_t got = raw_fd_read(fd, s->rawbuf + s->raw_len, TSSRC_DETECT_CAP - s->raw_len, &r);
     if (got < 0) {
-      if (r == NET_ERR_EOF && s->raw_len > 0) {
-        detect_framing(s);
-      } else {
-        if (reason_out)
-          *reason_out = r;
+      if (!handle_detect_read_error(s, r, reason_out))
         return -1;
-      }
+      detect_framing(s);
     } else {
       s->raw_len += (size_t)got;
       if (s->raw_len < TSSRC_DETECT_CAP)

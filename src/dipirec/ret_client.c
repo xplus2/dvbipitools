@@ -146,6 +146,22 @@ static void send_nack(ret_client_t *r, uint16_t start, size_t missing) {
     send(r->uni_fd, pkt, len, 0);
 }
 
+/* stores payload into r->hold[slot] if it fits (1), else logs once and returns 0 */
+static int hold_store(ret_client_t *r, size_t slot, const unsigned char *payload, size_t len) {
+  if (len <= RET_HOLD_CAP) {
+    r->oversized_payload_logged = 0;
+    r->hold[slot].used = 1;
+    r->hold[slot].len = len;
+    memcpy(r->hold[slot].data, payload, len);
+    return 1;
+  }
+  if (!r->oversized_payload_logged) {
+    log_line("ret: payload %zu exceeds hold cap (%d), dropping until it fits again", len, RET_HOLD_CAP);
+    r->oversized_payload_logged = 1;
+  }
+  return 0;
+}
+
 static void handle_original_seq(ret_client_t *r, uint16_t seq, const unsigned char *payload, size_t len, double now) {
   for (;;) {
     if (!r->gap_pending) {
@@ -181,31 +197,14 @@ static void handle_original_seq(ret_client_t *r, uint16_t seq, const unsigned ch
       if (delta < 0)
         return; /* stale duplicate */
       if ((size_t)delta < r->hold_n) {
-        if (!r->hold[delta].used) {
-          if (len <= RET_HOLD_CAP) {
-            r->oversized_payload_logged = 0;
-            r->hold[delta].used = 1;
-            r->hold[delta].len = len;
-            memcpy(r->hold[delta].data, payload, len);
-          } else if (!r->oversized_payload_logged) {
-            log_line("ret: payload %zu exceeds hold cap (%d), dropping until it fits again", len, RET_HOLD_CAP);
-            r->oversized_payload_logged = 1;
-          }
-        }
+        if (!r->hold[delta].used)
+          hold_store(r, (size_t)delta, payload, len);
         return;
       }
       if ((size_t)delta == r->hold_n && r->hold_n < RET_GAP_MAX) {
-        if (len <= RET_HOLD_CAP) {
-          r->oversized_payload_logged = 0;
-          r->hold[r->hold_n].used = 1;
-          r->hold[r->hold_n].len = len;
-          memcpy(r->hold[r->hold_n].data, payload, len);
+        if (hold_store(r, r->hold_n, payload, len)) {
           r->hold_n++;
           return;
-        }
-        if (!r->oversized_payload_logged) {
-          log_line("ret: payload %zu exceeds hold cap (%d), dropping until it fits again", len, RET_HOLD_CAP);
-          r->oversized_payload_logged = 1;
         }
       }
       abandon_gap(r); /* disjoint from the current window, or oversized: retry fresh below */

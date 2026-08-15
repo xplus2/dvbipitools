@@ -5,6 +5,15 @@
 
 #include "tspack.h"
 
+/* scans forward from d[1] for the next 0x47 sync byte within len bytes.
+   returns the number of bytes to skip (>=1) */
+static size_t resync_skip(const unsigned char *d, size_t len) {
+  size_t k = 1;
+  while (k < len && d[k] != 0x47)
+    k++;
+  return k;
+}
+
 int tspack_feed(tspack_t *pz, const unsigned char *d, size_t len, int (*cb)(void *, const unsigned char *), void *ctx) {
   while (len) {
     const unsigned char *p = NULL;
@@ -22,9 +31,7 @@ int tspack_feed(tspack_t *pz, const unsigned char *d, size_t len, int (*cb)(void
       p = pz->acc;
     } else if (len >= 188) {
       if (d[0] != 0x47) {
-        size_t k = 1;
-        while (k < len && d[k] != 0x47)
-          k++;
+        size_t k = resync_skip(d, len);
         d += k;
         len -= k;
         continue;

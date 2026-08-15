@@ -168,38 +168,46 @@ static const cs_entry_t cs_table[] = {
 
 static int split_href(const char *href, char *scheme, size_t scheme_cap, char *term, size_t term_cap) {
   const char *last_colon = strrchr(href, ':');
-  size_t scheme_len;
+  size_t scheme_len, term_len;
   if (!last_colon || last_colon == href)
     return -1;
   scheme_len = (size_t)(last_colon - href);
-  if (scheme_len + 1 > scheme_cap || strlen(last_colon + 1) + 1 > term_cap)
+  term_len = strlen(last_colon + 1);
+  if (scheme_len + 1 > scheme_cap || term_len + 1 > term_cap)
     return -1;
   memcpy(scheme, href, scheme_len);
   scheme[scheme_len] = '\0';
-  strcpy(term, last_colon + 1);
+  memcpy(term, last_colon + 1, term_len + 1);
   return 0;
+}
+
+/* scans cs_table for a scheme match with a numeric term and encodes the CS shorthand.
+   0/-1: encoded (ok/bitwriter error). -2: no such match, caller falls back to string form */
+static int try_cs_encode(bitwriter_t *bw, const char *scheme, const char *term) {
+  size_t i;
+  for (i = 0; i < CS_TABLE_N; i++) {
+    if (!strcmp(scheme, cs_table[i].uri)) {
+      char *endp;
+      unsigned long term_id = strtoul(term, &endp, 10);
+      if (*endp != '\0')
+        continue;
+      if (bitwriter_put(bw, 1, 1)       /* encoding_flag = 1 */
+          || bitwriter_put(bw, 0, 1)    /* grouping_flag = 0 */
+          || bitwriter_put(bw, cs_table[i].id, 7))
+        return -1;
+      return bitwriter_put_vluimsbf8(bw, term_id) ? -1 : 0;
+    }
+  }
+  return -2;
 }
 
 int dvb_controlledterm_encode(bitwriter_t *bw, strrepo_writer_t *sw, const char *href) {
   char scheme[256], term[64];
-  size_t i;
 
   if (split_href(href, scheme, sizeof scheme, term, sizeof term) == 0) {
-    for (i = 0; i < CS_TABLE_N; i++) {
-      if (!strcmp(scheme, cs_table[i].uri)) {
-        char *endp;
-        unsigned long term_id = strtoul(term, &endp, 10);
-        if (*endp == '\0') {
-          if (bitwriter_put(bw, 1, 1))       /* encoding_flag = 1 */
-            return -1;
-          if (bitwriter_put(bw, 0, 1))       /* grouping_flag = 0 */
-            return -1;
-          if (bitwriter_put(bw, cs_table[i].id, 7))
-            return -1;
-          return bitwriter_put_vluimsbf8(bw, term_id);
-        }
-      }
-    }
+    int r = try_cs_encode(bw, scheme, term);
+    if (r != -2)
+      return r;
   }
   if (bitwriter_put(bw, 0, 1)) /* encoding_flag = 0, string fallback */
     return -1;

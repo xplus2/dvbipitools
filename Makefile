@@ -208,6 +208,7 @@ dipirec_SRCS := \
 	src/dipirec/ret_client.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/signal.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -319,6 +320,7 @@ dipiradiohead_SRCS := \
 	src/dipiradiohead/radiohead/mpts.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/signal.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
@@ -452,6 +454,7 @@ dipitvhead_SRCS := \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/signal.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
@@ -514,6 +517,7 @@ dipifccret_SRCS := \
 	src/lib/argutil.c \
 	src/lib/signal.c \
 	src/lib/ioutil.c \
+	src/lib/net/sockaddr_index.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/demux/rtp.c \
@@ -546,7 +550,8 @@ dipicam378_SRCS := \
 	src/dipicam378/device.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
-	src/lib/signal.c
+	src/lib/signal.c \
+	src/lib/secure_zero.c
 else
 $(warning dipicam378: OpenSSL not found via pkg-config, skipping this tool entirely (RSA/AES crypto is its whole purpose))
 endif
@@ -579,7 +584,9 @@ dipidescramble_SRCS := \
 	src/dipidescramble/ipiclient.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/signal.c \
+	src/lib/secure_zero.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/udpxy.c \
@@ -656,6 +663,7 @@ dipirist_SRCS := \
 	src/dipirist/bridge.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/ioutil.c \
 	src/lib/signal.c \
 	src/lib/net/multicast.c \
@@ -809,7 +817,8 @@ UNIT_TESTS += dipicam378_crypto
 dipicam378_crypto_BIN := tests/unit/dipicam378/test_crypto
 dipicam378_crypto_SRCS := \
 	tests/unit/dipicam378/test_crypto.c \
-	src/dipicam378/crypto.c
+	src/dipicam378/crypto.c \
+	src/lib/secure_zero.c
 dipicam378_crypto_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipicam378_crypto_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
@@ -819,7 +828,8 @@ dipicam378_device_SRCS := \
 	tests/unit/dipicam378/test_device.c \
 	src/dipicam378/device.c \
 	src/dipicam378/crypto.c \
-	src/lib/log.c
+	src/lib/log.c \
+	src/lib/secure_zero.c
 dipicam378_device_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipicam378_device_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
@@ -840,7 +850,8 @@ UNIT_TESTS += dipidescramble_crypto
 dipidescramble_crypto_BIN := tests/unit/dipidescramble/test_crypto
 dipidescramble_crypto_SRCS := \
 	tests/unit/dipidescramble/test_crypto.c \
-	src/dipidescramble/crypto.c
+	src/dipidescramble/crypto.c \
+	src/lib/secure_zero.c
 dipidescramble_crypto_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_crypto_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
@@ -852,7 +863,8 @@ dipidescramble_device_SRCS := \
 	src/dipidescramble/crypto.c \
 	src/dipidescramble/ecm_profile.c \
 	src/lib/log.c \
-	src/lib/argutil.c
+	src/lib/argutil.c \
+	src/lib/secure_zero.c
 dipidescramble_device_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_device_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
@@ -863,7 +875,8 @@ dipidescramble_ecm_profile_SRCS := \
 	src/dipidescramble/ecm_profile.c \
 	src/dipidescramble/crypto.c \
 	src/lib/log.c \
-	src/lib/argutil.c
+	src/lib/argutil.c \
+	src/lib/secure_zero.c
 dipidescramble_ecm_profile_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_ecm_profile_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
@@ -894,6 +907,7 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/argutil.c \
 	src/lib/ioutil.c \
 	src/lib/signal.c \
+	src/lib/secure_zero.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
@@ -993,6 +1007,7 @@ dipirist_args_SRCS := \
 	tests/unit/dipirist/test_args.c \
 	src/dipirist/args.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/ioutil.c \
 	src/lib/log.c
 
@@ -1635,6 +1650,7 @@ dipiradiohead_args_SRCS := \
 	tests/unit/dipiradiohead/test_args.c \
 	src/dipiradiohead/args.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/ioutil.c \
 	src/lib/cas/cas_args.c \
 	src/lib/cas/biss/stub.c \
@@ -1722,6 +1738,7 @@ dipitvhead_args_SRCS := \
 	tests/unit/dipitvhead/test_args.c \
 	src/dipitvhead/args.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/cas/cas_args.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/ca_stub.c \
@@ -2125,6 +2142,7 @@ dipirec_record_SRCS := \
 	src/dipirec/args.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/signal.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -2194,6 +2212,7 @@ dipirec_args_SRCS := \
 	tests/unit/dipirec/test_args.c \
 	src/dipirec/args.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/ioutil.c \
 	src/lib/log.c
 
@@ -2244,6 +2263,7 @@ dipifccret_burst_table_BIN := tests/unit/dipifccret/test_burst_table
 dipifccret_burst_table_SRCS := \
 	tests/unit/dipifccret/test_burst_table.c \
 	src/dipifccret/fcc/burst_table.c \
+	src/lib/net/sockaddr_index.c \
 	src/dipifccret/fcc/burst.c \
 	src/dipifccret/channel/channel.c \
 	src/dipifccret/channel/hash.c \
@@ -2284,6 +2304,7 @@ dipifccret_ret_SRCS := \
 	tests/unit/dipifccret/test_ret.c \
 	src/dipifccret/ret/ret.c \
 	src/dipifccret/ret/rtx_session_table.c \
+	src/lib/net/sockaddr_index.c \
 	src/dipifccret/channel/channel.c \
 	src/dipifccret/channel/hash.c \
 	src/dipifccret/channel/ring.c \
@@ -2304,7 +2325,8 @@ dipifccret_ret_SRCS := \
 dipifccret_rtx_session_table_BIN := tests/unit/dipifccret/test_rtx_session_table
 dipifccret_rtx_session_table_SRCS := \
 	tests/unit/dipifccret/test_rtx_session_table.c \
-	src/dipifccret/ret/rtx_session_table.c
+	src/dipifccret/ret/rtx_session_table.c \
+	src/lib/net/sockaddr_index.c
 
 dipifccret_capture_BIN := tests/unit/dipifccret/test_capture
 dipifccret_capture_SRCS := \

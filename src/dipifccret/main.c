@@ -346,7 +346,7 @@ static void dispatch_datagram(dispatch_ctx_t *ctx, channel_t *resolved, const un
   rc.resolved = resolved;
   if (ctx->rsi_active)
     rtcp_parse(pkt, len, NULL, NULL, NULL, sdes_cb, NULL, &rc);
-  rtcp_parse(pkt, len, ctx->ret ? nack_cb : NULL, rams_r_cb, ctx->bursts ? rams_t_cb : NULL, NULL, ctx->bursts ? malformed_cb : NULL, &rc);
+  rtcp_parse(pkt, len, ctx->ret ? &nack_cb : NULL, rams_r_cb, ctx->bursts ? &rams_t_cb : NULL, NULL, ctx->bursts ? &malformed_cb : NULL, &rc);
 }
 
 static void listen_cb(const unsigned char *pkt, size_t len, int fd, const struct sockaddr *from, socklen_t fromlen, void *user) {
@@ -370,6 +370,23 @@ typedef struct {
   socklen_t addrlen;
   burst_t *b;
 } pacer_snap_t;
+
+/* under pc->bursts->lock: if this pacer still owns the slot, clear it on congestion/done.
+   returns 1 if this pacer owned the slot (caller may still need to send a notice) */
+static int finalize_burst_slot(pacer_ctx_t *pc, size_t idx, burst_t *b, int congestion, burst_tick_result_t r, int *remove_slot) {
+  int owns_slot = 0;
+  pthread_mutex_lock(&pc->bursts->lock);
+  if (pc->bursts->slots[idx].in_use && pc->bursts->slots[idx].b == b) {
+    owns_slot = 1;
+    if (congestion || r == BURST_TICK_DONE) {
+      pc->bursts->slots[idx].b = NULL;
+      pc->bursts->slots[idx].in_use = 0;
+      *remove_slot = 1;
+    }
+  }
+  pthread_mutex_unlock(&pc->bursts->lock);
+  return owns_slot;
+}
 
 /* lock covers only slot scan/copy and done-cleanup, never sends below */
 static void *pacer_main(void *arg) {
@@ -413,16 +430,7 @@ static void *pacer_main(void *arg) {
       dst.tolen = snap[i].addrlen;
       dst.congestion = 0;
       r = burst_tick(snap[i].b, pc->duration_cap_ms, burst_send_cb, &dst);
-      pthread_mutex_lock(&pc->bursts->lock);
-      if (pc->bursts->slots[snap[i].idx].in_use && pc->bursts->slots[snap[i].idx].b == snap[i].b) {
-        owns_slot = 1;
-        if (dst.congestion || r == BURST_TICK_DONE) {
-          pc->bursts->slots[snap[i].idx].b = NULL;
-          pc->bursts->slots[snap[i].idx].in_use = 0;
-          remove_slot = 1;
-        }
-      }
-      pthread_mutex_unlock(&pc->bursts->lock);
+      owns_slot = finalize_burst_slot(pc, snap[i].idx, snap[i].b, dst.congestion, r, &remove_slot);
 
       if (owns_slot && dst.congestion)
         send_rams_i(&dst, 0, 0, (uint16_t)BURST_CONGESTION, NULL);

@@ -13,6 +13,7 @@
 #include "lib/cas/cas_args.h"
 #include "lib/ioutil.h"
 #include "lib/log.h"
+#include "lib/uriparse.h"
 
 #include "args.h"
 #include "version.h"
@@ -30,21 +31,7 @@ static void argerr(const char *fmt, ...) {
 static int mcast_group_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
   if (*s == '@')
     s++;
-  if (argutil_addrport_parse(s, family, addr_out, addr_out_sz, port_out))
-    return -1;
-
-  if (*family == AF_INET) {
-    struct in_addr a;
-    inet_pton(AF_INET, addr_out, &a);
-    if ((ntohl(a.s_addr) >> 28) != 0xE) /* 224.0.0.0/4 */
-      return -1;
-  } else {
-    struct in6_addr a6;
-    inet_pton(AF_INET6, addr_out, &a6);
-    if (a6.s6_addr[0] != 0xFF) /* ff00::/8 */
-      return -1;
-  }
-  return 0;
+  return uriparse_mcast_addrport(s, family, addr_out, addr_out_sz, port_out);
 }
 
 static int mcast_parse(const char *s, config_t *cfg) {
@@ -136,7 +123,7 @@ static int cas_pids_parse(const char *s, config_t *cfg) {
   char *tok, *save = NULL;
   if (strlen(s) >= sizeof buf)
     return -1;
-  strcpy(buf, s);
+  bufcpy(buf, sizeof buf, s);
   cfg->cas_pid_count = 0;
   cfg->cas_pids_video = 0;
   cfg->cas_pids_audio = 0;
@@ -249,6 +236,43 @@ static void print_help(void) {
       "  %s -i rtp://@239.19.75.1:8700 --sdt \"Channel A\" -i rtp://@239.19.75.2:8700 --sdt \"Channel B\" \\\n"
       "     -m 239.1.1.3:5000 -e 5\n",
       TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+}
+
+static int is_sid_used(const unsigned *used, unsigned n_used, unsigned sid) {
+  unsigned j;
+  for (j = 0; j < n_used; j++)
+    if (used[j] == sid)
+      return 1;
+  return 0;
+}
+
+/* assigns the smallest unused positive sid to inputs that didn't get an explicit --sid.
+   -1: duplicate --sid given explicitly, 0 ok */
+static int assign_missing_sids(config_t *cfg) {
+  unsigned used[ARGS_MAX_INPUTS];
+  unsigned n_used = 0;
+  unsigned next = 1;
+  unsigned i;
+
+  for (i = 0; i < cfg->n_inputs; i++) {
+    if (cfg->inputs[i].sid == 0)
+      continue;
+    if (is_sid_used(used, n_used, cfg->inputs[i].sid)) {
+      argerr("duplicate --sid %u", cfg->inputs[i].sid);
+      return -1;
+    }
+    used[n_used++] = cfg->inputs[i].sid;
+  }
+  for (i = 0; i < cfg->n_inputs; i++) {
+    if (cfg->inputs[i].sid != 0)
+      continue;
+    while (is_sid_used(used, n_used, next))
+      next++;
+    cfg->inputs[i].sid = next;
+    used[n_used++] = next;
+    next++;
+  }
+  return 0;
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -873,40 +897,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     cfg->cas_pids_audio = 1;
   }
 
-  {
-    unsigned used[ARGS_MAX_INPUTS];
-    unsigned n_used = 0;
-    unsigned next = 1;
-    unsigned j;
-
-    for (i = 0; i < cfg->n_inputs; i++) {
-      if (cfg->inputs[i].sid == 0)
-        continue;
-      for (j = 0; j < n_used; j++)
-        if (used[j] == cfg->inputs[i].sid) {
-          argerr("duplicate --sid %u", cfg->inputs[i].sid);
-          return ARGS_ERR;
-        }
-      used[n_used++] = cfg->inputs[i].sid;
-    }
-    for (i = 0; i < cfg->n_inputs; i++) {
-      if (cfg->inputs[i].sid != 0)
-        continue;
-      for (;;) {
-        int taken = 0;
-        for (j = 0; j < n_used; j++)
-          if (used[j] == next) {
-            taken = 1;
-            break;
-          }
-        if (!taken)
-          break;
-        next++;
-      }
-      cfg->inputs[i].sid = next;
-      used[n_used++] = next;
-      next++;
-    }
-  }
+  if (assign_missing_sids(cfg) != 0)
+    return ARGS_ERR;
   return ARGS_OK;
 }

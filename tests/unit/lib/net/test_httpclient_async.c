@@ -78,7 +78,7 @@ static size_t drain_body(http_t *h, char *buf, size_t cap, size_t want) {
   size_t got = 0;
   int tries = 0;
 
-  while (got < want && tries++ < 100) {
+  while (got < want && tries < 100) {
     ssize_t n = http_read(h, buf + got, cap - got, NULL);
     if (n > 0)
       got += (size_t)n;
@@ -86,6 +86,7 @@ static size_t drain_body(http_t *h, char *buf, size_t cap, size_t want) {
       break;
     else
       usleep(5000);
+    tries++;
   }
   return got;
 }

@@ -58,11 +58,13 @@ static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
 
 static int decode_bim_to_xml(FILE *in, FILE *out, int verbose) {
   bcg_doc_t doc;
+  accessunit_scratch_t sc;
   char *buf = NULL;
   size_t len;
   int rc = 0, nfuu = 0;
 
   bcg_doc_init(&doc);
+  accessunit_scratch_init(&sc);
   if (read_all(in, &buf, &len) || len < 4) {
     rc = -1;
     goto done;
@@ -82,7 +84,7 @@ static int decode_bim_to_xml(FILE *in, FILE *out, int verbose) {
       rc = -1;
       goto done;
     }
-    if (accessunit_decode(&br, &sr, &doc, &nfuu)) {
+    if (accessunit_decode(&sc, &br, &sr, &doc, &nfuu)) {
       rc = -1;
       goto done;
     }
@@ -92,6 +94,7 @@ static int decode_bim_to_xml(FILE *in, FILE *out, int verbose) {
   }
 
 done:
+  accessunit_scratch_free(&sc);
   free(buf);
   bcg_doc_free(&doc);
   return rc;

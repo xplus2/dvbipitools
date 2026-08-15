@@ -82,6 +82,15 @@ static int due(uint64_t now, uint64_t *last, uint64_t interval) {
   return 0;
 }
 
+static size_t emit_cas_ecm_emm(tspacketizer_t *t, size_t vi, double now, unsigned char *sec, size_t seccap, unsigned char *ptr0, ts_packet_cb cb, void *ctx) {
+  size_t len, count = 0;
+  if (cas_vendor_ecm_due(t->cas, vi, now, sec, seccap, &len) == 0)
+    count += ts_packet_emit(cas_vendor_ecm_pid(t->cas, vi), &t->cc_ecm[vi], ptr0, sec, len, 0, 0, cb, ctx);
+  while (cas_vendor_next_emm(t->cas, vi, sec, seccap, &len) == 0)
+    count += ts_packet_emit(cas_vendor_emm_pid(t->cas, vi), &t->cc_emm[vi], ptr0, sec, len, 0, 0, cb, ctx);
+  return count;
+}
+
 size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, double now, const unsigned char *frame, size_t frame_len, ts_packet_cb cb, void *ctx) {
   unsigned char sec[4096], pesbuf[8192], prog_desc[32];
   unsigned char ptr0 = 0x00;
@@ -125,13 +134,9 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, double now, const 
         count += ts_packet_emit(PID_EIT, &t->cc_eit, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     if (t->cas) {
-      size_t vi, len, n_vendors = cas_vendor_count(t->cas);
-      for (vi = 0; vi < n_vendors; vi++) {
-        if (cas_vendor_ecm_due(t->cas, vi, now, sec, sizeof sec, &len) == 0)
-          count += ts_packet_emit(cas_vendor_ecm_pid(t->cas, vi), &t->cc_ecm[vi], &ptr0, sec, len, 0, 0, cb, ctx);
-        while (cas_vendor_next_emm(t->cas, vi, sec, sizeof sec, &len) == 0)
-          count += ts_packet_emit(cas_vendor_emm_pid(t->cas, vi), &t->cc_emm[vi], &ptr0, sec, len, 0, 0, cb, ctx);
-      }
+      size_t vi, n_vendors = cas_vendor_count(t->cas);
+      for (vi = 0; vi < n_vendors; vi++)
+        count += emit_cas_ecm_emm(t, vi, now, sec, sizeof sec, &ptr0, cb, ctx);
     }
   }
   n = pes_build(pts_90k, frame, frame_len, pesbuf, sizeof pesbuf);

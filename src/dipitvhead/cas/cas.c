@@ -106,23 +106,25 @@ static void add_pid(unsigned *pids, size_t *count, size_t cap, unsigned pid) {
   pids[(*count)++] = pid;
 }
 
+static void add_program_cas_pids(const config_t *cfg, const out_es_t *es, int es_count, unsigned *out, size_t *count, size_t cap) {
+  int i;
+  for (i = 0; i < es_count; i++) {
+    if (cfg->cas_pids_video && es[i].src->cls == PID_VIDEO)
+      add_pid(out, count, cap, es[i].out_pid);
+    if (cfg->cas_pids_audio && es[i].src->cls == PID_AUDIO)
+      add_pid(out, count, cap, es[i].out_pid);
+  }
+}
+
 size_t cas_resolve_pids_multi(const config_t *cfg, const out_es_t *const *es_lists, const int *es_counts, unsigned n_programs, unsigned *out, size_t cap) {
   size_t count = 0, k;
   unsigned p;
-  int i;
 
   for (k = 0; k < cfg->cas_pid_count; k++)
     add_pid(out, &count, cap, cfg->cas_pids[k]);
   if (cfg->cas_pids_video || cfg->cas_pids_audio)
-    for (p = 0; p < n_programs; p++) {
-      const out_es_t *es = es_lists[p];
-      for (i = 0; i < es_counts[p]; i++) {
-        if (cfg->cas_pids_video && es[i].src->cls == PID_VIDEO)
-          add_pid(out, &count, cap, es[i].out_pid);
-        if (cfg->cas_pids_audio && es[i].src->cls == PID_AUDIO)
-          add_pid(out, &count, cap, es[i].out_pid);
-      }
-    }
+    for (p = 0; p < n_programs; p++)
+      add_program_cas_pids(cfg, es_lists[p], es_counts[p], out, &count, cap);
   return count;
 }
 

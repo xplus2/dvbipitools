@@ -13,6 +13,7 @@
 #include "lib/argutil.h"
 #include "lib/ioutil.h"
 #include "lib/log.h"
+#include "lib/uriparse.h"
 
 #include "args.h"
 #include "filter/ts.h"
@@ -29,25 +30,9 @@ static void argerr(const char *fmt, ...) {
 
 /* rest: [@]addr:port, multicast literal required */
 static int parse_mcast_addrport(const char *rest, int *family, char *group, size_t groupsz, unsigned *port) {
-  const char *p = rest;
-
-  if (*p == '@')
-    p++;
-  if (argutil_addrport_parse(p, family, group, groupsz, port))
-    return -1;
-
-  if (*family == AF_INET) {
-    struct in_addr a;
-    inet_pton(AF_INET, group, &a);
-    if ((ntohl(a.s_addr) >> 28) != 0xE) /* 224.0.0.0/4 */
-      return -1;
-  } else {
-    struct in6_addr a6;
-    inet_pton(AF_INET6, group, &a6);
-    if (a6.s6_addr[0] != 0xFF) /* ff00::/8 */
-      return -1;
-  }
-  return 0;
+  if (*rest == '@')
+    rest++;
+  return uriparse_mcast_addrport(rest, family, group, groupsz, port);
 }
 
 static int parse_direct(const char *rest, source_t *s) {
@@ -56,67 +41,7 @@ static int parse_direct(const char *rest, source_t *s) {
 
 /* rest: host[:port]/cmd/... */
 static int parse_udpxy(const char *rest, source_t *s) {
-  const char *p = rest;
-  const char *seg, *segend;
-  size_t len;
-
-  if (*p == '[') {
-    const char *close = strchr(p, ']');
-    if (!close)
-      return -1;
-    len = (size_t)(close - (p + 1));
-    if (len == 0 || len >= sizeof s->http_host)
-      return -1;
-    memcpy(s->http_host, p + 1, len);
-    s->http_host[len] = '\0';
-    p = close + 1;
-  } else {
-    const char *hp = p;
-    while (*hp && *hp != ':' && *hp != '/')
-      hp++;
-    len = (size_t)(hp - p);
-    if (len == 0 || len >= sizeof s->http_host)
-      return -1;
-    memcpy(s->http_host, p, len);
-    s->http_host[len] = '\0';
-    p = hp;
-  }
-
-  if (*p == ':') {
-    const char *pe = ++p;
-    char portbuf[6];
-    while (isdigit((unsigned char)*pe))
-      pe++;
-    len = (size_t)(pe - p);
-    if (len == 0 || len >= sizeof portbuf)
-      return -1;
-    memcpy(portbuf, p, len);
-    portbuf[len] = '\0';
-    if (argutil_port_parse(portbuf, &s->http_port))
-      return -1;
-    p = pe;
-  } else {
-    s->http_port = 80;
-  }
-
-  if (*p != '/')
-    return -1;
-
-  seg = p + 1;
-  segend = strchr(seg, '/');
-  len = segend ? (size_t)(segend - seg) : strlen(seg);
-  if (len == 3 && memcmp(seg, "rtp", 3) == 0)
-    s->rtp_wrapped = 1;
-  else if (len == 3 && memcmp(seg, "udp", 3) == 0)
-    s->rtp_wrapped = 0;
-  else
-    return -1;
-
-  len = strlen(p);
-  if (len >= sizeof s->http_path)
-    return -1;
-  memcpy(s->http_path, p, len + 1);
-  return 0;
+  return uriparse_udpxy(rest, s->http_host, sizeof s->http_host, &s->http_port, &s->rtp_wrapped, s->http_path, sizeof s->http_path);
 }
 
 static int parse_uri(const char *uri, source_t *s) {
@@ -142,7 +67,7 @@ static int parse_uri(const char *uri, source_t *s) {
   if (strlen(uri) >= sizeof s->file_path)
     return -1;
   s->kind = URI_FILE;
-  strcpy(s->file_path, uri);
+  bufcpy(s->file_path, sizeof s->file_path, uri);
   return 0;
 }
 
@@ -180,21 +105,16 @@ static int parse_out_uri(const char *uri, out_target_t *o) {
     if (strlen(uri) >= sizeof o->rist_uri)
       return -1;
     o->kind = OUT_RIST;
-    strcpy(o->rist_uri, uri);
+    bufcpy(o->rist_uri, sizeof o->rist_uri, uri);
     return 0;
   }
-  if (strncmp(uri, "rtmps://", 8) == 0 || strncmp(uri, "rtmp://", 7) == 0) {
-    if (strlen(uri) >= sizeof o->rtmp_url)
+  {
+    int r = uriparse_rtmp_or_file(uri, o->rtmp_url, sizeof o->rtmp_url, o->file_path, sizeof o->file_path);
+    if (r < 0)
       return -1;
-    o->kind = (uri[4] == 's') ? OUT_RTMPS : OUT_RTMP;
-    strcpy(o->rtmp_url, uri);
+    o->kind = r == 2 ? OUT_RTMPS : r == 1 ? OUT_RTMP : OUT_FILE;
     return 0;
   }
-  if (strlen(uri) >= sizeof o->file_path)
-    return -1;
-  o->kind = OUT_FILE;
-  strcpy(o->file_path, uri);
-  return 0;
 }
 
 void out_describe(const out_target_t *o, char *buf, size_t n) {

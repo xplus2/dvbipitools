@@ -36,6 +36,7 @@ add_executable(dipirec
     ret_client.c
     ../lib/log.c
     ../lib/argutil.c
+    ../lib/uriparse.c
     ../lib/signal.c
     ../lib/net/multicast.c
     ../lib/net/netconnect.c

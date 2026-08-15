@@ -224,6 +224,53 @@ int load_doc(const config_t *cfg, bcg_doc_t *out) {
   return 0;
 }
 
+static void reload_doc(const config_t *cfg, bcg_doc_t *doc, bcg_metrics_t *bm, int metrics_on) {
+  bcg_doc_t reloaded;
+  if (load_doc(cfg, &reloaded)) {
+    log_line("reload failed, keeping previous guide");
+    if (!metrics_on)
+      return;
+    bm->sources_up = 0;
+    bm->source_errors_total[NET_ERR_FORMAT]++;
+    return;
+  }
+  bcg_doc_free(doc);
+  *doc = reloaded;
+  log_line("reloaded %d channels, %d programmes from %s / %s", doc->channel_count, doc->programme_count, cfg->input_path, cfg->map_path);
+  if (metrics_on)
+    bm->sources_up = 1;
+}
+
+static void publish_document(mcast_t *m, bitwriter_t *bw, const strrepo_writer_t *sw, unsigned cycles, int compress, bcg_metrics_t *bm, int metrics_on) {
+  size_t bits_len, strs_len, cont_len;
+  const unsigned char *bits = bitwriter_data(bw, &bits_len);
+  const unsigned char *strs = strrepo_writer_data(sw, &strs_len);
+  unsigned char *cont;
+  unsigned char *wrapped;
+  size_t wrapped_len;
+  int ok = 0;
+
+  if (container_build(bits, bits_len, strs, strs_len, &cont, &cont_len) != 0) {
+    if (metrics_on)
+      bm->document_errors_total++;
+    return;
+  }
+  if (wrapper_build(cont, cont_len, compress, &wrapped, &wrapped_len) == 0) {
+    ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_BCG_DATA_CONTAINER, 1, (unsigned)(cycles % 256), 1, 0, 0, 1, wrapped, wrapped_len) == 0;
+    free(wrapped);
+  }
+  free(cont);
+  if (!metrics_on)
+    return;
+  bm->documents_generated_total++;
+  if (ok) {
+    bm->publications_total++;
+    bm->last_success_time = (double)time(NULL);
+  } else {
+    bm->publication_errors_total++;
+  }
+}
+
 int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
   bcg_doc_t doc;
   mcast_t *m;
@@ -259,22 +306,8 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
     strrepo_writer_t sw;
     int nfuu = 0;
 
-    if (signal_reload_requested()) {
-      bcg_doc_t reloaded;
-      if (load_doc(cfg, &reloaded)) {
-        log_line("reload failed, keeping previous guide");
-        if (metrics_on) {
-          bm.sources_up = 0;
-          bm.source_errors_total[NET_ERR_FORMAT]++;
-        }
-      } else {
-        bcg_doc_free(&doc);
-        doc = reloaded;
-        log_line("reloaded %d channels, %d programmes from %s / %s", doc.channel_count, doc.programme_count, cfg->input_path, cfg->map_path);
-        if (metrics_on)
-          bm.sources_up = 1;
-      }
-    }
+    if (signal_reload_requested())
+      reload_doc(cfg, &doc, &bm, metrics_on);
 
     if (build_windowed_doc(&doc, &windowed, now_minutes(), cfg->window_hours * 60)) {
       bcg_doc_free(&windowed);
@@ -295,33 +328,7 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
       rc = 1;
       break;
     }
-    {
-      size_t bits_len, strs_len, cont_len;
-      const unsigned char *bits = bitwriter_data(&bw, &bits_len);
-      const unsigned char *strs = strrepo_writer_data(&sw, &strs_len);
-      unsigned char *cont;
-      if (container_build(bits, bits_len, strs, strs_len, &cont, &cont_len) == 0) {
-        unsigned char *wrapped;
-        size_t wrapped_len;
-        int ok = 0;
-        if (wrapper_build(cont, cont_len, cfg->compress, &wrapped, &wrapped_len) == 0) {
-          ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_BCG_DATA_CONTAINER, 1, (unsigned)(cycles % 256), 1, 0, 0, 1, wrapped, wrapped_len) == 0;
-          free(wrapped);
-        }
-        free(cont);
-        if (metrics_on) {
-          bm.documents_generated_total++;
-          if (ok) {
-            bm.publications_total++;
-            bm.last_success_time = (double)time(NULL);
-          } else {
-            bm.publication_errors_total++;
-          }
-        }
-      } else if (metrics_on) {
-        bm.document_errors_total++;
-      }
-    }
+    publish_document(m, &bw, &sw, cycles, cfg->compress, &bm, metrics_on);
     bitwriter_free(&bw);
     strrepo_writer_free(&sw);
 

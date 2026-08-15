@@ -11,6 +11,7 @@
 #include "lib/argutil.h"
 #include "lib/cas/biss/biss.h"
 #include "lib/log.h"
+#include "lib/uriparse.h"
 
 #include "args.h"
 #include "version.h"
@@ -28,21 +29,7 @@ static void argerr(const char *fmt, ...) {
 static int mcast_group_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
   if (*s == '@')
     s++;
-  if (argutil_addrport_parse(s, family, addr_out, addr_out_sz, port_out))
-    return -1;
-
-  if (*family == AF_INET) {
-    struct in_addr a;
-    inet_pton(AF_INET, addr_out, &a);
-    if ((ntohl(a.s_addr) >> 28) != 0xE) /* 224.0.0.0/4 */
-      return -1;
-  } else {
-    struct in6_addr a6;
-    inet_pton(AF_INET6, addr_out, &a6);
-    if (a6.s6_addr[0] != 0xFF) /* ff00::/8 */
-      return -1;
-  }
-  return 0;
+  return uriparse_mcast_addrport(s, family, addr_out, addr_out_sz, port_out);
 }
 
 static int fmt_from_name(const char *s, out_fmt_t *f) {
@@ -110,18 +97,12 @@ void input_describe(const input_t *s, char *buf, size_t n) {
 }
 
 static int parse_out_uri(const char *uri, out_target_t *o) {
+  int r;
   memset(o, 0, sizeof *o);
-  if (strncmp(uri, "rtmps://", 8) == 0 || strncmp(uri, "rtmp://", 7) == 0) {
-    if (strlen(uri) >= sizeof o->rtmp_url)
-      return -1;
-    o->kind = (uri[4] == 's') ? OUT_RTMPS : OUT_RTMP;
-    strcpy(o->rtmp_url, uri);
-    return 0;
-  }
-  if (strlen(uri) >= sizeof o->file_path)
+  r = uriparse_rtmp_or_file(uri, o->rtmp_url, sizeof o->rtmp_url, o->file_path, sizeof o->file_path);
+  if (r < 0)
     return -1;
-  o->kind = OUT_FILE;
-  strcpy(o->file_path, uri);
+  o->kind = r == 2 ? OUT_RTMPS : r == 1 ? OUT_RTMP : OUT_FILE;
   return 0;
 }
 

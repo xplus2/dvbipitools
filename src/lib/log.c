@@ -73,6 +73,16 @@ int log_colors_enabled(void) {
   return on;
 }
 
+/* skips a CSI escape sequence (ESC '[' params... final byte), *rp already past "ESC[" */
+static void skip_csi_params(char **rp) {
+  char *r = *rp;
+  while (*r && (*r < 0x40 || *r > 0x7E)) /* params */
+    r++;
+  if (*r)
+    r++; /* final */
+  *rp = r;
+}
+
 /* strip ANSI escapes in place: CSI and two-byte */
 static void strip_ansi(char *s) {
   char *r = s, *w = s;
@@ -82,10 +92,7 @@ static void strip_ansi(char *s) {
       r++;
       if (*r == '[') {
         r++;
-        while (*r && (*r < 0x40 || *r > 0x7E)) /* params */
-          r++;
-        if (*r)
-          r++; /* final */
+        skip_csi_params(&r);
       } else if (*r) {
         r++;
       }

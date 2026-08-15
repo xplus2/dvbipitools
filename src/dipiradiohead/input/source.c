@@ -339,6 +339,95 @@ static int next_sync_ok(source_t *s, size_t frame_len) {
   return aac_latm_is_sync(p, avail);
 }
 
+/* 1: codec now known (just resolved or already was), caller proceeds this iteration.
+   0: refilled, caller should continue its loop. -1: caller should return *ret */
+static int ensure_codec_known(source_t *s, net_err_reason_t *reason_out, int *ret) {
+  if (s->codec_known)
+    return 1;
+  if (s->buf_len < 2) {
+    int rf = refill(s, reason_out);
+    if (rf <= 0) {
+      *ret = rf;
+      return -1;
+    }
+    return 0;
+  }
+  if (aac_latm_is_sync(s->buf, s->buf_len)) {
+    s->codec = SRC_AAC_LATM;
+    s->latm = aac_latm_new();
+    if (!s->latm) {
+      if (reason_out)
+        *reason_out = NET_ERR_OTHER;
+      *ret = -1;
+      return -1;
+    }
+  } else if (aac_adts_is_sync(s->buf, s->buf_len)) {
+    s->codec = SRC_AAC_ADTS;
+  } else if (mpegaudio_is_sync(s->buf, s->buf_len)) {
+    s->codec = SRC_MPEG_AUDIO;
+  } else {
+    log_line("source: unrecognized audio sync (%02x %02x)", s->buf[0], s->buf[1]);
+    if (reason_out)
+      *reason_out = NET_ERR_FORMAT;
+    *ret = -1;
+    return -1;
+  }
+  s->codec_known = 1;
+  return 1;
+}
+
+enum { PROBE_STEP_RETURN, PROBE_STEP_CONTINUE, PROBE_STEP_PROCEED };
+
+/* decides what to do after a codec-specific probe. PROBE_STEP_PROCEED: frame_len is a
+   complete, buffered frame ready for the caller's next_sync_ok()/emit step */
+static int handle_probe_result(source_t *s, net_err_reason_t *reason_out, int r, size_t frame_len, int *ret) {
+  if (r == 0) {
+    int rf = refill(s, reason_out);
+    if (rf <= 0) {
+      *ret = rf;
+      return PROBE_STEP_RETURN;
+    }
+    return PROBE_STEP_CONTINUE;
+  }
+  if (r < 0) {
+    if (s->buf_len == 0) {
+      int rf = refill(s, reason_out);
+      if (rf <= 0) {
+        *ret = rf;
+        return PROBE_STEP_RETURN;
+      }
+      return PROBE_STEP_CONTINUE;
+    }
+    memmove(s->buf, s->buf + 1, s->buf_len - 1);
+    s->buf_len -= 1;
+    return PROBE_STEP_CONTINUE;
+  }
+  if (frame_len > s->buf_len) {
+    if (frame_len > SRC_BUF_CAP) {
+      log_line("source: frame too large (%zu bytes)", frame_len);
+      if (reason_out)
+        *reason_out = NET_ERR_FORMAT;
+      *ret = -1;
+      return PROBE_STEP_RETURN;
+    }
+    int rf = refill(s, reason_out);
+    if (rf <= 0) {
+      *ret = rf;
+      return PROBE_STEP_RETURN;
+    }
+    return PROBE_STEP_CONTINUE;
+  }
+  if (s->buf_len < frame_len + 2) {
+    int rf = refill(s, reason_out);
+    if (rf <= 0) {
+      *ret = rf;
+      return PROBE_STEP_RETURN;
+    }
+    return PROBE_STEP_CONTINUE;
+  }
+  return PROBE_STEP_PROCEED;
+}
+
 int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason_out) {
   if (s->pending_consume) {
     memmove(s->buf, s->buf + s->pending_consume, s->buf_len - s->pending_consume);
@@ -363,35 +452,15 @@ int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
       continue;
 
     if (!s->codec_known) {
-      if (s->buf_len < 2) {
-        int rf = refill(s, reason_out);
-        if (rf <= 0)
-          return rf;
+      int ret, step = ensure_codec_known(s, reason_out, &ret);
+      if (step < 0)
+        return ret;
+      if (step == 0)
         continue;
-      }
-      if (aac_latm_is_sync(s->buf, s->buf_len)) {
-        s->codec = SRC_AAC_LATM;
-        s->latm = aac_latm_new();
-        if (!s->latm) {
-          if (reason_out)
-            *reason_out = NET_ERR_OTHER;
-          return -1;
-        }
-      } else if (aac_adts_is_sync(s->buf, s->buf_len)) {
-        s->codec = SRC_AAC_ADTS;
-      } else if (mpegaudio_is_sync(s->buf, s->buf_len)) {
-        s->codec = SRC_MPEG_AUDIO;
-      } else {
-        log_line("source: unrecognized audio sync (%02x %02x)", s->buf[0], s->buf[1]);
-        if (reason_out)
-          *reason_out = NET_ERR_FORMAT;
-        return -1;
-      }
-      s->codec_known = 1;
     }
 
     {
-      int r = 0;
+      int r = 0, ret, step;
       size_t frame_len = 0;
       unsigned sample_rate = 0, samples = 0, stream_type = 0;
 
@@ -424,41 +493,12 @@ int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
         }
       }
 
-      if (r == 0) {
-        int rf = refill(s, reason_out);
-        if (rf <= 0)
-          return rf;
+      step = handle_probe_result(s, reason_out, r, frame_len, &ret);
+      if (step == PROBE_STEP_RETURN)
+        return ret;
+      if (step == PROBE_STEP_CONTINUE)
         continue;
-      }
-      if (r < 0) {
-        if (s->buf_len == 0) {
-          int rf = refill(s, reason_out);
-          if (rf <= 0)
-            return rf;
-          continue;
-        }
-        memmove(s->buf, s->buf + 1, s->buf_len - 1);
-        s->buf_len -= 1;
-        continue;
-      }
-      if (frame_len > s->buf_len) {
-        if (frame_len > SRC_BUF_CAP) {
-          log_line("source: frame too large (%zu bytes)", frame_len);
-          if (reason_out)
-            *reason_out = NET_ERR_FORMAT;
-          return -1;
-        }
-        int rf = refill(s, reason_out);
-        if (rf <= 0)
-          return rf;
-        continue;
-      }
-      if (s->buf_len < frame_len + 2) {
-        int rf = refill(s, reason_out);
-        if (rf <= 0)
-          return rf;
-        continue;
-      }
+
       if (!next_sync_ok(s, frame_len)) {
         memmove(s->buf, s->buf + 1, s->buf_len - 1);
         s->buf_len -= 1;

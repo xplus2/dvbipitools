@@ -154,6 +154,32 @@ static void probe_address(const config_t *cfg, const char *group, unsigned port,
   }
 }
 
+static void report_mpts_programs(const config_t *cfg, FILE *out, const probe_result_t *r, unsigned i,
+                                  const char *uri, const char *group, unsigned port, unsigned *found) {
+  int k;
+  for (k = 0; k < r->program_count; k++) {
+    (*found)++;
+    if (cfg->verbose)
+      log_line("%3u/254 %-28s %-32s sid=%u [%u pkts]", i, uri, r->programs[k].name, r->programs[k].sid, r->pkts);
+    else
+      log_line("%3u/254 %-28s %s (sid=%u)", i, uri, r->programs[k].name, r->programs[k].sid);
+    format_item(out, cfg->format, r->programs[k].name, uri, cfg->family, group, port, r->rtp_wrapped == 1, r->tsid, r->onid, r->programs[k].sid);
+  }
+  if (r->program_count == 0)
+    log_line_ansi("%3u/254 %-28s \e[0;33mstream present, no program resolved\e[0m", i, uri);
+}
+
+static void report_single_program(const config_t *cfg, FILE *out, const probe_result_t *r, unsigned i,
+                                   const char *uri, const char *group, unsigned port, unsigned *found) {
+  const char *name = (r->kind == PROBE_NAMED) ? r->name : "(no SDT)";
+  (*found)++;
+  if (cfg->verbose)
+    log_line("%3u/254 %-28s %-32s [%u pkts]", i, uri, name, r->pkts);
+  else
+    log_line("%3u/254 %-28s %s", i, uri, name);
+  format_item(out, cfg->format, name, uri, cfg->family, group, port, r->rtp_wrapped == 1, r->tsid, r->onid, r->sid);
+}
+
 int scan_run(const config_t *cfg, FILE *out) {
   char invocation[256], basestr[64];
   unsigned i, port, total = 0, found = 0;
@@ -171,7 +197,7 @@ int scan_run(const config_t *cfg, FILE *out) {
     addr_at(cfg, i, group, sizeof group);
     for (port = cfg->port_lo; port <= cfg->port_hi; port++) {
       probe_result_t r;
-      const char *proto, *name;
+      const char *proto;
       char uri[96];
 
       total++;
@@ -182,29 +208,12 @@ int scan_run(const config_t *cfg, FILE *out) {
       else
         snprintf(uri, sizeof uri, "%s://@%s:%u", proto, group, port);
 
-      if (r.kind == PROBE_NONE) {
+      if (r.kind == PROBE_NONE)
         log_line_ansi("%3u/254 %-28s \e[0;31mno stream\e[0m", i, uri);
-      } else if (cfg->mpts) {
-        int k;
-        for (k = 0; k < r.program_count; k++) {
-          found++;
-          if (cfg->verbose)
-            log_line("%3u/254 %-28s %-32s sid=%u [%u pkts]", i, uri, r.programs[k].name, r.programs[k].sid, r.pkts);
-          else
-            log_line("%3u/254 %-28s %s (sid=%u)", i, uri, r.programs[k].name, r.programs[k].sid);
-          format_item(out, cfg->format, r.programs[k].name, uri, cfg->family, group, port, r.rtp_wrapped == 1, r.tsid, r.onid, r.programs[k].sid);
-        }
-        if (r.program_count == 0)
-          log_line_ansi("%3u/254 %-28s \e[0;33mstream present, no program resolved\e[0m", i, uri);
-      } else {
-        name = (r.kind == PROBE_NAMED) ? r.name : "(no SDT)";
-        found++;
-        if (cfg->verbose)
-          log_line("%3u/254 %-28s %-32s [%u pkts]", i, uri, name, r.pkts);
-        else
-          log_line("%3u/254 %-28s %s", i, uri, name);
-        format_item(out, cfg->format, name, uri, cfg->family, group, port, r.rtp_wrapped == 1, r.tsid, r.onid, r.sid);
-      }
+      else if (cfg->mpts)
+        report_mpts_programs(cfg, out, &r, i, uri, group, port, &found);
+      else
+        report_single_program(cfg, out, &r, i, uri, group, port, &found);
       if (signal_stop_requested()) {
         interrupted = 1;
         break;

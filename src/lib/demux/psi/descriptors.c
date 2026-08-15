@@ -48,6 +48,40 @@ void add_ecm(psi_t *c, unsigned pid) {
     c->ecm[c->ecm_count++] = pid;
 }
 
+/* parses a teletext descriptor (tag 0x56): 5-byte entries, prefers subtitle types (2/5) */
+static void parse_teletext_desc(psi_es_t *e, const unsigned char *ld, size_t l) {
+  size_t x;
+  e->cls = PID_TELETEXT;
+  for (x = 0; x + 5 <= l; x += 5) {
+    int ty = ld[x + 3] >> 3;
+    unsigned mag = ld[x + 3] & 0x07;
+    unsigned pg = ld[x + 4];
+    unsigned page = (mag ? mag : 8) * 100 + ((pg >> 4) & 0x0F) * 10 + (pg & 0x0F);
+    if (!e->ttx_page || ty == 2 || ty == 5) {
+      e->ttx_page = page;
+      e->ttx_type = ty;
+      memcpy(e->ttx_lang, ld + x, 3);
+      e->ttx_lang[3] = '\0';
+    }
+    if (ty == 2 || ty == 5)
+      break;
+  }
+}
+
+/* parses a DVB subtitling descriptor (tag 0x59) */
+static void parse_subtitle_desc(psi_es_t *e, const unsigned char *ld, size_t l) {
+  e->cls = PID_SUBTITLE;
+  if (l < 8)
+    return;
+  e->sub_type = ld[3];
+  e->sub_composition_page = ((unsigned)ld[4] << 8) | ld[5];
+  e->sub_ancillary_page = ((unsigned)ld[6] << 8) | ld[7];
+  if (!e->lang[0]) {
+    memcpy(e->lang, ld, 3);
+    e->lang[3] = '\0';
+  }
+}
+
 void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
   size_t l;
   const unsigned char *ld;
@@ -92,34 +126,9 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
       break;
     case 0x06:
       if ((ld = find_desc(desc, dlen, 0x56, &l)) != NULL) {
-        size_t x;
-        e->cls = PID_TELETEXT;
-        /* 5-byte entries; prefer subtitle (type 2/5) */
-        for (x = 0; x + 5 <= l; x += 5) {
-          int ty = ld[x + 3] >> 3;
-          unsigned mag = ld[x + 3] & 0x07;
-          unsigned pg = ld[x + 4];
-          unsigned page = (mag ? mag : 8) * 100 + ((pg >> 4) & 0x0F) * 10 + (pg & 0x0F);
-          if (!e->ttx_page || ty == 2 || ty == 5) {
-            e->ttx_page = page;
-            e->ttx_type = ty;
-            memcpy(e->ttx_lang, ld + x, 3);
-            e->ttx_lang[3] = '\0';
-          }
-          if (ty == 2 || ty == 5)
-            break;
-        }
+        parse_teletext_desc(e, ld, l);
       } else if ((ld = find_desc(desc, dlen, 0x59, &l)) != NULL) {
-        e->cls = PID_SUBTITLE;
-        if (l >= 8) {
-          e->sub_type = ld[3];
-          e->sub_composition_page = ((unsigned)ld[4] << 8) | ld[5];
-          e->sub_ancillary_page = ((unsigned)ld[6] << 8) | ld[7];
-          if (!e->lang[0]) {
-            memcpy(e->lang, ld, 3);
-            e->lang[3] = '\0';
-          }
-        }
+        parse_subtitle_desc(e, ld, l);
       } else if (find_desc(desc, dlen, 0x6A, &l)) {
         e->cls = PID_AUDIO;
         e->codec = CODEC_AC3;

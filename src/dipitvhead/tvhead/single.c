@@ -8,6 +8,40 @@
 #include "lib/signal.h"
 #include "priv.h"
 
+/* rx is already built (discovery succeeded): sets up pacing/cas and runs until this
+   connection ends, then tears rx back down */
+static void run_single_input(const config_t *cfg, tvsrc_t *src, psi_t *psi, out_ctx_t *out, remux_t *rx,
+                              metrics_exporter_t *mx, input_metrics_t *im_p, ts_metrics_t *tsm_p) {
+  cas_t *cas = NULL;
+  int cas_wanted;
+
+  out->pacer = bitrate_pacer_new(cfg->bitrate_kbps ? (double)cfg->bitrate_kbps * 1000.0 : 0.0, cfg->stuff, cfg->burst_limit);
+  if (!out->pacer) {
+    log_line("bitrate pacer setup failed");
+    remux_free(rx);
+    return;
+  }
+  cas_wanted = cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled;
+  if (cas_wanted) {
+    int es_count;
+    const out_es_t *es = remux_es(rx, &es_count);
+    cas = cas_start(cfg, psi, es, es_count, remux_pcr_pid_out(rx));
+    if (cas)
+      remux_set_cas(rx, cas);
+    else
+      log_line("cas setup failed");
+  }
+  if (!cas_wanted || cas) {
+    print_discovered(psi);
+    run_output(src, rx, out, cfg, cas, mx, im_p, tsm_p);
+    if (cas)
+      cas_stop(cas);
+  }
+  bitrate_pacer_free(out->pacer);
+  out->pacer = NULL;
+  remux_free(rx);
+}
+
 int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   int rc = 0;
   mcast_t *outmc;
@@ -83,40 +117,10 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
 
       out_program_pids(0, &pids);
       rx = remux_new(cfg, &cfg->inputs[0], psi, &pids, 1);
-      if (!rx) {
+      if (!rx)
         log_line("remux setup failed");
-        r = -1;
-      } else {
-        out.pacer = bitrate_pacer_new(cfg->bitrate_kbps ? (double)cfg->bitrate_kbps * 1000.0 : 0.0, cfg->stuff, cfg->burst_limit);
-        if (!out.pacer) {
-          log_line("bitrate pacer setup failed");
-          remux_free(rx);
-          r = -1;
-        } else {
-          int cas_wanted = cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled;
-          cas_t *cas = NULL;
-          if (cas_wanted) {
-            int es_count;
-            const out_es_t *es = remux_es(rx, &es_count);
-            cas = cas_start(cfg, psi, es, es_count, remux_pcr_pid_out(rx));
-            if (cas)
-              remux_set_cas(rx, cas);
-            else
-              log_line("cas setup failed");
-          }
-          if (cas_wanted && !cas) {
-            r = -1;
-          } else {
-            print_discovered(psi);
-            run_output(src, rx, &out, cfg, cas, mx, im_p, tsm_p);
-            if (cas)
-              cas_stop(cas);
-          }
-          bitrate_pacer_free(out.pacer);
-          out.pacer = NULL;
-          remux_free(rx);
-        }
-      }
+      else
+        run_single_input(cfg, src, psi, &out, rx, mx, im_p, tsm_p);
     } else if (r == 0) {
       log_line("no live PMT found within %.0fs (use -p to select one, or check the source)", DISCOVERY_TIMEOUT_S);
     }

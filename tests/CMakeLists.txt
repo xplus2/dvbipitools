@@ -332,14 +332,16 @@ dvbipitools_add_unit_test(dipicam378_args
 if (OpenSSL_FOUND)
     dvbipitools_add_unit_test(dipicam378_crypto
         unit/dipicam378/test_crypto.c
-        ${CMAKE_SOURCE_DIR}/src/dipicam378/crypto.c)
+        ${CMAKE_SOURCE_DIR}/src/dipicam378/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/secure_zero.c)
     target_link_libraries(test_dipicam378_crypto PRIVATE OpenSSL::Crypto)
 
     dvbipitools_add_unit_test(dipicam378_device
         unit/dipicam378/test_device.c
         ${CMAKE_SOURCE_DIR}/src/dipicam378/device.c
         ${CMAKE_SOURCE_DIR}/src/dipicam378/crypto.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/secure_zero.c)
     target_link_libraries(test_dipicam378_device PRIVATE OpenSSL::Crypto)
 
     dvbipitools_add_unit_test(dipicam378_cs378x
@@ -354,7 +356,8 @@ if (OpenSSL_FOUND)
 
     dvbipitools_add_unit_test(dipidescramble_crypto
         unit/dipidescramble/test_crypto.c
-        ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c)
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/secure_zero.c)
     target_link_libraries(test_dipidescramble_crypto PRIVATE OpenSSL::Crypto)
 
     dvbipitools_add_unit_test(dipidescramble_device
@@ -363,7 +366,8 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile.c
         ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/secure_zero.c)
     target_link_libraries(test_dipidescramble_device PRIVATE OpenSSL::Crypto)
 
     dvbipitools_add_unit_test(dipidescramble_ecm_profile
@@ -371,7 +375,8 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/secure_zero.c)
     target_link_libraries(test_dipidescramble_ecm_profile PRIVATE OpenSSL::Crypto)
 
     dvbipitools_add_unit_test(dipidescramble_biss_ca_state
@@ -396,6 +401,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/secure_zero.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
@@ -661,6 +667,7 @@ dvbipitools_add_unit_test(dipiradiohead_args
     unit/dipiradiohead/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
@@ -831,6 +838,7 @@ dvbipitools_add_unit_test(dipitvhead_args
     unit/dipitvhead/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
@@ -1112,6 +1120,7 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -1179,6 +1188,7 @@ dvbipitools_add_unit_test(dipirec_args
     unit/dipirec/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
@@ -1233,6 +1243,7 @@ dvbipitools_add_unit_test(dipifccret_capture
 dvbipitools_add_unit_test(dipifccret_burst_table
     unit/dipifccret/test_burst_table.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/fcc/burst_table.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/sockaddr_index.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/fcc/burst.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/hash.c
@@ -1338,6 +1349,7 @@ dvbipitools_add_unit_test(dipifccret_ret
     unit/dipifccret/test_ret.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ret.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/rtx_session_table.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/sockaddr_index.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/hash.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/ring.c
@@ -1357,7 +1369,8 @@ dvbipitools_add_unit_test(dipifccret_ret
 
 dvbipitools_add_unit_test(dipifccret_rtx_session_table
     unit/dipifccret/test_rtx_session_table.c
-    ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/rtx_session_table.c)
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/rtx_session_table.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/sockaddr_index.c)
 
 dvbipitools_add_unit_test(lib_metrics_protocol
     unit/lib/metrics/test_protocol.c
@@ -1481,6 +1494,7 @@ dvbipitools_add_unit_test(dipirist_args
     unit/dipirist/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 

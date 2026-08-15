@@ -166,6 +166,26 @@ static void append_base_labels(strbuf_t *sb, const store_slot_t *slot) {
   sb_appendf(sb, "component=\"%s\",headend_id=\"%s\"", metrics_component_name(slot->component), esc_headend_id);
 }
 
+static void append_composite_input_reason(strbuf_t *sb, const char *label) {
+  char input_part[METRICS_LABEL_MAX + 1], reason_part[METRICS_LABEL_MAX + 1];
+  char esc_input[2 * METRICS_LABEL_MAX + 2], esc_reason[2 * METRICS_LABEL_MAX + 2];
+  const char *sep = strchr(label, METRICS_LABEL_SEP);
+  if (sep) {
+    size_t ilen = (size_t)(sep - label);
+    if (ilen >= sizeof input_part)
+      ilen = sizeof input_part - 1;
+    memcpy(input_part, label, ilen);
+    input_part[ilen] = '\0';
+    snprintf(reason_part, sizeof reason_part, "%s", sep + 1);
+  } else {
+    snprintf(input_part, sizeof input_part, "%s", label);
+    reason_part[0] = '\0';
+  }
+  escape_label(input_part, esc_input, sizeof esc_input);
+  escape_label(reason_part, esc_reason, sizeof esc_reason);
+  sb_appendf(sb, ",input=\"%s\",reason=\"%s\"", esc_input, esc_reason);
+}
+
 static void render_family(strbuf_t *sb, const store_t *st, const metric_def_t *def) {
   int i, j, any = 0;
   const char *kind_name = def->kind == M_COUNTER ? "counter" : def->kind == M_INFO ? "info" : "gauge";
@@ -197,23 +217,7 @@ static void render_family(strbuf_t *sb, const store_t *st, const metric_def_t *d
       sb_appendf(sb, "%s{", def->name);
       append_base_labels(sb, slot);
       if (def->composite_input_reason) {
-        char input_part[METRICS_LABEL_MAX + 1], reason_part[METRICS_LABEL_MAX + 1];
-        char esc_input[2 * METRICS_LABEL_MAX + 2], esc_reason[2 * METRICS_LABEL_MAX + 2];
-        const char *sep = strchr(e->label, METRICS_LABEL_SEP);
-        if (sep) {
-          size_t ilen = (size_t)(sep - e->label);
-          if (ilen >= sizeof input_part)
-            ilen = sizeof input_part - 1;
-          memcpy(input_part, e->label, ilen);
-          input_part[ilen] = '\0';
-          snprintf(reason_part, sizeof reason_part, "%s", sep + 1);
-        } else {
-          snprintf(input_part, sizeof input_part, "%s", e->label);
-          reason_part[0] = '\0';
-        }
-        escape_label(input_part, esc_input, sizeof esc_input);
-        escape_label(reason_part, esc_reason, sizeof esc_reason);
-        sb_appendf(sb, ",input=\"%s\",reason=\"%s\"", esc_input, esc_reason);
+        append_composite_input_reason(sb, e->label);
       } else if (def->label_name) {
         escape_label(e->label, esc, sizeof esc);
         sb_appendf(sb, ",%s=\"%s\"", def->label_name, esc);

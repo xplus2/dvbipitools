@@ -276,6 +276,23 @@ ttx_t *ttx_new(unsigned page, const char *lang, long lead_ms, ttx_cb cb, void *c
 
 void ttx_free(ttx_t *t) { free(t); }
 
+/* handles one EBU teletext subtitle packet (id==0x03) starting at u, if its magazine matches */
+static void handle_ebu_subtitle_packet(ttx_t *t, const unsigned char *u) {
+  unsigned char b[42];
+  int k, h0, h1;
+  unsigned mag, pkt;
+  for (k = 0; k < 42; k++) /* mpag(2) + data(40) */
+    b[k] = rev8(u[2 + k]);
+  h0 = unham[b[0]];
+  h1 = unham[b[1]];
+  if (h0 < 0 || h1 < 0)
+    return;
+  mag = (unsigned)h0 & 0x07;
+  pkt = ((unsigned)h1 << 1) | (((unsigned)h0 >> 3) & 1);
+  if (mag == t->magazine)
+    handle_packet(t, mag, pkt, b + 2, t->last_ms);
+}
+
 void ttx_pes(ttx_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   size_t i = 1; /* skip data_identifier */
 
@@ -287,25 +304,11 @@ void ttx_pes(ttx_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t
   while (i + 2 <= len) {
     unsigned id = d[i], ul = d[i + 1];
     const unsigned char *u = d + i + 2;
-    int h0, h1;
-    unsigned mag, pkt;
 
     if (i + 2 + ul > len)
       break;
-    if (id == 0x03 && ul >= 44 - 2) { /* EBU teletext subtitle */
-      unsigned char b[42];
-      int k;
-      for (k = 0; k < 42; k++) /* mpag(2) + data(40) */
-        b[k] = rev8(u[2 + k]);
-      h0 = unham[b[0]];
-      h1 = unham[b[1]];
-      if (h0 >= 0 && h1 >= 0) {
-        mag = (unsigned)h0 & 0x07;
-        pkt = ((unsigned)h1 << 1) | (((unsigned)h0 >> 3) & 1);
-        if (mag == t->magazine)
-          handle_packet(t, mag, pkt, b + 2, t->last_ms);
-      }
-    }
+    if (id == 0x03 && ul >= 44 - 2) /* EBU teletext subtitle */
+      handle_ebu_subtitle_packet(t, u);
     i += 2 + ul;
   }
 }

@@ -80,8 +80,11 @@ int argutil_addrport_parse(const char *s, int *family, char *addr_out, size_t ad
       return -1;
   }
 
-  if (strlen(addr) >= addr_out_sz)
-    return -1;
-  strcpy(addr_out, addr);
+  {
+    size_t alen = strlen(addr);
+    if (alen >= addr_out_sz)
+      return -1;
+    memcpy(addr_out, addr, alen + 1);
+  }
   return 0;
 }

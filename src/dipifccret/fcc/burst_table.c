@@ -15,7 +15,10 @@ burst_table_t *burst_table_new(size_t cap) {
   if (!t)
     return NULL;
   t->slots = calloc(cap, sizeof *t->slots);
-  if (!t->slots) {
+  t->index = sockaddr_index_new(cap);
+  if (!t->slots || !t->index) {
+    free(t->slots);
+    sockaddr_index_free(t->index);
     free(t);
     return NULL;
   }
@@ -32,6 +35,7 @@ void burst_table_free(burst_table_t *t) {
     if (t->slots[i].in_use)
       burst_release(t->slots[i].b);
   pthread_mutex_destroy(&t->lock);
+  sockaddr_index_free(t->index);
   free(t->slots);
   free(t);
 }
@@ -52,6 +56,20 @@ static int sockaddr_eq(const struct sockaddr_storage *a, socklen_t alen, const s
   return 0;
 }
 
+/* index hit, re-validated against authoritative slots[]. pacer thread
+   clears in_use: stale hits dropped. caller holds t->lock. SIZE_MAX if no
+   live session for addr */
+static size_t find_valid(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen) {
+  size_t idx = sockaddr_index_find(t->index, addr, addrlen);
+  if (idx == SIZE_MAX)
+    return SIZE_MAX;
+  if (!t->slots[idx].in_use || !sockaddr_eq(&t->slots[idx].addr, t->slots[idx].addrlen, addr, addrlen)) {
+    sockaddr_index_remove(t->index, addr, addrlen);
+    return SIZE_MAX;
+  }
+  return idx;
+}
+
 burst_slot_t *burst_table_claim(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int fd, burst_t *b) {
   size_t i;
   pthread_mutex_lock(&t->lock);
@@ -65,6 +83,8 @@ burst_slot_t *burst_table_claim(burst_table_t *t, const struct sockaddr *addr, s
       t->slots[i].nack_count = 0;
       t->slots[i].congestion_adapted = 0;
       t->slots[i].in_use = 1;
+      sockaddr_index_remove(t->index, addr, addrlen); /* drop stale entry before insert */
+      sockaddr_index_insert(t->index, addr, addrlen, i);
       pthread_mutex_unlock(&t->lock);
       return &t->slots[i];
     }
@@ -75,17 +95,11 @@ burst_slot_t *burst_table_claim(burst_table_t *t, const struct sockaddr *addr, s
 }
 
 burst_slot_t *burst_table_find(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen) {
-  size_t i;
-  burst_slot_t *found = NULL;
+  size_t idx;
   pthread_mutex_lock(&t->lock);
-  for (i = 0; i < t->cap; i++) {
-    if (t->slots[i].in_use && sockaddr_eq(&t->slots[i].addr, t->slots[i].addrlen, addr, addrlen)) {
-      found = &t->slots[i];
-      break;
-    }
-  }
+  idx = find_valid(t, addr, addrlen);
   pthread_mutex_unlock(&t->lock);
-  return found;
+  return idx == SIZE_MAX ? NULL : &t->slots[idx];
 }
 
 int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int fd, burst_t *b, uint8_t *msn_out) {
@@ -94,17 +108,14 @@ int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t a
   int updated = 0;
 
   pthread_mutex_lock(&t->lock);
-  for (i = 0; i < t->cap; i++) {
-    if (t->slots[i].in_use && sockaddr_eq(&t->slots[i].addr, t->slots[i].addrlen, addr, addrlen)) {
-      old = t->slots[i].b;
-      t->slots[i].fd = fd;
-      t->slots[i].b = b;
-      *msn_out = ++t->slots[i].msn;
-      updated = 1;
-      break;
-    }
-  }
-  if (!updated) {
+  i = find_valid(t, addr, addrlen);
+  if (i != SIZE_MAX) {
+    old = t->slots[i].b;
+    t->slots[i].fd = fd;
+    t->slots[i].b = b;
+    *msn_out = ++t->slots[i].msn;
+    updated = 1;
+  } else {
     for (i = 0; i < t->cap; i++) {
       if (!t->slots[i].in_use) {
         memcpy(&t->slots[i].addr, addr, addrlen);
@@ -115,6 +126,8 @@ int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t a
         t->slots[i].nack_count = 0;
         t->slots[i].congestion_adapted = 0;
         t->slots[i].in_use = 1;
+        sockaddr_index_remove(t->index, addr, addrlen);
+        sockaddr_index_insert(t->index, addr, addrlen, i);
         *msn_out = 0;
         pthread_mutex_unlock(&t->lock);
         return 0;
@@ -134,16 +147,19 @@ int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t a
 }
 
 int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, unsigned threshold, burst_table_nack_result_t *out) {
-  size_t i;
+  size_t idx;
 
   memset(out, 0, sizeof *out);
   pthread_mutex_lock(&t->lock);
-  for (i = 0; i < t->cap; i++) {
-    burst_slot_t *slot = &t->slots[i];
-    unsigned adapt_at;
+  idx = find_valid(t, addr, addrlen);
+  if (idx == SIZE_MAX) {
+    pthread_mutex_unlock(&t->lock);
+    return 0;
+  }
 
-    if (!slot->in_use || !sockaddr_eq(&slot->addr, slot->addrlen, addr, addrlen))
-      continue;
+  {
+    burst_slot_t *slot = &t->slots[idx];
+    unsigned adapt_at;
 
     slot->nack_count++;
     if (threshold == 0) {
@@ -162,23 +178,17 @@ int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen
       out->action = BURST_TABLE_NACK_ADAPTED;
       out->msn = ++slot->msn;
     }
-    pthread_mutex_unlock(&t->lock);
-    return 1;
   }
   pthread_mutex_unlock(&t->lock);
-  return 0;
+  return 1;
 }
 
 int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int has_stop_seq, uint32_t stop_seqnum) {
-  size_t i;
+  size_t idx;
   pthread_mutex_lock(&t->lock);
-  for (i = 0; i < t->cap; i++) {
-    if (t->slots[i].in_use && sockaddr_eq(&t->slots[i].addr, t->slots[i].addrlen, addr, addrlen)) {
-      burst_terminate(t->slots[i].b, has_stop_seq, stop_seqnum);
-      pthread_mutex_unlock(&t->lock);
-      return 1;
-    }
-  }
+  idx = find_valid(t, addr, addrlen);
+  if (idx != SIZE_MAX)
+    burst_terminate(t->slots[idx].b, has_stop_seq, stop_seqnum);
   pthread_mutex_unlock(&t->lock);
-  return 0;
+  return idx != SIZE_MAX;
 }

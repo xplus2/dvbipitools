@@ -90,6 +90,7 @@ add_executable(dipitvhead
     ../lib/cas/cas_scramble_engine.c
     ../lib/log.c
     ../lib/argutil.c
+    ../lib/uriparse.c
     ../lib/signal.c
     ../lib/metrics/protocol.c
     ../lib/metrics/export.c

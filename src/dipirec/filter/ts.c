@@ -261,8 +261,11 @@ int ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out
     if (!sec || !pusi)
       return 0;
     rl = pat_rewrite(sec, sl, rw);
-    if (rl && emit_section(out, 0x0000, (f->cc_pat = (f->cc_pat + 1) & 0x0F), rw, rl))
-      return 1;
+    if (rl) {
+      f->cc_pat = (f->cc_pat + 1) & 0x0F;
+      if (emit_section(out, 0x0000, f->cc_pat, rw, rl))
+        return 1;
+    }
     memcpy(out, in, 188); /* fallback: original */
     return 1;
   }
@@ -275,8 +278,11 @@ int ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out
     if (!sec || !pusi)
       return 0;
     rl = pmt_rewrite(f, sec, sl, rw);
-    if (rl && emit_section(out, pid, (f->cc_pmt = (f->cc_pmt + 1) & 0x0F), rw, rl))
-      return 1;
+    if (rl) {
+      f->cc_pmt = (f->cc_pmt + 1) & 0x0F;
+      if (emit_section(out, pid, f->cc_pmt, rw, rl))
+        return 1;
+    }
     memcpy(out, in, 188);
     return 1;
   }

@@ -16,6 +16,23 @@
 #define MSG_NOSIGNAL 0
 #endif
 
+/* -1: timeout or poll error (errno set). 0: fd writable again */
+static int wait_writable(int fd, double deadline) {
+  double remain = (deadline - mono_seconds()) * 1000.0;
+  struct pollfd pfd = {fd, POLLOUT, 0};
+  int prc;
+  if (remain <= 0) {
+    errno = ETIMEDOUT;
+    return -1;
+  }
+  prc = poll(&pfd, 1, (int)remain);
+  if (prc == 0) {
+    errno = ETIMEDOUT;
+    return -1;
+  }
+  return prc < 0 ? -1 : 0;
+}
+
 static int send_all(int fd, const unsigned char *buf, size_t n, atomic_int *stop) {
   size_t sent = 0;
   double deadline = mono_seconds() + (double)CS378X_SEND_TIMEOUT_MS / 1000.0;
@@ -30,23 +47,8 @@ static int send_all(int fd, const unsigned char *buf, size_t n, atomic_int *stop
 
     w = send(fd, buf + sent, n - sent, MSG_DONTWAIT | MSG_NOSIGNAL);
     if (w <= 0) {
-      if (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-        double remain = (deadline - mono_seconds()) * 1000.0;
-        struct pollfd pfd = {fd, POLLOUT, 0};
-        int prc;
-        if (remain <= 0) {
-          errno = ETIMEDOUT;
-          return -1;
-        }
-        prc = poll(&pfd, 1, (int)remain);
-        if (prc == 0) {
-          errno = ETIMEDOUT;
-          return -1;
-        }
-        if (prc < 0)
-          return -1;
+      if (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) && wait_writable(fd, deadline) == 0)
         continue;
-      }
       if (w < 0 && errno == EINTR)
         continue;
       return -1;

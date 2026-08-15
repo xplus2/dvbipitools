@@ -18,7 +18,8 @@ if (OpenSSL_FOUND)
         device.c
         ../lib/log.c
         ../lib/argutil.c
-        ../lib/signal.c)
+        ../lib/signal.c
+        ../lib/secure_zero.c)
 
     target_link_libraries(dipicam378 PRIVATE OpenSSL::Crypto)
 

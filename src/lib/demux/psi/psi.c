@@ -40,6 +40,17 @@ psi_t *psi_new(void) { return calloc(1, sizeof(psi_t)); }
 
 void psi_free(psi_t *c) { free(c); }
 
+/* records that pmt_cand[k] just resolved: locks onto it (single-mode, first resolution
+   only) and marks it resolved in multi-mode */
+static void note_pmt_resolved(psi_t *c, int k) {
+  if (!c->pmt_locked) {
+    c->pmt_locked = 1;
+    c->pmt_lock_idx = k;
+  }
+  if (c->multi_mode)
+    c->multi[k].resolved = 1;
+}
+
 void psi_feed(psi_t *c, const unsigned char *pkt) {
   unsigned pid;
   int pusi;
@@ -82,14 +93,8 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
       pmt_cand_t *cand = &c->pmt_cand[k];
       if (cand->pmt_pid != pid)
         continue;
-      if (psi_section_asm_feed(&cand->asm_, pl, plen, pusi) && parse_pmt(c, cand)) {
-        if (!c->pmt_locked) {
-          c->pmt_locked = 1;
-          c->pmt_lock_idx = k;
-        }
-        if (c->multi_mode)
-          c->multi[k].resolved = 1;
-      }
+      if (psi_section_asm_feed(&cand->asm_, pl, plen, pusi) && parse_pmt(c, cand))
+        note_pmt_resolved(c, k);
       break;
     }
   }

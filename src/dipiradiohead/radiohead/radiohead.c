@@ -86,6 +86,99 @@ const char *codec_name(source_codec_t c) {
   return "?";
 }
 
+typedef struct {
+  tspacketizer_t **tsp;
+  cas_t *cas;
+  const config_t *cfg;
+  meta_state_t *meta;
+  out_ctx_t *out;
+  input_metrics_t *im;
+  radio_metrics_t *rm;
+  int metrics_on;
+  metrics_exporter_t *mx;
+  uint64_t *samples_total;
+  double start;
+  double *last_stat;
+  unsigned long long *last_synced_bytes;
+} single_tick_t;
+
+/* processes one frame from src for the single-input path. 0: ok, keep looping.
+   -1: r<0 (source error), caller should break its loop and reconnect.
+   -2: fatal (tspacketizer_new() OOM or cas_failed()), caller must abort */
+static int process_single_frame(single_tick_t *tk, source_t *src) {
+  source_frame_t f;
+  net_err_reason_t reason = NET_ERR_OTHER;
+  int r = source_next_frame(src, &f, &reason);
+  uint64_t pts;
+  double now;
+
+  if (r == 0)
+    return 0;
+  if (r < 0) {
+    input_metrics_note_read(tk->metrics_on ? tk->im : NULL, -1, reason);
+    if (tk->metrics_on && reason == NET_ERR_FORMAT)
+      tk->rm->framing_errors_total++;
+    return -1;
+  }
+  if (tk->metrics_on) {
+    tk->im->last_data_time = (double)time(NULL);
+    tk->rm->frames_total[f.codec]++;
+  }
+
+  if (!*tk->tsp) {
+    tspacketizer_cfg_t tc;
+    tc.tsid = tk->cfg->tsid;
+    tc.onid = tk->cfg->onid;
+    tc.sid = tk->cfg->inputs[0].sid;
+    tc.stream_type = f.stream_type;
+    tc.network_name = tk->cfg->nit_text;
+    tc.service_name = tk->cfg->inputs[0].sdt_text;
+    tc.pmt_pid = 0;
+    tc.audio_pid = 0;
+    tc.standalone = 1;
+    *tk->tsp = tspacketizer_new(&tc);
+    if (!*tk->tsp)
+      return -2;
+    if (tk->cas)
+      tspacketizer_set_cas(*tk->tsp, tk->cas);
+    log_line("codec detected: %s, %u Hz", codec_name(f.codec), f.sample_rate);
+  }
+  if (tk->meta->dirty) {
+    tspacketizer_set_metadata(*tk->tsp, tk->meta->artist, tk->meta->title);
+    tk->meta->dirty = 0;
+    log_line("now playing: %s%s%s", tk->meta->artist, (tk->meta->artist[0] && tk->meta->title[0]) ? " - " : "", tk->meta->title);
+  }
+
+  now = mono_seconds();
+  pts = *tk->samples_total * 90000ULL / f.sample_rate;
+  *tk->samples_total += f.samples;
+  tk->out->cur_pts = pts;
+  if (tk->cas) {
+    cas_clock_tick(tk->cas, pts);
+    if (cas_failed(tk->cas)) {
+      log_line("cas: fatal, stopping");
+      return -2;
+    }
+    if (signal_reload_requested())
+      cas_reload_receivers(tk->cas);
+  }
+  tspacketizer_feed(*tk->tsp, pts, now, f.data, f.len, packet_cb, tk->out);
+  if (tk->cfg->verbose && now - *tk->last_stat >= 1.0) {
+    fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - tk->start, tk->out->packets);
+    fflush(stderr);
+    *tk->last_stat = now;
+  }
+  if (tk->metrics_on) {
+    unsigned long long sb = source_bytes_total(src);
+    if (sb > *tk->last_synced_bytes) {
+      tk->im->bytes_total += sb - *tk->last_synced_bytes;
+      *tk->last_synced_bytes = sb;
+    }
+  }
+  emit_metrics(tk->mx, now, tk->out, 1, 1, tk->im, 1, tk->rm, tk->cas);
+  return 0;
+}
+
 int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   mcast_t *mc;
   out_ctx_t out;
@@ -97,7 +190,9 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   input_metrics_t im;
   radio_metrics_t rm;
   unsigned long long last_synced_bytes = 0;
+  uint64_t samples_total = 0;
   int metrics_on = metrics_exporter_enabled(mx);
+  single_tick_t tk;
 
   if (cfg->n_inputs > 1)
     return radiohead_run_mpts(cfg, mx);
@@ -140,10 +235,24 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
   start = mono_seconds();
+  tk.tsp = &tsp;
+  tk.cas = cas;
+  tk.cfg = cfg;
+  tk.meta = &meta;
+  tk.out = &out;
+  tk.im = &im;
+  tk.rm = &rm;
+  tk.metrics_on = metrics_on;
+  tk.mx = mx;
+  tk.samples_total = &samples_total;
+  tk.start = start;
+  tk.last_stat = &last_stat;
+  tk.last_synced_bytes = &last_synced_bytes;
+
   while (!signal_stop_requested()) {
     net_err_reason_t reason = NET_ERR_OTHER;
     source_t *src = source_open(cfg->inputs[0].uri, cfg->insecure_tls, meta_cb, &meta, &reason);
-    uint64_t samples_total = 0;
+    samples_total = 0;
 
     if (!src) {
       if (metrics_on) {
@@ -167,78 +276,13 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     }
 
     while (!signal_stop_requested()) {
-      source_frame_t f;
-      int r = source_next_frame(src, &f, &reason);
-      uint64_t pts;
-      double now;
-
-      if (r == 0)
-        continue;
-      if (r < 0) {
-        input_metrics_note_read(metrics_on ? &im : NULL, -1, reason);
-        if (metrics_on && reason == NET_ERR_FORMAT)
-          rm.framing_errors_total++;
+      int step = process_single_frame(&tk, src);
+      if (step == -2) {
+        rc = 1;
+        goto done;
+      }
+      if (step == -1)
         break;
-      }
-      if (metrics_on) {
-        im.last_data_time = (double)time(NULL);
-        rm.frames_total[f.codec]++;
-      }
-
-      if (!tsp) {
-        tspacketizer_cfg_t tc;
-        tc.tsid = cfg->tsid;
-        tc.onid = cfg->onid;
-        tc.sid = cfg->inputs[0].sid;
-        tc.stream_type = f.stream_type;
-        tc.network_name = cfg->nit_text;
-        tc.service_name = cfg->inputs[0].sdt_text;
-        tc.pmt_pid = 0;
-        tc.audio_pid = 0;
-        tc.standalone = 1;
-        tsp = tspacketizer_new(&tc);
-        if (!tsp) {
-          rc = 1;
-          goto done;
-        }
-        if (cas)
-          tspacketizer_set_cas(tsp, cas);
-        log_line("codec detected: %s, %u Hz", codec_name(f.codec), f.sample_rate);
-      }
-      if (meta.dirty) {
-        tspacketizer_set_metadata(tsp, meta.artist, meta.title);
-        meta.dirty = 0;
-        log_line("now playing: %s%s%s", meta.artist, (meta.artist[0] && meta.title[0]) ? " - " : "", meta.title);
-      }
-
-      now = mono_seconds();
-      pts = samples_total * 90000ULL / f.sample_rate;
-      samples_total += f.samples;
-      out.cur_pts = pts;
-      if (cas) {
-        cas_clock_tick(cas, pts);
-        if (cas_failed(cas)) {
-          log_line("cas: fatal, stopping");
-          rc = 1;
-          goto done;
-        }
-        if (signal_reload_requested())
-          cas_reload_receivers(cas);
-      }
-      tspacketizer_feed(tsp, pts, now, f.data, f.len, packet_cb, &out);
-      if (cfg->verbose && now - last_stat >= 1.0) {
-        fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - start, out.packets);
-        fflush(stderr);
-        last_stat = now;
-      }
-      if (metrics_on) {
-        unsigned long long sb = source_bytes_total(src);
-        if (sb > last_synced_bytes) {
-          im.bytes_total += sb - last_synced_bytes;
-          last_synced_bytes = sb;
-        }
-      }
-      emit_metrics(mx, now, &out, 1, 1, &im, 1, &rm, cas);
     }
     if (metrics_on)
       im.up = 0;

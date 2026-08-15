@@ -156,6 +156,67 @@ static size_t find_startcode(const unsigned char *d, size_t len, size_t from, si
 }
 
 /* one video PES = one Annex-B access unit */
+static void handle_video_h264_nal(track_t *t, unsigned type, const unsigned char *p, size_t n, int *key) {
+  switch (type) {
+    case H264_NAL_SPS:
+      ps_store(t->es.sps, &t->es.spslen, p, n);
+      break;
+    case H264_NAL_PPS:
+      ps_store(t->es.pps, &t->es.ppslen, p, n);
+      break;
+    case H264_NAL_AUD:
+    case H264_NAL_FILLER:
+      break;
+    default:
+      if (type == H264_NAL_IDR)
+        *key = 1;
+      vbuf_add(t, p, n);
+  }
+}
+
+static void handle_video_hevc_nal(track_t *t, unsigned type, const unsigned char *p, size_t n, int *key) {
+  switch (type) {
+    case HEVC_NAL_VPS:
+      ps_store(t->es.vps, &t->es.vpslen, p, n);
+      break;
+    case HEVC_NAL_SPS:
+      ps_store(t->es.sps, &t->es.spslen, p, n);
+      break;
+    case HEVC_NAL_PPS:
+      ps_store(t->es.pps, &t->es.ppslen, p, n);
+      break;
+    case HEVC_NAL_AUD:
+    case HEVC_NAL_FILLER:
+      break;
+    default:
+      if (type >= HEVC_NAL_IRAP_FIRST && type <= HEVC_NAL_IRAP_LAST)
+        *key = 1;
+      vbuf_add(t, p, n);
+  }
+}
+
+static void try_parse_h264_hdr(mkv_t *m, track_t *t) {
+  if (h264_dims(t->es.sps, t->es.spslen, &t->width, &t->height) != 0)
+    return;
+  t->es.cpriv_len = build_avcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
+  if (t->es.cpriv_len) {
+    bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, NULL));
+    t->hdr_parsed = 1;
+    all_ready(m);
+  }
+}
+
+static void try_parse_hevc_hdr(mkv_t *m, track_t *t) {
+  if (hevc_info(t->es.sps, t->es.spslen, t->es.ptl, &t->es.chroma, &t->width, &t->height) != 0)
+    return;
+  t->es.cpriv_len = build_hvcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
+  if (t->es.cpriv_len) {
+    bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, NULL));
+    t->hdr_parsed = 1;
+    all_ready(m);
+  }
+}
+
 static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   size_t p, scl = 0;
   int key = 0;
@@ -181,66 +242,20 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
     }
     if (t->es.codec == CODEC_H264) {
       type = d[ns] & 0x1F;
-      switch (type) {
-        case H264_NAL_SPS:
-          ps_store(t->es.sps, &t->es.spslen, d + ns, n);
-          break;
-        case H264_NAL_PPS:
-          ps_store(t->es.pps, &t->es.ppslen, d + ns, n);
-          break;
-        case H264_NAL_AUD:
-        case H264_NAL_FILLER:
-          break;
-        default:
-          if (type == H264_NAL_IDR)
-            key = 1;
-          vbuf_add(t, d + ns, n);
-      }
+      handle_video_h264_nal(t, type, d + ns, n, &key);
     } else {
       type = (d[ns] >> 1) & 0x3F;
-      switch (type) {
-        case HEVC_NAL_VPS:
-          ps_store(t->es.vps, &t->es.vpslen, d + ns, n);
-          break;
-        case HEVC_NAL_SPS:
-          ps_store(t->es.sps, &t->es.spslen, d + ns, n);
-          break;
-        case HEVC_NAL_PPS:
-          ps_store(t->es.pps, &t->es.ppslen, d + ns, n);
-          break;
-        case HEVC_NAL_AUD:
-        case HEVC_NAL_FILLER:
-          break;
-        default:
-          if (type >= HEVC_NAL_IRAP_FIRST && type <= HEVC_NAL_IRAP_LAST)
-            key = 1;
-          vbuf_add(t, d + ns, n);
-      }
+      handle_video_hevc_nal(t, type, d + ns, n, &key);
     }
     p = q;
     scl = scl2;
   }
 
   if (!t->hdr_parsed) {
-    if (t->es.codec == CODEC_H264 && t->es.spslen && t->es.ppslen) {
-      if (h264_dims(t->es.sps, t->es.spslen, &t->width, &t->height) == 0) {
-        t->es.cpriv_len = build_avcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
-        if (t->es.cpriv_len) {
-          bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, NULL));
-          t->hdr_parsed = 1;
-          all_ready(m);
-        }
-      }
-    } else if (t->es.codec == CODEC_HEVC && t->es.vpslen && t->es.spslen && t->es.ppslen) {
-      if (hevc_info(t->es.sps, t->es.spslen, t->es.ptl, &t->es.chroma, &t->width, &t->height) == 0) {
-        t->es.cpriv_len = build_hvcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
-        if (t->es.cpriv_len) {
-          bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, NULL));
-          t->hdr_parsed = 1;
-          all_ready(m);
-        }
-      }
-    }
+    if (t->es.codec == CODEC_H264 && t->es.spslen && t->es.ppslen)
+      try_parse_h264_hdr(m, t);
+    else if (t->es.codec == CODEC_HEVC && t->es.vpslen && t->es.spslen && t->es.ppslen)
+      try_parse_hevc_hdr(m, t);
   }
   /* undecodable before first keyframe */
   if (key)

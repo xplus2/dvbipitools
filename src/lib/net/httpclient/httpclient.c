@@ -303,6 +303,18 @@ fail:
   return NULL;
 }
 
+/* resolves the redirect target from Location header. 0 ok, -1 failed (reason_out set) */
+static int resolve_redirect(struct http *h, http_url_t *next, net_err_reason_t *reason_out) {
+  const char *loc = http_header(h, "location");
+  if (!loc || resolve_location(next, loc) != 0) {
+    log_line("http: redirect without usable Location");
+    if (reason_out)
+      *reason_out = NET_ERR_FORMAT;
+    return -1;
+  }
+  return 0;
+}
+
 http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure, const char *extra_header, net_err_reason_t *reason_out) {
   http_url_t url = *url_in;
   int redirects;
@@ -313,13 +325,9 @@ http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure,
     if (!h)
       return NULL;
     if ((h->status == 301 || h->status == 302 || h->status == 303 || h->status == 307 || h->status == 308) && redirects < HTTP_REDIRECT_MAX) {
-      const char *loc = http_header(h, "location");
       http_url_t next = url;
-      if (!loc || resolve_location(&next, loc) != 0) {
-        log_line("http: redirect without usable Location");
+      if (resolve_redirect(h, &next, reason_out) != 0) {
         http_close(h);
-        if (reason_out)
-          *reason_out = NET_ERR_FORMAT;
         return NULL;
       }
       http_close(h);

@@ -63,7 +63,9 @@ int listen_run(const config_t *cfg) {
   double deadline;
   bcg_doc_t doc;
   int have_doc = 0;
+  accessunit_scratch_t sc;
 
+  accessunit_scratch_init(&sc);
   mcast_describe(cfg, mcast, sizeof mcast);
   m = mcast_open(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, 500);
   if (!m) {
@@ -118,7 +120,7 @@ int listen_run(const config_t *cfg) {
       continue;
     }
     bcg_doc_init(&candidate);
-    if (accessunit_decode(&br, &sr, &candidate, &nfuu)) {
+    if (accessunit_decode(&sc, &br, &sr, &candidate, &nfuu)) {
       bcg_doc_free(&candidate);
       free(unwrapped);
       continue;
@@ -146,6 +148,7 @@ int listen_run(const config_t *cfg) {
       write_csvmap(cfg->csvmap_path, &doc);
   }
 
+  accessunit_scratch_free(&sc);
   dvbstp_reasm_free(r);
   mcast_close(m);
   bcg_doc_free(&doc);

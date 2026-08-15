@@ -37,10 +37,9 @@ static int split_userinfo(const char *uri, char *token_out, size_t token_out_sz,
   scheme_len = (size_t)(scheme_end - uri) + 3;
   at = strchr(scheme_end + 3, '@');
   if (!at) {
-    if (strlen(uri) >= uri_out_sz)
+    if (bufcpy(uri_out, uri_out_sz, uri) >= uri_out_sz)
       return -1;
     token_out[0] = '\0';
-    strcpy(uri_out, uri);
     return 0;
   }
 
@@ -52,7 +51,7 @@ static int split_userinfo(const char *uri, char *token_out, size_t token_out_sz,
     memcpy(token_out, scheme_end + 3, tlen);
     token_out[tlen] = '\0';
     memcpy(uri_out, uri, scheme_len);
-    strcpy(uri_out + scheme_len, at + 1);
+    bufcpy(uri_out + scheme_len, uri_out_sz - scheme_len, at + 1);
   }
   return 0;
 }
@@ -124,8 +123,6 @@ int ipiclient_poll(ipiclient_t *c, emmcache_t *cache, device_state_t *d) {
     }
   }
   http_close(h);
-
-  /* todo: some more generic (JSON (?)) payload handler. configurable. for now: data dump is universal. */
   off = 0;
   while (off + 3 <= len) {
     size_t ulen = ((size_t)body[off + 1] << 8) | body[off + 2];

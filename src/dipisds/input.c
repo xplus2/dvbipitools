@@ -26,7 +26,12 @@ static int read_whole_file(const char *path, unsigned char **out, size_t *out_le
   unsigned char *buf;
   if (!f)
     return -1;
-  if (fseek(f, 0, SEEK_END) || (sz = ftell(f)) < 0) {
+  if (fseek(f, 0, SEEK_END)) {
+    fclose(f);
+    return -1;
+  }
+  sz = ftell(f);
+  if (sz < 0) {
     fclose(f);
     return -1;
   }
@@ -202,6 +207,15 @@ static int load_m3u(FILE *f, input_t *in) {
   return 0;
 }
 
+/* copies [tb,te) into title, truncating to fit */
+static void copy_title_field(char *title, size_t title_cap, const char *tb, const char *te) {
+  size_t n = (size_t)(te - tb);
+  if (n >= title_cap)
+    n = title_cap - 1;
+  memcpy(title, tb, n);
+  title[n] = '\0';
+}
+
 static int load_xspf(input_t *in, const unsigned char *buf) {
   const char *p = (const char *)buf;
   int idx = 0;
@@ -247,13 +261,8 @@ static int load_xspf(input_t *in, const unsigned char *buf) {
       const char *te;
       tb += 7;
       te = strstr(tb, "</title>");
-      if (te && te <= end) {
-        size_t n = (size_t)(te - tb);
-        if (n >= sizeof title)
-          n = sizeof title - 1;
-        memcpy(title, tb, n);
-        title[n] = '\0';
-      }
+      if (te && te <= end)
+        copy_title_field(title, sizeof title, tb, te);
     }
 
     s = &in->services[idx];
@@ -357,7 +366,7 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
     char *fields[5];
     int nf = 0;
     char *p = line;
-    char *end, *svc;
+    char *end, *svc, *svc_save;
     sds_package_t *pkg;
     size_t l = strlen(line);
     lineno++;
@@ -399,7 +408,7 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
     }
     memcpy(pkg->lang, fields[2], 3);
     pkg->visible = fields[3][0] == '\0' || fields[3][0] == '1';
-    svc = strtok(fields[4], "|");
+    svc = strtok_r(fields[4], "|", &svc_save);
     while (svc) {
       if (pkg->service_count >= SDS_MAX_PKG_SERVICES) {
         fprintf(stderr, TOOL_NAME ": %s: line %d: too many services in package (max %d)\n", path, lineno, SDS_MAX_PKG_SERVICES);
@@ -408,7 +417,7 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
       }
       bufcpy(pkg->service_names[pkg->service_count], sizeof pkg->service_names[0], svc);
       pkg->service_count++;
-      svc = strtok(NULL, "|");
+      svc = strtok_r(NULL, "|", &svc_save);
     }
     if (pkg->service_count == 0) {
       fprintf(stderr, TOOL_NAME ": %s: line %d: package has no services\n", path, lineno);
@@ -432,7 +441,7 @@ int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
     return -1;
   }
   while (fgets(line, sizeof line, f)) {
-    char *tok;
+    char *tok, *tok_save;
     sds_cell_t *cell;
     size_t l = strlen(line);
     lineno++;
@@ -447,21 +456,21 @@ int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
     }
     cell = &out[idx];
     memset(cell, 0, sizeof *cell);
-    tok = strtok(line, ",");
+    tok = strtok_r(line, ",", &tok_save);
     if (!tok) {
       fprintf(stderr, TOOL_NAME ": %s: line %d: expected id,country,type:value,...\n", path, lineno);
       fclose(f);
       return -1;
     }
     bufcpy(cell->id, sizeof cell->id, tok);
-    tok = strtok(NULL, ",");
+    tok = strtok_r(NULL, ",", &tok_save);
     if (!tok || strlen(tok) != 2) {
       fprintf(stderr, TOOL_NAME ": %s: line %d: bad country code: %s\n", path, lineno, tok ? tok : "(missing)");
       fclose(f);
       return -1;
     }
     bufcpy(cell->country, sizeof cell->country, tok);
-    while ((tok = strtok(NULL, ",")) != NULL) {
+    while ((tok = strtok_r(NULL, ",", &tok_save)) != NULL) {
       char *colon = strchr(tok, ':');
       char *end;
       if (!colon) {

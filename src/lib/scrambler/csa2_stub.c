@@ -5,8 +5,6 @@
 
 #include "csa2.h"
 
-/* todo(backlog): libdvbcsa is a quick-start, but we should go AVX-512_BITALG ... some day */
-
 /* built without libdvbcsa: CSA2 scrambling always fails to even acquire a key */
 csa2_key_t *csa2_key_new(const unsigned char cw[CSA2_CW_LEN]) {
   (void)cw;

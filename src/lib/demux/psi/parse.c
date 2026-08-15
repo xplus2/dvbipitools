@@ -9,6 +9,28 @@
 
 #include "priv.h"
 
+/* registers pid as a new PMT candidate for program prog (assumes pid isn't already a
+   candidate). also mirrors into c->multi[] when multi-program mode is on */
+static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
+  if (c->pmt_cand_count < PSI_MAX_PROGRAMS) {
+    pmt_cand_t *cand = &c->pmt_cand[c->pmt_cand_count];
+    memset(cand, 0, sizeof *cand);
+    cand->program_number = prog;
+    cand->pmt_pid = pid;
+    c->pmt_cand_count++;
+    if (c->multi_mode) {
+      psi_multi_program_t *m = &c->multi[c->multi_count];
+      memset(m, 0, sizeof *m);
+      m->program_number = prog;
+      m->pmt_pid = pid;
+      c->multi_count++;
+    }
+  } else if (!c->pmt_cand_overflow_logged) {
+    log_line("psi: more than %d PMT candidates, dropping the rest", PSI_MAX_PROGRAMS);
+    c->pmt_cand_overflow_logged = 1;
+  }
+}
+
 void parse_pat(psi_t *c) {
   const unsigned char *b = c->pat.buf;
   size_t n = c->pat.expect, i, end;
@@ -39,25 +61,8 @@ void parse_pat(psi_t *c) {
       continue;
     if (c->preferred_pmt_pid && pid != c->preferred_pmt_pid)
       continue;
-    if (!find_cand(c, pid)) {
-      if (c->pmt_cand_count < PSI_MAX_PROGRAMS) {
-        pmt_cand_t *cand = &c->pmt_cand[c->pmt_cand_count];
-        memset(cand, 0, sizeof *cand);
-        cand->program_number = prog;
-        cand->pmt_pid = pid;
-        c->pmt_cand_count++;
-        if (c->multi_mode) {
-          psi_multi_program_t *m = &c->multi[c->multi_count];
-          memset(m, 0, sizeof *m);
-          m->program_number = prog;
-          m->pmt_pid = pid;
-          c->multi_count++;
-        }
-      } else if (!c->pmt_cand_overflow_logged) {
-        log_line("psi: more than %d PMT candidates, dropping the rest", PSI_MAX_PROGRAMS);
-        c->pmt_cand_overflow_logged = 1;
-      }
-    }
+    if (!find_cand(c, pid))
+      add_pmt_candidate(c, prog, pid);
   }
   if (c->pat_program_count < PSI_MAX_PROGRAMS)
     c->pat_program_overflow_logged = 0;

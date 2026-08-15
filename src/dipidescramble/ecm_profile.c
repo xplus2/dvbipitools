@@ -6,6 +6,7 @@
 
 #include "lib/argutil.h"
 #include "lib/log.h"
+#include "lib/secure_zero.h"
 
 #include "ecm_profile.h"
 #include "version.h"
@@ -327,6 +328,34 @@ static void build_default_wire_order(const ecm_profile_t *p, ecm_token_list_t *l
   if (has_itag) { l->tok[l->count].kind = ECM_TOK_INTEGRITY_TAG; l->tok[l->count].id[0] = 0; l->count++; }
 }
 
+static int validate_cw_group(const ecm_token_list_t *cwg) {
+  int has_cw = 0, has_cpn = 0;
+  int i;
+  for (i = 0; i < cwg->count; i++) {
+    if (cwg->tok[i].kind == ECM_TOK_CW) {
+      if (has_cw) {
+        log_line(TOOL_NAME ": --ecm-profile: cw_group: cw appears more than once");
+        return -1;
+      }
+      has_cw = 1;
+    } else if (cwg->tok[i].kind == ECM_TOK_CP_NUMBER) {
+      if (has_cpn) {
+        log_line(TOOL_NAME ": --ecm-profile: cw_group: cp_number appears more than once");
+        return -1;
+      }
+      has_cpn = 1;
+    } else {
+      log_line(TOOL_NAME ": --ecm-profile: cw_group may only contain cp_number and/or cw");
+      return -1;
+    }
+  }
+  if (!has_cw) {
+    log_line(TOOL_NAME ": --ecm-profile: cw_group must contain cw");
+    return -1;
+  }
+  return 0;
+}
+
 int ecm_profile_validate(ecm_profile_t *p) {
   int i, j;
   int is_ecb = cipher_is_ecb(p->cipher), is_cbc = cipher_is_cbc(p->cipher), is_gcm = cipher_is_gcm(p->cipher);
@@ -378,16 +407,11 @@ int ecm_profile_validate(ecm_profile_t *p) {
     return -1;
 
   if (p->cw_count > 1) {
-    int has_cw = 0, has_cpn = 0;
     if (p->format.cw_group.count == 0) {
       log_line(TOOL_NAME ": --ecm-profile: cw_count>1 needs format.cw_group set"); return -1;
     }
-    for (i = 0; i < p->format.cw_group.count; i++) {
-      if (p->format.cw_group.tok[i].kind == ECM_TOK_CW) { if (has_cw) { log_line(TOOL_NAME ": --ecm-profile: cw_group: cw appears more than once"); return -1; } has_cw = 1; }
-      else if (p->format.cw_group.tok[i].kind == ECM_TOK_CP_NUMBER) { if (has_cpn) { log_line(TOOL_NAME ": --ecm-profile: cw_group: cp_number appears more than once"); return -1; } has_cpn = 1; }
-      else { log_line(TOOL_NAME ": --ecm-profile: cw_group may only contain cp_number and/or cw"); return -1; }
-    }
-    if (!has_cw) { log_line(TOOL_NAME ": --ecm-profile: cw_group must contain cw"); return -1; }
+    if (validate_cw_group(&p->format.cw_group) != 0)
+      return -1;
   } else if (p->format.cw_group.count != 0) {
     log_line(TOOL_NAME ": --ecm-profile: cw_group is only legal when cw_count>1"); return -1;
   }
@@ -454,6 +478,18 @@ int ecm_profile_validate(ecm_profile_t *p) {
   return 0;
 }
 
+static size_t cw_group_unit_len(const ecm_token_list_t *cwg, int cw_len) {
+  size_t unit = 0;
+  int j;
+  for (j = 0; j < cwg->count; j++) {
+    if (cwg->tok[j].kind == ECM_TOK_CW)
+      unit += (size_t)cw_len;
+    else if (cwg->tok[j].kind == ECM_TOK_CP_NUMBER)
+      unit += 2;
+  }
+  return unit;
+}
+
 int ecm_profile_layout(const ecm_profile_t *p, int cw_len, ecm_layout_t *out) {
   size_t plaintext_len = 0, block = (size_t)cipher_block_size(p->cipher);
   int is_gcm = cipher_is_gcm(p->cipher), is_cbc = cipher_is_cbc(p->cipher);
@@ -471,16 +507,9 @@ int ecm_profile_layout(const ecm_profile_t *p, int cw_len, ecm_layout_t *out) {
     case ECM_TOK_ECM_ID: plaintext_len += 2; break;
     case ECM_TOK_CP_NUMBER: plaintext_len += 2; break;
     case ECM_TOK_CW: plaintext_len += (size_t)cw_len; break;
-    case ECM_TOK_CW_GROUP: {
-      size_t unit = 0;
-      int j;
-      for (j = 0; j < p->format.cw_group.count; j++) {
-        if (p->format.cw_group.tok[j].kind == ECM_TOK_CW) unit += (size_t)cw_len;
-        else if (p->format.cw_group.tok[j].kind == ECM_TOK_CP_NUMBER) unit += 2;
-      }
-      plaintext_len += unit * (size_t)p->cw_count;
+    case ECM_TOK_CW_GROUP:
+      plaintext_len += cw_group_unit_len(&p->format.cw_group, cw_len) * (size_t)p->cw_count;
       break;
-    }
     case ECM_TOK_INTEGRITY_TAG: plaintext_len += itag_len; break;
     default: break;
     }
@@ -590,6 +619,25 @@ static int compute_tag(const ecm_profile_t *p, const unsigned char mac_key[CRYPT
   }
 }
 
+/* one cw_group's worth of tokens for a single combo, advancing *off. cp_number
+   falls back to cp_number_outer + combo index (mod 65536) if not carried in the group */
+static void extract_cw_group_combo(const ecm_token_list_t *cwg, const unsigned char *plaintext, size_t *off, int cw_len,
+                                    ecm_cw_combo_t *combo, unsigned cp_number_fallback) {
+  int j, has_cpn = 0;
+  for (j = 0; j < cwg->count; j++) {
+    if (cwg->tok[j].kind == ECM_TOK_CP_NUMBER) {
+      has_cpn = 1;
+      combo->cp_number = ((unsigned)plaintext[*off] << 8) | plaintext[*off + 1];
+      *off += 2;
+    } else if (cwg->tok[j].kind == ECM_TOK_CW) {
+      memcpy(combo->cw, plaintext + *off, (size_t)cw_len);
+      *off += (size_t)cw_len;
+    }
+  }
+  if (!has_cpn)
+    combo->cp_number = cp_number_fallback;
+}
+
 int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned char sk[CRYPTO_KEY_LEN], const unsigned char *wire, size_t wire_len, unsigned cp_number_outer,
                            unsigned ecm_id_fallback, ecm_cw_combo_t combos[ECM_PROFILE_CW_MAX], int *combo_count) {
   ecm_layout_t lay;
@@ -627,11 +675,11 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
     if (crypto_hkdf_sha256(sk, p->key_derivation.short_key_info, sep) != 0)
       return -1;
     memcpy(enc_key, sep, klen);
-    memset(sep, 0, sizeof sep);
+    secure_zero(sep, sizeof sep);
   } else {
     memcpy(enc_key, full_enc_key, klen);
   }
-  memset(full_enc_key, 0, sizeof full_enc_key);
+  secure_zero(full_enc_key, sizeof full_enc_key);
 
   if (is_gcm || is_cbc) {
     size_t ivlen = is_gcm ? (size_t)CRYPTO_GCM_NONCE_LEN : block;
@@ -666,7 +714,7 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
     if (crypto_ecm_block_decrypt(cipher_to_crypto(p->cipher), is_cbc, enc_key, is_cbc ? iv : NULL, ct_ptr, lay.ciphertext_len, plaintext) != 0)
       return -1;
   }
-  memset(enc_key, 0, sizeof enc_key);
+  secure_zero(enc_key, sizeof enc_key);
 
   if (p->integrity.type != ECM_INTEGRITY_NONE && p->integrity.order == ECM_INTEGRITY_BEFORE_ENCRYPT) {
     unsigned char tag[CRYPTO_HMAC_SHA256_LEN];
@@ -676,7 +724,7 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
     if (tag_len != integrity_tag_wire_len(p) || memcmp(tag, plaintext + data_len, tag_len) != 0)
       return -1;
   }
-  memset(mac_key, 0, sizeof mac_key);
+  secure_zero(mac_key, sizeof mac_key);
   *combo_count = 0;
   off = 0;
   combos[0].cp_number = cp_number_outer; /* default when field_order doesn't carry cp_number at all */
@@ -700,22 +748,8 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
       break;
     case ECM_TOK_CW_GROUP: {
       int c;
-      for (c = 0; c < p->cw_count; c++) {
-        int j, has_cpn_in_group = 0;
-        for (j = 0; j < p->format.cw_group.count; j++) {
-          if (p->format.cw_group.tok[j].kind == ECM_TOK_CP_NUMBER) {
-            has_cpn_in_group = 1;
-            combos[c].cp_number = ((unsigned)plaintext[off] << 8) | plaintext[off + 1];
-            off += 2;
-          } else if (p->format.cw_group.tok[j].kind == ECM_TOK_CW) {
-            memcpy(combos[c].cw, plaintext + off, (size_t)cw_len);
-            off += (size_t)cw_len;
-          }
-        }
-        if (!has_cpn_in_group)
-          /* not per combo: cp_number rolls forward from outer/first, mod 65536, matching modulo-256 rolling cp_number (widened) */
-          combos[c].cp_number = (cp_number_outer + (unsigned)c) & 0xFFFFu;
-      }
+      for (c = 0; c < p->cw_count; c++)
+        extract_cw_group_combo(&p->format.cw_group, plaintext, &off, cw_len, &combos[c], (cp_number_outer + (unsigned)c) & 0xFFFFu);
       *combo_count = p->cw_count;
       break;
     }
@@ -723,6 +757,6 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
     default: break;
     }
   }
-  memset(plaintext, 0, sizeof plaintext);
+  secure_zero(plaintext, sizeof plaintext);
   return *combo_count > 0 ? 0 : -1;
 }

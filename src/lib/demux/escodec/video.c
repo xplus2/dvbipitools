@@ -4,6 +4,23 @@
 #include <string.h>
 #include "escodec.h"
 
+/* skips one scaling list (H.264 SPS scaling_list()): sz entries, delta-coded, wraps mod 256 */
+static void skip_scaling_list(br_t *b, int sz) {
+  int j, last = 8, next = 8;
+  for (j = 0; j < sz; j++) {
+    if (next)
+      next = (last + br_se(b) + 256) % 256;
+    last = next ? next : last;
+  }
+}
+
+static void skip_scaling_matrices(br_t *b, int n) {
+  int k;
+  for (k = 0; k < n; k++)
+    if (br_u(b, 1))
+      skip_scaling_list(b, (k < 6) ? 16 : 64);
+}
+
 /* H.264 SPS -> dimensions */
 int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
   unsigned char rb[ESCODEC_PS_MAX];
@@ -35,18 +52,8 @@ int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
     br_ue(&b);
     br_ue(&b);
     br_u(&b, 1);
-    if (br_u(&b, 1)) { /* scaling matrices */
-      int n = (chroma != 3) ? 8 : 12, k, j;
-      for (k = 0; k < n; k++)
-        if (br_u(&b, 1)) {
-          int sz = (k < 6) ? 16 : 64, last = 8, next = 8;
-          for (j = 0; j < sz; j++) {
-            if (next)
-              next = (last + br_se(&b) + 256) % 256;
-            last = next ? next : last;
-          }
-        }
-    }
+    if (br_u(&b, 1)) /* scaling matrices */
+      skip_scaling_matrices(&b, (chroma != 3) ? 8 : 12);
   }
   br_ue(&b); /* log2_max_frame_num_minus4 */
   poc = br_ue(&b);

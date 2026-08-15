@@ -135,6 +135,37 @@ static http_async_state_t async_after_headers(http_async_t *a, net_err_reason_t 
   return HTTP_ASYNC_DONE;
 }
 
+/* starts the async TLS handshake. 0: pending (a->phase updated). -1: failed (reason_out set) */
+static int start_tls(http_async_t *a, struct http *h, net_err_reason_t *reason_out) {
+  h->tls = tls_connect_start(h->fd, h->url.host, a->insecure);
+  if (!h->tls) {
+    if (reason_out) /* already logged */
+      *reason_out = NET_ERR_TLS;
+    return -1;
+  }
+  a->phase = HA_TLS_HANDSHAKE;
+  a->want_events = POLLOUT; /* SSL_connect()'s first move is normally outbound */
+  return 0;
+}
+
+/* drains a->reqbuf into h. 1: fully sent. 0: pending (POLLOUT armed). -1: error (reason_out set) */
+static int send_request_buf(http_async_t *a, struct http *h, net_err_reason_t *reason_out) {
+  while (a->req_sent < a->req_len) {
+    ssize_t n = raw_send_nb(h, a->reqbuf + a->req_sent, a->req_len - a->req_sent);
+    if (n < 0) {
+      if (reason_out)
+        *reason_out = NET_ERR_READ;
+      return -1;
+    }
+    if (n == 0) {
+      a->want_events = POLLOUT;
+      return 0;
+    }
+    a->req_sent += (size_t)n;
+  }
+  return 1;
+}
+
 http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out) {
   struct http *h = a->h;
 
@@ -147,14 +178,8 @@ http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out
       return HTTP_ASYNC_ERROR;
     }
     if (h->url.tls) {
-      h->tls = tls_connect_start(h->fd, h->url.host, a->insecure);
-      if (!h->tls) {
-        if (reason_out) /* already logged */
-          *reason_out = NET_ERR_TLS;
+      if (start_tls(a, h, reason_out) != 0)
         return HTTP_ASYNC_ERROR;
-      }
-      a->phase = HA_TLS_HANDSHAKE;
-      a->want_events = POLLOUT; /* SSL_connect()'s first move is normally outbound */
       return HTTP_ASYNC_PENDING;
     }
     if (async_build_request(a) != 0) {
@@ -193,19 +218,11 @@ http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out
   }
 
   if (a->phase == HA_SENDING) {
-    while (a->req_sent < a->req_len) {
-      ssize_t n = raw_send_nb(h, a->reqbuf + a->req_sent, a->req_len - a->req_sent);
-      if (n < 0) {
-        if (reason_out)
-          *reason_out = NET_ERR_READ;
-        return HTTP_ASYNC_ERROR;
-      }
-      if (n == 0) {
-        a->want_events = POLLOUT;
-        return HTTP_ASYNC_PENDING;
-      }
-      a->req_sent += (size_t)n;
-    }
+    int r = send_request_buf(a, h, reason_out);
+    if (r < 0)
+      return HTTP_ASYNC_ERROR;
+    if (r == 0)
+      return HTTP_ASYNC_PENDING;
     a->phase = HA_READING_HEADERS;
     a->want_events = POLLIN;
     return HTTP_ASYNC_PENDING;

@@ -4,7 +4,7 @@
 # sourced by integration test scripts, not run directly
 # caller sets BIN from $1 before sourcing
 
-if [ -z "${BIN:-}" ] || [ ! -x "$BIN" ]; then
+if [[ -z "${BIN:-}" ]] || [[ ! -x "$BIN" ]]; then
     echo "FAIL: no executable binary given as \$1 ($BIN)" >&2
     exit 1
 fi
@@ -24,7 +24,7 @@ run_expect_rc() {
     shift 2
     "$@"
     got=$?
-    if [ "$got" != "$want" ]; then
+    if [[ "$got" != "$want" ]]; then
         fail "$label: expected exit $want, got $got"
     fi
 }

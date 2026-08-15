@@ -33,6 +33,25 @@ struct listen_pool {
   atomic_int stop;
 };
 
+/* drains pending datagrams on w->fd until EAGAIN/EWOULDBLOCK or an unrecoverable error */
+static void drain_worker_socket(worker_t *w, unsigned char *buf, size_t buflen) {
+  for (;;) {
+    struct sockaddr_storage from;
+    socklen_t fromlen = sizeof from;
+    ssize_t r = recvfrom(w->fd, buf, buflen, 0, (struct sockaddr *)&from, &fromlen);
+    if (r < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK)
+        return;
+      if (errno == EINTR)
+        continue;
+      log_line(TOOL_NAME ": recv: %s", strerror(errno));
+      return;
+    }
+    if (w->cb)
+      w->cb(buf, (size_t)r, w->fd, (struct sockaddr *)&from, fromlen, w->user);
+  }
+}
+
 static void *worker_main(void *arg) {
   worker_t *w = (worker_t *)arg;
   unsigned char buf[2048];
@@ -42,21 +61,7 @@ static void *worker_main(void *arg) {
     int n = epoll_wait(w->epfd, &ev, 1, 100);
     if (n <= 0)
       continue;
-    for (;;) {
-      struct sockaddr_storage from;
-      socklen_t fromlen = sizeof from;
-      ssize_t r = recvfrom(w->fd, buf, sizeof buf, 0, (struct sockaddr *)&from, &fromlen);
-      if (r < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-          break;
-        if (errno == EINTR)
-          continue;
-        log_line(TOOL_NAME ": recv: %s", strerror(errno));
-        break;
-      }
-      if (w->cb)
-        w->cb(buf, (size_t)r, w->fd, (struct sockaddr *)&from, fromlen, w->user);
-    }
+    drain_worker_socket(w, buf, sizeof buf);
   }
   return NULL;
 }
@@ -188,6 +193,25 @@ struct listen_multi {
   void *user;
 };
 
+/* drains pending datagrams on fd until EAGAIN/EWOULDBLOCK or an unrecoverable error */
+static void drain_multi_worker_socket(listen_multi_t *p, int fd, size_t slot, unsigned char *buf, size_t buflen) {
+  for (;;) {
+    struct sockaddr_storage from;
+    socklen_t fromlen = sizeof from;
+    ssize_t r = recvfrom(fd, buf, buflen, 0, (struct sockaddr *)&from, &fromlen);
+    if (r < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK)
+        return;
+      if (errno == EINTR)
+        continue;
+      log_line(TOOL_NAME ": resolve recv: %s", strerror(errno));
+      return;
+    }
+    if (p->cb)
+      p->cb(buf, (size_t)r, slot, fd, (struct sockaddr *)&from, fromlen, p->user);
+  }
+}
+
 static void *multi_worker_main(void *arg) {
   listen_multi_t *p = (listen_multi_t *)arg;
   unsigned char buf[2048];
@@ -199,21 +223,7 @@ static void *multi_worker_main(void *arg) {
     for (e = 0; e < n; e++) {
       size_t slot = (size_t)events[e].data.u64;
       int fd = p->fds[slot];
-      for (;;) {
-        struct sockaddr_storage from;
-        socklen_t fromlen = sizeof from;
-        ssize_t r = recvfrom(fd, buf, sizeof buf, 0, (struct sockaddr *)&from, &fromlen);
-        if (r < 0) {
-          if (errno == EAGAIN || errno == EWOULDBLOCK)
-            break;
-          if (errno == EINTR)
-            continue;
-          log_line(TOOL_NAME ": resolve recv: %s", strerror(errno));
-          break;
-        }
-        if (p->cb)
-          p->cb(buf, (size_t)r, slot, fd, (struct sockaddr *)&from, fromlen, p->user);
-      }
+      drain_multi_worker_socket(p, fd, slot, buf, sizeof buf);
     }
   }
   return NULL;

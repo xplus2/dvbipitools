@@ -23,6 +23,20 @@ static void reap_worker_slot(cs378x_server_t *s, int slot) {
   s->worker_thread_joinable[slot] = 0;
 }
 
+static void log_unknown_command(const unsigned char *body, size_t buflen, int slot) {
+  static const char hex_nib[] = "0123456789ABCDEF";
+  size_t dumplen = buflen + 20 > 32 ? 32 : buflen + 20;
+  char hex[32 * 3 + 1];
+  size_t i;
+  for (i = 0; i < dumplen; i++) {
+    hex[i * 3] = hex_nib[(body[i] >> 4) & 0xF];
+    hex[i * 3 + 1] = hex_nib[body[i] & 0xF];
+    hex[i * 3 + 2] = ' ';
+  }
+  hex[dumplen * 3] = '\0';
+  log_line(TOOL_NAME ": unknown command %d, len=%zu, bytes=%s(slot %d)", body[0], buflen, hex, slot);
+}
+
 /* read n bytes, honoring stop flag between recv() timeouts. 1 ok, 0 stopped, -1 closed/error */
 static int read_exact(int fd, unsigned char *buf, size_t n, atomic_int *stop) {
   size_t got = 0;
@@ -118,19 +132,8 @@ static void *worker_main(void *arg) {
         send_keepalive_answer(s, fd, conn_ucrc);
         break;
       default:
-        if (s->verbose) {
-          static const char hex_nib[] = "0123456789ABCDEF";
-          size_t dumplen = buflen + 20 > 32 ? 32 : buflen + 20;
-          char hex[32 * 3 + 1];
-          size_t i;
-          for (i = 0; i < dumplen; i++) {
-            hex[i * 3] = hex_nib[(body[i] >> 4) & 0xF];
-            hex[i * 3 + 1] = hex_nib[body[i] & 0xF];
-            hex[i * 3 + 2] = ' ';
-          }
-          hex[dumplen * 3] = '\0';
-          log_line(TOOL_NAME ": unknown command %d, len=%zu, bytes=%s(slot %d)", body[0], buflen, hex, slot);
-        }
+        if (s->verbose)
+          log_unknown_command(body, buflen, slot);
         break;
     }
   }

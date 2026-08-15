@@ -77,10 +77,30 @@ static int load_scan(FILE *f, scan_entry_t **out, int *out_n) {
   return 0;
 }
 
+/* returns scan[] index of an exact case-insensitive name match, or -1 */
+static int find_exact_match(const bcg_channel_t *c, const scan_entry_t *scan, int scan_n) {
+  int j, k;
+  for (j = 0; j < scan_n; j++)
+    for (k = 0; k < c->name_count; k++)
+      if (!strcasecmp(c->names[k], scan[j].name))
+        return j;
+  return -1;
+}
+
+/* returns scan[] index of a substring name match, or -1 */
+static int find_fuzzy_match(const bcg_channel_t *c, const scan_entry_t *scan, int scan_n) {
+  int j, k;
+  for (j = 0; j < scan_n; j++)
+    for (k = 0; k < c->name_count; k++)
+      if (ci_contains(scan[j].name, c->names[k]) || ci_contains(c->names[k], scan[j].name))
+        return j;
+  return -1;
+}
+
 int suggest_map(FILE *xmltv_f, FILE *scan_f, FILE *out) {
   bcg_doc_t doc;
   scan_entry_t *scan;
-  int scan_n, i, j, k;
+  int scan_n, i;
 
   bcg_doc_init(&doc);
   if (xmltv_read(xmltv_f, &doc)) {
@@ -96,21 +116,11 @@ int suggest_map(FILE *xmltv_f, FILE *scan_f, FILE *out) {
 
   for (i = 0; i < doc.channel_count; i++) {
     bcg_channel_t *c = &doc.channels[i];
-    int exact = -1, fuzzy = -1;
+    int exact, fuzzy = -1;
     const char *first_name = c->name_count ? c->names[0] : "?";
-    for (j = 0; j < scan_n && exact < 0; j++)
-      for (k = 0; k < c->name_count; k++)
-        if (!strcasecmp(c->names[k], scan[j].name)) {
-          exact = j;
-          break;
-        }
+    exact = find_exact_match(c, scan, scan_n);
     if (exact < 0)
-      for (j = 0; j < scan_n && fuzzy < 0; j++)
-        for (k = 0; k < c->name_count; k++)
-          if (ci_contains(scan[j].name, c->names[k]) || ci_contains(c->names[k], scan[j].name)) {
-            fuzzy = j;
-            break;
-          }
+      fuzzy = find_fuzzy_match(c, scan, scan_n);
 
     if (exact >= 0)
       fprintf(out, "%s,%s,%u,%u,%u\n", c->id, scan[exact].uri, scan[exact].tsid, scan[exact].onid, scan[exact].sid);

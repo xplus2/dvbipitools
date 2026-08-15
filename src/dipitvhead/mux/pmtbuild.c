@@ -115,6 +115,26 @@ static size_t put_subtitling(unsigned char *out, const psi_es_t *e) {
   return 10;
 }
 
+/* appends AC-3/EAC3 registration + ISO 639 language descriptors for an audio ES.
+   returns new n, or (size_t)-1 if it would overflow cap */
+static size_t put_audio_descriptors(unsigned char *out, size_t n, size_t cap, const out_es_t *e) {
+  if (e->src->codec == CODEC_AC3) {
+    if (n + 6 > cap)
+      return (size_t)-1;
+    n += put_registration(out + n, "AC-3");
+  } else if (e->src->codec == CODEC_EAC3) {
+    if (n + 6 > cap)
+      return (size_t)-1;
+    n += put_registration(out + n, "EAC3");
+  }
+  if (e->src->cls == PID_AUDIO && e->src->lang[0]) {
+    if (n + 6 > cap)
+      return (size_t)-1;
+    n += put_iso639(out + n, e->src->lang);
+  }
+  return n;
+}
+
 size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, const unsigned char *prog_desc, size_t prog_desc_len, const out_es_t *es, int es_count, const unsigned char *extra, size_t extra_len, unsigned char *out, size_t cap) {
   size_t n = 0, es_info_pos;
   int i;
@@ -157,20 +177,9 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
         return 0;
       n += put_subtitling(out + n, e->src);
     } else {
-      if (e->src->codec == CODEC_AC3) {
-        if (n + 6 > cap)
-          return 0;
-        n += put_registration(out + n, "AC-3");
-      } else if (e->src->codec == CODEC_EAC3) {
-        if (n + 6 > cap)
-          return 0;
-        n += put_registration(out + n, "EAC3");
-      }
-      if (e->src->cls == PID_AUDIO && e->src->lang[0]) {
-        if (n + 6 > cap)
-          return 0;
-        n += put_iso639(out + n, e->src->lang);
-      }
+      n = put_audio_descriptors(out, n, cap, e);
+      if (n == (size_t)-1)
+        return 0;
     }
 
     esinfo = (unsigned)(n - (es_info_pos + 2));

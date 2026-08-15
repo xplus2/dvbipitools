@@ -164,8 +164,11 @@ channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size
       atomic_store_explicit(&c->in_use, 1, memory_order_release);
 
       t->hash[avail] = i + 1;
-      if (was_empty && ++t->hash_used > (t->hash_size / 4) * 3)
-        chan_hash_rebuild(t);
+      if (was_empty) {
+        t->hash_used++;
+        if (t->hash_used > (t->hash_size / 4) * 3)
+          chan_hash_rebuild(t);
+      }
 
       result = c;
     }

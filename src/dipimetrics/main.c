@@ -46,6 +46,16 @@ static int uds_listen(const char *path) {
   return fd;
 }
 
+static void drain_uds_snapshots(int uds_fd, store_t *store, double now, int verbose) {
+  unsigned char buf[METRICS_MAX_SNAPSHOT_BYTES];
+  for (;;) {
+    ssize_t n = recvfrom(uds_fd, buf, sizeof buf, 0, NULL, NULL);
+    if (n < 0)
+      return;
+    store_ingest(store, buf, (size_t)n, now, verbose);
+  }
+}
+
 int main(int argc, char **argv) {
   config_t cfg;
   args_status_t st;
@@ -94,15 +104,8 @@ int main(int argc, char **argv) {
       break;
     now = mono_seconds();
 
-    if (nready > 0 && (pfds[0].revents & POLLIN)) {
-      unsigned char buf[METRICS_MAX_SNAPSHOT_BYTES];
-      for (;;) {
-        ssize_t n = recvfrom(uds_fd, buf, sizeof buf, 0, NULL, NULL);
-        if (n < 0)
-          break;
-        store_ingest(&store, buf, (size_t)n, now, cfg.verbose);
-      }
-    }
+    if (nready > 0 && (pfds[0].revents & POLLIN))
+      drain_uds_snapshots(uds_fd, &store, now, cfg.verbose);
     if (nready > 0 && (pfds[1].revents & POLLIN))
       http_accept_and_serve(http_fd, &store, now, cfg.verbose);
 

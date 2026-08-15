@@ -340,7 +340,7 @@ static void *burst_race_pacer(void *arg) {
     size_t i, n = 0;
 
     pthread_mutex_lock(&t->lock);
-    for (i = 0; i < t->cap; i++) {
+    for (i = 0; i < t->cap && n < BURST_RACE_CAP; i++) {
       if (!t->slots[i].in_use)
         continue;
       if (!t->slots[i].b) {

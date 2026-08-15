@@ -120,8 +120,51 @@ static int in_chan_alloc_payload(rtmp_in_chan_t *chan) {
   return 0;
 }
 
+static const size_t msg_hdr_size[4] = {11, 7, 3, 0};
+
+/* MESSAGE_HEADER: once fully buffered, resolves the channel and reads the header.
+   0: not enough bytes yet (caller keeps buffering). 1: done (caller advances state). -1: fatal */
+static int step_message_header(struct rtmp *r, rtmp_parser_t *p, size_t need) {
+  unsigned fmt;
+  uint32_t cid;
+
+  if (p->bytes < need)
+    return 0;
+  rtmp_chunk_basic_header_read(p->buffer, &fmt, &cid);
+  p->pkt = in_chan_find(r, cid);
+  if (!p->pkt) {
+    if (fmt != RTMP_CHUNK_FMT_0 && fmt != RTMP_CHUNK_FMT_1)
+      return -1;
+    p->pkt = in_chan_alloc(r, cid);
+    if (!p->pkt)
+      return -1;
+  }
+  p->pkt->header.cid = cid;
+  p->pkt->header.fmt = fmt;
+  rtmp_chunk_message_header_read(p->buffer + p->basic_bytes, &p->pkt->header);
+  return 1;
+}
+
+/* EXTENDED_TIMESTAMP: once fully buffered, updates clock and allocates the payload
+   buffer for a fresh message. 0: not enough bytes yet. 1: done. -1: fatal */
+static int step_extended_timestamp(rtmp_parser_t *p, size_t need, int has_ext) {
+  uint32_t ts;
+
+  if (p->bytes < need)
+    return 0;
+  ts = has_ext ? rtmp_chunk_extended_timestamp_read(p->buffer + msg_hdr_size[p->pkt->header.fmt] + p->basic_bytes) : p->pkt->header.timestamp;
+  if (0 == p->pkt->bytes) {
+    if (RTMP_CHUNK_FMT_0 == p->pkt->header.fmt)
+      p->pkt->clock = ts;
+    else
+      p->pkt->clock += ts;
+    if (in_chan_alloc_payload(p->pkt) != 0)
+      return -1;
+  }
+  return 1;
+}
+
 int rtmp_session_feed(struct rtmp *r, const unsigned char *data, size_t bytes) {
-  static const size_t msg_hdr_size[4] = {11, 7, 3, 0};
   rtmp_parser_t *p = &r->parser;
   size_t offset = 0;
 
@@ -144,25 +187,14 @@ int rtmp_session_feed(struct rtmp *r, const unsigned char *data, size_t bytes) {
 
       case RTMP_PARSE_MESSAGE_HEADER: {
         size_t need = msg_hdr_size[p->buffer[0] >> 6] + p->basic_bytes;
+        int r2;
         while (p->bytes < need && offset < bytes)
           p->buffer[p->bytes++] = data[offset++];
-        if (p->bytes >= need) {
-          unsigned fmt;
-          uint32_t cid;
-          rtmp_chunk_basic_header_read(p->buffer, &fmt, &cid);
-          p->pkt = in_chan_find(r, cid);
-          if (!p->pkt) {
-            if (fmt != RTMP_CHUNK_FMT_0 && fmt != RTMP_CHUNK_FMT_1)
-              return -1;
-            p->pkt = in_chan_alloc(r, cid);
-            if (!p->pkt)
-              return -1;
-          }
-          p->pkt->header.cid = cid;
-          p->pkt->header.fmt = fmt;
-          rtmp_chunk_message_header_read(p->buffer + p->basic_bytes, &p->pkt->header);
+        r2 = step_message_header(r, p, need);
+        if (r2 < 0)
+          return -1;
+        if (r2 == 1)
           p->state = RTMP_PARSE_EXTENDED_TIMESTAMP;
-        }
         break;
       }
 
@@ -171,20 +203,14 @@ int rtmp_session_feed(struct rtmp *r, const unsigned char *data, size_t bytes) {
            timestamp if chunk stream's last full header carried one */
         int has_ext = (p->pkt->header.timestamp == 0xFFFFFF);
         size_t need = msg_hdr_size[p->pkt->header.fmt] + p->basic_bytes + (has_ext ? 4 : 0);
+        int r2;
         while (p->bytes < need && offset < bytes)
           p->buffer[p->bytes++] = data[offset++];
-        if (p->bytes >= need) {
-          uint32_t ts = has_ext ? rtmp_chunk_extended_timestamp_read(p->buffer + msg_hdr_size[p->pkt->header.fmt] + p->basic_bytes) : p->pkt->header.timestamp;
-          if (0 == p->pkt->bytes) {
-            if (RTMP_CHUNK_FMT_0 == p->pkt->header.fmt)
-              p->pkt->clock = ts;
-            else
-              p->pkt->clock += ts;
-            if (in_chan_alloc_payload(p->pkt) != 0)
-              return -1;
-          }
+        r2 = step_extended_timestamp(p, need, has_ext);
+        if (r2 < 0)
+          return -1;
+        if (r2 == 1)
           p->state = RTMP_PARSE_PAYLOAD;
-        }
         break;
       }
 

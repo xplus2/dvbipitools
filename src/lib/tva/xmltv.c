@@ -24,6 +24,20 @@ static void scan_display_names(const char *s, const char *end, bcg_channel_t *c)
   }
 }
 
+/* fills in the remaining programme fields (stop/title/desc/category) once start parsed ok */
+static void fill_programme_details(bcg_programme_t *pr, const char *tag, const char *blk_end) {
+  char stop[BCG_TIME_LEN];
+  pr->stop[0] = '\0';
+  if (xml_attr(tag, blk_end, "stop", stop, sizeof stop) == 0 && xmltv_time_to_iso8601(stop, pr->stop, sizeof pr->stop))
+    pr->stop[0] = '\0';
+  if (xml_elem_text(tag, blk_end, "title", pr->title, sizeof pr->title))
+    pr->title[0] = '\0';
+  if (xml_elem_text(tag, blk_end, "desc", pr->desc, sizeof pr->desc))
+    pr->desc[0] = '\0';
+  if (xml_elem_text(tag, blk_end, "category", pr->category, sizeof pr->category))
+    pr->category[0] = '\0';
+}
+
 int xmltv_read(FILE *f, bcg_doc_t *doc) {
   char *buf;
   size_t len;
@@ -63,7 +77,7 @@ int xmltv_read(FILE *f, bcg_doc_t *doc) {
     const char *tag = strstr(p, "<programme");
     const char *blk_end;
     bcg_programme_t *pr;
-    char start[BCG_TIME_LEN], stop[BCG_TIME_LEN], channel[BCG_ID_LEN];
+    char start[BCG_TIME_LEN], channel[BCG_ID_LEN];
     if (!tag || tag >= end)
       break;
     blk_end = strstr(tag, "</programme>");
@@ -80,15 +94,7 @@ int xmltv_read(FILE *f, bcg_doc_t *doc) {
         fprintf(stderr, "xmltv: skipping programme, bad start time: %s\n", start);
         doc->programme_count--;
       } else {
-        pr->stop[0] = '\0';
-        if (xml_attr(tag, blk_end, "stop", stop, sizeof stop) == 0 && xmltv_time_to_iso8601(stop, pr->stop, sizeof pr->stop))
-          pr->stop[0] = '\0';
-        if (xml_elem_text(tag, blk_end, "title", pr->title, sizeof pr->title))
-          pr->title[0] = '\0';
-        if (xml_elem_text(tag, blk_end, "desc", pr->desc, sizeof pr->desc))
-          pr->desc[0] = '\0';
-        if (xml_elem_text(tag, blk_end, "category", pr->category, sizeof pr->category))
-          pr->category[0] = '\0';
+        fill_programme_details(pr, tag, blk_end);
       }
     }
     p = blk_end + 12;

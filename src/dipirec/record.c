@@ -380,6 +380,14 @@ typedef struct {
   int pace_pcr;       /* 1: this chunk wasn't RTP-framed, pace per packet */
 } stream_ctx_t;
 
+static int write_to_sinks(out_sink_t *sinks, int n_sinks, const unsigned char *buf, size_t len) {
+  int i;
+  for (i = 0; i < n_sinks; i++)
+    if (sink_write(&sinks[i], buf, len))
+      return 1;
+  return 0;
+}
+
 static int stream_cb(void *v, const unsigned char *pkt) {
   stream_ctx_t *c = v;
 
@@ -389,11 +397,9 @@ static int stream_cb(void *v, const unsigned char *pkt) {
   }
   if (c->f) {
     unsigned char o[188];
-    int i;
     if (ts_filter_packet(c->f, pkt, o)) {
-      for (i = 0; i < c->n_sinks; i++)
-        if (sink_write(&c->sinks[i], o, 188))
-          return 1;
+      if (write_to_sinks(c->sinks, c->n_sinks, o, 188))
+        return 1;
       *c->bytes += 188;
     }
     if (ts_filter_bad_track(c->f)) {

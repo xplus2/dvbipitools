@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <sys/socket.h>
 
+#include "lib/net/sockaddr_index.h"
+
 #include "burst.h"
 
 typedef struct {
@@ -25,6 +27,8 @@ typedef struct {
   burst_slot_t *slots;
   size_t cap;
   pthread_mutex_t lock;
+  sockaddr_index_t *index; /* addr->slot, O(1) avg. slots[]/in_use stay authoritative: lookups
+    re-validate against in_use+addr, drop stales */
 } burst_table_t;
 
 typedef enum {

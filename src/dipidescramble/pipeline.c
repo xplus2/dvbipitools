@@ -131,6 +131,34 @@ static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
   lc->packets++;
 }
 
+/* resolves BISS1/E key material into (algo, cw, cw_len); cw aliases cfg->biss1_sw or
+   fills sw_buf, per biss1_sw / biss2_sw / biss2_esw precedence. 0 ok, -1 esw decrypt failed */
+static int resolve_biss1e_key(const config_t *cfg, unsigned char sw_buf[BISS_KEY_LEN],
+                               scramble_algo_t *algo, const unsigned char **cw, size_t *cw_len) {
+  if (cfg->biss1_sw_given) {
+    *algo = SCRAMBLE_ALGO_CSA2;
+    *cw = cfg->biss1_sw;
+    *cw_len = BISS1_KEY_LEN;
+    return 0;
+  }
+  *algo = SCRAMBLE_ALGO_CISSA;
+  *cw = sw_buf;
+  *cw_len = BISS_KEY_LEN;
+  if (cfg->biss2_sw_given) {
+    memcpy(sw_buf, cfg->biss2_sw, BISS_KEY_LEN);
+    return 0;
+  }
+  return biss_esw_decrypt(cfg->biss2_id, cfg->biss2_esw, sw_buf) == 0 ? 0 : -1;
+}
+
+static void setup_unicast_emm(loop_ctx_t *lc) {
+  lc->ipi = ipiclient_new(lc->cfg->unicast_emm_uri, lc->cfg->insecure_tls);
+  if (!lc->ipi)
+    log_line(TOOL_NAME ": invalid -u/--unicast-emm uri, ignoring: %s", lc->cfg->unicast_emm_uri);
+  else if (ipiclient_poll(lc->ipi, lc->cache, lc->dev))
+    emmcache_save(lc->cache, lc->emm_file);
+}
+
 int pkt_cb(void *v, const unsigned char *pkt) {
   loop_ctx_t *lc = v;
   unsigned pid;
@@ -182,21 +210,10 @@ int pkt_cb(void *v, const unsigned char *pkt) {
         lc->fatal = 1;
         return 1;
       }
-      if (lc->cfg->biss1_sw_given) {
-        algo = SCRAMBLE_ALGO_CSA2;
-        cw = lc->cfg->biss1_sw;
-        cw_len = BISS1_KEY_LEN;
-      } else {
-        algo = SCRAMBLE_ALGO_CISSA;
-        cw = sw;
-        cw_len = BISS_KEY_LEN;
-        if (lc->cfg->biss2_sw_given) {
-          memcpy(sw, lc->cfg->biss2_sw, BISS_KEY_LEN);
-        } else if (biss_esw_decrypt(lc->cfg->biss2_id, lc->cfg->biss2_esw, sw) != 0) {
-          log_line(TOOL_NAME ": failed to decrypt --biss2-esw (no OpenSSL in this build?)");
-          lc->fatal = 1;
-          return 1;
-        }
+      if (resolve_biss1e_key(lc->cfg, sw, &algo, &cw, &cw_len) != 0) {
+        log_line(TOOL_NAME ": failed to decrypt --biss2-esw (no OpenSSL in this build?)");
+        lc->fatal = 1;
+        return 1;
       }
       lc->scr = scrambler_new(algo);
       if (!lc->scr) {
@@ -224,13 +241,8 @@ int pkt_cb(void *v, const unsigned char *pkt) {
       }
       if (emmcache_load(lc->cache, lc->dev, lc->emm_file) != 0)
         log_line(TOOL_NAME ": failed to read emm cache %s, continuing without it", lc->emm_file);
-      if (lc->cfg->unicast_emm_uri) {
-        lc->ipi = ipiclient_new(lc->cfg->unicast_emm_uri, lc->cfg->insecure_tls);
-        if (!lc->ipi)
-          log_line(TOOL_NAME ": invalid -u/--unicast-emm uri, ignoring: %s", lc->cfg->unicast_emm_uri);
-        else if (ipiclient_poll(lc->ipi, lc->cache, lc->dev))
-          emmcache_save(lc->cache, lc->emm_file);
-      }
+      if (lc->cfg->unicast_emm_uri)
+        setup_unicast_emm(lc);
       if (algo_from_mode(psi_scrambling_mode(lc->psi), &algo)) {
         lc->scr = scrambler_new(algo);
         lc->cw_len = (int)scrambler_cw_len(algo);

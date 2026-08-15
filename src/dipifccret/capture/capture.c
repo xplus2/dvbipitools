@@ -195,18 +195,36 @@ void capture_close(capture_t *cap) {
 }
 
 int capture_drop_privileges(const char *user) {
-  struct passwd *pw;
+  struct passwd pwbuf, *pw;
+  char *buf;
+  long bufsize;
+  int rc;
   if (!user)
     return 0;
-  pw = getpwnam(user);
-  if (!pw)
+  bufsize = sysconf(_SC_GETPW_R_SIZE_MAX);
+  if (bufsize <= 0)
+    bufsize = 16384;
+  buf = malloc((size_t)bufsize);
+  if (!buf)
     return -1;
-  if (setgid(pw->pw_gid) < 0)
+  rc = getpwnam_r(user, &pwbuf, buf, (size_t)bufsize, &pw);
+  if (rc != 0 || !pw) {
+    free(buf);
     return -1;
-  if (initgroups(pw->pw_name, pw->pw_gid) < 0)
+  }
+  if (setgid(pw->pw_gid) < 0) {
+    free(buf);
     return -1;
-  if (setuid(pw->pw_uid) < 0)
+  }
+  if (initgroups(pw->pw_name, pw->pw_gid) < 0) {
+    free(buf);
     return -1;
+  }
+  if (setuid(pw->pw_uid) < 0) {
+    free(buf);
+    return -1;
+  }
+  free(buf);
   return 0;
 }
 

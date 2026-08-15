@@ -174,6 +174,21 @@ int state_load(const config_t *cfg, sds_state_t *st) {
   return 0;
 }
 
+static void reload_state(const config_t *cfg, sds_state_t *st, sds_metrics_t *sm, int metrics_on) {
+  sds_state_t next;
+  if (state_load(cfg, &next)) {
+    log_line("reload failed, keeping previous input");
+    if (metrics_on)
+      sm->document_errors_total++;
+    return;
+  }
+  state_free(st);
+  *st = next;
+  log_line("reloaded %s: %d service%s", cfg->input_path, st->in.service_count, st->in.service_count == 1 ? "" : "s");
+  if (metrics_on)
+    sm->documents_generated_total++;
+}
+
 int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
   sds_state_t st;
   mcast_t *m;
@@ -204,20 +219,8 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
   while (!signal_stop_requested()) {
     int ok;
 
-    if (signal_reload_requested()) {
-      sds_state_t next;
-      if (state_load(cfg, &next)) {
-        log_line("reload failed, keeping previous input");
-        if (metrics_on)
-          sm.document_errors_total++;
-      } else {
-        state_free(&st);
-        st = next;
-        log_line("reloaded %s: %d service%s", cfg->input_path, st.in.service_count, st.in.service_count == 1 ? "" : "s");
-        if (metrics_on)
-          sm.documents_generated_total++;
-      }
-    }
+    if (signal_reload_requested())
+      reload_state(cfg, &st, &sm, metrics_on);
 
     if (st.in.kind == INPUT_RAW_XML) {
       ok = dvbstp_send_segment(m, st.in.raw_payload_id, 1, 1, 0, 0, 0, 1, st.in.raw_xml, st.in.raw_xml_len) == 0;

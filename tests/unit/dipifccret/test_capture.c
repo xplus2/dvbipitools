@@ -298,6 +298,22 @@ START_TEST(capture_truncated_frame_rejected) {
 }
 END_TEST
 
+/* BPF_LD|BPF_ABS: loads a word/halfword from pkt at f->k into *a. 0 ok, -1: out of bounds */
+static int bpf_load_abs(const struct sock_filter *f, unsigned size, const unsigned char *pkt, size_t len, uint32_t *a) {
+  if (size == BPF_W) {
+    if (f->k + 4 > len)
+      return -1;
+    *a = ((uint32_t)pkt[f->k] << 24) | ((uint32_t)pkt[f->k + 1] << 16) | ((uint32_t)pkt[f->k + 2] << 8) | pkt[f->k + 3];
+  } else if (size == BPF_H) {
+    if (f->k + 2 > len)
+      return -1;
+    *a = ((uint32_t)pkt[f->k] << 8) | pkt[f->k + 1];
+  } else {
+    ck_abort_msg("unsupported BPF load size");
+  }
+  return 0;
+}
+
 /* minimal classic-BPF interpreter covering exactly opcodes capture_build_bpf emits */
 static uint32_t bpf_run(const struct sock_filter *insns, size_t n, const unsigned char *pkt, size_t len) {
   size_t pc = 0;
@@ -309,17 +325,8 @@ static uint32_t bpf_run(const struct sock_filter *insns, size_t n, const unsigne
 
     if ((code & 0x07) == BPF_LD && (code & 0xe0) == BPF_ABS) {
       unsigned size = code & 0x18;
-      if (size == BPF_W) {
-        if (f->k + 4 > len)
-          return 0;
-        a = ((uint32_t)pkt[f->k] << 24) | ((uint32_t)pkt[f->k + 1] << 16) | ((uint32_t)pkt[f->k + 2] << 8) | pkt[f->k + 3];
-      } else if (size == BPF_H) {
-        if (f->k + 2 > len)
-          return 0;
-        a = ((uint32_t)pkt[f->k] << 8) | pkt[f->k + 1];
-      } else {
-        ck_abort_msg("unsupported BPF load size");
-      }
+      if (bpf_load_abs(f, size, pkt, len, &a) != 0)
+        return 0;
       pc++;
     } else if (code == (BPF_ALU | BPF_AND | BPF_K)) {
       a &= f->k;

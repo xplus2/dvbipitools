@@ -39,6 +39,10 @@ static tls_t *tls_setup(int fd, const char *host, int insecure) {
     log_ssl_error("SSL_CTX_new");
     goto fail;
   }
+  if (SSL_CTX_set_min_proto_version(t->ctx, TLS1_2_VERSION) != 1) {
+    log_ssl_error("SSL_CTX_set_min_proto_version");
+    goto fail;
+  }
   if (insecure) {
     SSL_CTX_set_verify(t->ctx, SSL_VERIFY_NONE, NULL);
   } else {

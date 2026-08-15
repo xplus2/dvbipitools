@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "lib/log.h"
+#include "lib/secure_zero.h"
 
 #include "crypto.h"
 #include "device.h"
@@ -173,6 +174,6 @@ int device_resolve_cw(device_state_t *d, const unsigned char *ecm, size_t ecm_le
     memcpy(cw_out, cw, (size_t)cw_len);
     memcpy(cw_out + cw_len, cw, (size_t)cw_len);
   }
-  memset(cw, 0, sizeof cw);
+  secure_zero(cw, sizeof cw);
   return 0;
 }
