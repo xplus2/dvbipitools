@@ -228,11 +228,14 @@ static int rtmp_fanout_open(const config_t *cfg, rtmp_fanout_t *r) {
 
 static void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len) {
   rtmp_fanout_t *r = ctx;
+  static const char *const labels[DIPIREC_MAX_OUT] = {
+    "rtmp[0]", "rtmp[1]", "rtmp[2]", "rtmp[3]",
+    "rtmp[4]", "rtmp[5]", "rtmp[6]", "rtmp[7]"
+  };
   int i;
-  char label[16];
+
   for (i = 0; i < r->n; i++) {
-    snprintf(label, sizeof label, "rtmp[%d]", i);
-    note_send_result(rtmpout_write(r->out[i], type, timestamp_ms, data, len) >= 0, &r->had_error[i], label);
+    note_send_result(rtmpout_write(r->out[i], type, timestamp_ms, data, len) >= 0, &r->had_error[i], labels[i]);
   }
 }
 
