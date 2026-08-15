@@ -57,7 +57,7 @@ jobs:
     - name: upload report
       if: always()
       uses: actions/upload-artifact@b770512530a57497d5a5701eb9464e837e29b139 # v5.0.0
-    with:
+      with:
         name: cppcheck-report
         path: cppcheck-report.txt
 
@@ -125,6 +125,6 @@ jobs:
           results_format: sarif
           publish_results: true
       - name: "Upload to code-scanning"
-        uses: github/codeql-action/upload-sarif@f3712975971ce207a66699394073289066601f05 # v3.37.7
+        uses: github/codeql-action/upload-sarif@df518292f3984e1837f48b948797f1f0a0d4a9ec # v3.28.10
         with:
           sarif_file: results.sarif
