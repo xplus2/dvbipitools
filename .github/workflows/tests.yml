@@ -119,12 +119,12 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: OSSF Scorecard action
-        uses: ossf/scorecard-action@62eecd7111330fd059811dd69e626761ed4837ff
+        uses: ossf/scorecard-action@62eecd7111330fd059811dd69e626761ed4837ff # v2.4.4
         with:
           results_file: results.sarif
           results_format: sarif
           publish_results: true
       - name: "Upload to code-scanning"
-        uses: github/codeql-action/upload-sarif@df518292f3984e1837f48b948797f1f0a0d4a9ec
+        uses: github/codeql-action/upload-sarif@df518292f3984e1837f48b948797f1f0a0d4a9ec # v3.28.10
         with:
           sarif_file: results.sarif
