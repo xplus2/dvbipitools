@@ -110,21 +110,6 @@ jobs:
         name: fuzz-smoke-crashes
         path: afl-out/*/default/crashes
         if-no-files-found: ignore
-        
-  scorecard:
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: OSSF Scorecard action
-        uses: ossf/scorecard-action@v2.4.4
-        with:
-          results_file: results.sarif
-          results_format: sarif
-          publish_results: true
-      - name: "Upload to code-scanning"
-        uses: github/codeql-action/upload-sarif@v3
+
         with:
           sarif_file: results.sarif
