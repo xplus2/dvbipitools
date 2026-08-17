@@ -1,0 +1,233 @@
+.TH DIPIREC 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipirec \- record a DVB-IPI stream to a file or stdout
+.SH SYNOPSIS
+.B dipirec
+.B \-i
+.I <uri>
+.B \-o
+.I <target>
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B dipirec
+records a DVB-IPI transport stream to a file, stdout, multicast, a RIST
+peer, or an RTMP(S) ingest server. Output is repeatable
+.RB ( \-o )
+so several destinations can be fed from a single source at once.
+.PP
+Sources accepted by
+.B \-i
+are:
+.RS
+.IP \(bu 2
+.B rtp://@<group>:<port>
+\- RTP wrapped SPTS multicast (the \fB@\fR is optional)
+.IP \(bu 2
+.B udp://@<group>:<port>
+\- raw SPTS multicast (the \fB@\fR is optional)
+.IP \(bu 2
+.B http://<host>:<port>/<cmd>/<group>:<port>/
+\- a udpxy proxy, where \fIcmd\fR is \fBrtp\fR or \fBudp\fR (also \fB%\fR
+and \fB~\fR forms)
+.IP \(bu 2
+.B \-
+\- stdin, plain TS or RTP-wrapped TS, auto-detected
+.IP \(bu 2
+.I <path>
+\- a file, plain TS or RTP-wrapped TS, auto-detected
+.IP \(bu 2
+IPv6 groups are given in brackets, e.g.
+.B rtp://@[ff3e::1]:8700
+.RE
+.PP
+Output targets accepted by
+.B \-o
+are a plain file path or
+.B \-
+for stdout, plus:
+.RS
+.IP \(bu 2
+.B rtp://@<group>:<port>
+\- RTP-wrapped multicast (\fB\-f raw\fR or \fB\-f ts\fR only)
+.IP \(bu 2
+.B udp://@<group>:<port>
+\- raw multicast, no RTP header (\fB\-f raw\fR or \fB\-f ts\fR only)
+.IP \(bu 2
+.B rist://<host>:<port>[?query]
+\- single-peer RIST sender (\fB\-f raw\fR or \fB\-f ts\fR only, requires
+librist)
+.IP \(bu 2
+.B rtmp(s)://<host>[:port]/<app>/<key>
+\- RTMP(S) publish; H.264/HEVC video, AC-3/E-AC-3/AAC audio
+.RE
+.PP
+The
+.B \-f
+option selects the recording format: \fBraw\fR (RTP unwrapped only,
+transport stream otherwise untouched), \fBts\fR (single program transport
+stream, drops stuffing/NIT/EIT/AIT/CA-EMM, keeps SDT, rewrites PAT/PMT),
+.B mkv
+(Matroska with H.264/HEVC video and AC3/EAC3/MP2/MP3/AAC/AAC-LATM audio) or
+.B mka
+(Matroska, audio only). Without \fB\-f\fR the format is taken from the
+.B \-o
+file suffix, defaulting to \fBts\fR.
+.PP
+.B mkv
+and
+.B mka
+containers and \fBsrt\fR subtitles decoded from EBU Teletext are additions
+beyond the DVB-IPI specification, as is udpxy proxy support.
+.SH OPTIONS
+.TP
+.BR \-o ", " \-\-out\ \fI<target>\fR
+Output, repeatable: a file, \fB\-\fR for stdout, or an
+\fBrtp://\fR/\fBudp://\fR/\fBrist://\fR/\fBrtmp://\fR/\fBrtmps://\fR target
+(see DESCRIPTION).
+.TP
+.BR \-i ", " \-\-in\ \fI<uri>\fR
+Input source (see DESCRIPTION).
+.TP
+.BR \-a ", " \-\-audio\ \fI<track>\fR
+Audio track, numbered from 1, or \fBall\fR. Default: \fBall\fR.
+.TP
+.BR \-f ", " \-\-format\ \fI<format>\fR
+.IR raw | ts | mkv | mka .
+Default: taken from the
+.B \-o
+suffix, else \fBts\fR.
+.B mkv
+and
+.B mka
+are rejected together with a network
+.B \-o
+target; \fBraw\fR is rejected alongside any \fB\-o rtmp://\fR or
+\fB\-o rtmps://\fR target.
+.TP
+.BR \-p ", " \-\-pmt\-pid\ \fI<pid>\fR | \fIall\fR
+MPTS source only: pin one program's PMT pid, or record every program
+(\fBall\fR; rejected with \fB\-f mkv\fR). Ignored, with a warning, on an
+SPTS source. If omitted on an MPTS source the tool fails early and lists
+the available programs.
+.TP
+.BR \-s ", " \-\-subtitles\ \fI<mode>\fR
+.IR strip | keep | srt .
+.B srt
+is valid only with \fBmkv\fR/\fBmka\fR. Default: \fBkeep\fR.
+.TP
+.BR \-t ", " \-\-time\ \fI<duration>\fR
+Recording duration, e.g. \fB90\fR, \fB5m\fR, \fB5m30s\fR, \fB1h3m20s\fR,
+\fB01:20:03\fR, \fB10:20\fR. Without \fB\-t\fR the recording runs until
+stopped.
+.TP
+.BR \-I ", " \-\-iface\ \fI<iface>\fR
+Interface for
+.BR \-i 's
+multicast join.
+.TP
+.BR \-O ", " \-\-out\-iface\ \fI<iface>\fR
+Interface for
+.BR \-o
+\fBrtp://\fR/\fBudp://\fR's multicast send.
+.TP
+.B \-\-ttl \fI<n>\fR
+Multicast TTL / hop limit for
+.B \-o
+\fBrtp://\fR/\fBudp://\fR. Default: kernel default (1).
+.TP
+.B \-\-profile \fI<p>\fR
+.IR simple | main .
+.B \-o
+.B rist://
+only. Default: \fBsimple\fR.
+.TP
+.B \-\-secret \fI<psk>\fR
+.B \-o
+.B rist://
+pre-shared key; requires \fB\-\-profile main\fR.
+.TP
+.B \-\-cname \fI<name>\fR
+.B \-o
+.B rist://
+cname. Default: library default.
+.TP
+.B \-\-buffer \fI<ms>\fR
+.B \-o
+.B rist://
+recovery buffer. Default: library default.
+.TP
+.B \-\-insecure
+Skip TLS verification for
+.B \-o
+.BR rtmps:// .
+.TP
+.BR \-v ", " \-\-verbose
+Periodic recording stats on stderr.
+.TP
+.B \-\-sub\-lead \fI<ms>\fR
+Shift subtitles earlier. Default: 1000.
+.TP
+.B \-\-color \fI<when>\fR
+.IR auto | always | never .
+Default: \fBauto\fR.
+.TP
+.B \-\-ret \fI<addr>:<port>\fR
+RET server unicast address (\fB\-i rtp://\fR only); enables gap repair.
+.TP
+.B \-\-no\-ret\-mc
+Skip joining the RET server's multicast repair session.
+.TP
+.B \-\-ret\-mc\-port \fI<port>\fR
+Override the repair session port. Default: \fB\-i\fR's port.
+.TP
+.B \-\-ret\-pt \fI<n>\fR
+RTX payload type, must match the RET server. Default: 99.
+.TP
+.B \-\-ret\-wait \fI<ms>\fR
+Hold budget after a NACK before giving up on a gap. Default: 200.
+.TP
+.B \-\-pace
+File/stdin source only: pace output to the input's own timing (RTP
+timestamp if RTP-framed, else PCR).
+.TP
+.B \-\-strip \fI<list>\fR
+.B \-f
+.B ts
+only: comma list of
+.IR NUL , NIT , AIT , EIT , CAT , ECM , EMM , RST , TDT , TOT , INT
+to drop, or \fBnone\fR. Default: \fBNUL,NIT,AIT,EIT\fR.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipirec \-i rtp://@239.19.75.1:8700 \-o show.ts
+Plain recording to a transport stream file.
+.TP
+.B dipirec \-i rtp://@239.19.75.1:8700 \-o show.mkv \-s srt \-t 1h30m \-v
+Matroska recording with SRT subtitle burn-in, a 90-minute time limit, and
+live stats.
+.TP
+.B dipirec \-i udp://@239.0.175.1:8700 \-o radio.mka \-I eth0
+Audio-only Matroska recording, join on a specific interface.
+.TP
+.B dipirec \-i http://10.0.0.1:4022/rtp/239.19.75.1:8700 \-o show.ts
+Recording via a udpxy proxy instead of a direct multicast join.
+.TP
+.B dipirec \-i show.ts \-\-pace \-o rtp://@239.9.9.9:6000 \-O eth1 \-\-ttl 16
+Replay a file back onto multicast at its original timing.
+.TP
+.B dipirec \-i rtp://@239.19.75.1:8700 \-o rtmp://live.example.com/app/key
+Relay a multicast source live to an RTMP ingest server.
+.SH EXIT STATUS
+.B 0
+on success.
+A non-zero status is returned on argument errors or I/O failure.
+.SH SEE ALSO
+.BR dipiscan (1),
+.BR dipisds (1),
+.BR dipitvhead (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

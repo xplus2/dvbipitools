@@ -1,0 +1,352 @@
+.TH DIPISDS 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipisds \- announce or discover DVB-IPI services via DVBSTP/SD&S
+.SH SYNOPSIS
+.B dipisds
+.B \-a
+.B \-i
+.I path
+.B \-m
+.IR mcast : port
+.RI [ options ]
+.PP
+.B dipisds
+.B \-l
+.B \-m
+.IR mcast : port
+.RI [ options ]
+.SH DESCRIPTION
+.B dipisds
+implements DVBSTP-carried SD&S service discovery per ETSI TS 102 034 clause 5.
+It runs in one of two mutually exclusive modes, selected by
+.B \-a
+(announce, headend/injector role) or
+.B \-l
+(listen, client/receiver role); exactly one of the two is required.
+.PP
+In announce mode
+.B dipisds
+reads a service list from
+.B \-i
+and repeatedly transmits it as SD&S records over DVBSTP on the multicast
+group:port given by
+.BR \-m ,
+at the interval set by
+.B \-t
+(default 5 seconds; ETSI TS 102 034 caps the full announce cycle at 30
+seconds, so keep the interval comfortably under that). The input format is
+inferred from the
+.B \-i
+suffix:
+.B .csv
+and
+.B .m3u
+use the same shapes as
+.BR dipiscan (1)'s
+own output,
+.B .xspf
+is XSPF with the DVB triplet carried in a dvbipitools extension element,
+and
+.B .xml
+is a hand-authored or dipiscan-generated raw SD&S document that is sent
+through unparsed. For the structured (non-.xml) inputs,
+.B \-p
+and
+.B \-O
+set the announced DomainName and provider display name, and
+.B dipisds
+additionally synthesizes a Service Provider Discovery record pointing back
+at the same multicast socket. A set of
+.BR \-\-ret\- ,
+.BR \-\-fcc\- ,
+.BR \-\-packages ,
+.BR \-\-cells ,
+.BR \-\-rms\- ,
+and
+.B \-\-fus\-
+options extend the announced Broadcast Discovery and RMS-FUS records for
+dipifccret RET/FCC retransmission servers, Package Discovery, Regionalisation
+Discovery, and RMS-FUS Discovery. These options are announce-only and, with
+the exception of the metrics options, have no effect on raw
+.B .xml
+input, which bypasses this processing entirely. SIGHUP re-reads
+.B \-i
+without restarting the process.
+.PP
+In listen mode
+.B dipisds
+joins the multicast group given by
+.BR \-m ,
+reassembles DVBSTP segments, and after
+.B \-t
+seconds (default 35, just over the spec's 30-second max cycle time so one
+full announce cycle is always captured) writes whatever Broadcast Discovery
+records it saw as a playlist to
+.B \-o
+(default stdout). The output format is selected by
+.B \-f
+or inferred from the
+.B \-o
+suffix:
+.BR m3u ,
+.BR csv ,
+and
+.B xspf
+mirror
+.BR dipiscan (1)'s
+own shapes;
+.B xml
+dumps the reassembled SD&S document as received, for debugging; and
+.B null
+discards the output.
+.PP
+.B \-I
+selects the network interface used for the multicast join or send,
+overriding the kernel's default multicast route.
+.B \-v
+prints periodic statistics to stderr: one line per announce cycle in
+.BR \-a ,
+one line per segment received in
+.BR \-l .
+.B \-d
+forks to the background and detaches from the controlling terminal after
+startup.
+.SH OPTIONS
+.SS Mode selection
+.TP
+.BR \-a ", " \-\-announce
+Headend mode: read
+.BR \-i ,
+transmit on
+.BR \-m .
+.TP
+.BR \-l ", " \-\-listen
+Client mode: receive on
+.BR \-m ,
+write
+.BR \-o .
+.SS Common options
+.TP
+.BI \-m " group" : port
+.RB ( \-\-mcast )
+Multicast group:port. Use
+.RI [ addr6 ]: port
+for IPv6. Required in both modes.
+.TP
+.BI \-I " iface"
+.RB ( \-\-iface )
+Multicast interface.
+.TP
+.BI \-t " seconds"
+Announce mode
+.RB ( \-\-interval ):
+repeat interval, default 5. Listen mode
+.RB ( \-\-timeout ):
+stop after N seconds, default 35.
+.TP
+.BR \-v ", " \-\-verbose
+Periodic stats on stderr.
+.TP
+.BI \-\-color " when"
+.RI ( auto | always | never ,
+default
+.BR auto ).
+.TP
+.BR \-d ", " \-\-daemonize
+Fork to background after startup, detach from terminal.
+.TP
+.BR \-h ", " \-\-help
+Show help and exit.
+.SS Announce mode options (\-a)
+.TP
+.BI \-i " path"
+.RB ( \-\-input )
+A
+.BR .csv / .m3u / .xspf
+playlist or raw SD&S
+.B .xml
+document.
+.TP
+.BI \-p " name"
+.RB ( \-\-provider )
+DomainName. Required unless
+.B \-i
+is
+.BR .xml .
+.TP
+.BI \-O " name"
+.RB ( \-\-offering )
+Display name. Required unless
+.B \-i
+is
+.BR .xml .
+.TP
+.BI \-L " code"
+.RB ( \-\-lang )
+ISO 639-2 code for the display name (default
+.BR deu ).
+.TP
+.BI \-\-ret\-addr " addr" : port
+Advertise a
+.BR dipifccret (1)
+RET server (its
+.B \-l
+value). Opt-in; adds RTPRetransmission to every announced service.
+.TP
+.BI \-\-ret\-rtx\-time " ms"
+RET rtx-time, matches
+.BR dipifccret (1)'s
+.B \-B
+(default 2000).
+.TP
+.BI \-\-ret\-rtx\-pt " n"
+RET RTP payload type, matches
+.BR dipifccret (1)'s
+.B \-R
+(default 99).
+.TP
+.B \-\-ret\-mc
+Also advertise multicast RET (as
+.BR dipifccret (1)
+does without
+.BR \-\-no\-mc\-ret ).
+.TP
+.BI \-\-ret\-mc\-port " port"
+Multicast RET port, matches
+.BR dipifccret (1)'s
+.BR \-F .
+Default: each service's own port.
+.TP
+.B \-\-ret\-rsi\-mc\-ret
+RSI (Annex F.5.3) rides the multicast RET session instead of the default
+session. Requires
+.BR \-\-ret\-mc ;
+matches
+.BR dipifccret (1)'s
+.BR \-\-rsi\-mc\-ret .
+.TP
+.BI \-\-fcc\-addr " addr" : port
+Advertise a
+.BR dipifccret (1)
+FCC server (its
+.B \-l
+value). Opt-in; adds ServerBasedEnhancementServiceInfo to every announced
+service.
+.TP
+.BI \-\-fcc\-rtx\-time " ms"
+FCC Retransmission_session rtx-time (default 2000).
+.TP
+.BI \-\-fcc\-rtx\-pt " n"
+FCC RTP payload type, matches
+.BR dipifccret (1)'s
+.B \-R
+(default 99).
+.TP
+.B \-\-fcc\-resolve\-by\-port
+Per-service FCC port instead of
+.BR \-\-fcc\-addr 's
+port. Matches
+.BR dipifccret (1)'s
+.BR \-\-fcc\-resolve\-by\-port .
+.TP
+.BI \-\-fcc\-resolve\-base\-port " port"
+Matches
+.BR dipifccret (1)'s
+.BR \-\-fcc\-resolve\-base\-port .
+.TP
+.BI \-\-fcc\-resolve\-max\-channels " n"
+Must match
+.BR dipifccret (1)'s
+.B \-M
+(default 384).
+.TP
+.BI \-\-metrics " path"
+Unix datagram socket for metrics (default
+.IR /run/dvbipitools/metrics.sock ).
+.TP
+.BI \-\-metrics\-id " name"
+Stable instance id. Metrics are disabled unless this is set.
+.TP
+.BI \-\-metrics\-interval " seconds"
+Snapshot interval (default 5).
+.TP
+.BI \-\-packages " path"
+Package Discovery from
+.I id,name,lang,visible,svc1|svc2|...
+lines.
+.TP
+.BI \-\-cells " path"
+Regionalisation Discovery from
+.I id,country,type:value,...
+lines.
+.TP
+.BI \-\-rms\-name " name"
+RMS Discovery display name. Requires
+.BR \-\-rms\-location .
+.TP
+.BI \-\-rms\-lang " code"
+ISO 639-2 code for
+.B \-\-rms\-name
+(default
+.BR deu ).
+.TP
+.BI \-\-rms\-location " uri"
+RMSType RMSLocation.
+.TP
+.BI \-\-rms\-logo " uri"
+RMSType LogoURI.
+.TP
+.BI \-\-fus\-name " name"
+FUS Discovery display name. Requires
+.BR \-\-fus\-id .
+.TP
+.BI \-\-fus\-lang " code"
+ISO 639-2 code for
+.B \-\-fus\-name
+(default
+.BR deu ).
+.TP
+.BI \-\-fus\-id " n"
+FUSID (decimal).
+.TP
+.BI \-\-fus\-announce " addr" : port
+FUS MulticastAnnouncementAddress.
+.TP
+.BI \-\-fus\-logo " uri"
+FUSType LogoURI.
+.SS Listen mode options (\-l)
+.TP
+.BI \-o " path"
+.RB ( \-\-output )
+Output path,
+.B \-
+for stdout (default).
+.TP
+.BI \-f " fmt"
+.RB ( \-\-format )
+.RI ( m3u | csv | xspf | xml | null ,
+default taken from the
+.B \-o
+suffix).
+.SH EXAMPLES
+.TP
+.B dipisds \-a \-i channels.csv \-p example.org \-O "My Headend" \-m 239.255.0.1:3937
+Announce a CSV playlist as an SD&S service list.
+.TP
+.B dipisds \-l \-m 239.255.0.1:3937 \-o discovered.m3u
+Listen for the announcement and write the discovered services as an m3u playlist.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B non-zero
+Argument error, or I/O or network failure.
+.SH SEE ALSO
+.BR dipiscan (1),
+.BR dipibcg (1),
+.BR dipifccret (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

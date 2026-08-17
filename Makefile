@@ -7,6 +7,10 @@ include config.mk
 
 .DEFAULT_GOAL := all
 
+PREFIX ?= /usr/local
+BINDIR := $(PREFIX)/bin
+MANDIR := $(PREFIX)/share/man/man1
+
 TOOLS := dipirec dipiscan dipiradiohead dipisds dipixmltv dipibim dipibcg dipitvhead dipimetrics
 
 dipimetrics_SRCS := \
@@ -2545,8 +2549,16 @@ fuzz-harnesses:
 	@echo "fuzz-harnesses: reconfigure with './configure --fuzz' to enable" >&2; exit 1
 endif
 
-.PHONY: all clean
+MAN_PAGES := $(foreach t,$(TOOLS),src/$(t)/$(t).1)
+
+.PHONY: all clean install
 all: $(TOOLS)
+
+install: $(TOOLS)
+	install -d $(DESTDIR)$(BINDIR)
+	install -m 0755 $(TOOLS) $(DESTDIR)$(BINDIR)/
+	install -d $(DESTDIR)$(MANDIR)
+	install -m 0644 $(MAN_PAGES) $(DESTDIR)$(MANDIR)/
 
 %.o: %.c config.mk
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@

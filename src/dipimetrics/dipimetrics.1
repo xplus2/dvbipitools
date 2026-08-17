@@ -1,0 +1,87 @@
+.TH DIPIMETRICS 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipimetrics \- collect and serve headend metrics as Prometheus/OpenMetrics
+.SH SYNOPSIS
+.B dipimetrics
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B dipimetrics
+is a DVB-IPI headend metrics collector. It receives periodic snapshots from
+.BR dipitvhead ,
+.BR dipiradiohead ,
+.B dipisds
+and
+.B dipibcg
+over a Unix datagram socket, and serves them as a single Prometheus/OpenMetrics
+text document at
+.B GET /metrics
+over plain HTTP.
+.PP
+Each exporting tool, if started with its own
+.B \-\-metrics-id
+option, sends a self-contained snapshot (component, instance id, process
+start time, sequence number, timestamp, and metric entries) at its own
+interval.
+.B dipimetrics
+retains only the latest snapshot per (component, instance) pair, rejects
+malformed, oversized, or unsupported-protocol-version datagrams, and drops
+an instance from the output once it has gone quiet for longer than
+.BR \-e / \-\-expiry
+seconds.
+.PP
+The HTTP side is intentionally minimal: one request handled at a time, a
+short read/write budget per connection, no TLS, no authentication. It is
+meant as a local diagnostics/scrape endpoint for infrequent polling, not as
+a general-purpose web server.
+.PP
+OpenMetrics is not part of any DVB/ETSI specification; it is used here as a
+convenience for integration with standard monitoring stacks.
+.SH OPTIONS
+.TP
+.BR \-S ", " \-\-sock\ \fI<path>\fR
+Unix datagram socket to receive snapshots on. Default:
+.IR /run/dvbipitools/metrics.sock .
+.TP
+.BR \-l ", " \-\-listen\ \fI<addr>\fR:\fI<port>\fR
+HTTP listen address:port. Default:
+.BR 127.0.0.1:9109 .
+.TP
+.BR \-e ", " \-\-expiry\ \fI<s>\fR
+Drop an instance after this many seconds without a new snapshot. Default:
+.BR 30 .
+.TP
+.BR \-v ", " \-\-verbose
+Log rejected/dropped snapshots to stderr.
+.TP
+.B \-\-color \fI<when>\fR
+.IR auto | always | never .
+Default:
+.BR auto .
+.TP
+.BR \-d ", " \-\-daemonize
+Fork to background after startup, detach from terminal.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipimetrics \-l 0.0.0.0:9109
+Serve the metrics endpoint on all interfaces instead of loopback only.
+.SH EXIT STATUS
+.B 0
+on success.
+A non-zero status is returned on argument errors or socket/bind failure.
+.SH FILES
+.TP
+.I /run/dvbipitools/metrics.sock
+Default Unix datagram socket for receiving snapshots from exporters, unless
+overridden with
+.BR \-S / \-\-sock .
+.SH SEE ALSO
+.BR dipitvhead (1),
+.BR dipiradiohead (1),
+.BR dipifccret (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

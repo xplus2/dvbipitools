@@ -1,0 +1,153 @@
+.TH DIPIRIST 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipirist \- bridge a DVB-IPI stream between RTP/UDP/file and a RIST link, sender or receiver
+.SH SYNOPSIS
+.B dipirist
+.B \-i
+.I uri
+.B \-o
+.I uri
+.RI [ options ]
+.SH DESCRIPTION
+.B dipirist
+bridges a DVB-IPI stream between a plain RTP/UDP/file endpoint and a RIST
+link (VSF TR-06), in either direction, using librist. RIST is not part of
+DVB-IPI; this tool exists to carry DVB-IPI streams over unmanaged or lossy
+networks with RIST's retransmission-based recovery.
+.PP
+Exactly one of
+.B \-i
+(input) or
+.B \-o
+(output) must be a
+.B rist://
+URI, the other is a regular
+.BR dipirec (1)-style
+endpoint: RTP or plain UDP multicast, a udpxy proxy (source side only),
+stdin/stdout, or a file. Whether
+.B dipirist
+runs as a RIST sender or receiver follows from which side the
+.B rist://
+URI is on: a
+.B rist://
+output calls out to a receiver, a
+.B rist://
+input listens for a sender. Only one direction is served per process.
+.PP
+A
+.B rist://
+endpoint address is either
+.IB host : port
+(calls out) or
+.BI @ host : port
+(listens); the leading
+.B @
+mirrors this toolkit's own
+.BR rtp://@ / udp://@
+convention. Repeating
+.B \-i
+or
+.B \-o
+with further
+.B rist://
+URIs bonds several links carrying the same stream. RIST query parameters
+such as \fBbuffer\fR, \fBsecret\fR, \fBcname\fR, and \fBweight\fR are
+accepted directly in the URI; the equivalent command-line options below
+override whatever the URI specifies.
+.PP
+RIST-specific concepts exposed on the command line: the
+.B profile
+(simple or main, main adds encryption), a pre-shared key
+.RB ( secret ,
+requires profile main), an RTCP
+.B cname
+identifying the stream, and the recovery
+.B buffer
+size in milliseconds.
+.SH OPTIONS
+.TP
+.BR \-i ", " \-\-in " " \fIuri\fR
+Input endpoint. Repeatable if it is a
+.B rist://
+URI, to bond several links.
+.TP
+.BR \-o ", " \-\-out " " \fIuri\fR
+Output endpoint. Repeatable if it is a
+.B rist://
+URI, to bond several links.
+.TP
+.BR \-I ", " \-\-iface " " \fIiface\fR
+Interface for the non-RIST side's multicast join or send.
+.TP
+.B \-\-profile \fIname\fR
+RIST profile,
+.B simple
+or
+.BR main .
+Default
+.BR simple .
+.B main
+adds encryption.
+.TP
+.B \-\-secret \fIpsk\fR
+Pre-shared key for encryption. Requires
+.BR \-\-profile\ main .
+.TP
+.B \-\-cname \fIname\fR
+RTCP cname. Default is library-generated.
+.TP
+.B \-\-buffer \fIms\fR
+RIST recovery buffer size in milliseconds (sets both min and max). Default
+is the library default.
+.TP
+.B \-\-color \fIwhen\fR
+Colorize log output:
+.BR auto ,
+.BR always ,
+or
+.BR never .
+Default
+.BR auto .
+.TP
+.B \-\-metrics \fIpath\fR
+Unix datagram socket path for metrics output. Default
+.IR /run/dvbipitools/metrics.sock .
+.TP
+.B \-\-metrics\-id \fIname\fR
+Stable instance id for metrics. Metrics are disabled unless this is set.
+.TP
+.B \-\-metrics\-interval \fIs\fR
+Metrics snapshot interval in seconds. Default
+.BR 5 .
+.TP
+.BR \-v ", " \-\-verbose
+Print periodic bridge statistics on stderr.
+.TP
+.BR \-d ", " \-\-daemonize
+Fork to background after startup, detach from terminal.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipirist \-i rtp://@239.1.1.1:5000 \-o rist://1.2.3.4:6000 \-\-buffer 1000
+Sender: read an RTP multicast and send it over RIST to a listening receiver.
+.TP
+.B dipirist \-i rist://@0.0.0.0:6000 \-o rtp://@239.1.1.1:5000 \-\-buffer 1000
+Receiver: listen for an incoming RIST connection and re-emit as RTP
+multicast.
+.TP
+.B dipirist \-i rtp://@239.1.1.1:5000 \-o rist://1.2.3.4:6000 \-o rist://5.6.7.8:6000
+Bonded sender: the same stream carried over two independent RIST links.
+.SH EXIT STATUS
+.B 0
+on success.
+Non-zero on argument errors or I/O/network failure.
+.SH SEE ALSO
+.BR dipirec (1),
+.BR dipitvhead (1),
+.BR dipiradiohead (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

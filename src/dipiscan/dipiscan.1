@@ -1,0 +1,100 @@
+.TH DIPISCAN 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipiscan \- scan and report on DVB-IPI multicast streams
+.SH SYNOPSIS
+.B dipiscan
+[\fIoptions\fR] 1>\fIplaylist\fR 2>\fIlog\fR
+.SH DESCRIPTION
+.B dipiscan
+sweeps a multicast /24 (or the analogous IPv6 range) for DVB-IPI services
+and writes a playlist of what answered. Every address/port combination in
+the configured range is probed once; each probe joins the multicast group
+(directly via IGMP/MLD, or through a udpxy gateway) and waits for a PAT
+and SDT service name within the configured time budget.
+.PP
+This tool exists because deployments do not always use DVBSTP/SD&S
+service discovery as implemented by
+.BR dipisds (1).
+Where SD&S is available, scanning a live multicast range for services is
+unnecessary; \fBdipiscan\fR fills the gap when it is not.
+.PP
+Output can be written as an M3U playlist, XSPF playlist, a local CSV
+format, SD&S Broadcast Discovery XML (ETSI TS 102 034), or discarded
+entirely (only the stderr log remains). The M3U, XSPF, and CSV formats
+are convenience additions and are not part of the DVB-IPI specification.
+Every format also carries the DVB triplet (transport_stream_id,
+original_network_id, service_id) read from PAT/SDT.
+.PP
+By default one address is reported as one program: whichever program's
+PMT resolves first. With \fB\-M\fR, every program listed in the PAT at
+that address gets its own playlist entry.
+.SH OPTIONS
+.TP
+.BR \-m ", " \-\-mcast " \fIaddr\fR"
+Base multicast group, IPv4 or IPv6; the last byte is swept 1..254.
+Default: 239.19.75.0.
+.TP
+.BR \-p ", " \-\-port " \fIport\fR[\-\fIport\fR]"
+Port or inclusive port range. Default: 8700.
+.TP
+.BR \-f ", " \-\-format " \fIfmt\fR"
+Output format: m3u, csv, xspf, xml, or null. Default: m3u.
+.TP
+.BR \-P ", " \-\-provider " \fIname\fR"
+DomainName for the output. Required when \fB\-f xml\fR is used.
+.TP
+.BR \-o ", " \-\-out " \fIpath\fR"
+Output file, or "\-" for stdout. Default: stdout.
+.TP
+.BR \-t ", " \-\-timeout " \fIsecs\fR"
+Wall-clock time budget per candidate. Default: 1.
+.TP
+.BR \-M ", " \-\-mpts
+Report every program found at an address, not just the first. Waits out
+the whole timeout budget per address.
+.TP
+.BR \-u ", " \-\-udpxy " \fIip\fR:\fIport\fR"
+Probe through a udpxy gateway instead of a direct IGMP/MLD join.
+.TP
+.BR \-I ", " \-\-iface " \fIiface\fR"
+Interface to use for the multicast join. Default: kernel default route.
+.TP
+.BR \-v ", " \-\-verbose
+Print per-candidate diagnostics on stderr.
+.TP
+.B \-\-color \fIwhen\fR
+Control colored output: auto, always, or never. Default: auto.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipiscan \-m 239.19.75.0 \-p 8700-8705 >hd.m3u
+Scan a custom address/port range, write an M3U playlist to a file.
+.TP
+.B dipiscan \-v \-f csv \-o scan.csv
+Scan with per-candidate diagnostics on stderr, write CSV output.
+.TP
+.B dipiscan \-u 127.0.0.1:8080 \-m 239.19.75.0 \-f xspf >playlist.xspf
+Scan through a udpxy gateway, write an XSPF playlist.
+.TP
+.B dipiscan \-f xml \-P example.org \-o scan.xml
+Write SD&S Broadcast Discovery XML, ready to feed into \fBdipisds \-a \-i\fR.
+.TP
+.B dipiscan \-M \-t 3 \-f xml \-P example.org \-o scan.xml
+MPTS-aware scan: one row per program per address, with a raised timeout
+budget to allow every PAT-listed program to be named.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B nonzero
+Argument error, or I/O or network failure.
+.SH SEE ALSO
+.BR dipisds (1),
+.BR dipirec (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

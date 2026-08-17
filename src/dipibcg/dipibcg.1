@@ -1,0 +1,145 @@
+.TH DIPIBCG 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipibcg \- announce or listen for a BiM-encoded TVA guide via DVBSTP/BCG
+.SH SYNOPSIS
+.B dipibcg
+.B \-a
+.B \-i
+.I xmltv
+.B \-M
+.I map.csv
+.B \-m
+.I mcast\fR:\fIport
+[\fIoptions\fR]
+.br
+.B dipibcg
+.B \-l
+.B \-m
+.I mcast\fR:\fIport
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B dipibcg
+implements DVB-IPI EPG/BCG (ETSI TS 102 539): it announces an xmltv guide
+on a multicast group as BiM-encoded TVA fragments, or listens on a group
+and writes the received guide back out as xmltv.
+.PP
+In announce mode
+.RB ( \-a )
+it reads an xmltv source
+.RB ( \-i )
+and an id-to-service mapping
+.RB ( \-M ),
+BiM-encodes the programmes still inside the announcement window
+.RB ( \-w )
+into a BCG container, and repeats the send every
+.B \-t
+(\fB\-\-interval\fR) seconds on the given multicast group
+.RB ( \-m )
+via DVBSTP.
+.PP
+In listen mode
+.RB ( \-l )
+it joins the multicast group
+.RB ( \-m ),
+reassembles DVBSTP segments, decodes the BCG container, and after
+.B \-t
+(\fB\-\-timeout\fR) seconds writes the most recently decoded guide as
+xmltv to
+.RB ( \-o ).
+Optionally
+.RB ( \-C )
+it also writes back a service mapping csv suitable for a later
+.BR \-M .
+.PP
+.B \-Z
+(\fB\-\-compress\fR) enables zlib/RFC 1950 compression of the BCG
+container in announce mode; support depends on the build. Listen mode
+decompresses transparently as needed and requires no flag.
+.SH OPTIONS
+.TP
+.BR \-a ", " \-\-announce
+Headend mode: read
+.BR \-i ,
+transmit on
+.BR \-m .
+.TP
+.BR \-l ", " \-\-listen
+Client mode: receive on
+.BR \-m ,
+write
+.BR \-o .
+.TP
+.BR \-i ", " \-\-input " \fIpath\fR"
+Announce: xmltv source (required).
+.TP
+.BR \-M ", " \-\-map " \fIpath\fR"
+Announce: xmltv id -> uri,tsid,onid,sid csv (required).
+.TP
+.BR \-w ", " \-\-window " \fIhours\fR"
+Announce: only events starting within this window (default 24).
+.TP
+.BR \-m ", " \-\-mcast " \fImcast\fR:\fIport\fR"
+Multicast group:port (\fB[\fIaddr6\fB]\fR:\fIport\fR for IPv6).
+.TP
+.BR \-I ", " \-\-iface " \fIiface\fR"
+Multicast interface.
+.TP
+.BR \-t ", " \-\-interval " \fIs\fR"
+Announce: repeat interval (default 5).
+.TP
+.BR \-t ", " \-\-timeout " \fIs\fR"
+Listen: stop after N seconds (default 35).
+.TP
+.BR \-o ", " \-\-output " \fIpath\fR"
+Listen: xmltv output path, "\-" for stdout (default).
+.TP
+.BR \-C ", " \-\-csv\-map " \fIpath\fR"
+Listen: also write a mapping csv (feeds back into \fB\-M\fR).
+.TP
+.BR \-Z ", " \-\-compress
+Announce: zlib-compress BCG containers (RFC 1950).
+.TP
+.BR \-v ", " \-\-verbose
+Periodic stats on stderr.
+.TP
+.B \-\-color \fIwhen\fR
+auto|always|never (default auto).
+.TP
+.B \-\-metrics \fIpath\fR
+Announce: Unix datagram socket for metrics (default:
+.IR /run/dvbipitools/metrics.sock ).
+.TP
+.B \-\-metrics\-id \fIname\fR
+Announce: stable instance id; metrics disabled unless set.
+.TP
+.B \-\-metrics\-interval \fIs\fR
+Announce: snapshot interval in seconds (default 5).
+.TP
+.BR \-d ", " \-\-daemonize
+Fork to background after startup, detach from terminal.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipibcg \-a \-i guide.xml \-M mapping.csv \-m 239.255.0.2:3938
+Announce guide.xml on the given multicast group using mapping.csv.
+.TP
+.B dipibcg \-l \-m 239.255.0.2:3938 \-o guide.xml \-C mapping.csv
+Listen on the group, write the received guide to guide.xml and a
+service mapping to mapping.csv.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B nonzero
+Argument error, or I/O/network failure.
+.SH SEE ALSO
+.BR dipixmltv (1),
+.BR dipibim (1),
+.BR dipisds (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

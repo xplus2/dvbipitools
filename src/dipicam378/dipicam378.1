@@ -1,0 +1,83 @@
+.TH DIPICAM378 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipicam378 \- cs378x (camd35/TCP) key server for CAS testing
+.SH SYNOPSIS
+.B dipicam378
+.B \-k
+.I keyfile
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B dipicam378
+is a cs378x (camd35/TCP) key server: it holds a device's RSA private key
+and answers ECM/EMM requests with a control word. It is a software
+smartcard, nothing more.
+.PP
+The tool speaks the cs378x/camd35 protocol used by oscam-compatible
+card readers. It listens on a TCP port, accepts a connection from a
+cs378x client such as oscam, and services ECM/EMM requests using a
+locally-held PEM-encoded RSA private key for a single device. The
+protocol's AES-128 encryption key is derived from the digest of the
+configured password, which must match the reader's \fBpassword =\fR
+setting.
+.PP
+.B dipicam378
+is intended for testing and validation of
+.BR dipitvhead (1)'s
+and
+.BR dipiradiohead (1)'s
+CAS output: it pairs with those tools' encrypted multicast streams and
+lets an oscam-driven client descramble them as if a real smartcard were
+present. It is not built without libssl, since RSA/AES crypto is its
+sole purpose.
+.SH OPTIONS
+.TP
+.BR \-k ", " \-\-key\ \fI<path>\fR
+RSA private key, PEM. Required.
+.TP
+.BR \-s ", " \-\-serial\ \fI<id>\fR
+Device's serial, matched against EMM-U.
+.TP
+.BR \-p ", " \-\-port\ \fI<n>\fR
+cs378x TCP listen port. Default: \fB27500\fR.
+.TP
+.BR \-a ", " \-\-auth\ \fI[user:]<pass>\fR
+Password must match the reader's \fBpassword =\fR (default:
+\fBdipicam378\fR); its digest is the AES-128 key.
+.TP
+.B \-\-caid \fI<hex>\fR
+ECMs for any other CAID get a CMD08 ("stop asking"). Optional, default:
+no CMD08 ever sent.
+.TP
+.B \-\-algo \fI<a>\fR
+.IR cissa | csa2 .
+Default: \fBcissa\fR.
+.TP
+.BR \-v ", " \-\-verbose
+Protocol/decode detail on stderr.
+.TP
+.B \-\-color \fI<when>\fR
+.IR auto | always | never .
+Default: \fBauto\fR.
+.TP
+.BR \-d ", " \-\-daemonize
+Fork to background after startup, detach from terminal.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipicam378 \-k device.key \-s e2e-01 \-p 27500
+Serve a single device's key on the default cs378x port, filtering EMM-U
+by serial.
+.SH EXIT STATUS
+.B 0
+on success.
+A non-zero status is returned on argument errors or socket failure.
+.SH SEE ALSO
+.BR dipitvhead (1),
+.BR dipiradiohead (1),
+.BR dipidescramble (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

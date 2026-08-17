@@ -1,0 +1,86 @@
+.TH DIPIBIM 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipibim \- convert between the plain TVA XML shape and its BiM binary encoding
+.SH SYNOPSIS
+.B dipibim
+.B \-f
+.I xml
+[\fB\-i\fR \fI<path>\fR] [\fB\-o\fR \fI<path>\fR] [\fIoptions\fR]
+.br
+.B dipibim
+.B \-f
+.I bim
+[\fB\-i\fR \fI<path>\fR] [\fB\-o\fR \fI<path>\fR] [\fIoptions\fR]
+.SH DESCRIPTION
+.B dipibim
+converts between plain DVB-IPI EPG (TVA) XML, as produced by
+.BR dipixmltv (1),
+and its BiM binary encoding (ETSI TS 102 323, subclause 9.4). \fB\-f\fR
+names the input format; the output is the other one. An uncompressed
+representation of TVA EPG data is not itself specified by ETSI TS 102 539,
+section 7.2, so
+.B dipibim
+exists mainly as a debugging and inspection aid for
+.BR dipibcg (1)'s
+BiM-encoded TVA fragments, not as a distribution tool in its own right.
+.PP
+Each ProgramInformation, Schedule (with its own ScheduleEvents) and
+ServiceInformation element is its own separately BiM-encoded fragment
+(ETSI TS 102 822-3-2, subclause 4.3.1.1). On the BiM side,
+.B dipibim
+reads and writes TS 102 323 tables 56/57's DVBBiMAccessUnit shape: a
+fragment count, then per fragment a length, a 16-bit DVBContextPath type
+tag, and the fragment's own BiM bytes, wrapped as [4-byte big-endian
+length][access unit][string repository]. No DVBSTP container, index
+structures or versioning (TS 102 822-3-2, subclauses 4.5/4.6) are
+produced or expected; see
+.BR dipibcg (1)
+for that layer.
+.PP
+Supported codecs (TS 102 323, subclause 9.4.3.3ff) are dvbStringCodec,
+dvbLocatorCodec (string fallback only, optimized-branch locators
+unsupported), dvbDateTimeCodec (full-precision 8-byte MJD+ms mode, always
+UTC) and dvbControlledTermCodec (compact scheme+term branch only on an
+exact table 69 match with an integer term). dvbDurationCodec is unused.
+CRIDs are derived from start time at write time rather than stored; a
+non-UTC source time round-trips to a different-looking CRID for the same
+instant.
+.SH OPTIONS
+.TP
+.BR \-i ", " \-\-input\ \fI<path>\fR
+Input path, \fB\-\fR for stdin. Default: stdin.
+.TP
+.BR \-o ", " \-\-output\ \fI<path>\fR
+Output path, \fB\-\fR for stdout. Default: stdout.
+.TP
+.BR \-f ", " \-\-format\ \fI<fmt>\fR
+.IR xml | bim .
+Names the input format; required.
+.TP
+.BR \-v ", " \-\-verbose
+Progress on stderr.
+.TP
+.B \-\-color \fI<when>\fR
+.IR auto | always | never .
+Default: \fBauto\fR.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipibim \-f xml \-i guide.tva.xml \-o guide.bim
+Encode a plain TVA XML guide to its BiM binary form.
+.TP
+.B dipibim \-f bim \-i guide.bim \-o guide.tva.xml
+Decode a BiM-encoded guide back to plain TVA XML.
+.SH EXIT STATUS
+.B 0
+on success.
+A non-zero status is returned on argument errors or I/O failure.
+.SH SEE ALSO
+.BR dipixmltv (1),
+.BR dipibcg (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

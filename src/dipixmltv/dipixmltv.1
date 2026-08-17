@@ -1,0 +1,89 @@
+.TH DIPIXMLTV 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipixmltv \- convert between XMLTV and the DVB-IPI EPG (TVA) XML shape
+.SH SYNOPSIS
+.B dipixmltv
+\fB\-f\fR xmltv \fB\-M\fR \fImap\fR [\fB\-i\fR \fIpath\fR] [\fB\-o\fR \fIpath\fR] [\fIoptions\fR]
+.br
+.B dipixmltv
+\fB\-f\fR tva [\fB\-R\fR \fIrevmap\fR] [\fB\-i\fR \fIpath\fR] [\fB\-o\fR \fIpath\fR] [\fIoptions\fR]
+.br
+.B dipixmltv
+\fB\-S\fR \fIscan.csv\fR [\fB\-i\fR \fIguide.xml\fR] [\fB\-o\fR \fIpath\fR] [\fIoptions\fR]
+.SH DESCRIPTION
+.B dipixmltv
+converts between xmltv guide data and the plain (non-BiM) DVB-IPI EPG XML
+shape (TVA metadata, ETSI TS 102 822-3-1/-3-2). XMLTV itself is not part
+of DVB-IPI; TVA XML is. \fB\-f\fR names the \fIinput\fR format, the other
+direction is always produced: \fB\-f xmltv\fR reads xmltv and writes
+TVA-shaped XML, \fB\-f tva\fR reads TVA-shaped XML and writes xmltv.
+.PP
+xmltv channel ids carry no DVB identity, and the tsid/onid/sid triplet
+from a dipiscan scan is commonly degenerate across services on the same
+headend. Conversion is therefore keyed on the multicast URI. \fB\-M\fR
+supplies the id-to-URI/triplet mapping required for \fB\-f xmltv\fR; an
+xmltv channel with no entry in the map is silently dropped, along with
+its programmes. \fB\-R\fR optionally renames an incoming TVA serviceId
+back to a preferred local xmltv id when converting the other way.
+.PP
+Programme identifiers are encoded as CRIDs under the authority
+\fBdipixmltv.invalid\fR (reserved under RFC 2606), since this project is
+not a registered CRID authority.
+.PP
+With \fB\-S\fR, instead of converting, \fBdipixmltv\fR reads a dipiscan
+CSV capture and an xmltv guide, matches channels by display name, and
+writes a suggested \fB\-M\fR mapping. Review the result before use.
+.SH OPTIONS
+.TP
+.BR \-i ", " \-\-input " \fIpath\fR"
+Input path, "\-" for stdin (default).
+.TP
+.BR \-o ", " \-\-output " \fIpath\fR"
+Output path, "\-" for stdout (default).
+.TP
+.BR \-f ", " \-\-format " \fIfmt\fR"
+xmltv|tva - names the INPUT format.
+.TP
+.BR \-M ", " \-\-map " \fIpath\fR"
+xmltv id -> uri,tsid,onid,sid (required for \fB\-f xmltv\fR).
+.TP
+.BR \-R ", " \-\-reverse\-map " \fIrevmap\fR"
+uri -> preferred xmltv id (optional, \fB\-f tva\fR only).
+.TP
+.BR \-S ", " \-\-suggest\-map " \fIpath\fR"
+dipiscan csv - write a suggested \fB\-M\fR mapping to \fB\-o\fR, matched
+by channel name (review before use).
+.TP
+.BR \-v ", " \-\-verbose
+Progress on stderr.
+.TP
+.B \-\-color \fIwhen\fR
+auto|always|never (default auto).
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipixmltv \-f xmltv \-M mapping.csv \-i guide.xml \-o guide.tva.xml
+Convert xmltv to TVA-shaped XML using an explicit channel mapping.
+.TP
+.B dipixmltv \-f tva \-i guide.tva.xml \-o guide.xml
+Convert TVA-shaped XML back to xmltv.
+.TP
+.B dipixmltv \-S scan.csv \-i guide.xml \-o mapping.csv
+Build a suggested \fB\-M\fR mapping from a dipiscan CSV capture and an
+xmltv guide, matched by channel name.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B nonzero
+Argument error, or I/O failure.
+.SH SEE ALSO
+.BR dipibim (1),
+.BR dipibcg (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

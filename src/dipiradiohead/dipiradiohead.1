@@ -1,0 +1,341 @@
+.TH DIPIRADIOHEAD 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipiradiohead \- re-mux an Icecast/Shoutcast stream as a DVB-IPI multicast
+.SH SYNOPSIS
+.B dipiradiohead
+.B \-i
+.I uri
+[\fB\-\-sid\fP \fIn\fP] [\fB\-\-sdt\fP \fIname\fP] [\fB\-i\fP \fIuri\fP ...]
+{\fB\-m\fP \fIgroup\fP:\fIport\fP | \fB\-R\fP \fIuri\fP} [\fIoptions\fP]
+.SH DESCRIPTION
+.B dipiradiohead
+fetches one or more Icecast/Shoutcast streams over
+.B http://
+or
+.B https://
+and re-muxes them, without transcoding, as one DVB-IPI multicast (or one or
+more RIST links). A single
+.B \-i
+produces a normal SPTS; more than one
+.B \-i
+produces an MPTS, one program per input. Icecast/Shoutcast as an input
+source is not itself part of DVB; it exists here to bridge real-world
+streaming sources into a DVB-IPI output.
+.PP
+Output is UDP or RTP multicast via
+.BR \-m ,
+one or more RIST peers via
+.B \-R
+(bonded onto a single sender, requires librist), or both at once; at least
+one of the two is required.
+.B dipiradiohead
+generates PAT/PMT/SDT/NIT/EIT signaling itself, including now-playing EIT
+present-event text taken from ICY
+.B StreamTitle
+metadata or inline ID3v2
+.B TIT2
+/
+.B TPE1
+tags, auto-detected per stream; this ICY/ID3-to-EIT mapping is a
+.B dipiradiohead
+addition, not a DVB-IPI feature.
+.PP
+.B https://
+sources are TLS-verified by default (certificate chain, hostname, expiry);
+.B \-k
+disables all three for self-signed lab or test sources. HTTPS support needs
+OpenSSL (libssl) and is a build-time option; a build without it fails
+cleanly on any
+.B https://
+source rather than connecting insecurely.
+.PP
+.B dipiradiohead
+can also scramble its output. As a DVB Simulcrypt SCS and EMMG-side MUX
+(ETSI TS 103 197, protocol versions 2 and 3) it drives one or more ECMGs via
+.B \-\-cas\-algo
+/
+.BR \-\-cas\-ecmg ,
+scrambling with CISSA (ETSI TS 103 127, needs OpenSSL) or CSA1/CSA2 (need
+libdvbcsa, loaded at runtime if present). Independently of Simulcrypt, it
+also supports standalone BISS scrambling with no ECMG/EMMG at all: legacy
+BISS1 Mode 1, BISS2 Mode 1/E, and BISS2 Mode CA (EBU Tech 3292/3292-s1,
+per-receiver RSA-2048-OAEP entitlement). Simulcrypt CAS and the BISS modes
+are mutually exclusive with each other.
+.SH OPTIONS
+.SS Input
+.TP
+.BR \-i ", " \-\-input " " \fIuri\fR
+Icecast/Shoutcast source,
+.B http://
+or
+.BR https:// .
+Repeatable; each
+.B \-i
+becomes one program of the output MPTS (or the single program of an SPTS
+if given only once).
+.TP
+.B \-\-sid \fIn\fR
+service_id / program_number for the
+.B \-i
+immediately before this option. Default: auto-assigned, lowest unused
+number.
+.TP
+.BR \-s ", " \-\-sdt " " \fIname\fR
+SDT service_name for the
+.B \-i
+immediately before this option. Default: auto (
+.B dipiradiohead
+for a single input, "dipiradiohead \fIn\fR" per input for an MPTS).
+.SS Output
+.TP
+.BR \-m ", " \-\-mcast " " \fIgroup\fR:\fIport\fR
+Output multicast group:port. Use
+.RI [ addr6 ]: port
+for IPv6. Required unless
+.B \-R
+is given.
+.TP
+.BR \-I ", " \-\-iface " " \fIiface\fR
+Outgoing multicast interface.
+.TP
+.BR \-r ", " \-\-rtp
+Wrap output in RTP. Default is plain UDP. Applies only to the
+.B \-m
+output.
+.TP
+.BR \-T ", " \-\-ttl " " \fIn\fR
+Multicast TTL / hop limit. Default: 1.
+.TP
+.BR \-R ", " \-\-rist " " \fIuri\fR
+.B rist://host:port[?query]
+output. Repeatable; every peer bonds onto a single RIST sender (requires
+librist). May be combined with
+.BR \-m .
+.TP
+.B \-\-profile \fIp\fR
+RIST profile,
+.B simple
+or
+.BR main .
+Applies only to
+.B \-R
+peers. Default:
+.BR simple .
+.TP
+.B \-\-secret \fIpsk\fR
+RIST pre-shared key. Applies only to
+.B \-R
+peers. Requires
+.BR \-\-profile\ main .
+.TP
+.B \-\-cname \fIname\fR
+RIST cname. Applies only to
+.B \-R
+peers. Default: library default.
+.TP
+.B \-\-buffer \fIms\fR
+RIST recovery buffer, in milliseconds. Applies only to
+.B \-R
+peers. Default: library default.
+.SS "Stream Identifiers"
+.TP
+.BR \-n ", " \-\-nit " " \fItext\fR
+NIT network_name.
+.TP
+.B \-\-tsid \fIn\fR
+transport_stream_id. Default: 1.
+.TP
+.B \-\-onid \fIn\fR
+original_network_id. Default: 1.
+.SS "Reliability and TLS"
+.TP
+.BR \-e ", " \-\-error " " \fIseconds\fR
+On input error, reconnect after N seconds. Default: fail once. Always
+retries, regardless of this option, when more than one
+.B \-i
+is given.
+.TP
+.BR \-k ", " \-\-insecure
+Skip TLS verification on
+.B https://
+sources: self-signed certificates, hostname mismatch, and expiry are all
+ignored.
+.SS "Logging and Metrics"
+.TP
+.BR \-v ", " \-\-verbose
+Print periodic statistics on stderr.
+.TP
+.B \-\-color \fIwhen\fR
+Colorize log output:
+.BR auto ,
+.BR always ,
+or
+.BR never .
+Default:
+.BR auto .
+.TP
+.B \-\-metrics \fIpath\fR
+Unix datagram socket path for metrics output. Default:
+.IR /run/dvbipitools/metrics.sock .
+.TP
+.B \-\-metrics\-id \fIname\fR
+Stable instance id for metrics. Metrics are disabled unless this is set.
+.TP
+.B \-\-metrics\-interval \fIs\fR
+Metrics snapshot interval, in seconds. Default:
+.BR 5 .
+.SS "CAS Scrambling: Simulcrypt"
+.TP
+.B \-\-cas\-algo \fIa\fR
+Enable CAS scrambling:
+.BR cissa ,
+.BR csa2 ,
+or
+.BR csa1 .
+Default: disabled.
+.TP
+.B \-\-cas\-ecmg \fIep\fR
+ECMG address,
+.BR tcp://host:port .
+Repeatable, one CAS vendor per
+.BR \-\-cas\-ecmg .
+At least one is required with
+.BR \-\-cas\-algo .
+.TP
+.B \-\-cas\-ecmg\-version \fIn\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: ECMG protocol version,
+.B 2
+or
+.BR 3 .
+Default: auto-negotiate.
+.TP
+.B \-\-cas\-super\-id \fIn\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: Super_CAS_id, decimal or 0x-hex. Required
+per vendor.
+.TP
+.B \-\-cas\-ecm\-id \fIn\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: ECM_id. Required per vendor.
+.TP
+.B \-\-cas\-ecm\-pid \fIpid\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: output PID for its ECM stream. Default:
+.BR 0x0020 .
+.TP
+.B \-\-cas\-emmg\-port \fIn\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: our EMMG listener port. Default:
+.BR 8002 .
+.TP
+.B \-\-cas\-emmg\-version \fIn\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: EMMG protocol version,
+.B 2
+or
+.BR 3 .
+Default: accept whichever the EMMG client proposes.
+.TP
+.B \-\-cas\-emm\-pid \fIpid\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: output PID for its EMM stream. Default:
+.BR 0x0021 .
+.TP
+.B \-\-cas\-resilience \fIr\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: behavior on that vendor's own ECMG loss,
+.BR frozen ,
+.BR cycling ,
+or
+.BR silent .
+Default:
+.BR frozen .
+.TP
+.B \-\-cas\-required
+For the
+.B \-\-cas\-ecmg
+immediately before this option: that vendor's outage forces the global
+fallback (see
+.BR \-\-cas\-fallback\-clear )
+regardless of other vendors' state.
+.TP
+.B \-\-cas\-cp\-duration \fIms\fR
+Crypto-period duration in milliseconds, shared by every configured vendor.
+Default:
+.BR 10000 .
+.TP
+.B \-\-cas\-fallback\-clear
+On total CAS outage (or a
+.B \-\-cas\-required
+vendor going down): switch content to clear-to-air instead of staying
+scrambled on the last known-good control word.
+.SS "CAS Scrambling: BISS"
+.TP
+.B \-\-biss2\-sw \fIhex32\fR
+Enable BISS2 Mode 1/E: a static 32 hex character Session Word, scrambling
+with CISSA. No ECMG/EMMG. Mutually exclusive with
+.BR \-\-cas\-algo .
+.TP
+.B \-\-biss2\-emit\-esw \fIid\fR
+With
+.BR \-\-biss2\-sw :
+log the AES-128-ECB Encrypted Session Word for the given 32 hex character
+receiver ID, for out-of-band distribution to that receiver.
+.TP
+.B \-\-biss1\-sw \fIhex12\fR
+Enable legacy BISS1 Mode 1: a static 12 hex character Session Word,
+scrambling with CSA1. Mutually exclusive with
+.B \-\-biss2\-sw
+and
+.BR \-\-cas\-algo .
+.TP
+.B \-\-biss2\-ca\-receivers \fIdir\fR
+Enable BISS2 Mode CA: a directory of PEM public keys, one per entitled
+receiver or group. Rescanned on
+.BR SIGHUP ;
+removing a receiver from the directory revokes it and forces a Session Key
+change. Mutually exclusive with
+.BR \-\-biss1\-sw ,
+.BR \-\-biss2\-sw ,
+and
+.BR \-\-cas\-algo .
+.TP
+.B \-\-biss2\-ca\-session\-id \fIn\fR
+Administratively unique entitlement_session_id, decimal or 0x-hex, 16 bit.
+Default: random at startup.
+.SS "Process Control"
+.TP
+.BR \-d ", " \-\-daemonize
+Fork to background after startup, detach from terminal.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipiradiohead \-i https://example.com/radio.m3u \-\-sdt \(dqChannel 1\(dq \-m 239.1.1.1:5000
+Single station, plain UDP multicast output.
+.TP
+.B dipiradiohead \-i http://example.com/somechannel/aac \-\-sdt \(dqSome Channel\(dq \-i https://example.com/radio.m3u \-\-sdt \(dqChannel 1\(dq \-m 239.1.1.2:5000 \-r \-e 5
+Two stations muxed into one MPTS, RTP-wrapped output, reconnect on input
+error after 5 seconds.
+.SH EXIT STATUS
+.B 0
+on success.
+Non-zero on argument errors or I/O/network failure.
+.SH SEE ALSO
+.BR dipitvhead (1),
+.BR dipimetrics (1),
+.BR dipirist (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

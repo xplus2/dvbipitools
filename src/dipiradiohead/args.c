@@ -67,7 +67,7 @@ static void print_help(void) {
       "options:\n"
       "  -i, --input <uri>          icecast/shoutcast source, http:// or https://; repeatable\n"
       "      --sid <n>              service_id/program_number for the -i right before this (default: auto)\n"
-      "      --sdt <name>           SDT service_name for the -i right before this (default: auto)\n"
+      "  -s, --sdt <name>           SDT service_name for the -i right before this (default: auto)\n"
       "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
       "  -I, --iface <iface>        outgoing multicast interface\n"
       "  -r, --rtp                  wrap output in RTP (default: plain UDP; -m output only)\n"

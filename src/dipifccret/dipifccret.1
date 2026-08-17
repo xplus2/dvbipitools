@@ -1,0 +1,200 @@
+.TH DIPIFCCRET 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipifccret \- RTP retransmission (RET) and Fast Channel Change (FCC/RAMS) server
+.SH SYNOPSIS
+.B dipifccret
+\fB\-g\fR \fI<cidr>\fR[,\fI<cidr>\fR...]
+\fB\-l\fR \fI<addr>\fR:\fI<port>\fR
+\fB\-I\fR \fI<iface>\fR
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B dipifccret
+is an RTP retransmission (RET, DVB-IPI Annex F, RFC 4588) and server-based
+Fast Channel Change (FCC, DVB-IPI Annex I, built on RFC 6285 RAMS) edge
+server. It implements RAMS-based FCC only; Companion Stream FCC (Annex J)
+is out of scope for this tool.
+.PP
+It passively watches a mirrored or SPAN-ported multicast segment through a
+raw AF_PACKET capture on the interface given with \fB\-I\fR, rather than
+joining channels via IGMP/MLD. A single capture thread feeds per-channel
+state for every multicast group inside the \fB\-g\fR range(s); channels are
+discovered dynamically as traffic appears, not configured one by one. The
+kernel-side capture filter built from \fB\-g\fR always unwraps a single
+802.1Q VLAN tag before matching, so a tagged trunk mirror port needs no
+extra configuration; only a single VLAN tag is supported (no QinQ).
+.PP
+For RET, the capture thread keeps a short sequence-keyed ring per channel.
+A client NACK on the \fB\-l\fR socket always gets a direct unicast repair
+reply, and, when the multicast RET session is enabled, is additionally
+repaired over that session (Annex F.5.2). The multicast RET session reuses
+the original channel's destination group and port by default (F.6.2.2);
+\fB\-F\fR overrides the port, and \fB\-\-no\-mc\-ret\fR disables the session
+entirely without affecting the unicast reply path. \fB\-\-no\-rsi\fR turns
+off periodic RTCP RSI self-announcement of the \fB\-l\fR target for NACKs.
+.PP
+For FCC, the capture thread also keeps a Random Access Point (RAP)-anchored
+cache per channel. A RAMS-R request arriving just before a channel join is
+answered with a burst of the cached data at an accelerated rate
+(\fB\-X\fR times the channel's observed nominal bitrate, capped by the
+client's requested Max Receive Bitrate if lower), so the receiver can start
+decoding immediately instead of waiting for the next RAP in the live
+stream. Burst duration is bounded by \fB\-D\fR regardless of signaling, and
+a burst is terminated early as congested once
+\fB\-\-congestion\-nack\-threshold\fR client NACKs arrive during it.
+.PP
+RET and FCC can each be disabled independently (\fB\-\-no\-ret\fR,
+\fB\-\-no\-fcc\fR), but not both at once. Both protocols share the single
+capture thread and the single \fB\-l\fR listen socket, served by \fB\-w\fR
+worker threads. Raw packet capture requires the \fBCAP_NET_RAW\fR
+capability; either grant it to the binary and run unprivileged, or start
+as root and use \fB\-u\fR to drop privileges right after the capture handle
+opens.
+.SH OPTIONS
+.SS General options
+.TP
+.BR \-g ", " \-\-range\ \fI<cidr>\fR[,\fI<cidr>\fR...]
+Multicast range(s) to capture, IPv4 or IPv6. Required. Authoritative
+whitelist enforced in userspace regardless of the kernel-side filter.
+.TP
+.BR \-l ", " \-\-listen\ \fI<addr>\fR:\fI<port>\fR
+Unicast bind, shared by RET and FCC traffic. Required.
+.TP
+.BR \-I ", " \-\-iface\ \fI<iface>\fR
+Capture interface. Required.
+.TP
+.BR \-M ", " \-\-max\-channels\ \fI<n>\fR
+Pre-allocated channel slots. Default: 0 (= 384).
+.TP
+.B \-\-channel\-idle\-timeout \fI<s>\fR
+Free a channel slot after this many seconds with no packets. Default: 120,
+0 = never reap.
+.TP
+.BR \-R ", " \-\-rtx\-pt\ \fI<n>\fR
+RTP payload type for retransmitted/burst packets. Default: 99.
+.TP
+.BR \-w ", " \-\-workers\ \fI<n>\fR
+.B \-l
+socket worker threads. Default: 0 (= online CPU cores).
+.TP
+.BR \-u ", " \-\-user\ \fI<user>\fR
+Drop privileges to this user after opening the capture handle.
+.TP
+.BR \-v ", " \-\-verbose
+Periodic stats on stderr.
+.TP
+.B \-\-color \fI<when>\fR
+.IR auto | always | never .
+Default:
+.BR auto .
+.TP
+.BR \-d ", " \-\-daemonize
+Fork to background after startup, detach from terminal.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SS RET (Annex F) options
+.TP
+.B \-\-no\-ret
+Disable RET entirely.
+.TP
+.BR \-B ", " \-\-buffer\ \fI<ms>\fR
+Per-channel retransmission buffer depth. Default: 2000.
+.TP
+.BR \-F ", " \-\-ff\-port\ \fI<port>\fR
+Multicast RET session port. Default: 0 (= original channel's port).
+.TP
+.B \-\-no\-mc\-ret
+Disable the multicast RET session; unicast-only repair.
+.TP
+.B \-\-max\-ret\-clients \fI<n>\fR
+Pre-allocated unicast RTX per-client sequence slots (F.3.2.1). Default:
+16384.
+.TP
+.B \-\-ret\-client\-idle\-timeout \fI<s>\fR
+Free a unicast RTX client slot after this many seconds with no NACKs.
+Default: 300, 0 = never reap.
+.TP
+.B \-\-no\-rsi
+Disable RSI self-announcement.
+.TP
+.B \-\-rsi\-interval \fI<s>\fR
+RSI self-announcement interval, IPv4
+.B \-l
+only. Default: 5.
+.TP
+.B \-\-rsi\-mc\-ret
+RSI (F.5.3) rides the MC RET session instead of the default session;
+requires MC RET. Matches
+.BR dipisds (1)
+.BR \-\-ret\-rsi\-mc\-ret .
+.TP
+.B \-\-rsi\-hostname \fI<name>\fR
+Announce this DNS name (SRBT 2) instead of
+.BR \-l 's
+IPv4 address (SRBT 0) in RSI.
+.SS FCC (Annex I) options
+.TP
+.B \-\-no\-fcc
+Disable FCC entirely.
+.TP
+.BR \-G ", " \-\-gop\-cap\ \fI<ms>\fR
+Safety cap on cached GOP-in-progress duration. Default: 8000.
+.TP
+.BR \-C ", " \-\-max\-bursts\ \fI<n>\fR
+Pre-allocated concurrent burst-session slots. Default: 4096.
+.TP
+.BR \-X ", " \-\-burst\-multiplier\ \fI<n>\fR
+Burst rate as a multiple of the channel's observed nominal bitrate.
+Default: 1.5.
+.TP
+.BR \-D ", " \-\-burst\-duration\-cap\ \fI<ms>\fR
+Hard max burst duration regardless of signaling. Default: 10000.
+.TP
+.B \-\-max\-buffer\-fill\-bound \fI<ms>\fR
+Reject a RAMS-R Min RAMS Buffer Fill Requirement above this (RFC 6285 Sec
+10 DoS mitigation). Default: 30000, 0 = no bound.
+.TP
+.B \-\-fcc\-resolve\-by\-port
+Resolve ignore-media-ssrc RAMS-R by a dedicated per-channel port instead
+of rejecting with 510. Default: off.
+.TP
+.B \-\-fcc\-resolve\-base\-port \fI<p>\fR
+Base port for
+.BR \-\-fcc\-resolve\-by\-port .
+Default: 0 (=
+.B \-l
+port + 1).
+.TP
+.B \-\-congestion\-nack\-threshold \fI<n>\fR
+NACKs during one burst before terminating it as congested (RFC 6285 Sec
+6.4). Default: 5, 0 = disabled.
+.TP
+.B \-\-fcc\-range \fI<cidr>\fR[,...]
+Restrict FCC to these
+.B \-g
+sub-ranges. Default: all of
+.BR \-g .
+.TP
+.B \-\-fcc\-client\-range \fI<cidr>\fR[,...]
+Restrict FCC requests to these client source ranges. Default: any client.
+.SH EXAMPLES
+.TP
+.B dipifccret \-g 239.0.0.0/8 \-l 10.0.0.1:6000 \-I eth0
+Edge box on a SPAN port mirroring the access switch, RET and FCC both on,
+all other settings at their defaults.
+.SH EXIT STATUS
+.B 0
+on success.
+A non-zero status is returned on argument errors or capture/socket
+failure. Raw AF_PACKET capture typically requires the
+.B CAP_NET_RAW
+capability or root privileges; see
+.B \-u
+above to drop privileges after the capture handle is opened.
+.SH SEE ALSO
+.BR dipitvhead (1),
+.BR dipimetrics (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

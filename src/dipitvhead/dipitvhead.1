@@ -1,0 +1,386 @@
+.TH DIPITVHEAD 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipitvhead \- re-package a transport stream as a DVB-IPI multicast, with target-bitrate control and optional HbbTV AIT injection and CAS scrambling
+.SH SYNOPSIS
+.B dipitvhead
+.B \-i
+.I uri
+.RI [ per-input\ options ]
+[
+.B \-i
+.I uri
+\&...]
+.RB { \-m
+.IB group : port
+.B |
+.B \-R
+.IR uri }
+.RI [ options ]
+.SH DESCRIPTION
+.B dipitvhead
+re-packages one or more already-muxed transport streams (not raw
+elementary streams) as one DVB-IPI multicast, under its own PAT/NIT
+(mux-wide) and one PMT/SDT per program. A single
+.B \-i
+produces a normal Single Program Transport Stream (SPTS); multiple
+.B \-i
+produce a Multi Program Transport Stream (MPTS), one program per input,
+each connected and retried independently. No transcoding is performed.
+MPTS support is an interpretation, not spec-driven: ETSI TS 102 034 barely
+mentions MPTS.
+.PP
+Input sources are given with repeatable
+.B \-i
+flags: multicast
+.RI ( udp:// ", " rtp:// ,
+RTP headers stripped automatically), HTTP/HTTPS, or stdin
+.RB ( \- ).
+Options marked per-input below pair with the
+.B \-i
+immediately preceding them, ffmpeg-style; using one before any
+.B \-i
+is an error. Program selection within a source is automatic (first
+PAT-listed program whose PMT actually arrives) unless overridden with
+.BR \-p .
+.PP
+Output goes to a multicast group/port
+.RB ( \-m ,
+RTP-wrapped by default) and/or one or more bonded RIST peers
+.RB ( \-R ,
+requires librist); at least one of the two is required. Target output
+bitrate can be shaped with
+.BR \-b ,
+combined with null-packet stuffing
+.RB ( \-S )
+and/or burst-limited pacing
+.RB ( \-B ).
+.PP
+HbbTV signalling
+.RB ( \-\-hbbtv )
+injects an AIT (ETSI TS 102 809) advertising one AUTOSTART hybrid
+broadcast/broadband application per input; this is a separate
+specification from DVB-IPI itself, not a passthrough of any source AIT.
+.PP
+CAS scrambling is optional and mutually exclusive between families:
+Simulcrypt
+.RB ( \-\-cas\-algo / \-\-cas\-ecmg\-* ,
+DVB-IPI's own prioritized CAS model, acting as SCS and EMMG-side MUX
+against one or more ECMG vendors) or BISS
+.RB ( \-\-biss1\-sw / \-\-biss2\-sw / \-\-biss2\-ca\-receivers ,
+EBU Tech 3292): BISS1 Mode 1 (CSA1), BISS2 Mode 1/E (CISSA, static
+Session Word), or BISS2 Mode CA (RSA-OAEP per-receiver entitlement).
+Supported ciphers are CISSA, CSA1, and CSA2; CSA3, BISS1 Mode E, and
+BISS-CA group keys are not implemented.
+.SH OPTIONS
+.SS Sources (per-input)
+.TP
+.BR \-i ", " \-\-input " " \fIuri\fR
+Input source:
+.BR udp:// ,
+.BR rtp:// ,
+.BR http:// ,
+.BR https:// ,
+or
+.B \-
+for stdin. Repeatable.
+.TP
+.BR \-p ", " \-\-pmt\-pid " " \fIpid\fR
+For the
+.B \-i
+right before this: select program by PMT PID (decimal or 0x-hex).
+Default: the first live one.
+.TP
+.B \-\-sid \fIn\fR
+For the
+.B \-i
+right before this: service_id / program_number. Default: auto-assigned.
+.TP
+.BR \-s ", " \-\-sdt " " \fItext\fR | \fB\-\fR
+For the
+.B \-i
+right before this: SDT service_name. Default: passthrough of the
+source's own SDT.
+.B \-
+drops it; text sets our own.
+.TP
+.BR \-I ", " \-\-iface " " \fIiface\fR
+For the
+.B \-i
+right before this: incoming multicast interface.
+.TP
+.B \-\-strip\-eit
+For the
+.B \-i
+right before this: drop source EIT. Default: passed through.
+.SS HbbTV AIT injection (per-input)
+.TP
+.B \-\-hbbtv \fIurl\fR
+For the
+.B \-i
+right before this: inject an AIT signalling this HbbTV application's
+entry-point URL. Default: none.
+.TP
+.B \-\-hbbtv\-org\-id \fIn\fR
+For the
+.B \-i
+right before this: HbbTV organisation_id. Required with
+.BR \-\-hbbtv .
+.TP
+.B \-\-hbbtv\-app\-id \fIn\fR
+For the
+.B \-i
+right before this: HbbTV application_id. Required with
+.BR \-\-hbbtv .
+.SS Output
+.TP
+.BR \-m ", " \-\-mcast " " \fIgroup\fR:\fIport\fR
+Output multicast group:port
+.RI ( [ addr6 ] : port
+for IPv6).
+.TP
+.BR \-O ", " \-\-out\-iface " " \fIiface\fR
+Outgoing multicast interface.
+.TP
+.BR \-u ", " \-\-udp
+Plain UDP output. Default: RTP-wrapped. Affects
+.B \-m
+output only.
+.TP
+.BR \-T ", " \-\-ttl " " \fIn\fR
+Multicast TTL / hop limit. Default
+.BR 1 .
+.TP
+.BR \-R ", " \-\-rist " " \fIuri\fR
+.B rist://host:port\fR[\fI?query\fR]
+output, bonded with any other
+.B \-R
+given. Requires librist.
+.TP
+.B \-\-profile \fIp\fR
+.B simple
+or
+.BR main ;
+.B \-R
+peers only. Default
+.BR simple .
+.TP
+.B \-\-secret \fIpsk\fR
+.B \-R
+pre-shared key. Requires
+.BR \-\-profile\ main .
+.TP
+.B \-\-cname \fIname\fR
+.B \-R
+RTCP cname. Default: library default.
+.TP
+.B \-\-buffer \fIms\fR
+.B \-R
+recovery buffer. Default: library default.
+.TP
+.BR \-n ", " \-\-nit " " \fItext\fR | \fB\-\fR
+NIT for the whole output. Default: passthrough of the source's NIT.
+.B \-
+drops it; text sets our own.
+.SS Bitrate control
+.TP
+.BR \-b ", " \-\-bitrate " " \fIkbps\fR
+Target output bitrate, shared across all inputs. Default: no shaping.
+.TP
+.BR \-S ", " \-\-stuff
+Null-packet stuffing up to
+.BR \-b 's
+target. Needs
+.BR \-b .
+.TP
+.BR \-B ", " \-\-burst\-limit
+Cap output at
+.BR \-b 's
+target, never above. Needs
+.BR \-b .
+.SS Reliability and TLS
+.TP
+.BR \-e ", " \-\-error " " \fIseconds\fR
+On input error, reconnect after N seconds. Default: fail once; always
+retries when more than one
+.B \-i
+is given.
+.TP
+.BR \-k ", " \-\-insecure
+Skip TLS verification (self-signed certificate, hostname, expiry).
+.SS Identifiers
+.TP
+.B \-\-tsid \fIn\fR
+transport_stream_id. Default
+.BR 1 .
+.TP
+.B \-\-onid \fIn\fR
+original_network_id. Default
+.BR 1 .
+.SS Logging and metrics
+.TP
+.BR \-v ", " \-\-verbose
+Periodic stats on stderr.
+.TP
+.B \-\-color \fIwhen\fR
+.BR auto ", " always ", or " never .
+Default
+.BR auto .
+.TP
+.B \-\-metrics \fIpath\fR
+Unix datagram socket for metrics. Default
+.IR /run/dvbipitools/metrics.sock .
+.TP
+.B \-\-metrics\-id \fIname\fR
+Stable instance id. Metrics are disabled unless set.
+.TP
+.B \-\-metrics\-interval \fIs\fR
+Snapshot interval in seconds. Default
+.BR 5 .
+.SS Conditional access: Simulcrypt
+.TP
+.B \-\-cas\-algo \fIa\fR
+Enable CAS:
+.BR cissa ", " csa2 ", or " csa1 .
+Default: disabled.
+.TP
+.B \-\-cas\-ecmg \fIep\fR
+ECMG address,
+.BR tcp://host:port .
+Repeatable, one CAS vendor per
+.BR \-\-cas\-ecmg .
+Required with
+.BR \-\-cas\-algo .
+.TP
+.B \-\-cas\-ecmg\-version \fIn\fR
+For the
+.B \-\-cas\-ecmg
+right before this: protocol version
+.BR 2 " or " 3 .
+Default: auto-negotiate.
+.TP
+.B \-\-cas\-super\-id \fIn\fR
+For the
+.B \-\-cas\-ecmg
+right before this: Super_CAS_id, decimal or 0x-hex. Required per vendor.
+.TP
+.B \-\-cas\-ecm\-id \fIn\fR
+For the
+.B \-\-cas\-ecmg
+right before this: ECM_id. Required per vendor.
+.TP
+.B \-\-cas\-ecm\-pid \fIpid\fR
+For the
+.B \-\-cas\-ecmg
+right before this: output PID for its ECM stream. Default
+.BR 0x0020 .
+.TP
+.B \-\-cas\-emmg\-port \fIn\fR
+For the
+.B \-\-cas\-ecmg
+right before this: our EMMG listener port. Default
+.BR 8002 .
+.TP
+.B \-\-cas\-emmg\-version \fIn\fR
+For the
+.B \-\-cas\-ecmg
+right before this: EMMG protocol version
+.BR 2 " or " 3 .
+Default: accept the client's proposal.
+.TP
+.B \-\-cas\-emm\-pid \fIpid\fR
+For the
+.B \-\-cas\-ecmg
+right before this: output PID for its EMM stream. Default
+.BR 0x0021 .
+.TP
+.B \-\-cas\-resilience \fIr\fR
+For the
+.B \-\-cas\-ecmg
+right before this: behavior on its own ECMG loss:
+.BR frozen ", " cycling ", or " silent .
+Default
+.BR frozen .
+.TP
+.B \-\-cas\-required
+For the
+.B \-\-cas\-ecmg
+right before this: its outage forces the global fallback regardless of
+other vendors.
+.TP
+.B \-\-cas\-pids \fIlist\fR
+PIDs to scramble: comma-separated PIDs and/or the
+.B video
+/
+.B audio
+keywords. Default
+.B video,audio
+(all video and audio streams).
+.TP
+.B \-\-cas\-cp\-duration \fIms\fR
+Crypto-period duration in milliseconds, shared by every vendor. Default
+.BR 10000 .
+.TP
+.B \-\-cas\-fallback\-clear
+On total outage (or a
+.B \-\-cas\-required
+vendor down): go clear instead of staying scrambled on the last
+known-good control word.
+.SS Conditional access: BISS
+.TP
+.B \-\-biss2\-sw \fIhex32\fR
+Enable BISS2 Mode 1/E: 32 hex char Session Word, scrambles with CISSA.
+No ECMG/EMMG. Mutually exclusive with
+.BR \-\-cas\-algo .
+.TP
+.B \-\-biss2\-emit\-esw \fIid\fR
+With
+.BR \-\-biss2\-sw :
+log the AES-128-ECB Encrypted Session Word for this 32 hex char receiver
+ID, for out-of-band distribution.
+.TP
+.B \-\-biss1\-sw \fIhex12\fR
+Enable legacy BISS1 Mode 1: 12 hex char Session Word, scrambles with
+CSA1. Mutually exclusive with
+.BR \-\-biss2\-sw / \-\-cas\-algo .
+.TP
+.B \-\-biss2\-ca\-receivers \fIdir\fR
+Enable BISS2 Mode CA: directory of PEM public keys, one per entitled
+receiver/group. Rescanned on SIGHUP; a receiver removed from the
+directory is revoked, forcing a Session Key change. Mutually exclusive
+with
+.BR \-\-biss1\-sw / \-\-biss2\-sw / \-\-cas\-algo .
+.TP
+.B \-\-biss2\-ca\-session\-id \fIn\fR
+Administratively unique entitlement_session_id, decimal or 0x-hex,
+16-bit. Default: random at startup.
+.SS General
+.TP
+.BR \-d ", " \-\-daemonize
+Fork to background after startup, detach from terminal.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipitvhead \-i rtp://@239.19.75.1:8700 \-m 239.1.1.1:5000 \-s "My Channel"
+Basic SPTS: one RTP source re-streamed with its own SDT service name.
+.TP
+.B dipitvhead \-i https://host/live/x/y.ts \-m 239.1.1.2:5000 \-b 8000 \-S \-B
+HTTPS source, bitrate-shaped to 8000 kbps with stuffing and burst limiting.
+.TP
+.B dipitvhead \-i rtp://@239.19.75.1:8700 \-\-sdt "Channel A" \-i rtp://@239.19.75.2:8700 \-\-sdt "Channel B" \-m 239.1.1.3:5000 \-e 5
+MPTS: two RTP sources merged into one output, each its own program,
+5-second reconnect on input error.
+.SH EXIT STATUS
+.B 0
+on success.
+Non-zero on argument errors or I/O/network failure.
+.SH SEE ALSO
+.BR dipiradiohead (1),
+.BR dipimetrics (1),
+.BR dipirist (1),
+.BR dipifccret (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

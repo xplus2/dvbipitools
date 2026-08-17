@@ -1,0 +1,213 @@
+.TH DIPIDESCRAMBLE 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipidescramble \- standalone CAS validation client / descrambler
+.SH SYNOPSIS
+.B dipidescramble
+.B \-i
+.I uri
+.B \-k
+.I keyfile
+.B \-s
+.I serial
+.B \-e
+.I emmfile
+.B \-o
+.I output
+.RI [ options ]
+.SH DESCRIPTION
+.B dipidescramble
+is a standalone CAS validation client: it descrambles a
+.BR dipitvhead / dipiradiohead -produced
+(or any wire-compatible) DVB-CSA1/CSA2/CISSA/BISS transport stream, given
+the device's RSA private key or a BISS session word. It is the
+client-side counterpart to
+.BR dipitvhead 's/ dipiradiohead 's
+CAS muxer/scrambler, mainly meant for automated tests: reading a
+(possibly) scrambled stream and writing it back out in the clear so the
+result can be checked. The CAS scheme is auto-detected from the stream's
+PMT
+.B CA_descriptor
+/
+.BR scrambling_descriptor ;
+.BR \-k / \-s / \-e
+or the
+.B \-\-biss*
+options are only required once the stream turns out to need them.
+.PP
+For ECM/EMM-driven (SimulCrypt-style) CAS, decryption follows the
+RSA -> BK -> SK -> CW key chain: EMM-U/EMM-G sections addressed to this
+device (matched by
+.BR \-s ,
+its serial) are decrypted with the device's RSA private key
+.RB ( \-k )
+to recover the Bouquet Key (BK); the BK decrypts the ECM to recover the
+Session Key/Word (SK); the SK in turn yields the Control Words (CW) used
+to descramble the transport stream payload itself. An EMM cache
+.RB ( \-e )
+holds decrypted EMM-U/EMM-G state across restarts, so a test run does not
+need to wait for the broadcast EMM carousel cadence (or
+.BR \-u )
+again. An optional unicast EMM pull
+.RB ( \-u )
+fetches EMMs once at startup instead of waiting on the carousel.
+.PP
+BISS (EBU Tech 3292) is supported directly without a device key: BISS1
+Mode 1 (CSA1, 12 hex char Session Word,
+.BR \-\-biss1\-sw ),
+BISS2 Mode 1 or Mode E (CISSA, 32 hex char Session Word or Encrypted
+Session Word + receiver ID,
+.BR \-\-biss2\-sw / \-\-biss2\-esw / \-\-biss2\-id ),
+and BISS2 Mode CA (RSA-OAEP receiver entitlement key,
+.BR \-\-biss2\-ca\-key ),
+which uses its own RSA-OAEP/AES-CBC/CISSA key hierarchy instead of the
+generic ECM/EMM CAS path.
+.PP
+.B \-\-ecm\-profile
+defines the internal formatting of an ECM payload (cipher, IV source,
+padding, header fields, integrity check, and more) for CAS schemes whose
+ECM layout is not hardcoded, since DVB-SimulCrypt leaves ECM payload
+formatting undefined and
+.BR dipitvhead / dipiradiohead
+treat it as an opaque blob.
+.PP
+Known gaps shared with
+.BR dipitvhead / dipiradiohead :
+no ETSI TS 103 197 CSA3 or non-standard CSA2 modes, no BISS1 Mode E, no
+BISS-CA group keys (device keys only), no eECMs.
+.SH OPTIONS
+.TP
+.BR \-i ", " \-\-input " " \fIuri\fR
+Input:
+.BR udp:// ,
+.BR rtp:// ,
+or
+.B \-
+for stdin. Required.
+.TP
+.BR \-k ", " \-\-key " " \fIpath\fR
+Device RSA private key, PEM. Required for ECM/EMM-driven CAS.
+.TP
+.BR \-s ", " \-\-serial " " \fIid\fR
+This device's serial, matched against EMM-U addressing. Required for
+ECM/EMM-driven CAS.
+.TP
+.BR \-e ", " \-\-emm\-file " " \fIpath\fR
+EMM cache: loaded on startup, rewritten on update. Required for
+ECM/EMM-driven CAS.
+.TP
+.BR \-u ", " \-\-unicast\-emm " " \fIuri\fR
+Unicast EMM pull endpoint, auth token as URI userinfo, e.g.
+.IR https://<token>@<host>:<port>/device/<serial>/emm .
+.TP
+.B \-\-insecure
+Skip TLS verification for
+.B \-u
+/
+.B \-\-unicast\-emm
+and
+.B \-o
+.B rtmps://
+(self-signed cert, hostname mismatch, expiry).
+.TP
+.B \-\-biss2\-sw \fIhex32\fR
+BISS2 Mode 1: 32 hex char Session Word.
+.TP
+.B \-\-biss2\-esw \fIhex32\fR
+BISS2 Mode E: 32 hex char Encrypted Session Word. Needs
+.BR \-\-biss2\-id .
+.TP
+.B \-\-biss2\-id \fIhex32\fR
+BISS2 Mode E: 32 hex char receiver ID for
+.BR \-\-biss2\-esw .
+.TP
+.B \-\-biss1\-sw \fIhex12\fR
+Legacy BISS1 Mode 1: 12 hex char Session Word.
+.TP
+.B \-\-biss2\-ca\-key \fIpath\fR
+BISS Mode CA: receiver RSA private key, PEM.
+.TP
+.B \-\-ecm\-profile \fIspec\fR
+ecm_profile template, comma-separated key=value (see
+.B README.md
+in the source tree).
+.TP
+.BR \-o ", " \-\-output " " \fItarget\fR
+Descrambled output, repeatable: a file path,
+.B \-
+for stdout, or
+.BR rtmp(s):// .
+An
+.B rtmp(s)://
+target is
+.IR host [ : port ]/ app / key ,
+carrying descrambled H.264/HEVC video plus AC-3/E-AC-3/AAC audio.
+.TP
+.BR \-f ", " \-\-format " " \fIfmt\fR
+Output container:
+.BR ts ", " mkv ", or " mka .
+Default
+.BR ts .
+Raw
+.B ts
+and
+.B rtmp(s)://
+targets may mix;
+.B mkv
+/
+.B mka
+needs exactly one plain file target.
+.TP
+.BR \-p ", " \-\-pmt\-pid " " \fIpid\fR|\fBall\fR
+MPTS source only: pin one PMT pid, or descramble every program
+.RB ( all ;
+rejected with
+.BR \-f\ mkv ).
+Ignored (with a warning) on an SPTS source. If omitted on an MPTS source,
+the tool fails early and lists the available programs.
+.TP
+.BR \-I ", " \-\-iface " " \fIiface\fR
+Incoming multicast interface.
+.TP
+.BR \-v ", " \-\-verbose
+Periodic stats plus BK/SK/CW update lines on stderr.
+.TP
+.B \-\-color \fIwhen\fR
+Colorize log output:
+.BR auto ,
+.BR always ,
+or
+.BR never .
+Default
+.BR auto .
+.TP
+.BR \-d ", " \-\-daemonize
+Fork to background after startup, detach from terminal.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipidescramble \-i rtp://@239.0.0.1:1975 \-k device.key \-s e2e-01 \-e emm.cache \-o out.ts \-v
+ECM/EMM-driven CAS: descramble using the device's private key, serial,
+and an EMM cache, writing a plain
+.B .ts
+file.
+.TP
+.B dipidescramble \-i rtp://@239.0.0.1:1975 \-\-biss2\-sw 00112233445566778899aabbccddeeff \-o out.ts
+BISS2 Mode 1: descramble with a known Session Word, no device key needed.
+.TP
+.B dipidescramble \-i rtp://@239.0.0.1:1975 \-\-biss2\-sw 00112233445566778899aabbccddeeff \-o rtmp://live.example.com/app/key
+BISS2 Mode 1, pushing the descrambled stream live to an RTMP ingest
+server instead of writing a file.
+.SH EXIT STATUS
+.B 0
+on success.
+Non-zero on argument errors or decryption/I/O failure.
+.SH SEE ALSO
+.BR dipitvhead (1),
+.BR dipiradiohead (1),
+.BR dipicam378 (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.
