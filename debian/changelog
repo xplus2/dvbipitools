@@ -28,6 +28,7 @@ dvbipitools (2.3.0-1) unstable; urgency=medium
   * -d|--daemonize param on most tools
   * make install
   * man pages
+  * marged port of dipirec-style --strip to dipitvhead
  -- dvbipitools authors <unspecified@example.com>  Wed, 19 Aug 2026 00:00:00 +0200
 
 dvbipitools (2.2.0-1) unstable; urgency=medium

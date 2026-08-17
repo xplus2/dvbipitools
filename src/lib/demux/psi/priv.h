@@ -24,6 +24,7 @@ struct psi {
   unsigned emm_pid, ca_system_id; /* from CAT's first CA_descriptor, 0 if none */
   unsigned char scrambling_mode; /* from PMT program_info's scrambling_descriptor, 0 if none */
   unsigned pmt_ca_system_id; /* PMT program_info's own first CA_descriptor, 0 if none */
+  unsigned pmt_ca_pid; /* PMT program_info CA_descriptor's PID, 0 if none */
   unsigned tsid, onid;
   psi_es_t es[PSI_MAX_ES];
   int es_count, audio_count;

@@ -49,13 +49,20 @@ unsigned remux_pcr_pid_out(const remux_t *r);
 /* source-pid->output-pid map. borrowed, valid for r's lifetime */
 const out_es_t *remux_es(const remux_t *r, int *count);
 
+/* source CA/ECM passthrough (see args.h's strip_mask, TVSTRIP_ECM): a ready-to-append
+   CA_descriptor (tag 0x09) for this program's ECM pid, 0 length if none carried */
+size_t remux_source_ca_descriptor(const remux_t *r, unsigned char *out, size_t cap);
+
+/* same shape, for this program's EMM pid. callers build/merge a CAT from it, mux-wide:
+   MPTS callers see tvhead/mpts.c, standalone: remux.c sends it directly */
+size_t remux_source_emm_descriptor(const remux_t *r, unsigned char *out, size_t cap);
+
 struct cas;
 /* NULL detaches */
 void remux_set_cas(remux_t *r, struct cas *cas);
 
-/* now_s: caller's clock, not read internally (testability, avoids clock read per packet,
-   see mpts_tick()). also drives PMT/AIT (standalone: +PAT/CAT/SDT/NIT) resend.
-   tsm: accumulates this call's TS-integrity counters (nullable) */
+/* now_s: caller's clock, not read internally (testability, avoids clock read per packet, see mpts_tick()).
+   also drives PMT/AIT (standalone: +PAT/CAT/SDT/NIT) resend. tsm: accumulates call's TS-integrity counters (nullable) */
 void remux_feed(remux_t *r, double now_s, const unsigned char *pkt188, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm);
 
 /* non-standalone only. 0: filled *out. nonzero: nothing to send */

@@ -321,10 +321,9 @@ static int parse_schedule(const char *buf, const char *end, bcg_doc_t *doc, cons
     blk_end = strstr(tag, "</Schedule>");
     if (!blk_end)
       break;
-    if (xml_attr(tag, blk_end, "serviceIDRef", channel, sizeof channel) == 0) {
-      if (parse_schedule_events(doc, pl, channel, tag, blk_end) != 0)
-        return -1;
-    }
+    if (xml_attr(tag, blk_end, "serviceIDRef", channel, sizeof channel) == 0 &&
+        parse_schedule_events(doc, pl, channel, tag, blk_end) != 0)
+      return -1;
     p = blk_end + 1;
   }
   return 0;

@@ -23,10 +23,14 @@ static unsigned out_stream_type(codec_t c) {
   return 0;
 }
 
-static int supported(const psi_es_t *e) {
+static int supported(const psi_es_t *e, unsigned strip_mask) {
   if (e->cls == PID_VIDEO || e->cls == PID_AUDIO)
     return e->codec != CODEC_NONE;
-  return e->cls == PID_TELETEXT || e->cls == PID_SUBTITLE;
+  if (e->cls == PID_TELETEXT || e->cls == PID_SUBTITLE)
+    return 1;
+  if (e->cls == PID_DATA)
+    return !(strip_mask & TVSTRIP_DATA);
+  return 0;
 }
 
 void out_program_pids(unsigned idx, out_program_pids_t *out) {
@@ -37,7 +41,7 @@ void out_program_pids(unsigned idx, out_program_pids_t *out) {
   out->ait_pid = block_base + OUT_PROGRAM_ES_CAP;
 }
 
-int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned src_pcr_pid, unsigned video_pid, unsigned es_pid_base, out_es_t *out_es, int cap, unsigned *pcr_pid, int *dropped) {
+int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned strip_mask, unsigned src_pcr_pid, unsigned video_pid, unsigned es_pid_base, out_es_t *out_es, int cap, unsigned *pcr_pid, int *dropped) {
   int i, n = 0;
   unsigned next_pid = es_pid_base;
 
@@ -45,17 +49,18 @@ int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned src_pcr_pid, u
 
   /* video first, fixed pid, so PCR (usually the video pid) lands somewhere predictable */
   for (i = 0; i < in_count && n < cap; i++) {
-    if (in_es[i].cls != PID_VIDEO || !supported(&in_es[i]))
+    if (in_es[i].cls != PID_VIDEO || !supported(&in_es[i], strip_mask))
       continue;
     out_es[n].in_pid = in_es[i].pid;
     out_es[n].out_pid = video_pid;
     out_es[n].stream_type = out_stream_type(in_es[i].codec);
     out_es[n].src = &in_es[i];
+    out_es[n].is_ca = 0;
     n++;
     break; /* one video track */
   }
   for (i = 0; i < in_count; i++) {
-    if (in_es[i].cls == PID_VIDEO || !supported(&in_es[i]))
+    if (in_es[i].cls == PID_VIDEO || !supported(&in_es[i], strip_mask))
       continue;
     if (n >= cap) {
       (*dropped)++;
@@ -63,8 +68,14 @@ int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned src_pcr_pid, u
     }
     out_es[n].in_pid = in_es[i].pid;
     out_es[n].out_pid = next_pid++;
-    out_es[n].stream_type = (in_es[i].cls == PID_TELETEXT || in_es[i].cls == PID_SUBTITLE) ? 0x06 : out_stream_type(in_es[i].codec);
+    if (in_es[i].cls == PID_TELETEXT || in_es[i].cls == PID_SUBTITLE)
+      out_es[n].stream_type = 0x06;
+    else if (in_es[i].cls == PID_DATA)
+      out_es[n].stream_type = in_es[i].stream_type; /* opaque passthrough: keep source's own */
+    else
+      out_es[n].stream_type = out_stream_type(in_es[i].codec);
     out_es[n].src = &in_es[i];
+    out_es[n].is_ca = 0;
     n++;
   }
 
@@ -77,6 +88,43 @@ int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned src_pcr_pid, u
       }
   }
   return n;
+}
+
+void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, unsigned emm_pid, unsigned emm_ca_system_id, unsigned es_pid_base, unsigned video_pid, out_es_t *out_es, int *n, int cap, int *dropped) {
+  int i, non_video = 0;
+  unsigned next_pid;
+
+  for (i = 0; i < *n; i++)
+    if (out_es[i].out_pid != video_pid)
+      non_video++;
+  next_pid = es_pid_base + (unsigned)non_video;
+
+  if (ecm_pid) {
+    if (*n >= cap) {
+      (*dropped)++;
+    } else {
+      out_es[*n].in_pid = ecm_pid;
+      out_es[*n].out_pid = next_pid++;
+      out_es[*n].stream_type = 0;
+      out_es[*n].src = NULL;
+      out_es[*n].is_ca = 1;
+      out_es[*n].ca_system_id = ecm_ca_system_id;
+      (*n)++;
+    }
+  }
+  if (emm_pid) {
+    if (*n >= cap) {
+      (*dropped)++;
+    } else {
+      out_es[*n].in_pid = emm_pid;
+      out_es[*n].out_pid = next_pid++;
+      out_es[*n].stream_type = 0;
+      out_es[*n].src = NULL;
+      out_es[*n].is_ca = 2;
+      out_es[*n].ca_system_id = emm_ca_system_id;
+      (*n)++;
+    }
+  }
 }
 
 static size_t put_registration(unsigned char *out, const char *fourcc) {
@@ -113,6 +161,25 @@ static size_t put_subtitling(unsigned char *out, const psi_es_t *e) {
   psi_put16(out + 6, e->sub_composition_page);
   psi_put16(out + 8, e->sub_ancillary_page);
   return 10;
+}
+
+/* copies source ES descriptor loop verbatim, minus CA_descriptor (tag 0x09): CA_PID would
+   point at stale ECM pid once remapped. returns new n, or (size_t)-1 on overflow */
+static size_t put_data_descriptors(unsigned char *out, size_t n, size_t cap, const psi_es_t *src) {
+  size_t i = 0;
+  while (i + 2 <= src->desc_len) {
+    size_t l = src->desc[i + 1];
+    if (i + 2 + l > src->desc_len)
+      break;
+    if (src->desc[i] != 0x09) {
+      if (n + 2 + l > cap)
+        return (size_t)-1;
+      memcpy(out + n, src->desc + i, 2 + l);
+      n += 2 + l;
+    }
+    i += 2 + l;
+  }
+  return n;
 }
 
 /* appends AC-3/EAC3 registration + ISO 639 language descriptors for an audio ES.
@@ -160,6 +227,8 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
 
   for (i = 0; i < es_count; i++) {
     const out_es_t *e = &es[i];
+    if (e->is_ca) /* ECM/EMM passthrough: carried as a pid, not a PMT stream entry */
+      continue;
     if (n + 5 > cap)
       return 0;
     out[n++] = (unsigned char)e->stream_type;
@@ -176,6 +245,10 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
       if (n + 10 > cap)
         return 0;
       n += put_subtitling(out + n, e->src);
+    } else if (e->src->cls == PID_DATA) {
+      n = put_data_descriptors(out, n, cap, e->src);
+      if (n == (size_t)-1)
+        return 0;
     } else {
       n = put_audio_descriptors(out, n, cap, e);
       if (n == (size_t)-1)

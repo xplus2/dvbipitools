@@ -28,6 +28,7 @@ across every input.
 | `-s` | `--sdt`              | `<text>` / `-`        | set SDT, see below                        | per-input  |
 | `-I` | `--iface`            | `<iface>`             | kernel route (incoming)                   | per-input  |
 |      | `--strip-eit`        |                       | off (source EIT passed through)           | per-input  |
+|      | `--strip`            | `<list>` / `none`     | `none` (no strip)                         | per-input  |
 |      | `--hbbtv`            | `<url>`               | none (no AIT sent)                        | per-input  |
 |      | `--hbbtv-org-id`     | `<n>`                 | required with `--hbbtv`                   | per-input  |
 |      | `--hbbtv-app-id`     | `<n>`                 | required with `--hbbtv`                   | per-input  |
@@ -53,7 +54,7 @@ across every input.
 |      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`           |            |
 |      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)        |            |
 |      | `--metrics-interval` | `<s>`                 | `5`                                       |            |
-| `-d` | `--daemonize`        |                       | off (foreground)                         |            |
+| `-d` | `--daemonize`        |                       | off (foreground)                          |            |
 | `-h` | `--help`             |                       |                                           |            |
 
 > Note that the default output changed from _plain UDP_ to _RTP_, since neither FCC nor RET would work
@@ -111,7 +112,7 @@ wins (real MPTS sources often list many services, stream one). `-p <pid>` forces
 ### Codec support
 
 Video: MPEG-2, H.264, HEVC. Audio: MPEG-1/2 (layer 1/2/3), AC-3, E-AC-3, AAC (ADTS/LATM).
-Subtitles: EBU teletext, DVB bitmap. Everything else (carousels, SCTE-35, CA/ECM) dropped.
+Subtitles: EBU teletext, DVB bitmap.
 
 Output PIDs: PAT `0x0000`, NIT `0x0010`, SDT `0x0011`, EIT `0x0012`, CAT `0x0001` - fixed,
 mux-wide, shared by every program (real DVB-SI reserved PIDs, per ETSI EN 300 468). Every other
@@ -160,6 +161,35 @@ whichever services it describes.
 MPTS: reassembled into sections, filtered to that program's own service_id (the
 source's EIT PID otherwise carries every service in its own multiplex, not just the one being
 remuxed), merged onto a shared output EIT.
+
+### Dropping carousels/SCTE-35/CA-ECM (`--strip`)
+
+Default: no stripping, carousels, SCTE-35 and the source's own conditional-access
+signaling all survive the remux. 
+
+* `--strip <list>` (comma-separated) opts back into dropping specified PID types.
+* `--strip none` is the same as omitting the flag
+
+| token  | what                                                                       |
+|--------|----------------------------------------------------------------------------|
+| `DATA` | carousels, SCTE-35, other PMT ES entry with an unrecognized `stream_type`  |
+| `ECM`  | the source's own CAT/ECM/EMM (see below)                                   |
+
+`--strip` only touches what the *source* carried. `dipitvhead`'s own PAT/PMT/SDT/NIT/AIT/CAT/
+ECM/EMM (`--hbbtv`, `--cas-*`, BISS) are not affected.
+
+`DATA` streams are forwarded: original `stream_type` and descriptors are kept as-is, minus
+`CA_descriptor`s, whose PID would be stale after remapping.
+
+`ECM` controls the source CA/ECM passthrough: if the source is already scrambled and dipitvhead isn't
+running its own `--cas-*`/BISS, its CAT, one program-level `CA_descriptor`, the ECM PID and the
+EMM pid are all carried through (but remapped), so a downstream receiver can still descramble it.
+
+Single-CAS-style: at most one ECM pid (PMT's own program-level `CA_descriptor` if present, else 1st ES-level one) and 
+one EMM pid per program. 
+If dipitvhead's own `--cas-*`/BISS is configured, source CA/ECM passthrough is not
+attempted for any input regardless of `--strip`. 
+Both would need the same CAT pid, and re-scrambling is not supported.
 
 ### Target bitrate (`-b`, `-S`, `-B`)
 
@@ -381,6 +411,9 @@ dipitvhead -i https://host/live/x/y.ts -k -m 239.1.1.2:5000 -b 8000 -S -B
 
 dipitvhead -i udp://@239.0.0.1:5000 -m 239.5.5.5:6000 \
   --hbbtv https://example.org/hbbtv/ --hbbtv-org-id 1 --hbbtv-app-id 100
+
+# drop carousels/SCTE-35 and the source's own CA/ECM signaling (old default behavior)
+dipitvhead -i rtp://@239.19.75.1:8700 --strip DATA,ECM -m 239.1.1.1:5000
 
 # MPTS: two independent SPTS sources merged into one output, each its own program.
 # --sid/--sdt pair with the -i right before them.

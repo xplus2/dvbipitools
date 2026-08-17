@@ -291,9 +291,8 @@ static void handle_mpeg2(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
         t->hdr_parsed = 1;
         all_ready(m);
       }
-    } else if (code == 0x00 && q >= ns + 3) {
-      if (((d[ns + 2] >> 3) & 0x07) == 1) /* picture_coding_type: 1 = I */
-        key = 1;
+    } else if (code == 0x00 && q >= ns + 3 && ((d[ns + 2] >> 3) & 0x07) == 1) { /* picture_coding_type: 1 = I */
+      key = 1;
     }
     p = q;
     scl = scl2;

@@ -153,6 +153,7 @@ unsigned psi_emm_pid(const psi_t *c) { return c->emm_pid; }
 unsigned psi_ca_system_id(const psi_t *c) { return c->ca_system_id; }
 unsigned char psi_scrambling_mode(const psi_t *c) { return c->scrambling_mode; }
 unsigned psi_pmt_ca_system_id(const psi_t *c) { return c->pmt_ca_system_id; }
+unsigned psi_pmt_ca_pid(const psi_t *c) { return c->pmt_ca_pid; }
 
 const psi_es_t *psi_es(const psi_t *c, int *count) {
   if (count)

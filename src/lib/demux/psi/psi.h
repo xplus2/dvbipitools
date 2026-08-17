@@ -8,6 +8,7 @@
 
 #define PSI_MAX_ES 32
 #define PSI_NAME 64
+#define PSI_ES_DESC_MAX 255 /* raw ES descriptor loop bytes kept for opaque passthrough */
 
 typedef enum {
   PID_UNKNOWN = 0,
@@ -45,6 +46,9 @@ typedef struct {
   char lang[4];    /* ISO 639, "" if none */
   int audio_index; /* 1-based among audio ES, else 0 */
   unsigned ca_pid; /* ECM pid from ES CA descriptor, 0 if none */
+  unsigned ca_system_id; /* ES CA descriptor's CA_system_id, 0 if none */
+  unsigned char desc[PSI_ES_DESC_MAX]; /* raw ES descriptor loop, for opaque passthrough */
+  size_t desc_len; /* 0 if none captured (incl. too long for desc[]) */
   unsigned ttx_page;   /* teletext page (e.g. 777), 0 if none */
   int ttx_type;        /* teletext_type; 2/5 = subtitle */
   char ttx_lang[4];    /* teletext ISO 639 language */
@@ -117,6 +121,10 @@ unsigned char psi_scrambling_mode(const psi_t *c);
 /* PMT program_info's own first CA_descriptor CA_system_id, 0 if none, not CAT's
    (psi_ca_system_id above). BISS: 0x2602 Mode 1/E, 0x2610 Mode CA, no CAT/scrambling_descriptor */
 unsigned psi_pmt_ca_system_id(const psi_t *c);
+
+/* PMT program_info's own first CA_descriptor CA_PID, 0 if none. pairs with
+   psi_pmt_ca_system_id() above. not folded into ecm[] like ES-level */
+unsigned psi_pmt_ca_pid(const psi_t *c);
 
 const psi_es_t *psi_es(const psi_t *c, int *count);
 int psi_audio_count(const psi_t *c);

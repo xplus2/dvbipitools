@@ -9,6 +9,7 @@
 #include "lib/demux/psi/section_asm.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
+#include "lib/mux/cadescbuild.h"
 #include "lib/mux/psi_build.h"
 #include "lib/mux/tspacket_write.h"
 
@@ -118,10 +119,34 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
   r->src_service_id = psi_program_number(psi);
   r->pcr_pid_in = psi_pcr_pid(psi);
   in_es = psi_es(psi, &count);
-  n = pmtbuild_map_es(in_es, count, psi_pcr_pid(psi), r->pids.video_pid, r->pids.es_pid_base, r->es, OUT_PROGRAM_ES_CAP, &r->pcr_pid_out, &dropped);
+  n = pmtbuild_map_es(in_es, count, input->strip_mask, psi_pcr_pid(psi), r->pids.video_pid, r->pids.es_pid_base, r->es, OUT_PROGRAM_ES_CAP, &r->pcr_pid_out, &dropped);
   if (n <= 0) {
     free(r);
     return NULL;
+  }
+  {
+    /* exclusive with own CAS/BISS: both would want OUT_PID_CAT */
+    int own_cas = cfg->cas_algo != CAS_ALGO_NONE || cfg->biss1_enabled || cfg->biss2_enabled || cfg->biss2_ca_enabled;
+    unsigned ecm_pid = 0, ecm_sysid = 0, emm_pid = 0, emm_sysid = 0;
+    if (!own_cas && !(input->strip_mask & TVSTRIP_ECM)) {
+      if (psi_pmt_ca_pid(psi)) {
+        ecm_pid = psi_pmt_ca_pid(psi);
+        ecm_sysid = psi_pmt_ca_system_id(psi);
+      } else {
+        int k;
+        for (k = 0; k < count; k++)
+          if (in_es[k].ca_pid) {
+            ecm_pid = in_es[k].ca_pid;
+            ecm_sysid = in_es[k].ca_system_id;
+            break;
+          }
+      }
+      if (psi_emm_pid(psi)) {
+        emm_pid = psi_emm_pid(psi);
+        emm_sysid = psi_ca_system_id(psi);
+      }
+    }
+    pmtbuild_add_ca_passthrough(ecm_pid, ecm_sysid, emm_pid, emm_sysid, r->pids.es_pid_base, r->pids.video_pid, r->es, &n, OUT_PROGRAM_ES_CAP, &dropped);
   }
   r->es_count = n;
   if (dropped)
@@ -147,6 +172,29 @@ unsigned remux_pcr_pid_out(const remux_t *r) { return r->pcr_pid_out; }
 const out_es_t *remux_es(const remux_t *r, int *count) {
   *count = r->es_count;
   return r->es;
+}
+
+/* is_ca 1 (ECM) or 2 (EMM) entry, NULL if this program carries none */
+static const out_es_t *find_ca_passthrough(const remux_t *r, int is_ca) {
+  int i;
+  for (i = 0; i < r->es_count; i++)
+    if (r->es[i].is_ca == is_ca)
+      return &r->es[i];
+  return NULL;
+}
+
+size_t remux_source_ca_descriptor(const remux_t *r, unsigned char *out, size_t cap) {
+  const out_es_t *e = find_ca_passthrough(r, 1);
+  if (!e)
+    return 0;
+  return cadescbuild_ca_descriptor(e->ca_system_id, e->out_pid, out, cap);
+}
+
+size_t remux_source_emm_descriptor(const remux_t *r, unsigned char *out, size_t cap) {
+  const out_es_t *e = find_ca_passthrough(r, 2);
+  if (!e)
+    return 0;
+  return cadescbuild_ca_descriptor(e->ca_system_id, e->out_pid, out, cap);
 }
 
 void remux_set_cas(remux_t *r, cas_t *cas) { r->cas = cas; }
@@ -210,7 +258,7 @@ static void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ct
 
   if (due(now, &r->last_pat, INTERVAL_PAT_PMT_S)) {
     unsigned char prog_desc[32];
-    size_t prog_desc_len = r->cas ? cas_prog_desc(r->cas, prog_desc, sizeof prog_desc) : 0;
+    size_t prog_desc_len = r->cas ? cas_prog_desc(r->cas, prog_desc, sizeof prog_desc) : remux_source_ca_descriptor(r, prog_desc, sizeof prog_desc);
     if (r->standalone) {
       n = psi_build_pat(r->cfg.tsid, 0, r->input.sid, r->pids.pmt_pid, sec, sizeof sec);
       psi_note(tsm, PSI_TABLE_PAT, n);
@@ -227,8 +275,15 @@ static void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ct
         track_pmt_metrics(r, tsm, sec, n);
       ts_packet_emit(r->pids.pmt_pid, &r->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
     }
-    if (r->standalone && r->cas && due(now, &r->last_cat, INTERVAL_PAT_PMT_S)) {
-      n = cas_build_cat(r->cas, sec, sizeof sec);
+    /* r->cas and source EMM passthrough are mutually exclusive (see remux_new()) */
+    if (r->standalone && (r->cas || find_ca_passthrough(r, 2)) && due(now, &r->last_cat, INTERVAL_PAT_PMT_S)) {
+      if (r->cas) {
+        n = cas_build_cat(r->cas, sec, sizeof sec);
+      } else {
+        unsigned char emm_desc[16];
+        size_t emm_desc_len = remux_source_emm_descriptor(r, emm_desc, sizeof emm_desc);
+        n = emm_desc_len ? psi_build_cat(0, emm_desc, emm_desc_len, sec, sizeof sec) : 0;
+      }
       psi_note(tsm, PSI_TABLE_CAT, n);
       if (n)
         ts_packet_emit(OUT_PID_CAT, &r->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);

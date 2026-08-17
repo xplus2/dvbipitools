@@ -16,6 +16,7 @@
 #include "lib/uriparse.h"
 
 #include "args.h"
+#include "mux/pmtbuild.h"
 #include "version.h"
 
 static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -146,6 +147,35 @@ static int cas_pids_parse(const char *s, config_t *cfg) {
   return (cfg->cas_pid_count || cfg->cas_pids_video || cfg->cas_pids_audio) ? 0 : -1;
 }
 
+/* comma-separated TVSTRIP_* tokens, or "none" (default) */
+static int parse_strip(const char *s, unsigned *mask) {
+  static const enum_map_t map[] = {{"DATA", TVSTRIP_DATA}, {"ECM", TVSTRIP_ECM}};
+  const char *p = s;
+
+  if (strcmp(s, "none") == 0) {
+    *mask = 0;
+    return 0;
+  }
+  *mask = 0;
+  while (*p) {
+    const char *comma = strchr(p, ',');
+    size_t len = comma ? (size_t)(comma - p) : strlen(p);
+    char tok[8];
+    int v;
+    if (len == 0 || len >= sizeof tok)
+      return -1;
+    memcpy(tok, p, len);
+    tok[len] = '\0';
+    if (map_lookup(map, sizeof map / sizeof map[0], tok, &v))
+      return -1;
+    *mask |= (unsigned)v;
+    p += len;
+    if (*p == ',')
+      p++;
+  }
+  return 0;
+}
+
 static void print_help(void) {
   printf(
       "usage: %s -i <uri> [per-input options] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]\n\n"
@@ -153,19 +183,20 @@ static void print_help(void) {
       "multicast. A single -i: normal SPTS. Multiple -i: MPTS, one program per input.\n\n"
       "options:\n"
       "  -i, --input <uri>          udp://, rtp://, http(s)://, or \"-\" for stdin; repeatable\n"
-      "  -p, --pmt-pid <pid>        for the -i right before this: select program by PMT PID\n"
+      "  -p, --pmt-pid <pid>        for -i right before: select program by PMT PID\n"
       "                             (dec or 0x-hex; default: first live one)\n"
-      "      --sid <n>              for the -i right before this: service_id/program_number\n"
+      "      --sid <n>              for -i right before: service_id/program_number\n"
       "                             (default: auto)\n"
-      "  -s, --sdt <text|->         for the -i right before this: SDT service_name - default\n"
+      "  -s, --sdt <text|->         for -i right before: SDT service_name - default\n"
       "                             passthrough source; \"-\" drops it; text = our own\n"
-      "  -I, --iface <iface>        for the -i right before this: incoming multicast interface\n"
-      "      --strip-eit            for the -i right before this: drop source EIT (default: passed through)\n"
-      "      --hbbtv <url>          for the -i right before this: inject an AIT signalling this\n"
+      "  -I, --iface <iface>        for -i right before: incoming multicast interface\n"
+      "      --strip-eit            for -i right before: drop source EIT (default: passed through)\n"
+      "      --strip <list>|none    for -i right before: comma list of DATA,ECM to drop (default: none)\n"
+      "      --hbbtv <url>          for -i right before: inject an AIT signalling this\n"
       "                             HbbTV app (default: none)\n"
-      "      --hbbtv-org-id <n>     for the -i right before this: HbbTV organisation_id\n"
+      "      --hbbtv-org-id <n>     for -i right before: HbbTV organisation_id\n"
       "                             (required with --hbbtv)\n"
-      "      --hbbtv-app-id <n>     for the -i right before this: HbbTV application_id\n"
+      "      --hbbtv-app-id <n>     for -i right before: HbbTV application_id\n"
       "                             (required with --hbbtv)\n"
       "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
       "  -O, --out-iface <iface>    outgoing multicast interface\n"
@@ -329,6 +360,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"cname", required_argument, 0, 1032},
       {"buffer", required_argument, 0, 1033},
       {"daemonize", no_argument, 0, 'd'},
+      {"strip", required_argument, 0, 1034},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_mcast = 0;
@@ -444,6 +476,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->inputs[cfg->n_inputs - 1].strip_eit = 1;
+        break;
+      case 1034:
+        if (cfg->n_inputs == 0) {
+          argerr("--strip must follow the -i it names");
+          return ARGS_ERR;
+        }
+        if (parse_strip(optarg, &cfg->inputs[cfg->n_inputs - 1].strip_mask)) {
+          argerr("invalid --strip: %s (comma list of DATA,ECM, or \"none\")", optarg);
+          return ARGS_ERR;
+        }
         break;
       case 1001:
         if (cfg->n_inputs == 0) {
@@ -900,6 +942,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     /* same default as --cas-algo's own pid selection above */
     cfg->cas_pids_video = 1;
     cfg->cas_pids_audio = 1;
+  }
+
+  if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss1_enabled || cfg->biss2_enabled || cfg->biss2_ca_enabled) {
+    for (i = 0; i < cfg->n_inputs; i++)
+      if (!(cfg->inputs[i].strip_mask & TVSTRIP_ECM)) {
+        log_line(TOOL_NAME ": source CA/ECM passthrough disabled: --cas-algo/--biss* already scrambling this mux");
+        break;
+      }
   }
 
   if (assign_missing_sids(cfg) != 0)

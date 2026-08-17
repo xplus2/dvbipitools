@@ -9,9 +9,13 @@
 
 #include "lib/log.h"
 #include "lib/mux/mpts.h"
+#include "lib/mux/psi_build.h"
+#include "lib/mux/tspacket_write.h"
 #include "lib/net/retryset.h"
 #include "lib/signal.h"
 #include "priv.h"
+
+#define INTERVAL_CAT_S 0.1 /* matches remux.c's own INTERVAL_PAT_PMT_S cadence */
 
 /* how long to wait for every configured input to be discovered when
    --cas-pids-video/audio need every program's own live ES discovery to resolve,
@@ -327,6 +331,8 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   int cas_needs_discovery = cas_wanted && (cfg->cas_pids_video || cfg->cas_pids_audio);
   double cas_gate_deadline = 0.0;
   unsigned char eit_cc = 0;
+  unsigned char cat_cc = 0;
+  double last_cat = -1.0;
   unsigned i, k, rr_start = 0;
   double run_start, last_stat = 0;
   int rc = 0;
@@ -476,11 +482,42 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       if (progs[i].rx)
         remux_emit_eit(progs[i].rx, OUT_PID_EIT, &eit_cc, 1, packet_cb, &out);
 
-    if (cas_needs_discovery && !cas) {
-      if (check_cas_discovery_gate(cfg, progs, n, mpts, cas_gate_deadline, &cas) != 0) {
-        rc = 1;
-        goto done;
+    /* source EMM passthrough: mux-wide CAT, merged from each program's descriptor.
+       exclusive with own CAS (remux_new()). multi-program version of remux.c
+       send_psi_tables()'s standalone CAT handling. */
+    if (!cas && now - last_cat >= INTERVAL_CAT_S) {
+      unsigned char cat_desc[ARGS_MAX_INPUTS * 6];
+      size_t cat_desc_len = 0;
+      int have_desc = 0;
+
+      last_cat = now;
+      for (i = 0; i < n; i++) {
+        size_t dl;
+        if (!progs[i].rx || cat_desc_len + 6 > sizeof cat_desc)
+          continue;
+        dl = remux_source_emm_descriptor(progs[i].rx, cat_desc + cat_desc_len, sizeof cat_desc - cat_desc_len);
+        if (dl) {
+          cat_desc_len += dl;
+          have_desc = 1;
+        }
       }
+      if (have_desc) {
+        unsigned char sec[4096];
+        unsigned char ptr0 = 0x00;
+        size_t sl = psi_build_cat(0, cat_desc, cat_desc_len, sec, sizeof sec);
+        if (sl) {
+          ts_packet_emit(OUT_PID_CAT, &cat_cc, &ptr0, sec, sl, 0, 0, packet_cb, &out);
+          if (tsm_p)
+            tsm_p->psi_sections_total[PSI_TABLE_CAT]++;
+        } else if (tsm_p) {
+          tsm_p->psi_errors_total[PSI_TABLE_CAT]++;
+        }
+      }
+    }
+
+    if (cas_needs_discovery && !cas && check_cas_discovery_gate(cfg, progs, n, mpts, cas_gate_deadline, &cas) != 0) {
+      rc = 1;
+      goto done;
     }
 
     mpts_tick(mpts, now, packet_cb, &out);

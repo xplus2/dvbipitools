@@ -18,6 +18,10 @@
 #define OUT_MAX_ES 32 /* per-program block: video+ES(cap) plus one AIT slot */
 #define OUT_PROGRAM_ES_CAP (OUT_MAX_ES - 1) /* last block slot is AIT */
 
+/* --strip bits, per-input (args.h's dipitvhead_input_t.strip_mask). default 0: nothing stripped */
+#define TVSTRIP_DATA 0x01 /* carousels, SCTE-35, any other unrecognized PMT ES entry */
+#define TVSTRIP_ECM 0x02  /* source CAT/ECM/EMM passthrough */
+
 typedef struct {
   unsigned pmt_pid, video_pid, es_pid_base, ait_pid;
 } out_program_pids_t;
@@ -31,13 +35,20 @@ typedef struct {
   unsigned in_pid;  /* source pid, for remux's packet -> out_es_t lookup */
   unsigned out_pid;
   unsigned stream_type; /* our own output stream_type, not source's */
-  const psi_es_t *src;  /* borrowed, valid as long as discovery psi_t is alive */
+  const psi_es_t *src;  /* borrowed, valid as long as discovery psi_t is alive. NULL if is_ca */
+  int is_ca; /* 0: normal PMT ES entry. 1: ECM passthrough. 2: EMM passthrough. neither gets own PMT stream_type entry */
+  unsigned ca_system_id; /* meaningful only if is_ca != 0 */
 } out_es_t;
 
 /* video -> video_pid, rest -> es_pid_base.. in order. drops unsupported ES.
-   retval: count, *pcr_pid = mapped output pid of the PCR ES (or first ES fallback),
-   *dropped = supported ES beyond cap, left unmapped, in discovery order */
-int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned src_pcr_pid, unsigned video_pid, unsigned es_pid_base, out_es_t *out_es, int cap, unsigned *pcr_pid, int *dropped);
+   PID_DATA (carousels, SCTE-35, any other unrecognized stream_type) counts supported unless strip_mask & TVSTRIP_DATA.
+   retval: count, *pcr_pid = mapped output pid of PCR ES (or first ES fallback),
+   *dropped = supported ES beyond cap, left unmapped */
+int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned strip_mask, unsigned src_pcr_pid, unsigned video_pid, unsigned es_pid_base, out_es_t *out_es, int cap, unsigned *pcr_pid, int *dropped);
+
+/* appends up to 2 synthetic out_es[] entries (is_ca 1/2), ECM/EMM at next free pid
+   after out_es[0..n). ecm_pid/emm_pid 0 = none. same cap/overflow bookkeeping as pmtbuild_map_es(). */
+void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, unsigned emm_pid, unsigned emm_ca_system_id, unsigned es_pid_base, unsigned video_pid, out_es_t *out_es, int *n, int cap, int *dropped);
 
 /* build multi-ES PMT section. prog_desc/prog_desc_len: program_info descriptor bytes (e.g. cadescbuild_ca_descriptor()), NULL/0 if none.
    extra/extra_len: pre-built ES-loop bytes appended before the CRC (e.g. aitbuild_pmt_entry()), NULL/0 if none. 0 on overflow */

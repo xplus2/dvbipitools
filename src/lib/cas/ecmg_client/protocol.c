@@ -40,9 +40,8 @@ int ecmg_find_error_status(const unsigned char *body, size_t body_len, unsigned 
   simulcrypt_tlv_reader_t it;
   unsigned short tag, vlen;
   const unsigned char *val;
-  int rc;
   simulcrypt_tlv_reader_init(&it, body, body_len);
-  while ((rc = simulcrypt_tlv_reader_next(&it, &tag, &val, &vlen)) == 1) {
+  while (simulcrypt_tlv_reader_next(&it, &tag, &val, &vlen) == 1) {
     if (tag == ECMG_P_ERROR_STATUS && vlen == 2) {
       *out = ((unsigned)val[0] << 8) | val[1];
       return 0;

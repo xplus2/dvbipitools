@@ -94,12 +94,14 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   c->ecm_count = 0;
   c->scrambling_mode = 0;
   c->pmt_ca_system_id = 0;
+  c->pmt_ca_pid = 0;
   if (12 + pil <= n) {
     const unsigned char *sd;
     ca = find_desc(b + 12, pil, 0x09, &l);
     if (ca && l >= 4) {
       c->pmt_ca_system_id = ((unsigned)ca[0] << 8) | ca[1];
-      add_ecm(c, (((unsigned)ca[2] & 0x1F) << 8) | ca[3]);
+      c->pmt_ca_pid = (((unsigned)ca[2] & 0x1F) << 8) | ca[3];
+      add_ecm(c, c->pmt_ca_pid);
     }
     sd = find_desc(b + 12, pil, 0x65, &l);
     if (sd && l >= 1)
@@ -118,9 +120,14 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
     e->stream_type = b[i];
     e->pid = (((unsigned)b[i + 1] & 0x1F) << 8) | b[i + 2];
     classify(e, desc, esil);
+    if (esil <= sizeof e->desc) {
+      memcpy(e->desc, desc, esil);
+      e->desc_len = esil;
+    }
     ca = find_desc(desc, esil, 0x09, &l);
     if (ca && l >= 4) {
       e->ca_pid = (((unsigned)ca[2] & 0x1F) << 8) | ca[3];
+      e->ca_system_id = ((unsigned)ca[0] << 8) | ca[1];
       add_ecm(c, e->ca_pid);
     }
     c->es_count++;

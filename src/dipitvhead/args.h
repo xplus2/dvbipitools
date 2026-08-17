@@ -63,6 +63,7 @@ typedef struct {
   char sdt_text[256];      /* -s <text> right after this -i */
   const char *iface_in;    /* -I right after this -i; NULL = kernel default route */
   int strip_eit;           /* --strip-eit right after this -i */
+  unsigned strip_mask;     /* --strip right after this -i, TVSTRIP_* bits (mux/pmtbuild.h). default 0: nothing stripped */
   const char *hbbtv_url;   /* --hbbtv right after this -i; NULL = no AIT for this program */
   unsigned hbbtv_org_id;   /* --hbbtv-org-id right after this -i; required with --hbbtv */
   unsigned hbbtv_app_id;   /* --hbbtv-app-id right after this -i; required with --hbbtv */

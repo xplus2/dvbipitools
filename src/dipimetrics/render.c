@@ -111,6 +111,12 @@ static void sb_init(strbuf_t *sb) {
   sb->buf[0] = '\0';
 }
 
+static void sb_appendf(strbuf_t *sb, const char *fmt, ...)
+#if defined(__GNUC__)
+    __attribute__((format(printf, 2, 3)))
+#endif
+    ;
+
 static void sb_appendf(strbuf_t *sb, const char *fmt, ...) {
   if (!sb->buf)
     return;

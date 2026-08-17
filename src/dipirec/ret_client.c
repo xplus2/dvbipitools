@@ -201,11 +201,10 @@ static void handle_original_seq(ret_client_t *r, uint16_t seq, const unsigned ch
           hold_store(r, (size_t)delta, payload, len);
         return;
       }
-      if ((size_t)delta == r->hold_n && r->hold_n < RET_GAP_MAX) {
-        if (hold_store(r, r->hold_n, payload, len)) {
-          r->hold_n++;
-          return;
-        }
+      if ((size_t)delta == r->hold_n && r->hold_n < RET_GAP_MAX &&
+          hold_store(r, r->hold_n, payload, len)) {
+        r->hold_n++;
+        return;
       }
       abandon_gap(r); /* disjoint from the current window, or oversized: retry fresh below */
     }
