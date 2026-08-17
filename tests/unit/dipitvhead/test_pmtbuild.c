@@ -52,7 +52,7 @@ START_TEST(pmtbuild_map_es_picks_video_first_and_drops_unsupported) {
   es[4].ttx_type = 2;
   snprintf(es[4].ttx_lang, sizeof es[4].ttx_lang, "deu");
 
-  n = pmtbuild_map_es(es, 5, 0x0102 /* PCR on the audio pid */, pids.video_pid, pids.es_pid_base, out_es, 8, &pcr_pid, &dropped);
+  n = pmtbuild_map_es(es, 5, TVSTRIP_DATA, 0x0102 /* PCR on the audio pid */, pids.video_pid, pids.es_pid_base, out_es, 8, &pcr_pid, &dropped);
 
   ck_assert_int_eq(n, 4); /* video + audio + subtitle + teletext, PID_DATA dropped */
   ck_assert_int_eq(dropped, 0); /* unsupported ES isn't a cap drop */
@@ -79,7 +79,7 @@ START_TEST(pmtbuild_map_es_defaults_pcr_to_first_es_when_no_match) {
   es[0].cls = PID_VIDEO;
   es[0].codec = CODEC_H264;
 
-  n = pmtbuild_map_es(es, 1, 0x9999 /* no ES has this pid */, pids.video_pid, pids.es_pid_base, out_es, 4, &pcr_pid, &dropped);
+  n = pmtbuild_map_es(es, 1, 0, 0x9999 /* no ES has this pid */, pids.video_pid, pids.es_pid_base, out_es, 4, &pcr_pid, &dropped);
   ck_assert_int_eq(n, 1);
   ck_assert_int_eq(dropped, 0);
   ck_assert_uint_eq(pcr_pid, out_es[0].out_pid);
@@ -104,7 +104,7 @@ START_TEST(pmtbuild_map_es_reports_dropped_beyond_cap) {
     es[i].codec = CODEC_AAC;
   }
 
-  n = pmtbuild_map_es(es, 4, es[0].pid, pids.video_pid, pids.es_pid_base, out_es, 2, &pcr_pid, &dropped);
+  n = pmtbuild_map_es(es, 4, 0, es[0].pid, pids.video_pid, pids.es_pid_base, out_es, 2, &pcr_pid, &dropped);
 
   ck_assert_int_eq(n, 2); /* video + one audio, cap is 2 */
   ck_assert_int_eq(dropped, 2); /* the other two audio ES */
@@ -143,7 +143,7 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
   es[3].ttx_type = 2;
   snprintf(es[3].ttx_lang, sizeof es[3].ttx_lang, "deu");
 
-  n = pmtbuild_map_es(es, 4, 0x0101, pids.video_pid, pids.es_pid_base, out_es, 8, &pcr_pid, &dropped);
+  n = pmtbuild_map_es(es, 4, 0, 0x0101, pids.video_pid, pids.es_pid_base, out_es, 8, &pcr_pid, &dropped);
   ck_assert_int_eq(n, 4);
   ck_assert_int_eq(dropped, 0);
 
