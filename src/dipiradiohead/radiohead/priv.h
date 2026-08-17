@@ -18,10 +18,10 @@
 #define TS_PER_DGRAM 7
 
 typedef struct {
-  mcast_t *mc;
+  mcast_t *mc; /* NULL unless -m given */
   int rtp;
   rtpheader_t *rtph;
-  ristout_t *rist; /* NULL unless -R given; bonded peers, sent alongside mc */
+  ristout_t *rist; /* NULL unless -R given; bonded peers, sent alongside mc if both present */
   uint64_t cur_pts;
   unsigned char batch[12 + TS_PER_DGRAM * 188]; /* [0,12): RTP header headroom, unused if !rtp */
   int batch_count;

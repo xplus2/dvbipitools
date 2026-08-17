@@ -61,7 +61,7 @@ static int pid_parse(const char *s, unsigned *out) {
 
 static void print_help(void) {
   printf(
-      "usage: %s -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] -m <mcast>:<port> [options]\n\n"
+      "usage: %s -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]\n\n"
       "fetch one or more icecast/shoutcast streams and re-mux them as one DVB-IPI multicast\n"
       "(a single -i: normal SPTS. multiple -i: MPTS, one program per input)\n\n"
       "options:\n"
@@ -70,11 +70,11 @@ static void print_help(void) {
       "      --sdt <name>           SDT service_name for the -i right before this (default: auto)\n"
       "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
       "  -I, --iface <iface>        outgoing multicast interface\n"
-      "  -r, --rtp                  wrap output in RTP (default: plain UDP)\n"
+      "  -r, --rtp                  wrap output in RTP (default: plain UDP; -m output only)\n"
       "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
       "  -n, --nit <text>           NIT network_name\n"
-      "  -R, --rist <uri>           rist://host:port[?query] additional output, bonded with any\n"
-      "                             other -R given; simultaneous with -m (requires librist)\n"
+      "  -R, --rist <uri>           rist://host:port[?query] output, bonded with any other -R\n"
+      "                             given (requires librist)\n"
       "      --profile <p>          simple|main; -R peers only (default: simple)\n"
       "      --secret <psk>         -R pre-shared key; requires --profile main\n"
       "      --cname <name>         -R cname (default: library default)\n"
@@ -570,8 +570,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -i input");
     return ARGS_ERR;
   }
-  if (!have_mcast) {
-    argerr("missing -m output multicast");
+  if (!have_mcast && cfg->n_rist == 0) {
+    argerr("need -m output multicast or at least one -R rist peer");
     return ARGS_ERR;
   }
   if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {

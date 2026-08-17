@@ -4,7 +4,7 @@ Fetches one or more Icecast/Shoutcast streams and re-muxes them as one DVB-IPI m
 transcoding. A single `-i` gives a normal SPTS; more than one gives an MPTS, one program per input.
 
 ```
-dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] -m <mcast>:<port> [options]
+dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]
 ```
 
 ## Options
@@ -14,7 +14,7 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] -m <mcast>:<por
 | `-i`  | `--input`            | `<uri>`                                | required, repeatable |            |
 |       | `--sid`              | `<n>`                                  | auto (see below)     | per-input  |
 | `-s`  | `--sdt`              | `<name>`                               | auto (see below)     | per-input  |
-| `-m`  | `--mcast`            | `<group>:<port>` / `[<group6>]:<port>` | required             |            |
+| `-m`  | `--mcast`            | `<group>:<port>` / `[<group6>]:<port>` | required unless `-R` given |    |
 | `-I`  | `--iface`            | `<iface>`                              | kernel route         |            |
 | `-r`  | `--rtp`              |                                        | off (plain UDP)      |            |
 | `-T`  | `--ttl`              | `<n>`                                  | 1 (kernel default)   |            |
@@ -118,12 +118,14 @@ route). `-r` wraps output in RTP, matching `dipirec -i rtp://`; without it, plai
 `-i udp://`. 7 TS packets (1316 B) per datagram either way. `-T` sets the multicast TTL / hop
 limit (default 1, i.e. link-local only - raise it to route beyond the first hop).
 
-`-R rist://host:port[?query]` sends the same TS to one or more RIST peers at the same time as
-the `-m` multicast output (requires librist; built without it, `-R` fails cleanly at startup).
-Repeatable - every peer bonds onto a single RIST sender context, same bonding model as
-[dipirist](../dipirist/README.md). `-m` stays required; `-R` is additional, not a replacement.
-`--profile`/`--secret`/`--cname`/`--buffer` configure the RIST peers; `--secret` requires
-`--profile main`.
+`-R rist://host:port[?query]` sends the same TS to one or more RIST peers, alongside `-m` if
+given, or standalone without it. One of `-m`/`-R` is required, not both (requires librist). 
+Repeatable, every peer bonds onto a single RIST sender context, 
+same bonding model as [dipirist](../dipirist/README.md). `-r` only affects the
+`-m` output.
+RIST is never RTP-wrapped. 
+`--profile`/`--secret`/`--cname`/`--buffer` configure the RIST peers.
+`--secret` requires `--profile main`.
 
 ## Now-playing metadata
 
@@ -261,13 +263,14 @@ ECM/EMM PIDs are auto-allocated.
 
 ### Limitations
 
-CISSA, CSA1/CSA2, BISS1 Mode 1, BISS2 Mode 1/E, BISS2 Mode CA.
+CISSA, CSA1, CSA2, BISS1 Mode 1, BISS2 Mode 1/E, BISS2 Mode CA only.
 
-* No CSA3/CSA-ALT
+* No CSA3
 * No BISS1 Mode E (DES)
 * BISS2 Mode CA: no group key pairs, but one keypair per file in receivers-dir.
   No `entitlement_priv_data_loop` vendor extensions, `prevent_descrambled_forward`/
   `prevent_decoded_forward`/`insert_watermark` entitlement flags always 0 (unenforced)
+* This is a single-pass scrambler
 
 
 ### Dependencies

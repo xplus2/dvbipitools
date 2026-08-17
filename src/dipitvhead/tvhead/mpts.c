@@ -338,6 +338,8 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   memset(input_stats, 0, sizeof input_stats);
   memset(&tsm, 0, sizeof tsm);
 
+  memset(&out, 0, sizeof out);
+
   progs = calloc(n, sizeof *progs);
   if (!progs)
     return 1;
@@ -361,19 +363,20 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     goto done;
   }
 
-  outmc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface_out, (int)cfg->ttl);
-  if (!outmc) {
-    rc = 1;
-    goto done;
-  }
-  memset(&out, 0, sizeof out);
-  out.mc = outmc;
-  out.rtp = cfg->rtp;
-  if (cfg->rtp) {
-    out.rtph = rtpheader_new();
-    if (!out.rtph) {
+  if (cfg->mcast_port) {
+    outmc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface_out, (int)cfg->ttl);
+    if (!outmc) {
       rc = 1;
       goto done;
+    }
+    out.mc = outmc;
+    out.rtp = cfg->rtp;
+    if (cfg->rtp) {
+      out.rtph = rtpheader_new();
+      if (!out.rtph) {
+        rc = 1;
+        goto done;
+      }
     }
   }
   if (cfg->n_rist > 0) {
@@ -513,8 +516,7 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
 done:
   if (cas)
     cas_flush(cas, packet_cb, &out);
-  if (outmc)
-    flush_batch(&out);
+  flush_batch(&out);
   for (i = 0; progs && i < n; i++)
     program_reset(&progs[i]);
   free(progs);
@@ -524,19 +526,18 @@ done:
     retryset_free(rs);
   if (cas)
     cas_stop(cas);
-  if (outmc) {
-    if (out.rtph)
-      rtpheader_free(out.rtph);
-    if (out.rist)
-      ristout_close(out.rist);
-    if (out.pacer)
-      bitrate_pacer_free(out.pacer);
+  if (out.rtph)
+    rtpheader_free(out.rtph);
+  if (out.rist)
+    ristout_close(out.rist);
+  if (out.pacer)
+    bitrate_pacer_free(out.pacer);
+  if (outmc)
     mcast_close(outmc);
-  }
 
-  if (cfg->verbose && outmc && log_stderr_is_tty())
+  if (cfg->verbose && log_stderr_is_tty())
     fputc('\n', stderr);
-  if (rc == 0 && outmc)
+  if (rc == 0)
     log_line("stopped.");
   return rc ? 1 : 0;
 }

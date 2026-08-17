@@ -48,11 +48,13 @@ void flush_batch(out_ctx_t *o) {
   if (o->batch_count == 0)
     return;
   bitrate_pace(o->pacer);
-  if (o->rtp) {
-    rtpheader_build(o->rtph, (uint32_t)(mono_seconds() * 90000.0), o->batch, 12);
-    note_send_result(mcast_send(o->mc, o->batch, 12 + n) >= 0, &o->mc_had_error, &o->errors, "mcast");
-  } else {
-    note_send_result(mcast_send(o->mc, o->batch + 12, n) >= 0, &o->mc_had_error, &o->errors, "mcast");
+  if (o->mc) {
+    if (o->rtp) {
+      rtpheader_build(o->rtph, (uint32_t)(mono_seconds() * 90000.0), o->batch, 12);
+      note_send_result(mcast_send(o->mc, o->batch, 12 + n) >= 0, &o->mc_had_error, &o->errors, "mcast");
+    } else {
+      note_send_result(mcast_send(o->mc, o->batch + 12, n) >= 0, &o->mc_had_error, &o->errors, "mcast");
+    }
   }
   if (o->rist)
     note_send_result(ristout_write(o->rist, o->batch + 12, n) >= 0, &o->rist_had_error, &o->errors, "rist");

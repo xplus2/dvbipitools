@@ -57,11 +57,13 @@ void flush_batch(out_ctx_t *o) {
 
   if (o->batch_count == 0)
     return;
-  if (o->rtp) {
-    rtpheader_build(o->rtph, (uint32_t)o->cur_pts, o->batch, 12);
-    note_send_result(mcast_send(o->mc, o->batch, 12 + n) >= 0, &o->mc_had_error, &o->errors, "mcast");
-  } else {
-    note_send_result(mcast_send(o->mc, o->batch + 12, n) >= 0, &o->mc_had_error, &o->errors, "mcast");
+  if (o->mc) {
+    if (o->rtp) {
+      rtpheader_build(o->rtph, (uint32_t)o->cur_pts, o->batch, 12);
+      note_send_result(mcast_send(o->mc, o->batch, 12 + n) >= 0, &o->mc_had_error, &o->errors, "mcast");
+    } else {
+      note_send_result(mcast_send(o->mc, o->batch + 12, n) >= 0, &o->mc_had_error, &o->errors, "mcast");
+    }
   }
   if (o->rist)
     note_send_result(ristout_write(o->rist, o->batch + 12, n) >= 0, &o->rist_had_error, &o->errors, "rist");
@@ -180,7 +182,7 @@ static int process_single_frame(single_tick_t *tk, source_t *src) {
 }
 
 int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
-  mcast_t *mc;
+  mcast_t *mc = NULL;
   out_ctx_t out;
   meta_state_t meta;
   tspacketizer_t *tsp = NULL;
@@ -202,16 +204,18 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   memset(&im, 0, sizeof im);
   memset(&rm, 0, sizeof rm);
   meta.rm = metrics_on ? &rm : NULL;
-  mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, (int)cfg->ttl);
-  if (!mc)
-    return 1;
-  out.mc = mc;
-  out.rtp = cfg->rtp;
-  if (cfg->rtp) {
-    out.rtph = rtpheader_new();
-    if (!out.rtph) {
-      mcast_close(mc);
+  if (cfg->mcast_port) {
+    mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, (int)cfg->ttl);
+    if (!mc)
       return 1;
+    out.mc = mc;
+    out.rtp = cfg->rtp;
+    if (cfg->rtp) {
+      out.rtph = rtpheader_new();
+      if (!out.rtph) {
+        mcast_close(mc);
+        return 1;
+      }
     }
   }
   if (cfg->n_rist > 0) {
@@ -219,7 +223,8 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     if (!out.rist) {
       if (out.rtph)
         rtpheader_free(out.rtph);
-      mcast_close(mc);
+      if (mc)
+        mcast_close(mc);
       return 1;
     }
   }
@@ -309,7 +314,8 @@ done:
     rtpheader_free(out.rtph);
   if (out.rist)
     ristout_close(out.rist);
-  mcast_close(mc);
+  if (mc)
+    mcast_close(mc);
 
   if (cfg->verbose && log_stderr_is_tty())
     fputc('\n', stderr);

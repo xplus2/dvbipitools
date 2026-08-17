@@ -24,7 +24,7 @@ jobs:
             tsan: ON
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: dependencies
       run: |
         sudo apt-get update
@@ -43,7 +43,7 @@ jobs:
   static-analysis:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: dependencies
       run: |
         sudo apt-get update
@@ -56,7 +56,7 @@ jobs:
           2>&1 | tee cppcheck-report.txt
     - name: upload report
       if: always()
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
       with:
         name: cppcheck-report
         path: cppcheck-report.txt
@@ -64,7 +64,7 @@ jobs:
   fuzz-smoke:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: dependencies
       run: |
         sudo apt-get update
@@ -105,9 +105,26 @@ jobs:
         exit $fail
     - name: upload crashes
       if: always()
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
       with:
         name: fuzz-smoke-crashes
         path: afl-out/*/default/crashes
         if-no-files-found: ignore
         
+  scorecard:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: OSSF Scorecard action
+        uses: ossf/scorecard-action@v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - name: "Upload to code-scanning"
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif

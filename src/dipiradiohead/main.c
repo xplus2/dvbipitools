@@ -30,7 +30,10 @@ int main(int argc, char **argv) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
   }
-  mcast_describe(&cfg, mcast, sizeof mcast);
+  if (cfg.mcast_port)
+    mcast_describe(&cfg, mcast, sizeof mcast);
+  else
+    snprintf(mcast, sizeof mcast, "-");
   if (cfg.n_inputs == 1) {
     log_line_ansi("\e[1mi:\e[0m\e[0;37m%s\e[0m \e[1mm:\e[0m\e[0;37m%s\e[0m \e[1mrtp:\e[0m\e[0;37m%s\e[0m", cfg.inputs[0].uri, mcast, cfg.rtp ? "yes" : "no");
   } else {

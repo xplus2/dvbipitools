@@ -44,7 +44,7 @@ static void run_single_input(const config_t *cfg, tvsrc_t *src, psi_t *psi, out_
 
 int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   int rc = 0;
-  mcast_t *outmc;
+  mcast_t *outmc = NULL;
   out_ctx_t out;
   input_metrics_t im;
   ts_metrics_t tsm;
@@ -55,16 +55,18 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   memset(&out, 0, sizeof out);
   memset(&im, 0, sizeof im);
   memset(&tsm, 0, sizeof tsm);
-  outmc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface_out, (int)cfg->ttl);
-  if (!outmc)
-    return 1;
-  out.mc = outmc;
-  out.rtp = cfg->rtp;
-  if (cfg->rtp) {
-    out.rtph = rtpheader_new();
-    if (!out.rtph) {
-      mcast_close(outmc);
+  if (cfg->mcast_port) {
+    outmc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface_out, (int)cfg->ttl);
+    if (!outmc)
       return 1;
+    out.mc = outmc;
+    out.rtp = cfg->rtp;
+    if (cfg->rtp) {
+      out.rtph = rtpheader_new();
+      if (!out.rtph) {
+        mcast_close(outmc);
+        return 1;
+      }
     }
   }
   if (cfg->n_rist > 0) {
@@ -72,7 +74,8 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     if (!out.rist) {
       if (out.rtph)
         rtpheader_free(out.rtph);
-      mcast_close(outmc);
+      if (outmc)
+        mcast_close(outmc);
       return 1;
     }
   }
@@ -143,7 +146,8 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     rtpheader_free(out.rtph);
   if (out.rist)
     ristout_close(out.rist);
-  mcast_close(outmc);
+  if (outmc)
+    mcast_close(outmc);
 
   if (cfg->verbose && log_stderr_is_tty())
     fputc('\n', stderr);

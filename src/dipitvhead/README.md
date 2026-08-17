@@ -11,7 +11,7 @@ One input being down never stops output for the others. No transcoding.
 
 ## General Usage
 ```
-dipitvhead -i <uri> [per-input options] [-i <uri> ...] -m <mcast>:<port> [options]
+dipitvhead -i <uri> [per-input options] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]
 ```
 
 ## Options
@@ -31,7 +31,7 @@ across every input.
 |      | `--hbbtv`            | `<url>`               | none (no AIT sent)                        | per-input  |
 |      | `--hbbtv-org-id`     | `<n>`                 | required with `--hbbtv`                   | per-input  |
 |      | `--hbbtv-app-id`     | `<n>`                 | required with `--hbbtv`                   | per-input  |
-| `-m` | `--mcast`            | `<group(6)>:<port>`   | required                                  |            |
+| `-m` | `--mcast`            | `<group(6)>:<port>`   | required unless `-R` given                |            |
 | `-O` | `--out-iface`        | `<iface>`             | kernel route (outgoing)                   |            |
 | `-u` | `--udp`              |                       | off (RTP)                                 |            |
 | `-T` | `--ttl`              | `<n>`                 | 1                                         |            |
@@ -167,11 +167,11 @@ target. `-B`: paces sending so output never runs ahead of target. Combinable.
 
 ### RIST output (`-R`)
 
-Sends the same TS the `-m` multicast output carries to one or more RIST peers at the same time
-(requires librist; built without it, `-R` fails cleanly at startup). `-R` is repeatable and every
-peer is bonded onto a single RIST sender context, same bonding model as
-[dipirist](../dipirist/README.md). `-m` stays required - `-R` is an additional, simultaneous
-output, not a replacement.
+Sends the same TS to one or more RIST peers, alongside `-m` if given, or standalone without it.
+One of `-m`/`-R` is required (requires librist). 
+`-R` is repeatable and every peer is bonded onto a single RIST sender context, same
+bonding model as [dipirist](../dipirist/README.md). `-u`/`--udp` only affects the `-m` output.
+RIST is never RTP-wrapped.
 
 `--profile`/`--secret`/`--cname`/`--buffer` configure the RIST peers (profile, pre-shared key,
 cname, recovery buffer); `--secret` requires `--profile main`.
@@ -311,13 +311,14 @@ ECM/EMM PIDs are auto-allocated.
 
 ### Limitations
 
-CISSA, CSA1/CSA2, BISS1 Mode 1, BISS2 Mode 1/E, BISS2 Mode CA.
+CISSA, CSA1, CSA2, BISS1 Mode 1, BISS2 Mode 1/E, BISS2 Mode CA only.
 
-* No CSA3/CSA-ALT
+* No CSA3
 * No BISS1 Mode E (DES)
 * BISS2 Mode CA: no group key pairs, but one keypair per file in receivers-dir.
   No `entitlement_priv_data_loop` vendor extensions, `prevent_descrambled_forward`/
   `prevent_decoded_forward`/`insert_watermark` entitlement flags always 0 (unenforced)
+* This is a single-pass scrambler
 
 ### Dependencies
 

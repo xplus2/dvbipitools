@@ -148,7 +148,7 @@ static int cas_pids_parse(const char *s, config_t *cfg) {
 
 static void print_help(void) {
   printf(
-      "usage: %s -i <uri> [per-input options] [-i <uri> ...] -m <mcast>:<port> [options]\n\n"
+      "usage: %s -i <uri> [per-input options] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]\n\n"
       "re-package one or more transport streams (already-muxed, not raw ES) as one DVB-IPI\n"
       "multicast. A single -i: normal SPTS. Multiple -i: MPTS, one program per input.\n\n"
       "options:\n"
@@ -169,10 +169,10 @@ static void print_help(void) {
       "                             (required with --hbbtv)\n"
       "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
       "  -O, --out-iface <iface>    outgoing multicast interface\n"
-      "  -u, --udp                  plain UDP output (default: RTP-wrapped)\n"
+      "  -u, --udp                  plain UDP output (default: RTP-wrapped; -m output only)\n"
       "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
-      "  -R, --rist <uri>           rist://host:port[?query] additional output, bonded with any\n"
-      "                             other -R given; simultaneous with -m (requires librist)\n"
+      "  -R, --rist <uri>           rist://host:port[?query] output, bonded with any other -R\n"
+      "                             given (requires librist)\n"
       "      --profile <p>          simple|main; -R peers only (default: simple)\n"
       "      --secret <psk>         -R pre-shared key; requires --profile main\n"
       "      --cname <name>         -R cname (default: library default)\n"
@@ -779,8 +779,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -i input");
     return ARGS_ERR;
   }
-  if (!have_mcast) {
-    argerr("missing -m output multicast");
+  if (!have_mcast && cfg->n_rist == 0) {
+    argerr("need -m output multicast or at least one -R rist peer");
     return ARGS_ERR;
   }
   if ((cfg->stuff || cfg->burst_limit) && !cfg->bitrate_kbps) {
