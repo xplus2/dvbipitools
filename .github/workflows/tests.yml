@@ -24,107 +24,89 @@ jobs:
             tsan: ON
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-    - name: dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake pkg-config libssl-dev check ffmpeg
-    - name: install tsduck
-      run: |
-        curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu24_amd64.deb
-        sudo apt-get install -y ./tsduck.deb
-    - name: configure
-      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DDVBIPITOOLS_SANITIZE=${{ matrix.sanitize }} -DDVBIPITOOLS_TSAN=${{ matrix.tsan }}
-    - name: build
-      run: cmake --build build -j"$(nproc)"
-    - name: test
-      run: ctest --test-dir build --output-on-failure
+      - uses: actions/checkout@v5
+      - name: dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config libssl-dev check ffmpeg
+      - name: install tsduck
+        run: |
+          curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu24_amd64.deb
+          sudo apt-get install -y ./tsduck.deb
+      - name: configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DDVBIPITOOLS_SANITIZE=${{ matrix.sanitize }} -DDVBIPITOOLS_TSAN=${{ matrix.tsan }}
+      - name: build
+        run: cmake --build build -j"$(nproc)"
+      - name: test
+        run: ctest --test-dir build --output-on-failure
 
   static-analysis:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-    - name: dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cppcheck
-    - name: cppcheck
-      run: |
-        set -o pipefail
-        cppcheck --enable=warning,performance,portability --std=c11 --inline-suppr \
-          --suppress=missingIncludeSystem --error-exitcode=1 -I src --quiet src/ \
-          2>&1 | tee cppcheck-report.txt
-    - name: upload report
-      if: always()
-      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-      with:
-        name: cppcheck-report
-        path: cppcheck-report.txt
+      - uses: actions/checkout@v5
+      - name: dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+      - name: cppcheck
+        run: |
+          set -o pipefail
+          cppcheck --enable=warning,performance,portability --std=c11 --inline-suppr \
+            --suppress=missingIncludeSystem --error-exitcode=1 -I src --quiet src/ \
+            2>&1 | tee cppcheck-report.txt
+      - name: upload report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: cppcheck-report
+          path: cppcheck-report.txt
 
   fuzz-smoke:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-    - name: dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake pkg-config libssl-dev afl++
-    - name: configure (afl-clang-fast)
-      run: cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_FUZZING=ON -DCMAKE_C_COMPILER=afl-clang-fast
-    - name: build harnesses
-      run: cmake --build build-fuzz -j"$(nproc)" --target fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_gen_seeds
-    - name: generate seeds
-      run: |
-        mkdir -p afl-in
-        build-fuzz/tests/fuzz/fuzz_gen_seeds afl-in
-    - name: fuzz smoke (60s per harness)
-      env:
-        AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES: "1"
-      run: |
-        fail=0
-        for h in fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams; do
-          echo "=== $h ==="
-          mkdir -p "afl-out/$h"
-          set +e
-          timeout 90 afl-fuzz -i afl-in -o "afl-out/$h" -V 60 -- "build-fuzz/tests/fuzz/$h" @@
-          rc=$?
-          set -e
-          if [ "$rc" -ne 0 ]; then
-            echo "$h: afl-fuzz exited abnormally (rc=$rc)"
-            fail=1
-          fi
-          if [ ! -s "afl-out/$h/default/fuzzer_stats" ]; then
-            echo "$h: no fuzzer_stats written, run never started"
-            fail=1
-          fi
-          if [ -n "$(ls -A "afl-out/$h/default/crashes" 2>/dev/null)" ]; then
-            echo "$h: crash found"
-            fail=1
-          fi
-        done
-        exit $fail
-    - name: upload crashes
-      if: always()
-      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-      with:
-        name: fuzz-smoke-crashes
-        path: afl-out/*/default/crashes
-        if-no-files-found: ignore
-        
-  scorecard:
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: OSSF Scorecard action
-        uses: ossf/scorecard-action@v2.4.4
+      - uses: actions/checkout@v5
+      - name: dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config libssl-dev afl++
+      - name: configure (afl-clang-fast)
+        run: cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_FUZZING=ON -DCMAKE_C_COMPILER=afl-clang-fast
+      - name: build harnesses
+        run: cmake --build build-fuzz -j"$(nproc)" --target fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_gen_seeds
+      - name: generate seeds
+        run: |
+          mkdir -p afl-in
+          build-fuzz/tests/fuzz/fuzz_gen_seeds afl-in
+      - name: fuzz smoke (60s per harness)
+        env:
+          AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES: "1"
+        run: |
+          fail=0
+          for h in fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams; do
+            echo "=== $h ==="
+            mkdir -p "afl-out/$h"
+            set +e
+            timeout 90 afl-fuzz -i afl-in -o "afl-out/$h" -V 60 -- "build-fuzz/tests/fuzz/$h" @@
+            rc=$?
+            set -e
+            if [ "$rc" -ne 0 ]; then
+              echo "$h: afl-fuzz exited abnormally (rc=$rc)"
+              fail=1
+            fi
+            if [ ! -s "afl-out/$h/default/fuzzer_stats" ]; then
+              echo "$h: no fuzzer_stats written, run never started"
+              fail=1
+            fi
+            if [ -n "$(ls -A "afl-out/$h/default/crashes" 2>/dev/null)" ]; then
+              echo "$h: crash found"
+              fail=1
+            fi
+          done
+          exit $fail
+      - name: upload crashes
+        if: always()
+        uses: actions/upload-artifact@v5
         with:
-          results_file: results.sarif
-          results_format: sarif
-          publish_results: true
-      - name: "Upload to code-scanning"
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results.sarif
+          name: fuzz-smoke-crashes
+          path: afl-out/*/default/crashes
+          if-no-files-found: ignore

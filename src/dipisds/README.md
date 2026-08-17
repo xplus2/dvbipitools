@@ -48,6 +48,7 @@ dipisds -l -m <mcast>:<port> [options]
 |      | `--fus-id`        | `<n>`                       | announce: required with `--fus-name`       |
 |      | `--fus-announce`  | `<addr>:<port>`             | announce: off                              |
 |      | `--fus-logo`      | `<uri>`                     | announce: off                              |
+| `-d` | `--daemonize`     |                             | off (foreground)                           |
 | `-h` | `--help`          |                             |                                             |
 
 ## Announce (`-a`)

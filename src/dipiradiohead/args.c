@@ -124,6 +124,7 @@ static void print_help(void) {
       "                             change). Mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo\n"
       "      --biss2-ca-session-id <n> administratively unique entitlement_session_id, dec or\n"
       "                             0x-hex, 16 bit (default: random at startup)\n"
+      "  -d, --daemonize            fork to background after startup, detach from terminal\n"
       "  -h, --help                 this help\n\n"
       "examples:\n"
       "  %s -i https://example.com/radio.m3u --sdt \"Channel 1\" -m 239.1.1.1:5000\n"
@@ -210,6 +211,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"secret", required_argument, 0, 1026},
       {"cname", required_argument, 0, 1027},
       {"buffer", required_argument, 0, 1028},
+      {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_mcast = 0;
@@ -226,7 +228,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   optind = 1;
   /* leading '+': disable GNU getopt argument permutation, so --sid/--sdt stay paired with
      whichever -i preceded them on the command line instead of being reordered */
-  while ((c = getopt_long(argc, argv, "+i:m:I:rT:n:s:e:kvhR:", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "+i:m:I:rT:n:s:e:kvdhR:", longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
         if (cfg->n_inputs >= RADIOHEAD_MAX_INPUTS) {
@@ -513,6 +515,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       }
       case 'v':
         cfg->verbose = 1;
+        break;
+      case 'd':
+        cfg->daemonize = 1;
         break;
       case 'R':
         if (strncmp(optarg, "rist://", 7) != 0) {

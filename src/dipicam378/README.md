@@ -19,6 +19,7 @@ dipicam378 -k <keyfile> [options]
 |      | `--algo`    | `cissa\|csa2`         | `cissa`             |
 | `-v` | `--verbose` |                       |                     |
 |      | `--color`   | `auto\|always\|never` | `auto`              |
+| `-d` | `--daemonize` |                     | off (foreground)    |
 | `-h` | `--help`    |                       |                     |
 
 This tool is for debugging and validation only. A password is required because the

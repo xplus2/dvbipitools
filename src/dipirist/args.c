@@ -159,6 +159,7 @@ static void print_help(void) {
       "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
       "  -v, --verbose              periodic bridge stats on stderr\n"
+      "  -d, --daemonize            fork to background after startup, detach from terminal\n"
       "  -h, --help                 this help\n\n"
       "examples:\n"
       "  %s -i rtp://@239.1.1.1:5000 -o rist://1.2.3.4:6000 --buffer 1000\n"
@@ -181,6 +182,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics-id", required_argument, 0, 1006},
       {"metrics-interval", required_argument, 0, 1007},
       {"verbose", no_argument, 0, 'v'},
+      {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int n_in = 0, n_out = 0;
@@ -189,7 +191,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
   cfg->profile = RIST_PROF_SIMPLE;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "i:o:I:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "i:o:I:vdh", longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
         if (parse_endpoint_uri(optarg, &cfg->in, 0, &n_in)) {
@@ -265,6 +267,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       }
       case 'v':
         cfg->verbose = 1;
+        break;
+      case 'd':
+        cfg->daemonize = 1;
         break;
       case 'h':
         print_help();

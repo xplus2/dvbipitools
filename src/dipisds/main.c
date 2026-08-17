@@ -1,8 +1,10 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "announce.h"
 #include "args.h"
@@ -28,6 +30,10 @@ int main(int argc, char **argv) {
   if (st == ARGS_ERR) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
+  }
+  if (cfg.daemonize && daemon(1, 1) != 0) {
+    log_line(TOOL_NAME ": daemonize failed: %s", strerror(errno));
+    return 1;
   }
   signals_install();
   if (cfg.mode != MODE_ANNOUNCE)

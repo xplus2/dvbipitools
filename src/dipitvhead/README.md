@@ -53,6 +53,7 @@ across every input.
 |      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`           |            |
 |      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)        |            |
 |      | `--metrics-interval` | `<s>`                 | `5`                                       |            |
+| `-d` | `--daemonize`        |                       | off (foreground)                         |            |
 | `-h` | `--help`             |                       |                                           |            |
 
 > Note that the default output changed from _plain UDP_ to _RTP_, since neither FCC nor RET would work

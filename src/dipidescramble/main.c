@@ -181,6 +181,10 @@ int main(int argc, char **argv) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
   }
+  if (cfg.daemonize && daemon(1, 1) != 0) {
+    log_line(TOOL_NAME ": daemonize failed: %s", strerror(errno));
+    return 1;
+  }
 
   {
     int i, on = 0;

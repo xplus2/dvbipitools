@@ -23,6 +23,7 @@ typedef struct {
   const char *csvmap_path;  /* -C, listen: optional companion mapping csv */
   int compress;             /* -Z, announce: zlib-compress BCG containers (RFC 1950) */
   int verbose;              /* -v */
+  int daemonize;            /* -d, --daemonize: fork to background after startup */
   int color_mode;           /* --color; log_color_t */
 
   const char *metrics_sock;    /* --metrics; NULL = default socket path */

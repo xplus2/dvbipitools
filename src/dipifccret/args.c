@@ -95,6 +95,7 @@ static void print_help(void) {
       "  -u, --user <user>                drop privileges to this user after opening the capture handle\n"
       "  -v, --verbose                    periodic stats on stderr\n"
       "      --color <when>               auto|always|never (default auto)\n"
+      "  -d, --daemonize                  fork to background after startup, detach from terminal\n"
       "  -h, --help                       this help\n\n"
       "RET (Annex F) options:\n"
       "      --no-ret                     disable RET entirely\n"
@@ -165,6 +166,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"congestion-nack-threshold", required_argument, 0, 1017},
       {"fcc-range", required_argument, 0, 1018},
       {"fcc-client-range", required_argument, 0, 1019},
+      {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_range = 0, have_listen = 0, have_iface = 0;
@@ -184,7 +186,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->ret_client_idle_timeout_s = 300;
   cfg->rsi_interval_s = 5;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "g:l:I:M:R:w:u:vhB:F:G:C:X:D:", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "g:l:I:M:R:w:u:vdhB:F:G:C:X:D:", longopts, NULL)) != -1) {
     switch (c) {
       case 'g':
         if (ranges_parse(optarg, cfg)) {
@@ -249,6 +251,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 'v':
         cfg->verbose = 1;
+        break;
+      case 'd':
+        cfg->daemonize = 1;
         break;
       case 1002: {
         log_color_t v;

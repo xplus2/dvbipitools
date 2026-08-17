@@ -151,6 +151,7 @@ static void print_help(void) {
       "  %-27sincoming multicast interface\n"
       "  %-27speriodic stats + BK/SK/CW update lines on stderr\n"
       "  %-27sauto|always|never (default auto)\n"
+      "  %-27sfork to background after startup, detach from terminal\n"
       "  %-27sthis help\n\n"
       "examples:\n"
       "  %s -i rtp://@239.0.0.1:1975 -k device.key -s e2e-01 -e emm.cache -o out.ts -v\n"
@@ -165,7 +166,7 @@ static void print_help(void) {
       "    --ecm-profile <spec>",
       "-o, --output <target>", "", "-f, --format <fmt>", "", "-p, --pmt-pid <pid|all>", "", "",
       "-I, --iface <iface>", "-v, --verbose",
-      "    --color <when>", "-h, --help",
+      "    --color <when>", "-d, --daemonize", "-h, --help",
       TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
@@ -189,6 +190,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"biss1-sw", required_argument, 0, 1007},
       {"biss2-ca-key", required_argument, 0, 1008},
       {"ecm-profile", required_argument, 0, 1009},
+      {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_input = 0, have_biss_id = 0;
@@ -196,7 +198,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
 
   memset(cfg, 0, sizeof *cfg);
   optind = 1;
-  while ((c = getopt_long(argc, argv, "i:k:s:e:u:o:f:p:I:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "i:k:s:e:u:o:f:p:I:vdh", longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
         if (input_parse(optarg, &cfg->input)) {
@@ -248,6 +250,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 'v':
         cfg->verbose = 1;
+        break;
+      case 'd':
+        cfg->daemonize = 1;
         break;
       case 1000:
         {

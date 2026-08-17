@@ -128,8 +128,11 @@ On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 * Dynamic Service Management (§13)
 
 Indirectly related: 
-
-* `dipitvhead`, `dipiradiohead` and `dipidescramble` don't support ETSI TS 103 197 CSA3/CSA-ALT
+* `dipitvhead`, `dipiradiohead` and `dipidescramble`:
+  - no support for ETSI TS 103 197 CSA3 or non-standard CSA2 modes
+  - no BISS1 Mode E
+  - no BISS-CA group keys, only device keys
+  - no eECMs
 
 ## Licence
 

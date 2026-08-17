@@ -5,6 +5,6 @@
 #define DIPICAM378_VERSION_H
 
 #define TOOL_NAME    "dipicam378"
-#define TOOL_VERSION "0.4.1"
+#define TOOL_VERSION "0.4.2"
 
 #endif

@@ -53,6 +53,7 @@ static void print_help(void) {
       "      --algo <a>            cissa|csa2 (default: cissa)\n"
       "  -v, --verbose             protocol/decode detail on stderr\n"
       "      --color <when>        auto|always|never (default auto)\n"
+      "  -d, --daemonize           fork to background after startup, detach from terminal\n"
       "  -h, --help                this help\n\n"
       "example:\n"
       "  %s -k device.key -s e2e-01 -p %u\n",
@@ -69,6 +70,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"algo", required_argument, 0, 1001},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1000},
+      {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_key = 0;
@@ -79,7 +81,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->password = ARGS_DEFAULT_PASSWORD;
   cfg->cw_len = 16;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "k:s:p:a:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "k:s:p:a:vdh", longopts, NULL)) != -1) {
     switch (c) {
       case 'k':
         cfg->key_path = optarg;
@@ -123,6 +125,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 'v':
         cfg->verbose = 1;
+        break;
+      case 'd':
+        cfg->daemonize = 1;
         break;
       case 1000:
         {

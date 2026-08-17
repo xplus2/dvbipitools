@@ -5,6 +5,6 @@
 #define DIPIRADIOHEAD_VERSION_H
 
 #define TOOL_NAME    "dipiradiohead"
-#define TOOL_VERSION "2.5.1"
+#define TOOL_VERSION "2.5.2"
 
 #endif

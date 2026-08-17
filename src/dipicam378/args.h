@@ -13,6 +13,7 @@ typedef struct {
   unsigned caid;         /* --caid, hex; 0 = no filter */
   int cw_len;            /* --algo cissa|csa2; 16 or 8 */
   int verbose;           /* -v */
+  int daemonize;         /* -d, --daemonize: fork to background after startup */
   int color_mode;        /* --color; log_color_t */
 } config_t;
 

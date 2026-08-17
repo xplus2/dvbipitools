@@ -45,6 +45,7 @@ typedef struct {
   unsigned buffer_ms; /* recovery_length_min/max on every peer; 0 = library default */
   const char *iface;  /* non-RIST side multicast join/send interface; NULL = kernel default */
   int verbose;
+  int daemonize; /* -d, --daemonize: fork to background after startup */
   int color_mode;
   const char *metrics_sock;    /* --metrics; NULL = default socket path */
   const char *metrics_id;      /* --metrics-id; NULL = metrics disabled */

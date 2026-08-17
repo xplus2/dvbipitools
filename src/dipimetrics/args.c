@@ -43,6 +43,7 @@ static void print_help(void) {
       "                       new snapshot (default: %d)\n"
       "  -v, --verbose        log rejected/dropped snapshots to stderr\n"
       "      --color <when>   auto|always|never (default auto)\n"
+      "  -d, --daemonize      fork to background after startup, detach from terminal\n"
       "  -h, --help           this help\n\n"
       "example:\n"
       "  %s -l 0.0.0.0:9109\n",
@@ -56,6 +57,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"expiry", required_argument, 0, 'e'},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1000},
+      {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_l = 0, have_e = 0;
@@ -64,7 +66,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
 
   memset(cfg, 0, sizeof *cfg);
   optind = 1;
-  while ((c = getopt_long(argc, argv, "S:l:e:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "S:l:e:vdh", longopts, NULL)) != -1) {
     switch (c) {
     case 'S':
       cfg->sock_path = optarg;
@@ -89,6 +91,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
     case 'v':
       cfg->verbose = 1;
+      break;
+    case 'd':
+      cfg->daemonize = 1;
       break;
     case 1000: {
       log_color_t v;

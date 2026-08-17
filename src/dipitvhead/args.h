@@ -87,6 +87,7 @@ typedef struct {
   unsigned tsid;             /* --tsid, default 1 */
   unsigned onid;             /* --onid, default 1 */
   int verbose;               /* -v */
+  int daemonize;             /* -d, --daemonize: fork to background after startup */
   int color_mode;            /* --color; log_color_t */
   cas_algo_t cas_algo;       /* --cas-algo; NONE = CAS disabled */
   cas_vendor_t cas_vendors[ARGS_MAX_CAS_VENDORS]; /* --cas-ecmg, repeatable; per-vendor options pair with --cas-ecmg right before them */

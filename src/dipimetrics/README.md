@@ -18,6 +18,7 @@ dipimetrics [options]
 | `-e` | `--expiry`   | `<s>`                 | `30`                            |
 | `-v` | `--verbose`  |                       | off                             |
 |      | `--color`    | `auto\|always\|never` | `auto`                          |
+| `-d` | `--daemonize` |                      | off (foreground)                |
 | `-h` | `--help`     |                       |                                 |
 
 ## How it works

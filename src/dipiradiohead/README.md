@@ -33,6 +33,7 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<po
 |       | `--metrics`          | `<path>`                               | `/run/dvbipitools/metrics.sock` |   |
 |       | `--metrics-id`       | `<name>`                               | none (metrics disabled unless set) | |
 |       | `--metrics-interval` | `<s>`                                  | `5`                  |            |
+| `-d`  | `--daemonize`        |                                        | off (foreground)     |            |
 | `-h`  | `--help`             |                                        |                      |            |
 
 `--sid`/`-s` pair with whichever `-i` came right before them - like ffmpeg's per-input options,

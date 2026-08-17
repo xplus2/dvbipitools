@@ -110,6 +110,7 @@ static void print_help(void) {
       "      --fus-id <n>        a: FUSID (decimal)\n"
       "      --fus-announce <a>:<p> a: FUS MulticastAnnouncementAddress\n"
       "      --fus-logo <uri>    a: FUSType LogoURI\n"
+      "  -d, --daemonize         fork to background after startup, detach from terminal\n"
       "  -h, --help              this help\n\n"
       "examples:\n"
       "  %s -a -i channels.csv -p example.org -O \"My Headend\" -m 239.255.0.1:3937\n"
@@ -159,6 +160,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"fus-id", required_argument, 0, 1024},
       {"fus-announce", required_argument, 0, 1025},
       {"fus-logo", required_argument, 0, 1026},
+      {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_a = 0, have_l = 0, have_mcast = 0, have_t = 0;
@@ -171,7 +173,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
   cfg->format = OUT_M3U;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "ali:p:O:L:m:I:t:o:f:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "ali:p:O:L:m:I:t:o:f:vdh", longopts, NULL)) != -1) {
     switch (c) {
     case 'a':
       have_a = 1;
@@ -233,6 +235,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
     case 'v':
       cfg->verbose = 1;
+      break;
+    case 'd':
+      cfg->daemonize = 1;
       break;
     case 1000: {
       log_color_t v;

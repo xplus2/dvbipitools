@@ -38,6 +38,7 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 |       | `--ecm-profile` | `<spec>`              | `ecm_profile` templating, see below                 |
 | `-v`  | `--verbose`     |                       | off                                                 |
 |       | `--color`       | `auto\|always\|never` | `auto`                                              |
+| `-d`  | `--daemonize`   |                       | off (foreground)                                    |
 | `-h`  | `--help`        |                       |                                                     |
 
 ## Parameters

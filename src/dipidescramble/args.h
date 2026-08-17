@@ -44,6 +44,7 @@ typedef struct {
   unsigned pmt_pid;            /* -p <pid>, valid iff pmt_sel == PMT_SEL_PID */
   const char *iface_in;        /* -I, NULL = kernel default route */
   int verbose;                 /* -v */
+  int daemonize;               /* -d, --daemonize: fork to background after startup */
   int color_mode;              /* int, actually a log_color_t */
   int biss2_sw_given;                   /* --biss2-sw */
   unsigned char biss2_sw[BISS_KEY_LEN]; /* --biss2-sw, parsed */

@@ -27,6 +27,7 @@ dipirist -i <uri> -o <uri> [options]
 |      | `--metrics-id` | `<name>`           | none (metrics disabled unless set) |
 |      | `--metrics-interval` | `<s>`         | `5`                                |
 | `-v` | `--verbose` |                       | off                               |
+| `-d` | `--daemonize` |                     | off (foreground)                  |
 | `-h` | `--help`    |                       |                                   |
 
 ## Endpoints (`-i`/`-o`)

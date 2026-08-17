@@ -229,6 +229,7 @@ static void print_help(void) {
       "                             change). Mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo\n"
       "      --biss2-ca-session-id <n> administratively unique entitlement_session_id, dec or\n"
       "                             0x-hex, 16 bit (default: random at startup)\n"
+      "  -d, --daemonize            fork to background after startup, detach from terminal\n"
       "  -h, --help                 this help\n\n"
       "examples:\n"
       "  %s -i rtp://@239.19.75.1:8700 -m 239.1.1.1:5000 -s \"My Channel\"\n"
@@ -327,6 +328,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"secret", required_argument, 0, 1031},
       {"cname", required_argument, 0, 1032},
       {"buffer", required_argument, 0, 1033},
+      {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_mcast = 0;
@@ -344,7 +346,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   optind = 1;
   /* leading '+': disable GNU getopt argument permutation, so per-input options stay paired
      with whichever -i preceded them instead of being reordered */
-  while ((c = getopt_long(argc, argv, "+i:p:m:I:O:uT:n:s:b:SBe:kvhR:", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "+i:p:m:I:O:uT:n:s:b:SBe:kvdhR:", longopts, NULL)) != -1) {
     switch (c) {
       case 'i': {
         source_t parsed;
@@ -722,6 +724,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       }
       case 'v':
         cfg->verbose = 1;
+        break;
+      case 'd':
+        cfg->daemonize = 1;
         break;
       case 'R':
         if (strncmp(optarg, "rist://", 7) != 0) {

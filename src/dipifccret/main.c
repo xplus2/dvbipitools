@@ -569,6 +569,10 @@ int main(int argc, char **argv) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
   }
+  if (cfg.daemonize && daemon(1, 1) != 0) {
+    log_line(TOOL_NAME ": daemonize failed: %s", strerror(errno));
+    return 1;
+  }
 
   max_channels = cfg.max_channels ? cfg.max_channels : CHANNEL_DEFAULT_MAX;
   ring_slots = cfg.no_ret ? 0 : cfg.buffer_ms; /* ring_slots ~= buffer_ms: ~1 packet/ms assumption */

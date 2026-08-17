@@ -72,6 +72,10 @@ int main(int argc, char **argv) {
     return 2;
   }
   log_set_color((log_color_t)cfg.color_mode);
+  if (cfg.daemonize && daemon(1, 1) != 0) {
+    log_line("dipimetrics: daemonize failed: %s", strerror(errno));
+    return 1;
+  }
   signals_install();
 
   uds_fd = uds_listen(cfg.sock_path);

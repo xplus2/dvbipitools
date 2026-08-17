@@ -26,6 +26,7 @@ typedef struct {
   unsigned workers; /* -l socket worker threads, 0 = CPU cores */
   const char *user; /* NULL = no privilege drop */
   int verbose;
+  int daemonize; /* -d, --daemonize: fork to background after startup */
   int color_mode;
 
   int no_ret; /* --no-ret */

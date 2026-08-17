@@ -33,6 +33,7 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
   -u, --user <user>                drop privileges to this user after opening the capture handle
   -v, --verbose                    periodic stats on stderr
       --color <when>               auto|always|never (default auto)
+  -d, --daemonize                  fork to background after startup, detach from terminal
   -h, --help                       this help
 ```
 

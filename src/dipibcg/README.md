@@ -30,6 +30,7 @@ dipibcg -l -m <mcast>:<port> [options]
 |      | `--metrics` | `<path>`                | announce: `/run/dvbipitools/metrics.sock`  |
 |      | `--metrics-id` | `<name>`             | announce: none (metrics disabled unless set) |
 |      | `--metrics-interval` | `<s>`          | announce: `5`                              |
+| `-d` | `--daemonize` |                       | off (foreground)                           |
 | `-h` | `--help`    |                         |                                             |
 
 ## Announce (`-a`)

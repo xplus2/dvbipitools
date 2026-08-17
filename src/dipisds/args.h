@@ -24,6 +24,7 @@ typedef struct {
   const char *output_path; /* -o, listen; NULL = stdout */
   out_fmt_t format;        /* -f, listen */
   int verbose;             /* -v */
+  int daemonize;           /* -d, --daemonize: fork to background after startup */
   int color_mode;          /* --color; log_color_t */
 
   int ret_enabled;       /* --ret-addr given, announce */

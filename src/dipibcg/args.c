@@ -72,6 +72,7 @@ static void print_help(void) {
       "      --metrics <path>   announce: Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
       "      --metrics-id <name> announce: stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s> announce: snapshot interval in seconds (default: 5)\n"
+      "  -d, --daemonize        fork to background after startup, detach from terminal\n"
       "  -h, --help             this help\n\n"
       "examples:\n"
       "  %s -a -i guide.xml -M mapping.csv -m 239.255.0.2:3938\n"
@@ -98,6 +99,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics", required_argument, 0, 1001},
       {"metrics-id", required_argument, 0, 1002},
       {"metrics-interval", required_argument, 0, 1003},
+      {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_a = 0, have_l = 0, have_mcast = 0, have_t = 0, have_w = 0;
@@ -106,7 +108,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
 
   memset(cfg, 0, sizeof *cfg);
   optind = 1;
-  while ((c = getopt_long(argc, argv, "ali:M:w:m:I:t:o:C:Zvh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "ali:M:w:m:I:t:o:C:Zvdh", longopts, NULL)) != -1) {
     switch (c) {
     case 'a':
       have_a = 1;
@@ -165,6 +167,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       break;
     case 'v':
       cfg->verbose = 1;
+      break;
+    case 'd':
+      cfg->daemonize = 1;
       break;
     case 1000: {
       log_color_t v;

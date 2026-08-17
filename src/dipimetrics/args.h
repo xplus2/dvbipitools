@@ -11,6 +11,7 @@ typedef struct {
   unsigned listen_port;  /* -l port part */
   long expiry_s;         /* -e, --expiry: drop an instance after this long silent */
   int verbose;           /* -v */
+  int daemonize;         /* -d, --daemonize: fork to background after startup */
   int color_mode;        /* --color; log_color_t */
 } config_t;
 
