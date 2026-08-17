@@ -176,6 +176,7 @@ endif
 
 ifeq ($(HAVE_TLS),yes)
 dipirec_TLS_SRC := src/lib/net/tls.c
+dipirec_AUTH_SRC := src/lib/net/rtmp/auth.c
 dipirec_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipirec_EXTRA_LDFLAGS := $(shell pkg-config --static --libs openssl)
@@ -184,6 +185,7 @@ dipirec_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 endif
 else
 dipirec_TLS_SRC := src/lib/net/tls_stub.c
+dipirec_AUTH_SRC := src/lib/net/rtmp/auth_stub.c
 ifneq ($(TLS),no)
 $(warning dipirec: OpenSSL not found via pkg-config, building without HTTPS support)
 endif
@@ -255,6 +257,7 @@ dipirec_SRCS := \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/rtmp.c \
 	src/lib/net/rtmpout.c \
+	$(dipirec_AUTH_SRC) \
 	src/dipirec/filter/ts.c \
 	src/dipirec/filter/pace.c
 
@@ -626,6 +629,7 @@ dipidescramble_SRCS := \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/rtmp.c \
 	src/lib/net/rtmpout.c \
+	src/lib/net/rtmp/auth.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa.c \
 	src/lib/cas/biss/biss.c \
@@ -935,6 +939,7 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/rtmp.c \
 	src/lib/net/rtmpout.c \
+	src/lib/net/rtmp/auth.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa.c \
 	src/lib/scrambler/csa2_stub.c \
@@ -2004,9 +2009,11 @@ lib_net_rtmp_SRCS := \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/chunk.c \
 	src/lib/net/rtmp/handshake.c \
+	src/lib/net/rtmp/auth_stub.c \
 	src/lib/mux/amf.c \
 	src/lib/mux/ebml.c \
-	src/lib/ioutil.c
+	src/lib/ioutil.c \
+	src/lib/log.c
 
 lib_net_rtmpout_BIN := tests/unit/lib/net/test_rtmpout
 lib_net_rtmpout_SRCS := \
@@ -2017,6 +2024,7 @@ lib_net_rtmpout_SRCS := \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/chunk.c \
 	src/lib/net/rtmp/handshake.c \
+	src/lib/net/rtmp/auth_stub.c \
 	src/lib/mux/amf.c \
 	src/lib/mux/ebml.c \
 	src/lib/net/netconnect.c \
@@ -2150,6 +2158,7 @@ dipirec_record_SRCS := \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
 	src/lib/net/tls_stub.c \
+	src/lib/net/rtmp/auth_stub.c \
 	src/lib/net/ristout_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \

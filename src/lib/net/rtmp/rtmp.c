@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -15,6 +16,11 @@ rtmp_t *rtmp_new(const rtmp_cfg_t *cfg) {
   bufcpy(r->app, sizeof r->app, cfg->app ? cfg->app : "");
   bufcpy(r->tcurl, sizeof r->tcurl, cfg->tcurl ? cfg->tcurl : "");
   bufcpy(r->stream_name, sizeof r->stream_name, cfg->stream_name ? cfg->stream_name : "");
+  if (cfg->user && cfg->user[0]) {
+    bufcpy(r->user, sizeof r->user, cfg->user);
+    bufcpy(r->password, sizeof r->password, cfg->password ? cfg->password : "");
+    snprintf(r->auth_query, sizeof r->auth_query, "?authmod=adobe&user=%s", r->user);
+  }
   r->in_chunk_size = 128;
   r->out_chunk_size = 128;
   r->write_cb = cfg->write_cb;

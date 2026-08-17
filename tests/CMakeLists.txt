@@ -185,9 +185,11 @@ dvbipitools_add_unit_test(lib_net_rtmp
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/chunk.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/handshake.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
-    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(lib_net_rtmpout
     unit/lib/net/test_rtmpout.c
@@ -197,6 +199,7 @@ dvbipitools_add_unit_test(lib_net_rtmpout
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/chunk.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/handshake.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -429,6 +432,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmpout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
@@ -1128,6 +1132,7 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/ristout_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c

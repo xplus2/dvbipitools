@@ -77,6 +77,9 @@ struct rtmp {
   uint32_t stream_id;
 
   char app[128], tcurl[512], stream_name[256];
+  char user[128], password[128];
+  char auth_query[400]; /* appended to connect app once auth needed */
+  int auth_tried;       /* credentialed retry sent, no more retries */
 
   rtmp_out_chan_t out_chan[RTMP_N_CHAN];
   rtmp_in_chan_t in_chan[RTMP_N_CHAN];

@@ -104,6 +104,24 @@ static size_t build_error(unsigned char *out, double transaction) {
   return n;
 }
 
+/* description kept short: build_chunk() writes one contiguous chunk, no
+   continuation headers, payload must stay under the 128B default chunk size */
+static size_t build_error_needauth(unsigned char *out, double transaction) {
+  ebuf_t b;
+  size_t n;
+  memset(&b, 0, sizeof b);
+  amf_string(&b, "_error");
+  amf_number(&b, transaction);
+  amf_null(&b);
+  amf_object_start(&b);
+  amf_object_key(&b, "description");
+  amf_string(&b, "?reason=needauth&user=bob&salt=abcd1234&opaque=deadbeef");
+  amf_object_end(&b);
+  n = build_chunk(out, 3, RTMP_TYPE_INVOKE, 0, b.p, b.len);
+  ebuf_free(&b);
+  return n;
+}
+
 static rtmp_t *make_client(capture_t *cap) {
   rtmp_cfg_t cfg;
   memset(cap, 0, sizeof *cap);
@@ -111,6 +129,22 @@ static rtmp_t *make_client(capture_t *cap) {
   cfg.app = "live";
   cfg.tcurl = "rtmp://host/live";
   cfg.stream_name = "key123";
+  cfg.write_cb = write_cb;
+  cfg.ready_cb = ready_cb;
+  cfg.error_cb = error_cb;
+  cfg.cb_ctx = cap;
+  return rtmp_new(&cfg);
+}
+
+static rtmp_t *make_client_with_auth(capture_t *cap, const char *user, const char *password) {
+  rtmp_cfg_t cfg;
+  memset(cap, 0, sizeof *cap);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.app = "live";
+  cfg.tcurl = "rtmp://host/live";
+  cfg.stream_name = "key123";
+  cfg.user = user;
+  cfg.password = password;
   cfg.write_cb = write_cb;
   cfg.ready_cb = ready_cb;
   cfg.error_cb = error_cb;
@@ -228,6 +262,38 @@ START_TEST(rtmp_error_reply_fires_error_cb) {
 }
 END_TEST
 
+START_TEST(rtmp_connect_includes_authmod_when_user_set) {
+  capture_t cap;
+  rtmp_t *r = make_client_with_auth(&cap, "bob", "hunter2");
+
+  ck_assert_ptr_nonnull(r);
+  run_handshake(r, &cap); /* asserts "connect"/"live" already present on wire */
+  ck_assert_ptr_nonnull(memmem(cap.buf, cap.len, "authmod=adobe&user=bob", 23));
+
+  rtmp_free(r);
+}
+END_TEST
+
+/* no OpenSSL backend in this test binary (auth_stub.c): needauth challenge
+   can't be answered, client must fail cleanly rather than hang or crash */
+START_TEST(rtmp_needauth_error_without_crypto_fails_gracefully) {
+  capture_t cap;
+  rtmp_t *r = make_client_with_auth(&cap, "bob", "hunter2");
+  unsigned char msg[512];
+  size_t n;
+
+  ck_assert_ptr_nonnull(r);
+  run_handshake(r, &cap);
+
+  n = build_error_needauth(msg, 1);
+  ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
+  ck_assert_str_eq(cap.error, "_error");
+  ck_assert_int_eq(cap.ready, 0);
+
+  rtmp_free(r);
+}
+END_TEST
+
 static Suite *rtmp_suite(void) {
   Suite *s = suite_create("rtmp");
   TCase *tc = tcase_create("core");
@@ -235,6 +301,8 @@ static Suite *rtmp_suite(void) {
   tcase_add_test(tc, rtmp_send_before_ready_fails);
   tcase_add_test(tc, rtmp_send_after_ready_uses_created_stream_id);
   tcase_add_test(tc, rtmp_error_reply_fires_error_cb);
+  tcase_add_test(tc, rtmp_connect_includes_authmod_when_user_set);
+  tcase_add_test(tc, rtmp_needauth_error_without_crypto_fails_gracefully);
   suite_add_tcase(s, tc);
   return s;
 }

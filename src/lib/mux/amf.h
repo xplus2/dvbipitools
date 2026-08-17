@@ -26,4 +26,7 @@ const unsigned char *amf_read_string(const unsigned char *p, const unsigned char
 /* any single value, recurses into object/ecma/strict-array bodies */
 const unsigned char *amf_skip_value(const unsigned char *p, const unsigned char *end);
 
+/* p at AMF_T_OBJECT marker, finds string key in body. 1 found, 0 absent, -1 malformed */
+int amf_object_find_string(const unsigned char *p, const unsigned char *end, const char *key, char *out, size_t cap);
+
 #endif

@@ -26,6 +26,7 @@ struct rtmpout {
   char host[256];
   unsigned port;
   char app[128], stream_key[256], tcurl[512];
+  char user[128], pass[128];
   int use_tls, insecure;
 
   rtmpout_phase_t phase;
@@ -112,6 +113,8 @@ static void start_rtmp(rtmpout_t *o) {
   cfg.app = o->app;
   cfg.tcurl = o->tcurl;
   cfg.stream_name = o->stream_key;
+  cfg.user = o->user;
+  cfg.password = o->pass;
   cfg.write_cb = rtmp_transport_write;
   cfg.ready_cb = on_ready;
   cfg.error_cb = on_error;
@@ -277,10 +280,10 @@ int rtmpout_write(rtmpout_t *o, flv_tag_type_t type, uint32_t timestamp_ms, cons
   return rtmp_send_data(o->rtmp, data, len);
 }
 
-/* rtmp(s)://host[:port]/app/key, key = final path segment */
+/* rtmp(s)://[user[:pass]@]host[:port]/app/key, key = final path segment */
 static int parse_url(const char *url, rtmpout_t *o) {
   const char *p = url;
-  const char *host_end, *colon, *last_slash;
+  const char *host_end, *at, *colon, *last_slash;
   size_t hostlen, applen;
 
   if (0 == strncmp(p, "rtmps://", 8)) {
@@ -298,6 +301,28 @@ static int parse_url(const char *url, rtmpout_t *o) {
   host_end = strchr(p, '/');
   if (!host_end || host_end == p)
     return -1;
+
+  o->user[0] = o->pass[0] = '\0';
+  at = NULL;
+  for (colon = p; colon < host_end; colon++) /* last '@': allows literal '@' in password */
+    if (*colon == '@')
+      at = colon;
+  if (at) {
+    const char *upcolon = memchr(p, ':', (size_t)(at - p));
+    size_t ulen = upcolon ? (size_t)(upcolon - p) : (size_t)(at - p);
+    if (!ulen || ulen >= sizeof o->user)
+      return -1;
+    memcpy(o->user, p, ulen);
+    o->user[ulen] = '\0';
+    if (upcolon) {
+      size_t plen = (size_t)(at - upcolon - 1);
+      if (plen >= sizeof o->pass)
+        return -1;
+      memcpy(o->pass, upcolon + 1, plen);
+      o->pass[plen] = '\0';
+    }
+    p = at + 1;
+  }
 
   colon = memchr(p, ':', (size_t)(host_end - p));
   hostlen = colon ? (size_t)(colon - p) : (size_t)(host_end - p);
@@ -335,12 +360,22 @@ static int parse_url(const char *url, rtmpout_t *o) {
   return 0;
 }
 
+/* redacts userinfo before logging, url may embed user:pass@ */
+static void log_invalid_url(const char *url) {
+  const char *scheme_end = strstr(url, "://");
+  const char *at = scheme_end ? strchr(scheme_end, '@') : NULL;
+  if (at)
+    log_line("rtmpout: invalid url: %.*s[redacted]@%s", (int)(scheme_end - url + 3), url, at + 1);
+  else
+    log_line("rtmpout: invalid url: %s", url);
+}
+
 rtmpout_t *rtmpout_open(const rtmpout_cfg_t *cfg) {
   rtmpout_t *o = calloc(1, sizeof *o);
   if (!o)
     return NULL;
   if (parse_url(cfg->url, o)) {
-    log_line("rtmpout: invalid url: %s", cfg->url);
+    log_invalid_url(cfg->url);
     free(o);
     return NULL;
   }

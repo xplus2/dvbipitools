@@ -5,6 +5,6 @@
 #define DIPIDESCRAMBLE_VERSION_H
 
 #define TOOL_NAME    "dipidescramble"
-#define TOOL_VERSION "1.2.3"
+#define TOOL_VERSION "1.2.4"
 
 #endif

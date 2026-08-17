@@ -70,6 +70,7 @@ if (OpenSSL_FOUND)
         ../lib/net/rtmp/command.c
         ../lib/net/rtmp/rtmp.c
         ../lib/net/rtmpout.c
+        ../lib/net/rtmp/auth.c
         ../lib/scrambler/scrambler.c
         ../lib/scrambler/cissa.c
         ../lib/cas/biss/biss.c

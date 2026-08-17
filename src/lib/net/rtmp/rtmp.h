@@ -19,6 +19,8 @@ typedef struct {
   const char *app;
   const char *tcurl; /* rtmp(s)://host[:port]/app, informational only */
   const char *stream_name;
+  const char *user;     /* NULL/empty: no auth attempted */
+  const char *password; /* ignored if user is empty */
   rtmp_write_cb write_cb;
   rtmp_ready_cb ready_cb;
   rtmp_error_cb error_cb;

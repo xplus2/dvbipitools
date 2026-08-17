@@ -188,3 +188,30 @@ const unsigned char *amf_skip_value(const unsigned char *p, const unsigned char 
       return NULL; /* unknown/unsupported marker: can't safely skip */
   }
 }
+
+int amf_object_find_string(const unsigned char *p, const unsigned char *end, const char *key, char *out, size_t cap) {
+  size_t keylen = strlen(key);
+  if (end - p < 1 || p[0] != AMF_T_OBJECT)
+    return -1;
+  p++;
+  for (;;) {
+    unsigned klen;
+    if (end - p < 2)
+      return -1;
+    klen = be16_at(p);
+    if (0 == klen) {
+      if (end - p < 3 || p[2] != AMF_OBJECT_END)
+        return -1;
+      return 0;
+    }
+    p += 2;
+    if (end - p < (ptrdiff_t)klen)
+      return -1;
+    if (klen == keylen && 0 == memcmp(p, key, klen))
+      return amf_read_string(p + klen, end, out, cap) ? 1 : -1;
+    p += klen;
+    p = amf_skip_value(p, end);
+    if (!p)
+      return -1;
+  }
+}

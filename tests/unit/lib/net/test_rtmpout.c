@@ -134,6 +134,35 @@ static void *fake_server_thread(void *arg) {
   return NULL;
 }
 
+/* like fake_server_thread but replies only to the handshake, then captures
+   whatever the client sends next (C2 + connect) instead of driving to ready */
+static void *capture_connect_thread(void *arg) {
+  fake_server_t *s = arg;
+  int cfd = accept(s->listen_fd, NULL, NULL);
+  unsigned char s0s1s2[1 + 2 * RTMP_HANDSHAKE_SIZE];
+  struct timeval tv = {1, 0};
+
+  if (cfd < 0)
+    return NULL;
+
+  recv_until_quiet(cfd); /* C0+C1 */
+  s0s1s2[0] = RTMP_VERSION;
+  memset(s0s1s2 + 1, 0x42, 2 * RTMP_HANDSHAKE_SIZE);
+  send(cfd, s0s1s2, sizeof s0s1s2, 0);
+
+  setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+  for (;;) {
+    ssize_t r = recv(cfd, s->captured + s->captured_len, sizeof s->captured - s->captured_len, 0);
+    if (r <= 0)
+      break;
+    s->captured_len += (size_t)r;
+    if (s->captured_len >= sizeof s->captured)
+      break;
+  }
+  close(cfd);
+  return NULL;
+}
+
 static int drive_until_sent(rtmpout_t *o, flv_tag_type_t type, const unsigned char *data, size_t len, int max_iters) {
   int i;
   for (i = 0; i < max_iters; i++) {
@@ -227,12 +256,47 @@ START_TEST(rtmpout_holds_back_interframe_until_keyframe) {
 }
 END_TEST
 
+START_TEST(rtmpout_sends_adobe_authmod_for_userinfo_uri) {
+  unsigned port;
+  int listen_fd = make_listener(&port);
+  pthread_t th;
+  fake_server_t srv;
+  char url[96];
+  rtmpout_cfg_t cfg;
+  rtmpout_t *o;
+  unsigned char keyframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'K', 'E', 'Y'};
+  int i;
+
+  memset(&srv, 0, sizeof srv);
+  srv.listen_fd = listen_fd;
+  ck_assert_int_eq(pthread_create(&th, NULL, capture_connect_thread, &srv), 0);
+
+  snprintf(url, sizeof url, "rtmp://alice:s3cret@127.0.0.1:%u/live/key123", port);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.url = url;
+  o = rtmpout_open(&cfg);
+  ck_assert_ptr_nonnull(o);
+
+  for (i = 0; i < 200; i++) {
+    rtmpout_write(o, FLV_TAG_VIDEO, 0, keyframe, sizeof keyframe);
+    usleep(5000);
+  }
+
+  pthread_join(th, NULL);
+  close(listen_fd);
+  ck_assert_ptr_nonnull(memmem(srv.captured, srv.captured_len, "authmod=adobe&user=alice", 25));
+
+  rtmpout_close(o);
+}
+END_TEST
+
 static Suite *rtmpout_suite(void) {
   Suite *s = suite_create("rtmpout");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, rtmpout_open_rejects_malformed_urls);
   tcase_add_test(tc, rtmpout_delivers_keyframe_end_to_end);
   tcase_add_test(tc, rtmpout_holds_back_interframe_until_keyframe);
+  tcase_add_test(tc, rtmpout_sends_adobe_authmod_for_userinfo_uri);
   suite_add_tcase(s, tc);
   return s;
 }

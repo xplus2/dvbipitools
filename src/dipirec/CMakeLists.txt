@@ -18,8 +18,10 @@ endif ()
 
 if (DIPIREC_HAVE_TLS)
     set(TLS_SRC ../lib/net/tls.c)
+    set(RTMP_AUTH_SRC ../lib/net/rtmp/auth.c)
 else ()
     set(TLS_SRC ../lib/net/tls_stub.c)
+    set(RTMP_AUTH_SRC ../lib/net/rtmp/auth_stub.c)
 endif ()
 
 if (DVBIPITOOLS_HAVE_RIST)
@@ -83,6 +85,7 @@ add_executable(dipirec
     ../lib/net/rtmp/command.c
     ../lib/net/rtmp/rtmp.c
     ../lib/net/rtmpout.c
+    ${RTMP_AUTH_SRC}
     filter/ts.c
     filter/pace.c)
 
