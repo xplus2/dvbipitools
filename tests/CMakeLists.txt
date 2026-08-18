@@ -126,7 +126,8 @@ dvbipitools_add_unit_test(lib_mux_teletext
 dvbipitools_add_unit_test(lib_mux_mkv
     unit/lib/mux/test_mkv.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/video.c
@@ -150,7 +151,8 @@ dvbipitools_add_unit_test(lib_mux_flv
     ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/flv.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/write.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/feed.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
@@ -279,7 +281,8 @@ if (OpenSSL_FOUND)
 
     dvbipitools_add_unit_test(lib_cas_biss
         unit/lib/cas/test_biss.c
-        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c)
     target_link_libraries(test_lib_cas_biss PRIVATE OpenSSL::Crypto)
 
     dvbipitools_add_unit_test(lib_cas_biss_ca
@@ -416,7 +419,8 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
-        ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/bitreader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/video.c
@@ -437,6 +441,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c
@@ -468,7 +473,8 @@ dvbipitools_add_unit_test(lib_bim_codec
     ${CMAKE_SOURCE_DIR}/src/lib/bim/codec.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitreader.c
-    ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
 
 dvbipitools_add_unit_test(lib_xml_util
     unit/lib/test_xml_util.c
@@ -481,11 +487,13 @@ dvbipitools_add_unit_test(lib_sds_xml
 
 dvbipitools_add_unit_test(lib_tva_timefmt
     unit/lib/tva/test_timefmt.c
-    ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
 
 dvbipitools_add_unit_test(lib_tva_bcg_doc
     unit/lib/tva/test_bcg_doc.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(lib_tva_mapping
@@ -542,7 +550,8 @@ dvbipitools_add_unit_test(dipiscan_format
     ${CMAKE_SOURCE_DIR}/src/dipiscan/format.c
     ${CMAKE_SOURCE_DIR}/src/lib/playlist_out.c
     ${CMAKE_SOURCE_DIR}/src/lib/sds_xml.c
-    ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c)
 
 dvbipitools_add_unit_test(dipiscan_scan
     unit/dipiscan/test_scan.c
@@ -661,6 +670,7 @@ dvbipitools_add_unit_test(dipiradiohead_tspacketizer
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -675,6 +685,7 @@ dvbipitools_add_unit_test(dipiradiohead_args
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
@@ -728,6 +739,7 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -815,6 +827,7 @@ dvbipitools_add_unit_test(dipiradiohead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -845,6 +858,7 @@ dvbipitools_add_unit_test(dipitvhead_args
     ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -909,6 +923,7 @@ dvbipitools_add_unit_test(dipitvhead_bitrate
 dvbipitools_add_unit_test(dipitvhead_remux
     unit/dipitvhead/test_remux.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/pmtbuild.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/aitbuild.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/cas.c
@@ -935,6 +950,7 @@ dvbipitools_add_unit_test(dipitvhead_remux
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -974,6 +990,7 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -1069,6 +1086,7 @@ dvbipitools_add_unit_test(dipitvhead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -1155,7 +1173,8 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/video.c

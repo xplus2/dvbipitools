@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "args.h"
+#include "lib/ioutil.h"
 #include "lib/log.h"
 #include "lib/tva/bcg_doc.h"
 #include "lib/tva/mapping.h"
@@ -24,7 +25,7 @@ static void write_tva_xml(FILE *out, bcg_doc_t *doc, const mapping_t *map, int v
     char uri[BCG_ID_LEN];
     unsigned tsid, onid, sid;
     if (!mapping_lookup(map, c->id, uri, sizeof uri, &tsid, &onid, &sid)) {
-      snprintf(c->uri, sizeof c->uri, "%s", uri);
+      bufcpy(c->uri, sizeof c->uri, uri);
       c->tsid = tsid;
       c->onid = onid;
       c->sid = sid;
@@ -44,11 +45,11 @@ static void apply_revmap(bcg_doc_t *doc, const revmap_t *rev) {
     int j;
     if (!preferred)
       continue;
-    snprintf(old_id, sizeof old_id, "%s", c->id);
-    snprintf(c->id, sizeof c->id, "%s", preferred);
+    bufcpy(old_id, sizeof old_id, c->id);
+    bufcpy(c->id, sizeof c->id, preferred);
     for (j = 0; j < doc->programme_count; j++)
       if (!strcmp(doc->programmes[j].channel_id, old_id))
-        snprintf(doc->programmes[j].channel_id, sizeof doc->programmes[j].channel_id, "%s", preferred);
+        bufcpy(doc->programmes[j].channel_id, sizeof doc->programmes[j].channel_id, preferred);
   }
 }
 

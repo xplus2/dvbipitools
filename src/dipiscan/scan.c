@@ -9,6 +9,7 @@
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/rtp.h"
 #include "lib/demux/tspack.h"
+#include "lib/ioutil.h"
 #include "lib/log.h"
 #include "lib/net/multicast.h"
 #include "lib/net/udpxy.h"
@@ -109,7 +110,7 @@ void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_
         continue;
       p = &r->programs[r->program_count++];
       p->sid = m[i].program_number;
-      snprintf(p->name, sizeof p->name, "%s", m[i].service_name[0] ? m[i].service_name : "(no SDT)");
+      bufcpy(p->name, sizeof p->name, m[i].service_name[0] ? m[i].service_name : "(no SDT)");
     }
     r->kind = r->program_count ? PROBE_NAMED : PROBE_UNNAMED;
   } else if (psi_have_pat(pc.psi) && psi_service_name(pc.psi)[0]) {

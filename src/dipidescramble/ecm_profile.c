@@ -175,6 +175,157 @@ static int parse_token_list(char *val, ecm_token_list_t *out) {
   return out->count > 0 ? 0 : -1;
 }
 
+static int set_cipher(ecm_profile_t *out, char *val) {
+  int v;
+  if (map_lookup(cipher_names, N(cipher_names), val, &v) != 0) return -1;
+  out->cipher = (ecm_cipher_t)v;
+  return 0;
+}
+static int set_iv(ecm_profile_t *out, char *val) {
+  int v;
+  if (map_lookup(iv_source_names, N(iv_source_names), val, &v) != 0) return -1;
+  out->iv_source = (ecm_iv_source_t)v;
+  return 0;
+}
+static int set_padding(ecm_profile_t *out, char *val) {
+  int v;
+  if (map_lookup(padding_names, N(padding_names), val, &v) != 0) return -1;
+  out->padding = (ecm_padding_t)v;
+  return 0;
+}
+static int set_hkdf(ecm_profile_t *out, char *val) { return parse_bool(val, &out->key_derivation.hkdf); }
+static int set_enc_info(ecm_profile_t *out, char *val) {
+  if (strlen(val) >= ECM_PROFILE_INFO_MAX) return -1;
+  strncpy(out->key_derivation.enc_info, val, ECM_PROFILE_INFO_MAX - 1);
+  return 0;
+}
+static int set_mac_info(ecm_profile_t *out, char *val) {
+  if (strlen(val) >= ECM_PROFILE_INFO_MAX) return -1;
+  strncpy(out->key_derivation.mac_info, val, ECM_PROFILE_INFO_MAX - 1);
+  return 0;
+}
+static int set_short_key_source(ecm_profile_t *out, char *val) {
+  int v;
+  if (map_lookup(short_key_source_names, N(short_key_source_names), val, &v) != 0) return -1;
+  out->key_derivation.short_key_source = (ecm_short_key_source_t)v;
+  return 0;
+}
+static int set_short_key_info(ecm_profile_t *out, char *val) {
+  if (strlen(val) >= ECM_PROFILE_INFO_MAX) return -1;
+  strncpy(out->key_derivation.short_key_info, val, ECM_PROFILE_INFO_MAX - 1);
+  out->key_derivation.short_key_info_set = 1;
+  return 0;
+}
+static int set_header(ecm_profile_t *out, char *val) { return parse_header_entry(val, &out->format); }
+static int set_include_cp_number(ecm_profile_t *out, char *val) { return parse_bool(val, &out->format.include_cp_number); }
+static int set_include_ecm_id(ecm_profile_t *out, char *val) { return parse_bool(val, &out->format.include_ecm_id); }
+static int set_field_order(ecm_profile_t *out, char *val) {
+  if (parse_token_list(val, &out->format.field_order) != 0) return -1;
+  out->format.field_order_set = 1;
+  return 0;
+}
+static int set_wire_order(ecm_profile_t *out, char *val) {
+  if (parse_token_list(val, &out->format.wire_order) != 0) return -1;
+  out->format.wire_order_set = 1;
+  return 0;
+}
+static int set_cp_number_layout(ecm_profile_t *out, char *val) {
+  int v;
+  if (map_lookup(cp_layout_names, N(cp_layout_names), val, &v) != 0) return -1;
+  out->cp_number_layout = (ecm_cp_layout_t)v;
+  return 0;
+}
+static int set_integrity(ecm_profile_t *out, char *val) {
+  int v;
+  if (map_lookup(integrity_names, N(integrity_names), val, &v) != 0) return -1;
+  out->integrity.type = (ecm_integrity_t)v;
+  return 0;
+}
+static int set_integrity_order(ecm_profile_t *out, char *val) {
+  int v;
+  if (map_lookup(integrity_order_names, N(integrity_order_names), val, &v) != 0) return -1;
+  out->integrity.order = (ecm_integrity_order_t)v;
+  return 0;
+}
+static int set_truncate_tag(ecm_profile_t *out, char *val) {
+  char *end;
+  long n = strtol(val, &end, 10);
+  if (*end != '\0' || n <= 0) return -1;
+  out->integrity.truncate_tag = (int)n;
+  return 0;
+}
+static int set_truncate_from(ecm_profile_t *out, char *val) {
+  int v;
+  if (map_lookup(truncate_from_names, N(truncate_from_names), val, &v) != 0) return -1;
+  out->integrity.truncate_from = (ecm_truncate_from_t)v;
+  return 0;
+}
+static int set_bind_ecm_id(ecm_profile_t *out, char *val) { return parse_bool(val, &out->integrity.bind_ecm_id); }
+static int set_bind_cp_number(ecm_profile_t *out, char *val) { return parse_bool(val, &out->integrity.bind_cp_number); }
+static int set_crc32_variant(ecm_profile_t *out, char *val) {
+  int v;
+  if (map_lookup(crc32_variant_names, N(crc32_variant_names), val, &v) != 0) return -1;
+  out->integrity.crc32_variant = (ecm_crc32_variant_t)v;
+  return 0;
+}
+static int set_crc32_endian(ecm_profile_t *out, char *val) {
+  int v;
+  if (map_lookup(crc32_endian_names, N(crc32_endian_names), val, &v) != 0) return -1;
+  out->integrity.crc32_endian = (ecm_crc32_endian_t)v;
+  return 0;
+}
+static int set_cw_count(ecm_profile_t *out, char *val) {
+  char *end;
+  long n = strtol(val, &end, 10);
+  if (*end != '\0' || n < 0 || n > ECM_PROFILE_CW_MAX) return -1;
+  out->cw_count = (int)n;
+  return 0;
+}
+static int set_cw_group(ecm_profile_t *out, char *val) { return parse_token_list(val, &out->format.cw_group); }
+static int set_ecm_id(ecm_profile_t *out, char *val) {
+  char *end;
+  unsigned long n = strtoul(val, &end, 0);
+  if (*end != '\0' || n > 0xFFFFu) return -1;
+  out->ecm_id = (unsigned)n;
+  out->ecm_id_set = 1;
+  return 0;
+}
+
+typedef int (*ecm_field_setter_fn)(ecm_profile_t *out, char *val);
+
+typedef struct {
+  const char *key;
+  ecm_field_setter_fn set;
+} ecm_field_setter_t;
+
+static const ecm_field_setter_t field_setters[] = {
+    {"cipher", set_cipher},
+    {"iv", set_iv},
+    {"padding", set_padding},
+    {"hkdf", set_hkdf},
+    {"enc_info", set_enc_info},
+    {"mac_info", set_mac_info},
+    {"short_key_source", set_short_key_source},
+    {"short_key_info", set_short_key_info},
+    {"header", set_header},
+    {"include_cp_number", set_include_cp_number},
+    {"include_ecm_id", set_include_ecm_id},
+    {"field_order", set_field_order},
+    {"wire_order", set_wire_order},
+    {"cp_number_layout", set_cp_number_layout},
+    {"integrity", set_integrity},
+    {"integrity_order", set_integrity_order},
+    {"truncate_tag", set_truncate_tag},
+    {"truncate_from", set_truncate_from},
+    {"bind_ecm_id", set_bind_ecm_id},
+    {"bind_cp_number", set_bind_cp_number},
+    {"crc32_variant", set_crc32_variant},
+    {"crc32_endian", set_crc32_endian},
+    {"cw_count", set_cw_count},
+    {"cw_group", set_cw_group},
+    {"ecm_id", set_ecm_id},
+};
+
 int ecm_profile_parse(const char *spec, ecm_profile_t *out) {
   char buf[ECM_PROFILE_SPEC_MAX];
   char *saveptr = NULL;
@@ -205,7 +356,6 @@ int ecm_profile_parse(const char *spec, ecm_profile_t *out) {
   while (pair) {
     char *eq = strchr(pair, '=');
     char *key, *val;
-    int v;
 
     if (!eq) {
       log_line(TOOL_NAME ": --ecm-profile: malformed field %s (expected key=value)", pair);
@@ -215,85 +365,20 @@ int ecm_profile_parse(const char *spec, ecm_profile_t *out) {
     key = pair;
     val = eq + 1;
 
-    if (strcmp(key, "cipher") == 0) {
-      if (map_lookup(cipher_names, N(cipher_names), val, &v) != 0) return profile_err(key, val);
-      out->cipher = (ecm_cipher_t)v;
-    } else if (strcmp(key, "iv") == 0) {
-      if (map_lookup(iv_source_names, N(iv_source_names), val, &v) != 0) return profile_err(key, val);
-      out->iv_source = (ecm_iv_source_t)v;
-    } else if (strcmp(key, "padding") == 0) {
-      if (map_lookup(padding_names, N(padding_names), val, &v) != 0) return profile_err(key, val);
-      out->padding = (ecm_padding_t)v;
-    } else if (strcmp(key, "hkdf") == 0) {
-      if (parse_bool(val, &out->key_derivation.hkdf) != 0) return profile_err(key, val);
-    } else if (strcmp(key, "enc_info") == 0) {
-      if (strlen(val) >= ECM_PROFILE_INFO_MAX) return profile_err(key, val);
-      strncpy(out->key_derivation.enc_info, val, ECM_PROFILE_INFO_MAX - 1);
-    } else if (strcmp(key, "mac_info") == 0) {
-      if (strlen(val) >= ECM_PROFILE_INFO_MAX) return profile_err(key, val);
-      strncpy(out->key_derivation.mac_info, val, ECM_PROFILE_INFO_MAX - 1);
-    } else if (strcmp(key, "short_key_source") == 0) {
-      if (map_lookup(short_key_source_names, N(short_key_source_names), val, &v) != 0) return profile_err(key, val);
-      out->key_derivation.short_key_source = (ecm_short_key_source_t)v;
-    } else if (strcmp(key, "short_key_info") == 0) {
-      if (strlen(val) >= ECM_PROFILE_INFO_MAX) return profile_err(key, val);
-      strncpy(out->key_derivation.short_key_info, val, ECM_PROFILE_INFO_MAX - 1);
-      out->key_derivation.short_key_info_set = 1;
-    } else if (strcmp(key, "header") == 0) {
-      if (parse_header_entry(val, &out->format) != 0) return profile_err(key, val);
-    } else if (strcmp(key, "include_cp_number") == 0) {
-      if (parse_bool(val, &out->format.include_cp_number) != 0) return profile_err(key, val);
-    } else if (strcmp(key, "include_ecm_id") == 0) {
-      if (parse_bool(val, &out->format.include_ecm_id) != 0) return profile_err(key, val);
-    } else if (strcmp(key, "field_order") == 0) {
-      if (parse_token_list(val, &out->format.field_order) != 0) return profile_err(key, val);
-      out->format.field_order_set = 1;
-    } else if (strcmp(key, "wire_order") == 0) {
-      if (parse_token_list(val, &out->format.wire_order) != 0) return profile_err(key, val);
-      out->format.wire_order_set = 1;
-    } else if (strcmp(key, "cp_number_layout") == 0) {
-      if (map_lookup(cp_layout_names, N(cp_layout_names), val, &v) != 0) return profile_err(key, val);
-      out->cp_number_layout = (ecm_cp_layout_t)v;
-    } else if (strcmp(key, "integrity") == 0) {
-      if (map_lookup(integrity_names, N(integrity_names), val, &v) != 0) return profile_err(key, val);
-      out->integrity.type = (ecm_integrity_t)v;
-    } else if (strcmp(key, "integrity_order") == 0) {
-      if (map_lookup(integrity_order_names, N(integrity_order_names), val, &v) != 0) return profile_err(key, val);
-      out->integrity.order = (ecm_integrity_order_t)v;
-    } else if (strcmp(key, "truncate_tag") == 0) {
-      char *end;
-      long n = strtol(val, &end, 10);
-      if (*end != '\0' || n <= 0) return profile_err(key, val);
-      out->integrity.truncate_tag = (int)n;
-    } else if (strcmp(key, "truncate_from") == 0) {
-      if (map_lookup(truncate_from_names, N(truncate_from_names), val, &v) != 0) return profile_err(key, val);
-      out->integrity.truncate_from = (ecm_truncate_from_t)v;
-    } else if (strcmp(key, "bind_ecm_id") == 0) {
-      if (parse_bool(val, &out->integrity.bind_ecm_id) != 0) return profile_err(key, val);
-    } else if (strcmp(key, "bind_cp_number") == 0) {
-      if (parse_bool(val, &out->integrity.bind_cp_number) != 0) return profile_err(key, val);
-    } else if (strcmp(key, "crc32_variant") == 0) {
-      if (map_lookup(crc32_variant_names, N(crc32_variant_names), val, &v) != 0) return profile_err(key, val);
-      out->integrity.crc32_variant = (ecm_crc32_variant_t)v;
-    } else if (strcmp(key, "crc32_endian") == 0) {
-      if (map_lookup(crc32_endian_names, N(crc32_endian_names), val, &v) != 0) return profile_err(key, val);
-      out->integrity.crc32_endian = (ecm_crc32_endian_t)v;
-    } else if (strcmp(key, "cw_count") == 0) {
-      char *end;
-      long n = strtol(val, &end, 10);
-      if (*end != '\0' || n < 0 || n > ECM_PROFILE_CW_MAX) return profile_err(key, val);
-      out->cw_count = (int)n;
-    } else if (strcmp(key, "cw_group") == 0) {
-      if (parse_token_list(val, &out->format.cw_group) != 0) return profile_err(key, val);
-    } else if (strcmp(key, "ecm_id") == 0) {
-      char *end;
-      unsigned long n = strtoul(val, &end, 0);
-      if (*end != '\0' || n > 0xFFFFu) return profile_err(key, val);
-      out->ecm_id = (unsigned)n;
-      out->ecm_id_set = 1;
-    } else {
-      log_line(TOOL_NAME ": --ecm-profile: unknown field %s", key);
-      return -1;
+    {
+      size_t fi;
+      const ecm_field_setter_t *found = NULL;
+      for (fi = 0; fi < N(field_setters); fi++)
+        if (strcmp(key, field_setters[fi].key) == 0) {
+          found = &field_setters[fi];
+          break;
+        }
+      if (!found) {
+        log_line(TOOL_NAME ": --ecm-profile: unknown field %s", key);
+        return -1;
+      }
+      if (found->set(out, val) != 0)
+        return profile_err(key, val);
     }
     pair = strtok_r(NULL, ",", &saveptr);
   }
@@ -619,10 +704,10 @@ static int compute_tag(const ecm_profile_t *p, const unsigned char mac_key[CRYPT
   }
 }
 
-/* one cw_group's worth of tokens for a single combo, advancing *off. cp_number
-   falls back to cp_number_outer + combo index (mod 65536) if not carried in the group */
+/* cw_groups tokens for single combo, advances *off.
+   cp_number falls back to cp_number_outer + combo index (mod 65536) unless carried in group */
 static void extract_cw_group_combo(const ecm_token_list_t *cwg, const unsigned char *plaintext, size_t *off, int cw_len,
-                                    ecm_cw_combo_t *combo, unsigned cp_number_fallback) {
+                                   ecm_cw_combo_t *combo, unsigned cp_number_fallback) {
   int j, has_cpn = 0;
   for (j = 0; j < cwg->count; j++) {
     if (cwg->tok[j].kind == ECM_TOK_CP_NUMBER) {

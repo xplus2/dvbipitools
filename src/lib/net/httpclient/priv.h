@@ -42,7 +42,7 @@ struct http_async {
   http_async_phase_t phase;
   short want_events;
   netconnect_pending_t *connect_pending;
-  http_url_t url; /* current hop; redirects update this */
+  http_url_t url; /* current hop, updated on redirect */
   char user_agent[128];
   int insecure;
   char extra_header[512];
@@ -59,8 +59,10 @@ int resolve_location(http_url_t *u, const char *loc);
 
 /* httpclient.c */
 ssize_t raw_recv(struct http *h, void *buf, size_t cap, net_err_reason_t *reason_out);
-char *find_header_end(char *b, size_t n, size_t *termlen);
 void parse_headers(struct http *h, char *block);
 int setup_transfer_encoding(struct http *h, net_err_reason_t *reason_out);
+int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *user_agent, const char *extra_header);
+void finish_headers(struct http *h, char *term, size_t termlen, size_t got);
+int http_is_redirect_status(int status);
 
 #endif

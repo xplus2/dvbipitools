@@ -439,7 +439,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           cfg->nit_mode = TABLE_DROP;
         } else {
           cfg->nit_mode = TABLE_OVERRIDE;
-          snprintf(cfg->nit_text, sizeof cfg->nit_text, "%s", optarg);
+          bufcpy(cfg->nit_text, sizeof cfg->nit_text, optarg);
         }
         break;
       case 's':
@@ -451,7 +451,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           cfg->inputs[cfg->n_inputs - 1].sdt_mode = TABLE_DROP;
         } else {
           cfg->inputs[cfg->n_inputs - 1].sdt_mode = TABLE_OVERRIDE;
-          snprintf(cfg->inputs[cfg->n_inputs - 1].sdt_text, sizeof cfg->inputs[0].sdt_text, "%s", optarg);
+          bufcpy(cfg->inputs[cfg->n_inputs - 1].sdt_text, sizeof cfg->inputs[0].sdt_text, optarg);
         }
         break;
       case 'b': {

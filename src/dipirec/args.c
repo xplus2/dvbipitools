@@ -503,17 +503,17 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->color_mode = v;
         break;
       }
-    case 1000: {
-      char *end;
-      long v = strtol(optarg, &end, 10);
-      if (*end != '\0' || v < 0 || v > 10000) {
-        argerr("invalid --sub-lead: %s (0..10000 ms)", optarg);
-        return ARGS_ERR;
+      case 1000: {
+        char *end;
+        long v = strtol(optarg, &end, 10);
+        if (*end != '\0' || v < 0 || v > 10000) {
+          argerr("invalid --sub-lead: %s (0..10000 ms)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->sub_lead_ms = v;
+        break;
       }
-      cfg->sub_lead_ms = v;
-      break;
-    }
-    case 'v':
+      case 'v':
         cfg->verbose = 1;
         break;
       case 1002:

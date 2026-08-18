@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
   config_t cfg;
   args_status_t st;
   tssrc_cfg_t tc;
-  tssrc_t *src;
+  tssrc_t *src = NULL;
   tspack_t pz;
   loop_ctx_t lc;
   unsigned char buf[65536];
@@ -168,7 +168,10 @@ int main(int argc, char **argv) {
   char in_desc[128], outdesc[2048];
   unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
   int n_all_pids;
-  int mkv_fd;
+  int mkv_fd = -1;
+  int rc = 1;
+
+  memset(&lc, 0, sizeof lc);
 
   log_set_color(log_color_prescan(argc, argv));
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
@@ -200,12 +203,9 @@ int main(int argc, char **argv) {
   input_describe(&cfg.input, in_desc, sizeof in_desc);
   log_line(TOOL_NAME ": i:%s k:%s s:%s e:%s o:%s%s", in_desc, cfg.key_path ? cfg.key_path : "(none)", cfg.serial ? cfg.serial : "(none)", cfg.emm_file ? cfg.emm_file : "(none)", outdesc, cfg.unicast_emm_uri ? " unicast-emm:yes" : "");
 
-  lc.dev = NULL; /* lazily created once stream reveals it needs ECM/EMM-driven CAS */
-  lc.biss_ca = NULL; /* lazily created once stream reveals BISS Mode CA */
-  lc.ipi = NULL;
   lc.cache = emmcache_new();
   if (!lc.cache)
-    return 1;
+    goto cleanup;
 
   memset(&tc, 0, sizeof tc);
   tc.kind = tssrc_kind_of(cfg.input.kind);
@@ -218,30 +218,14 @@ int main(int argc, char **argv) {
   src = tssrc_open(&tc, NULL);
   if (!src) {
     log_line(TOOL_NAME ": cannot open -i %s", in_desc);
-    emmcache_free(lc.cache);
-    device_state_free(lc.dev);
-    biss_ca_state_free(lc.biss_ca);
-    return 1;
+    goto cleanup;
   }
 
-  if (resolve_pmt_selection(&cfg, src, &pmt_pid, all_pids, &n_all_pids)) {
-    tssrc_close(src);
-    emmcache_free(lc.cache);
-    device_state_free(lc.dev);
-    biss_ca_state_free(lc.biss_ca);
-    return 1;
-  }
+  if (resolve_pmt_selection(&cfg, src, &pmt_pid, all_pids, &n_all_pids))
+    goto cleanup;
 
-  if (open_outputs(&cfg, &lc, &mkv_fd)) {
-    close_outputs(&lc, mkv_fd);
-    tssrc_close(src);
-    emmcache_free(lc.cache);
-    device_state_free(lc.dev);
-    biss_ca_state_free(lc.biss_ca);
-    return 1;
-  }
-  lc.mkv = NULL;
-  lc.mkv_bytes = 0;
+  if (open_outputs(&cfg, &lc, &mkv_fd))
+    goto cleanup;
   if (cfg.format == FMT_MKV || cfg.format == FMT_MKA) {
     snprintf(mkv_app_name, sizeof mkv_app_name, "%s %s", TOOL_NAME, TOOL_VERSION);
     memset(&mkv_opts, 0, sizeof mkv_opts);
@@ -256,12 +240,7 @@ int main(int argc, char **argv) {
       lc.mkv = mkv_new(mkv_fd, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, NULL, 0);
     if (!lc.mkv) {
       log_line(TOOL_NAME ": cannot start mkv/mka mux");
-      close_outputs(&lc, mkv_fd);
-      tssrc_close(src);
-      emmcache_free(lc.cache);
-      device_state_free(lc.dev);
-      biss_ca_state_free(lc.biss_ca);
-      return 1;
+      goto cleanup;
     }
   }
   if (lc.n_rtmp > 0) {
@@ -269,42 +248,14 @@ int main(int argc, char **argv) {
     lc.flv = flv_new(&flv_opts, pmt_pid, rtmp_fanout_cb, &lc, NULL);
     if (!lc.flv) {
       log_line(TOOL_NAME ": cannot start flv mux");
-      if (lc.mkv)
-        mkv_close(lc.mkv);
-      close_outputs(&lc, mkv_fd);
-      tssrc_close(src);
-      emmcache_free(lc.cache);
-      device_state_free(lc.dev);
-      biss_ca_state_free(lc.biss_ca);
-      return 1;
+      goto cleanup;
     }
   }
-  lc.packets = 0;
-  lc.ecm_pid = 0;
-  lc.emm_pid = 0;
-  lc.cas_logged = 0;
   lc.emm_file = cfg.emm_file;
   lc.cfg = &cfg;
-  memset(&lc.ecm_asm, 0, sizeof lc.ecm_asm);
-  memset(&lc.emm_asm, 0, sizeof lc.emm_asm);
-  lc.scr = NULL;
-  lc.cw_len = 0;
-  lc.have_cw[0] = lc.have_cw[1] = 0;
-  lc.emit_failed = 0;
-  lc.fatal = 0;
   lc.psi = psi_new();
-  if (!lc.psi) {
-    if (lc.flv)
-      flv_close(lc.flv);
-    if (lc.mkv)
-      mkv_close(lc.mkv);
-    close_outputs(&lc, mkv_fd);
-    tssrc_close(src);
-    emmcache_free(lc.cache);
-    device_state_free(lc.dev);
-    biss_ca_state_free(lc.biss_ca);
-    return 1;
-  }
+  if (!lc.psi)
+    goto cleanup;
   if (pmt_pid)
     psi_select_pmt_pid(lc.psi, pmt_pid); /* CW derivation is mux-wide either way, nicer stats only */
 
@@ -327,17 +278,18 @@ int main(int argc, char **argv) {
   }
 
   pipeline_flush(&lc);
+  rc = (lc.fatal || lc.emit_failed) ? 1 : 0;
+
+cleanup:
   ipiclient_free(lc.ipi);
   scrambler_free(lc.scr);
   psi_free(lc.psi);
-  if (lc.flv)
-    flv_close(lc.flv);
-  if (lc.mkv)
-    mkv_close(lc.mkv);
+  flv_close(lc.flv);
+  mkv_close(lc.mkv);
   close_outputs(&lc, mkv_fd);
   tssrc_close(src);
   emmcache_free(lc.cache);
   device_state_free(lc.dev);
   biss_ca_state_free(lc.biss_ca);
-  return (lc.fatal || lc.emit_failed) ? 1 : 0;
+  return rc;
 }

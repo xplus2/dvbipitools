@@ -13,6 +13,7 @@
 #include <openssl/rsa.h>
 
 #include "ca.h"
+#include "evp_block.h"
 
 struct biss_ca_key {
   EVP_PKEY *pkey;
@@ -180,33 +181,7 @@ out:
 }
 
 static int aes128_cbc_block(const unsigned char sk[BISS_CA_SK_LEN], const unsigned char iv[BISS_CA_IV_LEN], const unsigned char in[BISS_CA_SW_LEN], unsigned char out[BISS_CA_SW_LEN], int enc) {
-  EVP_CIPHER_CTX *ctx;
-  int outlen, totlen;
-  int rc = -1;
-
-  ctx = EVP_CIPHER_CTX_new();
-  if (!ctx)
-    return -1;
-
-  if (enc ? EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, sk, iv) != 1
-          : EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, sk, iv) != 1)
-    goto out;
-  EVP_CIPHER_CTX_set_padding(ctx, 0);
-
-  if (enc ? EVP_EncryptUpdate(ctx, out, &outlen, in, BISS_CA_SW_LEN) != 1
-          : EVP_DecryptUpdate(ctx, out, &outlen, in, BISS_CA_SW_LEN) != 1)
-    goto out;
-  if (outlen != BISS_CA_SW_LEN)
-    goto out;
-  totlen = outlen;
-  if (enc ? EVP_EncryptFinal_ex(ctx, out + totlen, &outlen) != 1
-          : EVP_DecryptFinal_ex(ctx, out + totlen, &outlen) != 1)
-    goto out;
-
-  rc = 0;
-out:
-  EVP_CIPHER_CTX_free(ctx);
-  return rc;
+  return evp_cipher_block(EVP_aes_128_cbc(), sk, iv, in, out, BISS_CA_SW_LEN, enc);
 }
 
 int biss_ca_aes_cbc_encrypt(const unsigned char sk[BISS_CA_SK_LEN], const unsigned char iv[BISS_CA_IV_LEN], const unsigned char sw[BISS_CA_SW_LEN], unsigned char out[BISS_CA_SW_LEN]) {

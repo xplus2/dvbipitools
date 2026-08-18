@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../ioutil.h"
 #include "../log.h"
 
 #include "bcg_doc.h"
@@ -17,23 +18,8 @@ void bcg_doc_free(bcg_doc_t *d) {
   memset(d, 0, sizeof *d);
 }
 
-static void *grow(void *arr, int *cap, int need, size_t elemsz) {
-  int newcap;
-  void *p;
-  if (need <= *cap)
-    return arr;
-  newcap = *cap ? *cap * 2 : 16;
-  if (newcap < need)
-    newcap = need;
-  p = realloc(arr, (size_t)newcap * elemsz);
-  if (!p)
-    return NULL;
-  *cap = newcap;
-  return p;
-}
-
 bcg_channel_t *bcg_add_channel(bcg_doc_t *d) {
-  void *p = grow(d->channels, &d->channel_cap, d->channel_count + 1, sizeof *d->channels);
+  void *p = array_grow(d->channels, &d->channel_cap, d->channel_count + 1, sizeof *d->channels);
   if (!p)
     return NULL;
   d->channels = p;
@@ -42,7 +28,7 @@ bcg_channel_t *bcg_add_channel(bcg_doc_t *d) {
 }
 
 bcg_programme_t *bcg_add_programme(bcg_doc_t *d) {
-  void *p = grow(d->programmes, &d->programme_cap, d->programme_count + 1, sizeof *d->programmes);
+  void *p = array_grow(d->programmes, &d->programme_cap, d->programme_count + 1, sizeof *d->programmes);
   if (!p)
     return NULL;
   d->programmes = p;

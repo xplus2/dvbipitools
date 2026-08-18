@@ -6,48 +6,6 @@
 #include "../simulcrypt_msg.h"
 #include "priv.h"
 
-int find_u16(const unsigned char *body, size_t body_len, unsigned short tag, unsigned *out) {
-  simulcrypt_tlv_reader_t it;
-  unsigned short t, vlen;
-  const unsigned char *val;
-  simulcrypt_tlv_reader_init(&it, body, body_len);
-  while (simulcrypt_tlv_reader_next(&it, &t, &val, &vlen) == 1) {
-    if (t == tag && vlen == 2) {
-      *out = ((unsigned)val[0] << 8) | val[1];
-      return 1;
-    }
-  }
-  return 0;
-}
-
-int find_u32(const unsigned char *body, size_t body_len, unsigned short tag, unsigned *out) {
-  simulcrypt_tlv_reader_t it;
-  unsigned short t, vlen;
-  const unsigned char *val;
-  simulcrypt_tlv_reader_init(&it, body, body_len);
-  while (simulcrypt_tlv_reader_next(&it, &t, &val, &vlen) == 1) {
-    if (t == tag && vlen == 4) {
-      *out = ((unsigned)val[0] << 24) | ((unsigned)val[1] << 16) | ((unsigned)val[2] << 8) | val[3];
-      return 1;
-    }
-  }
-  return 0;
-}
-
-int find_u8(const unsigned char *body, size_t body_len, unsigned short tag, unsigned *out) {
-  simulcrypt_tlv_reader_t it;
-  unsigned short t, vlen;
-  const unsigned char *val;
-  simulcrypt_tlv_reader_init(&it, body, body_len);
-  while (simulcrypt_tlv_reader_next(&it, &t, &val, &vlen) == 1) {
-    if (t == tag && vlen == 1) {
-      *out = val[0];
-      return 1;
-    }
-  }
-  return 0;
-}
-
 size_t emmg_build_channel_status(unsigned char *out, size_t cap, unsigned char version, unsigned client_id, unsigned data_channel_id) {
   simulcrypt_writer_t w;
   unsigned char cid[4];

@@ -2,6 +2,8 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <poll.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "../log.h"
@@ -115,6 +117,19 @@ static time_t next_retry_deadline(const retryset_t *rs, time_t now) {
   return rs->retry_interval_s > 0 ? now + rs->retry_interval_s : RETRYSET_NEVER;
 }
 
+static void log_slot(unsigned idx, const char *label, const char *fmt, ...) {
+  char msg[128];
+  va_list ap;
+
+  va_start(ap, fmt);
+  vsnprintf(msg, sizeof msg, fmt, ap);
+  va_end(ap);
+  if (label)
+    log_line("input %u (%s): %s", idx, label, msg);
+  else
+    log_line("input %u: %s", idx, msg);
+}
+
 void retryset_service(retryset_t *rs, unsigned idx, time_t now) {
   retryset_slot_t *sl = &rs->slots[idx];
 
@@ -126,32 +141,22 @@ void retryset_service(retryset_t *rs, unsigned idx, time_t now) {
       sl->result = rs->ops->open_take(sl->opening);
       sl->opening = NULL;
       sl->state = RETRYSET_CONNECTED;
-      if (sl->label)
-        log_line("input %u (%s): connected", idx, sl->label);
-      else
-        log_line("input %u: connected", idx);
+      log_slot(idx, sl->label, "connected");
       return;
     }
     rs->ops->open_free(sl->opening);
     sl->opening = NULL;
     sl->state = RETRYSET_DOWN;
     sl->retry_deadline = next_retry_deadline(rs, now);
-    if (sl->retry_deadline != RETRYSET_NEVER) {
-      if (sl->label)
-        log_line("input %u (%s): connect failed, retrying in %lds", idx, sl->label, rs->retry_interval_s);
-      else
-        log_line("input %u: connect failed, retrying in %lds", idx, rs->retry_interval_s);
-    } else {
-      if (sl->label)
-        log_line("input %u (%s): connect failed, not retrying", idx, sl->label);
-      else
-        log_line("input %u: connect failed, not retrying", idx);
-    }
+    if (sl->retry_deadline != RETRYSET_NEVER)
+      log_slot(idx, sl->label, "connect failed, retrying in %lds", rs->retry_interval_s);
+    else
+      log_slot(idx, sl->label, "connect failed, not retrying");
     return;
   }
 
   if (sl->state == RETRYSET_CONNECTED)
-    return; /* caller drives its own reads directly; see retryset_mark_down() on error */
+    return; /* caller drives its own reads directly, see retryset_mark_down() on error */
 
   if (sl->retry_deadline == RETRYSET_NEVER || now < sl->retry_deadline)
     return;
@@ -172,15 +177,8 @@ void retryset_mark_down(retryset_t *rs, unsigned idx, time_t now) {
   sl->result = NULL;
   sl->state = RETRYSET_DOWN;
   sl->retry_deadline = next_retry_deadline(rs, now);
-  if (sl->retry_deadline != RETRYSET_NEVER) {
-    if (sl->label)
-      log_line("input %u (%s): read error, retrying in %lds", idx, sl->label, rs->retry_interval_s);
-    else
-      log_line("input %u: read error, retrying in %lds", idx, rs->retry_interval_s);
-  } else {
-    if (sl->label)
-      log_line("input %u (%s): read error, not retrying", idx, sl->label);
-    else
-      log_line("input %u: read error, not retrying", idx);
-  }
+  if (sl->retry_deadline != RETRYSET_NEVER)
+    log_slot(idx, sl->label, "read error, retrying in %lds", rs->retry_interval_s);
+  else
+    log_slot(idx, sl->label, "read error, not retrying");
 }

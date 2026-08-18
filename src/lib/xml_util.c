@@ -43,8 +43,8 @@ void xml_escape(FILE *f, const char *s) {
   }
 }
 
-/* decodes one &#NNN;/&#xHH; numeric char reference at src[*ip..), advancing *ip past it
-   and appending to out (bumping *oip). 0 ok, -1: caller must stop (output full) */
+/* decode 1 numchar ref (&#NNN;/&#xHH;) at src[*ip..), advances *ip past it,
+   appends to out (bumps *oip). 0 ok, -1: caller stops (output full) */
 static int decode_numeric_ref(const char *src, size_t n, size_t *ip, char *out, size_t outcap, size_t *oip) {
   size_t i = *ip, oi = *oip;
   size_t j = i + 2;
@@ -114,6 +114,22 @@ int xml_elem_text(const char *s, const char *end, const char *tag, char *out, si
     return -1;
   decode_copy(gt + 1, (size_t)(close - (gt + 1)), out, outcap);
   return 0;
+}
+
+int for_each_xml_block(const char *buf, const char *end, const char *open_tag, const char *close_tag, xml_block_cb cb, void *ctx) {
+  const char *p = buf;
+  for (;;) {
+    const char *tag = strstr(p, open_tag);
+    const char *blk_end;
+    if (!tag || tag >= end)
+      return 0;
+    blk_end = strstr(tag, close_tag);
+    if (!blk_end || blk_end >= end)
+      return 0;
+    if (cb(tag, blk_end, ctx))
+      return -1;
+    p = blk_end + 1;
+  }
 }
 
 int xml_attr(const char *s, const char *end, const char *name, char *out, size_t outcap) {

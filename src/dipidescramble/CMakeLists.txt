@@ -52,7 +52,8 @@ if (OpenSSL_FOUND)
         ../lib/demux/mpts_probe.c
         ../lib/mux/ebml.c
         ../lib/mux/mkv/mkv.c
-        ../lib/demux/escodec/bitreader.c
+        ../lib/demux/bitreader.c
+        ../lib/demux/escodec/aubuild.c
         ../lib/demux/escodec/audio.c
         ../lib/mux/mkv/video.c
         ../lib/demux/escodec/video.c
@@ -74,6 +75,7 @@ if (OpenSSL_FOUND)
         ../lib/scrambler/scrambler.c
         ../lib/scrambler/cissa.c
         ../lib/cas/biss/biss.c
+        ../lib/cas/biss/hex.c
         ../lib/cas/biss/ca.c
         ../lib/cas/biss/ca_sections.c
         ${CSA2_SRC})

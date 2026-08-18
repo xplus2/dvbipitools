@@ -60,7 +60,8 @@ int main(int argc, char **argv) {
   config_t cfg;
   args_status_t st;
   int uds_fd, http_fd;
-  static store_t store; /* ~1.9MB, keep off the stack */
+  http_server_t *hs;
+  static store_t store; /* ~1.9MB, keeps off stack */
 
   log_set_color(log_color_prescan(argc, argv));
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
@@ -87,35 +88,41 @@ int main(int argc, char **argv) {
     unlink(cfg.sock_path);
     return 1;
   }
+  hs = http_server_new(http_fd);
+  if (!hs) {
+    close(uds_fd);
+    close(http_fd);
+    unlink(cfg.sock_path);
+    return 1;
+  }
 
   store_init(&store);
   log_line("receiving snapshots on %s, serving http://%s:%u/metrics", cfg.sock_path, cfg.listen_addr, cfg.listen_port);
 
   while (!signal_stop_requested()) {
-    struct pollfd pfds[2];
-    int nready;
+    struct pollfd pfds[1 + HTTP_MAX_CONNS + 1]; /* uds + listen + open connections */
+    int n = 0;
     double now;
 
-    pfds[0].fd = uds_fd;
-    pfds[0].events = POLLIN;
-    pfds[0].revents = 0;
-    pfds[1].fd = http_fd;
-    pfds[1].events = POLLIN;
-    pfds[1].revents = 0;
+    pfds[n].fd = uds_fd;
+    pfds[n].events = POLLIN;
+    pfds[n].revents = 0;
+    n++;
+    http_server_poll_fds(hs, pfds, sizeof pfds / sizeof *pfds, &n);
 
-    nready = poll(pfds, 2, POLL_TIMEOUT_MS);
+    poll(pfds, (nfds_t)n, POLL_TIMEOUT_MS);
     if (signal_stop_requested())
       break;
     now = mono_seconds();
 
-    if (nready > 0 && (pfds[0].revents & POLLIN))
+    if (pfds[0].revents & POLLIN)
       drain_uds_snapshots(uds_fd, &store, now, cfg.verbose);
-    if (nready > 0 && (pfds[1].revents & POLLIN))
-      http_accept_and_serve(http_fd, &store, now, cfg.verbose);
+    http_server_service(hs, pfds, n, &store, now, cfg.verbose);
 
     store_reap_expired(&store, now, (double)cfg.expiry_s);
   }
 
+  http_server_free(hs);
   close(uds_fd);
   close(http_fd);
   unlink(cfg.sock_path);

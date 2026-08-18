@@ -10,6 +10,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "../ioutil.h"
 #include "../log.h"
 #include "netconnect.h"
 #include "udpxy.h"
@@ -25,15 +26,6 @@ struct udpxy {
   unsigned char hold[8192]; /* body read with headers */
   size_t hlen, hpos;
 };
-
-static char *find_crlf2(char *b, size_t n) {
-  size_t i;
-  for (i = 0; i + 3 < n; i++)
-    if (b[i] == '\r' && b[i + 1] == '\n' && b[i + 2] == '\r' &&
-        b[i + 3] == '\n')
-      return b + i;
-  return NULL;
-}
 
 static int send_all(int fd, const char *b, size_t n) {
   while (n) {
@@ -55,7 +47,7 @@ udpxy_t *udpxy_open(const char *host, unsigned port, const char *path, const cha
   char req[700];
   udpxy_t *u = NULL;
   int fd, rl, flags;
-  size_t got = 0, hdr;
+  size_t got = 0, hdr, termlen = 0;
   char *term = NULL;
 
   fd = netconnect_tcp(host, port, UDPXY_CONNECT_TIMEOUT_MS, reason_out);
@@ -105,7 +97,7 @@ udpxy_t *udpxy_open(const char *host, unsigned port, const char *path, const cha
       goto fail;
     }
     got += (size_t)n;
-    term = find_crlf2((char *)u->hold, got);
+    term = find_header_end((char *)u->hold, got, &termlen);
     if (term)
       break;
   }
@@ -130,7 +122,7 @@ udpxy_t *udpxy_open(const char *host, unsigned port, const char *path, const cha
       goto fail;
     }
   }
-  hdr = (size_t)(term - (char *)u->hold) + 4;
+  hdr = (size_t)(term - (char *)u->hold) + termlen;
   u->hpos = 0;
   u->hlen = got - hdr;
   memmove(u->hold, u->hold + hdr, u->hlen);

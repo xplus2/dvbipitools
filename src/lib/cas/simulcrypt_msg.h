@@ -35,6 +35,11 @@ void simulcrypt_tlv_reader_init(simulcrypt_tlv_reader_t *r, const unsigned char 
 /* 1 = element, 0 = clean end, -1 = truncated tag/length or value */
 int simulcrypt_tlv_reader_next(simulcrypt_tlv_reader_t *r, unsigned short *tag, const unsigned char **value, unsigned short *value_len);
 
+/* scan payload's TLVs for tag with matching fixed value width. 1 found, 0 not found/wrong width */
+int simulcrypt_find_u8(const unsigned char *payload, size_t payload_len, unsigned short tag, unsigned *out);
+int simulcrypt_find_u16(const unsigned char *payload, size_t payload_len, unsigned short tag, unsigned *out);
+int simulcrypt_find_u32(const unsigned char *payload, size_t payload_len, unsigned short tag, unsigned *out);
+
 typedef struct {
   unsigned char *buf;
   size_t cap;
@@ -45,7 +50,7 @@ typedef struct {
 int simulcrypt_writer_begin(simulcrypt_writer_t *w, unsigned char *buf, size_t cap, unsigned char version, unsigned short type);
 /* -1 on overflow */
 int simulcrypt_writer_put_tlv(simulcrypt_writer_t *w, unsigned short tag, const unsigned char *value, unsigned short value_len);
-/* patches payload_len, returns total frame bytes; 0 if begin/put_tlv ever failed */
+/* patches payload_len, returns total frame bytes. 0 if begin/put_tlv failed */
 size_t simulcrypt_writer_finish(simulcrypt_writer_t *w);
 
 /* buffered non-blocking-socket + poll() single-frame reader, state survives partial reads */

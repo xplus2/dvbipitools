@@ -70,9 +70,9 @@ static size_t find_valid(burst_table_t *t, const struct sockaddr *addr, socklen_
   return idx;
 }
 
-burst_slot_t *burst_table_claim(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int fd, burst_t *b) {
+/* caller holds t->lock. claims free slot for addr/fd/b, indexes it. NULL on full tab */
+static burst_slot_t *claim_locked(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int fd, burst_t *b) {
   size_t i;
-  pthread_mutex_lock(&t->lock);
   for (i = 0; i < t->cap; i++) {
     if (!t->slots[i].in_use) {
       memcpy(&t->slots[i].addr, addr, addrlen);
@@ -85,13 +85,20 @@ burst_slot_t *burst_table_claim(burst_table_t *t, const struct sockaddr *addr, s
       t->slots[i].in_use = 1;
       sockaddr_index_remove(t->index, addr, addrlen); /* drop stale entry before insert */
       sockaddr_index_insert(t->index, addr, addrlen, i);
-      pthread_mutex_unlock(&t->lock);
       return &t->slots[i];
     }
   }
-  pthread_mutex_unlock(&t->lock);
-  log_line(TOOL_NAME ": max-bursts (%zu) reached, rejecting new burst session", t->cap);
   return NULL;
+}
+
+burst_slot_t *burst_table_claim(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int fd, burst_t *b) {
+  burst_slot_t *s;
+  pthread_mutex_lock(&t->lock);
+  s = claim_locked(t, addr, addrlen, fd, b);
+  pthread_mutex_unlock(&t->lock);
+  if (!s)
+    log_line(TOOL_NAME ": max-bursts (%zu) reached, rejecting new burst session", t->cap);
+  return s;
 }
 
 burst_slot_t *burst_table_find(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen) {
@@ -116,22 +123,11 @@ int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t a
     *msn_out = ++t->slots[i].msn;
     updated = 1;
   } else {
-    for (i = 0; i < t->cap; i++) {
-      if (!t->slots[i].in_use) {
-        memcpy(&t->slots[i].addr, addr, addrlen);
-        t->slots[i].addrlen = addrlen;
-        t->slots[i].fd = fd;
-        t->slots[i].b = b;
-        t->slots[i].msn = 0;
-        t->slots[i].nack_count = 0;
-        t->slots[i].congestion_adapted = 0;
-        t->slots[i].in_use = 1;
-        sockaddr_index_remove(t->index, addr, addrlen);
-        sockaddr_index_insert(t->index, addr, addrlen, i);
-        *msn_out = 0;
-        pthread_mutex_unlock(&t->lock);
-        return 0;
-      }
+    burst_slot_t *s = claim_locked(t, addr, addrlen, fd, b);
+    if (s) {
+      *msn_out = 0;
+      pthread_mutex_unlock(&t->lock);
+      return 0;
     }
   }
   pthread_mutex_unlock(&t->lock);

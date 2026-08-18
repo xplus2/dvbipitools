@@ -1,35 +1,19 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <errno.h>
 #include <string.h>
-#include <sys/random.h>
 
 #include "lib/log.h"
 #include "lib/mux/psi_build.h"
 
+#include "../cw_gen.h"
 #include "priv.h"
-
-static int cw_gen(unsigned char *out, size_t len) {
-  size_t got = 0;
-  while (got < len) {
-    ssize_t n = getrandom(out + got, len - got, 0);
-    if (n < 0) {
-      if (errno == EINTR)
-        continue;
-      log_line("ecmg: getrandom: %s", strerror(errno));
-      return -1;
-    }
-    got += (size_t)n;
-  }
-  return 0;
-}
 
 static const unsigned char *hist_get_or_gen(cw_hist_entry_t *hist, unsigned short cp, size_t cw_len) {
   int i = cp % ECMG_CW_HIST;
   if (hist[i].valid && hist[i].cp_number == cp)
     return hist[i].cw;
-  if (cw_gen(hist[i].cw, cw_len) < 0)
+  if (cw_gen(hist[i].cw, cw_len, "ecmg") < 0)
     return NULL;
   hist[i].cp_number = cp;
   hist[i].valid = 1;
@@ -37,17 +21,11 @@ static const unsigned char *hist_get_or_gen(cw_hist_entry_t *hist, unsigned shor
 }
 
 int ecmg_find_error_status(const unsigned char *body, size_t body_len, unsigned short *out) {
-  simulcrypt_tlv_reader_t it;
-  unsigned short tag, vlen;
-  const unsigned char *val;
-  simulcrypt_tlv_reader_init(&it, body, body_len);
-  while (simulcrypt_tlv_reader_next(&it, &tag, &val, &vlen) == 1) {
-    if (tag == ECMG_P_ERROR_STATUS && vlen == 2) {
-      *out = ((unsigned)val[0] << 8) | val[1];
-      return 0;
-    }
-  }
-  return -1;
+  unsigned v;
+  if (!simulcrypt_find_u16(body, body_len, ECMG_P_ERROR_STATUS, &v))
+    return -1;
+  *out = (unsigned short)v;
+  return 0;
 }
 
 /* 0 ok (fills all five), -1 malformed or cw_per_msg missing/out of range */

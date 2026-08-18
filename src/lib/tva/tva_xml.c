@@ -26,7 +26,7 @@ static void percent_encode(const char *s, char *out, size_t outcap) {
   out[oi] = '\0';
 }
 
-/* "YYYY-MM-DDTHH:MM:SS..." -> "YYYYMMDDHHMMSS", truncates the rest */
+/* "YYYY-MM-DDTHH:MM:SS..." -> "YYYYMMDDHHMMSS", truncates rest */
 static void iso8601_compact_prefix(const char *iso, char *out, size_t outcap) {
   size_t i, oi = 0;
   for (i = 0; iso[i] && oi + 1 < outcap; i++)
@@ -73,7 +73,7 @@ void tva_xml_write(FILE *f, const bcg_doc_t *doc) {
     }
     if (pr->category[0]) {
       /* ContentCS 3.0 = unclassified, real scheme not made-up */
-      fputs("<Genre href=\"urn:tva:metadata:cs:ContentCS:2011:3.0\"><Name>", f);
+      fputs("<Genre href=\"" TVA_CONTENTCS_2011_URN "\"><Name>", f);
       xml_escape(f, pr->category);
       fputs("</Name></Genre>", f);
     }
@@ -141,69 +141,86 @@ void tva_xml_write(FILE *f, const bcg_doc_t *doc) {
 }
 
 typedef struct {
-  char crid[BCG_ID_LEN * 3 + 64];
-  char title[BCG_TEXT_LEN];
-  char desc[BCG_TEXT_LEN];
-  char category[BCG_ID_LEN];
-} progtext_t;
+  const char *crid;
+  int idx;
+} progtext_idx_t;
 
 typedef struct {
-  progtext_t *items;
+  bcg_progtext_t *items;
   int n, cap;
+  progtext_idx_t *idx; /* sorted by crid, built once after parse_program_texts */
 } progtext_list_t;
 
-static progtext_t *find_progtext(progtext_t *arr, int n, const char *crid) {
+static int progtext_idx_cmp(const void *a, const void *b) {
+  return strcmp(((const progtext_idx_t *)a)->crid, ((const progtext_idx_t *)b)->crid);
+}
+
+/* 0 ok, -1 OOM. pl->items must not change after this: idx entries are built from it */
+static int progtext_list_build_index(progtext_list_t *pl) {
   int i;
-  for (i = 0; i < n; i++)
-    if (!strcmp(arr[i].crid, crid))
-      return &arr[i];
+  if (!pl->n)
+    return 0;
+  pl->idx = malloc(sizeof *pl->idx * (size_t)pl->n);
+  if (!pl->idx)
+    return -1;
+  for (i = 0; i < pl->n; i++) {
+    pl->idx[i].crid = pl->items[i].crid;
+    pl->idx[i].idx = i;
+  }
+  qsort(pl->idx, (size_t)pl->n, sizeof *pl->idx, progtext_idx_cmp);
+  return 0;
+}
+
+static bcg_progtext_t *find_progtext(const progtext_list_t *pl, const char *crid) {
+  int lo = 0, hi = pl->n - 1;
+  while (lo <= hi) {
+    int mid = (lo + hi) / 2;
+    int c = strcmp(crid, pl->idx[mid].crid);
+    if (c == 0)
+      return &pl->items[pl->idx[mid].idx];
+    if (c < 0)
+      hi = mid - 1;
+    else
+      lo = mid + 1;
+  }
   return NULL;
 }
 
 /* grows pl->items to fit one more entry if needed. 0 ok, -1 OOM */
 static int progtext_grow(progtext_list_t *pl) {
-  int newcap;
   void *np;
   if (pl->n < pl->cap)
     return 0;
-  newcap = pl->cap ? pl->cap * 2 : 32;
-  np = realloc(pl->items, (size_t)newcap * sizeof *pl->items);
+  np = array_grow(pl->items, &pl->cap, pl->n + 1, sizeof *pl->items);
   if (!np)
     return -1;
   pl->items = np;
-  pl->cap = newcap;
   return 0;
 }
 
-/* scans ProgramInformation blocks into pl (growing it as needed). 0 ok, -1 OOM */
-static int parse_program_texts(const char *buf, const char *end, progtext_list_t *pl) {
-  const char *p = buf;
-  for (;;) {
-    const char *tag = strstr(p, "<ProgramInformation ");
-    const char *blk_end;
-    char crid[BCG_ID_LEN * 3 + 64];
-    progtext_t *pt;
-    if (!tag || tag >= end)
-      break;
-    blk_end = strstr(tag, "</ProgramInformation>");
-    if (!blk_end)
-      break;
-    if (xml_attr(tag, blk_end, "programId", crid, sizeof crid) == 0) {
-      if (progtext_grow(pl) != 0)
-        return -1;
-      pt = &pl->items[pl->n++];
-      memset(pt, 0, sizeof *pt);
-      bufcpy(pt->crid, sizeof pt->crid, crid);
-      if (xml_elem_text(tag, blk_end, "Title", pt->title, sizeof pt->title))
-        pt->title[0] = '\0';
-      if (xml_elem_text(tag, blk_end, "Synopsis", pt->desc, sizeof pt->desc))
-        pt->desc[0] = '\0';
-      if (xml_elem_text(tag, blk_end, "Name", pt->category, sizeof pt->category))
-        pt->category[0] = '\0';
-    }
-    p = blk_end + 1;
+static int program_text_cb(const char *tag, const char *blk_end, void *ctx) {
+  progtext_list_t *pl = ctx;
+  char crid[BCG_ID_LEN * 3 + 64];
+  bcg_progtext_t *pt;
+  if (xml_attr(tag, blk_end, "programId", crid, sizeof crid) == 0) {
+    if (progtext_grow(pl) != 0)
+      return -1;
+    pt = &pl->items[pl->n++];
+    memset(pt, 0, sizeof *pt);
+    bufcpy(pt->crid, sizeof pt->crid, crid);
+    if (xml_elem_text(tag, blk_end, "Title", pt->title, sizeof pt->title))
+      pt->title[0] = '\0';
+    if (xml_elem_text(tag, blk_end, "Synopsis", pt->desc, sizeof pt->desc))
+      pt->desc[0] = '\0';
+    if (xml_elem_text(tag, blk_end, "Name", pt->category, sizeof pt->category))
+      pt->category[0] = '\0';
   }
   return 0;
+}
+
+/* scan ProgramInformation blocks into pl (growing it as needed). 0 ok, -1 OOM */
+static int parse_program_texts(const char *buf, const char *end, progtext_list_t *pl) {
+  return for_each_xml_block(buf, end, "<ProgramInformation ", "</ProgramInformation>", program_text_cb, pl);
 }
 
 /* collects every <Name> for channel c within [tag,blk_end) */
@@ -221,7 +238,7 @@ static void collect_service_names(bcg_channel_t *c, const char *tag, const char 
   }
 }
 
-/* parses the IPTV/DTT <ServiceURL> entries within [tag,blk_end) for channel c */
+/* parses IPTV/DTT <ServiceURL> entries within [tag,blk_end) for channel c */
 static void parse_service_urls(bcg_channel_t *c, const char *tag, const char *blk_end) {
   const char *u1 = strstr(tag, "<ServiceURL name=\"IPTV\">");
   const char *u2 = strstr(tag, "<ServiceURL name=\"DTT\">");
@@ -238,37 +255,31 @@ static void parse_service_urls(bcg_channel_t *c, const char *tag, const char *bl
   }
 }
 
-/* scans ServiceInformation blocks into doc's channels. 0 ok, -1 OOM */
-static int parse_service_information(const char *buf, const char *end, bcg_doc_t *doc) {
-  const char *p = buf;
-  for (;;) {
-    const char *tag = strstr(p, "<ServiceInformation ");
-    const char *blk_end;
-    bcg_channel_t *c;
-    char sid[BCG_ID_LEN];
-    if (!tag || tag >= end)
-      break;
-    blk_end = strstr(tag, "</ServiceInformation>");
-    if (!blk_end)
-      break;
-    if (xml_attr(tag, blk_end, "serviceId", sid, sizeof sid) == 0) {
-      c = bcg_add_channel(doc);
-      if (!c)
-        return -1;
-      bufcpy(c->id, sizeof c->id, sid);
-      collect_service_names(c, tag, blk_end);
-      parse_service_urls(c, tag, blk_end);
-    }
-    p = blk_end + 1;
+static int service_info_cb(const char *tag, const char *blk_end, void *ctx) {
+  bcg_doc_t *doc = ctx;
+  bcg_channel_t *c;
+  char sid[BCG_ID_LEN];
+  if (xml_attr(tag, blk_end, "serviceId", sid, sizeof sid) == 0) {
+    c = bcg_add_channel(doc);
+    if (!c)
+      return -1;
+    bufcpy(c->id, sizeof c->id, sid);
+    collect_service_names(c, tag, blk_end);
+    parse_service_urls(c, tag, blk_end);
   }
   return 0;
+}
+
+/* scan ServiceInformation blocks into doc's channels. 0 ok, -1 OOM */
+static int parse_service_information(const char *buf, const char *end, bcg_doc_t *doc) {
+  return for_each_xml_block(buf, end, "<ServiceInformation ", "</ServiceInformation>", service_info_cb, doc);
 }
 
 /* processes one ScheduleEvent [etag,eend) for channel. 0 ok, -1 OOM */
 static int parse_schedule_event(bcg_doc_t *doc, const progtext_list_t *pl, const char *channel, const char *etag, const char *eend) {
   char crid[BCG_ID_LEN * 3 + 64];
   char start[BCG_TIME_LEN], stop[BCG_TIME_LEN];
-  progtext_t *pt;
+  bcg_progtext_t *pt;
   bcg_programme_t *pr;
 
   if (xml_attr(etag, eend, "crid", crid, sizeof crid) != 0 ||
@@ -283,7 +294,7 @@ static int parse_schedule_event(bcg_doc_t *doc, const progtext_list_t *pl, const
     bufcpy(pr->stop, sizeof pr->stop, stop);
   else
     pr->stop[0] = '\0';
-  pt = find_progtext(pl->items, pl->n, crid);
+  pt = find_progtext(pl, crid);
   if (pt) {
     bufcpy(pr->title, sizeof pr->title, pt->title);
     bufcpy(pr->desc, sizeof pr->desc, pt->desc);
@@ -292,41 +303,41 @@ static int parse_schedule_event(bcg_doc_t *doc, const progtext_list_t *pl, const
   return 0;
 }
 
-/* scans ScheduleEvent entries within [tag,blk_end) for channel. 0 ok, -1 OOM */
-static int parse_schedule_events(bcg_doc_t *doc, const progtext_list_t *pl, const char *channel, const char *tag, const char *blk_end) {
-  const char *ep = tag;
-  for (;;) {
-    const char *etag = strstr(ep, "<ScheduleEvent>");
-    const char *eend;
-    if (!etag || etag >= blk_end)
-      return 0;
-    eend = strstr(etag, "</ScheduleEvent>");
-    if (!eend || eend > blk_end)
-      return 0;
-    if (parse_schedule_event(doc, pl, channel, etag, eend) != 0)
-      return -1;
-    ep = eend + 1;
-  }
+typedef struct {
+  bcg_doc_t *doc;
+  const progtext_list_t *pl;
+  const char *channel;
+} schedule_event_ctx_t;
+
+static int schedule_event_cb(const char *tag, const char *blk_end, void *vctx) {
+  schedule_event_ctx_t *ctx = vctx;
+  return parse_schedule_event(ctx->doc, ctx->pl, ctx->channel, tag, blk_end);
 }
 
-/* scans Schedule blocks, adding programmes to doc. 0 ok, -1 OOM */
-static int parse_schedule(const char *buf, const char *end, bcg_doc_t *doc, const progtext_list_t *pl) {
-  const char *p = buf;
-  for (;;) {
-    const char *tag = strstr(p, "<Schedule ");
-    const char *blk_end;
-    char channel[BCG_ID_LEN];
-    if (!tag || tag >= end)
-      break;
-    blk_end = strstr(tag, "</Schedule>");
-    if (!blk_end)
-      break;
-    if (xml_attr(tag, blk_end, "serviceIDRef", channel, sizeof channel) == 0 &&
-        parse_schedule_events(doc, pl, channel, tag, blk_end) != 0)
-      return -1;
-    p = blk_end + 1;
-  }
+/* scans ScheduleEvent entries within [tag,blk_end) for channel. 0 ok, -1 OOM */
+static int parse_schedule_events(bcg_doc_t *doc, const progtext_list_t *pl, const char *channel, const char *tag, const char *blk_end) {
+  schedule_event_ctx_t ctx = {doc, pl, channel};
+  return for_each_xml_block(tag, blk_end, "<ScheduleEvent>", "</ScheduleEvent>", schedule_event_cb, &ctx);
+}
+
+typedef struct {
+  bcg_doc_t *doc;
+  const progtext_list_t *pl;
+} schedule_ctx_t;
+
+static int schedule_cb(const char *tag, const char *blk_end, void *vctx) {
+  schedule_ctx_t *ctx = vctx;
+  char channel[BCG_ID_LEN];
+  if (xml_attr(tag, blk_end, "serviceIDRef", channel, sizeof channel) == 0 &&
+      parse_schedule_events(ctx->doc, ctx->pl, channel, tag, blk_end) != 0)
+    return -1;
   return 0;
+}
+
+/* scan Schedule blocks, adding programmes to doc. 0 ok, -1 OOM */
+static int parse_schedule(const char *buf, const char *end, bcg_doc_t *doc, const progtext_list_t *pl) {
+  schedule_ctx_t ctx = {doc, pl};
+  return for_each_xml_block(buf, end, "<Schedule ", "</Schedule>", schedule_cb, &ctx);
 }
 
 int tva_xml_read(FILE *f, bcg_doc_t *doc) {
@@ -339,10 +350,11 @@ int tva_xml_read(FILE *f, bcg_doc_t *doc) {
   if (read_all(f, &buf, &len))
     return -1;
   end = buf + len;
-
-  rc = parse_program_texts(buf, end, &pl) == 0 && parse_service_information(buf, end, doc) == 0 && parse_schedule(buf, end, doc, &pl) == 0 ? 0 : -1;
+  rc = parse_program_texts(buf, end, &pl) == 0 && progtext_list_build_index(&pl) == 0 && parse_service_information(buf, end, doc) == 0 &&
+               parse_schedule(buf, end, doc, &pl) == 0 ? 0 : -1;
 
   free(buf);
   free(pl.items);
+  free(pl.idx);
   return rc;
 }

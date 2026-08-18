@@ -10,6 +10,7 @@
 #include "lib/demux/escodec/escodec.h"
 #include "lib/demux/pes.h"
 #include "lib/demux/psi/psi.h"
+#include "lib/mux/ebml.h"
 
 #define FLV_REM_MAX 65536
 
@@ -39,6 +40,7 @@ struct flv {
   int64_t t0;
   flv_tag_cb cb;
   void *cb_ctx;
+  ebuf_t tagbuf; /* flv_send_tag()'s scratch buffer, reused across tags */
 };
 
 /* feed.c */

@@ -2,10 +2,10 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <ctype.h>
-#include <stdio.h>
 #include <string.h>
 #include <strings.h>
 
+#include "lib/ioutil.h"
 #include "playlist.h"
 
 #define SNIFF_CAP 4096
@@ -57,7 +57,7 @@ static int parse_m3u(char *text, char *url, size_t n) {
     if (!*line || line[0] == '#')
       continue;
     if (is_url_line(line)) {
-      snprintf(url, n, "%s", line);
+      bufcpy(url, n, line);
       return 1;
     }
   }
@@ -85,7 +85,7 @@ static int parse_pls(char *text, char *url, size_t n) {
   while ((line = next_line(&cur)) != NULL) {
     const char *v;
     if (is_file_key(line, &v) && is_url_line(v)) {
-      snprintf(url, n, "%s", v);
+      bufcpy(url, n, v);
       return 1;
     }
   }

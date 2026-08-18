@@ -39,11 +39,11 @@ endif ()
 
 if (DIPITVHEAD_HAVE_CISSA)
     set(CISSA_SRC ../lib/scrambler/cissa.c)
-    set(BISS_SRC ../lib/cas/biss/biss.c)
+    set(BISS_SRC ../lib/cas/biss/biss.c ../lib/cas/biss/hex.c)
     set(BISS_CA_SRC ../lib/cas/biss/ca.c)
 else ()
     set(CISSA_SRC ../lib/scrambler/cissa_stub.c)
-    set(BISS_SRC ../lib/cas/biss/stub.c)
+    set(BISS_SRC ../lib/cas/biss/stub.c ../lib/cas/biss/hex.c)
     set(BISS_CA_SRC ../lib/cas/biss/ca_stub.c)
 endif ()
 

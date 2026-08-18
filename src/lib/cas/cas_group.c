@@ -1,12 +1,10 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <errno.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/random.h>
 #include <time.h>
 
 #include "lib/log.h"
@@ -15,9 +13,10 @@
 
 #include "cas_group.h"
 #include "cas_scramble_engine.h"
+#include "cw_gen.h"
 #include "emmg_server/emmg_server.h"
 
-#define CAS_GROUP_CW_HIST 8 /* rolling cache, keyed by shared epoch - lookahead depth across vendors */
+#define CAS_GROUP_CW_HIST 8 /* cw ring size: epoch-keyed, cross-vendor lookahead depth */
 
 typedef struct {
   int valid;
@@ -68,21 +67,6 @@ static double mono(void) {
   return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
 }
 
-static int cw_gen(unsigned char *out, size_t len) {
-  size_t got = 0;
-  while (got < len) {
-    ssize_t n = getrandom(out + got, len - got, 0);
-    if (n < 0) {
-      if (errno == EINTR)
-        continue;
-      log_line("cas_group: getrandom: %s", strerror(errno));
-      return -1;
-    }
-    got += (size_t)n;
-  }
-  return 0;
-}
-
 static unsigned long group_current_epoch(cas_group_t *g) {
   return atomic_load_explicit(&g->cp_clock_ms, memory_order_relaxed) / g->cfg.cp_duration_ms;
 }
@@ -94,27 +78,36 @@ void csa1_apply_cw_checksum(unsigned char cw[8]) {
 
 static int group_cw_for_epoch(cas_group_t *g, unsigned long epoch, unsigned char *out, size_t cw_len) {
   int idx = (int)(epoch % CAS_GROUP_CW_HIST);
-  int rc = 0;
+  int need_gen;
+
+  pthread_mutex_lock(&g->cw_lock);
+  need_gen = !(g->hist[idx].valid && g->hist[idx].epoch == epoch);
+  if (!need_gen)
+    memcpy(out, g->hist[idx].cw, cw_len);
+  pthread_mutex_unlock(&g->cw_lock);
+
+  if (!need_gen)
+    return 0;
+
+  /* cw_lock shared cross-vendor: keep getrandom off it */
+  unsigned char generated[ECMG_MAX_CW_LEN];
+  if (cw_gen(generated, cw_len, "cas_group") < 0)
+    return -1;
+  if (g->cfg.legacy_csa1 && cw_len == 8)
+    csa1_apply_cw_checksum(generated);
 
   pthread_mutex_lock(&g->cw_lock);
   if (!(g->hist[idx].valid && g->hist[idx].epoch == epoch)) {
-    if (cw_gen(g->hist[idx].cw, cw_len) < 0) {
-      rc = -1;
-    } else {
-      if (g->cfg.legacy_csa1 && cw_len == 8)
-        csa1_apply_cw_checksum(g->hist[idx].cw);
-      g->hist[idx].epoch = epoch;
-      g->hist[idx].valid = 1;
-    }
+    memcpy(g->hist[idx].cw, generated, cw_len);
+    g->hist[idx].epoch = epoch;
+    g->hist[idx].valid = 1;
   }
-  if (rc == 0)
-    memcpy(out, g->hist[idx].cw, cw_len);
+  memcpy(out, g->hist[idx].cw, cw_len);
   pthread_mutex_unlock(&g->cw_lock);
-  return rc;
+  return 0;
 }
 
-/* ecmg_client's own cp_number is connection-local, resets on reconnect
-   epoch_base anchors it to the shared epoch at the moment this vendor's channel came up. */
+/* cp_number connection-local: resets on reconnect. epoch_base anchors shared epoch at connect time. */
 static int vendor_cw_get(void *ctx, unsigned short cp_number, unsigned char *cw_out, size_t cw_len) {
   vendor_cw_ctx_t *cc = ctx;
   cas_group_t *g = cc->g;
@@ -217,9 +210,12 @@ cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
     return NULL;
   g->cfg = *cfg;
   g->flush_pid = flush_pid;
-  g->scrambling_mode = (cfg->algo == SCRAMBLE_ALGO_CISSA) ? CADESC_SCRAMBLING_MODE_CISSA
-                       : cfg->legacy_csa1                 ? CADESC_SCRAMBLING_MODE_CSA1
-                                                           : CADESC_SCRAMBLING_MODE_CSA2;
+  if (cfg->algo == SCRAMBLE_ALGO_CISSA)
+    g->scrambling_mode = CADESC_SCRAMBLING_MODE_CISSA;
+  else if (cfg->legacy_csa1)
+    g->scrambling_mode = CADESC_SCRAMBLING_MODE_CSA1;
+  else
+    g->scrambling_mode = CADESC_SCRAMBLING_MODE_CSA2;
   g->engine = cas_scramble_engine_start(cfg->algo, cfg->pids, cfg->pid_count, flush_pid);
   if (!g->engine) {
     free(g);
@@ -276,8 +272,8 @@ void cas_group_clock_tick(cas_group_t *g, unsigned long delta_ms) {
   atomic_fetch_add_explicit(&g->cp_clock_ms, delta_ms, memory_order_relaxed);
 }
 
-/* stops minting CWs once nobody is alive to deliver them as ECMs - engine keeps the last
-   published CW (frozen), rather than rolling forward into keys no receiver can ever get. */
+/* stops minting CWs once nobody delivers ECMs: engine freezes last published CW
+   instead of rolling forward into keys no recv can ever get */
 static void refresh_group_cw(cas_group_t *g, scrambler_emit_cb emit, void *ctx) {
   unsigned long epoch;
   unsigned char cw[ECMG_MAX_CW_LEN];

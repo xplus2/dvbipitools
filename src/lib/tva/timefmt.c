@@ -5,15 +5,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../ioutil.h"
 #include "timefmt.h"
-
-static int all_digits(const char *s, int n) {
-  int i;
-  for (i = 0; i < n; i++)
-    if (!isdigit((unsigned char)s[i]))
-      return 0;
-  return 1;
-}
 
 int xmltv_time_to_iso8601(const char *in, char *out, size_t outcap) {
   char y[5], mo[3], d[3], h[3], mi[3], s[3];
@@ -47,29 +40,19 @@ int xmltv_time_to_iso8601(const char *in, char *out, size_t outcap) {
 }
 
 int iso8601_to_xmltv_time(const char *in, char *out, size_t outcap) {
-  char y[5], mo[3], d[3], h[3], mi[3], s[3];
-  size_t l = strlen(in);
-  const char *tail;
+  iso8601_t f;
 
-  if (l < 19 || in[4] != '-' || in[7] != '-' || in[10] != 'T' || in[13] != ':' || in[16] != ':')
+  if (iso8601_split(in, &f))
     return -1;
-  memcpy(y, in, 4); y[4] = '\0';
-  memcpy(mo, in + 5, 2); mo[2] = '\0';
-  memcpy(d, in + 8, 2); d[2] = '\0';
-  memcpy(h, in + 11, 2); h[2] = '\0';
-  memcpy(mi, in + 14, 2); mi[2] = '\0';
-  memcpy(s, in + 17, 2); s[2] = '\0';
 
-  tail = in + 19;
-  if (*tail == 'Z') {
-    snprintf(out, outcap, "%s%s%s%s%s%s +0000", y, mo, d, h, mi, s);
-  } else if ((*tail == '+' || *tail == '-') && strlen(tail) >= 6 && tail[3] == ':') {
-    char sign = tail[0];
-    char oh[3] = {tail[1], tail[2], '\0'};
-    char om[3] = {tail[4], tail[5], '\0'};
-    snprintf(out, outcap, "%s%s%s%s%s%s %c%s%s", y, mo, d, h, mi, s, sign, oh, om);
+  if (f.offset_kind == ISO8601_OFF_Z) {
+    snprintf(out, outcap, "%04d%02d%02d%02d%02d%02d +0000", f.y, f.mo, f.d, f.h, f.mi, f.s);
+  } else if (f.offset_kind == ISO8601_OFF_NUMERIC) {
+    char sign = f.off_min < 0 ? '-' : '+';
+    int abs_min = f.off_min < 0 ? -f.off_min : f.off_min;
+    snprintf(out, outcap, "%04d%02d%02d%02d%02d%02d %c%02d%02d", f.y, f.mo, f.d, f.h, f.mi, f.s, sign, abs_min / 60, abs_min % 60);
   } else {
-    snprintf(out, outcap, "%s%s%s%s%s%s", y, mo, d, h, mi, s);
+    snprintf(out, outcap, "%04d%02d%02d%02d%02d%02d", f.y, f.mo, f.d, f.h, f.mi, f.s);
   }
   return 0;
 }

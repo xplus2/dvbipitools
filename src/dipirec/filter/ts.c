@@ -215,18 +215,33 @@ static int int_dropped(ts_filter_t *f, unsigned pid, const unsigned char *pkt) {
 /* NUL/NIT/EIT/CAT/AIT/ECM/EMM/RST/TDT/TOT: resolved via psi.c or fixed pid.
    INT excluded, needs raw packet, see int_dropped() */
 static int table_dropped(const ts_filter_t *f, unsigned pid, pid_class_t cls) {
-  if (cls == PID_NULL)
-    return (f->strip_mask & STRIP_NUL) != 0;
-  if (cls == PID_NIT)
-    return (f->strip_mask & STRIP_NIT) != 0;
-  if (cls == PID_EIT)
-    return (f->strip_mask & STRIP_EIT) != 0;
-  if (cls == PID_CAT)
-    return (f->strip_mask & STRIP_CAT) != 0;
-  if (cls == PID_AIT)
-    return (f->strip_mask & STRIP_AIT) != 0;
-  if (cls == PID_ECM)
-    return (f->strip_mask & STRIP_ECM) != 0;
+  switch (cls) {
+    case PID_NULL:
+      return (f->strip_mask & STRIP_NUL) != 0;
+    case PID_NIT:
+      return (f->strip_mask & STRIP_NIT) != 0;
+    case PID_EIT:
+      return (f->strip_mask & STRIP_EIT) != 0;
+    case PID_CAT:
+      return (f->strip_mask & STRIP_CAT) != 0;
+    case PID_AIT:
+      return (f->strip_mask & STRIP_AIT) != 0;
+    case PID_ECM:
+      return (f->strip_mask & STRIP_ECM) != 0;
+    case PID_UNKNOWN:
+    case PID_PAT:
+    case PID_PMT:
+    case PID_SDT:
+    case PID_OTHER_SI:
+    case PID_PCR:
+    case PID_VIDEO:
+    case PID_AUDIO:
+    case PID_TELETEXT:
+    case PID_SUBTITLE:
+    case PID_DATA:
+      break;
+  }
+  /* raw-pid checks below apply regardless of cls, switch above only covers class-based ones */
   if ((f->strip_mask & STRIP_EMM) && psi_emm_pid(f->psi) && pid == psi_emm_pid(f->psi))
     return 1;
   if ((f->strip_mask & (STRIP_TDT | STRIP_TOT)) && pid == 0x0014)

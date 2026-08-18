@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "lib/ioutil.h"
 #include "lib/log.h"
 
 #include "../version.h"
@@ -25,13 +26,6 @@ struct mcsend_table {
   const char *iface;
   int ttl;
 };
-
-static size_t next_pow2(size_t n) {
-  size_t p = 1;
-  while (p < n)
-    p <<= 1;
-  return p;
-}
 
 static size_t ptr_hash(const void *p) {
   size_t h = (size_t)(uintptr_t)p >> 4; /* channel_t entries are array-strided, low bits are dead weight */
@@ -88,14 +82,14 @@ void mcsend_ensure(mcsend_table_t *t, channel_t *c, unsigned ff_port) {
     h = (h + 1) & t->hash_mask;
     if (h == start) {
       log_line(TOOL_NAME ": mcsend table full, dropping RET multicast for a channel - accounting invariant violated");
-      return; /* can't happen, sized 2x the bounded key space */
+      return; /* can't happen, table 2x key space */
     }
   }
 
   port = ff_port ? ff_port : c->port;
   m = mcast_open_send(c->family, c->group, port, t->iface, t->ttl);
   if (!m)
-    return; /* mcast_open_send already logged the reason */
+    return;
 
   if (t->entries[h].sock)
     mcast_close(t->entries[h].sock); /* stale socket from a reaped/reclaimed channel */

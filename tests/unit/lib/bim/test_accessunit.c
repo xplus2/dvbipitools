@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "lib/bim/accessunit.h"
+#include "lib/bim/fragment.h"
 
 static bcg_doc_t *build_doc(void) {
   static bcg_doc_t doc;
@@ -57,7 +58,8 @@ START_TEST(accessunit_encode_decode_round_trips_full_doc) {
 
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
-  ck_assert_int_eq(accessunit_encode(doc, &bw, &sw, &nfuu), 0);
+  accessunit_scratch_init(&sc);
+  ck_assert_int_eq(accessunit_encode(&sc, doc, &bw, &sw, &nfuu), 0);
   /* 2 program-information + 1 schedule + 1 service-information: nouri channel excluded */
   ck_assert_int_eq(nfuu, 4);
 
@@ -67,7 +69,6 @@ START_TEST(accessunit_encode_decode_round_trips_full_doc) {
   bitreader_init(&br, bwdata, bwlen);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
   bcg_doc_init(&doc2);
-  accessunit_scratch_init(&sc);
   ck_assert_int_eq(accessunit_decode(&sc, &br, &sr, &doc2, &nfuu2), 0);
   accessunit_scratch_free(&sc);
 
@@ -112,7 +113,8 @@ START_TEST(accessunit_encode_empty_doc_has_zero_fuus) {
   bcg_doc_init(&doc);
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
-  ck_assert_int_eq(accessunit_encode(&doc, &bw, &sw, &nfuu), 0);
+  accessunit_scratch_init(&sc);
+  ck_assert_int_eq(accessunit_encode(&sc, &doc, &bw, &sw, &nfuu), 0);
   ck_assert_int_eq(nfuu, 0);
 
   bwdata = bitwriter_data(&bw, &bwlen);
@@ -120,7 +122,6 @@ START_TEST(accessunit_encode_empty_doc_has_zero_fuus) {
   bitreader_init(&br, bwdata, bwlen);
   strrepo_reader_init(&sr, swdata, swlen);
   bcg_doc_init(&doc2);
-  accessunit_scratch_init(&sc);
   ck_assert_int_eq(accessunit_decode(&sc, &br, &sr, &doc2, &nfuu2), 0);
   accessunit_scratch_free(&sc);
   ck_assert_int_eq(nfuu2, 0);
@@ -271,6 +272,66 @@ START_TEST(accessunit_decode_rejects_fuu_count_one_byte_short_of_boundary) {
 }
 END_TEST
 
+static int emit_fuu(bitwriter_t *outer, int ctxpath, bitwriter_t *fbw) {
+  size_t flen;
+  const unsigned char *fbytes = bitwriter_data(fbw, &flen);
+  if (bitwriter_put_vluimsbf8(outer, (uint64_t)flen))
+    return -1;
+  if (bitwriter_put(outer, (uint64_t)ctxpath, 16))
+    return -1;
+  return bitwriter_put_bytes(outer, fbytes, flen);
+}
+
+/* sr is sequential cursor: schedule fuu before its program_info fuu would desync
+   string reads, decode must reject */
+START_TEST(accessunit_decode_rejects_schedule_fuu_before_program_information_fuu) {
+  bcg_doc_t doc;
+  bcg_programme_t pr;
+  bitwriter_t bw, fbw;
+  bitreader_t br;
+  strrepo_writer_t sw;
+  strrepo_reader_t sr;
+  accessunit_scratch_t sc;
+  const unsigned char *bwdata, *swdata;
+  size_t bwlen, swlen;
+  int nfuu = -1;
+
+  memset(&pr, 0, sizeof pr);
+  snprintf(pr.channel_id, sizeof pr.channel_id, "channel1");
+  snprintf(pr.start, sizeof pr.start, "2020-12-15T12:00:00Z");
+  snprintf(pr.title, sizeof pr.title, "News");
+  snprintf(pr.desc, sizeof pr.desc, "Evening news");
+  snprintf(pr.category, sizeof pr.category, "Current affairs");
+
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(bitwriter_put_vluimsbf8(&bw, 2), 0);
+
+  bitwriter_init(&fbw);
+  ck_assert_int_eq(fragment_encode_schedule("channel1", &pr, 1, &fbw, &sw), 0);
+  ck_assert_int_eq(emit_fuu(&bw, DVBCTXPATH_SCHEDULE, &fbw), 0);
+  bitwriter_free(&fbw);
+
+  bitwriter_init(&fbw);
+  ck_assert_int_eq(fragment_encode_program_information(&pr, &fbw, &sw), 0);
+  ck_assert_int_eq(emit_fuu(&bw, DVBCTXPATH_PROGRAM_INFORMATION, &fbw), 0);
+  bitwriter_free(&fbw);
+
+  bwdata = bitwriter_data(&bw, &bwlen);
+  swdata = strrepo_writer_data(&sw, &swlen);
+  bitreader_init(&br, bwdata, bwlen);
+  ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
+  bcg_doc_init(&doc);
+  accessunit_scratch_init(&sc);
+  ck_assert_int_eq(accessunit_decode(&sc, &br, &sr, &doc, &nfuu), -1);
+  accessunit_scratch_free(&sc);
+
+  bcg_doc_free(&doc);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
 static Suite *accessunit_suite(void) {
   Suite *s = suite_create("accessunit");
   TCase *tc = tcase_create("core");
@@ -280,6 +341,7 @@ static Suite *accessunit_suite(void) {
   tcase_add_test(tc, accessunit_decode_rejects_implausible_fuu_count_for_remaining_bytes);
   tcase_add_test(tc, accessunit_decode_accepts_fuu_count_at_exact_byte_boundary);
   tcase_add_test(tc, accessunit_decode_rejects_fuu_count_one_byte_short_of_boundary);
+  tcase_add_test(tc, accessunit_decode_rejects_schedule_fuu_before_program_information_fuu);
   suite_add_tcase(s, tc);
   return s;
 }

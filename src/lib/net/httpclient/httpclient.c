@@ -58,7 +58,7 @@ ssize_t raw_recv(struct http *h, void *buf, size_t cap, net_err_reason_t *reason
     n = recv(h->fd, buf, cap, 0);
     if (n < 0) {
       if (errno == EINTR)
-        continue; /* spurious wakeup, not a real timeout; retry transparently */
+        continue; /* EINTR: not a real timeout, retry */
       if (errno == EAGAIN || errno == EWOULDBLOCK)
         return 0;
       log_line("recv: %s", strerror(errno));
@@ -90,22 +90,6 @@ static int raw_send_all(struct http *h, const char *buf, size_t n) {
     n -= (size_t)w;
   }
   return 0;
-}
-
-/* end of headers: CRLFCRLF or bare LFLF (some servers skip \r). termlen: 4 or 2 */
-char *find_header_end(char *b, size_t n, size_t *termlen) {
-  size_t i;
-  for (i = 0; i + 1 < n; i++) {
-    if (b[i] == '\n' && b[i + 1] == '\n') {
-      *termlen = 2;
-      return b + i;
-    }
-    if (i + 3 < n && b[i] == '\r' && b[i + 1] == '\n' && b[i + 2] == '\r' && b[i + 3] == '\n') {
-      *termlen = 4;
-      return b + i;
-    }
-  }
-  return NULL;
 }
 
 static void hdr_lower(char *s) {
@@ -154,7 +138,7 @@ static int transfer_encoding_is_chunked(const char *v) {
   return n == 7 && !strncasecmp(v, "chunked", 7);
 }
 
-/* rejects any other transfer-coding (gzip, compress, identity, ...); none supported here */
+/* rejects transfer-coding other than chunked (gzip, compress, identity, ...) */
 int setup_transfer_encoding(struct http *h, net_err_reason_t *reason_out) {
   const char *te = http_header(h, "transfer-encoding");
   if (!te)
@@ -168,6 +152,45 @@ int setup_transfer_encoding(struct http *h, net_err_reason_t *reason_out) {
   h->chunked = 1;
   h->cstate = CHUNK_SIZE_LINE;
   return 0;
+}
+
+/* GET line + Host/User-Agent/Icy-MetaData/optional extra header/Connection: close.
+   ret: request length, or -1 if it doesn't fit cap */
+int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *user_agent, const char *extra_header) {
+  char hostport[300];
+  char hdrline[512] = "";
+  unsigned default_port = url->tls ? 443 : 80;
+  int rl;
+
+  if (extra_header)
+    snprintf(hdrline, sizeof hdrline, "%s\r\n", extra_header);
+  if (url->port == default_port)
+    bufcpy(hostport, sizeof hostport, url->host);
+  else
+    snprintf(hostport, sizeof hostport, "%s:%u", url->host, url->port);
+  rl = snprintf(buf, cap, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nIcy-MetaData: 1\r\n%sConnection: close\r\n\r\n", url->path, hostport, user_agent, hdrline);
+  if (rl < 0 || rl >= (int)cap) {
+    log_line("http request too long");
+    return -1;
+  }
+  return rl;
+}
+
+/* installs parsed headers from h->hold[0..term), leftover body bytes shifted to front */
+void finish_headers(struct http *h, char *term, size_t termlen, size_t got) {
+  size_t hdrlen = (size_t)(term - (char *)h->hold);
+  size_t consumed = hdrlen + termlen;
+  char block[sizeof h->hold];
+  memcpy(block, h->hold, hdrlen);
+  block[hdrlen] = '\0';
+  parse_headers(h, block);
+  h->hlen = got - consumed;
+  memmove(h->hold, h->hold + consumed, h->hlen);
+  h->hpos = 0;
+}
+
+int http_is_redirect_status(int status) {
+  return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
 }
 
 const char *http_header(const http_t *h, const char *name) {
@@ -188,7 +211,7 @@ int http_status(const http_t *h) { return h->status; }
 
 static struct http *fetch_once(const http_url_t *url, const char *user_agent, int insecure, const char *extra_header, net_err_reason_t *reason_out) {
   struct http *h = calloc(1, sizeof *h);
-  char req[2048], hdrline[512] = "";
+  char req[2048];
   int rl;
   size_t got = 0;
   char *term;
@@ -213,19 +236,8 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
     }
   }
 
-  if (extra_header)
-    snprintf(hdrline, sizeof hdrline, "%s\r\n", extra_header);
-  {
-    char hostport[300];
-    unsigned default_port = h->url.tls ? 443 : 80;
-    if (h->url.port == default_port)
-      bufcpy(hostport, sizeof hostport, h->url.host);
-    else
-      snprintf(hostport, sizeof hostport, "%s:%u", h->url.host, h->url.port);
-    rl = snprintf(req, sizeof req, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nIcy-MetaData: 1\r\n%sConnection: close\r\n\r\n", h->url.path, hostport, user_agent, hdrline);
-  }
-  if (rl < 0 || rl >= (int)sizeof req) {
-    log_line("http request too long");
+  rl = build_get_request(req, sizeof req, &h->url, user_agent, extra_header);
+  if (rl < 0) {
     if (reason_out)
       *reason_out = NET_ERR_FORMAT;
     goto fail;
@@ -271,24 +283,7 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
         *reason_out = NET_ERR_FORMAT;
       goto fail;
     }
-    term = find_header_end((char *)h->hold, got, &termlen);
-    if (!term) {
-      log_line("http: no header terminator");
-      if (reason_out)
-        *reason_out = NET_ERR_FORMAT;
-      goto fail;
-    }
-    {
-      size_t hdrlen = (size_t)(term - (char *)h->hold);
-      size_t consumed = hdrlen + termlen;
-      char block[sizeof h->hold];
-      memcpy(block, h->hold, hdrlen);
-      block[hdrlen] = '\0';
-      parse_headers(h, block);
-      h->hlen = got - consumed;
-      memmove(h->hold, h->hold + consumed, h->hlen);
-      h->hpos = 0;
-    }
+    finish_headers(h, term, termlen, got);
   }
   if (setup_transfer_encoding(h, reason_out) != 0)
     goto fail;
@@ -303,7 +298,7 @@ fail:
   return NULL;
 }
 
-/* resolves the redirect target from Location header. 0 ok, -1 failed (reason_out set) */
+/* resolves redirect target from Location header. 0 ok, -1 failed (reason_out set) */
 static int resolve_redirect(struct http *h, http_url_t *next, net_err_reason_t *reason_out) {
   const char *loc = http_header(h, "location");
   if (!loc || resolve_location(next, loc) != 0) {
@@ -324,7 +319,7 @@ http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure,
     struct http *h = fetch_once(&url, ua, insecure, extra_header, reason_out);
     if (!h)
       return NULL;
-    if ((h->status == 301 || h->status == 302 || h->status == 303 || h->status == 307 || h->status == 308) && redirects < HTTP_REDIRECT_MAX) {
+    if (http_is_redirect_status(h->status) && redirects < HTTP_REDIRECT_MAX) {
       http_url_t next = url;
       if (resolve_redirect(h, &next, reason_out) != 0) {
         http_close(h);

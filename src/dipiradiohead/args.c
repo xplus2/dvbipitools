@@ -262,14 +262,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 'n':
-        snprintf(cfg->nit_text, sizeof cfg->nit_text, "%s", optarg);
+        bufcpy(cfg->nit_text, sizeof cfg->nit_text, optarg);
         break;
       case 's':
         if (cfg->n_inputs == 0) {
           argerr("--sdt/-s must follow the -i it names");
           return ARGS_ERR;
         }
-        snprintf(cfg->inputs[cfg->n_inputs - 1].sdt_text, sizeof cfg->inputs[0].sdt_text, "%s", optarg);
+        bufcpy(cfg->inputs[cfg->n_inputs - 1].sdt_text, sizeof cfg->inputs[0].sdt_text, optarg);
         break;
       case 'e': {
         char *end;
@@ -673,7 +673,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     if (cfg->inputs[i].sdt_text[0])
       continue;
     if (cfg->n_inputs == 1)
-      snprintf(cfg->inputs[i].sdt_text, sizeof cfg->inputs[i].sdt_text, "%s", TOOL_NAME);
+      bufcpy(cfg->inputs[i].sdt_text, sizeof cfg->inputs[i].sdt_text, TOOL_NAME);
     else
       snprintf(cfg->inputs[i].sdt_text, sizeof cfg->inputs[i].sdt_text, "%s %u", TOOL_NAME, i + 1);
   }

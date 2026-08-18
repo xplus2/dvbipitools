@@ -28,23 +28,9 @@ static ssize_t raw_send_nb(struct http *h, const char *buf, size_t n) {
 }
 
 static int async_build_request(http_async_t *a) {
-  char hostport[300];
-  char hdrline[sizeof a->extra_header + 4] = "";
-  unsigned default_port = a->h->url.tls ? 443 : 80;
-  int rl;
-
-  if (a->have_extra_header)
-    snprintf(hdrline, sizeof hdrline, "%s\r\n", a->extra_header);
-  if (a->h->url.port == default_port)
-    bufcpy(hostport, sizeof hostport, a->h->url.host);
-  else
-    snprintf(hostport, sizeof hostport, "%s:%u", a->h->url.host, a->h->url.port);
-  rl = snprintf(a->reqbuf, sizeof a->reqbuf, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nIcy-MetaData: 1\r\n%sConnection: close\r\n\r\n",
-                a->h->url.path, hostport, a->user_agent, hdrline);
-  if (rl < 0 || rl >= (int)sizeof a->reqbuf) {
-    log_line("http request too long");
+  int rl = build_get_request(a->reqbuf, sizeof a->reqbuf, &a->h->url, a->user_agent, a->have_extra_header ? a->extra_header : NULL);
+  if (rl < 0)
     return -1;
-  }
   a->req_len = (size_t)rl;
   a->req_sent = 0;
   return 0;
@@ -95,7 +81,7 @@ short http_async_poll_events(const http_async_t *a) { return a->want_events; }
 static http_async_state_t async_after_headers(http_async_t *a, net_err_reason_t *reason_out) {
   struct http *h = a->h;
 
-  if (h->status == 301 || h->status == 302 || h->status == 303 || h->status == 307 || h->status == 308) {
+  if (http_is_redirect_status(h->status)) {
     const char *loc;
     http_url_t next;
     if (a->redirects >= HTTP_REDIRECT_MAX) {
@@ -135,7 +121,7 @@ static http_async_state_t async_after_headers(http_async_t *a, net_err_reason_t 
   return HTTP_ASYNC_DONE;
 }
 
-/* starts the async TLS handshake. 0: pending (a->phase updated). -1: failed (reason_out set) */
+/* starts async TLS handshake. 0: pending (a->phase updated). -1: failed (reason_out set) */
 static int start_tls(http_async_t *a, struct http *h, net_err_reason_t *reason_out) {
   h->tls = tls_connect_start(h->fd, h->url.host, a->insecure);
   if (!h->tls) {
@@ -169,106 +155,100 @@ static int send_request_buf(http_async_t *a, struct http *h, net_err_reason_t *r
 http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out) {
   struct http *h = a->h;
 
-  if (a->phase == HA_CONNECTING) {
-    int cr = netconnect_tcp_finish(&a->connect_pending, &h->fd, reason_out);
-    if (cr == 0)
-      return HTTP_ASYNC_PENDING; /* this address failed, next candidate connecting on h->fd */
-    if (cr < 0) {
-      log_line("connect %s:%u: %s", h->url.host, h->url.port, strerror(errno));
-      return HTTP_ASYNC_ERROR;
-    }
-    if (h->url.tls) {
-      if (start_tls(a, h, reason_out) != 0)
+  switch (a->phase) {
+    case HA_CONNECTING: {
+      int cr = netconnect_tcp_finish(&a->connect_pending, &h->fd, reason_out);
+      if (cr == 0)
+        return HTTP_ASYNC_PENDING; /* this address failed, next candidate connecting on h->fd */
+      if (cr < 0) {
+        log_line("connect %s:%u: %s", h->url.host, h->url.port, strerror(errno));
         return HTTP_ASYNC_ERROR;
-      return HTTP_ASYNC_PENDING;
-    }
-    if (async_build_request(a) != 0) {
-      if (reason_out)
-        *reason_out = NET_ERR_FORMAT;
-      return HTTP_ASYNC_ERROR;
-    }
-    a->phase = HA_SENDING;
-    a->want_events = POLLOUT;
-    return HTTP_ASYNC_PENDING;
-  }
-
-  if (a->phase == HA_TLS_HANDSHAKE) {
-    tls_handshake_status_t st = tls_handshake_step(h->tls);
-    if (st == TLS_HANDSHAKE_WANT_READ) {
-      a->want_events = POLLIN;
-      return HTTP_ASYNC_PENDING;
-    }
-    if (st == TLS_HANDSHAKE_WANT_WRITE) {
-      a->want_events = POLLOUT;
-      return HTTP_ASYNC_PENDING;
-    }
-    if (st == TLS_HANDSHAKE_ERROR) {
-      if (reason_out)
-        *reason_out = NET_ERR_TLS;
-      return HTTP_ASYNC_ERROR;
-    }
-    if (async_build_request(a) != 0) {
-      if (reason_out)
-        *reason_out = NET_ERR_FORMAT;
-      return HTTP_ASYNC_ERROR;
-    }
-    a->phase = HA_SENDING;
-    a->want_events = POLLOUT;
-    return HTTP_ASYNC_PENDING;
-  }
-
-  if (a->phase == HA_SENDING) {
-    int r = send_request_buf(a, h, reason_out);
-    if (r < 0)
-      return HTTP_ASYNC_ERROR;
-    if (r == 0)
-      return HTTP_ASYNC_PENDING;
-    a->phase = HA_READING_HEADERS;
-    a->want_events = POLLIN;
-    return HTTP_ASYNC_PENDING;
-  }
-
-  { /* HA_READING_HEADERS */
-    char *term;
-    size_t termlen = 0;
-
-    for (;;) {
-      ssize_t n;
-      if (a->hdr_got >= sizeof h->hold) {
-        log_line("http: response headers too large");
+      }
+      if (h->url.tls) {
+        if (start_tls(a, h, reason_out) != 0)
+          return HTTP_ASYNC_ERROR;
+        return HTTP_ASYNC_PENDING;
+      }
+      if (async_build_request(a) != 0) {
         if (reason_out)
           *reason_out = NET_ERR_FORMAT;
         return HTTP_ASYNC_ERROR;
       }
-      n = raw_recv(h, h->hold + a->hdr_got, sizeof h->hold - a->hdr_got, reason_out);
-      if (n < 0) {
-        log_line("http: connection closed while reading headers");
-        return HTTP_ASYNC_ERROR;
-      }
-      if (n == 0) {
+      a->phase = HA_SENDING;
+      a->want_events = POLLOUT;
+      return HTTP_ASYNC_PENDING;
+    }
+
+    case HA_TLS_HANDSHAKE: {
+      tls_handshake_status_t st = tls_handshake_step(h->tls);
+      if (st == TLS_HANDSHAKE_WANT_READ) {
         a->want_events = POLLIN;
         return HTTP_ASYNC_PENDING;
       }
-      a->hdr_got += (size_t)n;
-      term = find_header_end((char *)h->hold, a->hdr_got, &termlen);
-      if (term)
-        break;
+      if (st == TLS_HANDSHAKE_WANT_WRITE) {
+        a->want_events = POLLOUT;
+        return HTTP_ASYNC_PENDING;
+      }
+      if (st == TLS_HANDSHAKE_ERROR) {
+        if (reason_out)
+          *reason_out = NET_ERR_TLS;
+        return HTTP_ASYNC_ERROR;
+      }
+      if (async_build_request(a) != 0) {
+        if (reason_out)
+          *reason_out = NET_ERR_FORMAT;
+        return HTTP_ASYNC_ERROR;
+      }
+      a->phase = HA_SENDING;
+      a->want_events = POLLOUT;
+      return HTTP_ASYNC_PENDING;
     }
-    {
-      size_t hdrlen = (size_t)(term - (char *)h->hold);
-      size_t consumed = hdrlen + termlen;
-      char block[sizeof h->hold];
-      memcpy(block, h->hold, hdrlen);
-      block[hdrlen] = '\0';
-      parse_headers(h, block);
-      h->hlen = a->hdr_got - consumed;
-      memmove(h->hold, h->hold + consumed, h->hlen);
-      h->hpos = 0;
+
+    case HA_SENDING: {
+      int r = send_request_buf(a, h, reason_out);
+      if (r < 0)
+        return HTTP_ASYNC_ERROR;
+      if (r == 0)
+        return HTTP_ASYNC_PENDING;
+      a->phase = HA_READING_HEADERS;
+      a->want_events = POLLIN;
+      return HTTP_ASYNC_PENDING;
     }
-    if (setup_transfer_encoding(h, reason_out) != 0)
-      return HTTP_ASYNC_ERROR;
-    return async_after_headers(a, reason_out);
+
+    case HA_READING_HEADERS: {
+      char *term;
+      size_t termlen = 0;
+
+      for (;;) {
+        ssize_t n;
+        if (a->hdr_got >= sizeof h->hold) {
+          log_line("http: response headers too large");
+          if (reason_out)
+            *reason_out = NET_ERR_FORMAT;
+          return HTTP_ASYNC_ERROR;
+        }
+        n = raw_recv(h, h->hold + a->hdr_got, sizeof h->hold - a->hdr_got, reason_out);
+        if (n < 0) {
+          log_line("http: connection closed while reading headers");
+          return HTTP_ASYNC_ERROR;
+        }
+        if (n == 0) {
+          a->want_events = POLLIN;
+          return HTTP_ASYNC_PENDING;
+        }
+        a->hdr_got += (size_t)n;
+        term = find_header_end((char *)h->hold, a->hdr_got, &termlen);
+        if (term)
+          break;
+      }
+      finish_headers(h, term, termlen, a->hdr_got);
+      if (setup_transfer_encoding(h, reason_out) != 0)
+        return HTTP_ASYNC_ERROR;
+      return async_after_headers(a, reason_out);
+    }
   }
+
+  return HTTP_ASYNC_ERROR;
 }
 
 http_t *http_async_take(http_async_t *a) {

@@ -11,9 +11,6 @@
 
 int announce_run(const config_t *cfg, metrics_exporter_t *mx);
 
-/* EN 300 468 annex C, same formula as lib/bim/codec.c's dvbDateTimeCodec */
-long date_to_mjd(int y, int mo, int d);
-
 /* "YYYY-MM-DDTHH:MM:SS[Z|+HH:MM|-HH:MM]" -> minutes since MJD epoch, UTC-normalized. 0 ok, -1 malformed */
 int iso8601_to_minutes(const char *in, long *out);
 

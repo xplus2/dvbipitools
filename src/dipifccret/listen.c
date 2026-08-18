@@ -33,23 +33,32 @@ struct listen_pool {
   atomic_int stop;
 };
 
-/* drains pending datagrams on w->fd until EAGAIN/EWOULDBLOCK or an unrecoverable error */
-static void drain_worker_socket(worker_t *w, unsigned char *buf, size_t buflen) {
+/* drains pending datagrams on fd via recv_cb, stops at EAGAIN/EWOULDBLOCK or a real error.
+   log_tag identifies caller in error line */
+static void drain_socket(int fd, unsigned char *buf, size_t buflen, const char *log_tag,
+                          void (*recv_cb)(const unsigned char *data, size_t len, int fd, const struct sockaddr *from, socklen_t fromlen, void *ctx),
+                          void *ctx) {
   for (;;) {
     struct sockaddr_storage from;
     socklen_t fromlen = sizeof from;
-    ssize_t r = recvfrom(w->fd, buf, buflen, 0, (struct sockaddr *)&from, &fromlen);
+    ssize_t r = recvfrom(fd, buf, buflen, 0, (struct sockaddr *)&from, &fromlen);
     if (r < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK)
         return;
       if (errno == EINTR)
         continue;
-      log_line(TOOL_NAME ": recv: %s", strerror(errno));
+      log_line(TOOL_NAME ": %s: %s", log_tag, strerror(errno));
       return;
     }
-    if (w->cb)
-      w->cb(buf, (size_t)r, w->fd, (struct sockaddr *)&from, fromlen, w->user);
+    if (recv_cb)
+      recv_cb(buf, (size_t)r, fd, (struct sockaddr *)&from, fromlen, ctx);
   }
+}
+
+static void worker_recv_cb(const unsigned char *data, size_t len, int fd, const struct sockaddr *from, socklen_t fromlen, void *ctx) {
+  worker_t *w = ctx;
+  if (w->cb)
+    w->cb(data, len, fd, from, fromlen, w->user);
 }
 
 static void *worker_main(void *arg) {
@@ -61,7 +70,7 @@ static void *worker_main(void *arg) {
     int n = epoll_wait(w->epfd, &ev, 1, 100);
     if (n <= 0)
       continue;
-    drain_worker_socket(w, buf, sizeof buf);
+    drain_socket(w->fd, buf, sizeof buf, "recv", worker_recv_cb, w);
   }
   return NULL;
 }
@@ -71,7 +80,7 @@ static int bind_dgram(int fd, int family, const char *addr, unsigned port) {
   socklen_t sslen;
   if (netaddr_fill(family, addr, port, &ss, &sslen)) {
     log_line(TOOL_NAME ": bad listen address: %s", addr);
-    errno = EINVAL; /* netaddr_fill()'s inet_pton() never sets errno; caller's strerror(errno) needs a real value */
+    errno = EINVAL; /* inet_pton() never sets errno, give caller's strerror() a real value */
     return -1;
   }
   return bind(fd, (struct sockaddr *)&ss, sslen);
@@ -193,23 +202,15 @@ struct listen_multi {
   void *user;
 };
 
-/* drains pending datagrams on fd until EAGAIN/EWOULDBLOCK or an unrecoverable error */
-static void drain_multi_worker_socket(listen_multi_t *p, int fd, size_t slot, unsigned char *buf, size_t buflen) {
-  for (;;) {
-    struct sockaddr_storage from;
-    socklen_t fromlen = sizeof from;
-    ssize_t r = recvfrom(fd, buf, buflen, 0, (struct sockaddr *)&from, &fromlen);
-    if (r < 0) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK)
-        return;
-      if (errno == EINTR)
-        continue;
-      log_line(TOOL_NAME ": resolve recv: %s", strerror(errno));
-      return;
-    }
-    if (p->cb)
-      p->cb(buf, (size_t)r, slot, fd, (struct sockaddr *)&from, fromlen, p->user);
-  }
+typedef struct {
+  listen_multi_t *p;
+  size_t slot;
+} multi_drain_ctx_t;
+
+static void multi_recv_cb(const unsigned char *data, size_t len, int fd, const struct sockaddr *from, socklen_t fromlen, void *ctx) {
+  multi_drain_ctx_t *c = ctx;
+  if (c->p->cb)
+    c->p->cb(data, len, c->slot, fd, from, fromlen, c->p->user);
 }
 
 static void *multi_worker_main(void *arg) {
@@ -223,7 +224,8 @@ static void *multi_worker_main(void *arg) {
     for (e = 0; e < n; e++) {
       size_t slot = (size_t)events[e].data.u64;
       int fd = p->fds[slot];
-      drain_multi_worker_socket(p, fd, slot, buf, sizeof buf);
+      multi_drain_ctx_t dc = {p, slot};
+      drain_socket(fd, buf, sizeof buf, "resolve recv", multi_recv_cb, &dc);
     }
   }
   return NULL;

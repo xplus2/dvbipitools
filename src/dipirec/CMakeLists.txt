@@ -68,7 +68,8 @@ add_executable(dipirec
     ../lib/mux/rtpheader.c
     ../lib/mux/ebml.c
     ../lib/mux/mkv/mkv.c
-    ../lib/demux/escodec/bitreader.c
+    ../lib/demux/bitreader.c
+    ../lib/demux/escodec/aubuild.c
     ../lib/demux/escodec/audio.c
     ../lib/mux/mkv/video.c
     ../lib/demux/escodec/video.c

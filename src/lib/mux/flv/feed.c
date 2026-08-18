@@ -1,91 +1,11 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdlib.h>
 #include <string.h>
 
+#include "lib/demux/escodec/aubuild.h"
 #include "lib/log.h"
 #include "priv.h"
-
-/* Annex B NAL unit types */
-#define H264_NAL_IDR 5
-#define H264_NAL_SPS 7
-#define H264_NAL_PPS 8
-#define H264_NAL_AUD 9
-#define H264_NAL_FILLER 12
-
-#define HEVC_NAL_IRAP_FIRST 16 /* BLA_W_LP */
-#define HEVC_NAL_IRAP_LAST 21  /* CRA_NUT */
-#define HEVC_NAL_VPS 32
-#define HEVC_NAL_SPS 33
-#define HEVC_NAL_PPS 34
-#define HEVC_NAL_AUD 35
-#define HEVC_NAL_FILLER 38
-
-static void ps_store(unsigned char *dst, size_t *dlen, const unsigned char *s, size_t n) {
-  if (n && n <= ESCODEC_PS_MAX) {
-    memcpy(dst, s, n);
-    *dlen = n;
-  }
-}
-
-static size_t find_startcode(const unsigned char *d, size_t len, size_t from, size_t *sclen) {
-  size_t i;
-
-  for (i = from; i + 3 <= len; i++) {
-    if (d[i] || d[i + 1])
-      continue;
-    if (d[i + 2] == 1) {
-      *sclen = 3;
-      return i;
-    }
-    if (i + 4 <= len && d[i + 2] == 0 && d[i + 3] == 1) {
-      *sclen = 4;
-      return i;
-    }
-  }
-  return len;
-}
-
-static int vbuf_add(flv_track_t *t, const unsigned char *nal, size_t n) {
-  size_t need = t->vbuflen + 4 + n;
-
-  if (need > t->vbufcap) {
-    size_t nc = t->vbufcap ? t->vbufcap * 2 : 65536;
-    unsigned char *np;
-    while (nc < need)
-      nc *= 2;
-    np = realloc(t->vbuf, nc);
-    if (!np)
-      return -1;
-    t->vbuf = np;
-    t->vbufcap = nc;
-  }
-  t->vbuf[t->vbuflen++] = (unsigned char)(n >> 24);
-  t->vbuf[t->vbuflen++] = (unsigned char)(n >> 16);
-  t->vbuf[t->vbuflen++] = (unsigned char)(n >> 8);
-  t->vbuf[t->vbuflen++] = (unsigned char)n;
-  memcpy(t->vbuf + t->vbuflen, nal, n);
-  t->vbuflen += n;
-  return 0;
-}
-
-static int rem_append(flv_track_t *t, const unsigned char *d, size_t n) {
-  if (t->remlen + n > t->remcap) {
-    size_t nc = t->remcap ? t->remcap * 2 : 8192;
-    unsigned char *np;
-    while (nc < t->remlen + n)
-      nc *= 2;
-    np = realloc(t->rem, nc);
-    if (!np)
-      return -1;
-    t->rem = np;
-    t->remcap = nc;
-  }
-  memcpy(t->rem + t->remlen, d, n);
-  t->remlen += n;
-  return 0;
-}
 
 /* live push: no pend[]-style buffer/rewrite like mkv. pre-ready frames dropped, no rewind for late joiners. */
 void flv_all_ready(flv_t *f) {
@@ -100,45 +20,6 @@ void flv_all_ready(flv_t *f) {
   f->t0 = f->have_v ? f->vtrk.ts_ms : f->atrk.ts_ms;
   f->started = 1;
   flv_emit_metadata(f);
-}
-
-static void handle_h264_nal(flv_track_t *t, unsigned type, const unsigned char *p, size_t n, int *key) {
-  switch (type) {
-    case H264_NAL_SPS:
-      ps_store(t->es.sps, &t->es.spslen, p, n);
-      break;
-    case H264_NAL_PPS:
-      ps_store(t->es.pps, &t->es.ppslen, p, n);
-      break;
-    case H264_NAL_AUD:
-    case H264_NAL_FILLER:
-      break;
-    default:
-      if (type == H264_NAL_IDR)
-        *key = 1;
-      vbuf_add(t, p, n);
-  }
-}
-
-static void handle_hevc_nal(flv_track_t *t, unsigned type, const unsigned char *p, size_t n, int *key) {
-  switch (type) {
-    case HEVC_NAL_VPS:
-      ps_store(t->es.vps, &t->es.vpslen, p, n);
-      break;
-    case HEVC_NAL_SPS:
-      ps_store(t->es.sps, &t->es.spslen, p, n);
-      break;
-    case HEVC_NAL_PPS:
-      ps_store(t->es.pps, &t->es.ppslen, p, n);
-      break;
-    case HEVC_NAL_AUD:
-    case HEVC_NAL_FILLER:
-      break;
-    default:
-      if (type >= HEVC_NAL_IRAP_FIRST && type <= HEVC_NAL_IRAP_LAST)
-        *key = 1;
-      vbuf_add(t, p, n);
-  }
 }
 
 static void try_parse_h264_hdr(flv_t *f, flv_track_t *t) {
@@ -188,10 +69,10 @@ static void handle_video(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, co
     }
     if (t->es.codec == CODEC_H264) {
       type = d[ns] & 0x1F;
-      handle_h264_nal(t, type, d + ns, n, &key);
+      esc_handle_h264_nal(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, type, d + ns, n, &key);
     } else {
       type = (d[ns] >> 1) & 0x3F;
-      handle_hevc_nal(t, type, d + ns, n, &key);
+      esc_handle_hevc_nal(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, type, d + ns, n, &key);
     }
     p = q;
     scl = scl2;
@@ -216,7 +97,7 @@ static void handle_audio(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, co
     t->ts_ms = pts_unwrap(&t->pts, pts);
   if (t->remlen > FLV_REM_MAX)
     t->remlen = 0;
-  if (rem_append(t, data, len))
+  if (esc_rem_append(&t->rem, &t->remlen, &t->remcap, data, len))
     return;
 
   while (pos < t->remlen) {

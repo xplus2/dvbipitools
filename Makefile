@@ -244,7 +244,8 @@ dipirec_SRCS := \
 	src/lib/mux/rtpheader.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/mkv/mkv.c \
-	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/escodec/aubuild.c \
 	src/lib/demux/escodec/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
@@ -285,11 +286,11 @@ endif
 
 ifeq ($(HAVE_OPENSSL),yes)
 dipiradiohead_CISSA_SRC := src/lib/scrambler/cissa.c
-dipiradiohead_BISS_SRC := src/lib/cas/biss/biss.c
+dipiradiohead_BISS_SRC := src/lib/cas/biss/biss.c src/lib/cas/biss/hex.c
 dipiradiohead_BISS_CA_SRC := src/lib/cas/biss/ca.c
 else
 dipiradiohead_CISSA_SRC := src/lib/scrambler/cissa_stub.c
-dipiradiohead_BISS_SRC := src/lib/cas/biss/stub.c
+dipiradiohead_BISS_SRC := src/lib/cas/biss/stub.c src/lib/cas/biss/hex.c
 dipiradiohead_BISS_CA_SRC := src/lib/cas/biss/ca_stub.c
 $(warning dipiradiohead: OpenSSL not found via pkg-config, building without CISSA support)
 endif
@@ -399,11 +400,11 @@ endif
 
 ifeq ($(HAVE_OPENSSL),yes)
 dipitvhead_CISSA_SRC := src/lib/scrambler/cissa.c
-dipitvhead_BISS_SRC := src/lib/cas/biss/biss.c
+dipitvhead_BISS_SRC := src/lib/cas/biss/biss.c src/lib/cas/biss/hex.c
 dipitvhead_BISS_CA_SRC := src/lib/cas/biss/ca.c
 else
 dipitvhead_CISSA_SRC := src/lib/scrambler/cissa_stub.c
-dipitvhead_BISS_SRC := src/lib/cas/biss/stub.c
+dipitvhead_BISS_SRC := src/lib/cas/biss/stub.c src/lib/cas/biss/hex.c
 dipitvhead_BISS_CA_SRC := src/lib/cas/biss/ca_stub.c
 $(warning dipitvhead: OpenSSL not found via pkg-config, building without CISSA support)
 endif
@@ -615,7 +616,8 @@ dipidescramble_SRCS := \
 	src/lib/demux/mpts_probe.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/mkv/mkv.c \
-	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/escodec/aubuild.c \
 	src/lib/demux/escodec/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
@@ -637,6 +639,7 @@ dipidescramble_SRCS := \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa.c \
 	src/lib/cas/biss/biss.c \
+	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca.c \
 	src/lib/cas/biss/ca_sections.c \
 	$(dipidescramble_CSA2_SRC)
@@ -746,7 +749,8 @@ UNIT_TESTS += lib_cas_biss
 lib_cas_biss_BIN := tests/unit/lib/cas/test_biss
 lib_cas_biss_SRCS := \
 	tests/unit/lib/cas/test_biss.c \
-	src/lib/cas/biss/biss.c
+	src/lib/cas/biss/biss.c \
+	src/lib/cas/biss/hex.c
 lib_cas_biss_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_cas_biss_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
@@ -927,7 +931,8 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/mux/teletext.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/mkv/mkv.c \
-	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/escodec/aubuild.c \
 	src/lib/demux/escodec/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
@@ -948,6 +953,7 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/scrambler/cissa.c \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/biss.c \
+	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/net/tls.c \
@@ -1281,7 +1287,8 @@ lib_mux_mkv_BIN := tests/unit/lib/mux/test_mkv
 lib_mux_mkv_SRCS := \
 	tests/unit/lib/mux/test_mkv.c \
 	src/lib/mux/mkv/mkv.c \
-	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/escodec/aubuild.c \
 	src/lib/demux/escodec/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
@@ -1306,7 +1313,8 @@ lib_mux_flv_SRCS := \
 	src/lib/mux/flv/flv.c \
 	src/lib/mux/flv/write.c \
 	src/lib/mux/flv/feed.c \
-	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/escodec/aubuild.c \
 	src/lib/demux/escodec/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/amf.c \
@@ -1343,7 +1351,8 @@ lib_bim_codec_SRCS := \
 	src/lib/bim/codec.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bitreader.c \
-	src/lib/bim/strrepo.c
+	src/lib/bim/strrepo.c \
+	src/lib/ioutil.c
 
 lib_xml_util_BIN := tests/unit/lib/test_xml_util
 lib_xml_util_SRCS := \
@@ -1359,12 +1368,14 @@ lib_sds_xml_SRCS := \
 lib_tva_timefmt_BIN := tests/unit/lib/tva/test_timefmt
 lib_tva_timefmt_SRCS := \
 	tests/unit/lib/tva/test_timefmt.c \
-	src/lib/tva/timefmt.c
+	src/lib/tva/timefmt.c \
+	src/lib/ioutil.c
 
 lib_tva_bcg_doc_BIN := tests/unit/lib/tva/test_bcg_doc
 lib_tva_bcg_doc_SRCS := \
 	tests/unit/lib/tva/test_bcg_doc.c \
 	src/lib/tva/bcg_doc.c \
+	src/lib/ioutil.c \
 	src/lib/log.c
 
 lib_tva_mapping_BIN := tests/unit/lib/tva/test_mapping
@@ -1428,7 +1439,8 @@ dipiscan_format_SRCS := \
 	src/dipiscan/format.c \
 	src/lib/playlist_out.c \
 	src/lib/sds_xml.c \
-	src/lib/xml_util.c
+	src/lib/xml_util.c \
+	src/lib/ioutil.c
 
 dipiscan_scan_BIN := tests/unit/dipiscan/test_scan
 dipiscan_scan_SRCS := \
@@ -1558,6 +1570,7 @@ dipiradiohead_tspacketizer_SRCS := \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -1595,6 +1608,7 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -1648,6 +1662,7 @@ dipiradiohead_cas_SRCS := \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -1663,6 +1678,7 @@ dipiradiohead_args_SRCS := \
 	src/lib/ioutil.c \
 	src/lib/cas/cas_args.c \
 	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/log.c
 
@@ -1750,6 +1766,7 @@ dipitvhead_args_SRCS := \
 	src/lib/uriparse.c \
 	src/lib/cas/cas_args.c \
 	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -1819,6 +1836,7 @@ dipitvhead_remux_BIN := tests/unit/dipitvhead/test_remux
 dipitvhead_remux_SRCS := \
 	tests/unit/dipitvhead/test_remux.c \
 	src/dipitvhead/mux/remux.c \
+	src/lib/ioutil.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
 	src/dipitvhead/cas/cas.c \
@@ -1845,6 +1863,7 @@ dipitvhead_remux_SRCS := \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -1885,6 +1904,7 @@ dipitvhead_output_SRCS := \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -1984,6 +2004,7 @@ dipitvhead_cas_SRCS := \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -2185,7 +2206,8 @@ dipirec_record_SRCS := \
 	src/lib/mux/rtpheader.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/mkv/mkv.c \
-	src/lib/demux/escodec/bitreader.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/escodec/aubuild.c \
 	src/lib/demux/escodec/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \

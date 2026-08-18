@@ -30,21 +30,21 @@ static const unsigned char FOURCC_AC3[4] = {'a', 'c', '-', '3'};
 static const unsigned char FOURCC_EAC3[4] = {'e', 'c', '-', '3'};
 
 void flv_send_tag(flv_t *f, flv_tag_type_t type, uint32_t ts, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
-  ebuf_t b;
+  ebuf_t *b = &f->tagbuf;
 
-  memset(&b, 0, sizeof b);
-  eb_bytes(&b, hdr, hn);
+  b->len = 0; /* keep f->tagbuf's allocation, this tag reuses it */
+  b->err = 0;
+  eb_bytes(b, hdr, hn);
   if (pn)
-    eb_bytes(&b, payload, pn);
-  if (b.err) {
+    eb_bytes(b, payload, pn);
+  if (b->err) {
     f->err = 1;
   } else {
     if (f->bytes)
-      *f->bytes += b.len;
+      *f->bytes += b->len;
     if (f->cb)
-      f->cb(f->cb_ctx, type, ts, b.p, b.len);
+      f->cb(f->cb_ctx, type, ts, b->p, b->len);
   }
-  ebuf_free(&b);
 }
 
 /* only known facts: duration=0, videocodecid=0 iff no video track */

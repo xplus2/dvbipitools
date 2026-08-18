@@ -8,6 +8,8 @@
 
 #include "bcg_doc.h"
 
+#define TVA_CONTENTCS_2011_URN "urn:tva:metadata:cs:ContentCS:2011:3.0"
+
 /* crid://dipixmltv.invalid/<percent-encoded-channel-id>/<14-digit-timestamp> */
 void tva_build_crid(const char *channel_id, const char *start_iso, char *out, size_t outcap);
 

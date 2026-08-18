@@ -52,6 +52,48 @@ int simulcrypt_tlv_reader_next(simulcrypt_tlv_reader_t *r, unsigned short *tag, 
   return 1;
 }
 
+int simulcrypt_find_u8(const unsigned char *payload, size_t payload_len, unsigned short tag, unsigned *out) {
+  simulcrypt_tlv_reader_t it;
+  unsigned short t, vlen;
+  const unsigned char *val;
+  simulcrypt_tlv_reader_init(&it, payload, payload_len);
+  while (simulcrypt_tlv_reader_next(&it, &t, &val, &vlen) == 1) {
+    if (t == tag && vlen == 1) {
+      *out = val[0];
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int simulcrypt_find_u16(const unsigned char *payload, size_t payload_len, unsigned short tag, unsigned *out) {
+  simulcrypt_tlv_reader_t it;
+  unsigned short t, vlen;
+  const unsigned char *val;
+  simulcrypt_tlv_reader_init(&it, payload, payload_len);
+  while (simulcrypt_tlv_reader_next(&it, &t, &val, &vlen) == 1) {
+    if (t == tag && vlen == 2) {
+      *out = ((unsigned)val[0] << 8) | val[1];
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int simulcrypt_find_u32(const unsigned char *payload, size_t payload_len, unsigned short tag, unsigned *out) {
+  simulcrypt_tlv_reader_t it;
+  unsigned short t, vlen;
+  const unsigned char *val;
+  simulcrypt_tlv_reader_init(&it, payload, payload_len);
+  while (simulcrypt_tlv_reader_next(&it, &t, &val, &vlen) == 1) {
+    if (t == tag && vlen == 4) {
+      *out = ((unsigned)val[0] << 24) | ((unsigned)val[1] << 16) | ((unsigned)val[2] << 8) | val[3];
+      return 1;
+    }
+  }
+  return 0;
+}
+
 int simulcrypt_writer_begin(simulcrypt_writer_t *w, unsigned char *buf, size_t cap, unsigned char version, unsigned short type) {
   w->buf = buf;
   w->cap = cap;
@@ -115,8 +157,7 @@ int simulcrypt_reader_poll(simulcrypt_reader_t *r, int fd, int timeout_ms, simul
     if (!r->need && r->have >= SIMULCRYPT_HDR_LEN) {
       simulcrypt_hdr_parse(r->buf, r->have, &r->hdr);
       r->need = SIMULCRYPT_HDR_LEN + r->hdr.payload_len;
-      /* payload_len is 16-bit so this can't happen with today's SIMULCRYPT_MAX_PAYLOAD,
-         but the buffer write below relies on it - check locally, don't just trust that */
+      /* payload_len 16-bit, can't exceed SIMULCRYPT_MAX_PAYLOAD today, checked anyway */
       if (r->need > sizeof r->buf)
         return -1;
     }

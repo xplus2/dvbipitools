@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-/* writes one valid starter seed per fuzz target into directory argv[1].
-   not part of any normal build; run manually before afl-fuzz. */
+/* write starter seed per fuzz target into directory argv[1].
+   not part of any normal build. run manually before afl-fuzz. */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,6 +57,7 @@ static void gen_bim(const char *dir) {
   bcg_programme_t *pr;
   bitwriter_t bw;
   strrepo_writer_t sw;
+  accessunit_scratch_t sc;
   const unsigned char *bits, *strs;
   size_t bits_len, strs_len;
   unsigned char *out;
@@ -80,12 +81,15 @@ static void gen_bim(const char *dir) {
 
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
-  if (accessunit_encode(&doc, &bw, &sw, &nfuu)) {
+  accessunit_scratch_init(&sc);
+  if (accessunit_encode(&sc, &doc, &bw, &sw, &nfuu)) {
+    accessunit_scratch_free(&sc);
     strrepo_writer_free(&sw);
     bitwriter_free(&bw);
     bcg_doc_free(&doc);
     return;
   }
+  accessunit_scratch_free(&sc);
 
   bits = bitwriter_data(&bw, &bits_len);
   strs = strrepo_writer_data(&sw, &strs_len);
@@ -155,14 +159,14 @@ static void gen_simulcrypt_msg(const char *dir) {
 }
 
 static void gen_ecmg_channel_status(const char *dir) {
-  /* ecmg_parse_channel_status() takes the message BODY directly, no generic_message
-     header - ECMG_P_CW_PER_MSG (tag 0x000B) is the only required field */
+  /* ecmg_parse_channel_status() takes message BODY directly, no generic_message
+     header. ECMG_P_CW_PER_MSG (tag 0x000B) is only required field */
   static const unsigned char body[] = {0x00, 0x0B, 0x00, 0x01, 0x01};
   write_file(dir, "ecmg_channel_status_min.bin", body, sizeof body);
 }
 
 static void gen_dvbstp(const char *dir) {
-  /* single-section segment, no CRC, no provider id, no private words - clause 5.4.1.3 */
+  /* single-section segment, no CRC, no provider id, no private words, per clause 5.4.1.3 */
   static const unsigned char payload[] = "hello";
   unsigned char pkt[12 + sizeof payload - 1];
 
@@ -199,7 +203,7 @@ static void gen_dvbstp_bcg_compressed(const char *dir) {
 }
 
 static void gen_emmg_datagrams(const char *dir) {
-  /* emmg_extract_datagrams() takes the data_provision BODY directly - one EMMG_P_DATAGRAM (tag 0x0005) TLV */
+  /* emmg_extract_datagrams() takes data_provision BODY directly: one EMMG_P_DATAGRAM (tag 0x0005) TLV */
   static const unsigned char body[] = {0x00, 0x05, 0x00, 0x03, 0xAA, 0xBB, 0xCC};
   write_file(dir, "emmg_datagrams_min.bin", body, sizeof body);
 }

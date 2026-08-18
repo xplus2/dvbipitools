@@ -6,17 +6,12 @@
 
 #include <stddef.h>
 
+#include "lib/demux/bitreader.h"
 #include "lib/demux/psi/psi.h"
 
 #define ESCODEC_PS_MAX 512 /* SPS/PPS/VPS */
 #define ESCODEC_AU_MAX 8192
 #define ESCODEC_CPRIV_MAX 1024
-
-typedef struct {
-  const unsigned char *d;
-  size_t len, bit;
-  int err;
-} br_t;
 
 /* container-agnostic codec state: avcC/hvcC/ASC, param sets, LATM cache */
 typedef struct {
@@ -39,13 +34,6 @@ typedef struct {
   unsigned rate, ch, samples;
   int layer;
 } esc_frame_t;
-
-/* bitreader.c */
-unsigned br_u(br_t *b, int n);
-unsigned br_ue(br_t *b);
-int br_se(br_t *b);
-size_t br_slice(const br_t *b, size_t from, size_t to, unsigned char *out, size_t cap);
-size_t rbsp_unescape(const unsigned char *s, size_t len, unsigned char *d, size_t cap);
 
 /* video.c */
 int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h);

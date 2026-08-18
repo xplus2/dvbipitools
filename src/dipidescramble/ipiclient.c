@@ -85,7 +85,7 @@ int ipiclient_poll(ipiclient_t *c, emmcache_t *cache, device_state_t *d) {
   int changed = 0, stalls = 0;
   const char *etag;
 
-  /* todo: configurabvle token name */
+  /* todo: configurable token name */
   if (c->etag[0])
     snprintf(hdr, sizeof hdr, "X-Device-Token: %s\r\nIf-None-Match: %s", c->token, c->etag);
   else

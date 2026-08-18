@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../ioutil.h"
+
 #define SOCKADDR_INDEX_TOMBSTONE 2
 
 typedef struct {
@@ -23,15 +25,9 @@ struct sockaddr_index {
   sockaddr_index_entry_t *entries;
   size_t size; /* power of two */
   size_t mask;
-  size_t used; /* occupied + tombstoned, rebuild threshold */
+  size_t used;       /* occupied entries */
+  size_t tombstones; /* reaped entries pending a rebuild */
 };
-
-static size_t next_pow2(size_t n) {
-  size_t p = 1;
-  while (p < n)
-    p <<= 1;
-  return p;
-}
 
 /* canonicalizes sockaddr to hashable/comparable fields. unknown family, NULL/zero-length address collapse onto shared key */
 static void canon_key(const struct sockaddr *addr, socklen_t addrlen, int *family, unsigned char bytes[16], size_t *byteslen, unsigned short *port) {
@@ -120,6 +116,7 @@ static void rebuild(sockaddr_index_t *idx) {
   }
   free(old);
   idx->used = live;
+  idx->tombstones = 0;
 }
 
 size_t sockaddr_index_find(const sockaddr_index_t *idx, const struct sockaddr *addr, socklen_t addrlen) {
@@ -146,14 +143,16 @@ void sockaddr_index_insert(sockaddr_index_t *idx, const struct sockaddr *addr, s
   unsigned char bytes[16];
   size_t byteslen, h;
   unsigned short port;
-  int was_empty;
 
   canon_key(addr, addrlen, &family, bytes, &byteslen, &port);
   h = key_hash(family, bytes, byteslen, port) & idx->mask;
   while (idx->entries[h].state == 1)
     h = (h + 1) & idx->mask;
 
-  was_empty = idx->entries[h].state == 0;
+  if (idx->entries[h].state == SOCKADDR_INDEX_TOMBSTONE)
+    idx->tombstones--;
+  else
+    idx->used++;
   idx->entries[h].state = 1;
   idx->entries[h].family = family;
   memcpy(idx->entries[h].bytes, bytes, byteslen);
@@ -161,7 +160,7 @@ void sockaddr_index_insert(sockaddr_index_t *idx, const struct sockaddr *addr, s
   idx->entries[h].port = port;
   idx->entries[h].slot = slot_idx;
 
-  if (was_empty && ++idx->used > (idx->size / 4) * 3)
+  if (idx->used + idx->tombstones > (idx->size / 4) * 3)
     rebuild(idx);
 }
 
@@ -180,6 +179,9 @@ void sockaddr_index_remove(sockaddr_index_t *idx, const struct sockaddr *addr, s
       return;
     if (e->state == 1 && entry_key_eq(e, family, bytes, byteslen, port)) {
       e->state = SOCKADDR_INDEX_TOMBSTONE;
+      idx->used--;
+      if (++idx->tombstones > idx->size / 4)
+        rebuild(idx);
       return;
     }
     h = (h + 1) & idx->mask;

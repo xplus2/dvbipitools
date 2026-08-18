@@ -12,12 +12,11 @@
 #include <unistd.h>
 
 #include "lib/log.h"
-#include "lib/signal.h"
 
 #include "httpserver.h"
 #include "render.h"
 
-#define HTTP_IO_TIMEOUT_S 5
+#define HTTP_IDLE_TIMEOUT_S 5 /* reaps stuck/idle peer */
 #define REQ_BUF_CAP 8192
 
 int http_listen(int family, const char *addr, unsigned port) {
@@ -74,18 +73,149 @@ int http_listen(int family, const char *addr, unsigned port) {
   return fd;
 }
 
-static int write_all(int fd, const char *buf, size_t len) {
-  size_t sent = 0;
-  while (sent < len) {
-    ssize_t n = send(fd, buf + sent, len - sent, MSG_NOSIGNAL);
-    if (n <= 0)
-      return -1;
-    sent += (size_t)n;
-  }
-  return 0;
+typedef struct {
+  int used;
+  int fd;
+  int pfd_idx; /* index into callers pfds[] from last poll_fds() call, -1 = unpolled */
+  int reading; /* 1 = still reading request, 0 = sending response */
+  double deadline;
+  char reqbuf[REQ_BUF_CAP];
+  size_t reqlen;
+  char *resp;
+  size_t resplen, respoff;
+} http_conn_t;
+
+struct http_server {
+  int listen_fd;
+  int listen_pfd_idx;
+  http_conn_t conns[HTTP_MAX_CONNS];
+};
+
+http_server_t *http_server_new(int listen_fd) {
+  http_server_t *hs = calloc(1, sizeof *hs);
+  if (!hs)
+    return NULL;
+  hs->listen_fd = listen_fd;
+  hs->listen_pfd_idx = -1;
+  return hs;
 }
 
-static void respond_metrics(int fd, const store_t *st, double now_mono) {
+void http_server_free(http_server_t *hs) {
+  int i;
+  if (!hs)
+    return;
+  for (i = 0; i < HTTP_MAX_CONNS; i++) {
+    if (hs->conns[i].used) {
+      close(hs->conns[i].fd);
+      free(hs->conns[i].resp);
+    }
+  }
+  free(hs);
+}
+
+void http_server_poll_fds(http_server_t *hs, struct pollfd *pfds, int cap, int *n) {
+  int i;
+
+  hs->listen_pfd_idx = -1;
+  if (*n < cap) {
+    hs->listen_pfd_idx = *n;
+    pfds[*n].fd = hs->listen_fd;
+    pfds[*n].events = POLLIN;
+    pfds[*n].revents = 0;
+    (*n)++;
+  }
+  for (i = 0; i < HTTP_MAX_CONNS; i++) {
+    http_conn_t *c = &hs->conns[i];
+    if (!c->used) {
+      c->pfd_idx = -1;
+      continue;
+    }
+    if (*n >= cap) {
+      c->pfd_idx = -1;
+      continue;
+    }
+    c->pfd_idx = *n;
+    pfds[*n].fd = c->fd;
+    pfds[*n].events = (short)(c->reading ? POLLIN : POLLOUT);
+    pfds[*n].revents = 0;
+    (*n)++;
+  }
+}
+
+static void conn_close(http_conn_t *c) {
+  close(c->fd);
+  free(c->resp);
+  memset(c, 0, sizeof *c);
+}
+
+static void conn_accept(http_server_t *hs, int fd, double now_mono) {
+  int i, flags;
+  http_conn_t *c = NULL;
+
+  for (i = 0; i < HTTP_MAX_CONNS; i++)
+    if (!hs->conns[i].used) {
+      c = &hs->conns[i];
+      break;
+    }
+  if (!c) {
+    close(fd); /* pool full, drop rather than let it queue up unbounded */
+    return;
+  }
+  flags = fcntl(fd, F_GETFL, 0);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    close(fd);
+    return;
+  }
+  memset(c, 0, sizeof *c);
+  c->used = 1;
+  c->fd = fd;
+  c->reading = 1;
+  c->pfd_idx = -1;
+  c->deadline = now_mono + HTTP_IDLE_TIMEOUT_S;
+}
+
+static void conn_read_step(http_conn_t *c) {
+  ssize_t got;
+
+  if (c->reqlen >= sizeof c->reqbuf - 1) {
+    conn_close(c);
+    return;
+  }
+  got = recv(c->fd, c->reqbuf + c->reqlen, sizeof c->reqbuf - 1 - c->reqlen, 0);
+  if (got < 0) {
+    if (errno != EAGAIN && errno != EWOULDBLOCK)
+      conn_close(c);
+    return;
+  }
+  if (got == 0) {
+    conn_close(c); /* peer closed before sending a full request */
+    return;
+  }
+  c->reqlen += (size_t)got;
+  c->reqbuf[c->reqlen] = '\0';
+}
+
+static const char *strip_query(char *path) {
+  char *q = strchr(path, '?');
+  if (q)
+    *q = '\0';
+  return path;
+}
+
+/* combines header+body into one buffer up front: send-side then only tracks one offset */
+static void set_response(http_conn_t *c, const char *hdr, size_t hdr_len, const char *body, size_t body_len) {
+  c->resp = malloc(hdr_len + body_len);
+  if (!c->resp) {
+    c->resplen = 0;
+    return;
+  }
+  memcpy(c->resp, hdr, hdr_len);
+  if (body_len)
+    memcpy(c->resp + hdr_len, body, body_len);
+  c->resplen = hdr_len + body_len;
+}
+
+static void build_metrics_response(http_conn_t *c, const store_t *st, double now_mono) {
   char *body;
   size_t body_len;
   char hdr[256];
@@ -98,12 +228,11 @@ static void respond_metrics(int fd, const store_t *st, double now_mono) {
                       "Content-Length: %zu\r\n"
                       "Connection: close\r\n\r\n",
                       body_len);
-  if (write_all(fd, hdr, (size_t)hdr_len) == 0)
-    write_all(fd, body, body_len);
+  set_response(c, hdr, (size_t)hdr_len, body, body_len);
   free(body);
 }
 
-static void respond_404(int fd) {
+static void build_404_response(http_conn_t *c) {
   static const char body[] = "not found\n";
   char hdr[160];
   int hdr_len = snprintf(hdr, sizeof hdr,
@@ -112,61 +241,75 @@ static void respond_404(int fd) {
                           "Content-Length: %zu\r\n"
                           "Connection: close\r\n\r\n",
                           sizeof body - 1);
-  if (write_all(fd, hdr, (size_t)hdr_len) == 0)
-    write_all(fd, body, sizeof body - 1);
+  set_response(c, hdr, (size_t)hdr_len, body, sizeof body - 1);
 }
 
-static const char *strip_query(char *path) {
-  char *q = strchr(path, '?');
-  if (q)
-    *q = '\0';
-  return path;
-}
-
-void http_accept_and_serve(int listen_fd, store_t *st, double now_mono, int verbose) {
-  int fd;
-  struct timeval tv;
-  char reqbuf[REQ_BUF_CAP];
-  size_t reqlen = 0;
-  double deadline;
+static void conn_build_response(http_conn_t *c, store_t *st, double now_mono, int verbose) {
   char method[16], path[256];
-
-  fd = accept(listen_fd, NULL, NULL);
-  if (fd < 0)
-    return;
-
-  tv.tv_sec = HTTP_IO_TIMEOUT_S;
-  tv.tv_usec = 0;
-  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
-  setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
-
-  reqbuf[0] = '\0';
-  deadline = mono_seconds() + HTTP_IO_TIMEOUT_S;
-  for (;;) {
-    ssize_t n;
-    if (reqlen >= sizeof reqbuf - 1 || mono_seconds() >= deadline)
-      break;
-    n = recv(fd, reqbuf + reqlen, sizeof reqbuf - 1 - reqlen, 0);
-    if (n <= 0)
-      break;
-    reqlen += (size_t)n;
-    reqbuf[reqlen] = '\0';
-    if (strstr(reqbuf, "\r\n\r\n"))
-      break;
-  }
 
   method[0] = '\0';
   path[0] = '\0';
-  sscanf(reqbuf, "%15s %255s", method, path);
+  sscanf(c->reqbuf, "%15s %255s", method, path);
 
   if (!strcmp(method, "GET") && !strcmp(strip_query(path), "/metrics")) {
     st->stats.http_requests_200++;
-    respond_metrics(fd, st, now_mono);
+    build_metrics_response(c, st, now_mono);
   } else {
     if (verbose && method[0])
       log_line("dipimetrics: 404 %s %s", method, path);
     st->stats.http_requests_404++;
-    respond_404(fd);
+    build_404_response(c);
   }
-  close(fd);
+  c->reading = 0;
+  c->respoff = 0;
+  c->deadline = now_mono + HTTP_IDLE_TIMEOUT_S;
+}
+
+static void conn_write_step(http_conn_t *c) {
+  ssize_t sent;
+
+  if (!c->resp || c->respoff >= c->resplen) {
+    conn_close(c);
+    return;
+  }
+  sent = send(c->fd, c->resp + c->respoff, c->resplen - c->respoff, MSG_NOSIGNAL);
+  if (sent < 0) {
+    if (errno != EAGAIN && errno != EWOULDBLOCK)
+      conn_close(c);
+    return;
+  }
+  c->respoff += (size_t)sent;
+  if (c->respoff >= c->resplen)
+    conn_close(c);
+}
+
+void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, store_t *st, double now_mono, int verbose) {
+  int i;
+
+  if (hs->listen_pfd_idx >= 0 && hs->listen_pfd_idx < n && (pfds[hs->listen_pfd_idx].revents & POLLIN)) {
+    for (;;) {
+      int fd = accept(hs->listen_fd, NULL, NULL);
+      if (fd < 0)
+        break;
+      conn_accept(hs, fd, now_mono);
+    }
+  }
+
+  for (i = 0; i < HTTP_MAX_CONNS; i++) {
+    http_conn_t *c = &hs->conns[i];
+    short rev;
+    if (!c->used)
+      continue;
+    rev = (c->pfd_idx >= 0 && c->pfd_idx < n) ? pfds[c->pfd_idx].revents : 0;
+    if (c->reading) {
+      if (rev & (POLLIN | POLLHUP | POLLERR))
+        conn_read_step(c);
+      if (c->used && c->reading && strstr(c->reqbuf, "\r\n\r\n"))
+        conn_build_response(c, st, now_mono, verbose);
+    } else if (rev & (POLLOUT | POLLERR)) {
+      conn_write_step(c);
+    }
+    if (c->used && now_mono >= c->deadline)
+      conn_close(c);
+  }
 }

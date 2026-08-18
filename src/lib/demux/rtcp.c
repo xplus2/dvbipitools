@@ -3,6 +3,7 @@
 
 #include <string.h>
 
+#include "../beutil.h"
 #include "rtcp.h"
 
 #define RTCP_PT_RTPFB 205 /* RFC 4585 transport layer feedback */
@@ -22,18 +23,6 @@
 #define RTCP_SDES_ITEM_END 0
 #define RTCP_SDES_ITEM_CNAME 1
 
-static uint32_t rd32(const unsigned char *p) {
-  return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
-}
-
-static uint16_t rd16(const unsigned char *p) {
-  return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
-}
-
-static uint64_t rd64(const unsigned char *p) {
-  return ((uint64_t)rd32(p) << 32) | rd32(p + 4);
-}
-
 static void parse_nack(const unsigned char *p, size_t len, rtcp_nack_cb cb, void *user) {
   rtcp_nack_t nack;
   size_t fci_off, fci_len, i;
@@ -41,16 +30,16 @@ static void parse_nack(const unsigned char *p, size_t len, rtcp_nack_cb cb, void
   if (len < 12 || !cb)
     return;
 
-  nack.sender_ssrc = rd32(p + 4);
-  nack.media_ssrc = rd32(p + 8);
+  nack.sender_ssrc = be32_get(p + 4);
+  nack.media_ssrc = be32_get(p + 8);
   nack.entry_count = 0;
   nack.truncated = 0;
 
   fci_off = 12;
   fci_len = len - fci_off; /* may include RFC 3550 padding, worst case one bogus trailing entry */
   for (i = 0; i + 4 <= fci_len && nack.entry_count < RTCP_NACK_MAX_ENTRIES; i += 4) {
-    nack.entry[nack.entry_count].pid = rd16(p + fci_off + i);
-    nack.entry[nack.entry_count].blp = rd16(p + fci_off + i + 2);
+    nack.entry[nack.entry_count].pid = be16_get(p + fci_off + i);
+    nack.entry[nack.entry_count].blp = be16_get(p + fci_off + i + 2);
     nack.entry_count++;
   }
   if (nack.entry_count == RTCP_NACK_MAX_ENTRIES && i + 4 <= fci_len)
@@ -65,12 +54,12 @@ static void parse_rams_r_tlvs(const unsigned char *p, size_t len, rtcp_rams_r_t 
 
   while (off + 4 <= len) {
     unsigned type = p[off];
-    uint16_t vlen = rd16(p + off + 2);
+    uint16_t vlen = be16_get(p + off + 2);
     size_t total = 4 + (size_t)vlen;
     size_t padded = (total + 3) & ~(size_t)3;
 
     if (off + total > len)
-      break; /* malformed, stop rather than misparse rest */
+      break; /* stop before misparsing rest */
 
     switch (type) {
       case RTCP_RAMS_TLV_MEDIA_SSRC: /* DVB profile: 0-length flag, no value read */
@@ -79,19 +68,19 @@ static void parse_rams_r_tlvs(const unsigned char *p, size_t len, rtcp_rams_r_t 
       case RTCP_RAMS_TLV_MIN_BUFFER_FILL:
         if (vlen >= 4) {
           req->has_min_buffer_fill = 1;
-          req->min_buffer_fill_ms = rd32(p + off + 4);
+          req->min_buffer_fill_ms = be32_get(p + off + 4);
         }
         break;
       case RTCP_RAMS_TLV_MAX_BUFFER_FILL:
         if (vlen >= 4) {
           req->has_max_buffer_fill = 1;
-          req->max_buffer_fill_ms = rd32(p + off + 4);
+          req->max_buffer_fill_ms = be32_get(p + off + 4);
         }
         break;
       case RTCP_RAMS_TLV_MAX_BITRATE:
         if (vlen >= 8) {
           req->has_max_bitrate = 1;
-          req->max_bitrate_bps = rd64(p + off + 4);
+          req->max_bitrate_bps = be64_get(p + off + 4);
         }
         break;
       default:
@@ -128,16 +117,16 @@ static int parse_rams_t_tlvs(const unsigned char *p, size_t len, rtcp_rams_t_t *
 
   while (off + 4 <= len) {
     unsigned type = p[off];
-    uint16_t vlen = rd16(p + off + 2);
+    uint16_t vlen = be16_get(p + off + 2);
     size_t total = 4 + (size_t)vlen;
     size_t padded = (total + 3) & ~(size_t)3;
 
     if (off + total > len)
-      return 1; /* malformed, stop rather than misparse rest */
+      return 1; /* stop before misparsing rest */
 
     if (type == RTCP_RAMS_TLV_FIRST_MC_SEQNUM && vlen >= 4) {
       term->has_first_mc_seqnum = 1;
-      term->first_mc_seqnum = rd32(p + off + 4);
+      term->first_mc_seqnum = be32_get(p + off + 4);
     }
     /* any other type: not defined for RAMS-T, tolerate-and-ignore */
     off += padded;
@@ -171,8 +160,8 @@ static void parse_rams(const unsigned char *p, size_t len, rtcp_rams_r_cb rams_r
   if (len < 16) /* SSRC pair (8) + SFMT/reserved (4), at minimum */
     return;
 
-  sender_ssrc = rd32(p + 4);
-  media_ssrc = rd32(p + 8);
+  sender_ssrc = be32_get(p + 4);
+  media_ssrc = be32_get(p + 8);
   sfmt = p[12];
 
   if (sfmt == RTCP_SFMT_RAMS_R)
@@ -200,7 +189,7 @@ static void parse_sdes(const unsigned char *p, size_t len, unsigned sc, rtcp_sde
     return;
 
   for (chunk = 0; chunk < sc && off + 4 <= len; chunk++) {
-    uint32_t ssrc = rd32(p + off);
+    uint32_t ssrc = be32_get(p + off);
     size_t item_off = off + 4;
     rtcp_sdes_t sdes;
     int found_cname = 0;
@@ -245,10 +234,10 @@ void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_r
     unsigned version = p[off] >> 6;
     unsigned pt = p[off + 1];
     unsigned fmt = p[off] & 0x1F; /* FMT (RTPFB/PSFB), RC (SR/RR) or SC (SDES), same bit field */
-    size_t pkt_len = ((size_t)rd16(p + off + 2) + 1) * 4; /* RFC 3550 6.4.1 */
+    size_t pkt_len = ((size_t)be16_get(p + off + 2) + 1) * 4; /* RFC 3550 6.4.1 */
 
     if (version != 2 || off + pkt_len > len)
-      break; /* malformed, stop rather than misparse the rest */
+      break; /* stop before misparsing rest */
 
     if (pt == RTCP_PT_RTPFB)
       parse_rtpfb(p + off, pkt_len, fmt, nack_cb, rams_r_cb, rams_t_cb, malformed_cb, user);

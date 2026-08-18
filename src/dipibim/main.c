@@ -23,15 +23,17 @@ static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
   bcg_doc_t doc;
   bitwriter_t bw;
   strrepo_writer_t sw;
+  accessunit_scratch_t sc;
   int rc = 0, nfuu = 0;
 
   bcg_doc_init(&doc);
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
+  accessunit_scratch_init(&sc);
 
   if (tva_xml_read(in, &doc)) {
     rc = -1;
-  } else if (accessunit_encode(&doc, &bw, &sw, &nfuu)) {
+  } else if (accessunit_encode(&sc, &doc, &bw, &sw, &nfuu)) {
     rc = -1;
   } else {
     size_t bits_len, strs_len;
@@ -50,6 +52,7 @@ static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
     }
   }
 
+  accessunit_scratch_free(&sc);
   strrepo_writer_free(&sw);
   bitwriter_free(&bw);
   bcg_doc_free(&doc);

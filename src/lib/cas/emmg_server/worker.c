@@ -32,7 +32,7 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
   switch (type) {
   case EMMG_MSG_CHANNEL_SETUP: {
     unsigned client_id, data_channel_id;
-    if (!find_u32(body, body_len, EMMG_P_CLIENT_ID, &client_id) || !find_u16(body, body_len, EMMG_P_DATA_CHANNEL_ID, &data_channel_id)) {
+    if (!simulcrypt_find_u32(body, body_len, EMMG_P_CLIENT_ID, &client_id) || !simulcrypt_find_u16(body, body_len, EMMG_P_DATA_CHANNEL_ID, &data_channel_id)) {
       *should_close = 1;
       return;
     }
@@ -55,7 +55,7 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
       *should_close = 1;
       return;
     }
-    if (!find_u16(body, body_len, EMMG_P_DATA_STREAM_ID, &data_stream_id) || !find_u16(body, body_len, EMMG_P_DATA_ID, &data_id) || !find_u8(body, body_len, EMMG_P_DATA_TYPE, &data_type)) {
+    if (!simulcrypt_find_u16(body, body_len, EMMG_P_DATA_STREAM_ID, &data_stream_id) || !simulcrypt_find_u16(body, body_len, EMMG_P_DATA_ID, &data_id) || !simulcrypt_find_u8(body, body_len, EMMG_P_DATA_TYPE, &data_type)) {
       *should_close = 1;
       return;
     }
@@ -80,7 +80,7 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
       *should_close = 1;
       return;
     }
-    have_bw = find_u16(body, body_len, EMMG_P_BANDWIDTH, &bw);
+    have_bw = simulcrypt_find_u16(body, body_len, EMMG_P_BANDWIDTH, &bw);
     *reply_len = emmg_build_stream_bw_allocation(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id, cs->data_stream_id, have_bw, bw);
     break;
   }
@@ -98,7 +98,7 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
   case EMMG_MSG_CHANNEL_ERROR:
   case EMMG_MSG_STREAM_ERROR: {
     unsigned err = 0;
-    find_u16(body, body_len, EMMG_P_ERROR_STATUS, &err);
+    simulcrypt_find_u16(body, body_len, EMMG_P_ERROR_STATUS, &err);
     log_line("emmg: client reported error (message 0x%04x, error_status 0x%04x)", type, err);
     *should_close = 1;
     break;

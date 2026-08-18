@@ -1,10 +1,10 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdio.h>
 #include <string.h>
 #include <time.h>
 
+#include "lib/ioutil.h"
 #include "lib/log.h"
 #include "lib/signal.h"
 #include "mpts_probe.h"
@@ -49,7 +49,7 @@ static void fill_result(const psi_t *psi, mpts_probe_result_t *r) {
   for (i = 0; i < r->program_count; i++) {
     r->programs[i].program_number = m[i].program_number;
     r->programs[i].pmt_pid = m[i].pmt_pid;
-    snprintf(r->programs[i].name, sizeof r->programs[i].name, "%s", m[i].service_name);
+    bufcpy(r->programs[i].name, sizeof r->programs[i].name, m[i].service_name);
   }
   r->kind = (r->program_count > 1) ? MPTS_PROBE_MPTS : MPTS_PROBE_SPTS;
 }

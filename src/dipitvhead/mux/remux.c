@@ -8,6 +8,7 @@
 
 #include "lib/demux/psi/section_asm.h"
 #include "lib/demux/tspack.h"
+#include "lib/ioutil.h"
 #include "lib/log.h"
 #include "lib/mux/cadescbuild.h"
 #include "lib/mux/psi_build.h"
@@ -83,12 +84,12 @@ static void resolve_sdt(remux_t *r, const psi_t *psi) {
   if (r->input.sdt_mode == TABLE_DROP) {
     r->send_sdt = 0;
   } else if (r->input.sdt_mode == TABLE_OVERRIDE) {
-    snprintf(r->service_name, sizeof r->service_name, "%s", r->input.sdt_text);
-    snprintf(r->provider_name, sizeof r->provider_name, "%s", TOOL_NAME);
+    bufcpy(r->service_name, sizeof r->service_name, r->input.sdt_text);
+    bufcpy(r->provider_name, sizeof r->provider_name, TOOL_NAME);
     r->send_sdt = 1;
   } else {
-    snprintf(r->service_name, sizeof r->service_name, "%s", psi_service_name(psi));
-    snprintf(r->provider_name, sizeof r->provider_name, "%s", psi_provider_name(psi));
+    bufcpy(r->service_name, sizeof r->service_name, psi_service_name(psi));
+    bufcpy(r->provider_name, sizeof r->provider_name, psi_provider_name(psi));
     r->send_sdt = r->service_name[0] != '\0';
   }
 }
@@ -97,10 +98,10 @@ static void resolve_nit(remux_t *r, const psi_t *psi) {
   if (r->cfg.nit_mode == TABLE_DROP) {
     r->send_nit = 0;
   } else if (r->cfg.nit_mode == TABLE_OVERRIDE) {
-    snprintf(r->network_name, sizeof r->network_name, "%s", r->cfg.nit_text);
+    bufcpy(r->network_name, sizeof r->network_name, r->cfg.nit_text);
     r->send_nit = 1;
   } else {
-    snprintf(r->network_name, sizeof r->network_name, "%s", psi_network_name(psi));
+    bufcpy(r->network_name, sizeof r->network_name, psi_network_name(psi));
     r->send_nit = r->network_name[0] != '\0';
   }
 }

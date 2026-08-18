@@ -58,6 +58,12 @@ typedef struct {
   size_t payload_len;
 } rap_cache_entry_t;
 
+/* seq/timestamp only, returned by channel_cache_peek_meta */
+typedef struct {
+  uint16_t seq;
+  uint32_t timestamp;
+} rap_cache_meta_t;
+
 /* cap 0 = FCC disabled, entries not allocated */
 typedef struct {
   void *entries;
@@ -67,8 +73,8 @@ typedef struct {
   _Atomic int have_rap;
 } rap_cache_t;
 
-/* single writer (capture thread); lock-free readers elsewhere, every shared field atomic.
-   ring_size 0 = RET disabled here, cache.cap 0 = FCC disabled here; either or both may be active */
+/* single writer (capture thread), lock-free readers elsewhere, every shared field atomic.
+   ring_size 0 = RET disabled here, cache.cap 0 = FCC disabled here, either or both may be active */
 typedef struct {
   _Atomic int in_use;
   int family;
@@ -81,7 +87,7 @@ typedef struct {
   _Atomic int ssrc_known;
   _Atomic time_t last_seen;
   _Atomic unsigned generation; /* bumped on every reclaim: lets mcsend.c detect a reused slot */
-  _Atomic uint16_t rtx_seq_mc; /* MC RET session's own RTX seq space, F.3.2.1; reset by reclaim memset below */
+  _Atomic uint16_t rtx_seq_mc; /* MC RET session's own RTX seq space, F.3.2.1, reset by reclaim memset below */
   time_t bitrate_window_start;
   uint64_t bitrate_window_bytes;
   int oversized_logged; /* channel_store: re-armed once a payload is back within CHANNEL_MAX_PAYLOAD */
@@ -114,14 +120,16 @@ channel_t *channel_table_at(channel_table_t *t, size_t i);
 
 /* single write path for both RET ring and FCC cache, one call per captured packet.
    also maintains t's ssrc->channel index (channel_find_by_ssrc), taking t->lock only
-   when ssrc actually changed since the last call for this channel */
+   when ssrc actually changed since last call for this channel */
 void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len);
 
-int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out); /* RET; 0 if ring inactive */
+int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out); /* RET, 0 if ring inactive */
 
-int channel_has_rap(const channel_t *c); /* FCC; 0 if cache inactive */
+int channel_has_rap(const channel_t *c); /* FCC, 0 if cache inactive */
 size_t channel_cache_count(const channel_t *c);
 int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out);
+/* seq/timestamp only, skips payload copy */
+int channel_cache_peek_meta(const channel_t *c, size_t index, rap_cache_meta_t *out);
 
 /* F.5.3 SRBT 8 source. cname NULL/0-length if none this time.
    collision: [ssrc,cname] if both known, else [ssrc,address]. locks t, callable from any listen worker thread. */

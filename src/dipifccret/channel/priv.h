@@ -9,10 +9,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "lib/ioutil.h"
+
 #include "channel.h"
 
-/* single writer (capture thread) for lookup/store/reap; lock-free atomic reads elsewhere.
-   two separate rings on purpose: RET is seq-keyed, FCC is RAP-anchored linear-from-RAP. */
+/* single writer (capture thread): lookup/store/reap. atomic reads elsewhere, lock-free.
+   two rings by design: RET seq-keyed, FCC RAP-anchored linear-from-RAP. */
 
 #define RET_PAYLOAD_WORDS (CHANNEL_MAX_PAYLOAD / 8)
 #define FCC_PAYLOAD_WORDS (CHANNEL_MAX_PAYLOAD / 8)
@@ -64,7 +66,6 @@ struct channel_table {
 #define CHANNEL_HASH_TOMBSTONE SIZE_MAX
 
 /* hash.c */
-size_t next_pow2(size_t n);
 size_t chan_key_hash(int family, const void *addr, size_t addr_len, unsigned port);
 void chan_hash_rebuild(channel_table_t *t);
 channel_t *chan_hash_probe(channel_table_t *t, int family, const void *addr, size_t addr_len, unsigned port, size_t *avail);

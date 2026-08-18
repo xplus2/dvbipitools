@@ -21,92 +21,111 @@ static int emit_fuu(bitwriter_t *outer, int ctxpath, bitwriter_t *fbw) {
   return bitwriter_put_bytes(outer, fbytes, flen);
 }
 
-int accessunit_encode(const bcg_doc_t *doc, bitwriter_t *bw, strrepo_writer_t *sw, int *out_nfuu) {
-  int i, j, nfuu = 0;
+typedef struct {
+  const char *id;
+  int idx;
+} channel_idx_t;
 
-  for (i = 0; i < doc->programme_count; i++) {
-    const bcg_channel_t *c = bcg_find_channel(doc, doc->programmes[i].channel_id);
-    if (c && c->uri[0])
+static int channel_idx_cmp(const void *a, const void *b) {
+  return strcmp(((const channel_idx_t *)a)->id, ((const channel_idx_t *)b)->id);
+}
+
+/* -1 if not found */
+static int channel_idx_find(const channel_idx_t *idx, int n, const char *id) {
+  int lo = 0, hi = n - 1;
+  while (lo <= hi) {
+    int mid = (lo + hi) / 2;
+    int c = strcmp(id, idx[mid].id);
+    if (c == 0)
+      return idx[mid].idx;
+    if (c < 0)
+      hi = mid - 1;
+    else
+      lo = mid + 1;
+  }
+  return -1;
+}
+
+int accessunit_encode(accessunit_scratch_t *sc, const bcg_doc_t *doc, bitwriter_t *bw, strrepo_writer_t *sw, int *out_nfuu) {
+  int i, nfuu = 0, rc = -1;
+  channel_idx_t *cidx = NULL;
+  int *prog_channel = NULL;      /* channel index per programme, -1 if unmatched */
+  int *channel_has_prog = NULL;  /* 1 per channel with at least one programme */
+
+  if (doc->channel_count) {
+    cidx = malloc(sizeof *cidx * (size_t)doc->channel_count);
+    channel_has_prog = calloc((size_t)doc->channel_count, sizeof *channel_has_prog);
+    if (!cidx || !channel_has_prog)
+      goto done;
+    for (i = 0; i < doc->channel_count; i++) {
+      cidx[i].id = doc->channels[i].id;
+      cidx[i].idx = i;
+    }
+    qsort(cidx, (size_t)doc->channel_count, sizeof *cidx, channel_idx_cmp);
+  }
+  if (doc->programme_count) {
+    prog_channel = malloc(sizeof *prog_channel * (size_t)doc->programme_count);
+    if (!prog_channel)
+      goto done;
+    for (i = 0; i < doc->programme_count; i++) {
+      prog_channel[i] = channel_idx_find(cidx, doc->channel_count, doc->programmes[i].channel_id);
+      if (prog_channel[i] >= 0)
+        channel_has_prog[prog_channel[i]] = 1;
+    }
+  }
+
+  for (i = 0; i < doc->programme_count; i++)
+    if (prog_channel[i] >= 0 && doc->channels[prog_channel[i]].uri[0])
       nfuu++;
-  }
-  for (i = 0; i < doc->channel_count; i++) {
-    const bcg_channel_t *c = &doc->channels[i];
-    if (!c->uri[0])
-      continue;
-    for (j = 0; j < doc->programme_count; j++)
-      if (!strcmp(doc->programmes[j].channel_id, c->id)) {
-        nfuu++;
-        break;
-      }
-  }
+  for (i = 0; i < doc->channel_count; i++)
+    if (doc->channels[i].uri[0] && channel_has_prog[i])
+      nfuu++;
   for (i = 0; i < doc->channel_count; i++)
     if (doc->channels[i].uri[0])
       nfuu++;
 
   if (bitwriter_put_vluimsbf8(bw, (uint64_t)nfuu))
-    return -1;
+    goto done;
 
   for (i = 0; i < doc->programme_count; i++) {
     const bcg_programme_t *pr = &doc->programmes[i];
-    const bcg_channel_t *c = bcg_find_channel(doc, pr->channel_id);
-    bitwriter_t fbw;
-    if (!c || !c->uri[0])
+    if (prog_channel[i] < 0 || !doc->channels[prog_channel[i]].uri[0])
       continue;
-    bitwriter_init(&fbw);
-    if (fragment_encode_program_information(pr, &fbw, sw) || emit_fuu(bw, DVBCTXPATH_PROGRAM_INFORMATION, &fbw)) {
-      bitwriter_free(&fbw);
-      return -1;
-    }
-    bitwriter_free(&fbw);
+    bitwriter_reset(&sc->fbw);
+    if (fragment_encode_program_information(pr, &sc->fbw, sw) || emit_fuu(bw, DVBCTXPATH_PROGRAM_INFORMATION, &sc->fbw))
+      goto done;
   }
 
   for (i = 0; i < doc->channel_count; i++) {
     const bcg_channel_t *c = &doc->channels[i];
-    bitwriter_t fbw;
-    int any = 0;
-    if (!c->uri[0])
+    if (!c->uri[0] || !channel_has_prog[i])
       continue;
-    for (j = 0; j < doc->programme_count; j++)
-      if (!strcmp(doc->programmes[j].channel_id, c->id)) {
-        any = 1;
-        break;
-      }
-    if (!any)
-      continue;
-    bitwriter_init(&fbw);
-    if (fragment_encode_schedule(c->id, doc->programmes, doc->programme_count, &fbw, sw) || emit_fuu(bw, DVBCTXPATH_SCHEDULE, &fbw)) {
-      bitwriter_free(&fbw);
-      return -1;
-    }
-    bitwriter_free(&fbw);
+    bitwriter_reset(&sc->fbw);
+    if (fragment_encode_schedule(c->id, doc->programmes, doc->programme_count, &sc->fbw, sw) || emit_fuu(bw, DVBCTXPATH_SCHEDULE, &sc->fbw))
+      goto done;
   }
 
   for (i = 0; i < doc->channel_count; i++) {
     const bcg_channel_t *c = &doc->channels[i];
-    bitwriter_t fbw;
     if (!c->uri[0])
       continue;
-    bitwriter_init(&fbw);
-    if (fragment_encode_service_information(c, &fbw, sw) || emit_fuu(bw, DVBCTXPATH_SERVICE_INFORMATION, &fbw)) {
-      bitwriter_free(&fbw);
-      return -1;
-    }
-    bitwriter_free(&fbw);
+    bitwriter_reset(&sc->fbw);
+    if (fragment_encode_service_information(c, &sc->fbw, sw) || emit_fuu(bw, DVBCTXPATH_SERVICE_INFORMATION, &sc->fbw))
+      goto done;
   }
 
   *out_nfuu = nfuu;
-  return 0;
+  rc = 0;
+
+done:
+  free(cidx);
+  free(prog_channel);
+  free(channel_has_prog);
+  return rc;
 }
 
 typedef struct {
-  char crid[BCG_ID_LEN * 3 + 64];
-  char title[BCG_TEXT_LEN];
-  char desc[BCG_TEXT_LEN];
-  char category[BCG_ID_LEN];
-} ptext_t;
-
-typedef struct {
-  ptext_t *arr;
+  bcg_progtext_t *arr;
   int n;
 } ptext_ctx_t;
 
@@ -134,12 +153,13 @@ void accessunit_scratch_init(accessunit_scratch_t *sc) { memset(sc, 0, sizeof *s
 void accessunit_scratch_free(accessunit_scratch_t *sc) {
   free(sc->fuus);
   free(sc->ptext);
+  bitwriter_free(&sc->fbw);
   memset(sc, 0, sizeof *sc);
 }
 
 int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int *out_nfuu) {
   const unsigned char *base = br->buf;
-  ptext_t *ptext;
+  bcg_progtext_t *ptext;
   int ptext_n = 0;
   fuu_index_t *fuus;
   int nfuu, i, rc = 0;
@@ -153,81 +173,105 @@ int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_
     return -1;
   nfuu = (int)n64;
   if (nfuu > sc->fuus_cap) {
-    int newcap = sc->fuus_cap ? sc->fuus_cap * 2 : 32;
-    void *np;
-    if (newcap < nfuu)
-      newcap = nfuu;
-    np = realloc(sc->fuus, (size_t)newcap * sizeof *fuus);
+    void *np = array_grow(sc->fuus, &sc->fuus_cap, nfuu, sizeof *fuus);
     if (!np)
       return -1;
     sc->fuus = np;
-    sc->fuus_cap = newcap;
   }
   fuus = sc->fuus;
   ptext = sc->ptext;
 
-  for (i = 0; i < nfuu; i++) {
-    uint64_t flen, ctxpath;
-    if (bitreader_get_vluimsbf8(br, &flen) || bitreader_get(br, 16, &ctxpath) || br->bit_pos != 0 ||
-        flen > bitreader_bits_left(br) / 8) {
-      rc = -1;
-      goto done;
+  {
+    /* sr sequential cursor: fuu order must match encode's group order
+       (program_info, schedule, service_info) or frags read wrong strings */
+    int phase = 0;
+    for (i = 0; i < nfuu; i++) {
+      uint64_t flen, ctxpath;
+      int fuu_phase;
+      if (bitreader_get_vluimsbf8(br, &flen) || bitreader_get(br, 16, &ctxpath) || br->bit_pos != 0 ||
+          flen > bitreader_bits_left(br) / 8) {
+        rc = -1;
+        goto done;
+      }
+      fuus[i].context_path = (int)ctxpath;
+      switch (fuus[i].context_path) {
+        case DVBCTXPATH_PROGRAM_INFORMATION:
+          fuu_phase = 0;
+          break;
+        case DVBCTXPATH_SCHEDULE:
+          fuu_phase = 1;
+          break;
+        case DVBCTXPATH_SERVICE_INFORMATION:
+          fuu_phase = 2;
+          break;
+        default:
+          fuu_phase = -1;
+          break;
+      }
+      if (fuu_phase >= 0) {
+        if (fuu_phase < phase) {
+          rc = -1;
+          goto done;
+        }
+        phase = fuu_phase;
+      }
+      fuus[i].offset = br->byte_pos;
+      fuus[i].length = (size_t)flen;
+      br->byte_pos += (size_t)flen;
     }
-    fuus[i].context_path = (int)ctxpath;
-    fuus[i].offset = br->byte_pos;
-    fuus[i].length = (size_t)flen;
-    br->byte_pos += (size_t)flen;
   }
 
   for (i = 0; i < nfuu; i++) {
     bitreader_t fbr;
-    bcg_programme_t tmp;
-    if (fuus[i].context_path != DVBCTXPATH_PROGRAM_INFORMATION)
-      continue;
-    bitreader_init(&fbr, base + fuus[i].offset, fuus[i].length);
-    if (ptext_n >= sc->ptext_cap) {
-      int newcap = sc->ptext_cap ? sc->ptext_cap * 2 : 32;
-      void *np = realloc(sc->ptext, (size_t)newcap * sizeof *ptext);
-      if (!np) {
-        rc = -1;
-        goto done;
+    switch (fuus[i].context_path) {
+      case DVBCTXPATH_PROGRAM_INFORMATION: {
+        bcg_programme_t tmp;
+        bitreader_init(&fbr, base + fuus[i].offset, fuus[i].length);
+        if (ptext_n >= sc->ptext_cap) {
+          void *np = array_grow(sc->ptext, &sc->ptext_cap, ptext_n + 1, sizeof *ptext);
+          if (!np) {
+            rc = -1;
+            goto done;
+          }
+          sc->ptext = np;
+          ptext = sc->ptext;
+        }
+        if (fragment_decode_program_information(&fbr, sr, ptext[ptext_n].crid, sizeof ptext[ptext_n].crid, &tmp)) {
+          rc = -1;
+          goto done;
+        }
+        bufcpy(ptext[ptext_n].title, sizeof ptext[ptext_n].title, tmp.title);
+        bufcpy(ptext[ptext_n].desc, sizeof ptext[ptext_n].desc, tmp.desc);
+        bufcpy(ptext[ptext_n].category, sizeof ptext[ptext_n].category, tmp.category);
+        ptext_n++;
+        break;
       }
-      sc->ptext = np;
-      sc->ptext_cap = newcap;
-      ptext = sc->ptext;
-    }
-    if (fragment_decode_program_information(&fbr, sr, ptext[ptext_n].crid, sizeof ptext[ptext_n].crid, &tmp)) {
-      rc = -1;
-      goto done;
-    }
-    bufcpy(ptext[ptext_n].title, sizeof ptext[ptext_n].title, tmp.title);
-    bufcpy(ptext[ptext_n].desc, sizeof ptext[ptext_n].desc, tmp.desc);
-    bufcpy(ptext[ptext_n].category, sizeof ptext[ptext_n].category, tmp.category);
-    ptext_n++;
-  }
-
-  for (i = 0; i < nfuu; i++) {
-    bitreader_t fbr;
-    if (fuus[i].context_path == DVBCTXPATH_SCHEDULE) {
-      ptext_ctx_t ctx;
-      ctx.arr = ptext;
-      ctx.n = ptext_n;
-      bitreader_init(&fbr, base + fuus[i].offset, fuus[i].length);
-      if (fragment_decode_schedule(&fbr, sr, doc, ptext_lookup, &ctx)) {
-        rc = -1;
-        goto done;
+      case DVBCTXPATH_SCHEDULE: {
+        ptext_ctx_t ctx;
+        ctx.arr = ptext;
+        ctx.n = ptext_n;
+        bitreader_init(&fbr, base + fuus[i].offset, fuus[i].length);
+        if (fragment_decode_schedule(&fbr, sr, doc, ptext_lookup, &ctx)) {
+          rc = -1;
+          goto done;
+        }
+        break;
       }
-    } else if (fuus[i].context_path == DVBCTXPATH_SERVICE_INFORMATION) {
-      bcg_channel_t *c = bcg_add_channel(doc);
-      if (!c) {
-        rc = -1;
-        goto done;
+      case DVBCTXPATH_SERVICE_INFORMATION: {
+        bcg_channel_t *c = bcg_add_channel(doc);
+        if (!c) {
+          rc = -1;
+          goto done;
+        }
+        bitreader_init(&fbr, base + fuus[i].offset, fuus[i].length);
+        if (fragment_decode_service_information(&fbr, sr, c)) {
+          rc = -1;
+          goto done;
+        }
+        break;
       }
-      bitreader_init(&fbr, base + fuus[i].offset, fuus[i].length);
-      if (fragment_decode_service_information(&fbr, sr, c)) {
-        rc = -1;
-        goto done;
-      }
+      default:
+        break;
     }
   }
 

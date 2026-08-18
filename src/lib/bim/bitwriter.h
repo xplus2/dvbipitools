@@ -17,6 +17,8 @@ typedef struct {
 
 void bitwriter_init(bitwriter_t *bw);
 void bitwriter_free(bitwriter_t *bw);
+/* clears content, keeps allocated buf/cap for reuse */
+void bitwriter_reset(bitwriter_t *bw);
 /* MSB-first, nbits 0..64. returns 0 ok, -1 oom */
 int bitwriter_put(bitwriter_t *bw, uint64_t value, int nbits);
 /* caller must be byte-aligned already (e.g. right after bitwriter_flush) */

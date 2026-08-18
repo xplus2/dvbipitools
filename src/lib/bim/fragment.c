@@ -33,7 +33,7 @@ int fragment_encode_program_information(const bcg_programme_t *pr, bitwriter_t *
   if (put_bit(bw, pr->category[0] != 0))
     return -1;
   if (pr->category[0]) {
-    if (dvb_controlledterm_encode(bw, sw, "urn:tva:metadata:cs:ContentCS:2011:3.0"))
+    if (dvb_controlledterm_encode(bw, sw, TVA_CONTENTCS_2011_URN))
       return -1;
     if (dvb_string_encode(sw, pr->category))
       return -1;

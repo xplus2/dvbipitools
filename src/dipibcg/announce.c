@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <ctype.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +11,7 @@
 #include "lib/bim/accessunit.h"
 #include "lib/bim/bitwriter.h"
 #include "lib/bim/strrepo.h"
+#include "lib/ioutil.h"
 #include "lib/log.h"
 #include "lib/metrics/export.h"
 #include "lib/net/dvbstp.h"
@@ -24,53 +24,13 @@
 #include "version.h"
 #include "wrapper.h"
 
-long date_to_mjd(int y, int mo, int d) {
-  int yy = mo <= 2 ? y - 1 : y;
-  int mm = mo <= 2 ? mo + 12 : mo;
-  return 14956L + d + (long)((yy - 1900) * 365.25) + (long)((mm + 1) * 30.6001);
-}
-
-static int all_digits(const char *s, int n) {
-  int i;
-  for (i = 0; i < n; i++)
-    if (!isdigit((unsigned char)s[i]))
-      return 0;
-  return 1;
-}
-
-/* "YYYY-MM-DDTHH:MM:SS[Z|+HH:MM|-HH:MM]" -> minutes since the MJD epoch, UTC-normalized */
+/* "YYYY-MM-DDTHH:MM:SS[Z|+HH:MM|-HH:MM]" -> minutes since MJD epoch, UTC-normalized */
 int iso8601_to_minutes(const char *in, long *out) {
-  size_t l = strlen(in);
-  int y, mo, d, h, mi, off_min = 0;
-  long mjd, total;
+  iso8601_t f;
 
-  if (l < 19 || in[4] != '-' || in[7] != '-' || in[10] != 'T' || in[13] != ':' || in[16] != ':')
+  if (iso8601_split(in, &f))
     return -1;
-  if (!all_digits(in, 4) || !all_digits(in + 5, 2) || !all_digits(in + 8, 2) ||
-      !all_digits(in + 11, 2) || !all_digits(in + 14, 2))
-    return -1;
-  y = (in[0] - '0') * 1000 + (in[1] - '0') * 100 + (in[2] - '0') * 10 + (in[3] - '0');
-  mo = (in[5] - '0') * 10 + (in[6] - '0');
-  d = (in[8] - '0') * 10 + (in[9] - '0');
-  h = (in[11] - '0') * 10 + (in[12] - '0');
-  mi = (in[14] - '0') * 10 + (in[15] - '0');
-
-  if (l > 19) {
-    const char *tail = in + 19;
-    if (*tail == '+' || *tail == '-') {
-      if (strlen(tail) >= 6 && tail[3] == ':' && all_digits(tail + 1, 2) && all_digits(tail + 4, 2)) {
-        int oh = (tail[1] - '0') * 10 + (tail[2] - '0');
-        int om = (tail[4] - '0') * 10 + (tail[5] - '0');
-        off_min = (oh * 60 + om) * (tail[0] == '-' ? -1 : 1);
-      } else {
-        return -1;
-      }
-    }
-  }
-
-  mjd = date_to_mjd(y, mo, d);
-  total = mjd * 1440L + h * 60L + mi - off_min;
-  *out = total;
+  *out = date_to_mjd(f.y, f.mo, f.d) * 1440L + f.h * 60L + f.mi - f.off_min;
   return 0;
 }
 
@@ -96,8 +56,8 @@ typedef struct {
   double last_success_time; /* unix seconds, 0 = never */
 } bcg_metrics_t;
 
-/* windowed->channels is a copy of doc->channels (build_windowed_doc), so
-   bcg_find_channel() index into it is stable for the seen[] mark */
+/* windowed->channels copies doc->channels (build_windowed_doc): bcg_find_channel()
+   index stays stable for seen[] mark */
 static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *doc, const bcg_doc_t *windowed, const bcg_metrics_t *bm) {
   metrics_writer_t w;
   unsigned r;
@@ -214,7 +174,7 @@ int load_doc(const config_t *cfg, bcg_doc_t *out) {
     char uri[BCG_ID_LEN];
     unsigned tsid, onid, sid;
     if (!mapping_lookup(&map, c->id, uri, sizeof uri, &tsid, &onid, &sid)) {
-      snprintf(c->uri, sizeof c->uri, "%s", uri);
+      bufcpy(c->uri, sizeof c->uri, uri);
       c->tsid = tsid;
       c->onid = onid;
       c->sid = sid;
@@ -278,9 +238,11 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
   int rc = 0;
   char mcast_txt[80];
   bcg_metrics_t bm;
+  accessunit_scratch_t sc;
   int metrics_on = metrics_exporter_enabled(mx);
 
   memset(&bm, 0, sizeof bm);
+  accessunit_scratch_init(&sc);
 
   if (load_doc(cfg, &doc)) {
     if (metrics_on)
@@ -319,7 +281,7 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
 
     bitwriter_init(&bw);
     strrepo_writer_init(&sw);
-    if (accessunit_encode(&windowed, &bw, &sw, &nfuu)) {
+    if (accessunit_encode(&sc, &windowed, &bw, &sw, &nfuu)) {
       bitwriter_free(&bw);
       strrepo_writer_free(&sw);
       bcg_doc_free(&windowed);
@@ -340,6 +302,7 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
     sleep_interruptible((double)cfg->interval_s);
   }
 
+  accessunit_scratch_free(&sc);
   mcast_close(m);
   bcg_doc_free(&doc);
   log_line("stopped after %u cycle%s", cycles, cycles == 1 ? "" : "s");

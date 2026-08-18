@@ -31,11 +31,57 @@ struct mcast {
   } dest; /* send-side only */
 };
 
+/* socket+SO_REUSEADDR+SO_RCVBUF+iface resolve+bind, shared by ASM and SSM open.
+   -1 on fail, *ifidx_out set from iface (0 if iface is NULL) */
+static int open_bound_recv_socket(int family, unsigned port, const char *iface, unsigned *ifidx_out) {
+  int fd, on = 1;
+  int rcvbuf = 4 * 1024 * 1024; /* absorb brief stalls, e.g. slow -v terminal */
+
+  *ifidx_out = 0;
+  fd = socket(family, SOCK_DGRAM, IPPROTO_UDP);
+  if (fd < 0) {
+    log_line("socket: %s", strerror(errno));
+    return -1;
+  }
+  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
+  setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf);
+  if (iface) {
+    *ifidx_out = if_nametoindex(iface);
+    if (!*ifidx_out) {
+      log_line("unknown interface: %s", iface);
+      close(fd);
+      return -1;
+    }
+  }
+  if (family == AF_INET) {
+    struct sockaddr_in a;
+    memset(&a, 0, sizeof a);
+    a.sin_family = AF_INET;
+    a.sin_port = htons((unsigned short)port);
+    a.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (bind(fd, (struct sockaddr *)&a, sizeof a) < 0) {
+      log_line("bind: %s", strerror(errno));
+      close(fd);
+      return -1;
+    }
+  } else {
+    struct sockaddr_in6 a;
+    memset(&a, 0, sizeof a);
+    a.sin6_family = AF_INET6;
+    a.sin6_port = htons((unsigned short)port);
+    if (bind(fd, (struct sockaddr *)&a, sizeof a) < 0) {
+      log_line("bind: %s", strerror(errno));
+      close(fd);
+      return -1;
+    }
+  }
+  return fd;
+}
+
 mcast_t *mcast_open(int family, const char *group, unsigned port, const char *iface, int recv_timeout_ms) {
   mcast_t *m = calloc(1, sizeof *m);
-  unsigned ifidx = 0;
-  int on = 1;
-  struct timeval tv; /* recv timeout; caller polls deadline */
+  unsigned ifidx;
+  struct timeval tv; /* recv timeout, caller polls deadline */
 
   tv.tv_sec = recv_timeout_ms / 1000;
   tv.tv_usec = (recv_timeout_ms % 1000) * 1000;
@@ -43,35 +89,13 @@ mcast_t *mcast_open(int family, const char *group, unsigned port, const char *if
   if (!m)
     return NULL;
   m->family = family;
-  m->fd = socket(family, SOCK_DGRAM, IPPROTO_UDP);
+  m->fd = open_bound_recv_socket(family, port, iface, &ifidx);
   if (m->fd < 0) {
-    log_line("socket: %s", strerror(errno));
     free(m);
     return NULL;
   }
-  setsockopt(m->fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
-  {
-    int rcvbuf = 4 * 1024 * 1024;   /* absorb brief stalls, e.g. slow -v terminal */
-    setsockopt(m->fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf);
-  }
-  if (iface) {
-    ifidx = if_nametoindex(iface);
-    if (!ifidx) {
-      log_line("unknown interface: %s", iface);
-      goto fail;
-    }
-  }
 
   if (family == AF_INET) {
-    struct sockaddr_in a;
-    memset(&a, 0, sizeof a);
-    a.sin_family = AF_INET;
-    a.sin_port = htons((unsigned short)port);
-    a.sin_addr.s_addr = htonl(INADDR_ANY);
-    if (bind(m->fd, (struct sockaddr *)&a, sizeof a) < 0) {
-      log_line("bind: %s", strerror(errno));
-      goto fail;
-    }
     inet_pton(AF_INET, group, &m->mreq.v4.imr_multiaddr);
     m->mreq.v4.imr_address.s_addr = htonl(INADDR_ANY);
     m->mreq.v4.imr_ifindex = (int)ifidx;
@@ -80,14 +104,6 @@ mcast_t *mcast_open(int family, const char *group, unsigned port, const char *if
       goto fail;
     }
   } else {
-    struct sockaddr_in6 a;
-    memset(&a, 0, sizeof a);
-    a.sin6_family = AF_INET6;
-    a.sin6_port = htons((unsigned short)port);
-    if (bind(m->fd, (struct sockaddr *)&a, sizeof a) < 0) {
-      log_line("bind: %s", strerror(errno));
-      goto fail;
-    }
     inet_pton(AF_INET6, group, &m->mreq.v6.ipv6mr_multiaddr);
     m->mreq.v6.ipv6mr_interface = ifidx;
     if (setsockopt(m->fd, IPPROTO_IPV6, IPV6_JOIN_GROUP, &m->mreq.v6, sizeof m->mreq.v6) < 0) {
@@ -99,16 +115,14 @@ mcast_t *mcast_open(int family, const char *group, unsigned port, const char *if
   return m;
 
 fail:
-  if (m->fd >= 0)
-    close(m->fd);
+  close(m->fd);
   free(m);
   return NULL;
 }
 
 mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char *source_addr, const char *iface, int recv_timeout_ms) {
   mcast_t *m = calloc(1, sizeof *m);
-  unsigned ifidx = 0;
-  int on = 1;
+  unsigned ifidx;
   int level = (family == AF_INET) ? IPPROTO_IP : IPPROTO_IPV6;
   struct timeval tv;
 
@@ -119,47 +133,14 @@ mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char
     return NULL;
   m->family = family;
   m->ssm = 1;
-  m->fd = socket(family, SOCK_DGRAM, IPPROTO_UDP);
+  m->fd = open_bound_recv_socket(family, port, iface, &ifidx);
   if (m->fd < 0) {
-    log_line("socket: %s", strerror(errno));
     free(m);
     return NULL;
-  }
-  setsockopt(m->fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
-  {
-    int rcvbuf = 4 * 1024 * 1024;
-    setsockopt(m->fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf);
-  }
-  if (iface) {
-    ifidx = if_nametoindex(iface);
-    if (!ifidx) {
-      log_line("unknown interface: %s", iface);
-      goto fail;
-    }
   }
 
   memset(&m->gsr, 0, sizeof m->gsr);
   m->gsr.gsr_interface = ifidx;
-  if (family == AF_INET) {
-    struct sockaddr_in a;
-    memset(&a, 0, sizeof a);
-    a.sin_family = AF_INET;
-    a.sin_port = htons((unsigned short)port);
-    a.sin_addr.s_addr = htonl(INADDR_ANY);
-    if (bind(m->fd, (struct sockaddr *)&a, sizeof a) < 0) {
-      log_line("bind: %s", strerror(errno));
-      goto fail;
-    }
-  } else {
-    struct sockaddr_in6 a;
-    memset(&a, 0, sizeof a);
-    a.sin6_family = AF_INET6;
-    a.sin6_port = htons((unsigned short)port);
-    if (bind(m->fd, (struct sockaddr *)&a, sizeof a) < 0) {
-      log_line("bind: %s", strerror(errno));
-      goto fail;
-    }
-  }
   {
     socklen_t sslen;
     if (netaddr_fill(family, group, port, &m->gsr.gsr_group, &sslen)) {
@@ -179,8 +160,7 @@ mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char
   return m;
 
 fail:
-  if (m->fd >= 0)
-    close(m->fd);
+  close(m->fd);
   free(m);
   return NULL;
 }

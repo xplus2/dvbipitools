@@ -257,10 +257,15 @@ static int next_latm(esc_track_t *t, const unsigned char *d, size_t len, esc_fra
   } while (v == 255 && !b.err);
   if (b.err || !plen || plen > sizeof t->au)
     return -1;
-  for (i = 0; i < plen; i++)
-    t->au[i] = (unsigned char)br_u(&b, 8);
-  if (b.err)
-    return -1;
+  if (b.bit % 8 == 0 && (b.bit >> 3) + plen <= b.len) {
+    memcpy(t->au, b.d + (b.bit >> 3), plen);
+    b.bit += plen * 8;
+  } else {
+    for (i = 0; i < plen; i++)
+      t->au[i] = (unsigned char)br_u(&b, 8);
+    if (b.err)
+      return -1;
+  }
   f->consumed = total;
   f->out = t->au;
   f->outlen = plen;

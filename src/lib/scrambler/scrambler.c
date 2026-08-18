@@ -13,9 +13,9 @@
 #define SCRAMBLER_QUEUE_MODE_ENCRYPT 1
 #define SCRAMBLER_QUEUE_MODE_DECRYPT 2
 
-/* total queued entries (crypto + passthrough) can outrun crypto batch size during long unscrambled/no-key runs.
-   this bounds it, well above queue_batch_size, so passthrough-heavy streams never overflow the array.
-   hitting it just forces an early flush */
+/* total queued entries (crypto + passthrough) can outrun crypto batch size during long unscrambled/no-key.
+   multiplier keeps cap above queue_batch_size, avoid overflow on passthrough-heavy streams.
+   hitting cap forces early flush */
 #define SCRAMBLER_QUEUE_CAP_MULTIPLIER 16u
 
 typedef struct {
@@ -31,7 +31,7 @@ struct scrambler {
   int have_key[2];
 
   scrambler_queue_entry_t *queue;
-  unsigned queue_batch_size; /* csa2_batch_size(); 0 = no batching backend */
+  unsigned queue_batch_size; /* csa2_batch_size() result, 0 means no batching backend */
   unsigned queue_cap;        /* allocated s->queue length */
   unsigned queue_len;
   unsigned queue_scrambled_count;
@@ -83,9 +83,9 @@ int scrambler_set_key(scrambler_t *s, int parity, const unsigned char *cw, size_
   if (cw_len != scrambler_cw_len(s->algo))
     return -1;
 
-  /* scrambler_queue_flush() below looks up s->csa2_key[parity] at flush time, not at
-     enqueue time - a batch already pending under this parity must go out under the
-     still-current key before it's replaced, or its packets get the new key instead */
+  /* scrambler_queue_flush() reads s->csa2_key[parity] at flush time, not enqueue time.
+     pending same-parity batch must flush under still-current key before replacement,
+     else queued packets get new key */
   if (s->queue_scrambled_count > 0 && s->queue_parity == parity)
     scrambler_queue_flush(s, emit, ctx);
 
@@ -123,7 +123,7 @@ int scrambler_encrypt_packet(scrambler_t *s, unsigned char pkt[188], int parity)
 
   payload_off = ts_payload_offset(pkt);
   if (payload_off >= 188)
-    return 0; /* AF fills the packet, nothing to scramble, leave control bits at 00 */
+    return 0; /* AF fills packet, control bits stay 00 */
   payload_size = 188 - payload_off;
 
   if (s->algo == SCRAMBLE_ALGO_CSA2) {
@@ -136,7 +136,7 @@ int scrambler_encrypt_packet(scrambler_t *s, unsigned char pkt[188], int parity)
     /* CISSA: TS 103 127 clause 6.3.2, AES-CBC without stealing, needs whole 16-byte blocks. trailing residual bytes stay clear. */
     size_t enc_size = payload_size - (payload_size % 16u);
     if (enc_size == 0)
-      return 0; /* payload smaller than one cipher block: nothing to scramble, leave control bits at 00 */
+      return 0; /* payload under one cipher block, control bits stay 00 */
     pkt[3] = (unsigned char)((pkt[3] & 0x3F) | (parity == SCRAMBLE_PARITY_ODD ? 0xC0 : 0x80));
     return cissa_encrypt_block(s->cissa_key[parity], pkt + payload_off, enc_size);
   }
@@ -158,7 +158,7 @@ int scrambler_decrypt_packet(scrambler_t *s, unsigned char pkt[188]) {
 
   payload_off = ts_payload_offset(pkt);
   if (payload_off >= 188) {
-    pkt[3] &= 0x3F; /* AF fills the packet, nothing was ever scrambled here */
+    pkt[3] &= 0x3F; /* AF fills packet, never scrambled */
     return 0;
   }
   payload_size = 188 - payload_off;
@@ -208,6 +208,15 @@ static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *
   s->queue_mode = SCRAMBLER_QUEUE_MODE_NONE;
 }
 
+/* flush first if crypto batch is already accumulating under different mode/parity.
+   keep every batch's entries under shared key */
+static void scrambler_queue_ensure_batch(scrambler_t *s, int mode, int parity, scrambler_emit_cb emit, void *ctx) {
+  if (s->queue_scrambled_count > 0 && (s->queue_mode != mode || s->queue_parity != parity))
+    scrambler_queue_flush(s, emit, ctx);
+  s->queue_mode = mode;
+  s->queue_parity = parity;
+}
+
 /* queue_cap == 0 (CISSA, or CSA2 without libdvbcsa): no batching backend, emit immediately.
    needs_crypto entries never reach here, @see scrambler_encrypt_packet_queued/scrambler_decrypt_packet_queued. */
 static void scrambler_queue_push(scrambler_t *s, const unsigned char pkt[188], int needs_crypto, size_t payload_off, size_t payload_size, scrambler_emit_cb emit, void *ctx) {
@@ -220,13 +229,9 @@ static void scrambler_queue_push(scrambler_t *s, const unsigned char pkt[188], i
   mode = s->queue_mode;
   parity = s->queue_parity;
   if (s->queue_len == s->queue_cap) {
-    /* flush resets mode/parity to (NONE,-1): restore ensure_batch's commit, else
-       push below lands under reset */
     scrambler_queue_flush(s, emit, ctx);
-    if (needs_crypto) {
-      s->queue_mode = mode;
-      s->queue_parity = parity;
-    }
+    if (needs_crypto)
+      scrambler_queue_ensure_batch(s, mode, parity, emit, ctx);
   }
   e = &s->queue[s->queue_len];
   memcpy(e->pkt, pkt, 188);
@@ -239,15 +244,6 @@ static void scrambler_queue_push(scrambler_t *s, const unsigned char pkt[188], i
     if (s->queue_scrambled_count == s->queue_batch_size)
       scrambler_queue_flush(s, emit, ctx);
   }
-}
-
-/* flushes first if a crypto batch is already accumulating under a different mode/parity than what's to be queued.
-   keeps every batch's entries under one shared key */
-static void scrambler_queue_ensure_batch(scrambler_t *s, int mode, int parity, scrambler_emit_cb emit, void *ctx) {
-  if (s->queue_scrambled_count > 0 && (s->queue_mode != mode || s->queue_parity != parity))
-    scrambler_queue_flush(s, emit, ctx);
-  s->queue_mode = mode;
-  s->queue_parity = parity;
 }
 
 int scrambler_encrypt_packet_queued(scrambler_t *s, unsigned char pkt[188], int parity, scrambler_emit_cb emit, void *ctx) {

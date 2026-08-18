@@ -5,13 +5,6 @@
 
 #include "priv.h"
 
-size_t next_pow2(size_t n) {
-  size_t p = 1;
-  while (p < n)
-    p <<= 1;
-  return p;
-}
-
 size_t chan_key_hash(int family, const void *addr, size_t addr_len, unsigned port) {
   uint64_t h = 1469598103934665603ULL; /* FNV-1a 64-bit offset basis */
   const unsigned char *p = (const unsigned char *)addr;

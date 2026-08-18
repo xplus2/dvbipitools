@@ -6,6 +6,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "lib/ioutil.h"
 #include "lib/log.h"
 #include "lib/metrics/export.h"
 #include "lib/net/dvbstp.h"
@@ -68,7 +69,7 @@ int state_load(const config_t *cfg, sds_state_t *st) {
     const sds_fcc_t *fcc = NULL;
     if (cfg->ret_enabled) {
       memset(&ret_val, 0, sizeof ret_val);
-      snprintf(ret_val.addr, sizeof ret_val.addr, "%s", cfg->ret_addr);
+      bufcpy(ret_val.addr, sizeof ret_val.addr, cfg->ret_addr);
       ret_val.port = cfg->ret_port;
       ret_val.rtx_time_ms = cfg->ret_rtx_time;
       ret_val.rtx_pt = cfg->ret_rtx_pt;
@@ -79,7 +80,7 @@ int state_load(const config_t *cfg, sds_state_t *st) {
     }
     if (cfg->fcc_enabled) {
       memset(&fcc_val, 0, sizeof fcc_val);
-      snprintf(fcc_val.addr, sizeof fcc_val.addr, "%s", cfg->fcc_addr);
+      bufcpy(fcc_val.addr, sizeof fcc_val.addr, cfg->fcc_addr);
       fcc_val.port = cfg->fcc_port;
       fcc_val.rtx_time_ms = cfg->fcc_rtx_time;
       fcc_val.rtx_pt = cfg->fcc_rtx_pt;
@@ -148,13 +149,13 @@ int state_load(const config_t *cfg, sds_state_t *st) {
       memset(&rms_val, 0, sizeof rms_val);
       memset(&fus_val, 0, sizeof fus_val);
       if (cfg->rms_enabled) {
-        snprintf(rms_val.name, sizeof rms_val.name, "%s", cfg->rms_name);
+        bufcpy(rms_val.name, sizeof rms_val.name, cfg->rms_name);
         memcpy(rms_val.lang, cfg->rms_lang, 3);
         rms_val.location = cfg->rms_location;
         rms_val.logo_uri = cfg->rms_logo;
         rms_count = 1;
       } else {
-        snprintf(fus_val.name, sizeof fus_val.name, "%s", cfg->fus_name);
+        bufcpy(fus_val.name, sizeof fus_val.name, cfg->fus_name);
         memcpy(fus_val.lang, cfg->fus_lang, 3);
         fus_val.fus_id = cfg->fus_id;
         fus_val.announce_addr = cfg->fus_announce_addr[0] ? cfg->fus_announce_addr : NULL;

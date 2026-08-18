@@ -3,6 +3,7 @@
 
 #include <string.h>
 
+#include "../beutil.h"
 #include "rtcp_build.h"
 
 #define RTCP_PT_RTPFB 205 /* RFC 4585 transport layer feedback */
@@ -18,23 +19,6 @@
 #define RTCP_RAMS_TLV_BURST_DURATION 34
 #define RTCP_RAMS_TLV_MAX_TRANSMIT_BITRATE 35
 
-static void wr16(unsigned char *p, uint16_t v) {
-  p[0] = (unsigned char)(v >> 8);
-  p[1] = (unsigned char)v;
-}
-
-static void wr32(unsigned char *p, uint32_t v) {
-  p[0] = (unsigned char)(v >> 24);
-  p[1] = (unsigned char)(v >> 16);
-  p[2] = (unsigned char)(v >> 8);
-  p[3] = (unsigned char)v;
-}
-
-static void wr64(unsigned char *p, uint64_t v) {
-  wr32(p, (uint32_t)(v >> 32));
-  wr32(p + 4, (uint32_t)v);
-}
-
 size_t rtcp_build_ff(uint32_t sender_ssrc, uint32_t media_ssrc, const rtcp_nack_entry_t *entries, size_t entry_count, unsigned char *out, size_t cap) {
   size_t total, words, i;
 
@@ -48,12 +32,12 @@ size_t rtcp_build_ff(uint32_t sender_ssrc, uint32_t media_ssrc, const rtcp_nack_
   out[0] = 0x80 | RTCP_FMT_NACK; /* V=2, P=0, FMT=1 */
   out[1] = RTCP_PT_RTPFB;
   words = total / 4 - 1;
-  wr16(out + 2, (uint16_t)words);
-  wr32(out + 4, sender_ssrc);
-  wr32(out + 8, media_ssrc);
+  be16_put(out + 2, (uint16_t)words);
+  be32_put(out + 4, sender_ssrc);
+  be32_put(out + 8, media_ssrc);
   for (i = 0; i < entry_count; i++) {
-    wr16(out + 12 + i * 4, entries[i].pid);
-    wr16(out + 12 + i * 4 + 2, entries[i].blp);
+    be16_put(out + 12 + i * 4, entries[i].pid);
+    be16_put(out + 12 + i * 4 + 2, entries[i].blp);
   }
   return total;
 }
@@ -67,11 +51,11 @@ size_t rtcp_build_rsi_header(uint32_t ssrc, uint32_t summarized_ssrc, uint32_t n
   out[0] = 0x80; /* V=2, P=0, reserved=0 */
   out[1] = RTCP_PT_RSI;
   words = total_len / 4 - 1;
-  wr16(out + 2, (uint16_t)words);
-  wr32(out + 4, ssrc);
-  wr32(out + 8, summarized_ssrc);
-  wr32(out + 12, ntp_sec);
-  wr32(out + 16, ntp_frac);
+  be16_put(out + 2, (uint16_t)words);
+  be32_put(out + 4, ssrc);
+  be32_put(out + 8, summarized_ssrc);
+  be32_put(out + 12, ntp_sec);
+  be32_put(out + 16, ntp_frac);
 
   return 20;
 }
@@ -93,7 +77,7 @@ size_t rtcp_build_rsi_srbt_addr(const unsigned char *addr, size_t addr_len, uint
 
   out[0] = (unsigned char)srbt;
   out[1] = (unsigned char)(sub_len / 4);
-  wr16(out + 2, port);
+  be16_put(out + 2, port);
   memcpy(out + 4, addr, addr_len);
 
   return sub_len;
@@ -113,7 +97,7 @@ size_t rtcp_build_rsi_srbt_dns(const char *name, size_t name_len, uint16_t port,
 
   out[0] = 2; /* SRBT 2 = DNS name unicast feedback, Figure F.8 */
   out[1] = (unsigned char)(total / 4);
-  wr16(out + 2, port);
+  be16_put(out + 2, port);
   memset(out + 4, 0, padded);
   memcpy(out + 4, name, name_len);
 
@@ -128,9 +112,9 @@ size_t rtcp_build_rsi_srbt_bandwidth(double kbps, unsigned char *out, size_t cap
 
   out[0] = 11; /* SRBT 11 = "Receiver Bandwidth", Figure F.10 */
   out[1] = 2;  /* sub-report length: 2 32-bit words */
-  wr16(out + 2, 0x4000); /* S=0, R=1 (applies per RET-enabled HNED), Reserved=0 */
+  be16_put(out + 2, 0x4000); /* S=0, R=1 (applies per RET-enabled HNED), Reserved=0 */
   fixed_point = (uint32_t)(kbps * 65536.0); /* Q16.16, binary point between byte 2 and 3 */
-  wr32(out + 4, fixed_point);
+  be32_put(out + 4, fixed_point);
 
   return 8;
 }
@@ -147,9 +131,9 @@ size_t rtcp_build_rsi_srbt_collision(const uint32_t *ssrcs, size_t count, unsign
 
   out[0] = 8; /* SRBT 8 = SSRC collision list */
   out[1] = (unsigned char)(total / 4);
-  wr16(out + 2, 0); /* Reserved */
+  be16_put(out + 2, 0); /* Reserved */
   for (i = 0; i < count; i++)
-    wr32(out + 4 + i * 4, ssrcs[i]);
+    be32_put(out + 4 + i * 4, ssrcs[i]);
 
   return total;
 }
@@ -176,26 +160,26 @@ size_t rtcp_build_rams_i(uint32_t sender_ssrc, uint32_t media_ssrc, uint8_t msn,
   out[0] = 0x80 | RTCP_FMT_RAMS; /* V=2, P=0, FMT=6 */
   out[1] = RTCP_PT_RTPFB;
   words = total / 4 - 1;
-  wr16(out + 2, (uint16_t)words);
-  wr32(out + 4, sender_ssrc);
-  wr32(out + 8, media_ssrc);
+  be16_put(out + 2, (uint16_t)words);
+  be32_put(out + 4, sender_ssrc);
+  be32_put(out + 8, media_ssrc);
   out[12] = RTCP_SFMT_RAMS_I;
   out[13] = msn;
-  wr16(out + 14, response);
+  be16_put(out + 14, response);
 
   off = 16;
   if (tlvs && tlvs->has_media_ssrc_tlv) {
     out[off] = RTCP_RAMS_TLV_MEDIA_SSRC;
     out[off + 1] = 0;
-    wr16(out + off + 2, 4);
-    wr32(out + off + 4, tlvs->media_ssrc_tlv);
+    be16_put(out + off + 2, 4);
+    be32_put(out + off + 4, tlvs->media_ssrc_tlv);
     off += 8;
   }
   if (tlvs && tlvs->has_first_packet_seqnum) {
     out[off] = RTCP_RAMS_TLV_FIRST_PACKET_SEQNUM;
     out[off + 1] = 0;
-    wr16(out + off + 2, 2);
-    wr16(out + off + 4, tlvs->first_packet_seqnum);
+    be16_put(out + off + 2, 2);
+    be16_put(out + off + 4, tlvs->first_packet_seqnum);
     out[off + 6] = 0; /* padding to 4-byte boundary */
     out[off + 7] = 0;
     off += 8;
@@ -203,22 +187,22 @@ size_t rtcp_build_rams_i(uint32_t sender_ssrc, uint32_t media_ssrc, uint8_t msn,
   if (tlvs && tlvs->has_earliest_join_time) {
     out[off] = RTCP_RAMS_TLV_EARLIEST_JOIN_TIME;
     out[off + 1] = 0;
-    wr16(out + off + 2, 4);
-    wr32(out + off + 4, tlvs->earliest_join_time_ms);
+    be16_put(out + off + 2, 4);
+    be32_put(out + off + 4, tlvs->earliest_join_time_ms);
     off += 8;
   }
   if (tlvs && tlvs->has_burst_duration) {
     out[off] = RTCP_RAMS_TLV_BURST_DURATION;
     out[off + 1] = 0;
-    wr16(out + off + 2, 4);
-    wr32(out + off + 4, tlvs->burst_duration_ms);
+    be16_put(out + off + 2, 4);
+    be32_put(out + off + 4, tlvs->burst_duration_ms);
     off += 8;
   }
   if (tlvs && tlvs->has_max_transmit_bitrate) {
     out[off] = RTCP_RAMS_TLV_MAX_TRANSMIT_BITRATE;
     out[off + 1] = 0;
-    wr16(out + off + 2, 8);
-    wr64(out + off + 4, tlvs->max_transmit_bitrate_bps);
+    be16_put(out + off + 2, 8);
+    be64_put(out + off + 4, tlvs->max_transmit_bitrate_bps);
     off += 12;
   }
 

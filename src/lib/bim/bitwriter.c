@@ -3,6 +3,7 @@
 
 #include <limits.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "bitwriter.h"
 
@@ -19,6 +20,12 @@ void bitwriter_free(bitwriter_t *bw) {
   bw->buf = NULL;
   bw->cap = 0;
   bw->len = 0;
+}
+
+void bitwriter_reset(bitwriter_t *bw) {
+  bw->len = 0;
+  bw->cur = 0;
+  bw->cur_bits = 0;
 }
 
 static int push_byte(bitwriter_t *bw, unsigned char b) {
@@ -50,8 +57,26 @@ int bitwriter_put(bitwriter_t *bw, uint64_t value, int nbits) {
   return 0;
 }
 
+static int push_bytes(bitwriter_t *bw, const unsigned char *data, size_t len) {
+  if (bw->len + len > bw->cap) {
+    size_t newcap = bw->cap ? bw->cap * 2 : 64;
+    while (newcap < bw->len + len)
+      newcap *= 2;
+    unsigned char *np = realloc(bw->buf, newcap);
+    if (!np)
+      return -1;
+    bw->buf = np;
+    bw->cap = newcap;
+  }
+  memcpy(bw->buf + bw->len, data, len);
+  bw->len += len;
+  return 0;
+}
+
 int bitwriter_put_bytes(bitwriter_t *bw, const unsigned char *data, size_t len) {
   size_t i;
+  if (bw->cur_bits == 0)
+    return push_bytes(bw, data, len);
   for (i = 0; i < len; i++)
     if (bitwriter_put(bw, data[i], 8))
       return -1;

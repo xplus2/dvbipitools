@@ -17,11 +17,11 @@ static double elapsed_seconds(const struct timespec *start) {
 
 /* ms spanned by cached RAP-anchored run. 0 if fewer than 2 entries. */
 static unsigned cache_depth_ms(const channel_t *c) {
-  rap_cache_entry_t first, last;
+  rap_cache_meta_t first, last;
   size_t count = channel_cache_count(c);
   uint32_t diff;
 
-  if (count < 2 || !channel_cache_get(c, 0, &first) || !channel_cache_get(c, count - 1, &last))
+  if (count < 2 || !channel_cache_peek_meta(c, 0, &first) || !channel_cache_peek_meta(c, count - 1, &last))
     return 0;
   diff = last.timestamp - first.timestamp; /* wraps safely, span << 2^32 ticks */
   return (unsigned)((double)diff * 1000.0 / BURST_RTP_CLOCK_HZ);

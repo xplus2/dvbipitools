@@ -4,14 +4,12 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "../beutil.h"
 #include "../demux/crc32.h"
 
 #include "psi_build.h"
 
-void psi_put16(unsigned char *p, unsigned v) {
-  p[0] = (unsigned char)(v >> 8);
-  p[1] = (unsigned char)v;
-}
+void psi_put16(unsigned char *p, unsigned v) { be16_put(p, (uint16_t)v); }
 
 size_t psi_utf8_clamp(const char *s, size_t len, size_t max_bytes) {
   size_t i = 0;
@@ -47,10 +45,7 @@ size_t psi_finish_section(unsigned char *out, size_t len, size_t cap, unsigned c
   out[1] = (unsigned char)(flags_nibble | ((seclen >> 8) & 0x0F));
   out[2] = (unsigned char)seclen;
   crc = crc32_mpeg(out, len);
-  out[len] = (unsigned char)(crc >> 24);
-  out[len + 1] = (unsigned char)(crc >> 16);
-  out[len + 2] = (unsigned char)(crc >> 8);
-  out[len + 3] = (unsigned char)crc;
+  be32_put(out + len, crc);
   len += 4;
   return len;
 }

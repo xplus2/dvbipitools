@@ -4,6 +4,7 @@
 #include <stdatomic.h>
 #include <string.h>
 
+#include "rtpheader.h"
 #include "rtx.h"
 
 size_t rtx_build(_Atomic uint16_t *seq, uint32_t ssrc, unsigned char pt, uint32_t timestamp, uint16_t orig_seq, const unsigned char *orig_payload, size_t orig_payload_len, unsigned char *out, size_t cap) {
@@ -14,20 +15,8 @@ size_t rtx_build(_Atomic uint16_t *seq, uint32_t ssrc, unsigned char pt, uint32_
     return 0;
 
   my_seq = atomic_fetch_add_explicit(seq, 1, memory_order_relaxed); /* single atomic op: no two callers get same seq */
-  out[0] = 0x80; /* V=2, P=0, X=0, CC=0 */
-  out[1] = (unsigned char)(pt & 0x7F); /* M=0 */
-  out[2] = (unsigned char)(my_seq >> 8);
-  out[3] = (unsigned char)my_seq;
-  out[4] = (unsigned char)(timestamp >> 24);
-  out[5] = (unsigned char)(timestamp >> 16);
-  out[6] = (unsigned char)(timestamp >> 8);
-  out[7] = (unsigned char)timestamp;
-  out[8] = (unsigned char)(ssrc >> 24);
-  out[9] = (unsigned char)(ssrc >> 16);
-  out[10] = (unsigned char)(ssrc >> 8);
-  out[11] = (unsigned char)ssrc;
-  out[12] = (unsigned char)(orig_seq >> 8); /* OSN, RFC 4588 */
-  out[13] = (unsigned char)orig_seq;
+  rtp_write_header(out, pt, my_seq, timestamp, ssrc);
+  be16_put(out + 12, orig_seq); /* OSN, RFC 4588 */
   if (orig_payload_len)
     memcpy(out + 14, orig_payload, orig_payload_len);
   return total;

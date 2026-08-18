@@ -12,6 +12,13 @@
 
 #define CAPTURE_BPF_MAX_INSNS 4096u /* kernel classic-BPF program length limit */
 
+/* emit_v4_clause() instruction count: LD, AND, JEQ, RET */
+#define BPF_V4_CLAUSE_INSNS 4u
+/* emit_v6_clause()'s per-word instruction count: LD, AND, JEQ. its own jf offsets and BPF_V6_CLAUSE_INSNS key off this */
+#define BPF_V6_WORD_INSNS 3u
+/* emit_v6_clause()'s total: 4 words + trailing RET. bpf_dispatch_len() keys off this */
+#define BPF_V6_CLAUSE_INSNS (4u * BPF_V6_WORD_INSNS + 1u)
+
 typedef struct {
   struct sock_filter *insns;
   size_t len, cap;
@@ -30,7 +37,7 @@ static int bpf_emit(bpf_buf_t *b, struct sock_filter insn) {
   return 0;
 }
 
-/* match: dst v4 addr at addr_off masked; on match falls through to the RET+accept right below, on mismatch jf=1 skips it to the next clause */
+/* match: dst v4 addr at addr_off, masked. match falls through to RET+accept below, mismatch (jf=1) skips to next clause */
 static int emit_v4_clause(bpf_buf_t *b, unsigned addr_off, const cidr_t *c) {
   uint32_t mask = ntohl(c->u.v4.mask.s_addr);
   uint32_t net = ntohl(c->u.v4.addr.s_addr) & mask;
@@ -53,7 +60,7 @@ static uint32_t v6_word_mask(unsigned prefix, unsigned w) {
   return 0xFFFFFFFFu << (word_bits + 32 - prefix);
 }
 
-/* 4 word-checks chained by fixed jf offsets (10/7/4/1) so each clause is self-contained regardless of range count - no cross-clause backpatching needed */
+/* 4 word-checks chained by fixed jf offsets (10/7/4/1), self-contained regardless of range count, no cross-clause backpatching */
 static int emit_v6_clause(bpf_buf_t *b, unsigned addr_off, const cidr_t *c) {
   unsigned w;
   for (w = 0; w < 4; w++) {
@@ -62,7 +69,7 @@ static int emit_v6_clause(bpf_buf_t *b, unsigned addr_off, const cidr_t *c) {
     memcpy(&raw, &c->u.v6.addr.s6_addr[w * 4], 4);
     mask = v6_word_mask(c->u.v6.prefix, w);
     net = ntohl(raw) & mask;
-    jf = (w == 3) ? 1 : (3 - w) * 3 + 1;
+    jf = (w == 3) ? 1 : (3 - w) * BPF_V6_WORD_INSNS + 1;
     if (bpf_emit(b, (struct sock_filter)BPF_STMT(BPF_LD | BPF_W | BPF_ABS, addr_off + w * 4)) < 0)
       return -1;
     if (bpf_emit(b, (struct sock_filter)BPF_STMT(BPF_ALU | BPF_AND | BPF_K, mask)) < 0)
@@ -74,10 +81,10 @@ static int emit_v6_clause(bpf_buf_t *b, unsigned addr_off, const cidr_t *c) {
 }
 
 static size_t bpf_dispatch_len(size_t nv4, size_t nv6) {
-  return 4 * nv4 + 13 * nv6 + 5;
+  return BPF_V4_CLAUSE_INSNS * nv4 + BPF_V6_CLAUSE_INSNS * nv6 + 5;
 }
 
-/* assumes A = ethertype on entry; base is the ethernet-payload offset (14 = no vlan, 18 = one vlan tag already unwrapped) */
+/* assumes A = ethertype on entry. base: ethernet-payload offset (14 no vlan, 18 vlan tag unwrapped) */
 static int emit_dispatch_block(bpf_buf_t *b, unsigned base, const cidr_t *ranges, size_t range_count) {
   size_t i, nv4 = 0, nv6 = 0;
   unsigned v4_section_len;
@@ -87,7 +94,7 @@ static int emit_dispatch_block(bpf_buf_t *b, unsigned base, const cidr_t *ranges
       nv4++;
     else
       nv6++;
-  v4_section_len = (unsigned)(4 * nv4 + 1);
+  v4_section_len = (unsigned)(BPF_V4_CLAUSE_INSNS * nv4 + 1);
 
   if (bpf_emit(b, (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, ETH_P_IP, 0, v4_section_len)) < 0)
     return -1;
@@ -108,10 +115,9 @@ static int emit_dispatch_block(bpf_buf_t *b, unsigned base, const cidr_t *ranges
   return bpf_emit(b, (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, 0)); /* v6, no range matched */
 }
 
-/* ethertype+vlan prologue, then two copies of the dispatch block (base 14 / base 18) - classic BPF has no
- * subroutines, so the with-vlan/without-vlan tail is duplicated rather than parameterized at runtime.
- * the base-14 block can be longer than 255 instructions (conditional jt/jf are 8-bit), so skipping over it
- * to reach the vlan path uses an unconditional BPF_JA trampoline instead of a direct conditional jump. */
+/* ethertype+vlan prologue, then 2 dispatch-block copies (base 14 / base 18). classic BPF lacks
+   subroutines: with-vlan/without-vlan tail duplicated.   base-14 block can exceed 255 instructions
+   (jt/jf are 8-bit): skipping it toward vlan path uses unconditional BPF_JA trampoline, no condjump. */
 struct sock_filter *capture_build_bpf(const cidr_t *ranges, size_t range_count, size_t *out_len) {
   bpf_buf_t b;
   size_t i, nv4 = 0, nv6 = 0, d_len, total;
@@ -138,6 +144,9 @@ struct sock_filter *capture_build_bpf(const cidr_t *ranges, size_t range_count, 
   if (bpf_emit(&b, (struct sock_filter)BPF_STMT(BPF_LD | BPF_H | BPF_ABS, 16)) < 0)
     goto fail;
   if (emit_dispatch_block(&b, 18, ranges, range_count) < 0)
+    goto fail;
+
+  if (b.len != total) /* catch emit_v4_clause/emit_v6_clause drifting from BPF_V4/V6_*_INSNS */
     goto fail;
 
   *out_len = b.len;

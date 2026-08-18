@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "../beutil.h"
 #include "amf.h"
 
 #define AMF_T_NUMBER 0x00
@@ -20,12 +21,14 @@
 #define AMF_T_LONG_STRING 0x0C
 
 static void amf_be16(ebuf_t *b, unsigned v) {
-  unsigned char t[2] = {(unsigned char)(v >> 8), (unsigned char)v};
+  unsigned char t[2];
+  be16_put(t, (uint16_t)v);
   eb_bytes(b, t, 2);
 }
 
 static void amf_be32(ebuf_t *b, unsigned v) {
-  unsigned char t[4] = {(unsigned char)(v >> 24), (unsigned char)(v >> 16), (unsigned char)(v >> 8), (unsigned char)v};
+  unsigned char t[4];
+  be32_put(t, (uint32_t)v);
   eb_bytes(b, t, 4);
 }
 
@@ -92,9 +95,6 @@ void amf_ecma_array_end(ebuf_t *b) {
   amf_object_end(b); /* same 00 00 09 terminator as Object */
 }
 
-static unsigned be16_at(const unsigned char *p) { return ((unsigned)p[0] << 8) | p[1]; }
-static uint32_t be32_at(const unsigned char *p) { return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3]; }
-
 const unsigned char *amf_read_number(const unsigned char *p, const unsigned char *end, double *v) {
   union {
     double d;
@@ -114,7 +114,7 @@ const unsigned char *amf_read_string(const unsigned char *p, const unsigned char
   unsigned n;
   if (end - p < 3 || p[0] != AMF_T_STRING)
     return NULL;
-  n = be16_at(p + 1);
+  n = be16_get(p + 1);
   if (end - (p + 3) < (ptrdiff_t)n)
     return NULL;
   if (cap) {
@@ -131,7 +131,7 @@ static const unsigned char *amf_skip_props(const unsigned char *p, const unsigne
     unsigned keylen;
     if (end - p < 2)
       return NULL;
-    keylen = be16_at(p);
+    keylen = be16_get(p);
     if (0 == keylen) {
       if (end - p < 3 || p[2] != AMF_OBJECT_END)
         return NULL;
@@ -170,7 +170,7 @@ const unsigned char *amf_skip_value(const unsigned char *p, const unsigned char 
     case AMF_T_STRICT_ARRAY:
       if (end - p < 5)
         return NULL;
-      count = be32_at(p + 1);
+      count = be32_get(p + 1);
       p += 5;
       for (i = 0; i < count; i++) {
         p = amf_skip_value(p, end);
@@ -183,7 +183,7 @@ const unsigned char *amf_skip_value(const unsigned char *p, const unsigned char 
     case AMF_T_LONG_STRING:
       if (end - p < 5)
         return NULL;
-      return p + 5 + be32_at(p + 1);
+      return p + 5 + be32_get(p + 1);
     default:
       return NULL; /* unknown/unsupported marker: can't safely skip */
   }
@@ -198,7 +198,7 @@ int amf_object_find_string(const unsigned char *p, const unsigned char *end, con
     unsigned klen;
     if (end - p < 2)
       return -1;
-    klen = be16_at(p);
+    klen = be16_get(p);
     if (0 == klen) {
       if (end - p < 3 || p[2] != AMF_OBJECT_END)
         return -1;

@@ -58,24 +58,18 @@ static int send_all(int fd, const unsigned char *buf, size_t n, atomic_int *stop
   return 0;
 }
 
-/* body decrypted in place; mutated into the CMD01 answer. conn_ucrc echoed verbatim */
-static void send_ecm_response(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4], unsigned char *body, const unsigned char cw[16]) {
-  size_t total;
-  uint32_t crc;
-
-  body[0] = CMD_ECM_RESPONSE;
-  body[1] = 16;
-  memcpy(body + 20, cw, 16);
-  total = cs378x_frame_boundary(20 + 16);
-  memset(body + 36, 0xFF, total - 36);
-  crc = cs378x_crc32(body + 20, 16);
+/* patches CRC over body[20:20+crc_len) into body[4:8), AES-encrypts body[0:total),
+   frames as conn_ucrc+body, sends. what_for names it in error logs */
+static void finalize_and_send(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4],
+                               unsigned char *body, size_t total, size_t crc_len, const char *what_for) {
+  uint32_t crc = cs378x_crc32(body + 20, crc_len);
   body[4] = (unsigned char)(crc >> 24);
   body[5] = (unsigned char)(crc >> 16);
   body[6] = (unsigned char)(crc >> 8);
   body[7] = (unsigned char)crc;
 
   if (cs378x_aes128_ecb(s->aes_key, body, total, 1) != 0) {
-    log_line(TOOL_NAME ": encrypt failed building ECM response");
+    log_line(TOOL_NAME ": encrypt failed building %s", what_for);
     return;
   }
   {
@@ -83,15 +77,26 @@ static void send_ecm_response(cs378x_server_t *s, int fd, const unsigned char co
     memcpy(frame, conn_ucrc, 4);
     memcpy(frame + 4, body, total);
     if (send_all(fd, frame, 4 + total, &s->stop) < 0)
-      log_line(TOOL_NAME ": send ECM response failed: %s", strerror(errno));
+      log_line(TOOL_NAME ": send %s failed: %s", what_for, strerror(errno));
   }
 }
 
-/* body decrypted in place. E_INVALID only, no sleep variant - stop-asking for this
-   srvid/prid/caid, still at body[8:20), out like send_ecm_response */
+/* body decrypted in place, mutated into CMD01 answer. conn_ucrc echoed verbatim */
+static void send_ecm_response(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4], unsigned char *body, const unsigned char cw[16]) {
+  size_t total;
+
+  body[0] = CMD_ECM_RESPONSE;
+  body[1] = 16;
+  memcpy(body + 20, cw, 16);
+  total = cs378x_frame_boundary(20 + 16);
+  memset(body + 36, 0xFF, total - 36);
+  finalize_and_send(s, fd, conn_ucrc, body, total, 16, "ECM response");
+}
+
+/* body decrypted in place. E_INVALID only, no sleep-retry variant: client stops asking
+   this srvid/prid/caid (still at body[8:20)). framed like send_ecm_response */
 static void send_cmd08(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4], unsigned char *body) {
   size_t total;
-  uint32_t crc;
 
   body[0] = CMD_INVALID;
   body[1] = 2;
@@ -99,45 +104,16 @@ static void send_cmd08(cs378x_server_t *s, int fd, const unsigned char conn_ucrc
   body[21] = 0;
   total = cs378x_frame_boundary(20 + 2);
   memset(body + 22, 0xFF, total - 22);
-  crc = cs378x_crc32(body + 20, 2);
-  body[4] = (unsigned char)(crc >> 24);
-  body[5] = (unsigned char)(crc >> 16);
-  body[6] = (unsigned char)(crc >> 8);
-  body[7] = (unsigned char)crc;
-
-  if (cs378x_aes128_ecb(s->aes_key, body, total, 1) != 0) {
-    log_line(TOOL_NAME ": encrypt failed building CMD08");
-    return;
-  }
-  {
-    unsigned char frame[4 + CS378X_BUF_CAP];
-    memcpy(frame, conn_ucrc, 4);
-    memcpy(frame + 4, body, total);
-    if (send_all(fd, frame, 4 + total, &s->stop) < 0)
-      log_line(TOOL_NAME ": send CMD08 failed: %s", strerror(errno));
-  }
+  finalize_and_send(s, fd, conn_ucrc, body, total, 2, "CMD08");
 }
 
 void send_keepalive_answer(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4]) {
   unsigned char body[32];
-  uint32_t crc;
   memset(body, 0, sizeof body);
   body[0] = CMD_KEEPALIVE;
   body[1] = 1;
   body[2] = 0;
-  crc = cs378x_crc32(body + 20, 1);
-  body[4] = (unsigned char)(crc >> 24);
-  body[5] = (unsigned char)(crc >> 16);
-  body[6] = (unsigned char)(crc >> 8);
-  body[7] = (unsigned char)crc;
-  if (cs378x_aes128_ecb(s->aes_key, body, sizeof body, 1) != 0)
-    return;
-  {
-    unsigned char frame[4 + 32];
-    memcpy(frame, conn_ucrc, 4);
-    memcpy(frame + 4, body, sizeof body);
-    send_all(fd, frame, sizeof frame, &s->stop);
-  }
+  finalize_and_send(s, fd, conn_ucrc, body, sizeof body, 1, "keepalive answer");
 }
 
 void handle_ecm(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4], unsigned char *body, size_t buflen) {

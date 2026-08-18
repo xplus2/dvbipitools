@@ -1,6 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <string.h>
+
 #include "bitreader.h"
 
 unsigned br_u(br_t *b, int n) {
@@ -27,6 +29,27 @@ unsigned br_ue(br_t *b) {
 int br_se(br_t *b) {
   unsigned v = br_ue(b);
   return (v & 1) ? (int)((v + 1) / 2) : -(int)(v / 2);
+}
+
+size_t br_slice(const br_t *b, size_t from, size_t to, unsigned char *out, size_t cap) {
+  size_t nbits = to - from, nb = (nbits + 7) / 8, i;
+
+  if (!nb || nb > cap)
+    return 0;
+  if (from % 8 == 0) {
+    size_t full = nbits / 8, rem = nbits % 8;
+    memcpy(out, b->d + from / 8, full);
+    if (rem)
+      out[full] = (unsigned char)(b->d[from / 8 + full] & (0xFF << (8 - rem)));
+    return nb;
+  }
+  memset(out, 0, nb);
+  for (i = 0; i < nbits; i++) {
+    size_t s = from + i;
+    unsigned bit = (b->d[s >> 3] >> (7 - (s & 7))) & 1;
+    out[i >> 3] |= (unsigned char)(bit << (7 - (i & 7)));
+  }
+  return nb;
 }
 
 size_t rbsp_unescape(const unsigned char *s, size_t len, unsigned char *d, size_t cap) {

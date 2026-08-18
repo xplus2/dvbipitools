@@ -28,6 +28,15 @@ typedef struct {
   char category[BCG_ID_LEN];
 } bcg_programme_t;
 
+/* CRID-keyed prg text, pending merge into bcg_programme_t. accessunit.c and tva_xml.c
+   build their own side-table, different lookup strategies, same rec */
+typedef struct {
+  char crid[BCG_ID_LEN * 3 + 64];
+  char title[BCG_TEXT_LEN];
+  char desc[BCG_TEXT_LEN];
+  char category[BCG_ID_LEN];
+} bcg_progtext_t;
+
 typedef struct {
   bcg_channel_t *channels;
   int channel_count, channel_cap;

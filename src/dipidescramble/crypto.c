@@ -56,48 +56,57 @@ int device_emm_g_decrypt(const unsigned char bk[CRYPTO_KEY_LEN], const unsigned 
   const unsigned char *ciphertext = in + CRYPTO_GCM_NONCE_LEN;
   const unsigned char *tag = in + CRYPTO_GCM_NONCE_LEN + CRYPTO_KEY_LEN;
   EVP_CIPHER_CTX *ctx;
-  int ok = 1, len = 0;
+  int len = 0, ret = -1;
 
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx)
     return -1;
 
-  ok &= EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) == 1;
-  ok &= EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, CRYPTO_GCM_NONCE_LEN, NULL) == 1;
-  ok &= EVP_DecryptInit_ex(ctx, NULL, NULL, bk, nonce) == 1;
-  ok &= EVP_DecryptUpdate(ctx, sk_out, &len, ciphertext, CRYPTO_KEY_LEN) == 1;
-  ok &= EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, CRYPTO_GCM_TAG_LEN, (void *)tag) == 1;
-  ok &= EVP_DecryptFinal_ex(ctx, sk_out + len, &len) == 1;
+  if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1)
+    goto done;
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, CRYPTO_GCM_NONCE_LEN, NULL) != 1)
+    goto done;
+  if (EVP_DecryptInit_ex(ctx, NULL, NULL, bk, nonce) != 1)
+    goto done;
+  if (EVP_DecryptUpdate(ctx, sk_out, &len, ciphertext, CRYPTO_KEY_LEN) != 1)
+    goto done;
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, CRYPTO_GCM_TAG_LEN, (void *)tag) != 1)
+    goto done;
+  if (EVP_DecryptFinal_ex(ctx, sk_out + len, &len) != 1)
+    goto done;
+  ret = 0;
 
+done:
   EVP_CIPHER_CTX_free(ctx);
-  if (!ok) {
+  if (ret != 0)
     secure_zero(sk_out, CRYPTO_KEY_LEN);
-    return -1;
-  }
-  return 0;
+  return ret;
 }
 
 int device_ecm_decrypt(const unsigned char sk[CRYPTO_KEY_LEN], const unsigned char enc[CRYPTO_CW_ENC_LEN], int cw_len, unsigned char *cw_out) {
   EVP_CIPHER_CTX *ctx;
   unsigned char block[CRYPTO_CW_ENC_LEN];
-  int ok = 1, len = 0;
+  int len = 0, ret = -1;
 
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx)
     return -1;
 
-  ok &= EVP_DecryptInit_ex(ctx, EVP_aes_256_ecb(), NULL, sk, NULL) == 1;
-  ok &= EVP_CIPHER_CTX_set_padding(ctx, 0) == 1;
-  ok &= EVP_DecryptUpdate(ctx, block, &len, enc, CRYPTO_CW_ENC_LEN) == 1;
-
-  EVP_CIPHER_CTX_free(ctx);
-  if (!ok || len != CRYPTO_CW_ENC_LEN) {
-    secure_zero(block, sizeof block);
-    return -1;
-  }
+  if (EVP_DecryptInit_ex(ctx, EVP_aes_256_ecb(), NULL, sk, NULL) != 1)
+    goto done;
+  if (EVP_CIPHER_CTX_set_padding(ctx, 0) != 1)
+    goto done;
+  if (EVP_DecryptUpdate(ctx, block, &len, enc, CRYPTO_CW_ENC_LEN) != 1)
+    goto done;
+  if (len != CRYPTO_CW_ENC_LEN)
+    goto done;
   memcpy(cw_out, block, (size_t)cw_len);
+  ret = 0;
+
+done:
+  EVP_CIPHER_CTX_free(ctx);
   secure_zero(block, sizeof block);
-  return 0;
+  return ret;
 }
 
 /* DES-EDE/EDE3 live in OpenSSL 3's "legacy" provider, not loaded by default */
@@ -131,7 +140,7 @@ int crypto_ecm_block_decrypt(crypto_ecm_cipher_t cipher, int cbc, const unsigned
                               const unsigned char *iv, const unsigned char *ct, size_t ct_len, unsigned char *out) {
   const EVP_CIPHER *evp = ecm_evp_cipher(cipher, cbc);
   EVP_CIPHER_CTX *ctx;
-  int ok = 1, len = 0, finlen = 0;
+  int len = 0, finlen = 0, ret = -1;
 
   if (!evp || ct_len == 0)
     return -1;
@@ -139,15 +148,20 @@ int crypto_ecm_block_decrypt(crypto_ecm_cipher_t cipher, int cbc, const unsigned
   if (!ctx)
     return -1;
 
-  ok &= EVP_DecryptInit_ex(ctx, evp, NULL, key, iv) == 1;
-  ok &= EVP_CIPHER_CTX_set_padding(ctx, 0) == 1;
-  ok &= EVP_DecryptUpdate(ctx, out, &len, ct, (int)ct_len) == 1;
-  ok &= EVP_DecryptFinal_ex(ctx, out + len, &finlen) == 1;
+  if (EVP_DecryptInit_ex(ctx, evp, NULL, key, iv) != 1)
+    goto done;
+  if (EVP_CIPHER_CTX_set_padding(ctx, 0) != 1)
+    goto done;
+  if (EVP_DecryptUpdate(ctx, out, &len, ct, (int)ct_len) != 1)
+    goto done;
+  if (EVP_DecryptFinal_ex(ctx, out + len, &finlen) != 1)
+    goto done;
+  if ((size_t)(len + finlen) == ct_len)
+    ret = 0;
 
+done:
   EVP_CIPHER_CTX_free(ctx);
-  if (!ok || (size_t)(len + finlen) != ct_len)
-    return -1;
-  return 0;
+  return ret;
 }
 
 int crypto_ecm_gcm_decrypt(int key_bits, const unsigned char *key, const unsigned char nonce[CRYPTO_GCM_NONCE_LEN],
@@ -155,26 +169,32 @@ int crypto_ecm_gcm_decrypt(int key_bits, const unsigned char *key, const unsigne
                             const unsigned char tag[CRYPTO_GCM_TAG_LEN], unsigned char *out) {
   const EVP_CIPHER *evp = key_bits == 128 ? EVP_aes_128_gcm() : EVP_aes_256_gcm();
   EVP_CIPHER_CTX *ctx;
-  int ok = 1, discard = 0, outlen = 0, finlen = 0;
+  int discard = 0, outlen = 0, finlen = 0, ret = -1;
 
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx)
     return -1;
 
-  ok &= EVP_DecryptInit_ex(ctx, evp, NULL, NULL, NULL) == 1;
-  ok &= EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, CRYPTO_GCM_NONCE_LEN, NULL) == 1;
-  ok &= EVP_DecryptInit_ex(ctx, NULL, NULL, key, nonce) == 1;
-  if (ok && aad && aad_len)
-    ok &= EVP_DecryptUpdate(ctx, NULL, &discard, aad, (int)aad_len) == 1;
-  if (ok && ct_len)
-    ok &= EVP_DecryptUpdate(ctx, out, &outlen, ct, (int)ct_len) == 1;
-  ok &= EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, CRYPTO_GCM_TAG_LEN, (void *)tag) == 1;
-  ok &= EVP_DecryptFinal_ex(ctx, out + outlen, &finlen) == 1;
+  if (EVP_DecryptInit_ex(ctx, evp, NULL, NULL, NULL) != 1)
+    goto done;
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, CRYPTO_GCM_NONCE_LEN, NULL) != 1)
+    goto done;
+  if (EVP_DecryptInit_ex(ctx, NULL, NULL, key, nonce) != 1)
+    goto done;
+  if (aad && aad_len && EVP_DecryptUpdate(ctx, NULL, &discard, aad, (int)aad_len) != 1)
+    goto done;
+  if (ct_len && EVP_DecryptUpdate(ctx, out, &outlen, ct, (int)ct_len) != 1)
+    goto done;
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, CRYPTO_GCM_TAG_LEN, (void *)tag) != 1)
+    goto done;
+  if (EVP_DecryptFinal_ex(ctx, out + outlen, &finlen) != 1)
+    goto done;
+  if ((size_t)outlen == ct_len)
+    ret = 0;
 
+done:
   EVP_CIPHER_CTX_free(ctx);
-  if (!ok || (size_t)outlen != ct_len)
-    return -1;
-  return 0;
+  return ret;
 }
 
 int crypto_hmac_sha256(const unsigned char key[CRYPTO_KEY_LEN], const unsigned char *data, size_t len, unsigned char out[CRYPTO_HMAC_SHA256_LEN]) {

@@ -87,6 +87,52 @@ START_TEST(find_startcode_finds_3_and_4_byte_codes) {
 }
 END_TEST
 
+START_TEST(br_slice_byte_aligned_start_copies_whole_and_partial_bytes) {
+  static const unsigned char d[] = {0xAB, 0xCD, 0xEF};
+  br_t b = {d, sizeof d, 0, 0};
+  unsigned char out[4] = {0};
+  /* from=0 (byte-aligned), 20 bits: 0xAB, 0xCD, then top nibble of 0xEF (low nibble must be masked off) */
+  size_t n = br_slice(&b, 0, 20, out, sizeof out);
+  ck_assert_uint_eq(n, 3u);
+  ck_assert_uint_eq(out[0], 0xAB);
+  ck_assert_uint_eq(out[1], 0xCD);
+  ck_assert_uint_eq(out[2], 0xE0); /* top 4 bits of 0xEF kept, bottom 4 zeroed */
+}
+END_TEST
+
+START_TEST(br_slice_byte_aligned_exact_byte_count_needs_no_partial_byte) {
+  static const unsigned char d[] = {0x12, 0x34};
+  br_t b = {d, sizeof d, 0, 0};
+  unsigned char out[2] = {0};
+  size_t n = br_slice(&b, 0, 16, out, sizeof out);
+  ck_assert_uint_eq(n, 2u);
+  ck_assert_uint_eq(out[0], 0x12);
+  ck_assert_uint_eq(out[1], 0x34);
+}
+END_TEST
+
+START_TEST(br_slice_non_byte_aligned_start_shifts_bits_across_bytes) {
+  static const unsigned char d[] = {0xF0, 0x0F};
+  br_t b = {d, sizeof d, 0, 0};
+  unsigned char out[2] = {0};
+  /* bits [4,12): low nibble of d[0] (0000) + high nibble of d[1] (0000) -> 0x00 */
+  size_t n = br_slice(&b, 4, 12, out, sizeof out);
+  ck_assert_uint_eq(n, 1u);
+  ck_assert_uint_eq(out[0], 0x00);
+}
+END_TEST
+
+START_TEST(br_slice_non_byte_aligned_partial_trailing_byte_zero_padded) {
+  static const unsigned char d[] = {0xFF, 0xFF};
+  br_t b = {d, sizeof d, 0, 0};
+  unsigned char out[1] = {0};
+  /* bits [1,6): 5 bits, all 1 in source -> top 5 bits set, bottom 3 zeroed */
+  size_t n = br_slice(&b, 1, 6, out, sizeof out);
+  ck_assert_uint_eq(n, 1u);
+  ck_assert_uint_eq(out[0], 0xF8);
+}
+END_TEST
+
 static Suite *bitreader_suite(void) {
   Suite *s = suite_create("bitreader");
   TCase *tc = tcase_create("core");
@@ -97,6 +143,10 @@ static Suite *bitreader_suite(void) {
   tcase_add_test(tc, rbsp_unescape_strips_emulation_prevention);
   tcase_add_test(tc, rbsp_unescape_leaves_non_escape_zeros_alone);
   tcase_add_test(tc, find_startcode_finds_3_and_4_byte_codes);
+  tcase_add_test(tc, br_slice_byte_aligned_start_copies_whole_and_partial_bytes);
+  tcase_add_test(tc, br_slice_byte_aligned_exact_byte_count_needs_no_partial_byte);
+  tcase_add_test(tc, br_slice_non_byte_aligned_start_shifts_bits_across_bytes);
+  tcase_add_test(tc, br_slice_non_byte_aligned_partial_trailing_byte_zero_padded);
   suite_add_tcase(s, tc);
   return s;
 }

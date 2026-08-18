@@ -16,6 +16,9 @@ unsigned br_u(br_t *b, int n);   /* n<=32 bits, MSB first */
 unsigned br_ue(br_t *b);         /* exp-golomb unsigned */
 int      br_se(br_t *b);         /* exp-golomb signed */
 
+/* copy bits [from,to) to out, MSB first, zero-padded to byte. 0 on no fit */
+size_t br_slice(const br_t *b, size_t from, size_t to, unsigned char *out, size_t cap);
+
 /* strip H.264/HEVC emulation prevention (00 00 03 -> 00 00) */
 size_t rbsp_unescape(const unsigned char *s, size_t len, unsigned char *d, size_t cap);
 

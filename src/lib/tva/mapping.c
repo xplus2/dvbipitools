@@ -61,15 +61,13 @@ int mapping_load(const char *path, mapping_t *m) {
       return -1;
     }
     if (m->count >= m->cap) {
-      int newcap = m->cap ? m->cap * 2 : 64;
-      void *p = realloc(m->entries, (size_t)newcap * sizeof *m->entries);
+      void *p = array_grow(m->entries, &m->cap, m->count + 1, sizeof *m->entries);
       if (!p) {
         fclose(f);
         mapping_free(m);
         return -1;
       }
       m->entries = p;
-      m->cap = newcap;
     }
     e = &m->entries[m->count++];
     bufcpy(e->id, sizeof e->id, id);

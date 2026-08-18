@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/ioutil.h"
 #include "render.h"
 
 typedef enum { M_GAUGE, M_COUNTER, M_INFO } metric_kind_t;
@@ -16,10 +17,10 @@ typedef struct {
   metric_kind_t kind;
   const char *help;
   const char *label_name;     /* NULL = no metric-specific label */
-  int composite_input_reason; /* label on the wire is "input" SEP "reason" */
+  int composite_input_reason; /* label on wire is "input" SEP "reason" */
 } metric_def_t;
 
-/* order = protocol.h metric_id_t order; also the order rendered */
+/* order matches protocol.h metric_id_t order, also render order */
 static const metric_def_t DEFS[] = {
     {METRICS_ID_HEADEND_INFO, "dvbipi_headend_info", M_INFO, "toolkit build info", "version", 0},
     {METRICS_ID_METRICS_SNAPSHOTS_DROPPED_TOTAL, "dvbipi_metrics_snapshots_dropped_total", M_COUNTER, "snapshots this exporter failed to send", NULL, 0},
@@ -147,7 +148,7 @@ static void sb_appendf(strbuf_t *sb, const char *fmt, ...) {
   }
 }
 
-/* backslash/quote/newline escaping per the OpenMetrics/Prometheus text label-value grammar */
+/* backslash/quote/newline escaping per OpenMetrics/Prometheus text label-value grammar */
 static void escape_label(const char *in, char *out, size_t out_cap) {
   size_t oi = 0;
   for (; *in && oi + 2 < out_cap; in++) {
@@ -165,7 +166,7 @@ static void escape_label(const char *in, char *out, size_t out_cap) {
 }
 
 /* label named headend_id, not instance: Prometheus already assigns instance
-   per scrape target, so instance would collide and get renamed exported_instance */
+   per scrape target, colliding names get renamed exported_instance */
 static void append_base_labels(strbuf_t *sb, const store_slot_t *slot) {
   char esc_headend_id[2 * METRICS_ID_MAX + 2];
   escape_label(slot->metrics_id, esc_headend_id, sizeof esc_headend_id);
@@ -182,9 +183,9 @@ static void append_composite_input_reason(strbuf_t *sb, const char *label) {
       ilen = sizeof input_part - 1;
     memcpy(input_part, label, ilen);
     input_part[ilen] = '\0';
-    snprintf(reason_part, sizeof reason_part, "%s", sep + 1);
+    bufcpy(reason_part, sizeof reason_part, sep + 1);
   } else {
-    snprintf(input_part, sizeof input_part, "%s", label);
+    bufcpy(input_part, sizeof input_part, label);
     reason_part[0] = '\0';
   }
   escape_label(input_part, esc_input, sizeof esc_input);
@@ -192,34 +193,80 @@ static void append_composite_input_reason(strbuf_t *sb, const char *label) {
   sb_appendf(sb, ",input=\"%s\",reason=\"%s\"", esc_input, esc_reason);
 }
 
-static void render_family(strbuf_t *sb, const store_t *st, const metric_def_t *def) {
-  int i, j, any = 0;
-  const char *kind_name = def->kind == M_COUNTER ? "counter" : def->kind == M_INFO ? "info" : "gauge";
+#define DEF_ID_MAX 128 /* comfortably above highest metrics_id_t value */
 
-  for (i = 0; i < STORE_MAX_INSTANCES && !any; i++) {
-    const store_slot_t *slot = &st->slots[i];
-    if (!slot->used)
-      continue;
-    for (j = 0; j < slot->entry_count; j++)
-      if (slot->entries[j].id == def->id) {
-        any = 1;
-        break;
-      }
+typedef struct {
+  const store_slot_t *slot;
+  const stored_entry_t *entry;
+} entry_ref_t;
+
+/* one pass over every stored entry, bucketed by def instead of one scan per def */
+static void render_grouped(strbuf_t *sb, const store_t *st) {
+  int def_idx[DEF_ID_MAX]; /* metrics_id_t -> DEFS[] index, -1 if unused */
+  size_t count[N_DEFS], start[N_DEFS], cursor[N_DEFS];
+  entry_ref_t *refs = NULL;
+  size_t total = 0, off = 0, k;
+  unsigned i;
+  int si, j;
+
+  for (i = 0; i < DEF_ID_MAX; i++)
+    def_idx[i] = -1;
+  for (i = 0; i < N_DEFS; i++) {
+    count[i] = 0;
+    if ((unsigned)DEFS[i].id < DEF_ID_MAX)
+      def_idx[DEFS[i].id] = (int)i;
   }
-  if (!any)
-    return;
 
-  sb_appendf(sb, "# HELP %s %s\n", def->name, def->help);
-  sb_appendf(sb, "# TYPE %s %s\n", def->name, kind_name);
-  for (i = 0; i < STORE_MAX_INSTANCES; i++) {
-    const store_slot_t *slot = &st->slots[i];
+  for (si = 0; si < STORE_MAX_INSTANCES; si++) {
+    const store_slot_t *slot = &st->slots[si];
     if (!slot->used)
       continue;
     for (j = 0; j < slot->entry_count; j++) {
-      const stored_entry_t *e = &slot->entries[j];
+      unsigned id = (unsigned)slot->entries[j].id;
+      int di = (id < DEF_ID_MAX) ? def_idx[id] : -1;
+      if (di >= 0) {
+        count[(unsigned)di]++;
+        total++;
+      }
+    }
+  }
+
+  if (total) {
+    refs = malloc(sizeof *refs * total);
+    if (refs) {
+      for (i = 0; i < N_DEFS; i++) {
+        start[i] = off;
+        cursor[i] = off;
+        off += count[i];
+      }
+      for (si = 0; si < STORE_MAX_INSTANCES; si++) {
+        const store_slot_t *slot = &st->slots[si];
+        if (!slot->used)
+          continue;
+        for (j = 0; j < slot->entry_count; j++) {
+          unsigned id = (unsigned)slot->entries[j].id;
+          int di = (id < DEF_ID_MAX) ? def_idx[id] : -1;
+          if (di >= 0) {
+            refs[cursor[(unsigned)di]].slot = slot;
+            refs[cursor[(unsigned)di]].entry = &slot->entries[j];
+            cursor[(unsigned)di]++;
+          }
+        }
+      }
+    }
+  }
+
+  for (i = 0; i < N_DEFS; i++) {
+    const metric_def_t *def = &DEFS[i];
+    const char *kind_name = def->kind == M_COUNTER ? "counter" : def->kind == M_INFO ? "info" : "gauge";
+    if (!count[i] || !refs)
+      continue;
+    sb_appendf(sb, "# HELP %s %s\n", def->name, def->help);
+    sb_appendf(sb, "# TYPE %s %s\n", def->name, kind_name);
+    for (k = start[i]; k < start[i] + count[i]; k++) {
+      const store_slot_t *slot = refs[k].slot;
+      const stored_entry_t *e = refs[k].entry;
       char esc[2 * METRICS_LABEL_MAX + 2];
-      if (e->id != def->id)
-        continue;
       sb_appendf(sb, "%s{", def->name);
       append_base_labels(sb, slot);
       if (def->composite_input_reason) {
@@ -231,6 +278,7 @@ static void render_family(strbuf_t *sb, const store_t *st, const metric_def_t *d
       sb_appendf(sb, "} %llu\n", (unsigned long long)e->value);
     }
   }
+  free(refs);
 }
 
 static void render_snapshot_age(strbuf_t *sb, const store_t *st, double now_mono) {
@@ -286,11 +334,9 @@ static void render_self_metrics(strbuf_t *sb, const store_t *st) {
 
 void render_openmetrics(const store_t *st, double now_mono, char **out, size_t *out_len) {
   strbuf_t sb;
-  unsigned i;
 
   sb_init(&sb);
-  for (i = 0; i < N_DEFS; i++)
-    render_family(&sb, st, &DEFS[i]);
+  render_grouped(&sb, st);
   render_snapshot_age(&sb, st, now_mono);
   render_self_metrics(&sb, st);
   sb_appendf(&sb, "# EOF\n");

@@ -54,11 +54,6 @@ typedef struct {
   int slot;
 } worker_arg_t;
 
-/* protocol.c */
-int find_u16(const unsigned char *body, size_t body_len, unsigned short tag, unsigned *out);
-int find_u32(const unsigned char *body, size_t body_len, unsigned short tag, unsigned *out);
-int find_u8(const unsigned char *body, size_t body_len, unsigned short tag, unsigned *out);
-
 /* emmg_server.c */
 void publish_datagram_cb(const unsigned char *data, unsigned short len, void *user);
 

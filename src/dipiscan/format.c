@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "format.h"
+#include "lib/ioutil.h"
 #include "lib/playlist_out.h"
 #include "lib/sds_xml.h"
 #include "lib/xml_util.h"
@@ -38,8 +39,8 @@ void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri, int 
     case OUT_XML: {
       sds_service_t s;
       memset(&s, 0, sizeof s);
-      snprintf(s.name, sizeof s.name, "%s", name);
-      snprintf(s.address, sizeof s.address, "%s", group);
+      bufcpy(s.name, sizeof s.name, name);
+      bufcpy(s.address, sizeof s.address, group);
       s.family = family;
       s.port = port;
       s.rtp = rtp;

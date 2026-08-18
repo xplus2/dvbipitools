@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include "../beutil.h"
 #include "rtp.h"
 
 size_t rtp_payload_offset(const unsigned char *p, size_t len) {
@@ -14,7 +15,7 @@ size_t rtp_payload_offset(const unsigned char *p, size_t len) {
   if (p[0] & 0x10) { /* extension header */
     if (len < off + 4)
       return 0;
-    off += 4 + (size_t)(((unsigned)p[off + 2] << 8) | p[off + 3]) * 4;
+    off += 4 + (size_t)be16_get(p + off + 2) * 4;
   }
   if (off >= len || p[off] != 0x47) /* payload must be TS */
     return 0;
@@ -32,15 +33,15 @@ int rtp_parse_header(const unsigned char *p, size_t len, rtp_hdr_t *h) {
   if (p[0] & 0x10) { /* extension header */
     if (len < off + 4)
       return 0;
-    off += 4 + (size_t)(((unsigned)p[off + 2] << 8) | p[off + 3]) * 4;
+    off += 4 + (size_t)be16_get(p + off + 2) * 4;
   }
   if (off > len)
     return 0;
 
   h->pt = p[1] & 0x7F;
-  h->seq = (uint16_t)(((unsigned)p[2] << 8) | p[3]);
-  h->timestamp = ((uint32_t)p[4] << 24) | ((uint32_t)p[5] << 16) | ((uint32_t)p[6] << 8) | p[7];
-  h->ssrc = ((uint32_t)p[8] << 24) | ((uint32_t)p[9] << 16) | ((uint32_t)p[10] << 8) | p[11];
+  h->seq = be16_get(p + 2);
+  h->timestamp = be32_get(p + 4);
+  h->ssrc = be32_get(p + 8);
   h->payload_off = off;
   return 1;
 }

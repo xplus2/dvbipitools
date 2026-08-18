@@ -7,6 +7,18 @@
 
 #include "priv.h"
 
+/* odd gen: write in progress, readers retry */
+static unsigned seqlock_begin_write(_Atomic unsigned *gen) {
+  unsigned g = atomic_load_explicit(gen, memory_order_relaxed);
+  atomic_store_explicit(gen, g + 1, memory_order_relaxed);
+  return g;
+}
+
+/* even gen, release: publishes fields written since start */
+static void seqlock_commit_write(_Atomic unsigned *gen, unsigned g) {
+  atomic_store_explicit(gen, g + 2, memory_order_release);
+}
+
 void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len) {
   ret_ring_entry_t *slot;
   unsigned g;
@@ -17,8 +29,7 @@ void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, unsigned cha
   memcpy(words, payload, payload_len);
 
   slot = &((ret_ring_entry_t *)c->ring)[seq % c->ring_size];
-  g = atomic_load_explicit(&slot->gen, memory_order_relaxed);
-  atomic_store_explicit(&slot->gen, g + 1, memory_order_relaxed); /* odd: write starting */
+  g = seqlock_begin_write(&slot->gen);
   atomic_store_explicit(&slot->seq, seq, memory_order_relaxed);
   atomic_store_explicit(&slot->timestamp, timestamp, memory_order_relaxed);
   atomic_store_explicit(&slot->dscp, dscp, memory_order_relaxed);
@@ -26,7 +37,7 @@ void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, unsigned cha
     atomic_store_explicit(&slot->payload[i], words[i], memory_order_relaxed);
   atomic_store_explicit(&slot->payload_len, payload_len, memory_order_relaxed);
   atomic_store_explicit(&slot->valid, 1, memory_order_relaxed);
-  atomic_store_explicit(&slot->gen, g + 2, memory_order_release); /* even: write done, publishes everything above */
+  seqlock_commit_write(&slot->gen, g);
 }
 
 /* random_access_indicator: adaptation field byte0 bit6 (Annex I p.26 RAP def) */
@@ -75,8 +86,7 @@ void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, unsigne
     return; /* nothing cached until first RAP arrives */
 
   e = &ring[wc % rc->cap];
-  g = atomic_load_explicit(&e->gen, memory_order_relaxed);
-  atomic_store_explicit(&e->gen, g + 1, memory_order_relaxed); /* odd: write starting */
+  g = seqlock_begin_write(&e->gen);
   atomic_store_explicit(&e->seq, seq, memory_order_relaxed);
   atomic_store_explicit(&e->timestamp, timestamp, memory_order_relaxed);
   atomic_store_explicit(&e->dscp, dscp, memory_order_relaxed);
@@ -85,7 +95,7 @@ void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, unsigne
   for (i = 0; i < FCC_PAYLOAD_WORDS; i++)
     atomic_store_explicit(&e->payload[i], words[i], memory_order_relaxed);
   atomic_store_explicit(&e->payload_len, payload_len, memory_order_relaxed);
-  atomic_store_explicit(&e->gen, g + 2, memory_order_release); /* even: write done, publishes everything above */
+  seqlock_commit_write(&e->gen, g);
 
   atomic_store_explicit(&rc->write_count, wc + 1, memory_order_release); /* publish last */
 }
@@ -118,7 +128,41 @@ int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out) {
       return out->valid && out->seq == seq;
     }
   }
-  return 0; /* repeatedly raced a concurrent write; treat as not-found, same as a real miss */
+  return 0; /* repeatedly raced concurrent write, treated as not-found, like a real miss */
+}
+
+int channel_cache_peek_meta(const channel_t *c, size_t index, rap_cache_meta_t *out) {
+  const fcc_ring_entry_t *ring = (const fcc_ring_entry_t *)c->cache.entries;
+  uint64_t wc, rwc, avail, start, abs_pos;
+  const fcc_ring_entry_t *slot;
+  unsigned g1, g2;
+  int tries;
+
+  if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire))
+    return 0;
+  wc = atomic_load_explicit(&c->cache.write_count, memory_order_acquire);
+  rwc = atomic_load_explicit(&c->cache.rap_write_count, memory_order_relaxed);
+  avail = wc - rwc;
+  if (avail > c->cache.cap)
+    avail = c->cache.cap;
+  if (index >= avail)
+    return 0;
+
+  start = wc - avail;
+  abs_pos = start + index;
+  slot = &ring[abs_pos % c->cache.cap];
+
+  for (tries = 0; tries < 8; tries++) {
+    g1 = atomic_load_explicit(&slot->gen, memory_order_acquire);
+    if (g1 & 1u)
+      continue; /* write in progress, retry */
+    out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
+    out->timestamp = atomic_load_explicit(&slot->timestamp, memory_order_relaxed);
+    g2 = atomic_load_explicit(&slot->gen, memory_order_acquire);
+    if (g1 == g2)
+      return 1;
+  }
+  return 0; /* repeatedly raced concurrent write, treated as not-found, like a real miss */
 }
 
 int channel_has_rap(const channel_t *c) {
@@ -177,5 +221,5 @@ int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out) 
       return 1;
     }
   }
-  return 0; /* repeatedly raced concurrent write; treat as not-found, same as real miss */
+  return 0; /* repeatedly raced concurrent write, treated as not-found, same as real miss */
 }

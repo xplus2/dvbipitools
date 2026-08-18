@@ -126,7 +126,7 @@ typedef struct {
 
 #define CHANNEL_REAP_STEP_SLOTS 8 /* slots checked per packet: bounds cost vs one O(max_channels) sweep per interval */
 
-/* fed by capture.c per whitelisted RTP-carried-TS packet; single demux feeds both RET ring and FCC cache */
+/* fed by capture.c per whitelisted RTP-carried-TS packet, single demux feeds both RET ring & FCC cache */
 static void capture_cb(int family, const void *addr, size_t addr_len, unsigned port, unsigned char dscp, uint32_t ssrc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len, void *user) {
   dispatch_ctx_t *ctx = (dispatch_ctx_t *)user;
   channel_t *c;
@@ -263,7 +263,7 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
 
   {
     burst_t *b = burst_new(c, rc->ctx->burst_multiplier, req->has_max_bitrate ? (double)req->max_bitrate_bps : 0.0, rc->ctx->rtx_pt);
-    rap_cache_entry_t first;
+    rap_cache_meta_t first;
     uint8_t msn;
     uint16_t response;
     int start_result;
@@ -281,7 +281,7 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
     }
     response = start_result ? (uint16_t)BURST_UPDATE : (uint16_t)BURST_ACCEPT;
 
-    if (channel_cache_get(c, 0, &first)) {
+    if (channel_cache_peek_meta(c, 0, &first)) {
       tlvs.has_first_packet_seqnum = 1;
       tlvs.first_packet_seqnum = first.seq;
     }
@@ -320,7 +320,7 @@ static void sdes_cb(const rtcp_sdes_t *sdes, void *user) {
   rc->sdes_cname_len = sdes->cname_len;
 }
 
-/* fires for a recognized-but-corrupt RAMS-T; RAMS-T itself never gets a normal response */
+/* fires for a recognized-but-corrupt RAMS-T, RAMS-T itself never gets a normal response */
 static void malformed_cb(unsigned sfmt, uint32_t sender_ssrc, uint32_t media_ssrc, void *user) {
   listen_req_ctx_t *rc = (listen_req_ctx_t *)user;
   unicast_dest_t dst;
@@ -371,8 +371,8 @@ typedef struct {
   burst_t *b;
 } pacer_snap_t;
 
-/* under pc->bursts->lock: if this pacer still owns the slot, clear it on congestion/done.
-   returns 1 if this pacer owned the slot (caller may still need to send a notice) */
+/* under pc->bursts->lock: if this pacer still owns slot, clear it on congestion/done.
+   returns 1 if this pacer owned slot (caller may still need to send a notice) */
 static int finalize_burst_slot(pacer_ctx_t *pc, size_t idx, burst_t *b, int congestion, burst_tick_result_t r, int *remove_slot) {
   int owns_slot = 0;
   pthread_mutex_lock(&pc->bursts->lock);

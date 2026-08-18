@@ -1,11 +1,11 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "../ioutil.h"
 #include "codec.h"
 
 int dvb_string_encode(strrepo_writer_t *sw, const char *s) {
@@ -31,13 +31,6 @@ int dvb_locator_decode(bitreader_t *br, strrepo_reader_t *sr, char *out, size_t 
   return dvb_string_decode(sr, out, outcap);
 }
 
-/* EN 300 468 annex C */
-static long date_to_mjd(int y, int mo, int d) {
-  int yy = mo <= 2 ? y - 1 : y;
-  int mm = mo <= 2 ? mo + 12 : mo;
-  return 14956L + d + (long)((yy - 1900) * 365.25) + (long)((mm + 1) * 30.6001);
-}
-
 static void mjd_to_date(long mjd, int *y, int *mo, int *d) {
   int yp = (int)((mjd - 15078.2) / 365.25);
   int mp = (int)((mjd - 14956.1 - (int)(yp * 365.25)) / 30.6001);
@@ -48,64 +41,27 @@ static void mjd_to_date(long mjd, int *y, int *mo, int *d) {
   *d = dd;
 }
 
-static int all_digits(const char *s, int n) {
-  int i;
-  for (i = 0; i < n; i++)
-    if (!isdigit((unsigned char)s[i]))
-      return 0;
-  return 1;
-}
-
-/* "YYYY-MM-DDTHH:MM:SS[Z|+HH:MM|-HH:MM]", missing offset treated as UTC */
-static int parse_iso8601(const char *in, int *y, int *mo, int *d, int *h, int *mi, int *s, int *off_min) {
-  size_t l = strlen(in);
-  const char *tail;
-  if (l < 19 || in[4] != '-' || in[7] != '-' || in[10] != 'T' || in[13] != ':' || in[16] != ':')
-    return -1;
-  if (!all_digits(in, 4) || !all_digits(in + 5, 2) || !all_digits(in + 8, 2) ||
-      !all_digits(in + 11, 2) || !all_digits(in + 14, 2) || !all_digits(in + 17, 2))
-    return -1;
-  *y = (in[0] - '0') * 1000 + (in[1] - '0') * 100 + (in[2] - '0') * 10 + (in[3] - '0');
-  *mo = (in[5] - '0') * 10 + (in[6] - '0');
-  *d = (in[8] - '0') * 10 + (in[9] - '0');
-  *h = (in[11] - '0') * 10 + (in[12] - '0');
-  *mi = (in[14] - '0') * 10 + (in[15] - '0');
-  *s = (in[17] - '0') * 10 + (in[18] - '0');
-  tail = in + 19;
-  *off_min = 0;
-  if (*tail == 'Z' || *tail == '\0')
-    return 0;
-  if ((*tail == '+' || *tail == '-') && strlen(tail) >= 6 && tail[3] == ':' &&
-      all_digits(tail + 1, 2) && all_digits(tail + 4, 2)) {
-    int oh = (tail[1] - '0') * 10 + (tail[2] - '0');
-    int om = (tail[4] - '0') * 10 + (tail[5] - '0');
-    *off_min = (oh * 60 + om) * (tail[0] == '-' ? -1 : 1);
-    return 0;
-  }
-  return -1;
-}
-
 static long floor_div(long a, long b) {
   long q = a / b, r = a % b;
   return (r != 0 && ((r < 0) != (b < 0))) ? q - 1 : q;
 }
 
 int dvb_datetime_encode(bitwriter_t *bw, const char *iso8601) {
-  int y, mo, d, h, mi, s, off_min;
+  iso8601_t f;
   long mjd_local, total_minutes, mjd_utc, minute_of_day;
   int hour, min;
   uint64_t ms;
 
-  if (parse_iso8601(iso8601, &y, &mo, &d, &h, &mi, &s, &off_min))
+  if (iso8601_split(iso8601, &f))
     return -1;
 
-  mjd_local = date_to_mjd(y, mo, d);
-  total_minutes = mjd_local * 1440L + h * 60L + mi - off_min;
+  mjd_local = date_to_mjd(f.y, f.mo, f.d);
+  total_minutes = mjd_local * 1440L + f.h * 60L + f.mi - f.off_min;
   mjd_utc = floor_div(total_minutes, 1440L);
   minute_of_day = total_minutes - mjd_utc * 1440L;
   hour = (int)(minute_of_day / 60);
   min = (int)(minute_of_day % 60);
-  ms = (uint64_t)(hour * 3600 + min * 60 + s) * 1000ULL;
+  ms = (uint64_t)(hour * 3600 + min * 60 + f.s) * 1000ULL;
 
   if (bitwriter_put(bw, 0, 2)) /* dateTime_flag = 00, full precision */
     return -1;
@@ -181,7 +137,7 @@ static int split_href(const char *href, char *scheme, size_t scheme_cap, char *t
   return 0;
 }
 
-/* scans cs_table for a scheme match with a numeric term and encodes the CS shorthand.
+/* scans cs_table for scheme match with numeric term, encodes CS shorthand.
    0/-1: encoded (ok/bitwriter error). -2: no such match, caller falls back to string form */
 static int try_cs_encode(bitwriter_t *bw, const char *scheme, const char *term) {
   size_t i;
