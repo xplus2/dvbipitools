@@ -11,8 +11,8 @@
 #include "lib/demux/tspack.h"
 #include "lib/ioutil.h"
 #include "lib/log.h"
+#include "lib/net/httpclient/httpclient.h"
 #include "lib/net/multicast.h"
-#include "lib/net/udpxy.h"
 #include "lib/signal.h"
 #include "scan.h"
 #include "version.h"
@@ -52,7 +52,7 @@ int probe_cb(void *v, const unsigned char *pkt) {
 }
 
 static ssize_t mcast_read_adapter(void *ctx, unsigned char *buf, size_t cap) { return mcast_recv((mcast_t *)ctx, buf, cap, NULL); }
-static ssize_t udpxy_read_adapter(void *ctx, unsigned char *buf, size_t cap) { return udpxy_read((udpxy_t *)ctx, buf, cap, NULL); }
+static ssize_t http_read_adapter(void *ctx, unsigned char *buf, size_t cap) { return http_read((http_t *)ctx, buf, cap, NULL); }
 
 /* budget until first packet, dead addrs bail early */
 #define PROBE_QUIET_MS 300
@@ -130,19 +130,53 @@ void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_
   psi_free(pc.psi);
 }
 
+/* expands %g/%p/%%. template pre-validated (args.c). unknown esc stops expansion */
+static void http_path_expand(const char *tmpl, const char *group, unsigned port, char *out, size_t outcap) {
+  char portbuf[16];
+  size_t o = 0;
+  snprintf(portbuf, sizeof portbuf, "%u", port);
+  for (; *tmpl && o + 1 < outcap; tmpl++) {
+    const char *ins = NULL;
+    if (*tmpl == '%') {
+      tmpl++;
+      if (*tmpl == 'g')
+        ins = group;
+      else if (*tmpl == 'p')
+        ins = portbuf;
+      else if (*tmpl == '%')
+        ins = "%";
+      else
+        break;
+    }
+    if (ins) {
+      size_t l = strlen(ins);
+      if (l > outcap - 1 - o)
+        l = outcap - 1 - o;
+      memcpy(out + o, ins, l);
+      o += l;
+    } else {
+      out[o++] = *tmpl;
+    }
+  }
+  out[o] = '\0';
+}
+
 static void probe_address(const config_t *cfg, const char *group, unsigned port, probe_result_t *r) {
-  if (cfg->udpxy) {
-    char path[300];
-    udpxy_t *u;
-    snprintf(path, sizeof path, "/udp/%s:%u/", group, port);
-    u = udpxy_open(cfg->udpxy_host, cfg->udpxy_port, path, TOOL_NAME "/" TOOL_VERSION, NULL);
-    if (!u) {
+  if (cfg->http_proxy) {
+    http_url_t url;
+    http_t *h;
+    memset(&url, 0, sizeof url);
+    bufcpy(url.host, sizeof url.host, cfg->http_proxy_host);
+    url.port = cfg->http_proxy_port;
+    http_path_expand(cfg->http_path_tmpl ? cfg->http_path_tmpl : "/udp/%g:%p/", group, port, url.path, sizeof url.path);
+    h = http_get(&url, TOOL_NAME "/" TOOL_VERSION, 0, NULL, NULL);
+    if (!h) {
       memset(r, 0, sizeof *r);
       r->kind = PROBE_NONE;
       return;
     }
-    probe_common(udpxy_read_adapter, u, cfg->timeout_ms, cfg->mpts, r);
-    udpxy_close(u);
+    probe_common(http_read_adapter, h, cfg->timeout_ms, cfg->mpts, r);
+    http_close(h);
   } else {
     mcast_t *m = mcast_open(cfg->family, group, port, cfg->iface, 200);
     if (!m) {

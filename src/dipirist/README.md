@@ -13,22 +13,23 @@ dipirist -i <uri> -o <uri> [options]
 
 ## Options
 
-| flag | long form   | argument              | default                           |
-|------|-------------|-----------------------|-----------------------------------|
-| `-i` | `--in`      | `<uri>`               | required                          |
-| `-o` | `--out`     | `<uri>`               | required                          |
-| `-I` | `--iface`   | `<iface>`             | kernel route (non-RIST side only) |
-|      | `--profile` | `simple\|main`        | `simple`                          |
-|      | `--secret`  | `<psk>`               | none (requires `--profile main`)  |
-|      | `--cname`   | `<name>`              | library default                   |
-|      | `--buffer`  | `<ms>`                | library default                   |
-|      | `--color`   | `auto\|always\|never` | `auto`                            |
-|      | `--metrics` | `<path>`              | `/run/dvbipitools/metrics.sock`   |
-|      | `--metrics-id` | `<name>`           | none (metrics disabled unless set) |
-|      | `--metrics-interval` | `<s>`         | `5`                                |
-| `-v` | `--verbose` |                       | off                               |
-| `-d` | `--daemonize` |                     | off (foreground)                  |
-| `-h` | `--help`    |                       |                                   |
+| flag | long form            | argument              | default                            |
+|------|----------------------|-----------------------|------------------------------------|
+| `-i` | `--in`               | `<uri>`               | required                           |
+| `-o` | `--out`              | `<uri>`               | required                           |
+| `-I` | `--iface`            | `<iface>`             | kernel route (non-RIST side only)  |
+| `-k` | `--insecure`         |                       | off (`-i https://` source only)    |
+|      | `--profile`          | `simple\|main`        | `simple`                           |
+|      | `--secret`           | `<psk>`               | none (requires `--profile main`)   |
+|      | `--cname`            | `<name>`              | library default                    |
+|      | `--buffer`           | `<ms>`                | library default                    |
+|      | `--color`            | `auto\|always\|never` | `auto`                             |
+|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`    |
+|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set) |
+|      | `--metrics-interval` | `<s>`                 | `5`                                |
+| `-v` | `--verbose`          |                       | off                                |
+| `-d` | `--daemonize`        |                       | off (foreground)                   |
+| `-h` | `--help`             |                       |                                    |
 
 ## Endpoints (`-i`/`-o`)
 
@@ -38,7 +39,8 @@ dipirist -i <uri> -o <uri> [options]
 | `rist://@<host>:<port>[?params]`             | RIST peer, listens; `-i` only, repeat to bond   |
 | `rtp://@<group>:<port>`                      | RTP wrapped SPTS multicast                      |
 | `udp://@<group>:<port>`                      | plain SPTS multicast                            |
-| `http://<host>:<port>/<cmd>/<group>:<port>/` | udpxy proxy, `-i` only, `cmd` is `rtp` or `udp` |
+| `http://<host>:<port>/<path>`                | HTTP TS stream, `-i` only                       |
+| `https://<host>:<port>/<path>`               | same, TLS (`-k` skips verification), `-i` only  |
 | `-`                                          | stdin (`-i`) or stdout (`-o`)                   |
 | `<path>`                                     | a file                                          |
 

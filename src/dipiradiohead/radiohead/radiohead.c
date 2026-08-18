@@ -7,6 +7,7 @@
 
 #include "lib/ioutil.h"
 #include "lib/log.h"
+#include "lib/net/send_result.h"
 #include "lib/signal.h"
 
 #include "../input/source.h"
@@ -36,20 +37,6 @@ ristout_t *radiohead_rist_open(const config_t *cfg) {
   rc.buffer_ms = cfg->rist_buffer_ms;
   rc.verbose = cfg->verbose;
   return ristout_open(&rc);
-}
-
-/* a failed output is never fatal; log only on the failure/recovery edge, keep retrying every batch */
-static void note_send_result(int ok, int *had_error, unsigned long long *errors, const char *label) {
-  if (!ok) {
-    (*errors)++;
-    if (!*had_error) {
-      log_line("%s output: send failed, will keep retrying", label);
-      *had_error = 1;
-    }
-  } else if (*had_error) {
-    log_line("%s output: recovered", label);
-    *had_error = 0;
-  }
 }
 
 void flush_batch(out_ctx_t *o) {

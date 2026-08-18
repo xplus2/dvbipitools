@@ -16,7 +16,11 @@ add_executable(dipiscan
     ../lib/ioutil.c
     ../lib/net/multicast.c
     ../lib/net/netconnect.c
-    ../lib/net/udpxy.c
+    ../lib/net/httpclient/httpclient.c
+    ../lib/net/httpclient/url.c
+    ../lib/net/httpclient/read.c
+    ../lib/net/httpclient/async.c
+    ../lib/net/tls_stub.c
     ../lib/demux/rtp.c
     ../lib/demux/crc32.c
     ../lib/demux/psi/psi.c

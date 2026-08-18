@@ -23,8 +23,8 @@ Exactly one of
 .B rist://
 URI, the other is a regular
 .BR dipirec (1)-style
-endpoint: RTP or plain UDP multicast, a udpxy proxy (source side only),
-stdin/stdout, or a file. Whether
+endpoint: RTP or plain UDP multicast, an HTTP(S) TS stream (source side
+only), stdin/stdout, or a file. Whether
 .B dipirist
 runs as a RIST sender or receiver follows from which side the
 .B rist://
@@ -78,6 +78,11 @@ URI, to bond several links.
 .TP
 .BR \-I ", " \-\-iface " " \fIiface\fR
 Interface for the non-RIST side's multicast join or send.
+.TP
+.BR \-k ", " \-\-insecure
+Skip TLS verification. Only meaningful with an
+.B \-i https://
+source.
 .TP
 .B \-\-profile \fIname\fR
 RIST profile,

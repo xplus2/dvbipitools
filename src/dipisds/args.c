@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <getopt.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -10,6 +9,7 @@
 
 #include "lib/argutil.h"
 #include "lib/log.h"
+#include "lib/uriparse.h"
 
 #include "args.h"
 #include "version.h"
@@ -24,21 +24,7 @@ static void argerr(const char *fmt, ...) {
 }
 
 static int mcast_parse(const char *s, config_t *cfg) {
-  if (argutil_addrport_parse(s, &cfg->family, cfg->mcast_group, sizeof cfg->mcast_group, &cfg->mcast_port))
-    return -1;
-
-  if (cfg->family == AF_INET) {
-    struct in_addr a;
-    inet_pton(AF_INET, cfg->mcast_group, &a);
-    if ((ntohl(a.s_addr) >> 28) != 0xE)
-      return -1;
-  } else {
-    struct in6_addr a6;
-    inet_pton(AF_INET6, cfg->mcast_group, &a6);
-    if (a6.s6_addr[0] != 0xFF)
-      return -1;
-  }
-  return 0;
+  return uriparse_mcast_addrport(s, &cfg->family, cfg->mcast_group, sizeof cfg->mcast_group, &cfg->mcast_port);
 }
 
 static int ret_addr_parse(const char *s, char *addr_out, size_t addr_cap, unsigned *port_out) {
@@ -47,10 +33,7 @@ static int ret_addr_parse(const char *s, char *addr_out, size_t addr_cap, unsign
 }
 
 void mcast_describe(const config_t *cfg, char *buf, size_t n) {
-  if (cfg->family == AF_INET6)
-    snprintf(buf, n, "[%s]:%u", cfg->mcast_group, cfg->mcast_port);
-  else
-    snprintf(buf, n, "%s:%u", cfg->mcast_group, cfg->mcast_port);
+  uriparse_mcast_describe(cfg->family, cfg->mcast_group, cfg->mcast_port, buf, n);
 }
 
 static int has_suffix(const char *s, const char *sfx) {

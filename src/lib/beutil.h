@@ -11,6 +11,12 @@ static inline void be16_put(unsigned char *p, uint16_t v) {
   p[1] = (unsigned char)v;
 }
 
+static inline void be24_put(unsigned char *p, uint32_t v) {
+  p[0] = (unsigned char)(v >> 16);
+  p[1] = (unsigned char)(v >> 8);
+  p[2] = (unsigned char)v;
+}
+
 static inline void be32_put(unsigned char *p, uint32_t v) {
   p[0] = (unsigned char)(v >> 24);
   p[1] = (unsigned char)(v >> 16);
@@ -25,6 +31,10 @@ static inline void be64_put(unsigned char *p, uint64_t v) {
 
 static inline uint16_t be16_get(const unsigned char *p) {
   return (uint16_t)(((unsigned)p[0] << 8) | p[1]);
+}
+
+static inline uint32_t be24_get(const unsigned char *p) {
+  return ((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | p[2];
 }
 
 static inline uint32_t be32_get(const unsigned char *p) {

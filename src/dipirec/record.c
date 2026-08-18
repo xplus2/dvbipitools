@@ -42,11 +42,10 @@ static int src_open(const config_t *cfg, src_t *s) {
 
   memset(&tc, 0, sizeof tc);
   tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
-  if (s->kind == URI_UDPXY) {
-    tc.kind = TSSRC_UDPXY;
-    tc.udpxy_host = cfg->source.http_host;
-    tc.udpxy_port = cfg->source.http_port;
-    tc.udpxy_path = cfg->source.http_path;
+  if (s->kind == URI_HTTP) {
+    tc.kind = TSSRC_HTTP;
+    tc.http = cfg->source.http;
+    tc.insecure_tls = cfg->insecure_tls;
   } else if (s->kind == URI_FILE) {
     if (cfg->source.file_path[0]) {
       tc.kind = TSSRC_FILE;
@@ -66,7 +65,7 @@ static int src_open(const config_t *cfg, src_t *s) {
   if (!s->t)
     return -1;
 
-  if (s->kind != URI_UDPXY && cfg->ret.enabled) {
+  if (s->kind != URI_HTTP && cfg->ret.enabled) {
     s->ret = ret_client_open(cfg);
     if (!s->ret) {
       tssrc_close(s->t);

@@ -98,14 +98,23 @@ START_TEST(missing_out_is_rejected) {
 }
 END_TEST
 
-START_TEST(udpxy_source_ok) {
+START_TEST(http_source_ok) {
   char *argv[] = {"dipirist", "-i", "http://10.0.0.1:4022/rtp/239.19.75.1:8700", "-o", "rist://1.2.3.4:6000", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
 }
 END_TEST
 
-START_TEST(udpxy_sink_is_rejected) {
+START_TEST(http_source_accepts_arbitrary_path) {
+  char *argv[] = {"dipirist", "-i", "https://10.0.0.1:8443/any/path/at/all", "-o", "rist://1.2.3.4:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.in.nonrist.kind, NONRIST_HTTP);
+  ck_assert_int_eq(cfg.in.nonrist.http.tls, 1);
+}
+END_TEST
+
+START_TEST(http_sink_is_rejected) {
   char *argv[] = {"dipirist", "-i", "rist://@0.0.0.0:6000", "-o", "http://10.0.0.1:4022/rtp/239.19.75.1:8700", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
@@ -218,8 +227,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, mixed_rist_and_nonrist_on_same_flag_is_rejected);
   tcase_add_test(tc, missing_in_is_rejected);
   tcase_add_test(tc, missing_out_is_rejected);
-  tcase_add_test(tc, udpxy_source_ok);
-  tcase_add_test(tc, udpxy_sink_is_rejected);
+  tcase_add_test(tc, http_source_ok);
+  tcase_add_test(tc, http_source_accepts_arbitrary_path);
+  tcase_add_test(tc, http_sink_is_rejected);
   tcase_add_test(tc, non_multicast_direct_address_is_rejected);
   tcase_add_test(tc, default_profile_is_simple);
   tcase_add_test(tc, profile_main_is_accepted);

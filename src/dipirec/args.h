@@ -6,24 +6,24 @@
 
 #include <stddef.h>
 
+#include "lib/net/httpclient/httpclient.h"
+
 typedef enum {
   URI_RTP,  /* multicast, RTP wrapped */
   URI_UDP,  /* multicast, plain ts */
-  URI_UDPXY, /* udpxy http */
+  URI_HTTP, /* http:// or https://, http_url_t.tls tells which */
   URI_FILE  /* "-" = stdin, RTP-vs-raw auto-detected */
 } uri_kind_t;
 
 typedef struct {
   uri_kind_t kind;
-  int rtp_wrapped; /* RTP payload */
+  int rtp_wrapped; /* RTP payload. URI_RTP / URI_UDP only, protocol-inherent */
   /* URI_RTP / URI_UDP */
   int family; /* AF_INET or AF_INET6 */
   char group[64];
   unsigned port;
-  /* URI_UDPXY */
-  char http_host[256];
-  unsigned http_port;
-  char http_path[512]; /* GET path, leading '/' */
+  /* URI_HTTP */
+  http_url_t http;
   /* URI_FILE, "" means stdin */
   char file_path[512];
 } source_t;
@@ -85,7 +85,7 @@ typedef struct {
   char rist_secret[128];  /* --secret, -o rist:// + --profile main only, "" = none */
   char rist_cname[128];   /* --cname, -o rist:// only, "" = library default */
   unsigned rist_buffer_ms; /* --buffer, -o rist:// only, 0 = library default */
-  int insecure_tls;       /* --insecure, -o rtmps:// only */
+  int insecure_tls;       /* --insecure, -o rtmps:// or -i https:// */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

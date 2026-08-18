@@ -56,7 +56,6 @@ const char *codec_name(source_codec_t c);
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
                   const input_metrics_t *inputs, unsigned n_inputs, const radio_metrics_t *rm, cas_t *cas);
 void radiohead_mpts_set_cas(mpts_t *mpts, cas_t *cas);
-extern const mpts_program_ops_t mpts_program_ops;
 
 /* mpts.c */
 int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx);

@@ -31,12 +31,10 @@ int revmap_load(const char *path, revmap_t *m) {
     return -1;
   }
   while (fgets(line, sizeof line, f)) {
-    size_t l = strlen(line);
     char *uri, *id;
     revmap_entry_t *e;
     lineno++;
-    while (l && (line[l - 1] == '\n' || line[l - 1] == '\r'))
-      line[--l] = '\0';
+    chomp(line);
     if (!line[0] || line[0] == '#')
       continue;
     if (split_first1(line, &uri, &id)) {

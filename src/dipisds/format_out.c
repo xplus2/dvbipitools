@@ -2,11 +2,11 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <arpa/inet.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "format_out.h"
 #include "lib/playlist_out.h"
-#include "lib/xml_util.h"
 
 void format_out_init(FILE *f, out_fmt_t fmt, const char *invocation) {
   playlist_out_init(f, (playlist_out_fmt_t)fmt, invocation, "");
@@ -14,32 +14,24 @@ void format_out_init(FILE *f, out_fmt_t fmt, const char *invocation) {
 
 void format_out_item(FILE *f, out_fmt_t fmt, const sds_service_t *s) {
   const char *scheme = s->rtp ? "rtp" : "udp";
+  char uri[300];
+
+  if (fmt == OUT_M3U || fmt == OUT_CSV || fmt == OUT_XSPF) {
+    if (s->family == AF_INET6)
+      snprintf(uri, sizeof uri, "%s://@[%s]:%u", scheme, s->address, s->port);
+    else
+      snprintf(uri, sizeof uri, "%s://@%s:%u", scheme, s->address, s->port);
+  }
+
   switch (fmt) {
   case OUT_M3U:
-    fprintf(f, "#EXTINF:-1 tsid=\"%u\" onid=\"%u\" sid=\"%u\",%s\n", s->tsid, s->onid, s->sid, s->name);
-    if (s->family == AF_INET6)
-      fprintf(f, "%s://@[%s]:%u\n", scheme, s->address, s->port);
-    else
-      fprintf(f, "%s://@%s:%u\n", scheme, s->address, s->port);
+    playlist_out_m3u_item(f, s->name, uri, s->tsid, s->onid, s->sid);
     break;
-  case OUT_CSV: {
-    /* comma is the field separator, keep it out of the name */
-    const char *p;
-    for (p = s->name; *p; p++)
-      if (*p != ',')
-        fputc(*p, f);
-    fprintf(f, ",%s://@%s:%u,%u,%u,%u\n", scheme, s->address, s->port, s->tsid, s->onid, s->sid);
+  case OUT_CSV:
+    playlist_out_csv_item(f, s->name, uri, s->tsid, s->onid, s->sid);
     break;
-  }
   case OUT_XSPF:
-    fputs("  <track><location>", f);
-    if (s->family == AF_INET6)
-      fprintf(f, "%s://@[%s]:%u", scheme, s->address, s->port);
-    else
-      fprintf(f, "%s://@%s:%u", scheme, s->address, s->port);
-    fputs("</location><title>", f);
-    xml_escape(f, s->name);
-    fprintf(f, "</title><extension application=\"urn:dvbipitools:dvb-triplet\" tsid=\"%u\" onid=\"%u\" sid=\"%u\"/></track>\n", s->tsid, s->onid, s->sid);
+    playlist_out_xspf_item(f, s->name, uri, s->tsid, s->onid, s->sid);
     break;
   case OUT_XML:
   case OUT_NULL:

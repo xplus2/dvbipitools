@@ -94,7 +94,6 @@ between real-world usage of media formats and the standard.
 * dipirec
   - `mkv` and `mka` containers.
   - `srt` subtitles from EBU Teletext (ETSI EN 300 706). SRT isn't a DVB format.
-  - udpxy is not part of any DVB/ETSI specification.
 * dipiscan
   - This tool would largely be unnecessary if deployments consistently used DVBSTP/SD&S as implemented by `dipisds`.
   - `m3u`, `xspf` and our own "local" `csv` format.

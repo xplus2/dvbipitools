@@ -4,7 +4,7 @@
 #include "uriparse.h"
 
 #include <arpa/inet.h>
-#include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "argutil.h"
@@ -28,68 +28,11 @@ int uriparse_mcast_addrport(const char *rest, int *family, char *group, size_t g
   return 0;
 }
 
-int uriparse_udpxy(const char *rest, char *host_out, size_t host_cap, unsigned *port_out, int *rtp_wrapped_out, char *path_out, size_t path_cap) {
-  const char *p = rest;
-  const char *seg, *segend;
-  size_t len;
-
-  if (*p == '[') {
-    const char *close = strchr(p, ']');
-    if (!close)
-      return -1;
-    len = (size_t)(close - (p + 1));
-    if (len == 0 || len >= host_cap)
-      return -1;
-    memcpy(host_out, p + 1, len);
-    host_out[len] = '\0';
-    p = close + 1;
-  } else {
-    const char *hp = p;
-    while (*hp && *hp != ':' && *hp != '/')
-      hp++;
-    len = (size_t)(hp - p);
-    if (len == 0 || len >= host_cap)
-      return -1;
-    memcpy(host_out, p, len);
-    host_out[len] = '\0';
-    p = hp;
-  }
-
-  if (*p == ':') {
-    const char *pe = ++p;
-    char portbuf[6];
-    while (isdigit((unsigned char)*pe))
-      pe++;
-    len = (size_t)(pe - p);
-    if (len == 0 || len >= sizeof portbuf)
-      return -1;
-    memcpy(portbuf, p, len);
-    portbuf[len] = '\0';
-    if (argutil_port_parse(portbuf, port_out))
-      return -1;
-    p = pe;
-  } else {
-    *port_out = 80;
-  }
-
-  if (*p != '/')
-    return -1;
-
-  seg = p + 1;
-  segend = strchr(seg, '/');
-  len = segend ? (size_t)(segend - seg) : strlen(seg);
-  if (len == 3 && memcmp(seg, "rtp", 3) == 0)
-    *rtp_wrapped_out = 1;
-  else if (len == 3 && memcmp(seg, "udp", 3) == 0)
-    *rtp_wrapped_out = 0;
+void uriparse_mcast_describe(int family, const char *group, unsigned port, char *buf, size_t n) {
+  if (family == AF_INET6)
+    snprintf(buf, n, "[%s]:%u", group, port);
   else
-    return -1;
-
-  len = strlen(p);
-  if (len >= path_cap)
-    return -1;
-  memcpy(path_out, p, len + 1);
-  return 0;
+    snprintf(buf, n, "%s:%u", group, port);
 }
 
 int uriparse_rtmp_or_file(const char *uri, char *rtmp_buf, size_t rtmp_cap, char *file_buf, size_t file_cap) {

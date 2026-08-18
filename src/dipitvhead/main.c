@@ -1,15 +1,13 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <errno.h>
 #include <stdio.h>
-#include <string.h>
-#include <unistd.h>
 
 #include "args.h"
 #include "lib/log.h"
 #include "lib/metrics/export.h"
 #include "lib/signal.h"
+#include "lib/toolmain.h"
 #include "tvhead/tvhead.h"
 #include "version.h"
 
@@ -22,7 +20,7 @@ int main(int argc, char **argv) {
   int rc;
 
   log_set_color(log_color_prescan(argc, argv));
-  log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
+  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
   if (st == ARGS_OK)
     log_set_color((log_color_t)cfg.color_mode);
@@ -32,10 +30,8 @@ int main(int argc, char **argv) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
   }
-  if (cfg.daemonize && daemon(1, 1) != 0) {
-    log_line(TOOL_NAME ": daemonize failed: %s", strerror(errno));
+  if (toolmain_daemonize(cfg.daemonize, TOOL_NAME))
     return 1;
-  }
 
   if (cfg.mcast_port)
     mcast_describe(&cfg, mcast, sizeof mcast);

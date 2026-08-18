@@ -213,6 +213,7 @@ static void render_grouped(strbuf_t *sb, const store_t *st) {
     def_idx[i] = -1;
   for (i = 0; i < N_DEFS; i++) {
     count[i] = 0;
+    start[i] = 0;
     if ((unsigned)DEFS[i].id < DEF_ID_MAX)
       def_idx[DEFS[i].id] = (int)i;
   }

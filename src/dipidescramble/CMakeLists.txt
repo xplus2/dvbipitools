@@ -26,6 +26,8 @@ if (OpenSSL_FOUND)
         biss_ca_state.c
         emmcache.c
         ipiclient.c
+        ../lib/cas/device_crypto.c
+        ../lib/cas/device_state_core.c
         ../lib/log.c
         ../lib/secure_zero.c
         ../lib/argutil.c
@@ -33,7 +35,6 @@ if (OpenSSL_FOUND)
         ../lib/signal.c
         ../lib/net/multicast.c
         ../lib/net/netconnect.c
-        ../lib/net/udpxy.c
         ../lib/net/tssource.c
         ../lib/net/tls.c
         ../lib/net/httpclient/httpclient.c

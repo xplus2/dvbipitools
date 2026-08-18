@@ -39,15 +39,14 @@ static struct rist_logging_settings *open_logging(int verbose) {
   return ls;
 }
 
-static void nonrist_to_tssrc_cfg(const nonrist_t *s, const char *iface, tssrc_cfg_t *tc) {
+static void nonrist_to_tssrc_cfg(const nonrist_t *s, const char *iface, int insecure_tls, tssrc_cfg_t *tc) {
   memset(tc, 0, sizeof *tc);
   tc->user_agent = TOOL_NAME "/" TOOL_VERSION;
   switch (s->kind) {
-  case NONRIST_UDPXY:
-    tc->kind = TSSRC_UDPXY;
-    tc->udpxy_host = s->http_host;
-    tc->udpxy_port = s->http_port;
-    tc->udpxy_path = s->http_path;
+  case NONRIST_HTTP:
+    tc->kind = TSSRC_HTTP;
+    tc->http = s->http;
+    tc->insecure_tls = insecure_tls;
     break;
   case NONRIST_FILE:
     if (s->file_path[0]) {
@@ -146,7 +145,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   int i;
   int rc = 0;
 
-  nonrist_to_tssrc_cfg(&cfg->in.nonrist, cfg->iface, &tc);
+  nonrist_to_tssrc_cfg(&cfg->in.nonrist, cfg->iface, cfg->insecure_tls, &tc);
   src = tssrc_open(&tc, NULL);
   if (!src)
     return 1;

@@ -39,7 +39,11 @@ dipiscan_SRCS := \
 	src/lib/ioutil.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
-	src/lib/net/udpxy.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/tls_stub.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/psi/psi.c \
@@ -58,6 +62,7 @@ dipisds_SRCS := \
 	src/lib/playlist_out.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/signal.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
@@ -132,6 +137,7 @@ dipibcg_SRCS := \
 	$(dipibcg_ZLIB_SRC) \
 	src/lib/log.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/signal.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
@@ -218,7 +224,6 @@ dipirec_SRCS := \
 	src/lib/signal.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
-	src/lib/net/udpxy.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
 	src/lib/metrics/protocol.c \
@@ -327,6 +332,7 @@ dipiradiohead_SRCS := \
 	src/dipiradiohead/radiohead/metrics.c \
 	src/dipiradiohead/radiohead/mpts.c \
 	src/lib/log.c \
+	src/lib/toolmain.c \
 	src/lib/argutil.c \
 	src/lib/uriparse.c \
 	src/lib/signal.c \
@@ -368,6 +374,7 @@ dipiradiohead_SRCS := \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
+	src/lib/cas/cas_core.c \
 	src/lib/mux/rtpheader.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/mpts.c \
@@ -460,7 +467,9 @@ dipitvhead_SRCS := \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
+	src/lib/cas/cas_core.c \
 	src/lib/log.c \
+	src/lib/toolmain.c \
 	src/lib/argutil.c \
 	src/lib/uriparse.c \
 	src/lib/signal.c \
@@ -468,7 +477,6 @@ dipitvhead_SRCS := \
 	src/lib/metrics/export.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
-	src/lib/net/udpxy.c \
 	src/lib/net/tssource.c \
 	src/lib/net/retryset.c \
 	$(dipitvhead_TLS_SRC) \
@@ -554,8 +562,9 @@ dipicam378_SRCS := \
 	src/dipicam378/cs378x/crypto.c \
 	src/dipicam378/cs378x/protocol.c \
 	src/dipicam378/cs378x/worker.c \
-	src/dipicam378/crypto.c \
 	src/dipicam378/device.c \
+	src/lib/cas/device_crypto.c \
+	src/lib/cas/device_state_core.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/signal.c \
@@ -590,6 +599,8 @@ dipidescramble_SRCS := \
 	src/dipidescramble/biss_ca_state.c \
 	src/dipidescramble/emmcache.c \
 	src/dipidescramble/ipiclient.c \
+	src/lib/cas/device_crypto.c \
+	src/lib/cas/device_state_core.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/uriparse.c \
@@ -597,7 +608,6 @@ dipidescramble_SRCS := \
 	src/lib/secure_zero.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
-	src/lib/net/udpxy.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tls.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -679,7 +689,6 @@ dipirist_SRCS := \
 	src/lib/signal.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
-	src/lib/net/udpxy.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
 	src/lib/net/ristout.c \
@@ -829,7 +838,7 @@ UNIT_TESTS += dipicam378_crypto
 dipicam378_crypto_BIN := tests/unit/dipicam378/test_crypto
 dipicam378_crypto_SRCS := \
 	tests/unit/dipicam378/test_crypto.c \
-	src/dipicam378/crypto.c \
+	src/lib/cas/device_crypto.c \
 	src/lib/secure_zero.c
 dipicam378_crypto_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipicam378_crypto_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -839,7 +848,8 @@ dipicam378_device_BIN := tests/unit/dipicam378/test_device
 dipicam378_device_SRCS := \
 	tests/unit/dipicam378/test_device.c \
 	src/dipicam378/device.c \
-	src/dipicam378/crypto.c \
+	src/lib/cas/device_crypto.c \
+	src/lib/cas/device_state_core.c \
 	src/lib/log.c \
 	src/lib/secure_zero.c
 dipicam378_device_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
@@ -863,6 +873,7 @@ dipidescramble_crypto_BIN := tests/unit/dipidescramble/test_crypto
 dipidescramble_crypto_SRCS := \
 	tests/unit/dipidescramble/test_crypto.c \
 	src/dipidescramble/crypto.c \
+	src/lib/cas/device_crypto.c \
 	src/lib/secure_zero.c
 dipidescramble_crypto_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_crypto_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -874,6 +885,8 @@ dipidescramble_device_SRCS := \
 	src/dipidescramble/device.c \
 	src/dipidescramble/crypto.c \
 	src/dipidescramble/ecm_profile.c \
+	src/lib/cas/device_crypto.c \
+	src/lib/cas/device_state_core.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/secure_zero.c
@@ -886,6 +899,7 @@ dipidescramble_ecm_profile_SRCS := \
 	tests/unit/dipidescramble/test_ecm_profile.c \
 	src/dipidescramble/ecm_profile.c \
 	src/dipidescramble/crypto.c \
+	src/lib/cas/device_crypto.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/secure_zero.c
@@ -915,6 +929,8 @@ dipidescramble_pipeline_SRCS := \
 	src/dipidescramble/biss_ca_state.c \
 	src/dipidescramble/emmcache.c \
 	src/dipidescramble/ipiclient.c \
+	src/lib/cas/device_crypto.c \
+	src/lib/cas/device_state_core.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/ioutil.c \
@@ -1015,6 +1031,8 @@ dipisds_args_SRCS := \
 	tests/unit/dipisds/test_args.c \
 	src/dipisds/args.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
+	src/lib/ioutil.c \
 	src/lib/log.c
 
 dipirist_args_BIN := tests/unit/dipirist/test_args
@@ -1023,6 +1041,7 @@ dipirist_args_SRCS := \
 	src/dipirist/args.c \
 	src/lib/argutil.c \
 	src/lib/uriparse.c \
+	src/lib/net/httpclient/url.c \
 	src/lib/ioutil.c \
 	src/lib/log.c
 
@@ -1046,6 +1065,7 @@ dipisds_listen_SRCS := \
 	src/dipisds/listen.c \
 	src/dipisds/args.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/dipisds/format_out.c \
 	src/lib/playlist_out.c \
 	src/lib/sds_xml.c \
@@ -1096,6 +1116,8 @@ dipibcg_args_SRCS := \
 	tests/unit/dipibcg/test_args.c \
 	src/dipibcg/args.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
+	src/lib/ioutil.c \
 	src/lib/log.c
 
 dipibcg_announce_BIN := tests/unit/dipibcg/test_announce
@@ -1104,6 +1126,7 @@ dipibcg_announce_SRCS := \
 	src/dipibcg/announce.c \
 	src/dipibcg/args.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/lib/tva/bcg_doc.c \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
@@ -1134,6 +1157,7 @@ dipibcg_listen_SRCS := \
 	src/dipibcg/listen.c \
 	src/dipibcg/args.c \
 	src/lib/argutil.c \
+	src/lib/uriparse.c \
 	src/dipibcg/container.c \
 	src/dipibcg/wrapper_stub.c \
 	src/lib/tva/bcg_doc.c \
@@ -1203,7 +1227,6 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/multicast.c \
-	src/lib/net/udpxy.c \
 	src/lib/demux/rtp.c \
 	src/lib/signal.c \
 	src/lib/log.c
@@ -1462,7 +1485,6 @@ dipiscan_scan_SRCS := \
 	src/lib/mux/psi_build.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
-	src/lib/net/udpxy.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -1558,6 +1580,7 @@ dipiradiohead_tspacketizer_SRCS := \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
+	src/lib/cas/cas_core.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/psi/psi.c \
@@ -1602,6 +1625,7 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
+	src/lib/cas/cas_core.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/crc32.c \
 	src/lib/scrambler/scrambler.c \
@@ -1651,6 +1675,7 @@ dipiradiohead_cas_SRCS := \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
+	src/lib/cas/cas_core.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
@@ -1752,7 +1777,6 @@ dipitvhead_source_SRCS := \
 	src/lib/net/httpclient/read.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/tls_stub.c \
-	src/lib/net/udpxy.c \
 	src/lib/demux/rtp.c \
 	src/lib/ioutil.c \
 	src/lib/signal.c \
@@ -1791,7 +1815,6 @@ dipitvhead_discover_SRCS := \
 	src/lib/net/httpclient/read.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/tls_stub.c \
-	src/lib/net/udpxy.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/psi.c \
@@ -1830,7 +1853,8 @@ dipitvhead_bitrate_BIN := tests/unit/dipitvhead/test_bitrate
 dipitvhead_bitrate_SRCS := \
 	tests/unit/dipitvhead/test_bitrate.c \
 	src/dipitvhead/mux/bitrate.c \
-	src/lib/log.c
+	src/lib/log.c \
+	src/lib/signal.c
 
 dipitvhead_remux_BIN := tests/unit/dipitvhead/test_remux
 dipitvhead_remux_SRCS := \
@@ -1851,6 +1875,7 @@ dipitvhead_remux_SRCS := \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
+	src/lib/cas/cas_core.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/psi/psi.c \
@@ -1892,6 +1917,7 @@ dipitvhead_output_SRCS := \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
+	src/lib/cas/cas_core.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/psi/psi.c \
@@ -1918,7 +1944,6 @@ dipitvhead_output_SRCS := \
 	src/lib/net/httpclient/read.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/tls_stub.c \
-	src/lib/net/udpxy.c \
 	src/lib/ioutil.c \
 	src/lib/argutil.c \
 	src/lib/metrics/export.c \
@@ -1992,6 +2017,7 @@ dipitvhead_cas_SRCS := \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
+	src/lib/cas/cas_core.c \
 	src/lib/mux/cadescbuild.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/psi/psi.c \
@@ -2083,7 +2109,6 @@ lib_net_tssource_async_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/multicast.c \
-	src/lib/net/udpxy.c \
 	src/lib/demux/rtp.c \
 	src/lib/signal.c \
 	src/lib/log.c
@@ -2100,7 +2125,6 @@ lib_net_tssource_file_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/multicast.c \
-	src/lib/net/udpxy.c \
 	src/lib/demux/rtp.c \
 	src/lib/signal.c \
 	src/lib/log.c
@@ -2179,7 +2203,6 @@ dipirec_record_SRCS := \
 	src/lib/signal.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
-	src/lib/net/udpxy.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
 	src/lib/net/tls_stub.c \
@@ -2248,6 +2271,7 @@ dipirec_args_SRCS := \
 	src/dipirec/args.c \
 	src/lib/argutil.c \
 	src/lib/uriparse.c \
+	src/lib/net/httpclient/url.c \
 	src/lib/ioutil.c \
 	src/lib/log.c
 

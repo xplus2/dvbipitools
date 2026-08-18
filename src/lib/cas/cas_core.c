@@ -162,7 +162,7 @@ static unsigned pick_free_pid(unsigned start, const unsigned *avoid, size_t avoi
     if (!collide)
       return pid;
   }
-  return 0x1FFE; /* pathological: avoid[] occupies the whole top of the pid space */
+  return 0x1FFE; /* pathological: avoid[] fills top of pid space */
 }
 
 int cas_core_start_biss_ca_dispatch(const cas_biss_ca_cfg_t *cfg, const unsigned *pids, size_t pid_count, unsigned flush_pid, const char *log_prefix, cas_core_t *out) {

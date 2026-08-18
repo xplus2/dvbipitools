@@ -5,6 +5,8 @@
 
 #include <time.h>
 
+#include "xml_util.h"
+
 void playlist_out_stamp(char *buf, size_t n) {
   time_t now = time(NULL);
   struct tm tm;
@@ -38,4 +40,24 @@ void playlist_out_close(FILE *f, playlist_out_fmt_t fmt) {
     case PLAYLIST_OUT_XML:
     case PLAYLIST_OUT_NULL: break;
   }
+}
+
+void playlist_out_m3u_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid) {
+  fprintf(f, "#EXTINF:-1 tsid=\"%u\" onid=\"%u\" sid=\"%u\",%s\n%s\n", tsid, onid, sid, name, uri);
+}
+
+void playlist_out_csv_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid) {
+  const char *p;
+  for (p = name; *p; p++)
+    if (*p != ',')
+      fputc(*p, f);
+  fprintf(f, ",%s,%u,%u,%u\n", uri, tsid, onid, sid);
+}
+
+void playlist_out_xspf_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid) {
+  fputs("  <track><location>", f);
+  xml_escape(f, uri);
+  fputs("</location><title>", f);
+  xml_escape(f, name);
+  fprintf(f, "</title><extension application=\"urn:dvbipitools:dvb-triplet\" tsid=\"%u\" onid=\"%u\" sid=\"%u\"/></track>\n", tsid, onid, sid);
 }

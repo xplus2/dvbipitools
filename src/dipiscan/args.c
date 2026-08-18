@@ -93,7 +93,7 @@ static int port_range_parse(const char *s, unsigned *lo, unsigned *hi) {
 }
 
 /* host[:port], IPv6 host in brackets. port optional, default 80 */
-static int udpxy_parse(const char *s, config_t *cfg) {
+static int http_proxy_parse(const char *s, config_t *cfg) {
   const char *p = s;
   size_t len;
 
@@ -102,28 +102,40 @@ static int udpxy_parse(const char *s, config_t *cfg) {
     if (!close)
       return -1;
     len = (size_t)(close - (p + 1));
-    if (len == 0 || len >= sizeof cfg->udpxy_host)
+    if (len == 0 || len >= sizeof cfg->http_proxy_host)
       return -1;
-    memcpy(cfg->udpxy_host, p + 1, len);
-    cfg->udpxy_host[len] = '\0';
+    memcpy(cfg->http_proxy_host, p + 1, len);
+    cfg->http_proxy_host[len] = '\0';
     p = close + 1;
   } else {
     const char *hp = p;
     while (*hp && *hp != ':')
       hp++;
     len = (size_t)(hp - p);
-    if (len == 0 || len >= sizeof cfg->udpxy_host)
+    if (len == 0 || len >= sizeof cfg->http_proxy_host)
       return -1;
-    memcpy(cfg->udpxy_host, p, len);
-    cfg->udpxy_host[len] = '\0';
+    memcpy(cfg->http_proxy_host, p, len);
+    cfg->http_proxy_host[len] = '\0';
     p = hp;
   }
 
   if (*p == ':')
-    return port_num_parse(p + 1, &cfg->udpxy_port);
+    return port_num_parse(p + 1, &cfg->http_proxy_port);
   if (*p != '\0')
     return -1;
-  cfg->udpxy_port = 80;
+  cfg->http_proxy_port = 80;
+  return 0;
+}
+
+/* %g (group), %p (port), %% (literal %). anything else after % is invalid */
+static int http_path_tmpl_valid(const char *t) {
+  for (; *t; t++) {
+    if (*t != '%')
+      continue;
+    t++;
+    if (*t != 'g' && *t != 'p' && *t != '%')
+      return -1;
+  }
   return 0;
 }
 
@@ -151,7 +163,10 @@ static void print_help(void) {
       "  -t, --timeout <secs>     wall-clock budget per candidate       [1]\n"
       "  -M, --mpts               report every program at an address,\n"
       "                           waits out the whole timeout budget per address\n"
-      "  -u, --udpxy <ip:port>    use udpxy instead of a direct IGMP/MLD join\n"
+      "  -u, --http-proxy <ip:port>  probe via an HTTP TS proxy instead of a\n"
+      "                           direct IGMP/MLD join\n"
+      "  -x, --http-path <tmpl>   proxy request path per candidate, -u only\n"
+      "                           %%g=group %%p=port %%%%=literal %%    [/udp/%%g:%%p/]\n"
       "  -I, --iface <iface>      interface for the multicast join      [kernel default]\n"
       "  -v, --verbose            per-candidate diagnostics on stderr\n"
       "      --color <when>       auto|always|never                     [auto]\n"
@@ -174,7 +189,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"out", required_argument, 0, 'o'},
       {"timeout", required_argument, 0, 't'},
       {"mpts", no_argument, 0, 'M'},
-      {"udpxy", required_argument, 0, 'u'},
+      {"http-proxy", required_argument, 0, 'u'},
+      {"http-path", required_argument, 0, 'x'},
       {"iface", required_argument, 0, 'I'},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1001},
@@ -191,7 +207,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->format = OUT_M3U;
   cfg->timeout_ms = 1000;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "m:p:f:P:o:t:Mu:I:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "m:p:f:P:o:t:Mu:x:I:vh", longopts, NULL)) != -1) {
     switch (c) {
       case 'm':
         if (base_parse(optarg, &cfg->family, cfg->base)) {
@@ -231,11 +247,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->mpts = 1;
         break;
       case 'u':
-        if (udpxy_parse(optarg, cfg)) {
-          argerr("invalid -u udpxy address: %s", optarg);
+        if (http_proxy_parse(optarg, cfg)) {
+          argerr("invalid -u http-proxy address: %s", optarg);
           return ARGS_ERR;
         }
-        cfg->udpxy = 1;
+        cfg->http_proxy = 1;
+        break;
+      case 'x':
+        if (http_path_tmpl_valid(optarg)) {
+          argerr("invalid -x path template: %s (%%g, %%p, %%%% only)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->http_path_tmpl = optarg;
         break;
       case 'I':
         cfg->iface = optarg;
@@ -267,5 +290,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -P provider (required for -f xml)");
     return ARGS_ERR;
   }
+  if (cfg->http_path_tmpl && !cfg->http_proxy)
+    log_line(TOOL_NAME ": --http-path has no effect without -u/--http-proxy");
   return ARGS_OK;
 }

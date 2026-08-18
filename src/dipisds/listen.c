@@ -18,21 +18,6 @@
 
 #define RECV_BUF 65536
 
-int already_seen(seen_t *seen, int *count, const dvbstp_header_t *h) {
-  int i;
-  for (i = 0; i < *count; i++)
-    /* cppcheck-suppress uninitvar -- seen[i] for i<count always written by an earlier call */
-    if (seen[i].payload_id == h->payload_id && seen[i].segment_id == h->segment_id && seen[i].version == h->segment_version)
-      return 1;
-  if (*count < LISTEN_SEEN_MAX) {
-    seen[*count].payload_id = h->payload_id;
-    seen[*count].segment_id = h->segment_id;
-    seen[*count].version = h->segment_version;
-    (*count)++;
-  }
-  return 0;
-}
-
 int listen_run(const config_t *cfg) {
   char invocation[128], mcast[80];
   FILE *f;

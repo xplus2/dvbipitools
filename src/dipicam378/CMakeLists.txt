@@ -14,8 +14,9 @@ if (OpenSSL_FOUND)
         cs378x/crypto.c
         cs378x/protocol.c
         cs378x/worker.c
-        crypto.c
         device.c
+        ../lib/cas/device_crypto.c
+        ../lib/cas/device_state_core.c
         ../lib/log.c
         ../lib/argutil.c
         ../lib/signal.c

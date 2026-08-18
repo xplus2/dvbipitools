@@ -26,9 +26,11 @@ are:
 .B udp://@<group>:<port>
 \- raw SPTS multicast (the \fB@\fR is optional)
 .IP \(bu 2
-.B http://<host>:<port>/<cmd>/<group>:<port>/
-\- a udpxy proxy, where \fIcmd\fR is \fBrtp\fR or \fBudp\fR (also \fB%\fR
-and \fB~\fR forms)
+.B http://<host>:<port>/<path>
+or
+.B https://<host>:<port>/<path>
+\- an HTTP(S) TS stream (\fB\-\-insecure\fR skips TLS verification on
+\fBhttps://\fR)
 .IP \(bu 2
 .B \-
 \- stdin, plain TS or RTP-wrapped TS, auto-detected
@@ -77,7 +79,7 @@ file suffix, defaulting to \fBts\fR.
 and
 .B mka
 containers and \fBsrt\fR subtitles decoded from EBU Teletext are additions
-beyond the DVB-IPI specification, as is udpxy proxy support.
+beyond the DVB-IPI specification, as is the HTTP(S) source.
 .SH OPTIONS
 .TP
 .BR \-o ", " \-\-out\ \fI<target>\fR
@@ -212,7 +214,7 @@ live stats.
 Audio-only Matroska recording, join on a specific interface.
 .TP
 .B dipirec \-i http://10.0.0.1:4022/rtp/239.19.75.1:8700 \-o show.ts
-Recording via a udpxy proxy instead of a direct multicast join.
+Recording via an HTTP TS proxy instead of a direct multicast join.
 .TP
 .B dipirec \-i show.ts \-\-pace \-o rtp://@239.9.9.9:6000 \-O eth1 \-\-ttl 16
 Replay a file back onto multicast at its original timing.

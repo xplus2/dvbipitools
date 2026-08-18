@@ -64,7 +64,7 @@ typedef struct {
   const unsigned char *biss2_sw;     /* BISS_KEY_LEN */
 } cas_biss_cfg_t;
 
-/* dispatches to BISS1 or BISS2 Mode 1/E per cfg, logs the ESW first if biss2_emit_esw set. fills *out, 0 ok, -1 OOM/engine start failed */
+/* dispatches to BISS1 or BISS2 Mode 1/E per cfg, logs ESW first if biss2_emit_esw set. fills *out, 0 ok, -1 OOM/engine start failed */
 int cas_core_start_biss_dispatch(const cas_biss_cfg_t *cfg, const unsigned *pids, size_t pid_count, unsigned flush_pid, const char *log_prefix, cas_core_t *out);
 
 typedef struct {

@@ -12,6 +12,7 @@ add_executable(dipisds
     ../lib/playlist_out.c
     ../lib/log.c
     ../lib/argutil.c
+    ../lib/uriparse.c
     ../lib/signal.c
     ../lib/metrics/protocol.c
     ../lib/metrics/export.c

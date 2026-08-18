@@ -8,7 +8,7 @@ if (DIPIRIST_ENABLED AND DVBIPITOOLS_HAVE_RIST)
     set(DIPIRIST_HAVE_RIST TRUE)
 endif ()
 
-option(DIPIRIST_TLS "build dipirist with HTTPS/TLS support for udpxy sources (requires OpenSSL)" ON)
+option(DIPIRIST_TLS "build dipirist with HTTPS/TLS support for -i https:// sources (requires OpenSSL)" ON)
 
 set(DIPIRIST_HAVE_TLS FALSE)
 if (DIPIRIST_HAVE_RIST AND DIPIRIST_TLS)
@@ -42,7 +42,6 @@ if (DIPIRIST_HAVE_RIST)
         ../lib/signal.c
         ../lib/net/multicast.c
         ../lib/net/netconnect.c
-        ../lib/net/udpxy.c
         ../lib/net/tssource.c
         ../lib/net/tssink.c
         ../lib/net/ristout.c

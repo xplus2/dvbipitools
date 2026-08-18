@@ -2,10 +2,10 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdlib.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "lib/log.h"
+#include "lib/signal.h"
 
 #include "bitrate.h"
 
@@ -21,12 +21,6 @@ struct bitrate_pacer {
   double last_overage_log; /* < 0 = never logged */
 };
 
-static double mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
-
 bitrate_pacer_t *bitrate_pacer_new(double target_bps, int stuff, int burst_limit) {
   bitrate_pacer_t *p = calloc(1, sizeof *p);
   if (!p)
@@ -34,7 +28,7 @@ bitrate_pacer_t *bitrate_pacer_new(double target_bps, int stuff, int burst_limit
   p->target_bps = target_bps;
   p->stuff = stuff;
   p->burst_limit = burst_limit;
-  p->start = mono();
+  p->start = mono_seconds();
   p->last_overage_log = -1.0;
   return p;
 }
@@ -45,7 +39,7 @@ void bitrate_pace(bitrate_pacer_t *p) {
   double ahead_s;
   if (!p || !p->burst_limit || p->target_bps <= 0.0)
     return;
-  ahead_s = ((double)p->bits_sent - (mono() - p->start) * p->target_bps) / p->target_bps;
+  ahead_s = ((double)p->bits_sent - (mono_seconds() - p->start) * p->target_bps) / p->target_bps;
   if (ahead_s > 0.0)
     usleep((useconds_t)(ahead_s * 1e6));
 }
@@ -58,7 +52,7 @@ void bitrate_account_n(bitrate_pacer_t *p, unsigned n) {
   p->bits_sent += (unsigned long long)PACKET_BITS * n;
   if (p->target_bps <= 0.0)
     return;
-  now = mono();
+  now = mono_seconds();
   ahead_s = ((double)p->bits_sent - (now - p->start) * p->target_bps) / p->target_bps;
   if (ahead_s > OVERAGE_THRESHOLD_S && (p->last_overage_log < 0.0 || now - p->last_overage_log >= OVERAGE_LOG_COOLDOWN_S)) {
     log_line("bitrate: content exceeds -b target by >%.0fs of backlog, not corrected (pass -B to throttle)", OVERAGE_THRESHOLD_S);
@@ -72,7 +66,7 @@ int bitrate_stuff_due(bitrate_pacer_t *p) {
   double behind_bits;
   if (!p->stuff || p->target_bps <= 0.0)
     return 0;
-  behind_bits = (mono() - p->start) * p->target_bps - (double)p->bits_sent;
+  behind_bits = (mono_seconds() - p->start) * p->target_bps - (double)p->bits_sent;
   if (behind_bits <= 0.0)
     return 0;
   return (int)(behind_bits / PACKET_BITS);

@@ -35,23 +35,13 @@ static int load_scan(FILE *f, scan_entry_t **out, int *out_n) {
   int n = 0, cap = 0;
 
   while (fgets(line, sizeof line, f)) {
-    char *fields[5] = {0};
-    int nf = 0;
-    char *p = line;
-    size_t l = strlen(line);
+    char *fields[5];
+    size_t nf;
     scan_entry_t *e;
-    while (l && (line[l - 1] == '\n' || line[l - 1] == '\r'))
-      line[--l] = '\0';
+    chomp(line);
     if (!line[0])
       continue;
-    while (nf < 5) {
-      fields[nf++] = p;
-      p = strchr(p, ',');
-      if (!p)
-        break;
-      *p = '\0';
-      p++;
-    }
+    nf = csv_split(line, fields, 5);
     if (nf < 2)
       continue;
     if (n >= cap) {

@@ -88,6 +88,26 @@ int all_digits(const char *s, int n) {
   return 1;
 }
 
+void chomp(char *line) {
+  size_t l = strlen(line);
+  while (l && (line[l - 1] == '\n' || line[l - 1] == '\r'))
+    line[--l] = '\0';
+}
+
+size_t csv_split(char *line, char **fields, size_t max_fields) {
+  size_t nf = 0;
+  char *p = line;
+  while (nf < max_fields) {
+    fields[nf++] = p;
+    p = strchr(p, ',');
+    if (!p)
+      break;
+    *p = '\0';
+    p++;
+  }
+  return nf;
+}
+
 int iso8601_split(const char *in, iso8601_t *out) {
   size_t l = strlen(in);
   const char *tail;

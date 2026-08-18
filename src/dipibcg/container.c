@@ -4,20 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/beutil.h"
+
 #include "container.h"
 
 #define HEADER_LEN (1 + 2 * 8) /* num_structures + 2 entries of 8 bytes each */
 #define UINT24_MAX 0xFFFFFFu
-
-static void put24(unsigned char *p, size_t v) {
-  p[0] = (unsigned char)(v >> 16);
-  p[1] = (unsigned char)(v >> 8);
-  p[2] = (unsigned char)v;
-}
-
-static size_t get24(const unsigned char *p) {
-  return ((size_t)p[0] << 16) | ((size_t)p[1] << 8) | (size_t)p[2];
-}
 
 int container_build(const unsigned char *access_unit, size_t au_len, const unsigned char *string_repo, size_t sr_len, unsigned char **out, size_t *out_len) {
   size_t sr_offset;
@@ -40,13 +32,13 @@ int container_build(const unsigned char *access_unit, size_t au_len, const unsig
   p = buf + 1;
   p[0] = CONTAINER_STRUCT_DATA_REPOSITORY;
   p[1] = CONTAINER_DATAREPO_BINARY;
-  put24(p + 2, HEADER_LEN);
-  put24(p + 5, au_len);
+  be24_put(p + 2, HEADER_LEN);
+  be24_put(p + 5, (uint32_t)au_len);
   p += 8;
   p[0] = CONTAINER_STRUCT_DATA_REPOSITORY;
   p[1] = CONTAINER_DATAREPO_STRINGS;
-  put24(p + 2, sr_offset);
-  put24(p + 5, sr_len);
+  be24_put(p + 2, (uint32_t)sr_offset);
+  be24_put(p + 5, (uint32_t)sr_len);
 
   memcpy(buf + HEADER_LEN, access_unit, au_len);
   memcpy(buf + HEADER_LEN + au_len, string_repo, sr_len);
@@ -71,7 +63,7 @@ int container_parse(const unsigned char *buf, size_t len, const unsigned char **
   p = buf + 1;
   for (i = 0; i < num_structures; i++, p += 8) {
     unsigned type = p[0], id = p[1];
-    size_t ptr = get24(p + 2), length = get24(p + 5);
+    size_t ptr = be24_get(p + 2), length = be24_get(p + 5);
     if (ptr > len || length > len - ptr)
       return -1;
     if (type != CONTAINER_STRUCT_DATA_REPOSITORY)

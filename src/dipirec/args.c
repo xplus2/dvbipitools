@@ -39,11 +39,6 @@ static int parse_direct(const char *rest, source_t *s) {
   return parse_mcast_addrport(rest, &s->family, s->group, sizeof s->group, &s->port);
 }
 
-/* rest: host[:port]/cmd/... */
-static int parse_udpxy(const char *rest, source_t *s) {
-  return uriparse_udpxy(rest, s->http_host, sizeof s->http_host, &s->http_port, &s->rtp_wrapped, s->http_path, sizeof s->http_path);
-}
-
 static int parse_uri(const char *uri, source_t *s) {
   memset(s, 0, sizeof *s);
   if (strcmp(uri, "-") == 0) {
@@ -60,9 +55,9 @@ static int parse_uri(const char *uri, source_t *s) {
     s->rtp_wrapped = 0;
     return parse_direct(uri + 6, s);
   }
-  if (strncmp(uri, "http://", 7) == 0) {
-    s->kind = URI_UDPXY;
-    return parse_udpxy(uri + 7, s);
+  if (strncmp(uri, "http://", 7) == 0 || strncmp(uri, "https://", 8) == 0) {
+    s->kind = URI_HTTP;
+    return http_url_parse(uri, &s->http);
   }
   if (strlen(uri) >= sizeof s->file_path)
     return -1;
@@ -82,8 +77,8 @@ void source_describe(const source_t *s, char *buf, size_t n) {
       snprintf(buf, n, "%s://@%s:%u", scheme, s->group, s->port);
     break;
   }
-  case URI_UDPXY:
-    snprintf(buf, n, "http://%s:%u%s (%s)", s->http_host, s->http_port, s->http_path, s->rtp_wrapped ? "rtp" : "udp");
+  case URI_HTTP:
+    snprintf(buf, n, "%s://%s:%u%s", s->http.tls ? "https" : "http", s->http.host, s->http.port, s->http.path);
     break;
   case URI_FILE:
     snprintf(buf, n, "%s", s->file_path[0] ? s->file_path : "- (stdin)");
@@ -337,7 +332,8 @@ static void print_help(void) {
       "sources (-i):\n"
       "  rtp://@<group>:<port>    RTP wrapped SPTS multicast (@ optional)\n"
       "  udp://@<group>:<port>    raw SPTS multicast (@ optional)\n"
-      "  http://<host>:<port>/<cmd>/<group>:<port>/   udpxy proxy (cmd = rtp|udp; also %% ~)\n"
+      "  http://<host>:<port>/<path>    HTTP TS stream\n"
+      "  https://<host>:<port>/<path>   same, TLS (--insecure skips verification)\n"
       "  -                        stdin, TS or RTP-wrapped TS (auto-detected)\n"
       "  <path>                   a file, TS or RTP-wrapped TS (auto-detected)\n"
       "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8700\n\n"
@@ -700,8 +696,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       log_line(TOOL_NAME ": --out-iface has no effect, no -o rtp:// or udp:// target");
     if (cfg->out_ttl && !has_rtp_udp)
       log_line(TOOL_NAME ": --ttl has no effect, no -o rtp:// or udp:// target");
-    if (cfg->insecure_tls && !has_rtmps)
-      log_line(TOOL_NAME ": --insecure has no effect, no -o rtmps:// target");
+    if (cfg->insecure_tls && !has_rtmps && !(cfg->source.kind == URI_HTTP && cfg->source.http.tls))
+      log_line(TOOL_NAME ": --insecure has no effect, no -o rtmps:// target or -i https:// source");
   }
   if (strip_arg && cfg->format != FMT_TS)
     log_line(TOOL_NAME ": --strip has no effect outside -f ts");

@@ -17,7 +17,7 @@ dipiscan [options] 1>playlist 2>log
 | `-o` | `--out`       | `<path>` / `-`              | `-` (stdout)                     |
 | `-t` | `--timeout`   | `<secs>`                    | `1`                              |
 | `-M` | `--mpts`      |                             | off (SPTS or first program only) |
-| `-u` | `--udpxy`     | `<ip:port>`                 | off (direct IGMP/MLD join)       |
+| `-u` | `--http-proxy`| `<ip:port>`                 | off (direct IGMP/MLD join)       |
 | `-I` | `--iface`     | `<iface>`                   | kernel default                   |
 | `-v` | `--verbose`   |                             | off                              |
 |      | `--color`     | `auto\|always\|never`       | `auto`                           |
@@ -75,9 +75,9 @@ one whose PMT never resolved at all is left out of that pass entirely. Raise `-t
 if a scanned mux carries several programs and rows go missing or come back
 unnamed.
 
-## udpxy (`-u`)
+## HTTP proxy (`-u`)
 
-`-u <ip:port>` probes through a udpxy gateway instead of joining the group directly.
+`-u <ip:port>` probes through an HTTP TS proxy instead of joining the group directly.
 Port defaults to 80 if omitted.
 
 ## Network interface (`-I`)
@@ -105,7 +105,7 @@ dipiscan -m 239.19.75.0 -p 8700-8705 >hd.m3u
 # csv with per-candidate packet counts on stderr
 dipiscan -v -f csv -o scan.csv
 
-# through a udpxy gateway
+# through an HTTP TS proxy
 dipiscan -u 127.0.0.1:8080 -m 239.19.75.0 -f xspf >playlist.xspf
 
 # SD&S xml, ready for dipisds

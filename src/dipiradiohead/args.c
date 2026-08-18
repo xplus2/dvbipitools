@@ -602,71 +602,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--cas-* options require --cas-algo");
     return ARGS_ERR;
   }
-  if (cfg->biss2_enabled && (cfg->cas_algo != CAS_ALGO_NONE || cfg->n_cas_vendors > 0)) {
-    argerr("--biss2-sw is mutually exclusive with --cas-algo/--cas-ecmg");
+  if (cas_args_validate(TOOL_NAME, cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
+                         cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms) != 0)
     return ARGS_ERR;
-  }
-  if (cfg->biss2_emit_esw && !cfg->biss2_enabled) {
-    argerr("--biss2-emit-esw requires --biss2-sw");
-    return ARGS_ERR;
-  }
-  if (cfg->biss1_enabled && (cfg->cas_algo != CAS_ALGO_NONE || cfg->n_cas_vendors > 0)) {
-    argerr("--biss1-sw is mutually exclusive with --cas-algo/--cas-ecmg");
-    return ARGS_ERR;
-  }
-  if (cfg->biss2_enabled && cfg->biss1_enabled) {
-    argerr("--biss2-sw and --biss1-sw are mutually exclusive");
-    return ARGS_ERR;
-  }
-  if (cfg->biss2_ca_enabled && (cfg->cas_algo != CAS_ALGO_NONE || cfg->n_cas_vendors > 0)) {
-    argerr("--biss2-ca-receivers is mutually exclusive with --cas-algo/--cas-ecmg");
-    return ARGS_ERR;
-  }
-  if (cfg->biss2_ca_enabled && (cfg->biss2_enabled || cfg->biss1_enabled)) {
-    argerr("--biss2-ca-receivers is mutually exclusive with --biss2-sw/--biss1-sw");
-    return ARGS_ERR;
-  }
-  if (cfg->biss2_ca_session_id_given && !cfg->biss2_ca_enabled) {
-    argerr("--biss2-ca-session-id requires --biss2-ca-receivers");
-    return ARGS_ERR;
-  }
-  if (cfg->biss2_ca_enabled && cfg->cas_cp_duration_ms < 1000) {
-    argerr("--biss2-ca-receivers needs --cas-cp-duration >= 1000 (Tech 3292-s1 T_ECM_change_min)");
-    return ARGS_ERR;
-  }
-  if (cfg->cas_algo != CAS_ALGO_NONE) {
-    unsigned vi, vj;
-    if (cfg->n_cas_vendors == 0) {
-      argerr("--cas-algo requires --cas-ecmg");
-      return ARGS_ERR;
-    }
-    for (vi = 0; vi < cfg->n_cas_vendors; vi++) {
-      const cas_vendor_t *v = &cfg->cas_vendors[vi];
-      if (!v->super_cas_id) {
-        argerr("--cas-ecmg %s:%u requires --cas-super-id", v->ecmg_host, v->ecmg_port);
-        return ARGS_ERR;
-      }
-      if (!v->ecm_id) {
-        argerr("--cas-ecmg %s:%u requires --cas-ecm-id", v->ecmg_host, v->ecmg_port);
-        return ARGS_ERR;
-      }
-      if (v->ecm_pid == v->emm_pid) {
-        argerr("--cas-ecm-pid and --cas-emm-pid must differ (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
-        return ARGS_ERR;
-      }
-      for (vj = vi + 1; vj < cfg->n_cas_vendors; vj++) {
-        const cas_vendor_t *o = &cfg->cas_vendors[vj];
-        if (v->ecm_pid == o->ecm_pid || v->ecm_pid == o->emm_pid || v->emm_pid == o->ecm_pid || v->emm_pid == o->emm_pid) {
-          argerr("--cas-ecm-pid/--cas-emm-pid collide across --cas-ecmg vendors");
-          return ARGS_ERR;
-        }
-        if (v->emmg_port == o->emmg_port) {
-          argerr("--cas-emmg-port %u used by more than one --cas-ecmg vendor (each needs its own EMMG listener)", v->emmg_port);
-          return ARGS_ERR;
-        }
-      }
-    }
-  }
   if (assign_missing_sids(cfg) != 0)
     return ARGS_ERR;
   for (i = 0; i < cfg->n_inputs; i++) {

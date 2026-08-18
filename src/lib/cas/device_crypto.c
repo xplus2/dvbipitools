@@ -8,7 +8,7 @@
 
 #include "lib/secure_zero.h"
 
-#include "crypto.h"
+#include "device_crypto.h"
 
 int device_key_load(const char *path, EVP_PKEY **out) {
   FILE *f = fopen(path, "r");

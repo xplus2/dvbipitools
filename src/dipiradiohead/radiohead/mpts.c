@@ -15,7 +15,19 @@
 #include "priv.h"
 
 #define MPTS_POLL_MAX_MS 100
-#define MPTS_MAX_FRAMES_PER_TICK 32 /* per input, per tick. caps one input's backlog from delaying the rest */
+#define MPTS_MAX_FRAMES_PER_TICK 32 /* per input, per tick. caps one input's backlog delaying others */
+
+/* lib/mux/mpts.c is tool-agnostic (shared with dipitvhead). these adapt our concrete types to its void*-based ops vtable. */
+static int mpts_program_get_sdt_info(void *ctx, psi_sdt_entry_t *out) {
+  return tspacketizer_get_sdt_info((tspacketizer_t *)ctx, out);
+}
+static size_t mpts_program_build_eit(void *ctx, unsigned char *out, size_t cap) {
+  return tspacketizer_build_eit((tspacketizer_t *)ctx, out, cap);
+}
+static int mpts_program_eit_pending(const void *ctx) {
+  return tspacketizer_eit_pending((const tspacketizer_t *)ctx);
+}
+static const mpts_program_ops_t mpts_program_ops = {mpts_program_get_sdt_info, mpts_program_build_eit, mpts_program_eit_pending};
 
 typedef struct {
   inputset_t *is;

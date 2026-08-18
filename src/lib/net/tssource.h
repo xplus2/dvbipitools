@@ -11,7 +11,7 @@
 #include "httpclient/httpclient.h"
 #include "multicast.h"
 
-typedef enum { TSSRC_RTP, TSSRC_UDP, TSSRC_STDIN, TSSRC_HTTP, TSSRC_UDPXY, TSSRC_FILE } tssrc_kind_t;
+typedef enum { TSSRC_RTP, TSSRC_UDP, TSSRC_STDIN, TSSRC_HTTP, TSSRC_FILE } tssrc_kind_t;
 
 typedef struct {
   tssrc_kind_t kind;
@@ -23,13 +23,9 @@ typedef struct {
   /* TSSRC_HTTP */
   http_url_t http;
   int insecure_tls; /* skip TLS verification */
-  /* TSSRC_UDPXY */
-  const char *udpxy_host;
-  unsigned udpxy_port;
-  const char *udpxy_path;
   /* TSSRC_FILE */
   const char *file_path;
-  /* TSSRC_HTTP / TSSRC_UDPXY; NULL = "dvbipitools" */
+  /* TSSRC_HTTP. NULL = "dvbipitools" */
   const char *user_agent;
 } tssrc_cfg_t;
 
@@ -55,8 +51,7 @@ uint32_t tssrc_last_rtp_ts(const tssrc_t *s);
    on top of the joined group. NULL unless the kind is TSSRC_RTP/TSSRC_UDP. */
 mcast_t *tssrc_mcast(tssrc_t *s);
 
-/* underlying fd, for caller's own poll(); valid for life of s. -1 for TSSRC_UDPXY
-   (no fd accessor). */
+/* underlying fd, for caller's own poll(). valid for life of s. */
 int tssrc_fd(const tssrc_t *s);
 
 /* TSSRC_FILE/TSSRC_STDIN, seekable underlying fd only (best-effort, silent no-op otherwise):
@@ -69,10 +64,10 @@ void tssrc_close(tssrc_t *s);
 typedef enum { TSSRC_OPEN_PENDING, TSSRC_OPEN_DONE, TSSRC_OPEN_ERROR } tssrc_open_state_t;
 typedef struct tssrc_open tssrc_open_t;
 
-/* async tssrc_open(): never blocks caller's thread. TSSRC_RTP/UDP/STDIN/UDPXY/FILE complete
+/* async tssrc_open(): never blocks caller's thread. TSSRC_RTP/UDP/STDIN/FILE complete
    on first step() regardless (cheap, local-only work: joining mcasts, stdin, open()).
    only TSSRC_HTTP genuinely spans multiple steps (connect+TLS handshake+header read).
-   No internal timeout, caller decides when to give up. NULL only on immediate setup failure (calloc-logged). */
+   No internal timeout, caller decides when to give up. NULL only on immediate setup failure */
 tssrc_open_t *tssrc_open_async_start(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out);
 
 int tssrc_open_async_poll_fd(const tssrc_open_t *o);
@@ -83,7 +78,7 @@ tssrc_open_state_t tssrc_open_async_step(tssrc_open_t *o, net_err_reason_t *reas
 /* DONE only: hands over tssrc_t, frees async handle */
 tssrc_t *tssrc_open_async_take(tssrc_open_t *o);
 
-/* frees handle + owned state; safe at any state incl. PENDING */
+/* frees handle + owned state. safe at any state incl. PENDING */
 void tssrc_open_async_free(tssrc_open_t *o);
 
 #endif

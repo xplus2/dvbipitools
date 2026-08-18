@@ -24,6 +24,12 @@ void *array_grow(void *arr, int *cap, int need, size_t elemsz);
 /* s[0..n) all ASCII digits */
 int all_digits(const char *s, int n);
 
+/* strips trailing \n/\r in place */
+void chomp(char *line);
+
+/* splits line in place on ',', writes up to max_fields pointers into fields[]. returns fill count */
+size_t csv_split(char *line, char **fields, size_t max_fields);
+
 typedef enum { ISO8601_OFF_NONE, ISO8601_OFF_Z, ISO8601_OFF_NUMERIC } iso8601_offset_kind_t;
 
 typedef struct {

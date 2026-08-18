@@ -5,17 +5,9 @@
 #include <string.h>
 #include <zlib.h>
 
+#include "lib/beutil.h"
+
 #include "wrapper.h"
-
-static void put24(unsigned char *p, size_t v) {
-  p[0] = (unsigned char)(v >> 16);
-  p[1] = (unsigned char)(v >> 8);
-  p[2] = (unsigned char)v;
-}
-
-static size_t get24(const unsigned char *p) {
-  return ((size_t)p[0] << 16) | ((size_t)p[1] << 8) | (size_t)p[2];
-}
 
 static int build_uncompressed(const unsigned char *container, size_t container_len, unsigned char **out, size_t *out_len) {
   unsigned char *buf = malloc(1 + container_len);
@@ -52,7 +44,7 @@ int wrapper_build(const unsigned char *container, size_t container_len, int want
     return -1;
   }
   buf[0] = WRAPPER_METHOD_ZLIB;
-  put24(buf + 1, container_len);
+  be24_put(buf + 1, (uint32_t)container_len);
   memcpy(buf + 4, compbuf, compressed_len);
   free(compbuf);
 
@@ -86,7 +78,7 @@ int wrapper_parse(const unsigned char *data, size_t len, unsigned char **out, si
     uLongf dest_len;
     if (len < 4)
       return -1;
-    original_size = get24(data + 1);
+    original_size = be24_get(data + 1);
     buf = malloc(original_size ? original_size : 1);
     if (!buf)
       return -1;

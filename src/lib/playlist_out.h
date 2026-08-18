@@ -20,4 +20,13 @@ void playlist_out_init(FILE *f, playlist_out_fmt_t fmt, const char *invocation, 
 /* M3U/XSPF footer only */
 void playlist_out_close(FILE *f, playlist_out_fmt_t fmt);
 
+/* #EXTINF line + uri line */
+void playlist_out_m3u_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid);
+
+/* name with any ',' stripped (field separator), then ,uri,tsid,onid,sid */
+void playlist_out_csv_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid);
+
+/* <track> with dvb-triplet extension */
+void playlist_out_xspf_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid);
+
 #endif

@@ -9,8 +9,8 @@
 /* rest: addr:port or [addr6]:port, multicast required (224.0.0.0/4, ff00::/8). caller strips leading '@' first. */
 int uriparse_mcast_addrport(const char *rest, int *family, char *group, size_t groupsz, unsigned *port);
 
-/* rest: host[:port]/(rtp|udp)/path..., udpxy-style tspush. port_out defaults 80 if absent. */
-int uriparse_udpxy(const char *rest, char *host_out, size_t host_cap, unsigned *port_out, int *rtp_wrapped_out, char *path_out, size_t path_cap);
+/* group:port, or [group]:port when family is AF_INET6 */
+void uriparse_mcast_describe(int family, const char *group, unsigned port, char *buf, size_t n);
 
 /* classifies uri as rtmp/rtmps/file, copies into matching buffer.
    returns 0 = file, 1 = rtmp, 2 = rtmps, -1 if uri doesn't fit target buffer. */

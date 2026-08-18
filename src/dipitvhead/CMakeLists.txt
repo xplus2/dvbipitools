@@ -88,7 +88,9 @@ add_executable(dipitvhead
     ../lib/cas/emmg_server/worker.c
     ../lib/cas/cas_group.c
     ../lib/cas/cas_scramble_engine.c
+    ../lib/cas/cas_core.c
     ../lib/log.c
+    ../lib/toolmain.c
     ../lib/argutil.c
     ../lib/uriparse.c
     ../lib/signal.c
@@ -96,7 +98,6 @@ add_executable(dipitvhead
     ../lib/metrics/export.c
     ../lib/net/multicast.c
     ../lib/net/netconnect.c
-    ../lib/net/udpxy.c
     ../lib/net/tssource.c
     ../lib/net/retryset.c
     ${TLS_SRC}

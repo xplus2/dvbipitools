@@ -33,11 +33,6 @@ static int parse_direct(const char *rest, nonrist_t *s) {
   return uriparse_mcast_addrport(rest, &s->family, s->group, sizeof s->group, &s->port);
 }
 
-/* rest: host[:port]/cmd/..., source side (-i) only */
-static int parse_udpxy(const char *rest, nonrist_t *s) {
-  return uriparse_udpxy(rest, s->http_host, sizeof s->http_host, &s->http_port, &s->rtp_wrapped, s->http_path, sizeof s->http_path);
-}
-
 static int parse_nonrist(const char *uri, nonrist_t *s, int is_sink) {
   memset(s, 0, sizeof *s);
   if (strcmp(uri, "-") == 0) {
@@ -54,11 +49,11 @@ static int parse_nonrist(const char *uri, nonrist_t *s, int is_sink) {
     s->rtp_wrapped = 0;
     return parse_direct(uri + 6, s);
   }
-  if (strncmp(uri, "http://", 7) == 0) {
+  if (strncmp(uri, "http://", 7) == 0 || strncmp(uri, "https://", 8) == 0) {
     if (is_sink)
-      return -1; /* a udpxy proxy makes no sense as an output */
-    s->kind = NONRIST_UDPXY;
-    return parse_udpxy(uri + 7, s);
+      return -1; /* an HTTP TS source makes no sense as an output */
+    s->kind = NONRIST_HTTP;
+    return http_url_parse(uri, &s->http);
   }
   if (strlen(uri) >= sizeof s->file_path)
     return -1;
@@ -117,9 +112,9 @@ void endpoint_describe(const endpoint_t *e, char *buf, size_t n) {
       snprintf(buf, n, "%s://@%s:%u", scheme, e->nonrist.group, e->nonrist.port);
     break;
   }
-  case NONRIST_UDPXY:
-    snprintf(buf, n, "http://%s:%u%s (%s)", e->nonrist.http_host, e->nonrist.http_port, e->nonrist.http_path,
-              e->nonrist.rtp_wrapped ? "rtp" : "udp");
+  case NONRIST_HTTP:
+    snprintf(buf, n, "%s://%s:%u%s", e->nonrist.http.tls ? "https" : "http", e->nonrist.http.host, e->nonrist.http.port,
+              e->nonrist.http.path);
     break;
   case NONRIST_FILE:
     snprintf(buf, n, "%s", e->nonrist.file_path[0] ? e->nonrist.file_path : "- (stdin/stdout)");
@@ -141,15 +136,16 @@ static void print_help(void) {
       "                              --secret below for the equivalent flags)\n"
       "  rtp://@<group>:<port>      RTP wrapped SPTS multicast (@ optional)\n"
       "  udp://@<group>:<port>      raw SPTS multicast (@ optional)\n"
-      "  http://<host>:<port>/<cmd>/<group>:<port>/   udpxy proxy, -i only\n"
-      "                             (cmd = rtp|udp; also %% ~)\n"
+      "  http://<host>:<port>/<path>   HTTP TS stream, -i only\n"
+      "  https://<host>:<port>/<path>  same, TLS (-k skips verification), -i only\n"
       "  -                          stdin (-i) or stdout (-o)\n"
       "  <path>                     a file\n"
       "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8700\n\n"
       "options:\n"
-      "  -i, --in <uri>             input (see above); repeatable if rist://\n"
-      "  -o, --out <uri>            output (see above); repeatable if rist://\n"
+      "  -i, --in <uri>             input (see above), repeatable if rist://\n"
+      "  -o, --out <uri>            output (see above), repeatable if rist://\n"
       "  -I, --iface <iface>        interface for the non-RIST side's multicast join/send\n"
+      "  -k, --insecure             skip TLS verification, -i https:// only\n"
       "      --profile <name>       simple|main (default simple); main adds encryption\n"
       "      --secret <psk>         pre-shared key; requires --profile main\n"
       "      --cname <name>         RTCP cname; default library-generated\n"
@@ -173,6 +169,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"in", required_argument, 0, 'i'},
       {"out", required_argument, 0, 'o'},
       {"iface", required_argument, 0, 'I'},
+      {"insecure", no_argument, 0, 'k'},
       {"profile", required_argument, 0, 1000},
       {"secret", required_argument, 0, 1001},
       {"cname", required_argument, 0, 1002},
@@ -191,7 +188,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
   cfg->profile = RIST_PROF_SIMPLE;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "i:o:I:vdh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "i:o:I:kvdh", longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
         if (parse_endpoint_uri(optarg, &cfg->in, 0, &n_in)) {
@@ -208,16 +205,19 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'I':
         cfg->iface = optarg;
         break;
-      case 1000:
-        if (strcmp(optarg, "simple") == 0)
-          cfg->profile = RIST_PROF_SIMPLE;
-        else if (strcmp(optarg, "main") == 0)
-          cfg->profile = RIST_PROF_MAIN;
-        else {
+      case 'k':
+        cfg->insecure_tls = 1;
+        break;
+      case 1000: {
+        static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
+        int v;
+        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
           argerr("invalid --profile: %s (simple|main)", optarg);
           return ARGS_ERR;
         }
+        cfg->profile = (rist_profile_sel_t)v;
         break;
+      }
       case 1001:
         if (bufcpy(cfg->secret, sizeof cfg->secret, optarg) >= sizeof cfg->secret) {
           argerr("--secret too long");
@@ -302,5 +302,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--metrics/--metrics-interval require --metrics-id");
     return ARGS_ERR;
   }
+  if (cfg->insecure_tls && !(cfg->in.nonrist.kind == NONRIST_HTTP && cfg->in.nonrist.http.tls))
+    log_line(TOOL_NAME ": --insecure has no effect, no -i https:// source");
   return ARGS_OK;
 }

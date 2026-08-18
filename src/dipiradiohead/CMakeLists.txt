@@ -69,6 +69,7 @@ add_executable(dipiradiohead
     radiohead/metrics.c
     radiohead/mpts.c
     ../lib/log.c
+    ../lib/toolmain.c
     ../lib/argutil.c
     ../lib/uriparse.c
     ../lib/signal.c
@@ -110,6 +111,7 @@ add_executable(dipiradiohead
     ../lib/cas/emmg_server/worker.c
     ../lib/cas/cas_group.c
     ../lib/cas/cas_scramble_engine.c
+    ../lib/cas/cas_core.c
     ../lib/mux/rtpheader.c
     ../lib/mux/psi_build.c
     ../lib/mux/mpts.c

@@ -51,19 +51,7 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
   metrics_exporter_send(mx, &w);
 }
 
-/* mpts.c is tool-agnostic (shared with dipitvhead). they adapt our concrete types to its void*-based ops vtables. */
-static int mpts_program_get_sdt_info(void *ctx, psi_sdt_entry_t *out) {
-  return tspacketizer_get_sdt_info((tspacketizer_t *)ctx, out);
-}
-static size_t mpts_program_build_eit(void *ctx, unsigned char *out, size_t cap) {
-  return tspacketizer_build_eit((tspacketizer_t *)ctx, out, cap);
-}
-static int mpts_program_eit_pending(const void *ctx) {
-  return tspacketizer_eit_pending((const tspacketizer_t *)ctx);
-}
-const mpts_program_ops_t mpts_program_ops = {
-    mpts_program_get_sdt_info, mpts_program_build_eit, mpts_program_eit_pending};
-
+/* lib/mux/mpts.c is tool-agnostic. this adapts concrete types to its void*-based cas ops vtable. */
 static size_t mpts_cas_build_cat(void *ctx, unsigned char *out, size_t cap) {
   return cas_build_cat((cas_t *)ctx, out, cap);
 }

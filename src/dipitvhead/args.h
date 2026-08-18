@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include "lib/cas/biss/biss.h"
+#include "lib/cas/cas_args.h"
 #include "lib/net/httpclient/httpclient.h"
 
 typedef enum {
@@ -29,31 +30,11 @@ typedef struct {
 /* -n/-s: no flag = passthrough source table if present; "-" = drop; text = override with our own */
 typedef enum { TABLE_PASSTHROUGH, TABLE_DROP, TABLE_OVERRIDE } table_mode_t;
 
-/* NONE = --cas-algo not given, CAS disabled */
-typedef enum { CAS_ALGO_NONE, CAS_ALGO_CISSA, CAS_ALGO_CSA2, CAS_ALGO_CSA1 } cas_algo_t;
-
-typedef enum { CAS_OUTAGE_FROZEN, CAS_OUTAGE_CYCLING, CAS_OUTAGE_SILENT } cas_outage_mode_t;
-
 #define ARGS_MAX_CAS_PIDS 16
-#define ARGS_MAX_CAS_VENDORS 8 /* matches CAS_GROUP_MAX_VENDORS */
 #define ARGS_MAX_INPUTS 32 /* matches MPTS_MAX_PROGRAMS: one input becomes one mux program */
 #define ARGS_MAX_RIST_PEERS 8 /* matches RISTOUT_MAX_PEERS */
 
 typedef enum { RIST_PROF_SIMPLE, RIST_PROF_MAIN } rist_profile_sel_t;
-
-typedef struct {
-  char ecmg_host[256];       /* --cas-ecmg */
-  unsigned ecmg_port;        /* --cas-ecmg */
-  unsigned ecmg_version;     /* --cas-ecmg-version right after this --cas-ecmg; 0 = auto-negotiate v2/v3 */
-  unsigned super_cas_id;     /* --cas-super-id right after this --cas-ecmg */
-  unsigned ecm_id;           /* --cas-ecm-id right after this --cas-ecmg */
-  unsigned ecm_pid;          /* --cas-ecm-pid right after this --cas-ecmg; default 0x0020 */
-  unsigned emmg_port;        /* --cas-emmg-port right after this --cas-ecmg; default 8002 */
-  unsigned emmg_version;     /* --cas-emmg-version right after this --cas-ecmg; 0 = accept client's proposal */
-  unsigned emm_pid;          /* --cas-emm-pid right after this --cas-ecmg; default 0x0021 */
-  cas_outage_mode_t resilience; /* --cas-resilience right after this --cas-ecmg; default frozen */
-  int required;               /* --cas-required right after this --cas-ecmg */
-} cas_vendor_t;
 
 typedef struct {
   source_t input;          /* -i */

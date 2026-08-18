@@ -55,7 +55,7 @@ static void deliver_clock_tick(cas_t *c, unsigned long delta_ms) {
     cas_group_clock_tick(c->core.group, delta_ms);
 }
 
-/* wall-clock here is a plausibility fence only, never the primary clock */
+/* wall-clock is a plausibility fence only, never primary clock */
 static void pcr_sample(cas_t *c, uint64_t pcr27) {
   double now = cas_core_mono();
 
@@ -252,7 +252,7 @@ cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, con
     c = calloc(1, sizeof *c);
     if (!c)
       return NULL;
-    c->pcr_out_pid = 0x1FFF; /* no single pid drives the clock here - see cas_wall_tick() */
+    c->pcr_out_pid = 0x1FFF; /* MPTS, no single pid drives clock: see cas_wall_tick() */
     if (cas_core_start_biss_dispatch(&bc, pids, pid_count, 0x1FFF, TOOL_NAME ": ", &c->core) != 0) {
       free(c);
       return NULL;
@@ -281,7 +281,7 @@ cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, con
   c = calloc(1, sizeof *c);
   if (!c)
     return NULL;
-  c->pcr_out_pid = 0x1FFF; /* no single pid drives the clock here - see cas_wall_tick() */
+  c->pcr_out_pid = 0x1FFF; /* MPTS, no single pid drives clock: see cas_wall_tick() */
 
   fill_group_cfg(cfg, &gcfg);
   gcfg.pid_count = cas_resolve_pids_multi(cfg, es_lists, es_counts, n_programs, gcfg.pids, CAS_CORE_MAX_PIDS);

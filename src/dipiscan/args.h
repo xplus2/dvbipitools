@@ -13,13 +13,14 @@ typedef struct {
   unsigned char base[16]; /* base group address, last byte swept 1..254 */
   unsigned port_lo, port_hi; /* inclusive port range probed per address */
   out_fmt_t format;
-  const char *provider; /* -P, DomainName for -f xml; required if format==OUT_XML */
+  const char *provider; /* -P, DomainName for -f xml. required if format==OUT_XML */
   const char *out_path; /* NULL/"-" = stdout */
   int timeout_ms;       /* wall-clock budget per candidate address */
   int mpts;             /* -M: report every PAT-listed program at each address, not just first */
-  int udpxy;            /* nonzero: use udpxy instead of direct join */
-  char udpxy_host[256];
-  unsigned udpxy_port;
+  int http_proxy;            /* nonzero: probe via an HTTP TS proxy instead of direct join */
+  char http_proxy_host[256];
+  unsigned http_proxy_port;
+  const char *http_path_tmpl; /* -x. NULL default "/udp/%g:%p/". %g=group, %p=port, %%=literal % */
   const char *iface;
   int verbose;
   int color_mode; /* log_color_t */

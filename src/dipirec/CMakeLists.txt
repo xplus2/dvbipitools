@@ -42,7 +42,6 @@ add_executable(dipirec
     ../lib/signal.c
     ../lib/net/multicast.c
     ../lib/net/netconnect.c
-    ../lib/net/udpxy.c
     ../lib/net/tssource.c
     ../lib/net/tssink.c
     ../lib/metrics/protocol.c

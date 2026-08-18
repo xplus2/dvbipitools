@@ -110,23 +110,13 @@ static int load_csv(FILE *f, input_t *in) {
 
   while (fgets(line, sizeof line, f)) {
     char *fields[5];
-    int nf = 0;
-    char *p = line;
-    size_t l = strlen(line);
+    size_t nf;
     sds_service_t *s;
     lineno++;
-    while (l && (line[l - 1] == '\n' || line[l - 1] == '\r'))
-      line[--l] = '\0';
+    chomp(line);
     if (!line[0])
       continue;
-    while (nf < 5) {
-      fields[nf++] = p;
-      p = strchr(p, ',');
-      if (!p)
-        break;
-      *p = '\0';
-      p++;
-    }
+    nf = csv_split(line, fields, 5);
     if (nf < 2) {
       fprintf(stderr, TOOL_NAME ": line %d: expected name,uri\n", lineno);
       return -1;
@@ -158,9 +148,7 @@ static int load_m3u(FILE *f, input_t *in) {
   int have_pending = 0, idx = 0;
 
   while (fgets(line, sizeof line, f)) {
-    size_t l = strlen(line);
-    while (l && (line[l - 1] == '\n' || line[l - 1] == '\r'))
-      line[--l] = '\0';
+    chomp(line);
     if (!line[0])
       continue;
     if (!strncmp(line, "#EXTINF:", 8)) {
@@ -364,24 +352,14 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
   }
   while (fgets(line, sizeof line, f)) {
     char *fields[5];
-    int nf = 0;
-    char *p = line;
+    size_t nf;
     char *end, *svc, *svc_save;
     sds_package_t *pkg;
-    size_t l = strlen(line);
     lineno++;
-    while (l && (line[l - 1] == '\n' || line[l - 1] == '\r'))
-      line[--l] = '\0';
+    chomp(line);
     if (!line[0])
       continue;
-    while (nf < 5) {
-      fields[nf++] = p;
-      p = strchr(p, ',');
-      if (!p)
-        break;
-      *p = '\0';
-      p++;
-    }
+    nf = csv_split(line, fields, 5);
     if (nf < 5) {
       fprintf(stderr, TOOL_NAME ": %s: line %d: expected id,name,lang,visible,svc1|svc2|...\n", path, lineno);
       fclose(f);
@@ -443,10 +421,8 @@ int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
   while (fgets(line, sizeof line, f)) {
     char *tok, *tok_save;
     sds_cell_t *cell;
-    size_t l = strlen(line);
     lineno++;
-    while (l && (line[l - 1] == '\n' || line[l - 1] == '\r'))
-      line[--l] = '\0';
+    chomp(line);
     if (!line[0])
       continue;
     if (idx >= max) {

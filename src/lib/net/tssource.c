@@ -12,7 +12,6 @@
 #include "httpclient/httpclient.h"
 #include "multicast.h"
 #include "tssource.h"
-#include "udpxy.h"
 
 /* max plausible RTP/MPEGTS record under a 1500-byte MTU: 12 + 7*188 */
 #define TSSRC_RTP_MAX_RECORD (12 + 7 * 188)
@@ -26,7 +25,6 @@ struct tssrc {
   tssrc_kind_t kind;
   mcast_t *m;
   http_t *h;
-  udpxy_t *u;
   int fd; /* TSSRC_FILE */
   /* TSSRC_STDIN/TSSRC_FILE byte-stream framing */
   deframe_state_t deframe_state;
@@ -57,13 +55,6 @@ tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
   case TSSRC_HTTP:
     s->h = http_get(&cfg->http, ua, cfg->insecure_tls, NULL, reason_out);
     if (!s->h) {
-      free(s);
-      return NULL;
-    }
-    return s;
-  case TSSRC_UDPXY:
-    s->u = udpxy_open(cfg->udpxy_host, cfg->udpxy_port, cfg->udpxy_path, ua, reason_out);
-    if (!s->u) {
       free(s);
       return NULL;
     }
@@ -257,8 +248,6 @@ ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t 
     return n;
   case TSSRC_HTTP:
     return http_read(s->h, buf, cap, reason_out);
-  case TSSRC_UDPXY:
-    return udpxy_read(s->u, buf, cap, reason_out);
   case TSSRC_STDIN:
     return deframe_read(s, STDIN_FILENO, buf, cap, reason_out);
   case TSSRC_FILE:
@@ -295,8 +284,6 @@ int tssrc_fd(const tssrc_t *s) {
     return STDIN_FILENO;
   case TSSRC_FILE:
     return s->fd;
-  case TSSRC_UDPXY:
-    return -1;
   }
   return -1;
 }
@@ -308,8 +295,6 @@ void tssrc_close(tssrc_t *s) {
     mcast_close(s->m);
   if (s->h)
     http_close(s->h);
-  if (s->u)
-    udpxy_close(s->u);
   if (s->kind == TSSRC_FILE)
     close(s->fd);
   free(s);
@@ -334,7 +319,7 @@ tssrc_open_t *tssrc_open_async_start(const tssrc_cfg_t *cfg, net_err_reason_t *r
     }
     return o;
   }
-  o->result = tssrc_open(cfg, reason_out); /* RTP/UDP/STDIN/UDPXY/FILE: cheap, local-only, done synchronously */
+  o->result = tssrc_open(cfg, reason_out); /* RTP/UDP/STDIN/FILE. cheap, local-only, done synchronously */
   if (!o->result) {
     free(o);
     return NULL;

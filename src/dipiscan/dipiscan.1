@@ -9,7 +9,7 @@ dipiscan \- scan and report on DVB-IPI multicast streams
 sweeps a multicast /24 (or the analogous IPv6 range) for DVB-IPI services
 and writes a playlist of what answered. Every address/port combination in
 the configured range is probed once; each probe joins the multicast group
-(directly via IGMP/MLD, or through a udpxy gateway) and waits for a PAT
+(directly via IGMP/MLD, or through an HTTP TS proxy) and waits for a PAT
 and SDT service name within the configured time budget.
 .PP
 This tool exists because deployments do not always use DVBSTP/SD&S
@@ -53,8 +53,8 @@ Wall-clock time budget per candidate. Default: 1.
 Report every program found at an address, not just the first. Waits out
 the whole timeout budget per address.
 .TP
-.BR \-u ", " \-\-udpxy " \fIip\fR:\fIport\fR"
-Probe through a udpxy gateway instead of a direct IGMP/MLD join.
+.BR \-u ", " \-\-http\-proxy " \fIip\fR:\fIport\fR"
+Probe through an HTTP TS proxy instead of a direct IGMP/MLD join.
 .TP
 .BR \-I ", " \-\-iface " \fIiface\fR"
 Interface to use for the multicast join. Default: kernel default route.
@@ -76,7 +76,7 @@ Scan a custom address/port range, write an M3U playlist to a file.
 Scan with per-candidate diagnostics on stderr, write CSV output.
 .TP
 .B dipiscan \-u 127.0.0.1:8080 \-m 239.19.75.0 \-f xspf >playlist.xspf
-Scan through a udpxy gateway, write an XSPF playlist.
+Scan through an HTTP TS proxy, write an XSPF playlist.
 .TP
 .B dipiscan \-f xml \-P example.org \-o scan.xml
 Write SD&S Broadcast Discovery XML, ready to feed into \fBdipisds \-a \-i\fR.
