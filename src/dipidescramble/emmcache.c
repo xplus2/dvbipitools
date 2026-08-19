@@ -40,8 +40,7 @@ emmcache_t *emmcache_new(void) { return calloc(1, sizeof(struct emmcache)); }
 void emmcache_free(emmcache_t *c) { free(c); }
 
 static emm_g_slot_t *slot_for(struct emmcache *c, unsigned service_id) {
-  size_t i;
-  for (i = 0; i < c->service_count; i++)
+  for (size_t i = 0; i < c->service_count; i++)
     if (c->services[i].service_id == service_id)
       return &c->services[i];
   if (c->service_count >= EMMCACHE_MAX_SERVICES)
@@ -138,14 +137,14 @@ int emmcache_load(emmcache_t *c, device_state_t *d, const char *path) {
 
 int emmcache_save(const emmcache_t *c, const char *path) {
   unsigned char buf[(EMMCACHE_MAX_SERVICES + 1) * PSI_SECTION_ASM_BUF_LEN];
-  size_t off = 0, i;
+  size_t off = 0;
   FILE *f;
 
   if (c->have_emm_u) {
     memcpy(buf + off, c->emm_u.raw, c->emm_u.len);
     off += c->emm_u.len;
   }
-  for (i = 0; i < c->service_count; i++) {
+  for (size_t i = 0; i < c->service_count; i++) {
     memcpy(buf + off, c->services[i].sec.raw, c->services[i].sec.len);
     off += c->services[i].sec.len;
   }

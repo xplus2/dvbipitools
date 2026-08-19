@@ -47,7 +47,6 @@ static int due_s(double now, double *last, double interval) {
 
 mpts_t *mpts_new(unsigned tsid, unsigned onid, const char *network_name, const psi_pat_entry_t *entries, unsigned n_programs, const mpts_program_ops_t *program_ops) {
   mpts_t *m;
-  unsigned i;
 
   if (n_programs > MPTS_MAX_PROGRAMS) {
     log_line("mpts: %u programs requested, exceeds MPTS_MAX_PROGRAMS (%u)", n_programs, MPTS_MAX_PROGRAMS);
@@ -61,7 +60,7 @@ mpts_t *mpts_new(unsigned tsid, unsigned onid, const char *network_name, const p
   m->network_name = network_name;
   m->n_programs = n_programs;
   m->program_ops = program_ops;
-  for (i = 0; i < n_programs; i++) {
+  for (unsigned i = 0; i < n_programs; i++) {
     m->entries[i] = entries[i];
     m->last_eit[i] = -1.0;
   }
@@ -81,11 +80,10 @@ void mpts_set_program(mpts_t *m, unsigned idx, void *program_ctx) {
 }
 
 void mpts_set_cas(mpts_t *m, void *cas_ctx, const mpts_cas_ops_t *cas_ops, const mpts_cas_vendor_pid_t *vendors, size_t n_vendors) {
-  size_t i;
   m->cas_ctx = cas_ctx;
   m->cas_ops = cas_ops;
   m->n_cas_vendors = n_vendors < MPTS_MAX_CAS_VENDORS ? n_vendors : MPTS_MAX_CAS_VENDORS;
-  for (i = 0; i < m->n_cas_vendors; i++)
+  for (size_t i = 0; i < m->n_cas_vendors; i++)
     m->cas_vendors[i] = vendors[i];
   m->last_cat = -1.0;
 }
@@ -95,7 +93,6 @@ size_t mpts_tick(mpts_t *m, double now_s, ts_packet_cb cb, void *ctx) {
   unsigned char ptr0 = 0x00;
   psi_sdt_entry_t sdt_entries[MPTS_MAX_PROGRAMS];
   size_t n, count = 0;
-  unsigned i, n_sdt;
 
   if (due_s(now_s, &m->last_pat, MPTS_INTERVAL_PAT_CAT)) {
     n = psi_build_pat_multi(m->tsid, m->ver_pat, m->entries, m->n_programs, sec, sizeof sec);
@@ -114,8 +111,8 @@ size_t mpts_tick(mpts_t *m, double now_s, ts_packet_cb cb, void *ctx) {
   }
 
   if (due_s(now_s, &m->last_sdt, MPTS_INTERVAL_SDT)) {
-    n_sdt = 0;
-    for (i = 0; i < m->n_programs; i++) {
+    unsigned n_sdt = 0;
+    for (unsigned i = 0; i < m->n_programs; i++) {
       void *pctx = m->program_ctx[i];
       if (pctx && m->program_ops->get_sdt_info(pctx, &sdt_entries[n_sdt]) == 0)
         n_sdt++;
@@ -136,7 +133,7 @@ size_t mpts_tick(mpts_t *m, double now_s, ts_packet_cb cb, void *ctx) {
     }
   }
 
-  for (i = 0; i < m->n_programs; i++) {
+  for (unsigned i = 0; i < m->n_programs; i++) {
     void *pctx = m->program_ctx[i];
     int eit_due;
 

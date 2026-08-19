@@ -38,8 +38,8 @@ static uint64_t decode_pcr_base(const unsigned char *p) {
 START_TEST(ts_packet_emit_single_packet_reassembles_via_standard_offset) {
   unsigned char data[10];
   unsigned char cc = 0;
-  size_t off, i;
-  for (i = 0; i < sizeof data; i++)
+  size_t off;
+  for (size_t i = 0; i < sizeof data; i++)
     data[i] = (unsigned char)(0x30 + i);
 
   g_count = 0;
@@ -63,10 +63,10 @@ START_TEST(ts_packet_emit_splits_across_packets_with_pointer_on_first_only) {
   unsigned char data[190];
   unsigned char cc = 0;
   unsigned char rebuilt[190];
-  size_t off, got = 0, i;
+  size_t off, got = 0;
   const unsigned char pointer_byte = 0x00;
 
-  for (i = 0; i < sizeof data; i++)
+  for (size_t i = 0; i < sizeof data; i++)
     data[i] = (unsigned char)(i & 0xFF);
 
   g_count = 0;
@@ -119,10 +119,10 @@ END_TEST
 START_TEST(ts_packet_emit_partial_bounds_to_max_packets_per_call) {
   unsigned char data[190];
   unsigned char cc = 0;
-  size_t offset = 0, i, n;
+  size_t offset = 0, n;
   const unsigned char pointer_byte = 0x00;
 
-  for (i = 0; i < sizeof data; i++)
+  for (size_t i = 0; i < sizeof data; i++)
     data[i] = (unsigned char)(i & 0xFF);
 
   g_count = 0;
@@ -146,10 +146,10 @@ START_TEST(ts_packet_emit_partial_matches_ts_packet_emit_byte_for_byte) {
   unsigned char data[190];
   unsigned char cc_full = 0, cc_partial = 0;
   unsigned char full_pkts[2][188], partial_pkts[2][188];
-  size_t offset = 0, i;
+  size_t offset = 0;
   const unsigned char pointer_byte = 0x00;
 
-  for (i = 0; i < sizeof data; i++)
+  for (size_t i = 0; i < sizeof data; i++)
     data[i] = (unsigned char)((i * 7) & 0xFF);
 
   g_count = 0;

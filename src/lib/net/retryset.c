@@ -34,7 +34,6 @@ struct retryset {
 retryset_t *retryset_new(unsigned n, void *const *slot_ctxs, const char *const *labels,
                           const retryset_ops_t *ops, long error_retry_s) {
   retryset_t *rs;
-  unsigned i;
 
   if (n > RETRYSET_MAX_SLOTS)
     return NULL;
@@ -49,7 +48,7 @@ retryset_t *retryset_new(unsigned n, void *const *slot_ctxs, const char *const *
     log_line("multi-input: no -e given, defaulting to %lds per-input retry", rs->retry_interval_s);
   }
 
-  for (i = 0; i < n; i++) {
+  for (unsigned i = 0; i < n; i++) {
     retryset_slot_t *sl = &rs->slots[i];
     sl->slot_ctx = slot_ctxs[i];
     sl->label = labels ? labels[i] : NULL;
@@ -60,11 +59,9 @@ retryset_t *retryset_new(unsigned n, void *const *slot_ctxs, const char *const *
 }
 
 void retryset_free(retryset_t *rs) {
-  unsigned i;
-
   if (!rs)
     return;
-  for (i = 0; i < rs->count; i++) {
+  for (unsigned i = 0; i < rs->count; i++) {
     retryset_slot_t *sl = &rs->slots[i];
     if (sl->opening)
       rs->ops->open_free(sl->opening);
@@ -101,9 +98,8 @@ short retryset_poll_events(const retryset_t *rs, unsigned idx) {
 
 time_t retryset_next_deadline(const retryset_t *rs) {
   time_t best = RETRYSET_NEVER;
-  unsigned i;
 
-  for (i = 0; i < rs->count; i++) {
+  for (unsigned i = 0; i < rs->count; i++) {
     const retryset_slot_t *sl = &rs->slots[i];
     if (sl->state != RETRYSET_DOWN || sl->retry_deadline == RETRYSET_NEVER)
       continue;

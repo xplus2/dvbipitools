@@ -21,12 +21,11 @@ static char *write_temp(const unsigned char *data, size_t len) {
 }
 
 static void fill_ts_packet(unsigned char *pkt, unsigned char tag) {
-  size_t i;
   pkt[0] = 0x47;
   pkt[1] = 0x00;
   pkt[2] = 0x00;
   pkt[3] = 0x10;
-  for (i = 4; i < 188; i++)
+  for (size_t i = 4; i < 188; i++)
     pkt[i] = tag;
 }
 
@@ -48,8 +47,7 @@ static void fill_rtp_header(unsigned char *h, uint32_t ts, uint32_t seq) {
 
 static ssize_t read_all(tssrc_t *s, unsigned char *buf, size_t cap) {
   size_t got = 0;
-  int tries;
-  for (tries = 0; got < cap && tries < 100000; tries++) {
+  for (int tries = 0; got < cap && tries < 100000; tries++) {
     ssize_t n = tssrc_read(s, buf + got, cap - got, NULL);
     if (n < 0)
       break;
@@ -60,12 +58,11 @@ static ssize_t read_all(tssrc_t *s, unsigned char *buf, size_t cap) {
 
 START_TEST(tssrc_file_raw_ts_passthrough) {
   unsigned char content[20 * 188], readback[20 * 188];
-  unsigned i;
   char *path;
   tssrc_cfg_t cfg;
   tssrc_t *s;
 
-  for (i = 0; i < 20; i++)
+  for (unsigned i = 0; i < 20; i++)
     fill_ts_packet(content + i * 188, (unsigned char)i);
 
   path = write_temp(content, sizeof content);
@@ -87,15 +84,15 @@ END_TEST
 
 START_TEST(tssrc_file_rtp_framed_deframes) {
   unsigned char content[6 * (12 + 7 * 188)], expect_ts[6 * 7 * 188], readback[6 * 7 * 188];
-  unsigned rec, k, off = 0, eoff = 0;
+  unsigned off = 0, eoff = 0;
   char *path;
   tssrc_cfg_t cfg;
   tssrc_t *s;
 
-  for (rec = 0; rec < 6; rec++) {
+  for (unsigned rec = 0; rec < 6; rec++) {
     fill_rtp_header(content + off, 90000 * rec, rec);
     off += 12;
-    for (k = 0; k < 7; k++) {
+    for (unsigned k = 0; k < 7; k++) {
       unsigned char tag = (unsigned char)(rec * 7 + k);
       fill_ts_packet(content + off, tag);
       fill_ts_packet(expect_ts + eoff, tag);
@@ -126,12 +123,11 @@ END_TEST
 
 START_TEST(tssrc_rewind_restarts_raw_file_from_zero) {
   unsigned char content[10 * 188], first_pass[188], second_pass[3 * 188];
-  unsigned i;
   char *path;
   tssrc_cfg_t cfg;
   tssrc_t *s;
 
-  for (i = 0; i < 10; i++)
+  for (unsigned i = 0; i < 10; i++)
     fill_ts_packet(content + i * 188, (unsigned char)i);
 
   path = write_temp(content, sizeof content);

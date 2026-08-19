@@ -46,8 +46,7 @@ static int v6_prefix_match(const struct in6_addr *a, const struct in6_addr *b, u
 }
 
 int in_ranges(int family, const void *addr, const cidr_t *ranges, size_t range_count) {
-  size_t i;
-  for (i = 0; i < range_count; i++) {
+  for (size_t i = 0; i < range_count; i++) {
     const cidr_t *c = &ranges[i];
     if (c->family != family)
       continue;

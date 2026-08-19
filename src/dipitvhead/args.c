@@ -121,14 +121,14 @@ static int pid_parse(const char *s, unsigned *out) {
 /* comma-separated PIDs and/or the "video"/"audio" keywords, e.g. "0x0103,video" or "audio,0x0104,0x0106" */
 static int cas_pids_parse(const char *s, config_t *cfg) {
   char buf[512];
-  char *tok, *save = NULL;
+  char *save = NULL;
   if (strlen(s) >= sizeof buf)
     return -1;
   bufcpy(buf, sizeof buf, s);
   cfg->cas_pid_count = 0;
   cfg->cas_pids_video = 0;
   cfg->cas_pids_audio = 0;
-  for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+  for (char *tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
     unsigned pid;
     if (strcmp(tok, "video") == 0) {
       cfg->cas_pids_video = 1;
@@ -283,9 +283,8 @@ static int assign_missing_sids(config_t *cfg) {
   unsigned used[ARGS_MAX_INPUTS];
   unsigned n_used = 0;
   unsigned next = 1;
-  unsigned i;
 
-  for (i = 0; i < cfg->n_inputs; i++) {
+  for (unsigned i = 0; i < cfg->n_inputs; i++) {
     if (cfg->inputs[i].sid == 0)
       continue;
     if (is_sid_used(used, n_used, cfg->inputs[i].sid)) {
@@ -294,7 +293,7 @@ static int assign_missing_sids(config_t *cfg) {
     }
     used[n_used++] = cfg->inputs[i].sid;
   }
-  for (i = 0; i < cfg->n_inputs; i++) {
+  for (unsigned i = 0; i < cfg->n_inputs; i++) {
     if (cfg->inputs[i].sid != 0)
       continue;
     while (is_sid_used(used, n_used, next))
@@ -367,7 +366,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *profile_arg = NULL;
   int have_secret = 0;
   int c;
-  unsigned i;
 
   memset(cfg, 0, sizeof *cfg);
   cfg->tsid = 1;
@@ -852,7 +850,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--secret requires --profile main");
     return ARGS_ERR;
   }
-  for (i = 0; i < cfg->n_inputs; i++) {
+  for (unsigned i = 0; i < cfg->n_inputs; i++) {
     dipitvhead_input_t *in = &cfg->inputs[i];
     if (in->hbbtv_url && (!in->hbbtv_org_id || !in->hbbtv_app_id)) {
       argerr("--hbbtv requires --hbbtv-org-id and --hbbtv-app-id");
@@ -882,7 +880,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
 
   if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss1_enabled || cfg->biss2_enabled || cfg->biss2_ca_enabled) {
-    for (i = 0; i < cfg->n_inputs; i++)
+    for (unsigned i = 0; i < cfg->n_inputs; i++)
       if (!(cfg->inputs[i].strip_mask & TVSTRIP_ECM)) {
         log_line(TOOL_NAME ": source CA/ECM passthrough disabled: --cas-algo/--biss* already scrambling this mux");
         break;

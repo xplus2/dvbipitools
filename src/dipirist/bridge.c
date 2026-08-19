@@ -108,9 +108,7 @@ static int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
 /* one rist_peer_create() per e bonded URI, receiver side (always listens). --secret --cname
    --buffer override URI's own query params. 0 ok, -1 error */
 static int add_peers(struct rist_ctx *ctx, const endpoint_t *e, const config_t *cfg) {
-  int i;
-
-  for (i = 0; i < e->n_rist; i++) {
+  for (int i = 0; i < e->n_rist; i++) {
     struct rist_peer_config *pc = NULL;
     struct rist_peer *peer;
     if (rist_parse_address2(e->rist_uri[i], &pc) != 0 || !pc) {
@@ -142,7 +140,6 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   ristout_cfg_t rcfg;
   ristout_t *rist;
   unsigned char buf[65536];
-  int i;
   int rc = 0;
 
   nonrist_to_tssrc_cfg(&cfg->in.nonrist, cfg->iface, cfg->insecure_tls, &tc);
@@ -151,7 +148,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     return 1;
 
   memset(&rcfg, 0, sizeof rcfg);
-  for (i = 0; i < cfg->out.n_rist; i++)
+  for (int i = 0; i < cfg->out.n_rist; i++)
     rcfg.peer_uri[i] = cfg->out.rist_uri[i];
   rcfg.npeers = cfg->out.n_rist;
   rcfg.profile = cfg->profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;

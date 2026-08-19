@@ -27,14 +27,14 @@ static int probe_cb(void *v, const unsigned char *pkt) {
 
 static int all_named(const psi_t *psi, int *count) {
   const psi_multi_program_t *m;
-  int i, n;
+  int n;
 
   m = psi_multi_programs(psi, &n);
   if (count)
     *count = n;
   if (!n)
     return 0;
-  for (i = 0; i < n; i++)
+  for (int i = 0; i < n; i++)
     if (!m[i].resolved || !m[i].service_name[0])
       return 0;
   return 1;
@@ -42,11 +42,11 @@ static int all_named(const psi_t *psi, int *count) {
 
 static void fill_result(const psi_t *psi, mpts_probe_result_t *r) {
   const psi_multi_program_t *m;
-  int i, n;
+  int n;
 
   m = psi_multi_programs(psi, &n);
   r->program_count = (n > PSI_MAX_PROGRAMS) ? PSI_MAX_PROGRAMS : n;
-  for (i = 0; i < r->program_count; i++) {
+  for (int i = 0; i < r->program_count; i++) {
     r->programs[i].program_number = m[i].program_number;
     r->programs[i].pmt_pid = m[i].pmt_pid;
     bufcpy(r->programs[i].name, sizeof r->programs[i].name, m[i].service_name);
@@ -104,9 +104,7 @@ mpts_probe_result_t mpts_probe_run(tssrc_t *src, int name_wait_ms) {
 }
 
 void mpts_probe_print_programs(const char *tool_name, const mpts_probe_result_t *r) {
-  int i;
-
   log_line("%s: %d program(s) available:", tool_name, r->program_count);
-  for (i = 0; i < r->program_count; i++)
+  for (int i = 0; i < r->program_count; i++)
     log_line("%s:   sid=%u pmt_pid=0x%04x %s", tool_name, r->programs[i].program_number, r->programs[i].pmt_pid, r->programs[i].name[0] ? r->programs[i].name : "(no SDT)");
 }

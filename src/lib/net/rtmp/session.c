@@ -9,16 +9,14 @@
 #define RTMP_MAX_MESSAGE_BYTES (10u << 20)
 
 static rtmp_out_chan_t *out_chan_find(struct rtmp *r, uint32_t cid) {
-  unsigned i;
-  for (i = 0; i < RTMP_N_CHAN; i++)
+  for (unsigned i = 0; i < RTMP_N_CHAN; i++)
     if (r->out_chan[i].used && r->out_chan[i].cid == cid)
       return &r->out_chan[i];
   return NULL;
 }
 
 static rtmp_out_chan_t *out_chan_alloc(struct rtmp *r, uint32_t cid) {
-  unsigned i;
-  for (i = 0; i < RTMP_N_CHAN; i++)
+  for (unsigned i = 0; i < RTMP_N_CHAN; i++)
     if (!r->out_chan[i].used) {
       memset(&r->out_chan[i], 0, sizeof r->out_chan[i]);
       r->out_chan[i].cid = cid;
@@ -88,16 +86,14 @@ int rtmp_session_write_message(struct rtmp *r, uint32_t cid, unsigned char type,
 }
 
 static rtmp_in_chan_t *in_chan_find(struct rtmp *r, uint32_t cid) {
-  unsigned i;
-  for (i = 0; i < RTMP_N_CHAN; i++)
+  for (unsigned i = 0; i < RTMP_N_CHAN; i++)
     if (r->in_chan[i].used && r->in_chan[i].cid == cid)
       return &r->in_chan[i];
   return NULL;
 }
 
 static rtmp_in_chan_t *in_chan_alloc(struct rtmp *r, uint32_t cid) {
-  unsigned i;
-  for (i = 0; i < RTMP_N_CHAN; i++)
+  for (unsigned i = 0; i < RTMP_N_CHAN; i++)
     if (!r->in_chan[i].used) {
       memset(&r->in_chan[i], 0, sizeof r->in_chan[i]);
       r->in_chan[i].cid = cid;

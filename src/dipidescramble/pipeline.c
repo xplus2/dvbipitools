@@ -49,8 +49,7 @@ static void rtmp_note_result(int ok, int *had_error, int idx) {
 
 void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len) {
   loop_ctx_t *lc = ctx;
-  int i;
-  for (i = 0; i < lc->n_rtmp; i++)
+  for (int i = 0; i < lc->n_rtmp; i++)
     rtmp_note_result(rtmpout_write(lc->rtmp[i], type, timestamp_ms, data, len) >= 0, &lc->rtmp_had_error[i], i);
 }
 

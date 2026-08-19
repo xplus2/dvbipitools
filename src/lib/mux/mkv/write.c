@@ -29,8 +29,7 @@ void wfd(mkv_t *m, const void *p, size_t n) {
 }
 
 track_t *find_track(mkv_t *m, unsigned pid) {
-  int i;
-  for (i = 0; i < m->ntrk; i++)
+  for (int i = 0; i < m->ntrk; i++)
     if (m->trk[i].pid == pid)
       return &m->trk[i];
   return NULL;
@@ -106,7 +105,6 @@ static void write_head(mkv_t *m) {
   ebuf_t b, e;
   time_t now = time(NULL);
   struct tm tm;
-  int i;
 
   gmtime_r(&now, &tm);
   strftime(date, sizeof date, "%Y-%m-%d %H:%M:%S", &tm);
@@ -138,7 +136,7 @@ static void write_head(mkv_t *m) {
 
   memset(&b, 0, sizeof b);
   memset(&e, 0, sizeof e);
-  for (i = 0; i < m->ntrk; i++) {
+  for (int i = 0; i < m->ntrk; i++) {
     track_t *t = &m->trk[i];
     ebuf_t te, sub;
     int video = (t->cls == PID_VIDEO);
@@ -194,25 +192,23 @@ static void write_head(mkv_t *m) {
 }
 
 void start(mkv_t *m) {
-  int i;
-
   if (m->started || !m->ntrk)
     return;
   m->t0 = 0;
   if (m->npend) {
     int vnum = 0, found = 0;
     int64_t vt = 0;
-    for (i = 0; i < m->ntrk; i++)
+    for (int i = 0; i < m->ntrk; i++)
       if (m->trk[i].cls == PID_VIDEO) {
         vnum = m->trk[i].num;
         break;
       }
     m->t0 = m->pend[0].ts;
-    for (i = 1; i < m->npend; i++)
+    for (int i = 1; i < m->npend; i++)
       if (m->pend[i].ts < m->t0)
         m->t0 = m->pend[i].ts;
     /* with video: start at first keyframe */
-    for (i = 0; vnum && i < m->npend; i++)
+    for (int i = 0; vnum && i < m->npend; i++)
       if (m->pend[i].num == vnum && (!found || m->pend[i].ts < vt)) {
         vt = m->pend[i].ts;
         found = 1;
@@ -222,7 +218,7 @@ void start(mkv_t *m) {
   }
   write_head(m);
   m->started = 1;
-  for (i = 0; i < m->npend; i++) {
+  for (int i = 0; i < m->npend; i++) {
     if (m->pend[i].ts >= m->t0)
       put_block(m, m->pend[i].num, m->pend[i].ts - m->t0, m->pend[i].data, m->pend[i].len, m->pend[i].key, m->pend[i].dur);
     free(m->pend[i].data);

@@ -183,12 +183,11 @@ static void parse_rtpfb(const unsigned char *p, size_t len, unsigned fmt, rtcp_n
    chunk padded to a 32-bit boundary. RFC 3550 6.5. */
 static void parse_sdes(const unsigned char *p, size_t len, unsigned sc, rtcp_sdes_cb cb, void *user) {
   size_t off = 4; /* skip RTCP header (V/P/SC, PT, length) */
-  unsigned chunk;
 
   if (!cb)
     return;
 
-  for (chunk = 0; chunk < sc && off + 4 <= len; chunk++) {
+  for (unsigned chunk = 0; chunk < sc && off + 4 <= len; chunk++) {
     uint32_t ssrc = be32_get(p + off);
     size_t item_off = off + 4;
     rtcp_sdes_t sdes;

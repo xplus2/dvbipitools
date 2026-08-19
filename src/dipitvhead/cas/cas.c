@@ -77,20 +77,18 @@ static void pcr_sample(cas_t *c, uint64_t pcr27) {
 }
 
 static void add_pid(unsigned *pids, size_t *count, size_t cap, unsigned pid) {
-  size_t i;
   if (*count >= cap) {
     log_line(TOOL_NAME ": cas: pid 0x%x dropped, already at the %zu pid cap", pid, cap);
     return;
   }
-  for (i = 0; i < *count; i++)
+  for (size_t i = 0; i < *count; i++)
     if (pids[i] == pid)
       return;
   pids[(*count)++] = pid;
 }
 
 static void add_program_cas_pids(const config_t *cfg, const out_es_t *es, int es_count, unsigned *out, size_t *count, size_t cap) {
-  int i;
-  for (i = 0; i < es_count; i++) {
+  for (int i = 0; i < es_count; i++) {
     if (cfg->cas_pids_video && es[i].src->cls == PID_VIDEO)
       add_pid(out, count, cap, es[i].out_pid);
     if (cfg->cas_pids_audio && es[i].src->cls == PID_AUDIO)
@@ -99,13 +97,12 @@ static void add_program_cas_pids(const config_t *cfg, const out_es_t *es, int es
 }
 
 size_t cas_resolve_pids_multi(const config_t *cfg, const out_es_t *const *es_lists, const int *es_counts, unsigned n_programs, unsigned *out, size_t cap) {
-  size_t count = 0, k;
-  unsigned p;
+  size_t count = 0;
 
-  for (k = 0; k < cfg->cas_pid_count; k++)
+  for (size_t k = 0; k < cfg->cas_pid_count; k++)
     add_pid(out, &count, cap, cfg->cas_pids[k]);
   if (cfg->cas_pids_video || cfg->cas_pids_audio)
-    for (p = 0; p < n_programs; p++)
+    for (unsigned p = 0; p < n_programs; p++)
       add_program_cas_pids(cfg, es_lists[p], es_counts[p], out, &count, cap);
   return count;
 }
@@ -126,7 +123,6 @@ static ecmg_outage_mode_t map_outage_mode(cas_outage_mode_t m) {
 }
 
 static void fill_group_cfg(const config_t *cfg, cas_group_cfg_t *gcfg) {
-  size_t i;
   memset(gcfg, 0, sizeof *gcfg);
   gcfg->algo = (cfg->cas_algo == CAS_ALGO_CISSA) ? SCRAMBLE_ALGO_CISSA : SCRAMBLE_ALGO_CSA2;
   gcfg->legacy_csa1 = (cfg->cas_algo == CAS_ALGO_CSA1);
@@ -135,7 +131,7 @@ static void fill_group_cfg(const config_t *cfg, cas_group_cfg_t *gcfg) {
   if (cfg->n_cas_vendors > CAS_GROUP_MAX_VENDORS)
     log_line(TOOL_NAME ": cas: %u vendors configured, only the first %d will be started", cfg->n_cas_vendors, CAS_GROUP_MAX_VENDORS);
   gcfg->vendor_count = cfg->n_cas_vendors < CAS_GROUP_MAX_VENDORS ? cfg->n_cas_vendors : CAS_GROUP_MAX_VENDORS;
-  for (i = 0; i < gcfg->vendor_count; i++) {
+  for (size_t i = 0; i < gcfg->vendor_count; i++) {
     const cas_vendor_t *v = &cfg->cas_vendors[i];
     cas_group_vendor_cfg_t *gv = &gcfg->vendors[i];
     gv->ecmg_host = v->ecmg_host;

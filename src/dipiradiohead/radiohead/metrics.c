@@ -12,7 +12,6 @@
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
                    const input_metrics_t *inputs, unsigned n_inputs, const radio_metrics_t *rm, cas_t *cas) {
   metrics_writer_t w;
-  unsigned c;
 
   if (!metrics_exporter_due(mx, now))
     return;
@@ -24,17 +23,17 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
   metrics_writer_put(&w, METRICS_ID_CONFIGURED_SERVICES, NULL, configured_services);
   metrics_writer_put(&w, METRICS_ID_ACTIVE_SERVICES, NULL, active_services);
   metrics_writer_put_inputs(&w, inputs, n_inputs);
-  for (c = 0; c <= SRC_AAC_LATM; c++)
+  for (unsigned c = 0; c <= SRC_AAC_LATM; c++)
     metrics_writer_put(&w, METRICS_ID_RADIO_AUDIO_FRAMES_TOTAL, codec_name((source_codec_t)c), rm->frames_total[c]);
   metrics_writer_put(&w, METRICS_ID_RADIO_AUDIO_FRAMING_ERRORS_TOTAL, NULL, rm->framing_errors_total);
   metrics_writer_put(&w, METRICS_ID_RADIO_METADATA_UPDATES_TOTAL, NULL, rm->metadata_updates_total);
   if (cas) {
     cas_metrics_t cm;
-    size_t i, n = cas_vendor_count(cas);
+    size_t n = cas_vendor_count(cas);
     cas_get_metrics(cas, &cm);
     metrics_writer_put(&w, METRICS_ID_CAS_SCRAMBLED_PACKETS_TOTAL, NULL, cm.scrambled_packets_total);
     metrics_writer_put(&w, METRICS_ID_CAS_UNEXPECTED_CLEAR_PACKETS_TOTAL, NULL, cm.unexpected_clear_packets_total);
-    for (i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
       char label[16];
       cas_metrics_t vm;
       cas_vendor_metrics(cas, i, &vm);
@@ -65,10 +64,10 @@ static const mpts_cas_ops_t mpts_cas_ops = {mpts_cas_build_cat, mpts_cas_ecm_due
 
 void radiohead_mpts_set_cas(mpts_t *mpts, cas_t *cas) {
   mpts_cas_vendor_pid_t vendors[MPTS_MAX_CAS_VENDORS];
-  size_t i, n = cas_vendor_count(cas);
+  size_t n = cas_vendor_count(cas);
   if (n > MPTS_MAX_CAS_VENDORS)
     n = MPTS_MAX_CAS_VENDORS;
-  for (i = 0; i < n; i++) {
+  for (size_t i = 0; i < n; i++) {
     vendors[i].ecm_pid = cas_vendor_ecm_pid(cas, i);
     vendors[i].emm_pid = cas_vendor_emm_pid(cas, i);
   }

@@ -38,10 +38,9 @@ void copy_name(char *dst, size_t dstsz, const unsigned char *src, size_t len) {
 }
 
 void add_ecm(psi_t *c, unsigned pid) {
-  int k;
   if (pid == 0 || pid == 0x1FFF)
     return;
-  for (k = 0; k < c->ecm_count; k++)
+  for (int k = 0; k < c->ecm_count; k++)
     if (c->ecm[k] == pid)
       return;
   if (c->ecm_count < PSI_MAX_ES)
@@ -50,9 +49,8 @@ void add_ecm(psi_t *c, unsigned pid) {
 
 /* parses a teletext descriptor (tag 0x56): 5-byte entries, prefers subtitle types (2/5) */
 static void parse_teletext_desc(psi_es_t *e, const unsigned char *ld, size_t l) {
-  size_t x;
   e->cls = PID_TELETEXT;
-  for (x = 0; x + 5 <= l; x += 5) {
+  for (size_t x = 0; x + 5 <= l; x += 5) {
     int ty = ld[x + 3] >> 3;
     unsigned mag = ld[x + 3] & 0x07;
     unsigned pg = ld[x + 4];

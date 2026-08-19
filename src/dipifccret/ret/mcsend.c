@@ -52,10 +52,9 @@ mcsend_table_t *mcsend_table_new(size_t max_channels, const char *iface, int ttl
 }
 
 void mcsend_table_free(mcsend_table_t *t) {
-  size_t i;
   if (!t)
     return;
-  for (i = 0; i < t->hash_size; i++) {
+  for (size_t i = 0; i < t->hash_size; i++) {
     if (t->entries[i].sock)
       mcast_close(t->entries[i].sock);
   }

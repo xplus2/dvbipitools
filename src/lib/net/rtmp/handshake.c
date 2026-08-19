@@ -15,14 +15,13 @@ static uint32_t xorshift32(uint32_t *s) {
 
 void rtmp_handshake_c1(unsigned char *c1, uint32_t timestamp) {
   uint32_t s = timestamp ? timestamp : 1;
-  size_t i;
 
   c1[0] = (unsigned char)(timestamp >> 24);
   c1[1] = (unsigned char)(timestamp >> 16);
   c1[2] = (unsigned char)(timestamp >> 8);
   c1[3] = (unsigned char)timestamp;
   memset(c1 + 4, 0, 4);
-  for (i = 8; i < RTMP_HANDSHAKE_SIZE; i += 4) {
+  for (size_t i = 8; i < RTMP_HANDSHAKE_SIZE; i += 4) {
     uint32_t v = xorshift32(&s);
     c1[i] = (unsigned char)(v >> 24);
     c1[i + 1] = (unsigned char)(v >> 16);

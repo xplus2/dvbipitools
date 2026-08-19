@@ -144,8 +144,7 @@ unsigned csa2_batch_size(void) {
    in one call, verified against the single-packet API on mixed non-8-aligned lengths (real TS payloads vary with adaptation field size) */
 static unsigned int csa2_batch_maxlen(const csa2_batch_entry_t *entries, unsigned n) {
   unsigned int maxlen = 0;
-  unsigned i;
-  for (i = 0; i < n; i++)
+  for (unsigned i = 0; i < n; i++)
     if ((unsigned int)entries[i].len > maxlen)
       maxlen = (unsigned int)entries[i].len;
   return (maxlen + 7u) & ~7u;
@@ -153,8 +152,7 @@ static unsigned int csa2_batch_maxlen(const csa2_batch_entry_t *entries, unsigne
 
 void csa2_encrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n) {
   struct dvbcsa_bs_batch_s batch[n + 1];
-  unsigned i;
-  for (i = 0; i < n; i++) {
+  for (unsigned i = 0; i < n; i++) {
     batch[i].data = entries[i].data;
     batch[i].len = (unsigned int)entries[i].len;
   }
@@ -164,8 +162,7 @@ void csa2_encrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n) 
 
 void csa2_decrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n) {
   struct dvbcsa_bs_batch_s batch[n + 1];
-  unsigned i;
-  for (i = 0; i < n; i++) {
+  for (unsigned i = 0; i < n; i++) {
     batch[i].data = entries[i].data;
     batch[i].len = (unsigned int)entries[i].len;
   }

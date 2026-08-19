@@ -155,14 +155,13 @@ static rtmp_t *make_client_with_auth(capture_t *cap, const char *user, const cha
 /* drives handshake: C0/C1 out, feeds back S0/S1/S2, expects connect on wire */
 static void run_handshake(rtmp_t *r, capture_t *cap) {
   unsigned char s0s1s2[1 + 2 * RTMP_HANDSHAKE_SIZE];
-  size_t i;
 
   rtmp_start(r);
   ck_assert_uint_eq(cap->len, 1 + RTMP_HANDSHAKE_SIZE);
   ck_assert_uint_eq(cap->buf[0], RTMP_VERSION);
 
   s0s1s2[0] = RTMP_VERSION;
-  for (i = 0; i < 2 * RTMP_HANDSHAKE_SIZE; i++)
+  for (size_t i = 0; i < 2 * RTMP_HANDSHAKE_SIZE; i++)
     s0s1s2[1 + i] = (unsigned char)(i * 7); /* arbitrary, simple handshake never validates it */
   cap->len = 0;
   ck_assert_int_eq(rtmp_feed(r, s0s1s2, sizeof s0s1s2), 0);

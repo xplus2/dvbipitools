@@ -62,23 +62,22 @@ static int unham_ready;
 
 static void unham_init(void) {
   unsigned char code[16];
-  int d, i, k;
 
-  for (d = 0; d < 16; d++) {
+  for (int d = 0; d < 16; d++) {
     unsigned D1 = d & 1, D2 = (d >> 1) & 1, D3 = (d >> 2) & 1, D4 = (d >> 3) & 1;
     unsigned P1 = D1 ^ D2 ^ D4, P2 = D1 ^ D3 ^ D4, P3 = D2 ^ D3 ^ D4;
     unsigned c = P1 | (P2 << 1) | (D1 << 2) | (P3 << 3) | (D2 << 4) | (D3 << 5) | (D4 << 6);
     unsigned ones = 0;
-    for (k = 0; k < 8; k++)
+    for (int k = 0; k < 8; k++)
       ones += (c >> k) & 1;
     c |= (ones & 1) << 7; /* P4: even parity */
     code[d] = rev8((unsigned char)c);
   }
-  for (i = 0; i < 256; i++) {
+  for (int i = 0; i < 256; i++) {
     int best = -1, bestd = 9, d2;
     for (d2 = 0; d2 < 16; d2++) {
       int diff = i ^ code[d2], n = 0;
-      for (k = 0; k < 8; k++)
+      for (int k = 0; k < 8; k++)
         n += (diff >> k) & 1;
       if (n < bestd) {
         bestd = n;
@@ -101,8 +100,7 @@ static void append_utf8(char *dst, size_t cap, size_t *o, const char *s) {
 /* teletext bytes -> UTF-8; controls -> space */
 static void row_text(const unsigned char *d, int cols, int nat, char *out, size_t cap) {
   size_t o = 0;
-  int i, k;
-  for (i = 0; i < cols; i++) {
+  for (int i = 0; i < cols; i++) {
     unsigned char c = d[i] & 0x7F;
     const char *rep = NULL;
     if (c < 0x20) { /* spacing attribute */
@@ -110,7 +108,7 @@ static void row_text(const unsigned char *d, int cols, int nat, char *out, size_
         out[o++] = ' ';
       continue;
     }
-    for (k = 0; k < 13; k++)
+    for (int k = 0; k < 13; k++)
       if (g0_nat_pos[k] == c) {
         rep = g0_nat[nat & 7][k];
         break;
@@ -127,9 +125,8 @@ static void row_text(const unsigned char *d, int cols, int nat, char *out, size_
 
 static void build_text(ttx_t *t, char *out, size_t cap) {
   size_t o = 0;
-  int r;
 
-  for (r = 0; r < t->nrows; r++) {
+  for (int r = 0; r < t->nrows; r++) {
     const char *s = t->row[r];
     size_t n;
     while (*s == ' ') /* trim leading */
@@ -194,11 +191,10 @@ static int digit_count(unsigned v) {
 static int is_ident_row(const ttx_t *t, const char *text) {
   int n = digit_count(t->page);
   unsigned v = 0;
-  int i;
 
   while (*text == ' ')
     text++;
-  for (i = 0; i < n; i++) {
+  for (int i = 0; i < n; i++) {
     if (text[i] < '0' || text[i] > '9')
       return 0;
     v = v * 10 + (unsigned)(text[i] - '0');
@@ -209,7 +205,6 @@ static int is_ident_row(const ttx_t *t, const char *text) {
 /* rows of one subtitle arrive together; a gap starts the next */
 static void add_row(ttx_t *t, const unsigned char *d, int64_t ts) {
   char text[TTX_COLS * 4 + 1];
-  int r;
 
   row_text(d, TTX_COLS, t->nat, text, sizeof text);
   if (!text[0])
@@ -219,7 +214,7 @@ static void add_row(ttx_t *t, const unsigned char *d, int64_t ts) {
   if (!t->nrows)
     t->group_start = ts;
   t->group_last = ts;
-  for (r = 0; r < t->nrows; r++)
+  for (int r = 0; r < t->nrows; r++)
     if (strcmp(t->row[r], text) == 0)
       return; /* already in this group */
   if (t->nrows >= TTX_ROWS)
@@ -279,9 +274,9 @@ void ttx_free(ttx_t *t) { free(t); }
 /* handles one EBU teletext subtitle packet (id==0x03) starting at u, if its magazine matches */
 static void handle_ebu_subtitle_packet(ttx_t *t, const unsigned char *u) {
   unsigned char b[42];
-  int k, h0, h1;
+  int h0, h1;
   unsigned mag, pkt;
-  for (k = 0; k < 42; k++) /* mpag(2) + data(40) */
+  for (int k = 0; k < 42; k++) /* mpag(2) + data(40) */
     b[k] = rev8(u[2 + k]);
   h0 = unham[b[0]];
   h1 = unham[b[1]];

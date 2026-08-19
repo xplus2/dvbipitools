@@ -8,8 +8,7 @@
 size_t chan_key_hash(int family, const void *addr, size_t addr_len, unsigned port) {
   uint64_t h = 1469598103934665603ULL; /* FNV-1a 64-bit offset basis */
   const unsigned char *p = (const unsigned char *)addr;
-  size_t i;
-  for (i = 0; i < addr_len; i++) {
+  for (size_t i = 0; i < addr_len; i++) {
     h ^= p[i];
     h *= 1099511628211ULL; /* FNV prime */
   }
@@ -22,10 +21,10 @@ size_t chan_key_hash(int family, const void *addr, size_t addr_len, unsigned por
 
 /* drops all tombstones, reinserts live entries only */
 void chan_hash_rebuild(channel_table_t *t) {
-  size_t i, live = 0;
+  size_t live = 0;
 
   memset(t->hash, 0, t->hash_size * sizeof *t->hash);
-  for (i = 0; i < t->max_channels; i++) {
+  for (size_t i = 0; i < t->max_channels; i++) {
     channel_t *c = &t->chan[i];
     size_t h;
     if (atomic_load_explicit(&c->in_use, memory_order_relaxed) != 1)
@@ -74,10 +73,10 @@ size_t chan_ssrc_hash(uint32_t ssrc) {
 
 /* drops all tombstones, reinserts every ssrc-known live entry */
 void ssrc_hash_rebuild(channel_table_t *t) {
-  size_t i, live = 0;
+  size_t live = 0;
 
   memset(t->ssrc_hash, 0, t->ssrc_hash_size * sizeof *t->ssrc_hash);
-  for (i = 0; i < t->max_channels; i++) {
+  for (size_t i = 0; i < t->max_channels; i++) {
     channel_t *c = &t->chan[i];
     size_t h;
     if (atomic_load_explicit(&c->in_use, memory_order_relaxed) != 1 || !atomic_load_explicit(&c->ssrc_known, memory_order_relaxed))

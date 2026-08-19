@@ -135,7 +135,7 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_stays_in_range) {
   sds_fcc_t fcc;
   unsigned char buf[4096];
   char needle[32];
-  size_t len, i;
+  size_t len;
   unsigned port = 0;
 
   memset(&svc, 0, sizeof svc);
@@ -151,7 +151,7 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_stays_in_range) {
   len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, buf, sizeof buf);
   ck_assert_uint_gt(len, 0u);
 
-  for (i = 0; i < fcc.resolve_max_channels; i++) {
+  for (size_t i = 0; i < fcc.resolve_max_channels; i++) {
     snprintf(needle, sizeof needle, "DestinationPort=\"%u\"", (unsigned)(fcc.resolve_base_port + i));
     if (strstr((char *)buf, needle)) {
       port = fcc.resolve_base_port + (unsigned)i;

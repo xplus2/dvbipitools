@@ -58,9 +58,8 @@ START_TEST(emm_u_decrypt_recovers_bk) {
   unsigned char bk[CRYPTO_KEY_LEN], recovered[CRYPTO_KEY_LEN];
   unsigned char ct[512];
   size_t ctlen = sizeof ct;
-  int i;
 
-  for (i = 0; i < CRYPTO_KEY_LEN; i++)
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++)
     bk[i] = (unsigned char)(i * 7 + 1);
 
   ctx = EVP_PKEY_CTX_new(pkey, NULL);
@@ -116,9 +115,8 @@ static void gcm_encrypt(const unsigned char key[CRYPTO_KEY_LEN], const unsigned 
 START_TEST(emm_g_decrypt_recovers_sk) {
   unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN], recovered[CRYPTO_KEY_LEN];
   unsigned char blob[CRYPTO_EMM_G_LEN];
-  int i;
 
-  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
     bk[i] = (unsigned char)(i + 1);
     sk[i] = (unsigned char)(255 - i);
   }

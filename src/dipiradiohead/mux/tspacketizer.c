@@ -95,7 +95,6 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, double now, const 
   unsigned char sec[4096], pesbuf[8192], prog_desc[32];
   unsigned char ptr0 = 0x00;
   size_t n, count = 0, prog_desc_len = 0;
-  int timer_due, meta_due;
 
   if (due(pts_90k, &t->last_pat, INTERVAL_PAT_PMT)) {
     if (t->cas)
@@ -126,8 +125,8 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, double now, const 
         count += ts_packet_emit(PID_NIT, &t->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
     }
 
-    timer_due = due(pts_90k, &t->last_eit, INTERVAL_EIT);
-    meta_due = t->meta_changed || timer_due;
+    int timer_due = due(pts_90k, &t->last_eit, INTERVAL_EIT);
+    int meta_due = t->meta_changed || timer_due;
     if (meta_due) {
       n = tspacketizer_build_eit(t, sec, sizeof sec);
       if (n)

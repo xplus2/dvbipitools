@@ -33,7 +33,7 @@ static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
 
 void parse_pat(psi_t *c) {
   const unsigned char *b = c->pat.buf;
-  size_t n = c->pat.expect, i, end;
+  size_t n = c->pat.expect, end;
   if (n < 12 || b[0] != 0x00 || crc32_mpeg(b, n) != 0)
     return;
   c->nit_pid = 0;
@@ -42,7 +42,7 @@ void parse_pat(psi_t *c) {
    * be mid-assembly, and the PAT repeats far more often than that takes. */
   c->tsid = ((unsigned)b[3] << 8) | b[4];
   end = n - 4;
-  for (i = 8; i + 4 <= end; i += 4) {
+  for (size_t i = 8; i + 4 <= end; i += 4) {
     unsigned prog = ((unsigned)b[i] << 8) | b[i + 1];
     unsigned pid = (((unsigned)b[i + 2] & 0x1F) << 8) | b[i + 3];
     if (prog == 0) {
@@ -78,7 +78,6 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   size_t n = cand->asm_.expect, i, end, pil, l;
   unsigned prog;
   const unsigned char *ca;
-  int k;
   if (n < 16 || b[0] != 0x02 || crc32_mpeg(b, n) != 0)
     return 0;
   prog = ((unsigned)b[3] << 8) | b[4];
@@ -141,7 +140,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   } else {
     c->es_overflow_logged = 0;
   }
-  for (k = 0; k < c->es_count; k++)
+  for (int k = 0; k < c->es_count; k++)
     if (c->es[k].cls == PID_AUDIO)
       c->es[k].audio_index = ++c->audio_count;
   c->have_pmt = 1;
@@ -151,8 +150,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
 
 /* index into pmt_cand[]/multi[] for program_number, -1 if unknown */
 static int find_multi_index(const psi_t *c, unsigned program_number) {
-  int k;
-  for (k = 0; k < c->pmt_cand_count; k++)
+  for (int k = 0; k < c->pmt_cand_count; k++)
     if (c->pmt_cand[k].program_number == program_number)
       return k;
   return -1;
@@ -160,7 +158,7 @@ static int find_multi_index(const psi_t *c, unsigned program_number) {
 
 void parse_sdt(psi_t *c) {
   const unsigned char *b = c->sdt.buf;
-  size_t n = c->sdt.expect, i, end, dll;
+  size_t n = c->sdt.expect, i, end;
 
   if (n < 12 || b[0] != 0x42 || crc32_mpeg(b, n) != 0)
     return;
@@ -170,7 +168,7 @@ void parse_sdt(psi_t *c) {
   while (i + 5 <= end) {
     unsigned sid = ((unsigned)b[i] << 8) | b[i + 1];
     const unsigned char *d = b + i + 5;
-    dll = tspack_length12(b + i + 3);
+    size_t dll = tspack_length12(b + i + 3);
     if (i + 5 + dll > end)
       break;
     if (sid == c->program_number)

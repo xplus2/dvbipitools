@@ -20,11 +20,10 @@ static unsigned fcc_resolve_port(const sds_service_t *s, const sds_fcc_t *fcc) {
   unsigned char addr[16];
   size_t addr_len = s->family == AF_INET6 ? 16 : 4;
   uint64_t h = 1469598103934665603ULL;
-  size_t i;
 
   if (inet_pton(s->family, s->address, addr) != 1)
     return fcc->port;
-  for (i = 0; i < addr_len; i++) {
+  for (size_t i = 0; i < addr_len; i++) {
     h ^= addr[i];
     h *= 1099511628211ULL;
   }
@@ -173,18 +172,17 @@ void sds_regionalisation_open(FILE *f, const char *domain, unsigned version) {
 }
 
 void sds_regionalisation_item(FILE *f, const sds_cell_t *cell) {
-  int i;
   fputs("<Cell Id=\"", f);
   xml_escape(f, cell->id);
   fputs("\">\n<CountryCode>", f);
   xml_escape(f, cell->country);
   fputs("</CountryCode>\n", f);
-  for (i = 0; i < cell->ca_depth; i++) {
+  for (int i = 0; i < cell->ca_depth; i++) {
     fprintf(f, "<CA Type=\"%u\" Value=\"", cell->ca[i].type);
     xml_escape(f, cell->ca[i].value);
     fputs("\">", f);
   }
-  for (i = 0; i < cell->ca_depth; i++)
+  for (int i = 0; i < cell->ca_depth; i++)
     fputs("</CA>", f);
   fputs("\n</Cell>\n", f);
 }
@@ -216,14 +214,13 @@ size_t sds_build_regionalisation(const char *domain, unsigned version, const sds
 size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *rms, int rms_count, const sds_fus_t *fus, int fus_count, unsigned char *buf, size_t cap) {
   char *ptr;
   size_t len;
-  int i;
   FILE *f = open_memstream(&ptr, &len);
   if (!f)
     return 0;
   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<RMSFUSDiscovery DomainName=\"", f);
   xml_escape(f, domain);
   fprintf(f, "\" Version=\"%u\">\n", version);
-  for (i = 0; i < rms_count; i++) {
+  for (int i = 0; i < rms_count; i++) {
     fputs("<RMSProvider RMSLocation=\"", f);
     xml_escape(f, rms[i].location);
     fputs("\"", f);
@@ -236,7 +233,7 @@ size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *
     xml_escape(f, rms[i].name);
     fputs("</RMSName></RMSProvider>\n", f);
   }
-  for (i = 0; i < fus_count; i++) {
+  for (int i = 0; i < fus_count; i++) {
     fputs("<FUSProvider", f);
     if (fus[i].logo_uri) {
       fputs(" LogoURI=\"", f);

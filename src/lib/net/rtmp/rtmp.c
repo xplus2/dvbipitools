@@ -32,10 +32,9 @@ rtmp_t *rtmp_new(const rtmp_cfg_t *cfg) {
 }
 
 void rtmp_free(rtmp_t *r) {
-  unsigned i;
   if (!r)
     return;
-  for (i = 0; i < RTMP_N_CHAN; i++)
+  for (unsigned i = 0; i < RTMP_N_CHAN; i++)
     free(r->in_chan[i].payload);
   free(r);
 }

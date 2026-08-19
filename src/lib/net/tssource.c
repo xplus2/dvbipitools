@@ -98,8 +98,7 @@ static ssize_t raw_fd_read(int fd, unsigned char *buf, size_t cap, net_err_reaso
 /* checks that the first nn 188-byte TS packets in this candidate RTP-framed stride
    are sync-aligned (0x47 at their start) */
 static int rtp_stride_candidate_ok(const unsigned char *b, int nn) {
-  size_t k;
-  for (k = 0; k < (size_t)nn; k++)
+  for (size_t k = 0; k < (size_t)nn; k++)
     if (b[12 + 188 * k] != 0x47)
       return 0;
   return 1;
@@ -108,14 +107,13 @@ static int rtp_stride_candidate_ok(const unsigned char *b, int nn) {
 static void detect_framing(tssrc_t *s) {
   const unsigned char *b = s->rawbuf;
   size_t n = s->raw_len;
-  int nn;
 
   if (n >= 3 * 188 && b[0] == 0x47 && b[188] == 0x47 && b[376] == 0x47) {
     s->deframe_state = DEFRAME_RAW;
     return;
   }
   if (n >= 12 + 188 && (b[0] >> 6) == 2) {
-    for (nn = 1; nn <= 7; nn++) {
+    for (int nn = 1; nn <= 7; nn++) {
       size_t stride = 12 + (size_t)nn * 188;
       if (n < stride + 12 + 1)
         break;
@@ -230,13 +228,11 @@ static ssize_t deframe_read(tssrc_t *s, int fd, unsigned char *buf, size_t cap, 
 }
 
 ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
-  ssize_t n;
-  size_t off;
-
   switch (s->kind) {
   case TSSRC_RTP:
-  case TSSRC_UDP:
-    n = mcast_recv(s->m, buf, cap, reason_out);
+  case TSSRC_UDP: {
+    ssize_t n = mcast_recv(s->m, buf, cap, reason_out);
+    size_t off;
     if (n <= 0)
       return n;
     off = rtp_payload_offset(buf, (size_t)n);
@@ -246,6 +242,7 @@ ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t 
       n -= (ssize_t)off;
     }
     return n;
+  }
   case TSSRC_HTTP:
     return http_read(s->h, buf, cap, reason_out);
   case TSSRC_STDIN:

@@ -13,8 +13,7 @@
    window: same first_cp calc as ecmg_build_cw_provision, exact match required. */
 static int fill_hist_from_source(ecmg_client_t *c, cw_hist_entry_t *hist, unsigned short cp_number, unsigned lead_cw, unsigned cw_per_msg) {
   unsigned short first_cp = (unsigned short)(cp_number + lead_cw - cw_per_msg + 1);
-  unsigned i;
-  for (i = 0; i < cw_per_msg; i++) {
+  for (unsigned i = 0; i < cw_per_msg; i++) {
     unsigned short cp = (unsigned short)(first_cp + i);
     int idx = cp % ECMG_CW_HIST;
     if (hist[idx].valid && hist[idx].cp_number == cp)

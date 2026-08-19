@@ -29,14 +29,14 @@ void addr_at(const config_t *cfg, unsigned i, char *buf, size_t n) {
 /* -M: every PAT-listed program named. a program stuck at pmt-resolved-but-nameless still exits early once
    quiet/timeout deadline hits. this only short-circuits when everything's in. */
 int multi_all_named(const psi_t *psi) {
-  int i, count;
+  int count;
   const psi_multi_program_t *m;
   if (!psi_have_pat(psi))
     return 0;
   m = psi_multi_programs(psi, &count);
   if (count == 0)
     return 0;
-  for (i = 0; i < count; i++)
+  for (int i = 0; i < count; i++)
     if (!m[i].resolved || !m[i].service_name[0])
       return 0;
   return 1;
@@ -100,11 +100,11 @@ void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_
   if (pc.pkts == 0) {
     r->kind = PROBE_NONE;
   } else if (multi) {
-    int i, count;
+    int count;
     const psi_multi_program_t *m = psi_multi_programs(pc.psi, &count);
     r->tsid = psi_transport_stream_id(pc.psi);
     r->onid = psi_original_network_id(pc.psi);
-    for (i = 0; i < count && r->program_count < PSI_MAX_PROGRAMS; i++) {
+    for (int i = 0; i < count && r->program_count < PSI_MAX_PROGRAMS; i++) {
       scan_program_t *p;
       if (!m[i].resolved)
         continue;
@@ -191,8 +191,7 @@ static void probe_address(const config_t *cfg, const char *group, unsigned port,
 
 static void report_mpts_programs(const config_t *cfg, FILE *out, const probe_result_t *r, unsigned i,
                                   const char *uri, const char *group, unsigned port, unsigned *found) {
-  int k;
-  for (k = 0; k < r->program_count; k++) {
+  for (int k = 0; k < r->program_count; k++) {
     (*found)++;
     if (cfg->verbose)
       log_line("%3u/254 %-28s %-32s sid=%u [%u pkts]", i, uri, r->programs[k].name, r->programs[k].sid, r->pkts);
@@ -217,7 +216,7 @@ static void report_single_program(const config_t *cfg, FILE *out, const probe_re
 
 int scan_run(const config_t *cfg, FILE *out) {
   char invocation[256], basestr[64];
-  unsigned i, port, total = 0, found = 0;
+  unsigned total = 0, found = 0;
   double start = mono_seconds();
   int interrupted = 0;
 
@@ -227,10 +226,10 @@ int scan_run(const config_t *cfg, FILE *out) {
   else
     snprintf(invocation, sizeof invocation, "%s --mcast %s --port %u-%u --timeout %d", TOOL_NAME, basestr, cfg->port_lo, cfg->port_hi, cfg->timeout_ms / 1000);
   format_init(out, cfg->format, invocation, cfg->provider);
-  for (i = 1; i < 255 && !interrupted; i++) {
+  for (unsigned i = 1; i < 255 && !interrupted; i++) {
     char group[64];
     addr_at(cfg, i, group, sizeof group);
-    for (port = cfg->port_lo; port <= cfg->port_hi; port++) {
+    for (unsigned port = cfg->port_lo; port <= cfg->port_hi; port++) {
       probe_result_t r;
       const char *proto;
       char uri[96];

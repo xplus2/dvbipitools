@@ -52,7 +52,6 @@ capture_t *capture_open(const char *iface, const char *const *ranges, size_t ran
   struct sock_filter *prog = NULL;
   size_t prog_len = 0;
   struct sock_fprog fprog;
-  size_t i;
 
   if (!iface) {
     snprintf(errbuf, errbuf_len, "capture interface required");
@@ -79,7 +78,7 @@ capture_t *capture_open(const char *iface, const char *const *ranges, size_t ran
     goto fail;
   }
   cap->range_count = range_count;
-  for (i = 0; i < range_count; i++) {
+  for (size_t i = 0; i < range_count; i++) {
     if (cidr_parse(ranges[i], &cap->parsed_ranges[i]) != 0) {
       snprintf(errbuf, errbuf_len, "invalid range: %s", ranges[i]);
       goto fail;
@@ -232,13 +231,12 @@ static void capture_drain_ring(capture_t *cap, capture_frame_cb cb, void *user) 
   for (;;) {
     struct tpacket_block_desc *bd = (struct tpacket_block_desc *)(cap->ring + cap->block_idx * cap->block_size);
     struct tpacket3_hdr *ppd;
-    unsigned i;
 
     if (!(bd->hdr.bh1.block_status & TP_STATUS_USER))
       break;
 
     ppd = (struct tpacket3_hdr *)((unsigned char *)bd + bd->hdr.bh1.offset_to_first_pkt);
-    for (i = 0; i < bd->hdr.bh1.num_pkts; i++) {
+    for (unsigned i = 0; i < bd->hdr.bh1.num_pkts; i++) {
       const unsigned char *pkt = (const unsigned char *)ppd + ppd->tp_mac;
       capture_handle_frame(pkt, ppd->tp_snaplen, cap->parsed_ranges, cap->range_count, cb, user);
       ppd = (struct tpacket3_hdr *)((unsigned char *)ppd + ppd->tp_next_offset);

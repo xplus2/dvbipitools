@@ -106,14 +106,13 @@ START_TEST(retryset_stays_pending_across_multiple_steps) {
   void *ctxs[1];
   retryset_t *rs;
   time_t now = 1000;
-  int i;
 
   spec.steps_to_done = 2;
   ctxs[0] = &spec;
   rs = retryset_new(1, ctxs, NULL, &mock_ops, 1);
 
   retryset_service(rs, 0, now); /* starts opening */
-  for (i = 0; i < 2; i++) {
+  for (int i = 0; i < 2; i++) {
     retryset_service(rs, 0, now); /* still PENDING (steps_to_done=2) */
     ck_assert_ptr_null(retryset_result(rs, 0));
   }

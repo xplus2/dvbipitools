@@ -71,8 +71,8 @@ int main(int argc, char **argv) {
   }
 
   {
-    int i, on = 0;
-    for (i = 0; i < cfg.n_out; i++) {
+    int on = 0;
+    for (int i = 0; i < cfg.n_out; i++) {
       char one[600];
       out_describe(&cfg.out[i], one, sizeof one);
       on = app(out, sizeof out, on, "%s%s", i ? "," : "", one);

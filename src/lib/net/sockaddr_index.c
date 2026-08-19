@@ -54,8 +54,7 @@ static void canon_key(const struct sockaddr *addr, socklen_t addrlen, int *famil
 
 static size_t key_hash(int family, const unsigned char *bytes, size_t byteslen, unsigned short port) {
   uint64_t h = 1469598103934665603ULL; /* FNV-1a 64-bit offset basis */
-  size_t i;
-  for (i = 0; i < byteslen; i++) {
+  for (size_t i = 0; i < byteslen; i++) {
     h ^= bytes[i];
     h *= 1099511628211ULL; /* FNV prime */
   }
@@ -96,7 +95,7 @@ void sockaddr_index_free(sockaddr_index_t *idx) {
    keys live in entries, no caller data needed */
 static void rebuild(sockaddr_index_t *idx) {
   sockaddr_index_entry_t *old = idx->entries;
-  size_t old_size = idx->size, i, live = 0;
+  size_t old_size = idx->size, live = 0;
 
   idx->entries = calloc(idx->size, sizeof *idx->entries);
   if (!idx->entries) {
@@ -104,7 +103,7 @@ static void rebuild(sockaddr_index_t *idx) {
     idx->entries = old;
     return;
   }
-  for (i = 0; i < old_size; i++) {
+  for (size_t i = 0; i < old_size; i++) {
     size_t h;
     if (old[i].state != 1)
       continue;

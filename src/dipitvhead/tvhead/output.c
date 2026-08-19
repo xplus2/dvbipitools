@@ -14,10 +14,9 @@
 
 ristout_t *tvhead_rist_open(const config_t *cfg) {
   ristout_cfg_t rc;
-  unsigned i;
 
   memset(&rc, 0, sizeof rc);
-  for (i = 0; i < cfg->n_rist; i++)
+  for (unsigned i = 0; i < cfg->n_rist; i++)
     rc.peer_uri[i] = cfg->rist_uri[i];
   rc.npeers = (int)cfg->n_rist;
   rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
@@ -97,8 +96,7 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
   metrics_writer_put(&w, METRICS_ID_TS_DISCONTINUITIES_TOTAL, NULL, tsm->ts_discontinuities);
   metrics_writer_put(&w, METRICS_ID_PCR_DISCONTINUITIES_TOTAL, NULL, tsm->pcr_discontinuities);
   {
-    psi_table_t t;
-    for (t = 0; t < PSI_TABLE_COUNT; t++) {
+    for (psi_table_t t = 0; t < PSI_TABLE_COUNT; t++) {
       metrics_writer_put(&w, METRICS_ID_PSI_SECTIONS_TOTAL, psi_table_name(t), tsm->psi_sections_total[t]);
       metrics_writer_put(&w, METRICS_ID_PSI_ERRORS_TOTAL, psi_table_name(t), tsm->psi_errors_total[t]);
     }
@@ -110,11 +108,11 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
   metrics_writer_put(&w, METRICS_ID_TV_EIT_QUEUE_DROPS_TOTAL, NULL, tsm->eit_queue_drops_total);
   if (cas) {
     cas_metrics_t cm;
-    size_t i, n = cas_vendor_count(cas);
+    size_t n = cas_vendor_count(cas);
     cas_get_metrics(cas, &cm);
     metrics_writer_put(&w, METRICS_ID_CAS_SCRAMBLED_PACKETS_TOTAL, NULL, cm.scrambled_packets_total);
     metrics_writer_put(&w, METRICS_ID_CAS_UNEXPECTED_CLEAR_PACKETS_TOTAL, NULL, cm.unexpected_clear_packets_total);
-    for (i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
       char label[16];
       cas_metrics_t vm;
       cas_vendor_metrics(cas, i, &vm);
@@ -146,7 +144,7 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
   fc.tsm = tsm;
 
   while (!signal_stop_requested()) {
-    int stuff_n, k;
+    int stuff_n;
     double now;
     ssize_t n;
     reason = NET_ERR_OTHER;
@@ -169,7 +167,7 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
     if (cas && signal_reload_requested())
       cas_reload_receivers(cas);
     stuff_n = bitrate_stuff_due(out->pacer);
-    for (k = 0; k < stuff_n; k++)
+    for (int k = 0; k < stuff_n; k++)
       send_null_packet(out);
     if (cfg->verbose && now - last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - start, out->packets);

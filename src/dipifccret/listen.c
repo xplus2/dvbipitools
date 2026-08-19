@@ -114,7 +114,6 @@ static int open_reuseport_socket(int family, const char *addr, unsigned port) {
 
 listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, unsigned workers, listen_rtcp_cb cb, void *user) {
   listen_pool_t *p;
-  unsigned i;
   int fd, epfd, rc;
 
   if (workers == 0)
@@ -129,7 +128,7 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
   }
   atomic_init(&p->stop, 0);
 
-  for (i = 0; i < workers; i++) {
+  for (unsigned i = 0; i < workers; i++) {
     struct epoll_event ev;
     worker_t *w = &p->workers[i];
 
@@ -168,9 +167,9 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
 
 fail:
   atomic_store_explicit(&p->stop, 1, memory_order_relaxed);
-  for (i = 0; i < p->count; i++)
+  for (unsigned i = 0; i < p->count; i++)
     pthread_join(p->workers[i].thread, NULL);
-  for (i = 0; i < p->count; i++) {
+  for (unsigned i = 0; i < p->count; i++) {
     close(p->workers[i].epfd);
     close(p->workers[i].fd);
   }
@@ -180,12 +179,11 @@ fail:
 }
 
 void listen_pool_stop(listen_pool_t *p) {
-  unsigned i;
   if (!p)
     return;
-  for (i = 0; i < p->count; i++)
+  for (unsigned i = 0; i < p->count; i++)
     pthread_join(p->workers[i].thread, NULL);
-  for (i = 0; i < p->count; i++) {
+  for (unsigned i = 0; i < p->count; i++) {
     close(p->workers[i].epfd);
     close(p->workers[i].fd);
   }
@@ -220,8 +218,7 @@ static void *multi_worker_main(void *arg) {
 
   while (!signal_stop_requested()) {
     int n = epoll_wait(p->epfd, events, 32, 100);
-    int e;
-    for (e = 0; e < n; e++) {
+    for (int e = 0; e < n; e++) {
       size_t slot = (size_t)events[e].data.u64;
       int fd = p->fds[slot];
       multi_drain_ctx_t dc = {p, slot};
@@ -233,7 +230,7 @@ static void *multi_worker_main(void *arg) {
 
 listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_port, size_t count, listen_multi_cb cb, void *user) {
   listen_multi_t *p;
-  size_t i, opened = 0;
+  size_t opened = 0;
   int rc;
 
   if (count == 0)
@@ -258,7 +255,7 @@ listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_p
     return NULL;
   }
 
-  for (i = 0; i < count; i++) {
+  for (size_t i = 0; i < count; i++) {
     struct epoll_event ev;
     int fd = open_reuseport_socket(family, addr, base_port + (unsigned)i);
     if (fd < 0)
@@ -282,7 +279,7 @@ listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_p
   return p;
 
 fail:
-  for (i = 0; i < opened; i++)
+  for (size_t i = 0; i < opened; i++)
     close(p->fds[i]);
   close(p->epfd);
   free(p->fds);
@@ -291,11 +288,10 @@ fail:
 }
 
 void listen_multi_stop(listen_multi_t *p) {
-  size_t i;
   if (!p)
     return;
   pthread_join(p->thread, NULL);
-  for (i = 0; i < p->count; i++)
+  for (size_t i = 0; i < p->count; i++)
     close(p->fds[i]);
   close(p->epfd);
   free(p->fds);

@@ -23,8 +23,7 @@ int device_core_init(device_core_t *core, const char *key_path, const char *seri
 void device_core_release(device_core_t *core) { EVP_PKEY_free(core->ek); }
 
 service_key_t *device_core_service_slot(device_core_t *core, unsigned service_id, int create) {
-  size_t i;
-  for (i = 0; i < core->service_count; i++)
+  for (size_t i = 0; i < core->service_count; i++)
     if (core->services[i].service_id == service_id)
       return &core->services[i];
   if (!create || core->service_count >= DEVICE_MAX_SERVICES)

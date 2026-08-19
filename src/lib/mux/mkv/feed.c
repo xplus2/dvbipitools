@@ -20,11 +20,10 @@ static void on_cue(void *ctx, const ttx_cue_t *cue) {
   mkv_t *m = ctx;
   int64_t dur = cue->end_ms - cue->start_ms;
   size_t n = strlen(cue->text);
-  int i;
 
   if (!n || dur <= 0)
     return;
-  for (i = 0; i < m->ntrk; i++) {
+  for (int i = 0; i < m->ntrk; i++) {
     track_t *t = &m->trk[i];
     if (t->cls != PID_TELETEXT)
       continue;
@@ -46,8 +45,7 @@ static void on_cue(void *ctx, const ttx_cue_t *cue) {
 
 /* psi_have_sdt(): "arrived", not "ours". programs cycle independently, check name itself */
 static int all_psi_named(const mkv_t *m) {
-  int i;
-  for (i = 0; i < m->npsi; i++)
+  for (int i = 0; i < m->npsi; i++)
     if (!psi_service_name(m->psi[i])[0])
       return 0;
   return 1;
@@ -56,10 +54,9 @@ static int all_psi_named(const mkv_t *m) {
 /* start: all track headers present, video keyframe seen.
    brief SDT wait -> service name for Title/tags. multi-program: longer grace, per-program cycles skew */
 void all_ready(mkv_t *m) {
-  int i;
   int64_t grace_ms = (m->npsi > 1) ? 3000 : 2000;
 
-  for (i = 0; i < m->ntrk; i++) {
+  for (int i = 0; i < m->ntrk; i++) {
     const track_t *t = &m->trk[i];
     if (!t->hdr_parsed)
       return;
@@ -261,7 +258,7 @@ static void add_track(mkv_t *m, const psi_es_t *es, int psi_idx) {
 
 void setup(mkv_t *m) {
   const psi_es_t *es;
-  int c, k, p;
+  int c, k;
 
   if (m->video_ok) {
     es = psi_es(m->psi[0], &c);
@@ -276,7 +273,7 @@ void setup(mkv_t *m) {
       add_track(m, &es[k], 0);
     }
   }
-  for (p = 0; p < m->npsi; p++) {
+  for (int p = 0; p < m->npsi; p++) {
     es = psi_es(m->psi[p], &c);
     for (k = 0; k < c && m->ntrk < MKV_MAX_TRACKS; k++) {
       if (es[k].cls != PID_AUDIO)

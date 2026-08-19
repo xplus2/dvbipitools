@@ -68,7 +68,6 @@ void metrics_exporter_note_error(metrics_exporter_t *exp, net_err_reason_t reaso
 
 int metrics_exporter_begin(metrics_exporter_t *exp, metrics_writer_t *w, const char *version) {
   metrics_hdr_t hdr;
-  unsigned i;
 
   if (!exp->enabled)
     return -1;
@@ -87,7 +86,7 @@ int metrics_exporter_begin(metrics_exporter_t *exp, metrics_writer_t *w, const c
     return -1;
   if (metrics_writer_put(w, METRICS_ID_METRICS_SNAPSHOTS_DROPPED_TOTAL, NULL, exp->snapshots_dropped))
     return -1;
-  for (i = 0; i < NET_ERR_COUNT; i++) {
+  for (unsigned i = 0; i < NET_ERR_COUNT; i++) {
     if (metrics_writer_put(w, METRICS_ID_ERRORS_TOTAL, net_err_reason_name((net_err_reason_t)i), exp->errors_total[i]))
       return -1;
   }
@@ -122,9 +121,7 @@ void input_metrics_note_read(input_metrics_t *im, ssize_t n, net_err_reason_t re
 }
 
 void metrics_writer_put_inputs(metrics_writer_t *w, const input_metrics_t *inputs, unsigned n) {
-  unsigned i, r;
-
-  for (i = 0; i < n; i++) {
+  for (unsigned i = 0; i < n; i++) {
     const input_metrics_t *im = &inputs[i];
     char label[16];
     snprintf(label, sizeof label, "i%u", i);
@@ -132,7 +129,7 @@ void metrics_writer_put_inputs(metrics_writer_t *w, const input_metrics_t *input
     metrics_writer_put(w, METRICS_ID_INPUT_BYTES_TOTAL, label, im->bytes_total);
     metrics_writer_put(w, METRICS_ID_INPUT_RECONNECTS_TOTAL, label, im->reconnects_total);
     metrics_writer_put(w, METRICS_ID_INPUT_LAST_DATA_TIME_SECONDS, label, (uint64_t)im->last_data_time);
-    for (r = 0; r < NET_ERR_COUNT; r++) {
+    for (unsigned r = 0; r < NET_ERR_COUNT; r++) {
       if (im->errors_total[r]) {
         char combined[16 + 1 + 8];
         snprintf(combined, sizeof combined, "%s%c%s", label, METRICS_LABEL_SEP, net_err_reason_name((net_err_reason_t)r));

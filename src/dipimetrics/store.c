@@ -30,8 +30,7 @@ void store_init(store_t *st) {
 }
 
 static store_slot_t *find_slot(store_t *st, metrics_component_t component, const char *metrics_id) {
-  int i;
-  for (i = 0; i < STORE_MAX_INSTANCES; i++) {
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++) {
     store_slot_t *s = &st->slots[i];
     if (s->used && s->component == component && !strcmp(s->metrics_id, metrics_id))
       return s;
@@ -40,8 +39,7 @@ static store_slot_t *find_slot(store_t *st, metrics_component_t component, const
 }
 
 static store_slot_t *find_free_slot(store_t *st) {
-  int i;
-  for (i = 0; i < STORE_MAX_INSTANCES; i++)
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++)
     if (!st->slots[i].used)
       return &st->slots[i];
   return NULL;
@@ -140,8 +138,7 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
 }
 
 void store_reap_expired(store_t *st, double now_mono, double expiry_s) {
-  int i;
-  for (i = 0; i < STORE_MAX_INSTANCES; i++) {
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++) {
     store_slot_t *s = &st->slots[i];
     if (s->used && now_mono - s->received_mono > expiry_s)
       s->used = 0;

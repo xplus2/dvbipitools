@@ -74,8 +74,7 @@ channel_table_t *channel_table_new(size_t max_channels, size_t ring_slots, size_
   return t;
 
 fail: {
-    size_t j;
-    for (j = 0; j <= i; j++) {
+    for (size_t j = 0; j <= i; j++) {
       free(t->chan[j].ring);
       free(t->chan[j].cache.entries);
     }
@@ -89,10 +88,9 @@ fail: {
 }
 
 void channel_table_free(channel_table_t *t) {
-  size_t i;
   if (!t)
     return;
-  for (i = 0; i < t->max_channels; i++) {
+  for (size_t i = 0; i < t->max_channels; i++) {
     if (t->chan[i].psi)
       psi_free(t->chan[i].psi);
     free(t->chan[i].ring);
@@ -108,13 +106,13 @@ void channel_table_free(channel_table_t *t) {
 
 /* hash[] is non-atomic shared state: lock covers probe+claim+insert */
 channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size_t addr_len, unsigned port) {
-  size_t i, avail;
+  size_t avail;
   channel_t *result;
 
   pthread_mutex_lock(&t->lock);
   result = chan_hash_probe(t, family, addr, addr_len, port, &avail);
 
-  for (i = 0; !result && i < t->max_channels; i++) {
+  for (size_t i = 0; !result && i < t->max_channels; i++) {
     channel_t *c = &t->chan[i];
     int expected = 0;
     if (!atomic_compare_exchange_strong_explicit(&c->in_use, &expected, 2, memory_order_acq_rel, memory_order_relaxed))
@@ -139,8 +137,7 @@ channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size
 
       if (saved_ring) {
         ret_ring_entry_t *ring = (ret_ring_entry_t *)saved_ring;
-        size_t j;
-        for (j = 0; j < saved_ring_size; j++) {
+        for (size_t j = 0; j < saved_ring_size; j++) {
           atomic_store_explicit(&ring[j].valid, 0, memory_order_relaxed);
           atomic_store_explicit(&ring[j].gen, 0, memory_order_relaxed);
         }
@@ -287,10 +284,10 @@ void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq
 }
 
 static void hned_collision_note(channel_t *c, uint32_t ssrc, time_t now) {
-  size_t i, oldest = 0;
+  size_t oldest = 0;
   time_t oldest_time = now;
 
-  for (i = 0; i < CHANNEL_HNED_COLLISION_MAX; i++) {
+  for (size_t i = 0; i < CHANNEL_HNED_COLLISION_MAX; i++) {
     if (c->hned_collisions[i].valid && c->hned_collisions[i].ssrc == ssrc) {
       c->hned_collisions[i].last_detected = now;
       return;
@@ -367,11 +364,11 @@ void channel_hned_seen(channel_table_t *t, channel_t *c, uint32_t ssrc, const st
 }
 
 size_t channel_hned_collisions(channel_table_t *t, channel_t *c, uint32_t *out, size_t cap, time_t max_age_s) {
-  size_t i, n = 0;
+  size_t n = 0;
   time_t now = time(NULL);
 
   pthread_mutex_lock(&t->lock);
-  for (i = 0; i < CHANNEL_HNED_COLLISION_MAX && n < cap; i++) {
+  for (size_t i = 0; i < CHANNEL_HNED_COLLISION_MAX && n < cap; i++) {
     if (c->hned_collisions[i].valid && now - c->hned_collisions[i].last_detected <= max_age_s)
       out[n++] = c->hned_collisions[i].ssrc;
   }
@@ -410,9 +407,8 @@ static void reap_slot(channel_table_t *t, size_t i, time_t now, time_t max_age_s
 
 void channel_table_reap(channel_table_t *t, time_t max_age_s) {
   time_t now = time(NULL);
-  size_t i;
   pthread_mutex_lock(&t->lock);
-  for (i = 0; i < t->max_channels; i++)
+  for (size_t i = 0; i < t->max_channels; i++)
     reap_slot(t, i, now, max_age_s);
   pthread_mutex_unlock(&t->lock);
 }
@@ -422,10 +418,10 @@ void channel_table_reap(channel_table_t *t, time_t max_age_s) {
    no single call ever costs O(max_channels). */
 void channel_table_reap_step(channel_table_t *t, time_t max_age_s, size_t max_scan) {
   time_t now = time(NULL);
-  size_t i, n;
+  size_t n;
   pthread_mutex_lock(&t->lock);
   n = max_scan < t->max_channels ? max_scan : t->max_channels;
-  for (i = 0; i < n; i++) {
+  for (size_t i = 0; i < n; i++) {
     reap_slot(t, t->reap_cursor, now, max_age_s);
     t->reap_cursor = (t->reap_cursor + 1) % t->max_channels;
   }

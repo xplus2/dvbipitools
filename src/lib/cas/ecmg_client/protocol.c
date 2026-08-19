@@ -105,7 +105,6 @@ size_t ecmg_build_cw_provision(unsigned char *out, size_t cap, unsigned char ver
                                   cw_hist_entry_t *hist, size_t cw_len, unsigned lead_cw, unsigned cw_per_msg) {
   simulcrypt_writer_t w;
   unsigned short first_cp = (unsigned short)(cp_number + lead_cw - cw_per_msg + 1);
-  unsigned i;
   if (simulcrypt_writer_begin(&w, out, cap, version, ECMG_MSG_CW_PROVISION) < 0)
     return 0;
   if (simulcrypt_writer_put_tlv(&w, ECMG_P_ECM_CHANNEL_ID, (unsigned char[]){0, ECMG_CHANNEL_ID}, 2) < 0)
@@ -114,7 +113,7 @@ size_t ecmg_build_cw_provision(unsigned char *out, size_t cap, unsigned char ver
     return 0;
   if (simulcrypt_writer_put_tlv(&w, ECMG_P_CP_NUMBER, (unsigned char[]){(unsigned char)(cp_number >> 8), (unsigned char)cp_number}, 2) < 0)
     return 0;
-  for (i = 0; i < cw_per_msg; i++) {
+  for (unsigned i = 0; i < cw_per_msg; i++) {
     unsigned char combo[2 + ECMG_MAX_CW_LEN];
     unsigned short cp = (unsigned short)(first_cp + i);
     const unsigned char *cw = hist_get_or_gen(hist, cp, cw_len);

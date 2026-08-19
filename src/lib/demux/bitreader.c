@@ -32,7 +32,7 @@ int br_se(br_t *b) {
 }
 
 size_t br_slice(const br_t *b, size_t from, size_t to, unsigned char *out, size_t cap) {
-  size_t nbits = to - from, nb = (nbits + 7) / 8, i;
+  size_t nbits = to - from, nb = (nbits + 7) / 8;
 
   if (!nb || nb > cap)
     return 0;
@@ -44,7 +44,7 @@ size_t br_slice(const br_t *b, size_t from, size_t to, unsigned char *out, size_
     return nb;
   }
   memset(out, 0, nb);
-  for (i = 0; i < nbits; i++) {
+  for (size_t i = 0; i < nbits; i++) {
     size_t s = from + i;
     unsigned bit = (b->d[s >> 3] >> (7 - (s & 7))) & 1;
     out[i >> 3] |= (unsigned char)(bit << (7 - (i & 7)));
@@ -53,8 +53,8 @@ size_t br_slice(const br_t *b, size_t from, size_t to, unsigned char *out, size_
 }
 
 size_t rbsp_unescape(const unsigned char *s, size_t len, unsigned char *d, size_t cap) {
-  size_t i, o = 0, zeros = 0;
-  for (i = 0; i < len && o < cap; i++) {
+  size_t o = 0, zeros = 0;
+  for (size_t i = 0; i < len && o < cap; i++) {
     if (zeros >= 2 && s[i] == 0x03) {
       zeros = 0;
       continue;
@@ -66,9 +66,7 @@ size_t rbsp_unescape(const unsigned char *s, size_t len, unsigned char *d, size_
 }
 
 size_t find_startcode(const unsigned char *d, size_t len, size_t from, size_t *sclen) {
-  size_t i;
-
-  for (i = from; i + 3 <= len; i++) {
+  for (size_t i = from; i + 3 <= len; i++) {
     if (d[i] || d[i + 1])
       continue;
     if (d[i + 2] == 1) {

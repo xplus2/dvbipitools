@@ -14,13 +14,12 @@
 #include "lib/mux/psi_build.h"
 
 static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, int pusi, const unsigned char *payload, size_t plen) {
-  size_t i;
   pkt[0] = 0x47;
   pkt[1] = (unsigned char)((pusi ? 0x40 : 0x00) | ((pid >> 8) & 0x1F));
   pkt[2] = (unsigned char)pid;
   pkt[3] = 0x10;
   memcpy(pkt + 4, payload, plen);
-  for (i = 4 + plen; i < 188; i++)
+  for (size_t i = 4 + plen; i < 188; i++)
     pkt[i] = 0xFF;
 }
 
@@ -106,7 +105,6 @@ static size_t build_pes_with_pts(unsigned char *out, uint64_t pts_90k, const uns
 
 /* one-frame ADTS AAC, 44100 Hz (sr_idx=4), raw_blocks=0 */
 static size_t build_adts_frame(unsigned char *out, size_t total_len) {
-  size_t i;
   out[0] = 0xFF;
   out[1] = 0xF1;
   out[2] = (unsigned char)(0x40 | (4 << 2));
@@ -114,14 +112,13 @@ static size_t build_adts_frame(unsigned char *out, size_t total_len) {
   out[4] = (unsigned char)((total_len >> 3) & 0xFF);
   out[5] = (unsigned char)((total_len & 0x07) << 5);
   out[6] = 0x00;
-  for (i = 7; i < total_len; i++)
+  for (size_t i = 7; i < total_len; i++)
     out[i] = 0xAB;
   return total_len;
 }
 
 /* one AC-3 sync frame, 48 kHz (fscod=0), frmsizecod=0 -> 128 bytes, 2ch (acmod=2) */
 static size_t build_ac3_frame(unsigned char *out, size_t total_len) {
-  size_t i;
   out[0] = 0x0B;
   out[1] = 0x77;
   out[2] = 0x00;
@@ -129,7 +126,7 @@ static size_t build_ac3_frame(unsigned char *out, size_t total_len) {
   out[4] = 0x00; /* fscod=0, frmsizecod=0 */
   out[5] = 0x00;
   out[6] = 0x40; /* acmod=2 -> ac3_ch[2] = 2 channels */
-  for (i = 7; i < total_len; i++)
+  for (size_t i = 7; i < total_len; i++)
     out[i] = 0xCD;
   return total_len;
 }

@@ -38,10 +38,9 @@ pes_t *pes_new(pes_cb cb, void *ctx) {
 }
 
 void pes_free(pes_t *p) {
-  int i;
   if (!p)
     return;
-  for (i = 0; i < p->n; i++)
+  for (int i = 0; i < p->n; i++)
     free(p->s[i].buf);
   free(p);
 }
@@ -56,12 +55,10 @@ int pes_track(pes_t *p, unsigned pid) {
 }
 
 static stream_t *find(pes_t *p, unsigned pid) {
-  int i;
-
   if (p->last_idx >= 0 && p->last_idx < p->n && p->s[p->last_idx].pid == pid)
     return &p->s[p->last_idx];
 
-  for (i = 0; i < p->n; i++)
+  for (int i = 0; i < p->n; i++)
     if (p->s[i].pid == pid) {
       p->last_idx = i;
       return &p->s[i];
@@ -134,8 +131,7 @@ void pes_feed(pes_t *p, const unsigned char *pkt) {
 }
 
 void pes_flush(pes_t *p) {
-  int i;
-  for (i = 0; i < p->n; i++)
+  for (int i = 0; i < p->n; i++)
     deliver(p, &p->s[i]);
 }
 

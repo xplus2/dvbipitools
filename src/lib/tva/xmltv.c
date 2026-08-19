@@ -92,13 +92,11 @@ int xmltv_read(FILE *f, bcg_doc_t *doc) {
 }
 
 void xmltv_write(FILE *f, const bcg_doc_t *doc, const char *generator_name) {
-  int i;
   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE tv SYSTEM \"xmltv.dtd\">\n<tv generator-info-name=\"", f);
   xml_escape(f, generator_name);
   fputs("\">\n", f);
-  for (i = 0; i < doc->channel_count; i++) {
+  for (int i = 0; i < doc->channel_count; i++) {
     const bcg_channel_t *c = &doc->channels[i];
-    int j;
     fputs("  <channel id=\"", f);
     xml_escape(f, c->id);
     fputs("\">\n", f);
@@ -107,14 +105,14 @@ void xmltv_write(FILE *f, const bcg_doc_t *doc, const char *generator_name) {
       xml_escape(f, c->id);
       fputs("</display-name>\n", f);
     }
-    for (j = 0; j < c->name_count; j++) {
+    for (int j = 0; j < c->name_count; j++) {
       fputs("    <display-name>", f);
       xml_escape(f, c->names[j]);
       fputs("</display-name>\n", f);
     }
     fputs("  </channel>\n", f);
   }
-  for (i = 0; i < doc->programme_count; i++) {
+  for (int i = 0; i < doc->programme_count; i++) {
     const bcg_programme_t *pr = &doc->programmes[i];
     char start[BCG_TIME_LEN], stop[BCG_TIME_LEN];
     if (iso8601_to_xmltv_time(pr->start, start, sizeof start))

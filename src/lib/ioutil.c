@@ -51,8 +51,7 @@ size_t bufcpy(char *dst, size_t dstsz, const char *src) {
 }
 
 char *find_header_end(char *b, size_t n, size_t *termlen) {
-  size_t i;
-  for (i = 0; i + 1 < n; i++) {
+  for (size_t i = 0; i + 1 < n; i++) {
     if (b[i] == '\n' && b[i + 1] == '\n') {
       *termlen = 2;
       return b + i;

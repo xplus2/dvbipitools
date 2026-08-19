@@ -49,8 +49,7 @@ static tssrc_kind_t tssrc_kind_of(input_kind_t k) {
 }
 
 static int cfg_has_rtmp(const config_t *cfg) {
-  int i;
-  for (i = 0; i < cfg->n_out; i++)
+  for (int i = 0; i < cfg->n_out; i++)
     if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS)
       return 1;
   return 0;
@@ -61,7 +60,6 @@ static int cfg_has_rtmp(const config_t *cfg) {
 static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pmt_pid,
                                   unsigned *all_pids, int *n_all_pids) {
   mpts_probe_result_t probe;
-  int k;
 
   *pmt_pid = 0;
   *n_all_pids = 0;
@@ -88,11 +86,11 @@ static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pm
       mpts_probe_print_programs(TOOL_NAME, &probe);
       return 1;
     }
-    for (k = 0; k < probe.program_count; k++)
+    for (int k = 0; k < probe.program_count; k++)
       all_pids[(*n_all_pids)++] = probe.programs[k].pmt_pid;
     return 0;
   }
-  for (k = 0; k < probe.program_count; k++)
+  for (int k = 0; k < probe.program_count; k++)
     if (probe.programs[k].pmt_pid == cfg->pmt_pid) {
       *pmt_pid = cfg->pmt_pid;
       return 0;
@@ -107,13 +105,12 @@ static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pm
    (message already logged, caller closes whatever this left open via lc) */
 static int open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
   int is_mkv_fmt = (cfg->format == FMT_MKV || cfg->format == FMT_MKA);
-  int i;
 
   lc->n_outfd = 0;
   lc->n_rtmp = 0;
   *mkv_fd = -1;
 
-  for (i = 0; i < cfg->n_out; i++) {
+  for (int i = 0; i < cfg->n_out; i++) {
     const out_target_t *o = &cfg->out[i];
 
     if (o->kind == OUT_RTMP || o->kind == OUT_RTMPS) {
@@ -143,10 +140,9 @@ static int open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
 }
 
 static void close_outputs(loop_ctx_t *lc, int mkv_fd) {
-  int i;
-  for (i = 0; i < lc->n_rtmp; i++)
+  for (int i = 0; i < lc->n_rtmp; i++)
     rtmpout_close(lc->rtmp[i]);
-  for (i = 0; i < lc->n_outfd; i++)
+  for (int i = 0; i < lc->n_outfd; i++)
     if (lc->outfd[i] != STDOUT_FILENO)
       close(lc->outfd[i]);
   if (mkv_fd >= 0 && mkv_fd != STDOUT_FILENO)
@@ -190,8 +186,8 @@ int main(int argc, char **argv) {
   }
 
   {
-    int i, on = 0;
-    for (i = 0; i < cfg.n_out; i++) {
+    int on = 0;
+    for (int i = 0; i < cfg.n_out; i++) {
       char one[600];
       int r;
       out_describe(&cfg.out[i], one, sizeof one);

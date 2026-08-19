@@ -20,11 +20,9 @@
 static uint32_t crc32_table[256];
 
 static void crc32_table_init(void) {
-  unsigned n;
-  int k;
-  for (n = 0; n < 256; n++) {
+  for (unsigned n = 0; n < 256; n++) {
     uint32_t c = (uint32_t)n << 24;
-    for (k = 0; k < 8; k++)
+    for (int k = 0; k < 8; k++)
       c = (c & 0x80000000u) ? (c << 1) ^ 0x04C11DB7u : (c << 1);
     crc32_table[n] = c;
   }
@@ -34,8 +32,7 @@ static void crc32_table_init(void) {
    used both as portable fallback and as tail path after a chunked
    accelerated backend has consumed bulk of buffer. */
 static uint32_t crc32_mpeg_table_update(uint32_t crc, const unsigned char *data, size_t len) {
-  size_t i;
-  for (i = 0; i < len; i++)
+  for (size_t i = 0; i < len; i++)
     crc = (crc << 8) ^ crc32_table[((crc >> 24) ^ data[i]) & 0xFF];
   return crc;
 }
@@ -98,8 +95,7 @@ uint32_t crc32_mpeg_pclmul(const unsigned char *data, size_t len) {
 static unsigned char crc32_mpeg_bitrev8[256];
 
 static void crc32_mpeg_bitrev8_init(void) {
-  unsigned n;
-  for (n = 0; n < 256; n++) {
+  for (unsigned n = 0; n < 256; n++) {
     unsigned char b = (unsigned char)n;
     b = (unsigned char)(((b & 0xF0) >> 4) | ((b & 0x0F) << 4));
     b = (unsigned char)(((b & 0xCC) >> 2) | ((b & 0x33) << 2));
@@ -120,8 +116,7 @@ static uint32_t crc32_mpeg_bitrev32(uint32_t x) {
 __attribute__((target("+crc")))
 static uint32_t crc32_mpeg_armcrc(const unsigned char *data, size_t len) {
   uint32_t crc = 0xFFFFFFFFu;
-  size_t i;
-  for (i = 0; i < len; i++)
+  for (size_t i = 0; i < len; i++)
     crc = __crc32b(crc, crc32_mpeg_bitrev8[data[i]]);
   return crc32_mpeg_bitrev32(crc);
 }

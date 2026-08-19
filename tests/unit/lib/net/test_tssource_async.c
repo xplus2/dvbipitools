@@ -16,9 +16,8 @@
 
 static tssrc_open_state_t drive(tssrc_open_t *o, int max_iters) {
   tssrc_open_state_t st = TSSRC_OPEN_PENDING;
-  int i;
 
-  for (i = 0; i < max_iters && st == TSSRC_OPEN_PENDING; i++) {
+  for (int i = 0; i < max_iters && st == TSSRC_OPEN_PENDING; i++) {
     struct pollfd pfd;
     int fd = tssrc_open_async_poll_fd(o);
     if (fd < 0) {

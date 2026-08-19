@@ -101,10 +101,9 @@ http_server_t *http_server_new(int listen_fd) {
 }
 
 void http_server_free(http_server_t *hs) {
-  int i;
   if (!hs)
     return;
-  for (i = 0; i < HTTP_MAX_CONNS; i++) {
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) {
     if (hs->conns[i].used) {
       close(hs->conns[i].fd);
       free(hs->conns[i].resp);
@@ -114,8 +113,6 @@ void http_server_free(http_server_t *hs) {
 }
 
 void http_server_poll_fds(http_server_t *hs, struct pollfd *pfds, int cap, int *n) {
-  int i;
-
   hs->listen_pfd_idx = -1;
   if (*n < cap) {
     hs->listen_pfd_idx = *n;
@@ -124,7 +121,7 @@ void http_server_poll_fds(http_server_t *hs, struct pollfd *pfds, int cap, int *
     pfds[*n].revents = 0;
     (*n)++;
   }
-  for (i = 0; i < HTTP_MAX_CONNS; i++) {
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) {
     http_conn_t *c = &hs->conns[i];
     if (!c->used) {
       c->pfd_idx = -1;
@@ -149,10 +146,10 @@ static void conn_close(http_conn_t *c) {
 }
 
 static void conn_accept(http_server_t *hs, int fd, double now_mono) {
-  int i, flags;
+  int flags;
   http_conn_t *c = NULL;
 
-  for (i = 0; i < HTTP_MAX_CONNS; i++)
+  for (int i = 0; i < HTTP_MAX_CONNS; i++)
     if (!hs->conns[i].used) {
       c = &hs->conns[i];
       break;
@@ -284,8 +281,6 @@ static void conn_write_step(http_conn_t *c) {
 }
 
 void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, store_t *st, double now_mono, int verbose) {
-  int i;
-
   if (hs->listen_pfd_idx >= 0 && hs->listen_pfd_idx < n && (pfds[hs->listen_pfd_idx].revents & POLLIN)) {
     for (;;) {
       int fd = accept(hs->listen_fd, NULL, NULL);
@@ -295,7 +290,7 @@ void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, st
     }
   }
 
-  for (i = 0; i < HTTP_MAX_CONNS; i++) {
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) {
     http_conn_t *c = &hs->conns[i];
     short rev;
     if (!c->used)

@@ -195,11 +195,10 @@ int http_is_redirect_status(int status) {
 
 const char *http_header(const http_t *h, const char *name) {
   char key[64];
-  int i;
 
   bufcpy(key, sizeof key, name);
   hdr_lower(key);
-  for (i = 0; i < h->hdr_count; i++)
+  for (int i = 0; i < h->hdr_count; i++)
     if (!strcmp(h->hdr[i].name, key))
       return h->hdr[i].value;
   return NULL;
@@ -213,8 +212,6 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
   struct http *h = calloc(1, sizeof *h);
   char req[2048];
   int rl;
-  size_t got = 0;
-  char *term;
 
   if (!h)
     return NULL;
@@ -248,6 +245,8 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
     goto fail;
   }
   {
+    size_t got = 0;
+    char *term;
     size_t termlen = 0;
     double deadline = mono_seconds() + (double)HTTP_HEADER_TIMEOUT_MS / 1000.0;
     while (got < sizeof h->hold) {
@@ -312,10 +311,9 @@ static int resolve_redirect(struct http *h, http_url_t *next, net_err_reason_t *
 
 http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure, const char *extra_header, net_err_reason_t *reason_out) {
   http_url_t url = *url_in;
-  int redirects;
   const char *ua = user_agent ? user_agent : "dvbipitools";
 
-  for (redirects = 0; redirects <= HTTP_REDIRECT_MAX; redirects++) {
+  for (int redirects = 0; redirects <= HTTP_REDIRECT_MAX; redirects++) {
     struct http *h = fetch_once(&url, ua, insecure, extra_header, reason_out);
     if (!h)
       return NULL;

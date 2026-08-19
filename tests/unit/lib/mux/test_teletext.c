@@ -21,8 +21,7 @@ static unsigned char hamm_raw(unsigned d) {
   unsigned P1 = D1 ^ D2 ^ D4, P2 = D1 ^ D3 ^ D4, P3 = D2 ^ D3 ^ D4;
   unsigned c = P1 | (P2 << 1) | (D1 << 2) | (P3 << 3) | (D2 << 4) | (D3 << 5) | (D4 << 6);
   unsigned ones = 0;
-  int k;
-  for (k = 0; k < 7; k++)
+  for (int k = 0; k < 7; k++)
     ones += (c >> k) & 1;
   c |= (ones & 1) << 7;
   return (unsigned char)c;
@@ -34,7 +33,7 @@ static size_t build_ttx_pes(unsigned char *out, unsigned page, unsigned pkt, con
   unsigned mag = (page / 100) & 0x07;
   unsigned d0 = (mag & 0x07) | ((pkt & 1) << 3);
   unsigned d1 = (pkt >> 1) & 0x0F;
-  size_t n = 0, i;
+  size_t n = 0;
   size_t tlen = strlen(text);
 
   out[n++] = 0x10;             /* data_identifier */
@@ -44,7 +43,7 @@ static size_t build_ttx_pes(unsigned char *out, unsigned page, unsigned pkt, con
   out[n++] = 0xFF;             /* reserved, unused */
   out[n++] = rev8_local(hamm_raw(d0)); /* mpag byte 1 (magazine + pkt bit0) */
   out[n++] = rev8_local(hamm_raw(d1)); /* mpag byte 2 (pkt bits 1-4) */
-  for (i = 0; i < 40; i++) {
+  for (size_t i = 0; i < 40; i++) {
     unsigned char c = (i < tlen) ? (unsigned char)text[i] : 0x20;
     out[n++] = rev8_local(c);
   }

@@ -153,9 +153,8 @@ START_TEST(full_chain_csa2_recovers_cw) {
   unsigned char buf[1024];
   unsigned char cw_out[16];
   size_t n;
-  int i;
 
-  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
     bk[i] = (unsigned char)(i + 10);
     sk[i] = (unsigned char)(200 - i);
   }
@@ -185,9 +184,8 @@ START_TEST(resolve_cw_ignores_srvid_mismatch_with_one_cached_service) {
   unsigned char buf[1024];
   unsigned char cw_out[16];
   size_t n;
-  int i;
 
-  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
     bk[i] = (unsigned char)(i + 10);
     sk[i] = (unsigned char)(200 - i);
   }
@@ -285,9 +283,8 @@ START_TEST(resolve_cw_rejects_bad_cw_len) {
   unsigned char buf[1024];
   unsigned char cw_out[16];
   size_t n;
-  int i;
 
-  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
     bk[i] = (unsigned char)i;
     sk[i] = (unsigned char)(255 - i);
   }

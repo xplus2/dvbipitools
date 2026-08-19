@@ -88,7 +88,7 @@ static void repair_range(ret_ctx_t *r, channel_t *c, uint16_t start, uint16_t en
 void ret_handle_nack(ret_ctx_t *r, const rtcp_nack_t *nack, int fd, const struct sockaddr *from, socklen_t fromlen) {
   channel_t *c = channel_find_by_ssrc(r->channels, nack->media_ssrc);
   unsigned char ff[12 + 4 * RTCP_NACK_MAX_ENTRIES];
-  size_t ff_len, i;
+  size_t ff_len;
   if (!c)
     return;
 
@@ -97,15 +97,14 @@ void ret_handle_nack(ret_ctx_t *r, const rtcp_nack_t *nack, int fd, const struct
   if (ff_len > 0)
     r->send_mc(c, ff, ff_len, RET_DSCP_RTCP, r->send_mc_user);
 
-  for (i = 0; i < nack->entry_count; i++) {
+  for (size_t i = 0; i < nack->entry_count; i++) {
     uint16_t pid = nack->entry[i].pid;
     uint16_t blp = nack->entry[i].blp;
-    unsigned bit;
 
     /* F.3.1/Figure F.2: always reply directly to requester */
     repair_one_unicast(r, c, pid, fd, from, fromlen);
     repair_one(r, c, pid);
-    for (bit = 0; bit < 16; bit++) {
+    for (unsigned bit = 0; bit < 16; bit++) {
       if (blp & (1u << bit)) {
         uint16_t seq = (uint16_t)(pid + bit + 1);
         repair_one_unicast(r, c, seq, fd, from, fromlen);

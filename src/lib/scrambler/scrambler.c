@@ -182,13 +182,12 @@ int scrambler_decrypt_packet(scrambler_t *s, unsigned char pkt[188]) {
 }
 
 static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *ctx) {
-  unsigned i;
   if (s->queue_len == 0)
     return;
   if (s->queue_scrambled_count > 0) {
     csa2_batch_entry_t entries[s->queue_scrambled_count];
     unsigned ei = 0;
-    for (i = 0; i < s->queue_len; i++) {
+    for (unsigned i = 0; i < s->queue_len; i++) {
       if (s->queue[i].needs_crypto) {
         entries[ei].data = s->queue[i].pkt + s->queue[i].payload_off;
         entries[ei].len = s->queue[i].payload_size;
@@ -200,7 +199,7 @@ static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *
     else
       csa2_decrypt_batch(s->csa2_key[s->queue_parity], entries, s->queue_scrambled_count);
   }
-  for (i = 0; i < s->queue_len; i++)
+  for (unsigned i = 0; i < s->queue_len; i++)
     emit(ctx, s->queue[i].pkt);
   s->queue_len = 0;
   s->queue_scrambled_count = 0;
@@ -221,14 +220,13 @@ static void scrambler_queue_ensure_batch(scrambler_t *s, int mode, int parity, s
    needs_crypto entries never reach here, @see scrambler_encrypt_packet_queued/scrambler_decrypt_packet_queued. */
 static void scrambler_queue_push(scrambler_t *s, const unsigned char pkt[188], int needs_crypto, size_t payload_off, size_t payload_size, scrambler_emit_cb emit, void *ctx) {
   scrambler_queue_entry_t *e;
-  int mode, parity;
   if (s->queue_cap == 0) {
     emit(ctx, pkt);
     return;
   }
-  mode = s->queue_mode;
-  parity = s->queue_parity;
   if (s->queue_len == s->queue_cap) {
+    int mode = s->queue_mode;
+    int parity = s->queue_parity;
     scrambler_queue_flush(s, emit, ctx);
     if (needs_crypto)
       scrambler_queue_ensure_batch(s, mode, parity, emit, ctx);

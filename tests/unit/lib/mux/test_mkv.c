@@ -17,13 +17,12 @@
 
 /* Only audio path (video needs H.264/HEVC SPS bitstreams). mkv.c discovers PAT/PMT/SDT itself via mkv_feed */
 static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, int pusi, const unsigned char *payload, size_t plen) {
-  size_t i;
   pkt[0] = 0x47;
   pkt[1] = (unsigned char)((pusi ? 0x40 : 0x00) | ((pid >> 8) & 0x1F));
   pkt[2] = (unsigned char)pid;
   pkt[3] = 0x10;
   memcpy(pkt + 4, payload, plen);
-  for (i = 4 + plen; i < 188; i++)
+  for (size_t i = 4 + plen; i < 188; i++)
     pkt[i] = 0xFF;
 }
 
@@ -36,7 +35,6 @@ static void wrap_section_packet(unsigned char pkt[188], unsigned pid, const unsi
 
 /* one-frame ADTS AAC, 44100 Hz (sr_idx=4), raw_blocks=0 */
 static size_t build_adts_frame(unsigned char *out, size_t total_len) {
-  size_t i;
   out[0] = 0xFF;
   out[1] = 0xF1;
   out[2] = (unsigned char)(0x40 | (4 << 2));
@@ -44,7 +42,7 @@ static size_t build_adts_frame(unsigned char *out, size_t total_len) {
   out[4] = (unsigned char)((total_len >> 3) & 0xFF);
   out[5] = (unsigned char)((total_len & 0x07) << 5);
   out[6] = 0x00;
-  for (i = 7; i < total_len; i++)
+  for (size_t i = 7; i < total_len; i++)
     out[i] = 0xAB;
   return total_len;
 }

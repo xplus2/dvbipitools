@@ -28,10 +28,9 @@ burst_table_t *burst_table_new(size_t cap) {
 }
 
 void burst_table_free(burst_table_t *t) {
-  size_t i;
   if (!t)
     return;
-  for (i = 0; i < t->cap; i++)
+  for (size_t i = 0; i < t->cap; i++)
     if (t->slots[i].in_use)
       burst_release(t->slots[i].b);
   pthread_mutex_destroy(&t->lock);
@@ -72,8 +71,7 @@ static size_t find_valid(burst_table_t *t, const struct sockaddr *addr, socklen_
 
 /* caller holds t->lock. claims free slot for addr/fd/b, indexes it. NULL on full tab */
 static burst_slot_t *claim_locked(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int fd, burst_t *b) {
-  size_t i;
-  for (i = 0; i < t->cap; i++) {
+  for (size_t i = 0; i < t->cap; i++) {
     if (!t->slots[i].in_use) {
       memcpy(&t->slots[i].addr, addr, addrlen);
       t->slots[i].addrlen = addrlen;

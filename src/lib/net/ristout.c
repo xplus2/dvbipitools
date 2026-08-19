@@ -40,9 +40,7 @@ static struct rist_logging_settings *open_logging(int verbose) {
 }
 
 static int add_peers(struct rist_ctx *ctx, const ristout_cfg_t *cfg) {
-  int i;
-
-  for (i = 0; i < cfg->npeers; i++) {
+  for (int i = 0; i < cfg->npeers; i++) {
     struct rist_peer_config *pc = NULL;
     struct rist_peer *peer;
 
@@ -121,9 +119,7 @@ ristout_t *ristout_open(const ristout_cfg_t *cfg) {
 }
 
 int ristout_write(ristout_t *r, const unsigned char *buf, size_t n) {
-  size_t off;
-
-  for (off = 0; off < n; off += RIST_CHUNK) {
+  for (size_t off = 0; off < n; off += RIST_CHUNK) {
     struct rist_data_block db;
     size_t chunk = n - off < RIST_CHUNK ? n - off : RIST_CHUNK;
 

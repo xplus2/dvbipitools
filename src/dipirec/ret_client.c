@@ -87,8 +87,7 @@ static ssize_t outq_pop(ret_client_t *r, unsigned char *buf, size_t cap) {
 
 /* hold[0] out, everything else down one slot, gap base advances */
 static void gap_shift(ret_client_t *r) {
-  size_t i;
-  for (i = 0; i + 1 < r->hold_n; i++)
+  for (size_t i = 0; i + 1 < r->hold_n; i++)
     r->hold[i] = r->hold[i + 1];
   if (r->hold_n)
     r->hold_n--;
@@ -130,11 +129,11 @@ static void send_nack(ret_client_t *r, uint16_t start, size_t missing) {
   size_t n = 0, done = 0, len;
 
   while (done < missing && n < RTCP_NACK_MAX_ENTRIES) {
-    size_t chunk = missing - done, i;
+    size_t chunk = missing - done;
     uint16_t blp = 0;
     if (chunk > 17)
       chunk = 17;
-    for (i = 1; i < chunk; i++)
+    for (size_t i = 1; i < chunk; i++)
       blp = (uint16_t)(blp | (1u << (i - 1)));
     entries[n].pid = (uint16_t)(start + done);
     entries[n].blp = blp;

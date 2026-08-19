@@ -205,24 +205,22 @@ static void render_grouped(strbuf_t *sb, const store_t *st) {
   int def_idx[DEF_ID_MAX]; /* metrics_id_t -> DEFS[] index, -1 if unused */
   size_t count[N_DEFS], start[N_DEFS], cursor[N_DEFS];
   entry_ref_t *refs = NULL;
-  size_t total = 0, off = 0, k;
-  unsigned i;
-  int si, j;
+  size_t total = 0;
 
-  for (i = 0; i < DEF_ID_MAX; i++)
+  for (unsigned i = 0; i < DEF_ID_MAX; i++)
     def_idx[i] = -1;
-  for (i = 0; i < N_DEFS; i++) {
+  for (unsigned i = 0; i < N_DEFS; i++) {
     count[i] = 0;
     start[i] = 0;
     if ((unsigned)DEFS[i].id < DEF_ID_MAX)
       def_idx[DEFS[i].id] = (int)i;
   }
 
-  for (si = 0; si < STORE_MAX_INSTANCES; si++) {
+  for (int si = 0; si < STORE_MAX_INSTANCES; si++) {
     const store_slot_t *slot = &st->slots[si];
     if (!slot->used)
       continue;
-    for (j = 0; j < slot->entry_count; j++) {
+    for (int j = 0; j < slot->entry_count; j++) {
       unsigned id = (unsigned)slot->entries[j].id;
       int di = (id < DEF_ID_MAX) ? def_idx[id] : -1;
       if (di >= 0) {
@@ -235,16 +233,17 @@ static void render_grouped(strbuf_t *sb, const store_t *st) {
   if (total) {
     refs = malloc(sizeof *refs * total);
     if (refs) {
-      for (i = 0; i < N_DEFS; i++) {
+      size_t off = 0;
+      for (unsigned i = 0; i < N_DEFS; i++) {
         start[i] = off;
         cursor[i] = off;
         off += count[i];
       }
-      for (si = 0; si < STORE_MAX_INSTANCES; si++) {
+      for (int si = 0; si < STORE_MAX_INSTANCES; si++) {
         const store_slot_t *slot = &st->slots[si];
         if (!slot->used)
           continue;
-        for (j = 0; j < slot->entry_count; j++) {
+        for (int j = 0; j < slot->entry_count; j++) {
           unsigned id = (unsigned)slot->entries[j].id;
           int di = (id < DEF_ID_MAX) ? def_idx[id] : -1;
           if (di >= 0) {
@@ -257,14 +256,14 @@ static void render_grouped(strbuf_t *sb, const store_t *st) {
     }
   }
 
-  for (i = 0; i < N_DEFS; i++) {
+  for (unsigned i = 0; i < N_DEFS; i++) {
     const metric_def_t *def = &DEFS[i];
     const char *kind_name = def->kind == M_COUNTER ? "counter" : def->kind == M_INFO ? "info" : "gauge";
     if (!count[i] || !refs)
       continue;
     sb_appendf(sb, "# HELP %s %s\n", def->name, def->help);
     sb_appendf(sb, "# TYPE %s %s\n", def->name, kind_name);
-    for (k = start[i]; k < start[i] + count[i]; k++) {
+    for (size_t k = start[i]; k < start[i] + count[i]; k++) {
       const store_slot_t *slot = refs[k].slot;
       const stored_entry_t *e = refs[k].entry;
       char esc[2 * METRICS_LABEL_MAX + 2];
@@ -283,8 +282,8 @@ static void render_grouped(strbuf_t *sb, const store_t *st) {
 }
 
 static void render_snapshot_age(strbuf_t *sb, const store_t *st, double now_mono) {
-  int i, any = 0;
-  for (i = 0; i < STORE_MAX_INSTANCES; i++)
+  int any = 0;
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++)
     if (st->slots[i].used)
       any = 1;
   if (!any)
@@ -292,7 +291,7 @@ static void render_snapshot_age(strbuf_t *sb, const store_t *st, double now_mono
 
   sb_appendf(sb, "# HELP dvbipi_metrics_snapshot_age_seconds seconds since this instance's last snapshot was received\n");
   sb_appendf(sb, "# TYPE dvbipi_metrics_snapshot_age_seconds gauge\n");
-  for (i = 0; i < STORE_MAX_INSTANCES; i++) {
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++) {
     const store_slot_t *slot = &st->slots[i];
     if (!slot->used)
       continue;
@@ -303,8 +302,8 @@ static void render_snapshot_age(strbuf_t *sb, const store_t *st, double now_mono
 }
 
 static void render_self_metrics(strbuf_t *sb, const store_t *st) {
-  int i, active = 0;
-  for (i = 0; i < STORE_MAX_INSTANCES; i++)
+  int active = 0;
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++)
     if (st->slots[i].used)
       active++;
 

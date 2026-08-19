@@ -19,8 +19,7 @@ static FILE *open_input(const char *path) { return strcmp(path, "-") ? fopen(pat
 static FILE *open_output(const char *path) { return strcmp(path, "-") ? fopen(path, "w") : stdout; }
 
 static void write_tva_xml(FILE *out, bcg_doc_t *doc, const mapping_t *map, int verbose) {
-  int i;
-  for (i = 0; i < doc->channel_count; i++) {
+  for (int i = 0; i < doc->channel_count; i++) {
     bcg_channel_t *c = &doc->channels[i];
     char uri[BCG_ID_LEN];
     unsigned tsid, onid, sid;
@@ -37,17 +36,15 @@ static void write_tva_xml(FILE *out, bcg_doc_t *doc, const mapping_t *map, int v
 }
 
 static void apply_revmap(bcg_doc_t *doc, const revmap_t *rev) {
-  int i;
-  for (i = 0; i < doc->channel_count; i++) {
+  for (int i = 0; i < doc->channel_count; i++) {
     bcg_channel_t *c = &doc->channels[i];
     const char *preferred = revmap_lookup(rev, c->uri);
     char old_id[BCG_ID_LEN];
-    int j;
     if (!preferred)
       continue;
     bufcpy(old_id, sizeof old_id, c->id);
     bufcpy(c->id, sizeof c->id, preferred);
-    for (j = 0; j < doc->programme_count; j++)
+    for (int j = 0; j < doc->programme_count; j++)
       if (!strcmp(doc->programmes[j].channel_id, old_id))
         bufcpy(doc->programmes[j].channel_id, sizeof doc->programmes[j].channel_id, preferred);
   }

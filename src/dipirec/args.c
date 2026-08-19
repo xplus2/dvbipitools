@@ -308,8 +308,8 @@ static int fmt_from_suffix(const char *path, out_fmt_t *f) {
   static const enum_map_t map[] = {{"ts", FMT_TS}, {"mkv", FMT_MKV}, {"mka", FMT_MKA}};
   const char *dot = strrchr(path, '.');
   char lower[8];
-  int v;
   size_t i;
+  int v;
 
   if (!dot)
     return 0;

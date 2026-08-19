@@ -77,7 +77,6 @@ START_TEST(scrambler_csa2_packet_encrypts_full_payload_including_residual) {
   unsigned char clear[188], pkt[188];
   struct dvbcsa_key_s *dk;
   scrambler_t *s;
-  size_t i;
 
   /* 5-byte adaptation field (1 length byte + 4): payload_off = 4+5 = 9, payload_size = 179,
      179 % 8 == 3 - libdvbcsa's residue termination stage still scrambles the full length,
@@ -88,7 +87,7 @@ START_TEST(scrambler_csa2_packet_encrypts_full_payload_including_residual) {
   clear[3] = 0x31; /* AFC=11 AF+payload */
   clear[4] = 0x04; /* AF length byte: 4 bytes follow */
   clear[5] = clear[6] = clear[7] = clear[8] = 0xFF;
-  for (i = 9; i < 188; i++)
+  for (size_t i = 9; i < 188; i++)
     clear[i] = (unsigned char)(i * 3);
   memcpy(pkt, clear, sizeof pkt);
 
@@ -124,9 +123,8 @@ START_TEST(csa2_decrypt_block_round_trips_with_library_encrypt) {
   unsigned char plain[64], buf[64];
   struct dvbcsa_key_s *dk;
   csa2_key_t *k;
-  size_t i;
 
-  for (i = 0; i < sizeof plain; i++)
+  for (size_t i = 0; i < sizeof plain; i++)
     plain[i] = (unsigned char)(i * 5);
   memcpy(buf, plain, sizeof buf);
 
@@ -148,7 +146,6 @@ END_TEST
 START_TEST(scrambler_csa2_packet_descrambles_full_payload_round_trip) {
   unsigned char clear[188], pkt[188];
   scrambler_t *senc, *sdec;
-  size_t i;
 
   /* same 5-byte adaptation field / non-8-aligned tail shape as the encrypt-side test */
   clear[0] = 0x47;
@@ -157,7 +154,7 @@ START_TEST(scrambler_csa2_packet_descrambles_full_payload_round_trip) {
   clear[3] = 0x31;
   clear[4] = 0x04;
   clear[5] = clear[6] = clear[7] = clear[8] = 0xFF;
-  for (i = 9; i < 188; i++)
+  for (size_t i = 9; i < 188; i++)
     clear[i] = (unsigned char)(i * 3);
   memcpy(pkt, clear, sizeof pkt);
 
@@ -213,7 +210,6 @@ START_TEST(csa2_batch_matches_single_packet_api_mixed_lengths) {
   csa2_batch_entry_t entries[5];
   csa2_key_t *k;
   unsigned bs, n, i;
-  int trial;
 
   k = csa2_key_new(cw);
   ck_assert_ptr_nonnull(k);
@@ -222,10 +218,9 @@ START_TEST(csa2_batch_matches_single_packet_api_mixed_lengths) {
   n = bs < 5u ? bs : 5u;
 
   srand(2026);
-  for (trial = 0; trial < 500; trial++) {
+  for (int trial = 0; trial < 500; trial++) {
     for (i = 0; i < n; i++) {
-      size_t j;
-      for (j = 0; j < lens[i]; j++) {
+      for (size_t j = 0; j < lens[i]; j++) {
         unsigned char v = (unsigned char)rand();
         single[i][j] = v;
         batch_bufs[i][j] = v;
@@ -427,14 +422,13 @@ START_TEST(scrambler_encrypt_queued_survives_flush_at_queue_capacity) {
   struct dvbcsa_key_s *dk;
   unsigned bs = csa2_batch_size();
   unsigned cap = bs * 16; /* SCRAMBLER_QUEUE_CAP_MULTIPLIER in scrambler.c */
-  unsigned i;
 
   ck_assert_ptr_nonnull(s);
   captured_n = 0;
 
   /* fills queue via passthrough (no key yet): mirrors MPTS pid waiting on
      its parity's CW */
-  for (i = 0; i < cap; i++) {
+  for (unsigned i = 0; i < cap; i++) {
     memset(pkt, 0x66, 188);
     pkt[0] = 0x47;
     pkt[3] = 0x10; /* not scrambled */

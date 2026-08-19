@@ -61,9 +61,8 @@ static int make_listener(unsigned *port_out) {
 
 static http_async_state_t drive(http_async_t *a, int max_iters) {
   http_async_state_t st = HTTP_ASYNC_PENDING;
-  int i;
 
-  for (i = 0; i < max_iters && st == HTTP_ASYNC_PENDING; i++) {
+  for (int i = 0; i < max_iters && st == HTTP_ASYNC_PENDING; i++) {
     struct pollfd pfd;
     pfd.fd = http_async_poll_fd(a);
     pfd.events = http_async_poll_events(a);

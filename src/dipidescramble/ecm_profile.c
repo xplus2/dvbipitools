@@ -66,8 +66,7 @@ static crypto_ecm_cipher_t cipher_to_crypto(ecm_cipher_t c) {
 }
 
 static const ecm_header_t *find_header(const ecm_format_t *fmt, const char *id) {
-  int i;
-  for (i = 0; i < fmt->header_count; i++)
+  for (int i = 0; i < fmt->header_count; i++)
     if (strcmp(fmt->headers[i].id, id) == 0)
       return &fmt->headers[i];
   return NULL;
@@ -79,8 +78,8 @@ static int is_reserved_id(const char *id) {
 }
 
 static int count_kind(const ecm_token_list_t *l, ecm_token_kind_t k) {
-  int i, n = 0;
-  for (i = 0; i < l->count; i++)
+  int n = 0;
+  for (int i = 0; i < l->count; i++)
     if (l->tok[i].kind == k)
       n++;
   return n;
@@ -102,10 +101,10 @@ static int hex_nibble(char c) {
 }
 
 static int hex_decode(const char *hex, unsigned char *out, int out_max, int *out_len) {
-  size_t hexlen = strlen(hex), i;
+  size_t hexlen = strlen(hex);
   if (hexlen == 0 || hexlen % 2 != 0 || (int)(hexlen / 2) > out_max)
     return -1;
-  for (i = 0; i < hexlen; i += 2) {
+  for (size_t i = 0; i < hexlen; i += 2) {
     int hi = hex_nibble(hex[i]), lo = hex_nibble(hex[i + 1]);
     if (hi < 0 || lo < 0)
       return -1;
@@ -366,9 +365,8 @@ int ecm_profile_parse(const char *spec, ecm_profile_t *out) {
     val = eq + 1;
 
     {
-      size_t fi;
       const ecm_field_setter_t *found = NULL;
-      for (fi = 0; fi < N(field_setters); fi++)
+      for (size_t fi = 0; fi < N(field_setters); fi++)
         if (strcmp(key, field_setters[fi].key) == 0) {
           found = &field_setters[fi];
           break;
@@ -415,8 +413,7 @@ static void build_default_wire_order(const ecm_profile_t *p, ecm_token_list_t *l
 
 static int validate_cw_group(const ecm_token_list_t *cwg) {
   int has_cw = 0, has_cpn = 0;
-  int i;
-  for (i = 0; i < cwg->count; i++) {
+  for (int i = 0; i < cwg->count; i++) {
     if (cwg->tok[i].kind == ECM_TOK_CW) {
       if (has_cw) {
         log_line(TOOL_NAME ": --ecm-profile: cw_group: cw appears more than once");
@@ -442,7 +439,6 @@ static int validate_cw_group(const ecm_token_list_t *cwg) {
 }
 
 int ecm_profile_validate(ecm_profile_t *p) {
-  int i, j;
   int is_ecb = cipher_is_ecb(p->cipher), is_cbc = cipher_is_cbc(p->cipher), is_gcm = cipher_is_gcm(p->cipher);
   int mte = p->integrity.order == ECM_INTEGRITY_BEFORE_ENCRYPT && p->integrity.type != ECM_INTEGRITY_NONE;
 
@@ -472,11 +468,11 @@ int ecm_profile_validate(ecm_profile_t *p) {
     log_line(TOOL_NAME ": --ecm-profile: short_key_source=separate_info needs hkdf=1"); return -1;
   }
 
-  for (i = 0; i < p->format.header_count; i++) {
+  for (int i = 0; i < p->format.header_count; i++) {
     if (is_reserved_id(p->format.headers[i].id)) {
       log_line(TOOL_NAME ": --ecm-profile: header id \"%s\" is a reserved token keyword", p->format.headers[i].id); return -1;
     }
-    for (j = i + 1; j < p->format.header_count; j++)
+    for (int j = i + 1; j < p->format.header_count; j++)
       if (strcmp(p->format.headers[i].id, p->format.headers[j].id) == 0) {
         log_line(TOOL_NAME ": --ecm-profile: duplicate header id \"%s\"", p->format.headers[i].id); return -1;
       }
@@ -528,7 +524,7 @@ int ecm_profile_validate(ecm_profile_t *p) {
     } else if (itag_n != 0) {
       log_line(TOOL_NAME ": --ecm-profile: integrity_tag in field_order needs integrity_order=before-encrypt"); return -1;
     }
-    for (i = 0; i < fo->count; i++) {
+    for (int i = 0; i < fo->count; i++) {
       if (fo->tok[i].kind == ECM_TOK_IV || fo->tok[i].kind == ECM_TOK_CIPHERTEXT || fo->tok[i].kind == ECM_TOK_GCM_TAG) {
         log_line(TOOL_NAME ": --ecm-profile: field_order may not contain iv/ciphertext/gcm_tag (wire_order tokens)"); return -1;
       }
@@ -551,7 +547,7 @@ int ecm_profile_validate(ecm_profile_t *p) {
     if (ct_n != 1) { log_line(TOOL_NAME ": --ecm-profile: wire_order must contain ciphertext exactly once"); return -1; }
     if (gcm_n != (is_gcm ? 1 : 0)) { log_line(TOOL_NAME ": --ecm-profile: wire_order: gcm_tag presence inconsistent with cipher"); return -1; }
     if (itag_n != (has_itag ? 1 : 0)) { log_line(TOOL_NAME ": --ecm-profile: wire_order: integrity_tag presence inconsistent with integrity settings"); return -1; }
-    for (i = 0; i < wo->count; i++) {
+    for (int i = 0; i < wo->count; i++) {
       if (wo->tok[i].kind == ECM_TOK_ECM_ID || wo->tok[i].kind == ECM_TOK_CP_NUMBER || wo->tok[i].kind == ECM_TOK_CW || wo->tok[i].kind == ECM_TOK_CW_GROUP) {
         log_line(TOOL_NAME ": --ecm-profile: wire_order may not contain ecm_id/cp_number/cw/cw_group (field_order tokens)"); return -1;
       }
@@ -565,8 +561,7 @@ int ecm_profile_validate(ecm_profile_t *p) {
 
 static size_t cw_group_unit_len(const ecm_token_list_t *cwg, int cw_len) {
   size_t unit = 0;
-  int j;
-  for (j = 0; j < cwg->count; j++) {
+  for (int j = 0; j < cwg->count; j++) {
     if (cwg->tok[j].kind == ECM_TOK_CW)
       unit += (size_t)cw_len;
     else if (cwg->tok[j].kind == ECM_TOK_CP_NUMBER)
@@ -580,9 +575,8 @@ int ecm_profile_layout(const ecm_profile_t *p, int cw_len, ecm_layout_t *out) {
   int is_gcm = cipher_is_gcm(p->cipher), is_cbc = cipher_is_cbc(p->cipher);
   size_t itag_len = integrity_tag_wire_len(p);
   const ecm_token_list_t *fo = &p->format.field_order;
-  int i, k;
   memset(out, 0, sizeof *out);
-  for (i = 0; i < fo->count; i++) {
+  for (int i = 0; i < fo->count; i++) {
     switch (fo->tok[i].kind) {
     case ECM_TOK_HEADER: {
       const ecm_header_t *h = find_header(&p->format, fo->tok[i].id);
@@ -621,7 +615,7 @@ int ecm_profile_layout(const ecm_profile_t *p, int cw_len, ecm_layout_t *out) {
   out->integrity_tag_len = (p->integrity.order == ECM_INTEGRITY_AFTER_ENCRYPT) ? itag_len : 0;
   out->wire_len = out->iv_len + out->ciphertext_len + out->gcm_tag_len + out->integrity_tag_len;
 
-  for (k = 0; k < p->format.wire_order.count; k++)
+  for (int k = 0; k < p->format.wire_order.count; k++)
     if (p->format.wire_order.tok[k].kind == ECM_TOK_HEADER) {
       const ecm_header_t *h = find_header(&p->format, p->format.wire_order.tok[k].id);
       out->wire_len += h ? (size_t)h->len : 0;
@@ -631,9 +625,8 @@ int ecm_profile_layout(const ecm_profile_t *p, int cw_len, ecm_layout_t *out) {
 
 static int locate_wire_components(const ecm_profile_t *p, const ecm_layout_t *lay, const unsigned char *wire, size_t wire_len, const unsigned char **iv, const unsigned char **ct, const unsigned char **gcm_tag, const unsigned char **itag) {
   size_t off = 0;
-  int i;
   *iv = NULL; *ct = NULL; *gcm_tag = NULL; *itag = NULL;
-  for (i = 0; i < p->format.wire_order.count; i++) {
+  for (int i = 0; i < p->format.wire_order.count; i++) {
     const ecm_token_t *t = &p->format.wire_order.tok[i];
     size_t len = 0;
     const unsigned char **dest = NULL;
@@ -708,8 +701,8 @@ static int compute_tag(const ecm_profile_t *p, const unsigned char mac_key[CRYPT
    cp_number falls back to cp_number_outer + combo index (mod 65536) unless carried in group */
 static void extract_cw_group_combo(const ecm_token_list_t *cwg, const unsigned char *plaintext, size_t *off, int cw_len,
                                    ecm_cw_combo_t *combo, unsigned cp_number_fallback) {
-  int j, has_cpn = 0;
-  for (j = 0; j < cwg->count; j++) {
+  int has_cpn = 0;
+  for (int j = 0; j < cwg->count; j++) {
     if (cwg->tok[j].kind == ECM_TOK_CP_NUMBER) {
       has_cpn = 1;
       combo->cp_number = ((unsigned)plaintext[*off] << 8) | plaintext[*off + 1];
@@ -731,10 +724,8 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
   unsigned char plaintext[ECM_PROFILE_WIRE_MAX];
   unsigned char assoc[4];
   const unsigned char *iv_ptr, *ct_ptr, *gcm_tag_ptr, *itag_ptr;
-  unsigned ecm_id = p->ecm_id_set ? p->ecm_id : ecm_id_fallback;
   int is_gcm, is_cbc;
   size_t klen, block, assoc_len = 0, off;
-  int i;
   if (ecm_profile_layout(p, cw_len, &lay) != 0 || lay.wire_len != wire_len || lay.plaintext_len > sizeof plaintext)
     return -1;
   if (locate_wire_components(p, &lay, wire, wire_len, &iv_ptr, &ct_ptr, &gcm_tag_ptr, &itag_ptr) != 0)
@@ -780,7 +771,7 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
     }
   }
 
-  if (p->integrity.bind_ecm_id) { assoc[assoc_len++] = (unsigned char)(ecm_id >> 8); assoc[assoc_len++] = (unsigned char)ecm_id; }
+  if (p->integrity.bind_ecm_id) { unsigned ecm_id = p->ecm_id_set ? p->ecm_id : ecm_id_fallback; assoc[assoc_len++] = (unsigned char)(ecm_id >> 8); assoc[assoc_len++] = (unsigned char)ecm_id; }
   if (p->integrity.bind_cp_number) { assoc[assoc_len++] = (unsigned char)(cp_number_outer >> 8); assoc[assoc_len++] = (unsigned char)cp_number_outer; }
 
   if (p->integrity.type != ECM_INTEGRITY_NONE && p->integrity.order == ECM_INTEGRITY_AFTER_ENCRYPT) {
@@ -813,7 +804,7 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
   *combo_count = 0;
   off = 0;
   combos[0].cp_number = cp_number_outer; /* default when field_order doesn't carry cp_number at all */
-  for (i = 0; i < p->format.field_order.count; i++) {
+  for (int i = 0; i < p->format.field_order.count; i++) {
     const ecm_token_t *t = &p->format.field_order.tok[i];
     switch (t->kind) {
     case ECM_TOK_HEADER: {
@@ -832,8 +823,7 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
       *combo_count = 1;
       break;
     case ECM_TOK_CW_GROUP: {
-      int c;
-      for (c = 0; c < p->cw_count; c++)
+      for (int c = 0; c < p->cw_count; c++)
         extract_cw_group_combo(&p->format.cw_group, plaintext, &off, cw_len, &combos[c], (cp_number_outer + (unsigned)c) & 0xFFFFu);
       *combo_count = p->cw_count;
       break;

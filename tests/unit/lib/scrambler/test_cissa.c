@@ -15,8 +15,7 @@ static const unsigned char cw[CISSA_CW_LEN] = {
     0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
 
 static void hex_decode(const char *hex, unsigned char *out, size_t out_len) {
-  size_t i;
-  for (i = 0; i < out_len; i++) {
+  for (size_t i = 0; i < out_len; i++) {
     unsigned hi, lo;
     sscanf(hex + i * 2, "%1x%1x", &hi, &lo);
     out[i] = (unsigned char)((hi << 4) | lo);
@@ -217,11 +216,10 @@ END_TEST
 /* one shared key across all vectors: proves ctx reuse still resets IV per packet */
 START_TEST(cissa_reuses_key_schedule_correctly_across_packets) {
   scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CISSA);
-  size_t i;
 
   ck_assert_ptr_nonnull(s);
   ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, NULL, NULL), 0);
-  for (i = 0; i < sizeof vectors / sizeof vectors[0]; i++) {
+  for (size_t i = 0; i < sizeof vectors / sizeof vectors[0]; i++) {
     unsigned char clear[188], scrambled[188], got[188];
     hex_decode(vectors[i].clear_hex, clear, 188);
     hex_decode(vectors[i].scrambled_hex, scrambled, 188);

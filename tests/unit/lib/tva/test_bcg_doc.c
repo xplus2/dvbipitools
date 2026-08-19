@@ -49,11 +49,10 @@ END_TEST
 START_TEST(bcg_channel_add_name_caps_at_max_and_drops_silently) {
   bcg_doc_t d;
   bcg_channel_t *c;
-  int i;
   bcg_doc_init(&d);
   c = bcg_add_channel(&d);
 
-  for (i = 0; i < BCG_MAX_NAMES + 3; i++) {
+  for (int i = 0; i < BCG_MAX_NAMES + 3; i++) {
     char name[16];
     snprintf(name, sizeof name, "name%d", i);
     bcg_channel_add_name(c, name);

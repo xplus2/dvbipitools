@@ -62,8 +62,7 @@ static uint32_t v6_word_mask(unsigned prefix, unsigned w) {
 
 /* 4 word-checks chained by fixed jf offsets (10/7/4/1), self-contained regardless of range count, no cross-clause backpatching */
 static int emit_v6_clause(bpf_buf_t *b, unsigned addr_off, const cidr_t *c) {
-  unsigned w;
-  for (w = 0; w < 4; w++) {
+  for (unsigned w = 0; w < 4; w++) {
     uint32_t raw, mask, net;
     unsigned jf;
     memcpy(&raw, &c->u.v6.addr.s6_addr[w * 4], 4);
@@ -86,10 +85,10 @@ static size_t bpf_dispatch_len(size_t nv4, size_t nv6) {
 
 /* assumes A = ethertype on entry. base: ethernet-payload offset (14 no vlan, 18 vlan tag unwrapped) */
 static int emit_dispatch_block(bpf_buf_t *b, unsigned base, const cidr_t *ranges, size_t range_count) {
-  size_t i, nv4 = 0, nv6 = 0;
+  size_t nv4 = 0, nv6 = 0;
   unsigned v4_section_len;
 
-  for (i = 0; i < range_count; i++)
+  for (size_t i = 0; i < range_count; i++)
     if (ranges[i].family == AF_INET)
       nv4++;
     else
@@ -98,7 +97,7 @@ static int emit_dispatch_block(bpf_buf_t *b, unsigned base, const cidr_t *ranges
 
   if (bpf_emit(b, (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, ETH_P_IP, 0, v4_section_len)) < 0)
     return -1;
-  for (i = 0; i < range_count; i++)
+  for (size_t i = 0; i < range_count; i++)
     if (ranges[i].family == AF_INET && emit_v4_clause(b, base + 16, &ranges[i]) < 0)
       return -1;
   if (bpf_emit(b, (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, 0)) < 0) /* v4, no range matched */
@@ -109,7 +108,7 @@ static int emit_dispatch_block(bpf_buf_t *b, unsigned base, const cidr_t *ranges
   if (bpf_emit(b, (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, 0)) < 0) /* neither v4 nor v6 */
     return -1;
 
-  for (i = 0; i < range_count; i++)
+  for (size_t i = 0; i < range_count; i++)
     if (ranges[i].family == AF_INET6 && emit_v6_clause(b, base + 24, &ranges[i]) < 0)
       return -1;
   return bpf_emit(b, (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, 0)); /* v6, no range matched */
@@ -120,10 +119,10 @@ static int emit_dispatch_block(bpf_buf_t *b, unsigned base, const cidr_t *ranges
    (jt/jf are 8-bit): skipping it toward vlan path uses unconditional BPF_JA trampoline, no condjump. */
 struct sock_filter *capture_build_bpf(const cidr_t *ranges, size_t range_count, size_t *out_len) {
   bpf_buf_t b;
-  size_t i, nv4 = 0, nv6 = 0, d_len, total;
+  size_t nv4 = 0, nv6 = 0, d_len, total;
 
   memset(&b, 0, sizeof b);
-  for (i = 0; i < range_count; i++)
+  for (size_t i = 0; i < range_count; i++)
     if (ranges[i].family == AF_INET)
       nv4++;
     else

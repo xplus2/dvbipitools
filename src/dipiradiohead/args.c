@@ -144,10 +144,8 @@ static int is_sid_used(const unsigned *used, unsigned n_used, unsigned sid) {
 static int assign_missing_sids(config_t *cfg) {
   unsigned used[RADIOHEAD_MAX_INPUTS];
   unsigned n_used = 0;
-  unsigned next = 1;
-  unsigned i;
 
-  for (i = 0; i < cfg->n_inputs; i++) {
+  for (unsigned i = 0; i < cfg->n_inputs; i++) {
     if (cfg->inputs[i].sid == 0)
       continue;
     if (is_sid_used(used, n_used, cfg->inputs[i].sid)) {
@@ -156,7 +154,8 @@ static int assign_missing_sids(config_t *cfg) {
     }
     used[n_used++] = cfg->inputs[i].sid;
   }
-  for (i = 0; i < cfg->n_inputs; i++) {
+  unsigned next = 1;
+  for (unsigned i = 0; i < cfg->n_inputs; i++) {
     if (cfg->inputs[i].sid != 0)
       continue;
     while (is_sid_used(used, n_used, next))

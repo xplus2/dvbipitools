@@ -10,8 +10,7 @@
 
 /* existing candidate for this pmt_pid, or NULL */
 pmt_cand_t *find_cand(psi_t *c, unsigned pmt_pid) {
-  int k;
-  for (k = 0; k < c->pmt_cand_count; k++)
+  for (int k = 0; k < c->pmt_cand_count; k++)
     if (c->pmt_cand[k].pmt_pid == pmt_pid)
       return &c->pmt_cand[k];
   return NULL;
@@ -19,14 +18,12 @@ pmt_cand_t *find_cand(psi_t *c, unsigned pmt_pid) {
 
 /* precedence nit>pmt>es>ecm>pcr, stamped lowest-first so higher overwrites (PCR often shares video pid) */
 void rebuild_class_table(psi_t *c) {
-  int i;
-
   memset(c->class_by_pid, 0, sizeof c->class_by_pid); /* PID_UNKNOWN == 0 */
   if (c->have_pmt) {
     c->class_by_pid[c->pcr_pid] = PID_PCR;
-    for (i = 0; i < c->ecm_count; i++)
+    for (int i = 0; i < c->ecm_count; i++)
       c->class_by_pid[c->ecm[i]] = PID_ECM;
-    for (i = 0; i < c->es_count; i++)
+    for (int i = 0; i < c->es_count; i++)
       c->class_by_pid[c->es[i].pid] = c->es[i].cls;
     c->class_by_pid[c->pmt_pid] = PID_PMT;
   } else if (c->have_pat) {
@@ -88,8 +85,7 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
     if (pid == c->pmt_pid && psi_section_asm_feed(&c->pmt_cand[c->pmt_lock_idx].asm_, pl, plen, pusi))
       parse_pmt(c, &c->pmt_cand[c->pmt_lock_idx]);
   } else if (c->have_pat) {
-    int k;
-    for (k = 0; k < c->pmt_cand_count; k++) {
+    for (int k = 0; k < c->pmt_cand_count; k++) {
       pmt_cand_t *cand = &c->pmt_cand[k];
       if (cand->pmt_pid != pid)
         continue;
@@ -101,8 +97,6 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
 }
 
 int psi_wants_pid(const psi_t *c, unsigned pid) {
-  int k;
-
   switch (pid) {
     case TS_PID_PAT:
     case TS_PID_NIT:
@@ -115,7 +109,7 @@ int psi_wants_pid(const psi_t *c, unsigned pid) {
   if (c->pmt_locked && !c->multi_mode)
     return pid == c->pmt_pid;
   if (c->have_pat)
-    for (k = 0; k < c->pmt_cand_count; k++)
+    for (int k = 0; k < c->pmt_cand_count; k++)
       if (c->pmt_cand[k].pmt_pid == pid)
         return 1;
   return 0;

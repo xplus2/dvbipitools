@@ -207,9 +207,8 @@ typedef struct {
 } rtmp_fanout_t;
 
 static int rtmp_fanout_open(const config_t *cfg, rtmp_fanout_t *r) {
-  int i;
   r->n = 0;
-  for (i = 0; i < cfg->n_out; i++) {
+  for (int i = 0; i < cfg->n_out; i++) {
     rtmpout_cfg_t rc;
     if (cfg->out[i].kind != OUT_RTMP && cfg->out[i].kind != OUT_RTMPS)
       continue;
@@ -231,16 +230,14 @@ static void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms
     "rtmp[0]", "rtmp[1]", "rtmp[2]", "rtmp[3]",
     "rtmp[4]", "rtmp[5]", "rtmp[6]", "rtmp[7]"
   };
-  int i;
 
-  for (i = 0; i < r->n; i++) {
+  for (int i = 0; i < r->n; i++) {
     note_send_result(rtmpout_write(r->out[i], type, timestamp_ms, data, len) >= 0, &r->had_error[i], labels[i]);
   }
 }
 
 static void rtmp_fanout_close(rtmp_fanout_t *r) {
-  int i;
-  for (i = 0; i < r->n; i++)
+  for (int i = 0; i < r->n; i++)
     rtmpout_close(r->out[i]);
 }
 
@@ -291,12 +288,12 @@ static void stats_show(const config_t *cfg, double elapsed, unsigned long long b
   if (!log_stderr_is_tty())
     return;
   if (psi) {
-    int c, k, tt = 0, sb = 0;
+    int c, tt = 0, sb = 0;
     const psi_es_t *es = psi_es(psi, &c);
     if (*psi_service_name(psi))
       name = psi_service_name(psi);
     atr = psi_audio_count(psi);
-    for (k = 0; k < c; k++) {
+    for (int k = 0; k < c; k++) {
       if (es[k].cls == PID_TELETEXT)
         tt = 1;
       if (es[k].cls == PID_SUBTITLE)
@@ -335,7 +332,6 @@ static int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks
 
   while (!stop_now(cfg, start)) {
     ssize_t n = src_read(s, buf, sizeof buf);
-    int i;
     if (n < 0)
       break;
     if (n == 0)
@@ -350,7 +346,7 @@ static int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks
     }
     if (ctx.psi)
       tspack_feed(&pz, buf, (size_t)n, raw_cb, &ctx);
-    for (i = 0; i < n_sinks; i++)
+    for (int i = 0; i < n_sinks; i++)
       if (sink_write(&sinks[i], buf, (size_t)n)) {
         rc = 1;
         break;
@@ -380,8 +376,7 @@ typedef struct {
 } stream_ctx_t;
 
 static int write_to_sinks(out_sink_t *sinks, int n_sinks, const unsigned char *buf, size_t len) {
-  int i;
-  for (i = 0; i < n_sinks; i++)
+  for (int i = 0; i < n_sinks; i++)
     if (sink_write(&sinks[i], buf, len))
       return 1;
   return 0;
@@ -426,7 +421,6 @@ static int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_si
                        unsigned long long *bytes, double start, int video_ok, unsigned pmt_pid, const unsigned *all_pids,
                        int n_all_pids, pace_ctrl_t *pace) {
   unsigned char buf[65536];
-  char app_name[64], srcuri[1024];
   tspack_t pz = {{0}, 0};
   stream_ctx_t ctx;
   double last_stat = 0;
@@ -446,6 +440,7 @@ static int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_si
   }
   if (is_mkv) {
     mkv_opts_t opts;
+    char app_name[64], srcuri[1024];
     snprintf(app_name, sizeof app_name, "%s %s", TOOL_NAME, TOOL_VERSION);
     source_describe(&cfg->source, srcuri, sizeof srcuri);
     memset(&opts, 0, sizeof opts);
@@ -513,8 +508,7 @@ static int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_si
 }
 
 static int cfg_has_rtmp(const config_t *cfg) {
-  int i;
-  for (i = 0; i < cfg->n_out; i++)
+  for (int i = 0; i < cfg->n_out; i++)
     if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS)
       return 1;
   return 0;
@@ -524,7 +518,6 @@ static int cfg_has_rtmp(const config_t *cfg) {
    1: abort, message already printed. raw skips this, nothing to select there. */
 static int resolve_pmt_selection(const config_t *cfg, src_t *s, unsigned *pmt_pid, unsigned *all_pids, int *n_all_pids) {
   mpts_probe_result_t probe;
-  int k;
 
   *pmt_pid = 0;
   *n_all_pids = 0;
@@ -557,11 +550,11 @@ static int resolve_pmt_selection(const config_t *cfg, src_t *s, unsigned *pmt_pi
       mpts_probe_print_programs(TOOL_NAME, &probe);
       return 1;
     }
-    for (k = 0; k < probe.program_count; k++)
+    for (int k = 0; k < probe.program_count; k++)
       all_pids[(*n_all_pids)++] = probe.programs[k].pmt_pid;
     return 0;
   }
-  for (k = 0; k < probe.program_count; k++)
+  for (int k = 0; k < probe.program_count; k++)
     if (probe.programs[k].pmt_pid == cfg->pmt_pid) {
       *pmt_pid = cfg->pmt_pid;
       return 0;
@@ -585,10 +578,9 @@ int record_run(const config_t *cfg) {
   unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
   int n_all_pids;
   pace_ctrl_t *pace;
-  int i;
 
   rf.n = 0;
-  for (i = 0; i < cfg->n_out && !rc; i++) {
+  for (int i = 0; i < cfg->n_out && !rc; i++) {
     if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS)
       continue;
     if (is_mkv_fmt) {
@@ -612,7 +604,7 @@ int record_run(const config_t *cfg) {
     if (have_src)
       src_close(&s);
     rtmp_fanout_close(&rf);
-    for (i = 0; i < n_sinks; i++)
+    for (int i = 0; i < n_sinks; i++)
       sink_close(&sinks[i]);
     if (mkv_fd >= 0 && mkv_fd != STDOUT_FILENO)
       close(mkv_fd);
@@ -633,7 +625,7 @@ int record_run(const config_t *cfg) {
 
   src_close(&s); /* IGMP/MLD leave */
   rtmp_fanout_close(&rf);
-  for (i = 0; i < n_sinks; i++)
+  for (int i = 0; i < n_sinks; i++)
     sink_close(&sinks[i]);
   if (mkv_fd >= 0 && mkv_fd != STDOUT_FILENO)
     close(mkv_fd);

@@ -28,8 +28,8 @@ static void percent_encode(const char *s, char *out, size_t outcap) {
 
 /* "YYYY-MM-DDTHH:MM:SS..." -> "YYYYMMDDHHMMSS", truncates rest */
 static void iso8601_compact_prefix(const char *iso, char *out, size_t outcap) {
-  size_t i, oi = 0;
-  for (i = 0; iso[i] && oi + 1 < outcap; i++)
+  size_t oi = 0;
+  for (size_t i = 0; iso[i] && oi + 1 < outcap; i++)
     if (iso[i] != '-' && iso[i] != ':' && iso[i] != 'T')
       out[oi++] = iso[i];
   out[oi] = '\0';
@@ -46,12 +46,10 @@ void tva_build_crid(const char *channel_id, const char *start_iso, char *out, si
 }
 
 void tva_xml_write(FILE *f, const bcg_doc_t *doc) {
-  int i, j;
-
   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<TVAMain xmlns=\"urn:tva:metadata:2004\">\n<ProgramDescription>\n", f);
   fputs("<MetadataOriginationInformationTable/>\n<ClassificationSchemeTable/>\n", f);
   fputs("<ProgramInformationTable>\n", f);
-  for (i = 0; i < doc->programme_count; i++) {
+  for (int i = 0; i < doc->programme_count; i++) {
     const bcg_programme_t *pr = &doc->programmes[i];
     const bcg_channel_t *c = bcg_find_channel(doc, pr->channel_id);
     char crid[BCG_ID_LEN * 3 + 64];
@@ -82,12 +80,12 @@ void tva_xml_write(FILE *f, const bcg_doc_t *doc) {
   fputs("</ProgramInformationTable>\n<GroupInformationTable/>\n", f);
 
   fputs("<ProgramLocationTable>\n", f);
-  for (i = 0; i < doc->channel_count; i++) {
+  for (int i = 0; i < doc->channel_count; i++) {
     const bcg_channel_t *c = &doc->channels[i];
     int any = 0;
     if (!c->uri[0])
       continue;
-    for (j = 0; j < doc->programme_count; j++)
+    for (int j = 0; j < doc->programme_count; j++)
       if (!strcmp(doc->programmes[j].channel_id, c->id)) {
         any = 1;
         break;
@@ -97,7 +95,7 @@ void tva_xml_write(FILE *f, const bcg_doc_t *doc) {
     fputs("<Schedule serviceIDRef=\"", f);
     xml_escape(f, c->id);
     fputs("\">\n", f);
-    for (j = 0; j < doc->programme_count; j++) {
+    for (int j = 0; j < doc->programme_count; j++) {
       const bcg_programme_t *pr = &doc->programmes[j];
       char crid[BCG_ID_LEN * 3 + 64];
       if (strcmp(pr->channel_id, c->id))
@@ -115,14 +113,14 @@ void tva_xml_write(FILE *f, const bcg_doc_t *doc) {
   fputs("</ProgramLocationTable>\n", f);
 
   fputs("<ServiceInformationTable>\n", f);
-  for (i = 0; i < doc->channel_count; i++) {
+  for (int i = 0; i < doc->channel_count; i++) {
     const bcg_channel_t *c = &doc->channels[i];
     if (!c->uri[0])
       continue;
     fputs("<ServiceInformation serviceId=\"", f);
     xml_escape(f, c->id);
     fputs("\">\n", f);
-    for (j = 0; j < c->name_count; j++) {
+    for (int j = 0; j < c->name_count; j++) {
       fputs("<Name>", f);
       xml_escape(f, c->names[j]);
       fputs("</Name>\n", f);
@@ -157,13 +155,12 @@ static int progtext_idx_cmp(const void *a, const void *b) {
 
 /* 0 ok, -1 OOM. pl->items must not change after this: idx entries are built from it */
 static int progtext_list_build_index(progtext_list_t *pl) {
-  int i;
   if (!pl->n)
     return 0;
   pl->idx = malloc(sizeof *pl->idx * (size_t)pl->n);
   if (!pl->idx)
     return -1;
-  for (i = 0; i < pl->n; i++) {
+  for (int i = 0; i < pl->n; i++) {
     pl->idx[i].crid = pl->items[i].crid;
     pl->idx[i].idx = i;
   }

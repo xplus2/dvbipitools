@@ -400,12 +400,12 @@ static void *pacer_main(void *arg) {
   }
 
   while (!signal_stop_requested()) {
-    size_t i, n = 0;
+    size_t n = 0;
 
     nanosleep(&tick, NULL);
 
     pthread_mutex_lock(&pc->bursts->lock);
-    for (i = 0; i < pc->bursts->cap; i++) {
+    for (size_t i = 0; i < pc->bursts->cap; i++) {
       burst_slot_t *slot = &pc->bursts->slots[i];
       if (!slot->in_use)
         continue;
@@ -419,7 +419,7 @@ static void *pacer_main(void *arg) {
     }
     pthread_mutex_unlock(&pc->bursts->lock);
 
-    for (i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
       unicast_dest_t dst;
       burst_tick_result_t r;
       int owns_slot = 0;
@@ -480,18 +480,17 @@ static void *rsi_pacer_main(void *arg) {
     chunks_per_cycle = 1;
 
   while (!signal_stop_requested()) {
-    unsigned i;
-    size_t cap, idx;
+    size_t cap;
     uint32_t ntp_sec, ntp_frac;
 
-    for (i = 0; i < chunks_per_cycle && !signal_stop_requested(); i++)
+    for (unsigned i = 0; i < chunks_per_cycle && !signal_stop_requested(); i++)
       nanosleep(&chunk, NULL);
     if (signal_stop_requested())
       break;
 
     ntp_now(&ntp_sec, &ntp_frac);
     cap = channel_table_capacity(pc->channels);
-    for (idx = 0; idx < cap; idx++) {
+    for (size_t idx = 0; idx < cap; idx++) {
       channel_t *c = channel_table_at(pc->channels, idx);
       unsigned char pkt[RSI_PKT_MAX];
       uint32_t collisions[CHANNEL_HNED_COLLISION_MAX];

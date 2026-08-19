@@ -25,10 +25,9 @@ void meta_cb(void *ctx, const char *artist, const char *title) {
 
 ristout_t *radiohead_rist_open(const config_t *cfg) {
   ristout_cfg_t rc;
-  unsigned i;
 
   memset(&rc, 0, sizeof rc);
-  for (i = 0; i < cfg->n_rist; i++)
+  for (unsigned i = 0; i < cfg->n_rist; i++)
     rc.peer_uri[i] = cfg->rist_uri[i];
   rc.npeers = (int)cfg->n_rist;
   rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;

@@ -80,7 +80,7 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *do
   for (int i = 0; i < windowed->programme_count; i++) {
     const bcg_programme_t *pr = &windowed->programmes[i];
     const bcg_channel_t *c = bcg_find_channel(windowed, pr->channel_id);
-    long s, e;
+    long s;
     if (c && seen) {
       int idx = (int)(c - windowed->channels);
       if (!seen[idx]) {
@@ -89,7 +89,7 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *do
       }
     }
     if (!iso8601_to_minutes(pr->start, &s)) {
-      e = s;
+      long e = s;
       if (pr->stop[0])
         iso8601_to_minutes(pr->stop, &e);
       if (!have_sched || s < sched_start)
@@ -114,15 +114,14 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *do
 }
 
 int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long window_min) {
-  int i;
   bcg_doc_init(dst);
-  for (i = 0; i < src->channel_count; i++) {
+  for (int i = 0; i < src->channel_count; i++) {
     bcg_channel_t *c = bcg_add_channel(dst);
     if (!c)
       return -1;
     *c = src->channels[i];
   }
-  for (i = 0; i < src->programme_count; i++) {
+  for (int i = 0; i < src->programme_count; i++) {
     const bcg_programme_t *pr = &src->programmes[i];
     bcg_programme_t *out;
     long start_min, end_min;

@@ -47,10 +47,9 @@ void amf_number(ebuf_t *b, double v) {
     uint64_t u;
   } c;
   unsigned char m = AMF_T_NUMBER, t[8];
-  int i;
   c.d = v;
   eb_bytes(b, &m, 1);
-  for (i = 0; i < 8; i++)
+  for (int i = 0; i < 8; i++)
     t[i] = (unsigned char)(c.u >> (8 * (7 - i)));
   eb_bytes(b, t, 8);
 }
@@ -100,11 +99,10 @@ const unsigned char *amf_read_number(const unsigned char *p, const unsigned char
     double d;
     uint64_t u;
   } c;
-  int i;
   if (end - p < 9 || p[0] != AMF_T_NUMBER)
     return NULL;
   c.u = 0;
-  for (i = 0; i < 8; i++)
+  for (int i = 0; i < 8; i++)
     c.u = (c.u << 8) | p[1 + i];
   *v = c.d;
   return p + 9;
@@ -148,7 +146,6 @@ static const unsigned char *amf_skip_props(const unsigned char *p, const unsigne
 }
 
 const unsigned char *amf_skip_value(const unsigned char *p, const unsigned char *end) {
-  uint32_t i, count;
   if (end - p < 1)
     return NULL;
   switch (p[0]) {
@@ -170,9 +167,9 @@ const unsigned char *amf_skip_value(const unsigned char *p, const unsigned char 
     case AMF_T_STRICT_ARRAY:
       if (end - p < 5)
         return NULL;
-      count = be32_get(p + 1);
+      uint32_t count = be32_get(p + 1);
       p += 5;
-      for (i = 0; i < count; i++) {
+      for (uint32_t i = 0; i < count; i++) {
         p = amf_skip_value(p, end);
         if (!p)
           return NULL;

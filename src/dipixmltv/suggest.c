@@ -18,12 +18,11 @@ typedef struct {
 
 static int ci_contains(const char *hay, const char *needle) {
   size_t hn = strlen(hay), nn = strlen(needle);
-  size_t i;
   if (nn == 0)
     return 1;
   if (nn > hn)
     return 0;
-  for (i = 0; i + nn <= hn; i++)
+  for (size_t i = 0; i + nn <= hn; i++)
     if (!strncasecmp(hay + i, needle, nn))
       return 1;
   return 0;
@@ -69,9 +68,8 @@ static int load_scan(FILE *f, scan_entry_t **out, int *out_n) {
 
 /* returns scan[] index of an exact case-insensitive name match, or -1 */
 static int find_exact_match(const bcg_channel_t *c, const scan_entry_t *scan, int scan_n) {
-  int j, k;
-  for (j = 0; j < scan_n; j++)
-    for (k = 0; k < c->name_count; k++)
+  for (int j = 0; j < scan_n; j++)
+    for (int k = 0; k < c->name_count; k++)
       if (!strcasecmp(c->names[k], scan[j].name))
         return j;
   return -1;
@@ -79,9 +77,8 @@ static int find_exact_match(const bcg_channel_t *c, const scan_entry_t *scan, in
 
 /* returns scan[] index of a substring name match, or -1 */
 static int find_fuzzy_match(const bcg_channel_t *c, const scan_entry_t *scan, int scan_n) {
-  int j, k;
-  for (j = 0; j < scan_n; j++)
-    for (k = 0; k < c->name_count; k++)
+  for (int j = 0; j < scan_n; j++)
+    for (int k = 0; k < c->name_count; k++)
       if (ci_contains(scan[j].name, c->names[k]) || ci_contains(c->names[k], scan[j].name))
         return j;
   return -1;
@@ -90,7 +87,7 @@ static int find_fuzzy_match(const bcg_channel_t *c, const scan_entry_t *scan, in
 int suggest_map(FILE *xmltv_f, FILE *scan_f, FILE *out) {
   bcg_doc_t doc;
   scan_entry_t *scan;
-  int scan_n, i;
+  int scan_n;
 
   bcg_doc_init(&doc);
   if (xmltv_read(xmltv_f, &doc)) {
@@ -104,7 +101,7 @@ int suggest_map(FILE *xmltv_f, FILE *scan_f, FILE *out) {
 
   fputs("# suggested mapping - review before use\n# live lines are exact name matches; commented lines need manual confirmation\n", out);
 
-  for (i = 0; i < doc.channel_count; i++) {
+  for (int i = 0; i < doc.channel_count; i++) {
     bcg_channel_t *c = &doc.channels[i];
     int exact, fuzzy = -1;
     const char *first_name = c->name_count ? c->names[0] : "?";

@@ -134,8 +134,7 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
         ecm_pid = psi_pmt_ca_pid(psi);
         ecm_sysid = psi_pmt_ca_system_id(psi);
       } else {
-        int k;
-        for (k = 0; k < count; k++)
+        for (int k = 0; k < count; k++)
           if (in_es[k].ca_pid) {
             ecm_pid = in_es[k].ca_pid;
             ecm_sysid = in_es[k].ca_system_id;
@@ -177,8 +176,7 @@ const out_es_t *remux_es(const remux_t *r, int *count) {
 
 /* is_ca 1 (ECM) or 2 (EMM) entry, NULL if this program carries none */
 static const out_es_t *find_ca_passthrough(const remux_t *r, int is_ca) {
-  int i;
-  for (i = 0; i < r->es_count; i++)
+  for (int i = 0; i < r->es_count; i++)
     if (r->es[i].is_ca == is_ca)
       return &r->es[i];
   return NULL;
@@ -217,12 +215,10 @@ static int due(double now, double *last, double interval) {
 
 /* es[] index for a source pid, or -1 if not carried (dropped) */
 static int find_es(remux_t *r, unsigned in_pid) {
-  int i;
-
   if (r->last_es_idx >= 0 && r->last_es_idx < r->es_count && r->es[r->last_es_idx].in_pid == in_pid)
     return r->last_es_idx;
 
-  for (i = 0; i < r->es_count; i++)
+  for (int i = 0; i < r->es_count; i++)
     if (r->es[i].in_pid == in_pid) {
       r->last_es_idx = i;
       return i;
@@ -311,8 +307,9 @@ static void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ct
   }
 
   if (r->standalone && r->cas) {
-    size_t vi, len, n_vendors = cas_vendor_count(r->cas);
-    for (vi = 0; vi < n_vendors; vi++) {
+    size_t n_vendors = cas_vendor_count(r->cas);
+    for (size_t vi = 0; vi < n_vendors; vi++) {
+      size_t len;
       if (cas_vendor_ecm_due(r->cas, vi, now, sec, sizeof sec, &len) == 0)
         ts_packet_emit(cas_vendor_ecm_pid(r->cas, vi), &r->cc_ecm[vi], &ptr0, sec, len, 0, 0, cb, ctx);
       while (cas_vendor_next_emm(r->cas, vi, sec, sizeof sec, &len) == 0)
@@ -342,9 +339,7 @@ static void forward_packet(remux_t *r, unsigned out_pid, unsigned char *cc, cons
 
 /* key: table_id+section_number. updates if present, appends if room, else drops */
 static void eit_queue_put(remux_t *r, unsigned char table_id, unsigned char section_number, const unsigned char *data, size_t len, ts_metrics_t *tsm) {
-  int i;
-
-  for (i = 0; i < r->eit_queue_count; i++) {
+  for (int i = 0; i < r->eit_queue_count; i++) {
     if (r->eit_queue[i].table_id == table_id && r->eit_queue[i].section_number == section_number) {
       memcpy(r->eit_queue[i].data, data, len);
       r->eit_queue[i].len = len;

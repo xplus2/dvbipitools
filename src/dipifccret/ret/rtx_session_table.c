@@ -24,7 +24,6 @@ struct rtx_session_table {
 
 rtx_session_table_t *rtx_session_table_new(size_t cap) {
   rtx_session_table_t *t;
-  size_t i;
 
   if (cap == 0)
     return NULL;
@@ -42,7 +41,7 @@ rtx_session_table_t *rtx_session_table_new(size_t cap) {
     return NULL;
   }
   t->cap = cap;
-  for (i = 0; i < cap; i++)
+  for (size_t i = 0; i < cap; i++)
     t->free_list[i] = cap - 1 - i;
   t->free_count = cap;
   pthread_mutex_init(&t->lock, NULL);
@@ -78,10 +77,10 @@ rtx_session_slot_t *rtx_session_table_get(rtx_session_table_t *t, const struct s
     idx = t->free_list[--t->free_count];
   } else {
     /* table full: evict coldest session, O(cap) rare path */
-    size_t i, oldest = 0;
+    size_t oldest = 0;
     time_t oldest_time = 0;
     int have = 0;
-    for (i = 0; i < t->cap; i++) {
+    for (size_t i = 0; i < t->cap; i++) {
       if (!t->slots[i].valid)
         continue;
       if (!have || t->slots[i].last_seen <= oldest_time) {
@@ -127,10 +126,10 @@ static void reap_one(rtx_session_table_t *t, size_t i, time_t now, time_t max_ag
 
 void rtx_session_table_reap_step(rtx_session_table_t *t, time_t max_age_s, size_t max_scan) {
   time_t now = time(NULL);
-  size_t i, n;
+  size_t n;
   pthread_mutex_lock(&t->lock);
   n = max_scan < t->cap ? max_scan : t->cap;
-  for (i = 0; i < n; i++) {
+  for (size_t i = 0; i < n; i++) {
     reap_one(t, t->reap_cursor, now, max_age_s);
     t->reap_cursor = (t->reap_cursor + 1) % t->cap;
   }

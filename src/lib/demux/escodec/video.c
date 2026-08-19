@@ -6,8 +6,8 @@
 
 /* skips one scaling list (H.264 SPS scaling_list()): sz entries, delta-coded, wraps mod 256 */
 static void skip_scaling_list(br_t *b, int sz) {
-  int j, last = 8, next = 8;
-  for (j = 0; j < sz; j++) {
+  int last = 8, next = 8;
+  for (int j = 0; j < sz; j++) {
     if (next)
       next = (last + br_se(b) + 256) % 256;
     last = next ? next : last;
@@ -15,8 +15,7 @@ static void skip_scaling_list(br_t *b, int sz) {
 }
 
 static void skip_scaling_matrices(br_t *b, int n) {
-  int k;
-  for (k = 0; k < n; k++)
+  for (int k = 0; k < n; k++)
     if (br_u(b, 1))
       skip_scaling_list(b, (k < 6) ? 16 : 64);
 }
@@ -60,12 +59,12 @@ int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
   if (poc == 0) {
     br_ue(&b);
   } else if (poc == 1) {
-    unsigned n, k;
+    unsigned n;
     br_u(&b, 1);
     br_se(&b);
     br_se(&b);
     n = br_ue(&b);
-    for (k = 0; k < n && !b.err; k++)
+    for (unsigned k = 0; k < n && !b.err; k++)
       br_se(&b);
   }
   br_ue(&b); /* max_num_ref_frames */
@@ -97,7 +96,7 @@ int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
 int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned *chroma, unsigned *w, unsigned *h) {
   unsigned char rb[ESCODEC_PS_MAX];
   br_t b;
-  unsigned maxsub, i, sp[8], sl[8];
+  unsigned maxsub;
   b.len = rbsp_unescape(nal, len, rb, sizeof rb);
   b.d = rb;
   b.bit = 0;
@@ -106,18 +105,19 @@ int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned
   br_u(&b, 4);  /* sps_video_parameter_set_id */
   maxsub = br_u(&b, 3);
   br_u(&b, 1);
-  for (i = 0; i < 12; i++)
+  for (unsigned i = 0; i < 12; i++)
     ptl[i] = (unsigned char)br_u(&b, 8);
   if (maxsub > 0) {
     if (maxsub > 7)
       return -1;
-    for (i = 0; i < maxsub; i++) {
+    unsigned sp[8], sl[8];
+    for (unsigned i = 0; i < maxsub; i++) {
       sp[i] = br_u(&b, 1);
       sl[i] = br_u(&b, 1);
     }
-    for (i = maxsub; i < 8; i++)
+    for (unsigned i = maxsub; i < 8; i++)
       br_u(&b, 2);
-    for (i = 0; i < maxsub; i++) {
+    for (unsigned i = 0; i < maxsub; i++) {
       if (sp[i]) {
         br_u(&b, 32);
         br_u(&b, 32);
@@ -171,7 +171,7 @@ size_t build_avcc(const esc_track_t *t, unsigned char *o, size_t cap) {
 size_t build_hvcc(const esc_track_t *t, unsigned char *o, size_t cap) {
   static const unsigned char types[3] = {32, 33, 34};
   const unsigned char *ps[3];
-  size_t pl[3], n = 0, i;
+  size_t pl[3], n = 0;
 
   ps[0] = t->vps;
   pl[0] = t->vpslen;
@@ -194,7 +194,7 @@ size_t build_hvcc(const esc_track_t *t, unsigned char *o, size_t cap) {
   o[n++] = 0x00;
   o[n++] = 0x03; /* 4-byte NALU length */
   o[n++] = 3;    /* numOfArrays */
-  for (i = 0; i < 3; i++) {
+  for (size_t i = 0; i < 3; i++) {
     o[n++] = types[i];
     o[n++] = 0;
     o[n++] = 1;

@@ -14,8 +14,7 @@ static void put_be16(unsigned char *p, uint16_t v) {
 }
 
 static void put_be64(unsigned char *p, uint64_t v) {
-  int i;
-  for (i = 0; i < 8; i++)
+  for (int i = 0; i < 8; i++)
     p[i] = (unsigned char)(v >> (8 * (7 - i)));
 }
 
@@ -25,8 +24,7 @@ static uint16_t get_be16(const unsigned char *p) {
 
 static uint64_t get_be64(const unsigned char *p) {
   uint64_t v = 0;
-  int i;
-  for (i = 0; i < 8; i++)
+  for (int i = 0; i < 8; i++)
     v = (v << 8) | p[i];
   return v;
 }

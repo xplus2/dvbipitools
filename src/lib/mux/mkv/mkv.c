@@ -9,7 +9,6 @@
 mkv_t *mkv_new(int fd, const mkv_opts_t *opts, int video_ok, unsigned long long *bytes,
                const unsigned *pmt_pids, int n_pids) {
   mkv_t *m = calloc(1, sizeof *m);
-  int i;
 
   if (!m)
     return NULL;
@@ -20,7 +19,7 @@ mkv_t *mkv_new(int fd, const mkv_opts_t *opts, int video_ok, unsigned long long 
   if (n_pids > MKV_MAX_PROGRAMS)
     n_pids = MKV_MAX_PROGRAMS;
   m->npsi = (n_pids > 0) ? n_pids : 1;
-  for (i = 0; i < m->npsi; i++) {
+  for (int i = 0; i < m->npsi; i++) {
     m->psi[i] = psi_new();
     if (!m->psi[i]) {
       mkv_close(m);
@@ -38,8 +37,7 @@ mkv_t *mkv_new(int fd, const mkv_opts_t *opts, int video_ok, unsigned long long 
 }
 
 static int all_psi_ready(const mkv_t *m) {
-  int i;
-  for (i = 0; i < m->npsi; i++)
+  for (int i = 0; i < m->npsi; i++)
     if (!psi_ready(m->psi[i]))
       return 0;
   return 1;
@@ -47,11 +45,10 @@ static int all_psi_ready(const mkv_t *m) {
 
 void mkv_feed(mkv_t *m, const unsigned char *pkt) {
   unsigned pid;
-  int i;
   if (m->err)
     return;
   pid = tspack_pid(pkt);
-  for (i = 0; i < m->npsi; i++)
+  for (int i = 0; i < m->npsi; i++)
     if (psi_wants_pid(m->psi[i], pid))
       psi_feed(m->psi[i], pkt);
   if (!m->setup && all_psi_ready(m))
@@ -67,29 +64,27 @@ const psi_t *mkv_psi(const mkv_t *m) { return m->psi[0]; }
 int mkv_error(const mkv_t *m) { return m->err; }
 
 void mkv_close(mkv_t *m) {
-  int i;
-
   if (!m)
     return;
   m->flushing = 1;
   if (m->pes)
     pes_flush(m->pes);
-  for (i = 0; i < m->ntrk; i++)
+  for (int i = 0; i < m->ntrk; i++)
     if (m->trk[i].ttx)
       ttx_flush(m->trk[i].ttx);
   if (!m->started && m->ntrk)
     start(m);
   cluster_flush(m);
-  for (i = 0; i < m->npend; i++)
+  for (int i = 0; i < m->npend; i++)
     free(m->pend[i].data);
-  for (i = 0; i < m->ntrk; i++) {
+  for (int i = 0; i < m->ntrk; i++) {
     free(m->trk[i].rem);
     free(m->trk[i].vbuf);
     ttx_free(m->trk[i].ttx);
   }
   ebuf_free(&m->cl);
   pes_free(m->pes);
-  for (i = 0; i < m->npsi; i++)
+  for (int i = 0; i < m->npsi; i++)
     psi_free(m->psi[i]);
   free(m);
 }

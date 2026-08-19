@@ -53,10 +53,8 @@ typedef struct {
 /* processes one input slot for this poll tick: reads up to MPTS_MAX_FRAMES_PER_TICK frames,
    feeds the packetizer, updates metrics. -1: fatal (tspacketizer_new() OOM), caller must abort */
 static int process_input_slot(mpts_tick_t *tk, unsigned i) {
-  unsigned frames_this_visit = 0;
   source_t *src;
   int connected_now;
-  unsigned pfd_i;
   int ready = 0;
 
   src = inputset_source(tk->is, i);
@@ -72,7 +70,7 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
 
   /* only read a slot poll() actually reported ready. source_next_frame() can block for several seconds
      (http_read()'s SO_RCVTIMEO) on a connected-but-currently-silent source, which would otherwise stall other inputs */
-  for (pfd_i = 0; pfd_i < tk->npfd; pfd_i++)
+  for (unsigned pfd_i = 0; pfd_i < tk->npfd; pfd_i++)
     if (tk->pfd_slot[pfd_i] == i && (tk->pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP))) {
       ready = 1;
       break;
@@ -80,6 +78,7 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
   if (!ready)
     return 0;
 
+  unsigned frames_this_visit = 0;
   while (frames_this_visit < MPTS_MAX_FRAMES_PER_TICK) {
     source_frame_t f;
     uint64_t pts;
@@ -160,7 +159,6 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   radio_metrics_t rm;
   int metrics_on = metrics_exporter_enabled(mx);
   unsigned n = cfg->n_inputs;
-  unsigned i, k, rr_start = 0;
   inputset_t *is = NULL;
   mpts_t *mpts = NULL;
   cas_t *cas = NULL;
@@ -201,7 +199,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     }
   }
 
-  for (i = 0; i < n; i++) {
+  for (unsigned i = 0; i < n; i++) {
     meta_ctxs[i] = &metas[i];
     metas[i].rm = metrics_on ? &rm : NULL;
   }
@@ -210,7 +208,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     rc = 1;
     goto done;
   }
-  for (i = 0; i < n; i++) {
+  for (unsigned i = 0; i < n; i++) {
     entries[i].program_number = inputset_sid(is, i);
     entries[i].pmt_pid = inputset_pmt_pid(is, i);
   }
@@ -222,7 +220,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
 
   if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled) {
     unsigned audio_pids[RADIOHEAD_MAX_INPUTS];
-    for (i = 0; i < n; i++)
+    for (unsigned i = 0; i < n; i++)
       audio_pids[i] = inputset_audio_pid(is, i);
     cas = cas_start(cfg, audio_pids, n);
     if (!cas) {
@@ -234,6 +232,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
   start = mono_seconds();
+  unsigned rr_start = 0;
   while (!signal_stop_requested()) {
     struct pollfd pfds[RADIOHEAD_MAX_INPUTS];
     unsigned pfd_slot[RADIOHEAD_MAX_INPUTS];
@@ -249,7 +248,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       if (remain_ms < timeout_ms)
         timeout_ms = remain_ms;
     }
-    for (i = 0; i < n; i++) {
+    for (unsigned i = 0; i < n; i++) {
       int fd = inputset_poll_fd(is, i);
       if (fd < 0)
         continue;
@@ -265,7 +264,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
 
     now = mono_seconds();
     now_t = time(NULL);
-    for (i = 0; i < n; i++)
+    for (unsigned i = 0; i < n; i++)
       inputset_service(is, i, now_t);
 
     {
@@ -289,8 +288,8 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       tk.pfds = pfds;
       tk.npfd = npfd;
 
-      for (k = 0; k < n; k++) {
-        i = (rr_start + k) % n;
+      for (unsigned k = 0; k < n; k++) {
+        unsigned i = (rr_start + k) % n;
         if (process_input_slot(&tk, i) != 0) {
           rc = 1;
           goto done;
@@ -318,7 +317,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     }
     {
       unsigned active = 0;
-      for (i = 0; i < n; i++)
+      for (unsigned i = 0; i < n; i++)
         if (tsps[i])
           active++;
       emit_metrics(mx, now, &out, n, active, input_stats, n, &rm, cas);
@@ -329,7 +328,7 @@ done:
   if (cas)
     cas_flush(cas, packet_cb, &out);
   flush_batch(&out);
-  for (i = 0; i < n; i++)
+  for (unsigned i = 0; i < n; i++)
     if (tsps[i])
       tspacketizer_free(tsps[i]);
   if (mpts)

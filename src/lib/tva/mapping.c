@@ -84,8 +84,7 @@ void mapping_free(mapping_t *m) {
 }
 
 int mapping_lookup(const mapping_t *m, const char *id, char *uri, size_t uri_cap, unsigned *tsid, unsigned *onid, unsigned *sid) {
-  int i;
-  for (i = 0; i < m->count; i++)
+  for (int i = 0; i < m->count; i++)
     if (!strcmp(m->entries[i].id, id)) {
       bufcpy(uri, uri_cap, m->entries[i].uri);
       *tsid = m->entries[i].tsid;
