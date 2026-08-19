@@ -5,19 +5,26 @@
 #define DIPIFCCRET_BURST_TABLE_H
 
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <sys/socket.h>
 
 #include "lib/net/sockaddr_index.h"
+#include "lib/seqlock.h"
 
 #include "burst.h"
 
+#define BURST_ADDR_WORDS (sizeof(struct sockaddr_storage) / sizeof(uint64_t))
+
+/* claim/find/note_nack/terminate: table lock. pacer (main.c): lock-free via gen seqlock below.
+   msn/nack_count/congestion_adapted: table-lock only, never read by pacer, stay plain. */
 typedef struct {
-  int in_use;
-  struct sockaddr_storage addr;
-  socklen_t addrlen;
-  int fd;
-  burst_t *b;
+  _Atomic unsigned gen;
+  _Atomic int in_use;
+  _Atomic uint64_t addr_words[BURST_ADDR_WORDS];
+  _Atomic socklen_t addrlen;
+  _Atomic int fd;
+  _Atomic(burst_t *) b;
   uint8_t msn; /* RAMS-I MSN for this burst, 0 at claim, incremented per code-100 update */
   unsigned nack_count; /* NACKs from client during current burst, 0 at claim */
   int congestion_adapted; /* bitrate already halved once this burst, 0 at claim */
@@ -59,7 +66,7 @@ int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t a
 /* note a NACK on an existing session. threshold 0 disables all actions. 1 found, 0 not found. */
 int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, unsigned threshold, burst_table_nack_result_t *out);
 
-/* terminates matching session if found; 1 found, 0 not. has_stop_seq/stop_seqnum: see burst_terminate() */
+/* terminates matching session if found. 1 found, 0 not. has_stop_seq/stop_seqnum: see burst_terminate() */
 int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int has_stop_seq, uint32_t stop_seqnum);
 
 #endif

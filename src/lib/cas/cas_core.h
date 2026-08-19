@@ -30,6 +30,7 @@ static inline double cas_core_mono(void) {
 }
 
 void cas_core_hex_format(const unsigned char *in, size_t len, char *out);
+void cas_core_format_super_cas_id(unsigned id, char *out);
 
 /* stops+frees whichever of core's 3 engines is set (safe if all NULL). caller frees core itself */
 void cas_core_stop(cas_core_t *core);

@@ -4,6 +4,7 @@
 #ifndef DIPIFCCRET_CHANNEL_H
 #define DIPIFCCRET_CHANNEL_H
 
+#include <pthread.h>
 #include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -96,8 +97,9 @@ typedef struct {
   void *ring; /* RET ring */
   size_t ring_size;
   rap_cache_t cache;
-  hned_track_entry_t hned[CHANNEL_HNED_TRACK_MAX]; /* guarded by owning table lock, not lock-free */
-  hned_collision_entry_t hned_collisions[CHANNEL_HNED_COLLISION_MAX]; /* same */
+  pthread_mutex_t hned_lock; /* guards hned/hned_collisions below, cross-thread: multiple RTCP workers per channel */
+  hned_track_entry_t hned[CHANNEL_HNED_TRACK_MAX];
+  hned_collision_entry_t hned_collisions[CHANNEL_HNED_COLLISION_MAX];
 } channel_t;
 
 typedef struct channel_table channel_table_t;
@@ -119,8 +121,7 @@ size_t channel_table_capacity(const channel_table_t *t);
 channel_t *channel_table_at(channel_table_t *t, size_t i);
 
 /* single write path for both RET ring and FCC cache, one call per captured packet.
-   also maintains t's ssrc->channel index (channel_find_by_ssrc), taking t->lock only
-   when ssrc actually changed since last call for this channel */
+   also maintains t's ssrc->channel index (channel_find_by_ssrc), seqlock-wrapped, ssrc-change-only per call */
 void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len);
 
 int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out); /* RET, 0 if ring inactive */
@@ -132,11 +133,11 @@ int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out);
 int channel_cache_peek_meta(const channel_t *c, size_t index, rap_cache_meta_t *out);
 
 /* F.5.3 SRBT 8 source. cname NULL/0-length if none this time.
-   collision: [ssrc,cname] if both known, else [ssrc,address]. locks t, callable from any listen worker thread. */
-void channel_hned_seen(channel_table_t *t, channel_t *c, uint32_t ssrc, const struct sockaddr *from, socklen_t fromlen, const char *cname, size_t cname_len);
+   collision: [ssrc,cname] if both known, else [ssrc,address]. locks c->hned_lock, callable from any listen worker thread. */
+void channel_hned_seen(channel_t *c, uint32_t ssrc, const struct sockaddr *from, socklen_t fromlen, const char *cname, size_t cname_len);
 
-/* pending collisions on c within max_age_s, up to cap ssrcs into out. returns count, locks t. */
-size_t channel_hned_collisions(channel_table_t *t, channel_t *c, uint32_t *out, size_t cap, time_t max_age_s);
+/* pending collisions on c within max_age_s, up to cap ssrcs into out. returns count, locks c->hned_lock. */
+size_t channel_hned_collisions(channel_t *c, uint32_t *out, size_t cap, time_t max_age_s);
 
 void channel_table_reap(channel_table_t *t, time_t max_age_s);
 

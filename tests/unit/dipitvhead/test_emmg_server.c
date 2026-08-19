@@ -215,8 +215,8 @@ START_TEST(extract_datagrams_rejects_malformed) {
 END_TEST
 
 /* below: standalone integration tests. a synchronous fake EMMG client
-   (this process, a loopback socket) connects to the REAL emmg_server.c listener and drives
-   its actual accept/worker state machine end to end. */
+   (this process, a loopback socket) connects to emmg_server.c's real listener, drives
+   its actual accept/worker state machine end to end */
 
 static int fake_connect(unsigned port) {
   int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -361,7 +361,7 @@ START_TEST(emmg_server_accepts_up_to_new_conn_cap) {
     ck_assert_uint_eq(hdr.type, EMMG_MSG_CHANNEL_STATUS);
   }
 
-  /* 9th, beyond the new cap: TCP accepts it, the server then closes it */
+  /* 9th, beyond cap: TCP accepts it, server closes it */
   extra = fake_connect(port);
   ck_assert_int_ge(extra, 0);
   n = fake_build_channel_setup(msg, sizeof msg, 3, 0x4A7500FFu, 1);
@@ -422,6 +422,54 @@ START_TEST(emmg_server_queue_holds_more_than_old_64_cap) {
 }
 END_TEST
 
+START_TEST(emmg_server_queue_holds_more_than_old_256_cap) {
+  emmg_server_cfg_t cfg;
+  emmg_server_t *s;
+  unsigned port;
+  int fd;
+  unsigned char msg[512], payload[512];
+  simulcrypt_hdr_t hdr;
+  size_t n;
+  unsigned char got[64];
+  size_t got_len;
+  struct timespec ts;
+
+  cfg.port = 0;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+  port = emmg_server_port(s);
+  fd = fake_connect(port);
+  ck_assert_int_ge(fd, 0);
+
+  n = fake_build_channel_setup(msg, sizeof msg, 3, 0x4A750003, 1);
+  simulcrypt_send_all(fd, msg, n, 3000);
+  fake_read_reply(fd, &hdr, payload, sizeof payload);
+  n = fake_build_stream_setup(msg, sizeof msg, 3, 1, 1, 0);
+  simulcrypt_send_all(fd, msg, n, 3000);
+  fake_read_reply(fd, &hdr, payload, sizeof payload);
+
+  /* old cap was 256, well under backpressure's high watermark (~921): push 300 without
+     draining, first one must survive */
+  for (int i = 0; i < 300; i++) {
+    unsigned char dg[1];
+    dg[0] = (unsigned char)i;
+    n = fake_build_data_provision(msg, sizeof msg, 3, dg, sizeof dg);
+    ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+  }
+
+  ts.tv_sec = 0;
+  ts.tv_nsec = 300L * 1000000L;
+  nanosleep(&ts, NULL);
+
+  ck_assert_int_eq(emmg_server_dequeue_emm(s, got, sizeof got, &got_len), 0);
+  ck_assert_uint_eq(got_len, 1u);
+  ck_assert_uint_eq(got[0], 0u);
+
+  close(fd);
+  emmg_server_stop(s);
+}
+END_TEST
+
 START_TEST(emmg_server_rejects_stream_setup_before_channel_setup) {
   emmg_server_cfg_t cfg;
   emmg_server_t *s;
@@ -442,7 +490,7 @@ START_TEST(emmg_server_rejects_stream_setup_before_channel_setup) {
   n = fake_build_stream_setup(msg, sizeof msg, 3, 1, 1, 0);
   ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
 
-  /* server closes the connection (should_close) instead of replying: read() sees EOF */
+  /* server closes connection (should_close) instead of replying: read() sees EOF */
   rn = read(fd, msg, sizeof msg);
   ck_assert_int_eq(rn, 0);
 
@@ -548,13 +596,14 @@ static Suite *emmg_server_suite(void) {
   suite_add_tcase(s, tc);
 
   {
-    /* real sockets: give this tcase more headroom than the default */
+    /* real sockets: give this tcase more headroom than default */
     TCase *tc_integ = tcase_create("integration");
     tcase_set_timeout(tc_integ, 15);
     tcase_add_test(tc_integ, emmg_server_completes_real_handshake_and_queues_datagram);
     tcase_add_test(tc_integ, emmg_server_rejects_stream_setup_before_channel_setup);
     tcase_add_test(tc_integ, emmg_server_accepts_up_to_new_conn_cap);
     tcase_add_test(tc_integ, emmg_server_queue_holds_more_than_old_64_cap);
+    tcase_add_test(tc_integ, emmg_server_queue_holds_more_than_old_256_cap);
     tcase_add_test(tc_integ, emmg_server_stop_reaps_all_max_conns_in_mixed_states);
     suite_add_tcase(s, tc_integ);
   }

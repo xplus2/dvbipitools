@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "lib/cas/cas_core.h"
 #include "lib/log.h"
 #include "lib/net/send_result.h"
 #include "lib/signal.h"
@@ -27,7 +28,7 @@ ristout_t *tvhead_rist_open(const config_t *cfg) {
   return ristout_open(&rc);
 }
 
-/* pace/account once per datagram not per packet; keeps burst_limit's sleep off per-packet path */
+/* paces/accounts once per datagram, keeps burst_limit's sleep off per-packet path */
 void flush_batch(out_ctx_t *o) {
   size_t n = (size_t)o->batch_count * 188;
 
@@ -116,7 +117,7 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
       char label[16];
       cas_metrics_t vm;
       cas_vendor_metrics(cas, i, &vm);
-      snprintf(label, sizeof label, "0x%08x", cas_vendor_super_cas_id(cas, i));
+      cas_core_format_super_cas_id(cas_vendor_super_cas_id(cas, i), label);
       metrics_writer_put(&w, METRICS_ID_CAS_ECMG_CONNECTED, label, vm.ecmg_connected ? 1 : 0);
       metrics_writer_put(&w, METRICS_ID_CAS_EMMG_CLIENTS, label, vm.emmg_clients);
       metrics_writer_put(&w, METRICS_ID_CAS_CRYPTOPERIOD_TRANSITIONS_TOTAL, label, vm.cryptoperiod_transitions_total);

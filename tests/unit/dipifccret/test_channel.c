@@ -15,7 +15,7 @@
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
 
-/* channel_lookup() takes raw address bytes now, not text; tests still use IPv4 literals */
+/* channel_lookup() takes raw address bytes, this converts IPv4 literals for tests */
 static channel_t *lookup_ip(channel_table_t *t, const char *ip, unsigned port) {
   unsigned char addr[4];
   inet_pton(AF_INET, ip, addr);
@@ -106,7 +106,7 @@ START_TEST(channel_lookup_allocates_finds_and_exhausts) {
 }
 END_TEST
 
-/* group/addr/addr_len populated on claim; mcsend.c's mcast_open_send() needs c->group text */
+/* group/addr/addr_len populated on claim. mcsend.c's mcast_open_send() needs c->group text */
 START_TEST(channel_lookup_populates_addr_and_text_group) {
   channel_table_t *t = channel_table_new(1, 0, 0);
   channel_t *c = lookup_ip(t, "239.5.6.7", 5000);
@@ -258,7 +258,7 @@ START_TEST(channel_fcc_cache_tracks_rap_and_entries) {
   {
     rap_cache_entry_t e;
     ck_assert_int_eq(channel_cache_get(c, 0, &e), 1);
-    ck_assert_uint_eq(e.seq, 2u); /* RAP-bearing store; earlier seq 1 was pre-RAP, never cached */
+    ck_assert_uint_eq(e.seq, 2u); /* RAP-bearing store. seq 1 was pre-RAP, never cached */
     ck_assert_uint_eq(e.dscp, 0x90u);
     ck_assert_int_eq(channel_cache_get(c, 1, &e), 1);
     ck_assert_uint_eq(e.seq, 3u);
@@ -310,7 +310,7 @@ START_TEST(channel_lookup_reclaim_resets_rtx_seq_mc) {
 END_TEST
 
 /* max_scan bounds work per call: full table frees slots only as cursor visits them,
-   never all at once; cursor advances every call, eventually covers whole table */
+   never all at once. cursor advances every call, eventually covers whole table */
 START_TEST(channel_table_reap_step_bounds_work_per_call) {
   channel_table_t *t = channel_table_new(4, 0, 0);
   channel_t *a, *e;
@@ -322,7 +322,7 @@ START_TEST(channel_table_reap_step_bounds_work_per_call) {
   ck_assert_ptr_nonnull(lookup_ip(t, "239.2.2.4", 5000));
   ck_assert_ptr_null(lookup_ip(t, "239.2.2.5", 5000)); /* table full */
 
-  channel_table_reap_step(t, -1, 1); /* max_age -1: always stale; scans 1 slot */
+  channel_table_reap_step(t, -1, 1); /* max_age -1: always stale. scans 1 slot */
   e = lookup_ip(t, "239.2.2.5", 5000);
   ck_assert_ptr_nonnull(e);
   ck_assert_ptr_eq(e, a); /* reused only slot cursor visited */
@@ -521,8 +521,8 @@ static void *ssrc_race_reader(void *arg) {
     uint32_t base = ((i + idx) % 2) ? 0x10000000u : 0x20000000u;
     uint32_t ssrc = base + (uint32_t)((i * 3 + idx) % SSRC_RACE_SPAN);
     channel_t *r = channel_find_by_ssrc(g_ssrc_race_table, ssrc);
-    /* ssrc can change between match and this check (real race, not a bug); only forbidden
-       outcome is a slot outside known set */
+    /* ssrc can change between match and this check, expected race.
+       only forbidden outcome is a slot outside known set */
     if (r && r != g_ssrc_race_a && r != g_ssrc_race_b)
       atomic_store_explicit(&g_ssrc_race_bad, 1, memory_order_relaxed);
   }
@@ -626,10 +626,10 @@ START_TEST(channel_hned_seen_no_collision_for_same_address) {
   uint32_t out[CHANNEL_HNED_COLLISION_MAX];
 
   mk_addr(&a, 6001);
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0);
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0); /* same ssrc, same address again */
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0);
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0); /* same ssrc, same address again */
 
-  ck_assert_uint_eq(channel_hned_collisions(t, c, out, CHANNEL_HNED_COLLISION_MAX, 60), 0u);
+  ck_assert_uint_eq(channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 60), 0u);
   channel_table_free(t);
 }
 END_TEST
@@ -643,10 +643,10 @@ START_TEST(channel_hned_seen_detects_collision_from_different_address) {
 
   mk_addr(&a, 6001);
   mk_addr(&b, 6002);
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0);
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&b, sizeof b, NULL, 0); /* same ssrc, different port */
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0);
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&b, sizeof b, NULL, 0); /* same ssrc, different port */
 
-  n = channel_hned_collisions(t, c, out, CHANNEL_HNED_COLLISION_MAX, 60);
+  n = channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 60);
   ck_assert_uint_eq(n, 1u);
   ck_assert_uint_eq(out[0], 0xABCDu);
   channel_table_free(t);
@@ -661,10 +661,10 @@ START_TEST(channel_hned_seen_cname_takes_precedence_over_address) {
 
   mk_addr(&a, 6001);
   mk_addr(&b, 6002);
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, "same@host", 9);
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&b, sizeof b, "same@host", 9); /* address changed, cname didn't: same HNED, no collision */
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, "same@host", 9);
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&b, sizeof b, "same@host", 9); /* address changed, cname didn't: same HNED, no collision */
 
-  ck_assert_uint_eq(channel_hned_collisions(t, c, out, CHANNEL_HNED_COLLISION_MAX, 60), 0u);
+  ck_assert_uint_eq(channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 60), 0u);
   channel_table_free(t);
 }
 END_TEST
@@ -677,10 +677,10 @@ START_TEST(channel_hned_seen_detects_collision_from_different_cname) {
   size_t n;
 
   mk_addr(&a, 6001);
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, "alice@host", 10);
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, "bob@host", 8); /* same ssrc, same address, different cname: real collision */
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, "alice@host", 10);
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, "bob@host", 8); /* same ssrc, same address, different cname: real collision */
 
-  n = channel_hned_collisions(t, c, out, CHANNEL_HNED_COLLISION_MAX, 60);
+  n = channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 60);
   ck_assert_uint_eq(n, 1u);
   ck_assert_uint_eq(out[0], 0xABCDu);
   channel_table_free(t);
@@ -696,10 +696,10 @@ START_TEST(channel_hned_seen_falls_back_to_address_without_cname) {
 
   mk_addr(&a, 6001);
   mk_addr(&b, 6002);
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0); /* never sent SDES */
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&b, sizeof b, NULL, 0); /* different address, still no cname: fallback applies */
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0); /* never sent SDES */
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&b, sizeof b, NULL, 0); /* different address, still no cname: fallback applies */
 
-  n = channel_hned_collisions(t, c, out, CHANNEL_HNED_COLLISION_MAX, 60);
+  n = channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 60);
   ck_assert_uint_eq(n, 1u);
   ck_assert_uint_eq(out[0], 0xABCDu);
   channel_table_free(t);
@@ -714,11 +714,11 @@ START_TEST(channel_hned_collisions_ages_out_past_max_age) {
 
   mk_addr(&a, 6001);
   mk_addr(&b, 6002);
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0);
-  channel_hned_seen(t, c, 0xABCDu, (const struct sockaddr *)&b, sizeof b, NULL, 0);
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0);
+  channel_hned_seen(c, 0xABCDu, (const struct sockaddr *)&b, sizeof b, NULL, 0);
 
-  ck_assert_uint_eq(channel_hned_collisions(t, c, out, CHANNEL_HNED_COLLISION_MAX, 60), 1u);
-  ck_assert_uint_eq(channel_hned_collisions(t, c, out, CHANNEL_HNED_COLLISION_MAX, -1), 0u); /* max_age -1: already "too old" */
+  ck_assert_uint_eq(channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 60), 1u);
+  ck_assert_uint_eq(channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, -1), 0u); /* max_age -1: already "too old" */
   channel_table_free(t);
 }
 END_TEST
@@ -732,12 +732,12 @@ START_TEST(channel_hned_collisions_are_per_channel) {
 
   mk_addr(&a, 6001);
   mk_addr(&b, 6002);
-  channel_hned_seen(t, c1, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0);
-  channel_hned_seen(t, c1, 0xABCDu, (const struct sockaddr *)&b, sizeof b, NULL, 0); /* collision on c1 only */
-  channel_hned_seen(t, c2, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0);
+  channel_hned_seen(c1, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0);
+  channel_hned_seen(c1, 0xABCDu, (const struct sockaddr *)&b, sizeof b, NULL, 0); /* collision on c1 only */
+  channel_hned_seen(c2, 0xABCDu, (const struct sockaddr *)&a, sizeof a, NULL, 0);
 
-  ck_assert_uint_eq(channel_hned_collisions(t, c1, out, CHANNEL_HNED_COLLISION_MAX, 60), 1u);
-  ck_assert_uint_eq(channel_hned_collisions(t, c2, out, CHANNEL_HNED_COLLISION_MAX, 60), 0u);
+  ck_assert_uint_eq(channel_hned_collisions(c1, out, CHANNEL_HNED_COLLISION_MAX, 60), 1u);
+  ck_assert_uint_eq(channel_hned_collisions(c2, out, CHANNEL_HNED_COLLISION_MAX, 60), 0u);
   channel_table_free(t);
 }
 END_TEST

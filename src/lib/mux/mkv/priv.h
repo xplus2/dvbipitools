@@ -65,6 +65,7 @@ struct mkv {
   pend_t pend[MKV_PEND_MAX];
   int npend;
   size_t pend_bytes;
+  unsigned char *pend_arena; /* MKV_PEND_BYTES, bump-allocated by pend_add, reset with pend_bytes */
   ebuf_t cl;
   int64_t cl_base;
   int cl_open;

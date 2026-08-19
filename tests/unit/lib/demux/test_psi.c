@@ -171,7 +171,7 @@ static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid,
 }
 
 /* builds a one-program, zero-ES PMT section with a scrambling_descriptor (tag 0x65,
- * one mode byte) in program_info, CRC included, returns length. mode == 0: omit the
+ * one mode byte) in program_info, CRC included, returns length. mode == 0: omit
  * descriptor entirely (program_info_length = 0) */
 static size_t build_pmt_with_scrambling(unsigned char *out, unsigned prog_num, unsigned pcr_pid, unsigned char mode) {
   unsigned char body[32];
@@ -374,7 +374,7 @@ START_TEST(psi_rejects_pat_with_bad_crc) {
   psi_t *p = psi_new();
   unsigned char section[64], pkt[188];
   size_t slen = build_pat(section, 0x1234, 1, 0x0100);
-  section[slen - 1] ^= 0xFF; /* corrupt the CRC */
+  section[slen - 1] ^= 0xFF; /* corrupt CRC */
   wrap_ts_packet(pkt, 0x0000, 0, section, slen);
 
   psi_feed(p, pkt);
@@ -392,7 +392,7 @@ START_TEST(psi_ignores_pointer_field_beyond_payload) {
   pkt[1] = 0x40; /* pusi=1, pid hi bits = 0 */
   pkt[2] = 0x00; /* pid = 0x0000 (PAT) */
   pkt[3] = 0x10; /* adaptation_field_control = payload only */
-  pkt[4] = 0xFF; /* pointer_field claims 255 bytes to skip - far beyond the 183 available */
+  pkt[4] = 0xFF; /* pointer_field claims 255 bytes to skip, far beyond 183 available */
 
   psi_feed(p, pkt); /* must not read out of bounds, must not crash */
 
@@ -439,7 +439,7 @@ START_TEST(psi_rejects_cat_with_bad_crc) {
   psi_t *p = psi_new();
   unsigned char section[64], pkt[188];
   size_t slen = build_cat(section, 0x0B75, 0x0021);
-  section[slen - 1] ^= 0xFF; /* corrupt the CRC */
+  section[slen - 1] ^= 0xFF; /* corrupt CRC */
   wrap_ts_packet(pkt, 0x0001, 0, section, slen);
 
   psi_feed(p, pkt);
@@ -599,6 +599,73 @@ START_TEST(psi_multi_mode_resolves_every_pmt_and_sdt_name) {
 }
 END_TEST
 
+/* pmt_wanted[] mirrors pmt_cand[]'s append-only growth: pins that a program added,
+   or a program's pmt_pid changed, mid-stream surfaces through psi_wants_pid() */
+START_TEST(psi_wants_pid_picks_up_program_added_before_lock) {
+  psi_t *p = psi_new();
+  unsigned char section[128], pkt[188];
+  size_t slen;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_wants_pid(p, 0x0200), 0); /* program 2 not seen yet */
+
+  slen = build_pat2(section, 0x1234, 1, 0x0100, 2, 0x0200); /* program 2 joins PAT */
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_wants_pid(p, 0x0200), 1);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_wants_pid_picks_up_program_added_in_multi_mode) {
+  psi_t *p = psi_new();
+  unsigned char section[128], pkt[188];
+  size_t slen;
+
+  psi_enable_multi_program(p);
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pmt(section, 1, 0x0101, 0x0101, 0x1B, 0x0102, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt); /* program 1 resolved, multi mode keeps tracking new arrivals */
+  ck_assert_int_eq(psi_wants_pid(p, 0x0200), 0); /* program 2 not seen yet */
+
+  slen = build_pat2(section, 0x1234, 1, 0x0100, 2, 0x0200); /* program 2 joins PAT */
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_wants_pid(p, 0x0200), 1);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_wants_pid_tracks_new_pid_when_program_moves) {
+  psi_t *p = psi_new();
+  unsigned char section[128], pkt[188];
+  size_t slen;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_wants_pid(p, 0x0100), 1);
+  ck_assert_int_eq(psi_wants_pid(p, 0x0300), 0);
+
+  slen = build_pat(section, 0x1234, 1, 0x0300); /* same program, pmt_pid moved */
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_wants_pid(p, 0x0300), 1);
+  ck_assert_int_eq(psi_wants_pid(p, 0x0100), 1); /* stale candidate never removed, still tracked */
+
+  psi_free(p);
+}
+END_TEST
+
 static Suite *psi_suite(void) {
   Suite *s = suite_create("psi");
   TCase *tc = tcase_create("core");
@@ -614,6 +681,9 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_pmt_with_no_ca_descriptor_leaves_pmt_ca_system_id_zero);
   tcase_add_test(tc, psi_without_multi_mode_locks_first_pmt_only);
   tcase_add_test(tc, psi_multi_mode_resolves_every_pmt_and_sdt_name);
+  tcase_add_test(tc, psi_wants_pid_picks_up_program_added_before_lock);
+  tcase_add_test(tc, psi_wants_pid_picks_up_program_added_in_multi_mode);
+  tcase_add_test(tc, psi_wants_pid_tracks_new_pid_when_program_moves);
   suite_add_tcase(s, tc);
   return s;
 }

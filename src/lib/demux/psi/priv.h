@@ -44,6 +44,7 @@ struct psi {
   int multi_count;
 
   pid_class_t class_by_pid[8192]; /* direct pid->class, rebuilt on parse_pat/parse_pmt */
+  unsigned char pmt_wanted[8192]; /* direct pid->ever-a-candidate, mirrors pmt_cand[] growth, set-only */
 
   /* overflow logging, edge-triggered: logged once when a repeat first exceeds
      a cap, cleared once a repeat no longer does - avoids spamming every PAT/PMT cycle */

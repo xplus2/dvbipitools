@@ -21,6 +21,16 @@ void cas_core_hex_format(const unsigned char *in, size_t len, char *out) {
   out[2 * len] = '\0';
 }
 
+/* "0x" + 8 lowercase hex digits + NUL, out must hold 11 bytes */
+void cas_core_format_super_cas_id(unsigned id, char *out) {
+  static const char digits[] = "0123456789abcdef";
+  out[0] = '0';
+  out[1] = 'x';
+  for (int i = 0; i < 8; i++)
+    out[2 + i] = digits[(id >> (28 - 4 * i)) & 0xF];
+  out[10] = '\0';
+}
+
 void cas_core_stop(cas_core_t *core) {
   cas_scramble_engine_stop(core->biss_engine);
   biss_ca_engine_stop(core->biss_ca);

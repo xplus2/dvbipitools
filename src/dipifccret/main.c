@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -121,7 +122,7 @@ typedef struct {
   unsigned idle_timeout_s; /* 0 = reaping disabled */
   unsigned ret_client_idle_timeout_s; /* 0 = reaping disabled */
 
-  int nack_truncated_logged; /* re-armed once a NACK arrives that isn't truncated */
+  atomic_int nack_truncated_logged; /* re-armed once a NACK arrives that isn't truncated. racy across workers, relaxed ok */
 } dispatch_ctx_t;
 
 #define CHANNEL_REAP_STEP_SLOTS 8 /* slots checked per packet: bounds cost vs one O(max_channels) sweep per interval */
@@ -172,12 +173,12 @@ static void hned_cname_for(const listen_req_ctx_t *rc, uint32_t ssrc, const char
 static void nack_cb(const rtcp_nack_t *nack, void *user) {
   listen_req_ctx_t *rc = (listen_req_ctx_t *)user;
   if (nack->truncated) {
-    if (!rc->ctx->nack_truncated_logged) {
+    if (!atomic_load_explicit(&rc->ctx->nack_truncated_logged, memory_order_relaxed)) {
       log_line(TOOL_NAME ": NACK has more than %d FCI entries, dropping the rest", RTCP_NACK_MAX_ENTRIES);
-      rc->ctx->nack_truncated_logged = 1;
+      atomic_store_explicit(&rc->ctx->nack_truncated_logged, 1, memory_order_relaxed);
     }
   } else {
-    rc->ctx->nack_truncated_logged = 0;
+    atomic_store_explicit(&rc->ctx->nack_truncated_logged, 0, memory_order_relaxed);
   }
   if (rc->ctx->rsi_active) {
     channel_t *c = rc->resolved ? rc->resolved : channel_find_by_ssrc(rc->ctx->channels, nack->media_ssrc);
@@ -185,7 +186,7 @@ static void nack_cb(const rtcp_nack_t *nack, void *user) {
       const char *cname;
       size_t cname_len;
       hned_cname_for(rc, nack->sender_ssrc, &cname, &cname_len);
-      channel_hned_seen(rc->ctx->channels, c, nack->sender_ssrc, rc->from, rc->fromlen, cname, cname_len);
+      channel_hned_seen(c, nack->sender_ssrc, rc->from, rc->fromlen, cname, cname_len);
     }
   }
   ret_handle_nack(rc->ctx->ret, nack, rc->fd, rc->from, rc->fromlen);
@@ -252,7 +253,7 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
     const char *cname;
     size_t cname_len;
     hned_cname_for(rc, req->sender_ssrc, &cname, &cname_len);
-    channel_hned_seen(rc->ctx->channels, c, req->sender_ssrc, rc->from, rc->fromlen, cname, cname_len);
+    channel_hned_seen(c, req->sender_ssrc, rc->from, rc->fromlen, cname, cname_len);
   }
   resp = burst_decide(c, req, rc->ctx->max_buffer_fill_bound_ms);
   memset(&tlvs, 0, sizeof tlvs);
@@ -304,7 +305,7 @@ static void rams_t_cb(const rtcp_rams_t_t *term, void *user) {
       const char *cname;
       size_t cname_len;
       hned_cname_for(rc, term->sender_ssrc, &cname, &cname_len);
-      channel_hned_seen(rc->ctx->channels, c, term->sender_ssrc, rc->from, rc->fromlen, cname, cname_len);
+      channel_hned_seen(c, term->sender_ssrc, rc->from, rc->fromlen, cname, cname_len);
     }
   }
   burst_table_terminate(rc->ctx->bursts, rc->from, rc->fromlen, term->has_first_mc_seqnum, term->first_mc_seqnum);
@@ -371,16 +372,20 @@ typedef struct {
   burst_t *b;
 } pacer_snap_t;
 
-/* under pc->bursts->lock: if this pacer still owns slot, clear it on congestion/done.
-   returns 1 if this pacer owned slot (caller may still need to send a notice) */
+/* under pc->bursts->lock, gen-bracketed for pacer's lock-free scan: clears slot if this
+   pacer still owns it, on congestion/done. returns 1 if this pacer owned slot (caller
+   may still need to send a notice) */
 static int finalize_burst_slot(pacer_ctx_t *pc, size_t idx, burst_t *b, int congestion, burst_tick_result_t r, int *remove_slot) {
+  burst_slot_t *slot = &pc->bursts->slots[idx];
   int owns_slot = 0;
   pthread_mutex_lock(&pc->bursts->lock);
-  if (pc->bursts->slots[idx].in_use && pc->bursts->slots[idx].b == b) {
+  if (atomic_load_explicit(&slot->in_use, memory_order_relaxed) && atomic_load_explicit(&slot->b, memory_order_relaxed) == b) {
     owns_slot = 1;
     if (congestion || r == BURST_TICK_DONE) {
-      pc->bursts->slots[idx].b = NULL;
-      pc->bursts->slots[idx].in_use = 0;
+      unsigned g = seqlock_begin_write(&slot->gen);
+      atomic_store_explicit(&slot->b, NULL, memory_order_relaxed);
+      atomic_store_explicit(&slot->in_use, 0, memory_order_relaxed);
+      seqlock_commit_write(&slot->gen, g);
       *remove_slot = 1;
     }
   }
@@ -388,7 +393,8 @@ static int finalize_burst_slot(pacer_ctx_t *pc, size_t idx, burst_t *b, int cong
   return owns_slot;
 }
 
-/* lock covers only slot scan/copy and done-cleanup, never sends below */
+/* scan is lock-free: seqlock-guarded read per slot, retried on writer overlap, skipped on
+   repeated overlap (next tick picks it up). done-cleanup below takes table lock */
 static void *pacer_main(void *arg) {
   pacer_ctx_t *pc = (pacer_ctx_t *)arg;
   struct timespec tick = {0, 20 * 1000 * 1000}; /* 20ms */
@@ -404,20 +410,43 @@ static void *pacer_main(void *arg) {
 
     nanosleep(&tick, NULL);
 
-    pthread_mutex_lock(&pc->bursts->lock);
     for (size_t i = 0; i < pc->bursts->cap; i++) {
       burst_slot_t *slot = &pc->bursts->slots[i];
-      if (!slot->in_use)
-        continue;
-      burst_acquire(slot->b);
-      snap[n].idx = i;
-      snap[n].fd = slot->fd;
-      snap[n].addr = slot->addr;
-      snap[n].addrlen = slot->addrlen;
-      snap[n].b = slot->b;
-      n++;
+
+      for (int tries = 0; tries < 8; tries++) {
+        unsigned g1 = atomic_load_explicit(&slot->gen, memory_order_acquire);
+        unsigned g2;
+        int in_use;
+        uint64_t words[BURST_ADDR_WORDS];
+        int fd = 0;
+        burst_t *b = NULL;
+        socklen_t addrlen = 0;
+
+        if (g1 & 1u)
+          continue; /* write in progress, retry */
+        in_use = atomic_load_explicit(&slot->in_use, memory_order_relaxed);
+        if (in_use) {
+          for (size_t w = 0; w < BURST_ADDR_WORDS; w++)
+            words[w] = atomic_load_explicit(&slot->addr_words[w], memory_order_relaxed);
+          addrlen = atomic_load_explicit(&slot->addrlen, memory_order_relaxed);
+          fd = atomic_load_explicit(&slot->fd, memory_order_relaxed);
+          b = atomic_load_explicit(&slot->b, memory_order_relaxed);
+        }
+        g2 = atomic_load_explicit(&slot->gen, memory_order_acquire);
+        if (g1 != g2)
+          continue; /* torn read, retry */
+        if (in_use) {
+          burst_acquire(b);
+          snap[n].idx = i;
+          snap[n].fd = fd;
+          memcpy(&snap[n].addr, words, sizeof snap[n].addr);
+          snap[n].addrlen = addrlen;
+          snap[n].b = b;
+          n++;
+        }
+        break;
+      }
     }
-    pthread_mutex_unlock(&pc->bursts->lock);
 
     for (size_t i = 0; i < n; i++) {
       unicast_dest_t dst;
@@ -519,7 +548,7 @@ static void *rsi_pacer_main(void *arg) {
         off += sub_len; /* 0 on out-of-range kbps: sub-report just omitted, off unchanged */
       }
 
-      collision_n = channel_hned_collisions(pc->channels, c, collisions, CHANNEL_HNED_COLLISION_MAX, collision_max_age);
+      collision_n = channel_hned_collisions(c, collisions, CHANNEL_HNED_COLLISION_MAX, collision_max_age);
       if (collision_n > 0) {
         sub_len = rtcp_build_rsi_srbt_collision(collisions, collision_n, pkt + off, sizeof(pkt) - off);
         off += sub_len;

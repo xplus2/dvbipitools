@@ -18,6 +18,7 @@ static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
     cand->program_number = prog;
     cand->pmt_pid = pid;
     c->pmt_cand_count++;
+    c->pmt_wanted[pid] = 1;
     if (c->multi_mode) {
       psi_multi_program_t *m = &c->multi[c->multi_count];
       memset(m, 0, sizeof *m);
@@ -38,8 +39,8 @@ void parse_pat(psi_t *c) {
     return;
   c->nit_pid = 0;
   c->pat_program_count = 0;
-  /* pmt_cand[] is deliberately NOT reset here: a candidate's PMT may still
-   * be mid-assembly, and the PAT repeats far more often than that takes. */
+  /* pmt_cand[] deliberately not reset here: a candidate's PMT may still be
+   * mid-assembly, PAT repeats far more often than that takes */
   c->tsid = ((unsigned)b[3] << 8) | b[4];
   end = n - 4;
   for (size_t i = 8; i + 4 <= end; i += 4) {
@@ -57,7 +58,7 @@ void parse_pat(psi_t *c) {
       log_line("psi: PAT has more than %d programs, dropping the rest", PSI_MAX_PROGRAMS);
       c->pat_program_overflow_logged = 1;
     }
-    if (c->pmt_locked)
+    if (c->pmt_locked && !c->multi_mode)
       continue;
     if (c->preferred_pmt_pid && pid != c->preferred_pmt_pid)
       continue;
@@ -200,8 +201,8 @@ void parse_nit(psi_t *c) {
 }
 
 /* ISO/IEC 13818-1 table 2-30: table_id + 7 more header bytes (same shape as PAT's
-   program loop header), then a plain descriptor loop up to the CRC - no program-like
-   entries. Takes the first CA_descriptor found (tag 0x09), single-CAS assumption. */
+   program loop header), then a plain descriptor loop up to CRC, no program-like
+   entries. takes first CA_descriptor found (tag 0x09), single-CAS assumption */
 void parse_cat(psi_t *c) {
   const unsigned char *b = c->cat.buf;
   size_t n = c->cat.expect, l;

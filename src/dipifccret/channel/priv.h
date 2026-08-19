@@ -4,12 +4,12 @@
 #ifndef DIPIFCCRET_CHANNEL_PRIV_H
 #define DIPIFCCRET_CHANNEL_PRIV_H
 
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #include "lib/ioutil.h"
+#include "lib/seqlock.h"
 
 #include "channel.h"
 
@@ -44,31 +44,45 @@ struct channel_table {
   size_t ring_slots;
   size_t cache_cap;
 
-  /* open-addr index: (family,group,port)->slot+1. 0=empty, TOMBSTONE=reaped. rebuild >75% load. */
-  size_t *hash;
+  /* open-addr index: (family,group,port)->slot+1. 0=empty, TOMBSTONE=reaped, CLAIMING=insert in flight.
+     rebuild >75% load. multi-writer: channel_lookup (any thread), reap_slot, both CAS single buckets.
+     hash_rebuild_active/hash_active_writers pair excludes concurrent bucket ops during a rewrite. */
+  _Atomic size_t *hash;
   size_t hash_size;
   size_t hash_mask;
-  size_t hash_used;
+  _Atomic size_t hash_used;
+  _Atomic int hash_rebuild_active;
+  _Atomic int hash_active_writers;
 
-  /* open-addr index: ssrc->slot+1, same conventions. channel_find_by_ssrc's NACK-path lookup. */
-  size_t *ssrc_hash;
+  /* open-addr index: ssrc->slot+1, same conventions. channel_find_by_ssrc's NACK-path lookup.
+     write-only from capture thread, read cross-thread by listen workers: seqlock-guarded via ssrc_gen.
+     bucket array itself _Atomic too: seqlock only tells readers when to discard, not access safety. */
+  _Atomic size_t *ssrc_hash;
   size_t ssrc_hash_size;
   size_t ssrc_hash_mask;
   size_t ssrc_hash_used;
+  _Atomic unsigned ssrc_gen;
 
-  size_t *resolve_hash; /* hash(family,addr,port)%max_channels -> slot+1, no probe, sized max_channels not padded */
-
-  pthread_mutex_t lock; /* guards hash/hash_used and ssrc_hash/ssrc_hash_used above */
+  _Atomic size_t *resolve_hash; /* hash(family,addr,port)%max_channels -> slot+1, no probe, sized max_channels,
+                                    not padded. single-word publish, read cross-thread by resolve-by-port listeners. */
 
   size_t reap_cursor; /* channel_table_reap_step()'s scan position, wraps at max_channels */
 };
 
 #define CHANNEL_HASH_TOMBSTONE SIZE_MAX
+#define CHANNEL_HASH_CLAIMING (SIZE_MAX - 1)
 
 /* hash.c */
 size_t chan_key_hash(int family, const void *addr, size_t addr_len, unsigned port);
 void chan_hash_rebuild(channel_table_t *t);
-channel_t *chan_hash_probe(channel_table_t *t, int family, const void *addr, size_t addr_len, unsigned port, size_t *avail);
+void hash_writer_enter(channel_table_t *t);
+void hash_writer_exit(channel_table_t *t);
+/* match: returned directly. no match: NULL, *claimed_h = CAS'd bucket (state CLAIMING),
+   *was_tombstone = TOMBSTONE vs EMPTY before claim. exactly one of publish_claim/rollback_claim
+   follows. call wrapped in hash_writer_enter/exit. */
+channel_t *chan_hash_find_or_claim(channel_table_t *t, int family, const void *addr, size_t addr_len, unsigned port, size_t *claimed_h, int *was_tombstone);
+void chan_hash_publish_claim(channel_table_t *t, size_t h, int was_tombstone, size_t slot_idx);
+void chan_hash_rollback_claim(channel_table_t *t, size_t h, int was_tombstone);
 size_t chan_ssrc_hash(uint32_t ssrc);
 void ssrc_hash_rebuild(channel_table_t *t);
 void ssrc_hash_remove(channel_table_t *t, size_t slot_idx, uint32_t ssrc);

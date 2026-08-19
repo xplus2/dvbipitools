@@ -234,7 +234,7 @@ START_TEST(start_replaces_existing_burst_without_reusing_old_pointer) {
   ck_assert_ptr_eq(slot->b, b2);
   ck_assert_int_eq(burst_is_done(b1), 1);
 
-  burst_release(b1); /* table swap dropped ownership; test still holds the constructor ref */
+  burst_release(b1); /* table swap dropped ownership, test holds constructor ref */
   burst_table_free(t);
   channel_table_free(g_table);
 }
@@ -470,13 +470,18 @@ START_TEST(start_under_concurrent_exhaustion_admits_exactly_cap_sessions) {
 
   for (i = 0; i < (int)t->cap; i++) {
     const struct sockaddr_in *sin;
+    struct sockaddr_storage sa;
+    uint64_t words[BURST_ADDR_WORDS];
     unsigned port;
     size_t j;
 
     if (!t->slots[i].in_use)
       continue;
     in_use_count++;
-    sin = (const struct sockaddr_in *)&t->slots[i].addr;
+    for (j = 0; j < BURST_ADDR_WORDS; j++)
+      words[j] = atomic_load_explicit(&t->slots[i].addr_words[j], memory_order_relaxed);
+    memcpy(&sa, words, sizeof sa);
+    sin = (const struct sockaddr_in *)&sa;
     port = ntohs(sin->sin_port);
     for (j = 0; j < seen_n; j++)
       ck_assert_uint_ne(seen_ports[j], port);

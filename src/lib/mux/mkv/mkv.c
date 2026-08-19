@@ -12,6 +12,11 @@ mkv_t *mkv_new(int fd, const mkv_opts_t *opts, int video_ok, unsigned long long 
 
   if (!m)
     return NULL;
+  m->pend_arena = malloc(MKV_PEND_BYTES);
+  if (!m->pend_arena) {
+    mkv_close(m);
+    return NULL;
+  }
   m->fd = fd;
   m->opts = opts;
   m->video_ok = video_ok;
@@ -75,8 +80,6 @@ void mkv_close(mkv_t *m) {
   if (!m->started && m->ntrk)
     start(m);
   cluster_flush(m);
-  for (int i = 0; i < m->npend; i++)
-    free(m->pend[i].data);
   for (int i = 0; i < m->ntrk; i++) {
     free(m->trk[i].rem);
     free(m->trk[i].vbuf);
@@ -86,5 +89,6 @@ void mkv_close(mkv_t *m) {
   pes_free(m->pes);
   for (int i = 0; i < m->npsi; i++)
     psi_free(m->psi[i]);
+  free(m->pend_arena);
   free(m);
 }

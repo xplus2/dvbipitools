@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 
+#include "lib/cas/cas_core.h"
+
 #include "../mux/tspacketizer.h"
 #include "../version.h"
 #include "priv.h"
@@ -37,7 +39,7 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
       char label[16];
       cas_metrics_t vm;
       cas_vendor_metrics(cas, i, &vm);
-      snprintf(label, sizeof label, "0x%08x", cas_vendor_super_cas_id(cas, i));
+      cas_core_format_super_cas_id(cas_vendor_super_cas_id(cas, i), label);
       metrics_writer_put(&w, METRICS_ID_CAS_ECMG_CONNECTED, label, vm.ecmg_connected ? 1 : 0);
       metrics_writer_put(&w, METRICS_ID_CAS_EMMG_CLIENTS, label, vm.emmg_clients);
       metrics_writer_put(&w, METRICS_ID_CAS_CRYPTOPERIOD_TRANSITIONS_TOTAL, label, vm.cryptoperiod_transitions_total);

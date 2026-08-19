@@ -163,6 +163,18 @@ void sockaddr_index_insert(sockaddr_index_t *idx, const struct sockaddr *addr, s
     rebuild(idx);
 }
 
+size_t sockaddr_stripe_of(const struct sockaddr *addr, socklen_t addrlen, size_t stripe_count) {
+  int family;
+  unsigned char bytes[16];
+  size_t byteslen;
+  unsigned short port;
+
+  if (!addr || addrlen == 0)
+    return 0;
+  canon_key(addr, addrlen, &family, bytes, &byteslen, &port);
+  return key_hash(family, bytes, byteslen, port) % stripe_count;
+}
+
 void sockaddr_index_remove(sockaddr_index_t *idx, const struct sockaddr *addr, socklen_t addrlen) {
   int family;
   unsigned char bytes[16];

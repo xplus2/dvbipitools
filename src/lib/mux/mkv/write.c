@@ -36,15 +36,18 @@ track_t *find_track(mkv_t *m, unsigned pid) {
 }
 
 void cluster_flush(mkv_t *m) {
+  unsigned char buf[16]; /* eb_id max 4 bytes + eb_size max 8 bytes, always fits */
   ebuf_t hdr;
 
   if (!m->cl_open)
     return;
-  memset(&hdr, 0, sizeof hdr);
+  hdr.p = buf;
+  hdr.len = 0;
+  hdr.cap = sizeof buf;
+  hdr.err = 0;
   eb_id(&hdr, 0x1F43B675);
   eb_size(&hdr, m->cl.len);
   wfd(m, hdr.p, hdr.len);
-  ebuf_free(&hdr);
   wfd(m, m->cl.p, m->cl.len); /* straight to output, no throwaway copy of whole cluster */
   m->cl.len = 0;              /* keep m->cl's allocation, next cluster reuses it */
   m->cl_open = 0;
@@ -218,11 +221,9 @@ void start(mkv_t *m) {
   }
   write_head(m);
   m->started = 1;
-  for (int i = 0; i < m->npend; i++) {
+  for (int i = 0; i < m->npend; i++)
     if (m->pend[i].ts >= m->t0)
       put_block(m, m->pend[i].num, m->pend[i].ts - m->t0, m->pend[i].data, m->pend[i].len, m->pend[i].key, m->pend[i].dur);
-    free(m->pend[i].data);
-  }
   m->npend = 0;
   m->pend_bytes = 0;
 }
@@ -237,9 +238,7 @@ void pend_add(mkv_t *m, int num, int64_t ts, const unsigned char *d, size_t n, i
     return;
   }
   p = &m->pend[m->npend];
-  p->data = malloc(n);
-  if (!p->data)
-    return;
+  p->data = m->pend_arena + m->pend_bytes;
   memcpy(p->data, d, n);
   p->num = num;
   p->ts = ts;

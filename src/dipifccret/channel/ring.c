@@ -7,18 +7,6 @@
 
 #include "priv.h"
 
-/* odd gen: write in progress, readers retry */
-static unsigned seqlock_begin_write(_Atomic unsigned *gen) {
-  unsigned g = atomic_load_explicit(gen, memory_order_relaxed);
-  atomic_store_explicit(gen, g + 1, memory_order_relaxed);
-  return g;
-}
-
-/* even gen, release: publishes fields written since start */
-static void seqlock_commit_write(_Atomic unsigned *gen, unsigned g) {
-  atomic_store_explicit(gen, g + 2, memory_order_release);
-}
-
 void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len) {
   ret_ring_entry_t *slot;
   unsigned g;
@@ -123,7 +111,7 @@ int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out) {
       return out->valid && out->seq == seq;
     }
   }
-  return 0; /* repeatedly raced concurrent write, treated as not-found, like a real miss */
+  return 0; /* repeated race treated as not-found */
 }
 
 int channel_cache_peek_meta(const channel_t *c, size_t index, rap_cache_meta_t *out) {
@@ -156,7 +144,7 @@ int channel_cache_peek_meta(const channel_t *c, size_t index, rap_cache_meta_t *
     if (g1 == g2)
       return 1;
   }
-  return 0; /* repeatedly raced concurrent write, treated as not-found, like a real miss */
+  return 0; /* repeated race treated as not-found */
 }
 
 int channel_has_rap(const channel_t *c) {
@@ -213,5 +201,5 @@ int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out) 
       return 1;
     }
   }
-  return 0; /* repeatedly raced concurrent write, treated as not-found, same as real miss */
+  return 0; /* repeated race treated as not-found */
 }

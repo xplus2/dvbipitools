@@ -31,8 +31,8 @@ void burst_table_free(burst_table_t *t) {
   if (!t)
     return;
   for (size_t i = 0; i < t->cap; i++)
-    if (t->slots[i].in_use)
-      burst_release(t->slots[i].b);
+    if (atomic_load_explicit(&t->slots[i].in_use, memory_order_relaxed))
+      burst_release(atomic_load_explicit(&t->slots[i].b, memory_order_relaxed));
   pthread_mutex_destroy(&t->lock);
   sockaddr_index_free(t->index);
   free(t->slots);
@@ -55,35 +55,60 @@ static int sockaddr_eq(const struct sockaddr_storage *a, socklen_t alen, const s
   return 0;
 }
 
+/* plain sockaddr_storage from slot's atomic words */
+static void slot_read_addr(const burst_slot_t *s, struct sockaddr_storage *out) {
+  uint64_t words[BURST_ADDR_WORDS];
+  for (size_t w = 0; w < BURST_ADDR_WORDS; w++)
+    words[w] = atomic_load_explicit(&s->addr_words[w], memory_order_relaxed);
+  memcpy(out, words, sizeof *out);
+}
+
 /* index hit, re-validated against authoritative slots[]. pacer thread
    clears in_use: stale hits dropped. caller holds t->lock. SIZE_MAX if no
    live session for addr */
 static size_t find_valid(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen) {
   size_t idx = sockaddr_index_find(t->index, addr, addrlen);
+  struct sockaddr_storage sa;
+
   if (idx == SIZE_MAX)
     return SIZE_MAX;
-  if (!t->slots[idx].in_use || !sockaddr_eq(&t->slots[idx].addr, t->slots[idx].addrlen, addr, addrlen)) {
+  if (!atomic_load_explicit(&t->slots[idx].in_use, memory_order_relaxed)) {
+    sockaddr_index_remove(t->index, addr, addrlen);
+    return SIZE_MAX;
+  }
+  slot_read_addr(&t->slots[idx], &sa);
+  if (!sockaddr_eq(&sa, atomic_load_explicit(&t->slots[idx].addrlen, memory_order_relaxed), addr, addrlen)) {
     sockaddr_index_remove(t->index, addr, addrlen);
     return SIZE_MAX;
   }
   return idx;
 }
 
-/* caller holds t->lock. claims free slot for addr/fd/b, indexes it. NULL on full tab */
+/* caller holds t->lock. claims free slot for addr/fd/b, indexes it. NULL on full tab.
+   gen-bracketed: pacer may read this slot lock-free right up to in_use flip below */
 static burst_slot_t *claim_locked(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int fd, burst_t *b) {
   for (size_t i = 0; i < t->cap; i++) {
-    if (!t->slots[i].in_use) {
-      memcpy(&t->slots[i].addr, addr, addrlen);
-      t->slots[i].addrlen = addrlen;
-      t->slots[i].fd = fd;
-      t->slots[i].b = b;
-      t->slots[i].msn = 0;
-      t->slots[i].nack_count = 0;
-      t->slots[i].congestion_adapted = 0;
-      t->slots[i].in_use = 1;
+    burst_slot_t *s = &t->slots[i];
+    if (!atomic_load_explicit(&s->in_use, memory_order_relaxed)) {
+      unsigned g = seqlock_begin_write(&s->gen);
+      uint64_t words[BURST_ADDR_WORDS];
+
+      memset(words, 0, sizeof words);
+      memcpy(words, addr, addrlen);
+      for (size_t w = 0; w < BURST_ADDR_WORDS; w++)
+        atomic_store_explicit(&s->addr_words[w], words[w], memory_order_relaxed);
+      atomic_store_explicit(&s->addrlen, addrlen, memory_order_relaxed);
+      atomic_store_explicit(&s->fd, fd, memory_order_relaxed);
+      atomic_store_explicit(&s->b, b, memory_order_relaxed);
+      s->msn = 0;
+      s->nack_count = 0;
+      s->congestion_adapted = 0;
+      atomic_store_explicit(&s->in_use, 1, memory_order_relaxed);
+      seqlock_commit_write(&s->gen, g);
+
       sockaddr_index_remove(t->index, addr, addrlen); /* drop stale entry before insert */
       sockaddr_index_insert(t->index, addr, addrlen, i);
-      return &t->slots[i];
+      return s;
     }
   }
   return NULL;
@@ -115,10 +140,13 @@ int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t a
   pthread_mutex_lock(&t->lock);
   i = find_valid(t, addr, addrlen);
   if (i != SIZE_MAX) {
-    old = t->slots[i].b;
-    t->slots[i].fd = fd;
-    t->slots[i].b = b;
-    *msn_out = ++t->slots[i].msn;
+    burst_slot_t *s = &t->slots[i];
+    unsigned g = seqlock_begin_write(&s->gen);
+    old = atomic_load_explicit(&s->b, memory_order_relaxed);
+    atomic_store_explicit(&s->fd, fd, memory_order_relaxed);
+    atomic_store_explicit(&s->b, b, memory_order_relaxed);
+    *msn_out = ++s->msn;
+    seqlock_commit_write(&s->gen, g);
     updated = 1;
   } else {
     burst_slot_t *s = claim_locked(t, addr, addrlen, fd, b);
@@ -153,6 +181,7 @@ int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen
 
   {
     burst_slot_t *slot = &t->slots[idx];
+    burst_t *b = atomic_load_explicit(&slot->b, memory_order_relaxed);
     unsigned adapt_at;
 
     slot->nack_count++;
@@ -163,11 +192,11 @@ int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen
 
     adapt_at = threshold / 2;
     if (slot->nack_count >= threshold) {
-      burst_terminate(slot->b, 0, 0);
+      burst_terminate(b, 0, 0);
       out->action = BURST_TABLE_NACK_TERMINATED;
     } else if (!slot->congestion_adapted && adapt_at > 0 && slot->nack_count >= adapt_at) {
-      out->new_bps = atomic_load_explicit(&slot->b->target_bps, memory_order_relaxed) * 0.5;
-      atomic_store_explicit(&slot->b->target_bps, out->new_bps, memory_order_relaxed);
+      out->new_bps = atomic_load_explicit(&b->target_bps, memory_order_relaxed) * 0.5;
+      atomic_store_explicit(&b->target_bps, out->new_bps, memory_order_relaxed);
       slot->congestion_adapted = 1;
       out->action = BURST_TABLE_NACK_ADAPTED;
       out->msn = ++slot->msn;
@@ -182,7 +211,7 @@ int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen
   pthread_mutex_lock(&t->lock);
   idx = find_valid(t, addr, addrlen);
   if (idx != SIZE_MAX)
-    burst_terminate(t->slots[idx].b, has_stop_seq, stop_seqnum);
+    burst_terminate(atomic_load_explicit(&t->slots[idx].b, memory_order_relaxed), has_stop_seq, stop_seqnum);
   pthread_mutex_unlock(&t->lock);
   return idx != SIZE_MAX;
 }

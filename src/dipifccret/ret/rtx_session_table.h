@@ -27,10 +27,9 @@ typedef struct rtx_session_table rtx_session_table_t;
 rtx_session_table_t *rtx_session_table_new(size_t cap);
 void rtx_session_table_free(rtx_session_table_t *t);
 
-/* finds or claims session for this client address; evicts coldest session
-   if table full (no protocol path exists to reject a repair). addr NULL or
-   addrlen 0 (unit-test convenience, never happens on real recvfrom() path)
-   maps to one shared session, not a crash. */
+/* finds or claims session for this client address. full address-sharded stripe
+   evicts its own coldest session. addr NULL or addrlen 0 (unit-test convenience, never happens on real
+   recvfrom() path) maps to one shared session. */
 rtx_session_slot_t *rtx_session_table_get(rtx_session_table_t *t, const struct sockaddr *addr, socklen_t addrlen);
 
 /* amortized reap, at most max_scan slots per call: same pattern as channel_table_reap_step */

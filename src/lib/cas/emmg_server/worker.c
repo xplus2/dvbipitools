@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "lib/log.h"
@@ -130,6 +131,7 @@ static void *worker_main(void *arg) {
   emmg_conn_state_t cs;
   simulcrypt_reader_t rd;
   int flags;
+  int backpressured = 0;
 
   memset(&cs, 0, sizeof cs);
   simulcrypt_reader_init(&rd);
@@ -146,11 +148,23 @@ static void *worker_main(void *arg) {
   while (!atomic_load_explicit(&s->stop, memory_order_relaxed) && !signal_stop_requested()) {
     simulcrypt_hdr_t hdr;
     const unsigned char *payload;
-    int rc = simulcrypt_reader_poll(&rd, fd, EMMG_POLL_INTERVAL_MS, &hdr, &payload);
     unsigned char reply[SIMULCRYPT_MAX_FRAME];
     size_t reply_len = 0;
     int should_close = 0;
+    int rc;
+    size_t qlen = atomic_load_explicit(&s->queue_len, memory_order_relaxed);
 
+    /* stop draining this socket above high watermark: TCP flow control pushes back on sender */
+    if (!backpressured && qlen >= EMMG_QUEUE_HIGH_WATERMARK)
+      backpressured = 1;
+    else if (backpressured && qlen <= EMMG_QUEUE_LOW_WATERMARK)
+      backpressured = 0;
+    if (backpressured) {
+      struct timespec backoff = {0, EMMG_POLL_INTERVAL_MS * 1000000L};
+      nanosleep(&backoff, NULL);
+      continue;
+    }
+    rc = simulcrypt_reader_poll(&rd, fd, EMMG_POLL_INTERVAL_MS, &hdr, &payload);
     if (rc < 0) {
       log_line("emmg: connection closed by peer or read error (slot %d)", slot);
       break;

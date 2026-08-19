@@ -10,6 +10,7 @@
 #include "tva_xml.h"
 
 static const char *unreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+static const char hex_digits[] = "0123456789ABCDEF";
 
 static void percent_encode(const char *s, char *out, size_t outcap) {
   size_t oi = 0;
@@ -17,9 +18,12 @@ static void percent_encode(const char *s, char *out, size_t outcap) {
     if (strchr(unreserved, *s)) {
       out[oi++] = *s;
     } else {
+      unsigned char c = (unsigned char)*s;
       if (oi + 4 > outcap)
         break;
-      snprintf(out + oi, 4, "%%%02X", (unsigned char)*s);
+      out[oi] = '%';
+      out[oi + 1] = hex_digits[c >> 4];
+      out[oi + 2] = hex_digits[c & 0xF];
       oi += 3;
     }
   }
