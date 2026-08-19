@@ -309,11 +309,12 @@ static int fmt_from_suffix(const char *path, out_fmt_t *f) {
   const char *dot = strrchr(path, '.');
   char lower[8];
   int v;
+  size_t i;
 
   if (!dot)
     return 0;
   dot++;
-  for (size_t i = 0; i < sizeof lower - 1 && dot[i]; i++)
+  for (i = 0; i < sizeof lower - 1 && dot[i]; i++)
     lower[i] = (char)tolower((unsigned char)dot[i]);
   if (dot[i]) /* too long to be any known suffix */
     return 0;
