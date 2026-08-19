@@ -77,8 +77,6 @@ static void args_err(const char *tool, const char *fmt, ...) {
 int cas_args_validate(const char *tool_name, cas_algo_t cas_algo, const cas_vendor_t *vendors, unsigned n_vendors,
                        int biss2_enabled, int biss1_enabled, int biss2_ca_enabled, int biss2_emit_esw,
                        int biss2_ca_session_id_given, unsigned cas_cp_duration_ms) {
-  unsigned vi, vj;
-
   if (biss2_enabled && (cas_algo != CAS_ALGO_NONE || n_vendors > 0)) {
     args_err(tool_name, "--biss2-sw is mutually exclusive with --cas-algo/--cas-ecmg");
     return -1;
@@ -117,7 +115,7 @@ int cas_args_validate(const char *tool_name, cas_algo_t cas_algo, const cas_vend
     args_err(tool_name, "--cas-algo requires --cas-ecmg");
     return -1;
   }
-  for (vi = 0; vi < n_vendors; vi++) {
+  for (unsigned vi = 0; vi < n_vendors; vi++) {
     const cas_vendor_t *v = &vendors[vi];
     if (!v->super_cas_id) {
       args_err(tool_name, "--cas-ecmg %s:%u requires --cas-super-id", v->ecmg_host, v->ecmg_port);
@@ -131,7 +129,7 @@ int cas_args_validate(const char *tool_name, cas_algo_t cas_algo, const cas_vend
       args_err(tool_name, "--cas-ecm-pid and --cas-emm-pid must differ (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
       return -1;
     }
-    for (vj = vi + 1; vj < n_vendors; vj++) {
+    for (unsigned vj = vi + 1; vj < n_vendors; vj++) {
       const cas_vendor_t *o = &vendors[vj];
       if (v->ecm_pid == o->ecm_pid || v->ecm_pid == o->emm_pid || v->emm_pid == o->ecm_pid || v->emm_pid == o->emm_pid) {
         args_err(tool_name, "--cas-ecm-pid/--cas-emm-pid collide across --cas-ecmg vendors");

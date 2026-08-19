@@ -300,9 +300,8 @@ static void burst_race_send_cb(const unsigned char *pkt, size_t len, int dscp, v
 }
 
 static void *burst_race_rams_r(void *arg) {
-  int i;
   (void)arg;
-  for (i = 0; i < BURST_RACE_RAMS_R_ITERS; i++) {
+  for (int i = 0; i < BURST_RACE_RAMS_R_ITERS; i++) {
     burst_t *b = burst_new(g_burst_race_chan, 1.0, 0, 99);
     uint8_t msn;
     if (!b)

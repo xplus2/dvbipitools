@@ -16,14 +16,13 @@ static int hexval(char c) {
 }
 
 int biss_parse_hex16(const char *hex, unsigned char out[BISS_KEY_LEN]) {
-  size_t i;
   if (!hex || !out)
     return -1;
   if ((hex[0] == '0') && (hex[1] == 'x' || hex[1] == 'X'))
     hex += 2;
   if (strlen(hex) != BISS_KEY_LEN * 2)
     return -1;
-  for (i = 0; i < BISS_KEY_LEN; i++) {
+  for (size_t i = 0; i < BISS_KEY_LEN; i++) {
     int hi = hexval(hex[2 * i]), lo = hexval(hex[2 * i + 1]);
     if (hi < 0 || lo < 0)
       return -1;
@@ -33,14 +32,13 @@ int biss_parse_hex16(const char *hex, unsigned char out[BISS_KEY_LEN]) {
 }
 
 int biss1_parse_sw(const char *hex, unsigned char cw_out[BISS1_KEY_LEN]) {
-  size_t i;
   if (!hex || !cw_out)
     return -1;
   if ((hex[0] == '0') && (hex[1] == 'x' || hex[1] == 'X'))
     hex += 2;
   if (strlen(hex) != BISS1_SW_HEX_LEN)
     return -1;
-  for (i = 0; i < 6; i++) {
+  for (size_t i = 0; i < 6; i++) {
     int hi = hexval(hex[2 * i]), lo = hexval(hex[2 * i + 1]);
     if (hi < 0 || lo < 0)
       return -1;

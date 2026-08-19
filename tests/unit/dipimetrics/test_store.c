@@ -25,9 +25,8 @@ static size_t build_snapshot(unsigned char *buf, metrics_component_t component, 
 }
 
 static store_slot_t *only_used_slot(store_t *st) {
-  int i;
   store_slot_t *found = NULL;
-  for (i = 0; i < STORE_MAX_INSTANCES; i++)
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++)
     if (st->slots[i].used) {
       ck_assert_ptr_null(found);
       found = &st->slots[i];
@@ -160,7 +159,7 @@ START_TEST(distinct_component_same_id_are_separate_instances) {
   store_t st;
   unsigned char buf[METRICS_MAX_SNAPSHOT_BYTES];
   size_t len;
-  int count = 0, i;
+  int count = 0;
 
   store_init(&st);
   len = build_snapshot(buf, METRICS_COMPONENT_SDS, "shared-name", 100, 1, 1);
@@ -168,7 +167,7 @@ START_TEST(distinct_component_same_id_are_separate_instances) {
   len = build_snapshot(buf, METRICS_COMPONENT_BCG, "shared-name", 100, 1, 2);
   store_ingest(&st, buf, len, 10.0, 0);
 
-  for (i = 0; i < STORE_MAX_INSTANCES; i++)
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++)
     if (st.slots[i].used)
       count++;
   ck_assert_int_eq(count, 2);

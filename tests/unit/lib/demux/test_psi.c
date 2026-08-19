@@ -79,7 +79,7 @@ static size_t build_pat2(unsigned char *out, unsigned tsid, unsigned prog1, unsi
  * a service_descriptor (0x48), CRC included, returns length */
 static size_t build_sdt2(unsigned char *out, unsigned onid, unsigned sid1, const char *name1, unsigned sid2, const char *name2) {
   unsigned char body[96];
-  size_t n = 0, hdr, crc_at, dlen_pos, i;
+  size_t n = 0, hdr, crc_at;
   uint32_t crc;
 
   body[n++] = 0x00; /* transport_stream_id, unused by parse_sdt() */
@@ -91,14 +91,14 @@ static size_t build_sdt2(unsigned char *out, unsigned onid, unsigned sid1, const
   body[n++] = (unsigned char)onid;
   body[n++] = 0xFF; /* reserved_future_use */
 
-  for (i = 0; i < 2; i++) {
+  for (size_t i = 0; i < 2; i++) {
     unsigned sid = i == 0 ? sid1 : sid2;
     const char *name = i == 0 ? name1 : name2;
     size_t nlen = strlen(name);
     body[n++] = (unsigned char)(sid >> 8);
     body[n++] = (unsigned char)sid;
     body[n++] = 0xFD;
-    dlen_pos = n; /* descriptors_loop_length, filled below */
+    size_t dlen_pos = n; /* descriptors_loop_length, filled below */
     n += 2;
     body[n++] = 0x48; /* service_descriptor */
     body[n++] = (unsigned char)(3 + nlen); /* descriptor_length: type+provider_len+name_len+name */
@@ -313,14 +313,13 @@ static size_t build_cat_empty(unsigned char *out) {
 /* wraps one PSI section (pusi=1, pointer_field=0) into a single 188-byte TS packet */
 static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, unsigned char cc,
                             const unsigned char *section, size_t slen) {
-  size_t i;
   pkt[0] = 0x47;
   pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
   pkt[2] = (unsigned char)pid;
   pkt[3] = (unsigned char)(0x10 | (cc & 0x0F)); /* adaptation_field_control = payload only */
   pkt[4] = 0x00;                                /* pointer_field */
   memcpy(pkt + 5, section, slen);
-  for (i = 5 + slen; i < 188; i++)
+  for (size_t i = 5 + slen; i < 188; i++)
     pkt[i] = 0xFF;
 }
 

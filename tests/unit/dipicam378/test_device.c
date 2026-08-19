@@ -153,9 +153,8 @@ START_TEST(full_chain_csa2_recovers_cw) {
   unsigned char buf[1024];
   unsigned char cw_out[16];
   size_t n;
-  int i;
 
-  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
     bk[i] = (unsigned char)(i + 10);
     sk[i] = (unsigned char)(200 - i);
   }
@@ -189,9 +188,8 @@ START_TEST(csa2_odd_ecm_fills_odd_half_only) {
   unsigned char buf[1024];
   unsigned char cw_out[16];
   size_t n;
-  int i;
 
-  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
     bk[i] = (unsigned char)(i + 30);
     sk[i] = (unsigned char)(150 - i);
   }
@@ -339,9 +337,8 @@ START_TEST(no_serial_configured_accepts_any_emm_u) {
   unsigned char buf[1024];
   unsigned char cw_out[16];
   size_t n;
-  int i;
 
-  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
     bk[i] = (unsigned char)i;
     sk[i] = (unsigned char)(255 - i);
   }
@@ -369,9 +366,8 @@ START_TEST(resolve_cw_rejects_wrong_caid) {
   unsigned char buf[1024];
   unsigned char cw_out[16];
   size_t n;
-  int i;
 
-  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
     bk[i] = (unsigned char)i;
     sk[i] = (unsigned char)(255 - i);
   }
@@ -399,9 +395,8 @@ START_TEST(resolve_cw_accepts_matching_caid) {
   unsigned char buf[1024];
   unsigned char cw_out[16];
   size_t n;
-  int i;
 
-  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
     bk[i] = (unsigned char)i;
     sk[i] = (unsigned char)(255 - i);
   }

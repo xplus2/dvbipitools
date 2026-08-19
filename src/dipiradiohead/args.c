@@ -133,8 +133,7 @@ static void print_help(void) {
 }
 
 static int is_sid_used(const unsigned *used, unsigned n_used, unsigned sid) {
-  unsigned j;
-  for (j = 0; j < n_used; j++)
+  for (unsigned j = 0; j < n_used; j++)
     if (used[j] == sid)
       return 1;
   return 0;
@@ -219,7 +218,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *profile_arg = NULL;
   int have_secret = 0;
   int c;
-  unsigned i;
 
   memset(cfg, 0, sizeof *cfg);
   cfg->tsid = 1;
@@ -607,7 +605,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   if (assign_missing_sids(cfg) != 0)
     return ARGS_ERR;
-  for (i = 0; i < cfg->n_inputs; i++) {
+  for (unsigned i = 0; i < cfg->n_inputs; i++) {
     if (cfg->inputs[i].sdt_text[0])
       continue;
     if (cfg->n_inputs == 1)

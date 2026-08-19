@@ -17,9 +17,8 @@ START_TEST(csa2_encrypt_block_round_trips_with_library_decrypt) {
   unsigned char plain[64], buf[64];
   struct dvbcsa_key_s *dk;
   csa2_key_t *k;
-  size_t i;
 
-  for (i = 0; i < sizeof plain; i++)
+  for (size_t i = 0; i < sizeof plain; i++)
     plain[i] = (unsigned char)i;
   memcpy(buf, plain, sizeof buf);
 
@@ -42,14 +41,13 @@ START_TEST(scrambler_csa2_packet_rounds_to_8byte_blocks_and_round_trips) {
   unsigned char clear[188], pkt[188];
   struct dvbcsa_key_s *dk;
   scrambler_t *s;
-  size_t i;
 
   /* no adaptation field: header 4 bytes, 184-byte payload (multiple of 8 already, no residual) */
   clear[0] = 0x47;
   clear[1] = 0x60;
   clear[2] = 0x80;
   clear[3] = 0x11; /* AFC=01 payload only, scrambling_control=00 */
-  for (i = 4; i < 188; i++)
+  for (size_t i = 4; i < 188; i++)
     clear[i] = (unsigned char)(i * 7);
   memcpy(pkt, clear, sizeof pkt);
 

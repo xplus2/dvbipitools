@@ -136,10 +136,9 @@ END_TEST
 START_TEST(too_many_inputs_is_rejected) {
   char *argv[1 + (ARGS_MAX_INPUTS + 1) * 2 + 2 + 1];
   int n = 0;
-  int i;
   config_t cfg;
   argv[n++] = "dipitvhead";
-  for (i = 0; i < ARGS_MAX_INPUTS + 1; i++) {
+  for (int i = 0; i < ARGS_MAX_INPUTS + 1; i++) {
     argv[n++] = "-i";
     argv[n++] = "udp://@239.1.1.1:5000";
   }

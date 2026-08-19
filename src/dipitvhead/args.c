@@ -271,8 +271,7 @@ static void print_help(void) {
 }
 
 static int is_sid_used(const unsigned *used, unsigned n_used, unsigned sid) {
-  unsigned j;
-  for (j = 0; j < n_used; j++)
+  for (unsigned j = 0; j < n_used; j++)
     if (used[j] == sid)
       return 1;
   return 0;

@@ -308,13 +308,12 @@ static int fmt_from_suffix(const char *path, out_fmt_t *f) {
   static const enum_map_t map[] = {{"ts", FMT_TS}, {"mkv", FMT_MKV}, {"mka", FMT_MKA}};
   const char *dot = strrchr(path, '.');
   char lower[8];
-  size_t i;
   int v;
 
   if (!dot)
     return 0;
   dot++;
-  for (i = 0; i < sizeof lower - 1 && dot[i]; i++)
+  for (size_t i = 0; i < sizeof lower - 1 && dot[i]; i++)
     lower[i] = (char)tolower((unsigned char)dot[i]);
   if (dot[i]) /* too long to be any known suffix */
     return 0;
@@ -660,17 +659,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       return ARGS_ERR;
     }
   } else {
-    int i;
     cfg->format = FMT_TS;
-    for (i = 0; i < cfg->n_out; i++)
+    for (int i = 0; i < cfg->n_out; i++)
       if (cfg->out[i].kind == OUT_FILE && strcmp(cfg->out[i].file_path, "-") != 0) {
         fmt_from_suffix(cfg->out[i].file_path, &cfg->format);
         break;
       }
   }
   {
-    int i, has_rtp_udp = 0, has_rtmp = 0, has_rtmps = 0, has_non_file = 0, n_non_rtmp = 0;
-    for (i = 0; i < cfg->n_out; i++) {
+    int has_rtp_udp = 0, has_rtmp = 0, has_rtmps = 0, has_non_file = 0, n_non_rtmp = 0;
+    for (int i = 0; i < cfg->n_out; i++) {
       out_kind_t k = cfg->out[i].kind;
       if (k == OUT_RTP || k == OUT_UDP)
         has_rtp_udp = 1;
@@ -716,8 +714,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     cfg->rist_profile = (rist_profile_sel_t)v;
   }
   {
-    int i, has_rist = 0;
-    for (i = 0; i < cfg->n_out; i++)
+    int has_rist = 0;
+    for (int i = 0; i < cfg->n_out; i++)
       if (cfg->out[i].kind == OUT_RIST)
         has_rist = 1;
     if (!has_rist && (profile_arg || have_secret || have_cname || have_buffer))

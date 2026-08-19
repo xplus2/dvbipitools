@@ -58,7 +58,7 @@ int biss_ca_parse_session_data(const unsigned char *in, size_t in_len, unsigned 
 }
 
 size_t biss_ca_build_emm_section(unsigned table_id, unsigned esid, unsigned version, unsigned section_number, unsigned last_section_number, unsigned onid, unsigned last_table_id, const biss_ca_emm_entry_t *entries, size_t n_entries, unsigned char *out, size_t cap) {
-  size_t n = 0, i;
+  size_t n = 0;
   size_t entry_size = BISS_CA_EKID_LEN + BISS_CA_RSA_BYTES;
 
   if (!out || !entries)
@@ -80,7 +80,7 @@ size_t biss_ca_build_emm_section(unsigned table_id, unsigned esid, unsigned vers
   out[n++] = 0x00; /* reserved(4)+descriptor_length(12) hi: no top-level descriptors */
   out[n++] = 0x00; /* descriptor_length lo */
 
-  for (i = 0; i < n_entries; i++) {
+  for (size_t i = 0; i < n_entries; i++) {
     memcpy(out + n, entries[i].entitlement_key_id, BISS_CA_EKID_LEN);
     n += BISS_CA_EKID_LEN;
     memcpy(out + n, entries[i].encrypted_session_data, BISS_CA_RSA_BYTES);
@@ -123,10 +123,10 @@ int biss_ca_parse_emm_section(const unsigned char *sec, size_t sec_len, biss_ca_
 }
 
 const unsigned char *biss_ca_emm_find_entry(const biss_ca_emm_parsed_t *emm, const unsigned char ekid[BISS_CA_EKID_LEN]) {
-  size_t i, entry_size = BISS_CA_EKID_LEN + BISS_CA_RSA_BYTES;
   if (!emm || !ekid)
     return NULL;
-  for (i = 0; i < emm->n_entries; i++) {
+  for (size_t i = 0; i < emm->n_entries; i++) {
+    size_t entry_size = BISS_CA_EKID_LEN + BISS_CA_RSA_BYTES;
     const unsigned char *entry = emm->entries + i * entry_size;
     if (memcmp(entry, ekid, BISS_CA_EKID_LEN) == 0)
       return entry + BISS_CA_EKID_LEN;

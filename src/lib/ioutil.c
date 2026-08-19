@@ -81,8 +81,7 @@ void *array_grow(void *arr, int *cap, int need, size_t elemsz) {
 }
 
 int all_digits(const char *s, int n) {
-  int i;
-  for (i = 0; i < n; i++)
+  for (int i = 0; i < n; i++)
     if (!isdigit((unsigned char)s[i]))
       return 0;
   return 1;

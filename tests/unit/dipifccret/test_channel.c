@@ -23,14 +23,13 @@ static channel_t *lookup_ip(channel_table_t *t, const char *ip, unsigned port) {
 }
 
 static void wrap_section_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  size_t i;
   pkt[0] = 0x47;
   pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
   pkt[2] = (unsigned char)pid;
   pkt[3] = 0x10;
   pkt[4] = 0x00;
   memcpy(pkt + 5, section, slen);
-  for (i = 5 + slen; i < 188; i++)
+  for (size_t i = 5 + slen; i < 188; i++)
     pkt[i] = 0xFF;
 }
 
@@ -204,8 +203,8 @@ END_TEST
 START_TEST(channel_lookup_by_resolve_slot_returns_null_for_unclaimed_slot) {
   channel_table_t *t = channel_table_new(4, 0, 0);
   channel_t *a = lookup_ip(t, "239.1.1.1", 5000);
-  size_t i, unclaimed = (size_t)-1;
-  for (i = 0; i < 4; i++) {
+  size_t unclaimed = (size_t)-1;
+  for (size_t i = 0; i < 4; i++) {
     if (i != a->resolve_slot) {
       unclaimed = i;
       break;
@@ -342,10 +341,9 @@ END_TEST
 
 START_TEST(channel_lookup_churn_triggers_rebuild_without_hanging) {
   channel_table_t *t = channel_table_new(2, 0, 0); /* hash_size 4: tombstones cross 75% fast */
-  char group[32];
-  int i;
 
-  for (i = 0; i < 20; i++) {
+  for (int i = 0; i < 20; i++) {
+    char group[32];
     channel_t *c;
     snprintf(group, sizeof group, "239.9.9.%d", i + 1);
     c = lookup_ip(t, group, 5000);
@@ -373,9 +371,8 @@ static channel_t *g_ret_race_chan;
 static _Atomic int g_ret_race_bad;
 
 static void *ret_race_writer(void *arg) {
-  uint16_t seq;
   (void)arg;
-  for (seq = 0; seq < RET_RACE_SEQS; seq++) {
+  for (uint16_t seq = 0; seq < RET_RACE_SEQS; seq++) {
     unsigned char payload[16];
     memset(payload, 0, sizeof payload);
     payload[0] = (unsigned char)(seq >> 8);
@@ -388,9 +385,8 @@ static void *ret_race_writer(void *arg) {
 }
 
 static void *ret_race_reader(void *arg) {
-  long idx = (long)arg;
-  int i;
-  for (i = 0; i < RET_RACE_READER_ITERS; i++) {
+  for (int i = 0; i < RET_RACE_READER_ITERS; i++) {
+    long idx = (long)arg;
     uint16_t seq = (uint16_t)((i * 7 + idx * 13) % RET_RACE_SEQS);
     channel_slot_t out;
     if (channel_find(g_ret_race_chan, seq, &out)) {
@@ -436,9 +432,8 @@ static channel_t *g_fcc_race_chan;
 static _Atomic int g_fcc_race_bad;
 
 static void *fcc_race_writer(void *arg) {
-  uint16_t seq;
   (void)arg;
-  for (seq = 1; seq <= FCC_RACE_APPENDS; seq++) {
+  for (uint16_t seq = 1; seq <= FCC_RACE_APPENDS; seq++) {
     unsigned char payload[16];
     memset(payload, 0, sizeof payload);
     payload[0] = (unsigned char)(seq >> 8);
@@ -451,9 +446,8 @@ static void *fcc_race_writer(void *arg) {
 }
 
 static void *fcc_race_reader(void *arg) {
-  int i;
   (void)arg;
-  for (i = 0; i < FCC_RACE_READER_ITERS; i++) {
+  for (int i = 0; i < FCC_RACE_READER_ITERS; i++) {
     size_t count = channel_cache_count(g_fcc_race_chan);
     rap_cache_entry_t e;
     if (count == 0)
@@ -511,10 +505,9 @@ static channel_t *g_ssrc_race_a, *g_ssrc_race_b;
 static _Atomic int g_ssrc_race_bad;
 
 static void *ssrc_race_writer(void *arg) {
-  unsigned char payload[4] = {0};
-  int i;
   (void)arg;
-  for (i = 0; i < SSRC_RACE_ITERS; i++) {
+  for (int i = 0; i < SSRC_RACE_ITERS; i++) {
+    unsigned char payload[4] = {0};
     channel_store(g_ssrc_race_table, g_ssrc_race_a, 0x10000000u + (uint32_t)(i % SSRC_RACE_SPAN), (uint16_t)i, 0, 0, payload, sizeof payload);
     channel_store(g_ssrc_race_table, g_ssrc_race_b, 0x20000000u + (uint32_t)(i % SSRC_RACE_SPAN), (uint16_t)i, 0, 0, payload, sizeof payload);
   }

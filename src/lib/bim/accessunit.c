@@ -131,8 +131,7 @@ typedef struct {
 
 static int ptext_lookup(void *vctx, const char *crid, bcg_programme_t *pr) {
   ptext_ctx_t *ctx = (ptext_ctx_t *)vctx;
-  int i;
-  for (i = 0; i < ctx->n; i++)
+  for (int i = 0; i < ctx->n; i++)
     if (!strcmp(ctx->arr[i].crid, crid)) {
       bufcpy(pr->title, sizeof pr->title, ctx->arr[i].title);
       bufcpy(pr->desc, sizeof pr->desc, ctx->arr[i].desc);

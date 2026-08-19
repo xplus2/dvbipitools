@@ -16,7 +16,6 @@ size_t bitreader_bits_left(const bitreader_t *br) {
 
 int bitreader_get(bitreader_t *br, int nbits, uint64_t *out) {
   uint64_t v = 0;
-  int i;
   if ((size_t)nbits > bitreader_bits_left(br))
     return -1;
   if (br->bit_pos == 0) {
@@ -26,7 +25,7 @@ int bitreader_get(bitreader_t *br, int nbits, uint64_t *out) {
       nbits -= 8;
     }
   }
-  for (i = 0; i < nbits; i++) {
+  for (int i = 0; i < nbits; i++) {
     unsigned bit = (br->buf[br->byte_pos] >> (7 - br->bit_pos)) & 1;
     v = (v << 1) | bit;
     br->bit_pos++;

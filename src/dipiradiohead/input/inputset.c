@@ -107,12 +107,11 @@ static const retryset_ops_t slot_ops = {
 inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ctxs, input_metrics_t *input_stats) {
   inputset_t *is = calloc(1, sizeof *is);
   void *slot_ctxs[RADIOHEAD_MAX_INPUTS];
-  unsigned i;
 
   if (!is)
     return NULL;
 
-  for (i = 0; i < cfg->n_inputs; i++) {
+  for (unsigned i = 0; i < cfg->n_inputs; i++) {
     is->ctxs[i].uri = cfg->inputs[i].uri;
     is->ctxs[i].insecure = cfg->insecure_tls;
     is->ctxs[i].cb = cb;

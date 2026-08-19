@@ -42,8 +42,7 @@ int log_color_from_string(const char *s, log_color_t *out) {
 }
 
 log_color_t log_color_prescan(int argc, char **argv) {
-  int i;
-  for (i = 1; i < argc; i++) {
+  for (int i = 1; i < argc; i++) {
     const char *v = NULL;
     if (!strcmp(argv[i], "--color") && i + 1 < argc)
       v = argv[i + 1];

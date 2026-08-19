@@ -57,8 +57,7 @@ struct biss_ca_engine {
 };
 
 static void free_receivers(biss_ca_receiver_t *r, size_t n) {
-  size_t i;
-  for (i = 0; i < n; i++)
+  for (size_t i = 0; i < n; i++)
     biss_ca_key_free(r[i].pub);
 }
 
@@ -295,13 +294,13 @@ static void rebuild_ecm(biss_ca_engine_t *e) {
 static void rebuild_emm(biss_ca_engine_t *e) {
   biss_ca_emm_entry_t entries[BISS_CA_ENGINE_MAX_RECEIVERS];
   unsigned char session_data[BISS_CA_SESSION_DATA_LEN];
-  size_t i, n = 0, len;
+  size_t n = 0, len;
 
   if (!biss_ca_build_session_data(e->sk, e->sk_parity, session_data, sizeof session_data)) {
     log_line("biss-ca: EMM rebuild failed (session_data build)");
     return;
   }
-  for (i = 0; i < e->n_receivers; i++) {
+  for (size_t i = 0; i < e->n_receivers; i++) {
     memcpy(entries[n].entitlement_key_id, e->receivers[i].ekid, BISS_CA_EKID_LEN);
     if (biss_ca_rsa_encrypt(e->receivers[i].pub, session_data, sizeof session_data, entries[n].encrypted_session_data) != 0) {
       log_line("biss-ca: RSA-OAEP encrypt failed for one receiver, dropping it this round");
@@ -345,8 +344,7 @@ int biss_ca_engine_emm_due(biss_ca_engine_t *e, double now, unsigned char *out, 
 }
 
 static int ekid_in_set(const biss_ca_receiver_t *set, size_t n, const unsigned char ekid[BISS_CA_EKID_LEN]) {
-  size_t i;
-  for (i = 0; i < n; i++)
+  for (size_t i = 0; i < n; i++)
     if (memcmp(set[i].ekid, ekid, BISS_CA_EKID_LEN) == 0)
       return 1;
   return 0;
@@ -354,7 +352,7 @@ static int ekid_in_set(const biss_ca_receiver_t *set, size_t n, const unsigned c
 
 int biss_ca_engine_reload_receivers(biss_ca_engine_t *e) {
   biss_ca_receiver_t fresh[BISS_CA_ENGINE_MAX_RECEIVERS];
-  size_t n_fresh, i;
+  size_t n_fresh;
   int changed;
 
   n_fresh = load_receivers(e->receivers_dir, fresh, BISS_CA_ENGINE_MAX_RECEIVERS);
@@ -365,7 +363,7 @@ int biss_ca_engine_reload_receivers(biss_ca_engine_t *e) {
 
   changed = (n_fresh != e->n_receivers);
   if (!changed)
-    for (i = 0; i < n_fresh; i++)
+    for (size_t i = 0; i < n_fresh; i++)
       if (!ekid_in_set(e->receivers, e->n_receivers, fresh[i].ekid)) {
         changed = 1;
         break;

@@ -67,10 +67,9 @@ int fragment_decode_program_information(bitreader_t *br, strrepo_reader_t *sr, c
 }
 
 int fragment_encode_schedule(const char *channel_id, const bcg_programme_t *programmes, int count, bitwriter_t *bw, strrepo_writer_t *sw) {
-  int j;
   if (dvb_string_encode(sw, channel_id))
     return -1;
-  for (j = 0; j < count; j++) {
+  for (int j = 0; j < count; j++) {
     const bcg_programme_t *pr = &programmes[j];
     char crid[BCG_ID_LEN * 3 + 64];
     if (strcmp(pr->channel_id, channel_id))
@@ -125,11 +124,10 @@ int fragment_decode_schedule(bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *d
 }
 
 int fragment_encode_service_information(const bcg_channel_t *c, bitwriter_t *bw, strrepo_writer_t *sw) {
-  int j;
   char dtt[64];
   if (dvb_string_encode(sw, c->id))
     return -1;
-  for (j = 0; j < c->name_count; j++) {
+  for (int j = 0; j < c->name_count; j++) {
     if (put_bit(bw, 1))
       return -1;
     if (dvb_string_encode(sw, c->names[j]))

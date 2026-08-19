@@ -34,12 +34,10 @@ void cas_pid_apply(cas_pid_state_t *ps, int have_target, int target_parity, int 
 }
 
 static cas_pid_state_t *find_pid_state(cas_scramble_engine_t *e, unsigned pid) {
-  size_t i;
-
   if (e->last_pid_idx < e->pid_count && e->pid[e->last_pid_idx].pid == pid)
     return &e->pid[e->last_pid_idx];
 
-  for (i = 0; i < e->pid_count; i++)
+  for (size_t i = 0; i < e->pid_count; i++)
     if (e->pid[i].pid == pid) {
       e->last_pid_idx = i;
       return &e->pid[i];
@@ -49,7 +47,7 @@ static cas_pid_state_t *find_pid_state(cas_scramble_engine_t *e, unsigned pid) {
 
 cas_scramble_engine_t *cas_scramble_engine_start(scramble_algo_t algo, const unsigned *pids, size_t pid_count, unsigned flush_pid) {
   cas_scramble_engine_t *e;
-  size_t i, n;
+  size_t n;
 
   e = calloc(1, sizeof *e);
   if (!e)
@@ -60,7 +58,7 @@ cas_scramble_engine_t *cas_scramble_engine_start(scramble_algo_t algo, const uns
     return NULL;
   }
   n = pid_count < CAS_SCRAMBLE_ENGINE_MAX_PIDS ? pid_count : CAS_SCRAMBLE_ENGINE_MAX_PIDS;
-  for (i = 0; i < n; i++)
+  for (size_t i = 0; i < n; i++)
     e->pid[i].pid = pids[i];
   e->pid_count = n;
   e->flush_pid = flush_pid;

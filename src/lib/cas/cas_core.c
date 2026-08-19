@@ -14,8 +14,7 @@
 
 void cas_core_hex_format(const unsigned char *in, size_t len, char *out) {
   static const char digits[] = "0123456789abcdef";
-  size_t i;
-  for (i = 0; i < len; i++) {
+  for (size_t i = 0; i < len; i++) {
     out[2 * i] = digits[in[i] >> 4];
     out[2 * i + 1] = digits[in[i] & 0xF];
   }
@@ -150,11 +149,9 @@ int cas_core_start_biss_dispatch(const cas_biss_cfg_t *cfg, const unsigned *pids
 }
 
 static unsigned pick_free_pid(unsigned start, const unsigned *avoid, size_t avoid_count) {
-  unsigned pid;
-  for (pid = start; pid < 0x1FFF; pid++) {
-    size_t i;
+  for (unsigned pid = start; pid < 0x1FFF; pid++) {
     int collide = 0;
-    for (i = 0; i < avoid_count; i++)
+    for (size_t i = 0; i < avoid_count; i++)
       if (avoid[i] == pid) {
         collide = 1;
         break;

@@ -24,12 +24,11 @@
 
 void write_csvmap(const char *path, const bcg_doc_t *doc) {
   FILE *f = fopen(path, "w");
-  int i;
   if (!f) {
     log_line("cannot open %s for writing", path);
     return;
   }
-  for (i = 0; i < doc->channel_count; i++) {
+  for (int i = 0; i < doc->channel_count; i++) {
     const bcg_channel_t *c = &doc->channels[i];
     if (!c->uri[0])
       continue;

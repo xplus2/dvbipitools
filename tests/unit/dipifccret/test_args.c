@@ -229,12 +229,11 @@ START_TEST(rsi_hostname_too_long_is_rejected) {
   char longname[300];
   char *argv[10];
   config_t cfg;
-  int i;
   memset(longname, 'a', sizeof longname - 1);
   longname[sizeof longname - 1] = '\0';
   {
     char *base[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "--rsi-hostname"};
-    for (i = 0; i < 8; i++)
+    for (int i = 0; i < 8; i++)
       argv[i] = base[i];
   }
   argv[8] = longname;

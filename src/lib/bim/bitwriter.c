@@ -42,8 +42,7 @@ static int push_byte(bitwriter_t *bw, unsigned char b) {
 }
 
 int bitwriter_put(bitwriter_t *bw, uint64_t value, int nbits) {
-  int i;
-  for (i = nbits - 1; i >= 0; i--) {
+  for (int i = nbits - 1; i >= 0; i--) {
     unsigned bit = (unsigned)((value >> i) & 1);
     bw->cur |= bit << (7 - bw->cur_bits);
     bw->cur_bits++;
@@ -74,10 +73,9 @@ static int push_bytes(bitwriter_t *bw, const unsigned char *data, size_t len) {
 }
 
 int bitwriter_put_bytes(bitwriter_t *bw, const unsigned char *data, size_t len) {
-  size_t i;
   if (bw->cur_bits == 0)
     return push_bytes(bw, data, len);
-  for (i = 0; i < len; i++)
+  for (size_t i = 0; i < len; i++)
     if (bitwriter_put(bw, data[i], 8))
       return -1;
   return 0;
@@ -99,10 +97,10 @@ const unsigned char *bitwriter_data(bitwriter_t *bw, size_t *out_len) {
 
 int bitwriter_put_vluimsbf8(bitwriter_t *bw, uint64_t value) {
   int maxgroups = (int)((sizeof(value) * CHAR_BIT + 6) / 7);
-  int ngroups = 1, i;
+  int ngroups = 1;
   while (ngroups < maxgroups && (value >> (7 * ngroups)) != 0)
     ngroups++;
-  for (i = ngroups - 1; i >= 0; i--) {
+  for (int i = ngroups - 1; i >= 0; i--) {
     if (bitwriter_put(bw, i != 0, 1))
       return -1;
     if (bitwriter_put(bw, (value >> (7 * i)) & 0x7F, 7))
@@ -113,10 +111,10 @@ int bitwriter_put_vluimsbf8(bitwriter_t *bw, uint64_t value) {
 
 int bitwriter_put_vluimsbf4(bitwriter_t *bw, uint64_t value) {
   int maxgroups = (int)((sizeof(value) * CHAR_BIT + 3) / 4);
-  int n = 1, i;
+  int n = 1;
   while (n < maxgroups && (value >> (4 * n)) != 0)
     n++;
-  for (i = 0; i < n - 1; i++)
+  for (int i = 0; i < n - 1; i++)
     if (bitwriter_put(bw, 1, 1))
       return -1;
   if (bitwriter_put(bw, 0, 1))

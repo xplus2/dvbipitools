@@ -27,8 +27,7 @@ static void log_unknown_command(const unsigned char *body, size_t buflen, int sl
   static const char hex_nib[] = "0123456789ABCDEF";
   size_t dumplen = buflen + 20 > 32 ? 32 : buflen + 20;
   char hex[32 * 3 + 1];
-  size_t i;
-  for (i = 0; i < dumplen; i++) {
+  for (size_t i = 0; i < dumplen; i++) {
     hex[i * 3] = hex_nib[(body[i] >> 4) & 0xF];
     hex[i * 3 + 1] = hex_nib[body[i] & 0xF];
     hex[i * 3 + 2] = ' ';
@@ -186,7 +185,7 @@ void *accept_main(void *arg) {
 
   while (!atomic_load_explicit(&s->stop, memory_order_relaxed) && !signal_stop_requested()) {
     struct pollfd pfd;
-    int pret, fd, slot, i;
+    int pret, fd, slot;
 
     pfd.fd = s->listen_fd;
     pfd.events = POLLIN;
@@ -203,7 +202,7 @@ void *accept_main(void *arg) {
     }
 
     slot = -1;
-    for (i = 0; i < CS378X_MAX_CONNS; i++) {
+    for (int i = 0; i < CS378X_MAX_CONNS; i++) {
       int expected = 0;
       if (atomic_compare_exchange_strong_explicit(&s->worker_active[i], &expected, 1, memory_order_acq_rel, memory_order_relaxed)) {
         slot = i;

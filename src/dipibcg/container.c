@@ -49,7 +49,7 @@ int container_build(const unsigned char *access_unit, size_t au_len, const unsig
 }
 
 int container_parse(const unsigned char *buf, size_t len, const unsigned char **au, size_t *au_len,  const unsigned char **sr, size_t *sr_len) {
-  unsigned num_structures, i;
+  unsigned num_structures;
   const unsigned char *p;
 
   *au = NULL;
@@ -61,7 +61,7 @@ int container_parse(const unsigned char *buf, size_t len, const unsigned char **
     return -1;
 
   p = buf + 1;
-  for (i = 0; i < num_structures; i++, p += 8) {
+  for (unsigned i = 0; i < num_structures; i++, p += 8) {
     unsigned type = p[0], id = p[1];
     size_t ptr = be24_get(p + 2), length = be24_get(p + 5);
     if (ptr > len || length > len - ptr)

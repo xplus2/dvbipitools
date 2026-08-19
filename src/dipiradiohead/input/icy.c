@@ -81,14 +81,14 @@ static void handle_meta_block(icy_t *c) {
 }
 
 size_t icy_feed(icy_t *c, const unsigned char *in, size_t inlen, unsigned char *out, size_t cap) {
-  size_t i, w = 0;
+  size_t w = 0;
 
   if (c->metaint == 0) {
     size_t n = inlen < cap ? inlen : cap;
     memcpy(out, in, n);
     return n;
   }
-  for (i = 0; i < inlen; i++) {
+  for (size_t i = 0; i < inlen; i++) {
     unsigned char b = in[i];
     switch (c->state) {
       case ST_AUDIO:

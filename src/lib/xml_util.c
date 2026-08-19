@@ -72,8 +72,8 @@ static int decode_numeric_ref(const char *src, size_t n, size_t *ip, char *out, 
 }
 
 static void decode_copy(const char *src, size_t n, char *out, size_t outcap) {
-  size_t i, oi = 0;
-  for (i = 0; i < n && oi + 1 < outcap;) {
+  size_t oi = 0;
+  for (size_t i = 0; i < n && oi + 1 < outcap;) {
     if (!strncmp(src + i, "&amp;", 5)) { out[oi++] = '&'; i += 5; }
     else if (!strncmp(src + i, "&lt;", 4)) { out[oi++] = '<'; i += 4; }
     else if (!strncmp(src + i, "&gt;", 4)) { out[oi++] = '>'; i += 4; }

@@ -72,12 +72,11 @@ void sds_broadcast_close(FILE *f) {
 size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, unsigned char *buf, size_t cap) {
   char *ptr;
   size_t len;
-  int i;
   FILE *f = open_memstream(&ptr, &len);
   if (!f)
     return 0;
   sds_broadcast_open(f, domain, version);
-  for (i = 0; i < count; i++)
+  for (int i = 0; i < count; i++)
     sds_broadcast_item(f, &svcs[i], ret, fcc);
   sds_broadcast_close(f);
   fclose(f);
@@ -93,7 +92,6 @@ size_t sds_build_broadcast(const char *domain, unsigned version, const sds_servi
 size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, const unsigned *extra_payload_ids, int extra_count, unsigned char *buf, size_t cap) {
   char *ptr;
   size_t len;
-  int i;
   FILE *f = open_memstream(&ptr, &len);
   if (!f)
     return 0;
@@ -102,7 +100,7 @@ size_t sds_build_sp(const char *domain, const char *display_name, const char *la
   fprintf(f, "\" Version=\"%u\">\n<Name Language=\"%.3s\">", version, lang);
   xml_escape(f, display_name);
   fprintf(f, "</Name>\n<Offering><Push Address=\"%s\" Port=\"%u\"><PayloadId Id=\"2\"/>", push_addr, push_port);
-  for (i = 0; i < extra_count; i++)
+  for (int i = 0; i < extra_count; i++)
     fprintf(f, "<PayloadId Id=\"%u\"/>", extra_payload_ids[i]);
   fputs("</Push></Offering>\n</ServiceProvider>\n</ServiceProviderDiscovery>\n</ServiceDiscovery>\n", f);
   fclose(f);
@@ -122,19 +120,17 @@ void sds_package_open(FILE *f, const char *domain, unsigned version) {
 }
 
 static const sds_service_t *sds_find_service(const char *name, const sds_service_t *svcs, int svc_count) {
-  int i;
-  for (i = 0; i < svc_count; i++)
+  for (int i = 0; i < svc_count; i++)
     if (!strcmp(svcs[i].name, name))
       return &svcs[i];
   return NULL;
 }
 
 void sds_package_item(FILE *f, const sds_package_t *pkg, const sds_service_t *svcs, int svc_count) {
-  int i;
   fprintf(f, "<Package Id=\"%u\" Visible=\"%s\">\n<PackageName Language=\"%.3s\">", pkg->id, pkg->visible ? "true" : "false", pkg->lang);
   xml_escape(f, pkg->name);
   fputs("</PackageName>\n", f);
-  for (i = 0; i < pkg->service_count; i++) {
+  for (int i = 0; i < pkg->service_count; i++) {
     const sds_service_t *s = sds_find_service(pkg->service_names[i], svcs, svc_count);
     fputs("<Service><TextualID ServiceName=\"", f);
     xml_escape(f, pkg->service_names[i]);
@@ -153,12 +149,11 @@ void sds_package_close(FILE *f) {
 size_t sds_build_package(const char *domain, unsigned version, const sds_package_t *pkgs, int pkg_count, const sds_service_t *svcs, int svc_count, unsigned char *buf, size_t cap) {
   char *ptr;
   size_t len;
-  int i;
   FILE *f = open_memstream(&ptr, &len);
   if (!f)
     return 0;
   sds_package_open(f, domain, version);
-  for (i = 0; i < pkg_count; i++)
+  for (int i = 0; i < pkg_count; i++)
     sds_package_item(f, &pkgs[i], svcs, svc_count);
   sds_package_close(f);
   fclose(f);
@@ -201,12 +196,11 @@ void sds_regionalisation_close(FILE *f) {
 size_t sds_build_regionalisation(const char *domain, unsigned version, const sds_cell_t *cells, int count, unsigned char *buf, size_t cap) {
   char *ptr;
   size_t len;
-  int i;
   FILE *f = open_memstream(&ptr, &len);
   if (!f)
     return 0;
   sds_regionalisation_open(f, domain, version);
-  for (i = 0; i < count; i++)
+  for (int i = 0; i < count; i++)
     sds_regionalisation_item(f, &cells[i]);
   sds_regionalisation_close(f);
   fclose(f);

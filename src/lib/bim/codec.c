@@ -140,8 +140,7 @@ static int split_href(const char *href, char *scheme, size_t scheme_cap, char *t
 /* scans cs_table for scheme match with numeric term, encodes CS shorthand.
    0/-1: encoded (ok/bitwriter error). -2: no such match, caller falls back to string form */
 static int try_cs_encode(bitwriter_t *bw, const char *scheme, const char *term) {
-  size_t i;
-  for (i = 0; i < CS_TABLE_N; i++) {
+  for (size_t i = 0; i < CS_TABLE_N; i++) {
     if (!strcmp(scheme, cs_table[i].uri)) {
       char *endp;
       unsigned long term_id = strtoul(term, &endp, 10);
@@ -178,7 +177,6 @@ int dvb_controlledterm_decode(bitreader_t *br, strrepo_reader_t *sr, char *out, 
     return dvb_string_decode(sr, out, outcap);
   {
     uint64_t grouping_flag, scheme_id, term_id;
-    size_t i;
     if (bitreader_get(br, 1, &grouping_flag))
       return -1;
     if (grouping_flag) /* ClassificationSchemeGroupID/-Index form, not supported */
@@ -187,7 +185,7 @@ int dvb_controlledterm_decode(bitreader_t *br, strrepo_reader_t *sr, char *out, 
       return -1;
     if (bitreader_get_vluimsbf8(br, &term_id))
       return -1;
-    for (i = 0; i < CS_TABLE_N; i++)
+    for (size_t i = 0; i < CS_TABLE_N; i++)
       if (cs_table[i].id == scheme_id) {
         if ((size_t)snprintf(out, outcap, "%s:%lu", cs_table[i].uri, (unsigned long)term_id) >= outcap)
           return -1;

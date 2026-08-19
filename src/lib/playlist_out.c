@@ -47,8 +47,7 @@ void playlist_out_m3u_item(FILE *f, const char *name, const char *uri, unsigned 
 }
 
 void playlist_out_csv_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid) {
-  const char *p;
-  for (p = name; *p; p++)
+  for (const char *p = name; *p; p++)
     if (*p != ',')
       fputc(*p, f);
   fprintf(f, ",%s,%u,%u,%u\n", uri, tsid, onid, sid);

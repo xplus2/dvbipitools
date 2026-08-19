@@ -164,8 +164,7 @@ static void *capture_connect_thread(void *arg) {
 }
 
 static int drive_until_sent(rtmpout_t *o, flv_tag_type_t type, const unsigned char *data, size_t len, int max_iters) {
-  int i;
-  for (i = 0; i < max_iters; i++) {
+  for (int i = 0; i < max_iters; i++) {
     if (0 == rtmpout_write(o, type, 0, data, len))
       return 1;
     usleep(5000);
@@ -228,7 +227,6 @@ START_TEST(rtmpout_holds_back_interframe_until_keyframe) {
   rtmpout_t *o;
   unsigned char interframe[8] = {0x27, 0x01, 0x00, 0x00, 0x00, 'I', 'N', 'T'}; /* FrameType=inter, held back pre-keyframe */
   unsigned char keyframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'K', 'E', 'Y'};
-  int i;
 
   memset(&srv, 0, sizeof srv);
   srv.listen_fd = listen_fd;
@@ -241,7 +239,7 @@ START_TEST(rtmpout_holds_back_interframe_until_keyframe) {
   ck_assert_ptr_nonnull(o);
 
   /* held-back frames also return 0, not -1: drive_until_sent's success check doesn't apply here */
-  for (i = 0; i < 50; i++) {
+  for (int i = 0; i < 50; i++) {
     rtmpout_write(o, FLV_TAG_VIDEO, 0, interframe, sizeof interframe);
     usleep(5000);
   }
@@ -265,7 +263,6 @@ START_TEST(rtmpout_sends_adobe_authmod_for_userinfo_uri) {
   rtmpout_cfg_t cfg;
   rtmpout_t *o;
   unsigned char keyframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'K', 'E', 'Y'};
-  int i;
 
   memset(&srv, 0, sizeof srv);
   srv.listen_fd = listen_fd;
@@ -277,7 +274,7 @@ START_TEST(rtmpout_sends_adobe_authmod_for_userinfo_uri) {
   o = rtmpout_open(&cfg);
   ck_assert_ptr_nonnull(o);
 
-  for (i = 0; i < 200; i++) {
+  for (int i = 0; i < 200; i++) {
     rtmpout_write(o, FLV_TAG_VIDEO, 0, keyframe, sizeof keyframe);
     usleep(5000);
   }

@@ -105,7 +105,6 @@ static void handle_biss_ca_ecm_section(loop_ctx_t *lc) {
 /* stops writing after first fail within one flush. once emit_failed is set, later packets (same batch) must not still land on disk/mux */
 static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
   loop_ctx_t *lc = ctx;
-  int i;
   if (lc->emit_failed)
     return;
   if (lc->mkv) {
@@ -115,7 +114,7 @@ static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
       return;
     }
   } else {
-    for (i = 0; i < lc->n_outfd; i++)
+    for (int i = 0; i < lc->n_outfd; i++)
       if (write(lc->outfd[i], pkt, 188) != 188) {
         lc->emit_failed = 1;
         return;

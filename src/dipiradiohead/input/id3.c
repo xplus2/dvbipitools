@@ -80,13 +80,13 @@ static unsigned rd16(const unsigned char *p, int le) {
 
 /* ID3v2 UTF-16 (BOM per enc 0x01, fixed BE per enc 0x02) -> UTF-8, surrogate pairs included */
 static void utf16_to_utf8(const unsigned char *body, size_t len, char *out, size_t cap, size_t *o) {
-  size_t i, start = 0;
+  size_t start = 0;
   int le = 0;
 
   if (len >= 2 && body[0] == 0xFF && body[1] == 0xFE) { le = 1; start = 2; }
   else if (len >= 2 && body[0] == 0xFE && body[1] == 0xFF) { start = 2; }
 
-  for (i = start; i + 1 < len; i += 2) {
+  for (size_t i = start; i + 1 < len; i += 2) {
     unsigned unit = rd16(body + i, le);
     unsigned cp;
     size_t n;
@@ -115,8 +115,7 @@ static void utf16_to_utf8(const unsigned char *body, size_t len, char *out, size
 
 /* Latin 1/15: every byte is its own code point U+0000-U+00FF, 1:1 with Unicode */
 static void latin1_to_utf8(const unsigned char *body, size_t len, char *out, size_t cap, size_t *o) {
-  size_t i;
-  for (i = 0; i < len; i++) {
+  for (size_t i = 0; i < len; i++) {
     size_t n;
     if (body[i] == 0)
       break;

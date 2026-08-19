@@ -126,9 +126,8 @@ static int vendor_alive(cas_group_vendor_t *v) {
 }
 
 int cas_group_fallback_active_calc(size_t vendor_count, const int *required, const int *alive) {
-  size_t i;
   int any_alive = 0;
-  for (i = 0; i < vendor_count; i++) {
+  for (size_t i = 0; i < vendor_count; i++) {
     if (required[i] && !alive[i])
       return 1;
     if (alive[i])
@@ -138,8 +137,7 @@ int cas_group_fallback_active_calc(size_t vendor_count, const int *required, con
 }
 
 static int cas_group_any_alive(cas_group_t *g) {
-  size_t i;
-  for (i = 0; i < g->cfg.vendor_count; i++)
+  for (size_t i = 0; i < g->cfg.vendor_count; i++)
     if (vendor_alive(&g->vendors[i]))
       return 1;
   return 0;
@@ -147,8 +145,7 @@ static int cas_group_any_alive(cas_group_t *g) {
 
 static int cas_group_fallback_active(cas_group_t *g) {
   int required[CAS_GROUP_MAX_VENDORS], alive[CAS_GROUP_MAX_VENDORS];
-  size_t i;
-  for (i = 0; i < g->cfg.vendor_count; i++) {
+  for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     required[i] = g->vendors[i].required;
     alive[i] = vendor_alive(&g->vendors[i]);
   }
@@ -156,8 +153,7 @@ static int cas_group_fallback_active(cas_group_t *g) {
 }
 
 static void cas_lazy_start(cas_group_t *g) {
-  size_t i;
-  for (i = 0; i < g->cfg.vendor_count; i++) {
+  for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     cas_group_vendor_t *v = &g->vendors[i];
     ecmg_client_cfg_t ecfg;
     emmg_server_cfg_t mcfg;
@@ -202,7 +198,6 @@ static void cas_lazy_start(cas_group_t *g) {
 
 cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
   cas_group_t *g;
-  size_t i;
   unsigned lm;
 
   g = calloc(1, sizeof *g);
@@ -222,7 +217,7 @@ cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
     return NULL;
   }
   pthread_mutex_init(&g->cw_lock, NULL);
-  for (i = 0; i < cfg->vendor_count; i++) {
+  for (size_t i = 0; i < cfg->vendor_count; i++) {
     g->vendors[i].ca_system_id = cfg->vendors[i].super_cas_id >> 16;
     g->vendors[i].ecm_pid = cfg->vendors[i].ecm_pid;
     g->vendors[i].emm_pid = cfg->vendors[i].emm_pid;
@@ -240,10 +235,9 @@ cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
 }
 
 void cas_group_stop(cas_group_t *g) {
-  size_t i;
   if (!g)
     return;
-  for (i = 0; i < g->cfg.vendor_count; i++) {
+  for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     if (g->vendors[i].ecmg)
       ecmg_client_stop(g->vendors[i].ecmg);
     if (g->vendors[i].emmg)
@@ -295,12 +289,11 @@ void cas_group_scramble_packet(cas_group_t *g, unsigned out_pid, double now, uns
   int have_target = 0;
   int target_parity;
   int cw_valid;
-  size_t i;
 
   if (g->have_clock)
     refresh_group_cw(g, emit, ctx);
 
-  for (i = 0; i < g->cfg.vendor_count; i++) {
+  for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     cas_group_vendor_t *v = &g->vendors[i];
     if (vendor_alive(v) && ecmg_client_ecm_epoch(v->ecmg) != 0) {
       have_target = 1;
@@ -320,8 +313,7 @@ void cas_group_flush(cas_group_t *g, scrambler_emit_cb emit, void *ctx) {
 
 size_t cas_group_prog_desc(cas_group_t *g, unsigned char *out, size_t cap) {
   size_t total = 0;
-  size_t i;
-  for (i = 0; i < g->cfg.vendor_count; i++) {
+  for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     size_t n = cadescbuild_ca_descriptor(g->vendors[i].ca_system_id, g->vendors[i].ecm_pid, out + total, cap - total);
     if (!n)
       return 0;
@@ -339,8 +331,7 @@ size_t cas_group_prog_desc(cas_group_t *g, unsigned char *out, size_t cap) {
 size_t cas_group_build_cat(cas_group_t *g, unsigned char *out, size_t cap) {
   unsigned char desc[CAS_GROUP_MAX_VENDORS * 16];
   size_t total = 0;
-  size_t i;
-  for (i = 0; i < g->cfg.vendor_count; i++) {
+  for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     size_t n = cadescbuild_ca_descriptor(g->vendors[i].ca_system_id, g->vendors[i].emm_pid, desc + total, sizeof desc - total);
     if (!n)
       return 0;

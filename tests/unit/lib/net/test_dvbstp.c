@@ -310,10 +310,9 @@ START_TEST(reasm_feed_evicts_oldest_slot_once_all_slots_are_busy) {
   dvbstp_reasm_t *r = dvbstp_reasm_new();
   const unsigned char *out_data;
   size_t out_len;
-  int i;
 
   /* fill all 8 slots with incomplete two-section segments (segment_id 0..7) */
-  for (i = 0; i < 8; i++) {
+  for (int i = 0; i < 8; i++) {
     unsigned char pkt[12 + 1];
     size_t h = build_header(pkt, 1, (unsigned)i, 1, 0, 1, 0, 0, 0, 0);
     pkt[h] = 'x';

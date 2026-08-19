@@ -24,11 +24,11 @@ struct ts_filter {
 /* audio ES not selected by -a */
 static int audio_dropped(const ts_filter_t *f, unsigned pid) {
   const psi_es_t *es;
-  int count, k;
+  int count;
   if (f->audio_all)
     return 0;
   es = psi_es(f->psi, &count);
-  for (k = 0; k < count; k++)
+  for (int k = 0; k < count; k++)
     if (es[k].pid == pid && es[k].cls == PID_AUDIO)
       return es[k].audio_index != (int)f->audio_track;
   return 0;

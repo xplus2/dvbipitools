@@ -29,16 +29,15 @@ static void capture_cb(void *ctx, const unsigned char *pkt) {
 }
 
 static int saw_pid(unsigned pid) {
-  int i;
-  for (i = 0; i < g_count && i < MAX_SEEN; i++)
+  for (int i = 0; i < g_count && i < MAX_SEEN; i++)
     if (g_pids[i] == pid)
       return 1;
   return 0;
 }
 
 static int count_pid(unsigned pid) {
-  int i, n = 0;
-  for (i = 0; i < g_count && i < MAX_SEEN; i++)
+  int n = 0;
+  for (int i = 0; i < g_count && i < MAX_SEEN; i++)
     if (g_pids[i] == pid)
       n++;
   return n;
@@ -47,8 +46,7 @@ static int count_pid(unsigned pid) {
 /* first captured packet for pid, NULL if none. pointer_field(1) + section starts at pkt[4] -
    same layout wrap_ts_packet() below produces */
 static const unsigned char *first_pkt(unsigned pid) {
-  int i;
-  for (i = 0; i < g_count && i < MAX_SEEN; i++)
+  for (int i = 0; i < g_count && i < MAX_SEEN; i++)
     if (g_pids[i] == pid)
       return g_pkts[i];
   return NULL;
@@ -66,14 +64,13 @@ static unsigned sdt_version(const unsigned char *pkt) {
 
 /* wraps one PSI section into a single 188-byte TS packet, pusi=1, pointer=0 */
 static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  size_t i;
   pkt[0] = 0x47;
   pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
   pkt[2] = (unsigned char)pid;
   pkt[3] = 0x10;
   pkt[4] = 0x00;
   memcpy(pkt + 5, section, slen);
-  for (i = 5 + slen; i < 188; i++)
+  for (size_t i = 5 + slen; i < 188; i++)
     pkt[i] = 0xFF;
 }
 

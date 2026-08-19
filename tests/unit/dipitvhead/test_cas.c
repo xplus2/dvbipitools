@@ -223,10 +223,9 @@ START_TEST(resolve_pids_exceeds_old_16_limit) {
   psi_es_t pe[20];
   out_es_t es[20];
   unsigned out[CAS_CORE_MAX_PIDS];
-  int i;
   memset(&cfg, 0, sizeof cfg);
   cfg.cas_pids_audio = 1;
-  for (i = 0; i < 20; i++)
+  for (int i = 0; i < 20; i++)
     set_es(&es[i], &pe[i], (unsigned)(0x0100 + i), PID_AUDIO);
   ck_assert_uint_eq(cas_resolve_pids(&cfg, es, 20, out, CAS_CORE_MAX_PIDS), 20);
 }
@@ -292,11 +291,10 @@ START_TEST(resolve_pids_multi_caps_across_programs) {
   const out_es_t *es_lists[2];
   int es_counts[2];
   unsigned out[4];
-  int i;
 
   memset(&cfg, 0, sizeof cfg);
   cfg.cas_pids_audio = 1;
-  for (i = 0; i < 3; i++) {
+  for (int i = 0; i < 3; i++) {
     set_es(&es0[i], &pe0[i], (unsigned)(0x1500 + i), PID_AUDIO);
     set_es(&es1[i], &pe1[i], (unsigned)(0x1600 + i), PID_AUDIO);
   }

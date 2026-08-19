@@ -27,22 +27,20 @@ static void capture_cb(void *ctx, const unsigned char *pkt) {
 }
 
 static int saw_pid(unsigned pid) {
-  int i;
-  for (i = 0; i < g_count && i < MAX_SEEN; i++)
+  for (int i = 0; i < g_count && i < MAX_SEEN; i++)
     if (g_pids[i] == pid)
       return 1;
   return 0;
 }
 
 static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  size_t i;
   pkt[0] = 0x47;
   pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
   pkt[2] = (unsigned char)pid;
   pkt[3] = 0x10;
   pkt[4] = 0x00;
   memcpy(pkt + 5, section, slen);
-  for (i = 5 + slen; i < 188; i++)
+  for (size_t i = 5 + slen; i < 188; i++)
     pkt[i] = 0xFF;
 }
 
@@ -130,7 +128,7 @@ START_TEST(remux_forwards_mapped_es_and_sends_pat_pmt_on_first_feed) {
   out_program_pids_t pids;
   unsigned char pkt[188];
   ts_metrics_t tsm;
-  int i, video_idx = -1;
+  int video_idx = -1;
 
   base_cfg(&cfg);
   base_input(&input);
@@ -156,7 +154,7 @@ START_TEST(remux_forwards_mapped_es_and_sends_pat_pmt_on_first_feed) {
   ck_assert_uint_eq(tsm.psi_errors_total[PSI_TABLE_PAT], 0u);
   ck_assert_uint_eq(tsm.psi_errors_total[PSI_TABLE_PMT], 0u);
 
-  for (i = 0; i < g_count && i < MAX_SEEN; i++)
+  for (int i = 0; i < g_count && i < MAX_SEEN; i++)
     if (g_pids[i] == 0x0100)
       video_idx = i;
   ck_assert_int_ge(video_idx, 0);
@@ -174,7 +172,7 @@ START_TEST(remux_es_exposes_output_pid_mapping) {
   remux_t *r;
   out_program_pids_t pids;
   const out_es_t *es;
-  int count, i, saw_video = 0, saw_audio = 0;
+  int count, saw_video = 0, saw_audio = 0;
 
   base_cfg(&cfg);
   base_input(&input);
@@ -184,7 +182,7 @@ START_TEST(remux_es_exposes_output_pid_mapping) {
 
   es = remux_es(r, &count);
   ck_assert_int_eq(count, 2);
-  for (i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     if (es[i].src->cls == PID_VIDEO) {
       ck_assert_uint_eq(es[i].out_pid, pids.video_pid);
       ck_assert_uint_eq(es[i].in_pid, 0x0101);
@@ -683,12 +681,12 @@ static void eit_capture_cb(void *ctx, const unsigned char *pkt) {
 
 /* service_id must match build_discovery_psi()'s 101 to pass remux's filter */
 static size_t build_fake_eit_section(unsigned char *section_out, unsigned service_id, unsigned char section_number, size_t body_len) {
-  size_t slen = 3 + body_len, i;
+  size_t slen = 3 + body_len;
 
   section_out[0] = 0x4E; /* EIT actual_transport_stream, present/following */
   section_out[1] = (unsigned char)(0xF0 | ((body_len >> 8) & 0x0F));
   section_out[2] = (unsigned char)body_len;
-  for (i = 0; i < body_len; i++)
+  for (size_t i = 0; i < body_len; i++)
     section_out[3 + i] = (unsigned char)((0xA0 + i) & 0xFF);
   section_out[3] = (unsigned char)(service_id >> 8);
   section_out[4] = (unsigned char)service_id;
@@ -765,7 +763,7 @@ START_TEST(remux_non_standalone_eit_spans_ticks_when_bounded) {
   out_program_pids_t pids;
   unsigned char pkt[2][188], section[300];
   unsigned char cc = 0;
-  size_t slen, i;
+  size_t slen;
 
   base_cfg(&cfg);
   base_input(&input);
@@ -787,7 +785,7 @@ START_TEST(remux_non_standalone_eit_spans_ticks_when_bounded) {
   pkt[1][3] = 0x10;
   memcpy(pkt[1] + 4, section + 183, slen - 183);
 
-  for (i = 0; i < 2; i++)
+  for (size_t i = 0; i < 2; i++)
     remux_feed(r, 0.0, pkt[i], capture_cb, NULL, NULL);
   ck_assert_int_eq(remux_eit_pending(r), 1);
 
@@ -836,7 +834,6 @@ START_TEST(remux_non_standalone_eit_queue_full_counts_drops) {
   out_program_pids_t pids;
   unsigned char pkt[188], section[40];
   ts_metrics_t tsm;
-  int i;
 
   base_cfg(&cfg);
   base_input(&input);
@@ -846,7 +843,7 @@ START_TEST(remux_non_standalone_eit_queue_full_counts_drops) {
   memset(&tsm, 0, sizeof tsm);
 
   /* EIT_QUEUE_CAP is 16: 16 distinct section_numbers fill it, the 17th must be dropped */
-  for (i = 0; i < 17; i++) {
+  for (int i = 0; i < 17; i++) {
     build_fake_eit_section(section, 101, (unsigned char)i, 20);
     wrap_eit_packet(pkt, section, 23);
     remux_feed(r, 0.0, pkt, capture_cb, NULL, &tsm);

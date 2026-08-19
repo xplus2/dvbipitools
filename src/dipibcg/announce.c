@@ -60,8 +60,7 @@ typedef struct {
    index stays stable for seen[] mark */
 static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *doc, const bcg_doc_t *windowed, const bcg_metrics_t *bm) {
   metrics_writer_t w;
-  unsigned r;
-  int i, services_with_events = 0;
+  int services_with_events = 0;
   long sched_start = 0, sched_end = 0;
   int have_sched = 0;
   char *seen;
@@ -73,12 +72,12 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *do
 
   metrics_writer_put(&w, METRICS_ID_BCG_SOURCES_CONFIGURED, NULL, 1);
   metrics_writer_put(&w, METRICS_ID_BCG_SOURCES_UP, NULL, bm->sources_up ? 1 : 0);
-  for (r = 0; r < NET_ERR_COUNT; r++)
+  for (unsigned r = 0; r < NET_ERR_COUNT; r++)
     metrics_writer_put(&w, METRICS_ID_BCG_SOURCE_ERRORS_TOTAL, net_err_reason_name((net_err_reason_t)r), bm->source_errors_total[r]);
   metrics_writer_put(&w, METRICS_ID_BCG_SERVICES, NULL, (uint64_t)doc->channel_count);
 
   seen = windowed->channel_count > 0 ? calloc((size_t)windowed->channel_count, 1) : NULL;
-  for (i = 0; i < windowed->programme_count; i++) {
+  for (int i = 0; i < windowed->programme_count; i++) {
     const bcg_programme_t *pr = &windowed->programmes[i];
     const bcg_channel_t *c = bcg_find_channel(windowed, pr->channel_id);
     long s, e;
@@ -148,7 +147,6 @@ int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long wind
 int load_doc(const config_t *cfg, bcg_doc_t *out) {
   mapping_t map;
   FILE *in;
-  int i;
 
   in = strcmp(cfg->input_path, "-") ? fopen(cfg->input_path, "r") : stdin;
   if (!in) {
@@ -169,7 +167,7 @@ int load_doc(const config_t *cfg, bcg_doc_t *out) {
     bcg_doc_free(out);
     return -1;
   }
-  for (i = 0; i < out->channel_count; i++) {
+  for (int i = 0; i < out->channel_count; i++) {
     bcg_channel_t *c = &out->channels[i];
     char uri[BCG_ID_LEN];
     unsigned tsid, onid, sid;

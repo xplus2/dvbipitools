@@ -383,7 +383,6 @@ START_TEST(emmg_server_queue_holds_more_than_old_64_cap) {
   unsigned char msg[512], payload[512];
   simulcrypt_hdr_t hdr;
   size_t n;
-  int i;
   unsigned char got[64];
   size_t got_len;
   struct timespec ts;
@@ -403,7 +402,7 @@ START_TEST(emmg_server_queue_holds_more_than_old_64_cap) {
   fake_read_reply(fd, &hdr, payload, sizeof payload);
 
   /* old cap was 64 - push 65 without draining, first one must survive */
-  for (i = 0; i < 65; i++) {
+  for (int i = 0; i < 65; i++) {
     unsigned char dg[1];
     dg[0] = (unsigned char)i;
     n = fake_build_data_provision(msg, sizeof msg, 3, dg, sizeof dg);

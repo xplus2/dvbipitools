@@ -264,7 +264,6 @@ START_TEST(server_stop_reaps_all_max_conns_in_mixed_states) {
   double start, elapsed;
   unsigned port = test_free_port();
   struct timespec settle = {0, 100L * 1000000L};
-  int i;
 
   memset(&cfg, 0, sizeof cfg);
   cfg.port = port;
@@ -295,7 +294,7 @@ START_TEST(server_stop_reaps_all_max_conns_in_mixed_states) {
   fds[1] = partial_fd;
   fds[2] = slow_fd1;
   fds[3] = slow_fd2;
-  for (i = 0; i < 4; i++) {
+  for (int i = 0; i < 4; i++) {
     assert_closed_by_server(fds[i]);
     close(fds[i]);
   }

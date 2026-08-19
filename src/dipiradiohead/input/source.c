@@ -140,10 +140,9 @@ static source_t *build_source(http_t *h, const unsigned char *sniff, size_t got,
 
 source_t *source_open(const char *uri, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out) {
   char cur_uri[2048];
-  int hops;
 
   bufcpy(cur_uri, sizeof cur_uri, uri);
-  for (hops = 0; hops < SRC_MAX_HOPS; hops++) {
+  for (int hops = 0; hops < SRC_MAX_HOPS; hops++) {
     http_url_t u;
     http_t *h;
     unsigned char sniff[SRC_SNIFF_CAP];

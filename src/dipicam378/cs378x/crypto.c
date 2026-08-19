@@ -8,11 +8,9 @@
 static uint32_t crc32_table[256];
 
 void cs378x_crc32_init_table(void) {
-  uint32_t c;
-  int n, k;
-  for (n = 0; n < 256; n++) {
-    c = (uint32_t)n;
-    for (k = 0; k < 8; k++)
+  for (int n = 0; n < 256; n++) {
+    uint32_t c = (uint32_t)n;
+    for (int k = 0; k < 8; k++)
       c = (c & 1) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1);
     crc32_table[n] = c;
   }
@@ -21,8 +19,7 @@ void cs378x_crc32_init_table(void) {
 /* zlib-standard CRC-32 (reflected, poly 0xEDB88320) */
 uint32_t cs378x_crc32(const unsigned char *buf, size_t len) {
   uint32_t crc = 0xFFFFFFFFu;
-  size_t i;
-  for (i = 0; i < len; i++)
+  for (size_t i = 0; i < len; i++)
     crc = crc32_table[(crc ^ buf[i]) & 0xFF] ^ (crc >> 8);
   return crc ^ 0xFFFFFFFFu;
 }

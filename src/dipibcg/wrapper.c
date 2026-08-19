@@ -55,7 +55,6 @@ int wrapper_build(const unsigned char *container, size_t container_len, int want
 
 int wrapper_parse(const unsigned char *data, size_t len, unsigned char **out, size_t *out_len) {
   unsigned method;
-  size_t body_len;
   unsigned char *buf;
 
   if (len < 1)
@@ -63,7 +62,7 @@ int wrapper_parse(const unsigned char *data, size_t len, unsigned char **out, si
   method = data[0];
 
   if (method == WRAPPER_METHOD_NONE) {
-    body_len = len - 1;
+    size_t body_len = len - 1;
     buf = malloc(body_len ? body_len : 1);
     if (!buf)
       return -1;
