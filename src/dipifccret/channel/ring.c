@@ -87,7 +87,7 @@ void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, unsigne
 
 int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out) {
   const ret_ring_entry_t *slot;
-  uint64_t words[RET_PAYLOAD_WORDS];
+  uint64_t words[RET_PAYLOAD_WORDS] = {0};
 
   if (c->ring_size == 0)
     return 0;
@@ -168,7 +168,7 @@ int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out) 
   const fcc_ring_entry_t *ring = (const fcc_ring_entry_t *)c->cache.entries;
   uint64_t wc, rwc, avail, start, abs_pos;
   const fcc_ring_entry_t *slot;
-  uint64_t words[FCC_PAYLOAD_WORDS];
+  uint64_t words[FCC_PAYLOAD_WORDS] = {0};
 
   if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire))
     return 0;

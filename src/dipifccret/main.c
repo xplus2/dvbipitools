@@ -417,7 +417,7 @@ static void *pacer_main(void *arg) {
         unsigned g1 = atomic_load_explicit(&slot->gen, memory_order_acquire);
         unsigned g2;
         int in_use;
-        uint64_t words[BURST_ADDR_WORDS];
+        uint64_t words[BURST_ADDR_WORDS] = {0};
         int fd = 0;
         burst_t *b = NULL;
         socklen_t addrlen = 0;

@@ -57,7 +57,7 @@ static int sockaddr_eq(const struct sockaddr_storage *a, socklen_t alen, const s
 
 /* plain sockaddr_storage from slot's atomic words */
 static void slot_read_addr(const burst_slot_t *s, struct sockaddr_storage *out) {
-  uint64_t words[BURST_ADDR_WORDS];
+  uint64_t words[BURST_ADDR_WORDS] = {0};
   for (size_t w = 0; w < BURST_ADDR_WORDS; w++)
     words[w] = atomic_load_explicit(&s->addr_words[w], memory_order_relaxed);
   memcpy(out, words, sizeof *out);

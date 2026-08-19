@@ -471,7 +471,7 @@ START_TEST(start_under_concurrent_exhaustion_admits_exactly_cap_sessions) {
   for (i = 0; i < (int)t->cap; i++) {
     const struct sockaddr_in *sin;
     struct sockaddr_storage sa;
-    uint64_t words[BURST_ADDR_WORDS];
+    uint64_t words[BURST_ADDR_WORDS] = {0};
     unsigned port;
     size_t j;
 
