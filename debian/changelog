@@ -30,6 +30,7 @@ dvbipitools (2.3.0-1) unstable; urgency=medium
   * man pages
   * marged port of dipirec-style --strip to dipitvhead
   * udpxy inputs replaced by generic http(s) tspush_client
+  * OpenATV opkg .ipk packaging
  -- dvbipitools authors <unspecified@example.com>  Thu, 20 Aug 2026 00:00:00 +0200
 
 dvbipitools (2.2.0-1) unstable; urgency=medium

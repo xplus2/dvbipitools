@@ -3,6 +3,7 @@
 
 if (DVBIPITOOLS_STATIC)
     set(OPENSSL_USE_STATIC_LIBS TRUE)
+    set(ATOMIC_LIB atomic)
 endif ()
 find_package(OpenSSL)
 
@@ -81,7 +82,7 @@ if (OpenSSL_FOUND)
         ../lib/cas/biss/ca_sections.c
         ${CSA2_SRC})
 
-    target_link_libraries(dipidescramble PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(dipidescramble PRIVATE OpenSSL::SSL OpenSSL::Crypto ${ATOMIC_LIB})
 
     if (DIPIDESCRAMBLE_CSA)
         target_link_libraries(dipidescramble PRIVATE ${CMAKE_DL_LIBS})

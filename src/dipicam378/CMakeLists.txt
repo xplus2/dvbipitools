@@ -3,6 +3,7 @@
 
 if (DVBIPITOOLS_STATIC)
     set(OPENSSL_USE_STATIC_LIBS TRUE)
+    set(ATOMIC_LIB atomic)
 endif ()
 find_package(OpenSSL)
 
@@ -22,7 +23,7 @@ if (OpenSSL_FOUND)
         ../lib/signal.c
         ../lib/secure_zero.c)
 
-    target_link_libraries(dipicam378 PRIVATE OpenSSL::Crypto)
+    target_link_libraries(dipicam378 PRIVATE OpenSSL::Crypto ${ATOMIC_LIB})
 
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)

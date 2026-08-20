@@ -1,0 +1,169 @@
+name: OpenATV opkg package
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - opkgarch: mipsel
+            dpkgarch: mipsel
+            triplet: mipsel-linux-gnu
+            sysproc: mips
+            crosspkg: crossbuild-essential-mipsel
+            mesoncpu: mips
+            container: debian:bookworm
+          - opkgarch: armv7ahf
+            dpkgarch: armhf
+            triplet: arm-linux-gnueabihf
+            sysproc: arm
+            crosspkg: crossbuild-essential-armhf
+            mesoncpu: arm
+          - opkgarch: aarch64
+            dpkgarch: arm64
+            triplet: aarch64-linux-gnu
+            sysproc: aarch64
+            crosspkg: crossbuild-essential-arm64
+            mesoncpu: aarch64
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+    - name: build dependencies (ubuntu ports arch)
+      if: matrix.container == ''
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ${{ matrix.crosspkg }}
+        sudo dpkg --add-architecture ${{ matrix.dpkgarch }}
+        CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+        {
+          echo "deb [arch=${{ matrix.dpkgarch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME main universe restricted multiverse"
+          echo "deb [arch=${{ matrix.dpkgarch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME-updates main universe restricted multiverse"
+          echo "deb [arch=${{ matrix.dpkgarch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME-security main universe restricted multiverse"
+        } | sudo tee /etc/apt/sources.list.d/ports-${{ matrix.dpkgarch }}.list
+        sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/ports-${{ matrix.dpkgarch }}.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
+        sudo apt-get install -y libssl-dev:${{ matrix.dpkgarch }}
+    - name: build librist (static, ubuntu ports arch)
+      if: matrix.container == ''
+      run: |
+        sudo apt-get install -y meson ninja-build libmbedtls-dev libmbedtls-dev:${{ matrix.dpkgarch }}
+        curl -sL "https://code.videolan.org/rist/librist/-/archive/v0.2.20/librist-v0.2.20.tar.gz" | tar xz -C /tmp
+        MESON_ARGS="--default-library=static --libdir=lib --prefix=${{ github.workspace }}/librist-static -Dbuiltin_cjson=true -Duse_mbedtls=true -Dbuiltin_mbedtls=false -Dtest=false -Dbuilt_tools=false"
+        cat > /tmp/librist-cross.ini <<EOF
+        [binaries]
+        c = '${{ matrix.triplet }}-gcc'
+        ar = '${{ matrix.triplet }}-ar'
+        strip = '${{ matrix.triplet }}-strip'
+        pkg-config = 'pkg-config'
+
+        [host_machine]
+        system = 'linux'
+        cpu_family = '${{ matrix.mesoncpu }}'
+        cpu = '${{ matrix.sysproc }}'
+        endian = 'little'
+        EOF
+        MESON_ARGS="$MESON_ARGS --cross-file /tmp/librist-cross.ini"
+        meson setup /tmp/librist-build /tmp/librist-v0.2.20 $MESON_ARGS
+        ninja -C /tmp/librist-build install
+    - name: configure (ubuntu ports arch)
+      if: matrix.container == ''
+      run: |
+        CROSS_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_LIBRARY_ARCHITECTURE=${{ matrix.triplet }}"
+        TLS_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a"
+        export PKG_CONFIG_PATH="${{ github.workspace }}/librist-static/lib/pkgconfig:$PKG_CONFIG_PATH"
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS $TLS_ARGS
+    - name: make (ubuntu ports arch)
+      if: matrix.container == ''
+      run: cmake --build ${{github.workspace}}/build --config Release
+
+    - name: build in container (debian bookworm, mipsel)
+      if: matrix.container != ''
+      run: |
+        PARENT="$(dirname "${{ github.workspace }}")"
+        NAME="$(basename "${{ github.workspace }}")"
+        cat > /tmp/mipsel-build.sh <<'BUILDSCRIPT'
+        set -ex
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y build-essential cmake curl meson ninja-build ${{ matrix.crosspkg }} libmbedtls-dev
+        dpkg --add-architecture ${{ matrix.dpkgarch }}
+        apt-get update
+        apt-get install -y libssl-dev:${{ matrix.dpkgarch }} libmbedtls-dev:${{ matrix.dpkgarch }}
+        curl -sL "https://code.videolan.org/rist/librist/-/archive/v0.2.20/librist-v0.2.20.tar.gz" | tar xz -C /tmp
+        cat > /tmp/librist-cross.ini <<EOF
+        [binaries]
+        c = '${{ matrix.triplet }}-gcc'
+        ar = '${{ matrix.triplet }}-ar'
+        strip = '${{ matrix.triplet }}-strip'
+        pkg-config = 'pkg-config'
+
+        [host_machine]
+        system = 'linux'
+        cpu_family = '${{ matrix.mesoncpu }}'
+        cpu = '${{ matrix.sysproc }}'
+        endian = 'little'
+        EOF
+        meson setup /tmp/librist-build /tmp/librist-v0.2.20 --default-library=static --libdir=lib --prefix=/tmp/librist-static -Dbuiltin_cjson=true -Duse_mbedtls=true -Dbuiltin_mbedtls=false -Dtest=false -Dbuilt_tools=false --cross-file /tmp/librist-cross.ini
+        ninja -C /tmp/librist-build install
+        export PKG_CONFIG_PATH="/tmp/librist-static/lib/pkgconfig:$PKG_CONFIG_PATH"
+        cmake -B /tmp/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON \
+          -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} \
+          -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_LIBRARY_ARCHITECTURE=${{ matrix.triplet }} \
+          -DOPENSSL_INCLUDE_DIR=/usr/include \
+          -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a \
+          -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a
+        cmake --build /tmp/build --config Release
+        cp -a /tmp/build build
+        BUILDSCRIPT
+        docker run --rm \
+          -v "$PARENT:/work" -v /tmp/mipsel-build.sh:/mipsel-build.sh -w "/work/$NAME" \
+          ${{ matrix.container }} \
+          bash /mipsel-build.sh
+
+    - name: packaging
+      run: |
+        VERSION="${GITHUB_REF_NAME#v}"
+        STAGING="staging/${{ matrix.opkgarch }}"
+        mkdir -p "${STAGING}/usr/bin"
+        install -m 0755 build/src/dipirec/dipirec "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dipiscan/dipiscan "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dipiradiohead/dipiradiohead "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dipisds/dipisds "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dipixmltv/dipixmltv "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dipibim/dipibim "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dipibcg/dipibcg "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dipitvhead/dipitvhead "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dipimetrics/dipimetrics "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dipifccret/dipifccret "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dipidescramble/dipidescramble "${STAGING}/usr/bin/"
+        # dipicam378 needs OpenSSL, guard in case a future arch here lacks a static libcrypto
+        [ -f build/src/dipicam378/dipicam378 ] && install -m 0755 build/src/dipicam378/dipicam378 "${STAGING}/usr/bin/"
+        # dipirist: skip if the static librist build failed this arch
+        [ -f build/src/dipirist/dipirist ] && install -m 0755 build/src/dipirist/dipirist "${STAGING}/usr/bin/"
+        mkdir -p dist
+        ipk/build-ipk.sh "${STAGING}" "${{ matrix.opkgarch }}" "${VERSION}" "dist/dvbipitools_${VERSION}_${{ matrix.opkgarch }}.ipk"
+    - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      with:
+        name: ipk-${{ matrix.opkgarch }}
+        path: dist/*.ipk
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+      with:
+        pattern: ipk-*
+        merge-multiple: true
+        path: dist
+    - name: assets
+      uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+      with:
+        files: dist/*.ipk

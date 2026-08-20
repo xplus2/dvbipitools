@@ -1,0 +1,21 @@
+Package: dvbipitools
+Version: @VERSION@
+Architecture: @ARCH@
+Installed-Size: @INSTALLED_SIZE@
+Maintainer: dvbipitools authors <unspecified@example.com>
+Section: utils
+Priority: optional
+Description: command line tools for DVB-IPI streams
+ dipirec records a DVB-IPI multicast.
+ dipirist bridges a DVB-IPI stream between plain RTP/UDP/file and a RIST link (VSF TR-06), sender or receiver, built on librist.
+ dipiscan scans and reports on DVB-IPI multicast streams.
+ dipiradiohead re-muxes an Icecast/Shoutcast stream as a DVB-IPI multicast, with optional DVB Simulcrypt CAS scrambling (CISSA, CSA2 via libdvbcsa if installed).
+ dipisds announces or discovers DVB-IPI services via DVBSTP/SD&S (ETSI TS 102 034).
+ dipixmltv converts between xmltv and the DVB-IPI EPG (TVA) xml shape.
+ dipibim converts between the plain TVA xml shape and its BiM binary encoding.
+ dipibcg announces an xmltv guide as BiM-encoded TVA fragments via DVBSTP/BCG (ETSI TS 102 539), or listens for one.
+ dipitvhead re-packages a transport stream (multicast, http(s), or stdin) as a DVB-IPI multicast, with target-bitrate control, optional HbbTV AIT injection, and optional DVB Simulcrypt CAS scrambling (CISSA, CSA2 via libdvbcsa if installed).
+ dipimetrics collects periodic snapshots from the other persistent headend tools over a Unix datagram socket and serves them as a Prometheus/OpenMetrics HTTP endpoint.
+ dipifccret is an RTP retransmission (RET, Annex F) and server-based Fast Channel Change (FCC/RAMS, Annex I) server, passively watching a mirrored multicast segment via raw AF_PACKET capture to repair packet loss and burst cached RTP data to a HNED on request.
+ dipicam378 is a cs378x (camd35/TCP) key server for testing dipitvhead's/dipiradiohead's CAS output: holds a device's RSA private key, answers ECM/EMM requests with a control word, a software smartcard for oscam.
+ dipidescramble is a standalone CAS validation client for testing dipitvhead's/dipiradiohead's CAS output: reads a scrambled transport stream, decrypts the RSA -> BK -> SK -> CW chain with the device's private key, and descrambles it in place.

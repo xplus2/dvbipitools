@@ -7,6 +7,7 @@ set(DIPIREC_HAVE_TLS FALSE)
 if (DIPIREC_TLS)
     if (DVBIPITOOLS_STATIC)
         set(OPENSSL_USE_STATIC_LIBS TRUE)
+        set(ATOMIC_LIB atomic)
     endif ()
     find_package(OpenSSL)
     if (OpenSSL_FOUND)
@@ -90,7 +91,7 @@ add_executable(dipirec
     filter/pace.c)
 
 if (DIPIREC_HAVE_TLS)
-    target_link_libraries(dipirec PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(dipirec PRIVATE OpenSSL::SSL OpenSSL::Crypto ${ATOMIC_LIB})
 endif ()
 
 if (DVBIPITOOLS_HAVE_RIST)
