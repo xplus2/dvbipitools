@@ -213,7 +213,7 @@ static void publish_document(mcast_t *m, bitwriter_t *bw, const strrepo_writer_t
     return;
   }
   if (wrapper_build(cont, cont_len, compress, &wrapped, &wrapped_len) == 0) {
-    ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_BCG_DATA_CONTAINER, 1, (unsigned)(cycles % 256), 1, 0, 0, 1, wrapped, wrapped_len) == 0;
+    ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_BCG_DATA_CONTAINER, 1, cycles % 256, 1, 0, 0, 1, wrapped, wrapped_len) == 0;
     free(wrapped);
   }
   free(cont);

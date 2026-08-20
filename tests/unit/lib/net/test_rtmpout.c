@@ -11,6 +11,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "lib/mux/amf.h"
@@ -167,7 +168,8 @@ static int drive_until_sent(rtmpout_t *o, flv_tag_type_t type, const unsigned ch
   for (int i = 0; i < max_iters; i++) {
     if (0 == rtmpout_write(o, type, 0, data, len))
       return 1;
-    usleep(5000);
+    struct timespec ts = {0, 5000000L};
+    nanosleep(&ts, NULL);
   }
   return 0;
 }
@@ -241,7 +243,8 @@ START_TEST(rtmpout_holds_back_interframe_until_keyframe) {
   /* held-back frames also return 0, not -1: drive_until_sent's success check doesn't apply here */
   for (int i = 0; i < 50; i++) {
     rtmpout_write(o, FLV_TAG_VIDEO, 0, interframe, sizeof interframe);
-    usleep(5000);
+    struct timespec ts = {0, 5000000L};
+    nanosleep(&ts, NULL);
   }
   ck_assert_int_eq(drive_until_sent(o, FLV_TAG_VIDEO, keyframe, sizeof keyframe, 400), 1);
 
@@ -276,7 +279,8 @@ START_TEST(rtmpout_sends_adobe_authmod_for_userinfo_uri) {
 
   for (int i = 0; i < 200; i++) {
     rtmpout_write(o, FLV_TAG_VIDEO, 0, keyframe, sizeof keyframe);
-    usleep(5000);
+    struct timespec ts = {0, 5000000L};
+    nanosleep(&ts, NULL);
   }
 
   pthread_join(th, NULL);

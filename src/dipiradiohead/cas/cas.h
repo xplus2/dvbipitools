@@ -20,7 +20,7 @@ cas_t *cas_start(const config_t *cfg, const unsigned *audio_pids, size_t n_audio
 void cas_stop(cas_t *c);
 
 /* 1 once grace period passed with no frame seen: fatal, caller must stop */
-int cas_failed(cas_t *c);
+int cas_failed(const cas_t *c);
 
 /* call once per audio frame, before tspacketizer_feed(). pts_90k: radiohead's own sample clock.
    first call lazy-starts ECMG/EMMG. */

@@ -438,6 +438,7 @@ static void fake_ecmg_start(fake_ecmg_t *fe) {
 
   memset(fe, 0, sizeof *fe);
   fe->listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+  ck_assert_int_ge(fe->listen_fd, 0);
   memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);

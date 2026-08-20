@@ -149,7 +149,7 @@ int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t a
     seqlock_commit_write(&s->gen, g);
     updated = 1;
   } else {
-    burst_slot_t *s = claim_locked(t, addr, addrlen, fd, b);
+    const burst_slot_t *s = claim_locked(t, addr, addrlen, fd, b);
     if (s) {
       *msn_out = 0;
       pthread_mutex_unlock(&t->lock);

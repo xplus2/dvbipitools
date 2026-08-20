@@ -129,12 +129,14 @@ static int http_proxy_parse(const char *s, config_t *cfg) {
 
 /* %g (group), %p (port), %% (literal %). anything else after % is invalid */
 static int http_path_tmpl_valid(const char *t) {
-  for (; *t; t++) {
-    if (*t != '%')
-      continue;
-    t++;
-    if (*t != 'g' && *t != 'p' && *t != '%')
-      return -1;
+  while (*t) {
+    size_t step = 1;
+    if (*t == '%') {
+      if (t[1] != 'g' && t[1] != 'p' && t[1] != '%')
+        return -1;
+      step = 2;
+    }
+    t += step;
   }
   return 0;
 }

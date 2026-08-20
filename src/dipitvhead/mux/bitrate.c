@@ -2,7 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdlib.h>
-#include <unistd.h>
+#include <time.h>
 
 #include "lib/log.h"
 #include "lib/signal.h"
@@ -40,8 +40,10 @@ void bitrate_pace(bitrate_pacer_t *p) {
   if (!p || !p->burst_limit || p->target_bps <= 0.0)
     return;
   ahead_s = ((double)p->bits_sent - (mono_seconds() - p->start) * p->target_bps) / p->target_bps;
-  if (ahead_s > 0.0)
-    usleep((useconds_t)(ahead_s * 1e6));
+  if (ahead_s > 0.0) {
+    struct timespec ts = {(time_t)ahead_s, (long)((ahead_s - (time_t)ahead_s) * 1e9)};
+    nanosleep(&ts, NULL);
+  }
 }
 
 void bitrate_account_n(bitrate_pacer_t *p, unsigned n) {

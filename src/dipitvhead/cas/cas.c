@@ -302,7 +302,7 @@ void cas_stop(cas_t *c) {
   free(c);
 }
 
-int cas_failed(cas_t *c) { return cas_core_failed(&c->core); }
+int cas_failed(const cas_t *c) { return cas_core_failed(&c->core); }
 
 unsigned cas_pcr_pid(cas_t *c) { return c->pcr_out_pid; }
 

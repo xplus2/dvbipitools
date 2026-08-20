@@ -86,10 +86,10 @@ static void utf16_to_utf8(const unsigned char *body, size_t len, char *out, size
   if (len >= 2 && body[0] == 0xFF && body[1] == 0xFE) { le = 1; start = 2; }
   else if (len >= 2 && body[0] == 0xFE && body[1] == 0xFF) { start = 2; }
 
-  for (size_t i = start; i + 1 < len; i += 2) {
+  for (size_t i = start; i + 1 < len;) {
     unsigned unit = rd16(body + i, le);
     unsigned cp;
-    size_t n;
+    size_t n, step = 2;
 
     if (unit == 0)
       break;
@@ -97,7 +97,7 @@ static void utf16_to_utf8(const unsigned char *body, size_t len, char *out, size
       unsigned lo = rd16(body + i + 2, le);
       if (lo >= 0xDC00 && lo <= 0xDFFF) {
         cp = 0x10000 + ((unit - 0xD800) << 10) + (lo - 0xDC00);
-        i += 2;
+        step = 4;
       } else {
         cp = 0xFFFD; /* unpaired high surrogate */
       }
@@ -110,6 +110,7 @@ static void utf16_to_utf8(const unsigned char *body, size_t len, char *out, size
     if (!n)
       break;
     *o += n;
+    i += step;
   }
 }
 

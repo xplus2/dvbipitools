@@ -62,7 +62,7 @@ ssize_t raw_recv(struct http *h, void *buf, size_t cap, net_err_reason_t *reason
 void parse_headers(struct http *h, char *block);
 int setup_transfer_encoding(struct http *h, net_err_reason_t *reason_out);
 int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *user_agent, const char *extra_header);
-void finish_headers(struct http *h, char *term, size_t termlen, size_t got);
+void finish_headers(struct http *h, const char *term, size_t termlen, size_t got);
 int http_is_redirect_status(int status);
 
 #endif

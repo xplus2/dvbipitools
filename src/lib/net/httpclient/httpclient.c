@@ -177,7 +177,7 @@ int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *
 }
 
 /* installs parsed headers from h->hold[0..term), leftover body bytes shifted to front */
-void finish_headers(struct http *h, char *term, size_t termlen, size_t got) {
+void finish_headers(struct http *h, const char *term, size_t termlen, size_t got) {
   size_t hdrlen = (size_t)(term - (char *)h->hold);
   size_t consumed = hdrlen + termlen;
   char block[sizeof h->hold];

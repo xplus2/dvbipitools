@@ -32,14 +32,14 @@ START_TEST(eb_size_encodes_variable_length_with_marker_bit) {
   ebuf_t b = {0};
   eb_size(&b, 5);
   ck_assert_uint_eq(b.len, 1u);
-  ck_assert_uint_eq((unsigned char)b.p[0], 0x85u); /* marker bit 7 + value 5 */
+  ck_assert_uint_eq(b.p[0], 0x85u); /* marker bit 7 + value 5 */
   ebuf_free(&b);
 
   memset(&b, 0, sizeof b);
   eb_size(&b, 200);
   ck_assert_uint_eq(b.len, 2u);
-  ck_assert_uint_eq((unsigned char)b.p[0], 0x40u);
-  ck_assert_uint_eq((unsigned char)b.p[1], 0xC8u);
+  ck_assert_uint_eq(b.p[0], 0x40u);
+  ck_assert_uint_eq(b.p[1], 0xC8u);
   ebuf_free(&b);
 }
 END_TEST
@@ -108,7 +108,7 @@ START_TEST(eb_bytes_grows_past_initial_capacity) {
     eb_bytes(&b, chunk, sizeof chunk);
   ck_assert_uint_eq(b.len, 5000u);
   ck_assert_int_eq(b.err, 0);
-  ck_assert_uint_eq((unsigned char)b.p[4999], 0xABu);
+  ck_assert_uint_eq(b.p[4999], 0xABu);
   ebuf_free(&b);
 }
 END_TEST

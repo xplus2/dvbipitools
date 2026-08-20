@@ -36,7 +36,7 @@ START_TEST(bitwriter_put_round_trips_through_bitreader) {
   ck_assert_int_eq(bitwriter_put(&bw, 1, 1), 0);
   ck_assert_int_eq(bitwriter_put(&bw, 0x2A, 7), 0);
   ck_assert_int_eq(bitwriter_put(&bw, 0xDEADBEEFu, 32), 0);
-  ck_assert_int_eq(bitwriter_put(&bw, 0x1234567890ABCDEFull, 64), 0);
+  ck_assert_int_eq(bitwriter_put(&bw, 0x1234567890ABCDEFULL, 64), 0);
 
   data = bitwriter_data(&bw, &len);
   bitreader_init(&br, data, len);
@@ -48,7 +48,7 @@ START_TEST(bitwriter_put_round_trips_through_bitreader) {
   ck_assert_int_eq(bitreader_get(&br, 32, &v), 0);
   ck_assert_uint_eq((uint32_t)v, 0xDEADBEEFu);
   ck_assert_int_eq(bitreader_get(&br, 64, &v), 0);
-  ck_assert(v == 0x1234567890ABCDEFull);
+  ck_assert(v == 0x1234567890ABCDEFULL);
 
   bitwriter_free(&bw);
 }

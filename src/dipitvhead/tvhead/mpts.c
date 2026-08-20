@@ -317,7 +317,7 @@ static int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, 
 
 /* EMM passthrough: mux-wide CAT, merged from each program's descriptor.
    exclusive with own CAS (remux_new()). mp version of remux.c send_psi_tables()'s CAT handler */
-static void emit_source_cat_passthrough(mpts_program_t *progs, unsigned n, unsigned char *cat_cc, ts_metrics_t *tsm_p, remux_packet_cb cb, void *ctx) {
+static void emit_source_cat_passthrough(const mpts_program_t *progs, unsigned n, unsigned char *cat_cc, ts_metrics_t *tsm_p, remux_packet_cb cb, void *ctx) {
   unsigned char cat_desc[ARGS_MAX_INPUTS * 6];
   size_t cat_desc_len = 0;
   int have_desc = 0;

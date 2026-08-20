@@ -128,7 +128,7 @@ static int cas_pids_parse(const char *s, config_t *cfg) {
   cfg->cas_pid_count = 0;
   cfg->cas_pids_video = 0;
   cfg->cas_pids_audio = 0;
-  for (char *tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+  for (const char *tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
     unsigned pid;
     if (strcmp(tok, "video") == 0) {
       cfg->cas_pids_video = 1;

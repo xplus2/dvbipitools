@@ -193,7 +193,5 @@ int biss_ca_parse_ecm_section(const unsigned char *sec, size_t sec_len, biss_ca_
   memcpy(out->esw_even, sec + n, BISS_CA_SW_LEN);
   n += BISS_CA_SW_LEN;
   memcpy(out->esw_odd, sec + n, BISS_CA_SW_LEN);
-  n += BISS_CA_SW_LEN;
-
   return 0;
 }

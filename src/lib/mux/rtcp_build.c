@@ -203,7 +203,6 @@ size_t rtcp_build_rams_i(uint32_t sender_ssrc, uint32_t media_ssrc, uint8_t msn,
     out[off + 1] = 0;
     be16_put(out + off + 2, 8);
     be64_put(out + off + 4, tlvs->max_transmit_bitrate_bps);
-    off += 12;
   }
 
   return total;

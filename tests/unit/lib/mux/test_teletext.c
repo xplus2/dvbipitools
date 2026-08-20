@@ -64,7 +64,7 @@ START_TEST(ttx_decodes_one_row_and_emits_cue_on_flush) {
   unsigned char pes[64];
   size_t n = build_ttx_pes(pes, 777, 1, "HELLO");
   g_calls = 0;
-  ttx_pes(t, 1, 90000ull, pes, n); /* pts_90k=90000 -> 1000ms */
+  ttx_pes(t, 1, 90000ULL, pes, n); /* pts_90k=90000 -> 1000ms */
   ck_assert_int_eq(g_calls, 0);    /* nothing emitted until flush/next group */
   ttx_flush(t);
   ck_assert_int_eq(g_calls, 1);
@@ -80,7 +80,7 @@ START_TEST(ttx_ignores_packets_on_a_different_magazine) {
   unsigned char pes[64];
   size_t n = build_ttx_pes(pes, 100, 1, "WRONG MAG"); /* page 100 -> magazine 1 */
   g_calls = 0;
-  ttx_pes(t, 1, 90000ull, pes, n);
+  ttx_pes(t, 1, 90000ULL, pes, n);
   ttx_flush(t);
   ck_assert_int_eq(g_calls, 0);
   ttx_free(t);
@@ -93,7 +93,7 @@ START_TEST(ttx_skips_the_page_ident_row) {
   /* ident rows start with the page number and are boundaries, not text */
   size_t n = build_ttx_pes(pes, 777, 0, "777 12:00:00");
   g_calls = 0;
-  ttx_pes(t, 1, 90000ull, pes, n);
+  ttx_pes(t, 1, 90000ULL, pes, n);
   ttx_flush(t);
   ck_assert_int_eq(g_calls, 0); /* the ident row itself never becomes a cue */
   ttx_free(t);
@@ -105,7 +105,7 @@ START_TEST(ttx_lead_ms_shifts_cue_times_earlier) {
   unsigned char pes[64];
   size_t n = build_ttx_pes(pes, 777, 1, "HELLO");
   g_calls = 0;
-  ttx_pes(t, 1, 90000ull, pes, n); /* 1000ms */
+  ttx_pes(t, 1, 90000ULL, pes, n); /* 1000ms */
   ttx_flush(t);
   ck_assert_int_eq(g_calls, 1);
   ck_assert_int_eq((int)g_cue.start_ms, 700); /* 1000 - 300 lead */

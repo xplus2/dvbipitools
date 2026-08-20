@@ -100,7 +100,7 @@ END_TEST
 START_TEST(ts_packet_emit_first_packet_carries_pcr) {
   unsigned char data[4] = {0xAA, 0xBB, 0xCC, 0xDD};
   unsigned char cc = 0;
-  uint64_t pcr = 123456789ull;
+  uint64_t pcr = 123456789ULL;
   size_t off;
 
   g_count = 0;

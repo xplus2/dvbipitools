@@ -137,7 +137,7 @@ void cas_stop(cas_t *c) {
   free(c);
 }
 
-int cas_failed(cas_t *c) { return cas_core_failed(&c->core); }
+int cas_failed(const cas_t *c) { return cas_core_failed(&c->core); }
 
 void cas_clock_tick(cas_t *c, uint64_t pts_90k) {
   if (c->core.biss_engine)

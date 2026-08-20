@@ -394,7 +394,7 @@ static int finalize_burst_slot(pacer_ctx_t *pc, size_t idx, burst_t *b, int cong
 }
 
 /* seqlock reader for one slot, bounded retry: repeated overlap = treated as unreadable this tick */
-static int burst_slot_read(burst_slot_t *slot, int *in_use, uint64_t *words, socklen_t *addrlen, int *fd, burst_t **b) {
+static int burst_slot_read(const burst_slot_t *slot, int *in_use, uint64_t *words, socklen_t *addrlen, int *fd, burst_t **b) {
   for (int tries = 0; tries < 8; tries++) {
     unsigned g1 = atomic_load_explicit(&slot->gen, memory_order_acquire);
     unsigned g2;

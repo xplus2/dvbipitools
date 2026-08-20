@@ -31,7 +31,7 @@ cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, con
 void cas_wall_tick(cas_t *c, double now_s);
 
 /* 1: PCR-detection grace period passed, none seen. fatal, caller stops */
-int cas_failed(cas_t *c);
+int cas_failed(const cas_t *c);
 unsigned cas_pcr_pid(cas_t *c);
 
 /* call per emitted packet, in order:

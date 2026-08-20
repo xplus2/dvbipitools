@@ -280,7 +280,7 @@ static int parse_service_information(const char *buf, const char *end, bcg_doc_t
 static int parse_schedule_event(bcg_doc_t *doc, const progtext_list_t *pl, const char *channel, const char *etag, const char *eend) {
   char crid[BCG_ID_LEN * 3 + 64];
   char start[BCG_TIME_LEN], stop[BCG_TIME_LEN];
-  bcg_progtext_t *pt;
+  const bcg_progtext_t *pt;
   bcg_programme_t *pr;
 
   if (xml_attr(etag, eend, "crid", crid, sizeof crid) != 0 ||
