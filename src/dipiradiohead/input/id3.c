@@ -89,7 +89,8 @@ static void utf16_to_utf8(const unsigned char *body, size_t len, char *out, size
   for (size_t i = start; i + 1 < len;) {
     unsigned unit = rd16(body + i, le);
     unsigned cp;
-    size_t n, step = 2;
+    size_t n;
+    size_t step = 2;
 
     if (unit == 0)
       break;

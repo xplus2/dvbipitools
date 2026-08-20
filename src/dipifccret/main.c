@@ -434,7 +434,7 @@ static void *pacer_main(void *arg) {
     nanosleep(&tick, NULL);
 
     for (size_t i = 0; i < pc->bursts->cap; i++) {
-      burst_slot_t *slot = &pc->bursts->slots[i];
+      const burst_slot_t *slot = &pc->bursts->slots[i];
       int in_use = 0;
       uint64_t words[BURST_ADDR_WORDS] = {0};
       int fd = 0;

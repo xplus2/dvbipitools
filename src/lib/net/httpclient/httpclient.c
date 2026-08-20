@@ -246,7 +246,7 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
   }
   {
     size_t got = 0;
-    char *term;
+    const char *term;
     size_t termlen = 0;
     double deadline = mono_seconds() + (double)HTTP_HEADER_TIMEOUT_MS / 1000.0;
     while (got < sizeof h->hold) {

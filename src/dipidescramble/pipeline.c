@@ -150,7 +150,7 @@ static int resolve_biss1e_key(const config_t *cfg, unsigned char sw_buf[BISS_KEY
 }
 
 static void setup_unicast_emm(loop_ctx_t *lc) {
-  lc->ipi = ipiclient_new(lc->cfg->unicast_emm_uri, lc->cfg->insecure_tls);
+  lc->ipi = ipiclient_new(lc->cfg->unicast_emm_uri, lc->cfg->insecure_tls, lc->cfg->unicast_emm_token_header);
   if (!lc->ipi)
     log_line(TOOL_NAME ": invalid -u/--unicast-emm uri, ignoring: %s", lc->cfg->unicast_emm_uri);
   else if (ipiclient_poll(lc->ipi, lc->cache, lc->dev))

@@ -8,8 +8,9 @@
 
 typedef struct ipiclient ipiclient_t;
 
-/* uri: full -u/--unicast-emm uri incl. userinfo token, e.g. https://<token>@<host>:<port>/device/<serial>/emm. NULL = malformed */
-ipiclient_t *ipiclient_new(const char *uri, int insecure);
+/* uri: full -u/--unicast-emm uri incl. userinfo token, e.g. https://<token>@<host>:<port>/device/<serial>/emm.
+   token_header: HTTP header for token, NULL/empty = "X-Device-Token". NULL return = malformed */
+ipiclient_t *ipiclient_new(const char *uri, int insecure, const char *token_header);
 void ipiclient_free(ipiclient_t *c);
 
 /* one-shot fetch (ETag conditional), feeds returned units through emmcache_feed().

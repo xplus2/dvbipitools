@@ -15,12 +15,14 @@
 
 #define IPICLIENT_TOKEN_MAX 256
 #define IPICLIENT_ETAG_MAX 128
+#define IPICLIENT_TOKEN_HEADER_MAX 64
 #define IPICLIENT_STALL_MAX 3 /* recv() timeouts to tolerate before giving up on one poll */
 #define IPICLIENT_BODY_MAX (33 * PSI_SECTION_ASM_BUF_LEN) /* one EMM-U + up to 32 EMM-G, matches emmcache.c's cap */
 
 struct ipiclient {
   http_url_t url;
   char token[IPICLIENT_TOKEN_MAX];
+  char token_header[IPICLIENT_TOKEN_HEADER_MAX];
   int insecure;
   char etag[IPICLIENT_ETAG_MAX];
 };
@@ -56,7 +58,7 @@ static int split_userinfo(const char *uri, char *token_out, size_t token_out_sz,
   return 0;
 }
 
-ipiclient_t *ipiclient_new(const char *uri, int insecure) {
+ipiclient_t *ipiclient_new(const char *uri, int insecure, const char *token_header) {
   ipiclient_t *c;
   char stripped[512];
 
@@ -71,6 +73,12 @@ ipiclient_t *ipiclient_new(const char *uri, int insecure) {
     free(c);
     return NULL;
   }
+  if (!token_header || !token_header[0])
+    token_header = "X-Device-Token";
+  if (bufcpy(c->token_header, sizeof c->token_header, token_header) >= sizeof c->token_header) {
+    free(c);
+    return NULL;
+  }
   c->insecure = insecure;
   return c;
 }
@@ -78,18 +86,17 @@ ipiclient_t *ipiclient_new(const char *uri, int insecure) {
 void ipiclient_free(ipiclient_t *c) { free(c); }
 
 int ipiclient_poll(ipiclient_t *c, emmcache_t *cache, device_state_t *d) {
-  char hdr[IPICLIENT_TOKEN_MAX + IPICLIENT_ETAG_MAX + 64];
+  char hdr[IPICLIENT_TOKEN_HEADER_MAX + IPICLIENT_TOKEN_MAX + IPICLIENT_ETAG_MAX + 32];
   http_t *h;
   static unsigned char body[IPICLIENT_BODY_MAX];
   size_t len = 0, off;
   int changed = 0, stalls = 0;
   const char *etag;
 
-  /* todo: configurable token name */
   if (c->etag[0])
-    snprintf(hdr, sizeof hdr, "X-Device-Token: %s\r\nIf-None-Match: %s", c->token, c->etag);
+    snprintf(hdr, sizeof hdr, "%s: %s\r\nIf-None-Match: %s", c->token_header, c->token, c->etag);
   else
-    snprintf(hdr, sizeof hdr, "X-Device-Token: %s", c->token);
+    snprintf(hdr, sizeof hdr, "%s: %s", c->token_header, c->token);
 
   h = http_get(&c->url, TOOL_NAME "/" TOOL_VERSION, c->insecure, hdr, NULL);
   if (!h)

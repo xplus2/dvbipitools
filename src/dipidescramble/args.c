@@ -135,6 +135,7 @@ static void print_help(void) {
       "  %-27sunicast EMM pull endpoint, auth token as URI userinfo\n"
       "  %-27s(e.g. https://<token>@<host>:<port>/device/<serial>/emm)\n"
       "  %-27sskip TLS verification for -u/--unicast-emm and -o rtmps:// (self-signed, hostname, expiry)\n"
+      "  %-27sHTTP header carrying the token for -u/--unicast-emm (default X-Device-Token)\n"
       "  %-27sBISS2 Mode 1: 32 hex char Session Word\n"
       "  %-27sBISS2 Mode E: 32 hex char Encrypted Session Word (needs --biss2-id)\n"
       "  %-27sBISS2 Mode E: 32 hex char receiver ID for --biss2-esw\n"
@@ -160,6 +161,7 @@ static void print_help(void) {
       TOOL_NAME,
       "-i, --input <uri>", "-k, --key <path>", "-s, --serial <id>", "-e, --emm-file <path>",
       "-u, --unicast-emm <uri>", "", "    --insecure",
+      "    --token-header <name>",
       "    --biss2-sw <hex32>", "    --biss2-esw <hex32>", "    --biss2-id <hex32>",
       "    --biss1-sw <hex12>",
       "    --biss2-ca-key <path>",
@@ -178,6 +180,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"emm-file", required_argument, 0, 'e'},
       {"unicast-emm", required_argument, 0, 'u'},
       {"insecure", no_argument, 0, 1003},
+      {"token-header", required_argument, 0, 1010},
       {"output", required_argument, 0, 'o'},
       {"format", required_argument, 0, 'f'},
       {"pmt-pid", required_argument, 0, 'p'},
@@ -221,6 +224,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1003:
         cfg->insecure_tls = 1;
+        break;
+      case 1010:
+        if (!optarg[0] || strpbrk(optarg, ":\r\n ")) {
+          argerr("invalid --token-header: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->unicast_emm_token_header = optarg;
         break;
       case 'o':
         if (cfg->n_out >= DIPIDESCRAMBLE_MAX_OUT) {

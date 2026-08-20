@@ -37,6 +37,7 @@ typedef struct {
   const char *emm_file;        /* -e, EMM cache file, required unless --biss-* */
   const char *unicast_emm_uri; /* NULL = not set, auth token as URI userinfo */
   int insecure_tls;            /* --insecure, skips TLS verification for -u and -o rtmps:// */
+  const char *unicast_emm_token_header; /* --token-header, NULL = default "X-Device-Token" */
   out_target_t out[DIPIDESCRAMBLE_MAX_OUT]; /* -o, repeatable, required */
   int n_out;
   out_fmt_t format;            /* -f, ts|mkv|mka, default ts */
