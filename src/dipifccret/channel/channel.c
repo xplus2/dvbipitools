@@ -209,6 +209,22 @@ channel_t *channel_lookup_by_resolve_slot(channel_table_t *t, size_t slot) {
   return atomic_load_explicit(&c->in_use, memory_order_acquire) == 1 ? c : NULL;
 }
 
+static channel_t *ssrc_scan_bucket(channel_table_t *t, size_t base, uint32_t ssrc) {
+  size_t h = base;
+
+  for (;;) {
+    size_t slot_plus1 = atomic_load_explicit(&t->ssrc_hash[h], memory_order_relaxed);
+    if (slot_plus1 == 0)
+      return NULL;
+    if (slot_plus1 != CHANNEL_HASH_TOMBSTONE) {
+      channel_t *c = &t->chan[slot_plus1 - 1];
+      if (atomic_load_explicit(&c->in_use, memory_order_acquire) == 1 && atomic_load_explicit(&c->ssrc_known, memory_order_acquire) && atomic_load_explicit(&c->ssrc, memory_order_acquire) == ssrc)
+        return c;
+    }
+    h = (h + 1) & t->ssrc_hash_mask;
+  }
+}
+
 /* seqlock reader, bounded retry: repeated overlap = plain miss, like ring.c */
 channel_t *channel_find_by_ssrc(channel_table_t *t, uint32_t ssrc) {
   size_t base = chan_ssrc_hash(ssrc) & t->ssrc_hash_mask;
@@ -216,24 +232,11 @@ channel_t *channel_find_by_ssrc(channel_table_t *t, uint32_t ssrc) {
   for (int tries = 0; tries < 8; tries++) {
     unsigned g1 = atomic_load_explicit(&t->ssrc_gen, memory_order_acquire);
     unsigned g2;
-    size_t h = base;
-    channel_t *result = NULL;
+    channel_t *result;
 
     if (g1 & 1u)
       continue; /* write in progress, retry */
-    for (;;) {
-      size_t slot_plus1 = atomic_load_explicit(&t->ssrc_hash[h], memory_order_relaxed);
-      if (slot_plus1 == 0)
-        break;
-      if (slot_plus1 != CHANNEL_HASH_TOMBSTONE) {
-        channel_t *c = &t->chan[slot_plus1 - 1];
-        if (atomic_load_explicit(&c->in_use, memory_order_acquire) == 1 && atomic_load_explicit(&c->ssrc_known, memory_order_acquire) && atomic_load_explicit(&c->ssrc, memory_order_acquire) == ssrc) {
-          result = c;
-          break;
-        }
-      }
-      h = (h + 1) & t->ssrc_hash_mask;
-    }
+    result = ssrc_scan_bucket(t, base, ssrc);
     g2 = atomic_load_explicit(&t->ssrc_gen, memory_order_acquire);
     if (g1 == g2)
       return result;

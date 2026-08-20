@@ -32,7 +32,11 @@ static int channel_idx_cmp(const void *a, const void *b) {
 
 /* -1 if not found */
 static int channel_idx_find(const channel_idx_t *idx, int n, const char *id) {
-  int lo = 0, hi = n - 1;
+  int lo, hi;
+  if (n <= 0)
+    return -1;
+  lo = 0;
+  hi = n - 1;
   while (lo <= hi) {
     int mid = (lo + hi) / 2;
     int c = strcmp(id, idx[mid].id);
@@ -156,6 +160,24 @@ void accessunit_scratch_free(accessunit_scratch_t *sc) {
   memset(sc, 0, sizeof *sc);
 }
 
+static int decode_program_info_fuu(accessunit_scratch_t *sc, bcg_progtext_t **ptext, int *ptext_n, bitreader_t *fbr, strrepo_reader_t *sr) {
+  bcg_programme_t tmp;
+  if (*ptext_n >= sc->ptext_cap) {
+    void *np = array_grow(sc->ptext, &sc->ptext_cap, *ptext_n + 1, sizeof **ptext);
+    if (!np)
+      return -1;
+    sc->ptext = np;
+    *ptext = sc->ptext;
+  }
+  if (fragment_decode_program_information(fbr, sr, (*ptext)[*ptext_n].crid, sizeof (*ptext)[*ptext_n].crid, &tmp))
+    return -1;
+  bufcpy((*ptext)[*ptext_n].title, sizeof (*ptext)[*ptext_n].title, tmp.title);
+  bufcpy((*ptext)[*ptext_n].desc, sizeof (*ptext)[*ptext_n].desc, tmp.desc);
+  bufcpy((*ptext)[*ptext_n].category, sizeof (*ptext)[*ptext_n].category, tmp.category);
+  (*ptext_n)++;
+  return 0;
+}
+
 int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int *out_nfuu) {
   const unsigned char *base = br->buf;
   bcg_progtext_t *ptext;
@@ -224,25 +246,11 @@ int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_
     bitreader_t fbr;
     switch (fuus[i].context_path) {
       case DVBCTXPATH_PROGRAM_INFORMATION: {
-        bcg_programme_t tmp;
         bitreader_init(&fbr, base + fuus[i].offset, fuus[i].length);
-        if (ptext_n >= sc->ptext_cap) {
-          void *np = array_grow(sc->ptext, &sc->ptext_cap, ptext_n + 1, sizeof *ptext);
-          if (!np) {
-            rc = -1;
-            goto done;
-          }
-          sc->ptext = np;
-          ptext = sc->ptext;
-        }
-        if (fragment_decode_program_information(&fbr, sr, ptext[ptext_n].crid, sizeof ptext[ptext_n].crid, &tmp)) {
+        if (decode_program_info_fuu(sc, &ptext, &ptext_n, &fbr, sr)) {
           rc = -1;
           goto done;
         }
-        bufcpy(ptext[ptext_n].title, sizeof ptext[ptext_n].title, tmp.title);
-        bufcpy(ptext[ptext_n].desc, sizeof ptext[ptext_n].desc, tmp.desc);
-        bufcpy(ptext[ptext_n].category, sizeof ptext[ptext_n].category, tmp.category);
-        ptext_n++;
         break;
       }
       case DVBCTXPATH_SCHEDULE: {

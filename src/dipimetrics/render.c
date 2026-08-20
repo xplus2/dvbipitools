@@ -200,6 +200,23 @@ typedef struct {
   const stored_entry_t *entry;
 } entry_ref_t;
 
+static void fill_entry_refs(const store_t *st, const int *def_idx, entry_ref_t *refs, size_t *cursor) {
+  for (int si = 0; si < STORE_MAX_INSTANCES; si++) {
+    const store_slot_t *slot = &st->slots[si];
+    if (!slot->used)
+      continue;
+    for (int j = 0; j < slot->entry_count; j++) {
+      unsigned id = (unsigned)slot->entries[j].id;
+      int di = (id < DEF_ID_MAX) ? def_idx[id] : -1;
+      if (di >= 0) {
+        refs[cursor[(unsigned)di]].slot = slot;
+        refs[cursor[(unsigned)di]].entry = &slot->entries[j];
+        cursor[(unsigned)di]++;
+      }
+    }
+  }
+}
+
 /* one pass over every stored entry, bucketed by def instead of one scan per def */
 static void render_grouped(strbuf_t *sb, const store_t *st) {
   int def_idx[DEF_ID_MAX]; /* metrics_id_t -> DEFS[] index, -1 if unused */
@@ -239,20 +256,7 @@ static void render_grouped(strbuf_t *sb, const store_t *st) {
         cursor[i] = off;
         off += count[i];
       }
-      for (int si = 0; si < STORE_MAX_INSTANCES; si++) {
-        const store_slot_t *slot = &st->slots[si];
-        if (!slot->used)
-          continue;
-        for (int j = 0; j < slot->entry_count; j++) {
-          unsigned id = (unsigned)slot->entries[j].id;
-          int di = (id < DEF_ID_MAX) ? def_idx[id] : -1;
-          if (di >= 0) {
-            refs[cursor[(unsigned)di]].slot = slot;
-            refs[cursor[(unsigned)di]].entry = &slot->entries[j];
-            cursor[(unsigned)di]++;
-          }
-        }
-      }
+      fill_entry_refs(st, def_idx, refs, cursor);
     }
   }
 

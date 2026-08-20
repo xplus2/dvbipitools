@@ -152,6 +152,32 @@ static int send_request_buf(http_async_t *a, struct http *h, net_err_reason_t *r
   return 1;
 }
 
+/* returns 0 on header terminator found (term_out/termlen_out set), -1 on error, 1 = more data needed */
+static int read_response_headers(struct http *h, http_async_t *a, net_err_reason_t *reason_out, char **term_out, size_t *termlen_out) {
+  for (;;) {
+    ssize_t n;
+    if (a->hdr_got >= sizeof h->hold) {
+      log_line("http: response headers too large");
+      if (reason_out)
+        *reason_out = NET_ERR_FORMAT;
+      return -1;
+    }
+    n = raw_recv(h, h->hold + a->hdr_got, sizeof h->hold - a->hdr_got, reason_out);
+    if (n < 0) {
+      log_line("http: connection closed while reading headers");
+      return -1;
+    }
+    if (n == 0) {
+      a->want_events = POLLIN;
+      return 1;
+    }
+    a->hdr_got += (size_t)n;
+    *term_out = find_header_end((char *)h->hold, a->hdr_got, termlen_out);
+    if (*term_out)
+      return 0;
+  }
+}
+
 http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out) {
   struct http *h = a->h;
 
@@ -216,31 +242,14 @@ http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out
     }
 
     case HA_READING_HEADERS: {
-      char *term;
+      char *term = NULL;
       size_t termlen = 0;
+      int st = read_response_headers(h, a, reason_out, &term, &termlen);
 
-      for (;;) {
-        ssize_t n;
-        if (a->hdr_got >= sizeof h->hold) {
-          log_line("http: response headers too large");
-          if (reason_out)
-            *reason_out = NET_ERR_FORMAT;
-          return HTTP_ASYNC_ERROR;
-        }
-        n = raw_recv(h, h->hold + a->hdr_got, sizeof h->hold - a->hdr_got, reason_out);
-        if (n < 0) {
-          log_line("http: connection closed while reading headers");
-          return HTTP_ASYNC_ERROR;
-        }
-        if (n == 0) {
-          a->want_events = POLLIN;
-          return HTTP_ASYNC_PENDING;
-        }
-        a->hdr_got += (size_t)n;
-        term = find_header_end((char *)h->hold, a->hdr_got, &termlen);
-        if (term)
-          break;
-      }
+      if (st < 0)
+        return HTTP_ASYNC_ERROR;
+      if (st > 0)
+        return HTTP_ASYNC_PENDING;
       finish_headers(h, term, termlen, a->hdr_got);
       if (setup_transfer_encoding(h, reason_out) != 0)
         return HTTP_ASYNC_ERROR;

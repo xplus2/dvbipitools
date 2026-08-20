@@ -134,6 +134,8 @@ void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_
 static void http_path_expand(const char *tmpl, const char *group, unsigned port, char *out, size_t outcap) {
   char portbuf[16];
   size_t o = 0;
+  if (outcap == 0)
+    return;
   snprintf(portbuf, sizeof portbuf, "%u", port);
   for (; *tmpl && o + 1 < outcap; tmpl++) {
     const char *ins = NULL;
@@ -150,8 +152,9 @@ static void http_path_expand(const char *tmpl, const char *group, unsigned port,
     }
     if (ins) {
       size_t l = strlen(ins);
-      if (l > outcap - 1 - o)
-        l = outcap - 1 - o;
+      size_t space = outcap - 1 - o; /* o+1 < outcap above: never underflows */
+      if (l > space)
+        l = space;
       memcpy(out + o, ins, l);
       o += l;
     } else {

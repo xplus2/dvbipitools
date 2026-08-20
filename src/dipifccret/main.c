@@ -393,6 +393,29 @@ static int finalize_burst_slot(pacer_ctx_t *pc, size_t idx, burst_t *b, int cong
   return owns_slot;
 }
 
+/* seqlock reader for one slot, bounded retry: repeated overlap = treated as unreadable this tick */
+static int burst_slot_read(burst_slot_t *slot, int *in_use, uint64_t *words, socklen_t *addrlen, int *fd, burst_t **b) {
+  for (int tries = 0; tries < 8; tries++) {
+    unsigned g1 = atomic_load_explicit(&slot->gen, memory_order_acquire);
+    unsigned g2;
+
+    if (g1 & 1u)
+      continue; /* write in progress, retry */
+    *in_use = atomic_load_explicit(&slot->in_use, memory_order_relaxed);
+    if (*in_use) {
+      for (size_t w = 0; w < BURST_ADDR_WORDS; w++)
+        words[w] = atomic_load_explicit(&slot->addr_words[w], memory_order_relaxed);
+      *addrlen = atomic_load_explicit(&slot->addrlen, memory_order_relaxed);
+      *fd = atomic_load_explicit(&slot->fd, memory_order_relaxed);
+      *b = atomic_load_explicit(&slot->b, memory_order_relaxed);
+    }
+    g2 = atomic_load_explicit(&slot->gen, memory_order_acquire);
+    if (g1 == g2)
+      return 1;
+  }
+  return 0; /* repeated race, skip this tick */
+}
+
 /* scan is lock-free: seqlock-guarded read per slot, retried on writer overlap, skipped on
    repeated overlap (next tick picks it up). done-cleanup below takes table lock */
 static void *pacer_main(void *arg) {
@@ -412,40 +435,21 @@ static void *pacer_main(void *arg) {
 
     for (size_t i = 0; i < pc->bursts->cap; i++) {
       burst_slot_t *slot = &pc->bursts->slots[i];
+      int in_use = 0;
+      uint64_t words[BURST_ADDR_WORDS] = {0};
+      int fd = 0;
+      burst_t *b = NULL;
+      socklen_t addrlen = 0;
 
-      for (int tries = 0; tries < 8; tries++) {
-        unsigned g1 = atomic_load_explicit(&slot->gen, memory_order_acquire);
-        unsigned g2;
-        int in_use;
-        uint64_t words[BURST_ADDR_WORDS] = {0};
-        int fd = 0;
-        burst_t *b = NULL;
-        socklen_t addrlen = 0;
-
-        if (g1 & 1u)
-          continue; /* write in progress, retry */
-        in_use = atomic_load_explicit(&slot->in_use, memory_order_relaxed);
-        if (in_use) {
-          for (size_t w = 0; w < BURST_ADDR_WORDS; w++)
-            words[w] = atomic_load_explicit(&slot->addr_words[w], memory_order_relaxed);
-          addrlen = atomic_load_explicit(&slot->addrlen, memory_order_relaxed);
-          fd = atomic_load_explicit(&slot->fd, memory_order_relaxed);
-          b = atomic_load_explicit(&slot->b, memory_order_relaxed);
-        }
-        g2 = atomic_load_explicit(&slot->gen, memory_order_acquire);
-        if (g1 != g2)
-          continue; /* torn read, retry */
-        if (in_use) {
-          burst_acquire(b);
-          snap[n].idx = i;
-          snap[n].fd = fd;
-          memcpy(&snap[n].addr, words, sizeof snap[n].addr);
-          snap[n].addrlen = addrlen;
-          snap[n].b = b;
-          n++;
-        }
-        break;
-      }
+      if (!burst_slot_read(slot, &in_use, words, &addrlen, &fd, &b) || !in_use)
+        continue;
+      burst_acquire(b);
+      snap[n].idx = i;
+      snap[n].fd = fd;
+      memcpy(&snap[n].addr, words, sizeof snap[n].addr);
+      snap[n].addrlen = addrlen;
+      snap[n].b = b;
+      n++;
     }
 
     for (size_t i = 0; i < n; i++) {

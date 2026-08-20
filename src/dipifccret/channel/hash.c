@@ -66,38 +66,38 @@ void chan_hash_rebuild(channel_table_t *t) {
 /* full restart on lost claim CAS: bucket state may have moved meanwhile */
 channel_t *chan_hash_find_or_claim(channel_table_t *t, int family, const void *addr, size_t addr_len, unsigned port, size_t *claimed_h, int *was_tombstone) {
   size_t start = chan_key_hash(family, addr, addr_len, port) & t->hash_mask;
+  size_t h = start;
+  size_t avail = 0;
+  int have_avail = 0;
 
   for (;;) {
-    size_t h = start;
-    size_t avail = 0;
-    int have_avail = 0;
-
-    for (;;) {
-      size_t v = atomic_load_explicit(&t->hash[h], memory_order_acquire);
-      if (v == 0) {
-        size_t claim_h = have_avail ? avail : h;
-        size_t expected = have_avail ? CHANNEL_HASH_TOMBSTONE : 0;
-        if (atomic_compare_exchange_strong_explicit(&t->hash[claim_h], &expected, CHANNEL_HASH_CLAIMING, memory_order_acq_rel, memory_order_relaxed)) {
-          *claimed_h = claim_h;
-          *was_tombstone = have_avail;
-          return NULL;
-        }
-        break; /* claim CAS lost, restart */
+    size_t v = atomic_load_explicit(&t->hash[h], memory_order_acquire);
+    if (v == 0) {
+      size_t claim_h = have_avail ? avail : h;
+      size_t expected = have_avail ? CHANNEL_HASH_TOMBSTONE : 0;
+      if (atomic_compare_exchange_strong_explicit(&t->hash[claim_h], &expected, CHANNEL_HASH_CLAIMING, memory_order_acq_rel, memory_order_relaxed)) {
+        *claimed_h = claim_h;
+        *was_tombstone = have_avail;
+        return NULL;
       }
-      if (v == CHANNEL_HASH_TOMBSTONE) {
-        if (!have_avail) {
-          avail = h;
-          have_avail = 1;
-        }
-      } else if (v == CHANNEL_HASH_CLAIMING) {
-        continue; /* spin same bucket till resolved */
-      } else {
-        channel_t *c = &t->chan[v - 1];
-        if (atomic_load_explicit(&c->in_use, memory_order_acquire) == 1 && c->family == family && c->port == port && c->addr_len == addr_len && memcmp(c->addr, addr, addr_len) == 0)
-          return c;
-      }
-      h = (h + 1) & t->hash_mask;
+      h = start; /* claim CAS lost, restart: bucket state may have moved */
+      avail = 0;
+      have_avail = 0;
+      continue;
     }
+    if (v == CHANNEL_HASH_TOMBSTONE) {
+      if (!have_avail) {
+        avail = h;
+        have_avail = 1;
+      }
+    } else if (v == CHANNEL_HASH_CLAIMING) {
+      continue; /* spin same bucket till resolved */
+    } else {
+      channel_t *c = &t->chan[v - 1];
+      if (atomic_load_explicit(&c->in_use, memory_order_acquire) == 1 && c->family == family && c->port == port && c->addr_len == addr_len && memcmp(c->addr, addr, addr_len) == 0)
+        return c;
+    }
+    h = (h + 1) & t->hash_mask;
   }
 }
 

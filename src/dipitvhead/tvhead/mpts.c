@@ -315,6 +315,38 @@ static int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, 
   return 0;
 }
 
+/* EMM passthrough: mux-wide CAT, merged from each program's descriptor.
+   exclusive with own CAS (remux_new()). mp version of remux.c send_psi_tables()'s CAT handler */
+static void emit_source_cat_passthrough(mpts_program_t *progs, unsigned n, unsigned char *cat_cc, ts_metrics_t *tsm_p, remux_packet_cb cb, void *ctx) {
+  unsigned char cat_desc[ARGS_MAX_INPUTS * 6];
+  size_t cat_desc_len = 0;
+  int have_desc = 0;
+  unsigned char sec[4096];
+  unsigned char ptr0 = 0x00;
+  size_t sl;
+  for (unsigned i = 0; i < n; i++) {
+    size_t dl;
+    if (!progs[i].rx || cat_desc_len + 6 > sizeof cat_desc)
+      continue;
+    dl = remux_source_emm_descriptor(progs[i].rx, cat_desc + cat_desc_len, sizeof cat_desc - cat_desc_len);
+    if (dl) {
+      cat_desc_len += dl;
+      have_desc = 1;
+    }
+  }
+  if (!have_desc)
+    return;
+
+  sl = psi_build_cat(0, cat_desc, cat_desc_len, sec, sizeof sec);
+  if (sl) {
+    ts_packet_emit(OUT_PID_CAT, cat_cc, &ptr0, sec, sl, 0, 0, cb, ctx);
+    if (tsm_p)
+      tsm_p->psi_sections_total[PSI_TABLE_CAT]++;
+  } else if (tsm_p) {
+    tsm_p->psi_errors_total[PSI_TABLE_CAT]++;
+  }
+}
+
 int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   unsigned n = cfg->n_inputs;
   tv_slot_ctx_t slot_ctxs[ARGS_MAX_INPUTS];
@@ -481,37 +513,9 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       if (progs[i].rx)
         remux_emit_eit(progs[i].rx, OUT_PID_EIT, &eit_cc, 1, packet_cb, &out);
 
-    /* source EMM passthrough: mux-wide CAT, merged from each program's descriptor.
-       exclusive with own CAS (remux_new()). multi-program version of remux.c
-       send_psi_tables()'s standalone CAT handling. */
     if (!cas && now - last_cat >= INTERVAL_CAT_S) {
-      unsigned char cat_desc[ARGS_MAX_INPUTS * 6];
-      size_t cat_desc_len = 0;
-      int have_desc = 0;
-
       last_cat = now;
-      for (unsigned i = 0; i < n; i++) {
-        size_t dl;
-        if (!progs[i].rx || cat_desc_len + 6 > sizeof cat_desc)
-          continue;
-        dl = remux_source_emm_descriptor(progs[i].rx, cat_desc + cat_desc_len, sizeof cat_desc - cat_desc_len);
-        if (dl) {
-          cat_desc_len += dl;
-          have_desc = 1;
-        }
-      }
-      if (have_desc) {
-        unsigned char sec[4096];
-        unsigned char ptr0 = 0x00;
-        size_t sl = psi_build_cat(0, cat_desc, cat_desc_len, sec, sizeof sec);
-        if (sl) {
-          ts_packet_emit(OUT_PID_CAT, &cat_cc, &ptr0, sec, sl, 0, 0, packet_cb, &out);
-          if (tsm_p)
-            tsm_p->psi_sections_total[PSI_TABLE_CAT]++;
-        } else if (tsm_p) {
-          tsm_p->psi_errors_total[PSI_TABLE_CAT]++;
-        }
-      }
+      emit_source_cat_passthrough(progs, n, &cat_cc, tsm_p, packet_cb, &out);
     }
 
     if (cas_needs_discovery && !cas && check_cas_discovery_gate(cfg, progs, n, mpts, cas_gate_deadline, &cas) != 0) {

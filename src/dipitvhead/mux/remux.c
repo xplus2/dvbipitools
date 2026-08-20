@@ -106,6 +106,13 @@ static void resolve_nit(remux_t *r, const psi_t *psi) {
   }
 }
 
+static const psi_es_t *find_first_ca_es(const psi_es_t *es, int count) {
+  for (int k = 0; k < count; k++)
+    if (es[k].ca_pid)
+      return &es[k];
+  return NULL;
+}
+
 remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const psi_t *psi, const out_program_pids_t *pids, int standalone) {
   remux_t *r = calloc(1, sizeof *r);
   int n, count, dropped;
@@ -134,12 +141,11 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
         ecm_pid = psi_pmt_ca_pid(psi);
         ecm_sysid = psi_pmt_ca_system_id(psi);
       } else {
-        for (int k = 0; k < count; k++)
-          if (in_es[k].ca_pid) {
-            ecm_pid = in_es[k].ca_pid;
-            ecm_sysid = in_es[k].ca_system_id;
-            break;
-          }
+        const psi_es_t *ca_es = find_first_ca_es(in_es, count);
+        if (ca_es) {
+          ecm_pid = ca_es->ca_pid;
+          ecm_sysid = ca_es->ca_system_id;
+        }
       }
       if (psi_emm_pid(psi)) {
         emm_pid = psi_emm_pid(psi);
