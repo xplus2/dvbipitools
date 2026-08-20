@@ -98,7 +98,9 @@ static int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
     metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_RECOVERED_TOTAL, NULL, f->recovered);
     metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_LOST_TOTAL, NULL, f->lost);
     metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_RTT_MILLISECONDS, NULL, f->rtt);
+#ifdef DIPIRIST_HAVE_AVG_BUFFER_TIME
     metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_BUFFER_MILLISECONDS, NULL, f->avg_buffer_time);
+#endif
     metrics_exporter_send(mx, &w);
   }
   rist_stats_free(stats);

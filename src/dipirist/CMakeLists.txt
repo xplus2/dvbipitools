@@ -59,4 +59,18 @@ if (DIPIRIST_HAVE_RIST)
     if (DIPIRIST_HAVE_TLS)
         target_link_libraries(dipirist PRIVATE OpenSSL::SSL OpenSSL::Crypto)
     endif ()
+
+    include(CheckCSourceCompiles)
+    set(CMAKE_REQUIRED_INCLUDES ${RIST_INCLUDE_DIRS})
+    check_c_source_compiles("
+#include <librist/librist.h>
+int main(void) {
+    struct rist_stats_receiver_flow f;
+    return (int) f.avg_buffer_time;
+}
+" DIPIRIST_HAVE_AVG_BUFFER_TIME)
+    unset(CMAKE_REQUIRED_INCLUDES)
+    if (DIPIRIST_HAVE_AVG_BUFFER_TIME)
+        target_compile_definitions(dipirist PRIVATE DIPIRIST_HAVE_AVG_BUFFER_TIME)
+    endif ()
 endif ()

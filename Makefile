@@ -105,6 +105,8 @@ dipibim_SRCS := \
 	src/lib/bim/fragment.c \
 	src/lib/bim/accessunit.c
 
+LDFLAGS += -latomic
+
 HAVE_LIBZ := $(shell pkg-config --exists zlib && echo yes)
 
 ifeq ($(ZLIB),no)
@@ -664,6 +666,12 @@ ifneq (,$(findstring -static,$(LDFLAGS)))
 dipirist_EXTRA_LDFLAGS := $(shell pkg-config --static --libs librist)
 else
 dipirist_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
+endif
+
+DIPIRIST_AVGBUF_TEST_SRC := '\#include <librist/librist.h>\nint main(void){struct rist_stats_receiver_flow f;return (int)f.avg_buffer_time;}\n'
+HAVE_AVG_BUFFER_TIME := $(shell printf $(DIPIRIST_AVGBUF_TEST_SRC) | $(CC) -xc - $(dipirist_EXTRA_CFLAGS) -o /dev/null >/dev/null 2>&1 && echo yes)
+ifeq ($(HAVE_AVG_BUFFER_TIME),yes)
+dipirist_EXTRA_CFLAGS += -DDIPIRIST_HAVE_AVG_BUFFER_TIME
 endif
 
 ifeq ($(HAVE_TLS),yes)
