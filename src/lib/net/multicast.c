@@ -31,10 +31,13 @@ struct mcast {
   } dest; /* send-side only */
 };
 
-/* socket+SO_REUSEADDR+SO_RCVBUF+iface resolve+bind, shared by ASM and SSM open.
-   -1 on fail, *ifidx_out set from iface (0 if iface is NULL) */
-static int open_bound_recv_socket(int family, unsigned port, const char *iface, unsigned *ifidx_out) {
-  int fd, on = 1;
+/* socket+SO_REUSEADDR+SO_RCVBUF+iface resolve+bind, shared ASM/SSM open.
+   binds group not INADDR_ANY: same-port same-process inputs else all
+   eligible for each other's traffic (IP_MULTICAST_ALL), kernel picks one
+   winner per packet not per destination.
+   -1 fail, *ifidx_out from iface (0 if NULL) */
+static int open_bound_recv_socket(int family, const char *group, unsigned port, const char *iface, unsigned *ifidx_out) {
+  int fd, on = 1, off = 0;
   int rcvbuf = 4 * 1024 * 1024; /* absorb brief stalls, e.g. slow -v terminal */
 
   *ifidx_out = 0;
@@ -55,10 +58,17 @@ static int open_bound_recv_socket(int family, unsigned port, const char *iface, 
   }
   if (family == AF_INET) {
     struct sockaddr_in a;
+    /* belt-and-suspenders w/ group bind below: wildcard bind else sees every
+       group any host socket joined, not own (ip(7)) */
+    setsockopt(fd, IPPROTO_IP, IP_MULTICAST_ALL, &off, sizeof off);
     memset(&a, 0, sizeof a);
     a.sin_family = AF_INET;
     a.sin_port = htons((unsigned short)port);
-    a.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (inet_pton(AF_INET, group, &a.sin_addr) != 1) {
+      log_line("bad group address: %s", group);
+      close(fd);
+      return -1;
+    }
     if (bind(fd, (struct sockaddr *)&a, sizeof a) < 0) {
       log_line("bind: %s", strerror(errno));
       close(fd);
@@ -69,6 +79,11 @@ static int open_bound_recv_socket(int family, unsigned port, const char *iface, 
     memset(&a, 0, sizeof a);
     a.sin6_family = AF_INET6;
     a.sin6_port = htons((unsigned short)port);
+    if (inet_pton(AF_INET6, group, &a.sin6_addr) != 1) {
+      log_line("bad group address: %s", group);
+      close(fd);
+      return -1;
+    }
     if (bind(fd, (struct sockaddr *)&a, sizeof a) < 0) {
       log_line("bind: %s", strerror(errno));
       close(fd);
@@ -89,7 +104,7 @@ mcast_t *mcast_open(int family, const char *group, unsigned port, const char *if
   if (!m)
     return NULL;
   m->family = family;
-  m->fd = open_bound_recv_socket(family, port, iface, &ifidx);
+  m->fd = open_bound_recv_socket(family, group, port, iface, &ifidx);
   if (m->fd < 0) {
     free(m);
     return NULL;
@@ -133,7 +148,7 @@ mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char
     return NULL;
   m->family = family;
   m->ssm = 1;
-  m->fd = open_bound_recv_socket(family, port, iface, &ifidx);
+  m->fd = open_bound_recv_socket(family, group, port, iface, &ifidx);
   if (m->fd < 0) {
     free(m);
     return NULL;
