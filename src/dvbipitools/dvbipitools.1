@@ -1,0 +1,82 @@
+.TH DVBIPITOOLS 1 "2026-08-21" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dvbipitools \- multicall binary bundling every dvbipitools tool
+.SH SYNOPSIS
+.B dvbipitools
+\fItool\fR [\fIargs\fR ...]
+.br
+.B dipi
+\fIshort\-name\fR [\fIargs\fR ...]
+.br
+\fItool\fR [\fIargs\fR ...]
+.SH DESCRIPTION
+.B dvbipitools
+is one executable containing every tool in this project
+(\fBdipibcg\fR, \fBdipibim\fR, \fBdipicam378\fR, \fBdipidescramble\fR,
+\fBdipifccret\fR, \fBdipimetrics\fR, \fBdipiradiohead\fR, \fBdipirec\fR,
+\fBdipirist\fR, \fBdipiscan\fR, \fBdipisds\fR, \fBdipitvhead\fR,
+\fBdipixmltv\fR), dispatched one of three ways:
+.TP
+.B by full tool name
+\fBdvbipitools\fR \fItool\fR [\fIargs\fR ...], e.g. \fBdvbipitools dipiscan \-h\fR.
+.TP
+.B by short name
+\fBdipi\fR \fIshort\-name\fR [\fIargs\fR ...], where \fIshort\-name\fR drops
+the \fBdipi\fR prefix, e.g. \fBdipi scan \-h\fR. Both entry points accept
+either the full or the short name.
+.TP
+.B by symlink or hardlink
+Linking \fBdvbipitools\fR under any tool's own name (e.g.
+.I dipiscan
+\-> \fBdvbipitools\fR) makes running that link behave exactly like the
+standalone tool, with \fIargs\fR passed through unchanged.
+.PP
+Run
+.B dvbipitools
+or
+.B dipi
+with no arguments for the full applet list. Once dispatched, a tool's own
+options, exit status, and behavior are identical to running it standalone;
+see that tool's own manual page.
+.PP
+Not all 13 tools are necessarily present: \fBdipicam378\fR and
+\fBdipidescramble\fR require OpenSSL, \fBdipirist\fR requires librist, each
+built in only if that dependency was found (matching the standalone build).
+.SH EXAMPLES
+.TP
+.B dvbipitools dipiscan \-m 239.19.75.0 >hd.m3u
+Run \fBdipiscan\fR by its full name.
+.TP
+.B dipi scan \-m 239.19.75.0 >hd.m3u
+Same, via the short form.
+.TP
+.B ln \-s dvbipitools dipirec && ./dipirec \-i ... \-o ...
+Run \fBdipirec\fR via a symlink to \fBdvbipitools\fR.
+.SH EXIT STATUS
+.TP
+.B 0
+Success, or bare invocation with no arguments (applet list printed).
+.TP
+.B 2
+Unrecognized applet name or subcommand.
+.TP
+.B other
+Whatever the dispatched tool itself returns.
+.SH SEE ALSO
+.BR dipibcg (1),
+.BR dipibim (1),
+.BR dipicam378 (1),
+.BR dipidescramble (1),
+.BR dipifccret (1),
+.BR dipimetrics (1),
+.BR dipiradiohead (1),
+.BR dipirec (1),
+.BR dipirist (1),
+.BR dipiscan (1),
+.BR dipisds (1),
+.BR dipitvhead (1),
+.BR dipixmltv (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

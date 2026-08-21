@@ -11,21 +11,22 @@ I did not let it mess up the hard parts.
 
 ## Fantastic tools and where to deploy them
 
-| Tool                                           | Headend | Edge | Client | Lab | Purpose                                           |
-|------------------------------------------------|---------|------|--------|-----|---------------------------------------------------|
-| [dipitvhead](src/dipitvhead/README.md)         | ✔️      |      |        | ✔️  | Provide IPTV multicasts                           |
-| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      |      |        | ✔️  | Provide radio multicasts                          |
-| [dipimetrics](src/dipimetrics/README.md)       | ✔️      |      |        | ✔️  | Per-host OpenMetrics                              |
-| [dipirist](src/dipirist/README.md)             | ✔️      |      |        | ✔️  | RTP/TS to/from RIST bridge (sender & receiver)    |
-| [dipifccret](src/dipifccret/README.md)         | ✔️      | ✔️   |        | ✔️  | RAMS-based FCC (Annex I) and RET (Annex F) server |
-| [dipisds](src/dipisds/README.md)               | ✔️      |      | ✔️     | ✔️  | DVBSTP/SD&S service discovery (announce & listen) |
-| [dipibcg](src/dipibcg/README.md)               | ✔️      |      | ✔️     | ✔️  | DVBSTP/TVA BCG (publisher & reader)               |
-| [dipixmltv](src/dipixmltv/README.md)           | ✔️      |      | ✔️     | ✔️  | XMLTV to/from DVB-IPI TVA XML converter           |
-| [dipirec](src/dipirec/README.md)               |         |      | ✔️     | ✔️  | Multicast to file/stdout recorder                 |
-| [dipiscan](src/dipiscan/README.md)             |         |      | ✔️     | ✔️  | Scan for multicast TV/radio services (w/o SD&S)   |
-| [dipibim](src/dipibim/README.md)               |         |      |        | ✔️  | TVA XML BiM encoder/decoder (to debug `dipibcg`)  |
-| [dipicam378](src/dipicam378/README.md)         |         |      |        | ✔️  | cs378x CAS test smartcard emulator                |
-| [dipidescramble](src/dipidescramble/README.md) |         |      |        | ✔️  | CAS validation client / descrambler               |
+| Tool                                                  | Headend | Edge | Client | Lab | Purpose                                           |
+|-------------------------------------------------------|---------|------|--------|-----|---------------------------------------------------|
+| [dipitvhead](src/dipitvhead/README.md)                | ✔️      |      |        | ✔️  | Provide IPTV multicasts                           |
+| [dipiradiohead](src/dipiradiohead/README.md)          | ✔️      |      |        | ✔️  | Provide radio multicasts                          |
+| [dipimetrics](src/dipimetrics/README.md)              | ✔️      |      |        | ✔️  | Per-host OpenMetrics                              |
+| [dipirist](src/dipirist/README.md)                    | ✔️      |      |        | ✔️  | RTP/TS to/from RIST bridge (sender & receiver)    |
+| [dipifccret](src/dipifccret/README.md)                | ✔️      | ✔️   |        | ✔️  | RAMS-based FCC (Annex I) and RET (Annex F) server |
+| [dipisds](src/dipisds/README.md)                      | ✔️      |      | ✔️     | ✔️  | DVBSTP/SD&S service discovery (announce & listen) |
+| [dipibcg](src/dipibcg/README.md)                      | ✔️      |      | ✔️     | ✔️  | DVBSTP/TVA BCG (publisher & reader)               |
+| [dipixmltv](src/dipixmltv/README.md)                  | ✔️      |      | ✔️     | ✔️  | XMLTV to/from DVB-IPI TVA XML converter           |
+| [dipirec](src/dipirec/README.md)                      |         |      | ✔️     | ✔️  | Multicast to file/stdout recorder                 |
+| [dipiscan](src/dipiscan/README.md)                    |         |      | ✔️     | ✔️  | Scan for multicast TV/radio services (w/o SD&S)   |
+| [dipibim](src/dipibim/README.md)                      |         |      |        | ✔️  | TVA XML BiM encoder/decoder (to debug `dipibcg`)  |
+| [dipicam378](src/dipicam378/README.md)                |         |      |        | ✔️  | cs378x CAS test smartcard emulator                |
+| [dipidescramble](src/dipidescramble/README.md)        |         |      |        | ✔️  | CAS validation client / descrambler               |
+| [dvbipitools](src/dvbipitools/README.md) | ✔️      | ✔️     | ✔️       | ✔️  | All of the above (multicall binary)               |
 
 
 ## Build

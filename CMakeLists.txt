@@ -95,6 +95,8 @@ add_compile_definitions(
 
 include_directories("${CMAKE_SOURCE_DIR}/src")
 
+include(${CMAKE_SOURCE_DIR}/cmake/tool_sources.cmake)
+
 # generic src/*/CMakeLists.txt
 file(GLOB tool_dirs LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/src/*")
 foreach (d ${tool_dirs})

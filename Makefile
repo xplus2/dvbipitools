@@ -733,6 +733,88 @@ endef
 
 $(foreach t,$(TOOLS),$(eval $(call TOOL_template,$(t))))
 
+# dvbipitools: multicall binary, all $(TOOLS) merged, dispatch by argv[0]/subcommand.
+# separate object tree (build/dvbipitools/...): source-adjacent %.o would collide
+# with standalone tools' own objects under differing -D renames below.
+DVBIPITOOLS_TOOLS := $(TOOLS)
+
+DVBIPITOOLS_SRCS := $(sort $(foreach t,$(DVBIPITOOLS_TOOLS),$($(t)_SRCS)) src/dvbipitools/main.c)
+
+# dipiscan always stubs TLS, other tools follow global HAVE_TLS: pick 1 variant.
+DVBIPITOOLS_SRCS := $(filter-out src/lib/net/tls.c src/lib/net/tls_stub.c,$(DVBIPITOOLS_SRCS))
+ifeq ($(HAVE_TLS),yes)
+DVBIPITOOLS_SRCS += src/lib/net/tls.c
+else
+DVBIPITOOLS_SRCS += src/lib/net/tls_stub.c
+endif
+
+DVBIPITOOLS_OBJS := $(patsubst src/%.c,build/dvbipitools/src/%.o,$(DVBIPITOOLS_SRCS))
+ALL_OBJS += $(DVBIPITOOLS_OBJS)
+
+DVBIPITOOLS_EXTRA_CFLAGS := $(sort $(foreach t,$(DVBIPITOOLS_TOOLS),$($(t)_EXTRA_CFLAGS)))
+DVBIPITOOLS_EXTRA_LDFLAGS := $(sort $(foreach t,$(DVBIPITOOLS_TOOLS),$($(t)_EXTRA_LDFLAGS)))
+$(DVBIPITOOLS_OBJS): CFLAGS += $(DVBIPITOOLS_EXTRA_CFLAGS)
+
+# main()/args_parse() collide across all 13 tools once linked together, plus a
+# few same-named helpers between 2 unrelated tools (mcast_describe, cas_*, ...).
+# renamed per tool, scoped to that tool's own build/dvbipitools/src/<tool>/
+# objects only: differing renames of one name across tools must not both land
+# on a shared src/lib/ object.
+dvbipitools_dipibcg_DEFS := -Dmain=dipibcg_main -Dargs_parse=dipibcg_args_parse
+dvbipitools_dipibim_DEFS := -Dmain=dipibim_main -Dargs_parse=dipibim_args_parse
+dvbipitools_dipicam378_DEFS := -Dmain=dipicam378_main -Dargs_parse=dipicam378_args_parse \
+	-Daccept_main=dipicam378_accept_main
+dvbipitools_dipidescramble_DEFS := -Dmain=dipidescramble_main -Dargs_parse=dipidescramble_args_parse \
+	-Ddevice_on_emm=dipidescramble_device_on_emm -Ddevice_resolve_cw=dipidescramble_device_resolve_cw \
+	-Ddevice_state_free=dipidescramble_device_state_free -Ddevice_state_new=dipidescramble_device_state_new \
+	-Dout_describe=dipidescramble_out_describe
+dvbipitools_dipifccret_DEFS := -Dmain=dipifccret_main -Dargs_parse=dipifccret_args_parse
+dvbipitools_dipimetrics_DEFS := -Dmain=dipimetrics_main -Dargs_parse=dipimetrics_args_parse
+dvbipitools_dipiradiohead_DEFS := -Dmain=dipiradiohead_main -Dargs_parse=dipiradiohead_args_parse \
+	-Dcodec_name=dipiradiohead_codec_name -Dmcast_describe=dipiradiohead_mcast_describe
+dvbipitools_dipirec_DEFS := -Dmain=dipirec_main -Dargs_parse=dipirec_args_parse
+dvbipitools_dipirist_DEFS := -Dmain=dipirist_main -Dargs_parse=dipirist_args_parse
+dvbipitools_dipiscan_DEFS := -Dmain=dipiscan_main -Dargs_parse=dipiscan_args_parse
+dvbipitools_dipisds_DEFS := -Dmain=dipisds_main -Dargs_parse=dipisds_args_parse \
+	-Dannounce_run=dipisds_announce_run -Dlisten_run=dipisds_listen_run \
+	-Dmcast_describe=dipisds_mcast_describe
+dvbipitools_dipitvhead_DEFS := -Dmain=dipitvhead_main -Dargs_parse=dipitvhead_args_parse \
+	-Dcas_start=dipitvhead_cas_start -Dcas_stop=dipitvhead_cas_stop -Dcas_failed=dipitvhead_cas_failed \
+	-Dcas_scramble_packet=dipitvhead_cas_scramble_packet -Dcas_flush=dipitvhead_cas_flush \
+	-Dcas_get_metrics=dipitvhead_cas_get_metrics -Dcas_vendor_metrics=dipitvhead_cas_vendor_metrics \
+	-Dcas_vendor_super_cas_id=dipitvhead_cas_vendor_super_cas_id -Dcas_prog_desc=dipitvhead_cas_prog_desc \
+	-Dcas_build_cat=dipitvhead_cas_build_cat -Dcas_vendor_count=dipitvhead_cas_vendor_count \
+	-Dcas_vendor_ecm_pid=dipitvhead_cas_vendor_ecm_pid -Dcas_vendor_emm_pid=dipitvhead_cas_vendor_emm_pid \
+	-Dcas_vendor_ecm_due=dipitvhead_cas_vendor_ecm_due -Dcas_vendor_next_emm=dipitvhead_cas_vendor_next_emm \
+	-Dcas_reload_receivers=dipitvhead_cas_reload_receivers -Demit_metrics=dipitvhead_emit_metrics \
+	-Dflush_batch=dipitvhead_flush_batch -Dpacket_cb=dipitvhead_packet_cb \
+	-Dmcast_describe=dipitvhead_mcast_describe -Dsource_describe=dipitvhead_source_describe
+dvbipitools_dipixmltv_DEFS := -Dmain=dipixmltv_main -Dargs_parse=dipixmltv_args_parse
+
+define DVBIPITOOLS_TOOLDIR_template
+build/dvbipitools/src/$(1)/%.o: DVBIPITOOLS_DEFS := $$(dvbipitools_$(1)_DEFS)
+endef
+$(foreach t,$(DVBIPITOOLS_TOOLS),$(eval $(call DVBIPITOOLS_TOOLDIR_template,$(t))))
+
+DVBIPITOOLS_FEATURE_DEFS :=
+ifneq (,$(filter dipicam378,$(DVBIPITOOLS_TOOLS)))
+DVBIPITOOLS_FEATURE_DEFS += -DDVBIPITOOLS_HAVE_CAM378
+endif
+ifneq (,$(filter dipidescramble,$(DVBIPITOOLS_TOOLS)))
+DVBIPITOOLS_FEATURE_DEFS += -DDVBIPITOOLS_HAVE_DESCRAMBLE
+endif
+ifneq (,$(filter dipirist,$(DVBIPITOOLS_TOOLS)))
+DVBIPITOOLS_FEATURE_DEFS += -DDVBIPITOOLS_HAVE_RIST
+endif
+build/dvbipitools/src/dvbipitools/main.o: DVBIPITOOLS_DEFS := $(DVBIPITOOLS_FEATURE_DEFS)
+
+build/dvbipitools/src/%.o: src/%.c config.mk
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(DVBIPITOOLS_DEFS) -MMD -MP -c $< -o $@
+
+dvbipitools: $(DVBIPITOOLS_OBJS)
+	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) -o $@
+
 UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_rtpheader lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
@@ -2630,14 +2712,14 @@ fuzz-harnesses:
 	@echo "fuzz-harnesses: reconfigure with './configure --fuzz' to enable" >&2; exit 1
 endif
 
-MAN_PAGES := $(foreach t,$(TOOLS),src/$(t)/$(t).1)
+MAN_PAGES := $(foreach t,$(TOOLS),src/$(t)/$(t).1) src/dvbipitools/dvbipitools.1
 
 .PHONY: all clean install
-all: $(TOOLS)
+all: $(TOOLS) dvbipitools
 
-install: $(TOOLS)
+install: $(TOOLS) dvbipitools
 	install -d $(DESTDIR)$(BINDIR)
-	install -m 0755 $(TOOLS) $(DESTDIR)$(BINDIR)/
+	install -m 0755 $(TOOLS) dvbipitools $(DESTDIR)$(BINDIR)/
 	install -d $(DESTDIR)$(MANDIR)
 	install -m 0644 $(MAN_PAGES) $(DESTDIR)$(MANDIR)/
 
@@ -2649,4 +2731,5 @@ install: $(TOOLS)
 TLS_VARIANTS := src/lib/net/tls.o src/lib/net/tls_stub.o
 
 clean:
-	rm -f $(ALL_OBJS) $(ALL_OBJS:.o=.d) $(TLS_VARIANTS) $(TLS_VARIANTS:.o=.d) $(TOOLS) $(TEST_BINS) $(FUZZ_BINS)
+	rm -f $(ALL_OBJS) $(ALL_OBJS:.o=.d) $(TLS_VARIANTS) $(TLS_VARIANTS:.o=.d) $(TOOLS) dvbipitools $(TEST_BINS) $(FUZZ_BINS)
+	rm -rf build/dvbipitools

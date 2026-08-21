@@ -23,3 +23,4 @@ Description: command line tools for DVB-IPI streams
  dipifccret is an RTP retransmission (RET, Annex F) and server-based Fast Channel Change (FCC/RAMS, Annex I) server, passively watching a mirrored multicast segment via raw AF_PACKET capture to repair packet loss and burst cached RTP data to a HNED on request.
  dipicam378 is a cs378x (camd35/TCP) key server for testing dipitvhead's/dipiradiohead's CAS output: holds a device's RSA private key, answers ECM/EMM requests with a control word, a software smartcard for oscam.
  dipidescramble is a standalone CAS validation client for testing dipitvhead's/dipiradiohead's CAS output: reads a scrambled transport stream, decrypts the RSA -> BK -> SK -> CW chain with the device's private key, and descrambles it in place.
+ dvbipitools is a multicall binary bundling all of the above: run as "dvbipitools <tool>", or symlink/hardlink it to any tool's name.
