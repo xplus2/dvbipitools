@@ -20,7 +20,7 @@ jobs:
             crosspkg: crossbuild-essential-mipsel
             mesoncpu: mips
             container: debian:bookworm
-          - opkgarch: armv7ahf
+          - opkgarch: armv7ahf-neon
             dpkgarch: armhf
             triplet: arm-linux-gnueabihf
             sysproc: arm
