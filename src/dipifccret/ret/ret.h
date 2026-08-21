@@ -38,4 +38,7 @@ void ret_handle_nack(ret_ctx_t *r, const rtcp_nack_t *nack, int fd, const struct
 /* self-detected gap [gap_start, gap_end] on ssrc's channel; sends an FF then repairs via send_mc, no unicast reply */
 void ret_on_self_detected_gap(ret_ctx_t *r, uint32_t ssrc, uint16_t gap_start, uint16_t gap_end);
 
+/* active unicast RTX client sessions, F.3.2.1 */
+size_t ret_ctx_active_clients(ret_ctx_t *r);
+
 #endif

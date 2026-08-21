@@ -31,6 +31,15 @@ typedef struct {
   psi_t *psi;
   unsigned ecm_pid, emm_pid; /* 0 = not yet resolved */
   int cas_logged;
+  const char *cas_mode; /* NULL until cas_logged: "classic"/"biss1e"/"biss-ca" */
+  uint64_t ecm_total;
+  uint64_t ecm_errors_total;
+  uint64_t emm_total;
+  uint64_t cryptoperiod_transitions_total;
+  uint64_t scrambled_packets_total;
+  uint64_t unexpected_clear_packets_total;
+  uint64_t key_load_errors_total;
+  uint64_t output_errors_total;
   device_state_t *dev; /* NULL until classic ECM/EMM CAS resolved */
   biss_ca_state_t *biss_ca; /* NULL unless BISS Mode CA resolved */
   emmcache_t *cache;

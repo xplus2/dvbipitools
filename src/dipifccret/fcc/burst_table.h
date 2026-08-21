@@ -36,7 +36,17 @@ typedef struct {
   pthread_mutex_t lock;
   sockaddr_index_t *index; /* addr->slot, O(1) avg. slots[]/in_use stay authoritative: lookups
     re-validate against in_use+addr, drop stales */
+  _Atomic uint64_t bytes_retransmitted_total; /* pacer-folded per tick, survives slot reuse */
+  _Atomic uint64_t nacks_total;
+  _Atomic uint64_t congestion_adaptations_total;
 } burst_table_t;
+
+typedef struct {
+  unsigned bursts_active;
+  uint64_t bytes_retransmitted_total;
+  uint64_t nacks_total;
+  uint64_t congestion_adaptations_total;
+} burst_table_metrics_t;
 
 typedef enum {
   BURST_TABLE_NACK_NONE,
@@ -68,5 +78,10 @@ int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen
 
 /* terminates matching session if found. 1 found, 0 not. has_stop_seq/stop_seqnum: see burst_terminate() */
 int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int has_stop_seq, uint32_t stop_seqnum);
+
+/* pacer folds each tick's bytes_sent delta here, doesn't survive slot reuse otherwise */
+void burst_table_note_bytes_sent(burst_table_t *t, uint64_t bytes);
+
+void burst_table_get_metrics(burst_table_t *t, burst_table_metrics_t *out);
 
 #endif

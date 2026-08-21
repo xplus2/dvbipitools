@@ -18,8 +18,12 @@ if (OpenSSL_FOUND)
         device.c
         ../lib/cas/device_crypto.c
         ../lib/cas/device_state_core.c
+        ../lib/metrics/protocol.c
+        ../lib/metrics/export.c
+        ../lib/net/netconnect.c
         ../lib/log.c
         ../lib/argutil.c
+        ../lib/ioutil.c
         ../lib/signal.c
         ../lib/secure_zero.c)
 

@@ -95,6 +95,9 @@ static void print_help(void) {
       "  -u, --user <user>                drop privileges to this user after opening the capture handle\n"
       "  -v, --verbose                    periodic stats on stderr\n"
       "      --color <when>               auto|always|never (default auto)\n"
+      "      --metrics <path>             Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+      "      --metrics-id <name>          stable instance id; metrics disabled unless set\n"
+      "      --metrics-interval <s>       snapshot interval in seconds (default: 5)\n"
       "  -d, --daemonize                  fork to background after startup, detach from terminal\n"
       "  -h, --help                       this help\n\n"
       "RET (Annex F) options:\n"
@@ -166,6 +169,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"congestion-nack-threshold", required_argument, 0, 1017},
       {"fcc-range", required_argument, 0, 1018},
       {"fcc-client-range", required_argument, 0, 1019},
+      {"metrics", required_argument, 0, 1022},
+      {"metrics-id", required_argument, 0, 1023},
+      {"metrics-interval", required_argument, 0, 1024},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
@@ -421,6 +427,22 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
+      case 1022:
+        cfg->metrics_sock = optarg;
+        break;
+      case 1023:
+        cfg->metrics_id = optarg;
+        break;
+      case 1024: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 86400UL) {
+          argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->metrics_interval_s = (unsigned)v;
+        break;
+      }
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -455,6 +477,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   if (cfg->workers == 0) {
     long n = sysconf(_SC_NPROCESSORS_ONLN);
     cfg->workers = n > 0 ? (unsigned)n : 1;
+  }
+  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
+    argerr("--metrics/--metrics-interval require --metrics-id");
+    return ARGS_ERR;
   }
   return ARGS_OK;
 }

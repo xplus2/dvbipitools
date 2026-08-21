@@ -35,4 +35,7 @@ rtx_session_slot_t *rtx_session_table_get(rtx_session_table_t *t, const struct s
 /* amortized reap, at most max_scan slots per call: same pattern as channel_table_reap_step */
 void rtx_session_table_reap_step(rtx_session_table_t *t, time_t max_age_s, size_t max_scan);
 
+/* valid sessions across every stripe */
+size_t rtx_session_table_active_count(rtx_session_table_t *t);
+
 #endif

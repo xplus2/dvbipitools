@@ -78,3 +78,11 @@ int device_resolve_cw(device_state_t *d, const unsigned char *ecm, size_t ecm_le
   secure_zero(cw, sizeof cw);
   return 0;
 }
+
+unsigned device_state_services_active(const device_state_t *d) {
+  unsigned n = 0;
+  for (size_t i = 0; i < d->core.service_count; i++)
+    if (d->core.services[i].have)
+      n++;
+  return n;
+}

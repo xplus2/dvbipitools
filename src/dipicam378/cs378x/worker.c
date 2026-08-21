@@ -70,6 +70,7 @@ static void *worker_main(void *arg) {
   tv.tv_usec = CS378X_RECV_TIMEOUT_MS * 1000;
   setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
   log_line(TOOL_NAME ": connection accepted (slot %d)", slot);
+  atomic_fetch_add_explicit(&s->connections_total, 1, memory_order_relaxed);
 
   for (;;) {
     unsigned char buf[CS378X_BUF_CAP];
@@ -83,12 +84,14 @@ static void *worker_main(void *arg) {
     if (!have_ucrc) {
       if (s->check_ucrc && memcmp(buf, s->expected_ucrc, 4) != 0) {
         log_line(TOOL_NAME ": username mismatch, closing (slot %d)", slot);
+        atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_USER], 1, memory_order_relaxed);
         break;
       }
       memcpy(conn_ucrc, buf, 4);
       have_ucrc = 1;
     } else if (memcmp(buf, conn_ucrc, 4) != 0) {
       log_line(TOOL_NAME ": connection id changed mid-stream, closing (slot %d)", slot);
+      atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_CONNID], 1, memory_order_relaxed);
       break;
     }
 
@@ -103,6 +106,7 @@ static void *worker_main(void *arg) {
     total = cs378x_frame_boundary(20 + buflen);
     if (total > CS378X_BUF_CAP - 4) {
       log_line(TOOL_NAME ": oversized request (%zu), closing (slot %d)", total, slot);
+      atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_OVERSIZED], 1, memory_order_relaxed);
       break;
     }
 
@@ -116,6 +120,7 @@ static void *worker_main(void *arg) {
 
     if (cs378x_crc32(body + 20, buflen) != (((uint32_t)body[4] << 24) | ((uint32_t)body[5] << 16) | ((uint32_t)body[6] << 8) | body[7])) {
       log_line(TOOL_NAME ": checksum error, wrong password? (slot %d)", slot);
+      atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_CHECKSUM], 1, memory_order_relaxed);
       break;
     }
 

@@ -7,6 +7,7 @@
 
 #include "args.h"
 #include "lib/log.h"
+#include "lib/metrics/export.h"
 #include "lib/signal.h"
 #include "record.h"
 #include "version.h"
@@ -90,5 +91,13 @@ int main(int argc, char **argv) {
   if (cfg.ret.enabled) app(line, sizeof line, n, " \e[1mret:\e[0m\e[0;37m%s:%u%s\e[0m", cfg.ret.addr, cfg.ret.port, cfg.ret.mc_enabled ? "+mc" : "");
   log_line_ansi("%s", line);
   signals_install();
-  return record_run(&cfg);
+  {
+    metrics_exporter_t mx;
+    int rc;
+
+    metrics_exporter_init(&mx, METRICS_COMPONENT_REC, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
+    rc = record_run(&cfg, &mx);
+    metrics_exporter_close(&mx);
+    return rc;
+  }
 }

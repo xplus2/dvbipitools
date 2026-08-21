@@ -272,6 +272,40 @@ START_TEST(note_nack_adapts_then_terminates_under_thresholds) {
 }
 END_TEST
 
+START_TEST(get_metrics_reports_active_count_and_nack_totals) {
+  burst_table_t *t = burst_table_new(1);
+  channel_t *c = make_channel_with_rap();
+  burst_t *b;
+  struct sockaddr_in sin;
+  burst_table_nack_result_t result;
+  burst_table_metrics_t m;
+
+  atomic_store_explicit(&c->nominal_bps, 4000000.0, memory_order_relaxed);
+  b = burst_new(c, 1.0, 0, 99);
+  addr_of(&sin, 6000);
+  burst_table_claim(t, (const struct sockaddr *)&sin, sizeof sin, 3, b);
+
+  burst_table_get_metrics(t, &m);
+  ck_assert_uint_eq(m.bursts_active, 1);
+  ck_assert_uint_eq(m.nacks_total, 0);
+  ck_assert_uint_eq(m.congestion_adaptations_total, 0);
+
+  burst_table_note_nack(t, (const struct sockaddr *)&sin, sizeof sin, 4, &result); /* nack 1, no action */
+  burst_table_note_nack(t, (const struct sockaddr *)&sin, sizeof sin, 4, &result); /* nack 2, adapts */
+
+  burst_table_note_bytes_sent(t, 1000);
+  burst_table_note_bytes_sent(t, 500);
+
+  burst_table_get_metrics(t, &m);
+  ck_assert_uint_eq(m.nacks_total, 2);
+  ck_assert_uint_eq(m.congestion_adaptations_total, 1);
+  ck_assert_uint_eq(m.bytes_retransmitted_total, 1500);
+
+  burst_table_free(t);
+  channel_table_free(g_table);
+}
+END_TEST
+
 /* race: RAMS-R (burst_table_start) + pacer + NACK + RAMS-T interleaved.
    mirrors main.c pacer_main's acquire/tick/reconcile/release cycle */
 
@@ -508,6 +542,7 @@ static Suite *burst_table_suite(void) {
   tcase_add_test(tc, congestion_adapted_resets_on_claim_and_reclaim);
   tcase_add_test(tc, start_replaces_existing_burst_without_reusing_old_pointer);
   tcase_add_test(tc, note_nack_adapts_then_terminates_under_thresholds);
+  tcase_add_test(tc, get_metrics_reports_active_count_and_nack_totals);
   tcase_add_test(tc, burst_table_survives_rams_r_pacer_nack_termination_race);
   tcase_add_test(tc, start_under_concurrent_exhaustion_admits_exactly_cap_sessions);
   tcase_set_timeout(tc, 20);

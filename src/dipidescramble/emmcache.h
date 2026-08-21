@@ -23,4 +23,7 @@ int emmcache_feed(emmcache_t *c, device_state_t *d, const unsigned char *emm, si
 /* whole-file rewrite of current tracked section set. 0 ok, -1 w fail */
 int emmcache_save(const emmcache_t *c, const char *path);
 
+/* EMM-G sections dropped: cache full (EMMCACHE_MAX_SERVICES already tracked) */
+unsigned long long emmcache_dropped_total(const emmcache_t *c);
+
 #endif

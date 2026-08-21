@@ -33,6 +33,7 @@ struct emmcache {
   int have_emm_u;
   emm_g_slot_t services[EMMCACHE_MAX_SERVICES];
   size_t service_count;
+  unsigned long long dropped_total;
 };
 
 emmcache_t *emmcache_new(void) { return calloc(1, sizeof(struct emmcache)); }
@@ -63,6 +64,7 @@ int emmcache_feed(emmcache_t *c, device_state_t *d, const unsigned char *emm, si
     emm_g_slot_t *sl = slot_for(c, service_id);
     if (!sl) {
       log_line(TOOL_NAME ": emm cache full (%d services), dropping EMM-G for service_id 0x%04x", EMMCACHE_MAX_SERVICES, service_id);
+      c->dropped_total++;
       return 0;
     }
     if (sl->sec.len == emm_len && memcmp(sl->sec.raw, emm, emm_len) == 0)
@@ -161,4 +163,8 @@ int emmcache_save(const emmcache_t *c, const char *path) {
   }
   fclose(f);
   return 0;
+}
+
+unsigned long long emmcache_dropped_total(const emmcache_t *c) {
+  return c->dropped_total;
 }

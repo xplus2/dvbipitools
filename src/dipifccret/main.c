@@ -14,7 +14,9 @@
 #include <unistd.h>
 
 #include "lib/demux/rtcp.h"
+#include "lib/ioutil.h"
 #include "lib/log.h"
+#include "lib/metrics/export.h"
 #include "lib/mux/rtcp_build.h"
 #include "lib/signal.h"
 
@@ -457,12 +459,14 @@ static void *pacer_main(void *arg) {
       burst_tick_result_t r;
       int owns_slot = 0;
       int remove_slot = 0;
+      double bytes_before = snap[i].b->bytes_sent; /* single-ticker-thread field, burst.h */
 
       dst.fd = snap[i].fd;
       dst.to = (const struct sockaddr *)&snap[i].addr;
       dst.tolen = snap[i].addrlen;
       dst.congestion = 0;
       r = burst_tick(snap[i].b, pc->duration_cap_ms, burst_send_cb, &dst);
+      burst_table_note_bytes_sent(pc->bursts, (uint64_t)(snap[i].b->bytes_sent - bytes_before));
       owns_slot = finalize_burst_slot(pc, snap[i].idx, snap[i].b, dst.congestion, r, &remove_slot);
 
       if (owns_slot && dst.congestion)
@@ -566,6 +570,52 @@ static void *rsi_pacer_main(void *arg) {
   return NULL;
 }
 
+typedef struct {
+  metrics_exporter_t *mx;
+  channel_table_t *channels;
+  ret_ctx_t *ret;        /* NULL: RET disabled */
+  burst_table_t *bursts; /* NULL: FCC disabled */
+} metrics_ctx_t;
+
+static void push_metrics(metrics_ctx_t *mc) {
+  metrics_writer_t w;
+  size_t cap, active_channels = 0;
+
+  if (!metrics_exporter_due(mc->mx, mono_seconds()) || metrics_exporter_begin(mc->mx, &w, TOOL_VERSION))
+    return;
+
+  cap = channel_table_capacity(mc->channels);
+  for (size_t i = 0; i < cap; i++)
+    if (channel_table_at(mc->channels, i))
+      active_channels++;
+  metrics_writer_put(&w, METRICS_ID_FCC_CHANNELS_ACTIVE, NULL, active_channels);
+
+  if (mc->ret)
+    metrics_writer_put(&w, METRICS_ID_FCC_RET_CLIENTS_ACTIVE, NULL, ret_ctx_active_clients(mc->ret));
+
+  if (mc->bursts) {
+    burst_table_metrics_t bm;
+    burst_table_get_metrics(mc->bursts, &bm);
+    metrics_writer_put(&w, METRICS_ID_FCC_BURSTS_ACTIVE, NULL, bm.bursts_active);
+    metrics_writer_put(&w, METRICS_ID_FCC_BYTES_RETRANSMITTED_TOTAL, NULL, bm.bytes_retransmitted_total);
+    metrics_writer_put(&w, METRICS_ID_FCC_NACKS_TOTAL, NULL, bm.nacks_total);
+    metrics_writer_put(&w, METRICS_ID_FCC_CONGESTION_ADAPTATIONS_TOTAL, NULL, bm.congestion_adaptations_total);
+  }
+
+  metrics_exporter_send(mc->mx, &w);
+}
+
+static void *metrics_thread_main(void *arg) {
+  metrics_ctx_t *mc = arg;
+  struct timespec tick = {0, 200 * 1000 * 1000}; /* 200ms: stop signal noticed promptly */
+
+  while (!signal_stop_requested()) {
+    push_metrics(mc);
+    nanosleep(&tick, NULL);
+  }
+  return NULL;
+}
+
 int main(int argc, char **argv) {
   config_t cfg;
   args_status_t st;
@@ -589,6 +639,10 @@ int main(int argc, char **argv) {
   rsi_pacer_ctx_t rsi_ctx;
   pthread_t rsi_thread;
   int rsi_started = 0;
+  metrics_exporter_t mx;
+  metrics_ctx_t metrics_ctx;
+  pthread_t metrics_thread;
+  int metrics_started = 0;
 
   log_set_color(log_color_prescan(argc, argv));
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
@@ -605,6 +659,7 @@ int main(int argc, char **argv) {
     log_line(TOOL_NAME ": daemonize failed: %s", strerror(errno));
     return 1;
   }
+  metrics_exporter_init(&mx, METRICS_COMPONENT_FCCRET, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
 
   max_channels = cfg.max_channels ? cfg.max_channels : CHANNEL_DEFAULT_MAX;
   ring_slots = cfg.no_ret ? 0 : cfg.buffer_ms; /* ring_slots ~= buffer_ms: ~1 packet/ms assumption */
@@ -732,6 +787,18 @@ int main(int argc, char **argv) {
     rsi_started = 1;
   }
 
+  if (metrics_exporter_enabled(&mx)) {
+    metrics_ctx.mx = &mx;
+    metrics_ctx.channels = channels;
+    metrics_ctx.ret = ret;
+    metrics_ctx.bursts = bursts;
+    if (pthread_create(&metrics_thread, NULL, metrics_thread_main, &metrics_ctx) != 0) {
+      fprintf(stderr, "%s: failed to start metrics thread\n", TOOL_NAME);
+      return 1;
+    }
+    metrics_started = 1;
+  }
+
   signals_install();
   log_line(TOOL_NAME ": capturing, %u worker(s) on %s:%u, %zu channel slots [%s%s%s%s]", cfg.workers, cfg.listen_addr, cfg.listen_port, max_channels,
       cfg.no_ret ? "no RET" : (mt ? "RET+MC" : "RET unicast-only"), cfg.no_ret || cfg.no_fcc ? "" : ", ", cfg.no_fcc ? "no FCC" : "FCC", rsi_started ? "+RSI" : "");
@@ -741,6 +808,9 @@ int main(int argc, char **argv) {
     pthread_join(pacer_thread, NULL);
   if (rsi_started)
     pthread_join(rsi_thread, NULL);
+  if (metrics_started)
+    pthread_join(metrics_thread, NULL);
+  metrics_exporter_close(&mx);
   listen_pool_stop(pool);
   if (resolve_pool)
     listen_multi_stop(resolve_pool);

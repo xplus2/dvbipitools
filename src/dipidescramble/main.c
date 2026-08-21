@@ -11,6 +11,7 @@
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
+#include "lib/metrics/export.h"
 #include "lib/mux/flv/flv.h"
 #include "lib/net/rtmpout.h"
 #include "lib/net/tssource.h"
@@ -139,6 +140,26 @@ static int open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
   return 0;
 }
 
+static void push_metrics(metrics_exporter_t *mx, const loop_ctx_t *lc) {
+  metrics_writer_t w;
+
+  if (!metrics_exporter_due(mx, mono_seconds()) || metrics_exporter_begin(mx, &w, TOOL_VERSION))
+    return;
+  if (lc->cas_mode) {
+    metrics_writer_put(&w, METRICS_ID_DESCRAMBLE_MODE, lc->cas_mode, 1);
+    metrics_writer_put(&w, METRICS_ID_CAS_CRYPTOPERIOD_TRANSITIONS_TOTAL, lc->cas_mode, lc->cryptoperiod_transitions_total);
+    metrics_writer_put(&w, METRICS_ID_CAS_ECM_TOTAL, lc->cas_mode, lc->ecm_total);
+    metrics_writer_put(&w, METRICS_ID_CAS_ECM_ERRORS_TOTAL, lc->cas_mode, lc->ecm_errors_total);
+    metrics_writer_put(&w, METRICS_ID_CAS_EMM_TOTAL, lc->cas_mode, lc->emm_total);
+    metrics_writer_put(&w, METRICS_ID_CAS_EMM_DROPPED_TOTAL, lc->cas_mode, lc->dev ? emmcache_dropped_total(lc->cache) : 0);
+  }
+  metrics_writer_put(&w, METRICS_ID_CAS_SCRAMBLED_PACKETS_TOTAL, NULL, lc->scrambled_packets_total);
+  metrics_writer_put(&w, METRICS_ID_CAS_UNEXPECTED_CLEAR_PACKETS_TOTAL, NULL, lc->unexpected_clear_packets_total);
+  metrics_writer_put(&w, METRICS_ID_DESCRAMBLE_KEY_LOAD_ERRORS_TOTAL, NULL, lc->key_load_errors_total);
+  metrics_writer_put(&w, METRICS_ID_DESCRAMBLE_OUTPUT_ERRORS_TOTAL, NULL, lc->output_errors_total);
+  metrics_exporter_send(mx, &w);
+}
+
 static void close_outputs(loop_ctx_t *lc, int mkv_fd) {
   for (int i = 0; i < lc->n_rtmp; i++)
     rtmpout_close(lc->rtmp[i]);
@@ -156,6 +177,7 @@ int main(int argc, char **argv) {
   tssrc_t *src = NULL;
   tspack_t pz;
   loop_ctx_t lc;
+  metrics_exporter_t mx;
   unsigned char buf[65536];
   char mkv_app_name[64];
   mkv_opts_t mkv_opts;
@@ -258,6 +280,7 @@ int main(int argc, char **argv) {
   memset(&pz, 0, sizeof pz);
   signals_install();
   start = last_stat = mono_seconds();
+  metrics_exporter_init(&mx, METRICS_COMPONENT_DESCRAMBLE, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
 
   while (!signal_stop_requested()) {
     ssize_t n = tssrc_read(src, buf, sizeof buf, NULL);
@@ -271,8 +294,11 @@ int main(int argc, char **argv) {
       log_line(TOOL_NAME ": %llu packets, %.0fs elapsed", lc.packets, mono_seconds() - start);
       last_stat = mono_seconds();
     }
+    if (metrics_exporter_enabled(&mx))
+      push_metrics(&mx, &lc);
   }
 
+  metrics_exporter_close(&mx);
   pipeline_flush(&lc);
   rc = (lc.fatal || lc.emit_failed) ? 1 : 0;
 

@@ -455,8 +455,22 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c)
     target_link_libraries(test_dipidescramble_pipeline PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(dipidescramble_args
+        unit/dipidescramble/test_args.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/args.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/secure_zero.c)
+    target_link_libraries(test_dipidescramble_args PRIVATE OpenSSL::Crypto)
 else ()
-    message(WARNING "tests: OpenSSL not found, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_ecm_profile/dipidescramble_biss_ca_state/dipidescramble_pipeline unit tests")
+    message(WARNING "tests: OpenSSL not found, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_ecm_profile/dipidescramble_biss_ca_state/dipidescramble_pipeline/dipidescramble_args unit tests")
 endif ()
 
 dvbipitools_add_unit_test(lib_bim_bitwriter
@@ -1147,6 +1161,8 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/dipirec/record.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/ret_client.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c

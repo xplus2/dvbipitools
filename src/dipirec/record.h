@@ -7,9 +7,10 @@
 #include <stddef.h>
 
 #include "args.h"
+#include "lib/metrics/export.h"
 
 /* run recording; 0 on success */
-int record_run(const config_t *cfg);
+int record_run(const config_t *cfg, metrics_exporter_t *mx);
 
 /* 1 if a stop signal or -t duration_s has elapsed since start (mono_seconds()) */
 int stop_now(const config_t *cfg, double start);

@@ -127,12 +127,14 @@ void handle_ecm(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4], un
 
   if (s->verbose)
     log_line(TOOL_NAME ": ECM request srvid=%04X caid=%04X prid=%08X len=%zu", srvid, caid, prid, buflen);
+  atomic_fetch_add_explicit(&s->ecm_total, 1, memory_order_relaxed);
 
   rc = s->ecm_cb ? s->ecm_cb(body + 20, buflen, srvid, caid, prid, cw, s->user) : -1;
   if (rc == 0) {
     send_ecm_response(s, fd, conn_ucrc, body, cw);
     return;
   }
+  atomic_fetch_add_explicit(&s->ecm_errors_total, 1, memory_order_relaxed);
   if (rc == -2) {
     log_line(TOOL_NAME ": caid %04X not supported, sending CMD08 for srvid=%04X", caid, srvid);
     send_cmd08(s, fd, conn_ucrc, body);
@@ -150,6 +152,7 @@ void handle_emm(cs378x_server_t *s, unsigned char *body, size_t buflen) {
 
   if (s->verbose)
     log_line(TOOL_NAME ": EMM caid=%04X provid=%08X len=%zu", caid, provid, buflen);
+  atomic_fetch_add_explicit(&s->emm_total, 1, memory_order_relaxed);
 
   if (s->emm_cb)
     s->emm_cb(body + 20, buflen, caid, provid, s->user);

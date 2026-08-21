@@ -69,6 +69,7 @@ static void handle_ecm_section(loop_ctx_t *lc) {
   if (device_resolve_cw(lc->dev, sec, seclen, psi_program_number(lc->psi), lc->cw_len, lc->ecm_pid, cw) != 0) {
     if (lc->cfg->ecm_profile.set)
       log_line(TOOL_NAME ": ecm_profile: CW resolve failed for this ECM section");
+    lc->ecm_errors_total++;
     return;
   }
   if (lc->have_cw[parity] && memcmp(lc->last_cw[parity], cw, sizeof cw) == 0)
@@ -76,6 +77,7 @@ static void handle_ecm_section(loop_ctx_t *lc) {
 
   memcpy(lc->last_cw[parity], cw, sizeof cw);
   lc->have_cw[parity] = 1;
+  lc->cryptoperiod_transitions_total++;
   scrambler_set_key(lc->scr, parity, cw, (size_t)lc->cw_len, emit_downstream, lc);
   log_line(TOOL_NAME ": CW updated (parity=%s)", parity == SCRAMBLE_PARITY_EVEN ? "even" : "odd");
 }
@@ -85,17 +87,21 @@ static void handle_ecm_section(loop_ctx_t *lc) {
 static void handle_biss_ca_ecm_section(loop_ctx_t *lc) {
   unsigned char sw[2][BISS_CA_SW_LEN];
 
-  if (biss_ca_state_resolve_ecm(lc->biss_ca, lc->ecm_asm.buf, lc->ecm_asm.expect, sw[SCRAMBLE_PARITY_EVEN], sw[SCRAMBLE_PARITY_ODD]) != 0)
+  if (biss_ca_state_resolve_ecm(lc->biss_ca, lc->ecm_asm.buf, lc->ecm_asm.expect, sw[SCRAMBLE_PARITY_EVEN], sw[SCRAMBLE_PARITY_ODD]) != 0) {
+    lc->ecm_errors_total++;
     return;
+  }
   if (!lc->have_cw[SCRAMBLE_PARITY_EVEN] || memcmp(lc->last_cw[SCRAMBLE_PARITY_EVEN], sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN) != 0) {
     memcpy(lc->last_cw[SCRAMBLE_PARITY_EVEN], sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN);
     lc->have_cw[SCRAMBLE_PARITY_EVEN] = 1;
+    lc->cryptoperiod_transitions_total++;
     scrambler_set_key(lc->scr, SCRAMBLE_PARITY_EVEN, sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN, emit_downstream, lc);
     log_line(TOOL_NAME ": biss-ca: CW updated (parity=even)");
   }
   if (!lc->have_cw[SCRAMBLE_PARITY_ODD] || memcmp(lc->last_cw[SCRAMBLE_PARITY_ODD], sw[SCRAMBLE_PARITY_ODD], BISS_CA_SW_LEN) != 0) {
     memcpy(lc->last_cw[SCRAMBLE_PARITY_ODD], sw[SCRAMBLE_PARITY_ODD], BISS_CA_SW_LEN);
     lc->have_cw[SCRAMBLE_PARITY_ODD] = 1;
+    lc->cryptoperiod_transitions_total++;
     scrambler_set_key(lc->scr, SCRAMBLE_PARITY_ODD, sw[SCRAMBLE_PARITY_ODD], BISS_CA_SW_LEN, emit_downstream, lc);
     log_line(TOOL_NAME ": biss-ca: CW updated (parity=odd)");
   }
@@ -110,12 +116,14 @@ static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
     mkv_feed(lc->mkv, pkt);
     if (mkv_error(lc->mkv)) {
       lc->emit_failed = 1;
+      lc->output_errors_total++;
       return;
     }
   } else {
     for (int i = 0; i < lc->n_outfd; i++)
       if (write(lc->outfd[i], pkt, 188) != 188) {
         lc->emit_failed = 1;
+        lc->output_errors_total++;
         return;
       }
   }
@@ -123,6 +131,7 @@ static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
     flv_feed(lc->flv, pkt);
     if (flv_error(lc->flv)) {
       lc->emit_failed = 1;
+      lc->output_errors_total++;
       return;
     }
   }
@@ -186,6 +195,7 @@ int pkt_cb(void *v, const unsigned char *pkt) {
       lc->biss_ca = biss_ca_state_new(lc->cfg->biss2_ca_key_path);
       if (!lc->biss_ca) {
         log_line(TOOL_NAME ": cannot load RSA private key from --biss2-ca-key %s", lc->cfg->biss2_ca_key_path);
+        lc->key_load_errors_total++;
         lc->fatal = 1;
         return 1;
       }
@@ -196,6 +206,7 @@ int pkt_cb(void *v, const unsigned char *pkt) {
         return 1;
       }
       lc->cw_len = (int)scrambler_cw_len(SCRAMBLE_ALGO_CISSA);
+      lc->cas_mode = "biss-ca";
     } else if (pmt_ca == BISS_CA_SYSTEM_ID) {
       unsigned char sw[BISS_KEY_LEN];
       scramble_algo_t algo;
@@ -210,6 +221,7 @@ int pkt_cb(void *v, const unsigned char *pkt) {
       }
       if (resolve_biss1e_key(lc->cfg, sw, &algo, &cw, &cw_len) != 0) {
         log_line(TOOL_NAME ": failed to decrypt --biss2-esw (no OpenSSL in this build?)");
+        lc->key_load_errors_total++;
         lc->fatal = 1;
         return 1;
       }
@@ -222,6 +234,7 @@ int pkt_cb(void *v, const unsigned char *pkt) {
       lc->cw_len = (int)scrambler_cw_len(algo);
       scrambler_set_key(lc->scr, SCRAMBLE_PARITY_EVEN, cw, cw_len, NULL, NULL);
       scrambler_set_key(lc->scr, SCRAMBLE_PARITY_ODD, cw, cw_len, NULL, NULL);
+      lc->cas_mode = "biss1e";
     } else if (psi_have_cat(lc->psi) && lc->ecm_pid && psi_emm_pid(lc->psi) && psi_scrambling_mode(lc->psi)) {
       scramble_algo_t algo;
       log_line(TOOL_NAME ": CAS parameters resolved: ecm_pid=0x%04x emm_pid=0x%04x ca_system_id=0x%04x scrambling_mode=0x%02x", lc->ecm_pid, psi_emm_pid(lc->psi), psi_ca_system_id(lc->psi), psi_scrambling_mode(lc->psi));
@@ -234,9 +247,11 @@ int pkt_cb(void *v, const unsigned char *pkt) {
       lc->dev = device_state_new(lc->cfg->key_path, lc->cfg->serial, &lc->cfg->ecm_profile);
       if (!lc->dev) {
         log_line(TOOL_NAME ": cannot load RSA private key from -k %s", lc->cfg->key_path);
+        lc->key_load_errors_total++;
         lc->fatal = 1;
         return 1;
       }
+      lc->cas_mode = "classic";
       if (emmcache_load(lc->cache, lc->dev, lc->emm_file) != 0)
         log_line(TOOL_NAME ": failed to read emm cache %s, continuing without it", lc->emm_file);
       if (lc->cfg->unicast_emm_uri)
@@ -254,6 +269,7 @@ int pkt_cb(void *v, const unsigned char *pkt) {
 
   /* BISS 1/E signaling pid also classifies PID_ECM. guard lc->dev, not just lc->biss_ca */
   if (lc->ecm_pid && pid == lc->ecm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_feed(&lc->ecm_asm, pl, plen, pusi) && lc->scr) {
+    lc->ecm_total++;
     if (lc->biss_ca)
       handle_biss_ca_ecm_section(lc);
     else if (lc->dev)
@@ -261,6 +277,7 @@ int pkt_cb(void *v, const unsigned char *pkt) {
   }
 
   if (lc->emm_pid && pid == lc->emm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_feed(&lc->emm_asm, pl, plen, pusi)) {
+    lc->emm_total++;
     if (lc->biss_ca) {
       biss_ca_state_on_emm(lc->biss_ca, lc->emm_asm.buf, lc->emm_asm.expect);
     } else if (lc->dev && emmcache_feed(lc->cache, lc->dev, lc->emm_asm.buf, lc->emm_asm.expect)) {
@@ -271,8 +288,12 @@ int pkt_cb(void *v, const unsigned char *pkt) {
   /* pkt is always genuinely mutable (tspack_t's acc[] or main()'s buffer). const is just tspack_feed()'s callback contract */
   if (lc->scr) {
     /* -1: reserved control value or key not loaded yet. fwd as-is */
-    if (scrambler_decrypt_packet_queued(lc->scr, (unsigned char *)pkt, emit_downstream, lc) != 0)
+    if (scrambler_decrypt_packet_queued(lc->scr, (unsigned char *)pkt, emit_downstream, lc) != 0) {
+      lc->unexpected_clear_packets_total++;
       emit_downstream(lc, pkt);
+    } else {
+      lc->scrambled_packets_total++;
+    }
   } else {
     emit_downstream(lc, pkt);
   }

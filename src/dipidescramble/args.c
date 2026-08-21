@@ -152,6 +152,9 @@ static void print_help(void) {
       "  %-27sincoming multicast interface\n"
       "  %-27speriodic stats + BK/SK/CW update lines on stderr\n"
       "  %-27sauto|always|never (default auto)\n"
+      "  %-27sUnix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+      "  %-27sstable instance id; metrics disabled unless set\n"
+      "  %-27ssnapshot interval in seconds (default: 5)\n"
       "  %-27sfork to background after startup, detach from terminal\n"
       "  %-27sthis help\n\n"
       "examples:\n"
@@ -168,7 +171,9 @@ static void print_help(void) {
       "    --ecm-profile <spec>",
       "-o, --output <target>", "", "-f, --format <fmt>", "", "-p, --pmt-pid <pid|all>", "", "",
       "-I, --iface <iface>", "-v, --verbose",
-      "    --color <when>", "-d, --daemonize", "-h, --help",
+      "    --color <when>",
+      "    --metrics <path>", "    --metrics-id <name>", "    --metrics-interval <s>",
+      "-d, --daemonize", "-h, --help",
       TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
@@ -193,6 +198,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"biss1-sw", required_argument, 0, 1007},
       {"biss2-ca-key", required_argument, 0, 1008},
       {"ecm-profile", required_argument, 0, 1009},
+      {"metrics", required_argument, 0, 1011},
+      {"metrics-id", required_argument, 0, 1012},
+      {"metrics-interval", required_argument, 0, 1013},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
@@ -311,6 +319,22 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
+      case 1011:
+        cfg->metrics_sock = optarg;
+        break;
+      case 1012:
+        cfg->metrics_id = optarg;
+        break;
+      case 1013: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 86400UL) {
+          argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->metrics_interval_s = (unsigned)v;
+        break;
+      }
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -359,6 +383,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (cfg->biss1_sw_given && (cfg->biss2_sw_given || cfg->biss2_esw_given)) {
     argerr("--biss1-sw is mutually exclusive with --biss2-sw/--biss2-esw");
+    return ARGS_ERR;
+  }
+  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
+    argerr("--metrics/--metrics-interval require --metrics-id");
     return ARGS_ERR;
   }
   return ARGS_OK;

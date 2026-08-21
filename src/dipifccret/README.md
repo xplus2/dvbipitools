@@ -33,6 +33,9 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
   -u, --user <user>                drop privileges to this user after opening the capture handle
   -v, --verbose                    periodic stats on stderr
       --color <when>               auto|always|never (default auto)
+      --metrics <path>             Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)
+      --metrics-id <name>          stable instance id; metrics disabled unless set
+      --metrics-interval <s>       snapshot interval in seconds (default: 5)
   -d, --daemonize                  fork to background after startup, detach from terminal
   -h, --help                       this help
 ```

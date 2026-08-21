@@ -1,3 +1,11 @@
+dvbipitools (2.3.1-1) unstable; urgency=medium
+  * added optional metrics export to the following tools:
+    + dipirec
+    + dipidescramble
+    + dipicam378
+    + dipifccret
+ -- dvbipitools authors <unspecified@example.com>  Tue, 01 Sep 2026 00:00:00 +0200
+
 dvbipitools (2.3.0-1) unstable; urgency=medium
   * merged dipirist sender and receiver
   * dipirec replay to multicast

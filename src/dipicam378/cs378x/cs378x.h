@@ -16,6 +16,22 @@ typedef struct {
   int verbose;
 } cs378x_cfg_t;
 
+/* append-only: index also selects auth_errors_total[] slot, metrics wire label */
+typedef enum { CAM_AUTH_USER = 0, CAM_AUTH_CONNID, CAM_AUTH_CHECKSUM, CAM_AUTH_OVERSIZED, CAM_AUTH_REASON_COUNT } cam_auth_reason_t;
+
+const char *cs378x_auth_reason_name(cam_auth_reason_t r);
+
+typedef struct {
+  unsigned connections_active;
+  unsigned long long connections_total;
+  unsigned long long auth_errors_total[CAM_AUTH_REASON_COUNT];
+  unsigned long long ecm_total;
+  unsigned long long ecm_errors_total;
+  unsigned long long emm_total;
+} cs378x_metrics_t;
+
+void cs378x_server_get_metrics(cs378x_server_t *s, cs378x_metrics_t *out);
+
 /* CW for one ECM. 0 ok. -1 transient, no reply (OSCcam retries, e.g. no EMM yet).
    -2 permanent, CAID unsupported (CMD08 "shut up") */
 typedef int (*cs378x_ecm_cb)(const unsigned char *ecm, size_t ecm_len, unsigned srvid, unsigned caid, unsigned prid, unsigned char cw_out[16], void *user);

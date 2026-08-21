@@ -29,6 +29,8 @@ if (OpenSSL_FOUND)
         ipiclient.c
         ../lib/cas/device_crypto.c
         ../lib/cas/device_state_core.c
+        ../lib/metrics/protocol.c
+        ../lib/metrics/export.c
         ../lib/log.c
         ../lib/secure_zero.c
         ../lib/argutil.c

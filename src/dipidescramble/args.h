@@ -56,6 +56,9 @@ typedef struct {
   unsigned char biss1_sw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into full checksummed CSA1 CW */
   const char *biss2_ca_key_path;         /* --biss2-ca-key, receiver RSA private key PEM, required only if stream turns out to be BISS Mode CA */
   ecm_profile_t ecm_profile;             /* --ecm-profile, ecm_profile.set == 0 = AES-256-ECB/CBCnoIV, unchanged */
+  const char *metrics_sock;    /* --metrics. NULL = default socket path */
+  const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
+  unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

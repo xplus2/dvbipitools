@@ -42,6 +42,12 @@ struct cs378x_server {
   cs378x_ecm_cb ecm_cb;
   cs378x_emm_cb emm_cb;
   void *user;
+
+  atomic_ullong connections_total;
+  atomic_ullong auth_errors_total[CAM_AUTH_REASON_COUNT];
+  atomic_ullong ecm_total;
+  atomic_ullong ecm_errors_total;
+  atomic_ullong emm_total;
 };
 
 typedef struct {

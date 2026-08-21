@@ -122,6 +122,7 @@ typedef struct {
   ristout_t *rist; /* NULL unless -o rist:// */
   int net_had_error;  /* edge-log gate, net send failure never stops recording */
   int rist_had_error; /* edge-log gate, rist write failure never stops recording */
+  uint64_t errors_total; /* metrics: cumulative write failures, net/rist only */
 } out_sink_t;
 
 static int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
@@ -129,6 +130,7 @@ static int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) 
   o->rist = NULL;
   o->net_had_error = 0;
   o->rist_had_error = 0;
+  o->errors_total = 0;
   if (t->kind == OUT_FILE) {
     o->fd = open_output(t->file_path);
     return o->fd < 0 ? -1 : 0;
@@ -162,8 +164,9 @@ static int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) 
 }
 
 /* failed network sink never fatal, log only on failure/recovery edge, retry every write */
-static void note_send_result(int ok, int *had_error, const char *label) {
+static void note_send_result(int ok, int *had_error, uint64_t *errors_total, const char *label) {
   if (!ok) {
+    (*errors_total)++;
     if (!*had_error) {
       log_line("%s output: write failed, will keep retrying", label);
       *had_error = 1;
@@ -176,11 +179,11 @@ static void note_send_result(int ok, int *had_error, const char *label) {
 
 static int sink_write(out_sink_t *o, const unsigned char *p, size_t n) {
   if (o->rist) {
-    note_send_result(ristout_write(o->rist, p, n) >= 0, &o->rist_had_error, "rist");
+    note_send_result(ristout_write(o->rist, p, n) >= 0, &o->rist_had_error, &o->errors_total, "rist");
     return 0;
   }
   if (o->net) {
-    note_send_result(tssink_write(o->net, p, n) >= 0, &o->net_had_error, "net");
+    note_send_result(tssink_write(o->net, p, n) >= 0, &o->net_had_error, &o->errors_total, "net");
     return 0;
   }
   return write_all(o->fd, p, n);
@@ -203,6 +206,7 @@ static void sink_close(out_sink_t *o) {
 typedef struct {
   rtmpout_t *out[DIPIREC_MAX_OUT];
   int had_error[DIPIREC_MAX_OUT];
+  uint64_t errors_total[DIPIREC_MAX_OUT]; /* metrics: cumulative write failures per target */
   int n;
 } rtmp_fanout_t;
 
@@ -219,6 +223,7 @@ static int rtmp_fanout_open(const config_t *cfg, rtmp_fanout_t *r) {
     if (!r->out[r->n])
       return -1;
     r->had_error[r->n] = 0;
+    r->errors_total[r->n] = 0;
     r->n++;
   }
   return 0;
@@ -232,7 +237,7 @@ static void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms
   };
 
   for (int i = 0; i < r->n; i++) {
-    note_send_result(rtmpout_write(r->out[i], type, timestamp_ms, data, len) >= 0, &r->had_error[i], labels[i]);
+    note_send_result(rtmpout_write(r->out[i], type, timestamp_ms, data, len) >= 0, &r->had_error[i], &r->errors_total[i], labels[i]);
   }
 }
 
@@ -318,8 +323,35 @@ static void stats_show(const config_t *cfg, double elapsed, unsigned long long b
   fflush(stderr);
 }
 
+/* label o<i>: net/rist sinks only, up/retry concept. label rtmp<i>: rtmp targets */
+static void push_metrics(metrics_exporter_t *mx, const config_t *cfg, out_sink_t *sinks, int n_sinks,
+                         const rtmp_fanout_t *rf, unsigned long long bytes, double start) {
+  metrics_writer_t w;
+  char label[16];
+
+  if (!metrics_exporter_due(mx, mono_seconds()) || metrics_exporter_begin(mx, &w, TOOL_VERSION))
+    return;
+  metrics_writer_put(&w, METRICS_ID_REC_BYTES_TOTAL, NULL, bytes);
+  metrics_writer_put(&w, METRICS_ID_REC_ELAPSED_SECONDS, NULL, (uint64_t)(mono_seconds() - start));
+  metrics_writer_put(&w, METRICS_ID_REC_DURATION_LIMIT_SECONDS, NULL, cfg->duration_s > 0 ? (uint64_t)cfg->duration_s : 0);
+  for (int i = 0; i < n_sinks; i++) {
+    if (!sinks[i].net && !sinks[i].rist)
+      continue;
+    snprintf(label, sizeof label, "o%d", i);
+    metrics_writer_put(&w, METRICS_ID_REC_OUTPUT_UP, label, (sinks[i].net_had_error || sinks[i].rist_had_error) ? 0 : 1);
+    metrics_writer_put(&w, METRICS_ID_REC_OUTPUT_ERRORS_TOTAL, label, sinks[i].errors_total);
+  }
+  for (int i = 0; i < rf->n; i++) {
+    snprintf(label, sizeof label, "rtmp%d", i);
+    metrics_writer_put(&w, METRICS_ID_REC_OUTPUT_UP, label, rf->had_error[i] ? 0 : 1);
+    metrics_writer_put(&w, METRICS_ID_REC_OUTPUT_ERRORS_TOTAL, label, rf->errors_total[i]);
+  }
+  metrics_exporter_send(mx, &w);
+}
+
 /* no flv/rtmp path here, args.c already rejects -f raw + an rtmp(s) target */
-static int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, unsigned long long *bytes, double start, pace_ctrl_t *pace) {
+static int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, const rtmp_fanout_t *rf,
+                    metrics_exporter_t *mx, unsigned long long *bytes, double start, pace_ctrl_t *pace) {
   unsigned char buf[65536];
   tspack_t pz = {{0}, 0};
   raw_ctx_t ctx;
@@ -358,6 +390,8 @@ static int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks
       stats_show(cfg, mono_seconds() - start, *bytes, ctx.psi);
       last_stat = mono_seconds();
     }
+    if (metrics_exporter_enabled(mx))
+      push_metrics(mx, cfg, sinks, n_sinks, rf, *bytes, start);
   }
   psi_free(ctx.psi);
   return rc;
@@ -418,8 +452,8 @@ static int stream_cb(void *v, const unsigned char *pkt) {
    mkv_fd < 0: no mkv/mka target. rf->n == 0: no rtmp(s) target.
    pmt_pid/all_pids/n_all_pids: as resolve_pmt_selection filled them in */
 static int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, int mkv_fd, rtmp_fanout_t *rf,
-                       unsigned long long *bytes, double start, int video_ok, unsigned pmt_pid, const unsigned *all_pids,
-                       int n_all_pids, pace_ctrl_t *pace) {
+                       metrics_exporter_t *mx, unsigned long long *bytes, double start, int video_ok, unsigned pmt_pid,
+                       const unsigned *all_pids, int n_all_pids, pace_ctrl_t *pace) {
   unsigned char buf[65536];
   tspack_t pz = {{0}, 0};
   stream_ctx_t ctx;
@@ -498,6 +532,8 @@ static int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_si
       stats_show(cfg, mono_seconds() - start, *bytes, p);
       last_stat = mono_seconds();
     }
+    if (metrics_exporter_enabled(mx))
+      push_metrics(mx, cfg, sinks, n_sinks, rf, *bytes, start);
   }
   if (ctx.flv)
     flv_close(ctx.flv);
@@ -564,7 +600,7 @@ static int resolve_pmt_selection(const config_t *cfg, src_t *s, unsigned *pmt_pi
   return 1;
 }
 
-int record_run(const config_t *cfg) {
+int record_run(const config_t *cfg, metrics_exporter_t *mx) {
   unsigned long long bytes = 0;
   double start;
   src_t s;
@@ -618,9 +654,9 @@ int record_run(const config_t *cfg) {
   start = mono_seconds();
   if (cfg->format == FMT_RAW || (cfg->format == FMT_TS && n_all_pids > 0))
     /* -p all under -f ts: nothing left to filter, mkv/flv both need one fixed program anyway */
-    rc = run_raw(&s, cfg, sinks, n_sinks, &bytes, start, pace);
+    rc = run_raw(&s, cfg, sinks, n_sinks, &rf, mx, &bytes, start, pace);
   else
-    rc = run_stream(&s, cfg, sinks, n_sinks, mkv_fd, &rf, &bytes, start, cfg->format == FMT_MKV, pmt_pid, all_pids, n_all_pids, pace);
+    rc = run_stream(&s, cfg, sinks, n_sinks, mkv_fd, &rf, mx, &bytes, start, cfg->format == FMT_MKV, pmt_pid, all_pids, n_all_pids, pace);
   pace_free(pace);
 
   src_close(&s); /* IGMP/MLD leave */

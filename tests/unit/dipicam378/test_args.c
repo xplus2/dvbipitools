@@ -138,6 +138,21 @@ START_TEST(serial_and_verbose_are_recorded) {
 }
 END_TEST
 
+START_TEST(metrics_options_require_metrics_id) {
+  char *argv[] = {"dipicam378", "-k", "device.key", "--metrics", "/tmp/x.sock", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(metrics_id_alone_is_accepted) {
+  char *argv[] = {"dipicam378", "-k", "device.key", "--metrics-id", "inst1", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.metrics_id, "inst1");
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipicam378_args");
   TCase *tc = tcase_create("core");
@@ -157,6 +172,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
   tcase_add_test(tc, help_returns_help_status);
   tcase_add_test(tc, serial_and_verbose_are_recorded);
+  tcase_add_test(tc, metrics_options_require_metrics_id);
+  tcase_add_test(tc, metrics_id_alone_is_accepted);
   suite_add_tcase(s, tc);
   return s;
 }

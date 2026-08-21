@@ -185,6 +185,7 @@ int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen
     unsigned adapt_at;
 
     slot->nack_count++;
+    atomic_fetch_add_explicit(&t->nacks_total, 1, memory_order_relaxed);
     if (threshold == 0) {
       pthread_mutex_unlock(&t->lock);
       return 1;
@@ -198,6 +199,7 @@ int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen
       out->new_bps = atomic_load_explicit(&b->target_bps, memory_order_relaxed) * 0.5;
       atomic_store_explicit(&b->target_bps, out->new_bps, memory_order_relaxed);
       slot->congestion_adapted = 1;
+      atomic_fetch_add_explicit(&t->congestion_adaptations_total, 1, memory_order_relaxed);
       out->action = BURST_TABLE_NACK_ADAPTED;
       out->msn = ++slot->msn;
     }
@@ -214,4 +216,18 @@ int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen
     burst_terminate(atomic_load_explicit(&t->slots[idx].b, memory_order_relaxed), has_stop_seq, stop_seqnum);
   pthread_mutex_unlock(&t->lock);
   return idx != SIZE_MAX;
+}
+
+void burst_table_note_bytes_sent(burst_table_t *t, uint64_t bytes) {
+  atomic_fetch_add_explicit(&t->bytes_retransmitted_total, bytes, memory_order_relaxed);
+}
+
+void burst_table_get_metrics(burst_table_t *t, burst_table_metrics_t *out) {
+  out->bursts_active = 0;
+  for (size_t i = 0; i < t->cap; i++)
+    if (atomic_load_explicit(&t->slots[i].in_use, memory_order_relaxed))
+      out->bursts_active++;
+  out->bytes_retransmitted_total = atomic_load_explicit(&t->bytes_retransmitted_total, memory_order_relaxed);
+  out->nacks_total = atomic_load_explicit(&t->nacks_total, memory_order_relaxed);
+  out->congestion_adaptations_total = atomic_load_explicit(&t->congestion_adaptations_total, memory_order_relaxed);
 }

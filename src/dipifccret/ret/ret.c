@@ -49,6 +49,10 @@ void ret_ctx_reap_step(ret_ctx_t *r, time_t max_age_s, size_t max_scan) {
   rtx_session_table_reap_step(r->rtx_clients, max_age_s, max_scan);
 }
 
+size_t ret_ctx_active_clients(ret_ctx_t *r) {
+  return rtx_session_table_active_count(r->rtx_clients);
+}
+
 static void repair_one(ret_ctx_t *r, channel_t *c, uint16_t seq) {
   channel_slot_t slot;
   unsigned char out[12 + 2 + CHANNEL_MAX_PAYLOAD];

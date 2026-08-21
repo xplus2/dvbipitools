@@ -55,6 +55,10 @@ typedef struct {
   size_t fcc_range_count;
   cidr_t fcc_client_ranges[ARGS_MAX_RANGES]; /* --fcc-client-range, empty = every client eligible (505) */
   size_t fcc_client_range_count;
+
+  const char *metrics_sock;    /* --metrics. NULL = default socket path */
+  const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
+  unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

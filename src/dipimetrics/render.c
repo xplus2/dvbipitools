@@ -92,6 +92,24 @@ static const metric_def_t DEFS[] = {
     {METRICS_ID_RIST_RECEIVER_LOST_TOTAL, "dvbipi_rist_receiver_lost_total", M_COUNTER, "packets never recovered", NULL, 0},
     {METRICS_ID_RIST_RECEIVER_RTT_MILLISECONDS, "dvbipi_rist_receiver_rtt_milliseconds", M_GAUGE, "average RTT across the flow's peers", NULL, 0},
     {METRICS_ID_RIST_RECEIVER_BUFFER_MILLISECONDS, "dvbipi_rist_receiver_buffer_milliseconds", M_GAUGE, "current recovery buffer fill", NULL, 0},
+    {METRICS_ID_REC_BYTES_TOTAL, "dvbipi_rec_bytes_total", M_COUNTER, "bytes written across all outputs", NULL, 0},
+    {METRICS_ID_REC_OUTPUT_UP, "dvbipi_rec_output_up", M_GAUGE, "1 if this output's last write succeeded", "output", 0},
+    {METRICS_ID_REC_OUTPUT_ERRORS_TOTAL, "dvbipi_rec_output_errors_total", M_COUNTER, "output write failures", "output", 0},
+    {METRICS_ID_REC_ELAPSED_SECONDS, "dvbipi_rec_elapsed_seconds", M_GAUGE, "seconds since recording started", NULL, 0},
+    {METRICS_ID_REC_DURATION_LIMIT_SECONDS, "dvbipi_rec_duration_limit_seconds", M_GAUGE, "configured recording duration, 0 if unlimited", NULL, 0},
+    {METRICS_ID_DESCRAMBLE_MODE, "dvbipi_descramble_mode", M_INFO, "detected CAS scheme", "mode", 0},
+    {METRICS_ID_DESCRAMBLE_KEY_LOAD_ERRORS_TOTAL, "dvbipi_descramble_key_load_errors_total", M_COUNTER, "RSA/device key load failures", NULL, 0},
+    {METRICS_ID_DESCRAMBLE_OUTPUT_ERRORS_TOTAL, "dvbipi_descramble_output_errors_total", M_COUNTER, "output emit failures", NULL, 0},
+    {METRICS_ID_CAM_CONNECTIONS_ACTIVE, "dvbipi_cam_connections_active", M_GAUGE, "connected cs378x clients", NULL, 0},
+    {METRICS_ID_CAM_CONNECTIONS_TOTAL, "dvbipi_cam_connections_total", M_COUNTER, "cs378x client connections accepted", NULL, 0},
+    {METRICS_ID_CAM_AUTH_ERRORS_TOTAL, "dvbipi_cam_auth_errors_total", M_COUNTER, "cs378x auth/protocol errors by reason", "reason", 0},
+    {METRICS_ID_CAM_SERVICES_ACTIVE, "dvbipi_cam_services_active", M_GAUGE, "services with a live session key", NULL, 0},
+    {METRICS_ID_FCC_CHANNELS_ACTIVE, "dvbipi_fcc_channels_active", M_GAUGE, "channels currently tracked", NULL, 0},
+    {METRICS_ID_FCC_BURSTS_ACTIVE, "dvbipi_fcc_bursts_active", M_GAUGE, "concurrent FCC burst sessions", NULL, 0},
+    {METRICS_ID_FCC_RET_CLIENTS_ACTIVE, "dvbipi_fcc_ret_clients_active", M_GAUGE, "active unicast RET sessions", NULL, 0},
+    {METRICS_ID_FCC_BYTES_RETRANSMITTED_TOTAL, "dvbipi_fcc_bytes_retransmitted_total", M_COUNTER, "bytes retransmitted via FCC bursts", NULL, 0},
+    {METRICS_ID_FCC_NACKS_TOTAL, "dvbipi_fcc_nacks_total", M_COUNTER, "NACKs handled", NULL, 0},
+    {METRICS_ID_FCC_CONGESTION_ADAPTATIONS_TOTAL, "dvbipi_fcc_congestion_adaptations_total", M_COUNTER, "burst rate reduced due to congestion", NULL, 0},
 };
 #define N_DEFS (sizeof DEFS / sizeof DEFS[0])
 
@@ -193,7 +211,7 @@ static void append_composite_input_reason(strbuf_t *sb, const char *label) {
   sb_appendf(sb, ",input=\"%s\",reason=\"%s\"", esc_input, esc_reason);
 }
 
-#define DEF_ID_MAX 128 /* comfortably above highest metrics_id_t value */
+#define DEF_ID_MAX 192 /* comfortably above highest metrics_id_t value */
 
 typedef struct {
   const store_slot_t *slot;

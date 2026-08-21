@@ -18,28 +18,31 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 
 ## Options
 
-| flag  | long form       | argument              | default                                             |
-|-------|-----------------|-----------------------|-----------------------------------------------------|
-| `-i`  | `--input`       | `<uri>`               | required                                            |
-| `-k`  | `--key`         | `<path>`              | required for ECM/EMM-driven CAS                     |
-| `-s`  | `--serial`      | `<id>`                | required for ECM/EMM-driven CAS                     |
-| `-e`  | `--emm-file`    | `<path>`              | required for ECM/EMM-driven CAS (cache file)        |
-| `-u`  | `--unicast-emm` | `<uri>`               |                                                     |
-|       | `--insecure`    |                       | off (`-u`, or `-o rtmps://`)                        |
-| `-o`  | `--output`      | `<target>`            | required, repeatable                                |
-| `-f`  | `--format`      | `ts\|mkv\|mka`        | `ts`                                                |
-| `-p`  | `--pmt-pid`     | `<pid>` / `all`       | none (see below)                                    |
-| `-I`  | `--iface`       | `<iface>`             | kernel default                                      |
-|       | `--biss1-sw`    | `<hex12>`             | BISS1 Mode 1, mutually exclusive with `--biss2-*`   |
-|       | `--biss2-sw`    | `<hex32>`             | BISS2 Mode 1, mutually exclusive with `--biss2-esw` |
-|       | `--biss2-esw`   | `<hex32>`             | BISS2 Mode E                                        |
-|       | `--biss2-id`    | `<hex32>`             | required with `--biss2-esw`                         |
-|       | `--biss2-ca-key`| `<path>`              | BISS2 Mode CA: receiver RSA private key, PEM        |
-|       | `--ecm-profile` | `<spec>`              | `ecm_profile` templating, see below                 |
-| `-v`  | `--verbose`     |                       | off                                                 |
-|       | `--color`       | `auto\|always\|never` | `auto`                                              |
-| `-d`  | `--daemonize`   |                       | off (foreground)                                    |
-| `-h`  | `--help`        |                       |                                                     |
+| flag  | long form            | argument              | default                                             |
+|-------|----------------------|-----------------------|-----------------------------------------------------|
+| `-i`  | `--input`            | `<uri>`               | required                                            |
+| `-k`  | `--key`              | `<path>`              | required for ECM/EMM-driven CAS                     |
+| `-s`  | `--serial`           | `<id>`                | required for ECM/EMM-driven CAS                     |
+| `-e`  | `--emm-file`         | `<path>`              | required for ECM/EMM-driven CAS (cache file)        |
+| `-u`  | `--unicast-emm`      | `<uri>`               |                                                     |
+|       | `--insecure`         |                       | off (`-u`, or `-o rtmps://`)                        |
+| `-o`  | `--output`           | `<target>`            | required, repeatable                                |
+| `-f`  | `--format`           | `ts\|mkv\|mka`        | `ts`                                                |
+| `-p`  | `--pmt-pid`          | `<pid>` / `all`       | none (see below)                                    |
+| `-I`  | `--iface`            | `<iface>`             | kernel default                                      |
+|       | `--biss1-sw`         | `<hex12>`             | BISS1 Mode 1, mutually exclusive with `--biss2-*`   |
+|       | `--biss2-sw`         | `<hex32>`             | BISS2 Mode 1, mutually exclusive with `--biss2-esw` |
+|       | `--biss2-esw`        | `<hex32>`             | BISS2 Mode E                                        |
+|       | `--biss2-id`         | `<hex32>`             | required with `--biss2-esw`                         |
+|       | `--biss2-ca-key`     | `<path>`              | BISS2 Mode CA: receiver RSA private key, PEM        |
+|       | `--ecm-profile`      | `<spec>`              | `ecm_profile` templating, see below                 |
+| `-v`  | `--verbose`          |                       | off                                                 |
+|       | `--color`            | `auto\|always\|never` | `auto`                                              |
+|       | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`                     |
+|       | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)                  |
+|       | `--metrics-interval` | `<s>`                 | `5`                                                 |
+| `-d`  | `--daemonize`        |                       | off (foreground)                                    |
+| `-h`  | `--help`             |                       |                                                     |
 
 ## Parameters
 

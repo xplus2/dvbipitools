@@ -43,18 +43,21 @@ static void print_help(void) {
       "cs378x (camd35/TCP) key server: holds a device's RSA private key, answers\n"
       "oscam's ECM/EMM with a control word - a software smartcard, nothing more.\n\n"
       "options:\n"
-      "  -k, --key <path>          RSA private key, PEM (required)\n"
-      "  -s, --serial <id>         device's serial, matched against EMM-U\n"
-      "  -p, --port <n>            cs378x TCP listen port (default: %u)\n"
-      "  -a, --auth [user:]<pass>  password must match the reader's \"password =\"\n"
-      "                            (default: \"%s\") - its digest is the AES-128 key.\n"
-      "      --caid <hex>          ECMs for any other CAID get a CMD08 (\"stop asking\")\n"
-      "                            (optional, default: no CMD08 ever sent)\n"
-      "      --algo <a>            cissa|csa2 (default: cissa)\n"
-      "  -v, --verbose             protocol/decode detail on stderr\n"
-      "      --color <when>        auto|always|never (default auto)\n"
-      "  -d, --daemonize           fork to background after startup, detach from terminal\n"
-      "  -h, --help                this help\n\n"
+      "  -k, --key <path>           RSA private key, PEM (required)\n"
+      "  -s, --serial <id>          device's serial, matched against EMM-U\n"
+      "  -p, --port <n>             cs378x TCP listen port (default: %u)\n"
+      "  -a, --auth [user:]<pass>   password must match the reader's \"password =\"\n"
+      "                             (default: \"%s\") - its digest is the AES-128 key.\n"
+      "      --caid <hex>           ECMs for any other CAID get a CMD08 (\"stop asking\")\n"
+      "                             (optional, default: no CMD08 ever sent)\n"
+      "      --algo <a>             cissa|csa2 (default: cissa)\n"
+      "  -v, --verbose              protocol/decode detail on stderr\n"
+      "      --color <when>         auto|always|never (default auto)\n"
+      "      --metrics <path>       Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+      "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
+      "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
+      "  -d, --daemonize            fork to background after startup, detach from terminal\n"
+      "  -h, --help                 this help\n\n"
       "example:\n"
       "  %s -k device.key -s e2e-01 -p %u\n",
       TOOL_NAME, ARGS_DEFAULT_PORT, ARGS_DEFAULT_PASSWORD, TOOL_NAME, ARGS_DEFAULT_PORT);
@@ -70,6 +73,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"algo", required_argument, 0, 1001},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1000},
+      {"metrics", required_argument, 0, 1003},
+      {"metrics-id", required_argument, 0, 1004},
+      {"metrics-interval", required_argument, 0, 1005},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
@@ -139,6 +145,22 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           cfg->color_mode = v;
         }
         break;
+      case 1003:
+        cfg->metrics_sock = optarg;
+        break;
+      case 1004:
+        cfg->metrics_id = optarg;
+        break;
+      case 1005: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 86400UL) {
+          argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->metrics_interval_s = (unsigned)v;
+        break;
+      }
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -152,6 +174,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (!have_key) {
     argerr("missing -k device key");
+    return ARGS_ERR;
+  }
+  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
+    argerr("--metrics/--metrics-interval require --metrics-id");
     return ARGS_ERR;
   }
   return ARGS_OK;

@@ -531,6 +531,8 @@ dipifccret_SRCS := \
 	src/dipifccret/ret/mcsend.c \
 	src/dipifccret/fcc/burst.c \
 	src/dipifccret/fcc/burst_table.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/signal.c \
@@ -567,8 +569,12 @@ dipicam378_SRCS := \
 	src/dipicam378/device.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/cas/device_state_core.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c \
+	src/lib/net/netconnect.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
+	src/lib/ioutil.c \
 	src/lib/signal.c \
 	src/lib/secure_zero.c
 else
@@ -603,6 +609,8 @@ dipidescramble_SRCS := \
 	src/dipidescramble/ipiclient.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/cas/device_state_core.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/uriparse.c \
@@ -988,8 +996,25 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/net/httpclient/async.c
 dipidescramble_pipeline_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_pipeline_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += dipidescramble_args
+dipidescramble_args_BIN := tests/unit/dipidescramble/test_args
+dipidescramble_args_SRCS := \
+	tests/unit/dipidescramble/test_args.c \
+	src/dipidescramble/args.c \
+	src/dipidescramble/ecm_profile.c \
+	src/dipidescramble/crypto.c \
+	src/lib/cas/device_crypto.c \
+	src/lib/cas/biss/hex.c \
+	src/lib/uriparse.c \
+	src/lib/log.c \
+	src/lib/argutil.c \
+	src/lib/ioutil.c \
+	src/lib/secure_zero.c
+dipidescramble_args_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+dipidescramble_args_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 else
-$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_ecm_profile/dipidescramble_biss_ca_state/dipidescramble_pipeline unit tests)
+$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_ecm_profile/dipidescramble_biss_ca_state/dipidescramble_pipeline/dipidescramble_args unit tests)
 endif
 
 lib_metrics_protocol_BIN := tests/unit/lib/metrics/test_protocol
@@ -2205,6 +2230,8 @@ dipirec_record_SRCS := \
 	src/dipirec/record.c \
 	src/dipirec/ret_client.c \
 	src/dipirec/args.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
 	src/lib/uriparse.c \

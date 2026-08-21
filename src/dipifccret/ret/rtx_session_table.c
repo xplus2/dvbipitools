@@ -170,6 +170,17 @@ static void reap_one(rtx_session_stripe_t *t, size_t i, time_t now, time_t max_a
   t->free_list[t->free_count++] = i;
 }
 
+size_t rtx_session_table_active_count(rtx_session_table_t *t) {
+  size_t n = 0;
+  for (size_t si = 0; si < t->stripe_count; si++) {
+    rtx_session_stripe_t *s = &t->stripes[si];
+    pthread_mutex_lock(&s->lock);
+    n += s->cap - s->free_count;
+    pthread_mutex_unlock(&s->lock);
+  }
+  return n;
+}
+
 /* max_scan split across every stripe, each locked only for its own share */
 void rtx_session_table_reap_step(rtx_session_table_t *t, time_t max_age_s, size_t max_scan) {
   time_t now = time(NULL);

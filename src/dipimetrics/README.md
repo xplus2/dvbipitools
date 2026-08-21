@@ -1,6 +1,7 @@
 # dipimetrics
 
-Host-level metrics collector for `dipitvhead`, `dipiradiohead`, `dipisds`, `dipibcg` and `dipirist`. 
+Host-level metrics collector for `dipitvhead`, `dipiradiohead`, `dipisds`, `dipibcg`, `dipirist`,
+`dipirec`, `dipidescramble`, `dipicam378` and `dipifccret`. 
 Each of those tools, if started with `--metrics-id`, periodically sends a snapshot of its own counters
 over a Unix datagram socket. `dipimetrics` retains the latest snapshot per (component, instance),
 and serves them all as one Prometheus/OpenMetrics document over plain HTTP.
@@ -11,15 +12,15 @@ dipimetrics [options]
 
 ## Options
 
-| flag | long form    | argument              | default                         |
-|------|--------------|-----------------------|---------------------------------|
-| `-S` | `--sock`     | `<path>`              | `/run/dvbipitools/metrics.sock` |
-| `-l` | `--listen`   | `<addr>:<port>`       | `127.0.0.1:9109`                |
-| `-e` | `--expiry`   | `<s>`                 | `30`                            |
-| `-v` | `--verbose`  |                       | off                             |
-|      | `--color`    | `auto\|always\|never` | `auto`                          |
-| `-d` | `--daemonize` |                      | off (foreground)                |
-| `-h` | `--help`     |                       |                                 |
+| flag | long form     | argument              | default                         |
+|------|---------------|-----------------------|---------------------------------|
+| `-S` | `--sock`      | `<path>`              | `/run/dvbipitools/metrics.sock` |
+| `-l` | `--listen`    | `<addr>:<port>`       | `127.0.0.1:9109`                |
+| `-e` | `--expiry`    | `<s>`                 | `30`                            |
+| `-v` | `--verbose`   |                       | off                             |
+|      | `--color`     | `auto\|always\|never` | `auto`                          |
+| `-d` | `--daemonize` |                       | off (foreground)                |
+| `-h` | `--help`      |                       |                                 |
 
 ## How it works
 
@@ -47,9 +48,9 @@ a general-purpose web server. There is no TLS and no authentication.
 
 Output is `application/openmetrics-text`: one `# TYPE`/`# HELP` pair per metric family actually
 present (families with zero live samples are omitted), samples labeled
-`component="tvhead|radiohead|sds|bcg"` and `headend_id="<the exporter's --metrics-id>"` plus
-whatever label the metric itself carries (`reason`, `input`, `table`, `codec`, `transport`,
-`version`). The label is deliberately not called `instance`: Prometheus assigns its own
+`component="tvhead|radiohead|sds|bcg|rist|rec|descramble|cam378|fccret"` and
+`headend_id="<the exporter's --metrics-id>"` plus whatever label the metric itself carries
+(`reason`, `input`, `table`, `codec`, `transport`, `version`, `peer`, `output`, `mode`). The label is deliberately not called `instance`: Prometheus assigns its own
 `instance` label per scrape target (the `host:port` of `dipimetrics` itself), which would
 collide with and rename an exporter-supplied `instance` label to `exported_instance`.
 One extra, collector-computed series is added per tracked instance:

@@ -86,6 +86,9 @@ typedef struct {
   char rist_cname[128];   /* --cname, -o rist:// only, "" = library default */
   unsigned rist_buffer_ms; /* --buffer, -o rist:// only, 0 = library default */
   int insecure_tls;       /* --insecure, -o rtmps:// or -i https:// */
+  const char *metrics_sock;    /* --metrics. NULL = default socket path */
+  const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
+  unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

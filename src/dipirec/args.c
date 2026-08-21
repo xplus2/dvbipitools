@@ -370,6 +370,9 @@ static void print_help(void) {
       "  -v, --verbose            periodic recording stats on stderr\n"
       "      --sub-lead <ms>      shift subtitles earlier (default 1000)\n"
       "      --color <when>       auto|always|never (default auto)\n"
+      "      --metrics <path>     Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+      "      --metrics-id <name>  stable instance id; metrics disabled unless set\n"
+      "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
       "      --ret <addr>:<port>  RET server unicast address (rtp:// only; enables gap repair)\n"
       "      --no-ret-mc          skip joining the RET server's multicast repair session\n"
       "      --ret-mc-port <port> override the repair session port (default: -i's port)\n"
@@ -423,6 +426,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"cname", required_argument, 0, 1013},
       {"buffer", required_argument, 0, 1014},
       {"insecure", no_argument, 0, 1015},
+      {"metrics", required_argument, 0, 1016},
+      {"metrics-id", required_argument, 0, 1017},
+      {"metrics-interval", required_argument, 0, 1018},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   const char *fmt_arg = NULL;
@@ -602,6 +608,22 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1015:
         cfg->insecure_tls = 1;
         break;
+      case 1016:
+        cfg->metrics_sock = optarg;
+        break;
+      case 1017:
+        cfg->metrics_id = optarg;
+        break;
+      case 1018: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 86400UL) {
+          argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->metrics_interval_s = (unsigned)v;
+        break;
+      }
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -725,6 +747,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       argerr("--secret requires --profile main");
       return ARGS_ERR;
     }
+  }
+  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
+    argerr("--metrics/--metrics-interval require --metrics-id");
+    return ARGS_ERR;
   }
   return ARGS_OK;
 }

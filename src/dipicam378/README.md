@@ -9,18 +9,21 @@ dipicam378 -k <keyfile> [options]
 
 ## Options
 
-| flag | long form   | argument              | default             |
-|------|-------------|-----------------------|---------------------|
-| `-k` | `--key`     | `<path>`              | required            |
-| `-s` | `--serial`  | `<id>`                | none = no filtering |
-| `-p` | `--port`    | `<n>`                 | `27500`             |
-| `-a` | `--auth`    | `[user:]<pass>`       | `dipicam378`        |
-|      | `--caid`    | `<hex>`               | none = no filtering |
-|      | `--algo`    | `cissa\|csa2`         | `cissa`             |
-| `-v` | `--verbose` |                       |                     |
-|      | `--color`   | `auto\|always\|never` | `auto`              |
-| `-d` | `--daemonize` |                     | off (foreground)    |
-| `-h` | `--help`    |                       |                     |
+| flag | long form            | argument              | default             |
+|------|----------------------|-----------------------|---------------------|
+| `-k` | `--key`              | `<path>`              | required            |
+| `-s` | `--serial`           | `<id>`                | none = no filtering |
+| `-p` | `--port`             | `<n>`                 | `27500`             |
+| `-a` | `--auth`             | `[user:]<pass>`       | `dipicam378`        |
+|      | `--caid`             | `<hex>`               | none = no filtering |
+|      | `--algo`             | `cissa\|csa2`         | `cissa`             |
+| `-v` | `--verbose`          |                       |                     |
+|      | `--color`            | `auto\|always\|never` | `auto`              |
+|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock` |
+|      | `--metrics-id`       | `<name>`              | none = metrics disabled |
+|      | `--metrics-interval` | `<s>`                 | `5`                 |
+| `-d` | `--daemonize`        |                       | off (foreground)    |
+| `-h` | `--help`             |                       |                     |
 
 This tool is for debugging and validation only. A password is required because the
 protocol's encryption relies on it. A username is optional, give one only if you

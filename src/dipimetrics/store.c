@@ -20,6 +20,14 @@ const char *metrics_component_name(metrics_component_t c) {
     return "bcg";
   case METRICS_COMPONENT_RIST:
     return "rist";
+  case METRICS_COMPONENT_REC:
+    return "rec";
+  case METRICS_COMPONENT_DESCRAMBLE:
+    return "descramble";
+  case METRICS_COMPONENT_CAM378:
+    return "cam378";
+  case METRICS_COMPONENT_FCCRET:
+    return "fccret";
   default:
     return "unknown";
   }

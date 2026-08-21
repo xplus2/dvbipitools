@@ -122,6 +122,27 @@ START_TEST(reap_step_frees_only_stale_slots) {
 }
 END_TEST
 
+START_TEST(active_count_tracks_claims_and_reap) {
+  rtx_session_table_t *t = rtx_session_table_new(32);
+  struct sockaddr_in a = mk_addr(6000);
+  struct sockaddr_in b = mk_addr(6001);
+  rtx_session_slot_t *sa;
+  int i;
+
+  ck_assert_uint_eq(rtx_session_table_active_count(t), 0u);
+  sa = rtx_session_table_get(t, (const struct sockaddr *)&a, sizeof a);
+  rtx_session_table_get(t, (const struct sockaddr *)&b, sizeof b);
+  ck_assert_uint_eq(rtx_session_table_active_count(t), 2u);
+
+  sa->last_seen = 0; /* force-age past reap below */
+  for (i = 0; i < 64; i++)
+    rtx_session_table_reap_step(t, 60, 8);
+  ck_assert_uint_eq(rtx_session_table_active_count(t), 1u);
+
+  rtx_session_table_free(t);
+}
+END_TEST
+
 static Suite *rtx_session_table_suite(void) {
   Suite *s = suite_create("rtx_session_table");
   TCase *tc = tcase_create("core");
@@ -130,6 +151,7 @@ static Suite *rtx_session_table_suite(void) {
   tcase_add_test(tc, get_tolerates_null_address);
   tcase_add_test(tc, full_table_evicts_rather_than_rejects_new_client);
   tcase_add_test(tc, reap_step_frees_only_stale_slots);
+  tcase_add_test(tc, active_count_tracks_claims_and_reap);
   suite_add_tcase(s, tc);
   return s;
 }

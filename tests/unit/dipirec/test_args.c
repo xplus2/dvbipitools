@@ -105,6 +105,22 @@ START_TEST(out_iface_has_no_effect_on_rist_but_is_not_an_error) {
 }
 END_TEST
 
+START_TEST(metrics_options_require_metrics_id) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts", "--metrics", "/tmp/x.sock", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(metrics_id_alone_is_accepted) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts",
+                  "--metrics-id", "inst1", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.metrics_id, "inst1");
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipirec_args");
   TCase *tc = tcase_create("core");
@@ -120,6 +136,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, buffer_zero_is_rejected);
   tcase_add_test(tc, rist_options_without_rist_out_are_harmless);
   tcase_add_test(tc, out_iface_has_no_effect_on_rist_but_is_not_an_error);
+  tcase_add_test(tc, metrics_options_require_metrics_id);
+  tcase_add_test(tc, metrics_id_alone_is_accepted);
   suite_add_tcase(s, tc);
   return s;
 }

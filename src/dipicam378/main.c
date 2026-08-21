@@ -4,15 +4,39 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
+#include "lib/ioutil.h"
 #include "lib/log.h"
+#include "lib/metrics/export.h"
 #include "lib/signal.h"
 
 #include "args.h"
 #include "cs378x/cs378x.h"
 #include "device.h"
 #include "version.h"
+
+#define CAM378_METRICS_POLL_MS 200
+
+static void push_metrics(metrics_exporter_t *mx, cs378x_server_t *srv, const device_state_t *dev, const char *algo_name) {
+  cs378x_metrics_t m;
+  metrics_writer_t w;
+
+  if (!metrics_exporter_due(mx, mono_seconds()) || metrics_exporter_begin(mx, &w, TOOL_VERSION))
+    return;
+  cs378x_server_get_metrics(srv, &m);
+  metrics_writer_put(&w, METRICS_ID_CAM_CONNECTIONS_ACTIVE, NULL, m.connections_active);
+  metrics_writer_put(&w, METRICS_ID_CAM_CONNECTIONS_TOTAL, NULL, m.connections_total);
+  for (int i = 0; i < CAM_AUTH_REASON_COUNT; i++)
+    if (m.auth_errors_total[i])
+      metrics_writer_put(&w, METRICS_ID_CAM_AUTH_ERRORS_TOTAL, cs378x_auth_reason_name((cam_auth_reason_t)i), m.auth_errors_total[i]);
+  metrics_writer_put(&w, METRICS_ID_CAM_SERVICES_ACTIVE, NULL, device_state_services_active(dev));
+  metrics_writer_put(&w, METRICS_ID_CAS_ECM_TOTAL, algo_name, m.ecm_total);
+  metrics_writer_put(&w, METRICS_ID_CAS_ECM_ERRORS_TOTAL, algo_name, m.ecm_errors_total);
+  metrics_writer_put(&w, METRICS_ID_CAS_EMM_TOTAL, algo_name, m.emm_total);
+  metrics_exporter_send(mx, &w);
+}
 
 /* banner prints before parsing: --color read early */
 static int ecm_cb(const unsigned char *ecm, size_t ecm_len, unsigned srvid, unsigned caid, unsigned prid, unsigned char cw_out[16], void *user) {
@@ -32,6 +56,7 @@ int main(int argc, char **argv) {
   device_state_t *dev;
   cs378x_cfg_t srv_cfg;
   cs378x_server_t *srv;
+  metrics_exporter_t mx;
 
   log_set_color(log_color_prescan(argc, argv));
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
@@ -69,8 +94,19 @@ int main(int argc, char **argv) {
   }
   log_line(TOOL_NAME ": listening on port %u", cfg.port);
 
-  while (!signal_stop_requested())
-    pause();
+  metrics_exporter_init(&mx, METRICS_COMPONENT_CAM378, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
+  if (!metrics_exporter_enabled(&mx)) {
+    while (!signal_stop_requested())
+      pause();
+  } else {
+    const char *algo_name = cfg.cw_len == 8 ? "csa2" : "cissa";
+    struct timespec tick = {0, CAM378_METRICS_POLL_MS * 1000000L};
+    while (!signal_stop_requested()) {
+      push_metrics(&mx, srv, dev, algo_name);
+      nanosleep(&tick, NULL);
+    }
+  }
+  metrics_exporter_close(&mx);
 
   cs378x_server_stop(srv);
   device_state_free(dev);

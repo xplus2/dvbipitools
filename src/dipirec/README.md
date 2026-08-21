@@ -8,45 +8,48 @@ dipirec -i <uri> -o <target> [options]
 
 ## Options
 
-| flag | long form         | argument              | default                             |
-|------|-------------------|-----------------------|-------------------------------------|
-| `-i` | `--in`            | `<uri>`               | required                            |
-| `-o` | `--out`           | `<target>`            | required, repeatable                |
-| `-a` | `--audio`         | `<track>` / `all`     | `all`                               |
-| `-f` | `--format`        | `raw\|ts\|mkv\|mka`   | from `-o` suffix, else `ts`         |
-| `-p` | `--pmt-pid`       | `<pid>` / `all`       | none (see below)                    |
-| `-s` | `--subtitles`     | `strip\|keep\|srt`    | `keep`                              |
-| `-t` | `--time`          | `<duration>`          | no limit (runs until stopped)       |
-| `-I` | `--iface`         | `<iface>`             | kernel route                        |
-| `-O` | `--out-iface`     | `<iface>`             | kernel route                        |
-|      | `--ttl`           | `<n>`                 | kernel default (`1`)                |
-| `-v` | `--verbose`       |                       | off                                 |
-|      | `--sub-lead`      | `<ms>`                | `1000`                              |
-|      | `--color`         | `auto\|always\|never` | `auto`                              |
-|      | `--ret`           | `<addr>:<port>`       | off (no gap repair)                 |
-|      | `--no-ret-mc`     |                       | off (joins repair session)          |
-|      | `--ret-mc-port`   | `<port>`              | same as `-i`'s port                 |
-|      | `--ret-pt`        | `<n>`                 | `99`                                |
-|      | `--ret-wait`      | `<ms>`                | `200`                               |
-|      | `--pace`          |                       | off (file/stdin source only)        |
-|      | `--strip`         | `<list>` / `none`     | `NUL,NIT,AIT,EIT`                   |
-|      | `--profile`       | `simple\|main`        | `simple` (`-o rist://` only)        |
-|      | `--secret`        | `<psk>`               | none (`-o rist://` only)            |
-|      | `--cname`         | `<name>`              | library default (`-o rist://` only) |
-|      | `--buffer`        | `<ms>`                | library default (`-o rist://` only) |
-|      | `--insecure`      |                       | off (`-o rtmps://` only)            |
-| `-h` | `--help`          |                       |                                     |
+| flag | long form            | argument              | default                             |
+|------|----------------------|-----------------------|-------------------------------------|
+| `-i` | `--in`               | `<uri>`               | required                            |
+| `-o` | `--out`              | `<target>`            | required, repeatable                |
+| `-a` | `--audio`            | `<track>` / `all`     | `all`                               |
+| `-f` | `--format`           | `raw\|ts\|mkv\|mka`   | from `-o` suffix, else `ts`         |
+| `-p` | `--pmt-pid`          | `<pid>` / `all`       | none (see below)                    |
+| `-s` | `--subtitles`        | `strip\|keep\|srt`    | `keep`                              |
+| `-t` | `--time`             | `<duration>`          | no limit (runs until stopped)       |
+| `-I` | `--iface`            | `<iface>`             | kernel route                        |
+| `-O` | `--out-iface`        | `<iface>`             | kernel route                        |
+|      | `--ttl`              | `<n>`                 | kernel default (`1`)                |
+| `-v` | `--verbose`          |                       | off                                 |
+|      | `--sub-lead`         | `<ms>`                | `1000`                              |
+|      | `--color`            | `auto\|always\|never` | `auto`                              |
+|      | `--ret`              | `<addr>:<port>`       | off (no gap repair)                 |
+|      | `--no-ret-mc`        |                       | off (joins repair session)          |
+|      | `--ret-mc-port`      | `<port>`              | same as `-i`'s port                 |
+|      | `--ret-pt`           | `<n>`                 | `99`                                |
+|      | `--ret-wait`         | `<ms>`                | `200`                               |
+|      | `--pace`             |                       | off (file/stdin source only)        |
+|      | `--strip`            | `<list>` / `none`     | `NUL,NIT,AIT,EIT`                   |
+|      | `--profile`          | `simple\|main`        | `simple` (`-o rist://` only)        |
+|      | `--secret`           | `<psk>`               | none (`-o rist://` only)            |
+|      | `--cname`            | `<name>`              | library default (`-o rist://` only) |
+|      | `--buffer`           | `<ms>`                | library default (`-o rist://` only) |
+|      | `--insecure`         |                       | off (`-o rtmps://` only)            |
+|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`     |
+|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)  |
+|      | `--metrics-interval` | `<s>`                 | `5`                                 |
+| `-h` | `--help`             |                       |                                     |
 
 ## Input (`-i`)
 
-| schema                                | what's this?                                |
-|----------------------------------------|---------------------------------------------|
-| `rtp://@<group>:<port>`                | RTP wrapped SPTS or MPTS                    |
-| `udp://@<group>:<port>`                | plain SPTS or MPTS                          |
-| `http://<host>:<port>/<path>`          | HTTP TS stream                              |
-| `https://<host>:<port>/<path>`         | same, TLS (`--insecure` skips verification) |
-| `-`                                    | stdin, TS or RTP wrapped TS                 |
-| `<path>`                               | a file, TS or RTP wrapped TS                |
+| schema                         | what's this?                                |
+|--------------------------------|---------------------------------------------|
+| `rtp://@<group>:<port>`        | RTP wrapped SPTS or MPTS                    |
+| `udp://@<group>:<port>`        | plain SPTS or MPTS                          |
+| `http://<host>:<port>/<path>`  | HTTP TS stream                              |
+| `https://<host>:<port>/<path>` | same, TLS (`--insecure` skips verification) |
+| `-`                            | stdin, TS or RTP wrapped TS                 |
+| `<path>`                       | a file, TS or RTP wrapped TS                |
 
 `@` is optional. `<group>` can be an IPv4 or IPv6 multicast address.
 

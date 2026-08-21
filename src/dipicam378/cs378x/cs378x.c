@@ -80,3 +80,30 @@ void cs378x_server_stop(cs378x_server_t *s) {
     }
   free(s);
 }
+
+const char *cs378x_auth_reason_name(cam_auth_reason_t r) {
+  switch (r) {
+  case CAM_AUTH_USER:
+    return "user";
+  case CAM_AUTH_CONNID:
+    return "connid";
+  case CAM_AUTH_CHECKSUM:
+    return "checksum";
+  case CAM_AUTH_OVERSIZED:
+    return "oversized";
+  default:
+    return "unknown";
+  }
+}
+
+void cs378x_server_get_metrics(cs378x_server_t *s, cs378x_metrics_t *out) {
+  memset(out, 0, sizeof *out);
+  for (int i = 0; i < CS378X_MAX_CONNS; i++)
+    out->connections_active += (unsigned)atomic_load_explicit(&s->worker_active[i], memory_order_relaxed);
+  out->connections_total = atomic_load_explicit(&s->connections_total, memory_order_relaxed);
+  for (int i = 0; i < CAM_AUTH_REASON_COUNT; i++)
+    out->auth_errors_total[i] = atomic_load_explicit(&s->auth_errors_total[i], memory_order_relaxed);
+  out->ecm_total = atomic_load_explicit(&s->ecm_total, memory_order_relaxed);
+  out->ecm_errors_total = atomic_load_explicit(&s->ecm_errors_total, memory_order_relaxed);
+  out->emm_total = atomic_load_explicit(&s->emm_total, memory_order_relaxed);
+}

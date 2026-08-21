@@ -21,6 +21,8 @@ add_executable(dipifccret
     ret/mcsend.c
     fcc/burst.c
     fcc/burst_table.c
+    ../lib/metrics/protocol.c
+    ../lib/metrics/export.c
     ../lib/log.c
     ../lib/argutil.c
     ../lib/signal.c

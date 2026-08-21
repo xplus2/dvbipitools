@@ -24,4 +24,7 @@ void device_on_emm(device_state_t *d, const unsigned char *emm, size_t emm_len);
    -2 permanent: caid configured and mismatched, peer may stop asking */
 int device_resolve_cw(device_state_t *d, const unsigned char *ecm, size_t ecm_len, unsigned srvid, unsigned caid, unsigned char cw_out[16]);
 
+/* services with a live session key */
+unsigned device_state_services_active(const device_state_t *d);
+
 #endif
