@@ -46,6 +46,8 @@ cmake --build build
 | `-DDIPIRADIOHEAD_TLS=OFF` / `-DDIPITVHEAD_TLS=OFF` / `-DDIPIREC_TLS=OFF` | `--no-tls`              | Build the respective tool without TLS source support |
 | `-DDIPITVHEAD_CSA=OFF` / `-DDIPIRADIOHEAD_CSA=OFF` / `-DDIPIDESCRAMBLE_CSA=OFF` | `--no-csa`   | Build the respective tool without CSA1/CSA2/BISS1    | 
 | `-DDIPIBCG_ZLIB=OFF`                                                     | `--no-zlib`             | Build `dipibcg` without BCG container compression support |
+| `-DDVBIPITOOLS_RIST=OFF`                                                 | `--no-rist`             | Skip librist detection, disable `dipirist`/rist:// support |
+| `-DDVBIPITOOLS_SRT=OFF`                                                  | `--no-srt`              | Skip libsrt detection, disable `dipisrt`                  |
 
 > Note: The build automatically disables TLS support if OpenSSL is not found.
 
@@ -73,7 +75,6 @@ cmake --build build
 ```sh
 dpkg-buildpackage -b -us -uc
 ```
-
 Build-Depends: `debhelper-compat (= 13)`, `cmake`, `libssl-dev`, `librist-dev`.
 
 

@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <netinet/in.h>
 #include <stdlib.h>
@@ -9,49 +8,6 @@
 
 #include "dipisrt/bridge.h"
 #include "dipisrt/version.h"
-
-START_TEST(addr_len_ipv4) {
-  ck_assert_uint_eq(addr_len(AF_INET), sizeof(struct sockaddr_in));
-}
-END_TEST
-
-START_TEST(addr_len_ipv6) {
-  ck_assert_uint_eq(addr_len(AF_INET6), sizeof(struct sockaddr_in6));
-}
-END_TEST
-
-START_TEST(build_addr_ipv4) {
-  struct sockaddr_storage ss;
-  struct sockaddr_in *a = (struct sockaddr_in *)&ss;
-  struct in_addr want;
-
-  build_addr(AF_INET, "127.0.0.1", 9000, &ss);
-  ck_assert_int_eq(a->sin_family, AF_INET);
-  ck_assert_uint_eq(ntohs(a->sin_port), 9000u);
-  inet_pton(AF_INET, "127.0.0.1", &want);
-  ck_assert_int_eq(memcmp(&a->sin_addr, &want, sizeof want), 0);
-}
-END_TEST
-
-START_TEST(build_addr_ipv6) {
-  struct sockaddr_storage ss;
-  struct sockaddr_in6 *a = (struct sockaddr_in6 *)&ss;
-  struct in6_addr want;
-
-  build_addr(AF_INET6, "::1", 9000, &ss);
-  ck_assert_int_eq(a->sin6_family, AF_INET6);
-  ck_assert_uint_eq(ntohs(a->sin6_port), 9000u);
-  inet_pton(AF_INET6, "::1", &want);
-  ck_assert_int_eq(memcmp(&a->sin6_addr, &want, sizeof want), 0);
-}
-END_TEST
-
-START_TEST(group_mode_of_maps_all_values) {
-  ck_assert_int_eq(group_mode_of(SRT_GROUP_NONE), SRTOUT_GROUP_NONE);
-  ck_assert_int_eq(group_mode_of(SRT_GROUP_BROADCAST), SRTOUT_GROUP_BROADCAST);
-  ck_assert_int_eq(group_mode_of(SRT_GROUP_BACKUP), SRTOUT_GROUP_BACKUP);
-}
-END_TEST
 
 START_TEST(tssrc_cfg_file_with_path) {
   nonsrt_t s;
@@ -177,11 +133,6 @@ END_TEST
 static Suite *bridge_suite(void) {
   Suite *s = suite_create("dipisrt_bridge");
   TCase *tc = tcase_create("core");
-  tcase_add_test(tc, addr_len_ipv4);
-  tcase_add_test(tc, addr_len_ipv6);
-  tcase_add_test(tc, build_addr_ipv4);
-  tcase_add_test(tc, build_addr_ipv6);
-  tcase_add_test(tc, group_mode_of_maps_all_values);
   tcase_add_test(tc, tssrc_cfg_file_with_path);
   tcase_add_test(tc, tssrc_cfg_file_empty_path_is_stdin);
   tcase_add_test(tc, tssrc_cfg_http_carries_tls_and_insecure);

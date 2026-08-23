@@ -212,7 +212,7 @@ endif
 endif
 
 ifeq ($(HAVE_RIST),yes)
-dipirec_RIST_SRC := src/lib/net/ristout.c
+dipirec_RIST_SRC := src/lib/net/rist/ristout.c
 dipirec_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipirec_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -220,7 +220,7 @@ else
 dipirec_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
 else
-dipirec_RIST_SRC := src/lib/net/ristout_stub.c
+dipirec_RIST_SRC := src/lib/net/rist/ristout_stub.c
 endif
 
 dipirec_SRCS := \
@@ -276,7 +276,7 @@ dipirec_SRCS := \
 	src/lib/net/rtmp/session.c \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/rtmp.c \
-	src/lib/net/rtmpout.c \
+	src/lib/net/rtmp/rtmpout.c \
 	$(dipirec_AUTH_SRC) \
 	src/dipirec/filter/ts.c \
 	src/dipirec/filter/pace.c
@@ -324,7 +324,7 @@ dipiradiohead_EXTRA_CFLAGS += -pthread
 dipiradiohead_EXTRA_LDFLAGS += -pthread
 
 ifeq ($(HAVE_RIST),yes)
-dipiradiohead_RIST_SRC := src/lib/net/ristout.c
+dipiradiohead_RIST_SRC := src/lib/net/rist/ristout.c
 dipiradiohead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -332,7 +332,7 @@ else
 dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
 else
-dipiradiohead_RIST_SRC := src/lib/net/ristout_stub.c
+dipiradiohead_RIST_SRC := src/lib/net/rist/ristout_stub.c
 endif
 
 dipiradiohead_SRCS := \
@@ -440,7 +440,7 @@ dipitvhead_EXTRA_CFLAGS += -pthread
 dipitvhead_EXTRA_LDFLAGS += -pthread
 
 ifeq ($(HAVE_RIST),yes)
-dipitvhead_RIST_SRC := src/lib/net/ristout.c
+dipitvhead_RIST_SRC := src/lib/net/rist/ristout.c
 dipitvhead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -448,7 +448,7 @@ else
 dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
 else
-dipitvhead_RIST_SRC := src/lib/net/ristout_stub.c
+dipitvhead_RIST_SRC := src/lib/net/rist/ristout_stub.c
 endif
 
 dipitvhead_SRCS := \
@@ -662,7 +662,7 @@ dipidescramble_SRCS := \
 	src/lib/net/rtmp/session.c \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/rtmp.c \
-	src/lib/net/rtmpout.c \
+	src/lib/net/rtmp/rtmpout.c \
 	src/lib/net/rtmp/auth.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa.c \
@@ -721,7 +721,7 @@ dipirist_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
-	src/lib/net/ristout.c \
+	src/lib/net/rist/ristout.c \
 	$(dipirist_TLS_SRC) \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -777,7 +777,9 @@ dipisrt_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
-	src/lib/net/srtout.c \
+	src/lib/net/srt/srtcommon.c \
+	src/lib/net/srt/srtout.c \
+	src/lib/net/srt/srtin.c \
 	$(dipisrt_TLS_SRC) \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -1139,7 +1141,7 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/net/rtmp/session.c \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/rtmp.c \
-	src/lib/net/rtmpout.c \
+	src/lib/net/rtmp/rtmpout.c \
 	src/lib/net/rtmp/auth.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa.c \
@@ -1256,7 +1258,7 @@ dipirist_bridge_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
-	src/lib/net/ristout.c \
+	src/lib/net/rist/ristout.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -1279,7 +1281,7 @@ dipisrt_args_SRCS := \
 	src/lib/log.c
 
 ifeq ($(HAVE_SRT),yes)
-UNIT_TESTS += dipisrt_bridge
+UNIT_TESTS += dipisrt_bridge lib_net_srt_srtcommon
 dipisrt_bridge_BIN := tests/unit/dipisrt/test_bridge
 dipisrt_bridge_EXTRA_CFLAGS := $(shell pkg-config --cflags srt)
 dipisrt_bridge_EXTRA_LDFLAGS := $(shell pkg-config --libs srt)
@@ -1296,7 +1298,9 @@ dipisrt_bridge_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
-	src/lib/net/srtout.c \
+	src/lib/net/srt/srtcommon.c \
+	src/lib/net/srt/srtout.c \
+	src/lib/net/srt/srtin.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -1306,6 +1310,14 @@ dipisrt_bridge_SRCS := \
 	src/lib/mux/rtpheader.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c
+
+lib_net_srt_srtcommon_BIN := tests/unit/lib/net/srt/test_srtcommon
+lib_net_srt_srtcommon_EXTRA_CFLAGS := $(shell pkg-config --cflags srt)
+lib_net_srt_srtcommon_EXTRA_LDFLAGS := $(shell pkg-config --libs srt)
+lib_net_srt_srtcommon_SRCS := \
+	tests/unit/lib/net/srt/test_srtcommon.c \
+	src/lib/net/srt/srtcommon.c \
+	src/lib/log.c
 endif
 
 dipisds_input_BIN := tests/unit/dipisds/test_input
@@ -1901,7 +1913,7 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/cas/biss/ca_engine.c \
 	src/lib/net/multicast.c \
 	src/lib/net/retryset.c \
-	src/lib/net/ristout_stub.c \
+	src/lib/net/rist/ristout_stub.c \
 	src/dipiradiohead/input/source.c \
 	src/dipiradiohead/input/inputset.c \
 	src/dipiradiohead/input/playlist.c \
@@ -2199,7 +2211,7 @@ dipitvhead_output_SRCS := \
 	src/lib/cas/biss/ca_engine.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
-	src/lib/net/ristout_stub.c \
+	src/lib/net/rist/ristout_stub.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -2329,10 +2341,10 @@ lib_net_rtmp_SRCS := \
 	src/lib/ioutil.c \
 	src/lib/log.c
 
-lib_net_rtmpout_BIN := tests/unit/lib/net/test_rtmpout
+lib_net_rtmpout_BIN := tests/unit/lib/net/rtmp/test_rtmpout
 lib_net_rtmpout_SRCS := \
-	tests/unit/lib/net/test_rtmpout.c \
-	src/lib/net/rtmpout.c \
+	tests/unit/lib/net/rtmp/test_rtmpout.c \
+	src/lib/net/rtmp/rtmpout.c \
 	src/lib/net/rtmp/rtmp.c \
 	src/lib/net/rtmp/session.c \
 	src/lib/net/rtmp/command.c \
@@ -2472,7 +2484,7 @@ dipirec_record_SRCS := \
 	src/lib/net/tssink.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/rtmp/auth_stub.c \
-	src/lib/net/ristout_stub.c \
+	src/lib/net/rist/ristout_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -2511,7 +2523,7 @@ dipirec_record_SRCS := \
 	src/lib/net/rtmp/session.c \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/rtmp.c \
-	src/lib/net/rtmpout.c \
+	src/lib/net/rtmp/rtmpout.c \
 	src/dipirec/filter/ts.c \
 	src/dipirec/filter/pace.c
 

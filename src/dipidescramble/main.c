@@ -13,7 +13,7 @@
 #include "lib/log.h"
 #include "lib/metrics/export.h"
 #include "lib/mux/flv/flv.h"
-#include "lib/net/rtmpout.h"
+#include "lib/net/rtmp/rtmpout.h"
 #include "lib/net/tssource.h"
 #include "lib/signal.h"
 

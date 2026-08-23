@@ -193,8 +193,8 @@ dvbipitools_add_unit_test(lib_net_rtmp
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
 
 dvbipitools_add_unit_test(lib_net_rtmpout
-    unit/lib/net/test_rtmpout.c
-    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmpout.c
+    unit/lib/net/rtmp/test_rtmpout.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmpout.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/session.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
@@ -439,7 +439,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/session.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
-        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmpout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmpout.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c
@@ -764,7 +764,7 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/retryset.c
-    ${CMAKE_SOURCE_DIR}/src/lib/net/ristout_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/inputset.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
@@ -1017,7 +1017,7 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
-    ${CMAKE_SOURCE_DIR}/src/lib/net/ristout_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -1173,7 +1173,7 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth_stub.c
-    ${CMAKE_SOURCE_DIR}/src/lib/net/ristout_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -1212,7 +1212,7 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/session.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
-    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmpout.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmpout.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c)
 
@@ -1577,7 +1577,7 @@ if (TARGET dipirist)
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
-        ${CMAKE_SOURCE_DIR}/src/lib/net/ristout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -1616,7 +1616,9 @@ if (TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
-        ${CMAKE_SOURCE_DIR}/src/lib/net/srtout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -1627,8 +1629,14 @@ if (TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c)
     target_link_libraries(test_dipisrt_bridge PRIVATE PkgConfig::SRT)
+
+    dvbipitools_add_unit_test(lib_net_srt_srtcommon
+        unit/lib/net/srt/test_srtcommon.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+    target_link_libraries(test_lib_net_srt_srtcommon PRIVATE PkgConfig::SRT)
 else ()
-    message(WARNING "tests: dipisrt not built (libsrt missing), skipping its bridge unit test")
+    message(WARNING "tests: dipisrt not built (libsrt missing), skipping its bridge and srtcommon unit tests")
 endif ()
 
 dvbipitools_add_unit_test(dipisds_input

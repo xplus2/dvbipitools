@@ -13,11 +13,11 @@
 #include "lib/signal.h"
 #include "version.h"
 
-static const char *group_mode_str(srt_group_sel_t g) {
+static const char *group_mode_str(srtgroup_mode_t g) {
   switch (g) {
-  case SRT_GROUP_BROADCAST:
+  case SRTGROUP_BROADCAST:
     return "broadcast";
-  case SRT_GROUP_BACKUP:
+  case SRTGROUP_BACKUP:
     return "backup";
   default:
     return "single";

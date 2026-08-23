@@ -1,19 +1,14 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <stdint.h>
+#include <errno.h>
+#include <poll.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <time.h>
-#include <unistd.h>
 
-#include <srt/srt.h>
-
-#include "lib/ioutil.h"
 #include "lib/log.h"
-#include "lib/net/srtout.h"
+#include "lib/net/srt/srtin.h"
+#include "lib/net/srt/srtout.h"
 #include "lib/net/tssink.h"
 #include "lib/net/tssource.h"
 #include "lib/signal.h"
@@ -22,53 +17,8 @@
 #include "bridge.h"
 #include "version.h"
 
-#define SRT_RCVTIMEO_MS 200
+#define DIPISRT_SENDER_POLL_MS 200
 #define DIPISRT_SENDER_DRAIN_MS_DEFAULT 1000 /* srt's own default latency buffer */
-
-static void srt_log_cb(void *opaque, int level, const char *file, int line, const char *area, const char *message) {
-  (void)opaque;
-  (void)level;
-  (void)file;
-  (void)line;
-  (void)area;
-  log_line("srt: %s", message);
-}
-
-static void open_logging(int verbose) {
-  srt_setloglevel(verbose ? LOG_DEBUG : LOG_WARNING);
-  srt_setloghandler(NULL, srt_log_cb);
-}
-
-socklen_t addr_len(int family) {
-  return family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
-}
-
-/* host: numeric IP only, already validated by args.c's argutil_addrport_parse() */
-void build_addr(int family, const char *host, unsigned port, struct sockaddr_storage *ss) {
-  memset(ss, 0, sizeof *ss);
-  if (family == AF_INET6) {
-    struct sockaddr_in6 *a = (struct sockaddr_in6 *)ss;
-    a->sin6_family = AF_INET6;
-    a->sin6_port = htons((uint16_t)port);
-    inet_pton(AF_INET6, host, &a->sin6_addr);
-  } else {
-    struct sockaddr_in *a = (struct sockaddr_in *)ss;
-    a->sin_family = AF_INET;
-    a->sin_port = htons((uint16_t)port);
-    inet_pton(AF_INET, host, &a->sin_addr);
-  }
-}
-
-srtout_group_mode_t group_mode_of(srt_group_sel_t g) {
-  switch (g) {
-  case SRT_GROUP_BROADCAST:
-    return SRTOUT_GROUP_BROADCAST;
-  case SRT_GROUP_BACKUP:
-    return SRTOUT_GROUP_BACKUP;
-  default:
-    return SRTOUT_GROUP_NONE;
-  }
-}
 
 void nonsrt_to_tssrc_cfg(const nonsrt_t *s, const char *iface, int insecure_tls, tssrc_cfg_t *tc) {
   memset(tc, 0, sizeof *tc);
@@ -116,224 +66,12 @@ void nonsrt_to_tssink_cfg(const nonsrt_t *s, const char *iface, tssink_cfg_t *tk
   }
 }
 
-/* is_group skips TRANSTYPE: rejected on group sockets, live forced already. plain
-   GROUPCONNECT listener: not a group yet, still gets it. 0 ok, -1 error */
-static int apply_common_opts(SRTSOCKET s, const config_t *cfg, int is_group) {
-  int transtype = SRTT_LIVE;
-  int timeo = SRT_RCVTIMEO_MS;
-
-  if (!is_group && srt_setsockopt(s, 0, SRTO_TRANSTYPE, &transtype, sizeof transtype) != 0)
-    goto fail;
-  if (cfg->passphrase[0]) {
-    if (srt_setsockopt(s, 0, SRTO_PASSPHRASE, cfg->passphrase, (int)strlen(cfg->passphrase)) != 0)
-      goto fail;
-    if (cfg->pbkeylen) {
-      int kl = cfg->pbkeylen;
-      if (srt_setsockopt(s, 0, SRTO_PBKEYLEN, &kl, sizeof kl) != 0)
-        goto fail;
-    }
-  }
-  if (cfg->streamid[0] && srt_setsockopt(s, 0, SRTO_STREAMID, cfg->streamid, (int)strlen(cfg->streamid)) != 0)
-    goto fail;
-  if (cfg->packetfilter[0] && srt_setsockopt(s, 0, SRTO_PACKETFILTER, cfg->packetfilter, (int)strlen(cfg->packetfilter)) != 0)
-    goto fail;
-  if (cfg->latency_ms) {
-    int lat = (int)cfg->latency_ms;
-    if (srt_setsockopt(s, 0, SRTO_LATENCY, &lat, sizeof lat) != 0)
-      goto fail;
-  }
-  if (srt_setsockopt(s, 0, SRTO_RCVTIMEO, &timeo, sizeof timeo) != 0)
-    goto fail;
-  return 0;
-
-fail:
-  log_line("srt: setsockopt failed: %s", srt_getlasterror_str());
-  return -1;
-}
-
-static SRTSOCKET open_single_caller(const config_t *cfg) {
-  SRTSOCKET s;
-  struct sockaddr_storage remote;
-
-  s = srt_create_socket();
-  if (s == SRT_INVALID_SOCK) {
-    log_line("srt: socket create failed: %s", srt_getlasterror_str());
-    return SRT_INVALID_SOCK;
-  }
-  if (apply_common_opts(s, cfg, 0)) {
-    srt_close(s);
-    return SRT_INVALID_SOCK;
-  }
-  build_addr(cfg->in.family[0], cfg->in.srt_host[0], cfg->in.srt_port[0], &remote);
-
-  if (cfg->rendezvous) {
-    struct sockaddr_storage local;
-    build_addr(cfg->local_family, cfg->local_host, cfg->local_port, &local);
-    if (srt_rendezvous(s, (struct sockaddr *)&local, (int)addr_len(cfg->local_family), (struct sockaddr *)&remote,
-                        (int)addr_len(cfg->in.family[0])) != 0) {
-      log_line("srt: rendezvous failed: %s", srt_getlasterror_str());
-      srt_close(s);
-      return SRT_INVALID_SOCK;
-    }
-  } else if (srt_connect(s, (struct sockaddr *)&remote, (int)addr_len(cfg->in.family[0])) != 0) {
-    log_line("srt: connect failed: %s", srt_getlasterror_str());
-    srt_close(s);
-    return SRT_INVALID_SOCK;
-  }
-  return s;
-}
-
-/* accepted socket shares listener's UDP multiplexer. early close: kills connection too.
-   keep listener open until final teardown. lsn_out: carries it out */
-static SRTSOCKET open_single_listener(const config_t *cfg, SRTSOCKET *lsn_out) {
-  SRTSOCKET lsn, s = SRT_INVALID_SOCK;
-  struct sockaddr_storage local;
-
-  *lsn_out = SRT_INVALID_SOCK;
-  lsn = srt_create_socket();
-  if (lsn == SRT_INVALID_SOCK) {
-    log_line("srt: socket create failed: %s", srt_getlasterror_str());
-    return SRT_INVALID_SOCK;
-  }
-  if (apply_common_opts(lsn, cfg, 0)) {
-    srt_close(lsn);
-    return SRT_INVALID_SOCK;
-  }
-  build_addr(cfg->in.family[0], cfg->in.srt_host[0], cfg->in.srt_port[0], &local);
-  if (srt_bind(lsn, (struct sockaddr *)&local, (int)addr_len(cfg->in.family[0])) != 0 || srt_listen(lsn, 1) != 0) {
-    log_line("srt: bind/listen failed: %s", srt_getlasterror_str());
-    srt_close(lsn);
-    return SRT_INVALID_SOCK;
-  }
-  while (!signal_stop_requested()) {
-    s = srt_accept(lsn, NULL, NULL);
-    if (s != SRT_INVALID_SOCK)
-      break;
-    if (srt_getlasterror(NULL) != SRT_ETIMEOUT) {
-      log_line("srt: accept failed: %s", srt_getlasterror_str());
-      s = SRT_INVALID_SOCK;
-      break;
-    }
-  }
-  if (s == SRT_INVALID_SOCK)
-    srt_close(lsn); /* no connection ever came in: nothing depends on this multiplexer */
-  else
-    *lsn_out = lsn;
-  return s;
-}
-
-static SRTSOCKET open_group_caller(const config_t *cfg) {
-  SRTSOCKET g;
-  SRT_GROUP_TYPE type = cfg->group_mode == SRT_GROUP_BACKUP ? SRT_GTYPE_BACKUP : SRT_GTYPE_BROADCAST;
-  SRT_SOCKGROUPCONFIG gc[DIPISRT_MAX_PEERS];
-
-  g = srt_create_group(type);
-  if (g == SRT_INVALID_SOCK) {
-    log_line("srt: group create failed: %s", srt_getlasterror_str());
-    return SRT_INVALID_SOCK;
-  }
-  if (apply_common_opts(g, cfg, 1)) {
-    srt_close(g);
-    return SRT_INVALID_SOCK;
-  }
-  for (int i = 0; i < cfg->in.n_srt; i++) {
-    struct sockaddr_storage remote;
-    build_addr(cfg->in.family[i], cfg->in.srt_host[i], cfg->in.srt_port[i], &remote);
-    gc[i] = srt_prepare_endpoint(NULL, (struct sockaddr *)&remote, (int)addr_len(cfg->in.family[i]));
-  }
-  if (srt_connect_group(g, gc, cfg->in.n_srt) == SRT_ERROR) {
-    log_line("srt: group connect failed: %s", srt_getlasterror_str());
-    srt_close(g);
-    return SRT_INVALID_SOCK;
-  }
-  return g;
-}
-
-/* one listener per bonded peer; accept_bond returns first hello. GROUPCONNECT: accept
-   returns group id, not socket. lifetime rule: see open_single_listener() */
-static SRTSOCKET open_group_listener(const config_t *cfg, SRTSOCKET *listeners_out, int *n_listeners_out) {
-  SRTSOCKET listeners[DIPISRT_MAX_PEERS];
-  int groupconnect = 1;
-  SRTSOCKET s = SRT_INVALID_SOCK;
-  int i;
-
-  *n_listeners_out = 0;
-  for (i = 0; i < cfg->in.n_srt; i++) {
-    struct sockaddr_storage local;
-    listeners[i] = srt_create_socket();
-    if (listeners[i] == SRT_INVALID_SOCK) {
-      log_line("srt: socket create failed: %s", srt_getlasterror_str());
-      goto fail;
-    }
-    if (apply_common_opts(listeners[i], cfg, 0) ||
-        srt_setsockopt(listeners[i], 0, SRTO_GROUPCONNECT, &groupconnect, sizeof groupconnect) != 0) {
-      log_line("srt: setsockopt failed: %s", srt_getlasterror_str());
-      goto fail;
-    }
-    build_addr(cfg->in.family[i], cfg->in.srt_host[i], cfg->in.srt_port[i], &local);
-    if (srt_bind(listeners[i], (struct sockaddr *)&local, (int)addr_len(cfg->in.family[i])) != 0 ||
-        srt_listen(listeners[i], 1) != 0) {
-      log_line("srt: bind/listen failed on peer %d: %s", i, srt_getlasterror_str());
-      goto fail;
-    }
-  }
-  while (!signal_stop_requested()) {
-    s = srt_accept_bond(listeners, cfg->in.n_srt, SRT_RCVTIMEO_MS);
-    if (s != SRT_INVALID_SOCK)
-      break;
-    if (srt_getlasterror(NULL) != SRT_ETIMEOUT) {
-      log_line("srt: accept_bond failed: %s", srt_getlasterror_str());
-      s = SRT_INVALID_SOCK;
-      break;
-    }
-  }
-  if (s == SRT_INVALID_SOCK) {
-    for (int j = 0; j < i; j++)
-      srt_close(listeners[j]);
-  } else {
-    memcpy(listeners_out, listeners, (size_t)i * sizeof listeners[0]);
-    *n_listeners_out = i;
-  }
-  return s;
-
-fail:
-  for (int j = 0; j < i; j++)
-    srt_close(listeners[j]);
-  return SRT_INVALID_SOCK;
-}
-
-/* listeners_out/n_listeners_out: sockets outliving this call, see above. caller flavors:
-   empty, nothing to keep alive */
-static SRTSOCKET open_srt_input(const config_t *cfg, SRTSOCKET *listeners_out, int *n_listeners_out) {
-  *n_listeners_out = 0;
-  if (cfg->group_mode != SRT_GROUP_NONE)
-    return cfg->in.listen ? open_group_listener(cfg, listeners_out, n_listeners_out) : open_group_caller(cfg);
-  if (cfg->in.listen) {
-    SRTSOCKET lsn;
-    SRTSOCKET s = open_single_listener(cfg, &lsn);
-    if (lsn != SRT_INVALID_SOCK) {
-      listeners_out[0] = lsn;
-      *n_listeners_out = 1;
-    }
-    return s;
-  }
-  return open_single_caller(cfg);
-}
-
-static void push_receiver_stats(SRTSOCKET s, metrics_exporter_t *mx) {
-  SRT_TRACEBSTATS st;
-  metrics_writer_t w;
-
-  if (!mx || !metrics_exporter_due(mx, mono_seconds()) || srt_bstats(s, &st, 0) != 0)
-    return;
-  if (metrics_exporter_begin(mx, &w, TOOL_VERSION))
-    return;
-  metrics_writer_put(&w, METRICS_ID_SRT_RECEIVER_RECEIVED_TOTAL, NULL, (uint64_t)st.pktRecvTotal);
-  metrics_writer_put(&w, METRICS_ID_SRT_RECEIVER_LOST_TOTAL, NULL, (uint64_t)st.pktRcvLossTotal);
-  metrics_writer_put(&w, METRICS_ID_SRT_RECEIVER_DROPPED_TOTAL, NULL, (uint64_t)st.pktRcvDropTotal);
-  metrics_writer_put(&w, METRICS_ID_SRT_RECEIVER_RTT_MILLISECONDS, NULL, (uint64_t)st.msRTT);
-  metrics_writer_put(&w, METRICS_ID_SRT_RECEIVER_BUFFER_MILLISECONDS, NULL, (uint64_t)st.msRcvTsbPdDelay);
-  metrics_exporter_send(mx, &w);
+static void fill_common_opts(const config_t *cfg, srtcommon_opts_t *o) {
+  o->passphrase = cfg->passphrase[0] ? cfg->passphrase : NULL;
+  o->pbkeylen = cfg->pbkeylen;
+  o->streamid = cfg->streamid[0] ? cfg->streamid : NULL;
+  o->packetfilter = cfg->packetfilter[0] ? cfg->packetfilter : NULL;
+  o->latency_ms = cfg->latency_ms;
 }
 
 static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
@@ -341,8 +79,10 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   tssrc_t *src;
   srtout_cfg_t rcfg;
   srtout_t *srt;
+  struct pollfd pfd;
   unsigned char buf[65536];
   int rc = 0;
+  int was_connected = 0;
 
   nonsrt_to_tssrc_cfg(&cfg->in.nonsrt, cfg->iface, cfg->insecure_tls, &tc);
   src = tssrc_open(&tc, NULL);
@@ -355,15 +95,11 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     rcfg.peers[i].port = cfg->out.srt_port[i];
   }
   rcfg.npeers = cfg->out.n_srt;
-  rcfg.group_mode = group_mode_of(cfg->group_mode);
+  rcfg.group_mode = cfg->group_mode;
   rcfg.rendezvous = cfg->rendezvous;
   rcfg.local_host = cfg->local_host[0] ? cfg->local_host : NULL;
   rcfg.local_port = cfg->local_port;
-  rcfg.passphrase = cfg->passphrase[0] ? cfg->passphrase : NULL;
-  rcfg.pbkeylen = cfg->pbkeylen;
-  rcfg.streamid = cfg->streamid[0] ? cfg->streamid : NULL;
-  rcfg.packetfilter = cfg->packetfilter[0] ? cfg->packetfilter : NULL;
-  rcfg.latency_ms = cfg->latency_ms;
+  fill_common_opts(cfg, &rcfg.opts);
   rcfg.verbose = cfg->verbose;
   rcfg.mx = mx;
   rcfg.tool_version = TOOL_VERSION;
@@ -374,10 +110,31 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     return 1;
   }
 
-  {
-    int had_error = 0;
+  pfd.fd = tssrc_fd(src);
+  pfd.events = POLLIN;
 
-    while (!signal_stop_requested()) {
+  while (!signal_stop_requested()) {
+    srtout_status_t st;
+    int pr;
+
+    srtout_service(srt, &st);
+    if (st.connected != was_connected) {
+      log_line(st.connected ? "srt output: connected" : "srt output: link down, reconnecting");
+      was_connected = st.connected;
+    }
+
+    pr = poll(&pfd, 1, DIPISRT_SENDER_POLL_MS);
+    if (pr < 0) {
+      if (errno == EINTR)
+        continue;
+      log_line("srt output: poll failed: %s", strerror(errno));
+      rc = 1;
+      break;
+    }
+    if (pr == 0 || !(pfd.revents & (POLLIN | POLLERR | POLLHUP)))
+      continue;
+
+    {
       net_err_reason_t reason = NET_ERR_OTHER;
       ssize_t n = tssrc_read(src, buf, sizeof buf, &reason);
 
@@ -385,17 +142,8 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
         rc = 1;
         break;
       }
-      if (n == 0)
-        continue;
-      if (srtout_write(srt, buf, (size_t)n) < 0) {
-        if (!had_error) {
-          log_line("srt output: write failed, will keep retrying");
-          had_error = 1;
-        }
-      } else if (had_error) {
-        log_line("srt output: recovered");
-        had_error = 0;
-      }
+      if (n > 0)
+        srtout_write(srt, buf, (size_t)n);
     }
   }
   if (rc) {
@@ -414,9 +162,8 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
 static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   tssink_cfg_t tk;
   tssink_t *sink;
-  SRTSOCKET s;
-  SRTSOCKET listeners[DIPISRT_MAX_PEERS];
-  int n_listeners;
+  srtin_cfg_t rcfg;
+  srtin_t *srt;
   unsigned char buf[65536];
   unsigned char dedup_hist[RECV_DEDUP_HISTORY][65536];
   int dedup_hist_len[RECV_DEDUP_HISTORY] = {0};
@@ -429,51 +176,38 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   if (!sink)
     return 1;
 
-  if (srt_startup() == SRT_ERROR) {
-    log_line("srt: startup failed: %s", srt_getlasterror_str());
-    tssink_close(sink);
-    return 1;
+  memset(&rcfg, 0, sizeof rcfg);
+  for (int i = 0; i < cfg->in.n_srt; i++) {
+    rcfg.peers[i].host = cfg->in.srt_host[i];
+    rcfg.peers[i].port = cfg->in.srt_port[i];
   }
-  open_logging(cfg->verbose);
+  rcfg.npeers = cfg->in.n_srt;
+  rcfg.group_mode = cfg->group_mode;
+  rcfg.listen = cfg->in.listen;
+  rcfg.rendezvous = cfg->rendezvous;
+  rcfg.local_host = cfg->local_host[0] ? cfg->local_host : NULL;
+  rcfg.local_port = cfg->local_port;
+  fill_common_opts(cfg, &rcfg.opts);
+  rcfg.verbose = cfg->verbose;
+  rcfg.mx = mx;
+  rcfg.tool_version = TOOL_VERSION;
 
-  s = open_srt_input(cfg, listeners, &n_listeners);
-  if (s == SRT_INVALID_SOCK) {
-    srt_cleanup();
+  srt = srtin_open(&rcfg);
+  if (!srt) {
     tssink_close(sink);
     return signal_stop_requested() ? 0 : 1;
   }
 
   while (!signal_stop_requested()) {
-    int n = srt_recvmsg2(s, (char *)buf, sizeof buf, NULL);
+    int reconnected = 0;
+    int n = srtin_read(srt, buf, sizeof buf, &reconnected);
 
-    if (n == SRT_ERROR) {
-      int err = srt_getlasterror(NULL);
-      if (err == SRT_ETIMEOUT)
-        continue;
-      if (err == SRT_EASYNCRCV) {
-        /* group with every member link down right now, not a dead group: retry */
-        usleep(SRT_RCVTIMEO_MS * 1000);
-        continue;
-      }
-      if (cfg->group_mode != SRT_GROUP_NONE && n_listeners > 0) {
-        /* group error: state could be corrupted, reconnect regardless of cause */
-        log_line("srt: read failed on group (%s), reconnecting", srt_getlasterror_str());
-        srt_close(s);
-        s = SRT_INVALID_SOCK;
-        while (!signal_stop_requested() && s == SRT_INVALID_SOCK) {
-          s = srt_accept_bond(listeners, n_listeners, SRT_RCVTIMEO_MS);
-          if (s == SRT_INVALID_SOCK && srt_getlasterror(NULL) != SRT_ETIMEOUT)
-            log_line("srt: reconnect attempt failed: %s", srt_getlasterror_str());
-        }
-        if (s == SRT_INVALID_SOCK)
-          break;
-        dedup_active = 1;
-        continue;
-      }
-      log_line("srt: read failed: %s", srt_getlasterror_str());
+    if (n < 0) {
       rc = 1;
       break;
     }
+    if (reconnected)
+      dedup_active = 1;
     if (n == 0)
       continue;
     if (dedup_active) {
@@ -492,16 +226,12 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
       rc = 1;
       break;
     }
-    push_receiver_stats(s, mx);
     memcpy(dedup_hist[dedup_hist_next], buf, (size_t)n);
     dedup_hist_len[dedup_hist_next] = n;
     dedup_hist_next = (dedup_hist_next + 1) % RECV_DEDUP_HISTORY;
   }
 
-  srt_close(s);
-  for (int i = 0; i < n_listeners; i++)
-    srt_close(listeners[i]);
-  srt_cleanup();
+  srtin_close(srt);
   tssink_close(sink);
   return rc;
 }

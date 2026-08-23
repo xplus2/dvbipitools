@@ -81,7 +81,7 @@ static int parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *
 
     if (has_at)
       rest++;
-    if (e->n_srt >= DIPISRT_MAX_PEERS)
+    if (e->n_srt >= SRTCOMMON_MAX_PEERS)
       return -1;
     if (argutil_addrport_parse(rest, &family, host, sizeof host, &port))
       return -1;
@@ -209,7 +209,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int c;
 
   memset(cfg, 0, sizeof *cfg);
-  cfg->group_mode = SRT_GROUP_NONE;
+  cfg->group_mode = SRTGROUP_NONE;
   optind = 1;
   while ((c = getopt_long(argc, argv, "i:o:I:kvdh", longopts, NULL)) != -1) {
     switch (c) {
@@ -236,25 +236,27 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         argerr("--group-mode needs a libsrt built with bonding support (ENABLE_BONDING=ON)");
         return ARGS_ERR;
 #else
-        static const enum_map_t map[] = {{"broadcast", SRT_GROUP_BROADCAST}, {"backup", SRT_GROUP_BACKUP}};
+        static const enum_map_t map[] = {{"broadcast", SRTGROUP_BROADCAST}, {"backup", SRTGROUP_BACKUP}};
         int v;
         if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
           argerr("invalid --group-mode: %s (broadcast|backup)", optarg);
           return ARGS_ERR;
         }
-        cfg->group_mode = (srt_group_sel_t)v;
+        cfg->group_mode = (srtgroup_mode_t)v;
         break;
 #endif
       }
       case 1001:
         cfg->rendezvous = 1;
         break;
-      case 1002:
-        if (argutil_addrport_parse(optarg, &cfg->local_family, cfg->local_host, sizeof cfg->local_host, &cfg->local_port)) {
+      case 1002: {
+        int family_unused;
+        if (argutil_addrport_parse(optarg, &family_unused, cfg->local_host, sizeof cfg->local_host, &cfg->local_port)) {
           argerr("invalid --local: %s", optarg);
           return ARGS_ERR;
         }
         break;
+      }
       case 1003:
         if (bufcpy(cfg->passphrase, sizeof cfg->passphrase, optarg) >= sizeof cfg->passphrase) {
           argerr("--passphrase too long");
@@ -349,11 +351,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   {
     const endpoint_t *srt_ep = cfg->in.is_srt ? &cfg->in : &cfg->out;
-    if (srt_ep->n_srt > 1 && cfg->group_mode == SRT_GROUP_NONE) {
+    if (srt_ep->n_srt > 1 && cfg->group_mode == SRTGROUP_NONE) {
       argerr("bonding several srt:// peers requires --group-mode");
       return ARGS_ERR;
     }
-    if (srt_ep->n_srt == 1 && cfg->group_mode != SRT_GROUP_NONE) {
+    if (srt_ep->n_srt == 1 && cfg->group_mode != SRTGROUP_NONE) {
       argerr("--group-mode has no effect with a single srt:// peer");
       return ARGS_ERR;
     }
@@ -362,7 +364,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         argerr("--rendezvous is not combinable with srt://@ (listener)");
         return ARGS_ERR;
       }
-      if (cfg->group_mode != SRT_GROUP_NONE) {
+      if (cfg->group_mode != SRTGROUP_NONE) {
         argerr("--rendezvous is not combinable with --group-mode");
         return ARGS_ERR;
       }

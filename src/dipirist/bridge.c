@@ -8,7 +8,7 @@
 
 #include "lib/ioutil.h"
 #include "lib/log.h"
-#include "lib/net/ristout.h"
+#include "lib/net/rist/ristout.h"
 #include "lib/net/tssink.h"
 #include "lib/net/tssource.h"
 #include "lib/signal.h"

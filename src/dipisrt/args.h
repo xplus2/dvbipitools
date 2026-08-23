@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include "lib/net/httpclient/httpclient.h"
+#include "lib/net/srt/srtcommon.h"
 
 typedef enum {
   NONSRT_RTP,  /* multicast, RTP wrapped */
@@ -25,16 +26,12 @@ typedef struct {
   char file_path[512]; /* "" = stdin (source) or stdout (sink) */
 } nonsrt_t;
 
-#define DIPISRT_MAX_PEERS 8
-
-typedef enum { SRT_GROUP_NONE, SRT_GROUP_BROADCAST, SRT_GROUP_BACKUP } srt_group_sel_t;
-
 typedef struct {
-  int is_srt;  /* 1: srt://, repeatable up to DIPISRT_MAX_PEERS for bonding. 0: nonsrt */
+  int is_srt;  /* 1: srt://, repeatable up to SRTCOMMON_MAX_PEERS for bonding. 0: nonsrt */
   int listen;  /* @ prefix seen: this side binds/listens/accepts. else: calls out. same for every bonded peer */
-  int family[DIPISRT_MAX_PEERS];  /* AF_INET or AF_INET6 */
-  char srt_host[DIPISRT_MAX_PEERS][64]; /* numeric IP; argutil_addrport_parse doesn't resolve hostnames */
-  unsigned srt_port[DIPISRT_MAX_PEERS];
+  int family[SRTCOMMON_MAX_PEERS];  /* AF_INET or AF_INET6; display only, see endpoint_describe() */
+  char srt_host[SRTCOMMON_MAX_PEERS][64]; /* numeric IP; argutil_addrport_parse doesn't resolve hostnames */
+  unsigned srt_port[SRTCOMMON_MAX_PEERS];
   int n_srt;
   nonsrt_t nonsrt; /* valid iff !is_srt */
 } endpoint_t;
@@ -42,9 +39,8 @@ typedef struct {
 typedef struct {
   endpoint_t in;  /* -i */
   endpoint_t out; /* -o */
-  srt_group_sel_t group_mode; /* NONE unless srt:// side bonds (n_srt > 1) */
+  srtgroup_mode_t group_mode; /* NONE unless srt:// side bonds (n_srt > 1) */
   int rendezvous;             /* srt:// side uses srt_rendezvous(); not combinable with @ or bonding */
-  int local_family;
   char local_host[64]; /* --local host:port; required with --rendezvous */
   unsigned local_port;
   char passphrase[128]; /* "" = no encryption; else 10..79 chars, SRT's own PBKDF2 passphrase bounds */

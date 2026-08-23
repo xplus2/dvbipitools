@@ -190,7 +190,7 @@ function(dipidescramble_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/session.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
-        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmpout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmpout.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c
@@ -313,9 +313,9 @@ function(dipiradiohead_resolve_sources)
     endif ()
 
     if (DVBIPITOOLS_HAVE_RIST)
-        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/ristout.c)
+        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c)
     else ()
-        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/ristout_stub.c)
+        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c)
     endif ()
 
     set(DIPIRADIOHEAD_SRCS
@@ -409,9 +409,9 @@ function(dipirec_resolve_sources)
         set(RTMP_AUTH_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth_stub.c)
     endif ()
     if (DVBIPITOOLS_HAVE_RIST)
-        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/ristout.c)
+        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c)
     else ()
-        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/ristout_stub.c)
+        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c)
     endif ()
     set(DIPIREC_SRCS
         ${CMAKE_SOURCE_DIR}/src/dipirec/main.c
@@ -466,7 +466,7 @@ function(dipirec_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/session.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
-        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmpout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmpout.c
         ${RTMP_AUTH_SRC}
         ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
         ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c)
@@ -519,7 +519,7 @@ function(dipirist_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
-        ${CMAKE_SOURCE_DIR}/src/lib/net/ristout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
         ${TLS_SRC}
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -591,7 +591,9 @@ function(dipisrt_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
-        ${CMAKE_SOURCE_DIR}/src/lib/net/srtout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
         ${TLS_SRC}
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -713,9 +715,9 @@ function(dipitvhead_resolve_sources)
     endif ()
 
     if (DVBIPITOOLS_HAVE_RIST)
-        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/ristout.c)
+        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c)
     else ()
-        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/ristout_stub.c)
+        set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c)
     endif ()
 
     set(DIPITVHEAD_SRCS

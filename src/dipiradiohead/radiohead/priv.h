@@ -9,7 +9,7 @@
 #include "lib/mux/mpts.h"
 #include "lib/mux/rtpheader.h"
 #include "lib/net/multicast.h"
-#include "lib/net/ristout.h"
+#include "lib/net/rist/ristout.h"
 
 #include "../cas/cas.h"
 #include "../input/source.h"

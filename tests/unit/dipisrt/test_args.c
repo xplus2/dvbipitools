@@ -75,7 +75,7 @@ START_TEST(repeated_srt_out_with_group_mode_bonds_peers) {
 #ifdef DIPISRT_HAVE_BONDING
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.out.n_srt, 2);
-  ck_assert_int_eq(cfg.group_mode, SRT_GROUP_BROADCAST);
+  ck_assert_int_eq(cfg.group_mode, SRTGROUP_BROADCAST);
   ck_assert_str_eq(cfg.out.srt_host[0], "1.2.3.4");
   ck_assert_str_eq(cfg.out.srt_host[1], "5.6.7.8");
 #else

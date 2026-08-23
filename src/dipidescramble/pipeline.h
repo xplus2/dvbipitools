@@ -15,7 +15,7 @@
 #include "lib/demux/psi/section_asm.h"
 #include "lib/mux/flv/flv.h"
 #include "lib/mux/mkv/mkv.h"
-#include "lib/net/rtmpout.h"
+#include "lib/net/rtmp/rtmpout.h"
 #include "lib/scrambler/scrambler.h"
 
 typedef struct {
