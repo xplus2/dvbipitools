@@ -87,11 +87,11 @@ int emmg_server_dequeue_emm(emmg_server_t *s, unsigned char *out, size_t cap, si
 unsigned long emmg_server_emm_dropped_total(emmg_server_t *s) { return atomic_load_explicit(&s->emm_dropped, memory_order_relaxed); }
 
 unsigned emmg_server_client_count(emmg_server_t *s) {
-  int i, n = 0;
-  for (i = 0; i < EMMG_MAX_CONNS; i++)
+  unsigned i, n = 0;
+  for (i = 0; i < s->max_conns; i++)
     if (atomic_load_explicit(&s->worker_active[i], memory_order_relaxed))
       n++;
-  return (unsigned)n;
+  return n;
 }
 
 unsigned long emmg_server_emm_total(emmg_server_t *s) { return atomic_load_explicit(&s->emm_total, memory_order_relaxed); }
@@ -136,6 +136,10 @@ emmg_server_t *emmg_server_start(const emmg_server_cfg_t *cfg) {
   if (!s)
     return NULL;
 
+  s->max_conns = cfg->max_conns ? cfg->max_conns : 8;
+  if (s->max_conns > EMMG_MAX_CONNS_CEILING)
+    s->max_conns = EMMG_MAX_CONNS_CEILING;
+
   s->listen_fd = tcp_listen_dualstack(cfg->port);
   if (s->listen_fd < 0) {
     free(s);
@@ -169,7 +173,7 @@ void emmg_server_stop(emmg_server_t *s) {
   pthread_join(s->accept_thread, NULL);
   close(s->listen_fd);
 
-  for (int i = 0; i < EMMG_MAX_CONNS; i++)
+  for (unsigned i = 0; i < s->max_conns; i++)
     if (s->worker_thread_joinable[i]) {
       pthread_join(s->worker_thread[i], NULL);
       s->worker_thread_joinable[i] = 0;

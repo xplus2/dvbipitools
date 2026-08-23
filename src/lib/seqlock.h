@@ -10,7 +10,7 @@
    writer-vs-writer exclusion is caller's job, this only orders one writer against lock-free readers. */
 static inline unsigned seqlock_begin_write(_Atomic unsigned *gen) {
   unsigned g = atomic_load_explicit(gen, memory_order_relaxed);
-  atomic_store_explicit(gen, g + 1, memory_order_relaxed);
+  atomic_store_explicit(gen, g + 1, memory_order_release);
   return g;
 }
 

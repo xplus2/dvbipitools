@@ -374,27 +374,6 @@ typedef struct {
   burst_t *b;
 } pacer_snap_t;
 
-/* under pc->bursts->lock, gen-bracketed for pacer's lock-free scan: clears slot if this
-   pacer still owns it, on congestion/done. returns 1 if this pacer owned slot (caller
-   may still need to send a notice) */
-static int finalize_burst_slot(pacer_ctx_t *pc, size_t idx, burst_t *b, int congestion, burst_tick_result_t r, int *remove_slot) {
-  burst_slot_t *slot = &pc->bursts->slots[idx];
-  int owns_slot = 0;
-  pthread_mutex_lock(&pc->bursts->lock);
-  if (atomic_load_explicit(&slot->in_use, memory_order_relaxed) && atomic_load_explicit(&slot->b, memory_order_relaxed) == b) {
-    owns_slot = 1;
-    if (congestion || r == BURST_TICK_DONE) {
-      unsigned g = seqlock_begin_write(&slot->gen);
-      atomic_store_explicit(&slot->b, NULL, memory_order_relaxed);
-      atomic_store_explicit(&slot->in_use, 0, memory_order_relaxed);
-      seqlock_commit_write(&slot->gen, g);
-      *remove_slot = 1;
-    }
-  }
-  pthread_mutex_unlock(&pc->bursts->lock);
-  return owns_slot;
-}
-
 /* seqlock reader for one slot, bounded retry: repeated overlap = treated as unreadable this tick */
 static int burst_slot_read(const burst_slot_t *slot, int *in_use, uint64_t *words, socklen_t *addrlen, int *fd, burst_t **b) {
   for (int tries = 0; tries < 8; tries++) {
@@ -467,7 +446,7 @@ static void *pacer_main(void *arg) {
       dst.congestion = 0;
       r = burst_tick(snap[i].b, pc->duration_cap_ms, burst_send_cb, &dst);
       burst_table_note_bytes_sent(pc->bursts, (uint64_t)(snap[i].b->bytes_sent - bytes_before));
-      owns_slot = finalize_burst_slot(pc, snap[i].idx, snap[i].b, dst.congestion, r, &remove_slot);
+      owns_slot = burst_table_release(pc->bursts, snap[i].idx, snap[i].b, dst.congestion || r == BURST_TICK_DONE, &remove_slot);
 
       if (owns_slot && dst.congestion)
         send_rams_i(&dst, 0, 0, (uint16_t)BURST_CONGESTION, NULL);

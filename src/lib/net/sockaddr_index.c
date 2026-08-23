@@ -60,7 +60,10 @@ static size_t key_hash(int family, const unsigned char *bytes, size_t byteslen, 
   }
   h ^= (unsigned)family;
   h *= 1099511628211ULL;
-  h ^= (unsigned)port;
+  h ^= (unsigned char)(port & 0xff); /* byte-at-a-time, matches bytes[] loop above: keeps
+    avalanche when only one port byte varies (sequential client ports differ in just one) */
+  h *= 1099511628211ULL;
+  h ^= (unsigned char)(port >> 8);
   h *= 1099511628211ULL;
   return (size_t)h;
 }

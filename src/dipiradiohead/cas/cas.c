@@ -115,6 +115,7 @@ cas_t *cas_start(const config_t *cfg, const unsigned *audio_pids, size_t n_audio
     gv->ecm_pid = v->ecm_pid;
     gv->emm_pid = v->emm_pid;
     gv->emmg_port = v->emmg_port;
+    gv->emmg_max_conns = v->emmg_max_conns;
     gv->required = v->required;
     gv->outage_mode = map_outage_mode(v->resilience);
   }

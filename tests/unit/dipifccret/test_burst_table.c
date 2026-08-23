@@ -153,12 +153,17 @@ START_TEST(claim_reclaims_slot_after_manual_release) {
   burst_t *b2 = burst_new(c, 1.0, 0, 99);
   struct sockaddr_in sin1, sin2;
   burst_slot_t *slot;
+  size_t idx;
+  int did_clear = 0;
 
   addr_of(&sin1, 6000);
   slot = burst_table_claim(t, (const struct sockaddr *)&sin1, sizeof sin1, 3, b1);
   ck_assert_ptr_nonnull(slot);
+  idx = (size_t)(slot - t->slots);
   burst_free(b1);
-  slot->in_use = 0; /* same release path burst.c's pacer uses on BURST_TICK_DONE */
+  /* same release path burst.c's pacer uses on BURST_TICK_DONE */
+  ck_assert_int_eq(burst_table_release(t, idx, b1, 1, &did_clear), 1);
+  ck_assert_int_eq(did_clear, 1);
 
   addr_of(&sin2, 6001);
   slot = burst_table_claim(t, (const struct sockaddr *)&sin2, sizeof sin2, 3, b2);
@@ -198,8 +203,12 @@ START_TEST(congestion_adapted_resets_on_claim_and_reclaim) {
   slot = burst_table_claim(t, (const struct sockaddr *)&sin1, sizeof sin1, 3, b1);
   ck_assert_int_eq(slot->congestion_adapted, 0);
   slot->congestion_adapted = 1;
-  burst_free(b1);
-  slot->in_use = 0;
+  {
+    size_t idx = (size_t)(slot - t->slots);
+    int did_clear = 0;
+    burst_free(b1);
+    ck_assert_int_eq(burst_table_release(t, idx, b1, 1, &did_clear), 1);
+  }
 
   addr_of(&sin2, 6001);
   slot = burst_table_claim(t, (const struct sockaddr *)&sin2, sizeof sin2, 3, b2);
@@ -372,7 +381,7 @@ static void *burst_race_pacer(void *arg) {
   while (!atomic_load_explicit(&g_burst_race_stop, memory_order_relaxed)) {
     size_t i, n = 0;
 
-    pthread_mutex_lock(&t->lock);
+    pthread_mutex_lock(&t->stripes[0].lock); /* BURST_RACE_CAP 1: always exactly one stripe */
     for (i = 0; i < t->cap && n < BURST_RACE_CAP; i++) {
       if (!t->slots[i].in_use)
         continue;
@@ -385,19 +394,13 @@ static void *burst_race_pacer(void *arg) {
       snap[n].b = t->slots[i].b;
       n++;
     }
-    pthread_mutex_unlock(&t->lock);
+    pthread_mutex_unlock(&t->stripes[0].lock);
 
     for (i = 0; i < n; i++) {
       burst_tick_result_t r = burst_tick(snap[i].b, 60000, burst_race_send_cb, NULL);
       int remove_slot = 0;
 
-      pthread_mutex_lock(&t->lock);
-      if (t->slots[snap[i].idx].in_use && t->slots[snap[i].idx].b == snap[i].b && r == BURST_TICK_DONE) {
-        t->slots[snap[i].idx].b = NULL;
-        t->slots[snap[i].idx].in_use = 0;
-        remove_slot = 1;
-      }
-      pthread_mutex_unlock(&t->lock);
+      burst_table_release(t, snap[i].idx, snap[i].b, r == BURST_TICK_DONE, &remove_slot);
 
       if (remove_slot)
         burst_release(snap[i].b); /* drop slot ownership */
@@ -528,6 +531,33 @@ START_TEST(start_under_concurrent_exhaustion_admits_exactly_cap_sessions) {
 }
 END_TEST
 
+/* cap > BURST_TABLE_STRIPE_COUNT_MAX: several addresses land in same stripe.
+   total admitted must equal cap regardless of distribution. */
+START_TEST(claim_admits_exactly_cap_across_multiple_stripes) {
+  burst_table_t *t = burst_table_new(16);
+  channel_t *c = make_channel_with_rap();
+  burst_t *bufs[17];
+  struct sockaddr_in sin;
+  int claimed = 0;
+  size_t i;
+
+  for (i = 0; i < 17; i++) {
+    burst_slot_t *slot;
+    bufs[i] = burst_new(c, 1.0, 0, 99);
+    addr_of(&sin, 6000 + (unsigned)i);
+    slot = burst_table_claim(t, (const struct sockaddr *)&sin, sizeof sin, 3, bufs[i]);
+    if (slot)
+      claimed++;
+    else
+      burst_free(bufs[i]);
+  }
+  ck_assert_int_eq(claimed, 16);
+
+  burst_table_free(t);
+  channel_table_free(g_table);
+}
+END_TEST
+
 static Suite *burst_table_suite(void) {
   Suite *s = suite_create("burst_table");
   TCase *tc = tcase_create("core");
@@ -545,6 +575,7 @@ static Suite *burst_table_suite(void) {
   tcase_add_test(tc, get_metrics_reports_active_count_and_nack_totals);
   tcase_add_test(tc, burst_table_survives_rams_r_pacer_nack_termination_race);
   tcase_add_test(tc, start_under_concurrent_exhaustion_admits_exactly_cap_sessions);
+  tcase_add_test(tc, claim_admits_exactly_cap_across_multiple_stripes);
   tcase_set_timeout(tc, 20);
   suite_add_tcase(s, tc);
   return s;

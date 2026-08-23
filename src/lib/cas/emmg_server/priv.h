@@ -10,7 +10,6 @@
 
 #include "emmg_server.h"
 
-#define EMMG_MAX_CONNS 8
 #define EMMG_QUEUE_CAP 1024
 #define EMMG_QUEUE_HIGH_WATERMARK ((EMMG_QUEUE_CAP * 9) / 10)
 #define EMMG_QUEUE_LOW_WATERMARK ((EMMG_QUEUE_CAP * 3) / 4)
@@ -33,10 +32,11 @@ struct emmg_server {
   int listen_fd;
   atomic_int stop;
   pthread_t accept_thread;
+  unsigned max_conns; /* set once at start, 1..EMMG_MAX_CONNS_CEILING */
 
-  atomic_int worker_active[EMMG_MAX_CONNS];
-  pthread_t worker_thread[EMMG_MAX_CONNS];
-  int worker_thread_joinable[EMMG_MAX_CONNS];
+  atomic_int worker_active[EMMG_MAX_CONNS_CEILING];
+  pthread_t worker_thread[EMMG_MAX_CONNS_CEILING];
+  int worker_thread_joinable[EMMG_MAX_CONNS_CEILING];
 
   pthread_mutex_t queue_lock;
   emmg_queued_datagram_t queue[EMMG_QUEUE_CAP];

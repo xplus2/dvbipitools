@@ -12,8 +12,9 @@ typedef struct device_state device_state_t;
 
 /* serial: matched against EMM-U addressing. No cw_len here.
    only device_resolve_cw() needs it, read from PMT. profile: ecm_profile.set == 0 keeps AES-256-ECB.
-   copied by value, caller's copy not retained. NULL on err */
-device_state_t *device_state_new(const char *key_path, const char *serial, const ecm_profile_t *profile);
+   copied by value, caller's copy not retained. max_services: 0 = default (32), else
+   1..DEVICE_MAX_SERVICES_CEILING. NULL on err */
+device_state_t *device_state_new(const char *key_path, const char *serial, const ecm_profile_t *profile, size_t max_services);
 void device_state_free(device_state_t *d);
 
 /* one EMM section (table_id + length + payload). EMM-U updates BK, EMM-G updates SK cache for its dvb_service_id.

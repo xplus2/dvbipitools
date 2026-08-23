@@ -212,15 +212,15 @@ void *accept_main(void *arg) {
     }
 
     slot = -1;
-    for (int i = 0; i < EMMG_MAX_CONNS; i++) {
+    for (unsigned i = 0; i < s->max_conns; i++) {
       int expected = 0;
       if (atomic_compare_exchange_strong_explicit(&s->worker_active[i], &expected, 1, memory_order_acq_rel, memory_order_relaxed)) {
-        slot = i;
+        slot = (int)i;
         break;
       }
     }
     if (slot < 0) {
-      log_line("emmg: connection limit (%d) reached, rejecting", EMMG_MAX_CONNS);
+      log_line("emmg: connection limit (%u) reached, rejecting", s->max_conns);
       close(fd);
       continue;
     }

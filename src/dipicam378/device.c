@@ -27,7 +27,7 @@ device_state_t *device_state_new(const char *key_path, int cw_len, const char *s
   d = calloc(1, sizeof *d);
   if (!d)
     return NULL;
-  if (device_core_init(&d->core, key_path, serial) != 0) {
+  if (device_core_init(&d->core, key_path, serial, 0) != 0) {
     free(d);
     return NULL;
   }

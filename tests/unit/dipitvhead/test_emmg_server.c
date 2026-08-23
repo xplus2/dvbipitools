@@ -285,7 +285,7 @@ static int fake_read_reply(int fd, simulcrypt_hdr_t *hdr, unsigned char *payload
 }
 
 START_TEST(emmg_server_completes_real_handshake_and_queues_datagram) {
-  emmg_server_cfg_t cfg;
+  emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
   unsigned port;
   int fd;
@@ -339,7 +339,7 @@ START_TEST(emmg_server_completes_real_handshake_and_queues_datagram) {
 END_TEST
 
 START_TEST(emmg_server_accepts_up_to_new_conn_cap) {
-  emmg_server_cfg_t cfg;
+  emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
   unsigned port;
   int fd[8], extra;
@@ -377,8 +377,47 @@ START_TEST(emmg_server_accepts_up_to_new_conn_cap) {
 }
 END_TEST
 
+START_TEST(emmg_server_max_conns_override_caps_below_default) {
+  emmg_server_cfg_t cfg = {0};
+  emmg_server_t *s;
+  unsigned port;
+  int fd[2], extra;
+  int i;
+  unsigned char msg[512], payload[512];
+  simulcrypt_hdr_t hdr;
+  size_t n;
+
+  cfg.port = 0;
+  cfg.max_conns = 2;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+  port = emmg_server_port(s);
+
+  for (i = 0; i < 2; i++) {
+    fd[i] = fake_connect(port);
+    ck_assert_int_ge(fd[i], 0);
+    n = fake_build_channel_setup(msg, sizeof msg, 3, 0x4A751000u + (unsigned)i, 1);
+    ck_assert_int_eq(simulcrypt_send_all(fd[i], msg, n, 3000), 0);
+    ck_assert_int_eq(fake_read_reply(fd[i], &hdr, payload, sizeof payload), 0);
+    ck_assert_uint_eq(hdr.type, EMMG_MSG_CHANNEL_STATUS);
+  }
+
+  /* 3rd, beyond override: TCP accepts it, server closes it */
+  extra = fake_connect(port);
+  ck_assert_int_ge(extra, 0);
+  n = fake_build_channel_setup(msg, sizeof msg, 3, 0x4A7510FFu, 1);
+  simulcrypt_send_all(extra, msg, n, 3000);
+  ck_assert_int_eq(fake_read_reply(extra, &hdr, payload, sizeof payload), -1);
+  close(extra);
+
+  for (i = 0; i < 2; i++)
+    close(fd[i]);
+  emmg_server_stop(s);
+}
+END_TEST
+
 START_TEST(emmg_server_queue_holds_more_than_old_64_cap) {
-  emmg_server_cfg_t cfg;
+  emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
   unsigned port;
   int fd;
@@ -425,7 +464,7 @@ START_TEST(emmg_server_queue_holds_more_than_old_64_cap) {
 END_TEST
 
 START_TEST(emmg_server_queue_holds_more_than_old_256_cap) {
-  emmg_server_cfg_t cfg;
+  emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
   unsigned port;
   int fd;
@@ -473,7 +512,7 @@ START_TEST(emmg_server_queue_holds_more_than_old_256_cap) {
 END_TEST
 
 START_TEST(emmg_server_rejects_stream_setup_before_channel_setup) {
-  emmg_server_cfg_t cfg;
+  emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
   unsigned port;
   int fd;
@@ -533,7 +572,7 @@ static void assert_closed_by_server(int fd) {
    mid-header (fewer than SIMULCRYPT_HDR_LEN bytes, rest never arrives).
    confirms stop reaps every worker promptly and closes each fd */
 START_TEST(emmg_server_stop_reaps_all_max_conns_in_mixed_states) {
-  emmg_server_cfg_t cfg;
+  emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
   unsigned port;
   int fd[8];
@@ -604,6 +643,7 @@ static Suite *emmg_server_suite(void) {
     tcase_add_test(tc_integ, emmg_server_completes_real_handshake_and_queues_datagram);
     tcase_add_test(tc_integ, emmg_server_rejects_stream_setup_before_channel_setup);
     tcase_add_test(tc_integ, emmg_server_accepts_up_to_new_conn_cap);
+    tcase_add_test(tc_integ, emmg_server_max_conns_override_caps_below_default);
     tcase_add_test(tc_integ, emmg_server_queue_holds_more_than_old_64_cap);
     tcase_add_test(tc_integ, emmg_server_queue_holds_more_than_old_256_cap);
     tcase_add_test(tc_integ, emmg_server_stop_reaps_all_max_conns_in_mixed_states);

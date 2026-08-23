@@ -2,9 +2,9 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <netdb.h>
-#include <stdio.h>
 #include <string.h>
 
+#include "lib/ioutil.h"
 #include "lib/log.h"
 
 #include "srtcommon.h"
@@ -64,7 +64,7 @@ int srtcommon_resolve(const char *host, unsigned port, struct sockaddr_storage *
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_DGRAM;
-  snprintf(portbuf, sizeof portbuf, "%u", port);
+  uint_to_str(portbuf, port);
   rc = getaddrinfo(host, portbuf, &hints, &res);
   if (rc != 0) {
     log_line("srt: address resolve failed for %s:%u: %s", host, port, gai_strerror(rc));

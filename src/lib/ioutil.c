@@ -50,6 +50,27 @@ size_t bufcpy(char *dst, size_t dstsz, const char *src) {
   return len;
 }
 
+size_t uint_to_str_pad(char *dst, unsigned val, unsigned min_width) {
+  char tmp[10]; /* UINT_MAX (32-bit) is 10 digits */
+  unsigned n = 0, pad;
+  if (val == 0)
+    tmp[n++] = '0';
+  else
+    while (val) {
+      tmp[n++] = (char)('0' + val % 10);
+      val /= 10;
+    }
+  pad = n < min_width ? min_width - n : 0;
+  for (unsigned i = 0; i < pad; i++)
+    dst[i] = '0';
+  for (unsigned i = 0; i < n; i++)
+    dst[pad + i] = tmp[n - 1 - i];
+  dst[pad + n] = '\0';
+  return pad + n;
+}
+
+size_t uint_to_str(char *dst, unsigned val) { return uint_to_str_pad(dst, val, 0); }
+
 char *find_header_end(char *b, size_t n, size_t *termlen) {
   for (size_t i = 0; i + 1 < n; i++) {
     if (b[i] == '\n' && b[i + 1] == '\n') {

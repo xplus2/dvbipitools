@@ -11,6 +11,7 @@
 #include "lib/argutil.h"
 #include "lib/cas/biss/biss.h"
 #include "lib/cas/cas_args.h"
+#include "lib/cas/emmg_server/emmg_server.h"
 #include "lib/ioutil.h"
 #include "lib/log.h"
 #include "lib/uriparse.h"
@@ -101,6 +102,8 @@ static void print_help(void) {
       "                             stream (default: 0x0020)\n"
       "      --cas-emmg-port <n>    for the --cas-ecmg right before this: our EMMG listener port\n"
       "                             (default: 8002)\n"
+      "      --cas-emmg-max-conns <n> for the --cas-ecmg right before this: max concurrent EMMG\n"
+      "                             client connections (default: 8, max: 64)\n"
       "      --cas-emmg-version <n> for the --cas-ecmg right before this: EMMG protocol version\n"
       "                             2|3 (default: accept client's proposal)\n"
       "      --cas-emm-pid <pid>    for the --cas-ecmg right before this: output PID for its EMM\n"
@@ -191,6 +194,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"cas-ecm-pid", required_argument, 0, 1009},
       {"cas-emmg-port", required_argument, 0, 1010},
       {"cas-emmg-version", required_argument, 0, 1011},
+      {"cas-emmg-max-conns", required_argument, 0, 1029},
       {"cas-emm-pid", required_argument, 0, 1012},
       {"cas-cp-duration", required_argument, 0, 1013},
       {"cas-resilience", required_argument, 0, 1014},
@@ -408,6 +412,22 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
+      case 1029: {
+        char *end;
+        unsigned long v;
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-emmg-max-conns must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > EMMG_MAX_CONNS_CEILING) {
+          argerr("invalid --cas-emmg-max-conns: %s (1..%u)", optarg, EMMG_MAX_CONNS_CEILING);
+          return ARGS_ERR;
+        }
+        cfg->cas_vendors[cfg->n_cas_vendors - 1].emmg_max_conns = (unsigned)v;
+        break;
+      }
       case 1012:
         any_cas_flag = 1;
         if (cfg->n_cas_vendors == 0) {

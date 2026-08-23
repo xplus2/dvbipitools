@@ -36,6 +36,7 @@ typedef struct {
   unsigned ecm_pid;
   unsigned emm_pid;
   unsigned emmg_port;
+  unsigned emmg_max_conns; /* 0 = library default (8) */
   ecmg_outage_mode_t outage_mode; /* per-vendor: frozen/cycling/silent on ECMG loss */
   int required;                  /* down triggers global fallback regardless of other vendors */
 } cas_group_vendor_cfg_t;

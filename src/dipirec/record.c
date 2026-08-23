@@ -426,8 +426,9 @@ static int stream_cb(void *v, const unsigned char *pkt) {
   }
   if (c->f) {
     unsigned char o[188];
-    if (ts_filter_packet(c->f, pkt, o)) {
-      if (write_to_sinks(c->sinks, c->n_sinks, o, 188))
+    const unsigned char *r = ts_filter_packet(c->f, pkt, o);
+    if (r) {
+      if (write_to_sinks(c->sinks, c->n_sinks, r, 188))
         return 1;
       *c->bytes += 188;
     }

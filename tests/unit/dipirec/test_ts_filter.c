@@ -233,7 +233,7 @@ static int filter_pid(ts_filter_t *f, unsigned pid) {
   pkt[1] = (unsigned char)(0x00 | ((pid >> 8) & 0x1F));
   pkt[2] = (unsigned char)pid;
   pkt[3] = 0x10;
-  return ts_filter_packet(f, pkt, out);
+  return ts_filter_packet(f, pkt, out) != NULL;
 }
 
 START_TEST(ts_filter_pat_rewrite_drops_nit_only_program) {
@@ -247,11 +247,13 @@ START_TEST(ts_filter_pat_rewrite_drops_nit_only_program) {
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
   wrap_ts_packet(pkt, 0x0000, sec, slen);
 
-  ck_assert_int_eq(ts_filter_packet(f, pkt, out), 1);
-  ck_assert_uint_eq(out[0], 0x47u);
-
-  check = psi_new();
-  psi_feed(check, out);
+  {
+    const unsigned char *r = ts_filter_packet(f, pkt, out);
+    ck_assert_ptr_nonnull(r);
+    ck_assert_uint_eq(r[0], 0x47u);
+    check = psi_new();
+    psi_feed(check, r);
+  }
   ck_assert_int_eq(psi_have_pat(check), 1);
   progs = psi_pat_programs(check, &count);
   ck_assert_int_eq(count, 1); /* the NIT (program 0) entry was dropped */
@@ -337,11 +339,12 @@ START_TEST(ts_filter_strip_none_keeps_nit_and_null) {
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
   wrap_ts_packet(pkt, 0x0000, sec, slen);
-  ck_assert_int_eq(ts_filter_packet(f, pkt, out), 1);
-  ck_assert_int_eq(memcmp(pkt, out, 188), 0); /* not stripping NIT: PAT untouched */
-
-  check = psi_new();
-  psi_feed(check, out);
+  {
+    const unsigned char *r = ts_filter_packet(f, pkt, out);
+    ck_assert_ptr_eq(r, pkt); /* not stripping NIT: passthrough, no copy */
+    check = psi_new();
+    psi_feed(check, r);
+  }
   ck_assert_uint_eq(psi_nit_pid(check), 0x0010u); /* NIT entry still there */
   psi_free(check);
 
@@ -433,10 +436,10 @@ START_TEST(ts_filter_strip_int_drops_by_table_id_and_latches) {
   memset(sec, 0, sizeof sec);
   sec[0] = 0x4C; /* INT table_id */
   wrap_ts_packet(pkt, 0x0150, sec, 12);
-  ck_assert_int_eq(ts_filter_packet(f, pkt, out), 0);
+  ck_assert_ptr_null(ts_filter_packet(f, pkt, out));
 
   pkt[1] &= (unsigned char)~0x40; /* continuation packet, no PUSI: still caught by latch */
-  ck_assert_int_eq(ts_filter_packet(f, pkt, out), 0);
+  ck_assert_ptr_null(ts_filter_packet(f, pkt, out));
 
   ts_filter_free(f);
 }

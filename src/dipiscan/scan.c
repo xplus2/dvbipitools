@@ -136,7 +136,7 @@ static void http_path_expand(const char *tmpl, const char *group, unsigned port,
   size_t o = 0;
   if (outcap == 0)
     return;
-  snprintf(portbuf, sizeof portbuf, "%u", port);
+  uint_to_str(portbuf, port);
   for (; *tmpl && o + 1 < outcap; tmpl++) {
     const char *ins = NULL;
     if (*tmpl == '%') {

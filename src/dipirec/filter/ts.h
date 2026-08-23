@@ -31,8 +31,9 @@ typedef struct ts_filter ts_filter_t;
 ts_filter_t *ts_filter_new(int audio_all, unsigned audio_track, int strip_subs, unsigned preferred_pmt_pid, unsigned strip_mask);
 void ts_filter_free(ts_filter_t *f);
 
-/* filter one pkg: 1 = keep (out filled), 0 = strip */
-int ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out);
+/* filter one pkt. NULL = strip. else result pointer:
+   in on passthrough, out on rewrite (PAT/PMT). no copy on passthrough. */
+const unsigned char *ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out);
 
 /* stream model */
 const psi_t *ts_filter_psi(const ts_filter_t *f);

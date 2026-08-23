@@ -6,8 +6,11 @@
 
 #include <stddef.h>
 
+#define EMMG_MAX_CONNS_CEILING 64
+
 typedef struct {
   unsigned port; /* dual-stack (v4+v6) wildcard listener */
+  unsigned max_conns; /* 0 = default (8), else 1..EMMG_MAX_CONNS_CEILING */
 } emmg_server_cfg_t;
 
 typedef struct emmg_server emmg_server_t;

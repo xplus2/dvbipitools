@@ -17,7 +17,7 @@ struct device_state {
   ecm_profile_t profile;
 };
 
-device_state_t *device_state_new(const char *key_path, const char *serial, const ecm_profile_t *profile) {
+device_state_t *device_state_new(const char *key_path, const char *serial, const ecm_profile_t *profile, size_t max_services) {
   device_state_t *d;
   size_t serial_len = strlen(serial);
 
@@ -26,7 +26,7 @@ device_state_t *device_state_new(const char *key_path, const char *serial, const
   d = calloc(1, sizeof *d);
   if (!d)
     return NULL;
-  if (device_core_init(&d->core, key_path, serial) != 0) {
+  if (device_core_init(&d->core, key_path, serial, max_services) != 0) {
     free(d);
     return NULL;
   }

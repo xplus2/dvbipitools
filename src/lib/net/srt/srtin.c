@@ -271,6 +271,22 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
   int n;
 
   *reconnected_out = 0;
+
+  /* mid-reconnect: one attempt per call, returns like a timeout.
+     caller's loop drives retry cadence, !internal */
+  if (r->sock == SRT_INVALID_SOCK) {
+    if (signal_stop_requested())
+      return 0;
+    r->sock = srt_accept_bond(r->listeners, r->n_listeners, SRT_RCVTIMEO_MS);
+    if (r->sock == SRT_INVALID_SOCK) {
+      if (srt_getlasterror(NULL) != SRT_ETIMEOUT)
+        log_line("srt: reconnect attempt failed: %s", srt_getlasterror_str());
+      return 0;
+    }
+    *reconnected_out = 1;
+    return 0;
+  }
+
   n = srt_recvmsg2(r->sock, (char *)buf, (int)cap, NULL);
   if (n == SRT_ERROR) {
     int err = srt_getlasterror(NULL);
@@ -283,18 +299,12 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
       return 0;
     }
     if (r->group_mode != SRTGROUP_NONE && r->n_listeners > 0) {
-      /* group error: state could be corrupted, reconnect regardless of cause */
+      /* group error: state could be corrupted, reconnect regardless of cause.
+         next call retries, one attempt each, see above */
       log_line("srt: read failed on group (%s), reconnecting", srt_getlasterror_str());
       srt_close(r->sock);
       r->sock = SRT_INVALID_SOCK;
-      while (!signal_stop_requested() && r->sock == SRT_INVALID_SOCK) {
-        r->sock = srt_accept_bond(r->listeners, r->n_listeners, SRT_RCVTIMEO_MS);
-        if (r->sock == SRT_INVALID_SOCK && srt_getlasterror(NULL) != SRT_ETIMEOUT)
-          log_line("srt: reconnect attempt failed: %s", srt_getlasterror_str());
-      }
-      if (r->sock != SRT_INVALID_SOCK)
-        *reconnected_out = 1;
-      return 0; /* reconnected, or stop was requested meanwhile: either way, no data this call */
+      return 0;
     }
     log_line("srt: read failed: %s", srt_getlasterror_str());
     return -1;

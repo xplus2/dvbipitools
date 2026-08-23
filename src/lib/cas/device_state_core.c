@@ -7,7 +7,7 @@
 
 #include "device_state_core.h"
 
-int device_core_init(device_core_t *core, const char *key_path, const char *serial) {
+int device_core_init(device_core_t *core, const char *key_path, const char *serial, size_t max_services) {
   size_t serial_len = serial ? strlen(serial) : 0;
   if (serial_len >= sizeof core->serial)
     return -1;
@@ -17,6 +17,9 @@ int device_core_init(device_core_t *core, const char *key_path, const char *seri
   if (serial_len)
     memcpy(core->serial, serial, serial_len);
   core->serial_len = serial_len;
+  core->max_services = max_services ? max_services : 32;
+  if (core->max_services > DEVICE_MAX_SERVICES_CEILING)
+    core->max_services = DEVICE_MAX_SERVICES_CEILING;
   return 0;
 }
 
@@ -26,7 +29,7 @@ service_key_t *device_core_service_slot(device_core_t *core, unsigned service_id
   for (size_t i = 0; i < core->service_count; i++)
     if (core->services[i].service_id == service_id)
       return &core->services[i];
-  if (!create || core->service_count >= DEVICE_MAX_SERVICES)
+  if (!create || core->service_count >= core->max_services)
     return NULL;
   core->services[core->service_count].service_id = service_id;
   core->services[core->service_count].have = 0;
@@ -67,7 +70,7 @@ static int handle_emm_g(device_core_t *core, const unsigned char *p, size_t len,
 
   sk = device_core_service_slot(core, service_id, 1);
   if (!sk) {
-    log_line("%sservice key cache full (%d services), dropping EMM-G for service %04X", log_prefix, DEVICE_MAX_SERVICES, service_id);
+    log_line("%sservice key cache full (%zu services), dropping EMM-G for service %04X", log_prefix, core->max_services, service_id);
     return 0;
   }
   if (device_emm_g_decrypt(core->bk, p + 4, sk->sk) == 0) {

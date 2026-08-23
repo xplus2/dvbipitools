@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/cas/device_state_core.h"
 #include "lib/demux/psi/section_asm.h"
 #include "lib/demux/tspack.h"
 #include "lib/log.h"
@@ -14,7 +15,7 @@
 #include "emmcache.h"
 #include "version.h"
 
-#define EMMCACHE_MAX_SERVICES 32 /* matches device.c's DEVICE_MAX_SERVICES */
+#define EMMCACHE_MAX_SERVICES_CEILING DEVICE_MAX_SERVICES_CEILING /* array size, matches device_core_t exactly */
 #define EMMCACHE_MAX_FILE (1 << 20) /* generous cap, real cache is a few KB */
 #define EMM_G_PAYLOAD_LEN (4 + CRYPTO_EMM_G_LEN) /* mirrors device.c's own classification */
 
@@ -31,12 +32,21 @@ typedef struct {
 struct emmcache {
   raw_sec_t emm_u;
   int have_emm_u;
-  emm_g_slot_t services[EMMCACHE_MAX_SERVICES];
+  emm_g_slot_t services[EMMCACHE_MAX_SERVICES_CEILING];
   size_t service_count;
+  size_t max_services;
   unsigned long long dropped_total;
 };
 
-emmcache_t *emmcache_new(void) { return calloc(1, sizeof(struct emmcache)); }
+emmcache_t *emmcache_new(size_t max_services) {
+  struct emmcache *c = calloc(1, sizeof(struct emmcache));
+  if (!c)
+    return NULL;
+  c->max_services = max_services ? max_services : 32;
+  if (c->max_services > EMMCACHE_MAX_SERVICES_CEILING)
+    c->max_services = EMMCACHE_MAX_SERVICES_CEILING;
+  return c;
+}
 
 void emmcache_free(emmcache_t *c) { free(c); }
 
@@ -44,7 +54,7 @@ static emm_g_slot_t *slot_for(struct emmcache *c, unsigned service_id) {
   for (size_t i = 0; i < c->service_count; i++)
     if (c->services[i].service_id == service_id)
       return &c->services[i];
-  if (c->service_count >= EMMCACHE_MAX_SERVICES)
+  if (c->service_count >= c->max_services)
     return NULL;
   c->services[c->service_count].service_id = service_id;
   return &c->services[c->service_count++];
@@ -63,7 +73,7 @@ int emmcache_feed(emmcache_t *c, device_state_t *d, const unsigned char *emm, si
     unsigned service_id = ((unsigned)emm[3] << 8) | emm[4];
     emm_g_slot_t *sl = slot_for(c, service_id);
     if (!sl) {
-      log_line(TOOL_NAME ": emm cache full (%d services), dropping EMM-G for service_id 0x%04x", EMMCACHE_MAX_SERVICES, service_id);
+      log_line(TOOL_NAME ": emm cache full (%zu services), dropping EMM-G for service_id 0x%04x", c->max_services, service_id);
       c->dropped_total++;
       return 0;
     }
@@ -138,9 +148,13 @@ int emmcache_load(emmcache_t *c, device_state_t *d, const char *path) {
 }
 
 int emmcache_save(const emmcache_t *c, const char *path) {
-  unsigned char buf[(EMMCACHE_MAX_SERVICES + 1) * PSI_SECTION_ASM_BUF_LEN];
+  unsigned char *buf = malloc((EMMCACHE_MAX_SERVICES_CEILING + 1) * PSI_SECTION_ASM_BUF_LEN);
   size_t off = 0;
   FILE *f;
+  int rc = 0;
+
+  if (!buf)
+    return -1;
 
   if (c->have_emm_u) {
     memcpy(buf + off, c->emm_u.raw, c->emm_u.len);
@@ -154,15 +168,16 @@ int emmcache_save(const emmcache_t *c, const char *path) {
   f = fopen(path, "wb");
   if (!f) {
     log_line(TOOL_NAME ": cannot write emm cache %s: %s", path, strerror(errno));
+    free(buf);
     return -1;
   }
   if (off && fwrite(buf, 1, off, f) != off) {
     log_line(TOOL_NAME ": short write to emm cache %s", path);
-    fclose(f);
-    return -1;
+    rc = -1;
   }
   fclose(f);
-  return 0;
+  free(buf);
+  return rc;
 }
 
 unsigned long long emmcache_dropped_total(const emmcache_t *c) {

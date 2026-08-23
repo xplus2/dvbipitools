@@ -5,11 +5,11 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
-#include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "lib/ioutil.h"
 #include "lib/log.h"
 
 #include "priv.h"
@@ -52,7 +52,7 @@ static int tcp_dial(ecmg_client_t *c, const char *host, unsigned port) {
   char portstr[6];
   int fd = -1, e, save_errno = 0;
 
-  snprintf(portstr, sizeof portstr, "%u", port);
+  uint_to_str(portstr, port);
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;

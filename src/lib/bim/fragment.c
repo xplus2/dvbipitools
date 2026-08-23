@@ -6,6 +6,7 @@
 
 #include "codec.h"
 #include "fragment.h"
+#include "lib/ioutil.h"
 #include "lib/tva/tva_xml.h"
 
 static int put_bit(bitwriter_t *bw, int v) { return bitwriter_put(bw, v ? 1 : 0, 1); }
@@ -107,7 +108,7 @@ int fragment_decode_schedule(bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *d
     pr = bcg_add_programme(doc);
     if (!pr)
       return -1;
-    snprintf(pr->channel_id, sizeof pr->channel_id, "%s", channel);
+    bufcpy(pr->channel_id, sizeof pr->channel_id, channel);
     if (dvb_datetime_decode(br, pr->start, sizeof pr->start))
       return -1;
     if ((present = get_bit(br)) < 0)

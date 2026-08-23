@@ -59,6 +59,7 @@ typedef struct {
   const char *metrics_sock;    /* --metrics. NULL = default socket path */
   const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
   unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
+  unsigned max_services;       /* --max-services. 0 = default (32) */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

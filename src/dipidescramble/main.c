@@ -221,7 +221,7 @@ int main(int argc, char **argv) {
   input_describe(&cfg.input, in_desc, sizeof in_desc);
   log_line(TOOL_NAME ": i:%s k:%s s:%s e:%s o:%s%s", in_desc, cfg.key_path ? cfg.key_path : "(none)", cfg.serial ? cfg.serial : "(none)", cfg.emm_file ? cfg.emm_file : "(none)", outdesc, cfg.unicast_emm_uri ? " unicast-emm:yes" : "");
 
-  lc.cache = emmcache_new();
+  lc.cache = emmcache_new(cfg.max_services);
   if (!lc.cache)
     goto cleanup;
 

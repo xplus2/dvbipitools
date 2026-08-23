@@ -28,7 +28,7 @@ static void section_header(unsigned char table_id, size_t payload_len, unsigned 
   out[2] = (unsigned char)(payload_len & 0xFF);
 }
 
-static device_state_t *make_device_serial(EVP_PKEY **pub_out, const char *serial) {
+static device_state_t *make_device_serial(EVP_PKEY **pub_out, const char *serial, size_t max_services) {
   EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
   EVP_PKEY *pkey = NULL;
   int fd;
@@ -47,7 +47,7 @@ static device_state_t *make_device_serial(EVP_PKEY **pub_out, const char *serial
   ck_assert_int_eq(PEM_write_PrivateKey(f, pkey, NULL, NULL, 0, NULL, NULL), 1);
   fclose(f);
 
-  d = device_state_new(g_key_path, serial, &no_profile);
+  d = device_state_new(g_key_path, serial, &no_profile, max_services);
   ck_assert_ptr_nonnull(d);
   remove(g_key_path);
 
@@ -56,7 +56,7 @@ static device_state_t *make_device_serial(EVP_PKEY **pub_out, const char *serial
 }
 
 static device_state_t *make_device(EVP_PKEY **pub_out) {
-  return make_device_serial(pub_out, TEST_SERIAL);
+  return make_device_serial(pub_out, TEST_SERIAL, 0);
 }
 
 /* builds a real EMM-U section: header + [1B addr_len][serial][2B bk_version][RSA-OAEP(bk)] */
@@ -200,6 +200,33 @@ START_TEST(resolve_cw_ignores_srvid_mismatch_with_one_cached_service) {
   ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x012D, 8, TEST_ECM_PID, cw_out), 0); /* mismatched srvid 0x012D (301) */
   ck_assert_mem_eq(cw_out, cw, 8);
   ck_assert_mem_eq(cw_out + 8, cw, 8);
+
+  EVP_PKEY_free(pub);
+  device_state_free(d);
+}
+END_TEST
+
+START_TEST(max_services_override_drops_emm_g_past_cap) {
+  EVP_PKEY *pub;
+  device_state_t *d = make_device_serial(&pub, TEST_SERIAL, 2);
+  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char buf[1024];
+  size_t n;
+
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
+    bk[i] = (unsigned char)(i + 10);
+    sk[i] = (unsigned char)(200 - i);
+  }
+
+  n = build_emm_u(pub, bk, buf, sizeof buf);
+  ck_assert_int_eq(device_on_emm(d, buf, n), 1);
+
+  n = build_emm_g(bk, sk, 0x0001, buf, sizeof buf);
+  ck_assert_int_eq(device_on_emm(d, buf, n), 1);
+  n = build_emm_g(bk, sk, 0x0002, buf, sizeof buf);
+  ck_assert_int_eq(device_on_emm(d, buf, n), 1);
+  n = build_emm_g(bk, sk, 0x0003, buf, sizeof buf); /* 3rd distinct service_id, past override cap */
+  ck_assert_int_eq(device_on_emm(d, buf, n), 0);
 
   EVP_PKEY_free(pub);
   device_state_free(d);
@@ -352,7 +379,7 @@ START_TEST(device_state_new_rejects_empty_serial) {
   int fd = mkstemp(path);
   ck_assert_int_ge(fd, 0);
   close(fd);
-  ck_assert_ptr_null(device_state_new(path, "", &no_profile));
+  ck_assert_ptr_null(device_state_new(path, "", &no_profile, 0));
   remove(path);
 }
 END_TEST
@@ -362,6 +389,7 @@ static Suite *device_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, full_chain_csa2_recovers_cw);
   tcase_add_test(tc, resolve_cw_ignores_srvid_mismatch_with_one_cached_service);
+  tcase_add_test(tc, max_services_override_drops_emm_g_past_cap);
   tcase_add_test(tc, full_chain_cissa_recovers_cw);
   tcase_add_test(tc, resolve_cw_fails_for_unknown_service);
   tcase_add_test(tc, resolve_cw_fails_before_any_emm_g);

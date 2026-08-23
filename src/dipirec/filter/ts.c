@@ -251,13 +251,13 @@ static int table_dropped(const ts_filter_t *f, unsigned pid, pid_class_t cls) {
   return 0;
 }
 
-int ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out) {
+const unsigned char *ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out) {
   unsigned pid;
   int pusi;
   pid_class_t cls;
   psi_feed(f->psi, in);
   if (in[0] != 0x47)
-    return 0;
+    return NULL;
   pid = tspack_pid(in);
   pusi = in[1] & 0x40;
   if (!f->audio_all && psi_have_pmt(f->psi) && (int)f->audio_track > psi_audio_count(f->psi))
@@ -268,21 +268,18 @@ int ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out
     unsigned char rw[PSI_SECTION_ASM_BUF_LEN];
     size_t sl, rl;
     const unsigned char *sec;
-    if (!(f->strip_mask & STRIP_NIT)) {
-      memcpy(out, in, 188);
-      return 1;
-    }
+    if (!(f->strip_mask & STRIP_NIT))
+      return in;
     sec = psi_pat_section(f->psi, &sl);
     if (!sec || !pusi)
-      return 0;
+      return NULL;
     rl = pat_rewrite(sec, sl, rw);
     if (rl) {
       f->cc_pat = (f->cc_pat + 1) & 0x0F;
       if (emit_section(out, 0x0000, f->cc_pat, rw, rl))
-        return 1;
+        return out;
     }
-    memcpy(out, in, 188); /* fallback: original */
-    return 1;
+    return in; /* fallback: original */
   }
 
   if (psi_have_pat(f->psi) && pid == psi_pmt_pid(f->psi)) {
@@ -291,31 +288,29 @@ int ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out
     size_t sl, rl;
     const unsigned char *sec = psi_pmt_section(f->psi, &sl);
     if (!sec || !pusi)
-      return 0;
+      return NULL;
     rl = pmt_rewrite(f, sec, sl, rw);
     if (rl) {
       f->cc_pmt = (f->cc_pmt + 1) & 0x0F;
       if (emit_section(out, pid, f->cc_pmt, rw, rl))
-        return 1;
+        return out;
     }
-    memcpy(out, in, 188);
-    return 1;
+    return in;
   }
 
   cls = psi_classify(f->psi, pid);
   if (table_dropped(f, pid, cls))
-    return 0;
+    return NULL;
   if ((f->strip_mask & STRIP_INT) && int_dropped(f, pid, in))
-    return 0;
+    return NULL;
   if (es_dropped(f, pid)) /* -a / -s drop */
-    return 0;
+    return NULL;
   /* hold unclassified ES until PMT */
   if ((!f->audio_all || f->strip_subs) && !psi_have_pmt(f->psi) &&
       cls == PID_UNKNOWN)
-    return 0;
+    return NULL;
 
-  memcpy(out, in, 188);
-  return 1;
+  return in;
 }
 
 const psi_t *ts_filter_psi(const ts_filter_t *f) { return f->psi; }

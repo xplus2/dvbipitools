@@ -142,6 +142,7 @@ static void fill_group_cfg(const config_t *cfg, cas_group_cfg_t *gcfg) {
     gv->ecm_pid = v->ecm_pid;
     gv->emm_pid = v->emm_pid;
     gv->emmg_port = v->emmg_port;
+    gv->emmg_max_conns = v->emmg_max_conns;
     gv->required = v->required;
     gv->outage_mode = map_outage_mode(v->resilience);
   }

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "auth.h"
+#include "lib/ioutil.h"
 #include "lib/mux/amf.h"
 #include "priv.h"
 
@@ -52,7 +53,8 @@ int rtmp_command_connect(struct rtmp *r) {
   amf_object_start(&b);
   amf_object_key(&b, "app");
   if (r->auth_query[0]) {
-    snprintf(appbuf, sizeof appbuf, "%s%s", r->app, r->auth_query);
+    size_t n = bufcpy(appbuf, sizeof appbuf, r->app);
+    bufcpy(appbuf + n, sizeof appbuf - n, r->auth_query);
     amf_string(&b, appbuf);
   } else {
     amf_string(&b, r->app);

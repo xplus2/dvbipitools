@@ -1317,6 +1317,7 @@ lib_net_srt_srtcommon_EXTRA_LDFLAGS := $(shell pkg-config --libs srt)
 lib_net_srt_srtcommon_SRCS := \
 	tests/unit/lib/net/srt/test_srtcommon.c \
 	src/lib/net/srt/srtcommon.c \
+	src/lib/ioutil.c \
 	src/lib/log.c
 endif
 
@@ -1940,6 +1941,7 @@ dipiradiohead_cas_SRCS := \
 	tests/unit/dipiradiohead/test_cas.c \
 	src/dipiradiohead/cas/cas.c \
 	src/lib/mux/cadescbuild.c \
+	src/lib/ioutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
@@ -2229,6 +2231,7 @@ dipitvhead_output_SRCS := \
 dipitvhead_ecmg_client_BIN := tests/unit/dipitvhead/test_ecmg_client
 dipitvhead_ecmg_client_SRCS := \
 	tests/unit/dipitvhead/test_ecmg_client.c \
+	src/lib/ioutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
@@ -2282,6 +2285,7 @@ dipitvhead_cas_BIN := tests/unit/dipitvhead/test_cas
 dipitvhead_cas_SRCS := \
 	tests/unit/dipitvhead/test_cas.c \
 	src/dipitvhead/cas/cas.c \
+	src/lib/ioutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
@@ -2425,6 +2429,7 @@ lib_cas_cas_group_BIN := tests/unit/lib/cas/test_cas_group
 lib_cas_cas_group_SRCS := \
 	tests/unit/lib/cas/test_cas_group.c \
 	src/lib/cas/cas_group.c \
+	src/lib/ioutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
@@ -2808,6 +2813,7 @@ fuzz_simulcrypt_msg_SRCS := \
 fuzz_ecmg_channel_status_BIN := tests/fuzz/fuzz_ecmg_channel_status
 fuzz_ecmg_channel_status_SRCS := \
 	tests/fuzz/fuzz_ecmg_channel_status.c \
+	src/lib/ioutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \

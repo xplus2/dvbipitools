@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <sched.h>
 #include <string.h>
 
 #include "priv.h"
@@ -27,7 +28,7 @@ void hash_writer_enter(channel_table_t *t) {
       return;
     atomic_fetch_sub_explicit(&t->hash_active_writers, 1, memory_order_acq_rel);
     while (atomic_load_explicit(&t->hash_rebuild_active, memory_order_acquire))
-      ;
+      sched_yield();
   }
 }
 
@@ -44,7 +45,7 @@ void chan_hash_rebuild(channel_table_t *t) {
   if (!atomic_compare_exchange_strong_explicit(&t->hash_rebuild_active, &expected, 1, memory_order_acq_rel, memory_order_relaxed))
     return;
   while (atomic_load_explicit(&t->hash_active_writers, memory_order_acquire) != 0)
-    ;
+    sched_yield();
 
   for (size_t h = 0; h < t->hash_size; h++)
     atomic_store_explicit(&t->hash[h], 0, memory_order_relaxed);

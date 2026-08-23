@@ -8,7 +8,7 @@
 
 #include "device_crypto.h"
 
-#define DEVICE_MAX_SERVICES 32
+#define DEVICE_MAX_SERVICES_CEILING 256
 #define DEVICE_SERIAL_MAX 256 /* addr_len is one wire byte, max 255 + nul */
 
 typedef struct {
@@ -24,12 +24,14 @@ typedef struct {
   size_t serial_len; /* 0 = no EMM-U address filtering */
   unsigned char bk[CRYPTO_KEY_LEN];
   int have_bk;
-  service_key_t services[DEVICE_MAX_SERVICES];
+  service_key_t services[DEVICE_MAX_SERVICES_CEILING];
   size_t service_count;
+  size_t max_services; /* set once at init, 1..DEVICE_MAX_SERVICES_CEILING */
 } device_core_t;
 
-/* loads device key, copies serial (NULL/"" ok, means no EMM-U filtering). 0 ok, -1 err */
-int device_core_init(device_core_t *core, const char *key_path, const char *serial);
+/* loads device key, copies serial (NULL/"" ok, means no EMM-U filtering).
+   max_services: 0 = default (32), else 1..DEVICE_MAX_SERVICES_CEILING. 0 ok, -1 err */
+int device_core_init(device_core_t *core, const char *key_path, const char *serial, size_t max_services);
 
 void device_core_release(device_core_t *core);
 

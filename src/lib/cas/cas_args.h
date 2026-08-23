@@ -30,6 +30,7 @@ typedef struct {
   unsigned ecm_id;               /* --cas-ecm-id right after this --cas-ecmg */
   unsigned ecm_pid;              /* --cas-ecm-pid right after this --cas-ecmg; default 0x0020 */
   unsigned emmg_port;            /* --cas-emmg-port right after this --cas-ecmg; default 8002 */
+  unsigned emmg_max_conns;       /* --cas-emmg-max-conns right after this --cas-ecmg. 0 = default (8) */
   unsigned emmg_version;         /* --cas-emmg-version right after this --cas-ecmg; 0 = accept client's proposal */
   unsigned emm_pid;              /* --cas-emm-pid right after this --cas-ecmg; default 0x0021 */
   cas_outage_mode_t resilience;  /* --cas-resilience right after this --cas-ecmg; default frozen */

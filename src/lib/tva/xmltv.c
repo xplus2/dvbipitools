@@ -46,7 +46,7 @@ static int channel_cb(const char *tag, const char *blk_end, void *ctx) {
     c = bcg_add_channel(doc);
     if (!c)
       return -1;
-    snprintf(c->id, sizeof c->id, "%s", id);
+    bufcpy(c->id, sizeof c->id, id);
     scan_display_names(tag, blk_end, c);
   }
   return 0;
@@ -60,7 +60,7 @@ static int programme_cb(const char *tag, const char *blk_end, void *ctx) {
     pr = bcg_add_programme(doc);
     if (!pr)
       return -1;
-    snprintf(pr->channel_id, sizeof pr->channel_id, "%s", channel);
+    bufcpy(pr->channel_id, sizeof pr->channel_id, channel);
     if (xmltv_time_to_iso8601(start, pr->start, sizeof pr->start)) {
       fprintf(stderr, "xmltv: skipping programme, bad start time: %s\n", start);
       doc->programme_count--;

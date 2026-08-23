@@ -7,7 +7,6 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <poll.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -72,7 +71,7 @@ int netconnect_tcp(const char *host, unsigned port, int timeout_ms, net_err_reas
   char portstr[6];
   int fd = -1, e, save_errno = 0;
 
-  snprintf(portstr, sizeof portstr, "%u", port);
+  uint_to_str(portstr, port);
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
@@ -160,7 +159,7 @@ int netconnect_tcp_start(const char *host, unsigned port, netconnect_pending_t *
   int fd, e, save_errno = 0;
   netconnect_pending_t *p;
 
-  snprintf(portstr, sizeof portstr, "%u", port);
+  uint_to_str(portstr, port);
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;

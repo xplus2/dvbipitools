@@ -244,7 +244,7 @@ int pkt_cb(void *v, const unsigned char *pkt) {
         lc->fatal = 1;
         return 1;
       }
-      lc->dev = device_state_new(lc->cfg->key_path, lc->cfg->serial, &lc->cfg->ecm_profile);
+      lc->dev = device_state_new(lc->cfg->key_path, lc->cfg->serial, &lc->cfg->ecm_profile, lc->cfg->max_services);
       if (!lc->dev) {
         log_line(TOOL_NAME ": cannot load RSA private key from -k %s", lc->cfg->key_path);
         lc->key_load_errors_total++;

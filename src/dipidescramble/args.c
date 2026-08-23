@@ -10,6 +10,7 @@
 
 #include "lib/argutil.h"
 #include "lib/cas/biss/biss.h"
+#include "lib/cas/device_state_core.h"
 #include "lib/log.h"
 #include "lib/uriparse.h"
 
@@ -155,6 +156,7 @@ static void print_help(void) {
       "  %-27sUnix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
       "  %-27sstable instance id; metrics disabled unless set\n"
       "  %-27ssnapshot interval in seconds (default: 5)\n"
+      "  %-27smax distinct EMM-G service_ids cached (default: 32, max: 256)\n"
       "  %-27sfork to background after startup, detach from terminal\n"
       "  %-27sthis help\n\n"
       "examples:\n"
@@ -173,6 +175,7 @@ static void print_help(void) {
       "-I, --iface <iface>", "-v, --verbose",
       "    --color <when>",
       "    --metrics <path>", "    --metrics-id <name>", "    --metrics-interval <s>",
+      "    --max-services <n>",
       "-d, --daemonize", "-h, --help",
       TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
@@ -201,6 +204,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics", required_argument, 0, 1011},
       {"metrics-id", required_argument, 0, 1012},
       {"metrics-interval", required_argument, 0, 1013},
+      {"max-services", required_argument, 0, 1014},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
@@ -333,6 +337,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->metrics_interval_s = (unsigned)v;
+        break;
+      }
+      case 1014: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > DEVICE_MAX_SERVICES_CEILING) {
+          argerr("invalid --max-services: %s (1..%u)", optarg, DEVICE_MAX_SERVICES_CEILING);
+          return ARGS_ERR;
+        }
+        cfg->max_services = (unsigned)v;
         break;
       }
       case 'h':

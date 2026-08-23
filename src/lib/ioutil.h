@@ -14,6 +14,13 @@ int read_all(FILE *f, char **out, size_t *out_len);
    returns strlen(src). truncated if >= dstsz, matches BSD strlcpy */
 size_t bufcpy(char *dst, size_t dstsz, const char *src);
 
+/* decimal digits of val into dst, NUL-terminated, zero-padded to at least min_width (like %0*u, widens past min_width rather than truncating).
+   no format-string parsing. dst needs >= min_width+1, and >= 11 regardless (UINT_MAX is 10 digits). returns strlen(dst) */
+size_t uint_to_str_pad(char *dst, unsigned val, unsigned min_width);
+
+/* uint_to_str_pad(dst, val, 0): plain decimal, no padding */
+size_t uint_to_str(char *dst, unsigned val);
+
 /* end of headers: CRLFCRLF or bare LFLF (some servers skip \r). termlen: 4 or 2 */
 char *find_header_end(char *b, size_t n, size_t *termlen);
 

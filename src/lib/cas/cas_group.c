@@ -188,6 +188,7 @@ static void cas_lazy_start(cas_group_t *g) {
 
     memset(&mcfg, 0, sizeof mcfg);
     mcfg.port = vc->emmg_port;
+    mcfg.max_conns = vc->emmg_max_conns;
     v->emmg = emmg_server_start(&mcfg);
     if (!v->emmg) {
       log_line("cas_group: EMMG server %zu failed to start", i);

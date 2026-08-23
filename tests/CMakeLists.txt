@@ -825,6 +825,7 @@ dvbipitools_add_unit_test(dipiradiohead_cas
     unit/dipiradiohead/test_cas.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cas/cas.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/cadescbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
@@ -1047,6 +1048,7 @@ dvbipitools_add_unit_test(dipitvhead_simulcrypt_msg
 
 dvbipitools_add_unit_test(dipitvhead_ecmg_client
     unit/dipitvhead/test_ecmg_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
@@ -1084,6 +1086,7 @@ dvbipitools_add_unit_test(dipitvhead_emmg_server
 dvbipitools_add_unit_test(dipitvhead_cas
     unit/dipitvhead/test_cas.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/cas.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
@@ -1117,6 +1120,7 @@ dvbipitools_add_unit_test(dipitvhead_cas
 dvbipitools_add_unit_test(lib_cas_cas_group
     unit/lib/cas/test_cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
@@ -1633,6 +1637,7 @@ if (TARGET dipisrt)
     dvbipitools_add_unit_test(lib_net_srt_srtcommon
         unit/lib/net/srt/test_srtcommon.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
+        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/log.c)
     target_link_libraries(test_lib_net_srt_srtcommon PRIVATE PkgConfig::SRT)
 else ()
