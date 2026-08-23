@@ -65,7 +65,6 @@ static int compute_tag(const ecm_profile_t *p, const unsigned char mac_key[CRYPT
     *tag_len_out = 4;
     return 0;
   }
-  /* hmac-sha256 */
   {
     unsigned char full[CRYPTO_HMAC_SHA256_LEN];
     size_t want = p->integrity.truncate_tag ? (size_t)p->integrity.truncate_tag : CRYPTO_HMAC_SHA256_LEN;

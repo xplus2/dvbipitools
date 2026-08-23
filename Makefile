@@ -227,6 +227,10 @@ dipirec_SRCS := \
 	src/dipirec/main.c \
 	src/dipirec/args.c \
 	src/dipirec/record.c \
+	src/dipirec/record/sink.c \
+	src/dipirec/record/rtmp_fanout.c \
+	src/dipirec/record/stats.c \
+	src/dipirec/record/run.c \
 	src/dipirec/ret_client.c \
 	src/lib/log.c \
 	src/lib/argutil.c \
@@ -362,7 +366,9 @@ dipiradiohead_SRCS := \
 	src/dipiradiohead/input/playlist.c \
 	src/dipiradiohead/input/icy.c \
 	src/dipiradiohead/input/id3.c \
-	src/dipiradiohead/input/source.c \
+	src/dipiradiohead/input/source/open.c \
+	src/dipiradiohead/input/source/open_async.c \
+	src/dipiradiohead/input/source/frame.c \
 	src/dipiradiohead/input/inputset.c \
 	src/lib/net/retryset.c \
 	src/dipiradiohead/framer/mpegaudio.c \
@@ -459,10 +465,16 @@ dipitvhead_SRCS := \
 	src/dipitvhead/tvhead/output.c \
 	src/dipitvhead/tvhead/single.c \
 	src/dipitvhead/tvhead/mpts.c \
+	src/dipitvhead/tvhead/mpts/retryset_adapter.c \
+	src/dipitvhead/tvhead/mpts/discover_feed.c \
+	src/dipitvhead/tvhead/mpts/cas_adapter.c \
 	src/dipitvhead/input/source.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
-	src/dipitvhead/mux/remux.c \
+	src/dipitvhead/mux/remux/lifecycle.c \
+	src/dipitvhead/mux/remux/psi.c \
+	src/dipitvhead/mux/remux/eit.c \
+	src/dipitvhead/mux/remux/feed.c \
 	src/dipitvhead/mux/bitrate.c \
 	src/dipitvhead/cas/cas.c \
 	src/lib/mux/cadescbuild.c \
@@ -525,6 +537,10 @@ dipifccret_EXTRA_CFLAGS := -pthread
 dipifccret_EXTRA_LDFLAGS := -pthread -latomic
 dipifccret_SRCS := \
 	src/dipifccret/main.c \
+	src/dipifccret/run/dispatch.c \
+	src/dipifccret/run/pacer.c \
+	src/dipifccret/run/rsi.c \
+	src/dipifccret/run/metrics.c \
 	src/dipifccret/args.c \
 	src/dipifccret/capture/capture.c \
 	src/dipifccret/capture/ranges.c \
@@ -848,7 +864,8 @@ dvbipitools_dipifccret_DEFS := -Dmain=dipifccret_main -Dargs_parse=dipifccret_ar
 dvbipitools_dipimetrics_DEFS := -Dmain=dipimetrics_main -Dargs_parse=dipimetrics_args_parse
 dvbipitools_dipiradiohead_DEFS := -Dmain=dipiradiohead_main -Dargs_parse=dipiradiohead_args_parse \
 	-Dcodec_name=dipiradiohead_codec_name -Dmcast_describe=dipiradiohead_mcast_describe
-dvbipitools_dipirec_DEFS := -Dmain=dipirec_main -Dargs_parse=dipirec_args_parse
+dvbipitools_dipirec_DEFS := -Dmain=dipirec_main -Dargs_parse=dipirec_args_parse \
+	-Drtmp_fanout_cb=dipirec_rtmp_fanout_cb
 dvbipitools_dipirist_DEFS := -Dmain=dipirist_main -Dargs_parse=dipirist_args_parse \
 	-Dconfig_is_sender=dipirist_config_is_sender -Dendpoint_describe=dipirist_endpoint_describe \
 	-Dbridge_run=dipirist_bridge_run
@@ -1935,7 +1952,9 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/retryset.c \
 	src/lib/net/rist/ristout_stub.c \
-	src/dipiradiohead/input/source.c \
+	src/dipiradiohead/input/source/open.c \
+	src/dipiradiohead/input/source/open_async.c \
+	src/dipiradiohead/input/source/frame.c \
 	src/dipiradiohead/input/inputset.c \
 	src/dipiradiohead/input/playlist.c \
 	src/dipiradiohead/input/icy.c \
@@ -2007,7 +2026,9 @@ dipiradiohead_args_SRCS := \
 dipiradiohead_source_async_BIN := tests/unit/dipiradiohead/input/test_source_async
 dipiradiohead_source_async_SRCS := \
 	tests/unit/dipiradiohead/input/test_source_async.c \
-	src/dipiradiohead/input/source.c \
+	src/dipiradiohead/input/source/open.c \
+	src/dipiradiohead/input/source/open_async.c \
+	src/dipiradiohead/input/source/frame.c \
 	src/dipiradiohead/input/playlist.c \
 	src/dipiradiohead/input/icy.c \
 	src/dipiradiohead/input/id3.c \
@@ -2030,7 +2051,9 @@ dipiradiohead_inputset_SRCS := \
 	tests/unit/dipiradiohead/input/test_inputset.c \
 	src/dipiradiohead/input/inputset.c \
 	src/lib/net/retryset.c \
-	src/dipiradiohead/input/source.c \
+	src/dipiradiohead/input/source/open.c \
+	src/dipiradiohead/input/source/open_async.c \
+	src/dipiradiohead/input/source/frame.c \
 	src/dipiradiohead/input/playlist.c \
 	src/dipiradiohead/input/icy.c \
 	src/dipiradiohead/input/id3.c \
@@ -2156,7 +2179,10 @@ dipitvhead_bitrate_SRCS := \
 dipitvhead_remux_BIN := tests/unit/dipitvhead/test_remux
 dipitvhead_remux_SRCS := \
 	tests/unit/dipitvhead/test_remux.c \
-	src/dipitvhead/mux/remux.c \
+	src/dipitvhead/mux/remux/lifecycle.c \
+	src/dipitvhead/mux/remux/psi.c \
+	src/dipitvhead/mux/remux/eit.c \
+	src/dipitvhead/mux/remux/feed.c \
 	src/lib/ioutil.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
@@ -2196,7 +2222,10 @@ dipitvhead_output_BIN := tests/unit/dipitvhead/test_output
 dipitvhead_output_SRCS := \
 	tests/unit/dipitvhead/test_output.c \
 	src/dipitvhead/tvhead/output.c \
-	src/dipitvhead/mux/remux.c \
+	src/dipitvhead/mux/remux/lifecycle.c \
+	src/dipitvhead/mux/remux/psi.c \
+	src/dipitvhead/mux/remux/eit.c \
+	src/dipitvhead/mux/remux/feed.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
 	src/dipitvhead/mux/bitrate.c \
@@ -2495,6 +2524,10 @@ dipirec_record_BIN := tests/unit/dipirec/test_record
 dipirec_record_SRCS := \
 	tests/unit/dipirec/test_record.c \
 	src/dipirec/record.c \
+	src/dipirec/record/sink.c \
+	src/dipirec/record/rtmp_fanout.c \
+	src/dipirec/record/stats.c \
+	src/dipirec/record/run.c \
 	src/dipirec/ret_client.c \
 	src/dipirec/args.c \
 	src/lib/metrics/protocol.c \

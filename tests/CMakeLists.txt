@@ -725,7 +725,9 @@ dvbipitools_add_unit_test(dipiradiohead_args
 
 dvbipitools_add_unit_test(dipiradiohead_source_async
     unit/dipiradiohead/input/test_source_async.c
-    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open_async.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/frame.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/icy.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/id3.c
@@ -781,7 +783,9 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/retryset.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
-    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open_async.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/frame.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/inputset.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/icy.c
@@ -806,7 +810,9 @@ dvbipitools_add_unit_test(dipiradiohead_inputset
     unit/dipiradiohead/input/test_inputset.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/inputset.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/retryset.c
-    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open_async.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/frame.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/icy.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/id3.c
@@ -958,7 +964,10 @@ dvbipitools_add_unit_test(dipitvhead_bitrate
 
 dvbipitools_add_unit_test(dipitvhead_remux
     unit/dipitvhead/test_remux.c
-    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/lifecycle.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/eit.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/feed.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/pmtbuild.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/aitbuild.c
@@ -997,7 +1006,10 @@ dvbipitools_add_unit_test(dipitvhead_remux
 dvbipitools_add_unit_test(dipitvhead_output
     unit/dipitvhead/test_output.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/output.c
-    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/lifecycle.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/psi.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/eit.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/feed.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/pmtbuild.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/aitbuild.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/bitrate.c
@@ -1179,6 +1191,10 @@ dvbipitools_add_unit_test(dipirec_pace
 dvbipitools_add_unit_test(dipirec_record
     unit/dipirec/test_record.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/record.c
+    ${CMAKE_SOURCE_DIR}/src/dipirec/record/sink.c
+    ${CMAKE_SOURCE_DIR}/src/dipirec/record/rtmp_fanout.c
+    ${CMAKE_SOURCE_DIR}/src/dipirec/record/stats.c
+    ${CMAKE_SOURCE_DIR}/src/dipirec/record/run.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/ret_client.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c

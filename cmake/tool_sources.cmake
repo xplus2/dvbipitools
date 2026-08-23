@@ -213,6 +213,10 @@ function(dipifccret_resolve_sources)
     find_package(Threads REQUIRED)
     set(DIPIFCCRET_SRCS
         ${CMAKE_SOURCE_DIR}/src/dipifccret/main.c
+        ${CMAKE_SOURCE_DIR}/src/dipifccret/run/dispatch.c
+        ${CMAKE_SOURCE_DIR}/src/dipifccret/run/pacer.c
+        ${CMAKE_SOURCE_DIR}/src/dipifccret/run/rsi.c
+        ${CMAKE_SOURCE_DIR}/src/dipifccret/run/metrics.c
         ${CMAKE_SOURCE_DIR}/src/dipifccret/args.c
         ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/capture.c
         ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/ranges.c
@@ -349,7 +353,9 @@ function(dipiradiohead_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
         ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/icy.c
         ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/id3.c
-        ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source.c
+        ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
+        ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open_async.c
+        ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/frame.c
         ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/inputset.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/retryset.c
         ${CMAKE_SOURCE_DIR}/src/dipiradiohead/framer/mpegaudio.c
@@ -421,6 +427,10 @@ function(dipirec_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipirec/main.c
         ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
         ${CMAKE_SOURCE_DIR}/src/dipirec/record.c
+        ${CMAKE_SOURCE_DIR}/src/dipirec/record/sink.c
+        ${CMAKE_SOURCE_DIR}/src/dipirec/record/rtmp_fanout.c
+        ${CMAKE_SOURCE_DIR}/src/dipirec/record/stats.c
+        ${CMAKE_SOURCE_DIR}/src/dipirec/record/run.c
         ${CMAKE_SOURCE_DIR}/src/dipirec/ret_client.c
         ${CMAKE_SOURCE_DIR}/src/lib/log.c
         ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
@@ -732,10 +742,16 @@ function(dipitvhead_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/output.c
         ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/single.c
         ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/mpts.c
+        ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/mpts/retryset_adapter.c
+        ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/mpts/discover_feed.c
+        ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/mpts/cas_adapter.c
         ${CMAKE_SOURCE_DIR}/src/dipitvhead/input/source.c
         ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/pmtbuild.c
         ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/aitbuild.c
-        ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux.c
+        ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/lifecycle.c
+        ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/psi.c
+        ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/eit.c
+        ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/feed.c
         ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/bitrate.c
         ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/cas.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/cadescbuild.c

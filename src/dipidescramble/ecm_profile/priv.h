@@ -20,7 +20,7 @@ const ecm_header_t *find_header(const ecm_format_t *fmt, const char *id);
 int is_reserved_id(const char *id);
 size_t integrity_tag_wire_len(const ecm_profile_t *p);
 
-/* 0: name is a fixed token keyword, *out set. -1: not one (a header id candidate) */
+/* 0: fixed token keyword, *out set. -1: not one, header id candidate */
 int lookup_fixed_token(const char *name, ecm_token_kind_t *out);
 
 #endif

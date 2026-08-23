@@ -82,6 +82,9 @@ endif ()
 dvbipitools_apply_tool_defs(dipiradiohead DIPIRADIOHEAD_SRCS
     "codec_name=dipiradiohead_codec_name"
     "mcast_describe=dipiradiohead_mcast_describe")
+# rtmp_fanout_cb: dipidescramble/pipeline.c defines its own, collides once merged here
+dvbipitools_apply_tool_defs(dipirec DIPIREC_SRCS
+    "rtmp_fanout_cb=dipirec_rtmp_fanout_cb")
 dvbipitools_apply_tool_defs(dipisds DIPISDS_SRCS
     "announce_run=dipisds_announce_run"
     "listen_run=dipisds_listen_run"
