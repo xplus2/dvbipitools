@@ -51,7 +51,6 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential cmake libssl-dev ${{ matrix.crosspkg }}
-        # i386/armel: no libssl-dev on Ubuntu, see -DDIPIRADIOHEAD_TLS=OFF below. others: ports arches, scoped update from ports.ubuntu.com
         case "${{ matrix.arch }}" in
           i386|armel|amd64) ;;
           *)
@@ -73,7 +72,7 @@ jobs:
           i386|armel|amd64) ;;
           *) sudo apt-get install -y libmbedtls-dev:${{ matrix.arch }} ;;
         esac
-        curl -sL "https://code.videolan.org/rist/librist/-/archive/v0.2.20/librist-v0.2.20.tar.gz" | tar xz -C /tmp
+        git clone --depth 1 --branch v0.2.20 https://code.videolan.org/rist/librist.git /tmp/librist-v0.2.20
         MESON_ARGS="--default-library=static --libdir=lib --prefix=${{ github.workspace }}/librist-static -Dbuiltin_cjson=true -Duse_mbedtls=true -Dbuiltin_mbedtls=false -Dtest=false -Dbuilt_tools=false"
         if [ -n "${{ matrix.triplet }}" ]; then
           cat > /tmp/librist-cross.ini <<EOF
@@ -93,11 +92,52 @@ jobs:
         fi
         meson setup /tmp/librist-build /tmp/librist-v0.2.20 $MESON_ARGS
         ninja -C /tmp/librist-build install
+    - name: build mbedtls (static, armel)
+      if: matrix.arch == 'armel'
+      run: |
+        curl -sSLf "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.2/mbedtls-3.6.2.tar.bz2" | tar xj -C /tmp
+        cmake -S /tmp/mbedtls-3.6.2 -B /tmp/mbedtls-build -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/mbedtls-static -DENABLE_PROGRAMS=OFF -DENABLE_TESTING=OFF \
+          -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} \
+          -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc
+        cmake --build /tmp/mbedtls-build -j"$(nproc)"
+        cmake --install /tmp/mbedtls-build
+    - name: build libsrt (static)
+      run: |
+        curl -sSLf "https://github.com/Haivision/srt/archive/refs/tags/v1.5.6.tar.gz" | tar xz -C /tmp
+        SRT_ARGS="-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/srt-static"
+        SRT_ARGS="$SRT_ARGS -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DENABLE_APPS=OFF -DENABLE_UNITTESTS=OFF -DENABLE_ENCRYPTION=ON"
+        SRT_ARGS="$SRT_ARGS -DCMAKE_EXE_LINKER_FLAGS=-static-libgcc -DCMAKE_CXX_FLAGS=-static-libgcc"
+        case "${{ matrix.arch }}" in
+          i386)
+            sudo dpkg --add-architecture i386
+            sudo apt-get update
+            sudo apt-get install -y libmbedtls-dev:i386
+            SRT_ARGS="$SRT_ARGS -DUSE_ENCLIB=mbedtls"
+            SRT_ARGS="$SRT_ARGS -DMBEDTLS_INCLUDE_DIR=/usr/include -DMBEDTLS_LIB=/usr/lib/i386-linux-gnu/libmbedtls.a -DMBEDCRYPTO_LIB=/usr/lib/i386-linux-gnu/libmbedcrypto.a -DMBEDX509_LIB=/usr/lib/i386-linux-gnu/libmbedx509.a"
+            ;;
+          armel)
+            SRT_ARGS="$SRT_ARGS -DUSE_ENCLIB=mbedtls"
+            SRT_ARGS="$SRT_ARGS -DMBEDTLS_INCLUDE_DIR=${{ github.workspace }}/mbedtls-static/include -DMBEDTLS_LIB=${{ github.workspace }}/mbedtls-static/lib/libmbedtls.a -DMBEDCRYPTO_LIB=${{ github.workspace }}/mbedtls-static/lib/libmbedcrypto.a -DMBEDX509_LIB=${{ github.workspace }}/mbedtls-static/lib/libmbedx509.a"
+            ;;
+          amd64) ;;
+          *) SRT_ARGS="$SRT_ARGS -DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a" ;;
+        esac
+        if [ -n "${{ matrix.triplet }}" ]; then
+          SRT_ARGS="$SRT_ARGS -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_CXX_COMPILER=${{ matrix.triplet }}-g++"
+        fi
+        cmake -S /tmp/srt-1.5.6 -B /tmp/srt-build $SRT_ARGS
+        cmake --build /tmp/srt-build -j"$(nproc)"
+        cmake --install /tmp/srt-build
     - name: configure
       run: |
         CROSS_ARGS=""
+        FOREIGN_PKGCONFIG=""
         if [ -n "${{ matrix.triplet }}" ]; then
           CROSS_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_LIBRARY_ARCHITECTURE=${{ matrix.triplet }}"
+          MULTIARCH="${{ matrix.triplet }}"
+          [ "${{ matrix.arch }}" = "i386" ] && MULTIARCH="i386-linux-gnu"
+          FOREIGN_PKGCONFIG="/usr/lib/${MULTIARCH}/pkgconfig:"
         fi
         TLS_ARGS=""
         case "${{ matrix.arch }}" in
@@ -105,7 +145,7 @@ jobs:
           amd64) ;;
           *) TLS_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a" ;;
         esac
-        export PKG_CONFIG_PATH="${{ github.workspace }}/librist-static/lib/pkgconfig:$PKG_CONFIG_PATH"
+        export PKG_CONFIG_PATH="${{ github.workspace }}/librist-static/lib/pkgconfig:${{ github.workspace }}/srt-static/lib/pkgconfig:${FOREIGN_PKGCONFIG}$PKG_CONFIG_PATH"
         cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS $TLS_ARGS
     - name: make
       run: cmake --build ${{github.workspace}}/build --config Release
@@ -122,10 +162,9 @@ jobs:
         install -m 0755 build/src/dipibcg/dipibcg "${PKGDIR}/"
         install -m 0755 build/src/dipitvhead/dipitvhead "${PKGDIR}/"
         install -m 0755 build/src/dipifccret/dipifccret "${PKGDIR}/"
-        # dipicam378 needs OpenSSL, unavailable on i386/armel here - same skip-if-missing pattern
         [ -f build/src/dipicam378/dipicam378 ] && install -m 0755 build/src/dipicam378/dipicam378 "${PKGDIR}/"
-        # dipirist: skip if static librist build failed this arch
         [ -f build/src/dipirist/dipirist ] && install -m 0755 build/src/dipirist/dipirist "${PKGDIR}/"
+        [ -f build/src/dipisrt/dipisrt ] && install -m 0755 build/src/dipisrt/dipisrt "${PKGDIR}/"
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
     - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
       with:

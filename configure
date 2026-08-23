@@ -14,6 +14,7 @@ FUZZING=no
 TLS=auto
 CSA=yes
 RIST=auto
+SRT=auto
 ZLIB=auto
 
 usage() {
@@ -31,6 +32,7 @@ usage: ./configure [options]
                  support
   --no-csa       build dipitvhead, dipiradiohead, dipidescramble w/o CSA1/CSA2/BISS1
   --no-rist      skip dipirist (default: auto-detect librist)
+  --no-srt       skip dipisrt (default: auto-detect libsrt)
   --no-zlib      build dipibcg without BCG container compression support
   --cc=CC        C compiler (default: cc, or \$CC)
   -h, --help     this help
@@ -49,6 +51,7 @@ while [ $# -gt 0 ]; do
         --no-tls)   TLS=no ;;
         --no-csa)   CSA=no ;;
         --no-rist)  RIST=no ;;
+        --no-srt)   SRT=no ;;
         --no-zlib)  ZLIB=no ;;
         --cc=*)     CC=${1#--cc=} ;;
         -h|--help)  usage; exit 0 ;;
@@ -122,8 +125,9 @@ TSAN := $TSAN
 TLS := $TLS
 CSA := $CSA
 RIST := $RIST
+SRT := $SRT
 ZLIB := $ZLIB
 EOF
 
-echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING tls=$TLS csa=$CSA rist=$RIST zlib=$ZLIB"
+echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING tls=$TLS csa=$CSA rist=$RIST srt=$SRT zlib=$ZLIB"
 echo "run 'make' to build."

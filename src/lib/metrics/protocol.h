@@ -30,7 +30,8 @@ typedef enum {
   METRICS_COMPONENT_REC = 6,
   METRICS_COMPONENT_DESCRAMBLE = 7,
   METRICS_COMPONENT_CAM378 = 8,
-  METRICS_COMPONENT_FCCRET = 9
+  METRICS_COMPONENT_FCCRET = 9,
+  METRICS_COMPONENT_SRT = 10
 } metrics_component_t;
 
 /* wire values: append only, never renumber/reuse */
@@ -136,7 +137,18 @@ typedef enum {
   METRICS_ID_FCC_RET_CLIENTS_ACTIVE = 162,
   METRICS_ID_FCC_BYTES_RETRANSMITTED_TOTAL = 163,
   METRICS_ID_FCC_NACKS_TOTAL = 164,
-  METRICS_ID_FCC_CONGESTION_ADAPTATIONS_TOTAL = 165
+  METRICS_ID_FCC_CONGESTION_ADAPTATIONS_TOTAL = 165,
+
+  METRICS_ID_SRT_SENDER_SENT_TOTAL = 170,           /* label = peer; sender only */
+  METRICS_ID_SRT_SENDER_RETRANSMITTED_TOTAL = 171,  /* label = peer; sender only */
+  METRICS_ID_SRT_SENDER_RTT_MILLISECONDS = 172,     /* label = peer; sender only */
+  METRICS_ID_SRT_SENDER_LOST_TOTAL = 173,           /* label = peer; sender only, peer-reported loss */
+  METRICS_ID_SRT_SENDER_DROPPED_TOTAL = 174,        /* label = peer; sender only, too-late-to-send drops */
+  METRICS_ID_SRT_RECEIVER_RECEIVED_TOTAL = 180,     /* receiver only */
+  METRICS_ID_SRT_RECEIVER_LOST_TOTAL = 181,         /* receiver only, incl. later-recovered */
+  METRICS_ID_SRT_RECEIVER_DROPPED_TOTAL = 182,      /* receiver only, too-late-to-play, never recovered */
+  METRICS_ID_SRT_RECEIVER_RTT_MILLISECONDS = 183,   /* receiver only */
+  METRICS_ID_SRT_RECEIVER_BUFFER_MILLISECONDS = 184 /* receiver only, tsbpd delay */
 } metrics_id_t;
 
 /* joins input+reason into METRICS_ID_INPUT_ERRORS_TOTAL's one label field */

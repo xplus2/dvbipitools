@@ -5,28 +5,29 @@ Tools for handling DVB-IPI streams.
 They kept piling up in private VCS over many years, so I finally decided to polish, consolidate, and publish them.
 GitHub is not the primary development repository, but releases are published here and pull requests are welcome.
 
-AI helped with the README files, `-h` boilerplate, and test scaffolding they never had before.
+AI helped with the README files, `-h` boilerplate, man pages and test scaffolding they never had before.
 I did not let it mess up the hard parts.
 
 
 ## Fantastic tools and where to deploy them
 
-| Tool                                                  | Headend | Edge | Client | Lab | Purpose                                           |
-|-------------------------------------------------------|---------|------|--------|-----|---------------------------------------------------|
-| [dipitvhead](src/dipitvhead/README.md)                | ✔️      |      |        | ✔️  | Provide IPTV multicasts                           |
-| [dipiradiohead](src/dipiradiohead/README.md)          | ✔️      |      |        | ✔️  | Provide radio multicasts                          |
-| [dipimetrics](src/dipimetrics/README.md)              | ✔️      |      |        | ✔️  | Per-host OpenMetrics                              |
-| [dipirist](src/dipirist/README.md)                    | ✔️      |      |        | ✔️  | RTP/TS to/from RIST bridge (sender & receiver)    |
-| [dipifccret](src/dipifccret/README.md)                | ✔️      | ✔️   |        | ✔️  | RAMS-based FCC (Annex I) and RET (Annex F) server |
-| [dipisds](src/dipisds/README.md)                      | ✔️      |      | ✔️     | ✔️  | DVBSTP/SD&S service discovery (announce & listen) |
-| [dipibcg](src/dipibcg/README.md)                      | ✔️      |      | ✔️     | ✔️  | DVBSTP/TVA BCG (publisher & reader)               |
-| [dipixmltv](src/dipixmltv/README.md)                  | ✔️      |      | ✔️     | ✔️  | XMLTV to/from DVB-IPI TVA XML converter           |
-| [dipirec](src/dipirec/README.md)                      |         |      | ✔️     | ✔️  | Multicast to file/stdout recorder                 |
-| [dipiscan](src/dipiscan/README.md)                    |         |      | ✔️     | ✔️  | Scan for multicast TV/radio services (w/o SD&S)   |
-| [dipibim](src/dipibim/README.md)                      |         |      |        | ✔️  | TVA XML BiM encoder/decoder (to debug `dipibcg`)  |
-| [dipicam378](src/dipicam378/README.md)                |         |      |        | ✔️  | cs378x CAS test smartcard emulator                |
-| [dipidescramble](src/dipidescramble/README.md)        |         |      |        | ✔️  | CAS validation client / descrambler               |
-| [dvbipitools](src/dvbipitools/README.md) | ✔️      | ✔️     | ✔️       | ✔️  | All of the above (multicall binary)               |
+| Tool                                           | Headend | Edge     | Client | Lab | Purpose                                           |
+|------------------------------------------------|---------|----------|--------|-----|---------------------------------------------------|
+| [dipitvhead](src/dipitvhead/README.md)         | ✔️      |          |        | ✔️  | Provide IPTV multicasts                           |
+| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      |          |        | ✔️  | Provide radio multicasts                          |
+| [dipimetrics](src/dipimetrics/README.md)       | ✔️      |          |        | ✔️  | Per-host OpenMetrics                              |
+| [dipirist](src/dipirist/README.md)             | ✔️      |          |        | ✔️  | RTP/TS to/from RIST bridge (sender & receiver)    |
+| [dipisrt](src/dipisrt/README.md)               | ✔️      |          |        | ✔️  | RTP/TS to/from SRT bridge (sender & receiver)     |
+| [dipifccret](src/dipifccret/README.md)         | ✔️      | ✔️       |        | ✔️  | RAMS-based FCC (Annex I) and RET (Annex F) server |
+| [dipisds](src/dipisds/README.md)               | ✔️      |          | ✔️     | ✔️  | DVBSTP/SD&S service discovery (announce & listen) |
+| [dipibcg](src/dipibcg/README.md)               | ✔️      |          | ✔️     | ✔️  | DVBSTP/TVA BCG (publisher & reader)               |
+| [dipixmltv](src/dipixmltv/README.md)           | ✔️      |          | ✔️     | ✔️  | XMLTV to/from DVB-IPI TVA XML converter           |
+| [dipirec](src/dipirec/README.md)               |         |          | ✔️     | ✔️  | Multicast to file/stdout recorder                 |
+| [dipiscan](src/dipiscan/README.md)             |         |          | ✔️     | ✔️  | Scan for multicast TV/radio services (w/o SD&S)   |
+| [dipibim](src/dipibim/README.md)               |         |          |        | ✔️  | TVA XML BiM encoder/decoder (to debug `dipibcg`)  |
+| [dipicam378](src/dipicam378/README.md)         |         |          |        | ✔️  | cs378x CAS test smartcard emulator                |
+| [dipidescramble](src/dipidescramble/README.md) |         |          |        | ✔️  | CAS validation client / descrambler               |
+| [dvbipitools](src/dvbipitools/README.md)       | ✔️      | ✔️  |   ✔️   | ✔️  | All of the above (multicall binary)               |
 
 
 ## Build
@@ -51,19 +52,21 @@ cmake --build build
 
 ### Dependencies
 
-* **libssl**
+* libssl
   + Required for HTTPS sources in `dipitvhead` and `dipiradiohead`.
   + Enables _CISSA/AES-128_ Conditional Access, and BISS2 (Mode 1/E Session Word AES-128,
     Mode CA RSA-OAEP receiver keys) in `dipitvhead` and `dipiradiohead`.
   + Required to build `dipicam378`/`dipidescramble` at all - RSA/AES crypto is their
     whole purpose, so both are skipped entirely if not found.
-* **librist**
+* zlib
+  * Optional: `-Z`/`--compress` in `dipibcg` (zlib/RFC 1950 compression of BCG containers)
+* libdvbcsa
+  + Not a build dependency: If present, `dipitvhead`, `dipiradiohead` and `dipidescramble` can use it to enable CSA1/CSA2/BISS1 support.
+* librist
   + Required to build `dipirist` at all.
   + Optional: adds RIST support to `dipitvhead`, `dipiradiohead` and `dipirec`.
-* **zlib**
-  * Optional: `-Z`/`--compress` in `dipibcg` (zlib/RFC 1950 compression of BCG containers)
-* **libdvbcsa**
-  + Not a build dependency: If present, `dipitvhead`, `dipiradiohead` and `dipidescramble` can use it to enable CSA1/CSA2/BISS1 support.
+* libsrt
+  + Required to build `dipisrt` at all.
 
 
 ## Packaging
@@ -93,8 +96,8 @@ between real-world usage of media formats and the standard.
   - Icecast/Shoutcast as an input source - none of this is part of DVB.
   - ICY `StreamTitle`, inline ID3v2 `TIT2`/`TPE1` mapping into EIT.
 * dipirec
-  - `mkv` and `mka` containers.
-  - `srt` subtitles from EBU Teletext (ETSI EN 300 706). SRT isn't a DVB format.
+  - Matroska containers (`mkv` and `mka`).
+  - SubRip subtitles (`.srt`) from EBU Teletext (ETSI EN 300 706). SRT isn't a DVB format.
 * dipiscan
   - This tool would largely be unnecessary if deployments consistently used DVBSTP/SD&S as implemented by `dipisds`.
   - `m3u`, `xspf` and our own "local" `csv` format.
@@ -109,6 +112,8 @@ between real-world usage of media formats and the standard.
   - OpenMetrics is not part of any DVB/ETSI specification.
 * dipirist
   - Reliable Internet Stream Transport (RIST) is not part of DVB.
+* dipisrt
+  - Secure Reliable Transport (SRT) is not part of DVB.
 
 
 ### Known gaps

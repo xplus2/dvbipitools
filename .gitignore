@@ -21,6 +21,7 @@ src/*.o
 /dipidescramble
 /dipimetrics
 /dipirist
+/dipisrt
 /dvbipitools
 
 # cmake generic and profile builds

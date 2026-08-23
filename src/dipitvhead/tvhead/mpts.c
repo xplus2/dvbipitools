@@ -362,6 +362,7 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   int cas_needs_discovery = cas_wanted && (cfg->cas_pids_video || cfg->cas_pids_audio);
   double cas_gate_deadline = 0.0;
   unsigned char eit_cc = 0;
+  int eit_busy = -1; /* program idx mid-section on shared EIT pid, -1: none */
   unsigned char cat_cc = 0;
   double last_cat = -1.0;
   unsigned rr_start = 0;
@@ -509,9 +510,22 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     }
     rr_start = n ? (rr_start + 1) % n : 0;
 
-    for (unsigned i = 0; i < n; i++)
-      if (progs[i].rx)
+    if (eit_busy >= 0 && progs[eit_busy].rx && remux_eit_pending(progs[eit_busy].rx)) {
+      remux_emit_eit(progs[eit_busy].rx, OUT_PID_EIT, &eit_cc, 1, packet_cb, &out);
+      if (!remux_eit_mid_section(progs[eit_busy].rx))
+        eit_busy = -1;
+    } else {
+      eit_busy = -1;
+      for (unsigned i = 0; i < n; i++) {
+        if (!progs[i].rx || !remux_eit_pending(progs[i].rx))
+          continue;
         remux_emit_eit(progs[i].rx, OUT_PID_EIT, &eit_cc, 1, packet_cb, &out);
+        if (remux_eit_mid_section(progs[i].rx)) {
+          eit_busy = (int)i;
+          break;
+        }
+      }
+    }
 
     if (!cas && now - last_cat >= INTERVAL_CAT_S) {
       last_cat = now;

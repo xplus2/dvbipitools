@@ -1,4 +1,4 @@
-name: OpenATV opkg package
+name: opkg package
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
       if: matrix.container == ''
       run: |
         sudo apt-get install -y meson ninja-build libmbedtls-dev libmbedtls-dev:${{ matrix.dpkgarch }}
-        curl -sL "https://code.videolan.org/rist/librist/-/archive/v0.2.20/librist-v0.2.20.tar.gz" | tar xz -C /tmp
+        git clone --depth 1 --branch v0.2.20 https://code.videolan.org/rist/librist.git /tmp/librist-v0.2.20
         MESON_ARGS="--default-library=static --libdir=lib --prefix=${{ github.workspace }}/librist-static -Dbuiltin_cjson=true -Duse_mbedtls=true -Dbuiltin_mbedtls=false -Dtest=false -Dbuilt_tools=false"
         cat > /tmp/librist-cross.ini <<EOF
         [binaries]
@@ -72,12 +72,25 @@ jobs:
         MESON_ARGS="$MESON_ARGS --cross-file /tmp/librist-cross.ini"
         meson setup /tmp/librist-build /tmp/librist-v0.2.20 $MESON_ARGS
         ninja -C /tmp/librist-build install
+    - name: build libsrt (static, ubuntu ports arch)
+      if: matrix.container == ''
+      run: |
+        curl -sSLf "https://github.com/Haivision/srt/archive/refs/tags/v1.5.6.tar.gz" | tar xz -C /tmp
+        cmake -S /tmp/srt-1.5.6 -B /tmp/srt-build -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/srt-static \
+          -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DENABLE_APPS=OFF -DENABLE_UNITTESTS=OFF -DENABLE_ENCRYPTION=ON \
+          -DCMAKE_EXE_LINKER_FLAGS=-static-libgcc -DCMAKE_CXX_FLAGS=-static-libgcc \
+          -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} \
+          -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_CXX_COMPILER=${{ matrix.triplet }}-g++ \
+          -DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a
+        cmake --build /tmp/srt-build -j"$(nproc)"
+        cmake --install /tmp/srt-build
     - name: configure (ubuntu ports arch)
       if: matrix.container == ''
       run: |
         CROSS_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_LIBRARY_ARCHITECTURE=${{ matrix.triplet }}"
         TLS_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a"
-        export PKG_CONFIG_PATH="${{ github.workspace }}/librist-static/lib/pkgconfig:$PKG_CONFIG_PATH"
+        export PKG_CONFIG_PATH="${{ github.workspace }}/librist-static/lib/pkgconfig:${{ github.workspace }}/srt-static/lib/pkgconfig:/usr/lib/${{ matrix.triplet }}/pkgconfig:$PKG_CONFIG_PATH"
         cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS $TLS_ARGS
     - name: make (ubuntu ports arch)
       if: matrix.container == ''
@@ -92,11 +105,11 @@ jobs:
         set -ex
         export DEBIAN_FRONTEND=noninteractive
         apt-get update
-        apt-get install -y build-essential cmake curl meson ninja-build ${{ matrix.crosspkg }} libmbedtls-dev
+        apt-get install -y build-essential cmake curl git meson ninja-build ${{ matrix.crosspkg }} libmbedtls-dev
         dpkg --add-architecture ${{ matrix.dpkgarch }}
         apt-get update
         apt-get install -y libssl-dev:${{ matrix.dpkgarch }} libmbedtls-dev:${{ matrix.dpkgarch }}
-        curl -sL "https://code.videolan.org/rist/librist/-/archive/v0.2.20/librist-v0.2.20.tar.gz" | tar xz -C /tmp
+        git clone --depth 1 --branch v0.2.20 https://code.videolan.org/rist/librist.git /tmp/librist-v0.2.20
         cat > /tmp/librist-cross.ini <<EOF
         [binaries]
         c = '${{ matrix.triplet }}-gcc'
@@ -112,7 +125,17 @@ jobs:
         EOF
         meson setup /tmp/librist-build /tmp/librist-v0.2.20 --default-library=static --libdir=lib --prefix=/tmp/librist-static -Dbuiltin_cjson=true -Duse_mbedtls=true -Dbuiltin_mbedtls=false -Dtest=false -Dbuilt_tools=false --cross-file /tmp/librist-cross.ini
         ninja -C /tmp/librist-build install
-        export PKG_CONFIG_PATH="/tmp/librist-static/lib/pkgconfig:$PKG_CONFIG_PATH"
+        curl -sSLf "https://github.com/Haivision/srt/archive/refs/tags/v1.5.6.tar.gz" | tar xz -C /tmp
+        cmake -S /tmp/srt-1.5.6 -B /tmp/srt-build -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=/tmp/srt-static \
+          -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DENABLE_APPS=OFF -DENABLE_UNITTESTS=OFF -DENABLE_ENCRYPTION=ON \
+          -DCMAKE_EXE_LINKER_FLAGS=-static-libgcc -DCMAKE_CXX_FLAGS=-static-libgcc \
+          -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} \
+          -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_CXX_COMPILER=${{ matrix.triplet }}-g++ \
+          -DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a
+        cmake --build /tmp/srt-build -j"$(nproc)"
+        cmake --install /tmp/srt-build
+        export PKG_CONFIG_PATH="/tmp/librist-static/lib/pkgconfig:/tmp/srt-static/lib/pkgconfig:/usr/lib/${{ matrix.triplet }}/pkgconfig:$PKG_CONFIG_PATH"
         cmake -B /tmp/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON \
           -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} \
           -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_LIBRARY_ARCHITECTURE=${{ matrix.triplet }} \
@@ -143,10 +166,9 @@ jobs:
         install -m 0755 build/src/dipimetrics/dipimetrics "${STAGING}/usr/bin/"
         install -m 0755 build/src/dipifccret/dipifccret "${STAGING}/usr/bin/"
         install -m 0755 build/src/dipidescramble/dipidescramble "${STAGING}/usr/bin/"
-        # dipicam378 needs OpenSSL, guard in case a future arch here lacks a static libcrypto
         [ -f build/src/dipicam378/dipicam378 ] && install -m 0755 build/src/dipicam378/dipicam378 "${STAGING}/usr/bin/"
-        # dipirist: skip if the static librist build failed this arch
         [ -f build/src/dipirist/dipirist ] && install -m 0755 build/src/dipirist/dipirist "${STAGING}/usr/bin/"
+        [ -f build/src/dipisrt/dipisrt ] && install -m 0755 build/src/dipisrt/dipisrt "${STAGING}/usr/bin/"
         mkdir -p dist
         ipk/build-ipk.sh "${STAGING}" "${{ matrix.opkgarch }}" "${VERSION}" "dist/dvbipitools_${VERSION}_${{ matrix.opkgarch }}.ipk"
     - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0

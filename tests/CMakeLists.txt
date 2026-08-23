@@ -1385,11 +1385,22 @@ endforeach()
 
 if (TARGET dipirist)
     file(GLOB DIPIRIST_INTEGRATION_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/dipirist/*.sh")
+    list(REMOVE_ITEM DIPIRIST_INTEGRATION_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/dipirist/bonding_common.sh")
     foreach(script ${DIPIRIST_INTEGRATION_SCRIPTS})
         dvbipitools_add_integration_test(dipirist ${script} dipirec)
     endforeach()
 else ()
     message(WARNING "tests: dipirist not built (librist missing), skipping its integration tests")
+endif ()
+
+if (TARGET dipisrt)
+    file(GLOB DIPISRT_INTEGRATION_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/dipisrt/*.sh")
+    list(REMOVE_ITEM DIPISRT_INTEGRATION_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/dipisrt/bonding_common.sh")
+    foreach(script ${DIPISRT_INTEGRATION_SCRIPTS})
+        dvbipitools_add_integration_test(dipisrt ${script})
+    endforeach()
+else ()
+    message(WARNING "tests: dipisrt not built (libsrt missing), skipping its integration tests")
 endif ()
 
 dvbipitools_add_unit_test(dipifccret_ret
@@ -1551,6 +1562,74 @@ dvbipitools_add_unit_test(dipirist_args
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+
+if (TARGET dipirist)
+    dvbipitools_add_unit_test(dipirist_bridge
+        unit/dipirist/test_bridge.c
+        ${CMAKE_SOURCE_DIR}/src/dipirist/bridge.c
+        ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
+        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/ristout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c)
+    target_link_libraries(test_dipirist_bridge PRIVATE PkgConfig::RIST)
+else ()
+    message(WARNING "tests: dipirist not built (librist missing), skipping its bridge unit test")
+endif ()
+
+dvbipitools_add_unit_test(dipisrt_args
+    unit/dipisrt/test_args.c
+    ${CMAKE_SOURCE_DIR}/src/dipisrt/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+target_compile_definitions(test_dipisrt_args PRIVATE DIPISRT_HAVE_BONDING)
+
+if (TARGET dipisrt)
+    dvbipitools_add_unit_test(dipisrt_bridge
+        unit/dipisrt/test_bridge.c
+        ${CMAKE_SOURCE_DIR}/src/dipisrt/bridge.c
+        ${CMAKE_SOURCE_DIR}/src/dipisrt/args.c
+        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srtout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c)
+    target_link_libraries(test_dipisrt_bridge PRIVATE PkgConfig::SRT)
+else ()
+    message(WARNING "tests: dipisrt not built (libsrt missing), skipping its bridge unit test")
+endif ()
 
 dvbipitools_add_unit_test(dipisds_input
     unit/dipisds/test_input.c

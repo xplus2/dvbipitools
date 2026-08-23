@@ -532,6 +532,7 @@ function(dipirist_resolve_sources)
     set(DIPIRIST_SRCS ${DIPIRIST_SRCS} PARENT_SCOPE)
     set(DIPIRIST_HAVE_TLS ${DIPIRIST_HAVE_TLS} PARENT_SCOPE)
     set(DIPIRIST_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
+    set(DIPIRIST_LIBRIST_IPV6_WARN ${DVBIPITOOLS_RIST_IPV6_WARN} PARENT_SCOPE)
 
     include(CheckCSourceCompiles)
     set(CMAKE_REQUIRED_INCLUDES ${RIST_INCLUDE_DIRS})
@@ -544,6 +545,64 @@ int main(void) {
 " DIPIRIST_HAVE_AVG_BUFFER_TIME)
     unset(CMAKE_REQUIRED_INCLUDES)
     set(DIPIRIST_HAVE_AVG_BUFFER_TIME ${DIPIRIST_HAVE_AVG_BUFFER_TIME} PARENT_SCOPE)
+endfunction()
+
+function(dipisrt_resolve_sources)
+    set(DIPISRT_HAVE_SRT FALSE)
+    option(DIPISRT_ENABLED "build dipisrt (requires libsrt)" ON)
+    if (DIPISRT_ENABLED AND DVBIPITOOLS_HAVE_SRT)
+        set(DIPISRT_HAVE_SRT TRUE)
+    endif ()
+    set(DIPISRT_FOUND ${DIPISRT_HAVE_SRT} PARENT_SCOPE)
+    set(DIPISRT_HAVE_BONDING ${DVBIPITOOLS_SRT_HAVE_BONDING} PARENT_SCOPE)
+    if (NOT DIPISRT_HAVE_SRT)
+        return()
+    endif ()
+
+    option(DIPISRT_TLS "build dipisrt with HTTPS/TLS support for -i https:// sources (requires OpenSSL)" ON)
+    set(DIPISRT_HAVE_TLS FALSE)
+    if (DIPISRT_TLS)
+        if (DVBIPITOOLS_STATIC)
+            set(OPENSSL_USE_STATIC_LIBS TRUE)
+        endif ()
+        find_package(OpenSSL)
+        if (OpenSSL_FOUND)
+            set(DIPISRT_HAVE_TLS TRUE)
+        else ()
+            message(WARNING "dipisrt: OpenSSL not found, building without HTTPS support")
+        endif ()
+    endif ()
+    if (DIPISRT_HAVE_TLS)
+        set(TLS_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c)
+    else ()
+        set(TLS_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c)
+    endif ()
+
+    set(DIPISRT_SRCS
+        ${CMAKE_SOURCE_DIR}/src/dipisrt/main.c
+        ${CMAKE_SOURCE_DIR}/src/dipisrt/args.c
+        ${CMAKE_SOURCE_DIR}/src/dipisrt/bridge.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srtout.c
+        ${TLS_SRC}
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c)
+    set(DIPISRT_SRCS ${DIPISRT_SRCS} PARENT_SCOPE)
+    set(DIPISRT_HAVE_TLS ${DIPISRT_HAVE_TLS} PARENT_SCOPE)
 endfunction()
 
 function(dipiscan_resolve_sources)

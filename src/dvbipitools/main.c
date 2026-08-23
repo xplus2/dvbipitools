@@ -21,6 +21,9 @@ int dipirec_main(int argc, char **argv);
 #ifdef DVBIPITOOLS_HAVE_RIST
 int dipirist_main(int argc, char **argv);
 #endif
+#ifdef DVBIPITOOLS_HAVE_SRT
+int dipisrt_main(int argc, char **argv);
+#endif
 int dipiscan_main(int argc, char **argv);
 int dipisds_main(int argc, char **argv);
 int dipitvhead_main(int argc, char **argv);
@@ -49,6 +52,9 @@ static const applet_t APPLETS[] = {
     {"dipirec", "rec", dipirec_main},
 #ifdef DVBIPITOOLS_HAVE_RIST
     {"dipirist", "rist", dipirist_main},
+#endif
+#ifdef DVBIPITOOLS_HAVE_SRT
+    {"dipisrt", "srt", dipisrt_main},
 #endif
     {"dipiscan", "scan", dipiscan_main},
     {"dipisds", "sds", dipisds_main},

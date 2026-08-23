@@ -68,10 +68,11 @@ void remux_feed(remux_t *r, double now_s, const unsigned char *pkt188, remux_pac
 /* non-standalone only. 0: filled *out. nonzero: nothing to send */
 int remux_get_sdt_info(remux_t *r, psi_sdt_entry_t *out);
 
-/* EIT: pid 0x0012, never mpts-owned. standalone: verbatim forward. non-standalone: drains a
-   reassembled per-service_id section queue. max_packets: small (1-2)/tick, spreads a large
-   section across ticks instead of one PCR-blocking burst. returns packets emitted. */
+/* EIT: pid 0x0012, never mpts-owned. standalone: verbatim forward. non-standalone: drain
+   reassembled per-service_id section queue. max_packets: small (1-2)/tick, spreads large
+   section across ticks instead of PCR-blocking burst. returns packets emitted. */
 size_t remux_emit_eit(remux_t *r, unsigned pid, unsigned char *cc, size_t max_packets, remux_packet_cb cb, void *ctx);
 int remux_eit_pending(const remux_t *r);
+int remux_eit_mid_section(const remux_t *r);
 
 #endif

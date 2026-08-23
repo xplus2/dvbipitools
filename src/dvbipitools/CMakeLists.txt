@@ -14,6 +14,7 @@ dipimetrics_resolve_sources()
 dipiradiohead_resolve_sources()
 dipirec_resolve_sources()
 dipirist_resolve_sources()
+dipisrt_resolve_sources()
 dipiscan_resolve_sources()
 dipisds_resolve_sources()
 dipitvhead_resolve_sources()
@@ -38,6 +39,9 @@ endif ()
 if (DIPIRIST_FOUND)
     dvbipitools_rename_main_args(dipirist)
 endif ()
+if (DIPISRT_FOUND)
+    dvbipitools_rename_main_args(dipisrt)
+endif ()
 
 # few non-static helpers collide across unrelated tools only once merged here.
 # one side renamed, other stays. scoped to src/<tool>/ own files only, no shared src/lib/ files: differing renames of same name
@@ -61,6 +65,19 @@ if (DIPIDESCRAMBLE_FOUND)
         "device_state_free=dipidescramble_device_state_free"
         "device_state_new=dipidescramble_device_state_new"
         "out_describe=dipidescramble_out_describe")
+endif ()
+# config_is_sender/endpoint_describe/bridge_run: only dipirist/dipisrt define these, collide once merged here
+if (DIPIRIST_FOUND)
+    dvbipitools_apply_tool_defs(dipirist DIPIRIST_SRCS
+        "config_is_sender=dipirist_config_is_sender"
+        "endpoint_describe=dipirist_endpoint_describe"
+        "bridge_run=dipirist_bridge_run")
+endif ()
+if (DIPISRT_FOUND)
+    dvbipitools_apply_tool_defs(dipisrt DIPISRT_SRCS
+        "config_is_sender=dipisrt_config_is_sender"
+        "endpoint_describe=dipisrt_endpoint_describe"
+        "bridge_run=dipisrt_bridge_run")
 endif ()
 dvbipitools_apply_tool_defs(dipiradiohead DIPIRADIOHEAD_SRCS
     "codec_name=dipiradiohead_codec_name"
@@ -103,6 +120,7 @@ set(DVBIPITOOLS_ALL_SRCS
     ${DIPIRADIOHEAD_SRCS}
     ${DIPIREC_SRCS}
     ${DIPIRIST_SRCS}
+    ${DIPISRT_SRCS}
     ${DIPISCAN_SRCS}
     ${DIPISDS_SRCS}
     ${DIPITVHEAD_SRCS}
@@ -114,7 +132,7 @@ set(DVBIPITOOLS_ALL_SRCS
 set(DVBIPITOOLS_NEED_OPENSSL FALSE)
 if (DIPIREC_HAVE_TLS OR DIPIRADIOHEAD_HAVE_TLS OR DIPIRADIOHEAD_HAVE_CISSA OR
     DIPITVHEAD_HAVE_TLS OR DIPITVHEAD_HAVE_CISSA OR DIPIDESCRAMBLE_FOUND OR
-    DIPICAM378_FOUND OR DIPIRIST_HAVE_TLS)
+    DIPICAM378_FOUND OR DIPIRIST_HAVE_TLS OR DIPISRT_HAVE_TLS)
     set(DVBIPITOOLS_NEED_OPENSSL TRUE)
 endif ()
 
@@ -193,13 +211,30 @@ endif ()
 if (DIPIRIST_FOUND AND DIPIRIST_HAVE_AVG_BUFFER_TIME)
     target_compile_definitions(dvbipitools PRIVATE DIPIRIST_HAVE_AVG_BUFFER_TIME)
 endif ()
+if (DIPIRIST_FOUND AND DIPIRIST_LIBRIST_IPV6_WARN)
+    target_compile_definitions(dvbipitools PRIVATE DIPIRIST_LIBRIST_IPV6_WARN)
+endif ()
+if (DIPISRT_FOUND)
+    target_compile_definitions(dvbipitools PRIVATE DVBIPITOOLS_HAVE_SRT)
+endif ()
+if (DIPISRT_FOUND AND DIPISRT_HAVE_BONDING)
+    target_compile_definitions(dvbipitools PRIVATE DIPISRT_HAVE_BONDING)
+endif ()
 
 if (DVBIPITOOLS_NEED_OPENSSL)
-    target_link_libraries(dvbipitools PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    set(DVBIPITOOLS_ATOMIC_LIB "")
+    if (DVBIPITOOLS_STATIC)
+        set(DVBIPITOOLS_ATOMIC_LIB atomic)
+    endif ()
+    target_link_libraries(dvbipitools PRIVATE OpenSSL::SSL OpenSSL::Crypto ${DVBIPITOOLS_ATOMIC_LIB})
 endif ()
 
 if (DVBIPITOOLS_HAVE_RIST)
     target_link_libraries(dvbipitools PRIVATE PkgConfig::RIST)
+endif ()
+
+if (DIPISRT_FOUND)
+    target_link_libraries(dvbipitools PRIVATE PkgConfig::SRT)
 endif ()
 
 if (DIPIBCG_HAVE_ZLIB)

@@ -75,6 +75,10 @@ static int parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *
   if (e->is_rist) {
     int has_at = uri[7] == '@'; /* librist: '@' right after rist:// binds/listens, else it calls out */
 
+#ifdef DIPIRIST_LIBRIST_IPV6_WARN
+    if (uri[7 + has_at] == '[')
+      log_line("warning: this librist build (<=0.2.20) has known IPv6 handling bugs, %s may crash it", uri);
+#endif
     if (e->n_rist >= DIPIRIST_MAX_PEERS)
       return -1;
     if (strlen(uri) >= sizeof e->rist_uri[0])
@@ -131,15 +135,15 @@ static void print_help(void) {
       "endpoints:\n"
       "  rist://<host>:<port>[?params]  RIST peer, calls out; -o only\n"
       "  rist://@<host>:<port>[?params] RIST peer, listens; -i only\n"
-      "                              repeat -i/-o to bond several links\n"
-      "                              e.g. ?buffer=1000&secret=... - see --buffer/\n"
-      "                              --secret below for the equivalent flags)\n"
-      "  rtp://@<group>:<port>      RTP wrapped SPTS multicast (@ optional)\n"
-      "  udp://@<group>:<port>      raw SPTS multicast (@ optional)\n"
-      "  http://<host>:<port>/<path>   HTTP TS stream, -i only\n"
-      "  https://<host>:<port>/<path>  same, TLS (-k skips verification), -i only\n"
-      "  -                          stdin (-i) or stdout (-o)\n"
-      "  <path>                     a file\n"
+      "                                 repeat -i/-o to bond several links\n"
+      "                                 e.g. ?buffer=1000&secret=... - see --buffer/\n"
+      "                                 --secret below for the equivalent flags)\n"
+      "  rtp://@<group>:<port>          RTP wrapped SPTS multicast (@ optional)\n"
+      "  udp://@<group>:<port>          raw SPTS multicast (@ optional)\n"
+      "  http://<host>:<port>/<path>    HTTP TS stream, -i only\n"
+      "  https://<host>:<port>/<path>   same, TLS (-k skips verification), -i only\n"
+      "  -                              stdin (-i) or stdout (-o)\n"
+      "  <path>                         a file\n"
       "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8700\n\n"
       "options:\n"
       "  -i, --in <uri>             input (see above), repeatable if rist://\n"

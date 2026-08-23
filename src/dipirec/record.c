@@ -27,6 +27,7 @@
 #include "version.h"
 
 #define MPTS_NAME_WAIT_MS 3000
+#define DIPIREC_RIST_DRAIN_MS_DEFAULT 1000 /* librist's own default recovery buffer length */
 
 typedef struct {
   uri_kind_t kind;
@@ -658,6 +659,19 @@ int record_run(const config_t *cfg, metrics_exporter_t *mx) {
   else
     rc = run_stream(&s, cfg, sinks, n_sinks, mkv_fd, &rf, mx, &bytes, start, cfg->format == FMT_MKV, pmt_pid, all_pids, n_all_pids, pace);
   pace_free(pace);
+
+  if (!stop_now(cfg, start)) {
+    /* eof/err, not live stop: drain rist arq retransmits before teardown */
+    int have_rist_out = 0;
+    for (int i = 0; i < n_sinks; i++)
+      if (sinks[i].rist)
+        have_rist_out = 1;
+    if (have_rist_out) {
+      unsigned drain_ms = cfg->rist_buffer_ms ? cfg->rist_buffer_ms : DIPIREC_RIST_DRAIN_MS_DEFAULT;
+      struct timespec ts = {(time_t)(drain_ms / 1000), (long)(drain_ms % 1000) * 1000000L};
+      nanosleep(&ts, NULL);
+    }
+  }
 
   src_close(&s); /* IGMP/MLD leave */
   rtmp_fanout_close(&rf);

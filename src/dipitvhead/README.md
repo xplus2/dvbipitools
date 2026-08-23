@@ -451,4 +451,22 @@ dipitvhead -i rtp://@239.19.75.1:8700 -m 239.1.1.1:5000 --biss2-ca-receivers /et
 
 # transcoding: not our job, but ffmpeg pipes straight in
 ffmpeg -i <source> -c:v libx264 -c:a aac -f mpegts - | dipitvhead -i - -m 239.5.5.5:6000
+
+# feeding radio + multiple tv stations into a single MPTS
+# m3u/pls/plain stream radio stations to mpts using dipiradiohead
+./dipiradiohead -i http://radio.example.com/listen.pls \
+                -i http://radio.example.net/aac \
+                -i http://radio.example.org/music.m3u \
+                -i http://radio.example.com/mp3 \
+                -m 239.1.2.0:5001 -O enx00deadbeef02
+# let dipitvhead fill the mux (dipiradiohead's PMT PIDs are assigned in order of definition)
+./dipitvhead -i rtp://239.2.3.1:5001 --sdt 'MC TV 1' -I enx00deadbeef00 \
+             -i rtp://239.2.3.2:5001 --sdt 'MC TV 2' -I enx00deadbeef00 \
+             -i http://receiver:8001/1:0:19:0:0:0:C00000:0:0:0: -I enx00deadbeef03 --sdt 'Sat TV 3' \
+             -i udp://239.3.4.1:4500 --sdt 'MC Radio 1' -I enx00deadbeef00 \             
+             -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1000 --sdt 'dipiradiohead Radio 1' \
+             -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1001 --sdt 'dipiradiohead Radio 2' \
+             -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1002 --sdt 'dipiradiohead Radio 3' \
+             -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1003 --sdt 'dipiradiohead Radio 4' \
+             -m 239.1.1.1:5000 -O enx00deadbeef01
 ```

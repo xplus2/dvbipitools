@@ -1,0 +1,189 @@
+.TH DIPISRT 1 "2026-08-22" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipisrt \- bridge a DVB-IPI stream between RTP/UDP/file and an SRT link, sender or receiver
+.SH SYNOPSIS
+.B dipisrt
+.B \-i
+.I uri
+.B \-o
+.I uri
+.RI [ options ]
+.SH DESCRIPTION
+.B dipisrt
+bridges a DVB-IPI stream between a plain RTP/UDP/file endpoint and an SRT
+link, in either direction, using libsrt. SRT is not part of DVB-IPI; this
+tool exists to carry DVB-IPI streams over unmanaged or lossy networks with
+SRT's ARQ-based recovery.
+.PP
+Exactly one of
+.B \-i
+(input) or
+.B \-o
+(output) must be an
+.B srt://
+URI, the other is a regular
+.BR dipirec (1)-style
+endpoint: RTP or plain UDP multicast, an HTTP(S) TS stream (source side
+only), stdin/stdout, or a file. Only one direction is served per process.
+.PP
+An
+.B srt://
+endpoint address is either
+.IB host : port
+(calls out, caller) or
+.BI @ host : port
+(binds/listens/accepts, listener); the leading
+.B @
+mirrors this toolkit's own
+.BR rtp://@ / udp://@
+convention. Unlike RIST's fixed sender-calls-out/receiver-listens rule,
+SRT's caller/listener role is independent of which side produces the
+media \(em either
+.B \-i
+or
+.B \-o
+may carry the
+.BR @ .
+.IR host
+is a numeric IP, not a hostname.
+.PP
+Repeating
+.B \-i
+or
+.B \-o
+with further
+.B srt://
+URIs bonds several links carrying the same stream, selected with
+.B \-\-group\-mode
+.RB ( broadcast
+or
+.BR backup ).
+Every bonded peer of one endpoint must agree on caller vs. listener.
+.PP
+.B \-\-rendezvous
+swaps the srt:// side's connection setup for SRT's rendezvous mode: both
+ends actively dial each other, neither is a listener, which lets two hosts
+behind separate NATs punch a direct hole to one another. It requires
+.B \-\-local
+and cannot combine with
+.B srt://@
+or
+.BR \-\-group\-mode .
+SRT's rendezvous only does the NAT hole\-punching itself \(em each side
+still needs to learn the other's public address some other way first.
+.SH OPTIONS
+.TP
+.BR \-i ", " \-\-in " " \fIuri\fR
+Input endpoint. Repeatable if it is an
+.B srt://
+URI, to bond several links.
+.TP
+.BR \-o ", " \-\-out " " \fIuri\fR
+Output endpoint. Repeatable if it is an
+.B srt://
+URI, to bond several links.
+.TP
+.BR \-I ", " \-\-iface " " \fIiface\fR
+Interface for the non-SRT side's multicast join or send.
+.TP
+.BR \-k ", " \-\-insecure
+Skip TLS verification. Only meaningful with an
+.B \-i https://
+source.
+.TP
+.B \-\-group\-mode \fImode\fR
+.B broadcast
+or
+.BR backup .
+Required when bonding (repeated
+.B srt://
+peers on one endpoint), rejected otherwise. Needs a
+.B libsrt
+built with bonding support
+.RB ( ENABLE_BONDING=ON ,
+off by default upstream and in most distro packages); this build rejects the flag outright
+if its own linked libsrt lacks it.
+.TP
+.B \-\-rendezvous
+Use SRT rendezvous instead of connect/listen. Requires
+.BR \-\-local .
+.TP
+.B \-\-local \fIhost:port\fR
+Local bind address for
+.BR \-\-rendezvous .
+.TP
+.B \-\-passphrase \fIpw\fR
+Encryption passphrase, 10 to 79 characters.
+.TP
+.B \-\-pbkeylen \fIn\fR
+AES key length in bits:
+.BR 16 ", " 24 ", or " 32 .
+Only valid with
+.BR \-\-passphrase ,
+default
+.B 16
+when a passphrase is set.
+.TP
+.B \-\-streamid \fIid\fR
+SRT stream id, passed to a listening peer on accept.
+.TP
+.B \-\-packetfilter \fIcfg\fR
+Raw SRT packet filter configuration string, e.g.
+.BR fec,cols:10,rows:5 .
+Off by default, matching SRT's own default.
+.TP
+.B \-\-latency \fIms\fR
+SRT latency in milliseconds. Default is the library default.
+.TP
+.B \-\-color \fIwhen\fR
+Colorize log output:
+.BR auto ,
+.BR always ,
+or
+.BR never .
+Default
+.BR auto .
+.TP
+.B \-\-metrics \fIpath\fR
+Unix datagram socket path for metrics output. Default
+.IR /run/dvbipitools/metrics.sock .
+.TP
+.B \-\-metrics\-id \fIname\fR
+Stable instance id for metrics. Metrics are disabled unless this is set.
+.TP
+.B \-\-metrics\-interval \fIs\fR
+Metrics snapshot interval in seconds. Default
+.BR 5 .
+.TP
+.BR \-v ", " \-\-verbose
+Print periodic bridge statistics on stderr.
+.TP
+.BR \-d ", " \-\-daemonize
+Fork to background after startup, detach from terminal.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH EXAMPLES
+.TP
+.B dipisrt \-i rtp://@239.1.1.1:5000 \-o srt://1.2.3.4:9000 \-\-latency 200
+Sender: read an RTP multicast and send it over SRT to a listening receiver.
+.TP
+.B dipisrt \-i srt://@0.0.0.0:9000 \-o rtp://@239.1.1.1:5000
+Receiver: listen for an incoming SRT connection and re-emit as RTP
+multicast.
+.TP
+.B dipisrt \-i rtp://@239.1.1.1:5000 \-o srt://1.2.3.4:9000 \-o srt://5.6.7.8:9000 \-\-group\-mode broadcast
+Bonded sender: the same stream carried over two independent SRT links.
+.SH EXIT STATUS
+.B 0
+on success.
+Non-zero on argument errors or I/O/network failure.
+.SH SEE ALSO
+.BR dipirec (1),
+.BR dipirist (1),
+.BR dipitvhead (1),
+.BR dipiradiohead (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

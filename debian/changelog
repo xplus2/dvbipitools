@@ -5,7 +5,13 @@ dvbipitools (2.3.1-1) unstable; urgency=medium
     + dipicam378
     + dipifccret
   * dvbipitools / "dipi" multicall binary
- -- dvbipitools authors <unspecified@example.com>  Tue, 01 Sep 2026 00:00:00 +0200
+  * ipk: armv7ahf -> armv7ahf-neon flagging for broader compatibility
+  * fixed kernel payload confusion on multiple mcast inputs using the same port
+  * added a warning about known problems when using librist v0.2.20 and below with IPv6
+  * merged dipisrt branch - no srt support in other tools until it stabilized
+    + bonding depends on libsrt having it enabled (not by default)
+  * fixed EIT race in mpts remuxer (corrupted eit+crc32)
+ -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.3.0-1) unstable; urgency=medium
   * merged dipirist sender and receiver

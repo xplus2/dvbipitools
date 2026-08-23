@@ -51,7 +51,7 @@ jobs:
             set -ex
             export DEBIAN_FRONTEND=noninteractive
             apt-get update
-            apt-get install -y build-essential cmake debhelper devscripts pkg-config libssl-dev librist-dev
+            apt-get install -y build-essential cmake debhelper devscripts pkg-config libssl-dev librist-dev libsrt-openssl-dev
             apt-get install -y libdvbcsa-dev || echo "::warning::libdvbcsa-dev not available for ${{ matrix.arch }}/${{ matrix.image }}, dipidescramble/dipitvhead/dipiradiohead will build with the CSA2 stub"
             dpkg-buildpackage -us -uc -b
           '

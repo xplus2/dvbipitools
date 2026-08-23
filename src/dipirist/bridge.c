@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <string.h>
+#include <time.h>
 
 #include <librist/librist.h>
 
@@ -17,8 +18,9 @@
 #include "version.h"
 
 #define RIST_READ_TIMEOUT_MS 200
+#define DIPIRIST_SENDER_DRAIN_MS_DEFAULT 1000 /* librist's own default recovery buffer length */
 
-static enum rist_profile profile_of(rist_profile_sel_t p) {
+enum rist_profile profile_of(rist_profile_sel_t p) {
   return p == RIST_PROF_MAIN ? RIST_PROFILE_MAIN : RIST_PROFILE_SIMPLE;
 }
 
@@ -39,7 +41,7 @@ static struct rist_logging_settings *open_logging(int verbose) {
   return ls;
 }
 
-static void nonrist_to_tssrc_cfg(const nonrist_t *s, const char *iface, int insecure_tls, tssrc_cfg_t *tc) {
+void nonrist_to_tssrc_cfg(const nonrist_t *s, const char *iface, int insecure_tls, tssrc_cfg_t *tc) {
   memset(tc, 0, sizeof *tc);
   tc->user_agent = TOOL_NAME "/" TOOL_VERSION;
   switch (s->kind) {
@@ -67,7 +69,7 @@ static void nonrist_to_tssrc_cfg(const nonrist_t *s, const char *iface, int inse
   }
 }
 
-static void nonrist_to_tssink_cfg(const nonrist_t *s, const char *iface, tssink_cfg_t *tk) {
+void nonrist_to_tssink_cfg(const nonrist_t *s, const char *iface, tssink_cfg_t *tk) {
   memset(tk, 0, sizeof *tk);
   if (s->kind == NONRIST_FILE) {
     if (s->file_path[0]) {
@@ -190,6 +192,12 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
         rist_had_error = 0;
       }
     }
+  }
+  if (rc) {
+    /* eof/err, not live stop: drain arq retransmits before teardown */
+    unsigned drain_ms = cfg->buffer_ms ? cfg->buffer_ms : DIPIRIST_SENDER_DRAIN_MS_DEFAULT;
+    struct timespec ts = {(time_t)(drain_ms / 1000), (long)(drain_ms % 1000) * 1000000L};
+    nanosleep(&ts, NULL);
   }
   ristout_close(rist);
   tssrc_close(src);

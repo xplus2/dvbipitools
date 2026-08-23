@@ -62,6 +62,10 @@ if (DVBIPITOOLS_RIST)
         pkg_check_modules(RIST IMPORTED_TARGET librist)
         if (RIST_FOUND)
             set(DVBIPITOOLS_HAVE_RIST TRUE)
+            set(DVBIPITOOLS_RIST_IPV6_WARN FALSE)
+            if (RIST_VERSION AND RIST_VERSION VERSION_LESS_EQUAL "0.2.20")
+                set(DVBIPITOOLS_RIST_IPV6_WARN TRUE)
+            endif ()
             if (DVBIPITOOLS_STATIC)
                 include(CheckCSourceCompiles)
                 set(CMAKE_REQUIRED_LIBRARIES ${RIST_STATIC_LDFLAGS})
@@ -82,6 +86,64 @@ if (DVBIPITOOLS_RIST)
     if (NOT DVBIPITOOLS_HAVE_RIST)
         message(WARNING "librist not found (or no static libraries available): dipirist skipped, rist:// output unavailable in dipirec/dipitvhead/dipiradiohead")
     endif ()
+endif ()
+
+option(DVBIPITOOLS_SRT "detect libsrt for srt:// support (dipisrt)" ON)
+
+set(DVBIPITOOLS_HAVE_SRT FALSE)
+if (DVBIPITOOLS_SRT)
+    find_package(PkgConfig)
+    if (PkgConfig_FOUND)
+        pkg_check_modules(SRT IMPORTED_TARGET srt)
+        if (SRT_FOUND)
+            set(DVBIPITOOLS_HAVE_SRT TRUE)
+            if (DVBIPITOOLS_STATIC)
+                list(APPEND SRT_STATIC_LDFLAGS atomic)
+                include(CheckCSourceCompiles)
+                set(CMAKE_REQUIRED_LIBRARIES ${SRT_STATIC_LDFLAGS})
+                set(CMAKE_REQUIRED_LINK_OPTIONS -static ${SRT_STATIC_LDFLAGS_OTHER})
+                check_c_source_compiles("int main(void) { return 0; }" DVBIPITOOLS_SRT_STATIC_LINKS)
+                unset(CMAKE_REQUIRED_LIBRARIES)
+                unset(CMAKE_REQUIRED_LINK_OPTIONS)
+                if (DVBIPITOOLS_SRT_STATIC_LINKS)
+                    set_target_properties(PkgConfig::SRT PROPERTIES
+                        INTERFACE_LINK_LIBRARIES "${SRT_STATIC_LDFLAGS}"
+                        INTERFACE_LINK_OPTIONS "${SRT_STATIC_LDFLAGS_OTHER}")
+                else ()
+                    set(DVBIPITOOLS_HAVE_SRT FALSE)
+                endif ()
+            endif ()
+        endif ()
+    endif ()
+    if (NOT DVBIPITOOLS_HAVE_SRT)
+        message(WARNING "libsrt not found (or no static libraries available): dipisrt skipped")
+    endif ()
+endif ()
+
+if (DVBIPITOOLS_HAVE_SRT AND CMAKE_CROSSCOMPILING)
+    message(WARNING "dipisrt: cross-compiling, cannot probe libsrt for bonding support at configure time - --group-mode disabled")
+    set(DVBIPITOOLS_SRT_HAVE_BONDING FALSE)
+elseif (DVBIPITOOLS_HAVE_SRT)
+    include(CheckCSourceRuns)
+    set(CMAKE_REQUIRED_LIBRARIES PkgConfig::SRT)
+    check_c_source_runs("
+#include <srt/srt.h>
+int main(void) {
+    int rc;
+    srt_startup();
+    rc = srt_create_group(SRT_GTYPE_BROADCAST);
+    if (rc >= 0)
+        srt_close(rc);
+    srt_cleanup();
+    return rc < 0 ? 1 : 0;
+}
+" DVBIPITOOLS_SRT_HAVE_BONDING)
+    unset(CMAKE_REQUIRED_LIBRARIES)
+    if (NOT DVBIPITOOLS_SRT_HAVE_BONDING)
+        message(WARNING "dipisrt: linked libsrt has no bonding support (ENABLE_BONDING=OFF) - --group-mode disabled")
+    endif ()
+else ()
+    set(DVBIPITOOLS_SRT_HAVE_BONDING FALSE)
 endif ()
 
 link_libraries(atomic)

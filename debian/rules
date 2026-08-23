@@ -13,6 +13,7 @@ override_dh_auto_configure:
 override_dh_auto_install:
 	install -D -m 0755 $(BUILDDIR)/src/dipirec/dipirec debian/dvbipitools/usr/bin/dipirec
 	install -D -m 0755 $(BUILDDIR)/src/dipirist/dipirist debian/dvbipitools/usr/bin/dipirist
+	install -D -m 0755 $(BUILDDIR)/src/dipisrt/dipisrt debian/dvbipitools/usr/bin/dipisrt
 	install -D -m 0755 $(BUILDDIR)/src/dipiscan/dipiscan debian/dvbipitools/usr/bin/dipiscan
 	install -D -m 0755 $(BUILDDIR)/src/dipiradiohead/dipiradiohead debian/dvbipitools/usr/bin/dipiradiohead
 	install -D -m 0755 $(BUILDDIR)/src/dipisds/dipisds debian/dvbipitools/usr/bin/dipisds
@@ -27,6 +28,7 @@ override_dh_auto_install:
 	install -D -m 0755 $(BUILDDIR)/src/dvbipitools/dvbipitools debian/dvbipitools/usr/bin/dvbipitools
 	install -D -m 0644 src/dipirec/dipirec.1 debian/dvbipitools/usr/share/man/man1/dipirec.1
 	install -D -m 0644 src/dipirist/dipirist.1 debian/dvbipitools/usr/share/man/man1/dipirist.1
+	install -D -m 0644 src/dipisrt/dipisrt.1 debian/dvbipitools/usr/share/man/man1/dipisrt.1
 	install -D -m 0644 src/dipiscan/dipiscan.1 debian/dvbipitools/usr/share/man/man1/dipiscan.1
 	install -D -m 0644 src/dipiradiohead/dipiradiohead.1 debian/dvbipitools/usr/share/man/man1/dipiradiohead.1
 	install -D -m 0644 src/dipisds/dipisds.1 debian/dvbipitools/usr/share/man/man1/dipisds.1

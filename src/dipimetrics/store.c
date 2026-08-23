@@ -18,6 +18,8 @@ const char *metrics_component_name(metrics_component_t c) {
     return "sds";
   case METRICS_COMPONENT_BCG:
     return "bcg";
+  case METRICS_COMPONENT_SRT:
+    return "srt";
   case METRICS_COMPONENT_RIST:
     return "rist";
   case METRICS_COMPONENT_REC:
@@ -126,8 +128,7 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
     if (!slot) {
       st->stats.snapshots_rejected_full++;
       if (verbose)
-        log_line("dipimetrics: dropped snapshot from new instance %s/%s, store full (%d slots)", metrics_component_name(hdr.component), hdr.metrics_id,
-                  STORE_MAX_INSTANCES);
+        log_line("dipimetrics: dropped snapshot from new instance %s/%s, store full (%d slots)", metrics_component_name(hdr.component), hdr.metrics_id,STORE_MAX_INSTANCES);
       return;
     }
   }

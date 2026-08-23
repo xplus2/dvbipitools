@@ -1,10 +1,10 @@
 # Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
 # See NOTICE and LICENSE for details and authorship information.
 
-# sourced by integration test scripts, not run directly
+# sourced by integration test scripts, not run directly.
 # caller sets BIN from $1 before sourcing
 
-if [[ -z "${BIN:-}" ]] || [[ ! -x "$BIN" ]]; then
+if [ -z "${BIN:-}" ] || [ ! -x "$BIN" ]; then
     echo "FAIL: no executable binary given as \$1 ($BIN)" >&2
     exit 1
 fi
@@ -24,7 +24,7 @@ run_expect_rc() {
     shift 2
     "$@"
     got=$?
-    if [[ "$got" != "$want" ]]; then
+    if [ "$got" != "$want" ]; then
         fail "$label: expected exit $want, got $got"
     fi
 }

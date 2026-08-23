@@ -504,3 +504,6 @@ size_t remux_emit_eit(remux_t *r, unsigned pid, unsigned char *cc, size_t max_pa
 }
 
 int remux_eit_pending(const remux_t *r) { return r->eit_queue_count > 0; }
+
+/* nonzero: partial section pending, caller must stay on r till done */
+int remux_eit_mid_section(const remux_t *r) { return r->eit_drain_off > 0; }

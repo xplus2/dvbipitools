@@ -2,7 +2,7 @@ Source: dvbipitools
 Section: utils
 Priority: optional
 Maintainer: dvbipitools authors <unspecified@example.com>
-Build-Depends: debhelper-compat (= 13), cmake, libssl-dev, librist-dev
+Build-Depends: debhelper-compat (= 13), cmake, libssl-dev, librist-dev, libsrt-openssl-dev
 Standards-Version: 4.7.0
 
 Package: dvbipitools
@@ -12,6 +12,7 @@ Recommends: udpxy, libdvbcsa1
 Description: command line tools for DVB-IPI streams
  dipirec records a DVB-IPI multicast.
  dipirist bridges a DVB-IPI stream between plain RTP/UDP/file and a RIST link (VSF TR-06), sender or receiver, built on librist.
+ dipisrt bridges a DVB-IPI stream between plain RTP/UDP/file and an SRT link, sender or receiver, built on libsrt.
  dipiscan scans and reports on DVB-IPI multicast streams.
  dipiradiohead re-muxes an Icecast/Shoutcast stream as a DVB-IPI multicast, with optional DVB Simulcrypt CAS scrambling (CISSA, CSA2 via libdvbcsa if installed).
  dipisds announces or discovers DVB-IPI services via DVBSTP/SD&S (ETSI TS 102 034).

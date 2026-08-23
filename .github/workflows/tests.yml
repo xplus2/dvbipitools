@@ -28,7 +28,7 @@ jobs:
       - name: dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake pkg-config libssl-dev check ffmpeg
+          sudo apt-get install -y build-essential cmake pkg-config libssl-dev check ffmpeg librist-dev libsrt-openssl-dev
       - name: install tsduck
         run: |
           curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu24_amd64.deb
@@ -39,6 +39,91 @@ jobs:
         run: cmake --build build -j"$(nproc)"
       - name: test
         run: ctest --test-dir build --output-on-failure
+
+  bonding-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config libssl-dev check iproute2 curl librist-dev
+      - name: build libsrt with bonding
+        run: |
+          curl -fsSL -o srt.tar.gz https://github.com/Haivision/srt/archive/refs/tags/v1.5.3.tar.gz
+          mkdir srt-src
+          tar xzf srt.tar.gz -C srt-src --strip-components=1
+          cmake -S srt-src -B srt-src/bld -DENABLE_BONDING=ON -DENABLE_STATIC=OFF \
+            -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_LIBDIR=lib
+          cmake --build srt-src/bld -j"$(nproc)"
+          sudo cmake --install srt-src/bld
+          sudo ldconfig
+      - name: configure
+        run: |
+          export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON 2>&1 | tee configure.log
+          grep -q "Performing Test DVBIPITOOLS_SRT_HAVE_BONDING - Success" configure.log
+      - name: build
+        run: |
+          cmake --build build -j"$(nproc)"
+          test -x build/src/dipirist/dipirist
+      - name: bonding tests
+        run: sudo ctest --test-dir build --output-on-failure -R bonding | tee bonding-results.log
+      - name: collect failure diagnostics
+        if: always()
+        run: |
+          mkdir -p bonding-diagnostics
+          grep -oE '/tmp/tmp\.[A-Za-z0-9]+' bonding-results.log | sort -u | while read -r d; do
+            [ -d "$d" ] && cp -r "$d" "bonding-diagnostics/$(basename "$d")"
+          done || true
+          echo "found_any=$([ -n "$(ls -A bonding-diagnostics)" ] && echo true || echo false)" >> "$GITHUB_ENV"
+      - name: upload failure diagnostics
+        if: always() && env.found_any == 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: bonding-failure-diagnostics
+          path: bonding-diagnostics
+          retention-days: 14
+      - name: bonding results summary
+        if: always()
+        run: |
+          {
+            echo "## Bonding scenario results"
+            echo ""
+            echo "| test | configured impairment | result | observed data |"
+            echo "|---|---|---|---|"
+            for t in \
+              integration_dipisrt_bonding_loss \
+              integration_dipisrt_bonding_reorder \
+              integration_dipisrt_bonding_link_flap \
+              integration_dipisrt_bonding_disappearance_recovery \
+              integration_dipisrt_bonding_jitter \
+              integration_dipisrt_bonding_combined \
+              integration_dipirist_bonding_roundtrip \
+              integration_dipirist_bonding_loss \
+              integration_dipirist_bonding_reorder \
+              integration_dipirist_bonding_link_flap \
+              integration_dipirist_bonding_disappearance_recovery \
+            ; do
+              case "$t" in
+                integration_dipisrt_bonding_loss) impair="30% loss, one link" ;;
+                integration_dipisrt_bonding_reorder) impair="90% reorder, one link" ;;
+                integration_dipisrt_bonding_link_flap) impair="100% loss flapping, one link" ;;
+                integration_dipisrt_bonding_disappearance_recovery) impair="100% loss then recovery, one link" ;;
+                integration_dipisrt_bonding_jitter) impair="60ms+-40ms delay, one link" ;;
+                integration_dipisrt_bonding_combined) impair="25-95% loss both links, staggered" ;;
+                integration_dipirist_bonding_roundtrip) impair="none" ;;
+                integration_dipirist_bonding_loss) impair="30% loss, one link" ;;
+                integration_dipirist_bonding_reorder) impair="90% reorder, one link" ;;
+                integration_dipirist_bonding_link_flap) impair="100% loss flapping, one link" ;;
+                integration_dipirist_bonding_disappearance_recovery) impair="100% loss then recovery, one link" ;;
+              esac
+              result=$(grep -q "$t .*Passed" bonding-results.log && echo pass || echo fail)
+              observed="n/a (pass, no logs kept)"
+              [ "$result" = fail ] && observed="raw send/recv logs in bonding-failure-diagnostics artifact"
+              echo "| $t | $impair | $result | $observed |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
 
   static-analysis:
     runs-on: ubuntu-latest

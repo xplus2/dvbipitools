@@ -186,6 +186,14 @@ else
 HAVE_RIST := $(HAVE_LIBRIST)
 endif
 
+HAVE_LIBSRT := $(shell pkg-config --exists srt && echo yes)
+
+ifeq ($(SRT),no)
+HAVE_SRT := no
+else
+HAVE_SRT := $(HAVE_LIBSRT)
+endif
+
 ifeq ($(HAVE_TLS),yes)
 dipirec_TLS_SRC := src/lib/net/tls.c
 dipirec_AUTH_SRC := src/lib/net/rtmp/auth.c
@@ -682,6 +690,12 @@ ifeq ($(HAVE_AVG_BUFFER_TIME),yes)
 dipirist_EXTRA_CFLAGS += -DDIPIRIST_HAVE_AVG_BUFFER_TIME
 endif
 
+DIPIRIST_LIBRIST_VERSION := $(shell pkg-config --modversion librist)
+DIPIRIST_LIBRIST_IPV6_WARN := $(shell dpkg --compare-versions '$(DIPIRIST_LIBRIST_VERSION)' le '0.2.20' && echo yes)
+ifeq ($(DIPIRIST_LIBRIST_IPV6_WARN),yes)
+dipirist_EXTRA_CFLAGS += -DDIPIRIST_LIBRIST_IPV6_WARN
+endif
+
 ifeq ($(HAVE_TLS),yes)
 dipirist_TLS_SRC := src/lib/net/tls.c
 dipirist_EXTRA_CFLAGS += $(shell pkg-config --cflags openssl)
@@ -719,6 +733,62 @@ dipirist_SRCS := \
 	src/lib/metrics/export.c
 else
 $(warning dipirist: librist not found via pkg-config, skipping this tool entirely (RIST support is its whole purpose))
+endif
+
+ifeq ($(HAVE_SRT),yes)
+TOOLS += dipisrt
+dipisrt_EXTRA_CFLAGS := $(shell pkg-config --cflags srt)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipisrt_EXTRA_LDFLAGS := $(shell pkg-config --static --libs srt)
+else
+dipisrt_EXTRA_LDFLAGS := $(shell pkg-config --libs srt)
+endif
+
+DIPISRT_BONDING_TEST_SRC := '\#include <srt/srt.h>\nint main(void){int rc;srt_startup();rc=srt_create_group(SRT_GTYPE_BROADCAST);srt_cleanup();return rc<0?1:0;}\n'
+HAVE_SRT_BONDING := $(shell probe=$$(mktemp); printf $(DIPISRT_BONDING_TEST_SRC) | $(CC) -xc - $(dipisrt_EXTRA_CFLAGS) $$(pkg-config --libs srt) -o $$probe 2>/dev/null && $$probe >/dev/null 2>&1 && echo yes; rm -f $$probe)
+ifeq ($(HAVE_SRT_BONDING),yes)
+dipisrt_EXTRA_CFLAGS += -DDIPISRT_HAVE_BONDING
+else
+$(warning dipisrt: linked libsrt has no bonding support (ENABLE_BONDING=OFF), --group-mode disabled)
+endif
+
+ifeq ($(HAVE_TLS),yes)
+dipisrt_TLS_SRC := src/lib/net/tls.c
+dipisrt_EXTRA_CFLAGS += $(shell pkg-config --cflags openssl)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipisrt_EXTRA_LDFLAGS += $(shell pkg-config --static --libs openssl)
+else
+dipisrt_EXTRA_LDFLAGS += $(shell pkg-config --libs openssl)
+endif
+else
+dipisrt_TLS_SRC := src/lib/net/tls_stub.c
+endif
+
+dipisrt_SRCS := \
+	src/dipisrt/main.c \
+	src/dipisrt/args.c \
+	src/dipisrt/bridge.c \
+	src/lib/log.c \
+	src/lib/argutil.c \
+	src/lib/uriparse.c \
+	src/lib/ioutil.c \
+	src/lib/signal.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tssource.c \
+	src/lib/net/tssink.c \
+	src/lib/net/srtout.c \
+	$(dipisrt_TLS_SRC) \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/demux/rtp.c \
+	src/lib/mux/rtpheader.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c
+else
+$(warning dipisrt: libsrt not found via pkg-config, skipping this tool entirely (SRT support is its whole purpose))
 endif
 
 ALL_OBJS :=
@@ -773,7 +843,12 @@ dvbipitools_dipimetrics_DEFS := -Dmain=dipimetrics_main -Dargs_parse=dipimetrics
 dvbipitools_dipiradiohead_DEFS := -Dmain=dipiradiohead_main -Dargs_parse=dipiradiohead_args_parse \
 	-Dcodec_name=dipiradiohead_codec_name -Dmcast_describe=dipiradiohead_mcast_describe
 dvbipitools_dipirec_DEFS := -Dmain=dipirec_main -Dargs_parse=dipirec_args_parse
-dvbipitools_dipirist_DEFS := -Dmain=dipirist_main -Dargs_parse=dipirist_args_parse
+dvbipitools_dipirist_DEFS := -Dmain=dipirist_main -Dargs_parse=dipirist_args_parse \
+	-Dconfig_is_sender=dipirist_config_is_sender -Dendpoint_describe=dipirist_endpoint_describe \
+	-Dbridge_run=dipirist_bridge_run
+dvbipitools_dipisrt_DEFS := -Dmain=dipisrt_main -Dargs_parse=dipisrt_args_parse \
+	-Dconfig_is_sender=dipisrt_config_is_sender -Dendpoint_describe=dipisrt_endpoint_describe \
+	-Dbridge_run=dipisrt_bridge_run
 dvbipitools_dipiscan_DEFS := -Dmain=dipiscan_main -Dargs_parse=dipiscan_args_parse
 dvbipitools_dipisds_DEFS := -Dmain=dipisds_main -Dargs_parse=dipisds_args_parse \
 	-Dannounce_run=dipisds_announce_run -Dlisten_run=dipisds_listen_run \
@@ -805,6 +880,9 @@ DVBIPITOOLS_FEATURE_DEFS += -DDVBIPITOOLS_HAVE_DESCRAMBLE
 endif
 ifneq (,$(filter dipirist,$(DVBIPITOOLS_TOOLS)))
 DVBIPITOOLS_FEATURE_DEFS += -DDVBIPITOOLS_HAVE_RIST
+endif
+ifneq (,$(filter dipisrt,$(DVBIPITOOLS_TOOLS)))
+DVBIPITOOLS_FEATURE_DEFS += -DDVBIPITOOLS_HAVE_SRT
 endif
 build/dvbipitools/src/dvbipitools/main.o: DVBIPITOOLS_DEFS := $(DVBIPITOOLS_FEATURE_DEFS)
 
@@ -838,7 +916,7 @@ UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section
 	dipibcg_container dipibcg_args dipibcg_announce dipibcg_listen \
 	dipicam378_args \
 	dipisds_args dipisds_input dipisds_format_out dipisds_announce dipisds_listen \
-	dipirist_args
+	dipirist_args dipisrt_args
 
 ifeq ($(HAVE_OPENSSL),yes)
 UNIT_TESTS += lib_scrambler_cissa
@@ -1159,6 +1237,76 @@ dipirist_args_SRCS := \
 	src/lib/net/httpclient/url.c \
 	src/lib/ioutil.c \
 	src/lib/log.c
+
+ifeq ($(HAVE_RIST),yes)
+UNIT_TESTS += dipirist_bridge
+dipirist_bridge_BIN := tests/unit/dipirist/test_bridge
+dipirist_bridge_EXTRA_CFLAGS := $(shell pkg-config --cflags librist)
+dipirist_bridge_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
+dipirist_bridge_SRCS := \
+	tests/unit/dipirist/test_bridge.c \
+	src/dipirist/bridge.c \
+	src/dipirist/args.c \
+	src/lib/argutil.c \
+	src/lib/uriparse.c \
+	src/lib/ioutil.c \
+	src/lib/log.c \
+	src/lib/signal.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tssource.c \
+	src/lib/net/tssink.c \
+	src/lib/net/ristout.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/demux/rtp.c \
+	src/lib/mux/rtpheader.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c
+endif
+
+dipisrt_args_BIN := tests/unit/dipisrt/test_args
+dipisrt_args_SRCS := \
+	tests/unit/dipisrt/test_args.c \
+	src/dipisrt/args.c \
+	src/lib/argutil.c \
+	src/lib/uriparse.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/ioutil.c \
+	src/lib/log.c
+
+ifeq ($(HAVE_SRT),yes)
+UNIT_TESTS += dipisrt_bridge
+dipisrt_bridge_BIN := tests/unit/dipisrt/test_bridge
+dipisrt_bridge_EXTRA_CFLAGS := $(shell pkg-config --cflags srt)
+dipisrt_bridge_EXTRA_LDFLAGS := $(shell pkg-config --libs srt)
+dipisrt_bridge_SRCS := \
+	tests/unit/dipisrt/test_bridge.c \
+	src/dipisrt/bridge.c \
+	src/dipisrt/args.c \
+	src/lib/argutil.c \
+	src/lib/uriparse.c \
+	src/lib/ioutil.c \
+	src/lib/log.c \
+	src/lib/signal.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tssource.c \
+	src/lib/net/tssink.c \
+	src/lib/net/srtout.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/demux/rtp.c \
+	src/lib/mux/rtpheader.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c
+endif
 
 dipisds_input_BIN := tests/unit/dipisds/test_input
 dipisds_input_SRCS := \
@@ -2548,7 +2696,8 @@ INTEGRATION_DIPIDESCRAMBLE_SCRIPTS := $(wildcard tests/integration/dipidescrambl
 INTEGRATION_DIPIMETRICS_SCRIPTS := $(wildcard tests/integration/dipimetrics/*.sh)
 INTEGRATION_DIPICAM378_SCRIPTS := $(wildcard tests/integration/dipicam378/*.sh)
 INTEGRATION_DIPIFCCRET_SCRIPTS := $(wildcard tests/integration/dipifccret/*.sh)
-INTEGRATION_DIPIRIST_SCRIPTS := $(wildcard tests/integration/dipirist/*.sh)
+INTEGRATION_DIPIRIST_SCRIPTS := $(filter-out tests/integration/dipirist/bonding_common.sh,$(wildcard tests/integration/dipirist/*.sh))
+INTEGRATION_DIPISRT_SCRIPTS := $(filter-out tests/integration/dipisrt/bonding_common.sh,$(wildcard tests/integration/dipisrt/*.sh))
 
 INTEGRATION_TEST_DEPS := dipibim dipixmltv dipitvhead dipiradiohead dipirec dipidescramble dipisds dipibcg dipimetrics dipifccret
 ifeq ($(HAVE_OPENSSL),yes)
@@ -2556,6 +2705,9 @@ INTEGRATION_TEST_DEPS += dipicam378
 endif
 ifeq ($(HAVE_RIST),yes)
 INTEGRATION_TEST_DEPS += dipirist
+endif
+ifeq ($(HAVE_SRT),yes)
+INTEGRATION_TEST_DEPS += dipisrt
 endif
 
 .PHONY: integration-test
@@ -2578,6 +2730,11 @@ ifeq ($(HAVE_RIST),yes)
 	@set -e; for s in $(INTEGRATION_DIPIRIST_SCRIPTS); do echo "running $$s"; sh $$s ./dipirist ./dipirec; done
 else
 	@echo "integration-test: librist not found, skipped dipirist integration tests" >&2
+endif
+ifeq ($(HAVE_SRT),yes)
+	@set -e; for s in $(INTEGRATION_DIPISRT_SCRIPTS); do echo "running $$s"; sh $$s ./dipisrt; done
+else
+	@echo "integration-test: libsrt not found, skipped dipisrt integration tests" >&2
 endif
 
 FUZZ_BIM_DEPS := \
