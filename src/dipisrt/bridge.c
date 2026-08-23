@@ -103,6 +103,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   rcfg.verbose = cfg->verbose;
   rcfg.mx = mx;
   rcfg.tool_version = TOOL_VERSION;
+  rcfg.safety_mult = cfg->send_buffer_mult;
 
   srt = srtout_open(&rcfg);
   if (!srt) {
@@ -157,7 +158,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   return rc;
 }
 
-#define RECV_DEDUP_HISTORY 2 /* reconnect can redeliver a couple already-written chunks */
+#define RECV_DEDUP_HISTORY 6 /* reconnect can redeliver several already-written chunks */
 
 static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   tssink_cfg_t tk;

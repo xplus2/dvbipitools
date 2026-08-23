@@ -21,6 +21,7 @@ typedef struct {
   int verbose;                 /* gates libsrt's own NOTICE/DEBUG logging */
   metrics_exporter_t *mx;      /* NULL = no stats push */
   const char *tool_version;    /* required if mx set */
+  unsigned safety_mult;        /* 0 = default 4; clamped to 32. pending-queue latency-window multiplier */
 } srtout_cfg_t;
 
 typedef struct srtout srtout_t;
@@ -39,7 +40,8 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg);
 void srtout_service(srtout_t *r, srtout_status_t *out);
 
 /* never blocks: chunks at SRT live payload size, queues what can't send yet
-   (not connected, backpressure) up to a small bound, drops oldest on overflow */
+   (not connected, backpressure) up to a bitrate/latency-sized bound, drops
+   oldest on overflow */
 void srtout_write(srtout_t *r, const unsigned char *buf, size_t n);
 
 void srtout_close(srtout_t *r);

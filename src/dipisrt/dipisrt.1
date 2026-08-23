@@ -135,6 +135,13 @@ Off by default, matching SRT's own default.
 .B \-\-latency \fIms\fR
 SRT latency in milliseconds. Default is the library default.
 .TP
+.B \-\-send\-buffer\-mult \fIn\fR
+Sender-side queue depth, in latency windows, 1 to 32. Only applies to the
+.B \-o srt://
+sender side; the queue is sized automatically from the observed input
+bitrate and current latency, bounded by available memory. Default
+.BR 4 .
+.TP
 .B \-\-color \fIwhen\fR
 Colorize log output:
 .BR auto ,

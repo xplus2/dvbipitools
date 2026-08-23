@@ -48,6 +48,7 @@ typedef struct {
   char streamid[128];   /* "" = none */
   char packetfilter[256]; /* "" = none; raw SRTO_PACKETFILTER string, e.g. "fec,cols:10,rows:5" */
   unsigned latency_ms;    /* 0 = library default */
+  unsigned send_buffer_mult; /* --send-buffer-mult. 0 = default 4; clamped 1..32 */
   const char *iface;      /* non-SRT side multicast join/send interface. NULL = kernel default */
   int verbose;
   int daemonize; /* -d, --daemonize: fork to background after startup */

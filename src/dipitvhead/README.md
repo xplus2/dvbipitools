@@ -75,6 +75,7 @@ using one before any `--cas-ecmg` is an error. Everything else is shared across 
 | `--cas-ecm-id`         | `<n>`                     | required per vendor                        | per-vendor |
 | `--cas-ecm-pid`        | `<pid>`                   | `0x0020`                                   | per-vendor |
 | `--cas-emmg-port`      | `<n>`                     | `8002`                                     | per-vendor |
+| `--cas-emmg-max-conns` | `<n>`                     | `8` (max `64`)                             | per-vendor |
 | `--cas-emmg-version`   | `2\|3`                    | accept client's proposal                   | per-vendor |
 | `--cas-emm-pid`        | `<pid>`                   | `0x0021`                                   | per-vendor |
 | `--cas-resilience`     | `frozen\|cycling\|silent` | `frozen`                                   | per-vendor |
@@ -286,12 +287,13 @@ the last two known CWs (even/odd), instead of freezing on one.
 the last known-good ECM. Content stays scrambled with the last known-good CW, same as `frozen` -
 only the ECM stream itself goes quiet.
 
-### EMMG (`--cas-emmg-port`, `--cas-emmg-version`)
+### EMMG (`--cas-emmg-port`, `--cas-emmg-max-conns`, `--cas-emmg-version`)
 
 dipitvhead is the EMMG-side MUX: it listens (`--cas-emmg-port`, default 8002) and the EMMG
 client connects to it, once per `--cas-ecmg` vendor (each with its own `--cas-emmg-port`).
-For now, the only topology, not the reversed one where the MUX dials out to the EMMG. Accepts
-whichever protocol version the client proposes unless `--cas-emmg-version` is set. EMM
+For now, the only topology, not the reversed one where the MUX dials out to the EMMG.
+`--cas-emmg-max-conns` caps concurrent client connections per vendor (default 8, max 64).
+Accepts whichever protocol version the client proposes unless `--cas-emmg-version` is set. EMM
 datagrams are queued and drained onto that vendor's own `--cas-emm-pid` on arrival.
 
 ### Multi-CAS (`--cas-required`, `--cas-fallback-clear`)

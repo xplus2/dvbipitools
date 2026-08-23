@@ -169,6 +169,7 @@ static void print_help(void) {
       "      --streamid <id>       SRTO_STREAMID, passed to a listening peer on accept\n"
       "      --packetfilter <cfg>  SRTO_PACKETFILTER config string, e.g. fec,cols:10,rows:5\n"
       "      --latency <ms>        SRTO_LATENCY; default library\n"
+      "      --send-buffer-mult <n> sender queue depth in latency windows, 1..32; default 4\n"
       "      --color <when>        auto|always|never (default auto)\n"
       "      --metrics <path>       Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
       "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
@@ -197,6 +198,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"streamid", required_argument, 0, 1005},
       {"packetfilter", required_argument, 0, 1006},
       {"latency", required_argument, 0, 1007},
+      {"send-buffer-mult", required_argument, 0, 1012},
       {"color", required_argument, 0, 1008},
       {"metrics", required_argument, 0, 1009},
       {"metrics-id", required_argument, 0, 1010},
@@ -295,6 +297,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->latency_ms = (unsigned)v;
         break;
       }
+      case 1012: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 32) {
+          argerr("invalid --send-buffer-mult: %s (1..32)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->send_buffer_mult = (unsigned)v;
+        break;
+      }
       case 1008: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
@@ -388,5 +400,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (cfg->insecure_tls && !(cfg->in.nonsrt.kind == NONSRT_HTTP && cfg->in.nonsrt.http.tls))
     log_line(TOOL_NAME ": --insecure has no effect, no -i https:// source");
+  if (cfg->send_buffer_mult && !config_is_sender(cfg))
+    log_line(TOOL_NAME ": --send-buffer-mult has no effect, no -o srt:// sender side");
   return ARGS_OK;
 }

@@ -611,7 +611,11 @@ dipidescramble_SRCS := \
 	src/dipidescramble/args.c \
 	src/dipidescramble/crypto.c \
 	src/dipidescramble/device.c \
-	src/dipidescramble/ecm_profile.c \
+	src/dipidescramble/ecm_profile/common.c \
+	src/dipidescramble/ecm_profile/parse.c \
+	src/dipidescramble/ecm_profile/validate.c \
+	src/dipidescramble/ecm_profile/wire.c \
+	src/dipidescramble/ecm_profile/crypto.c \
 	src/dipidescramble/biss_ca_state.c \
 	src/dipidescramble/emmcache.c \
 	src/dipidescramble/ipiclient.c \
@@ -1062,7 +1066,11 @@ dipidescramble_device_SRCS := \
 	tests/unit/dipidescramble/test_device.c \
 	src/dipidescramble/device.c \
 	src/dipidescramble/crypto.c \
-	src/dipidescramble/ecm_profile.c \
+	src/dipidescramble/ecm_profile/common.c \
+	src/dipidescramble/ecm_profile/parse.c \
+	src/dipidescramble/ecm_profile/validate.c \
+	src/dipidescramble/ecm_profile/wire.c \
+	src/dipidescramble/ecm_profile/crypto.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/cas/device_state_core.c \
 	src/lib/log.c \
@@ -1075,7 +1083,11 @@ UNIT_TESTS += dipidescramble_ecm_profile
 dipidescramble_ecm_profile_BIN := tests/unit/dipidescramble/test_ecm_profile
 dipidescramble_ecm_profile_SRCS := \
 	tests/unit/dipidescramble/test_ecm_profile.c \
-	src/dipidescramble/ecm_profile.c \
+	src/dipidescramble/ecm_profile/common.c \
+	src/dipidescramble/ecm_profile/parse.c \
+	src/dipidescramble/ecm_profile/validate.c \
+	src/dipidescramble/ecm_profile/wire.c \
+	src/dipidescramble/ecm_profile/crypto.c \
 	src/dipidescramble/crypto.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/log.c \
@@ -1103,7 +1115,11 @@ dipidescramble_pipeline_SRCS := \
 	src/dipidescramble/pipeline.c \
 	src/dipidescramble/device.c \
 	src/dipidescramble/crypto.c \
-	src/dipidescramble/ecm_profile.c \
+	src/dipidescramble/ecm_profile/common.c \
+	src/dipidescramble/ecm_profile/parse.c \
+	src/dipidescramble/ecm_profile/validate.c \
+	src/dipidescramble/ecm_profile/wire.c \
+	src/dipidescramble/ecm_profile/crypto.c \
 	src/dipidescramble/biss_ca_state.c \
 	src/dipidescramble/emmcache.c \
 	src/dipidescramble/ipiclient.c \
@@ -1164,7 +1180,11 @@ dipidescramble_args_BIN := tests/unit/dipidescramble/test_args
 dipidescramble_args_SRCS := \
 	tests/unit/dipidescramble/test_args.c \
 	src/dipidescramble/args.c \
-	src/dipidescramble/ecm_profile.c \
+	src/dipidescramble/ecm_profile/common.c \
+	src/dipidescramble/ecm_profile/parse.c \
+	src/dipidescramble/ecm_profile/validate.c \
+	src/dipidescramble/ecm_profile/wire.c \
+	src/dipidescramble/ecm_profile/crypto.c \
 	src/dipidescramble/crypto.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/cas/biss/hex.c \

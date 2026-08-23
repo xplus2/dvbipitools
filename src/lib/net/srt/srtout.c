@@ -19,9 +19,17 @@
 #define SRTOUT_SNDTIMEO_MS 1000
 #define SRTOUT_CLOSE_DRAIN_MAX_MS 3000 /* cap on drain_before_close's wait */
 #define SRTOUT_CLOSE_MIN_WAIT_MS 1000  /* floor on drain_before_close's wait, see there */
-#define SRTOUT_RECONNECT_BACKOFF_S 1.0 /* min gap between failed (re)connect attempts */
-#define SRTOUT_PENDING_MAX 64          /* ~1 default-latency window of live chunks */
+#define SRTOUT_RECONNECT_BACKOFF_S 0.2 /* min gap between failed (re)connect attempts */
 #define SRTOUT_PLSIZE 1316             /* srt.h's SRT_LIVE_DEF_PLSIZE, but real constant expr for array sizing */
+
+#define SRTOUT_PENDING_FLOOR_CHUNKS 64        /* never below this, regardless of bitrate/RAM: ~84KB */
+#define SRTOUT_SAFETY_MULT_DEFAULT 4          /* --send-buffer-mult unset: latency-window multiples to buffer */
+#define SRTOUT_SAFETY_MULT_MAX 32
+#define SRTOUT_DEFAULT_LATENCY_MS 120         /* SRT_LIVE_DEF_LATENCY, fallback for opts.latency_ms 0 */
+#define SRTOUT_INITIAL_BITRATE_BPS (100000000 / 8) /* generous startup guess, resize_pending_if_needed() settles it */
+#define SRTOUT_RAM_FRACTION_DIVISOR 50         /* ceiling: 1/50 = 2% of MemAvailable */
+#define SRTOUT_RESIZE_INTERVAL_S 1.0
+#define SRTOUT_BITRATE_EMA_ALPHA 0.3           /* new-sample weight per resize tick */
 
 struct srtout {
   SRTSOCKET sock;           /* SRT_INVALID_SOCK while (re)connecting */
@@ -32,12 +40,18 @@ struct srtout {
   const char *tool_version;
   char peer_label[64];
   srtout_cfg_t cfg; /* kept for reconnect */
+  unsigned safety_mult; /* resolved from cfg, clamped 1..SRTOUT_SAFETY_MULT_MAX */
 
-  unsigned char pending[SRTOUT_PENDING_MAX][SRTOUT_PLSIZE];
-  int pending_len[SRTOUT_PENDING_MAX];
+  unsigned char *pending; /* pending_cap * SRTOUT_PLSIZE bytes, malloc'd, resized in resize_pending() */
+  int *pending_len;       /* pending_cap ints */
+  int pending_cap;
   int pending_head;  /* index of oldest queued chunk */
   int pending_count;
   int drop_logged;   /* throttles "queue full" logging to once per overflow streak */
+
+  size_t bytes_since_check; /* fed to bitrate EMA at each resize tick */
+  double last_check_at;     /* mono_seconds(); 0 = not yet sampled */
+  double bitrate_ema_bps;   /* 0 until first real sample */
 };
 
 /* RCVSYN/SNDSYN off: connect/rendezvous returns immediately, EASYNCSND means in progress */
@@ -140,11 +154,13 @@ static void teardown_for_reconnect(srtout_t *r, const char *why) {
   r->next_reconnect_at = mono_seconds() + SRTOUT_RECONNECT_BACKOFF_S;
 }
 
+static unsigned char *pending_slot(srtout_t *r, int idx) { return r->pending + (size_t)idx * SRTOUT_PLSIZE; }
+
 static void enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
   int tail;
 
-  if (r->pending_count == SRTOUT_PENDING_MAX) {
-    r->pending_head = (r->pending_head + 1) % SRTOUT_PENDING_MAX;
+  if (r->pending_count == r->pending_cap) {
+    r->pending_head = (r->pending_head + 1) % r->pending_cap;
     r->pending_count--;
     if (!r->drop_logged) {
       log_line("srt output: send queue full, dropping oldest queued chunk");
@@ -153,8 +169,8 @@ static void enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
   } else {
     r->drop_logged = 0;
   }
-  tail = (r->pending_head + r->pending_count) % SRTOUT_PENDING_MAX;
-  memcpy(r->pending[tail], buf, (size_t)len);
+  tail = (r->pending_head + r->pending_count) % r->pending_cap;
+  memcpy(pending_slot(r, tail), buf, (size_t)len);
   r->pending_len[tail] = len;
   r->pending_count++;
 }
@@ -164,7 +180,7 @@ static void enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
 static void flush_pending(srtout_t *r) {
   while (r->pending_count > 0 && r->sock != SRT_INVALID_SOCK) {
     int head = r->pending_head;
-    int sent = srt_sendmsg2(r->sock, (const char *)r->pending[head], r->pending_len[head], NULL);
+    int sent = srt_sendmsg2(r->sock, (const char *)pending_slot(r, head), r->pending_len[head], NULL);
 
     if (sent == SRT_ERROR) {
       if (srt_getlasterror(NULL) == SRT_EASYNCSND)
@@ -172,9 +188,91 @@ static void flush_pending(srtout_t *r) {
       teardown_for_reconnect(r, "write failed on queued data");
       return;
     }
-    r->pending_head = (head + 1) % SRTOUT_PENDING_MAX;
+    r->pending_head = (head + 1) % r->pending_cap;
     r->pending_count--;
   }
+}
+
+/* MemAvailable: safe estimate, skips reclaimable cache. -1: /proc/meminfo unreadable */
+static long available_ram_bytes(void) {
+  FILE *f = fopen("/proc/meminfo", "r");
+  unsigned long kb = 0;
+  char line[128];
+
+  if (!f)
+    return -1;
+  while (fgets(line, sizeof line, f)) {
+    if (sscanf(line, "MemAvailable: %lu kB", &kb) == 1)
+      break;
+  }
+  fclose(f);
+  return kb ? (long)kb * 1024 : -1;
+}
+
+static int pending_target_chunks(srtout_t *r) {
+  double bps = r->bitrate_ema_bps > 0 ? r->bitrate_ema_bps : (double)SRTOUT_INITIAL_BITRATE_BPS;
+  unsigned latency_ms = r->cfg.opts.latency_ms ? r->cfg.opts.latency_ms : SRTOUT_DEFAULT_LATENCY_MS;
+  double floor_bytes = (double)SRTOUT_PENDING_FLOOR_CHUNKS * SRTOUT_PLSIZE;
+  double target_bytes = bps * (latency_ms / 1000.0) * r->safety_mult;
+  long ram = available_ram_bytes();
+  long ceiling_bytes = ram > 0 ? ram / SRTOUT_RAM_FRACTION_DIVISOR : -1;
+
+  if (target_bytes < floor_bytes)
+    target_bytes = floor_bytes;
+  if (ceiling_bytes > 0 && target_bytes > (double)ceiling_bytes)
+    target_bytes = (double)ceiling_bytes;
+  if (target_bytes < floor_bytes)
+    target_bytes = floor_bytes; /* RAM tighter than floor: keep floor anyway */
+  return (int)(target_bytes / SRTOUT_PLSIZE);
+}
+
+/* retargets capacity, never below what's queued: low instant bitrate
+   (finite source draining) must not discard backlog still catching up on link.
+   malloc failure: keeps current buffer, retries next tick */
+static void resize_pending(srtout_t *r, int new_cap) {
+  unsigned char *new_pending;
+  int *new_len;
+
+  if (new_cap < r->pending_count)
+    new_cap = r->pending_count;
+  if (new_cap == r->pending_cap)
+    return;
+  new_pending = malloc((size_t)new_cap * SRTOUT_PLSIZE);
+  new_len = malloc((size_t)new_cap * sizeof *new_len);
+  if (!new_pending || !new_len) {
+    log_line("srt output: pending buffer resize to %d chunks failed, keeping %d", new_cap, r->pending_cap);
+    free(new_pending);
+    free(new_len);
+    return;
+  }
+  for (int i = 0; i < r->pending_count; i++) {
+    int src = (r->pending_head + i) % r->pending_cap;
+    memcpy(new_pending + (size_t)i * SRTOUT_PLSIZE, pending_slot(r, src), (size_t)r->pending_len[src]);
+    new_len[i] = r->pending_len[src];
+  }
+  free(r->pending);
+  free(r->pending_len);
+  r->pending = new_pending;
+  r->pending_len = new_len;
+  r->pending_cap = new_cap;
+  r->pending_head = 0;
+}
+
+/* re-estimates input bitrate (EMA), retargets pending buffer to
+   safety_mult latency-windows at that rate, bounded by RAM headroom */
+static void resize_pending_if_needed(srtout_t *r) {
+  double now = mono_seconds();
+
+  if (r->last_check_at > 0 && now - r->last_check_at < SRTOUT_RESIZE_INTERVAL_S)
+    return;
+  if (r->last_check_at > 0) {
+    double inst = (double)r->bytes_since_check / (now - r->last_check_at);
+    r->bitrate_ema_bps = r->bitrate_ema_bps > 0 ? r->bitrate_ema_bps + SRTOUT_BITRATE_EMA_ALPHA * (inst - r->bitrate_ema_bps)
+                                                : inst;
+  }
+  r->bytes_since_check = 0;
+  r->last_check_at = now;
+  resize_pending(r, pending_target_chunks(r));
 }
 
 srtout_t *srtout_open(const srtout_cfg_t *cfg) {
@@ -215,9 +313,26 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
   r->mx = cfg->mx;
   r->tool_version = cfg->tool_version;
   r->cfg = *cfg;
+  r->safety_mult = cfg->safety_mult ? cfg->safety_mult : SRTOUT_SAFETY_MULT_DEFAULT;
+  if (r->safety_mult > SRTOUT_SAFETY_MULT_MAX)
+    r->safety_mult = SRTOUT_SAFETY_MULT_MAX;
   snprintf(r->peer_label, sizeof r->peer_label, "%s:%u", cfg->peers[0].host, cfg->peers[0].port);
 
+  r->pending_cap = SRTOUT_PENDING_FLOOR_CHUNKS;
+  r->pending = malloc((size_t)r->pending_cap * SRTOUT_PLSIZE);
+  r->pending_len = malloc((size_t)r->pending_cap * sizeof *r->pending_len);
+  if (!r->pending || !r->pending_len) {
+    free(r->pending);
+    free(r->pending_len);
+    srt_epoll_release(r->eid);
+    free(r);
+    srt_cleanup();
+    return NULL;
+  }
+
   if (start_connect(r) != 0) {
+    free(r->pending);
+    free(r->pending_len);
     srt_epoll_release(r->eid);
     free(r);
     srt_cleanup();
@@ -244,17 +359,22 @@ static void push_stats(srtout_t *r) {
 }
 
 static void service_step(srtout_t *r) {
+  resize_pending_if_needed(r);
   if (r->sock == SRT_INVALID_SOCK) {
     if (mono_seconds() >= r->next_reconnect_at && start_connect(r) != 0)
       r->next_reconnect_at = mono_seconds() + SRTOUT_RECONNECT_BACKOFF_S;
   } else {
     SRT_EPOLL_EVENT ev;
     if (srt_epoll_uwait(r->eid, &ev, 1, 0) > 0 && ev.fd == r->sock) {
-      if (ev.events & SRT_EPOLL_ERR)
-        teardown_for_reconnect(r, "link failed");
-      else if (ev.events & SRT_EPOLL_OUT) {
+      if (ev.events & SRT_EPOLL_OUT) {
         r->connected = 1;
         flush_pending(r);
+      }
+      if (ev.events & SRT_EPOLL_ERR) {
+        /* ERR can be stale from connect race. confirm broken before teardown */
+        SRT_SOCKSTATUS st = srt_getsockstate(r->sock);
+        if (st == SRTS_BROKEN || st == SRTS_CLOSED || st == SRTS_NONEXIST)
+          teardown_for_reconnect(r, "link failed");
       }
     }
   }
@@ -267,6 +387,7 @@ void srtout_service(srtout_t *r, srtout_status_t *out) {
 }
 
 void srtout_write(srtout_t *r, const unsigned char *buf, size_t n) {
+  r->bytes_since_check += n;
   for (size_t off = 0; off < n; off += (size_t)SRTOUT_PLSIZE) {
     size_t chunk = n - off < (size_t)SRTOUT_PLSIZE ? n - off : (size_t)SRTOUT_PLSIZE;
 
@@ -333,5 +454,7 @@ void srtout_close(srtout_t *r) {
   }
   srt_epoll_release(r->eid);
   srt_cleanup();
+  free(r->pending);
+  free(r->pending_len);
   free(r);
 }

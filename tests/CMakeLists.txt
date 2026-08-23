@@ -371,7 +371,11 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_state_core.c
-        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/common.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/parse.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/validate.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/wire.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/log.c
         ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/secure_zero.c)
@@ -379,7 +383,11 @@ if (OpenSSL_FOUND)
 
     dvbipitools_add_unit_test(dipidescramble_ecm_profile
         unit/dipidescramble/test_ecm_profile.c
-        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/common.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/parse.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/validate.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/wire.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/crypto.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/log.c
@@ -403,7 +411,11 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_state_core.c
-        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/common.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/parse.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/validate.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/wire.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/crypto.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/biss_ca_state.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/emmcache.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ipiclient.c
@@ -459,7 +471,11 @@ if (OpenSSL_FOUND)
     dvbipitools_add_unit_test(dipidescramble_args
         unit/dipidescramble/test_args.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/args.c
-        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/common.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/parse.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/validate.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/wire.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/crypto.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c

@@ -50,6 +50,7 @@ dvbipitools_add_fuzz_harness(simulcrypt_msg
 
 dvbipitools_add_fuzz_harness(ecmg_channel_status
     fuzz_ecmg_channel_status.c
+    ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c

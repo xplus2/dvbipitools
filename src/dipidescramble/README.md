@@ -41,6 +41,7 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 |       | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`                     |
 |       | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)                  |
 |       | `--metrics-interval` | `<s>`                 | `5`                                                 |
+|       | `--max-services`     | `<n>`                 | `32` (max `256`)                                    |
 | `-d`  | `--daemonize`        |                       | off (foreground)                                    |
 | `-h`  | `--help`             |                       |                                                     |
 
