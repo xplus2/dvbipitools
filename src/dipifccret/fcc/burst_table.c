@@ -36,7 +36,10 @@ static void stripe_destroy(burst_stripe_t *s) {
 
 burst_table_t *burst_table_new(size_t cap) {
   burst_table_t *t;
-  size_t n, base, extra, off;
+  size_t n;
+  size_t base;
+  size_t extra;
+  size_t off;
 
   if (cap == 0)
     return NULL;
@@ -120,7 +123,7 @@ static void slot_read_addr(const burst_slot_t *s, struct sockaddr_storage *out) 
 /* index hit, re-validated against authoritative slots[]. pacer thread
    clears in_use: stale hits dropped. caller holds st->lock. SIZE_MAX if no
    live session for addr */
-static size_t find_valid(burst_table_t *t, burst_stripe_t *st, const struct sockaddr *addr, socklen_t addrlen) {
+static size_t find_valid(const burst_table_t *t, burst_stripe_t *st, const struct sockaddr *addr, socklen_t addrlen) {
   size_t idx = sockaddr_index_find(st->index, addr, addrlen);
   struct sockaddr_storage sa;
 
@@ -280,7 +283,7 @@ int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen
   return idx != SIZE_MAX;
 }
 
-int burst_table_release(burst_table_t *t, size_t idx, burst_t *expect_b, int should_clear, int *did_clear) {
+int burst_table_release(burst_table_t *t, size_t idx, const burst_t *expect_b, int should_clear, int *did_clear) {
   burst_stripe_t *st = stripe_of_idx(t, idx);
   burst_slot_t *slot = &t->slots[idx];
   int owns_slot = 0;
@@ -312,7 +315,7 @@ void burst_table_note_bytes_sent(burst_table_t *t, uint64_t bytes) {
   atomic_fetch_add_explicit(&t->bytes_retransmitted_total, bytes, memory_order_relaxed);
 }
 
-void burst_table_get_metrics(burst_table_t *t, burst_table_metrics_t *out) {
+void burst_table_get_metrics(const burst_table_t *t, burst_table_metrics_t *out) {
   out->bursts_active = 0;
   for (size_t i = 0; i < t->cap; i++)
     if (atomic_load_explicit(&t->slots[i].in_use, memory_order_relaxed))

@@ -30,7 +30,7 @@ typedef struct {
   unsigned long long emm_total;
 } cs378x_metrics_t;
 
-void cs378x_server_get_metrics(cs378x_server_t *s, cs378x_metrics_t *out);
+void cs378x_server_get_metrics(const cs378x_server_t *s, cs378x_metrics_t *out);
 
 /* CW for one ECM. 0 ok. -1 transient, no reply (OSCcam retries, e.g. no EMM yet).
    -2 permanent, CAID unsupported (CMD08 "shut up") */

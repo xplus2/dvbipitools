@@ -29,7 +29,8 @@ extern const retryset_ops_t tv_retry_ops;
 
 typedef struct {
   unsigned char buf[65536];
-  size_t len, off; /* off..len: not yet fed to tspack_feed() this read */
+  size_t len;
+  size_t off; /* off..len: not yet fed to tspack_feed() this read */
 } read_backlog_t;
 
 typedef struct {
@@ -62,7 +63,7 @@ typedef struct {
 
 /* resolves the fd/events to poll for this input: its retry-connect fd, or once connected,
    its live source fd (POLLIN only) */
-int poll_fd_for_input(retryset_t *rs, unsigned i, short *events_out);
+int poll_fd_for_input(const retryset_t *rs, unsigned i, short *events_out);
 int input_poll_ready(unsigned i, const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd);
 
 /* runs (or continues) PSI discovery for input i until a remux_t can be built. always

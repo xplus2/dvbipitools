@@ -57,7 +57,8 @@ fail:
 }
 
 int srtcommon_resolve(const char *host, unsigned port, struct sockaddr_storage *ss, int *len) {
-  struct addrinfo hints, *res;
+  struct addrinfo hints;
+  struct addrinfo *res;
   char portbuf[6];
   int rc;
 

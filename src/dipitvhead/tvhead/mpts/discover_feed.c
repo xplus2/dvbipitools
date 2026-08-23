@@ -17,11 +17,11 @@ void program_reset(mpts_program_t *p) {
   memset(p, 0, sizeof *p);
 }
 
-int poll_fd_for_input(retryset_t *rs, unsigned i, short *events_out) {
+int poll_fd_for_input(const retryset_t *rs, unsigned i, short *events_out) {
   int fd = retryset_poll_fd(rs, i);
   *events_out = retryset_poll_events(rs, i);
   if (fd < 0) {
-    tvsrc_t *src = retryset_result(rs, i);
+    const tvsrc_t *src = retryset_result(rs, i);
     if (src) {
       fd = tvsrc_fd(src);
       *events_out = POLLIN;
@@ -118,6 +118,8 @@ void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   fc.tsm = tk->tsm;
   tspack_feed(&tk->progs[i].pz, bl->buf + bl->off, chunk, remux_cb, &fc);
   bl->off += chunk;
-  if (bl->off >= bl->len)
-    bl->len = bl->off = 0;
+  if (bl->off >= bl->len) {
+    bl->off = 0;
+    bl->len = 0;
+  }
 }

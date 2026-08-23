@@ -32,7 +32,8 @@ void *rsi_pacer_main(void *arg) {
 
   while (!signal_stop_requested()) {
     size_t cap;
-    uint32_t ntp_sec, ntp_frac;
+    uint32_t ntp_sec;
+    uint32_t ntp_frac;
 
     for (unsigned i = 0; i < chunks_per_cycle && !signal_stop_requested(); i++)
       nanosleep(&chunk, NULL);
@@ -45,7 +46,9 @@ void *rsi_pacer_main(void *arg) {
       channel_t *c = channel_table_at(pc->channels, idx);
       unsigned char pkt[RSI_PKT_MAX];
       uint32_t collisions[CHANNEL_HNED_COLLISION_MAX];
-      size_t off, sub_len, collision_n;
+      size_t off;
+      size_t sub_len;
+      size_t collision_n;
       uint32_t ssrc;
       double nominal_bps;
       uint16_t port;

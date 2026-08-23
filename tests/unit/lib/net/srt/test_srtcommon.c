@@ -50,7 +50,8 @@ END_TEST
 START_TEST(apply_opts_sets_latency_and_streamid) {
   SRTSOCKET s;
   srtcommon_opts_t o;
-  int lat = 0, optlen = sizeof lat;
+  int lat = 0;
+  int optlen = sizeof lat;
   char sid[64];
   int sidlen = sizeof sid;
 

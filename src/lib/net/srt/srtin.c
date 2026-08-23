@@ -28,8 +28,10 @@ struct srtin {
 
 static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
   SRTSOCKET s;
-  struct sockaddr_storage remote, local;
-  int remote_len, local_len;
+  struct sockaddr_storage remote;
+  struct sockaddr_storage local;
+  int remote_len;
+  int local_len;
 
   if (srtcommon_resolve(cfg->peers[0].host, cfg->peers[0].port, &remote, &remote_len))
     return SRT_INVALID_SOCK;
@@ -70,7 +72,8 @@ static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
 /* accepted socket shares listener's UDP multiplexer. early close: kills connection too.
    keep listener open until final teardown. lsn_out: carries it out */
 static SRTSOCKET open_single_listener(const srtin_cfg_t *cfg, SRTSOCKET *lsn_out) {
-  SRTSOCKET lsn, s = SRT_INVALID_SOCK;
+  SRTSOCKET lsn;
+  SRTSOCKET s = SRT_INVALID_SOCK;
   struct sockaddr_storage local;
   int local_len;
 

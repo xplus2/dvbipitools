@@ -236,7 +236,8 @@ END_TEST
 START_TEST(full_chain_cissa_recovers_cw) {
   EVP_PKEY *pub;
   device_state_t *d = make_device(&pub);
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
   unsigned char cw[16];
   unsigned char buf[1024];
   unsigned char cw_out[16];

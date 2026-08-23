@@ -207,7 +207,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
-  int n_in = 0, n_out = 0;
+  int n_in = 0;
+  int n_out = 0;
   int c;
 
   memset(cfg, 0, sizeof *cfg);

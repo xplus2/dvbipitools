@@ -19,6 +19,6 @@ void mcsend_table_free(mcsend_table_t *t);
 void mcsend_ensure(mcsend_table_t *t, channel_t *c, unsigned ff_port);
 
 /* lock-free, any thread; NULL if mcsend_ensure hasn't run for c yet */
-mcast_t *mcsend_get(mcsend_table_t *t, channel_t *c);
+mcast_t *mcsend_get(mcsend_table_t *t, const channel_t *c);
 
 #endif

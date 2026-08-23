@@ -45,7 +45,9 @@ static const psi_es_t *find_first_ca_es(const psi_es_t *es, int count) {
 
 remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const psi_t *psi, const out_program_pids_t *pids, int standalone) {
   remux_t *r = calloc(1, sizeof *r);
-  int n, count, dropped;
+  int n;
+  int count;
+  int dropped;
   const psi_es_t *in_es;
 
   if (!r)
@@ -65,7 +67,10 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
   {
     /* exclusive with own CAS/BISS: both would want OUT_PID_CAT */
     int own_cas = cfg->cas_algo != CAS_ALGO_NONE || cfg->biss1_enabled || cfg->biss2_enabled || cfg->biss2_ca_enabled;
-    unsigned ecm_pid = 0, ecm_sysid = 0, emm_pid = 0, emm_sysid = 0;
+    unsigned ecm_pid = 0;
+    unsigned ecm_sysid = 0;
+    unsigned emm_pid = 0;
+    unsigned emm_sysid = 0;
     if (!own_cas && !(input->strip_mask & TVSTRIP_ECM)) {
       if (psi_pmt_ca_pid(psi)) {
         ecm_pid = psi_pmt_ca_pid(psi);
@@ -97,7 +102,11 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
     if (!r->send_ait)
       log_line("--hbbtv: AIT build failed (url too long?), not sending it");
   }
-  r->last_pat = r->last_sdt = r->last_nit = r->last_ait = r->last_cat = -1.0;
+  r->last_pat = -1.0;
+  r->last_sdt = -1.0;
+  r->last_nit = -1.0;
+  r->last_ait = -1.0;
+  r->last_cat = -1.0;
   return r;
 }
 
@@ -133,7 +142,7 @@ size_t remux_source_emm_descriptor(const remux_t *r, unsigned char *out, size_t 
 
 void remux_set_cas(remux_t *r, cas_t *cas) { r->cas = cas; }
 
-int remux_get_sdt_info(remux_t *r, psi_sdt_entry_t *out) {
+int remux_get_sdt_info(const remux_t *r, psi_sdt_entry_t *out) {
   if (!r->send_sdt)
     return -1;
   out->service_id = r->input.sid;

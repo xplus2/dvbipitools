@@ -381,9 +381,11 @@ START_TEST(emmg_server_max_conns_override_caps_below_default) {
   emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
   unsigned port;
-  int fd[2], extra;
+  int fd[2];
+  int extra;
   int i;
-  unsigned char msg[512], payload[512];
+  unsigned char msg[512];
+  unsigned char payload[512];
   simulcrypt_hdr_t hdr;
   size_t n;
 

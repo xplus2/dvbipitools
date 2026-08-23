@@ -57,7 +57,8 @@ static int compute_tag(const ecm_profile_t *p, const unsigned char mac_key[CRYPT
   unsigned char buf[ECM_PROFILE_WIRE_MAX + 8];
   if (data_len + assoc_len > sizeof buf)
     return -1;
-  memcpy(buf, data, data_len);
+  if (data_len)
+    memcpy(buf, data, data_len);
   memcpy(buf + data_len, assoc, assoc_len);
   if (p->integrity.type == ECM_INTEGRITY_CRC32) {
     uint32_t crc = crypto_crc32(p->integrity.crc32_variant == ECM_CRC32_CASTAGNOLI, buf, data_len + assoc_len);
@@ -100,13 +101,22 @@ static void extract_cw_group_combo(const ecm_token_list_t *cwg, const unsigned c
 int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned char sk[CRYPTO_KEY_LEN], const unsigned char *wire, size_t wire_len, unsigned cp_number_outer,
                            unsigned ecm_id_fallback, ecm_cw_combo_t combos[ECM_PROFILE_CW_MAX], int *combo_count) {
   ecm_layout_t lay;
-  unsigned char full_enc_key[CRYPTO_KEY_LEN], mac_key[CRYPTO_KEY_LEN], enc_key[CRYPTO_KEY_LEN];
+  unsigned char full_enc_key[CRYPTO_KEY_LEN];
+  unsigned char mac_key[CRYPTO_KEY_LEN];
+  unsigned char enc_key[CRYPTO_KEY_LEN];
   unsigned char iv[16];
   unsigned char plaintext[ECM_PROFILE_WIRE_MAX];
   unsigned char assoc[4];
-  const unsigned char *iv_ptr, *ct_ptr, *gcm_tag_ptr, *itag_ptr;
-  int is_gcm, is_cbc;
-  size_t klen, block, assoc_len = 0, off;
+  const unsigned char *iv_ptr;
+  const unsigned char *ct_ptr;
+  const unsigned char *gcm_tag_ptr;
+  const unsigned char *itag_ptr;
+  int is_gcm;
+  int is_cbc;
+  size_t klen;
+  size_t block;
+  size_t assoc_len = 0;
+  size_t off;
   if (ecm_profile_layout(p, cw_len, &lay) != 0 || lay.wire_len != wire_len || lay.plaintext_len > sizeof plaintext)
     return -1;
   if (locate_wire_components(p, &lay, wire, wire_len, &iv_ptr, &ct_ptr, &gcm_tag_ptr, &itag_ptr) != 0)
@@ -175,7 +185,8 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
 
   if (p->integrity.type != ECM_INTEGRITY_NONE && p->integrity.order == ECM_INTEGRITY_BEFORE_ENCRYPT) {
     unsigned char tag[CRYPTO_HMAC_SHA256_LEN];
-    size_t tag_len, data_len = lay.plaintext_len - integrity_tag_wire_len(p);
+    size_t tag_len;
+    size_t data_len = lay.plaintext_len - integrity_tag_wire_len(p);
     if (compute_tag(p, mac_key, plaintext, data_len, assoc, assoc_len, tag, &tag_len) != 0)
       return -1;
     if (tag_len != integrity_tag_wire_len(p) || memcmp(tag, plaintext + data_len, tag_len) != 0)

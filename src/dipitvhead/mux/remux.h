@@ -66,7 +66,7 @@ void remux_set_cas(remux_t *r, struct cas *cas);
 void remux_feed(remux_t *r, double now_s, const unsigned char *pkt188, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm);
 
 /* non-standalone only. 0: filled *out. nonzero: nothing to send */
-int remux_get_sdt_info(remux_t *r, psi_sdt_entry_t *out);
+int remux_get_sdt_info(const remux_t *r, psi_sdt_entry_t *out);
 
 /* EIT: pid 0x0012, never mpts-owned. standalone: verbatim forward. non-standalone: drain
    reassembled per-service_id section queue. max_packets: small (1-2)/tick, spreads large

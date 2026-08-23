@@ -69,7 +69,8 @@ static int ts_pcr_plausible(uint64_t last_pcr27, uint64_t new_pcr27, double wall
 
 static void track_pcr(remux_t *r, double now_s, const unsigned char pkt188[188], ts_metrics_t *tsm) {
   unsigned afc = (pkt188[3] >> 4) & 0x3;
-  uint64_t base, pcr27;
+  uint64_t base;
+  uint64_t pcr27;
   unsigned ext;
 
   if (afc != 0x2 && afc != 0x3)

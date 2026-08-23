@@ -62,7 +62,6 @@ int iso8601_to_xmltv_time(const char *in, char *out, size_t outcap) {
   if (f.offset_kind == ISO8601_OFF_Z) {
     memcpy(buf + n, " +0000", 6);
     n += 6;
-    buf[n] = '\0';
   } else if (f.offset_kind == ISO8601_OFF_NUMERIC) {
     int abs_min = f.off_min < 0 ? -f.off_min : f.off_min;
     buf[n++] = ' ';
@@ -70,6 +69,7 @@ int iso8601_to_xmltv_time(const char *in, char *out, size_t outcap) {
     n += uint_to_str_pad(buf + n, (unsigned)(abs_min / 60), 2);
     n += uint_to_str_pad(buf + n, (unsigned)(abs_min % 60), 2);
   }
+  buf[n] = '\0';
   bufcpy(out, outcap, buf);
   return 0;
 }

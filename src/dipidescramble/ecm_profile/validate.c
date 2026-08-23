@@ -45,7 +45,8 @@ static void build_default_wire_order(const ecm_profile_t *p, ecm_token_list_t *l
 }
 
 static int validate_cw_group(const ecm_token_list_t *cwg) {
-  int has_cw = 0, has_cpn = 0;
+  int has_cw = 0;
+  int has_cpn = 0;
   for (int i = 0; i < cwg->count; i++) {
     if (cwg->tok[i].kind == ECM_TOK_CW) {
       if (has_cw) {
@@ -72,7 +73,9 @@ static int validate_cw_group(const ecm_token_list_t *cwg) {
 }
 
 int ecm_profile_validate(ecm_profile_t *p) {
-  int is_ecb = cipher_is_ecb(p->cipher), is_cbc = cipher_is_cbc(p->cipher), is_gcm = cipher_is_gcm(p->cipher);
+  int is_ecb = cipher_is_ecb(p->cipher);
+  int is_cbc = cipher_is_cbc(p->cipher);
+  int is_gcm = cipher_is_gcm(p->cipher);
   int mte = p->integrity.order == ECM_INTEGRITY_BEFORE_ENCRYPT && p->integrity.type != ECM_INTEGRITY_NONE;
 
   if (is_ecb && p->iv_source != ECM_IV_NONE) {
@@ -132,8 +135,11 @@ int ecm_profile_validate(ecm_profile_t *p) {
 
   {
     const ecm_token_list_t *fo = &p->format.field_order;
-    int ecm_id_n = count_kind(fo, ECM_TOK_ECM_ID), cpn_n = count_kind(fo, ECM_TOK_CP_NUMBER);
-    int cw_n = count_kind(fo, ECM_TOK_CW), cwg_n = count_kind(fo, ECM_TOK_CW_GROUP), itag_n = count_kind(fo, ECM_TOK_INTEGRITY_TAG);
+    int ecm_id_n = count_kind(fo, ECM_TOK_ECM_ID);
+    int cpn_n = count_kind(fo, ECM_TOK_CP_NUMBER);
+    int cw_n = count_kind(fo, ECM_TOK_CW);
+    int cwg_n = count_kind(fo, ECM_TOK_CW_GROUP);
+    int itag_n = count_kind(fo, ECM_TOK_INTEGRITY_TAG);
     if (ecm_id_n != (p->format.include_ecm_id ? 1 : 0)) {
       log_line(TOOL_NAME ": --ecm-profile: field_order must contain ecm_id exactly once iff include_ecm_id=1"); return -1;
     }
@@ -173,8 +179,10 @@ int ecm_profile_validate(ecm_profile_t *p) {
     const ecm_token_list_t *wo = &p->format.wire_order;
     int has_iv = is_gcm || (is_cbc && p->iv_source == ECM_IV_RANDOM);
     int has_itag = p->integrity.type != ECM_INTEGRITY_NONE && p->integrity.order == ECM_INTEGRITY_AFTER_ENCRYPT;
-    int iv_n = count_kind(wo, ECM_TOK_IV), ct_n = count_kind(wo, ECM_TOK_CIPHERTEXT);
-    int gcm_n = count_kind(wo, ECM_TOK_GCM_TAG), itag_n = count_kind(wo, ECM_TOK_INTEGRITY_TAG);
+    int iv_n = count_kind(wo, ECM_TOK_IV);
+    int ct_n = count_kind(wo, ECM_TOK_CIPHERTEXT);
+    int gcm_n = count_kind(wo, ECM_TOK_GCM_TAG);
+    int itag_n = count_kind(wo, ECM_TOK_INTEGRITY_TAG);
 
     if (iv_n != (has_iv ? 1 : 0)) { log_line(TOOL_NAME ": --ecm-profile: wire_order: iv presence inconsistent with cipher/iv_source"); return -1; }
     if (ct_n != 1) { log_line(TOOL_NAME ": --ecm-profile: wire_order must contain ciphertext exactly once"); return -1; }

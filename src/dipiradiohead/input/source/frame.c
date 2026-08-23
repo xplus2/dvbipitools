@@ -15,7 +15,8 @@ unsigned long long source_bytes_total(const source_t *s) { return s->bytes_total
 static int refill(source_t *s, net_err_reason_t *reason_out) {
   unsigned char tmp[4096];
   ssize_t n = http_read(s->http, tmp, sizeof tmp, reason_out);
-  size_t clean_cap, produced;
+  size_t clean_cap;
+  size_t produced;
 
   if (n < 0)
     return -1;
@@ -56,7 +57,7 @@ static int try_consume_tag(source_t *s) {
 }
 
 /* confirms a sync word at buf+frame_len too, since an 11/12-bit sync can appear by chance in compressed audio */
-static int next_sync_ok(source_t *s, size_t frame_len) {
+static int next_sync_ok(const source_t *s, size_t frame_len) {
   const unsigned char *p = s->buf + frame_len;
   size_t avail = s->buf_len - frame_len;
 
@@ -180,7 +181,8 @@ int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
       continue;
 
     if (!s->codec_known) {
-      int ret, step = ensure_codec_known(s, reason_out, &ret);
+      int ret;
+      int step = ensure_codec_known(s, reason_out, &ret);
       if (step < 0)
         return ret;
       if (step == 0)
@@ -188,9 +190,13 @@ int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
     }
 
     {
-      int r = 0, ret, step;
+      int r = 0;
+      int ret;
+      int step;
       size_t frame_len = 0;
-      unsigned sample_rate = 0, samples = 0, stream_type = 0;
+      unsigned sample_rate = 0;
+      unsigned samples = 0;
+      unsigned stream_type = 0;
 
       if (s->codec == SRC_MPEG_AUDIO) {
         mpegaudio_info_t info;

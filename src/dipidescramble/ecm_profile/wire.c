@@ -17,8 +17,10 @@ static size_t cw_group_unit_len(const ecm_token_list_t *cwg, int cw_len) {
 }
 
 int ecm_profile_layout(const ecm_profile_t *p, int cw_len, ecm_layout_t *out) {
-  size_t plaintext_len = 0, block = (size_t)cipher_block_size(p->cipher);
-  int is_gcm = cipher_is_gcm(p->cipher), is_cbc = cipher_is_cbc(p->cipher);
+  size_t plaintext_len = 0;
+  size_t block = (size_t)cipher_block_size(p->cipher);
+  int is_gcm = cipher_is_gcm(p->cipher);
+  int is_cbc = cipher_is_cbc(p->cipher);
   size_t itag_len = integrity_tag_wire_len(p);
   const ecm_token_list_t *fo = &p->format.field_order;
   memset(out, 0, sizeof *out);

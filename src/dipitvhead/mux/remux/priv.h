@@ -15,7 +15,8 @@
 #define EIT_QUEUE_CAP 16 /* distinct (table_id, section_number) sections held at once */
 
 typedef struct {
-  unsigned char table_id, section_number;
+  unsigned char table_id;
+  unsigned char section_number;
   unsigned char data[4096];
   size_t len;
 } eit_section_t;
@@ -32,8 +33,12 @@ struct remux {
   unsigned pcr_pid_out;
   cas_t *cas;
 
-  int send_sdt, send_nit, send_ait;
-  char service_name[256], provider_name[PSI_NAME], network_name[256];
+  int send_sdt;
+  int send_nit;
+  int send_ait;
+  char service_name[256];
+  char provider_name[PSI_NAME];
+  char network_name[256];
   unsigned char ait_pmt_entry[16];
   size_t ait_pmt_entry_len;
   unsigned char ait_section[300];
@@ -43,12 +48,23 @@ struct remux {
   size_t last_pmt_len;
   int have_last_pmt;
 
-  unsigned char cc_pat, cc_pmt, cc_sdt, cc_nit, cc_eit, cc_ait, cc_cat;
-  unsigned char cc_ecm[ARGS_MAX_CAS_VENDORS], cc_emm[ARGS_MAX_CAS_VENDORS];
+  unsigned char cc_pat;
+  unsigned char cc_pmt;
+  unsigned char cc_sdt;
+  unsigned char cc_nit;
+  unsigned char cc_eit;
+  unsigned char cc_ait;
+  unsigned char cc_cat;
+  unsigned char cc_ecm[ARGS_MAX_CAS_VENDORS];
+  unsigned char cc_emm[ARGS_MAX_CAS_VENDORS];
   unsigned char cc_es[OUT_PROGRAM_ES_CAP];
   int last_es_idx; /* MRU 1-entry cache: consecutive packets usually share a pid */
 
-  double last_pat, last_sdt, last_nit, last_ait, last_cat;
+  double last_pat;
+  double last_sdt;
+  double last_nit;
+  double last_ait;
+  double last_cat;
 
   /* per-pid TS-integrity, source-side: resets on reconnect, unlike caller-owned cumulative ts_metrics_t */
   unsigned char cc_state[8192]; /* bit 0x10=seen, low nibble=last continuity_counter */

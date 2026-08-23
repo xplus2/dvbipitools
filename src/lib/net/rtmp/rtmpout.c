@@ -25,23 +25,30 @@ typedef enum { RTMPOUT_DOWN, RTMPOUT_TCP_CONNECTING, RTMPOUT_TLS_HANDSHAKING, RT
 struct rtmpout {
   char host[256];
   unsigned port;
-  char app[128], stream_key[256], tcurl[512];
-  char user[128], pass[128];
-  int use_tls, insecure;
+  char app[128];
+  char stream_key[256];
+  char tcurl[512];
+  char user[128];
+  char pass[128];
+  int use_tls;
+  int insecure;
 
   rtmpout_phase_t phase;
   int fd;
   netconnect_pending_t *connect_pending;
   tls_t *tls;
   rtmp_t *rtmp;
-  int ready, failed;
+  int ready;
+  int failed;
   double next_retry;
 
   int need_keyframe;
   unsigned char meta[512];
   size_t meta_len;
-  unsigned char vseq[RTMPOUT_SEQHDR_MAX], aseq[RTMPOUT_SEQHDR_MAX];
-  size_t vseq_len, aseq_len;
+  unsigned char vseq[RTMPOUT_SEQHDR_MAX];
+  unsigned char aseq[RTMPOUT_SEQHDR_MAX];
+  size_t vseq_len;
+  size_t aseq_len;
 };
 
 static void rtmp_transport_write(void *ctx, const unsigned char *data, size_t len) {
@@ -283,8 +290,12 @@ int rtmpout_write(rtmpout_t *o, flv_tag_type_t type, uint32_t timestamp_ms, cons
 /* rtmp(s)://[user[:pass]@]host[:port]/app/key, key = final path segment */
 static int parse_url(const char *url, rtmpout_t *o) {
   const char *p = url;
-  const char *host_end, *at, *colon, *last_slash;
-  size_t hostlen, applen;
+  const char *host_end;
+  const char *at;
+  const char *colon;
+  const char *last_slash;
+  size_t hostlen;
+  size_t applen;
 
   if (0 == strncmp(p, "rtmps://", 8)) {
     o->use_tls = 1;
@@ -302,7 +313,8 @@ static int parse_url(const char *url, rtmpout_t *o) {
   if (!host_end || host_end == p)
     return -1;
 
-  o->user[0] = o->pass[0] = '\0';
+  o->user[0] = '\0';
+  o->pass[0] = '\0';
   at = NULL;
   for (colon = p; colon < host_end; colon++) /* last '@': allows literal '@' in password */
     if (*colon == '@')

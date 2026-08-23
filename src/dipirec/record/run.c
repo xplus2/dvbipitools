@@ -109,7 +109,13 @@ static int stream_cb(void *v, const unsigned char *pkt) {
   stream_ctx_t *c = v;
 
   if (c->pace_pcr) {
-    const psi_t *p = c->f ? ts_filter_psi(c->f) : c->m ? mkv_psi(c->m) : flv_psi(c->flv);
+    const psi_t *p;
+    if (c->f)
+      p = ts_filter_psi(c->f);
+    else if (c->m)
+      p = mkv_psi(c->m);
+    else
+      p = flv_psi(c->flv);
     pace_feed_pcr_pkt(c->pace, pkt, psi_pcr_pid(p));
   }
   if (c->f) {
@@ -164,7 +170,8 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
   }
   if (is_mkv) {
     mkv_opts_t opts;
-    char app_name[64], srcuri[1024];
+    char app_name[64];
+    char srcuri[1024];
     snprintf(app_name, sizeof app_name, "%s %s", TOOL_NAME, TOOL_VERSION);
     source_describe(&cfg->source, srcuri, sizeof srcuri);
     memset(&opts, 0, sizeof opts);
@@ -218,7 +225,13 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
       break;
     }
     if (cfg->verbose && mono_seconds() - last_stat >= 1.0) {
-      const psi_t *p = ctx.f ? ts_filter_psi(ctx.f) : ctx.m ? mkv_psi(ctx.m) : flv_psi(ctx.flv);
+      const psi_t *p;
+      if (ctx.f)
+        p = ts_filter_psi(ctx.f);
+      else if (ctx.m)
+        p = mkv_psi(ctx.m);
+      else
+        p = flv_psi(ctx.flv);
       stats_show(cfg, mono_seconds() - start, *bytes, p);
       last_stat = mono_seconds();
     }

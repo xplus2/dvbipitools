@@ -19,6 +19,7 @@ skip_unless_bonding_testable() {
         echo "SKIP: no CAP_NET_ADMIN / tc unavailable, cannot inject network impairment"
         exit 0
     fi
+    return 0
 }
 
 make_fixture() {
@@ -31,6 +32,7 @@ make_fixture() {
         dd if=/dev/urandom bs=187 count=1 2>/dev/null >> "$path"
         i=$((i + 1))
     done
+    return 0
 }
 
 net_setup() {
@@ -40,15 +42,18 @@ net_setup() {
     "$TC" qdisc add dev lo parent 1:1 handle 10: netem "$@"
     "$TC" filter add dev lo parent 1: protocol ip u32 match ip dport "$port" 0xffff flowid 1:1
     "$TC" filter add dev lo parent 1: protocol ip u32 match ip sport "$port" 0xffff flowid 1:1
+    return 0
 }
 
 net_change() {
     shift
     "$TC" qdisc change dev lo parent 1:1 handle 10: netem "$@"
+    return 0
 }
 
 net_teardown() {
     "$TC" qdisc del dev lo root >/dev/null 2>&1
+    return 0
 }
 
 #EOF

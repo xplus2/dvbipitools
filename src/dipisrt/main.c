@@ -26,7 +26,8 @@ static const char *group_mode_str(srtgroup_mode_t g) {
 
 int main(int argc, char **argv) {
   config_t cfg;
-  char in[1024], out[1024];
+  char in[1024];
+  char out[1024];
   args_status_t st;
   metrics_exporter_t mx;
   int rc;

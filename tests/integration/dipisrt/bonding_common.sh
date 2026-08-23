@@ -33,6 +33,7 @@ skip_unless_bonding_testable() {
         echo "SKIP: this libsrt build has no bonding support (ENABLE_BONDING=OFF)"
         exit 0
     fi
+    return 0
 }
 
 make_fixture() {
@@ -45,6 +46,7 @@ make_fixture() {
         dd if=/dev/urandom bs=187 count=1 2>/dev/null >> "$path"
         i=$((i + 1))
     done
+    return 0
 }
 
 # net_setup <portA> <netem-args...>: portA gets the netem discipline, portB (and everything
@@ -56,11 +58,13 @@ net_setup() {
     "$TC" qdisc add dev lo parent 1:1 handle 10: netem "$@"
     "$TC" filter add dev lo parent 1: protocol ip u32 match ip dport "$port" 0xffff flowid 1:1
     "$TC" filter add dev lo parent 1: protocol ip u32 match ip sport "$port" 0xffff flowid 1:1
+    return 0
 }
 
 net_change() {
     shift
     "$TC" qdisc change dev lo parent 1:1 handle 10: netem "$@"
+    return 0
 }
 
 # net_setup2 <portA> <netem-args-A> <portB> <netem-args-B>: both bonded links impaired
@@ -77,19 +81,24 @@ net_setup2() {
     "$TC" filter add dev lo parent 1: protocol ip u32 match ip sport "$portA" 0xffff flowid 1:1
     "$TC" filter add dev lo parent 1: protocol ip u32 match ip dport "$portB" 0xffff flowid 1:2
     "$TC" filter add dev lo parent 1: protocol ip u32 match ip sport "$portB" 0xffff flowid 1:2
+    return 0
 }
 
 # net_change2 A|B <netem-args>: retune one of the two links set up by net_setup2
 net_change2() {
-    if [ "$1" = A ]; then
-        "$TC" qdisc change dev lo parent 1:1 handle 10: netem $2
+    which=$1
+    args=$2
+    if [ "$which" = A ]; then
+        "$TC" qdisc change dev lo parent 1:1 handle 10: netem $args
     else
-        "$TC" qdisc change dev lo parent 1:2 handle 20: netem $2
+        "$TC" qdisc change dev lo parent 1:2 handle 20: netem $args
     fi
+    return 0
 }
 
 net_teardown() {
     "$TC" qdisc del dev lo root >/dev/null 2>&1
+    return 0
 }
 
 #EOF

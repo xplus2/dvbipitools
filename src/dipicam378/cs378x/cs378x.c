@@ -96,7 +96,7 @@ const char *cs378x_auth_reason_name(cam_auth_reason_t r) {
   }
 }
 
-void cs378x_server_get_metrics(cs378x_server_t *s, cs378x_metrics_t *out) {
+void cs378x_server_get_metrics(const cs378x_server_t *s, cs378x_metrics_t *out) {
   memset(out, 0, sizeof *out);
   for (int i = 0; i < CS378X_MAX_CONNS; i++)
     out->connections_active += (unsigned)atomic_load_explicit(&s->worker_active[i], memory_order_relaxed);

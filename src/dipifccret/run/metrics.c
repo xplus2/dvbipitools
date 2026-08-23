@@ -10,7 +10,8 @@
 
 static void push_metrics(metrics_ctx_t *mc) {
   metrics_writer_t w;
-  size_t cap, active_channels = 0;
+  size_t cap;
+  size_t active_channels = 0;
 
   if (!metrics_exporter_due(mc->mx, mono_seconds()) || metrics_exporter_begin(mc->mx, &w, TOOL_VERSION))
     return;

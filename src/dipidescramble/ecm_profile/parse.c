@@ -40,7 +40,8 @@ static int hex_decode(const char *hex, unsigned char *out, int out_max, int *out
   if (hexlen == 0 || hexlen % 2 != 0 || (int)(hexlen / 2) > out_max)
     return -1;
   for (size_t i = 0; i < hexlen; i += 2) {
-    int hi = hex_nibble(hex[i]), lo = hex_nibble(hex[i + 1]);
+    int hi = hex_nibble(hex[i]);
+    int lo = hex_nibble(hex[i + 1]);
     if (hi < 0 || lo < 0)
       return -1;
     out[i / 2] = (unsigned char)((hi << 4) | lo);
@@ -96,7 +97,7 @@ static int parse_token(const char *name, ecm_token_t *out) {
 
 static int parse_token_list(char *val, ecm_token_list_t *out) {
   char *saveptr = NULL;
-  char *tok = strtok_r(val, "+", &saveptr);
+  const char *tok = strtok_r(val, "+", &saveptr);
   out->count = 0;
   while (tok) {
     if (out->count >= ECM_PROFILE_TOKENS_MAX)
@@ -289,7 +290,8 @@ int ecm_profile_parse(const char *spec, ecm_profile_t *out) {
   pair = strtok_r(buf, ",", &saveptr);
   while (pair) {
     char *eq = strchr(pair, '=');
-    char *key, *val;
+    char *key;
+    char *val;
 
     if (!eq) {
       log_line(TOOL_NAME ": --ecm-profile: malformed field %s (expected key=value)", pair);

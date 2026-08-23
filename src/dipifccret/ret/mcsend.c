@@ -97,7 +97,7 @@ void mcsend_ensure(mcsend_table_t *t, channel_t *c, unsigned ff_port) {
   atomic_store_explicit(&t->entries[h].key, c, memory_order_release);
 }
 
-mcast_t *mcsend_get(mcsend_table_t *t, channel_t *c) {
+mcast_t *mcsend_get(mcsend_table_t *t, const channel_t *c) {
   size_t h = ptr_hash(c) & t->hash_mask;
   size_t start = h;
   unsigned gen = atomic_load_explicit(&c->generation, memory_order_relaxed);

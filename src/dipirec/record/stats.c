@@ -12,7 +12,9 @@
 
 /* clamp: keeps formatted length bounded */
 void fmt_dur(double secs, char *buf, size_t n) {
-  long s, h, m;
+  long s;
+  long h;
+  long m;
   s = (secs > 0.0) ? (long)secs : 0;
   if (s < 0)
     s = 0;
@@ -28,15 +30,19 @@ void fmt_dur(double secs, char *buf, size_t n) {
 
 /* one same-line stats update, tty only */
 void stats_show(const config_t *cfg, double elapsed, unsigned long long bytes, const psi_t *psi) {
-  char line[200], dur[16];
+  char line[200];
+  char dur[16];
   const char *name = "?";
   const char *subs = "-";
-  int atr = 0, len;
+  int atr = 0;
+  int len;
 
   if (!log_stderr_is_tty())
     return;
   if (psi) {
-    int c, tt = 0, sb = 0;
+    int c;
+    int tt = 0;
+    int sb = 0;
     const psi_es_t *es = psi_es(psi, &c);
     if (*psi_service_name(psi))
       name = psi_service_name(psi);
@@ -47,7 +53,14 @@ void stats_show(const config_t *cfg, double elapsed, unsigned long long bytes, c
       if (es[k].cls == PID_SUBTITLE)
         sb = 1;
     }
-    subs = (tt && sb) ? "ttx+sub" : tt ? "txt" : sb ? "sub" : "-";
+    if (tt && sb)
+      subs = "ttx+sub";
+    else if (tt)
+      subs = "txt";
+    else if (sb)
+      subs = "sub";
+    else
+      subs = "-";
   }
   fmt_dur(elapsed, dur, sizeof dur);
   len = snprintf(line, sizeof line, "%s %.1fMB %s a=%d s=%s", dur, (double)bytes / 1048576.0, name, atr, subs);
@@ -67,7 +80,7 @@ void stats_show(const config_t *cfg, double elapsed, unsigned long long bytes, c
 }
 
 /* label o<i>: net/rist sinks only, up/retry concept. label rtmp<i>: rtmp targets */
-void push_metrics(metrics_exporter_t *mx, const config_t *cfg, out_sink_t *sinks, int n_sinks,
+void push_metrics(metrics_exporter_t *mx, const config_t *cfg, const out_sink_t *sinks, int n_sinks,
                    const rtmp_fanout_t *rf, unsigned long long bytes, double start) {
   metrics_writer_t w;
   char label[16];

@@ -27,6 +27,7 @@ static int make_listener(unsigned *port_out) {
   struct sockaddr_in addr;
   socklen_t alen = sizeof addr;
 
+  ck_assert_int_ge(fd, 0);
   memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);

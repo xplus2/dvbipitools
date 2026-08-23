@@ -35,7 +35,7 @@ void ret_send_mc_impl(const channel_t *c, const unsigned char *pkt, size_t len, 
   mcast_t *m;
   if (!ctx->mt)
     return;
-  m = mcsend_get(ctx->mt, (channel_t *)c);
+  m = mcsend_get(ctx->mt, c);
   if (!m)
     return; /* socket not provisioned yet, a NACK can race ahead of capture's first packet */
   mcast_set_tos(m, dscp);
@@ -184,7 +184,12 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
     return;
   }
 
-  c = rc->resolved ? rc->resolved : (req->ignore_media_ssrc ? NULL : channel_find_by_ssrc(rc->ctx->channels, req->media_ssrc));
+  if (rc->resolved)
+    c = rc->resolved;
+  else if (req->ignore_media_ssrc)
+    c = NULL;
+  else
+    c = channel_find_by_ssrc(rc->ctx->channels, req->media_ssrc);
   if (c && rc->ctx->fcc_range_count > 0 && !in_ranges(c->family, c->addr, rc->ctx->fcc_ranges, rc->ctx->fcc_range_count)) {
     send_rams_i(&dst, req->media_ssrc, req->media_ssrc, (uint16_t)BURST_NOT_ENABLED, NULL);
     return;
@@ -263,7 +268,7 @@ static void sdes_cb(const rtcp_sdes_t *sdes, void *user) {
 
 /* fires for a recognized-but-corrupt RAMS-T, RAMS-T itself never gets a normal response */
 static void malformed_cb(unsigned sfmt, uint32_t sender_ssrc, uint32_t media_ssrc, void *user) {
-  listen_req_ctx_t *rc = (listen_req_ctx_t *)user;
+  const listen_req_ctx_t *rc = (const listen_req_ctx_t *)user;
   unicast_dest_t dst;
 
   (void)sender_ssrc;

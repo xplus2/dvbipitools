@@ -37,7 +37,9 @@ struct mcast {
    winner per packet not per destination.
    -1 fail, *ifidx_out from iface (0 if NULL) */
 static int open_bound_recv_socket(int family, const char *group, unsigned port, const char *iface, unsigned *ifidx_out) {
-  int fd, on = 1, off = 0;
+  int fd;
+  int on = 1;
+  int off = 0;
   int rcvbuf = 4 * 1024 * 1024; /* absorb brief stalls, e.g. slow -v terminal */
 
   *ifidx_out = 0;

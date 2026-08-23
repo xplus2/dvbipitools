@@ -52,7 +52,8 @@ size_t bufcpy(char *dst, size_t dstsz, const char *src) {
 
 size_t uint_to_str_pad(char *dst, unsigned val, unsigned min_width) {
   char tmp[10]; /* UINT_MAX (32-bit) is 10 digits */
-  unsigned n = 0, pad;
+  unsigned n = 0;
+  unsigned pad;
   if (val == 0)
     tmp[n++] = '0';
   else

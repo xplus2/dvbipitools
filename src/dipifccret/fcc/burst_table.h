@@ -34,7 +34,8 @@ typedef struct {
 
 /* full stripe rejects, no eviction: no protocol path to evict active repair session */
 typedef struct {
-  size_t base, count;
+  size_t base;
+  size_t count;
   size_t *free_list; /* stack of own global slot indices, O(1) claim/release */
   size_t free_count;
   sockaddr_index_t *index; /* addr->global slot idx, O(1) avg, own clients only */
@@ -92,11 +93,11 @@ int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen
 /* owns_slot: idx still in_use and holds expect_b.
    should_clear: also seqlock-clears slot, returns it to its stripe's free list.
    *did_clear: whether that clear ran. */
-int burst_table_release(burst_table_t *t, size_t idx, burst_t *expect_b, int should_clear, int *did_clear);
+int burst_table_release(burst_table_t *t, size_t idx, const burst_t *expect_b, int should_clear, int *did_clear);
 
 /* pacer folds each tick's bytes_sent delta here, doesn't survive slot reuse otherwise */
 void burst_table_note_bytes_sent(burst_table_t *t, uint64_t bytes);
 
-void burst_table_get_metrics(burst_table_t *t, burst_table_metrics_t *out);
+void burst_table_get_metrics(const burst_table_t *t, burst_table_metrics_t *out);
 
 #endif

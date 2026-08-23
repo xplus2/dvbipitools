@@ -35,7 +35,7 @@ void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const
   }
 }
 
-void rtmp_fanout_close(rtmp_fanout_t *r) {
+void rtmp_fanout_close(const rtmp_fanout_t *r) {
   for (int i = 0; i < r->n; i++)
     rtmpout_close(r->out[i]);
 }

@@ -57,8 +57,10 @@ struct srtout {
 /* RCVSYN/SNDSYN off: connect/rendezvous returns immediately, EASYNCSND means in progress */
 static SRTSOCKET open_single(const srtout_cfg_t *cfg) {
   SRTSOCKET s;
-  struct sockaddr_storage remote, local;
-  int remote_len, local_len;
+  struct sockaddr_storage remote;
+  struct sockaddr_storage local;
+  int remote_len;
+  int local_len;
   int no = 0;
 
   if (srtcommon_resolve(cfg->peers[0].host, cfg->peers[0].port, &remote, &remote_len))
@@ -209,7 +211,7 @@ static long available_ram_bytes(void) {
   return kb ? (long)kb * 1024 : -1;
 }
 
-static int pending_target_chunks(srtout_t *r) {
+static int pending_target_chunks(const srtout_t *r) {
   double bps = r->bitrate_ema_bps > 0 ? r->bitrate_ema_bps : (double)SRTOUT_INITIAL_BITRATE_BPS;
   unsigned latency_ms = r->cfg.opts.latency_ms ? r->cfg.opts.latency_ms : SRTOUT_DEFAULT_LATENCY_MS;
   double floor_bytes = (double)SRTOUT_PENDING_FLOOR_CHUNKS * SRTOUT_PLSIZE;
@@ -421,7 +423,8 @@ static void flush_before_close(srtout_t *r) {
    floor: max(MIN_WAIT_MS, peer latency), capped at DRAIN_MAX_MS */
 static void drain_before_close(SRTSOCKET sock) {
   int waited_ms = 0;
-  size_t blocks, bytes;
+  size_t blocks;
+  size_t bytes;
   int peer_latency = 0;
   int optlen = sizeof peer_latency;
   int floor_ms = SRTOUT_CLOSE_MIN_WAIT_MS;
