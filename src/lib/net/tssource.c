@@ -11,6 +11,7 @@
 
 #include "httpclient/httpclient.h"
 #include "multicast.h"
+#include "rist/ristin.h"
 #include "tssource.h"
 
 /* max plausible RTP/MPEGTS record under a 1500-byte MTU: 12 + 7*188 */
@@ -25,6 +26,7 @@ struct tssrc {
   tssrc_kind_t kind;
   mcast_t *m;
   http_t *h;
+  ristin_t *rist;
   int fd; /* TSSRC_FILE */
   /* TSSRC_STDIN/TSSRC_FILE byte-stream framing */
   deframe_state_t deframe_state;
@@ -70,6 +72,26 @@ tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
       return NULL;
     }
     return s;
+  case TSSRC_RIST: {
+    ristin_cfg_t rc;
+    memset(&rc, 0, sizeof rc);
+    rc.peer_uri = cfg->rist_uri;
+    rc.profile = cfg->rist_profile_main ? RISTIN_PROFILE_MAIN : RISTIN_PROFILE_SIMPLE;
+    rc.secret = cfg->rist_secret;
+    rc.cname = cfg->rist_cname;
+    rc.buffer_ms = cfg->rist_buffer_ms;
+    rc.verbose = cfg->rist_verbose;
+    rc.mx = cfg->rist_mx;
+    rc.tool_version = cfg->rist_tool_version;
+    s->rist = ristin_open(&rc);
+    if (!s->rist) {
+      free(s);
+      if (reason_out)
+        *reason_out = NET_ERR_CONNECT;
+      return NULL;
+    }
+    return s;
+  }
   }
   free(s);
   return NULL;
@@ -249,6 +271,8 @@ ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t 
     return deframe_read(s, STDIN_FILENO, buf, cap, reason_out);
   case TSSRC_FILE:
     return deframe_read(s, s->fd, buf, cap, reason_out);
+  case TSSRC_RIST:
+    return raw_fd_read(ristin_fd(s->rist), buf, cap, reason_out);
   }
   return -1;
 }
@@ -281,6 +305,8 @@ int tssrc_fd(const tssrc_t *s) {
     return STDIN_FILENO;
   case TSSRC_FILE:
     return s->fd;
+  case TSSRC_RIST:
+    return ristin_fd(s->rist);
   }
   return -1;
 }
@@ -292,6 +318,8 @@ void tssrc_close(tssrc_t *s) {
     mcast_close(s->m);
   if (s->h)
     http_close(s->h);
+  if (s->rist)
+    ristin_close(s->rist);
   if (s->kind == TSSRC_FILE)
     close(s->fd);
   free(s);

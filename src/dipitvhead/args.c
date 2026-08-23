@@ -58,6 +58,15 @@ static int source_parse(const char *uri, source_t *s) {
     s->kind = SRC_HTTP;
     return http_url_parse(uri, &s->http);
   }
+  if (strncmp(uri, "rist://", 7) == 0) {
+    if (uri[7] != '@') /* rist:// as input always listens */
+      return -1;
+    if (strlen(uri) >= sizeof s->rist_uri)
+      return -1;
+    s->kind = SRC_RIST;
+    bufcpy(s->rist_uri, sizeof s->rist_uri, uri);
+    return 0;
+  }
   return -1;
 }
 
@@ -77,6 +86,9 @@ void source_describe(const source_t *s, char *buf, size_t n) {
     break;
   case SRC_STDIN:
     snprintf(buf, n, "-");
+    break;
+  case SRC_RIST:
+    snprintf(buf, n, "%s", s->rist_uri);
     break;
   }
 }
@@ -183,7 +195,10 @@ static void print_help(void) {
       "re-package one or more transport streams (already-muxed, not raw ES) as one DVB-IPI\n"
       "multicast. A single -i: normal SPTS. Multiple -i: MPTS, one program per input.\n\n"
       "options:\n"
-      "  -i, --input <uri>          udp://, rtp://, http(s)://, or \"-\" for stdin; repeatable\n"
+      "  -i, --input <uri>          udp://, rtp://, http(s)://, rist://@host:port[?query]\n"
+      "                             (single peer, requires librist; @ marks it listening; no\n"
+      "                             bonding, use dipirist for that), or \"-\" for stdin; repeatable.\n"
+      "                             each RIST input costs an extra thread\n"
       "  -p, --pmt-pid <pid>        for -i right before: select program by PMT PID\n"
       "                             (dec or 0x-hex; default: first live one)\n"
       "      --sid <n>              for -i right before: service_id/program_number\n"
@@ -199,6 +214,8 @@ static void print_help(void) {
       "                             (required with --hbbtv)\n"
       "      --hbbtv-app-id <n>     for -i right before: HbbTV application_id\n"
       "                             (required with --hbbtv)\n"
+      "      --rist-profile-in <p>  for -i right before: simple|main; -i rist:// only\n"
+      "                             (default: simple)\n"
       "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
       "  -O, --out-iface <iface>    outgoing multicast interface\n"
       "  -u, --udp                  plain UDP output (default: RTP-wrapped; -m output only)\n"
@@ -363,6 +380,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"buffer", required_argument, 0, 1033},
       {"daemonize", no_argument, 0, 'd'},
       {"strip", required_argument, 0, 1034},
+      {"rist-profile-in", required_argument, 0, 1036},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_mcast = 0;
@@ -826,6 +844,20 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->rist_buffer_ms = (unsigned)v;
+        break;
+      }
+      case 1036: {
+        static const enum_map_t map[] = {{"simple", 0}, {"main", 1}};
+        int v;
+        if (cfg->n_inputs == 0) {
+          argerr("--rist-profile-in must follow the -i it names");
+          return ARGS_ERR;
+        }
+        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+          argerr("invalid --rist-profile-in: %s (simple|main)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->inputs[cfg->n_inputs - 1].rist_profile_main = v;
         break;
       }
       case 'h':

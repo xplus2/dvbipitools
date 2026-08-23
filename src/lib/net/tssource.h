@@ -10,8 +10,9 @@
 
 #include "httpclient/httpclient.h"
 #include "multicast.h"
+#include "rist/ristin.h"
 
-typedef enum { TSSRC_RTP, TSSRC_UDP, TSSRC_STDIN, TSSRC_HTTP, TSSRC_FILE } tssrc_kind_t;
+typedef enum { TSSRC_RTP, TSSRC_UDP, TSSRC_STDIN, TSSRC_HTTP, TSSRC_FILE, TSSRC_RIST } tssrc_kind_t;
 
 typedef struct {
   tssrc_kind_t kind;
@@ -27,6 +28,15 @@ typedef struct {
   const char *file_path;
   /* TSSRC_HTTP. NULL = "dvbipitools" */
   const char *user_agent;
+  /* TSSRC_RIST */
+  const char *rist_uri;    /* rist://@host:port[?query], single peer, @ required */
+  int rist_profile_main;   /* 0 = simple (default), 1 = main */
+  const char *rist_secret; /* profile main only */
+  const char *rist_cname;
+  unsigned rist_buffer_ms;
+  int rist_verbose;
+  metrics_exporter_t *rist_mx;  /* NULL = no stats push */
+  const char *rist_tool_version; /* required if rist_mx set */
 } tssrc_cfg_t;
 
 typedef struct tssrc tssrc_t;
@@ -64,9 +74,9 @@ void tssrc_close(tssrc_t *s);
 typedef enum { TSSRC_OPEN_PENDING, TSSRC_OPEN_DONE, TSSRC_OPEN_ERROR } tssrc_open_state_t;
 typedef struct tssrc_open tssrc_open_t;
 
-/* async tssrc_open(): never blocks caller's thread. TSSRC_RTP/UDP/STDIN/FILE complete
-   on first step() regardless (cheap, local-only work: joining mcasts, stdin, open()).
-   only TSSRC_HTTP genuinely spans multiple steps (connect+TLS handshake+header read).
+/* async tssrc_open(): never block caller's thread. TSSRC_RTP/UDP/STDIN/FILE complete on first step():
+   cheap, local-only: joining mcasts, stdin, open().
+   only TSSRC_HTTP spans multiple steps (connect+TLS handshake+header read).
    No internal timeout, caller decides when to give up. NULL only on immediate setup failure */
 tssrc_open_t *tssrc_open_async_start(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out);
 

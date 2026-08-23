@@ -121,6 +121,52 @@ START_TEST(metrics_id_alone_is_accepted) {
 }
 END_TEST
 
+START_TEST(rist_in_uri_with_at_is_accepted) {
+  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.source.kind, URI_RIST);
+  ck_assert_str_eq(cfg.source.rist_uri, "rist://@127.0.0.1:6000");
+}
+END_TEST
+
+START_TEST(rist_in_uri_without_at_is_rejected) {
+  char *argv[] = {"dipirec", "-i", "rist://127.0.0.1:6000", "-o", "-", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(profile_in_main_is_accepted) {
+  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", "--profile-in", "main", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.rist_profile_in, RIST_PROF_MAIN);
+}
+END_TEST
+
+START_TEST(unknown_profile_in_is_rejected) {
+  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", "--profile-in", "advanced", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(profile_in_without_rist_in_is_harmless) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "-", "--profile-in", "main", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+}
+END_TEST
+
+START_TEST(ret_is_rejected_with_rist_input) {
+  /* --ret needs RTP sequence numbers; a RIST source has its own ARQ instead */
+  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", "--ret", "1.2.3.4:6001", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipirec_args");
   TCase *tc = tcase_create("core");
@@ -138,6 +184,12 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, out_iface_has_no_effect_on_rist_but_is_not_an_error);
   tcase_add_test(tc, metrics_options_require_metrics_id);
   tcase_add_test(tc, metrics_id_alone_is_accepted);
+  tcase_add_test(tc, rist_in_uri_with_at_is_accepted);
+  tcase_add_test(tc, rist_in_uri_without_at_is_rejected);
+  tcase_add_test(tc, profile_in_main_is_accepted);
+  tcase_add_test(tc, unknown_profile_in_is_rejected);
+  tcase_add_test(tc, profile_in_without_rist_in_is_harmless);
+  tcase_add_test(tc, ret_is_rejected_with_rist_input);
   suite_add_tcase(s, tc);
   return s;
 }

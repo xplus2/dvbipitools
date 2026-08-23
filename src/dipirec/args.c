@@ -59,6 +59,15 @@ static int parse_uri(const char *uri, source_t *s) {
     s->kind = URI_HTTP;
     return http_url_parse(uri, &s->http);
   }
+  if (strncmp(uri, "rist://", 7) == 0) {
+    if (uri[7] != '@') /* rist:// as input always listens */
+      return -1;
+    if (strlen(uri) >= sizeof s->rist_uri)
+      return -1;
+    s->kind = URI_RIST;
+    bufcpy(s->rist_uri, sizeof s->rist_uri, uri);
+    return 0;
+  }
   if (strlen(uri) >= sizeof s->file_path)
     return -1;
   s->kind = URI_FILE;
@@ -82,6 +91,9 @@ void source_describe(const source_t *s, char *buf, size_t n) {
     break;
   case URI_FILE:
     snprintf(buf, n, "%s", s->file_path[0] ? s->file_path : "- (stdin)");
+    break;
+  case URI_RIST:
+    snprintf(buf, n, "%s", s->rist_uri);
     break;
   }
 }
@@ -336,6 +348,8 @@ static void print_help(void) {
       "  https://<host>:<port>/<path>   same, TLS (--insecure skips verification)\n"
       "  -                        stdin, TS or RTP-wrapped TS (auto-detected)\n"
       "  <path>                   a file, TS or RTP-wrapped TS (auto-detected)\n"
+      "  rist://@<host>:<port>[?query]  RIST receiver, single peer (@ required,\n"
+      "                           requires librist; no bonding, use dipirist for that)\n"
       "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8700\n\n"
       "outputs (-o, repeatable for multiple destinations at once), beyond a\n"
       "file path or \"-\" for stdout:\n"
@@ -366,6 +380,7 @@ static void print_help(void) {
       "      --secret <psk>       -o rist:// pre-shared key; requires --profile main\n"
       "      --cname <name>       -o rist:// cname (default: library default)\n"
       "      --buffer <ms>        -o rist:// recovery buffer (default: library default)\n"
+      "      --profile-in <p>     simple|main; -i rist:// only (default: simple)\n"
       "      --insecure           skip TLS verification for -o rtmps://\n"
       "  -v, --verbose            periodic recording stats on stderr\n"
       "      --sub-lead <ms>      shift subtitles earlier (default 1000)\n"
@@ -429,6 +444,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics", required_argument, 0, 1016},
       {"metrics-id", required_argument, 0, 1017},
       {"metrics-interval", required_argument, 0, 1018},
+      {"profile-in", required_argument, 0, 1019},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   const char *fmt_arg = NULL;
@@ -436,6 +452,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *time_arg = NULL;
   const char *strip_arg = NULL;
   const char *profile_arg = NULL;
+  const char *profile_in_arg = NULL;
   int have_in = 0;
   int have_secret = 0;
   int have_cname = 0;
@@ -624,6 +641,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->metrics_interval_s = (unsigned)v;
         break;
       }
+      case 1019:
+        profile_in_arg = optarg;
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -752,5 +772,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--metrics/--metrics-interval require --metrics-id");
     return ARGS_ERR;
   }
+  if (profile_in_arg) {
+    static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
+    int v;
+    if (map_lookup(map, sizeof map / sizeof map[0], profile_in_arg, &v)) {
+      argerr("invalid --profile-in: %s (simple|main)", profile_in_arg);
+      return ARGS_ERR;
+    }
+    cfg->rist_profile_in = (rist_profile_sel_t)v;
+  }
+  if (profile_in_arg && cfg->source.kind != URI_RIST)
+    log_line(TOOL_NAME ": --profile-in has no effect, no -i rist:// source");
   return ARGS_OK;
 }

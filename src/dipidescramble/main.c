@@ -45,6 +45,8 @@ static tssrc_kind_t tssrc_kind_of(input_kind_t k) {
     return TSSRC_UDP;
   case INPUT_STDIN:
     return TSSRC_STDIN;
+  case INPUT_RIST:
+    return TSSRC_RIST;
   }
   return TSSRC_STDIN;
 }
@@ -227,11 +229,16 @@ int main(int argc, char **argv) {
 
   memset(&tc, 0, sizeof tc);
   tc.kind = tssrc_kind_of(cfg.input.kind);
-  tc.family = cfg.input.family;
-  tc.group = cfg.input.group;
-  tc.port = cfg.input.port;
-  tc.iface = cfg.iface_in;
   tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
+  if (cfg.input.kind == INPUT_RIST) {
+    tc.rist_uri = cfg.input.rist_uri;
+    tc.rist_profile_main = cfg.rist_profile_main;
+  } else {
+    tc.family = cfg.input.family;
+    tc.group = cfg.input.group;
+    tc.port = cfg.input.port;
+    tc.iface = cfg.iface_in;
+  }
 
   src = tssrc_open(&tc, NULL);
   if (!src) {

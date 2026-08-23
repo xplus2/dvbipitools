@@ -12,7 +12,8 @@ typedef enum {
   URI_RTP,  /* multicast, RTP wrapped */
   URI_UDP,  /* multicast, plain ts */
   URI_HTTP, /* http:// or https://, http_url_t.tls tells which */
-  URI_FILE  /* "-" = stdin, RTP-vs-raw auto-detected */
+  URI_FILE, /* "-" = stdin, RTP-vs-raw auto-detected */
+  URI_RIST  /* single peer, @ required (listen) */
 } uri_kind_t;
 
 typedef struct {
@@ -26,6 +27,8 @@ typedef struct {
   http_url_t http;
   /* URI_FILE, "" means stdin */
   char file_path[512];
+  /* URI_RIST, stored raw for librist's own parser */
+  char rist_uri[256];
 } source_t;
 
 typedef enum { FMT_RAW, FMT_TS, FMT_MKV, FMT_MKA } out_fmt_t;
@@ -85,6 +88,7 @@ typedef struct {
   char rist_secret[128];  /* --secret, -o rist:// + --profile main only, "" = none */
   char rist_cname[128];   /* --cname, -o rist:// only, "" = library default */
   unsigned rist_buffer_ms; /* --buffer, -o rist:// only, 0 = library default */
+  rist_profile_sel_t rist_profile_in; /* --profile-in, -i rist:// only */
   int insecure_tls;       /* --insecure, -o rtmps:// or -i https:// */
   const char *metrics_sock;    /* --metrics. NULL = default socket path */
   const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */

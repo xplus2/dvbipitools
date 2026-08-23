@@ -23,6 +23,8 @@ static tssrc_kind_t tssrc_kind_of(src_kind_t k) {
     return TSSRC_HTTP;
   case SRC_STDIN:
     return TSSRC_STDIN;
+  case SRC_RIST:
+    return TSSRC_RIST;
   }
   return TSSRC_STDIN;
 }
@@ -42,6 +44,8 @@ tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_er
   tc.http = input->input.http;
   tc.insecure_tls = cfg->insecure_tls;
   tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
+  tc.rist_uri = input->input.rist_uri;
+  tc.rist_profile_main = input->rist_profile_main;
 
   s->t = tssrc_open(&tc, reason_out);
   if (!s->t) {
@@ -81,6 +85,8 @@ tvsrc_open_t *tvsrc_open_async_start(const config_t *cfg, const dipitvhead_input
   tc.http = input->input.http;
   tc.insecure_tls = cfg->insecure_tls;
   tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
+  tc.rist_uri = input->input.rist_uri;
+  tc.rist_profile_main = input->rist_profile_main;
 
   o->o = tssrc_open_async_start(&tc, reason_out);
   if (!o->o) {

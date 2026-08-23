@@ -42,6 +42,7 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 |       | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)                  |
 |       | `--metrics-interval` | `<s>`                 | `5`                                                 |
 |       | `--max-services`     | `<n>`                 | `32` (max `256`)                                    |
+|       | `--profile`          | `simple\|main`        | `simple`, `-i rist://` only                         |
 | `-d`  | `--daemonize`        |                       | off (foreground)                                    |
 | `-h`  | `--help`             |                       |                                                     |
 
@@ -51,6 +52,10 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 
 `udp://`/`rtp://` multicast, or `-` for stdin (already-demuxed `.ts` on stdin, e.g. piped from `dipirec`/`ffmpeg`).
 Can be a single-program stream (SPTS) or a multi-program mux (MPTS) - see `-p` below.
+
+`rist://@host:port[?query]` is also accepted. It requires librist and only supports a single peer per input (no bonding).
+If you need bonded RIST input, you can run `dipirist` in front of this tool as a bridge instead.
+Encrypted input needs `--profile main` and a `?secret=` query parameter in the URI.
 
 ### MPTS input (`-p`)
 
@@ -104,12 +109,12 @@ Fetched once at startup only, not polled.
 
 Repeatable: e.g. a file plus one or more RTMP(S) pushes.
 
-| schema                              | what's this?                       |
-|--------------------------------------|-------------------------------------|
-| `<path>`                             | a file                              |
-| `-`                                   | stdout                              |
-| `rtmp://<host>[:port]/<app>/<key>`   | RTMP publish, default port `1935`   |
-| `rtmps://<host>[:port]/<app>/<key>`  | RTMP over TLS, default port `443`   |
+| schema                              | what's this?                      |
+|-------------------------------------|-----------------------------------|
+| `<path>`                            | a file                            |
+| `-`                                 | stdout                            |
+| `rtmp://<host>[:port]/<app>/<key>`  | RTMP publish, default port `1935` |
+| `rtmps://<host>[:port]/<app>/<key>` | RTMP over TLS, default port `443` |
 
 RTMP output ignores `-f`: descrambled H.264/HEVC video. Unsupported video (MPEG-2) or audio
 (MP2) is dropped from that push.
@@ -216,7 +221,6 @@ dipidescramble -i rtp://@239.0.0.1:1975 --biss1-sw 0123456789ab -o out.ts -o rtm
 # complex ECM profile
 dipidescramble -i rtp://@239.0.0.1:1975 -k device.key -s mysmartcardserial-01 -e emm.cache -o out.ts \
   --ecm-profile cipher=aes128-cbc,iv=cp_number,padding=pkcs7,header=h1:AABB,include_cp_number=1,include_ecm_id=1,integrity=hmac-sha256,truncate_tag=8
-
 ```
 
 ## Notes

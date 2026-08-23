@@ -34,6 +34,7 @@ dipirec -i <uri> -o <target> [options]
 |      | `--secret`           | `<psk>`               | none (`-o rist://` only)            |
 |      | `--cname`            | `<name>`              | library default (`-o rist://` only) |
 |      | `--buffer`           | `<ms>`                | library default (`-o rist://` only) |
+|      | `--profile-in`       | `simple\|main`        | `simple` (`-i rist://` only)        |
 |      | `--insecure`         |                       | off (`-o rtmps://` only)            |
 |      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`     |
 |      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)  |
@@ -50,8 +51,15 @@ dipirec -i <uri> -o <target> [options]
 | `https://<host>:<port>/<path>` | same, TLS (`--insecure` skips verification) |
 | `-`                            | stdin, TS or RTP wrapped TS                 |
 | `<path>`                       | a file, TS or RTP wrapped TS                |
+| `rist://@<host>:<port>[?query]`| single-peer RIST receiver, requires librist |
 
-`@` is optional. `<group>` can be an IPv4 or IPv6 multicast address.
+`@` is optional for `rtp://`/`udp://`, but required for `rist://` (it marks the peer as listening, the
+role a receiver needs). `<group>` can be an IPv4 or IPv6 multicast address.
+
+`rist://@host:port[?query]` is also accepted. 
+It requires librist and only supports a single peer per input (no bonding).
+If you need bonded RIST input, you can run `dipirist` in front of this tool as a bridge instead.
+Encrypted input needs `--profile-in main` and a `?secret=` query parameter in the URI.
 
 For `rtp://` and `udp://` the tool joins the group itself (IGMPv2 / MLD, any source) and leaves on exit.
 RTP headers are detected and removed automatically, so a source that is actually plain TS works even when given as `rtp://`.

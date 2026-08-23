@@ -29,6 +29,10 @@ int src_open(const config_t *cfg, src_t *s) {
     } else {
       tc.kind = TSSRC_STDIN;
     }
+  } else if (s->kind == URI_RIST) {
+    tc.kind = TSSRC_RIST;
+    tc.rist_uri = cfg->source.rist_uri;
+    tc.rist_profile_main = cfg->rist_profile_in == RIST_PROF_MAIN;
   } else {
     tc.kind = (s->kind == URI_RTP) ? TSSRC_RTP : TSSRC_UDP;
     tc.family = cfg->source.family;

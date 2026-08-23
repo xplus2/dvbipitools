@@ -1,10 +1,11 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIREC_VERSION_H
-#define DIPIREC_VERSION_H
+#include <stddef.h>
 
-#define TOOL_NAME    "dipirec"
-#define TOOL_VERSION "2.2.6"
+#include "ristlog.h"
 
-#endif
+struct rist_logging_settings *ristlog_get(int verbose) {
+  (void)verbose;
+  return NULL;
+}

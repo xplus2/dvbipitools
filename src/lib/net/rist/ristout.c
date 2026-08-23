@@ -10,6 +10,7 @@
 #include "lib/log.h"
 #include "lib/signal.h"
 
+#include "ristlog.h"
 #include "ristout.h"
 
 #define RIST_CHUNK (7 * 188) /* librist caps a single data_block well under 64K (observed max ~9968B) */
@@ -17,27 +18,9 @@
 
 struct ristout {
   struct rist_ctx *ctx;
-  struct rist_logging_settings *log_settings;
   metrics_exporter_t *mx;
   const char *tool_version;
 };
-
-static int rist_log_cb(void *arg, enum rist_log_level level, const char *msg) {
-  (void)arg;
-  (void)level;
-  log_line("rist: %s", msg);
-  return 0;
-}
-
-/* NULL on failure; verbose gates INFO/DEBUG, otherwise WARN+ only */
-static struct rist_logging_settings *open_logging(int verbose) {
-  struct rist_logging_settings *ls = NULL;
-
-  if (rist_logging_set(&ls, verbose ? RIST_LOG_DEBUG : RIST_LOG_WARN, rist_log_cb, NULL, NULL, NULL) != 0)
-    return NULL;
-  rist_logging_set_global(ls); /* udpsocket_* internals log via global settings, not ctx's */
-  return ls;
-}
 
 static int add_peers(struct rist_ctx *ctx, const ristout_cfg_t *cfg) {
   for (int i = 0; i < cfg->npeers; i++) {
@@ -98,18 +81,13 @@ ristout_t *ristout_open(const ristout_cfg_t *cfg) {
   r->mx = cfg->mx;
   r->tool_version = cfg->tool_version;
 
-  r->log_settings = open_logging(cfg->verbose);
-  if (rist_sender_create(&r->ctx, profile, 0, r->log_settings) != 0) {
+  if (rist_sender_create(&r->ctx, profile, 0, ristlog_get(cfg->verbose)) != 0) {
     log_line("rist: sender create failed");
-    if (r->log_settings)
-      rist_logging_settings_free2(&r->log_settings);
     free(r);
     return NULL;
   }
   if (add_peers(r->ctx, cfg) || rist_start(r->ctx) != 0) {
     rist_destroy(r->ctx);
-    if (r->log_settings)
-      rist_logging_settings_free2(&r->log_settings);
     free(r);
     return NULL;
   }
@@ -138,7 +116,5 @@ void ristout_close(ristout_t *r) {
   if (!r)
     return;
   rist_destroy(r->ctx);
-  if (r->log_settings)
-    rist_logging_settings_free2(&r->log_settings);
   free(r);
 }

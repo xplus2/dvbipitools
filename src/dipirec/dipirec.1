@@ -1,4 +1,4 @@
-.TH DIPIREC 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPIREC 1 "2026-08-24" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipirec \- record a DVB-IPI stream to a file or stdout
 .SH SYNOPSIS
@@ -37,6 +37,12 @@ or
 .IP \(bu 2
 .I <path>
 \- a file, plain TS or RTP-wrapped TS, auto-detected
+.IP \(bu 2
+.B rist://@<host>:<port>[?query]
+\- single-peer RIST receiver (\fB@\fR required, marks it as listening;
+requires librist; no bonding here, use
+.BR dipirist (1)
+as a bridge for that)
 .IP \(bu 2
 IPv6 groups are given in brackets, e.g.
 .B rtp://@[ff3e::1]:8700
@@ -157,6 +163,14 @@ cname. Default: library default.
 .B \-o
 .B rist://
 recovery buffer. Default: library default.
+.TP
+.B \-\-profile\-in \fI<p>\fR
+.IR simple | main .
+.B \-i
+.B rist://
+only. Default: \fBsimple\fR. \fBmain\fR enables PSK encryption via a
+.B ?secret=
+query parameter on the input URI.
 .TP
 .B \-\-insecure
 Skip TLS verification for

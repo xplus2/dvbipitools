@@ -1,4 +1,4 @@
-.TH DIPIDESCRAMBLE 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPIDESCRAMBLE 1 "2026-08-24" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipidescramble \- standalone CAS validation client / descrambler
 .SH SYNOPSIS
@@ -80,9 +80,15 @@ BISS-CA group keys (device keys only), no eECMs.
 Input:
 .BR udp:// ,
 .BR rtp:// ,
+.BR rist://@ host:port[?query] ,
 or
 .B \-
 for stdin. Required.
+.B rist://
+takes a single peer only and requires librist; there is no bonding here,
+use
+.BR dipirist (1)
+as a bridge for that.
 .TP
 .BR \-k ", " \-\-key " " \fIpath\fR
 Device RSA private key, PEM. Required for ECM/EMM-driven CAS.
@@ -182,6 +188,16 @@ Default
 .TP
 .B \-\-max\-services \fIn\fR
 Max services tracked in the EMM cache, 1..256. Default 32.
+.TP
+.B \-\-profile \fIsimple\fR|\fImain\fR
+RIST profile for
+.B \-i rist://
+only. Default
+.BR simple .
+.B main
+enables PSK encryption via a
+.B ?secret=
+query parameter on the input URI.
 .TP
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.

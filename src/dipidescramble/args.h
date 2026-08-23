@@ -9,7 +9,7 @@
 #include "ecm_profile.h"
 #include "lib/cas/biss/biss.h"
 
-typedef enum { INPUT_RTP, INPUT_UDP, INPUT_STDIN } input_kind_t;
+typedef enum { INPUT_RTP, INPUT_UDP, INPUT_STDIN, INPUT_RIST } input_kind_t;
 typedef enum { FMT_TS, FMT_MKV, FMT_MKA } out_fmt_t;
 typedef enum { PMT_SEL_AUTO, PMT_SEL_PID, PMT_SEL_ALL } pmt_sel_t;
 typedef enum { OUT_FILE, OUT_RTMP, OUT_RTMPS } out_kind_t;
@@ -22,6 +22,8 @@ typedef struct {
   int family; /* AF_INET or AF_INET6 */
   char group[64];
   unsigned port;
+  /* INPUT_RIST */
+  char rist_uri[256]; /* rist://@host:port[?query], @ required (listen) */
 } input_t;
 
 typedef struct {
@@ -60,6 +62,7 @@ typedef struct {
   const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
   unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
   unsigned max_services;       /* --max-services. 0 = default (32) */
+  int rist_profile_main;       /* --profile, -i rist:// only. 0 = simple (default) */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

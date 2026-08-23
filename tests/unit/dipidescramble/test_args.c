@@ -49,6 +49,39 @@ START_TEST(metrics_id_alone_is_accepted) {
 }
 END_TEST
 
+START_TEST(rist_input_with_at_is_accepted) {
+  char *argv[] = {"dipidescramble", "-i", "rist://@127.0.0.1:6000", "-o", "out.ts", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.input.kind, INPUT_RIST);
+  ck_assert_str_eq(cfg.input.rist_uri, "rist://@127.0.0.1:6000");
+}
+END_TEST
+
+START_TEST(rist_input_without_at_is_rejected) {
+  char *argv[] = {"dipidescramble", "-i", "rist://127.0.0.1:6000", "-o", "out.ts", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(rist_profile_main_is_parsed) {
+  char *argv[] = {"dipidescramble", "-i", "rist://@127.0.0.1:6000", "-o", "out.ts",
+                  "--profile", "main", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.rist_profile_main, 1);
+}
+END_TEST
+
+START_TEST(invalid_rist_profile_is_rejected) {
+  char *argv[] = {"dipidescramble", "-i", "rist://@127.0.0.1:6000", "-o", "out.ts",
+                  "--profile", "bogus", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipidescramble_args");
   TCase *tc = tcase_create("core");
@@ -57,6 +90,10 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, minimal_valid_args_ok);
   tcase_add_test(tc, metrics_options_require_metrics_id);
   tcase_add_test(tc, metrics_id_alone_is_accepted);
+  tcase_add_test(tc, rist_input_with_at_is_accepted);
+  tcase_add_test(tc, rist_input_without_at_is_rejected);
+  tcase_add_test(tc, rist_profile_main_is_parsed);
+  tcase_add_test(tc, invalid_rist_profile_is_rejected);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -212,7 +212,7 @@ endif
 endif
 
 ifeq ($(HAVE_RIST),yes)
-dipirec_RIST_SRC := src/lib/net/rist/ristout.c
+dipirec_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c
 dipirec_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipirec_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -220,8 +220,10 @@ else
 dipirec_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
 else
-dipirec_RIST_SRC := src/lib/net/rist/ristout_stub.c
+dipirec_RIST_SRC := src/lib/net/rist/ristout_stub.c src/lib/net/rist/ristin_stub.c src/lib/net/rist/ristlog_stub.c
 endif
+dipirec_EXTRA_CFLAGS += -pthread
+dipirec_EXTRA_LDFLAGS += -pthread
 
 dipirec_SRCS := \
 	src/dipirec/main.c \
@@ -328,7 +330,7 @@ dipiradiohead_EXTRA_CFLAGS += -pthread
 dipiradiohead_EXTRA_LDFLAGS += -pthread
 
 ifeq ($(HAVE_RIST),yes)
-dipiradiohead_RIST_SRC := src/lib/net/rist/ristout.c
+dipiradiohead_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristlog.c
 dipiradiohead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -336,7 +338,7 @@ else
 dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
 else
-dipiradiohead_RIST_SRC := src/lib/net/rist/ristout_stub.c
+dipiradiohead_RIST_SRC := src/lib/net/rist/ristout_stub.c src/lib/net/rist/ristlog_stub.c
 endif
 
 dipiradiohead_SRCS := \
@@ -446,7 +448,7 @@ dipitvhead_EXTRA_CFLAGS += -pthread
 dipitvhead_EXTRA_LDFLAGS += -pthread
 
 ifeq ($(HAVE_RIST),yes)
-dipitvhead_RIST_SRC := src/lib/net/rist/ristout.c
+dipitvhead_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c
 dipitvhead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -454,7 +456,7 @@ else
 dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
 else
-dipitvhead_RIST_SRC := src/lib/net/rist/ristout_stub.c
+dipitvhead_RIST_SRC := src/lib/net/rist/ristout_stub.c src/lib/net/rist/ristin_stub.c src/lib/net/rist/ristlog_stub.c
 endif
 
 dipitvhead_SRCS := \
@@ -621,6 +623,20 @@ else
 dipidescramble_CSA2_SRC := src/lib/scrambler/csa2_stub.c
 endif
 
+ifeq ($(HAVE_RIST),yes)
+dipidescramble_RIST_SRC := src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c
+dipidescramble_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipidescramble_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
+else
+dipidescramble_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
+endif
+else
+dipidescramble_RIST_SRC := src/lib/net/rist/ristin_stub.c src/lib/net/rist/ristlog_stub.c
+endif
+dipidescramble_EXTRA_CFLAGS += -pthread
+dipidescramble_EXTRA_LDFLAGS += -pthread
+
 dipidescramble_SRCS := \
 	src/dipidescramble/main.c \
 	src/dipidescramble/pipeline.c \
@@ -690,7 +706,8 @@ dipidescramble_SRCS := \
 	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca.c \
 	src/lib/cas/biss/ca_sections.c \
-	$(dipidescramble_CSA2_SRC)
+	$(dipidescramble_CSA2_SRC) \
+	$(dipidescramble_RIST_SRC)
 else
 $(warning dipidescramble: OpenSSL not found via pkg-config, skipping this tool entirely (RSA/AES crypto is its whole purpose))
 endif
@@ -742,6 +759,8 @@ dipirist_SRCS := \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
 	src/lib/net/rist/ristout.c \
+	src/lib/net/rist/ristin.c \
+	src/lib/net/rist/ristlog.c \
 	$(dipirist_TLS_SRC) \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -784,6 +803,18 @@ else
 dipisrt_TLS_SRC := src/lib/net/tls_stub.c
 endif
 
+ifeq ($(HAVE_RIST),yes)
+dipisrt_RIST_SRC := src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c
+dipisrt_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipisrt_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
+else
+dipisrt_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
+endif
+else
+dipisrt_RIST_SRC := src/lib/net/rist/ristin_stub.c src/lib/net/rist/ristlog_stub.c
+endif
+
 dipisrt_SRCS := \
 	src/dipisrt/main.c \
 	src/dipisrt/args.c \
@@ -797,6 +828,7 @@ dipisrt_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
+	$(dipisrt_RIST_SRC) \
 	src/lib/net/srt/srtcommon.c \
 	src/lib/net/srt/srtout.c \
 	src/lib/net/srt/srtin.c \
@@ -1296,6 +1328,8 @@ dipirist_bridge_SRCS := \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
 	src/lib/net/rist/ristout.c \
+	src/lib/net/rist/ristin.c \
+	src/lib/net/rist/ristlog.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -1303,6 +1337,30 @@ dipirist_bridge_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/demux/rtp.c \
 	src/lib/mux/rtpheader.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c
+
+UNIT_TESTS += lib_net_rist_ristlog
+lib_net_rist_ristlog_BIN := tests/unit/lib/net/rist/test_ristlog
+lib_net_rist_ristlog_EXTRA_CFLAGS := $(shell pkg-config --cflags librist)
+lib_net_rist_ristlog_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
+lib_net_rist_ristlog_SRCS := \
+	tests/unit/lib/net/rist/test_ristlog.c \
+	src/lib/net/rist/ristlog.c \
+	src/lib/log.c
+
+UNIT_TESTS += lib_net_rist_ristin
+lib_net_rist_ristin_BIN := tests/unit/lib/net/rist/test_ristin
+lib_net_rist_ristin_EXTRA_CFLAGS := $(shell pkg-config --cflags librist)
+lib_net_rist_ristin_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
+lib_net_rist_ristin_SRCS := \
+	tests/unit/lib/net/rist/test_ristin.c \
+	src/lib/net/rist/ristin.c \
+	src/lib/net/rist/ristlog.c \
+	src/lib/log.c \
+	src/lib/ioutil.c \
+	src/lib/signal.c \
+	src/lib/net/netconnect.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c
 endif
@@ -1335,6 +1393,8 @@ dipisrt_bridge_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/srt/srtcommon.c \
 	src/lib/net/srt/srtout.c \
 	src/lib/net/srt/srtin.c \
@@ -1532,6 +1592,8 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/mux/psi_build.c \
 	src/lib/net/tssource.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -2090,6 +2152,8 @@ dipitvhead_source_SRCS := \
 	tests/unit/dipitvhead/input/test_source.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -2128,6 +2192,8 @@ dipitvhead_discover_SRCS := \
 	src/dipitvhead/tvhead/discover.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -2263,6 +2329,8 @@ dipitvhead_output_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/rist/ristout_stub.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -2429,6 +2497,8 @@ lib_net_tssource_async_BIN := tests/unit/lib/net/test_tssource_async
 lib_net_tssource_async_SRCS := \
 	tests/unit/lib/net/test_tssource_async.c \
 	src/lib/net/tssource.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -2445,6 +2515,8 @@ lib_net_tssource_file_BIN := tests/unit/lib/net/test_tssource_file
 lib_net_tssource_file_SRCS := \
 	tests/unit/lib/net/test_tssource_file.c \
 	src/lib/net/tssource.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -2543,6 +2615,8 @@ dipirec_record_SRCS := \
 	src/lib/net/tls_stub.c \
 	src/lib/net/rtmp/auth_stub.c \
 	src/lib/net/rist/ristout_stub.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \

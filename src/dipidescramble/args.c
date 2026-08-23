@@ -11,6 +11,7 @@
 #include "lib/argutil.h"
 #include "lib/cas/biss/biss.h"
 #include "lib/cas/device_state_core.h"
+#include "lib/ioutil.h"
 #include "lib/log.h"
 #include "lib/uriparse.h"
 
@@ -77,6 +78,15 @@ static int input_parse(const char *uri, input_t *s) {
     s->kind = INPUT_UDP;
     return mcast_group_parse(uri + 6, &s->family, s->group, sizeof s->group, &s->port);
   }
+  if (strncmp(uri, "rist://", 7) == 0) {
+    if (uri[7] != '@') /* rist:// as input always listens */
+      return -1;
+    if (strlen(uri) >= sizeof s->rist_uri)
+      return -1;
+    s->kind = INPUT_RIST;
+    bufcpy(s->rist_uri, sizeof s->rist_uri, uri);
+    return 0;
+  }
   return -1;
 }
 
@@ -93,6 +103,9 @@ void input_describe(const input_t *s, char *buf, size_t n) {
   }
   case INPUT_STDIN:
     snprintf(buf, n, "-");
+    break;
+  case INPUT_RIST:
+    snprintf(buf, n, "%s", s->rist_uri);
     break;
   }
 }
@@ -129,7 +142,8 @@ static void print_help(void) {
       "stream; -k/-s/-e or --biss-* are only required once the stream turns out to\n"
       "need them.\n\n"
       "options:\n"
-      "  %-27sudp://, rtp://, or \"-\" for stdin (required)\n"
+      "  %-27sudp://, rtp://, rist://@host:port[?query] (single peer, requires\n"
+      "  %-27slibrist; no bonding, use dipirist for that), or \"-\" for stdin (required)\n"
       "  %-27sdevice RSA private key, PEM (required for ECM/EMM-driven CAS)\n"
       "  %-27sthis device's serial, matched against EMM-U addressing (required for ECM/EMM-driven CAS)\n"
       "  %-27sEMM cache: loaded on startup, rewritten on update (required for ECM/EMM-driven CAS)\n"
@@ -157,6 +171,7 @@ static void print_help(void) {
       "  %-27sstable instance id; metrics disabled unless set\n"
       "  %-27ssnapshot interval in seconds (default: 5)\n"
       "  %-27smax distinct EMM-G service_ids cached (default: 32, max: 256)\n"
+      "  %-27ssimple|main; -i rist:// only (default: simple)\n"
       "  %-27sfork to background after startup, detach from terminal\n"
       "  %-27sthis help\n\n"
       "examples:\n"
@@ -164,7 +179,8 @@ static void print_help(void) {
       "  %s -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o out.ts\n"
       "  %s -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o rtmp://live.example.com/app/key\n",
       TOOL_NAME,
-      "-i, --input <uri>", "-k, --key <path>", "-s, --serial <id>", "-e, --emm-file <path>",
+      "-i, --input <uri>", "",
+      "-k, --key <path>", "-s, --serial <id>", "-e, --emm-file <path>",
       "-u, --unicast-emm <uri>", "", "    --insecure",
       "    --token-header <name>",
       "    --biss2-sw <hex32>", "    --biss2-esw <hex32>", "    --biss2-id <hex32>",
@@ -176,6 +192,7 @@ static void print_help(void) {
       "    --color <when>",
       "    --metrics <path>", "    --metrics-id <name>", "    --metrics-interval <s>",
       "    --max-services <n>",
+      "    --profile <p>",
       "-d, --daemonize", "-h, --help",
       TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
@@ -205,10 +222,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics-id", required_argument, 0, 1012},
       {"metrics-interval", required_argument, 0, 1013},
       {"max-services", required_argument, 0, 1014},
+      {"profile", required_argument, 0, 1015},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
-  int have_input = 0, have_biss_id = 0;
+  int have_input = 0, have_biss_id = 0, profile_given = 0;
   int c;
 
   memset(cfg, 0, sizeof *cfg);
@@ -349,6 +367,17 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->max_services = (unsigned)v;
         break;
       }
+      case 1015:
+        if (strcmp(optarg, "simple") == 0)
+          cfg->rist_profile_main = 0;
+        else if (strcmp(optarg, "main") == 0)
+          cfg->rist_profile_main = 1;
+        else {
+          argerr("invalid --profile: %s (simple|main)", optarg);
+          return ARGS_ERR;
+        }
+        profile_given = 1;
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -403,5 +432,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--metrics/--metrics-interval require --metrics-id");
     return ARGS_ERR;
   }
+  if (profile_given && cfg->input.kind != INPUT_RIST)
+    log_line(TOOL_NAME ": --profile has no effect, no -i rist:// source");
   return ARGS_OK;
 }

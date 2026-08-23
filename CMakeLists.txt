@@ -53,7 +53,7 @@ if (DVBIPITOOLS_TSAN)
     add_link_options(-fsanitize=thread)
 endif ()
 
-option(DVBIPITOOLS_RIST "detect librist for rist:// support (dipirist, and rist:// output in dipirec/dipitvhead/dipiradiohead)" ON)
+option(DVBIPITOOLS_RIST "detect librist for rist:// support (dipirist; rist:// output in dipirec/dipitvhead/dipiradiohead; rist:// input in dipirec/dipitvhead/dipidescramble)" ON)
 
 set(DVBIPITOOLS_HAVE_RIST FALSE)
 if (DVBIPITOOLS_RIST)
@@ -84,7 +84,7 @@ if (DVBIPITOOLS_RIST)
         endif ()
     endif ()
     if (NOT DVBIPITOOLS_HAVE_RIST)
-        message(WARNING "librist not found (or no static libraries available): dipirist skipped, rist:// output unavailable in dipirec/dipitvhead/dipiradiohead")
+        message(WARNING "librist not found (or no static libraries available): dipirist skipped, rist:// output unavailable in dipirec/dipitvhead/dipiradiohead, rist:// input unavailable in dipirec/dipitvhead/dipidescramble")
     endif ()
 endif ()
 

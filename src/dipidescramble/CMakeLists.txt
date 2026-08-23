@@ -11,4 +11,13 @@ if (DIPIDESCRAMBLE_FOUND)
     if (DIPIDESCRAMBLE_CSA)
         target_link_libraries(dipidescramble PRIVATE ${CMAKE_DL_LIBS})
     endif ()
+
+    if (DVBIPITOOLS_HAVE_RIST)
+        target_link_libraries(dipidescramble PRIVATE PkgConfig::RIST)
+    endif ()
+
+    # rist:// input's reader thread: pthread is a hard dependency from here on, not optional
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+    find_package(Threads REQUIRED)
+    target_link_libraries(dipidescramble PRIVATE Threads::Threads)
 endif ()

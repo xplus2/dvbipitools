@@ -80,6 +80,8 @@ dvbipitools_add_unit_test(lib_demux_mpts_probe
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -224,6 +226,8 @@ dvbipitools_add_unit_test(lib_net_httpclient_async
 dvbipitools_add_unit_test(lib_net_tssource_async
     unit/lib/net/test_tssource_async.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -239,6 +243,8 @@ dvbipitools_add_unit_test(lib_net_tssource_async
 dvbipitools_add_unit_test(lib_net_tssource_file
     unit/lib/net/test_tssource_file.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -881,6 +887,8 @@ dvbipitools_add_unit_test(dipitvhead_source
     unit/dipitvhead/input/test_source.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -917,6 +925,8 @@ dvbipitools_add_unit_test(dipitvhead_discover
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/discover.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -1047,6 +1057,8 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -1210,6 +1222,8 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -1614,6 +1628,8 @@ if (TARGET dipirist)
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -1626,6 +1642,28 @@ if (TARGET dipirist)
     target_link_libraries(test_dipirist_bridge PRIVATE PkgConfig::RIST)
 else ()
     message(WARNING "tests: dipirist not built (librist missing), skipping its bridge unit test")
+endif ()
+
+if (DVBIPITOOLS_HAVE_RIST)
+    dvbipitools_add_unit_test(lib_net_rist_ristlog
+        unit/lib/net/rist/test_ristlog.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c)
+    target_link_libraries(test_lib_net_rist_ristlog PRIVATE PkgConfig::RIST)
+
+    dvbipitools_add_unit_test(lib_net_rist_ristin
+        unit/lib/net/rist/test_ristin.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
+        ${CMAKE_SOURCE_DIR}/src/lib/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c)
+    target_link_libraries(test_lib_net_rist_ristin PRIVATE PkgConfig::RIST)
+else ()
+    message(WARNING "tests: librist missing, skipping ristin/ristlog unit tests")
 endif ()
 
 dvbipitools_add_unit_test(dipisrt_args
@@ -1651,6 +1689,8 @@ if (TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c

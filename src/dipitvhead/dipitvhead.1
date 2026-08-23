@@ -1,4 +1,4 @@
-.TH DIPITVHEAD 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPITVHEAD 1 "2026-08-24" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipitvhead \- re-package a transport stream as a DVB-IPI multicast, with target-bitrate control and optional HbbTV AIT injection and CAS scrambling
 .SH SYNOPSIS
@@ -80,9 +80,19 @@ Input source:
 .BR rtp:// ,
 .BR http:// ,
 .BR https:// ,
+.BR rist://@ host:port[?query] ,
 or
 .B \-
 for stdin. Repeatable.
+.B rist://
+takes a single peer only and requires librist;
+.B @
+is required, since an input peer always listens. Multiple
+.B \-i rist://
+entries are independent programs, not a bonded stream; use
+.BR dipirist (1)
+as a bridge for bonded RIST input. Each RIST input costs an extra
+thread beyond what other input kinds cost.
 .TP
 .BR \-p ", " \-\-pmt\-pid " " \fIpid\fR
 For the
@@ -131,6 +141,18 @@ For the
 .B \-i
 right before this: HbbTV application_id. Required with
 .BR \-\-hbbtv .
+.TP
+.B \-\-rist\-profile\-in \fIsimple\fR|\fImain\fR
+For the
+.B \-i
+right before this:
+.B \-i rist://
+only. Default:
+.BR simple .
+.B main
+enables PSK encryption via a
+.B ?secret=
+query parameter on that input's URI.
 .SS Output
 .TP
 .BR \-m ", " \-\-mcast " " \fIgroup\fR:\fIport\fR

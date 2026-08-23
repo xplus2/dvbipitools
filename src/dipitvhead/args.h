@@ -14,7 +14,8 @@ typedef enum {
   SRC_RTP,  /* multicast, RTP wrapped */
   SRC_UDP,  /* multicast, plain ts */
   SRC_HTTP, /* http:// or https://, http_url_t.tls tells which */
-  SRC_STDIN /* -i - */
+  SRC_STDIN, /* -i - */
+  SRC_RIST  /* single peer, @ required (listen) */
 } src_kind_t;
 
 typedef struct {
@@ -25,6 +26,8 @@ typedef struct {
   unsigned port;
   /* SRC_HTTP */
   http_url_t http;
+  /* SRC_RIST, stored raw for librist's own parser */
+  char rist_uri[256];
 } source_t;
 
 /* -n/-s: no flag = passthrough source table if present; "-" = drop; text = override with our own */
@@ -48,6 +51,7 @@ typedef struct {
   const char *hbbtv_url;   /* --hbbtv right after this -i; NULL = no AIT for this program */
   unsigned hbbtv_org_id;   /* --hbbtv-org-id right after this -i; required with --hbbtv */
   unsigned hbbtv_app_id;   /* --hbbtv-app-id right after this -i; required with --hbbtv */
+  int rist_profile_main;  /* --rist-profile-in right after this -i; SRC_RIST only */
 } dipitvhead_input_t;
 
 typedef struct {

@@ -32,6 +32,7 @@ across every input.
 |      | `--hbbtv`            | `<url>`               | none (no AIT sent)                        | per-input  |
 |      | `--hbbtv-org-id`     | `<n>`                 | required with `--hbbtv`                   | per-input  |
 |      | `--hbbtv-app-id`     | `<n>`                 | required with `--hbbtv`                   | per-input  |
+|      | `--rist-profile-in`  | `simple\|main`        | `simple` (`-i rist://` only)              | per-input  |
 | `-m` | `--mcast`            | `<group(6)>:<port>`   | required unless `-R` given                |            |
 | `-O` | `--out-iface`        | `<iface>`             | kernel route (outgoing)                   |            |
 | `-u` | `--udp`              |                       | off (RTP)                                 |            |
@@ -89,7 +90,7 @@ using one before any `--cas-ecmg` is an error. Everything else is shared across 
 BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each other.
 
 | long form                | argument   | default                                             |
-|--------------------------|------------|------------------------------------------------------|
+|--------------------------|------------|-----------------------------------------------------|
 | `--biss1-sw`             | `<hex12>`  | BISS1 Mode 1                                        |
 | `--biss2-sw`             | `<hex32>`  | BISS2 Mode 1/E                                      |
 | `--biss2-emit-esw`       | `<hex32>`  | log the Encrypted Session Word for this receiver ID |
@@ -104,6 +105,14 @@ BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each o
 `udp://`, `rtp://`, `http://`, `https://`, `-` for stdin. RTP headers stripped automatically.
 HTTPS: build-time option (`-DDIPITVHEAD_TLS=OFF`, auto-off without OpenSSL), `-k` skips cert
 verification.
+
+`rist://@host:port[?query]` is also accepted, requires librist. 
+`@` is required, since an input peer always listens. 
+Each `-i rist://` is a single peer (no bonding), since multiple`-i` entries are already independent programs.
+If you need bonded RIST input for a single program, run `dipirist` in front of this tool as a bridge instead.
+Encrypted input needs `--rist-profile-in main` (paired with the `-i` it follows) and a `?secret=` query parameter
+on the URI.
+Each RIST input costs an extra thread beyond what other input kinds cost, this matters at the high end of the 32-input ceiling.
 
 ### Program selection (`-p`)
 

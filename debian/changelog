@@ -12,6 +12,10 @@ dvbipitools (2.3.1-1) unstable; urgency=medium
     + bonding depends on libsrt having it enabled (not by default)
   * fixed EIT race in mpts remuxer (corrupted eit+crc32)
   * overrides for EMMG max conns and EMMC max services
+  * rist:// single-peer input support at:
+    + dipitvhead
+    + dipirec
+    + dipidescramble
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.3.0-1) unstable; urgency=medium
