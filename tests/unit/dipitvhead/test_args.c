@@ -315,18 +315,21 @@ START_TEST(rist_profile_in_before_any_input_is_rejected) {
 }
 END_TEST
 
-START_TEST(multiple_independent_rist_inputs_are_accepted) {
+START_TEST(more_than_one_rist_input_is_rejected) {
+  /* librist isn't safe with more than one rist_ctx per process */
   char *argv[] = {"dipitvhead",
                   "-i", "rist://@127.0.0.1:6000",
                   "-i", "rist://@127.0.0.1:6002",
                   "-m", "239.1.2.1:5000", NULL};
   config_t cfg;
-  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
-  ck_assert_uint_eq(cfg.n_inputs, 2u);
-  ck_assert_int_eq(cfg.inputs[0].input.kind, SRC_RIST);
-  ck_assert_int_eq(cfg.inputs[1].input.kind, SRC_RIST);
-  ck_assert_str_eq(cfg.inputs[0].input.rist_uri, "rist://@127.0.0.1:6000");
-  ck_assert_str_eq(cfg.inputs[1].input.rist_uri, "rist://@127.0.0.1:6002");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(rist_input_and_rist_output_together_is_rejected) {
+  char *argv[] = {"dipitvhead", "-i", "rist://@127.0.0.1:6000", "-R", "rist://1.2.3.4:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
 }
 END_TEST
 
@@ -377,7 +380,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, rist_input_without_at_is_rejected);
   tcase_add_test(tc, rist_profile_in_pairs_with_preceding_input);
   tcase_add_test(tc, rist_profile_in_before_any_input_is_rejected);
-  tcase_add_test(tc, multiple_independent_rist_inputs_are_accepted);
+  tcase_add_test(tc, more_than_one_rist_input_is_rejected);
+  tcase_add_test(tc, rist_input_and_rist_output_together_is_rejected);
   suite_add_tcase(s, tc);
   return s;
 }

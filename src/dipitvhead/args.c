@@ -875,6 +875,20 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -i input");
     return ARGS_ERR;
   }
+  {
+    unsigned n_rist_in = 0;
+    for (unsigned i = 0; i < cfg->n_inputs; i++)
+      if (cfg->inputs[i].input.kind == SRC_RIST)
+        n_rist_in++;
+    if (n_rist_in > 1) {
+      argerr("at most one -i rist:// input: librist isn't safe with more than one context per process");
+      return ARGS_ERR;
+    }
+    if (n_rist_in && cfg->n_rist) {
+      argerr("-i rist:// and -R rist:// cannot combine: librist isn't safe with more than one context per process");
+      return ARGS_ERR;
+    }
+  }
   if (!have_mcast && cfg->n_rist == 0) {
     argerr("need -m output multicast or at least one -R rist peer");
     return ARGS_ERR;

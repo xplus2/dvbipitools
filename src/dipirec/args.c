@@ -663,6 +663,20 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -i input");
     return ARGS_ERR;
   }
+  {
+    int n_rist_out = 0;
+    for (int i = 0; i < cfg->n_out; i++)
+      if (cfg->out[i].kind == OUT_RIST)
+        n_rist_out++;
+    if (n_rist_out > 1) {
+      argerr("at most one -o rist:// target: librist isn't safe with more than one context per process");
+      return ARGS_ERR;
+    }
+    if (cfg->source.kind == URI_RIST && n_rist_out) {
+      argerr("-i rist:// and -o rist:// cannot combine: librist isn't safe with more than one context per process");
+      return ARGS_ERR;
+    }
+  }
   if (cfg->ret.enabled && cfg->source.kind != URI_RTP) {
     argerr("--ret requires -i rtp://, no RTP sequence numbers otherwise");
     return ARGS_ERR;

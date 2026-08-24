@@ -61,6 +61,10 @@ It requires librist and only supports a single peer per input (no bonding).
 If you need bonded RIST input, you can run `dipirist` in front of this tool as a bridge instead.
 Encrypted input needs `--profile-in main` and a `?secret=` query parameter in the URI.
 
+> librist uses one context per process. This means that only _one_ input _or_ output can use RIST.
+> If the input is RIST, the output can't be (or vice versa). 
+> You also cannot have multiple RIST outputs at the same time.
+
 For `rtp://` and `udp://` the tool joins the group itself (IGMPv2 / MLD, any source) and leaves on exit.
 RTP headers are detected and removed automatically, so a source that is actually plain TS works even when given as `rtp://`.
 

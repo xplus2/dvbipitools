@@ -108,11 +108,13 @@ verification.
 
 `rist://@host:port[?query]` is also accepted, requires librist. 
 `@` is required, since an input peer always listens. 
-Each `-i rist://` is a single peer (no bonding), since multiple`-i` entries are already independent programs.
 If you need bonded RIST input for a single program, run `dipirist` in front of this tool as a bridge instead.
 Encrypted input needs `--rist-profile-in main` (paired with the `-i` it follows) and a `?secret=` query parameter
 on the URI.
-Each RIST input costs an extra thread beyond what other input kinds cost, this matters at the high end of the 32-input ceiling.
+
+> librist uses one context per process. This means that only _one_ input _or_ output can use RIST.
+> You can _not_ define multiple RIST inputs - and if you do, no RIST output.
+> As a work-around, you can let multiple instances of `dipirist` produce multicasts for `-i` here.
 
 ### Program selection (`-p`)
 

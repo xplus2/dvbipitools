@@ -159,6 +159,22 @@ START_TEST(profile_in_without_rist_in_is_harmless) {
 }
 END_TEST
 
+START_TEST(rist_input_and_rist_output_together_is_rejected) {
+  /* librist isn't safe with more than one rist_ctx per process */
+  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "rist://1.2.3.4:6002", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(more_than_one_rist_output_is_rejected) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000",
+                  "-o", "rist://1.2.3.4:6000", "-o", "rist://5.6.7.8:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 START_TEST(ret_is_rejected_with_rist_input) {
   /* --ret needs RTP sequence numbers; a RIST source has its own ARQ instead */
   char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", "--ret", "1.2.3.4:6001", NULL};
@@ -190,6 +206,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, unknown_profile_in_is_rejected);
   tcase_add_test(tc, profile_in_without_rist_in_is_harmless);
   tcase_add_test(tc, ret_is_rejected_with_rist_input);
+  tcase_add_test(tc, rist_input_and_rist_output_together_is_rejected);
+  tcase_add_test(tc, more_than_one_rist_output_is_rejected);
   suite_add_tcase(s, tc);
   return s;
 }
