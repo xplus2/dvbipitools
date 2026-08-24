@@ -3,12 +3,12 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "lib/log.h"
-
 #include "../version.h"
 #include "priv.h"
 
@@ -33,6 +33,17 @@ int src_open(const config_t *cfg, src_t *s) {
     tc.kind = TSSRC_RIST;
     tc.rist_uri = cfg->source.rist_uri;
     tc.rist_profile_main = cfg->rist_profile_in == RIST_PROF_MAIN;
+  } else if (s->kind == URI_SRT) {
+    tc.kind = TSSRC_SRT;
+    tc.srt_host = cfg->source.srt_host;
+    tc.srt_port = cfg->source.srt_port;
+    tc.srt_listen = cfg->source.srt_listen;
+    tc.srt_passphrase = cfg->srt_passphrase_in;
+    tc.srt_pbkeylen = cfg->srt_pbkeylen_in;
+    tc.srt_streamid = cfg->srt_streamid_in;
+    tc.srt_packetfilter = cfg->srt_packetfilter_in;
+    tc.srt_latency_ms = cfg->srt_latency_in_ms;
+    tc.srt_verbose = cfg->verbose;
   } else {
     tc.kind = (s->kind == URI_RTP) ? TSSRC_RTP : TSSRC_UDP;
     tc.family = cfg->source.family;
@@ -59,6 +70,19 @@ ssize_t src_read(src_t *s, unsigned char *buf, size_t cap) {
   if (s->ret)
     return ret_client_read(s->ret, tssrc_mcast(s->t), buf, cap);
   return tssrc_read(s->t, buf, cap, NULL);
+}
+
+int src_wait_readable(src_t *s, int timeout_ms) {
+  struct pollfd pfd;
+  int pr;
+  if (s->ret)
+    return 1; /* --ret already bounds its own poll */
+  pfd.fd = tssrc_fd(s->t);
+  pfd.events = POLLIN;
+  pr = poll(&pfd, 1, timeout_ms);
+  if (pr < 0)
+    return errno == EINTR ? 0 : -1;
+  return pr > 0;
 }
 
 void src_close(src_t *s) {
@@ -96,8 +120,10 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
 int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
   o->net = NULL;
   o->rist = NULL;
+  o->srt = NULL;
   o->net_had_error = 0;
   o->rist_had_error = 0;
+  o->srt_connected = 0;
   o->errors_total = 0;
   if (t->kind == OUT_FILE) {
     o->fd = open_output(t->file_path);
@@ -116,6 +142,22 @@ int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
     rc.verbose = cfg->verbose;
     o->rist = ristout_open(&rc);
     return o->rist ? 0 : -1;
+  }
+  if (t->kind == OUT_SRT) {
+    srtsink_cfg_t sc;
+    memset(&sc, 0, sizeof sc);
+    sc.peers[0].host = t->srt_host;
+    sc.peers[0].port = t->srt_port;
+    sc.npeers = 1;
+    sc.group_mode = SRTSINK_GROUP_NONE;
+    sc.passphrase = cfg->srt_passphrase;
+    sc.pbkeylen = cfg->srt_pbkeylen;
+    sc.streamid = cfg->srt_streamid;
+    sc.packetfilter = cfg->srt_packetfilter;
+    sc.latency_ms = cfg->srt_latency_ms;
+    sc.verbose = cfg->verbose;
+    o->srt = srtsink_open(&sc);
+    return o->srt ? 0 : -1;
   }
   {
     tssink_cfg_t tc;
@@ -149,6 +191,10 @@ int sink_write(out_sink_t *o, const unsigned char *p, size_t n) {
     note_send_result(ristout_write(o->rist, p, n) >= 0, &o->rist_had_error, &o->errors_total, "rist");
     return 0;
   }
+  if (o->srt) {
+    srtsink_write(o->srt, p, n);
+    return 0;
+  }
   if (o->net) {
     note_send_result(tssink_write(o->net, p, n) >= 0, &o->net_had_error, &o->errors_total, "net");
     return 0;
@@ -156,9 +202,26 @@ int sink_write(out_sink_t *o, const unsigned char *p, size_t n) {
   return write_all(o->fd, p, n);
 }
 
+void sinks_service_srt(out_sink_t *sinks, int n_sinks) {
+  for (int i = 0; i < n_sinks; i++) {
+    srtsink_status_t st;
+    if (!sinks[i].srt)
+      continue;
+    srtsink_service(sinks[i].srt, &st);
+    if (st.connected != sinks[i].srt_connected) {
+      log_line("srt[%d] output: %s", i, st.connected ? "connected" : "link down, reconnecting");
+      sinks[i].srt_connected = st.connected;
+    }
+  }
+}
+
 void sink_close(out_sink_t *o) {
   if (o->rist) {
     ristout_close(o->rist);
+    return;
+  }
+  if (o->srt) {
+    srtsink_close(o->srt);
     return;
   }
   if (o->net) {

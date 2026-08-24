@@ -12,6 +12,7 @@
 #include "httpclient/httpclient.h"
 #include "multicast.h"
 #include "rist/ristin.h"
+#include "srt/srtsrc.h"
 #include "tssource.h"
 
 /* max plausible RTP/MPEGTS record under a 1500-byte MTU: 12 + 7*188 */
@@ -27,6 +28,7 @@ struct tssrc {
   mcast_t *m;
   http_t *h;
   ristin_t *rist;
+  srtsrc_t *srt;
   int fd; /* TSSRC_FILE */
   /* TSSRC_STDIN/TSSRC_FILE byte-stream framing */
   deframe_state_t deframe_state;
@@ -85,6 +87,29 @@ tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
     rc.tool_version = cfg->rist_tool_version;
     s->rist = ristin_open(&rc);
     if (!s->rist) {
+      free(s);
+      if (reason_out)
+        *reason_out = NET_ERR_CONNECT;
+      return NULL;
+    }
+    return s;
+  }
+  case TSSRC_SRT: {
+    srtsrc_cfg_t sc;
+    memset(&sc, 0, sizeof sc);
+    sc.host = cfg->srt_host;
+    sc.port = cfg->srt_port;
+    sc.listen = cfg->srt_listen;
+    sc.passphrase = cfg->srt_passphrase;
+    sc.pbkeylen = cfg->srt_pbkeylen;
+    sc.streamid = cfg->srt_streamid;
+    sc.packetfilter = cfg->srt_packetfilter;
+    sc.latency_ms = cfg->srt_latency_ms;
+    sc.verbose = cfg->srt_verbose;
+    sc.mx = cfg->srt_mx;
+    sc.tool_version = cfg->srt_tool_version;
+    s->srt = srtsrc_open(&sc);
+    if (!s->srt) {
       free(s);
       if (reason_out)
         *reason_out = NET_ERR_CONNECT;
@@ -273,6 +298,8 @@ ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t 
     return deframe_read(s, s->fd, buf, cap, reason_out);
   case TSSRC_RIST:
     return raw_fd_read(ristin_fd(s->rist), buf, cap, reason_out);
+  case TSSRC_SRT:
+    return raw_fd_read(srtsrc_fd(s->srt), buf, cap, reason_out);
   }
   return -1;
 }
@@ -307,6 +334,8 @@ int tssrc_fd(const tssrc_t *s) {
     return s->fd;
   case TSSRC_RIST:
     return ristin_fd(s->rist);
+  case TSSRC_SRT:
+    return srtsrc_fd(s->srt);
   }
   return -1;
 }
@@ -320,6 +349,8 @@ void tssrc_close(tssrc_t *s) {
     http_close(s->h);
   if (s->rist)
     ristin_close(s->rist);
+  if (s->srt)
+    srtsrc_close(s->srt);
   if (s->kind == TSSRC_FILE)
     close(s->fd);
   free(s);

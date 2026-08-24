@@ -9,10 +9,10 @@
 #include "ecm_profile.h"
 #include "lib/cas/biss/biss.h"
 
-typedef enum { INPUT_RTP, INPUT_UDP, INPUT_STDIN, INPUT_RIST } input_kind_t;
+typedef enum { INPUT_RTP, INPUT_UDP, INPUT_STDIN, INPUT_RIST, INPUT_SRT } input_kind_t;
 typedef enum { FMT_TS, FMT_MKV, FMT_MKA } out_fmt_t;
 typedef enum { PMT_SEL_AUTO, PMT_SEL_PID, PMT_SEL_ALL } pmt_sel_t;
-typedef enum { OUT_FILE, OUT_RTMP, OUT_RTMPS } out_kind_t;
+typedef enum { OUT_FILE, OUT_RTMP, OUT_RTMPS, OUT_SRT } out_kind_t;
 
 #define DIPIDESCRAMBLE_MAX_OUT 8
 
@@ -24,12 +24,21 @@ typedef struct {
   unsigned port;
   /* INPUT_RIST */
   char rist_uri[256]; /* rist://@host:port[?query], @ required (listen) */
+  /* INPUT_SRT, single peer, no bonding/rendezvous (dipisrt for that) */
+  int srt_family; /* AF_INET or AF_INET6, display only */
+  char srt_host[64];
+  unsigned srt_port;
+  int srt_listen; /* 1 = @, bind/listen/accept. 0 = call out (connect) */
 } input_t;
 
 typedef struct {
   out_kind_t kind;
   char file_path[512]; /* OUT_FILE, "-" = stdout */
   char rtmp_url[600];  /* OUT_RTMP / OUT_RTMPS, passed to rtmpout's own parser as-is */
+  /* OUT_SRT: one peer per target, not bonded (repeat -o for more), always calls out */
+  int srt_family; /* AF_INET or AF_INET6, display only */
+  char srt_host[64];
+  unsigned srt_port;
 } out_target_t;
 
 typedef struct {
@@ -49,20 +58,30 @@ typedef struct {
   int verbose;                 /* -v */
   int daemonize;               /* -d, --daemonize: fork to background after startup */
   int color_mode;              /* int, actually a log_color_t */
-  int biss2_sw_given;                   /* --biss2-sw */
-  unsigned char biss2_sw[BISS_KEY_LEN]; /* --biss2-sw, parsed */
-  int biss2_esw_given;                  /* --biss2-esw, mutually exclusive with --biss2-sw */
+  int biss2_sw_given;                    /* --biss2-sw */
+  unsigned char biss2_sw[BISS_KEY_LEN];  /* --biss2-sw, parsed */
+  int biss2_esw_given;                   /* --biss2-esw, mutually exclusive with --biss2-sw */
   unsigned char biss2_esw[BISS_KEY_LEN]; /* --biss2-esw, parsed */
   unsigned char biss2_id[BISS_KEY_LEN];  /* --biss2-id, required with --biss2-esw */
   int biss1_sw_given;                    /* --biss1-sw, mutually exclusive with --biss2-sw/--biss2-esw */
   unsigned char biss1_sw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into full checksummed CSA1 CW */
   const char *biss2_ca_key_path;         /* --biss2-ca-key, receiver RSA private key PEM, required only if stream turns out to be BISS Mode CA */
   ecm_profile_t ecm_profile;             /* --ecm-profile, ecm_profile.set == 0 = AES-256-ECB/CBCnoIV, unchanged */
-  const char *metrics_sock;    /* --metrics. NULL = default socket path */
-  const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
-  unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
-  unsigned max_services;       /* --max-services. 0 = default (32) */
-  int rist_profile_main;       /* --profile, -i rist:// only. 0 = simple (default) */
+  const char *metrics_sock;              /* --metrics. NULL = default socket path */
+  const char *metrics_id;                /* --metrics-id. NULL = metrics disabled */
+  unsigned metrics_interval_s;           /* --metrics-interval. 0 = default */
+  unsigned max_services;                 /* --max-services. 0 = default (32) */
+  int rist_profile_main;                 /* --profile, -i rist:// only. 0 = simple (default) */
+  char srt_passphrase_in[128];           /* --srt-passphrase-in, -i srt:// only. "" = no encryption */
+  int srt_pbkeylen_in;                   /* --srt-pbkeylen-in, requires --srt-passphrase-in. 0 = library default (16) */
+  char srt_streamid_in[128];             /* --srt-streamid-in, -i srt:// only. "" = none */
+  char srt_packetfilter_in[256];         /* --srt-packetfilter-in, -i srt:// only. "" = none */
+  unsigned srt_latency_in_ms;            /* --srt-latency-in, -i srt:// only. 0 = library default */
+  char srt_passphrase[128];              /* --srt-passphrase, -o srt:// only, applies to every -o srt:// target. "" = no encryption */
+  int srt_pbkeylen;                      /* --srt-pbkeylen, requires --srt-passphrase. 0 = library default (16) */
+  char srt_streamid[128];                /* --srt-streamid, -o srt:// only. "" = none */
+  char srt_packetfilter[256];            /* --srt-packetfilter, -o srt:// only. "" = none */
+  unsigned srt_latency_ms;               /* --srt-latency, -o srt:// only. 0 = library default */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

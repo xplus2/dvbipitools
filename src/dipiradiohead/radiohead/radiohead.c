@@ -38,6 +38,38 @@ ristout_t *radiohead_rist_open(const config_t *cfg) {
   return ristout_open(&rc);
 }
 
+srtsink_t *radiohead_srt_open(const config_t *cfg) {
+  srtsink_cfg_t sc;
+
+  memset(&sc, 0, sizeof sc);
+  for (unsigned i = 0; i < cfg->n_srt; i++) {
+    sc.peers[i].host = cfg->srt_host[i];
+    sc.peers[i].port = cfg->srt_port[i];
+  }
+  sc.npeers = (int)cfg->n_srt;
+  sc.group_mode = cfg->srt_group_mode == SRT_BOND_BROADCAST ? SRTSINK_GROUP_BROADCAST
+                  : cfg->srt_group_mode == SRT_BOND_BACKUP  ? SRTSINK_GROUP_BACKUP : SRTSINK_GROUP_NONE;
+  sc.passphrase = cfg->srt_passphrase;
+  sc.pbkeylen = cfg->srt_pbkeylen;
+  sc.streamid = cfg->srt_streamid;
+  sc.packetfilter = cfg->srt_packetfilter;
+  sc.latency_ms = cfg->srt_latency_ms;
+  sc.verbose = cfg->verbose;
+  return srtsink_open(&sc);
+}
+
+void radiohead_srt_service(out_ctx_t *o) {
+  srtsink_status_t st;
+
+  if (!o->srt)
+    return;
+  srtsink_service(o->srt, &st);
+  if (st.connected != o->srt_connected) {
+    log_line("srt output: %s", st.connected ? "connected" : "link down, reconnecting");
+    o->srt_connected = st.connected;
+  }
+}
+
 void flush_batch(out_ctx_t *o) {
   size_t n = (size_t)o->batch_count * 188;
 
@@ -53,6 +85,8 @@ void flush_batch(out_ctx_t *o) {
   }
   if (o->rist)
     note_send_result(ristout_write(o->rist, o->batch + 12, n) >= 0, &o->rist_had_error, &o->errors, "rist");
+  if (o->srt)
+    srtsink_write(o->srt, o->batch + 12, n);
   o->batch_count = 0;
 }
 
@@ -214,6 +248,18 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
       return 1;
     }
   }
+  if (cfg->n_srt > 0) {
+    out.srt = radiohead_srt_open(cfg);
+    if (!out.srt) {
+      if (out.rist)
+        ristout_close(out.rist);
+      if (out.rtph)
+        rtpheader_free(out.rtph);
+      if (mc)
+        mcast_close(mc);
+      return 1;
+    }
+  }
 
   if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled) {
     unsigned audio_pid = TSPACKETIZER_PID_AUDIO;
@@ -267,7 +313,9 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     }
 
     while (!signal_stop_requested()) {
-      int step = process_single_frame(&tk, src);
+      int step;
+      radiohead_srt_service(&out);
+      step = process_single_frame(&tk, src);
       if (step == -2) {
         rc = 1;
         goto done;
@@ -300,6 +348,8 @@ done:
     rtpheader_free(out.rtph);
   if (out.rist)
     ristout_close(out.rist);
+  if (out.srt)
+    srtsink_close(out.srt);
   if (mc)
     mcast_close(mc);
 

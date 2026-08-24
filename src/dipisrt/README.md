@@ -83,6 +83,8 @@ dipisrt -i rtp://@239.1.1.1:5000 -o srt://1.2.3.4:9000 --passphrase correcthorse
   + Most shipped binaries of libsrt have this disabled.
     `dipisrt` detects this at runtime and enables the feature only if the linked library supports it.
     You are encouraged to carry out your own testing before using it for anything that matters.
+  + If you wondered why the automated bonding tests (GitHub Actions, latest tests, bonding-tests) don't test
+    recovery after a 100% link loss (but 95% instead): libsrt doesn't do that. Ever.
 * FEC (`--packetfilter`) is off by default, matching libsrt's own default.
 * The sender's outgoing queue is sized automatically from the observed input bitrate,
   `--latency`, and `--send-buffer-mult`, so it can absorb a struggling link without

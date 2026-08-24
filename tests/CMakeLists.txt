@@ -82,6 +82,7 @@ dvbipitools_add_unit_test(lib_demux_mpts_probe
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -228,6 +229,7 @@ dvbipitools_add_unit_test(lib_net_tssource_async
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -245,6 +247,7 @@ dvbipitools_add_unit_test(lib_net_tssource_file
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -430,6 +433,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/signal.c
         ${CMAKE_SOURCE_DIR}/src/lib/secure_zero.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
@@ -789,6 +793,7 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/retryset.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open_async.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/frame.c
@@ -889,6 +894,7 @@ dvbipitools_add_unit_test(dipitvhead_source
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -927,6 +933,7 @@ dvbipitools_add_unit_test(dipitvhead_discover
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -1059,6 +1066,8 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -1224,6 +1233,8 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -1630,6 +1641,7 @@ if (TARGET dipirist)
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -1700,6 +1712,7 @@ if (TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c

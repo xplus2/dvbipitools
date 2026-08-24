@@ -3,8 +3,10 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "lib/demux/mpts_probe.h"
@@ -26,6 +28,7 @@
 #include "version.h"
 
 #define MPTS_NAME_WAIT_MS 3000
+#define DIPIDESCRAMBLE_SRT_DRAIN_MS_DEFAULT 1000 /* srt's own default latency buffer */
 
 static int open_output(const char *path) {
   int fd;
@@ -47,6 +50,8 @@ static tssrc_kind_t tssrc_kind_of(input_kind_t k) {
     return TSSRC_STDIN;
   case INPUT_RIST:
     return TSSRC_RIST;
+  case INPUT_SRT:
+    return TSSRC_SRT;
   }
   return TSSRC_STDIN;
 }
@@ -111,6 +116,7 @@ static int open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
 
   lc->n_outfd = 0;
   lc->n_rtmp = 0;
+  lc->n_srt = 0;
   *mkv_fd = -1;
 
   for (int i = 0; i < cfg->n_out; i++) {
@@ -126,6 +132,26 @@ static int open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
         return -1;
       lc->rtmp_had_error[lc->n_rtmp] = 0;
       lc->n_rtmp++;
+      continue;
+    }
+    if (o->kind == OUT_SRT) {
+      srtsink_cfg_t sc;
+      memset(&sc, 0, sizeof sc);
+      sc.peers[0].host = o->srt_host;
+      sc.peers[0].port = o->srt_port;
+      sc.npeers = 1;
+      sc.group_mode = SRTSINK_GROUP_NONE;
+      sc.passphrase = cfg->srt_passphrase;
+      sc.pbkeylen = cfg->srt_pbkeylen;
+      sc.streamid = cfg->srt_streamid;
+      sc.packetfilter = cfg->srt_packetfilter;
+      sc.latency_ms = cfg->srt_latency_ms;
+      sc.verbose = cfg->verbose;
+      lc->srt[lc->n_srt] = srtsink_open(&sc);
+      if (!lc->srt[lc->n_srt])
+        return -1;
+      lc->srt_connected[lc->n_srt] = 0;
+      lc->n_srt++;
       continue;
     }
     if (is_mkv_fmt) {
@@ -165,6 +191,8 @@ static void push_metrics(metrics_exporter_t *mx, const loop_ctx_t *lc) {
 static void close_outputs(loop_ctx_t *lc, int mkv_fd) {
   for (int i = 0; i < lc->n_rtmp; i++)
     rtmpout_close(lc->rtmp[i]);
+  for (int i = 0; i < lc->n_srt; i++)
+    srtsink_close(lc->srt[i]);
   for (int i = 0; i < lc->n_outfd; i++)
     if (lc->outfd[i] != STDOUT_FILENO)
       close(lc->outfd[i]);
@@ -233,6 +261,16 @@ int main(int argc, char **argv) {
   if (cfg.input.kind == INPUT_RIST) {
     tc.rist_uri = cfg.input.rist_uri;
     tc.rist_profile_main = cfg.rist_profile_main;
+  } else if (cfg.input.kind == INPUT_SRT) {
+    tc.srt_host = cfg.input.srt_host;
+    tc.srt_port = cfg.input.srt_port;
+    tc.srt_listen = cfg.input.srt_listen;
+    tc.srt_passphrase = cfg.srt_passphrase_in;
+    tc.srt_pbkeylen = cfg.srt_pbkeylen_in;
+    tc.srt_streamid = cfg.srt_streamid_in;
+    tc.srt_packetfilter = cfg.srt_packetfilter_in;
+    tc.srt_latency_ms = cfg.srt_latency_in_ms;
+    tc.srt_verbose = cfg.verbose;
   } else {
     tc.family = cfg.input.family;
     tc.group = cfg.input.group;
@@ -290,7 +328,24 @@ int main(int argc, char **argv) {
   metrics_exporter_init(&mx, METRICS_COMPONENT_DESCRAMBLE, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
 
   while (!signal_stop_requested()) {
-    ssize_t n = tssrc_read(src, buf, sizeof buf, NULL);
+    struct pollfd pfd;
+    ssize_t n;
+    int pr;
+
+    srt_service_all(&lc);
+
+    pfd.fd = tssrc_fd(src);
+    pfd.events = POLLIN;
+    pr = poll(&pfd, 1, 100); /* bounded: keeps srt_service_all() ticking on quiet input too */
+    if (pr < 0) {
+      if (errno == EINTR)
+        continue;
+      break;
+    }
+    if (pr == 0)
+      continue;
+
+    n = tssrc_read(src, buf, sizeof buf, NULL);
     if (n < 0)
       break;
     if (n == 0)
@@ -307,6 +362,12 @@ int main(int argc, char **argv) {
 
   metrics_exporter_close(&mx);
   pipeline_flush(&lc);
+  if (!signal_stop_requested() && lc.n_srt > 0) {
+    /* eof/err, not live stop: drain srt retransmits before teardown */
+    unsigned drain_ms = cfg.srt_latency_ms ? cfg.srt_latency_ms : DIPIDESCRAMBLE_SRT_DRAIN_MS_DEFAULT;
+    struct timespec ts = {(time_t)(drain_ms / 1000), (long)(drain_ms % 1000) * 1000000L};
+    nanosleep(&ts, NULL);
+  }
   rc = (lc.fatal || lc.emit_failed) ? 1 : 0;
 
 cleanup:

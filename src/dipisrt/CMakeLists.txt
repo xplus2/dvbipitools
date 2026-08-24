@@ -16,4 +16,10 @@ if (DIPISRT_FOUND)
     if (DIPISRT_HAVE_BONDING)
         target_compile_definitions(dipisrt PRIVATE DIPISRT_HAVE_BONDING)
     endif ()
+
+    # srtsrc.c's reader thread (feeds tssource.c's TSSRC_SRT, unused by dipisrt itself
+    # but linked in for multicall-binary symbol consistency): pthread is a hard dependency
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+    find_package(Threads REQUIRED)
+    target_link_libraries(dipisrt PRIVATE Threads::Threads)
 endif ()

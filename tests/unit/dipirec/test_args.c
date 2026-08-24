@@ -183,6 +183,90 @@ START_TEST(ret_is_rejected_with_rist_input) {
 }
 END_TEST
 
+START_TEST(srt_input_listen_is_accepted) {
+  char *argv[] = {"dipirec", "-i", "srt://@127.0.0.1:6000", "-o", "-", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.source.kind, URI_SRT);
+  ck_assert_int_eq(cfg.source.srt_listen, 1);
+  ck_assert_str_eq(cfg.source.srt_host, "127.0.0.1");
+  ck_assert_uint_eq(cfg.source.srt_port, 6000);
+}
+END_TEST
+
+START_TEST(srt_input_caller_is_accepted) {
+  char *argv[] = {"dipirec", "-i", "srt://127.0.0.1:6000", "-o", "-", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.source.kind, URI_SRT);
+  ck_assert_int_eq(cfg.source.srt_listen, 0);
+}
+END_TEST
+
+START_TEST(srt_passphrase_in_length_is_validated) {
+  char *argv[] = {"dipirec", "-i", "srt://@127.0.0.1:6000", "-o", "-", "--srt-passphrase-in", "short", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_pbkeylen_in_requires_passphrase_in) {
+  char *argv[] = {"dipirec", "-i", "srt://@127.0.0.1:6000", "-o", "-", "--srt-pbkeylen-in", "16", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_output_caller_is_accepted) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:7000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.out[0].kind, OUT_SRT);
+  ck_assert_str_eq(cfg.out[0].srt_host, "1.2.3.4");
+  ck_assert_uint_eq(cfg.out[0].srt_port, 7000);
+}
+END_TEST
+
+START_TEST(srt_output_listen_is_rejected) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://@1.2.3.4:7000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(more_than_one_srt_output_is_accepted) {
+  /* unlike rist://, srtout has no per-process context limit: independent targets are fine */
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:7000", "-o", "srt://5.6.7.8:7000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.n_out, 2);
+  ck_assert_int_eq(cfg.out[0].kind, OUT_SRT);
+  ck_assert_int_eq(cfg.out[1].kind, OUT_SRT);
+}
+END_TEST
+
+START_TEST(srt_input_and_srt_output_together_is_accepted) {
+  /* unlike rist://, srt has no per-process context limit */
+  char *argv[] = {"dipirec", "-i", "srt://@127.0.0.1:6000", "-o", "srt://1.2.3.4:7000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+}
+END_TEST
+
+START_TEST(srt_passphrase_length_is_validated) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:7000", "--srt-passphrase", "short", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_pbkeylen_requires_passphrase) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:7000", "--srt-pbkeylen", "16", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipirec_args");
   TCase *tc = tcase_create("core");
@@ -208,6 +292,16 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, ret_is_rejected_with_rist_input);
   tcase_add_test(tc, rist_input_and_rist_output_together_is_rejected);
   tcase_add_test(tc, more_than_one_rist_output_is_rejected);
+  tcase_add_test(tc, srt_input_listen_is_accepted);
+  tcase_add_test(tc, srt_input_caller_is_accepted);
+  tcase_add_test(tc, srt_passphrase_in_length_is_validated);
+  tcase_add_test(tc, srt_pbkeylen_in_requires_passphrase_in);
+  tcase_add_test(tc, srt_output_caller_is_accepted);
+  tcase_add_test(tc, srt_output_listen_is_rejected);
+  tcase_add_test(tc, more_than_one_srt_output_is_accepted);
+  tcase_add_test(tc, srt_input_and_srt_output_together_is_accepted);
+  tcase_add_test(tc, srt_passphrase_length_is_validated);
+  tcase_add_test(tc, srt_pbkeylen_requires_passphrase);
   suite_add_tcase(s, tc);
   return s;
 }

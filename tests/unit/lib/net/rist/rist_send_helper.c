@@ -8,7 +8,7 @@
 #include <librist/librist.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
+#include <time.h>
 
 int main(int argc, char **argv) {
   struct rist_ctx *ctx;
@@ -46,9 +46,11 @@ int main(int argc, char **argv) {
   db.payload = argv[2];
   db.payload_len = strlen(argv[2]);
   for (tries = 0; tries < 50; tries++) {
+    struct timespec retry_wait = {0, 20000000L};
+
     if (rist_sender_data_write(ctx, &db) >= 0)
       break;
-    usleep(20000);
+    nanosleep(&retry_wait, NULL);
   }
   if (tries >= 50) {
     fprintf(stderr, "rist_sender_data_write never succeeded\n");
@@ -56,7 +58,10 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  usleep(300000); /* let it actually go out before tearing down */
+  {
+    struct timespec drain_wait = {0, 300000000L}; /* let it actually go out before tearing down */
+    nanosleep(&drain_wait, NULL);
+  }
   rist_destroy(ctx);
   return 0;
 }

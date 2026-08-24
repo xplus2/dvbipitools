@@ -45,9 +45,13 @@ PAT-listed program whose PMT actually arrives) unless overridden with
 .PP
 Output goes to a multicast group/port
 .RB ( \-m ,
-RTP-wrapped by default) and/or one or more bonded RIST peers
+RTP-wrapped by default) and/or one or more bonded RIST or SRT peers
 .RB ( \-R ,
-requires librist); at least one of the two is required. Target output
+requires librist or libsrt, one scheme at a time); at least one of
+.B \-m
+or
+.B \-R
+is required. Target output
 bitrate can be shaped with
 .BR \-b ,
 combined with null-packet stuffing
@@ -81,6 +85,7 @@ Input source:
 .BR http:// ,
 .BR https:// ,
 .BR rist://@ host:port[?query] ,
+.BR srt://@ host:port ,
 or
 .B \-
 for stdin. Repeatable.
@@ -93,6 +98,14 @@ entries are independent programs, not a bonded stream; use
 .BR dipirist (1)
 as a bridge for bonded RIST input. Each RIST input costs an extra
 thread beyond what other input kinds cost.
+.B srt://
+takes a single peer only and requires libsrt;
+.B @
+is required, same reason as
+.BR rist:// .
+No bonding or rendezvous; use
+.BR dipisrt (1)
+as a bridge for that. Each SRT input costs an extra thread too.
 .TP
 .BR \-p ", " \-\-pmt\-pid " " \fIpid\fR
 For the
@@ -153,6 +166,36 @@ only. Default:
 enables PSK encryption via a
 .B ?secret=
 query parameter on that input's URI.
+.TP
+.B \-\-srt\-passphrase\-in \fIpw\fR
+For the
+.B \-i
+right before this:
+.B \-i srt://
+only. Enables encryption, 10..79 chars.
+.TP
+.B \-\-srt\-pbkeylen\-in \fI16\fR|\fI24\fR|\fI32\fR
+For the
+.B \-i
+right before this: key length. Requires
+.BR \-\-srt\-passphrase\-in .
+Default
+.BR 16 .
+.TP
+.B \-\-srt\-streamid\-in \fIid\fR
+For the
+.B \-i
+right before this: SRT streamid. Default: none.
+.TP
+.B \-\-srt\-packetfilter\-in \fIcfg\fR
+For the
+.B \-i
+right before this: SRT packet filter config string. Default: none.
+.TP
+.B \-\-srt\-latency\-in \fIms\fR
+For the
+.B \-i
+right before this: SRT latency. Default: library default.
 .SS Output
 .TP
 .BR \-m ", " \-\-mcast " " \fIgroup\fR:\fIport\fR
@@ -174,30 +217,68 @@ Multicast TTL / hop limit. Default
 .TP
 .BR \-R ", " \-\-rist " " \fIuri\fR
 .B rist://host:port\fR[\fI?query\fR]
+or
+.B srt://host:port
 output, bonded with any other
 .B \-R
-given. Requires librist.
+of the same scheme given.
+.B \-R
+is one scheme at a time; mixing
+.B rist://
+and
+.B srt://
+peers is rejected. Requires librist or libsrt.
 .TP
 .B \-\-profile \fIp\fR
 .B simple
 or
 .BR main ;
-.B \-R
+.B \-R rist://
 peers only. Default
 .BR simple .
 .TP
 .B \-\-secret \fIpsk\fR
-.B \-R
+.B \-R rist://
 pre-shared key. Requires
 .BR \-\-profile\ main .
 .TP
 .B \-\-cname \fIname\fR
-.B \-R
+.B \-R rist://
 RTCP cname. Default: library default.
 .TP
 .B \-\-buffer \fIms\fR
-.B \-R
+.B \-R rist://
 recovery buffer. Default: library default.
+.TP
+.B \-\-srt\-group\-mode \fIbroadcast\fR|\fIbackup\fR
+Bonding mode across more than one
+.B \-R srt://
+peer. Required with more than one such peer, rejected with exactly one.
+.TP
+.B \-\-srt\-passphrase \fIpw\fR
+.B \-R srt://
+encryption passphrase, 10..79 chars. Applies to every
+.B \-R srt://
+peer.
+.TP
+.B \-\-srt\-pbkeylen \fI16\fR|\fI24\fR|\fI32\fR
+.B \-R srt://
+key length. Requires
+.BR \-\-srt\-passphrase .
+Default
+.BR 16 .
+.TP
+.B \-\-srt\-streamid \fIid\fR
+.B \-R srt://
+streamid. Default: none.
+.TP
+.B \-\-srt\-packetfilter \fIcfg\fR
+.B \-R srt://
+packet filter config string. Default: none.
+.TP
+.B \-\-srt\-latency \fIms\fR
+.B \-R srt://
+latency. Default: library default.
 .TP
 .BR \-n ", " \-\-nit " " \fItext\fR | \fB\-\fR
 NIT for the whole output. Default: passthrough of the source's NIT.
@@ -408,6 +489,7 @@ Non-zero on argument errors or I/O/network failure.
 .BR dipiradiohead (1),
 .BR dipimetrics (1),
 .BR dipirist (1),
+.BR dipisrt (1),
 .BR dipifccret (1)
 .PP
 Project homepage: https://github.com/xplus2/dvbipitools

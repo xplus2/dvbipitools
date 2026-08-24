@@ -76,7 +76,7 @@ static int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
 }
 
 /* 0 written fully, -1 unrecoverable (reader gone or stopping) */
-static int write_all(ristin_t *r, const unsigned char *buf, size_t n) {
+static int write_all(const ristin_t *r, const unsigned char *buf, size_t n) {
   while (n) {
     ssize_t w = write(r->pfd[1], buf, n);
 

@@ -67,6 +67,17 @@ static int source_parse(const char *uri, source_t *s) {
     bufcpy(s->rist_uri, sizeof s->rist_uri, uri);
     return 0;
   }
+  if (strncmp(uri, "srt://", 6) == 0) {
+    const char *rest = uri + 6;
+    int listen = *rest == '@';
+    if (listen)
+      rest++;
+    if (argutil_addrport_parse(rest, &s->srt_family, s->srt_host, sizeof s->srt_host, &s->srt_port))
+      return -1;
+    s->kind = SRC_SRT;
+    s->srt_listen = listen;
+    return 0;
+  }
   return -1;
 }
 
@@ -89,6 +100,12 @@ void source_describe(const source_t *s, char *buf, size_t n) {
     break;
   case SRC_RIST:
     snprintf(buf, n, "%s", s->rist_uri);
+    break;
+  case SRC_SRT:
+    if (s->srt_family == AF_INET6)
+      snprintf(buf, n, "srt://%s[%s]:%u", s->srt_listen ? "@" : "", s->srt_host, s->srt_port);
+    else
+      snprintf(buf, n, "srt://%s%s:%u", s->srt_listen ? "@" : "", s->srt_host, s->srt_port);
     break;
   }
 }
@@ -197,8 +214,10 @@ static void print_help(void) {
       "options:\n"
       "  -i, --input <uri>          udp://, rtp://, http(s)://, rist://@host:port[?query]\n"
       "                             (single peer, requires librist; @ marks it listening; no\n"
-      "                             bonding, use dipirist for that), or \"-\" for stdin; repeatable.\n"
-      "                             each RIST input costs an extra thread\n"
+      "                             bonding, use dipirist for that), srt://[@]host:port (single\n"
+      "                             peer, requires libsrt; no bonding/rendezvous, use dipisrt\n"
+      "                             for that), or \"-\" for stdin; repeatable.\n"
+      "                             each RIST/SRT input costs an extra thread\n"
       "  -p, --pmt-pid <pid>        for -i right before: select program by PMT PID\n"
       "                             (dec or 0x-hex; default: first live one)\n"
       "      --sid <n>              for -i right before: service_id/program_number\n"
@@ -216,16 +235,32 @@ static void print_help(void) {
       "                             (required with --hbbtv)\n"
       "      --rist-profile-in <p>  for -i right before: simple|main; -i rist:// only\n"
       "                             (default: simple)\n"
+      "      --srt-passphrase-in <pw>   for -i right before: passphrase, 10..79 chars;\n"
+      "                             -i srt:// only\n"
+      "      --srt-pbkeylen-in <n>  for -i right before: AES key length 16|24|32, requires\n"
+      "                             --srt-passphrase-in\n"
+      "      --srt-streamid-in <id> for -i right before: SRTO_STREAMID; -i srt:// only\n"
+      "      --srt-packetfilter-in <c>  for -i right before: SRTO_PACKETFILTER; -i srt:// only\n"
+      "      --srt-latency-in <ms>  for -i right before: SRTO_LATENCY; -i srt:// only\n"
       "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
       "  -O, --out-iface <iface>    outgoing multicast interface\n"
       "  -u, --udp                  plain UDP output (default: RTP-wrapped; -m output only)\n"
       "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
-      "  -R, --rist <uri>           rist://host:port[?query] output, bonded with any other -R\n"
-      "                             given (requires librist)\n"
-      "      --profile <p>          simple|main; -R peers only (default: simple)\n"
-      "      --secret <psk>         -R pre-shared key; requires --profile main\n"
-      "      --cname <name>         -R cname (default: library default)\n"
-      "      --buffer <ms>          -R recovery buffer (default: library default)\n"
+      "  -R, --rist <uri>           rist://host:port[?query] or srt://host:port output,\n"
+      "                             bonded with any other -R of the same scheme given\n"
+      "                             (requires librist/libsrt respectively; one scheme at a\n"
+      "                             time, rist:// and srt:// don't mix)\n"
+      "      --profile <p>          simple|main; -R rist:// peers only (default: simple)\n"
+      "      --secret <psk>         -R rist:// pre-shared key; requires --profile main\n"
+      "      --cname <name>         -R rist:// cname (default: library default)\n"
+      "      --buffer <ms>          -R rist:// recovery buffer (default: library default)\n"
+      "      --srt-group-mode <m>   broadcast|backup; required when bonding more than one\n"
+      "                             -R srt:// peer\n"
+      "      --srt-passphrase <pw>  passphrase for every -R srt:// peer, 10..79 chars\n"
+      "      --srt-pbkeylen <n>     AES key length for --srt-passphrase: 16|24|32\n"
+      "      --srt-streamid <id>    SRTO_STREAMID for every -R srt:// peer\n"
+      "      --srt-packetfilter <c> SRTO_PACKETFILTER for every -R srt:// peer\n"
+      "      --srt-latency <ms>     SRTO_LATENCY for every -R srt:// peer\n"
       "  -n, --nit <text|->         NIT (whole output): default passthrough source; \"-\" drops\n"
       "                             it; text = our own\n"
       "  -b, --bitrate <kbps>       target output bitrate, shared across all inputs (default: no shaping)\n"
@@ -381,12 +416,24 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"daemonize", no_argument, 0, 'd'},
       {"strip", required_argument, 0, 1034},
       {"rist-profile-in", required_argument, 0, 1036},
+      {"srt-passphrase-in", required_argument, 0, 1037},
+      {"srt-pbkeylen-in", required_argument, 0, 1038},
+      {"srt-streamid-in", required_argument, 0, 1039},
+      {"srt-packetfilter-in", required_argument, 0, 1040},
+      {"srt-latency-in", required_argument, 0, 1041},
+      {"srt-group-mode", required_argument, 0, 1042},
+      {"srt-passphrase", required_argument, 0, 1043},
+      {"srt-pbkeylen", required_argument, 0, 1044},
+      {"srt-streamid", required_argument, 0, 1045},
+      {"srt-packetfilter", required_argument, 0, 1046},
+      {"srt-latency", required_argument, 0, 1047},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_mcast = 0;
   int have_cas_pids = 0, any_cas_flag = 0;
   const char *profile_arg = NULL;
   int have_secret = 0;
+  const char *srt_group_mode_arg = NULL;
   int c;
 
   memset(cfg, 0, sizeof *cfg);
@@ -806,19 +853,43 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->daemonize = 1;
         break;
       case 'R':
-        if (strncmp(optarg, "rist://", 7) != 0) {
-          argerr("invalid -R rist uri: %s (must start with rist://)", optarg);
+        if (strncmp(optarg, "rist://", 7) == 0) {
+          if (cfg->n_srt > 0) {
+            argerr("-R: rist:// and srt:// peers cannot mix in one run");
+            return ARGS_ERR;
+          }
+          if (cfg->n_rist >= ARGS_MAX_RIST_PEERS) {
+            argerr("too many -R peers (max %d)", ARGS_MAX_RIST_PEERS);
+            return ARGS_ERR;
+          }
+          if (bufcpy(cfg->rist_uri[cfg->n_rist], sizeof cfg->rist_uri[0], optarg) >= sizeof cfg->rist_uri[0]) {
+            argerr("-R rist uri too long: %s", optarg);
+            return ARGS_ERR;
+          }
+          cfg->n_rist++;
+        } else if (strncmp(optarg, "srt://", 6) == 0) {
+          if (cfg->n_rist > 0) {
+            argerr("-R: rist:// and srt:// peers cannot mix in one run");
+            return ARGS_ERR;
+          }
+          if (cfg->n_srt >= ARGS_MAX_SRT_PEERS) {
+            argerr("too many -R srt:// peers (max %d)", ARGS_MAX_SRT_PEERS);
+            return ARGS_ERR;
+          }
+          if (optarg[6] == '@') {
+            argerr("-R srt:// output always calls out, no listener mode");
+            return ARGS_ERR;
+          }
+          if (argutil_addrport_parse(optarg + 6, &cfg->srt_family[cfg->n_srt], cfg->srt_host[cfg->n_srt],
+                                      sizeof cfg->srt_host[0], &cfg->srt_port[cfg->n_srt])) {
+            argerr("invalid -R srt uri: %s", optarg);
+            return ARGS_ERR;
+          }
+          cfg->n_srt++;
+        } else {
+          argerr("invalid -R uri: %s (must start with rist:// or srt://)", optarg);
           return ARGS_ERR;
         }
-        if (cfg->n_rist >= ARGS_MAX_RIST_PEERS) {
-          argerr("too many -R peers (max %d)", ARGS_MAX_RIST_PEERS);
-          return ARGS_ERR;
-        }
-        if (bufcpy(cfg->rist_uri[cfg->n_rist], sizeof cfg->rist_uri[0], optarg) >= sizeof cfg->rist_uri[0]) {
-          argerr("-R rist uri too long: %s", optarg);
-          return ARGS_ERR;
-        }
-        cfg->n_rist++;
         break;
       case 1030:
         profile_arg = optarg;
@@ -860,6 +931,110 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->inputs[cfg->n_inputs - 1].rist_profile_main = v;
         break;
       }
+      case 1037:
+        if (cfg->n_inputs == 0) {
+          argerr("--srt-passphrase-in must follow the -i it names");
+          return ARGS_ERR;
+        }
+        if (bufcpy(cfg->inputs[cfg->n_inputs - 1].srt_passphrase_in, sizeof cfg->inputs[0].srt_passphrase_in, optarg) >=
+            sizeof cfg->inputs[0].srt_passphrase_in) {
+          argerr("--srt-passphrase-in too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1038: {
+        char *end;
+        unsigned long v;
+        if (cfg->n_inputs == 0) {
+          argerr("--srt-pbkeylen-in must follow the -i it names");
+          return ARGS_ERR;
+        }
+        v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
+          argerr("invalid --srt-pbkeylen-in: %s (16|24|32)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->inputs[cfg->n_inputs - 1].srt_pbkeylen_in = (int)v;
+        break;
+      }
+      case 1039:
+        if (cfg->n_inputs == 0) {
+          argerr("--srt-streamid-in must follow the -i it names");
+          return ARGS_ERR;
+        }
+        if (bufcpy(cfg->inputs[cfg->n_inputs - 1].srt_streamid_in, sizeof cfg->inputs[0].srt_streamid_in, optarg) >=
+            sizeof cfg->inputs[0].srt_streamid_in) {
+          argerr("--srt-streamid-in too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1040:
+        if (cfg->n_inputs == 0) {
+          argerr("--srt-packetfilter-in must follow the -i it names");
+          return ARGS_ERR;
+        }
+        if (bufcpy(cfg->inputs[cfg->n_inputs - 1].srt_packetfilter_in, sizeof cfg->inputs[0].srt_packetfilter_in, optarg) >=
+            sizeof cfg->inputs[0].srt_packetfilter_in) {
+          argerr("--srt-packetfilter-in too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1041: {
+        char *end;
+        unsigned long v;
+        if (cfg->n_inputs == 0) {
+          argerr("--srt-latency-in must follow the -i it names");
+          return ARGS_ERR;
+        }
+        v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 60000) {
+          argerr("invalid --srt-latency-in: %s (1..60000 ms)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->inputs[cfg->n_inputs - 1].srt_latency_in_ms = (unsigned)v;
+        break;
+      }
+      case 1042:
+        srt_group_mode_arg = optarg;
+        break;
+      case 1043:
+        if (bufcpy(cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg) >= sizeof cfg->srt_passphrase) {
+          argerr("--srt-passphrase too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1044: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
+          argerr("invalid --srt-pbkeylen: %s (16|24|32)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->srt_pbkeylen = (int)v;
+        break;
+      }
+      case 1045:
+        if (bufcpy(cfg->srt_streamid, sizeof cfg->srt_streamid, optarg) >= sizeof cfg->srt_streamid) {
+          argerr("--srt-streamid too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1046:
+        if (bufcpy(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg) >= sizeof cfg->srt_packetfilter) {
+          argerr("--srt-packetfilter too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1047: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 60000) {
+          argerr("invalid --srt-latency: %s (1..60000 ms)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->srt_latency_ms = (unsigned)v;
+        break;
+      }
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -889,8 +1064,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       return ARGS_ERR;
     }
   }
-  if (!have_mcast && cfg->n_rist == 0) {
-    argerr("need -m output multicast or at least one -R rist peer");
+  if (!have_mcast && cfg->n_rist == 0 && cfg->n_srt == 0) {
+    argerr("need -m output multicast or at least one -R peer");
     return ARGS_ERR;
   }
   if ((cfg->stuff || cfg->burst_limit) && !cfg->bitrate_kbps) {
@@ -916,8 +1091,47 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--secret requires --profile main");
     return ARGS_ERR;
   }
+  if (srt_group_mode_arg) {
+    static const enum_map_t map[] = {{"broadcast", SRT_BOND_BROADCAST}, {"backup", SRT_BOND_BACKUP}};
+    int v;
+    if (map_lookup(map, sizeof map / sizeof map[0], srt_group_mode_arg, &v)) {
+      argerr("invalid --srt-group-mode: %s (broadcast|backup)", srt_group_mode_arg);
+      return ARGS_ERR;
+    }
+    cfg->srt_group_mode = (srt_bond_mode_t)v;
+  }
+  if (cfg->n_srt > 1 && cfg->srt_group_mode == SRT_BOND_NONE) {
+    argerr("bonding several -R srt:// peers requires --srt-group-mode");
+    return ARGS_ERR;
+  }
+  if (cfg->n_srt == 1 && cfg->srt_group_mode != SRT_BOND_NONE) {
+    argerr("--srt-group-mode has no effect with a single -R srt:// peer");
+    return ARGS_ERR;
+  }
+  if (cfg->n_srt == 0 && (srt_group_mode_arg || cfg->srt_passphrase[0] || cfg->srt_pbkeylen ||
+                          cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
+    log_line(TOOL_NAME ": --srt-* has no effect without an -R srt:// peer");
+  if (cfg->srt_passphrase[0] && (strlen(cfg->srt_passphrase) < 10 || strlen(cfg->srt_passphrase) > 79)) {
+    argerr("--srt-passphrase must be 10..79 characters");
+    return ARGS_ERR;
+  }
+  if (cfg->srt_pbkeylen && !cfg->srt_passphrase[0]) {
+    argerr("--srt-pbkeylen requires --srt-passphrase");
+    return ARGS_ERR;
+  }
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
     dipitvhead_input_t *in = &cfg->inputs[i];
+    if (in->srt_passphrase_in[0] && (strlen(in->srt_passphrase_in) < 10 || strlen(in->srt_passphrase_in) > 79)) {
+      argerr("--srt-passphrase-in must be 10..79 characters");
+      return ARGS_ERR;
+    }
+    if (in->srt_pbkeylen_in && !in->srt_passphrase_in[0]) {
+      argerr("--srt-pbkeylen-in requires --srt-passphrase-in");
+      return ARGS_ERR;
+    }
+    if (in->input.kind != SRC_SRT && (in->srt_passphrase_in[0] || in->srt_pbkeylen_in || in->srt_streamid_in[0] ||
+                                       in->srt_packetfilter_in[0] || in->srt_latency_in_ms))
+      log_line(TOOL_NAME ": --srt-*-in has no effect, that -i isn't srt://");
     if (in->hbbtv_url && (!in->hbbtv_org_id || !in->hbbtv_app_id)) {
       argerr("--hbbtv requires --hbbtv-org-id and --hbbtv-app-id");
       return ARGS_ERR;

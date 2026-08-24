@@ -1,6 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <errno.h>
+#include <poll.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -28,10 +30,40 @@ ristout_t *tvhead_rist_open(const config_t *cfg) {
   return ristout_open(&rc);
 }
 
+srtsink_t *tvhead_srt_open(const config_t *cfg) {
+  srtsink_cfg_t sc;
+
+  memset(&sc, 0, sizeof sc);
+  for (unsigned i = 0; i < cfg->n_srt; i++) {
+    sc.peers[i].host = cfg->srt_host[i];
+    sc.peers[i].port = cfg->srt_port[i];
+  }
+  sc.npeers = (int)cfg->n_srt;
+  sc.group_mode = cfg->srt_group_mode == SRT_BOND_BROADCAST ? SRTSINK_GROUP_BROADCAST
+                  : cfg->srt_group_mode == SRT_BOND_BACKUP  ? SRTSINK_GROUP_BACKUP : SRTSINK_GROUP_NONE;
+  sc.passphrase = cfg->srt_passphrase;
+  sc.pbkeylen = cfg->srt_pbkeylen;
+  sc.streamid = cfg->srt_streamid;
+  sc.packetfilter = cfg->srt_packetfilter;
+  sc.latency_ms = cfg->srt_latency_ms;
+  sc.verbose = cfg->verbose;
+  return srtsink_open(&sc);
+}
+
+void tvhead_srt_service(out_ctx_t *o) {
+  srtsink_status_t st;
+  if (!o->srt)
+    return;
+  srtsink_service(o->srt, &st);
+  if (st.connected != o->srt_connected) {
+    log_line("srt output: %s", st.connected ? "connected" : "link down, reconnecting");
+    o->srt_connected = st.connected;
+  }
+}
+
 /* paces/accounts once per datagram, keeps burst_limit's sleep off per-packet path */
 void flush_batch(out_ctx_t *o) {
   size_t n = (size_t)o->batch_count * 188;
-
   if (o->batch_count == 0)
     return;
   bitrate_pace(o->pacer);
@@ -45,6 +77,8 @@ void flush_batch(out_ctx_t *o) {
   }
   if (o->rist)
     note_send_result(ristout_write(o->rist, o->batch + 12, n) >= 0, &o->rist_had_error, &o->errors, "rist");
+  if (o->srt)
+    srtsink_write(o->srt, o->batch + 12, n);
   bitrate_account_n(o->pacer, (unsigned)o->batch_count);
   o->batch_count = 0;
 }
@@ -79,7 +113,6 @@ int remux_cb(void *v, const unsigned char *pkt) {
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
                    const input_metrics_t *inputs, unsigned n_inputs, const ts_metrics_t *tsm, cas_t *cas) {
   metrics_writer_t w;
-
   if (!metrics_exporter_due(mx, now))
     return;
   if (metrics_exporter_begin(mx, &w, TOOL_VERSION))
@@ -145,9 +178,22 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
   fc.tsm = tsm;
 
   while (!signal_stop_requested()) {
+    struct pollfd pfd;
     int stuff_n;
     double now;
     ssize_t n;
+    int pr;
+    tvhead_srt_service(out);
+    pfd.fd = tvsrc_fd(src);
+    pfd.events = POLLIN;
+    pr = poll(&pfd, 1, 100); /* bounded: keeps tvhead_srt_service() ticking on quiet input too */
+    if (pr < 0 && errno != EINTR) {
+      cas_flush(cas, packet_cb, out);
+      return -1;
+    }
+    if (pr <= 0)
+      continue;
+
     reason = NET_ERR_OTHER;
     n = tvsrc_read(src, buf, sizeof buf, &reason);
     input_metrics_note_read(im, n, reason);

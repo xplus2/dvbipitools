@@ -79,6 +79,18 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
       return 1;
     }
   }
+  if (cfg->n_srt > 0) {
+    out.srt = tvhead_srt_open(cfg);
+    if (!out.srt) {
+      if (out.rist)
+        ristout_close(out.rist);
+      if (out.rtph)
+        rtpheader_free(out.rtph);
+      if (outmc)
+        mcast_close(outmc);
+      return 1;
+    }
+  }
 
   while (!signal_stop_requested()) {
     net_err_reason_t reason = NET_ERR_OTHER;
@@ -146,6 +158,8 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     rtpheader_free(out.rtph);
   if (out.rist)
     ristout_close(out.rist);
+  if (out.srt)
+    srtsink_close(out.srt);
   if (outmc)
     mcast_close(outmc);
 

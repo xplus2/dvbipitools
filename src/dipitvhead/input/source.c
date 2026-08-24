@@ -25,6 +25,8 @@ static tssrc_kind_t tssrc_kind_of(src_kind_t k) {
     return TSSRC_STDIN;
   case SRC_RIST:
     return TSSRC_RIST;
+  case SRC_SRT:
+    return TSSRC_SRT;
   }
   return TSSRC_STDIN;
 }
@@ -46,6 +48,15 @@ tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_er
   tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
   tc.rist_uri = input->input.rist_uri;
   tc.rist_profile_main = input->rist_profile_main;
+  tc.srt_host = input->input.srt_host;
+  tc.srt_port = input->input.srt_port;
+  tc.srt_listen = input->input.srt_listen;
+  tc.srt_passphrase = input->srt_passphrase_in;
+  tc.srt_pbkeylen = input->srt_pbkeylen_in;
+  tc.srt_streamid = input->srt_streamid_in;
+  tc.srt_packetfilter = input->srt_packetfilter_in;
+  tc.srt_latency_ms = input->srt_latency_in_ms;
+  tc.srt_verbose = cfg->verbose;
 
   s->t = tssrc_open(&tc, reason_out);
   if (!s->t) {
@@ -87,6 +98,15 @@ tvsrc_open_t *tvsrc_open_async_start(const config_t *cfg, const dipitvhead_input
   tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
   tc.rist_uri = input->input.rist_uri;
   tc.rist_profile_main = input->rist_profile_main;
+  tc.srt_host = input->input.srt_host;
+  tc.srt_port = input->input.srt_port;
+  tc.srt_listen = input->input.srt_listen;
+  tc.srt_passphrase = input->srt_passphrase_in;
+  tc.srt_pbkeylen = input->srt_pbkeylen_in;
+  tc.srt_streamid = input->srt_streamid_in;
+  tc.srt_packetfilter = input->srt_packetfilter_in;
+  tc.srt_latency_ms = input->srt_latency_in_ms;
+  tc.srt_verbose = cfg->verbose;
 
   o->o = tssrc_open_async_start(&tc, reason_out);
   if (!o->o) {

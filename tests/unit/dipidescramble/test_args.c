@@ -82,6 +82,91 @@ START_TEST(invalid_rist_profile_is_rejected) {
 }
 END_TEST
 
+START_TEST(srt_input_listen_is_accepted) {
+  char *argv[] = {"dipidescramble", "-i", "srt://@127.0.0.1:6000", "-o", "out.ts", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.input.kind, INPUT_SRT);
+  ck_assert_int_eq(cfg.input.srt_listen, 1);
+  ck_assert_str_eq(cfg.input.srt_host, "127.0.0.1");
+  ck_assert_uint_eq(cfg.input.srt_port, 6000);
+}
+END_TEST
+
+START_TEST(srt_input_caller_is_accepted) {
+  char *argv[] = {"dipidescramble", "-i", "srt://127.0.0.1:6000", "-o", "out.ts", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.input.kind, INPUT_SRT);
+  ck_assert_int_eq(cfg.input.srt_listen, 0);
+}
+END_TEST
+
+START_TEST(srt_passphrase_in_length_is_validated) {
+  char *argv[] = {"dipidescramble", "-i", "srt://@127.0.0.1:6000", "-o", "out.ts", "--srt-passphrase-in", "short", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_pbkeylen_in_requires_passphrase_in) {
+  char *argv[] = {"dipidescramble", "-i", "srt://@127.0.0.1:6000", "-o", "out.ts", "--srt-pbkeylen-in", "16", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_pbkeylen_in_bad_value_is_rejected) {
+  char *argv[] = {"dipidescramble", "-i", "srt://@127.0.0.1:6000", "-o", "out.ts", "--srt-passphrase-in", "0123456789", "--srt-pbkeylen-in", "20", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_output_caller_is_accepted) {
+  char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "srt://127.0.0.1:7000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.n_out, 1);
+  ck_assert_int_eq(cfg.out[0].kind, OUT_SRT);
+  ck_assert_str_eq(cfg.out[0].srt_host, "127.0.0.1");
+  ck_assert_uint_eq(cfg.out[0].srt_port, 7000);
+}
+END_TEST
+
+START_TEST(srt_output_listen_is_rejected) {
+  char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "srt://@127.0.0.1:7000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_output_repeatable_independent_targets) {
+  char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "srt://127.0.0.1:7000", "-o", "srt://127.0.0.1:7001", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.n_out, 2);
+  ck_assert_int_eq(cfg.out[0].kind, OUT_SRT);
+  ck_assert_int_eq(cfg.out[1].kind, OUT_SRT);
+  ck_assert_uint_eq(cfg.out[0].srt_port, 7000);
+  ck_assert_uint_eq(cfg.out[1].srt_port, 7001);
+}
+END_TEST
+
+START_TEST(srt_passphrase_length_is_validated) {
+  char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "srt://127.0.0.1:7000", "--srt-passphrase", "short", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_pbkeylen_requires_passphrase) {
+  char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "srt://127.0.0.1:7000", "--srt-pbkeylen", "16", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipidescramble_args");
   TCase *tc = tcase_create("core");
@@ -94,6 +179,16 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, rist_input_without_at_is_rejected);
   tcase_add_test(tc, rist_profile_main_is_parsed);
   tcase_add_test(tc, invalid_rist_profile_is_rejected);
+  tcase_add_test(tc, srt_input_listen_is_accepted);
+  tcase_add_test(tc, srt_input_caller_is_accepted);
+  tcase_add_test(tc, srt_passphrase_in_length_is_validated);
+  tcase_add_test(tc, srt_pbkeylen_in_requires_passphrase_in);
+  tcase_add_test(tc, srt_pbkeylen_in_bad_value_is_rejected);
+  tcase_add_test(tc, srt_output_caller_is_accepted);
+  tcase_add_test(tc, srt_output_listen_is_rejected);
+  tcase_add_test(tc, srt_output_repeatable_independent_targets);
+  tcase_add_test(tc, srt_passphrase_length_is_validated);
+  tcase_add_test(tc, srt_pbkeylen_requires_passphrase);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -12,6 +12,7 @@
 #include "record/priv.h"
 
 #define DIPIREC_RIST_DRAIN_MS_DEFAULT 1000 /* librist's own default recovery buffer length */
+#define DIPIREC_SRT_DRAIN_MS_DEFAULT 1000  /* srt's own default latency buffer */
 
 int record_run(const config_t *cfg, metrics_exporter_t *mx) {
   unsigned long long bytes = 0;
@@ -73,13 +74,21 @@ int record_run(const config_t *cfg, metrics_exporter_t *mx) {
   pace_free(pace);
 
   if (!stop_now(cfg, start)) {
-    /* eof/err, not live stop: drain rist arq retransmits before teardown */
-    int have_rist_out = 0;
-    for (int i = 0; i < n_sinks; i++)
+    /* eof/err, not live stop: drain rist/srt retransmits before teardown */
+    int have_rist_out = 0, have_srt_out = 0;
+    for (int i = 0; i < n_sinks; i++) {
       if (sinks[i].rist)
         have_rist_out = 1;
+      if (sinks[i].srt)
+        have_srt_out = 1;
+    }
     if (have_rist_out) {
       unsigned drain_ms = cfg->rist_buffer_ms ? cfg->rist_buffer_ms : DIPIREC_RIST_DRAIN_MS_DEFAULT;
+      struct timespec ts = {(time_t)(drain_ms / 1000), (long)(drain_ms % 1000) * 1000000L};
+      nanosleep(&ts, NULL);
+    }
+    if (have_srt_out) {
+      unsigned drain_ms = cfg->srt_latency_ms ? cfg->srt_latency_ms : DIPIREC_SRT_DRAIN_MS_DEFAULT;
       struct timespec ts = {(time_t)(drain_ms / 1000), (long)(drain_ms % 1000) * 1000000L};
       nanosleep(&ts, NULL);
     }

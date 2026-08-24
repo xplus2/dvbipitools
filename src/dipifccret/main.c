@@ -32,19 +32,20 @@ int main(int argc, char **argv) {
   config_t cfg;
   args_status_t st;
   size_t max_channels, ring_slots, cache_cap;
-  channel_table_t *channels;
+  channel_table_t *channels = NULL;
   mcsend_table_t *mt = NULL;
   mcsend_table_t *rsi_mt = NULL;
   ret_ctx_t *ret = NULL;
   burst_table_t *bursts = NULL;
-  capture_t *cap;
+  capture_t *cap = NULL;
   char errbuf[256];
   ret_send_ctx_t ret_send_ctx;
   ret_send_ctx_t rsi_send_ctx;
   dispatch_ctx_t dispatch_ctx;
-  listen_pool_t *pool;
+  listen_pool_t *pool = NULL;
   listen_multi_t *resolve_pool = NULL;
   unsigned resolve_base_port;
+  int rc = 0;
   pacer_ctx_t pacer_ctx;
   pthread_t pacer_thread;
   int pacer_started = 0;
@@ -79,14 +80,16 @@ int main(int argc, char **argv) {
   channels = channel_table_new(max_channels, ring_slots, cache_cap);
   if (!channels) {
     fprintf(stderr, "%s: out of memory allocating channel table\n", TOOL_NAME);
-    return 1;
+    rc = 1;
+    goto cleanup;
   }
 
   if (!cfg.no_ret && !cfg.no_mc_ret) {
     mt = mcsend_table_new(max_channels, cfg.iface, MC_SEND_TTL);
     if (!mt) {
       fprintf(stderr, "%s: out of memory allocating MC RET session table\n", TOOL_NAME);
-      return 1;
+      rc = 1;
+      goto cleanup;
     }
   }
   if (!cfg.no_ret && !cfg.no_rsi) {
@@ -98,7 +101,8 @@ int main(int argc, char **argv) {
       rsi_mt = mcsend_table_new(max_channels, cfg.iface, MC_SEND_TTL);
       if (!rsi_mt) {
         fprintf(stderr, "%s: out of memory allocating RSI announcement table\n", TOOL_NAME);
-        return 1;
+        rc = 1;
+        goto cleanup;
       }
     }
   }
@@ -106,18 +110,21 @@ int main(int argc, char **argv) {
     bursts = burst_table_new(cfg.max_bursts);
     if (!bursts) {
       fprintf(stderr, "%s: out of memory allocating burst table\n", TOOL_NAME);
-      return 1;
+      rc = 1;
+      goto cleanup;
     }
   }
 
   cap = capture_open(cfg.iface, cfg.range_ptrs, cfg.range_count, errbuf, sizeof errbuf);
   if (!cap) {
     fprintf(stderr, "%s: %s\n", TOOL_NAME, errbuf);
-    return 1;
+    rc = 1;
+    goto cleanup;
   }
   if (capture_drop_privileges(cfg.user) != 0) {
     fprintf(stderr, "%s: failed to drop privileges to -u %s\n", TOOL_NAME, cfg.user);
-    return 1;
+    rc = 1;
+    goto cleanup;
   }
 
   if (!cfg.no_ret) {
@@ -125,7 +132,8 @@ int main(int argc, char **argv) {
     ret = ret_ctx_new(channels, cfg.rtx_pt, cfg.max_ret_clients, ret_send_mc_impl, ret_send_unicast_impl, &ret_send_ctx);
     if (!ret) {
       fprintf(stderr, "%s: out of memory creating ret context\n", TOOL_NAME);
-      return 1;
+      rc = 1;
+      goto cleanup;
     }
   }
 
@@ -152,7 +160,8 @@ int main(int argc, char **argv) {
   pool = listen_pool_start(cfg.listen_family, cfg.listen_addr, cfg.listen_port, cfg.workers, listen_cb, &dispatch_ctx);
   if (!pool) {
     fprintf(stderr, "%s: failed to start listen workers on %s:%u\n", TOOL_NAME, cfg.listen_addr, cfg.listen_port);
-    return 1;
+    rc = 1;
+    goto cleanup;
   }
 
   resolve_base_port = cfg.fcc_resolve_base_port ? cfg.fcc_resolve_base_port : cfg.listen_port + 1;
@@ -160,7 +169,8 @@ int main(int argc, char **argv) {
     resolve_pool = listen_multi_start(cfg.listen_family, cfg.listen_addr, resolve_base_port, max_channels, listen_resolve_cb, &dispatch_ctx);
     if (!resolve_pool) {
       fprintf(stderr, "%s: failed to start FCC resolve-by-port sockets at %s:%u..%u\n", TOOL_NAME, cfg.listen_addr, resolve_base_port, resolve_base_port + (unsigned)max_channels - 1);
-      return 1;
+      rc = 1;
+      goto cleanup;
     }
   }
 
@@ -169,7 +179,8 @@ int main(int argc, char **argv) {
     pacer_ctx.duration_cap_ms = cfg.duration_cap_ms;
     if (pthread_create(&pacer_thread, NULL, pacer_main, &pacer_ctx) != 0) {
       fprintf(stderr, "%s: failed to start burst pacing thread\n", TOOL_NAME);
-      return 1;
+      rc = 1;
+      goto cleanup;
     }
     pacer_started = 1;
   }
@@ -190,11 +201,13 @@ int main(int argc, char **argv) {
     rsi_ctx.hostname_len = strlen(cfg.rsi_hostname);
     if (inet_pton(AF_INET, cfg.listen_addr, rsi_ctx.addr) != 1) {
       fprintf(stderr, "%s: failed to parse -l address for RSI announcement\n", TOOL_NAME);
-      return 1;
+      rc = 1;
+      goto cleanup;
     }
     if (pthread_create(&rsi_thread, NULL, rsi_pacer_main, &rsi_ctx) != 0) {
       fprintf(stderr, "%s: failed to start RSI announcement thread\n", TOOL_NAME);
-      return 1;
+      rc = 1;
+      goto cleanup;
     }
     rsi_started = 1;
   }
@@ -206,7 +219,8 @@ int main(int argc, char **argv) {
     metrics_ctx.bursts = bursts;
     if (pthread_create(&metrics_thread, NULL, metrics_thread_main, &metrics_ctx) != 0) {
       fprintf(stderr, "%s: failed to start metrics thread\n", TOOL_NAME);
-      return 1;
+      rc = 1;
+      goto cleanup;
     }
     metrics_started = 1;
   }
@@ -215,7 +229,10 @@ int main(int argc, char **argv) {
   log_line(TOOL_NAME ": capturing, %u worker(s) on %s:%u, %zu channel slots [%s%s%s%s]", cfg.workers, cfg.listen_addr, cfg.listen_port, max_channels,
       cfg.no_ret ? "no RET" : (mt ? "RET+MC" : "RET unicast-only"), cfg.no_ret || cfg.no_fcc ? "" : ", ", cfg.no_fcc ? "no FCC" : "FCC", rsi_started ? "+RSI" : "");
   capture_run(cap, capture_cb, &dispatch_ctx);
-  capture_close(cap);
+
+cleanup:
+  if (cap)
+    capture_close(cap);
   if (pacer_started)
     pthread_join(pacer_thread, NULL);
   if (rsi_started)
@@ -223,7 +240,8 @@ int main(int argc, char **argv) {
   if (metrics_started)
     pthread_join(metrics_thread, NULL);
   metrics_exporter_close(&mx);
-  listen_pool_stop(pool);
+  if (pool)
+    listen_pool_stop(pool);
   if (resolve_pool)
     listen_multi_stop(resolve_pool);
   if (ret)
@@ -234,6 +252,7 @@ int main(int argc, char **argv) {
     mcsend_table_free(mt);
   if (rsi_mt)
     mcsend_table_free(rsi_mt);
-  channel_table_free(channels);
-  return 0;
+  if (channels)
+    channel_table_free(channels);
+  return rc;
 }

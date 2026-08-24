@@ -21,6 +21,10 @@ if (DVBIPITOOLS_HAVE_RIST)
     target_link_libraries(dipiradiohead PRIVATE PkgConfig::RIST)
 endif ()
 
+if (DVBIPITOOLS_HAVE_SRT)
+    target_link_libraries(dipiradiohead PRIVATE PkgConfig::SRT)
+endif ()
+
 # ECMG client thread: pthread is a hard dependency from here on, not optional
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)

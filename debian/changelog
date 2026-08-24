@@ -1,4 +1,4 @@
-dvbipitools (2.3.1-1) unstable; urgency=medium
+dvbipitools (2.4.0-1) unstable; urgency=medium
   * added optional metrics export to the following tools:
     + dipirec
     + dipidescramble
@@ -12,7 +12,12 @@ dvbipitools (2.3.1-1) unstable; urgency=medium
     + bonding depends on libsrt having it enabled (not by default)
   * fixed EIT race in mpts remuxer (corrupted eit+crc32)
   * overrides for EMMG max conns and EMMC max services
-  * rist:// single-peer input support at:
+  * rist:// single-peer input support (output already existed) at:
+    + dipitvhead
+    + dipirec
+    + dipidescramble
+    note: librist only supports 1 rist connection per process.
+  * srt:// single-peer/no-rendevouz input+output support at:
     + dipitvhead
     + dipirec
     + dipidescramble

@@ -20,43 +20,37 @@ dipitvhead -i <uri> [per-input options] [-i <uri> ...] {-m <mcast>:<port>|-R <ur
 (ffmpeg-style) - using one before any `-i` is an error. Everything else is mux-wide, shared
 across every input.
 
-| flag | long form            | argument              | default                                   | scope      |
-|------|----------------------|-----------------------|-------------------------------------------|------------|
-| `-i` | `--input`            | `<uri>` / `-`         | required                                  |            |
-| `-p` | `--pmt-pid`          | `<pid>`               | auto: first PAT program whose PMT arrives | per-input  |
-|      | `--sid`              | `<n>`                 | auto-assigned (lowest free integer)       | per-input  |
-| `-s` | `--sdt`              | `<text>` / `-`        | set SDT, see below                        | per-input  |
-| `-I` | `--iface`            | `<iface>`             | kernel route (incoming)                   | per-input  |
-|      | `--strip-eit`        |                       | off (source EIT passed through)           | per-input  |
-|      | `--strip`            | `<list>` / `none`     | `none` (no strip)                         | per-input  |
-|      | `--hbbtv`            | `<url>`               | none (no AIT sent)                        | per-input  |
-|      | `--hbbtv-org-id`     | `<n>`                 | required with `--hbbtv`                   | per-input  |
-|      | `--hbbtv-app-id`     | `<n>`                 | required with `--hbbtv`                   | per-input  |
-|      | `--rist-profile-in`  | `simple\|main`        | `simple` (`-i rist://` only)              | per-input  |
-| `-m` | `--mcast`            | `<group(6)>:<port>`   | required unless `-R` given                |            |
-| `-O` | `--out-iface`        | `<iface>`             | kernel route (outgoing)                   |            |
-| `-u` | `--udp`              |                       | off (RTP)                                 |            |
-| `-T` | `--ttl`              | `<n>`                 | 1                                         |            |
-| `-R` | `--rist`             | `rist://host:port`    | none, repeatable (bonded)                 |            |
-|      | `--profile`          | `simple\|main`        | `simple` (`-R` peers only)                |            |
-|      | `--secret`           | `<psk>`               | none (`-R` peers only)                    |            |
-|      | `--cname`            | `<name>`              | library default (`-R` peers only)         |            |
-|      | `--buffer`           | `<ms>`                | library default (`-R` peers only)         |            |
-| `-n` | `--nit`              | `<text>` / `-`        | set NIT, see below                        |            |
-| `-b` | `--bitrate`          | `<kbps>`              | none (no shaping)                         |            |
-| `-S` | `--stuff`            |                       | off (needs `-b`)                          |            |
-| `-B` | `--burst-limit`      |                       | off (needs `-b`)                          |            |
-| `-e` | `--error`            | `<seconds>`           | fail once (always retries in MPTS mode)   |            |
-| `-k` | `--insecure`         |                       | off (TLS verified)                        |            |
-|      | `--tsid`             | `<n>`                 | 1                                         |            |
-|      | `--onid`             | `<n>`                 | 1                                         |            |
-| `-v` | `--verbose`          |                       | off                                       |            |
-|      | `--color`            | `auto\|always\|never` | `auto`                                    |            |
-|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`           |            |
-|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)        |            |
-|      | `--metrics-interval` | `<s>`                 | `5`                                       |            |
-| `-d` | `--daemonize`        |                       | off (foreground)                          |            |
-| `-h` | `--help`             |                       |                                           |            |
+| flag | long form               | argument                                | default                                         | scope     |
+|------|-------------------------|-----------------------------------------|-------------------------------------------------|-----------|
+| `-i` | `--input`               | `<uri>` / `-`                           | required                                        |           |
+| `-p` | `--pmt-pid`             | `<pid>`                                 | auto: first PAT program whose PMT arrives       | per-input |
+|      | `--sid`                 | `<n>`                                   | auto-assigned (lowest free integer)             | per-input |
+| `-s` | `--sdt`                 | `<text>` / `-`                          | set SDT, see below                              | per-input |
+| `-I` | `--iface`               | `<iface>`                               | kernel route (incoming)                         | per-input |
+|      | `--strip-eit`           |                                         | off (source EIT passed through)                 | per-input |
+|      | `--strip`               | `<list>` / `none`                       | `none` (no strip)                               | per-input |
+|      | `--hbbtv`               | `<url>`                                 | none (no AIT sent)                              | per-input |
+|      | `--hbbtv-org-id`        | `<n>`                                   | required with `--hbbtv`                         | per-input |
+|      | `--hbbtv-app-id`        | `<n>`                                   | required with `--hbbtv`                         | per-input |
+| `-m` | `--mcast`               | `<group(6)>:<port>`                     | required unless `-R` given                      |           |
+| `-O` | `--out-iface`           | `<iface>`                               | kernel route (outgoing)                         |           |
+| `-u` | `--udp`                 |                                         | off (RTP)                                       |           |
+| `-T` | `--ttl`                 | `<n>`                                   | 1                                               |           |
+| `-n` | `--nit`                 | `<text>` / `-`                          | set NIT, see below                              |           |
+| `-b` | `--bitrate`             | `<kbps>`                                | none (no shaping)                               |           |
+| `-S` | `--stuff`               |                                         | off (needs `-b`)                                |           |
+| `-B` | `--burst-limit`         |                                         | off (needs `-b`)                                |           |
+| `-e` | `--error`               | `<seconds>`                             | fail once (always retries in MPTS mode)         |           |
+| `-k` | `--insecure`            |                                         | off (TLS verified)                              |           |
+|      | `--tsid`                | `<n>`                                   | 1                                               |           |
+|      | `--onid`                | `<n>`                                   | 1                                               |           |
+| `-v` | `--verbose`             |                                         | off                                             |           |
+|      | `--color`               | `auto\|always\|never`                   | `auto`                                          |           |
+|      | `--metrics`             | `<path>`                                | `/run/dvbipitools/metrics.sock`                 |           |
+|      | `--metrics-id`          | `<name>`                                | none (metrics disabled unless set)              |           |
+|      | `--metrics-interval`    | `<s>`                                   | `5`                                             |           |
+| `-d` | `--daemonize`           |                                         | off (foreground)                                |           |
+| `-h` | `--help`                |                                         |                                                 |           |
 
 > Note that the default output changed from _plain UDP_ to _RTP_, since neither FCC nor RET would work
 > on plain streams. You can restore the old behavior by setting `-u`|`--udp`.
@@ -98,16 +92,18 @@ BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each o
 | `--biss2-ca-session-id`  | `<n>`      | dec or 0x-hex, 16 bit; random if not given          |
 
 
-## Parameters
+### Related to RIST Input/Output
+| flag | long form            | argument                                | default                                         | scope     |
+|------|----------------------|-----------------------------------------|-------------------------------------------------|-----------|
+|      | `--rist-profile-in`  | `simple\|main`                          | `simple` (`-i rist://` only)                    | per-input |
+| `-R` | `--rist`             | `rist://host:port` or `srt://host:port` | none, repeatable (bonded, one scheme at a time) |           |
+|      | `--profile`          | `simple\|main`                          | `simple` (`-R rist://` peers only)              |           |
+|      | `--secret`           | `<psk>`                                 | none (`-R rist://` peers only)                  |           |
+|      | `--cname`            | `<name>`                                | library default (`-R rist://` peers only)       |           |
+|      | `--buffer`           | `<ms>`                                  | library default (`-R rist://` peers only)       |           |
 
-### Input (`-i`)
-
-`udp://`, `rtp://`, `http://`, `https://`, `-` for stdin. RTP headers stripped automatically.
-HTTPS: build-time option (`-DDIPITVHEAD_TLS=OFF`, auto-off without OpenSSL), `-k` skips cert
-verification.
-
-`rist://@host:port[?query]` is also accepted, requires librist. 
-`@` is required, since an input peer always listens. 
+`rist://@host:port[?query]` is also accepted, requires librist.
+`@` is required, since an input peer always listens.
 If you need bonded RIST input for a single program, run `dipirist` in front of this tool as a bridge instead.
 Encrypted input needs `--rist-profile-in main` (paired with the `-i` it follows) and a `?secret=` query parameter
 on the URI.
@@ -115,6 +111,48 @@ on the URI.
 > librist uses one context per process. This means that only _one_ input _or_ output can use RIST.
 > You can _not_ define multiple RIST inputs - and if you do, no RIST output.
 > As a work-around, you can let multiple instances of `dipirist` produce multicasts for `-i` here.
+
+
+### Related to SRT Inputs/Outputs
+| flag | long form               | argument            | default                                     | scope     |
+|------|-------------------------|---------------------|---------------------------------------------|-----------|
+|      | `--srt-passphrase-in`   | `<pw>`              | none (`-i srt://` only, 10..79 chars)       | per-input |
+|      | `--srt-pbkeylen-in`     | `16\|24\|32`        | `16`, requires `--srt-passphrase-in`        | per-input |
+|      | `--srt-streamid-in`     | `<id>`              | none (`-i srt://` only)                     | per-input |
+|      | `--srt-packetfilter-in` | `<cfg>`             | none (`-i srt://` only)                     | per-input |
+|      | `--srt-latency-in`      | `<ms>`              | library default (`-i srt://` only)          | per-input |
+|      | `--srt-group-mode`      | `broadcast\|backup` | none, required bonding >1 `-R srt://` peer  |           |
+|      | `--srt-passphrase`      | `<pw>`              | none (`-R srt://` peers only, 10..79 chars) |           |
+|      | `--srt-pbkeylen`        | `16\|24\|32`        | `16`, requires `--srt-passphrase`           |           |
+|      | `--srt-streamid`        | `<id>`              | none (`-R srt://` peers only)               |           |
+|      | `--srt-packetfilter`    | `<cfg>`             | none (`-R srt://` peers only)               |           |
+|      | `--srt-latency`         | `<ms>`              | library default (`-R srt://` peers only)    |           |
+
+`srt://@host:port` is also accepted, requires libsrt. `@` is required, same reason as RIST above.
+Single peer only, with no bonding or rendezvous. You can [dipisrt](../dipisrt/README.md) in front of
+this tool for that. `--srt-passphrase-in`/`--srt-pbkeylen-in`/`--srt-streamid-in`/`--srt-packetfilter-in`/
+`--srt-latency-in` (paired with the `-i` it follows) configure the peer; `--srt-pbkeylen-in` requires
+`--srt-passphrase-in`.
+
+---
+
+## Parameters
+
+### Input (`-i`)
+
+| schema                          | what's this?                                |
+|---------------------------------|---------------------------------------------|
+| `rtp://@<group>:<port>`         | RTP wrapped SPTS or MPTS multicast          |
+| `udp://@<group>:<port>`         | plain SPTS or MPTS multicast                |
+| `http://<host>:<port>/<path>`   | HTTP TS stream                              |
+| `https://<host>:<port>/<path>`  | same, TLS (`-k` skips verification)         |
+| `-`                             | stdin                                       |
+| `rist://@<host>:<port>[?query]` | single-peer RIST receiver, requires librist |
+| `srt://@<host>:<port>`          | single-peer SRT, requires libsrt            |
+
+RTP headers stripped automatically. HTTPS: build-time option (`-DDIPITVHEAD_TLS=OFF`, auto-off
+without OpenSSL).
+
 
 ### Program selection (`-p`)
 
@@ -208,16 +246,23 @@ Both would need the same CAT pid, and re-scrambling is not supported.
 No `-b`: source rate passes straight through. `-S`: null-packet padding when output falls behind
 target. `-B`: paces sending so output never runs ahead of target. Combinable.
 
-### RIST output (`-R`)
+### RIST/SRT output (`-R`)
 
-Sends the same TS to one or more RIST peers, alongside `-m` if given, or standalone without it.
-One of `-m`/`-R` is required (requires librist). 
-`-R` is repeatable and every peer is bonded onto a single RIST sender context, same
-bonding model as [dipirist](../dipirist/README.md). `-u`/`--udp` only affects the `-m` output.
-RIST is never RTP-wrapped.
+Sends the same TS to one or more RIST or SRT peers, alongside `-m` if given, or standalone
+without it. One of `-m`/`-R` is required (requires librist or libsrt). 
+`-R` is repeatable and every peer bonds onto a single sender context, one scheme at a time, so
+`rist://` and `srt://` peers cannot mix within the same run. `-u`/`--udp` only affects the `-m`
+output. Neither RIST nor SRT is ever RTP-wrapped.
 
-`--profile`/`--secret`/`--cname`/`--buffer` configure the RIST peers (profile, pre-shared key,
-cname, recovery buffer); `--secret` requires `--profile main`.
+`rist://host:port` peers bond the same way as [dipirist](../dipirist/README.md).
+`--profile`/`--secret`/`--cname`/`--buffer` configure them (profile, pre-shared key, cname,
+recovery buffer); `--secret` requires `--profile main`.
+
+`srt://host:port` peers (requires libsrt) bond the same way as
+[dipisrt](../dipisrt/README.md): a single peer needs no extra flags, more than one requires
+`--srt-group-mode broadcast|backup`. `--srt-passphrase`/`--srt-pbkeylen`/`--srt-streamid`/
+`--srt-packetfilter`/`--srt-latency` apply to every `-R srt://` peer; `--srt-pbkeylen` requires
+`--srt-passphrase`.
 
 ### HbbTV signalling (`--hbbtv`)
 
@@ -370,6 +415,7 @@ CAS support is a CMake/configure-time option (`DIPITVHEAD_CAS`, on by default).
 * CISSA needs OpenSSL
 * CSA1, CSA2 and BISS1 dlopen libdvbcsa at runtime, if it is present. It is not built against it and does not bundle it.
 * `-R`/RIST output needs librist (`DVBIPITOOLS_RIST` / `HAVE_RIST`, toolkit-wide).
+* `-i`/`-R` SRT needs libsrt (`DVBIPITOOLS_SRT` / `HAVE_SRT`, toolkit-wide).
 
 Missing any of these degrades gracefully to "that feature unavailable", not a build failure.
 

@@ -13,7 +13,8 @@ typedef enum {
   URI_UDP,  /* multicast, plain ts */
   URI_HTTP, /* http:// or https://, http_url_t.tls tells which */
   URI_FILE, /* "-" = stdin, RTP-vs-raw auto-detected */
-  URI_RIST  /* single peer, @ required (listen) */
+  URI_RIST, /* single peer, @ required (listen) */
+  URI_SRT   /* single peer, no bonding/rendezvous (see dipisrt) */
 } uri_kind_t;
 
 typedef struct {
@@ -29,12 +30,17 @@ typedef struct {
   char file_path[512];
   /* URI_RIST, stored raw for librist's own parser */
   char rist_uri[256];
+  /* URI_SRT */
+  int srt_family; /* AF_INET or AF_INET6, display only */
+  char srt_host[64];
+  unsigned srt_port;
+  int srt_listen; /* 1 = @, bind/listen/accept. 0 = call out (connect) */
 } source_t;
 
 typedef enum { FMT_RAW, FMT_TS, FMT_MKV, FMT_MKA } out_fmt_t;
 typedef enum { SUB_KEEP, SUB_STRIP, SUB_SRT } sub_mode_t;
 typedef enum { PMT_SEL_AUTO, PMT_SEL_PID, PMT_SEL_ALL } pmt_sel_t;
-typedef enum { OUT_FILE, OUT_RTP, OUT_UDP, OUT_RIST, OUT_RTMP, OUT_RTMPS } out_kind_t;
+typedef enum { OUT_FILE, OUT_RTP, OUT_UDP, OUT_RIST, OUT_RTMP, OUT_RTMPS, OUT_SRT } out_kind_t;
 typedef enum { RIST_PROF_SIMPLE, RIST_PROF_MAIN } rist_profile_sel_t;
 
 #define DIPIREC_MAX_OUT 8
@@ -51,6 +57,10 @@ typedef struct {
   char rist_uri[256];
   /* OUT_RTMP / OUT_RTMPS, passed to rtmpout's own parser as-is */
   char rtmp_url[600];
+  /* OUT_SRT: one peer per target, not bonded (repeat -o for more), always calls out */
+  int srt_family; /* AF_INET or AF_INET6, display only */
+  char srt_host[64];
+  unsigned srt_port;
 } out_target_t;
 
 typedef struct {
@@ -89,10 +99,20 @@ typedef struct {
   char rist_cname[128];   /* --cname, -o rist:// only, "" = library default */
   unsigned rist_buffer_ms; /* --buffer, -o rist:// only, 0 = library default */
   rist_profile_sel_t rist_profile_in; /* --profile-in, -i rist:// only */
-  int insecure_tls;       /* --insecure, -o rtmps:// or -i https:// */
-  const char *metrics_sock;    /* --metrics. NULL = default socket path */
-  const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
-  unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
+  int insecure_tls;              /* --insecure, -o rtmps:// or -i https:// */
+  const char *metrics_sock;      /* --metrics. NULL = default socket path */
+  const char *metrics_id;        /* --metrics-id. NULL = metrics disabled */
+  unsigned metrics_interval_s;   /* --metrics-interval. 0 = default */
+  char srt_passphrase_in[128];   /* --srt-passphrase-in, -i srt:// only. "" = no encryption */
+  int srt_pbkeylen_in;           /* --srt-pbkeylen-in, requires --srt-passphrase-in. 0 = library default (16) */
+  char srt_streamid_in[128];     /* --srt-streamid-in, -i srt:// only. "" = none */
+  char srt_packetfilter_in[256]; /* --srt-packetfilter-in, -i srt:// only. "" = none */
+  unsigned srt_latency_in_ms;    /* --srt-latency-in, -i srt:// only. 0 = library default */
+  char srt_passphrase[128];      /* --srt-passphrase, applies to every -o srt:// target. "" = no encryption */
+  int srt_pbkeylen;              /* --srt-pbkeylen, requires --srt-passphrase. 0 = library default (16) */
+  char srt_streamid[128];        /* --srt-streamid, applies to every -o srt:// target. "" = none */
+  char srt_packetfilter[256];    /* --srt-packetfilter, applies to every -o srt:// target. "" = none */
+  unsigned srt_latency_ms;       /* --srt-latency, applies to every -o srt:// target. 0 = library default */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

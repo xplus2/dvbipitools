@@ -12,6 +12,7 @@
 #include "lib/mux/rtpheader.h"
 #include "lib/net/multicast.h"
 #include "lib/net/rist/ristout.h"
+#include "lib/net/srt/srtsink.h"
 
 #include "../cas/cas.h"
 #include "../input/source.h"
@@ -32,12 +33,14 @@ typedef struct {
   mcast_t *mc; /* NULL unless -m given */
   int rtp;
   rtpheader_t *rtph;
-  ristout_t *rist; /* NULL unless -R given; bonded peers, sent alongside mc if both present */
+  ristout_t *rist; /* NULL unless -R rist:// given (bonded peers), sent alongside mc if both present */
+  srtsink_t *srt;  /* NULL unless -R srt:// given (bonded peers), sent alongside mc if both present */
   bitrate_pacer_t *pacer;
   unsigned char batch[12 + TS_PER_DGRAM * 188]; /* [0,12): RTP header headroom, unused if !rtp */
   int batch_count;
   int mc_had_error;   /* edge-log gate; a send failure here never stops process */
   int rist_had_error; /* edge-log gate; a write failure here never stops process */
+  int srt_connected;  /* edge-log gate for connect/link-down transitions */
   unsigned long long packets;
   unsigned long long errors;
 } out_ctx_t;
@@ -57,6 +60,10 @@ int discover(tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, input_me
 /* output.c */
 /* caller only calls this when cfg->n_rist > 0; NULL on err */
 ristout_t *tvhead_rist_open(const config_t *cfg);
+/* caller only calls this when cfg->n_srt > 0; NULL on err */
+srtsink_t *tvhead_srt_open(const config_t *cfg);
+/* ticks o->srt connect/reconnect + flush. no-op if !o->srt. call every loop iter. */
+void tvhead_srt_service(out_ctx_t *o);
 void flush_batch(out_ctx_t *o);
 void packet_cb(void *ctx, const unsigned char *pkt188);
 void send_null_packet(out_ctx_t *o);

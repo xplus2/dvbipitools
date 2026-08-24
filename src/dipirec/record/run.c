@@ -52,7 +52,16 @@ int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, const
   ctx.pace_pcr = 0;
 
   while (!stop_now(cfg, start)) {
-    ssize_t n = src_read(s, buf, sizeof buf);
+    ssize_t n;
+    int pr;
+    sinks_service_srt(sinks, n_sinks);
+    pr = src_wait_readable(s, 100);
+    if (pr < 0)
+      break;
+    if (pr == 0)
+      continue;
+
+    n = src_read(s, buf, sizeof buf);
     if (n < 0)
       break;
     if (n == 0)
@@ -205,7 +214,16 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
   }
 
   while (!stop_now(cfg, start)) {
-    ssize_t n = src_read(s, buf, sizeof buf);
+    ssize_t n;
+    int pr;
+    sinks_service_srt(sinks, n_sinks);
+    pr = src_wait_readable(s, 100);
+    if (pr < 0)
+      break;
+    if (pr == 0)
+      continue;
+
+    n = src_read(s, buf, sizeof buf);
     if (n < 0)
       break;
     if (n == 0)

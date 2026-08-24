@@ -44,6 +44,12 @@ requires librist; no bonding here, use
 .BR dipirist (1)
 as a bridge for that)
 .IP \(bu 2
+.B srt://[@]<host>:<port>
+\- single-peer SRT receiver (\fB@\fR binds/listens/accepts, else calls
+out; requires libsrt; no bonding or rendezvous here, use
+.BR dipisrt (1)
+as a bridge for those)
+.IP \(bu 2
 IPv6 groups are given in brackets, e.g.
 .B rtp://@[ff3e::1]:8700
 .RE
@@ -64,6 +70,13 @@ for stdout, plus:
 .B rist://<host>:<port>[?query]
 \- single-peer RIST sender (\fB\-f raw\fR or \fB\-f ts\fR only, requires
 librist)
+.IP \(bu 2
+.B srt://<host>:<port>
+\- single-peer SRT sender (\fB\-f raw\fR or \fB\-f ts\fR only, requires
+libsrt, always calls out - no listener mode). Independent per target, not
+bonded - repeat \fB\-o\fR for more, or use
+.BR dipisrt (1)
+if you need bonded peers
 .IP \(bu 2
 .B rtmp(s)://<host>[:port]/<app>/<key>
 \- RTMP(S) publish; H.264/HEVC video, AC-3/E-AC-3/AAC audio
@@ -90,8 +103,8 @@ beyond the DVB-IPI specification, as is the HTTP(S) source.
 .TP
 .BR \-o ", " \-\-out\ \fI<target>\fR
 Output, repeatable: a file, \fB\-\fR for stdout, or an
-\fBrtp://\fR/\fBudp://\fR/\fBrist://\fR/\fBrtmp://\fR/\fBrtmps://\fR target
-(see DESCRIPTION).
+\fBrtp://\fR/\fBudp://\fR/\fBrist://\fR/\fBsrt://\fR/\fBrtmp://\fR/\fBrtmps://\fR
+target (see DESCRIPTION).
 .TP
 .BR \-i ", " \-\-in\ \fI<uri>\fR
 Input source (see DESCRIPTION).
@@ -172,6 +185,65 @@ only. Default: \fBsimple\fR. \fBmain\fR enables PSK encryption via a
 .B ?secret=
 query parameter on the input URI.
 .TP
+.B \-\-srt\-passphrase\-in \fI<pw>\fR
+Passphrase for
+.B \-i
+.B srt://
+only, 10..79 characters. Default: none (no encryption).
+.TP
+.B \-\-srt\-pbkeylen\-in \fI16\fR|\fI24\fR|\fI32\fR
+AES key length, requires
+.BR \-\-srt\-passphrase\-in .
+Default: 16.
+.TP
+.B \-\-srt\-streamid\-in \fI<id>\fR
+SRTO_STREAMID for
+.B \-i
+.B srt://
+only.
+.TP
+.B \-\-srt\-packetfilter\-in \fI<cfg>\fR
+SRTO_PACKETFILTER config string for
+.B \-i
+.B srt://
+only, e.g.
+.IR fec,cols:10,rows:5 .
+.TP
+.B \-\-srt\-latency\-in \fI<ms>\fR
+SRTO_LATENCY for
+.B \-i
+.B srt://
+only. Default: library.
+.TP
+.B \-\-srt\-passphrase \fI<pw>\fR
+Passphrase applied to every
+.B \-o
+.B srt://
+target, 10..79 characters. Default: none (no encryption).
+.TP
+.B \-\-srt\-pbkeylen \fI16\fR|\fI24\fR|\fI32\fR
+AES key length, requires
+.BR \-\-srt\-passphrase .
+Default: 16.
+.TP
+.B \-\-srt\-streamid \fI<id>\fR
+SRTO_STREAMID applied to every
+.B \-o
+.B srt://
+target.
+.TP
+.B \-\-srt\-packetfilter \fI<cfg>\fR
+SRTO_PACKETFILTER config string applied to every
+.B \-o
+.B srt://
+target.
+.TP
+.B \-\-srt\-latency \fI<ms>\fR
+SRTO_LATENCY applied to every
+.B \-o
+.B srt://
+target. Default: library.
+.TP
 .B \-\-insecure
 Skip TLS verification for
 .B \-o
@@ -242,7 +314,9 @@ A non-zero status is returned on argument errors or I/O failure.
 .SH SEE ALSO
 .BR dipiscan (1),
 .BR dipisds (1),
-.BR dipitvhead (1)
+.BR dipitvhead (1),
+.BR dipirist (1),
+.BR dipisrt (1)
 .PP
 Project homepage: https://github.com/xplus2/dvbipitools
 .SH COPYRIGHT

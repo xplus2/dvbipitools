@@ -87,6 +87,17 @@ static int input_parse(const char *uri, input_t *s) {
     bufcpy(s->rist_uri, sizeof s->rist_uri, uri);
     return 0;
   }
+  if (strncmp(uri, "srt://", 6) == 0) {
+    const char *rest = uri + 6;
+    int listen = *rest == '@';
+    if (listen)
+      rest++;
+    if (argutil_addrport_parse(rest, &s->srt_family, s->srt_host, sizeof s->srt_host, &s->srt_port))
+      return -1;
+    s->kind = INPUT_SRT;
+    s->srt_listen = listen;
+    return 0;
+  }
   return -1;
 }
 
@@ -107,12 +118,26 @@ void input_describe(const input_t *s, char *buf, size_t n) {
   case INPUT_RIST:
     snprintf(buf, n, "%s", s->rist_uri);
     break;
+  case INPUT_SRT:
+    if (s->srt_family == AF_INET6)
+      snprintf(buf, n, "srt://%s[%s]:%u", s->srt_listen ? "@" : "", s->srt_host, s->srt_port);
+    else
+      snprintf(buf, n, "srt://%s%s:%u", s->srt_listen ? "@" : "", s->srt_host, s->srt_port);
+    break;
   }
 }
 
 static int parse_out_uri(const char *uri, out_target_t *o) {
   int r;
   memset(o, 0, sizeof *o);
+  if (strncmp(uri, "srt://", 6) == 0) {
+    if (uri[6] == '@') /* srt:// output always calls out, no listener mode */
+      return -1;
+    if (argutil_addrport_parse(uri + 6, &o->srt_family, o->srt_host, sizeof o->srt_host, &o->srt_port))
+      return -1;
+    o->kind = OUT_SRT;
+    return 0;
+  }
   r = uriparse_rtmp_or_file(uri, o->rtmp_url, sizeof o->rtmp_url, o->file_path, sizeof o->file_path);
   if (r < 0)
     return -1;
@@ -129,6 +154,12 @@ void out_describe(const out_target_t *o, char *buf, size_t n) {
   case OUT_FILE:
     snprintf(buf, n, "%s", strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
     break;
+  case OUT_SRT:
+    if (o->srt_family == AF_INET6)
+      snprintf(buf, n, "srt://[%s]:%u", o->srt_host, o->srt_port);
+    else
+      snprintf(buf, n, "srt://%s:%u", o->srt_host, o->srt_port);
+    break;
   }
 }
 
@@ -143,7 +174,9 @@ static void print_help(void) {
       "need them.\n\n"
       "options:\n"
       "  %-27sudp://, rtp://, rist://@host:port[?query] (single peer, requires\n"
-      "  %-27slibrist; no bonding, use dipirist for that), or \"-\" for stdin (required)\n"
+      "  %-27slibrist; no bonding, use dipirist for that), srt://[@]host:port\n"
+      "  %-27s(single peer, requires libsrt; no bonding/rendezvous, use dipisrt\n"
+      "  %-27sfor that), or \"-\" for stdin (required)\n"
       "  %-27sdevice RSA private key, PEM (required for ECM/EMM-driven CAS)\n"
       "  %-27sthis device's serial, matched against EMM-U addressing (required for ECM/EMM-driven CAS)\n"
       "  %-27sEMM cache: loaded on startup, rewritten on update (required for ECM/EMM-driven CAS)\n"
@@ -157,7 +190,9 @@ static void print_help(void) {
       "  %-27slegacy BISS1 Mode 1: 12 hex char Session Word\n"
       "  %-27sBISS Mode CA: receiver RSA private key, PEM\n"
       "  %-27secm_profile template, comma key=value (see README)\n"
-      "  %-27sdescrambled output, repeatable: file, \"-\" for stdout, or rtmp(s)://\n"
+      "  %-27sdescrambled output, repeatable: file, \"-\" for stdout, rtmp(s)://,\n"
+      "  %-27sor srt://host:port (requires libsrt; single peer per target,\n"
+      "  %-27snot bonded, repeat -o for more; use dipisrt for bonding)\n"
       "  %-27srtmp(s)://<host>[:port]/<app>/<key>, H.264/HEVC + AC-3/E-AC-3/AAC\n"
       "  %-27sts|mkv|mka output container (default ts; raw ts and rtmp(s) targets\n"
       "  %-27smay mix, mkv/mka needs exactly one plain file target)\n"
@@ -172,6 +207,16 @@ static void print_help(void) {
       "  %-27ssnapshot interval in seconds (default: 5)\n"
       "  %-27smax distinct EMM-G service_ids cached (default: 32, max: 256)\n"
       "  %-27ssimple|main; -i rist:// only (default: simple)\n"
+      "  %-27spassphrase for -i srt://, 10..79 chars\n"
+      "  %-27sAES key length for --srt-passphrase-in: 16|24|32 (default 16)\n"
+      "  %-27sSRTO_STREAMID for -i srt://\n"
+      "  %-27sSRTO_PACKETFILTER for -i srt://, e.g. fec,cols:10,rows:5\n"
+      "  %-27sSRTO_LATENCY (ms) for -i srt://\n"
+      "  %-27spassphrase for every -o srt:// target, 10..79 chars\n"
+      "  %-27sAES key length for --srt-passphrase: 16|24|32 (default 16)\n"
+      "  %-27sSRTO_STREAMID for every -o srt:// target\n"
+      "  %-27sSRTO_PACKETFILTER for every -o srt:// target\n"
+      "  %-27sSRTO_LATENCY (ms) for every -o srt:// target\n"
       "  %-27sfork to background after startup, detach from terminal\n"
       "  %-27sthis help\n\n"
       "examples:\n"
@@ -179,7 +224,7 @@ static void print_help(void) {
       "  %s -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o out.ts\n"
       "  %s -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o rtmp://live.example.com/app/key\n",
       TOOL_NAME,
-      "-i, --input <uri>", "",
+      "-i, --input <uri>", "", "", "",
       "-k, --key <path>", "-s, --serial <id>", "-e, --emm-file <path>",
       "-u, --unicast-emm <uri>", "", "    --insecure",
       "    --token-header <name>",
@@ -187,12 +232,16 @@ static void print_help(void) {
       "    --biss1-sw <hex12>",
       "    --biss2-ca-key <path>",
       "    --ecm-profile <spec>",
-      "-o, --output <target>", "", "-f, --format <fmt>", "", "-p, --pmt-pid <pid|all>", "", "",
+      "-o, --output <target>", "", "", "", "-f, --format <fmt>", "", "-p, --pmt-pid <pid|all>", "", "",
       "-I, --iface <iface>", "-v, --verbose",
       "    --color <when>",
       "    --metrics <path>", "    --metrics-id <name>", "    --metrics-interval <s>",
       "    --max-services <n>",
       "    --profile <p>",
+      "    --srt-passphrase-in <pw>", "    --srt-pbkeylen-in <n>", "    --srt-streamid-in <id>",
+      "    --srt-packetfilter-in <cfg>", "    --srt-latency-in <ms>",
+      "    --srt-passphrase <pw>", "    --srt-pbkeylen <n>", "    --srt-streamid <id>",
+      "    --srt-packetfilter <cfg>", "    --srt-latency <ms>",
       "-d, --daemonize", "-h, --help",
       TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
@@ -223,6 +272,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics-interval", required_argument, 0, 1013},
       {"max-services", required_argument, 0, 1014},
       {"profile", required_argument, 0, 1015},
+      {"srt-passphrase-in", required_argument, 0, 1016},
+      {"srt-pbkeylen-in", required_argument, 0, 1017},
+      {"srt-streamid-in", required_argument, 0, 1018},
+      {"srt-packetfilter-in", required_argument, 0, 1019},
+      {"srt-latency-in", required_argument, 0, 1020},
+      {"srt-passphrase", required_argument, 0, 1021},
+      {"srt-pbkeylen", required_argument, 0, 1022},
+      {"srt-streamid", required_argument, 0, 1023},
+      {"srt-packetfilter", required_argument, 0, 1024},
+      {"srt-latency", required_argument, 0, 1025},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
@@ -378,6 +437,82 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         profile_given = 1;
         break;
+      case 1016:
+        if (bufcpy(cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, optarg) >= sizeof cfg->srt_passphrase_in) {
+          argerr("--srt-passphrase-in too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1017: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
+          argerr("invalid --srt-pbkeylen-in: %s (16|24|32)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->srt_pbkeylen_in = (int)v;
+        break;
+      }
+      case 1018:
+        if (bufcpy(cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, optarg) >= sizeof cfg->srt_streamid_in) {
+          argerr("--srt-streamid-in too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1019:
+        if (bufcpy(cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, optarg) >= sizeof cfg->srt_packetfilter_in) {
+          argerr("--srt-packetfilter-in too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1020: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 60000) {
+          argerr("invalid --srt-latency-in: %s (1..60000 ms)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->srt_latency_in_ms = (unsigned)v;
+        break;
+      }
+      case 1021:
+        if (bufcpy(cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg) >= sizeof cfg->srt_passphrase) {
+          argerr("--srt-passphrase too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1022: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
+          argerr("invalid --srt-pbkeylen: %s (16|24|32)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->srt_pbkeylen = (int)v;
+        break;
+      }
+      case 1023:
+        if (bufcpy(cfg->srt_streamid, sizeof cfg->srt_streamid, optarg) >= sizeof cfg->srt_streamid) {
+          argerr("--srt-streamid too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1024:
+        if (bufcpy(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg) >= sizeof cfg->srt_packetfilter) {
+          argerr("--srt-packetfilter too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1025: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v == 0 || v > 60000) {
+          argerr("invalid --srt-latency: %s (1..60000 ms)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->srt_latency_ms = (unsigned)v;
+        break;
+      }
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -434,5 +569,33 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (profile_given && cfg->input.kind != INPUT_RIST)
     log_line(TOOL_NAME ": --profile has no effect, no -i rist:// source");
+  if (cfg->srt_passphrase_in[0] && (strlen(cfg->srt_passphrase_in) < 10 || strlen(cfg->srt_passphrase_in) > 79)) {
+    argerr("--srt-passphrase-in must be 10..79 characters");
+    return ARGS_ERR;
+  }
+  if (cfg->srt_pbkeylen_in && !cfg->srt_passphrase_in[0]) {
+    argerr("--srt-pbkeylen-in requires --srt-passphrase-in");
+    return ARGS_ERR;
+  }
+  if (cfg->input.kind != INPUT_SRT && (cfg->srt_passphrase_in[0] || cfg->srt_pbkeylen_in || cfg->srt_streamid_in[0] ||
+                                        cfg->srt_packetfilter_in[0] || cfg->srt_latency_in_ms))
+    log_line(TOOL_NAME ": --srt-*-in has no effect, no -i srt:// source");
+  if (cfg->srt_passphrase[0] && (strlen(cfg->srt_passphrase) < 10 || strlen(cfg->srt_passphrase) > 79)) {
+    argerr("--srt-passphrase must be 10..79 characters");
+    return ARGS_ERR;
+  }
+  if (cfg->srt_pbkeylen && !cfg->srt_passphrase[0]) {
+    argerr("--srt-pbkeylen requires --srt-passphrase");
+    return ARGS_ERR;
+  }
+  {
+    int has_srt_out = 0;
+    for (int i = 0; i < cfg->n_out; i++)
+      if (cfg->out[i].kind == OUT_SRT)
+        has_srt_out = 1;
+    if (!has_srt_out && (cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] ||
+                         cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
+      log_line(TOOL_NAME ": --srt-* has no effect, no -o srt:// target");
+  }
   return ARGS_OK;
 }

@@ -140,6 +140,18 @@ function(dipidescramble_resolve_sources)
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
                      ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c)
     endif ()
+    if (DVBIPITOOLS_HAVE_SRT)
+        set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
+    else ()
+        set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c)
+    endif ()
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+    find_package(Threads REQUIRED)
     set(DIPIDESCRAMBLE_SRCS
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/main.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/pipeline.c
@@ -210,7 +222,8 @@ function(dipidescramble_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
         ${CSA2_SRC}
-        ${RIST_SRC})
+        ${RIST_SRC}
+        ${SRT_SRC})
     set(DIPIDESCRAMBLE_SRCS ${DIPIDESCRAMBLE_SRCS} PARENT_SCOPE)
     set(DIPIDESCRAMBLE_CSA ${DIPIDESCRAMBLE_CSA} PARENT_SCOPE)
     set(DIPIDESCRAMBLE_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
@@ -336,6 +349,14 @@ function(dipiradiohead_resolve_sources)
                      ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c)
     endif ()
 
+    if (DVBIPITOOLS_HAVE_SRT)
+        set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
+    else ()
+        set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c)
+    endif ()
+
     set(DIPIRADIOHEAD_SRCS
         ${CMAKE_SOURCE_DIR}/src/dipiradiohead/main.c
         ${CMAKE_SOURCE_DIR}/src/dipiradiohead/args.c
@@ -353,6 +374,7 @@ function(dipiradiohead_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${TLS_SRC}
         ${RIST_SRC}
+        ${SRT_SRC}
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -437,6 +459,16 @@ function(dipirec_resolve_sources)
                      ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
                      ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c)
     endif ()
+    if (DVBIPITOOLS_HAVE_SRT)
+        set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
+    else ()
+        set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c)
+    endif ()
     set(DIPIREC_SRCS
         ${CMAKE_SOURCE_DIR}/src/dipirec/main.c
         ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
@@ -497,7 +529,8 @@ function(dipirec_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmpout.c
         ${RTMP_AUTH_SRC}
         ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
-        ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c)
+        ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c
+        ${SRT_SRC})
     set(DIPIREC_SRCS ${DIPIREC_SRCS} PARENT_SCOPE)
     set(DIPIREC_HAVE_TLS ${DIPIREC_HAVE_TLS} PARENT_SCOPE)
     set(DIPIREC_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
@@ -534,6 +567,14 @@ function(dipirist_resolve_sources)
         set(TLS_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c)
     endif ()
 
+    if (DVBIPITOOLS_HAVE_SRT)
+        set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
+    else ()
+        set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c)
+    endif ()
+
     set(DIPIRIST_SRCS
         ${CMAKE_SOURCE_DIR}/src/dipirist/main.c
         ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
@@ -550,6 +591,7 @@ function(dipirist_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
+        ${SRT_SRC}
         ${TLS_SRC}
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -630,6 +672,7 @@ function(dipisrt_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
         ${RIST_SRC}
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
@@ -763,6 +806,17 @@ function(dipitvhead_resolve_sources)
                      ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c)
     endif ()
 
+    if (DVBIPITOOLS_HAVE_SRT)
+        set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
+    else ()
+        set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
+                    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c)
+    endif ()
+
     set(DIPITVHEAD_SRCS
         ${CMAKE_SOURCE_DIR}/src/dipitvhead/main.c
         ${CMAKE_SOURCE_DIR}/src/dipitvhead/args.c
@@ -809,6 +863,7 @@ function(dipitvhead_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/retryset.c
         ${TLS_SRC}
         ${RIST_SRC}
+        ${SRT_SRC}
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c

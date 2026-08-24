@@ -93,6 +93,13 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       goto done;
     }
   }
+  if (cfg->n_srt > 0) {
+    out.srt = tvhead_srt_open(cfg);
+    if (!out.srt) {
+      rc = 1;
+      goto done;
+    }
+  }
   out.pacer = bitrate_pacer_new(cfg->bitrate_kbps ? (double)cfg->bitrate_kbps * 1000.0 : 0.0, cfg->stuff, cfg->burst_limit);
   if (!out.pacer) {
     log_line("bitrate pacer setup failed");
@@ -141,6 +148,8 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     poll(npfd ? pfds : NULL, npfd, timeout_ms);
     if (signal_stop_requested())
       break;
+
+    tvhead_srt_service(&out);
 
     now = mono_seconds();
     now_t = time(NULL);
@@ -253,6 +262,8 @@ done:
     rtpheader_free(out.rtph);
   if (out.rist)
     ristout_close(out.rist);
+  if (out.srt)
+    srtsink_close(out.srt);
   if (out.pacer)
     bitrate_pacer_free(out.pacer);
   if (outmc)

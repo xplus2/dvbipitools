@@ -333,6 +333,103 @@ START_TEST(rist_input_and_rist_output_together_is_rejected) {
 }
 END_TEST
 
+START_TEST(srt_input_listen_is_accepted) {
+  char *argv[] = {"dipitvhead", "-i", "srt://@127.0.0.1:6000", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.inputs[0].input.kind, SRC_SRT);
+  ck_assert_int_eq(cfg.inputs[0].input.srt_listen, 1);
+  ck_assert_str_eq(cfg.inputs[0].input.srt_host, "127.0.0.1");
+  ck_assert_uint_eq(cfg.inputs[0].input.srt_port, 6000);
+}
+END_TEST
+
+START_TEST(srt_input_caller_is_accepted) {
+  char *argv[] = {"dipitvhead", "-i", "srt://127.0.0.1:6000", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.inputs[0].input.srt_listen, 0);
+}
+END_TEST
+
+START_TEST(srt_passphrase_in_pairs_with_preceding_input) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-i", "srt://@127.0.0.1:6000", "--srt-passphrase-in", "0123456789", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.inputs[0].srt_passphrase_in, "");
+  ck_assert_str_eq(cfg.inputs[1].srt_passphrase_in, "0123456789");
+}
+END_TEST
+
+START_TEST(srt_passphrase_in_before_any_input_is_rejected) {
+  char *argv[] = {"dipitvhead", "--srt-passphrase-in", "0123456789", "-i", "srt://@127.0.0.1:6000", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_output_caller_is_accepted) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-R", "srt://1.2.3.4:7000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.n_srt, 1u);
+  ck_assert_str_eq(cfg.srt_host[0], "1.2.3.4");
+  ck_assert_uint_eq(cfg.srt_port[0], 7000);
+}
+END_TEST
+
+START_TEST(srt_output_listen_is_rejected) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-R", "srt://@1.2.3.4:7000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_peers_bonded_require_group_mode) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-R", "srt://1.2.3.4:7000", "-R", "srt://5.6.7.8:7000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_peers_bonded_with_group_mode_is_accepted) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-R", "srt://1.2.3.4:7000", "-R", "srt://5.6.7.8:7000", "--srt-group-mode", "backup", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.n_srt, 2u);
+  ck_assert_int_eq(cfg.srt_group_mode, SRT_BOND_BACKUP);
+}
+END_TEST
+
+START_TEST(rist_and_srt_output_peers_cannot_mix) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-R", "rist://1.2.3.4:7000", "-R", "srt://5.6.7.8:7000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_input_and_srt_output_together_is_accepted) {
+  /* unlike rist://, srt has no per-process context limit */
+  char *argv[] = {"dipitvhead", "-i", "srt://@127.0.0.1:6000", "-R", "srt://1.2.3.4:7000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+}
+END_TEST
+
+START_TEST(srt_passphrase_length_is_validated) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-R", "srt://1.2.3.4:7000", "--srt-passphrase", "short", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_pbkeylen_requires_passphrase) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-R", "srt://1.2.3.4:7000", "--srt-pbkeylen", "16", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 START_TEST(rist_options_without_any_rist_peer_are_rejected_by_profile_check_only) {
   /* --secret without --profile main still fails validation even with no -R;
      the no-op warning (logged, not fatal) doesn't change ARGS_OK/ARGS_ERR here */
@@ -382,6 +479,18 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, rist_profile_in_before_any_input_is_rejected);
   tcase_add_test(tc, more_than_one_rist_input_is_rejected);
   tcase_add_test(tc, rist_input_and_rist_output_together_is_rejected);
+  tcase_add_test(tc, srt_input_listen_is_accepted);
+  tcase_add_test(tc, srt_input_caller_is_accepted);
+  tcase_add_test(tc, srt_passphrase_in_pairs_with_preceding_input);
+  tcase_add_test(tc, srt_passphrase_in_before_any_input_is_rejected);
+  tcase_add_test(tc, srt_output_caller_is_accepted);
+  tcase_add_test(tc, srt_output_listen_is_rejected);
+  tcase_add_test(tc, srt_peers_bonded_require_group_mode);
+  tcase_add_test(tc, srt_peers_bonded_with_group_mode_is_accepted);
+  tcase_add_test(tc, rist_and_srt_output_peers_cannot_mix);
+  tcase_add_test(tc, srt_input_and_srt_output_together_is_accepted);
+  tcase_add_test(tc, srt_passphrase_length_is_validated);
+  tcase_add_test(tc, srt_pbkeylen_requires_passphrase);
   suite_add_tcase(s, tc);
   return s;
 }

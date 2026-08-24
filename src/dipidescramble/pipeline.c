@@ -53,6 +53,17 @@ void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const
     rtmp_note_result(rtmpout_write(lc->rtmp[i], type, timestamp_ms, data, len) >= 0, &lc->rtmp_had_error[i], i);
 }
 
+void srt_service_all(loop_ctx_t *lc) {
+  for (int i = 0; i < lc->n_srt; i++) {
+    srtsink_status_t st;
+    srtsink_service(lc->srt[i], &st);
+    if (st.connected != lc->srt_connected[i]) {
+      log_line(TOOL_NAME ": srt[%d] output: %s", i, st.connected ? "connected" : "link down, reconnecting");
+      lc->srt_connected[i] = st.connected;
+    }
+  }
+}
+
 static void handle_ecm_section(loop_ctx_t *lc) {
   const unsigned char *sec = lc->ecm_asm.buf;
   size_t seclen = lc->ecm_asm.expect;
@@ -135,6 +146,8 @@ static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
       return;
     }
   }
+  for (int i = 0; i < lc->n_srt; i++)
+    srtsink_write(lc->srt[i], pkt, 188);
   lc->packets++;
 }
 

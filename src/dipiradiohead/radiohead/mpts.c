@@ -198,6 +198,18 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       return 1;
     }
   }
+  if (cfg->n_srt > 0) {
+    out.srt = radiohead_srt_open(cfg);
+    if (!out.srt) {
+      if (out.rist)
+        ristout_close(out.rist);
+      if (out.rtph)
+        rtpheader_free(out.rtph);
+      if (mc)
+        mcast_close(mc);
+      return 1;
+    }
+  }
 
   for (unsigned i = 0; i < n; i++) {
     meta_ctxs[i] = &metas[i];
@@ -261,6 +273,8 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     poll(npfd ? pfds : NULL, npfd, timeout_ms);
     if (signal_stop_requested())
       break;
+
+    radiohead_srt_service(&out);
 
     now = mono_seconds();
     now_t = time(NULL);
@@ -341,6 +355,8 @@ done:
     rtpheader_free(out.rtph);
   if (out.rist)
     ristout_close(out.rist);
+  if (out.srt)
+    srtsink_close(out.srt);
   if (mc)
     mcast_close(mc);
 

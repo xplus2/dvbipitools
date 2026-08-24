@@ -13,6 +13,7 @@
 #include "lib/mux/flv/flv.h"
 #include "lib/net/rist/ristout.h"
 #include "lib/net/rtmp/rtmpout.h"
+#include "lib/net/srt/srtsink.h"
 #include "lib/net/tssink.h"
 #include "lib/net/tssource.h"
 
@@ -32,22 +33,32 @@ int src_open(const config_t *cfg, src_t *s);
 ssize_t src_read(src_t *s, unsigned char *buf, size_t cap);
 void src_close(src_t *s);
 
+/* 1: src_read() likely has data. 0: nothing this tick. -1: fatal poll
+   error. --ret sources: always 1, they bound their own poll already */
+int src_wait_readable(src_t *s, int timeout_ms);
+
 int open_output(const char *path);
 
-/* file/stdout via a plain fd, rtp/udp via tssink, rist:// via ristout.
+/* file/stdout via a plain fd, rtp/udp via tssink, rist:// via ristout, srt:// via srtsink.
    fd valid: run_mkv needs it, always file/stdout case (args rejects mkv/mka with net -o) */
 typedef struct {
   int fd;
-  tssink_t *net;   /* NULL unless -o rtp:// or udp:// */
-  ristout_t *rist; /* NULL unless -o rist:// */
+  tssink_t *net;    /* NULL unless -o rtp:// or udp:// */
+  ristout_t *rist;  /* NULL unless -o rist:// */
+  srtsink_t *srt;   /* NULL unless -o srt:// */
   int net_had_error;  /* edge-log gate, net send failure never stops recording */
   int rist_had_error; /* edge-log gate, rist write failure never stops recording */
+  int srt_connected;  /* edge-log gate for connect/link-down transitions */
   uint64_t errors_total; /* metrics: cumulative write failures, net/rist only */
 } out_sink_t;
 
 int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o);
 int sink_write(out_sink_t *o, const unsigned char *p, size_t n);
 void sink_close(out_sink_t *o);
+
+/* advances every -o srt:// sink's connect state, flushes queued data.
+   call every loop iteration, even if nothing was read */
+void sinks_service_srt(out_sink_t *sinks, int n_sinks);
 
 /* failed network sink never fatal, log only on failure/recovery edge, retry every write */
 void note_send_result(int ok, int *had_error, uint64_t *errors_total, const char *label);

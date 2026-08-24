@@ -1,4 +1,4 @@
-.TH DIPIRADIOHEAD 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPIRADIOHEAD 1 "2026-08-24" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipiradiohead \- re-mux an Icecast/Shoutcast stream as a DVB-IPI multicast
 .SH SYNOPSIS
@@ -24,10 +24,14 @@ streaming sources into a DVB-IPI output.
 .PP
 Output is UDP or RTP multicast via
 .BR \-m ,
-one or more RIST peers via
+one or more RIST or SRT peers via
 .B \-R
-(bonded onto a single sender, requires librist), or both at once; at least
-one of the two is required.
+(bonded onto a single sender, requires librist or libsrt respectively -
+one scheme at a time, not mixed), or both at once; at least one of
+.B \-m
+/
+.B \-R
+is required.
 .B dipiradiohead
 generates PAT/PMT/SDT/NIT/EIT signaling itself, including now-playing EIT
 present-event text taken from ICY
@@ -108,8 +112,11 @@ Multicast TTL / hop limit. Default: 1.
 .TP
 .BR \-R ", " \-\-rist " " \fIuri\fR
 .B rist://host:port[?query]
-output. Repeatable; every peer bonds onto a single RIST sender (requires
-librist). May be combined with
+or
+.B srt://host:port
+output. Repeatable; every peer bonds onto a single sender (requires
+librist or libsrt respectively). One scheme at a time within a single run
+- rist:// and srt:// peers don't mix. May be combined with
 .BR \-m .
 .TP
 .B \-\-profile \fIp\fR
@@ -118,25 +125,55 @@ RIST profile,
 or
 .BR main .
 Applies only to
-.B \-R
+.B \-R rist://
 peers. Default:
 .BR simple .
 .TP
 .B \-\-secret \fIpsk\fR
 RIST pre-shared key. Applies only to
-.B \-R
+.B \-R rist://
 peers. Requires
 .BR \-\-profile\ main .
 .TP
 .B \-\-cname \fIname\fR
 RIST cname. Applies only to
-.B \-R
+.B \-R rist://
 peers. Default: library default.
 .TP
 .B \-\-buffer \fIms\fR
 RIST recovery buffer, in milliseconds. Applies only to
-.B \-R
+.B \-R rist://
 peers. Default: library default.
+.TP
+.B \-\-srt\-group\-mode \fIbroadcast\fR|\fIbackup\fR
+Required when bonding more than one
+.B \-R srt://
+peer. No effect, rejected, with a single peer.
+.TP
+.B \-\-srt\-passphrase \fIpw\fR
+Passphrase for every
+.B \-R srt://
+peer, 10..79 characters. Default: none (no encryption).
+.TP
+.B \-\-srt\-pbkeylen \fI16\fR|\fI24\fR|\fI32\fR
+AES key length, requires
+.BR \-\-srt\-passphrase .
+Default: 16.
+.TP
+.B \-\-srt\-streamid \fIid\fR
+SRTO_STREAMID for every
+.B \-R srt://
+peer.
+.TP
+.B \-\-srt\-packetfilter \fIcfg\fR
+SRTO_PACKETFILTER config string for every
+.B \-R srt://
+peer.
+.TP
+.B \-\-srt\-latency \fIms\fR
+SRTO_LATENCY for every
+.B \-R srt://
+peer. Default: library.
 .SS "Stream Identifiers"
 .TP
 .BR \-n ", " \-\-nit " " \fItext\fR
@@ -341,7 +378,8 @@ Non-zero on argument errors or I/O/network failure.
 .SH SEE ALSO
 .BR dipitvhead (1),
 .BR dipimetrics (1),
-.BR dipirist (1)
+.BR dipirist (1),
+.BR dipisrt (1)
 .PP
 Project homepage: https://github.com/xplus2/dvbipitools
 .SH COPYRIGHT

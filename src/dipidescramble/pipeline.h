@@ -16,6 +16,7 @@
 #include "lib/mux/flv/flv.h"
 #include "lib/mux/mkv/mkv.h"
 #include "lib/net/rtmp/rtmpout.h"
+#include "lib/net/srt/srtsink.h"
 #include "lib/scrambler/scrambler.h"
 
 typedef struct {
@@ -27,6 +28,9 @@ typedef struct {
   rtmpout_t *rtmp[DIPIDESCRAMBLE_MAX_OUT];
   int rtmp_had_error[DIPIDESCRAMBLE_MAX_OUT];
   int n_rtmp;
+  srtsink_t *srt[DIPIDESCRAMBLE_MAX_OUT]; /* independent per target, not bonded */
+  int srt_connected[DIPIDESCRAMBLE_MAX_OUT];
+  int n_srt;
   unsigned long long packets;
   psi_t *psi;
   unsigned ecm_pid, emm_pid; /* 0 = not yet resolved */
@@ -67,5 +71,9 @@ void pipeline_flush(loop_ctx_t *lc);
 
 /* flv_tag_cb, fans out to lc->rtmp[0..n_rtmp), registered on lc->flv by main() */
 void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len);
+
+/* advances every -o srt:// target's connect state, flushes queued data.
+   call every main-loop iteration, even when input is quiet. */
+void srt_service_all(loop_ctx_t *lc);
 
 #endif

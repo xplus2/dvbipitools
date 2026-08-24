@@ -8,50 +8,72 @@ dipirec -i <uri> -o <target> [options]
 
 ## Options
 
-| flag | long form            | argument              | default                             |
-|------|----------------------|-----------------------|-------------------------------------|
-| `-i` | `--in`               | `<uri>`               | required                            |
-| `-o` | `--out`              | `<target>`            | required, repeatable                |
-| `-a` | `--audio`            | `<track>` / `all`     | `all`                               |
-| `-f` | `--format`           | `raw\|ts\|mkv\|mka`   | from `-o` suffix, else `ts`         |
-| `-p` | `--pmt-pid`          | `<pid>` / `all`       | none (see below)                    |
-| `-s` | `--subtitles`        | `strip\|keep\|srt`    | `keep`                              |
-| `-t` | `--time`             | `<duration>`          | no limit (runs until stopped)       |
-| `-I` | `--iface`            | `<iface>`             | kernel route                        |
-| `-O` | `--out-iface`        | `<iface>`             | kernel route                        |
-|      | `--ttl`              | `<n>`                 | kernel default (`1`)                |
-| `-v` | `--verbose`          |                       | off                                 |
-|      | `--sub-lead`         | `<ms>`                | `1000`                              |
-|      | `--color`            | `auto\|always\|never` | `auto`                              |
-|      | `--ret`              | `<addr>:<port>`       | off (no gap repair)                 |
-|      | `--no-ret-mc`        |                       | off (joins repair session)          |
-|      | `--ret-mc-port`      | `<port>`              | same as `-i`'s port                 |
-|      | `--ret-pt`           | `<n>`                 | `99`                                |
-|      | `--ret-wait`         | `<ms>`                | `200`                               |
-|      | `--pace`             |                       | off (file/stdin source only)        |
-|      | `--strip`            | `<list>` / `none`     | `NUL,NIT,AIT,EIT`                   |
-|      | `--profile`          | `simple\|main`        | `simple` (`-o rist://` only)        |
-|      | `--secret`           | `<psk>`               | none (`-o rist://` only)            |
-|      | `--cname`            | `<name>`              | library default (`-o rist://` only) |
-|      | `--buffer`           | `<ms>`                | library default (`-o rist://` only) |
-|      | `--profile-in`       | `simple\|main`        | `simple` (`-i rist://` only)        |
-|      | `--insecure`         |                       | off (`-o rtmps://` only)            |
-|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`     |
-|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)  |
-|      | `--metrics-interval` | `<s>`                 | `5`                                 |
-| `-h` | `--help`             |                       |                                     |
+| flag | long form               | argument              | default                                       |
+|------|-------------------------|-----------------------|-----------------------------------------------|
+| `-i` | `--in`                  | `<uri>`               | required                                      |
+| `-o` | `--out`                 | `<target>`            | required, repeatable                          |
+| `-a` | `--audio`               | `<track>` / `all`     | `all`                                         |
+| `-f` | `--format`              | `raw\|ts\|mkv\|mka`   | from `-o` suffix, else `ts`                   |
+| `-p` | `--pmt-pid`             | `<pid>` / `all`       | none (see below)                              |
+| `-s` | `--subtitles`           | `strip\|keep\|srt`    | `keep`                                        |
+| `-t` | `--time`                | `<duration>`          | no limit (runs until stopped)                 |
+| `-I` | `--iface`               | `<iface>`             | kernel route                                  |
+| `-O` | `--out-iface`           | `<iface>`             | kernel route                                  |
+|      | `--ttl`                 | `<n>`                 | kernel default (`1`)                          |
+| `-v` | `--verbose`             |                       | off                                           |
+|      | `--sub-lead`            | `<ms>`                | `1000`                                        |
+|      | `--color`               | `auto\|always\|never` | `auto`                                        |
+|      | `--ret`                 | `<addr>:<port>`       | off (no gap repair)                           |
+|      | `--no-ret-mc`           |                       | off (joins repair session)                    |
+|      | `--ret-mc-port`         | `<port>`              | same as `-i`'s port                           |
+|      | `--ret-pt`              | `<n>`                 | `99`                                          |
+|      | `--ret-wait`            | `<ms>`                | `200`                                         |
+|      | `--pace`                |                       | off (file/stdin source only)                  |
+|      | `--strip`               | `<list>` / `none`     | `NUL,NIT,AIT,EIT`                             |
+|      | `--insecure`            |                       | off (`-o rtmps://` only)                      |
+|      | `--metrics`             | `<path>`              | `/run/dvbipitools/metrics.sock`               |
+|      | `--metrics-id`          | `<name>`              | none (metrics disabled unless set)            |
+|      | `--metrics-interval`    | `<s>`                 | `5`                                           |
+| `-h` | `--help`                |                       |                                               |
+
+### Related to RIST Input/Output
+| flag | long form               | argument              | default                                       |
+|------|-------------------------|-----------------------|-----------------------------------------------|
+|      | `--profile`             | `simple\|main`        | `simple` (`-o rist://` only)                  |
+|      | `--secret`              | `<psk>`               | none (`-o rist://` only)                      |
+|      | `--cname`               | `<name>`              | library default (`-o rist://` only)           |
+|      | `--buffer`              | `<ms>`                | library default (`-o rist://` only)           |
+|      | `--profile-in`          | `simple\|main`        | `simple` (`-i rist://` only)                  |
+
+### Related to SRT Inputs/Outputs
+
+| flag | long form               | argument              | default                                       |
+|------|-------------------------|-----------------------|-----------------------------------------------|
+|      | `--srt-passphrase-in`   | `<pw>`                | none (`-i srt://` only, 10..79 chars)         |
+|      | `--srt-pbkeylen-in`     | `16\|24\|32`          | `16`, requires `--srt-passphrase-in`          |
+|      | `--srt-streamid-in`     | `<id>`                | none (`-i srt://` only)                       |
+|      | `--srt-packetfilter-in` | `<cfg>`               | none (`-i srt://` only)                       |
+|      | `--srt-latency-in`      | `<ms>`                | library default (`-i srt://` only)            |
+|      | `--srt-passphrase`      | `<pw>`                | none (every `-o srt://` target, 10..79 chars) |
+|      | `--srt-pbkeylen`        | `16\|24\|32`          | `16`, requires `--srt-passphrase`             |
+|      | `--srt-streamid`        | `<id>`                | none (every `-o srt://` target)               |
+|      | `--srt-packetfilter`    | `<cfg>`               | none (every `-o srt://` target)               |
+|      | `--srt-latency`         | `<ms>`                | library default (every `-o srt://` target)    |
+
+---
 
 ## Input (`-i`)
 
-| schema                         | what's this?                                |
-|--------------------------------|---------------------------------------------|
-| `rtp://@<group>:<port>`        | RTP wrapped SPTS or MPTS                    |
-| `udp://@<group>:<port>`        | plain SPTS or MPTS                          |
-| `http://<host>:<port>/<path>`  | HTTP TS stream                              |
-| `https://<host>:<port>/<path>` | same, TLS (`--insecure` skips verification) |
-| `-`                            | stdin, TS or RTP wrapped TS                 |
-| `<path>`                       | a file, TS or RTP wrapped TS                |
-| `rist://@<host>:<port>[?query]`| single-peer RIST receiver, requires librist |
+| schema                         | what's this?                                                    |
+|--------------------------------|-----------------------------------------------------------------|
+| `rtp://@<group>:<port>`        | RTP wrapped SPTS or MPTS                                        |
+| `udp://@<group>:<port>`        | plain SPTS or MPTS                                              |
+| `http://<host>:<port>/<path>`  | HTTP TS stream                                                  |
+| `https://<host>:<port>/<path>` | same, TLS (`--insecure` skips verification)                     |
+| `-`                            | stdin, TS or RTP wrapped TS                                     |
+| `<path>`                       | a file, TS or RTP wrapped TS                                    |
+| `rist://@<host>:<port>[?query]`| single-peer RIST receiver, requires librist                     |
+| `srt://[@]<host>:<port>`       | single-peer SRT, requires libsrt (`@` = listen, else calls out) |
 
 `@` is optional for `rtp://`/`udp://`, but required for `rist://` (it marks the peer as listening, the
 role a receiver needs). `<group>` can be an IPv4 or IPv6 multicast address.
@@ -60,6 +82,11 @@ role a receiver needs). `<group>` can be an IPv4 or IPv6 multicast address.
 It requires librist and only supports a single peer per input (no bonding).
 If you need bonded RIST input, you can run `dipirist` in front of this tool as a bridge instead.
 Encrypted input needs `--profile-in main` and a `?secret=` query parameter in the URI.
+
+`srt://[@]host:port` is also accepted, requiring libsrt. `@` binds/listens/accepts; without it, the
+tool calls out to a remote SRT sender instead. Single peer only - no bonding or rendezvous here, use
+`dipisrt` as a bridge for those. Encryption/streamid/latency/packet filtering are set via
+`--srt-passphrase-in`/`--srt-pbkeylen-in`/`--srt-streamid-in`/`--srt-packetfilter-in`/`--srt-latency-in`.
 
 > librist uses one context per process. This means that only _one_ input _or_ output can use RIST.
 > If the input is RIST, the output can't be (or vice versa). 
@@ -110,15 +137,16 @@ jitter) resyncs instead of trying to sleep-catch-up.
 
 Repeatable: a file plus one or more RTMP(S) pushes, or several RTMP(S) targets at once.
 
-| schema                              | what's this?                                    |
-|--------------------------------------|--------------------------------------------------|
-| `<path>`                             | a file                                            |
-| `-`                                   | stdout, also pipeable into [dipidescramble](../dipidescramble/README.md) |
-| `rtp://@<group>:<port>`              | RTP-wrapped multicast, `-f raw`/`ts` only         |
-| `udp://@<group>:<port>`              | plain multicast, no RTP header, `-f raw`/`ts` only |
-| `rist://<host>:<port>[?query]`       | single RIST peer, requires librist, `-f raw`/`ts` only |
-| `rtmp://<host>[:port]/<app>/<key>`   | RTMP publish, default port `1935`                 |
-| `rtmps://<host>[:port]/<app>/<key>`  | RTMP over TLS, default port `443`                 |
+| schema                              | what's this?                                                             |
+|-------------------------------------|--------------------------------------------------------------------------|
+| `<path>`                            | a file                                                                   |
+| `-`                                 | stdout, also pipeable into [dipidescramble](../dipidescramble/README.md) |
+| `rtp://@<group>:<port>`             | RTP-wrapped multicast, `-f raw`/`ts` only                                |
+| `udp://@<group>:<port>`             | plain multicast, no RTP header, `-f raw`/`ts` only                       |
+| `rist://<host>:<port>[?query]`      | single RIST peer, requires librist, `-f raw`/`ts` only                   |
+| `srt://<host>:<port>`               | single SRT peer per target, requires libsrt, `-f raw`/`ts` only          |
+| `rtmp://<host>[:port]/<app>/<key>`  | RTMP publish, default port `1935`                                        |
+| `rtmps://<host>[:port]/<app>/<key>` | RTMP over TLS, default port `443`                                        |
 
 `rtp://`/`udp://` join nothing, they just send: 7-packet (1316-byte) datagrams, RTP-wrapped with
 a fresh SSRC/sequence/timestamp for `rtp://`, plain for `udp://`. `rist://` sends the same
@@ -126,6 +154,11 @@ a fresh SSRC/sequence/timestamp for `rtp://`, plain for `udp://`. `rist://` send
 [dipirist](../dipirist/README.md) for bonding. `--profile`/`--secret`/`--cname`/`--buffer`
 configure it (`--secret` requires `--profile main`). Combined with
 [`--pace`](#real-time-pacing---pace): replay a file back onto multicast at its original speed.
+
+`srt://host:port` always calls out, since `srtout` has no listener mode. Each target is
+independent and not bonded. Repeat `-o` for more, or use [dipisrt](../dipisrt/README.md) if you
+need bonded peers. `--srt-passphrase`, `--srt-pbkeylen`, `--srt-streamid`, `--srt-packetfilter`,
+and `--srt-latency` apply to every `-o srt://` target.
 
 ### RTMP(S)
 

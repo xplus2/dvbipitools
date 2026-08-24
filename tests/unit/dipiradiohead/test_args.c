@@ -197,6 +197,67 @@ START_TEST(rist_secret_with_profile_main_is_accepted) {
 }
 END_TEST
 
+START_TEST(srt_peer_is_accepted) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000", "-R", "srt://1.2.3.4:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.n_srt, 1u);
+  ck_assert_str_eq(cfg.srt_host[0], "1.2.3.4");
+  ck_assert_uint_eq(cfg.srt_port[0], 6000u);
+}
+END_TEST
+
+START_TEST(srt_peer_with_at_is_rejected) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000", "-R", "srt://@1.2.3.4:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_peers_bonded_require_group_mode) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000", "-R", "srt://1.2.3.4:6000", "-R", "srt://5.6.7.8:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_peers_bonded_with_group_mode_is_accepted) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000", "-R", "srt://1.2.3.4:6000", "-R", "srt://5.6.7.8:6000", "--srt-group-mode", "broadcast", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.n_srt, 2u);
+  ck_assert_int_eq(cfg.srt_group_mode, SRT_BOND_BROADCAST);
+}
+END_TEST
+
+START_TEST(srt_group_mode_with_single_peer_is_rejected) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000", "-R", "srt://1.2.3.4:6000", "--srt-group-mode", "broadcast", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(rist_and_srt_peers_cannot_mix) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000", "-R", "rist://1.2.3.4:6000", "-R", "srt://5.6.7.8:6000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_passphrase_length_is_validated) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000", "-R", "srt://1.2.3.4:6000", "--srt-passphrase", "short", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(srt_pbkeylen_requires_passphrase) {
+  char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000", "-R", "srt://1.2.3.4:6000", "--srt-pbkeylen", "16", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("args");
   TCase *tc = tcase_create("core");
@@ -219,6 +280,14 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, rist_peer_without_rist_scheme_is_rejected);
   tcase_add_test(tc, rist_secret_without_profile_main_is_rejected);
   tcase_add_test(tc, rist_secret_with_profile_main_is_accepted);
+  tcase_add_test(tc, srt_peer_is_accepted);
+  tcase_add_test(tc, srt_peer_with_at_is_rejected);
+  tcase_add_test(tc, srt_peers_bonded_require_group_mode);
+  tcase_add_test(tc, srt_peers_bonded_with_group_mode_is_accepted);
+  tcase_add_test(tc, srt_group_mode_with_single_peer_is_rejected);
+  tcase_add_test(tc, rist_and_srt_peers_cannot_mix);
+  tcase_add_test(tc, srt_passphrase_length_is_validated);
+  tcase_add_test(tc, srt_pbkeylen_requires_passphrase);
   suite_add_tcase(s, tc);
   return s;
 }

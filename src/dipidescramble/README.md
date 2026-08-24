@@ -18,44 +18,78 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 
 ## Options
 
-| flag  | long form            | argument              | default                                             |
-|-------|----------------------|-----------------------|-----------------------------------------------------|
-| `-i`  | `--input`            | `<uri>`               | required                                            |
-| `-k`  | `--key`              | `<path>`              | required for ECM/EMM-driven CAS                     |
-| `-s`  | `--serial`           | `<id>`                | required for ECM/EMM-driven CAS                     |
-| `-e`  | `--emm-file`         | `<path>`              | required for ECM/EMM-driven CAS (cache file)        |
-| `-u`  | `--unicast-emm`      | `<uri>`               |                                                     |
-|       | `--insecure`         |                       | off (`-u`, or `-o rtmps://`)                        |
-| `-o`  | `--output`           | `<target>`            | required, repeatable                                |
-| `-f`  | `--format`           | `ts\|mkv\|mka`        | `ts`                                                |
-| `-p`  | `--pmt-pid`          | `<pid>` / `all`       | none (see below)                                    |
-| `-I`  | `--iface`            | `<iface>`             | kernel default                                      |
-|       | `--biss1-sw`         | `<hex12>`             | BISS1 Mode 1, mutually exclusive with `--biss2-*`   |
-|       | `--biss2-sw`         | `<hex32>`             | BISS2 Mode 1, mutually exclusive with `--biss2-esw` |
-|       | `--biss2-esw`        | `<hex32>`             | BISS2 Mode E                                        |
-|       | `--biss2-id`         | `<hex32>`             | required with `--biss2-esw`                         |
-|       | `--biss2-ca-key`     | `<path>`              | BISS2 Mode CA: receiver RSA private key, PEM        |
-|       | `--ecm-profile`      | `<spec>`              | `ecm_profile` templating, see below                 |
-| `-v`  | `--verbose`          |                       | off                                                 |
-|       | `--color`            | `auto\|always\|never` | `auto`                                              |
-|       | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`                     |
-|       | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)                  |
-|       | `--metrics-interval` | `<s>`                 | `5`                                                 |
-|       | `--max-services`     | `<n>`                 | `32` (max `256`)                                    |
-|       | `--profile`          | `simple\|main`        | `simple`, `-i rist://` only                         |
-| `-d`  | `--daemonize`        |                       | off (foreground)                                    |
-| `-h`  | `--help`             |                       |                                                     |
+| flag  | long form               | argument              | default                                             |
+|-------|-------------------------|-----------------------|-----------------------------------------------------|
+| `-i`  | `--input`               | `<uri>`               | required                                            |
+| `-k`  | `--key`                 | `<path>`              | required for ECM/EMM-driven CAS                     |
+| `-s`  | `--serial`              | `<id>`                | required for ECM/EMM-driven CAS                     |
+| `-e`  | `--emm-file`            | `<path>`              | required for ECM/EMM-driven CAS (cache file)        |
+| `-u`  | `--unicast-emm`         | `<uri>`               |                                                     |
+|       | `--insecure`            |                       | off (`-u`, or `-o rtmps://`)                        |
+| `-o`  | `--output`              | `<target>`            | required, repeatable                                |
+| `-f`  | `--format`              | `ts\|mkv\|mka`        | `ts`                                                |
+| `-p`  | `--pmt-pid`             | `<pid>` / `all`       | none (see below)                                    |
+| `-I`  | `--iface`               | `<iface>`             | kernel default                                      |
+|       | `--ecm-profile`         | `<spec>`              | `ecm_profile` templating, see below                 |
+| `-v`  | `--verbose`             |                       | off                                                 |
+|       | `--color`               | `auto\|always\|never` | `auto`                                              |
+|       | `--metrics`             | `<path>`              | `/run/dvbipitools/metrics.sock`                     |
+|       | `--metrics-id`          | `<name>`              | none (metrics disabled unless set)                  |
+|       | `--metrics-interval`    | `<s>`                 | `5`                                                 |
+|       | `--max-services`        | `<n>`                 | `32` (max `256`)                                    |
+|       | `--profile`             | `simple\|main`        | `simple`, `-i rist://` only                         |
+| `-d`  | `--daemonize`           |                       | off (foreground)                                    |
+| `-h`  | `--help`                |                       |                                                     |
+
+### Related to BISS
+| flag  | long form               | argument              | default                                             |
+|-------|-------------------------|-----------------------|-----------------------------------------------------|
+|       | `--biss1-sw`            | `<hex12>`             | BISS1 Mode 1, mutually exclusive with `--biss2-*`   |
+|       | `--biss2-sw`            | `<hex32>`             | BISS2 Mode 1, mutually exclusive with `--biss2-esw` |
+|       | `--biss2-esw`           | `<hex32>`             | BISS2 Mode E                                        |
+|       | `--biss2-id`            | `<hex32>`             | required with `--biss2-esw`                         |
+|       | `--biss2-ca-key`        | `<path>`              | BISS2 Mode CA: receiver RSA private key, PEM        |
+
+### Related to SRT Inputs/Outputs
+| flag  | long form               | argument              | default                                             |
+|-------|-------------------------|-----------------------|-----------------------------------------------------|
+|       | `--srt-passphrase-in`   | `<pw>`                | none, `-i srt://` only, 10..79 chars                |
+|       | `--srt-pbkeylen-in`     | `16\|24\|32`          | `16`, requires `--srt-passphrase-in`                |
+|       | `--srt-streamid-in`     | `<id>`                | none, `-i srt://` only                              |
+|       | `--srt-packetfilter-in` | `<cfg>`               | none, `-i srt://` only                              |
+|       | `--srt-latency-in`      | `<ms>`                | library default, `-i srt://` only                   |
+|       | `--srt-passphrase`      | `<pw>`                | none, every `-o srt://` target, 10..79 chars        |
+|       | `--srt-pbkeylen`        | `16\|24\|32`          | `16`, requires `--srt-passphrase`                   |
+|       | `--srt-streamid`        | `<id>`                | none, every `-o srt://` target                      |
+|       | `--srt-packetfilter`    | `<cfg>`               | none, every `-o srt://` target                      |
+|       | `--srt-latency`         | `<ms>`                | library default, every `-o srt://` target           |
+
+---
 
 ## Parameters
 
 ### Input (`-i`)
 
-`udp://`/`rtp://` multicast, or `-` for stdin (already-demuxed `.ts` on stdin, e.g. piped from `dipirec`/`ffmpeg`).
-Can be a single-program stream (SPTS) or a multi-program mux (MPTS) - see `-p` below.
+Can be a single-program stream (SPTS) or a multi-program mux (MPTS), see `-p` below.
+
+| schema                          | what's this?                                                      |
+|---------------------------------|-------------------------------------------------------------------|
+| `rtp://@<group>:<port>`         | RTP wrapped SPTS or MPTS multicast                                |
+| `udp://@<group>:<port>`         | plain SPTS or MPTS multicast                                      |
+| `-`                             | stdin, already-demuxed `.ts` (e.g. piped from `dipirec`/`ffmpeg`) |
+| `rist://@<host>:<port>[?query]` | single-peer RIST receiver, requires librist                       |
+| `srt://<host>:<port>`           | single-peer SRT, calls out, requires libsrt                       |
+| `srt://@<host>:<port>`          | single-peer SRT, listens, requires libsrt                         |
 
 `rist://@host:port[?query]` is also accepted. It requires librist and only supports a single peer per input (no bonding).
 If you need bonded RIST input, you can run `dipirist` in front of this tool as a bridge instead.
 Encrypted input needs `--profile main` and a `?secret=` query parameter in the URI.
+
+`srt://host:port` (caller) or `srt://@host:port` (listener) is also accepted. It requires libsrt
+and only supports a single peer (no bonding, no rendezvous). You can use `dipisrt` as a bridge for those.
+Encryption/streamid/latency/packet filtering are set via `--srt-passphrase-in`/`--srt-pbkeylen-in`/
+`--srt-streamid-in`/`--srt-packetfilter-in`/`--srt-latency-in`.
+
 
 ### MPTS input (`-p`)
 
@@ -109,18 +143,25 @@ Fetched once at startup only, not polled.
 
 Repeatable: e.g. a file plus one or more RTMP(S) pushes.
 
-| schema                              | what's this?                      |
-|-------------------------------------|-----------------------------------|
-| `<path>`                            | a file                            |
-| `-`                                 | stdout                            |
-| `rtmp://<host>[:port]/<app>/<key>`  | RTMP publish, default port `1935` |
-| `rtmps://<host>[:port]/<app>/<key>` | RTMP over TLS, default port `443` |
+| schema                               | what's this?                          |
+|--------------------------------------|---------------------------------------|
+| `<path>`                             | a file                                |
+| `-`                                  | stdout                                |
+| `rtmp://<host>[:port]/<app>/<key>`   | RTMP publish, default port `1935`     |
+| `rtmps://<host>[:port]/<app>/<key>`  | RTMP over TLS, default port `443`     |
+| `srt://host:port`                    | SRT push, calls out (requires libsrt) |
 
 RTMP output ignores `-f`: descrambled H.264/HEVC video. Unsupported video (MPEG-2) or audio
 (MP2) is dropped from that push.
 
-`-f mkv`/`mka` can combine with an `rtmp(s)://` target, given exactly one plain file target for
-the Matroska mux itself. `-p all` can't, same reason as `-f mkv`: RTMP is one program.
+`srt://` output always calls out, since `srtout` has no listener mode. Each `-o srt://` target
+is independent and not bonded. Repeat `-o` for more targets, or use `dipisrt` if you need bonded
+peers. Like RTMP, it ignores `-f` and always sends the raw descrambled TS. Encryption, streamid,
+latency, and packet filtering apply to every `-o srt://` target, via `--srt-passphrase`,
+`--srt-pbkeylen`, `--srt-streamid`, `--srt-packetfilter`, and `--srt-latency`.
+
+`-f mkv`/`mka` can combine with an `rtmp(s)://`/`srt://` target, given exactly one plain file target for
+the Matroska mux itself. `-p all` can't, same reason as `-f mkv`: RTMP/SRT here carry one program.
 
 `--insecure` (also `-u`, above) skips cert/hostname/expiry checks, for `rtmps://`.
 

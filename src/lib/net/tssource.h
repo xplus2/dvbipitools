@@ -12,7 +12,7 @@
 #include "multicast.h"
 #include "rist/ristin.h"
 
-typedef enum { TSSRC_RTP, TSSRC_UDP, TSSRC_STDIN, TSSRC_HTTP, TSSRC_FILE, TSSRC_RIST } tssrc_kind_t;
+typedef enum { TSSRC_RTP, TSSRC_UDP, TSSRC_STDIN, TSSRC_HTTP, TSSRC_FILE, TSSRC_RIST, TSSRC_SRT } tssrc_kind_t;
 
 typedef struct {
   tssrc_kind_t kind;
@@ -35,8 +35,20 @@ typedef struct {
   const char *rist_cname;
   unsigned rist_buffer_ms;
   int rist_verbose;
-  metrics_exporter_t *rist_mx;  /* NULL = no stats push */
+  metrics_exporter_t *rist_mx;   /* NULL = no stats push */
   const char *rist_tool_version; /* required if rist_mx set */
+  /* TSSRC_SRT: single peer, no bonding/rendezvous (dipisrt for that) */
+  int srt_listen;                /* 1 = @, bind/listen/accept. 0 = call out (connect) */
+  const char *srt_host;
+  unsigned srt_port;
+  const char *srt_passphrase;    /* NULL/"" = no encryption */
+  int srt_pbkeylen;              /* 0 = default (16), else 16/24/32 */
+  const char *srt_streamid;      /* NULL/"" = none */
+  const char *srt_packetfilter;  /* NULL/"" = none, raw SRTO_PACKETFILTER string */
+  unsigned srt_latency_ms;       /* 0 = library default */
+  int srt_verbose;
+  metrics_exporter_t *srt_mx;    /* NULL = no stats push */
+  const char *srt_tool_version;  /* required if srt_mx set */
 } tssrc_cfg_t;
 
 typedef struct tssrc tssrc_t;

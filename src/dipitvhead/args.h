@@ -15,7 +15,8 @@ typedef enum {
   SRC_UDP,  /* multicast, plain ts */
   SRC_HTTP, /* http:// or https://, http_url_t.tls tells which */
   SRC_STDIN, /* -i - */
-  SRC_RIST  /* single peer, @ required (listen) */
+  SRC_RIST, /* single peer, @ required (listen) */
+  SRC_SRT   /* single peer, no bonding/rendezvous (see dipisrt) */
 } src_kind_t;
 
 typedef struct {
@@ -28,6 +29,11 @@ typedef struct {
   http_url_t http;
   /* SRC_RIST, stored raw for librist's own parser */
   char rist_uri[256];
+  /* SRC_SRT */
+  int srt_family; /* AF_INET or AF_INET6, display only */
+  char srt_host[64];
+  unsigned srt_port;
+  int srt_listen; /* 1 = @, bind/listen/accept. 0 = call out (connect) */
 } source_t;
 
 /* -n/-s: no flag = passthrough source table if present; "-" = drop; text = override with our own */
@@ -36,8 +42,10 @@ typedef enum { TABLE_PASSTHROUGH, TABLE_DROP, TABLE_OVERRIDE } table_mode_t;
 #define ARGS_MAX_CAS_PIDS 16
 #define ARGS_MAX_INPUTS 32 /* matches MPTS_MAX_PROGRAMS: one input becomes one mux program */
 #define ARGS_MAX_RIST_PEERS 8 /* matches RISTOUT_MAX_PEERS */
+#define ARGS_MAX_SRT_PEERS 8  /* matches SRTSINK_MAX_PEERS */
 
 typedef enum { RIST_PROF_SIMPLE, RIST_PROF_MAIN } rist_profile_sel_t;
+typedef enum { SRT_BOND_NONE, SRT_BOND_BROADCAST, SRT_BOND_BACKUP } srt_bond_mode_t;
 
 typedef struct {
   source_t input;          /* -i */
@@ -52,6 +60,11 @@ typedef struct {
   unsigned hbbtv_org_id;   /* --hbbtv-org-id right after this -i; required with --hbbtv */
   unsigned hbbtv_app_id;   /* --hbbtv-app-id right after this -i; required with --hbbtv */
   int rist_profile_main;  /* --rist-profile-in right after this -i; SRC_RIST only */
+  char srt_passphrase_in[128];   /* --srt-passphrase-in right after this -i; SRC_SRT only, "" = no encryption */
+  int srt_pbkeylen_in;           /* --srt-pbkeylen-in right after this -i; requires --srt-passphrase-in */
+  char srt_streamid_in[128];     /* --srt-streamid-in right after this -i; SRC_SRT only, "" = none */
+  char srt_packetfilter_in[256]; /* --srt-packetfilter-in right after this -i; SRC_SRT only, "" = none */
+  unsigned srt_latency_in_ms;    /* --srt-latency-in right after this -i; SRC_SRT only, 0 = library default */
 } dipitvhead_input_t;
 
 typedef struct {
@@ -103,6 +116,18 @@ typedef struct {
   char rist_secret[128];  /* --secret; n_rist>0 + --profile main only, "" = none */
   char rist_cname[128];   /* --cname; n_rist>0 only, "" = library default */
   unsigned rist_buffer_ms; /* --buffer; n_rist>0 only, 0 = library default */
+  /* -R srt://, repeatable, bonded onto one group when >1 (--srt-group-mode).
+     one scheme at a time: rist:// and srt:// peers can't mix in one -R set */
+  int srt_family[ARGS_MAX_SRT_PEERS]; /* AF_INET or AF_INET6, display only */
+  char srt_host[ARGS_MAX_SRT_PEERS][64];
+  unsigned srt_port[ARGS_MAX_SRT_PEERS];
+  unsigned n_srt;
+  srt_bond_mode_t srt_group_mode; /* --srt-group-mode; n_srt>1 only, required then */
+  char srt_passphrase[128];   /* --srt-passphrase; n_srt>0 only, "" = no encryption */
+  int srt_pbkeylen;           /* --srt-pbkeylen, requires --srt-passphrase. 0 = library default (16) */
+  char srt_streamid[128];     /* --srt-streamid; n_srt>0 only, "" = none */
+  char srt_packetfilter[256]; /* --srt-packetfilter; n_srt>0 only, "" = none */
+  unsigned srt_latency_ms;    /* --srt-latency; n_srt>0 only, 0 = library default */
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;
