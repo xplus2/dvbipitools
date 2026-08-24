@@ -3,13 +3,17 @@
 
 #include <check.h>
 #include <poll.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
-#include <librist/librist.h>
-
 #include "lib/net/rist/ristin.h"
+
+#ifndef RIST_SEND_HELPER_PATH
+#error "RIST_SEND_HELPER_PATH must be defined to the built rist_send_helper binary's path"
+#endif
 
 #define TEST_PORT 15982 /* librist rejects odd ports */
 
@@ -43,15 +47,12 @@ static ssize_t read_with_timeout(int fd, void *buf, size_t cap, int timeout_ms) 
 START_TEST(receives_payload_from_a_real_rist_sender) {
   ristin_cfg_t cfg;
   ristin_t *r;
-  struct rist_ctx *sctx;
-  struct rist_peer_config *pc = NULL;
-  struct rist_peer *peer;
-  struct rist_data_block db;
   char uri[64];
   const char *payload = "hello from a real rist sender";
   char buf[128];
   ssize_t got;
-  int tries;
+  pid_t pid;
+  int status;
 
   memset(&cfg, 0, sizeof cfg);
   snprintf(uri, sizeof uri, "rist://@127.0.0.1:%d", TEST_PORT);
@@ -59,31 +60,23 @@ START_TEST(receives_payload_from_a_real_rist_sender) {
   r = ristin_open(&cfg);
   ck_assert_ptr_nonnull(r);
 
-  ck_assert_int_eq(rist_sender_create(&sctx, RIST_PROFILE_SIMPLE, 0, NULL), 0);
-  snprintf(uri, sizeof uri, "rist://127.0.0.1:%d", TEST_PORT);
-  ck_assert_int_eq(rist_parse_address2(uri, &pc), 0);
-  pc->initiate_conn = 1;
-  ck_assert_int_eq(rist_peer_create(sctx, &peer, pc), 0);
-  rist_peer_config_free2(&pc);
-  ck_assert_int_eq(rist_start(sctx), 0);
-
-  memset(&db, 0, sizeof db);
-  db.payload = payload;
-  db.payload_len = strlen(payload);
-  /* handshake needs a moment even on loopback: retry the write until the peer is up */
-  for (tries = 0; tries < 50; tries++) {
-    if (rist_sender_data_write(sctx, &db) >= 0)
-      break;
-    usleep(20000);
+  /* separate process: avoids two rist_ctx's in one process, see rist_send_helper.c */
+  pid = fork();
+  ck_assert_int_ge(pid, 0);
+  if (pid == 0) {
+    snprintf(uri, sizeof uri, "rist://127.0.0.1:%d", TEST_PORT);
+    execl(RIST_SEND_HELPER_PATH, RIST_SEND_HELPER_PATH, uri, payload, (char *)NULL);
+    _exit(127); /* exec failed */
   }
-  ck_assert_int_lt(tries, 50);
 
   got = read_with_timeout(ristin_fd(r), buf, sizeof buf - 1, 2000);
   ck_assert_int_eq(got, (ssize_t)strlen(payload));
   buf[got] = '\0';
   ck_assert_str_eq(buf, payload);
 
-  rist_destroy(sctx);
+  ck_assert_int_eq(waitpid(pid, &status, 0), pid);
+  ck_assert_int_eq(WIFEXITED(status) ? WEXITSTATUS(status) : -1, 0);
+
   ristin_close(r);
 }
 END_TEST

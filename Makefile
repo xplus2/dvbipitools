@@ -1349,9 +1349,17 @@ lib_net_rist_ristlog_SRCS := \
 	src/lib/net/rist/ristlog.c \
 	src/lib/log.c
 
+RIST_SEND_HELPER_BIN := tests/unit/lib/net/rist/rist_send_helper
+RIST_SEND_HELPER_SRCS := tests/unit/lib/net/rist/rist_send_helper.c
+RIST_SEND_HELPER_OBJS := $(RIST_SEND_HELPER_SRCS:.c=.o)
+ALL_OBJS += $(RIST_SEND_HELPER_OBJS)
+$(RIST_SEND_HELPER_OBJS): CFLAGS += $(shell pkg-config --cflags librist)
+$(RIST_SEND_HELPER_BIN): $(RIST_SEND_HELPER_OBJS)
+	$(CC) $^ $(LDFLAGS) $(shell pkg-config --libs librist) -o $@
+
 UNIT_TESTS += lib_net_rist_ristin
 lib_net_rist_ristin_BIN := tests/unit/lib/net/rist/test_ristin
-lib_net_rist_ristin_EXTRA_CFLAGS := $(shell pkg-config --cflags librist)
+lib_net_rist_ristin_EXTRA_CFLAGS := $(shell pkg-config --cflags librist) -DRIST_SEND_HELPER_PATH='"$(abspath $(RIST_SEND_HELPER_BIN))"'
 lib_net_rist_ristin_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
 lib_net_rist_ristin_SRCS := \
 	tests/unit/lib/net/rist/test_ristin.c \
@@ -1363,6 +1371,7 @@ lib_net_rist_ristin_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c
+tests/unit/lib/net/rist/test_ristin: $(RIST_SEND_HELPER_BIN)
 endif
 
 dipisrt_args_BIN := tests/unit/dipisrt/test_args
@@ -3033,5 +3042,5 @@ install: $(TOOLS) dvbipitools
 TLS_VARIANTS := src/lib/net/tls.o src/lib/net/tls_stub.o
 
 clean:
-	rm -f $(ALL_OBJS) $(ALL_OBJS:.o=.d) $(TLS_VARIANTS) $(TLS_VARIANTS:.o=.d) $(TOOLS) dvbipitools $(TEST_BINS) $(FUZZ_BINS)
+	rm -f $(ALL_OBJS) $(ALL_OBJS:.o=.d) $(TLS_VARIANTS) $(TLS_VARIANTS:.o=.d) $(TOOLS) dvbipitools $(TEST_BINS) $(FUZZ_BINS) $(RIST_SEND_HELPER_BIN)
 	rm -rf build/dvbipitools

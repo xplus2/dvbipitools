@@ -1651,6 +1651,9 @@ if (DVBIPITOOLS_HAVE_RIST)
         ${CMAKE_SOURCE_DIR}/src/lib/log.c)
     target_link_libraries(test_lib_net_rist_ristlog PRIVATE PkgConfig::RIST)
 
+    add_executable(rist_send_helper unit/lib/net/rist/rist_send_helper.c)
+    target_link_libraries(rist_send_helper PRIVATE PkgConfig::RIST)
+
     dvbipitools_add_unit_test(lib_net_rist_ristin
         unit/lib/net/rist/test_ristin.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
@@ -1662,6 +1665,9 @@ if (DVBIPITOOLS_HAVE_RIST)
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c)
     target_link_libraries(test_lib_net_rist_ristin PRIVATE PkgConfig::RIST)
+    add_dependencies(test_lib_net_rist_ristin rist_send_helper)
+    target_compile_definitions(test_lib_net_rist_ristin PRIVATE
+        RIST_SEND_HELPER_PATH="$<TARGET_FILE:rist_send_helper>")
 else ()
     message(WARNING "tests: librist missing, skipping ristin/ristlog unit tests")
 endif ()
