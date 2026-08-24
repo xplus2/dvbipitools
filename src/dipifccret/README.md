@@ -27,7 +27,7 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
   -g, --range <cidr>[,<cidr>...]   multicast range(s) to capture, IPv4 or IPv6
   -l, --listen <addr>:<port>       unicast bind, shared by RET and FCC traffic
   -I, --iface <iface>              capture interface (required, single Ethernet NIC)
-  -M, --max-channels <n>           preallocated channel slots (default: 0 = 384)
+  -M, --max-channels <n>           preallocated channel slots (default: 0 = 300)
   -R, --rtx-pt <n>                 RTP payload type for retransmitted/burst packets (default: 99)
   -w, --workers <n>                -l socket worker threads (default: 0 = online CPU cores)
   -u, --user <user>                drop privileges to this user after opening the capture handle

@@ -14,7 +14,7 @@
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/rtcp.h"
 
-#define CHANNEL_DEFAULT_MAX 384 /* max_channels 0 default */
+#define CHANNEL_DEFAULT_MAX 300 /* max_channels 0 default */
 #define CHANNEL_BITRATE_WINDOW_S 2
 #define CHANNEL_MAX_PAYLOAD 1472 /* Ethernet-MTU-bound RTP/UDP payload ceiling */
 #define CHANNEL_HNED_TRACK_MAX 32 /* recently seen (HNED ssrc, transport address) pairs, F.5.3 SRBT 8 source */

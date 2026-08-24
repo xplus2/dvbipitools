@@ -43,7 +43,7 @@ typedef struct {
   unsigned char fcc_rtx_pt; /* --fcc-rtx-pt, default 99 */
   int fcc_resolve_by_port;      /* --fcc-resolve-by-port, matches dipifccret flag of same name */
   unsigned fcc_resolve_base_port; /* --fcc-resolve-base-port, matches dipifccret */
-  size_t fcc_resolve_max_channels; /* --fcc-resolve-max-channels, must match dipifccret -M, default 384 */
+  size_t fcc_resolve_max_channels; /* --fcc-resolve-max-channels, default 300 */
 
   const char *metrics_sock;    /* --metrics; NULL = default socket path */
   const char *metrics_id;      /* --metrics-id; NULL = metrics disabled */

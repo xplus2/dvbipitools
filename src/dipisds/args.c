@@ -78,7 +78,7 @@ static void print_help(void) {
       "      --fcc-resolve-by-port     a: per-service FCC port instead of --fcc-addr's port,\n"
       "                          matches dipifccret --fcc-resolve-by-port\n"
       "      --fcc-resolve-base-port <p> a: matches dipifccret --fcc-resolve-base-port\n"
-      "      --fcc-resolve-max-channels <n> a: must match dipifccret -M (default 384)\n"
+      "      --fcc-resolve-max-channels <n> a: port hash modulus for resolve-by-port (default 300)\n"
       "      --metrics <path>    a: Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
       "      --metrics-id <name> a: stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s> a: snapshot interval in seconds (default: 5)\n"
@@ -474,7 +474,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       if (!have_fcc_rtx_pt)
         cfg->fcc_rtx_pt = 99;
       if (!have_fcc_resolve_max_channels)
-        cfg->fcc_resolve_max_channels = 384;
+        cfg->fcc_resolve_max_channels = 300;
     }
     if ((cfg->packages_path || cfg->cells_path || cfg->rms_enabled || cfg->fus_enabled) && has_suffix(cfg->input_path, ".xml")) {
       argerr("--packages/--cells/--rms-name/--fus-name have no effect with a raw .xml -i input (that path is sent through unparsed)");

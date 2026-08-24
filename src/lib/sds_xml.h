@@ -43,7 +43,7 @@ typedef struct {
   unsigned char rtx_pt;    /* Retransmission_session RTPPayloadTypeNumber */
   int resolve_by_port;     /* per-service port instead of port above, matches dipifccret --fcc-resolve-by-port */
   unsigned resolve_base_port;
-  size_t resolve_max_channels; /* must match dipifccret -M */
+  size_t resolve_max_channels; /* port hash modulus */
 } sds_fcc_t;
 
 /* Package (PackagedServices/Package, TS 102 034 clause 5.2.13.4) */

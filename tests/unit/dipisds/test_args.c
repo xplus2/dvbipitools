@@ -191,7 +191,7 @@ START_TEST(fcc_resolve_by_port_enables_with_default_max_channels) {
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.fcc_resolve_by_port, 1);
-  ck_assert_uint_eq(cfg.fcc_resolve_max_channels, 384u);
+  ck_assert_uint_eq(cfg.fcc_resolve_max_channels, 300u);
 }
 END_TEST
 

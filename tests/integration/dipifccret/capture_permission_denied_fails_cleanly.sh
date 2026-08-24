@@ -15,9 +15,10 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 out="$WORK/dipifccret.out"
-# -k: if capture_open() unexpectedly succeeds (CAP_NET_RAW available), capture_run()
-# blocks on packet capture until SIGTERM; SIGKILL after 2s bounds the worst case
-timeout -k 2 3 "$BIN" -g 239.0.0.0/8 -l 127.0.0.1:16000 -I lo >"$out" 2>&1
+# -M 4: CAP_NET_RAW check ignores channel capacity
+# small table, same alloc path per slot
+# -k: unexpected success blocks capture_run() until SIGTERM, SIGKILL after 3s bounds worst case
+timeout -k 3 10 "$BIN" -g 239.0.0.0/8 -l 127.0.0.1:16000 -I lo -M 4 >"$out" 2>&1
 rc=$?
 
 if grep -q "capture needs CAP_NET_RAW" "$out"; then

@@ -87,7 +87,7 @@ static void print_help(void) {
       "  -g, --range <cidr>[,<cidr>...]   multicast range(s) to capture, IPv4 or IPv6\n"
       "  -l, --listen <addr>:<port>       unicast bind, shared by RET and FCC traffic\n"
       "  -I, --iface <iface>              capture interface (required)\n"
-      "  -M, --max-channels <n>           pre-allocated channel slots (default: 0 = 384)\n"
+      "  -M, --max-channels <n>           pre-allocated channel slots (default: 0 = 300)\n"
       "      --channel-idle-timeout <s>   free a channel slot after this many seconds with no\n"
       "                                   packets (default: 120, 0 = never reap)\n"
       "  -R, --rtx-pt <n>                 RTP payload type for retransmitted/burst packets (default: 99)\n"
