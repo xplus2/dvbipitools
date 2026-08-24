@@ -1360,6 +1360,9 @@ $(RIST_SEND_HELPER_BIN): $(RIST_SEND_HELPER_OBJS)
 UNIT_TESTS += lib_net_rist_ristin
 lib_net_rist_ristin_BIN := tests/unit/lib/net/rist/test_ristin
 lib_net_rist_ristin_EXTRA_CFLAGS := $(shell pkg-config --cflags librist) -DRIST_SEND_HELPER_PATH='"$(abspath $(RIST_SEND_HELPER_BIN))"'
+ifeq ($(TSAN),yes)
+lib_net_rist_ristin_EXTRA_CFLAGS += -DDVBIPITOOLS_TSAN_BUILD
+endif
 lib_net_rist_ristin_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
 lib_net_rist_ristin_SRCS := \
 	tests/unit/lib/net/rist/test_ristin.c \

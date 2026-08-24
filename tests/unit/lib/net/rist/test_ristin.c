@@ -35,6 +35,9 @@ START_TEST(rejects_missing_at) {
 }
 END_TEST
 
+#ifndef DVBIPITOOLS_TSAN_BUILD
+/* excluded under TSAN: race is inside librist's receiver impl */
+
 /* blocking pipe read end: bound wait so a delivery failure fails test instead of hanging */
 static ssize_t read_with_timeout(int fd, void *buf, size_t cap, int timeout_ms) {
   struct pollfd pfd = {.fd = fd, .events = POLLIN};
@@ -82,13 +85,16 @@ START_TEST(receives_payload_from_a_real_rist_sender) {
   ristin_close(r);
 }
 END_TEST
+#endif
 
 static Suite *ristin_suite(void) {
   Suite *s = suite_create("ristin");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, rejects_non_rist_scheme);
   tcase_add_test(tc, rejects_missing_at);
+#ifndef DVBIPITOOLS_TSAN_BUILD
   tcase_add_test(tc, receives_payload_from_a_real_rist_sender);
+#endif
   suite_add_tcase(s, tc);
   return s;
 }
