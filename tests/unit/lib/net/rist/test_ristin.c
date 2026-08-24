@@ -54,20 +54,22 @@ START_TEST(receives_payload_from_a_real_rist_sender) {
   pid_t pid;
   int status;
 
+  /* fork before ristin_open(): forking a threaded process is itself a
+     sanitizer hazard. receiver's reader thread must not exist at fork() time */
+  pid = fork();
+  ck_assert_int_ge(pid, 0);
+  if (pid == 0) {
+    char sender_uri[64];
+    snprintf(sender_uri, sizeof sender_uri, "rist://127.0.0.1:%d", TEST_PORT);
+    execl(RIST_SEND_HELPER_PATH, RIST_SEND_HELPER_PATH, sender_uri, payload, (char *)NULL);
+    _exit(127); /* exec failed */
+  }
+
   memset(&cfg, 0, sizeof cfg);
   snprintf(uri, sizeof uri, "rist://@127.0.0.1:%d", TEST_PORT);
   cfg.peer_uri = uri;
   r = ristin_open(&cfg);
   ck_assert_ptr_nonnull(r);
-
-  /* separate process: avoids two rist_ctx's in one process, see rist_send_helper.c */
-  pid = fork();
-  ck_assert_int_ge(pid, 0);
-  if (pid == 0) {
-    snprintf(uri, sizeof uri, "rist://127.0.0.1:%d", TEST_PORT);
-    execl(RIST_SEND_HELPER_PATH, RIST_SEND_HELPER_PATH, uri, payload, (char *)NULL);
-    _exit(127); /* exec failed */
-  }
 
   got = read_with_timeout(ristin_fd(r), buf, sizeof buf - 1, 2000);
   ck_assert_int_eq(got, (ssize_t)strlen(payload));
