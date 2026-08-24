@@ -27,18 +27,14 @@ struct ecmg_client {
   pthread_t thread;
   atomic_int stop;
 
-  pthread_mutex_t cw_lock;
-  unsigned char cw_slot[2][ECMG_MAX_CW_LEN];
-  int cw_slot_have[2];
-  atomic_ulong cw_epoch;
-
   atomic_int connected; /* 1 while a CW_provision/ECM_response cycle is live */
-  atomic_ulong cw_published_at; /* packet_counter value when cached CW was last (re)published */
+  atomic_ulong cw_published_at; /* packet_counter at last CP provision */
 
   pthread_mutex_t ecm_lock;
-  unsigned char ecm[SIMULCRYPT_MAX_PAYLOAD];
-  size_t ecm_len;
-  atomic_ulong ecm_epoch;
+  unsigned char ecm_slot[2][SIMULCRYPT_MAX_PAYLOAD]; /* indexed by parity, ETR 289 */
+  size_t ecm_slot_len[2];
+  atomic_ulong ecm_epoch; /* monotonic, never reset: freshness signal only, not a parity source */
+  atomic_int last_parity; /* latest publish's parity, direct snapshot, reconnect-safe */
 
   atomic_uint ecm_rep_period_ms;
 

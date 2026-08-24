@@ -26,20 +26,13 @@ static int fill_hist_from_source(ecmg_client_t *c, cw_hist_entry_t *hist, unsign
   return 0;
 }
 
-static void publish_cw(ecmg_client_t *c, int slot, const unsigned char *cw) {
-  pthread_mutex_lock(&c->cw_lock);
-  memcpy(c->cw_slot[slot], cw, c->cw_len);
-  c->cw_slot_have[slot] = 1;
-  pthread_mutex_unlock(&c->cw_lock);
-  atomic_fetch_add_explicit(&c->cw_epoch, 1, memory_order_relaxed);
-}
-
-static void publish_ecm(ecmg_client_t *c, const unsigned char *dg, size_t dg_len) {
+static void publish_ecm(ecmg_client_t *c, int slot, const unsigned char *dg, size_t dg_len) {
   pthread_mutex_lock(&c->ecm_lock);
-  memcpy(c->ecm, dg, dg_len);
-  c->ecm_len = dg_len;
+  memcpy(c->ecm_slot[slot], dg, dg_len);
+  c->ecm_slot_len[slot] = dg_len;
   pthread_mutex_unlock(&c->ecm_lock);
   atomic_fetch_add_explicit(&c->ecm_epoch, 1, memory_order_relaxed);
+  atomic_store_explicit(&c->last_parity, slot, memory_order_relaxed);
 }
 
 /* run CW_provision cadence until disconnect/error. returns -1 to trigger reconn */
@@ -48,15 +41,14 @@ static void log_ecm_wait_failed(ecmg_client_t *c, unsigned short cp_number) {
     log_line("ecmg: no ECM_response for CP %u", cp_number);
 }
 
-/* scans an ECM_response's TLVs for the ECM datagram and publishes it if found */
-static void publish_ecm_response(ecmg_client_t *c, const unsigned char *payload, unsigned short payload_len) {
+static void publish_ecm_response(ecmg_client_t *c, unsigned short cp_number, const unsigned char *payload, unsigned short payload_len) {
   simulcrypt_tlv_reader_t it;
   unsigned short tag, vlen;
   const unsigned char *val;
   simulcrypt_tlv_reader_init(&it, payload, payload_len);
   while (simulcrypt_tlv_reader_next(&it, &tag, &val, &vlen) == 1) {
     if (tag == ECMG_P_ECM_DATAGRAM) {
-      publish_ecm(c, val, vlen);
+      publish_ecm(c, (int)(cp_number & 1), val, vlen); /* TS 103 197 clause 5.3: CP_number parity == CW parity */
       atomic_fetch_add_explicit(&c->ecm_total, 1, memory_order_relaxed);
       break;
     }
@@ -95,7 +87,6 @@ static int run_steady_state(ecmg_client_t *c, int fd, unsigned char version, uns
         log_line("ecmg: failed to build CW_provision");
         return -1;
       }
-      publish_cw(c, cp_number & 1, hist[cp_number % ECMG_CW_HIST].cw);
       atomic_store_explicit(&c->cw_published_at, cur, memory_order_relaxed);
 
       if (simulcrypt_send_all(fd, msg, len, ECMG_HANDSHAKE_TIMEOUT_MS) < 0) {
@@ -109,7 +100,7 @@ static int run_steady_state(ecmg_client_t *c, int fd, unsigned char version, uns
         return -1;
       }
       if (hdr.type == ECMG_MSG_ECM_RESPONSE) {
-        publish_ecm_response(c, payload, hdr.payload_len);
+        publish_ecm_response(c, cp_number, payload, hdr.payload_len);
       } else {
         unsigned short err = 0;
         ecmg_find_error_status(payload, hdr.payload_len, &err);

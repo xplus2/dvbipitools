@@ -43,13 +43,8 @@ ecmg_client_t *ecmg_client_start(const ecmg_client_cfg_t *cfg, const atomic_ulon
 /* joins thread */
 void ecmg_client_stop(ecmg_client_t *c);
 
-/* scrambling key for slot (0/1, picked by caller as cp_number & 1). 0 = filled cw_out/cw_len_out, -1 = not provisioned yet */
-int ecmg_client_get_cw(ecmg_client_t *c, int slot, unsigned char *cw_out, size_t cw_cap, size_t *cw_len_out);
-/* bumps whenever a slot is (re)written; lets a poller notice a fresh key without locking */
-unsigned long ecmg_client_cw_epoch(ecmg_client_t *c);
-
-/* latest ECM_datagram (MPEG-2 section, ready to packetize) for --cas-ecm-pid. 0 = filled out/len_out,
-   -1 = none yet, or outage_mode=silent and disconnected (see ecmg_ecm_available_calc()) */
+/* ecm_slot picked by ecmg_client_target_parity(). 0 filled, -1 no data yet
+   or silent+disconnected (ecmg_ecm_available_calc()) */
 int ecmg_client_get_ecm(ecmg_client_t *c, unsigned char *out, size_t cap, size_t *len_out);
 unsigned long ecmg_client_ecm_epoch(ecmg_client_t *c);
 
@@ -63,23 +58,18 @@ unsigned long ecmg_client_cryptoperiod_transitions(ecmg_client_t *c);
 unsigned long ecmg_client_ecm_total(ecmg_client_t *c);
 unsigned long ecmg_client_ecm_errors(ecmg_client_t *c);
 
-/* which cw_slot (0/1) cas.c should scramble with right now. frozen: always last published
-   parity. cycling, while disconnected: keeps alternating on normal crypto-period schedule
-   between two last-known CWs, using PCR-derived clock rather than waiting on ECMG. */
+/* target ecm_slot, see ecmg_target_parity_calc() for cycling math */
 int ecmg_client_target_parity(ecmg_client_t *c);
 
-/* pure logic behind ecmg_client_target_parity(), exposed only for unit tests to exercise
-   directly with synthetic values. cas.c has no business calling this, use accessor instead */
-int ecmg_target_parity_calc(ecmg_outage_mode_t outage_mode, int connected, unsigned long packets_per_cp, unsigned long cur, unsigned long published_at, unsigned long epoch);
+/* pure calc, unit-test only */
+int ecmg_target_parity_calc(ecmg_outage_mode_t outage_mode, int connected, unsigned long packets_per_cp, unsigned long cur, unsigned long published_at, unsigned long last_parity);
 
 /* outage_mode=silent, disconnected: 0, stop muxing this vendor's ECM PID. receiver on
    multi-CAS mux can move to another vendor instead of hanging on stale key. frozen/cycling:
    always 1, keep resending known-good ECM material indefinitely. pure, unit-testable. */
 int ecmg_ecm_available_calc(ecmg_outage_mode_t outage_mode, int connected);
 
-/* ETSI TS 103 197 clause 5: ECMG<->SCS message_type/parameter_type values.
-   format porn, exposed (with builders/parsers) for unit test synthetic buffers.
-   cas.c has no business calling anything here directly */
+/* TS 103 197 clause 5 message/parameter values */
 #define ECMG_MSG_CHANNEL_SETUP 0x0001
 #define ECMG_MSG_CHANNEL_STATUS 0x0003
 #define ECMG_MSG_CHANNEL_CLOSE 0x0004
