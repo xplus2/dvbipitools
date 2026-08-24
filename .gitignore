@@ -42,6 +42,10 @@ tests/fuzz/fuzz_*
 tests/fuzz/gen_seeds
 !tests/fuzz/gen_seeds.c
 
+# rist test sender helper binary (Makefile builds)
+tests/unit/lib/net/rist/rist_send_helper
+!tests/unit/lib/net/rist/rist_send_helper.c
+
 # test samples
 *.ts
 *.mkv

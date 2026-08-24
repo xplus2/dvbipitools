@@ -1371,7 +1371,7 @@ lib_net_rist_ristin_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c
-tests/unit/lib/net/rist/test_ristin: $(RIST_SEND_HELPER_BIN)
+tests/unit/lib/net/rist/test_ristin: | $(RIST_SEND_HELPER_BIN)
 endif
 
 dipisrt_args_BIN := tests/unit/dipisrt/test_args
