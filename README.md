@@ -11,24 +11,24 @@ I did not let it mess up the hard parts.
 
 ## Fantastic tools and where to deploy them
 
-| Tool                                           | Contrib | Headend | Edge | Client | Lab | Purpose                                   |
-|------------------------------------------------|---------|---------|------|--------|-----|-------------------------------------------|
-| [dipitvhead](src/dipitvhead/README.md)         | ✔️      | ✔️      |      |        | ✔️  | IPTV SCS/Muxer/Scrambler                  |
-| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      | ✔️      |      |        | ✔️  | Radio SCS/Muxer/Scrambler                 |
-| [dipirist](src/dipirist/README.md)             | ✔️      | ✔️      |      |        | ✔️  | RTP/TS RIST bridge                        |
-| [dipisrt](src/dipisrt/README.md)               | ✔️      | ✔️      |      |        | ✔️  | RTP/TS SRT bridge                         |
-| [dipimetrics](src/dipimetrics/README.md)       | ✔️      | ✔️      | ✔️   |        | ✔️  | Per-host OpenMetrics                      |
-| [dipifccret](src/dipifccret/README.md)         |         | ✔️      | ✔️   |        | ✔️  | FCC (Annex I), RET (Annex F) server       |
-| [dipisds](src/dipisds/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/SD&S (announce & listen)           |
-| [dipibcg](src/dipibcg/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/TVA BCG (publisher & reader)       |
-| [dipixmltv](src/dipixmltv/README.md)           |         | ✔️      |      | ✔️     | ✔️  | XMLTV <-> DVB-IPI TVA XML converter       |
-| [dipirec](src/dipirec/README.md)               |         |         |      | ✔️     | ✔️  | record and replay (FCC/RET client)        |
-| [dipiscan](src/dipiscan/README.md)             |         |         |      | ✔️     | ✔️  | Multicast TV/radio scanner (w/o SD&S)     |
-| [dipixy](src/dipixy/README.md)                 |         |         | ✔️   | ✔️ HN  | ✔️  | Multicst to (LL)HLS, DASH, HTTP/TS + DLNA |
-| [dipibim](src/dipibim/README.md)               |         |         |      |        | ✔️  | TVA XML BiM enc/dec (debug `dipibcg`)     |
-| [dipicam378](src/dipicam378/README.md)         |         |         |      |        | ✔️  | cs378x CAS test CAM                       |
-| [dipidescramble](src/dipidescramble/README.md) |         | ✔️      |      |        | ✔️  | descrambler (BISS & CAS validation)       |
-| [dvbipitools](src/dvbipitools/README.md)       | ✔️      | ✔️      | ✔️   | ✔️     | ✔️  | All of the above (multicall)              |
+| Tool                                           | Contrib | Headend | Edge | Client | Lab | Purpose                               |
+|------------------------------------------------|---------|---------|------|--------|-----|---------------------------------------|
+| [dipitvhead](src/dipitvhead/README.md)         | ✔️      | ✔️      |      |        | ✔️  | IPTV SCS/Muxer/Scrambler              |
+| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      | ✔️      |      |        | ✔️  | Radio SCS/Muxer/Scrambler             |
+| [dipirist](src/dipirist/README.md)             | ✔️      | ✔️      |      |        | ✔️  | RTP/TS RIST bridge                    |
+| [dipisrt](src/dipisrt/README.md)               | ✔️      | ✔️      |      |        | ✔️  | RTP/TS SRT bridge                     |
+| [dipimetrics](src/dipimetrics/README.md)       | ✔️      | ✔️      | ✔️   |        | ✔️  | Per-host OpenMetrics                  |
+| [dipifccret](src/dipifccret/README.md)         |         | ✔️      | ✔️   |        | ✔️  | FCC (Annex I), RET (Annex F) server   |
+| [dipisds](src/dipisds/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/SD&S (announce & listen)       |
+| [dipibcg](src/dipibcg/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/TVA BCG (publisher & reader)   |
+| [dipixmltv](src/dipixmltv/README.md)           |         | ✔️      |      | ✔️     | ✔️  | XMLTV <-> DVB-IPI TVA XML converter   |
+| [dipirec](src/dipirec/README.md)               |         |         |      | ✔️     | ✔️  | record and replay (FCC/RET client)    |
+| [dipiscan](src/dipiscan/README.md)             |         |         |      | ✔️     | ✔️  | Multicast TV/radio scanner (w/o SD&S) |
+| [dipixy](src/dipixy/README.md)                 |         |         | ✔️   | ✔️HN   | ✔️  | MC to (LL)HLS, DASH, HTTP/TS + DLNA   |
+| [dipibim](src/dipibim/README.md)               |         |         |      |        | ✔️  | TVA XML BiM enc/dec (debug `dipibcg`) |
+| [dipicam378](src/dipicam378/README.md)         |         |         |      |        | ✔️  | cs378x CAS test CAM                   |
+| [dipidescramble](src/dipidescramble/README.md) |         | ✔️      |      |        | ✔️  | descrambler (BISS & CAS validation)   |
+| [dvbipitools](src/dvbipitools/README.md)       | ✔️      | ✔️      | ✔️   | ✔️     | ✔️  | All of the above (multicall)          |
 
 > HN: Home Network, not directly _on_ client devices.
 

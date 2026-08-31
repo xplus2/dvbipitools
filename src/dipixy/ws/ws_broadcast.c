@@ -40,13 +40,18 @@ void ws_broadcast_register(ws_sink_fn fn, void *ctx) {
     pthread_mutex_unlock(&g_mtx);
     return;
   }
-  if (n)
-    memcpy(fresh->sinks, old->sinks, sizeof(sink_t) * (size_t)n);
+  if (n) memcpy(fresh->sinks, old->sinks, sizeof(sink_t) * (size_t)n);
   fresh->sinks[n].fn = fn;
   fresh->sinks[n].ctx = ctx;
   fresh->n = n + 1;
   atomic_store_explicit(&g_snapshot, fresh, memory_order_release);
   pthread_mutex_unlock(&g_mtx);
+  if (old) {
+    /* wait for publish() still reading it */
+    while (atomic_load_explicit(&g_active_publishers, memory_order_acquire) != 0)
+      sched_yield();
+    free(old);
+  }
 }
 
 void ws_broadcast_unregister(ws_sink_fn fn, void *ctx) {
@@ -73,6 +78,7 @@ void ws_broadcast_unregister(ws_sink_fn fn, void *ctx) {
   /* caller frees/recycles ctx next: wait out any publish() already mid-flight */
   while (atomic_load_explicit(&g_active_publishers, memory_order_acquire) != 0)
     sched_yield();
+  free(old);
 }
 
 void ws_broadcast_publish(const char *msg) {
