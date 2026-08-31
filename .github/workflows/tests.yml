@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake pkg-config libssl-dev check ffmpeg librist-dev libsrt-openssl-dev \
-            libnghttp2-dev libngtcp2-dev libngtcp2-crypto-ossl-dev libnghttp3-dev
+            libnghttp2-dev libngtcp2-dev libnghttp3-dev
       - name: install curl snap (HTTP/3 support)
         run: |
           sudo snap install curl
