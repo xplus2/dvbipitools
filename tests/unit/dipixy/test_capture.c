@@ -5,6 +5,7 @@
 #include <check.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -212,13 +213,13 @@ END_TEST
 
 typedef struct {
   unsigned char pkt[188];
-  volatile int got;
+  atomic_int got;
 } drain_thread_ctx_t;
 
 static void drain_sink(void *user, const unsigned char *pkt) {
   drain_thread_ctx_t *d = user;
   memcpy(d->pkt, pkt, 188);
-  d->got = 1;
+  atomic_store(&d->got, 1);
 }
 
 typedef struct {
@@ -239,7 +240,7 @@ static void run_drain_until(capture_ctx_t *cap, drain_thread_ctx_t *d) {
   a.cap = cap;
   a.d = d;
   pthread_create(&tid, NULL, drain_thread_fn, &a);
-  for (i = 0; i < 60 && !d->got; i++)
+  for (i = 0; i < 60 && !atomic_load(&d->got); i++)
     usleep(5000);
   pthread_cancel(tid);
   pthread_join(tid, NULL);

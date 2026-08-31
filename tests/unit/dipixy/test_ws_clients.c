@@ -37,13 +37,10 @@ START_TEST(remove_evicts_client_from_snapshot) {
   ck_assert_int_ge(h, 0);
   ck_assert_int_eq(ws_clients_build_snapshot(&snap), 0);
   ck_assert(strstr(snap, "10.0.0.2") != NULL);
-  free(snap);
 
   ws_clients_remove(h);
-  snap = NULL;
   ck_assert_int_eq(ws_clients_build_snapshot(&snap), 0);
   ck_assert(strstr(snap, "10.0.0.2") == NULL);
-  free(snap);
 }
 END_TEST
 
@@ -67,13 +64,10 @@ START_TEST(stale_remove_handle_does_not_evict_new_occupant) {
 
   ck_assert_int_eq(ws_clients_build_snapshot(&snap), 0);
   ck_assert(strstr(snap, "10.0.0.4") != NULL);
-  free(snap);
 
   ws_clients_remove(h_b); /* fresh handle: must still work */
-  snap = NULL;
   ck_assert_int_eq(ws_clients_build_snapshot(&snap), 0);
   ck_assert(strstr(snap, "10.0.0.4") == NULL);
-  free(snap);
 }
 END_TEST
 
@@ -93,7 +87,6 @@ START_TEST(stale_add_bytes_handle_does_not_corrupt_new_occupant) {
 
   ck_assert_int_eq(ws_clients_build_snapshot(&snap), 0);
   ck_assert(strstr(snap, "10.0.0.6") != NULL);
-  free(snap);
 }
 END_TEST
 
