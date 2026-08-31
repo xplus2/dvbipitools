@@ -62,13 +62,9 @@ grep -q "using HTTP/2" "$WORK/curl_h2.log" || fail "curl did not negotiate HTTP/
 [ -s "$h2cap" ] || fail "no packets captured over HTTP/2"
 check_cap "$h2cap" "http2"
 
-dipixy_has_http3=0
-status_json=$(curl -sk --http1.1 "https://127.0.0.1:$TLSPORT/ui/status.js" 2>"$WORK/curl_status.log")
-[ -n "$status_json" ] && [ "$(printf '%s' "$status_json" | jq -r '.build.features.http3')" = "true" ] && dipixy_has_http3=1
-
-if [ "$curl_has_http3" -eq 0 ] || [ "$dipixy_has_http3" -eq 0 ]; then
+if [ "$curl_has_http3" -eq 0 ]; then
     stop_bg
-    skip "HTTP/3 not available (curl_http3=$curl_has_http3 dipixy_http3=$dipixy_has_http3)"
+    skip "curl was not built with HTTP/3 support"
 fi
 
 h3cap="$WORK/h3.ts"
