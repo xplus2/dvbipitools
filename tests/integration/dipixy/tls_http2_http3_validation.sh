@@ -10,7 +10,8 @@ for t in ffmpeg curl openssl tsanalyze jq; do
 done
 
 curl -V | grep -q "HTTP2" || fail "curl was not built with HTTP/2 support"
-curl -V | grep -q "HTTP3" || fail "curl was not built with HTTP/3 support"
+curl_has_http3=0
+curl -V | grep -q "HTTP3" && curl_has_http3=1
 
 [ -f /etc/ssl/openssl.cnf ] && OPENSSL_CONF=/etc/ssl/openssl.cnf
 export OPENSSL_CONF
@@ -38,28 +39,46 @@ sleep 0.7
 
 url="https://127.0.0.1:$TLSPORT/udp/$MCAST:$MPORT/ts"
 
+stop_bg() {
+    kill $FFPID 2>/dev/null
+    wait $FFPID 2>/dev/null
+    kill $DPID 2>/dev/null
+    wait $DPID 2>/dev/null
+}
+
+check_cap() {
+    cap=$1
+    label=$2
+    report="$cap.json"
+    tsanalyze --json "$cap" >"$report" 2>"$WORK/tsanalyze_$(basename "$cap").log" \
+        || fail "tsanalyze failed on $cap"
+    services=$(jq '.services | length' "$report")
+    [ "${services:-0}" -ge 1 ] || fail "$label: no service found"
+}
+
 h2cap="$WORK/h2.ts"
 timeout 5 curl -skv --http2 -o "$h2cap" "$url" 2>"$WORK/curl_h2.log"
 grep -q "using HTTP/2" "$WORK/curl_h2.log" || fail "curl did not negotiate HTTP/2, see $WORK/curl_h2.log and $WORK/dipixy.log"
 [ -s "$h2cap" ] || fail "no packets captured over HTTP/2"
+check_cap "$h2cap" "http2"
+
+dipixy_has_http3=0
+status_json=$(curl -sk --http1.1 "https://127.0.0.1:$TLSPORT/ui/status.js" 2>"$WORK/curl_status.log")
+[ -n "$status_json" ] && [ "$(printf '%s' "$status_json" | jq -r '.build.features.http3')" = "true" ] && dipixy_has_http3=1
+
+if [ "$curl_has_http3" -eq 0 ] || [ "$dipixy_has_http3" -eq 0 ]; then
+    stop_bg
+    skip "HTTP/3 not available (curl_http3=$curl_has_http3 dipixy_http3=$dipixy_has_http3)"
+fi
 
 h3cap="$WORK/h3.ts"
 timeout 5 curl -skv --http3 -o "$h3cap" "$url" 2>"$WORK/curl_h3.log"
 grep -q "using HTTP/3" "$WORK/curl_h3.log" || fail "curl did not negotiate HTTP/3, see $WORK/curl_h3.log and $WORK/dipixy.log"
 [ -s "$h3cap" ] || fail "no packets captured over HTTP/3"
 
-kill $FFPID 2>/dev/null
-wait $FFPID 2>/dev/null
-kill $DPID 2>/dev/null
-wait $DPID 2>/dev/null
+stop_bg
 
-for cap in "$h2cap" "$h3cap"; do
-    report="$cap.json"
-    tsanalyze --json "$cap" >"$report" 2>"$WORK/tsanalyze_$(basename "$cap").log" \
-        || fail "tsanalyze failed on $cap"
-    services=$(jq '.services | length' "$report")
-    [ "${services:-0}" -ge 1 ] || fail "$cap: no service found"
-done
+check_cap "$h3cap" "http3"
 
 echo "OK"
 

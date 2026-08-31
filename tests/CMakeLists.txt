@@ -1441,6 +1441,7 @@ function(dvbipitools_add_integration_test tool script_path)
         list(APPEND extra_bins $<TARGET_FILE:${extra}>)
     endforeach()
     add_test(NAME integration_${tool}_${case_name} COMMAND sh ${script_path} $<TARGET_FILE:${tool}> ${extra_bins})
+    set_tests_properties(integration_${tool}_${case_name} PROPERTIES SKIP_RETURN_CODE 77)
 endfunction()
 
 file(GLOB DIPIBIM_INTEGRATION_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/dipibim/*.sh")

@@ -17,6 +17,12 @@ fail() {
     exit 1
 }
 
+# exit code recognized by ctest SKIP_RETURN_CODE (tests/CMakeLists.txt)
+skip() {
+    echo "SKIP: $*" >&2
+    exit 77
+}
+
 # run_expect_rc <expected-rc> <label> -- rest of the line runs
 run_expect_rc() {
     want=$1
