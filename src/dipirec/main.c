@@ -6,9 +6,9 @@
 #include <string.h>
 
 #include "args.h"
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/metrics/export.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 #include "record.h"
 #include "version.h"
 

@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <errno.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
@@ -8,7 +9,7 @@
 #include "lib/cas/biss/biss.h"
 #include "lib/cas/biss/ca.h"
 #include "lib/demux/tspack.h"
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 #include "pipeline.h"
 #include "version.h"
@@ -118,6 +119,23 @@ static void handle_biss_ca_ecm_section(loop_ctx_t *lc) {
   }
 }
 
+/* full or partial write-retry, EINTR aside. 0 ok, -1 error (lc->outbuf_len[i] left at 0 either way) */
+static int flush_outfd(loop_ctx_t *lc, int i) {
+  size_t off = 0;
+  while (off < lc->outbuf_len[i]) {
+    ssize_t n = write(lc->outfd[i], lc->outbuf[i] + off, lc->outbuf_len[i] - off);
+    if (n < 0) {
+      if (errno == EINTR)
+        continue;
+      lc->outbuf_len[i] = 0;
+      return -1;
+    }
+    off += (size_t)n;
+  }
+  lc->outbuf_len[i] = 0;
+  return 0;
+}
+
 /* stops writing after first fail within one flush. once emit_failed is set, later packets (same batch) must not still land on disk/mux */
 static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
   loop_ctx_t *lc = ctx;
@@ -131,12 +149,15 @@ static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
       return;
     }
   } else {
-    for (int i = 0; i < lc->n_outfd; i++)
-      if (write(lc->outfd[i], pkt, 188) != 188) {
+    for (int i = 0; i < lc->n_outfd; i++) {
+      if (lc->outbuf_len[i] + 188 > sizeof lc->outbuf[i] && flush_outfd(lc, i) < 0) {
         lc->emit_failed = 1;
         lc->output_errors_total++;
         return;
       }
+      memcpy(lc->outbuf[i] + lc->outbuf_len[i], pkt, 188);
+      lc->outbuf_len[i] += 188;
+    }
   }
   if (lc->flv) {
     flv_feed(lc->flv, pkt);
@@ -313,7 +334,12 @@ int pkt_cb(void *v, const unsigned char *pkt) {
   return lc->emit_failed ? 1 : 0;
 }
 
-/* drains scrambler_set_key()'s queued last-batch packets through emit_downstream() at shutdown */
+/* drains scrambler_set_key()'s queued last-batch packets through emit_downstream() at shutdown,
+   then flushes any bytes still sitting in raw-fd output batch buffers */
 void pipeline_flush(loop_ctx_t *lc) {
+  int i;
   scrambler_flush(lc->scr, emit_downstream, lc);
+  if (!lc->mkv)
+    for (i = 0; i < lc->n_outfd; i++)
+      flush_outfd(lc, i);
 }

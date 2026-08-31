@@ -5,7 +5,7 @@
 #include <time.h>
 
 #include "lib/mux/rtcp_build.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "run.h"
 

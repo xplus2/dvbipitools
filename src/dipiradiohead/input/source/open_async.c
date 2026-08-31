@@ -4,8 +4,8 @@
 #include <poll.h>
 #include <stdlib.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 
 #include "../../version.h"
 #include "../playlist.h"

@@ -5,7 +5,7 @@
 #include <string.h>
 #include <strings.h>
 
-#include "lib/ioutil.h"
+#include "lib/helper/ioutil.h"
 #include "playlist.h"
 
 #define SNIFF_CAP 4096

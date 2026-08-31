@@ -9,7 +9,7 @@
 #include <sys/random.h>
 #include <sys/types.h>
 
-#include "../log.h"
+#include "../helper/log.h"
 
 /* fills out[0..len) via getrandom(), retrying on EINTR. 0 ok, -1 failed (logged as "tag: getrandom: ...") */
 static inline int cw_gen(unsigned char *out, size_t len, const char *tag) {

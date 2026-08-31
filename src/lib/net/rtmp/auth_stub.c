@@ -2,7 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "auth.h"
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 int rtmp_auth_adobe_response(const char *user, const char *password, const char *salt, const char *opaque, const char *server_challenge, char *challenge2_out, size_t challenge2_cap, char *response_out, size_t response_cap) {
   (void)user;

@@ -10,7 +10,7 @@
 #include <sys/socket.h>
 
 #include "lib/net/sockaddr_index.h"
-#include "lib/seqlock.h"
+#include "lib/helper/seqlock.h"
 
 #include "burst.h"
 
@@ -50,6 +50,9 @@ typedef struct {
   _Atomic uint64_t bytes_retransmitted_total; /* pacer-folded per tick, survives slot reuse */
   _Atomic uint64_t nacks_total;
   _Atomic uint64_t congestion_adaptations_total;
+  /* highest-ever-claimed slot index + 1: pacer scans [0, this) instead of [0, cap),
+     cheap when configured cap is large but concurrent bursts are few. never shrinks */
+  _Atomic size_t high_water_mark;
 } burst_table_t;
 
 typedef struct {

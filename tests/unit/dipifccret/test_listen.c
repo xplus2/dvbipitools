@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #include "dipifccret/listen.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #define TEST_PORT 19245
 

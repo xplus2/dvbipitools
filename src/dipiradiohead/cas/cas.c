@@ -7,7 +7,7 @@
 #include "lib/cas/cas_core.h"
 #include "lib/cas/cas_group.h"
 #include "lib/cas/ecmg_client/ecmg_client.h"
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 #include "cas.h"
 

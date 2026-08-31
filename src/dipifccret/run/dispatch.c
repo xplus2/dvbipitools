@@ -9,7 +9,7 @@
 #include <unistd.h>
 
 #include "lib/demux/rtcp.h"
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/mux/rtcp_build.h"
 
 #include "../fcc/burst.h"
@@ -291,8 +291,8 @@ static void dispatch_datagram(dispatch_ctx_t *ctx, channel_t *resolved, const un
   rc.has_sdes = 0;
   rc.resolved = resolved;
   if (ctx->rsi_active)
-    rtcp_parse(pkt, len, NULL, NULL, NULL, sdes_cb, NULL, &rc);
-  rtcp_parse(pkt, len, ctx->ret ? &nack_cb : NULL, rams_r_cb, ctx->bursts ? &rams_t_cb : NULL, NULL, ctx->bursts ? &malformed_cb : NULL, &rc);
+    rtcp_parse(pkt, len, NULL, NULL, NULL, NULL, sdes_cb, NULL, &rc);
+  rtcp_parse(pkt, len, ctx->ret ? &nack_cb : NULL, rams_r_cb, NULL, ctx->bursts ? &rams_t_cb : NULL, NULL, ctx->bursts ? &malformed_cb : NULL, &rc);
 }
 
 void listen_cb(const unsigned char *pkt, size_t len, int fd, const struct sockaddr *from, socklen_t fromlen, void *user) {

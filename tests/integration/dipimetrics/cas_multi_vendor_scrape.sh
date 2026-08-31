@@ -5,9 +5,19 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsecmg curl; do
+for t in ffmpeg tsecmg curl nc; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
+
+wait_port() {
+    i=0
+    while [ $i -lt 50 ]; do
+        nc -z 127.0.0.1 "$1" >/dev/null 2>&1 && return 0
+        i=$((i + 1))
+        sleep 0.1
+    done
+    return 1
+}
 
 DIPITVHEAD=$(echo "$BIN" | sed 's#/dipimetrics\([^/]*\)$#/../dipitvhead/dipitvhead\1#')
 [ -x "$DIPITVHEAD" ] || DIPITVHEAD="./dipitvhead"
@@ -34,11 +44,12 @@ tsecmg -p $ECMG_A_PORT -s --log-protocol=info >"$WORK/tsecmg_a.log" 2>&1 &
 ECMG_A_PID=$!
 tsecmg -p $ECMG_B_PORT -s --log-protocol=info >"$WORK/tsecmg_b.log" 2>&1 &
 ECMG_B_PID=$!
-sleep 0.3
+wait_port $ECMG_A_PORT || fail "tsecmg (vendor A) never started listening on $ECMG_A_PORT (see $WORK/tsecmg_a.log)"
+wait_port $ECMG_B_PORT || fail "tsecmg (vendor B) never started listening on $ECMG_B_PORT (see $WORK/tsecmg_b.log)"
 
 timeout 8 "$BIN" -S "$SOCK" -l "127.0.0.1:$HTTPPORT" -v >"$WORK/dipimetrics.log" 2>&1 &
 MPID=$!
-sleep 0.3
+wait_port $HTTPPORT || fail "dipimetrics never started listening on $HTTPPORT (see $WORK/dipimetrics.log)"
 
 ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=25" \
     -f lavfi -i "sine=frequency=1000" -t 15 \

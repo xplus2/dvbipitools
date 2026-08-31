@@ -1,6 +1,6 @@
-.TH DIPIREC 1 "2026-08-24" "dvbipitools" "dvbipitools Manual"
+.TH DIPIREC 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
-dipirec \- record a DVB-IPI stream to a file or stdout
+dipirec \- record or replay a DVB-IPI stream to a file, multicast, or an RTMP(S) server
 .SH SYNOPSIS
 .B dipirec
 .B \-i
@@ -11,9 +11,13 @@ dipirec \- record a DVB-IPI stream to a file or stdout
 .SH DESCRIPTION
 .B dipirec
 records a DVB-IPI transport stream to a file, stdout, multicast, a RIST
-peer, or an RTMP(S) ingest server. Output is repeatable
+or SRT peer, or an RTMP(S) ingest server. Output
 .RB ( \-o )
-so several destinations can be fed from a single source at once.
+is repeatable, up to 8 targets, so several destinations can be fed from
+a single source at once. With
+.B \-\-pace
+a file or stdin source is replayed at its own original timing instead
+of being read as fast as possible.
 .PP
 Sources accepted by
 .B \-i
@@ -245,9 +249,12 @@ SRTO_LATENCY applied to every
 target. Default: library.
 .TP
 .B \-\-insecure
-Skip TLS verification for
+Skip TLS certificate/hostname/expiry verification for
 .B \-o
-.BR rtmps:// .
+.B rtmps://
+and
+.B \-i
+.BR https:// .
 .TP
 .BR \-v ", " \-\-verbose
 Periodic recording stats on stderr.
@@ -259,8 +266,23 @@ Shift subtitles earlier. Default: 1000.
 .IR auto | always | never .
 Default: \fBauto\fR.
 .TP
+.B \-\-metrics \fI<path>\fR
+Unix datagram socket for metrics. Default:
+.IR /run/dvbipitools/metrics.sock .
+.TP
+.B \-\-metrics\-id \fI<name>\fR
+Stable instance id. Metrics stay disabled unless this is set.
+.TP
+.B \-\-metrics\-interval \fI<s>\fR
+Snapshot interval in seconds. Default: 5.
+.TP
 .B \-\-ret \fI<addr>:<port>\fR
 RET server unicast address (\fB\-i rtp://\fR only); enables gap repair.
+Its address family must match
+.BR \-i 's,
+unless
+.B \-\-no\-ret\-mc
+is also given.
 .TP
 .B \-\-no\-ret\-mc
 Skip joining the RET server's multicast repair session.
@@ -307,16 +329,28 @@ Replay a file back onto multicast at its original timing.
 .TP
 .B dipirec \-i rtp://@239.19.75.1:8700 \-o rtmp://live.example.com/app/key
 Relay a multicast source live to an RTMP ingest server.
+.TP
+.B dipirec \-i rtp://@239.19.75.1:8700 \-o show.ts \-\-ret 10.0.0.1:6000
+Record with RET gap repair against a
+.BR dipifccret (1)
+edge server.
+.TP
+.B dipirec \-i rtp://@239.1.1.3:5000 \-p all \-o all_channels.mka
+MPTS source: every program's audio into one MKA file.
 .SH EXIT STATUS
+.TP
 .B 0
-on success.
-A non-zero status is returned on argument errors or I/O failure.
+Success.
+.TP
+.B nonzero
+Argument error, or I/O failure.
 .SH SEE ALSO
 .BR dipiscan (1),
 .BR dipisds (1),
 .BR dipitvhead (1),
 .BR dipirist (1),
-.BR dipisrt (1)
+.BR dipisrt (1),
+.BR dipifccret (1)
 .PP
 Project homepage: https://github.com/xplus2/dvbipitools
 .SH COPYRIGHT

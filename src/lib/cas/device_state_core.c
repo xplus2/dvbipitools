@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 #include "device_state_core.h"
 

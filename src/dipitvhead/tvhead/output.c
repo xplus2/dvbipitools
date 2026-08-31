@@ -8,9 +8,9 @@
 #include <string.h>
 
 #include "lib/cas/cas_core.h"
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/net/send_result.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "../version.h"
 #include "priv.h"

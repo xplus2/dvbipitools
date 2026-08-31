@@ -6,8 +6,8 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/log.h"
-#include "lib/signal.h"
+#include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 
 #include "../fcc/burst.h"
 #include "../version.h"
@@ -23,12 +23,8 @@ typedef struct {
 
 /* seqlock reader for one slot, bounded retry: repeated overlap = treated as unreadable this tick */
 static int burst_slot_read(const burst_slot_t *slot, int *in_use, uint64_t *words, socklen_t *addrlen, int *fd, burst_t **b) {
-  for (int tries = 0; tries < 8; tries++) {
-    unsigned g1 = atomic_load_explicit(&slot->gen, memory_order_acquire);
-    unsigned g2;
-
-    if (g1 & 1u)
-      continue; /* write in progress, retry */
+  unsigned g;
+  SEQLOCK_READ_LOOP(&slot->gen, g) {
     *in_use = atomic_load_explicit(&slot->in_use, memory_order_relaxed);
     if (*in_use) {
       for (size_t w = 0; w < BURST_ADDR_WORDS; w++)
@@ -37,8 +33,7 @@ static int burst_slot_read(const burst_slot_t *slot, int *in_use, uint64_t *word
       *fd = atomic_load_explicit(&slot->fd, memory_order_relaxed);
       *b = atomic_load_explicit(&slot->b, memory_order_relaxed);
     }
-    g2 = atomic_load_explicit(&slot->gen, memory_order_acquire);
-    if (g1 == g2)
+    if (SEQLOCK_READ_OK(&slot->gen, g))
       return 1;
   }
   return 0; /* repeated race, skip this tick */
@@ -58,10 +53,11 @@ void *pacer_main(void *arg) {
 
   while (!signal_stop_requested()) {
     size_t n = 0;
+    size_t scan_upto = atomic_load_explicit(&pc->bursts->high_water_mark, memory_order_relaxed);
 
     nanosleep(&tick, NULL);
 
-    for (size_t i = 0; i < pc->bursts->cap; i++) {
+    for (size_t i = 0; i < scan_upto; i++) {
       const burst_slot_t *slot = &pc->bursts->slots[i];
       int in_use = 0;
       uint64_t words[BURST_ADDR_WORDS] = {0};

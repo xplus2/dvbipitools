@@ -19,9 +19,14 @@
 #include "lib/net/srt/srtsink.h"
 #include "lib/scrambler/scrambler.h"
 
+/* raw-fd output batch size: cuts write() syscalls ~64x vs one per 188B packet */
+#define PIPELINE_OUT_BATCH_PKTS 64
+
 typedef struct {
   int outfd[DIPIDESCRAMBLE_MAX_OUT]; /* plain file targets, unused (mkv_t owns fd) under -f mkv/mka */
   int n_outfd;
+  unsigned char outbuf[DIPIDESCRAMBLE_MAX_OUT][PIPELINE_OUT_BATCH_PKTS * 188];
+  size_t outbuf_len[DIPIDESCRAMBLE_MAX_OUT];
   mkv_t *mkv; /* NULL unless -f mkv|mka */
   unsigned long long mkv_bytes;
   flv_t *flv; /* NULL: no rtmp(s) target */

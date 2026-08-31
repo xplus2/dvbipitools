@@ -4,8 +4,8 @@
 #include <netdb.h>
 #include <string.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 
 #include "srtcommon.h"
 

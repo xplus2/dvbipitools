@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 #include "dipibcg/announce.h"
-#include "lib/ioutil.h"
+#include "lib/helper/ioutil.h"
 
 static void write_temp_file(char *path, const char *content) {
   int fd = mkstemp(path);
@@ -115,7 +115,7 @@ START_TEST(build_windowed_doc_copies_all_channels) {
   add_channel(&src, "ch1");
   add_channel(&src, "ch2");
 
-  ck_assert_int_eq(build_windowed_doc(&src, &dst, 1000, 60), 0);
+  ck_assert_int_eq(build_windowed_doc(&src, &dst, 1000, 60, NULL, NULL, NULL), 0);
   ck_assert_int_eq(dst.channel_count, 2);
   ck_assert_str_eq(dst.channels[0].id, "ch1");
   ck_assert_str_eq(dst.channels[1].id, "ch2");
@@ -136,7 +136,7 @@ START_TEST(build_windowed_doc_filters_programmes_by_window) {
   /* malformed start: skipped */
   add_programme(&src, "ch1", "not-a-time", NULL);
 
-  ck_assert_int_eq(build_windowed_doc(&src, &dst, 1000, 60), 0);
+  ck_assert_int_eq(build_windowed_doc(&src, &dst, 1000, 60, NULL, NULL, NULL), 0);
   ck_assert_int_eq(dst.programme_count, 0);
 
   bcg_doc_free(&src);
@@ -159,7 +159,7 @@ START_TEST(build_windowed_doc_includes_in_range_and_no_stop_programmes) {
   snprintf(start_b, sizeof start_b, "2020-01-01T00:05:00Z");
   add_programme(&src, "ch1", start_b, NULL);
 
-  ck_assert_int_eq(build_windowed_doc(&src, &dst, now, 60), 0);
+  ck_assert_int_eq(build_windowed_doc(&src, &dst, now, 60, NULL, NULL, NULL), 0);
   ck_assert_int_eq(dst.programme_count, 2);
 
   bcg_doc_free(&src);

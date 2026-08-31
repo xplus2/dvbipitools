@@ -45,7 +45,7 @@ struct flv {
 
 /* feed.c */
 void flv_setup(flv_t *f);
-void flv_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, const unsigned char *data, size_t len);
+void flv_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len);
 void flv_all_ready(flv_t *f);
 
 /* write.c */

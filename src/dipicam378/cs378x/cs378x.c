@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 #include "../version.h"
 #include "priv.h"

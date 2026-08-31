@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../ioutil.h"
+#include "../helper/ioutil.h"
 #include "codec.h"
 
 int dvb_string_encode(strrepo_writer_t *sw, const char *s) {

@@ -4,7 +4,7 @@
 #ifndef LIB_NET_SEND_RESULT_H
 #define LIB_NET_SEND_RESULT_H
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 /* output failures aren't fatal, log only on failure/recovery edge, keep retrying every batch */
 static inline void note_send_result(int ok, int *had_error, unsigned long long *errors, const char *label) {

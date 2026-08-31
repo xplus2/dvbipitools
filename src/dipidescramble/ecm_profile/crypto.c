@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "lib/secure_zero.h"
+#include "lib/helper/secure_zero.h"
 #include "priv.h"
 
 static int locate_wire_components(const ecm_profile_t *p, const ecm_layout_t *lay, const unsigned char *wire, size_t wire_len, const unsigned char **iv, const unsigned char **ct, const unsigned char **gcm_tag, const unsigned char **itag) {

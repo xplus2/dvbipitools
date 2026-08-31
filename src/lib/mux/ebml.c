@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include "lib/helper/ioutil.h"
 #include "ebml.h"
 
 void ebuf_free(ebuf_t *b) {
@@ -15,18 +16,9 @@ void ebuf_free(ebuf_t *b) {
 void eb_bytes(ebuf_t *b, const void *data, size_t n) {
   if (b->err)
     return;
-  if (b->len + n > b->cap) {
-    size_t nc = b->cap ? b->cap * 2 : 4096;
-    unsigned char *np;
-    while (nc < b->len + n)
-      nc *= 2;
-    np = realloc(b->p, nc);
-    if (!np) {
-      b->err = 1;
-      return;
-    }
-    b->p = np;
-    b->cap = nc;
+  if (growbuf_reserve((void **)&b->p, &b->cap, 1, b->len + n, 4096)) {
+    b->err = 1;
+    return;
   }
   memcpy(b->p + b->len, data, n);
   b->len += n;

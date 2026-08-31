@@ -4,10 +4,10 @@
 #include <stdio.h>
 
 #include "args.h"
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/metrics/export.h"
-#include "lib/signal.h"
-#include "lib/toolmain.h"
+#include "lib/helper/signal.h"
+#include "lib/helper/toolmain.h"
 #include "radiohead/radiohead.h"
 #include "version.h"
 

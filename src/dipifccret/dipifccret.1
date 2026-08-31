@@ -1,4 +1,4 @@
-.TH DIPIFCCRET 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPIFCCRET 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipifccret \- RTP retransmission (RET) and Fast Channel Change (FCC/RAMS) server
 .SH SYNOPSIS
@@ -87,6 +87,16 @@ Periodic stats on stderr.
 Default:
 .BR auto .
 .TP
+.B \-\-metrics \fI<path>\fR
+Unix datagram socket for metrics. Default:
+.IR /run/dvbipitools/metrics.sock .
+.TP
+.B \-\-metrics\-id \fI<name>\fR
+Stable instance id. Metrics stay disabled unless this is set.
+.TP
+.B \-\-metrics\-interval \fI<s>\fR
+Snapshot interval in seconds. Default: 5.
+.TP
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.
 .TP
@@ -144,7 +154,9 @@ Safety cap on cached GOP-in-progress duration. Default: 8000.
 Pre-allocated concurrent burst-session slots. Default: 4096.
 .TP
 .BR \-X ", " \-\-burst\-multiplier\ \fI<n>\fR
-Burst rate as a multiple of the channel's observed nominal bitrate.
+Burst rate as a multiple of the channel's observed nominal bitrate,
+capped by the client's Max Receive Bitrate TLV if lower. Fixed
+multiplier, not an adaptive/congestion-aware ramp. Must be > 1.0.
 Default: 1.5.
 .TP
 .BR \-D ", " \-\-burst\-duration\-cap\ \fI<ms>\fR
@@ -182,6 +194,15 @@ Restrict FCC requests to these client source ranges. Default: any client.
 .B dipifccret \-g 239.0.0.0/8 \-l 10.0.0.1:6000 \-I eth0
 Edge box on a SPAN port mirroring the access switch, RET and FCC both on,
 all other settings at their defaults.
+.TP
+.B dipifccret \-g 239.0.0.0/8,224.1.2.0/24 \-l 10.0.0.1:6000 \-I eth0 \-w 4 \-u dipifccret
+Fixed worker count, privilege drop after opening the capture handle.
+.TP
+.B dipifccret \-g 239.0.0.0/8 \-l 10.0.0.1:6000 \-I eth0 \-\-no\-fcc
+RET only, no FCC.
+.TP
+.B dipifccret \-g 239.0.0.0/8 \-l 10.0.0.1:6000 \-I eth0 \-\-no\-ret \-G 4000 \-X 2.0
+FCC only, tighter GOP cache and burst rate.
 .SH EXIT STATUS
 .B 0
 on success.
@@ -193,6 +214,7 @@ capability or root privileges; see
 above to drop privileges after the capture handle is opened.
 .SH SEE ALSO
 .BR dipitvhead (1),
+.BR dipisds (1),
 .BR dipimetrics (1)
 .PP
 Project homepage: https://github.com/xplus2/dvbipitools

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 #include "../version.h"
 #include "burst_table.h"
@@ -154,6 +154,13 @@ static burst_slot_t *claim_locked(burst_table_t *t, burst_stripe_t *st, const st
     return NULL;
   idx = st->free_list[--st->free_count];
   s = &t->slots[idx];
+
+  {
+    size_t want = idx + 1;
+    size_t cur = atomic_load_explicit(&t->high_water_mark, memory_order_relaxed);
+    while (want > cur && !atomic_compare_exchange_weak_explicit(&t->high_water_mark, &cur, want, memory_order_relaxed, memory_order_relaxed))
+      ; /* concurrent claim in another stripe raced ahead: retry with its value */
+  }
 
   g = seqlock_begin_write(&s->gen);
   memset(words, 0, sizeof words);

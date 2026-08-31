@@ -6,9 +6,9 @@
 
 #include <librist/librist.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
-#include "lib/signal.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 
 #include "ristlog.h"
 #include "ristout.h"

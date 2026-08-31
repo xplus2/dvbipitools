@@ -7,9 +7,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/mux/rtpheader.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "multicast.h"
 #include "tssink.h"

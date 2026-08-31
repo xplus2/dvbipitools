@@ -11,9 +11,9 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/net/netconnect.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "listen.h"
 #include "version.h"

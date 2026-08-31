@@ -3,8 +3,8 @@
 
 #include <string.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 
 #include "protocol.h"
 
@@ -80,7 +80,7 @@ int metrics_reader_init(metrics_reader_t *r, const unsigned char *buf, size_t le
   if (hdr->proto_version != METRICS_PROTO_VERSION)
     return -1;
   hdr->component = (metrics_component_t)buf[1];
-  if (hdr->component < METRICS_COMPONENT_TVHEAD || hdr->component > METRICS_COMPONENT_SRT)
+  if (hdr->component < METRICS_COMPONENT_TVHEAD || hdr->component > METRICS_COMPONENT_XY)
     return -1;
   memcpy(hdr->metrics_id, buf + 4, METRICS_ID_MAX);
   hdr->metrics_id[METRICS_ID_MAX - 1] = '\0';

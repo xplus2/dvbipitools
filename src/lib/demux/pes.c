@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include "lib/helper/ioutil.h"
 #include "pes.h"
 #include "tspack.h"
 
@@ -10,8 +11,8 @@
 
 typedef struct {
   unsigned pid;
-  int used, started, has_pts;
-  uint64_t pts;
+  int used, started, has_pts, has_dts;
+  uint64_t pts, dts;
   unsigned char *buf;
   size_t len, cap;
 } stream_t;
@@ -67,23 +68,12 @@ static stream_t *find(pes_t *p, unsigned pid) {
 }
 
 static int sgrow(stream_t *s, size_t need) {
-  if (s->len + need > s->cap) {
-    size_t nc = s->cap ? s->cap * 2 : 8192;
-    unsigned char *np;
-    while (nc < s->len + need)
-      nc *= 2;
-    np = realloc(s->buf, nc);
-    if (!np)
-      return -1;
-    s->buf = np;
-    s->cap = nc;
-  }
-  return 0;
+  return growbuf_reserve((void **)&s->buf, &s->cap, 1, s->len + need, 8192);
 }
 
 static void deliver(pes_t *p, stream_t *s) {
   if (s->started && s->len)
-    p->cb(p->ctx, s->pid, s->has_pts, s->pts, s->buf, s->len);
+    p->cb(p->ctx, s->pid, s->has_pts, s->pts, s->has_dts, s->dts, s->buf, s->len);
   s->started = 0;
   s->len = 0;
 }
@@ -120,8 +110,11 @@ void pes_feed(pes_t *p, const unsigned char *pkt) {
     hdrlen = pl[8];
     es = 9 + (size_t)hdrlen;
     s->has_pts = (pl[7] & 0x80) ? 1 : 0;
+    s->has_dts = (pl[7] & 0xC0) == 0xC0 && plen >= 19 ? 1 : 0;
     if (s->has_pts)
       s->pts = read_pts(pl + 9);
+    if (s->has_dts)
+      s->dts = read_pts(pl + 14);
     s->started = 1;
     if (es < plen)
       append(s, pl + es, plen - es);

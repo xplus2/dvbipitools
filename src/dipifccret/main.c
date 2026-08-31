@@ -8,8 +8,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "lib/log.h"
-#include "lib/signal.h"
+#include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 
 #include "args.h"
 #include "channel/channel.h"

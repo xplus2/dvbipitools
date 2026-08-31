@@ -1,7 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include "../beutil.h"
+#include "../helper/beutil.h"
 #include "rtp.h"
 
 size_t rtp_payload_offset(const unsigned char *p, size_t len) {

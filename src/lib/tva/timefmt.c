@@ -4,7 +4,7 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "../ioutil.h"
+#include "../helper/ioutil.h"
 #include "timefmt.h"
 
 int xmltv_time_to_iso8601(const char *in, char *out, size_t outcap) {

@@ -11,13 +11,13 @@
 #include "lib/bim/accessunit.h"
 #include "lib/bim/bitwriter.h"
 #include "lib/bim/strrepo.h"
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/metrics/export.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
 #include "lib/net/netconnect.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 #include "lib/tva/bcg_doc.h"
 #include "lib/tva/mapping.h"
 #include "lib/tva/xmltv.h"
@@ -56,14 +56,36 @@ typedef struct {
   double last_success_time; /* unix seconds, 0 = never */
 } bcg_metrics_t;
 
-/* windowed->channels copies doc->channels (build_windowed_doc): bcg_find_channel()
-   index stays stable for seen[] mark */
-static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *doc, const bcg_doc_t *windowed, const bcg_metrics_t *bm) {
+typedef struct {
+  const char *id;
+  int idx;
+} chan_idx_t;
+
+static int chan_idx_cmp(const void *a, const void *b) { return strcmp(((const chan_idx_t *)a)->id, ((const chan_idx_t *)b)->id); }
+
+/* -1 if not found */
+static int chan_idx_find(const chan_idx_t *idx, int n, const char *id) {
+  int lo = 0, hi = n - 1;
+  while (lo <= hi) {
+    int mid = (lo + hi) / 2;
+    int c = strcmp(id, idx[mid].id);
+    if (c == 0)
+      return idx[mid].idx;
+    if (c < 0)
+      hi = mid - 1;
+    else
+      lo = mid + 1;
+  }
+  return -1;
+}
+
+/* windowed->channels copies doc->channels (build_windowed_doc): index stays stable for seen[] mark */
+static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *doc, const bcg_doc_t *windowed, const bcg_metrics_t *bm,
+                          long sched_start, long sched_end, int have_sched) {
   metrics_writer_t w;
   int services_with_events = 0;
-  long sched_start = 0, sched_end = 0;
-  int have_sched = 0;
   char *seen;
+  chan_idx_t *cidx;
 
   if (!metrics_exporter_due(mx, now))
     return;
@@ -77,29 +99,24 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *do
   metrics_writer_put(&w, METRICS_ID_BCG_SERVICES, NULL, (uint64_t)doc->channel_count);
 
   seen = windowed->channel_count > 0 ? calloc((size_t)windowed->channel_count, 1) : NULL;
+  cidx = windowed->channel_count > 0 ? malloc(sizeof *cidx * (size_t)windowed->channel_count) : NULL;
+  if (cidx) {
+    for (int i = 0; i < windowed->channel_count; i++) {
+      cidx[i].id = windowed->channels[i].id;
+      cidx[i].idx = i;
+    }
+    qsort(cidx, (size_t)windowed->channel_count, sizeof *cidx, chan_idx_cmp);
+  }
   for (int i = 0; i < windowed->programme_count; i++) {
     const bcg_programme_t *pr = &windowed->programmes[i];
-    const bcg_channel_t *c = bcg_find_channel(windowed, pr->channel_id);
-    long s;
-    if (c && seen) {
-      int idx = (int)(c - windowed->channels);
-      if (!seen[idx]) {
-        seen[idx] = 1;
-        services_with_events++;
-      }
-    }
-    if (!iso8601_to_minutes(pr->start, &s)) {
-      long e = s;
-      if (pr->stop[0])
-        iso8601_to_minutes(pr->stop, &e);
-      if (!have_sched || s < sched_start)
-        sched_start = s;
-      if (!have_sched || e > sched_end)
-        sched_end = e;
-      have_sched = 1;
+    int idx = cidx ? chan_idx_find(cidx, windowed->channel_count, pr->channel_id) : -1;
+    if (idx >= 0 && seen && !seen[idx]) {
+      seen[idx] = 1;
+      services_with_events++;
     }
   }
   free(seen);
+  free(cidx);
 
   metrics_writer_put(&w, METRICS_ID_BCG_SERVICES_WITH_EVENTS, NULL, (uint64_t)services_with_events);
   metrics_writer_put(&w, METRICS_ID_BCG_EVENTS, NULL, (uint64_t)windowed->programme_count);
@@ -113,7 +130,11 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *do
   metrics_exporter_send(mx, &w);
 }
 
-int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long window_min) {
+int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long window_min,
+                        long *out_sched_start, long *out_sched_end, int *out_have_sched) {
+  long sched_start = 0, sched_end = 0;
+  int have_sched = 0;
+
   bcg_doc_init(dst);
   for (int i = 0; i < src->channel_count; i++) {
     bcg_channel_t *c = bcg_add_channel(dst);
@@ -139,7 +160,18 @@ int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long wind
     if (!out)
       return -1;
     *out = *pr;
+    if (!have_sched || start_min < sched_start)
+      sched_start = start_min;
+    if (!have_sched || end_min > sched_end)
+      sched_end = end_min;
+    have_sched = 1;
   }
+  if (out_sched_start)
+    *out_sched_start = sched_start;
+  if (out_sched_end)
+    *out_sched_end = sched_end;
+  if (out_have_sched)
+    *out_have_sched = have_sched;
   return 0;
 }
 
@@ -264,11 +296,13 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
     bitwriter_t bw;
     strrepo_writer_t sw;
     int nfuu = 0;
+    long sched_start, sched_end;
+    int have_sched;
 
     if (signal_reload_requested())
       reload_doc(cfg, &doc, &bm, metrics_on);
 
-    if (build_windowed_doc(&doc, &windowed, now_minutes(), cfg->window_hours * 60)) {
+    if (build_windowed_doc(&doc, &windowed, now_minutes(), cfg->window_hours * 60, &sched_start, &sched_end, &have_sched)) {
       bcg_doc_free(&windowed);
       if (metrics_on)
         bm.document_errors_total++;
@@ -294,7 +328,7 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
     cycles++;
     if (cfg->verbose)
       log_line("cycle %u sent, %d fragments", cycles, nfuu);
-    emit_metrics(mx, mono_seconds(), &doc, &windowed, &bm);
+    emit_metrics(mx, mono_seconds(), &doc, &windowed, &bm, sched_start, sched_end, have_sched);
     bcg_doc_free(&windowed);
     sleep_interruptible((double)cfg->interval_s);
   }

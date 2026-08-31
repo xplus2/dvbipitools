@@ -8,7 +8,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "../version.h"
 #include "priv.h"
 
@@ -57,7 +58,20 @@ int src_open(const config_t *cfg, src_t *s) {
     return -1;
 
   if (s->kind != URI_HTTP && cfg->ret.enabled) {
-    s->ret = ret_client_open(cfg);
+    ret_client_cfg_t rc;
+    memset(&rc, 0, sizeof rc);
+    rc.family = cfg->ret.family;
+    bufcpy(rc.addr, sizeof rc.addr, cfg->ret.addr);
+    rc.port = cfg->ret.port;
+    rc.mc_enabled = cfg->ret.mc_enabled;
+    rc.mc_port = cfg->ret.mc_port;
+    rc.rtx_pt = cfg->ret.rtx_pt;
+    rc.wait_ms = cfg->ret.wait_ms;
+    rc.source_family = cfg->source.family;
+    bufcpy(rc.source_group, sizeof rc.source_group, cfg->source.group);
+    rc.source_port = cfg->source.port;
+    rc.iface_in = cfg->iface_in;
+    s->ret = ret_client_open(&rc);
     if (!s->ret) {
       tssrc_close(s->t);
       return -1;

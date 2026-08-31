@@ -8,12 +8,12 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/net/netconnect.h"
 #include "lib/net/rtmp/rtmp.h"
 #include "lib/net/tls.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 #include "rtmpout.h"
 
 #define RTMPOUT_RETRY_S 3

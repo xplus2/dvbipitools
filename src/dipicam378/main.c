@@ -7,10 +7,10 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/metrics/export.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "args.h"
 #include "cs378x/cs378x.h"

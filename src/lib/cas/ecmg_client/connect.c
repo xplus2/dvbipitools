@@ -9,8 +9,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 
 #include "priv.h"
 

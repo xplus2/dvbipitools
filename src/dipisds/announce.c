@@ -6,15 +6,15 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/metrics/export.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 #include "announce.h"
 #include "input.h"
-#include "lib/sds_xml.h"
+#include "lib/helper/sds_xml.h"
 #include "version.h"
 
 #define DOC_CAP 65536

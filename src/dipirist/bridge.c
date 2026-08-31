@@ -6,12 +6,12 @@
 
 #include <librist/librist.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/net/rist/ristout.h"
 #include "lib/net/tssink.h"
 #include "lib/net/tssource.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "args.h"
 #include "bridge.h"

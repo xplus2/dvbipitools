@@ -1,10 +1,10 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/mux/psi_build.h"
 #include "lib/mux/tspacket_write.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "priv.h"
 

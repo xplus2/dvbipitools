@@ -16,8 +16,11 @@ static uint64_t g_pts;
 static unsigned char g_data[512];
 static size_t g_len;
 
-static void capture_cb(void *ctx, unsigned pid, int has_pts, uint64_t pts, const unsigned char *data, size_t len) {
+static void capture_cb(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data,
+                        size_t len) {
   (void)ctx;
+  (void)has_dts;
+  (void)dts;
   g_calls++;
   g_pid = pid;
   g_has_pts = has_pts;

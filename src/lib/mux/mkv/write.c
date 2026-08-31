@@ -7,7 +7,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "priv.h"
 
 void wfd(mkv_t *m, const void *p, size_t n) {

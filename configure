@@ -16,6 +16,8 @@ CSA=yes
 RIST=auto
 SRT=auto
 ZLIB=auto
+HTTP2=auto
+HTTP3=auto
 
 usage() {
     cat <<EOF
@@ -34,6 +36,10 @@ usage: ./configure [options]
   --no-rist      skip dipirist (default: auto-detect librist)
   --no-srt       skip dipisrt (default: auto-detect libsrt)
   --no-zlib      build dipibcg without BCG container compression support
+  --no-http2     build dipixy without HTTP/2 support (default: auto-detect
+                 libnghttp2)
+  --no-http3     build dipixy without HTTP/3 support (default: auto-detect
+                 libngtcp2/libnghttp3)
   --cc=CC        C compiler (default: cc, or \$CC)
   -h, --help     this help
 EOF
@@ -53,6 +59,8 @@ while [ $# -gt 0 ]; do
         --no-rist)  RIST=no ;;
         --no-srt)   SRT=no ;;
         --no-zlib)  ZLIB=no ;;
+        --no-http2) HTTP2=no ;;
+        --no-http3) HTTP3=no ;;
         --cc=*)     CC=${1#--cc=} ;;
         -h|--help)  usage; exit 0 ;;
         *) echo "configure: unknown option: $1" >&2; usage >&2; exit 1 ;;
@@ -127,7 +135,9 @@ CSA := $CSA
 RIST := $RIST
 SRT := $SRT
 ZLIB := $ZLIB
+HTTP2 := $HTTP2
+HTTP3 := $HTTP3
 EOF
 
-echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING tls=$TLS csa=$CSA rist=$RIST srt=$SRT zlib=$ZLIB"
+echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING tls=$TLS csa=$CSA rist=$RIST srt=$SRT zlib=$ZLIB http2=$HTTP2 http3=$HTTP3"
 echo "run 'make' to build."

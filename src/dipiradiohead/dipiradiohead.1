@@ -1,4 +1,4 @@
-.TH DIPIRADIOHEAD 1 "2026-08-24" "dvbipitools" "dvbipitools Manual"
+.TH DIPIRADIOHEAD 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipiradiohead \- re-mux an Icecast/Shoutcast stream as a DVB-IPI multicast
 .SH SYNOPSIS
@@ -76,7 +76,11 @@ or
 Repeatable; each
 .B \-i
 becomes one program of the output MPTS (or the single program of an SPTS
-if given only once).
+if given only once). Codec (mp3, mp2, AAC ADTS, AAC LATM/LOAS) is
+auto-detected from stream sync bytes, not from the URI. The response
+body is sniffed, not the URL suffix: an M3U or PLS playlist is
+recognized and its first URL line followed instead, up to 5 hops,
+each re-sniffed.
 .TP
 .B \-\-sid \fIn\fR
 service_id / program_number for the
@@ -187,10 +191,13 @@ original_network_id. Default: 1.
 .SS "Reliability and TLS"
 .TP
 .BR \-e ", " \-\-error " " \fIseconds\fR
-On input error, reconnect after N seconds. Default: fail once. Always
-retries, regardless of this option, when more than one
+On input error, reconnect after N seconds. Default: fail once. With
+more than one
 .B \-i
-is given.
+this always retries regardless of this option, using a 5 second
+interval if
+.B \-e
+is not given.
 .TP
 .BR \-k ", " \-\-insecure
 Skip TLS verification on
@@ -200,7 +207,7 @@ ignored.
 .SS "Logging and Metrics"
 .TP
 .BR \-v ", " \-\-verbose
-Print periodic statistics on stderr.
+Periodic statistics on stderr, about once a second.
 .TP
 .B \-\-color \fIwhen\fR
 Colorize log output:

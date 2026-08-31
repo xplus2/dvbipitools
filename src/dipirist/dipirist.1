@@ -1,4 +1,4 @@
-.TH DIPIRIST 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPIRIST 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipirist \- bridge a DVB-IPI stream between RTP/UDP/file and a RIST link, sender or receiver
 .SH SYNOPSIS
@@ -44,16 +44,26 @@ endpoint address is either
 .B @
 mirrors this toolkit's own
 .BR rtp://@ / udp://@
-convention. Repeating
+convention, though for those the
+.B @
+is purely decorative, group and port are parsed the same with or
+without it. Repeating
 .B \-i
 or
 .B \-o
 with further
 .B rist://
-URIs bonds several links carrying the same stream. RIST query parameters
-such as \fBbuffer\fR, \fBsecret\fR, \fBcname\fR, and \fBweight\fR are
-accepted directly in the URI; the equivalent command-line options below
-override whatever the URI specifies.
+URIs bonds several links carrying the same stream, up to 8 peers per
+endpoint. RIST query parameters such as \fBbuffer\fR, \fBsecret\fR,
+\fBcname\fR, and \fBweight\fR are accepted directly in the URI; the
+equivalent command-line options below override whatever the URI
+specifies.
+.PP
+.B rtp://
+and
+.B udp://
+multicast groups accept IPv6 literals in brackets, e.g.
+.BR rtp://@[ff3e::1]:8700 .
 .PP
 RIST-specific concepts exposed on the command line: the
 .B profile
@@ -77,7 +87,8 @@ Output endpoint. Repeatable if it is a
 URI, to bond several links.
 .TP
 .BR \-I ", " \-\-iface " " \fIiface\fR
-Interface for the non-RIST side's multicast join or send.
+Interface for the non-RIST side's multicast join or send. Default:
+kernel route.
 .TP
 .BR \-k ", " \-\-insecure
 Skip TLS verification. Only meaningful with an
@@ -102,8 +113,8 @@ Pre-shared key for encryption. Requires
 RTCP cname. Default is library-generated.
 .TP
 .B \-\-buffer \fIms\fR
-RIST recovery buffer size in milliseconds (sets both min and max). Default
-is the library default.
+RIST recovery buffer size in milliseconds, 1 to 60000 (sets both min and
+max). Default is the library default.
 .TP
 .B \-\-color \fIwhen\fR
 Colorize log output:
@@ -122,11 +133,12 @@ Unix datagram socket path for metrics output. Default
 Stable instance id for metrics. Metrics are disabled unless this is set.
 .TP
 .B \-\-metrics\-interval \fIs\fR
-Metrics snapshot interval in seconds. Default
+Metrics snapshot interval in seconds, 1 to 86400. Default
 .BR 5 .
 .TP
 .BR \-v ", " \-\-verbose
-Print periodic bridge statistics on stderr.
+Raise librist's own log verbosity to DEBUG. Default is WARN and above
+only.
 .TP
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.
@@ -150,6 +162,7 @@ on success.
 Non-zero on argument errors or I/O/network failure.
 .SH SEE ALSO
 .BR dipirec (1),
+.BR dipisrt (1),
 .BR dipitvhead (1),
 .BR dipiradiohead (1)
 .PP

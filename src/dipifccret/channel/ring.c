@@ -93,11 +93,8 @@ int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out) {
     return 0;
   slot = &((const ret_ring_entry_t *)c->ring)[seq % c->ring_size];
 
-  for (int tries = 0; tries < 8; tries++) {
-    unsigned g1 = atomic_load_explicit(&slot->gen, memory_order_acquire);
-    unsigned g2;
-    if (g1 & 1u)
-      continue; /* write in progress, retry */
+  unsigned g;
+  SEQLOCK_READ_LOOP(&slot->gen, g) {
     out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
     out->timestamp = atomic_load_explicit(&slot->timestamp, memory_order_relaxed);
     out->dscp = atomic_load_explicit(&slot->dscp, memory_order_relaxed);
@@ -105,8 +102,7 @@ int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out) {
       words[i] = atomic_load_explicit(&slot->payload[i], memory_order_relaxed);
     out->payload_len = atomic_load_explicit(&slot->payload_len, memory_order_relaxed);
     out->valid = atomic_load_explicit(&slot->valid, memory_order_relaxed);
-    g2 = atomic_load_explicit(&slot->gen, memory_order_acquire);
-    if (g1 == g2) {
+    if (SEQLOCK_READ_OK(&slot->gen, g)) {
       memcpy(out->payload, words, sizeof out->payload);
       return out->valid && out->seq == seq;
     }
@@ -133,15 +129,11 @@ int channel_cache_peek_meta(const channel_t *c, size_t index, rap_cache_meta_t *
   abs_pos = start + index;
   slot = &ring[abs_pos % c->cache.cap];
 
-  for (int tries = 0; tries < 8; tries++) {
-    unsigned g1 = atomic_load_explicit(&slot->gen, memory_order_acquire);
-    unsigned g2;
-    if (g1 & 1u)
-      continue; /* write in progress, retry */
+  unsigned g;
+  SEQLOCK_READ_LOOP(&slot->gen, g) {
     out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
     out->timestamp = atomic_load_explicit(&slot->timestamp, memory_order_relaxed);
-    g2 = atomic_load_explicit(&slot->gen, memory_order_acquire);
-    if (g1 == g2)
+    if (SEQLOCK_READ_OK(&slot->gen, g))
       return 1;
   }
   return 0; /* repeated race treated as not-found */
@@ -184,19 +176,15 @@ int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out) 
   abs_pos = start + index;
   slot = &ring[abs_pos % c->cache.cap];
 
-  for (int tries = 0; tries < 8; tries++) {
-    unsigned g1 = atomic_load_explicit(&slot->gen, memory_order_acquire);
-    unsigned g2;
-    if (g1 & 1u)
-      continue; /* write in progress, retry */
+  unsigned g;
+  SEQLOCK_READ_LOOP(&slot->gen, g) {
     out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
     out->timestamp = atomic_load_explicit(&slot->timestamp, memory_order_relaxed);
     out->dscp = atomic_load_explicit(&slot->dscp, memory_order_relaxed);
     for (size_t i = 0; i < FCC_PAYLOAD_WORDS; i++)
       words[i] = atomic_load_explicit(&slot->payload[i], memory_order_relaxed);
     out->payload_len = atomic_load_explicit(&slot->payload_len, memory_order_relaxed);
-    g2 = atomic_load_explicit(&slot->gen, memory_order_acquire);
-    if (g1 == g2) {
+    if (SEQLOCK_READ_OK(&slot->gen, g)) {
       memcpy(out->payload, words, sizeof out->payload);
       return 1;
     }

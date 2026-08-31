@@ -165,7 +165,7 @@ START_TEST(ret_handle_nack_generic_nack_matches_requested_entries) {
 
   ck_assert_int_ge(g_mc_calls, 1);
   g_nack_calls = 0;
-  rtcp_parse(g_mc_pkt[0], g_mc_len[0], on_nack, NULL, NULL, NULL, NULL, NULL);
+  rtcp_parse(g_mc_pkt[0], g_mc_len[0], on_nack, NULL, NULL, NULL, NULL, NULL, NULL);
 
   ck_assert_int_eq(g_nack_calls, 1);
   ck_assert_uint_eq(g_decoded_nack.sender_ssrc, 0x2222u);

@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "lib/sds_xml.h"
+#include "lib/helper/sds_xml.h"
 
 int main(int argc, char **argv) {
   FILE *f;

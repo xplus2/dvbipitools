@@ -5,8 +5,8 @@
 #include <string.h>
 
 #include "args.h"
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/tva/bcg_doc.h"
 #include "lib/tva/mapping.h"
 #include "lib/tva/tva_xml.h"

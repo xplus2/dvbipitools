@@ -5,6 +5,6 @@
 #define DVBIPITOOLS_VERSION_H
 
 #define TOOL_NAME    "dvbipitools"
-#define TOOL_VERSION "2.3.1"
+#define TOOL_VERSION "2.4.0"
 
 #endif

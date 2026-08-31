@@ -17,8 +17,10 @@ int iso8601_to_minutes(const char *in, long *out);
 /* MJD epoch (date_to_mjd 1970-01-01) is day 40587 */
 long minutes_to_unix(long mjd_minutes);
 
-/* dst := channels of src, programmes of src within [now, now+window_min]. 0 ok, -1 oom */
-int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long window_min);
+/* dst := channels of src, programmes of src within [now, now+window_min]. 0 ok, -1 oom.
+   out_sched_start/out_sched_end/out_have_sched: min start/max end minutes across kept
+   programmes, already parses each one's start/stop. any may be NULL */
+int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long window_min, long *out_sched_start, long *out_sched_end, int *out_have_sched);
 
 /* reads cfg->input_path (xmltv) and cfg->map_path (csv), applies mapping. 0 ok, -1 error on stderr */
 int load_doc(const config_t *cfg, bcg_doc_t *out);

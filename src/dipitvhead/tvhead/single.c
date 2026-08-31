@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "lib/log.h"
-#include "lib/signal.h"
+#include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 #include "priv.h"
 
 /* rx is already built (discovery succeeded): sets up pacing/cas and runs until this

@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/mux/psi_build.h"
 
 #include "../cw_gen.h"

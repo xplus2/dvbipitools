@@ -4,10 +4,11 @@
 #include <stdio.h>
 
 #include "args.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/metrics/export.h"
-#include "lib/signal.h"
-#include "lib/toolmain.h"
+#include "lib/helper/signal.h"
+#include "lib/helper/toolmain.h"
 #include "tvhead/tvhead.h"
 #include "version.h"
 
@@ -36,7 +37,7 @@ int main(int argc, char **argv) {
   if (cfg.mcast_port)
     mcast_describe(&cfg, mcast, sizeof mcast);
   else
-    snprintf(mcast, sizeof mcast, "-");
+    bufcpy(mcast, sizeof mcast, "-");
   if (cfg.n_inputs == 1) {
     source_describe(&cfg.inputs[0].input, src, sizeof src);
     log_line_ansi("\e[1mi:\e[0m\e[0;37m%s\e[0m \e[1mm:\e[0m\e[0;37m%s\e[0m \e[1mrtp:\e[0m\e[0;37m%s\e[0m", src, mcast, cfg.rtp ? "yes" : "no");

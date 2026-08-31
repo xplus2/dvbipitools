@@ -1,4 +1,4 @@
-.TH DIPICAM378 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPICAM378 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipicam378 \- cs378x (camd35/TCP) key server for CAS testing
 .SH SYNOPSIS
@@ -21,43 +21,63 @@ configured password, which must match the reader's \fBpassword =\fR
 setting.
 .PP
 .B dipicam378
-is intended for testing and validation of
+is for debugging and validation only, pairing with
 .BR dipitvhead (1)'s
 and
 .BR dipiradiohead (1)'s
-CAS output: it pairs with those tools' encrypted multicast streams and
-lets an oscam-driven client descramble them as if a real smartcard were
-present. It is not built without libssl, since RSA/AES crypto is its
-sole purpose.
+CAS output so an oscam-driven client can descramble their encrypted
+multicast streams as if a real smartcard were present. Built only when
+libssl is available; RSA/AES crypto is its sole purpose.
 .SH OPTIONS
 .TP
 .BR \-k ", " \-\-key\ \fI<path>\fR
 RSA private key, PEM. Required.
 .TP
 .BR \-s ", " \-\-serial\ \fI<id>\fR
-Device's serial, matched against EMM-U.
+Device's serial, matched against EMM-U addressing. EMM-U for any
+other device on the same carousel is skipped. Default: unset, no
+filtering.
 .TP
 .BR \-p ", " \-\-port\ \fI<n>\fR
-cs378x TCP listen port. Default: \fB27500\fR.
+cs378x TCP listen port, the one OSCam's \fBprotocol = cs378x\fR reader
+dials into. Default: \fB27500\fR.
 .TP
 .BR \-a ", " \-\-auth\ \fI[user:]<pass>\fR
 Password must match the reader's \fBpassword =\fR (default:
-\fBdipicam378\fR); its digest is the AES-128 key.
+\fBdipicam378\fR); its digest is the AES-128 key. If \fIuser\fR is
+given, it must match the reader's \fBuser =\fR too, and any other
+username is rejected. Omitted: no username check, any connection
+accepted.
 .TP
 .B \-\-caid \fI<hex>\fR
-ECMs for any other CAID get a CMD08 ("stop asking"). Optional, default:
-no CMD08 ever sent.
+This device's own CAID. ECMs for any other CAID get a CMD08 ("stop
+asking"), so OSCam stops re-requesting a CAID this device will never
+answer for. Default: unset, no filtering, no CMD08.
 .TP
 .B \-\-algo \fI<a>\fR
 .IR cissa | csa2 .
+Selects whether a decrypted ECM's control word is 16 or 8 bytes.
 Default: \fBcissa\fR.
 .TP
 .BR \-v ", " \-\-verbose
-Protocol/decode detail on stderr.
+Connection accept/close and cs378x message types in/out are logged
+unconditionally; this adds ECM/EMM request field detail.
 .TP
 .B \-\-color \fI<when>\fR
 .IR auto | always | never .
 Default: \fBauto\fR.
+.TP
+.B \-\-metrics \fIpath\fR
+Unix datagram socket for metrics. Default:
+.IR /run/dvbipitools/metrics.sock .
+.TP
+.B \-\-metrics\-id \fIname\fR
+Stable instance id. Metrics stay disabled unless this is set.
+\fB\-\-metrics\fR and \fB\-\-metrics\-interval\fR require it; either
+given without \fB\-\-metrics\-id\fR is a startup error.
+.TP
+.B \-\-metrics\-interval \fIs\fR
+Snapshot interval in seconds. Default: 5.
 .TP
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.
@@ -66,9 +86,9 @@ Fork to background after startup, detach from terminal.
 Show usage and exit.
 .SH EXAMPLES
 .TP
-.B dipicam378 \-k device.key \-s e2e-01 \-p 27500
-Serve a single device's key on the default cs378x port, filtering EMM-U
-by serial.
+.B dipicam378 \-k device.key \-s cardserial\-01 \-p 27500 \-v \-a someuser:somepassword
+Serve a single device's key on the default cs378x port, filtering
+EMM-U by serial, verbose logging, username+password auth.
 .SH EXIT STATUS
 .B 0
 on success.

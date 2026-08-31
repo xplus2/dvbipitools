@@ -85,7 +85,7 @@ void emit(mkv_t *m, track_t *t, const unsigned char *d, size_t n, int key);
 
 /* feed.c */
 void all_ready(mkv_t *m);
-void on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, const unsigned char *data, size_t len);
+void on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len);
 void setup(mkv_t *m);
 
 #endif

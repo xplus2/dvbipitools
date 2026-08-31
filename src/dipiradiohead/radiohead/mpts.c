@@ -6,8 +6,8 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/log.h"
-#include "lib/signal.h"
+#include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 
 #include "../input/inputset.h"
 #include "../input/source.h"

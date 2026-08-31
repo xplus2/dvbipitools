@@ -9,10 +9,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/argutil.h"
-#include "lib/ioutil.h"
-#include "lib/log.h"
-#include "lib/uriparse.h"
+#include "lib/helper/argutil.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
+#include "lib/helper/uriparse.h"
 
 #include "args.h"
 #include "version.h"
@@ -101,7 +101,7 @@ int config_is_sender(const config_t *cfg) {
 void endpoint_describe(const endpoint_t *e, char *buf, size_t n) {
   if (e->is_rist) {
     if (e->n_rist == 1)
-      snprintf(buf, n, "%s", e->rist_uri[0]);
+      bufcpy(buf, n, e->rist_uri[0]);
     else
       snprintf(buf, n, "%s +%d more", e->rist_uri[0], e->n_rist - 1);
     return;
@@ -121,7 +121,7 @@ void endpoint_describe(const endpoint_t *e, char *buf, size_t n) {
               e->nonrist.http.path);
     break;
   case NONRIST_FILE:
-    snprintf(buf, n, "%s", e->nonrist.file_path[0] ? e->nonrist.file_path : "- (stdin/stdout)");
+    bufcpy(buf, n, e->nonrist.file_path[0] ? e->nonrist.file_path : "- (stdin/stdout)");
     break;
   }
 }

@@ -5,7 +5,7 @@
 #include <string.h>
 #include <zlib.h>
 
-#include "lib/beutil.h"
+#include "lib/helper/beutil.h"
 
 #include "wrapper.h"
 

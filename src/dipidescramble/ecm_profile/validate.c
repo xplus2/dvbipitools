@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 #include "../version.h"
 #include "priv.h"

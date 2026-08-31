@@ -19,6 +19,17 @@ dipiscan_resolve_sources()
 dipisds_resolve_sources()
 dipitvhead_resolve_sources()
 dipixmltv_resolve_sources()
+dipixy_resolve_sources()
+
+# dipixy embeds htdocs/index.html at build time. src/dipixy/CMakeLists.txt
+# does this for its own standalone binary; multicall needs its own copy.
+set(DVBIPITOOLS_DIPIXY_HTDOCS_GEN ${CMAKE_CURRENT_BINARY_DIR}/dipixy_htdocs_index.gen.c)
+add_custom_command(
+    OUTPUT ${DVBIPITOOLS_DIPIXY_HTDOCS_GEN}
+    COMMAND gen_htdocs ${CMAKE_SOURCE_DIR}/src/dipixy/htdocs/index.html ${DVBIPITOOLS_DIPIXY_HTDOCS_GEN} g_htdocs_index_html
+    DEPENDS gen_htdocs ${CMAKE_SOURCE_DIR}/src/dipixy/htdocs/index.html
+    COMMENT "dvbipitools: embedding dipixy htdocs/index.html")
+list(APPEND DIPIXY_SRCS ${DVBIPITOOLS_DIPIXY_HTDOCS_GEN})
 
 function(dvbipitools_rename_main_args tool)
     set_source_files_properties(${CMAKE_SOURCE_DIR}/src/${tool}/main.c PROPERTIES
@@ -27,7 +38,7 @@ function(dvbipitools_rename_main_args tool)
         COMPILE_DEFINITIONS "args_parse=${tool}_args_parse")
 endfunction()
 
-foreach (t dipibcg dipibim dipifccret dipimetrics dipiradiohead dipirec dipiscan dipisds dipitvhead dipixmltv)
+foreach (t dipibcg dipibim dipifccret dipimetrics dipiradiohead dipirec dipiscan dipisds dipitvhead dipixmltv dipixy)
     dvbipitools_rename_main_args(${t})
 endforeach ()
 if (DIPICAM378_FOUND)
@@ -111,6 +122,12 @@ dvbipitools_apply_tool_defs(dipitvhead DIPITVHEAD_SRCS
     "packet_cb=dipitvhead_packet_cb"
     "mcast_describe=dipitvhead_mcast_describe"
     "source_describe=dipitvhead_source_describe")
+# capture_open/capture_close: dipifccret defines its own, collides once merged here
+# find_header: dipidescramble defines its own, collides once merged here
+dvbipitools_apply_tool_defs(dipixy DIPIXY_SRCS
+    "capture_open=dipixy_capture_open"
+    "capture_close=dipixy_capture_close"
+    "find_header=dipixy_find_header")
 
 set(DVBIPITOOLS_ALL_SRCS
     main.c
@@ -127,7 +144,8 @@ set(DVBIPITOOLS_ALL_SRCS
     ${DIPISCAN_SRCS}
     ${DIPISDS_SRCS}
     ${DIPITVHEAD_SRCS}
-    ${DIPIXMLTV_SRCS})
+    ${DIPIXMLTV_SRCS}
+    ${DIPIXY_SRCS})
 
 # real vs stub variant picked per tool (TLS, CSA2, CISSA, BISS, BISS-CA, RTMP auth).
 # tools can disagree (dipiscan always stubs TLS, dipirec picks real when OpenSSL found).
@@ -135,7 +153,7 @@ set(DVBIPITOOLS_ALL_SRCS
 set(DVBIPITOOLS_NEED_OPENSSL FALSE)
 if (DIPIREC_HAVE_TLS OR DIPIRADIOHEAD_HAVE_TLS OR DIPIRADIOHEAD_HAVE_CISSA OR
     DIPITVHEAD_HAVE_TLS OR DIPITVHEAD_HAVE_CISSA OR DIPIDESCRAMBLE_FOUND OR
-    DIPICAM378_FOUND OR DIPIRIST_HAVE_TLS OR DIPISRT_HAVE_TLS)
+    DIPICAM378_FOUND OR DIPIRIST_HAVE_TLS OR DIPISRT_HAVE_TLS OR DIPIXY_HAVE_TLS)
     set(DVBIPITOOLS_NEED_OPENSSL TRUE)
 endif ()
 
@@ -252,3 +270,6 @@ endif ()
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 target_link_libraries(dvbipitools PRIVATE Threads::Threads)
+
+# dipixy's hls.c calls ceil()
+target_link_libraries(dvbipitools PRIVATE m)

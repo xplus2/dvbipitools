@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 #include "../../framer/aac_adts.h"
 #include "../../framer/mpegaudio.h"
@@ -56,16 +56,27 @@ static int try_consume_tag(source_t *s) {
   return 2;
 }
 
-/* confirms a sync word at buf+frame_len too, since an 11/12-bit sync can appear by chance in compressed audio */
-static int next_sync_ok(const source_t *s, size_t frame_len) {
-  const unsigned char *p = s->buf + frame_len;
-  size_t avail = s->buf_len - frame_len;
-
+static int is_sync_at(const source_t *s, const unsigned char *p, size_t avail) {
   if (s->codec == SRC_MPEG_AUDIO)
     return mpegaudio_is_sync(p, avail);
   if (s->codec == SRC_AAC_ADTS)
     return aac_adts_is_sync(p, avail);
   return aac_latm_is_sync(p, avail);
+}
+
+/* confirms a sync word at buf+frame_len too, since an 11/12-bit sync can appear by chance in compressed audio */
+static int next_sync_ok(const source_t *s, size_t frame_len) {
+  return is_sync_at(s, s->buf + frame_len, s->buf_len - frame_len);
+}
+
+/* first accepted sync offset in buf[1..buf_len), cheap is_sync_at() per byte,
+   no repeated probe() calls. buf_len if none: caller drops buffer, waits for more data */
+static size_t find_resync_offset(const source_t *s) {
+  size_t i;
+  for (i = 1; i < s->buf_len; i++)
+    if (is_sync_at(s, s->buf + i, s->buf_len - i))
+      return i;
+  return s->buf_len;
 }
 
 /* 1: codec now known (just resolved or already was), caller proceeds this iteration.
@@ -119,6 +130,7 @@ static int handle_probe_result(source_t *s, net_err_reason_t *reason_out, int r,
     return PROBE_STEP_CONTINUE;
   }
   if (r < 0) {
+    size_t off;
     if (s->buf_len == 0) {
       int rf = refill(s, reason_out);
       if (rf <= 0) {
@@ -127,8 +139,9 @@ static int handle_probe_result(source_t *s, net_err_reason_t *reason_out, int r,
       }
       return PROBE_STEP_CONTINUE;
     }
-    memmove(s->buf, s->buf + 1, s->buf_len - 1);
-    s->buf_len -= 1;
+    off = find_resync_offset(s);
+    memmove(s->buf, s->buf + off, s->buf_len - off);
+    s->buf_len -= off;
     return PROBE_STEP_CONTINUE;
   }
   if (frame_len > s->buf_len) {
@@ -234,8 +247,9 @@ int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
         continue;
 
       if (!next_sync_ok(s, frame_len)) {
-        memmove(s->buf, s->buf + 1, s->buf_len - 1);
-        s->buf_len -= 1;
+        size_t off = find_resync_offset(s);
+        memmove(s->buf, s->buf + off, s->buf_len - off);
+        s->buf_len -= off;
         continue;
       }
       out->codec = s->codec;

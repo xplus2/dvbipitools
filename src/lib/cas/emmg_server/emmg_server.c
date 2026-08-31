@@ -10,7 +10,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 #include "priv.h"
 

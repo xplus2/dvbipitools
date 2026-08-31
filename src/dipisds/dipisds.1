@@ -1,4 +1,4 @@
-.TH DIPISDS 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPISDS 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipisds \- announce or discover DVB-IPI services via DVBSTP/SD&S
 .SH SYNOPSIS
@@ -17,8 +17,8 @@ dipisds \- announce or discover DVB-IPI services via DVBSTP/SD&S
 .RI [ options ]
 .SH DESCRIPTION
 .B dipisds
-implements DVBSTP-carried SD&S service discovery per ETSI TS 102 034 clause 5.
-It runs in one of two mutually exclusive modes, selected by
+implements DVBSTP-carried SD&S service discovery per ETSI TS 102 034
+clause 5. It runs in one of two mutually exclusive modes, selected by
 .B \-a
 (announce, headend/injector role) or
 .B \-l
@@ -49,7 +49,13 @@ is XSPF with the DVB triplet carried in a dvbipitools extension element,
 and
 .B .xml
 is a hand-authored or dipiscan-generated raw SD&S document that is sent
-through unparsed. For the structured (non-.xml) inputs,
+through unparsed. For the structured formats, each entry's URI is
+.BR rtp:// [ @ ] addr : port
+or
+.BR udp:// [ @ ] addr : port ,
+the same convention dipirec/dipiscan use; a missing TSId/OrigNetId
+defaults to 1, a missing ServiceId auto-increments from 1. For the
+structured (non-.xml) inputs,
 .B \-p
 and
 .B \-O
@@ -69,9 +75,12 @@ dipifccret RET/FCC retransmission servers, Package Discovery, Regionalisation
 Discovery, and RMS-FUS Discovery. These options are announce-only and, with
 the exception of the metrics options, have no effect on raw
 .B .xml
-input, which bypasses this processing entirely. SIGHUP re-reads
+input, which bypasses this processing entirely.
+.PP
+SIGHUP re-reads
 .B \-i
-without restarting the process.
+without restarting the process; on a parse error the previous input keeps
+being announced and the error is logged. No effect in listen mode.
 .PP
 In listen mode
 .B dipisds
@@ -210,6 +219,8 @@ Also advertise multicast RET (as
 .BR dipifccret (1)
 does without
 .BR \-\-no\-mc\-ret ).
+Group:port always match the service's own IPMulticastAddress, per Annex
+F.6.2.2's same-group:port reuse.
 .TP
 .BI \-\-ret\-mc\-port " port"
 Multicast RET port, matches
@@ -231,7 +242,10 @@ Advertise a
 FCC server (its
 .B \-l
 value). Opt-in; adds ServerBasedEnhancementServiceInfo to every announced
-service.
+service. Separate element from
+.BR \-\-ret\-addr 's
+RTPRetransmission; both can be given together, but per Annex I.2.3 an HNED
+using both services is meant to prefer this element.
 .TP
 .BI \-\-fcc\-rtx\-time " ms"
 FCC Retransmission_session rtx-time (default 2000).
@@ -268,18 +282,40 @@ Stable instance id. Metrics are disabled unless this is set.
 Snapshot interval (default 5).
 .TP
 .BI \-\-packages " path"
-Package Discovery from
+Package Discovery (payload 0x05) from
 .I id,name,lang,visible,svc1|svc2|...
 lines.
+.I id
+is the numeric Id;
+.I name
+/
+.I lang
+set PackageName and its ISO 639-2 language;
+.I visible
+is 0 or 1 (default 1). Service names are matched against
+.B \-i
+entries by ServiceName: matches get a DVBTriplet, unmatched names are
+emitted without one.
 .TP
 .BI \-\-cells " path"
-Regionalisation Discovery from
+Regionalisation Discovery (payload 0x07) from
 .I id,country,type:value,...
 lines.
+.I id
+is the Cell's Id, matched against ServiceAvailability/PackageAvailability
+Cells elsewhere;
+.I country
+is the 2-letter ISO 3166 CountryCode. The
+.I type:value
+pairs are RFC 4676 civic address types, nested outer to inner in the given
+order: a single chain per cell, not a branching CA tree.
 .TP
 .BI \-\-rms\-name " name"
 RMS Discovery display name. Requires
 .BR \-\-rms\-location .
+Mutually exclusive with
+.BR \-\-fus\-name :
+RMSFUSDiscovery carries one provider type or the other, never both.
 .TP
 .BI \-\-rms\-lang " code"
 ISO 639-2 code for
@@ -296,6 +332,8 @@ RMSType LogoURI.
 .BI \-\-fus\-name " name"
 FUS Discovery display name. Requires
 .BR \-\-fus\-id .
+Mutually exclusive with
+.BR \-\-rms\-name .
 .TP
 .BI \-\-fus\-lang " code"
 ISO 639-2 code for
@@ -325,6 +363,21 @@ for stdout (default).
 default taken from the
 .B \-o
 suffix).
+.SH SCOPE
+DVBSTP framing is generic; on announce, the structured (non-.xml) side
+understands Service Provider Discovery, Broadcast Discovery, Package
+Discovery, Regionalisation Discovery, and RMS-FUS Discovery (payloads
+0x01/0x02/0x05/0x07/0x08), each a minimal producer subset of its ETSI TS
+102 034 clause 5.2.13 type. Anything wider goes through
+.B .xml
+passthrough. Listen
+.RB ( \-l )
+remains Broadcast Discovery only.
+.PP
+Not a general SD&S client: CoD and BCG-carriage records
+.RB ( dipibcg (1)
+covers BCG) are out of scope. Compression is always none: gzip is
+spec-restricted to other payload ids, BiM is not implemented.
 .SH EXAMPLES
 .TP
 .B dipisds \-a \-i channels.csv \-p example.org \-O "My Headend" \-m 239.255.0.1:3937

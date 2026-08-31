@@ -55,6 +55,27 @@ typedef struct {
 /* called per RAMS-T termination found */
 typedef void (*rtcp_rams_t_cb)(const rtcp_rams_t_t *term, void *user);
 
+/* RAMS-I (Annex I.2.7.3 / RFC 6285 7.3), server->client */
+typedef struct {
+  uint32_t sender_ssrc;
+  uint32_t media_ssrc;
+  uint8_t msn;
+  uint16_t response;
+  int has_media_ssrc_tlv;
+  uint32_t media_ssrc_tlv;
+  int has_first_packet_seqnum;
+  uint16_t first_packet_seqnum;
+  int has_earliest_join_time;
+  uint32_t earliest_join_time_ms;
+  int has_burst_duration;
+  uint32_t burst_duration_ms;
+  int has_max_transmit_bitrate;
+  uint64_t max_transmit_bitrate_bps;
+} rtcp_rams_i_t;
+
+/* called per RAMS-I response found */
+typedef void (*rtcp_rams_i_cb)(const rtcp_rams_i_t *info, void *user);
+
 #define RTCP_CNAME_MAX 64 /* SDES CNAME, truncated if longer. only uniqueness matters here */
 
 /* RFC 3550 6.5, one SDES chunk with a CNAME item */
@@ -71,7 +92,7 @@ typedef void (*rtcp_sdes_cb)(const rtcp_sdes_t *sdes, void *user);
    suppress it. malformed TLV region still yields whatever parsed before corruption hit */
 typedef void (*rtcp_malformed_cb)(unsigned sfmt, uint32_t sender_ssrc, uint32_t media_ssrc, void *user);
 
-/* skips SR/RR/BYE/RAMS-I; parses SDES CNAME items if sdes_cb given. stops on malformed length, no misparse. any cb may be NULL to ignore that mtype. */
-void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_t_cb rams_t_cb, rtcp_sdes_cb sdes_cb, rtcp_malformed_cb malformed_cb, void *user);
+/* skips SR/RR/BYE; parses SDES CNAME items if sdes_cb given. stops on malformed length, no misparse. any cb may be NULL to ignore that mtype. */
+void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_i_cb rams_i_cb, rtcp_rams_t_cb rams_t_cb, rtcp_sdes_cb sdes_cb, rtcp_malformed_cb malformed_cb, void *user);
 
 #endif

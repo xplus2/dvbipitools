@@ -11,7 +11,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
+#include "lib/vendor/picohttpparser/picohttpparser.h"
 
 #include "httpserver.h"
 #include "render.h"
@@ -241,12 +242,33 @@ static void build_404_response(http_conn_t *c) {
   set_response(c, hdr, (size_t)hdr_len, body, sizeof body - 1);
 }
 
-static void conn_build_response(http_conn_t *c, store_t *st, double now_mono, int verbose) {
-  char method[16], path[256];
+static int request_headers_complete(const char *buf, size_t len) {
+  const char *method, *path;
+  size_t method_len, path_len;
+  int minor_version;
+  struct phr_header headers[32];
+  size_t num_headers = 32;
+  return phr_parse_request(buf, len, &method, &method_len, &path, &path_len, &minor_version, headers, &num_headers, 0) != -2;
+}
 
-  method[0] = '\0';
-  path[0] = '\0';
-  sscanf(c->reqbuf, "%15s %255s", method, path);
+static void conn_build_response(http_conn_t *c, store_t *st, double now_mono, int verbose) {
+  const char *pmethod, *ppath;
+  size_t method_len = 0, path_len = 0;
+  int minor_version;
+  struct phr_header headers[32];
+  size_t num_headers = 32;
+  char method[16] = "", path[256] = "";
+
+  if (phr_parse_request(c->reqbuf, c->reqlen, &pmethod, &method_len, &ppath, &path_len, &minor_version, headers, &num_headers, 0) > 0) {
+    if (method_len >= sizeof method)
+      method_len = sizeof method - 1;
+    memcpy(method, pmethod, method_len);
+    method[method_len] = '\0';
+    if (path_len >= sizeof path)
+      path_len = sizeof path - 1;
+    memcpy(path, ppath, path_len);
+    path[path_len] = '\0';
+  }
 
   if (!strcmp(method, "GET") && !strcmp(strip_query(path), "/metrics")) {
     st->stats.http_requests_200++;
@@ -299,7 +321,7 @@ void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, st
     if (c->reading) {
       if (rev & (POLLIN | POLLHUP | POLLERR))
         conn_read_step(c);
-      if (c->used && c->reading && strstr(c->reqbuf, "\r\n\r\n"))
+      if (c->used && c->reading && request_headers_complete(c->reqbuf, c->reqlen))
         conn_build_response(c, st, now_mono, verbose);
     } else if (rev & (POLLOUT | POLLERR)) {
       conn_write_step(c);

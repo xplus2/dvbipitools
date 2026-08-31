@@ -8,9 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/argutil.h"
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/argutil.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/metrics/protocol.h"
 
 #include "args.h"

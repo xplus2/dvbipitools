@@ -3,8 +3,8 @@
 
 #include <string.h>
 
-#include "lib/log.h"
-#include "lib/signal.h"
+#include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 #include "priv.h"
 
 #define MPTS_READ_CHUNK_BYTES (32 * 188) /* caps backlog delay, per input per tick */

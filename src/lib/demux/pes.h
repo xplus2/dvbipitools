@@ -7,8 +7,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* one complete PES: ES payload + 90 kHz PTS (has_pts 0 if none) */
-typedef void (*pes_cb)(void *ctx, unsigned pid, int has_pts, uint64_t pts, const unsigned char *data, size_t len);
+/* one complete PES: ES payload + 90 kHz PTS/DTS (has_pts/has_dts 0 if absent).
+   dts present only if PES header's PTS_DTS_flags = 11 */
+typedef void (*pes_cb)(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data,
+                        size_t len);
 typedef struct pes pes_t;
 pes_t *pes_new(pes_cb cb, void *ctx);
 void pes_free(pes_t *p);

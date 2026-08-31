@@ -9,7 +9,7 @@
 #include "lib/cas/device_state_core.h"
 #include "lib/demux/psi/section_asm.h"
 #include "lib/demux/tspack.h"
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 #include "crypto.h"
 #include "emmcache.h"

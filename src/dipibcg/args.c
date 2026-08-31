@@ -7,9 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/argutil.h"
-#include "lib/log.h"
-#include "lib/uriparse.h"
+#include "lib/helper/argutil.h"
+#include "lib/helper/log.h"
+#include "lib/helper/uriparse.h"
 
 #include "args.h"
 #include "version.h"

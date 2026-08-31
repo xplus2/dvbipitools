@@ -25,7 +25,7 @@ START_TEST(rtcp_build_ff_round_trips_through_rtcp_parse) {
   ck_assert_uint_eq(n, 12u + 2u * 4u);
 
   g_nack_calls = 0;
-  rtcp_parse(buf, n, nack_cb, NULL, NULL, NULL, NULL, NULL);
+  rtcp_parse(buf, n, nack_cb, NULL, NULL, NULL, NULL, NULL, NULL);
 
   ck_assert_int_eq(g_nack_calls, 1);
   ck_assert_uint_eq(g_nack.sender_ssrc, 0x11111111u);
@@ -175,6 +175,139 @@ START_TEST(rtcp_build_rams_i_appends_requested_tlvs) {
 }
 END_TEST
 
+static int g_rams_r_calls;
+static rtcp_rams_r_t g_rams_r;
+
+static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
+  (void)user;
+  g_rams_r_calls++;
+  g_rams_r = *req;
+}
+
+START_TEST(rtcp_build_rams_r_round_trips_through_rtcp_parse) {
+  unsigned char buf[64];
+  rtcp_rams_r_t req;
+  size_t n;
+
+  memset(&req, 0, sizeof req);
+  req.sender_ssrc = 0x11111111u;
+  req.media_ssrc = 0x22222222u;
+  req.ignore_media_ssrc = 1;
+  req.has_min_buffer_fill = 1;
+  req.min_buffer_fill_ms = 100;
+  req.has_max_buffer_fill = 1;
+  req.max_buffer_fill_ms = 2000;
+  req.has_max_bitrate = 1;
+  req.max_bitrate_bps = 5000000;
+
+  n = rtcp_build_rams_r(&req, buf, sizeof buf);
+  ck_assert_uint_gt(n, 0u);
+
+  g_rams_r_calls = 0;
+  rtcp_parse(buf, n, NULL, rams_r_cb, NULL, NULL, NULL, NULL, NULL);
+
+  ck_assert_int_eq(g_rams_r_calls, 1);
+  ck_assert_uint_eq(g_rams_r.sender_ssrc, 0x11111111u);
+  ck_assert_uint_eq(g_rams_r.media_ssrc, 0x22222222u);
+  ck_assert_int_eq(g_rams_r.ignore_media_ssrc, 1);
+  ck_assert_int_eq(g_rams_r.has_min_buffer_fill, 1);
+  ck_assert_uint_eq(g_rams_r.min_buffer_fill_ms, 100u);
+  ck_assert_int_eq(g_rams_r.has_max_buffer_fill, 1);
+  ck_assert_uint_eq(g_rams_r.max_buffer_fill_ms, 2000u);
+  ck_assert_int_eq(g_rams_r.has_max_bitrate, 1);
+  ck_assert_uint_eq((unsigned long)g_rams_r.max_bitrate_bps, 5000000u);
+}
+END_TEST
+
+START_TEST(rtcp_build_rams_r_rejects_small_cap) {
+  unsigned char buf[8];
+  rtcp_rams_r_t req;
+  memset(&req, 0, sizeof req);
+  ck_assert_uint_eq(rtcp_build_rams_r(&req, buf, sizeof buf), 0u);
+}
+END_TEST
+
+static int g_rams_t_calls;
+static rtcp_rams_t_t g_rams_t;
+
+static void rams_t_cb(const rtcp_rams_t_t *term, void *user) {
+  (void)user;
+  g_rams_t_calls++;
+  g_rams_t = *term;
+}
+
+START_TEST(rtcp_build_rams_t_round_trips_through_rtcp_parse) {
+  unsigned char buf[32];
+  rtcp_rams_t_t term;
+  size_t n;
+
+  memset(&term, 0, sizeof term);
+  term.sender_ssrc = 0x33333333u;
+  term.media_ssrc = 0x44444444u;
+  term.has_first_mc_seqnum = 1;
+  term.first_mc_seqnum = 123456;
+
+  n = rtcp_build_rams_t(&term, buf, sizeof buf);
+  ck_assert_uint_gt(n, 0u);
+
+  g_rams_t_calls = 0;
+  rtcp_parse(buf, n, NULL, NULL, NULL, rams_t_cb, NULL, NULL, NULL);
+
+  ck_assert_int_eq(g_rams_t_calls, 1);
+  ck_assert_uint_eq(g_rams_t.sender_ssrc, 0x33333333u);
+  ck_assert_uint_eq(g_rams_t.media_ssrc, 0x44444444u);
+  ck_assert_int_eq(g_rams_t.has_first_mc_seqnum, 1);
+  ck_assert_uint_eq(g_rams_t.first_mc_seqnum, 123456u);
+}
+END_TEST
+
+START_TEST(rtcp_build_rams_t_rejects_small_cap) {
+  unsigned char buf[8];
+  rtcp_rams_t_t term;
+  memset(&term, 0, sizeof term);
+  term.has_first_mc_seqnum = 1;
+  ck_assert_uint_eq(rtcp_build_rams_t(&term, buf, sizeof buf), 0u);
+}
+END_TEST
+
+static int g_rams_i_calls;
+static rtcp_rams_i_t g_rams_i;
+
+static void rams_i_cb(const rtcp_rams_i_t *info, void *user) {
+  (void)user;
+  g_rams_i_calls++;
+  g_rams_i = *info;
+}
+
+START_TEST(rtcp_build_rams_i_round_trips_through_rtcp_parse) {
+  unsigned char buf[64];
+  rtcp_rams_i_tlvs_t tlvs;
+  size_t n;
+
+  memset(&tlvs, 0, sizeof tlvs);
+  tlvs.has_first_packet_seqnum = 1;
+  tlvs.first_packet_seqnum = 4242;
+  tlvs.has_max_transmit_bitrate = 1;
+  tlvs.max_transmit_bitrate_bps = 8000000;
+
+  n = rtcp_build_rams_i(0x55555555u, 0x66666666u, 3, 200, &tlvs, buf, sizeof buf);
+  ck_assert_uint_gt(n, 0u);
+
+  g_rams_i_calls = 0;
+  rtcp_parse(buf, n, NULL, NULL, rams_i_cb, NULL, NULL, NULL, NULL);
+
+  ck_assert_int_eq(g_rams_i_calls, 1);
+  ck_assert_uint_eq(g_rams_i.sender_ssrc, 0x55555555u);
+  ck_assert_uint_eq(g_rams_i.media_ssrc, 0x66666666u);
+  ck_assert_uint_eq(g_rams_i.msn, 3u);
+  ck_assert_uint_eq(g_rams_i.response, 200u);
+  ck_assert_int_eq(g_rams_i.has_first_packet_seqnum, 1);
+  ck_assert_uint_eq(g_rams_i.first_packet_seqnum, 4242u);
+  ck_assert_int_eq(g_rams_i.has_max_transmit_bitrate, 1);
+  ck_assert_uint_eq((unsigned long)g_rams_i.max_transmit_bitrate_bps, 8000000u);
+}
+END_TEST
+
 static Suite *rtcp_build_suite(void) {
   Suite *s = suite_create("rtcp_build");
   TCase *tc = tcase_create("core");
@@ -191,6 +324,11 @@ static Suite *rtcp_build_suite(void) {
   tcase_add_test(tc, rtcp_build_rsi_srbt_collision_rejects_zero_count);
   tcase_add_test(tc, rtcp_build_rams_i_header_with_no_tlvs);
   tcase_add_test(tc, rtcp_build_rams_i_appends_requested_tlvs);
+  tcase_add_test(tc, rtcp_build_rams_r_round_trips_through_rtcp_parse);
+  tcase_add_test(tc, rtcp_build_rams_r_rejects_small_cap);
+  tcase_add_test(tc, rtcp_build_rams_t_round_trips_through_rtcp_parse);
+  tcase_add_test(tc, rtcp_build_rams_t_rejects_small_cap);
+  tcase_add_test(tc, rtcp_build_rams_i_round_trips_through_rtcp_parse);
   suite_add_tcase(s, tc);
   return s;
 }

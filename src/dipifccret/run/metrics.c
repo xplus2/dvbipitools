@@ -4,7 +4,7 @@
 #include <time.h>
 
 #include "lib/metrics/export.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 #include "../version.h"
 #include "run.h"
 

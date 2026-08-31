@@ -6,7 +6,7 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#include "lib/sds_xml.h"
+#include "lib/helper/sds_xml.h"
 
 START_TEST(sds_broadcast_round_trips_multiple_services) {
   sds_service_t svcs[2], out[8];
@@ -306,6 +306,196 @@ START_TEST(sds_parse_broadcast_not_truncated_when_it_fits) {
 }
 END_TEST
 
+START_TEST(sds_parse_broadcast_reads_max_bitrate) {
+  static const char xml[] =
+      "<SingleService><ServiceLocation><IPMulticastAddress Address=\"239.1.1.1\" Port=\"5000\"/>"
+      "</ServiceLocation><TextualIdentifier ServiceName=\"X\"/><DVBTriplet OrigNetId=\"1\" TSId=\"1\" "
+      "ServiceId=\"1\"/><MaxBitrate>3000</MaxBitrate></SingleService>";
+  sds_service_t out[2];
+  int n = sds_parse_broadcast(xml, out, 2, NULL);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(out[0].has_bitrate, 1);
+  ck_assert_uint_eq(out[0].max_bitrate_kbps, 3000u);
+}
+END_TEST
+
+START_TEST(sds_parse_broadcast_reads_content_genre) {
+  static const char xml[] =
+      "<SingleService><ServiceLocation><IPMulticastAddress Address=\"239.1.1.1\" Port=\"5000\"/>"
+      "</ServiceLocation><TextualIdentifier ServiceName=\"X\"/><DVBTriplet OrigNetId=\"1\" TSId=\"1\" "
+      "ServiceId=\"1\"/><SI ServiceType=\"1\"><Name Language=\"eng\">X</Name>"
+      "<ContentGenre>4</ContentGenre></SI></SingleService>";
+  sds_service_t out[2];
+  int n = sds_parse_broadcast(xml, out, 2, NULL);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(out[0].has_content_nibble, 1);
+  ck_assert_uint_eq(out[0].content_nibble, 4u);
+}
+END_TEST
+
+START_TEST(sds_parse_broadcast_no_bitrate_genre_ret_when_absent) {
+  static const char xml[] =
+      "<SingleService><ServiceLocation><IPMulticastAddress Address=\"239.1.1.1\" Port=\"5000\"/>"
+      "</ServiceLocation><TextualIdentifier ServiceName=\"X\"/></SingleService>";
+  sds_service_t out[2];
+  int n = sds_parse_broadcast(xml, out, 2, NULL);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(out[0].has_bitrate, 0);
+  ck_assert_int_eq(out[0].has_content_nibble, 0);
+  ck_assert_int_eq(out[0].has_ret, 0);
+  ck_assert_int_eq(out[0].has_fcc, 0);
+}
+END_TEST
+
+START_TEST(sds_parse_broadcast_round_trips_fcc) {
+  sds_service_t svc, out[2];
+  sds_fcc_t fcc;
+  unsigned char buf[4096];
+  size_t len;
+  int n;
+
+  memset(&svc, 0, sizeof svc);
+  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  svc.port = 5000;
+
+  memset(&fcc, 0, sizeof fcc);
+  snprintf(fcc.addr, sizeof fcc.addr, "10.0.0.2");
+  fcc.port = 7000;
+  fcc.rtx_time_ms = 3000;
+  fcc.rtx_pt = 98;
+
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+
+  n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(out[0].has_fcc, 1);
+  ck_assert_str_eq(out[0].fcc.addr, "10.0.0.2");
+  ck_assert_uint_eq(out[0].fcc.port, 7000u);
+  ck_assert_uint_eq(out[0].fcc.rtx_time_ms, 3000u);
+  ck_assert_uint_eq(out[0].fcc.rtx_pt, 98u);
+}
+END_TEST
+
+START_TEST(sds_parse_broadcast_round_trips_fcc_resolve_by_port) {
+  sds_service_t svc, out[2];
+  sds_fcc_t fcc;
+  unsigned char buf[4096];
+  size_t len;
+  int n;
+  unsigned expect_port;
+
+  memset(&svc, 0, sizeof svc);
+  svc.family = AF_INET;
+  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  svc.port = 5000;
+
+  memset(&fcc, 0, sizeof fcc);
+  snprintf(fcc.addr, sizeof fcc.addr, "10.0.0.2");
+  fcc.resolve_by_port = 1;
+  fcc.resolve_base_port = 7000;
+  fcc.resolve_max_channels = 16;
+
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+
+  n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(out[0].has_fcc, 1);
+  expect_port = out[0].fcc.port;
+  ck_assert_uint_ge(expect_port, fcc.resolve_base_port);
+  ck_assert_uint_lt(expect_port, fcc.resolve_base_port + (unsigned)fcc.resolve_max_channels);
+}
+END_TEST
+
+START_TEST(sds_parse_broadcast_round_trips_unicast_ret) {
+  sds_service_t svc, out[2];
+  sds_ret_t ret;
+  unsigned char buf[4096];
+  size_t len;
+  int n;
+
+  memset(&svc, 0, sizeof svc);
+  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  svc.port = 5000;
+
+  memset(&ret, 0, sizeof ret);
+  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  ret.port = 6000;
+  ret.rtx_time_ms = 2000;
+  ret.rtx_pt = 99;
+
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+
+  n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(out[0].has_ret, 1);
+  ck_assert_str_eq(out[0].ret.addr, "10.0.0.1");
+  ck_assert_uint_eq(out[0].ret.port, 6000u);
+  ck_assert_uint_eq(out[0].ret.rtx_time_ms, 2000u);
+  ck_assert_uint_eq(out[0].ret.rtx_pt, 99u);
+  ck_assert_int_eq(out[0].ret.mc, 0);
+}
+END_TEST
+
+START_TEST(sds_parse_broadcast_round_trips_multicast_ret) {
+  sds_service_t svc, out[2];
+  sds_ret_t ret;
+  unsigned char buf[4096];
+  size_t len;
+  int n;
+
+  memset(&svc, 0, sizeof svc);
+  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  svc.port = 5000;
+
+  memset(&ret, 0, sizeof ret);
+  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  ret.port = 6000;
+  ret.rtx_time_ms = 2000;
+  ret.rtx_pt = 99;
+  ret.mc = 1;
+  ret.mc_port = 5000;
+
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+
+  n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(out[0].has_ret, 1);
+  ck_assert_int_eq(out[0].ret.mc, 1);
+  ck_assert_uint_eq(out[0].ret.mc_port, 0u);
+}
+END_TEST
+
+START_TEST(sds_parse_broadcast_round_trips_multicast_ret_override_port) {
+  sds_service_t svc, out[2];
+  sds_ret_t ret;
+  unsigned char buf[4096];
+  size_t len;
+  int n;
+
+  memset(&svc, 0, sizeof svc);
+  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  svc.port = 5000;
+
+  memset(&ret, 0, sizeof ret);
+  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  ret.port = 6000;
+  ret.mc = 1;
+  ret.mc_port = 5555;
+
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+
+  n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(out[0].ret.mc, 1);
+  ck_assert_uint_eq(out[0].ret.mc_port, 5555u);
+}
+END_TEST
+
 START_TEST(sds_build_package_resolves_dvb_triplet_by_name) {
   sds_service_t svcs[1];
   sds_package_t pkg;
@@ -415,6 +605,14 @@ static Suite *sds_xml_suite(void) {
   tcase_add_test(tc, sds_parse_broadcast_defaults_missing_ids);
   tcase_add_test(tc, sds_parse_broadcast_reports_truncation);
   tcase_add_test(tc, sds_parse_broadcast_not_truncated_when_it_fits);
+  tcase_add_test(tc, sds_parse_broadcast_reads_max_bitrate);
+  tcase_add_test(tc, sds_parse_broadcast_reads_content_genre);
+  tcase_add_test(tc, sds_parse_broadcast_no_bitrate_genre_ret_when_absent);
+  tcase_add_test(tc, sds_parse_broadcast_round_trips_unicast_ret);
+  tcase_add_test(tc, sds_parse_broadcast_round_trips_multicast_ret);
+  tcase_add_test(tc, sds_parse_broadcast_round_trips_multicast_ret_override_port);
+  tcase_add_test(tc, sds_parse_broadcast_round_trips_fcc);
+  tcase_add_test(tc, sds_parse_broadcast_round_trips_fcc_resolve_by_port);
   suite_add_tcase(s, tc);
   return s;
 }

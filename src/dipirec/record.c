@@ -6,8 +6,8 @@
 #include <unistd.h>
 
 #include "lib/demux/psi/psi.h"
-#include "lib/log.h"
-#include "lib/signal.h"
+#include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 
 #include "record/priv.h"
 

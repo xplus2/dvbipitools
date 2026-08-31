@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../ioutil.h"
-#include "../log.h"
+#include "../helper/ioutil.h"
+#include "../helper/log.h"
 
 #include "bcg_doc.h"
 

@@ -6,7 +6,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/ioutil.h"
+#include "lib/helper/ioutil.h"
 #include "priv.h"
 
 rtmp_t *rtmp_new(const rtmp_cfg_t *cfg) {

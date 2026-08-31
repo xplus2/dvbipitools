@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "format_out.h"
-#include "lib/playlist_out.h"
+#include "lib/helper/playlist_out.h"
 
 void format_out_init(FILE *f, out_fmt_t fmt, const char *invocation) {
   playlist_out_init(f, (playlist_out_fmt_t)fmt, invocation, "");

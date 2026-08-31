@@ -3,8 +3,8 @@
 
 #include <string.h>
 
-#include "lib/log.h"
-#include "lib/signal.h"
+#include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 #include "priv.h"
 
 static int psi_cb(void *v, const unsigned char *pkt) {

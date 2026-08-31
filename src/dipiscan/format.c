@@ -4,9 +4,9 @@
 #include <string.h>
 
 #include "format.h"
-#include "lib/ioutil.h"
-#include "lib/playlist_out.h"
-#include "lib/sds_xml.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/playlist_out.h"
+#include "lib/helper/sds_xml.h"
 
 void format_init(FILE *f, out_fmt_t fmt, const char *invocation, const char *provider) {
   playlist_out_init(f, (playlist_out_fmt_t)fmt, invocation, "dipiscan ");

@@ -53,4 +53,10 @@ typedef struct {
    TLVs may be NULL (no optional TLVs). 0 if cap too small. */
 size_t rtcp_build_rams_i(uint32_t sender_ssrc, uint32_t media_ssrc, uint8_t msn, uint16_t response, const rtcp_rams_i_tlvs_t *tlvs, unsigned char *out, size_t cap);
 
+/* RAMS-R (Annex I.2.7.2 / RFC 6285 §7.2), client->server. 0 if cap too small. */
+size_t rtcp_build_rams_r(const rtcp_rams_r_t *req, unsigned char *out, size_t cap);
+
+/* RAMS-T (Annex I.2.7.4 / RFC 6285 §7.4), client->server. 0 if cap too small. */
+size_t rtcp_build_rams_t(const rtcp_rams_t_t *term, unsigned char *out, size_t cap);
+
 #endif

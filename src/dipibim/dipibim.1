@@ -1,4 +1,4 @@
-.TH DIPIBIM 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPIBIM 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipibim \- convert between the plain TVA XML shape and its BiM binary encoding
 .SH SYNOPSIS
@@ -16,13 +16,12 @@ dipibim \- convert between the plain TVA XML shape and its BiM binary encoding
 converts between plain DVB-IPI EPG (TVA) XML, as produced by
 .BR dipixmltv (1),
 and its BiM binary encoding (ETSI TS 102 323, subclause 9.4). \fB\-f\fR
-names the input format; the output is the other one. An uncompressed
-representation of TVA EPG data is not itself specified by ETSI TS 102 539,
-section 7.2, so
+names the input format; the output is the other one. No mapping table:
 .B dipibim
-exists mainly as a debugging and inspection aid for
-.BR dipibcg (1)'s
-BiM-encoded TVA fragments, not as a distribution tool in its own right.
+does not touch xmltv ids or URIs, it is a wire-format conversion only.
+See
+.BR dipibcg (1)
+for distribution.
 .PP
 Each ProgramInformation, Schedule (with its own ScheduleEvents) and
 ServiceInformation element is its own separately BiM-encoded fragment
@@ -58,7 +57,8 @@ Output path, \fB\-\fR for stdout. Default: stdout.
 Names the input format; required.
 .TP
 .BR \-v ", " \-\-verbose
-Progress on stderr.
+One line on stderr: channel/programme/fragment counts, plus output byte
+size when encoding to BiM.
 .TP
 .B \-\-color \fI<when>\fR
 .IR auto | always | never .

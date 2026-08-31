@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "lib/demux/escodec/aubuild.h"
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "priv.h"
 
 /* live push: no pend[]-style buffer/rewrite like mkv. pre-ready frames dropped, no rewind for late joiners. */
@@ -129,9 +129,11 @@ static void handle_audio(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, co
   }
 }
 
-void flv_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, const unsigned char *data, size_t len) {
+void flv_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len) {
   flv_t *f = ctx;
   flv_track_t *t = NULL;
+  (void)has_dts;
+  (void)dts;
 
   if (f->err)
     return;

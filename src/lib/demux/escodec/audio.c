@@ -35,7 +35,8 @@ static const unsigned mpa_sample_rates[4][3] = {{11025, 12000, 8000},{0, 0, 0},{
 static const unsigned aac_sample_rates[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000,  7350};
 
 static int next_ac3(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
-  unsigned fscod, frmsizecod;
+  unsigned fscod, frmsizecod, acmod;
+  br_t b;
 
   (void)t;
   if (len < 7)
@@ -52,8 +53,25 @@ static int next_ac3(esc_track_t *t, const unsigned char *d, size_t len, esc_fram
   f->out = d;
   f->outlen = f->consumed;
   f->rate = ac3_rate[fscod];
-  f->ch = ac3_ch[d[6] >> 5];
   f->samples = 1536;
+  f->bitrate_code = frmsizecod;
+
+  b.d = d + 5;
+  b.len = 2;
+  b.bit = 0;
+  b.err = 0;
+  f->bsid = br_u(&b, 5);
+  f->bsmod = br_u(&b, 3);
+  acmod = br_u(&b, 3);
+  f->acmod = acmod;
+  f->ch = ac3_ch[acmod];
+  if ((acmod & 1) && acmod != 1)
+    br_u(&b, 2); /* cmixlev */
+  if (acmod & 4)
+    br_u(&b, 2); /* surmixlev */
+  if (acmod == 2)
+    br_u(&b, 2); /* dsurmod */
+  f->lfeon = br_u(&b, 1);
   return 0;
 }
 
@@ -84,7 +102,11 @@ static int next_eac3(esc_track_t *t, const unsigned char *d, size_t len, esc_fra
     f->rate = ac3_rate[fscod];
     f->samples = blk[numblkscod] * 256;
   }
-  f->ch = ac3_ch[(d[4] >> 1) & 7];
+  f->acmod = (d[4] >> 1) & 7;
+  f->ch = ac3_ch[f->acmod];
+  f->lfeon = d[4] & 1;
+  f->bsid = d[5] >> 3;
+  f->bsmod = 0; /* no fixed E-AC-3 bit position, dec3 leaves 0 */
   f->out = d;
   f->outlen = f->consumed;
   return 0;

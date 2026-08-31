@@ -1,4 +1,4 @@
-.TH DIPISRT 1 "2026-08-22" "dvbipitools" "dvbipitools Manual"
+.TH DIPISRT 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipisrt \- bridge a DVB-IPI stream between RTP/UDP/file and an SRT link, sender or receiver
 .SH SYNOPSIS
@@ -38,14 +38,18 @@ mirrors this toolkit's own
 .BR rtp://@ / udp://@
 convention. Unlike RIST's fixed sender-calls-out/receiver-listens rule,
 SRT's caller/listener role is independent of which side produces the
-media \(em either
+media; either
 .B \-i
 or
 .B \-o
 may carry the
 .BR @ .
 .IR host
-is a numeric IP, not a hostname.
+is a numeric IP, not a hostname. IPv6 addresses and multicast groups
+are bracketed, e.g.
+.B srt://@[::1]:9000
+or
+.BR rtp://@[ff3e::1]:8700 .
 .PP
 Repeating
 .B \-i
@@ -69,7 +73,7 @@ and cannot combine with
 .B srt://@
 or
 .BR \-\-group\-mode .
-SRT's rendezvous only does the NAT hole\-punching itself \(em each side
+SRT's rendezvous only does the NAT hole\-punching itself; each side
 still needs to learn the other's public address some other way first.
 .SH OPTIONS
 .TP
@@ -84,7 +88,8 @@ Output endpoint. Repeatable if it is an
 URI, to bond several links.
 .TP
 .BR \-I ", " \-\-iface " " \fIiface\fR
-Interface for the non-SRT side's multicast join or send.
+Interface for the non-SRT side's multicast join or send. Default:
+kernel default route.
 .TP
 .BR \-k ", " \-\-insecure
 Skip TLS verification. Only meaningful with an
@@ -133,7 +138,7 @@ Raw SRT packet filter configuration string, e.g.
 Off by default, matching SRT's own default.
 .TP
 .B \-\-latency \fIms\fR
-SRT latency in milliseconds. Default is the library default.
+SRT latency in milliseconds, 1 to 60000. Default is the library default.
 .TP
 .B \-\-send\-buffer\-mult \fIn\fR
 Sender-side queue depth, in latency windows, 1 to 32. Only applies to the
@@ -152,14 +157,18 @@ Default
 .BR auto .
 .TP
 .B \-\-metrics \fIpath\fR
-Unix datagram socket path for metrics output. Default
+Unix datagram socket path for metrics output. Requires
+.BR \-\-metrics\-id .
+Default
 .IR /run/dvbipitools/metrics.sock .
 .TP
 .B \-\-metrics\-id \fIname\fR
 Stable instance id for metrics. Metrics are disabled unless this is set.
 .TP
 .B \-\-metrics\-interval \fIs\fR
-Metrics snapshot interval in seconds. Default
+Metrics snapshot interval in seconds, 1 to 86400. Requires
+.BR \-\-metrics\-id .
+Default
 .BR 5 .
 .TP
 .BR \-v ", " \-\-verbose
@@ -181,6 +190,9 @@ multicast.
 .TP
 .B dipisrt \-i rtp://@239.1.1.1:5000 \-o srt://1.2.3.4:9000 \-o srt://5.6.7.8:9000 \-\-group\-mode broadcast
 Bonded sender: the same stream carried over two independent SRT links.
+.TP
+.B dipisrt \-i rtp://@239.1.1.1:5000 \-o srt://1.2.3.4:9000 \-\-passphrase correcthorsebatterystaple
+Sender with encryption.
 .SH EXIT STATUS
 .B 0
 on success.

@@ -6,7 +6,7 @@
 
 #include <openssl/pem.h>
 
-#include "lib/secure_zero.h"
+#include "lib/helper/secure_zero.h"
 
 #include "device_crypto.h"
 

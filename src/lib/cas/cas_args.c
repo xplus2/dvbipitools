@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/argutil.h"
+#include "lib/helper/argutil.h"
 
 int cas_super_id_parse(const char *s, unsigned *out) {
   char *end;

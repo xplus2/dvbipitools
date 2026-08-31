@@ -12,9 +12,9 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "../../ioutil.h"
-#include "../../log.h"
-#include "../../signal.h"
+#include "../../helper/ioutil.h"
+#include "../../helper/log.h"
+#include "../../helper/signal.h"
 #include "../netconnect.h"
 #include "priv.h"
 
@@ -97,38 +97,52 @@ static void hdr_lower(char *s) {
     *s = (char)tolower((unsigned char)*s);
 }
 
-void parse_headers(struct http *h, char *block) {
-  char *line, *save = NULL;
+int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out) {
+  const char *msg;
+  size_t msg_len;
+  int minor_version, status;
+  struct phr_header headers[HTTP_PARSE_MAX_HEADERS];
+  size_t num_headers = HTTP_PARSE_MAX_HEADERS;
+  int pret;
+  size_t i;
 
-  line = strtok_r(block, "\r\n", &save);
-  if (!line)
-    return;
-  { /* status line: HTTP/1.x <code> ... */
-    char *sp = strchr(line, ' ');
-    h->status = sp ? atoi(sp + 1) : 0;
+  pret = phr_parse_response((const char *)h->hold, got, &minor_version, &status, &msg, &msg_len, headers, &num_headers, 0);
+  (void)minor_version;
+  (void)msg;
+  (void)msg_len;
+  if (pret == -2)
+    return 0;
+  if (pret == -1) {
+    log_line("http: malformed response status line/headers");
+    if (reason_out)
+      *reason_out = NET_ERR_FORMAT;
+    return -1;
   }
-  while ((line = strtok_r(NULL, "\r\n", &save)) != NULL) {
-    char *colon = strchr(line, ':');
-    char *v;
-    size_t nlen;
-    if (!colon)
-      continue;
-    if (h->hdr_count >= HTTP_HDR_MAX) {
-      log_line("http: response has more than %d headers, dropping rest", HTTP_HDR_MAX);
-      break;
-    }
-    nlen = (size_t)(colon - line);
+
+  h->status = status;
+  if (num_headers > HTTP_HDR_MAX) {
+    log_line("http: response has more than %d headers, dropping rest", HTTP_HDR_MAX);
+    num_headers = HTTP_HDR_MAX;
+  }
+  for (i = 0; i < num_headers; i++) {
+    size_t nlen = headers[i].name_len;
+    size_t vlen = headers[i].value_len;
     if (nlen >= sizeof h->hdr[0].name)
       nlen = sizeof h->hdr[0].name - 1;
-    memcpy(h->hdr[h->hdr_count].name, line, nlen);
-    h->hdr[h->hdr_count].name[nlen] = '\0';
-    hdr_lower(h->hdr[h->hdr_count].name);
-    v = colon + 1;
-    while (*v == ' ' || *v == '\t')
-      v++;
-    bufcpy(h->hdr[h->hdr_count].value, sizeof h->hdr[0].value, v);
-    h->hdr_count++;
+    memcpy(h->hdr[i].name, headers[i].name, nlen);
+    h->hdr[i].name[nlen] = '\0';
+    hdr_lower(h->hdr[i].name);
+    if (vlen >= sizeof h->hdr[0].value)
+      vlen = sizeof h->hdr[0].value - 1;
+    memcpy(h->hdr[i].value, headers[i].value, vlen);
+    h->hdr[i].value[vlen] = '\0';
   }
+  h->hdr_count = (int)num_headers;
+
+  h->hlen = got - (size_t)pret;
+  memmove(h->hold, h->hold + pret, h->hlen);
+  h->hpos = 0;
+  return 1;
 }
 
 static int transfer_encoding_is_chunked(const char *v) {
@@ -150,7 +164,6 @@ int setup_transfer_encoding(struct http *h, net_err_reason_t *reason_out) {
     return -1;
   }
   h->chunked = 1;
-  h->cstate = CHUNK_SIZE_LINE;
   return 0;
 }
 
@@ -174,19 +187,6 @@ int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *
     return -1;
   }
   return rl;
-}
-
-/* installs parsed headers from h->hold[0..term), leftover body bytes shifted to front */
-void finish_headers(struct http *h, const char *term, size_t termlen, size_t got) {
-  size_t hdrlen = (size_t)(term - (char *)h->hold);
-  size_t consumed = hdrlen + termlen;
-  char block[sizeof h->hold];
-  memcpy(block, h->hold, hdrlen);
-  block[hdrlen] = '\0';
-  parse_headers(h, block);
-  h->hlen = got - consumed;
-  memmove(h->hold, h->hold + consumed, h->hlen);
-  h->hpos = 0;
 }
 
 int http_is_redirect_status(int status) {
@@ -246,12 +246,12 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
   }
   {
     size_t got = 0;
-    const char *term;
-    size_t termlen = 0;
+    int have = 0;
     double deadline = mono_seconds() + (double)HTTP_HEADER_TIMEOUT_MS / 1000.0;
     while (got < sizeof h->hold) {
       double remain = deadline - mono_seconds();
       ssize_t n;
+      int pr;
       if (remain <= 0) {
         log_line("http: timed out waiting for response headers");
         if (reason_out)
@@ -271,18 +271,21 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
         goto fail;
       }
       got += (size_t)n;
-      term = find_header_end((char *)h->hold, got, &termlen);
-      if (term)
+      pr = try_parse_response(h, got, reason_out);
+      if (pr < 0)
+        goto fail;
+      if (pr > 0) {
+        have = 1;
         break;
+      }
     }
     set_rcvtimeo(h->fd, (double)HTTP_HEADER_TIMEOUT_MS / 1000.0);
-    if (!term) {
+    if (!have) {
       log_line("http: response headers too large");
       if (reason_out)
         *reason_out = NET_ERR_FORMAT;
       goto fail;
     }
-    finish_headers(h, term, termlen, got);
   }
   if (setup_transfer_encoding(h, reason_out) != 0)
     goto fail;

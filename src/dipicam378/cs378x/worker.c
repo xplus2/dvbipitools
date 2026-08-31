@@ -10,8 +10,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "lib/log.h"
-#include "lib/signal.h"
+#include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 
 #include "../version.h"
 #include "priv.h"
@@ -57,6 +57,69 @@ static int read_exact(int fd, unsigned char *buf, size_t n, atomic_int *stop) {
   return 1;
 }
 
+typedef enum { FRAME_OK, FRAME_STOP, FRAME_AUTH_FAIL } frame_status_t;
+
+/* read+decrypt+validate one frame. auth/size/crc failures logged+counted here.
+   FRAME_OK: body_out/buflen_out set. FRAME_STOP: read/decrypt failed, no log.
+   FRAME_AUTH_FAIL: already logged */
+static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned char *buf, unsigned char **body_out,
+                                  size_t *buflen_out, unsigned char conn_ucrc[4], int *have_ucrc) {
+  unsigned char *body = buf + 4;
+  size_t buflen, total;
+  int rc;
+
+  rc = read_exact(fd, buf, CS378X_MIN_FRAME, &s->stop);
+  if (rc <= 0)
+    return FRAME_STOP;
+
+  if (!*have_ucrc) {
+    if (s->check_ucrc && memcmp(buf, s->expected_ucrc, 4) != 0) {
+      log_line(TOOL_NAME ": username mismatch, closing (slot %d)", slot);
+      atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_USER], 1, memory_order_relaxed);
+      return FRAME_AUTH_FAIL;
+    }
+    memcpy(conn_ucrc, buf, 4);
+    *have_ucrc = 1;
+  } else if (memcmp(buf, conn_ucrc, 4) != 0) {
+    log_line(TOOL_NAME ": connection id changed mid-stream, closing (slot %d)", slot);
+    atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_CONNID], 1, memory_order_relaxed);
+    return FRAME_AUTH_FAIL;
+  }
+
+  if (cs378x_aes128_ecb(s->aes_key, body, 32, 0) != 0)
+    return FRAME_STOP;
+
+  if (body[0] == CMD_ECM_REQUEST)
+    buflen = (size_t)(3 + ((body[21] & 0x0F) << 8) + body[22]);
+  else
+    buflen = body[1];
+
+  total = cs378x_frame_boundary(20 + buflen);
+  if (total > CS378X_BUF_CAP - 4) {
+    log_line(TOOL_NAME ": oversized request (%zu), closing (slot %d)", total, slot);
+    atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_OVERSIZED], 1, memory_order_relaxed);
+    return FRAME_AUTH_FAIL;
+  }
+
+  if (total > 32) {
+    rc = read_exact(fd, body + 32, total - 32, &s->stop);
+    if (rc <= 0)
+      return FRAME_STOP;
+    if (cs378x_aes128_ecb(s->aes_key, body + 32, total - 32, 0) != 0)
+      return FRAME_STOP;
+  }
+
+  if (cs378x_crc32(body + 20, buflen) != (((uint32_t)body[4] << 24) | ((uint32_t)body[5] << 16) | ((uint32_t)body[6] << 8) | body[7])) {
+    log_line(TOOL_NAME ": checksum error, wrong password? (slot %d)", slot);
+    atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_CHECKSUM], 1, memory_order_relaxed);
+    return FRAME_AUTH_FAIL;
+  }
+
+  *body_out = body;
+  *buflen_out = buflen;
+  return FRAME_OK;
+}
+
 static void *worker_main(void *arg) {
   worker_arg_t *wa = arg;
   cs378x_server_t *s = wa->s;
@@ -74,55 +137,11 @@ static void *worker_main(void *arg) {
 
   for (;;) {
     unsigned char buf[CS378X_BUF_CAP];
-    unsigned char *body = buf + 4;
-    size_t buflen, total;
-    int rc;
-    rc = read_exact(fd, buf, CS378X_MIN_FRAME, &s->stop);
-    if (rc <= 0)
+    unsigned char *body;
+    size_t buflen;
+
+    if (read_frame(s, fd, slot, buf, &body, &buflen, conn_ucrc, &have_ucrc) != FRAME_OK)
       break;
-
-    if (!have_ucrc) {
-      if (s->check_ucrc && memcmp(buf, s->expected_ucrc, 4) != 0) {
-        log_line(TOOL_NAME ": username mismatch, closing (slot %d)", slot);
-        atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_USER], 1, memory_order_relaxed);
-        break;
-      }
-      memcpy(conn_ucrc, buf, 4);
-      have_ucrc = 1;
-    } else if (memcmp(buf, conn_ucrc, 4) != 0) {
-      log_line(TOOL_NAME ": connection id changed mid-stream, closing (slot %d)", slot);
-      atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_CONNID], 1, memory_order_relaxed);
-      break;
-    }
-
-    if (cs378x_aes128_ecb(s->aes_key, body, 32, 0) != 0)
-      break;
-
-    if (body[0] == CMD_ECM_REQUEST)
-      buflen = (size_t)(3 + ((body[21] & 0x0F) << 8) + body[22]);
-    else
-      buflen = body[1];
-
-    total = cs378x_frame_boundary(20 + buflen);
-    if (total > CS378X_BUF_CAP - 4) {
-      log_line(TOOL_NAME ": oversized request (%zu), closing (slot %d)", total, slot);
-      atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_OVERSIZED], 1, memory_order_relaxed);
-      break;
-    }
-
-    if (total > 32) {
-      rc = read_exact(fd, body + 32, total - 32, &s->stop);
-      if (rc <= 0)
-        break;
-      if (cs378x_aes128_ecb(s->aes_key, body + 32, total - 32, 0) != 0)
-        break;
-    }
-
-    if (cs378x_crc32(body + 20, buflen) != (((uint32_t)body[4] << 24) | ((uint32_t)body[5] << 16) | ((uint32_t)body[6] << 8) | body[7])) {
-      log_line(TOOL_NAME ": checksum error, wrong password? (slot %d)", slot);
-      atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_CHECKSUM], 1, memory_order_relaxed);
-      break;
-    }
 
     switch (body[0]) {
       case CMD_ECM_REQUEST:
@@ -145,7 +164,6 @@ static void *worker_main(void *arg) {
   log_line(TOOL_NAME ": connection closed (slot %d)", slot);
   atomic_store_explicit(&s->worker_fd[slot], -1, memory_order_release);
   close(fd);
-  free(wa);
   atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
   return NULL;
 }
@@ -221,13 +239,8 @@ void *accept_main(void *arg) {
     }
 
     {
-      worker_arg_t *wa = malloc(sizeof *wa);
+      worker_arg_t *wa = &s->worker_args[slot];
       pthread_t th;
-      if (!wa) {
-        close(fd);
-        atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
-        continue;
-      }
       reap_worker_slot(s, slot);
       wa->s = s;
       wa->fd = fd;
@@ -236,7 +249,6 @@ void *accept_main(void *arg) {
       if (pthread_create(&th, NULL, worker_main, wa) != 0) {
         log_line(TOOL_NAME ": pthread_create: %s", strerror(errno));
         close(fd);
-        free(wa);
         atomic_store_explicit(&s->worker_fd[slot], -1, memory_order_release);
         atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
       } else {

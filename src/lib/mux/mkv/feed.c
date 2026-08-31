@@ -5,8 +5,8 @@
 #include <time.h>
 
 #include "lib/demux/escodec/aubuild.h"
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "priv.h"
 
 static int64_t now_ms(void) {
@@ -221,9 +221,11 @@ static void handle_audio(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   }
 }
 
-void on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, const unsigned char *data, size_t len) {
+void on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len) {
   mkv_t *m = ctx;
   track_t *t = find_track(m, pid);
+  (void)has_dts;
+  (void)dts;
 
   if (!t || m->err)
     return;

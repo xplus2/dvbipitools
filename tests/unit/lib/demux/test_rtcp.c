@@ -88,7 +88,7 @@ START_TEST(nack_is_parsed_via_builder_round_trip) {
 
   reset_counters();
   ck_assert_uint_gt(n, 0u);
-  rtcp_parse(buf, n, nack_cb, NULL, NULL, NULL, NULL, NULL);
+  rtcp_parse(buf, n, nack_cb, NULL, NULL, NULL, NULL, NULL, NULL);
   ck_assert_int_eq(g_nack_calls, 1);
   ck_assert_uint_eq(g_nack.sender_ssrc, 0xAAAAu);
   ck_assert_uint_eq(g_nack.media_ssrc, 0xBBBBu);
@@ -103,7 +103,7 @@ START_TEST(rams_r_ignore_media_ssrc_flag_is_parsed) {
   size_t n = build_rams(pkt, RTCP_SFMT_RAMS_R, 0x1111, 0x2222, fci, sizeof fci);
 
   reset_counters();
-  rtcp_parse(pkt, n, NULL, rams_r_cb, NULL, NULL, NULL, NULL);
+  rtcp_parse(pkt, n, NULL, rams_r_cb, NULL, NULL, NULL, NULL, NULL);
   ck_assert_int_eq(g_rams_r_calls, 1);
   ck_assert_int_eq(g_rams_r.ignore_media_ssrc, 1);
   ck_assert_uint_eq(g_rams_r.sender_ssrc, 0x1111u);
@@ -116,7 +116,7 @@ START_TEST(rams_t_with_no_tlv_is_parsed) {
   size_t n = build_rams(pkt, RTCP_SFMT_RAMS_T, 0x3333, 0x4444, NULL, 0);
 
   reset_counters();
-  rtcp_parse(pkt, n, NULL, NULL, rams_t_cb, NULL, NULL, NULL);
+  rtcp_parse(pkt, n, NULL, NULL, NULL, rams_t_cb, NULL, NULL, NULL);
   ck_assert_int_eq(g_rams_t_calls, 1);
   ck_assert_int_eq(g_rams_t.has_first_mc_seqnum, 0);
   ck_assert_int_eq(g_malformed_calls, 0);
@@ -133,7 +133,7 @@ START_TEST(rams_t_with_seqnum_tlv_is_parsed) {
   size_t n = build_rams(pkt, RTCP_SFMT_RAMS_T, 0x5555, 0x6666, fci, sizeof fci);
 
   reset_counters();
-  rtcp_parse(pkt, n, NULL, NULL, rams_t_cb, NULL, malformed_cb, NULL);
+  rtcp_parse(pkt, n, NULL, NULL, NULL, rams_t_cb, NULL, malformed_cb, NULL);
   ck_assert_int_eq(g_rams_t_calls, 1);
   ck_assert_int_eq(g_rams_t.has_first_mc_seqnum, 1);
   ck_assert_uint_eq(g_rams_t.first_mc_seqnum, 0xDEADBEEFu);
@@ -152,7 +152,7 @@ START_TEST(malformed_rams_t_tlv_reports_via_malformed_cb_and_still_delivers_part
   n = build_rams(pkt, RTCP_SFMT_RAMS_T, 0x7777, 0x8888, fci, sizeof fci);
 
   reset_counters();
-  rtcp_parse(pkt, n, NULL, NULL, rams_t_cb, NULL, malformed_cb, NULL);
+  rtcp_parse(pkt, n, NULL, NULL, NULL, rams_t_cb, NULL, malformed_cb, NULL);
   ck_assert_int_eq(g_rams_t_calls, 1); /* still delivered, no seqnum found before corruption */
   ck_assert_int_eq(g_rams_t.has_first_mc_seqnum, 0);
   ck_assert_int_eq(g_malformed_calls, 1);
@@ -167,7 +167,7 @@ START_TEST(malformed_cb_not_called_for_well_formed_rams_t) {
   size_t n = build_rams(pkt, RTCP_SFMT_RAMS_T, 0x9999, 0xAAAA, NULL, 0);
 
   reset_counters();
-  rtcp_parse(pkt, n, NULL, NULL, rams_t_cb, NULL, malformed_cb, NULL);
+  rtcp_parse(pkt, n, NULL, NULL, NULL, rams_t_cb, NULL, malformed_cb, NULL);
   ck_assert_int_eq(g_malformed_calls, 0);
 }
 END_TEST
@@ -183,7 +183,7 @@ START_TEST(malformed_cb_not_called_for_rams_r) {
   n = build_rams(pkt, RTCP_SFMT_RAMS_R, 0xBBBB, 0xCCCC, fci, sizeof fci);
 
   reset_counters();
-  rtcp_parse(pkt, n, NULL, rams_r_cb, NULL, NULL, malformed_cb, NULL);
+  rtcp_parse(pkt, n, NULL, rams_r_cb, NULL, NULL, NULL, malformed_cb, NULL);
   ck_assert_int_eq(g_malformed_calls, 0);
   ck_assert_int_eq(g_rams_r_calls, 1);
 }
@@ -192,7 +192,44 @@ END_TEST
 START_TEST(both_cb_and_malformed_cb_null_does_not_crash) {
   unsigned char pkt[64];
   size_t n = build_rams(pkt, RTCP_SFMT_RAMS_T, 1, 2, NULL, 0);
-  rtcp_parse(pkt, n, NULL, NULL, NULL, NULL, NULL, NULL);
+  rtcp_parse(pkt, n, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+}
+END_TEST
+
+static int g_rams_i_calls;
+static rtcp_rams_i_t g_rams_i;
+
+static void rams_i_cb(const rtcp_rams_i_t *info, void *user) {
+  (void)user;
+  g_rams_i_calls++;
+  g_rams_i = *info;
+}
+
+START_TEST(rams_i_is_parsed_via_builder_round_trip) {
+  unsigned char buf[64];
+  rtcp_rams_i_tlvs_t tlvs;
+  size_t n;
+
+  memset(&tlvs, 0, sizeof tlvs);
+  tlvs.has_earliest_join_time = 1;
+  tlvs.earliest_join_time_ms = 0;
+  tlvs.has_burst_duration = 1;
+  tlvs.burst_duration_ms = 8000;
+
+  n = rtcp_build_rams_i(0x77777777u, 0x88888888u, 5, 200, &tlvs, buf, sizeof buf);
+  ck_assert_uint_gt(n, 0u);
+
+  g_rams_i_calls = 0;
+  rtcp_parse(buf, n, NULL, NULL, rams_i_cb, NULL, NULL, NULL, NULL);
+
+  ck_assert_int_eq(g_rams_i_calls, 1);
+  ck_assert_uint_eq(g_rams_i.sender_ssrc, 0x77777777u);
+  ck_assert_uint_eq(g_rams_i.media_ssrc, 0x88888888u);
+  ck_assert_uint_eq(g_rams_i.msn, 5u);
+  ck_assert_uint_eq(g_rams_i.response, 200u);
+  ck_assert_int_eq(g_rams_i.has_earliest_join_time, 1);
+  ck_assert_int_eq(g_rams_i.has_burst_duration, 1);
+  ck_assert_uint_eq(g_rams_i.burst_duration_ms, 8000u);
 }
 END_TEST
 
@@ -207,6 +244,7 @@ static Suite *rtcp_suite(void) {
   tcase_add_test(tc, malformed_cb_not_called_for_well_formed_rams_t);
   tcase_add_test(tc, malformed_cb_not_called_for_rams_r);
   tcase_add_test(tc, both_cb_and_malformed_cb_null_does_not_crash);
+  tcase_add_test(tc, rams_i_is_parsed_via_builder_round_trip);
   suite_add_tcase(s, tc);
   return s;
 }

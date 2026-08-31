@@ -3,8 +3,8 @@
 
 #include <string.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 
 #include "store.h"
 
@@ -30,6 +30,8 @@ const char *metrics_component_name(metrics_component_t c) {
     return "cam378";
   case METRICS_COMPONENT_FCCRET:
     return "fccret";
+  case METRICS_COMPONENT_XY:
+    return "xy";
   default:
     return "unknown";
   }

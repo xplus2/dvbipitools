@@ -8,7 +8,7 @@
 #include <openssl/provider.h>
 #endif
 
-#include "lib/secure_zero.h"
+#include "lib/helper/secure_zero.h"
 
 #include "crypto.h"
 

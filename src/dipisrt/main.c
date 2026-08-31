@@ -8,9 +8,9 @@
 
 #include "args.h"
 #include "bridge.h"
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/metrics/export.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 #include "version.h"
 
 static const char *group_mode_str(srtgroup_mode_t g) {

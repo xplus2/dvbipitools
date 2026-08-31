@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/ioutil.h"
+#include "lib/helper/ioutil.h"
 
 #include "accessunit.h"
 #include "fragment.h"
@@ -178,6 +178,47 @@ static int decode_program_info_fuu(accessunit_scratch_t *sc, bcg_progtext_t **pt
   return 0;
 }
 
+/* -1: context_path not phase-ordered (no ordering check applies to it) */
+static int resolve_fuu_phase(int context_path) {
+  switch (context_path) {
+    case DVBCTXPATH_PROGRAM_INFORMATION:
+      return 0;
+    case DVBCTXPATH_SCHEDULE:
+      return 1;
+    case DVBCTXPATH_SERVICE_INFORMATION:
+      return 2;
+    default:
+      return -1;
+  }
+}
+
+/* decodes one fuu's payload by context_path. 0 ok, -1 error */
+static int decode_one_fuu(accessunit_scratch_t *sc, bcg_doc_t *doc, strrepo_reader_t *sr, const unsigned char *base,
+                           const fuu_index_t *fu, bcg_progtext_t **ptext, int *ptext_n) {
+  bitreader_t fbr;
+  switch (fu->context_path) {
+    case DVBCTXPATH_PROGRAM_INFORMATION:
+      bitreader_init(&fbr, base + fu->offset, fu->length);
+      return decode_program_info_fuu(sc, ptext, ptext_n, &fbr, sr);
+    case DVBCTXPATH_SCHEDULE: {
+      ptext_ctx_t ctx;
+      ctx.arr = *ptext;
+      ctx.n = *ptext_n;
+      bitreader_init(&fbr, base + fu->offset, fu->length);
+      return fragment_decode_schedule(&fbr, sr, doc, ptext_lookup, &ctx);
+    }
+    case DVBCTXPATH_SERVICE_INFORMATION: {
+      bcg_channel_t *c = bcg_add_channel(doc);
+      if (!c)
+        return -1;
+      bitreader_init(&fbr, base + fu->offset, fu->length);
+      return fragment_decode_service_information(&fbr, sr, c);
+    }
+    default:
+      return 0;
+  }
+}
+
 int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int *out_nfuu) {
   const unsigned char *base = br->buf;
   bcg_progtext_t *ptext;
@@ -215,20 +256,7 @@ int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_
         goto done;
       }
       fuus[i].context_path = (int)ctxpath;
-      switch (fuus[i].context_path) {
-        case DVBCTXPATH_PROGRAM_INFORMATION:
-          fuu_phase = 0;
-          break;
-        case DVBCTXPATH_SCHEDULE:
-          fuu_phase = 1;
-          break;
-        case DVBCTXPATH_SERVICE_INFORMATION:
-          fuu_phase = 2;
-          break;
-        default:
-          fuu_phase = -1;
-          break;
-      }
+      fuu_phase = resolve_fuu_phase(fuus[i].context_path);
       if (fuu_phase >= 0) {
         if (fuu_phase < phase) {
           rc = -1;
@@ -243,42 +271,9 @@ int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_
   }
 
   for (i = 0; i < nfuu; i++) {
-    bitreader_t fbr;
-    switch (fuus[i].context_path) {
-      case DVBCTXPATH_PROGRAM_INFORMATION: {
-        bitreader_init(&fbr, base + fuus[i].offset, fuus[i].length);
-        if (decode_program_info_fuu(sc, &ptext, &ptext_n, &fbr, sr)) {
-          rc = -1;
-          goto done;
-        }
-        break;
-      }
-      case DVBCTXPATH_SCHEDULE: {
-        ptext_ctx_t ctx;
-        ctx.arr = ptext;
-        ctx.n = ptext_n;
-        bitreader_init(&fbr, base + fuus[i].offset, fuus[i].length);
-        if (fragment_decode_schedule(&fbr, sr, doc, ptext_lookup, &ctx)) {
-          rc = -1;
-          goto done;
-        }
-        break;
-      }
-      case DVBCTXPATH_SERVICE_INFORMATION: {
-        bcg_channel_t *c = bcg_add_channel(doc);
-        if (!c) {
-          rc = -1;
-          goto done;
-        }
-        bitreader_init(&fbr, base + fuus[i].offset, fuus[i].length);
-        if (fragment_decode_service_information(&fbr, sr, c)) {
-          rc = -1;
-          goto done;
-        }
-        break;
-      }
-      default:
-        break;
+    if (decode_one_fuu(sc, doc, sr, base, &fuus[i], &ptext, &ptext_n)) {
+      rc = -1;
+      goto done;
     }
   }
 

@@ -1,4 +1,4 @@
-.TH DVBIPITOOLS 1 "2026-08-21" "dvbipitools" "dvbipitools Manual"
+.TH DVBIPITOOLS 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dvbipitools \- multicall binary bundling every dvbipitools tool
 .SH SYNOPSIS
@@ -14,8 +14,8 @@ dvbipitools \- multicall binary bundling every dvbipitools tool
 is one executable containing every tool in this project
 (\fBdipibcg\fR, \fBdipibim\fR, \fBdipicam378\fR, \fBdipidescramble\fR,
 \fBdipifccret\fR, \fBdipimetrics\fR, \fBdipiradiohead\fR, \fBdipirec\fR,
-\fBdipirist\fR, \fBdipiscan\fR, \fBdipisds\fR, \fBdipitvhead\fR,
-\fBdipixmltv\fR), dispatched one of three ways:
+\fBdipirist\fR, \fBdipiscan\fR, \fBdipisds\fR, \fBdipisrt\fR,
+\fBdipitvhead\fR, \fBdipixmltv\fR, \fBdipixy\fR), reached one of three ways:
 .TP
 .B by full tool name
 \fBdvbipitools\fR \fItool\fR [\fIargs\fR ...], e.g. \fBdvbipitools dipiscan \-h\fR.
@@ -38,10 +38,49 @@ or
 with no arguments for the full applet list. Once dispatched, a tool's own
 options, exit status, and behavior are identical to running it standalone;
 see that tool's own manual page.
+.B dvbipitools
+itself adds no options of its own.
 .PP
-Not all 13 tools are necessarily present: \fBdipicam378\fR and
-\fBdipidescramble\fR require OpenSSL, \fBdipirist\fR requires librist, each
-built in only if that dependency was found (matching the standalone build).
+Not all 15 tools are necessarily present: \fBdipicam378\fR and
+\fBdipidescramble\fR require OpenSSL, \fBdipirist\fR requires librist,
+\fBdipisrt\fR requires libsrt, each built in only if that dependency was
+found (matching the standalone build).
+.SH APPLETS
+Full name and short name (for the
+.B dipi
+entry point):
+.PP
+.RS
+dipibcg          bcg
+.br
+dipibim          bim
+.br
+dipicam378       cam378
+.br
+dipidescramble   descramble
+.br
+dipifccret       fccret
+.br
+dipimetrics      metrics
+.br
+dipiradiohead    radiohead
+.br
+dipirec          rec
+.br
+dipirist         rist
+.br
+dipiscan         scan
+.br
+dipisds          sds
+.br
+dipisrt          srt
+.br
+dipitvhead       tvhead
+.br
+dipixmltv        xmltv
+.br
+dipixy           xy
+.RE
 .SH EXAMPLES
 .TP
 .B dvbipitools dipiscan \-m 239.19.75.0 >hd.m3u
@@ -74,8 +113,10 @@ Whatever the dispatched tool itself returns.
 .BR dipirist (1),
 .BR dipiscan (1),
 .BR dipisds (1),
+.BR dipisrt (1),
 .BR dipitvhead (1),
-.BR dipixmltv (1)
+.BR dipixmltv (1),
+.BR dipixy (1)
 .PP
 Project homepage: https://github.com/xplus2/dvbipitools
 .SH COPYRIGHT

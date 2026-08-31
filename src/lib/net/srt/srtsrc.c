@@ -1,16 +1,14 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "lib/ioutil.h"
-#include "lib/signal.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/signal.h"
 
 #include "srtin.h"
 #include "srtsrc.h"
@@ -25,32 +23,6 @@ struct srtsrc {
   char packetfilter[256];
   srtin_cfg_t cfg; /* peers[0]/opts point into the buffers above */
 };
-
-/* 0 written fully, -1 unrecoverable (reader gone or stopping) */
-static int write_all(srtsrc_t *r, const unsigned char *buf, size_t n) {
-  while (n) {
-    ssize_t w = write(r->pfd[1], buf, n);
-
-    if (w > 0) {
-      buf += (size_t)w;
-      n -= (size_t)w;
-      continue;
-    }
-    if (w < 0 && errno == EINTR)
-      continue;
-    if (w < 0 && errno == EAGAIN) {
-      struct pollfd pfd = {.fd = r->pfd[1], .events = POLLOUT, .revents = 0};
-
-      if (poll(&pfd, 1, 100) < 0 && errno != EINTR)
-        return -1;
-      if (atomic_load_explicit(&r->stop, memory_order_relaxed) || signal_stop_requested())
-        return -1;
-      continue;
-    }
-    return -1; /* EPIPE: reader gone */
-  }
-  return 0;
-}
 
 static void *reader_main(void *arg) {
   srtsrc_t *r = arg;
@@ -69,7 +41,7 @@ static void *reader_main(void *arg) {
       break;
     if (n == 0)
       continue;
-    if (write_all(r, buf, (size_t)n) < 0)
+    if (pipe_write_all(r->pfd[1], buf, (size_t)n, &r->stop) < 0)
       break;
   }
   srtin_close(s);

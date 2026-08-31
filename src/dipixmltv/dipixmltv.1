@@ -1,4 +1,4 @@
-.TH DIPIXMLTV 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPIXMLTV 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipixmltv \- convert between XMLTV and the DVB-IPI EPG (TVA) XML shape
 .SH SYNOPSIS
@@ -20,19 +20,23 @@ TVA-shaped XML, \fB\-f tva\fR reads TVA-shaped XML and writes xmltv.
 .PP
 xmltv channel ids carry no DVB identity, and the tsid/onid/sid triplet
 from a dipiscan scan is commonly degenerate across services on the same
-headend. Conversion is therefore keyed on the multicast URI. \fB\-M\fR
-supplies the id-to-URI/triplet mapping required for \fB\-f xmltv\fR; an
-xmltv channel with no entry in the map is silently dropped, along with
-its programmes. \fB\-R\fR optionally renames an incoming TVA serviceId
-back to a preferred local xmltv id when converting the other way.
-.PP
-Programme identifiers are encoded as CRIDs under the authority
-\fBdipixmltv.invalid\fR (reserved under RFC 2606), since this project is
-not a registered CRID authority.
+headend (every service reporting tsid=1 onid=0 sid=1 is normal).
+Conversion is therefore keyed on the multicast URI, the one part
+guaranteed unique per service. \fB\-M\fR supplies the id-to-URI/triplet
+mapping required for \fB\-f xmltv\fR; an xmltv channel with no entry in
+the map is silently dropped, along with its programmes. \fB\-R\fR
+optionally renames an incoming TVA serviceId back to a preferred local
+xmltv id when converting the other way; without it the incoming
+serviceId is kept as-is.
 .PP
 With \fB\-S\fR, instead of converting, \fBdipixmltv\fR reads a dipiscan
-CSV capture and an xmltv guide, matches channels by display name, and
-writes a suggested \fB\-M\fR mapping. Review the result before use.
+CSV capture and an xmltv guide, and writes a suggested \fB\-M\fR mapping
+to \fB\-o\fR. Channels are matched by every \fB<display\-name>\fR, not
+just the first: an exact case-insensitive match becomes a live mapping
+line; a substring match becomes a \fB#\fR-commented line with the
+closest guess, for you to confirm or fix; no match at all becomes
+\fB# UNMATCHED: \fIid\fR (\fIname\fR)\fR. Review the result before use
+as \fB\-M\fR.
 .SH OPTIONS
 .TP
 .BR \-i ", " \-\-input " \fIpath\fR"
@@ -42,26 +46,60 @@ Input path, "\-" for stdin (default).
 Output path, "\-" for stdout (default).
 .TP
 .BR \-f ", " \-\-format " \fIfmt\fR"
-xmltv|tva - names the INPUT format.
+Names the INPUT format: \fBxmltv\fR or \fBtva\fR. Output is always the
+other one. Required unless \fB\-S\fR is given.
 .TP
 .BR \-M ", " \-\-map " \fIpath\fR"
-xmltv id -> uri,tsid,onid,sid (required for \fB\-f xmltv\fR).
+Channel map, one \fIid\fR,\fIuri\fR,\fItsid\fR,\fIonid\fR,\fIsid\fR line
+per channel: dipiscan's own csv shape, with column 1 repurposed to the
+xmltv channel id. Required for \fB\-f xmltv\fR.
 .TP
 .BR \-R ", " \-\-reverse\-map " \fIrevmap\fR"
-uri -> preferred xmltv id (optional, \fB\-f tva\fR only).
+Reverse map, one \fIuri\fR,\fIid\fR line per channel. Optional, used
+only with \fB\-f tva\fR.
 .TP
 .BR \-S ", " \-\-suggest\-map " \fIpath\fR"
-dipiscan csv - write a suggested \fB\-M\fR mapping to \fB\-o\fR, matched
-by channel name (review before use).
+Switch to suggest-map mode: read a dipiscan csv from \fIpath\fR and an
+xmltv guide from \fB\-i\fR, write a suggested \fB\-M\fR mapping to
+\fB\-o\fR. See DESCRIPTION for the matching rules. \fB\-f\fR is not
+required in this mode.
 .TP
 .BR \-v ", " \-\-verbose
-Progress on stderr.
+Print one summary line to stderr: channels and programmes read. No
+effect with \fB\-S\fR.
 .TP
 .B \-\-color \fIwhen\fR
 auto|always|never (default auto).
 .TP
 .BR \-h ", " \-\-help
 Show usage and exit.
+.SH XMLTV CONFORMANCE
+Output aims to be DTD-valid xmltv: \fBdisplay\-name\fR and \fBtitle\fR
+are required non-empty elements in xmltv.dtd, so a channel with no
+source name falls back to its id, and a programme with no title falls
+back to \fB(untitled)\fR.
+.PP
+The reader is lenient: a conforming file always works, and quirks
+outside the DTD that don't touch the fields dipixmltv needs are not
+rejected either.
+.SH CRIDS
+TVA's \fBprogramId\fR/\fBcrid\fR is a constrained \fBanyURI\fR
+(\fBcrid://.../...\fR); raw xmltv ids, which can contain anything, are
+not valid there directly, and the tsid/onid/sid triplet is too often
+degenerate to use as a collision-free key. \fBdipixmltv\fR builds the
+CRID from the xmltv channel id instead, which is unique within its own
+source:
+.PP
+.nf
+.RS
+crid://dipixmltv.invalid/\fI<percent\-encoded\-channel\-id>\fR/\fI<programme\-start\-timestamp>\fR
+.RE
+.fi
+.PP
+\fBdipixmltv.invalid\fR is not a registered CRID authority; the
+\fB.invalid\fR TLD is reserved for this under RFC 2606. Because the
+timestamp is part of the id, a rescheduled programme gets a new CRID.
+Do not use this id as a hard reference in a PVR.
 .SH EXAMPLES
 .TP
 .B dipixmltv \-f xmltv \-M mapping.csv \-i guide.xml \-o guide.tva.xml
@@ -72,7 +110,7 @@ Convert TVA-shaped XML back to xmltv.
 .TP
 .B dipixmltv \-S scan.csv \-i guide.xml \-o mapping.csv
 Build a suggested \fB\-M\fR mapping from a dipiscan CSV capture and an
-xmltv guide, matched by channel name.
+xmltv guide, matched by display name.
 .SH EXIT STATUS
 .TP
 .B 0
@@ -81,8 +119,9 @@ Success.
 .B nonzero
 Argument error, or I/O failure.
 .SH SEE ALSO
+.BR dipibcg (1),
 .BR dipibim (1),
-.BR dipibcg (1)
+.BR dipiscan (1)
 .PP
 Project homepage: https://github.com/xplus2/dvbipitools
 .SH COPYRIGHT

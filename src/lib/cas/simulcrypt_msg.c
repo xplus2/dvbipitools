@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 #include "lib/mux/psi_build.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "simulcrypt_msg.h"
 

@@ -8,8 +8,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "lib/ioutil.h"
-#include "lib/seqlock.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/seqlock.h"
 
 #include "channel.h"
 

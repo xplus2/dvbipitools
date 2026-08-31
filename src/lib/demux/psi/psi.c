@@ -16,7 +16,9 @@ pmt_cand_t *find_cand(psi_t *c, unsigned pmt_pid) {
   return NULL;
 }
 
-/* precedence nit>pmt>es>ecm>pcr, stamped lowest-first so higher overwrites (PCR often shares video pid) */
+/* precedence: fixed pids (PAT/CAT/NIT/SDT/EIT/OTHER_SI/NULL) > nit > pmt > es > ecm > pcr,
+   stamped lowest-first, higher overwrites (PCR often shares video pid). fixed pids stamped
+   last, always win: matches psi_classify()'s old hardcoded-first behavior */
 void rebuild_class_table(psi_t *c) {
   memset(c->class_by_pid, 0, sizeof c->class_by_pid); /* PID_UNKNOWN == 0 */
   if (c->have_pmt) {
@@ -31,9 +33,22 @@ void rebuild_class_table(psi_t *c) {
   }
   if (c->have_pat && c->nit_pid)
     c->class_by_pid[c->nit_pid] = PID_NIT;
+  c->class_by_pid[0x0000] = PID_PAT;
+  c->class_by_pid[0x0001] = PID_CAT;
+  c->class_by_pid[0x0010] = PID_NIT;
+  c->class_by_pid[0x0011] = PID_SDT;
+  c->class_by_pid[0x0012] = PID_EIT;
+  c->class_by_pid[0x0013] = PID_OTHER_SI;
+  c->class_by_pid[0x0014] = PID_OTHER_SI;
+  c->class_by_pid[0x1FFF] = PID_NULL;
 }
 
-psi_t *psi_new(void) { return calloc(1, sizeof(psi_t)); }
+psi_t *psi_new(void) {
+  psi_t *c = calloc(1, sizeof(psi_t));
+  if (c)
+    rebuild_class_table(c); /* seeds fixed pids before any packet arrives */
+  return c;
+}
 
 void psi_free(psi_t *c) { free(c); }
 
@@ -157,23 +172,7 @@ const char *psi_service_name(const psi_t *c) { return c->service_name; }
 const char *psi_provider_name(const psi_t *c) { return c->provider_name; }
 const char *psi_network_name(const psi_t *c) { return c->network_name; }
 
-pid_class_t psi_classify(const psi_t *c, unsigned pid) {
-  if (pid == 0x0000)
-    return PID_PAT;
-  if (pid == 0x0001)
-    return PID_CAT;
-  if (pid == 0x0010)
-    return PID_NIT;
-  if (pid == 0x0011)
-    return PID_SDT;
-  if (pid == 0x0012)
-    return PID_EIT;
-  if (pid == 0x0013 || pid == 0x0014)
-    return PID_OTHER_SI;
-  if (pid == 0x1FFF)
-    return PID_NULL;
-  return c->class_by_pid[pid];
-}
+pid_class_t psi_classify(const psi_t *c, unsigned pid) { return c->class_by_pid[pid]; }
 
 const unsigned char *psi_pat_section(const psi_t *c, size_t *len) {
   if (!c->have_pat) {

@@ -6,8 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "lib/argutil.h"
-#include "lib/log.h"
+#include "lib/helper/argutil.h"
+#include "lib/helper/log.h"
 
 #include "args.h"
 #include "version.h"

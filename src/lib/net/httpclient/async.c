@@ -7,8 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../../ioutil.h"
-#include "../../log.h"
+#include "../../helper/ioutil.h"
+#include "../../helper/log.h"
 #include "../netconnect.h"
 #include "priv.h"
 
@@ -152,10 +152,10 @@ static int send_request_buf(http_async_t *a, struct http *h, net_err_reason_t *r
   return 1;
 }
 
-/* returns 0 on header terminator found (term_out/termlen_out set), -1 on error, 1 = more data needed */
-static int read_response_headers(struct http *h, http_async_t *a, net_err_reason_t *reason_out, char **term_out, size_t *termlen_out) {
+static int read_response_headers(struct http *h, http_async_t *a, net_err_reason_t *reason_out) {
   for (;;) {
     ssize_t n;
+    int pr;
     if (a->hdr_got >= sizeof h->hold) {
       log_line("http: response headers too large");
       if (reason_out)
@@ -172,8 +172,10 @@ static int read_response_headers(struct http *h, http_async_t *a, net_err_reason
       return 1;
     }
     a->hdr_got += (size_t)n;
-    *term_out = find_header_end((char *)h->hold, a->hdr_got, termlen_out);
-    if (*term_out)
+    pr = try_parse_response(h, a->hdr_got, reason_out);
+    if (pr < 0)
+      return -1;
+    if (pr > 0)
       return 0;
   }
 }
@@ -242,15 +244,12 @@ http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out
     }
 
     case HA_READING_HEADERS: {
-      char *term = NULL;
-      size_t termlen = 0;
-      int st = read_response_headers(h, a, reason_out, &term, &termlen);
+      int st = read_response_headers(h, a, reason_out);
 
       if (st < 0)
         return HTTP_ASYNC_ERROR;
       if (st > 0)
         return HTTP_ASYNC_PENDING;
-      finish_headers(h, term, termlen, a->hdr_got);
       if (setup_transfer_encoding(h, reason_out) != 0)
         return HTTP_ASYNC_ERROR;
       return async_after_headers(a, reason_out);

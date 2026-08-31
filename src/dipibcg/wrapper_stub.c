@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "wrapper.h"
 
 /* zlib stub: the wrapper envelope still mandatory (TS 102 323 7.3.1.5) */

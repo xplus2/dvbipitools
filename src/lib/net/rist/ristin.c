@@ -3,7 +3,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -12,9 +11,9 @@
 
 #include <librist/librist.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
-#include "lib/signal.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 
 #include "ristin.h"
 #include "ristlog.h"
@@ -75,32 +74,6 @@ static int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
   return 0;
 }
 
-/* 0 written fully, -1 unrecoverable (reader gone or stopping) */
-static int write_all(const ristin_t *r, const unsigned char *buf, size_t n) {
-  while (n) {
-    ssize_t w = write(r->pfd[1], buf, n);
-
-    if (w > 0) {
-      buf += w;
-      n -= (size_t)w;
-      continue;
-    }
-    if (w < 0 && errno == EINTR)
-      continue;
-    if (w < 0 && errno == EAGAIN) {
-      struct pollfd pfd = {.fd = r->pfd[1], .events = POLLOUT};
-
-      if (poll(&pfd, 1, 100) < 0 && errno != EINTR)
-        return -1;
-      if (atomic_load_explicit(&r->stop, memory_order_relaxed) || signal_stop_requested())
-        return -1;
-      continue;
-    }
-    return -1; /* EPIPE: reader gone */
-  }
-  return 0;
-}
-
 static void *reader_main(void *arg) {
   ristin_t *r = arg;
 
@@ -112,7 +85,7 @@ static void *reader_main(void *arg) {
       break;
     if (ret == 0 || !db)
       continue;
-    if (write_all(r, db->payload, db->payload_len) < 0) {
+    if (pipe_write_all(r->pfd[1], db->payload, db->payload_len, &r->stop) < 0) {
       rist_receiver_data_block_free2(&db);
       break;
     }

@@ -5,10 +5,10 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/net/send_result.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "../input/source.h"
 #include "../mux/tspacketizer.h"

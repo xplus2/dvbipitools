@@ -12,6 +12,7 @@ done
 MCAST=239.255.7.40
 PORT=17740
 ECMG_PORT=12240
+EMMG_PORT=18010
 
 cap="$WORK/cas_capture.ts"
 report="$WORK/cas_report.json"
@@ -29,7 +30,7 @@ ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=2
     -c:v libx264 -preset ultrafast -c:a aac -f mpegts - 2>"$WORK/ffmpeg.log" | \
 timeout 12 "$BIN" -O lo -u -m $MCAST:$PORT -i - -s "CAS Test" \
     --cas-algo cissa --cas-ecmg "tcp://127.0.0.1:$ECMG_PORT" --cas-ecmg-version 2 \
-    --cas-super-id 0x4A750002 --cas-ecm-id 1 --cas-pids video,audio \
+    --cas-emmg-port $EMMG_PORT --cas-super-id 0x4A750002 --cas-ecm-id 1 --cas-pids video,audio \
     --cas-cp-duration 3000 \
     >"$WORK/dipitvhead.log" 2>&1
 

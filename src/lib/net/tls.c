@@ -8,14 +8,9 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
-#include "../log.h"
+#include "../helper/log.h"
 #include "tls.h"
-
-struct tls {
-  SSL_CTX *ctx;
-  SSL *ssl;
-  int fd;
-};
+#include "tls_priv.h"
 
 static void log_ssl_error(const char *what) {
   unsigned long e = ERR_get_error();

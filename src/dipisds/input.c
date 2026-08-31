@@ -6,9 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/ioutil.h"
+#include "lib/helper/ioutil.h"
 #include "lib/net/dvbstp.h"
-#include "lib/xml_util.h"
+#include "lib/helper/xml_util.h"
 #include "input.h"
 #include "version.h"
 

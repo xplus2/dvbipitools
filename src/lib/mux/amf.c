@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "../beutil.h"
+#include "../helper/beutil.h"
 #include "amf.h"
 
 #define AMF_T_NUMBER 0x00

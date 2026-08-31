@@ -22,7 +22,12 @@ src/*.o
 /dipimetrics
 /dipirist
 /dipisrt
+/dipixy
 /dvbipitools
+
+# dipixy: htdocs embedded at build time (Makefile builds)
+/src/dipixy/gen_htdocs
+/src/dipixy/htdocs_index.gen.c
 
 # cmake generic and profile builds
 /build*/

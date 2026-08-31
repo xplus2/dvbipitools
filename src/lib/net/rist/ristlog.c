@@ -3,7 +3,7 @@
 
 #include <librist/librist.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 
 #include "ristlog.h"
 

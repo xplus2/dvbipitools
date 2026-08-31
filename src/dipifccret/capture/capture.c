@@ -20,7 +20,7 @@
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "capture.h"
 

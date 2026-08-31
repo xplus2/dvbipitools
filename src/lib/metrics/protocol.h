@@ -8,8 +8,8 @@
 #include <stdint.h>
 
 /* one snapshot/datagram, capped at METRICS_MAX_SNAPSHOT_BYTES.
-   entry = metric_id(2 BE) + label_len(1) + label + value(8 BE); unknown
-   ids skip by length, so appends stay wire-compatible */
+   entry = metric_id(2 BE) + label_len(1) + label + value(8 BE). unknown
+   ids skip by length, appends stay wire-compatible */
 
 #define METRICS_PROTO_VERSION 1
 #define METRICS_MAX_SNAPSHOT_BYTES 4096
@@ -31,7 +31,8 @@ typedef enum {
   METRICS_COMPONENT_DESCRAMBLE = 7,
   METRICS_COMPONENT_CAM378 = 8,
   METRICS_COMPONENT_FCCRET = 9,
-  METRICS_COMPONENT_SRT = 10
+  METRICS_COMPONENT_SRT = 10,
+  METRICS_COMPONENT_XY = 11
 } metrics_component_t;
 
 /* wire values: append only, never renumber/reuse */
@@ -69,7 +70,7 @@ typedef enum {
   METRICS_ID_CAS_EMM_TOTAL = 55,                       /* label = cas */
   METRICS_ID_CAS_SCRAMBLED_PACKETS_TOTAL = 56,         /* shared scramble engine, one value across all cas */
   METRICS_ID_CAS_UNEXPECTED_CLEAR_PACKETS_TOTAL = 57,  /* shared scramble engine, one value across all cas */
-  METRICS_ID_CAS_EMM_DROPPED_TOTAL = 58,               /* label = cas; oversized or evicted from a full send queue */
+  METRICS_ID_CAS_EMM_DROPPED_TOTAL = 58,               /* label = cas, oversized or evicted from full send queue */
 
   METRICS_ID_RADIO_AUDIO_FRAMES_TOTAL = 60,       /* label = codec */
   METRICS_ID_RADIO_AUDIO_FRAMING_ERRORS_TOTAL = 61,
@@ -107,9 +108,9 @@ typedef enum {
   METRICS_ID_BCG_SCHEDULE_START_TIME_SECONDS = 101,
   METRICS_ID_BCG_SCHEDULE_END_TIME_SECONDS = 102,
 
-  METRICS_ID_RIST_SENDER_SENT_TOTAL = 110,          /* label = peer; sender only */
-  METRICS_ID_RIST_SENDER_RETRANSMITTED_TOTAL = 111, /* label = peer; sender only */
-  METRICS_ID_RIST_SENDER_RTT_MILLISECONDS = 112,    /* label = peer; sender only */
+  METRICS_ID_RIST_SENDER_SENT_TOTAL = 110,          /* label = peer, sender only */
+  METRICS_ID_RIST_SENDER_RETRANSMITTED_TOTAL = 111, /* label = peer, sender only */
+  METRICS_ID_RIST_SENDER_RTT_MILLISECONDS = 112,    /* label = peer, sender only */
   METRICS_ID_RIST_RECEIVER_RECEIVED_TOTAL = 120,    /* receiver only, flow aggregate */
   METRICS_ID_RIST_RECEIVER_MISSING_TOTAL = 121,     /* receiver only */
   METRICS_ID_RIST_RECEIVER_RECOVERED_TOTAL = 122,   /* receiver only */
@@ -139,16 +140,24 @@ typedef enum {
   METRICS_ID_FCC_NACKS_TOTAL = 164,
   METRICS_ID_FCC_CONGESTION_ADAPTATIONS_TOTAL = 165,
 
-  METRICS_ID_SRT_SENDER_SENT_TOTAL = 170,           /* label = peer; sender only */
-  METRICS_ID_SRT_SENDER_RETRANSMITTED_TOTAL = 171,  /* label = peer; sender only */
-  METRICS_ID_SRT_SENDER_RTT_MILLISECONDS = 172,     /* label = peer; sender only */
-  METRICS_ID_SRT_SENDER_LOST_TOTAL = 173,           /* label = peer; sender only, peer-reported loss */
-  METRICS_ID_SRT_SENDER_DROPPED_TOTAL = 174,        /* label = peer; sender only, too-late-to-send drops */
+  METRICS_ID_SRT_SENDER_SENT_TOTAL = 170,           /* label = peer, sender only */
+  METRICS_ID_SRT_SENDER_RETRANSMITTED_TOTAL = 171,  /* label = peer, sender only */
+  METRICS_ID_SRT_SENDER_RTT_MILLISECONDS = 172,     /* label = peer, sender only */
+  METRICS_ID_SRT_SENDER_LOST_TOTAL = 173,           /* label = peer, sender only, peer-reported loss */
+  METRICS_ID_SRT_SENDER_DROPPED_TOTAL = 174,        /* label = peer, sender only, too-late-to-send drops */
   METRICS_ID_SRT_RECEIVER_RECEIVED_TOTAL = 180,     /* receiver only */
   METRICS_ID_SRT_RECEIVER_LOST_TOTAL = 181,         /* receiver only, incl. later-recovered */
   METRICS_ID_SRT_RECEIVER_DROPPED_TOTAL = 182,      /* receiver only, too-late-to-play, never recovered */
   METRICS_ID_SRT_RECEIVER_RTT_MILLISECONDS = 183,   /* receiver only */
-  METRICS_ID_SRT_RECEIVER_BUFFER_MILLISECONDS = 184 /* receiver only, tsbpd delay */
+  METRICS_ID_SRT_RECEIVER_BUFFER_MILLISECONDS = 184, /* receiver only, tsbpd delay */
+
+  METRICS_ID_XY_CONNECTIONS_TOTAL = 190,
+  METRICS_ID_XY_CONNECTIONS_ACTIVE = 191,
+  METRICS_ID_XY_REQUESTS_TOTAL = 192,
+  METRICS_ID_XY_HTTP_ERRORS_TOTAL = 193,
+  METRICS_ID_XY_BYTES_SERVED_TOTAL = 194,
+  METRICS_ID_XY_SOURCES_ACTIVE = 195,
+  METRICS_ID_XY_TSPUSH_SUBS_ACTIVE = 196
 } metrics_id_t;
 
 /* joins input+reason into METRICS_ID_INPUT_ERRORS_TOTAL's one label field */
@@ -170,10 +179,10 @@ typedef struct {
 
 /* 0 ok, -1 bad proto_version/empty metrics_id */
 int metrics_writer_begin(metrics_writer_t *w, const metrics_hdr_t *hdr);
-/* label may be NULL (unlabeled series); truncated to METRICS_LABEL_MAX.
+/* label may be NULL (unlabeled series), truncated to METRICS_LABEL_MAX.
    -1 on overflow, writer becomes unusable (finish returns 0 afterward) */
 int metrics_writer_put(metrics_writer_t *w, metrics_id_t id, const char *label, uint64_t value);
-/* total encoded bytes, ready to send; 0 if begin/put ever failed */
+/* total encoded bytes, ready to send. 0 if begin/put ever failed */
 size_t metrics_writer_finish(metrics_writer_t *w);
 
 typedef struct {
@@ -186,7 +195,7 @@ typedef struct {
    or empty metrics_id */
 int metrics_reader_init(metrics_reader_t *r, const unsigned char *buf, size_t len, metrics_hdr_t *hdr);
 /* 1 = entry, 0 = clean end, -1 = truncated entry.
-   label_out may be NULL to skip the copy (label_cap ignored then) */
+   label_out may be NULL to skip copy (label_cap ignored then) */
 int metrics_reader_next(metrics_reader_t *r, metrics_id_t *id, char *label_out, size_t label_cap, uint64_t *value);
 
 #endif

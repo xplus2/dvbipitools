@@ -10,10 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/argutil.h"
-#include "lib/ioutil.h"
-#include "lib/log.h"
-#include "lib/uriparse.h"
+#include "lib/helper/argutil.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
+#include "lib/helper/uriparse.h"
 
 #include "args.h"
 #include "filter/ts.h"
@@ -101,10 +101,10 @@ void source_describe(const source_t *s, char *buf, size_t n) {
     snprintf(buf, n, "%s://%s:%u%s", s->http.tls ? "https" : "http", s->http.host, s->http.port, s->http.path);
     break;
   case URI_FILE:
-    snprintf(buf, n, "%s", s->file_path[0] ? s->file_path : "- (stdin)");
+    bufcpy(buf, n, s->file_path[0] ? s->file_path : "- (stdin)");
     break;
   case URI_RIST:
-    snprintf(buf, n, "%s", s->rist_uri);
+    bufcpy(buf, n, s->rist_uri);
     break;
   case URI_SRT:
     if (s->srt_family == AF_INET6)
@@ -161,14 +161,14 @@ void out_describe(const out_target_t *o, char *buf, size_t n) {
     break;
   }
   case OUT_RIST:
-    snprintf(buf, n, "%s", o->rist_uri);
+    bufcpy(buf, n, o->rist_uri);
     break;
   case OUT_RTMP:
   case OUT_RTMPS:
-    snprintf(buf, n, "%s", o->rtmp_url);
+    bufcpy(buf, n, o->rtmp_url);
     break;
   case OUT_FILE:
-    snprintf(buf, n, "%s", strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
+    bufcpy(buf, n, strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
     break;
   case OUT_SRT:
     if (o->srt_family == AF_INET6)

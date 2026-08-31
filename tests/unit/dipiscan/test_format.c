@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "dipiscan/format.h"
-#include "lib/sds_xml.h"
+#include "lib/helper/sds_xml.h"
 
 static FILE *open_capture(char **buf, size_t *len) {
   return open_memstream(buf, len);

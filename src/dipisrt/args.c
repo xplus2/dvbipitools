@@ -8,10 +8,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/argutil.h"
-#include "lib/ioutil.h"
-#include "lib/log.h"
-#include "lib/uriparse.h"
+#include "lib/helper/argutil.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
+#include "lib/helper/uriparse.h"
 
 #include "args.h"
 #include "version.h"
@@ -112,7 +112,7 @@ void endpoint_describe(const endpoint_t *e, char *buf, size_t n) {
     else
       snprintf(first, sizeof first, "srt://%s%s:%u", e->listen ? "@" : "", e->srt_host[0], e->srt_port[0]);
     if (e->n_srt == 1)
-      snprintf(buf, n, "%s", first);
+      bufcpy(buf, n, first);
     else
       snprintf(buf, n, "%s +%d more", first, e->n_srt - 1);
     return;
@@ -132,7 +132,7 @@ void endpoint_describe(const endpoint_t *e, char *buf, size_t n) {
               e->nonsrt.http.path);
     break;
   case NONSRT_FILE:
-    snprintf(buf, n, "%s", e->nonsrt.file_path[0] ? e->nonsrt.file_path : "- (stdin/stdout)");
+    bufcpy(buf, n, e->nonsrt.file_path[0] ? e->nonsrt.file_path : "- (stdin/stdout)");
     break;
   }
 }

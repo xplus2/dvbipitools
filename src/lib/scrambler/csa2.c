@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "../log.h"
+#include "../helper/log.h"
 
 #include "csa2.h"
 

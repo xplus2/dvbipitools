@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "../demux/crc32.h"
-#include "../log.h"
+#include "../helper/log.h"
 #include "dvbstp.h"
 
 size_t dvbstp_parse_header(const unsigned char *buf, size_t len, dvbstp_header_t *h) {

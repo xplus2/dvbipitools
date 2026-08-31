@@ -4,20 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/helper/ioutil.h"
+
 #include "aubuild.h"
 
 int esc_rem_append(unsigned char **rem, size_t *remlen, size_t *remcap, const unsigned char *d, size_t n) {
-  if (*remlen + n > *remcap) {
-    size_t nc = *remcap ? *remcap * 2 : 8192;
-    unsigned char *np;
-    while (nc < *remlen + n)
-      nc *= 2;
-    np = realloc(*rem, nc);
-    if (!np)
-      return -1;
-    *rem = np;
-    *remcap = nc;
-  }
+  if (growbuf_reserve((void **)rem, remcap, 1, *remlen + n, 8192))
+    return -1;
   memcpy(*rem + *remlen, d, n);
   *remlen += n;
   return 0;
@@ -26,17 +19,8 @@ int esc_rem_append(unsigned char **rem, size_t *remlen, size_t *remcap, const un
 int esc_vbuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *nal, size_t n) {
   size_t need = *vbuflen + 4 + n;
 
-  if (need > *vbufcap) {
-    size_t nc = *vbufcap ? *vbufcap * 2 : 65536;
-    unsigned char *np;
-    while (nc < need)
-      nc *= 2;
-    np = realloc(*vbuf, nc);
-    if (!np)
-      return -1;
-    *vbuf = np;
-    *vbufcap = nc;
-  }
+  if (growbuf_reserve((void **)vbuf, vbufcap, 1, need, 65536))
+    return -1;
   (*vbuf)[(*vbuflen)++] = (unsigned char)(n >> 24);
   (*vbuf)[(*vbuflen)++] = (unsigned char)(n >> 16);
   (*vbuf)[(*vbuflen)++] = (unsigned char)(n >> 8);

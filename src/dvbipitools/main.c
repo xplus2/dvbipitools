@@ -28,6 +28,7 @@ int dipiscan_main(int argc, char **argv);
 int dipisds_main(int argc, char **argv);
 int dipitvhead_main(int argc, char **argv);
 int dipixmltv_main(int argc, char **argv);
+int dipixy_main(int argc, char **argv);
 
 typedef int (*applet_main_t)(int argc, char **argv);
 
@@ -60,6 +61,7 @@ static const applet_t APPLETS[] = {
     {"dipisds", "sds", dipisds_main},
     {"dipitvhead", "tvhead", dipitvhead_main},
     {"dipixmltv", "xmltv", dipixmltv_main},
+    {"dipixy", "xy", dipixy_main},
 };
 
 #define N_APPLETS (sizeof(APPLETS) / sizeof(APPLETS[0]))

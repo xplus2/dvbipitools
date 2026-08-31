@@ -35,14 +35,14 @@ function(dipibcg_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipibcg/listen.c
         ${CMAKE_SOURCE_DIR}/src/dipibcg/container.c
         ${ZLIB_SRC}
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
-        ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
@@ -66,10 +66,10 @@ function(dipibim_resolve_sources)
     set(DIPIBIM_SRCS
         ${CMAKE_SOURCE_DIR}/src/dipibim/main.c
         ${CMAKE_SOURCE_DIR}/src/dipibim/args.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
         ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
         ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
@@ -107,11 +107,11 @@ function(dipicam378_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
-        ${CMAKE_SOURCE_DIR}/src/lib/secure_zero.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
     set(DIPICAM378_SRCS ${DIPICAM378_SRCS} PARENT_SCOPE)
     set(DIPICAM378_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
 endfunction()
@@ -170,11 +170,11 @@ function(dipidescramble_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_state_core.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/secure_zero.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
@@ -182,8 +182,9 @@ function(dipidescramble_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
@@ -254,10 +255,10 @@ function(dipifccret_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipifccret/fcc/burst_table.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/sockaddr_index.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -281,10 +282,11 @@ function(dipimetrics_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipimetrics/store.c
         ${CMAKE_SOURCE_DIR}/src/dipimetrics/render.c
         ${CMAKE_SOURCE_DIR}/src/dipimetrics/httpserver.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c)
     set(DIPIMETRICS_SRCS ${DIPIMETRICS_SRCS} PARENT_SCOPE)
 endfunction()
@@ -363,11 +365,11 @@ function(dipiradiohead_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipiradiohead/radiohead/radiohead.c
         ${CMAKE_SOURCE_DIR}/src/dipiradiohead/radiohead/metrics.c
         ${CMAKE_SOURCE_DIR}/src/dipiradiohead/radiohead/mpts.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/toolmain.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
@@ -378,8 +380,9 @@ function(dipiradiohead_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
         ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
@@ -477,11 +480,11 @@ function(dipirec_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipirec/record/rtmp_fanout.c
         ${CMAKE_SOURCE_DIR}/src/dipirec/record/stats.c
         ${CMAKE_SOURCE_DIR}/src/dipirec/record/run.c
-        ${CMAKE_SOURCE_DIR}/src/dipirec/ret_client.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/fccret/ret_client.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
@@ -493,8 +496,9 @@ function(dipirec_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/rtx.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -579,11 +583,11 @@ function(dipirist_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipirist/main.c
         ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
         ${CMAKE_SOURCE_DIR}/src/dipirist/bridge.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
@@ -596,6 +600,7 @@ function(dipirist_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
@@ -662,11 +667,11 @@ function(dipisrt_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipisrt/main.c
         ${CMAKE_SOURCE_DIR}/src/dipisrt/args.c
         ${CMAKE_SOURCE_DIR}/src/dipisrt/bridge.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
@@ -680,6 +685,7 @@ function(dipisrt_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
@@ -695,18 +701,19 @@ function(dipiscan_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipiscan/args.c
         ${CMAKE_SOURCE_DIR}/src/dipiscan/format.c
         ${CMAKE_SOURCE_DIR}/src/dipiscan/scan.c
-        ${CMAKE_SOURCE_DIR}/src/lib/playlist_out.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
-        ${CMAKE_SOURCE_DIR}/src/lib/sds_xml.c
-        ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
@@ -719,6 +726,267 @@ function(dipiscan_resolve_sources)
     set(DIPISCAN_SRCS ${DIPISCAN_SRCS} PARENT_SCOPE)
 endfunction()
 
+function(dipixy_resolve_sources)
+    option(DIPIXY_TLS "build dipixy with HTTPS/TLS support (requires OpenSSL)" ON)
+    set(DIPIXY_HAVE_TLS FALSE)
+    if (DIPIXY_TLS)
+        if (DVBIPITOOLS_STATIC)
+            set(OPENSSL_USE_STATIC_LIBS TRUE)
+            set(ATOMIC_LIB atomic)
+        endif ()
+        find_package(OpenSSL)
+        if (OpenSSL_FOUND)
+            set(DIPIXY_HAVE_TLS TRUE)
+        else ()
+            message(WARNING "dipixy: OpenSSL not found, building without HTTPS support")
+        endif ()
+    endif ()
+    if (DIPIXY_HAVE_TLS)
+        set(REACTOR_TLS_SRC
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tls.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tls_conn.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tls_io.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tls_cert.c)
+        set(DIPIXY_CLIENT_TLS_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c)
+    else ()
+        set(REACTOR_TLS_SRC ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tls_stub.c)
+        set(DIPIXY_CLIENT_TLS_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c)
+    endif ()
+
+    if (DVBIPITOOLS_HAVE_RIST)
+        set(DIPIXY_RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
+                             ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c)
+    else ()
+        set(DIPIXY_RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
+                             ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c)
+    endif ()
+
+    if (DVBIPITOOLS_HAVE_SRT)
+        set(DIPIXY_SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
+                            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+                            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
+                            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+                            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
+    else ()
+        set(DIPIXY_SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
+                            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c)
+    endif ()
+
+    option(DIPIXY_HTTP2 "build dipixy with HTTP/2 support (requires libnghttp2)" ON)
+    set(DIPIXY_HAVE_HTTP2 FALSE)
+    if (DIPIXY_HTTP2)
+        find_package(PkgConfig)
+        if (PkgConfig_FOUND)
+            pkg_check_modules(NGHTTP2 IMPORTED_TARGET libnghttp2)
+            if (NGHTTP2_FOUND)
+                set(DIPIXY_HAVE_HTTP2 TRUE)
+                if (DVBIPITOOLS_STATIC)
+                    include(CheckCSourceCompiles)
+                    set(CMAKE_REQUIRED_LIBRARIES ${NGHTTP2_STATIC_LDFLAGS})
+                    set(CMAKE_REQUIRED_LINK_OPTIONS -static ${NGHTTP2_STATIC_LDFLAGS_OTHER})
+                    check_c_source_compiles("int main(void) { return 0; }" DIPIXY_NGHTTP2_STATIC_LINKS)
+                    unset(CMAKE_REQUIRED_LIBRARIES)
+                    unset(CMAKE_REQUIRED_LINK_OPTIONS)
+                    if (DIPIXY_NGHTTP2_STATIC_LINKS)
+                        set_target_properties(PkgConfig::NGHTTP2 PROPERTIES
+                            INTERFACE_LINK_LIBRARIES "${NGHTTP2_STATIC_LDFLAGS}"
+                            INTERFACE_LINK_OPTIONS "${NGHTTP2_STATIC_LDFLAGS_OTHER}")
+                    else ()
+                        set(DIPIXY_HAVE_HTTP2 FALSE)
+                    endif ()
+                endif ()
+            endif ()
+        endif ()
+        if (NOT DIPIXY_HAVE_HTTP2)
+            message(WARNING "dipixy: libnghttp2 not found (or no static libraries available), building without HTTP/2 support")
+        endif ()
+    endif ()
+    if (DIPIXY_HAVE_HTTP2)
+        set(DIPIXY_HTTP2_SRCS
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_tspush.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_hls.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_ws.c)
+    else ()
+        set(DIPIXY_HTTP2_SRCS)
+    endif ()
+
+    option(DIPIXY_HTTP3 "build dipixy with HTTP/3 support (requires libngtcp2 + libngtcp2_crypto_ossl + libnghttp3 + OpenSSL >= 3.5)" ON)
+    set(DIPIXY_HAVE_HTTP3 FALSE)
+    if (DIPIXY_HTTP3)
+        find_package(PkgConfig)
+        if (PkgConfig_FOUND)
+            pkg_check_modules(NGTCP2 IMPORTED_TARGET libngtcp2)
+            pkg_check_modules(NGTCP2_CRYPTO_OSSL IMPORTED_TARGET libngtcp2_crypto_ossl)
+            pkg_check_modules(NGHTTP3 IMPORTED_TARGET libnghttp3)
+            if (NGTCP2_FOUND AND NGTCP2_CRYPTO_OSSL_FOUND AND NGHTTP3_FOUND)
+                include(CheckCSourceCompiles)
+                check_c_source_compiles("
+                    #include <openssl/opensslv.h>
+                    #if OPENSSL_VERSION_NUMBER < 0x30500000L
+                    #error no quic
+                    #endif
+                    int main(void) { return 0; }" DIPIXY_HAVE_OPENSSL_QUIC)
+                if (DIPIXY_HAVE_OPENSSL_QUIC)
+                    set(DIPIXY_HAVE_HTTP3 TRUE)
+                    if (DVBIPITOOLS_STATIC)
+                        set(CMAKE_REQUIRED_LIBRARIES ${NGTCP2_STATIC_LDFLAGS} ${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS} ${NGHTTP3_STATIC_LDFLAGS})
+                        set(CMAKE_REQUIRED_LINK_OPTIONS -static ${NGTCP2_STATIC_LDFLAGS_OTHER} ${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS_OTHER}
+                            ${NGHTTP3_STATIC_LDFLAGS_OTHER})
+                        check_c_source_compiles("int main(void) { return 0; }" DIPIXY_HTTP3_STATIC_LINKS)
+                        unset(CMAKE_REQUIRED_LIBRARIES)
+                        unset(CMAKE_REQUIRED_LINK_OPTIONS)
+                        if (DIPIXY_HTTP3_STATIC_LINKS)
+                            set_target_properties(PkgConfig::NGTCP2 PROPERTIES
+                                INTERFACE_LINK_LIBRARIES "${NGTCP2_STATIC_LDFLAGS}"
+                                INTERFACE_LINK_OPTIONS "${NGTCP2_STATIC_LDFLAGS_OTHER}")
+                            set_target_properties(PkgConfig::NGTCP2_CRYPTO_OSSL PROPERTIES
+                                INTERFACE_LINK_LIBRARIES "${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS}"
+                                INTERFACE_LINK_OPTIONS "${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS_OTHER}")
+                            set_target_properties(PkgConfig::NGHTTP3 PROPERTIES
+                                INTERFACE_LINK_LIBRARIES "${NGHTTP3_STATIC_LDFLAGS}"
+                                INTERFACE_LINK_OPTIONS "${NGHTTP3_STATIC_LDFLAGS_OTHER}")
+                        else ()
+                            set(DIPIXY_HAVE_HTTP3 FALSE)
+                        endif ()
+                    endif ()
+                endif ()
+            endif ()
+        endif ()
+        if (NOT DIPIXY_HAVE_HTTP3)
+            message(WARNING "dipixy: libngtcp2/libngtcp2_crypto_ossl/libnghttp3 (+ OpenSSL >= 3.5, static libraries if DVBIPITOOLS_STATIC) not satisfied, building without HTTP/3 support")
+        endif ()
+    endif ()
+    if (DIPIXY_HAVE_HTTP3)
+        set(DIPIXY_HTTP3_SRCS
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_quic.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_req.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_resp.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_tspush.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_llhls.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_ws.c)
+    else ()
+        set(DIPIXY_HTTP3_SRCS)
+    endif ()
+
+    set(DIPIXY_SRCS
+        ${CMAKE_SOURCE_DIR}/src/dipixy/main.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/args.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/core/htdocs.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_listen.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_loop.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/channels.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/conn.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/handshake.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/dispatch.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/resp.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/content.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/route.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/waiters.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tspush.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_ws.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push_feed.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push_flush.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/rawaudio.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pmtselect.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/pmt_filter.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/core/status.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/core/tlscert.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_frame.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_broadcast.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_sources.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_clients.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_clients_json.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_clients_tick.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_fmt.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_serve.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_llhls.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_dash.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_render.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/segment/segment.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/segment/demux.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/segment/video.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/segment/audio.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/segment/mux.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_soap.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_oid.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_didl.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/core/metrics.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/fmp4.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/fmp4_moov.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/fmp4_frag.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/jsonbuf.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/sha1.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/base64.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_in.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/rtx.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/rtcp.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/rtx.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/rtcp_build.c
+        ${CMAKE_SOURCE_DIR}/src/lib/fccret/ret_client.c
+        ${CMAKE_SOURCE_DIR}/src/lib/fccret/fcc_client.c
+        ${REACTOR_TLS_SRC}
+        ${DIPIXY_CLIENT_TLS_SRC}
+        ${DIPIXY_RIST_SRC}
+        ${DIPIXY_SRT_SRC}
+        ${DIPIXY_HTTP2_SRCS}
+        ${DIPIXY_HTTP3_SRCS})
+    set(DIPIXY_SRCS ${DIPIXY_SRCS} PARENT_SCOPE)
+    set(DIPIXY_HAVE_TLS ${DIPIXY_HAVE_TLS} PARENT_SCOPE)
+    set(DIPIXY_HAVE_HTTP2 ${DIPIXY_HAVE_HTTP2} PARENT_SCOPE)
+    set(DIPIXY_HAVE_HTTP3 ${DIPIXY_HAVE_HTTP3} PARENT_SCOPE)
+    set(DIPIXY_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
+endfunction()
+
 function(dipisds_resolve_sources)
     set(DIPISDS_SRCS
         ${CMAKE_SOURCE_DIR}/src/dipisds/main.c
@@ -727,16 +995,16 @@ function(dipisds_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipisds/format_out.c
         ${CMAKE_SOURCE_DIR}/src/dipisds/announce.c
         ${CMAKE_SOURCE_DIR}/src/dipisds/listen.c
-        ${CMAKE_SOURCE_DIR}/src/lib/playlist_out.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
-        ${CMAKE_SOURCE_DIR}/src/lib/sds_xml.c
-        ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
@@ -850,11 +1118,11 @@ function(dipitvhead_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_core.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/toolmain.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/uriparse.c
-        ${CMAKE_SOURCE_DIR}/src/lib/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
@@ -867,8 +1135,9 @@ function(dipitvhead_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
@@ -900,10 +1169,10 @@ function(dipixmltv_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipixmltv/args.c
         ${CMAKE_SOURCE_DIR}/src/dipixmltv/revmap.c
         ${CMAKE_SOURCE_DIR}/src/dipixmltv/suggest.c
-        ${CMAKE_SOURCE_DIR}/src/lib/log.c
-        ${CMAKE_SOURCE_DIR}/src/lib/argutil.c
-        ${CMAKE_SOURCE_DIR}/src/lib/xml_util.c
-        ${CMAKE_SOURCE_DIR}/src/lib/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
         ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
         ${CMAKE_SOURCE_DIR}/src/lib/tva/mapping.c

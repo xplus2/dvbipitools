@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/ioutil.h"
+#include "lib/helper/ioutil.h"
 #include "render.h"
 
 typedef enum { M_GAUGE, M_COUNTER, M_INFO } metric_kind_t;
@@ -120,6 +120,13 @@ static const metric_def_t DEFS[] = {
     {METRICS_ID_FCC_BYTES_RETRANSMITTED_TOTAL, "dvbipi_fcc_bytes_retransmitted_total", M_COUNTER, "bytes retransmitted via FCC bursts", NULL, 0},
     {METRICS_ID_FCC_NACKS_TOTAL, "dvbipi_fcc_nacks_total", M_COUNTER, "NACKs handled", NULL, 0},
     {METRICS_ID_FCC_CONGESTION_ADAPTATIONS_TOTAL, "dvbipi_fcc_congestion_adaptations_total", M_COUNTER, "burst rate reduced due to congestion", NULL, 0},
+    {METRICS_ID_XY_CONNECTIONS_TOTAL, "dvbipi_xy_connections_total", M_COUNTER, "connections accepted, every protocol", NULL, 0},
+    {METRICS_ID_XY_CONNECTIONS_ACTIVE, "dvbipi_xy_connections_active", M_GAUGE, "connections currently open", NULL, 0},
+    {METRICS_ID_XY_REQUESTS_TOTAL, "dvbipi_xy_requests_total", M_COUNTER, "HTTP requests dispatched", NULL, 0},
+    {METRICS_ID_XY_HTTP_ERRORS_TOTAL, "dvbipi_xy_http_errors_total", M_COUNTER, "HTTP responses with a 4xx/5xx status", NULL, 0},
+    {METRICS_ID_XY_BYTES_SERVED_TOTAL, "dvbipi_xy_bytes_served_total", M_COUNTER, "wire bytes queued to clients, headers and body", NULL, 0},
+    {METRICS_ID_XY_SOURCES_ACTIVE, "dvbipi_xy_sources_active", M_GAUGE, "distinct multicast joins currently open", NULL, 0},
+    {METRICS_ID_XY_TSPUSH_SUBS_ACTIVE, "dvbipi_xy_tspush_subscribers_active", M_GAUGE, "raw TS push clients currently attached", NULL, 0},
 };
 #define N_DEFS (sizeof DEFS / sizeof DEFS[0])
 
@@ -221,7 +228,7 @@ static void append_composite_input_reason(strbuf_t *sb, const char *label) {
   sb_appendf(sb, ",input=\"%s\",reason=\"%s\"", esc_input, esc_reason);
 }
 
-#define DEF_ID_MAX 192 /* comfortably above highest metrics_id_t value */
+#define DEF_ID_MAX 200 /* comfortably above highest metrics_id_t value */
 
 typedef struct {
   const store_slot_t *slot;

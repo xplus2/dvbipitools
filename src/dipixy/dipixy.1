@@ -1,0 +1,685 @@
+.TH DIPIXY 1 "2026-08-28" "dvbipitools" "dvbipitools Manual"
+.SH NAME
+dipixy \- serve DVB-IPI multicast streams over HTTP
+.SH SYNOPSIS
+.B dipixy
+[\fB\-l\fR \fIaddr\fR:\fIport\fR] [\fB\-i\fR \fIsource\fR ...] [\fIoptions\fR]
+.SH DESCRIPTION
+.B dipixy
+is an amped up version of
+.BR udpxy .
+Not a fork, more like a tribute. On steroids. It can also act as a
+bridge between DVB-IPI and the more modern DVB-I-ish world.
+.PP
+While
+.B http://\fIaddress\fR:\fIport\fR/\fIcmd\fR/[\fIsrc_address\fR@]\fImgroup_address\fR<sep>\fImgroup_port\fR/
+still works like at
+.BR udpxy ,
+a few things were added:
+.RS
+.IP \(bu 2
+Protocols: IPv6, HTTP/2, HTTP/3, HTTPS
+.IP \(bu 2
+Ingress: MPTS demux, RIST, SRT, stdin
+.IP \(bu 2
+Egress: HLS (TS and fMP4), Low-Latency HLS, MPEG-DASH, audio raw demux
+.IP \(bu 2
+Operational: OpenMetrics
+.IP \(bu 2
+Convenience: a "URL Builder", PID filters, and playlists (M3U, XSPF,
+CSV, TVA XML, SD&S client \- see
+.BR dipiscan (1)
+and
+.BR dipisds (1))
+.RE
+.PP
+What behaves differently:
+.B rtp
+vs
+.B udp
+as
+.I cmd
+is strict and not just about probe skipping.
+.PP
+What's lost, compared to
+.BR udpxy :
+udpxrec (
+.BR dipirec (1)
+can serve a similar purpose); it's not lightweight; no other
+character than
+.B :
+separates \fImcast_group\fR:\fIport\fR; and its environment variables.
+.SH INPUT
+.B \-i
+is repeatable and dipixy dispatches each occurrence by the form of its
+argument:
+.RS
+.IP \(bu 2
+.B \-
+\- stdin, served at
+.BR /stdin/ <fmt>.
+At most one.
+.IP \(bu 2
+.RI rist://@ host : port
+\- RIST input, served at
+.BR /rist/ <fmt>.
+At most one.
+.IP \(bu 2
+.RI sds:// addr : port
+\- live SD&S/DVBSTP discovery.
+.IP \(bu 2
+.RI http[s]:// url
+\- single TS push URI.
+.IP \(bu 2
+.BI *. m3u\fR/\fB.m3u8
+\- M3U playlist.
+.IP \(bu 2
+.BI *. xspf
+\- XSPF playlist.
+.IP \(bu 2
+.BI *. csv
+\- CSV playlist.
+.IP \(bu 2
+.BI *. xml
+\- SD&S BroadcastDiscovery TVA XML.
+.RE
+.PP
+M3U, XSPF, and CSV are not strictly limited to the output of
+.BR dipiscan (1).
+.PP
+Every
+.BR sds:// ,
+playlist, and
+.B http[s]://
+source shares one index space, numbered in the order it was given on
+the command line, so the first of these three kinds is list 1, the
+2nd is list 2, and so on.
+.PP
+.BR rist://@ ,
+.B \-
+(stdin), or
+.B http[s]://
+each define just a single stream, not a playlist.
+.PP
+.BR \-n " \fIname\fR"
+right after an
+.B \-i
+gives that input a name, usable in URLs instead of its
+.BR /list/ n/
+index or its bare
+.BR /rist/ / /stdin/
+route (see URL PATHS below). Rules for
+.IR name :
+no
+.BR / ,
+no leading
+.BR . ,
+not one of
+.BR rtp ", " udp ", " srt ", " rist ", " stdin ", " list ", " metrics ", " ui ", " api ", " dlna ,
+and unique across every named
+.BR \-i .
+.SH OPTIONS
+.TP
+.BR \-I ", " \-\-iface " \fIiface\fR"
+Interface for multicast joins. Default: kernel default route.
+.TP
+.BR \-l ", " \-\-listen " \fIaddr\fR:\fIport\fR"
+HTTP listen address:port. Default: all:9080.
+.TP
+.BR \-L ", " \-\-listen\-tls " \fIaddr\fR:\fIport\fR"
+HTTPS listen address:port. Default: all:9443.
+.TP
+.B \-\-tls\-cert \fIpath\fR
+Certificate file (PEM). Default: search default paths, see TLS below.
+.TP
+.B \-\-tls\-key \fIpath\fR
+Private key file (PEM). Default: search default paths, see TLS below.
+.TP
+.BR \-j ", " \-\-workers " \fIspec\fR"
+.BR \-1 / \-2 / \-3 :
+that many times the cpu core count, or
+.RI < N >:
+an absolute thread count. Default: \-1.
+.TP
+.BR \-c ", " \-\-max\-clients " \fIn\fR"
+Cap on concurrent streams. Default: 256.
+.TP
+.B \-\-capture\-ring\-size \fIKiB\fR
+Per\-source ingress ring buffer. Default: 4096.
+.TP
+.BR \-i ", " \-\-input " \fIsource\fR"
+Add an input, repeatable, dispatched by form; see INPUT above. List
+index = position among all
+.B \-i
+flags, so a
+.B \-
+or
+.B rist://
+slot leaves that number unused.
+.TP
+.BR \-n ", " \-\-name " \fIname\fR"
+Names the
+.B \-i
+right before it; that name can then be used in URLs instead of
+.BR /list/ n/
+or
+.BR /rist/ / /stdin .
+Per-input; default: none (unnamed, addressable by index only).
+.TP
+.BI \-\-media\-type " radio\fR|\fBtv"
+.B radio
+or
+.B tv
+for the
+.B \-i
+right before it, drives DLNA
+.BR upnp:class .
+Per-input; default: tv.
+.TP
+.BR \-k ", " \-\-insecure
+Skip TLS verification on an
+.B https://
+input. Default: off.
+.TP
+.B \-\-sds\-timeout \fIseconds\fR
+.B sds://
+discovery wait at startup/reload. Default: 3.
+.TP
+.B \-\-sds\-refresh\-interval \fIseconds\fR
+.B sds://
+re\-poll period. Default: 30.
+.TP
+.B \-\-segment\-size \fIseconds\fR
+Target segment duration
+.RB ( hls ", " hls\-fmp4 ", " llhls ", " dash ).
+Default: 3.
+.TP
+.B \-\-segment\-count \fIn\fR
+Playlist/manifest sliding-window size. Default: 4.
+.TP
+.B \-\-hls\-part\-size \fIseconds\fR
+LL\-HLS target part duration, must be
+.B <
+.BR \-\-segment\-size .
+Default: 0.35.
+.TP
+.B \-\-hls\-seg\-pool \fIn\fR
+Segment buffer freelist cap per size class. Raise on a memory\-rich
+edge server to cut malloc under many concurrent HLS streams. Default: 8.
+.TP
+.B \-\-metrics \fIpath\fR
+Unix datagram socket for metrics. Default:
+.IR /run/dvbipitools/metrics.sock .
+.TP
+.B \-\-metrics\-id \fIname\fR
+Stable instance id. Default: none (metrics disabled unless set).
+.TP
+.B \-\-metrics\-interval \fIs\fR
+Snapshot interval. Default: 5.
+.TP
+.B \-\-metrics\-http
+Also serve
+.B /metrics
+ourselves. Default: off.
+.TP
+.BI "\-f, \-\-format " list
+Comma-separated route whitelist, from
+.BR ts ", " spts ", " rawaudio ", " hls ", " llhls ", " dash
+(
+.B hls
+covers both
+.B hls
+and
+.B hls\-fmp4
+routes). Formats not listed are disabled. Default: all enabled.
+.TP
+.B \-\-no\-url\-rtp
+Deactivate
+.BR /rtp/ .
+Default: off.
+.TP
+.B \-\-no\-url\-udp
+Deactivate
+.BR /udp/ .
+Default: off.
+.TP
+.B \-\-no\-url\-srt
+Deactivate
+.BR /srt/ .
+Default: off.
+.TP
+.B \-\-no\-pid\-filters
+Deactivate
+.BR ?filter= .
+Default: off.
+.TP
+.B \-\-no\-http2
+disable HTTP/2, default: off.
+.TP
+.B \-\-no\-http3
+disable HTTP/3, default: off.
+.TP
+.B \-\-no\-fcc
+Ignore SDS fcc. Default: off.
+.TP
+.B \-\-no\-ret
+Ignore SDS ret. Default: off.
+.TP
+.B \-\-no\-status
+Deactivate
+.BR /ui/status.js .
+Default: off.
+.TP
+.B \-\-status\-tpl \fIpath\fR
+Use this file instead of the built-in status page. Default: built-in.
+.TP
+.BI \-\-auth " user\fR:\fBpass"
+HTTP Basic Auth for
+.BR / ", " /ui/status.js ", and " /ui/ws/ .
+Default: off.
+.TP
+.B \-\-cors\-origin \fIlist\fR
+Comma-separated allowlist against
+.B Origin
+for
+.BR hls / hls\-fmp4 / llhls / dash
+responses. Default:
+.BR * .
+.TP
+.B \-\-ssdp\-ttl \fIn\fR
+Multicast TTL for SSDP packets. Default: 3.
+.TP
+.B \-\-ssdp\-iface \fIiface\fR
+Interface for SSDP announce/reply. Default: kernel default route.
+.TP
+.B \-\-ssdp\-interval \fIseconds\fR
+SSDP NOTIFY re\-announce period. Default: 60.
+.TP
+.B \-\-ssdp\-max\-age \fIseconds\fR
+Advertised
+.B CACHE\-CONTROL
+max\-age, must be
+.B >=
+2x
+.BR \-\-ssdp\-interval .
+Default: 1800.
+.TP
+.B \-\-enable\-dlna
+Serve SSDP and a UPnP MediaServer (DLNA), see DLNA below. Default: off.
+.TP
+.B \-\-dlna\-host \fIhost\fR[:\fIport\fR]
+Host[:port] advertised in SSDP/DIDL. Default:
+.BR \-\-listen ,
+if not
+.BR all .
+.TP
+.B \-\-dlna\-name \fIname\fR
+DLNA friendlyName. Default:
+.RI dipixy\ ( dlna\-host ).
+.TP
+.B \-\-dlna\-keep\-multicast
+.BR rtp / udp
+items point straight at their mgroup instead of
+.BR /spts ,
+see DLNA below. Default: off.
+.TP
+.BR \-d ", " \-\-daemonize
+Fork to background after startup, detach from terminal. Default: off.
+.TP
+.BR \-v ", " \-\-verbose
+Per-connection diagnostics on stderr. Default: off.
+.TP
+.B \-\-color \fIwhen\fR
+.BR auto | always | never .
+Default: auto.
+.TP
+.BR \-h ", " \-\-help
+Show usage and exit.
+.SH URL PATHS
+There is a shortcut: start
+.B dipixy
+with all your inputs and open
+.BR http://127.0.0.1:9080/ .
+The "URL Builder" lets you craft them easily.
+.PP
+The included web interface is basic on purpose.
+.RS
+.IP \(bu 2
+It's compiled-in.
+.IP \(bu 2
+Any web-based video player for HLS/LL-HLS/DASH would still hit some
+codec walls (AC3, E-AC3).
+.IP \(bu 2
+By staying a static website that's easy to read, it also functions as
+a kind of documentation:
+.B /ui/status.js
+is a JSON object with all "startup" info,
+.B /ui/ws/
+is the WebSocket for all dynamic information.
+.IP \(bu 2
+Using
+.BR \-\-status\-tpl ,
+you are invited to roll your own replacement; SIGHUP reloads it at
+runtime, easing your development.
+.IP \(bu 2
+.BI \-\-auth\ user : pass
+puts
+.BR / ", " /ui/status.js " and " /ui/ws/
+behind HTTP Basic Auth (checked on HTTP/1.1, HTTP/2 and HTTP/3
+alike). Every other route stays open.
+.RE
+.PP
+Anyway, here are the details. These routes address a source directly
+(\fIfmt\fR is one of \fBts\fR, \fBspts\fR, \fBrawaudio\fR, \fBhls\fR,
+\fBhls\-fmp4\fR, \fBllhls\fR, \fBdash\fR):
+.PP
+.RS
+/rtp/\fIaddr\fR:\fIport\fR/\fIfmt\fR    (RTP source)
+.br
+/udp/\fIaddr\fR:\fIport\fR/\fIfmt\fR    (plain MPEG-TS over UDP source)
+.br
+/srt/\fIaddr\fR:\fIport\fR/\fIfmt\fR    (SRT source, caller mode, dedup'd by addr:port)
+.RE
+.PP
+These two are bare, with no address, and at most one of each can ever
+exist:
+.PP
+.RS
+/rist/\fIfmt\fR    (the \fB\-i rist://@\fR\fIhost\fR:\fIport\fR source)
+.br
+/stdin/\fIfmt\fR   (the \fB\-i \-\fR source)
+.RE
+.PP
+These reach a channel list, indexed in
+.B \-i
+definition order:
+.PP
+.RS
+/list/\fIn\fR/item/\fIi\fR/\fIfmt\fR
+.br
+/list/\fIn\fR/name/\fIchannel\fR/\fIfmt\fR
+.RE
+.PP
+A named
+.B \-i
+(via
+.BR \-n ,
+see OPTIONS) is reachable the same way,
+.I name
+standing in for the whole bare or
+.BR /list/ n/
+piece \- both forms keep working side by side:
+.PP
+.RS
+/\fIname\fR/\fIfmt\fR    (\fB\-i \-\fR or \fB\-i rist://@\fR\fIhost\fR:\fIport\fR)
+.br
+/\fIname\fR/item/\fIi\fR/\fIfmt\fR
+.br
+/\fIname\fR/name/\fIchannel\fR/\fIfmt\fR
+.RE
+.PP
+.I fmt
+can be omitted (with or without a trailing slash); it then defaults to
+.BR ts .
+.PP
+Any path above accepts
+.BI ?filter= pids
+to drop PIDs from the output (comma-separated decimal or 0x-hex, e.g.
+.BR ?filter=101,0x20 ).
+Disable this feature with
+.BR \-\-no\-pid\-filters .
+.PP
+On a multi-program transport stream (MPTS),
+.B ts
+always passes every program through unchanged.
+.BR spts / hls / hls\-fmp4 / llhls / dash
+demux a single program and default to the first PMT that resolves.
+You can override this by selecting a specific PMT:
+.BI ?pmt= pid
+(decimal or 0x-hex).
+.B spts
+is a continuous raw TS push like
+.BR ts ,
+just guaranteed single-program: only the locked program's
+PAT/PMT/PCR/ES PIDs go out.
+.PP
+.B rawaudio
+locks the same way
+.RB ( ?pmt= ,
+default first PMT that resolves), then picks that program's
+lowest-numbered audio ES that is not dropped by
+.B ?filter=
+and forwards its PES payload as-is: raw data.
+.SH CODECS
+.B ts / spts
+and plain
+.B hls
+(TS segments) are a straight TS remux: any video/audio codec passes
+through untouched. Segmenting still needs to locate keyframes,
+understood for MPEG-2 Video, H.264/AVC and HEVC/H.265; other video
+codecs won't cut cleanly on an IDR/I-frame.
+.PP
+.BR hls\-fmp4 ", " llhls " and " dash
+build actual ISOBMFF (fMP4) sample entries, so their codec support is
+narrower:
+.RS
+.IP \(bu 2
+video: H.264/AVC, HEVC/H.265. MPEG-2 Video has no fMP4 sample entry
+and won't produce output.
+.IP \(bu 2
+audio: AAC (ADTS or LATM), AC-3, Enhanced AC-3 (E-AC-3), MPEG-1 Layer
+II (MP2).
+.RE
+.PP
+.B rawaudio
+just forwards a program's lowest-numbered audio ES's PES payload
+as-is, codec-agnostic.
+.SH DLNA
+.B dipixy
+comes with an integrated DLNA server, disabled by default.
+.PP
+If enabled
+.RB ( \-\-enable\-dlna ),
+dipixy announces itself as a UPnP MediaServer and serves a browsable
+ContentDirectory tree. You can override the announced hostname using
+.BR \-\-dlna\-host .
+If your network needs extra hops,
+.B \-\-ssdp\-ttl
+lets you customize its reach.
+.PP
+Assign a
+.BR \-n " \fIname\fR"
+to your inputs if you want nicer list names in your UPnP tree.
+.PP
+If an input was marked as
+.BR \-\-media\-type\ radio ,
+the stream(s) affected get flagged as
+.B upnp:class = object.item.audioItem.audioBroadcast
+and served as
+.BR /rawaudio .
+.B tv
+is always
+.BR /spts .
+.PP
+.B \-\-dlna\-name
+lets you set a nicer name to appear on your TV (like "MyProvider TV").
+.PP
+M3U's
+.B tvg\-logo
+and XSPF's
+.BR <image> ,
+as long as they point to a webserver, will get used as channel logos
+/ picons if present.
+.PP
+.B \-\-dlna\-keep\-multicast
+skips the http proxy for items whose source is a multicast
+.BR rtp:// " or " udp://
+group, whether from
+.B sds://
+discovery or a playlist entry: their DIDL
+.B res
+points the renderer straight at the mgroup via
+.RB protocolInfo=\(dq dvb\-igmp:*:33:* \(dq
+(IPv4) or
+.B dvb\-mld:*:33:*
+(IPv6), per ETSI TS 102 905.
+.BR srt:// /http(s)
+playlist entries and stdin/rist/http(s)
+.B \-i
+sources are unicast and always keep going through
+.BR /spts .
+.SH TLS
+If
+.BR \-\-tls\-cert / \-\-tls\-key
+aren't given, dipixy looks for
+.BR server.crt / server.key
+in the current working directory, in
+.BR /etc/dvbipitools/ ,
+and in
+.BR /etc/dvbipitools/dipixy/ .
+If none are found,
+.B \-\-listen\-tls
+is simply left unbound, and that is not an error. SIGUSR1 reloads the
+certificate without a restart.
+.SH DEPENDENCIES
+dipixy always speaks HTTP/1.1. HTTP/2
+.RI ( libnghttp2 )
+and HTTP/3
+.RI ( libngtcp2 " + " libngtcp2_crypto_ossl " + " libnghttp3 )
+are each auto-detected at build time, and TLS itself needs OpenSSL.
+Missing any of these disables that feature rather than failing the
+build.
+.BR \-\-no\-http2 " and " \-\-no\-http3
+turn either off at runtime regardless of what the binary was built
+with, and skip that protocol's connection buffers entirely.
+.PP
+RIST and SRT input need
+.IR librist / libsrt
+the same as every other tool here.
+.SH SIGNALS
+.TP
+.B ^C ", " SIGINT ", " SIGTERM
+Stop.
+.TP
+.B SIGHUP
+Re-read every
+.BR sds:// /playlist
+source and swap in the result; a source that fails to reload keeps
+serving its last-known-good list rather than going empty.
+.TP
+.B SIGUSR1
+Reload the TLS certificate.
+.SH BUGS
+.RS
+.IP \(bu 2
+Opening any form of HLS or DASH streams on a "cold" ingress stream
+means that there are no pre-produced segments available. This means
+that playback cannot start immediately.
+.IP \(bu 2
+RIST and SRT don't support bonding in this tool. You can use
+.BR dipirist (1)
+or
+.BR dipisrt (1)
+with
+.B \-i \-
+as a work-around.
+.IP \(bu 2
+The multicast client does not support FEC.
+.IP \(bu 2
+Radio. DVB-IPI installations wildly differ on how they implemented
+this. Some deliver an SPTS with one Audio PES. Others go full OTT,
+deliver raw streams or pack them into an MPTS until it's the size of
+their smallest TV profile. Similar for client support. VLC or Kodi
+will happily play a DLNA radio playlist, Samsung or LG most probably
+won't \- or maybe they do.
+.IP \(bu 2
+No transcoding here. While bursts won't be a problem, your DVB-IPI
+provider dislikes them as much as you do, heavy use of B-frames or a
+long GoP will collide with short segment sizes in HLS or DASH.
+.IP \(bu 2
+M3U and XSPF input playlists can contain
+.BR rtp:// ", " udp:// ", " srt://
+or HTTP(S) TS Push, not RIST, HLS or DASH.
+.RE
+.SH EXAMPLES
+.TP
+.B dipixy \-l 0.0.0.0:9080
+Direct routes, no channel list needed:
+.RS
+.B vlc http://localhost:9080/udp/239.1.1.1:5000/ts
+(TS push)
+.br
+.B vlc http://localhost:9080/rtp/239.1.1.1:5000/dash
+(MPEG DASH)
+.br
+.B vlc http://localhost:9080/srt/1.2.3.4:9000/hls
+(HLS, TS segments)
+.br
+.B vlc http://localhost:9080/srt/1.2.3.4:9000/hls\-fmp4
+(HLS, fMP4 segments)
+.br
+.B vlc http://localhost:9080/srt/1.2.3.4:9000/llhls
+(Low-Latency HLS)
+.RE
+.TP
+.B dipixy \-i sds://239.19.75.1:3937
+Live SD&S discovery as list 1.
+.TP
+.B dipixy \-l 0.0.0.0:9080 \-i channels.m3u
+A static M3U channel list, custom port.
+.TP
+.B dipixy \-L [::]:9443 \-\-tls\-cert server.crt \-\-tls\-key server.key \-i tv.xspf \-i radio.xspf
+HTTPS on IPv6, 2 XSPF lists.
+.TP
+.B ffmpeg \-re \-i source.mkv \-c copy \-f mpegts \- | dipixy \-i \- \-l 0.0.0.0:9080
+Stdin, fed by ffmpeg; then
+.BR "curl http://localhost:9080/stdin/hls\-fmp4" .
+.TP
+.B dipixy \-i rist://@0.0.0.0:9000 \-i https://origin.example/live.ts
+A RIST listener plus a pulled HTTP(S) source, indexed as list 1:
+.RS
+.B vlc http://localhost:9080/rist/dash
+.br
+.B vlc http://localhost:9080/list/1/item/1/llhls
+.RE
+.TP
+.B "vlc \(dqhttp://localhost:9080/udp/239.1.1.1:5000/llhls?filter=0x100,0x101&pmt=0x1000\(dq"
+LL-HLS, PID-filtered, one program picked out of an MPTS (by the PID
+of its PMT).
+.TP
+.B "vlc \(dqhttp://localhost:9080/udp/239.1.1.1:5000/spts?pmt=0x1000\(dq"
+Guaranteed single-program TS push out of an MPTS, same PMT selection
+as above.
+.TP
+.B dipixy \-l 0.0.0.0:9080 \-\-metrics\-id xy1
+Metrics alongside
+.BR dipimetrics (1).
+.TP
+.B dipixy \-i tv.xspf \-n tv \-i rist://@0.0.0.0:9000 \-n backup
+Named inputs, addressed by name instead of index:
+.RS
+.B vlc http://localhost:9080/tv/item/1/hls
+.br
+.B vlc http://localhost:9080/backup/ts
+.RE
+.TP
+.B dipixy \-l 0.0.0.0:9080 \-i channels.m3u \-\-enable\-dlna \-\-dlna\-host 192.0.2.10:9080
+DLNA MediaServer, browsable by any UPnP renderer on the LAN.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B nonzero
+Argument error, or listen-socket setup failure.
+.SH SEE ALSO
+.BR dipiscan (1),
+.BR dipisds (1),
+.BR dipirist (1),
+.BR dipisrt (1),
+.BR dipirec (1),
+.BR dipimetrics (1)
+.PP
+Project homepage: https://github.com/xplus2/dvbipitools
+.SH COPYRIGHT
+Licensed under the GNU General Public License, version 3 or later.

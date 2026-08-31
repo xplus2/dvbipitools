@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/xml_util.h"
+#include "lib/helper/xml_util.h"
 
 START_TEST(xml_escape_escapes_all_five_entities) {
   char *buf;

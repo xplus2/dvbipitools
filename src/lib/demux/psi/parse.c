@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "../../log.h"
+#include "../../helper/log.h"
 #include "../crc32.h"
 #include "../tspack.h"
 

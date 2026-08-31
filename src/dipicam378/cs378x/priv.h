@@ -25,6 +25,12 @@
 #define CMD_KEEPALIVE 55
 #define CMD_INVALID 8 /* "stop sending requests for srvid/prvid/caid" */
 
+typedef struct {
+  cs378x_server_t *s;
+  int fd;
+  int slot;
+} worker_arg_t;
+
 struct cs378x_server {
   int listen_fd;
   atomic_int stop;
@@ -33,6 +39,7 @@ struct cs378x_server {
   pthread_t worker_thread[CS378X_MAX_CONNS];
   int worker_thread_joinable[CS378X_MAX_CONNS];
   atomic_int worker_fd[CS378X_MAX_CONNS];
+  worker_arg_t worker_args[CS378X_MAX_CONNS]; /* no per-connection malloc, reuse gated by worker_active[] */
 
   unsigned char aes_key[16]; /* MD5(password) */
   unsigned char expected_ucrc[4]; /* crc32(MD5(username)); only checked if check_ucrc */
@@ -49,12 +56,6 @@ struct cs378x_server {
   atomic_ullong ecm_errors_total;
   atomic_ullong emm_total;
 };
-
-typedef struct {
-  cs378x_server_t *s;
-  int fd;
-  int slot;
-} worker_arg_t;
 
 /* protocol.c */
 void handle_ecm(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4], unsigned char *body, size_t buflen);

@@ -3,6 +3,7 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <stdlib.h>
@@ -11,7 +12,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "../log.h"
+#include "../helper/log.h"
 #include "multicast.h"
 #include "netconnect.h"
 
@@ -196,6 +197,13 @@ ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_o
 }
 
 int mcast_fd(const mcast_t *m) { return m->fd; }
+
+int mcast_set_nonblock(mcast_t *m) {
+  int flags = fcntl(m->fd, F_GETFL, 0);
+  if (flags < 0)
+    return -1;
+  return fcntl(m->fd, F_SETFL, flags | O_NONBLOCK);
+}
 
 mcast_t *mcast_open_send(int family, const char *group, unsigned port, const char *iface, int ttl) {
   mcast_t *m = calloc(1, sizeof *m);

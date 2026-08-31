@@ -12,9 +12,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "../ioutil.h"
-#include "../log.h"
-#include "../signal.h"
+#include "../helper/ioutil.h"
+#include "../helper/log.h"
+#include "../helper/signal.h"
 
 #include "netconnect.h"
 

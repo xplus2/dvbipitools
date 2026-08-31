@@ -15,7 +15,7 @@
 #include "lib/mux/psi_build.h"
 #include "lib/mux/rtcp_build.h"
 #include "lib/net/dvbstp.h"
-#include "lib/sds_xml.h"
+#include "lib/helper/sds_xml.h"
 #include "lib/tva/bcg_doc.h"
 
 static int write_file(const char *dir, const char *name, const unsigned char *data, size_t len) {

@@ -6,12 +6,12 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/net/srt/srtin.h"
 #include "lib/net/srt/srtout.h"
 #include "lib/net/tssink.h"
 #include "lib/net/tssource.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "args.h"
 #include "bridge.h"

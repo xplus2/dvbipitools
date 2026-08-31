@@ -3,14 +3,14 @@
 
 #include <string.h>
 
-#include "../beutil.h"
+#include "../helper/beutil.h"
 #include "rtcp.h"
 
 #define RTCP_PT_RTPFB 205 /* RFC 4585 transport layer feedback */
 #define RTCP_FMT_NACK 1 /* Generic NACK, RFC 4585 6.2.1 */
 #define RTCP_FMT_RAMS 6 /* RAMS, RFC 6285 sec 7 */
 
-#define RTCP_SFMT_RAMS_I 2 /* RFC 6285 7.3, server->client only, not parsed here */
+#define RTCP_SFMT_RAMS_I 2 /* RFC 6285 7.3 */
 
 #define RTCP_RAMS_TLV_MEDIA_SSRC 1
 #define RTCP_RAMS_TLV_MIN_BUFFER_FILL 2
@@ -18,6 +18,12 @@
 #define RTCP_RAMS_TLV_MAX_BITRATE 4
 
 #define RTCP_RAMS_TLV_FIRST_MC_SEQNUM 61
+
+#define RTCP_RAMS_I_TLV_MEDIA_SSRC 31
+#define RTCP_RAMS_I_TLV_FIRST_PACKET_SEQNUM 32
+#define RTCP_RAMS_I_TLV_EARLIEST_JOIN_TIME 33
+#define RTCP_RAMS_I_TLV_BURST_DURATION 34
+#define RTCP_RAMS_I_TLV_MAX_TRANSMIT_BITRATE 35
 
 #define RTCP_PT_SDES 202 /* RFC 3550 6.5 */
 #define RTCP_SDES_ITEM_END 0
@@ -153,7 +159,73 @@ static void parse_rams_t(const unsigned char *p, size_t len, uint32_t sender_ssr
     malformed_cb(RTCP_SFMT_RAMS_T, sender_ssrc, media_ssrc, user);
 }
 
-static void parse_rams(const unsigned char *p, size_t len, rtcp_rams_r_cb rams_r_cb, rtcp_rams_t_cb rams_t_cb, rtcp_malformed_cb malformed_cb, void *user) {
+static void parse_rams_i_tlvs(const unsigned char *p, size_t len, rtcp_rams_i_t *info) {
+  size_t off = 0;
+
+  while (off + 4 <= len) {
+    unsigned type = p[off];
+    uint16_t vlen = be16_get(p + off + 2);
+    size_t total = 4 + (size_t)vlen;
+    size_t padded = (total + 3) & ~(size_t)3;
+
+    if (off + total > len)
+      break;
+
+    switch (type) {
+      case RTCP_RAMS_I_TLV_MEDIA_SSRC:
+        if (vlen >= 4) {
+          info->has_media_ssrc_tlv = 1;
+          info->media_ssrc_tlv = be32_get(p + off + 4);
+        }
+        break;
+      case RTCP_RAMS_I_TLV_FIRST_PACKET_SEQNUM:
+        if (vlen >= 2) {
+          info->has_first_packet_seqnum = 1;
+          info->first_packet_seqnum = be16_get(p + off + 4);
+        }
+        break;
+      case RTCP_RAMS_I_TLV_EARLIEST_JOIN_TIME:
+        if (vlen >= 4) {
+          info->has_earliest_join_time = 1;
+          info->earliest_join_time_ms = be32_get(p + off + 4);
+        }
+        break;
+      case RTCP_RAMS_I_TLV_BURST_DURATION:
+        if (vlen >= 4) {
+          info->has_burst_duration = 1;
+          info->burst_duration_ms = be32_get(p + off + 4);
+        }
+        break;
+      case RTCP_RAMS_I_TLV_MAX_TRANSMIT_BITRATE:
+        if (vlen >= 8) {
+          info->has_max_transmit_bitrate = 1;
+          info->max_transmit_bitrate_bps = be64_get(p + off + 4);
+        }
+        break;
+      default:
+        break;
+    }
+    off += padded;
+  }
+}
+
+static void parse_rams_i(const unsigned char *p, size_t len, uint32_t sender_ssrc, uint32_t media_ssrc, rtcp_rams_i_cb cb, void *user) {
+  rtcp_rams_i_t info;
+
+  if (!cb || len < 4)
+    return;
+
+  memset(&info, 0, sizeof info);
+  info.sender_ssrc = sender_ssrc;
+  info.media_ssrc = media_ssrc;
+  info.msn = p[1];
+  info.response = be16_get(p + 2);
+
+  parse_rams_i_tlvs(p + 4, len - 4, &info);
+  cb(&info, user);
+}
+
+static void parse_rams(const unsigned char *p, size_t len, rtcp_rams_r_cb rams_r_cb, rtcp_rams_i_cb rams_i_cb, rtcp_rams_t_cb rams_t_cb, rtcp_malformed_cb malformed_cb, void *user) {
   uint32_t sender_ssrc, media_ssrc;
   unsigned sfmt;
 
@@ -166,16 +238,17 @@ static void parse_rams(const unsigned char *p, size_t len, rtcp_rams_r_cb rams_r
 
   if (sfmt == RTCP_SFMT_RAMS_R)
     parse_rams_r(p + 16, len - 16, sender_ssrc, media_ssrc, rams_r_cb, user);
+  else if (sfmt == RTCP_SFMT_RAMS_I)
+    parse_rams_i(p + 12, len - 12, sender_ssrc, media_ssrc, rams_i_cb, user);
   else if (sfmt == RTCP_SFMT_RAMS_T)
     parse_rams_t(p + 16, len - 16, sender_ssrc, media_ssrc, rams_t_cb, malformed_cb, user);
-  /* RAMS-I (server->client): not parsed here, intentionally skipped */
 }
 
-static void parse_rtpfb(const unsigned char *p, size_t len, unsigned fmt, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_t_cb rams_t_cb, rtcp_malformed_cb malformed_cb, void *user) {
+static void parse_rtpfb(const unsigned char *p, size_t len, unsigned fmt, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_i_cb rams_i_cb, rtcp_rams_t_cb rams_t_cb, rtcp_malformed_cb malformed_cb, void *user) {
   if (fmt == RTCP_FMT_NACK)
     parse_nack(p, len, nack_cb, user);
   else if (fmt == RTCP_FMT_RAMS)
-    parse_rams(p, len, rams_r_cb, rams_t_cb, malformed_cb, user);
+    parse_rams(p, len, rams_r_cb, rams_i_cb, rams_t_cb, malformed_cb, user);
   /* other FMT values: valid, intentionally skipped */
 }
 
@@ -228,7 +301,7 @@ static void parse_sdes(const unsigned char *p, size_t len, unsigned sc, rtcp_sde
   }
 }
 
-void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_t_cb rams_t_cb, rtcp_sdes_cb sdes_cb, rtcp_malformed_cb malformed_cb, void *user) {
+void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_i_cb rams_i_cb, rtcp_rams_t_cb rams_t_cb, rtcp_sdes_cb sdes_cb, rtcp_malformed_cb malformed_cb, void *user) {
   size_t off = 0;
 
   while (off + 4 <= len) {
@@ -241,7 +314,7 @@ void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_r
       break; /* stop before misparsing rest */
 
     if (pt == RTCP_PT_RTPFB)
-      parse_rtpfb(p + off, pkt_len, fmt, nack_cb, rams_r_cb, rams_t_cb, malformed_cb, user);
+      parse_rtpfb(p + off, pkt_len, fmt, nack_cb, rams_r_cb, rams_i_cb, rams_t_cb, malformed_cb, user);
     else if (pt == RTCP_PT_SDES)
       parse_sdes(p + off, pkt_len, fmt, sdes_cb, user);
     /* other types (SR/RR/BYE/PSFB): valid, intentionally skipped */

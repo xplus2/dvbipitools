@@ -4,17 +4,15 @@
 #ifndef DVBIPITOOLS_LIB_NET_HTTPCLIENT_PRIV_H
 #define DVBIPITOOLS_LIB_NET_HTTPCLIENT_PRIV_H
 
+#include "../../vendor/picohttpparser/picohttpparser.h"
 #include "../tls.h"
 #include "httpclient.h"
 
 #define HTTP_HDR_MAX 32
+#define HTTP_PARSE_MAX_HEADERS 64
 #define HTTP_REDIRECT_MAX 5
 #define HTTP_CONNECT_TIMEOUT_MS 5000
 #define HTTP_HEADER_TIMEOUT_MS 5000
-
-/* chunked transfer-coding (RFC 7230 4.1) decode state, driven byte-by-byte for
-   framing (size line, CRLFs, trailer) and in bulk for chunk data itself */
-typedef enum { CHUNK_SIZE_LINE, CHUNK_DATA, CHUNK_DATA_CRLF, CHUNK_TRAILER, CHUNK_DONE } chunk_state_t;
 
 struct http {
   int fd;
@@ -29,11 +27,8 @@ struct http {
   } hdr[HTTP_HDR_MAX];
   int hdr_count;
   int chunked;
-  chunk_state_t cstate;
-  unsigned long long chunk_remaining;
-  char sizeline[64];
-  size_t sizeline_len;
-  int sizeline_bad; /* size line exceeded sizeline[], reject at LF instead of using truncated value */
+  int chunk_done;
+  struct phr_chunked_decoder decoder;
 };
 
 typedef enum { HA_CONNECTING, HA_TLS_HANDSHAKE, HA_SENDING, HA_READING_HEADERS } http_async_phase_t;
@@ -59,10 +54,10 @@ int resolve_location(http_url_t *u, const char *loc);
 
 /* httpclient.c */
 ssize_t raw_recv(struct http *h, void *buf, size_t cap, net_err_reason_t *reason_out);
-void parse_headers(struct http *h, char *block);
 int setup_transfer_encoding(struct http *h, net_err_reason_t *reason_out);
 int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *user_agent, const char *extra_header);
-void finish_headers(struct http *h, const char *term, size_t termlen, size_t got);
 int http_is_redirect_status(int status);
+
+int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out);
 
 #endif

@@ -59,6 +59,7 @@ ln -s dvbipitools dipiscan
 ln -s dvbipitools dipibim
 ln -s dvbipitools dipicam378
 ln -s dvbipitools dipidescramble
+ln -s dvbipitools dipixy
 
 # your scripts nand your units stay unchanged 
 ./dipirec -i udp://239.1.1.1:5000 -o out.ts
@@ -84,6 +85,7 @@ Renaming would work too, but who wants to do that?
 | `dipisds`        | `sds`        |
 | `dipitvhead`     | `tvhead`     |
 | `dipixmltv`      | `xmltv`      |
+| `dipixmltv`      | `xy`         |
 
 `dipicam378`/`dipidescramble` need OpenSSL, `dipirist` needs librist, `dipisrt` needs libsrt, same as the
 standalone builds. Each is only in the table above if their dependencies were found.
@@ -98,8 +100,8 @@ See that tool's own README/`-h`.
 
 ## Exit status
 
-| code | meaning |
-|------|---------|
-| `0` | success, or bare invocation with no arguments (applet list printed) |
-| `2` | unrecognized applet name or subcommand |
-| other | whatever the dispatched tool itself returns |
+| code  | meaning                                                         |
+|-------|-----------------------------------------------------------------|
+| `0`   | success, or invocation with no arguments (applet list printed)  |
+| `2`   | unrecognized applet name or subcommand                          |
+| other | whatever the dispatched tool itself returns                     |

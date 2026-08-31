@@ -9,10 +9,10 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/metrics/protocol.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "args.h"
 #include "httpserver.h"

@@ -21,6 +21,10 @@ dvbipitools (2.4.0-1) unstable; urgency=medium
     + dipitvhead
     + dipirec
     + dipidescramble
+  * new: dipixy
+    + multicast to HLS/LL-HLS/HLS-TS/HLS-FMP4/MPEG-DASH/Progressive TS
+    + DLNA/UPnP-AV (~DVB-HN)
+  * picohttpparser
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.3.0-1) unstable; urgency=medium

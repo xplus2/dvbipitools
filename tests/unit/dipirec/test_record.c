@@ -7,7 +7,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 #include "dipirec/record.h"
 
 START_TEST(fmt_dur_under_an_hour_omits_hours) {

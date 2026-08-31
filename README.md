@@ -1,34 +1,36 @@
 # dvbipitools
 
-Tools for handling DVB-IPI streams.
+Tools for handling DVB-IPI.
 
 They kept piling up in private VCS over many years, so I finally decided to polish, consolidate, and publish them.
 GitHub is not the primary development repository, but releases are published here and pull requests are welcome.
 
-AI helped with the README files, `-h` boilerplate, man pages and test scaffolding they never had before.
+AI helped with the README files, `-h` boilerplate, man pages and test scaffolding.
 I did not let it mess up the hard parts.
 
 
 ## Fantastic tools and where to deploy them
 
-| Tool                                           | Contrib | Headend | Edge | Client | Lab | Purpose                                  |
-|------------------------------------------------|---------|---------|------|--------|-----|------------------------------------------|
-| [dipitvhead](src/dipitvhead/README.md)         | ✔️      | ✔️      |      |        | ✔️  | IPTV SCS/Muxer/Scrambler                 |
-| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      | ✔️      |      |        | ✔️  | Radio SCS/Muxer/Scrambler                |
-| [dipirist](src/dipirist/README.md)             | ✔️      | ✔️      |      |        | ✔️  | RTP/TS RIST bridge                       |
-| [dipisrt](src/dipisrt/README.md)               | ✔️      | ✔️      |      |        | ✔️  | RTP/TS SRT bridge                        |
-| [dipimetrics](src/dipimetrics/README.md)       | ✔️      | ✔️      | ✔️   |        | ✔️  | Per-host OpenMetrics                     |
-| [dipifccret](src/dipifccret/README.md)         |         | ✔️      | ✔️   |        | ✔️  | FCC (Annex I), RET (Annex F) server |
-| [dipisds](src/dipisds/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/SD&S (announce & listen)          |
-| [dipibcg](src/dipibcg/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/TVA BCG (publisher & reader)      |
-| [dipixmltv](src/dipixmltv/README.md)           |         | ✔️      |      | ✔️     | ✔️  | XMLTV <-> DVB-IPI TVA XML converter      |
-| [dipirec](src/dipirec/README.md)               |         |         |      | ✔️     | ✔️  | record and replay (FCC/RET client)       |
-| [dipiscan](src/dipiscan/README.md)             |         |         |      | ✔️     | ✔️  | Multicast TV/radio scanner (w/o SD&S)    |
-| [dipibim](src/dipibim/README.md)               |         |         |      |        | ✔️  | TVA XML BiM enc/dec (debug `dipibcg`)    |
-| [dipicam378](src/dipicam378/README.md)         |         |         |      |        | ✔️  | cs378x CAS test CAM                      |
-| [dipidescramble](src/dipidescramble/README.md) |         |         |      |        | ✔️  | CAS validation descrambler               |
-| [dvbipitools](src/dvbipitools/README.md)       | ✔️      | ✔️      | ✔️   |   ✔️   | ✔️  | All of the above (multicall)             |
+| Tool                                           | Contrib | Headend | Edge | Client | Lab | Purpose                                   |
+|------------------------------------------------|---------|---------|------|--------|-----|-------------------------------------------|
+| [dipitvhead](src/dipitvhead/README.md)         | ✔️      | ✔️      |      |        | ✔️  | IPTV SCS/Muxer/Scrambler                  |
+| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      | ✔️      |      |        | ✔️  | Radio SCS/Muxer/Scrambler                 |
+| [dipirist](src/dipirist/README.md)             | ✔️      | ✔️      |      |        | ✔️  | RTP/TS RIST bridge                        |
+| [dipisrt](src/dipisrt/README.md)               | ✔️      | ✔️      |      |        | ✔️  | RTP/TS SRT bridge                         |
+| [dipimetrics](src/dipimetrics/README.md)       | ✔️      | ✔️      | ✔️   |        | ✔️  | Per-host OpenMetrics                      |
+| [dipifccret](src/dipifccret/README.md)         |         | ✔️      | ✔️   |        | ✔️  | FCC (Annex I), RET (Annex F) server       |
+| [dipisds](src/dipisds/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/SD&S (announce & listen)           |
+| [dipibcg](src/dipibcg/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/TVA BCG (publisher & reader)       |
+| [dipixmltv](src/dipixmltv/README.md)           |         | ✔️      |      | ✔️     | ✔️  | XMLTV <-> DVB-IPI TVA XML converter       |
+| [dipirec](src/dipirec/README.md)               |         |         |      | ✔️     | ✔️  | record and replay (FCC/RET client)        |
+| [dipiscan](src/dipiscan/README.md)             |         |         |      | ✔️     | ✔️  | Multicast TV/radio scanner (w/o SD&S)     |
+| [dipixy](src/dipixy/README.md)                 |         |         | ✔️   | ✔️ HN  | ✔️  | Multicst to (LL)HLS, DASH, HTTP/TS + DLNA |
+| [dipibim](src/dipibim/README.md)               |         |         |      |        | ✔️  | TVA XML BiM enc/dec (debug `dipibcg`)     |
+| [dipicam378](src/dipicam378/README.md)         |         |         |      |        | ✔️  | cs378x CAS test CAM                       |
+| [dipidescramble](src/dipidescramble/README.md) |         | ✔️      |      |        | ✔️  | descrambler (BISS & CAS validation)       |
+| [dvbipitools](src/dvbipitools/README.md)       | ✔️      | ✔️      | ✔️   | ✔️     | ✔️  | All of the above (multicall)              |
 
+> HN: Home Network, not directly _on_ client devices.
 
 ## Build
 
@@ -69,7 +71,8 @@ cmake --build build
   + Optional: adds RIST support to `dipitvhead`, `dipiradiohead` and `dipirec`.
 * libsrt
   + Required to build `dipisrt` at all.
-
+* libnghttp2, libngtcp2, libngtcp2_crypto_ossl and libnghttp3
+  + HTTP/2 and HTTP/3 support in `dipixy`.
 
 ## Packaging
 ```sh
@@ -115,7 +118,8 @@ between real-world usage of media formats and the standard.
   - Reliable Internet Stream Transport (RIST) is not part of DVB.
 * dipisrt
   - Secure Reliable Transport (SRT) is not part of DVB.
-
+* dipixy
+  - HLS, LL-HLS and MPEG-DASH and not part of DVB-IPI, but (partially) in DVB-I 
 
 ### Known gaps
 On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
@@ -123,7 +127,6 @@ On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 * FEC (Annex E) 
 * Companion Stream FCC (Annex J). RAMS-based FCC is provided by `dipifccret`
 * DVB Companion Screens and Streams
-* DVB Home Network, ETSI TS 102 905
 * SD&S record type "CoD Discovery" and "Services From Other SPs"
 * RTSP command/control for CoD services and multicast join (§6)
 * DHCP-based IP address assignment for the HNED (§8)

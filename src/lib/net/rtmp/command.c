@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "auth.h"
-#include "lib/ioutil.h"
+#include "lib/helper/ioutil.h"
 #include "lib/mux/amf.h"
 #include "priv.h"
 

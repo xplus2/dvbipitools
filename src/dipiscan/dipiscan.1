@@ -1,4 +1,4 @@
-.TH DIPISCAN 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPISCAN 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipiscan \- scan and report on DVB-IPI multicast streams
 .SH SYNOPSIS
@@ -23,11 +23,27 @@ format, SD&S Broadcast Discovery XML (ETSI TS 102 034), or discarded
 entirely (only the stderr log remains). The M3U, XSPF, and CSV formats
 are convenience additions and are not part of the DVB-IPI specification.
 Every format also carries the DVB triplet (transport_stream_id,
-original_network_id, service_id) read from PAT/SDT.
+original_network_id, service_id) read from PAT/SDT: CSV as three extra
+columns, M3U as \fItsid\fR/\fIonid\fR/\fIsid\fR attributes on the
+.B #EXTINF
+line, XSPF as an
+.B <extension application="urn:dvbipitools:dvb-triplet">
+element per track, XML as the
+.B DVBTriplet
+element the schema already defines for it.
+.PP
+.B \-f xml
+also needs \fB\-P\fR (\fB\-\-provider\fR): the schema's DomainName is
+required, and dipiscan has no identity of its own to put there. Feed
+the result straight into
+.B "dipisds \-a \-i scan.xml \-m ..."
+to announce it.
 .PP
 By default one address is reported as one program: whichever program's
-PMT resolves first. With \fB\-M\fR, every program listed in the PAT at
-that address gets its own playlist entry.
+PMT resolves first (an MPTS address still answers, just with only one of
+its programs found). With \fB\-M\fR, every program listed in the PAT at
+that address gets its own playlist entry, same URI, distinct
+\fIsid\fR/name.
 .SH OPTIONS
 .TP
 .BR \-m ", " \-\-mcast " \fIaddr\fR"
@@ -44,29 +60,55 @@ Output format: m3u, csv, xspf, xml, or null. Default: m3u.
 DomainName for the output. Required when \fB\-f xml\fR is used.
 .TP
 .BR \-o ", " \-\-out " \fIpath\fR"
-Output file, or "\-" for stdout. Default: stdout.
+Output file, or "\-" for stdout. Default: stdout. Progress and
+\fB\-v\fR diagnostics always go to stderr, regardless of \fB\-o\fR.
 .TP
 .BR \-t ", " \-\-timeout " \fIsecs\fR"
-Wall-clock time budget per candidate. Default: 1.
+Wall-clock time budget per candidate for a named result (PAT + SDT
+service name). 1..3600. Default: 1. If a candidate produces no packets
+at all within 300 ms of the join, it is skipped early, without waiting
+out the full budget.
 .TP
 .BR \-M ", " \-\-mpts
-Report every program found at an address, not just the first. Waits out
-the whole timeout budget per address.
+Report every PAT-listed program at an address, not just the first.
+Changes what \fB\-t\fR waits for: instead of exiting as soon as any one
+program is named, the probe waits for every PAT-listed program to be
+named, up to the full \fB\-t\fR budget. A program whose PMT resolved but
+whose SDT name did not arrive in time is still reported, as "(no SDT)";
+one whose PMT never resolved is left out of that pass entirely. Raise
+\fB\-t\fR if a scanned mux carries several programs and rows go missing
+or come back unnamed.
 .TP
 .BR \-u ", " \-\-http\-proxy " \fIip\fR:\fIport\fR"
-Probe through an HTTP TS proxy instead of a direct IGMP/MLD join.
+Probe through an HTTP TS proxy instead of a direct IGMP/MLD join. Port
+defaults to 80 if omitted.
+.TP
+.BR \-x ", " \-\-http\-path " \fItmpl\fR"
+Request path template used against the proxy, \fB\-u\fR only.
+.B %g
+expands to the group address,
+.B %p
+to the port,
+.B %%
+to a literal "%"; any other character after "%" is invalid. Default:
+.IR /udp/%g:%p/ .
+Ignored (with a warning) if given without \fB\-u\fR.
 .TP
 .BR \-I ", " \-\-iface " \fIiface\fR"
-Interface to use for the multicast join. Default: kernel default route.
+Interface to use for the multicast join. Default: kernel default route,
+usually wrong when multi-homed.
 .TP
 .BR \-v ", " \-\-verbose
-Print per-candidate diagnostics on stderr.
+Print per-candidate packet counts on stderr, in addition to the name.
 .TP
 .B \-\-color \fIwhen\fR
 Control colored output: auto, always, or never. Default: auto.
 .TP
 .BR \-h ", " \-\-help
 Show usage and exit.
+.SH STOPPING
+SIGINT or SIGTERM stops the scan after the current candidate and closes
+the playlist properly.
 .SH EXAMPLES
 .TP
 .B dipiscan \-m 239.19.75.0 \-p 8700-8705 >hd.m3u
@@ -87,13 +129,15 @@ budget to allow every PAT-listed program to be named.
 .SH EXIT STATUS
 .TP
 .B 0
-Success.
+Success (including no options given: usage hint printed, nothing else
+done).
 .TP
 .B nonzero
-Argument error, or I/O or network failure.
+Argument error, output file could not be opened, or the scan was
+interrupted by a signal.
 .SH SEE ALSO
 .BR dipisds (1),
-.BR dipirec (1)
+.BR dipixy (1)
 .PP
 Project homepage: https://github.com/xplus2/dvbipitools
 .SH COPYRIGHT

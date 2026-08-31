@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "../beutil.h"
+#include "../helper/beutil.h"
 #include "rtcp_build.h"
 
 #define RTCP_PT_RTPFB 205 /* RFC 4585 transport layer feedback */
@@ -18,6 +18,13 @@
 #define RTCP_RAMS_TLV_EARLIEST_JOIN_TIME 33
 #define RTCP_RAMS_TLV_BURST_DURATION 34
 #define RTCP_RAMS_TLV_MAX_TRANSMIT_BITRATE 35
+
+#define RTCP_RAMS_R_TLV_IGNORE_MEDIA_SSRC 1
+#define RTCP_RAMS_R_TLV_MIN_BUFFER_FILL 2
+#define RTCP_RAMS_R_TLV_MAX_BUFFER_FILL 3
+#define RTCP_RAMS_R_TLV_MAX_BITRATE 4
+
+#define RTCP_RAMS_T_TLV_FIRST_MC_SEQNUM 61
 
 size_t rtcp_build_ff(uint32_t sender_ssrc, uint32_t media_ssrc, const rtcp_nack_entry_t *entries, size_t entry_count, unsigned char *out, size_t cap) {
   size_t total, words, i;
@@ -134,6 +141,91 @@ size_t rtcp_build_rsi_srbt_collision(const uint32_t *ssrcs, size_t count, unsign
   be16_put(out + 2, 0); /* Reserved */
   for (i = 0; i < count; i++)
     be32_put(out + 4 + i * 4, ssrcs[i]);
+
+  return total;
+}
+
+size_t rtcp_build_rams_r(const rtcp_rams_r_t *req, unsigned char *out, size_t cap) {
+  size_t total, words, off;
+
+  total = 16;
+  if (req->ignore_media_ssrc)
+    total += 4;
+  if (req->has_min_buffer_fill)
+    total += 8;
+  if (req->has_max_buffer_fill)
+    total += 8;
+  if (req->has_max_bitrate)
+    total += 12;
+  if (cap < total)
+    return 0;
+
+  out[0] = 0x80 | RTCP_FMT_RAMS;
+  out[1] = RTCP_PT_RTPFB;
+  words = total / 4 - 1;
+  be16_put(out + 2, (uint16_t)words);
+  be32_put(out + 4, req->sender_ssrc);
+  be32_put(out + 8, req->media_ssrc);
+  out[12] = RTCP_SFMT_RAMS_R;
+  out[13] = 0;
+  be16_put(out + 14, 0);
+
+  off = 16;
+  if (req->ignore_media_ssrc) {
+    out[off] = RTCP_RAMS_R_TLV_IGNORE_MEDIA_SSRC;
+    out[off + 1] = 0;
+    be16_put(out + off + 2, 0);
+    off += 4;
+  }
+  if (req->has_min_buffer_fill) {
+    out[off] = RTCP_RAMS_R_TLV_MIN_BUFFER_FILL;
+    out[off + 1] = 0;
+    be16_put(out + off + 2, 4);
+    be32_put(out + off + 4, req->min_buffer_fill_ms);
+    off += 8;
+  }
+  if (req->has_max_buffer_fill) {
+    out[off] = RTCP_RAMS_R_TLV_MAX_BUFFER_FILL;
+    out[off + 1] = 0;
+    be16_put(out + off + 2, 4);
+    be32_put(out + off + 4, req->max_buffer_fill_ms);
+    off += 8;
+  }
+  if (req->has_max_bitrate) {
+    out[off] = RTCP_RAMS_R_TLV_MAX_BITRATE;
+    out[off + 1] = 0;
+    be16_put(out + off + 2, 8);
+    be64_put(out + off + 4, req->max_bitrate_bps);
+  }
+
+  return total;
+}
+
+size_t rtcp_build_rams_t(const rtcp_rams_t_t *term, unsigned char *out, size_t cap) {
+  size_t total, words;
+
+  total = 16;
+  if (term->has_first_mc_seqnum)
+    total += 8;
+  if (cap < total)
+    return 0;
+
+  out[0] = 0x80 | RTCP_FMT_RAMS;
+  out[1] = RTCP_PT_RTPFB;
+  words = total / 4 - 1;
+  be16_put(out + 2, (uint16_t)words);
+  be32_put(out + 4, term->sender_ssrc);
+  be32_put(out + 8, term->media_ssrc);
+  out[12] = RTCP_SFMT_RAMS_T;
+  out[13] = 0;
+  be16_put(out + 14, 0);
+
+  if (term->has_first_mc_seqnum) {
+    out[16] = RTCP_RAMS_T_TLV_FIRST_MC_SEQNUM;
+    out[17] = 0;
+    be16_put(out + 18, 4);
+    be32_put(out + 20, term->first_mc_seqnum);
+  }
 
   return total;
 }

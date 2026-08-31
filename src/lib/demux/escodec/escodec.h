@@ -33,6 +33,8 @@ typedef struct {
   size_t outlen;
   unsigned rate, ch, samples;
   int layer;
+  unsigned bsid, bsmod, acmod, lfeon; /* AC3/EAC3 dac3/dec3 fields, unset otherwise */
+  unsigned bitrate_code;              /* AC3 only: 5-bit frmsizecod, dac3's bit_rate_code */
 } esc_frame_t;
 
 /* video.c */

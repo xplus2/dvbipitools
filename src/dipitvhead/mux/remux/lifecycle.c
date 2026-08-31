@@ -3,8 +3,8 @@
 
 #include <stdlib.h>
 
-#include "lib/ioutil.h"
-#include "lib/log.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/mux/cadescbuild.h"
 
 #include "../../version.h"

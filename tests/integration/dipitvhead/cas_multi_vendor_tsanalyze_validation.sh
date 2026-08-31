@@ -5,9 +5,19 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze tsecmg jq; do
+for t in ffmpeg tsp tsanalyze tsecmg jq nc; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
+
+wait_port() {
+    i=0
+    while [ $i -lt 50 ]; do
+        nc -z 127.0.0.1 "$1" >/dev/null 2>&1 && return 0
+        i=$((i + 1))
+        sleep 0.1
+    done
+    return 1
+}
 
 MCAST=239.255.7.44
 ECMG_A_PORT=12244
@@ -25,7 +35,8 @@ tsecmg -p $ECMG_A_PORT -s --log-protocol=info >"$WORK/tsecmg_a1.log" 2>&1 &
 ECMG_A_PID=$!
 tsecmg -p $ECMG_B_PORT -s --log-protocol=info >"$WORK/tsecmg_b1.log" 2>&1 &
 ECMG_B_PID=$!
-sleep 0.3
+wait_port $ECMG_A_PORT || fail "tsecmg (vendor A) never started listening on $ECMG_A_PORT (see $WORK/tsecmg_a1.log)"
+wait_port $ECMG_B_PORT || fail "tsecmg (vendor B) never started listening on $ECMG_B_PORT (see $WORK/tsecmg_b1.log)"
 
 tsp -I ip $MCAST:$PORT1 --local-address 127.0.0.1 --receive-timeout 6000 \
     -O file "$cap1" >"$WORK/tsp1.log" 2>&1 &
@@ -70,7 +81,7 @@ report2="$WORK/cas_multi_nonrequired_down.json"
 
 tsecmg -p $ECMG_A_PORT -s --log-protocol=info >"$WORK/tsecmg_a2.log" 2>&1 &
 ECMG_A_PID=$!
-sleep 0.3
+wait_port $ECMG_A_PORT || fail "tsecmg (vendor A) never started listening on $ECMG_A_PORT (see $WORK/tsecmg_a2.log)"
 
 tsp -I ip $MCAST:$PORT2 --local-address 127.0.0.1 --receive-timeout 6000 \
     -O file "$cap2" >"$WORK/tsp2.log" 2>&1 &
@@ -107,7 +118,7 @@ report3="$WORK/cas_multi_required_down.json"
 
 tsecmg -p $ECMG_B_PORT -s --log-protocol=info >"$WORK/tsecmg_b3.log" 2>&1 &
 ECMG_B_PID=$!
-sleep 0.3
+wait_port $ECMG_B_PORT || fail "tsecmg (vendor B) never started listening on $ECMG_B_PORT (see $WORK/tsecmg_b3.log)"
 
 tsp -I ip $MCAST:$PORT3 --local-address 127.0.0.1 --receive-timeout 6000 \
     -O file "$cap3" >"$WORK/tsp3.log" 2>&1 &

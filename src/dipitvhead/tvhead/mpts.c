@@ -7,9 +7,9 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/net/retryset.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "mpts/priv.h"
 

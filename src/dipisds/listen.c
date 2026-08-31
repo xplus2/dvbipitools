@@ -6,14 +6,14 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 #include "format_out.h"
 #include "input.h"
 #include "listen.h"
-#include "lib/sds_xml.h"
+#include "lib/helper/sds_xml.h"
 #include "version.h"
 
 #define RECV_BUF 65536

@@ -1,4 +1,4 @@
-.TH DIPIDESCRAMBLE 1 "2026-08-24" "dvbipitools" "dvbipitools Manual"
+.TH DIPIDESCRAMBLE 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipidescramble \- standalone CAS validation client / descrambler
 .SH SYNOPSIS
@@ -124,19 +124,29 @@ and
 .B rtmps://
 (self-signed cert, hostname mismatch, expiry).
 .TP
+.B \-\-token\-header \fIname\fR
+HTTP header carrying the token for
+.BR \-u / \-\-unicast\-emm .
+Default
+.BR X\-Device\-Token .
+.TP
 .B \-\-biss2\-sw \fIhex32\fR
-BISS2 Mode 1: 32 hex char Session Word.
+BISS2 Mode 1: 32 hex char Session Word. Mutually exclusive with
+.BR \-\-biss2\-esw .
 .TP
 .B \-\-biss2\-esw \fIhex32\fR
 BISS2 Mode E: 32 hex char Encrypted Session Word. Needs
-.BR \-\-biss2\-id .
+.BR \-\-biss2\-id ,
+mutually exclusive with
+.BR \-\-biss2\-sw .
 .TP
 .B \-\-biss2\-id \fIhex32\fR
 BISS2 Mode E: 32 hex char receiver ID for
 .BR \-\-biss2\-esw .
 .TP
 .B \-\-biss1\-sw \fIhex12\fR
-Legacy BISS1 Mode 1: 12 hex char Session Word.
+Legacy BISS1 Mode 1: 12 hex char Session Word. Mutually exclusive with
+.BR \-\-biss2\-sw / \-\-biss2\-esw .
 .TP
 .B \-\-biss2\-ca\-key \fIpath\fR
 BISS Mode CA: receiver RSA private key, PEM.
@@ -189,7 +199,8 @@ targets may mix;
 needs exactly one plain file target.
 .TP
 .BR \-p ", " \-\-pmt\-pid " " \fIpid\fR|\fBall\fR
-MPTS source only: pin one PMT pid, or descramble every program
+MPTS source only: pin one PMT pid (0x0010..0x1FFE, rejected if not in the
+PAT), or descramble every program
 .RB ( all ;
 rejected with
 .BR \-f\ mkv ).
@@ -211,8 +222,18 @@ or
 Default
 .BR auto .
 .TP
+.B \-\-metrics \fIpath\fR
+Unix datagram socket for metrics. Default
+.IR /run/dvbipitools/metrics.sock .
+.TP
+.B \-\-metrics\-id \fIname\fR
+Stable instance id. Metrics stay disabled unless this is set.
+.TP
+.B \-\-metrics\-interval \fIs\fR
+Snapshot interval in seconds, 1..86400. Default 5.
+.TP
 .B \-\-max\-services \fIn\fR
-Max services tracked in the EMM cache, 1..256. Default 32.
+Max EMM-G service_ids tracked in the EMM cache, 1..256. Default 32.
 .TP
 .B \-\-profile \fIsimple\fR|\fImain\fR
 RIST profile for
@@ -288,12 +309,18 @@ and an EMM cache, writing a plain
 .B .ts
 file.
 .TP
+.B dipidescramble \-i rtp://@239.0.0.1:1975 \-k device.key \-s e2e-01 \-e emm.cache \-o out.mka \-f mka \-p all
+MPTS source: descramble the whole mux, one audio track per program.
+.TP
 .B dipidescramble \-i rtp://@239.0.0.1:1975 \-\-biss2\-sw 00112233445566778899aabbccddeeff \-o out.ts
 BISS2 Mode 1: descramble with a known Session Word, no device key needed.
 .TP
-.B dipidescramble \-i rtp://@239.0.0.1:1975 \-\-biss2\-sw 00112233445566778899aabbccddeeff \-o rtmp://live.example.com/app/key
-BISS2 Mode 1, pushing the descrambled stream live to an RTMP ingest
-server instead of writing a file.
+.B dipidescramble \-i rtp://@239.0.0.1:1975 \-\-biss2\-ca\-key receiver1.key \-o out.ts
+BISS2 Mode CA: descramble using this receiver's own RSA private key.
+.TP
+.B dipidescramble \-i rtp://@239.0.0.1:1975 \-\-biss2\-sw 00112233445566778899aabbccddeeff \-o out.ts \-o rtmp://live.example.com/app/key
+BISS2 Mode 1, writing a local file and pushing live to an RTMP ingest
+server at the same time.
 .SH EXIT STATUS
 .B 0
 on success.

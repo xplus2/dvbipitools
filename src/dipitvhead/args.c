@@ -8,13 +8,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/argutil.h"
+#include "lib/helper/argutil.h"
 #include "lib/cas/biss/biss.h"
 #include "lib/cas/cas_args.h"
 #include "lib/cas/emmg_server/emmg_server.h"
-#include "lib/ioutil.h"
-#include "lib/log.h"
-#include "lib/uriparse.h"
+#include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
+#include "lib/helper/uriparse.h"
 
 #include "args.h"
 #include "mux/pmtbuild.h"
@@ -28,6 +28,23 @@ static void argerr(const char *fmt, ...) {
   argutil_verr(TOOL_NAME, fmt, ap);
   va_end(ap);
 }
+
+/* args_parse()-only: cfg is that function's config_t* param */
+#define REQUIRE_INPUT(opt) \
+  do { \
+    if (cfg->n_inputs == 0) { \
+      argerr(opt " must follow the -i it names"); \
+      return ARGS_ERR; \
+    } \
+  } while (0)
+
+#define REQUIRE_CAS_VENDOR(opt) \
+  do { \
+    if (cfg->n_cas_vendors == 0) { \
+      argerr(opt " must follow the --cas-ecmg it names"); \
+      return ARGS_ERR; \
+    } \
+  } while (0)
 
 /* [@]<addr>:<port> or [@][<addr6>]:<port>, multicast literal required */
 static int mcast_group_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
@@ -96,10 +113,10 @@ void source_describe(const source_t *s, char *buf, size_t n) {
     snprintf(buf, n, "%s://%s:%u%s", s->http.tls ? "https" : "http", s->http.host, s->http.port, s->http.path);
     break;
   case SRC_STDIN:
-    snprintf(buf, n, "-");
+    bufcpy(buf, n, "-");
     break;
   case SRC_RIST:
-    snprintf(buf, n, "%s", s->rist_uri);
+    bufcpy(buf, n, s->rist_uri);
     break;
   case SRC_SRT:
     if (s->srt_family == AF_INET6)
@@ -461,10 +478,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 'p':
-        if (cfg->n_inputs == 0) {
-          argerr("-p/--pmt-pid must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("-p/--pmt-pid");
         if (pid_parse(optarg, &cfg->inputs[cfg->n_inputs - 1].pmt_pid) || cfg->inputs[cfg->n_inputs - 1].pmt_pid == 0) {
           argerr("invalid -p pmt-pid: %s (0x0010..0x1FFE)", optarg);
           return ARGS_ERR;
@@ -478,10 +492,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         have_mcast = 1;
         break;
       case 'I':
-        if (cfg->n_inputs == 0) {
-          argerr("-I/--iface must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("-I/--iface");
         cfg->inputs[cfg->n_inputs - 1].iface_in = optarg;
         break;
       case 'O':
@@ -509,10 +520,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 's':
-        if (cfg->n_inputs == 0) {
-          argerr("-s/--sdt must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("-s/--sdt");
         if (strcmp(optarg, "-") == 0) {
           cfg->inputs[cfg->n_inputs - 1].sdt_mode = TABLE_DROP;
         } else {
@@ -537,44 +545,29 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->burst_limit = 1;
         break;
       case 1000:
-        if (cfg->n_inputs == 0) {
-          argerr("--strip-eit must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--strip-eit");
         cfg->inputs[cfg->n_inputs - 1].strip_eit = 1;
         break;
       case 1034:
-        if (cfg->n_inputs == 0) {
-          argerr("--strip must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--strip");
         if (parse_strip(optarg, &cfg->inputs[cfg->n_inputs - 1].strip_mask)) {
           argerr("invalid --strip: %s (comma list of DATA,ECM, or \"none\")", optarg);
           return ARGS_ERR;
         }
         break;
       case 1001:
-        if (cfg->n_inputs == 0) {
-          argerr("--hbbtv must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--hbbtv");
         cfg->inputs[cfg->n_inputs - 1].hbbtv_url = optarg;
         break;
       case 1002:
-        if (cfg->n_inputs == 0) {
-          argerr("--hbbtv-org-id must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--hbbtv-org-id");
         if (org_id_parse(optarg, &cfg->inputs[cfg->n_inputs - 1].hbbtv_org_id)) {
           argerr("invalid --hbbtv-org-id: %s", optarg);
           return ARGS_ERR;
         }
         break;
       case 1003:
-        if (cfg->n_inputs == 0) {
-          argerr("--hbbtv-app-id must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--hbbtv-app-id");
         if (id_parse(optarg, &cfg->inputs[cfg->n_inputs - 1].hbbtv_app_id)) {
           argerr("invalid --hbbtv-app-id: %s", optarg);
           return ARGS_ERR;
@@ -606,10 +599,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 1006:
-        if (cfg->n_inputs == 0) {
-          argerr("--sid must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--sid");
         if (id_parse(optarg, &cfg->inputs[cfg->n_inputs - 1].sid)) {
           argerr("invalid --sid: %s (1..65535)", optarg);
           return ARGS_ERR;
@@ -656,10 +646,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       }
       case 1010:
         any_cas_flag = 1;
-        if (cfg->n_cas_vendors == 0) {
-          argerr("--cas-ecmg-version must follow the --cas-ecmg it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_CAS_VENDOR("--cas-ecmg-version");
         if (cas_version_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].ecmg_version)) {
           argerr("invalid --cas-ecmg-version: %s (2|3)", optarg);
           return ARGS_ERR;
@@ -667,10 +654,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1011:
         any_cas_flag = 1;
-        if (cfg->n_cas_vendors == 0) {
-          argerr("--cas-super-id must follow the --cas-ecmg it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_CAS_VENDOR("--cas-super-id");
         if (cas_super_id_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].super_cas_id)) {
           argerr("invalid --cas-super-id: %s", optarg);
           return ARGS_ERR;
@@ -678,10 +662,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1012:
         any_cas_flag = 1;
-        if (cfg->n_cas_vendors == 0) {
-          argerr("--cas-ecm-id must follow the --cas-ecmg it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_CAS_VENDOR("--cas-ecm-id");
         if (id_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].ecm_id)) {
           argerr("invalid --cas-ecm-id: %s (1..65535)", optarg);
           return ARGS_ERR;
@@ -689,10 +670,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1013:
         any_cas_flag = 1;
-        if (cfg->n_cas_vendors == 0) {
-          argerr("--cas-ecm-pid must follow the --cas-ecmg it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_CAS_VENDOR("--cas-ecm-pid");
         if (pid_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].ecm_pid) || cfg->cas_vendors[cfg->n_cas_vendors - 1].ecm_pid == 0) {
           argerr("invalid --cas-ecm-pid: %s (0x0001..0x1FFE)", optarg);
           return ARGS_ERR;
@@ -700,10 +678,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1014:
         any_cas_flag = 1;
-        if (cfg->n_cas_vendors == 0) {
-          argerr("--cas-emmg-port must follow the --cas-ecmg it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_CAS_VENDOR("--cas-emmg-port");
         if (argutil_port_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].emmg_port)) {
           argerr("invalid --cas-emmg-port: %s", optarg);
           return ARGS_ERR;
@@ -711,10 +686,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1015:
         any_cas_flag = 1;
-        if (cfg->n_cas_vendors == 0) {
-          argerr("--cas-emmg-version must follow the --cas-ecmg it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_CAS_VENDOR("--cas-emmg-version");
         if (cas_version_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].emmg_version)) {
           argerr("invalid --cas-emmg-version: %s (2|3)", optarg);
           return ARGS_ERR;
@@ -724,10 +696,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         char *end;
         unsigned long v;
         any_cas_flag = 1;
-        if (cfg->n_cas_vendors == 0) {
-          argerr("--cas-emmg-max-conns must follow the --cas-ecmg it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_CAS_VENDOR("--cas-emmg-max-conns");
         v = strtoul(optarg, &end, 10);
         if (*end != '\0' || v == 0 || v > EMMG_MAX_CONNS_CEILING) {
           argerr("invalid --cas-emmg-max-conns: %s (1..%u)", optarg, EMMG_MAX_CONNS_CEILING);
@@ -738,10 +707,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       }
       case 1016:
         any_cas_flag = 1;
-        if (cfg->n_cas_vendors == 0) {
-          argerr("--cas-emm-pid must follow the --cas-ecmg it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_CAS_VENDOR("--cas-emm-pid");
         if (pid_parse(optarg, &cfg->cas_vendors[cfg->n_cas_vendors - 1].emm_pid) || cfg->cas_vendors[cfg->n_cas_vendors - 1].emm_pid == 0) {
           argerr("invalid --cas-emm-pid: %s (0x0001..0x1FFE)", optarg);
           return ARGS_ERR;
@@ -771,10 +737,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         static const enum_map_t map[] = {{"frozen", CAS_OUTAGE_FROZEN}, {"cycling", CAS_OUTAGE_CYCLING}, {"silent", CAS_OUTAGE_SILENT}};
         int v;
         any_cas_flag = 1;
-        if (cfg->n_cas_vendors == 0) {
-          argerr("--cas-resilience must follow the --cas-ecmg it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_CAS_VENDOR("--cas-resilience");
         if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
           argerr("invalid --cas-resilience: %s (frozen|cycling|silent)", optarg);
           return ARGS_ERR;
@@ -800,10 +763,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       }
       case 1023:
         any_cas_flag = 1;
-        if (cfg->n_cas_vendors == 0) {
-          argerr("--cas-required must follow the --cas-ecmg it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_CAS_VENDOR("--cas-required");
         cfg->cas_vendors[cfg->n_cas_vendors - 1].required = 1;
         break;
       case 1024:
@@ -920,10 +880,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1036: {
         static const enum_map_t map[] = {{"simple", 0}, {"main", 1}};
         int v;
-        if (cfg->n_inputs == 0) {
-          argerr("--rist-profile-in must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--rist-profile-in");
         if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
           argerr("invalid --rist-profile-in: %s (simple|main)", optarg);
           return ARGS_ERR;
@@ -932,10 +889,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1037:
-        if (cfg->n_inputs == 0) {
-          argerr("--srt-passphrase-in must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--srt-passphrase-in");
         if (bufcpy(cfg->inputs[cfg->n_inputs - 1].srt_passphrase_in, sizeof cfg->inputs[0].srt_passphrase_in, optarg) >=
             sizeof cfg->inputs[0].srt_passphrase_in) {
           argerr("--srt-passphrase-in too long");
@@ -945,10 +899,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1038: {
         char *end;
         unsigned long v;
-        if (cfg->n_inputs == 0) {
-          argerr("--srt-pbkeylen-in must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--srt-pbkeylen-in");
         v = strtoul(optarg, &end, 10);
         if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
           argerr("invalid --srt-pbkeylen-in: %s (16|24|32)", optarg);
@@ -958,10 +909,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1039:
-        if (cfg->n_inputs == 0) {
-          argerr("--srt-streamid-in must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--srt-streamid-in");
         if (bufcpy(cfg->inputs[cfg->n_inputs - 1].srt_streamid_in, sizeof cfg->inputs[0].srt_streamid_in, optarg) >=
             sizeof cfg->inputs[0].srt_streamid_in) {
           argerr("--srt-streamid-in too long");
@@ -969,10 +917,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 1040:
-        if (cfg->n_inputs == 0) {
-          argerr("--srt-packetfilter-in must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--srt-packetfilter-in");
         if (bufcpy(cfg->inputs[cfg->n_inputs - 1].srt_packetfilter_in, sizeof cfg->inputs[0].srt_packetfilter_in, optarg) >=
             sizeof cfg->inputs[0].srt_packetfilter_in) {
           argerr("--srt-packetfilter-in too long");
@@ -982,10 +927,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1041: {
         char *end;
         unsigned long v;
-        if (cfg->n_inputs == 0) {
-          argerr("--srt-latency-in must follow the -i it names");
-          return ARGS_ERR;
-        }
+        REQUIRE_INPUT("--srt-latency-in");
         v = strtoul(optarg, &end, 10);
         if (*end != '\0' || v == 0 || v > 60000) {
           argerr("invalid --srt-latency-in: %s (1..60000 ms)", optarg);

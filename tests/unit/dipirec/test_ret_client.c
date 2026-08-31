@@ -13,18 +13,18 @@
 
 #include "lib/demux/rtcp.h"
 #include "lib/mux/rtx.h"
-#include "lib/signal.h"
-#include "dipirec/ret_client.h"
+#include "lib/helper/signal.h"
+#include "lib/fccret/ret_client.h"
 
 static ret_client_t *open_client(unsigned nack_port, unsigned wait_ms) {
-  config_t cfg;
+  ret_client_cfg_t cfg;
   memset(&cfg, 0, sizeof cfg);
-  cfg.ret.family = AF_INET;
-  strcpy(cfg.ret.addr, "127.0.0.1");
-  cfg.ret.port = nack_port;
-  cfg.ret.mc_enabled = 0;
-  cfg.ret.rtx_pt = 99;
-  cfg.ret.wait_ms = wait_ms;
+  cfg.family = AF_INET;
+  strcpy(cfg.addr, "127.0.0.1");
+  cfg.port = nack_port;
+  cfg.mc_enabled = 0;
+  cfg.rtx_pt = 99;
+  cfg.wait_ms = wait_ms;
   return ret_client_open(&cfg);
 }
 
@@ -273,7 +273,7 @@ START_TEST(a_gap_sends_a_real_nack_on_the_wire) {
   ck_assert_int_gt(n, 0);
 
   g_nack_count = 0;
-  rtcp_parse(rbuf, (size_t)n, nack_cb, NULL, NULL, NULL, NULL, NULL);
+  rtcp_parse(rbuf, (size_t)n, nack_cb, NULL, NULL, NULL, NULL, NULL, NULL);
   ck_assert_int_eq(g_nack_count, 1);
   ck_assert_uint_eq(g_last_nack.entry_count, 1u);
   ck_assert_uint_eq(g_last_nack.entry[0].pid, 101u);

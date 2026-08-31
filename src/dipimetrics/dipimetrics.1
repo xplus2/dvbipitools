@@ -1,41 +1,53 @@
-.TH DIPIMETRICS 1 "2026-08-17" "dvbipitools" "dvbipitools Manual"
+.TH DIPIMETRICS 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
-dipimetrics \- collect and serve headend metrics as Prometheus/OpenMetrics
+dipimetrics \- collect and serve dvbipitools metrics as Prometheus/OpenMetrics
 .SH SYNOPSIS
 .B dipimetrics
 [\fIoptions\fR]
 .SH DESCRIPTION
 .B dipimetrics
-is a DVB-IPI headend metrics collector. It receives periodic snapshots from
-.BR dipitvhead ,
-.BR dipiradiohead ,
-.B dipisds
+is a host-level metrics collector for
+.BR dipitvhead (1),
+.BR dipiradiohead (1),
+.BR dipisds (1),
+.BR dipibcg (1),
+.BR dipirist (1),
+.BR dipirec (1),
+.BR dipidescramble (1),
+.BR dipicam378 (1),
+.BR dipifccret (1),
+.BR dipisrt (1)
 and
-.B dipibcg
-over a Unix datagram socket, and serves them as a single Prometheus/OpenMetrics
-text document at
+.BR dipixy (1).
+Each of these, if started with its own
+.B \-\-metrics-id
+option, periodically sends a self-contained snapshot of its own counters
+over a Unix datagram socket: a header (component, instance id, process
+start time, sequence number, timestamp) followed by metric entries.
+.B dipimetrics
+retains the latest snapshot per (component, instance) pair and serves
+them all as one Prometheus/OpenMetrics text document at
 .B GET /metrics
 over plain HTTP.
 .PP
-Each exporting tool, if started with its own
-.B \-\-metrics-id
-option, sends a self-contained snapshot (component, instance id, process
-start time, sequence number, timestamp, and metric entries) at its own
-interval.
-.B dipimetrics
-retains only the latest snapshot per (component, instance) pair, rejects
-malformed, oversized, or unsupported-protocol-version datagrams, and drops
-an instance from the output once it has gone quiet for longer than
+A snapshot with a sequence number not greater than the last one seen for
+the same (component, instance) is dropped as stale/out of order. A
+different process start time is treated as the exporter having
+restarted, and is always accepted, replacing all prior state for that
+instance. Malformed, oversized, or unsupported-protocol-version
+datagrams are rejected outright. Up to 64 instances are tracked
+concurrently; a 65th distinct (component, instance) pair is dropped and
+logged under
+.BR \-v .
+An instance that has not sent a snapshot in
 .BR \-e / \-\-expiry
-seconds.
+seconds is dropped entirely, rather than serving an arbitrarily stale
+last-known value.
 .PP
-The HTTP side is intentionally minimal: one request handled at a time, a
-short read/write budget per connection, no TLS, no authentication. It is
-meant as a local diagnostics/scrape endpoint for infrequent polling, not as
-a general-purpose web server.
-.PP
-OpenMetrics is not part of any DVB/ETSI specification; it is used here as a
-convenience for integration with standard monitoring stacks.
+The receiving socket is
+.BR SOCK_DGRAM ,
+bound and never blocked on: a slow or absent collector never affects
+the exporters, which are already best-effort senders themselves.
 .SH OPTIONS
 .TP
 .BR \-S ", " \-\-sock\ \fI<path>\fR
@@ -44,14 +56,21 @@ Unix datagram socket to receive snapshots on. Default:
 .TP
 .BR \-l ", " \-\-listen\ \fI<addr>\fR:\fI<port>\fR
 HTTP listen address:port. Default:
-.BR 127.0.0.1:9109 .
+.BR 127.0.0.1:9109
+(loopback only; use e.g.
+.B \-l\ 0.0.0.0:9109
+to listen on all interfaces).
 .TP
 .BR \-e ", " \-\-expiry\ \fI<s>\fR
-Drop an instance after this many seconds without a new snapshot. Default:
-.BR 30 .
+Drop an instance after this many seconds without a new snapshot.
+Default:
+.BR 30 ,
+i.e. 6 missed sends at an exporter's own default 5s
+.BR \-\-metrics\-interval .
 .TP
 .BR \-v ", " \-\-verbose
-Log rejected/dropped snapshots to stderr.
+Log every rejected/dropped snapshot (malformed, unsupported protocol
+version, stale sequence, store full) and every HTTP 404, to stderr.
 .TP
 .B \-\-color \fI<when>\fR
 .IR auto | always | never .
@@ -63,10 +82,75 @@ Fork to background after startup, detach from terminal.
 .TP
 .BR \-h ", " \-\-help
 Show usage and exit.
+.SH HTTP ENDPOINT
+.BR \-l / \-\-listen
+is the address:port
+.B GET /metrics
+is served on. Every other path returns
+.BR 404 .
+The server is intentionally minimal: up to 8 connections in flight at
+once, a 5-second read/write budget per connection so a stalled client
+can't wedge the collector, and
+.B Connection: close
+on every response. This is a local diagnostics endpoint meant for
+infrequent scraping, not a general-purpose web server. There is no TLS
+and no authentication.
+.PP
+Output is
+.BR application/openmetrics-text :
+one
+.B # TYPE
+/
+.B # HELP
+pair per metric family actually present (families with zero live
+samples are omitted). Every sample carries
+.B component="tvhead|radiohead|sds|bcg|rist|rec|descramble|cam378|fccret|srt|xy"
+and
+.BR headend_id="<the\ exporter's\ \-\-metrics\-id>" ,
+plus whatever label the metric itself carries
+.RB ( reason ", " input ", " table ", " cas ", " codec ", " transport ", "
+.BR peer ", " output ", " mode ).
+The label is deliberately not called
+.BR instance :
+Prometheus assigns its own
+.B instance
+label per scrape target (the host:port of
+.B dipimetrics
+itself), which would collide with and rename an exporter-supplied
+.B instance
+label to
+.BR exported_instance .
+.PP
+One extra, collector-computed series is added per tracked instance:
+.BR dvbipi_metrics_snapshot_age_seconds ,
+seconds since that instance's last accepted snapshot, independent of
+anything the exporter itself reports.
+.PP
+.B dipimetrics
+also reports on itself, always present regardless of what's currently
+tracked:
+.BR dvbipi_metrics_instances
+(gauge, exporter instances currently held in the store),
+.BR dvbipi_metrics_snapshots_received_total
+(counter),
+.BR dvbipi_metrics_snapshots_rejected_total{reason="malformed|stale|full|version"}
+(counter, one series per reason),
+.BR dvbipi_metrics_snapshot_entries_dropped_total
+(counter, metric entries dropped from an otherwise-accepted snapshot
+past its per-snapshot entry cap) and
+.BR dvbipi_metrics_http_requests_total{status="200|404"}
+(counter, one series per status).
+.SH SIGNALS
+.BR \(haC ,
+SIGINT or SIGTERM stop the process: sockets are closed and the Unix
+socket file is removed.
 .SH EXAMPLES
 .TP
-.B dipimetrics \-l 0.0.0.0:9109
-Serve the metrics endpoint on all interfaces instead of loopback only.
+.B dipimetrics
+Start the collector with defaults.
+.TP
+.B dipimetrics \-l 0.0.0.0:9109 \-e 60
+Reachable from another host, with a longer expiry.
 .SH EXIT STATUS
 .B 0
 on success.
@@ -74,13 +158,21 @@ A non-zero status is returned on argument errors or socket/bind failure.
 .SH FILES
 .TP
 .I /run/dvbipitools/metrics.sock
-Default Unix datagram socket for receiving snapshots from exporters, unless
-overridden with
+Default Unix datagram socket for receiving snapshots from exporters,
+unless overridden with
 .BR \-S / \-\-sock .
 .SH SEE ALSO
 .BR dipitvhead (1),
 .BR dipiradiohead (1),
-.BR dipifccret (1)
+.BR dipisds (1),
+.BR dipibcg (1),
+.BR dipirist (1),
+.BR dipirec (1),
+.BR dipidescramble (1),
+.BR dipicam378 (1),
+.BR dipifccret (1),
+.BR dipisrt (1),
+.BR dipixy (1)
 .PP
 Project homepage: https://github.com/xplus2/dvbipitools
 .SH COPYRIGHT

@@ -7,9 +7,9 @@
 #include "lib/demux/mpts_probe.h"
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/tspack.h"
-#include "lib/log.h"
+#include "lib/helper/log.h"
 #include "lib/mux/mkv/mkv.h"
-#include "lib/signal.h"
+#include "lib/helper/signal.h"
 
 #include "../filter/ts.h"
 #include "../version.h"

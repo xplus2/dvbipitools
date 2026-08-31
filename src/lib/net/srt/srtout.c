@@ -10,8 +10,8 @@
 
 #include <srt/srt.h>
 
-#include "lib/log.h"
-#include "lib/signal.h"
+#include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 
 #include "srtcommon.h"
 #include "srtout.h"
