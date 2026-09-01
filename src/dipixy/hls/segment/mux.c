@@ -72,7 +72,8 @@ void try_create_fmux(hls_seg_ctx_t *s) {
   s->fmux = fmp4_mux_new(trk, ntrk);
   if (!s->fmux) return;
   outlen = fmp4_init_segment(s->fmux, &out);
-  if (outlen) hls_set_init_segment(s->cap_ctx, &s->filter, s->pmt_pid, HLS_CONTAINER_FMP4, out, outlen);
+  if (outlen && hls_set_init_segment(s->cap_ctx, &s->filter, s->pmt_pid, HLS_CONTAINER_FMP4, out, outlen) < 0)
+    log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_set_init_segment failed, init segment lost");
 }
 
 /* open_now/cut_now apply once this au becomes pending, 1 call later. ts_ms: decode-order (dts, or pts if no dts). cts_ticks: (pts-dts) in track ticks, 0 wo dts */
@@ -87,7 +88,8 @@ void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, int32_t cts_ticks, in
       if (s->fmp4_frag_open) {
         unsigned char *out;
         size_t outlen = fmp4_segment_end(s->fmux, &out);
-        if (outlen) hls_push_segment(s->cap_ctx, &s->filter, s->pmt_pid, HLS_CONTAINER_FMP4, out, outlen, s->fmp4_pend_elapsed);
+        if (outlen && hls_push_segment(s->cap_ctx, &s->filter, s->pmt_pid, HLS_CONTAINER_FMP4, out, outlen, s->fmp4_pend_elapsed) < 0)
+          log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_segment failed, fmp4 segment lost");
       } else {
         s->fmp4_anchor_ms = s->fmp4_pend_ts_ms;
       }
@@ -103,7 +105,10 @@ void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, int32_t cts_ticks, in
     samp.keyframe = s->fmp4_pend_key;
     fmp4_segment_add_sample(s->fmux, &samp);
   }
-  if (buf_reserve(&s->fmp4_pend_data, &s->fmp4_pend_cap, s->nal_scratch_len) < 0) return;
+  if (buf_reserve(&s->fmp4_pend_data, &s->fmp4_pend_cap, s->nal_scratch_len) < 0) {
+    log_throttled(&s->oom_drop_throttle, LOG_THROTTLE_WINDOW_S, "hls: buf_reserve failed, fmp4 access unit dropped");
+    return;
+  }
   memcpy(s->fmp4_pend_data, s->nal_scratch, s->nal_scratch_len);
   s->fmp4_pend_len = s->nal_scratch_len;
   s->fmp4_pend_key = kf;

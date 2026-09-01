@@ -35,8 +35,10 @@ static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
 void parse_pat(psi_t *c) {
   const unsigned char *b = c->pat.buf;
   size_t n = c->pat.expect, end;
-  if (n < 12 || b[0] != 0x00 || crc32_mpeg(b, n) != 0)
+  if (n < 12 || b[0] != 0x00 || crc32_mpeg(b, n) != 0) {
+    log_throttled(&c->pat_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed PAT section dropped");
     return;
+  }
   c->nit_pid = 0;
   c->pat_program_count = 0;
   /* pmt_cand[] deliberately not reset here: a candidate's PMT may still be
@@ -79,8 +81,10 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   size_t n = cand->asm_.expect, i, end, pil, l;
   unsigned prog;
   const unsigned char *ca;
-  if (n < 16 || b[0] != 0x02 || crc32_mpeg(b, n) != 0)
+  if (n < 16 || b[0] != 0x02 || crc32_mpeg(b, n) != 0) {
+    log_throttled(&c->pmt_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed PMT section dropped");
     return 0;
+  }
   prog = ((unsigned)b[3] << 8) | b[4];
   if (prog != cand->program_number)
     return 0;
@@ -161,8 +165,10 @@ void parse_sdt(psi_t *c) {
   const unsigned char *b = c->sdt.buf;
   size_t n = c->sdt.expect, i, end;
 
-  if (n < 12 || b[0] != 0x42 || crc32_mpeg(b, n) != 0)
+  if (n < 12 || b[0] != 0x42 || crc32_mpeg(b, n) != 0) {
+    log_throttled(&c->sdt_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed SDT section dropped");
     return;
+  }
   c->onid = ((unsigned)b[8] << 8) | b[9];
   end = n - 4;
   i = 11;
@@ -189,11 +195,15 @@ void parse_nit(psi_t *c) {
   size_t n = c->nit.expect, ndl, l;
   const unsigned char *nn;
 
-  if (n < 12 || b[0] != 0x40 || crc32_mpeg(b, n) != 0)
+  if (n < 12 || b[0] != 0x40 || crc32_mpeg(b, n) != 0) {
+    log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed NIT section dropped");
     return;
+  }
   ndl = tspack_length12(b + 8);
-  if (10 + ndl > n)
+  if (10 + ndl > n) {
+    log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: NIT network descriptor loop overruns section, dropped");
     return;
+  }
   nn = find_desc(b + 10, ndl, 0x40, &l);
   if (nn)
     copy_name(c->network_name, sizeof c->network_name, nn, l);
@@ -208,8 +218,10 @@ void parse_cat(psi_t *c) {
   size_t n = c->cat.expect, l;
   const unsigned char *ca;
 
-  if (n < 12 || b[0] != 0x01 || crc32_mpeg(b, n) != 0)
+  if (n < 12 || b[0] != 0x01 || crc32_mpeg(b, n) != 0) {
+    log_throttled(&c->cat_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed CAT section dropped");
     return;
+  }
   c->emm_pid = 0;
   c->ca_system_id = 0;
   ca = find_desc(b + 8, n - 12, 0x09, &l);

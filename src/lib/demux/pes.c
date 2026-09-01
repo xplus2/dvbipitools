@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "pes.h"
 #include "tspack.h"
 
@@ -15,6 +16,7 @@ typedef struct {
   uint64_t pts, dts;
   unsigned char *buf;
   size_t len, cap;
+  log_throttle_t drop_throttle;
 } stream_t;
 
 struct pes {
@@ -82,6 +84,8 @@ static void append(stream_t *s, const unsigned char *d, size_t n) {
   if (sgrow(s, n) == 0) {
     memcpy(s->buf + s->len, d, n);
     s->len += n;
+  } else {
+    log_throttled(&s->drop_throttle, LOG_THROTTLE_WINDOW_S, "pes: sgrow failed, pid %u payload bytes dropped", s->pid);
   }
 }
 

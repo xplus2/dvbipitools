@@ -72,8 +72,10 @@ size_t capture_reader_read(capture_reader_t *r, unsigned char *buf, size_t cap) 
   uint64_t available;
   size_t n, pos, first;
   if (wt - r->read_total > g_capture_ring_cap) {
-    r->dropped += wt - r->read_total - g_capture_ring_cap;
+    uint64_t just_dropped = wt - r->read_total - g_capture_ring_cap;
+    r->dropped += just_dropped;
     r->read_total = wt - g_capture_ring_cap;
+    log_throttled(&r->drop_throttle, LOG_THROTTLE_WINDOW_S, "capture: reader fell behind, dropped %llu bytes", (unsigned long long)just_dropped);
   }
   available = wt - r->read_total;
   n = available < cap ? (size_t)available : cap;

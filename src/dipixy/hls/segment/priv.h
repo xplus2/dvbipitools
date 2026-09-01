@@ -11,6 +11,7 @@
 #include "lib/demux/escodec/aubuild.h"
 #include "lib/demux/pes.h"
 #include "lib/demux/psi/psi.h"
+#include "lib/helper/log.h"
 #include "lib/mux/fmp4/fmp4.h"
 
 #include "segment.h"
@@ -20,6 +21,7 @@ typedef struct hls_seg_ctx {
   _Atomic(struct hls_seg_ctx *) chain_next;
   pid_filter_t filter;
   unsigned pmt_pid; /* 0 = auto */
+  unsigned char cc_pmt; /* HLS_CONTAINER_TS: rewritten PMT packets' own cc */
   _Atomic int64_t last_request_ms;
   _Atomic int refcount;
 
@@ -105,6 +107,10 @@ typedef struct hls_seg_ctx {
   int64_t last_au_ts_ms;
   int last_au_key;
   int have_last_au;
+
+  log_throttle_t seg_push_fail_throttle;
+  log_throttle_t oom_drop_throttle;
+  log_throttle_t audio_parse_throttle;
 } hls_seg_ctx_t;
 
 /* segment.c */

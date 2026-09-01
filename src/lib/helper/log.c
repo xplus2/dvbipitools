@@ -114,6 +114,35 @@ void log_line(const char *fmt, ...) {
   fputc('\n', stderr);
 }
 
+void log_throttled(log_throttle_t *t, int window_s, const char *fmt, ...) {
+  struct timespec now;
+  long long now_ms, next, new_next;
+  va_list ap;
+  char msg[512];
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  now_ms = (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+  next = atomic_load_explicit(&t->next_log_ms, memory_order_relaxed);
+  if (now_ms < next) {
+    atomic_fetch_add_explicit(&t->suppressed, 1, memory_order_relaxed);
+    return;
+  }
+  new_next = now_ms + (long long)window_s * 1000;
+  if (!atomic_compare_exchange_strong_explicit(&t->next_log_ms, &next, new_next, memory_order_relaxed, memory_order_relaxed)) {
+    atomic_fetch_add_explicit(&t->suppressed, 1, memory_order_relaxed);
+    return;
+  }
+  va_start(ap, fmt);
+  vsnprintf(msg, sizeof msg, fmt, ap);
+  va_end(ap);
+  {
+    unsigned long suppressed = atomic_exchange_explicit(&t->suppressed, 0, memory_order_relaxed);
+    if (suppressed)
+      log_line("%s (%lu more in %ds)", msg, suppressed, window_s);
+    else
+      log_line("%s", msg);
+  }
+}
+
 void log_line_ansi(const char *fmt, ...) {
   char ts[20], msg[4096];
   va_list ap;

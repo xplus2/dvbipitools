@@ -52,7 +52,8 @@ void esc_handle_h264_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen,
     default:
       if (type == H264_NAL_IDR)
         *key = 1;
-      esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n);
+      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0)
+        log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, h264 nal dropped");
   }
 }
 
@@ -73,6 +74,7 @@ void esc_handle_hevc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen,
     default:
       if (type >= HEVC_NAL_IRAP_FIRST && type <= HEVC_NAL_IRAP_LAST)
         *key = 1;
-      esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n);
+      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0)
+        log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, hevc nal dropped");
   }
 }

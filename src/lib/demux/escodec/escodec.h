@@ -8,6 +8,7 @@
 
 #include "lib/demux/bitreader.h"
 #include "lib/demux/psi/psi.h"
+#include "lib/helper/log.h"
 
 #define ESCODEC_PS_MAX 512 /* SPS/PPS/VPS */
 #define ESCODEC_AU_MAX 8192
@@ -25,6 +26,7 @@ typedef struct {
   unsigned chroma;
   unsigned char au[ESCODEC_AU_MAX];
   int latm_cfg_ok, latm_flt;
+  log_throttle_t vbuf_drop_throttle;
 } esc_track_t;
 
 typedef struct {

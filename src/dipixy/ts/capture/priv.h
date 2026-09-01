@@ -9,6 +9,7 @@
 
 #include "lib/fccret/fcc_client.h"
 #include "lib/fccret/ret_client.h"
+#include "lib/helper/log.h"
 #include "lib/net/multicast.h"
 #include "lib/net/tssource.h"
 
@@ -45,6 +46,8 @@ struct capture_ctx {
 
   int pump_shard; /* owning pump thread, set once at creation, read-only after */
 
+  log_throttle_t drain_err_throttle;
+
   struct capture_ctx *next;
 };
 
@@ -52,6 +55,7 @@ struct capture_reader {
   capture_ctx_t *ctx;
   uint64_t read_total;
   uint64_t dropped;
+  log_throttle_t drop_throttle;
 };
 
 typedef struct capture_snapshot {

@@ -19,6 +19,7 @@
 #include "pidfilter.h"
 #include "rawaudio.h"
 #include "lib/demux/psi/psi.h"
+#include "lib/helper/log.h"
 #include "../ws/ws_clients.h"
 
 #define TS_PUSH_MAX_SUBS 4096
@@ -66,6 +67,7 @@ typedef struct {
   unsigned char cc_pmt; /* rewritten PMT packets' own cc, spts_psi/filter_psi share this: mutually exclusive */
   rawaudio_demux_t *rawaudio; /* non-NULL = /rawaudio subscriber */
   int ws_handle;              /* ws_clients.c registry handle, -1 none */
+  log_throttle_t ring_drop_throttle;
 } ts_sub_t;
 
 extern ts_sub_t *g_ts_subs; /* calloc by ts_push_init, g_ts_subs_n entries */

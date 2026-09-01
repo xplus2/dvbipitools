@@ -6,6 +6,7 @@
 
 #include "section_asm.h"
 #include "psi.h"
+#include "lib/helper/log.h"
 
 #define TS_PID_PAT 0x0000
 #define TS_PID_CAT 0x0001
@@ -51,6 +52,12 @@ struct psi {
   int pat_program_overflow_logged;
   int pmt_cand_overflow_logged;
   int es_overflow_logged;
+
+  log_throttle_t pat_drop_throttle;
+  log_throttle_t pmt_drop_throttle;
+  log_throttle_t sdt_drop_throttle;
+  log_throttle_t nit_drop_throttle;
+  log_throttle_t cat_drop_throttle;
 };
 
 /* psi.c */

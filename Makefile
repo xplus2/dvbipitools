@@ -1958,7 +1958,8 @@ lib_demux_pes_SRCS := \
 	tests/unit/lib/demux/test_pes.c \
 	src/lib/demux/pes.c \
 	src/lib/demux/tspack.c \
-	src/lib/helper/ioutil.c
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c
 
 lib_mux_psi_build_BIN := tests/unit/lib/mux/test_psi_build
 lib_mux_psi_build_SRCS := \
@@ -2016,7 +2017,8 @@ lib_mux_teletext_SRCS := \
 	src/lib/mux/teletext.c \
 	src/lib/demux/pes.c \
 	src/lib/demux/tspack.c \
-	src/lib/helper/ioutil.c
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c
 
 lib_mux_mkv_BIN := tests/unit/lib/mux/test_mkv
 lib_mux_mkv_SRCS := \
@@ -2283,7 +2285,8 @@ dipiradiohead_pes_SRCS := \
 	src/dipiradiohead/mux/pes.c \
 	src/lib/demux/pes.c \
 	src/lib/demux/tspack.c \
-	src/lib/helper/ioutil.c
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c
 
 dipiradiohead_tspacketizer_BIN := tests/unit/dipiradiohead/test_tspacketizer
 dipiradiohead_tspacketizer_SRCS := \

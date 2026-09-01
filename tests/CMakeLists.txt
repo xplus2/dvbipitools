@@ -57,7 +57,8 @@ dvbipitools_add_unit_test(lib_demux_pes
     unit/lib/demux/test_pes.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_unit_test(lib_mux_psi_build
     unit/lib/mux/test_psi_build.c
@@ -134,7 +135,8 @@ dvbipitools_add_unit_test(lib_mux_teletext
     ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_unit_test(lib_mux_mkv
     unit/lib/mux/test_mkv.c
@@ -707,7 +709,8 @@ dvbipitools_add_unit_test(dipiradiohead_pes
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/mux/pes.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_unit_test(dipiradiohead_tspacketizer
     unit/dipiradiohead/test_tspacketizer.c

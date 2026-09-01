@@ -25,8 +25,10 @@ void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigne
       s->audio_anchor_nominal_samples = s->audio_nominal_samples;
     }
   }
-  if (s->audio_remlen > HLS_AUDIO_REM_MAX)
+  if (s->audio_remlen > HLS_AUDIO_REM_MAX) {
+    log_throttled(&s->audio_parse_throttle, LOG_THROTTLE_WINDOW_S, "hls: audio_remlen exceeded HLS_AUDIO_REM_MAX, discarding pending bytes");
     s->audio_remlen = 0;
+  }
   if (esc_rem_append(&s->audio_rem, &s->audio_remlen, &s->audio_remcap, data, len))
     return;
 
@@ -36,6 +38,7 @@ void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigne
     if (r > 0)
       break;
     if (r < 0) {
+      log_throttled(&s->audio_parse_throttle, LOG_THROTTLE_WINDOW_S, "hls: audio ES parse failed, resyncing byte by byte");
       pos++;
       continue;
     }

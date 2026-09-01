@@ -3,7 +3,9 @@
 
 #include "priv.h"
 
+#include "lib/demux/psi/section_asm.h"
 #include "lib/demux/tspack.h"
+#include "lib/mux/pmt_filter.h"
 
 #include <string.h>
 
@@ -36,9 +38,28 @@ static void lock_program_pids(hls_seg_ctx_t *s) {
   s->len = 0;
 }
 
-static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt) {
+/* silent fallback to pkt: no section yet, or rewrite doesn't fit one packet. cc_pmt advances only on success */
+static const unsigned char *maybe_rewrite_pmt(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned pid, unsigned char *rw, unsigned char *out188) {
+  const unsigned char *sec;
+  unsigned drop_pids[PID_FILTER_MAX];
+  size_t sl, rl;
+
+  if (s->container != HLS_CONTAINER_TS || s->filter.count == 0 || !psi_have_pmt(s->psi) || pid != psi_pmt_pid(s->psi))
+    return pkt;
+  sec = psi_pmt_section(s->psi, &sl);
+  if (!sec) return pkt;
+  for (int k = 0; k < s->filter.count; k++) drop_pids[k] = s->filter.pids[k];
+  rl = pmt_filter_rewrite(sec, sl, drop_pids, (size_t)s->filter.count, rw, PSI_SECTION_ASM_BUF_LEN);
+  if (!rl) return pkt;
+  s->cc_pmt = (s->cc_pmt + 1) & 0x0F;
+  if (!pmt_filter_emit_packet(out188, pid, s->cc_pmt, rw, rl)) return pkt;
+  return out188;
+}
+
+static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *pmt_rw, unsigned char *pmt_pkt) {
   unsigned pid = tspack_pid(pkt);
   int pusi = 0;
+  const unsigned char *out_pkt;
   if (pid_filter_excludes(&s->filter, pid))
     return;
 
@@ -87,9 +108,13 @@ static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt) {
     tspack_payload(pkt, &pl, &plen, &pusi);
   }
 
-  if (buf_reserve(&s->buf, &s->cap, s->len + 188) < 0)
+  out_pkt = maybe_rewrite_pmt(s, pkt, pid, pmt_rw, pmt_pkt);
+
+  if (buf_reserve(&s->buf, &s->cap, s->len + 188) < 0) {
+    log_throttled(&s->oom_drop_throttle, LOG_THROTTLE_WINDOW_S, "hls: buf_reserve failed, ts packet dropped");
     return;
-  memcpy(s->buf + s->len, pkt, 188);
+  }
+  memcpy(s->buf + s->len, out_pkt, 188);
   s->len += 188;
 
   /* pes_feed's callback may trim s->buf. packet bytes always survive as new tail: offset valid only post-call */
@@ -114,10 +139,12 @@ void hls_seg_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_
 void hls_seg_feed_all(capture_ctx_t *ctx, const unsigned char *pkt) {
   const _Atomic(void *) *head = capture_hls_seg_head_ptr(ctx);
   hls_seg_ctx_t *s = atomic_load_explicit(head, memory_order_acquire);
+  unsigned char pmt_rw[PSI_SECTION_ASM_BUF_LEN];
+  unsigned char pmt_pkt[188];
 
   while (s) {
     hls_seg_ctx_t *next = atomic_load_explicit(&s->chain_next, memory_order_relaxed);
-    feed_one(s, pkt); /* safe unlocked: ctx has one fixed owning pump thread, sweep_idle waits b4 freeing */
+    feed_one(s, pkt, pmt_rw, pmt_pkt); /* safe unlocked: ctx has one fixed owning pump thread, sweep_idle waits b4 freeing */
     s = next;
   }
 }

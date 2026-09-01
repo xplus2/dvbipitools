@@ -4,6 +4,8 @@
 #ifndef DIPIREC_LOG_H
 #define DIPIREC_LOG_H
 
+#include <stdatomic.h>
+
 /* timestamped line (ISO UTC, no 'T') to stderr */
 void log_line(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
@@ -24,6 +26,15 @@ log_color_t log_color_prescan(int argc, char **argv);
 
 int log_stderr_is_tty(void);
 int log_colors_enabled(void);
+
+typedef struct {
+  _Atomic long long next_log_ms;
+  atomic_ulong suppressed;
+} log_throttle_t;
+
+#define LOG_THROTTLE_WINDOW_S 5
+
+void log_throttled(log_throttle_t *t, int window_s, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
 
 /* for log_line_ansi payloads */
 #define LOG_RESET  "\033[0m"

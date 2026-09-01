@@ -18,8 +18,10 @@ void ts_push_h2_enqueue(int sub_idx, const uint8_t *pkt, size_t len) {
     return;
   wpos = atomic_load_explicit(&s->h2_wpos, memory_order_relaxed);
   rpos = atomic_load_explicit(&s->h2_rpos, memory_order_acquire);
-  if (len > TS_RING_H2_BYTES - (wpos - rpos))
-    return; /* ring full: drop */
+  if (len > TS_RING_H2_BYTES - (wpos - rpos)) {
+    log_throttled(&s->ring_drop_throttle, LOG_THROTTLE_WINDOW_S, "ts_push: h2 ring full, dropping packet");
+    return;
+  }
   idx = wpos & (TS_RING_H2_BYTES - 1u);
   first = len;
   if (idx + first > TS_RING_H2_BYTES)
@@ -43,7 +45,10 @@ void ts_push_h3_enqueue(int sub_idx, const uint8_t *pkt, size_t len) {
   if (!s->h3_ring) return;
   wpos = atomic_load_explicit(&s->h3_wpos, memory_order_relaxed);
   rpos = atomic_load_explicit(&s->h3_rpos, memory_order_acquire);
-  if (len > TS_RING_H3_BYTES - (wpos - rpos)) return; /* ring full: drop */
+  if (len > TS_RING_H3_BYTES - (wpos - rpos)) {
+    log_throttled(&s->ring_drop_throttle, LOG_THROTTLE_WINDOW_S, "ts_push: h3 ring full, dropping packet");
+    return;
+  }
   idx = wpos & (TS_RING_H3_BYTES - 1u);
   first = len;
   if (idx + first > TS_RING_H3_BYTES) first = TS_RING_H3_BYTES - idx;

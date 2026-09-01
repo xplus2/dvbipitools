@@ -7,39 +7,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "lib/helper/log.h"
 
 #include "priv.h"
 
-/* CLOCK_MONOTONIC: immune to wall-clock jumps */
-static void log_throttled(log_throttle_t *t, const char *msg) {
-  struct timespec now;
-  long long now_ms, next, new_next;
-
-  clock_gettime(CLOCK_MONOTONIC, &now);
-  now_ms = (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
-  next = atomic_load_explicit(&t->next_log_ms, memory_order_relaxed);
-  if (now_ms >= next) {
-    new_next = now_ms + EMMG_DROP_LOG_WINDOW_S * 1000;
-    if (atomic_compare_exchange_strong_explicit(&t->next_log_ms, &next, new_next, memory_order_relaxed, memory_order_relaxed)) {
-      unsigned long suppressed = atomic_exchange_explicit(&t->suppressed, 0, memory_order_relaxed);
-      if (suppressed)
-        log_line("emmg: %s (%lu more in last %ds)", msg, suppressed, EMMG_DROP_LOG_WINDOW_S);
-      else
-        log_line("emmg: %s", msg);
-      return;
-    }
-  }
-  atomic_fetch_add_explicit(&t->suppressed, 1, memory_order_relaxed);
-}
-
 void publish_datagram_cb(const unsigned char *data, unsigned short len, void *user) {
   emmg_server_t *s = user;
   if (len > EMMG_MAX_DATAGRAM_LEN) {
-    log_throttled(&s->oversized_throttle, "dropping oversized EMM datagram");
+    log_throttled(&s->oversized_throttle, LOG_THROTTLE_WINDOW_S, "emmg: dropping oversized EMM datagram");
     atomic_fetch_add_explicit(&s->emm_dropped, 1, memory_order_relaxed);
     return;
   }
@@ -47,7 +24,7 @@ void publish_datagram_cb(const unsigned char *data, unsigned short len, void *us
   if (atomic_load_explicit(&s->queue_len, memory_order_relaxed) == EMMG_QUEUE_CAP) {
     s->queue_head = (s->queue_head + 1) % EMMG_QUEUE_CAP;
     atomic_fetch_sub_explicit(&s->queue_len, 1, memory_order_relaxed);
-    log_throttled(&s->queue_full_throttle, "EMM queue full, dropping oldest datagram");
+    log_throttled(&s->queue_full_throttle, LOG_THROTTLE_WINDOW_S, "emmg: EMM queue full, dropping oldest datagram");
     atomic_fetch_add_explicit(&s->emm_dropped, 1, memory_order_relaxed);
   }
   {
