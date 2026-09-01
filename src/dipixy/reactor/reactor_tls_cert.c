@@ -27,9 +27,9 @@ static void asn1time_to_str(const ASN1_TIME *t, char *buf, size_t sz) {
   bufcpy(buf, sz, tmp);
 }
 
-static void x509_to_info(X509 *cert, char *buf, size_t sz) {
+static void x509_to_info(const X509 *cert, char *buf, size_t sz) {
   char cn[256] = "(unknown)";
-  X509_NAME *subj = X509_get_subject_name(cert);
+  const X509_NAME *subj = X509_get_subject_name(cert);
   if (subj) X509_NAME_get_text_by_NID(subj, NID_commonName, cn, (int)sizeof(cn));
   char nb[64], na[64];
   asn1time_to_str(X509_get0_notBefore(cert), nb, sizeof(nb));
@@ -82,10 +82,10 @@ void tls_cert_info(char *buf, size_t sz, const char *path, int from_file) {
   }
 }
 
-static void x509_to_detail(X509 *cert, tls_cert_detail_t *out) {
+static void x509_to_detail(const X509 *cert, tls_cert_detail_t *out) {
   memset(out, 0, sizeof(*out));
 
-  X509_NAME *subj = X509_get_subject_name(cert);
+  const X509_NAME *subj = X509_get_subject_name(cert);
   if (subj)
     X509_NAME_get_text_by_NID(subj, NID_commonName, out->cn,(int)sizeof(out->cn));
   else
@@ -98,7 +98,7 @@ static void x509_to_detail(X509 *cert, tls_cert_detail_t *out) {
   if (sans) {
     int n = sk_GENERAL_NAME_num(sans);
     for (int i = 0; i < n && out->alias_count < 16; i++) {
-      GENERAL_NAME *gn = sk_GENERAL_NAME_value(sans, i);
+      const GENERAL_NAME *gn = sk_GENERAL_NAME_value(sans, i);
       if (gn->type == GEN_DNS) {
         const char *dns = (const char *)ASN1_STRING_get0_data(gn->d.ia5);
         if (dns) {

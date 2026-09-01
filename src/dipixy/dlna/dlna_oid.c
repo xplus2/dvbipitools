@@ -76,8 +76,7 @@ const char *source_kind_str(source_kind_t k) {
 }
 
 const source_def_t *find_source(const config_t *cfg, unsigned ord) {
-  int i;
-  for (i = 0; i < cfg->n_sources; i++)
+  for (int i = 0; i < cfg->n_sources; i++)
     if ((unsigned)cfg->sources[i].ordinal == ord)
       return &cfg->sources[i];
   return NULL;
@@ -140,7 +139,7 @@ void sb_add(strbuf_t *b, const char *s) { sb_add_n(b, s, strlen(s)); }
 
 void sb_add_u64(strbuf_t *b, uint64_t v) {
   char tmp[20], rev[21];
-  size_t n = 0, i;
+  size_t n = 0;
   if (!v) {
     tmp[n++] = '0';
   } else {
@@ -149,7 +148,7 @@ void sb_add_u64(strbuf_t *b, uint64_t v) {
       v /= 10;
     }
   }
-  for (i = 0; i < n; i++)
+  for (size_t i = 0; i < n; i++)
     rev[i] = tmp[n - 1 - i];
   rev[n] = '\0';
   sb_add(b, rev);

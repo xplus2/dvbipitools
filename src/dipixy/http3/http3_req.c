@@ -122,8 +122,8 @@ int cb_handshake_completed(ngtcp2_conn *qconn, void *ud) {
 }
 
 static int h3_conn_active_count(const h3_conn_t *c) {
-  int i, n = 0;
-  for (i = 0; i < H3_MAX_REQS; i++) if (c->reqs[i].active) n++;
+  int n = 0;
+  for (int i = 0; i < H3_MAX_REQS; i++) if (c->reqs[i].active) n++;
   return n;
 }
 

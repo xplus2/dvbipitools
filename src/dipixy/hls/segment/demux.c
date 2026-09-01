@@ -12,8 +12,7 @@ static int audio_codec_supported(codec_t c) {
 }
 
 static int program_pid_allowed(const hls_seg_ctx_t *s, unsigned pid) {
-  int i;
-  for (i = 0; i < s->n_allowed; i++)
+  for (int i = 0; i < s->n_allowed; i++)
     if (s->allowed_pids[i] == pid)
       return 1;
   return 0;
@@ -21,7 +20,7 @@ static int program_pid_allowed(const hls_seg_ctx_t *s, unsigned pid) {
 
 /* called once, when video_pid_known first -> true: snapshots locked own pids, drops pre-lock stuff in s->buf */
 static void lock_program_pids(hls_seg_ctx_t *s) {
-  int n, i;
+  int n;
   const psi_es_t *es;
   unsigned pcr_pid;
   s->n_allowed = 0;
@@ -31,7 +30,7 @@ static void lock_program_pids(hls_seg_ctx_t *s) {
   if (pcr_pid)
     s->allowed_pids[s->n_allowed++] = pcr_pid;
   es = psi_es(s->psi, &n);
-  for (i = 0; i < n && s->n_allowed < (int)(sizeof s->allowed_pids / sizeof s->allowed_pids[0]); i++)
+  for (int i = 0; i < n && s->n_allowed < (int)(sizeof s->allowed_pids / sizeof s->allowed_pids[0]); i++)
     s->allowed_pids[s->n_allowed++] = es[i].pid;
 
   s->len = 0;
@@ -113,7 +112,7 @@ void hls_seg_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_
 
 /* several segmenters possible per source now, one per distinct ?filter= */
 void hls_seg_feed_all(capture_ctx_t *ctx, const unsigned char *pkt) {
-  _Atomic(void *) *head = capture_hls_seg_head_ptr(ctx);
+  const _Atomic(void *) *head = capture_hls_seg_head_ptr(ctx);
   hls_seg_ctx_t *s = atomic_load_explicit(head, memory_order_acquire);
 
   while (s) {

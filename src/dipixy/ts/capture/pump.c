@@ -23,7 +23,7 @@ static _Atomic uint64_t g_pump_gen[CAPTURE_PUMP_MAX_THREADS];
 static _Atomic int g_shard_ctr;
 
 int next_pump_shard(void) {
-  return (int)(atomic_fetch_add_explicit(&g_shard_ctr, 1, memory_order_relaxed) % g_n_pump_threads);
+  return atomic_fetch_add_explicit(&g_shard_ctr, 1, memory_order_relaxed) % g_n_pump_threads;
 }
 
 void capture_pump_set_thread_count(int n) {
@@ -35,8 +35,7 @@ void capture_pump_set_thread_count(int n) {
 }
 
 void capture_wait_pumps_quiescent(void) {
-  int i;
-  for (i = 0; i < g_n_pump_threads; i++) {
+  for (int i = 0; i < g_n_pump_threads; i++) {
     uint64_t g = atomic_load_explicit(&g_pump_gen[i], memory_order_acquire);
     if (g & 1) while (atomic_load_explicit(&g_pump_gen[i], memory_order_acquire) == g) sched_yield();
   }
@@ -94,7 +93,7 @@ int capture_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned ch
   for (;;) {
     unsigned char buf[CAPTURE_RECV_BUF];
     const unsigned char *payload;
-    size_t len, off;
+    size_t len;
     ssize_t n;
     int unwrapped = 0;
     if (ctx->fcc) {
@@ -127,7 +126,7 @@ int capture_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned ch
       payload = buf;
       len = (size_t)n;
     }
-    for (off = 0; off + 188 <= len; off += 188) sink(user, payload + off);
+    for (size_t off = 0; off + 188 <= len; off += 188) sink(user, payload + off);
   }
 }
 

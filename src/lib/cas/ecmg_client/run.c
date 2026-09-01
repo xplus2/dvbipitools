@@ -48,7 +48,7 @@ static void publish_ecm_response(ecmg_client_t *c, unsigned short cp_number, con
   simulcrypt_tlv_reader_init(&it, payload, payload_len);
   while (simulcrypt_tlv_reader_next(&it, &tag, &val, &vlen) == 1) {
     if (tag == ECMG_P_ECM_DATAGRAM) {
-      publish_ecm(c, (int)(cp_number & 1), val, vlen); /* TS 103 197 clause 5.3: CP_number parity == CW parity */
+      publish_ecm(c, cp_number & 1, val, vlen); /* TS 103 197 clause 5.3: CP_number parity == CW parity */
       atomic_fetch_add_explicit(&c->ecm_total, 1, memory_order_relaxed);
       break;
     }

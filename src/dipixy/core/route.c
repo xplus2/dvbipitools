@@ -155,12 +155,11 @@ static int fmt_or_hls_file_parse(const char *s, route_t *out) {
 static const char *const route_reserved_names[] = {"rtp", "udp", "srt", "rist", "stdin", "list", "metrics", "ui", "api", "dlna"};
 
 int route_name_valid(const char *name) {
-  size_t i;
   if (!name || !*name || strlen(name) > ROUTE_NAME_MAX)
     return 0;
   if (strchr(name, '/') || name[0] == '.')
     return 0;
-  for (i = 0; i < sizeof route_reserved_names / sizeof route_reserved_names[0]; i++)
+  for (size_t i = 0; i < sizeof route_reserved_names / sizeof route_reserved_names[0]; i++)
     if (!strcmp(name, route_reserved_names[i]))
       return 0;
   return 1;
@@ -228,7 +227,7 @@ int route_parse(const char *path, route_t *out) {
   char buf[512];
   char *seg[MAX_SEGS];
   int nseg = 0;
-  char *p, *save;
+  char *save;
 
   if (!path || path[0] != '/')
     return -1;
@@ -236,7 +235,7 @@ int route_parse(const char *path, route_t *out) {
     return -1;
   bufcpy(buf, sizeof buf, path + 1);
 
-  for (p = strtok_r(buf, "/", &save); p && nseg < MAX_SEGS; p = strtok_r(NULL, "/", &save))
+  for (char *p = strtok_r(buf, "/", &save); p && nseg < MAX_SEGS; p = strtok_r(NULL, "/", &save))
     seg[nseg++] = p;
 
   if (nseg > 0 && pct_decode(seg[0]))

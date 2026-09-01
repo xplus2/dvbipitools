@@ -140,7 +140,7 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
 static _Thread_local llhls_waiter_t t_h2_llhls_waiters[H2_LLHLS_WAITERS_MAX];
 static _Thread_local int t_h2_llhls_waiters_active;
 
-int h2_llhls_try_park(h2_conn_t *conn, conn_t *c, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter,
+int h2_llhls_try_park(h2_conn_t *conn, const conn_t *c, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter,
                        unsigned pmt_pid, const char *filename, int is_head, const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle) {
   (void)c; /* recovered from conn->c in h2_llhls_finish() */
   return llhls_waiter_pool_try_park(t_h2_llhls_waiters, H2_LLHLS_WAITERS_MAX, &t_h2_llhls_waiters_active, conn,

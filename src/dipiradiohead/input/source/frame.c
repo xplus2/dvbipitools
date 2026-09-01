@@ -72,8 +72,7 @@ static int next_sync_ok(const source_t *s, size_t frame_len) {
 /* first accepted sync offset in buf[1..buf_len), cheap is_sync_at() per byte,
    no repeated probe() calls. buf_len if none: caller drops buffer, waits for more data */
 static size_t find_resync_offset(const source_t *s) {
-  size_t i;
-  for (i = 1; i < s->buf_len; i++)
+  for (size_t i = 1; i < s->buf_len; i++)
     if (is_sync_at(s, s->buf + i, s->buf_len - i))
       return i;
   return s->buf_len;

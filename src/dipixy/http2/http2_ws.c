@@ -99,8 +99,7 @@ void h2_ws_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id) {
 }
 
 static h2_ws_stream_t *find_ws(h2_conn_t *conn, int32_t stream_id) {
-  int i;
-  for (i = 0; i < H2_WS_MAX; i++)
+  for (int i = 0; i < H2_WS_MAX; i++)
     if (conn->ws[i].sid == stream_id)
       return &conn->ws[i];
   return NULL;
@@ -192,8 +191,7 @@ void h2_ws_on_stream_close(h2_conn_t *conn, int32_t stream_id) {
 }
 
 void h2_ws_on_conn_close(h2_conn_t *conn) {
-  int i;
-  for (i = 0; i < H2_WS_MAX; i++) if (conn->ws[i].sid) ws_stream_cleanup(&conn->ws[i]);
+  for (int i = 0; i < H2_WS_MAX; i++) if (conn->ws[i].sid) ws_stream_cleanup(&conn->ws[i]);
 }
 
 #endif /* HAVE_HTTP2 */

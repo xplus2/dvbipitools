@@ -19,8 +19,7 @@
 static pthread_mutex_t g_reload_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 static void free_list_items(channel_list_t l) {
-  int j;
-  for (j = 0; j < l.count; j++) {
+  for (int j = 0; j < l.count; j++) {
     free(l.items[j].name);
     free(l.items[j].uri);
     free(l.items[j].icon_uri);
@@ -87,8 +86,7 @@ typedef struct {
 } refresh_arg_t;
 
 void channels_reload_all(channels_t *ch, const config_t *cfg) {
-  int i;
-  for (i = 0; i < cfg->n_sources; i++) reload_one_list(ch, cfg->sources[i].ordinal - 1, &cfg->sources[i], cfg);
+  for (int i = 0; i < cfg->n_sources; i++) reload_one_list(ch, cfg->sources[i].ordinal - 1, &cfg->sources[i], cfg);
   log_line(TOOL_NAME ": channel lists reloaded");
 }
 
@@ -101,8 +99,7 @@ static void *refresh_thread_fn(void *arg) {
   while (g_refresh_running && !signal_stop_requested()) {
     if (signal_reload_requested()) channels_reload_all(a->ch, a->cfg);
     if (mono_seconds() >= next) {
-      int i;
-      for (i = 0; i < a->cfg->n_sources; i++)
+      for (int i = 0; i < a->cfg->n_sources; i++)
         if (a->cfg->sources[i].kind == SRC_SDS)
           reload_one_list(a->ch, a->cfg->sources[i].ordinal - 1, &a->cfg->sources[i], a->cfg);
       next = mono_seconds() + a->cfg->sds_refresh_interval_s;
@@ -137,9 +134,8 @@ void channels_stop_refresh(void) {
 }
 
 void channels_free(channels_t *ch) {
-  int i;
   if (!ch) return;
-  for (i = 0; i < ch->n_lists; i++) {
+  for (int i = 0; i < ch->n_lists; i++) {
     channel_list_t *l = atomic_load_explicit(&ch->lists[i], memory_order_relaxed);
     if (!l) continue;
     free_list_items(*l);

@@ -25,7 +25,7 @@ int mcast_fd(const mcast_t *m);
 
 /* O_NONBLOCK on fd. mcast_recv() returns 0 on EAGAIN, same as
    timed-out blocking read. 0 ok, -1 error */
-int mcast_set_nonblock(mcast_t *m);
+int mcast_set_nonblock(const mcast_t *m);
 
 /* send-side: no join, no bind. iface NULL = kernel default route. ttl 0 = kernel default (1) */
 mcast_t *mcast_open_send(int family, const char *group, unsigned port, const char *iface, int ttl);

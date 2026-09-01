@@ -23,7 +23,8 @@ static uint64_t rd64(const unsigned char *p) {
 /* path: dot-separated fourcc chain, e.g. "moov.trak.tkhd". 1 = match (out/outlen = payload past 8B header), 0 = missing seg */
 static int find_box(const unsigned char *buf, size_t len, const char *path, const unsigned char **out, size_t *outlen) {
   char pathbuf[128];
-  char *seg, *save = NULL;
+  const char *seg;
+  char *save = NULL;
   const unsigned char *p = buf;
   size_t rem = len;
 

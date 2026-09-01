@@ -188,7 +188,7 @@ typedef struct {
   unsigned idx, emitted;
 } root_walk_t;
 
-static int root_walk_should_emit(root_walk_t *w) {
+static int root_walk_should_emit(const root_walk_t *w) {
   if (w->idx <= w->skip)
     return 0;
   if (w->take && w->emitted >= w->take)
@@ -273,14 +273,14 @@ static void root_emit_source(root_walk_t *w, const source_def_t *src) {
 }
 
 static void browse_root_children(root_walk_t *w) {
-  int ord, si, max_ord;
+  int si, max_ord;
   max_ord = w->cfg->stdin_ordinal;
   if (w->cfg->rist_ordinal > max_ord)
     max_ord = w->cfg->rist_ordinal;
   if (w->cfg->n_sources > 0 && w->cfg->sources[w->cfg->n_sources - 1].ordinal > max_ord)
     max_ord = w->cfg->sources[w->cfg->n_sources - 1].ordinal;
   si = 0;
-  for (ord = 1; ord <= max_ord; ord++) {
+  for (int ord = 1; ord <= max_ord; ord++) {
     if (ord == w->cfg->stdin_ordinal) {
       root_emit_stdin(w);
     } else if (ord == w->cfg->rist_ordinal) {

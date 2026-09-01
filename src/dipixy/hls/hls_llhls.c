@@ -17,11 +17,10 @@ void snapshot_ll_playlist(const hls_store_t *s, ll_playlist_snap_t *snap) {
   for (i = 0; i < s->count; i++) {
     const hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
     ll_seg_snap_t *ss = &snap->segs[i];
-    int p;
     ss->seq = seg->seq;
     ss->duration = seg->duration;
     ss->part_count = seg->parts.count;
-    for (p = 0; p < seg->parts.count; p++) {
+    for (int p = 0; p < seg->parts.count; p++) {
       ss->part_duration[p] = seg->parts.duration[p];
       ss->part_independent[p] = seg->parts.independent[p];
     }
@@ -59,7 +58,7 @@ static char *write_extinf_line(char *mp, double duration, uint32_t seq) {
 /* no lock held. returns bytes written */
 size_t format_ll_playlist(const ll_playlist_snap_t *snap, char *m3u8, size_t cap) {
   char *mp = m3u8;
-  char *end = m3u8 + cap;
+  const char *end = m3u8 + cap;
   int i;
 
   mp = WRITE_LIT(mp, "#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n#EXT-X-VERSION:6\n#EXT-X-TARGETDURATION:");
@@ -74,8 +73,7 @@ size_t format_ll_playlist(const ll_playlist_snap_t *snap, char *m3u8, size_t cap
 
   for (i = 0; i < snap->seg_count; i++) {
     const ll_seg_snap_t *ss = &snap->segs[i];
-    int p;
-    for (p = 0; p < ss->part_count; p++) {
+    for (int p = 0; p < ss->part_count; p++) {
       if ((size_t)(end - mp) < 128)
         goto done;
       mp = write_part_line(mp, ss->part_duration[p], ss->seq, p, ss->part_independent[p]);
@@ -106,7 +104,7 @@ int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsi
   int req_part;
   char etag[48];
   char cors_hdr[192];
-  uint8_t *body = NULL;
+  const uint8_t *body = NULL;
   size_t body_len = 0;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
   if (!strcmp(filename, "index_ll.m3u8")) {

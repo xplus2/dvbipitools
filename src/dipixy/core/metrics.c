@@ -70,7 +70,7 @@ static void sb_add(strbuf_t *b, const char *s) {
 
 static void sb_add_u64(strbuf_t *b, uint64_t v) {
   char tmp[20], rev[21];
-  size_t n = 0, i;
+  size_t n = 0;
   if (!v) {
     tmp[n++] = '0';
   } else {
@@ -79,7 +79,7 @@ static void sb_add_u64(strbuf_t *b, uint64_t v) {
       v /= 10;
     }
   }
-  for (i = 0; i < n; i++)
+  for (size_t i = 0; i < n; i++)
     rev[i] = tmp[n - 1 - i];
   rev[n] = '\0';
   sb_add(b, rev);

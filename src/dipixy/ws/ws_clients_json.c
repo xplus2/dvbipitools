@@ -36,7 +36,7 @@ static const char *route_fmt_name(route_fmt_t fmt) {
 
 void jbuf_i64(jbuf_t *j, long long v) {
   char tmp[20], buf[21];
-  size_t n = 0, off = 0, i;
+  size_t n = 0, off = 0;
   unsigned long long uv;
   int neg = v < 0;
   uv = neg ? (unsigned long long)(-(v + 1)) + 1ULL : (unsigned long long)v;
@@ -50,14 +50,14 @@ void jbuf_i64(jbuf_t *j, long long v) {
   }
   if (neg)
     buf[off++] = '-';
-  for (i = 0; i < n; i++)
+  for (size_t i = 0; i < n; i++)
     buf[off++] = tmp[n - 1 - i];
   jbuf_raw(j, buf, off);
 }
 
 static void jbuf_u64(jbuf_t *j, unsigned long long v) {
   char tmp[20], buf[20];
-  size_t n = 0, i;
+  size_t n = 0;
   if (!v) {
     tmp[n++] = '0';
   } else {
@@ -66,7 +66,7 @@ static void jbuf_u64(jbuf_t *j, unsigned long long v) {
       v /= 10;
     }
   }
-  for (i = 0; i < n; i++)
+  for (size_t i = 0; i < n; i++)
     buf[i] = tmp[n - 1 - i];
   jbuf_raw(j, buf, n);
 }

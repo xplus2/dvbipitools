@@ -21,14 +21,13 @@ static int frag_reserve_data(frag_track_t *f, size_t need) {
 
 fmp4_mux_t *fmp4_mux_new(const fmp4_track_cfg_t *tracks, int ntracks) {
   fmp4_mux_t *m;
-  int i;
   if (ntracks < 1 || ntracks > FMP4_MAX_TRACKS)
     return NULL;
   m = calloc(1, sizeof *m);
   if (!m)
     return NULL;
   m->ntrk = ntracks;
-  for (i = 0; i < ntracks; i++) {
+  for (int i = 0; i < ntracks; i++) {
     size_t cl = tracks[i].cpriv_len;
     if (cl > FMP4_CPRIV_MAX)
       cl = FMP4_CPRIV_MAX;
@@ -41,11 +40,10 @@ fmp4_mux_t *fmp4_mux_new(const fmp4_track_cfg_t *tracks, int ntracks) {
 }
 
 void fmp4_mux_free(fmp4_mux_t *m) {
-  int i;
   if (!m)
     return;
   mp4buf_free(&m->out);
-  for (i = 0; i < m->ntrk; i++) {
+  for (int i = 0; i < m->ntrk; i++) {
     free(m->frag[i].samples);
     free(m->frag[i].data);
   }
@@ -54,7 +52,6 @@ void fmp4_mux_free(fmp4_mux_t *m) {
 
 size_t fmp4_init_segment(fmp4_mux_t *m, unsigned char **out) {
   mp4buf_t ftyp, moov;
-  int i;
 
   mp4buf_free(&m->out);
 
@@ -68,7 +65,7 @@ size_t fmp4_init_segment(fmp4_mux_t *m, unsigned char **out) {
 
   memset(&moov, 0, sizeof moov);
   build_mvhd(&moov, m->ntrk);
-  for (i = 0; i < m->ntrk; i++)
+  for (int i = 0; i < m->ntrk; i++)
     build_trak(&moov, &m->trk[i]);
   build_mvex(&moov, m);
   mb_box(&m->out, "moov", &moov);
@@ -78,9 +75,8 @@ size_t fmp4_init_segment(fmp4_mux_t *m, unsigned char **out) {
 }
 
 void fmp4_segment_begin(fmp4_mux_t *m, uint32_t sequence_number) {
-  int i;
   m->seq = sequence_number;
-  for (i = 0; i < m->ntrk; i++) {
+  for (int i = 0; i < m->ntrk; i++) {
     m->frag[i].nsamples = 0;
     m->frag[i].data_len = 0;
     m->trk[i].frag_base_dts = m->trk[i].next_dts;

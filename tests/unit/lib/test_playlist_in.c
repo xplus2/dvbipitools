@@ -18,6 +18,7 @@ static void write_temp_file(char *path, const char *suffix, const char *content)
   fd = mkstemps(path, (int)strlen(suffix));
   ck_assert_int_ge(fd, 0);
   f = fdopen(fd, "w");
+  ck_assert_ptr_nonnull(f);
   fputs(content, f);
   fclose(f);
 }

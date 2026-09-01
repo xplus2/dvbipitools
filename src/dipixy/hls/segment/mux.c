@@ -6,7 +6,7 @@
 #include <string.h>
 
 /* 1 ok (trk filled), 0 not enough decoded yet (no SPS/PPS, or malformed) */
-static int build_video_track_cfg(hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned char *cpriv, size_t cpriv_cap) {
+static int build_video_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned char *cpriv, size_t cpriv_cap) {
   unsigned w = 0, h = 0;
   size_t cpriv_len;
 
@@ -32,7 +32,7 @@ static int build_video_track_cfg(hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsign
   return 1;
 }
 
-static void build_audio_track_cfg(hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned track_id) {
+static void build_audio_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned track_id) {
   memset(trk, 0, sizeof *trk);
   trk->codec = s->audio_codec;
   trk->track_id = track_id;

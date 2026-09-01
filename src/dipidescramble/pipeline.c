@@ -337,9 +337,8 @@ int pkt_cb(void *v, const unsigned char *pkt) {
 /* drains scrambler_set_key()'s queued last-batch packets through emit_downstream() at shutdown,
    then flushes any bytes still sitting in raw-fd output batch buffers */
 void pipeline_flush(loop_ctx_t *lc) {
-  int i;
   scrambler_flush(lc->scr, emit_downstream, lc);
   if (!lc->mkv)
-    for (i = 0; i < lc->n_outfd; i++)
+    for (int i = 0; i < lc->n_outfd; i++)
       flush_outfd(lc, i);
 }

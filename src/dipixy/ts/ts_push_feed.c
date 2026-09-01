@@ -11,7 +11,7 @@
 /* mirrors hls/segment.c's lock_program_pids(): snapshot locked program's own
    pids (PAT, its PMT, PCR, every ES) once PSI resolves */
 static void spts_lock(ts_sub_t *s) {
-  int n, i;
+  int n;
   const psi_es_t *es;
   unsigned pcr_pid;
 
@@ -21,15 +21,14 @@ static void spts_lock(ts_sub_t *s) {
   pcr_pid = psi_pcr_pid(s->spts_psi);
   if (pcr_pid) s->spts_allowed[s->spts_n_allowed++] = pcr_pid;
   es = psi_es(s->spts_psi, &n);
-  for (i = 0; i < n && s->spts_n_allowed < (int)(sizeof s->spts_allowed / sizeof s->spts_allowed[0]); i++)
+  for (int i = 0; i < n && s->spts_n_allowed < (int)(sizeof s->spts_allowed / sizeof s->spts_allowed[0]); i++)
     s->spts_allowed[s->spts_n_allowed++] = es[i].pid;
 
   s->spts_locked = 1;
 }
 
 static int spts_pid_allowed(const ts_sub_t *s, unsigned pid) {
-  int i;
-  for (i = 0; i < s->spts_n_allowed; i++) if (s->spts_allowed[i] == pid) return 1;
+  for (int i = 0; i < s->spts_n_allowed; i++) if (s->spts_allowed[i] == pid) return 1;
   return 0;
 }
 
@@ -50,16 +49,15 @@ static void filter_psi_track(ts_sub_t *s, const unsigned char *pkt, unsigned pid
 
 /* silent fallback to pkt: no section yet, or rewrite doesn't fit one packet. cc_pmt advances only on success */
 static const unsigned char *maybe_rewrite_pmt(ts_sub_t *s, const unsigned char *pkt, unsigned pid, unsigned char *rw, unsigned char *out188) {
-  psi_t *tp = s->spts ? s->spts_psi : s->filter_psi;
+  const psi_t *tp = s->spts ? s->spts_psi : s->filter_psi;
   const unsigned char *sec;
   unsigned drop_pids[PID_FILTER_MAX];
   size_t sl, rl;
-  int k;
 
   if (!tp || s->filter.count == 0 || !psi_have_pmt(tp) || pid != psi_pmt_pid(tp)) return pkt;
   sec = psi_pmt_section(tp, &sl);
   if (!sec) return pkt;
-  for (k = 0; k < s->filter.count; k++) drop_pids[k] = s->filter.pids[k];
+  for (int k = 0; k < s->filter.count; k++) drop_pids[k] = s->filter.pids[k];
   rl = pmt_filter_rewrite(sec, sl, drop_pids, (size_t)s->filter.count, rw, PSI_SECTION_ASM_BUF_LEN);
   if (!rl) return pkt;
   s->cc_pmt = (s->cc_pmt + 1) & 0x0F;
@@ -88,7 +86,7 @@ void ts_push_rawaudio_emit(void *vctx, const unsigned char *data, size_t len) {
   }
 }
 
-void ts_push_drop_sub(ts_sub_t *s, int idx) {
+void ts_push_drop_sub(const ts_sub_t *s, int idx) {
   if (s->proto == 1) {
     conn_t *c = conn_for_fd(s->fd);
     if (c) conn_request_close(c);

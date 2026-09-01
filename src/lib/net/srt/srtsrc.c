@@ -25,7 +25,7 @@ struct srtsrc {
 };
 
 static void *reader_main(void *arg) {
-  srtsrc_t *r = arg;
+  const srtsrc_t *r = arg;
   srtin_t *s = srtin_open(&r->cfg);
 
   if (!s) {

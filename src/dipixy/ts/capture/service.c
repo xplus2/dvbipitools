@@ -67,7 +67,7 @@ capture_reader_t *capture_reader_open(capture_ctx_t *ctx) {
 void capture_reader_close(capture_reader_t *r) { free(r); }
 
 size_t capture_reader_read(capture_reader_t *r, unsigned char *buf, size_t cap) {
-  capture_ctx_t *c = r->ctx;
+  const capture_ctx_t *c = r->ctx;
   uint64_t wt = atomic_load_explicit(&c->write_total, memory_order_acquire);
   uint64_t available;
   size_t n, pos, first;

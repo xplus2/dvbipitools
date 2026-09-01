@@ -14,7 +14,7 @@ int hls_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
   char *mp;
   char etag[48];
   char cors_hdr[192];
-  int m3u8_len, td, i;
+  int m3u8_len, td;
   const char *ext;
   unsigned long seq_ul;
   uint32_t req_seq, oldest, last;
@@ -45,8 +45,8 @@ int hls_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     mp = write_u32(mp, s->oldest_seq, 0);
     *mp++ = '\n';
     if (s->container == HLS_CONTAINER_FMP4) mp = WRITE_LIT(mp, "#EXT-X-MAP:URI=\"init.mp4\"\n");
-    for (i = 0; i < s->count; i++) {
-      hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
+    for (int i = 0; i < s->count; i++) {
+      const hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
       if ((size_t)(mp - m3u8) + 64 > sizeof m3u8)
         break;
       mp = WRITE_LIT(mp, "#EXTINF:");

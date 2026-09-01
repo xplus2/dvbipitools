@@ -27,8 +27,7 @@ static int iface_eq(const char *a, const char *b) {
 }
 
 static capture_ctx_t *find_existing(int family, const char *group, unsigned port, const char *iface) {
-  capture_ctx_t *c;
-  for (c = g_open; c; c = c->next)
+  for (capture_ctx_t *c = g_open; c; c = c->next)
     if (c->backend == CAP_BACKEND_MCAST && c->family == family && c->port == port &&
         strcmp(c->group, group) == 0 && iface_eq(c->iface, iface))
       return c;
@@ -36,8 +35,7 @@ static capture_ctx_t *find_existing(int family, const char *group, unsigned port
 }
 
 capture_ctx_t *find_existing_tssrc(const char *key) {
-  capture_ctx_t *c;
-  for (c = g_open; c; c = c->next)
+  for (capture_ctx_t *c = g_open; c; c = c->next)
     if (c->backend == CAP_BACKEND_TSSRC && c->key && !strcmp(c->key, key))
       return c;
   return NULL;
@@ -81,9 +79,8 @@ void reclaim_retired_snapshots(void) {
 }
 
 void unlink_ctx(capture_ctx_t *ctx) {
-  capture_ctx_t **pp;
   pthread_mutex_lock(&g_lock);
-  for (pp = &g_open; *pp; pp = &(*pp)->next)
+  for (capture_ctx_t **pp = &g_open; *pp; pp = &(*pp)->next)
     if (*pp == ctx) {
       *pp = ctx->next;
       break;
@@ -230,20 +227,18 @@ void capture_close(capture_ctx_t *ctx) {
 }
 
 int capture_active_count(void) {
-  capture_ctx_t *c;
   int n = 0;
   pthread_mutex_lock(&g_lock);
-  for (c = g_open; c; c = c->next)
+  for (capture_ctx_t *c = g_open; c; c = c->next)
     n++;
   pthread_mutex_unlock(&g_lock);
   return n;
 }
 
 uint64_t capture_bytes_total(void) {
-  capture_ctx_t *c;
   uint64_t total = 0;
   pthread_mutex_lock(&g_lock);
-  for (c = g_open; c; c = c->next)
+  for (capture_ctx_t *c = g_open; c; c = c->next)
     total += atomic_load_explicit(&c->write_total, memory_order_relaxed);
   pthread_mutex_unlock(&g_lock);
   return total;

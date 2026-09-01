@@ -13,6 +13,6 @@ void ts_push_ring_enqueue(ts_sub_t *s, const uint8_t *data, size_t len);
 
 /* ts_push_feed.c */
 void ts_push_rawaudio_emit(void *vctx, const unsigned char *data, size_t len);
-void ts_push_drop_sub(ts_sub_t *s, int idx);
+void ts_push_drop_sub(const ts_sub_t *s, int idx);
 
 #endif

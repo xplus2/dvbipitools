@@ -56,7 +56,7 @@ void ws_broadcast_register(ws_sink_fn fn, void *ctx) {
 
 void ws_broadcast_unregister(ws_sink_fn fn, void *ctx) {
   sink_snapshot_t *old, *fresh;
-  int i, n, w = 0;
+  int n, w = 0;
   pthread_mutex_lock(&g_mtx);
   old = atomic_load_explicit(&g_snapshot, memory_order_relaxed);
   if (!old) {
@@ -69,7 +69,7 @@ void ws_broadcast_unregister(ws_sink_fn fn, void *ctx) {
     pthread_mutex_unlock(&g_mtx);
     return;
   }
-  for (i = 0; i < n; i++)
+  for (int i = 0; i < n; i++)
     if (!(old->sinks[i].fn == fn && old->sinks[i].ctx == ctx))
       fresh->sinks[w++] = old->sinks[i];
   fresh->n = w;
@@ -85,7 +85,7 @@ void ws_broadcast_publish(const char *msg) {
   static _Thread_local uint8_t *frame;
   static _Thread_local size_t frame_cap;
   sink_snapshot_t *snap;
-  int i, n;
+  int n;
   size_t mlen, flen;
 
   atomic_fetch_add_explicit(&g_active_publishers, 1, memory_order_acquire);
@@ -110,12 +110,12 @@ void ws_broadcast_publish(const char *msg) {
     }
   }
   ws_frame_encode(frame, WS_OP_TEXT, msg, mlen);
-  for (i = 0; i < n; i++)
+  for (int i = 0; i < n; i++)
     snap->sinks[i].fn(snap->sinks[i].ctx, frame, flen);
   atomic_fetch_sub_explicit(&g_active_publishers, 1, memory_order_release);
 }
 
 int ws_broadcast_has_sinks(void) {
-  sink_snapshot_t *snap = atomic_load_explicit(&g_snapshot, memory_order_acquire);
+  const sink_snapshot_t *snap = atomic_load_explicit(&g_snapshot, memory_order_acquire);
   return snap && snap->n > 0;
 }

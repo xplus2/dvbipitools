@@ -67,7 +67,7 @@ void reactor_notify_listening(void);
 
 /* reactor_listen.c */
 void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid);
-void reactor_teardown_listeners(reactor_listeners_t *rl, int tid);
+void reactor_teardown_listeners(const reactor_listeners_t *rl, int tid);
 void reactor_raise_nofile_limit(void);
 
 /* reactor_loop.c: worker/pump thread entry points, spawned via pthread_create() from reactor_run() */
@@ -152,8 +152,7 @@ typedef void (*llhls_waiter_finish_fn)(llhls_waiter_t *w);
 static inline int llhls_waiter_pool_try_park(llhls_waiter_t *slots, int cap, int *active_count, void *owner,  int64_t stream_id, capture_ctx_t *cap_ctx, const pid_filter_t *filter,
                                              unsigned pmt_pid, const char *filename, int is_head, int keep_alive, const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part,
                                              int timeout_ms, int ws_handle) {
-  int i;
-  for (i = 0; i < cap; i++) {
+  for (int i = 0; i < cap; i++) {
     llhls_waiter_t *w = &slots[i];
     if (w->active)
       continue;
@@ -180,8 +179,7 @@ static inline int llhls_waiter_pool_try_park(llhls_waiter_t *slots, int cap, int
 
 /* stream_id < 0: match owner only (conn closing). else: match owner + exact stream (stream closing) */
 static inline void llhls_waiter_pool_close_owner(llhls_waiter_t *slots, int cap, int *active_count, void *owner, int64_t stream_id) {
-  int i;
-  for (i = 0; i < cap; i++) if (slots[i].active && slots[i].owner == owner && (stream_id < 0 || slots[i].stream_id == stream_id)) {
+  for (int i = 0; i < cap; i++) if (slots[i].active && slots[i].owner == owner && (stream_id < 0 || slots[i].stream_id == stream_id)) {
     slots[i].active = 0;
     (*active_count)--;
   }
@@ -189,10 +187,9 @@ static inline void llhls_waiter_pool_close_owner(llhls_waiter_t *slots, int cap,
 
 static inline void llhls_waiter_pool_flush(llhls_waiter_t *slots, int cap, int *active_count, llhls_waiter_finish_fn finish) {
   int64_t now;
-  int i;
   if (*active_count <= 0) return;
   now = now_ms();
-  for (i = 0; i < cap; i++) {
+  for (int i = 0; i < cap; i++) {
     llhls_waiter_t *w = &slots[i];
     if (!w->active) continue;
     if (now < w->deadline_ms && !hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, w->want_seg, w->want_part)) continue;
@@ -206,7 +203,7 @@ static inline void llhls_waiter_pool_flush(llhls_waiter_t *slots, int cap, int *
 void hls_cold_flush_waiters(void);
 
 /* dispatch.c. purges c's waiter slot, call before reactor_close() frees it */
-void hls_cold_waiter_conn_closing(conn_t *c);
+void hls_cold_waiter_conn_closing(const conn_t *c);
 
 /* handshake.c: TLS handshake + accept */
 void reactor_handshake(int epfd, conn_t *c);

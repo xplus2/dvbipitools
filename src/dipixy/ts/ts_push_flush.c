@@ -56,8 +56,8 @@ void ts_push_h3_enqueue(int sub_idx, const uint8_t *pkt, size_t len) {
 #endif
 
 int ts_push_active_count(void) {
-  int i, n = 0;
-  for (i = 0; i < g_ts_subs_n; i++) if (atomic_load_explicit(&g_ts_subs[i].alive, memory_order_relaxed) == TS_SUB_ALIVE) n++;
+  int n = 0;
+  for (int i = 0; i < g_ts_subs_n; i++) if (atomic_load_explicit(&g_ts_subs[i].alive, memory_order_relaxed) == TS_SUB_ALIVE) n++;
   return n;
 }
 

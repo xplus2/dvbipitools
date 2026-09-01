@@ -185,7 +185,7 @@ int ws_clients_touch(const client_info_t *info) {
   const char *ip, *src_proto, *src_addr, *src_name, *item_name;
   int free_slot;
   time_t now = time(NULL);
-  uint32_t h, i, n;
+  uint32_t h, i;
   if (info->filter)
     pid_filter_format(info->filter, filt, sizeof filt);
   else
@@ -200,7 +200,7 @@ int ws_clients_touch(const client_info_t *info) {
 
   pthread_mutex_lock(&g_clients_mtx);
   i = h & g_hash_mask;
-  for (n = 0; n < g_hash_cap; n++, i = (i + 1) & g_hash_mask) {
+  for (uint32_t n = 0; n < g_hash_cap; n++, i = (i + 1) & g_hash_mask) {
     ws_client_t *e;
     int idx = g_hash[i];
     if (idx == WS_HASH_EMPTY)

@@ -32,8 +32,7 @@ static void make_rtp_header(unsigned char hdr[12]) {
 }
 
 static size_t drain(capture_ctx_t *c, capture_reader_t *r, unsigned char *buf, size_t cap) {
-  int i;
-  for (i = 0; i < 40; i++) {
+  for (int i = 0; i < 40; i++) {
     capture_service(c);
     usleep(5000);
   }
@@ -236,11 +235,10 @@ static void *drain_thread_fn(void *arg) {
 static void run_drain_until(capture_ctx_t *cap, drain_thread_ctx_t *d) {
   pthread_t tid;
   drain_args_t a;
-  int i;
   a.cap = cap;
   a.d = d;
   pthread_create(&tid, NULL, drain_thread_fn, &a);
-  for (i = 0; i < 60 && !atomic_load(&d->got); i++)
+  for (int i = 0; i < 60 && !atomic_load(&d->got); i++)
     usleep(5000);
   pthread_cancel(tid);
   pthread_join(tid, NULL);

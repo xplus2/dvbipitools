@@ -46,8 +46,7 @@ static void playlist_item_open_static(channel_item_t *it, int insecure_tls) {
 }
 
 static void list_from_playlist(channel_list_t *l, const playlist_list_t *pl, int insecure_tls) {
-  int i;
-  for (i = 0; i < pl->count; i++) {
+  for (int i = 0; i < pl->count; i++) {
     channel_item_t *it = list_append(l);
     if (!it)
       return;
@@ -93,8 +92,7 @@ void build_from_csv(channel_list_t *l, const char *path, int insecure_tls) {
 
 /* shared by build_from_sds()/build_from_xml(): sds_parse_broadcast() output to channel_item_t */
 static void append_sds_entries(channel_list_t *l, const sds_service_t *entries, int count) {
-  int i;
-  for (i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     char addrbuf[80], uribuf[96];
     channel_item_t *it = list_append(l);
     if (!it)

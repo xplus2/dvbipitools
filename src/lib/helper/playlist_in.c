@@ -11,10 +11,9 @@
 #include "xml_util.h"
 
 void playlist_list_free(playlist_list_t *pl) {
-  int i;
   if (!pl)
     return;
-  for (i = 0; i < pl->count; i++) {
+  for (int i = 0; i < pl->count; i++) {
     free(pl->items[i].name);
     free(pl->items[i].uri);
     free(pl->items[i].icon_uri);
@@ -97,7 +96,7 @@ playlist_list_t *playlist_in_parse_m3u(const char *path) {
   char *buf;
   size_t len;
   playlist_list_t *pl;
-  char *saveptr, *line;
+  char *saveptr;
   playlist_item_t pending;
   int have_pending = 0;
 
@@ -110,7 +109,7 @@ playlist_list_t *playlist_in_parse_m3u(const char *path) {
     return NULL;
   }
 
-  for (line = strtok_r(buf, "\n", &saveptr); line; line = strtok_r(NULL, "\n", &saveptr)) {
+  for (char *line = strtok_r(buf, "\n", &saveptr); line; line = strtok_r(NULL, "\n", &saveptr)) {
     chomp(line);
     if (*line == '\0')
       continue;
@@ -131,6 +130,7 @@ playlist_list_t *playlist_in_parse_m3u(const char *path) {
         if (have_pending) {
           free(pending.name);
           free(pending.icon_uri);
+          have_pending = 0;
         }
         break;
       }
@@ -158,7 +158,7 @@ playlist_list_t *playlist_in_parse_csv(const char *path) {
   char *buf;
   size_t len;
   playlist_list_t *pl;
-  char *saveptr, *line;
+  char *saveptr;
 
   if (slurp(path, &buf, &len))
     return NULL;
@@ -169,7 +169,7 @@ playlist_list_t *playlist_in_parse_csv(const char *path) {
     return NULL;
   }
 
-  for (line = strtok_r(buf, "\n", &saveptr); line; line = strtok_r(NULL, "\n", &saveptr)) {
+  for (char *line = strtok_r(buf, "\n", &saveptr); line; line = strtok_r(NULL, "\n", &saveptr)) {
     char *fields[6];
     size_t nf;
     playlist_item_t *slot;

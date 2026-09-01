@@ -176,7 +176,7 @@ void conn_publish(conn_t *c) {
   __atomic_store_n(&g_fd_conn[c->fd], c, __ATOMIC_RELEASE);
 }
 
-void conn_unpublish(conn_t *c) {
+void conn_unpublish(const conn_t *c) {
   if (g_fd_conn_max && c->fd >= 0 && c->fd < g_fd_conn_max)
     __atomic_store_n(&g_fd_conn[c->fd], (conn_t *)NULL, __ATOMIC_RELEASE);
 }

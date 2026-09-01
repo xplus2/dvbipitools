@@ -15,7 +15,7 @@ size_t fmp4_segment_end(fmp4_mux_t *m, unsigned char **out) {
   size_t patch_pos[FMP4_MAX_TRACKS];
   size_t track_mdat_off[FMP4_MAX_TRACKS];
   size_t out_moof_start, mdat_payload_start, running;
-  int i, j;
+  int i;
 
   mp4buf_free(&m->out);
   memset(&styp, 0, sizeof styp);
@@ -36,7 +36,7 @@ size_t fmp4_segment_end(fmp4_mux_t *m, unsigned char **out) {
   }
 
   for (i = 0; i < m->ntrk; i++) {
-    frag_track_t *f = &m->frag[i];
+    const frag_track_t *f = &m->frag[i];
     mp4buf_t traf, tfhd, tfdt, trun;
     size_t traf_trun_start, moof_traf_start;
 
@@ -56,8 +56,8 @@ size_t fmp4_segment_end(fmp4_mux_t *m, unsigned char **out) {
     mb_u32(&trun, (uint32_t)f->nsamples);
     patch_pos[i] = trun.len; /* rebased below at each nesting level */
     mb_u32(&trun, 0);
-    for (j = 0; j < f->nsamples; j++) {
-      frag_sample_t *fs = &f->samples[j];
+    for (int j = 0; j < f->nsamples; j++) {
+      const frag_sample_t *fs = &f->samples[j];
       mb_u32(&trun, fs->duration);
       mb_u32(&trun, fs->size);
       mb_u32(&trun, sample_flags(fs->keyframe));

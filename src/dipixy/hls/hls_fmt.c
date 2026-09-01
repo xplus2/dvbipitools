@@ -39,14 +39,14 @@ void hls_sb_add_hex2(strbuf_t *b, unsigned v) {
 
 void hls_sb_add_u64(strbuf_t *b, uint64_t v) {
   char tmp[20], rev[21];
-  size_t n = 0, i;
+  size_t n = 0;
   if (!v) {
     tmp[n++] = '0';
   } else while (v) {
     tmp[n++] = (char)('0' + v % 10);
     v /= 10;
   }
-  for (i = 0; i < n; i++)
+  for (size_t i = 0; i < n; i++)
     rev[i] = tmp[n - 1 - i];
   rev[n] = '\0';
   hls_sb_add(b, rev);
@@ -212,28 +212,28 @@ char *write_lit(char *dst, const char *lit, size_t len) {
 
 char *write_u32(char *dst, uint32_t v, int min_digits) {
   char tmp[10];
-  int n = 0, i;
+  int n = 0;
   do {
     tmp[n++] = (char)('0' + v % 10);
     v /= 10;
   } while (v);
   while (n < min_digits)
     tmp[n++] = '0';
-  for (i = 0; i < n; i++)
+  for (int i = 0; i < n; i++)
     dst[i] = tmp[n - 1 - i];
   return dst + n;
 }
 
 char *write_u64_gen(char *dst, uint64_t v, int min_digits) {
   char tmp[20];
-  int n = 0, i;
+  int n = 0;
   do {
     tmp[n++] = (char)('0' + v % 10);
     v /= 10;
   } while (v);
   while (n < min_digits)
     tmp[n++] = '0';
-  for (i = 0; i < n; i++)
+  for (int i = 0; i < n; i++)
     dst[i] = tmp[n - 1 - i];
   return dst + n;
 }

@@ -45,8 +45,8 @@ void pid_filter_parse(const char *value, pid_filter_t *out) {
   if (out->count > 1)
     qsort(out->pids, (size_t)out->count, sizeof out->pids[0], cmp_u16);
   {
-    int i, w = 0;
-    for (i = 0; i < out->count; i++)
+    int w = 0;
+    for (int i = 0; i < out->count; i++)
       if (i == 0 || out->pids[i] != out->pids[w - 1])
         out->pids[w++] = out->pids[i];
     out->count = w;
@@ -73,11 +73,10 @@ int pid_filter_equal(const pid_filter_t *a, const pid_filter_t *b) {
 
 void pid_filter_format(const pid_filter_t *f, char *buf, size_t bufsz) {
   size_t off = 0;
-  int i;
   if (!bufsz)
     return;
   buf[0] = '\0';
-  for (i = 0; i < f->count && off < bufsz; i++) {
+  for (int i = 0; i < f->count && off < bufsz; i++) {
     char frag[8];
     size_t flen = 0;
     if (i)

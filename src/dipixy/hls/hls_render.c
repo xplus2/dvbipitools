@@ -61,7 +61,7 @@ int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid,
   char m3u8[4096];
   char *mp;
   char etag[48];
-  int m3u8_len, td, i;
+  int m3u8_len, td;
   const char *ext;
   unsigned long seq_ul;
   uint32_t req_seq, oldest, last;
@@ -89,8 +89,8 @@ int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid,
     mp = write_u32(mp, s->oldest_seq, 0);
     *mp++ = '\n';
     if (s->container == HLS_CONTAINER_FMP4) mp = WRITE_LIT(mp, "#EXT-X-MAP:URI=\"init.mp4\"\n");
-    for (i = 0; i < s->count; i++) {
-      hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
+    for (int i = 0; i < s->count; i++) {
+      const hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
       if ((size_t)(mp - m3u8) + 64 > sizeof m3u8) break;
       mp = WRITE_LIT(mp, "#EXTINF:");
       mp = write_fixed3(mp, seg->duration);
@@ -159,7 +159,7 @@ int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   uint32_t req_seq;
   int req_part;
   char etag[48];
-  uint8_t *body = NULL;
+  const uint8_t *body = NULL;
   size_t body_len = 0;
   memset(out, 0, sizeof *out);
   if (!strcmp(filename, "index_ll.m3u8")) {
@@ -214,7 +214,7 @@ int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
 }
 
 int hls_render_dash(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int is_head, hls_resp_t *out) {
-  hls_store_t *s;
+  const hls_store_t *s;
   char mpd[8192];
   size_t mpd_len;
   memset(out, 0, sizeof *out);
@@ -231,7 +231,7 @@ int hls_render_dash(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
 }
 
 int hls_render_dash_seg(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, hls_resp_t *out) {
-  hls_store_t *s;
+  const hls_store_t *s;
   const hls_seg_t *seg;
   uint64_t req_t;
   char etag[48];

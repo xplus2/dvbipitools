@@ -234,7 +234,7 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto,
 /* removes idx from g_tid_head[s->reactor_tid]'s chain. owning thread only,
    no-op if idx was never linked (reactor_tid still -1) */
 static void ts_push_unlink_tid(int idx) {
-  ts_sub_t *s = &g_ts_subs[idx];
+  const ts_sub_t *s = &g_ts_subs[idx];
   int tid = s->reactor_tid;
   int cur;
   if (tid < 0 || tid >= TS_PUSH_MAX_REACTOR_THREADS)
@@ -258,7 +258,7 @@ static void ts_push_unlink_tid(int idx) {
    yet capture_close()'d (may free it) */
 static void ts_push_unlink_ctx(capture_ctx_t *ctx, int idx) {
   _Atomic int *head = capture_ts_push_head_ptr(ctx);
-  ts_sub_t *s = &g_ts_subs[idx];
+  const ts_sub_t *s = &g_ts_subs[idx];
   int next = atomic_load_explicit(&s->ctx_next, memory_order_relaxed);
   int cur = atomic_load_explicit(head, memory_order_relaxed);
   if (cur == idx) {

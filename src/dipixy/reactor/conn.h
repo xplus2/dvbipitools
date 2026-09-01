@@ -142,7 +142,7 @@ int conn_table_init(int maxfd);
 /* owning reactor thread calls conn_publish/conn_unpublish.
    conn_for_fd() safe from any thread (single-writer, atomic ptr) */
 void conn_publish(conn_t *c);
-void conn_unpublish(conn_t *c);
+void conn_unpublish(const conn_t *c);
 conn_t *conn_for_fd(int fd);
 
 /* callable from any thread. over backpressure cap marks conn dead, returns -1, else 0 */

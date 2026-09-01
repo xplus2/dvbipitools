@@ -113,7 +113,7 @@ static int uni_socket_open(const fcc_client_cfg_t *cfg) {
   return fd;
 }
 
-static void send_rams_r(fcc_client_t *r, const fcc_client_cfg_t *cfg) {
+static void send_rams_r(const fcc_client_t *r, const fcc_client_cfg_t *cfg) {
   rtcp_rams_r_t req;
   unsigned char pkt[32];
   size_t n;

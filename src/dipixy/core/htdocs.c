@@ -81,7 +81,7 @@ void htdocs_template_reload_check(void) {
 }
 
 void htdocs_get(const char **buf, size_t *len) {
-  htdocs_page_t *p = atomic_load_explicit(&g_page, memory_order_acquire);
+  const htdocs_page_t *p = atomic_load_explicit(&g_page, memory_order_acquire);
   *buf = p->buf;
   *len = p->len;
 }

@@ -17,6 +17,8 @@ static capture_ctx_t *tssrc_ctx_new(char *key, const tssrc_cfg_t *cfg, net_err_r
   capture_ctx_t *c = calloc(1, sizeof *c);
   if (!c) {
     free(key);
+    if (reason)
+      *reason = NET_ERR_OTHER;
     return NULL;
   }
   atomic_init(&c->ts_push_head, -1);

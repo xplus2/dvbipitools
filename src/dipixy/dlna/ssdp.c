@@ -175,9 +175,8 @@ static void send_notify_one(const config_t *cfg, const char *uuid, const char *n
 }
 
 static void send_notify_all(const config_t *cfg, const char *uuid, int alive) {
-  size_t i;
   send_notify_one(cfg, uuid, NULL, alive);
-  for (i = 0; i < SSDP_NTYPES; i++)
+  for (size_t i = 0; i < SSDP_NTYPES; i++)
     send_notify_one(cfg, uuid, ssdp_types[i], alive);
 }
 

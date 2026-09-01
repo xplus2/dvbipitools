@@ -14,7 +14,7 @@ typedef struct {
 } pmt_es_spec_t;
 
 static size_t build_pmt(unsigned char *out, unsigned pcr_pid, const unsigned char *prog_info, size_t prog_info_len, const pmt_es_spec_t *es, size_t n_es) {
-  size_t o = 0, i;
+  size_t o = 0;
   out[o++] = 0x02;
   out[o++] = 0;
   out[o++] = 0; /* section_length: pmt_filter_rewrite ignores it on input */
@@ -29,7 +29,7 @@ static size_t build_pmt(unsigned char *out, unsigned pcr_pid, const unsigned cha
   out[o++] = (unsigned char)prog_info_len;
   memcpy(out + o, prog_info, prog_info_len);
   o += prog_info_len;
-  for (i = 0; i < n_es; i++) {
+  for (size_t i = 0; i < n_es; i++) {
     out[o++] = (unsigned char)es[i].stream_type;
     out[o++] = (unsigned char)(0xE0 | ((es[i].pid >> 8) & 0x1F));
     out[o++] = (unsigned char)es[i].pid;

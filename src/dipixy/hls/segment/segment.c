@@ -28,7 +28,7 @@ static void seg_unpin(hls_seg_ctx_t *s) {
   atomic_fetch_sub_explicit(&s->refcount, 1, memory_order_release);
 }
 
-static int seg_key_equal(const hls_seg_ctx_t *s, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container) {
+static int seg_key_equal(const hls_seg_ctx_t *s, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container) {
   return s->cap_ctx == ctx && s->pmt_pid == pmt_pid && s->container == container && pid_filter_equal(&s->filter, filter);
 }
 
@@ -47,8 +47,7 @@ int buf_reserve(unsigned char **buf, size_t *cap, size_t need) {
 
 /* caller must hold g_mtx. container in key: ts, fmp4 segmenters coexist per channel */
 static hls_seg_ctx_t *find_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container) {
-  int i;
-  for (i = 0; i < HLS_SEG_MAX_STORES; i++) {
+  for (int i = 0; i < HLS_SEG_MAX_STORES; i++) {
     hls_seg_ctx_t *s = atomic_load_explicit(&g_stores[i], memory_order_relaxed);
     if (s && seg_key_equal(s, ctx, filter, pmt_pid, container)) return s;
   }

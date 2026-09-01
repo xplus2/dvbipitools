@@ -146,9 +146,8 @@ void ws_frame_encode(uint8_t *out, int opcode, const void *payload, size_t paylo
     out[2] = (uint8_t)(payload_len >> 8);
     out[3] = (uint8_t)payload_len;
   } else {
-    size_t i;
     out[1] = 127;
-    for (i = 0; i < 8; i++)
+    for (size_t i = 0; i < 8; i++)
       out[2 + i] = (uint8_t)((uint64_t)payload_len >> (56 - 8 * i));
   }
   if (payload_len)

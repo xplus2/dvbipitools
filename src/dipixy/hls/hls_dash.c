@@ -19,9 +19,8 @@ static void iso8601_utc(time_t t, char *out, size_t outsz) {
 /* avc1.PPCCLL from AVCProfileIndication/profile_compatibility/AVCLevelIndication in init seg's avcC box.
    hvcC needs 12 fixed-layout fields, hvc1.1.6.L93.B0 (Main, Level 3.1) generic fallback */
 static void dash_codecs(const uint8_t *init, size_t initsz, int hevc, char *out, size_t outsz) {
-  size_t i;
   if (!hevc) {
-    for (i = 0; i + 8 <= initsz; i++) {
+    for (size_t i = 0; i + 8 <= initsz; i++) {
       if (init[i] == 'a' && init[i + 1] == 'v' && init[i + 2] == 'c' && init[i + 3] == 'C') {
         strbuf_t b;
         hls_sb_init(&b, out, outsz);
@@ -40,9 +39,8 @@ static void dash_codecs(const uint8_t *init, size_t initsz, int hevc, char *out,
 
 /* if init has no audio track="". mp4a.40.<N>: N from the AAC ASC's top 5 bits, fixed offset into build_esds() layout */
 static void dash_audio_codecs(const uint8_t *init, size_t initsz, char *out, size_t outsz) {
-  size_t i;
   out[0] = '\0';
-  for (i = 0; i + 4 <= initsz; i++) {
+  for (size_t i = 0; i + 4 <= initsz; i++) {
     if (!memcmp(init + i, "ac-3", 4)) {
       bufcpy(out, outsz, "ac-3");
       return;
@@ -149,7 +147,7 @@ size_t build_mpd(const hls_store_t *s, char *mpd, size_t cap) {
 }
 
 int hls_serve_dash(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
-  hls_store_t *s;
+  const hls_store_t *s;
   char mpd[8192];
   char cors_hdr[192];
   size_t mpd_len;
@@ -184,8 +182,7 @@ int parse_dash_seg_filename(const char *fn, uint64_t *t) {
 
 /* caller holds store's lock. NULL if no segment starts exactly at t_ms */
 const hls_seg_t *find_seg_by_time(const hls_store_t *s, uint64_t t_ms) {
-  int i;
-  for (i = 0; i < s->count; i++) {
+  for (int i = 0; i < s->count; i++) {
     const hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
     if (seg->start_ms == t_ms) return seg;
   }
@@ -193,7 +190,7 @@ const hls_seg_t *find_seg_by_time(const hls_store_t *s, uint64_t t_ms) {
 }
 
 int hls_serve_dash_seg(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
-  hls_store_t *s;
+  const hls_store_t *s;
   const hls_seg_t *seg;
   uint64_t req_t;
   char etag[48];

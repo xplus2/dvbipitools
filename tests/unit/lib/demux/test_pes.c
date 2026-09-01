@@ -64,7 +64,6 @@ static void build_pes_start_payload(unsigned char *pl, unsigned stream_id, uint6
    never checks them, only PTS_DTS_flags and the 5-byte value layout */
 static void build_pes_start_payload_pts_dts(unsigned char *pl, unsigned stream_id, uint64_t pts, uint64_t dts,
                                              unsigned char fill_base) {
-  size_t i;
   pl[0] = 0x00;
   pl[1] = 0x00;
   pl[2] = 0x01;
@@ -76,7 +75,7 @@ static void build_pes_start_payload_pts_dts(unsigned char *pl, unsigned stream_i
   pl[8] = 0x0A; /* PES_header_data_length */
   encode_pts(pts, pl + 9);
   encode_pts(dts, pl + 14);
-  for (i = 19; i < 184; i++)
+  for (size_t i = 19; i < 184; i++)
     pl[i] = (unsigned char)((i - 19 + fill_base) & 0xFF);
 }
 

@@ -10,8 +10,7 @@
 
 int find_header(const struct phr_header *headers, size_t num_headers, const char *name, char *out, size_t outsz) {
   size_t namelen = strlen(name);
-  size_t i;
-  for (i = 0; i < num_headers; i++) {
+  for (size_t i = 0; i < num_headers; i++) {
     const struct phr_header *h = &headers[i];
     size_t vlen;
     if (h->name_len != namelen || strncasecmp(h->name, name, namelen)) continue;
@@ -76,8 +75,7 @@ int route_disabled(const route_t *rt) {
 
 /* -n-named source: ordinal of its -i, 0 if unmatched */
 static unsigned source_ordinal_by_name(const config_t *cfg, const char *name) {
-  int i;
-  for (i = 0; i < cfg->n_sources; i++) if (cfg->sources[i].name && !strcmp(cfg->sources[i].name, name)) return (unsigned)cfg->sources[i].ordinal;
+  for (int i = 0; i < cfg->n_sources; i++) if (cfg->sources[i].name && !strcmp(cfg->sources[i].name, name)) return (unsigned)cfg->sources[i].ordinal;
   return 0;
 }
 
@@ -128,7 +126,6 @@ capture_ctx_t *open_source(const route_t *rt, unsigned *out_list_num) {
 
 void route_client_info(const route_t *rt, unsigned list_num, const pid_filter_t *filter, unsigned pmt_pid, const char *client_ip, int http_ver, route_item_bufs_t *bufs, client_info_t *out) {
   const config_t *cfg = reactor_cfg();
-  int i;
   memset(out, 0, sizeof *out);
   out->ip = client_ip;
   out->http_ver = http_ver;
@@ -172,7 +169,7 @@ void route_client_info(const route_t *rt, unsigned list_num, const pid_filter_t 
       return;
     case ROUTE_LIST_ITEM:
     case ROUTE_LIST_NAME:
-      for (i = 0; i < cfg->n_sources; i++)
+      for (int i = 0; i < cfg->n_sources; i++)
         if ((unsigned)cfg->sources[i].ordinal == list_num) {
           out->src_ordinal = list_num;
           out->src_name = cfg->sources[i].name;

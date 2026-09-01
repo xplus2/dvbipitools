@@ -69,7 +69,7 @@ static void h3_hash_insert(const uint8_t *key, size_t keylen, h3_conn_t *c) {
 }
 
 /* tombstones only (key,c)'s own slot, other conns' probe chains intact */
-static void h3_hash_delete(const uint8_t *key, size_t keylen, h3_conn_t *c) {
+static void h3_hash_delete(const uint8_t *key, size_t keylen, const h3_conn_t *c) {
   uint32_t i = cid_hash(key, keylen) & (H3_HASH_CAP - 1);
   for (uint32_t n = 0; n < H3_HASH_CAP; n++, i = (i + 1) & (H3_HASH_CAP - 1)) {
     if (t_h3_hash[i] == NULL)
@@ -194,7 +194,7 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
   }
 }
 
-static void h3_pool_release(h3_conn_t *c) { t_h3_pool_free[t_h3_pool_free_n++] = c->pool_slot; }
+static void h3_pool_release(const h3_conn_t *c) { t_h3_pool_free[t_h3_pool_free_n++] = c->pool_slot; }
 
 h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr *local, socklen_t locallen) {
   ngtcp2_pkt_hd hd;

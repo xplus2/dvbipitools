@@ -19,7 +19,6 @@ static void put_matrix_unity(mp4buf_t *b) {
 
 void build_mvhd(mp4buf_t *out, int ntrk) {
   mp4buf_t b;
-  int i;
   memset(&b, 0, sizeof b);
   mb_u8(&b, 0);
   mb_u24(&b, 0);
@@ -33,7 +32,7 @@ void build_mvhd(mp4buf_t *out, int ntrk) {
   mb_u32(&b, 0);
   mb_u32(&b, 0);
   put_matrix_unity(&b);
-  for (i = 0; i < 6; i++)
+  for (int i = 0; i < 6; i++)
     mb_u32(&b, 0); /* pre_defined */
   mb_u32(&b, (uint32_t)(ntrk + 1));
   mb_box(out, "mvhd", &b);
@@ -180,7 +179,7 @@ static void build_esds(mp4buf_t *out, const fmp4_trk_t *t) {
   memset(&sl, 0, sizeof sl);
   mb_u8(&sl, 0x02); /* SLConfigDescriptor, predefined = MP4 */
   memset(&es_desc, 0, sizeof es_desc);
-  mb_u16(&es_desc, (unsigned)t->cfg.track_id); /* ES_ID */
+  mb_u16(&es_desc, t->cfg.track_id); /* ES_ID */
   mb_u8(&es_desc, 0);                          /* flags: no dependency/URL/OCR */
   put_desc(&es_desc, 0x04, &dec_cfg);          /* DecoderConfigDescriptor */
   put_desc(&es_desc, 0x06, &sl);               /* SLConfigDescriptor */
@@ -195,9 +194,9 @@ static void build_dac3(mp4buf_t *out, const fmp4_trk_t *t) {
   mp4buf_t b;
   unsigned fscod = t->cfg.rate == 48000 ? 0 : t->cfg.rate == 44100 ? 1 : t->cfg.rate == 32000 ? 2 : 3;
   memset(&b, 0, sizeof b);
-  mb_u8(&b, (unsigned)((fscod << 6) | t->cfg.ac3_bsid << 1 | (t->cfg.ac3_bsmod >> 2)));
-  mb_u8(&b, (unsigned)((t->cfg.ac3_bsmod & 3) << 6 | t->cfg.ac3_acmod << 3 | t->cfg.ac3_lfeon << 2 | (t->cfg.ac3_bitrate_code >> 3)));
-  mb_u8(&b, (unsigned)((t->cfg.ac3_bitrate_code & 7) << 5));
+  mb_u8(&b, (fscod << 6) | t->cfg.ac3_bsid << 1 | (t->cfg.ac3_bsmod >> 2));
+  mb_u8(&b, (t->cfg.ac3_bsmod & 3) << 6 | t->cfg.ac3_acmod << 3 | t->cfg.ac3_lfeon << 2 | (t->cfg.ac3_bitrate_code >> 3));
+  mb_u8(&b, (t->cfg.ac3_bitrate_code & 7) << 5);
   mb_box(out, "dac3", &b);
 }
 
@@ -205,8 +204,8 @@ static void build_dec3(mp4buf_t *out, const fmp4_trk_t *t) {
   mp4buf_t b;
   unsigned fscod = t->cfg.rate == 48000 ? 0 : t->cfg.rate == 44100 ? 1 : t->cfg.rate == 32000 ? 2 : 3;
   memset(&b, 0, sizeof b);
-  mb_u16(&b, (unsigned)((t->cfg.ac3_bitrate_code & 0x1FFF) << 3)); /* data_rate:13, num_ind_sub-1:3=0 */
-  mb_u8(&b, (unsigned)((fscod << 6) | t->cfg.ac3_bsid << 1 | 0));  /* fscod:2 bsid:5 asvc:1 */
+  mb_u16(&b, (t->cfg.ac3_bitrate_code & 0x1FFF) << 3); /* data_rate:13, num_ind_sub-1:3=0 */
+  mb_u8(&b, (fscod << 6) | t->cfg.ac3_bsid << 1 | 0);  /* fscod:2 bsid:5 asvc:1 */
   mb_u8(&b, (unsigned)((t->cfg.ac3_bsmod << 5) | (t->cfg.ac3_acmod << 2) | (t->cfg.ac3_lfeon << 1)));
   mb_u8(&b, 0); /* num_dep_sub:4=0, reserved:1, pad */
   mb_box(out, "dec3", &b);
@@ -224,7 +223,7 @@ static void build_stsd(mp4buf_t *out, const fmp4_trk_t *t) {
     mb_u16(&entry, 1);  /* data_reference_index */
     mb_u32(&entry, 0);  /* reserved */
     mb_u32(&entry, 0);
-    mb_u16(&entry, (unsigned)t->cfg.channels);
+    mb_u16(&entry, t->cfg.channels);
     mb_u16(&entry, 16); /* samplesize */
     mb_u16(&entry, 0);  /* pre_defined */
     mb_u16(&entry, 0);  /* reserved */
@@ -258,8 +257,8 @@ static void build_stsd(mp4buf_t *out, const fmp4_trk_t *t) {
     mb_u32(&entry, 0);
     mb_u32(&entry, 0);
     mb_u32(&entry, 0); /* pre_defined */
-    mb_u16(&entry, (unsigned)t->cfg.width);
-    mb_u16(&entry, (unsigned)t->cfg.height);
+    mb_u16(&entry, t->cfg.width);
+    mb_u16(&entry, t->cfg.height);
     mb_u32(&entry, 0x00480000u); /* horizresolution 72dpi */
     mb_u32(&entry, 0x00480000u); /* vertresolution 72dpi */
     mb_u32(&entry, 0);
@@ -338,9 +337,8 @@ void build_trak(mp4buf_t *out, const fmp4_trk_t *t) {
 
 void build_mvex(mp4buf_t *out, const fmp4_mux_t *m) {
   mp4buf_t mvex;
-  int i;
   memset(&mvex, 0, sizeof mvex);
-  for (i = 0; i < m->ntrk; i++) {
+  for (int i = 0; i < m->ntrk; i++) {
     mp4buf_t trex;
     memset(&trex, 0, sizeof trex);
     mb_u8(&trex, 0);

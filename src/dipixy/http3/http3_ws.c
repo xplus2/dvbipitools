@@ -152,8 +152,7 @@ void h3_ws_on_stream_close(h3_conn_t *c, int64_t stream_id) {
 }
 
 void h3_ws_on_conn_close(h3_conn_t *c) {
-  int i;
-  for (i = 0; i < H3_MAX_REQS; i++) if (c->reqs[i].active) h3_ws_req_cleanup(&c->reqs[i]);
+  for (int i = 0; i < H3_MAX_REQS; i++) if (c->reqs[i].active) h3_ws_req_cleanup(&c->reqs[i]);
 }
 
 /* per-reactor eventfd handler: resumes H3 WS streams with data queued from any thread */

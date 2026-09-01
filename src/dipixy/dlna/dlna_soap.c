@@ -59,7 +59,6 @@ FILE *gbuf_open(gbuf_t *g) {
 static _Thread_local gbuf_t t_soap_gbuf;
 
 int soap_action_response(char **out, size_t *out_len, const char *service_urn, const char *action_response_tag, const soap_field_t *fields, int nfields) {
-  int i;
   FILE *f = gbuf_open(&t_soap_gbuf);
   if (!f) return 500;
   fprintf(f,
@@ -68,7 +67,7 @@ int soap_action_response(char **out, size_t *out_len, const char *service_urn, c
           "s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"><s:Body>"
           "<u:%s xmlns:u=\"%s\">",
           action_response_tag, service_urn);
-  for (i = 0; i < nfields; i++) {
+  for (int i = 0; i < nfields; i++) {
     fprintf(f, "<%s>", fields[i].name);
     xml_escape(f, fields[i].value);
     fprintf(f, "</%s>", fields[i].name);

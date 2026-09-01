@@ -48,7 +48,7 @@ void reactor_handshake(int epfd, conn_t *c) {
 }
 
 /* accept finish: sockopts, conn_new, client_ip, epoll add. shared by io_uring + accept4() paths */
-static void reactor_accept_setup(int epfd, reactor_listener *L, int fd, const struct sockaddr_storage *saddr) {
+static void reactor_accept_setup(int epfd, const reactor_listener *L, int fd, const struct sockaddr_storage *saddr) {
   __atomic_add_fetch(&g_connections_total, 1, __ATOMIC_RELAXED);
   int nd = 1;
   setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nd, sizeof(nd));

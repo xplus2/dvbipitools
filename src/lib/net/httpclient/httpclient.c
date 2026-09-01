@@ -104,7 +104,6 @@ int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out)
   struct phr_header headers[HTTP_PARSE_MAX_HEADERS];
   size_t num_headers = HTTP_PARSE_MAX_HEADERS;
   int pret;
-  size_t i;
 
   pret = phr_parse_response((const char *)h->hold, got, &minor_version, &status, &msg, &msg_len, headers, &num_headers, 0);
   (void)minor_version;
@@ -124,7 +123,7 @@ int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out)
     log_line("http: response has more than %d headers, dropping rest", HTTP_HDR_MAX);
     num_headers = HTTP_HDR_MAX;
   }
-  for (i = 0; i < num_headers; i++) {
+  for (size_t i = 0; i < num_headers; i++) {
     size_t nlen = headers[i].name_len;
     size_t vlen = headers[i].value_len;
     if (nlen >= sizeof h->hdr[0].name)

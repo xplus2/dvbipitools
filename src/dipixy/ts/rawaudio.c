@@ -76,10 +76,10 @@ void rawaudio_demux_free(rawaudio_demux_t *d) {
 }
 
 static void rawaudio_pick_pid(rawaudio_demux_t *d) {
-  int n, i, best_idx = 0;
+  int n, best_idx = 0;
   unsigned best_pid = 0;
   const psi_es_t *es = psi_es(d->psi, &n);
-  for (i = 0; i < n; i++) {
+  for (int i = 0; i < n; i++) {
     if (!es[i].audio_index || pid_filter_excludes(&d->filter, es[i].pid))
       continue;
     if (!best_idx || es[i].audio_index < best_idx) {

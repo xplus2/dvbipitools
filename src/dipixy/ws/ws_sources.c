@@ -65,7 +65,7 @@ static void emit_source_json(jbuf_t *j, const channels_t *channels, const char *
 
 int ws_sources_build_snapshot(const config_t *cfg, const channels_t *channels, char **out) {
   static _Thread_local jbuf_t j;
-  int ord, si, max_ord;
+  int si, max_ord;
 
   jbuf_reset(&j);
   max_ord = cfg->stdin_ordinal;
@@ -81,7 +81,7 @@ int ws_sources_build_snapshot(const config_t *cfg, const channels_t *channels, c
   jbuf_key(&j, "sources");
   jbuf_str(&j, "[");
   si = 0;
-  for (ord = 1; ord <= max_ord; ord++) {
+  for (int ord = 1; ord <= max_ord; ord++) {
     if (ord > 1 && (ord == cfg->stdin_ordinal || ord == cfg->rist_ordinal || (si < cfg->n_sources && cfg->sources[si].ordinal == ord)))
       jbuf_str(&j, ",");
     if (ord == cfg->stdin_ordinal)

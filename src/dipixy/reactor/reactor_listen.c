@@ -72,7 +72,6 @@ static int create_listen_sock_for_spec(const listen_spec_t *spec) {
 
 void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
   struct epoll_event ev;
-  int i;
   rl->nL = 0;
 
   {
@@ -108,7 +107,7 @@ void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
     rl->L[rl->nL++] = (reactor_listener){rl->tspush_efd, 0, RL_TSPUSH_EFD};
   }
 
-  for (i = 0; i < rl->nL; i++) {
+  for (int i = 0; i < rl->nL; i++) {
     memset(&ev, 0, sizeof ev);
     ev.events = EPOLLIN;
     ev.data.ptr = &rl->L[i];
@@ -116,13 +115,12 @@ void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
   }
 }
 
-void reactor_teardown_listeners(reactor_listeners_t *rl, int tid) {
-  int i;
+void reactor_teardown_listeners(const reactor_listeners_t *rl, int tid) {
   if (rl->tspush_efd >= 0) {
     ts_push_register_reactor_efd(tid, -1);
     close(rl->tspush_efd);
   }
-  for (i = 0; i < rl->nL; i++) if (rl->L[i].kind == RL_ACCEPT || rl->L[i].kind == RL_H3_UDP) close(rl->L[i].fd);
+  for (int i = 0; i < rl->nL; i++) if (rl->L[i].kind == RL_ACCEPT || rl->L[i].kind == RL_H3_UDP) close(rl->L[i].fd);
 #ifdef HAVE_HTTP3
   h3_thread_cleanup();
 #endif

@@ -130,7 +130,7 @@ void *worker_thread(void *arg) {
 
   for (;;) {
     struct epoll_event events[256];
-    int nev, i, timeout_ms = 200;
+    int nev, timeout_ms = 200;
     if (signal_stop_requested()) break;
 #ifdef HAVE_HTTP3
     {
@@ -143,7 +143,7 @@ void *worker_thread(void *arg) {
       if (errno == EINTR) continue;
       break;
     }
-    for (i = 0; i < nev; i++) reactor_handle_event(epfd, &rl, tid, &events[i]);
+    for (int i = 0; i < nev; i++) reactor_handle_event(epfd, &rl, tid, &events[i]);
     llhls_flush_waiters();
     hls_cold_flush_waiters();
     htdocs_template_reload_check();

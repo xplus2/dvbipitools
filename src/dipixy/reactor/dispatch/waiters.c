@@ -63,8 +63,7 @@ static _Thread_local int t_hls_cold_waiters_active;
 int hls_cold_try_park(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename,
                        hls_cold_kind_t kind, hls_container_t container, int is_head, int keep_alive,
                        const char *origin_hdr, int timeout_ms, int ws_handle) {
-  int i;
-  for (i = 0; i < HLS_COLD_WAITERS_MAX; i++) {
+  for (int i = 0; i < HLS_COLD_WAITERS_MAX; i++) {
     hls_cold_waiter_t *w = &t_hls_cold_waiters[i];
     if (w->active)
       continue;
@@ -87,9 +86,8 @@ int hls_cold_try_park(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter,
   return 0;
 }
 
-void hls_cold_waiter_conn_closing(conn_t *c) {
-  int i;
-  for (i = 0; i < HLS_COLD_WAITERS_MAX; i++)
+void hls_cold_waiter_conn_closing(const conn_t *c) {
+  for (int i = 0; i < HLS_COLD_WAITERS_MAX; i++)
     if (t_hls_cold_waiters[i].active && t_hls_cold_waiters[i].c == c) {
       t_hls_cold_waiters[i].active = 0;
       t_hls_cold_waiters_active--;
@@ -98,11 +96,10 @@ void hls_cold_waiter_conn_closing(conn_t *c) {
 
 void hls_cold_flush_waiters(void) {
   int64_t now;
-  int i;
   if (!t_hls_cold_waiters_active)
     return;
   now = now_ms();
-  for (i = 0; i < HLS_COLD_WAITERS_MAX; i++) {
+  for (int i = 0; i < HLS_COLD_WAITERS_MAX; i++) {
     hls_cold_waiter_t *w = &t_hls_cold_waiters[i];
     int ready, served;
     size_t bytes = 0;

@@ -47,7 +47,7 @@ int tls_is_tls(int fd) {
 
 int tls_client_cert_verified(int fd) {
   if (fd < 0 || fd >= g_tls_fd_max) return 0;
-  SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
+  const SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
   if (!ssl) return 0;
   if (SSL_get_verify_result(ssl) != X509_V_OK) return 0;
   X509 *cert = SSL_get_peer_certificate(ssl);
@@ -60,11 +60,11 @@ void tls_get_client_cert_cn(int fd, char *buf, size_t bufsz) {
   if (!buf || !bufsz) return;
   buf[0] = '\0';
   if (fd < 0 || fd >= g_tls_fd_max) return;
-  SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
+  const SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
   if (!ssl) return;
   X509 *cert = SSL_get_peer_certificate(ssl);
   if (!cert) return;
-  X509_NAME *subj = X509_get_subject_name(cert);
+  const X509_NAME *subj = X509_get_subject_name(cert);
   if (subj) X509_NAME_get_text_by_NID(subj, NID_commonName, buf, (int)bufsz);
   X509_free(cert);
 }
@@ -190,14 +190,14 @@ void tls_gc_sweep(void) {
 
 int tls_has_pending(int fd) {
   if (fd < 0 || fd >= g_tls_fd_max) return 0;
-  SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
+  const SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
   return ssl ? SSL_pending(ssl) > 0 : 0;
 }
 
 int tls_alpn_is_h2(int fd) {
 #ifdef HAVE_HTTP2
   if (fd < 0 || fd >= g_tls_fd_max) return 0;
-  SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
+  const SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
   if (!ssl) return 0;
   const unsigned char *proto = NULL;
   unsigned int protolen = 0;

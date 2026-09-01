@@ -198,7 +198,7 @@ ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_o
 
 int mcast_fd(const mcast_t *m) { return m->fd; }
 
-int mcast_set_nonblock(mcast_t *m) {
+int mcast_set_nonblock(const mcast_t *m) {
   int flags = fcntl(m->fd, F_GETFL, 0);
   if (flags < 0)
     return -1;

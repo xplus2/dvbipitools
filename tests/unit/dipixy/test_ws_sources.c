@@ -19,6 +19,7 @@ static void write_temp_m3u(char *path, const char *content) {
   fd = mkstemps(path, 4);
   ck_assert_int_ge(fd, 0);
   f = fdopen(fd, "w");
+  ck_assert_ptr_nonnull(f);
   fputs(content, f);
   fclose(f);
 }

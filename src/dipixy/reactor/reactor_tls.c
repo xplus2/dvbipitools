@@ -164,10 +164,8 @@ int tls_create_listen_sock6(int port, const char *host6) {
 int tls_is_running(void) { return (g_ssl_ctx != NULL); }
 
 void tls_cleanup(void) {
-  int s;
-
   /* flush pending GC entries before tearing down SSL context */
-  for (s = 0; s < tls_gc_nshards; s++) {
+  for (int s = 0; s < tls_gc_nshards; s++) {
     tls_gc_shard_t *shard = &tls_gc_shards[s];
     tls_gc_node_t *chain = atomic_exchange_explicit(&shard->head, NULL, memory_order_acquire);
     while (chain) {

@@ -31,8 +31,7 @@ static void reader_exit(void) {
 }
 
 void wait_readers_quiescent(void) {
-  int i;
-  for (i = 0; i < CHANNELS_MAX_READER_THREADS; i++) {
+  for (int i = 0; i < CHANNELS_MAX_READER_THREADS; i++) {
     uint64_t g = atomic_load_explicit(&g_reader_gen[i], memory_order_acquire);
     if (g & 1)
       while (atomic_load_explicit(&g_reader_gen[i], memory_order_acquire) == g)
@@ -99,10 +98,9 @@ static const channel_item_t *channel_list_get_item(const channel_list_t *l, unsi
 }
 
 static const channel_item_t *channel_list_find_name(const channel_list_t *l, const char *name) {
-  int i;
   if (!l)
     return NULL;
-  for (i = 0; i < l->count; i++)
+  for (int i = 0; i < l->count; i++)
     if (strcmp(l->items[i].name, name) == 0)
       return &l->items[i];
   return NULL;
@@ -147,7 +145,6 @@ capture_ctx_t *channels_resolve_static(const channels_t *ch, unsigned list_num, 
 int channels_list_for_each(const channels_t *ch, unsigned list_num, void (*emit)(void *ctx, const channel_item_t *item),
                             void *ctx) {
   const channel_list_t *l;
-  int i;
   reader_enter();
   l = channels_get(ch, list_num);
   if (!l) {
@@ -155,7 +152,7 @@ int channels_list_for_each(const channels_t *ch, unsigned list_num, void (*emit)
     return 0;
   }
   if (emit)
-    for (i = 0; i < l->count; i++)
+    for (int i = 0; i < l->count; i++)
       emit(ctx, &l->items[i]);
   reader_exit();
   return l->count;
@@ -165,7 +162,6 @@ int channels_item_lookup(const channels_t *ch, unsigned list_num, unsigned item_
                          char *out_proto, size_t out_protosz, char *out_addr, size_t out_addrsz) {
   const channel_list_t *l;
   const channel_item_t *it;
-  int i;
 
   reader_enter();
   l = channels_get(ch, list_num);
@@ -176,7 +172,7 @@ int channels_item_lookup(const channels_t *ch, unsigned list_num, unsigned item_
   if (item_name) {
     it = channel_list_find_name(l, item_name);
     if (it)
-      for (i = 0; i < l->count; i++)
+      for (int i = 0; i < l->count; i++)
         if (&l->items[i] == it) {
           *out_item_num = (unsigned)(i + 1);
           break;
@@ -197,7 +193,8 @@ int channels_item_lookup(const channels_t *ch, unsigned list_num, unsigned item_
       size_t len = scheme_end ? (size_t)(scheme_end - it->uri) : 0;
       if (len >= out_protosz)
         len = out_protosz - 1;
-      memcpy(out_proto, it->uri, len);
+      if (len)
+        memcpy(out_proto, it->uri, len);
       out_proto[len] = '\0';
     }
     if (out_addr && out_addrsz) {

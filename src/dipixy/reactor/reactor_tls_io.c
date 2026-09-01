@@ -56,7 +56,7 @@ int tls_zc_drain(int fd, int *hi_out) {
       if (!((cm->cmsg_level == SOL_IP && cm->cmsg_type == IP_RECVERR) ||
             (cm->cmsg_level == SOL_IPV6 && cm->cmsg_type == IPV6_RECVERR)))
         continue;
-      struct sock_extended_err *serr = (struct sock_extended_err *)CMSG_DATA(cm);
+      const struct sock_extended_err *serr = (const struct sock_extended_err *)CMSG_DATA(cm);
       if (serr->ee_errno != 0 || serr->ee_origin != SO_EE_ORIGIN_ZEROCOPY)
         continue;
       found = 1;

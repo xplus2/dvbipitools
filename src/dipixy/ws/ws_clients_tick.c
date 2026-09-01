@@ -93,11 +93,11 @@ void ws_clients_tick(void) {
 int ws_clients_build_snapshot(char **out) {
   static _Thread_local jbuf_t j;
   ws_client_snapshot_t snap;
-  int i, n = 0;
+  int n = 0;
   jbuf_reset(&j);
   jbuf_str(&j, "{\"type\":\"clients.snapshot\",\"clients\":[");
   pthread_mutex_lock(&g_clients_mtx);
-  for (i = 0; i < g_clients_cap; i++) {
+  for (int i = 0; i < g_clients_cap; i++) {
     if (!g_clients[i].used) continue;
     if (n++) jbuf_str(&j, ",");
     snapshot_client(&snap, &g_clients[i]);

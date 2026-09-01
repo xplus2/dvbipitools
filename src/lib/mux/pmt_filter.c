@@ -7,8 +7,7 @@
 #include "psi_build.h"
 
 static int pid_in_set(unsigned pid, const unsigned *pids, size_t n) {
-  size_t i;
-  for (i = 0; i < n; i++)
+  for (size_t i = 0; i < n; i++)
     if (pids[i] == pid)
       return 1;
   return 0;
