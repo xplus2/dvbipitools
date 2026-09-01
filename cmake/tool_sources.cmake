@@ -805,6 +805,7 @@ function(dipixy_resolve_sources)
         set(DIPIXY_HTTP2_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_tspush.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_dashchunk.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_hls.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_ws.c)
     else ()
@@ -864,7 +865,9 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_req.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_resp.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_tspush.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_dashchunk.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_llhls.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_hls_cold.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_ws.c)
     else ()
         set(DIPIXY_HTTP3_SRCS)
@@ -899,6 +902,7 @@ function(dipixy_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/route.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/waiters.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tspush.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_dashchunk.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_ws.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push_feed.c
@@ -917,17 +921,18 @@ function(dipixy_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_clients.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_clients_json.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_clients_tick.c
-        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls.c
-        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_fmt.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/segstore.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/respfmt.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_serve.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_llhls.c
-        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_dash.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/dash/dash.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/dash/lldash.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_render.c
-        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/segment/segment.c
-        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/segment/demux.c
-        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/segment/video.c
-        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/segment/audio.c
-        ${CMAKE_SOURCE_DIR}/src/dipixy/hls/segment/mux.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/segment/segment.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/segment/demux.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/segment/video.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/segment/audio.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/segment/mux.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_soap.c

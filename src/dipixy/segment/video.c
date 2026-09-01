@@ -83,7 +83,7 @@ static void ts_part_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, size_t au_o
   }
 
   if (au_off > s->part_start_off) {
-    if (hls_push_part(s->cap_ctx, &s->filter, s->pmt_pid, s->buf + s->part_start_off, au_off - s->part_start_off, part_elapsed, s->part_key) < 0)
+    if (hls_push_part(s->cap_ctx, &s->filter, s->pmt_pid, HLS_CONTAINER_TS, s->buf + s->part_start_off, au_off - s->part_start_off, part_elapsed, s->part_key) < 0)
       log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_part failed, part lost");
   }
   s->part_start_off = will_trim ? 0 : au_off;
@@ -128,7 +128,7 @@ void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, 
   if (!cut_now) return;
   if (s->container == HLS_CONTAINER_TS) {
     if (atomic_load_explicit(&s->part_target, memory_order_acquire) > 0.0) {
-      if (hls_push_segment_ll(s->cap_ctx, &s->filter, s->pmt_pid, elapsed) < 0)
+      if (hls_push_segment_ll(s->cap_ctx, &s->filter, s->pmt_pid, HLS_CONTAINER_TS, elapsed) < 0)
         log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_segment_ll failed, segment lost");
     } else {
       if (hls_push_segment(s->cap_ctx, &s->filter, s->pmt_pid, HLS_CONTAINER_TS, s->buf, cut_off, elapsed) < 0)

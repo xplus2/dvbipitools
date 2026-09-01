@@ -1,7 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include "hls_int.h"
+#include "dash.h"
+#include "dash_int.h"
 
 #include "lib/helper/ioutil.h"
 
@@ -14,6 +15,21 @@ static void iso8601_utc(time_t t, char *out, size_t outsz) {
   struct tm tmv;
   gmtime_r(&t, &tmv);
   strftime(out, outsz, "%Y-%m-%dT%H:%M:%SZ", &tmv);
+}
+
+/* no bounds check, caller sizes buffer */
+static char *write_xml_escaped(char *dst, const char *s) {
+  for (; *s; s++) {
+    switch (*s) {
+      case '&': dst = write_lit(dst, "&amp;", 5); break;
+      case '<': dst = write_lit(dst, "&lt;", 4); break;
+      case '>': dst = write_lit(dst, "&gt;", 4); break;
+      case '"': dst = write_lit(dst, "&quot;", 6); break;
+      case '\'': dst = write_lit(dst, "&apos;", 6); break;
+      default: *dst++ = *s; break;
+    }
+  }
+  return dst;
 }
 
 /* avc1.PPCCLL from AVCProfileIndication/profile_compatibility/AVCLevelIndication in init seg's avcC box.
@@ -63,8 +79,9 @@ static void dash_audio_codecs(const uint8_t *init, size_t initsz, char *out, siz
   }
 }
 
-/* caller holds store's lock. codecs: comma-joined video+audio (audio omitted if none) */
-size_t build_mpd(const hls_store_t *s, char *mpd, size_t cap) {
+/* caller holds store's lock. codecs: comma-joined video+audio (audio omitted if none).
+   want_ll: route-selected, not derived from s->part_target */
+static size_t build_mpd(const hls_store_t *s, char *mpd, size_t cap, int want_ll, const char *utc_url) {
   char *mp = mpd;
   char avail[32], publish[32], vcodec[32], acodec[32], codecs[64];
   double min_update, tsb_depth, pres_delay, min_buffer;
@@ -112,14 +129,38 @@ size_t build_mpd(const hls_store_t *s, char *mpd, size_t cap) {
   mp = write_fixed1(mp, pres_delay);
   mp = WRITE_LIT(mp, "S\"\n     minBufferTime=\"PT");
   mp = write_fixed1(mp, min_buffer);
-  mp = WRITE_LIT(mp, "S\">\n  <Period id=\"0\" start=\"PT0S\">\n"
-                      "    <AdaptationSet mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">\n"
-                      "      <Representation id=\"video\" codecs=\"");
+  mp = WRITE_LIT(mp, "S\">\n");
+  /* DASH-IF LL CR-r8 9.X.4.2 */
+  if (want_ll && s->part_target > 0.0)
+    mp = WRITE_LIT(mp, "  <ServiceDescription id=\"0\">\n"
+                        "    <Latency target=\"3500\" min=\"2000\" max=\"10000\" referenceId=\"0\"/>\n"
+                        "  </ServiceDescription>\n");
+  mp = WRITE_LIT(mp, "  <Period id=\"0\" start=\"PT0S\">\n"
+                      "    <AdaptationSet mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">\n");
+  if (want_ll && s->part_target > 0.0) {
+    /* DASH-IF LL CR-r8 9.X.6.2.8 */
+    mp = WRITE_LIT(mp, "      <Resync type=\"0\" dT=\"");
+    mp = write_u64_gen(mp, (uint64_t)(s->part_target * 1000.0 + 0.5), 0);
+    /* DASH-IF LL CR-r8 9.X.4.3/9.X.4.2 */
+    mp = WRITE_LIT(mp, "\"/>\n      <ProducerReferenceTime id=\"0\" inband=\"true\" type=\"encoder\" wallclockTime=\"");
+    mp = write_lit(mp, avail, strlen(avail));
+    mp = WRITE_LIT(mp, "\" presentationTime=\"0\">\n        <UTCTiming schemeIdUri=\"urn:mpeg:dash:utc:http-xsiso:2014\" value=\"");
+    mp = write_xml_escaped(mp, utc_url);
+    mp = WRITE_LIT(mp, "\"/>\n      </ProducerReferenceTime>\n");
+  }
+  mp = WRITE_LIT(mp, "      <Representation id=\"video\" codecs=\"");
   mp = write_lit(mp, codecs, strlen(codecs));
   mp = WRITE_LIT(mp, "\" bandwidth=\"");
   mp = write_u64_gen(mp, bw_secs > 0.0 ? (uint64_t)(bw_bits / bw_secs) : 1000000ULL, 0);
-  mp = WRITE_LIT(mp, "\">\n        <SegmentTemplate initialization=\"init.mp4\" media=\"dseg$Time$.m4s\" timescale=\"1000\">\n"
-                      "          <SegmentTimeline>\n");
+  mp = WRITE_LIT(mp, "\">\n        <SegmentTemplate initialization=\"init.mp4\" media=\"dseg$Time$.m4s\" timescale=\"1000\"");
+  if (want_ll && s->part_target > 0.0) {
+    double ato = s->seg_target - s->part_target;
+    if (ato < 0.0) ato = 0.0;
+    mp = WRITE_LIT(mp, " availabilityTimeOffset=\"");
+    mp = write_fixed3(mp, ato);
+    mp = WRITE_LIT(mp, "\" availabilityTimeComplete=\"false\"");
+  }
+  mp = WRITE_LIT(mp, ">\n          <SegmentTimeline>\n");
 
   /* seg dur varies (keyframe-aligned cuts): report true duration. t= only needed on the first entry, else implicit */
   for (i = 0; i < s->count; i++) {
@@ -141,12 +182,17 @@ size_t build_mpd(const hls_store_t *s, char *mpd, size_t cap) {
                       "        </SegmentTemplate>\n"
                       "      </Representation>\n"
                       "    </AdaptationSet>\n"
-                      "  </Period>\n"
-                      "</MPD>\n");
+                      "  </Period>\n");
+  if (want_ll && s->part_target > 0.0) {
+    mp = WRITE_LIT(mp, "  <UTCTiming schemeIdUri=\"urn:mpeg:dash:utc:http-xsiso:2014\" value=\"");
+    mp = write_xml_escaped(mp, utc_url);
+    mp = WRITE_LIT(mp, "\"/>\n");
+  }
+  mp = WRITE_LIT(mp, "</MPD>\n");
   return (size_t)(mp - mpd);
 }
 
-int hls_serve_dash(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
+int hls_serve_dash(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int want_ll, const char *utc_url, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
   const hls_store_t *s;
   char mpd[8192];
   char cors_hdr[192];
@@ -159,7 +205,7 @@ int hls_serve_dash(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, un
     queue_status(c, "404 Not Found", keep_alive);
     return 1;
   }
-  mpd_len = build_mpd(s, mpd, sizeof mpd);
+  mpd_len = build_mpd(s, mpd, sizeof mpd, want_ll, utc_url);
   pthread_mutex_unlock(store_lock(s));
   queue_mpd(c, mpd, mpd_len, is_head, keep_alive, cors_hdr);
   if (out_bytes)
@@ -181,7 +227,7 @@ int parse_dash_seg_filename(const char *fn, uint64_t *t) {
 }
 
 /* caller holds store's lock. NULL if no segment starts exactly at t_ms */
-const hls_seg_t *find_seg_by_time(const hls_store_t *s, uint64_t t_ms) {
+static const hls_seg_t *find_seg_by_time(const hls_store_t *s, uint64_t t_ms) {
   for (int i = 0; i < s->count; i++) {
     const hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
     if (seg->start_ms == t_ms) return seg;
@@ -215,6 +261,43 @@ int hls_serve_dash_seg(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter
   }
   if (out_bytes)
     *out_bytes = seg->size;
+  pthread_mutex_unlock(store_lock(s));
+  return 1;
+}
+
+int hls_render_dash(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int want_ll, const char *utc_url, int is_head, hls_resp_t *out) {
+  const hls_store_t *s;
+  char mpd[8192];
+  size_t mpd_len;
+  memset(out, 0, sizeof *out);
+  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_FMP4);
+  if (!s || s->count == 0) {
+    if (s) pthread_mutex_unlock(store_lock(s));
+    resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
+    return 1;
+  }
+  mpd_len = build_mpd(s, mpd, sizeof mpd, want_ll, utc_url);
+  pthread_mutex_unlock(store_lock(s));
+  resp_set(out, 200, "application/dash+xml", NULL, (uint8_t *)mpd, mpd_len, is_head);
+  return 1;
+}
+
+int hls_render_dash_seg(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, hls_resp_t *out) {
+  const hls_store_t *s;
+  const hls_seg_t *seg;
+  uint64_t req_t;
+  char etag[48];
+  memset(out, 0, sizeof *out);
+  if (!parse_dash_seg_filename(filename, &req_t)) return 0;
+  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_FMP4);
+  seg = s ? find_seg_by_time(s, req_t) : NULL;
+  if (!seg) {
+    if (s) pthread_mutex_unlock(store_lock(s));
+    resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
+    return 1;
+  }
+  seg_etag(seg->seq, seg->size, etag, sizeof etag);
+  resp_set_zc(out, 200, "video/mp4", etag, seg->data, seg->size, is_head);
   pthread_mutex_unlock(store_lock(s));
   return 1;
 }

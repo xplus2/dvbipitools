@@ -33,8 +33,7 @@ static void argerr(const char *fmt, ...) {
 static int listen_parse(const char *s, listen_spec_t *out) {
   if (strncmp(s, "all:", 4) == 0) {
     unsigned port;
-    if (argutil_port_parse(s + 4, &port))
-      return -1;
+    if (argutil_port_parse(s + 4, &port)) return -1;
     out->scope = LISTEN_ANY;
     out->addr[0] = '\0';
     out->port = port;
@@ -43,8 +42,7 @@ static int listen_parse(const char *s, listen_spec_t *out) {
   {
     int family;
     unsigned port;
-    if (argutil_addrport_parse(s, &family, out->addr, sizeof out->addr, &port))
-      return -1;
+    if (argutil_addrport_parse(s, &family, out->addr, sizeof out->addr, &port)) return -1;
     out->scope = family == AF_INET6 ? LISTEN_V6 : LISTEN_V4;
     out->port = port;
     return 0;
@@ -55,8 +53,7 @@ static int listen_parse(const char *s, listen_spec_t *out) {
 static int workers_parse(const char *s, int *out) {
   char *end;
   long v = strtol(s, &end, 10);
-  if (*end != '\0')
-    return -1;
+  if (*end != '\0') return -1;
   if (v == -1 || v == -2 || v == -3) {
     *out = (int)v;
     return 0;
@@ -68,42 +65,32 @@ static int workers_parse(const char *s, int *out) {
   return -1;
 }
 
-/* -f/--format <list>: comma-separated whitelist, tokens ts,spts,rawaudio,hls,llhls,dash.
-   sets cfg's no_* fields: listed formats 0, everything else 1. 0 ok, -1 empty or unknown token */
+/* -f/--format <list>: comma-separated list: ts,spts,rawaudio,hls,llhls,dash,lldash
+   listed formats 0, everything else 1. 0 ok, -1 empty or unknown token */
 static int format_parse(const char *s, config_t *cfg) {
   struct {
     const char *name;
     int *flag;
   } items[] = {
       {"ts", &cfg->no_ts},   {"spts", &cfg->no_spts}, {"rawaudio", &cfg->no_rawaudio},
-      {"hls", &cfg->no_hls}, {"llhls", &cfg->no_llhls}, {"dash", &cfg->no_dash},
+      {"hls", &cfg->no_hls}, {"llhls", &cfg->no_llhls}, {"dash", &cfg->no_dash}, {"lldash", &cfg->no_lldash},
   };
   size_t n_items = sizeof items / sizeof items[0];
   size_t i;
   const char *p = s;
-
-  if (!*s)
-    return -1;
-
-  for (i = 0; i < n_items; i++)
-    *items[i].flag = 1;
-
+  if (!*s) return -1;
+  for (i = 0; i < n_items; i++) *items[i].flag = 1;
   while (*p) {
     const char *comma = strchr(p, ',');
     size_t len = comma ? (size_t)(comma - p) : strlen(p);
     int matched = 0;
-
-    if (!len)
-      return -1;
-    for (i = 0; i < n_items; i++) {
-      if (strlen(items[i].name) == len && !strncmp(items[i].name, p, len)) {
-        *items[i].flag = 0;
-        matched = 1;
-        break;
-      }
+    if (!len) return -1;
+    for (i = 0; i < n_items; i++) if (strlen(items[i].name) == len && !strncmp(items[i].name, p, len)) {
+      *items[i].flag = 0;
+      matched = 1;
+      break;
     }
-    if (!matched)
-      return -1;
+    if (!matched) return -1;
     p = comma ? comma + 1 : p + len;
   }
   return 0;
@@ -112,8 +99,7 @@ static int format_parse(const char *s, config_t *cfg) {
 /* case-insensitive suffix match against known playlist extensions */
 static int playlist_kind_from_ext(const char *path, source_kind_t *out) {
   const char *dot = strrchr(path, '.');
-  if (!dot)
-    return -1;
+  if (!dot) return -1;
   if (!strcasecmp(dot, ".m3u") || !strcasecmp(dot, ".m3u8"))
     *out = SRC_M3U;
   else if (!strcasecmp(dot, ".xspf"))
@@ -129,8 +115,7 @@ static int playlist_kind_from_ext(const char *path, source_kind_t *out) {
 
 static int sources_append(config_t *cfg, source_kind_t kind, const char *value, int ordinal) {
   source_def_t *p = array_grow(cfg->sources, &cfg->sources_cap, cfg->n_sources + 1, sizeof *cfg->sources);
-  if (!p)
-    return -1;
+  if (!p) return -1;
   cfg->sources = p;
   memset(&cfg->sources[cfg->n_sources], 0, sizeof *cfg->sources);
   cfg->sources[cfg->n_sources].kind = kind;
@@ -141,13 +126,9 @@ static int sources_append(config_t *cfg, source_kind_t kind, const char *value, 
 }
 
 static int name_in_use(const config_t *cfg, const char *name) {
-  if (cfg->stdin_name && !strcmp(cfg->stdin_name, name))
-    return 1;
-  if (cfg->rist_name && !strcmp(cfg->rist_name, name))
-    return 1;
-  for (int i = 0; i < cfg->n_sources; i++)
-    if (cfg->sources[i].name && !strcmp(cfg->sources[i].name, name))
-      return 1;
+  if (cfg->stdin_name && !strcmp(cfg->stdin_name, name)) return 1;
+  if (cfg->rist_name && !strcmp(cfg->rist_name, name))   return 1;
+  for (int i = 0; i < cfg->n_sources; i++) if (cfg->sources[i].name && !strcmp(cfg->sources[i].name, name)) return 1;
   return 0;
 }
 
@@ -189,16 +170,19 @@ static void print_help(void) {
       "      --sds-timeout <s>       sds:// discovery wait at startup/reload [3]\n"
       "      --sds-refresh-interval <s>  sds:// re-poll period               [30]\n"
       "      --segment-size <s>      target segment duration, seconds        [3]\n"
-      "                              (hls, hls-fmp4, llhls, dash)\n"
+      "                              (hls, hls-fmp4, llhls, dash, lldash)\n"
       "      --segment-count <n>     playlist/manifest sliding-window size   [4]\n"
       "      --hls-part-size <s>     LL-HLS target part duration, seconds    [0.35]\n"
+      "      --dash-part-size <s>    LL-DASH target chunk duration, seconds  [0.333]\n"
+      "      --dash-utc-url <url>    LL-DASH MPD UTCTiming source, http-xsiso\n"
+      "                              [http://time.akamai.com/?iso&ms]\n"
       "      --hls-seg-pool <n>      segment buffer freelist cap per size    [8]\n"
       "      --metrics <path>        metrics sock [/run/dvbipitools/metrics.sock]\n"
       "      --metrics-id <name>     stable instance id, disabled if not set\n"
       "      --metrics-interval <s>  snapshot interval (default: 5 seconds)\n"
       "      --metrics-http          also serve /metrics ourselves           [off]\n"
       "  -f, --format <list>         comma-separated route whitelist, from\n"
-      "                              ts,spts,rawaudio,hls,llhls,dash         [all]\n"
+      "                              ts,spts,rawaudio,hls,llhls,dash,lldash  [all]\n"
       "      --no-url-rtp            disable /rtp/... routes\n"
       "      --no-url-udp            disable /udp/... routes\n"
       "      --no-url-srt            disable /srt/... routes\n"
@@ -210,7 +194,8 @@ static void print_help(void) {
       "      --no-status             disable /ui/status.js\n"
       "      --status-tpl <path>     use file instead of the built-in page\n"
       "      --auth <user:pass>      HTTP Basic Auth for /, /ui/status.js, /ui/ws/  [off]\n"
-      "      --cors-origin <list>    comma-separated hls/llhls/dash origins  [\"*\"]\n"
+      "      --cors-origin <list>    comma-separated hls/hls-fmp4/llhls/dash/lldash\n"
+      "                              origins  [\"*\"]\n"
       "      --ssdp-ttl <n>          SSDP multicast TTL                      [3]\n"
       "      --ssdp-iface <iface>    interface for SSDP announce/reply       [kernel]\n"
       "      --ssdp-interval <s>     SSDP NOTIFY re-announce period          [60]\n"
@@ -226,7 +211,8 @@ static void print_help(void) {
       "\n"
       "Each -i flag's list index is its own position on the command line.\n"
       "any URL takes ?filter=<pids> to drop PIDs, e.g. ?filter=101,0x20.\n\n"
-      "on an MPTS source, hls/llhls/dash demux the first arriving PMT.\n"
+      "on an MPTS source, hls/hls-fmp4/llhls/dash/lldash demux the first\n"
+      "arriving PMT.\n"
       "use ?pmt=<pid> (dec or 0x-hex) to pick a different one. ts\n"
       "passes the whole MPTS through.\n"
       "\n"
@@ -252,6 +238,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"segment-size", required_argument, 0, 1008},
       {"segment-count", required_argument, 0, 1009},
       {"hls-part-size", required_argument, 0, 1010},
+      {"dash-part-size", required_argument, 0, 1049},
+      {"dash-utc-url", required_argument, 0, 1050},
       {"hls-seg-pool", required_argument, 0, 1039},
       {"metrics", required_argument, 0, 1012},
       {"metrics-id", required_argument, 0, 1013},
@@ -307,6 +295,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->segment_size = 3.0;
   cfg->segment_count = 4;
   cfg->hls_part_size = 0.35;
+  cfg->dash_part_size = 0.333;
+  cfg->dash_utc_url = "http://time.akamai.com/?iso&ms";
   cfg->hls_seg_pool = 8;
   cfg->ssdp_ttl = 3;
   cfg->ssdp_interval_s = 60.0;
@@ -421,6 +411,25 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->hls_part_size = v;
         break;
       }
+      case 1049: {
+        char *end;
+        double v = strtod(optarg, &end);
+        if (*end != '\0' || v < 0.05 || v > 5.0) {
+          argerr("invalid --dash-part-size: %s (seconds, 0.05-5.0)", optarg);
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        cfg->dash_part_size = v;
+        break;
+      }
+      case 1050:
+        if (strlen(optarg) > 256) {
+          argerr("invalid --dash-utc-url: too long (max 256 chars)");
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        cfg->dash_utc_url = optarg;
+        break;
       case 1039: {
         char *end;
         long v = strtol(optarg, &end, 10);
@@ -454,7 +463,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 'f':
         if (format_parse(optarg, cfg)) {
-          argerr("invalid -f/--format: %s (comma-separated list of ts,spts,rawaudio,hls,llhls,dash)", optarg);
+          argerr("invalid -f/--format: %s (comma-separated list of ts,spts,rawaudio,hls,llhls,dash,lldash)", optarg);
           args_free(cfg);
           return ARGS_ERR;
         }
@@ -750,6 +759,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (cfg->hls_part_size >= cfg->segment_size) {
     argerr("--hls-part-size (%.2f) must be smaller than --segment-size (%.2f)", cfg->hls_part_size, cfg->segment_size);
+    args_free(cfg);
+    return ARGS_ERR;
+  }
+  if (cfg->dash_part_size >= cfg->segment_size) {
+    argerr("--dash-part-size (%.2f) must be smaller than --segment-size (%.2f)", cfg->dash_part_size, cfg->segment_size);
     args_free(cfg);
     return ARGS_ERR;
   }

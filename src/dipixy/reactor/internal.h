@@ -37,9 +37,10 @@ const channels_t *reactor_channels(void);
 void reactor_reload_channels(void);
 
 typedef enum {
-  RL_ACCEPT = 0,  /* TCP/TLS accept socket */
-  RL_TSPUSH_EFD,  /* per-reactor TS-push wakeup eventfd */
-  RL_H3_UDP       /* QUIC UDP socket (HAVE_HTTP3 only) */
+  RL_ACCEPT = 0,     /* TCP/TLS accept socket */
+  RL_TSPUSH_EFD,     /* per-reactor TS-push wakeup eventfd */
+  RL_DASHCHUNK_EFD,  /* per-reactor LL-DASH chunk wakeup eventfd (H2/H3) */
+  RL_H3_UDP          /* QUIC UDP socket (HAVE_HTTP3 only) */
 } reactor_listener_kind;
 
 typedef struct {
@@ -49,9 +50,10 @@ typedef struct {
 } reactor_listener;
 
 typedef struct {
-  reactor_listener L[6]; /* 2 TCP (plain+tls), 2 H3 UDP (v4+v6), 1 tspush efd */
+  reactor_listener L[7]; /* 2 TCP (plain+tls), 2 H3 UDP (v4+v6), 1 tspush efd, 1 dashchunk efd */
   int nL;
   int tspush_efd;
+  int dashchunk_efd;
 } reactor_listeners_t;
 
 /* reactor.c: conn lifecycle */
@@ -192,7 +194,7 @@ static inline void llhls_waiter_pool_flush(llhls_waiter_t *slots, int cap, int *
   for (int i = 0; i < cap; i++) {
     llhls_waiter_t *w = &slots[i];
     if (!w->active) continue;
-    if (now < w->deadline_ms && !hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, w->want_seg, w->want_part)) continue;
+    if (now < w->deadline_ms && !hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, HLS_CONTAINER_TS, w->want_seg, w->want_part)) continue;
     w->active = 0;
     (*active_count)--;
     finish(w);
@@ -205,6 +207,9 @@ void hls_cold_flush_waiters(void);
 /* dispatch.c. purges c's waiter slot, call before reactor_close() frees it */
 void hls_cold_waiter_conn_closing(const conn_t *c);
 
+/* index.m3u8/index_ll.m3u8/manifest.mpd requested b4 first segment/part exists */
+typedef enum { HLS_COLD_HLS, HLS_COLD_LLHLS, HLS_COLD_DASH } hls_cold_kind_t;
+
 /* handshake.c: TLS handshake + accept */
 void reactor_handshake(int epfd, conn_t *c);
 void reactor_accept(int epfd, reactor_listener *L);
@@ -213,6 +218,12 @@ void reactor_accept(int epfd, reactor_listener *L);
 void reactor_tspush_begin(int epfd, conn_t *c);
 void reactor_tspush_readable(int epfd, conn_t *c);
 void reactor_tspush_close(int epfd, conn_t *c);
+
+/* reactor_dashchunk.c */
+void reactor_dashchunk_begin(int epfd, conn_t *c);
+void reactor_dashchunk_readable(int epfd, conn_t *c);
+void reactor_dashchunk_flush(int epfd, conn_t *c);
+void reactor_dashchunk_close(int epfd, conn_t *c);
 
 /* CONN_WS lifecycle. dispatch.c queues 101, sets become_ws */
 void reactor_ws_begin(int epfd, conn_t *c);

@@ -1,13 +1,14 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include "hls_int.h"
-#include "../core/metrics.h"
-#include "../reactor/internal.h"
-#include "../version.h"
+#include "segstore_int.h"
+#include "core/metrics.h"
+#include "reactor/internal.h"
+#include "version.h"
 
 #include "lib/helper/ioutil.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 static void set_persistence(conn_t *c, int keep_alive) {
@@ -252,4 +253,51 @@ char *write_fixed3(char *dst, double v) {
   dst = write_u32(dst, scaled / 1000, 0);
   *dst++ = '.';
   return write_u32(dst, scaled % 1000, 3);
+}
+
+void resp_set(hls_resp_t *out, int status, const char *content_type, const char *etag, const uint8_t *body, size_t body_len, int is_head) {
+  out->status = status;
+  out->content_type = content_type;
+  if (etag)
+    bufcpy(out->etag, sizeof out->etag, etag);
+  else
+    out->etag[0] = '\0';
+  out->body_len = body_len;
+  out->body = NULL;
+  if (!body || is_head)
+    return;
+  out->body = malloc(body_len);
+  if (!out->body) {
+    out->status = 500;
+    out->content_type = NULL;
+    out->body_len = 0;
+    return;
+  }
+  memcpy(out->body, body, body_len);
+}
+
+/* seg_buf-backed body: ref instead of copy. below HLS_ZC_MIN_LEN, falls back to resp_set() */
+void resp_set_zc(hls_resp_t *out, int status, const char *content_type, const char *etag, uint8_t *body, size_t body_len, int is_head) {
+  if (!body || is_head || body_len < HLS_ZC_MIN_LEN) {
+    resp_set(out, status, content_type, etag, body, body_len, is_head);
+    return;
+  }
+  out->status = status;
+  out->content_type = content_type;
+  if (etag)
+    bufcpy(out->etag, sizeof out->etag, etag);
+  else
+    out->etag[0] = '\0';
+  seg_buf_ref(body);
+  out->body = body;
+  out->body_len = body_len;
+  out->zc = 1;
+}
+
+void hls_resp_body_release(uint8_t *body, int zc) {
+  if (zc) {
+    seg_buf_unref(body);
+  } else {
+    free(body);
+  }
 }

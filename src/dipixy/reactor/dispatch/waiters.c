@@ -3,6 +3,7 @@
 
 #include "priv.h"
 #include "../../hls/hls.h"
+#include "../../dash/dash.h"
 
 #include "lib/helper/ioutil.h"
 
@@ -13,9 +14,9 @@ static _Thread_local int t_llhls_waiters_active;
 
 /* 1 parked (caller must not touch c further, epoll left alone). 0 table full: caller serves what's avail */
 int llhls_try_park(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename,
-                    int is_head, int keep_alive, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle) {
-  return llhls_waiter_pool_try_park(t_llhls_waiters, LLHLS_WAITERS_MAX, &t_llhls_waiters_active, c, -1, ctx, filter,
-                                     pmt_pid, filename, is_head, keep_alive, NULL, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
+                   int is_head, int keep_alive, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle) {
+  return llhls_waiter_pool_try_park(t_llhls_waiters, LLHLS_WAITERS_MAX, &t_llhls_waiters_active, c, -1, ctx, filter, pmt_pid, filename,
+                                    is_head, keep_alive, NULL, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
 }
 
 void llhls_waiter_conn_closing(conn_t *c) {
@@ -47,6 +48,7 @@ typedef struct {
   char filename[32];
   hls_cold_kind_t kind;
   hls_container_t container; /* HLS_COLD_HLS only, hls vs hls-fmp4 */
+  int want_ll;                /* HLS_COLD_DASH only, lldash vs dash */
   int is_head;
   int keep_alive;
   char origin[128]; /* Origin request header, empty if absent */
@@ -61,8 +63,7 @@ static _Thread_local int t_hls_cold_waiters_active;
 /* 1 parked: manifest requested before capture's first segment/part, waits of an instant unretryable 404.
    0 table full: caller serves now */
 int hls_cold_try_park(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename,
-                       hls_cold_kind_t kind, hls_container_t container, int is_head, int keep_alive,
-                       const char *origin_hdr, int timeout_ms, int ws_handle) {
+                      hls_cold_kind_t kind, hls_container_t container, int want_ll, int is_head, int keep_alive, const char *origin_hdr, int timeout_ms, int ws_handle) {
   for (int i = 0; i < HLS_COLD_WAITERS_MAX; i++) {
     hls_cold_waiter_t *w = &t_hls_cold_waiters[i];
     if (w->active)
@@ -74,6 +75,7 @@ int hls_cold_try_park(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter,
     bufcpy(w->filename, sizeof w->filename, filename);
     w->kind = kind;
     w->container = container;
+    w->want_ll = want_ll;
     w->is_head = is_head;
     w->keep_alive = keep_alive;
     bufcpy(w->origin, sizeof w->origin, origin_hdr ? origin_hdr : "");
@@ -104,12 +106,12 @@ void hls_cold_flush_waiters(void) {
     int ready, served;
     size_t bytes = 0;
     if (!w->active) continue;
-    ready = w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready(w->cap_ctx, &w->filter, w->pmt_pid) : hls_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, w->container);
+    ready = w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, w->container) : hls_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, w->container);
     if (now < w->deadline_ms && !ready) continue;
     if (w->kind == HLS_COLD_LLHLS)
       served = hls_serve_ll(w->c, w->cap_ctx, &w->filter, w->pmt_pid, w->filename, w->is_head, w->keep_alive, NULL,w->origin[0] ? w->origin : NULL, &bytes);
     else if (w->kind == HLS_COLD_DASH)
-      served = hls_serve_dash(w->c, w->cap_ctx, &w->filter, w->pmt_pid, w->is_head, w->keep_alive, w->origin[0] ? w->origin : NULL, &bytes);
+      served = hls_serve_dash(w->c, w->cap_ctx, &w->filter, w->pmt_pid, w->want_ll, reactor_cfg()->dash_utc_url, w->is_head, w->keep_alive, w->origin[0] ? w->origin : NULL, &bytes);
     else
       served = hls_serve(w->c, w->cap_ctx, &w->filter, w->pmt_pid, w->container, w->filename, w->is_head, w->keep_alive, NULL,w->origin[0] ? w->origin : NULL, &bytes);
     if (served)

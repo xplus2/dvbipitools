@@ -81,6 +81,8 @@ typedef struct hls_seg_ctx {
   hls_container_t container;
   fmp4_mux_t *fmux; /* HLS_CONTAINER_FMP4 only, created once SPS/PPS known */
   int fmp4_frag_open;
+  int64_t fmp4_frag_start_ts_ms; /* current open fragment's first sample ts, drives chunk_now */
+  int fmp4_frag_key;             /* current open fragment's first sample keyframe flag */
   uint32_t fmp4_seq;
   int64_t fmp4_anchor_ms;
   int fmp4_audio_seeded;
@@ -92,10 +94,13 @@ typedef struct hls_seg_ctx {
   int64_t fmp4_pend_ts_ms;
   int32_t fmp4_pend_cts;    /* (pts - dts) in track ticks, 0 if no dts */
   int fmp4_pend_starts_frag;
-  double fmp4_pend_elapsed; /* set alongside starts_frag, used if this pend later closes a fragment */
+  int fmp4_pend_ends_seg;   /* set alongside starts_frag: this boundary also closes the enclosing segment */
+  double fmp4_pend_elapsed; /* set alongside starts_frag, used if this pend later closes a segment */
   int fmp4_have_pend;
 
-  /* HLS_CONTAINER_TS only. 0 = LL-HLS off. close on keyframe or part_target secs, whichever first. atomic: hls_seg_touch() write vs pump's unlocked read */
+  /* 0 = LL off. TS: part closes on keyframe or part_target secs, whichever first.
+     FMP4: chunk closes on part_target secs, sample-aligned, independent of keyframe.
+     atomic: hls_seg_touch() write vs pump's unlocked read */
   _Atomic double part_target;
   size_t part_start_off;
   int64_t part_start_ts_ms;

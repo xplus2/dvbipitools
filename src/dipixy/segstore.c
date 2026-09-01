@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include "hls_int.h"
-#include "../reactor/internal.h"
+#include "segstore_int.h"
+#include "reactor/internal.h"
 
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
@@ -300,8 +300,8 @@ int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
   return 0;
 }
 
-void hls_llhls_enable(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double part_target) {
-  hls_store_t *s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_TS);
+void hls_llhls_enable(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, double part_target) {
+  hls_store_t *s = find_store_locked(ctx, filter, pmt_pid, container);
   if (!s)
     return;
   s->part_target = part_target;
@@ -313,11 +313,18 @@ static int live_reserve(hls_store_t *s, size_t need) {
   return growbuf_reserve((void **)&s->live_data, &s->live_cap, 1, need, 65536);
 }
 
-int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const uint8_t *data, size_t size, double duration, int independent) {
+static hls_part_pushed_cb g_part_pushed_cb;
+static hls_segment_done_cb g_segment_done_cb;
+
+void hls_set_part_pushed_cb(hls_part_pushed_cb cb) { g_part_pushed_cb = cb; }
+void hls_set_segment_done_cb(hls_segment_done_cb cb) { g_segment_done_cb = cb; }
+
+int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, const uint8_t *data, size_t size, double duration, int independent) {
   hls_store_t *s;
   int n;
+  uint32_t live_msn;
 
-  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_TS);
+  s = find_store_locked(ctx, filter, pmt_pid, container);
   if (!s) return -1;
   if (s->live_parts.count >= HLS_MAX_PARTS || live_reserve(s, s->live_len + size) < 0) {
     pthread_mutex_unlock(store_lock(s));
@@ -331,11 +338,13 @@ int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   s->live_parts.count = n + 1;
   memcpy(s->live_data + s->live_len, data, size);
   s->live_len += size;
+  live_msn = s->live_msn;
   pthread_mutex_unlock(store_lock(s));
+  if (g_part_pushed_cb) g_part_pushed_cb(ctx, filter, pmt_pid, container, live_msn, data, size);
   return 0;
 }
 
-int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double duration) {
+int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, double duration) {
   hls_store_t *s;
   uint8_t *evicted[HLS_MAX_SEGS];
   int nevicted;
@@ -343,7 +352,7 @@ int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned
   uint32_t seq;
   uint8_t *copy = NULL;
 
-  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_TS);
+  s = find_store_locked(ctx, filter, pmt_pid, container);
   if (!s) return -1;
   if (s->live_len) {
     copy = seg_buf_alloc(s->live_len);
@@ -361,6 +370,8 @@ int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned
   s->segs[idx].size = s->live_len;
   s->segs[idx].duration = duration;
   s->segs[idx].seq = seq;
+  s->segs[idx].start_ms = s->cum_ms;
+  s->cum_ms += (uint64_t)(duration * 1000.0 + 0.5);
   s->segs[idx].parts = s->live_parts;
   s->count++;
   if (duration > s->td_hw) s->td_hw = duration;
@@ -371,6 +382,7 @@ int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned
   pthread_mutex_unlock(store_lock(s));
   for (int i = 0; i < nevicted; i++)
     seg_buf_unref(evicted[i]);
+  if (g_segment_done_cb) g_segment_done_cb(ctx, filter, pmt_pid, container, seq);
   return 0;
 }
 
@@ -383,8 +395,8 @@ int hls_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   return ready;
 }
 
-int hls_ll_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid) {
-  const hls_store_t *s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_TS);
+int hls_ll_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container) {
+  const hls_store_t *s = find_store_locked(ctx, filter, pmt_pid, container);
   int ready;
   if (!s) return 0;
   ready = s->part_target > 0.0 && (s->count > 0 || s->live_parts.count > 0);
@@ -392,8 +404,8 @@ int hls_ll_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned 
   return ready;
 }
 
-int hls_part_available(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, uint32_t want_seg, int want_part) {
-  const hls_store_t *s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_TS);
+int hls_part_available(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, uint32_t want_seg, int want_part) {
+  const hls_store_t *s = find_store_locked(ctx, filter, pmt_pid, container);
   int found = 0;
   if (!s) return 0;
   if (s->live_msn == want_seg && s->live_parts.count > want_part) found = 1;

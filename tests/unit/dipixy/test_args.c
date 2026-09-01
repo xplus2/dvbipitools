@@ -83,6 +83,45 @@ START_TEST(hls_part_size_rejects_not_smaller_than_segment_size) {
 }
 END_TEST
 
+START_TEST(dash_part_size_defaults_to_333ms) {
+  char *argv[] = {"dipixy", "-I", "eth0", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_double_eq_tol(cfg.dash_part_size, 0.333, 1e-9);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(dash_part_size_is_overridable) {
+  char *argv[] = {"dipixy", "--dash-part-size", "0.5", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_double_eq_tol(cfg.dash_part_size, 0.5, 1e-9);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(dash_part_size_rejects_out_of_range) {
+  char *argv[] = {"dipixy", "--dash-part-size", "0.01", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(dash_part_size_rejects_zero) {
+  char *argv[] = {"dipixy", "--dash-part-size", "0", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(dash_part_size_rejects_not_smaller_than_segment_size) {
+  char *argv[] = {"dipixy", "--segment-size", "2", "--dash-part-size", "2", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 START_TEST(listen_v4_is_overridable) {
   char *argv[] = {"dipixy", "-l", "0.0.0.0:8080", NULL};
   config_t cfg;
@@ -342,6 +381,7 @@ START_TEST(feature_toggle_flags_default_off) {
   ck_assert_int_eq(cfg.no_hls, 0);
   ck_assert_int_eq(cfg.no_llhls, 0);
   ck_assert_int_eq(cfg.no_dash, 0);
+  ck_assert_int_eq(cfg.no_lldash, 0);
   ck_assert_int_eq(cfg.no_ts, 0);
   ck_assert_int_eq(cfg.no_spts, 0);
   ck_assert_int_eq(cfg.no_rawaudio, 0);
@@ -378,6 +418,17 @@ START_TEST(format_whitelist_enables_only_listed) {
   ck_assert_int_eq(cfg.no_hls, 1);
   ck_assert_int_eq(cfg.no_llhls, 1);
   ck_assert_int_eq(cfg.no_dash, 0);
+  ck_assert_int_eq(cfg.no_lldash, 1);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(format_whitelist_lldash_enables_it) {
+  char *argv[] = {"dipixy", "-f", "lldash", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.no_lldash, 0);
+  ck_assert_int_eq(cfg.no_dash, 1);
   args_free(&cfg);
 }
 END_TEST
@@ -774,6 +825,11 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, hls_part_size_is_overridable);
   tcase_add_test(tc, hls_part_size_rejects_out_of_range);
   tcase_add_test(tc, hls_part_size_rejects_not_smaller_than_segment_size);
+  tcase_add_test(tc, dash_part_size_defaults_to_333ms);
+  tcase_add_test(tc, dash_part_size_is_overridable);
+  tcase_add_test(tc, dash_part_size_rejects_out_of_range);
+  tcase_add_test(tc, dash_part_size_rejects_zero);
+  tcase_add_test(tc, dash_part_size_rejects_not_smaller_than_segment_size);
   tcase_add_test(tc, listen_v4_is_overridable);
   tcase_add_test(tc, listen_v6_bracket_form_parses);
   tcase_add_test(tc, listen_tls_is_overridable);
@@ -804,6 +860,7 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, feature_toggle_flags_default_off);
   tcase_add_test(tc, feature_toggle_flags_recorded);
   tcase_add_test(tc, format_whitelist_enables_only_listed);
+  tcase_add_test(tc, format_whitelist_lldash_enables_it);
   tcase_add_test(tc, format_whitelist_unknown_token_rejected);
   tcase_add_test(tc, format_whitelist_empty_rejected);
   tcase_add_test(tc, stdin_flag_accepts_dash);

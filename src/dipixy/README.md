@@ -2,7 +2,7 @@
 
 When parts of ETSI TS 102 905 (DVB-HN) meet udpxy and lean towards DVB-I, `dipixy` is the result.
 
-It takes various input streams and playlists, allows playback using HLS (ts and fMP4), LL-HLS, MPEG-DASH and progressive HTTP/TS.
+It takes various input streams and playlists, allows playback using HLS (ts and fMP4), LL-HLS, MPEG-DASH (regular and CMAF Low-Latency) and progressive HTTP/TS.
 
 Optionally, it's also a DLNA MediaServer for your home network to consume streams without an additional Set-Top-Box.
 
@@ -30,9 +30,11 @@ dipixy [-l addr:port] [-i source ...] [options]
 | `-k` | `--insecure`             |                       | off; skip TLS input verification             |       |
 |      | `--sds-timeout`          | `<seconds>`           | `3`; sds:// discovery wait                   |       |
 |      | `--sds-refresh-interval` | `<seconds>`           | `30`; sds:// retry                           |       |
-|      | `--segment-size`         | `<seconds>`           | `3` (hls, hls-fmp4, llhls, dash)             |       |
+|      | `--segment-size`         | `<seconds>`           | `3` (hls, hls-fmp4, llhls, dash, lldash)     |       |
 |      | `--segment-count`        | `<n>`                 | `4`                                          |       |
 |      | `--hls-part-size`        | `<seconds>`           | `0.35` (llhls, must be `<` segment-size)     |       |
+|      | `--dash-part-size`       | `<seconds>`           | `0.333` (`lldash`, must be `<` segment-size) |       |
+|      | `--dash-utc-url`         | `<url>`               | `http://time.akamai.com/?iso&ms` (`lldash`)  |       |
 |      | `--hls-seg-pool`         | `<n>`                 | `8`; per-size-class segment buffer cap       |       |
 |      | `--metrics`              | `<path>`              | `/run/dvbipitools/metrics.sock`              |       |
 |      | `--metrics-id`           | `<name>`              | none (metrics disabled unless set)           |       |
@@ -41,7 +43,7 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--status-tpl`           | `<path>`              | built-in, override with your own             |       |
 |      | `--auth`                 | `<user:pass>`         | off; HTTP Basic Auth for status              |       |
 |      | `--cors-origin`          | `<list>`              | `*` (comma-separated allowlist vs `Origin`)  |       |
-| `-f` | `--format`               | `<list>`              | all; allow `ts,spts,rawaudio,hls,llhls,dash` |       |
+| `-f` | `--format`               | `<list>`              | all; allow `ts,spts,rawaudio,hls,llhls,dash,lldash` |  |
 |      | `--no-url-rtp`           |                       | off (deactivate `/rtp/`)                     |       |
 |      | `--no-url-udp`           |                       | off (deactivate `/udp/`)                     |       |
 |      | `--no-url-srt`           |                       | off (deactivate `/srt/`)                     |       |
@@ -62,7 +64,7 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--ssdp-ttl`             | `<n>`                 | `3`                                      |       |
 |      | `--ssdp-iface`           | `<iface>`             | kernel default route; interace name      |       |
 |      | `--ssdp-interval`        | `<seconds>`           | `60`; NOTIFY re-announce period          |       |
-|      | `--ssdp-max-age`         | `<seconds>`           | `1800`; max-age, >= 2x interval          |      |
+|      | `--ssdp-max-age`         | `<seconds>`           | `1800`; max-age, >= 2x interval          |       |
 |      | `--dlna-host`            | `<host>[:<port>]`     | `--listen`, if not 0.0.0.0               |       |
 |      | `--dlna-name`            | `<name>`              | `dipixy (<dlna-host>)`                   |       |
 |      | `--dlna-keep-multicast`  |                       | off (force DVB-HN 9.2 multicast passing) |       |
@@ -103,14 +105,14 @@ The "URL Builder" lets you craft them easily.
 
 The included web interface is as basic, but: 
 * It's compiled-in.
-* Any web-based video player for HLS/LL-HLS/DASH would still hit some codec walls (AC3, E-AC3).
+* Any web-based video player for HLS/LL-HLS/DASH/LL-DASH would still hit some codec walls (AC3, E-AC3).
 * By staying a static website that's easy to read, it also functions as a kind of template if you want to roll your own.
   Using `--status-tpl`, you are invited to roll your own replacement. `SIGHUP` will reload it at runtime.
 
 
 Anyway, here are the details if you want to craft your URIs manually:
 
-These routes address a source directly (`fmt` is one of `ts`, `spts`, `rawaudio`, `hls`, `hls-fmp4`, `llhls`, `dash`):
+These routes address a source directly (`fmt` is one of `ts`, `spts`, `rawaudio`, `hls`, `hls-fmp4`, `llhls`, `dash`, `lldash`):
 
 ```
 /rtp/<addr>:<port>/<fmt>    RTP source
@@ -147,7 +149,7 @@ Any path above accepts `?filter=<pids>` to drop PIDs from the output (comma-sepa
 `0x`-hex, e.g. `?filter=101,0x20`). Disable this feature with `--no-pid-filters`.
 
 On a multi-program transport stream (MPTS), `ts` always passes every program through unchanged.
-`spts`/`hls`/`hls-fmp4`/`llhls`/`dash` demux a single program and default to the first PMT that
+`spts`/`hls`/`hls-fmp4`/`llhls`/`dash`/`lldash` demux a single program and default to the first PMT that
 resolves. 
 You can override this by selecting a specific PMT:`?pmt=<pid>` (decimal or `0x`-hex). 
 `spts` is a continuous raw HTTP/TS like `ts`, just guaranteed single-program: only the locked program's PAT/PMT/PCR/ES PIDs go out.
@@ -162,7 +164,7 @@ that is not dropped by `?filter=` and forwards its PES payload as-is: raw data.
 Segmenting still needs to locate keyframes, understood for MPEG-2 Video, H.264/AVC and HEVC/H.265.
 Other video codecs won't cut cleanly on an IDR/I-frame.
 
-`hls-fmp4`, `llhls` and `dash` build actual ISOBMFF (fMP4) sample entries, so their codec support is narrower:
+`hls-fmp4`, `llhls`, `dash` and `lldash` build actual ISOBMFF (fMP4) sample entries, so their codec support is narrower:
 * video: H.264/AVC, HEVC/H.265. MPEG-2 Video has no fMP4 sample entry and won't produce output.
 * audio: AAC (ADTS or LATM), AC-3, Enhanced AC-3 (E-AC-3), MPEG-1 Layer II (MP2).
 
@@ -273,7 +275,7 @@ While `http://<address>:<port>/<cmd>/[src_address@]<mgroup_address><sep><mgroup_
 a few things were added:
 * Protocols: IPv6, HTTP/2, HTTP/3, HTTPS, SSDP
 * Ingress: MPTS demux, RIST, SRT, stdin
-* Egress: HLS (TS and fMP4), Low-Latency HLS, MPEG-DASH, audio raw demux
+* Egress: HLS (TS and fMP4), Low-Latency HLS, MPEG-DASH (regular and CMAF Low-Latency), audio raw demux
 * Operational: OpenMetrics
 * Convenience:
   + "URL Builder"
@@ -322,6 +324,10 @@ vlc http://localhost:9080/list/1/item/1/llhls
 
 # LL-HLS, PID-filtered, one program picked out of an MPTS (by the PID of its PMT)
 vlc "http://localhost:9080/udp/239.1.1.1:5000/llhls?filter=0x100,0x101&pmt=0x1000"
+
+# LL-DASH
+dipixy -l 0.0.0.0:9080
+vlc http://localhost:9080/udp/239.1.1.1:5000/lldash
 
 # guaranteed single-program TS out of an MPTS, same PMT selection as above
 vlc "http://localhost:9080/udp/239.1.1.1:5000/spts?pmt=0x1000"

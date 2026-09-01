@@ -70,6 +70,7 @@ int route_disabled(const route_t *rt) {
          (rt->fmt == ROUTE_FMT_SPTS && cfg->no_spts) ||
          ((rt->fmt == ROUTE_FMT_HLS || rt->fmt == ROUTE_FMT_HLS_FMP4) && cfg->no_hls) ||
          (rt->fmt == ROUTE_FMT_LLHLS && cfg->no_llhls) || (rt->fmt == ROUTE_FMT_DASH && cfg->no_dash) ||
+         (rt->fmt == ROUTE_FMT_LLDASH && cfg->no_lldash) ||
          (rt->fmt == ROUTE_FMT_RAWAUDIO && cfg->no_rawaudio);
 }
 
@@ -175,9 +176,8 @@ void route_client_info(const route_t *rt, unsigned list_num, const pid_filter_t 
           out->src_name = cfg->sources[i].name;
           break;
         }
-      if (channels_item_lookup(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL,
-                               &out->item_num, bufs->name, sizeof bufs->name, bufs->proto, sizeof bufs->proto,
-                               bufs->addr, sizeof bufs->addr) == 0) {
+      if (channels_item_lookup(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL, &out->item_num, bufs->name,
+                    sizeof bufs->name, bufs->proto, sizeof bufs->proto, bufs->addr, sizeof bufs->addr) == 0) {
         out->item_name = bufs->name[0] ? bufs->name : NULL;
         out->src_proto = bufs->proto[0] ? bufs->proto : NULL;
         out->src_addr = bufs->addr[0] ? bufs->addr : NULL;

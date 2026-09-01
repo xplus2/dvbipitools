@@ -2,17 +2,13 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "box.h"
-
 #include <stdlib.h>
 #include <string.h>
-
 #include "lib/helper/ioutil.h"
 
 static void mb_reserve(mp4buf_t *b, size_t need) {
-  if (b->err)
-    return;
-  if (growbuf_reserve((void **)&b->p, &b->cap, 1, need, 256))
-    b->err = 1;
+  if (b->err) return;
+  if (growbuf_reserve((void **)&b->p, &b->cap, 1, need, 256)) b->err = 1;
 }
 
 void mp4buf_free(mp4buf_t *b) {
@@ -22,9 +18,9 @@ void mp4buf_free(mp4buf_t *b) {
 }
 
 void mb_bytes(mp4buf_t *b, const void *data, size_t n) {
+  if (!n) return;
   mb_reserve(b, b->len + n);
-  if (b->err)
-    return;
+  if (b->err) return;
   memcpy(b->p + b->len, data, n);
   b->len += n;
 }
@@ -68,8 +64,7 @@ void mb_fourcc(mp4buf_t *b, const char fourcc[4]) {
 }
 
 void mb_patch_u32(mp4buf_t *b, size_t pos, uint32_t v) {
-  if (b->err || pos + 4 > b->len)
-    return;
+  if (b->err || pos + 4 > b->len) return;
   b->p[pos] = (unsigned char)(v >> 24);
   b->p[pos + 1] = (unsigned char)(v >> 16);
   b->p[pos + 2] = (unsigned char)(v >> 8);
@@ -77,8 +72,7 @@ void mb_patch_u32(mp4buf_t *b, size_t pos, uint32_t v) {
 }
 
 void mb_box(mp4buf_t *parent, const char fourcc[4], mp4buf_t *child) {
-  if (child->err)
-    parent->err = 1;
+  if (child->err) parent->err = 1;
   mb_u32(parent, (uint32_t)(8 + child->len));
   mb_fourcc(parent, fourcc);
   mb_bytes(parent, child->p, child->len);

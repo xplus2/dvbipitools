@@ -2185,11 +2185,11 @@ dvbipitools_add_unit_test(dipixy_ws_sources
 
 dvbipitools_add_unit_test(dipixy_hls
     unit/dipixy/test_hls.c
-    ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls.c
-    ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_fmt.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/segstore.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/respfmt.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_serve.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_llhls.c
-    ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_dash.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dash/dash.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_render.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c

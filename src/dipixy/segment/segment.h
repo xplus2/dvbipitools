@@ -6,9 +6,9 @@
 #ifndef DIPIXY_HLS_SEGMENT_H
 #define DIPIXY_HLS_SEGMENT_H
 
-#include "../../ts/capture/capture.h"
-#include "../../ts/pidfilter.h"
-#include "../hls.h"
+#include "../ts/capture/capture.h"
+#include "../ts/pidfilter.h"
+#include "../segstore.h"
 
 /* always take ownership of ctx's capture_open() ref: existing segmenter for
    (ctx, filter, pmt_pid) absorbs+drops it, a new one keeps it.

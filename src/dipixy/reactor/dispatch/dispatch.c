@@ -8,7 +8,9 @@
 
 #include "../../core/metrics.h"
 #include "../../hls/hls.h"
-#include "../../hls/segment/segment.h"
+#include "../../dash/dash.h"
+#include "../../dash/lldash.h"
+#include "../../segment/segment.h"
 #include "../../ts/pmtselect.h"
 #include "../../ts/ts_push.h"
 
@@ -197,12 +199,13 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
         respond_status(c, RESP_501, keep_alive);
         break;
       }
-      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, container, reactor_cfg()->hls_part_size)) {
+      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, container,
+                          container == HLS_CONTAINER_FMP4 ? 0.0 : reactor_cfg()->hls_part_size)) {
         respond_status(c, RESP_501, keep_alive);
         break;
       }
       if (!strcmp(rt.hls_file, "index.m3u8") && !hls_store_ready(ctx, &filter, pmt_pid, container) &&
-          hls_cold_try_park(c, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_HLS, container, is_head, keep_alive, origin_hdr,
+          hls_cold_try_park(c, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_HLS, container, 0, is_head, keep_alive, origin_hdr,
                             (int)(reactor_cfg()->segment_size * 2000.0), wsh)) {
         c->state = CONN_DISPATCH;
         return;
@@ -235,14 +238,13 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
         respond_status(c, RESP_501, keep_alive);
         break;
       }
-      if (!strcmp(rt.hls_file, "index_ll.m3u8") && !hls_ll_store_ready(ctx, &filter, pmt_pid) &&
-          hls_cold_try_park(c, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_LLHLS, HLS_CONTAINER_TS, is_head, keep_alive, origin_hdr,
+      if (!strcmp(rt.hls_file, "index_ll.m3u8") && !hls_ll_store_ready(ctx, &filter, pmt_pid, HLS_CONTAINER_TS) && hls_cold_try_park(c, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_LLHLS, HLS_CONTAINER_TS, 0, is_head, keep_alive, origin_hdr,
                             (int)(reactor_cfg()->segment_size * 2000.0), wsh)) {
         c->state = CONN_DISPATCH;
         return;
       }
       if (!strcmp(rt.hls_file, "index_ll.m3u8") && parse_blocking_reload(query, &want_seg, &want_part) &&
-          !hls_part_available(ctx, &filter, pmt_pid, want_seg, want_part) &&
+          !hls_part_available(ctx, &filter, pmt_pid, HLS_CONTAINER_TS, want_seg, want_part) &&
           llhls_try_park(c, ctx, &filter, pmt_pid, rt.hls_file, is_head, keep_alive, origin_hdr, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), wsh)) {
         c->state = CONN_DISPATCH;
         return;
@@ -255,7 +257,9 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
       break;
     }
 
-    case ROUTE_FMT_DASH: {
+    case ROUTE_FMT_DASH:
+    case ROUTE_FMT_LLDASH: {
+      int want_ll = rt.fmt == ROUTE_FMT_LLDASH;
       int wsh;
       size_t bytes = 0;
       capture_ctx_t *ctx = open_source(&rt, &list_num);
@@ -270,11 +274,14 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
         respond_status(c, RESP_501, keep_alive);
         break;
       }
-      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, HLS_CONTAINER_FMP4, reactor_cfg()->hls_part_size)) {
+      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, HLS_CONTAINER_FMP4,
+                          want_ll ? reactor_cfg()->dash_part_size : 0.0)) {
         respond_status(c, RESP_501, keep_alive);
         break;
       }
       if (strcmp(rt.hls_file, "manifest.mpd") != 0) {
+        if (!reactor_cfg()->no_lldash && !is_head && dash_lldash_try_attach(c, ctx, &filter, pmt_pid, rt.hls_file, keep_alive, origin_hdr, wsh))
+          break;
         if (hls_serve_dash_seg(c, ctx, &filter, pmt_pid, rt.hls_file, is_head, keep_alive, origin_hdr, &bytes))
           ws_clients_add_bytes(wsh, bytes);
         else
@@ -282,11 +289,11 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
         break;
       }
       if (!hls_store_ready(ctx, &filter, pmt_pid, HLS_CONTAINER_FMP4) &&
-          hls_cold_try_park(c, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_DASH, HLS_CONTAINER_FMP4, is_head, keep_alive, origin_hdr, (int)(reactor_cfg()->segment_size * 2000.0), wsh)) {
+          hls_cold_try_park(c, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_DASH, HLS_CONTAINER_FMP4, want_ll, is_head, keep_alive, origin_hdr, (int)(reactor_cfg()->segment_size * 2000.0), wsh)) {
         c->state = CONN_DISPATCH;
         return;
       }
-      if (hls_serve_dash(c, ctx, &filter, pmt_pid, is_head, keep_alive, origin_hdr, &bytes))
+      if (hls_serve_dash(c, ctx, &filter, pmt_pid, want_ll, reactor_cfg()->dash_utc_url, is_head, keep_alive, origin_hdr, &bytes))
         ws_clients_add_bytes(wsh, bytes);
       else
         respond_status(c, RESP_404, keep_alive);

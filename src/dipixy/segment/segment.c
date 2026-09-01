@@ -55,11 +55,11 @@ static hls_seg_ctx_t *find_locked(capture_ctx_t *ctx, const pid_filter_t *filter
 }
 
 /* lock free touch, somewhat. fails if s mid removal by sweep_idle, caller retries under g_mtx */
-static int touch_pinned(hls_seg_ctx_t *s, hls_container_t container, double part_target, int *llhls_newly_on) {
+static int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_on) {
   if (!seg_try_pin(s)) return 0;
   atomic_store_explicit(&s->last_request_ms, now_ms(), memory_order_relaxed);
-  *llhls_newly_on = container == HLS_CONTAINER_TS && part_target > 0.0 && atomic_load_explicit(&s->part_target, memory_order_relaxed) <= 0.0;
-  if (container == HLS_CONTAINER_TS && part_target > 0.0) atomic_store_explicit(&s->part_target, part_target, memory_order_release);
+  *llhls_newly_on = part_target > 0.0 && atomic_load_explicit(&s->part_target, memory_order_relaxed) <= 0.0;
+  if (part_target > 0.0) atomic_store_explicit(&s->part_target, part_target, memory_order_release);
   seg_unpin(s);
   return 1;
 }
@@ -71,9 +71,9 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
 
   for (i = 0; i < HLS_SEG_MAX_STORES; i++) {
     s = atomic_load_explicit(&g_stores[i], memory_order_acquire);
-    if (s && seg_key_equal(s, ctx, filter, pmt_pid, container) && touch_pinned(s, container, part_target, &llhls_newly_on)) {
+    if (s && seg_key_equal(s, ctx, filter, pmt_pid, container) && touch_pinned(s, part_target, &llhls_newly_on)) {
       capture_close(ctx); /* redundant ref: existing segmenter already holds its own */
-      if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, part_target);
+      if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, container, part_target);
       return 1;
     }
   }
@@ -82,10 +82,10 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   s = find_locked(ctx, filter, pmt_pid, container);
   if (s) {
     /* g_mtx excludes sweep removal: pin here cannot fail */
-    touch_pinned(s, container, part_target, &llhls_newly_on);
+    touch_pinned(s, part_target, &llhls_newly_on);
     pthread_mutex_unlock(&g_mtx);
     capture_close(ctx);
-    if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, part_target);
+    if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, container, part_target);
     return 1;
   }
   s = calloc(1, sizeof *s);
@@ -102,7 +102,7 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   s->max_segs = max_segs;
   s->boot_left = max_segs;
   s->container = container;
-  if (container == HLS_CONTAINER_TS) atomic_store_explicit(&s->part_target, part_target, memory_order_relaxed);
+  atomic_store_explicit(&s->part_target, part_target, memory_order_relaxed);
   s->first_ts_ms = -1;
   s->fmp4_audio_track_idx = -1;
   atomic_store_explicit(&s->last_request_ms, now_ms(), memory_order_relaxed);
@@ -138,7 +138,7 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   pthread_mutex_unlock(&g_mtx);
 
   hls_store_open(ctx, filter, pmt_pid, seg_target, max_segs, container);
-  if (container == HLS_CONTAINER_TS && part_target > 0.0) hls_llhls_enable(ctx, filter, pmt_pid, part_target);
+  if (part_target > 0.0) hls_llhls_enable(ctx, filter, pmt_pid, container, part_target);
   return 1;
 }
 

@@ -147,6 +147,15 @@ START_TEST(udp_dash_direct_route_parses) {
 }
 END_TEST
 
+START_TEST(udp_lldash_direct_route_parses) {
+  route_t r;
+  ck_assert_int_eq(route_parse("/udp/239.0.0.1:8000/lldash", &r), 0);
+  ck_assert_int_eq(r.kind, ROUTE_UDP);
+  ck_assert_int_eq(r.fmt, ROUTE_FMT_LLDASH);
+  ck_assert_str_eq(r.hls_file, "manifest.mpd");
+}
+END_TEST
+
 START_TEST(dash_seg_filename_route_parses) {
   route_t r;
   ck_assert_int_eq(route_parse("/list/1/item/3/dseg12000.m4s", &r), 0);
@@ -477,6 +486,7 @@ static Suite *route_suite(void) {
   tcase_add_test(tc, llhls_part_filename_route_parses);
   tcase_add_test(tc, malformed_llhls_part_filename_rejected);
   tcase_add_test(tc, udp_dash_direct_route_parses);
+  tcase_add_test(tc, udp_lldash_direct_route_parses);
   tcase_add_test(tc, dash_seg_filename_route_parses);
   tcase_add_test(tc, malformed_dash_seg_filename_rejected);
   tcase_add_test(tc, rtp_ipv6_bracket_address_parses);

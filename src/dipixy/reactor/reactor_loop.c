@@ -9,8 +9,9 @@
 #include "../core/htdocs.h"
 #include "../core/metrics.h"
 #include "../core/status.h"
+#include "../dash/lldash.h"
 #include "../hls/hls.h"
-#include "../hls/segment/segment.h"
+#include "../segment/segment.h"
 #include "../ts/ts_push.h"
 #include "../version.h"
 #include "lib/demux/tspack.h"
@@ -53,6 +54,13 @@ static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, str
 #endif
       return;
     }
+    if (lp->kind == RL_DASHCHUNK_EFD) {
+      uint64_t v = 0;
+      ssize_t r = read(lp->fd, &v, sizeof v);
+      (void)r;
+      dash_lldash_flush_ready(tid);
+      return;
+    }
 #ifdef HAVE_HTTP3
     if (lp->kind == RL_H3_UDP) {
       h3_handle_readable(lp->fd);
@@ -86,6 +94,12 @@ static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, str
         reactor_tspush_readable(epfd, c);
       else
         reactor_conn_flush(epfd, c);
+      break;
+    case CONN_DASHCHUNK:
+      if (e & EPOLLIN)
+        reactor_dashchunk_readable(epfd, c);
+      else
+        reactor_dashchunk_flush(epfd, c);
       break;
     case CONN_WS:
       if (e & EPOLLIN)
@@ -149,9 +163,11 @@ void *worker_thread(void *arg) {
     htdocs_template_reload_check();
 #ifdef HAVE_HTTP2
     h2_llhls_flush_waiters();
+    h2_hls_cold_flush_waiters();
 #endif
 #ifdef HAVE_HTTP3
     h3_llhls_flush_waiters();
+    h3_hls_cold_flush_waiters();
     h3_ws_flush();
     h3_tick();
 #endif

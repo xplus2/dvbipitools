@@ -22,7 +22,7 @@ Protocols: IPv6, HTTP/2, HTTP/3, HTTPS
 .IP \(bu 2
 Ingress: MPTS demux, RIST, SRT, stdin
 .IP \(bu 2
-Egress: HLS (TS and fMP4), Low-Latency HLS, MPEG-DASH, audio raw demux
+Egress: HLS (TS and fMP4), Low-Latency HLS, MPEG-DASH (regular and CMAF Low-Latency), audio raw demux
 .IP \(bu 2
 Operational: OpenMetrics
 .IP \(bu 2
@@ -191,7 +191,7 @@ re\-poll period. Default: 30.
 .TP
 .B \-\-segment\-size \fIseconds\fR
 Target segment duration
-.RB ( hls ", " hls\-fmp4 ", " llhls ", " dash ).
+.RB ( hls ", " hls\-fmp4 ", " llhls ", " dash ", " lldash ).
 Default: 3.
 .TP
 .B \-\-segment\-count \fIn\fR
@@ -202,6 +202,16 @@ LL\-HLS target part duration, must be
 .B <
 .BR \-\-segment\-size .
 Default: 0.35.
+.TP
+.B \-\-dash\-part\-size \fIseconds\fR
+LL\-DASH target chunk duration, must be
+.B <
+.BR \-\-segment\-size .
+Default: 0.333.
+.TP
+.B \-\-dash\-utc\-url \fIurl\fR
+LL\-DASH MPD UTCTiming source (max 256 chars). Default:
+.IR http://time.akamai.com/?iso&ms .
 .TP
 .B \-\-hls\-seg\-pool \fIn\fR
 Segment buffer freelist cap per size class. Raise on a memory\-rich
@@ -224,7 +234,7 @@ ourselves. Default: off.
 .TP
 .BI "\-f, \-\-format " list
 Comma-separated route whitelist, from
-.BR ts ", " spts ", " rawaudio ", " hls ", " llhls ", " dash
+.BR ts ", " spts ", " rawaudio ", " hls ", " llhls ", " dash ", " lldash
 (
 .B hls
 covers both
@@ -282,7 +292,7 @@ Default: off.
 Comma-separated allowlist against
 .B Origin
 for
-.BR hls / hls\-fmp4 / llhls / dash
+.BR hls / hls\-fmp4 / llhls / dash / lldash
 responses. Default:
 .BR * .
 .TP
@@ -371,7 +381,7 @@ alike). Every other route stays open.
 .PP
 Anyway, here are the details. These routes address a source directly
 (\fIfmt\fR is one of \fBts\fR, \fBspts\fR, \fBrawaudio\fR, \fBhls\fR,
-\fBhls\-fmp4\fR, \fBllhls\fR, \fBdash\fR):
+\fBhls\-fmp4\fR, \fBllhls\fR, \fBdash\fR, \fBlldash\fR):
 .PP
 .RS
 /rtp/\fIaddr\fR:\fIport\fR/\fIfmt\fR    (RTP source)
@@ -432,7 +442,7 @@ Disable this feature with
 On a multi-program transport stream (MPTS),
 .B ts
 always passes every program through unchanged.
-.BR spts / hls / hls\-fmp4 / llhls / dash
+.BR spts / hls / hls\-fmp4 / llhls / dash / lldash
 demux a single program and default to the first PMT that resolves.
 You can override this by selecting a specific PMT:
 .BI ?pmt= pid
@@ -459,7 +469,7 @@ through untouched. Segmenting still needs to locate keyframes,
 understood for MPEG-2 Video, H.264/AVC and HEVC/H.265; other video
 codecs won't cut cleanly on an IDR/I-frame.
 .PP
-.BR hls\-fmp4 ", " llhls " and " dash
+.BR hls\-fmp4 ", " llhls ", " dash " and " lldash
 build actual ISOBMFF (fMP4) sample entries, so their codec support is
 narrower:
 .RS

@@ -35,8 +35,7 @@ void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigne
   while (pos < s->audio_remlen) {
     esc_frame_t f;
     int r = next_frame(&s->es_audio, s->audio_rem + pos, s->audio_remlen - pos, &f);
-    if (r > 0)
-      break;
+    if (r > 0) break;
     if (r < 0) {
       log_throttled(&s->audio_parse_throttle, LOG_THROTTLE_WINDOW_S, "hls: audio ES parse failed, resyncing byte by byte");
       pos++;
@@ -49,17 +48,14 @@ void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigne
       s->audio_bsmod = f.bsmod;
       s->audio_acmod = f.acmod;
       s->audio_lfeon = f.lfeon;
-      s->audio_bitrate_code =
-          s->audio_codec == CODEC_EAC3
+      s->audio_bitrate_code = s->audio_codec == CODEC_EAC3
               ? (unsigned)((uint64_t)f.consumed * 8 * f.rate / (f.samples ? f.samples : 1) / 1000)
               : f.bitrate_code;
       s->audio_ready = 1;
       try_create_fmux(s);
     }
-    if (f.samples)
-      s->audio_nominal_samples += (int64_t)f.samples;
-    if (f.outlen)
-      fmp4_feed_audio_au(s, &f);
+    if (f.samples) s->audio_nominal_samples += (int64_t)f.samples;
+    if (f.outlen) fmp4_feed_audio_au(s, &f);
     pos += f.consumed;
   }
   if (pos) {

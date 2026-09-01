@@ -50,6 +50,8 @@ typedef struct {
   double segment_size;      /* --segment-size, seconds, min 2. hls/hls-fmp4/llhls/dash share it */
   int segment_count;        /* --segment-count, min 3 */
   double hls_part_size;     /* --hls-part-size, seconds, must be < segment_size */
+  double dash_part_size;    /* --dash-part-size, seconds, must be < segment_size. 0 = LL-DASH off */
+  const char *dash_utc_url; /* --dash-utc-url. LL-DASH MPD UTCTiming/ProducerReferenceTime src, xsiso */
   int hls_seg_pool;         /* --hls-seg-pool, per-size-class freelist cap, min 1 */
   const char *metrics_sock; /* --metrics. NULL = default socket path */
   const char *metrics_id;   /* --metrics-id. NULL = metrics disabled */
@@ -58,6 +60,7 @@ typedef struct {
   int no_hls;               /* -f/--format: hls absent, disables hls and hls-fmp4 routes */
   int no_llhls;             /* -f/--format: llhls absent */
   int no_dash;              /* -f/--format: dash absent */
+  int no_lldash;            /* -f/--format: lldash absent */
   int no_ts;                /* -f/--format: ts absent, disables raw TS push routes */
   int no_spts;              /* -f/--format: spts absent, disables single-program TS push routes */
   int no_rawaudio;          /* -f/--format: rawaudio absent, disables /rawaudio routes */

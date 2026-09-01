@@ -142,6 +142,7 @@ static int cb_stream_close(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id
   if (c->h3conn)
     nghttp3_conn_close_stream(c->h3conn, stream_id, app_err);
   h3_llhls_on_stream_close(c, stream_id);
+  h3_hls_cold_on_stream_close(c, stream_id);
   h3_ws_on_stream_close(c, stream_id);
   free_req(c, stream_id);
   return 0;
@@ -306,6 +307,7 @@ void h3conn_del(h3_conn_t *c) {
   if (!c)
     return;
   h3_llhls_on_conn_close(c);
+  h3_hls_cold_on_conn_close(c);
   h3_ws_on_conn_close(c);
   if (c->h3conn) {
     nghttp3_conn_del(c->h3conn);

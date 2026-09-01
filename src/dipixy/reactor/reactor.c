@@ -8,6 +8,7 @@
 #include "reactor.h"
 
 #include "../hls/hls.h"
+#include "../dash/lldash.h"
 #include "../ts/ts_push.h"
 #include "../version.h"
 #include "lib/helper/log.h"
@@ -69,14 +70,11 @@ void reactor_finish(int epfd, conn_t *c) {
     reactor_close(epfd, c);
     return;
   }
-  if (c->become_tspush)
-    reactor_tspush_begin(epfd, c);
-  else if (c->become_ws)
-    reactor_ws_begin(epfd, c);
-  else if (c->keep_alive)
-    reactor_keepalive(epfd, c);
-  else
-    reactor_close(epfd, c);
+  if (c->become_tspush)             reactor_tspush_begin(epfd, c);
+  else if (c->become_dashchunk)     reactor_dashchunk_begin(epfd, c);
+  else if (c->become_ws)            reactor_ws_begin(epfd, c);
+  else if (c->keep_alive)           reactor_keepalive(epfd, c);
+  else                              reactor_close(epfd, c);
 }
 
 void reactor_conn_flush(int epfd, conn_t *c) {
@@ -85,8 +83,7 @@ void reactor_conn_flush(int epfd, conn_t *c) {
   rc = c->dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
   caf = c->close_after_flush;
   pthread_mutex_unlock(&c->out_lock);
-  if (rc == CONN_FLUSH_ERROR || (rc == CONN_FLUSH_DONE && caf))
-    reactor_tspush_close(epfd, c);
+  if (rc == CONN_FLUSH_ERROR || (rc == CONN_FLUSH_DONE && caf)) reactor_tspush_close(epfd, c);
 }
 
 /* joined before reactor_run() returns: on_listening must finish reading cfg b4 main()'s cfg goes out of scope */
@@ -127,7 +124,8 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   conn_table_init(conn_cap);
   ts_push_init(!(cfg->no_ts && cfg->no_spts && cfg->no_rawaudio), cfg->max_clients);
   ws_clients_init(cfg->max_clients);
-  if (!(cfg->no_hls && cfg->no_llhls && cfg->no_dash)) hls_set_seg_pool_cap(cfg->hls_seg_pool);
+  if (!(cfg->no_hls && cfg->no_llhls && cfg->no_dash && cfg->no_lldash)) hls_set_seg_pool_cap(cfg->hls_seg_pool);
+  if (!cfg->no_lldash) dash_lldash_init();
 
   workers = reactor_resolve_workers(cfg->workers_spec, (int)sysconf(_SC_NPROCESSORS_ONLN));
   if (workers < 1) workers = 1;

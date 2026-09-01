@@ -19,7 +19,8 @@ typedef enum {
   CONN_WRITING,       /* draining output queue */
   CONN_WS,            /* upgraded WebSocket, reading frames */
   CONN_H2,            /* HTTP/2 async: nghttp2 session */
-  CONN_TSPUSH,        /* MPEG-TS push: output-only. packets arrive via conn_send_buffered */
+  CONN_TSPUSH,        /* MPEG-TS push: output-only. packets via conn_send_buffered */
+  CONN_DASHCHUNK,     /* LL-DASH chunk stream: output-only, chunks via conn_send_buffered */
   CONN_CLOSING
 } conn_state;
 
@@ -68,7 +69,8 @@ typedef struct conn_t {
   unsigned close_after_flush
       : 1;                      /* handler "closed": reactor closes on drain */
   unsigned become_ws : 1;       /* WS upgrade: after 101 drains, switch conn to CONN_WS frame reading */
-  unsigned become_tspush : 1;   /* MPEG-TS push: after headers drain, keep as output-only CONN_TSPUSH */
+  unsigned become_tspush : 1;   /* MPEG-TS push: after headers drain, keep as output only CONN_TSPUSH */
+  unsigned become_dashchunk : 1; /* LL-DASH stream: after headers drain, keep output only CONN_DASHCHUNK */
   unsigned requested_close : 1; /* other thread asked owner to close: flush, then quiet teardown (no slot/room cleanup, requester already did it) */
   unsigned keep_alive : 1;      /* after flush: recycle for next HTTP/1.1 request */
   int slot;                     /* owning user[] slot, or 0 if none */
@@ -77,8 +79,7 @@ typedef struct conn_t {
   void *h2;                     /* h2_conn_t* once CONN_H2 (reactor-owned) */
   char client_ip[64];           /* peer IP, restored into t_req per dispatch */
   time_t last_active;
-  size_t req_bytes; /* request bytes consumed from in.buf, incl trailing blank
-                        line. reactor_keepalive() preserves pipelined bytes past it */
+  size_t req_bytes; /* request bytes consumed from in.buf, incl trailing blank line. reactor_keepalive() preserves pipelined bytes past it */
   _Alignas(64) _Atomic unsigned char want_write; /* EPOLLOUT currently armed for this fd */
   unsigned char dead;                      /* backpressure tripped: owner must close */
   unsigned char read_done;                 /* recv()==0: blocks EPOLLIN re-arm */

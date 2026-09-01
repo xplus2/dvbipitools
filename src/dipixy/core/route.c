@@ -38,6 +38,10 @@ static int fmt_parse(const char *s, route_fmt_t *out) {
     *out = ROUTE_FMT_DASH;
     return 0;
   }
+  if (!strcmp(s, "lldash")) {
+    *out = ROUTE_FMT_LLDASH;
+    return 0;
+  }
   if (!strcmp(s, "rawaudio")) {
     *out = ROUTE_FMT_RAWAUDIO;
     return 0;
@@ -147,7 +151,7 @@ static int fmt_or_hls_file_parse(const char *s, route_t *out) {
     bufcpy(out->hls_file, sizeof out->hls_file, "index.m3u8");
   else if (out->fmt == ROUTE_FMT_LLHLS)
     bufcpy(out->hls_file, sizeof out->hls_file, "index_ll.m3u8");
-  else if (out->fmt == ROUTE_FMT_DASH)
+  else if (out->fmt == ROUTE_FMT_DASH || out->fmt == ROUTE_FMT_LLDASH)
     bufcpy(out->hls_file, sizeof out->hls_file, "manifest.mpd");
   return 0;
 }

@@ -43,7 +43,6 @@ static const unsigned char *maybe_rewrite_pmt(hls_seg_ctx_t *s, const unsigned c
   const unsigned char *sec;
   unsigned drop_pids[PID_FILTER_MAX];
   size_t sl, rl;
-
   if (s->container != HLS_CONTAINER_TS || s->filter.count == 0 || !psi_have_pmt(s->psi) || pid != psi_pmt_pid(s->psi))
     return pkt;
   sec = psi_pmt_section(s->psi, &sl);
@@ -60,12 +59,8 @@ static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *
   unsigned pid = tspack_pid(pkt);
   int pusi = 0;
   const unsigned char *out_pkt;
-  if (pid_filter_excludes(&s->filter, pid))
-    return;
-
-  if (psi_wants_pid(s->psi, pid))
-    psi_feed(s->psi, pkt);
-
+  if (pid_filter_excludes(&s->filter, pid)) return;
+  if (psi_wants_pid(s->psi, pid)) psi_feed(s->psi, pkt);
   if (!s->video_pid_known && psi_ready(s->psi)) {
     int n, i;
     const psi_es_t *es = psi_es(s->psi, &n);
@@ -119,15 +114,13 @@ static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *
 
   /* pes_feed's callback may trim s->buf. packet bytes always survive as new tail: offset valid only post-call */
   pes_feed(s->pes, pkt);
-
   if (pusi) {
     s->pending_pes_off = s->len - 188;
     s->have_pending_pes = 1;
   }
 }
 
-void hls_seg_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data,
-            size_t len) {
+void hls_seg_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len) {
   hls_seg_ctx_t *s = ctx;
   if (pid == s->video_pid)
     handle_video_pes(s, has_pts, pts, has_dts, dts, data, len);
@@ -141,7 +134,6 @@ void hls_seg_feed_all(capture_ctx_t *ctx, const unsigned char *pkt) {
   hls_seg_ctx_t *s = atomic_load_explicit(head, memory_order_acquire);
   unsigned char pmt_rw[PSI_SECTION_ASM_BUF_LEN];
   unsigned char pmt_pkt[188];
-
   while (s) {
     hls_seg_ctx_t *next = atomic_load_explicit(&s->chain_next, memory_order_relaxed);
     feed_one(s, pkt, pmt_rw, pmt_pkt); /* safe unlocked: ctx has one fixed owning pump thread, sweep_idle waits b4 freeing */

@@ -215,6 +215,9 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   jbuf_key(&j, "hls_part_size_s");
   jbuf_fmt(&j, "%.3f", cfg->hls_part_size);
   jbuf_str(&j, ",");
+  jbuf_key(&j, "dash_part_size_s");
+  jbuf_fmt(&j, "%.3f", cfg->dash_part_size);
+  jbuf_str(&j, ",");
   jbuf_key(&j, "hls_seg_pool");
   jbuf_fmt(&j, "%d", cfg->hls_seg_pool);
   jbuf_str(&j, "},");
@@ -326,6 +329,9 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   jbuf_str(&j, ",");
   jbuf_key(&j, "no_dash");
   jbuf_str(&j, cfg->no_dash ? "true" : "false");
+  jbuf_str(&j, ",");
+  jbuf_key(&j, "no_lldash");
+  jbuf_str(&j, cfg->no_lldash ? "true" : "false");
   jbuf_str(&j, ",");
   jbuf_key(&j, "no_ts");
   jbuf_str(&j, cfg->no_ts ? "true" : "false");

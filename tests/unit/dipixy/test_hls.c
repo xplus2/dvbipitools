@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "dipixy/hls/hls.h"
+#include "dipixy/dash/dash.h"
 #include "dipixy/ts/pidfilter.h"
 #include "lib/helper/ioutil.h"
 
@@ -158,12 +159,12 @@ START_TEST(llhls_part_roundtrip) {
   const uint8_t part[64] = {0x47};
   no_filter(&f);
   hls_store_open(CTX_A, &f, 0, 2.0, 6, HLS_CONTAINER_TS);
-  hls_llhls_enable(CTX_A, &f, 0, 0.5);
-  ck_assert_int_eq(hls_ll_store_ready(CTX_A, &f, 0), 0);
-  ck_assert_int_eq(hls_part_available(CTX_A, &f, 0, 0, 0), 0);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_ll_store_ready(CTX_A, &f, 0), 1);
-  ck_assert_int_eq(hls_part_available(CTX_A, &f, 0, 0, 0), 1);
+  hls_llhls_enable(CTX_A, &f, 0, HLS_CONTAINER_TS, 0.5);
+  ck_assert_int_eq(hls_ll_store_ready(CTX_A, &f, 0, HLS_CONTAINER_TS), 0);
+  ck_assert_int_eq(hls_part_available(CTX_A, &f, 0, HLS_CONTAINER_TS, 0, 0), 0);
+  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, HLS_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_ll_store_ready(CTX_A, &f, 0, HLS_CONTAINER_TS), 1);
+  ck_assert_int_eq(hls_part_available(CTX_A, &f, 0, HLS_CONTAINER_TS, 0, 0), 1);
 
   ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, "seg0.0.ts", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
@@ -184,9 +185,9 @@ START_TEST(llhls_finalized_segment_part_still_served) {
   const uint8_t part[64] = {0x11};
   no_filter(&f);
   hls_store_open(CTX_A, &f, 0, 2.0, 6, HLS_CONTAINER_TS);
-  hls_llhls_enable(CTX_A, &f, 0, 0.5);
-  hls_push_part(CTX_A, &f, 0, part, sizeof part, 0.5, 1);
-  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, 0.5), 0);
+  hls_llhls_enable(CTX_A, &f, 0, HLS_CONTAINER_TS, 0.5);
+  hls_push_part(CTX_A, &f, 0, HLS_CONTAINER_TS, part, sizeof part, 0.5, 1);
+  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, HLS_CONTAINER_TS, 0.5), 0);
 
   ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, "seg0.0.ts", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
@@ -206,7 +207,7 @@ START_TEST(dash_manifest_and_segment_roundtrip) {
   hls_set_init_segment(CTX_A, &f, 0, HLS_CONTAINER_FMP4, init, sizeof init);
   ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, HLS_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
 
-  ck_assert_int_eq(hls_render_dash(CTX_A, &f, 0, 0, &r), 1);
+  ck_assert_int_eq(hls_render_dash(CTX_A, &f, 0, 0, "http://example.invalid/", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "application/dash+xml");
   ck_assert(memmem(r.body, r.body_len, "<MPD", 4) != NULL);
@@ -217,6 +218,25 @@ START_TEST(dash_manifest_and_segment_roundtrip) {
   ck_assert_str_eq(r.content_type, "video/mp4");
   ck_assert_uint_eq(r.body_len, sizeof seg);
   ck_assert_mem_eq(r.body, seg, sizeof seg);
+  hls_resp_body_release(r.body, r.zc);
+}
+END_TEST
+
+/* regression: hls_push_segment_ll() start_ms/cum_ms */
+START_TEST(lldash_second_segment_addressable_by_start_ms) {
+  pid_filter_t f;
+  hls_resp_t r;
+  const uint8_t chunk[64] = {0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p'};
+  no_filter(&f);
+  hls_store_open(CTX_A, &f, 0, 2.0, 6, HLS_CONTAINER_FMP4);
+  hls_llhls_enable(CTX_A, &f, 0, HLS_CONTAINER_FMP4, 0.5);
+  hls_push_part(CTX_A, &f, 0, HLS_CONTAINER_FMP4, chunk, sizeof chunk, 0.5, 1);
+  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, HLS_CONTAINER_FMP4, 0.5), 0);
+  hls_push_part(CTX_A, &f, 0, HLS_CONTAINER_FMP4, chunk, sizeof chunk, 0.5, 1);
+  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, HLS_CONTAINER_FMP4, 0.5), 0);
+  ck_assert_int_eq(hls_render_dash_seg(CTX_A, &f, 0, "dseg500.m4s", 0, &r), 1);
+  ck_assert_int_eq(r.status, 200);
+  ck_assert_uint_eq(r.body_len, sizeof chunk);
   hls_resp_body_release(r.body, r.zc);
 }
 END_TEST
@@ -248,6 +268,7 @@ static Suite *hls_suite(void) {
   tcase_add_test(tc, if_none_match_returns_304);
   tcase_add_test(tc, head_request_omits_body);
   tcase_add_test(tc, store_close_then_render_is_404);
+  tcase_add_test(tc, lldash_second_segment_addressable_by_start_ms);
   tcase_add_test(tc, distinct_ctx_get_distinct_stores);
   tcase_add_test(tc, fmp4_init_segment_roundtrip);
   tcase_add_test(tc, llhls_part_roundtrip);

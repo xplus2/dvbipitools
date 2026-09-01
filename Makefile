@@ -1004,7 +1004,7 @@ dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs libnghttp2)
 else
 dipixy_EXTRA_LDFLAGS += $(shell pkg-config --libs libnghttp2)
 endif
-dipixy_HTTP2_SRC := src/dipixy/http2/http2.c src/dipixy/http2/http2_tspush.c src/dipixy/http2/http2_hls.c src/dipixy/http2/http2_ws.c
+dipixy_HTTP2_SRC := src/dipixy/http2/http2.c src/dipixy/http2/http2_tspush.c src/dipixy/http2/http2_dashchunk.c src/dipixy/http2/http2_hls.c src/dipixy/http2/http2_ws.c
 else
 dipixy_HTTP2_SRC :=
 ifneq ($(HTTP2),no)
@@ -1019,7 +1019,7 @@ dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs libngtcp2 libngtcp2_c
 else
 dipixy_EXTRA_LDFLAGS += $(shell pkg-config --libs libngtcp2 libngtcp2_crypto_ossl libnghttp3)
 endif
-dipixy_HTTP3_SRC := src/dipixy/http3/http3.c src/dipixy/http3/http3_quic.c src/dipixy/http3/http3_req.c src/dipixy/http3/http3_resp.c src/dipixy/http3/http3_tspush.c src/dipixy/http3/http3_llhls.c src/dipixy/http3/http3_ws.c
+dipixy_HTTP3_SRC := src/dipixy/http3/http3.c src/dipixy/http3/http3_quic.c src/dipixy/http3/http3_req.c src/dipixy/http3/http3_resp.c src/dipixy/http3/http3_tspush.c src/dipixy/http3/http3_dashchunk.c src/dipixy/http3/http3_llhls.c src/dipixy/http3/http3_hls_cold.c src/dipixy/http3/http3_ws.c
 else
 dipixy_HTTP3_SRC :=
 ifeq ($(HAVE_LIBNGTCP2),yes)
@@ -1065,6 +1065,7 @@ dipixy_SRCS := \
 	src/dipixy/reactor/dispatch/route.c \
 	src/dipixy/reactor/dispatch/waiters.c \
 	src/dipixy/reactor/reactor_tspush.c \
+	src/dipixy/reactor/reactor_dashchunk.c \
 	src/dipixy/reactor/reactor_ws.c \
 	src/dipixy/ts/ts_push.c \
 	src/dipixy/ts/ts_push_feed.c \
@@ -1083,17 +1084,18 @@ dipixy_SRCS := \
 	src/dipixy/ws/ws_clients.c \
 	src/dipixy/ws/ws_clients_json.c \
 	src/dipixy/ws/ws_clients_tick.c \
-	src/dipixy/hls/hls.c \
-	src/dipixy/hls/hls_fmt.c \
+	src/dipixy/segstore.c \
+	src/dipixy/respfmt.c \
 	src/dipixy/hls/hls_serve.c \
 	src/dipixy/hls/hls_llhls.c \
-	src/dipixy/hls/hls_dash.c \
+	src/dipixy/dash/dash.c \
+	src/dipixy/dash/lldash.c \
 	src/dipixy/hls/hls_render.c \
-	src/dipixy/hls/segment/segment.c \
-	src/dipixy/hls/segment/demux.c \
-	src/dipixy/hls/segment/video.c \
-	src/dipixy/hls/segment/audio.c \
-	src/dipixy/hls/segment/mux.c \
+	src/dipixy/segment/segment.c \
+	src/dipixy/segment/demux.c \
+	src/dipixy/segment/video.c \
+	src/dipixy/segment/audio.c \
+	src/dipixy/segment/mux.c \
 	src/dipixy/dlna/ssdp.c \
 	src/dipixy/dlna/dlna.c \
 	src/dipixy/dlna/dlna_soap.c \
@@ -3375,11 +3377,11 @@ dipixy_dispatch_EXTRA_LDFLAGS := -Wl,--gc-sections
 dipixy_hls_BIN := tests/unit/dipixy/test_hls
 dipixy_hls_SRCS := \
 	tests/unit/dipixy/test_hls.c \
-	src/dipixy/hls/hls.c \
-	src/dipixy/hls/hls_fmt.c \
+	src/dipixy/segstore.c \
+	src/dipixy/respfmt.c \
 	src/dipixy/hls/hls_serve.c \
 	src/dipixy/hls/hls_llhls.c \
-	src/dipixy/hls/hls_dash.c \
+	src/dipixy/dash/dash.c \
 	src/dipixy/hls/hls_render.c \
 	src/dipixy/ts/pidfilter.c \
 	src/lib/helper/ioutil.c \

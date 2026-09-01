@@ -24,10 +24,13 @@ void h3_handle_readable(int udp_fd);
 /* periodic maintenance: expire idle conns, flush deferred TX */
 void h3_tick(void);
 
-/* resumes any H3 streams parked on LL-HLS blocking reload, call once per worker loop tick */
+/* resumes any H3 streams parked on LL-HLS blocking reload, call once per tick */
 void h3_llhls_flush_waiters(void);
 
-/* resumes H3 WS streams with data queued from any thread, call once per worker loop tick */
+/* resumes cold-parked H3 manifest/playlist streams, call once per tick */
+void h3_hls_cold_flush_waiters(void);
+
+/* resumes H3 WS streams with data queued from any thread, call once per tick */
 void h3_ws_flush(void);
 
 /* ms until nearest QUIC timer, for epoll_wait sizing. -1 = no active conns */

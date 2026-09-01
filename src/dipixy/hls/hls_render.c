@@ -9,53 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void resp_set(hls_resp_t *out, int status, const char *content_type, const char *etag, const uint8_t *body, size_t body_len, int is_head) {
-  out->status = status;
-  out->content_type = content_type;
-  if (etag)
-    bufcpy(out->etag, sizeof out->etag, etag);
-  else
-    out->etag[0] = '\0';
-  out->body_len = body_len;
-  out->body = NULL;
-  if (!body || is_head)
-    return;
-  out->body = malloc(body_len);
-  if (!out->body) {
-    out->status = 500;
-    out->content_type = NULL;
-    out->body_len = 0;
-    return;
-  }
-  memcpy(out->body, body, body_len);
-}
-
-/* seg_buf-backed body: ref instead of copy. below HLS_ZC_MIN_LEN, falls back to resp_set() */
-static void resp_set_zc(hls_resp_t *out, int status, const char *content_type, const char *etag, uint8_t *body, size_t body_len, int is_head) {
-  if (!body || is_head || body_len < HLS_ZC_MIN_LEN) {
-    resp_set(out, status, content_type, etag, body, body_len, is_head);
-    return;
-  }
-  out->status = status;
-  out->content_type = content_type;
-  if (etag)
-    bufcpy(out->etag, sizeof out->etag, etag);
-  else
-    out->etag[0] = '\0';
-  seg_buf_ref(body);
-  out->body = body;
-  out->body_len = body_len;
-  out->zc = 1;
-}
-
-void hls_resp_body_release(uint8_t *body, int zc) {
-  if (zc) {
-    seg_buf_unref(body);
-  } else {
-    free(body);
-  }
-}
-
 int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
   hls_store_t *s;
   char m3u8[4096];
@@ -209,43 +162,6 @@ int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
     resp_set(out, 304, NULL, etag, NULL, 0, is_head);
   else
     resp_set(out, 200, "video/mp2t", etag, body, body_len, is_head);
-  pthread_mutex_unlock(store_lock(s));
-  return 1;
-}
-
-int hls_render_dash(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int is_head, hls_resp_t *out) {
-  const hls_store_t *s;
-  char mpd[8192];
-  size_t mpd_len;
-  memset(out, 0, sizeof *out);
-  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_FMP4);
-  if (!s || s->count == 0) {
-    if (s) pthread_mutex_unlock(store_lock(s));
-    resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
-    return 1;
-  }
-  mpd_len = build_mpd(s, mpd, sizeof mpd);
-  pthread_mutex_unlock(store_lock(s));
-  resp_set(out, 200, "application/dash+xml", NULL, (uint8_t *)mpd, mpd_len, is_head);
-  return 1;
-}
-
-int hls_render_dash_seg(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, hls_resp_t *out) {
-  const hls_store_t *s;
-  const hls_seg_t *seg;
-  uint64_t req_t;
-  char etag[48];
-  memset(out, 0, sizeof *out);
-  if (!parse_dash_seg_filename(filename, &req_t)) return 0;
-  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_FMP4);
-  seg = s ? find_seg_by_time(s, req_t) : NULL;
-  if (!seg) {
-    if (s) pthread_mutex_unlock(store_lock(s));
-    resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
-    return 1;
-  }
-  seg_etag(seg->seq, seg->size, etag, sizeof etag);
-  resp_set_zc(out, 200, "video/mp4", etag, seg->data, seg->size, is_head);
   pthread_mutex_unlock(store_lock(s));
   return 1;
 }

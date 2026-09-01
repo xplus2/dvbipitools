@@ -72,13 +72,14 @@ main{flex:1;padding:16px;overflow:auto}
 <div class="field">
 <label for="fmtSel">format</label>
 <select id="fmtSel" onchange="updUrl()">
-<option id="fmt-ts" value="ts">ts</option>
-<option id="fmt-spts" value="spts">spts</option>
+<option id="fmt-ts" value="ts">TS</option>
+<option id="fmt-spts" value="spts">SPTS</option>
 <option id="fmt-rawaudio" value="rawaudio">rawaudio</option>
-<option id="fmt-hls" value="hls">hls</option>
-<option id="fmt-hls-fmp4" value="hls-fmp4">hls-fmp4</option>
-<option id="fmt-llhls" value="llhls">llhls</option>
-<option id="fmt-dash" value="dash">dash</option>
+<option id="fmt-hls" value="hls">HLS</option>
+<option id="fmt-hls-fmp4" value="hls-fmp4">HLS-fMP4</option>
+<option id="fmt-llhls" value="llhls">LL-HLS</option>
+<option id="fmt-dash" value="dash">MPEG DASH</option>
+<option id="fmt-lldash" value="lldash">LL-DASH</option>
 </select>
 </div>
 <div class="field" id="filterField">
@@ -145,7 +146,7 @@ function loadStat() {
       ['Bitrate In', d.bitrate.in_mbps + ' mbps'],
       ['Bitrate Out', d.bitrate.out_mbps + ' mbps'],
       ['Capacity', 'max-clients ' + d.server.max_clients + ', capture-ring ' + d.server.capture_ring_kib + ' KiB'],
-      ['Segments', d.segment.size_s + 's x ' + d.segment.count + ' (part ' + d.segment.hls_part_size_s + 's, pool ' + d.segment.hls_seg_pool + ')'],
+      ['Segments', d.segment.size_s + 's x ' + d.segment.count + ' (hls-part ' + d.segment.hls_part_size_s + 's, dash-part ' + d.segment.dash_part_size_s + 's, pool ' + d.segment.hls_seg_pool + ')'],
       ['SD&S', 'timeout ' + d.sds.timeout_s + 's, refresh ' + d.sds.refresh_interval_s + 's, fcc ' + (d.flags.no_fcc ? 'off' : 'on') + ', ret ' + (d.flags.no_ret ? 'off' : 'on')],
       ['Disabled', Object.keys(d.flags).filter(function (k) { return k.indexOf('no_') === 0 && d.flags[k]; }).map(function (k) { return k.slice(3).replace(/_/g, '-'); }).join(', ') || 'none'],
       ['CORS', d.cors_origins],
@@ -165,7 +166,7 @@ function loadStat() {
 }
 function appFlags() {
   var flags = (state.status && state.status.flags) || {};
-  ['ts', 'spts', 'rawaudio', 'hls', 'hls-fmp4', 'llhls', 'dash'].forEach(function (fmt) {$('fmt-' + fmt).disabled = !!flags['no_' + (fmt === 'hls-fmp4' ? 'hls' : fmt)];});
+  ['ts', 'spts', 'rawaudio', 'hls', 'hls-fmp4', 'llhls', 'dash', 'lldash'].forEach(function (fmt) {$('fmt-' + fmt).disabled = !!flags['no_' + (fmt === 'hls-fmp4' ? 'hls' : fmt)];});
   $('filterField').style.display = flags.no_pid_filters ? 'none' : 'block';
 }
 function renderSrc() {
