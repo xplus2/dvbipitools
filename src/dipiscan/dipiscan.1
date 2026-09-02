@@ -49,6 +49,13 @@ that address gets its own playlist entry, same URI, distinct
 .BR \-m ", " \-\-mcast " \fIaddr\fR"
 Base multicast group, IPv4 or IPv6; the last byte is swept 1..254.
 Default: 239.19.75.0.
+.RS
+Also accepts
+.IR addr / prefixlen
+(CIDR, same asdefault /24) or
+.IR startaddr \- stopaddr
+(explicit inclusive range, swept as given).
+.RE
 .TP
 .BR \-p ", " \-\-port " \fIport\fR[\-\fIport\fR]"
 Port or inclusive port range. Default: 8700.
@@ -68,6 +75,9 @@ Wall-clock time budget per candidate for a named result (PAT + SDT
 service name). 1..3600. Default: 1. If a candidate produces no packets
 at all within 300 ms of the join, it is skipped early, without waiting
 out the full budget.
+.TP
+.BR \-j ", " \-\-jets " \fIjets\fR"
+Concurrent probing threads. 1..256. Default: 1.
 .TP
 .BR \-M ", " \-\-mpts
 Report every PAT-listed program at an address, not just the first.
@@ -126,6 +136,12 @@ Write SD&S Broadcast Discovery XML, ready to feed into \fBdipisds \-a \-i\fR.
 .B dipiscan \-M \-t 3 \-f xml \-P example.org \-o scan.xml
 MPTS-aware scan: one row per program per address, with a raised timeout
 budget to allow every PAT-listed program to be named.
+.TP
+.B dipiscan \-m 239.19.75.0/23 \-p 8700-8705 >hd.m3u
+Sweep a wider CIDR block.
+.TP
+.B dipiscan \-m 239.19.75.10\-239.19.75.20 >hd.m3u
+Sweep an explicit address range.
 .SH EXIT STATUS
 .TP
 .B 0

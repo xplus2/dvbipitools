@@ -26,8 +26,8 @@ dipixy_resolve_sources()
 set(DVBIPITOOLS_DIPIXY_HTDOCS_GEN ${CMAKE_CURRENT_BINARY_DIR}/dipixy_htdocs_index.gen.c)
 add_custom_command(
     OUTPUT ${DVBIPITOOLS_DIPIXY_HTDOCS_GEN}
-    COMMAND gen_htdocs ${CMAKE_SOURCE_DIR}/src/dipixy/htdocs/index.html ${DVBIPITOOLS_DIPIXY_HTDOCS_GEN} g_htdocs_index_html
-    DEPENDS gen_htdocs ${CMAKE_SOURCE_DIR}/src/dipixy/htdocs/index.html
+    COMMAND ${GEN_HTDOCS_EXE} ${CMAKE_SOURCE_DIR}/src/dipixy/htdocs/index.html ${DVBIPITOOLS_DIPIXY_HTDOCS_GEN} g_htdocs_index_html
+    DEPENDS ${GEN_HTDOCS_DEP} ${CMAKE_SOURCE_DIR}/src/dipixy/htdocs/index.html
     COMMENT "dvbipitools: embedding dipixy htdocs/index.html")
 list(APPEND DIPIXY_SRCS ${DVBIPITOOLS_DIPIXY_HTDOCS_GEN})
 

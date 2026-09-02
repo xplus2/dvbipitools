@@ -16,7 +16,8 @@ START_TEST(addr_at_sweeps_last_octet_ipv4) {
   char buf[64];
   memset(&cfg, 0, sizeof cfg);
   cfg.family = AF_INET;
-  inet_pton(AF_INET, "239.1.1.0", cfg.base);
+  inet_pton(AF_INET, "239.1.1.1", cfg.start);
+  inet_pton(AF_INET, "239.1.1.254", cfg.end);
 
   addr_at(&cfg, 1, buf, sizeof buf);
   ck_assert_str_eq(buf, "239.1.1.1");
@@ -30,12 +31,91 @@ START_TEST(addr_at_sweeps_last_octet_ipv6) {
   char buf[64];
   memset(&cfg, 0, sizeof cfg);
   cfg.family = AF_INET6;
-  inet_pton(AF_INET6, "ff15::", cfg.base); /* byte 15 is the only one addr_at replaces */
+  inet_pton(AF_INET6, "ff15::1", cfg.start);
+  inet_pton(AF_INET6, "ff15::fe", cfg.end);
 
   addr_at(&cfg, 1, buf, sizeof buf);
   ck_assert_str_eq(buf, "ff15::1");
   addr_at(&cfg, 16, buf, sizeof buf);
   ck_assert_str_eq(buf, "ff15::10");
+}
+END_TEST
+
+START_TEST(addr_at_carries_across_bytes) {
+  config_t cfg;
+  char buf[64];
+  memset(&cfg, 0, sizeof cfg);
+  cfg.family = AF_INET;
+  inet_pton(AF_INET, "239.1.1.250", cfg.start);
+  inet_pton(AF_INET, "239.1.2.10", cfg.end);
+
+  addr_at(&cfg, 1, buf, sizeof buf);
+  ck_assert_str_eq(buf, "239.1.1.250");
+  addr_at(&cfg, 7, buf, sizeof buf); /* carries into the third octet */
+  ck_assert_str_eq(buf, "239.1.2.0");
+}
+END_TEST
+
+START_TEST(mcast_parse_plain_address_sweeps_default_24) {
+  config_t cfg;
+  char argv0[] = "dipiscan", argv1[] = "-m", argv2[] = "239.1.1.5";
+  char *argv[] = {argv0, argv1, argv2, NULL};
+  char lo[64], hi[64];
+
+  ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.total, 254u);
+  inet_ntop(AF_INET, cfg.start, lo, sizeof lo);
+  inet_ntop(AF_INET, cfg.end, hi, sizeof hi);
+  ck_assert_str_eq(lo, "239.1.1.1");
+  ck_assert_str_eq(hi, "239.1.1.254");
+}
+END_TEST
+
+START_TEST(mcast_parse_cidr_sweeps_host_range) {
+  config_t cfg;
+  char argv0[] = "dipiscan", argv1[] = "-m", argv2[] = "239.1.0.0/23";
+  char *argv[] = {argv0, argv1, argv2, NULL};
+  char lo[64], hi[64];
+
+  ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.total, 510u); /* 2^9 - 2 */
+  inet_ntop(AF_INET, cfg.start, lo, sizeof lo);
+  inet_ntop(AF_INET, cfg.end, hi, sizeof hi);
+  ck_assert_str_eq(lo, "239.1.0.1");
+  ck_assert_str_eq(hi, "239.1.1.254");
+}
+END_TEST
+
+START_TEST(mcast_parse_cidr_rejects_range_over_cap) {
+  config_t cfg;
+  char argv0[] = "dipiscan", argv1[] = "-m", argv2[] = "239.0.0.0/8";
+  char *argv[] = {argv0, argv1, argv2, NULL};
+
+  ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(mcast_parse_explicit_range) {
+  config_t cfg;
+  char argv0[] = "dipiscan", argv1[] = "-m", argv2[] = "239.1.1.10-239.1.1.20";
+  char *argv[] = {argv0, argv1, argv2, NULL};
+  char lo[64], hi[64];
+
+  ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.total, 11u);
+  inet_ntop(AF_INET, cfg.start, lo, sizeof lo);
+  inet_ntop(AF_INET, cfg.end, hi, sizeof hi);
+  ck_assert_str_eq(lo, "239.1.1.10");
+  ck_assert_str_eq(hi, "239.1.1.20");
+}
+END_TEST
+
+START_TEST(mcast_parse_explicit_range_rejects_reversed) {
+  config_t cfg;
+  char argv0[] = "dipiscan", argv1[] = "-m", argv2[] = "239.1.1.20-239.1.1.10";
+  char *argv[] = {argv0, argv1, argv2, NULL};
+
+  ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_ERR);
 }
 END_TEST
 
@@ -353,6 +433,12 @@ static Suite *scan_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, addr_at_sweeps_last_octet_ipv4);
   tcase_add_test(tc, addr_at_sweeps_last_octet_ipv6);
+  tcase_add_test(tc, addr_at_carries_across_bytes);
+  tcase_add_test(tc, mcast_parse_plain_address_sweeps_default_24);
+  tcase_add_test(tc, mcast_parse_cidr_sweeps_host_range);
+  tcase_add_test(tc, mcast_parse_cidr_rejects_range_over_cap);
+  tcase_add_test(tc, mcast_parse_explicit_range);
+  tcase_add_test(tc, mcast_parse_explicit_range_rejects_reversed);
   tcase_add_test(tc, multi_all_named_false_without_pat);
   tcase_add_test(tc, multi_all_named_false_when_multi_program_not_enabled);
   tcase_add_test(tc, multi_all_named_false_until_every_program_resolved_and_named);

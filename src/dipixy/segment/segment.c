@@ -57,7 +57,7 @@ int buf_reserve(unsigned char **buf, size_t *cap, size_t need) {
 #define HLS_SEG_BUF_ASSUMED_BPS (20 * 1000 * 1000 / 8)
 
 /* caller must hold g_mtx. container in key: ts, fmp4 segmenters coexist per channel */
-static hls_seg_ctx_t *find_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
+static hls_seg_ctx_t *find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
   for (int i = 0; i < g_stores_n; i++) {
     hls_seg_ctx_t *s = atomic_load_explicit(&g_stores[i], memory_order_relaxed);
     if (s && seg_key_equal(s, ctx, filter, pmt_pid, container)) return s;

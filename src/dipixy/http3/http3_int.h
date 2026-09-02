@@ -181,8 +181,8 @@ int h3_hls_cold_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx,
                           const char *filename, hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head,
                           const char *origin_hdr, int timeout_ms, int ws_handle);
 void h3_hls_cold_flush_waiters(void);
-void h3_hls_cold_on_stream_close(h3_conn_t *c, int64_t stream_id);
-void h3_hls_cold_on_conn_close(h3_conn_t *c);
+void h3_hls_cold_on_stream_close(const h3_conn_t *c, int64_t stream_id);
+void h3_hls_cold_on_conn_close(const h3_conn_t *c);
 
 /* from http3_ws.c */
 void h3_ws_dispatch(h3_conn_t *c, h3_req_t *r);

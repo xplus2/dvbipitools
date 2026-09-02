@@ -11,11 +11,14 @@ dipiscan [options] 1>playlist 2>log
 | flag | long form     | argument                    | default                          |
 |------|---------------|-----------------------------|----------------------------------|
 | `-m` | `--mcast`     | `<addr>`                    | `239.19.75.0`                    |
+|      |               | or `<addr>/<prefixlen>`     |                                  |
+|      |               | or `<startaddr>-<stopaddr>` |                                  |
 | `-p` | `--port`      | `<port[-port]>`             | `8700`                           |
 | `-f` | `--format`    | `m3u\|csv\|xspf\|xml\|null` | `m3u`                            |
 | `-P` | `--provider`  | `<name>`                    | required with `-f xml`           |
 | `-o` | `--out`       | `<path>` / `-`              | `-` (stdout)                     |
 | `-t` | `--timeout`   | `<secs>`                    | `1`                              |
+| `-j` | `--jets`      | `<jets>`                    | `1` (concurrency)                |
 | `-M` | `--mpts`      |                             | off (SPTS or first program only) |
 | `-u` | `--http-proxy`| `<ip:port>`                 | off (direct IGMP/MLD join)       |
 | `-I` | `--iface`     | `<iface>`                   | kernel default                   |
@@ -25,7 +28,12 @@ dipiscan [options] 1>playlist 2>log
 
 ## Scan range (`-m`, `-p`)
 
-`-m <addr>` base multicast group, IPv4 or IPv6; last byte is swept 1..254 (/24). Default `239.19.75.0`.
+`-m` takes one of three forms:
+
+- `<addr>` - base multicast group, IPv4 or IPv6; last byte is swept 1..254 (/24). Default `239.19.75.0`.
+- `<addr>/<prefixlen>` - CIDR block; (same as the default /24).
+- `<startaddr>-<stopaddr>` - explicit inclusive address range, swept as given.
+
 `-p <port[-port]>` is a port or inclusive port range. Default `8700`.
 
 Every address/port combination in range gets probed once.
@@ -114,4 +122,10 @@ dipisds -a -i scan.xml -m 239.255.0.1:3937
 
 # MPTS-aware scan: one row per program per address
 dipiscan -M -t 3 -f xml -P example.org -o scan.xml
+
+# sweep a wider CIDR block
+dipiscan -m 239.19.75.0/23 -p 8700-8705 >hd.m3u
+
+# sweep an explicit address range
+dipiscan -m 239.19.75.10-239.19.75.20 >hd.m3u
 ```

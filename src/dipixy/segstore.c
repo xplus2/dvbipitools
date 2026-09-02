@@ -165,7 +165,7 @@ static hls_store_t *find_store(const capture_ctx_t *ctx, const pid_filter_t *fil
   return NULL;
 }
 
-hls_store_t *find_store_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
+hls_store_t *find_store_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
   hls_store_t *s;
   pthread_mutex_lock(&g_table_mtx);
   s = find_store(ctx, filter, pmt_pid, container);
@@ -253,7 +253,7 @@ void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   pthread_mutex_unlock(&g_table_mtx);
 }
 
-void hls_store_close(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
+void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
   hls_store_t *s;
   pthread_mutex_lock(&g_table_mtx);
   s = find_store(ctx, filter, pmt_pid, container);

@@ -33,7 +33,7 @@ void hls_seg_pool_trim_idle(void);
 void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double seg_target, int max_segs, seg_container_t container);
 
 /* noop if not open */
-void hls_store_close(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
+void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
 
 /* data copied into a malloc'd buffer. 0 ok, -1 if store not open */
 int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const uint8_t *data, size_t size, double duration);
@@ -55,14 +55,14 @@ int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
 int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, double duration);
 
 /* fires after hls_push_part(), seq: enclosing (still-open) segment's seq. NULL to unregister */
-typedef void (*hls_part_pushed_cb)(hls_store_t *store, uint32_t seq, const uint8_t *data, size_t len);
+typedef void (*hls_part_pushed_cb)(const hls_store_t *store, uint32_t seq, const uint8_t *data, size_t len);
 void hls_set_part_pushed_cb(hls_part_pushed_cb cb);
 
 /* fires after hls_push_segment_ll(), seq: the now-finalized segment's seq. NULL to unregister */
-typedef void (*hls_segment_done_cb)(hls_store_t *store, uint32_t seq);
+typedef void (*hls_segment_done_cb)(const hls_store_t *store, uint32_t seq);
 void hls_set_segment_done_cb(hls_segment_done_cb cb);
 
-typedef void (*hls_store_closing_cb)(hls_store_t *store);
+typedef void (*hls_store_closing_cb)(const hls_store_t *store);
 void hls_set_store_closing_cb(hls_store_closing_cb cb);
 
 /* 1 once store has its first segment, 0 if not yet or ctx unknown */

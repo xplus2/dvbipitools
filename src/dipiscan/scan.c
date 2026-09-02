@@ -2,6 +2,8 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <arpa/inet.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <string.h>
 #include <time.h>
 
@@ -17,12 +19,17 @@
 #include "scan.h"
 #include "version.h"
 
-/* candidate group address at sweep index i (1..254): base with last byte/octet replaced */
+/* candidate group address at idx i in cfg->start, cfg->end */
 void addr_at(const config_t *cfg, unsigned i, char *buf, size_t n) {
   unsigned char a[16];
-  size_t alen = (cfg->family == AF_INET6) ? 16 : 4;
-  memcpy(a, cfg->base, alen);
-  a[alen - 1] = (unsigned char)i;
+  int alen = (cfg->family == AF_INET6) ? 16 : 4;
+  unsigned delta = i - 1;
+  memcpy(a, cfg->start, (size_t)alen);
+  for (int p = alen - 1; p >= 0 && delta; p--) {
+    unsigned sum = a[p] + (delta & 0xFF);
+    a[p] = (unsigned char)sum;
+    delta = (delta >> 8) + (sum >> 8);
+  }
   inet_ntop(cfg->family, a, buf, (socklen_t)n);
 }
 
@@ -197,13 +204,13 @@ static void report_mpts_programs(const config_t *cfg, FILE *out, const probe_res
   for (int k = 0; k < r->program_count; k++) {
     (*found)++;
     if (cfg->verbose)
-      log_line("%3u/254 %-28s %-32s sid=%u [%u pkts]", i, uri, r->programs[k].name, r->programs[k].sid, r->pkts);
+      log_line("%u/%u %-28s %-32s sid=%u [%u pkts]", i, cfg->total, uri, r->programs[k].name, r->programs[k].sid, r->pkts);
     else
-      log_line("%3u/254 %-28s %s (sid=%u)", i, uri, r->programs[k].name, r->programs[k].sid);
+      log_line("%u/%u %-28s %s (sid=%u)", i, cfg->total, uri, r->programs[k].name, r->programs[k].sid);
     format_item(out, cfg->format, r->programs[k].name, uri, cfg->family, group, port, r->rtp_wrapped == 1, r->tsid, r->onid, r->programs[k].sid);
   }
   if (r->program_count == 0)
-    log_line_ansi("%3u/254 %-28s \e[0;33mstream present, no program resolved\e[0m", i, uri);
+    log_line_ansi("%u/%u %-28s \e[0;33mstream present, no program resolved\e[0m", i, cfg->total, uri);
 }
 
 static void report_single_program(const config_t *cfg, FILE *out, const probe_result_t *r, unsigned i,
@@ -211,56 +218,114 @@ static void report_single_program(const config_t *cfg, FILE *out, const probe_re
   const char *name = (r->kind == PROBE_NAMED) ? r->name : "(no SDT)";
   (*found)++;
   if (cfg->verbose)
-    log_line("%3u/254 %-28s %-32s [%u pkts]", i, uri, name, r->pkts);
+    log_line("%u/%u %-28s %-32s [%u pkts]", i, cfg->total, uri, name, r->pkts);
   else
-    log_line("%3u/254 %-28s %s", i, uri, name);
+    log_line("%u/%u %-28s %s", i, cfg->total, uri, name);
   format_item(out, cfg->format, name, uri, cfg->family, group, port, r->rtp_wrapped == 1, r->tsid, r->onid, r->sid);
 }
 
-int scan_run(const config_t *cfg, FILE *out) {
-  char invocation[256], basestr[64];
-  unsigned total = 0, found = 0;
-  double start = mono_seconds();
-  int interrupted = 0;
+typedef struct {
+  const config_t *cfg;
+  FILE *out;
+  atomic_uint next_claim;
+  pthread_mutex_t mtx;
+  pthread_cond_t cv;
+  unsigned next_commit;
+  unsigned total;
+  unsigned found;
+} scan_job_t;
 
-  args_base_describe(cfg, basestr, sizeof basestr);
+static void *scan_worker(void *arg) {
+  scan_job_t *job = arg;
+  const config_t *cfg = job->cfg;
+
+  for (;;) {
+    unsigned i = atomic_fetch_add_explicit(&job->next_claim, 1u, memory_order_relaxed) + 1u;
+    if (i > cfg->total) break;
+    if (signal_stop_requested()) {
+      pthread_mutex_lock(&job->mtx);
+      while (job->next_commit != i) pthread_cond_wait(&job->cv, &job->mtx);
+      job->next_commit = i + 1;
+      pthread_cond_broadcast(&job->cv);
+      pthread_mutex_unlock(&job->mtx);
+      break;
+    }
+
+    {
+      char group[64];
+      addr_at(cfg, i, group, sizeof group);
+      for (unsigned port = cfg->port_lo; port <= cfg->port_hi; port++) {
+        probe_result_t r;
+        const char *proto;
+        char uri[96];
+        int last;
+
+        probe_address(cfg, group, port, &r);
+        proto = (r.rtp_wrapped == 1) ? "rtp" : "udp";
+        if (cfg->family == AF_INET6)
+          snprintf(uri, sizeof uri, "%s://@[%s]:%u", proto, group, port);
+        else
+          snprintf(uri, sizeof uri, "%s://@%s:%u", proto, group, port);
+
+        pthread_mutex_lock(&job->mtx);
+        while (job->next_commit != i)
+          pthread_cond_wait(&job->cv, &job->mtx);
+        job->total++;
+        if (r.kind == PROBE_NONE)
+          log_line_ansi("%u/%u %-28s \e[0;31mno stream\e[0m", i, cfg->total, uri);
+        else if (cfg->mpts)
+          report_mpts_programs(cfg, job->out, &r, i, uri, group, port, &job->found);
+        else
+          report_single_program(cfg, job->out, &r, i, uri, group, port, &job->found);
+        last = (port == cfg->port_hi) || signal_stop_requested();
+        if (last)
+          job->next_commit = i + 1;
+        pthread_cond_broadcast(&job->cv);
+        pthread_mutex_unlock(&job->mtx);
+        if (last)
+          break;
+      }
+    }
+  }
+  return NULL;
+}
+
+int scan_run(const config_t *cfg, FILE *out) {
+  char invocation[256], basestr[128], lo[64], hi[64];
+  double start = mono_seconds();
+  int interrupted;
+  int af = cfg->family == AF_INET6 ? AF_INET6 : AF_INET;
+  unsigned jets = cfg->jets ? cfg->jets : 1;
+  pthread_t threads[DIPISCAN_MAX_JETS];
+  scan_job_t job;
+  args_range_describe(cfg, basestr, sizeof basestr);
+  inet_ntop(af, cfg->start, lo, sizeof lo);
+  inet_ntop(af, cfg->end, hi, sizeof hi);
+  log_line("%s - %s (%u address%s)", lo, hi, cfg->total, cfg->total == 1 ? "" : "es");
   if (cfg->port_lo == cfg->port_hi)
     snprintf(invocation, sizeof invocation, "%s --mcast %s --port %u --timeout %d", TOOL_NAME, basestr, cfg->port_lo, cfg->timeout_ms / 1000);
   else
     snprintf(invocation, sizeof invocation, "%s --mcast %s --port %u-%u --timeout %d", TOOL_NAME, basestr, cfg->port_lo, cfg->port_hi, cfg->timeout_ms / 1000);
   format_init(out, cfg->format, invocation, cfg->provider);
-  for (unsigned i = 1; i < 255 && !interrupted; i++) {
-    char group[64];
-    addr_at(cfg, i, group, sizeof group);
-    for (unsigned port = cfg->port_lo; port <= cfg->port_hi; port++) {
-      probe_result_t r;
-      const char *proto;
-      char uri[96];
 
-      total++;
-      probe_address(cfg, group, port, &r);
-      proto = (r.rtp_wrapped == 1) ? "rtp" : "udp";
-      if (cfg->family == AF_INET6)
-        snprintf(uri, sizeof uri, "%s://@[%s]:%u", proto, group, port);
-      else
-        snprintf(uri, sizeof uri, "%s://@%s:%u", proto, group, port);
-
-      if (r.kind == PROBE_NONE)
-        log_line_ansi("%3u/254 %-28s \e[0;31mno stream\e[0m", i, uri);
-      else if (cfg->mpts)
-        report_mpts_programs(cfg, out, &r, i, uri, group, port, &found);
-      else
-        report_single_program(cfg, out, &r, i, uri, group, port, &found);
-      if (signal_stop_requested()) {
-        interrupted = 1;
-        break;
-      }
-    }
-  }
+  job.cfg = cfg;
+  job.out = out;
+  atomic_init(&job.next_claim, 0u);
+  pthread_mutex_init(&job.mtx, NULL);
+  pthread_cond_init(&job.cv, NULL);
+  job.next_commit = 1;
+  job.total = 0;
+  job.found = 0;
+  for (unsigned t = 1; t < jets; t++) if (pthread_create(&threads[t], NULL, scan_worker, &job)) threads[t] = 0;
+  scan_worker(&job);
+  for (unsigned t = 1; t < jets; t++) if (threads[t]) pthread_join(threads[t], NULL);
+  pthread_cond_destroy(&job.cv);
+  pthread_mutex_destroy(&job.mtx);
   format_close(out, cfg->format);
+  interrupted = signal_stop_requested() ? 1 : 0;
   if (interrupted)
-    log_line("interrupted: found %u station%s (of %u probed) in %.1fs", found, found == 1 ? "" : "s", total, mono_seconds() - start);
+    log_line("interrupted: found %u station%s (of %u probed) in %.1fs", job.found, job.found == 1 ? "" : "s", job.total, mono_seconds() - start);
   else
-    log_line("found %u station%s in %.1fs", found, found == 1 ? "" : "s", mono_seconds() - start);
+    log_line("found %u station%s in %.1fs", job.found, job.found == 1 ? "" : "s", mono_seconds() - start);
   return interrupted;
 }

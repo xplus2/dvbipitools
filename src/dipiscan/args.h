@@ -8,10 +8,16 @@
 
 typedef enum { OUT_M3U, OUT_CSV, OUT_XSPF, OUT_XML, OUT_NULL } out_fmt_t;
 
+/* -j|--jets */
+#define DIPISCAN_MAX_JETS 256
+
 typedef struct {
-  int family;             /* AF_INET or AF_INET6 */
-  unsigned char base[16]; /* base group address, last byte swept 1..254 */
+  int family;              /* AF_INET or AF_INET6 */
+  unsigned char start[16]; /* 1st group address */
+  unsigned char end[16];   /* last group address */
+  unsigned total;          /* address count (start-end) */
   unsigned port_lo, port_hi; /* inclusive port range probed per address */
+  unsigned jets;            /* -j|--jets */
   out_fmt_t format;
   const char *provider; /* -P, DomainName for -f xml. required if format==OUT_XML */
   const char *out_path; /* NULL/"-" = stdout */
@@ -30,7 +36,7 @@ typedef enum { ARGS_OK, ARGS_HELP, ARGS_NOARGS, ARGS_ERR } args_status_t;
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg);
 
-/* base group address as text (4&6), no port */
-void args_base_describe(const config_t *cfg, char *buf, size_t n);
+/* range "start-stop" */
+void args_range_describe(const config_t *cfg, char *buf, size_t n);
 
 #endif

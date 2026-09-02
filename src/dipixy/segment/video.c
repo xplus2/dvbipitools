@@ -82,10 +82,9 @@ static void ts_part_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, size_t au_o
     part_elapsed = (double)(ts_ms - s->part_start_ts_ms) / 1000.0;
   }
 
-  if (au_off > s->part_start_off) {
-    if (hls_push_part(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_TS, s->buf + s->part_start_off, au_off - s->part_start_off, part_elapsed, s->part_key) < 0)
-      log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_part failed, part lost");
-  }
+  if (au_off > s->part_start_off &&
+      hls_push_part(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_TS, s->buf + s->part_start_off, au_off - s->part_start_off, part_elapsed, s->part_key) < 0)
+    log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_part failed, part lost");
   s->part_start_off = will_trim ? 0 : au_off;
   s->part_start_ts_ms = ts_ms;
   s->part_key = new_part_key;

@@ -14,7 +14,8 @@
 #include <sys/socket.h>
 
 void reactor_dashchunk_begin(int epfd, conn_t *c) {
-  c->in.len = c->in.off = 0;
+  c->in.len = 0;
+  c->in.off = 0;
   c->become_dashchunk = 0;
   c->close_after_flush = 0;
   c->state = CONN_DASHCHUNK;

@@ -4,3 +4,8 @@
 dipiscan_resolve_sources()
 
 add_executable(dipiscan ${DIPISCAN_SRCS})
+
+# -j/--jets threads
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+target_link_libraries(dipiscan PRIVATE Threads::Threads)

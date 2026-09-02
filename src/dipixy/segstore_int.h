@@ -68,7 +68,7 @@ typedef struct {
 
 /* segstore.c: buffer pool + store registry */
 pthread_mutex_t *store_lock(const hls_store_t *s);
-hls_store_t *find_store_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
+hls_store_t *find_store_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
 int hls_target_duration(const hls_store_t *s);
 uint8_t *seg_buf_alloc(size_t size);
 void seg_buf_ref(uint8_t *data);

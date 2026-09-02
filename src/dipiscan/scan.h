@@ -14,7 +14,7 @@
 /* 0 = done, 1 = stopped early by SIGINT/SIGTERM */
 int scan_run(const config_t *cfg, FILE *out);
 
-/* candidate group address at sweep index i (1..254): base with last byte/octet replaced */
+/* candidate group address at idx i in cfg->start, cfg->end */
 void addr_at(const config_t *cfg, unsigned i, char *buf, size_t n);
 
 typedef enum { PROBE_NONE, PROBE_UNNAMED, PROBE_NAMED } probe_kind_t;

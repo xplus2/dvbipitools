@@ -25,7 +25,8 @@ dvbipitools (2.4.0-1) unstable; urgency=medium
     + multicast/RIST/SRT to HLS/LL-HLS/HLS-TS/HLS-FMP4/DASH/LL-DASH/Progressive (SP|MP)TS
     + DLNA/UPnP-AV (~DVB-HN)
   * picohttpparser
- -- dvbipitools authors <unspecified@example.com>  tbd
+  * dipiscan: CIDR, multiple jets
+ -- dvbipitools authors <unspecified@example.com>  Wed, 02 Sep 2026 00:00:00 +0200
 
 dvbipitools (2.3.0-1) unstable; urgency=medium
   * merged dipirist sender and receiver

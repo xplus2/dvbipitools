@@ -26,7 +26,7 @@ static void argerr(const char *fmt, ...) {
   va_end(ap);
 }
 
-/* full multicast address, family from ':' presence. last byte becomes sweep counter in scan.c */
+/* full multicast address, family from ':' presence */
 static int base_parse(const char *s, int *family, unsigned char *base) {
   if (strchr(s, ':')) {
     struct in6_addr a6;
@@ -48,8 +48,158 @@ static int base_parse(const char *s, int *family, unsigned char *base) {
   return 0;
 }
 
-void args_base_describe(const config_t *cfg, char *buf, size_t n) {
-  inet_ntop( cfg->family == AF_INET6 ? AF_INET6 : AF_INET, cfg->base, buf, (socklen_t)n);
+void args_range_describe(const config_t *cfg, char *buf, size_t n) {
+  char lo[64], hi[64];
+  int af = cfg->family == AF_INET6 ? AF_INET6 : AF_INET;
+  inet_ntop(af, cfg->start, lo, sizeof lo);
+  inet_ntop(af, cfg->end, hi, sizeof hi);
+  snprintf(buf, n, "%s-%s", lo, hi);
+}
+
+/* cap on swept addresses: do not sweep millions of candidates */
+#define MAX_SWEEP_HOSTBITS 20
+#define MAX_SWEEP_ADDRS ((1u << MAX_SWEEP_HOSTBITS) - 2u)
+
+static void addr_incr1(unsigned char *a, int alen) {
+  for (int i = alen - 1; i >= 0; i--) if (++a[i]) break;
+}
+
+static void addr_decr1(unsigned char *a, int alen) {
+  for (int i = alen - 1; i >= 0; i--) if (a[i]--) break;
+}
+
+/* end-start, capped. -1 if end<start or range exceeds cap */
+static int addr_diff_capped(const unsigned char *start, const unsigned char *end, int alen, unsigned cap, unsigned *out) {
+  unsigned char diff[16];
+  int borrow = 0;
+  for (int i = alen - 1; i >= 0; i--) {
+    int d = (int)end[i] - (int)start[i] - borrow;
+    if (d < 0) {
+      d += 256;
+      borrow = 1;
+    } else {
+      borrow = 0;
+    }
+    diff[i] = (unsigned char)d;
+  }
+  if (borrow)
+    return -1;
+  for (int i = 0; i < alen - 4; i++)
+    if (diff[i])
+      return -1;
+  {
+    unsigned val = 0;
+    for (int i = alen >= 4 ? alen - 4 : 0; i < alen; i++) val = (val << 8) | diff[i];
+    if (val > cap) return -1;
+    *out = val;
+  }
+  return 0;
+}
+
+/* addr/prefixlen. host range is net+1 .. broadcast-1 */
+static int cidr_parse(const char *addrs, const char *prefixs, int *family, unsigned char *start, unsigned char *end, unsigned *total) {
+  unsigned char addr[16], net[16], top[16];
+  int fam, alen, maxprefix, hostbits, bit;
+  char *pend;
+  long prefix;
+
+  if (base_parse(addrs, &fam, addr)) return -1;
+  errno = 0;
+  prefix = strtol(prefixs, &pend, 10);
+  if (errno || pend == prefixs || *pend != '\0' || prefix < 0)
+    return -1;
+
+  alen = (fam == AF_INET6) ? 16 : 4;
+  maxprefix = alen * 8;
+  if (prefix > maxprefix - 2) /* need >= 2 host bits */
+    return -1;
+  hostbits = maxprefix - (int)prefix;
+  if (hostbits > MAX_SWEEP_HOSTBITS)
+    return -1;
+
+  memcpy(net, addr, (size_t)alen);
+  memcpy(top, addr, (size_t)alen);
+  bit = 0;
+  for (int i = alen - 1; i >= 0 && bit < hostbits; i--) {
+    int bits_here = hostbits - bit < 8 ? hostbits - bit : 8;
+    unsigned char mask = (unsigned char)((1u << bits_here) - 1);
+    net[i] &= (unsigned char)~mask;
+    top[i] |= mask;
+    bit += bits_here;
+  }
+
+  memcpy(start, net, (size_t)alen);
+  addr_incr1(start, alen);
+  memcpy(end, top, (size_t)alen);
+  addr_decr1(end, alen);
+  *family = fam;
+  *total = (1u << hostbits) - 2u;
+  return 0;
+}
+
+/* startaddr-stopaddr (incl.) */
+static int range_parse(const char *los, const char *his, int *family, unsigned char *start, unsigned char *end, unsigned *total) {
+  int fam_lo, fam_hi, alen;
+  unsigned char lo[16], hi[16];
+  unsigned diff;
+
+  if (base_parse(los, &fam_lo, lo) || base_parse(his, &fam_hi, hi))
+    return -1;
+  if (fam_lo != fam_hi)
+    return -1;
+  alen = (fam_lo == AF_INET6) ? 16 : 4;
+  if (memcmp(lo, hi, (size_t)alen) > 0)
+    return -1;
+  if (addr_diff_capped(lo, hi, alen, MAX_SWEEP_ADDRS - 1u, &diff))
+    return -1;
+
+  *family = fam_lo;
+  memcpy(start, lo, 16);
+  memcpy(end, hi, 16);
+  *total = diff + 1u;
+  return 0;
+}
+
+/* default /24, last byte swept 1..254 */
+static void plain_parse(const unsigned char *addr, int family, unsigned char *start, unsigned char *end, unsigned *total) {
+  int alen = (family == AF_INET6) ? 16 : 4;
+  memcpy(start, addr, 16);
+  memcpy(end, addr, 16);
+  start[alen - 1] = 1;
+  end[alen - 1] = 254;
+  *total = 254;
+}
+
+/* plain addr, CIDR or startaddr-stopaddr */
+static int mcast_range_parse(const char *s, int *family, unsigned char *start, unsigned char *end, unsigned *total) {
+  const char *slash = strchr(s, '/');
+  const char *dash = strchr(s, '-');
+
+  if (slash) {
+    char addrbuf[64];
+    size_t len = (size_t)(slash - s);
+    if (len == 0 || len >= sizeof addrbuf)
+      return -1;
+    memcpy(addrbuf, s, len);
+    addrbuf[len] = '\0';
+    return cidr_parse(addrbuf, slash + 1, family, start, end, total);
+  }
+  if (dash) {
+    char lobuf[64];
+    size_t len = (size_t)(dash - s);
+    if (len == 0 || len >= sizeof lobuf)
+      return -1;
+    memcpy(lobuf, s, len);
+    lobuf[len] = '\0';
+    return range_parse(lobuf, dash + 1, family, start, end, total);
+  }
+  {
+    unsigned char addr[16];
+    if (base_parse(s, family, addr))
+      return -1;
+    plain_parse(addr, *family, start, end, total);
+    return 0;
+  }
 }
 
 /* port 1..65535, digits only */
@@ -158,11 +308,14 @@ static void print_help(void) {
       "options:\n"
       "  -m, --mcast <addr>       base multicast group, v4 or v6; the last\n"
       "                           byte is swept 1..254                  [239.19.75.0]\n"
+      "                           or <addr>/<prefixlen>, host range swept\n"
+      "                           or <startaddr>-<stopaddr>, swept as given\n"
       "  -p, --port <port[-port]> port or inclusive port range          [8700]\n"
       "  -f, --format <fmt>       m3u|csv|xspf|xml|null                 [m3u]\n"
       "  -P, --provider <name>    DomainName (required on -f xml)\n"
       "  -o, --out <path>         output file, or \"-\" for stdout      [stdout]\n"
       "  -t, --timeout <secs>     wall-clock budget per candidate       [1]\n"
+      "  -j, --jets <jets>        concurrent probing threads            [1]\n"
       "  -M, --mpts               report every program at an address,\n"
       "                           waits out the whole timeout budget per address\n"
       "  -u, --http-proxy <ip:port>  probe via an HTTP TS proxy instead of a\n"
@@ -178,8 +331,10 @@ static void print_help(void) {
       "  %s -v -f csv -o scan.csv\n"
       "  %s -u 127.0.0.1:8080 -m 239.19.75.0 -f xspf >playlist.xspf\n"
       "  %s -f xml -P example.org -o scan.xml    # feed straight into dipisds -a -i\n"
-      "  %s -M -t 3 -f xml -P example.org -o scan.xml  # MPTS addresses too\n\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+      "  %s -M -t 3 -f xml -P example.org -o scan.xml  # MPTS addresses too\n"
+      "  %s -m 239.19.75.0/23 -p 8700-8705 >hd.m3u  # sweep a CIDR block\n"
+      "  %s -m 239.19.75.10-239.19.75.20 >hd.m3u    # sweep an explicit range\n\n",
+      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -190,6 +345,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"provider", required_argument, 0, 'P'},
       {"out", required_argument, 0, 'o'},
       {"timeout", required_argument, 0, 't'},
+      {"jets", required_argument, 0, 'j'},
       {"mpts", no_argument, 0, 'M'},
       {"http-proxy", required_argument, 0, 'u'},
       {"http-path", required_argument, 0, 'x'},
@@ -204,16 +360,21 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_NOARGS;
 
   memset(cfg, 0, sizeof *cfg);
-  base_parse("239.19.75.0", &cfg->family, cfg->base);
+  {
+    unsigned char def[16];
+    base_parse("239.19.75.0", &cfg->family, def);
+    plain_parse(def, cfg->family, cfg->start, cfg->end, &cfg->total);
+  }
   cfg->port_lo = cfg->port_hi = 8700;
   cfg->format = OUT_M3U;
   cfg->timeout_ms = 1000;
+  cfg->jets = 1;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "m:p:f:P:o:t:Mu:x:I:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "m:p:f:P:o:t:j:Mu:x:I:vh", longopts, NULL)) != -1) {
     switch (c) {
       case 'm':
-        if (base_parse(optarg, &cfg->family, cfg->base)) {
-          argerr("invalid -m address: %s", optarg);
+        if (mcast_range_parse(optarg, &cfg->family, cfg->start, cfg->end, &cfg->total)) {
+          argerr("invalid -m address: %s (addr, addr/prefixlen, or startaddr-stopaddr)", optarg);
           return ARGS_ERR;
         }
         break;
@@ -243,6 +404,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->timeout_ms = (int)(v * 1000);
+        break;
+      }
+      case 'j': {
+        char *end;
+        long v = strtol(optarg, &end, 10);
+        if (*end != '\0' || v < 1 || v > DIPISCAN_MAX_JETS) {
+          argerr("invalid -j jets: %s (1..%d)", optarg, DIPISCAN_MAX_JETS);
+          return ARGS_ERR;
+        }
+        cfg->jets = (unsigned)v;
         break;
       }
       case 'M':

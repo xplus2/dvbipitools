@@ -167,7 +167,7 @@ static void unlink_tid_chain(int idx) {
   }
 }
 
-static void on_part_pushed(hls_store_t *store, uint32_t seq, const uint8_t *data, size_t len) {
+static void on_part_pushed(const hls_store_t *store, uint32_t seq, const uint8_t *data, size_t len) {
   int i;
   if (store->container != SEG_CONTAINER_FMP4) return;
   i = atomic_load_explicit(&store->lldash_sub_head, memory_order_acquire);
@@ -186,7 +186,7 @@ static void on_part_pushed(hls_store_t *store, uint32_t seq, const uint8_t *data
   }
 }
 
-static void on_segment_done(hls_store_t *store, uint32_t seq) {
+static void on_segment_done(const hls_store_t *store, uint32_t seq) {
   int i;
   if (store->container != SEG_CONTAINER_FMP4) return;
   i = atomic_load_explicit(&store->lldash_sub_head, memory_order_acquire);
@@ -206,7 +206,7 @@ static void on_segment_done(hls_store_t *store, uint32_t seq) {
   }
 }
 
-static void on_store_closing(hls_store_t *store) {
+static void on_store_closing(const hls_store_t *store) {
   int i = atomic_load_explicit(&store->lldash_sub_head, memory_order_acquire);
   while (i != -1) {
     dashchunk_sub_t *s = &g_subs[i];

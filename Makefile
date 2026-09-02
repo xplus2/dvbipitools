@@ -54,6 +54,10 @@ dipiscan_SRCS := \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c
 
+# -j/--jets
+dipiscan_EXTRA_CFLAGS += -pthread
+dipiscan_EXTRA_LDFLAGS += -pthread
+
 dipisds_SRCS := \
 	src/dipisds/main.c \
 	src/dipisds/args.c \
@@ -1028,9 +1032,12 @@ $(warning dipixy: libngtcp2/libnghttp3 not found via pkg-config, building withou
 endif
 endif
 
+# gen_htdocs -> build time: NOT a cross build
+CC_FOR_BUILD ?= cc
+
 GEN_HTDOCS_BIN := src/dipixy/gen_htdocs
 $(GEN_HTDOCS_BIN): src/dipixy/gen_htdocs.c
-	$(CC) -std=gnu11 -Wall -Wextra -Werror -O2 $< -o $@
+	$(CC_FOR_BUILD) -std=gnu11 -Wall -Wextra -Werror -O2 $< -o $@
 
 src/dipixy/htdocs_index.gen.c: src/dipixy/htdocs/index.html $(GEN_HTDOCS_BIN)
 	$(GEN_HTDOCS_BIN) src/dipixy/htdocs/index.html $@ g_htdocs_index_html

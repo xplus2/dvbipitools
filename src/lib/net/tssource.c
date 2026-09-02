@@ -42,8 +42,11 @@ struct tssrc {
 tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
   const char *ua = cfg->user_agent ? cfg->user_agent : "dvbipitools";
   tssrc_t *s = calloc(1, sizeof *s);
-  if (!s)
+  if (!s) {
+    if (reason_out)
+      *reason_out = NET_ERR_OTHER;
     return NULL;
+  }
   s->kind = cfg->kind;
   switch (s->kind) {
   case TSSRC_RTP:

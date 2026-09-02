@@ -3,13 +3,11 @@
 
 dipixy_resolve_sources()
 
-add_executable(gen_htdocs ${CMAKE_CURRENT_SOURCE_DIR}/gen_htdocs.c)
-
 set(DIPIXY_HTDOCS_INDEX_GEN ${CMAKE_CURRENT_BINARY_DIR}/htdocs_index.gen.c)
 add_custom_command(
     OUTPUT ${DIPIXY_HTDOCS_INDEX_GEN}
-    COMMAND gen_htdocs ${CMAKE_CURRENT_SOURCE_DIR}/htdocs/index.html ${DIPIXY_HTDOCS_INDEX_GEN} g_htdocs_index_html
-    DEPENDS gen_htdocs ${CMAKE_CURRENT_SOURCE_DIR}/htdocs/index.html
+    COMMAND ${GEN_HTDOCS_EXE} ${CMAKE_CURRENT_SOURCE_DIR}/htdocs/index.html ${DIPIXY_HTDOCS_INDEX_GEN} g_htdocs_index_html
+    DEPENDS ${GEN_HTDOCS_DEP} ${CMAKE_CURRENT_SOURCE_DIR}/htdocs/index.html
     COMMENT "dipixy: embedding htdocs/index.html")
 
 add_executable(dipixy ${DIPIXY_SRCS} ${DIPIXY_HTDOCS_INDEX_GEN})

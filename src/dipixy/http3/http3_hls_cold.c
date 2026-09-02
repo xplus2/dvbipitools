@@ -58,7 +58,7 @@ int h3_hls_cold_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx,
   return 0;
 }
 
-void h3_hls_cold_on_stream_close(h3_conn_t *c, int64_t stream_id) {
+void h3_hls_cold_on_stream_close(const h3_conn_t *c, int64_t stream_id) {
   for (int i = 0; i < H3_HLS_COLD_WAITERS_MAX; i++)
     if (t_h3_hls_cold_waiters[i].active && t_h3_hls_cold_waiters[i].conn == c && t_h3_hls_cold_waiters[i].stream_id == stream_id) {
       t_h3_hls_cold_waiters[i].active = 0;
@@ -66,7 +66,7 @@ void h3_hls_cold_on_stream_close(h3_conn_t *c, int64_t stream_id) {
     }
 }
 
-void h3_hls_cold_on_conn_close(h3_conn_t *c) {
+void h3_hls_cold_on_conn_close(const h3_conn_t *c) {
   for (int i = 0; i < H3_HLS_COLD_WAITERS_MAX; i++)
     if (t_h3_hls_cold_waiters[i].active && t_h3_hls_cold_waiters[i].conn == c) {
       t_h3_hls_cold_waiters[i].active = 0;

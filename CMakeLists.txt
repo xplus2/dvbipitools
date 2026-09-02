@@ -159,6 +159,30 @@ include_directories("${CMAKE_SOURCE_DIR}/src")
 
 include(${CMAKE_SOURCE_DIR}/cmake/tool_sources.cmake)
 
+if (CMAKE_CROSSCOMPILING)
+    if (DEFINED ENV{CC_FOR_BUILD} AND NOT "$ENV{CC_FOR_BUILD}" STREQUAL "")
+        set(GEN_HTDOCS_HOST_CC_CANDIDATES $ENV{CC_FOR_BUILD})
+    else ()
+        set(GEN_HTDOCS_HOST_CC_CANDIDATES cc gcc clang)
+    endif ()
+    find_program(GEN_HTDOCS_HOST_CC NAMES ${GEN_HTDOCS_HOST_CC_CANDIDATES})
+    if (NOT GEN_HTDOCS_HOST_CC)
+        message(FATAL_ERROR "gen_htdocs: no build-host C compiler found (set CC_FOR_BUILD)")
+    endif ()
+    set(GEN_HTDOCS_EXE ${CMAKE_BINARY_DIR}/gen_htdocs)
+    add_custom_command(
+        OUTPUT ${GEN_HTDOCS_EXE}
+        COMMAND ${GEN_HTDOCS_HOST_CC} -std=gnu11 -Wall -Wextra -Werror -O2 ${CMAKE_SOURCE_DIR}/src/dipixy/gen_htdocs.c -o ${GEN_HTDOCS_EXE}
+        DEPENDS ${CMAKE_SOURCE_DIR}/src/dipixy/gen_htdocs.c
+        COMMENT "building gen_htdocs for build host")
+    add_custom_target(gen_htdocs_host DEPENDS ${GEN_HTDOCS_EXE})
+    set(GEN_HTDOCS_DEP gen_htdocs_host)
+else ()
+    add_executable(gen_htdocs ${CMAKE_SOURCE_DIR}/src/dipixy/gen_htdocs.c)
+    set(GEN_HTDOCS_EXE gen_htdocs)
+    set(GEN_HTDOCS_DEP gen_htdocs)
+endif ()
+
 # generic src/*/CMakeLists.txt
 file(GLOB tool_dirs LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/src/*")
 foreach (d ${tool_dirs})

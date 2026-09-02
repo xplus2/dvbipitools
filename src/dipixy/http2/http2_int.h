@@ -100,8 +100,8 @@ void h2_llhls_on_conn_close(h2_conn_t *conn);
 /* from http2_hls.c */
 int h2_hls_cold_try_park(h2_conn_t *conn, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, hls_cold_kind_t kind, seg_container_t container,
                          int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle);
-void h2_hls_cold_on_stream_close(h2_conn_t *conn, int32_t stream_id);
-void h2_hls_cold_on_conn_close(h2_conn_t *conn);
+void h2_hls_cold_on_stream_close(const h2_conn_t *conn, int32_t stream_id);
+void h2_hls_cold_on_conn_close(const h2_conn_t *conn);
 
 /* from http2_ws.c */
 void h2_ws_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id);
