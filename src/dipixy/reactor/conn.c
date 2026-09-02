@@ -64,7 +64,7 @@ static void buf_compact(conn_buf *b) {
 int conn_epoll_mod(conn_t *c, int epfd, int want_out) {
   struct epoll_event ev;
   memset(&ev, 0, sizeof(ev));
-  ev.events = (c->read_done ? 0u : (uint32_t)EPOLLIN) | (want_out ? (uint32_t)EPOLLOUT : 0u);
+  ev.events = (atomic_load_explicit(&c->read_done, memory_order_relaxed) ? 0u : (uint32_t)EPOLLIN) | (want_out ? (uint32_t)EPOLLOUT : 0u);
   ev.data.ptr = c;
   return epoll_ctl(epfd, EPOLL_CTL_MOD, c->fd, &ev);
 }
@@ -198,15 +198,25 @@ void conn_request_close(conn_t *c) {
   if (c->epfd >= 0 && !atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) { /* wake owner: flush, tear down */
     struct epoll_event ev;
     memset(&ev, 0, sizeof(ev));
-    ev.events = (c->read_done ? 0u : (uint32_t)EPOLLIN) | (uint32_t)EPOLLOUT;
+    ev.events = (atomic_load_explicit(&c->read_done, memory_order_relaxed) ? 0u : (uint32_t)EPOLLIN) | (uint32_t)EPOLLOUT;
     ev.data.ptr = c;
     epoll_ctl(c->epfd, EPOLL_CTL_MOD, c->fd, &ev);
   }
   pthread_mutex_unlock(&c->out_lock);
 }
 
-int conn_send_buffered(conn_t *c, const void *a, size_t alen, const void *b,
-                       size_t blen) {
+void conn_sweep_idle(unsigned idle_timeout_s) {
+  time_t now;
+  if (!idle_timeout_s || !g_fd_conn_max) return;
+  now = time(NULL);
+  for (int fd = 0; fd < g_fd_conn_max; fd++) {
+    conn_t *c = __atomic_load_n(&g_fd_conn[fd], __ATOMIC_ACQUIRE);
+    if (c && (unsigned)(now - c->last_active) > idle_timeout_s)
+      conn_request_close(c);
+  }
+}
+
+int conn_send_buffered(conn_t *c, const void *a, size_t alen, const void *b, size_t blen) {
   int rc = 0;
   pthread_mutex_lock(&c->out_lock);
   if (c->dead) {
@@ -217,8 +227,7 @@ int conn_send_buffered(conn_t *c, const void *a, size_t alen, const void *b,
   if (pending + alen + blen > CONN_OUT_MAX) {
     c->dead = 1; /* slow consumer: owner closes on next visit */
     rc = -1;
-  } else if ((alen && conn_queue(c, a, alen) < 0) ||
-             (blen && conn_queue(c, b, blen) < 0)) {
+  } else if ((alen && conn_queue(c, a, alen) < 0) || (blen && conn_queue(c, b, blen) < 0)) {
     c->dead = 1; /* OOM */
     rc = -1;
   }
@@ -226,7 +235,7 @@ int conn_send_buffered(conn_t *c, const void *a, size_t alen, const void *b,
   if (c->epfd >= 0 && !atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) {
     struct epoll_event ev;
     memset(&ev, 0, sizeof(ev));
-    ev.events = (c->read_done ? 0u : (uint32_t)EPOLLIN) | (uint32_t)EPOLLOUT;
+    ev.events = (atomic_load_explicit(&c->read_done, memory_order_relaxed) ? 0u : (uint32_t)EPOLLIN) | (uint32_t)EPOLLOUT;
     ev.data.ptr = c;
     epoll_ctl(c->epfd, EPOLL_CTL_MOD, c->fd, &ev);
   }

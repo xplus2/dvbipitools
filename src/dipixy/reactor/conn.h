@@ -82,7 +82,7 @@ typedef struct conn_t {
   size_t req_bytes; /* request bytes consumed from in.buf, incl trailing blank line. reactor_keepalive() preserves pipelined bytes past it */
   _Alignas(64) _Atomic unsigned char want_write; /* EPOLLOUT currently armed for this fd */
   unsigned char dead;                      /* backpressure tripped: owner must close */
-  unsigned char read_done;                 /* recv()==0: blocks EPOLLIN re-arm */
+  _Atomic unsigned char read_done;         /* recv()==0: blocks EPOLLIN re-arm */
   int epfd;
   pthread_mutex_t out_lock;
   /* MSG_ZEROCOPY state, owner-thread-only */
@@ -151,6 +151,8 @@ int conn_send_buffered(conn_t *c, const void *a, size_t alen, const void *b, siz
 
 /* safe from any thread, flushes pending output first. caller handles slot_reset/room cleanup, owner only closes fd + frees conn */
 void conn_request_close(conn_t *c);
+
+void conn_sweep_idle(unsigned idle_timeout_s);
 
 #endif /* DIPIXY_CONN_H */
 

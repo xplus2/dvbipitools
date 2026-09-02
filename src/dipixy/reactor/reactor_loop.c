@@ -80,6 +80,8 @@ static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, str
       reactor_tspush_close(epfd, c);
     else if (c->state == CONN_WS)
       reactor_ws_close(epfd, c);
+    else if (c->state == CONN_DASHCHUNK)
+      reactor_dashchunk_close(epfd, c);
 #ifdef HAVE_HTTP2
     else if (c->state == CONN_H2)
       h2_conn_close(epfd, c);
@@ -158,6 +160,7 @@ void *worker_thread(void *arg) {
       break;
     }
     for (int i = 0; i < nev; i++) reactor_handle_event(epfd, &rl, tid, &events[i]);
+    if (tid == 0) conn_sweep_idle(reactor_cfg()->idle_timeout_s);
     llhls_flush_waiters();
     hls_cold_flush_waiters();
     htdocs_template_reload_check();

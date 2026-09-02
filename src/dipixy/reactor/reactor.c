@@ -8,6 +8,7 @@
 #include "reactor.h"
 
 #include "../hls/hls.h"
+#include "../segment/segment.h"
 #include "../dash/lldash.h"
 #include "../ts/ts_push.h"
 #include "../version.h"
@@ -124,8 +125,10 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   conn_table_init(conn_cap);
   ts_push_init(!(cfg->no_ts && cfg->no_spts && cfg->no_rawaudio), cfg->max_clients);
   ws_clients_init(cfg->max_clients);
+  hls_store_init(cfg->max_channels);
+  hls_seg_init(cfg->max_channels);
   if (!(cfg->no_hls && cfg->no_llhls && cfg->no_dash && cfg->no_lldash)) hls_set_seg_pool_cap(cfg->hls_seg_pool);
-  if (!cfg->no_lldash) dash_lldash_init();
+  if (!cfg->no_lldash) dash_lldash_init(cfg->max_clients);
 
   workers = reactor_resolve_workers(cfg->workers_spec, (int)sysconf(_SC_NPROCESSORS_ONLN));
   if (workers < 1) workers = 1;
@@ -133,6 +136,9 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
     log_line(TOOL_NAME ": -j resolves to %d workers, exceeds max supported %d", workers, REACTOR_MAX_WORKERS);
     return -1;
   }
+#ifdef HAVE_HTTP3
+  h3_set_max_conns_per_thread(cfg->max_clients / workers);
+#endif
 
   {
     const char *cert_path, *key_path;

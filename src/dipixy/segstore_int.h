@@ -5,6 +5,7 @@
 #define DIPIXY_SEGSTORE_INT_H
 
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <time.h>
 
@@ -30,7 +31,7 @@ typedef struct {
 /* ftyp+moov worst case: FMP4_MAX_TRACKS(4) x FMP4_CPRIV_MAX(512) plus box overhead */
 #define HLS_INIT_SEG_MAX 8192
 
-typedef struct {
+typedef struct hls_store_t {
   capture_ctx_t *cap_ctx;
   pid_filter_t filter;
   unsigned pmt_pid; /* 0 = auto */
@@ -39,8 +40,8 @@ typedef struct {
   double td_hw; /* target duration high-water mark, monotonic */
   int max_segs;
   int video_codec; /* 0=AVC, 1=HEVC, drives HLS VERSION */
-  hls_container_t container;
-  uint8_t init_data[HLS_INIT_SEG_MAX]; /* HLS_CONTAINER_FMP4 only */
+  seg_container_t container;
+  uint8_t init_data[HLS_INIT_SEG_MAX]; /* SEG_CONTAINER_FMP4 only */
   size_t init_size;
   int init_gen; /* bumped each hls_set_init_segment(), part of init.mp4's ETag */
   time_t opened_at; /* MPD availabilityStartTime */
@@ -56,6 +57,7 @@ typedef struct {
   size_t live_len, live_cap;
   hls_parts_t live_parts;
   uint32_t live_msn; /* == next_seq while this segment is in progress */
+  _Atomic int lldash_sub_head;
 } hls_store_t;
 
 typedef struct {
@@ -66,7 +68,7 @@ typedef struct {
 
 /* segstore.c: buffer pool + store registry */
 pthread_mutex_t *store_lock(const hls_store_t *s);
-hls_store_t *find_store_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container);
+hls_store_t *find_store_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
 int hls_target_duration(const hls_store_t *s);
 uint8_t *seg_buf_alloc(size_t size);
 void seg_buf_ref(uint8_t *data);

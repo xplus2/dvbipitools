@@ -48,6 +48,6 @@ int llhls_try_park(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, un
 
 /* want_ll: HLS_COLD_DASH only, ROUTE_FMT_LLDASH vs ROUTE_FMT_DASH */
 int hls_cold_try_park(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename,
-                      hls_cold_kind_t kind, hls_container_t container, int want_ll, int is_head, int keep_alive, const char *origin_hdr, int timeout_ms, int ws_handle);
+                      hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head, int keep_alive, const char *origin_hdr, int timeout_ms, int ws_handle);
 
 #endif

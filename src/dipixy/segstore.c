@@ -3,6 +3,7 @@
 
 #include "segstore_int.h"
 #include "reactor/internal.h"
+#include "version.h"
 
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
@@ -127,26 +128,44 @@ void hls_seg_pool_trim_idle(void) {
 
 void seg_buf_release_cb(void *arg) { seg_buf_unref((uint8_t *)arg); }
 
-static hls_store_t g_stores[HLS_MAX_STORES];
+static hls_store_t *g_stores;
+static int g_stores_n;
 /* zero-init == PTHREAD_MUTEX_INITIALIZER on glibc/Linux (this project's only target).
-   kept out of hls_store_t: hls_store_open() memsets on reuse, mutex storage must
-   never be touched except via pthread_mutex_* calls */
-static pthread_mutex_t g_store_locks[HLS_MAX_STORES];
+   kept out of hls_store_t: hls_store_open() memsets on reuse, mutex storage must never be touched except via pthread_mutex_* calls */
+static pthread_mutex_t *g_store_locks;
 /* guard store identity and free-slot claim only. content (segs/live_data/counts/...) guarded by store's g_store_locks[] entry */
 static pthread_mutex_t g_table_mtx = PTHREAD_MUTEX_INITIALIZER;
+
+static hls_store_closing_cb g_store_closing_cb;
+
+void hls_store_init(int max_channels) {
+  int n = max_channels > 0 ? max_channels : 1;
+  if (n > HLS_MAX_STORES) n = HLS_MAX_STORES;
+  g_stores = calloc((size_t)n, sizeof *g_stores);
+  g_store_locks = calloc((size_t)n, sizeof *g_store_locks);
+  if (!g_stores || !g_store_locks) {
+    log_line(TOOL_NAME ": out of memory sizing store table (%d entries)", n);
+    free(g_stores);
+    free(g_store_locks);
+    g_stores = NULL;
+    g_store_locks = NULL;
+    return;
+  }
+  g_stores_n = n;
+}
 
 pthread_mutex_t *store_lock(const hls_store_t *s) { return &g_store_locks[s - g_stores]; }
 
 /* caller must hold g_table_mtx. container in key: ts, fmp4 segmenters coexist per channel */
-static hls_store_t *find_store(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container) {
-  for (int i = 0; i < HLS_MAX_STORES; i++)
+static hls_store_t *find_store(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
+  for (int i = 0; i < g_stores_n; i++)
     if (g_stores[i].open && g_stores[i].cap_ctx == ctx && g_stores[i].pmt_pid == pmt_pid && g_stores[i].container == container &&
         pid_filter_equal(&g_stores[i].filter, filter))
       return &g_stores[i];
   return NULL;
 }
 
-hls_store_t *find_store_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container) {
+hls_store_t *find_store_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
   hls_store_t *s;
   pthread_mutex_lock(&g_table_mtx);
   s = find_store(ctx, filter, pmt_pid, container);
@@ -193,7 +212,7 @@ static int evict_to_fit_collect(hls_store_t *s, uint8_t **out, int max_out) {
 }
 
 /* open/close rare (once per stream lifecycle, not per-request): held under table_mtx + store lock, no sharding */
-void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double seg_target, int max_segs, hls_container_t container) {
+void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double seg_target, int max_segs, seg_container_t container) {
   hls_store_t *s;
 
   if (max_segs < 2)
@@ -204,7 +223,7 @@ void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   pthread_mutex_lock(&g_table_mtx);
   s = find_store(ctx, filter, pmt_pid, container);
   if (!s) {
-    for (int i = 0; i < HLS_MAX_STORES; i++) {
+    for (int i = 0; i < g_stores_n; i++) {
       if (!g_stores[i].open) {
         s = &g_stores[i];
         break;
@@ -229,11 +248,12 @@ void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   s->container = container;
   s->open = 1;
   s->opened_at = time(NULL);
+  atomic_init(&s->lldash_sub_head, -1);
   pthread_mutex_unlock(store_lock(s));
   pthread_mutex_unlock(&g_table_mtx);
 }
 
-void hls_store_close(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container) {
+void hls_store_close(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
   hls_store_t *s;
   pthread_mutex_lock(&g_table_mtx);
   s = find_store(ctx, filter, pmt_pid, container);
@@ -245,11 +265,12 @@ void hls_store_close(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
     s->live_data = NULL;
     s->open = 0;
     pthread_mutex_unlock(store_lock(s));
+    if (g_store_closing_cb) g_store_closing_cb(s);
   }
   pthread_mutex_unlock(&g_table_mtx);
 }
 
-int hls_set_init_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, const uint8_t *data, size_t size) {
+int hls_set_init_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const uint8_t *data, size_t size) {
   hls_store_t *s;
   if (size > HLS_INIT_SEG_MAX) {
     log_line("hls_set_init_segment: %zu exceeds HLS_INIT_SEG_MAX %d", size, HLS_INIT_SEG_MAX);
@@ -266,7 +287,7 @@ int hls_set_init_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
   return 0;
 }
 
-int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, const uint8_t *data, size_t size, double duration) {
+int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const uint8_t *data, size_t size, double duration) {
   uint8_t *copy;
   uint8_t *evicted[HLS_MAX_SEGS];
   int nevicted;
@@ -300,7 +321,7 @@ int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
   return 0;
 }
 
-void hls_llhls_enable(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, double part_target) {
+void hls_llhls_enable(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, double part_target) {
   hls_store_t *s = find_store_locked(ctx, filter, pmt_pid, container);
   if (!s)
     return;
@@ -318,8 +339,9 @@ static hls_segment_done_cb g_segment_done_cb;
 
 void hls_set_part_pushed_cb(hls_part_pushed_cb cb) { g_part_pushed_cb = cb; }
 void hls_set_segment_done_cb(hls_segment_done_cb cb) { g_segment_done_cb = cb; }
+void hls_set_store_closing_cb(hls_store_closing_cb cb) { g_store_closing_cb = cb; }
 
-int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, const uint8_t *data, size_t size, double duration, int independent) {
+int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const uint8_t *data, size_t size, double duration, int independent) {
   hls_store_t *s;
   int n;
   uint32_t live_msn;
@@ -340,11 +362,11 @@ int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   s->live_len += size;
   live_msn = s->live_msn;
   pthread_mutex_unlock(store_lock(s));
-  if (g_part_pushed_cb) g_part_pushed_cb(ctx, filter, pmt_pid, container, live_msn, data, size);
+  if (g_part_pushed_cb) g_part_pushed_cb(s, live_msn, data, size);
   return 0;
 }
 
-int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, double duration) {
+int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, double duration) {
   hls_store_t *s;
   uint8_t *evicted[HLS_MAX_SEGS];
   int nevicted;
@@ -382,11 +404,11 @@ int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned
   pthread_mutex_unlock(store_lock(s));
   for (int i = 0; i < nevicted; i++)
     seg_buf_unref(evicted[i]);
-  if (g_segment_done_cb) g_segment_done_cb(ctx, filter, pmt_pid, container, seq);
+  if (g_segment_done_cb) g_segment_done_cb(s, seq);
   return 0;
 }
 
-int hls_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container) {
+int hls_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
   const hls_store_t *s = find_store_locked(ctx, filter, pmt_pid, container);
   int ready;
   if (!s) return 0;
@@ -395,7 +417,7 @@ int hls_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   return ready;
 }
 
-int hls_ll_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container) {
+int hls_ll_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
   const hls_store_t *s = find_store_locked(ctx, filter, pmt_pid, container);
   int ready;
   if (!s) return 0;
@@ -404,7 +426,7 @@ int hls_ll_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned 
   return ready;
 }
 
-int hls_part_available(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, uint32_t want_seg, int want_part) {
+int hls_part_available(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, uint32_t want_seg, int want_part) {
   const hls_store_t *s = find_store_locked(ctx, filter, pmt_pid, container);
   int found = 0;
   if (!s) return 0;

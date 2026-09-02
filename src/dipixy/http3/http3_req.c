@@ -220,7 +220,7 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
 
     case ROUTE_FMT_HLS:
     case ROUTE_FMT_HLS_FMP4: {
-      hls_container_t container = rt.fmt == ROUTE_FMT_HLS_FMP4 ? HLS_CONTAINER_FMP4 : HLS_CONTAINER_TS;
+      seg_container_t container = rt.fmt == ROUTE_FMT_HLS_FMP4 ? SEG_CONTAINER_FMP4 : SEG_CONTAINER_TS;
       hls_resp_t resp;
       int wsh, handled;
       ctx = open_source(&rt, &list_num);
@@ -236,7 +236,7 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
         return;
       }
       if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, container,
-                          container == HLS_CONTAINER_FMP4 ? 0.0 : reactor_cfg()->hls_part_size)) {
+                          container == SEG_CONTAINER_FMP4 ? 0.0 : reactor_cfg()->hls_part_size)) {
         h3_respond_status(c, r->stream_id, "501");
         return;
       }
@@ -268,16 +268,16 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
         h3_respond_status(c, r->stream_id, "501");
         return;
       }
-      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, HLS_CONTAINER_TS, reactor_cfg()->hls_part_size)) {
+      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_TS, reactor_cfg()->hls_part_size)) {
         h3_respond_status(c, r->stream_id, "501");
         return;
       }
-      if (!strcmp(rt.hls_file, "index_ll.m3u8") && !hls_ll_store_ready(ctx, &filter, pmt_pid, HLS_CONTAINER_TS) &&
-          h3_hls_cold_try_park(c, r->stream_id, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_LLHLS, HLS_CONTAINER_TS, 0, is_head,
+      if (!strcmp(rt.hls_file, "index_ll.m3u8") && !hls_ll_store_ready(ctx, &filter, pmt_pid, SEG_CONTAINER_TS) &&
+          h3_hls_cold_try_park(c, r->stream_id, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_LLHLS, SEG_CONTAINER_TS, 0, is_head,
                                 r->origin[0] ? r->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), wsh))
         return;
       if (!strcmp(rt.hls_file, "index_ll.m3u8") && parse_blocking_reload(query, &want_seg, &want_part) &&
-          !hls_part_available(ctx, &filter, pmt_pid, HLS_CONTAINER_TS, want_seg, want_part) &&
+          !hls_part_available(ctx, &filter, pmt_pid, SEG_CONTAINER_TS, want_seg, want_part) &&
           h3_llhls_try_park(c, r->stream_id, ctx, &filter, pmt_pid, rt.hls_file, is_head, r->inm[0] ? r->inm : NULL,
                              r->origin[0] ? r->origin : NULL, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), wsh))
         return;
@@ -305,7 +305,7 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
         h3_respond_status(c, r->stream_id, "501");
         return;
       }
-      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, HLS_CONTAINER_FMP4,
+      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_FMP4,
                           want_ll ? reactor_cfg()->dash_part_size : 0.0)) {
         h3_respond_status(c, r->stream_id, "501");
         return;
@@ -327,13 +327,13 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
             return;
           }
         }
-        handled = hls_render_dash_seg(ctx, &filter, pmt_pid, rt.hls_file, is_head, &resp);
+        handled = dash_render_seg(ctx, &filter, pmt_pid, rt.hls_file, is_head, &resp);
       } else {
-        if (!hls_store_ready(ctx, &filter, pmt_pid, HLS_CONTAINER_FMP4) &&
-            h3_hls_cold_try_park(c, r->stream_id, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_DASH, HLS_CONTAINER_FMP4, want_ll, is_head,
+        if (!hls_store_ready(ctx, &filter, pmt_pid, SEG_CONTAINER_FMP4) &&
+            h3_hls_cold_try_park(c, r->stream_id, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_DASH, SEG_CONTAINER_FMP4, want_ll, is_head,
                                  r->origin[0] ? r->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), wsh))
           return;
-        handled = hls_render_dash(ctx, &filter, pmt_pid, want_ll, reactor_cfg()->dash_utc_url, is_head, &resp);
+        handled = dash_render(ctx, &filter, pmt_pid, want_ll, reactor_cfg()->dash_utc_url, is_head, &resp);
       }
       h3_respond_hls(c, r, handled, &resp);
       if (handled && resp.status == 200) ws_clients_add_bytes(wsh, resp.body_len);

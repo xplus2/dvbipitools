@@ -118,7 +118,7 @@ between real-world usage of media formats and the standard.
 * dipisrt
   - Secure Reliable Transport (SRT) is not part of DVB.
 * dipixy
-  - HLS, LL-HLS and MPEG-DASH and not part of DVB-IPI, but (partially) in DVB-I 
+  - HLS, LL-HLS and MPEG-DASH are not part of DVB-IPI.
 
 ### Known gaps
 On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.

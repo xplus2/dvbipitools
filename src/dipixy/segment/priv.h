@@ -21,7 +21,7 @@ typedef struct hls_seg_ctx {
   _Atomic(struct hls_seg_ctx *) chain_next;
   pid_filter_t filter;
   unsigned pmt_pid; /* 0 = auto */
-  unsigned char cc_pmt; /* HLS_CONTAINER_TS: rewritten PMT packets' own cc */
+  unsigned char cc_pmt; /* SEG_CONTAINER_TS: rewritten PMT packets' own cc */
   _Atomic int64_t last_request_ms;
   _Atomic int refcount;
 
@@ -78,8 +78,8 @@ typedef struct hls_seg_ctx {
   unsigned char *nal_scratch;  /* esc_handle_*_nal's AU buffer, discarded each AU */
   size_t nal_scratch_len, nal_scratch_cap;
 
-  hls_container_t container;
-  fmp4_mux_t *fmux; /* HLS_CONTAINER_FMP4 only, created once SPS/PPS known */
+  seg_container_t container;
+  fmp4_mux_t *fmux; /* SEG_CONTAINER_FMP4 only, created once SPS/PPS known */
   int fmp4_frag_open;
   int64_t fmp4_frag_start_ts_ms; /* current open fragment's first sample ts, drives chunk_now */
   int fmp4_frag_key;             /* current open fragment's first sample keyframe flag */

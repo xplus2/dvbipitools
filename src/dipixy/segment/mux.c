@@ -72,7 +72,7 @@ void try_create_fmux(hls_seg_ctx_t *s) {
   s->fmux = fmp4_mux_new(trk, ntrk);
   if (!s->fmux) return;
   outlen = fmp4_init_segment(s->fmux, &out);
-  if (outlen && hls_set_init_segment(s->cap_ctx, &s->filter, s->pmt_pid, HLS_CONTAINER_FMP4, out, outlen) < 0)
+  if (outlen && hls_set_init_segment(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_FMP4, out, outlen) < 0)
     log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_set_init_segment failed, init segment lost");
 }
 
@@ -97,11 +97,11 @@ void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, int32_t cts_ticks, in
         if (outlen) {
           if (pt > 0.0) {
             double chunk_dur = (double)(s->fmp4_pend_ts_ms - s->fmp4_frag_start_ts_ms) / 1000.0;
-            if (hls_push_part(s->cap_ctx, &s->filter, s->pmt_pid, HLS_CONTAINER_FMP4, out, outlen, chunk_dur, s->fmp4_frag_key) < 0)
+            if (hls_push_part(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_FMP4, out, outlen, chunk_dur, s->fmp4_frag_key) < 0)
               log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_part failed, fmp4 chunk lost");
-            if (s->fmp4_pend_ends_seg && hls_push_segment_ll(s->cap_ctx, &s->filter, s->pmt_pid, HLS_CONTAINER_FMP4, s->fmp4_pend_elapsed) < 0)
+            if (s->fmp4_pend_ends_seg && hls_push_segment_ll(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_FMP4, s->fmp4_pend_elapsed) < 0)
               log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_segment_ll failed, fmp4 segment lost");
-          } else if (hls_push_segment(s->cap_ctx, &s->filter, s->pmt_pid, HLS_CONTAINER_FMP4, out, outlen, s->fmp4_pend_elapsed) < 0) {
+          } else if (hls_push_segment(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_FMP4, out, outlen, s->fmp4_pend_elapsed) < 0) {
             log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_segment failed, fmp4 segment lost");
           }
         }

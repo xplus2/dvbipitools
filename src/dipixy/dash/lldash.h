@@ -15,7 +15,7 @@
 #include <stdint.h>
 
 /* call once at startup, before any traffic */
-void dash_lldash_init(void);
+void dash_lldash_init(int max_clients);
 
 /* c: headers not yet queued.1 attached (caller must not touch c), 0 no store/filename: 404 */
 int dash_lldash_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int keep_alive, const char *origin_hdr, int ws_handle);

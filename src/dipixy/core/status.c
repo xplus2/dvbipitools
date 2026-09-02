@@ -200,6 +200,9 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   jbuf_key(&j, "max_clients");
   jbuf_fmt(&j, "%d", cfg->max_clients);
   jbuf_str(&j, ",");
+  jbuf_key(&j, "max_channels");
+  jbuf_fmt(&j, "%d", cfg->max_channels);
+  jbuf_str(&j, ",");
   jbuf_key(&j, "capture_ring_kib");
   jbuf_fmt(&j, "%u", cfg->capture_ring_kib);
   jbuf_str(&j, "},");

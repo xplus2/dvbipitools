@@ -12,7 +12,7 @@
    if_none_match: raw If-None-Match header value or NULL, checked against init.mp4/segments only.
    origin_hdr: raw Origin request header value or NULL, drives Access-Control-Allow-Origin.
    out_bytes: response byte count, NULL ok. 1 handled, 0 no HLS filename */
-int hls_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container,
+int hls_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container,
               const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes);
 
 /* filename is bare: "index_ll.m3u8" or "segNNNNN.PP.ts". same conn_queue()/
@@ -20,7 +20,7 @@ int hls_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
 int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes);
 
 /* same lookup as hls_serve() */
-int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out);
+int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out);
 
 /* same lookup as hls_serve_ll() */
 int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out);

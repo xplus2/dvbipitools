@@ -153,6 +153,9 @@ static void print_help(void) {
       "  -j, --workers <spec>        -1/-2/-3: that many x cpu cores,\n"
       "                              or <N>: an absolute thread count        [-1]\n"
       "  -c, --max-clients <n>       cap on concurrent streams               [256]\n"
+      "      --max-channels <n>      cap on concurrent\n"
+      "                              (source,filter,pmt,container)           [32]\n"
+      "      --idle-timeout <s>      close a conn idle this long, 0 = off    [0]\n"
       "      --capture-ring-size <n> per-source ingress ring buffer, KiB     [4096]\n"
       "  -i, --input <source>        add an input, repeatable, by form:\n"
       "                              -                      stdin, /stdin/<fmt>\n"
@@ -232,6 +235,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"tls-key", required_argument, 0, 1002},
       {"workers", required_argument, 0, 'j'},
       {"max-clients", required_argument, 0, 'c'},
+      {"max-channels", required_argument, 0, 1051},
+      {"idle-timeout", required_argument, 0, 1052},
       {"capture-ring-size", required_argument, 0, 1048},
       {"sds-timeout", required_argument, 0, 1044},
       {"sds-refresh-interval", required_argument, 0, 1045},
@@ -289,6 +294,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   listen_parse("all:9443", &cfg->listen_tls);
   cfg->workers_spec = -1;
   cfg->max_clients = 256;
+  cfg->max_channels = 32;
   cfg->capture_ring_kib = 4096;
   cfg->sds_timeout_s = 3.0;
   cfg->sds_refresh_interval_s = 30.0;
@@ -343,6 +349,28 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->max_clients = (int)v;
+        break;
+      }
+      case 1051: {
+        char *end;
+        long v = strtol(optarg, &end, 10);
+        if (*end != '\0' || v < 1 || v > 1024) {
+          argerr("invalid --max-channels: %s (1..1024)", optarg);
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        cfg->max_channels = (int)v;
+        break;
+      }
+      case 1052: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0' || v > 86400UL) {
+          argerr("invalid --idle-timeout: %s (seconds, 0..86400, 0 = off)", optarg);
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        cfg->idle_timeout_s = (unsigned)v;
         break;
       }
       case 1048: {

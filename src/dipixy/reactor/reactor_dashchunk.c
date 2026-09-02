@@ -39,7 +39,7 @@ void reactor_dashchunk_readable(int epfd, conn_t *c) {
     ssize_t n = tls_net_recv(c->fd, buf, sizeof buf);
     if (n > 0) continue;
     if (n == 0) {
-      c->read_done = 1;
+      atomic_store_explicit(&c->read_done, 1, memory_order_relaxed);
       conn_epoll_mod(c, epfd, c->want_write);
       return; /* half close: no disconn */
     }

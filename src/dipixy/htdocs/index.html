@@ -75,11 +75,11 @@ main{flex:1;padding:16px;overflow:auto}
 <option id="fmt-ts" value="ts">TS</option>
 <option id="fmt-spts" value="spts">SPTS</option>
 <option id="fmt-rawaudio" value="rawaudio">rawaudio</option>
-<option id="fmt-hls" value="hls">HLS</option>
-<option id="fmt-hls-fmp4" value="hls-fmp4">HLS-fMP4</option>
-<option id="fmt-llhls" value="llhls">LL-HLS</option>
+<option id="fmt-hls" value="hls">HLS (TS)</option>
+<option id="fmt-hls-fmp4" value="hls-fmp4">HLS (fMP4)</option>
+<option id="fmt-llhls" value="llhls">Low-Latency HLS</option>
 <option id="fmt-dash" value="dash">MPEG DASH</option>
-<option id="fmt-lldash" value="lldash">LL-DASH</option>
+<option id="fmt-lldash" value="lldash">Low-Latency DASH</option>
 </select>
 </div>
 <div class="field" id="filterField">
@@ -145,7 +145,7 @@ function loadStat() {
       ['Mem RSS', d.memory.rss_bytes + ' B = ' + (d.memory.rss_bytes / 1048576).toFixed(2) + ' MB'],
       ['Bitrate In', d.bitrate.in_mbps + ' mbps'],
       ['Bitrate Out', d.bitrate.out_mbps + ' mbps'],
-      ['Capacity', 'max-clients ' + d.server.max_clients + ', capture-ring ' + d.server.capture_ring_kib + ' KiB'],
+      ['Capacity', 'max-clients ' + d.server.max_clients + ', max-channels ' + d.server.max_channels + ', capture-ring ' + d.server.capture_ring_kib + ' KiB'],
       ['Segments', d.segment.size_s + 's x ' + d.segment.count + ' (hls-part ' + d.segment.hls_part_size_s + 's, dash-part ' + d.segment.dash_part_size_s + 's, pool ' + d.segment.hls_seg_pool + ')'],
       ['SD&S', 'timeout ' + d.sds.timeout_s + 's, refresh ' + d.sds.refresh_interval_s + 's, fcc ' + (d.flags.no_fcc ? 'off' : 'on') + ', ret ' + (d.flags.no_ret ? 'off' : 'on')],
       ['Disabled', Object.keys(d.flags).filter(function (k) { return k.indexOf('no_') === 0 && d.flags[k]; }).map(function (k) { return k.slice(3).replace(/_/g, '-'); }).join(', ') || 'none'],

@@ -43,7 +43,7 @@ static const unsigned char *maybe_rewrite_pmt(hls_seg_ctx_t *s, const unsigned c
   const unsigned char *sec;
   unsigned drop_pids[PID_FILTER_MAX];
   size_t sl, rl;
-  if (s->container != HLS_CONTAINER_TS || s->filter.count == 0 || !psi_have_pmt(s->psi) || pid != psi_pmt_pid(s->psi))
+  if (s->container != SEG_CONTAINER_TS || s->filter.count == 0 || !psi_have_pmt(s->psi) || pid != psi_pmt_pid(s->psi))
     return pkt;
   sec = psi_pmt_section(s->psi, &sl);
   if (!sec) return pkt;
@@ -74,7 +74,7 @@ static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *
         break;
       }
     }
-    if (s->video_pid_known && s->container == HLS_CONTAINER_FMP4) {
+    if (s->video_pid_known && s->container == SEG_CONTAINER_FMP4) {
       for (i = 0; i < n; i++) {
         if (es[i].cls == PID_AUDIO && audio_codec_supported(es[i].codec)) {
           s->audio_pid = es[i].pid;

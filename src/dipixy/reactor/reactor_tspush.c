@@ -49,7 +49,7 @@ void reactor_tspush_readable(int epfd, conn_t *c) {
     if (n > 0)
       continue; /* drain unexpected data */
     if (n == 0) {
-      c->read_done = 1;
+      atomic_store_explicit(&c->read_done, 1, memory_order_relaxed);
       conn_epoll_mod(c, epfd, c->want_write); /* epoll reports FIN forever: stop polling */
       return; /* half-close: not a disconnect */
     }

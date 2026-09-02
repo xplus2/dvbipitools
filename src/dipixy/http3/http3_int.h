@@ -38,8 +38,6 @@
 #define H3_IDLE_NS (30 * 1000000000ULL)
 #define H3_PATH_MAX 8192
 #define H3_MAX_CONNS_PER_THREAD 256
-#define H3_HASH_CAP (H3_MAX_CONNS_PER_THREAD * 4u) /* 2 keys/conn (scid+odcid), ~50% load factor */
-_Static_assert((H3_HASH_CAP & (H3_HASH_CAP - 1)) == 0, "H3_HASH_CAP must be a power of two");
 
 typedef struct h3_req {
   int active;
@@ -96,9 +94,9 @@ typedef struct h3_conn {
 
 /* t_h3_active[]: dense, no holes, iterate for "all connections" (h3_tick,
    idle sweeps, ts_push_h3_flush). t_h3_hash[]: open-addressing lookup by raw CID bytes, keyed SCID+ODCID. */
-extern _Thread_local h3_conn_t *t_h3_active[H3_MAX_CONNS_PER_THREAD];
+extern _Thread_local h3_conn_t **t_h3_active;
 extern _Thread_local int t_h3_active_cnt;
-extern _Thread_local h3_conn_t *t_h3_hash[H3_HASH_CAP];
+extern _Thread_local h3_conn_t **t_h3_hash;
 extern _Thread_local int t_h3_init;
 
 static inline ngtcp2_tstamp h3_ts(void) {
@@ -180,7 +178,7 @@ void h3_llhls_on_conn_close(h3_conn_t *c);
 
 /* from http3_hls_cold.c */
 int h3_hls_cold_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid,
-                          const char *filename, hls_cold_kind_t kind, hls_container_t container, int want_ll, int is_head,
+                          const char *filename, hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head,
                           const char *origin_hdr, int timeout_ms, int ws_handle);
 void h3_hls_cold_flush_waiters(void);
 void h3_hls_cold_on_stream_close(h3_conn_t *c, int64_t stream_id);

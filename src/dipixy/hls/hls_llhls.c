@@ -110,7 +110,7 @@ int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsi
   if (!strcmp(filename, "index_ll.m3u8")) {
     char m3u8[16384];
     ll_playlist_snap_t snap;
-    s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_TS);
+    s = find_store_locked(ctx, filter, pmt_pid, SEG_CONTAINER_TS);
     if (!s || s->part_target <= 0.0 || (s->count == 0 && s->live_parts.count == 0)) {
       if (s) pthread_mutex_unlock(store_lock(s));
       queue_status(c, "404 Not Found", keep_alive);
@@ -130,7 +130,7 @@ int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsi
   if (!parse_part_filename(filename, &req_seq, &req_part))
     return 0;
 
-  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_TS);
+  s = find_store_locked(ctx, filter, pmt_pid, SEG_CONTAINER_TS);
   if (s && s->live_msn == req_seq && req_part < s->live_parts.count) {
     body = s->live_data + s->live_parts.offset[req_part];
     body_len = s->live_parts.size[req_part];

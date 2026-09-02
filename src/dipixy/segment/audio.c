@@ -9,7 +9,7 @@
 void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigned char *data, size_t len) {
   size_t pos = 0;
 
-  if (s->container != HLS_CONTAINER_FMP4)
+  if (s->container != SEG_CONTAINER_FMP4)
     return;
   if (has_pts && s->audio_ready) {
     int64_t pts_ms = pts_unwrap(&s->audio_ptswrap, pts);

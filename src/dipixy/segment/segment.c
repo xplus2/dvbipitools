@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "priv.h"
+#include "../version.h"
 
 #include "lib/helper/ioutil.h"
 
@@ -9,10 +10,20 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define HLS_SEG_MAX_STORES 32
-
-static _Atomic(hls_seg_ctx_t *) g_stores[HLS_SEG_MAX_STORES];
+static _Atomic(hls_seg_ctx_t *) *g_stores;
+static int g_stores_n;
 static pthread_mutex_t g_mtx = PTHREAD_MUTEX_INITIALIZER;
+
+void hls_seg_init(int max_channels) {
+  int n = max_channels > 0 ? max_channels : 1;
+  if (n > HLS_MAX_STORES) n = HLS_MAX_STORES;
+  g_stores = calloc((size_t)n, sizeof *g_stores);
+  if (!g_stores) {
+    log_line(TOOL_NAME ": out of memory sizing segmenter table (%d entries)", n);
+    return;
+  }
+  g_stores_n = n;
+}
 
 static int seg_try_pin(hls_seg_ctx_t *s) {
   int cur = atomic_load_explicit(&s->refcount, memory_order_relaxed);
@@ -28,7 +39,7 @@ static void seg_unpin(hls_seg_ctx_t *s) {
   atomic_fetch_sub_explicit(&s->refcount, 1, memory_order_release);
 }
 
-static int seg_key_equal(const hls_seg_ctx_t *s, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container) {
+static int seg_key_equal(const hls_seg_ctx_t *s, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
   return s->cap_ctx == ctx && s->pmt_pid == pmt_pid && s->container == container && pid_filter_equal(&s->filter, filter);
 }
 
@@ -46,8 +57,8 @@ int buf_reserve(unsigned char **buf, size_t *cap, size_t need) {
 #define HLS_SEG_BUF_ASSUMED_BPS (20 * 1000 * 1000 / 8)
 
 /* caller must hold g_mtx. container in key: ts, fmp4 segmenters coexist per channel */
-static hls_seg_ctx_t *find_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container) {
-  for (int i = 0; i < HLS_SEG_MAX_STORES; i++) {
+static hls_seg_ctx_t *find_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
+  for (int i = 0; i < g_stores_n; i++) {
     hls_seg_ctx_t *s = atomic_load_explicit(&g_stores[i], memory_order_relaxed);
     if (s && seg_key_equal(s, ctx, filter, pmt_pid, container)) return s;
   }
@@ -64,12 +75,12 @@ static int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_o
   return 1;
 }
 
-int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double seg_target, int max_segs, hls_container_t container, double part_target) {
+int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double seg_target, int max_segs, seg_container_t container, double part_target) {
   hls_seg_ctx_t *s;
   int i;
   int llhls_newly_on = 0;
 
-  for (i = 0; i < HLS_SEG_MAX_STORES; i++) {
+  for (i = 0; i < g_stores_n; i++) {
     s = atomic_load_explicit(&g_stores[i], memory_order_acquire);
     if (s && seg_key_equal(s, ctx, filter, pmt_pid, container) && touch_pinned(s, part_target, &llhls_newly_on)) {
       capture_close(ctx); /* redundant ref: existing segmenter already holds its own */
@@ -119,8 +130,8 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
     return 0;
   }
 
-  for (i = 0; i < HLS_SEG_MAX_STORES; i++) if (!atomic_load_explicit(&g_stores[i], memory_order_relaxed)) break;
-  if (i == HLS_SEG_MAX_STORES) {
+  for (i = 0; i < g_stores_n; i++) if (!atomic_load_explicit(&g_stores[i], memory_order_relaxed)) break;
+  if (i == g_stores_n) {
     psi_free(s->psi);
     pes_free(s->pes);
     free(s);
@@ -161,15 +172,15 @@ static void unlink_from_ctx_chain(hls_seg_ctx_t *victim) {
 }
 
 void hls_seg_sweep_idle(void) {
-  hls_seg_ctx_t *victims[HLS_SEG_MAX_STORES];
+  hls_seg_ctx_t *victims[HLS_MAX_STORES];
   int nvictims = 0;
   int i;
   int64_t now = now_ms();
 
   pthread_mutex_lock(&g_mtx);
-  for (i = 0; i < HLS_SEG_MAX_STORES; i++) {
+  for (i = 0; i < g_stores_n; i++) {
     hls_seg_ctx_t *s = atomic_load_explicit(&g_stores[i], memory_order_relaxed);
-    if (s && now - atomic_load_explicit(&s->last_request_ms, memory_order_relaxed) > (int64_t)(s->seg_target * 6000.0)) {
+    if (s && now - atomic_load_explicit(&s->last_request_ms, memory_order_relaxed) > (int64_t)(s->seg_target * (double)s->max_segs * 1500.0)) {
       victims[nvictims++] = s;
       atomic_store_explicit(&g_stores[i], NULL, memory_order_release);
       unlink_from_ctx_chain(s);

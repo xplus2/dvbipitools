@@ -33,6 +33,8 @@ typedef struct {
   const char *tls_key;      /* --tls-key */
   int workers_spec;         /* -j: -1/-2/-3 relative to core count, >=1 absolute */
   int max_clients;          /* -c/--max-clients: cap on concurrent streams [256] */
+  int max_channels;
+  unsigned idle_timeout_s;
   unsigned capture_ring_kib; /* --capture-ring-size: per-source ingress ring, KiB [4096] */
   double sds_timeout_s;      /* --sds-timeout: sds:// discovery wait, seconds [3] */
   double sds_refresh_interval_s; /* --sds-refresh-interval: sds:// re-poll period, seconds [30] */

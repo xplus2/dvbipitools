@@ -219,9 +219,10 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto,
     s->rawaudio = rawaudio_demux;
     {
       _Atomic int *head = capture_ts_push_head_ptr(ctx);
-      int old_head = atomic_load_explicit(head, memory_order_acquire);
+      int old_head = atomic_load_explicit(head, memory_order_relaxed);
       atomic_store_explicit(&s->ctx_next, old_head, memory_order_relaxed);
-      atomic_store_explicit(head, i, memory_order_release);
+      while (!atomic_compare_exchange_weak_explicit(head, &old_head, i, memory_order_release, memory_order_relaxed))
+        atomic_store_explicit(&s->ctx_next, old_head, memory_order_relaxed);
     }
     return i;
   }

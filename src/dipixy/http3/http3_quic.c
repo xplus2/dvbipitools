@@ -18,9 +18,20 @@
 
 static SSL_CTX *g_h3_ssl_ctx = NULL;
 
-_Thread_local h3_conn_t *t_h3_active[H3_MAX_CONNS_PER_THREAD];
+static int g_h3_max_conns = H3_MAX_CONNS_PER_THREAD;
+static uint32_t g_h3_hash_cap = H3_MAX_CONNS_PER_THREAD * 4u;
+
+void h3_set_max_conns_per_thread(int n) {
+  if (n < 1) n = 1;
+  if (n > H3_MAX_CONNS_PER_THREAD) n = H3_MAX_CONNS_PER_THREAD;
+  g_h3_max_conns = n;
+  g_h3_hash_cap = (uint32_t)next_pow2((size_t)n * 4);
+  if (g_h3_hash_cap < 4) g_h3_hash_cap = 4;
+}
+
+_Thread_local h3_conn_t **t_h3_active = NULL;
 _Thread_local int t_h3_active_cnt = 0;
-_Thread_local h3_conn_t *t_h3_hash[H3_HASH_CAP];
+_Thread_local h3_conn_t **t_h3_hash = NULL;
 _Thread_local int t_h3_init = 0;
 _Thread_local int t_h3_udp4 = -1;
 _Thread_local int t_h3_udp6 = -1;
@@ -28,6 +39,7 @@ _Thread_local int t_h3_udp6 = -1;
 static _Thread_local h3_conn_t *t_h3_pool = NULL;
 static _Thread_local int *t_h3_pool_free = NULL;
 static _Thread_local int t_h3_pool_free_n = 0;
+static _Thread_local uint32_t t_h3_hash_cap = 0;
 
 /* deleted marker: unlike NULL, doesn't stop a probe */
 #define H3_HASH_TOMB ((h3_conn_t *)(uintptr_t)1)
@@ -35,18 +47,25 @@ static _Thread_local int t_h3_pool_free_n = 0;
 int h3_tables_alloc(void) {
   if (t_h3_init)
     return 1;
-  t_h3_pool = calloc(H3_MAX_CONNS_PER_THREAD, sizeof *t_h3_pool);
-  t_h3_pool_free = malloc(sizeof *t_h3_pool_free * H3_MAX_CONNS_PER_THREAD);
-  if (!t_h3_pool || !t_h3_pool_free) {
+  t_h3_pool = calloc((size_t)g_h3_max_conns, sizeof *t_h3_pool);
+  t_h3_pool_free = malloc(sizeof *t_h3_pool_free * (size_t)g_h3_max_conns);
+  t_h3_active = malloc(sizeof *t_h3_active * (size_t)g_h3_max_conns);
+  t_h3_hash = calloc((size_t)g_h3_hash_cap, sizeof *t_h3_hash);
+  if (!t_h3_pool || !t_h3_pool_free || !t_h3_active || !t_h3_hash) {
     free(t_h3_pool);
     free(t_h3_pool_free);
+    free(t_h3_active);
+    free(t_h3_hash);
     t_h3_pool = NULL;
     t_h3_pool_free = NULL;
+    t_h3_active = NULL;
+    t_h3_hash = NULL;
     return 0;
   }
-  for (int i = 0; i < H3_MAX_CONNS_PER_THREAD; i++)
+  for (int i = 0; i < g_h3_max_conns; i++)
     t_h3_pool_free[i] = i;
-  t_h3_pool_free_n = H3_MAX_CONNS_PER_THREAD;
+  t_h3_pool_free_n = g_h3_max_conns;
+  t_h3_hash_cap = g_h3_hash_cap;
   t_h3_init = 1;
   return 1;
 }
@@ -59,8 +78,8 @@ static uint32_t cid_hash(const uint8_t *data, size_t len) {
 }
 
 static void h3_hash_insert(const uint8_t *key, size_t keylen, h3_conn_t *c) {
-  uint32_t i = cid_hash(key, keylen) & (H3_HASH_CAP - 1);
-  for (uint32_t n = 0; n < H3_HASH_CAP; n++, i = (i + 1) & (H3_HASH_CAP - 1)) {
+  uint32_t i = cid_hash(key, keylen) & (t_h3_hash_cap - 1);
+  for (uint32_t n = 0; n < t_h3_hash_cap; n++, i = (i + 1) & (t_h3_hash_cap - 1)) {
     if (t_h3_hash[i] == NULL || t_h3_hash[i] == H3_HASH_TOMB) {
       t_h3_hash[i] = c;
       return;
@@ -70,8 +89,8 @@ static void h3_hash_insert(const uint8_t *key, size_t keylen, h3_conn_t *c) {
 
 /* tombstones only (key,c)'s own slot, other conns' probe chains intact */
 static void h3_hash_delete(const uint8_t *key, size_t keylen, const h3_conn_t *c) {
-  uint32_t i = cid_hash(key, keylen) & (H3_HASH_CAP - 1);
-  for (uint32_t n = 0; n < H3_HASH_CAP; n++, i = (i + 1) & (H3_HASH_CAP - 1)) {
+  uint32_t i = cid_hash(key, keylen) & (t_h3_hash_cap - 1);
+  for (uint32_t n = 0; n < t_h3_hash_cap; n++, i = (i + 1) & (t_h3_hash_cap - 1)) {
     if (t_h3_hash[i] == NULL)
       return;
     if (t_h3_hash[i] == c) {
@@ -204,7 +223,7 @@ h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *
 
   if (!h3_tables_alloc())
     return NULL;
-  if (t_h3_active_cnt >= H3_MAX_CONNS_PER_THREAD)
+  if (t_h3_active_cnt >= g_h3_max_conns)
     return NULL;
 
   if (t_h3_pool_free_n == 0)
@@ -358,8 +377,8 @@ h3_conn_t *find_conn(const uint8_t *pkt, size_t pktlen) {
   if (ngtcp2_pkt_decode_version_cid(&vc, pkt, pktlen, H3_SCID_LEN) != 0)
     return NULL;
 
-  uint32_t i = cid_hash(vc.dcid, vc.dcidlen) & (H3_HASH_CAP - 1);
-  for (uint32_t n = 0; n < H3_HASH_CAP; n++, i = (i + 1) & (H3_HASH_CAP - 1)) {
+  uint32_t i = cid_hash(vc.dcid, vc.dcidlen) & (t_h3_hash_cap - 1);
+  for (uint32_t n = 0; n < t_h3_hash_cap; n++, i = (i + 1) & (t_h3_hash_cap - 1)) {
     h3_conn_t *c = t_h3_hash[i];
     if (!c)
       return NULL;

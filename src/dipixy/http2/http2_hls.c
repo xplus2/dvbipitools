@@ -185,7 +185,7 @@ typedef struct {
   unsigned pmt_pid;
   char filename[32];
   hls_cold_kind_t kind;
-  hls_container_t container; /* HLS_COLD_HLS only, hls vs hls-fmp4 */
+  seg_container_t container; /* HLS_COLD_HLS only, hls vs hls-fmp4 */
   int want_ll;                /* HLS_COLD_DASH only, lldash vs dash */
   int is_head;
   char origin[128];
@@ -199,7 +199,7 @@ static _Thread_local int t_h2_hls_cold_waiters_active;
 
 /* 1 parked: manifest/playlist requested before capture's first segment/part.
    0 table full: caller serves now */
-int h2_hls_cold_try_park(h2_conn_t *conn, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, hls_cold_kind_t kind, hls_container_t container,
+int h2_hls_cold_try_park(h2_conn_t *conn, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, hls_cold_kind_t kind, seg_container_t container,
                          int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle) {
   for (int i = 0; i < H2_HLS_COLD_WAITERS_MAX; i++) {
     h2_hls_cold_waiter_t *w = &t_h2_hls_cold_waiters[i];
@@ -256,7 +256,7 @@ void h2_hls_cold_flush_waiters(void) {
     if (w->kind == HLS_COLD_LLHLS)
       handled = hls_render_ll(w->cap_ctx, &w->filter, w->pmt_pid, w->filename, w->is_head, NULL, &resp);
     else if (w->kind == HLS_COLD_DASH)
-      handled = hls_render_dash(w->cap_ctx, &w->filter, w->pmt_pid, w->want_ll, reactor_cfg()->dash_utc_url, w->is_head, &resp);
+      handled = dash_render(w->cap_ctx, &w->filter, w->pmt_pid, w->want_ll, reactor_cfg()->dash_utc_url, w->is_head, &resp);
     else
       handled = hls_render(w->cap_ctx, &w->filter, w->pmt_pid, w->container, w->filename, w->is_head, NULL, &resp);
     if (!handled) {

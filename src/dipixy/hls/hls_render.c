@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, hls_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
+int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
   hls_store_t *s;
   char m3u8[4096];
   char *mp;
@@ -31,17 +31,17 @@ int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid,
       resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
       return 1;
     }
-    seg_ext = s->container == HLS_CONTAINER_FMP4 ? "m4s" : "ts";
+    seg_ext = s->container == SEG_CONTAINER_FMP4 ? "m4s" : "ts";
     td = hls_target_duration(s);
     mp = m3u8;
     mp = WRITE_LIT(mp, "#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n#EXT-X-VERSION:");
-    mp = write_u32(mp, s->container == HLS_CONTAINER_FMP4 || s->video_codec == 1 ? 7u : 3u, 0);
+    mp = write_u32(mp, s->container == SEG_CONTAINER_FMP4 || s->video_codec == 1 ? 7u : 3u, 0);
     mp = WRITE_LIT(mp, "\n#EXT-X-TARGETDURATION:");
     mp = write_u32(mp, (uint32_t)td, 0);
     mp = WRITE_LIT(mp, "\n#EXT-X-MEDIA-SEQUENCE:");
     mp = write_u32(mp, s->oldest_seq, 0);
     *mp++ = '\n';
-    if (s->container == HLS_CONTAINER_FMP4) mp = WRITE_LIT(mp, "#EXT-X-MAP:URI=\"init.mp4\"\n");
+    if (s->container == SEG_CONTAINER_FMP4) mp = WRITE_LIT(mp, "#EXT-X-MAP:URI=\"init.mp4\"\n");
     for (int i = 0; i < s->count; i++) {
       const hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
       if ((size_t)(mp - m3u8) + 64 > sizeof m3u8) break;
@@ -118,7 +118,7 @@ int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   if (!strcmp(filename, "index_ll.m3u8")) {
     char m3u8[16384];
     ll_playlist_snap_t snap;
-    s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_TS);
+    s = find_store_locked(ctx, filter, pmt_pid, SEG_CONTAINER_TS);
     if (!s || s->part_target <= 0.0 || (s->count == 0 && s->live_parts.count == 0)) {
       if (s)
         pthread_mutex_unlock(store_lock(s));
@@ -136,7 +136,7 @@ int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
 
   if (!parse_part_filename(filename, &req_seq, &req_part)) return 0;
 
-  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_TS);
+  s = find_store_locked(ctx, filter, pmt_pid, SEG_CONTAINER_TS);
   if (s && s->live_msn == req_seq && req_part < s->live_parts.count) {
     body = s->live_data + s->live_parts.offset[req_part];
     body_len = s->live_parts.size[req_part];

@@ -192,14 +192,14 @@ static size_t build_mpd(const hls_store_t *s, char *mpd, size_t cap, int want_ll
   return (size_t)(mp - mpd);
 }
 
-int hls_serve_dash(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int want_ll, const char *utc_url, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
+int dash_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int want_ll, const char *utc_url, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
   const hls_store_t *s;
   char mpd[8192];
   char cors_hdr[192];
   size_t mpd_len;
 
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
-  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_FMP4);
+  s = find_store_locked(ctx, filter, pmt_pid, SEG_CONTAINER_FMP4);
   if (!s || s->count == 0) {
     if (s) pthread_mutex_unlock(store_lock(s));
     queue_status(c, "404 Not Found", keep_alive);
@@ -235,7 +235,7 @@ static const hls_seg_t *find_seg_by_time(const hls_store_t *s, uint64_t t_ms) {
   return NULL;
 }
 
-int hls_serve_dash_seg(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
+int dash_serve_seg(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
   const hls_store_t *s;
   const hls_seg_t *seg;
   uint64_t req_t;
@@ -244,7 +244,7 @@ int hls_serve_dash_seg(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter
   if (!parse_dash_seg_filename(filename, &req_t)) return 0;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
 
-  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_FMP4);
+  s = find_store_locked(ctx, filter, pmt_pid, SEG_CONTAINER_FMP4);
   seg = s ? find_seg_by_time(s, req_t) : NULL;
   if (!seg) {
     if (s) pthread_mutex_unlock(store_lock(s));
@@ -265,12 +265,12 @@ int hls_serve_dash_seg(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter
   return 1;
 }
 
-int hls_render_dash(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int want_ll, const char *utc_url, int is_head, hls_resp_t *out) {
+int dash_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int want_ll, const char *utc_url, int is_head, hls_resp_t *out) {
   const hls_store_t *s;
   char mpd[8192];
   size_t mpd_len;
   memset(out, 0, sizeof *out);
-  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_FMP4);
+  s = find_store_locked(ctx, filter, pmt_pid, SEG_CONTAINER_FMP4);
   if (!s || s->count == 0) {
     if (s) pthread_mutex_unlock(store_lock(s));
     resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
@@ -282,14 +282,14 @@ int hls_render_dash(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   return 1;
 }
 
-int hls_render_dash_seg(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, hls_resp_t *out) {
+int dash_render_seg(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, hls_resp_t *out) {
   const hls_store_t *s;
   const hls_seg_t *seg;
   uint64_t req_t;
   char etag[48];
   memset(out, 0, sizeof *out);
   if (!parse_dash_seg_filename(filename, &req_t)) return 0;
-  s = find_store_locked(ctx, filter, pmt_pid, HLS_CONTAINER_FMP4);
+  s = find_store_locked(ctx, filter, pmt_pid, SEG_CONTAINER_FMP4);
   seg = s ? find_seg_by_time(s, req_t) : NULL;
   if (!seg) {
     if (s) pthread_mutex_unlock(store_lock(s));

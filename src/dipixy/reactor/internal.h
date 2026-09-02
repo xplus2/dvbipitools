@@ -194,7 +194,7 @@ static inline void llhls_waiter_pool_flush(llhls_waiter_t *slots, int cap, int *
   for (int i = 0; i < cap; i++) {
     llhls_waiter_t *w = &slots[i];
     if (!w->active) continue;
-    if (now < w->deadline_ms && !hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, HLS_CONTAINER_TS, w->want_seg, w->want_part)) continue;
+    if (now < w->deadline_ms && !hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, SEG_CONTAINER_TS, w->want_seg, w->want_part)) continue;
     w->active = 0;
     (*active_count)--;
     finish(w);
