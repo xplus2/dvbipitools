@@ -70,7 +70,7 @@ static void addr_decr1(unsigned char *a, int alen) {
 
 /* end-start, capped. -1 if end<start or range exceeds cap */
 static int addr_diff_capped(const unsigned char *start, const unsigned char *end, int alen, unsigned cap, unsigned *out) {
-  unsigned char diff[16];
+  unsigned char diff[16] = {0};
   int borrow = 0;
   for (int i = alen - 1; i >= 0; i--) {
     int d = (int)end[i] - (int)start[i] - borrow;
