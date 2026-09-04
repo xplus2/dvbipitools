@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "lib/demux/psi/psi.h"
 #include "ts/capture/capture.h"
 #include "ts/pidfilter.h"
 #include "reactor/conn.h"
@@ -38,8 +39,9 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
 /* data copied into a malloc'd buffer. 0 ok, -1 if store not open */
 int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const uint8_t *data, size_t size, double duration);
 
-/* fmp4 only, served at "init.mp4". copies data. 0 ok, -1 if store not open */
-int hls_set_init_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const uint8_t *data, size_t size);
+/* fmp4 only, served at "init.mp4". copies data. video_codec: drives HLS VERSION + DASH codecs=.
+   0 ok, -1 if store not open */
+int hls_set_init_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, codec_t video_codec, const uint8_t *data, size_t size);
 
 #define HLS_MAX_PARTS 32
 

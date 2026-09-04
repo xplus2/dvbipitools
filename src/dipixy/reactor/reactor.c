@@ -20,6 +20,7 @@
 #endif
 
 #include <pthread.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
 #include <sys/resource.h>
@@ -96,9 +97,22 @@ static void *on_listening_thread(void *arg) {
   return NULL;
 }
 
+static void reactor_log_status_url(const char *scheme, const listen_spec_t *ls) {
+  char host[80];
+  if
+    (ls->scope == LISTEN_ANY) snprintf(host, sizeof host, "0.0.0.0");
+  else if
+    (ls->scope == LISTEN_V6) snprintf(host, sizeof host, "[%s]", ls->addr);
+  else
+    snprintf(host, sizeof host, "%s", ls->addr);
+
+  log_line_ansi(TOOL_NAME ": status \e[0;34m%s://%s:%u/\e[0m", scheme, host, ls->port);
+}
+
 void reactor_notify_listening(void) {
-  log_line(TOOL_NAME ": listening on %s:%u%s", g_cfg->listen.scope == LISTEN_ANY ? "all" : g_cfg->listen.addr, g_cfg->listen.port,
-           tls_is_running() ? " (+ tls)" : "");
+  log_line(TOOL_NAME ": listening on %s:%u%s", g_cfg->listen.scope == LISTEN_ANY ? "all" : g_cfg->listen.addr, g_cfg->listen.port, tls_is_running() ? " (+ tls)" : "");
+  if (!g_cfg->no_status) reactor_log_status_url("http", &g_cfg->listen);
+  if (!g_cfg->no_status && tls_is_running()) reactor_log_status_url("https", &g_cfg->listen_tls);
   if (g_on_listening) {
     if (pthread_create(&g_on_listening_thread, NULL, on_listening_thread, (void *)g_cfg) == 0)
       g_on_listening_thread_started = 1;

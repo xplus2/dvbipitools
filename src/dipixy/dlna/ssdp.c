@@ -276,7 +276,7 @@ static void *ssdp_thread_fn(void *arg) {
 
   next_announce = 0.0;
   send_notify_all(a->cfg, a->uuid, 1);
-  log_line(TOOL_NAME ": ssdp: announcing uuid:%s at http://%s/dlna/desc.xml", a->uuid, a->cfg->dlna_host);
+  log_line_ansi(TOOL_NAME ": ssdp: announcing uuid:%s at \e[0;34mhttp://%s/dlna/desc.xml\e[0m", a->uuid, a->cfg->dlna_host);
 
   while (g_running) {
     char buf[SSDP_RECV_BUF];

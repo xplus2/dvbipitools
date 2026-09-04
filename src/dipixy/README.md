@@ -97,7 +97,7 @@ it was given on the command line, so the first of these three kinds is list 1, t
 `-n <name>` right after an `-i` gives that input a name, usable in URLs instead of its
 `/list/<n>/` index or its bare `/rist/`/`/stdin/` route (see URL Paths below). Rules: no `/`, no
 leading `.`, not one of `rtp`, `udp`, `srt`, `rist`, `stdin`, `list`, `metrics`, `ui`, `api`,
-`dlna`, and unique across every named `-i`.
+`dlna`, `export`, and unique across every named `-i`.
 
 ## URL Paths
 
@@ -159,15 +159,38 @@ You can override this by selecting a specific PMT:`?pmt=<pid>` (decimal or `0x`-
 that is not dropped by `?filter=` and forwards its PES payload as-is: raw data.
 
 
+## Playlist export
+
+The "List Export" page (or `/export/<fmt>/<type>` directly) lists every configured channel as
+one playlist, for VLC/Kodi/tvheadend/... to subscribe to instead of hand-feeding one URL per channel.
+
+```
+/export/<fmt>/<type>
+```
+
+`<fmt>` is any of the entry formats above (`ts`, `spts`, `rawaudio`, `hls`, `hls-fmp4`, `llhls`,
+`dash`, `lldash`); `<type>` is `m3u` or `xspf`.
+
+Optional query params:
+* `?host=<hostname_or_ip>[:port]`: base host for generated URLs. Default: the request's own
+  `Host:` header, port from `--listen`/`--listen-tls` depending on HTTP/HTTPS.
+* `?input=1,3,4`: include only these `-i` indices. Default: all.
+* `?filter=<pids>`: forwarded onto generated URLs, if applicable.
+* `?keep_multicast`: a channel whose source is `rtp://`/`udp://` gets listed by its raw
+  multicast URI instead of a dipixy play-path.
+* `?plain`: force `Content-Type: text/plain`.
+
+A channel's `tvg-logo`/`<image>` (M3U/XSPF) carries through if the source playlist had one.
+
 ## Codecs
 
 `ts`/`spts` and plain `hls` (TS segments) are a straight TS remux: any video/audio codec passes through untouched.
-Segmenting still needs to locate keyframes, understood for MPEG-2 Video, H.264/AVC and HEVC/H.265.
+Segmenting still needs to locate keyframes, understood for MPEG-2 Video, H.264/AVC, H.265/HEVC, and H.266/VVC.
 Other video codecs won't cut cleanly on an IDR/I-frame.
 
 `hls-fmp4`, `llhls`, `dash` and `lldash` build actual ISOBMFF (fMP4) sample entries, so their codec support is narrower:
-* video: H.264/AVC, HEVC/H.265. MPEG-2 Video has no fMP4 sample entry and won't produce output.
-* audio: AAC (ADTS or LATM), AC-3, Enhanced AC-3 (E-AC-3), MPEG-1 Layer II (MP2).
+* video: H.264/AVC, H.265/HEVC, H.266/VVC. MPEG-2 Video has no fMP4 sample entry and won't produce output.
+* audio: AAC (ADTS or LATM), AC-3, Enhanced AC-3 (E-AC-3), MPEG-1 Layer II (MP2), Opus.
 
 `rawaudio` just forwards a program's lowest-numbered audio ES's PES payload as-is, codec-agnostic.
 

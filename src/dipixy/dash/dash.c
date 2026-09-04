@@ -34,23 +34,27 @@ static char *write_xml_escaped(char *dst, const char *s) {
 
 /* avc1.PPCCLL from AVCProfileIndication/profile_compatibility/AVCLevelIndication in init seg's avcC box.
    hvcC needs 12 fixed-layout fields, hvc1.1.6.L93.B0 (Main, Level 3.1) generic fallback */
-static void dash_codecs(const uint8_t *init, size_t initsz, int hevc, char *out, size_t outsz) {
-  if (!hevc) {
-    for (size_t i = 0; i + 8 <= initsz; i++) {
-      if (init[i] == 'a' && init[i + 1] == 'v' && init[i + 2] == 'c' && init[i + 3] == 'C') {
-        strbuf_t b;
-        hls_sb_init(&b, out, outsz);
-        hls_sb_add(&b, "avc1.");
-        hls_sb_add_hex2(&b, init[i + 5]);
-        hls_sb_add_hex2(&b, init[i + 6]);
-        hls_sb_add_hex2(&b, init[i + 7]);
-        return;
-      }
-    }
-    bufcpy(out, outsz, "avc1.640028");
+static void dash_codecs(const uint8_t *init, size_t initsz, codec_t vcodec, char *out, size_t outsz) {
+  if (vcodec == CODEC_HEVC) {
+    bufcpy(out, outsz, "hvc1.1.6.L93.B0");
     return;
   }
-  bufcpy(out, outsz, "hvc1.1.6.L93.B0");
+  if (vcodec == CODEC_VVC) {
+    bufcpy(out, outsz, "vvc1.1.L1.CQ");
+    return;
+  }
+  for (size_t i = 0; i + 8 <= initsz; i++) {
+    if (init[i] == 'a' && init[i + 1] == 'v' && init[i + 2] == 'c' && init[i + 3] == 'C') {
+      strbuf_t b;
+      hls_sb_init(&b, out, outsz);
+      hls_sb_add(&b, "avc1.");
+      hls_sb_add_hex2(&b, init[i + 5]);
+      hls_sb_add_hex2(&b, init[i + 6]);
+      hls_sb_add_hex2(&b, init[i + 7]);
+      return;
+    }
+  }
+  bufcpy(out, outsz, "avc1.640028");
 }
 
 /* if init has no audio track="". mp4a.40.<N>: N from the AAC ASC's top 5 bits, fixed offset into build_esds() layout */
@@ -63,6 +67,10 @@ static void dash_audio_codecs(const uint8_t *init, size_t initsz, char *out, siz
     }
     if (!memcmp(init + i, "ec-3", 4)) {
       bufcpy(out, outsz, "ec-3");
+      return;
+    }
+    if (!memcmp(init + i, "Opus", 4)) {
+      bufcpy(out, outsz, "opus");
       return;
     }
     if (!memcmp(init + i, "esds", 4) && i + 31 <= initsz) {
@@ -91,7 +99,7 @@ static size_t build_mpd(const hls_store_t *s, char *mpd, size_t cap, int want_ll
 
   iso8601_utc(s->opened_at, avail, sizeof avail);
   iso8601_utc(time(NULL), publish, sizeof publish);
-  dash_codecs(s->init_data, s->init_size, s->video_codec == 1, vcodec, sizeof vcodec);
+  dash_codecs(s->init_data, s->init_size, s->video_codec, vcodec, sizeof vcodec);
   dash_audio_codecs(s->init_data, s->init_size, acodec, sizeof acodec);
   if (acodec[0]) {
     size_t off = bufcpy(codecs, sizeof codecs, vcodec);

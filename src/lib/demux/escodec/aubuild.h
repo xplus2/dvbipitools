@@ -23,6 +23,14 @@
 #define HEVC_NAL_AUD 35
 #define HEVC_NAL_FILLER 38
 
+#define VVC_NAL_IRAP_FIRST 7 /* IDR_W_RADL */
+#define VVC_NAL_IRAP_LAST 9  /* CRA_NUT, excl. GDR_NUT(10) */
+#define VVC_NAL_VPS 14
+#define VVC_NAL_SPS 15
+#define VVC_NAL_PPS 16
+#define VVC_NAL_AUD 20
+#define VVC_NAL_FILLER 25 /* FD_NUT */
+
 /* doubles *remcap as needed. 0 ok, -1 realloc failed */
 int esc_rem_append(unsigned char **rem, size_t *remlen, size_t *remcap, const unsigned char *d, size_t n);
 
@@ -34,5 +42,6 @@ void esc_ps_store(unsigned char *dst, size_t *dlen, const unsigned char *s, size
 /* param sets to es, AUD/filler dropped, rest to *vbuf via esc_vbuf_add(). sets *key on IDR/IRAP */
 void esc_handle_h264_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, unsigned type, const unsigned char *p, size_t n, int *key);
 void esc_handle_hevc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, unsigned type, const unsigned char *p, size_t n, int *key);
+void esc_handle_vvc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, unsigned type, const unsigned char *p, size_t n, int *key);
 
 #endif

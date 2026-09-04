@@ -31,11 +31,13 @@ typedef enum {
   CODEC_MPEG2V,
   CODEC_H264,
   CODEC_HEVC,
+  CODEC_VVC,
   CODEC_MP2A,
   CODEC_AAC,
   CODEC_AAC_LATM,
   CODEC_AC3,
-  CODEC_EAC3
+  CODEC_EAC3,
+  CODEC_OPUS
 } codec_t;
 
 typedef struct {
@@ -77,15 +79,12 @@ psi_t *psi_new(void);
 void psi_free(psi_t *c);
 void psi_feed(psi_t *c, const unsigned char *pkt); /* one 188-byte packet */
 
-/* call before PMT locks in: forces one program's PMT PID instead of
-   auto-selecting first PAT-listed candidate. bad pid (not in PAT):
-   psi_ready() just never becomes true, cross-check psi_pat_programs(). */
+/* call b4 PMT locks in: forces PMT PID */
 void psi_select_pmt_pid(psi_t *c, unsigned pmt_pid);
 
 /* call before feeding: each candidate's PMT resolves independently, no
    single-first lock. SDT-actual names captured per program too, combinable
-   with psi_select_pmt_pid(). warning: single-current-program accessors track
-   whichever program resolved last, unstable. use psi_multi_programs() instead. */
+   with psi_select_pmt_pid(). */
 void psi_enable_multi_program(psi_t *c);
 
 /* one entry per PAT-listed program, valid once psi_have_pat().

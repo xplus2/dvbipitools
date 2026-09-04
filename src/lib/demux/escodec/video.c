@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <string.h>
+#include "aubuild.h"
 #include "escodec.h"
 
 /* skips one scaling list (H.264 SPS scaling_list()): sz entries, delta-coded, wraps mod 256 */
@@ -145,6 +146,56 @@ int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned
   return 0;
 }
 
+static void br_align(br_t *b) {
+  b->bit = (b->bit + 7) & ~(size_t)7;
+}
+
+static void skip_vvc_gci(br_t *b) {
+  unsigned gci_present = br_u(b, 1);
+  if (gci_present) {
+    unsigned num_additional_bits;
+    for (int i = 0; i < 69; i++) br_u(b, 1);
+    num_additional_bits = br_u(b, 8);
+    for (unsigned i = 0; i < num_additional_bits; i++) br_u(b, 1);
+  }
+  br_align(b);
+}
+
+static void skip_vvc_ptl(br_t *b, unsigned max_sublayers_minus1) {
+  unsigned char sublayer_level_present[8];
+  unsigned i, num_sub_profiles;
+  br_u(b, 7 + 1 + 8 + 1 + 1); /* profile_idc, tier, level, frame_only, multilayer */
+  skip_vvc_gci(b);
+  if (max_sublayers_minus1 > 7) max_sublayers_minus1 = 7;
+  for (i = 0; i < max_sublayers_minus1; i++) sublayer_level_present[i] = (unsigned char)br_u(b, 1);
+  br_align(b);
+  for (i = 0; i < max_sublayers_minus1; i++) if (sublayer_level_present[i]) br_u(b, 8);
+  num_sub_profiles = br_u(b, 8);
+  for (i = 0; i < num_sub_profiles; i++) br_u(b, 32);
+}
+
+int vvc_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
+  unsigned char rb[ESCODEC_PS_MAX];
+  br_t b;
+  unsigned max_sublayers_minus1, ptl_dpb_hrd_present;
+  b.len = rbsp_unescape(nal, len, rb, sizeof rb);
+  b.d = rb;
+  b.bit = 0;
+  b.err = 0;
+  br_u(&b, 16 + 4 + 4);
+  max_sublayers_minus1 = br_u(&b, 3);
+  br_u(&b, 2 + 2);
+  ptl_dpb_hrd_present = br_u(&b, 1);
+  if (!ptl_dpb_hrd_present) return -1; /* multi-layer VPS-only ptl signaling, out of scope */
+  skip_vvc_ptl(&b, max_sublayers_minus1);
+  br_u(&b, 1);
+  if (br_u(&b, 1)) br_u(&b, 1);
+  *w = br_ue(&b);
+  *h = br_ue(&b);
+  if (b.err || !*w || !*h) return -1;
+  return 0;
+}
+
 size_t build_avcc(const esc_track_t *t, unsigned char *o, size_t cap) {
   size_t n = 0;
 
@@ -165,6 +216,32 @@ size_t build_avcc(const esc_track_t *t, unsigned char *o, size_t cap) {
   o[n++] = (unsigned char)t->ppslen;
   memcpy(o + n, t->pps, t->ppslen);
   n += t->ppslen;
+  return n;
+}
+
+size_t build_vvcc(const esc_track_t *t, unsigned char *o, size_t cap) {
+  static const unsigned char types[3] = {VVC_NAL_VPS, VVC_NAL_SPS, VVC_NAL_PPS};
+  const unsigned char *ps[3];
+  size_t pl[3], n = 0;
+
+  ps[0] = t->vps;
+  pl[0] = t->vpslen;
+  ps[1] = t->sps;
+  pl[1] = t->spslen;
+  ps[2] = t->pps;
+  pl[2] = t->ppslen;
+  if (2 + pl[0] + pl[1] + pl[2] + 3 * 5 > cap) return 0;
+  o[n++] = 0xFE; /* ptl_present_flag=0: no NativePTL block */
+  o[n++] = 3;
+  for (size_t i = 0; i < 3; i++) {
+    o[n++] = (unsigned char)(0x80 | types[i]);
+    o[n++] = 0;
+    o[n++] = 1;
+    o[n++] = (unsigned char)(pl[i] >> 8);
+    o[n++] = (unsigned char)pl[i];
+    memcpy(o + n, ps[i], pl[i]);
+    n += pl[i];
+  }
   return n;
 }
 

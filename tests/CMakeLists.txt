@@ -1954,6 +1954,62 @@ dvbipitools_add_unit_test(dipixy_channels
     ${CMAKE_SOURCE_DIR}/src/lib/fccret/ret_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/fccret/fcc_client.c)
 
+dvbipitools_add_unit_test(dipixy_playlist
+    unit/dipixy/test_playlist.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_threadlocal_stub.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/core/playlist.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/channels.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_soap.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_oid.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_didl.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_broadcast.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_frame.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_sources.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_in.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/jsonbuf.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/rtx.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/rtcp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/rtx.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/rtcp_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/fccret/ret_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/fccret/fcc_client.c)
+
 dvbipitools_add_unit_test(dipixy_gena
     unit/dipixy/test_gena.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_threadlocal_stub.c

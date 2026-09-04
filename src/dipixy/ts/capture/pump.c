@@ -5,6 +5,7 @@
 
 #include "lib/demux/rtp.h"
 
+#include <poll.h>
 #include <sched.h>
 #include <string.h>
 #include <time.h>
@@ -58,12 +59,19 @@ static int64_t monotonic_ms(void) {
 /* stdin/http aren't packet-aligned: reassembles 188B packets across calls */
 static int tssrc_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned char *pkt), void *user) {
   int64_t deadline = monotonic_ms() + CAPTURE_TSSRC_DRAIN_BUDGET_MS;
+  int fd = tssrc_fd(ctx->ts);
   /* caps g_lock hold per tick: continuous source never returns 0 on its own */
   for (;;) {
     unsigned char buf[CAPTURE_RECV_BUF];
     size_t len, off;
     ssize_t n;
     if (monotonic_ms() >= deadline) return 0;
+    if (fd >= 0) {
+      /* underlying fd (stdin above all) may be a blocking descriptor with
+         nothing to read: poll first, never call tssrc_read() blind */
+      struct pollfd pfd = {fd, POLLIN, 0};
+      if (poll(&pfd, 1, 0) <= 0) return 0;
+    }
     n = tssrc_read(ctx->ts, buf, sizeof buf, NULL);
     if (n < 0) return -1;
     if (n == 0) return 0;

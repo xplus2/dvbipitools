@@ -10,7 +10,7 @@
 #include <string.h>
 
 static int audio_codec_supported(codec_t c) {
-  return c == CODEC_AAC || c == CODEC_AAC_LATM || c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_MP2A;
+  return c == CODEC_AAC || c == CODEC_AAC_LATM || c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_MP2A || c == CODEC_OPUS;
 }
 
 static int program_pid_allowed(const hls_seg_ctx_t *s, unsigned pid) {
@@ -29,8 +29,7 @@ static void lock_program_pids(hls_seg_ctx_t *s) {
   s->allowed_pids[s->n_allowed++] = 0; /* PAT */
   s->allowed_pids[s->n_allowed++] = psi_pmt_pid(s->psi);
   pcr_pid = psi_pcr_pid(s->psi);
-  if (pcr_pid)
-    s->allowed_pids[s->n_allowed++] = pcr_pid;
+  if (pcr_pid) s->allowed_pids[s->n_allowed++] = pcr_pid;
   es = psi_es(s->psi, &n);
   for (int i = 0; i < n && s->n_allowed < (int)(sizeof s->allowed_pids / sizeof s->allowed_pids[0]); i++)
     s->allowed_pids[s->n_allowed++] = es[i].pid;

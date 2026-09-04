@@ -78,3 +78,24 @@ void esc_handle_hevc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen,
         log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, hevc nal dropped");
   }
 }
+
+void esc_handle_vvc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, unsigned type, const unsigned char *p, size_t n, int *key) {
+  switch (type) {
+    case VVC_NAL_VPS:
+      esc_ps_store(es->vps, &es->vpslen, p, n);
+      break;
+    case VVC_NAL_SPS:
+      esc_ps_store(es->sps, &es->spslen, p, n);
+      break;
+    case VVC_NAL_PPS:
+      esc_ps_store(es->pps, &es->ppslen, p, n);
+      break;
+    case VVC_NAL_AUD:
+    case VVC_NAL_FILLER:
+      break;
+    default:
+      if (type >= VVC_NAL_IRAP_FIRST && type <= VVC_NAL_IRAP_LAST) *key = 1;
+      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0)
+        log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, vvc nal dropped");
+  }
+}

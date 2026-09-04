@@ -16,14 +16,15 @@ main{flex:1;padding:16px;overflow:auto}
 #statTable td:first-child{font-weight:600;white-space:nowrap}
 #statBtns{margin-top:12px;display:flex;gap:8px}
 #statBtns button{padding:6px 12px;cursor:pointer}
-#urlbar{display:flex;gap:6px;margin-bottom:14px}
-#urlOutput{flex:1;font-family:monospace;padding:6px;background:#ddd;border:1px solid #888}
-#copyBtn{cursor:pointer;font-size:16px;padding:4px 10px}
+#urlbar,#plUrlbar{display:flex;gap:6px;margin-bottom:14px}
+#urlOutput,#plUrlOutput{flex:1;font-family:monospace;padding:6px;background:#ddd;border:1px solid #888}
+#copyBtn,#plCopyBtn{cursor:pointer;font-size:16px;padding:4px 10px}
 .ub-layout{display:flex;gap:18px;align-items:flex-start}
 .ub-list{flex:1;min-width:0}
 .ub-side{flex:0 0 220px}
 .src-item{border:1px solid #8888;margin-bottom:6px}
 .src-item.disabled{opacity:.4;pointer-events:none}
+.src-item.inactive{opacity:.4}
 .src-head{padding:6px 8px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
 .src-sub{padding:0 8px 6px 8px}
 .src-row{padding:3px 0 3px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
@@ -31,7 +32,8 @@ main{flex:1;padding:16px;overflow:auto}
 .src-head:hover,.src-row:hover{background:#ddd}
 .field{margin-bottom:10px}
 .field label{display:block;margin-bottom:2px}
-.field select,.field input{width:100%;padding:4px}
+.field select,.field input:not([type=checkbox]):not([type=radio]){width:100%;padding:4px}
+.field label:has(>input[type=checkbox]){display:inline-flex;align-items:center;gap:6px;margin-bottom:0}
 .radio-group{display:flex;gap:14px}
 .radio-group label{display:inline-flex;align-items:center;gap:4px;width:auto;margin-bottom:0}
 #verText{color:#666;margin-top:-22px; font-size:80%}
@@ -46,6 +48,7 @@ main{flex:1;padding:16px;overflow:auto}
 <button onclick="show('status')">Status</button>
 <button onclick="show('clients')">Clients</button>
 <button onclick="show('urlbuilder')">URL Builder</button>
+<button onclick="show('playlist')">List Export</button>
 <hr>
 </nav>
 <main>
@@ -113,6 +116,47 @@ main{flex:1;padding:16px;overflow:auto}
 </div>
 </div>
 </section>
+<section id="view-playlist" hidden>
+<div id="plUrlbar">
+<input type="text" id="plUrlOutput" readonly value="">
+<button id="plCopyBtn" title="copy to clipboard">&#128203;</button>
+</div>
+<div class="ub-layout">
+<div class="ub-list" id="plSrcList"></div>
+<div class="ub-side">
+<div class="field">
+<label for="plFmtSel">format</label>
+<select id="plFmtSel" onchange="updExportUrl()">
+<option id="plfmt-ts" value="ts">TS</option>
+<option id="plfmt-spts" value="spts">SPTS</option>
+<option id="plfmt-rawaudio" value="rawaudio">rawaudio</option>
+<option id="plfmt-hls" value="hls">HLS (TS)</option>
+<option id="plfmt-hls-fmp4" value="hls-fmp4">HLS (fMP4)</option>
+<option id="plfmt-llhls" value="llhls">Low-Latency HLS</option>
+<option id="plfmt-dash" value="dash">MPEG DASH</option>
+<option id="plfmt-lldash" value="lldash">Low-Latency DASH</option>
+</select>
+</div>
+<div class="field">
+<label for="plTypeSel">playlist type</label>
+<select id="plTypeSel" onchange="updExportUrl()">
+<option value="m3u">M3U</option>
+<option value="xspf">XSPF</option>
+</select>
+</div>
+<div class="field" id="plFilterField">
+<label for="plFilterInp">filter (pids)</label>
+<input type="text" id="plFilterInp" placeholder="101,0x20" oninput="updExportUrl()">
+</div>
+<div class="field">
+<label><input type="checkbox" id="plKeepMcast" onchange="updExportUrl()"> keep_multicast</label>
+</div>
+<div class="field">
+<label><input type="checkbox" id="plPlain" onchange="updExportUrl()"> plain</label>
+</div>
+</div>
+</div>
+</section>
 </main>
 <script>
 function $(id) { return document.getElementById(id); }
@@ -122,9 +166,9 @@ function el(tag, cls, text) {
   if (text != null) e.textContent = text;
   return e;
 }
-var state = { status: null, sources: [], selection: null, clients: {}, clientRows: {} };
+var state = { status: null, sources: [], selection: null, clients: {}, clientRows: {}, plActive: {} };
 function show(name) {
-  ['status', 'clients', 'urlbuilder'].forEach(function (v) {$('view-' + v).hidden = v !== name;});
+  ['status', 'clients', 'urlbuilder', 'playlist'].forEach(function (v) {$('view-' + v).hidden = v !== name;});
   if (name === 'status') loadStat();
 }
 function loadStat() {
@@ -166,8 +210,13 @@ function loadStat() {
 }
 function appFlags() {
   var flags = (state.status && state.status.flags) || {};
-  ['ts', 'spts', 'rawaudio', 'hls', 'hls-fmp4', 'llhls', 'dash', 'lldash'].forEach(function (fmt) {$('fmt-' + fmt).disabled = !!flags['no_' + (fmt === 'hls-fmp4' ? 'hls' : fmt)];});
+  ['ts', 'spts', 'rawaudio', 'hls', 'hls-fmp4', 'llhls', 'dash', 'lldash'].forEach(function (fmt) {
+    var off = !!flags['no_' + (fmt === 'hls-fmp4' ? 'hls' : fmt)];
+    $('fmt-' + fmt).disabled = off;
+    $('plfmt-' + fmt).disabled = off;
+  });
   $('filterField').style.display = flags.no_pid_filters ? 'none' : 'block';
+  $('plFilterField').style.display = flags.no_pid_filters ? 'none' : 'block';
 }
 function renderSrc() {
   var list = $('srcList');
@@ -226,6 +275,43 @@ function mkSrcItem(o) {
   };
   return div;
 }
+function renderPlSrc() {
+  var list = $('plSrcList');
+  list.innerHTML = '';
+  state.sources.forEach(function (s) {
+    var active = state.plActive[s.list_num] !== false;
+    var row = el('div', 'src-item' + (active ? '' : ' inactive'));
+    var head = el('div', 'src-head');
+    head.appendChild(el('span', '', '#' + s.list_num + ' [' + s.kind + '] ' + (s.name || '-')));
+    head.appendChild(el('span', '', active ? 'active' : 'inactive'));
+    head.onclick = function () {
+      state.plActive[s.list_num] = !active;
+      renderPlSrc();
+      updExportUrl();
+    };
+    row.appendChild(head);
+    list.appendChild(row);
+  });
+}
+function buildExportUrl() {
+  var fmt = $('plFmtSel').value;
+  var type = $('plTypeSel').value;
+  var path = '/export/' + fmt + '/' + type;
+  var params = [];
+  var lists = state.sources;
+  var active = lists.filter(function (s) { return state.plActive[s.list_num] !== false; });
+  if (active.length && active.length < lists.length)
+    params.push('input=' + active.map(function (s) { return s.list_num; }).join(','));
+  var filter = $('plFilterInp').value.trim();
+  if (filter) params.push('filter=' + encodeURIComponent(filter));
+  if ($('plKeepMcast').checked) params.push('keep_multicast');
+  if ($('plPlain').checked) params.push('plain');
+  if (params.length) path += '?' + params.join('&');
+  return location.origin + path;
+}
+function updExportUrl() {
+  $('plUrlOutput').value = buildExportUrl();
+}
 function select(sel, showGroup, el) {
   document.querySelectorAll('.src-head.selected, .src-row.selected').forEach(function (e) {e.classList.remove('selected');});
   el.classList.add('selected');
@@ -269,6 +355,15 @@ function updUrl() {
 }
 $('copyBtn').onclick = function () {
   var el = $('urlOutput');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(el.value);
+  } else {
+    el.select();
+    document.execCommand('copy');
+  }
+};
+$('plCopyBtn').onclick = function () {
+  var el = $('plUrlOutput');
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(el.value);
   } else {
@@ -377,11 +472,15 @@ function wsConn() {
     if (msg.type === 'sources.snapshot') {
       state.sources = msg.sources || [];
       renderSrc();
+      renderPlSrc();
+      updExportUrl();
     } else if (msg.type === 'sources.update') {
       src = msg.sources[0];
       for (i = 0; i < state.sources.length && state.sources[i].list_num !== src.list_num; i++);
       if (i < state.sources.length) state.sources[i] = src; else state.sources.push(src);
       renderSrc();
+      renderPlSrc();
+      updExportUrl();
     } else if (msg.type === 'tls.reload') {
       if (msg.ok) loadStat();
     } else if (msg.type === 'clients.snapshot') {
@@ -414,6 +513,8 @@ fetch('/ui/status.js').then(function (r) {
   $('verText').textContent = 'v' + (data.version || '?');
   appFlags();
   renderSrc();
+  renderPlSrc();
+  updExportUrl();
   wsConn();
 }).catch(function () {$('verText').textContent = '';});
 show('status');

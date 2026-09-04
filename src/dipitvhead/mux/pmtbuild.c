@@ -13,11 +13,13 @@ static unsigned out_stream_type(codec_t c) {
     case CODEC_MPEG2V:   return 0x02;
     case CODEC_H264:     return 0x1B;
     case CODEC_HEVC:     return 0x24;
+    case CODEC_VVC:      return 0x33;
     case CODEC_MP2A:     return 0x03;
     case CODEC_AAC:      return 0x0F;
     case CODEC_AAC_LATM: return 0x11;
     case CODEC_AC3:      return 0x81;
     case CODEC_EAC3:     return 0x87;
+    case CODEC_OPUS:     return 0x06;
     case CODEC_NONE:     return 0;
   }
   return 0;
@@ -182,7 +184,7 @@ static size_t put_data_descriptors(unsigned char *out, size_t n, size_t cap, con
   return n;
 }
 
-/* appends AC-3/EAC3 registration + ISO 639 language descriptors for an audio ES.
+/* appends AC-3/EAC3/Opus registration + ISO 639 language descriptors for an audio ES.
    returns new n, or (size_t)-1 if it would overflow cap */
 static size_t put_audio_descriptors(unsigned char *out, size_t n, size_t cap, const out_es_t *e) {
   if (e->src->codec == CODEC_AC3) {
@@ -193,6 +195,10 @@ static size_t put_audio_descriptors(unsigned char *out, size_t n, size_t cap, co
     if (n + 6 > cap)
       return (size_t)-1;
     n += put_registration(out + n, "EAC3");
+  } else if (e->src->codec == CODEC_OPUS) {
+    if (n + 6 > cap)
+      return (size_t)-1;
+    n += put_registration(out + n, "Opus");
   }
   if (e->src->cls == PID_AUDIO && e->src->lang[0]) {
     if (n + 6 > cap)

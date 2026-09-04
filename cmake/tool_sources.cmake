@@ -877,6 +877,7 @@ function(dipixy_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/dipixy/main.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/args.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/core/playlist.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/core/htdocs.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_listen.c
@@ -956,6 +957,7 @@ function(dipixy_resolve_sources)
         ${CMAKE_SOURCE_DIR}/src/lib/helper/sha1.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/base64.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_in.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c

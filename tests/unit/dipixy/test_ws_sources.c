@@ -31,7 +31,7 @@ START_TEST(snapshot_stdin_only_unnamed) {
   cfg.stdin_ordinal = 1;
 
   ck_assert_int_eq(ws_sources_build_snapshot(&cfg, NULL, &out), 0);
-  ck_assert_str_eq(out, "{\"type\":\"sources.snapshot\",\"sources\":[{\"kind\":\"stdin\",\"name\":null}]}");
+  ck_assert_str_eq(out, "{\"type\":\"sources.snapshot\",\"sources\":[{\"kind\":\"stdin\",\"name\":null,\"list_num\":1}]}");
 }
 END_TEST
 
@@ -43,7 +43,7 @@ START_TEST(snapshot_stdin_only_named) {
   cfg.stdin_name = "Main";
 
   ck_assert_int_eq(ws_sources_build_snapshot(&cfg, NULL, &out), 0);
-  ck_assert_str_eq(out, "{\"type\":\"sources.snapshot\",\"sources\":[{\"kind\":\"stdin\",\"name\":\"Main\"}]}");
+  ck_assert_str_eq(out, "{\"type\":\"sources.snapshot\",\"sources\":[{\"kind\":\"stdin\",\"name\":\"Main\",\"list_num\":1}]}");
 }
 END_TEST
 
@@ -54,7 +54,7 @@ START_TEST(snapshot_rist_only) {
   cfg.rist_ordinal = 1;
 
   ck_assert_int_eq(ws_sources_build_snapshot(&cfg, NULL, &out), 0);
-  ck_assert_str_eq(out, "{\"type\":\"sources.snapshot\",\"sources\":[{\"kind\":\"rist\",\"name\":null}]}");
+  ck_assert_str_eq(out, "{\"type\":\"sources.snapshot\",\"sources\":[{\"kind\":\"rist\",\"name\":null,\"list_num\":1}]}");
 }
 END_TEST
 
@@ -94,7 +94,7 @@ START_TEST(snapshot_m3u_source_lists_items) {
 }
 END_TEST
 
-START_TEST(snapshot_orders_by_ordinal_and_omits_items_for_stdin_rist) {
+START_TEST(snapshot_orders_by_ordinal_and_carries_list_num_without_items_for_stdin_rist) {
   config_t cfg;
   source_def_t src;
   char path[160];
@@ -128,9 +128,17 @@ START_TEST(snapshot_orders_by_ordinal_and_omits_items_for_stdin_rist) {
     ck_assert_ptr_nonnull(rist_pos);
     ck_assert(stdin_pos < m3u_pos);
     ck_assert(m3u_pos < rist_pos);
-    /* stdin/rist have no list_num/items at all (list_num 0) */
-    ck_assert(strstr(out, "\"list_num\":1") == NULL);
-    ck_assert(strstr(out, "\"list_num\":3") == NULL);
+    {
+      char stdin_obj[128];
+      size_t stdin_len = (size_t)(m3u_pos - stdin_pos);
+      ck_assert(stdin_len < sizeof stdin_obj);
+      memcpy(stdin_obj, stdin_pos, stdin_len);
+      stdin_obj[stdin_len] = 0;
+      ck_assert_ptr_nonnull(strstr(stdin_obj, "\"list_num\":1"));
+      ck_assert_ptr_null(strstr(stdin_obj, "\"items\""));
+    }
+    ck_assert_ptr_nonnull(strstr(rist_pos, "\"list_num\":3"));
+    ck_assert_ptr_null(strstr(rist_pos, "\"items\""));
   }
 
   channels_free(ch);
@@ -215,7 +223,7 @@ static Suite *ws_sources_suite(void) {
   tcase_add_test(tc, snapshot_stdin_only_named);
   tcase_add_test(tc, snapshot_rist_only);
   tcase_add_test(tc, snapshot_m3u_source_lists_items);
-  tcase_add_test(tc, snapshot_orders_by_ordinal_and_omits_items_for_stdin_rist);
+  tcase_add_test(tc, snapshot_orders_by_ordinal_and_carries_list_num_without_items_for_stdin_rist);
   tcase_add_test(tc, update_wraps_single_source_with_items);
   tcase_add_test(tc, source_kind_names_cover_all_kinds);
   suite_add_tcase(s, tc);

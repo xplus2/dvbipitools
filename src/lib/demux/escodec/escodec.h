@@ -42,8 +42,10 @@ typedef struct {
 /* video.c */
 int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h);
 int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned *chroma, unsigned *w, unsigned *h);
+int vvc_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h);
 size_t build_avcc(const esc_track_t *t, unsigned char *o, size_t cap);
 size_t build_hvcc(const esc_track_t *t, unsigned char *o, size_t cap);
+size_t build_vvcc(const esc_track_t *t, unsigned char *o, size_t cap);
 
 /* audio.c */
 int next_frame(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f);

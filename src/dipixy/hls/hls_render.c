@@ -35,7 +35,7 @@ int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid,
     td = hls_target_duration(s);
     mp = m3u8;
     mp = WRITE_LIT(mp, "#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n#EXT-X-VERSION:");
-    mp = write_u32(mp, s->container == SEG_CONTAINER_FMP4 || s->video_codec == 1 ? 7u : 3u, 0);
+    mp = write_u32(mp, s->container == SEG_CONTAINER_FMP4 || s->video_codec == CODEC_HEVC || s->video_codec == CODEC_VVC ? 7u : 3u, 0);
     mp = WRITE_LIT(mp, "\n#EXT-X-TARGETDURATION:");
     mp = write_u32(mp, (uint32_t)td, 0);
     mp = WRITE_LIT(mp, "\n#EXT-X-MEDIA-SEQUENCE:");

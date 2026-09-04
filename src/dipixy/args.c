@@ -214,6 +214,8 @@ static void print_help(void) {
       "\n"
       "Each -i flag's list index is its own position on the command line.\n"
       "any URL takes ?filter=<pids> to drop PIDs, e.g. ?filter=101,0x20.\n\n"
+      "/export/<fmt>/<type> (type: m3u|xspf) lists every channel as one\n"
+      "playlist. ?host=, ?input=1,3,4, ?filter=, ?keep_multicast, ?plain.\n\n"
       "on an MPTS source, hls/hls-fmp4/llhls/dash/lldash demux the first\n"
       "arriving PMT.\n"
       "use ?pmt=<pid> (dec or 0x-hex) to pick a different one. ts\n"

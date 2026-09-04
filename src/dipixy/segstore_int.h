@@ -39,7 +39,7 @@ typedef struct hls_store_t {
   double seg_target;
   double td_hw; /* target duration high-water mark, monotonic */
   int max_segs;
-  int video_codec; /* 0=AVC, 1=HEVC, drives HLS VERSION */
+  codec_t video_codec; /* drives HLS VERSION + DASH codecs= */
   seg_container_t container;
   uint8_t init_data[HLS_INIT_SEG_MAX]; /* SEG_CONTAINER_FMP4 only */
   size_t init_size;

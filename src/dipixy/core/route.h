@@ -49,6 +49,8 @@ typedef struct {
 /* path starts with '/'. 0 ok, -1 no match or malformed */
 int route_parse(const char *path, route_t *out);
 
+int fmt_parse(const char *s, route_fmt_t *out);
+
 /* uri like "rtp://@239.0.0.1:8000" or "udp://@[ff0e::1]:8000" from channel_item_t.uri. 0 ok, -1 malformed */
 int route_resolve_channel_uri(const char *uri, int *family, char *addr, size_t addrsz, unsigned *port, int *rtp);
 

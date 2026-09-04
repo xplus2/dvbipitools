@@ -39,6 +39,9 @@ static int detect_keyframe(hls_seg_ctx_t *s, const unsigned char *d, size_t len)
       } else if (s->video_codec == CODEC_HEVC) {
         type = (d[ns] >> 1) & 0x3F;
         esc_handle_hevc_nal(&s->es, &s->nal_scratch, &s->nal_scratch_len, &s->nal_scratch_cap, type, d + ns, n, &key);
+      } else if (s->video_codec == CODEC_VVC && n >= 2) {
+        type = (d[ns + 1] >> 3) & 0x1F;
+        esc_handle_vvc_nal(&s->es, &s->nal_scratch, &s->nal_scratch_len, &s->nal_scratch_cap, type, d + ns, n, &key);
       }
     }
     p = q;
@@ -82,8 +85,7 @@ static void ts_part_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, size_t au_o
     part_elapsed = (double)(ts_ms - s->part_start_ts_ms) / 1000.0;
   }
 
-  if (au_off > s->part_start_off &&
-      hls_push_part(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_TS, s->buf + s->part_start_off, au_off - s->part_start_off, part_elapsed, s->part_key) < 0)
+  if (au_off > s->part_start_off && hls_push_part(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_TS, s->buf + s->part_start_off, au_off - s->part_start_off, part_elapsed, s->part_key) < 0)
     log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_part failed, part lost");
   s->part_start_off = will_trim ? 0 : au_off;
   s->part_start_ts_ms = ts_ms;
@@ -99,12 +101,10 @@ void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, 
   int kf, open_now, cut_now;
   if (!s->have_pending_pes) return; /* stream start: no offset recorded yet for this PES */
   cut_off = s->pending_pes_off;
-
   kf = detect_keyframe(s, data, len);
   pts_ms = has_pts ? pts_unwrap(&s->ptswrap, pts) : -1;
   ts_ms = has_dts ? pts_unwrap(&s->dtswrap, dts) : pts_ms;
   cts_ticks = (has_dts && pts_ms >= 0) ? (int32_t)((pts_ms - ts_ms) * 90) : 0;
-
   open_now = kf && !s->seg_open;
   elapsed = (kf && s->seg_open && ts_ms >= 0 && s->first_ts_ms >= 0) ? (double)(ts_ms - s->first_ts_ms) / 1000.0 : 0.0;
   {

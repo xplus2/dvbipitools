@@ -76,7 +76,7 @@ static void build_mdhd(mp4buf_t *out, const fmp4_trk_t *t) {
 }
 
 static int codec_is_audio(codec_t c) {
-  return c == CODEC_AAC || c == CODEC_AAC_LATM || c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_MP2A;
+  return c == CODEC_AAC || c == CODEC_AAC_LATM || c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_MP2A || c == CODEC_OPUS;
 }
 
 static void build_hdlr(mp4buf_t *out, int is_audio) {
@@ -211,15 +211,26 @@ static void build_dec3(mp4buf_t *out, const fmp4_trk_t *t) {
   mb_box(out, "dec3", &b);
 }
 
+static void build_dops(mp4buf_t *out, const fmp4_trk_t *t) {
+  mp4buf_t b;
+  memset(&b, 0, sizeof b);
+  mb_u8(&b, 0);
+  mb_u8(&b, (unsigned char)t->cfg.channels);
+  mb_u16(&b, 0);
+  mb_u32(&b, 48000);
+  mb_u16(&b, 0);
+  mb_u8(&b, 0);
+  mb_box(out, "dOps", &b);
+}
+
 static void build_stsd(mp4buf_t *out, const fmp4_trk_t *t) {
   mp4buf_t entry, stsd;
   int i;
 
   if (codec_is_audio(t->cfg.codec)) {
-    const char *entry_fourcc = t->cfg.codec == CODEC_AC3 ? "ac-3" : t->cfg.codec == CODEC_EAC3 ? "ec-3" : "mp4a";
+    const char *entry_fourcc = t->cfg.codec == CODEC_AC3 ? "ac-3" : t->cfg.codec == CODEC_EAC3 ? "ec-3" : t->cfg.codec == CODEC_OPUS ? "Opus" : "mp4a";
     memset(&entry, 0, sizeof entry);
-    for (i = 0; i < 6; i++)
-      mb_u8(&entry, 0); /* reserved */
+    for (i = 0; i < 6; i++) mb_u8(&entry, 0); /* reserved */
     mb_u16(&entry, 1);  /* data_reference_index */
     mb_u32(&entry, 0);  /* reserved */
     mb_u32(&entry, 0);
@@ -232,6 +243,8 @@ static void build_stsd(mp4buf_t *out, const fmp4_trk_t *t) {
       build_dac3(&entry, t);
     else if (t->cfg.codec == CODEC_EAC3)
       build_dec3(&entry, t);
+    else if (t->cfg.codec == CODEC_OPUS)
+      build_dops(&entry, t);
     else
       build_esds(&entry, t);
 
@@ -246,9 +259,8 @@ static void build_stsd(mp4buf_t *out, const fmp4_trk_t *t) {
 
   {
     mp4buf_t cfgbox;
-    const char *entry_fourcc = (t->cfg.codec == CODEC_HEVC) ? "hvc1" : "avc1";
-    const char *cfg_fourcc = (t->cfg.codec == CODEC_HEVC) ? "hvcC" : "avcC";
-
+    const char *entry_fourcc = (t->cfg.codec == CODEC_HEVC) ? "hvc1" : (t->cfg.codec == CODEC_VVC) ? "vvc1" : "avc1";
+    const char *cfg_fourcc = (t->cfg.codec == CODEC_HEVC) ? "hvcC" : (t->cfg.codec == CODEC_VVC) ? "vvcC" : "avcC";
     memset(&entry, 0, sizeof entry);
     for (i = 0; i < 6; i++) mb_u8(&entry, 0); /* reserved */
     mb_u16(&entry, 1);  /* data_reference_index */
@@ -267,11 +279,9 @@ static void build_stsd(mp4buf_t *out, const fmp4_trk_t *t) {
       mb_u8(&entry, 0); /* compressorname, len-prefix 0 = empty */
     mb_u16(&entry, 0x0018); /* depth */
     mb_u16(&entry, 0xFFFF); /* pre_defined = -1 */
-
     memset(&cfgbox, 0, sizeof cfgbox);
     mb_bytes(&cfgbox, t->cfg.cpriv, t->cfg.cpriv_len);
     mb_box(&entry, cfg_fourcc, &cfgbox);
-
     memset(&stsd, 0, sizeof stsd);
     mb_u8(&stsd, 0);
     mb_u24(&stsd, 0);

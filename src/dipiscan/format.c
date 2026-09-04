@@ -17,13 +17,13 @@ void format_init(FILE *f, out_fmt_t fmt, const char *invocation, const char *pro
 void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri, int family, const char *group, unsigned port, int rtp, unsigned tsid, unsigned onid, unsigned sid) {
   switch (fmt) {
     case OUT_M3U:
-      playlist_out_m3u_item(f, name, uri, tsid, onid, sid);
+      playlist_out_m3u_item(f, name, uri, NULL, tsid, onid, sid);
       break;
     case OUT_CSV:
       playlist_out_csv_item(f, name, uri, tsid, onid, sid);
       break;
     case OUT_XSPF:
-      playlist_out_xspf_item(f, name, uri, tsid, onid, sid);
+      playlist_out_xspf_item(f, name, uri, NULL, tsid, onid, sid);
       break;
     case OUT_XML: {
       sds_service_t s;

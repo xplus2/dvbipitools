@@ -147,7 +147,10 @@ void *worker_thread(void *arg) {
   for (;;) {
     struct epoll_event events[256];
     int nev, timeout_ms = 200;
-    if (signal_stop_requested()) break;
+    if (signal_stop_requested()) {
+      if (tid == 0) log_line(TOOL_NAME ": signal received, shutting down");
+      break;
+    }
 #ifdef HAVE_HTTP3
     {
       int h3ms = h3_next_timeout_ms();

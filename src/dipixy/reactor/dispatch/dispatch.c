@@ -136,6 +136,19 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
   if (!reactor_cfg()->no_status && !is_head && ws_try_upgrade(c, path, headers, num_headers, keep_alive))
     goto finish;
 
+  if (!strncmp(path, "/export/", 8)) {
+    route_fmt_t exp_fmt;
+    playlist_type_t exp_ptype;
+    char host_buf[128];
+    const char *host_hdr = find_header(headers, num_headers, "Host", host_buf, sizeof host_buf) ? host_buf : NULL;
+    if (playlist_path_parse(path, &exp_fmt, &exp_ptype) || playlist_fmt_disabled(reactor_cfg(), exp_fmt)) {
+      respond_status(c, RESP_404, keep_alive);
+      goto finish;
+    }
+    serve_playlist(c, exp_fmt, exp_ptype, host_hdr, query, &filter, is_head, keep_alive);
+    goto finish;
+  }
+
   if (route_parse(path, &rt)) {
     respond_status(c, RESP_404, keep_alive);
     goto finish;

@@ -1046,6 +1046,7 @@ dipixy_SRCS := \
 	src/dipixy/main.c \
 	src/dipixy/args.c \
 	src/dipixy/core/route.c \
+	src/dipixy/core/playlist.c \
 	src/dipixy/htdocs_index.gen.c \
 	src/dipixy/core/htdocs.c \
 	src/dipixy/reactor/reactor.c \
@@ -1126,6 +1127,7 @@ dipixy_SRCS := \
 	src/lib/helper/sha1.c \
 	src/lib/helper/base64.c \
 	src/lib/helper/playlist_in.c \
+	src/lib/helper/playlist_out.c \
 	src/lib/helper/sds_xml.c \
 	src/lib/helper/xml_util.c \
 	src/lib/net/multicast.c \
@@ -3202,7 +3204,7 @@ dipifccret_capture_SRCS := \
 	src/lib/demux/rtp.c \
 	src/lib/helper/signal.c
 
-UNIT_TESTS += dipixy_args dipixy_route dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls lib_playlist_in
+UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
@@ -3222,6 +3224,63 @@ dipixy_route_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/uriparse.c
+
+dipixy_playlist_BIN := tests/unit/dipixy/test_playlist
+dipixy_playlist_SRCS := \
+	tests/unit/dipixy/test_playlist.c \
+	src/dipixy/reactor/reactor_threadlocal_stub.c \
+	src/dipixy/core/playlist.c \
+	src/dipixy/core/route.c \
+	src/dipixy/ts/pidfilter.c \
+	src/dipixy/ts/channels/channels.c \
+	src/dipixy/ts/channels/build.c \
+	src/dipixy/ts/channels/reload.c \
+	src/dipixy/dlna/gena.c \
+	src/dipixy/dlna/dlna.c \
+	src/dipixy/dlna/dlna_soap.c \
+	src/dipixy/dlna/dlna_oid.c \
+	src/dipixy/dlna/dlna_didl.c \
+	src/dipixy/dlna/dlna_control.c \
+	src/dipixy/dlna/ssdp.c \
+	src/dipixy/ts/capture/capture.c \
+	src/dipixy/ts/capture/pump.c \
+	src/dipixy/ts/capture/service.c \
+	src/dipixy/ts/capture/source.c \
+	src/dipixy/ws/ws_broadcast.c \
+	src/dipixy/ws/ws_frame.c \
+	src/dipixy/ws/ws_sources.c \
+	src/lib/helper/playlist_in.c \
+	src/lib/helper/playlist_out.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c \
+	src/lib/helper/signal.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/sds_xml.c \
+	src/lib/helper/xml_util.c \
+	src/lib/helper/jsonbuf.c \
+	src/lib/net/dvbstp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/rtp.c \
+	src/lib/net/tssource.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
+	src/lib/net/srt/srtsrc_stub.c \
+	src/lib/net/srt/srtsink_stub.c \
+	src/lib/demux/rtx.c \
+	src/lib/demux/rtcp.c \
+	src/lib/mux/rtx.c \
+	src/lib/mux/rtcp_build.c \
+	src/lib/fccret/ret_client.c \
+	src/lib/fccret/fcc_client.c
 
 dipixy_capture_BIN := tests/unit/dipixy/test_capture
 dipixy_capture_SRCS := \

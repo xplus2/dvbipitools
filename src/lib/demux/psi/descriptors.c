@@ -101,6 +101,10 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
       e->cls = PID_VIDEO;
       e->codec = CODEC_HEVC;
       break;
+    case 0x33:
+      e->cls = PID_VIDEO;
+      e->codec = CODEC_VVC;
+      break;
     case 0x03:
     case 0x04:
       e->cls = PID_AUDIO;
@@ -133,6 +137,9 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
       } else if (find_desc(desc, dlen, 0x7A, &l)) {
         e->cls = PID_AUDIO;
         e->codec = CODEC_EAC3;
+      } else if ((ld = find_desc(desc, dlen, 0x05, &l)) != NULL && l >= 4 && !memcmp(ld, "Opus", 4)) {
+        e->cls = PID_AUDIO;
+        e->codec = CODEC_OPUS;
       }
       break;
     case 0x05:

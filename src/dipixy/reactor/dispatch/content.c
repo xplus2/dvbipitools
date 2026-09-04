@@ -49,6 +49,25 @@ void serve_status(conn_t *c, int is_head, int keep_alive) {
   c->close_after_flush = keep_alive ? 0 : 1;
 }
 
+void serve_playlist(conn_t *c, route_fmt_t fmt, playlist_type_t ptype, const char *host_hdr, const char *query, const pid_filter_t *filter, int is_head, int keep_alive) {
+  char *body;
+  size_t len;
+  char hdr[192];
+  size_t n;
+  const char *mime;
+  if (playlist_render(reactor_cfg(), reactor_channels(), c->ssl != NULL, host_hdr, query, filter, fmt, ptype, &body, &len)) {
+    respond_status(c, RESP_501, keep_alive);
+    return;
+  }
+  mime = playlist_query_has_flag(query, "plain") ? "text/plain; charset=utf-8" : ptype == PLAYLIST_M3U ? "audio/x-mpegurl" : "application/xspf+xml";
+  n = build_ok_header(hdr, sizeof hdr, mime, len, keep_alive);
+  conn_queue(c, hdr, n);
+  if (!is_head) conn_queue(c, body, len);
+  free(body);
+  c->keep_alive = keep_alive ? 1 : 0;
+  c->close_after_flush = keep_alive ? 0 : 1;
+}
+
 void serve_dlna_xml(conn_t *c, const char *body, size_t len, int is_head, int keep_alive) {
   char hdr[128];
   size_t n = build_ok_header(hdr, sizeof hdr, "text/xml; charset=utf-8", len, keep_alive);

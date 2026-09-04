@@ -42,8 +42,10 @@ void playlist_out_close(FILE *f, playlist_out_fmt_t fmt) {
   }
 }
 
-void playlist_out_m3u_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid) {
-  fprintf(f, "#EXTINF:-1 tsid=\"%u\" onid=\"%u\" sid=\"%u\",%s\n%s\n", tsid, onid, sid, name, uri);
+void playlist_out_m3u_item(FILE *f, const char *name, const char *uri, const char *icon_uri, unsigned tsid, unsigned onid, unsigned sid) {
+  fputs("#EXTINF:-1 ", f);
+  if (icon_uri && *icon_uri) fprintf(f, "tvg-logo=\"%s\" ", icon_uri);
+  fprintf(f, "tsid=\"%u\" onid=\"%u\" sid=\"%u\",%s\n%s\n", tsid, onid, sid, name, uri);
 }
 
 void playlist_out_csv_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid) {
@@ -53,10 +55,16 @@ void playlist_out_csv_item(FILE *f, const char *name, const char *uri, unsigned 
   fprintf(f, ",%s,%u,%u,%u\n", uri, tsid, onid, sid);
 }
 
-void playlist_out_xspf_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid) {
+void playlist_out_xspf_item(FILE *f, const char *name, const char *uri, const char *icon_uri, unsigned tsid, unsigned onid, unsigned sid) {
   fputs("  <track><location>", f);
   xml_escape(f, uri);
   fputs("</location><title>", f);
   xml_escape(f, name);
-  fprintf(f, "</title><extension application=\"urn:dvbipitools:dvb-triplet\" tsid=\"%u\" onid=\"%u\" sid=\"%u\"/></track>\n", tsid, onid, sid);
+  fputs("</title>", f);
+  if (icon_uri && *icon_uri) {
+    fputs("<image>", f);
+    xml_escape(f, icon_uri);
+    fputs("</image>", f);
+  }
+  fprintf(f, "<extension application=\"urn:dvbipitools:dvb-triplet\" tsid=\"%u\" onid=\"%u\" sid=\"%u\"/></track>\n", tsid, onid, sid);
 }

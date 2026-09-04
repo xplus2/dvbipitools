@@ -297,6 +297,38 @@ static int next_latm(esc_track_t *t, const unsigned char *d, size_t len, esc_fra
   return 0;
 }
 
+static const unsigned short opus_frame_samples[32] = {
+    480, 960, 1920, 2880, 480, 960, 1920, 2880, 480, 960, 1920, 2880, 480, 960, 480, 960,
+    120, 240, 480, 960, 120, 240, 480, 960, 120, 240, 480, 960, 120, 240, 480, 960};
+
+static int next_opus(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
+  unsigned toc, config, code, frames;
+
+  (void)t;
+  if (len < 1)
+    return 1;
+  if (len >= 2 && d[0] == 0xFF && (d[1] & 0xE0) == 0xE0)
+    return -1; /* control header prefix au. not supported */
+  toc = d[0];
+  config = (toc >> 3) & 0x1F;
+  code = toc & 0x03;
+  if (code == 3) {
+    if (len < 2) return 1;
+    frames = d[1] & 0x3F;
+    if (!frames) return -1;
+  } else {
+    frames = (code == 0) ? 1 : 2;
+  }
+  if (frames * opus_frame_samples[config] > 5760) return -1;
+  f->consumed = len;
+  f->out = d;
+  f->outlen = len;
+  f->rate = 48000;
+  f->ch = ((toc >> 2) & 1) ? 2 : 1;
+  f->samples = frames * opus_frame_samples[config];
+  return 0;
+}
+
 int next_frame(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   memset(f, 0, sizeof *f);
   f->layer = 2;
@@ -306,6 +338,7 @@ int next_frame(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *
     case CODEC_MP2A:        return next_mpa(t, d, len, f);
     case CODEC_AAC:         return next_aac(t, d, len, f);
     case CODEC_AAC_LATM:    return next_latm(t, d, len, f);
+    case CODEC_OPUS:        return next_opus(t, d, len, f);
     default:                return -1;
   }
 }

@@ -1,3 +1,9 @@
+dvbipitools (2.4.1-1) unstable; urgency=low
+  * dipixy
+    + playlist /export/ convenience feature: m3u and xspf for VLC, Kodi Simple IPTV, tvheadend, ..
+    + segmetation support added for VVC and Opus, fixed HEVC
+ -- dvbipitools authors <unspecified@example.com>  tbd
+
 dvbipitools (2.4.0-1) unstable; urgency=medium
   * added optional metrics export to the following tools:
     + dipirec

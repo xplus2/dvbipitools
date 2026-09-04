@@ -35,8 +35,7 @@ static void emit_item_json(void *vctx, const channel_item_t *item) {
   jbuf_str(c->j, "}");
 }
 
-/* list_num 0: stdin/rist, no items */
-static void emit_source_json(jbuf_t *j, const channels_t *channels, const char *kind, const char *name, unsigned list_num) {
+static void emit_source_json(jbuf_t *j, const channels_t *channels, const char *kind, const char *name, unsigned ordinal, int has_items) {
   jbuf_str(j, "{");
   jbuf_key(j, "kind");
   jbuf_json_string(j, kind);
@@ -46,18 +45,18 @@ static void emit_source_json(jbuf_t *j, const channels_t *channels, const char *
     jbuf_json_string(j, name);
   else
     jbuf_str(j, "null");
-  if (list_num) {
+  jbuf_str(j, ",");
+  jbuf_key(j, "list_num");
+  {
+    char numbuf[11];
+    jbuf_raw(j, numbuf, uint_to_str(numbuf, ordinal));
+  }
+  if (has_items) {
     item_emit_ctx_t ictx = {j, 0};
-    jbuf_str(j, ",");
-    jbuf_key(j, "list_num");
-    {
-      char numbuf[11];
-      jbuf_raw(j, numbuf, uint_to_str(numbuf, list_num));
-    }
     jbuf_str(j, ",");
     jbuf_key(j, "items");
     jbuf_str(j, "[");
-    channels_list_for_each(channels, list_num, emit_item_json, &ictx);
+    channels_list_for_each(channels, ordinal, emit_item_json, &ictx);
     jbuf_str(j, "]");
   }
   jbuf_str(j, "}");
@@ -85,11 +84,11 @@ int ws_sources_build_snapshot(const config_t *cfg, const channels_t *channels, c
     if (ord > 1 && (ord == cfg->stdin_ordinal || ord == cfg->rist_ordinal || (si < cfg->n_sources && cfg->sources[si].ordinal == ord)))
       jbuf_str(&j, ",");
     if (ord == cfg->stdin_ordinal)
-      emit_source_json(&j, channels, "stdin", cfg->stdin_name, 0);
+      emit_source_json(&j, channels, "stdin", cfg->stdin_name, (unsigned)ord, 0);
     else if (ord == cfg->rist_ordinal)
-      emit_source_json(&j, channels, "rist", cfg->rist_name, 0);
+      emit_source_json(&j, channels, "rist", cfg->rist_name, (unsigned)ord, 0);
     else if (si < cfg->n_sources && cfg->sources[si].ordinal == ord) {
-      emit_source_json(&j, channels, source_kind_name(cfg->sources[si].kind), cfg->sources[si].name, (unsigned)ord);
+      emit_source_json(&j, channels, source_kind_name(cfg->sources[si].kind), cfg->sources[si].name, (unsigned)ord, 1);
       si++;
     }
   }
@@ -109,7 +108,7 @@ int ws_sources_build_update(const channels_t *channels, const source_def_t *src,
   jbuf_str(&j, ",");
   jbuf_key(&j, "sources");
   jbuf_str(&j, "[");
-  emit_source_json(&j, channels, source_kind_name(src->kind), src->name, list_num);
+  emit_source_json(&j, channels, source_kind_name(src->kind), src->name, list_num, 1);
   jbuf_str(&j, "]}");
   if (j.failed)
     return -1;

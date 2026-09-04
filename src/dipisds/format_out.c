@@ -25,13 +25,13 @@ void format_out_item(FILE *f, out_fmt_t fmt, const sds_service_t *s) {
 
   switch (fmt) {
   case OUT_M3U:
-    playlist_out_m3u_item(f, s->name, uri, s->tsid, s->onid, s->sid);
+    playlist_out_m3u_item(f, s->name, uri, NULL, s->tsid, s->onid, s->sid);
     break;
   case OUT_CSV:
     playlist_out_csv_item(f, s->name, uri, s->tsid, s->onid, s->sid);
     break;
   case OUT_XSPF:
-    playlist_out_xspf_item(f, s->name, uri, s->tsid, s->onid, s->sid);
+    playlist_out_xspf_item(f, s->name, uri, NULL, s->tsid, s->onid, s->sid);
     break;
   case OUT_XML:
   case OUT_NULL:

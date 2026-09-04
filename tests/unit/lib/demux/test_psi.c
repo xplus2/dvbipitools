@@ -211,13 +211,53 @@ static size_t build_pmt_with_scrambling(unsigned char *out, unsigned prog_num, u
   return crc_at + 4;
 }
 
+static size_t build_pmt_with_audio_registration(unsigned char *out, unsigned prog_num, unsigned pcr_pid, unsigned video_pid, unsigned video_type, unsigned audio_pid, const char fourcc[4]) {
+  unsigned char body[32];
+  size_t n = 0, hdr, crc_at;
+  uint32_t crc;
+  body[n++] = (unsigned char)(prog_num >> 8);
+  body[n++] = (unsigned char)prog_num;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = (unsigned char)(0xE0 | ((pcr_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)pcr_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  body[n++] = (unsigned char)video_type;
+  body[n++] = (unsigned char)(0xE0 | ((video_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)video_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  body[n++] = 0x06;
+  body[n++] = (unsigned char)(0xE0 | ((audio_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)audio_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x06;
+  body[n++] = 0x05;
+  body[n++] = 0x04;
+  memcpy(body + n, fourcc, 4);
+  n += 4;
+  hdr = n + 4;
+  out[0] = 0x02;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
 /* one-program, zero-ES PMT with a CA_descriptor (tag 0x09) in program_info instead of a
  * scrambling_descriptor, CRC included, returns length */
 static size_t build_pmt_with_ca(unsigned char *out, unsigned prog_num, unsigned pcr_pid, unsigned ca_system_id, unsigned ca_pid) {
   unsigned char body[32];
   size_t n = 0, hdr, crc_at;
   uint32_t crc;
-
   body[n++] = (unsigned char)(prog_num >> 8);
   body[n++] = (unsigned char)prog_num;
   body[n++] = 0xC1;
@@ -666,6 +706,51 @@ START_TEST(psi_wants_pid_tracks_new_pid_when_program_moves) {
 }
 END_TEST
 
+START_TEST(psi_classifies_vvc_video_stream_type) {
+  psi_t *p = psi_new();
+  unsigned char section[64], pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pmt(section, 1, 0x0101, 0x0101, 0x33, 0x0102, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  ck_assert_int_eq(psi_ready(p), 1);
+  es = psi_es(p, &count);
+  ck_assert_int_eq(es[0].cls, PID_VIDEO);
+  ck_assert_int_eq(es[0].codec, CODEC_VVC);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_classifies_opus_via_registration_descriptor) {
+  psi_t *p = psi_new();
+  unsigned char section[64], pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_with_audio_registration(section, 1, 0x0101, 0x0101, 0x1B, 0x0102, "Opus");
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_ready(p), 1);
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 2);
+  ck_assert_int_eq(es[1].cls, PID_AUDIO);
+  ck_assert_int_eq(es[1].codec, CODEC_OPUS);
+  psi_free(p);
+}
+END_TEST
+
 static Suite *psi_suite(void) {
   Suite *s = suite_create("psi");
   TCase *tc = tcase_create("core");
@@ -684,6 +769,8 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_wants_pid_picks_up_program_added_before_lock);
   tcase_add_test(tc, psi_wants_pid_picks_up_program_added_in_multi_mode);
   tcase_add_test(tc, psi_wants_pid_tracks_new_pid_when_program_moves);
+  tcase_add_test(tc, psi_classifies_vvc_video_stream_type);
+  tcase_add_test(tc, psi_classifies_opus_via_registration_descriptor);
   suite_add_tcase(s, tc);
   return s;
 }

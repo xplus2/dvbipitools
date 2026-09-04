@@ -18,8 +18,11 @@ static int build_video_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, 
     unsigned chroma;
     if (!s->es.spslen || hevc_info(s->es.sps, s->es.spslen, ptl, &chroma, &w, &h)) return 0; /* hevc_info: 0 ok, -1 malformed */
     cpriv_len = build_hvcc(&s->es, cpriv, cpriv_cap);
+  } else if (s->video_codec == CODEC_VVC) {
+    if (!s->es.spslen || vvc_dims(s->es.sps, s->es.spslen, &w, &h)) return 0;
+    cpriv_len = build_vvcc(&s->es, cpriv, cpriv_cap);
   } else {
-    return 0; /* fmp4: H.264/HEVC only, no MPEG-2 sample entry */
+    return 0; /* fmp4: H.264/HEVC/VVC only, no MPEG-2 sample entry */
   }
   memset(trk, 0, sizeof *trk);
   trk->codec = s->video_codec;
@@ -72,7 +75,7 @@ void try_create_fmux(hls_seg_ctx_t *s) {
   s->fmux = fmp4_mux_new(trk, ntrk);
   if (!s->fmux) return;
   outlen = fmp4_init_segment(s->fmux, &out);
-  if (outlen && hls_set_init_segment(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_FMP4, out, outlen) < 0)
+  if (outlen && hls_set_init_segment(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_FMP4, s->video_codec, out, outlen) < 0)
     log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_set_init_segment failed, init segment lost");
 }
 

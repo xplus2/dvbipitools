@@ -224,11 +224,13 @@ const char *codec_name(codec_t k) {
     case CODEC_MPEG2V:    return "mpeg2video";
     case CODEC_H264:      return "h264";
     case CODEC_HEVC:      return "hevc";
+    case CODEC_VVC:       return "vvc";
     case CODEC_MP2A:      return "mp2";
     case CODEC_AAC:       return "aac";
     case CODEC_AAC_LATM:  return "aac_latm";
     case CODEC_AC3:       return "ac3";
     case CODEC_EAC3:      return "eac3";
+    case CODEC_OPUS:      return "opus";
     case CODEC_NONE:      return "none";
   }
   return "none";

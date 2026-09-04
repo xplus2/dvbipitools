@@ -13,7 +13,7 @@
 
 #define MAX_SEGS 8
 
-static int fmt_parse(const char *s, route_fmt_t *out) {
+int fmt_parse(const char *s, route_fmt_t *out) {
   if (!strcmp(s, "ts")) {
     *out = ROUTE_FMT_TS;
     return 0;
@@ -156,7 +156,7 @@ static int fmt_or_hls_file_parse(const char *s, route_t *out) {
   return 0;
 }
 
-static const char *const route_reserved_names[] = {"rtp", "udp", "srt", "rist", "stdin", "list", "metrics", "ui", "api", "dlna"};
+static const char *const route_reserved_names[] = {"rtp", "udp", "srt", "rist", "stdin", "list", "metrics", "ui", "api", "dlna", "export"};
 
 int route_name_valid(const char *name) {
   if (!name || !*name || strlen(name) > ROUTE_NAME_MAX)

@@ -115,7 +115,7 @@ no
 no leading
 .BR . ,
 not one of
-.BR rtp ", " udp ", " srt ", " rist ", " stdin ", " list ", " metrics ", " ui ", " api ", " dlna ,
+.BR rtp ", " udp ", " srt ", " rist ", " stdin ", " list ", " metrics ", " ui ", " api ", " dlna ", " export ,
 and unique across every named
 .BR \-i .
 .SH OPTIONS
@@ -463,6 +463,46 @@ default first PMT that resolves), then picks that program's
 lowest-numbered audio ES that is not dropped by
 .B ?filter=
 and forwards its PES payload as-is: raw data.
+.SH PLAYLIST EXPORT
+The "List Export" page, or
+.BI /export/ fmt / type
+directly, lists every configured channel as one playlist.
+.I fmt
+is any format from URL PATHS above;
+.I type
+is
+.BR m3u " or " xspf .
+.PP
+.RS
+.BI ?host= host [:\fIport\fR]
+\- base host for generated URLs. Default:
+.B Host:
+request header, port from
+.BR \-\-listen / \-\-listen\-tls .
+.br
+.BI ?input= 1,3,4
+\- only these
+.B \-i
+ordinals. Default: all.
+.br
+.BI ?filter= pids
+\- forwarded onto every generated URL.
+.br
+.B ?keep_multicast
+\- an
+.BR rtp:// / udp://
+channel is listed by its raw multicast URI instead of a play\-path.
+.br
+.B ?plain
+\- force
+.BR Content\-Type:\ text/plain .
+.RE
+.PP
+A channel's
+.B tvg\-logo
+/
+.B <image>
+(M3U/XSPF) carries through if the source playlist had one.
 .SH CODECS
 .B ts / spts
 and plain

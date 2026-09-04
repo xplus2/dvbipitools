@@ -117,7 +117,6 @@ START_TEST(store_close_then_render_is_404) {
   hls_store_open(CTX_A, &f, 0, 2.0, 6, SEG_CONTAINER_TS);
   hls_push_segment(CTX_A, &f, 0, SEG_CONTAINER_TS, data, sizeof data, 2.0);
   hls_store_close(CTX_A, &f, 0, SEG_CONTAINER_TS);
-
   ck_assert_int_eq(hls_render(CTX_A, &f, 0, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 404);
 }
@@ -130,7 +129,6 @@ START_TEST(distinct_ctx_get_distinct_stores) {
   no_filter(&f);
   hls_store_open(CTX_A, &f, 0, 2.0, 6, SEG_CONTAINER_TS);
   hls_push_segment(CTX_A, &f, 0, SEG_CONTAINER_TS, data, sizeof data, 2.0);
-
   ck_assert_int_eq(hls_render(CTX_B, &f, 0, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 404);
 }
@@ -142,8 +140,7 @@ START_TEST(fmp4_init_segment_roundtrip) {
   const uint8_t init[16] = {'f', 't', 'y', 'p'};
   no_filter(&f);
   hls_store_open(CTX_A, &f, 0, 2.0, 6, SEG_CONTAINER_FMP4);
-  ck_assert_int_eq(hls_set_init_segment(CTX_A, &f, 0, SEG_CONTAINER_FMP4, init, sizeof init), 0);
-
+  ck_assert_int_eq(hls_set_init_segment(CTX_A, &f, 0, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init), 0);
   ck_assert_int_eq(hls_render(CTX_A, &f, 0, SEG_CONTAINER_FMP4, "init.mp4", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "video/mp4");
@@ -165,13 +162,11 @@ START_TEST(llhls_part_roundtrip) {
   ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
   ck_assert_int_eq(hls_ll_store_ready(CTX_A, &f, 0, SEG_CONTAINER_TS), 1);
   ck_assert_int_eq(hls_part_available(CTX_A, &f, 0, SEG_CONTAINER_TS, 0, 0), 1);
-
   ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, "seg0.0.ts", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_uint_eq(r.body_len, sizeof part);
   ck_assert_mem_eq(r.body, part, sizeof part);
   hls_resp_body_release(r.body, r.zc);
-
   ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, "index_ll.m3u8", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(memmem(r.body, r.body_len, "#EXT-X-PART-INF", 15) != NULL);
@@ -188,7 +183,6 @@ START_TEST(llhls_finalized_segment_part_still_served) {
   hls_llhls_enable(CTX_A, &f, 0, SEG_CONTAINER_TS, 0.5);
   hls_push_part(CTX_A, &f, 0, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1);
   ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, SEG_CONTAINER_TS, 0.5), 0);
-
   ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, "seg0.0.ts", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_uint_eq(r.body_len, sizeof part);
@@ -204,15 +198,13 @@ START_TEST(dash_manifest_and_segment_roundtrip) {
   const uint8_t seg[256] = {0x47};
   no_filter(&f);
   hls_store_open(CTX_A, &f, 0, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_set_init_segment(CTX_A, &f, 0, SEG_CONTAINER_FMP4, init, sizeof init);
+  hls_set_init_segment(CTX_A, &f, 0, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
   ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
-
   ck_assert_int_eq(dash_render(CTX_A, &f, 0, 0, "http://example.invalid/", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "application/dash+xml");
   ck_assert(memmem(r.body, r.body_len, "<MPD", 4) != NULL);
   hls_resp_body_release(r.body, r.zc);
-
   ck_assert_int_eq(dash_render_seg(CTX_A, &f, 0, "dseg0.m4s", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "video/mp4");

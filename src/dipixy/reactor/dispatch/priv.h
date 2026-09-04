@@ -6,6 +6,7 @@
 
 #include "../internal.h"
 #include "../reactor_tls.h"
+#include "../../core/playlist.h"
 
 extern const char RESP_400[];
 extern const char RESP_401[];
@@ -33,6 +34,8 @@ int wants_keepalive(int minor_version, const struct phr_header *headers, size_t 
 /* content.c */
 void serve_metrics(conn_t *c, int is_head, int keep_alive);
 void serve_status(conn_t *c, int is_head, int keep_alive);
+void serve_playlist(conn_t *c, route_fmt_t fmt, playlist_type_t ptype, const char *host_hdr, const char *query,
+                    const pid_filter_t *filter, int is_head, int keep_alive);
 void serve_dlna_xml(conn_t *c, const char *body, size_t len, int is_head, int keep_alive);
 void serve_dlna_desc(conn_t *c, int is_head, int keep_alive);
 void serve_dlna_cd_scpd(conn_t *c, int is_head, int keep_alive);

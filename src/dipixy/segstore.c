@@ -4,7 +4,6 @@
 #include "segstore_int.h"
 #include "reactor/internal.h"
 #include "version.h"
-
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 
@@ -34,8 +33,7 @@ static int g_seg_pool_cap = 8;
 
 /* call once at startup, before any HLS traffic */
 void hls_set_seg_pool_cap(int n) {
-  if (n < 1)
-    n = 1;
+  if (n < 1) n = 1;
   g_seg_pool_cap = n;
   for (int i = 0; i < SEG_POOL_CLASSES; i++)
     seg_pool[i].slots = calloc((size_t)n, sizeof *seg_pool[i].slots);
@@ -58,23 +56,19 @@ uint8_t *seg_buf_alloc(size_t size) {
   seg_pool_class_t *c = &seg_pool[cls];
   seg_buf_hdr_t *h = NULL;
 
-  if (c->slots) {
-    for (int i = 0; i < g_seg_pool_cap; i++) {
-      seg_buf_hdr_t *expected = atomic_load_explicit(&c->slots[i], memory_order_relaxed);
-      if (!expected)
-        continue;
-      if (atomic_compare_exchange_strong_explicit(&c->slots[i], &expected, NULL, memory_order_acquire, memory_order_relaxed)) {
-        h = expected;
-        break;
-      }
+  if (c->slots) for (int i = 0; i < g_seg_pool_cap; i++) {
+    seg_buf_hdr_t *expected = atomic_load_explicit(&c->slots[i], memory_order_relaxed);
+    if (!expected) continue;
+    if (atomic_compare_exchange_strong_explicit(&c->slots[i], &expected, NULL, memory_order_acquire, memory_order_relaxed)) {
+      h = expected;
+      break;
     }
   }
   if (h)
     atomic_store_explicit(&c->last_used_ms, now_ms(), memory_order_relaxed);
   else {
     h = malloc(sizeof(*h) + seg_pool_class_cap(cls));
-    if (!h)
-      return NULL;
+    if (!h) return NULL;
     h->pool_class = cls;
   }
   atomic_init(&h->refcnt, 1);
@@ -83,8 +77,7 @@ uint8_t *seg_buf_alloc(size_t size) {
 
 /* NULL-safe like free(): a zero-size push (hls_push_segment_ll with live_len==0) stores NULL */
 void seg_buf_ref(uint8_t *data) {
-  if (!data)
-    return;
+  if (!data) return;
   seg_buf_hdr_t *h = (seg_buf_hdr_t *)data - 1;
   atomic_fetch_add_explicit(&h->refcnt, 1, memory_order_relaxed);
 }
@@ -92,19 +85,15 @@ void seg_buf_ref(uint8_t *data) {
 void seg_buf_unref(uint8_t *data) {
   seg_buf_hdr_t *h;
   seg_pool_class_t *c;
-  if (!data)
-    return;
+  if (!data) return;
   h = (seg_buf_hdr_t *)data - 1;
-  if (atomic_fetch_sub_explicit(&h->refcnt, 1, memory_order_acq_rel) != 1)
-    return;
+  if (atomic_fetch_sub_explicit(&h->refcnt, 1, memory_order_acq_rel) != 1) return;
   c = &seg_pool[h->pool_class];
-  if (c->slots) {
-    for (int i = 0; i < g_seg_pool_cap; i++) {
-      seg_buf_hdr_t *expected = NULL;
-      if (atomic_compare_exchange_strong_explicit(&c->slots[i], &expected, h, memory_order_release, memory_order_relaxed)) {
-        atomic_store_explicit(&c->last_used_ms, now_ms(), memory_order_relaxed);
-        return;
-      }
+  if (c->slots) for (int i = 0; i < g_seg_pool_cap; i++) {
+    seg_buf_hdr_t *expected = NULL;
+    if (atomic_compare_exchange_strong_explicit(&c->slots[i], &expected, h, memory_order_release, memory_order_relaxed)) {
+      atomic_store_explicit(&c->last_used_ms, now_ms(), memory_order_relaxed);
+      return;
     }
   }
   free(h);
@@ -169,8 +158,7 @@ hls_store_t *find_store_locked(const capture_ctx_t *ctx, const pid_filter_t *fil
   hls_store_t *s;
   pthread_mutex_lock(&g_table_mtx);
   s = find_store(ctx, filter, pmt_pid, container);
-  if (s)
-    pthread_mutex_lock(store_lock(s));
+  if (s) pthread_mutex_lock(store_lock(s));
   pthread_mutex_unlock(&g_table_mtx);
   return s;
 }
@@ -183,8 +171,7 @@ int hls_target_duration(const hls_store_t *s) {
 
 /* caller must hold store's lock */
 static void evict_oldest(hls_store_t *s) {
-  if (s->count == 0)
-    return;
+  if (s->count == 0) return;
   seg_buf_unref(s->segs[s->head].data);
   s->segs[s->head].data = NULL;
   s->head = (s->head + 1) % HLS_MAX_SEGS;
@@ -214,28 +201,19 @@ static int evict_to_fit_collect(hls_store_t *s, uint8_t **out, int max_out) {
 /* open/close rare (once per stream lifecycle, not per-request): held under table_mtx + store lock, no sharding */
 void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double seg_target, int max_segs, seg_container_t container) {
   hls_store_t *s;
-
-  if (max_segs < 2)
-    max_segs = 2;
-  if (max_segs > HLS_MAX_SEGS)
-    max_segs = HLS_MAX_SEGS;
-
+  if (max_segs < 2) max_segs = 2;
+  if (max_segs > HLS_MAX_SEGS) max_segs = HLS_MAX_SEGS;
   pthread_mutex_lock(&g_table_mtx);
   s = find_store(ctx, filter, pmt_pid, container);
-  if (!s) {
-    for (int i = 0; i < g_stores_n; i++) {
-      if (!g_stores[i].open) {
-        s = &g_stores[i];
-        break;
-      }
-    }
+  if (!s) for (int i = 0; i < g_stores_n; i++) if (!g_stores[i].open) {
+    s = &g_stores[i];
+    break;
   }
   if (!s) {
     pthread_mutex_unlock(&g_table_mtx);
     return; /* out of slots */
   }
   pthread_mutex_lock(store_lock(s));
-
   free_all_segs(s);
   free(s->live_data);
   memset(s, 0, sizeof *s);
@@ -270,7 +248,7 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
   pthread_mutex_unlock(&g_table_mtx);
 }
 
-int hls_set_init_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const uint8_t *data, size_t size) {
+int hls_set_init_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, codec_t video_codec, const uint8_t *data, size_t size) {
   hls_store_t *s;
   if (size > HLS_INIT_SEG_MAX) {
     log_line("hls_set_init_segment: %zu exceeds HLS_INIT_SEG_MAX %d", size, HLS_INIT_SEG_MAX);
@@ -278,11 +256,11 @@ int hls_set_init_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
   }
 
   s = find_store_locked(ctx, filter, pmt_pid, container);
-  if (!s)
-    return -1;
+  if (!s) return -1;
   memcpy(s->init_data, data, size);
   s->init_size = size;
   s->init_gen++;
+  s->video_codec = video_codec;
   pthread_mutex_unlock(store_lock(s));
   return 0;
 }
@@ -295,8 +273,7 @@ int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
   int idx;
   uint32_t seq;
   copy = seg_buf_alloc(size);
-  if (!copy)
-    return -1;
+  if (!copy) return -1;
   memcpy(copy, data, size);
   s = find_store_locked(ctx, filter, pmt_pid, container);
   if (!s) {
@@ -316,8 +293,7 @@ int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
   s->count++;
   if (duration > s->td_hw) s->td_hw = duration;
   pthread_mutex_unlock(store_lock(s));
-  for (int i = 0; i < nevicted; i++)
-    seg_buf_unref(evicted[i]);
+  for (int i = 0; i < nevicted; i++) seg_buf_unref(evicted[i]);
   return 0;
 }
 
@@ -345,7 +321,6 @@ int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   hls_store_t *s;
   int n;
   uint32_t live_msn;
-
   s = find_store_locked(ctx, filter, pmt_pid, container);
   if (!s) return -1;
   if (s->live_parts.count >= HLS_MAX_PARTS || live_reserve(s, s->live_len + size) < 0) {
@@ -397,13 +372,11 @@ int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned
   s->segs[idx].parts = s->live_parts;
   s->count++;
   if (duration > s->td_hw) s->td_hw = duration;
-
   s->live_len = 0;
   s->live_parts.count = 0;
   s->live_msn = s->next_seq;
   pthread_mutex_unlock(store_lock(s));
-  for (int i = 0; i < nevicted; i++)
-    seg_buf_unref(evicted[i]);
+  for (int i = 0; i < nevicted; i++) seg_buf_unref(evicted[i]);
   if (g_segment_done_cb) g_segment_done_cb(s, seq);
   return 0;
 }
