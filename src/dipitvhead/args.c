@@ -315,6 +315,15 @@ static void print_help(void) {
       "                             frozen|cycling|silent (default: frozen)\n"
       "      --cas-required         for the --cas-ecmg right before this: its outage forces the\n"
       "                             global fallback regardless of other vendors\n"
+      "      --cas-cwenc-algo <a>   for the --cas-ecmg right before this: encrypt CW_provision's\n"
+      "                             CWs per Annex D, des56|aes128|aes256 (default: off)\n"
+      "      --cas-cwenc-aes-mode <m> for the --cas-ecmg right before this: stream|ecb, aes* only\n"
+      "                             (default: stream)\n"
+      "      --cas-cwenc-fixed-key <hex> for the --cas-ecmg right before this: 14/32/64 hex chars\n"
+      "                             for des56/aes128/aes256 (default: des56's Annex D ROM key)\n"
+      "      --cas-cwenc-key-list-a <path> for the --cas-ecmg right before this: 2048-byte Annex D\n"
+      "                             key list file\n"
+      "      --cas-cwenc-key-list-b <path> for the --cas-ecmg right before this: same, second list\n"
       "      --cas-pids <list>      PIDs to scramble: comma-separated pids and/or video/audio keywords\n"
       "                             (default: video,audio - all video and audio streams)\n"
       "      --cas-cp-duration <ms> crypto-period duration in ms, shared by every vendor (default: 10000)\n"
@@ -419,6 +428,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics-id", required_argument, 0, 1021},
       {"metrics-interval", required_argument, 0, 1022},
       {"cas-required", no_argument, 0, 1023},
+      {"cas-cwenc-algo", required_argument, 0, 1048},
+      {"cas-cwenc-aes-mode", required_argument, 0, 1049},
+      {"cas-cwenc-fixed-key", required_argument, 0, 1050},
+      {"cas-cwenc-key-list-a", required_argument, 0, 1051},
+      {"cas-cwenc-key-list-b", required_argument, 0, 1052},
       {"cas-fallback-clear", no_argument, 0, 1024},
       {"biss2-sw", required_argument, 0, 1025},
       {"biss2-emit-esw", required_argument, 0, 1026},
@@ -765,6 +779,51 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         any_cas_flag = 1;
         REQUIRE_CAS_VENDOR("--cas-required");
         cfg->cas_vendors[cfg->n_cas_vendors - 1].required = 1;
+        break;
+      case 1048:
+        any_cas_flag = 1;
+        REQUIRE_CAS_VENDOR("--cas-cwenc-algo");
+        if (strcmp(optarg, "des56") && strcmp(optarg, "aes128") && strcmp(optarg, "aes256")) {
+          argerr("invalid --cas-cwenc-algo: %s (des56|aes128|aes256)", optarg);
+          return ARGS_ERR;
+        }
+        bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_algorithm, sizeof cfg->cas_vendors[0].cwenc_algorithm, optarg);
+        break;
+      case 1049:
+        any_cas_flag = 1;
+        REQUIRE_CAS_VENDOR("--cas-cwenc-aes-mode");
+        if (strcmp(optarg, "stream") && strcmp(optarg, "ecb")) {
+          argerr("invalid --cas-cwenc-aes-mode: %s (stream|ecb)", optarg);
+          return ARGS_ERR;
+        }
+        bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_aes_mode, sizeof cfg->cas_vendors[0].cwenc_aes_mode, optarg);
+        break;
+      case 1050:
+        any_cas_flag = 1;
+        REQUIRE_CAS_VENDOR("--cas-cwenc-fixed-key");
+        if (bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_fixed_key_hex, sizeof cfg->cas_vendors[0].cwenc_fixed_key_hex, optarg) >=
+            sizeof cfg->cas_vendors[0].cwenc_fixed_key_hex) {
+          argerr("--cas-cwenc-fixed-key too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1051:
+        any_cas_flag = 1;
+        REQUIRE_CAS_VENDOR("--cas-cwenc-key-list-a");
+        if (bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_key_list_a_path, sizeof cfg->cas_vendors[0].cwenc_key_list_a_path, optarg) >=
+            sizeof cfg->cas_vendors[0].cwenc_key_list_a_path) {
+          argerr("--cas-cwenc-key-list-a too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1052:
+        any_cas_flag = 1;
+        REQUIRE_CAS_VENDOR("--cas-cwenc-key-list-b");
+        if (bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_key_list_b_path, sizeof cfg->cas_vendors[0].cwenc_key_list_b_path, optarg) >=
+            sizeof cfg->cas_vendors[0].cwenc_key_list_b_path) {
+          argerr("--cas-cwenc-key-list-b too long");
+          return ARGS_ERR;
+        }
         break;
       case 1024:
         any_cas_flag = 1;

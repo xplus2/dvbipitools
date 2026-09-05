@@ -118,6 +118,11 @@ cas_t *cas_start(const config_t *cfg, const unsigned *audio_pids, size_t n_audio
     gv->emmg_max_conns = v->emmg_max_conns;
     gv->required = v->required;
     gv->outage_mode = map_outage_mode(v->resilience);
+    gv->cwenc_algorithm = v->cwenc_algorithm;
+    gv->cwenc_aes_mode = v->cwenc_aes_mode;
+    gv->cwenc_fixed_key_hex = v->cwenc_fixed_key_hex;
+    gv->cwenc_key_list_a_path = v->cwenc_key_list_a_path;
+    gv->cwenc_key_list_b_path = v->cwenc_key_list_b_path;
   }
   for (i = 0; i < n_audio_pids; i++)
     gcfg.pids[i] = audio_pids[i];

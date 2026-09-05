@@ -95,9 +95,10 @@ START_TEST(cw_provision_lead0_permsg1_sends_one_combo_at_cp) {
   unsigned short tag, vlen;
   const unsigned char *val;
   int combos = 0;
+  cwenc_ctx_t off_ctx = {0};
 
   memset(hist, 0, sizeof hist);
-  size_t n = ecmg_build_cw_provision(buf, sizeof buf, 3, 500, hist, 8, 0, 1);
+  size_t n = ecmg_build_cw_provision(buf, sizeof buf, 3, 500, hist, 8, 0, 1, &off_ctx);
   ck_assert_uint_gt(n, 0u);
   ck_assert_int_eq(simulcrypt_hdr_parse(buf, n, &hdr), 0);
   ck_assert_uint_eq(hdr.type, ECMG_MSG_CW_PROVISION);
@@ -123,9 +124,9 @@ START_TEST(cw_provision_lead1_permsg2_sends_current_and_next) {
   const unsigned char *val;
   unsigned short seen_cp[4];
   int combos = 0;
-
+  cwenc_ctx_t off_ctx = {0};
   memset(hist, 0, sizeof hist);
-  size_t n = ecmg_build_cw_provision(buf, sizeof buf, 3, 500, hist, 16, 1, 2);
+  size_t n = ecmg_build_cw_provision(buf, sizeof buf, 3, 500, hist, 16, 1, 2, &off_ctx);
   ck_assert_uint_gt(n, 0u);
   ck_assert_int_eq(simulcrypt_hdr_parse(buf, n, &hdr), 0);
 
@@ -153,10 +154,11 @@ START_TEST(cw_provision_reuses_history_for_overlapping_cp) {
   const unsigned char *val;
   unsigned char cw_cp501_first[16];
   int found;
+  cwenc_ctx_t off_ctx = {0};
 
   memset(hist, 0, sizeof hist);
   /* CP=500: combo for [500,501] - caches CW(501) */
-  size_t n1 = ecmg_build_cw_provision(buf1, sizeof buf1, 3, 500, hist, 16, 1, 2);
+  size_t n1 = ecmg_build_cw_provision(buf1, sizeof buf1, 3, 500, hist, 16, 1, 2, &off_ctx);
   ck_assert_uint_gt(n1, 0u);
   simulcrypt_hdr_parse(buf1, n1, &hdr);
   simulcrypt_tlv_reader_init(&r, buf1 + SIMULCRYPT_HDR_LEN, hdr.payload_len);
@@ -170,7 +172,7 @@ START_TEST(cw_provision_reuses_history_for_overlapping_cp) {
   ck_assert_int_eq(found, 1);
 
   /* CP=501: combo for [501,502] - CW(501) must be the SAME value cached above, not fresh randomness */
-  size_t n2 = ecmg_build_cw_provision(buf2, sizeof buf2, 3, 501, hist, 16, 1, 2);
+  size_t n2 = ecmg_build_cw_provision(buf2, sizeof buf2, 3, 501, hist, 16, 1, 2, &off_ctx);
   ck_assert_uint_gt(n2, 0u);
   simulcrypt_hdr_parse(buf2, n2, &hdr);
   simulcrypt_tlv_reader_init(&r, buf2 + SIMULCRYPT_HDR_LEN, hdr.payload_len);
@@ -188,8 +190,49 @@ END_TEST
 START_TEST(cw_provision_rejects_small_cap) {
   unsigned char buf[10];
   cw_hist_entry_t hist[ECMG_CW_HIST];
+  cwenc_ctx_t off_ctx = {0};
   memset(hist, 0, sizeof hist);
-  ck_assert_uint_eq(ecmg_build_cw_provision(buf, sizeof buf, 3, 1, hist, 16, 0, 1), 0u);
+  ck_assert_uint_eq(ecmg_build_cw_provision(buf, sizeof buf, 3, 1, hist, 16, 0, 1, &off_ctx), 0u);
+}
+END_TEST
+
+START_TEST(cw_provision_encrypts_when_cwenc_active) {
+  unsigned char buf[128];
+  cw_hist_entry_t hist[ECMG_CW_HIST];
+  simulcrypt_hdr_t hdr;
+  const unsigned char *val;
+  unsigned short vlen;
+  cwenc_config_t cfg;
+  cwenc_ctx_t ctx, ctx2;
+  cwenc_selection_t sel;
+  unsigned char plain_cw[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
+  unsigned char expect_cw[8];
+  size_t n;
+
+  memset(hist, 0, sizeof hist);
+  hist[500 % ECMG_CW_HIST].valid = 1;
+  hist[500 % ECMG_CW_HIST].cp_number = 500;
+  memcpy(hist[500 % ECMG_CW_HIST].cw, plain_cw, 8);
+
+  ck_assert_int_eq(cwenc_config_init(&cfg, "des56", NULL, NULL, NULL, NULL), 0);
+  cwenc_ctx_init(&ctx, &cfg);
+  cwenc_ctx_init(&ctx2, &cfg);
+  ck_assert_int_eq(cwenc_select_next(&ctx2, &sel), 0);
+  memcpy(expect_cw, plain_cw, 8);
+  ck_assert_int_eq(cwenc_encrypt_cw(&cfg, &sel, 8, ECMG_CHANNEL_ID, ECMG_STREAM_ID, 500, expect_cw), 0);
+
+  n = ecmg_build_cw_provision(buf, sizeof buf, 3, 500, hist, 8, 0, 1, &ctx);
+  ck_assert_uint_gt(n, 0u);
+  simulcrypt_hdr_parse(buf, n, &hdr);
+
+  ck_assert_int_eq(find_tlv(buf + SIMULCRYPT_HDR_LEN, hdr.payload_len, ECMG_P_CW_ENCRYPTION, &val, &vlen), 1);
+  ck_assert_uint_eq(vlen, 2);
+  ck_assert_uint_eq(((unsigned)val[0] << 8) | val[1], 0);
+
+  ck_assert_int_eq(find_tlv(buf + SIMULCRYPT_HDR_LEN, hdr.payload_len, ECMG_P_CP_CW_COMBINATION, &val, &vlen), 1);
+  ck_assert_uint_eq(vlen, 2 + 8);
+  ck_assert_mem_eq(val + 2, expect_cw, 8);
+  ck_assert_mem_ne(val + 2, plain_cw, 8);
 }
 END_TEST
 
@@ -668,6 +711,7 @@ static Suite *ecmg_client_suite(void) {
   tcase_add_test(tc, cw_provision_lead1_permsg2_sends_current_and_next);
   tcase_add_test(tc, cw_provision_reuses_history_for_overlapping_cp);
   tcase_add_test(tc, cw_provision_rejects_small_cap);
+  tcase_add_test(tc, cw_provision_encrypts_when_cwenc_active);
   tcase_add_test(tc, find_error_status_locates_tag);
   tcase_add_test(tc, find_error_status_absent_returns_error);
   tcase_add_test(tc, parse_channel_status_full_message);

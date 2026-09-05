@@ -354,10 +354,12 @@ ifeq ($(HAVE_OPENSSL),yes)
 dipiradiohead_CISSA_SRC := src/lib/scrambler/cissa.c
 dipiradiohead_BISS_SRC := src/lib/cas/biss/biss.c src/lib/cas/biss/hex.c
 dipiradiohead_BISS_CA_SRC := src/lib/cas/biss/ca.c
+dipiradiohead_CWENC_SRC := src/lib/cas/ecmg_client/cw_encryption.c
 else
 dipiradiohead_CISSA_SRC := src/lib/scrambler/cissa_stub.c
 dipiradiohead_BISS_SRC := src/lib/cas/biss/stub.c src/lib/cas/biss/hex.c
 dipiradiohead_BISS_CA_SRC := src/lib/cas/biss/ca_stub.c
+dipiradiohead_CWENC_SRC := src/lib/cas/ecmg_client/cw_encryption_stub.c
 $(warning dipiradiohead: OpenSSL not found via pkg-config, building without CISSA support)
 endif
 
@@ -446,6 +448,8 @@ dipiradiohead_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	$(dipiradiohead_CWENC_SRC) \
+	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
@@ -486,10 +490,12 @@ ifeq ($(HAVE_OPENSSL),yes)
 dipitvhead_CISSA_SRC := src/lib/scrambler/cissa.c
 dipitvhead_BISS_SRC := src/lib/cas/biss/biss.c src/lib/cas/biss/hex.c
 dipitvhead_BISS_CA_SRC := src/lib/cas/biss/ca.c
+dipitvhead_CWENC_SRC := src/lib/cas/ecmg_client/cw_encryption.c
 else
 dipitvhead_CISSA_SRC := src/lib/scrambler/cissa_stub.c
 dipitvhead_BISS_SRC := src/lib/cas/biss/stub.c src/lib/cas/biss/hex.c
 dipitvhead_BISS_CA_SRC := src/lib/cas/biss/ca_stub.c
+dipitvhead_CWENC_SRC := src/lib/cas/ecmg_client/cw_encryption_stub.c
 $(warning dipitvhead: OpenSSL not found via pkg-config, building without CISSA support)
 endif
 
@@ -558,6 +564,8 @@ dipitvhead_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	$(dipitvhead_CWENC_SRC) \
+	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
@@ -1335,8 +1343,18 @@ lib_cas_biss_ca_engine_SRCS := \
 	src/lib/helper/log.c
 lib_cas_biss_ca_engine_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_cas_biss_ca_engine_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += lib_cas_cw_encryption
+lib_cas_cw_encryption_BIN := tests/unit/lib/cas/test_cw_encryption
+lib_cas_cw_encryption_SRCS := \
+	tests/unit/lib/cas/test_cw_encryption.c \
+	src/lib/cas/ecmg_client/cw_encryption.c \
+	src/lib/helper/secure_zero.c \
+	src/lib/helper/log.c
+lib_cas_cw_encryption_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+lib_cas_cw_encryption_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 else
-$(warning tests: OpenSSL not found via pkg-config, skipping lib_scrambler_cissa/lib_cas_biss/lib_cas_biss_ca/lib_cas_biss_ca_engine unit tests)
+$(warning tests: OpenSSL not found via pkg-config, skipping lib_scrambler_cissa/lib_cas_biss/lib_cas_biss_ca/lib_cas_biss_ca_engine/lib_cas_cw_encryption unit tests)
 endif
 
 UNIT_TESTS += lib_cas_biss_ca_sections
@@ -2312,6 +2330,8 @@ dipiradiohead_tspacketizer_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
@@ -2357,6 +2377,8 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
@@ -2412,6 +2434,8 @@ dipiradiohead_cas_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
@@ -2445,6 +2469,10 @@ dipiradiohead_args_SRCS := \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/ioutil.c \
 	src/lib/cas/cas_args.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
@@ -2542,6 +2570,10 @@ dipitvhead_args_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/cas/cas_args.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
@@ -2630,6 +2662,8 @@ dipitvhead_remux_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
@@ -2675,6 +2709,8 @@ dipitvhead_output_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
@@ -2728,6 +2764,8 @@ dipitvhead_ecmg_client_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/ecmg_client/cw_encryption.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/psi/psi.c \
@@ -2741,6 +2779,8 @@ dipitvhead_ecmg_client_SRCS := \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/helper/log.c \
 	src/lib/helper/signal.c
+dipitvhead_ecmg_client_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+dipitvhead_ecmg_client_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
 dipitvhead_emmg_server_BIN := tests/unit/dipitvhead/test_emmg_server
 dipitvhead_emmg_server_SRCS := \
@@ -2782,6 +2822,8 @@ dipitvhead_cas_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
@@ -2935,6 +2977,8 @@ lib_cas_cas_group_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
@@ -3664,6 +3708,8 @@ fuzz_ecmg_channel_status_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c \

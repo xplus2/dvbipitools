@@ -51,22 +51,27 @@ not global flags. Order matters: `--sid`/`-s` before the first `-i` is an error.
 with the `--cas-ecmg` immediately before them, same convention as `-i`'s `--sid`/`-s` above -
 using one before any `--cas-ecmg` is an error. Everything else is shared across every vendor.
 
-| long form              | argument                  | default                                    | scope      |
-|------------------------|---------------------------|--------------------------------------------|------------|
-| `--cas-algo`           | `cissa\|csa2\|csa1`       | disabled                                   |            |
-| `--cas-ecmg`           | `tcp://host:port`         | at least one required with `--cas-algo`    |            |
-| `--cas-ecmg-version`   | `2\|3`                    | auto-negotiate                             | per-vendor |
-| `--cas-super-id`       | `<n>`                     | required per vendor                        | per-vendor |
-| `--cas-ecm-id`         | `<n>`                     | required per vendor                        | per-vendor |
-| `--cas-ecm-pid`        | `<pid>`                   | `0x0020`                                   | per-vendor |
-| `--cas-emmg-port`      | `<n>`                     | `8002`                                     | per-vendor |
-| `--cas-emmg-max-conns` | `<n>`                     | `8` (max `64`)                             | per-vendor |
-| `--cas-emmg-version`   | `2\|3`                    | accept client's proposal                   | per-vendor |
-| `--cas-emm-pid`        | `<pid>`                   | `0x0021`                                   | per-vendor |
-| `--cas-resilience`     | `frozen\|cycling\|silent` | `frozen`                                   | per-vendor |
-| `--cas-required`       |                           | off                                        | per-vendor |
-| `--cas-cp-duration`    | `<ms>`                    | `10000`                                    |            |
-| `--cas-fallback-clear` |                           | off (stay scrambled on last known-good CW) |            |
+| long form                | argument                  | default                                    | scope      |
+|--------------------------|---------------------------|--------------------------------------------|------------|
+| `--cas-algo`             | `cissa\|csa2\|csa1`       | disabled                                   |            |
+| `--cas-ecmg`             | `tcp://host:port`         | at least one required with `--cas-algo`    |            |
+| `--cas-ecmg-version`     | `2\|3`                    | auto-negotiate                             | per-vendor |
+| `--cas-super-id`         | `<n>`                     | required per vendor                        | per-vendor |
+| `--cas-ecm-id`           | `<n>`                     | required per vendor                        | per-vendor |
+| `--cas-ecm-pid`          | `<pid>`                   | `0x0020`                                   | per-vendor |
+| `--cas-emmg-port`        | `<n>`                     | `8002`                                     | per-vendor |
+| `--cas-emmg-max-conns`   | `<n>`                     | `8` (max `64`)                             | per-vendor |
+| `--cas-emmg-version`     | `2\|3`                    | accept client's proposal                   | per-vendor |
+| `--cas-emm-pid`          | `<pid>`                   | `0x0021`                                   | per-vendor |
+| `--cas-resilience`       | `frozen\|cycling\|silent` | `frozen`                                   | per-vendor |
+| `--cas-required`         |                           | off                                        | per-vendor |
+| `--cas-cwenc-algo`       | `des56\|aes128\|aes256`   | off (plaintext)                            | per-vendor |
+| `--cas-cwenc-aes-mode`   | `stream\|ecb`             | `stream`                                   | per-vendor |
+| `--cas-cwenc-fixed-key`  | `<hex>`                   | `des56`'s Annex D ROM key; none for aes*   | per-vendor |
+| `--cas-cwenc-key-list-a` | `<path>`                  | none                                       | per-vendor |
+| `--cas-cwenc-key-list-b` | `<path>`                  | none                                       | per-vendor |
+| `--cas-cp-duration`      | `<ms>`                    | `10000`                                    |            |
+| `--cas-fallback-clear`   |                           | off (stay scrambled on last known-good CW) |            |
 
 ### Conditional Access: BISS
 
@@ -223,6 +228,22 @@ the last two known CWs (even/odd), instead of freezing on one.
 the last known-good ECM. Content stays scrambled with the last known-good CW, same as `frozen` -
 only the ECM stream itself goes quiet.
 
+### CW encryption (`--cas-cwenc-*`)
+
+Off by default: `CP_CW_combination` uses a plain CW.
+Setting `--cas-cwenc-algo` encrypts it per ETSI TS 103 197 Annex D. As specified, `des56` is supported.
+However, it allows extensions, so we used it _as generic as possible_ for some modern interpretation. 
+
+* `des56`: the spec-literal single-DES scheme. Included for interop, not as a recommendation.
+* `aes128`/`aes256`: generic extension of the same Annex D parameter framing.
+  `--cas-cwenc-aes-mode stream` (default) works for either an 8 or 16 byte control word;
+  `ecb` needs a 16 byte one (AES has no 8-byte block mode) and is rejected at startup otherwise.
+* `--cas-cwenc-fixed-key`: sized to the algorithm (14/32/64 hex chars). Left unset, `des56` falls
+  back to Annex D's own published ROM key; `aes128`/`aes256` have no such default and fail at
+  startup if neither this nor a key list is configured.
+* `--cas-cwenc-key-list-a`/`-b`: optional 2048-byte Annex D key list files. When at least one is
+  loaded, `CW_provision` messages rotate through it instead of using the fixed key.
+
 ### EMMG (`--cas-emmg-port`, `--cas-emmg-max-conns`, `--cas-emmg-version`)
 
 dipiradiohead is the EMMG-side MUX: it listens (`--cas-emmg-port`, default 8002) and the EMMG
@@ -355,6 +376,11 @@ dipiradiohead -i https://radio.example.com/channel1.m3u --sdt "Channel 1" \
 # scrambled (CISSA), ECMG at ecmg.example:2222
 dipiradiohead -i https://radio.example.com/channel1.m3u -m 239.1.1.1:5000 -r -s "Channel 1" \
   --cas-algo cissa --cas-ecmg tcp://ecmg.example:2222 --cas-super-id 0x4A750002 --cas-ecm-id 1
+
+# same, with Annex D control-word encryption to the ECMG (fixed key, ROM default)
+dipiradiohead -i https://radio.example.com/channel1.m3u -m 239.1.1.1:5000 -r -s "Channel 1" \
+  --cas-algo cissa --cas-ecmg tcp://ecmg.example:2222 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
+  --cas-cwenc-algo des56
 
 # multi-CAS: two vendors, one required. --cas-ecmg opens a slot; the flags after it
 # (version/super-id/ecm-id/pid/resilience/required) pair with that --cas-ecmg.

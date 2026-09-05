@@ -39,6 +39,11 @@ typedef struct {
   unsigned emmg_max_conns; /* 0 = library default (8) */
   ecmg_outage_mode_t outage_mode; /* per-vendor: frozen/cycling/silent on ECMG loss */
   int required;                  /* down triggers global fallback regardless of other vendors */
+  const char *cwenc_algorithm;
+  const char *cwenc_aes_mode;
+  const char *cwenc_fixed_key_hex;
+  const char *cwenc_key_list_a_path;
+  const char *cwenc_key_list_b_path;
 } cas_group_vendor_cfg_t;
 
 typedef struct {

@@ -19,6 +19,7 @@
 struct ecmg_client {
   ecmg_client_cfg_t cfg;
   size_t cw_len;
+  cwenc_ctx_t cwenc_ctx;
 
   const atomic_ulong *packet_counter;
   unsigned long packets_per_cp;

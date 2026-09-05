@@ -67,11 +67,20 @@ int ecmg_client_target_parity(ecmg_client_t *c) {
 }
 
 ecmg_client_t *ecmg_client_start(const ecmg_client_cfg_t *cfg, const atomic_ulong *packet_counter, unsigned long packets_per_cp, unsigned long lookahead_margin_packets) {
-  ecmg_client_t *c = calloc(1, sizeof *c);
+  cwenc_config_t cwenc_cfg;
+  ecmg_client_t *c;
+
+  if (cwenc_config_init(&cwenc_cfg, cfg->cwenc_algorithm, cfg->cwenc_aes_mode, cfg->cwenc_fixed_key_hex, cfg->cwenc_key_list_a_path, cfg->cwenc_key_list_b_path) != 0)
+    return NULL;
+  if (cwenc_config_validate(&cwenc_cfg, (int)scrambler_cw_len(cfg->algo)) != 0)
+    return NULL;
+
+  c = calloc(1, sizeof *c);
   if (!c)
     return NULL;
   c->cfg = *cfg;
   c->cw_len = scrambler_cw_len(cfg->algo);
+  cwenc_ctx_init(&c->cwenc_ctx, &cwenc_cfg);
   c->packet_counter = packet_counter;
   c->packets_per_cp = packets_per_cp;
   c->lookahead_margin_packets = lookahead_margin_packets;

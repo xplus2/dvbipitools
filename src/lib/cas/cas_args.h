@@ -35,6 +35,11 @@ typedef struct {
   unsigned emm_pid;              /* --cas-emm-pid right after this --cas-ecmg; default 0x0021 */
   cas_outage_mode_t resilience;  /* --cas-resilience right after this --cas-ecmg; default frozen */
   int required;                  /* --cas-required right after this --cas-ecmg */
+  char cwenc_algorithm[8];
+  char cwenc_aes_mode[8];
+  char cwenc_fixed_key_hex[65];
+  char cwenc_key_list_a_path[256];
+  char cwenc_key_list_b_path[256];
 } cas_vendor_t;
 
 /* biss2/biss1/biss2-ca/simulcrypt mutual exclusivity, plus per-vendor cross-checks

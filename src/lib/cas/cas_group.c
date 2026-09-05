@@ -173,6 +173,11 @@ static void cas_lazy_start(cas_group_t *g) {
     ecfg.cp_duration_ms = g->cfg.cp_duration_ms;
     ecfg.algo = g->cfg.algo;
     ecfg.outage_mode = vc->outage_mode;
+    ecfg.cwenc_algorithm = vc->cwenc_algorithm;
+    ecfg.cwenc_aes_mode = vc->cwenc_aes_mode;
+    ecfg.cwenc_fixed_key_hex = vc->cwenc_fixed_key_hex;
+    ecfg.cwenc_key_list_a_path = vc->cwenc_key_list_a_path;
+    ecfg.cwenc_key_list_b_path = vc->cwenc_key_list_b_path;
     v->cw_ctx.g = g;
     v->cw_ctx.idx = i;
     ecfg.cw_source.get_cw = vendor_cw_get;

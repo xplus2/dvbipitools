@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 #include <stddef.h>
 
+#include "lib/cas/ecmg_client/cw_encryption.h"
 #include "lib/scrambler/scrambler.h"
 
 typedef enum { ECMG_OUTAGE_FROZEN, ECMG_OUTAGE_CYCLING, ECMG_OUTAGE_SILENT } ecmg_outage_mode_t;
@@ -33,6 +34,11 @@ typedef struct {
   scramble_algo_t algo;      /* picks wire CW length via scrambler_cw_len() */
   ecmg_outage_mode_t outage_mode;
   ecmg_cw_source_t cw_source; /* zero-init: self-generate, see above */
+  const char *cwenc_algorithm;
+  const char *cwenc_aes_mode;
+  const char *cwenc_fixed_key_hex;
+  const char *cwenc_key_list_a_path;
+  const char *cwenc_key_list_b_path;
 } ecmg_client_cfg_t;
 
 typedef struct ecmg_client ecmg_client_t;
@@ -92,6 +98,7 @@ int ecmg_ecm_available_calc(ecmg_outage_mode_t outage_mode, int connected);
 #define ECMG_P_CP_NUMBER 0x0012
 #define ECMG_P_CP_CW_COMBINATION 0x0014
 #define ECMG_P_ECM_DATAGRAM 0x0015
+#define ECMG_P_CW_ENCRYPTION 0x0018
 #define ECMG_P_ECM_ID 0x0019
 #define ECMG_P_ERROR_STATUS 0x7000
 
@@ -112,7 +119,7 @@ typedef struct {
 
 size_t ecmg_build_channel_setup(unsigned char *out, size_t cap, unsigned char version, unsigned super_cas_id);
 size_t ecmg_build_stream_setup(unsigned char *out, size_t cap, unsigned char version, unsigned ecm_id, unsigned nominal_cp_100ms);
-size_t ecmg_build_cw_provision(unsigned char *out, size_t cap, unsigned char version, unsigned short cp_number, cw_hist_entry_t *hist, size_t cw_len, unsigned lead_cw, unsigned cw_per_msg);
+size_t ecmg_build_cw_provision(unsigned char *out, size_t cap, unsigned char version, unsigned short cp_number, cw_hist_entry_t *hist, size_t cw_len, unsigned lead_cw, unsigned cw_per_msg, cwenc_ctx_t *cwenc_ctx);
 
 int ecmg_find_error_status(const unsigned char *body, size_t body_len, unsigned short *out);
 /* 0 ok (fills all five), -1 malformed or cw_per_msg missing/out of range */

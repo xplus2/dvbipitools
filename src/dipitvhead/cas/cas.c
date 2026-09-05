@@ -145,6 +145,11 @@ static void fill_group_cfg(const config_t *cfg, cas_group_cfg_t *gcfg) {
     gv->emmg_max_conns = v->emmg_max_conns;
     gv->required = v->required;
     gv->outage_mode = map_outage_mode(v->resilience);
+    gv->cwenc_algorithm = v->cwenc_algorithm;
+    gv->cwenc_aes_mode = v->cwenc_aes_mode;
+    gv->cwenc_fixed_key_hex = v->cwenc_fixed_key_hex;
+    gv->cwenc_key_list_a_path = v->cwenc_key_list_a_path;
+    gv->cwenc_key_list_b_path = v->cwenc_key_list_b_path;
   }
 }
 

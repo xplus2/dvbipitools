@@ -102,9 +102,12 @@ size_t ecmg_build_stream_setup(unsigned char *out, size_t cap, unsigned char ver
 }
 
 size_t ecmg_build_cw_provision(unsigned char *out, size_t cap, unsigned char version, unsigned short cp_number,
-                                  cw_hist_entry_t *hist, size_t cw_len, unsigned lead_cw, unsigned cw_per_msg) {
+                                  cw_hist_entry_t *hist, size_t cw_len, unsigned lead_cw, unsigned cw_per_msg, cwenc_ctx_t *cwenc_ctx) {
   simulcrypt_writer_t w;
   unsigned short first_cp = (unsigned short)(cp_number + lead_cw - cw_per_msg + 1);
+  cwenc_selection_t sel;
+  int cwenc_active = cwenc_select_next(cwenc_ctx, &sel) == 0;
+
   if (simulcrypt_writer_begin(&w, out, cap, version, ECMG_MSG_CW_PROVISION) < 0)
     return 0;
   if (simulcrypt_writer_put_tlv(&w, ECMG_P_ECM_CHANNEL_ID, (unsigned char[]){0, ECMG_CHANNEL_ID}, 2) < 0)
@@ -113,6 +116,11 @@ size_t ecmg_build_cw_provision(unsigned char *out, size_t cap, unsigned char ver
     return 0;
   if (simulcrypt_writer_put_tlv(&w, ECMG_P_CP_NUMBER, (unsigned char[]){(unsigned char)(cp_number >> 8), (unsigned char)cp_number}, 2) < 0)
     return 0;
+  if (cwenc_active) {
+    unsigned short param = cwenc_pack_param(&sel);
+    if (simulcrypt_writer_put_tlv(&w, ECMG_P_CW_ENCRYPTION, (unsigned char[]){(unsigned char)(param >> 8), (unsigned char)param}, 2) < 0)
+      return 0;
+  }
   for (unsigned i = 0; i < cw_per_msg; i++) {
     unsigned char combo[2 + ECMG_MAX_CW_LEN];
     unsigned short cp = (unsigned short)(first_cp + i);
@@ -121,6 +129,8 @@ size_t ecmg_build_cw_provision(unsigned char *out, size_t cap, unsigned char ver
       return 0;
     psi_put16(combo, cp);
     memcpy(combo + 2, cw, cw_len);
+    if (cwenc_active && cwenc_encrypt_cw(&cwenc_ctx->cfg, &sel, (int)cw_len, ECMG_CHANNEL_ID, ECMG_STREAM_ID, cp, combo + 2) != 0)
+      return 0;
     if (simulcrypt_writer_put_tlv(&w, ECMG_P_CP_CW_COMBINATION, combo, (unsigned short)(2 + cw_len)) < 0)
       return 0;
   }

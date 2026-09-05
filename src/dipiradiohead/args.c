@@ -121,6 +121,15 @@ static void print_help(void) {
       "                             frozen|cycling|silent (default: frozen)\n"
       "      --cas-required         for the --cas-ecmg right before this: its outage forces the\n"
       "                             global fallback regardless of other vendors\n"
+      "      --cas-cwenc-algo <a>   for the --cas-ecmg right before this: encrypt CW_provision's\n"
+      "                             CWs per Annex D, des56|aes128|aes256 (default: off)\n"
+      "      --cas-cwenc-aes-mode <m> for the --cas-ecmg right before this: stream|ecb, aes* only\n"
+      "                             (default: stream)\n"
+      "      --cas-cwenc-fixed-key <hex> for the --cas-ecmg right before this: 14/32/64 hex chars\n"
+      "                             for des56/aes128/aes256 (default: des56's Annex D ROM key)\n"
+      "      --cas-cwenc-key-list-a <path> for the --cas-ecmg right before this: 2048-byte Annex D\n"
+      "                             key list file\n"
+      "      --cas-cwenc-key-list-b <path> for the --cas-ecmg right before this: same, second list\n"
       "      --cas-cp-duration <ms> crypto-period duration in ms, shared by every vendor (default: 10000)\n"
       "      --cas-fallback-clear   on total outage (or a --cas-required vendor down): clear\n"
       "                             instead of staying scrambled on the last known-good CW\n"
@@ -211,6 +220,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics-id", required_argument, 0, 1016},
       {"metrics-interval", required_argument, 0, 1017},
       {"cas-required", no_argument, 0, 1018},
+      {"cas-cwenc-algo", required_argument, 0, 1048},
+      {"cas-cwenc-aes-mode", required_argument, 0, 1049},
+      {"cas-cwenc-fixed-key", required_argument, 0, 1050},
+      {"cas-cwenc-key-list-a", required_argument, 0, 1051},
+      {"cas-cwenc-key-list-b", required_argument, 0, 1052},
       {"cas-fallback-clear", no_argument, 0, 1019},
       {"biss2-sw", required_argument, 0, 1020},
       {"biss2-emit-esw", required_argument, 0, 1021},
@@ -505,6 +519,66 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->cas_vendors[cfg->n_cas_vendors - 1].required = 1;
+        break;
+      case 1048:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-cwenc-algo must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (strcmp(optarg, "des56") && strcmp(optarg, "aes128") && strcmp(optarg, "aes256")) {
+          argerr("invalid --cas-cwenc-algo: %s (des56|aes128|aes256)", optarg);
+          return ARGS_ERR;
+        }
+        bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_algorithm, sizeof cfg->cas_vendors[0].cwenc_algorithm, optarg);
+        break;
+      case 1049:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-cwenc-aes-mode must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (strcmp(optarg, "stream") && strcmp(optarg, "ecb")) {
+          argerr("invalid --cas-cwenc-aes-mode: %s (stream|ecb)", optarg);
+          return ARGS_ERR;
+        }
+        bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_aes_mode, sizeof cfg->cas_vendors[0].cwenc_aes_mode, optarg);
+        break;
+      case 1050:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-cwenc-fixed-key must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_fixed_key_hex, sizeof cfg->cas_vendors[0].cwenc_fixed_key_hex, optarg) >=
+            sizeof cfg->cas_vendors[0].cwenc_fixed_key_hex) {
+          argerr("--cas-cwenc-fixed-key too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1051:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-cwenc-key-list-a must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_key_list_a_path, sizeof cfg->cas_vendors[0].cwenc_key_list_a_path, optarg) >=
+            sizeof cfg->cas_vendors[0].cwenc_key_list_a_path) {
+          argerr("--cas-cwenc-key-list-a too long");
+          return ARGS_ERR;
+        }
+        break;
+      case 1052:
+        any_cas_flag = 1;
+        if (cfg->n_cas_vendors == 0) {
+          argerr("--cas-cwenc-key-list-b must follow the --cas-ecmg it names");
+          return ARGS_ERR;
+        }
+        if (bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_key_list_b_path, sizeof cfg->cas_vendors[0].cwenc_key_list_b_path, optarg) >=
+            sizeof cfg->cas_vendors[0].cwenc_key_list_b_path) {
+          argerr("--cas-cwenc-key-list-b too long");
+          return ARGS_ERR;
+        }
         break;
       case 1019:
         any_cas_flag = 1;

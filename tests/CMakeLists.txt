@@ -335,8 +335,15 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
     target_link_libraries(test_lib_cas_biss_ca_engine PRIVATE OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(lib_cas_cw_encryption
+        unit/lib/cas/test_cw_encryption.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+    target_link_libraries(test_lib_cas_cw_encryption PRIVATE OpenSSL::Crypto)
 else ()
-    message(WARNING "tests: OpenSSL not found, skipping lib_scrambler_cissa/lib_cas_biss/lib_cas_biss_ca/lib_cas_biss_ca_engine unit tests")
+    message(WARNING "tests: OpenSSL not found, skipping lib_scrambler_cissa/lib_cas_biss/lib_cas_biss_ca/lib_cas_biss_ca_engine/lib_cas_cw_encryption unit tests")
 endif ()
 
 dvbipitools_add_unit_test(lib_cas_biss_ca_sections
@@ -724,6 +731,8 @@ dvbipitools_add_unit_test(dipiradiohead_tspacketizer
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
@@ -757,6 +766,10 @@ dvbipitools_add_unit_test(dipiradiohead_args
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
@@ -803,6 +816,8 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
@@ -895,6 +910,8 @@ dvbipitools_add_unit_test(dipiradiohead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
@@ -946,6 +963,10 @@ dvbipitools_add_unit_test(dipitvhead_args
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
@@ -1029,6 +1050,8 @@ dvbipitools_add_unit_test(dipitvhead_remux
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
@@ -1073,6 +1096,8 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
@@ -1138,6 +1163,8 @@ dvbipitools_add_unit_test(dipitvhead_ecmg_client
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
@@ -1151,6 +1178,7 @@ dvbipitools_add_unit_test(dipitvhead_ecmg_client
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c)
+target_link_libraries(test_dipitvhead_ecmg_client PRIVATE OpenSSL::Crypto)
 
 dvbipitools_add_unit_test(dipitvhead_emmg_server
     unit/dipitvhead/test_emmg_server.c
@@ -1176,6 +1204,8 @@ dvbipitools_add_unit_test(dipitvhead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
@@ -1210,6 +1240,8 @@ dvbipitools_add_unit_test(lib_cas_cas_group
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c

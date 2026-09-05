@@ -319,6 +319,70 @@ fallback (see
 .BR \-\-cas\-fallback\-clear )
 regardless of other vendors' state.
 .TP
+.B \-\-cas\-cwenc\-algo \fIa\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: encrypt
+.BR CW_provision 's
+control word per ETSI TS 103 197 Annex D. As specified,
+.B des56
+is supported. However, it allows extensions, so we used it as
+generic as possible for some modern interpretation.
+.BR des56 ,
+.BR aes128 ,
+or
+.BR aes256 .
+Default: off (plaintext, today's behavior).
+.B des56
+is the spec-literal single-DES scheme. Included for interop, not as
+a recommendation.
+.BR aes128 " and " aes256
+are a generic extension of the same Annex D parameter framing.
+.TP
+.B \-\-cas\-cwenc\-aes\-mode \fIm\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option:
+.BR stream " or " ecb ,
+.BR aes128 / aes256
+only. Default:
+.BR stream .
+.B ecb
+is rejected when that vendor's control word is 8 bytes (AES has no
+8-byte block mode).
+.TP
+.B \-\-cas\-cwenc\-fixed\-key \fIhex\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: fixed key, hex-encoded, 14 characters
+for
+.BR des56 ,
+32 for
+.BR aes128 ,
+64 for
+.BR aes256 .
+Default: for
+.BR des56 ,
+Annex D's own published ROM key; no default for
+.BR aes128 / aes256 ,
+which fail at startup instead if a key list is not configured either.
+.TP
+.B \-\-cas\-cwenc\-key\-list\-a \fIpath\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: Annex D key list file, exactly 2048
+raw bytes. Either this or
+.B \-\-cas\-cwenc\-fixed\-key
+selects the key addressing mode used per
+.BR CW_provision .
+.TP
+.B \-\-cas\-cwenc\-key\-list\-b \fIpath\fR
+For the
+.B \-\-cas\-ecmg
+immediately before this option: second Annex D key list file, same
+format as
+.BR \-\-cas\-cwenc\-key\-list\-a .
+.TP
 .B \-\-cas\-cp\-duration \fIms\fR
 Crypto-period duration in milliseconds, shared by every configured vendor.
 Default:

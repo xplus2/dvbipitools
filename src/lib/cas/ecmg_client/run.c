@@ -82,7 +82,7 @@ static int run_steady_state(ecmg_client_t *c, int fd, unsigned char version, uns
         log_line("ecmg: CW source failed for CP %u", cp_number);
         return -1;
       }
-      len = ecmg_build_cw_provision(msg, sizeof msg, version, cp_number, hist, c->cw_len, lead_cw, cw_per_msg);
+      len = ecmg_build_cw_provision(msg, sizeof msg, version, cp_number, hist, c->cw_len, lead_cw, cw_per_msg, &c->cwenc_ctx);
       if (!len) {
         log_line("ecmg: failed to build CW_provision");
         return -1;

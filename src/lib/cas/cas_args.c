@@ -7,7 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/cas/ecmg_client/cw_encryption.h"
 #include "lib/helper/argutil.h"
+#include "lib/scrambler/scrambler.h"
 
 int cas_super_id_parse(const char *s, unsigned *out) {
   char *end;
@@ -115,6 +117,7 @@ int cas_args_validate(const char *tool_name, cas_algo_t cas_algo, const cas_vend
     args_err(tool_name, "--cas-algo requires --cas-ecmg");
     return -1;
   }
+  size_t cwenc_cw_len = scrambler_cw_len(cas_algo == CAS_ALGO_CISSA ? SCRAMBLE_ALGO_CISSA : SCRAMBLE_ALGO_CSA2);
   for (unsigned vi = 0; vi < n_vendors; vi++) {
     const cas_vendor_t *v = &vendors[vi];
     if (!v->super_cas_id) {
@@ -128,6 +131,14 @@ int cas_args_validate(const char *tool_name, cas_algo_t cas_algo, const cas_vend
     if (v->ecm_pid == v->emm_pid) {
       args_err(tool_name, "--cas-ecm-pid and --cas-emm-pid must differ (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
       return -1;
+    }
+    if (v->cwenc_algorithm[0]) {
+      cwenc_config_t cwenc_cfg;
+      if (cwenc_config_init(&cwenc_cfg, v->cwenc_algorithm, v->cwenc_aes_mode, v->cwenc_fixed_key_hex, v->cwenc_key_list_a_path, v->cwenc_key_list_b_path) != 0 ||
+          cwenc_config_validate(&cwenc_cfg, (int)cwenc_cw_len) != 0) {
+        args_err(tool_name, "--cas-ecmg %s:%u: invalid --cas-cwenc-* configuration", v->ecmg_host, v->ecmg_port);
+        return -1;
+      }
     }
     for (unsigned vj = vi + 1; vj < n_vendors; vj++) {
       const cas_vendor_t *o = &vendors[vj];
