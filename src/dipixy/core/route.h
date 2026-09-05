@@ -14,7 +14,8 @@ typedef enum {
   ROUTE_FMT_LLHLS,
   ROUTE_FMT_DASH,
   ROUTE_FMT_LLDASH,
-  ROUTE_FMT_RAWAUDIO
+  ROUTE_FMT_RAWAUDIO,
+  ROUTE_FMT_MP4
 } route_fmt_t;
 typedef enum {
   ROUTE_RTP,
@@ -43,7 +44,8 @@ typedef struct {
                               ROUTE_FMT_HLS_FMP4: "index.m3u8", "init.mp4", or "segNNNNN.m4s".
                               ROUTE_FMT_LLHLS: "index_ll.m3u8" or "segNNNNN.PP.ts".
                               ROUTE_FMT_DASH/ROUTE_FMT_LLDASH: "manifest.mpd" or "dsegTTTT.m4s" (TTTT: start time, ms).
-                              dseg/init: no format (playlist): always resolve to ROUTE_FMT_DASH */
+                              dseg/init: no format (playlist): always resolve to ROUTE_FMT_DASH.
+                              ROUTE_FMT_MP4: unused, bare route only */
 } route_t;
 
 /* path starts with '/'. 0 ok, -1 no match or malformed */

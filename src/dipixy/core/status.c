@@ -345,6 +345,9 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   jbuf_key(&j, "no_rawaudio");
   jbuf_str(&j, cfg->no_rawaudio ? "true" : "false");
   jbuf_str(&j, ",");
+  jbuf_key(&j, "no_mp4");
+  jbuf_str(&j, cfg->no_mp4 ? "true" : "false");
+  jbuf_str(&j, ",");
   jbuf_key(&j, "no_url_rtp");
   jbuf_str(&j, cfg->no_url_rtp ? "true" : "false");
   jbuf_str(&j, ",");

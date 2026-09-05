@@ -7,6 +7,7 @@
 #include "reactor_tls.h"
 
 #include "../dash/lldash.h"
+#include "../segment/mp4push.h"
 #include "../ts/ts_push.h"
 #include "../version.h"
 #ifdef HAVE_HTTP3
@@ -114,6 +115,12 @@ void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
     rl->L[rl->nL++] = (reactor_listener){rl->dashchunk_efd, 0, RL_DASHCHUNK_EFD};
   }
 
+  rl->mp4push_efd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+  if (rl->mp4push_efd >= 0) {
+    mp4push_register_reactor_efd(tid, rl->mp4push_efd);
+    rl->L[rl->nL++] = (reactor_listener){rl->mp4push_efd, 0, RL_MP4PUSH_EFD};
+  }
+
   for (int i = 0; i < rl->nL; i++) {
     memset(&ev, 0, sizeof ev);
     ev.events = EPOLLIN;
@@ -130,6 +137,10 @@ void reactor_teardown_listeners(const reactor_listeners_t *rl, int tid) {
   if (rl->dashchunk_efd >= 0) {
     dash_lldash_register_reactor_efd(tid, -1);
     close(rl->dashchunk_efd);
+  }
+  if (rl->mp4push_efd >= 0) {
+    mp4push_register_reactor_efd(tid, -1);
+    close(rl->mp4push_efd);
   }
   for (int i = 0; i < rl->nL; i++) if (rl->L[i].kind == RL_ACCEPT || rl->L[i].kind == RL_H3_UDP) close(rl->L[i].fd);
 #ifdef HAVE_HTTP3

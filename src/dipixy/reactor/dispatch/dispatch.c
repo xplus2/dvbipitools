@@ -11,6 +11,7 @@
 #include "../../dash/dash.h"
 #include "../../dash/lldash.h"
 #include "../../segment/segment.h"
+#include "../../segment/mp4push.h"
 #include "../../ts/pmtselect.h"
 #include "../../ts/ts_push.h"
 
@@ -310,6 +311,41 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
         ws_clients_add_bytes(wsh, bytes);
       else
         respond_status(c, RESP_404, keep_alive);
+      break;
+    }
+
+    case ROUTE_FMT_MP4: {
+      static const char mp4_head_header[] = "HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\nConnection: close\r\n\r\n";
+      int wsh;
+      capture_ctx_t *ctx = open_source(&rt, &list_num);
+      if (!ctx) {
+        respond_status(c, RESP_404, keep_alive);
+        break;
+      }
+      if (is_head) {
+        capture_close(ctx);
+        conn_queue(c, mp4_head_header, strlen(mp4_head_header));
+        break;
+      }
+      route_client_info(&rt, list_num, &filter, pmt_pid, c->client_ip, 1, &item_bufs, &cinfo);
+      wsh = ws_clients_touch(&cinfo);
+      if (wsh < 0) {
+        capture_close(ctx);
+        respond_status(c, RESP_501, keep_alive);
+        break;
+      }
+      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_FMP4, 0.0)) {
+        respond_status(c, RESP_501, keep_alive);
+        break;
+      }
+      if (!hls_store_ready(ctx, &filter, pmt_pid, SEG_CONTAINER_FMP4) &&
+          hls_cold_try_park(c, ctx, &filter, pmt_pid, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, is_head, keep_alive, origin_hdr, (int)(reactor_cfg()->segment_size * 2000.0), wsh)) {
+        c->state = CONN_DISPATCH;
+        return;
+      }
+      if (!mp4push_try_attach(c, ctx, &filter, pmt_pid, wsh)) {
+        respond_status(c, RESP_501, keep_alive);
+      }
       break;
     }
 

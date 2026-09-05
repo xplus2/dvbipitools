@@ -31,6 +31,7 @@ static const char *route_fmt_name(route_fmt_t fmt) {
     case ROUTE_FMT_DASH: return "dash";
     case ROUTE_FMT_LLDASH: return "lldash";
     case ROUTE_FMT_RAWAUDIO: return "rawaudio";
+    case ROUTE_FMT_MP4: return "mp4";
   }
   return "?";
 }

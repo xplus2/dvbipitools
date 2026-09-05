@@ -12,6 +12,7 @@
 #include "../dash/lldash.h"
 #include "../hls/hls.h"
 #include "../segment/segment.h"
+#include "../segment/mp4push.h"
 #include "../ts/ts_push.h"
 #include "../version.h"
 #include "lib/demux/tspack.h"
@@ -61,6 +62,13 @@ static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, str
       dash_lldash_flush_ready(tid);
       return;
     }
+    if (lp->kind == RL_MP4PUSH_EFD) {
+      uint64_t v = 0;
+      ssize_t r = read(lp->fd, &v, sizeof v);
+      (void)r;
+      mp4push_flush_ready(tid);
+      return;
+    }
 #ifdef HAVE_HTTP3
     if (lp->kind == RL_H3_UDP) {
       h3_handle_readable(lp->fd);
@@ -82,6 +90,8 @@ static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, str
       reactor_ws_close(epfd, c);
     else if (c->state == CONN_DASHCHUNK)
       reactor_dashchunk_close(epfd, c);
+    else if (c->state == CONN_MP4PUSH)
+      reactor_mp4push_close(epfd, c);
 #ifdef HAVE_HTTP2
     else if (c->state == CONN_H2)
       h2_conn_close(epfd, c);
@@ -102,6 +112,12 @@ static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, str
         reactor_dashchunk_readable(epfd, c);
       else
         reactor_dashchunk_flush(epfd, c);
+      break;
+    case CONN_MP4PUSH:
+      if (e & EPOLLIN)
+        reactor_mp4push_readable(epfd, c);
+      else
+        reactor_mp4push_flush(epfd, c);
       break;
     case CONN_WS:
       if (e & EPOLLIN)

@@ -116,10 +116,18 @@ typedef struct hls_seg_ctx {
   log_throttle_t seg_push_fail_throttle;
   log_throttle_t oom_drop_throttle;
   log_throttle_t audio_parse_throttle;
+
+  _Atomic int mp4push_sub_head; /* -1 empty, else segment/mp4push.c chain */
 } hls_seg_ctx_t;
 
 /* segment.c */
 int buf_reserve(unsigned char **buf, size_t *cap, size_t need);
+void hls_seg_registry_lock(void);
+void hls_seg_registry_unlock(void);
+hls_seg_ctx_t *hls_seg_find_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
+
+/* mp4push.c */
+void mp4push_deliver(hls_seg_ctx_t *s, const unsigned char *data, size_t len);
 
 /* mux.c */
 void try_create_fmux(hls_seg_ctx_t *s);

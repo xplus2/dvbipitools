@@ -21,6 +21,7 @@ typedef enum {
   CONN_H2,            /* HTTP/2 async: nghttp2 session */
   CONN_TSPUSH,        /* MPEG-TS push: output-only. packets via conn_send_buffered */
   CONN_DASHCHUNK,     /* LL-DASH chunk stream: output-only, chunks via conn_send_buffered */
+  CONN_MP4PUSH,       /* MP4 push: output-only, fragments via conn_send_buffered */
   CONN_CLOSING
 } conn_state;
 
@@ -66,18 +67,18 @@ typedef struct conn_t {
   void *ssl;               /* SSL* when TLS, NULL for plain */
   /* owner-thread bits: only owning reactor touches, never under out_lock.
      must not share a word with want_write/dead below */
-  unsigned close_after_flush
-      : 1;                      /* handler "closed": reactor closes on drain */
-  unsigned become_ws : 1;       /* WS upgrade: after 101 drains, switch conn to CONN_WS frame reading */
-  unsigned become_tspush : 1;   /* MPEG-TS push: after headers drain, keep as output only CONN_TSPUSH */
-  unsigned become_dashchunk : 1; /* LL-DASH stream: after headers drain, keep output only CONN_DASHCHUNK */
-  unsigned requested_close : 1; /* other thread asked owner to close: flush, then quiet teardown (no slot/room cleanup, requester already did it) */
-  unsigned keep_alive : 1;      /* after flush: recycle for next HTTP/1.1 request */
-  int slot;                     /* owning user[] slot, or 0 if none */
-  int reactor_tid;              /* owning reactor thread index (-1 until published as WS/STREAM) */
-  void *ws;                     /* ws_conn_state* once CONN_WS (reactor-owned) */
-  void *h2;                     /* h2_conn_t* once CONN_H2 (reactor-owned) */
-  char client_ip[64];           /* peer IP, restored into t_req per dispatch */
+  unsigned close_after_flush : 1; /* handler "closed": reactor closes on drain */
+  unsigned become_ws : 1;         /* WS upgrade: after 101 drains, switch conn to CONN_WS frame reading */
+  unsigned become_tspush : 1;     /* MPEG-TS push: after headers drain, keep as output only CONN_TSPUSH */
+  unsigned become_dashchunk : 1;  /* LL-DASH stream: after headers drain, keep output only CONN_DASHCHUNK */
+  unsigned become_mp4push : 1;    /* MP4: after headers drain, keep output only CONN_MP4PUSH */
+  unsigned requested_close : 1;   /* other thread asked owner to close: flush, then quiet teardown (no slot/room cleanup, requester already did it) */
+  unsigned keep_alive : 1;        /* after flush: recycle for next HTTP/1.1 request */
+  int slot;                       /* owning user[] slot, or 0 if none */
+  int reactor_tid;                /* owning reactor thread index (-1 until published as WS/STREAM) */
+  void *ws;                       /* ws_conn_state* once CONN_WS (reactor-owned) */
+  void *h2;                       /* h2_conn_t* once CONN_H2 (reactor-owned) */
+  char client_ip[64];             /* peer IP, restored into t_req per dispatch */
   time_t last_active;
   size_t req_bytes; /* request bytes consumed from in.buf, incl trailing blank line. reactor_keepalive() preserves pipelined bytes past it */
   _Alignas(64) _Atomic unsigned char want_write; /* EPOLLOUT currently armed for this fd */

@@ -139,7 +139,7 @@ Repeatable: a file plus one or more RTMP(S) pushes, or several RTMP(S) targets a
 
 | schema                              | what's this?                                                             |
 |-------------------------------------|--------------------------------------------------------------------------|
-| `<path>`                            | a file                                                                   |
+| `<path>`                            | a file, format detected from the suffix or `-f (raw\|ts\|mkv\|mka)`      |
 | `-`                                 | stdout, also pipeable into [dipidescramble](../dipidescramble/README.md) |
 | `rtp://@<group>:<port>`             | RTP-wrapped multicast, `-f raw`/`ts` only                                |
 | `udp://@<group>:<port>`             | plain multicast, no RTP header, `-f raw`/`ts` only                       |

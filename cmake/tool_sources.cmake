@@ -810,6 +810,7 @@ function(dipixy_resolve_sources)
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_tspush.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_dashchunk.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_mp4push.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_hls.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_ws.c)
     else ()
@@ -870,6 +871,7 @@ function(dipixy_resolve_sources)
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_resp.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_tspush.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_dashchunk.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_mp4push.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_llhls.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_hls_cold.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_ws.c)
@@ -908,6 +910,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/waiters.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tspush.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_dashchunk.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_mp4push.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_ws.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push_feed.c
@@ -938,6 +941,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/segment/video.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/segment/audio.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/segment/mux.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/segment/mp4push.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_soap.c

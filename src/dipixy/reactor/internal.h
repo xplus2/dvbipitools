@@ -40,6 +40,7 @@ typedef enum {
   RL_ACCEPT = 0,     /* TCP/TLS accept socket */
   RL_TSPUSH_EFD,     /* per-reactor TS-push wakeup eventfd */
   RL_DASHCHUNK_EFD,  /* per-reactor LL-DASH chunk wakeup eventfd (H2/H3) */
+  RL_MP4PUSH_EFD,    /* per-reactor progressive-MP4 wakeup eventfd (H2/H3) */
   RL_H3_UDP          /* QUIC UDP socket (HAVE_HTTP3 only) */
 } reactor_listener_kind;
 
@@ -50,10 +51,11 @@ typedef struct {
 } reactor_listener;
 
 typedef struct {
-  reactor_listener L[7]; /* 2 TCP (plain+tls), 2 H3 UDP (v4+v6), 1 tspush efd, 1 dashchunk efd */
+  reactor_listener L[8]; /* 2 TCP (plain+tls), 2 H3 UDP (v4+v6), 1 tspush efd, 1 dashchunk efd, 1 mp4push efd */
   int nL;
   int tspush_efd;
   int dashchunk_efd;
+  int mp4push_efd;
 } reactor_listeners_t;
 
 /* reactor.c: conn lifecycle */
@@ -121,8 +123,7 @@ static inline int64_t now_ms(void) {
 static inline int parse_blocking_reload(const char *query, uint32_t *want_seg, int *want_part) {
   const char *msn = query ? strstr(query, "_HLS_msn=") : NULL;
   const char *part = query ? strstr(query, "_HLS_part=") : NULL;
-  if (!msn || !part)
-    return 0;
+  if (!msn || !part) return 0;
   *want_seg = (uint32_t)strtoul(msn + 9, NULL, 10);
   *want_part = (int)strtol(part + 10, NULL, 10);
   return 1;
@@ -207,8 +208,8 @@ void hls_cold_flush_waiters(void);
 /* dispatch.c. purges c's waiter slot, call before reactor_close() frees it */
 void hls_cold_waiter_conn_closing(const conn_t *c);
 
-/* index.m3u8/index_ll.m3u8/manifest.mpd requested b4 first segment/part exists */
-typedef enum { HLS_COLD_HLS, HLS_COLD_LLHLS, HLS_COLD_DASH } hls_cold_kind_t;
+/* index.m3u8/index_ll.m3u8/manifest.mpd/mp4 requested b4 first segment/part exists */
+typedef enum { HLS_COLD_HLS, HLS_COLD_LLHLS, HLS_COLD_DASH, HLS_COLD_MP4 } hls_cold_kind_t;
 
 /* handshake.c: TLS handshake + accept */
 void reactor_handshake(int epfd, conn_t *c);
@@ -224,6 +225,12 @@ void reactor_dashchunk_begin(int epfd, conn_t *c);
 void reactor_dashchunk_readable(int epfd, conn_t *c);
 void reactor_dashchunk_flush(int epfd, conn_t *c);
 void reactor_dashchunk_close(int epfd, conn_t *c);
+
+/* reactor_mp4push.c */
+void reactor_mp4push_begin(int epfd, conn_t *c);
+void reactor_mp4push_readable(int epfd, conn_t *c);
+void reactor_mp4push_flush(int epfd, conn_t *c);
+void reactor_mp4push_close(int epfd, conn_t *c);
 
 /* CONN_WS lifecycle. dispatch.c queues 101, sets become_ws */
 void reactor_ws_begin(int epfd, conn_t *c);

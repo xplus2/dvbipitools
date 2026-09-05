@@ -385,6 +385,7 @@ START_TEST(feature_toggle_flags_default_off) {
   ck_assert_int_eq(cfg.no_ts, 0);
   ck_assert_int_eq(cfg.no_spts, 0);
   ck_assert_int_eq(cfg.no_rawaudio, 0);
+  ck_assert_int_eq(cfg.no_mp4, 0);
   ck_assert_int_eq(cfg.no_url_rtp, 0);
   ck_assert_int_eq(cfg.no_url_udp, 0);
   ck_assert_int_eq(cfg.no_url_srt, 0);
@@ -415,6 +416,7 @@ START_TEST(format_whitelist_enables_only_listed) {
   ck_assert_int_eq(cfg.no_ts, 1);
   ck_assert_int_eq(cfg.no_spts, 0);
   ck_assert_int_eq(cfg.no_rawaudio, 1);
+  ck_assert_int_eq(cfg.no_mp4, 1);
   ck_assert_int_eq(cfg.no_hls, 1);
   ck_assert_int_eq(cfg.no_llhls, 1);
   ck_assert_int_eq(cfg.no_dash, 0);
@@ -429,6 +431,16 @@ START_TEST(format_whitelist_lldash_enables_it) {
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.no_lldash, 0);
   ck_assert_int_eq(cfg.no_dash, 1);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(format_whitelist_mp4_enables_it) {
+  char *argv[] = {"dipixy", "-f", "mp4", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.no_mp4, 0);
+  ck_assert_int_eq(cfg.no_ts, 1);
   args_free(&cfg);
 }
 END_TEST
@@ -861,6 +873,7 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, feature_toggle_flags_recorded);
   tcase_add_test(tc, format_whitelist_enables_only_listed);
   tcase_add_test(tc, format_whitelist_lldash_enables_it);
+  tcase_add_test(tc, format_whitelist_mp4_enables_it);
   tcase_add_test(tc, format_whitelist_unknown_token_rejected);
   tcase_add_test(tc, format_whitelist_empty_rejected);
   tcase_add_test(tc, stdin_flag_accepts_dash);

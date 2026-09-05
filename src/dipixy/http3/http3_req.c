@@ -340,6 +340,46 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
       return;
     }
 
+    case ROUTE_FMT_MP4: {
+      int wsh;
+      ctx = open_source(&rt, &list_num);
+      if (!ctx) {
+        h3_respond_status(c, r->stream_id, "404");
+        return;
+      }
+      route_client_info(&rt, list_num, &filter, pmt_pid, client_ip, 3, &item_bufs, &cinfo);
+      wsh = ws_clients_touch(&cinfo);
+      if (wsh < 0) {
+        capture_close(ctx);
+        h3_respond_status(c, r->stream_id, "501");
+        return;
+      }
+      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_FMP4, 0.0)) {
+        h3_respond_status(c, r->stream_id, "501");
+        return;
+      }
+      if (!hls_store_ready(ctx, &filter, pmt_pid, SEG_CONTAINER_FMP4) &&
+          h3_hls_cold_try_park(c, r->stream_id, ctx, &filter, pmt_pid, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, is_head, r->origin[0] ? r->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), wsh))
+        return;
+      {
+        int sub = mp4push_subscribe(ctx, &filter, pmt_pid, 3);
+        if (sub >= 0) {
+          nghttp3_nv nva[] = {
+              {(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP3_NV_FLAG_NONE}, {(uint8_t *)"content-type", (uint8_t *)"video/mp4", 12, 9, NGHTTP3_NV_FLAG_NONE},
+          };
+          nghttp3_data_reader dr;
+          dr.read_data = h3_mp4push_read_cb;
+          r->mp4push_sub_idx = sub;
+          mp4push_h3_bind(sub, c, r->stream_id, t_reactor_tid, wsh);
+          nghttp3_conn_set_stream_user_data(c->h3conn, r->stream_id, r);
+          nghttp3_conn_submit_response(c->h3conn, r->stream_id, nva, 2, &dr);
+          return;
+        }
+      }
+      h3_respond_status(c, r->stream_id, "501");
+      return;
+    }
+
     default:
       h3_respond_status(c, r->stream_id, "501");
       return;

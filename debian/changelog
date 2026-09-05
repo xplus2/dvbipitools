@@ -2,6 +2,7 @@ dvbipitools (2.4.1-1) unstable; urgency=low
   * dipixy
     + playlist /export/ convenience feature: m3u and xspf for VLC, Kodi Simple IPTV, tvheadend, ..
     + segmetation support added for VVC and Opus, fixed HEVC
+    + progressive mp4 output (not chunked)
   * optional ETSI TS 103 197 Annex D in dipitvhead + dipiradiohead
  -- dvbipitools authors <unspecified@example.com>  tbd
 

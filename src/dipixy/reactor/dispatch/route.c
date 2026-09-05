@@ -71,7 +71,8 @@ int route_disabled(const route_t *rt) {
          ((rt->fmt == ROUTE_FMT_HLS || rt->fmt == ROUTE_FMT_HLS_FMP4) && cfg->no_hls) ||
          (rt->fmt == ROUTE_FMT_LLHLS && cfg->no_llhls) || (rt->fmt == ROUTE_FMT_DASH && cfg->no_dash) ||
          (rt->fmt == ROUTE_FMT_LLDASH && cfg->no_lldash) ||
-         (rt->fmt == ROUTE_FMT_RAWAUDIO && cfg->no_rawaudio);
+         (rt->fmt == ROUTE_FMT_RAWAUDIO && cfg->no_rawaudio) ||
+         (rt->fmt == ROUTE_FMT_MP4 && cfg->no_mp4);
 }
 
 /* -n-named source: ordinal of its -i, 0 if unmatched */

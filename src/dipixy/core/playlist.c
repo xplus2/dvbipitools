@@ -47,6 +47,7 @@ int playlist_fmt_disabled(const config_t *cfg, route_fmt_t fmt) {
     case ROUTE_FMT_LLHLS:    return cfg->no_llhls;
     case ROUTE_FMT_DASH:     return cfg->no_dash;
     case ROUTE_FMT_LLDASH:   return cfg->no_lldash;
+    case ROUTE_FMT_MP4:      return cfg->no_mp4;
   }
   return 1;
 }
@@ -74,6 +75,7 @@ static const char *fmt_str(route_fmt_t fmt) {
     case ROUTE_FMT_LLHLS:    return "llhls";
     case ROUTE_FMT_DASH:     return "dash";
     case ROUTE_FMT_LLDASH:   return "lldash";
+    case ROUTE_FMT_MP4:      return "mp4";
   }
   return "ts";
 }

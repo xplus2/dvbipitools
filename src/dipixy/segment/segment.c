@@ -65,6 +65,13 @@ static hls_seg_ctx_t *find_locked(const capture_ctx_t *ctx, const pid_filter_t *
   return NULL;
 }
 
+void hls_seg_registry_lock(void) { pthread_mutex_lock(&g_mtx); }
+void hls_seg_registry_unlock(void) { pthread_mutex_unlock(&g_mtx); }
+
+hls_seg_ctx_t *hls_seg_find_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
+  return find_locked(ctx, filter, pmt_pid, container);
+}
+
 /* lock free touch, somewhat. fails if s mid removal by sweep_idle, caller retries under g_mtx */
 static int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_on) {
   if (!seg_try_pin(s)) return 0;
@@ -116,6 +123,7 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   atomic_store_explicit(&s->part_target, part_target, memory_order_relaxed);
   s->first_ts_ms = -1;
   s->fmp4_audio_track_idx = -1;
+  atomic_store_explicit(&s->mp4push_sub_head, -1, memory_order_relaxed);
   atomic_store_explicit(&s->last_request_ms, now_ms(), memory_order_relaxed);
   atomic_store_explicit(&s->refcount, 1, memory_order_relaxed);
   s->psi = psi_new();
@@ -180,7 +188,8 @@ void hls_seg_sweep_idle(void) {
   pthread_mutex_lock(&g_mtx);
   for (i = 0; i < g_stores_n; i++) {
     hls_seg_ctx_t *s = atomic_load_explicit(&g_stores[i], memory_order_relaxed);
-    if (s && now - atomic_load_explicit(&s->last_request_ms, memory_order_relaxed) > (int64_t)(s->seg_target * (double)s->max_segs * 1500.0)) {
+    if (s && now - atomic_load_explicit(&s->last_request_ms, memory_order_relaxed) > (int64_t)(s->seg_target * (double)s->max_segs * 1500.0) &&
+        atomic_load_explicit(&s->mp4push_sub_head, memory_order_relaxed) == -1) {
       victims[nvictims++] = s;
       atomic_store_explicit(&g_stores[i], NULL, memory_order_release);
       unlink_from_ctx_chain(s);

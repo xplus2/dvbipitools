@@ -78,6 +78,7 @@ main{flex:1;padding:16px;overflow:auto}
 <option id="fmt-ts" value="ts">TS</option>
 <option id="fmt-spts" value="spts">SPTS</option>
 <option id="fmt-rawaudio" value="rawaudio">rawaudio</option>
+<option id="fmt-mp4" value="mp4">Progressive MP4</option>
 <option id="fmt-hls" value="hls">HLS (TS)</option>
 <option id="fmt-hls-fmp4" value="hls-fmp4">HLS (fMP4)</option>
 <option id="fmt-llhls" value="llhls">Low-Latency HLS</option>
@@ -130,6 +131,7 @@ main{flex:1;padding:16px;overflow:auto}
 <option id="plfmt-ts" value="ts">TS</option>
 <option id="plfmt-spts" value="spts">SPTS</option>
 <option id="plfmt-rawaudio" value="rawaudio">rawaudio</option>
+<option id="plfmt-mp4" value="mp4">Progressive MP4</option>
 <option id="plfmt-hls" value="hls">HLS (TS)</option>
 <option id="plfmt-hls-fmp4" value="hls-fmp4">HLS (fMP4)</option>
 <option id="plfmt-llhls" value="llhls">Low-Latency HLS</option>
@@ -210,7 +212,7 @@ function loadStat() {
 }
 function appFlags() {
   var flags = (state.status && state.status.flags) || {};
-  ['ts', 'spts', 'rawaudio', 'hls', 'hls-fmp4', 'llhls', 'dash', 'lldash'].forEach(function (fmt) {
+  ['ts', 'spts', 'rawaudio', 'mp4', 'hls', 'hls-fmp4', 'llhls', 'dash', 'lldash'].forEach(function (fmt) {
     var off = !!flags['no_' + (fmt === 'hls-fmp4' ? 'hls' : fmt)];
     $('fmt-' + fmt).disabled = off;
     $('plfmt-' + fmt).disabled = off;

@@ -2286,6 +2286,11 @@ target_link_libraries(test_dipixy_hls PRIVATE m)
 target_compile_options(test_dipixy_hls PRIVATE -ffunction-sections -fdata-sections)
 target_link_options(test_dipixy_hls PRIVATE -Wl,--gc-sections)
 
+dvbipitools_add_unit_test(dipixy_mp4push
+    unit/dipixy/test_mp4push.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/segment/mp4push.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
 dvbipitools_add_unit_test(lib_playlist_in
     unit/lib/test_playlist_in.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_in.c

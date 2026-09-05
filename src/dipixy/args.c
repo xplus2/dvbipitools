@@ -65,14 +65,14 @@ static int workers_parse(const char *s, int *out) {
   return -1;
 }
 
-/* -f/--format <list>: comma-separated list: ts,spts,rawaudio,hls,llhls,dash,lldash
+/* -f/--format <list>: comma-separated list.
    listed formats 0, everything else 1. 0 ok, -1 empty or unknown token */
 static int format_parse(const char *s, config_t *cfg) {
   struct {
     const char *name;
     int *flag;
   } items[] = {
-      {"ts", &cfg->no_ts},   {"spts", &cfg->no_spts}, {"rawaudio", &cfg->no_rawaudio},
+      {"ts", &cfg->no_ts},   {"spts", &cfg->no_spts}, {"rawaudio", &cfg->no_rawaudio}, {"mp4", &cfg->no_mp4},
       {"hls", &cfg->no_hls}, {"llhls", &cfg->no_llhls}, {"dash", &cfg->no_dash}, {"lldash", &cfg->no_lldash},
   };
   size_t n_items = sizeof items / sizeof items[0];

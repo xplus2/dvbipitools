@@ -46,6 +46,10 @@ int fmt_parse(const char *s, route_fmt_t *out) {
     *out = ROUTE_FMT_RAWAUDIO;
     return 0;
   }
+  if (!strcmp(s, "mp4")) {
+    *out = ROUTE_FMT_MP4;
+    return 0;
+  }
   return -1;
 }
 

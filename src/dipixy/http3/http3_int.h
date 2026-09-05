@@ -27,6 +27,7 @@
 #include "../ts/pidfilter.h"
 #include "../ts/ts_push.h"
 #include "../dash/lldash.h"
+#include "../segment/mp4push.h"
 #include "../reactor/internal.h"
 
 #define H3_MAX_REQS 16
@@ -56,6 +57,7 @@ typedef struct h3_req {
   int resp_zc;
   int tspush_sub_idx;     /* -1 normal req, >=0 TS push subscriber slot */
   int dashchunk_sub_idx;  /* -1 normal req, >=0 dash/lldash.c subscriber slot */
+  int mp4push_sub_idx;    /* -1 normal req, >=0 segment/mp4push.c subscriber slot */
   int ws_active;
   void *ws_parser;        /* ws_parser_t*, void* to keep ws_frame.h out of this header */
   uint8_t *ws_pending;    /* not yet handed to nghttp3 */
@@ -118,6 +120,7 @@ static inline h3_req_t *alloc_req(h3_conn_t *c, int64_t sid) {
       c->reqs[i].stream_id = sid;
       c->reqs[i].tspush_sub_idx = -1;
       c->reqs[i].dashchunk_sub_idx = -1;
+      c->reqs[i].mp4push_sub_idx = -1;
       return &c->reqs[i];
     }
   }
@@ -136,6 +139,10 @@ static inline void free_req(h3_conn_t *c, int64_t sid) {
       if (c->reqs[i].dashchunk_sub_idx >= 0) {
         dash_lldash_sub_close(c->reqs[i].dashchunk_sub_idx);
         c->reqs[i].dashchunk_sub_idx = -1;
+      }
+      if (c->reqs[i].mp4push_sub_idx >= 0) {
+        mp4push_sub_close(c->reqs[i].mp4push_sub_idx);
+        c->reqs[i].mp4push_sub_idx = -1;
       }
       free(c->reqs[i].ws_pending);
       free(c->reqs[i].ws_send_data);
@@ -168,6 +175,9 @@ nghttp3_ssize h3_tspush_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec,
 
 /* from http3_dashchunk.c */
 nghttp3_ssize h3_dashchunk_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec, size_t veccnt, uint32_t *pflags, void *conn_ud, void *stream_ud);
+
+/* from http3_mp4push.c */
+nghttp3_ssize h3_mp4push_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec, size_t veccnt, uint32_t *pflags, void *conn_ud, void *stream_ud);
 
 /* from http3_llhls.c */
 int h3_llhls_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, const char *inm, const char *origin_hdr,

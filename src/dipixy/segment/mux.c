@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "priv.h"
+#include "mp4push.h"
 
 #include <string.h>
 
@@ -98,6 +99,7 @@ void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, int32_t cts_ticks, in
         unsigned char *out;
         size_t outlen = fmp4_segment_end(s->fmux, &out);
         if (outlen) {
+          mp4push_deliver(s, out, outlen);
           if (pt > 0.0) {
             double chunk_dur = (double)(s->fmp4_pend_ts_ms - s->fmp4_frag_start_ts_ms) / 1000.0;
             if (hls_push_part(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_FMP4, out, outlen, chunk_dur, s->fmp4_frag_key) < 0)
@@ -158,7 +160,6 @@ void fmp4_feed_audio_au(hls_seg_ctx_t *s, const esc_frame_t *f) {
     s->fmp4_audio_seeded = 1;
     s->audio_pending_drift_samples = 0; /* stale: measured against dropped frames */
   }
-
   dur = (int32_t)f->samples;
   if (s->audio_pending_drift_samples) {
     int32_t corr = (int32_t)s->audio_pending_drift_samples;

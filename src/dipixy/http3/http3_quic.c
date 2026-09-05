@@ -339,6 +339,14 @@ void h3conn_del(h3_conn_t *c) {
       ts_push_unsubscribe_by_idx(c->reqs[i].tspush_sub_idx);
       c->reqs[i].tspush_sub_idx = -1;
     }
+    if (c->reqs[i].dashchunk_sub_idx >= 0) {
+      dash_lldash_sub_close(c->reqs[i].dashchunk_sub_idx);
+      c->reqs[i].dashchunk_sub_idx = -1;
+    }
+    if (c->reqs[i].mp4push_sub_idx >= 0) {
+      mp4push_sub_close(c->reqs[i].mp4push_sub_idx);
+      c->reqs[i].mp4push_sub_idx = -1;
+    }
   }
   if (c->ossl_ctx) {
     ngtcp2_crypto_ossl_ctx_del(c->ossl_ctx);

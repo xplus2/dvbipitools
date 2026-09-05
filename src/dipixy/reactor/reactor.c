@@ -9,6 +9,7 @@
 
 #include "../hls/hls.h"
 #include "../segment/segment.h"
+#include "../segment/mp4push.h"
 #include "../dash/lldash.h"
 #include "../ts/ts_push.h"
 #include "../version.h"
@@ -74,6 +75,7 @@ void reactor_finish(int epfd, conn_t *c) {
   }
   if (c->become_tspush)             reactor_tspush_begin(epfd, c);
   else if (c->become_dashchunk)     reactor_dashchunk_begin(epfd, c);
+  else if (c->become_mp4push)       reactor_mp4push_begin(epfd, c);
   else if (c->become_ws)            reactor_ws_begin(epfd, c);
   else if (c->keep_alive)           reactor_keepalive(epfd, c);
   else                              reactor_close(epfd, c);
@@ -143,6 +145,7 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   hls_seg_init(cfg->max_channels);
   if (!(cfg->no_hls && cfg->no_llhls && cfg->no_dash && cfg->no_lldash)) hls_set_seg_pool_cap(cfg->hls_seg_pool);
   if (!cfg->no_lldash) dash_lldash_init(cfg->max_clients);
+  if (!cfg->no_mp4) mp4push_init(cfg->max_clients);
 
   workers = reactor_resolve_workers(cfg->workers_spec, (int)sysconf(_SC_NPROCESSORS_ONLN));
   if (workers < 1) workers = 1;

@@ -26,6 +26,7 @@
 #define H2_PATH_MAX 512
 #define H2_TSPUSH_MAX 4 /* concurrent TS push streams per H2 connection */
 #define H2_DASHCHUNK_MAX 4 /* concurrent LL-DASH chunk streams per H2 connection */
+#define H2_MP4PUSH_MAX 4 /* concurrent progressive-MP4 streams per H2 connection */
 #define H2_WS_MAX 4 /* concurrent WS streams per H2 connection */
 
 /* per-stream state: only method/path needed, dipixy has no req body or fancy headers */
@@ -51,6 +52,11 @@ typedef struct {
 } h2_dashchunk_stream_t;
 
 typedef struct {
+  int32_t sid; /* 0 = slot unused */
+  int sub_idx; /* segment/mp4push.c subscriber index */
+} h2_mp4push_stream_t;
+
+typedef struct {
   int32_t sid;        /* 0 = slot unused */
   conn_t *c;
   ws_parser_t parser;
@@ -72,6 +78,7 @@ typedef struct h2_conn {
   conn_t *c; /* owning conn_t (for out_lock and epfd) */
   h2_tspush_stream_t tspush[H2_TSPUSH_MAX];
   h2_dashchunk_stream_t dashchunk[H2_DASHCHUNK_MAX];
+  h2_mp4push_stream_t mp4push[H2_MP4PUSH_MAX];
   h2_ws_stream_t ws[H2_WS_MAX];
 } h2_conn_t;
 
@@ -87,6 +94,10 @@ int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush
 /* from http2_dashchunk.c */
 void h2_dashchunk_on_stream_close(h2_conn_t *conn, int32_t stream_id);
 int h2_dashchunk_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int sub_idx, int ws_handle);
+
+/* from http2_mp4push.c */
+void h2_mp4push_on_stream_close(h2_conn_t *conn, int32_t stream_id);
+int h2_mp4push_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int sub_idx, int ws_handle);
 
 /* from http2_hls.c. body ownership transfers in: malloc'd or NULL, freed here or by drain callback */
 void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, int zc, const char *origin_hdr);

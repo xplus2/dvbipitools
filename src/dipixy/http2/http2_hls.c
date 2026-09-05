@@ -5,6 +5,7 @@
 
 #include "../hls/hls.h"
 #include "../dash/dash.h"
+#include "../segment/mp4push.h"
 #include "../reactor/internal.h"
 #include "http2.h"
 #include "http2_int.h"
@@ -253,18 +254,28 @@ void h2_hls_cold_flush_waiters(void) {
     if (!w->active) continue;
     ready = w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, w->container) : hls_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, w->container);
     if (now < w->deadline_ms && !ready) continue;
-    if (w->kind == HLS_COLD_LLHLS)
-      handled = hls_render_ll(w->cap_ctx, &w->filter, w->pmt_pid, w->filename, w->is_head, NULL, &resp);
-    else if (w->kind == HLS_COLD_DASH)
-      handled = dash_render(w->cap_ctx, &w->filter, w->pmt_pid, w->want_ll, reactor_cfg()->dash_utc_url, w->is_head, &resp);
-    else
-      handled = hls_render(w->cap_ctx, &w->filter, w->pmt_pid, w->container, w->filename, w->is_head, NULL, &resp);
-    if (!handled) {
-      h2_submit_resp(w->conn, w->stream_id, 404, NULL, NULL, 0, NULL, 0, w->origin[0] ? w->origin : NULL);
+    if (w->kind == HLS_COLD_MP4) {
+      int sub = mp4push_subscribe(w->cap_ctx, &w->filter, w->pmt_pid, 2);
+      if (sub < 0 || !h2_mp4push_dispatch(w->conn, w->conn->c, w->stream_id, sub, w->ws_handle)) {
+        if (sub >= 0) mp4push_sub_close(sub);
+        h2_submit_resp(w->conn, w->stream_id, 501, NULL, NULL, 0, NULL, 0, w->origin[0] ? w->origin : NULL);
+      }
     } else {
-      h2_submit_resp(w->conn, w->stream_id, resp.status, resp.content_type, resp.etag, resp.body_len, resp.body, resp.zc, w->origin[0] ? w->origin : NULL);
-      if (resp.status == 200)
-        ws_clients_add_bytes(w->ws_handle, resp.body_len);
+      if (w->kind == HLS_COLD_LLHLS) {
+        handled = hls_render_ll(w->cap_ctx, &w->filter, w->pmt_pid, w->filename, w->is_head, NULL, &resp);
+      } else if (w->kind == HLS_COLD_DASH) {
+        handled = dash_render(w->cap_ctx, &w->filter, w->pmt_pid, w->want_ll, reactor_cfg()->dash_utc_url, w->is_head, &resp);
+      } else {
+        handled = hls_render(w->cap_ctx, &w->filter, w->pmt_pid, w->container, w->filename, w->is_head, NULL, &resp);
+      }
+      if (!handled) {
+        h2_submit_resp(w->conn, w->stream_id, 404, NULL, NULL, 0, NULL, 0, w->origin[0] ? w->origin : NULL);
+      } else {
+        h2_submit_resp(w->conn, w->stream_id, resp.status, resp.content_type, resp.etag, resp.body_len, resp.body, resp.zc, w->origin[0] ? w->origin : NULL);
+        if (resp.status == 200) {
+          ws_clients_add_bytes(w->ws_handle, resp.body_len);
+        }
+      }
     }
     h2_flush_tx(w->conn, w->conn->c);
     w->active = 0;

@@ -5,6 +5,6 @@
 #define DIPIXY_VERSION_H
 
 #define TOOL_NAME    "dipixy"
-#define TOOL_VERSION "0.8.4"
+#define TOOL_VERSION "0.8.5"
 
 #endif

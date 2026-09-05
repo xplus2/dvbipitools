@@ -1016,7 +1016,7 @@ dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs libnghttp2)
 else
 dipixy_EXTRA_LDFLAGS += $(shell pkg-config --libs libnghttp2)
 endif
-dipixy_HTTP2_SRC := src/dipixy/http2/http2.c src/dipixy/http2/http2_tspush.c src/dipixy/http2/http2_dashchunk.c src/dipixy/http2/http2_hls.c src/dipixy/http2/http2_ws.c
+dipixy_HTTP2_SRC := src/dipixy/http2/http2.c src/dipixy/http2/http2_tspush.c src/dipixy/http2/http2_dashchunk.c src/dipixy/http2/http2_mp4push.c src/dipixy/http2/http2_hls.c src/dipixy/http2/http2_ws.c
 else
 dipixy_HTTP2_SRC :=
 ifneq ($(HTTP2),no)
@@ -1031,7 +1031,7 @@ dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs libngtcp2 libngtcp2_c
 else
 dipixy_EXTRA_LDFLAGS += $(shell pkg-config --libs libngtcp2 libngtcp2_crypto_ossl libnghttp3)
 endif
-dipixy_HTTP3_SRC := src/dipixy/http3/http3.c src/dipixy/http3/http3_quic.c src/dipixy/http3/http3_req.c src/dipixy/http3/http3_resp.c src/dipixy/http3/http3_tspush.c src/dipixy/http3/http3_dashchunk.c src/dipixy/http3/http3_llhls.c src/dipixy/http3/http3_hls_cold.c src/dipixy/http3/http3_ws.c
+dipixy_HTTP3_SRC := src/dipixy/http3/http3.c src/dipixy/http3/http3_quic.c src/dipixy/http3/http3_req.c src/dipixy/http3/http3_resp.c src/dipixy/http3/http3_tspush.c src/dipixy/http3/http3_dashchunk.c src/dipixy/http3/http3_mp4push.c src/dipixy/http3/http3_llhls.c src/dipixy/http3/http3_hls_cold.c src/dipixy/http3/http3_ws.c
 else
 dipixy_HTTP3_SRC :=
 ifeq ($(HAVE_LIBNGTCP2),yes)
@@ -1082,6 +1082,7 @@ dipixy_SRCS := \
 	src/dipixy/reactor/dispatch/waiters.c \
 	src/dipixy/reactor/reactor_tspush.c \
 	src/dipixy/reactor/reactor_dashchunk.c \
+	src/dipixy/reactor/reactor_mp4push.c \
 	src/dipixy/reactor/reactor_ws.c \
 	src/dipixy/ts/ts_push.c \
 	src/dipixy/ts/ts_push_feed.c \
@@ -1112,6 +1113,7 @@ dipixy_SRCS := \
 	src/dipixy/segment/video.c \
 	src/dipixy/segment/audio.c \
 	src/dipixy/segment/mux.c \
+	src/dipixy/segment/mp4push.c \
 	src/dipixy/dlna/ssdp.c \
 	src/dipixy/dlna/dlna.c \
 	src/dipixy/dlna/dlna_soap.c \
@@ -3248,7 +3250,7 @@ dipifccret_capture_SRCS := \
 	src/lib/demux/rtp.c \
 	src/lib/helper/signal.c
 
-UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls lib_playlist_in
+UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_mp4push lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
@@ -3498,6 +3500,12 @@ dipixy_hls_SRCS := \
 	src/lib/helper/log.c
 dipixy_hls_EXTRA_CFLAGS := -ffunction-sections -fdata-sections
 dipixy_hls_EXTRA_LDFLAGS := -Wl,--gc-sections
+
+dipixy_mp4push_BIN := tests/unit/dipixy/test_mp4push
+dipixy_mp4push_SRCS := \
+	tests/unit/dipixy/test_mp4push.c \
+	src/dipixy/segment/mp4push.c \
+	src/lib/helper/log.c
 
 dipixy_conn_BIN := tests/unit/dipixy/test_conn
 dipixy_conn_SRCS := \

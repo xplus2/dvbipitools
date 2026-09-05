@@ -88,6 +88,14 @@ START_TEST(udp_hls_fmp4_direct_route_parses) {
 }
 END_TEST
 
+START_TEST(udp_mp4_direct_route_parses) {
+  route_t r;
+  ck_assert_int_eq(route_parse("/udp/239.0.0.1:8000/mp4", &r), 0);
+  ck_assert_int_eq(r.kind, ROUTE_UDP);
+  ck_assert_int_eq(r.fmt, ROUTE_FMT_MP4);
+}
+END_TEST
+
 START_TEST(hls_fmp4_init_filename_route_parses) {
   route_t r;
   ck_assert_int_eq(route_parse("/rtp/239.0.0.1:8000/init.mp4", &r), 0);
@@ -296,7 +304,7 @@ END_TEST
 
 START_TEST(invalid_format_suffix_rejected) {
   route_t r;
-  ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/mp4", &r), 0);
+  ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/bogus", &r), 0);
 }
 END_TEST
 
@@ -479,6 +487,7 @@ static Suite *route_suite(void) {
   tcase_add_test(tc, hls_segment_filename_route_parses_for_list);
   tcase_add_test(tc, malformed_segment_filename_rejected);
   tcase_add_test(tc, udp_hls_fmp4_direct_route_parses);
+  tcase_add_test(tc, udp_mp4_direct_route_parses);
   tcase_add_test(tc, hls_fmp4_init_filename_route_parses);
   tcase_add_test(tc, hls_fmp4_segment_filename_route_parses);
   tcase_add_test(tc, malformed_fmp4_segment_filename_rejected);

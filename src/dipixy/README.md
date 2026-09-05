@@ -2,7 +2,8 @@
 
 When parts of ETSI TS 102 905 (DVB-HN) meet udpxy and lean towards DVB-I, `dipixy` is the result.
 
-It takes various input streams and playlists, allows playback using HLS (ts and fMP4), LL-HLS, MPEG-DASH (regular and CMAF Low-Latency) and progressive HTTP/TS.
+It takes various input streams and playlists, allows playback using HLS (ts and fMP4), LL-HLS,
+MPEG-DASH (regular and CMAF Low-Latency), progressive HTTP/TS and progressive MP4.
 
 Optionally, it's also a DLNA MediaServer for your home network to consume streams without an additional Set-Top-Box.
 
@@ -14,48 +15,48 @@ dipixy [-l addr:port] [-i source ...] [options]
 
 ## Options
 
-| flag | long form                | argument              | default                                               | scope |
-|------|--------------------------|-----------------------|-------------------------------------------------------|-------|
-| `-I` | `--iface`                | `<iface>`             | kernel default route                                  |       |
-| `-l` | `--listen`               | `<addr>:<port>`       | `all:9080`                                            |       |
-| `-L` | `--listen-tls`           | `<addr>:<port>`       | `all:9443`                                            |       |
-|      | `--tls-cert`             | `<path>`              | search default paths, see below                       |       |
-|      | `--tls-key`              | `<path>`              | search default paths, see below                       |       |
-| `-j` | `--workers`              | `-1\|-2\|-3` or `<n>` | `-1` (that many x cpu cores) or <n> threads           |       |
-| `-c` | `--max-clients`          | `<n>`                 | `256`; cap on concurrent streams                      |       |
-|      | `--max-channels`         | `<n>`                 | `32`; cap on concurrent (source,filter,pmt,container) |       |
-|      | `--capture-ring-size`    | `<KiB>`               | `4096`; per-source ingress ring buffer                |       |
-| `-i` | `--input`                | `<source>`            | none, repeatable                                      |       |
-| `-n` | `--name`                 | `<name>`              | none; names the input                                 | input |
-|      | `--media-type`           | `radio\|tv`           | `tv`; only needed for DLNA                            | input |
-| `-k` | `--insecure`             |                       | off; skip TLS input verification                      |       |
-|      | `--sds-timeout`          | `<seconds>`           | `3`; sds:// discovery wait                            |       |
-|      | `--sds-refresh-interval` | `<seconds>`           | `30`; sds:// retry                                    |       |
-|      | `--segment-size`         | `<seconds>`           | `3` (hls, hls-fmp4, llhls, dash, lldash)              |       |
-|      | `--segment-count`        | `<n>`                 | `4`                                                   |       |
-|      | `--hls-part-size`        | `<seconds>`           | `0.35` (llhls, must be `<` segment-size)              |       |
-|      | `--dash-part-size`       | `<seconds>`           | `0.333` (`lldash`, must be `<` segment-size)          |       |
-|      | `--dash-utc-url`         | `<url>`               | `http://time.akamai.com/?iso&ms` (`lldash`)           |       |
-|      | `--hls-seg-pool`         | `<n>`                 | `8`; per-size-class segment buffer cap                |       |
-|      | `--metrics`              | `<path>`              | `/run/dvbipitools/metrics.sock`                       |       |
-|      | `--metrics-id`           | `<name>`              | none (metrics disabled unless set)                    |       |
-|      | `--metrics-interval`     | `<s>`                 | `5`                                                   |       |
-|      | `--metrics-http`         |                       | off (also serve `/metrics` ourselves)                 |       |
-|      | `--status-tpl`           | `<path>`              | built-in, override with your own                      |       |
-|      | `--auth`                 | `<user:pass>`         | off; HTTP Basic Auth for status                       |       |
-|      | `--cors-origin`          | `<list>`              | `*` (comma-separated allowlist vs `Origin`)           |       |
-| `-f` | `--format`               | `<list>`              | all; allow `ts,spts,rawaudio,hls,llhls,dash,lldash`   |       |
-|      | `--no-url-rtp`           |                       | off (deactivate `/rtp/`)                              |       |
-|      | `--no-url-udp`           |                       | off (deactivate `/udp/`)                              |       |
-|      | `--no-url-srt`           |                       | off (deactivate `/srt/`)                              |       |
-|      | `--no-pid-filters`       |                       | off (deactivate `?filter=`)                           |       |
-|      | `--no-fcc`               |                       | off (ignore SDS fcc)                                  |       |
-|      | `--no-ret`               |                       | off (ignore SDS ret)                                  |       |
-|      | `--no-status`            |                       | off (deactivate `/ui/status.js`)                      |       |
-| `-d` | `--daemonize`            |                       | off (fork to background after startup)                |       |
-| `-v` | `--verbose`              |                       | off                                                   |       |
-|      | `--color`                | `auto\|always\|never` | `auto`                                                |       |
-| `-h` | `--help`                 |                       |                                                       |       |
+| flag | long form                | argument              | default                                                 | scope |
+|------|--------------------------|-----------------------|---------------------------------------------------------|-------|
+| `-I` | `--iface`                | `<iface>`             | kernel default route                                    |       |
+| `-l` | `--listen`               | `<addr>:<port>`       | `all:9080`                                              |       |
+| `-L` | `--listen-tls`           | `<addr>:<port>`       | `all:9443`                                              |       |
+|      | `--tls-cert`             | `<path>`              | search default paths, see below                         |       |
+|      | `--tls-key`              | `<path>`              | search default paths, see below                         |       |
+| `-j` | `--workers`              | `-1\|-2\|-3` or `<n>` | `-1` (that many x cpu cores) or <n> threads             |       |
+| `-c` | `--max-clients`          | `<n>`                 | `256`; cap on concurrent streams                        |       |
+|      | `--max-channels`         | `<n>`                 | `32`; cap on concurrent (source,filter,pmt,container)   |       |
+|      | `--capture-ring-size`    | `<KiB>`               | `4096`; per-source ingress ring buffer                  |       |
+| `-i` | `--input`                | `<source>`            | none, repeatable                                        |       |
+| `-n` | `--name`                 | `<name>`              | none; names the input                                   | input |
+|      | `--media-type`           | `radio\|tv`           | `tv`; only needed for DLNA                              | input |
+| `-k` | `--insecure`             |                       | off; skip TLS input verification                        |       |
+|      | `--sds-timeout`          | `<seconds>`           | `3`; sds:// discovery wait                              |       |
+|      | `--sds-refresh-interval` | `<seconds>`           | `30`; sds:// retry                                      |       |
+|      | `--segment-size`         | `<seconds>`           | `3` (hls, hls-fmp4, llhls, dash, lldash)                |       |
+|      | `--segment-count`        | `<n>`                 | `4`                                                     |       |
+|      | `--hls-part-size`        | `<seconds>`           | `0.35` (llhls, must be `<` segment-size)                |       |
+|      | `--dash-part-size`       | `<seconds>`           | `0.333` (`lldash`, must be `<` segment-size)            |       |
+|      | `--dash-utc-url`         | `<url>`               | `http://time.akamai.com/?iso&ms` (`lldash`)             |       |
+|      | `--hls-seg-pool`         | `<n>`                 | `8`; per-size-class segment buffer cap                  |       |
+|      | `--metrics`              | `<path>`              | `/run/dvbipitools/metrics.sock`                         |       |
+|      | `--metrics-id`           | `<name>`              | none (metrics disabled unless set)                      |       |
+|      | `--metrics-interval`     | `<s>`                 | `5`                                                     |       |
+|      | `--metrics-http`         |                       | off (also serve `/metrics` ourselves)                   |       |
+|      | `--status-tpl`           | `<path>`              | built-in, override with your own                        |       |
+|      | `--auth`                 | `<user:pass>`         | off; HTTP Basic Auth for status                         |       |
+|      | `--cors-origin`          | `<list>`              | `*` (comma-separated allowlist vs `Origin`)             |       |
+| `-f` | `--format`               | `<list>`              | all; allow `ts,spts,rawaudio,mp4,hls,llhls,dash,lldash` |       |
+|      | `--no-url-rtp`           |                       | off (deactivate `/rtp/`)                                |       |
+|      | `--no-url-udp`           |                       | off (deactivate `/udp/`)                                |       |
+|      | `--no-url-srt`           |                       | off (deactivate `/srt/`)                                |       |
+|      | `--no-pid-filters`       |                       | off (deactivate `?filter=`)                             |       |
+|      | `--no-fcc`               |                       | off (ignore SDS fcc)                                    |       |
+|      | `--no-ret`               |                       | off (ignore SDS ret)                                    |       |
+|      | `--no-status`            |                       | off (deactivate `/ui/status.js`)                        |       |
+| `-d` | `--daemonize`            |                       | off (fork to background after startup)                  |       |
+| `-v` | `--verbose`              |                       | off                                                     |       |
+|      | `--color`                | `auto\|always\|never` | `auto`                                                  |       |
+| `-h` | `--help`                 |                       |                                                         |       |
 
 ### Related to DLNA/UPnP-AV
 
@@ -113,7 +114,7 @@ The included web interface is as basic, but:
 
 Anyway, here are the details if you want to craft your URIs manually:
 
-These routes address a source directly (`fmt` is one of `ts`, `spts`, `rawaudio`, `hls`, `hls-fmp4`, `llhls`, `dash`, `lldash`):
+These routes address a source directly (`fmt` is one of `ts`, `spts`, `rawaudio`, `mp4`, `hls`, `hls-fmp4`, `llhls`, `dash`, `lldash`):
 
 ```
 /rtp/<addr>:<port>/<fmt>    RTP source
@@ -168,7 +169,7 @@ one playlist, for VLC/Kodi/tvheadend/... to subscribe to instead of hand-feeding
 /export/<fmt>/<type>
 ```
 
-`<fmt>` is any of the entry formats above (`ts`, `spts`, `rawaudio`, `hls`, `hls-fmp4`, `llhls`,
+`<fmt>` is any of the entry formats above (`ts`, `spts`, `rawaudio`, `mp4`, `hls`, `hls-fmp4`, `llhls`,
 `dash`, `lldash`); `<type>` is `m3u` or `xspf`.
 
 Optional query params:
@@ -188,7 +189,7 @@ A channel's `tvg-logo`/`<image>` (M3U/XSPF) carries through if the source playli
 Segmenting still needs to locate keyframes, understood for MPEG-2 Video, H.264/AVC, H.265/HEVC, and H.266/VVC.
 Other video codecs won't cut cleanly on an IDR/I-frame.
 
-`hls-fmp4`, `llhls`, `dash` and `lldash` build actual ISOBMFF (fMP4) sample entries, so their codec support is narrower:
+`mp4`, `hls-fmp4`, `llhls`, `dash` and `lldash` build actual ISOBMFF (fMP4) sample entries, so their codec support is narrower:
 * video: H.264/AVC, H.265/HEVC, H.266/VVC. MPEG-2 Video has no fMP4 sample entry and won't produce output.
 * audio: AAC (ADTS or LATM), AC-3, Enhanced AC-3 (E-AC-3), MPEG-1 Layer II (MP2), Opus.
 
@@ -323,6 +324,7 @@ What's lost:
 # direct routes, no channel list needed
 dipixy -l 0.0.0.0:9080
 vlc http://localhost:9080/udp/239.1.1.1:5000/ts      # Progressive HTTP/TS
+vlc http://localhost:9080/udp/239.1.1.1:5000/mp4     # Progressive HTTP/MP4
 vlc http://localhost:9080/rtp/239.1.1.1:5000/dash    # MPEG DASH
 vlc http://localhost:9080/srt/1.2.3.4:9000/hls       # HLS (TS segments)
 vlc http://localhost:9080/srt/1.2.3.4:9000/hls-fmp4  # HLS (fMP4 segments)

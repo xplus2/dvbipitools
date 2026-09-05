@@ -66,6 +66,7 @@ typedef struct {
   int no_ts;                /* -f/--format: ts absent, disables raw TS push routes */
   int no_spts;              /* -f/--format: spts absent, disables single-program TS push routes */
   int no_rawaudio;          /* -f/--format: rawaudio absent, disables /rawaudio routes */
+  int no_mp4;               /* -f/--format: mp4 absent, disables /mp4 routes */
   int no_url_rtp;           /* --no-url-rtp: disables /rtp/... routes */
   int no_url_udp;           /* --no-url-udp: disables /udp/... routes */
   int no_url_srt;           /* --no-url-srt: disables /srt/... routes */

@@ -12,6 +12,7 @@
 #include "../dash/dash.h"
 #include "../dash/lldash.h"
 #include "../segment/segment.h"
+#include "../segment/mp4push.h"
 #include "../ts/pidfilter.h"
 #include "../ts/pmtselect.h"
 #include "../reactor/internal.h"
@@ -119,6 +120,7 @@ static int cb_stream_close(nghttp2_session *ng, int32_t stream_id, uint32_t erro
   h2_free_stream(conn, stream_id);
   h2_tspush_on_stream_close(conn, stream_id);
   h2_dashchunk_on_stream_close(conn, stream_id);
+  h2_mp4push_on_stream_close(conn, stream_id);
   h2_llhls_on_stream_close(conn, stream_id);
   h2_hls_cold_on_stream_close(conn, stream_id);
   h2_ws_on_stream_close(conn, stream_id);
@@ -331,6 +333,36 @@ static void h2_dispatch_stream(h2_conn_t *conn, conn_t *c, h2_stream_t *stream) 
       return;
     }
 
+    case ROUTE_FMT_MP4: {
+      int wsh;
+      ctx = open_source(&rt, &list_num);
+      if (!ctx) {
+        h2_respond_status(conn, stream->id, "404");
+        return;
+      }
+      route_client_info(&rt, list_num, &filter, pmt_pid, c->client_ip, 2, &item_bufs, &cinfo);
+      wsh = ws_clients_touch(&cinfo);
+      if (wsh < 0) {
+        capture_close(ctx);
+        h2_respond_status(conn, stream->id, "501");
+        return;
+      }
+      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_FMP4, 0.0)) {
+        h2_respond_status(conn, stream->id, "501");
+        return;
+      }
+      if (!hls_store_ready(ctx, &filter, pmt_pid, SEG_CONTAINER_FMP4) &&
+          h2_hls_cold_try_park(conn, stream->id, ctx, &filter, pmt_pid, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, is_head, stream->origin[0] ? stream->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), wsh))
+        return;
+      {
+        int sub = mp4push_subscribe(ctx, &filter, pmt_pid, 2);
+        if (sub >= 0 && h2_mp4push_dispatch(conn, c, stream->id, sub, wsh)) return;
+        if (sub >= 0) mp4push_sub_close(sub);
+      }
+      h2_respond_status(conn, stream->id, "501");
+      return;
+    }
+
     default:
       h2_respond_status(conn, stream->id, "501");
       return;
@@ -438,6 +470,7 @@ void h2_conn_close(int epfd, conn_t *c) {
   h2_conn_t *conn = (h2_conn_t *)c->h2;
   for (int i = 0; i < H2_TSPUSH_MAX; i++) if (conn->tspush[i].sid) h2_tspush_on_stream_close(conn, conn->tspush[i].sid);
   for (int i = 0; i < H2_DASHCHUNK_MAX; i++) if (conn->dashchunk[i].sid) h2_dashchunk_on_stream_close(conn, conn->dashchunk[i].sid);
+  for (int i = 0; i < H2_MP4PUSH_MAX; i++) if (conn->mp4push[i].sid) h2_mp4push_on_stream_close(conn, conn->mp4push[i].sid);
   h2_llhls_on_conn_close(conn);
   h2_hls_cold_on_conn_close(conn);
   h2_ws_on_conn_close(conn);

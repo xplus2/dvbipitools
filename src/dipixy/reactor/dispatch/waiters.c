@@ -4,6 +4,7 @@
 #include "priv.h"
 #include "../../hls/hls.h"
 #include "../../dash/dash.h"
+#include "../../segment/mp4push.h"
 
 #include "lib/helper/ioutil.h"
 
@@ -108,16 +109,23 @@ void hls_cold_flush_waiters(void) {
     if (!w->active) continue;
     ready = w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, w->container) : hls_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, w->container);
     if (now < w->deadline_ms && !ready) continue;
-    if (w->kind == HLS_COLD_LLHLS)
-      served = hls_serve_ll(w->c, w->cap_ctx, &w->filter, w->pmt_pid, w->filename, w->is_head, w->keep_alive, NULL,w->origin[0] ? w->origin : NULL, &bytes);
-    else if (w->kind == HLS_COLD_DASH)
-      served = dash_serve(w->c, w->cap_ctx, &w->filter, w->pmt_pid, w->want_ll, reactor_cfg()->dash_utc_url, w->is_head, w->keep_alive, w->origin[0] ? w->origin : NULL, &bytes);
-    else
-      served = hls_serve(w->c, w->cap_ctx, &w->filter, w->pmt_pid, w->container, w->filename, w->is_head, w->keep_alive, NULL,w->origin[0] ? w->origin : NULL, &bytes);
-    if (served)
-      ws_clients_add_bytes(w->ws_handle, bytes);
-    else
-      respond_status(w->c, RESP_404, w->keep_alive);
+    if (w->kind == HLS_COLD_MP4) {
+      if (!mp4push_try_attach(w->c, w->cap_ctx, &w->filter, w->pmt_pid, w->ws_handle))
+        respond_status(w->c, RESP_501, w->keep_alive);
+    } else {
+      if (w->kind == HLS_COLD_LLHLS) {
+        served = hls_serve_ll(w->c, w->cap_ctx, &w->filter, w->pmt_pid, w->filename, w->is_head, w->keep_alive, NULL,w->origin[0] ? w->origin : NULL, &bytes);
+      } else if (w->kind == HLS_COLD_DASH) {
+        served = dash_serve(w->c, w->cap_ctx, &w->filter, w->pmt_pid, w->want_ll, reactor_cfg()->dash_utc_url, w->is_head, w->keep_alive, w->origin[0] ? w->origin : NULL, &bytes);
+      } else {
+        served = hls_serve(w->c, w->cap_ctx, &w->filter, w->pmt_pid, w->container, w->filename, w->is_head, w->keep_alive, NULL,w->origin[0] ? w->origin : NULL, &bytes);
+      }
+      if (served) {
+        ws_clients_add_bytes(w->ws_handle, bytes);
+      } else {
+        respond_status(w->c, RESP_404, w->keep_alive);
+      }
+    }
     w->c->state = CONN_WRITING;
     reactor_finish(t_reactor_epfd, w->c);
     w->active = 0;
