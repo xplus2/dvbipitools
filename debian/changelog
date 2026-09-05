@@ -4,6 +4,7 @@ dvbipitools (2.4.1-1) unstable; urgency=low
     + segmetation support added for VVC and Opus, fixed HEVC
     + progressive mp4 output (not chunked)
   * optional ETSI TS 103 197 Annex D in dipitvhead + dipiradiohead
+  * dipirec: mp4/m4a output support
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.0-1) unstable; urgency=medium

@@ -524,6 +524,12 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/write.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/feed.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/mp4.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/video.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/write.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/feed.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/moov.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/flv.c

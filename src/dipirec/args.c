@@ -338,7 +338,7 @@ static int parse_audio(const char *s, config_t *cfg) {
 }
 
 static int fmt_from_name(const char *s, out_fmt_t *f) {
-  static const enum_map_t map[] = {{"raw", FMT_RAW}, {"ts", FMT_TS}, {"mkv", FMT_MKV}, {"mka", FMT_MKA}};
+  static const enum_map_t map[] = {{"raw", FMT_RAW}, {"ts", FMT_TS}, {"mkv", FMT_MKV}, {"mka", FMT_MKA}, {"mp4", FMT_MP4}, {"m4a", FMT_M4A}};
   int v;
   if (map_lookup(map, sizeof map / sizeof map[0], s, &v))
     return -1;
@@ -348,7 +348,7 @@ static int fmt_from_name(const char *s, out_fmt_t *f) {
 
 /* 1 if suffix gave format. no "raw": not a meaningful file extension, name-only via -f */
 static int fmt_from_suffix(const char *path, out_fmt_t *f) {
-  static const enum_map_t map[] = {{"ts", FMT_TS}, {"mkv", FMT_MKV}, {"mka", FMT_MKA}};
+  static const enum_map_t map[] = {{"ts", FMT_TS}, {"mkv", FMT_MKV}, {"mka", FMT_MKA}, {"mp4", FMT_MP4}, {"m4a", FMT_M4A}};
   const char *dot = strrchr(path, '.');
   char lower[8];
   size_t i;
@@ -401,14 +401,16 @@ static void print_help(void) {
       "                           rtp://udp://rist://srt://rtmp://rtmps:// (see below)\n"
       "  -i, --in <uri>           input source (see above)\n"
       "  -a, --audio <track>      audio track from 1, or \"all\" (default: all)\n"
-      "  -f, --format <format>    raw|ts|mkv|mka (default: from -o suffix, else ts;\n"
-      "                           mkv/mka rejected with a network -o; raw rejected\n"
-      "                           alongside any -o rtmp://rtmps:// target)\n"
+      "  -f, --format <format>    raw|ts|mkv|mka|mp4|m4a (default: from -o suffix,\n"
+      "                           else ts; mkv/mka/mp4/m4a rejected with a network\n"
+      "                           -o; raw rejected alongside any -o rtmp://rtmps://\n"
+      "                           target)\n"
       "  -p, --pmt-pid <pid|all>  MPTS source only: pin one PMT pid, or record\n"
-      "                           every program (\"all\"; rejected with -f mkv).\n"
+      "                           every program (\"all\"; rejected with -f mkv/mp4).\n"
       "                           ignored (warned) on an SPTS source. omitted on\n"
       "                           an MPTS source: fails early, lists programs\n"
-      "  -s, --subtitles <mode>   strip|keep|srt (srt: mkv/mka only; default: keep)\n"
+      "  -s, --subtitles <mode>   strip|keep|srt (srt: mkv/mka/mp4/m4a only;\n"
+      "                           default: keep)\n"
       "  -t, --time <duration>    e.g. 90, 5m, 5m30s, 1h3m20s, 01:20:03, 10:20\n"
       "  -I, --iface <iface>      interface for -i's multicast join\n"
       "  -O, --out-iface <iface>  interface for -o rtp://udp://'s multicast send\n"
@@ -845,7 +847,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (fmt_arg) {
     if (fmt_from_name(fmt_arg, &cfg->format)) {
-      argerr("invalid -f format: %s (raw|ts|mkv|mka)", fmt_arg);
+      argerr("invalid -f format: %s (raw|ts|mkv|mka|mp4|m4a)", fmt_arg);
       return ARGS_ERR;
     }
   } else {
@@ -872,8 +874,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       if (k == OUT_RTMPS)
         has_rtmps = 1;
     }
-    if ((cfg->format == FMT_MKV || cfg->format == FMT_MKA) && (has_non_file || n_non_rtmp != 1)) {
-      argerr("-f mkv/mka requires exactly one -o file target (plus optional rtmp(s) targets)");
+    if ((cfg->format == FMT_MKV || cfg->format == FMT_MKA || cfg->format == FMT_MP4 || cfg->format == FMT_M4A) &&
+        (has_non_file || n_non_rtmp != 1)) {
+      argerr("-f mkv/mka/mp4/m4a requires exactly one -o file target (plus optional rtmp(s) targets)");
       return ARGS_ERR;
     }
     if (cfg->format == FMT_RAW && has_rtmp) {
@@ -889,9 +892,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (strip_arg && cfg->format != FMT_TS)
     log_line(TOOL_NAME ": --strip has no effect outside -f ts");
-  if (cfg->subs == SUB_SRT && cfg->format != FMT_MKV &&
-      cfg->format != FMT_MKA) {
-    argerr("-s srt requires -f mkv or mka");
+  if (cfg->subs == SUB_SRT && cfg->format != FMT_MKV && cfg->format != FMT_MKA &&
+      cfg->format != FMT_MP4 && cfg->format != FMT_M4A) {
+    argerr("-s srt requires -f mkv, mka, mp4 or m4a");
     return ARGS_ERR;
   }
   if (profile_arg) {

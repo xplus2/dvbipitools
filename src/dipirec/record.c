@@ -23,7 +23,7 @@ int record_run(const config_t *cfg, metrics_exporter_t *mx) {
   int n_sinks = 0;
   int mkv_fd = -1;
   rtmp_fanout_t rf;
-  int is_mkv_fmt = (cfg->format == FMT_MKV || cfg->format == FMT_MKA);
+  int is_mkv_fmt = (cfg->format == FMT_MKV || cfg->format == FMT_MKA || cfg->format == FMT_MP4 || cfg->format == FMT_M4A);
   int rc = 0;
   unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
   int n_all_pids;
@@ -70,7 +70,7 @@ int record_run(const config_t *cfg, metrics_exporter_t *mx) {
     /* -p all under -f ts: nothing left to filter, mkv/flv both need one fixed program anyway */
     rc = run_raw(&s, cfg, sinks, n_sinks, &rf, mx, &bytes, start, pace);
   else
-    rc = run_stream(&s, cfg, sinks, n_sinks, mkv_fd, &rf, mx, &bytes, start, cfg->format == FMT_MKV, pmt_pid, all_pids, n_all_pids, pace);
+    rc = run_stream(&s, cfg, sinks, n_sinks, mkv_fd, &rf, mx, &bytes, start, cfg->format == FMT_MKV || cfg->format == FMT_MP4, pmt_pid, all_pids, n_all_pids, pace);
   pace_free(pace);
 
   if (!stop_now(cfg, start)) {

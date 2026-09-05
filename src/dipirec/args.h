@@ -37,7 +37,7 @@ typedef struct {
   int srt_listen; /* 1 = @, bind/listen/accept. 0 = call out (connect) */
 } source_t;
 
-typedef enum { FMT_RAW, FMT_TS, FMT_MKV, FMT_MKA } out_fmt_t;
+typedef enum { FMT_RAW, FMT_TS, FMT_MKV, FMT_MKA, FMT_MP4, FMT_M4A } out_fmt_t;
 typedef enum { SUB_KEEP, SUB_STRIP, SUB_SRT } sub_mode_t;
 typedef enum { PMT_SEL_AUTO, PMT_SEL_PID, PMT_SEL_ALL } pmt_sel_t;
 typedef enum { OUT_FILE, OUT_RTP, OUT_UDP, OUT_RIST, OUT_RTMP, OUT_RTMPS, OUT_SRT } out_kind_t;

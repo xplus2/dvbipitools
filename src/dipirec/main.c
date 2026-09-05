@@ -18,6 +18,8 @@ static const char *fmt_name(out_fmt_t f) {
     case FMT_TS:    return "ts";
     case FMT_MKV:   return "mkv";
     case FMT_MKA:   return "mka";
+    case FMT_MP4:   return "mp4";
+    case FMT_M4A:   return "m4a";
   }
   return "?";
 }

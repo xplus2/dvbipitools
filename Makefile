@@ -317,6 +317,12 @@ dipirec_SRCS := \
 	src/lib/mux/mkv/video.c \
 	src/lib/mux/mkv/write.c \
 	src/lib/mux/mkv/feed.c \
+	src/lib/mux/fmp4/box.c \
+	src/lib/mux/mp4/mp4.c \
+	src/lib/mux/mp4/video.c \
+	src/lib/mux/mp4/write.c \
+	src/lib/mux/mp4/feed.c \
+	src/lib/mux/mp4/moov.c \
 	src/lib/mux/teletext.c \
 	src/lib/mux/amf.c \
 	src/lib/mux/flv/flv.c \
