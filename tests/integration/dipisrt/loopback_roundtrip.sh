@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-PORT=17972
+PORT=18032
 N_PKTS=200
 
 fixture="$WORK/fixture.ts"

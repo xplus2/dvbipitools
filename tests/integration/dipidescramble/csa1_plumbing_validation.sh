@@ -25,7 +25,7 @@ DIPITVHEAD=$(echo "$BIN" | sed 's#/dipidescramble\([^/]*\)$#/../dipitvhead/dipit
 
 MCAST=239.255.7.48
 PORT=17750
-ECMG_PORT=12248
+ECMG_PORT=12250
 EMMG_PORT=18009
 
 key="$WORK/testkey.pem"

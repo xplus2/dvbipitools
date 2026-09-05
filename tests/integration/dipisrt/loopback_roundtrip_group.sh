@@ -5,8 +5,8 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-PORTA=17974
-PORTB=17975
+PORTA=18030
+PORTB=18031
 N_PKTS=200
 
 # bonding needs libsrt -DENABLE_BONDING=ON, off by default upstream/most distro packages.

@@ -52,7 +52,7 @@ wait_for_port() {
 
 # phase 1: both vendors up - content scrambled, both CA_descriptors present with the right
 # CA_system_id on the right pid (super_cas_id >> 16: 0x4A750002 -> 19061, 0x0D960001 -> 3478)
-PORT1=17745
+PORT1=17762
 cap1="$WORK/cas_multi_steady.ts"
 report1="$WORK/cas_multi_steady.json"
 
@@ -96,7 +96,7 @@ ecm_b_cas=$(jq -r '.pids[] | select(.id==34) | .cas' "$report1")
 [ "$ecm_b_cas" = "3478" ] || fail "multi-cas steady: expected vendor B's CA_descriptor (cas=3478) on pid 0x0022, got '$ecm_b_cas'"
 
 # phase 2: non-required vendor B's ECMG is unreachable throughout - content must stay scrambled
-PORT2=17746
+PORT2=17763
 cap2="$WORK/cas_multi_nonrequired_down.ts"
 report2="$WORK/cas_multi_nonrequired_down.json"
 
@@ -132,7 +132,7 @@ is_scrambled=$(jq -r '.services[0]["is-scrambled"]' "$report2")
 
 # phase 3: required vendor A's ECMG is unreachable throughout, --cas-fallback-clear set -
 # content must go clear even though non-required vendor B is healthy
-PORT3=17747
+PORT3=17764
 cap3="$WORK/cas_multi_required_down.ts"
 report3="$WORK/cas_multi_required_down.json"
 

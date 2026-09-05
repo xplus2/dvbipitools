@@ -10,8 +10,8 @@ for t in ffmpeg curl ffprobe jq; do
 done
 
 MCAST=239.255.9.25
-MPORT=18105
-HTTPPORT=19206
+MPORT=18110
+HTTPPORT=19210
 BASE="http://127.0.0.1:$HTTPPORT/udp/$MCAST:$MPORT"
 
 ffmpeg -hide_banner -loglevel error -re -stream_loop -1 -f lavfi -i "testsrc=size=320x240:rate=25" \
