@@ -1285,6 +1285,12 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/dipirec/record/stats.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/record/run.c
     ${CMAKE_SOURCE_DIR}/src/lib/fccret/ret_client.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/mp4.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/video.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/write.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/feed.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/moov.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
