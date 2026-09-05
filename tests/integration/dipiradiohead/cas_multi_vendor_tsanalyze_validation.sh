@@ -39,6 +39,17 @@ start_http_source() {
     done
 }
 
+wait_for_port() {
+    port=$1
+    what=$2
+    i=0
+    while ! ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":$port\$"; do
+        i=$((i + 1))
+        [ "$i" -lt 100 ] || fail "multi-cas: $what on $port never became ready"
+        sleep 0.05
+    done
+}
+
 # phase 1: both vendors up - content scrambled, both CA_descriptors present with the right
 # CA_system_id on the right pid (super_cas_id >> 16: 0x4A750002 -> 19061, 0x0D960001 -> 3478)
 PORT1=17745
@@ -49,7 +60,8 @@ tsecmg -p $ECMG_A_PORT -s --log-protocol=info >"$WORK/tsecmg_a1.log" 2>&1 &
 ECMG_A_PID=$!
 tsecmg -p $ECMG_B_PORT -s --log-protocol=info >"$WORK/tsecmg_b1.log" 2>&1 &
 ECMG_B_PID=$!
-sleep 0.3
+wait_for_port $ECMG_A_PORT "tsecmg vendor A"
+wait_for_port $ECMG_B_PORT "tsecmg vendor B"
 start_http_source 1
 
 tsp -I ip $MCAST:$PORT1 --local-address 127.0.0.1 --receive-timeout 15000 \
@@ -90,7 +102,7 @@ report2="$WORK/cas_multi_nonrequired_down.json"
 
 tsecmg -p $ECMG_A_PORT -s --log-protocol=info >"$WORK/tsecmg_a2.log" 2>&1 &
 ECMG_A_PID=$!
-sleep 0.3
+wait_for_port $ECMG_A_PORT "tsecmg vendor A"
 start_http_source 2
 
 tsp -I ip $MCAST:$PORT2 --local-address 127.0.0.1 --receive-timeout 15000 \
@@ -126,7 +138,7 @@ report3="$WORK/cas_multi_required_down.json"
 
 tsecmg -p $ECMG_B_PORT -s --log-protocol=info >"$WORK/tsecmg_b3.log" 2>&1 &
 ECMG_B_PID=$!
-sleep 0.3
+wait_for_port $ECMG_B_PORT "tsecmg vendor B"
 start_http_source 3
 
 tsp -I ip $MCAST:$PORT3 --local-address 127.0.0.1 --receive-timeout 15000 \

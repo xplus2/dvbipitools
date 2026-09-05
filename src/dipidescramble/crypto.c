@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include <openssl/hmac.h>
@@ -12,12 +13,22 @@
 
 #include "crypto.h"
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+static OSSL_PROVIDER *ecm_legacy_provider;
+
+static void ecm_unload_legacy_provider(void) {
+  if (ecm_legacy_provider)
+    OSSL_PROVIDER_unload(ecm_legacy_provider);
+}
+#endif
+
 /* DES-EDE/EDE3 live in OpenSSL 3's "legacy" provider, not loaded by default */
 static void ecm_ensure_legacy_provider(void) {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
   static int done = 0;
   if (!done) {
-    OSSL_PROVIDER_load(NULL, "legacy");
+    ecm_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
+    atexit(ecm_unload_legacy_provider);
     done = 1;
   }
 #endif

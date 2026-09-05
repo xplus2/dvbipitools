@@ -13,8 +13,8 @@ DIPIRADIOHEAD=$(echo "$BIN" | sed 's#/dipidescramble\([^/]*\)$#/../dipiradiohead
 [ -x "$DIPIRADIOHEAD" ] || DIPIRADIOHEAD="./dipiradiohead"
 [ -x "$DIPIRADIOHEAD" ] || fail "cannot locate dipiradiohead binary (tried $DIPIRADIOHEAD)"
 
-MCAST=239.255.7.46
-PORT=17748
+MCAST=239.255.7.56
+PORT=17756
 HTTP_PORT=18084
 SW=00112233445566778899aabbccddeeff
 

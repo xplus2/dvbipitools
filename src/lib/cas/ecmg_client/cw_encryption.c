@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <openssl/evp.h>
@@ -27,12 +28,25 @@ void cwenc_des56_expand(const unsigned char in7[7], unsigned char out8[CWENC_DES
   }
 }
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+static OSSL_PROVIDER *cwenc_legacy_provider;
+static OSSL_PROVIDER *cwenc_default_provider;
+
+static void cwenc_unload_providers(void) {
+  if (cwenc_legacy_provider)
+    OSSL_PROVIDER_unload(cwenc_legacy_provider);
+  if (cwenc_default_provider)
+    OSSL_PROVIDER_unload(cwenc_default_provider);
+}
+#endif
+
 static void cwenc_ensure_legacy_provider(void) {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
   static int done = 0;
   if (!done) {
-    OSSL_PROVIDER_load(NULL, "legacy");
-    OSSL_PROVIDER_load(NULL, "default");
+    cwenc_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
+    cwenc_default_provider = OSSL_PROVIDER_load(NULL, "default");
+    atexit(cwenc_unload_providers);
     done = 1;
   }
 #endif

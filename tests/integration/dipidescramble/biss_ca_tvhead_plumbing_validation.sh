@@ -13,8 +13,8 @@ DIPITVHEAD=$(echo "$BIN" | sed 's#/dipidescramble\([^/]*\)$#/../dipitvhead/dipit
 [ -x "$DIPITVHEAD" ] || DIPITVHEAD="./dipitvhead"
 [ -x "$DIPITVHEAD" ] || fail "cannot locate dipitvhead binary (tried $DIPITVHEAD)"
 
-MCAST=239.255.7.45
-PORT=17745
+MCAST=239.255.7.55
+PORT=17755
 
 RECEIVERS="$WORK/receivers"
 mkdir -p "$RECEIVERS"
