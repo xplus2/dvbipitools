@@ -55,6 +55,7 @@ dvbipitools_add_fuzz_harness(ecmg_channel_status
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
