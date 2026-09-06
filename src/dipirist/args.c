@@ -17,47 +17,38 @@
 #include "args.h"
 #include "version.h"
 
-static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-
-static void argerr(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  argutil_verr(TOOL_NAME, fmt, ap);
-  va_end(ap);
-}
+#define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* rest: [@]addr:port, multicast literal required */
-static int parse_direct(const char *rest, nonrist_t *s) {
+static int parse_direct(const char *rest, plain_endpoint_t *s) {
   if (*rest == '@')
     rest++;
   return uriparse_mcast_addrport(rest, &s->family, s->group, sizeof s->group, &s->port);
 }
 
-static int parse_nonrist(const char *uri, nonrist_t *s, int is_sink) {
+static int parse_nonrist(const char *uri, plain_endpoint_t *s, int is_sink) {
   memset(s, 0, sizeof *s);
   if (strcmp(uri, "-") == 0) {
-    s->kind = NONRIST_FILE; /* file_path[0] == '\0': stdin (source) / stdout (sink) */
+    s->kind = PLAIN_EP_FILE; /* file_path[0] == '\0': stdin (source) / stdout (sink) */
     return 0;
   }
   if (strncmp(uri, "rtp://", 6) == 0) {
-    s->kind = NONRIST_RTP;
+    s->kind = PLAIN_EP_RTP;
     s->rtp_wrapped = 1;
     return parse_direct(uri + 6, s);
   }
   if (strncmp(uri, "udp://", 6) == 0) {
-    s->kind = NONRIST_UDP;
+    s->kind = PLAIN_EP_UDP;
     s->rtp_wrapped = 0;
     return parse_direct(uri + 6, s);
   }
   if (strncmp(uri, "http://", 7) == 0 || strncmp(uri, "https://", 8) == 0) {
-    if (is_sink)
-      return -1; /* an HTTP TS source makes no sense as an output */
-    s->kind = NONRIST_HTTP;
+    if (is_sink) return -1; /* an HTTP TS source makes no sense as an output */
+    s->kind = PLAIN_EP_HTTP;
     return http_url_parse(uri, &s->http);
   }
-  if (strlen(uri) >= sizeof s->file_path)
-    return -1;
-  s->kind = NONRIST_FILE;
+  if (strlen(uri) >= sizeof s->file_path) return -1;
+  s->kind = PLAIN_EP_FILE;
   bufcpy(s->file_path, sizeof s->file_path, uri);
   return 0;
 }
@@ -79,13 +70,10 @@ static int parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *
     if (uri[7 + has_at] == '[')
       log_line("warning: this librist build (<=0.2.20) has known IPv6 handling bugs, %s may crash it", uri);
 #endif
-    if (e->n_rist >= DIPIRIST_MAX_PEERS)
-      return -1;
-    if (strlen(uri) >= sizeof e->rist_uri[0])
-      return -1;
+    if (e->n_rist >= DIPIRIST_MAX_PEERS) return -1;
+    if (strlen(uri) >= sizeof e->rist_uri[0]) return -1;
     /* -i rist:// listens for sender, -o rist:// calls out to receiver */
-    if (is_sink == has_at)
-      return -1;
+    if (is_sink == has_at) return -1;
     bufcpy(e->rist_uri[e->n_rist++], sizeof e->rist_uri[0], uri);
   } else if (parse_nonrist(uri, &e->nonrist, is_sink)) {
     return -1;
@@ -107,20 +95,20 @@ void endpoint_describe(const endpoint_t *e, char *buf, size_t n) {
     return;
   }
   switch (e->nonrist.kind) {
-  case NONRIST_RTP:
-  case NONRIST_UDP: {
-    const char *scheme = (e->nonrist.kind == NONRIST_RTP) ? "rtp" : "udp";
+  case PLAIN_EP_RTP:
+  case PLAIN_EP_UDP: {
+    const char *scheme = (e->nonrist.kind == PLAIN_EP_RTP) ? "rtp" : "udp";
     if (e->nonrist.family == AF_INET6)
       snprintf(buf, n, "%s://@[%s]:%u", scheme, e->nonrist.group, e->nonrist.port);
     else
       snprintf(buf, n, "%s://@%s:%u", scheme, e->nonrist.group, e->nonrist.port);
     break;
   }
-  case NONRIST_HTTP:
+  case PLAIN_EP_HTTP:
     snprintf(buf, n, "%s://%s:%u%s", e->nonrist.http.tls ? "https" : "http", e->nonrist.http.host, e->nonrist.http.port,
               e->nonrist.http.path);
     break;
-  case NONRIST_FILE:
+  case PLAIN_EP_FILE:
     bufcpy(buf, n, e->nonrist.file_path[0] ? e->nonrist.file_path : "- (stdin/stdout)");
     break;
   }
@@ -234,16 +222,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
-      case 1003: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 60000) {
+      case 1003:
+        if (argutil_uint_range(optarg, 1, 60000, &cfg->buffer_ms)) {
           argerr("invalid --buffer: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->buffer_ms = (unsigned)v;
         break;
-      }
       case 1004: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
@@ -259,16 +243,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1006:
         cfg->metrics_id = optarg;
         break;
-      case 1007: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 86400UL) {
+      case 1007:
+        if (argutil_uint_range(optarg, 1, 86400, &cfg->metrics_interval_s)) {
           argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
           return ARGS_ERR;
         }
-        cfg->metrics_interval_s = (unsigned)v;
         break;
-      }
       case 'v':
         cfg->verbose = 1;
         break;
@@ -306,7 +286,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--metrics/--metrics-interval require --metrics-id");
     return ARGS_ERR;
   }
-  if (cfg->insecure_tls && !(cfg->in.nonrist.kind == NONRIST_HTTP && cfg->in.nonrist.http.tls))
+  if (cfg->insecure_tls && !(cfg->in.nonrist.kind == PLAIN_EP_HTTP && cfg->in.nonrist.http.tls))
     log_line(TOOL_NAME ": --insecure has no effect, no -i https:// source");
   return ARGS_OK;
 }

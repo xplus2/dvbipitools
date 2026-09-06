@@ -7,6 +7,7 @@
 #include "../version.h"
 #include "../ws/ws_clients.h"
 
+#include "lib/helper/byte_ring.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 
@@ -40,9 +41,7 @@ typedef struct {
   int ws_handle;
   int reactor_tid; /* h2/h3: owning reactor thread */
   _Atomic int finalized;
-  uint8_t *ring; /* h2/h3 */
-  _Atomic uint32_t wpos;
-  _Atomic uint32_t rpos;
+  byte_ring_t ring; /* h2/h3 */
   _Atomic int ring_errored;
   _Atomic int store_next;
   int tid_next;
@@ -65,8 +64,7 @@ static char *write_hex(char *dst, size_t v) {
     tmp[n++] = digits[v & 0xf];
     v >>= 4;
   } while (v);
-  for (int i = 0; i < n; i++)
-    *dst++ = tmp[n - 1 - i];
+  for (int i = 0; i < n; i++) *dst++ = tmp[n - 1 - i];
   return dst;
 }
 
@@ -97,21 +95,10 @@ static void wake_reactor(int tid) {
 }
 
 static void ring_enqueue(dashchunk_sub_t *s, const uint8_t *data, size_t len) {
-  uint32_t wpos, rpos, idx;
-  size_t first;
-  if (!s->ring || !len) return;
-  wpos = atomic_load_explicit(&s->wpos, memory_order_relaxed);
-  rpos = atomic_load_explicit(&s->rpos, memory_order_acquire);
-  if (len > DASHCHUNK_RING_BYTES - (wpos - rpos)) {
+  if (!byte_ring_write(&s->ring, data, len)) {
     atomic_store_explicit(&s->ring_errored, 1, memory_order_release);
     return;
   }
-  idx = wpos & (DASHCHUNK_RING_BYTES - 1u);
-  first = len;
-  if (idx + first > DASHCHUNK_RING_BYTES) first = DASHCHUNK_RING_BYTES - idx;
-  memcpy(s->ring + idx, data, first);
-  if (first < len) memcpy(s->ring, data + first, len - first);
-  atomic_store_explicit(&s->wpos, wpos + (uint32_t)len, memory_order_release);
   ws_clients_add_bytes(s->ws_handle, len);
 }
 
@@ -283,10 +270,8 @@ int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsign
   atomic_store_explicit(&g_subs[idx].finalized, 0, memory_order_relaxed);
   atomic_store_explicit(&g_subs[idx].ring_errored, 0, memory_order_relaxed);
   if (proto == 2 || proto == 3) {
-    if (!g_subs[idx].ring) g_subs[idx].ring = malloc(DASHCHUNK_RING_BYTES);
-    atomic_store_explicit(&g_subs[idx].wpos, 0, memory_order_relaxed);
-    atomic_store_explicit(&g_subs[idx].rpos, 0, memory_order_relaxed);
-    if (!g_subs[idx].ring) {
+    byte_ring_reset(&g_subs[idx].ring, DASHCHUNK_RING_BYTES);
+    if (!g_subs[idx].ring.buf) {
       atomic_store_explicit(&g_subs[idx].alive, DASHCHUNK_SUB_FREE, memory_order_release);
       return -1;
     }
@@ -328,29 +313,15 @@ int64_t dash_lldash_sub_h3_sid(int slot) {
 }
 
 size_t dash_lldash_ring_read(int slot, uint8_t *buf, size_t maxlen) {
-  dashchunk_sub_t *s;
-  uint32_t wpos, rpos, idx, avail, n;
   if (slot < 0 || slot >= g_subs_n) return 0;
-  s = &g_subs[slot];
-  if (!s->ring) return 0;
-  wpos = atomic_load_explicit(&s->wpos, memory_order_acquire);
-  rpos = atomic_load_explicit(&s->rpos, memory_order_relaxed);
-  if (wpos == rpos) return 0;
-  idx = rpos & (DASHCHUNK_RING_BYTES - 1u);
-  avail = wpos - rpos;
-  n = DASHCHUNK_RING_BYTES - idx;
-  if (n > avail) n = avail;
-  if (n > maxlen) n = (uint32_t)maxlen;
-  memcpy(buf, s->ring + idx, n);
-  atomic_store_explicit(&s->rpos, rpos + n, memory_order_release);
-  return n;
+  return byte_ring_read(&g_subs[slot].ring, buf, maxlen);
 }
 
 int dash_lldash_ring_pending(int slot) {
   dashchunk_sub_t *s;
   if (slot < 0 || slot >= g_subs_n) return 0;
   s = &g_subs[slot];
-  return atomic_load_explicit(&s->wpos, memory_order_acquire) != atomic_load_explicit(&s->rpos, memory_order_relaxed);
+  return atomic_load_explicit(&s->ring.wpos, memory_order_acquire) != atomic_load_explicit(&s->ring.rpos, memory_order_relaxed);
 }
 
 int dash_lldash_ring_errored(int slot) {
@@ -359,26 +330,16 @@ int dash_lldash_ring_errored(int slot) {
 }
 
 const uint8_t *dash_lldash_ring_peek(int slot, size_t *len) {
-  dashchunk_sub_t *s;
-  uint32_t wpos, rpos, idx, avail, contig;
-  *len = 0;
-  if (slot < 0 || slot >= g_subs_n) return NULL;
-  s = &g_subs[slot];
-  if (!s->ring) return NULL;
-  wpos = atomic_load_explicit(&s->wpos, memory_order_acquire);
-  rpos = atomic_load_explicit(&s->rpos, memory_order_relaxed);
-  if (wpos == rpos) return NULL;
-  idx = rpos & (DASHCHUNK_RING_BYTES - 1u);
-  avail = wpos - rpos;
-  contig = DASHCHUNK_RING_BYTES - idx;
-  if (contig > avail) contig = avail;
-  *len = contig;
-  return s->ring + idx;
+  if (slot < 0 || slot >= g_subs_n) {
+    *len = 0;
+    return NULL;
+  }
+  return byte_ring_peek(&g_subs[slot].ring, len);
 }
 
 void dash_lldash_ring_advance(int slot, size_t n) {
   if (slot < 0 || slot >= g_subs_n) return;
-  atomic_fetch_add_explicit(&g_subs[slot].rpos, (uint32_t)n, memory_order_release);
+  byte_ring_advance(&g_subs[slot].ring, n);
 }
 
 void dash_lldash_register_reactor_efd(int tid, int efd) {

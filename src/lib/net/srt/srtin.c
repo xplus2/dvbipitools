@@ -256,18 +256,19 @@ srtin_t *srtin_open(const srtin_cfg_t *cfg) {
 
 static void push_stats(srtin_t *r) {
   SRT_TRACEBSTATS st;
-  metrics_writer_t w;
 
   if (!r->mx || !metrics_exporter_due(r->mx, mono_seconds()) || srt_bstats(r->sock, &st, 0) != 0)
     return;
-  if (metrics_exporter_begin(r->mx, &w, r->tool_version))
-    return;
-  metrics_writer_put(&w, METRICS_ID_SRT_RECEIVER_RECEIVED_TOTAL, NULL, (uint64_t)st.pktRecvTotal);
-  metrics_writer_put(&w, METRICS_ID_SRT_RECEIVER_LOST_TOTAL, NULL, (uint64_t)st.pktRcvLossTotal);
-  metrics_writer_put(&w, METRICS_ID_SRT_RECEIVER_DROPPED_TOTAL, NULL, (uint64_t)st.pktRcvDropTotal);
-  metrics_writer_put(&w, METRICS_ID_SRT_RECEIVER_RTT_MILLISECONDS, NULL, (uint64_t)st.msRTT);
-  metrics_writer_put(&w, METRICS_ID_SRT_RECEIVER_BUFFER_MILLISECONDS, NULL, (uint64_t)st.msRcvTsbPdDelay);
-  metrics_exporter_send(r->mx, &w);
+  {
+    metrics_entry_t e[] = {
+        {METRICS_ID_SRT_RECEIVER_RECEIVED_TOTAL, NULL, (uint64_t)st.pktRecvTotal},
+        {METRICS_ID_SRT_RECEIVER_LOST_TOTAL, NULL, (uint64_t)st.pktRcvLossTotal},
+        {METRICS_ID_SRT_RECEIVER_DROPPED_TOTAL, NULL, (uint64_t)st.pktRcvDropTotal},
+        {METRICS_ID_SRT_RECEIVER_RTT_MILLISECONDS, NULL, (uint64_t)st.msRTT},
+        {METRICS_ID_SRT_RECEIVER_BUFFER_MILLISECONDS, NULL, (uint64_t)st.msRcvTsbPdDelay},
+    };
+    metrics_push_entries(r->mx, r->tool_version, e, sizeof e / sizeof e[0]);
+  }
 }
 
 int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out) {
@@ -278,12 +279,10 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
   /* mid-reconnect: one attempt per call, returns like a timeout.
      caller's loop drives retry cadence, !internal */
   if (r->sock == SRT_INVALID_SOCK) {
-    if (signal_stop_requested())
-      return 0;
+    if (signal_stop_requested()) return 0;
     r->sock = srt_accept_bond(r->listeners, r->n_listeners, SRT_RCVTIMEO_MS);
     if (r->sock == SRT_INVALID_SOCK) {
-      if (srt_getlasterror(NULL) != SRT_ETIMEOUT)
-        log_line("srt: reconnect attempt failed: %s", srt_getlasterror_str());
+      if (srt_getlasterror(NULL) != SRT_ETIMEOUT) log_line("srt: reconnect attempt failed: %s", srt_getlasterror_str());
       return 0;
     }
     *reconnected_out = 1;
@@ -293,9 +292,7 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
   n = srt_recvmsg2(r->sock, (char *)buf, (int)cap, NULL);
   if (n == SRT_ERROR) {
     int err = srt_getlasterror(NULL);
-
-    if (err == SRT_ETIMEOUT)
-      return 0;
+    if (err == SRT_ETIMEOUT) return 0;
     if (err == SRT_EASYNCRCV) {
       /* group with every member link down right now, not a dead group: retry */
       usleep(SRT_RCVTIMEO_MS * 1000);
@@ -312,18 +309,14 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
     log_line("srt: read failed: %s", srt_getlasterror_str());
     return -1;
   }
-  if (n > 0)
-    push_stats(r);
+  if (n > 0) push_stats(r);
   return n;
 }
 
 void srtin_close(srtin_t *r) {
-  if (!r)
-    return;
-  if (r->sock != SRT_INVALID_SOCK)
-    srt_close(r->sock);
-  for (int i = 0; i < r->n_listeners; i++)
-    srt_close(r->listeners[i]);
+  if (!r) return;
+  if (r->sock != SRT_INVALID_SOCK) srt_close(r->sock);
+  for (int i = 0; i < r->n_listeners; i++) srt_close(r->listeners[i]);
   srt_cleanup();
   free(r);
 }

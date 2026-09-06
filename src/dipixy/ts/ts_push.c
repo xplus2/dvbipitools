@@ -35,25 +35,13 @@ void ts_push_wake_reactor(int tid) {
 }
 
 void ts_push_ring_enqueue(ts_sub_t *s, const uint8_t *data, size_t len) {
-  uint32_t wpos, rpos, idx;
-  size_t first;
-  if (!s->pkt_ring || !len)
+  if (!len)
     return;
-  wpos = atomic_load_explicit(&s->pkt_wpos, memory_order_relaxed);
-  rpos = atomic_load_explicit(&s->pkt_rpos, memory_order_acquire);
-  if (len > TS_RING_PUSH_BYTES - (wpos - rpos)) {
+  if (!byte_ring_write(&s->pkt_ring, data, len)) {
     atomic_store_explicit(&s->pkt_overrun, 1, memory_order_release);
     ts_push_wake_reactor(s->reactor_tid);
     return;
   }
-  idx = wpos & (TS_RING_PUSH_BYTES - 1u);
-  first = len;
-  if (idx + first > TS_RING_PUSH_BYTES)
-    first = TS_RING_PUSH_BYTES - idx;
-  memcpy(s->pkt_ring + idx, data, first);
-  if (first < len)
-    memcpy(s->pkt_ring, data + first, len - first);
-  atomic_store_explicit(&s->pkt_wpos, wpos + (uint32_t)len, memory_order_release);
   ws_clients_add_bytes(s->ws_handle, len);
   ts_push_wake_reactor(s->reactor_tid);
 }
@@ -67,27 +55,23 @@ void ts_push_init(int prealloc, int max_clients) {
   int i, n;
 
   n = (max_clients > 0 ? max_clients : 0) + TS_PUSH_SUBS_HEADROOM;
-  if (n < TS_PUSH_SUBS_FLOOR)
-    n = TS_PUSH_SUBS_FLOOR;
-  if (n > TS_PUSH_MAX_SUBS)
-    n = TS_PUSH_MAX_SUBS;
+  if (n < TS_PUSH_SUBS_FLOOR) n = TS_PUSH_SUBS_FLOOR;
+  if (n > TS_PUSH_MAX_SUBS) n = TS_PUSH_MAX_SUBS;
   g_ts_subs = calloc((size_t)n, sizeof *g_ts_subs);
   if (!g_ts_subs) {
     log_line(TOOL_NAME ": out of memory sizing ts_push subscriber table (%d entries)", n);
     return;
   }
   g_ts_subs_n = n;
-
   for (i = 0; i < TS_PUSH_MAX_REACTOR_THREADS; i++) {
     g_ts_push_reactor_efds[i] = -1;
     g_tid_head[i] = -1;
   }
-  if (!prealloc)
-    return;
+  if (!prealloc) return;
   for (i = 0; i < TS_PUSH_PREALLOC_SUBS && i < g_ts_subs_n; i++) {
-    g_ts_subs[i].pkt_ring = malloc((size_t)TS_RING_PUSH_BYTES);
-    g_ts_subs[i].h2_ring = malloc((size_t)TS_RING_H2_BYTES);
-    g_ts_subs[i].h3_ring = malloc((size_t)TS_RING_H3_BYTES);
+    byte_ring_reset(&g_ts_subs[i].pkt_ring, TS_RING_PUSH_BYTES);
+    byte_ring_reset(&g_ts_subs[i].h2_ring, TS_RING_H2_BYTES);
+    byte_ring_reset(&g_ts_subs[i].h3_ring, TS_RING_H3_BYTES);
   }
 }
 
@@ -99,8 +83,7 @@ void ts_push_set_reactor_tid(int idx, int tid) {
 }
 
 void ts_push_register_reactor_efd(int tid, int efd) {
-  if (tid >= 0 && tid < TS_PUSH_MAX_REACTOR_THREADS)
-    g_ts_push_reactor_efds[tid] = efd;
+  if (tid >= 0 && tid < TS_PUSH_MAX_REACTOR_THREADS) g_ts_push_reactor_efds[tid] = efd;
 }
 
 int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto, int fd, unsigned pmt_pid, int spts,
@@ -112,20 +95,16 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto,
   if (spts) {
     spts_psi = psi_new();
     if (!spts_psi) return -1;
-    if (pmt_pid)
-      psi_select_pmt_pid(spts_psi, pmt_pid);
+    if (pmt_pid) psi_select_pmt_pid(spts_psi, pmt_pid);
   } else if (!rawaudio && filter->count > 0) {
     filter_psi = psi_new();
     if (!filter_psi) return -1;
   }
-
   for (;;) {
     ts_sub_t *s;
-    uint8_t *ring;
     int expected;
     for (i = 0; i < g_ts_subs_n; i++) {
-      if (atomic_load_explicit(&g_ts_subs[i].alive, memory_order_relaxed) != TS_SUB_FREE)
-        continue;
+      if (atomic_load_explicit(&g_ts_subs[i].alive, memory_order_relaxed) != TS_SUB_FREE) continue;
       expected = TS_SUB_FREE;
       if (atomic_compare_exchange_strong_explicit(&g_ts_subs[i].alive, &expected, TS_SUB_ALIVE, memory_order_acquire, memory_order_relaxed))
         break;
@@ -137,40 +116,28 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto,
        free-on-unsubscribe races it (UAF). reuse prior occupant's ring
        if sized for proto, else allocate once */
     if (proto == 3) {
-      ring = s->h3_ring;
-      if (!ring) {
-        ring = malloc((size_t)TS_RING_H3_BYTES);
-        if (!ring) {
-          atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
-          psi_free(spts_psi);
-          psi_free(filter_psi);
-          return -1;
-        }
-        s->h3_ring = ring;
+      byte_ring_reset(&s->h3_ring, TS_RING_H3_BYTES);
+      if (!s->h3_ring.buf) {
+        atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
+        psi_free(spts_psi);
+        psi_free(filter_psi);
+        return -1;
       }
     } else if (proto == 2) {
-      ring = s->h2_ring;
-      if (!ring) {
-        ring = malloc((size_t)TS_RING_H2_BYTES);
-        if (!ring) {
-          atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
-          psi_free(spts_psi);
-          psi_free(filter_psi);
-          return -1;
-        }
-        s->h2_ring = ring;
+      byte_ring_reset(&s->h2_ring, TS_RING_H2_BYTES);
+      if (!s->h2_ring.buf) {
+        atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
+        psi_free(spts_psi);
+        psi_free(filter_psi);
+        return -1;
       }
     } else {
-      ring = s->pkt_ring;
-      if (!ring) {
-        ring = malloc((size_t)TS_RING_PUSH_BYTES);
-        if (!ring) {
-          atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
-          psi_free(spts_psi);
-          psi_free(filter_psi);
-          return -1;
-        }
-        s->pkt_ring = ring;
+      byte_ring_reset(&s->pkt_ring, TS_RING_PUSH_BYTES);
+      if (!s->pkt_ring.buf) {
+        atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
+        psi_free(spts_psi);
+        psi_free(filter_psi);
+        return -1;
       }
     }
 
@@ -202,12 +169,6 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto,
     s->tid_next = -1;
     s->h3c = NULL;
     s->h3_sid = -1;
-    atomic_store_explicit(&s->h3_wpos, 0, memory_order_relaxed);
-    atomic_store_explicit(&s->h3_rpos, 0, memory_order_relaxed);
-    atomic_store_explicit(&s->h2_wpos, 0, memory_order_relaxed);
-    atomic_store_explicit(&s->h2_rpos, 0, memory_order_relaxed);
-    atomic_store_explicit(&s->pkt_wpos, 0, memory_order_relaxed);
-    atomic_store_explicit(&s->pkt_rpos, 0, memory_order_relaxed);
     atomic_store_explicit(&s->pkt_overrun, 0, memory_order_relaxed);
     s->spts = spts;
     s->spts_pmt_pid = pmt_pid;
@@ -238,8 +199,7 @@ static void ts_push_unlink_tid(int idx) {
   const ts_sub_t *s = &g_ts_subs[idx];
   int tid = s->reactor_tid;
   int cur;
-  if (tid < 0 || tid >= TS_PUSH_MAX_REACTOR_THREADS)
-    return;
+  if (tid < 0 || tid >= TS_PUSH_MAX_REACTOR_THREADS) return;
   if (g_tid_head[tid] == idx) {
     g_tid_head[tid] = s->tid_next;
     return;

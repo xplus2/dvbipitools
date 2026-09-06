@@ -4,7 +4,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <time.h>
@@ -24,12 +23,11 @@ static void reap_worker_slot(emmg_server_t *s, int slot) {
 }
 
 static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned char version, unsigned short type,
-                            const unsigned char *body, size_t body_len, unsigned char *reply, size_t *reply_len, int *should_close) {
+                           const unsigned char *body, size_t body_len, unsigned char *reply, size_t *reply_len, int *should_close) {
   *reply_len = 0;
   *should_close = 0;
 
   log_line("emmg: rx version=0x%02x type=0x%04x body_len=%zu", version, type, body_len);
-
   switch (type) {
   case EMMG_MSG_CHANNEL_SETUP: {
     unsigned client_id, data_channel_id;
@@ -139,7 +137,6 @@ static void *worker_main(void *arg) {
   if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
     log_line("emmg: fcntl O_NONBLOCK (slot %d): %s", slot, strerror(errno));
     close(fd);
-    free(wa);
     atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
     return NULL;
   }
@@ -169,8 +166,7 @@ static void *worker_main(void *arg) {
       log_line("emmg: connection closed by peer or read error (slot %d)", slot);
       break;
     }
-    if (rc == 0)
-      continue;
+    if (rc == 0) continue;
 
     handle_message(s, &cs, hdr.version, hdr.type, payload, hdr.payload_len, reply, &reply_len, &should_close);
     if (reply_len) {
@@ -180,12 +176,10 @@ static void *worker_main(void *arg) {
         break;
       }
     }
-    if (should_close)
-      break;
+    if (should_close) break;
   }
 
   close(fd);
-  free(wa);
   atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
   return NULL;
 }
@@ -200,13 +194,11 @@ void *accept_main(void *arg) {
     pfd.fd = s->listen_fd;
     pfd.events = POLLIN;
     pret = poll(&pfd, 1, EMMG_POLL_INTERVAL_MS);
-    if (pret <= 0)
-      continue;
+    if (pret <= 0) continue;
 
     fd = accept(s->listen_fd, NULL, NULL);
     if (fd < 0) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-        continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) continue;
       log_line("emmg: accept: %s", strerror(errno));
       continue;
     }
@@ -226,13 +218,8 @@ void *accept_main(void *arg) {
     }
 
     {
-      worker_arg_t *wa = malloc(sizeof *wa);
+      worker_arg_t *wa = &s->worker_args[slot];
       pthread_t th;
-      if (!wa) {
-        close(fd);
-        atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
-        continue;
-      }
       reap_worker_slot(s, slot);
       wa->s = s;
       wa->fd = fd;
@@ -240,7 +227,6 @@ void *accept_main(void *arg) {
       if (pthread_create(&th, NULL, worker_main, wa) != 0) {
         log_line("emmg: pthread_create: %s", strerror(errno));
         close(fd);
-        free(wa);
         atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
       } else {
         s->worker_thread[slot] = th;

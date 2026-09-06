@@ -20,14 +20,7 @@
 
 #define ARGS_AUTH_CREDS_MAX 128 /* max "user:password" length for --auth */
 
-static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-
-static void argerr(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  argutil_verr(TOOL_NAME, fmt, ap);
-  va_end(ap);
-}
+#define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* "all:<port>" (wildcard, both families) or "<addr>:<port>" / "[<addr6>]:<port>" */
 static int listen_parse(const char *s, listen_spec_t *out) {

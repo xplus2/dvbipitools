@@ -109,7 +109,7 @@ START_TEST(http_source_accepts_arbitrary_path) {
   char *argv[] = {"dipirist", "-i", "https://10.0.0.1:8443/any/path/at/all", "-o", "rist://1.2.3.4:6000", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
-  ck_assert_int_eq(cfg.in.nonrist.kind, NONRIST_HTTP);
+  ck_assert_int_eq(cfg.in.nonrist.kind, PLAIN_EP_HTTP);
   ck_assert_int_eq(cfg.in.nonrist.http.tls, 1);
 }
 END_TEST

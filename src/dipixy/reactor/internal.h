@@ -21,7 +21,10 @@
 #include "../core/route.h"
 #include "../ws/ws_clients.h"
 #include "conn.h"
+#include "reactor_tls.h"
 #include "lib/vendor/picohttpparser/picohttpparser.h"
+
+#include <errno.h>
 
 extern long g_connections_total;
 extern _Thread_local int t_reactor_tid;
@@ -99,6 +102,12 @@ void route_client_info(const route_t *rt, unsigned list_num, const pid_filter_t 
 void strip_etag_quotes(char *v);
 int find_header(const struct phr_header *headers, size_t num_headers, const char *name, char *out, size_t outsz);
 
+static inline void hdr_value_copy(char *dst, size_t dst_cap, const uint8_t *value, size_t valuelen) {
+  size_t n = valuelen < dst_cap - 1 ? valuelen : dst_cap - 1;
+  memcpy(dst, value, n);
+  dst[n] = '\0';
+}
+
 /* origin_hdr vs cors_origins allowlist ("*" ok). unset: always "*". match sets *vary, else NULL */
 const char *cors_match(const config_t *cfg, const char *origin_hdr, int *vary);
 
@@ -129,8 +138,12 @@ static inline int parse_blocking_reload(const char *query, uint32_t *want_seg, i
   return 1;
 }
 
-/* generic LL-HLS blocking-reload waiter pool. owner+stream_id: protocol conn/stream (stream_id -1: no stream concept, h1).
-   finish_fn: protocol-specific respond+flush, called after slot released */
+/* index.m3u8/index_ll.m3u8/manifest.mpd/mp4 requested b4 first segment/part exists */
+typedef enum { HLS_COLD_HLS, HLS_COLD_LLHLS, HLS_COLD_DASH, HLS_COLD_MP4 } hls_cold_kind_t;
+
+/* generic waiter pool, two uses: LL-HLS blocking-reload (want_seg/want_part/inm) and
+   hls-cold (kind/container/want_ll). owner+stream_id: protocol conn/stream (stream_id -1:
+   no stream concept, h1). finish_fn: protocol-specific respond+flush, after slot released */
 typedef struct {
   void *owner;
   int64_t stream_id;
@@ -144,12 +157,24 @@ typedef struct {
   char origin[128];
   uint32_t want_seg;
   int want_part;
+  hls_cold_kind_t kind;      /* hls-cold only */
+  seg_container_t container; /* hls-cold HLS_COLD_HLS only */
+  int want_ll;               /* hls-cold HLS_COLD_DASH only */
   int64_t deadline_ms;
   int active;
   int ws_handle;
 } llhls_waiter_t;
 
+typedef int (*llhls_waiter_ready_fn)(llhls_waiter_t *w);
 typedef void (*llhls_waiter_finish_fn)(llhls_waiter_t *w);
+
+static inline int llhls_ready_part(llhls_waiter_t *w) {
+  return hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, SEG_CONTAINER_TS, w->want_seg, w->want_part);
+}
+
+static inline int hls_cold_ready(llhls_waiter_t *w) {
+  return w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, w->container) : hls_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, w->container);
+}
 
 /* 1 parked (caller stops touching conn/stream), 0 table full */
 static inline int llhls_waiter_pool_try_park(llhls_waiter_t *slots, int cap, int *active_count, void *owner,  int64_t stream_id, capture_ctx_t *cap_ctx, const pid_filter_t *filter,
@@ -180,6 +205,36 @@ static inline int llhls_waiter_pool_try_park(llhls_waiter_t *slots, int cap, int
   return 0;
 }
 
+/* 1 parked (caller stops touching conn/stream), 0 table full. keep_alive: h1 only, pass 0 for h2/h3 */
+static inline int hls_cold_waiter_pool_try_park(llhls_waiter_t *slots, int cap, int *active_count, void *owner, int64_t stream_id, capture_ctx_t *cap_ctx, const pid_filter_t *filter,
+                                                unsigned pmt_pid, const char *filename, hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head, int keep_alive,
+                                                const char *origin_hdr, int timeout_ms, int ws_handle) {
+  for (int i = 0; i < cap; i++) {
+    llhls_waiter_t *w = &slots[i];
+    if (w->active)
+      continue;
+    w->owner = owner;
+    w->stream_id = stream_id;
+    w->cap_ctx = cap_ctx;
+    w->filter = *filter;
+    w->pmt_pid = pmt_pid;
+    bufcpy(w->filename, sizeof w->filename, filename);
+    w->kind = kind;
+    w->container = container;
+    w->want_ll = want_ll;
+    w->is_head = is_head;
+    w->keep_alive = keep_alive;
+    w->inm[0] = '\0';
+    bufcpy(w->origin, sizeof w->origin, origin_hdr ? origin_hdr : "");
+    w->deadline_ms = now_ms() + timeout_ms;
+    w->active = 1;
+    w->ws_handle = ws_handle;
+    (*active_count)++;
+    return 1;
+  }
+  return 0;
+}
+
 /* stream_id < 0: match owner only (conn closing). else: match owner + exact stream (stream closing) */
 static inline void llhls_waiter_pool_close_owner(llhls_waiter_t *slots, int cap, int *active_count, void *owner, int64_t stream_id) {
   for (int i = 0; i < cap; i++) if (slots[i].active && slots[i].owner == owner && (stream_id < 0 || slots[i].stream_id == stream_id)) {
@@ -188,14 +243,14 @@ static inline void llhls_waiter_pool_close_owner(llhls_waiter_t *slots, int cap,
   }
 }
 
-static inline void llhls_waiter_pool_flush(llhls_waiter_t *slots, int cap, int *active_count, llhls_waiter_finish_fn finish) {
+static inline void llhls_waiter_pool_flush(llhls_waiter_t *slots, int cap, int *active_count, llhls_waiter_ready_fn ready, llhls_waiter_finish_fn finish) {
   int64_t now;
   if (*active_count <= 0) return;
   now = now_ms();
   for (int i = 0; i < cap; i++) {
     llhls_waiter_t *w = &slots[i];
     if (!w->active) continue;
-    if (now < w->deadline_ms && !hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, SEG_CONTAINER_TS, w->want_seg, w->want_part)) continue;
+    if (now < w->deadline_ms && !ready(w)) continue;
     w->active = 0;
     (*active_count)--;
     finish(w);
@@ -208,12 +263,30 @@ void hls_cold_flush_waiters(void);
 /* dispatch.c. purges c's waiter slot, call before reactor_close() frees it */
 void hls_cold_waiter_conn_closing(const conn_t *c);
 
-/* index.m3u8/index_ll.m3u8/manifest.mpd/mp4 requested b4 first segment/part exists */
-typedef enum { HLS_COLD_HLS, HLS_COLD_LLHLS, HLS_COLD_DASH, HLS_COLD_MP4 } hls_cold_kind_t;
-
 /* handshake.c: TLS handshake + accept */
 void reactor_handshake(int epfd, conn_t *c);
 void reactor_accept(int epfd, reactor_listener *L);
+
+typedef void (*reactor_push_close_fn)(int epfd, conn_t *c);
+typedef void (*reactor_push_flush_fn)(int epfd, conn_t *c);
+
+/* shared by tspush/dashchunk/mp4push: server->client push connections drain & discard client bytes, half-close on EOF, flush on EAGAIN */
+static inline void reactor_push_conn_readable(int epfd, conn_t *c, reactor_push_close_fn close_fn, reactor_push_flush_fn flush_fn) {
+  char buf[256];
+  for (;;) {
+    ssize_t n = tls_net_recv(c->fd, buf, sizeof buf);
+    if (n > 0) continue;
+    if (n == 0) {
+      atomic_store_explicit(&c->read_done, 1, memory_order_relaxed);
+      conn_epoll_mod(c, epfd, c->want_write); /* epoll reports FIN forever: stop polling */
+      return; /* half-close: not a disconnect */
+    }
+    if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+    close_fn(epfd, c);
+    return;
+  }
+  flush_fn(epfd, c);
+}
 
 /* reactor_tspush.c */
 void reactor_tspush_begin(int epfd, conn_t *c);

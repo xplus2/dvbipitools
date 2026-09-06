@@ -94,17 +94,26 @@ static bool csa2_dl_ensure(void) {
 struct csa2_key {
   struct dvbcsa_key_s *k;
   struct dvbcsa_bs_key_s *bsk;
+  struct dvbcsa_bs_batch_s *batch_scratch;
+  unsigned batch_cap;
 };
+
+static struct dvbcsa_bs_batch_s *batch_scratch_reserve(csa2_key_t *k, unsigned need) {
+  if (need > k->batch_cap) {
+    struct dvbcsa_bs_batch_s *nb = realloc(k->batch_scratch, need * sizeof *nb);
+    if (!nb) return NULL;
+    k->batch_scratch = nb;
+    k->batch_cap = need;
+  }
+  return k->batch_scratch;
+}
 
 csa2_key_t *csa2_key_new(const unsigned char cw[CSA2_CW_LEN]) {
   csa2_key_t *k;
 
-  if (!csa2_dl_ensure())
-    return NULL;
-
+  if (!csa2_dl_ensure()) return NULL;
   k = calloc(1, sizeof *k);
-  if (!k)
-    return NULL;
+  if (!k) return NULL;
   k->k = p_dvbcsa_key_alloc();
   k->bsk = p_dvbcsa_bs_key_alloc();
   if (!k->k || !k->bsk) {
@@ -123,6 +132,7 @@ void csa2_key_free(csa2_key_t *k) {
     return;
   p_dvbcsa_key_free(k->k);
   p_dvbcsa_bs_key_free(k->bsk);
+  free(k->batch_scratch);
   free(k);
 }
 
@@ -135,8 +145,7 @@ void csa2_decrypt_block(csa2_key_t *k, unsigned char *data, size_t len) {
 }
 
 unsigned csa2_batch_size(void) {
-  if (!csa2_dl_ensure())
-    return 0;
+  if (!csa2_dl_ensure()) return 0;
   return p_dvbcsa_bs_batch_size();
 }
 
@@ -144,14 +153,13 @@ unsigned csa2_batch_size(void) {
    in one call, verified against the single-packet API on mixed non-8-aligned lengths (real TS payloads vary with adaptation field size) */
 static unsigned int csa2_batch_maxlen(const csa2_batch_entry_t *entries, unsigned n) {
   unsigned int maxlen = 0;
-  for (unsigned i = 0; i < n; i++)
-    if ((unsigned int)entries[i].len > maxlen)
-      maxlen = (unsigned int)entries[i].len;
+  for (unsigned i = 0; i < n; i++) if ((unsigned int)entries[i].len > maxlen) maxlen = (unsigned int)entries[i].len;
   return (maxlen + 7u) & ~7u;
 }
 
 void csa2_encrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n) {
-  struct dvbcsa_bs_batch_s batch[n + 1];
+  struct dvbcsa_bs_batch_s *batch = batch_scratch_reserve(k, n + 1);
+  if (!batch) return;
   for (unsigned i = 0; i < n; i++) {
     batch[i].data = entries[i].data;
     batch[i].len = (unsigned int)entries[i].len;
@@ -161,7 +169,8 @@ void csa2_encrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n) 
 }
 
 void csa2_decrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n) {
-  struct dvbcsa_bs_batch_s batch[n + 1];
+  struct dvbcsa_bs_batch_s *batch = batch_scratch_reserve(k, n + 1);
+  if (!batch) return;
   for (unsigned i = 0; i < n; i++) {
     batch[i].data = entries[i].data;
     batch[i].len = (unsigned int)entries[i].len;

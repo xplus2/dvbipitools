@@ -16,47 +16,37 @@
 #include "args.h"
 #include "version.h"
 
-static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-
-static void argerr(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  argutil_verr(TOOL_NAME, fmt, ap);
-  va_end(ap);
-}
+#define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* rest: [@]addr:port, multicast literal required */
-static int parse_direct(const char *rest, nonsrt_t *s) {
-  if (*rest == '@')
-    rest++;
+static int parse_direct(const char *rest, plain_endpoint_t *s) {
+  if (*rest == '@') rest++;
   return uriparse_mcast_addrport(rest, &s->family, s->group, sizeof s->group, &s->port);
 }
 
-static int parse_nonsrt(const char *uri, nonsrt_t *s, int is_sink) {
+static int parse_nonsrt(const char *uri, plain_endpoint_t *s, int is_sink) {
   memset(s, 0, sizeof *s);
   if (strcmp(uri, "-") == 0) {
-    s->kind = NONSRT_FILE; /* file_path[0] == '\0': stdin (source) / stdout (sink) */
+    s->kind = PLAIN_EP_FILE; /* file_path[0] == '\0': stdin (source) / stdout (sink) */
     return 0;
   }
   if (strncmp(uri, "rtp://", 6) == 0) {
-    s->kind = NONSRT_RTP;
+    s->kind = PLAIN_EP_RTP;
     s->rtp_wrapped = 1;
     return parse_direct(uri + 6, s);
   }
   if (strncmp(uri, "udp://", 6) == 0) {
-    s->kind = NONSRT_UDP;
+    s->kind = PLAIN_EP_UDP;
     s->rtp_wrapped = 0;
     return parse_direct(uri + 6, s);
   }
   if (strncmp(uri, "http://", 7) == 0 || strncmp(uri, "https://", 8) == 0) {
-    if (is_sink)
-      return -1; /* an HTTP TS source makes no sense as an output */
-    s->kind = NONSRT_HTTP;
+    if (is_sink) return -1; /* an HTTP TS source makes no sense as an output */
+    s->kind = PLAIN_EP_HTTP;
     return http_url_parse(uri, &s->http);
   }
-  if (strlen(uri) >= sizeof s->file_path)
-    return -1;
-  s->kind = NONSRT_FILE;
+  if (strlen(uri) >= sizeof s->file_path) return -1;
+  s->kind = PLAIN_EP_FILE;
   bufcpy(s->file_path, sizeof s->file_path, uri);
   return 0;
 }
@@ -79,12 +69,9 @@ static int parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *
     char host[64];
     unsigned port;
 
-    if (has_at)
-      rest++;
-    if (e->n_srt >= SRTCOMMON_MAX_PEERS)
-      return -1;
-    if (argutil_addrport_parse(rest, &family, host, sizeof host, &port))
-      return -1;
+    if (has_at) rest++;
+    if (e->n_srt >= SRTCOMMON_MAX_PEERS) return -1;
+    if (argutil_addrport_parse(rest, &family, host, sizeof host, &port)) return -1;
     if (e->n_srt == 0)
       e->listen = has_at;
     else if (e->listen != has_at)
@@ -118,20 +105,19 @@ void endpoint_describe(const endpoint_t *e, char *buf, size_t n) {
     return;
   }
   switch (e->nonsrt.kind) {
-  case NONSRT_RTP:
-  case NONSRT_UDP: {
-    const char *scheme = (e->nonsrt.kind == NONSRT_RTP) ? "rtp" : "udp";
+  case PLAIN_EP_RTP:
+  case PLAIN_EP_UDP: {
+    const char *scheme = (e->nonsrt.kind == PLAIN_EP_RTP) ? "rtp" : "udp";
     if (e->nonsrt.family == AF_INET6)
       snprintf(buf, n, "%s://@[%s]:%u", scheme, e->nonsrt.group, e->nonsrt.port);
     else
       snprintf(buf, n, "%s://@%s:%u", scheme, e->nonsrt.group, e->nonsrt.port);
     break;
   }
-  case NONSRT_HTTP:
-    snprintf(buf, n, "%s://%s:%u%s", e->nonsrt.http.tls ? "https" : "http", e->nonsrt.http.host, e->nonsrt.http.port,
-              e->nonsrt.http.path);
+  case PLAIN_EP_HTTP:
+    snprintf(buf, n, "%s://%s:%u%s", e->nonsrt.http.tls ? "https" : "http", e->nonsrt.http.host, e->nonsrt.http.port, e->nonsrt.http.path);
     break;
-  case NONSRT_FILE:
+  case PLAIN_EP_FILE:
     bufcpy(buf, n, e->nonsrt.file_path[0] ? e->nonsrt.file_path : "- (stdin/stdout)");
     break;
   }
@@ -288,26 +274,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
-      case 1007: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 60000) {
+      case 1007:
+        if (argutil_uint_range(optarg, 1, 60000, &cfg->latency_ms)) {
           argerr("invalid --latency: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->latency_ms = (unsigned)v;
         break;
-      }
-      case 1012: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 32) {
+      case 1012:
+        if (argutil_uint_range(optarg, 1, 32, &cfg->send_buffer_mult)) {
           argerr("invalid --send-buffer-mult: %s (1..32)", optarg);
           return ARGS_ERR;
         }
-        cfg->send_buffer_mult = (unsigned)v;
         break;
-      }
       case 1008: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
@@ -323,16 +301,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1010:
         cfg->metrics_id = optarg;
         break;
-      case 1011: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 86400UL) {
+      case 1011:
+        if (argutil_uint_range(optarg, 1, 86400, &cfg->metrics_interval_s)) {
           argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
           return ARGS_ERR;
         }
-        cfg->metrics_interval_s = (unsigned)v;
         break;
-      }
       case 'v':
         cfg->verbose = 1;
         break;
@@ -399,7 +373,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--metrics/--metrics-interval require --metrics-id");
     return ARGS_ERR;
   }
-  if (cfg->insecure_tls && !(cfg->in.nonsrt.kind == NONSRT_HTTP && cfg->in.nonsrt.http.tls))
+  if (cfg->insecure_tls && !(cfg->in.nonsrt.kind == PLAIN_EP_HTTP && cfg->in.nonsrt.http.tls))
     log_line(TOOL_NAME ": --insecure has no effect, no -i https:// source");
   if (cfg->send_buffer_mult && !config_is_sender(cfg))
     log_line(TOOL_NAME ": --send-buffer-mult has no effect, no -o srt:// sender side");

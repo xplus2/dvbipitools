@@ -13,6 +13,7 @@
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/tspack.h"
 #include "lib/helper/log.h"
+#include "lib/helper/toolmain.h"
 #include "lib/metrics/export.h"
 #include "lib/mux/flv/flv.h"
 #include "lib/net/rtmp/rtmpout.h"
@@ -32,43 +33,31 @@
 
 static int open_output(const char *path) {
   int fd;
-  if (strcmp(path, "-") == 0)
-    return STDOUT_FILENO;
+  if (strcmp(path, "-") == 0) return STDOUT_FILENO;
   fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-  if (fd < 0)
-    log_line(TOOL_NAME ": cannot open -o %s: %s", path, strerror(errno));
+  if (fd < 0) log_line(TOOL_NAME ": cannot open -o %s: %s", path, strerror(errno));
   return fd;
 }
 
 static tssrc_kind_t tssrc_kind_of(input_kind_t k) {
   switch (k) {
-  case INPUT_RTP:
-    return TSSRC_RTP;
-  case INPUT_UDP:
-    return TSSRC_UDP;
-  case INPUT_STDIN:
-    return TSSRC_STDIN;
-  case INPUT_RIST:
-    return TSSRC_RIST;
-  case INPUT_SRT:
-    return TSSRC_SRT;
+    case INPUT_RTP:       return TSSRC_RTP;
+    case INPUT_UDP:       return TSSRC_UDP;
+    case INPUT_STDIN:     return TSSRC_STDIN;
+    case INPUT_RIST:      return TSSRC_RIST;
+    case INPUT_SRT:       return TSSRC_SRT;
   }
   return TSSRC_STDIN;
 }
 
 static int cfg_has_rtmp(const config_t *cfg) {
-  for (int i = 0; i < cfg->n_out; i++)
-    if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS)
-      return 1;
+  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS) return 1;
   return 0;
 }
 
-/* mpts discovery + -p decision. 0: proceed (pmt_pid/all_pids/n_all_pids
- * filled in). 1: abort, message already printed. */
-static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pmt_pid,
-                                  unsigned *all_pids, int *n_all_pids) {
+/* mpts discovery + -p decision. 0: proceed (pmt_pid/all_pids/n_all_pids filled in). 1: abort, message already printed. */
+static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pmt_pid, unsigned *all_pids, int *n_all_pids) {
   mpts_probe_result_t probe;
-
   *pmt_pid = 0;
   *n_all_pids = 0;
 
@@ -78,8 +67,7 @@ static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pm
     return 1;
   }
   if (probe.kind == MPTS_PROBE_SPTS) {
-    if (cfg->pmt_sel != PMT_SEL_AUTO)
-      log_line(TOOL_NAME ": -p ignored, single-program source");
+    if (cfg->pmt_sel != PMT_SEL_AUTO) log_line(TOOL_NAME ": -p ignored, single-program source");
     return 0;
   }
 
@@ -94,8 +82,7 @@ static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pm
       mpts_probe_print_programs(TOOL_NAME, &probe);
       return 1;
     }
-    for (int k = 0; k < probe.program_count; k++)
-      all_pids[(*n_all_pids)++] = probe.programs[k].pmt_pid;
+    for (int k = 0; k < probe.program_count; k++) all_pids[(*n_all_pids)++] = probe.programs[k].pmt_pid;
     return 0;
   }
   for (int k = 0; k < probe.program_count; k++)
@@ -108,28 +95,22 @@ static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pm
   return 1;
 }
 
-/* opens every -o target: plain files into lc->outfd[] (or one -f mkv/mka
-   file into *mkv_fd), rtmp(s) targets into lc->rtmp[]. 0 ok, -1 fail
-   (message already logged, caller closes whatever this left open via lc) */
+/* opens every -o target: plain files into lc->outfd[], rtmp(s) targets into lc->rtmp[]. 0 ok, -1 fail */
 static int open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
   int is_mkv_fmt = (cfg->format == FMT_MKV || cfg->format == FMT_MKA);
-
   lc->n_outfd = 0;
   lc->n_rtmp = 0;
   lc->n_srt = 0;
   *mkv_fd = -1;
-
   for (int i = 0; i < cfg->n_out; i++) {
     const out_target_t *o = &cfg->out[i];
-
     if (o->kind == OUT_RTMP || o->kind == OUT_RTMPS) {
       rtmpout_cfg_t rc;
       memset(&rc, 0, sizeof rc);
       rc.url = o->rtmp_url;
       rc.insecure = cfg->insecure_tls;
       lc->rtmp[lc->n_rtmp] = rtmpout_open(&rc);
-      if (!lc->rtmp[lc->n_rtmp])
-        return -1;
+      if (!lc->rtmp[lc->n_rtmp]) return -1;
       lc->rtmp_had_error[lc->n_rtmp] = 0;
       lc->n_rtmp++;
       continue;
@@ -148,21 +129,18 @@ static int open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
       sc.latency_ms = cfg->srt_latency_ms;
       sc.verbose = cfg->verbose;
       lc->srt[lc->n_srt] = srtsink_open(&sc);
-      if (!lc->srt[lc->n_srt])
-        return -1;
+      if (!lc->srt[lc->n_srt]) return -1;
       lc->srt_connected[lc->n_srt] = 0;
       lc->n_srt++;
       continue;
     }
     if (is_mkv_fmt) {
       *mkv_fd = open_output(o->file_path);
-      if (*mkv_fd < 0)
-        return -1;
+      if (*mkv_fd < 0) return -1;
       continue;
     }
     lc->outfd[lc->n_outfd] = open_output(o->file_path);
-    if (lc->outfd[lc->n_outfd] < 0)
-      return -1;
+    if (lc->outfd[lc->n_outfd] < 0) return -1;
     lc->n_outfd++;
   }
   return 0;
@@ -189,15 +167,10 @@ static void push_metrics(metrics_exporter_t *mx, const loop_ctx_t *lc) {
 }
 
 static void close_outputs(loop_ctx_t *lc, int mkv_fd) {
-  for (int i = 0; i < lc->n_rtmp; i++)
-    rtmpout_close(lc->rtmp[i]);
-  for (int i = 0; i < lc->n_srt; i++)
-    srtsink_close(lc->srt[i]);
-  for (int i = 0; i < lc->n_outfd; i++)
-    if (lc->outfd[i] != STDOUT_FILENO)
-      close(lc->outfd[i]);
-  if (mkv_fd >= 0 && mkv_fd != STDOUT_FILENO)
-    close(mkv_fd);
+  for (int i = 0; i < lc->n_rtmp; i++) rtmpout_close(lc->rtmp[i]);
+  for (int i = 0; i < lc->n_srt; i++) srtsink_close(lc->srt[i]);
+  for (int i = 0; i < lc->n_outfd; i++) if (lc->outfd[i] != STDOUT_FILENO) close(lc->outfd[i]);
+  if (mkv_fd >= 0 && mkv_fd != STDOUT_FILENO) close(mkv_fd);
 }
 
 int main(int argc, char **argv) {
@@ -222,20 +195,15 @@ int main(int argc, char **argv) {
   memset(&lc, 0, sizeof lc);
 
   log_set_color(log_color_prescan(argc, argv));
-  log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
+  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
-  if (st == ARGS_OK)
-    log_set_color((log_color_t)cfg.color_mode);
-  if (st == ARGS_HELP)
-    return 0;
+  if (st == ARGS_OK) log_set_color((log_color_t)cfg.color_mode);
+  if (st == ARGS_HELP) return 0;
   if (st == ARGS_ERR) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
   }
-  if (cfg.daemonize && daemon(1, 1) != 0) {
-    log_line(TOOL_NAME ": daemonize failed: %s", strerror(errno));
-    return 1;
-  }
+  if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
 
   {
     int on = 0;
@@ -244,8 +212,7 @@ int main(int argc, char **argv) {
       int r;
       out_describe(&cfg.out[i], one, sizeof one);
       r = snprintf(outdesc + on, sizeof outdesc - (size_t)on, "%s%s", i ? "," : "", one);
-      if (r > 0 && (size_t)on + (size_t)r < sizeof outdesc)
-        on += r;
+      if (r > 0 && (size_t)on + (size_t)r < sizeof outdesc) on += r;
     }
   }
   input_describe(&cfg.input, in_desc, sizeof in_desc);
@@ -319,8 +286,7 @@ int main(int argc, char **argv) {
   lc.psi = psi_new();
   if (!lc.psi)
     goto cleanup;
-  if (pmt_pid)
-    psi_select_pmt_pid(lc.psi, pmt_pid); /* CW derivation is mux-wide either way, nicer stats only */
+  if (pmt_pid) psi_select_pmt_pid(lc.psi, pmt_pid); /* CW derivation is mux-wide either way, nicer stats only */
 
   memset(&pz, 0, sizeof pz);
   signals_install();
@@ -333,31 +299,26 @@ int main(int argc, char **argv) {
     int pr;
 
     srt_service_all(&lc);
+    pipeline_service_unicast_emm(&lc);
 
     pfd.fd = tssrc_fd(src);
     pfd.events = POLLIN;
     pr = poll(&pfd, 1, 100); /* bounded: keeps srt_service_all() ticking on quiet input too */
     if (pr < 0) {
-      if (errno == EINTR)
-        continue;
+      if (errno == EINTR) continue;
       break;
     }
-    if (pr == 0)
-      continue;
+    if (pr == 0) continue;
 
     n = tssrc_read(src, buf, sizeof buf, NULL);
-    if (n < 0)
-      break;
-    if (n == 0)
-      continue;
-    if (tspack_feed(&pz, buf, (size_t)n, pkt_cb, &lc))
-      break;
+    if (n < 0) break;
+    if (n == 0) continue;
+    if (tspack_feed(&pz, buf, (size_t)n, pkt_cb, &lc)) break;
     if (cfg.verbose && mono_seconds() - last_stat >= 1.0) {
       log_line(TOOL_NAME ": %llu packets, %.0fs elapsed", lc.packets, mono_seconds() - start);
       last_stat = mono_seconds();
     }
-    if (metrics_exporter_enabled(&mx))
-      push_metrics(&mx, &lc);
+    if (metrics_exporter_enabled(&mx)) push_metrics(&mx, &lc);
   }
 
   metrics_exporter_close(&mx);
@@ -371,6 +332,7 @@ int main(int argc, char **argv) {
   rc = (lc.fatal || lc.emit_failed) ? 1 : 0;
 
 cleanup:
+  ipiclient_poll_free(lc.ipi_pending);
   ipiclient_free(lc.ipi);
   scrambler_free(lc.scr);
   psi_free(lc.psi);

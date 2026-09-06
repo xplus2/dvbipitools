@@ -87,17 +87,16 @@ void *pacer_main(void *arg) {
       dst.to = (const struct sockaddr *)&snap[i].addr;
       dst.tolen = snap[i].addrlen;
       dst.congestion = 0;
+      dst.last_dscp = -1;
       r = burst_tick(snap[i].b, pc->duration_cap_ms, burst_send_cb, &dst);
       burst_table_note_bytes_sent(pc->bursts, (uint64_t)(snap[i].b->bytes_sent - bytes_before));
       owns_slot = burst_table_release(pc->bursts, snap[i].idx, snap[i].b, dst.congestion || r == BURST_TICK_DONE, &remove_slot);
-
       if (owns_slot && dst.congestion)
         send_rams_i(&dst, 0, 0, (uint16_t)BURST_CONGESTION, NULL);
       else if (owns_slot && r == BURST_TICK_DONE)
         send_rams_i(&dst, 0, 0, (uint16_t)BURST_DONE, NULL);
 
-      if (remove_slot)
-        burst_release(snap[i].b); /* drop slot ownership */
+      if (remove_slot) burst_release(snap[i].b); /* drop slot ownership */
       burst_release(snap[i].b); /* drop pacer snapshot */
     }
   }

@@ -55,6 +55,8 @@ tests/unit/lib/net/rist/rist_send_helper
 *.ts
 *.mkv
 *.mka
+*.mp4
+*.m4a
 
 *.m3u
 *.xspf
@@ -70,5 +72,6 @@ tests/unit/lib/net/rist/rist_send_helper
 /debian/dvbipitools.substvars
 /debian/files
 /debian/debhelper-build-stamp
+*.ipk
 
 #EOF

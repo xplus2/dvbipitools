@@ -23,6 +23,12 @@ typedef struct {
   size_t len;
 } emmg_queued_datagram_t;
 
+typedef struct {
+  emmg_server_t *s;
+  int fd;
+  int slot;
+} worker_arg_t;
+
 struct emmg_server {
   int listen_fd;
   atomic_int stop;
@@ -32,6 +38,7 @@ struct emmg_server {
   atomic_int worker_active[EMMG_MAX_CONNS_CEILING];
   pthread_t worker_thread[EMMG_MAX_CONNS_CEILING];
   int worker_thread_joinable[EMMG_MAX_CONNS_CEILING];
+  worker_arg_t worker_args[EMMG_MAX_CONNS_CEILING]; /* no per-connection malloc, reuse gated by worker_active[] */
 
   pthread_mutex_t queue_lock;
   emmg_queued_datagram_t queue[EMMG_QUEUE_CAP];
@@ -54,12 +61,6 @@ typedef struct {
   unsigned data_id;
   unsigned data_type;
 } emmg_conn_state_t;
-
-typedef struct {
-  emmg_server_t *s;
-  int fd;
-  int slot;
-} worker_arg_t;
 
 /* emmg_server.c */
 void publish_datagram_cb(const unsigned char *data, unsigned short len, void *user);

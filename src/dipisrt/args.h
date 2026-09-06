@@ -6,25 +6,8 @@
 
 #include <stddef.h>
 
-#include "lib/net/httpclient/httpclient.h"
+#include "lib/net/plain_endpoint.h"
 #include "lib/net/srt/srtcommon.h"
-
-typedef enum {
-  NONSRT_RTP,  /* multicast, RTP wrapped */
-  NONSRT_UDP,  /* multicast, plain ts */
-  NONSRT_HTTP, /* http:// or https://, http_url_t.tls tells which. -i (source side) only */
-  NONSRT_FILE  /* stdin/stdout ("-") or a local file path */
-} nonsrt_kind_t;
-
-typedef struct {
-  nonsrt_kind_t kind;
-  int rtp_wrapped; /* RTP payload. NONSRT_RTP / NONSRT_UDP only, protocol-inherent */
-  int family;      /* AF_INET or AF_INET6. NONSRT_RTP/NONSRT_UDP only */
-  char group[64];
-  unsigned port;
-  http_url_t http;     /* NONSRT_HTTP */
-  char file_path[512]; /* "" = stdin (source) or stdout (sink) */
-} nonsrt_t;
 
 typedef struct {
   int is_srt;  /* 1: srt://, repeatable up to SRTCOMMON_MAX_PEERS for bonding. 0: nonsrt */
@@ -33,7 +16,7 @@ typedef struct {
   char srt_host[SRTCOMMON_MAX_PEERS][64]; /* numeric IP; argutil_addrport_parse doesn't resolve hostnames */
   unsigned srt_port[SRTCOMMON_MAX_PEERS];
   int n_srt;
-  nonsrt_t nonsrt; /* valid iff !is_srt */
+  plain_endpoint_t nonsrt; /* valid iff !is_srt */
 } endpoint_t;
 
 typedef struct {

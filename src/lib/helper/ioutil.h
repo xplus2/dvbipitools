@@ -57,11 +57,23 @@ int iso8601_split(const char *in, iso8601_t *out);
 /* EN 300 468 annex C, proleptic Gregorian calendar date to modified Julian Day */
 long date_to_mjd(int y, int mo, int d);
 
+typedef struct {
+  char *buf;
+  size_t len, cap;
+} dstrbuf_t;
+
+/* OOM: buf stays NULL, every dstrbuf_appendf becomes a no-op */
+void dstrbuf_init(dstrbuf_t *sb);
+void dstrbuf_appendf(dstrbuf_t *sb, const char *fmt, ...)
+#if defined(__GNUC__)
+    __attribute__((format(printf, 2, 3)))
+#endif
+    ;
+
 /* power of two >= n, 1 if n == 0 */
 static inline size_t next_pow2(size_t n) {
   size_t p = 1;
-  while (p < n)
-    p <<= 1;
+  while (p < n) p <<= 1;
   return p;
 }
 

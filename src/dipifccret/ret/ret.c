@@ -53,38 +53,37 @@ size_t ret_ctx_active_clients(ret_ctx_t *r) {
   return rtx_session_table_active_count(r->rtx_clients);
 }
 
-static void repair_one(ret_ctx_t *r, channel_t *c, uint16_t seq) {
-  channel_slot_t slot;
+static void repair_one(ret_ctx_t *r, channel_t *c, const channel_slot_t *slot) {
   unsigned char out[12 + 2 + CHANNEL_MAX_PAYLOAD];
-  size_t n;
-  if (!channel_find(c, seq, &slot))
-    return;
-  n = rtx_build(&c->rtx_seq_mc, c->ssrc, r->rtx_pt, slot.timestamp, slot.seq, slot.payload, slot.payload_len, out, sizeof out);
+  size_t n = rtx_build(&c->rtx_seq_mc, c->ssrc, r->rtx_pt, slot->timestamp, slot->seq, slot->payload, slot->payload_len, out, sizeof out);
   if (n > 0)
-    r->send_mc(c, out, n, slot.dscp, r->send_mc_user);
+    r->send_mc(c, out, n, slot->dscp, r->send_mc_user);
 }
 
-static void repair_one_unicast(ret_ctx_t *r, channel_t *c, uint16_t seq, int fd, const struct sockaddr *from, socklen_t fromlen) {
-  channel_slot_t slot;
+static void repair_one_unicast(ret_ctx_t *r, channel_t *c, const channel_slot_t *slot, int fd, const struct sockaddr *from, socklen_t fromlen) {
   unsigned char out[12 + 2 + CHANNEL_MAX_PAYLOAD];
-  rtx_session_slot_t *session;
+  rtx_session_slot_t *session = rtx_session_table_get(r->rtx_clients, from, fromlen);
   size_t n;
-  if (!channel_find(c, seq, &slot))
-    return;
-  session = rtx_session_table_get(r->rtx_clients, from, fromlen);
   if (!session)
     return;
-  n = rtx_build(&session->seq, c->ssrc, r->rtx_pt, slot.timestamp, slot.seq, slot.payload, slot.payload_len, out, sizeof out);
+  n = rtx_build(&session->seq, c->ssrc, r->rtx_pt, slot->timestamp, slot->seq, slot->payload, slot->payload_len, out, sizeof out);
   if (n > 0)
-    r->send_unicast(fd, from, fromlen, out, n, slot.dscp, r->send_unicast_user);
+    r->send_unicast(fd, from, fromlen, out, n, slot->dscp, r->send_unicast_user);
+}
+
+static void repair_seq(ret_ctx_t *r, channel_t *c, uint16_t seq, int fd, const struct sockaddr *from, socklen_t fromlen) {
+  channel_slot_t slot;
+  if (!channel_find(c, seq, &slot)) return;
+  repair_one_unicast(r, c, &slot, fd, from, fromlen);
+  repair_one(r, c, &slot);
 }
 
 static void repair_range(ret_ctx_t *r, channel_t *c, uint16_t start, uint16_t end) {
   uint16_t seq = start;
   for (;;) {
-    repair_one(r, c, seq);
-    if (seq == end)
-      break;
+    channel_slot_t slot;
+    if (channel_find(c, seq, &slot)) repair_one(r, c, &slot);
+    if (seq == end) break;
     seq++;
   }
 }
@@ -93,27 +92,20 @@ void ret_handle_nack(ret_ctx_t *r, const rtcp_nack_t *nack, int fd, const struct
   channel_t *c = channel_find_by_ssrc(r->channels, nack->media_ssrc);
   unsigned char ff[12 + 4 * RTCP_NACK_MAX_ENTRIES];
   size_t ff_len;
-  if (!c)
-    return;
+  if (!c) return;
 
   /* F.5.2 multicast repair/suppression, additional to unicast reply below */
   ff_len = rtcp_build_ff(nack->sender_ssrc, nack->media_ssrc, nack->entry, nack->entry_count, ff, sizeof ff);
-  if (ff_len > 0)
-    r->send_mc(c, ff, ff_len, RET_DSCP_RTCP, r->send_mc_user);
-
+  if (ff_len > 0) r->send_mc(c, ff, ff_len, RET_DSCP_RTCP, r->send_mc_user);
   for (size_t i = 0; i < nack->entry_count; i++) {
     uint16_t pid = nack->entry[i].pid;
     uint16_t blp = nack->entry[i].blp;
 
     /* F.3.1/Figure F.2: always reply directly to requester */
-    repair_one_unicast(r, c, pid, fd, from, fromlen);
-    repair_one(r, c, pid);
-    for (unsigned bit = 0; bit < 16; bit++) {
-      if (blp & (1u << bit)) {
-        uint16_t seq = (uint16_t)(pid + bit + 1);
-        repair_one_unicast(r, c, seq, fd, from, fromlen);
-        repair_one(r, c, seq);
-      }
+    repair_seq(r, c, pid, fd, from, fromlen);
+    for (unsigned bit = 0; bit < 16; bit++) if (blp & (1u << bit)) {
+      uint16_t seq = (uint16_t)(pid + bit + 1);
+      repair_seq(r, c, seq, fd, from, fromlen);
     }
   }
 }
@@ -123,14 +115,11 @@ void ret_on_self_detected_gap(ret_ctx_t *r, uint32_t ssrc, uint16_t gap_start, u
   rtcp_nack_entry_t entry;
   unsigned char ff[16];
   size_t ff_len;
-  if (!c)
-    return;
+  if (!c) return;
 
   entry.pid = gap_start;
   entry.blp = 0; /* signals gap start only; repair below still covers full range */
   ff_len = rtcp_build_ff(0, ssrc, &entry, 1, ff, sizeof ff);
-  if (ff_len > 0)
-    r->send_mc(c, ff, ff_len, RET_DSCP_RTCP, r->send_mc_user);
-
+  if (ff_len > 0) r->send_mc(c, ff, ff_len, RET_DSCP_RTCP, r->send_mc_user);
   repair_range(r, c, gap_start, gap_end);
 }

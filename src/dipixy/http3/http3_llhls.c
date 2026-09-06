@@ -40,12 +40,11 @@ static void h3_llhls_finish(llhls_waiter_t *w) {
     if (resp.status == 200) ws_clients_add_bytes(w->ws_handle, resp.body_len);
   }
   fd = conn->local_addr.ss_family == AF_INET6 ? t_h3_udp6 : t_h3_udp4;
-  if (fd >= 0)
-    flush_tx(conn, fd);
+  if (fd >= 0) flush_tx(conn, fd);
 }
 
 void h3_llhls_flush_waiters(void) {
-  llhls_waiter_pool_flush(t_h3_llhls_waiters, H3_LLHLS_WAITERS_MAX, &t_h3_llhls_waiters_active, h3_llhls_finish);
+  llhls_waiter_pool_flush(t_h3_llhls_waiters, H3_LLHLS_WAITERS_MAX, &t_h3_llhls_waiters_active, llhls_ready_part, h3_llhls_finish);
 }
 
 #endif /* HAVE_HTTP3 */

@@ -31,6 +31,7 @@ struct scrambler {
   int have_key[2];
 
   scrambler_queue_entry_t *queue;
+  csa2_batch_entry_t *batch_entries; /* allocated queue_cap, replaces a VLA in scrambler_queue_flush */
   unsigned queue_batch_size; /* csa2_batch_size() result, 0 means no batching backend */
   unsigned queue_cap;        /* allocated s->queue length */
   unsigned queue_len;
@@ -53,7 +54,10 @@ scrambler_t *scrambler_new(scramble_algo_t algo) {
     if (s->queue_batch_size > 0) {
       s->queue_cap = s->queue_batch_size * SCRAMBLER_QUEUE_CAP_MULTIPLIER;
       s->queue = calloc(s->queue_cap, sizeof *s->queue);
-      if (!s->queue) {
+      s->batch_entries = calloc(s->queue_cap, sizeof *s->batch_entries);
+      if (!s->queue || !s->batch_entries) {
+        free(s->queue);
+        free(s->batch_entries);
         free(s);
         return NULL;
       }
@@ -70,6 +74,7 @@ void scrambler_free(scrambler_t *s) {
   cissa_key_free(s->cissa_key[SCRAMBLE_PARITY_EVEN]);
   cissa_key_free(s->cissa_key[SCRAMBLE_PARITY_ODD]);
   free(s->queue);
+  free(s->batch_entries);
   free(s);
 }
 
@@ -185,14 +190,12 @@ static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *
   if (s->queue_len == 0)
     return;
   if (s->queue_scrambled_count > 0) {
-    csa2_batch_entry_t entries[s->queue_scrambled_count];
+    csa2_batch_entry_t *entries = s->batch_entries;
     unsigned ei = 0;
-    for (unsigned i = 0; i < s->queue_len; i++) {
-      if (s->queue[i].needs_crypto) {
-        entries[ei].data = s->queue[i].pkt + s->queue[i].payload_off;
-        entries[ei].len = s->queue[i].payload_size;
-        ei++;
-      }
+    for (unsigned i = 0; i < s->queue_len; i++) if (s->queue[i].needs_crypto) {
+      entries[ei].data = s->queue[i].pkt + s->queue[i].payload_off;
+      entries[ei].len = s->queue[i].payload_size;
+      ei++;
     }
     if (s->queue_mode == SCRAMBLER_QUEUE_MODE_ENCRYPT)
       csa2_encrypt_batch(s->csa2_key[s->queue_parity], entries, s->queue_scrambled_count);
@@ -212,6 +215,7 @@ static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *
 static void scrambler_queue_ensure_batch(scrambler_t *s, int mode, int parity, scrambler_emit_cb emit, void *ctx) {
   if (s->queue_scrambled_count > 0 && (s->queue_mode != mode || s->queue_parity != parity))
     scrambler_queue_flush(s, emit, ctx);
+
   s->queue_mode = mode;
   s->queue_parity = parity;
 }

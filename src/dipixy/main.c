@@ -40,14 +40,13 @@ int main(int argc, char **argv) {
 
   dipixy_status_init(argc, argv);
   log_set_color(log_color_prescan(argc, argv));
-  log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
+  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
   if (st == ARGS_NOARGS) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 0;
   }
-  if (st == ARGS_HELP)
-    return 0;
+  if (st == ARGS_HELP) return 0;
   if (st == ARGS_ERR) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
@@ -71,20 +70,15 @@ int main(int argc, char **argv) {
   {
     int max_ord = 0;
     int i, j;
-    for (i = 0; i < cfg.n_sources; i++)
-      if (cfg.sources[i].ordinal > max_ord)
-        max_ord = cfg.sources[i].ordinal;
-    if (cfg.stdin_ordinal > max_ord)
-      max_ord = cfg.stdin_ordinal;
-    if (cfg.rist_ordinal > max_ord)
-      max_ord = cfg.rist_ordinal;
+    for (i = 0; i < cfg.n_sources; i++) if (cfg.sources[i].ordinal > max_ord) max_ord = cfg.sources[i].ordinal;
+    if (cfg.stdin_ordinal > max_ord) max_ord = cfg.stdin_ordinal;
+    if (cfg.rist_ordinal > max_ord) max_ord = cfg.rist_ordinal;
     for (i = 1; i <= max_ord; i++) {
       const source_def_t *src = NULL;
-      for (j = 0; j < cfg.n_sources; j++)
-        if (cfg.sources[j].ordinal == i) {
-          src = &cfg.sources[j];
-          break;
-        }
+      for (j = 0; j < cfg.n_sources; j++) if (cfg.sources[j].ordinal == i) {
+        src = &cfg.sources[j];
+        break;
+      }
       if (src) {
         channel_list_t *l = atomic_load_explicit(&channels->lists[i - 1], memory_order_relaxed);
         int count = l ? l->count : 0;
@@ -107,8 +101,7 @@ int main(int argc, char **argv) {
     }
   }
   capture_rist_init(cfg.rist_uri);
-  if (cfg.stdin_path)
-    capture_stdin_init();
+  if (cfg.stdin_path) capture_stdin_init();
   dipixy_metrics_init(&mx, &cfg);
   channels_start_refresh(channels, &cfg);
   rc = reactor_run(&cfg, channels, &mx, ssdp_start);

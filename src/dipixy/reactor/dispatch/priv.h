@@ -30,6 +30,7 @@ void respond_status(conn_t *c, const char *status, int keep_alive);
 void respond_401(conn_t *c, int keep_alive);
 size_t build_ok_header(char *hdr, size_t hdrsz, const char *content_type, size_t body_len, int keep_alive);
 int wants_keepalive(int minor_version, const struct phr_header *headers, size_t num_headers);
+void set_persistence(conn_t *c, int keep_alive);
 
 /* content.c */
 void serve_metrics(conn_t *c, int is_head, int keep_alive);

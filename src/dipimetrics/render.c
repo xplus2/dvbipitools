@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -130,59 +129,6 @@ static const metric_def_t DEFS[] = {
 };
 #define N_DEFS (sizeof DEFS / sizeof DEFS[0])
 
-typedef struct {
-  char *buf;
-  size_t len, cap;
-} strbuf_t;
-
-/* out of memory: sb->buf stays NULL, every sb_appendf becomes a no-op */
-static void sb_init(strbuf_t *sb) {
-  sb->cap = 8192;
-  sb->len = 0;
-  sb->buf = malloc(sb->cap);
-  if (!sb->buf) {
-    sb->cap = 0;
-    return;
-  }
-  sb->buf[0] = '\0';
-}
-
-static void sb_appendf(strbuf_t *sb, const char *fmt, ...)
-#if defined(__GNUC__)
-    __attribute__((format(printf, 2, 3)))
-#endif
-    ;
-
-static void sb_appendf(strbuf_t *sb, const char *fmt, ...) {
-  if (!sb->buf)
-    return;
-  for (;;) {
-    va_list ap;
-    int n;
-    char *p;
-    va_start(ap, fmt);
-    n = vsnprintf(sb->buf + sb->len, sb->cap - sb->len, fmt, ap);
-    va_end(ap);
-    if (n < 0)
-      return;
-    if ((size_t)n < sb->cap - sb->len) {
-      sb->len += (size_t)n;
-      return;
-    }
-    while (sb->cap - sb->len <= (size_t)n)
-      sb->cap *= 2;
-    p = realloc(sb->buf, sb->cap);
-    if (!p) {
-      free(sb->buf);
-      sb->buf = NULL;
-      sb->len = 0;
-      sb->cap = 0;
-      return;
-    }
-    sb->buf = p;
-  }
-}
-
 /* backslash/quote/newline escaping per OpenMetrics/Prometheus text label-value grammar */
 static void escape_label(const char *in, char *out, size_t out_cap) {
   size_t oi = 0;
@@ -202,13 +148,13 @@ static void escape_label(const char *in, char *out, size_t out_cap) {
 
 /* label named headend_id, not instance: Prometheus already assigns instance
    per scrape target, colliding names get renamed exported_instance */
-static void append_base_labels(strbuf_t *sb, const store_slot_t *slot) {
+static void append_base_labels(dstrbuf_t *sb, const store_slot_t *slot) {
   char esc_headend_id[2 * METRICS_ID_MAX + 2];
   escape_label(slot->metrics_id, esc_headend_id, sizeof esc_headend_id);
-  sb_appendf(sb, "component=\"%s\",headend_id=\"%s\"", metrics_component_name(slot->component), esc_headend_id);
+  dstrbuf_appendf(sb, "component=\"%s\",headend_id=\"%s\"", metrics_component_name(slot->component), esc_headend_id);
 }
 
-static void append_composite_input_reason(strbuf_t *sb, const char *label) {
+static void append_composite_input_reason(dstrbuf_t *sb, const char *label) {
   char input_part[METRICS_LABEL_MAX + 1], reason_part[METRICS_LABEL_MAX + 1];
   char esc_input[2 * METRICS_LABEL_MAX + 2], esc_reason[2 * METRICS_LABEL_MAX + 2];
   const char *sep = strchr(label, METRICS_LABEL_SEP);
@@ -225,7 +171,7 @@ static void append_composite_input_reason(strbuf_t *sb, const char *label) {
   }
   escape_label(input_part, esc_input, sizeof esc_input);
   escape_label(reason_part, esc_reason, sizeof esc_reason);
-  sb_appendf(sb, ",input=\"%s\",reason=\"%s\"", esc_input, esc_reason);
+  dstrbuf_appendf(sb, ",input=\"%s\",reason=\"%s\"", esc_input, esc_reason);
 }
 
 #define DEF_ID_MAX 200 /* comfortably above highest metrics_id_t value */
@@ -253,7 +199,7 @@ static void fill_entry_refs(const store_t *st, const int *def_idx, entry_ref_t *
 }
 
 /* one pass over every stored entry, bucketed by def instead of one scan per def */
-static void render_grouped(strbuf_t *sb, const store_t *st) {
+static void render_grouped(dstrbuf_t *sb, const store_t *st) {
   int def_idx[DEF_ID_MAX]; /* metrics_id_t -> DEFS[] index, -1 if unused */
   size_t count[N_DEFS], start[N_DEFS], cursor[N_DEFS];
   entry_ref_t *refs = NULL;
@@ -300,86 +246,78 @@ static void render_grouped(strbuf_t *sb, const store_t *st) {
     const char *kind_name = def->kind == M_COUNTER ? "counter" : def->kind == M_INFO ? "info" : "gauge";
     if (!count[i] || !refs)
       continue;
-    sb_appendf(sb, "# HELP %s %s\n", def->name, def->help);
-    sb_appendf(sb, "# TYPE %s %s\n", def->name, kind_name);
+    dstrbuf_appendf(sb, "# HELP %s %s\n", def->name, def->help);
+    dstrbuf_appendf(sb, "# TYPE %s %s\n", def->name, kind_name);
     for (size_t k = start[i]; k < start[i] + count[i]; k++) {
       const store_slot_t *slot = refs[k].slot;
       const stored_entry_t *e = refs[k].entry;
       char esc[2 * METRICS_LABEL_MAX + 2];
-      sb_appendf(sb, "%s{", def->name);
+      dstrbuf_appendf(sb, "%s{", def->name);
       append_base_labels(sb, slot);
       if (def->composite_input_reason) {
         append_composite_input_reason(sb, e->label);
       } else if (def->label_name) {
         escape_label(e->label, esc, sizeof esc);
-        sb_appendf(sb, ",%s=\"%s\"", def->label_name, esc);
+        dstrbuf_appendf(sb, ",%s=\"%s\"", def->label_name, esc);
       }
-      sb_appendf(sb, "} %llu\n", (unsigned long long)e->value);
+      dstrbuf_appendf(sb, "} %llu\n", (unsigned long long)e->value);
     }
   }
   free(refs);
 }
 
-static void render_snapshot_age(strbuf_t *sb, const store_t *st, double now_mono) {
+static void render_snapshot_age(dstrbuf_t *sb, const store_t *st, double now_mono) {
   int any = 0;
-  for (int i = 0; i < STORE_MAX_INSTANCES; i++)
-    if (st->slots[i].used)
-      any = 1;
-  if (!any)
-    return;
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++) if (st->slots[i].used) any = 1;
+  if (!any) return;
 
-  sb_appendf(sb, "# HELP dvbipi_metrics_snapshot_age_seconds seconds since this instance's last snapshot was received\n");
-  sb_appendf(sb, "# TYPE dvbipi_metrics_snapshot_age_seconds gauge\n");
+  dstrbuf_appendf(sb, "# HELP dvbipi_metrics_snapshot_age_seconds seconds since this instance's last snapshot was received\n");
+  dstrbuf_appendf(sb, "# TYPE dvbipi_metrics_snapshot_age_seconds gauge\n");
   for (int i = 0; i < STORE_MAX_INSTANCES; i++) {
     const store_slot_t *slot = &st->slots[i];
-    if (!slot->used)
-      continue;
-    sb_appendf(sb, "dvbipi_metrics_snapshot_age_seconds{");
+    if (!slot->used) continue;
+    dstrbuf_appendf(sb, "dvbipi_metrics_snapshot_age_seconds{");
     append_base_labels(sb, slot);
-    sb_appendf(sb, "} %.3f\n", now_mono - slot->received_mono);
+    dstrbuf_appendf(sb, "} %.3f\n", now_mono - slot->received_mono);
   }
 }
 
-static void render_self_metrics(strbuf_t *sb, const store_t *st) {
+static void render_self_metrics(dstrbuf_t *sb, const store_t *st) {
   int active = 0;
-  for (int i = 0; i < STORE_MAX_INSTANCES; i++)
-    if (st->slots[i].used)
-      active++;
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++) if (st->slots[i].used) active++;
 
-  sb_appendf(sb, "# HELP dvbipi_metrics_instances exporter instances currently tracked\n");
-  sb_appendf(sb, "# TYPE dvbipi_metrics_instances gauge\n");
-  sb_appendf(sb, "dvbipi_metrics_instances %d\n", active);
+  dstrbuf_appendf(sb, "# HELP dvbipi_metrics_instances exporter instances currently tracked\n");
+  dstrbuf_appendf(sb, "# TYPE dvbipi_metrics_instances gauge\n");
+  dstrbuf_appendf(sb, "dvbipi_metrics_instances %d\n", active);
 
-  sb_appendf(sb, "# HELP dvbipi_metrics_snapshots_received_total snapshots accepted and stored\n");
-  sb_appendf(sb, "# TYPE dvbipi_metrics_snapshots_received_total counter\n");
-  sb_appendf(sb, "dvbipi_metrics_snapshots_received_total %llu\n", (unsigned long long)st->stats.snapshots_received_total);
+  dstrbuf_appendf(sb, "# HELP dvbipi_metrics_snapshots_received_total snapshots accepted and stored\n");
+  dstrbuf_appendf(sb, "# TYPE dvbipi_metrics_snapshots_received_total counter\n");
+  dstrbuf_appendf(sb, "dvbipi_metrics_snapshots_received_total %llu\n", (unsigned long long)st->stats.snapshots_received_total);
 
-  sb_appendf(sb, "# HELP dvbipi_metrics_snapshots_rejected_total snapshots rejected by reason\n");
-  sb_appendf(sb, "# TYPE dvbipi_metrics_snapshots_rejected_total counter\n");
-  sb_appendf(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"malformed\"} %llu\n", (unsigned long long)st->stats.snapshots_rejected_malformed);
-  sb_appendf(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"stale\"} %llu\n", (unsigned long long)st->stats.snapshots_rejected_stale);
-  sb_appendf(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"full\"} %llu\n", (unsigned long long)st->stats.snapshots_rejected_full);
-  sb_appendf(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"version\"} %llu\n", (unsigned long long)st->stats.snapshots_rejected_version);
+  dstrbuf_appendf(sb, "# HELP dvbipi_metrics_snapshots_rejected_total snapshots rejected by reason\n");
+  dstrbuf_appendf(sb, "# TYPE dvbipi_metrics_snapshots_rejected_total counter\n");
+  dstrbuf_appendf(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"malformed\"} %llu\n", (unsigned long long)st->stats.snapshots_rejected_malformed);
+  dstrbuf_appendf(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"stale\"} %llu\n", (unsigned long long)st->stats.snapshots_rejected_stale);
+  dstrbuf_appendf(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"full\"} %llu\n", (unsigned long long)st->stats.snapshots_rejected_full);
+  dstrbuf_appendf(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"version\"} %llu\n", (unsigned long long)st->stats.snapshots_rejected_version);
 
-  sb_appendf(sb, "# HELP dvbipi_metrics_snapshot_entries_dropped_total entries dropped from accepted snapshots exceeding the per-snapshot entry cap\n");
-  sb_appendf(sb, "# TYPE dvbipi_metrics_snapshot_entries_dropped_total counter\n");
-  sb_appendf(sb, "dvbipi_metrics_snapshot_entries_dropped_total %llu\n", (unsigned long long)st->stats.snapshot_entries_dropped);
+  dstrbuf_appendf(sb, "# HELP dvbipi_metrics_snapshot_entries_dropped_total entries dropped from accepted snapshots exceeding the per-snapshot entry cap\n");
+  dstrbuf_appendf(sb, "# TYPE dvbipi_metrics_snapshot_entries_dropped_total counter\n");
+  dstrbuf_appendf(sb, "dvbipi_metrics_snapshot_entries_dropped_total %llu\n", (unsigned long long)st->stats.snapshot_entries_dropped);
 
-  sb_appendf(sb, "# HELP dvbipi_metrics_http_requests_total /metrics HTTP requests by response status\n");
-  sb_appendf(sb, "# TYPE dvbipi_metrics_http_requests_total counter\n");
-  sb_appendf(sb, "dvbipi_metrics_http_requests_total{status=\"200\"} %llu\n", (unsigned long long)st->stats.http_requests_200);
-  sb_appendf(sb, "dvbipi_metrics_http_requests_total{status=\"404\"} %llu\n", (unsigned long long)st->stats.http_requests_404);
+  dstrbuf_appendf(sb, "# HELP dvbipi_metrics_http_requests_total /metrics HTTP requests by response status\n");
+  dstrbuf_appendf(sb, "# TYPE dvbipi_metrics_http_requests_total counter\n");
+  dstrbuf_appendf(sb, "dvbipi_metrics_http_requests_total{status=\"200\"} %llu\n", (unsigned long long)st->stats.http_requests_200);
+  dstrbuf_appendf(sb, "dvbipi_metrics_http_requests_total{status=\"404\"} %llu\n", (unsigned long long)st->stats.http_requests_404);
 }
 
 void render_openmetrics(const store_t *st, double now_mono, char **out, size_t *out_len) {
-  strbuf_t sb;
-
-  sb_init(&sb);
+  dstrbuf_t sb;
+  dstrbuf_init(&sb);
   render_grouped(&sb, st);
   render_snapshot_age(&sb, st, now_mono);
   render_self_metrics(&sb, st);
-  sb_appendf(&sb, "# EOF\n");
-
+  dstrbuf_appendf(&sb, "# EOF\n");
   *out = sb.buf;
   *out_len = sb.len;
 }

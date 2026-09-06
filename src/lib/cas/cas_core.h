@@ -8,6 +8,7 @@
 #include <time.h>
 
 #include "biss/ca_engine.h"
+#include "cas_args.h"
 #include "cas_group.h"
 #include "cas_scramble_engine.h"
 #include "lib/scrambler/scrambler.h"
@@ -78,5 +79,7 @@ typedef struct {
 
 /* fills *out, 0 ok, -1 OOM/no OpenSSL (session_id generation)/engine start failed */
 int cas_core_start_biss_ca_dispatch(const cas_biss_ca_cfg_t *cfg, const unsigned *pids, size_t pid_count, unsigned flush_pid, const char *log_prefix, cas_core_t *out);
+
+void cas_core_fill_group_cfg(cas_algo_t cas_algo, unsigned cp_duration_ms, int fallback_clear, const cas_vendor_t *vendors, unsigned n_vendors, const char *log_prefix, cas_group_cfg_t *gcfg);
 
 #endif

@@ -9,9 +9,13 @@
 
 /* tool prefixed stderr line: "<tool>: <fmt>\n" */
 void argutil_verr(const char *tool, const char *fmt, va_list ap) __attribute__((format(printf, 2, 0)));
+void argutil_err(const char *tool, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
 /* port 1..65535, digits only */
 int argutil_port_parse(const char *p, unsigned *out);
+
+/* dec only, [min, max] incl. 0 ok, -1 bad format or oor */
+int argutil_uint_range(const char *s, unsigned min, unsigned max, unsigned *out);
 
 typedef struct {
   const char *name;

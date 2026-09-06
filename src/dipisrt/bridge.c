@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <poll.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -19,52 +20,6 @@
 
 #define DIPISRT_SENDER_POLL_MS 200
 #define DIPISRT_SENDER_DRAIN_MS_DEFAULT 1000 /* srt's own default latency buffer */
-
-void nonsrt_to_tssrc_cfg(const nonsrt_t *s, const char *iface, int insecure_tls, tssrc_cfg_t *tc) {
-  memset(tc, 0, sizeof *tc);
-  tc->user_agent = TOOL_NAME "/" TOOL_VERSION;
-  switch (s->kind) {
-  case NONSRT_HTTP:
-    tc->kind = TSSRC_HTTP;
-    tc->http = s->http;
-    tc->insecure_tls = insecure_tls;
-    break;
-  case NONSRT_FILE:
-    if (s->file_path[0]) {
-      tc->kind = TSSRC_FILE;
-      tc->file_path = s->file_path;
-    } else {
-      tc->kind = TSSRC_STDIN;
-    }
-    break;
-  case NONSRT_RTP:
-  case NONSRT_UDP:
-    tc->kind = (s->kind == NONSRT_RTP) ? TSSRC_RTP : TSSRC_UDP;
-    tc->family = s->family;
-    tc->group = s->group;
-    tc->port = s->port;
-    tc->iface = iface;
-    break;
-  }
-}
-
-void nonsrt_to_tssink_cfg(const nonsrt_t *s, const char *iface, tssink_cfg_t *tk) {
-  memset(tk, 0, sizeof *tk);
-  if (s->kind == NONSRT_FILE) {
-    if (s->file_path[0]) {
-      tk->kind = TSSINK_FILE;
-      tk->file_path = s->file_path;
-    } else {
-      tk->kind = TSSINK_STDOUT;
-    }
-  } else {
-    tk->kind = (s->kind == NONSRT_RTP) ? TSSINK_RTP : TSSINK_UDP;
-    tk->family = s->family;
-    tk->group = s->group;
-    tk->port = s->port;
-    tk->iface = iface;
-  }
-}
 
 static void fill_common_opts(const config_t *cfg, srtcommon_opts_t *o) {
   o->passphrase = cfg->passphrase[0] ? cfg->passphrase : NULL;
@@ -84,10 +39,9 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   int rc = 0;
   int was_connected = 0;
 
-  nonsrt_to_tssrc_cfg(&cfg->in.nonsrt, cfg->iface, cfg->insecure_tls, &tc);
+  plain_endpoint_to_tssrc_cfg(&cfg->in.nonsrt, cfg->iface, TOOL_NAME "/" TOOL_VERSION, cfg->insecure_tls, &tc);
   src = tssrc_open(&tc, NULL);
-  if (!src)
-    return 1;
+  if (!src) return 1;
 
   memset(&rcfg, 0, sizeof rcfg);
   for (int i = 0; i < cfg->out.n_srt; i++) {
@@ -126,25 +80,21 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
 
     pr = poll(&pfd, 1, DIPISRT_SENDER_POLL_MS);
     if (pr < 0) {
-      if (errno == EINTR)
-        continue;
+      if (errno == EINTR) continue;
       log_line("srt output: poll failed: %s", strerror(errno));
       rc = 1;
       break;
     }
-    if (pr == 0 || !(pfd.revents & (POLLIN | POLLERR | POLLHUP)))
-      continue;
+    if (pr == 0 || !(pfd.revents & (POLLIN | POLLERR | POLLHUP))) continue;
 
     {
       net_err_reason_t reason = NET_ERR_OTHER;
       ssize_t n = tssrc_read(src, buf, sizeof buf, &reason);
-
       if (n < 0) {
         rc = 1;
         break;
       }
-      if (n > 0)
-        srtout_write(srt, buf, (size_t)n);
+      if (n > 0) srtout_write(srt, buf, (size_t)n);
     }
   }
   if (rc) {
@@ -166,16 +116,19 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   srtin_cfg_t rcfg;
   srtin_t *srt;
   unsigned char buf[65536];
-  unsigned char dedup_hist[RECV_DEDUP_HISTORY][65536];
+  unsigned char (*dedup_hist)[65536] = malloc(sizeof(unsigned char[RECV_DEDUP_HISTORY][65536]));
   int dedup_hist_len[RECV_DEDUP_HISTORY] = {0};
   int dedup_hist_next = 0;
   int dedup_active = 0; /* set on reconnect, cleared at first non-duplicate chunk */
   int rc = 0;
 
-  nonsrt_to_tssink_cfg(&cfg->out.nonsrt, cfg->iface, &tk);
+  if (!dedup_hist) return 1;
+  plain_endpoint_to_tssink_cfg(&cfg->out.nonsrt, cfg->iface, &tk);
   sink = tssink_open(&tk);
-  if (!sink)
+  if (!sink) {
+    free(dedup_hist);
     return 1;
+  }
 
   memset(&rcfg, 0, sizeof rcfg);
   for (int i = 0; i < cfg->in.n_srt; i++) {
@@ -196,6 +149,7 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   srt = srtin_open(&rcfg);
   if (!srt) {
     tssink_close(sink);
+    free(dedup_hist);
     return signal_stop_requested() ? 0 : 1;
   }
 
@@ -207,10 +161,8 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
       rc = 1;
       break;
     }
-    if (reconnected)
-      dedup_active = 1;
-    if (n == 0)
-      continue;
+    if (reconnected) dedup_active = 1;
+    if (n == 0) continue;
     if (dedup_active) {
       int is_dup = 0;
       for (int h = 0; h < RECV_DEDUP_HISTORY; h++) {
@@ -219,8 +171,7 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
           break;
         }
       }
-      if (is_dup)
-        continue;
+      if (is_dup) continue;
       dedup_active = 0;
     }
     if (tssink_write(sink, buf, (size_t)n) < 0) {
@@ -234,6 +185,7 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
 
   srtin_close(srt);
   tssink_close(sink);
+  free(dedup_hist);
   return rc;
 }
 

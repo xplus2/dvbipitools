@@ -12,6 +12,7 @@
 #include "lib/bim/strrepo.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
+#include "lib/helper/toolmain.h"
 #include "lib/tva/bcg_doc.h"
 #include "lib/tva/tva_xml.h"
 #include "version.h"
@@ -51,7 +52,6 @@ static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
       log_line("%d channels, %d programmes, %d fragments -> %zu+%zu bytes", doc.channel_count, doc.programme_count, nfuu, bits_len, strs_len);
     }
   }
-
   accessunit_scratch_free(&sc);
   strrepo_writer_free(&sw);
   bitwriter_free(&bw);
@@ -110,12 +110,10 @@ int main(int argc, char **argv) {
   int rc;
 
   log_set_color(log_color_prescan(argc, argv));
-  log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
+  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
-  if (st == ARGS_OK)
-    log_set_color((log_color_t)cfg.color_mode);
-  if (st == ARGS_HELP)
-    return 0;
+  if (st == ARGS_OK) log_set_color((log_color_t)cfg.color_mode);
+  if (st == ARGS_HELP) return 0;
   if (st == ARGS_ERR) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
@@ -129,8 +127,7 @@ int main(int argc, char **argv) {
   out = open_output(cfg.output_path);
   if (!out) {
     fprintf(stderr, TOOL_NAME ": cannot open %s\n", cfg.output_path);
-    if (in != stdin)
-      fclose(in);
+    if (in != stdin) fclose(in);
     return 1;
   }
 
@@ -139,9 +136,7 @@ int main(int argc, char **argv) {
   else
     rc = decode_bim_to_xml(in, out, cfg.verbose) ? 1 : 0;
 
-  if (in != stdin)
-    fclose(in);
-  if (out != stdout)
-    fclose(out);
+  if (in != stdin) fclose(in);
+  if (out != stdout) fclose(out);
   return rc;
 }

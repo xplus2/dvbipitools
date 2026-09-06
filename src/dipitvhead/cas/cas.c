@@ -28,10 +28,8 @@ int cas_parse_pcr(const unsigned char pkt188[188], uint64_t *pcr27) {
   unsigned afc = (pkt188[3] >> 4) & 0x3;
   uint64_t base;
   unsigned ext;
-  if (afc != 0x2 && afc != 0x3)
-    return 0;
-  if (pkt188[4] < 1 || !(pkt188[5] & 0x10) || pkt188[4] < 7)
-    return 0;
+  if (afc != 0x2 && afc != 0x3) return 0;
+  if (pkt188[4] < 1 || !(pkt188[5] & 0x10) || pkt188[4] < 7) return 0;
   base = ((uint64_t)pkt188[6] << 25) | ((uint64_t)pkt188[7] << 17) | ((uint64_t)pkt188[8] << 9) | ((uint64_t)pkt188[9] << 1) | (pkt188[10] >> 7);
   ext = ((unsigned)(pkt188[10] & 0x01) << 8) | pkt188[11];
   *pcr27 = base * 300 + ext;
@@ -81,29 +79,22 @@ static void add_pid(unsigned *pids, size_t *count, size_t cap, unsigned pid) {
     log_line(TOOL_NAME ": cas: pid 0x%x dropped, already at the %zu pid cap", pid, cap);
     return;
   }
-  for (size_t i = 0; i < *count; i++)
-    if (pids[i] == pid)
-      return;
+  for (size_t i = 0; i < *count; i++) if (pids[i] == pid) return;
   pids[(*count)++] = pid;
 }
 
 static void add_program_cas_pids(const config_t *cfg, const out_es_t *es, int es_count, unsigned *out, size_t *count, size_t cap) {
   for (int i = 0; i < es_count; i++) {
-    if (cfg->cas_pids_video && es[i].src->cls == PID_VIDEO)
-      add_pid(out, count, cap, es[i].out_pid);
-    if (cfg->cas_pids_audio && es[i].src->cls == PID_AUDIO)
-      add_pid(out, count, cap, es[i].out_pid);
+    if (cfg->cas_pids_video && es[i].src->cls == PID_VIDEO) add_pid(out, count, cap, es[i].out_pid);
+    if (cfg->cas_pids_audio && es[i].src->cls == PID_AUDIO) add_pid(out, count, cap, es[i].out_pid);
   }
 }
 
 size_t cas_resolve_pids_multi(const config_t *cfg, const out_es_t *const *es_lists, const int *es_counts, unsigned n_programs, unsigned *out, size_t cap) {
   size_t count = 0;
-
-  for (size_t k = 0; k < cfg->cas_pid_count; k++)
-    add_pid(out, &count, cap, cfg->cas_pids[k]);
-  if (cfg->cas_pids_video || cfg->cas_pids_audio)
-    for (unsigned p = 0; p < n_programs; p++)
-      add_program_cas_pids(cfg, es_lists[p], es_counts[p], out, &count, cap);
+  for (size_t k = 0; k < cfg->cas_pid_count; k++) add_pid(out, &count, cap, cfg->cas_pids[k]);
+  if (cfg->cas_pids_video || cfg->cas_pids_audio) for (unsigned p = 0; p < n_programs; p++)
+    add_program_cas_pids(cfg, es_lists[p], es_counts[p], out, &count, cap);
   return count;
 }
 
@@ -111,46 +102,8 @@ size_t cas_resolve_pids(const config_t *cfg, const out_es_t *es, int es_count, u
   return cas_resolve_pids_multi(cfg, &es, &es_count, 1, out, cap);
 }
 
-static ecmg_outage_mode_t map_outage_mode(cas_outage_mode_t m) {
-  switch (m) {
-  case CAS_OUTAGE_CYCLING:
-    return ECMG_OUTAGE_CYCLING;
-  case CAS_OUTAGE_SILENT:
-    return ECMG_OUTAGE_SILENT;
-  default:
-    return ECMG_OUTAGE_FROZEN;
-  }
-}
-
 static void fill_group_cfg(const config_t *cfg, cas_group_cfg_t *gcfg) {
-  memset(gcfg, 0, sizeof *gcfg);
-  gcfg->algo = (cfg->cas_algo == CAS_ALGO_CISSA) ? SCRAMBLE_ALGO_CISSA : SCRAMBLE_ALGO_CSA2;
-  gcfg->legacy_csa1 = (cfg->cas_algo == CAS_ALGO_CSA1);
-  gcfg->cp_duration_ms = cfg->cas_cp_duration_ms;
-  gcfg->fallback_clear = cfg->cas_fallback_clear;
-  if (cfg->n_cas_vendors > CAS_GROUP_MAX_VENDORS)
-    log_line(TOOL_NAME ": cas: %u vendors configured, only the first %d will be started", cfg->n_cas_vendors, CAS_GROUP_MAX_VENDORS);
-  gcfg->vendor_count = cfg->n_cas_vendors < CAS_GROUP_MAX_VENDORS ? cfg->n_cas_vendors : CAS_GROUP_MAX_VENDORS;
-  for (size_t i = 0; i < gcfg->vendor_count; i++) {
-    const cas_vendor_t *v = &cfg->cas_vendors[i];
-    cas_group_vendor_cfg_t *gv = &gcfg->vendors[i];
-    gv->ecmg_host = v->ecmg_host;
-    gv->ecmg_port = v->ecmg_port;
-    gv->ecmg_version = v->ecmg_version;
-    gv->super_cas_id = v->super_cas_id;
-    gv->ecm_id = v->ecm_id;
-    gv->ecm_pid = v->ecm_pid;
-    gv->emm_pid = v->emm_pid;
-    gv->emmg_port = v->emmg_port;
-    gv->emmg_max_conns = v->emmg_max_conns;
-    gv->required = v->required;
-    gv->outage_mode = map_outage_mode(v->resilience);
-    gv->cwenc_algorithm = v->cwenc_algorithm;
-    gv->cwenc_aes_mode = v->cwenc_aes_mode;
-    gv->cwenc_fixed_key_hex = v->cwenc_fixed_key_hex;
-    gv->cwenc_key_list_a_path = v->cwenc_key_list_a_path;
-    gv->cwenc_key_list_b_path = v->cwenc_key_list_b_path;
-  }
+  cas_core_fill_group_cfg(cfg->cas_algo, cfg->cas_cp_duration_ms, cfg->cas_fallback_clear, cfg->cas_vendors, cfg->n_cas_vendors, TOOL_NAME ": ", gcfg);
 }
 
 static cas_biss_cfg_t biss_cfg_of(const config_t *cfg) {
@@ -186,8 +139,7 @@ cas_t *cas_start(const config_t *cfg, const psi_t *psi, const out_es_t *es, int 
       return NULL;
     }
     c = calloc(1, sizeof *c);
-    if (!c)
-      return NULL;
+    if (!c) return NULL;
     c->pcr_out_pid = pcr_out_pid;
     if (cas_core_start_biss_dispatch(&bc, pids, pid_count, pcr_out_pid, TOOL_NAME ": ", &c->core) != 0) {
       free(c);
@@ -204,8 +156,7 @@ cas_t *cas_start(const config_t *cfg, const psi_t *psi, const out_es_t *es, int 
       return NULL;
     }
     c = calloc(1, sizeof *c);
-    if (!c)
-      return NULL;
+    if (!c) return NULL;
     c->pcr_out_pid = pcr_out_pid;
     if (cas_core_start_biss_ca_dispatch(&bc, pids, pid_count, pcr_out_pid, TOOL_NAME ": ", &c->core) != 0) {
       free(c);
@@ -219,10 +170,8 @@ cas_t *cas_start(const config_t *cfg, const psi_t *psi, const out_es_t *es, int 
     return NULL;
   }
   c = calloc(1, sizeof *c);
-  if (!c)
-    return NULL;
+  if (!c) return NULL;
   c->pcr_out_pid = pcr_out_pid;
-
   fill_group_cfg(cfg, &gcfg);
   gcfg.pid_count = cas_resolve_pids(cfg, es, es_count, gcfg.pids, CAS_CORE_MAX_PIDS);
   if (gcfg.pid_count == 0) {
@@ -252,8 +201,7 @@ cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, con
       return NULL;
     }
     c = calloc(1, sizeof *c);
-    if (!c)
-      return NULL;
+    if (!c) return NULL;
     c->pcr_out_pid = 0x1FFF; /* MPTS, no single pid drives clock: see cas_wall_tick() */
     if (cas_core_start_biss_dispatch(&bc, pids, pid_count, 0x1FFF, TOOL_NAME ": ", &c->core) != 0) {
       free(c);
@@ -270,8 +218,7 @@ cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, con
       return NULL;
     }
     c = calloc(1, sizeof *c);
-    if (!c)
-      return NULL;
+    if (!c) return NULL;
     c->pcr_out_pid = 0x1FFF;
     if (cas_core_start_biss_ca_dispatch(&bc, pids, pid_count, 0x1FFF, TOOL_NAME ": ", &c->core) != 0) {
       free(c);
@@ -279,10 +226,8 @@ cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, con
     }
     return c;
   }
-
   c = calloc(1, sizeof *c);
-  if (!c)
-    return NULL;
+  if (!c) return NULL;
   c->pcr_out_pid = 0x1FFF; /* MPTS, no single pid drives clock: see cas_wall_tick() */
 
   fill_group_cfg(cfg, &gcfg);
@@ -302,8 +247,7 @@ cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, con
 }
 
 void cas_stop(cas_t *c) {
-  if (!c)
-    return;
+  if (!c) return;
   cas_core_stop(&c->core);
   free(c);
 }
@@ -314,28 +258,21 @@ unsigned cas_pcr_pid(cas_t *c) { return c->pcr_out_pid; }
 
 void cas_pcr_tick(cas_t *c, unsigned out_pid, const unsigned char pkt188[188]) {
   uint64_t pcr27;
-
-  if (c->core.biss_engine)
-    return; /* fixed-key BISS: no crypto period */
-  if (!c->core.biss_ca)
-    cas_group_tick_alive(c->core.group);
-  if (out_pid != c->pcr_out_pid || !cas_parse_pcr(pkt188, &pcr27))
-    return;
+  if (c->core.biss_engine) return; /* fixed-key BISS: no crypto period */
+  if (!c->core.biss_ca) cas_group_tick_alive(c->core.group);
+  if (out_pid != c->pcr_out_pid || !cas_parse_pcr(pkt188, &pcr27)) return;
   pcr_sample(c, pcr27);
 }
 
 void cas_wall_tick(cas_t *c, double now_s) {
-  if (c->core.biss_engine)
-    return;
-  if (!c->core.biss_ca)
-    cas_group_tick_alive(c->core.group);
+  if (c->core.biss_engine) return;
+  if (!c->core.biss_ca) cas_group_tick_alive(c->core.group);
   if (!c->have_pcr) {
     c->have_pcr = 1;
     deliver_clock_tick(c, 0);
   } else {
     double delta_s = now_s - c->last_pcr_wall;
-    if (delta_s > 0.0)
-      deliver_clock_tick(c, (unsigned long)(delta_s * 1000.0 + 0.5));
+    if (delta_s > 0.0) deliver_clock_tick(c, (unsigned long)(delta_s * 1000.0 + 0.5));
   }
   c->last_pcr_wall = now_s;
 }
@@ -345,8 +282,7 @@ void cas_scramble_packet(cas_t *c, unsigned out_pid, double now, unsigned char p
 }
 
 void cas_flush(cas_t *c, scrambler_emit_cb emit, void *ctx) {
-  if (!c)
-    return;
+  if (!c) return;
   cas_core_flush(&c->core, emit, ctx);
 }
 
@@ -377,7 +313,6 @@ int cas_vendor_next_emm(cas_t *c, size_t idx, unsigned char *out, size_t cap, si
 }
 
 void cas_reload_receivers(cas_t *c) {
-  if (!c)
-    return;
+  if (!c) return;
   cas_core_reload_receivers(&c->core);
 }

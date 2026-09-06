@@ -84,20 +84,28 @@ static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, str
   if (e & EPOLLERR)
     conn_zc_drain(c);
   if ((e & EPOLLHUP || (e & EPOLLERR && socket_has_error(c->fd))) && !(e & EPOLLIN)) {
-    if (c->state == CONN_TSPUSH)
-      reactor_tspush_close(epfd, c);
-    else if (c->state == CONN_WS)
-      reactor_ws_close(epfd, c);
-    else if (c->state == CONN_DASHCHUNK)
-      reactor_dashchunk_close(epfd, c);
-    else if (c->state == CONN_MP4PUSH)
-      reactor_mp4push_close(epfd, c);
+    switch (c->state) {
+      case CONN_TSPUSH:
+        reactor_tspush_close(epfd, c);
+        break;
+      case CONN_WS:
+        reactor_ws_close(epfd, c);
+        break;
+      case CONN_DASHCHUNK:
+        reactor_dashchunk_close(epfd, c);
+        break;
+      case CONN_MP4PUSH:
+        reactor_mp4push_close(epfd, c);
+        break;
 #ifdef HAVE_HTTP2
-    else if (c->state == CONN_H2)
-      h2_conn_close(epfd, c);
+      case CONN_H2:
+        h2_conn_close(epfd, c);
+        break;
 #endif
-    else
-      reactor_close(epfd, c);
+      default:
+        reactor_close(epfd, c);
+        break;
+    }
     return;
   }
   switch (c->state) {

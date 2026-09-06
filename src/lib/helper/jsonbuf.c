@@ -55,8 +55,10 @@ void jbuf_json_string(jbuf_t *j, const char *s) {
   jbuf_str(j, "\"");
   for (; *s; s++) {
     unsigned char c = (unsigned char)*s;
-    if (c == '"' || c == '\\')
-      jbuf_fmt(j, "\\%c", c);
+    if (c == '"' || c == '\\') {
+      jbuf_raw(j, "\\", 1);
+      jbuf_raw(j, (const char *)&c, 1);
+    }
     else if (c == '\n')
       jbuf_str(j, "\\n");
     else if (c == '\r')

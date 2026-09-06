@@ -21,6 +21,7 @@ dipimetrics_SRCS := \
 	src/dipimetrics/httpserver.c \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/helper/log.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/ioutil.c \
@@ -33,6 +34,7 @@ dipiscan_SRCS := \
 	src/dipiscan/scan.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/log.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/sds_xml.c \
@@ -67,6 +69,7 @@ dipisds_SRCS := \
 	src/dipisds/listen.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/log.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/signal.c \
@@ -86,6 +89,7 @@ dipixmltv_SRCS := \
 	src/dipixmltv/revmap.c \
 	src/dipixmltv/suggest.c \
 	src/lib/helper/log.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/xml_util.c \
 	src/lib/helper/ioutil.c \
@@ -99,6 +103,7 @@ dipibim_SRCS := \
 	src/dipibim/main.c \
 	src/dipibim/args.c \
 	src/lib/helper/log.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/xml_util.c \
 	src/lib/helper/ioutil.c \
@@ -144,6 +149,7 @@ dipibcg_SRCS := \
 	src/dipibcg/container.c \
 	$(dipibcg_ZLIB_SRC) \
 	src/lib/helper/log.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/signal.c \
@@ -278,6 +284,7 @@ dipirec_SRCS := \
 	src/dipirec/record/run.c \
 	src/lib/fccret/ret_client.c \
 	src/lib/helper/log.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/signal.c \
@@ -648,6 +655,7 @@ dipifccret_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
 	src/lib/helper/log.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/ioutil.c \
@@ -690,6 +698,7 @@ dipicam378_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/signal.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/secure_zero.c
 else
 $(warning dipicam378: OpenSSL not found via pkg-config, skipping this tool entirely (RSA/AES crypto is its whole purpose))
@@ -760,6 +769,7 @@ dipidescramble_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/signal.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -865,6 +875,7 @@ dipirist_SRCS := \
 	src/dipirist/args.c \
 	src/dipirist/bridge.c \
 	src/lib/helper/log.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/ioutil.c \
@@ -873,6 +884,7 @@ dipirist_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
+	src/lib/net/plain_endpoint.c \
 	src/lib/net/rist/ristout.c \
 	src/lib/net/rist/ristin.c \
 	src/lib/net/rist/ristlog.c \
@@ -937,6 +949,7 @@ dipisrt_SRCS := \
 	src/dipisrt/args.c \
 	src/dipisrt/bridge.c \
 	src/lib/helper/log.c \
+	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/ioutil.c \
@@ -945,6 +958,7 @@ dipisrt_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
+	src/lib/net/plain_endpoint.c \
 	$(dipisrt_RIST_SRC) \
 	src/lib/net/srt/srtsrc.c \
 	src/lib/net/srt/srtcommon.c \
@@ -1085,6 +1099,7 @@ dipixy_SRCS := \
 	src/dipixy/reactor/dispatch/resp.c \
 	src/dipixy/reactor/dispatch/content.c \
 	src/dipixy/reactor/dispatch/route.c \
+	src/dipixy/reactor/dispatch/route_common.c \
 	src/dipixy/reactor/dispatch/waiters.c \
 	src/dipixy/reactor/reactor_tspush.c \
 	src/dipixy/reactor/reactor_dashchunk.c \
@@ -1138,6 +1153,7 @@ dipixy_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/ioutil.c \
+	src/lib/helper/byte_ring.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/jsonbuf.c \
 	src/lib/helper/sha1.c \
@@ -1283,7 +1299,7 @@ dvbipitools: $(DVBIPITOOLS_OBJS)
 UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
-	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild \
+	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mp4 lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild \
 	lib_net_netconnect lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_tssource_async lib_net_tssource_file lib_net_retryset lib_net_dvbstp \
 	lib_mux_mpts \
 	lib_cas_cas_group \
@@ -1568,6 +1584,37 @@ dipidescramble_pipeline_SRCS := \
 dipidescramble_pipeline_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_pipeline_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
+UNIT_TESTS += dipidescramble_ipiclient
+dipidescramble_ipiclient_BIN := tests/unit/dipidescramble/test_ipiclient
+dipidescramble_ipiclient_SRCS := \
+	tests/unit/dipidescramble/test_ipiclient.c \
+	src/dipidescramble/ipiclient.c \
+	src/dipidescramble/emmcache.c \
+	src/dipidescramble/device.c \
+	src/dipidescramble/crypto.c \
+	src/dipidescramble/ecm_profile/common.c \
+	src/dipidescramble/ecm_profile/parse.c \
+	src/dipidescramble/ecm_profile/validate.c \
+	src/dipidescramble/ecm_profile/wire.c \
+	src/dipidescramble/ecm_profile/crypto.c \
+	src/lib/cas/device_crypto.c \
+	src/lib/cas/device_state_core.c \
+	src/lib/helper/log.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/signal.c \
+	src/lib/helper/secure_zero.c \
+	src/lib/demux/tspack.c \
+	src/lib/net/tls.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c
+dipidescramble_ipiclient_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+dipidescramble_ipiclient_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
 UNIT_TESTS += dipidescramble_args
 dipidescramble_args_BIN := tests/unit/dipidescramble/test_args
 dipidescramble_args_SRCS := \
@@ -1589,7 +1636,7 @@ dipidescramble_args_SRCS := \
 dipidescramble_args_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_args_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 else
-$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_ecm_profile/dipidescramble_biss_ca_state/dipidescramble_pipeline/dipidescramble_args unit tests)
+$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_ecm_profile/dipidescramble_biss_ca_state/dipidescramble_pipeline/dipidescramble_ipiclient/dipidescramble_args unit tests)
 endif
 
 lib_metrics_protocol_BIN := tests/unit/lib/metrics/test_protocol
@@ -1671,6 +1718,7 @@ dipirist_bridge_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
+	src/lib/net/plain_endpoint.c \
 	src/lib/net/rist/ristout.c \
 	src/lib/net/rist/ristin.c \
 	src/lib/net/rist/ristlog.c \
@@ -1751,6 +1799,7 @@ dipisrt_bridge_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
+	src/lib/net/plain_endpoint.c \
 	src/lib/net/rist/ristin_stub.c \
 	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/srt/srtsrc_stub.c \
@@ -2070,6 +2119,31 @@ lib_mux_mkv_SRCS := \
 	src/lib/mux/mkv/feed.c \
 	src/lib/helper/ioutil.c \
 	src/lib/mux/ebml.c \
+	src/lib/mux/teletext.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/pes.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/crc32.c \
+	src/lib/helper/log.c
+
+lib_mux_mp4_BIN := tests/unit/lib/mux/test_mp4
+lib_mux_mp4_SRCS := \
+	tests/unit/lib/mux/test_mp4.c \
+	src/lib/mux/mp4/mp4.c \
+	src/lib/mux/mp4/moov.c \
+	src/lib/mux/fmp4/box.c \
+	src/lib/mux/mp4/video.c \
+	src/lib/mux/mp4/write.c \
+	src/lib/mux/mp4/feed.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/escodec/aubuild.c \
+	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/video.c \
+	src/lib/helper/ioutil.c \
 	src/lib/mux/teletext.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/pes.c \
@@ -3033,6 +3107,12 @@ dipirec_record_SRCS := \
 	src/dipirec/record/stats.c \
 	src/dipirec/record/run.c \
 	src/lib/fccret/ret_client.c \
+	src/lib/mux/mp4/mp4.c \
+	src/lib/mux/mp4/video.c \
+	src/lib/mux/mp4/write.c \
+	src/lib/mux/mp4/feed.c \
+	src/lib/mux/mp4/moov.c \
+	src/lib/mux/fmp4/box.c \
 	src/dipirec/args.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
@@ -3488,6 +3568,7 @@ dipixy_dispatch_SRCS := \
 	src/dipixy/reactor/dispatch/resp.c \
 	src/dipixy/reactor/dispatch/content.c \
 	src/dipixy/reactor/dispatch/route.c \
+	src/dipixy/reactor/dispatch/route_common.c \
 	src/dipixy/reactor/dispatch/waiters.c
 dipixy_dispatch_EXTRA_CFLAGS := -ffunction-sections -fdata-sections
 dipixy_dispatch_EXTRA_LDFLAGS := -Wl,--gc-sections
@@ -3511,6 +3592,7 @@ dipixy_mp4push_BIN := tests/unit/dipixy/test_mp4push
 dipixy_mp4push_SRCS := \
 	tests/unit/dipixy/test_mp4push.c \
 	src/dipixy/segment/mp4push.c \
+	src/lib/helper/byte_ring.c \
 	src/lib/helper/log.c
 
 dipixy_conn_BIN := tests/unit/dipixy/test_conn

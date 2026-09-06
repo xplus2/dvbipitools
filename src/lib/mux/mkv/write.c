@@ -29,18 +29,19 @@ void wfd(mkv_t *m, const void *p, size_t n) {
 }
 
 track_t *find_track(mkv_t *m, unsigned pid) {
-  for (int i = 0; i < m->ntrk; i++)
-    if (m->trk[i].pid == pid)
-      return &m->trk[i];
+  if (m->last_trk_idx >= 0 && m->last_trk_idx < m->ntrk && m->trk[m->last_trk_idx].pid == pid)
+    return &m->trk[m->last_trk_idx];
+  for (int i = 0; i < m->ntrk; i++) if (m->trk[i].pid == pid) {
+    m->last_trk_idx = i;
+    return &m->trk[i];
+  }
   return NULL;
 }
 
 void cluster_flush(mkv_t *m) {
   unsigned char buf[16]; /* eb_id max 4 bytes + eb_size max 8 bytes, always fits */
   ebuf_t hdr;
-
-  if (!m->cl_open)
-    return;
+  if (!m->cl_open) return;
   hdr.p = buf;
   hdr.len = 0;
   hdr.cap = sizeof buf;

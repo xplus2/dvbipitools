@@ -194,10 +194,25 @@ static int resolve_biss1e_key(const config_t *cfg, unsigned char sw_buf[BISS_KEY
 
 static void setup_unicast_emm(loop_ctx_t *lc) {
   lc->ipi = ipiclient_new(lc->cfg->unicast_emm_uri, lc->cfg->insecure_tls, lc->cfg->unicast_emm_token_header);
-  if (!lc->ipi)
+  if (!lc->ipi) {
     log_line(TOOL_NAME ": invalid -u/--unicast-emm uri, ignoring: %s", lc->cfg->unicast_emm_uri);
-  else if (ipiclient_poll(lc->ipi, lc->cache, lc->dev))
-    emmcache_save(lc->cache, lc->emm_file);
+    return;
+  }
+  lc->ipi_pending = ipiclient_poll_start(lc->ipi);
+}
+
+void pipeline_service_unicast_emm(loop_ctx_t *lc) {
+  ipiclient_poll_state_t st;
+
+  if (!lc->ipi_pending) return;
+  st = ipiclient_poll_step(lc->ipi_pending);
+  if (st == IPICLIENT_POLL_PENDING) return;
+  if (st == IPICLIENT_POLL_DONE) {
+    if (ipiclient_poll_take(lc->ipi_pending, lc->cache, lc->dev)) emmcache_save(lc->cache, lc->emm_file);
+  } else {
+    ipiclient_poll_free(lc->ipi_pending);
+  }
+  lc->ipi_pending = NULL;
 }
 
 int pkt_cb(void *v, const unsigned char *pkt) {
@@ -218,86 +233,94 @@ int pkt_cb(void *v, const unsigned char *pkt) {
   if (!lc->cas_logged && psi_ready(lc->psi)) {
     unsigned pmt_ca = psi_pmt_ca_system_id(lc->psi);
 
-    if (pmt_ca == BISS_CA_SYSTEM_ID_CA) {
-      lc->cas_logged = 1;
-      log_line(TOOL_NAME ": BISS Mode CA detected (ca_system_id=0x%04x)", BISS_CA_SYSTEM_ID_CA);
-      if (!lc->cfg->biss2_ca_key_path) {
-        log_line(TOOL_NAME ": BISS Mode CA stream detected, no --biss2-ca-key given");
-        lc->fatal = 1;
-        return 1;
+    switch (pmt_ca) {
+      case BISS_CA_SYSTEM_ID_CA: {
+        lc->cas_logged = 1;
+        log_line(TOOL_NAME ": BISS Mode CA detected (ca_system_id=0x%04x)", BISS_CA_SYSTEM_ID_CA);
+        if (!lc->cfg->biss2_ca_key_path) {
+          log_line(TOOL_NAME ": BISS Mode CA stream detected, no --biss2-ca-key given");
+          lc->fatal = 1;
+          return 1;
+        }
+        lc->biss_ca = biss_ca_state_new(lc->cfg->biss2_ca_key_path);
+        if (!lc->biss_ca) {
+          log_line(TOOL_NAME ": cannot load RSA private key from --biss2-ca-key %s", lc->cfg->biss2_ca_key_path);
+          lc->key_load_errors_total++;
+          lc->fatal = 1;
+          return 1;
+        }
+        lc->scr = scrambler_new(SCRAMBLE_ALGO_CISSA);
+        if (!lc->scr) {
+          log_line(TOOL_NAME ": failed to set up BISS-CA descrambler");
+          lc->fatal = 1;
+          return 1;
+        }
+        lc->cw_len = (int)scrambler_cw_len(SCRAMBLE_ALGO_CISSA);
+        lc->cas_mode = "biss-ca";
+        break;
       }
-      lc->biss_ca = biss_ca_state_new(lc->cfg->biss2_ca_key_path);
-      if (!lc->biss_ca) {
-        log_line(TOOL_NAME ": cannot load RSA private key from --biss2-ca-key %s", lc->cfg->biss2_ca_key_path);
-        lc->key_load_errors_total++;
-        lc->fatal = 1;
-        return 1;
-      }
-      lc->scr = scrambler_new(SCRAMBLE_ALGO_CISSA);
-      if (!lc->scr) {
-        log_line(TOOL_NAME ": failed to set up BISS-CA descrambler");
-        lc->fatal = 1;
-        return 1;
-      }
-      lc->cw_len = (int)scrambler_cw_len(SCRAMBLE_ALGO_CISSA);
-      lc->cas_mode = "biss-ca";
-    } else if (pmt_ca == BISS_CA_SYSTEM_ID) {
-      unsigned char sw[BISS_KEY_LEN];
-      scramble_algo_t algo;
-      const unsigned char *cw;
-      size_t cw_len;
-      lc->cas_logged = 1;
-      log_line(TOOL_NAME ": BISS Mode 1/E detected (ca_system_id=0x%04x)", BISS_CA_SYSTEM_ID);
-      if (!lc->cfg->biss1_sw_given && !lc->cfg->biss2_sw_given && !lc->cfg->biss2_esw_given) {
-        log_line(TOOL_NAME ": BISS stream detected, no --biss1-sw/--biss2-sw/--biss2-esw given");
-        lc->fatal = 1;
-        return 1;
-      }
-      if (resolve_biss1e_key(lc->cfg, sw, &algo, &cw, &cw_len) != 0) {
-        log_line(TOOL_NAME ": failed to decrypt --biss2-esw (no OpenSSL in this build?)");
-        lc->key_load_errors_total++;
-        lc->fatal = 1;
-        return 1;
-      }
-      lc->scr = scrambler_new(algo);
-      if (!lc->scr) {
-        log_line(TOOL_NAME ": failed to set up BISS descrambler");
-        lc->fatal = 1;
-        return 1;
-      }
-      lc->cw_len = (int)scrambler_cw_len(algo);
-      scrambler_set_key(lc->scr, SCRAMBLE_PARITY_EVEN, cw, cw_len, NULL, NULL);
-      scrambler_set_key(lc->scr, SCRAMBLE_PARITY_ODD, cw, cw_len, NULL, NULL);
-      lc->cas_mode = "biss1e";
-    } else if (psi_have_cat(lc->psi) && lc->ecm_pid && psi_emm_pid(lc->psi) && psi_scrambling_mode(lc->psi)) {
-      scramble_algo_t algo;
-      log_line(TOOL_NAME ": CAS parameters resolved: ecm_pid=0x%04x emm_pid=0x%04x ca_system_id=0x%04x scrambling_mode=0x%02x", lc->ecm_pid, psi_emm_pid(lc->psi), psi_ca_system_id(lc->psi), psi_scrambling_mode(lc->psi));
-      lc->cas_logged = 1;
-      if (!lc->cfg->key_path || !lc->cfg->serial || !lc->cfg->emm_file) {
-        log_line(TOOL_NAME ": ECM/EMM CAS detected, no -k/-s/-e given, giving up");
-        lc->fatal = 1;
-        return 1;
-      }
-      lc->dev = device_state_new(lc->cfg->key_path, lc->cfg->serial, &lc->cfg->ecm_profile, lc->cfg->max_services);
-      if (!lc->dev) {
-        log_line(TOOL_NAME ": cannot load RSA private key from -k %s", lc->cfg->key_path);
-        lc->key_load_errors_total++;
-        lc->fatal = 1;
-        return 1;
-      }
-      lc->cas_mode = "classic";
-      if (emmcache_load(lc->cache, lc->dev, lc->emm_file) != 0)
-        log_line(TOOL_NAME ": failed to read emm cache %s, continuing without it", lc->emm_file);
-      if (lc->cfg->unicast_emm_uri)
-        setup_unicast_emm(lc);
-      if (algo_from_mode(psi_scrambling_mode(lc->psi), &algo)) {
+      case BISS_CA_SYSTEM_ID: {
+        unsigned char sw[BISS_KEY_LEN];
+        scramble_algo_t algo;
+        const unsigned char *cw;
+        size_t cw_len;
+        lc->cas_logged = 1;
+        log_line(TOOL_NAME ": BISS Mode 1/E detected (ca_system_id=0x%04x)", BISS_CA_SYSTEM_ID);
+        if (!lc->cfg->biss1_sw_given && !lc->cfg->biss2_sw_given && !lc->cfg->biss2_esw_given) {
+          log_line(TOOL_NAME ": BISS stream detected, no --biss1-sw/--biss2-sw/--biss2-esw given");
+          lc->fatal = 1;
+          return 1;
+        }
+        if (resolve_biss1e_key(lc->cfg, sw, &algo, &cw, &cw_len) != 0) {
+          log_line(TOOL_NAME ": failed to decrypt --biss2-esw (no OpenSSL in this build?)");
+          lc->key_load_errors_total++;
+          lc->fatal = 1;
+          return 1;
+        }
         lc->scr = scrambler_new(algo);
+        if (!lc->scr) {
+          log_line(TOOL_NAME ": failed to set up BISS descrambler");
+          lc->fatal = 1;
+          return 1;
+        }
         lc->cw_len = (int)scrambler_cw_len(algo);
-      } else {
-        log_line(TOOL_NAME ": unrecognized scrambling_mode 0x%02x, cannot descramble", psi_scrambling_mode(lc->psi));
-        lc->fatal = 1;
-        return 1;
+        scrambler_set_key(lc->scr, SCRAMBLE_PARITY_EVEN, cw, cw_len, NULL, NULL);
+        scrambler_set_key(lc->scr, SCRAMBLE_PARITY_ODD, cw, cw_len, NULL, NULL);
+        lc->cas_mode = "biss1e";
+        break;
       }
+      default:
+        if (psi_have_cat(lc->psi) && lc->ecm_pid && psi_emm_pid(lc->psi) && psi_scrambling_mode(lc->psi)) {
+          scramble_algo_t algo;
+          log_line(TOOL_NAME ": CAS parameters resolved: ecm_pid=0x%04x emm_pid=0x%04x ca_system_id=0x%04x scrambling_mode=0x%02x", lc->ecm_pid, psi_emm_pid(lc->psi), psi_ca_system_id(lc->psi), psi_scrambling_mode(lc->psi));
+          lc->cas_logged = 1;
+          if (!lc->cfg->key_path || !lc->cfg->serial || !lc->cfg->emm_file) {
+            log_line(TOOL_NAME ": ECM/EMM CAS detected, no -k/-s/-e given, giving up");
+            lc->fatal = 1;
+            return 1;
+          }
+          lc->dev = device_state_new(lc->cfg->key_path, lc->cfg->serial, &lc->cfg->ecm_profile, lc->cfg->max_services);
+          if (!lc->dev) {
+            log_line(TOOL_NAME ": cannot load RSA private key from -k %s", lc->cfg->key_path);
+            lc->key_load_errors_total++;
+            lc->fatal = 1;
+            return 1;
+          }
+          lc->cas_mode = "classic";
+          if (emmcache_load(lc->cache, lc->dev, lc->emm_file) != 0)
+            log_line(TOOL_NAME ": failed to read emm cache %s, continuing without it", lc->emm_file);
+          if (lc->cfg->unicast_emm_uri)
+            setup_unicast_emm(lc);
+          if (algo_from_mode(psi_scrambling_mode(lc->psi), &algo)) {
+            lc->scr = scrambler_new(algo);
+            lc->cw_len = (int)scrambler_cw_len(algo);
+          } else {
+            log_line(TOOL_NAME ": unrecognized scrambling_mode 0x%02x, cannot descramble", psi_scrambling_mode(lc->psi));
+            lc->fatal = 1;
+            return 1;
+          }
+        }
+        break;
     }
   }
 

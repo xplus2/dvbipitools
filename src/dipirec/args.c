@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,14 +20,7 @@
 #include "filter/ts.h"
 #include "version.h"
 
-static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-
-static void argerr(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  argutil_verr(TOOL_NAME, fmt, ap);
-  va_end(ap);
-}
+#define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* rest: [@]addr:port, multicast literal required */
 static int parse_mcast_addrport(const char *rest, int *family, char *group, size_t groupsz, unsigned *port) {
@@ -368,6 +362,37 @@ static int fmt_from_suffix(const char *path, out_fmt_t *f) {
   return 1;
 }
 
+static int parse_bufcpy_opt(char *dst, size_t dstsz, const char *val, const char *optname) {
+  if (bufcpy(dst, dstsz, val) >= dstsz) {
+    argerr("%s too long", optname);
+    return -1;
+  }
+  return 0;
+}
+
+static int parse_pbkeylen_opt(const char *val, int *out, const char *optname) {
+  char *end;
+  unsigned long v = strtoul(val, &end, 10);
+  if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
+    argerr("invalid %s: %s (16|24|32)", optname, val);
+    return -1;
+  }
+  *out = (int)v;
+  return 0;
+}
+
+static int validate_srt_passphrase(const char *passphrase, int pbkeylen, const char *suffix) {
+  if (passphrase[0] && (strlen(passphrase) < 10 || strlen(passphrase) > 79)) {
+    argerr("--srt-passphrase%s must be 10..79 characters", suffix);
+    return -1;
+  }
+  if (pbkeylen && !passphrase[0]) {
+    argerr("--srt-pbkeylen%s requires --srt-passphrase%s", suffix, suffix);
+    return -1;
+  }
+  return 0;
+}
+
 static void print_help(void) {
   printf(
       "usage: %s -i <uri> -o <target> [options]\n\n"
@@ -582,13 +607,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1000: {
-        char *end;
-        long v = strtol(optarg, &end, 10);
-        if (*end != '\0' || v < 0 || v > 10000) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 0, 10000, &v)) {
           argerr("invalid --sub-lead: %s (0..10000 ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->sub_lead_ms = v;
+        cfg->sub_lead_ms = (long)v;
         break;
       }
       case 'v':
@@ -604,36 +628,27 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1003:
         cfg->ret.mc_enabled = 0;
         break;
-      case 1004: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 65535) {
+      case 1004:
+        if (argutil_uint_range(optarg, 1, 65535, &cfg->ret.mc_port)) {
           argerr("invalid --ret-mc-port: %s", optarg);
           return ARGS_ERR;
         }
-        cfg->ret.mc_port = (unsigned)v;
         break;
-      }
       case 1005: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v > 127) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 0, 127, &v)) {
           argerr("invalid --ret-pt: %s (0..127)", optarg);
           return ARGS_ERR;
         }
         cfg->ret.rtx_pt = (unsigned char)v;
         break;
       }
-      case 1006: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0) {
+      case 1006:
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->ret.wait_ms)) {
           argerr("invalid --ret-wait: %s (ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->ret.wait_ms = (unsigned)v;
         break;
-      }
       case 1007:
         strip_arg = optarg;
         break;
@@ -644,9 +659,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->iface_out = optarg;
         break;
       case 1010: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v > 255) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 0, 255, &v)) {
           argerr("invalid --ttl: %s (0..255)", optarg);
           return ARGS_ERR;
         }
@@ -670,17 +684,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         have_cname = 1;
         break;
-      case 1014: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0) {
+      case 1014:
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->rist_buffer_ms)) {
           argerr("invalid --buffer: %s (ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->rist_buffer_ms = (unsigned)v;
         have_buffer = 1;
         break;
-      }
       case 1015:
         cfg->insecure_tls = 1;
         break;
@@ -690,95 +700,59 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1017:
         cfg->metrics_id = optarg;
         break;
-      case 1018: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 86400UL) {
+      case 1018:
+        if (argutil_uint_range(optarg, 1, 86400, &cfg->metrics_interval_s)) {
           argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
           return ARGS_ERR;
         }
-        cfg->metrics_interval_s = (unsigned)v;
         break;
-      }
       case 1019:
         profile_in_arg = optarg;
         break;
       case 1020:
-        if (bufcpy(cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, optarg) >= sizeof cfg->srt_passphrase_in) {
-          argerr("--srt-passphrase-in too long");
+        if (parse_bufcpy_opt(cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, optarg, "--srt-passphrase-in"))
           return ARGS_ERR;
-        }
         break;
-      case 1021: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
-          argerr("invalid --srt-pbkeylen-in: %s (16|24|32)", optarg);
+      case 1021:
+        if (parse_pbkeylen_opt(optarg, &cfg->srt_pbkeylen_in, "--srt-pbkeylen-in"))
           return ARGS_ERR;
-        }
-        cfg->srt_pbkeylen_in = (int)v;
         break;
-      }
       case 1022:
-        if (bufcpy(cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, optarg) >= sizeof cfg->srt_streamid_in) {
-          argerr("--srt-streamid-in too long");
+        if (parse_bufcpy_opt(cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, optarg, "--srt-streamid-in"))
           return ARGS_ERR;
-        }
         break;
       case 1023:
-        if (bufcpy(cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, optarg) >= sizeof cfg->srt_packetfilter_in) {
-          argerr("--srt-packetfilter-in too long");
+        if (parse_bufcpy_opt(cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, optarg, "--srt-packetfilter-in"))
           return ARGS_ERR;
-        }
         break;
-      case 1024: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 60000) {
+      case 1024:
+        if (argutil_uint_range(optarg, 1, 60000, &cfg->srt_latency_in_ms)) {
           argerr("invalid --srt-latency-in: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->srt_latency_in_ms = (unsigned)v;
         break;
-      }
       case 1025:
-        if (bufcpy(cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg) >= sizeof cfg->srt_passphrase) {
-          argerr("--srt-passphrase too long");
+        if (parse_bufcpy_opt(cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg, "--srt-passphrase"))
           return ARGS_ERR;
-        }
         break;
-      case 1026: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
-          argerr("invalid --srt-pbkeylen: %s (16|24|32)", optarg);
+      case 1026:
+        if (parse_pbkeylen_opt(optarg, &cfg->srt_pbkeylen, "--srt-pbkeylen"))
           return ARGS_ERR;
-        }
-        cfg->srt_pbkeylen = (int)v;
         break;
-      }
       case 1027:
-        if (bufcpy(cfg->srt_streamid, sizeof cfg->srt_streamid, optarg) >= sizeof cfg->srt_streamid) {
-          argerr("--srt-streamid too long");
+        if (parse_bufcpy_opt(cfg->srt_streamid, sizeof cfg->srt_streamid, optarg, "--srt-streamid"))
           return ARGS_ERR;
-        }
         break;
       case 1028:
-        if (bufcpy(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg) >= sizeof cfg->srt_packetfilter) {
-          argerr("--srt-packetfilter too long");
+        if (parse_bufcpy_opt(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg, "--srt-packetfilter"))
           return ARGS_ERR;
-        }
         break;
-      case 1029: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 60000) {
+      case 1029:
+        if (argutil_uint_range(optarg, 1, 60000, &cfg->srt_latency_ms)) {
           argerr("invalid --srt-latency: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->srt_latency_ms = (unsigned)v;
         break;
-      }
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -933,25 +907,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (profile_in_arg && cfg->source.kind != URI_RIST)
     log_line(TOOL_NAME ": --profile-in has no effect, no -i rist:// source");
-  if (cfg->srt_passphrase_in[0] && (strlen(cfg->srt_passphrase_in) < 10 || strlen(cfg->srt_passphrase_in) > 79)) {
-    argerr("--srt-passphrase-in must be 10..79 characters");
+  if (validate_srt_passphrase(cfg->srt_passphrase_in, cfg->srt_pbkeylen_in, "-in"))
     return ARGS_ERR;
-  }
-  if (cfg->srt_pbkeylen_in && !cfg->srt_passphrase_in[0]) {
-    argerr("--srt-pbkeylen-in requires --srt-passphrase-in");
-    return ARGS_ERR;
-  }
   if (cfg->source.kind != URI_SRT && (cfg->srt_passphrase_in[0] || cfg->srt_pbkeylen_in || cfg->srt_streamid_in[0] ||
                                        cfg->srt_packetfilter_in[0] || cfg->srt_latency_in_ms))
     log_line(TOOL_NAME ": --srt-*-in has no effect, no -i srt:// source");
-  if (cfg->srt_passphrase[0] && (strlen(cfg->srt_passphrase) < 10 || strlen(cfg->srt_passphrase) > 79)) {
-    argerr("--srt-passphrase must be 10..79 characters");
+  if (validate_srt_passphrase(cfg->srt_passphrase, cfg->srt_pbkeylen, ""))
     return ARGS_ERR;
-  }
-  if (cfg->srt_pbkeylen && !cfg->srt_passphrase[0]) {
-    argerr("--srt-pbkeylen requires --srt-passphrase");
-    return ARGS_ERR;
-  }
   {
     int has_srt_out = 0;
     for (int i = 0; i < cfg->n_out; i++)

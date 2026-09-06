@@ -83,6 +83,7 @@ void hls_sb_add_u64(strbuf_t *b, uint64_t v);
 void queue_status(conn_t *c, const char *status, int keep_alive);
 void queue_not_modified(conn_t *c, const char *etag, int keep_alive);
 void cors_prepare(const char *origin_hdr, char *out, size_t outsz);
+void set_persistence(conn_t *c, int keep_alive);
 void queue_m3u8(conn_t *c, const char *body, size_t body_len, int is_head, int keep_alive, const char *cors_hdr);
 void queue_segment(conn_t *c, const uint8_t *body, size_t body_len, const char *content_type, const char *etag, int is_head, int keep_alive, const char *cors_hdr);
 #define HLS_ZC_MIN_LEN (32u * 1024u)

@@ -293,30 +293,57 @@ void conn_zc_drain(conn_t *c) {
   c->zc_await_count = w;
 }
 
+#define CONN_FLUSH_CHUNK 65536
+
 int conn_flush(conn_t *c, int epfd) {
+  unsigned char chunk[CONN_FLUSH_CHUNK];
+
   conn_zc_drain(c);
 
-  while (c->out.off < c->out.len) {
-    ssize_t n =
-        tls_net_send(c->fd, c->out.buf + c->out.off, c->out.len - c->out.off);
-    if (n > 0) {
-      c->out.off += (size_t)n;
-      continue;
+  for (;;) {
+    size_t pending, tocopy, sent = 0;
+    int last_errno = 0;
+
+    pthread_mutex_lock(&c->out_lock);
+    pending = c->out.len - c->out.off;
+    if (pending == 0) {
+      pthread_mutex_unlock(&c->out_lock);
+      break;
     }
-    /* tls_net_send maps SSL_WANT_READ/WRITE to EAGAIN. EPOLLIN stays armed: covers WANT_READ mid-renegotiation.
-       EPOLLOUT added: full send buffer also wakes */
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-      unsigned char want_expected = 0;
-      if (atomic_compare_exchange_strong_explicit(&c->want_write, &want_expected, 1, memory_order_relaxed, memory_order_relaxed)) {
-        if (conn_epoll_mod(c, epfd, 1) < 0) {
-          atomic_store_explicit(&c->want_write, 0, memory_order_relaxed);
-          return CONN_FLUSH_ERROR;
-        }
+    tocopy = pending < sizeof chunk ? pending : sizeof chunk;
+    memcpy(chunk, c->out.buf + c->out.off, tocopy);
+    pthread_mutex_unlock(&c->out_lock);
+
+    while (sent < tocopy) {
+      ssize_t n = tls_net_send(c->fd, chunk + sent, tocopy - sent);
+      if (n > 0) {
+        sent += (size_t)n;
+        continue;
       }
-      c->last_active = time(NULL);
-      return CONN_FLUSH_MORE;
+      last_errno = errno;
+      break;
     }
-    return CONN_FLUSH_ERROR;
+
+    pthread_mutex_lock(&c->out_lock);
+    c->out.off += sent;
+    pthread_mutex_unlock(&c->out_lock);
+
+    if (sent < tocopy) {
+      /* tls_net_send maps SSL_WANT_READ/WRITE to EAGAIN. EPOLLIN stays armed: covers WANT_READ mid-renegotiation.
+         EPOLLOUT added: full send buffer also wakes */
+      if (last_errno == EAGAIN || last_errno == EWOULDBLOCK) {
+        unsigned char want_expected = 0;
+        if (atomic_compare_exchange_strong_explicit(&c->want_write, &want_expected, 1, memory_order_relaxed, memory_order_relaxed)) {
+          if (conn_epoll_mod(c, epfd, 1) < 0) {
+            atomic_store_explicit(&c->want_write, 0, memory_order_relaxed);
+            return CONN_FLUSH_ERROR;
+          }
+        }
+        c->last_active = time(NULL);
+        return CONN_FLUSH_MORE;
+      }
+      return CONN_FLUSH_ERROR;
+    }
   }
 
   while (c->zc.active) {
@@ -357,7 +384,9 @@ int conn_flush(conn_t *c, int epfd) {
   }
 
   /* drained: reset, disarm EPOLLOUT if armed */
+  pthread_mutex_lock(&c->out_lock);
   c->out.off = c->out.len = 0;
+  pthread_mutex_unlock(&c->out_lock);
   c->last_active = time(NULL);
   unsigned char want_expected = 1;
   if (atomic_compare_exchange_strong_explicit(&c->want_write, &want_expected, 0, memory_order_relaxed, memory_order_relaxed)) {

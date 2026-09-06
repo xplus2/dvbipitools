@@ -19,6 +19,7 @@
 #include "pidfilter.h"
 #include "rawaudio.h"
 #include "lib/demux/psi/psi.h"
+#include "lib/helper/byte_ring.h"
 #include "lib/helper/log.h"
 #include "../ws/ws_clients.h"
 
@@ -47,15 +48,9 @@ typedef struct {
   int tid_next; /* ts_push_set_reactor_tid()'s per-tid chain. owning thread only */
   void *h3c;
   int64_t h3_sid;
-  uint8_t *h3_ring;
-  _Atomic uint32_t h3_wpos;
-  _Atomic uint32_t h3_rpos;
-  uint8_t *h2_ring;
-  _Atomic uint32_t h2_wpos;
-  _Atomic uint32_t h2_rpos;
-  uint8_t *pkt_ring; /* H1 only */
-  _Atomic uint32_t pkt_wpos;
-  _Atomic uint32_t pkt_rpos;
+  byte_ring_t h3_ring;
+  byte_ring_t h2_ring;
+  byte_ring_t pkt_ring; /* H1 only */
   _Atomic int pkt_overrun;
   int spts;              /* 1 = /spts: filter to spts_allowed, not just filter's excludes */
   unsigned spts_pmt_pid; /* 0 = auto (first PMT that resolves) */

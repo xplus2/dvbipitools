@@ -82,9 +82,12 @@ void reactor_finish(int epfd, conn_t *c) {
 }
 
 void reactor_conn_flush(int epfd, conn_t *c) {
-  int rc, caf;
+  int rc, caf, dead;
   pthread_mutex_lock(&c->out_lock);
-  rc = c->dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
+  dead = c->dead;
+  pthread_mutex_unlock(&c->out_lock);
+  rc = dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
+  pthread_mutex_lock(&c->out_lock);
   caf = c->close_after_flush;
   pthread_mutex_unlock(&c->out_lock);
   if (rc == CONN_FLUSH_ERROR || (rc == CONN_FLUSH_DONE && caf)) reactor_tspush_close(epfd, c);

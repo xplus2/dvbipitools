@@ -25,10 +25,8 @@ void serve_metrics(conn_t *c, int is_head, int keep_alive) {
   }
   n = build_ok_header(hdr, sizeof hdr, "text/plain; version=0.0.4", len, keep_alive);
   conn_queue(c, hdr, n);
-  if (!is_head)
-    conn_queue(c, body, len);
-  c->keep_alive = keep_alive ? 1 : 0;
-  c->close_after_flush = keep_alive ? 0 : 1;
+  if (!is_head) conn_queue(c, body, len);
+  set_persistence(c, keep_alive);
 }
 
 void serve_status(conn_t *c, int is_head, int keep_alive) {
@@ -36,17 +34,14 @@ void serve_status(conn_t *c, int is_head, int keep_alive) {
   size_t len;
   char hdr[192];
   size_t n;
-
   if (dipixy_status_render_json(reactor_cfg(), &body, &len)) {
     respond_status(c, RESP_501, keep_alive);
     return;
   }
   n = build_ok_header(hdr, sizeof hdr, "application/json", len, keep_alive);
   conn_queue(c, hdr, n);
-  if (!is_head)
-    conn_queue(c, body, len);
-  c->keep_alive = keep_alive ? 1 : 0;
-  c->close_after_flush = keep_alive ? 0 : 1;
+  if (!is_head) conn_queue(c, body, len);
+  set_persistence(c, keep_alive);
 }
 
 void serve_playlist(conn_t *c, route_fmt_t fmt, playlist_type_t ptype, const char *host_hdr, const char *query, const pid_filter_t *filter, int is_head, int keep_alive) {
@@ -64,18 +59,15 @@ void serve_playlist(conn_t *c, route_fmt_t fmt, playlist_type_t ptype, const cha
   conn_queue(c, hdr, n);
   if (!is_head) conn_queue(c, body, len);
   free(body);
-  c->keep_alive = keep_alive ? 1 : 0;
-  c->close_after_flush = keep_alive ? 0 : 1;
+  set_persistence(c, keep_alive);
 }
 
 void serve_dlna_xml(conn_t *c, const char *body, size_t len, int is_head, int keep_alive) {
   char hdr[128];
   size_t n = build_ok_header(hdr, sizeof hdr, "text/xml; charset=utf-8", len, keep_alive);
   conn_queue(c, hdr, n);
-  if (!is_head)
-    conn_queue(c, body, len);
-  c->keep_alive = keep_alive ? 1 : 0;
-  c->close_after_flush = keep_alive ? 0 : 1;
+  if (!is_head) conn_queue(c, body, len);
+  set_persistence(c, keep_alive);
 }
 
 void serve_dlna_desc(conn_t *c, int is_head, int keep_alive) {
@@ -127,10 +119,8 @@ void serve_dlna_control(conn_t *c, const char *service, const struct phr_header 
     conn_queue(c, hdr, b.len);
     conn_queue(c, resp, resp_len);
   }
-  c->keep_alive = keep_alive ? 1 : 0;
-  c->close_after_flush = keep_alive ? 0 : 1;
-  if (status != 200)
-    dipixy_metrics_note_http_error();
+  set_persistence(c, keep_alive);
+  if (status != 200) dipixy_metrics_note_http_error();
 }
 
 void serve_dlna_subscribe(conn_t *c, const char *service, const struct phr_header *headers, size_t num_headers, int keep_alive) {
@@ -144,6 +134,7 @@ void serve_dlna_subscribe(conn_t *c, const char *service, const struct phr_heade
     gena_renew(sid_hdr, sid, sizeof sid);
   else
     gena_subscribe_new(reactor_cfg(), service, callback, sid, sizeof sid);
+
   dispatch_sb_init(&b, hdr, sizeof hdr);
   dispatch_sb_add(&b, "HTTP/1.1 200 OK\r\nSID: ");
   dispatch_sb_add(&b, sid);
@@ -151,8 +142,7 @@ void serve_dlna_subscribe(conn_t *c, const char *service, const struct phr_heade
   dispatch_sb_add(&b, keep_alive ? "keep-alive" : "close");
   dispatch_sb_add(&b, "\r\n\r\n");
   conn_queue(c, hdr, b.len);
-  c->keep_alive = keep_alive ? 1 : 0;
-  c->close_after_flush = keep_alive ? 0 : 1;
+  set_persistence(c, keep_alive);
 }
 
 void serve_dlna_unsubscribe(conn_t *c, const struct phr_header *headers, size_t num_headers, int keep_alive) {
@@ -165,8 +155,7 @@ void serve_dlna_unsubscribe(conn_t *c, const struct phr_header *headers, size_t 
   dispatch_sb_add(&b, keep_alive ? "keep-alive" : "close");
   dispatch_sb_add(&b, "\r\n\r\n");
   conn_queue(c, hdr, b.len);
-  c->keep_alive = keep_alive ? 1 : 0;
-  c->close_after_flush = keep_alive ? 0 : 1;
+  set_persistence(c, keep_alive);
 }
 
 void serve_htdocs_index(conn_t *c, int is_head, int keep_alive) {
@@ -177,8 +166,6 @@ void serve_htdocs_index(conn_t *c, int is_head, int keep_alive) {
   htdocs_get(&body, &len);
   n = build_ok_header(hdr, sizeof hdr, "text/html; charset=utf-8", len, keep_alive);
   conn_queue(c, hdr, n);
-  if (!is_head)
-    conn_queue(c, body, len);
-  c->keep_alive = keep_alive ? 1 : 0;
-  c->close_after_flush = keep_alive ? 0 : 1;
+  if (!is_head) conn_queue(c, body, len);
+  set_persistence(c, keep_alive);
 }

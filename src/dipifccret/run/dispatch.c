@@ -17,11 +17,15 @@
 #include "run.h"
 
 /* 0 on success, else errno */
-static int send_unicast(int fd, const struct sockaddr *to, socklen_t tolen, const unsigned char *pkt, size_t len, int dscp) {
-  if (to->sa_family == AF_INET6)
-    setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &dscp, sizeof dscp);
-  else
-    setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp);
+static int send_unicast(int fd, const struct sockaddr *to, socklen_t tolen, const unsigned char *pkt, size_t len, int dscp, int *last_dscp) {
+  if (!last_dscp || *last_dscp != dscp) {
+    if (to->sa_family == AF_INET6)
+      setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &dscp, sizeof dscp);
+    else
+      setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp);
+    if (last_dscp)
+      *last_dscp = dscp;
+  }
   if (sendto(fd, pkt, len, 0, to, tolen) < 0) {
     int err = errno;
     log_line(TOOL_NAME ": unicast sendto: %s", strerror(err));
@@ -33,23 +37,21 @@ static int send_unicast(int fd, const struct sockaddr *to, socklen_t tolen, cons
 void ret_send_mc_impl(const channel_t *c, const unsigned char *pkt, size_t len, int dscp, void *user) {
   ret_send_ctx_t *ctx = (ret_send_ctx_t *)user;
   mcast_t *m;
-  if (!ctx->mt)
-    return;
+  if (!ctx->mt) return;
   m = mcsend_get(ctx->mt, c);
-  if (!m)
-    return; /* socket not provisioned yet, a NACK can race ahead of capture's first packet */
+  if (!m) return; /* socket not provisioned yet, a NACK can race ahead of capture's first packet */
   mcast_set_tos(m, dscp);
   mcast_send(m, pkt, len);
 }
 
 void ret_send_unicast_impl(int fd, const struct sockaddr *to, socklen_t tolen, const unsigned char *pkt, size_t len, int dscp, void *user) {
   (void)user;
-  send_unicast(fd, to, tolen, pkt, len, dscp);
+  send_unicast(fd, to, tolen, pkt, len, dscp, NULL);
 }
 
 void burst_send_cb(const unsigned char *pkt, size_t len, int dscp, void *user) {
   unicast_dest_t *dst = (unicast_dest_t *)user;
-  int err = send_unicast(dst->fd, dst->to, dst->tolen, pkt, len, dscp);
+  int err = send_unicast(dst->fd, dst->to, dst->tolen, pkt, len, dscp, &dst->last_dscp);
   if (err == EAGAIN || err == EWOULDBLOCK || err == ENOBUFS)
     dst->congestion = 1;
 }
@@ -58,7 +60,7 @@ void send_rams_i_msn(const unicast_dest_t *dst, uint32_t sender_ssrc, uint32_t m
   unsigned char pkt[128];
   size_t n = rtcp_build_rams_i(sender_ssrc, media_ssrc, msn, response, tlvs, pkt, sizeof pkt);
   if (n > 0)
-    send_unicast(dst->fd, dst->to, dst->tolen, pkt, n, RET_DSCP_RTCP);
+    send_unicast(dst->fd, dst->to, dst->tolen, pkt, n, RET_DSCP_RTCP, NULL);
 }
 
 void send_rams_i(const unicast_dest_t *dst, uint32_t sender_ssrc, uint32_t media_ssrc, uint16_t response, const rtcp_rams_i_tlvs_t *tlvs) {
@@ -144,7 +146,6 @@ static void nack_cb(const rtcp_nack_t *nack, void *user) {
     } else if (result.action == BURST_TABLE_NACK_ADAPTED) {
       unicast_dest_t dst;
       rtcp_rams_i_tlvs_t tlvs;
-
       dst.fd = rc->fd;
       dst.to = rc->from;
       dst.tolen = rc->fromlen;
@@ -170,7 +171,6 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
   channel_t *c;
   burst_response_t resp;
   rtcp_rams_i_tlvs_t tlvs;
-
   dst.fd = rc->fd;
   dst.to = rc->from;
   dst.tolen = rc->fromlen;

@@ -12,10 +12,6 @@
 
 #include "args.h"
 
-/* exposed for unit testing, not CLI-facing */
-void nonsrt_to_tssrc_cfg(const nonsrt_t *s, const char *iface, int insecure_tls, tssrc_cfg_t *tc);
-void nonsrt_to_tssink_cfg(const nonsrt_t *s, const char *iface, tssink_cfg_t *tk);
-
 /* runs until stop sig or error. 0 clean stop, 1 error */
 int bridge_run(const config_t *cfg, metrics_exporter_t *mx);
 

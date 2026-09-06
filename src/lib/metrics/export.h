@@ -4,6 +4,7 @@
 #ifndef DVBIPITOOLS_LIB_METRICS_EXPORT_H
 #define DVBIPITOOLS_LIB_METRICS_EXPORT_H
 
+#include <stddef.h>
 #include <stdint.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -46,8 +47,16 @@ int metrics_exporter_begin(metrics_exporter_t *exp, metrics_writer_t *w, const c
 /* nonblocking. any failure (oversized/full buffer/no collector) counts as dropped, no retry */
 void metrics_exporter_send(metrics_exporter_t *exp, metrics_writer_t *w);
 
-/* caller keeps outside per-input connection object: must survive
-   reconnect teardown/recreate */
+typedef struct {
+  metrics_id_t id;
+  const char *label;
+  uint64_t value;
+} metrics_entry_t;
+
+/* caller has already confirmed metrics_exporter_due(). -1 from begin: no-op */
+void metrics_push_entries(metrics_exporter_t *exp, const char *version, const metrics_entry_t *entries, size_t n);
+
+/* caller keeps outside per-input connection object: must survive reconnect teardown/recreate */
 typedef struct {
   int up;
   int seen_open; /* has ever opened successfully: gates reconnects_total */
@@ -57,12 +66,10 @@ typedef struct {
   double last_data_time; /* unix seconds, 0 = never */
 } input_metrics_t;
 
-/* n>0: bumps bytes_total + last_data_time. n<0: bumps errors_total[reason].
-   n==0: no-op. safe to call with im NULL (disabled) */
+/* n>0: bumps bytes_total + last_data_time. n<0: bumps errors_total[reason]. n==0: no-op. safe to call with im NULL */
 void input_metrics_note_read(input_metrics_t *im, ssize_t n, net_err_reason_t reason);
 
-/* label = "i<idx>", or "i<idx>" + METRICS_LABEL_SEP + reason per nonzero
-   error reason (bounds snapshot size by observed error diversity, not n) */
+/* label = "i<idx>", or "i<idx>" + METRICS_LABEL_SEP + reason per nonzero error reason */
 void metrics_writer_put_inputs(metrics_writer_t *w, const input_metrics_t *inputs, unsigned n);
 
 #endif

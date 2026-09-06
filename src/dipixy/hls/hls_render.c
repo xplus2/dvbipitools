@@ -12,9 +12,8 @@
 int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
   hls_store_t *s;
   char m3u8[4096];
-  char *mp;
   char etag[48];
-  int m3u8_len, td;
+  int m3u8_len;
   const char *ext;
   unsigned long seq_ul;
   uint32_t req_seq, oldest, last;
@@ -24,37 +23,16 @@ int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid,
   ext = hls_filename_ext(filename);
   if (!ext) return 0;
   if (!strcmp(ext, "index")) {
-    const char *seg_ext;
+    plain_playlist_snap_t snap;
     s = find_store_locked(ctx, filter, pmt_pid, container);
     if (!s || s->count == 0) {
       if (s) pthread_mutex_unlock(store_lock(s));
       resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
       return 1;
     }
-    seg_ext = s->container == SEG_CONTAINER_FMP4 ? "m4s" : "ts";
-    td = hls_target_duration(s);
-    mp = m3u8;
-    mp = WRITE_LIT(mp, "#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n#EXT-X-VERSION:");
-    mp = write_u32(mp, s->container == SEG_CONTAINER_FMP4 || s->video_codec == CODEC_HEVC || s->video_codec == CODEC_VVC ? 7u : 3u, 0);
-    mp = WRITE_LIT(mp, "\n#EXT-X-TARGETDURATION:");
-    mp = write_u32(mp, (uint32_t)td, 0);
-    mp = WRITE_LIT(mp, "\n#EXT-X-MEDIA-SEQUENCE:");
-    mp = write_u32(mp, s->oldest_seq, 0);
-    *mp++ = '\n';
-    if (s->container == SEG_CONTAINER_FMP4) mp = WRITE_LIT(mp, "#EXT-X-MAP:URI=\"init.mp4\"\n");
-    for (int i = 0; i < s->count; i++) {
-      const hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
-      if ((size_t)(mp - m3u8) + 64 > sizeof m3u8) break;
-      mp = WRITE_LIT(mp, "#EXTINF:");
-      mp = write_fixed3(mp, seg->duration);
-      mp = WRITE_LIT(mp, ",\nseg");
-      mp = write_u32(mp, seg->seq, 5);
-      *mp++ = '.';
-      mp = write_lit(mp, seg_ext, strlen(seg_ext));
-      *mp++ = '\n';
-    }
-    m3u8_len = (int)(mp - m3u8);
+    snapshot_plain_playlist(s, &snap);
     pthread_mutex_unlock(store_lock(s));
+    m3u8_len = (int)format_plain_playlist(&snap, m3u8, sizeof m3u8);
     resp_set(out, 200, "application/vnd.apple.mpegurl", NULL, (uint8_t *)m3u8, (size_t)m3u8_len, is_head);
     return 1;
   }

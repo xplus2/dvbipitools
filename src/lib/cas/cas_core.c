@@ -26,8 +26,7 @@ void cas_core_format_super_cas_id(unsigned id, char *out) {
   static const char digits[] = "0123456789abcdef";
   out[0] = '0';
   out[1] = 'x';
-  for (int i = 0; i < 8; i++)
-    out[2 + i] = digits[(id >> (28 - 4 * i)) & 0xF];
+  for (int i = 0; i < 8; i++) out[2 + i] = digits[(id >> (28 - 4 * i)) & 0xF];
   out[10] = '\0';
 }
 
@@ -79,8 +78,7 @@ void cas_core_get_metrics(cas_core_t *core, cas_metrics_t *out) {
 /* BISS (1/E and CA): no per-vendor breakdown, one shared engine */
 void cas_core_vendor_metrics(cas_core_t *core, size_t idx, cas_metrics_t *out) {
   memset(out, 0, sizeof *out);
-  if (!core->biss_engine && !core->biss_ca)
-    cas_group_vendor_metrics(core->group, idx, out);
+  if (!core->biss_engine && !core->biss_ca) cas_group_vendor_metrics(core->group, idx, out);
 }
 
 unsigned cas_core_vendor_super_cas_id(cas_core_t *core, size_t idx) {
@@ -88,18 +86,14 @@ unsigned cas_core_vendor_super_cas_id(cas_core_t *core, size_t idx) {
 }
 
 size_t cas_core_prog_desc(cas_core_t *core, unsigned char *out, size_t cap) {
-  if (core->biss_engine)
-    return cadescbuild_ca_descriptor(BISS_CA_SYSTEM_ID, BISS_CA_PID, out, cap);
-  if (core->biss_ca)
-    return biss_ca_engine_prog_desc(core->biss_ca, out, cap);
+  if (core->biss_engine) return cadescbuild_ca_descriptor(BISS_CA_SYSTEM_ID, BISS_CA_PID, out, cap);
+  if (core->biss_ca) return biss_ca_engine_prog_desc(core->biss_ca, out, cap);
   return cas_group_prog_desc(core->group, out, cap);
 }
 
 size_t cas_core_build_cat(cas_core_t *core, unsigned char *out, size_t cap) {
-  if (core->biss_engine)
-    return psi_build_cat(0, NULL, 0, out, cap); /* empty CAT, no EMM in BISS 1/E */
-  if (core->biss_ca)
-    return biss_ca_engine_build_cat(core->biss_ca, out, cap);
+  if (core->biss_engine) return psi_build_cat(0, NULL, 0, out, cap); /* empty CAT, no EMM in BISS 1/E */
+  if (core->biss_ca) return biss_ca_engine_build_cat(core->biss_ca, out, cap);
   return cas_group_build_cat(core->group, out, cap);
 }
 
@@ -114,29 +108,24 @@ unsigned cas_core_vendor_emm_pid(cas_core_t *core, size_t idx) {
 }
 
 int cas_core_vendor_ecm_due(cas_core_t *core, size_t idx, double now, unsigned char *out, size_t cap, size_t *out_len) {
-  if (core->biss_ca)
-    return biss_ca_engine_ecm_due(core->biss_ca, now, out, cap, out_len);
+  if (core->biss_ca) return biss_ca_engine_ecm_due(core->biss_ca, now, out, cap, out_len);
   return core->biss_engine ? -1 : cas_group_vendor_ecm_due(core->group, idx, now, out, cap, out_len);
 }
 
 int cas_core_vendor_next_emm(cas_core_t *core, size_t idx, unsigned char *out, size_t cap, size_t *out_len) {
-  if (core->biss_ca)
-    return biss_ca_engine_emm_due(core->biss_ca, cas_core_mono(), out, cap, out_len);
+  if (core->biss_ca) return biss_ca_engine_emm_due(core->biss_ca, cas_core_mono(), out, cap, out_len);
   return core->biss_engine ? -1 : cas_group_vendor_next_emm(core->group, idx, out, cap, out_len);
 }
 
 void cas_core_reload_receivers(cas_core_t *core) {
-  if (!core->biss_ca)
-    return;
-  if (biss_ca_engine_reload_receivers(core->biss_ca) > 0)
-    biss_ca_engine_force_sk_rotation(core->biss_ca);
+  if (!core->biss_ca) return;
+  if (biss_ca_engine_reload_receivers(core->biss_ca) > 0) biss_ca_engine_force_sk_rotation(core->biss_ca);
 }
 
 int cas_core_start_biss(scramble_algo_t algo, const unsigned char *cw, size_t cw_len, const unsigned *pids, size_t pid_count, unsigned flush_pid, const char *label, const char *log_prefix, cas_core_t *out) {
   memset(out, 0, sizeof *out);
   out->biss_engine = cas_scramble_engine_start(algo, pids, pid_count, flush_pid);
-  if (!out->biss_engine)
-    return -1;
+  if (!out->biss_engine) return -1;
   cas_scramble_engine_set_cw(out->biss_engine, SCRAMBLE_PARITY_EVEN, cw, cw_len, NULL, NULL);
   log_line("%sbiss: %s active, %zu pid(s) scrambled, no ECMG/EMMG", log_prefix, label, pid_count);
   return 0;
@@ -161,13 +150,11 @@ int cas_core_start_biss_dispatch(const cas_biss_cfg_t *cfg, const unsigned *pids
 static unsigned pick_free_pid(unsigned start, const unsigned *avoid, size_t avoid_count) {
   for (unsigned pid = start; pid < 0x1FFF; pid++) {
     int collide = 0;
-    for (size_t i = 0; i < avoid_count; i++)
-      if (avoid[i] == pid) {
-        collide = 1;
-        break;
-      }
-    if (!collide)
-      return pid;
+    for (size_t i = 0; i < avoid_count; i++) if (avoid[i] == pid) {
+      collide = 1;
+      break;
+    }
+    if (!collide) return pid;
   }
   return 0x1FFE; /* pathological: avoid[] fills top of pid space */
 }
@@ -199,4 +186,46 @@ int cas_core_start_biss_ca_dispatch(const cas_biss_ca_cfg_t *cfg, const unsigned
 
   out->biss_ca = biss_ca_engine_start(&ecfg);
   return out->biss_ca ? 0 : -1;
+}
+
+static ecmg_outage_mode_t map_outage_mode(cas_outage_mode_t m) {
+  switch (m) {
+  case CAS_OUTAGE_CYCLING:
+    return ECMG_OUTAGE_CYCLING;
+  case CAS_OUTAGE_SILENT:
+    return ECMG_OUTAGE_SILENT;
+  default:
+    return ECMG_OUTAGE_FROZEN;
+  }
+}
+
+void cas_core_fill_group_cfg(cas_algo_t cas_algo, unsigned cp_duration_ms, int fallback_clear, const cas_vendor_t *vendors, unsigned n_vendors, const char *log_prefix, cas_group_cfg_t *gcfg) {
+  memset(gcfg, 0, sizeof *gcfg);
+  gcfg->algo = (cas_algo == CAS_ALGO_CISSA) ? SCRAMBLE_ALGO_CISSA : SCRAMBLE_ALGO_CSA2;
+  gcfg->legacy_csa1 = (cas_algo == CAS_ALGO_CSA1);
+  gcfg->cp_duration_ms = cp_duration_ms;
+  gcfg->fallback_clear = fallback_clear;
+  if (n_vendors > CAS_GROUP_MAX_VENDORS)
+    log_line("%scas: %u vendors configured, only the first %d will be started", log_prefix, n_vendors, CAS_GROUP_MAX_VENDORS);
+  gcfg->vendor_count = n_vendors < CAS_GROUP_MAX_VENDORS ? n_vendors : CAS_GROUP_MAX_VENDORS;
+  for (size_t i = 0; i < gcfg->vendor_count; i++) {
+    const cas_vendor_t *v = &vendors[i];
+    cas_group_vendor_cfg_t *gv = &gcfg->vendors[i];
+    gv->ecmg_host = v->ecmg_host;
+    gv->ecmg_port = v->ecmg_port;
+    gv->ecmg_version = v->ecmg_version;
+    gv->super_cas_id = v->super_cas_id;
+    gv->ecm_id = v->ecm_id;
+    gv->ecm_pid = v->ecm_pid;
+    gv->emm_pid = v->emm_pid;
+    gv->emmg_port = v->emmg_port;
+    gv->emmg_max_conns = v->emmg_max_conns;
+    gv->required = v->required;
+    gv->outage_mode = map_outage_mode(v->resilience);
+    gv->cwenc_algorithm = v->cwenc_algorithm;
+    gv->cwenc_aes_mode = v->cwenc_aes_mode;
+    gv->cwenc_fixed_key_hex = v->cwenc_fixed_key_hex;
+    gv->cwenc_key_list_a_path = v->cwenc_key_list_a_path;
+    gv->cwenc_key_list_b_path = v->cwenc_key_list_b_path;
+  }
 }

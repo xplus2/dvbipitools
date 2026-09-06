@@ -7,6 +7,7 @@
 #include "args.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
+#include "lib/helper/toolmain.h"
 #include "lib/tva/bcg_doc.h"
 #include "lib/tva/mapping.h"
 #include "lib/tva/tva_xml.h"
@@ -40,8 +41,7 @@ static void apply_revmap(bcg_doc_t *doc, const revmap_t *rev) {
     bcg_channel_t *c = &doc->channels[i];
     const char *preferred = revmap_lookup(rev, c->uri);
     char old_id[BCG_ID_LEN];
-    if (!preferred)
-      continue;
+    if (!preferred) continue;
     bufcpy(old_id, sizeof old_id, c->id);
     bufcpy(c->id, sizeof c->id, preferred);
     for (int j = 0; j < doc->programme_count; j++)
@@ -51,11 +51,9 @@ static void apply_revmap(bcg_doc_t *doc, const revmap_t *rev) {
 }
 
 static void write_xmltv(FILE *out, bcg_doc_t *doc, int have_rev, const revmap_t *rev, int verbose) {
-  if (have_rev)
-    apply_revmap(doc, rev);
+  if (have_rev) apply_revmap(doc, rev);
   xmltv_write(out, doc, TOOL_NAME);
-  if (verbose)
-    log_line("%d channels, %d programmes read", doc->channel_count, doc->programme_count);
+  if (verbose) log_line("%d channels, %d programmes read", doc->channel_count, doc->programme_count);
 }
 
 int main(int argc, char **argv) {
@@ -66,12 +64,10 @@ int main(int argc, char **argv) {
   int rc = 0;
 
   log_set_color(log_color_prescan(argc, argv));
-  log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
+  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
-  if (st == ARGS_OK)
-    log_set_color((log_color_t)cfg.color_mode);
-  if (st == ARGS_HELP)
-    return 0;
+  if (st == ARGS_OK) log_set_color((log_color_t)cfg.color_mode);
+  if (st == ARGS_HELP) return 0;
   if (st == ARGS_ERR) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
@@ -85,8 +81,7 @@ int main(int argc, char **argv) {
   out = open_output(cfg.output_path);
   if (!out) {
     fprintf(stderr, TOOL_NAME ": cannot open %s\n", cfg.output_path);
-    if (in != stdin)
-      fclose(in);
+    if (in != stdin) fclose(in);
     return 1;
   }
 
@@ -99,15 +94,11 @@ int main(int argc, char **argv) {
       rc = suggest_map(in, scan, out) ? 1 : 0;
       fclose(scan);
     }
-    if (in != stdin)
-      fclose(in);
-    if (out != stdout)
-      fclose(out);
+    if (in != stdin) fclose(in);
+    if (out != stdout) fclose(out);
     return rc;
   }
-
   bcg_doc_init(&doc);
-
   if (cfg.format == FMT_XMLTV) {
     mapping_t map;
     if (mapping_load(cfg.map_path, &map)) {
@@ -117,6 +108,7 @@ int main(int argc, char **argv) {
         rc = 1;
       else
         write_tva_xml(out, &doc, &map, cfg.verbose);
+
       mapping_free(&map);
     }
   } else {
@@ -135,14 +127,11 @@ int main(int argc, char **argv) {
       else
         write_xmltv(out, &doc, have_rev, &rev, cfg.verbose);
     }
-    if (have_rev)
-      revmap_free(&rev);
+    if (have_rev) revmap_free(&rev);
   }
 
   bcg_doc_free(&doc);
-  if (in != stdin)
-    fclose(in);
-  if (out != stdout)
-    fclose(out);
+  if (in != stdin) fclose(in);
+  if (out != stdout) fclose(out);
   return rc;
 }

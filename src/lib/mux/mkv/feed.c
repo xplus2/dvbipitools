@@ -73,11 +73,10 @@ void all_ready(mkv_t *m) {
 }
 
 static void try_parse_h264_hdr(mkv_t *m, track_t *t) {
-  if (h264_dims(t->es.sps, t->es.spslen, &t->width, &t->height) != 0)
-    return;
+  if (h264_dims(t->es.sps, t->es.spslen, &t->width, &t->height) != 0) return;
   t->es.cpriv_len = build_avcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
   if (t->es.cpriv_len) {
-    bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, NULL));
+    codec_id_for(t->es.codec, NULL, t->codecid, sizeof t->codecid);
     t->hdr_parsed = 1;
     all_ready(m);
   }
@@ -88,7 +87,7 @@ static void try_parse_hevc_hdr(mkv_t *m, track_t *t) {
     return;
   t->es.cpriv_len = build_hvcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
   if (t->es.cpriv_len) {
-    bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, NULL));
+    codec_id_for(t->es.codec, NULL, t->codecid, sizeof t->codecid);
     t->hdr_parsed = 1;
     all_ready(m);
   }
@@ -99,12 +98,9 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   int key = 0;
 
   /* EOS flush: cut-off picture */
-  if (m->flushing)
-    return;
-  if (has_pts)
-    t->ts_ms = pts_unwrap(&t->pts, pts);
+  if (m->flushing) return;
+  if (has_pts) t->ts_ms = pts_unwrap(&t->pts, pts);
   t->vbuflen = 0;
-
   p = find_startcode(d, len, 0, &scl);
   while (p < len) {
     size_t ns = p + scl, scl2 = 0;
@@ -147,24 +143,20 @@ static void handle_mpeg2(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   size_t p, scl = 0;
   int key = 0;
 
-  if (m->flushing)
-    return;
-  if (has_pts)
-    t->ts_ms = pts_unwrap(&t->pts, pts);
-
+  if (m->flushing) return;
+  if (has_pts) t->ts_ms = pts_unwrap(&t->pts, pts);
   p = find_startcode(d, len, 0, &scl);
   while (p < len) {
     size_t ns = p + scl, scl2 = 0;
     size_t q = find_startcode(d, len, ns, &scl2);
     unsigned code = (ns < len) ? d[ns] : 0xFF;
-
     if (code == 0xB3 && !t->hdr_parsed && q >= ns + 4) {
       unsigned w = ((unsigned)d[ns + 1] << 4) | (d[ns + 2] >> 4);
       unsigned h = ((unsigned)(d[ns + 2] & 0x0F) << 8) | d[ns + 3];
       if (w && h) {
         t->width = w;
         t->height = h;
-        bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, NULL));
+        codec_id_for(t->es.codec, NULL, t->codecid, sizeof t->codecid);
         t->hdr_parsed = 1;
         all_ready(m);
       }
@@ -201,18 +193,14 @@ static void handle_audio(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
       continue;
     }
     if (!t->hdr_parsed) {
-      if (f.rate)
-        t->es.rate = f.rate;
-      if (f.ch)
-        t->es.channels = f.ch;
-      bufcpy(t->codecid, sizeof t->codecid, codec_id_for(t->es.codec, &f));
+      if (f.rate) t->es.rate = f.rate;
+      if (f.ch) t->es.channels = f.ch;
+      codec_id_for(t->es.codec, &f, t->codecid, sizeof t->codecid);
       t->hdr_parsed = 1;
       all_ready(m);
     }
-    if (f.outlen)
-      emit(m, t, f.out, f.outlen, 1);
-    if (t->es.rate && f.samples)
-      t->ts_ms += (int64_t)f.samples * 1000 / (int64_t)t->es.rate;
+    if (f.outlen) emit(m, t, f.out, f.outlen, 1);
+    if (t->es.rate && f.samples) t->ts_ms += (int64_t)f.samples * 1000 / (int64_t)t->es.rate;
     pos += f.consumed;
   }
   if (pos) {
@@ -226,7 +214,6 @@ void on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uin
   track_t *t = find_track(m, pid);
   (void)has_dts;
   (void)dts;
-
   if (!t || m->err)
     return;
   if (t->cls == PID_TELETEXT)
@@ -265,10 +252,8 @@ void setup(mkv_t *m) {
   if (m->video_ok) {
     es = psi_es(m->psi[0], &c);
     for (k = 0; k < c && m->ntrk < MKV_MAX_TRACKS; k++) {
-      if (es[k].cls != PID_VIDEO)
-        continue;
-      if (es[k].codec != CODEC_H264 && es[k].codec != CODEC_HEVC &&
-          es[k].codec != CODEC_MPEG2V) {
+      if (es[k].cls != PID_VIDEO) continue;
+      if (es[k].codec != CODEC_H264 && es[k].codec != CODEC_HEVC && es[k].codec != CODEC_MPEG2V) {
         log_line("mkv=no_vc(%s)", codec_name(es[k].codec));
         continue;
       }
@@ -278,10 +263,8 @@ void setup(mkv_t *m) {
   for (int p = 0; p < m->npsi; p++) {
     es = psi_es(m->psi[p], &c);
     for (k = 0; k < c && m->ntrk < MKV_MAX_TRACKS; k++) {
-      if (es[k].cls != PID_AUDIO)
-        continue;
-      if (!m->opts->audio_all && es[k].audio_index != (int)m->opts->audio_track)
-        continue;
+      if (es[k].cls != PID_AUDIO) continue;
+      if (!m->opts->audio_all && es[k].audio_index != (int)m->opts->audio_track) continue;
       if (!audio_supported(es[k].codec)) {
         log_line("mkv=no_ac(%s)", codec_name(es[k].codec));
         continue;
@@ -293,8 +276,7 @@ void setup(mkv_t *m) {
     es = psi_es(m->psi[0], &c);
     for (k = 0; k < c && m->ntrk < MKV_MAX_TRACKS; k++) {
       track_t *t;
-      if (es[k].cls != PID_TELETEXT || !es[k].ttx_page)
-        continue;
+      if (es[k].cls != PID_TELETEXT || !es[k].ttx_page) continue;
       add_track(m, &es[k], 0);
       t = &m->trk[m->ntrk - 1];
       t->ttx = ttx_new(es[k].ttx_page, es[k].ttx_lang, m->opts->sub_lead_ms, on_cue, m);
@@ -309,7 +291,6 @@ void setup(mkv_t *m) {
       break;
     }
   }
-  if (!m->ntrk)
-    log_line("mkv=no_mux");
+  if (!m->ntrk) log_line("mkv=no_mux");
   m->setup = 1;
 }

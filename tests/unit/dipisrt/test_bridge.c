@@ -10,13 +10,13 @@
 #include "dipisrt/version.h"
 
 START_TEST(tssrc_cfg_file_with_path) {
-  nonsrt_t s;
+  plain_endpoint_t s;
   tssrc_cfg_t tc;
   memset(&s, 0, sizeof s);
-  s.kind = NONSRT_FILE;
+  s.kind = PLAIN_EP_FILE;
   strcpy(s.file_path, "/tmp/fixture.ts");
 
-  nonsrt_to_tssrc_cfg(&s, NULL, 0, &tc);
+  plain_endpoint_to_tssrc_cfg(&s, NULL, TOOL_NAME "/" TOOL_VERSION, 0, &tc);
   ck_assert_int_eq(tc.kind, TSSRC_FILE);
   ck_assert_str_eq(tc.file_path, "/tmp/fixture.ts");
   ck_assert_str_eq(tc.user_agent, TOOL_NAME "/" TOOL_VERSION);
@@ -24,24 +24,24 @@ START_TEST(tssrc_cfg_file_with_path) {
 END_TEST
 
 START_TEST(tssrc_cfg_file_empty_path_is_stdin) {
-  nonsrt_t s;
+  plain_endpoint_t s;
   tssrc_cfg_t tc;
   memset(&s, 0, sizeof s);
-  s.kind = NONSRT_FILE;
+  s.kind = PLAIN_EP_FILE;
 
-  nonsrt_to_tssrc_cfg(&s, NULL, 0, &tc);
+  plain_endpoint_to_tssrc_cfg(&s, NULL, TOOL_NAME "/" TOOL_VERSION, 0, &tc);
   ck_assert_int_eq(tc.kind, TSSRC_STDIN);
 }
 END_TEST
 
 START_TEST(tssrc_cfg_http_carries_tls_and_insecure) {
-  nonsrt_t s;
+  plain_endpoint_t s;
   tssrc_cfg_t tc;
   memset(&s, 0, sizeof s);
-  s.kind = NONSRT_HTTP;
+  s.kind = PLAIN_EP_HTTP;
   s.http.tls = 1;
 
-  nonsrt_to_tssrc_cfg(&s, NULL, 1, &tc);
+  plain_endpoint_to_tssrc_cfg(&s, NULL, TOOL_NAME "/" TOOL_VERSION, 1, &tc);
   ck_assert_int_eq(tc.kind, TSSRC_HTTP);
   ck_assert_int_eq(tc.http.tls, 1);
   ck_assert_int_eq(tc.insecure_tls, 1);
@@ -49,15 +49,15 @@ START_TEST(tssrc_cfg_http_carries_tls_and_insecure) {
 END_TEST
 
 START_TEST(tssrc_cfg_rtp_carries_family_group_port_iface) {
-  nonsrt_t s;
+  plain_endpoint_t s;
   tssrc_cfg_t tc;
   memset(&s, 0, sizeof s);
-  s.kind = NONSRT_RTP;
+  s.kind = PLAIN_EP_RTP;
   s.family = AF_INET;
   strcpy(s.group, "239.1.1.1");
   s.port = 5000;
 
-  nonsrt_to_tssrc_cfg(&s, "eth0", 0, &tc);
+  plain_endpoint_to_tssrc_cfg(&s, "eth0", TOOL_NAME "/" TOOL_VERSION, 0, &tc);
   ck_assert_int_eq(tc.kind, TSSRC_RTP);
   ck_assert_int_eq(tc.family, AF_INET);
   ck_assert_str_eq(tc.group, "239.1.1.1");
@@ -67,50 +67,50 @@ START_TEST(tssrc_cfg_rtp_carries_family_group_port_iface) {
 END_TEST
 
 START_TEST(tssrc_cfg_udp_kind) {
-  nonsrt_t s;
+  plain_endpoint_t s;
   tssrc_cfg_t tc;
   memset(&s, 0, sizeof s);
-  s.kind = NONSRT_UDP;
+  s.kind = PLAIN_EP_UDP;
 
-  nonsrt_to_tssrc_cfg(&s, NULL, 0, &tc);
+  plain_endpoint_to_tssrc_cfg(&s, NULL, TOOL_NAME "/" TOOL_VERSION, 0, &tc);
   ck_assert_int_eq(tc.kind, TSSRC_UDP);
 }
 END_TEST
 
 START_TEST(tssink_cfg_file_with_path) {
-  nonsrt_t s;
+  plain_endpoint_t s;
   tssink_cfg_t tk;
   memset(&s, 0, sizeof s);
-  s.kind = NONSRT_FILE;
+  s.kind = PLAIN_EP_FILE;
   strcpy(s.file_path, "/tmp/out.ts");
 
-  nonsrt_to_tssink_cfg(&s, NULL, &tk);
+  plain_endpoint_to_tssink_cfg(&s, NULL, &tk);
   ck_assert_int_eq(tk.kind, TSSINK_FILE);
   ck_assert_str_eq(tk.file_path, "/tmp/out.ts");
 }
 END_TEST
 
 START_TEST(tssink_cfg_file_empty_path_is_stdout) {
-  nonsrt_t s;
+  plain_endpoint_t s;
   tssink_cfg_t tk;
   memset(&s, 0, sizeof s);
-  s.kind = NONSRT_FILE;
+  s.kind = PLAIN_EP_FILE;
 
-  nonsrt_to_tssink_cfg(&s, NULL, &tk);
+  plain_endpoint_to_tssink_cfg(&s, NULL, &tk);
   ck_assert_int_eq(tk.kind, TSSINK_STDOUT);
 }
 END_TEST
 
 START_TEST(tssink_cfg_rtp_carries_family_group_port_iface) {
-  nonsrt_t s;
+  plain_endpoint_t s;
   tssink_cfg_t tk;
   memset(&s, 0, sizeof s);
-  s.kind = NONSRT_RTP;
+  s.kind = PLAIN_EP_RTP;
   s.family = AF_INET6;
   strcpy(s.group, "ff3e::1");
   s.port = 8700;
 
-  nonsrt_to_tssink_cfg(&s, "eth1", &tk);
+  plain_endpoint_to_tssink_cfg(&s, "eth1", &tk);
   ck_assert_int_eq(tk.kind, TSSINK_RTP);
   ck_assert_int_eq(tk.family, AF_INET6);
   ck_assert_str_eq(tk.group, "ff3e::1");
@@ -120,12 +120,12 @@ START_TEST(tssink_cfg_rtp_carries_family_group_port_iface) {
 END_TEST
 
 START_TEST(tssink_cfg_udp_kind) {
-  nonsrt_t s;
+  plain_endpoint_t s;
   tssink_cfg_t tk;
   memset(&s, 0, sizeof s);
-  s.kind = NONSRT_UDP;
+  s.kind = PLAIN_EP_UDP;
 
-  nonsrt_to_tssink_cfg(&s, NULL, &tk);
+  plain_endpoint_to_tssink_cfg(&s, NULL, &tk);
   ck_assert_int_eq(tk.kind, TSSINK_UDP);
 }
 END_TEST

@@ -41,52 +41,6 @@ static struct rist_logging_settings *open_logging(int verbose) {
   return ls;
 }
 
-void nonrist_to_tssrc_cfg(const nonrist_t *s, const char *iface, int insecure_tls, tssrc_cfg_t *tc) {
-  memset(tc, 0, sizeof *tc);
-  tc->user_agent = TOOL_NAME "/" TOOL_VERSION;
-  switch (s->kind) {
-  case NONRIST_HTTP:
-    tc->kind = TSSRC_HTTP;
-    tc->http = s->http;
-    tc->insecure_tls = insecure_tls;
-    break;
-  case NONRIST_FILE:
-    if (s->file_path[0]) {
-      tc->kind = TSSRC_FILE;
-      tc->file_path = s->file_path;
-    } else {
-      tc->kind = TSSRC_STDIN;
-    }
-    break;
-  case NONRIST_RTP:
-  case NONRIST_UDP:
-    tc->kind = (s->kind == NONRIST_RTP) ? TSSRC_RTP : TSSRC_UDP;
-    tc->family = s->family;
-    tc->group = s->group;
-    tc->port = s->port;
-    tc->iface = iface;
-    break;
-  }
-}
-
-void nonrist_to_tssink_cfg(const nonrist_t *s, const char *iface, tssink_cfg_t *tk) {
-  memset(tk, 0, sizeof *tk);
-  if (s->kind == NONRIST_FILE) {
-    if (s->file_path[0]) {
-      tk->kind = TSSINK_FILE;
-      tk->file_path = s->file_path;
-    } else {
-      tk->kind = TSSINK_STDOUT;
-    }
-  } else {
-    tk->kind = (s->kind == NONRIST_RTP) ? TSSINK_RTP : TSSINK_UDP;
-    tk->family = s->family;
-    tk->group = s->group;
-    tk->port = s->port;
-    tk->iface = iface;
-  }
-}
-
 #define RIST_STATS_INTERVAL_MS 1000 /* metrics_exporter_due() gates actual push cadence */
 
 static int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
@@ -146,7 +100,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   unsigned char buf[65536];
   int rc = 0;
 
-  nonrist_to_tssrc_cfg(&cfg->in.nonrist, cfg->iface, cfg->insecure_tls, &tc);
+  plain_endpoint_to_tssrc_cfg(&cfg->in.nonrist, cfg->iface, TOOL_NAME "/" TOOL_VERSION, cfg->insecure_tls, &tc);
   src = tssrc_open(&tc, NULL);
   if (!src)
     return 1;
@@ -211,23 +165,19 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   struct rist_logging_settings *log_settings;
   int rc = 0;
 
-  nonrist_to_tssink_cfg(&cfg->out.nonrist, cfg->iface, &tk);
+  plain_endpoint_to_tssink_cfg(&cfg->out.nonrist, cfg->iface, &tk);
   sink = tssink_open(&tk);
-  if (!sink)
-    return 1;
-
+  if (!sink) return 1;
   log_settings = open_logging(cfg->verbose);
   if (rist_receiver_create(&ctx, profile_of(cfg->profile), log_settings) != 0) {
     log_line("rist: receiver create failed");
-    if (log_settings)
-      rist_logging_settings_free2(&log_settings);
+    if (log_settings) rist_logging_settings_free2(&log_settings);
     tssink_close(sink);
     return 1;
   }
   if (add_peers(ctx, &cfg->in, cfg) || rist_start(ctx) != 0) {
     rist_destroy(ctx);
-    if (log_settings)
-      rist_logging_settings_free2(&log_settings);
+    if (log_settings) rist_logging_settings_free2(&log_settings);
     tssink_close(sink);
     return 1;
   }
@@ -236,13 +186,11 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   while (!signal_stop_requested()) {
     struct rist_data_block *db = NULL;
     int ret = rist_receiver_data_read2(ctx, &db, RIST_READ_TIMEOUT_MS);
-
     if (ret < 0) {
       rc = 1;
       break;
     }
-    if (ret == 0 || !db)
-      continue;
+    if (ret == 0 || !db) continue;
     if (tssink_write(sink, db->payload, db->payload_len) < 0) {
       rc = 1;
       rist_receiver_data_block_free2(&db);
@@ -252,8 +200,7 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
   rist_destroy(ctx);
-  if (log_settings)
-    rist_logging_settings_free2(&log_settings);
+  if (log_settings) rist_logging_settings_free2(&log_settings);
   tssink_close(sink);
   return rc;
 }

@@ -56,8 +56,7 @@ void respond_status(conn_t *c, const char *status, int keep_alive) {
   dispatch_sb_add(&b, keep_alive ? "keep-alive" : "close");
   dispatch_sb_add(&b, "\r\nContent-Length: 0\r\n\r\n");
   conn_queue(c, hdr, b.len);
-  c->keep_alive = keep_alive ? 1 : 0;
-  c->close_after_flush = keep_alive ? 0 : 1;
+  set_persistence(c, keep_alive);
   dipixy_metrics_note_http_error(); /* every respond_status() call is an error path */
 }
 
@@ -71,8 +70,7 @@ void respond_401(conn_t *c, int keep_alive) {
   dispatch_sb_add(&b, keep_alive ? "keep-alive" : "close");
   dispatch_sb_add(&b, "\r\nContent-Length: 0\r\n\r\n");
   conn_queue(c, hdr, b.len);
-  c->keep_alive = keep_alive ? 1 : 0;
-  c->close_after_flush = keep_alive ? 0 : 1;
+  set_persistence(c, keep_alive);
   dipixy_metrics_note_http_error();
 }
 

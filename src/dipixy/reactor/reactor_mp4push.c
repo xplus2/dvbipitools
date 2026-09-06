@@ -5,7 +5,6 @@
 #include "reactor_tls.h"
 #include "../segment/mp4push.h"
 
-#include <errno.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 
@@ -34,27 +33,15 @@ void reactor_mp4push_close(int epfd, conn_t *c) {
 }
 
 void reactor_mp4push_readable(int epfd, conn_t *c) {
-  char buf[256];
-  for (;;) {
-    ssize_t n = tls_net_recv(c->fd, buf, sizeof buf);
-    if (n > 0) continue;
-    if (n == 0) {
-      atomic_store_explicit(&c->read_done, 1, memory_order_relaxed);
-      conn_epoll_mod(c, epfd, c->want_write);
-      return;
-    }
-    if (errno == EAGAIN || errno == EWOULDBLOCK) break;
-    reactor_mp4push_close(epfd, c);
-    return;
-  }
-  reactor_mp4push_flush(epfd, c);
+  reactor_push_conn_readable(epfd, c, reactor_mp4push_close, reactor_mp4push_flush);
 }
 
 void reactor_mp4push_flush(int epfd, conn_t *c) {
-  int rc;
+  int rc, dead;
   pthread_mutex_lock(&c->out_lock);
-  rc = c->dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
+  dead = c->dead;
   pthread_mutex_unlock(&c->out_lock);
+  rc = dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
   if (rc == CONN_FLUSH_ERROR)
     reactor_mp4push_close(epfd, c);
 }

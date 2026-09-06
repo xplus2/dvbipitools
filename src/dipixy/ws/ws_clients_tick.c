@@ -35,12 +35,13 @@ void ws_clients_tick(void) {
     if (!e->used)
       continue;
     if (!e->persistent && now - e->last_seen > WS_CLIENTS_PULL_IDLE_SEC) {
-      hash_delete(i);
+      ws_stripe_t *stripe = stripe_for_entry(i);
+      pthread_mutex_lock(&stripe->lock);
+      hash_delete(stripe, i);
+      pthread_mutex_unlock(&stripe->lock);
       e->used = 0;
-      if (g_free_slots)
-        g_free_slots[g_free_slots_n++] = i;
-      if (expired)
-        expired[n_expired++] = i;
+      if (g_free_slots) g_free_slots[g_free_slots_n++] = i;
+      if (expired) expired[n_expired++] = i;
       continue;
     }
     if (rates) {
@@ -54,21 +55,18 @@ void ws_clients_tick(void) {
   }
   pthread_mutex_unlock(&g_clients_mtx);
 
-  if (!has_sinks)
-    return;
+  if (!has_sinks) return;
 
   if (n_expired) {
     jbuf_t *j = &g_tick_msg_jbuf;
     jbuf_reset(j);
     jbuf_str(j, "{\"type\":\"clients.remove_many\",\"ids\":[");
     for (i = 0; i < n_expired; i++) {
-      if (i)
-        jbuf_str(j, ",");
+      if (i) jbuf_str(j, ",");
       jbuf_i64(j, expired[i]);
     }
     jbuf_str(j, "]}");
-    if (!j->failed)
-      ws_broadcast_publish(j->buf);
+    if (!j->failed) ws_broadcast_publish(j->buf);
   }
 
   {
@@ -76,8 +74,7 @@ void ws_clients_tick(void) {
     jbuf_reset(j);
     jbuf_str(j, "{\"type\":\"clients.tick\",\"clients\":[");
     for (i = 0; i < n_rate; i++) {
-      if (i)
-        jbuf_str(j, ",");
+      if (i) jbuf_str(j, ",");
       jbuf_str(j, "{\"id\":");
       jbuf_i64(j, rates[i].id);
       jbuf_str(j, ",\"mbps\":");
@@ -85,8 +82,7 @@ void ws_clients_tick(void) {
       jbuf_str(j, "}");
     }
     jbuf_str(j, "]}");
-    if (!j->failed)
-      ws_broadcast_publish(j->buf);
+    if (!j->failed) ws_broadcast_publish(j->buf);
   }
 }
 

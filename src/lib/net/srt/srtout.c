@@ -346,25 +346,24 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
 /* stats push covers whole connection/group, not per bonded member */
 static void push_stats(srtout_t *r) {
   SRT_TRACEBSTATS st;
-  metrics_writer_t w;
-
   if (!r->mx || r->sock == SRT_INVALID_SOCK || !metrics_exporter_due(r->mx, mono_seconds()) || srt_bstats(r->sock, &st, 0) != 0)
     return;
-  if (metrics_exporter_begin(r->mx, &w, r->tool_version))
-    return;
-  metrics_writer_put(&w, METRICS_ID_SRT_SENDER_SENT_TOTAL, r->peer_label, (uint64_t)st.pktSentTotal);
-  metrics_writer_put(&w, METRICS_ID_SRT_SENDER_RETRANSMITTED_TOTAL, r->peer_label, (uint64_t)st.pktRetransTotal);
-  metrics_writer_put(&w, METRICS_ID_SRT_SENDER_RTT_MILLISECONDS, r->peer_label, (uint64_t)st.msRTT);
-  metrics_writer_put(&w, METRICS_ID_SRT_SENDER_LOST_TOTAL, r->peer_label, (uint64_t)st.pktSndLossTotal);
-  metrics_writer_put(&w, METRICS_ID_SRT_SENDER_DROPPED_TOTAL, r->peer_label, (uint64_t)st.pktSndDropTotal);
-  metrics_exporter_send(r->mx, &w);
+  {
+    metrics_entry_t e[] = {
+        {METRICS_ID_SRT_SENDER_SENT_TOTAL, r->peer_label, (uint64_t)st.pktSentTotal},
+        {METRICS_ID_SRT_SENDER_RETRANSMITTED_TOTAL, r->peer_label, (uint64_t)st.pktRetransTotal},
+        {METRICS_ID_SRT_SENDER_RTT_MILLISECONDS, r->peer_label, (uint64_t)st.msRTT},
+        {METRICS_ID_SRT_SENDER_LOST_TOTAL, r->peer_label, (uint64_t)st.pktSndLossTotal},
+        {METRICS_ID_SRT_SENDER_DROPPED_TOTAL, r->peer_label, (uint64_t)st.pktSndDropTotal},
+    };
+    metrics_push_entries(r->mx, r->tool_version, e, sizeof e / sizeof e[0]);
+  }
 }
 
 static void service_step(srtout_t *r) {
   resize_pending_if_needed(r);
   if (r->sock == SRT_INVALID_SOCK) {
-    if (mono_seconds() >= r->next_reconnect_at && start_connect(r) != 0)
-      r->next_reconnect_at = mono_seconds() + SRTOUT_RECONNECT_BACKOFF_S;
+    if (mono_seconds() >= r->next_reconnect_at && start_connect(r) != 0) r->next_reconnect_at = mono_seconds() + SRTOUT_RECONNECT_BACKOFF_S;
   } else {
     SRT_EPOLL_EVENT ev;
     if (srt_epoll_uwait(r->eid, &ev, 1, 0) > 0 && ev.fd == r->sock) {
@@ -392,13 +391,10 @@ void srtout_write(srtout_t *r, const unsigned char *buf, size_t n) {
   r->bytes_since_check += n;
   for (size_t off = 0; off < n; off += (size_t)SRTOUT_PLSIZE) {
     size_t chunk = n - off < (size_t)SRTOUT_PLSIZE ? n - off : (size_t)SRTOUT_PLSIZE;
-
     if (r->pending_count == 0 && r->connected) {
       int sent = srt_sendmsg2(r->sock, (const char *)(buf + off), (int)chunk, NULL);
-      if (sent != SRT_ERROR)
-        continue;
-      if (srt_getlasterror(NULL) != SRT_EASYNCSND)
-        teardown_for_reconnect(r, "write failed");
+      if (sent != SRT_ERROR) continue;
+      if (srt_getlasterror(NULL) != SRT_EASYNCSND) teardown_for_reconnect(r, "write failed");
     }
     enqueue_pending(r, buf + off, (int)chunk);
   }
@@ -408,12 +404,10 @@ void srtout_write(srtout_t *r, const unsigned char *buf, size_t n) {
    else pending data drops silently */
 static void flush_before_close(srtout_t *r) {
   int waited_ms = 0;
-
   while (r->pending_count > 0 && waited_ms < SRTOUT_CLOSE_DRAIN_MAX_MS) {
     struct timespec ts = {0, 20L * 1000000L};
     service_step(r);
-    if (r->pending_count == 0)
-      break;
+    if (r->pending_count == 0) break;
     nanosleep(&ts, NULL);
     waited_ms += 20;
   }
@@ -436,8 +430,7 @@ static void drain_before_close(SRTSOCKET sock) {
   }
   if (srt_getsockopt(sock, 0, SRTO_PEERLATENCY, &peer_latency, &optlen) == 0 && peer_latency > floor_ms)
     floor_ms = peer_latency;
-  if (floor_ms > SRTOUT_CLOSE_DRAIN_MAX_MS)
-    floor_ms = SRTOUT_CLOSE_DRAIN_MAX_MS;
+  if (floor_ms > SRTOUT_CLOSE_DRAIN_MAX_MS) floor_ms = SRTOUT_CLOSE_DRAIN_MAX_MS;
   if (floor_ms > waited_ms) {
     struct timespec ts;
     int remain_ms = floor_ms - waited_ms;
@@ -448,8 +441,7 @@ static void drain_before_close(SRTSOCKET sock) {
 }
 
 void srtout_close(srtout_t *r) {
-  if (!r)
-    return;
+  if (!r) return;
   flush_before_close(r);
   if (r->sock != SRT_INVALID_SOCK) {
     drain_before_close(r->sock);

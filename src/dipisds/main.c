@@ -1,14 +1,13 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <errno.h>
 #include <stdio.h>
-#include <string.h>
 #include <unistd.h>
 
 #include "announce.h"
 #include "args.h"
 #include "lib/helper/log.h"
+#include "lib/helper/toolmain.h"
 #include "lib/metrics/export.h"
 #include "lib/helper/signal.h"
 #include "listen.h"
@@ -21,23 +20,17 @@ int main(int argc, char **argv) {
   int rc;
 
   log_set_color(log_color_prescan(argc, argv));
-  log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
+  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
-  if (st == ARGS_OK)
-    log_set_color((log_color_t)cfg.color_mode);
-  if (st == ARGS_HELP)
-    return 0;
+  if (st == ARGS_OK) log_set_color((log_color_t)cfg.color_mode);
+  if (st == ARGS_HELP) return 0;
   if (st == ARGS_ERR) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
   }
-  if (cfg.daemonize && daemon(1, 1) != 0) {
-    log_line(TOOL_NAME ": daemonize failed: %s", strerror(errno));
-    return 1;
-  }
+  if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
   signals_install();
-  if (cfg.mode != MODE_ANNOUNCE)
-    return listen_run(&cfg);
+  if (cfg.mode != MODE_ANNOUNCE) return listen_run(&cfg);
   metrics_exporter_init(&mx, METRICS_COMPONENT_SDS, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
   rc = announce_run(&cfg, &mx);
   metrics_exporter_close(&mx);

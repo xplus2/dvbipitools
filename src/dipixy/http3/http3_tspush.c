@@ -6,6 +6,8 @@
 #include "http3.h"
 #include "http3_int.h"
 
+#include "lib/helper/byte_ring.h"
+
 /* data reader for TS push streams: drains per-subscriber SPSC ring */
 nghttp3_ssize h3_tspush_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec, size_t veccnt, uint32_t *pflags, void *conn_ud, void *stream_ud) {
   (void)h3;
@@ -22,20 +24,14 @@ nghttp3_ssize h3_tspush_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec,
     *pflags = NGHTTP3_DATA_FLAG_EOF;
     return 0;
   }
-  uint32_t wpos = atomic_load_explicit(&sub->h3_wpos, memory_order_acquire);
-  uint32_t rpos = atomic_load_explicit(&sub->h3_rpos, memory_order_relaxed);
-  uint32_t idx, avail, contig;
-  if (wpos == rpos)
+  size_t contig;
+  const uint8_t *p = byte_ring_peek(&sub->h3_ring, &contig);
+  if (!p)
     return NGHTTP3_ERR_WOULDBLOCK;
-  idx = rpos & (TS_RING_H3_BYTES - 1u);
-  avail = wpos - rpos;
-  contig = TS_RING_H3_BYTES - idx;
-  if (contig > avail)
-    contig = avail;
-  vec[0].base = sub->h3_ring + idx;
+  vec[0].base = (uint8_t *)p;
   vec[0].len = contig;
   *pflags = NGHTTP3_DATA_FLAG_NONE;
-  atomic_store_explicit(&sub->h3_rpos, rpos + contig, memory_order_release);
+  byte_ring_advance(&sub->h3_ring, contig);
   return 1;
 }
 
@@ -50,12 +46,9 @@ void ts_push_h3_flush(void) {
     for (int ri = 0; ri < H3_MAX_REQS; ri++) {
       h3_req_t *r = &c->reqs[ri];
       ts_sub_t *sub;
-      uint32_t wpos, rpos;
       if (!r->active || r->tspush_sub_idx < 0) continue;
       sub = &g_ts_subs[r->tspush_sub_idx];
-      wpos = atomic_load_explicit(&sub->h3_wpos, memory_order_acquire);
-      rpos = atomic_load_explicit(&sub->h3_rpos, memory_order_relaxed);
-      if (wpos == rpos) continue;
+      if (atomic_load_explicit(&sub->h3_ring.wpos, memory_order_acquire) == atomic_load_explicit(&sub->h3_ring.rpos, memory_order_relaxed)) continue;
       nghttp3_conn_resume_stream(c->h3conn, r->stream_id);
       flush_tx(c, fd);
     }

@@ -53,14 +53,13 @@ static int add_peers(struct rist_ctx *ctx, const ristout_cfg_t *cfg) {
 static int sender_stats_cb(void *arg, const struct rist_stats *stats) {
   ristout_t *r = arg;
   const struct rist_stats_sender_peer *p = &stats->stats.sender_peer;
-  metrics_writer_t w;
-
-  if (stats->stats_type == RIST_STATS_SENDER_PEER && metrics_exporter_due(r->mx, mono_seconds()) &&
-      !metrics_exporter_begin(r->mx, &w, r->tool_version)) {
-    metrics_writer_put(&w, METRICS_ID_RIST_SENDER_SENT_TOTAL, p->cname, p->sent);
-    metrics_writer_put(&w, METRICS_ID_RIST_SENDER_RETRANSMITTED_TOTAL, p->cname, p->retransmitted);
-    metrics_writer_put(&w, METRICS_ID_RIST_SENDER_RTT_MILLISECONDS, p->cname, p->rtt);
-    metrics_exporter_send(r->mx, &w);
+  if (stats->stats_type == RIST_STATS_SENDER_PEER && metrics_exporter_due(r->mx, mono_seconds())) {
+    metrics_entry_t e[] = {
+        {METRICS_ID_RIST_SENDER_SENT_TOTAL, p->cname, p->sent},
+        {METRICS_ID_RIST_SENDER_RETRANSMITTED_TOTAL, p->cname, p->retransmitted},
+        {METRICS_ID_RIST_SENDER_RTT_MILLISECONDS, p->cname, p->rtt},
+    };
+    metrics_push_entries(r->mx, r->tool_version, e, sizeof e / sizeof e[0]);
   }
   rist_stats_free(stats);
   return 0;
@@ -69,15 +68,13 @@ static int sender_stats_cb(void *arg, const struct rist_stats *stats) {
 ristout_t *ristout_open(const ristout_cfg_t *cfg) {
   ristout_t *r;
   enum rist_profile profile = cfg->profile == RISTOUT_PROFILE_MAIN ? RIST_PROFILE_MAIN : RIST_PROFILE_SIMPLE;
-
   if (cfg->npeers <= 0 || cfg->npeers > RISTOUT_MAX_PEERS) {
     log_line("rist: invalid peer count %d", cfg->npeers);
     return NULL;
   }
 
   r = calloc(1, sizeof *r);
-  if (!r)
-    return NULL;
+  if (!r) return NULL;
   r->mx = cfg->mx;
   r->tool_version = cfg->tool_version;
 
@@ -91,8 +88,7 @@ ristout_t *ristout_open(const ristout_cfg_t *cfg) {
     free(r);
     return NULL;
   }
-  if (r->mx)
-    rist_stats_callback_set(r->ctx, RIST_STATS_INTERVAL_MS, sender_stats_cb, r);
+  if (r->mx) rist_stats_callback_set(r->ctx, RIST_STATS_INTERVAL_MS, sender_stats_cb, r);
   return r;
 }
 
@@ -100,7 +96,6 @@ int ristout_write(ristout_t *r, const unsigned char *buf, size_t n) {
   for (size_t off = 0; off < n; off += RIST_CHUNK) {
     struct rist_data_block db;
     size_t chunk = n - off < RIST_CHUNK ? n - off : RIST_CHUNK;
-
     memset(&db, 0, sizeof db);
     db.payload = buf + off;
     db.payload_len = chunk;
@@ -113,8 +108,7 @@ int ristout_write(ristout_t *r, const unsigned char *buf, size_t n) {
 }
 
 void ristout_close(ristout_t *r) {
-  if (!r)
-    return;
+  if (!r) return;
   rist_destroy(r->ctx);
   free(r);
 }

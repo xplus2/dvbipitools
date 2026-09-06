@@ -9,7 +9,6 @@
 #include "reactor_tls.h"
 #include "../dash/lldash.h"
 
-#include <errno.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 
@@ -35,26 +34,16 @@ void reactor_dashchunk_close(int epfd, conn_t *c) {
 }
 
 void reactor_dashchunk_readable(int epfd, conn_t *c) {
-  char buf[256];
-  for (;;) {
-    ssize_t n = tls_net_recv(c->fd, buf, sizeof buf);
-    if (n > 0) continue;
-    if (n == 0) {
-      atomic_store_explicit(&c->read_done, 1, memory_order_relaxed);
-      conn_epoll_mod(c, epfd, c->want_write);
-      return; /* half close: no disconn */
-    }
-    if (errno == EAGAIN || errno == EWOULDBLOCK) break;
-    reactor_dashchunk_close(epfd, c);
-    return;
-  }
-  reactor_dashchunk_flush(epfd, c);
+  reactor_push_conn_readable(epfd, c, reactor_dashchunk_close, reactor_dashchunk_flush);
 }
 
 void reactor_dashchunk_flush(int epfd, conn_t *c) {
-  int rc, close_after, keep;
+  int rc, close_after, keep, dead;
   pthread_mutex_lock(&c->out_lock);
-  rc = c->dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
+  dead = c->dead;
+  pthread_mutex_unlock(&c->out_lock);
+  rc = dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
+  pthread_mutex_lock(&c->out_lock);
   close_after = c->close_after_flush;
   keep = c->keep_alive;
   pthread_mutex_unlock(&c->out_lock);

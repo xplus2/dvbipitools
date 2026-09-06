@@ -15,6 +15,7 @@
 #include "../ts/pmtselect.h"
 #include "../reactor/internal.h"
 #include "../reactor/reactor_tls.h"
+#include "../reactor/dispatch/route_common.h"
 #include "../core/route.h"
 #include "http3.h"
 #include "http3_int.h"
@@ -29,8 +30,7 @@ static int cb_h3_begin_headers(nghttp3_conn *h3, int64_t sid, void *ud, void *st
   (void)stream_ud;
   h3_conn_t *c = ud;
   h3_req_t *r = find_req(c, sid);
-  if (!r)
-    r = alloc_req(c, sid);
+  if (!r) r = alloc_req(c, sid);
   return r ? 0 : NGHTTP3_ERR_CALLBACK_FAILURE;
 }
 
@@ -41,37 +41,23 @@ static int cb_h3_recv_header(nghttp3_conn *h3, int64_t sid, int32_t token, nghtt
   (void)stream_ud;
   h3_conn_t *c = ud;
   h3_req_t *r = find_req(c, sid);
-  if (!r)
-    return 0;
-
+  if (!r) return 0;
   nghttp3_vec n = nghttp3_rcbuf_get_buf(name);
   nghttp3_vec v = nghttp3_rcbuf_get_buf(value);
 
   if (n.len == 7 && memcmp(n.base, ":method", 7) == 0) {
-    size_t cp = v.len < sizeof(r->method) - 1 ? v.len : sizeof(r->method) - 1;
-    memcpy(r->method, v.base, cp);
-    r->method[cp] = '\0';
+    hdr_value_copy(r->method, sizeof r->method, v.base, v.len);
   } else if (n.len == 5 && memcmp(n.base, ":path", 5) == 0) {
-    size_t cp = v.len < sizeof(r->path) - 1 ? v.len : sizeof(r->path) - 1;
-    memcpy(r->path, v.base, cp);
-    r->path[cp] = '\0';
+    hdr_value_copy(r->path, sizeof r->path, v.base, v.len);
   } else if (n.len == 13 && memcmp(n.base, "if-none-match", 13) == 0) {
-    size_t cp = v.len < sizeof(r->inm) - 1 ? v.len : sizeof(r->inm) - 1;
-    memcpy(r->inm, v.base, cp);
-    r->inm[cp] = '\0';
+    hdr_value_copy(r->inm, sizeof r->inm, v.base, v.len);
     strip_etag_quotes(r->inm);
   } else if (n.len == 6 && memcmp(n.base, "origin", 6) == 0) {
-    size_t cp = v.len < sizeof(r->origin) - 1 ? v.len : sizeof(r->origin) - 1;
-    memcpy(r->origin, v.base, cp);
-    r->origin[cp] = '\0';
+    hdr_value_copy(r->origin, sizeof r->origin, v.base, v.len);
   } else if (n.len == 13 && memcmp(n.base, "authorization", 13) == 0) {
-    size_t cp = v.len < sizeof(r->authz) - 1 ? v.len : sizeof(r->authz) - 1;
-    memcpy(r->authz, v.base, cp);
-    r->authz[cp] = '\0';
+    hdr_value_copy(r->authz, sizeof r->authz, v.base, v.len);
   } else if (n.len == 9 && memcmp(n.base, ":protocol", 9) == 0) {
-    size_t cp = v.len < sizeof(r->protocol) - 1 ? v.len : sizeof(r->protocol) - 1;
-    memcpy(r->protocol, v.base, cp);
-    r->protocol[cp] = '\0';
+    hdr_value_copy(r->protocol, sizeof r->protocol, v.base, v.len);
   }
   return 0;
 }
@@ -80,8 +66,7 @@ static int cb_h3_recv_data(nghttp3_conn *h3, int64_t sid, const uint8_t *data, s
   (void)h3;
   (void)sid;
   (void)ud;
-  if (stream_ud)
-    h3_ws_data_chunk(stream_ud, data, datalen);
+  if (stream_ud) h3_ws_data_chunk(stream_ud, data, datalen);
   return 0;
 }
 
@@ -91,10 +76,8 @@ static int cb_h3_end_headers(nghttp3_conn *h3, int64_t sid, int fin, void *ud, v
   (void)stream_ud;
   h3_conn_t *c = ud;
   h3_req_t *r = find_req(c, sid);
-  if (!r)
-    return 0;
-  if (!r->dispatched)
-    r->dispatch_pending = 1;
+  if (!r) return 0;
+  if (!r->dispatched) r->dispatch_pending = 1;
   return 0;
 }
 
@@ -102,7 +85,6 @@ static int cb_h3_end_headers(nghttp3_conn *h3, int64_t sid, int fin, void *ud, v
 int cb_handshake_completed(ngtcp2_conn *qconn, void *ud) {
   h3_conn_t *c = ud;
   c->handshake_done = 1;
-
   if (ngtcp2_conn_open_uni_stream(qconn, &c->h3_ctrl, NULL) != 0 || ngtcp2_conn_open_uni_stream(qconn, &c->h3_qenc, NULL) != 0 || ngtcp2_conn_open_uni_stream(qconn, &c->h3_qdec, NULL) != 0)
     return NGTCP2_ERR_CALLBACK_FAILURE;
 
@@ -167,8 +149,7 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
   qmark = strchr(r->path, '?');
   query = qmark ? qmark + 1 : NULL;
   filter.count = 0;
-  if (!reactor_cfg()->no_pid_filters)
-    pid_filter_parse_query(query, &filter);
+  if (!reactor_cfg()->no_pid_filters) pid_filter_parse_query(query, &filter);
   pmt_pid = pmt_select_parse_query(query);
   if (qmark) *qmark = '\0';
   if (route_parse(r->path, &rt) || route_disabled(&rt)) {
@@ -222,32 +203,28 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
     case ROUTE_FMT_HLS_FMP4: {
       seg_container_t container = rt.fmt == ROUTE_FMT_HLS_FMP4 ? SEG_CONTAINER_FMP4 : SEG_CONTAINER_TS;
       hls_resp_t resp;
-      int wsh, handled;
-      ctx = open_source(&rt, &list_num);
-      if (!ctx) {
+      route_setup_t rs;
+      route_setup_status_t st;
+      int handled;
+      st = route_setup(&rt, &list_num, &filter, pmt_pid, client_ip, 3, &item_bufs, &cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
+                        container, container == SEG_CONTAINER_FMP4 ? 0.0 : reactor_cfg()->hls_part_size, &rs);
+      if (st == ROUTE_SETUP_404) {
         h3_respond_status(c, r->stream_id, "404");
         return;
       }
-      route_client_info(&rt, list_num, &filter, pmt_pid, client_ip, 3, &item_bufs, &cinfo);
-      wsh = ws_clients_touch(&cinfo);
-      if (wsh < 0) {
-        capture_close(ctx);
+      if (st == ROUTE_SETUP_501) {
         h3_respond_status(c, r->stream_id, "501");
         return;
       }
-      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, container,
-                          container == SEG_CONTAINER_FMP4 ? 0.0 : reactor_cfg()->hls_part_size)) {
-        h3_respond_status(c, r->stream_id, "501");
-        return;
-      }
+      ctx = rs.ctx;
       if (!strcmp(rt.hls_file, "index.m3u8") && !hls_store_ready(ctx, &filter, pmt_pid, container) &&
           h3_hls_cold_try_park(c, r->stream_id, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_HLS, container, 0, is_head,
-                                r->origin[0] ? r->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), wsh))
+                                r->origin[0] ? r->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
         return;
       handled = hls_render(ctx, &filter, pmt_pid, container, rt.hls_file, is_head, r->inm[0] ? r->inm : NULL, &resp);
       h3_respond_hls(c, r, handled, &resp);
       if (handled && resp.status == 200)
-        ws_clients_add_bytes(wsh, resp.body_len);
+        ws_clients_add_bytes(rs.ws_handle, resp.body_len);
       return;
     }
 
@@ -255,36 +232,33 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
       uint32_t want_seg;
       int want_part;
       hls_resp_t resp;
-      int wsh, handled;
-      ctx = open_source(&rt, &list_num);
-      if (!ctx) {
+      route_setup_t rs;
+      route_setup_status_t st;
+      int handled;
+      st = route_setup(&rt, &list_num, &filter, pmt_pid, client_ip, 3, &item_bufs, &cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
+                        SEG_CONTAINER_TS, reactor_cfg()->hls_part_size, &rs);
+      if (st == ROUTE_SETUP_404) {
         h3_respond_status(c, r->stream_id, "404");
         return;
       }
-      route_client_info(&rt, list_num, &filter, pmt_pid, client_ip, 3, &item_bufs, &cinfo);
-      wsh = ws_clients_touch(&cinfo);
-      if (wsh < 0) {
-        capture_close(ctx);
+      if (st == ROUTE_SETUP_501) {
         h3_respond_status(c, r->stream_id, "501");
         return;
       }
-      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_TS, reactor_cfg()->hls_part_size)) {
-        h3_respond_status(c, r->stream_id, "501");
-        return;
-      }
+      ctx = rs.ctx;
       if (!strcmp(rt.hls_file, "index_ll.m3u8") && !hls_ll_store_ready(ctx, &filter, pmt_pid, SEG_CONTAINER_TS) &&
           h3_hls_cold_try_park(c, r->stream_id, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_LLHLS, SEG_CONTAINER_TS, 0, is_head,
-                                r->origin[0] ? r->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), wsh))
+                                r->origin[0] ? r->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
         return;
       if (!strcmp(rt.hls_file, "index_ll.m3u8") && parse_blocking_reload(query, &want_seg, &want_part) &&
           !hls_part_available(ctx, &filter, pmt_pid, SEG_CONTAINER_TS, want_seg, want_part) &&
           h3_llhls_try_park(c, r->stream_id, ctx, &filter, pmt_pid, rt.hls_file, is_head, r->inm[0] ? r->inm : NULL,
-                             r->origin[0] ? r->origin : NULL, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), wsh))
+                             r->origin[0] ? r->origin : NULL, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), rs.ws_handle))
         return;
       handled = hls_render_ll(ctx, &filter, pmt_pid, rt.hls_file, is_head, r->inm[0] ? r->inm : NULL, &resp);
       h3_respond_hls(c, r, handled, &resp);
       if (handled && resp.status == 200)
-        ws_clients_add_bytes(wsh, resp.body_len);
+        ws_clients_add_bytes(rs.ws_handle, resp.body_len);
       return;
     }
 
@@ -292,24 +266,20 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
     case ROUTE_FMT_LLDASH: {
       int want_ll = rt.fmt == ROUTE_FMT_LLDASH;
       hls_resp_t resp;
-      int wsh, handled;
-      ctx = open_source(&rt, &list_num);
-      if (!ctx) {
+      route_setup_t rs;
+      route_setup_status_t st;
+      int handled;
+      st = route_setup(&rt, &list_num, &filter, pmt_pid, client_ip, 3, &item_bufs, &cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
+                       SEG_CONTAINER_FMP4, want_ll ? reactor_cfg()->dash_part_size : 0.0, &rs);
+      if (st == ROUTE_SETUP_404) {
         h3_respond_status(c, r->stream_id, "404");
         return;
       }
-      route_client_info(&rt, list_num, &filter, pmt_pid, client_ip, 3, &item_bufs, &cinfo);
-      wsh = ws_clients_touch(&cinfo);
-      if (wsh < 0) {
-        capture_close(ctx);
+      if (st == ROUTE_SETUP_501) {
         h3_respond_status(c, r->stream_id, "501");
         return;
       }
-      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_FMP4,
-                          want_ll ? reactor_cfg()->dash_part_size : 0.0)) {
-        h3_respond_status(c, r->stream_id, "501");
-        return;
-      }
+      ctx = rs.ctx;
       if (strcmp(rt.hls_file, "manifest.mpd") != 0) {
         if (!reactor_cfg()->no_lldash && !is_head) {
           int sub = dash_lldash_subscribe(ctx, &filter, pmt_pid, rt.hls_file, 3);
@@ -321,7 +291,7 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
             nghttp3_data_reader dr;
             dr.read_data = h3_dashchunk_read_cb;
             r->dashchunk_sub_idx = sub;
-            dash_lldash_h3_bind(sub, c, r->stream_id, t_reactor_tid, wsh);
+            dash_lldash_h3_bind(sub, c, r->stream_id, t_reactor_tid, rs.ws_handle);
             nghttp3_conn_set_stream_user_data(c->h3conn, r->stream_id, r);
             nghttp3_conn_submit_response(c->h3conn, r->stream_id, nva, 2, &dr);
             return;
@@ -331,35 +301,30 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
       } else {
         if (!hls_store_ready(ctx, &filter, pmt_pid, SEG_CONTAINER_FMP4) &&
             h3_hls_cold_try_park(c, r->stream_id, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_DASH, SEG_CONTAINER_FMP4, want_ll, is_head,
-                                 r->origin[0] ? r->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), wsh))
+                                 r->origin[0] ? r->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
           return;
         handled = dash_render(ctx, &filter, pmt_pid, want_ll, reactor_cfg()->dash_utc_url, is_head, &resp);
       }
       h3_respond_hls(c, r, handled, &resp);
-      if (handled && resp.status == 200) ws_clients_add_bytes(wsh, resp.body_len);
+      if (handled && resp.status == 200) ws_clients_add_bytes(rs.ws_handle, resp.body_len);
       return;
     }
 
     case ROUTE_FMT_MP4: {
-      int wsh;
-      ctx = open_source(&rt, &list_num);
-      if (!ctx) {
+      route_setup_t rs;
+      route_setup_status_t st = route_setup(&rt, &list_num, &filter, pmt_pid, client_ip, 3, &item_bufs, &cinfo, reactor_cfg()->segment_size,
+                                            reactor_cfg()->segment_count, SEG_CONTAINER_FMP4, 0.0, &rs);
+      if (st == ROUTE_SETUP_404) {
         h3_respond_status(c, r->stream_id, "404");
         return;
       }
-      route_client_info(&rt, list_num, &filter, pmt_pid, client_ip, 3, &item_bufs, &cinfo);
-      wsh = ws_clients_touch(&cinfo);
-      if (wsh < 0) {
-        capture_close(ctx);
+      if (st == ROUTE_SETUP_501) {
         h3_respond_status(c, r->stream_id, "501");
         return;
       }
-      if (!hls_seg_touch(ctx, &filter, pmt_pid, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_FMP4, 0.0)) {
-        h3_respond_status(c, r->stream_id, "501");
-        return;
-      }
+      ctx = rs.ctx;
       if (!hls_store_ready(ctx, &filter, pmt_pid, SEG_CONTAINER_FMP4) &&
-          h3_hls_cold_try_park(c, r->stream_id, ctx, &filter, pmt_pid, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, is_head, r->origin[0] ? r->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), wsh))
+          h3_hls_cold_try_park(c, r->stream_id, ctx, &filter, pmt_pid, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, is_head, r->origin[0] ? r->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
         return;
       {
         int sub = mp4push_subscribe(ctx, &filter, pmt_pid, 3);
@@ -370,7 +335,7 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
           nghttp3_data_reader dr;
           dr.read_data = h3_mp4push_read_cb;
           r->mp4push_sub_idx = sub;
-          mp4push_h3_bind(sub, c, r->stream_id, t_reactor_tid, wsh);
+          mp4push_h3_bind(sub, c, r->stream_id, t_reactor_tid, rs.ws_handle);
           nghttp3_conn_set_stream_user_data(c->h3conn, r->stream_id, r);
           nghttp3_conn_submit_response(c->h3conn, r->stream_id, nva, 2, &dr);
           return;

@@ -161,6 +161,30 @@ dvbipitools_add_unit_test(lib_mux_mkv
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
+dvbipitools_add_unit_test(lib_mux_mp4
+    unit/lib/mux/test_mp4.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/mp4.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/moov.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/video.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/write.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/feed.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
 dvbipitools_add_unit_test(lib_mux_fmp4
     unit/lib/mux/test_fmp4.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
@@ -510,6 +534,34 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
         ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c)
     target_link_libraries(test_dipidescramble_pipeline PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+
+    dvbipitools_add_unit_test(dipidescramble_ipiclient
+        unit/dipidescramble/test_ipiclient.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ipiclient.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/emmcache.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/device_state_core.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/common.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/parse.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/validate.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/wire.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c)
+    target_link_libraries(test_dipidescramble_ipiclient PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 
     dvbipitools_add_unit_test(dipidescramble_args
         unit/dipidescramble/test_args.c
@@ -1733,6 +1785,7 @@ if (TARGET dipirist)
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
@@ -1806,6 +1859,7 @@ if (TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
@@ -2214,6 +2268,7 @@ dvbipitools_add_unit_test(dipixy_dispatch
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/resp.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/content.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/route.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/route_common.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/waiters.c)
 target_compile_options(test_dipixy_dispatch PRIVATE -ffunction-sections -fdata-sections)
 target_link_options(test_dipixy_dispatch PRIVATE -Wl,--gc-sections)
@@ -2295,6 +2350,7 @@ target_link_options(test_dipixy_hls PRIVATE -Wl,--gc-sections)
 dvbipitools_add_unit_test(dipixy_mp4push
     unit/dipixy/test_mp4push.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/segment/mp4push.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/byte_ring.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_unit_test(lib_playlist_in

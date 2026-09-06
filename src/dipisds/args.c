@@ -14,14 +14,7 @@
 #include "args.h"
 #include "version.h"
 
-static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-
-static void argerr(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  argutil_verr(TOOL_NAME, fmt, ap);
-  va_end(ap);
-}
+#define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 static int mcast_parse(const char *s, config_t *cfg) {
   return uriparse_mcast_addrport(s, &cfg->family, cfg->mcast_group, sizeof cfg->mcast_group, &cfg->mcast_port);

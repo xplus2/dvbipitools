@@ -28,8 +28,24 @@ typedef struct {
   uint32_t live_msn;
 } ll_playlist_snap_t;
 
+typedef struct {
+  uint32_t seq;
+  double duration;
+} plain_seg_snap_t;
+
+typedef struct {
+  seg_container_t container;
+  codec_t video_codec;
+  int td;
+  uint32_t oldest_seq;
+  int seg_count;
+  plain_seg_snap_t segs[HLS_MAX_SEGS];
+} plain_playlist_snap_t;
+
 /* hls_serve.c */
 int parse_part_filename(const char *fn, uint32_t *seq, int *part);
+void snapshot_plain_playlist(const hls_store_t *s, plain_playlist_snap_t *snap);
+size_t format_plain_playlist(const plain_playlist_snap_t *snap, char *m3u8, size_t cap);
 
 /* hls_llhls.c */
 void snapshot_ll_playlist(const hls_store_t *s, ll_playlist_snap_t *snap); /* caller holds store_lock(s) */

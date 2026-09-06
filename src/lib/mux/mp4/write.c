@@ -27,7 +27,12 @@ void p4_wfd(mp4_t *m, const void *p, size_t n) {
 }
 
 track_t *p4_find_track(mp4_t *m, unsigned pid) {
-  for (int i = 0; i < m->ntrk; i++) if (m->trk[i].pid == pid) return &m->trk[i];
+  if (m->last_trk_idx >= 0 && m->last_trk_idx < m->ntrk && m->trk[m->last_trk_idx].pid == pid)
+    return &m->trk[m->last_trk_idx];
+  for (int i = 0; i < m->ntrk; i++) if (m->trk[i].pid == pid) {
+    m->last_trk_idx = i;
+    return &m->trk[i];
+  }
   return NULL;
 }
 

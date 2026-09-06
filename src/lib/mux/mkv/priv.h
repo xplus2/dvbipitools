@@ -57,6 +57,7 @@ struct mkv {
   pes_t *pes;
   track_t trk[MKV_MAX_TRACKS];
   int ntrk;
+  int last_trk_idx;
   int setup, started, err;
   int flushing; /* EOS: last PES partial */
   int ready_seen;
@@ -72,7 +73,7 @@ struct mkv {
 };
 
 /* video.c: codec_id_for only, rest -> lib/demux/escodec */
-const char *codec_id_for(codec_t codec, const esc_frame_t *f);
+void codec_id_for(codec_t codec, const esc_frame_t *f, char *out, size_t out_len);
 
 /* write.c */
 void wfd(mkv_t *m, const void *p, size_t n);

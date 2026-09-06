@@ -4,6 +4,7 @@
 #ifndef LIB_CAS_DEVICE_STATE_CORE_H
 #define LIB_CAS_DEVICE_STATE_CORE_H
 
+#include <pthread.h>
 #include <stddef.h>
 
 #include "device_crypto.h"
@@ -27,6 +28,7 @@ typedef struct {
   service_key_t services[DEVICE_MAX_SERVICES_CEILING];
   size_t service_count;
   size_t max_services; /* set once at init, 1..DEVICE_MAX_SERVICES_CEILING */
+  pthread_mutex_t lock;
 } device_core_t;
 
 /* loads device key, copies serial (NULL/"" ok, means no EMM-U filtering).
@@ -35,8 +37,18 @@ int device_core_init(device_core_t *core, const char *key_path, const char *seri
 
 void device_core_release(device_core_t *core);
 
+void *device_core_alloc(size_t state_size, const char *key_path, const char *serial, size_t max_services);
+
+void device_core_free_state(void *state);
+
+void device_core_lock(device_core_t *core);
+void device_core_unlock(device_core_t *core);
+
 /* finds service_id's key slot. create: adds one if not found and cache not full. NULL if not found/full */
-service_key_t *device_core_service_slot(device_core_t *core, unsigned service_id, int create);
+service_key_t *device_core_service_slot_locked(device_core_t *core, unsigned service_id, int create);
+
+/* count of services with a live session key */
+unsigned device_core_services_active(device_core_t *core);
 
 /* one EMM section (table_id+length+payload). EMM-U updates BK, EMM-G updates SK cache for its dvb_service_id.
    log_prefix prepended to progress log lines. 1 if state changed, 0 otherwise */

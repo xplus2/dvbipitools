@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <poll.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -13,8 +14,7 @@
 int read_all(FILE *f, char **out, size_t *out_len) {
   size_t cap = 65536, len = 0;
   char *buf = malloc(cap);
-  if (!buf)
-    return -1;
+  if (!buf) return -1;
   for (;;) {
     size_t n;
     if (len + 4096 + 1 > cap) {
@@ -65,10 +65,8 @@ size_t uint_to_str_pad(char *dst, unsigned val, unsigned min_width) {
       val /= 10;
     }
   pad = n < min_width ? min_width - n : 0;
-  for (unsigned i = 0; i < pad; i++)
-    dst[i] = '0';
-  for (unsigned i = 0; i < n; i++)
-    dst[pad + i] = tmp[n - 1 - i];
+  for (unsigned i = 0; i < pad; i++) dst[i] = '0';
+  for (unsigned i = 0; i < n; i++) dst[pad + i] = tmp[n - 1 - i];
   dst[pad + n] = '\0';
   return pad + n;
 }
@@ -78,14 +76,11 @@ size_t uint_to_str(char *dst, unsigned val) { return uint_to_str_pad(dst, val, 0
 void *array_grow(void *arr, int *cap, int need, size_t elemsz) {
   int newcap;
   void *p;
-  if (need <= *cap)
-    return arr;
+  if (need <= *cap) return arr;
   newcap = *cap ? *cap * 2 : 16;
-  if (newcap < need)
-    newcap = need;
+  if (newcap < need) newcap = need;
   p = realloc(arr, (size_t)newcap * elemsz);
-  if (!p)
-    return NULL;
+  if (!p) return NULL;
   *cap = newcap;
   return p;
 }
@@ -93,30 +88,24 @@ void *array_grow(void *arr, int *cap, int need, size_t elemsz) {
 int growbuf_reserve(void **buf, size_t *cap, size_t elem_size, size_t need_elems, size_t initial_elems) {
   size_t ncap;
   void *np;
-  if (*cap >= need_elems)
-    return 0;
+  if (*cap >= need_elems) return 0;
   ncap = *cap ? *cap : initial_elems;
-  while (ncap < need_elems)
-    ncap *= 2;
+  while (ncap < need_elems) ncap *= 2;
   np = realloc(*buf, ncap * elem_size);
-  if (!np)
-    return -1;
+  if (!np) return -1;
   *buf = np;
   *cap = ncap;
   return 0;
 }
 
 int all_digits(const char *s, int n) {
-  for (int i = 0; i < n; i++)
-    if (!isdigit((unsigned char)s[i]))
-      return 0;
+  for (int i = 0; i < n; i++) if (!isdigit((unsigned char)s[i])) return 0;
   return 1;
 }
 
 void chomp(char *line) {
   size_t l = strlen(line);
-  while (l && (line[l - 1] == '\n' || line[l - 1] == '\r'))
-    line[--l] = '\0';
+  while (l && (line[l - 1] == '\n' || line[l - 1] == '\r')) line[--l] = '\0';
 }
 
 size_t csv_split(char *line, char **fields, size_t max_fields) {
@@ -125,8 +114,7 @@ size_t csv_split(char *line, char **fields, size_t max_fields) {
   while (nf < max_fields) {
     fields[nf++] = p;
     p = strchr(p, ',');
-    if (!p)
-      break;
+    if (!p) break;
     *p = '\0';
     p++;
   }
@@ -136,11 +124,9 @@ size_t csv_split(char *line, char **fields, size_t max_fields) {
 int iso8601_split(const char *in, iso8601_t *out) {
   size_t l = strlen(in);
   const char *tail;
-
   if (l < 19 || in[4] != '-' || in[7] != '-' || in[10] != 'T' || in[13] != ':' || in[16] != ':')
     return -1;
-  if (!all_digits(in, 4) || !all_digits(in + 5, 2) || !all_digits(in + 8, 2) ||
-      !all_digits(in + 11, 2) || !all_digits(in + 14, 2) || !all_digits(in + 17, 2))
+  if (!all_digits(in, 4) || !all_digits(in + 5, 2) || !all_digits(in + 8, 2) || !all_digits(in + 11, 2) || !all_digits(in + 14, 2) || !all_digits(in + 17, 2))
     return -1;
   out->y = (in[0] - '0') * 1000 + (in[1] - '0') * 100 + (in[2] - '0') * 10 + (in[3] - '0');
   out->mo = (in[5] - '0') * 10 + (in[6] - '0');
@@ -158,8 +144,7 @@ int iso8601_split(const char *in, iso8601_t *out) {
     out->offset_kind = ISO8601_OFF_NONE;
     return 0;
   }
-  if ((*tail == '+' || *tail == '-') && strlen(tail) >= 6 && tail[3] == ':' &&
-      all_digits(tail + 1, 2) && all_digits(tail + 4, 2)) {
+  if ((*tail == '+' || *tail == '-') && strlen(tail) >= 6 && tail[3] == ':' && all_digits(tail + 1, 2) && all_digits(tail + 4, 2)) {
     int oh = (tail[1] - '0') * 10 + (tail[2] - '0');
     int om = (tail[4] - '0') * 10 + (tail[5] - '0');
     out->off_min = (oh * 60 + om) * (tail[0] == '-' ? -1 : 1);
@@ -184,18 +169,52 @@ int pipe_write_all(int fd, const unsigned char *buf, size_t n, const atomic_int 
       n -= (size_t)w;
       continue;
     }
-    if (w < 0 && errno == EINTR)
-      continue;
+    if (w < 0 && errno == EINTR) continue;
     if (w < 0 && errno == EAGAIN) {
       struct pollfd pfd = {.fd = fd, .events = POLLOUT, .revents = 0};
-
-      if (poll(&pfd, 1, 100) < 0 && errno != EINTR)
-        return -1;
-      if (atomic_load_explicit(stop, memory_order_relaxed))
-        return -1;
+      if (poll(&pfd, 1, 100) < 0 && errno != EINTR) return -1;
+      if (atomic_load_explicit(stop, memory_order_relaxed)) return -1;
       continue;
     }
     return -1; /* EPIPE: reader gone */
   }
   return 0;
+}
+
+void dstrbuf_init(dstrbuf_t *sb) {
+  sb->cap = 8192;
+  sb->len = 0;
+  sb->buf = malloc(sb->cap);
+  if (!sb->buf) {
+    sb->cap = 0;
+    return;
+  }
+  sb->buf[0] = '\0';
+}
+
+void dstrbuf_appendf(dstrbuf_t *sb, const char *fmt, ...) {
+  if (!sb->buf) return;
+  for (;;) {
+    va_list ap;
+    int n;
+    char *p;
+    va_start(ap, fmt);
+    n = vsnprintf(sb->buf + sb->len, sb->cap - sb->len, fmt, ap);
+    va_end(ap);
+    if (n < 0) return;
+    if ((size_t)n < sb->cap - sb->len) {
+      sb->len += (size_t)n;
+      return;
+    }
+    while (sb->cap - sb->len <= (size_t)n) sb->cap *= 2;
+    p = realloc(sb->buf, sb->cap);
+    if (!p) {
+      free(sb->buf);
+      sb->buf = NULL;
+      sb->len = 0;
+      sb->cap = 0;
+      return;
+    }
+    sb->buf = p;
+  }
 }

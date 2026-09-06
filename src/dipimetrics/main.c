@@ -13,6 +13,7 @@
 #include "lib/helper/log.h"
 #include "lib/metrics/protocol.h"
 #include "lib/helper/signal.h"
+#include "lib/helper/toolmain.h"
 
 #include "args.h"
 #include "httpserver.h"
@@ -50,8 +51,7 @@ static void drain_uds_snapshots(int uds_fd, store_t *store, double now, int verb
   unsigned char buf[METRICS_MAX_SNAPSHOT_BYTES];
   for (;;) {
     ssize_t n = recvfrom(uds_fd, buf, sizeof buf, 0, NULL, NULL);
-    if (n < 0)
-      return;
+    if (n < 0) return;
     store_ingest(store, buf, (size_t)n, now, verbose);
   }
 }
@@ -64,24 +64,19 @@ int main(int argc, char **argv) {
   static store_t store; /* ~1.9MB, keeps off stack */
 
   log_set_color(log_color_prescan(argc, argv));
-  log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
+  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
-  if (st == ARGS_HELP)
-    return 0;
+  if (st == ARGS_HELP) return 0;
   if (st == ARGS_ERR) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
   }
   log_set_color((log_color_t)cfg.color_mode);
-  if (cfg.daemonize && daemon(1, 1) != 0) {
-    log_line("dipimetrics: daemonize failed: %s", strerror(errno));
-    return 1;
-  }
+  if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
   signals_install();
 
   uds_fd = uds_listen(cfg.sock_path);
-  if (uds_fd < 0)
-    return 1;
+  if (uds_fd < 0) return 1;
   http_fd = http_listen(cfg.family, cfg.listen_addr, cfg.listen_port);
   if (http_fd < 0) {
     close(uds_fd);
@@ -111,14 +106,11 @@ int main(int argc, char **argv) {
     http_server_poll_fds(hs, pfds, sizeof pfds / sizeof *pfds, &n);
 
     poll(pfds, (nfds_t)n, POLL_TIMEOUT_MS);
-    if (signal_stop_requested())
-      break;
+    if (signal_stop_requested()) break;
     now = mono_seconds();
 
-    if (pfds[0].revents & POLLIN)
-      drain_uds_snapshots(uds_fd, &store, now, cfg.verbose);
+    if (pfds[0].revents & POLLIN) drain_uds_snapshots(uds_fd, &store, now, cfg.verbose);
     http_server_service(hs, pfds, n, &store, now, cfg.verbose);
-
     store_reap_expired(&store, now, (double)cfg.expiry_s);
   }
 

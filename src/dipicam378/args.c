@@ -16,14 +16,7 @@
 #define ARGS_DEFAULT_PORT 27500u
 #define ARGS_DEFAULT_PASSWORD TOOL_NAME
 
-static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-
-static void argerr(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  argutil_verr(TOOL_NAME, fmt, ap);
-  va_end(ap);
-}
+#define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 static int caid_parse(const char *p, unsigned *out) {
   char *end;

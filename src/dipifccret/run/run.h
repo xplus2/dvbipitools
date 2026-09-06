@@ -24,6 +24,7 @@ typedef struct {
   const struct sockaddr *to;
   socklen_t tolen;
   int congestion; /* set on EAGAIN/ENOBUFS by burst_send_cb, tier-1 502 signal */
+  int last_dscp; /* burst_send_cb's setsockopt cache, caller inits to -1 */
 } unicast_dest_t;
 
 void burst_send_cb(const unsigned char *pkt, size_t len, int dscp, void *user);
@@ -64,7 +65,7 @@ typedef struct {
 } dispatch_ctx_t;
 
 void capture_cb(int family, const void *addr, size_t addr_len, unsigned port, unsigned char dscp, uint32_t ssrc, uint16_t seq, uint32_t timestamp,
-                 const unsigned char *payload, size_t payload_len, void *user);
+                const unsigned char *payload, size_t payload_len, void *user);
 void listen_cb(const unsigned char *pkt, size_t len, int fd, const struct sockaddr *from, socklen_t fromlen, void *user);
 void listen_resolve_cb(const unsigned char *pkt, size_t len, size_t slot, int fd, const struct sockaddr *from, socklen_t fromlen, void *user);
 

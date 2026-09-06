@@ -54,13 +54,24 @@ typedef struct {
   double mbps;
 } tick_rate_t;
 
+#define WS_STRIPE_COUNT_MAX 8
+
+typedef struct {
+  int *hash;
+  uint32_t hash_cap, hash_mask;
+  pthread_mutex_t lock;
+} ws_stripe_t;
+
 /* ws_clients.c */
 extern ws_client_t *g_clients;
 extern int g_clients_cap;
 extern pthread_mutex_t g_clients_mtx;
 extern int *g_free_slots;
 extern int g_free_slots_n;
-void hash_delete(int idx);
+extern ws_stripe_t g_stripes[WS_STRIPE_COUNT_MAX];
+extern int g_stripe_count;
+ws_stripe_t *stripe_for_entry(int idx);
+void hash_delete(ws_stripe_t *stripe, int idx);
 
 /* ws_clients_tick.c, allocated by ws_clients_init() in ws_clients.c */
 extern int *g_expired_scratch;

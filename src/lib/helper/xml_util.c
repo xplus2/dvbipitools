@@ -108,10 +108,16 @@ int xml_elem_text(const char *s, const char *end, const char *tag, char *out, si
     return -1;
   if (gt[-1] == '/')
     return -1; /* self-closing, no text */
-  snprintf(closetag, sizeof closetag, "</%s>", tag);
+  {
+    size_t tl = taglen < sizeof closetag - 4 ? taglen : sizeof closetag - 4;
+    closetag[0] = '<';
+    closetag[1] = '/';
+    memcpy(closetag + 2, tag, tl);
+    closetag[2 + tl] = '>';
+    closetag[3 + tl] = '\0';
+  }
   close = strstr(gt + 1, closetag);
-  if (!close || close > end)
-    return -1;
+  if (!close || close > end) return -1;
   decode_copy(gt + 1, (size_t)(close - (gt + 1)), out, outcap);
   return 0;
 }
@@ -121,13 +127,10 @@ int for_each_xml_block(const char *buf, const char *end, const char *open_tag, c
   for (;;) {
     const char *tag = strstr(p, open_tag);
     const char *blk_end;
-    if (!tag || tag >= end)
-      return 0;
+    if (!tag || tag >= end) return 0;
     blk_end = strstr(tag, close_tag);
-    if (!blk_end || blk_end >= end)
-      return 0;
-    if (cb(tag, blk_end, ctx))
-      return -1;
+    if (!blk_end || blk_end >= end) return 0;
+    if (cb(tag, blk_end, ctx)) return -1;
     p = blk_end + 1;
   }
 }
@@ -138,18 +141,15 @@ int xml_attr(const char *s, const char *end, const char *name, char *out, size_t
   while (p < end) {
     const char *hit = strstr(p, name);
     const char *v, *q;
-    if (!hit || hit >= end)
-      return -1;
+    if (!hit || hit >= end) return -1;
     /* reject a hit inside a longer name, e.g. "sid" inside "tsid=" */
-    if ((hit > s && (isalnum((unsigned char)hit[-1]) || hit[-1] == '_')) ||
-        hit[namelen] != '=' || hit[namelen + 1] != '"') {
+    if ((hit > s && (isalnum((unsigned char)hit[-1]) || hit[-1] == '_')) || hit[namelen] != '=' || hit[namelen + 1] != '"') {
       p = hit + 1;
       continue;
     }
     v = hit + namelen + 2;
     q = strchr(v, '"');
-    if (!q || q > end)
-      return -1;
+    if (!q || q > end) return -1;
     decode_copy(v, (size_t)(q - v), out, outcap);
     return 0;
   }

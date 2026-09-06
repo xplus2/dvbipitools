@@ -76,6 +76,7 @@ struct mp4mux {
   pes_t *pes;
   track_t trk[MP4_MAX_TRACKS];
   int ntrk;
+  int last_trk_idx;
   int setup, started, err;
   int flushing;
   int ready_seen;

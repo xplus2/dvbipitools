@@ -18,14 +18,7 @@
 #include "args.h"
 #include "version.h"
 
-static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-
-static void argerr(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  argutil_verr(TOOL_NAME, fmt, ap);
-  va_end(ap);
-}
+#define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* [@]<addr>:<port> or [@][<addr6>]:<port>, multicast literal required */
 static int mcast_group_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
@@ -113,10 +106,10 @@ void input_describe(const input_t *s, char *buf, size_t n) {
     break;
   }
   case INPUT_STDIN:
-    snprintf(buf, n, "-");
+    bufcpy(buf, n, "-");
     break;
   case INPUT_RIST:
-    snprintf(buf, n, "%s", s->rist_uri);
+    bufcpy(buf, n, s->rist_uri);
     break;
   case INPUT_SRT:
     if (s->srt_family == AF_INET6)
@@ -149,10 +142,10 @@ void out_describe(const out_target_t *o, char *buf, size_t n) {
   switch (o->kind) {
   case OUT_RTMP:
   case OUT_RTMPS:
-    snprintf(buf, n, "%s", o->rtmp_url);
+    bufcpy(buf, n, o->rtmp_url);
     break;
   case OUT_FILE:
-    snprintf(buf, n, "%s", strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
+    bufcpy(buf, n, strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
     break;
   case OUT_SRT:
     if (o->srt_family == AF_INET6)

@@ -3,6 +3,7 @@
 
 #include <arpa/inet.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,14 +16,7 @@
 #include "args.h"
 #include "version.h"
 
-static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-
-static void argerr(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  argutil_verr(TOOL_NAME, fmt, ap);
-  va_end(ap);
-}
+#define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* comma-separated CIDR list (IPv4 or IPv6), light validation here, capture.c re-validates at BPF-build time */
 static int ranges_parse(const char *s, config_t *cfg) {
@@ -213,45 +207,35 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         have_iface = 1;
         break;
       case 'M': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0') {
+        unsigned v;
+        if (argutil_uint_range(optarg, 0, UINT_MAX, &v)) {
           argerr("invalid -M max-channels: %s", optarg);
           return ARGS_ERR;
         }
         cfg->max_channels = (size_t)v;
         break;
       }
-      case 1005: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0') {
+      case 1005:
+        if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->channel_idle_timeout_s)) {
           argerr("invalid --channel-idle-timeout: %s (s)", optarg);
           return ARGS_ERR;
         }
-        cfg->channel_idle_timeout_s = (unsigned)v;
         break;
-      }
       case 'R': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v > 127) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 0, 127, &v)) {
           argerr("invalid -R rtx-pt: %s (0..127)", optarg);
           return ARGS_ERR;
         }
         cfg->rtx_pt = (unsigned char)v;
         break;
       }
-      case 'w': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0') {
+      case 'w':
+        if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->workers)) {
           argerr("invalid -w workers: %s", optarg);
           return ARGS_ERR;
         }
-        cfg->workers = (unsigned)v;
         break;
-      }
       case 'u':
         cfg->user = optarg;
         break;
@@ -273,62 +257,45 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1003:
         cfg->no_ret = 1;
         break;
-      case 'B': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0) {
+      case 'B':
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->buffer_ms)) {
           argerr("invalid -B buffer: %s (ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->buffer_ms = (unsigned)v;
         break;
-      }
-      case 'F': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v > 65535) {
+      case 'F':
+        if (argutil_uint_range(optarg, 0, 65535, &cfg->ff_port)) {
           argerr("invalid -F ff-port: %s", optarg);
           return ARGS_ERR;
         }
-        cfg->ff_port = (unsigned)v;
         break;
-      }
       case 1001:
         cfg->no_mc_ret = 1;
         break;
       case 1020: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
           argerr("invalid --max-ret-clients: %s", optarg);
           return ARGS_ERR;
         }
         cfg->max_ret_clients = (size_t)v;
         break;
       }
-      case 1021: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0') {
+      case 1021:
+        if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->ret_client_idle_timeout_s)) {
           argerr("invalid --ret-client-idle-timeout: %s (s)", optarg);
           return ARGS_ERR;
         }
-        cfg->ret_client_idle_timeout_s = (unsigned)v;
         break;
-      }
       case 1006:
         cfg->no_rsi = 1;
         break;
-      case 1007: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0) {
+      case 1007:
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->rsi_interval_s)) {
           argerr("invalid --rsi-interval: %s (s)", optarg);
           return ARGS_ERR;
         }
-        cfg->rsi_interval_s = (unsigned)v;
         break;
-      }
       case 1008:
         cfg->rsi_mc_ret = 1;
         break;
@@ -342,20 +309,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1004:
         cfg->no_fcc = 1;
         break;
-      case 'G': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0) {
+      case 'G':
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->gop_cap_ms)) {
           argerr("invalid -G gop-cap: %s (ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->gop_cap_ms = (unsigned)v;
         break;
-      }
       case 'C': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
           argerr("invalid -C max-bursts: %s", optarg);
           return ARGS_ERR;
         }
@@ -372,49 +334,33 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->burst_multiplier = v;
         break;
       }
-      case 'D': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0) {
+      case 'D':
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->duration_cap_ms)) {
           argerr("invalid -D burst-duration-cap: %s (ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->duration_cap_ms = (unsigned)v;
         break;
-      }
-      case 1014: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0') {
+      case 1014:
+        if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->max_buffer_fill_bound_ms)) {
           argerr("invalid --max-buffer-fill-bound: %s (ms, 0 = no bound)", optarg);
           return ARGS_ERR;
         }
-        cfg->max_buffer_fill_bound_ms = (unsigned)v;
         break;
-      }
       case 1015:
         cfg->fcc_resolve_by_port = 1;
         break;
-      case 1016: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v > 65535) {
+      case 1016:
+        if (argutil_uint_range(optarg, 0, 65535, &cfg->fcc_resolve_base_port)) {
           argerr("invalid --fcc-resolve-base-port: %s", optarg);
           return ARGS_ERR;
         }
-        cfg->fcc_resolve_base_port = (unsigned)v;
         break;
-      }
-      case 1017: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0') {
+      case 1017:
+        if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->congestion_nack_threshold)) {
           argerr("invalid --congestion-nack-threshold: %s (0 = disabled)", optarg);
           return ARGS_ERR;
         }
-        cfg->congestion_nack_threshold = (unsigned)v;
         break;
-      }
       case 1018:
         if (cidr_list_parse(optarg, cfg->fcc_ranges, &cfg->fcc_range_count, ARGS_MAX_RANGES)) {
           argerr("invalid --fcc-range: %s", optarg);
@@ -433,16 +379,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1023:
         cfg->metrics_id = optarg;
         break;
-      case 1024: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 86400UL) {
+      case 1024:
+        if (argutil_uint_range(optarg, 1, 86400, &cfg->metrics_interval_s)) {
           argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
           return ARGS_ERR;
         }
-        cfg->metrics_interval_s = (unsigned)v;
         break;
-      }
       case 'h':
         print_help();
         return ARGS_HELP;

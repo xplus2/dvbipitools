@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void set_persistence(conn_t *c, int keep_alive) {
+void set_persistence(conn_t *c, int keep_alive) {
   c->keep_alive = keep_alive ? 1 : 0;
   c->close_after_flush = keep_alive ? 0 : 1;
 }
@@ -47,8 +47,7 @@ void hls_sb_add_u64(strbuf_t *b, uint64_t v) {
     tmp[n++] = (char)('0' + v % 10);
     v /= 10;
   }
-  for (size_t i = 0; i < n; i++)
-    rev[i] = tmp[n - 1 - i];
+  for (size_t i = 0; i < n; i++) rev[i] = tmp[n - 1 - i];
   rev[n] = '\0';
   hls_sb_add(b, rev);
 }
@@ -218,10 +217,8 @@ char *write_u32(char *dst, uint32_t v, int min_digits) {
     tmp[n++] = (char)('0' + v % 10);
     v /= 10;
   } while (v);
-  while (n < min_digits)
-    tmp[n++] = '0';
-  for (int i = 0; i < n; i++)
-    dst[i] = tmp[n - 1 - i];
+  while (n < min_digits) tmp[n++] = '0';
+  for (int i = 0; i < n; i++) dst[i] = tmp[n - 1 - i];
   return dst + n;
 }
 
@@ -232,10 +229,8 @@ char *write_u64_gen(char *dst, uint64_t v, int min_digits) {
     tmp[n++] = (char)('0' + v % 10);
     v /= 10;
   } while (v);
-  while (n < min_digits)
-    tmp[n++] = '0';
-  for (int i = 0; i < n; i++)
-    dst[i] = tmp[n - 1 - i];
+  while (n < min_digits) tmp[n++] = '0';
+  for (int i = 0; i < n; i++) dst[i] = tmp[n - 1 - i];
   return dst + n;
 }
 
@@ -264,8 +259,7 @@ void resp_set(hls_resp_t *out, int status, const char *content_type, const char 
     out->etag[0] = '\0';
   out->body_len = body_len;
   out->body = NULL;
-  if (!body || is_head)
-    return;
+  if (!body || is_head) return;
   out->body = malloc(body_len);
   if (!out->body) {
     out->status = 500;
@@ -284,10 +278,11 @@ void resp_set_zc(hls_resp_t *out, int status, const char *content_type, const ch
   }
   out->status = status;
   out->content_type = content_type;
-  if (etag)
+  if (etag) {
     bufcpy(out->etag, sizeof out->etag, etag);
-  else
+  } else {
     out->etag[0] = '\0';
+  }
   seg_buf_ref(body);
   out->body = body;
   out->body_len = body_len;

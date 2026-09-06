@@ -3,6 +3,7 @@
 
 #include <arpa/inet.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,14 +21,7 @@
 #include "mux/pmtbuild.h"
 #include "version.h"
 
-static void argerr(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-
-static void argerr(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  argutil_verr(TOOL_NAME, fmt, ap);
-  va_end(ap);
-}
+#define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* args_parse()-only: cfg is that function's config_t* param */
 #define REQUIRE_INPUT(opt) \
@@ -135,24 +129,12 @@ void mcast_describe(const config_t *cfg, char *buf, size_t n) {
 }
 
 static int id_parse(const char *s, unsigned *out) {
-  char *end;
-  unsigned long v;
-  v = strtoul(s, &end, 10);
-  if (*end != '\0' || v == 0 || v > 0xFFFF)
-    return -1;
-  *out = (unsigned)v;
-  return 0;
+  return argutil_uint_range(s, 1, 0xFFFF, out);
 }
 
 /* organisation_id is 32 bits per TS 102 809, unlike application_id's 16 */
 static int org_id_parse(const char *s, unsigned *out) {
-  char *end;
-  unsigned long v;
-  v = strtoul(s, &end, 10);
-  if (*end != '\0' || v == 0 || v > 0xFFFFFFFFUL)
-    return -1;
-  *out = (unsigned)v;
-  return 0;
+  return argutil_uint_range(s, 1, 0xFFFFFFFFUL, out);
 }
 
 /* decimal or 0x-hex, PMT pid range: 0x0010..0x1FFE (0 = auto, handled by caller) */
@@ -516,13 +498,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->rtp = 0;
         break;
       case 'T': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 255) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, 255, &v)) {
           argerr("invalid -T ttl: %s (1..255)", optarg);
           return ARGS_ERR;
         }
-        cfg->ttl = (unsigned)v;
+        cfg->ttl = v;
         break;
       }
       case 'n':
@@ -543,13 +524,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 'b': {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 1000000) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, 1000000, &v)) {
           argerr("invalid -b bitrate: %s (kbps)", optarg);
           return ARGS_ERR;
         }
-        cfg->bitrate_kbps = (unsigned)v;
+        cfg->bitrate_kbps = v;
         break;
       }
       case 'S':
@@ -588,13 +568,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 'e': {
-        char *end;
-        long v = strtol(optarg, &end, 10);
-        if (*end != '\0' || v < 0) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 0, UINT_MAX, &v)) {
           argerr("invalid -e seconds: %s", optarg);
           return ARGS_ERR;
         }
-        cfg->error_retry_s = v;
+        cfg->error_retry_s = (long)v;
         break;
       }
       case 'k':
@@ -707,16 +686,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 1035: {
-        char *end;
-        unsigned long v;
+        unsigned v;
         any_cas_flag = 1;
         REQUIRE_CAS_VENDOR("--cas-emmg-max-conns");
-        v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > EMMG_MAX_CONNS_CEILING) {
+        if (argutil_uint_range(optarg, 1, EMMG_MAX_CONNS_CEILING, &v)) {
           argerr("invalid --cas-emmg-max-conns: %s (1..%u)", optarg, EMMG_MAX_CONNS_CEILING);
           return ARGS_ERR;
         }
-        cfg->cas_vendors[cfg->n_cas_vendors - 1].emmg_max_conns = (unsigned)v;
+        cfg->cas_vendors[cfg->n_cas_vendors - 1].emmg_max_conns = v;
         break;
       }
       case 1016:
@@ -736,15 +713,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         have_cas_pids = 1;
         break;
       case 1018: {
-        char *end;
-        unsigned long v;
+        unsigned v;
         any_cas_flag = 1;
-        v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 86400000UL) {
+        if (argutil_uint_range(optarg, 1, 86400000, &v)) {
           argerr("invalid --cas-cp-duration: %s (ms, 1..86400000)", optarg);
           return ARGS_ERR;
         }
-        cfg->cas_cp_duration_ms = (unsigned)v;
+        cfg->cas_cp_duration_ms = v;
         break;
       }
       case 1019: {
@@ -766,13 +741,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->metrics_id = optarg;
         break;
       case 1022: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 86400UL) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, 86400, &v)) {
           argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
           return ARGS_ERR;
         }
-        cfg->metrics_interval_s = (unsigned)v;
+        cfg->metrics_interval_s = v;
         break;
       }
       case 1023:
@@ -927,13 +901,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 1033: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
           argerr("invalid --buffer: %s (ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->rist_buffer_ms = (unsigned)v;
+        cfg->rist_buffer_ms = v;
         break;
       }
       case 1036: {
@@ -984,15 +957,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 1041: {
-        char *end;
-        unsigned long v;
+        unsigned v;
         REQUIRE_INPUT("--srt-latency-in");
-        v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 60000) {
+        if (argutil_uint_range(optarg, 1, 60000, &v)) {
           argerr("invalid --srt-latency-in: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->inputs[cfg->n_inputs - 1].srt_latency_in_ms = (unsigned)v;
+        cfg->inputs[cfg->n_inputs - 1].srt_latency_in_ms = v;
         break;
       }
       case 1042:
@@ -1027,13 +998,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 1047: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 60000) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, 60000, &v)) {
           argerr("invalid --srt-latency: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
-        cfg->srt_latency_ms = (unsigned)v;
+        cfg->srt_latency_ms = v;
         break;
       }
       case 'h':

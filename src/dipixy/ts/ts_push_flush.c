@@ -9,27 +9,12 @@
 #ifdef HAVE_HTTP2
 void ts_push_h2_enqueue(int sub_idx, const uint8_t *pkt, size_t len) {
   ts_sub_t *s;
-  uint32_t wpos, rpos, idx;
-  size_t first;
-  if (sub_idx < 0 || sub_idx >= g_ts_subs_n || !len)
-    return;
+  if (sub_idx < 0 || sub_idx >= g_ts_subs_n || !len) return;
   s = &g_ts_subs[sub_idx];
-  if (!s->h2_ring)
-    return;
-  wpos = atomic_load_explicit(&s->h2_wpos, memory_order_relaxed);
-  rpos = atomic_load_explicit(&s->h2_rpos, memory_order_acquire);
-  if (len > TS_RING_H2_BYTES - (wpos - rpos)) {
+  if (!byte_ring_write(&s->h2_ring, pkt, len)) {
     log_throttled(&s->ring_drop_throttle, LOG_THROTTLE_WINDOW_S, "ts_push: h2 ring full, dropping packet");
     return;
   }
-  idx = wpos & (TS_RING_H2_BYTES - 1u);
-  first = len;
-  if (idx + first > TS_RING_H2_BYTES)
-    first = TS_RING_H2_BYTES - idx;
-  memcpy(s->h2_ring + idx, pkt, first);
-  if (first < len)
-    memcpy(s->h2_ring, pkt + first, len - first);
-  atomic_store_explicit(&s->h2_wpos, wpos + (uint32_t)len, memory_order_release);
   ws_clients_add_bytes(s->ws_handle, len);
   ts_push_wake_reactor(s->reactor_tid);
 }
@@ -38,23 +23,12 @@ void ts_push_h2_enqueue(int sub_idx, const uint8_t *pkt, size_t len) {
 #ifdef HAVE_HTTP3
 void ts_push_h3_enqueue(int sub_idx, const uint8_t *pkt, size_t len) {
   ts_sub_t *s;
-  uint32_t wpos, rpos, idx;
-  size_t first;
   if (sub_idx < 0 || sub_idx >= g_ts_subs_n || !len) return;
   s = &g_ts_subs[sub_idx];
-  if (!s->h3_ring) return;
-  wpos = atomic_load_explicit(&s->h3_wpos, memory_order_relaxed);
-  rpos = atomic_load_explicit(&s->h3_rpos, memory_order_acquire);
-  if (len > TS_RING_H3_BYTES - (wpos - rpos)) {
+  if (!byte_ring_write(&s->h3_ring, pkt, len)) {
     log_throttled(&s->ring_drop_throttle, LOG_THROTTLE_WINDOW_S, "ts_push: h3 ring full, dropping packet");
     return;
   }
-  idx = wpos & (TS_RING_H3_BYTES - 1u);
-  first = len;
-  if (idx + first > TS_RING_H3_BYTES) first = TS_RING_H3_BYTES - idx;
-  memcpy(s->h3_ring + idx, pkt, first);
-  if (first < len) memcpy(s->h3_ring, pkt + first, len - first);
-  atomic_store_explicit(&s->h3_wpos, wpos + (uint32_t)len, memory_order_release);
   ws_clients_add_bytes(s->ws_handle, len);
   ts_push_wake_reactor(s->reactor_tid);
 }
@@ -79,7 +53,7 @@ void ts_push_flush_ready(int tid) {
       goto next_sub;
 #ifdef HAVE_HTTP2
     if (s->proto == 2) {
-      if (atomic_load_explicit(&s->h2_wpos, memory_order_acquire) != atomic_load_explicit(&s->h2_rpos, memory_order_relaxed))
+      if (atomic_load_explicit(&s->h2_ring.wpos, memory_order_acquire) != atomic_load_explicit(&s->h2_ring.rpos, memory_order_relaxed))
         h2_tspush_wake(i);
       goto next_sub;
     }
@@ -91,24 +65,18 @@ void ts_push_flush_ready(int tid) {
       goto next_sub;
     }
     for (;;) {
-      uint32_t wpos = atomic_load_explicit(&s->pkt_wpos, memory_order_acquire);
-      uint32_t rpos = atomic_load_explicit(&s->pkt_rpos, memory_order_relaxed);
-      uint32_t ring_idx, avail, contig;
+      size_t contig;
       const uint8_t *p;
       conn_t *c;
-      if (wpos == rpos || !s->pkt_ring)
+      p = byte_ring_peek(&s->pkt_ring, &contig);
+      if (!p)
         break;
-      ring_idx = rpos & (TS_RING_PUSH_BYTES - 1u);
-      avail = wpos - rpos;
-      contig = TS_RING_PUSH_BYTES - ring_idx;
-      if (contig > avail) contig = avail;
-      p = s->pkt_ring + ring_idx;
       c = conn_for_fd(s->fd);
       if (!c || conn_send_buffered(c, p, contig, NULL, 0) < 0) {
         ts_push_drop_sub(s, i);
         break;
       }
-      atomic_store_explicit(&s->pkt_rpos, rpos + contig, memory_order_release);
+      byte_ring_advance(&s->pkt_ring, contig);
     }
   next_sub:
     i = next;

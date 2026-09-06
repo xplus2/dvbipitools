@@ -59,16 +59,15 @@ static int add_peer(struct rist_ctx *ctx, const ristin_cfg_t *cfg) {
 static int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
   ristin_t *r = arg;
   const struct rist_stats_receiver_flow *f = &stats->stats.receiver_flow;
-  metrics_writer_t w;
-
-  if (stats->stats_type == RIST_STATS_RECEIVER_FLOW && metrics_exporter_due(r->mx, mono_seconds()) &&
-      !metrics_exporter_begin(r->mx, &w, r->tool_version)) {
-    metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_RECEIVED_TOTAL, NULL, f->received);
-    metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_MISSING_TOTAL, NULL, f->missing);
-    metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_RECOVERED_TOTAL, NULL, f->recovered);
-    metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_LOST_TOTAL, NULL, f->lost);
-    metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_RTT_MILLISECONDS, NULL, f->rtt);
-    metrics_exporter_send(r->mx, &w);
+  if (stats->stats_type == RIST_STATS_RECEIVER_FLOW && metrics_exporter_due(r->mx, mono_seconds())) {
+    metrics_entry_t e[] = {
+        {METRICS_ID_RIST_RECEIVER_RECEIVED_TOTAL, NULL, f->received},
+        {METRICS_ID_RIST_RECEIVER_MISSING_TOTAL, NULL, f->missing},
+        {METRICS_ID_RIST_RECEIVER_RECOVERED_TOTAL, NULL, f->recovered},
+        {METRICS_ID_RIST_RECEIVER_LOST_TOTAL, NULL, f->lost},
+        {METRICS_ID_RIST_RECEIVER_RTT_MILLISECONDS, NULL, f->rtt},
+    };
+    metrics_push_entries(r->mx, r->tool_version, e, sizeof e / sizeof e[0]);
   }
   rist_stats_free(stats);
   return 0;
@@ -80,11 +79,8 @@ static void *reader_main(void *arg) {
   while (!atomic_load_explicit(&r->stop, memory_order_relaxed) && !signal_stop_requested()) {
     struct rist_data_block *db = NULL;
     int ret = rist_receiver_data_read2(r->ctx, &db, RISTIN_READ_TIMEOUT_MS);
-
-    if (ret < 0)
-      break;
-    if (ret == 0 || !db)
-      continue;
+    if (ret < 0) break;
+    if (ret == 0 || !db) continue;
     if (pipe_write_all(r->pfd[1], db->payload, db->payload_len, &r->stop) < 0) {
       rist_receiver_data_block_free2(&db);
       break;
@@ -105,8 +101,7 @@ ristin_t *ristin_open(const ristin_cfg_t *cfg) {
   }
 
   r = calloc(1, sizeof *r);
-  if (!r)
-    return NULL;
+  if (!r) return NULL;
   r->mx = cfg->mx;
   r->tool_version = cfg->tool_version;
 
@@ -155,8 +150,7 @@ ristin_t *ristin_open(const ristin_cfg_t *cfg) {
 int ristin_fd(const ristin_t *r) { return r->pfd[0]; }
 
 void ristin_close(ristin_t *r) {
-  if (!r)
-    return;
+  if (!r) return;
   atomic_store_explicit(&r->stop, 1, memory_order_relaxed);
   pthread_join(r->thread, NULL);
   rist_destroy(r->ctx);

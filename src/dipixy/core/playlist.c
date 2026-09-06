@@ -106,8 +106,19 @@ static void host_strip_port(char *h) {
   if (colon) *colon = '\0';
 }
 
-static void resolve_hostport(const config_t *cfg, int is_tls, const char *host_hdr, const char *query,
-                              char *out, size_t outsz) {
+static size_t sb_add(char *buf, size_t cap, size_t len, const char *s) {
+  size_t n = bufcpy(buf + len, cap - len, s);
+  size_t room = cap > len ? cap - len - 1 : 0;
+  return len + (n < room ? n : room);
+}
+
+static size_t sb_add_uint(char *buf, size_t cap, size_t len, unsigned v) {
+  char tmp[12];
+  uint_to_str(tmp, v);
+  return sb_add(buf, cap, len, tmp);
+}
+
+static void resolve_hostport(const config_t *cfg, int is_tls, const char *host_hdr, const char *query, char *out, size_t outsz) {
   char qhost[128];
   char hostname[128];
   unsigned port = is_tls ? cfg->listen_tls.port : cfg->listen.port;
@@ -124,7 +135,11 @@ static void resolve_hostport(const config_t *cfg, int is_tls, const char *host_h
   } else {
     bufcpy(hostname, sizeof hostname, "127.0.0.1");
   }
-  snprintf(out, outsz, "%s:%u", hostname, port);
+  {
+    size_t len = sb_add(out, outsz, 0, hostname);
+    len = sb_add(out, outsz, len, ":");
+    sb_add_uint(out, outsz, len, port);
+  }
 }
 
 static int ordinal_included(const char *csv, unsigned ord) {
@@ -133,8 +148,7 @@ static int ordinal_included(const char *csv, unsigned ord) {
   while (p) {
     char *end;
     unsigned long v = strtoul(p, &end, 10);
-    if (end != p && v == ord)
-      return 1;
+    if (end != p && v == ord) return 1;
     p = strchr(p, ',');
     if (p) p++;
   }
@@ -143,10 +157,10 @@ static int ordinal_included(const char *csv, unsigned ord) {
 
 static void append_filter(char *target, size_t targetsz, size_t used, const pid_filter_t *filter) {
   char filterbuf[128];
-  if (!filter || !filter->count || used >= targetsz)
-    return;
+  if (!filter || !filter->count || used >= targetsz) return;
   pid_filter_format(filter, filterbuf, sizeof filterbuf);
-  snprintf(target + used, targetsz - used, "?filter=%s", filterbuf);
+  used = sb_add(target, targetsz, used, "?filter=");
+  sb_add(target, targetsz, used, filterbuf);
 }
 
 static void emit_out(FILE *f, playlist_type_t ptype, const char *name, const char *target, const char *icon_uri, unsigned tsid, unsigned onid, unsigned sid) {
@@ -159,14 +173,22 @@ static void emit_out(FILE *f, playlist_type_t ptype, const char *name, const cha
 static void emit_singleton(FILE *f, playlist_type_t ptype, route_fmt_t fmt, const char *scheme, const char *hostport, const pid_filter_t *filter, const char *kind, const char *name) {
   char target[300];
   char name_enc[192];
-  int n;
+  const char *seg;
+  size_t n;
   if (name) {
     pct_encode_seg(name, name_enc, sizeof name_enc);
-    n = snprintf(target, sizeof target, "%s://%s/%s/%s", scheme, hostport, name_enc, fmt_str(fmt));
+    seg = name_enc;
   } else {
-    n = snprintf(target, sizeof target, "%s://%s/%s/%s", scheme, hostport, kind, fmt_str(fmt));
+    seg = kind;
   }
-  append_filter(target, sizeof target, n < 0 ? sizeof target : (size_t)n, filter);
+  n = sb_add(target, sizeof target, 0, scheme);
+  n = sb_add(target, sizeof target, n, "://");
+  n = sb_add(target, sizeof target, n, hostport);
+  n = sb_add(target, sizeof target, n, "/");
+  n = sb_add(target, sizeof target, n, seg);
+  n = sb_add(target, sizeof target, n, "/");
+  n = sb_add(target, sizeof target, n, fmt_str(fmt));
+  append_filter(target, sizeof target, n, filter);
   emit_out(f, ptype, name ? name : kind, target, NULL, 0, 0, 0);
 }
 
@@ -189,21 +211,32 @@ static void emit_item(void *vctx, const channel_item_t *item) {
   int family, rtp_flag;
   char maddr[64];
   unsigned mport;
-  int n;
+  size_t n;
   rc->item_num++;
   if (rc->keep_multicast && item->uri && !route_resolve_channel_uri(item->uri, &family, maddr, sizeof maddr, &mport, &rtp_flag)) {
     char hostport[80];
     uriparse_mcast_describe(family, maddr, mport, hostport, sizeof hostport);
-    snprintf(target, sizeof target, "%s://%s", rtp_flag ? "rtp" : "udp", hostport);
+    n = sb_add(target, sizeof target, 0, rtp_flag ? "rtp" : "udp");
+    n = sb_add(target, sizeof target, n, "://");
+    sb_add(target, sizeof target, n, hostport);
   } else {
     char name_enc[192];
+    n = sb_add(target, sizeof target, 0, rc->scheme);
+    n = sb_add(target, sizeof target, n, "://");
+    n = sb_add(target, sizeof target, n, rc->hostport);
     if (rc->src_name) {
       pct_encode_seg(rc->src_name, name_enc, sizeof name_enc);
-      n = snprintf(target, sizeof target, "%s://%s/%s/item/%d/%s", rc->scheme, rc->hostport, name_enc, rc->item_num, fmt_str(rc->fmt));
+      n = sb_add(target, sizeof target, n, "/");
+      n = sb_add(target, sizeof target, n, name_enc);
     } else {
-      n = snprintf(target, sizeof target, "%s://%s/list/%u/item/%d/%s", rc->scheme, rc->hostport, rc->ordinal, rc->item_num, fmt_str(rc->fmt));
+      n = sb_add(target, sizeof target, n, "/list/");
+      n = sb_add_uint(target, sizeof target, n, rc->ordinal);
     }
-    append_filter(target, sizeof target, n < 0 ? sizeof target : (size_t)n, rc->filter);
+    n = sb_add(target, sizeof target, n, "/item/");
+    n = sb_add_uint(target, sizeof target, n, (unsigned)rc->item_num);
+    n = sb_add(target, sizeof target, n, "/");
+    n = sb_add(target, sizeof target, n, fmt_str(rc->fmt));
+    append_filter(target, sizeof target, n, rc->filter);
   }
   emit_out(rc->f, rc->ptype, item->name, target, item->icon_uri, item->tsid, item->onid, item->sid);
 }
@@ -229,11 +262,9 @@ int playlist_render(const config_t *cfg, const channels_t *ch, int is_tls, const
   si = 0;
   for (int ord = 1; ord <= max_ord; ord++) {
     if (ord == cfg->stdin_ordinal) {
-      if (ordinal_included(input_filter, (unsigned)ord))
-        emit_singleton(f, ptype, fmt, scheme, hostport, filter, "stdin", cfg->stdin_name);
+      if (ordinal_included(input_filter, (unsigned)ord)) emit_singleton(f, ptype, fmt, scheme, hostport, filter, "stdin", cfg->stdin_name);
     } else if (ord == cfg->rist_ordinal) {
-      if (ordinal_included(input_filter, (unsigned)ord))
-        emit_singleton(f, ptype, fmt, scheme, hostport, filter, "rist", cfg->rist_name);
+      if (ordinal_included(input_filter, (unsigned)ord)) emit_singleton(f, ptype, fmt, scheme, hostport, filter, "rist", cfg->rist_name);
     } else if (si < cfg->n_sources && cfg->sources[si].ordinal == ord) {
       if (ordinal_included(input_filter, (unsigned)ord)) {
         emit_ctx_t rc = {0};

@@ -7,6 +7,8 @@
 #include "../ts/ts_push.h"
 #include "http2_int.h"
 
+#include "lib/helper/byte_ring.h"
+
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -22,21 +24,11 @@ static ssize_t tspush_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *b
   (void)ud;
   h2_tspush_stream_t *tcs = source->ptr;
   ts_sub_t *sub = &g_ts_subs[tcs->sub_idx];
-  uint32_t wpos = atomic_load_explicit(&sub->h2_wpos, memory_order_acquire);
-  uint32_t rpos = atomic_load_explicit(&sub->h2_rpos, memory_order_relaxed);
-  uint32_t idx, n;
-  if (wpos == rpos) {
+  size_t n = byte_ring_read(&sub->h2_ring, buf, length);
+  if (!n) {
     *data_flags = NGHTTP2_DATA_FLAG_NO_END_STREAM;
     return NGHTTP2_ERR_DEFERRED;
   }
-  idx = rpos & (TS_RING_H2_BYTES - 1u);
-  n = wpos - rpos;
-  if (n > TS_RING_H2_BYTES - idx)
-    n = TS_RING_H2_BYTES - idx;
-  if (n > length)
-    n = (uint32_t)length;
-  memcpy(buf, sub->h2_ring + idx, n);
-  atomic_store_explicit(&sub->h2_rpos, rpos + n, memory_order_release);
   return (ssize_t)n;
 }
 
@@ -54,40 +46,32 @@ static void h2_submit_tspush_response(h2_conn_t *conn, int32_t stream_id, h2_tsp
 /* new ring data for sub_idx: resume DATA provider, arm EPOLLOUT for next
    h2_flush_tx */
 void h2_tspush_wake(int sub_idx) {
-  if (sub_idx < 0 || sub_idx >= g_ts_subs_n)
-    return;
+  if (sub_idx < 0 || sub_idx >= g_ts_subs_n) return;
   int fd = g_ts_subs[sub_idx].fd;
   conn_t *c = conn_for_fd(fd);
-  if (!c)
-    return;
+  if (!c) return;
   h2_conn_t *conn = (h2_conn_t *)c->h2;
-  if (!conn)
-    return;
+  if (!conn) return;
   h2_tspush_stream_t *tcs = NULL;
   for (int i = 0; i < H2_TSPUSH_MAX; i++)
     if (conn->tspush[i].sid && conn->tspush[i].sub_idx == sub_idx) {
       tcs = &conn->tspush[i];
       break;
     }
-  if (!tcs)
-    return;
+  if (!tcs) return;
   nghttp2_session_resume_data(conn->ng, tcs->sid);
   pthread_mutex_lock(&c->out_lock);
-  if (!atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed))
-    conn_epoll_mod(c, c->epfd, 1);
+  if (!atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) conn_epoll_mod(c, c->epfd, 1);
   pthread_mutex_unlock(&c->out_lock);
 }
 
 /* registers a TS push stream. 1 = dispatched, 0 = slot table full (caller sends an error response) */
 int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush_sub) {
   int ci = -1;
-  for (int i = 0; i < H2_TSPUSH_MAX; i++)
-    if (!conn->tspush[i].sid) {
-      ci = i;
-      break;
-    }
-  if (ci < 0)
-    return 0;
+  for (int i = 0; i < H2_TSPUSH_MAX; i++) if (!conn->tspush[i].sid) {
+    ci = i;
+    break;
+  if (ci < 0) return 0;
   h2_tspush_stream_t *tcs = &conn->tspush[ci];
   tcs->sub_idx = tspush_sub;
   tcs->sid = stream_id;
@@ -102,8 +86,7 @@ int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush
 void h2_tspush_on_stream_close(h2_conn_t *conn, int32_t stream_id) {
   for (int i = 0; i < H2_TSPUSH_MAX; i++) {
     h2_tspush_stream_t *tcs = &conn->tspush[i];
-    if (tcs->sid != stream_id)
-      continue;
+    if (tcs->sid != stream_id) continue;
     int sub = tcs->sub_idx;
     tcs->sid = 0;
     tcs->sub_idx = -1;

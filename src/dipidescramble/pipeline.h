@@ -54,6 +54,7 @@ typedef struct {
   emmcache_t *cache;
   const char *emm_file;
   ipiclient_t *ipi; /* NULL unless -u given and classic CAS resolved */
+  ipiclient_poll_t *ipi_pending;
   const config_t *cfg;
   psi_section_asm_t ecm_asm, emm_asm;
   scrambler_t *scr; /* NULL until scrambling_mode resolved */
@@ -80,5 +81,7 @@ void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const
 /* advances every -o srt:// target's connect state, flushes queued data.
    call every main-loop iteration, even when input is quiet. */
 void srt_service_all(loop_ctx_t *lc);
+
+void pipeline_service_unicast_emm(loop_ctx_t *lc);
 
 #endif

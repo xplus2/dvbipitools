@@ -39,6 +39,7 @@ function(dipibcg_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
@@ -67,6 +68,7 @@ function(dipibim_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipibim/main.c
             ${CMAKE_SOURCE_DIR}/src/dipibim/args.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
@@ -111,6 +113,7 @@ function(dipicam378_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
     set(DIPICAM378_SRCS ${DIPICAM378_SRCS} PARENT_SCOPE)
     set(DIPICAM378_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
@@ -175,6 +178,7 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
@@ -258,6 +262,7 @@ function(dipifccret_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/sockaddr_index.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
@@ -286,6 +291,7 @@ function(dipimetrics_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c)
     set(DIPIMETRICS_SRCS ${DIPIMETRICS_SRCS} PARENT_SCOPE)
@@ -489,6 +495,7 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
@@ -598,10 +605,12 @@ function(dipirist_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
@@ -682,10 +691,12 @@ function(dipisrt_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
             ${RIST_SRC}
             ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
@@ -715,6 +726,7 @@ function(dipiscan_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
@@ -913,6 +925,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/resp.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/content.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/route.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/route_common.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/waiters.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tspush.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_dashchunk.c
@@ -966,6 +979,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/byte_ring.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/jsonbuf.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/sha1.c
@@ -1021,6 +1035,7 @@ function(dipisds_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
@@ -1195,6 +1210,7 @@ function(dipixmltv_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixmltv/revmap.c
             ${CMAKE_SOURCE_DIR}/src/dipixmltv/suggest.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c

@@ -10,7 +10,7 @@
 
 #include "lib/helper/log.h"
 #include "lib/helper/signal.h"
-
+#include "lib/helper/toolmain.h"
 #include "args.h"
 #include "channel/channel.h"
 #include "listen.h"
@@ -58,22 +58,18 @@ int main(int argc, char **argv) {
   int metrics_started = 0;
 
   log_set_color(log_color_prescan(argc, argv));
-  log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
+  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);
-  if (st == ARGS_OK)
-    log_set_color((log_color_t)cfg.color_mode);
-  if (st == ARGS_HELP)
-    return 0;
+  if (st == ARGS_OK) log_set_color((log_color_t)cfg.color_mode);
+  if (st == ARGS_HELP) return 0;
   if (st == ARGS_ERR) {
     fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
     return 2;
   }
-  if (cfg.daemonize && daemon(1, 1) != 0) {
-    log_line(TOOL_NAME ": daemonize failed: %s", strerror(errno));
+  if (toolmain_daemonize(cfg.daemonize, TOOL_NAME))
     return 1;
-  }
+  signals_install();
   metrics_exporter_init(&mx, METRICS_COMPONENT_FCCRET, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
-
   max_channels = cfg.max_channels ? cfg.max_channels : CHANNEL_DEFAULT_MAX;
   ring_slots = cfg.no_ret ? 0 : cfg.buffer_ms; /* ring_slots ~= buffer_ms: ~1 packet/ms assumption */
   cache_cap = cfg.no_fcc ? 0 : cache_cap_from_gop_ms(cfg.gop_cap_ms);
@@ -225,34 +221,22 @@ int main(int argc, char **argv) {
     metrics_started = 1;
   }
 
-  signals_install();
   log_line(TOOL_NAME ": capturing, %u worker(s) on %s:%u, %zu channel slots [%s%s%s%s]", cfg.workers, cfg.listen_addr, cfg.listen_port, max_channels,
       cfg.no_ret ? "no RET" : (mt ? "RET+MC" : "RET unicast-only"), cfg.no_ret || cfg.no_fcc ? "" : ", ", cfg.no_fcc ? "no FCC" : "FCC", rsi_started ? "+RSI" : "");
   capture_run(cap, capture_cb, &dispatch_ctx);
 
 cleanup:
-  if (cap)
-    capture_close(cap);
-  if (pacer_started)
-    pthread_join(pacer_thread, NULL);
-  if (rsi_started)
-    pthread_join(rsi_thread, NULL);
-  if (metrics_started)
-    pthread_join(metrics_thread, NULL);
+  if (cap) capture_close(cap);
+  if (pacer_started) pthread_join(pacer_thread, NULL);
+  if (rsi_started) pthread_join(rsi_thread, NULL);
+  if (metrics_started) pthread_join(metrics_thread, NULL);
   metrics_exporter_close(&mx);
-  if (pool)
-    listen_pool_stop(pool);
-  if (resolve_pool)
-    listen_multi_stop(resolve_pool);
-  if (ret)
-    ret_ctx_free(ret);
-  if (bursts)
-    burst_table_free(bursts);
-  if (mt)
-    mcsend_table_free(mt);
-  if (rsi_mt)
-    mcsend_table_free(rsi_mt);
-  if (channels)
-    channel_table_free(channels);
+  if (pool) listen_pool_stop(pool);
+  if (resolve_pool) listen_multi_stop(resolve_pool);
+  if (ret) ret_ctx_free(ret);
+  if (bursts) burst_table_free(bursts);
+  if (mt) mcsend_table_free(mt);
+  if (rsi_mt) mcsend_table_free(rsi_mt);
+  if (channels) channel_table_free(channels);
   return rc;
 }

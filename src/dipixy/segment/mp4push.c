@@ -7,8 +7,10 @@
 #include "../version.h"
 #include "../ws/ws_clients.h"
 
+#include "lib/helper/byte_ring.h"
 #include "lib/helper/log.h"
 
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -33,9 +35,7 @@ typedef struct {
   int64_t h3_sid;
   int ws_handle;
   int reactor_tid;
-  uint8_t *ring;
-  _Atomic uint32_t wpos;
-  _Atomic uint32_t rpos;
+  byte_ring_t ring;
   _Atomic int ring_errored;
   _Atomic int seg_next;
   int tid_next;
@@ -45,6 +45,16 @@ static mp4push_sub_t *g_subs;
 static int g_subs_n;
 static int g_reactor_efds[MP4PUSH_MAX_REACTOR_THREADS];
 static int g_tid_head[MP4PUSH_MAX_REACTOR_THREADS];
+static int *g_free_slots;
+static int g_free_slots_n;
+static pthread_mutex_t g_free_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static void free_slot(int idx) {
+  atomic_store_explicit(&g_subs[idx].alive, MP4PUSH_SUB_FREE, memory_order_release);
+  pthread_mutex_lock(&g_free_lock);
+  g_free_slots[g_free_slots_n++] = idx;
+  pthread_mutex_unlock(&g_free_lock);
+}
 
 static void wake_reactor(int tid) {
   int efd;
@@ -58,21 +68,10 @@ static void wake_reactor(int tid) {
 }
 
 static void ring_enqueue(mp4push_sub_t *s, const uint8_t *data, size_t len) {
-  uint32_t wpos, rpos, idx;
-  size_t first;
-  if (!s->ring || !len) return;
-  wpos = atomic_load_explicit(&s->wpos, memory_order_relaxed);
-  rpos = atomic_load_explicit(&s->rpos, memory_order_acquire);
-  if (len > MP4PUSH_RING_BYTES - (wpos - rpos)) {
+  if (!byte_ring_write(&s->ring, data, len)) {
     atomic_store_explicit(&s->ring_errored, 1, memory_order_release);
     return;
   }
-  idx = wpos & (MP4PUSH_RING_BYTES - 1u);
-  first = len;
-  if (idx + first > MP4PUSH_RING_BYTES) first = MP4PUSH_RING_BYTES - idx;
-  memcpy(s->ring + idx, data, first);
-  if (first < len) memcpy(s->ring, data + first, len - first);
-  atomic_store_explicit(&s->wpos, wpos + (uint32_t)len, memory_order_release);
   ws_clients_add_bytes(s->ws_handle, len);
 }
 
@@ -161,20 +160,22 @@ void mp4push_init(int max_clients) {
     g_reactor_efds[i] = -1;
     g_tid_head[i] = -1;
   }
+  g_free_slots = malloc(sizeof(int) * (size_t)n);
+  if (g_free_slots) {
+    for (int i = 0; i < n; i++) g_free_slots[i] = i;
+    g_free_slots_n = n;
+  }
 }
 
 int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int proto) {
   hls_seg_ctx_t *s;
   int idx = -1;
 
-  for (int i = 0; i < g_subs_n; i++) {
-    int expected = MP4PUSH_SUB_FREE;
-    if (atomic_compare_exchange_strong_explicit(&g_subs[i].alive, &expected, MP4PUSH_SUB_ALIVE, memory_order_acquire, memory_order_relaxed)) {
-      idx = i;
-      break;
-    }
-  }
+  pthread_mutex_lock(&g_free_lock);
+  if (g_free_slots_n > 0) idx = g_free_slots[--g_free_slots_n];
+  pthread_mutex_unlock(&g_free_lock);
   if (idx < 0) return -1;
+  atomic_store_explicit(&g_subs[idx].alive, MP4PUSH_SUB_ALIVE, memory_order_release);
 
   g_subs[idx].cap_ctx = ctx;
   g_subs[idx].filter = *filter;
@@ -189,11 +190,9 @@ int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
   atomic_store_explicit(&g_subs[idx].ring_errored, 0, memory_order_relaxed);
   if (proto == 2 || proto == 3) {
     hls_resp_t resp;
-    if (!g_subs[idx].ring) g_subs[idx].ring = malloc(MP4PUSH_RING_BYTES);
-    atomic_store_explicit(&g_subs[idx].wpos, 0, memory_order_relaxed);
-    atomic_store_explicit(&g_subs[idx].rpos, 0, memory_order_relaxed);
-    if (!g_subs[idx].ring) {
-      atomic_store_explicit(&g_subs[idx].alive, MP4PUSH_SUB_FREE, memory_order_release);
+    byte_ring_reset(&g_subs[idx].ring, MP4PUSH_RING_BYTES);
+    if (!g_subs[idx].ring.buf) {
+      free_slot(idx);
       return -1;
     }
     if (hls_render(ctx, filter, pmt_pid, SEG_CONTAINER_FMP4, "init.mp4", 0, NULL, &resp) && resp.status == 200) {
@@ -207,7 +206,7 @@ int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
   if (s) seg_link(s, idx);
   hls_seg_registry_unlock();
   if (!s) {
-    atomic_store_explicit(&g_subs[idx].alive, MP4PUSH_SUB_FREE, memory_order_release);
+    free_slot(idx);
     return -1;
   }
   return idx;
@@ -264,52 +263,28 @@ int64_t mp4push_sub_h3_sid(int slot) {
 }
 
 size_t mp4push_ring_read(int slot, uint8_t *buf, size_t maxlen) {
-  mp4push_sub_t *s;
-  uint32_t wpos, rpos, idx, avail, n;
   if (slot < 0 || slot >= g_subs_n) return 0;
-  s = &g_subs[slot];
-  if (!s->ring) return 0;
-  wpos = atomic_load_explicit(&s->wpos, memory_order_acquire);
-  rpos = atomic_load_explicit(&s->rpos, memory_order_relaxed);
-  if (wpos == rpos) return 0;
-  idx = rpos & (MP4PUSH_RING_BYTES - 1u);
-  avail = wpos - rpos;
-  n = MP4PUSH_RING_BYTES - idx;
-  if (n > avail) n = avail;
-  if (n > maxlen) n = (uint32_t)maxlen;
-  memcpy(buf, s->ring + idx, n);
-  atomic_store_explicit(&s->rpos, rpos + n, memory_order_release);
-  return n;
+  return byte_ring_read(&g_subs[slot].ring, buf, maxlen);
 }
 
 const uint8_t *mp4push_ring_peek(int slot, size_t *len) {
-  mp4push_sub_t *s;
-  uint32_t wpos, rpos, idx, avail, contig;
-  *len = 0;
-  if (slot < 0 || slot >= g_subs_n) return NULL;
-  s = &g_subs[slot];
-  if (!s->ring) return NULL;
-  wpos = atomic_load_explicit(&s->wpos, memory_order_acquire);
-  rpos = atomic_load_explicit(&s->rpos, memory_order_relaxed);
-  if (wpos == rpos) return NULL;
-  idx = rpos & (MP4PUSH_RING_BYTES - 1u);
-  avail = wpos - rpos;
-  contig = MP4PUSH_RING_BYTES - idx;
-  if (contig > avail) contig = avail;
-  *len = contig;
-  return s->ring + idx;
+  if (slot < 0 || slot >= g_subs_n) {
+    *len = 0;
+    return NULL;
+  }
+  return byte_ring_peek(&g_subs[slot].ring, len);
 }
 
 void mp4push_ring_advance(int slot, size_t n) {
   if (slot < 0 || slot >= g_subs_n) return;
-  atomic_fetch_add_explicit(&g_subs[slot].rpos, (uint32_t)n, memory_order_release);
+  byte_ring_advance(&g_subs[slot].ring, n);
 }
 
 int mp4push_ring_pending(int slot) {
   mp4push_sub_t *s;
   if (slot < 0 || slot >= g_subs_n) return 0;
   s = &g_subs[slot];
-  return atomic_load_explicit(&s->wpos, memory_order_acquire) != atomic_load_explicit(&s->rpos, memory_order_relaxed);
+  return atomic_load_explicit(&s->ring.wpos, memory_order_acquire) != atomic_load_explicit(&s->ring.rpos, memory_order_relaxed);
 }
 
 int mp4push_ring_errored(int slot) {
@@ -357,5 +332,5 @@ void mp4push_sub_close(int slot) {
   if (seg) seg_unlink(seg, slot);
   hls_seg_registry_unlock();
   if (s->proto == 2 || s->proto == 3) unlink_tid_chain(slot);
-  atomic_store_explicit(&s->alive, MP4PUSH_SUB_FREE, memory_order_release);
+  free_slot(slot);
 }
