@@ -71,6 +71,7 @@ int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush
   for (int i = 0; i < H2_TSPUSH_MAX; i++) if (!conn->tspush[i].sid) {
     ci = i;
     break;
+  }
   if (ci < 0) return 0;
   h2_tspush_stream_t *tcs = &conn->tspush[ci];
   tcs->sub_idx = tspush_sub;
