@@ -17,8 +17,9 @@ SOCK="$WORK/metrics.sock"
 
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/key.pem" -out "$WORK/cert.pem" -days 1 -subj "/CN=host-a" >"$WORK/openssl_a.log" 2>&1 || fail "cert a generation failed, see $WORK/openssl_a.log"
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/key_b.pem" -out "$WORK/cert_b.pem" -days 1 -subj "/CN=host-b" >"$WORK/openssl_b.log" 2>&1 || fail "cert b generation failed, see $WORK/openssl_b.log"
-timeout 12 "$BIN" -S "$SOCK" -l "127.0.0.1:$HTTPPORT" --tls-cert "$WORK/cert.pem" --tls-key "$WORK/key.pem" -v >"$WORK/dipimetrics.log" 2>&1 &
+"$BIN" -S "$SOCK" -l "127.0.0.1:$HTTPPORT" --tls-cert "$WORK/cert.pem" --tls-key "$WORK/key.pem" -v >"$WORK/dipimetrics.log" 2>&1 &
 MPID=$!
+trap 'kill $MPID 2>/dev/null; rm -rf "$WORK"' EXIT
 sleep 0.5
 
 body="$WORK/metrics.txt"
@@ -46,9 +47,6 @@ while [ $i -lt 30 ]; do
     sleep 0.1
 done
 echo "$cn" | grep -q "CN *= *host-b" || fail "served cert after reload: expected CN=host-b, got '$cn' (see $WORK/dipimetrics.log)"
-
-kill $MPID 2>/dev/null
-wait $MPID 2>/dev/null
 
 echo "OK"
 
