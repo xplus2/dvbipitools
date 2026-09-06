@@ -14,8 +14,8 @@
 #define N (L * D)
 
 static size_t drain_all(fec2022_dec_t *dc, unsigned char *out, size_t cap) {
-  size_t off = 0, n;
-
+  size_t off = 0;
+  size_t n;
   while ((n = fec2022_dec_drain(dc, out + off, cap - off)) > 0) off += n;
   return off;
 }
@@ -29,7 +29,10 @@ static void build_source(unsigned char *out, uint16_t seq, uint32_t ts, unsigned
   out[5] = (unsigned char)(ts >> 16);
   out[6] = (unsigned char)(ts >> 8);
   out[7] = (unsigned char)ts;
-  out[8] = out[9] = out[10] = out[11] = 0x42;
+  out[8] = 0x42;
+  out[9] = 0x42;
+  out[10] = 0x42;
+  out[11] = 0x42;
   memset(out + 12, fill, 188);
 }
 
@@ -49,7 +52,8 @@ START_TEST(fec2022_enc_new_rejects_bad_params) {
 END_TEST
 
 START_TEST(fec2022_parse_ld_accepts_and_rejects) {
-  unsigned l, d;
+  unsigned l;
+  unsigned d;
 
   ck_assert_int_eq(fec2022_parse_ld("10:5", &l, &d), 0);
   ck_assert_uint_eq(l, 10u);
@@ -144,7 +148,8 @@ START_TEST(fec2022_drops_double_loss_in_one_column) {
   unsigned char out[(N + L) * FEC2022_MAX_PKT];
   size_t off;
   unsigned col = 1;
-  uint16_t drop_a = (uint16_t)(col + 0u * L), drop_b = (uint16_t)(col + 1u * L);
+  uint16_t drop_a = (uint16_t)(col + 0u * L);
+  uint16_t drop_b = (uint16_t)(col + 1u * L);
 
   ck_assert_ptr_nonnull(e);
   ck_assert_ptr_nonnull(dc);

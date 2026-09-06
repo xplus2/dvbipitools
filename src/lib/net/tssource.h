@@ -21,7 +21,9 @@ typedef struct {
   const char *group;
   unsigned port;
   const char *iface; /* NULL = kernel default route */
-  unsigned al_fec_l, al_fec_d, al_fec_port;
+  unsigned al_fec_l;
+  unsigned al_fec_d;
+  unsigned al_fec_port;
   /* TSSRC_HTTP */
   http_url_t http;
   int insecure_tls; /* skip TLS verification */

@@ -16,7 +16,9 @@ typedef struct {
   unsigned port;
   const char *iface; /* NULL = kernel default route */
   int ttl;            /* 0 = kernel default */
-  unsigned al_fec_l, al_fec_d, al_fec_port;
+  unsigned al_fec_l;
+  unsigned al_fec_d;
+  unsigned al_fec_port;
   /* TSSINK_FILE; O_TRUNC on open */
   const char *file_path;
 } tssink_cfg_t;

@@ -16,7 +16,7 @@ static void free_rtp_out(out_ctx_t *o) {
 
 /* rx is already built (discovery succeeded): sets up pacing/cas and runs until this
    connection ends, then tears rx back down */
-static void run_single_input(const config_t *cfg, tvsrc_t *src, psi_t *psi, out_ctx_t *out, remux_t *rx, metrics_exporter_t *mx, input_metrics_t *im_p, ts_metrics_t *tsm_p) {
+static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi, out_ctx_t *out, remux_t *rx, metrics_exporter_t *mx, input_metrics_t *im_p, ts_metrics_t *tsm_p) {
   cas_t *cas = NULL;
   int cas_wanted;
 

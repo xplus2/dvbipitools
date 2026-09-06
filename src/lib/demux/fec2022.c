@@ -14,7 +14,11 @@ typedef struct {
   int gen_open;
   unsigned real_count;
   int repair_seen;
-  unsigned char rp, rx, rcc, rm, rpt_xor;
+  unsigned char rp;
+  unsigned char rx;
+  unsigned char rcc;
+  unsigned char rm;
+  unsigned char rpt_xor;
   uint32_t rts_xor;
   uint16_t rlen_xor;
   unsigned char repair_payload[FEC2022_MAX_PKT - 12];
@@ -30,7 +34,8 @@ typedef struct {
 } ring_slot_t;
 
 struct fec2022_dec {
-  unsigned l, d;
+  unsigned l;
+  unsigned d;
   uint32_t src_ssrc;
   int have_ssrc;
   int have_cursor;
@@ -42,7 +47,8 @@ struct fec2022_dec {
   ring_slot_t *ring;
   unsigned char *ready;
   size_t *ready_len;
-  unsigned ready_head, ready_count;
+  unsigned ready_head;
+  unsigned ready_count;
 };
 
 fec2022_dec_t *fec2022_dec_new(unsigned l, unsigned d) {
@@ -123,7 +129,11 @@ static void resolve_column(fec2022_dec_t *dec, unsigned c) {
     if (dec->slot_seen[si]) {
       ring_put(dec, seq, RING_READY, dec->slot_pkt + si * FEC2022_MAX_PKT, dec->slot_len[si]);
     } else if (i == missing) {
-      unsigned char p = cs->rp, x = cs->rx, cc = cs->rcc, m = cs->rm, pt_xor = cs->rpt_xor;
+      unsigned char p = cs->rp;
+      unsigned char x = cs->rx;
+      unsigned char cc = cs->rcc;
+      unsigned char m = cs->rm;
+      unsigned char pt_xor = cs->rpt_xor;
       uint32_t ts_xor = cs->rts_xor;
       uint16_t len_xor = cs->rlen_xor;
       unsigned char payload[FEC2022_MAX_PKT - 12];
@@ -176,7 +186,10 @@ static void enter_generation(fec2022_dec_t *dec, unsigned c, unsigned gen) {
 
 int fec2022_dec_source(fec2022_dec_t *dec, const unsigned char *pkt, size_t len) {
   uint16_t seq;
-  unsigned c, pos, gen, idx;
+  unsigned c;
+  unsigned pos;
+  unsigned gen;
+  unsigned idx;
   fec2022_col_t *cs;
   size_t si;
 
@@ -216,9 +229,12 @@ void fec2022_dec_repair(fec2022_dec_t *dec, const unsigned char *pkt, size_t len
   rtp_hdr_t h;
   const unsigned char *fh;
   uint16_t snb;
-  unsigned c, pos, gen;
+  unsigned c;
+  unsigned pos;
+  unsigned gen;
   fec2022_col_t *cs;
-  size_t payload_off, payload_len;
+  size_t payload_off;
+  size_t payload_len;
 
   if (!rtp_parse_header(pkt, len, &h) || h.payload_off + 16 > len) return;
   fh = pkt + h.payload_off;

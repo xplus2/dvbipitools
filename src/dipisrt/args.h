@@ -33,7 +33,9 @@ typedef struct {
   unsigned latency_ms;    /* 0 = library default */
   unsigned send_buffer_mult; /* --send-buffer-mult. 0 = default 4; clamped 1..32 */
   const char *iface;      /* non-SRT side multicast join/send interface. NULL = kernel default */
-  unsigned al_fec_l, al_fec_d, al_fec_port;
+  unsigned al_fec_l;
+  unsigned al_fec_d;
+  unsigned al_fec_port;
   int verbose;
   int daemonize; /* -d, --daemonize: fork to background after startup */
   int color_mode;

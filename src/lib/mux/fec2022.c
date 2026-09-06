@@ -10,7 +10,11 @@
 #include "fec2022.h"
 
 typedef struct {
-  unsigned char p, x, cc, m, pt_xor;
+  unsigned char p;
+  unsigned char x;
+  unsigned char cc;
+  unsigned char m;
+  unsigned char pt_xor;
   uint32_t ts_xor;
   uint16_t len_xor;
   uint16_t snb;
@@ -20,7 +24,8 @@ typedef struct {
 } fec2022_col_t;
 
 struct fec2022_enc {
-  unsigned l, d;
+  unsigned l;
+  unsigned d;
   unsigned char pt;
   uint16_t seq;
   fec2022_col_t cols[FEC2022_MAX_L];
@@ -44,7 +49,8 @@ void fec2022_enc_free(fec2022_enc_t *e) { free(e); }
 
 int fec2022_parse_ld(const char *s, unsigned *l_out, unsigned *d_out) {
   char *end;
-  unsigned long l, d;
+  unsigned long l;
+  unsigned long d;
 
   l = strtoul(s, &end, 10);
   if (*end != ':' || l == 0) return -1;
@@ -86,7 +92,9 @@ size_t fec2022_enc_feed(fec2022_enc_t *e, const unsigned char *pkt, size_t len, 
   be16_put(out + 12, c->snb);               /* RFC6015 SN base low */
   be16_put(out + 14, c->len_xor);           /* RFC6015 Length recovery */
   out[16] = (unsigned char)(0x80 | c->pt_xor); /* RFC6015 E, PT recovery */
-  out[17] = out[18] = out[19] = 0;             /* RFC6015 Mask */
+  out[17] = 0;                                 /* RFC6015 Mask */
+  out[18] = 0;
+  out[19] = 0;
   be32_put(out + 20, c->ts_xor);            /* RFC6015 TS recovery */
   out[24] = 0;                                 /* RFC6015 N, D, Type, Index */
   out[25] = (unsigned char)e->l;               /* RFC6015 Offset = L */

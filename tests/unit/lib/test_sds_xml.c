@@ -134,7 +134,8 @@ START_TEST(sds_broadcast_includes_fec_pt_when_not_96) {
 END_TEST
 
 START_TEST(sds_parse_broadcast_round_trips_fec) {
-  sds_service_t svc, out[2];
+  sds_service_t svc;
+  sds_service_t out[2];
   sds_fec_t fec;
   unsigned char buf[4096];
   size_t len;
@@ -162,7 +163,8 @@ START_TEST(sds_parse_broadcast_round_trips_fec) {
 END_TEST
 
 START_TEST(sds_parse_broadcast_round_trips_fec_default_pt) {
-  sds_service_t svc, out[2];
+  sds_service_t svc;
+  sds_service_t out[2];
   sds_fec_t fec;
   unsigned char buf[4096];
   size_t len;
@@ -447,7 +449,8 @@ START_TEST(sds_parse_broadcast_no_bitrate_genre_ret_when_absent) {
 END_TEST
 
 START_TEST(sds_parse_broadcast_round_trips_fcc) {
-  sds_service_t svc, out[2];
+  sds_service_t svc;
+  sds_service_t out[2];
   sds_fcc_t fcc;
   unsigned char buf[4096];
   size_t len;
@@ -477,7 +480,8 @@ START_TEST(sds_parse_broadcast_round_trips_fcc) {
 END_TEST
 
 START_TEST(sds_parse_broadcast_round_trips_fcc_resolve_by_port) {
-  sds_service_t svc, out[2];
+  sds_service_t svc;
+  sds_service_t out[2];
   sds_fcc_t fcc;
   unsigned char buf[4096];
   size_t len;
@@ -508,7 +512,8 @@ START_TEST(sds_parse_broadcast_round_trips_fcc_resolve_by_port) {
 END_TEST
 
 START_TEST(sds_parse_broadcast_round_trips_unicast_ret) {
-  sds_service_t svc, out[2];
+  sds_service_t svc;
+  sds_service_t out[2];
   sds_ret_t ret;
   unsigned char buf[4096];
   size_t len;
@@ -539,7 +544,8 @@ START_TEST(sds_parse_broadcast_round_trips_unicast_ret) {
 END_TEST
 
 START_TEST(sds_parse_broadcast_round_trips_multicast_ret) {
-  sds_service_t svc, out[2];
+  sds_service_t svc;
+  sds_service_t out[2];
   sds_ret_t ret;
   unsigned char buf[4096];
   size_t len;
@@ -569,7 +575,8 @@ START_TEST(sds_parse_broadcast_round_trips_multicast_ret) {
 END_TEST
 
 START_TEST(sds_parse_broadcast_round_trips_multicast_ret_override_port) {
-  sds_service_t svc, out[2];
+  sds_service_t svc;
+  sds_service_t out[2];
   sds_ret_t ret;
   unsigned char buf[4096];
   size_t len;

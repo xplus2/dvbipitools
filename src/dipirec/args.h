@@ -88,7 +88,9 @@ typedef struct {
   const char *iface_in;  /* -I, -i rtp/udp join iface, NULL = kernel default */
   const char *iface_out; /* --out-iface, -o rtp/udp send iface, NULL = kernel default */
   int out_ttl;           /* --ttl, -o rtp/udp send TTL/hop-limit, 0 = kernel default (1) */
-  unsigned al_fec_l, al_fec_d, al_fec_port;
+  unsigned al_fec_l;
+  unsigned al_fec_d;
+  unsigned al_fec_port;
   int verbose;          /* -v */
   long sub_lead_ms;     /* --sub-lead, shifts subtitles earlier */
   int color_mode;       /* int, actually a log_color_t */

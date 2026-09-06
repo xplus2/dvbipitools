@@ -77,7 +77,9 @@ typedef struct {
   int rtp;                   /* default on; -u/--udp forces plain UDP output */
   unsigned ttl;              /* -T; 0 = kernel default (1) */
   int dscp;                  /* --dscp, default NET_DSCP_VIDEO_HIGH */
-  unsigned al_fec_l, al_fec_d, al_fec_port;
+  unsigned al_fec_l;
+  unsigned al_fec_d;
+  unsigned al_fec_port;
   table_mode_t nit_mode;     /* -n; one NIT for whole output */
   char nit_text[256];        /* -n <text> */
   unsigned bitrate_kbps;     /* -b; 0 = no shaping, passthrough rate; one shared budget for whole output */

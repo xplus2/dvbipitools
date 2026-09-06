@@ -75,7 +75,8 @@ typedef struct {
   int no_http3;             /* --no-http3: disable h3 */
   int no_fcc;               /* --no-fcc: ignore SDS fcc */
   int no_ret;               /* --no-ret: ignore SDS ret */
-  unsigned al_fec_l, al_fec_d;
+  unsigned al_fec_l;
+  unsigned al_fec_d;
   int no_al_fec;
   int no_status;            /* --no-status: disables /ui/status.js */
   const char *status_template; /* --status-tpl <path>. NULL = embedded default. SIGHUP reloads */

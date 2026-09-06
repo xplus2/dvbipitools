@@ -829,7 +829,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
   }
   {
-    int has_rtp_udp = 0, has_rtp = 0, has_rtmp = 0, has_rtmps = 0, has_non_file = 0, n_non_rtmp = 0;
+    int has_rtp_udp = 0;
+    int has_rtp = 0;
+    int has_rtmp = 0;
+    int has_rtmps = 0;
+    int has_non_file = 0;
+    int n_non_rtmp = 0;
     for (int i = 0; i < cfg->n_out; i++) {
       out_kind_t k = cfg->out[i].kind;
       if (k == OUT_RTP || k == OUT_UDP) has_rtp_udp = 1;

@@ -234,7 +234,9 @@ void on_repair(ret_client_t *r, const unsigned char *pkt, size_t len, double now
 }
 
 static int uni_socket_open(const ret_client_cfg_t *cfg) {
-  int fd, on = 1, tos = NET_DSCP_SIGNALLING;
+  int fd;
+  int on = 1;
+  int tos = NET_DSCP_SIGNALLING;
   struct sockaddr_storage ss;
   socklen_t sslen;
 
