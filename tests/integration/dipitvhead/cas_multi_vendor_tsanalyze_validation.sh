@@ -54,13 +54,14 @@ timeout 12 "$BIN" -O lo -u -m $MCAST:$PORT1 -i - -s "Multi CAS Steady" \
     --cas-pids video,audio --cas-cp-duration 3000 --cas-fallback-clear \
     >"$WORK/dipitvhead1.log" 2>&1
 
-wait $TSPID || true
+sleep 0.5
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 kill $ECMG_A_PID $ECMG_B_PID 2>/dev/null
 
 [ -s "$cap1" ] || fail "multi-cas steady: no packets captured (see $WORK/dipitvhead1.log)"
 
-tsanalyze --json "$cap1" > "$report1" 2>"$WORK/tsanalyze1.log" \
-    || fail "multi-cas steady: tsanalyze failed, see $WORK/tsanalyze1.log"
+tsanalyze --json "$cap1" > "$report1" 2>"$WORK/tsanalyze1.log" || fail "multi-cas steady: tsanalyze failed, see $WORK/tsanalyze1.log"
 
 is_scrambled=$(jq -r '.services[0]["is-scrambled"]' "$report1")
 [ "$is_scrambled" = "true" ] || fail "multi-cas steady: expected scrambled output, is-scrambled=$is_scrambled"
@@ -83,8 +84,7 @@ tsecmg -p $ECMG_A_PORT -s --log-protocol=info >"$WORK/tsecmg_a2.log" 2>&1 &
 ECMG_A_PID=$!
 wait_port $ECMG_A_PORT || fail "tsecmg (vendor A) never started listening on $ECMG_A_PORT (see $WORK/tsecmg_a2.log)"
 
-tsp -I ip $MCAST:$PORT2 --local-address 127.0.0.1 --receive-timeout 6000 \
-    -O file "$cap2" >"$WORK/tsp2.log" 2>&1 &
+tsp -I ip $MCAST:$PORT2 --local-address 127.0.0.1 --receive-timeout 6000 -O file "$cap2" >"$WORK/tsp2.log" 2>&1 &
 TSPID=$!
 
 ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=25" \
@@ -99,13 +99,14 @@ timeout 12 "$BIN" -O lo -u -m $MCAST:$PORT2 -i - -s "Multi CAS Nonrequired Down"
     --cas-pids video,audio --cas-cp-duration 3000 --cas-fallback-clear \
     >"$WORK/dipitvhead2.log" 2>&1
 
-wait $TSPID || true
+sleep 0.5
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 kill $ECMG_A_PID 2>/dev/null
 
 [ -s "$cap2" ] || fail "multi-cas nonrequired-down: no packets captured (see $WORK/dipitvhead2.log)"
 
-tsanalyze --json "$cap2" > "$report2" 2>"$WORK/tsanalyze2.log" \
-    || fail "multi-cas nonrequired-down: tsanalyze failed, see $WORK/tsanalyze2.log"
+tsanalyze --json "$cap2" > "$report2" 2>"$WORK/tsanalyze2.log" || fail "multi-cas nonrequired-down: tsanalyze failed, see $WORK/tsanalyze2.log"
 
 is_scrambled=$(jq -r '.services[0]["is-scrambled"]' "$report2")
 [ "$is_scrambled" = "true" ] || fail "multi-cas nonrequired-down: expected content to stay scrambled with only a non-required vendor down, is-scrambled=$is_scrambled"
@@ -120,8 +121,7 @@ tsecmg -p $ECMG_B_PORT -s --log-protocol=info >"$WORK/tsecmg_b3.log" 2>&1 &
 ECMG_B_PID=$!
 wait_port $ECMG_B_PORT || fail "tsecmg (vendor B) never started listening on $ECMG_B_PORT (see $WORK/tsecmg_b3.log)"
 
-tsp -I ip $MCAST:$PORT3 --local-address 127.0.0.1 --receive-timeout 6000 \
-    -O file "$cap3" >"$WORK/tsp3.log" 2>&1 &
+tsp -I ip $MCAST:$PORT3 --local-address 127.0.0.1 --receive-timeout 6000 -O file "$cap3" >"$WORK/tsp3.log" 2>&1 &
 TSPID=$!
 
 ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=25" \
@@ -136,14 +136,14 @@ timeout 12 "$BIN" -O lo -u -m $MCAST:$PORT3 -i - -s "Multi CAS Required Down" \
     --cas-pids video,audio --cas-cp-duration 3000 --cas-fallback-clear \
     >"$WORK/dipitvhead3.log" 2>&1
 
-wait $TSPID || true
+sleep 0.5
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 kill $ECMG_B_PID 2>/dev/null
 
 [ -s "$cap3" ] || fail "multi-cas required-down: no packets captured (see $WORK/dipitvhead3.log)"
 
-tsanalyze --json "$cap3" > "$report3" 2>"$WORK/tsanalyze3.log" \
-    || fail "multi-cas required-down: tsanalyze failed, see $WORK/tsanalyze3.log"
-
+tsanalyze --json "$cap3" > "$report3" 2>"$WORK/tsanalyze3.log" || fail "multi-cas required-down: tsanalyze failed, see $WORK/tsanalyze3.log"
 is_scrambled=$(jq -r '.services[0]["is-scrambled"]' "$report3")
 [ "$is_scrambled" = "false" ] || fail "multi-cas required-down: expected clear output with the required vendor down and --cas-fallback-clear, is-scrambled=$is_scrambled"
 

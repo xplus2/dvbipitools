@@ -124,7 +124,7 @@ between real-world usage of media formats and the standard.
 On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 
 * FEC (Annex E) 
-* Companion Stream FCC (Annex J). RAMS-based FCC is provided by `dipifccret`
+* Companion Stream FCC (Annex J)
 * DVB Companion Screens and Streams
 * SD&S record type "CoD Discovery" and "Services From Other SPs"
 * RTSP command/control for CoD services and multicast join (§6)

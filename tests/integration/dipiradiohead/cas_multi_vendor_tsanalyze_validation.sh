@@ -79,14 +79,14 @@ timeout 20 "$BIN" -I lo -m $MCAST:$PORT1 -i "http://127.0.0.1:$HTTP_PORT/stream.
     --cas-cp-duration 3000 --cas-fallback-clear \
     >"$WORK/dipiradiohead1.log" 2>&1 || true
 
-wait $TSPID || true
+sleep 0.5
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 kill $ECMG_A_PID $ECMG_B_PID $FFSERVE_PID 2>/dev/null
 
 [ -s "$cap1" ] || fail "multi-cas steady: no packets captured (see $WORK/dipiradiohead1.log)"
 
-tsanalyze --json "$cap1" > "$report1" 2>"$WORK/tsanalyze1.log" \
-    || fail "multi-cas steady: tsanalyze failed, see $WORK/tsanalyze1.log"
-
+tsanalyze --json "$cap1" > "$report1" 2>"$WORK/tsanalyze1.log" || fail "multi-cas steady: tsanalyze failed, see $WORK/tsanalyze1.log"
 is_scrambled=$(jq -r '.services[0]["is-scrambled"]' "$report1")
 [ "$is_scrambled" = "true" ] || fail "multi-cas steady: expected scrambled output, is-scrambled=$is_scrambled"
 
@@ -106,8 +106,7 @@ ECMG_A_PID=$!
 wait_for_port $ECMG_A_PORT "tsecmg vendor A"
 start_http_source 2
 
-tsp -I ip $MCAST:$PORT2 --local-address 127.0.0.1 --receive-timeout 15000 \
-    -O file "$cap2" >"$WORK/tsp2.log" 2>&1 &
+tsp -I ip $MCAST:$PORT2 --local-address 127.0.0.1 --receive-timeout 15000 -O file "$cap2" >"$WORK/tsp2.log" 2>&1 &
 TSPID=$!
 sleep 0.3
 
@@ -120,13 +119,14 @@ timeout 20 "$BIN" -I lo -m $MCAST:$PORT2 -i "http://127.0.0.1:$HTTP_PORT/stream.
     --cas-cp-duration 3000 --cas-fallback-clear \
     >"$WORK/dipiradiohead2.log" 2>&1 || true
 
-wait $TSPID || true
+sleep 0.5
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 kill $ECMG_A_PID $FFSERVE_PID 2>/dev/null
 
 [ -s "$cap2" ] || fail "multi-cas nonrequired-down: no packets captured (see $WORK/dipiradiohead2.log)"
 
-tsanalyze --json "$cap2" > "$report2" 2>"$WORK/tsanalyze2.log" \
-    || fail "multi-cas nonrequired-down: tsanalyze failed, see $WORK/tsanalyze2.log"
+tsanalyze --json "$cap2" > "$report2" 2>"$WORK/tsanalyze2.log" || fail "multi-cas nonrequired-down: tsanalyze failed, see $WORK/tsanalyze2.log"
 
 is_scrambled=$(jq -r '.services[0]["is-scrambled"]' "$report2")
 [ "$is_scrambled" = "true" ] || fail "multi-cas nonrequired-down: expected content to stay scrambled with only a non-required vendor down, is-scrambled=$is_scrambled"
@@ -142,8 +142,7 @@ ECMG_B_PID=$!
 wait_for_port $ECMG_B_PORT "tsecmg vendor B"
 start_http_source 3
 
-tsp -I ip $MCAST:$PORT3 --local-address 127.0.0.1 --receive-timeout 15000 \
-    -O file "$cap3" >"$WORK/tsp3.log" 2>&1 &
+tsp -I ip $MCAST:$PORT3 --local-address 127.0.0.1 --receive-timeout 15000 -O file "$cap3" >"$WORK/tsp3.log" 2>&1 &
 TSPID=$!
 sleep 0.3
 
@@ -156,7 +155,9 @@ timeout 20 "$BIN" -I lo -m $MCAST:$PORT3 -i "http://127.0.0.1:$HTTP_PORT/stream.
     --cas-cp-duration 3000 --cas-fallback-clear \
     >"$WORK/dipiradiohead3.log" 2>&1 || true
 
-wait $TSPID || true
+sleep 0.5
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 kill $ECMG_B_PID $FFSERVE_PID 2>/dev/null
 
 [ -s "$cap3" ] || fail "multi-cas required-down: no packets captured (see $WORK/dipiradiohead3.log)"
