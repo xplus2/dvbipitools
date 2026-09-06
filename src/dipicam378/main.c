@@ -18,7 +18,7 @@
 
 #define CAM378_METRICS_POLL_MS 200
 
-static void push_metrics(metrics_exporter_t *mx, cs378x_server_t *srv, device_state_t *dev, const char *algo_name) {
+static void push_metrics(metrics_exporter_t *mx, const cs378x_server_t *srv, device_state_t *dev, const char *algo_name) {
   cs378x_metrics_t m;
   metrics_writer_t w;
 

@@ -48,6 +48,7 @@ wait_for_port() {
         [ "$i" -lt 100 ] || fail "multi-cas: $what on $port never became ready"
         sleep 0.05
     done
+    return 0
 }
 
 # phase 1: both vendors up - content scrambled, both CA_descriptors present with the right

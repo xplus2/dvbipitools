@@ -180,11 +180,11 @@ int h2_hls_cold_try_park(h2_conn_t *conn, int32_t stream_id, capture_ctx_t *ctx,
 }
 
 void h2_hls_cold_on_stream_close(const h2_conn_t *conn, int32_t stream_id) {
-  llhls_waiter_pool_close_owner(t_h2_hls_cold_waiters, H2_HLS_COLD_WAITERS_MAX, &t_h2_hls_cold_waiters_active, (void *)conn, stream_id);
+  llhls_waiter_pool_close_owner(t_h2_hls_cold_waiters, H2_HLS_COLD_WAITERS_MAX, &t_h2_hls_cold_waiters_active, conn, stream_id);
 }
 
 void h2_hls_cold_on_conn_close(const h2_conn_t *conn) {
-  llhls_waiter_pool_close_owner(t_h2_hls_cold_waiters, H2_HLS_COLD_WAITERS_MAX, &t_h2_hls_cold_waiters_active, (void *)conn, -1);
+  llhls_waiter_pool_close_owner(t_h2_hls_cold_waiters, H2_HLS_COLD_WAITERS_MAX, &t_h2_hls_cold_waiters_active, conn, -1);
 }
 
 static void h2_hls_cold_finish(llhls_waiter_t *w) {

@@ -198,7 +198,9 @@ START_TEST(flv_no_supported_tracks_emits_nothing_and_no_error) {
 
   {
     unsigned char body[32];
-    size_t n = 0, hdr, crc_at;
+    size_t n = 0;
+    size_t hdr;
+    size_t crc_at;
     uint32_t crc;
     body[n++] = (unsigned char)(101 >> 8);
     body[n++] = (unsigned char)101;

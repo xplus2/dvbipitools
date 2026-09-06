@@ -228,7 +228,11 @@ static void build_stsd(mp4buf_t *out, const fmp4_trk_t *t) {
   int i;
 
   if (codec_is_audio(t->cfg.codec)) {
-    const char *entry_fourcc = t->cfg.codec == CODEC_AC3 ? "ac-3" : t->cfg.codec == CODEC_EAC3 ? "ec-3" : t->cfg.codec == CODEC_OPUS ? "Opus" : "mp4a";
+    const char *entry_fourcc;
+    if (t->cfg.codec == CODEC_AC3) entry_fourcc = "ac-3";
+    else if (t->cfg.codec == CODEC_EAC3) entry_fourcc = "ec-3";
+    else if (t->cfg.codec == CODEC_OPUS) entry_fourcc = "Opus";
+    else entry_fourcc = "mp4a";
     memset(&entry, 0, sizeof entry);
     for (i = 0; i < 6; i++) mb_u8(&entry, 0); /* reserved */
     mb_u16(&entry, 1);  /* data_reference_index */
@@ -259,8 +263,11 @@ static void build_stsd(mp4buf_t *out, const fmp4_trk_t *t) {
 
   {
     mp4buf_t cfgbox;
-    const char *entry_fourcc = (t->cfg.codec == CODEC_HEVC) ? "hvc1" : (t->cfg.codec == CODEC_VVC) ? "vvc1" : "avc1";
-    const char *cfg_fourcc = (t->cfg.codec == CODEC_HEVC) ? "hvcC" : (t->cfg.codec == CODEC_VVC) ? "vvcC" : "avcC";
+    const char *entry_fourcc;
+    const char *cfg_fourcc;
+    if (t->cfg.codec == CODEC_HEVC) { entry_fourcc = "hvc1"; cfg_fourcc = "hvcC"; }
+    else if (t->cfg.codec == CODEC_VVC) { entry_fourcc = "vvc1"; cfg_fourcc = "vvcC"; }
+    else { entry_fourcc = "avc1"; cfg_fourcc = "avcC"; }
     memset(&entry, 0, sizeof entry);
     for (i = 0; i < 6; i++) mb_u8(&entry, 0); /* reserved */
     mb_u16(&entry, 1);  /* data_reference_index */

@@ -33,24 +33,32 @@ typedef struct {
   unsigned track_id;
   pid_class_t cls;
   char lang[4];
-  unsigned width, height;
+  unsigned width;
+  unsigned height;
   int hdr_parsed;
   int psi_idx; /* m->psi[] index */
   int64_t ts_ms;      /* video: dts. audio/subs: pts (no reordering, dts==pts) */
   int64_t pts_ms;     /* video only, for cts_offset */
-  pts_unwrap_t pts_uw, dts_uw;
+  pts_unwrap_t pts_uw;
+  pts_unwrap_t dts_uw;
   unsigned char *rem; /* audio: partial frame carry-over */
-  size_t remlen, remcap;
+  size_t remlen;
+  size_t remcap;
   unsigned char *vbuf; /* video: length-prefixed AU */
-  size_t vbuflen, vbufcap;
+  size_t vbuflen;
+  size_t vbufcap;
   int got_key;
   ttx_t *ttx;
   esc_track_t es;
-  unsigned char ac3_bsid, ac3_bsmod, ac3_acmod, ac3_lfeon; /* AC3/EAC3 dac3/dec3, captured from 1st frame */
+  unsigned char ac3_bsid;  /* AC3/EAC3 dac3/dec3, captured from 1st frame */
+  unsigned char ac3_bsmod;
+  unsigned char ac3_acmod;
+  unsigned char ac3_lfeon;
   unsigned ac3_bitrate_code;
 
   mp4_samp_t *samp;
-  int nsamp, samp_cap;
+  int nsamp;
+  int samp_cap;
   uint32_t *prev_dur_slot;
   int64_t prev_dts_ms;
   uint32_t last_dur;
@@ -77,7 +85,9 @@ struct mp4mux {
   track_t trk[MP4_MAX_TRACKS];
   int ntrk;
   int last_trk_idx;
-  int setup, started, err;
+  int setup;
+  int started;
+  int err;
   int flushing;
   int ready_seen;
   int64_t ready_ms;

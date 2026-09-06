@@ -17,6 +17,7 @@ main{flex:1;padding:16px;overflow:auto}
 #statBtns{margin-top:12px;display:flex;gap:8px}
 #statBtns button{padding:6px 12px;cursor:pointer}
 #urlbar,#plUrlbar{display:flex;gap:6px;margin-bottom:14px}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 #urlOutput,#plUrlOutput{flex:1;font-family:monospace;padding:6px;background:#ddd;border:1px solid #888}
 #copyBtn,#plCopyBtn{cursor:pointer;font-size:16px;padding:4px 10px}
 .ub-layout{display:flex;gap:18px;align-items:flex-start}
@@ -119,6 +120,7 @@ main{flex:1;padding:16px;overflow:auto}
 </section>
 <section id="view-playlist" hidden>
 <div id="plUrlbar">
+<label for="plUrlOutput" class="visually-hidden">playlist url</label>
 <input type="text" id="plUrlOutput" readonly value="">
 <button id="plCopyBtn" title="copy to clipboard">&#128203;</button>
 </div>

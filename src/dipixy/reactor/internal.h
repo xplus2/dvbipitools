@@ -236,7 +236,7 @@ static inline int hls_cold_waiter_pool_try_park(llhls_waiter_t *slots, int cap, 
 }
 
 /* stream_id < 0: match owner only (conn closing). else: match owner + exact stream (stream closing) */
-static inline void llhls_waiter_pool_close_owner(llhls_waiter_t *slots, int cap, int *active_count, void *owner, int64_t stream_id) {
+static inline void llhls_waiter_pool_close_owner(llhls_waiter_t *slots, int cap, int *active_count, const void *owner, int64_t stream_id) {
   for (int i = 0; i < cap; i++) if (slots[i].active && slots[i].owner == owner && (stream_id < 0 || slots[i].stream_id == stream_id)) {
     slots[i].active = 0;
     (*active_count)--;

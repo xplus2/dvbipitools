@@ -65,7 +65,7 @@ void tls_server_ctx_free(tls_server_ctx_t *sc) {
   free(sc);
 }
 
-tls_t *tls_server_accept_start(tls_server_ctx_t *sc, int fd) {
+tls_t *tls_server_accept_start(const tls_server_ctx_t *sc, int fd) {
   tls_t *t = calloc(1, sizeof *t);
   if (!t) return NULL;
   t->fd = fd;
@@ -85,7 +85,7 @@ tls_t *tls_server_accept_start(tls_server_ctx_t *sc, int fd) {
   return t;
 }
 
-tls_handshake_status_t tls_server_handshake_step(tls_t *t) {
+tls_handshake_status_t tls_server_handshake_step(const tls_t *t) {
   int r = SSL_accept(t->ssl);
   int err;
   if (r == 1) return TLS_HANDSHAKE_DONE;

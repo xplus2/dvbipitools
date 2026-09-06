@@ -59,7 +59,8 @@ long date_to_mjd(int y, int mo, int d);
 
 typedef struct {
   char *buf;
-  size_t len, cap;
+  size_t len;
+  size_t cap;
 } dstrbuf_t;
 
 /* OOM: buf stays NULL, every dstrbuf_appendf becomes a no-op */

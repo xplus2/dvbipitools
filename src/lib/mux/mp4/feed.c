@@ -93,7 +93,8 @@ static void try_parse_vvc_hdr(mp4_t *m, track_t *t) {
 }
 
 static void handle_video(mp4_t *m, track_t *t, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *d, size_t len) {
-  size_t p, scl = 0;
+  size_t p;
+  size_t scl = 0;
   int key = 0;
 
   if (m->flushing)
@@ -105,7 +106,8 @@ static void handle_video(mp4_t *m, track_t *t, int has_pts, uint64_t pts, int ha
 
   p = find_startcode(d, len, 0, &scl);
   while (p < len) {
-    size_t ns = p + scl, scl2 = 0;
+    size_t ns = p + scl;
+    size_t scl2 = 0;
     size_t q = find_startcode(d, len, ns, &scl2);
     size_t n = q - ns;
     unsigned type;
@@ -217,7 +219,8 @@ static void add_track(mp4_t *m, const psi_es_t *es, int psi_idx) {
 
 void p4_setup(mp4_t *m) {
   const psi_es_t *es;
-  int c, k;
+  int c;
+  int k;
   if (m->video_ok) {
     es = psi_es(m->psi[0], &c);
     for (k = 0; k < c && m->ntrk < MP4_MAX_TRACKS; k++) {
@@ -233,8 +236,7 @@ void p4_setup(mp4_t *m) {
     es = psi_es(m->psi[p], &c);
     for (k = 0; k < c && m->ntrk < MP4_MAX_TRACKS; k++) {
       if (es[k].cls != PID_AUDIO) continue;
-      if (!m->opts->audio_all && es[k].audio_index != (int)m->opts->audio_track)
-        continue;
+      if (!m->opts->audio_all && es[k].audio_index != (int)m->opts->audio_track) continue;
       if (!audio_supported(es[k].codec)) {
         log_line("mp4=no_ac(%s)", codec_name(es[k].codec));
         continue;
@@ -246,8 +248,7 @@ void p4_setup(mp4_t *m) {
     es = psi_es(m->psi[0], &c);
     for (k = 0; k < c && m->ntrk < MP4_MAX_TRACKS; k++) {
       track_t *t;
-      if (es[k].cls != PID_TELETEXT || !es[k].ttx_page)
-        continue;
+      if (es[k].cls != PID_TELETEXT || !es[k].ttx_page) continue;
       add_track(m, &es[k], 0);
       t = &m->trk[m->ntrk - 1];
       t->ttx = ttx_new(es[k].ttx_page, es[k].ttx_lang, m->opts->sub_lead_ms, on_cue, m);

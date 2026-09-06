@@ -23,13 +23,13 @@ static size_t g_fake_init_len;
 void hls_seg_registry_lock(void) { pthread_mutex_lock(&g_fake_lock); }
 void hls_seg_registry_unlock(void) { pthread_mutex_unlock(&g_fake_lock); }
 
-hls_seg_ctx_t *hls_seg_find_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
+hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
   (void)filter;
   if (!g_fake_seg_present || ctx != g_fake_ctx || pmt_pid != g_fake_pmt || container != SEG_CONTAINER_FMP4) return NULL;
   return &g_fake_seg;
 }
 
-int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container,
+int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container,
                const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
   (void)ctx;
   (void)filter;
@@ -57,7 +57,7 @@ void hls_resp_body_release(uint8_t *body, int zc) {
   free(body);
 }
 
-void capture_wait_pumps_quiescent(void) {}
+void capture_wait_pumps_quiescent(void) { /* fake: no pumps here */ }
 
 conn_t *conn_for_fd(int fd) {
   (void)fd;

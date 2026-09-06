@@ -299,11 +299,11 @@ int conn_flush(conn_t *c, int epfd) {
   unsigned char chunk[CONN_FLUSH_CHUNK];
 
   conn_zc_drain(c);
-
   for (;;) {
-    size_t pending, tocopy, sent = 0;
+    size_t pending;
+    size_t tocopy;
+    size_t sent = 0;
     int last_errno = 0;
-
     pthread_mutex_lock(&c->out_lock);
     pending = c->out.len - c->out.off;
     if (pending == 0) {
@@ -355,8 +355,7 @@ int conn_flush(conn_t *c, int epfd) {
         c->zc.any_zc = 1;
         c->zc.last_zc_id = c->zc_next_id++;
       }
-      if (c->zc.off < c->zc.len)
-        continue;
+      if (c->zc.off < c->zc.len) continue;
       /* fully handed off: release now if never pinned, else await confirm */
       if (!c->zc.any_zc)
         c->zc.release(c->zc.release_arg);

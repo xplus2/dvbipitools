@@ -30,14 +30,13 @@ typedef struct {
 } server_arg_t;
 
 static void *serve_once(void *arg) {
-  server_arg_t *a = arg;
+  const server_arg_t *a = arg;
   int cfd = accept(a->listen_fd, NULL, NULL);
   struct timeval tv = {2, 0};
   char buf[4096];
   size_t got = 0;
 
-  if (cfd < 0)
-    return NULL;
+  if (cfd < 0) return NULL;
   setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
   for (;;) {
     ssize_t n = recv(cfd, buf + got, sizeof buf - got, 0);
@@ -57,6 +56,7 @@ static int make_listener(unsigned *port_out) {
   struct sockaddr_in addr;
   socklen_t alen = sizeof addr;
 
+  ck_assert_int_ge(fd, 0);
   memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -69,9 +69,7 @@ static int make_listener(unsigned *port_out) {
 
 static ipiclient_poll_state_t drive(ipiclient_poll_t *p, int max_iters) {
   ipiclient_poll_state_t st = IPICLIENT_POLL_PENDING;
-  int i;
-
-  for (i = 0; i < max_iters && st == IPICLIENT_POLL_PENDING; i++) {
+  for (int i = 0; i < max_iters && st == IPICLIENT_POLL_PENDING; i++) {
     struct pollfd pfd;
     pfd.fd = ipiclient_poll_fd(p);
     pfd.events = ipiclient_poll_events(p);

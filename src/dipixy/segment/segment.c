@@ -68,7 +68,7 @@ static hls_seg_ctx_t *find_locked(const capture_ctx_t *ctx, const pid_filter_t *
 void hls_seg_registry_lock(void) { pthread_mutex_lock(&g_mtx); }
 void hls_seg_registry_unlock(void) { pthread_mutex_unlock(&g_mtx); }
 
-hls_seg_ctx_t *hls_seg_find_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
+hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
   return find_locked(ctx, filter, pmt_pid, container);
 }
 

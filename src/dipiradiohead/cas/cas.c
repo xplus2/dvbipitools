@@ -47,8 +47,6 @@ static cas_biss_ca_cfg_t biss_ca_cfg_of(const config_t *cfg) {
 cas_t *cas_start(const config_t *cfg, const unsigned *audio_pids, size_t n_audio_pids) {
   cas_t *c;
   cas_group_cfg_t gcfg;
-  size_t i;
-
   if (n_audio_pids == 0) {
     log_line("cas: no audio pids to scramble");
     return NULL;
@@ -83,7 +81,7 @@ cas_t *cas_start(const config_t *cfg, const unsigned *audio_pids, size_t n_audio
   if (!c) return NULL;
 
   cas_core_fill_group_cfg(cfg->cas_algo, cfg->cas_cp_duration_ms, cfg->cas_fallback_clear, cfg->cas_vendors, cfg->n_cas_vendors, "", &gcfg);
-  for (i = 0; i < n_audio_pids; i++) gcfg.pids[i] = audio_pids[i];
+  for (size_t i = 0; i < n_audio_pids; i++) gcfg.pids[i] = audio_pids[i];
   gcfg.pid_count = n_audio_pids;
   c->core.group = cas_group_start(&gcfg, audio_pids[0]);
   if (!c->core.group) {

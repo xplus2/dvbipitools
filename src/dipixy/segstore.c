@@ -248,7 +248,7 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
   pthread_mutex_unlock(&g_table_mtx);
 }
 
-int hls_set_init_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, codec_t video_codec, const uint8_t *data, size_t size) {
+int hls_set_init_segment(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, codec_t video_codec, const uint8_t *data, size_t size) {
   hls_store_t *s;
   if (size > HLS_INIT_SEG_MAX) {
     log_line("hls_set_init_segment: %zu exceeds HLS_INIT_SEG_MAX %d", size, HLS_INIT_SEG_MAX);

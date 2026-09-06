@@ -54,11 +54,12 @@ static void cwenc_ensure_legacy_provider(void) {
 
 static int cwenc_block_encrypt(const EVP_CIPHER *cipher, const unsigned char *key, const unsigned char *in, size_t len, unsigned char *out) {
   EVP_CIPHER_CTX *ctx;
-  int outlen = 0, finlen = 0, ret = -1;
+  int outlen = 0;
+  int finlen = 0;
+  int ret = -1;
 
   ctx = EVP_CIPHER_CTX_new();
-  if (!ctx)
-    return -1;
+  if (!ctx) return -1;
   if (EVP_EncryptInit_ex(ctx, cipher, NULL, key, NULL) != 1)
     goto done;
   if (EVP_CIPHER_CTX_set_padding(ctx, 0) != 1)
@@ -67,8 +68,7 @@ static int cwenc_block_encrypt(const EVP_CIPHER *cipher, const unsigned char *ke
     goto done;
   if (EVP_EncryptFinal_ex(ctx, out + outlen, &finlen) != 1)
     goto done;
-  if ((size_t)(outlen + finlen) == len)
-    ret = 0;
+  if ((size_t)(outlen + finlen) == len) ret = 0;
 
 done:
   EVP_CIPHER_CTX_free(ctx);
@@ -89,7 +89,9 @@ int cwenc_aes_ecb_encrypt(int key_bits, const unsigned char *key, const unsigned
 int cwenc_aes_ctr_xcrypt(int key_bits, const unsigned char *key, const unsigned char iv[CWENC_AES_BLOCK_LEN], const unsigned char *in, unsigned char *out, size_t len) {
   const EVP_CIPHER *cipher = key_bits == 128 ? EVP_aes_128_ctr() : EVP_aes_256_ctr();
   EVP_CIPHER_CTX *ctx;
-  int outlen = 0, finlen = 0, ret = -1;
+  int outlen = 0;
+  int finlen = 0;
+  int ret = -1;
   if (len == 0) return -1;
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx) return -1;
@@ -140,7 +142,8 @@ static int cwenc_hex_nibble(char c) {
 static int cwenc_hex_decode(const char *hex, unsigned char *out, size_t out_len) {
   if (strlen(hex) != out_len * 2) return -1;
   for (size_t i = 0; i < out_len; i++) {
-    int hi = cwenc_hex_nibble(hex[2 * i]), lo = cwenc_hex_nibble(hex[2 * i + 1]);
+    int hi = cwenc_hex_nibble(hex[2 * i]);
+    int lo = cwenc_hex_nibble(hex[2 * i + 1]);
     if (hi < 0 || lo < 0) return -1;
     out[i] = (unsigned char)((hi << 4) | lo);
   }
@@ -242,7 +245,9 @@ void cwenc_ctx_init(cwenc_ctx_t *ctx, const cwenc_config_t *cfg) {
 int cwenc_select_next(cwenc_ctx_t *ctx, cwenc_selection_t *out) {
   const cwenc_config_t *cfg = &ctx->cfg;
   if (cfg->algo == CWENC_ALGO_OFF) return -1;
-  out->algorithm_type = cfg->algo == CWENC_ALGO_DES56 ? 0 : cfg->algo == CWENC_ALGO_AES128 ? 1 : 2;
+  if (cfg->algo == CWENC_ALGO_DES56) out->algorithm_type = 0;
+  else if (cfg->algo == CWENC_ALGO_AES128) out->algorithm_type = 1;
+  else out->algorithm_type = 2;
   if (cfg->key_list_a_loaded || cfg->key_list_b_loaded) {
     int use_b = cfg->key_list_b_loaded && (ctx->next_list_sel || !cfg->key_list_a_loaded);
     const unsigned char *list = use_b ? cfg->key_list_b : cfg->key_list_a;

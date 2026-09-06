@@ -38,7 +38,10 @@ void reactor_dashchunk_readable(int epfd, conn_t *c) {
 }
 
 void reactor_dashchunk_flush(int epfd, conn_t *c) {
-  int rc, close_after, keep, dead;
+  int rc;
+  int close_after;
+  int keep;
+  int dead;
   pthread_mutex_lock(&c->out_lock);
   dead = c->dead;
   pthread_mutex_unlock(&c->out_lock);

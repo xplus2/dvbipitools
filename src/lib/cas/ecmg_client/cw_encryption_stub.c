@@ -66,7 +66,8 @@ static int cwenc_hex_nibble(char c) {
 static int cwenc_hex_decode(const char *hex, unsigned char *out, size_t out_len) {
   if (strlen(hex) != out_len * 2) return -1;
   for (size_t i = 0; i < out_len; i++) {
-    int hi = cwenc_hex_nibble(hex[2 * i]), lo = cwenc_hex_nibble(hex[2 * i + 1]);
+    int hi = cwenc_hex_nibble(hex[2 * i]);
+    int lo = cwenc_hex_nibble(hex[2 * i + 1]);
     if (hi < 0 || lo < 0) return -1;
     out[i] = (unsigned char)((hi << 4) | lo);
   }
@@ -162,7 +163,9 @@ void cwenc_ctx_init(cwenc_ctx_t *ctx, const cwenc_config_t *cfg) {
 int cwenc_select_next(cwenc_ctx_t *ctx, cwenc_selection_t *out) {
   const cwenc_config_t *cfg = &ctx->cfg;
   if (cfg->algo == CWENC_ALGO_OFF) return -1;
-  out->algorithm_type = cfg->algo == CWENC_ALGO_DES56 ? 0 : cfg->algo == CWENC_ALGO_AES128 ? 1 : 2;
+  if (cfg->algo == CWENC_ALGO_DES56) out->algorithm_type = 0;
+  else if (cfg->algo == CWENC_ALGO_AES128) out->algorithm_type = 1;
+  else out->algorithm_type = 2;
   if (cfg->key_list_a_loaded || cfg->key_list_b_loaded) {
     int use_b = cfg->key_list_b_loaded && (ctx->next_list_sel || !cfg->key_list_a_loaded);
     const unsigned char *list = use_b ? cfg->key_list_b : cfg->key_list_a;

@@ -203,7 +203,8 @@ START_TEST(cw_provision_encrypts_when_cwenc_active) {
   const unsigned char *val;
   unsigned short vlen;
   cwenc_config_t cfg;
-  cwenc_ctx_t ctx, ctx2;
+  cwenc_ctx_t ctx;
+  cwenc_ctx_t ctx2;
   cwenc_selection_t sel;
   unsigned char plain_cw[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
   unsigned char expect_cw[8];

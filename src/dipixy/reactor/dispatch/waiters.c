@@ -53,7 +53,7 @@ int hls_cold_try_park(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter,
 }
 
 void hls_cold_waiter_conn_closing(const conn_t *c) {
-  llhls_waiter_pool_close_owner(t_hls_cold_waiters, HLS_COLD_WAITERS_MAX, &t_hls_cold_waiters_active, (void *)c, -1);
+  llhls_waiter_pool_close_owner(t_hls_cold_waiters, HLS_COLD_WAITERS_MAX, &t_hls_cold_waiters_active, c, -1);
 }
 
 static void hls_cold_finish(llhls_waiter_t *w) {

@@ -27,7 +27,7 @@ int byte_ring_write(byte_ring_t *r, const uint8_t *data, size_t len);
 size_t byte_ring_read(byte_ring_t *r, uint8_t *dst, size_t maxlen);
 
 /* zero-copy: ptr to the next contiguous run, *len its size (0/NULL if empty) */
-const uint8_t *byte_ring_peek(byte_ring_t *r, size_t *len);
+const uint8_t *byte_ring_peek(const byte_ring_t *r, size_t *len);
 
 /* consumer-side advance after byte_ring_peek() */
 void byte_ring_advance(byte_ring_t *r, size_t n);

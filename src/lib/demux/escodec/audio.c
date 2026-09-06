@@ -301,8 +301,11 @@ static const unsigned short opus_frame_samples[32] = {
     480, 960, 1920, 2880, 480, 960, 1920, 2880, 480, 960, 1920, 2880, 480, 960, 480, 960,
     120, 240, 480, 960, 120, 240, 480, 960, 120, 240, 480, 960, 120, 240, 480, 960};
 
-static int next_opus(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
-  unsigned toc, config, code, frames;
+static int next_opus(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
+  unsigned toc;
+  unsigned config;
+  unsigned code;
+  unsigned frames;
 
   (void)t;
   if (len < 1)

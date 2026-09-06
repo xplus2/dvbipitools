@@ -54,10 +54,9 @@ int playlist_fmt_disabled(const config_t *cfg, route_fmt_t fmt) {
 
 int playlist_query_has_flag(const char *query, const char *name) {
   size_t namelen;
-  const char *p;
   if (!query) return 0;
   namelen = strlen(name);
-  for (p = query; (p = strstr(p, name)) != NULL; p += namelen) {
+  for (const char *p = query; (p = strstr(p, name)) != NULL; p += namelen) {
     char after = p[namelen];
     if ((p == query || p[-1] == '&') && (after == '\0' || after == '&' || after == '='))
       return 1;
@@ -208,7 +207,8 @@ typedef struct {
 static void emit_item(void *vctx, const channel_item_t *item) {
   emit_ctx_t *rc = vctx;
   char target[600];
-  int family, rtp_flag;
+  int family;
+  int rtp_flag;
   char maddr[64];
   unsigned mport;
   size_t n;
@@ -249,7 +249,8 @@ int playlist_render(const config_t *cfg, const channels_t *ch, int is_tls, const
   const char *scheme = is_tls ? "https" : "http";
   const char *input_filter;
   int keep_multicast = playlist_query_has_flag(query, "keep_multicast");
-  int max_ord, si;
+  int max_ord;
+  int si;
 
   resolve_hostport(cfg, is_tls, host_hdr, query, hostport, sizeof hostport);
   input_filter = query_param_extract(query, "input=", input_csv, sizeof input_csv) ? input_csv : NULL;

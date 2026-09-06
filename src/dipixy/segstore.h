@@ -41,7 +41,7 @@ int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
 
 /* fmp4 only, served at "init.mp4". copies data. video_codec: drives HLS VERSION + DASH codecs=.
    0 ok, -1 if store not open */
-int hls_set_init_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, codec_t video_codec, const uint8_t *data, size_t size);
+int hls_set_init_segment(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, codec_t video_codec, const uint8_t *data, size_t size);
 
 #define HLS_MAX_PARTS 32
 

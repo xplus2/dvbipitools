@@ -124,10 +124,10 @@ typedef struct hls_seg_ctx {
 int buf_reserve(unsigned char **buf, size_t *cap, size_t need);
 void hls_seg_registry_lock(void);
 void hls_seg_registry_unlock(void);
-hls_seg_ctx_t *hls_seg_find_locked(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
+hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
 
 /* mp4push.c */
-void mp4push_deliver(hls_seg_ctx_t *s, const unsigned char *data, size_t len);
+void mp4push_deliver(const hls_seg_ctx_t *s, const unsigned char *data, size_t len);
 
 /* mux.c */
 void try_create_fmux(hls_seg_ctx_t *s);

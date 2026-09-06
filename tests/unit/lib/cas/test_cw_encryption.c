@@ -23,7 +23,10 @@ START_TEST(des56_expand_matches_annex_d_kat) {
 END_TEST
 
 START_TEST(des_ecb_encrypt_matches_known_vector) {
-  unsigned char key[8], pt[8], expect[8], out[8];
+  unsigned char key[8];
+  unsigned char pt[8];
+  unsigned char expect[8];
+  unsigned char out[8];
   hex_decode("133457799BBCDFF1", key);
   hex_decode("0123456789ABCDEF", pt);
   hex_decode("85E813540F0AB405", expect);
@@ -33,13 +36,18 @@ START_TEST(des_ecb_encrypt_matches_known_vector) {
 END_TEST
 
 START_TEST(des_ecb_encrypt_rejects_non_block_length) {
-  unsigned char key[8] = {0}, pt[5] = {0}, out[8];
+  unsigned char key[8] = {0};
+  unsigned char pt[5] = {0};
+  unsigned char out[8];
   ck_assert_int_eq(cwenc_des_ecb_encrypt(key, pt, sizeof pt, out), -1);
 }
 END_TEST
 
 START_TEST(aes128_ecb_encrypt_matches_fips197) {
-  unsigned char key[16], pt[16], expect[16], out[16];
+  unsigned char key[16];
+  unsigned char pt[16];
+  unsigned char expect[16];
+  unsigned char out[16];
   hex_decode("000102030405060708090a0b0c0d0e0f", key);
   hex_decode("00112233445566778899aabbccddeeff", pt);
   hex_decode("69c4e0d86a7b0430d8cdb78070b4c55a", expect);
@@ -49,7 +57,10 @@ START_TEST(aes128_ecb_encrypt_matches_fips197) {
 END_TEST
 
 START_TEST(aes256_ecb_encrypt_matches_fips197) {
-  unsigned char key[32], pt[16], expect[16], out[16];
+  unsigned char key[32];
+  unsigned char pt[16];
+  unsigned char expect[16];
+  unsigned char out[16];
   hex_decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", key);
   hex_decode("00112233445566778899aabbccddeeff", pt);
   hex_decode("8ea2b7ca516745bfeafc49904b496089", expect);
@@ -62,7 +73,8 @@ START_TEST(aes_ctr_is_its_own_inverse) {
   unsigned char key[32] = {1, 2, 3};
   unsigned char iv[16] = {0};
   unsigned char pt[16] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'};
-  unsigned char ct[16], back[16];
+  unsigned char ct[16];
+  unsigned char back[16];
   ck_assert_int_eq(cwenc_aes_ctr_xcrypt(256, key, iv, pt, ct, sizeof pt), 0);
   ck_assert_mem_ne(ct, pt, sizeof pt);
   ck_assert_int_eq(cwenc_aes_ctr_xcrypt(256, key, iv, ct, back, sizeof ct), 0);
@@ -74,7 +86,8 @@ START_TEST(aes_ctr_handles_cw_len_8) {
   unsigned char key[16] = {9, 9, 9};
   unsigned char iv[16] = {0};
   unsigned char pt[8] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'};
-  unsigned char ct[8], back[8];
+  unsigned char ct[8];
+  unsigned char back[8];
   ck_assert_int_eq(cwenc_aes_ctr_xcrypt(128, key, iv, pt, ct, sizeof pt), 0);
   ck_assert_int_eq(cwenc_aes_ctr_xcrypt(128, key, iv, ct, back, sizeof ct), 0);
   ck_assert_mem_eq(back, pt, sizeof pt);
@@ -82,7 +95,10 @@ START_TEST(aes_ctr_handles_cw_len_8) {
 END_TEST
 
 START_TEST(hkdf_sha256_matches_vector) {
-  unsigned char ikm[7], info[26], expect[32], out[32];
+  unsigned char ikm[7];
+  unsigned char info[26];
+  unsigned char expect[32];
+  unsigned char out[32];
   hex_decode("4DA19FF0AF6B8F", ikm);
   memcpy(info, "annexd-cwenc-ctx-v01", 20);
   unsigned char tail[6] = {0x00, 0x01, 0x00, 0x01, 0x00, 0x2A};
@@ -108,7 +124,8 @@ START_TEST(des56_rom_default_encrypts_known_vector) {
   cwenc_config_t cfg;
   cwenc_ctx_t ctx;
   cwenc_selection_t sel;
-  unsigned char cw[8], expect[8];
+  unsigned char cw[8];
+  unsigned char expect[8];
   hex_decode("1122334455667788", cw);
   hex_decode("53c37859bba01f3e", expect);
 
@@ -129,7 +146,8 @@ START_TEST(aes256_stream_fixed_key_matches_vector) {
   cwenc_config_t cfg;
   cwenc_ctx_t ctx;
   cwenc_selection_t sel;
-  unsigned char cw[16], expect[16];
+  unsigned char cw[16];
+  unsigned char expect[16];
   hex_decode("00112233445566778899aabbccddeeff", cw);
   hex_decode("d3809272a5fbd5fc9ba7a6a0d96d49dc", expect);
   ck_assert_int_eq(cwenc_config_init(&cfg, "aes256", "stream", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", NULL, NULL), 0);
@@ -146,7 +164,8 @@ START_TEST(aes128_ecb_fixed_key_matches_vector) {
   cwenc_config_t cfg;
   cwenc_ctx_t ctx;
   cwenc_selection_t sel;
-  unsigned char cw[16], expect[16];
+  unsigned char cw[16];
+  unsigned char expect[16];
   hex_decode("112233445566778899aabbccddeeff00", cw);
   hex_decode("ce57c949d9af6745ad0142a70a96b0a4", expect);
 
@@ -164,7 +183,8 @@ START_TEST(des56_key_list_mode_matches_vector) {
   cwenc_config_t cfg;
   cwenc_ctx_t ctx;
   cwenc_selection_t sel;
-  unsigned char cw[8], expect[8];
+  unsigned char cw[8];
+  unsigned char expect[8];
   hex_decode("a1b2c3d4e5f60718", cw);
   hex_decode("6b0e1f28a3970d88", expect);
 

@@ -69,7 +69,8 @@ int main(int argc, char **argv) {
   }
   {
     int max_ord = 0;
-    int i, j;
+    int i;
+    int j;
     for (i = 0; i < cfg.n_sources; i++) if (cfg.sources[i].ordinal > max_ord) max_ord = cfg.sources[i].ordinal;
     if (cfg.stdin_ordinal > max_ord) max_ord = cfg.stdin_ordinal;
     if (cfg.rist_ordinal > max_ord) max_ord = cfg.rist_ordinal;

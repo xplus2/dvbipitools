@@ -58,7 +58,8 @@ typedef struct {
 
 typedef struct {
   int *hash;
-  uint32_t hash_cap, hash_mask;
+  uint32_t hash_cap;
+  uint32_t hash_mask;
   pthread_mutex_t lock;
 } ws_stripe_t;
 

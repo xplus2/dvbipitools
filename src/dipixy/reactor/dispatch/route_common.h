@@ -16,7 +16,7 @@ typedef struct {
 } route_setup_t;
 
 /* open_source+route_client_info+ws_clients_touch+hls_seg_touch. ctx already closed on !OK */
-route_setup_status_t route_setup(const route_t *rt, unsigned *list_num, pid_filter_t *filter, unsigned pmt_pid, const char *client_ip, int http_ver, route_item_bufs_t *item_bufs,
+route_setup_status_t route_setup(const route_t *rt, unsigned *list_num, const pid_filter_t *filter, unsigned pmt_pid, const char *client_ip, int http_ver, route_item_bufs_t *item_bufs,
                                  client_info_t *cinfo, double seg_target, int max_segs, seg_container_t container, double part_target, route_setup_t *out);
 
 #endif

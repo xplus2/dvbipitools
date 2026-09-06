@@ -22,17 +22,18 @@ int h3_hls_cold_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx,
 }
 
 void h3_hls_cold_on_stream_close(const h3_conn_t *c, int64_t stream_id) {
-  llhls_waiter_pool_close_owner(t_h3_hls_cold_waiters, H3_HLS_COLD_WAITERS_MAX, &t_h3_hls_cold_waiters_active, (void *)c, stream_id);
+  llhls_waiter_pool_close_owner(t_h3_hls_cold_waiters, H3_HLS_COLD_WAITERS_MAX, &t_h3_hls_cold_waiters_active, c, stream_id);
 }
 
 void h3_hls_cold_on_conn_close(const h3_conn_t *c) {
-  llhls_waiter_pool_close_owner(t_h3_hls_cold_waiters, H3_HLS_COLD_WAITERS_MAX, &t_h3_hls_cold_waiters_active, (void *)c, -1);
+  llhls_waiter_pool_close_owner(t_h3_hls_cold_waiters, H3_HLS_COLD_WAITERS_MAX, &t_h3_hls_cold_waiters_active, c, -1);
 }
 
 static void h3_hls_cold_finish(llhls_waiter_t *w) {
   h3_conn_t *conn = w->owner;
   h3_req_t *r;
-  int handled, fd;
+  int handled;
+  int fd;
   hls_resp_t resp;
 
   r = find_req(conn, w->stream_id);

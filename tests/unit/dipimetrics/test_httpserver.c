@@ -234,7 +234,8 @@ END_TEST
 
 START_TEST(get_metrics_returns_200_and_openmetrics_body) {
   store_t st;
-  int lfd, cfd;
+  int lfd;
+  int cfd;
   http_server_t *hs;
   char buf[8192];
 

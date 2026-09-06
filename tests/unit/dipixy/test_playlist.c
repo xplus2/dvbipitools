@@ -128,7 +128,8 @@ START_TEST(render_m3u_builds_http_play_paths_with_triplet_and_icon) {
 END_TEST
 
 START_TEST(render_xspf_uses_image_element_for_icon) {
-  char path_a[160], path_b[160];
+  char path_a[160];
+  char path_b[160];
   source_def_t src[2];
   config_t cfg;
   channels_t *ch = build_two_lists(path_a, path_b, src);
@@ -153,7 +154,8 @@ START_TEST(render_xspf_uses_image_element_for_icon) {
 END_TEST
 
 START_TEST(render_input_param_restricts_to_listed_ordinals) {
-  char path_a[160], path_b[160];
+  char path_a[160];
+  char path_b[160];
   source_def_t src[2];
   config_t cfg;
   channels_t *ch = build_two_lists(path_a, path_b, src);
@@ -178,7 +180,8 @@ START_TEST(render_input_param_restricts_to_listed_ordinals) {
 END_TEST
 
 START_TEST(render_filter_forwarded_to_http_entries_only) {
-  char path_a[160], path_b[160];
+  char path_a[160];
+  char path_b[160];
   source_def_t src[2];
   config_t cfg;
   channels_t *ch = build_two_lists(path_a, path_b, src);
@@ -210,7 +213,8 @@ START_TEST(render_filter_forwarded_to_http_entries_only) {
 END_TEST
 
 START_TEST(render_host_override_and_scheme_follow_request) {
-  char path_a[160], path_b[160];
+  char path_a[160];
+  char path_b[160];
   source_def_t src[2];
   config_t cfg;
   channels_t *ch = build_two_lists(path_a, path_b, src);

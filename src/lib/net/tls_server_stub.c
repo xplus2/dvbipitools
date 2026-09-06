@@ -18,13 +18,13 @@ int tls_server_ctx_reload(tls_server_ctx_t *sc) {
 
 void tls_server_ctx_free(tls_server_ctx_t *sc) { (void)sc; }
 
-tls_t *tls_server_accept_start(tls_server_ctx_t *sc, int fd) {
+tls_t *tls_server_accept_start(const tls_server_ctx_t *sc, int fd) {
   (void)sc;
   (void)fd;
   return NULL;
 }
 
-tls_handshake_status_t tls_server_handshake_step(tls_t *t) {
+tls_handshake_status_t tls_server_handshake_step(const tls_t *t) {
   (void)t;
   return TLS_HANDSHAKE_ERROR;
 }

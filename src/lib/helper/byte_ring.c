@@ -19,7 +19,9 @@ void byte_ring_free(byte_ring_t *r) {
 }
 
 int byte_ring_write(byte_ring_t *r, const uint8_t *data, size_t len) {
-  uint32_t wpos, rpos, idx;
+  uint32_t wpos;
+  uint32_t rpos;
+  uint32_t idx;
   size_t first;
   if (!len) return 1;
   if (!r->buf) return 0;
@@ -36,7 +38,11 @@ int byte_ring_write(byte_ring_t *r, const uint8_t *data, size_t len) {
 }
 
 size_t byte_ring_read(byte_ring_t *r, uint8_t *dst, size_t maxlen) {
-  uint32_t wpos, rpos, idx, avail, n;
+  uint32_t wpos;
+  uint32_t rpos;
+  uint32_t idx;
+  uint32_t avail;
+  uint32_t n;
   if (!r->buf) return 0;
   wpos = atomic_load_explicit(&r->wpos, memory_order_acquire);
   rpos = atomic_load_explicit(&r->rpos, memory_order_relaxed);
@@ -51,8 +57,12 @@ size_t byte_ring_read(byte_ring_t *r, uint8_t *dst, size_t maxlen) {
   return n;
 }
 
-const uint8_t *byte_ring_peek(byte_ring_t *r, size_t *len) {
-  uint32_t wpos, rpos, idx, avail, contig;
+const uint8_t *byte_ring_peek(const byte_ring_t *r, size_t *len) {
+  uint32_t wpos;
+  uint32_t rpos;
+  uint32_t idx;
+  uint32_t avail;
+  uint32_t contig;
   *len = 0;
   if (!r->buf) return NULL;
   wpos = atomic_load_explicit(&r->wpos, memory_order_acquire);

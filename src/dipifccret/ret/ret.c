@@ -60,15 +60,13 @@ static void repair_one(ret_ctx_t *r, channel_t *c, const channel_slot_t *slot) {
     r->send_mc(c, out, n, slot->dscp, r->send_mc_user);
 }
 
-static void repair_one_unicast(ret_ctx_t *r, channel_t *c, const channel_slot_t *slot, int fd, const struct sockaddr *from, socklen_t fromlen) {
+static void repair_one_unicast(ret_ctx_t *r, const channel_t *c, const channel_slot_t *slot, int fd, const struct sockaddr *from, socklen_t fromlen) {
   unsigned char out[12 + 2 + CHANNEL_MAX_PAYLOAD];
   rtx_session_slot_t *session = rtx_session_table_get(r->rtx_clients, from, fromlen);
   size_t n;
-  if (!session)
-    return;
+  if (!session) return;
   n = rtx_build(&session->seq, c->ssrc, r->rtx_pt, slot->timestamp, slot->seq, slot->payload, slot->payload_len, out, sizeof out);
-  if (n > 0)
-    r->send_unicast(fd, from, fromlen, out, n, slot->dscp, r->send_unicast_user);
+  if (n > 0) r->send_unicast(fd, from, fromlen, out, n, slot->dscp, r->send_unicast_user);
 }
 
 static void repair_seq(ret_ctx_t *r, channel_t *c, uint16_t seq, int fd, const struct sockaddr *from, socklen_t fromlen) {

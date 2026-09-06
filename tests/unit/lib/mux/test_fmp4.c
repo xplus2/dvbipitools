@@ -349,8 +349,13 @@ END_TEST
 START_TEST(vvc_stsd_has_vvc1_vvcc_entry) {
   fmp4_mux_t *m = make_vvc_mux(3, 1920, 1080);
   unsigned char *out;
-  const unsigned char *stsd, *vvc1, *vvcc;
-  size_t len, stsd_len, vvc1_len, vvcc_len;
+  const unsigned char *stsd;
+  const unsigned char *vvc1;
+  const unsigned char *vvcc;
+  size_t len;
+  size_t stsd_len;
+  size_t vvc1_len;
+  size_t vvcc_len;
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
   ck_assert(find_box(stsd + 8, stsd_len - 8, "vvc1", &vvc1, &vvc1_len));
@@ -365,8 +370,13 @@ END_TEST
 START_TEST(opus_stsd_has_opus_dops_entry) {
   fmp4_mux_t *m = make_opus_mux(2);
   unsigned char *out;
-  const unsigned char *stsd, *entry, *dops;
-  size_t len, stsd_len, entry_len, dops_len;
+  const unsigned char *stsd;
+  const unsigned char *entry;
+  const unsigned char *dops;
+  size_t len;
+  size_t stsd_len;
+  size_t entry_len;
+  size_t dops_len;
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
   ck_assert(find_box(stsd + 8, stsd_len - 8, "Opus", &entry, &entry_len));

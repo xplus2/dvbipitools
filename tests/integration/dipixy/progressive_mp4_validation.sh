@@ -44,6 +44,7 @@ stop_bg() {
     wait $FFPID 2>/dev/null
     kill $DPID 2>/dev/null
     wait $DPID 2>/dev/null
+    return 0
 }
 
 check_progressive_mp4() {
@@ -54,12 +55,12 @@ check_progressive_mp4() {
     grep -aq "moov" "$cap" || fail "$label: no moov box (init segment) found"
     grep -aq "moof" "$cap" || fail "$label: no moof box (live fragment) found"
     probe="$cap.json"
-    ffprobe -v error -print_format json -show_streams "$cap" >"$probe" 2>"$WORK/ffprobe_$(basename "$cap").log" \
-        || fail "$label: ffprobe failed, see $WORK/ffprobe_$(basename "$cap").log"
+    ffprobe -v error -print_format json -show_streams "$cap" >"$probe" 2>"$WORK/ffprobe_$(basename "$cap").log" || fail "$label: ffprobe failed, see $WORK/ffprobe_$(basename "$cap").log"
     video_codec=$(jq -r '[.streams[] | select(.codec_type == "video")][0].codec_name // empty' "$probe")
     [ "$video_codec" = "h264" ] || fail "$label: expected h264 video, got '$video_codec'"
     audio_codec=$(jq -r '[.streams[] | select(.codec_type == "audio")][0].codec_name // empty' "$probe")
     [ "$audio_codec" = "aac" ] || fail "$label: expected aac audio, got '$audio_codec'"
+    return 0
 }
 
 h1cap="$WORK/h1.mp4"

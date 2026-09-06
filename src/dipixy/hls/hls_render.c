@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int hls_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
+int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
   hls_store_t *s;
   char m3u8[4096];
   char etag[48];

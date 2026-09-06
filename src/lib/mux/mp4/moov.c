@@ -32,7 +32,8 @@ static void put_matrix_unity(mp4buf_t *b) {
 }
 
 void p4_write_ftyp_mdat_head(mp4_t *m) {
-  mp4buf_t ftyp, top;
+  mp4buf_t ftyp;
+  mp4buf_t top;
   unsigned char mdat_hdr[16];
 
   memset(&ftyp, 0, sizeof ftyp);
@@ -127,9 +128,12 @@ static void build_hdlr(mp4buf_t *out, pid_class_t cls) {
   static const char vname[] = "VideoHandler";
   static const char aname[] = "SoundHandler";
   static const char tname[] = "TextHandler";
-  const char *hty = cls == PID_VIDEO ? "vide" : cls == PID_AUDIO ? "soun" : "text";
-  const char *name = cls == PID_VIDEO ? vname : cls == PID_AUDIO ? aname : tname;
-  size_t namelen = cls == PID_VIDEO ? sizeof vname : cls == PID_AUDIO ? sizeof aname : sizeof tname;
+  const char *hty;
+  const char *name;
+  size_t namelen;
+  if (cls == PID_VIDEO) { hty = "vide"; name = vname; namelen = sizeof vname; }
+  else if (cls == PID_AUDIO) { hty = "soun"; name = aname; namelen = sizeof aname; }
+  else { hty = "text"; name = tname; namelen = sizeof tname; }
   mp4buf_t b;
   memset(&b, 0, sizeof b);
   mb_u8(&b, 0);
@@ -174,7 +178,9 @@ static void build_nmhd(mp4buf_t *out) {
 }
 
 static void build_dinf(mp4buf_t *out) {
-  mp4buf_t dref, url, dinf;
+  mp4buf_t dref;
+  mp4buf_t url;
+  mp4buf_t dinf;
   memset(&url, 0, sizeof url);
   mb_u8(&url, 0);
   mb_u24(&url, 1);
@@ -214,7 +220,10 @@ static void put_desc(mp4buf_t *out, unsigned tag, mp4buf_t *payload) {
 static void build_esds(mp4buf_t *out, const track_t *t) {
   int is_aac = t->es.codec == CODEC_AAC || t->es.codec == CODEC_AAC_LATM;
   unsigned char oti = (unsigned char)(is_aac ? 0x40 : 0x6B);
-  mp4buf_t esds, es_desc, dec_cfg, sl;
+  mp4buf_t esds;
+  mp4buf_t es_desc;
+  mp4buf_t dec_cfg;
+  mp4buf_t sl;
 
   memset(&dec_cfg, 0, sizeof dec_cfg);
   mb_u8(&dec_cfg, oti);
@@ -231,7 +240,7 @@ static void build_esds(mp4buf_t *out, const track_t *t) {
   memset(&sl, 0, sizeof sl);
   mb_u8(&sl, 0x02);
   memset(&es_desc, 0, sizeof es_desc);
-  mb_u16(&es_desc, (unsigned)t->track_id);
+  mb_u16(&es_desc, t->track_id);
   mb_u8(&es_desc, 0);
   put_desc(&es_desc, 0x04, &dec_cfg);
   put_desc(&es_desc, 0x06, &sl);
@@ -244,7 +253,11 @@ static void build_esds(mp4buf_t *out, const track_t *t) {
 
 static void build_dac3(mp4buf_t *out, const track_t *t) {
   mp4buf_t b;
-  unsigned fscod = t->es.rate == 48000 ? 0 : t->es.rate == 44100 ? 1 : t->es.rate == 32000 ? 2 : 3;
+  unsigned fscod;
+  if (t->es.rate == 48000) fscod = 0;
+  else if (t->es.rate == 44100) fscod = 1;
+  else if (t->es.rate == 32000) fscod = 2;
+  else fscod = 3;
   memset(&b, 0, sizeof b);
   mb_u8(&b, (fscod << 6) | t->ac3_bsid << 1 | (t->ac3_bsmod >> 2));
   mb_u8(&b, (t->ac3_bsmod & 3) << 6 | t->ac3_acmod << 3 | t->ac3_lfeon << 2 | (t->ac3_bitrate_code >> 3));
@@ -254,7 +267,11 @@ static void build_dac3(mp4buf_t *out, const track_t *t) {
 
 static void build_dec3(mp4buf_t *out, const track_t *t) {
   mp4buf_t b;
-  unsigned fscod = t->es.rate == 48000 ? 0 : t->es.rate == 44100 ? 1 : t->es.rate == 32000 ? 2 : 3;
+  unsigned fscod;
+  if (t->es.rate == 48000) fscod = 0;
+  else if (t->es.rate == 44100) fscod = 1;
+  else if (t->es.rate == 32000) fscod = 2;
+  else fscod = 3;
   memset(&b, 0, sizeof b);
   mb_u16(&b, (t->ac3_bitrate_code & 0x1FFF) << 3);
   mb_u8(&b, (fscod << 6) | t->ac3_bsid << 1 | 0);
@@ -265,13 +282,12 @@ static void build_dec3(mp4buf_t *out, const track_t *t) {
 
 static void build_audio_entry(mp4buf_t *stsd, const track_t *t) {
   mp4buf_t entry;
-  int i;
   memset(&entry, 0, sizeof entry);
-  for (i = 0; i < 6; i++) mb_u8(&entry, 0);
+  for (int i = 0; i < 6; i++) mb_u8(&entry, 0);
   mb_u16(&entry, 1);
   mb_u32(&entry, 0);
   mb_u32(&entry, 0);
-  mb_u16(&entry, (unsigned)t->es.channels);
+  mb_u16(&entry, t->es.channels);
   mb_u16(&entry, 16);
   mb_u16(&entry, 0);
   mb_u16(&entry, 0);
@@ -286,8 +302,12 @@ static void build_audio_entry(mp4buf_t *stsd, const track_t *t) {
 }
 
 static void build_video_entry(mp4buf_t *stsd, const track_t *t) {
-  mp4buf_t entry, cfgbox;
-  const char *cfg_fourcc = t->es.codec == CODEC_HEVC ? "hvcC" : t->es.codec == CODEC_VVC ? "vvcC" : "avcC";
+  mp4buf_t entry;
+  mp4buf_t cfgbox;
+  const char *cfg_fourcc;
+  if (t->es.codec == CODEC_HEVC) cfg_fourcc = "hvcC";
+  else if (t->es.codec == CODEC_VVC) cfg_fourcc = "vvcC";
+  else cfg_fourcc = "avcC";
   int i;
   memset(&entry, 0, sizeof entry);
   for (i = 0; i < 6; i++) mb_u8(&entry, 0);
@@ -297,8 +317,8 @@ static void build_video_entry(mp4buf_t *stsd, const track_t *t) {
   mb_u32(&entry, 0);
   mb_u32(&entry, 0);
   mb_u32(&entry, 0);
-  mb_u16(&entry, (unsigned)t->width);
-  mb_u16(&entry, (unsigned)t->height);
+  mb_u16(&entry, t->width);
+  mb_u16(&entry, t->height);
   mb_u32(&entry, 0x00480000u);
   mb_u32(&entry, 0x00480000u);
   mb_u32(&entry, 0);
@@ -314,10 +334,10 @@ static void build_video_entry(mp4buf_t *stsd, const track_t *t) {
 }
 
 static void build_text_entry(mp4buf_t *stsd) {
-  mp4buf_t entry, ftab;
-  int i;
+  mp4buf_t entry;
+  mp4buf_t ftab;
   memset(&entry, 0, sizeof entry);
-  for (i = 0; i < 6; i++) mb_u8(&entry, 0);
+  for (int i = 0; i < 6; i++) mb_u8(&entry, 0);
   mb_u16(&entry, 1);
   mb_u32(&entry, 0); /* displayFlags */
   mb_u8(&entry, 1);  /* horizontal-justification: center */
@@ -359,7 +379,9 @@ static void build_stsd(mp4buf_t *out, const track_t *t) {
 static void build_stts(mp4buf_t *out, const track_t *t) {
   mp4buf_t b;
   size_t cnt_pos;
-  uint32_t entries = 0, run_dur = 0, run_cnt = 0;
+  uint32_t entries = 0;
+  uint32_t run_dur = 0;
+  uint32_t run_cnt = 0;
   memset(&b, 0, sizeof b);
   mb_u8(&b, 0);
   mb_u24(&b, 0);
@@ -391,7 +413,9 @@ static void build_stts(mp4buf_t *out, const track_t *t) {
 static void build_ctts(mp4buf_t *out, const track_t *t) {
   mp4buf_t b;
   size_t cnt_pos;
-  uint32_t entries = 0, run_off = 0, run_cnt = 0;
+  uint32_t entries = 0;
+  uint32_t run_off = 0;
+  uint32_t run_cnt = 0;
   int any = 0;
   memset(&b, 0, sizeof b);
   mb_u8(&b, 0);
@@ -536,7 +560,8 @@ static void build_trak(mp4buf_t *out, const track_t *t) {
 }
 
 void p4_write_moov(mp4_t *m) {
-  mp4buf_t moov, top;
+  mp4buf_t moov;
+  mp4buf_t top;
   unsigned char patch[8];
   uint64_t mdat_size;
   uint32_t movie_dur = 0;

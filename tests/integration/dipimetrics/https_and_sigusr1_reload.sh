@@ -37,7 +37,12 @@ echo "$cn" | grep -q "CN *= *host-a" || fail "served cert before reload: expecte
 cp "$WORK/cert_b.pem" "$WORK/cert.pem"
 cp "$WORK/key_b.pem" "$WORK/key.pem"
 kill -USR1 "$MPID"
-sleep 0.5
+i=0
+while [ $i -lt 30 ]; do
+    grep -q "TLS cert reload" "$WORK/dipimetrics.log" && break
+    i=$((i + 1))
+    sleep 0.1
+done
 grep -q "TLS cert reload ok" "$WORK/dipimetrics.log" || fail "SIGUSR1 reload not logged as ok, see $WORK/dipimetrics.log"
 
 cn=$(echo | openssl s_client -connect "127.0.0.1:$HTTPPORT" 2>/dev/null | openssl x509 -noout -subject)

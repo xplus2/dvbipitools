@@ -213,7 +213,9 @@ static size_t build_pmt_with_scrambling(unsigned char *out, unsigned prog_num, u
 
 static size_t build_pmt_with_audio_registration(unsigned char *out, unsigned prog_num, unsigned pcr_pid, unsigned video_pid, unsigned video_type, unsigned audio_pid, const char fourcc[4]) {
   unsigned char body[32];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
   body[n++] = (unsigned char)(prog_num >> 8);
   body[n++] = (unsigned char)prog_num;
@@ -708,7 +710,8 @@ END_TEST
 
 START_TEST(psi_classifies_vvc_video_stream_type) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
   int count;
   const psi_es_t *es;
@@ -732,7 +735,8 @@ END_TEST
 
 START_TEST(psi_classifies_opus_via_registration_descriptor) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
   int count;
   const psi_es_t *es;

@@ -9,7 +9,8 @@
 #include <sys/socket.h>
 
 void reactor_mp4push_begin(int epfd, conn_t *c) {
-  c->in.len = c->in.off = 0;
+  c->in.off = 0;
+  c->in.len = 0;
   c->become_mp4push = 0;
   c->close_after_flush = 0;
   c->state = CONN_MP4PUSH;
@@ -37,7 +38,8 @@ void reactor_mp4push_readable(int epfd, conn_t *c) {
 }
 
 void reactor_mp4push_flush(int epfd, conn_t *c) {
-  int rc, dead;
+  int rc;
+  int dead;
   pthread_mutex_lock(&c->out_lock);
   dead = c->dead;
   pthread_mutex_unlock(&c->out_lock);

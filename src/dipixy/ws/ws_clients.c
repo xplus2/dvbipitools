@@ -56,7 +56,8 @@ static void hash_insert(ws_stripe_t *stripe, uint32_t h, int idx) {
 }
 
 void hash_delete(ws_stripe_t *stripe, int idx) {
-  uint32_t i, h;
+  uint32_t i;
+  uint32_t h;
   const ws_client_t *e = &g_clients[idx];
   h = client_hash(e->ip, e->fmt, e->pmt_pid, e->filter, e->src_proto, e->src_addr, e->src_ordinal, e->src_name, e->item_num, e->item_name);
   i = h & stripe->hash_mask;
@@ -190,7 +191,7 @@ void ws_clients_remove(int handle) {
   if (removed) publish_client_event("clients.remove", idx);
 }
 
-static int try_match(ws_stripe_t *stripe, uint32_t h, const client_info_t *info, const char *filt, const char *ip, const char *src_proto,
+static int try_match(const ws_stripe_t *stripe, uint32_t h, const client_info_t *info, const char *filt, const char *ip, const char *src_proto,
                      const char *src_addr, const char *src_name, const char *item_name, time_t now) {
   uint32_t i = h & stripe->hash_mask;
   for (uint32_t n = 0; n < stripe->hash_cap; n++, i = (i + 1) & stripe->hash_mask) {
@@ -214,8 +215,13 @@ static int try_match(ws_stripe_t *stripe, uint32_t h, const client_info_t *info,
 
 int ws_clients_touch(const client_info_t *info) {
   char filt[128];
-  const char *ip, *src_proto, *src_addr, *src_name, *item_name;
-  int idx, free_slot;
+  const char *ip;
+  const char *src_proto;
+  const char *src_addr;
+  const char *src_name;
+  const char *item_name;
+  int idx;
+  int free_slot;
   time_t now = time(NULL);
   uint32_t h;
   ws_stripe_t *stripe;

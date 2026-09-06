@@ -163,7 +163,8 @@ static void skip_vvc_gci(br_t *b) {
 
 static void skip_vvc_ptl(br_t *b, unsigned max_sublayers_minus1) {
   unsigned char sublayer_level_present[8];
-  unsigned i, num_sub_profiles;
+  unsigned i;
+  unsigned num_sub_profiles;
   br_u(b, 7 + 1 + 8 + 1 + 1); /* profile_idc, tier, level, frame_only, multilayer */
   skip_vvc_gci(b);
   if (max_sublayers_minus1 > 7) max_sublayers_minus1 = 7;
@@ -177,7 +178,8 @@ static void skip_vvc_ptl(br_t *b, unsigned max_sublayers_minus1) {
 int vvc_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
   unsigned char rb[ESCODEC_PS_MAX];
   br_t b;
-  unsigned max_sublayers_minus1, ptl_dpb_hrd_present;
+  unsigned max_sublayers_minus1;
+  unsigned ptl_dpb_hrd_present;
   b.len = rbsp_unescape(nal, len, rb, sizeof rb);
   b.d = rb;
   b.bit = 0;
@@ -222,7 +224,8 @@ size_t build_avcc(const esc_track_t *t, unsigned char *o, size_t cap) {
 size_t build_vvcc(const esc_track_t *t, unsigned char *o, size_t cap) {
   static const unsigned char types[3] = {VVC_NAL_VPS, VVC_NAL_SPS, VVC_NAL_PPS};
   const unsigned char *ps[3];
-  size_t pl[3], n = 0;
+  size_t pl[3];
+  size_t n = 0;
 
   ps[0] = t->vps;
   pl[0] = t->vpslen;
@@ -256,8 +259,7 @@ size_t build_hvcc(const esc_track_t *t, unsigned char *o, size_t cap) {
   pl[1] = t->spslen;
   ps[2] = t->pps;
   pl[2] = t->ppslen;
-  if (23 + pl[0] + pl[1] + pl[2] + 15 > cap)
-    return 0;
+  if (23 + pl[0] + pl[1] + pl[2] + 15 > cap) return 0;
   o[n++] = 1;
   memcpy(o + n, t->ptl, 12);
   n += 12;

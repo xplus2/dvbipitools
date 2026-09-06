@@ -78,7 +78,8 @@ static mp4_opts_t base_cfg(void) {
 /* feeds PAT (program 101 -> PMT pid 0x100), a 1-audio-ES PMT (AAC, pid 0x101),
    and an SDT for program 101 (mp4 doesn't wait ~2s real time for one) */
 static void feed_discovery(mp4_t *m) {
-  unsigned char sec[256], pkt[188];
+  unsigned char sec[256];
+  unsigned char pkt[188];
   size_t slen;
 
   slen = psi_build_pat(0x1234, 0, 101, 0x0100, sec, sizeof sec);
@@ -87,7 +88,9 @@ static void feed_discovery(mp4_t *m) {
 
   {
     unsigned char body[32];
-    size_t n = 0, hdr, crc_at;
+    size_t n = 0;
+    size_t hdr;
+    size_t crc_at;
     uint32_t crc;
     body[n++] = (unsigned char)(101 >> 8);
     body[n++] = (unsigned char)101;
@@ -176,7 +179,8 @@ START_TEST(mp4_no_supported_tracks_writes_nothing_and_no_error) {
   unsigned long long bytes = 0;
   mp4_opts_t cfg = base_cfg();
   mp4_t *m;
-  unsigned char sec[256], pkt[188];
+  unsigned char sec[256];
+  unsigned char pkt[188];
   size_t slen;
   long fsize;
   FILE *f;
@@ -194,7 +198,9 @@ START_TEST(mp4_no_supported_tracks_writes_nothing_and_no_error) {
 
   {
     unsigned char body[32];
-    size_t n = 0, hdr, crc_at;
+    size_t n = 0;
+    size_t hdr;
+    size_t crc_at;
     uint32_t crc;
     body[n++] = (unsigned char)(101 >> 8);
     body[n++] = (unsigned char)101;
@@ -241,7 +247,9 @@ END_TEST
 /* one-AAC-ES PMT for prog_num, ES pid = pmt_pid+1 */
 static size_t build_pmt_aac(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
   unsigned es_pid = pmt_pid + 1;
 

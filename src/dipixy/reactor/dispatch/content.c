@@ -54,7 +54,9 @@ void serve_playlist(conn_t *c, route_fmt_t fmt, playlist_type_t ptype, const cha
     respond_status(c, RESP_501, keep_alive);
     return;
   }
-  mime = playlist_query_has_flag(query, "plain") ? "text/plain; charset=utf-8" : ptype == PLAYLIST_M3U ? "audio/x-mpegurl" : "application/xspf+xml";
+  if (playlist_query_has_flag(query, "plain")) mime = "text/plain; charset=utf-8";
+  else if (ptype == PLAYLIST_M3U) mime = "audio/x-mpegurl";
+  else mime = "application/xspf+xml";
   n = build_ok_header(hdr, sizeof hdr, mime, len, keep_alive);
   conn_queue(c, hdr, n);
   if (!is_head) conn_queue(c, body, len);

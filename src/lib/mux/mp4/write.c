@@ -99,7 +99,8 @@ void p4_start(mp4_t *m) {
   if (m->started || !m->ntrk) return;
   m->t0 = 0;
   if (m->npend) {
-    int vtrk = -1, found = 0;
+    int vtrk = -1;
+    int found = 0;
     int64_t vt = 0;
     for (int i = 0; i < m->ntrk; i++) if (m->trk[i].cls == PID_VIDEO) {
       vtrk = i;
