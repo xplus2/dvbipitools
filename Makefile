@@ -13,6 +13,31 @@ MANDIR := $(PREFIX)/share/man/man1
 
 TOOLS := dipirec dipiscan dipiradiohead dipisds dipixmltv dipibim dipibcg dipitvhead dipimetrics
 
+HAVE_OPENSSL := $(shell pkg-config --exists openssl && echo yes)
+
+ifeq ($(TLS),no)
+HAVE_TLS := no
+else
+HAVE_TLS := $(HAVE_OPENSSL)
+endif
+
+ifeq ($(HAVE_TLS),yes)
+dipimetrics_TLS_SRC := src/lib/net/tls.c
+dipimetrics_TLSSERVER_SRC := src/lib/net/tls_server.c
+dipimetrics_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipimetrics_EXTRA_LDFLAGS := $(shell pkg-config --static --libs openssl)
+else
+dipimetrics_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+endif
+else
+dipimetrics_TLS_SRC := src/lib/net/tls_stub.c
+dipimetrics_TLSSERVER_SRC := src/lib/net/tls_server_stub.c
+ifneq ($(TLS),no)
+$(warning dipimetrics: OpenSSL not found via pkg-config, building without HTTPS support)
+endif
+endif
+
 dipimetrics_SRCS := \
 	src/dipimetrics/main.c \
 	src/dipimetrics/args.c \
@@ -25,7 +50,9 @@ dipimetrics_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/ioutil.c \
-	src/lib/metrics/protocol.c
+	src/lib/metrics/protocol.c \
+	$(dipimetrics_TLS_SRC) \
+	$(dipimetrics_TLSSERVER_SRC)
 
 dipiscan_SRCS := \
 	src/dipiscan/main.c \
@@ -172,14 +199,6 @@ dipibcg_SRCS := \
 	src/lib/bim/codec.c \
 	src/lib/bim/fragment.c \
 	src/lib/bim/accessunit.c
-
-HAVE_OPENSSL := $(shell pkg-config --exists openssl && echo yes)
-
-ifeq ($(TLS),no)
-HAVE_TLS := no
-else
-HAVE_TLS := $(HAVE_OPENSSL)
-endif
 
 ifeq ($(CSA),no)
 HAVE_CSA := no
@@ -1887,7 +1906,11 @@ dipimetrics_httpserver_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c \
-	src/lib/helper/ioutil.c
+	src/lib/helper/ioutil.c \
+	$(dipimetrics_TLS_SRC) \
+	$(dipimetrics_TLSSERVER_SRC)
+dipimetrics_httpserver_EXTRA_CFLAGS := $(dipimetrics_EXTRA_CFLAGS)
+dipimetrics_httpserver_EXTRA_LDFLAGS := $(dipimetrics_EXTRA_LDFLAGS)
 
 dipibcg_container_BIN := tests/unit/dipibcg/test_container
 dipibcg_container_SRCS := \

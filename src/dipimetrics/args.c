@@ -29,18 +29,20 @@ static void print_help(void) {
       "dipiradiohead, dipisds and dipibcg over a Unix datagram socket, serves\n"
       "them as Prometheus/OpenMetrics text at GET /metrics\n\n"
       "options:\n"
-      "  -S, --sock <path>    Unix datagram socket to receive snapshots on\n"
-      "                       (default: %s)\n"
-      "  -l, --listen <a>:<p> HTTP listen address:port (default: %s:%u)\n"
-      "  -e, --expiry <s>     drop an instance after this many seconds without a\n"
-      "                       new snapshot (default: %d)\n"
-      "  -v, --verbose        log rejected/dropped snapshots to stderr\n"
-      "      --color <when>   auto|always|never (default auto)\n"
-      "  -d, --daemonize      fork to background after startup, detach from terminal\n"
-      "  -h, --help           this help\n\n"
+      "  -S, --sock <path>     Unix datagram socket for snapshots on (default: %s)\n"
+      "  -l, --listen <a>:<p>  HTTP listen address:port (default: %s:%u)\n"
+      "      --tls-cert <path> certificate file (PEM), HTTPS on -l, requires --tls-key\n"
+      "      --tls-key <path>  private key file (PEM), requires --tls-cert\n"
+      "  -e, --expiry <s>      drop an instance after this many seconds without a\n"
+      "                        new snapshot (default: %d)\n"
+      "  -v, --verbose         log rejected/dropped snapshots to stderr\n"
+      "      --color <when>    auto|always|never (default auto)\n"
+      "  -d, --daemonize       fork to background after startup, detach from terminal\n"
+      "  -h, --help            this help\n\n"
       "example:\n"
-      "  %s -l 0.0.0.0:9109\n",
-      TOOL_NAME, METRICS_DEFAULT_SOCK_PATH, DEFAULT_LISTEN_ADDR, (unsigned)DEFAULT_LISTEN_PORT, DEFAULT_EXPIRY_S, TOOL_NAME);
+      "  %s -l 0.0.0.0:9109\n"
+      "  %s -l 0.0.0.0:9109 --tls-cert srv.crt --tls-key srv.key\n",
+      TOOL_NAME, METRICS_DEFAULT_SOCK_PATH, DEFAULT_LISTEN_ADDR, (unsigned)DEFAULT_LISTEN_PORT, DEFAULT_EXPIRY_S, TOOL_NAME, TOOL_NAME);
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -48,6 +50,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"sock", required_argument, 0, 'S'},
       {"listen", required_argument, 0, 'l'},
       {"expiry", required_argument, 0, 'e'},
+      {"tls-cert", required_argument, 0, 1001},
+      {"tls-key", required_argument, 0, 1002},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1000},
       {"daemonize", no_argument, 0, 'd'},
@@ -82,6 +86,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       have_e = 1;
       break;
     }
+    case 1001:
+      cfg->tls_cert = optarg;
+      break;
+    case 1002:
+      cfg->tls_key = optarg;
+      break;
     case 'v':
       cfg->verbose = 1;
       break;
@@ -106,6 +116,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (optind < argc) {
     argerr("unexpected argument: %s", argv[optind]);
+    return ARGS_ERR;
+  }
+  if (cfg->tls_cert && !cfg->tls_key) {
+    argerr("--tls-cert given without --tls-key");
+    return ARGS_ERR;
+  }
+  if (cfg->tls_key && !cfg->tls_cert) {
+    argerr("--tls-key given without --tls-cert");
     return ARGS_ERR;
   }
 

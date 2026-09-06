@@ -30,8 +30,7 @@ usage: ./configure [options]
   --tests        enable 'make test' target
   --fuzz         enable 'make fuzz-harnesses' target (AFL++ standalone harnesses;
                  pass --cc=afl-clang-fast for real instrumentation)
-  --no-tls       build dipirec, dipiradiohead, dipitvhead without HTTPS/TLS
-                 support
+  --no-tls       build dipirec, dipiradiohead, dipitvhead, dipimetrics without HTTPS/TLS
   --no-csa       build dipitvhead, dipiradiohead, dipidescramble w/o CSA1/CSA2/BISS1
   --no-rist      skip dipirist (default: auto-detect librist)
   --no-srt       skip dipisrt (default: auto-detect libsrt)

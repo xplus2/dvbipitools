@@ -12,6 +12,8 @@
 #include <unistd.h>
 
 #include "lib/helper/log.h"
+#include "lib/net/tls.h"
+#include "lib/net/tls_server.h"
 #include "lib/vendor/picohttpparser/picohttpparser.h"
 
 #include "httpserver.h"
@@ -78,6 +80,9 @@ typedef struct {
   int used;
   int fd;
   int pfd_idx; /* index into callers pfds[] from last poll_fds() call, -1 = unpolled */
+  tls_t *tls;
+  int handshaking;
+  int tls_want_write;
   int reading; /* 1 = still reading request, 0 = sending response */
   double deadline;
   char reqbuf[REQ_BUF_CAP];
@@ -89,24 +94,25 @@ typedef struct {
 struct http_server {
   int listen_fd;
   int listen_pfd_idx;
+  tls_server_ctx_t *tls_ctx;
   http_conn_t conns[HTTP_MAX_CONNS];
 };
 
-http_server_t *http_server_new(int listen_fd) {
+http_server_t *http_server_new(int listen_fd, tls_server_ctx_t *tls_ctx) {
   http_server_t *hs = calloc(1, sizeof *hs);
-  if (!hs)
-    return NULL;
+  if (!hs) return NULL;
   hs->listen_fd = listen_fd;
   hs->listen_pfd_idx = -1;
+  hs->tls_ctx = tls_ctx;
   return hs;
 }
 
 void http_server_free(http_server_t *hs) {
-  if (!hs)
-    return;
+  if (!hs) return;
   for (int i = 0; i < HTTP_MAX_CONNS; i++) {
     if (hs->conns[i].used) {
-      close(hs->conns[i].fd);
+      if (hs->conns[i].tls) tls_close(hs->conns[i].tls);
+      else close(hs->conns[i].fd);
       free(hs->conns[i].resp);
     }
   }
@@ -134,14 +140,20 @@ void http_server_poll_fds(http_server_t *hs, struct pollfd *pfds, int cap, int *
     }
     c->pfd_idx = *n;
     pfds[*n].fd = c->fd;
-    pfds[*n].events = (short)(c->reading ? POLLIN : POLLOUT);
+    if (c->handshaking)
+      pfds[*n].events = (short)(c->tls_want_write ? POLLOUT : POLLIN);
+    else
+      pfds[*n].events = (short)(c->reading ? POLLIN : POLLOUT);
     pfds[*n].revents = 0;
     (*n)++;
   }
 }
 
 static void conn_close(http_conn_t *c) {
-  close(c->fd);
+  if (c->tls)
+    tls_close(c->tls);
+  else
+    close(c->fd);
   free(c->resp);
   memset(c, 0, sizeof *c);
 }
@@ -149,7 +161,6 @@ static void conn_close(http_conn_t *c) {
 static void conn_accept(http_server_t *hs, int fd, double now_mono) {
   int flags;
   http_conn_t *c = NULL;
-
   for (int i = 0; i < HTTP_MAX_CONNS; i++)
     if (!hs->conns[i].used) {
       c = &hs->conns[i];
@@ -167,9 +178,38 @@ static void conn_accept(http_server_t *hs, int fd, double now_mono) {
   memset(c, 0, sizeof *c);
   c->used = 1;
   c->fd = fd;
-  c->reading = 1;
   c->pfd_idx = -1;
   c->deadline = now_mono + HTTP_IDLE_TIMEOUT_S;
+  if (hs->tls_ctx) {
+    c->tls = tls_server_accept_start(hs->tls_ctx, fd);
+    if (!c->tls) {
+      close(fd);
+      memset(c, 0, sizeof *c);
+      return;
+    }
+    c->handshaking = 1;
+  } else {
+    c->reading = 1;
+  }
+}
+
+static void conn_handshake_step(http_conn_t *c) {
+  switch (tls_server_handshake_step(c->tls)) {
+  case TLS_HANDSHAKE_DONE:
+    c->handshaking = 0;
+    c->reading = 1;
+    break;
+  case TLS_HANDSHAKE_WANT_WRITE:
+    c->tls_want_write = 1;
+    break;
+  case TLS_HANDSHAKE_WANT_READ:
+    c->tls_want_write = 0;
+    break;
+  case TLS_HANDSHAKE_ERROR:
+  default:
+    conn_close(c);
+    break;
+  }
 }
 
 static void conn_read_step(http_conn_t *c) {
@@ -179,15 +219,24 @@ static void conn_read_step(http_conn_t *c) {
     conn_close(c);
     return;
   }
-  got = recv(c->fd, c->reqbuf + c->reqlen, sizeof c->reqbuf - 1 - c->reqlen, 0);
-  if (got < 0) {
-    if (errno != EAGAIN && errno != EWOULDBLOCK)
+  if (c->tls) {
+    got = tls_read(c->tls, c->reqbuf + c->reqlen, sizeof c->reqbuf - 1 - c->reqlen);
+    if (got < 0) {
       conn_close(c);
-    return;
-  }
-  if (got == 0) {
-    conn_close(c); /* peer closed before sending a full request */
-    return;
+      return;
+    }
+    if (got == 0) return;
+  } else {
+    got = recv(c->fd, c->reqbuf + c->reqlen, sizeof c->reqbuf - 1 - c->reqlen, 0);
+    if (got < 0) {
+      if (errno != EAGAIN && errno != EWOULDBLOCK)
+        conn_close(c);
+      return;
+    }
+    if (got == 0) {
+      conn_close(c); /* peer closed before sending a full request */
+      return;
+    }
   }
   c->reqlen += (size_t)got;
   c->reqbuf[c->reqlen] = '\0';
@@ -195,8 +244,7 @@ static void conn_read_step(http_conn_t *c) {
 
 static const char *strip_query(char *path) {
   char *q = strchr(path, '?');
-  if (q)
-    *q = '\0';
+  if (q) *q = '\0';
   return path;
 }
 
@@ -208,8 +256,7 @@ static void set_response(http_conn_t *c, const char *hdr, size_t hdr_len, const 
     return;
   }
   memcpy(c->resp, hdr, hdr_len);
-  if (body_len)
-    memcpy(c->resp + hdr_len, body, body_len);
+  if (body_len) memcpy(c->resp + hdr_len, body, body_len);
   c->resplen = hdr_len + body_len;
 }
 
@@ -221,11 +268,11 @@ static void build_metrics_response(http_conn_t *c, const store_t *st, double now
 
   render_openmetrics(st, now_mono, &body, &body_len);
   hdr_len = snprintf(hdr, sizeof hdr,
-                      "HTTP/1.1 200 OK\r\n"
-                      "Content-Type: application/openmetrics-text; version=1.0.0; charset=utf-8\r\n"
-                      "Content-Length: %zu\r\n"
-                      "Connection: close\r\n\r\n",
-                      body_len);
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: application/openmetrics-text; version=1.0.0; charset=utf-8\r\n"
+    "Content-Length: %zu\r\n"
+    "Connection: close\r\n\r\n",
+    body_len);
   set_response(c, hdr, (size_t)hdr_len, body, body_len);
   free(body);
 }
@@ -234,11 +281,11 @@ static void build_404_response(http_conn_t *c) {
   static const char body[] = "not found\n";
   char hdr[160];
   int hdr_len = snprintf(hdr, sizeof hdr,
-                          "HTTP/1.1 404 Not Found\r\n"
-                          "Content-Type: text/plain; charset=utf-8\r\n"
-                          "Content-Length: %zu\r\n"
-                          "Connection: close\r\n\r\n",
-                          sizeof body - 1);
+    "HTTP/1.1 404 Not Found\r\n"
+    "Content-Type: text/plain; charset=utf-8\r\n"
+    "Content-Length: %zu\r\n"
+    "Connection: close\r\n\r\n",
+    sizeof body - 1);
   set_response(c, hdr, (size_t)hdr_len, body, sizeof body - 1);
 }
 
@@ -260,12 +307,10 @@ static void conn_build_response(http_conn_t *c, store_t *st, double now_mono, in
   char method[16] = "", path[256] = "";
 
   if (phr_parse_request(c->reqbuf, c->reqlen, &pmethod, &method_len, &ppath, &path_len, &minor_version, headers, &num_headers, 0) > 0) {
-    if (method_len >= sizeof method)
-      method_len = sizeof method - 1;
+    if (method_len >= sizeof method) method_len = sizeof method - 1;
     memcpy(method, pmethod, method_len);
     method[method_len] = '\0';
-    if (path_len >= sizeof path)
-      path_len = sizeof path - 1;
+    if (path_len >= sizeof path) path_len = sizeof path - 1;
     memcpy(path, ppath, path_len);
     path[path_len] = '\0';
   }
@@ -274,8 +319,7 @@ static void conn_build_response(http_conn_t *c, store_t *st, double now_mono, in
     st->stats.http_requests_200++;
     build_metrics_response(c, st, now_mono);
   } else {
-    if (verbose && method[0])
-      log_line("dipimetrics: 404 %s %s", method, path);
+    if (verbose && method[0]) log_line("dipimetrics: 404 %s %s", method, path);
     st->stats.http_requests_404++;
     build_404_response(c);
   }
@@ -291,23 +335,29 @@ static void conn_write_step(http_conn_t *c) {
     conn_close(c);
     return;
   }
-  sent = send(c->fd, c->resp + c->respoff, c->resplen - c->respoff, MSG_NOSIGNAL);
-  if (sent < 0) {
-    if (errno != EAGAIN && errno != EWOULDBLOCK)
+  if (c->tls) {
+    sent = tls_write(c->tls, c->resp + c->respoff, c->resplen - c->respoff);
+    if (sent < 0) {
       conn_close(c);
-    return;
+      return;
+    }
+    if (sent == 0) return;
+  } else {
+    sent = send(c->fd, c->resp + c->respoff, c->resplen - c->respoff, MSG_NOSIGNAL);
+    if (sent < 0) {
+      if (errno != EAGAIN && errno != EWOULDBLOCK) conn_close(c);
+      return;
+    }
   }
   c->respoff += (size_t)sent;
-  if (c->respoff >= c->resplen)
-    conn_close(c);
+  if (c->respoff >= c->resplen) conn_close(c);
 }
 
 void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, store_t *st, double now_mono, int verbose) {
   if (hs->listen_pfd_idx >= 0 && hs->listen_pfd_idx < n && (pfds[hs->listen_pfd_idx].revents & POLLIN)) {
     for (;;) {
       int fd = accept(hs->listen_fd, NULL, NULL);
-      if (fd < 0)
-        break;
+      if (fd < 0) break;
       conn_accept(hs, fd, now_mono);
     }
   }
@@ -315,18 +365,17 @@ void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, st
   for (int i = 0; i < HTTP_MAX_CONNS; i++) {
     http_conn_t *c = &hs->conns[i];
     short rev;
-    if (!c->used)
-      continue;
+    if (!c->used) continue;
     rev = (c->pfd_idx >= 0 && c->pfd_idx < n) ? pfds[c->pfd_idx].revents : 0;
-    if (c->reading) {
-      if (rev & (POLLIN | POLLHUP | POLLERR))
-        conn_read_step(c);
-      if (c->used && c->reading && request_headers_complete(c->reqbuf, c->reqlen))
-        conn_build_response(c, st, now_mono, verbose);
+    if (c->handshaking) {
+      if (rev & (POLLIN | POLLOUT | POLLHUP | POLLERR))
+        conn_handshake_step(c);
+    } else if (c->reading) {
+      if (rev & (POLLIN | POLLHUP | POLLERR)) conn_read_step(c);
+      if (c->used && c->reading && request_headers_complete(c->reqbuf, c->reqlen)) conn_build_response(c, st, now_mono, verbose);
     } else if (rev & (POLLOUT | POLLERR)) {
       conn_write_step(c);
     }
-    if (c->used && now_mono >= c->deadline)
-      conn_close(c);
+    if (c->used && now_mono >= c->deadline) conn_close(c);
   }
 }

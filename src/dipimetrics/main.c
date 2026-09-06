@@ -14,6 +14,7 @@
 #include "lib/metrics/protocol.h"
 #include "lib/helper/signal.h"
 #include "lib/helper/toolmain.h"
+#include "lib/net/tls_server.h"
 
 #include "args.h"
 #include "httpserver.h"
@@ -61,6 +62,7 @@ int main(int argc, char **argv) {
   args_status_t st;
   int uds_fd, http_fd;
   http_server_t *hs;
+  tls_server_ctx_t *tls_ctx = NULL;
   static store_t store; /* ~1.9MB, keeps off stack */
 
   log_set_color(log_color_prescan(argc, argv));
@@ -75,24 +77,34 @@ int main(int argc, char **argv) {
   if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
   signals_install();
 
+  if (cfg.tls_cert) {
+    tls_ctx = tls_server_ctx_new(cfg.tls_cert, cfg.tls_key);
+    if (!tls_ctx) return 1;
+  }
+
   uds_fd = uds_listen(cfg.sock_path);
-  if (uds_fd < 0) return 1;
+  if (uds_fd < 0) {
+    tls_server_ctx_free(tls_ctx);
+    return 1;
+  }
   http_fd = http_listen(cfg.family, cfg.listen_addr, cfg.listen_port);
   if (http_fd < 0) {
     close(uds_fd);
     unlink(cfg.sock_path);
+    tls_server_ctx_free(tls_ctx);
     return 1;
   }
-  hs = http_server_new(http_fd);
+  hs = http_server_new(http_fd, tls_ctx);
   if (!hs) {
     close(uds_fd);
     close(http_fd);
     unlink(cfg.sock_path);
+    tls_server_ctx_free(tls_ctx);
     return 1;
   }
 
   store_init(&store);
-  log_line("receiving snapshots on %s, serving http://%s:%u/metrics", cfg.sock_path, cfg.listen_addr, cfg.listen_port);
+  log_line("receiving snapshots on %s, serving %s://%s:%u/metrics", cfg.sock_path, tls_ctx ? "https" : "http", cfg.listen_addr, cfg.listen_port);
 
   while (!signal_stop_requested()) {
     struct pollfd pfds[1 + HTTP_MAX_CONNS + 1]; /* uds + listen + open connections */
@@ -112,12 +124,20 @@ int main(int argc, char **argv) {
     if (pfds[0].revents & POLLIN) drain_uds_snapshots(uds_fd, &store, now, cfg.verbose);
     http_server_service(hs, pfds, n, &store, now, cfg.verbose);
     store_reap_expired(&store, now, (double)cfg.expiry_s);
+
+    if (signal_tls_reload_requested()) {
+      if (tls_ctx)
+        log_line("dipimetrics: SIGUSR1: TLS cert reload %s", tls_server_ctx_reload(tls_ctx) == 0 ? "ok" : "failed");
+      else
+        log_line("dipimetrics: SIGUSR1: no TLS configured, ignoring");
+    }
   }
 
   http_server_free(hs);
   close(uds_fd);
   close(http_fd);
   unlink(cfg.sock_path);
+  tls_server_ctx_free(tls_ctx);
   log_line("stopped");
   return 0;
 }

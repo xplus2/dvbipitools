@@ -65,6 +65,29 @@ START_TEST(expiry_rejects_zero_and_negative) {
 }
 END_TEST
 
+START_TEST(tls_cert_and_key_together_are_accepted) {
+  char *argv[] = {"dipimetrics", "--tls-cert", "srv.crt", "--tls-key", "srv.key", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.tls_cert, "srv.crt");
+  ck_assert_str_eq(cfg.tls_key, "srv.key");
+}
+END_TEST
+
+START_TEST(tls_cert_without_key_is_rejected) {
+  char *argv[] = {"dipimetrics", "--tls-cert", "srv.crt", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(tls_key_without_cert_is_rejected) {
+  char *argv[] = {"dipimetrics", "--tls-key", "srv.key", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 START_TEST(invalid_color_mode_is_rejected) {
   char *argv[] = {"dipimetrics", "--color", "sometimes", NULL};
   config_t cfg;
@@ -95,6 +118,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, listen_rejects_malformed_addr);
   tcase_add_test(tc, expiry_is_overridable);
   tcase_add_test(tc, expiry_rejects_zero_and_negative);
+  tcase_add_test(tc, tls_cert_and_key_together_are_accepted);
+  tcase_add_test(tc, tls_cert_without_key_is_rejected);
+  tcase_add_test(tc, tls_key_without_cert_is_rejected);
   tcase_add_test(tc, invalid_color_mode_is_rejected);
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
   tcase_add_test(tc, help_returns_help_status);

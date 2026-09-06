@@ -16,6 +16,8 @@ dipimetrics [options]
 |------|---------------|-----------------------|---------------------------------|
 | `-S` | `--sock`      | `<path>`              | `/run/dvbipitools/metrics.sock` |
 | `-l` | `--listen`    | `<addr>:<port>`       | `127.0.0.1:9109`                |
+|      | `--tls-cert`  | `<path>`              | off (plain HTTP)                |
+|      | `--tls-key`   | `<path>`              | off (plain HTTP)                |
 | `-e` | `--expiry`    | `<s>`                 | `30`                            |
 | `-v` | `--verbose`   |                       | off                             |
 |      | `--color`     | `auto\|always\|never` | `auto`                          |
@@ -44,7 +46,11 @@ only, pass e.g. `-l 0.0.0.0:9109` for "any"). Every other path returns `404`.
 The server is intentionally minimal: one request handled at a time, `Connection: close` on every response, 
 a several-second read/write budget per connection so a stalled client can't wedge the collector. 
 This is a local diagnostics endpoint meant for infrequent scraping, not
-a general-purpose web server. There is no TLS and no authentication.
+a general-purpose web server. There is no authentication.
+
+`--tls-cert`/`--tls-key` (PEM, both required together) switch `-l` from plain HTTP to HTTPS.
+The certificate is reloaded from the same paths on `SIGUSR1`, without dropping the listener or
+any in-flight connection.
 
 Output is `application/openmetrics-text`: one `# TYPE`/`# HELP` pair per metric family actually
 present (families with zero live samples are omitted), samples labeled
@@ -70,7 +76,8 @@ and every `404`, with enough detail to diagnose a misbehaving exporter or a stra
 
 ## Signals
 
-`^C`, SIGINT or SIGTERM: stop the process (closes sockets, removes the Unix socket file).
+* `^C`, SIGINT or SIGTERM: stop
+* SIGUSR1: reload the TLS certificate/key
 
 ## Running under systemd
 
@@ -111,6 +118,9 @@ dipimetrics
 
 # reachable from another host, custom expiry
 dipimetrics -l 0.0.0.0:9109 -e 60
+
+# HTTPS
+dipimetrics -l 0.0.0.0:9109 --tls-cert srv.crt --tls-key srv.key
 
 # let dipitvhead report in
 dipitvhead ... --metrics-id headend1-tv1 --metrics-interval 5

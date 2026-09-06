@@ -1944,7 +1944,10 @@ dvbipitools_add_unit_test(dipimetrics_httpserver
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tls_server.c)
+target_link_libraries(test_dipimetrics_httpserver PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 
 dvbipitools_add_unit_test(dipixy_args
     unit/dipixy/test_args.c

@@ -12,7 +12,7 @@
 #include "tls.h"
 #include "tls_priv.h"
 
-static void log_ssl_error(const char *what) {
+void tls_log_ssl_error(const char *what) {
   unsigned long e = ERR_get_error();
   char buf[256];
   if (e) {
@@ -26,16 +26,15 @@ static void log_ssl_error(const char *what) {
 /* shared by tls_connect() and tls_connect_start(): everything up to (not incl.) SSL_connect() */
 static tls_t *tls_setup(int fd, const char *host, int insecure) {
   tls_t *t = calloc(1, sizeof *t);
-  if (!t)
-    return NULL;
+  if (!t) return NULL;
   t->fd = fd;
   t->ctx = SSL_CTX_new(TLS_client_method());
   if (!t->ctx) {
-    log_ssl_error("SSL_CTX_new");
+    tls_log_ssl_error("SSL_CTX_new");
     goto fail;
   }
   if (SSL_CTX_set_min_proto_version(t->ctx, TLS1_2_VERSION) != 1) {
-    log_ssl_error("SSL_CTX_set_min_proto_version");
+    tls_log_ssl_error("SSL_CTX_set_min_proto_version");
     goto fail;
   }
   if (insecure) {
@@ -43,45 +42,42 @@ static tls_t *tls_setup(int fd, const char *host, int insecure) {
   } else {
     SSL_CTX_set_verify(t->ctx, SSL_VERIFY_PEER, NULL);
     if (SSL_CTX_set_default_verify_paths(t->ctx) != 1) {
-      log_ssl_error("SSL_CTX_set_default_verify_paths");
+      tls_log_ssl_error("SSL_CTX_set_default_verify_paths");
       goto fail;
     }
   }
   t->ssl = SSL_new(t->ctx);
   if (!t->ssl) {
-    log_ssl_error("SSL_new");
+    tls_log_ssl_error("SSL_new");
     goto fail;
   }
   if (SSL_set_tlsext_host_name(t->ssl, host) != 1) {
-    log_ssl_error("SSL SNI setup");
+    tls_log_ssl_error("SSL SNI setup");
     goto fail;
   }
   if (!insecure && SSL_set1_host(t->ssl, host) != 1) {
-    log_ssl_error("SSL hostname verification setup");
+    tls_log_ssl_error("SSL hostname verification setup");
     goto fail;
   }
   if (SSL_set_fd(t->ssl, fd) != 1) {
-    log_ssl_error("SSL_set_fd");
+    tls_log_ssl_error("SSL_set_fd");
     goto fail;
   }
   return t;
 
 fail:
-  if (t->ssl)
-    SSL_free(t->ssl);
-  if (t->ctx)
-    SSL_CTX_free(t->ctx);
+  if (t->ssl) SSL_free(t->ssl);
+  if (t->ctx) SSL_CTX_free(t->ctx);
   free(t);
   return NULL;
 }
 
 tls_t *tls_connect(int fd, const char *host, int insecure) {
   tls_t *t = tls_setup(fd, host, insecure);
-  if (!t)
-    return NULL;
+  if (!t) return NULL;
   if (SSL_connect(t->ssl) != 1) {
     log_line("tls handshake with %s failed", host);
-    log_ssl_error("SSL_connect");
+    tls_log_ssl_error("SSL_connect");
     SSL_free(t->ssl);
     SSL_CTX_free(t->ctx);
     free(t);
@@ -97,59 +93,44 @@ tls_t *tls_connect_start(int fd, const char *host, int insecure) {
 tls_handshake_status_t tls_handshake_step(tls_t *t) {
   int r = SSL_connect(t->ssl);
   int err;
-
-  if (r == 1)
-    return TLS_HANDSHAKE_DONE;
+  if (r == 1) return TLS_HANDSHAKE_DONE;
   err = SSL_get_error(t->ssl, r);
-  if (err == SSL_ERROR_WANT_READ)
-    return TLS_HANDSHAKE_WANT_READ;
-  if (err == SSL_ERROR_WANT_WRITE)
-    return TLS_HANDSHAKE_WANT_WRITE;
+  if (err == SSL_ERROR_WANT_READ) return TLS_HANDSHAKE_WANT_READ;
+  if (err == SSL_ERROR_WANT_WRITE) return TLS_HANDSHAKE_WANT_WRITE;
   log_line("tls handshake failed");
-  log_ssl_error("SSL_connect");
+  tls_log_ssl_error("SSL_connect");
   return TLS_HANDSHAKE_ERROR;
 }
 
 ssize_t tls_read(tls_t *t, void *buf, size_t cap) {
   int n, err;
-
-  if (cap > INT_MAX)
-    cap = INT_MAX;
+  if (cap > INT_MAX) cap = INT_MAX;
   n = SSL_read(t->ssl, buf, (int)cap);
-  if (n > 0)
-    return n;
+  if (n > 0) return n;
   err = SSL_get_error(t->ssl, n);
-  if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
-    return 0;
-  if (err != SSL_ERROR_ZERO_RETURN)
-    log_ssl_error("SSL_read");
+  if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) return 0;
+  if (err != SSL_ERROR_ZERO_RETURN) tls_log_ssl_error("SSL_read");
   return -1;
 }
 
 ssize_t tls_write(tls_t *t, const void *buf, size_t len) {
   int n, err;
-  if (len > INT_MAX)
-    len = INT_MAX;
+  if (len > INT_MAX) len = INT_MAX;
   n = SSL_write(t->ssl, buf, (int)len);
-  if (n > 0)
-    return n;
+  if (n > 0) return n;
   err = SSL_get_error(t->ssl, n);
-  if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
-    return 0;
-  log_ssl_error("SSL_write");
+  if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) return 0;
+  tls_log_ssl_error("SSL_write");
   return -1;
 }
 
 void tls_close(tls_t *t) {
-  if (!t)
-    return;
+  if (!t) return;
   if (t->ssl) {
     SSL_shutdown(t->ssl);
     SSL_free(t->ssl);
   }
-  if (t->ctx)
-    SSL_CTX_free(t->ctx);
-  if (t->fd >= 0)
-    close(t->fd);
+  if (t->ctx) SSL_CTX_free(t->ctx);
+  if (t->fd >= 0) close(t->fd);
   free(t);
 }

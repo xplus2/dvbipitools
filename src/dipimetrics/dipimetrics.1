@@ -61,6 +61,19 @@ HTTP listen address:port. Default:
 .B \-l\ 0.0.0.0:9109
 to listen on all interfaces).
 .TP
+.B \-\-tls\-cert \fI<path>\fR
+Certificate file (PEM). HTTPS on
+.B \-l
+instead of HTTP. Requires
+.B \-\-tls\-key
+too. Reloaded on
+.BR SIGUSR1 .
+.TP
+.B \-\-tls\-key \fI<path>\fR
+Private key file (PEM). Requires
+.B \-\-tls\-cert
+too.
+.TP
 .BR \-e ", " \-\-expiry\ \fI<s>\fR
 Drop an instance after this many seconds without a new snapshot.
 Default:
@@ -93,8 +106,16 @@ once, a 5-second read/write budget per connection so a stalled client
 can't wedge the collector, and
 .B Connection: close
 on every response. This is a local diagnostics endpoint meant for
-infrequent scraping, not a general-purpose web server. There is no TLS
-and no authentication.
+infrequent scraping, not a general-purpose web server. There is no
+authentication.
+.PP
+.BR \-\-tls\-cert / \-\-tls\-key
+(PEM, both required together) switch
+.B \-l
+from plain HTTP to HTTPS. The certificate is reloaded from the same
+paths on
+.BR SIGUSR1 ,
+without dropping the listener or any in-flight connection.
 .PP
 Output is
 .BR application/openmetrics-text :
@@ -144,6 +165,11 @@ past its per-snapshot entry cap) and
 .BR \(haC ,
 SIGINT or SIGTERM stop the process: sockets are closed and the Unix
 socket file is removed.
+.PP
+.B SIGUSR1
+reloads the TLS certificate/key from the
+.BR \-\-tls\-cert / \-\-tls\-key
+paths (no-op if HTTPS isn't enabled).
 .SH EXAMPLES
 .TP
 .B dipimetrics
@@ -151,6 +177,9 @@ Start the collector with defaults.
 .TP
 .B dipimetrics \-l 0.0.0.0:9109 \-e 60
 Reachable from another host, with a longer expiry.
+.TP
+.B dipimetrics \-l 0.0.0.0:9109 \-\-tls\-cert srv.crt \-\-tls\-key srv.key
+Serve over HTTPS.
 .SH EXIT STATUS
 .B 0
 on success.

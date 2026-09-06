@@ -16,4 +16,6 @@ struct tls {
   int fd;
 };
 
+void tls_log_ssl_error(const char *what);
+
 #endif

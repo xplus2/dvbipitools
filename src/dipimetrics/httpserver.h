@@ -6,6 +6,8 @@
 
 #include <poll.h>
 
+#include "lib/net/tls_server.h"
+
 #include "store.h"
 
 #define HTTP_MAX_CONNS 8 /* concurrent in-flight connections, sized for occasional scrapes not real load */
@@ -16,7 +18,7 @@ typedef struct http_server http_server_t;
 int http_listen(int family, const char *addr, unsigned port);
 
 /* owns HTTP_MAX_CONNS connection slots against listen_fd. NULL on OOM */
-http_server_t *http_server_new(int listen_fd);
+http_server_t *http_server_new(int listen_fd, tls_server_ctx_t *tls_ctx);
 void http_server_free(http_server_t *hs);
 
 /* append hs's listen fd + every open conn's fd to pfds[*n..cap), advancing *n.

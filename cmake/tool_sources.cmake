@@ -281,6 +281,27 @@ function(dipifccret_resolve_sources)
 endfunction()
 
 function(dipimetrics_resolve_sources)
+    option(DIPIMETRICS_TLS "build dipimetrics with HTTPS/TLS support (requires OpenSSL)" ON)
+    set(DIPIMETRICS_HAVE_TLS FALSE)
+    if (DIPIMETRICS_TLS)
+        if (DVBIPITOOLS_STATIC)
+            set(OPENSSL_USE_STATIC_LIBS TRUE)
+            set(ATOMIC_LIB atomic)
+        endif ()
+        find_package(OpenSSL)
+        if (OpenSSL_FOUND)
+            set(DIPIMETRICS_HAVE_TLS TRUE)
+        else ()
+            message(WARNING "dipimetrics: OpenSSL not found, building without HTTPS support")
+        endif ()
+    endif ()
+    if (DIPIMETRICS_HAVE_TLS)
+        set(TLS_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c)
+        set(TLS_SERVER_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/tls_server.c)
+    else ()
+        set(TLS_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c)
+        set(TLS_SERVER_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/tls_server_stub.c)
+    endif ()
     set(DIPIMETRICS_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/main.c
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/args.c
@@ -293,8 +314,12 @@ function(dipimetrics_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
-            ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c)
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+            ${TLS_SRC}
+            ${TLS_SERVER_SRC})
     set(DIPIMETRICS_SRCS ${DIPIMETRICS_SRCS} PARENT_SCOPE)
+    set(DIPIMETRICS_HAVE_TLS ${DIPIMETRICS_HAVE_TLS} PARENT_SCOPE)
+    set(DIPIMETRICS_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
 endfunction()
 
 function(dipiradiohead_resolve_sources)

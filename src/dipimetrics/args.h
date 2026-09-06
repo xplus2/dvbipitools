@@ -13,6 +13,8 @@ typedef struct {
   int verbose;           /* -v */
   int daemonize;         /* -d, --daemonize: fork to background after startup */
   int color_mode;        /* --color; log_color_t */
+  const char *tls_cert;
+  const char *tls_key;
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;
