@@ -95,7 +95,10 @@ int main(int argc, char **argv) {
       fclose(scan);
     }
     if (in != stdin) fclose(in);
-    if (out != stdout) fclose(out);
+    if (out != stdout && fclose(out) && rc == 0) {
+      fprintf(stderr, TOOL_NAME ": error writing %s\n", cfg.output_path);
+      rc = 1;
+    }
     return rc;
   }
   bcg_doc_init(&doc);
@@ -132,6 +135,9 @@ int main(int argc, char **argv) {
 
   bcg_doc_free(&doc);
   if (in != stdin) fclose(in);
-  if (out != stdout) fclose(out);
+  if (out != stdout && fclose(out) && rc == 0) {
+    fprintf(stderr, TOOL_NAME ": error writing %s\n", cfg.output_path);
+    rc = 1;
+  }
   return rc;
 }

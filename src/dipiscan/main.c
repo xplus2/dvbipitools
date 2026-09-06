@@ -43,6 +43,9 @@ int main(int argc, char **argv) {
   setvbuf(out, NULL, _IOLBF, 0);
   signals_install();
   rc = scan_run(&cfg, out);
-  if (out != stdout) fclose(out);
+  if (out != stdout && fclose(out) && rc == 0) {
+    log_line("error writing %s", cfg.out_path);
+    rc = 1;
+  }
   return rc;
 }

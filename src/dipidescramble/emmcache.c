@@ -175,7 +175,10 @@ int emmcache_save(const emmcache_t *c, const char *path) {
     log_line(TOOL_NAME ": short write to emm cache %s", path);
     rc = -1;
   }
-  fclose(f);
+  if (fclose(f)) {
+    log_line(TOOL_NAME ": error writing emm cache %s: %s", path, strerror(errno));
+    rc = -1;
+  }
   free(buf);
   return rc;
 }

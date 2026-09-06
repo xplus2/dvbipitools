@@ -34,7 +34,8 @@ void write_csvmap(const char *path, const bcg_doc_t *doc) {
       continue;
     fprintf(f, "%s,%s,%u,%u,%u\n", c->id, c->uri, c->tsid, c->onid, c->sid);
   }
-  fclose(f);
+  if (fclose(f))
+    log_line("error writing %s", path);
 }
 
 int listen_run(const config_t *cfg) {
@@ -119,14 +120,18 @@ int listen_run(const config_t *cfg) {
       log_line("segment %u: %d channels, %d programmes, %d fragments", segments, doc.channel_count, doc.programme_count, nfuu);
   }
 
+  int write_failed = 0;
   if (have_doc) {
     FILE *f = strcmp(cfg->output_path, "-") == 0 ? stdout : fopen(cfg->output_path, "w");
     if (!f) {
       log_line("cannot open %s for writing", cfg->output_path);
+      write_failed = 1;
     } else {
       xmltv_write(f, &doc, TOOL_NAME);
-      if (f != stdout)
-        fclose(f);
+      if (f != stdout && fclose(f)) {
+        log_line("error writing %s", cfg->output_path);
+        write_failed = 1;
+      }
     }
     if (cfg->csvmap_path)
       write_csvmap(cfg->csvmap_path, &doc);
@@ -137,5 +142,5 @@ int listen_run(const config_t *cfg) {
   mcast_close(m);
   bcg_doc_free(&doc);
   log_line("captured %u time%s in %u segment%s", captures, captures == 1 ? "" : "s", segments, segments == 1 ? "" : "s");
-  return have_doc ? 0 : 1;
+  return have_doc && !write_failed ? 0 : 1;
 }

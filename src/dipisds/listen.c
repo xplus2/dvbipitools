@@ -97,8 +97,11 @@ int listen_run(const config_t *cfg) {
 
   dvbstp_reasm_free(r);
   mcast_close(m);
-  if (f != stdout)
-    fclose(f);
+  int rc = 0;
+  if (f != stdout && fclose(f)) {
+    log_line("error writing %s", cfg->output_path);
+    rc = 1;
+  }
   log_line("found %u service%s in %u segment%s", total_services, total_services == 1 ? "" : "s", segments, segments == 1 ? "" : "s");
-  return 0;
+  return rc;
 }

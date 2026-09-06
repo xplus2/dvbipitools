@@ -91,6 +91,11 @@ int state_load(const config_t *cfg, sds_state_t *st) {
 
     st->broadcast_doc = malloc(DOC_CAP);
     st->sp_doc = malloc(DOC_CAP);
+    if (!st->broadcast_doc || !st->sp_doc) {
+      log_line("out of memory building SD&S documents");
+      state_free(st);
+      return -1;
+    }
     st->broadcast_len = sds_build_broadcast(cfg->provider, 1, st->in.services, st->in.service_count, ret, fcc, st->broadcast_doc, DOC_CAP);
     st->sp_len = sds_build_sp(cfg->provider, cfg->offering, cfg->lang, 1, cfg->mcast_group, cfg->mcast_port, extra_payload_ids, extra_count, st->sp_doc, DOC_CAP);
     if (!st->broadcast_len || !st->sp_len) {
@@ -107,6 +112,12 @@ int state_load(const config_t *cfg, sds_state_t *st) {
         return -1;
       }
       st->package_doc = malloc(DOC_CAP);
+      if (!st->package_doc) {
+        free(pkgs);
+        log_line("out of memory building Package Discovery document");
+        state_free(st);
+        return -1;
+      }
       st->package_len = sds_build_package(cfg->provider, 1, pkgs, pkg_count, st->in.services, st->in.service_count, st->package_doc, DOC_CAP);
       free(pkgs);
       if (!st->package_len) {
@@ -125,6 +136,12 @@ int state_load(const config_t *cfg, sds_state_t *st) {
         return -1;
       }
       st->cell_doc = malloc(DOC_CAP);
+      if (!st->cell_doc) {
+        free(cells);
+        log_line("out of memory building Regionalisation Discovery document");
+        state_free(st);
+        return -1;
+      }
       st->cell_len = sds_build_regionalisation(cfg->provider, 1, cells, cell_count, st->cell_doc, DOC_CAP);
       free(cells);
       if (!st->cell_len) {
@@ -156,6 +173,11 @@ int state_load(const config_t *cfg, sds_state_t *st) {
         fus_count = 1;
       }
       st->rmsfus_doc = malloc(DOC_CAP);
+      if (!st->rmsfus_doc) {
+        log_line("out of memory building RMS-FUS Discovery document");
+        state_free(st);
+        return -1;
+      }
       st->rmsfus_len = sds_build_rms_fus(cfg->provider, 1, &rms_val, rms_count, &fus_val, fus_count, st->rmsfus_doc, DOC_CAP);
       if (!st->rmsfus_len) {
         log_line("RMS-FUS Discovery document too large (max %d bytes)", DOC_CAP);

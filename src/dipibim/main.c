@@ -137,6 +137,9 @@ int main(int argc, char **argv) {
     rc = decode_bim_to_xml(in, out, cfg.verbose) ? 1 : 0;
 
   if (in != stdin) fclose(in);
-  if (out != stdout) fclose(out);
+  if (out != stdout && fclose(out) && rc == 0) {
+    fprintf(stderr, TOOL_NAME ": error writing %s\n", cfg.output_path);
+    rc = 1;
+  }
   return rc;
 }
