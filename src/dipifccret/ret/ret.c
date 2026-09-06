@@ -22,8 +22,7 @@ struct ret_ctx {
 
 ret_ctx_t *ret_ctx_new(channel_table_t *channels, unsigned char rtx_pt, size_t max_ret_clients, ret_send_fn send_mc, ret_send_unicast_fn send_unicast, void *user) {
   ret_ctx_t *r = calloc(1, sizeof *r);
-  if (!r)
-    return NULL;
+  if (!r) return NULL;
   r->channels = channels;
   r->rtx_pt = rtx_pt;
   r->send_mc = send_mc;
@@ -39,8 +38,7 @@ ret_ctx_t *ret_ctx_new(channel_table_t *channels, unsigned char rtx_pt, size_t m
 }
 
 void ret_ctx_free(ret_ctx_t *r) {
-  if (!r)
-    return;
+  if (!r) return;
   rtx_session_table_free(r->rtx_clients);
   free(r);
 }
@@ -94,7 +92,7 @@ void ret_handle_nack(ret_ctx_t *r, const rtcp_nack_t *nack, int fd, const struct
 
   /* F.5.2 multicast repair/suppression, additional to unicast reply below */
   ff_len = rtcp_build_ff(nack->sender_ssrc, nack->media_ssrc, nack->entry, nack->entry_count, ff, sizeof ff);
-  if (ff_len > 0) r->send_mc(c, ff, ff_len, RET_DSCP_RTCP, r->send_mc_user);
+  if (ff_len > 0) r->send_mc(c, ff, ff_len, NET_DSCP_SIGNALLING, r->send_mc_user);
   for (size_t i = 0; i < nack->entry_count; i++) {
     uint16_t pid = nack->entry[i].pid;
     uint16_t blp = nack->entry[i].blp;
@@ -118,6 +116,6 @@ void ret_on_self_detected_gap(ret_ctx_t *r, uint32_t ssrc, uint16_t gap_start, u
   entry.pid = gap_start;
   entry.blp = 0; /* signals gap start only; repair below still covers full range */
   ff_len = rtcp_build_ff(0, ssrc, &entry, 1, ff, sizeof ff);
-  if (ff_len > 0) r->send_mc(c, ff, ff_len, RET_DSCP_RTCP, r->send_mc_user);
+  if (ff_len > 0) r->send_mc(c, ff, ff_len, NET_DSCP_SIGNALLING, r->send_mc_user);
   repair_range(r, c, gap_start, gap_end);
 }

@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "../helper/argutil.h"
 #include "../helper/ioutil.h"
 #include "../helper/log.h"
 #include "../helper/signal.h"
@@ -21,16 +22,13 @@
 #define NETCONNECT_POLL_INTERVAL_MS 150
 
 const char *net_err_reason_name(net_err_reason_t reason) {
-  static const char *const names[NET_ERR_COUNT] = {
-      "dns", "connect", "timeout", "tls", "http", "format", "read", "eof", "other"};
-  if ((unsigned)reason >= NET_ERR_COUNT)
-    return "other";
+  static const char *const names[NET_ERR_COUNT] = {"dns", "connect", "timeout", "tls", "http", "format", "read", "eof", "other"};
+  if ((unsigned)reason >= NET_ERR_COUNT) return "other";
   return names[reason];
 }
 
 static void set_reason(net_err_reason_t *out, net_err_reason_t v) {
-  if (out)
-    *out = v;
+  if (out) *out = v;
 }
 
 /* 1 connected, -1 refused/error, 0 timed out or stop requested */
@@ -42,10 +40,8 @@ static int wait_connect(int fd, int timeout_ms) {
     int step = NETCONNECT_POLL_INTERVAL_MS;
     int pret;
 
-    if (signal_stop_requested())
-      return 0;
-    if (step > timeout_ms - elapsed)
-      step = timeout_ms - elapsed;
+    if (signal_stop_requested()) return 0;
+    if (step > timeout_ms - elapsed) step = timeout_ms - elapsed;
     pfd.fd = fd;
     pfd.events = POLLOUT;
     pfd.revents = 0;
@@ -54,13 +50,11 @@ static int wait_connect(int fd, int timeout_ms) {
       int soerr = 0;
       socklen_t sl = sizeof soerr;
       getsockopt(fd, SOL_SOCKET, SO_ERROR, &soerr, &sl);
-      if (soerr == 0)
-        return 1;
+      if (soerr == 0) return 1;
       errno = soerr;
       return -1;
     }
-    if (pret < 0 && errno != EINTR)
-      return -1;
+    if (pret < 0 && errno != EINTR) return -1;
     elapsed += step;
   }
   return 0;
@@ -84,8 +78,7 @@ int netconnect_tcp(const char *host, unsigned port, int timeout_ms, net_err_reas
   for (ai = res; ai; ai = ai->ai_next) {
     int flags, cr;
     fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-    if (fd < 0)
-      continue;
+    if (fd < 0) continue;
     flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
       save_errno = errno;
@@ -112,8 +105,7 @@ int netconnect_tcp(const char *host, unsigned port, int timeout_ms, net_err_reas
   }
   freeaddrinfo(res);
   if (fd < 0) {
-    if (!signal_stop_requested())
-      log_line("connect %s:%u: %s", host, port, strerror(save_errno));
+    if (!signal_stop_requested()) log_line("connect %s:%u: %s", host, port, strerror(save_errno));
     set_reason(reason_out, (save_errno == ETIMEDOUT) ? NET_ERR_TIMEOUT : NET_ERR_CONNECT);
     return -1;
   }
@@ -131,8 +123,7 @@ static int try_addrs(struct addrinfo *ai, struct addrinfo **used, int *save_errn
   for (; ai; ai = ai->ai_next) {
     int fd, flags;
     fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-    if (fd < 0)
-      continue;
+    if (fd < 0) continue;
     flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
       *save_errno = errno;
@@ -233,8 +224,7 @@ int netconnect_tcp_finish(netconnect_pending_t **pending, int *fd, net_err_reaso
 }
 
 void netconnect_tcp_abort(netconnect_pending_t *pending) {
-  if (!pending)
-    return;
+  if (!pending) return;
   freeaddrinfo(pending->res);
   free(pending);
 }
@@ -245,22 +235,36 @@ int netaddr_fill(int family, const char *addr, unsigned port, struct sockaddr_st
     struct sockaddr_in *a = (struct sockaddr_in *)ss;
     a->sin_family = AF_INET;
     a->sin_port = htons((unsigned short)port);
-    if (inet_pton(AF_INET, addr, &a->sin_addr) != 1)
-      return -1;
+    if (inet_pton(AF_INET, addr, &a->sin_addr) != 1) return -1;
     *sslen = sizeof *a;
   } else {
     struct sockaddr_in6 *a = (struct sockaddr_in6 *)ss;
     a->sin6_family = AF_INET6;
     a->sin6_port = htons((unsigned short)port);
-    if (inet_pton(AF_INET6, addr, &a->sin6_addr) != 1)
-      return -1;
+    if (inet_pton(AF_INET6, addr, &a->sin6_addr) != 1) return -1;
     *sslen = sizeof *a;
   }
   return 0;
 }
 
 int net_set_dscp(int fd, int family, int tos) {
-  if (family == AF_INET)
-    return setsockopt(fd, IPPROTO_IP, IP_TOS, &tos, sizeof tos);
+  if (family == AF_INET) return setsockopt(fd, IPPROTO_IP, IP_TOS, &tos, sizeof tos);
   return setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof tos);
+}
+
+int net_dscp_parse(const char *s, int *tos_out) {
+  static const enum_map_t map[] = {
+      {"video-high", NET_DSCP_VIDEO_HIGH},
+      {"video-low", NET_DSCP_VIDEO_LOW},
+      {"voice", NET_DSCP_VOICE_BEARER},
+      {"signalling", NET_DSCP_SIGNALLING},
+      {"best-effort", NET_DSCP_BEST_EFFORT},
+  };
+  unsigned v;
+  if (map_lookup(map, sizeof map / sizeof map[0], s, tos_out) == 0) return 0;
+  if (argutil_uint_range(s, 0, 63, &v) == 0) {
+    *tos_out = (int)(v << 2);
+    return 0;
+  }
+  return -1;
 }

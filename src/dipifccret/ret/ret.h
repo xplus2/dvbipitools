@@ -10,12 +10,9 @@
 #include <time.h>
 
 #include "lib/demux/rtcp.h"
+#include "lib/net/netconnect.h"
 
 #include "../channel/channel.h"
-
-/* F.9/I.2.12 IP_TOS byte (DSCP << 2), voice/video signalling class for RTCP control traffic.
-   RTX/burst data packets mirror captured original packet's own DSCP instead, see channel_slot_t.dscp */
-#define RET_DSCP_RTCP (0x1A << 2) /* 0b011010 */
 
 /* sends one built packet on c's MC RET session (F.6.2.2); caller owns socket, sets IP_TOS to dscp */
 typedef void (*ret_send_fn)(const channel_t *c, const unsigned char *pkt, size_t len, int dscp, void *user);

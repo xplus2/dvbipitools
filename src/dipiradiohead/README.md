@@ -18,6 +18,7 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<po
 | `-I`  | `--iface`            | `<iface>`                               | kernel route                                    |           |
 | `-r`  | `--rtp`              |                                         | off (plain UDP)                                 |           |
 | `-T`  | `--ttl`              | `<n>`                                   | 1 (kernel default)                              |           |
+|       | `--dscp`             | `<v>`                                   | `video-high`                                    |           |
 | `-R`  | `--rist`             | `rist://host:port` or `srt://host:port` | none, repeatable (bonded, one scheme at a time) |           |
 |       | `--profile`          | `simple\|main`                          | `simple` (`-R rist://` peers only)              |           |
 |       | `--secret`           | `<psk>`                                 | none (`-R rist://` peers only)                  |           |

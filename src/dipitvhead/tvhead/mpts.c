@@ -44,16 +44,12 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
 
   memset(input_stats, 0, sizeof input_stats);
   memset(&tsm, 0, sizeof tsm);
-
   memset(&out, 0, sizeof out);
 
   progs = calloc(n, sizeof *progs);
-  if (!progs)
-    return 1;
-
+  if (!progs) return 1;
   for (unsigned i = 0; i < n; i++) {
     out_program_pids_t pids;
-
     slot_ctxs[i].cfg = cfg;
     slot_ctxs[i].input = &cfg->inputs[i];
     slot_ctxs[i].im = metrics_on ? &input_stats[i] : NULL;
@@ -76,6 +72,7 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       rc = 1;
       goto done;
     }
+    mcast_set_tos(outmc, cfg->dscp);
     out.mc = outmc;
     out.rtp = cfg->rtp;
     if (cfg->rtp) {
@@ -118,8 +115,7 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
   run_start = mono_seconds();
-  if (cas_needs_discovery)
-    cas_gate_deadline = run_start + CAS_KEYWORD_DISCOVERY_TIMEOUT_S;
+  if (cas_needs_discovery) cas_gate_deadline = run_start + CAS_KEYWORD_DISCOVERY_TIMEOUT_S;
 
   while (!signal_stop_requested()) {
     struct pollfd pfds[ARGS_MAX_INPUTS];
@@ -133,13 +129,11 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     if (deadline != RETRYSET_NEVER) {
       long remain_s = (long)(deadline - time(NULL));
       int remain_ms = remain_s <= 0 ? 0 : (int)(remain_s * 1000);
-      if (remain_ms < timeout_ms)
-        timeout_ms = remain_ms;
+      if (remain_ms < timeout_ms) timeout_ms = remain_ms;
     }
     for (unsigned i = 0; i < n; i++) {
       int fd = poll_fd_for_input(rs, i, &pfds[npfd].events);
-      if (fd < 0)
-        continue;
+      if (fd < 0) continue;
       pfds[npfd].fd = fd;
       pfds[npfd].revents = 0;
       pfd_slot[npfd] = i;
@@ -153,8 +147,7 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
 
     now = mono_seconds();
     now_t = time(NULL);
-    for (unsigned i = 0; i < n; i++)
-      retryset_service(rs, i, now_t);
+    for (unsigned i = 0; i < n; i++) retryset_service(rs, i, now_t);
 
     {
       mpts_tick_t tk;
@@ -175,11 +168,8 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
 
         unsigned i = (rr_start + k) % n;
         src = retryset_result(rs, i);
-        if (!src)
-          continue;
-        if (!input_poll_ready(i, pfd_slot, pfds, npfd))
-          continue;
-
+        if (!src) continue;
+        if (!input_poll_ready(i, pfd_slot, pfds, npfd)) continue;
         if (!progs[i].rx)
           discover_input(&tk, i, src);
         else
@@ -190,13 +180,11 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
 
     if (eit_busy >= 0 && progs[eit_busy].rx && remux_eit_pending(progs[eit_busy].rx)) {
       remux_emit_eit(progs[eit_busy].rx, OUT_PID_EIT, &eit_cc, 1, packet_cb, &out);
-      if (!remux_eit_mid_section(progs[eit_busy].rx))
-        eit_busy = -1;
+      if (!remux_eit_mid_section(progs[eit_busy].rx)) eit_busy = -1;
     } else {
       eit_busy = -1;
       for (unsigned i = 0; i < n; i++) {
-        if (!progs[i].rx || !remux_eit_pending(progs[i].rx))
-          continue;
+        if (!progs[i].rx || !remux_eit_pending(progs[i].rx)) continue;
         remux_emit_eit(progs[i].rx, OUT_PID_EIT, &eit_cc, 1, packet_cb, &out);
         if (remux_eit_mid_section(progs[i].rx)) {
           eit_busy = (int)i;
@@ -223,13 +211,11 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
         rc = 1;
         goto done;
       }
-      if (signal_reload_requested())
-        cas_reload_receivers(cas);
+      if (signal_reload_requested()) cas_reload_receivers(cas);
     }
     {
       int stuff_n = bitrate_stuff_due(out.pacer);
-      for (unsigned k = 0; k < (unsigned)stuff_n; k++)
-        send_null_packet(&out);
+      for (unsigned k = 0; k < (unsigned)stuff_n; k++) send_null_packet(&out);
     }
     if (cfg->verbose && now - last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - run_start, out.packets);
@@ -238,40 +224,25 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     }
     {
       unsigned active = 0;
-      for (unsigned i = 0; i < n; i++)
-        if (progs[i].rx)
-          active++;
+      for (unsigned i = 0; i < n; i++) if (progs[i].rx) active++;
       emit_metrics(mx, now, &out, n, active, input_stats, n, tsm_p, cas);
     }
   }
 
 done:
-  if (cas)
-    cas_flush(cas, packet_cb, &out);
+  if (cas) cas_flush(cas, packet_cb, &out);
   flush_batch(&out);
-  for (unsigned i = 0; progs && i < n; i++)
-    program_reset(&progs[i]);
+  for (unsigned i = 0; progs && i < n; i++) program_reset(&progs[i]);
   free(progs);
-  if (mpts)
-    mpts_free(mpts);
-  if (rs)
-    retryset_free(rs);
-  if (cas)
-    cas_stop(cas);
-  if (out.rtph)
-    rtpheader_free(out.rtph);
-  if (out.rist)
-    ristout_close(out.rist);
-  if (out.srt)
-    srtsink_close(out.srt);
-  if (out.pacer)
-    bitrate_pacer_free(out.pacer);
-  if (outmc)
-    mcast_close(outmc);
-
-  if (cfg->verbose && log_stderr_is_tty())
-    fputc('\n', stderr);
-  if (rc == 0)
-    log_line("stopped.");
+  if (mpts) mpts_free(mpts);
+  if (rs) retryset_free(rs);
+  if (cas) cas_stop(cas);
+  if (out.rtph) rtpheader_free(out.rtph);
+  if (out.rist) ristout_close(out.rist);
+  if (out.srt) srtsink_close(out.srt);
+  if (out.pacer) bitrate_pacer_free(out.pacer);
+  if (outmc) mcast_close(outmc);
+  if (cfg->verbose && log_stderr_is_tty()) fputc('\n', stderr);
+  if (rc == 0) log_line("stopped.");
   return rc ? 1 : 0;
 }

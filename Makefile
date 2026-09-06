@@ -1671,6 +1671,7 @@ lib_metrics_export_SRCS := \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c \
 	src/lib/helper/ioutil.c
@@ -1705,6 +1706,8 @@ dipisds_args_SRCS := \
 	tests/unit/dipisds/test_args.c \
 	src/dipisds/args.c \
 	src/lib/helper/argutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
@@ -1785,6 +1788,7 @@ lib_net_rist_ristin_SRCS := \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/signal.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c
 tests/unit/lib/net/rist/test_ristin: | $(RIST_SEND_HELPER_BIN)
@@ -1892,6 +1896,7 @@ dipisds_announce_SRCS := \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
@@ -1922,6 +1927,8 @@ dipibcg_args_SRCS := \
 	tests/unit/dipibcg/test_args.c \
 	src/dipibcg/args.c \
 	src/lib/helper/argutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
@@ -2035,6 +2042,7 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/multicast.c \
 	src/lib/demux/rtp.c \
@@ -2522,6 +2530,7 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/ioutil.c \
 	src/lib/metrics/export.c \
@@ -2571,6 +2580,8 @@ dipiradiohead_args_SRCS := \
 	tests/unit/dipiradiohead/test_args.c \
 	src/dipiradiohead/args.c \
 	src/lib/helper/argutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/ioutil.c \
 	src/lib/cas/cas_args.c \
@@ -2603,6 +2614,7 @@ dipiradiohead_source_async_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
@@ -2629,6 +2641,7 @@ dipiradiohead_inputset_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
@@ -2657,6 +2670,7 @@ dipitvhead_source_SRCS := \
 	src/lib/net/srt/srtsrc_stub.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -2704,6 +2718,7 @@ dipitvhead_discover_SRCS := \
 	src/lib/net/srt/srtsrc_stub.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -2968,7 +2983,8 @@ lib_net_netconnect_SRCS := \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/signal.c \
-	src/lib/helper/log.c
+	src/lib/helper/log.c \
+	src/lib/helper/argutil.c
 
 lib_net_rtmp_BIN := tests/unit/lib/net/test_rtmp
 lib_net_rtmp_SRCS := \
@@ -2997,6 +3013,7 @@ lib_net_rtmpout_SRCS := \
 	src/lib/mux/amf.c \
 	src/lib/mux/ebml.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/signal.c \
@@ -3012,6 +3029,7 @@ lib_net_httpclient_async_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
@@ -3030,6 +3048,7 @@ lib_net_tssource_async_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/multicast.c \
 	src/lib/demux/rtp.c \
@@ -3050,6 +3069,7 @@ lib_net_tssource_file_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/multicast.c \
 	src/lib/demux/rtp.c \
@@ -3069,6 +3089,7 @@ lib_net_dvbstp_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
@@ -3209,6 +3230,7 @@ dipirec_ret_client_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
 
@@ -3223,6 +3245,7 @@ lib_fccret_fcc_client_SRCS := \
 	src/lib/mux/rtcp_build.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
@@ -3251,6 +3274,7 @@ dipifccret_listen_SRCS := \
 	src/dipifccret/listen.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
 dipifccret_listen_EXTRA_LDFLAGS := -pthread
@@ -3277,6 +3301,7 @@ dipifccret_ret_mcsend_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
 
@@ -3449,6 +3474,7 @@ dipixy_capture_SRCS := \
 	src/lib/helper/signal.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/demux/rtp.c \
 	src/lib/net/tssource.c \
 	src/lib/net/httpclient/httpclient.c \

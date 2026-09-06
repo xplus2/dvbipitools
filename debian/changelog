@@ -8,6 +8,11 @@ dvbipitools (2.4.1-1) unstable; urgency=low
     + dipiradiohead
   * dipirec: mp4/m4a output support
   * dipimetrics: optional HTTPS
+  * DSCP/QoS/DiffServ (Clause 11.1) --dscp 0-63
+    + dipitvhead (default: NET_DSCP_VIDEO_HIGH)
+    + dipiradiohead (default: NET_DSCP_VIDEO_HIGH)
+    + dipibcg (default: NET_DSCP_SIGNALLING)
+    + dipisds (default: NET_DSCP_SIGNALLING)
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.0-1) unstable; urgency=medium

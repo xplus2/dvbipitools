@@ -146,6 +146,12 @@ for IPv6. Required in both modes.
 .RB ( \-\-iface )
 Multicast interface.
 .TP
+.BI \-\-dscp " v"
+Announce: output DSCP marking (ETSI TS 102 034 Table 29):
+.RI ( video-high | video-low | voice | signalling | best-effort ,
+or a raw DSCP value 0..63, default
+.BR signalling ).
+.TP
 .BI \-t " seconds"
 Announce mode
 .RB ( \-\-interval ):

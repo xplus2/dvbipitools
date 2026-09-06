@@ -23,8 +23,7 @@ static int send_unicast(int fd, const struct sockaddr *to, socklen_t tolen, cons
       setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &dscp, sizeof dscp);
     else
       setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp);
-    if (last_dscp)
-      *last_dscp = dscp;
+    if (last_dscp) *last_dscp = dscp;
   }
   if (sendto(fd, pkt, len, 0, to, tolen) < 0) {
     int err = errno;
@@ -52,15 +51,13 @@ void ret_send_unicast_impl(int fd, const struct sockaddr *to, socklen_t tolen, c
 void burst_send_cb(const unsigned char *pkt, size_t len, int dscp, void *user) {
   unicast_dest_t *dst = (unicast_dest_t *)user;
   int err = send_unicast(dst->fd, dst->to, dst->tolen, pkt, len, dscp, &dst->last_dscp);
-  if (err == EAGAIN || err == EWOULDBLOCK || err == ENOBUFS)
-    dst->congestion = 1;
+  if (err == EAGAIN || err == EWOULDBLOCK || err == ENOBUFS) dst->congestion = 1;
 }
 
 void send_rams_i_msn(const unicast_dest_t *dst, uint32_t sender_ssrc, uint32_t media_ssrc, uint8_t msn, uint16_t response, const rtcp_rams_i_tlvs_t *tlvs) {
   unsigned char pkt[128];
   size_t n = rtcp_build_rams_i(sender_ssrc, media_ssrc, msn, response, tlvs, pkt, sizeof pkt);
-  if (n > 0)
-    send_unicast(dst->fd, dst->to, dst->tolen, pkt, n, RET_DSCP_RTCP, NULL);
+  if (n > 0) send_unicast(dst->fd, dst->to, dst->tolen, pkt, n, NET_DSCP_SIGNALLING, NULL);
 }
 
 void send_rams_i(const unicast_dest_t *dst, uint32_t sender_ssrc, uint32_t media_ssrc, uint16_t response, const rtcp_rams_i_tlvs_t *tlvs) {
@@ -80,13 +77,10 @@ void capture_cb(int family, const void *addr, size_t addr_len, unsigned port, un
     ret_ctx_reap_step(ctx->ret, (time_t)ctx->ret_client_idle_timeout_s, CHANNEL_REAP_STEP_SLOTS);
 
   c = channel_lookup(ctx->channels, family, addr, addr_len, port);
-  if (!c)
-    return; /* max-channels cap, already logged by channel_lookup */
+  if (!c) return; /* max-channels cap, already logged by channel_lookup */
   channel_store(ctx->channels, c, ssrc, seq, timestamp, dscp, payload, payload_len);
-  if (ctx->mt)
-    mcsend_ensure(ctx->mt, c, ctx->ff_port); /* cheap no-op if c already has a socket */
-  if (ctx->rsi_mt)
-    mcsend_ensure(ctx->rsi_mt, c, 0); /* always own port per channel, RSI address, not -F's */
+  if (ctx->mt) mcsend_ensure(ctx->mt, c, ctx->ff_port); /* cheap no-op if c already has a socket */
+  if (ctx->rsi_mt) mcsend_ensure(ctx->rsi_mt, c, 0); /* always own port per channel, RSI address, not -F's */
 }
 
 typedef struct {
@@ -135,7 +129,6 @@ static void nack_cb(const rtcp_nack_t *nack, void *user) {
 
   if (rc->ctx->bursts && rc->ctx->congestion_nack_threshold > 0) {
     burst_table_nack_result_t result;
-
     if (burst_table_note_nack(rc->ctx->bursts, rc->from, rc->fromlen, rc->ctx->congestion_nack_threshold, &result) &&
         result.action == BURST_TABLE_NACK_TERMINATED) {
       unicast_dest_t dst;
@@ -158,10 +151,8 @@ static void nack_cb(const rtcp_nack_t *nack, void *user) {
 }
 
 static int addr_in_ranges(const struct sockaddr *sa, const cidr_t *ranges, size_t count) {
-  if (sa->sa_family == AF_INET)
-    return in_ranges(AF_INET, &((const struct sockaddr_in *)sa)->sin_addr, ranges, count);
-  if (sa->sa_family == AF_INET6)
-    return in_ranges(AF_INET6, &((const struct sockaddr_in6 *)sa)->sin6_addr, ranges, count);
+  if (sa->sa_family == AF_INET)  return in_ranges(AF_INET, &((const struct sockaddr_in *)sa)->sin_addr, ranges, count);
+  if (sa->sa_family == AF_INET6) return in_ranges(AF_INET6, &((const struct sockaddr_in6 *)sa)->sin6_addr, ranges, count);
   return 0;
 }
 
@@ -258,8 +249,7 @@ static void rams_t_cb(const rtcp_rams_t_t *term, void *user) {
 
 static void sdes_cb(const rtcp_sdes_t *sdes, void *user) {
   listen_req_ctx_t *rc = (listen_req_ctx_t *)user;
-  if (rc->has_sdes)
-    return; /* one datagram normally reports one participant, first chunk wins */
+  if (rc->has_sdes) return; /* one datagram normally reports one participant, first chunk wins */
   rc->has_sdes = 1;
   rc->sdes_ssrc = sdes->ssrc;
   memcpy(rc->sdes_cname, sdes->cname, sdes->cname_len);
@@ -272,8 +262,7 @@ static void malformed_cb(unsigned sfmt, uint32_t sender_ssrc, uint32_t media_ssr
   unicast_dest_t dst;
 
   (void)sender_ssrc;
-  if (sfmt != RTCP_SFMT_RAMS_T)
-    return;
+  if (sfmt != RTCP_SFMT_RAMS_T) return;
   dst.fd = rc->fd;
   dst.to = rc->from;
   dst.tolen = rc->fromlen;

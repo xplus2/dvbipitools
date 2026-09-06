@@ -16,6 +16,7 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
+#include "lib/net/netconnect.h"
 
 #include "args.h"
 #include "mux/pmtbuild.h"
@@ -141,8 +142,7 @@ static int org_id_parse(const char *s, unsigned *out) {
 static int pid_parse(const char *s, unsigned *out) {
   char *end;
   unsigned long v = strtoul(s, &end, 0);
-  if (*end != '\0' || v > 0x1FFE)
-    return -1;
+  if (*end != '\0' || v > 0x1FFE) return -1;
   *out = (unsigned)v;
   return 0;
 }
@@ -151,8 +151,7 @@ static int pid_parse(const char *s, unsigned *out) {
 static int cas_pids_parse(const char *s, config_t *cfg) {
   char buf[512];
   char *save = NULL;
-  if (strlen(s) >= sizeof buf)
-    return -1;
+  if (strlen(s) >= sizeof buf) return -1;
   bufcpy(buf, sizeof buf, s);
   cfg->cas_pid_count = 0;
   cfg->cas_pids_video = 0;
@@ -167,10 +166,8 @@ static int cas_pids_parse(const char *s, config_t *cfg) {
       cfg->cas_pids_audio = 1;
       continue;
     }
-    if (cfg->cas_pid_count >= ARGS_MAX_CAS_PIDS)
-      return -1;
-    if (pid_parse(tok, &pid) || pid == 0)
-      return -1;
+    if (cfg->cas_pid_count >= ARGS_MAX_CAS_PIDS) return -1;
+    if (pid_parse(tok, &pid) || pid == 0) return -1;
     cfg->cas_pids[cfg->cas_pid_count++] = pid;
   }
   return (cfg->cas_pid_count || cfg->cas_pids_video || cfg->cas_pids_audio) ? 0 : -1;
@@ -191,16 +188,13 @@ static int parse_strip(const char *s, unsigned *mask) {
     size_t len = comma ? (size_t)(comma - p) : strlen(p);
     char tok[8];
     int v;
-    if (len == 0 || len >= sizeof tok)
-      return -1;
+    if (len == 0 || len >= sizeof tok) return -1;
     memcpy(tok, p, len);
     tok[len] = '\0';
-    if (map_lookup(map, sizeof map / sizeof map[0], tok, &v))
-      return -1;
+    if (map_lookup(map, sizeof map / sizeof map[0], tok, &v)) return -1;
     *mask |= (unsigned)v;
     p += len;
-    if (*p == ',')
-      p++;
+    if (*p == ',') p++;
   }
   return 0;
 }
@@ -245,6 +239,8 @@ static void print_help(void) {
       "  -O, --out-iface <iface>    outgoing multicast interface\n"
       "  -u, --udp                  plain UDP output (default: RTP-wrapped; -m output only)\n"
       "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
+      "      --dscp <v>             output DSCP marking: video-high|video-low|voice|\n"
+      "                             signalling|best-effort|0..63 (default: video-high)\n"
       "  -R, --rist <uri>           rist://host:port[?query] or srt://host:port output,\n"
       "                             bonded with any other -R of the same scheme given\n"
       "                             (requires librist/libsrt respectively; one scheme at a\n"
@@ -334,9 +330,7 @@ static void print_help(void) {
 }
 
 static int is_sid_used(const unsigned *used, unsigned n_used, unsigned sid) {
-  for (unsigned j = 0; j < n_used; j++)
-    if (used[j] == sid)
-      return 1;
+  for (unsigned j = 0; j < n_used; j++) if (used[j] == sid) return 1;
   return 0;
 }
 
@@ -348,8 +342,7 @@ static int assign_missing_sids(config_t *cfg) {
   unsigned next = 1;
 
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
-    if (cfg->inputs[i].sid == 0)
-      continue;
+    if (cfg->inputs[i].sid == 0) continue;
     if (is_sid_used(used, n_used, cfg->inputs[i].sid)) {
       argerr("duplicate --sid %u", cfg->inputs[i].sid);
       return -1;
@@ -357,10 +350,8 @@ static int assign_missing_sids(config_t *cfg) {
     used[n_used++] = cfg->inputs[i].sid;
   }
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
-    if (cfg->inputs[i].sid != 0)
-      continue;
-    while (is_sid_used(used, n_used, next))
-      next++;
+    if (cfg->inputs[i].sid != 0) continue;
+    while (is_sid_used(used, n_used, next)) next++;
     cfg->inputs[i].sid = next;
     used[n_used++] = next;
     next++;
@@ -429,6 +420,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"daemonize", no_argument, 0, 'd'},
       {"strip", required_argument, 0, 1034},
       {"rist-profile-in", required_argument, 0, 1036},
+      {"dscp", required_argument, 0, 1053},
       {"srt-passphrase-in", required_argument, 0, 1037},
       {"srt-pbkeylen-in", required_argument, 0, 1038},
       {"srt-streamid-in", required_argument, 0, 1039},
@@ -453,6 +445,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->tsid = 1;
   cfg->onid = 1;
   cfg->rtp = 1;
+  cfg->dscp = NET_DSCP_VIDEO_HIGH;
   cfg->cas_cp_duration_ms = 10000;
   optind = 1;
   /* leading '+': disable GNU getopt argument permutation, so per-input options stay paired
@@ -803,6 +796,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         any_cas_flag = 1;
         cfg->cas_fallback_clear = 1;
         break;
+      case 1053:
+        if (net_dscp_parse(optarg, &cfg->dscp)) {
+          argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
+          return ARGS_ERR;
+        }
+        break;
       case 1025:
         if (biss_parse_hex16(optarg, cfg->biss2_sw)) {
           argerr("invalid --biss2-sw: %s (32 hex chars)", optarg);
@@ -1100,8 +1099,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       argerr("--srt-pbkeylen-in requires --srt-passphrase-in");
       return ARGS_ERR;
     }
-    if (in->input.kind != SRC_SRT && (in->srt_passphrase_in[0] || in->srt_pbkeylen_in || in->srt_streamid_in[0] ||
-                                       in->srt_packetfilter_in[0] || in->srt_latency_in_ms))
+    if (in->input.kind != SRC_SRT && (in->srt_passphrase_in[0] || in->srt_pbkeylen_in || in->srt_streamid_in[0] || in->srt_packetfilter_in[0] || in->srt_latency_in_ms))
       log_line(TOOL_NAME ": --srt-*-in has no effect, that -i isn't srt://");
     if (in->hbbtv_url && (!in->hbbtv_org_id || !in->hbbtv_app_id)) {
       argerr("--hbbtv requires --hbbtv-org-id and --hbbtv-app-id");
@@ -1117,7 +1115,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   }
   if (cas_args_validate(TOOL_NAME, cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
-                         cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms) != 0)
+                        cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms) != 0)
     return ARGS_ERR;
   if (cfg->cas_algo != CAS_ALGO_NONE && !have_cas_pids) {
     /* default: scramble all video and audio elementary streams */
@@ -1131,14 +1129,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
 
   if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss1_enabled || cfg->biss2_enabled || cfg->biss2_ca_enabled) {
-    for (unsigned i = 0; i < cfg->n_inputs; i++)
-      if (!(cfg->inputs[i].strip_mask & TVSTRIP_ECM)) {
-        log_line(TOOL_NAME ": source CA/ECM passthrough disabled: --cas-algo/--biss* already scrambling this mux");
-        break;
-      }
+    for (unsigned i = 0; i < cfg->n_inputs; i++) if (!(cfg->inputs[i].strip_mask & TVSTRIP_ECM)) {
+      log_line(TOOL_NAME ": source CA/ECM passthrough disabled: --cas-algo/--biss* already scrambling this mux");
+      break;
+    }
   }
-
-  if (assign_missing_sids(cfg) != 0)
-    return ARGS_ERR;
+  if (assign_missing_sids(cfg) != 0) return ARGS_ERR;
   return ARGS_OK;
 }

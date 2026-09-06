@@ -76,6 +76,7 @@ typedef struct {
   const char *iface_out;     /* -O; NULL = kernel default route */
   int rtp;                   /* default on; -u/--udp forces plain UDP output */
   unsigned ttl;              /* -T; 0 = kernel default (1) */
+  int dscp;                  /* --dscp, default NET_DSCP_VIDEO_HIGH */
   table_mode_t nit_mode;     /* -n; one NIT for whole output */
   char nit_text[256];        /* -n <text> */
   unsigned bitrate_kbps;     /* -b; 0 = no shaping, passthrough rate; one shared budget for whole output */

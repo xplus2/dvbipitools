@@ -31,10 +31,8 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const sds_state_t *
   metrics_writer_t w;
   int service_providers = st->in.kind == INPUT_SERVICES ? 1 : 0;
 
-  if (!metrics_exporter_due(mx, now))
-    return;
-  if (metrics_exporter_begin(mx, &w, TOOL_VERSION))
-    return;
+  if (!metrics_exporter_due(mx, now)) return;
+  if (metrics_exporter_begin(mx, &w, TOOL_VERSION)) return;
   metrics_writer_put(&w, METRICS_ID_SDS_SERVICE_PROVIDERS, NULL, (uint64_t)service_providers);
   metrics_writer_put(&w, METRICS_ID_SDS_SERVICES, NULL, (uint64_t)st->in.service_count);
   metrics_writer_put(&w, METRICS_ID_SDS_DOCUMENTS_GENERATED_TOTAL, NULL, sm->documents_generated_total);
@@ -59,9 +57,7 @@ int state_load(const config_t *cfg, sds_state_t *st) {
   int extra_count = 0;
 
   memset(st, 0, sizeof *st);
-  if (input_load(cfg->input_path, &st->in))
-    return -1;
-
+  if (input_load(cfg->input_path, &st->in)) return -1;
   if (st->in.kind == INPUT_SERVICES) {
     sds_ret_t ret_val;
     const sds_ret_t *ret = NULL;
@@ -89,12 +85,9 @@ int state_load(const config_t *cfg, sds_state_t *st) {
       fcc_val.resolve_max_channels = cfg->fcc_resolve_max_channels;
       fcc = &fcc_val;
     }
-    if (cfg->packages_path)
-      extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_PACKAGE_DISCOVERY;
-    if (cfg->cells_path)
-      extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY;
-    if (cfg->rms_enabled || cfg->fus_enabled)
-      extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_RMSFUS_DISCOVERY;
+    if (cfg->packages_path) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_PACKAGE_DISCOVERY;
+    if (cfg->cells_path) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY;
+    if (cfg->rms_enabled || cfg->fus_enabled) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_RMSFUS_DISCOVERY;
 
     st->broadcast_doc = malloc(DOC_CAP);
     st->sp_doc = malloc(DOC_CAP);
@@ -105,7 +98,6 @@ int state_load(const config_t *cfg, sds_state_t *st) {
       state_free(st);
       return -1;
     }
-
     if (cfg->packages_path) {
       sds_package_t *pkgs = malloc(sizeof *pkgs * SDS_MAX_PACKAGES);
       int pkg_count;
@@ -179,15 +171,13 @@ static void reload_state(const config_t *cfg, sds_state_t *st, sds_metrics_t *sm
   sds_state_t next;
   if (state_load(cfg, &next)) {
     log_line("reload failed, keeping previous input");
-    if (metrics_on)
-      sm->document_errors_total++;
+    if (metrics_on) sm->document_errors_total++;
     return;
   }
   state_free(st);
   *st = next;
   log_line("reloaded %s: %d service%s", cfg->input_path, st->in.service_count, st->in.service_count == 1 ? "" : "s");
-  if (metrics_on)
-    sm->documents_generated_total++;
+  if (metrics_on) sm->documents_generated_total++;
 }
 
 int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
@@ -198,19 +188,15 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
   int metrics_on = metrics_exporter_enabled(mx);
 
   memset(&sm, 0, sizeof sm);
-
-  if (state_load(cfg, &st))
-    return 1;
-  if (metrics_on)
-    sm.documents_generated_total++;
-
+  if (state_load(cfg, &st)) return 1;
+  if (metrics_on) sm.documents_generated_total++;
   m = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, 0);
   if (!m) {
     log_line("cannot open %s:%u for sending", cfg->mcast_group, cfg->mcast_port);
     state_free(&st);
     return 1;
   }
-
+  mcast_set_tos(m, cfg->dscp);
   if (st.in.kind == INPUT_RAW_XML) {
     log_line("announcing raw %s (payload 0x%02x) on %s:%u every %lds", cfg->input_path, st.in.raw_payload_id, cfg->mcast_group, cfg->mcast_port, cfg->interval_s);
   } else {
@@ -219,10 +205,7 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
 
   while (!signal_stop_requested()) {
     int ok;
-
-    if (signal_reload_requested())
-      reload_state(cfg, &st, &sm, metrics_on);
-
+    if (signal_reload_requested()) reload_state(cfg, &st, &sm, metrics_on);
     if (st.in.kind == INPUT_RAW_XML) {
       ok = dvbstp_send_segment(m, st.in.raw_payload_id, 1, 1, 0, 0, 0, 1, st.in.raw_xml, st.in.raw_xml_len) == 0;
     } else {
@@ -244,8 +227,7 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
       }
     }
     cycles++;
-    if (cfg->verbose)
-      log_line("cycle %u sent", cycles);
+    if (cfg->verbose) log_line("cycle %u sent", cycles);
     emit_metrics(mx, mono_seconds(), &st, &sm);
     sleep_interruptible((double)cfg->interval_s);
   }

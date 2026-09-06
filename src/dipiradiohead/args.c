@@ -15,6 +15,7 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
+#include "lib/net/netconnect.h"
 
 #include "args.h"
 #include "version.h"
@@ -37,8 +38,7 @@ static int id_parse(const char *s, unsigned *out) {
   char *end;
   unsigned long v;
   v = strtoul(s, &end, 10);
-  if (*end != '\0' || v == 0 || v > 0xFFFF)
-    return -1;
+  if (*end != '\0' || v == 0 || v > 0xFFFF) return -1;
   *out = (unsigned)v;
   return 0;
 }
@@ -47,8 +47,7 @@ static int id_parse(const char *s, unsigned *out) {
 static int pid_parse(const char *s, unsigned *out) {
   char *end;
   unsigned long v = strtoul(s, &end, 0);
-  if (*end != '\0' || v == 0 || v > 0x1FFE)
-    return -1;
+  if (*end != '\0' || v == 0 || v > 0x1FFE) return -1;
   *out = (unsigned)v;
   return 0;
 }
@@ -66,6 +65,8 @@ static void print_help(void) {
       "  -I, --iface <iface>        outgoing multicast interface\n"
       "  -r, --rtp                  wrap output in RTP (default: plain UDP; -m output only)\n"
       "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
+      "      --dscp <v>             output DSCP marking: video-high|video-low|voice|\n"
+      "                             signalling|best-effort|0..63 (default: video-high)\n"
       "  -n, --nit <text>           NIT network_name\n"
       "  -R, --rist <uri>           rist://host:port[?query] or srt://host:port output,\n"
       "                             bonded with any other -R of the same scheme given\n"
@@ -147,9 +148,7 @@ static void print_help(void) {
 }
 
 static int is_sid_used(const unsigned *used, unsigned n_used, unsigned sid) {
-  for (unsigned j = 0; j < n_used; j++)
-    if (used[j] == sid)
-      return 1;
+  for (unsigned j = 0; j < n_used; j++) if (used[j] == sid) return 1;
   return 0;
 }
 
@@ -160,8 +159,7 @@ static int assign_missing_sids(config_t *cfg) {
   unsigned n_used = 0;
 
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
-    if (cfg->inputs[i].sid == 0)
-      continue;
+    if (cfg->inputs[i].sid == 0) continue;
     if (is_sid_used(used, n_used, cfg->inputs[i].sid)) {
       argerr("duplicate --sid %u", cfg->inputs[i].sid);
       return -1;
@@ -170,10 +168,8 @@ static int assign_missing_sids(config_t *cfg) {
   }
   unsigned next = 1;
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
-    if (cfg->inputs[i].sid != 0)
-      continue;
-    while (is_sid_used(used, n_used, next))
-      next++;
+    if (cfg->inputs[i].sid != 0) continue;
+    while (is_sid_used(used, n_used, next)) next++;
     cfg->inputs[i].sid = next;
     used[n_used++] = next;
     next++;
@@ -235,6 +231,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"srt-streamid", required_argument, 0, 1033},
       {"srt-packetfilter", required_argument, 0, 1034},
       {"srt-latency", required_argument, 0, 1035},
+      {"dscp", required_argument, 0, 1053},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
@@ -248,6 +245,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
   cfg->tsid = 1;
   cfg->onid = 1;
+  cfg->dscp = NET_DSCP_VIDEO_HIGH;
   cfg->cas_cp_duration_ms = 10000;
   optind = 1;
   /* leading '+': disable GNU getopt argument permutation, so --sid/--sdt stay paired with
@@ -513,6 +511,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         cfg->cas_vendors[cfg->n_cas_vendors - 1].required = 1;
         break;
+      case 1053:
+        if (net_dscp_parse(optarg, &cfg->dscp)) {
+          argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
+          return ARGS_ERR;
+        }
+        break;
       case 1048:
         any_cas_flag = 1;
         if (cfg->n_cas_vendors == 0) {
@@ -647,8 +651,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
             argerr("-R srt:// output always calls out, no listener mode");
             return ARGS_ERR;
           }
-          if (argutil_addrport_parse(optarg + 6, &cfg->srt_family[cfg->n_srt], cfg->srt_host[cfg->n_srt],
-                                      sizeof cfg->srt_host[0], &cfg->srt_port[cfg->n_srt])) {
+          if (argutil_addrport_parse(optarg + 6, &cfg->srt_family[cfg->n_srt], cfg->srt_host[cfg->n_srt], sizeof cfg->srt_host[0], &cfg->srt_port[cfg->n_srt])) {
             argerr("invalid -R srt uri: %s", optarg);
             return ARGS_ERR;
           }
@@ -780,8 +783,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--srt-group-mode has no effect with a single -R srt:// peer");
     return ARGS_ERR;
   }
-  if (cfg->n_srt == 0 && (srt_group_mode_arg || cfg->srt_passphrase[0] || cfg->srt_pbkeylen ||
-                          cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
+  if (cfg->n_srt == 0 && (srt_group_mode_arg || cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
     log_line(TOOL_NAME ": --srt-* has no effect without an -R srt:// peer");
   if (cfg->srt_passphrase[0] && (strlen(cfg->srt_passphrase) < 10 || strlen(cfg->srt_passphrase) > 79)) {
     argerr("--srt-passphrase must be 10..79 characters");

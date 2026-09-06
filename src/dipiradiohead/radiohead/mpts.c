@@ -65,18 +65,15 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
     tk->last_synced_bytes[i] = 0;
   }
   tk->was_connected[i] = connected_now;
-  if (!src)
-    return 0;
+  if (!src) return 0;
 
   /* only read a slot poll() actually reported ready. source_next_frame() can block for several seconds
      (http_read()'s SO_RCVTIMEO) on a connected-but-currently-silent source, which would otherwise stall other inputs */
-  for (unsigned pfd_i = 0; pfd_i < tk->npfd; pfd_i++)
-    if (tk->pfd_slot[pfd_i] == i && (tk->pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP))) {
-      ready = 1;
-      break;
-    }
-  if (!ready)
-    return 0;
+  for (unsigned pfd_i = 0; pfd_i < tk->npfd; pfd_i++) if (tk->pfd_slot[pfd_i] == i && (tk->pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP))) {
+    ready = 1;
+    break;
+  }
+  if (!ready) return 0;
 
   unsigned frames_this_visit = 0;
   while (frames_this_visit < MPTS_MAX_FRAMES_PER_TICK) {
@@ -84,15 +81,11 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
     uint64_t pts;
     net_err_reason_t reason = NET_ERR_OTHER;
     int r = source_next_frame(src, &f, &reason);
-
-    if (r == 0)
-      break;
+    if (r == 0) break;
     if (r < 0) {
       input_metrics_note_read(tk->metrics_on ? &tk->input_stats[i] : NULL, -1, reason);
-      if (tk->metrics_on && reason == NET_ERR_FORMAT)
-        tk->rm->framing_errors_total++;
-      if (tk->metrics_on)
-        tk->input_stats[i].up = 0;
+      if (tk->metrics_on && reason == NET_ERR_FORMAT) tk->rm->framing_errors_total++;
+      if (tk->metrics_on) tk->input_stats[i].up = 0;
       inputset_mark_down(tk->is, i, tk->now_t);
       mpts_set_program(tk->mpts, i, NULL);
       break;
@@ -115,10 +108,8 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
       tc.audio_pid = inputset_audio_pid(tk->is, i);
       tc.standalone = 0;
       tk->tsps[i] = tspacketizer_new(&tc);
-      if (!tk->tsps[i])
-        return -1;
-      if (tk->cas)
-        tspacketizer_set_cas(tk->tsps[i], tk->cas);
+      if (!tk->tsps[i]) return -1;
+      if (tk->cas) tspacketizer_set_cas(tk->tsps[i], tk->cas);
       log_line("input %u (%s): codec detected: %s, %u Hz", i, inputset_service_name(tk->is, i), codec_name(f.codec), f.sample_rate);
     }
     mpts_set_program(tk->mpts, i, tk->tsps[i]);
@@ -126,10 +117,8 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
     if (tk->metas[i].dirty) {
       tspacketizer_set_metadata(tk->tsps[i], tk->metas[i].artist, tk->metas[i].title);
       tk->metas[i].dirty = 0;
-      log_line("input %u (%s): now playing: %s%s%s", i, inputset_service_name(tk->is, i), tk->metas[i].artist,
-                (tk->metas[i].artist[0] && tk->metas[i].title[0]) ? " - " : "", tk->metas[i].title);
+      log_line("input %u (%s): now playing: %s%s%s", i, inputset_service_name(tk->is, i), tk->metas[i].artist, (tk->metas[i].artist[0] && tk->metas[i].title[0]) ? " - " : "", tk->metas[i].title);
     }
-
     pts = tk->samples_total[i] * 90000ULL / f.sample_rate;
     tk->samples_total[i] += f.samples;
     tk->out->cur_pts = pts;
@@ -176,8 +165,8 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
 
   if (cfg->mcast_port) {
     mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, (int)cfg->ttl);
-    if (!mc)
-      return 1;
+    if (!mc) return 1;
+    mcast_set_tos(mc, cfg->dscp);
     out.mc = mc;
     out.rtp = cfg->rtp;
     if (cfg->rtp) {
@@ -191,22 +180,17 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   if (cfg->n_rist > 0) {
     out.rist = radiohead_rist_open(cfg);
     if (!out.rist) {
-      if (out.rtph)
-        rtpheader_free(out.rtph);
-      if (mc)
-        mcast_close(mc);
+      if (out.rtph) rtpheader_free(out.rtph);
+      if (mc) mcast_close(mc);
       return 1;
     }
   }
   if (cfg->n_srt > 0) {
     out.srt = radiohead_srt_open(cfg);
     if (!out.srt) {
-      if (out.rist)
-        ristout_close(out.rist);
-      if (out.rtph)
-        rtpheader_free(out.rtph);
-      if (mc)
-        mcast_close(mc);
+      if (out.rist) ristout_close(out.rist);
+      if (out.rtph) rtpheader_free(out.rtph);
+      if (mc) mcast_close(mc);
       return 1;
     }
   }
@@ -232,8 +216,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
 
   if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled) {
     unsigned audio_pids[RADIOHEAD_MAX_INPUTS];
-    for (unsigned i = 0; i < n; i++)
-      audio_pids[i] = inputset_audio_pid(is, i);
+    for (unsigned i = 0; i < n; i++) audio_pids[i] = inputset_audio_pid(is, i);
     cas = cas_start(cfg, audio_pids, n);
     if (!cas) {
       log_line("cas: failed to start");
@@ -262,8 +245,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     }
     for (unsigned i = 0; i < n; i++) {
       int fd = inputset_poll_fd(is, i);
-      if (fd < 0)
-        continue;
+      if (fd < 0) continue;
       pfds[npfd].fd = fd;
       pfds[npfd].events = inputset_poll_events(is, i);
       pfds[npfd].revents = 0;
@@ -271,15 +253,11 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       npfd++;
     }
     poll(npfd ? pfds : NULL, npfd, timeout_ms);
-    if (signal_stop_requested())
-      break;
-
+    if (signal_stop_requested()) break;
     radiohead_srt_service(&out);
-
     now = mono_seconds();
     now_t = time(NULL);
-    for (unsigned i = 0; i < n; i++)
-      inputset_service(is, i, now_t);
+    for (unsigned i = 0; i < n; i++) inputset_service(is, i, now_t);
 
     {
       mpts_tick_t tk;
@@ -321,8 +299,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
         rc = 1;
         goto done;
       }
-      if (signal_reload_requested())
-        cas_reload_receivers(cas);
+      if (signal_reload_requested()) cas_reload_receivers(cas);
     }
     if (cfg->verbose && now - last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - start, out.packets);
@@ -331,38 +308,23 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     }
     {
       unsigned active = 0;
-      for (unsigned i = 0; i < n; i++)
-        if (tsps[i])
-          active++;
+      for (unsigned i = 0; i < n; i++) if (tsps[i]) active++;
       emit_metrics(mx, now, &out, n, active, input_stats, n, &rm, cas);
     }
   }
 
 done:
-  if (cas)
-    cas_flush(cas, packet_cb, &out);
+  if (cas) cas_flush(cas, packet_cb, &out);
   flush_batch(&out);
-  for (unsigned i = 0; i < n; i++)
-    if (tsps[i])
-      tspacketizer_free(tsps[i]);
-  if (mpts)
-    mpts_free(mpts);
-  if (is)
-    inputset_free(is);
-  if (cas)
-    cas_stop(cas);
-  if (out.rtph)
-    rtpheader_free(out.rtph);
-  if (out.rist)
-    ristout_close(out.rist);
-  if (out.srt)
-    srtsink_close(out.srt);
-  if (mc)
-    mcast_close(mc);
-
-  if (cfg->verbose && log_stderr_is_tty())
-    fputc('\n', stderr);
-  if (rc == 0)
-    log_line("stopped.");
+  for (unsigned i = 0; i < n; i++) if (tsps[i]) tspacketizer_free(tsps[i]);
+  if (mpts) mpts_free(mpts);
+  if (is) inputset_free(is);
+  if (cas) cas_stop(cas);
+  if (out.rtph) rtpheader_free(out.rtph);
+  if (out.rist) ristout_close(out.rist);
+  if (out.srt) srtsink_close(out.srt);
+  if (mc) mcast_close(mc);
+  if (cfg->verbose && log_stderr_is_tty()) fputc('\n', stderr);
+  if (rc == 0) log_line("stopped.");
   return rc;
 }

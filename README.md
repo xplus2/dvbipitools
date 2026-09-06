@@ -131,7 +131,6 @@ On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 * DHCP-based IP address assignment for the HNED (§8)
 * FUSS, the mandatory File Upload System Stub (§9)
 * Content Download Services / CDS, push or pull (§10)
-* Full QoS/DiffServ behavior (§11): Only limited or fixed DSCP handling is implemented
 * SRM delivery for Content Protection revocation (§12)
 * Dynamic Service Management (§13)
 

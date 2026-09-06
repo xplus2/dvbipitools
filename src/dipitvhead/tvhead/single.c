@@ -57,8 +57,8 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   memset(&tsm, 0, sizeof tsm);
   if (cfg->mcast_port) {
     outmc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface_out, (int)cfg->ttl);
-    if (!outmc)
-      return 1;
+    if (!outmc) return 1;
+    mcast_set_tos(outmc, cfg->dscp);
     out.mc = outmc;
     out.rtp = cfg->rtp;
     if (cfg->rtp) {
@@ -72,22 +72,17 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   if (cfg->n_rist > 0) {
     out.rist = tvhead_rist_open(cfg);
     if (!out.rist) {
-      if (out.rtph)
-        rtpheader_free(out.rtph);
-      if (outmc)
-        mcast_close(outmc);
+      if (out.rtph) rtpheader_free(out.rtph);
+      if (outmc) mcast_close(outmc);
       return 1;
     }
   }
   if (cfg->n_srt > 0) {
     out.srt = tvhead_srt_open(cfg);
     if (!out.srt) {
-      if (out.rist)
-        ristout_close(out.rist);
-      if (out.rtph)
-        rtpheader_free(out.rtph);
-      if (outmc)
-        mcast_close(outmc);
+      if (out.rist) ristout_close(out.rist);
+      if (out.rtph) rtpheader_free(out.rtph);
+      if (outmc) mcast_close(outmc);
       return 1;
     }
   }
@@ -112,8 +107,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
       continue;
     }
     if (metrics_on) {
-      if (im.seen_open)
-        im.reconnects_total++;
+      if (im.seen_open) im.reconnects_total++;
       im.seen_open = 1;
       im.up = 1;
     }
@@ -141,8 +135,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     }
     psi_free(psi);
     tvsrc_close(src);
-    if (metrics_on)
-      im.up = 0;
+    if (metrics_on) im.up = 0;
     if (signal_stop_requested())
       break;
     if (cfg->error_retry_s <= 0) {
@@ -154,18 +147,11 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
   flush_batch(&out);
-  if (out.rtph)
-    rtpheader_free(out.rtph);
-  if (out.rist)
-    ristout_close(out.rist);
-  if (out.srt)
-    srtsink_close(out.srt);
-  if (outmc)
-    mcast_close(outmc);
-
-  if (cfg->verbose && log_stderr_is_tty())
-    fputc('\n', stderr);
-  if (rc == 0)
-    log_line("stopped.");
+  if (out.rtph) rtpheader_free(out.rtph);
+  if (out.rist) ristout_close(out.rist);
+  if (out.srt) srtsink_close(out.srt);
+  if (outmc) mcast_close(outmc);
+  if (cfg->verbose && log_stderr_is_tty()) fputc('\n', stderr);
+  if (rc == 0) log_line("stopped.");
   return rc ? 1 : 0;
 }

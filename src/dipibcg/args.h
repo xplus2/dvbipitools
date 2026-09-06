@@ -17,6 +17,7 @@ typedef struct {
   char mcast_group[64];     /* -m group */
   unsigned mcast_port;      /* -m port */
   const char *iface;        /* -I; NULL = kernel default route */
+  int dscp;                 /* --dscp, announce only, default NET_DSCP_SIGNALLING */
   long interval_s;          /* -t, announce: repeat interval, default 5 */
   long timeout_s;           /* -t, listen: default 35 (> 30s max cycle time) */
   const char *output_path;  /* -o, listen; NULL = stdout */

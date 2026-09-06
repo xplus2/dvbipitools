@@ -99,6 +99,7 @@ dvbipitools_add_unit_test(lib_demux_mpts_probe
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
@@ -226,7 +227,8 @@ dvbipitools_add_unit_test(lib_net_netconnect
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c)
 
 dvbipitools_add_unit_test(lib_net_rtmp
     unit/lib/net/test_rtmp.c
@@ -253,6 +255,7 @@ dvbipitools_add_unit_test(lib_net_rtmpout
     ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
@@ -267,6 +270,7 @@ dvbipitools_add_unit_test(lib_net_httpclient_async
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
@@ -284,6 +288,7 @@ dvbipitools_add_unit_test(lib_net_tssource_async
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
@@ -303,6 +308,7 @@ dvbipitools_add_unit_test(lib_net_tssource_file
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
@@ -315,6 +321,7 @@ dvbipitools_add_unit_test(lib_net_dvbstp
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
@@ -815,6 +822,8 @@ dvbipitools_add_unit_test(dipiradiohead_args
     unit/dipiradiohead/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
@@ -846,6 +855,7 @@ dvbipitools_add_unit_test(dipiradiohead_source_async
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
@@ -908,6 +918,7 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
@@ -936,6 +947,7 @@ dvbipitools_add_unit_test(dipiradiohead_inputset
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
@@ -998,6 +1010,7 @@ dvbipitools_add_unit_test(dipitvhead_source
     ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -1043,6 +1056,7 @@ dvbipitools_add_unit_test(dipitvhead_discover
     ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -1415,6 +1429,7 @@ dvbipitools_add_unit_test(dipirec_ret_client
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
@@ -1428,6 +1443,7 @@ dvbipitools_add_unit_test(lib_fccret_fcc_client
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtcp_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
@@ -1453,6 +1469,7 @@ dvbipitools_add_unit_test(dipifccret_listen
     ${CMAKE_SOURCE_DIR}/src/dipifccret/listen.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 target_link_libraries(test_dipifccret_listen PRIVATE Threads::Threads)
@@ -1477,6 +1494,7 @@ dvbipitools_add_unit_test(dipifccret_ret_mcsend
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
@@ -1649,6 +1667,7 @@ dvbipitools_add_unit_test(lib_metrics_export
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
@@ -1683,6 +1702,8 @@ dvbipitools_add_unit_test(dipibcg_args
     unit/dipibcg/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipibcg/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
@@ -1758,6 +1779,8 @@ dvbipitools_add_unit_test(dipisds_args
     unit/dipisds/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
@@ -1824,7 +1847,8 @@ if (DVBIPITOOLS_HAVE_RIST)
         ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
-        ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c)
     target_link_libraries(test_lib_net_rist_ristin PRIVATE PkgConfig::RIST)
     add_dependencies(test_lib_net_rist_ristin rist_send_helper)
     target_compile_definitions(test_lib_net_rist_ristin PRIVATE
@@ -1931,6 +1955,7 @@ dvbipitools_add_unit_test(dipisds_announce
     ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
@@ -1977,6 +2002,7 @@ dvbipitools_add_unit_test(dipixy_capture
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c

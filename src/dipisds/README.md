@@ -20,6 +20,7 @@ dipisds -l -m <mcast>:<port> [options]
 | `-L` | `--lang`          | `<code>`                    | announce: `deu`                            |
 | `-m` | `--mcast`         | `<g>:<p>`                   | required                                   |
 | `-I` | `--iface`         | `<iface>`                   | kernel default                             |
+|      | `--dscp`          | `<v>`                       | announce: `signalling`                     |
 | `-t` | `--interval`      | `<s>`                       | announce: `5`                              |
 | `-t` | `--timeout`       | `<s>`                       | listen: `35`                               |
 | `-o` | `--output`        | `<path>` / `-`              | listen: `-` (stdout)                       |

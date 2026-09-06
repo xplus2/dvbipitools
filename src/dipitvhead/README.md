@@ -36,6 +36,7 @@ across every input.
 | `-O` | `--out-iface`           | `<iface>`                               | kernel route (outgoing)                         |           |
 | `-u` | `--udp`                 |                                         | off (RTP)                                       |           |
 | `-T` | `--ttl`                 | `<n>`                                   | 1                                               |           |
+|      | `--dscp`                | `<v>`                                   | `video-high`                                    |           |
 | `-n` | `--nit`                 | `<text>` / `-`                          | set NIT, see below                              |           |
 | `-b` | `--bitrate`             | `<kbps>`                                | none (no shaping)                               |           |
 | `-S` | `--stuff`               |                                         | off (needs `-b`)                                |           |

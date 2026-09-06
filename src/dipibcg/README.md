@@ -20,6 +20,7 @@ dipibcg -l -m <mcast>:<port> [options]
 | `-w` | `--window`  | `<hours>`               | announce: `24`                             |
 | `-m` | `--mcast`   | `<g>:<p>`               | required                                   |
 | `-I` | `--iface`   | `<iface>`               | kernel route                               |
+|      | `--dscp`    | `<v>`                   | announce: `signalling`                     |
 | `-t` | `--interval`| `<s>`                   | announce: `5`                              |
 | `-t` | `--timeout` | `<s>`                   | listen: `35`                               |
 | `-o` | `--output`  | `<path>` / `-`          | listen: `-` (stdout)                       |

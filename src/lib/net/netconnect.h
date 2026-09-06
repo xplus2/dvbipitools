@@ -35,6 +35,16 @@ int netaddr_fill(int family, const char *addr, unsigned port, struct sockaddr_st
 /* IP_TOS (v4) or IPV6_TCLASS (v6) on fd */
 int net_set_dscp(int fd, int family, int tos);
 
+/* ETSI TS 102 034 Table 29, tos byte = dscp << 2 */
+#define NET_DSCP_VOICE_BEARER (0x30 << 2)
+#define NET_DSCP_VIDEO_HIGH   (0x22 << 2)
+#define NET_DSCP_VIDEO_LOW    (0x24 << 2)
+#define NET_DSCP_SIGNALLING   (0x1A << 2)
+#define NET_DSCP_BEST_EFFORT  (0x00 << 2)
+
+/* name or raw 0..63 dscp; *tos_out = full tos byte */
+int net_dscp_parse(const char *s, int *tos_out);
+
 /* holds the resolved addrinfo list + position for netconnect_tcp_start/finish's
    fallback to the next address when one fails */
 typedef struct netconnect_pending netconnect_pending_t;

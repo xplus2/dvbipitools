@@ -27,16 +27,12 @@ void *rsi_pacer_main(void *arg) {
   unsigned chunks_per_cycle = pc->interval_s * 5;
   time_t collision_max_age = (time_t)pc->interval_s * 3; /* report collision ~3 cycles after last seen */
 
-  if (!chunks_per_cycle)
-    chunks_per_cycle = 1;
-
+  if (!chunks_per_cycle) chunks_per_cycle = 1;
   while (!signal_stop_requested()) {
     size_t cap;
     uint32_t ntp_sec;
     uint32_t ntp_frac;
-
-    for (unsigned i = 0; i < chunks_per_cycle && !signal_stop_requested(); i++)
-      nanosleep(&chunk, NULL);
+    for (unsigned i = 0; i < chunks_per_cycle && !signal_stop_requested(); i++) nanosleep(&chunk, NULL);
     if (signal_stop_requested())
       break;
 
@@ -52,8 +48,7 @@ void *rsi_pacer_main(void *arg) {
       uint32_t ssrc;
       double nominal_bps;
       uint16_t port;
-      if (!c || !atomic_load_explicit(&c->ssrc_known, memory_order_acquire))
-        continue;
+      if (!c || !atomic_load_explicit(&c->ssrc_known, memory_order_acquire)) continue;
       ssrc = atomic_load_explicit(&c->ssrc, memory_order_acquire);
       port = pc->resolve_by_port ? (uint16_t)(pc->resolve_base_port + c->resolve_slot) : pc->port;
       off = 20;
@@ -61,8 +56,7 @@ void *rsi_pacer_main(void *arg) {
         sub_len = rtcp_build_rsi_srbt_dns(pc->hostname, pc->hostname_len, port, pkt + off, sizeof(pkt) - off);
       else
         sub_len = rtcp_build_rsi_srbt_addr(pc->addr, sizeof pc->addr, port, pkt + off, sizeof(pkt) - off);
-      if (sub_len == 0)
-        continue;
+      if (sub_len == 0) continue;
       off += sub_len;
 
       nominal_bps = atomic_load_explicit(&c->nominal_bps, memory_order_relaxed);
@@ -78,7 +72,7 @@ void *rsi_pacer_main(void *arg) {
       }
       if (rtcp_build_rsi_header(ssrc, ssrc, ntp_sec, ntp_frac, off, pkt, sizeof pkt) == 0)
         continue;
-      ret_send_mc_impl(c, pkt, off, RET_DSCP_RTCP, pc->send_ctx);
+      ret_send_mc_impl(c, pkt, off, NET_DSCP_SIGNALLING, pc->send_ctx);
     }
   }
   return NULL;

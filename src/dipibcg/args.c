@@ -10,6 +10,7 @@
 #include "lib/helper/argutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
+#include "lib/net/netconnect.h"
 
 #include "args.h"
 #include "version.h"
@@ -38,6 +39,8 @@ static void print_help(void) {
       "  -w, --window <hours>   announce: only events starting within this (default 24)\n"
       "  -m, --mcast <g>:<p>    multicast group:port ([addr6]:port for v6)\n"
       "  -I, --iface <iface>    multicast interface\n"
+      "      --dscp <v>         announce: output DSCP marking: video-high|video-low|voice|\n"
+      "                         signalling|best-effort|0..63 (default: signalling)\n"
       "  -t, --interval <s>     announce: repeat interval (default 5)\n"
       "  -t, --timeout <s>      listen: stop after N seconds (default 35)\n"
       "  -o, --output <path>    listen: xmltv output path, - for stdout (default)\n"
@@ -75,6 +78,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics", required_argument, 0, 1001},
       {"metrics-id", required_argument, 0, 1002},
       {"metrics-interval", required_argument, 0, 1003},
+      {"dscp", required_argument, 0, 1004},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
@@ -83,6 +87,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int c;
 
   memset(cfg, 0, sizeof *cfg);
+  cfg->dscp = NET_DSCP_SIGNALLING;
   optind = 1;
   while ((c = getopt_long(argc, argv, "ali:M:w:m:I:t:o:C:Zvdh", longopts, NULL)) != -1) {
     switch (c) {
@@ -172,6 +177,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       cfg->metrics_interval_s = (unsigned)v;
       break;
     }
+    case 1004:
+      if (net_dscp_parse(optarg, &cfg->dscp)) {
+        argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
+        return ARGS_ERR;
+      }
+      break;
     case 'h':
       print_help();
       return ARGS_HELP;

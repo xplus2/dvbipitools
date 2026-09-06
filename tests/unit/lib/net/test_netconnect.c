@@ -50,11 +50,49 @@ START_TEST(netconnect_tcp_bounded_time_on_unreachable) {
 }
 END_TEST
 
+START_TEST(dscp_parse_symbolic_names) {
+  int tos;
+  ck_assert_int_eq(net_dscp_parse("video-high", &tos), 0);
+  ck_assert_int_eq(tos, NET_DSCP_VIDEO_HIGH);
+  ck_assert_int_eq(net_dscp_parse("video-low", &tos), 0);
+  ck_assert_int_eq(tos, NET_DSCP_VIDEO_LOW);
+  ck_assert_int_eq(net_dscp_parse("voice", &tos), 0);
+  ck_assert_int_eq(tos, NET_DSCP_VOICE_BEARER);
+  ck_assert_int_eq(net_dscp_parse("signalling", &tos), 0);
+  ck_assert_int_eq(tos, NET_DSCP_SIGNALLING);
+  ck_assert_int_eq(net_dscp_parse("best-effort", &tos), 0);
+  ck_assert_int_eq(tos, NET_DSCP_BEST_EFFORT);
+}
+END_TEST
+
+START_TEST(dscp_parse_raw_numeric) {
+  int tos;
+  ck_assert_int_eq(net_dscp_parse("0", &tos), 0);
+  ck_assert_int_eq(tos, 0);
+  ck_assert_int_eq(net_dscp_parse("63", &tos), 0);
+  ck_assert_int_eq(tos, 63 << 2);
+  ck_assert_int_eq(net_dscp_parse("34", &tos), 0);
+  ck_assert_int_eq(tos, 34 << 2);
+}
+END_TEST
+
+START_TEST(dscp_parse_rejects_invalid) {
+  int tos;
+  ck_assert_int_eq(net_dscp_parse("64", &tos), -1);
+  ck_assert_int_eq(net_dscp_parse("-1", &tos), -1);
+  ck_assert_int_eq(net_dscp_parse("video-med", &tos), -1);
+  ck_assert_int_eq(net_dscp_parse("", &tos), -1);
+}
+END_TEST
+
 static Suite *netconnect_suite(void) {
   Suite *s = suite_create("netconnect");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, netconnect_tcp_succeeds_against_local_listener);
   tcase_add_test(tc, netconnect_tcp_bounded_time_on_unreachable);
+  tcase_add_test(tc, dscp_parse_symbolic_names);
+  tcase_add_test(tc, dscp_parse_raw_numeric);
+  tcase_add_test(tc, dscp_parse_rejects_invalid);
   suite_add_tcase(s, tc);
   return s;
 }

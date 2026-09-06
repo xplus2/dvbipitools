@@ -10,6 +10,7 @@
 #include "lib/helper/argutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
+#include "lib/net/netconnect.h"
 
 #include "args.h"
 #include "version.h"
@@ -49,6 +50,8 @@ static void print_help(void) {
       "  -L, --lang <code>       a: ISO 639-2 for the display name (default deu)\n"
       "  -m, --mcast <g>:<p>     multicast group:port ([addr6]:port for v6)\n"
       "  -I, --iface <iface>     multicast interface\n"
+      "      --dscp <v>          announce: output DSCP marking: video-high|video-low|voice|\n"
+      "                          signalling|best-effort|0..63 (default: signalling)\n"
       "  -t, --interval <s>      a: repeat interval (default 5)\n"
       "  -t, --timeout <s>       l: stop after N seconds (default 35)\n"
       "  -o, --output <path>     l: output path, - for stdout (default)\n"
@@ -136,6 +139,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"fus-id", required_argument, 0, 1024},
       {"fus-announce", required_argument, 0, 1025},
       {"fus-logo", required_argument, 0, 1026},
+      {"dscp", required_argument, 0, 1027},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
@@ -148,6 +152,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
 
   memset(cfg, 0, sizeof *cfg);
   cfg->format = OUT_M3U;
+  cfg->dscp = NET_DSCP_SIGNALLING;
   optind = 1;
   while ((c = getopt_long(argc, argv, "ali:p:O:L:m:I:t:o:f:vdh", longopts, NULL)) != -1) {
     switch (c) {
@@ -184,6 +189,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       break;
     case 'I':
       cfg->iface = optarg;
+      break;
+    case 1027:
+      if (net_dscp_parse(optarg, &cfg->dscp)) {
+        argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
+        return ARGS_ERR;
+      }
       break;
     case 't': {
       char *end;
@@ -519,8 +530,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       argerr("--packages/--cells/--rms-*/--fus-* options are announce-only");
       return ARGS_ERR;
     }
-    if (!cfg->output_path)
-      cfg->output_path = "-";
+    if (!cfg->output_path) cfg->output_path = "-";
     if (have_t)
       cfg->timeout_s = t_value;
     else

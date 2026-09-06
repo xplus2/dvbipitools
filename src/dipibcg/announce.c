@@ -27,9 +27,7 @@
 /* "YYYY-MM-DDTHH:MM:SS[Z|+HH:MM|-HH:MM]" -> minutes since MJD epoch, UTC-normalized */
 int iso8601_to_minutes(const char *in, long *out) {
   iso8601_t f;
-
-  if (iso8601_split(in, &f))
-    return -1;
+  if (iso8601_split(in, &f)) return -1;
   *out = date_to_mjd(f.y, f.mo, f.d) * 1440L + f.h * 60L + f.mi - f.off_min;
   return 0;
 }
@@ -69,8 +67,7 @@ static int chan_idx_find(const chan_idx_t *idx, int n, const char *id) {
   while (lo <= hi) {
     int mid = (lo + hi) / 2;
     int c = strcmp(id, idx[mid].id);
-    if (c == 0)
-      return idx[mid].idx;
+    if (c == 0) return idx[mid].idx;
     if (c < 0)
       hi = mid - 1;
     else
@@ -86,18 +83,13 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *do
   int services_with_events = 0;
   char *seen;
   chan_idx_t *cidx;
-
-  if (!metrics_exporter_due(mx, now))
-    return;
-  if (metrics_exporter_begin(mx, &w, TOOL_VERSION))
-    return;
+  if (!metrics_exporter_due(mx, now)) return;
+  if (metrics_exporter_begin(mx, &w, TOOL_VERSION)) return;
 
   metrics_writer_put(&w, METRICS_ID_BCG_SOURCES_CONFIGURED, NULL, 1);
   metrics_writer_put(&w, METRICS_ID_BCG_SOURCES_UP, NULL, bm->sources_up ? 1 : 0);
-  for (unsigned r = 0; r < NET_ERR_COUNT; r++)
-    metrics_writer_put(&w, METRICS_ID_BCG_SOURCE_ERRORS_TOTAL, net_err_reason_name((net_err_reason_t)r), bm->source_errors_total[r]);
+  for (unsigned r = 0; r < NET_ERR_COUNT; r++) metrics_writer_put(&w, METRICS_ID_BCG_SOURCE_ERRORS_TOTAL, net_err_reason_name((net_err_reason_t)r), bm->source_errors_total[r]);
   metrics_writer_put(&w, METRICS_ID_BCG_SERVICES, NULL, (uint64_t)doc->channel_count);
-
   seen = windowed->channel_count > 0 ? calloc((size_t)windowed->channel_count, 1) : NULL;
   cidx = windowed->channel_count > 0 ? malloc(sizeof *cidx * (size_t)windowed->channel_count) : NULL;
   if (cidx) {
@@ -130,48 +122,37 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const bcg_doc_t *do
   metrics_exporter_send(mx, &w);
 }
 
-int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long window_min,
-                        long *out_sched_start, long *out_sched_end, int *out_have_sched) {
+int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long window_min, long *out_sched_start, long *out_sched_end, int *out_have_sched) {
   long sched_start = 0, sched_end = 0;
   int have_sched = 0;
 
   bcg_doc_init(dst);
   for (int i = 0; i < src->channel_count; i++) {
     bcg_channel_t *c = bcg_add_channel(dst);
-    if (!c)
-      return -1;
+    if (!c) return -1;
     *c = src->channels[i];
   }
   for (int i = 0; i < src->programme_count; i++) {
     const bcg_programme_t *pr = &src->programmes[i];
     bcg_programme_t *out;
     long start_min, end_min;
-    if (iso8601_to_minutes(pr->start, &start_min))
-      continue;
+    if (iso8601_to_minutes(pr->start, &start_min)) continue;
     end_min = start_min;
     if (pr->stop[0] && !iso8601_to_minutes(pr->stop, &end_min)) {
       /* end_min set */
     }
-    if (end_min < now)
-      continue;
-    if (start_min > now + window_min)
-      continue;
+    if (end_min < now) continue;
+    if (start_min > now + window_min) continue;
     out = bcg_add_programme(dst);
-    if (!out)
-      return -1;
+    if (!out) return -1;
     *out = *pr;
-    if (!have_sched || start_min < sched_start)
-      sched_start = start_min;
-    if (!have_sched || end_min > sched_end)
-      sched_end = end_min;
+    if (!have_sched || start_min < sched_start) sched_start = start_min;
+    if (!have_sched || end_min > sched_end) sched_end = end_min;
     have_sched = 1;
   }
-  if (out_sched_start)
-    *out_sched_start = sched_start;
-  if (out_sched_end)
-    *out_sched_end = sched_end;
-  if (out_have_sched)
-    *out_have_sched = have_sched;
+  if (out_sched_start) *out_sched_start = sched_start;
+  if (out_sched_end) *out_sched_end = sched_end;
+  if (out_have_sched) *out_have_sched = have_sched;
   return 0;
 }
 
@@ -186,14 +167,11 @@ int load_doc(const config_t *cfg, bcg_doc_t *out) {
   }
   bcg_doc_init(out);
   if (xmltv_read(in, out)) {
-    if (in != stdin)
-      fclose(in);
+    if (in != stdin) fclose(in);
     bcg_doc_free(out);
     return -1;
   }
-  if (in != stdin)
-    fclose(in);
-
+  if (in != stdin) fclose(in);
   if (mapping_load(cfg->map_path, &map)) {
     bcg_doc_free(out);
     return -1;
@@ -217,8 +195,7 @@ static void reload_doc(const config_t *cfg, bcg_doc_t *doc, bcg_metrics_t *bm, i
   bcg_doc_t reloaded;
   if (load_doc(cfg, &reloaded)) {
     log_line("reload failed, keeping previous guide");
-    if (!metrics_on)
-      return;
+    if (!metrics_on) return;
     bm->sources_up = 0;
     bm->source_errors_total[NET_ERR_FORMAT]++;
     return;
@@ -226,8 +203,7 @@ static void reload_doc(const config_t *cfg, bcg_doc_t *doc, bcg_metrics_t *bm, i
   bcg_doc_free(doc);
   *doc = reloaded;
   log_line("reloaded %d channels, %d programmes from %s / %s", doc->channel_count, doc->programme_count, cfg->input_path, cfg->map_path);
-  if (metrics_on)
-    bm->sources_up = 1;
+  if (metrics_on) bm->sources_up = 1;
 }
 
 static void publish_document(mcast_t *m, bitwriter_t *bw, const strrepo_writer_t *sw, unsigned cycles, int compress, bcg_metrics_t *bm, int metrics_on) {
@@ -240,8 +216,7 @@ static void publish_document(mcast_t *m, bitwriter_t *bw, const strrepo_writer_t
   int ok = 0;
 
   if (container_build(bits, bits_len, strs, strs_len, &cont, &cont_len) != 0) {
-    if (metrics_on)
-      bm->document_errors_total++;
+    if (metrics_on) bm->document_errors_total++;
     return;
   }
   if (wrapper_build(cont, cont_len, compress, &wrapped, &wrapped_len) == 0) {
@@ -249,8 +224,7 @@ static void publish_document(mcast_t *m, bitwriter_t *bw, const strrepo_writer_t
     free(wrapped);
   }
   free(cont);
-  if (!metrics_on)
-    return;
+  if (!metrics_on) return;
   bm->documents_generated_total++;
   if (ok) {
     bm->publications_total++;
@@ -272,21 +246,18 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
 
   memset(&bm, 0, sizeof bm);
   accessunit_scratch_init(&sc);
-
   if (load_doc(cfg, &doc)) {
-    if (metrics_on)
-      bm.source_errors_total[NET_ERR_FORMAT]++;
+    if (metrics_on) bm.source_errors_total[NET_ERR_FORMAT]++;
     return 1;
   }
-  if (metrics_on)
-    bm.sources_up = 1;
-
+  if (metrics_on) bm.sources_up = 1;
   m = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, 0);
   if (!m) {
     log_line("cannot open %s:%u for sending", cfg->mcast_group, cfg->mcast_port);
     bcg_doc_free(&doc);
     return 1;
   }
+  mcast_set_tos(m, cfg->dscp);
 
   mcast_describe(cfg, mcast_txt, sizeof mcast_txt);
   log_line("announcing %d channels, %d programmes (window %ldh) on %s every %lds", doc.channel_count, doc.programme_count, cfg->window_hours, mcast_txt, cfg->interval_s);
@@ -299,13 +270,10 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
     long sched_start, sched_end;
     int have_sched;
 
-    if (signal_reload_requested())
-      reload_doc(cfg, &doc, &bm, metrics_on);
-
+    if (signal_reload_requested()) reload_doc(cfg, &doc, &bm, metrics_on);
     if (build_windowed_doc(&doc, &windowed, now_minutes(), cfg->window_hours * 60, &sched_start, &sched_end, &have_sched)) {
       bcg_doc_free(&windowed);
-      if (metrics_on)
-        bm.document_errors_total++;
+      if (metrics_on) bm.document_errors_total++;
       rc = 1;
       break;
     }
@@ -316,18 +284,15 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
       bitwriter_free(&bw);
       strrepo_writer_free(&sw);
       bcg_doc_free(&windowed);
-      if (metrics_on)
-        bm.document_errors_total++;
+      if (metrics_on) bm.document_errors_total++;
       rc = 1;
       break;
     }
     publish_document(m, &bw, &sw, cycles, cfg->compress, &bm, metrics_on);
     bitwriter_free(&bw);
     strrepo_writer_free(&sw);
-
     cycles++;
-    if (cfg->verbose)
-      log_line("cycle %u sent, %d fragments", cycles, nfuu);
+    if (cfg->verbose) log_line("cycle %u sent, %d fragments", cycles, nfuu);
     emit_metrics(mx, mono_seconds(), &doc, &windowed, &bm, sched_start, sched_end, have_sched);
     bcg_doc_free(&windowed);
     sleep_interruptible((double)cfg->interval_s);

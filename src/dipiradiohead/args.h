@@ -31,6 +31,7 @@ typedef struct {
   const char *iface;         /* -I; NULL = kernel default route */
   int rtp;                   /* -r */
   unsigned ttl;              /* -T; 0 = kernel default (1) */
+  int dscp;                  /* --dscp, default NET_DSCP_VIDEO_HIGH */
   char nit_text[256];        /* -n; empty = no NIT network_name descriptor */
   long error_retry_s;        /* -e; 0 = no retry, fail on first input error (single input only) */
   int insecure_tls;          /* -k; skip TLS verification */

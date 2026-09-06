@@ -114,6 +114,12 @@ output.
 .BR \-T ", " \-\-ttl " " \fIn\fR
 Multicast TTL / hop limit. Default: 1.
 .TP
+.BR \-\-dscp " " \fIv\fR
+Output DSCP marking (ETSI TS 102 034 Table 29):
+.BR video-high ", " video-low ", " voice ", " signalling ", " best-effort ,
+or a raw DSCP value 0..63. Default
+.BR video-high .
+.TP
 .BR \-R ", " \-\-rist " " \fIuri\fR
 .B rist://host:port[?query]
 or

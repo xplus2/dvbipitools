@@ -77,7 +77,7 @@ static struct sockaddr_in make_client_addr(const char *ip, unsigned short port) 
   return a;
 }
 
-#define TEST_DSCP 0x44 /* arbitrary, distinct from RET_DSCP_RTCP: proves mirroring, not coincidence */
+#define TEST_DSCP 0x44 /* not NET_DSCP_SIGNALLING */
 
 /* channel with N sequential ring entries, seq base_seq..base_seq+n-1, DSCP TEST_DSCP,
    payload[0] == entry index for identification */
@@ -85,7 +85,6 @@ static channel_t *make_channel(channel_table_t **out_table, uint32_t ssrc, uint1
   channel_table_t *t = channel_table_new(1, 32, 0);
   channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
   int i;
-
   for (i = 0; i < n; i++) {
     unsigned char payload[4] = {(unsigned char)i, 0, 0, 0};
     channel_store(t, c, ssrc, (uint16_t)(base_seq + i), (uint32_t)i, TEST_DSCP, payload, sizeof payload);
@@ -115,7 +114,7 @@ START_TEST(ret_handle_nack_repairs_primary_and_blp_bits) {
 
   /* mc: 1 Generic NACK (FF) + 3 repairs (100, 101, 103) */
   ck_assert_int_eq(g_mc_calls, 4);
-  ck_assert_int_eq(g_mc_dscp[0], RET_DSCP_RTCP);
+  ck_assert_int_eq(g_mc_dscp[0], NET_DSCP_SIGNALLING);
   for (i = 1; i < 4; i++)
     ck_assert_int_eq(g_mc_dscp[i], TEST_DSCP); /* mirrored from channel's stored entries, F.9 */
 
@@ -239,7 +238,7 @@ START_TEST(ret_on_self_detected_gap_sends_ff_and_repairs_range) {
   /* 1 FF + 3 repairs (51,52,53), all via mc only, no unicast at all */
   ck_assert_int_eq(g_mc_calls, 4);
   ck_assert_int_eq(g_uni_calls, 0);
-  ck_assert_int_eq(g_mc_dscp[0], RET_DSCP_RTCP);
+  ck_assert_int_eq(g_mc_dscp[0], NET_DSCP_SIGNALLING);
 
   for (i = 1; i < 4; i++) {
     ck_assert_int_eq(rtx_parse(g_mc_pkt[i], g_mc_len[i], 99, &out), 1);
@@ -332,9 +331,7 @@ START_TEST(mc_and_unicast_rtx_seq_are_independent) {
   ck_assert_uint_eq(rtx_wire_seq(g_uni_pkt[0]), 1u); /* unicast: only this client's own 2nd repair */
 
   mc_repair_idx = -1;
-  for (i = 0; i < g_mc_calls; i++)
-    if (g_mc_dscp[i] != RET_DSCP_RTCP)
-      mc_repair_idx = i;
+  for (i = 0; i < g_mc_calls; i++) if (g_mc_dscp[i] != NET_DSCP_SIGNALLING) mc_repair_idx = i;
   ck_assert_int_ge(mc_repair_idx, 0);
   ck_assert_uint_eq(rtx_wire_seq(g_mc_pkt[mc_repair_idx]), 2u); /* mc: 3rd repair ever (0, 1 via gap, 2 now) */
 

@@ -19,16 +19,14 @@ void meta_cb(void *ctx, const char *artist, const char *title) {
   bufcpy(m->artist, sizeof m->artist, artist);
   bufcpy(m->title, sizeof m->title, title);
   m->dirty = 1;
-  if (m->rm)
-    m->rm->metadata_updates_total++;
+  if (m->rm) m->rm->metadata_updates_total++;
 }
 
 ristout_t *radiohead_rist_open(const config_t *cfg) {
   ristout_cfg_t rc;
 
   memset(&rc, 0, sizeof rc);
-  for (unsigned i = 0; i < cfg->n_rist; i++)
-    rc.peer_uri[i] = cfg->rist_uri[i];
+  for (unsigned i = 0; i < cfg->n_rist; i++) rc.peer_uri[i] = cfg->rist_uri[i];
   rc.npeers = (int)cfg->n_rist;
   rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
   rc.secret = cfg->rist_secret;
@@ -60,9 +58,7 @@ srtsink_t *radiohead_srt_open(const config_t *cfg) {
 
 void radiohead_srt_service(out_ctx_t *o) {
   srtsink_status_t st;
-
-  if (!o->srt)
-    return;
+  if (!o->srt) return;
   srtsink_service(o->srt, &st);
   if (st.connected != o->srt_connected) {
     log_line("srt output: %s", st.connected ? "connected" : "link down, reconnecting");
@@ -73,8 +69,7 @@ void radiohead_srt_service(out_ctx_t *o) {
 void flush_batch(out_ctx_t *o) {
   size_t n = (size_t)o->batch_count * 188;
 
-  if (o->batch_count == 0)
-    return;
+  if (o->batch_count == 0) return;
   if (o->mc) {
     if (o->rtp) {
       rtpheader_build(o->rtph, (uint32_t)o->cur_pts, o->batch, 12);
@@ -83,10 +78,8 @@ void flush_batch(out_ctx_t *o) {
       note_send_result(mcast_send(o->mc, o->batch + 12, n) >= 0, &o->mc_had_error, &o->errors, "mcast");
     }
   }
-  if (o->rist)
-    note_send_result(ristout_write(o->rist, o->batch + 12, n) >= 0, &o->rist_had_error, &o->errors, "rist");
-  if (o->srt)
-    srtsink_write(o->srt, o->batch + 12, n);
+  if (o->rist) note_send_result(ristout_write(o->rist, o->batch + 12, n) >= 0, &o->rist_had_error, &o->errors, "rist");
+  if (o->srt) srtsink_write(o->srt, o->batch + 12, n);
   o->batch_count = 0;
 }
 
@@ -95,8 +88,7 @@ void packet_cb(void *ctx, const unsigned char *pkt188) {
   memcpy(o->batch + 12 + (size_t)o->batch_count * 188, pkt188, 188);
   o->batch_count++;
   o->packets++;
-  if (o->batch_count == TS_PER_DGRAM)
-    flush_batch(o);
+  if (o->batch_count == TS_PER_DGRAM) flush_batch(o);
 }
 
 const char *codec_name(source_codec_t c) {
@@ -134,12 +126,10 @@ static int process_single_frame(single_tick_t *tk, source_t *src) {
   uint64_t pts;
   double now;
 
-  if (r == 0)
-    return 0;
+  if (r == 0) return 0;
   if (r < 0) {
     input_metrics_note_read(tk->metrics_on ? tk->im : NULL, -1, reason);
-    if (tk->metrics_on && reason == NET_ERR_FORMAT)
-      tk->rm->framing_errors_total++;
+    if (tk->metrics_on && reason == NET_ERR_FORMAT) tk->rm->framing_errors_total++;
     return -1;
   }
   if (tk->metrics_on) {
@@ -159,10 +149,8 @@ static int process_single_frame(single_tick_t *tk, source_t *src) {
     tc.audio_pid = 0;
     tc.standalone = 1;
     *tk->tsp = tspacketizer_new(&tc);
-    if (!*tk->tsp)
-      return -2;
-    if (tk->cas)
-      tspacketizer_set_cas(*tk->tsp, tk->cas);
+    if (!*tk->tsp) return -2;
+    if (tk->cas) tspacketizer_set_cas(*tk->tsp, tk->cas);
     log_line("codec detected: %s, %u Hz", codec_name(f.codec), f.sample_rate);
   }
   if (tk->meta->dirty) {
@@ -181,8 +169,7 @@ static int process_single_frame(single_tick_t *tk, source_t *src) {
       log_line("cas: fatal, stopping");
       return -2;
     }
-    if (signal_reload_requested())
-      cas_reload_receivers(tk->cas);
+    if (signal_reload_requested()) cas_reload_receivers(tk->cas);
   }
   tspacketizer_feed(*tk->tsp, pts, now, f.data, f.len, packet_cb, tk->out);
   if (tk->cfg->verbose && now - *tk->last_stat >= 1.0) {
@@ -216,8 +203,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   int metrics_on = metrics_exporter_enabled(mx);
   single_tick_t tk;
 
-  if (cfg->n_inputs > 1)
-    return radiohead_run_mpts(cfg, mx);
+  if (cfg->n_inputs > 1) return radiohead_run_mpts(cfg, mx);
 
   memset(&meta, 0, sizeof meta);
   memset(&out, 0, sizeof out);
@@ -226,8 +212,8 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   meta.rm = metrics_on ? &rm : NULL;
   if (cfg->mcast_port) {
     mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, (int)cfg->ttl);
-    if (!mc)
-      return 1;
+    if (!mc) return 1;
+    mcast_set_tos(mc, cfg->dscp);
     out.mc = mc;
     out.rtp = cfg->rtp;
     if (cfg->rtp) {
@@ -241,22 +227,17 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   if (cfg->n_rist > 0) {
     out.rist = radiohead_rist_open(cfg);
     if (!out.rist) {
-      if (out.rtph)
-        rtpheader_free(out.rtph);
-      if (mc)
-        mcast_close(mc);
+      if (out.rtph) rtpheader_free(out.rtph);
+      if (mc) mcast_close(mc);
       return 1;
     }
   }
   if (cfg->n_srt > 0) {
     out.srt = radiohead_srt_open(cfg);
     if (!out.srt) {
-      if (out.rist)
-        ristout_close(out.rist);
-      if (out.rtph)
-        rtpheader_free(out.rtph);
-      if (mc)
-        mcast_close(mc);
+      if (out.rist) ristout_close(out.rist);
+      if (out.rtph) rtpheader_free(out.rtph);
+      if (mc) mcast_close(mc);
       return 1;
     }
   }
@@ -305,8 +286,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
       continue;
     }
     if (metrics_on) {
-      if (im.seen_open)
-        im.reconnects_total++;
+      if (im.seen_open) im.reconnects_total++;
       im.seen_open = 1;
       im.up = 1;
       last_synced_bytes = 0;
@@ -323,8 +303,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
       if (step == -1)
         break;
     }
-    if (metrics_on)
-      im.up = 0;
+    if (metrics_on) im.up = 0;
     source_close(src);
     if (signal_stop_requested())
       break;
@@ -337,25 +316,15 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
 done:
-  if (cas)
-    cas_flush(cas, packet_cb, &out);
+  if (cas) cas_flush(cas, packet_cb, &out);
   flush_batch(&out);
-  if (tsp)
-    tspacketizer_free(tsp);
-  if (cas)
-    cas_stop(cas);
-  if (out.rtph)
-    rtpheader_free(out.rtph);
-  if (out.rist)
-    ristout_close(out.rist);
-  if (out.srt)
-    srtsink_close(out.srt);
-  if (mc)
-    mcast_close(mc);
-
-  if (cfg->verbose && log_stderr_is_tty())
-    fputc('\n', stderr);
-  if (rc == 0)
-    log_line("stopped.");
+  if (tsp) tspacketizer_free(tsp);
+  if (cas) cas_stop(cas);
+  if (out.rtph) rtpheader_free(out.rtph);
+  if (out.rist) ristout_close(out.rist);
+  if (out.srt) srtsink_close(out.srt);
+  if (mc) mcast_close(mc);
+  if (cfg->verbose && log_stderr_is_tty()) fputc('\n', stderr);
+  if (rc == 0) log_line("stopped.");
   return rc;
 }

@@ -107,6 +107,12 @@ Multicast group:port (\fB[\fIaddr6\fB]\fR:\fIport\fR for IPv6). Required.
 .BR \-I ", " \-\-iface " \fIiface\fR"
 Multicast interface. Default: kernel route.
 .TP
+.BR \-\-dscp " " \fIv\fR
+Announce: output DSCP marking (ETSI TS 102 034 Table 29):
+.BR video-high ", " video-low ", " voice ", " signalling ", " best-effort ,
+or a raw DSCP value 0..63. Default
+.BR signalling .
+.TP
 .BR \-t ", " \-\-interval " \fIs\fR"
 Announce: repeat interval (default 5).
 .TP
