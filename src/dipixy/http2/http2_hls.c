@@ -142,11 +142,11 @@ int h2_llhls_try_park(h2_conn_t *conn, const conn_t *c, int32_t stream_id, captu
                                     is_head, 0, inm, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
 }
 
-void h2_llhls_on_stream_close(h2_conn_t *conn, int32_t stream_id) {
+void h2_llhls_on_stream_close(const h2_conn_t *conn, int32_t stream_id) {
   llhls_waiter_pool_close_owner(t_h2_llhls_waiters, H2_LLHLS_WAITERS_MAX, &t_h2_llhls_waiters_active, conn, stream_id);
 }
 
-void h2_llhls_on_conn_close(h2_conn_t *conn) {
+void h2_llhls_on_conn_close(const h2_conn_t *conn) {
   llhls_waiter_pool_close_owner(t_h2_llhls_waiters, H2_LLHLS_WAITERS_MAX, &t_h2_llhls_waiters_active, conn, -1);
 }
 

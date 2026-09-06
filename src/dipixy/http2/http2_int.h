@@ -105,8 +105,8 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
 /* from http2_hls.c: LL-HLS blocking-reload parking, mirrors dispatch.c's llhls_try_park() for H2 streams */
 int h2_llhls_try_park(h2_conn_t *conn, const conn_t *c, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter,
                       unsigned pmt_pid, const char *filename, int is_head, const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle);
-void h2_llhls_on_stream_close(h2_conn_t *conn, int32_t stream_id);
-void h2_llhls_on_conn_close(h2_conn_t *conn);
+void h2_llhls_on_stream_close(const h2_conn_t *conn, int32_t stream_id);
+void h2_llhls_on_conn_close(const h2_conn_t *conn);
 
 /* from http2_hls.c */
 int h2_hls_cold_try_park(h2_conn_t *conn, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, hls_cold_kind_t kind, seg_container_t container,

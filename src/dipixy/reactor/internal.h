@@ -119,7 +119,7 @@ int http_auth_ok(const config_t *cfg, const char *auth_hdr);
 void llhls_flush_waiters(void);
 
 /* dispatch.c. purges c's waiter slot, call before reactor_close() frees it */
-void llhls_waiter_conn_closing(conn_t *c);
+void llhls_waiter_conn_closing(const conn_t *c);
 
 /* clock_gettime(CLOCK_MONOTONIC) in ms, shared by dispatch.c/http2_hls.c/http3_req.c */
 static inline int64_t now_ms(void) {

@@ -18,11 +18,11 @@ int h3_llhls_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, co
                                     stream_id, ctx, filter, pmt_pid, filename, is_head, 0, inm, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
 }
 
-void h3_llhls_on_stream_close(h3_conn_t *c, int64_t stream_id) {
+void h3_llhls_on_stream_close(const h3_conn_t *c, int64_t stream_id) {
   llhls_waiter_pool_close_owner(t_h3_llhls_waiters, H3_LLHLS_WAITERS_MAX, &t_h3_llhls_waiters_active, c, stream_id);
 }
 
-void h3_llhls_on_conn_close(h3_conn_t *c) {
+void h3_llhls_on_conn_close(const h3_conn_t *c) {
   llhls_waiter_pool_close_owner(t_h3_llhls_waiters, H3_LLHLS_WAITERS_MAX, &t_h3_llhls_waiters_active, c, -1);
 }
 

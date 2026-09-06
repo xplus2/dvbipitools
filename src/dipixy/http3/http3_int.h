@@ -183,8 +183,8 @@ nghttp3_ssize h3_mp4push_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec
 int h3_llhls_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, const char *inm, const char *origin_hdr,
                        uint32_t want_seg, int want_part, int timeout_ms, int ws_handle);
 void h3_llhls_flush_waiters(void);
-void h3_llhls_on_stream_close(h3_conn_t *c, int64_t stream_id);
-void h3_llhls_on_conn_close(h3_conn_t *c);
+void h3_llhls_on_stream_close(const h3_conn_t *c, int64_t stream_id);
+void h3_llhls_on_conn_close(const h3_conn_t *c);
 
 /* from http3_hls_cold.c */
 int h3_hls_cold_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid,

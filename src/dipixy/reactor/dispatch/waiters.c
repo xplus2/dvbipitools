@@ -20,7 +20,7 @@ int llhls_try_park(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, un
                                     is_head, keep_alive, NULL, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
 }
 
-void llhls_waiter_conn_closing(conn_t *c) {
+void llhls_waiter_conn_closing(const conn_t *c) {
   llhls_waiter_pool_close_owner(t_llhls_waiters, LLHLS_WAITERS_MAX, &t_llhls_waiters_active, c, -1);
 }
 
