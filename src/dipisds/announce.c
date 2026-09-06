@@ -63,6 +63,8 @@ int state_load(const config_t *cfg, sds_state_t *st) {
     const sds_ret_t *ret = NULL;
     sds_fcc_t fcc_val;
     const sds_fcc_t *fcc = NULL;
+    sds_fec_t fec_val;
+    const sds_fec_t *fec = NULL;
     if (cfg->ret_enabled) {
       memset(&ret_val, 0, sizeof ret_val);
       bufcpy(ret_val.addr, sizeof ret_val.addr, cfg->ret_addr);
@@ -85,6 +87,13 @@ int state_load(const config_t *cfg, sds_state_t *st) {
       fcc_val.resolve_max_channels = cfg->fcc_resolve_max_channels;
       fcc = &fcc_val;
     }
+    if (cfg->al_fec_enabled) {
+      memset(&fec_val, 0, sizeof fec_val);
+      bufcpy(fec_val.addr, sizeof fec_val.addr, cfg->al_fec_addr);
+      fec_val.port = cfg->al_fec_port;
+      fec_val.pt = cfg->al_fec_pt;
+      fec = &fec_val;
+    }
     if (cfg->packages_path) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_PACKAGE_DISCOVERY;
     if (cfg->cells_path) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY;
     if (cfg->rms_enabled || cfg->fus_enabled) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_RMSFUS_DISCOVERY;
@@ -96,7 +105,7 @@ int state_load(const config_t *cfg, sds_state_t *st) {
       state_free(st);
       return -1;
     }
-    st->broadcast_len = sds_build_broadcast(cfg->provider, 1, st->in.services, st->in.service_count, ret, fcc, st->broadcast_doc, DOC_CAP);
+    st->broadcast_len = sds_build_broadcast(cfg->provider, 1, st->in.services, st->in.service_count, ret, fcc, fec, st->broadcast_doc, DOC_CAP);
     st->sp_len = sds_build_sp(cfg->provider, cfg->offering, cfg->lang, 1, cfg->mcast_group, cfg->mcast_port, extra_payload_ids, extra_count, st->sp_doc, DOC_CAP);
     if (!st->broadcast_len || !st->sp_len) {
       log_line("SD&S document too large (max %d bytes), reduce the service list", DOC_CAP);

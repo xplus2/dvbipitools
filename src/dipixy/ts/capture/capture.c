@@ -80,11 +80,10 @@ void reclaim_retired_snapshots(void) {
 
 void unlink_ctx(capture_ctx_t *ctx) {
   pthread_mutex_lock(&g_lock);
-  for (capture_ctx_t **pp = &g_open; *pp; pp = &(*pp)->next)
-    if (*pp == ctx) {
-      *pp = ctx->next;
-      break;
-    }
+  for (capture_ctx_t **pp = &g_open; *pp; pp = &(*pp)->next) if (*pp == ctx) {
+    *pp = ctx->next;
+    break;
+  }
   rebuild_snapshot();
   pthread_mutex_unlock(&g_lock);
 }
@@ -94,10 +93,10 @@ void free_ctx_resources(capture_ctx_t *ctx) {
     tssrc_close(ctx->ts);
     free(ctx->key);
   } else {
-    if (ctx->fcc)
-      fcc_client_close(ctx->fcc);
-    if (ctx->ret)
-      ret_client_close(ctx->ret);
+    if (ctx->fcc) fcc_client_close(ctx->fcc);
+    if (ctx->ret) ret_client_close(ctx->ret);
+    if (ctx->fec_dec) fec2022_dec_free(ctx->fec_dec);
+    if (ctx->fec_m) mcast_close(ctx->fec_m);
     mcast_close(ctx->m);
     free(ctx->iface);
   }
@@ -105,9 +104,19 @@ void free_ctx_resources(capture_ctx_t *ctx) {
   free(ctx);
 }
 
+ssize_t capture_fec_read(capture_ctx_t *ctx, unsigned char *buf, size_t cap) {
+  unsigned char repair_buf[FEC2022_MAX_REPAIR];
+  ssize_t rn = mcast_recv(ctx->fec_m, repair_buf, sizeof repair_buf, NULL);
+  ssize_t n;
+  if (rn > 0) fec2022_dec_repair(ctx->fec_dec, repair_buf, (size_t)rn);
+  n = mcast_recv(ctx->m, buf, cap, NULL);
+  if (n < 0) return -1;
+  if (n > 0) fec2022_dec_source(ctx->fec_dec, buf, (size_t)n);
+  return (ssize_t)fec2022_dec_drain(ctx->fec_dec, buf, cap);
+}
+
 void capture_set_ring_cap(size_t bytes) {
-  if (bytes)
-    g_capture_ring_cap = bytes;
+  if (bytes) g_capture_ring_cap = bytes;
 }
 
 static int addr_family(const char *addr) { return strchr(addr, ':') ? AF_INET6 : AF_INET; }
@@ -133,6 +142,20 @@ static ret_client_t *open_ret(const sds_ret_t *ret, int family, const char *grou
   return r;
 }
 
+static void open_fec(capture_ctx_t *c, const sds_fec_t *fec, unsigned al_fec_l, unsigned al_fec_d, const char *iface) {
+  c->fec_m = mcast_open(addr_family(fec->addr), fec->addr, fec->port, iface, 0);
+  c->fec_dec = c->fec_m ? fec2022_dec_new(al_fec_l, al_fec_d) : NULL;
+  if (!c->fec_m || !c->fec_dec || mcast_set_nonblock(c->fec_m)) {
+    if (c->fec_dec)
+      fec2022_dec_free(c->fec_dec);
+    if (c->fec_m)
+      mcast_close(c->fec_m);
+    c->fec_m = NULL;
+    c->fec_dec = NULL;
+    log_line(TOOL_NAME ": al-fec repair stream %s:%u unreachable, continuing without FEC recovery", fec->addr, fec->port);
+  }
+}
+
 static fcc_client_t *open_fcc(const sds_fcc_t *fcc) {
   fcc_client_cfg_t fc;
   fcc_client_t *f;
@@ -147,7 +170,7 @@ static fcc_client_t *open_fcc(const sds_fcc_t *fcc) {
   return f;
 }
 
-capture_ctx_t *capture_open(int family, const char *group, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc) {
+capture_ctx_t *capture_open(int family, const char *group, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned al_fec_l, unsigned al_fec_d) {
   capture_ctx_t *c, *dup;
 
   pthread_mutex_lock(&g_lock);
@@ -191,6 +214,8 @@ capture_ctx_t *capture_open(int family, const char *group, unsigned port, const 
     c->ret = open_ret(ret, family, group, port, iface);
   if (fcc)
     c->fcc = open_fcc(fcc);
+  if (fec && al_fec_l)
+    open_fec(c, fec, al_fec_l, al_fec_d, iface);
   c->refcount = 1;
 
   pthread_mutex_lock(&g_lock);

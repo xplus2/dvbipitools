@@ -40,9 +40,9 @@ static size_t drain(capture_ctx_t *c, capture_reader_t *r, unsigned char *buf, s
 }
 
 START_TEST(dedup_shares_context_for_same_key) {
-  capture_ctx_t *a = capture_open(AF_INET, "239.8.8.1", 15801, NULL, 0, NULL, NULL);
-  capture_ctx_t *b = capture_open(AF_INET, "239.8.8.1", 15801, NULL, 0, NULL, NULL);
-  capture_ctx_t *c = capture_open(AF_INET, "239.8.8.1", 15802, NULL, 0, NULL, NULL);
+  capture_ctx_t *a = capture_open(AF_INET, "239.8.8.1", 15801, NULL, 0, NULL, NULL, NULL, 0, 0);
+  capture_ctx_t *b = capture_open(AF_INET, "239.8.8.1", 15801, NULL, 0, NULL, NULL, NULL, 0, 0);
+  capture_ctx_t *c = capture_open(AF_INET, "239.8.8.1", 15802, NULL, 0, NULL, NULL, NULL, 0, 0);
 
   ck_assert_ptr_nonnull(a);
   ck_assert_ptr_eq(a, b);
@@ -57,7 +57,7 @@ END_TEST
 
 START_TEST(two_readers_on_same_context_each_see_all_bytes) {
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.2", 15802, NULL, 1);
-  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.2", 15802, NULL, 0, NULL, NULL);
+  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.2", 15802, NULL, 0, NULL, NULL, NULL, 0, 0);
   capture_reader_t *r1, *r2;
   unsigned char dgram[188], out1[512], out2[512];
 
@@ -86,7 +86,7 @@ END_TEST
 
 START_TEST(plain_udp_two_ts_packets_round_trip) {
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.3", 15803, NULL, 1);
-  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.3", 15803, NULL, 0, NULL, NULL);
+  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.3", 15803, NULL, 0, NULL, NULL, NULL, 0, 0);
   capture_reader_t *r = capture_reader_open(cap);
   unsigned char dgram[376], out[512];
   size_t n;
@@ -111,7 +111,7 @@ END_TEST
 
 START_TEST(rtp_wrapped_packet_has_header_stripped) {
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.4", 15804, NULL, 1);
-  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.4", 15804, NULL, 1, NULL, NULL);
+  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.4", 15804, NULL, 1, NULL, NULL, NULL, 0, 0);
   capture_reader_t *r = capture_reader_open(cap);
   unsigned char dgram[12 + 188], ts[188], out[512];
   size_t n;
@@ -136,7 +136,7 @@ END_TEST
 
 START_TEST(non_rtp_payload_dropped_when_rtp_expected) {
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.5", 15805, NULL, 1);
-  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.5", 15805, NULL, 1, NULL, NULL);
+  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.5", 15805, NULL, 1, NULL, NULL, NULL, 0, 0);
   capture_reader_t *r = capture_reader_open(cap);
   unsigned char junk[20], out[512];
   size_t n;
@@ -256,7 +256,7 @@ START_TEST(ret_wired_capture_delivers_plain_packet) {
   ret.port = 15906; /* UDP connect() succeeds with no listener; NACKs just go nowhere */
   ret.rtx_pt = 99;
 
-  cap = capture_open(AF_INET, "239.8.8.6", 15806, NULL, 1, &ret, NULL);
+  cap = capture_open(AF_INET, "239.8.8.6", 15806, NULL, 1, &ret, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
 
@@ -287,7 +287,7 @@ START_TEST(fcc_wired_capture_delivers_plain_multicast_after_cutover) {
   fcc.port = 15907; /* no real FCC server: burst never arrives, plain multicast still cuts over */
   fcc.rtx_pt = 99;
 
-  cap = capture_open(AF_INET, "239.8.8.7", 15807, NULL, 1, NULL, &fcc);
+  cap = capture_open(AF_INET, "239.8.8.7", 15807, NULL, 1, NULL, &fcc, NULL, 0, 0);
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
 

@@ -175,12 +175,21 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
         mcast_close(mc);
         return 1;
       }
+      if (cfg->al_fec_l) {
+        out.fec_mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->al_fec_port, cfg->iface, (int)cfg->ttl);
+        out.fec_enc = out.fec_mc ? fec2022_enc_new(cfg->al_fec_l, cfg->al_fec_d, 96) : NULL;
+        if (!out.fec_mc || !out.fec_enc) {
+          free_rtp_out(&out);
+          mcast_close(mc);
+          return 1;
+        }
+      }
     }
   }
   if (cfg->n_rist > 0) {
     out.rist = radiohead_rist_open(cfg);
     if (!out.rist) {
-      if (out.rtph) rtpheader_free(out.rtph);
+      free_rtp_out(&out);
       if (mc) mcast_close(mc);
       return 1;
     }
@@ -189,7 +198,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     out.srt = radiohead_srt_open(cfg);
     if (!out.srt) {
       if (out.rist) ristout_close(out.rist);
-      if (out.rtph) rtpheader_free(out.rtph);
+      free_rtp_out(&out);
       if (mc) mcast_close(mc);
       return 1;
     }
@@ -320,7 +329,7 @@ done:
   if (mpts) mpts_free(mpts);
   if (is) inputset_free(is);
   if (cas) cas_stop(cas);
-  if (out.rtph) rtpheader_free(out.rtph);
+  free_rtp_out(&out);
   if (out.rist) ristout_close(out.rist);
   if (out.srt) srtsink_close(out.srt);
   if (mc) mcast_close(mc);

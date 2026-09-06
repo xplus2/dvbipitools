@@ -20,9 +20,7 @@ static unsigned fcc_resolve_port(const sds_service_t *s, const sds_fcc_t *fcc) {
   unsigned char addr[16];
   size_t addr_len = s->family == AF_INET6 ? 16 : 4;
   uint64_t h = 1469598103934665603ULL;
-
-  if (inet_pton(s->family, s->address, addr) != 1)
-    return fcc->port;
+  if (inet_pton(s->family, s->address, addr) != 1) return fcc->port;
   for (size_t i = 0; i < addr_len; i++) {
     h ^= addr[i];
     h *= 1099511628211ULL;
@@ -34,14 +32,18 @@ static unsigned fcc_resolve_port(const sds_service_t *s, const sds_fcc_t *fcc) {
   return fcc->resolve_base_port + (unsigned)((size_t)h % fcc->resolve_max_channels);
 }
 
-void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc) {
+void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec) {
   fprintf(f, "<SingleService><ServiceLocation><IPMulticastAddress Address=\"%s\" Port=\"%u\" Streaming=\"%s\"", s->address, s->port, s->rtp ? "rtp" : "udp");
-  if (ret || fcc) {
+  if (ret || fcc || fec) {
     fputs(">", f);
+    if (fec) {
+      fprintf(f, "<FECBaseLayer Address=\"%s\" Port=\"%u\"", fec->addr, fec->port);
+      if (fec->pt != 96) fprintf(f, " PayloadTypeNumber=\"%u\"", fec->pt);
+      fputs("/>", f);
+    }
     if (ret) {
       fprintf(f, "<RTPRetransmission><RTCPReporting DestinationAddress=\"%s\" DestinationPort=\"%u\"", ret->addr, ret->port);
-      if (ret->rsi_mc_ret)
-        fputs(" dvb-rsi-mc-ret=\"true\"", f);
+      if (ret->rsi_mc_ret) fputs(" dvb-rsi-mc-ret=\"true\"", f);
       fputs("/>", f);
       fprintf(f, "<UnicastRET rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", ret->rtx_time_ms, ret->rtx_pt);
       if (ret->mc)
@@ -68,15 +70,14 @@ void sds_broadcast_close(FILE *f) {
   fputs("</ServiceList>\n</BroadcastDiscovery>\n</ServiceDiscovery>\n", f);
 }
 
-size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, unsigned char *buf, size_t cap) {
+size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned char *buf, size_t cap) {
   char *ptr;
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
-  if (!f)
-    return 0;
+  if (!f) return 0;
   sds_broadcast_open(f, domain, version);
   for (int i = 0; i < count; i++)
-    sds_broadcast_item(f, &svcs[i], ret, fcc);
+    sds_broadcast_item(f, &svcs[i], ret, fcc, fec);
   sds_broadcast_close(f);
   fclose(f);
   if (len > cap) {
@@ -92,15 +93,13 @@ size_t sds_build_sp(const char *domain, const char *display_name, const char *la
   char *ptr;
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
-  if (!f)
-    return 0;
+  if (!f) return 0;
   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<ServiceProviderDiscovery>\n<ServiceProvider DomainName=\"", f);
   xml_escape(f, domain);
   fprintf(f, "\" Version=\"%u\">\n<Name Language=\"%.3s\">", version, lang);
   xml_escape(f, display_name);
   fprintf(f, "</Name>\n<Offering><Push Address=\"%s\" Port=\"%u\"><PayloadId Id=\"2\"/>", push_addr, push_port);
-  for (int i = 0; i < extra_count; i++)
-    fprintf(f, "<PayloadId Id=\"%u\"/>", extra_payload_ids[i]);
+  for (int i = 0; i < extra_count; i++) fprintf(f, "<PayloadId Id=\"%u\"/>", extra_payload_ids[i]);
   fputs("</Push></Offering>\n</ServiceProvider>\n</ServiceProviderDiscovery>\n</ServiceDiscovery>\n", f);
   fclose(f);
   if (len > cap) {
@@ -119,9 +118,7 @@ void sds_package_open(FILE *f, const char *domain, unsigned version) {
 }
 
 static const sds_service_t *sds_find_service(const char *name, const sds_service_t *svcs, int svc_count) {
-  for (int i = 0; i < svc_count; i++)
-    if (!strcmp(svcs[i].name, name))
-      return &svcs[i];
+  for (int i = 0; i < svc_count; i++) if (!strcmp(svcs[i].name, name)) return &svcs[i];
   return NULL;
 }
 
@@ -134,8 +131,7 @@ void sds_package_item(FILE *f, const sds_package_t *pkg, const sds_service_t *sv
     fputs("<Service><TextualID ServiceName=\"", f);
     xml_escape(f, pkg->service_names[i]);
     fputs("\"/>", f);
-    if (s)
-      fprintf(f, "<DVBTriplet OrigNetId=\"%u\" TSId=\"%u\" ServiceId=\"%u\"/>", s->onid, s->tsid, s->sid);
+    if (s) fprintf(f, "<DVBTriplet OrigNetId=\"%u\" TSId=\"%u\" ServiceId=\"%u\"/>", s->onid, s->tsid, s->sid);
     fputs("</Service>\n", f);
   }
   fputs("</Package>\n", f);
@@ -149,11 +145,9 @@ size_t sds_build_package(const char *domain, unsigned version, const sds_package
   char *ptr;
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
-  if (!f)
-    return 0;
+  if (!f) return 0;
   sds_package_open(f, domain, version);
-  for (int i = 0; i < pkg_count; i++)
-    sds_package_item(f, &pkgs[i], svcs, svc_count);
+  for (int i = 0; i < pkg_count; i++) sds_package_item(f, &pkgs[i], svcs, svc_count);
   sds_package_close(f);
   fclose(f);
   if (len > cap) {
@@ -182,8 +176,7 @@ void sds_regionalisation_item(FILE *f, const sds_cell_t *cell) {
     xml_escape(f, cell->ca[i].value);
     fputs("\">", f);
   }
-  for (int i = 0; i < cell->ca_depth; i++)
-    fputs("</CA>", f);
+  for (int i = 0; i < cell->ca_depth; i++) fputs("</CA>", f);
   fputs("\n</Cell>\n", f);
 }
 
@@ -195,11 +188,9 @@ size_t sds_build_regionalisation(const char *domain, unsigned version, const sds
   char *ptr;
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
-  if (!f)
-    return 0;
+  if (!f) return 0;
   sds_regionalisation_open(f, domain, version);
-  for (int i = 0; i < count; i++)
-    sds_regionalisation_item(f, &cells[i]);
+  for (int i = 0; i < count; i++) sds_regionalisation_item(f, &cells[i]);
   sds_regionalisation_close(f);
   fclose(f);
   if (len > cap) {
@@ -215,8 +206,7 @@ size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *
   char *ptr;
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
-  if (!f)
-    return 0;
+  if (!f) return 0;
   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<RMSFUSDiscovery DomainName=\"", f);
   xml_escape(f, domain);
   fprintf(f, "\" Version=\"%u\">\n", version);
@@ -243,8 +233,7 @@ size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *
     fprintf(f, "><FUSName Language=\"%.3s\">", fus[i].lang);
     xml_escape(f, fus[i].name);
     fprintf(f, "</FUSName><FUSID>%lu</FUSID><FUSAnnouncement>", fus[i].fus_id);
-    if (fus[i].announce_addr)
-      fprintf(f, "<MulticastAnnouncementAddress Address=\"%s\" Port=\"%u\"/>", fus[i].announce_addr, fus[i].announce_port);
+    if (fus[i].announce_addr) fprintf(f, "<MulticastAnnouncementAddress Address=\"%s\" Port=\"%u\"/>", fus[i].announce_addr, fus[i].announce_port);
     fputs("</FUSAnnouncement></FUSProvider>\n", f);
   }
   fputs("</RMSFUSDiscovery>\n</ServiceDiscovery>\n", f);
@@ -297,13 +286,23 @@ static void parse_ret(const char *tag, const char *end, sds_service_t *s) {
   }
 }
 
+static void parse_fec(const char *tag, const char *end, sds_service_t *s) {
+  xml_span_t fec = {0};
+  char tmp[32];
+  if (for_each_xml_block(tag, end, "<FECBaseLayer", "/>", capture_first_span, &fec) != -1) return;
+  s->has_fec = 1;
+  xml_attr(fec.tag, fec.end, "Address", s->fec.addr, sizeof s->fec.addr);
+  if (xml_attr(fec.tag, fec.end, "Port", tmp, sizeof tmp) == 0) s->fec.port = (unsigned)strtoul(tmp, NULL, 10);
+  s->fec.pt = 96;
+  if (xml_attr(fec.tag, fec.end, "PayloadTypeNumber", tmp, sizeof tmp) == 0) s->fec.pt = (unsigned char)strtoul(tmp, NULL, 10);
+}
+
 static void parse_fcc(const char *tag, const char *end, sds_service_t *s) {
   xml_span_t fcc = {0};
   char tmp[32];
-
-  if (for_each_xml_block(tag, end, "<ServerBasedEnhancementServiceInfo", "</ServerBasedEnhancementServiceInfo>", capture_first_span, &fcc) != -1)
-    return;
+  if (for_each_xml_block(tag, end, "<ServerBasedEnhancementServiceInfo", "</ServerBasedEnhancementServiceInfo>", capture_first_span, &fcc) != -1) return;
   s->has_fcc = 1;
+
   {
     xml_span_t rep = {0};
     if (for_each_xml_block(fcc.tag, fcc.end, "<RTCPReporting", "/>", capture_first_span, &rep) == -1) {
@@ -327,8 +326,7 @@ int sds_parse_broadcast(const char *xml, sds_service_t *out, int max, int *trunc
   const char *p = xml;
   int n = 0;
 
-  if (truncated)
-    *truncated = 0;
+  if (truncated) *truncated = 0;
   while (n < max) {
     const char *tag = strstr(p, "<SingleService");
     const char *end;
@@ -344,8 +342,7 @@ int sds_parse_broadcast(const char *xml, sds_service_t *out, int max, int *trunc
     if (xml_attr(tag, end, "Address", s->address, sizeof s->address) == 0 && xml_attr(tag, end, "Port", tmp, sizeof tmp) == 0) {
       s->port = (unsigned)strtoul(tmp, NULL, 10);
       s->family = strchr(s->address, ':') ? AF_INET6 : AF_INET;
-      if (xml_attr(tag, end, "ServiceName", s->name, sizeof s->name))
-        s->name[0] = '\0';
+      if (xml_attr(tag, end, "ServiceName", s->name, sizeof s->name)) s->name[0] = '\0';
       s->rtp = xml_attr(tag, end, "Streaming", tmp, sizeof tmp) == 0 && !strcmp(tmp, "rtp");
       s->onid = xml_attr(tag, end, "OrigNetId", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
       s->tsid = xml_attr(tag, end, "TSId", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
@@ -354,6 +351,7 @@ int sds_parse_broadcast(const char *xml, sds_service_t *out, int max, int *trunc
         s->max_bitrate_kbps = (unsigned)strtoul(tmp, NULL, 10);
         s->has_bitrate = 1;
       }
+
       {
         xml_span_t si = {0};
         if (for_each_xml_block(tag, end, "<SI", "</SI>", capture_first_span, &si) == -1 &&
@@ -364,11 +362,11 @@ int sds_parse_broadcast(const char *xml, sds_service_t *out, int max, int *trunc
       }
       parse_ret(tag, end, s);
       parse_fcc(tag, end, s);
+      parse_fec(tag, end, s);
       n++;
     }
     p = end + 16;
   }
-  if (truncated && n == max && strstr(p, "<SingleService"))
-    *truncated = 1;
+  if (truncated && n == max && strstr(p, "<SingleService")) *truncated = 1;
   return n;
 }

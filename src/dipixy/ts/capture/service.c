@@ -39,6 +39,8 @@ int capture_service(capture_ctx_t *ctx) {
     } else if (ctx->ret) {
       unwrapped = 1;
       n = ret_client_read(ctx->ret, ctx->m, buf, sizeof buf);
+    } else if (ctx->fec_dec) {
+      n = capture_fec_read(ctx, buf, sizeof buf);
     } else {
       n = mcast_recv(ctx->m, buf, sizeof buf, NULL);
     }

@@ -277,6 +277,17 @@ Matches
 .BI \-\-fcc\-resolve\-max\-channels " n"
 Port hash modulus for resolve-by-port (default 300).
 .TP
+.BI \-\-al\-fec\-addr " addr" : port
+Advertises an Annex E Layer 1 FEC (SMPTE 2022-1) repair stream: adds a
+.B FECBaseLayer
+element to every service's
+.BR IPMulticastAddress .
+Off by default.
+.TP
+.BI \-\-al\-fec\-pt " n"
+FEC repair stream RTP payload type (default 96). Requires
+.BR \-\-al\-fec\-addr .
+.TP
 .BI \-\-metrics " path"
 Unix datagram socket for metrics (default
 .IR /run/dvbipitools/metrics.sock ).

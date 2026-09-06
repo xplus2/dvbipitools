@@ -36,6 +36,12 @@ typedef struct {
 } sds_fcc_t;
 
 typedef struct {
+  char addr[SDS_MAX_ADDR];
+  unsigned port;
+  unsigned char pt;
+} sds_fec_t;
+
+typedef struct {
   char name[SDS_MAX_NAME];
   char address[SDS_MAX_ADDR];
   int family;
@@ -50,6 +56,8 @@ typedef struct {
   sds_ret_t ret;
   int has_fcc;
   sds_fcc_t fcc;
+  int has_fec;
+  sds_fec_t fec;
 } sds_service_t;
 
 /* Package (PackagedServices/Package, TS 102 034 clause 5.2.13.4) */
@@ -96,11 +104,11 @@ typedef struct {
 
 /* streaming BroadcastDiscovery (payload 0x02), one <SingleService> per item call. ret/fcc NULL = no such record */
 void sds_broadcast_open(FILE *f, const char *domain, unsigned version);
-void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc);
+void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec);
 void sds_broadcast_close(FILE *f);
 
 /* same document, single-shot into a memory buffer. 0 = didn't fit cap */
-size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, unsigned char *buf, size_t cap);
+size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned char *buf, size_t cap);
 
 /* payload 0x01. push_addr/push_port: this announcer's own delivery point. lang: ISO 639-2 for display_name.
    extra_payload_ids: other PayloadIds sharing this push socket. 0 = didn't fit cap */

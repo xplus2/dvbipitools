@@ -13,28 +13,30 @@ dipisrt -i <uri> -o <uri> [options]
 
 ## Options
 
-| flag | long form            | argument              | default                             |
-|------|----------------------|-----------------------|-------------------------------------|
-| `-i` | `--in`               | `<uri>`               | required                            |
-| `-o` | `--out`              | `<uri>`               | required                            |
-| `-I` | `--iface`            | `<iface>`             | kernel route (non-SRT side only)    |
-| `-k` | `--insecure`         |                       | off (`-i https://` source only)     |
-|      | `--group-mode`       | `broadcast\|backup`   | none (required when bonding)        |
-|      | `--rendezvous`       |                       | off (needs `--local`)               |
-|      | `--local`            | `<host:port>`         | none (required with `--rendezvous`) |
-|      | `--passphrase`       | `<pw>`                | none (10..79 chars)                 |
-|      | `--pbkeylen`         | `16\|24\|32`          | `16` (only with `--passphrase`)     |
-|      | `--streamid`         | `<id>`                | none                                |
-|      | `--packetfilter`     | `<cfg>`               | none, e.g. `fec,cols:10,rows:5`     |
-|      | `--latency`          | `<ms>`                | library default                     |
-|      | `--send-buffer-mult` | `<n>` (1..32)         | `4` (sender side only)              |
-|      | `--color`            | `auto\|always\|never` | `auto`                              |
-|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`     |
-|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)  |
-|      | `--metrics-interval` | `<s>`                 | `5`                                 |
-| `-v` | `--verbose`          |                       | off                                 |
-| `-d` | `--daemonize`        |                       | off (foreground)                    |
-| `-h` | `--help`             |                       |                                     |
+| flag | long form            | argument              | default                                      |
+|------|----------------------|-----------------------|----------------------------------------------|
+| `-i` | `--in`               | `<uri>`               | required                                     |
+| `-o` | `--out`              | `<uri>`               | required                                     |
+| `-I` | `--iface`            | `<iface>`             | kernel route (non-SRT side only)             |
+| `-k` | `--insecure`         |                       | off (`-i https://` source only)              |
+|      | `--group-mode`       | `broadcast\|backup`   | none (required when bonding)                 |
+|      | `--rendezvous`       |                       | off (needs `--local`)                        |
+|      | `--local`            | `<host:port>`         | none (required with `--rendezvous`)          |
+|      | `--passphrase`       | `<pw>`                | none (10..79 chars)                          |
+|      | `--pbkeylen`         | `16\|24\|32`          | `16` (only with `--passphrase`)              |
+|      | `--streamid`         | `<id>`                | none                                         |
+|      | `--packetfilter`     | `<cfg>`               | none, e.g. `fec,cols:10,rows:5`              |
+|      | `--latency`          | `<ms>`                | library default                              |
+|      | `--send-buffer-mult` | `<n>` (1..32)         | `4` (sender side only)                       |
+|      | `--al-fec`           | `<L>:<D>`             | off (Annex E Layer 1 FEC, rtp:// side only)  |
+|      | `--al-fec-port`      | `<port>`              | required with `--al-fec`                     |
+|      | `--color`            | `auto\|always\|never` | `auto`                                       |
+|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`              |
+|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)           |
+|      | `--metrics-interval` | `<s>`                 | `5`                                          |
+| `-v` | `--verbose`          |                       | off                                          |
+| `-d` | `--daemonize`        |                       | off (foreground)                             |
+| `-h` | `--help`             |                       |                                              |
 
 ## Endpoints (`-i`/`-o`)
 
@@ -85,7 +87,8 @@ dipisrt -i rtp://@239.1.1.1:5000 -o srt://1.2.3.4:9000 --passphrase correcthorse
     You are encouraged to carry out your own testing before using it for anything that matters.
   + If you wondered why the automated bonding tests (GitHub Actions, latest tests, bonding-tests) don't test
     recovery after a 100% link loss (but 95% instead): libsrt doesn't do that. Ever.
-* FEC (`--packetfilter`) is off by default, matching libsrt's own default.
+* FEC (`--packetfilter`) is off by default, matching libsrt's own default. This is SRT's own native FEC, unrelated to `--al-fec` (ETSI TS 102 034 Annex E),
+  which protects `rtp://`. The two can both be on at once, independently.
 * The sender's outgoing queue is sized automatically from the observed input bitrate,
   `--latency`, and `--send-buffer-mult`, so it can absorb a struggling link without
   dropping data. It never shrinks below roughly 84KB, never grows past about 2% of

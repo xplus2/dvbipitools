@@ -89,6 +89,7 @@ dvbipitools_add_unit_test(lib_demux_mpts_probe
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
@@ -109,6 +110,13 @@ dvbipitools_add_unit_test(lib_demux_mpts_probe
 dvbipitools_add_unit_test(lib_mux_rtpheader
     unit/lib/mux/test_rtpheader.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c)
+
+dvbipitools_add_unit_test(lib_mux_fec2022
+    unit/lib/mux/test_fec2022.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c)
 
 dvbipitools_add_unit_test(lib_mux_rtx
@@ -278,6 +286,7 @@ dvbipitools_add_unit_test(lib_net_httpclient_async
 dvbipitools_add_unit_test(lib_net_tssource_async
     unit/lib/net/test_tssource_async.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
@@ -298,6 +307,7 @@ dvbipitools_add_unit_test(lib_net_tssource_async
 dvbipitools_add_unit_test(lib_net_tssource_file
     unit/lib/net/test_tssource_file.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
@@ -821,6 +831,7 @@ dvbipitools_add_unit_test(dipiradiohead_tspacketizer
 dvbipitools_add_unit_test(dipiradiohead_args
     unit/dipiradiohead/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
@@ -871,6 +882,7 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cas/cas.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/cadescbuild.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mpts.c
@@ -1005,6 +1017,7 @@ dvbipitools_add_unit_test(dipitvhead_source
     unit/dipitvhead/input/test_source.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
@@ -1025,6 +1038,7 @@ dvbipitools_add_unit_test(dipitvhead_source
 dvbipitools_add_unit_test(dipitvhead_args
     unit/dipitvhead/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
@@ -1051,6 +1065,7 @@ dvbipitools_add_unit_test(dipitvhead_discover
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/discover.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
@@ -1157,6 +1172,7 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/cas.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/cadescbuild.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
@@ -1196,6 +1212,7 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -1367,7 +1384,9 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
@@ -1451,6 +1470,7 @@ dvbipitools_add_unit_test(lib_fccret_fcc_client
 dvbipitools_add_unit_test(dipirec_args
     unit/dipirec/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -1788,6 +1808,7 @@ dvbipitools_add_unit_test(dipisds_args
 dvbipitools_add_unit_test(dipirist_args
     unit/dipirist/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -1807,7 +1828,9 @@ if (TARGET dipirist)
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
@@ -1863,6 +1886,7 @@ endif ()
 dvbipitools_add_unit_test(dipisrt_args
     unit/dipisrt/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipisrt/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -1883,11 +1907,13 @@ if (TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
@@ -1978,6 +2004,7 @@ dvbipitools_add_unit_test(dipixy_args
     unit/dipixy/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/args.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/base64.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
@@ -2005,6 +2032,7 @@ dvbipitools_add_unit_test(dipixy_capture
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -2058,6 +2086,7 @@ dvbipitools_add_unit_test(dipixy_channels
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -2114,6 +2143,7 @@ dvbipitools_add_unit_test(dipixy_playlist
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -2167,6 +2197,7 @@ dvbipitools_add_unit_test(dipixy_gena
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -2220,6 +2251,7 @@ dvbipitools_add_unit_test(dipixy_dlna
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -2344,6 +2376,7 @@ dvbipitools_add_unit_test(dipixy_ws_sources
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c

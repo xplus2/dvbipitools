@@ -278,6 +278,17 @@ Ignore SDS fcc. Default: off.
 .B \-\-no\-ret
 Ignore SDS ret. Default: off.
 .TP
+.BR \-\-al\-fec " " \fIL\fR:\fID\fR
+Annex E Layer 1 FEC (SMPTE 2022-1) matrix size, used for any SDS-advertised
+repair stream.
+.IR L " * " D " <= 400, " L " <= 40. Off by default (no FEC recovery even"
+if a source advertises one).
+.TP
+.B \-\-no\-al\-fec
+Ignore SDS
+.BR FECBaseLayer .
+Default: off.
+.TP
 .B \-\-no\-status
 Deactivate
 .BR /ui/status.js .

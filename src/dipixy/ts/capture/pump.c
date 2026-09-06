@@ -114,13 +114,13 @@ int capture_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned ch
     } else if (ctx->ret) {
       unwrapped = 1;
       n = ret_client_read(ctx->ret, ctx->m, buf, sizeof buf);
+    } else if (ctx->fec_dec) {
+      n = capture_fec_read(ctx, buf, sizeof buf);
     } else {
       n = mcast_recv(ctx->m, buf, sizeof buf, NULL);
     }
-    if (n < 0)
-      return -1;
-    if (n == 0)
-      return 0;
+    if (n < 0) return -1;
+    if (n == 0) return 0;
     atomic_fetch_add_explicit(&ctx->write_total, (uint64_t)n, memory_order_relaxed);
     if (unwrapped) {
       payload = buf;

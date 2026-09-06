@@ -5,6 +5,6 @@
 #define DIPISDS_VERSION_H
 
 #define TOOL_NAME    "dipisds"
-#define TOOL_VERSION "1.2.3"
+#define TOOL_VERSION "1.2.4"
 
 #endif

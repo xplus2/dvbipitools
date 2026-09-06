@@ -37,6 +37,8 @@ across every input.
 | `-u` | `--udp`                 |                                         | off (RTP)                                       |           |
 | `-T` | `--ttl`                 | `<n>`                                   | 1                                               |           |
 |      | `--dscp`                | `<v>`                                   | `video-high`                                    |           |
+|      | `--al-fec`              | `<L>:<D>`                               | off (Annex E Layer 1 FEC, needs RTP output)     |           |
+|      | `--al-fec-port`         | `<port>`                                | required with `--al-fec`                        |           |
 | `-n` | `--nit`                 | `<text>` / `-`                          | set NIT, see below                              |           |
 | `-b` | `--bitrate`             | `<kbps>`                                | none (no shaping)                               |           |
 | `-S` | `--stuff`               |                                         | off (needs `-b`)                                |           |
@@ -269,6 +271,15 @@ recovery buffer); `--secret` requires `--profile main`.
 `--srt-group-mode broadcast|backup`. `--srt-passphrase`/`--srt-pbkeylen`/`--srt-streamid`/
 `--srt-packetfilter`/`--srt-latency` apply to every `-R srt://` peer; `--srt-pbkeylen` requires
 `--srt-passphrase`.
+
+### Annex E Layer 1 FEC (`--al-fec`)
+
+Sends a parallel SMPTE 2022-1 (ETSI TS 102 034 Annex E) repair stream alongside the `-m` RTP output, 
+on the same multicast group at `--al-fec-port`. 
+`<L>:<D>` sets the column/row size of the parity matrix (columns * rows <= 400, columns <= 40). 
+A receiver needs the same `<L>:<D>` and the repair port to recover from loss. 
+Single-parity-stream FEC recovers at most one lost packet per column
+Requires RTP output.
 
 ### HbbTV signalling (`--hbbtv`)
 

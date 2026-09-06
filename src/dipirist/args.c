@@ -13,6 +13,7 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
+#include "lib/mux/fec2022.h"
 
 #include "args.h"
 #include "version.h"
@@ -142,6 +143,9 @@ static void print_help(void) {
       "      --secret <psk>         pre-shared key; requires --profile main\n"
       "      --cname <name>         RTCP cname; default library-generated\n"
       "      --buffer <ms>          RIST recovery buffer (min=max=<ms>); default library\n"
+      "      --al-fec <L>:<D>       Annex E Layer 1 FEC (SMPTE 2022-1) on the rtp:// leg,\n"
+      "                             L*D<=400, L<=40\n"
+      "      --al-fec-port <port>   repair stream UDP port, requires --al-fec\n"
       "      --color <when>         auto|always|never (default auto)\n"
       "      --metrics <path>       Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
       "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
@@ -170,6 +174,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics", required_argument, 0, 1005},
       {"metrics-id", required_argument, 0, 1006},
       {"metrics-interval", required_argument, 0, 1007},
+      {"al-fec", required_argument, 0, 1008},
+      {"al-fec-port", required_argument, 0, 1009},
       {"verbose", no_argument, 0, 'v'},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
@@ -249,6 +255,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
+      case 1008:
+        if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
+          argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1009:
+        if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
+          argerr("invalid --al-fec-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
       case 'v':
         cfg->verbose = 1;
         break;
@@ -285,6 +303,19 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
     argerr("--metrics/--metrics-interval require --metrics-id");
     return ARGS_ERR;
+  }
+  if (cfg->al_fec_l && !cfg->al_fec_port) {
+    argerr("--al-fec requires --al-fec-port");
+    return ARGS_ERR;
+  }
+  if (!cfg->al_fec_l && cfg->al_fec_port) log_line(TOOL_NAME ": --al-fec-port has no effect without --al-fec");
+
+  {
+    plain_endpoint_t *ne = cfg->in.is_rist ? &cfg->out.nonrist : &cfg->in.nonrist;
+    if (cfg->al_fec_l && ne->kind != PLAIN_EP_RTP) log_line(TOOL_NAME ": --al-fec has no effect, non-rist:// side isn't rtp://");
+    ne->al_fec_l = cfg->al_fec_l;
+    ne->al_fec_d = cfg->al_fec_d;
+    ne->al_fec_port = cfg->al_fec_port;
   }
   if (cfg->insecure_tls && !(cfg->in.nonrist.kind == PLAIN_EP_HTTP && cfg->in.nonrist.http.tls))
     log_line(TOOL_NAME ": --insecure has no effect, no -i https:// source");

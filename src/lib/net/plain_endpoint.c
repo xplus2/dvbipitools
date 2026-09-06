@@ -29,6 +29,9 @@ void plain_endpoint_to_tssrc_cfg(const plain_endpoint_t *s, const char *iface, c
     tc->group = s->group;
     tc->port = s->port;
     tc->iface = iface;
+    tc->al_fec_l = s->al_fec_l;
+    tc->al_fec_d = s->al_fec_d;
+    tc->al_fec_port = s->al_fec_port;
     break;
   }
 }
@@ -48,5 +51,8 @@ void plain_endpoint_to_tssink_cfg(const plain_endpoint_t *s, const char *iface, 
     tk->group = s->group;
     tk->port = s->port;
     tk->iface = iface;
+    tk->al_fec_l = s->al_fec_l;
+    tk->al_fec_d = s->al_fec_d;
+    tk->al_fec_port = s->al_fec_port;
   }
 }

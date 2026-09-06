@@ -19,8 +19,7 @@ ristout_t *tvhead_rist_open(const config_t *cfg) {
   ristout_cfg_t rc;
 
   memset(&rc, 0, sizeof rc);
-  for (unsigned i = 0; i < cfg->n_rist; i++)
-    rc.peer_uri[i] = cfg->rist_uri[i];
+  for (unsigned i = 0; i < cfg->n_rist; i++) rc.peer_uri[i] = cfg->rist_uri[i];
   rc.npeers = (int)cfg->n_rist;
   rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
   rc.secret = cfg->rist_secret;
@@ -52,8 +51,7 @@ srtsink_t *tvhead_srt_open(const config_t *cfg) {
 
 void tvhead_srt_service(out_ctx_t *o) {
   srtsink_status_t st;
-  if (!o->srt)
-    return;
+  if (!o->srt) return;
   srtsink_service(o->srt, &st);
   if (st.connected != o->srt_connected) {
     log_line("srt output: %s", st.connected ? "connected" : "link down, reconnecting");
@@ -64,21 +62,23 @@ void tvhead_srt_service(out_ctx_t *o) {
 /* paces/accounts once per datagram, keeps burst_limit's sleep off per-packet path */
 void flush_batch(out_ctx_t *o) {
   size_t n = (size_t)o->batch_count * 188;
-  if (o->batch_count == 0)
-    return;
+  if (o->batch_count == 0) return;
   bitrate_pace(o->pacer);
   if (o->mc) {
     if (o->rtp) {
       rtpheader_build(o->rtph, (uint32_t)(mono_seconds() * 90000.0), o->batch, 12);
       note_send_result(mcast_send(o->mc, o->batch, 12 + n) >= 0, &o->mc_had_error, &o->errors, "mcast");
+      if (o->fec_enc) {
+        unsigned char repair[FEC2022_MAX_REPAIR];
+        size_t rlen = fec2022_enc_feed(o->fec_enc, o->batch, 12 + n, (uint32_t)(mono_seconds() * 90000.0), repair, sizeof repair);
+        if (rlen) mcast_send(o->fec_mc, repair, rlen);
+      }
     } else {
       note_send_result(mcast_send(o->mc, o->batch + 12, n) >= 0, &o->mc_had_error, &o->errors, "mcast");
     }
   }
-  if (o->rist)
-    note_send_result(ristout_write(o->rist, o->batch + 12, n) >= 0, &o->rist_had_error, &o->errors, "rist");
-  if (o->srt)
-    srtsink_write(o->srt, o->batch + 12, n);
+  if (o->rist) note_send_result(ristout_write(o->rist, o->batch + 12, n) >= 0, &o->rist_had_error, &o->errors, "rist");
+  if (o->srt)  srtsink_write(o->srt, o->batch + 12, n);
   bitrate_account_n(o->pacer, (unsigned)o->batch_count);
   o->batch_count = 0;
 }
@@ -88,8 +88,7 @@ void packet_cb(void *ctx, const unsigned char *pkt188) {
   memcpy(o->batch + 12 + (size_t)o->batch_count * 188, pkt188, 188);
   o->batch_count++;
   o->packets++;
-  if (o->batch_count == TS_PER_DGRAM)
-    flush_batch(o);
+  if (o->batch_count == TS_PER_DGRAM) flush_batch(o);
 }
 
 void send_null_packet(out_ctx_t *o) {
@@ -111,12 +110,10 @@ int remux_cb(void *v, const unsigned char *pkt) {
 /* common + output + input + TS-integrity + CAS metrics, on mx's own interval
    (metrics_exporter_due gates/no-ops when disabled) */
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
-                   const input_metrics_t *inputs, unsigned n_inputs, const ts_metrics_t *tsm, cas_t *cas) {
+                  const input_metrics_t *inputs, unsigned n_inputs, const ts_metrics_t *tsm, cas_t *cas) {
   metrics_writer_t w;
-  if (!metrics_exporter_due(mx, now))
-    return;
-  if (metrics_exporter_begin(mx, &w, TOOL_VERSION))
-    return;
+  if (!metrics_exporter_due(mx, now)) return;
+  if (metrics_exporter_begin(mx, &w, TOOL_VERSION)) return;
   metrics_writer_put(&w, METRICS_ID_OUTPUT_PACKETS_TOTAL, NULL, out->packets);
   metrics_writer_put(&w, METRICS_ID_OUTPUT_BYTES_TOTAL, NULL, out->packets * 188ULL);
   metrics_writer_put(&w, METRICS_ID_OUTPUT_ERRORS_TOTAL, NULL, out->errors);
@@ -191,8 +188,7 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
       cas_flush(cas, packet_cb, out);
       return -1;
     }
-    if (pr <= 0)
-      continue;
+    if (pr <= 0) continue;
 
     reason = NET_ERR_OTHER;
     n = tvsrc_read(src, buf, sizeof buf, &reason);
@@ -211,11 +207,9 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
       cas_flush(cas, packet_cb, out);
       return -1;
     }
-    if (cas && signal_reload_requested())
-      cas_reload_receivers(cas);
+    if (cas && signal_reload_requested()) cas_reload_receivers(cas);
     stuff_n = bitrate_stuff_due(out->pacer);
-    for (int k = 0; k < stuff_n; k++)
-      send_null_packet(out);
+    for (int k = 0; k < stuff_n; k++) send_null_packet(out);
     if (cfg->verbose && now - last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - start, out->packets);
       fflush(stderr);

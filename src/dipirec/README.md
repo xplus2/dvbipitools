@@ -8,33 +8,35 @@ dipirec -i <uri> -o <target> [options]
 
 ## Options
 
-| flag | long form               | argument              | default                                       |
-|------|-------------------------|-----------------------|-----------------------------------------------|
-| `-i` | `--in`                  | `<uri>`               | required                                      |
-| `-o` | `--out`                 | `<target>`            | required, repeatable                          |
-| `-a` | `--audio`               | `<track>` / `all`     | `all`                                         |
-| `-f` | `--format`              | `raw\|ts\|mkv\|mka`   | from `-o` suffix, else `ts`                   |
-| `-p` | `--pmt-pid`             | `<pid>` / `all`       | none (see below)                              |
-| `-s` | `--subtitles`           | `strip\|keep\|srt`    | `keep`                                        |
-| `-t` | `--time`                | `<duration>`          | no limit (runs until stopped)                 |
-| `-I` | `--iface`               | `<iface>`             | kernel route                                  |
-| `-O` | `--out-iface`           | `<iface>`             | kernel route                                  |
-|      | `--ttl`                 | `<n>`                 | kernel default (`1`)                          |
-| `-v` | `--verbose`             |                       | off                                           |
-|      | `--sub-lead`            | `<ms>`                | `1000`                                        |
-|      | `--color`               | `auto\|always\|never` | `auto`                                        |
-|      | `--ret`                 | `<addr>:<port>`       | off (no gap repair)                           |
-|      | `--no-ret-mc`           |                       | off (joins repair session)                    |
-|      | `--ret-mc-port`         | `<port>`              | same as `-i`'s port                           |
-|      | `--ret-pt`              | `<n>`                 | `99`                                          |
-|      | `--ret-wait`            | `<ms>`                | `200`                                         |
-|      | `--pace`                |                       | off (file/stdin source only)                  |
-|      | `--strip`               | `<list>` / `none`     | `NUL,NIT,AIT,EIT`                             |
-|      | `--insecure`            |                       | off (`-o rtmps://` only)                      |
-|      | `--metrics`             | `<path>`              | `/run/dvbipitools/metrics.sock`               |
-|      | `--metrics-id`          | `<name>`              | none (metrics disabled unless set)            |
-|      | `--metrics-interval`    | `<s>`                 | `5`                                           |
-| `-h` | `--help`                |                       |                                               |
+| flag | long form               | argument              | default                                           |
+|------|-------------------------|-----------------------|---------------------------------------------------|
+| `-i` | `--in`                  | `<uri>`               | required                                          |
+| `-o` | `--out`                 | `<target>`            | required, repeatable                              |
+| `-a` | `--audio`               | `<track>` / `all`     | `all`                                             |
+| `-f` | `--format`              | `raw\|ts\|mkv\|mka`   | from `-o` suffix, else `ts`                       |
+| `-p` | `--pmt-pid`             | `<pid>` / `all`       | none (see below)                                  |
+| `-s` | `--subtitles`           | `strip\|keep\|srt`    | `keep`                                            |
+| `-t` | `--time`                | `<duration>`          | no limit (runs until stopped)                     |
+| `-I` | `--iface`               | `<iface>`             | kernel route                                      |
+| `-O` | `--out-iface`           | `<iface>`             | kernel route                                      |
+|      | `--ttl`                 | `<n>`                 | kernel default (`1`)                              |
+|      | `--al-fec`              | `<L>:<D>`             | off (Annex E Layer 1 FEC, `-i`/`-o` rtp:// only)  |
+|      | `--al-fec-port`         | `<port>`              | required with `--al-fec`                          |
+| `-v` | `--verbose`             |                       | off                                               |
+|      | `--sub-lead`            | `<ms>`                | `1000`                                            |
+|      | `--color`               | `auto\|always\|never` | `auto`                                            |
+|      | `--ret`                 | `<addr>:<port>`       | off (no gap repair)                               |
+|      | `--no-ret-mc`           |                       | off (joins repair session)                        |
+|      | `--ret-mc-port`         | `<port>`              | same as `-i`'s port                               |
+|      | `--ret-pt`              | `<n>`                 | `99`                                              |
+|      | `--ret-wait`            | `<ms>`                | `200`                                             |
+|      | `--pace`                |                       | off (file/stdin source only)                      |
+|      | `--strip`               | `<list>` / `none`     | `NUL,NIT,AIT,EIT`                                 |
+|      | `--insecure`            |                       | off (`-o rtmps://` only)                          |
+|      | `--metrics`             | `<path>`              | `/run/dvbipitools/metrics.sock`                   |
+|      | `--metrics-id`          | `<name>`              | none (metrics disabled unless set)                |
+|      | `--metrics-interval`    | `<s>`                 | `5`                                               |
+| `-h` | `--help`                |                       |                                                   |
 
 ### Related to RIST Input/Output
 | flag | long form               | argument              | default                                       |
@@ -289,6 +291,13 @@ They're independent, so a box bridging two segments can join on one NIC and send
 `--ttl <n>` sets the TTL (IPv4) / hop limit (IPv6) on `-o rtp://`/`-o udp://` packets; default is
 the kernel's (`1`, i.e. link-local only). Also ignored (with a warning) outside `-o rtp://`/`-o udp://`.
 Needed for a replay to cross a router - `1` won't leave the sending segment.
+
+## Annex E Layer 1 FEC (`--al-fec`)
+
+`--al-fec <L>:<D>` sends (on `-o rtp://`) or expects (on `-i rtp://`) a parallel SMPTE 2022-1
+(ETSI TS 102 034 Annex E) repair stream on the same multicast group at `--al-fec-port`. 
+Columns * rows <= 400, columns <= 40. Both ends need the same `<L>:<D>` and port. 
+Recovers at most one lost packet per column.
 
 ## Live stats (`-v`)
 

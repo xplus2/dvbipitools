@@ -21,6 +21,7 @@ typedef struct {
   int family; /* AF_INET or AF_INET6. PLAIN_EP_RTP/PLAIN_EP_UDP only */
   char group[64];
   unsigned port;
+  unsigned al_fec_l, al_fec_d, al_fec_port;
   http_url_t http; /* PLAIN_EP_HTTP */
   char file_path[512]; /* "" = stdin (source) or stdout (sink) */
 } plain_endpoint_t;

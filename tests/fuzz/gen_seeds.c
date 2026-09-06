@@ -128,9 +128,8 @@ static void gen_sds(const char *dir) {
   svc.onid = 2;
   svc.sid = 101;
 
-  n = sds_build_broadcast("dvb-ip.example", 1, &svc, 1, NULL, NULL, buf, sizeof buf);
-  if (n)
-    write_file(dir, "sds_min.xml", buf, n);
+  n = sds_build_broadcast("dvb-ip.example", 1, &svc, 1, NULL, NULL, NULL, buf, sizeof buf);
+  if (n) write_file(dir, "sds_min.xml", buf, n);
 }
 
 static void gen_rtcp(const char *dir) {
@@ -141,8 +140,7 @@ static void gen_rtcp(const char *dir) {
   entry.pid = 100;
   entry.blp = 0;
   n = rtcp_build_ff(0x11111111u, 0x22222222u, &entry, 1, buf, sizeof buf);
-  if (n)
-    write_file(dir, "rtcp_nack.bin", buf, n);
+  if (n) write_file(dir, "rtcp_nack.bin", buf, n);
 }
 
 static void gen_simulcrypt_msg(const char *dir) {
@@ -154,8 +152,7 @@ static void gen_simulcrypt_msg(const char *dir) {
   simulcrypt_writer_begin(&w, buf, sizeof buf, 3, 0x0201 /* ECMG_MSG_CW_PROVISION */);
   simulcrypt_writer_put_tlv(&w, 0x0015 /* ECMG_P_ECM_DATAGRAM */, val, sizeof val);
   n = simulcrypt_writer_finish(&w);
-  if (n)
-    write_file(dir, "simulcrypt_msg_min.bin", buf, n);
+  if (n) write_file(dir, "simulcrypt_msg_min.bin", buf, n);
 }
 
 static void gen_ecmg_channel_status(const char *dir) {

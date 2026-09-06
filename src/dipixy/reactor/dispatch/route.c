@@ -89,7 +89,7 @@ capture_ctx_t *open_source(const route_t *rt, unsigned *out_list_num) {
   switch (rt->kind) {
     case ROUTE_RTP:
     case ROUTE_UDP:
-      return capture_open(rt->family, rt->addr, rt->port, cfg->iface, rt->kind == ROUTE_RTP, NULL, NULL);
+      return capture_open(rt->family, rt->addr, rt->port, cfg->iface, rt->kind == ROUTE_RTP, NULL, NULL, NULL, 0, 0);
     case ROUTE_SRT:
       return capture_open_srt(rt->addr, rt->port);
     case ROUTE_RIST:
@@ -119,7 +119,8 @@ capture_ctx_t *open_source(const route_t *rt, unsigned *out_list_num) {
         memset(&rf, 0, sizeof rf);
         if (channels_resolve(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL, &family, addr, sizeof addr, &port, &rtp, &rf))
           return NULL;
-        return capture_open(family, addr, port, cfg->iface, rtp, rf.has_ret && !cfg->no_ret ? &rf.ret : NULL, rf.has_fcc && !cfg->no_fcc ? &rf.fcc : NULL);
+        return capture_open(family, addr, port, cfg->iface, rtp, rf.has_ret && !cfg->no_ret ? &rf.ret : NULL, rf.has_fcc && !cfg->no_fcc ? &rf.fcc : NULL,
+                             rf.has_fec && !cfg->no_al_fec ? &rf.fec : NULL, cfg->al_fec_l, cfg->al_fec_d);
       }
     }
   }
@@ -171,14 +172,13 @@ void route_client_info(const route_t *rt, unsigned list_num, const pid_filter_t 
       return;
     case ROUTE_LIST_ITEM:
     case ROUTE_LIST_NAME:
-      for (int i = 0; i < cfg->n_sources; i++)
-        if ((unsigned)cfg->sources[i].ordinal == list_num) {
-          out->src_ordinal = list_num;
-          out->src_name = cfg->sources[i].name;
-          break;
-        }
+      for (int i = 0; i < cfg->n_sources; i++) if ((unsigned)cfg->sources[i].ordinal == list_num) {
+        out->src_ordinal = list_num;
+        out->src_name = cfg->sources[i].name;
+        break;
+      }
       if (channels_item_lookup(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL, &out->item_num, bufs->name,
-                    sizeof bufs->name, bufs->proto, sizeof bufs->proto, bufs->addr, sizeof bufs->addr) == 0) {
+         sizeof bufs->name, bufs->proto, sizeof bufs->proto, bufs->addr, sizeof bufs->addr) == 0) {
         out->item_name = bufs->name[0] ? bufs->name : NULL;
         out->src_proto = bufs->proto[0] ? bufs->proto : NULL;
         out->src_addr = bufs->addr[0] ? bufs->addr : NULL;

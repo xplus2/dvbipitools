@@ -46,6 +46,11 @@ typedef struct {
   unsigned fcc_resolve_base_port; /* --fcc-resolve-base-port, matches dipifccret */
   size_t fcc_resolve_max_channels; /* --fcc-resolve-max-channels, default 300 */
 
+  int al_fec_enabled;
+  char al_fec_addr[64];
+  unsigned al_fec_port;
+  unsigned char al_fec_pt;
+
   const char *metrics_sock;    /* --metrics; NULL = default socket path */
   const char *metrics_id;      /* --metrics-id; NULL = metrics disabled */
   unsigned metrics_interval_s; /* --metrics-interval; 0 = default */

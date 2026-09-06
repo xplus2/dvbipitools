@@ -9,6 +9,7 @@
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/tspack.h"
 #include "lib/metrics/export.h"
+#include "lib/mux/fec2022.h"
 #include "lib/mux/rtpheader.h"
 #include "lib/net/multicast.h"
 #include "lib/net/rist/ristout.h"
@@ -33,6 +34,8 @@ typedef struct {
   mcast_t *mc; /* NULL unless -m given */
   int rtp;
   rtpheader_t *rtph;
+  mcast_t *fec_mc;
+  fec2022_enc_t *fec_enc;
   ristout_t *rist; /* NULL unless -R rist:// given (bonded peers), sent alongside mc if both present */
   srtsink_t *srt;  /* NULL unless -R srt:// given (bonded peers), sent alongside mc if both present */
   bitrate_pacer_t *pacer;
@@ -69,7 +72,7 @@ void packet_cb(void *ctx, const unsigned char *pkt188);
 void send_null_packet(out_ctx_t *o);
 int remux_cb(void *v, const unsigned char *pkt);
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
-                   const input_metrics_t *inputs, unsigned n_inputs, const ts_metrics_t *tsm, cas_t *cas);
+                  const input_metrics_t *inputs, unsigned n_inputs, const ts_metrics_t *tsm, cas_t *cas);
 int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, cas_t *cas, metrics_exporter_t *mx, input_metrics_t *im, ts_metrics_t *tsm);
 
 /* single.c */

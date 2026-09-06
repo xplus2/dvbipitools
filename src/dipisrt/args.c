@@ -12,6 +12,7 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
+#include "lib/mux/fec2022.h"
 
 #include "args.h"
 #include "version.h"
@@ -142,21 +143,24 @@ static void print_help(void) {
       "  <path>                        a file\n"
       "  IPv6 addrs/groups in brackets, e.g. srt://@[::1]:9000, rtp://@[ff3e::1]:8700\n\n"
       "options:\n"
-      "  -i, --in <uri>            input (see above), repeatable if srt://\n"
-      "  -o, --out <uri>           output (see above), repeatable if srt://\n"
-      "  -I, --iface <iface>       interface for the non-SRT side's multicast join/send\n"
-      "  -k, --insecure            skip TLS verification, -i https:// only\n"
-      "      --group-mode <mode>   broadcast|backup; required when bonding (repeated srt://)\n"
-      "      --rendezvous          srt_rendezvous() instead of connect/listen; needs --local,\n"
-      "                            not combinable with @ or --group-mode\n"
-      "      --local <host:port>   local bind address for --rendezvous\n"
-      "      --passphrase <pw>     encryption passphrase, 10..79 chars\n"
-      "      --pbkeylen <n>        16|24|32 (AES key length); default 16 if --passphrase set\n"
-      "      --streamid <id>       SRTO_STREAMID, passed to a listening peer on accept\n"
-      "      --packetfilter <cfg>  SRTO_PACKETFILTER config string, e.g. fec,cols:10,rows:5\n"
-      "      --latency <ms>        SRTO_LATENCY; default library\n"
+      "  -i, --in <uri>             input (see above), repeatable if srt://\n"
+      "  -o, --out <uri>            output (see above), repeatable if srt://\n"
+      "  -I, --iface <iface>        interface for the non-SRT side's multicast join/send\n"
+      "  -k, --insecure             skip TLS verification, -i https:// only\n"
+      "      --group-mode <mode>    broadcast|backup; required when bonding (repeated srt://)\n"
+      "      --rendezvous           srt_rendezvous() instead of connect/listen; needs --local,\n"
+      "                             not combinable with @ or --group-mode\n"
+      "      --local <host:port>    local bind address for --rendezvous\n"
+      "      --passphrase <pw>      encryption passphrase, 10..79 chars\n"
+      "      --pbkeylen <n>         16|24|32 (AES key length); default 16 if --passphrase set\n"
+      "      --streamid <id>        SRTO_STREAMID, passed to a listening peer on accept\n"
+      "      --packetfilter <cfg>   SRTO_PACKETFILTER config string, e.g. fec,cols:10,rows:5\n"
+      "      --latency <ms>         SRTO_LATENCY; default library\n"
       "      --send-buffer-mult <n> sender queue depth in latency windows, 1..32; default 4\n"
-      "      --color <when>        auto|always|never (default auto)\n"
+      "      --al-fec <L>:<D>       Annex E Layer 1 FEC (SMPTE 2022-1) on the rtp:// leg,\n"
+      "                             L*D<=400, L<=40\n"
+      "      --al-fec-port <port>   repair stream UDP port, requires --al-fec\n"
+      "      --color <when>         auto|always|never (default auto)\n"
       "      --metrics <path>       Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
       "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
@@ -185,6 +189,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"packetfilter", required_argument, 0, 1006},
       {"latency", required_argument, 0, 1007},
       {"send-buffer-mult", required_argument, 0, 1012},
+      {"al-fec", required_argument, 0, 1013},
+      {"al-fec-port", required_argument, 0, 1014},
       {"color", required_argument, 0, 1008},
       {"metrics", required_argument, 0, 1009},
       {"metrics-id", required_argument, 0, 1010},
@@ -286,6 +292,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
+      case 1013:
+        if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
+          argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1014:
+        if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
+          argerr("invalid --al-fec-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
       case 1008: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
@@ -372,6 +390,19 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
     argerr("--metrics/--metrics-interval require --metrics-id");
     return ARGS_ERR;
+  }
+  if (cfg->al_fec_l && !cfg->al_fec_port) {
+    argerr("--al-fec requires --al-fec-port");
+    return ARGS_ERR;
+  }
+  if (!cfg->al_fec_l && cfg->al_fec_port) log_line(TOOL_NAME ": --al-fec-port has no effect without --al-fec");
+
+  {
+    plain_endpoint_t *ne = cfg->in.is_srt ? &cfg->out.nonsrt : &cfg->in.nonsrt;
+    if (cfg->al_fec_l && ne->kind != PLAIN_EP_RTP) log_line(TOOL_NAME ": --al-fec has no effect, the non-srt:// side isn't rtp://");
+    ne->al_fec_l = cfg->al_fec_l;
+    ne->al_fec_d = cfg->al_fec_d;
+    ne->al_fec_port = cfg->al_fec_port;
   }
   if (cfg->insecure_tls && !(cfg->in.nonsrt.kind == PLAIN_EP_HTTP && cfg->in.nonsrt.http.tls))
     log_line(TOOL_NAME ": --insecure has no effect, no -i https:// source");

@@ -15,6 +15,7 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
+#include "lib/mux/fec2022.h"
 
 #include "args.h"
 #include "filter/ts.h"
@@ -24,8 +25,7 @@
 
 /* rest: [@]addr:port, multicast literal required */
 static int parse_mcast_addrport(const char *rest, int *family, char *group, size_t groupsz, unsigned *port) {
-  if (*rest == '@')
-    rest++;
+  if (*rest == '@') rest++;
   return uriparse_mcast_addrport(rest, family, group, groupsz, port);
 }
 
@@ -54,10 +54,8 @@ static int parse_uri(const char *uri, source_t *s) {
     return http_url_parse(uri, &s->http);
   }
   if (strncmp(uri, "rist://", 7) == 0) {
-    if (uri[7] != '@') /* rist:// as input always listens */
-      return -1;
-    if (strlen(uri) >= sizeof s->rist_uri)
-      return -1;
+    if (uri[7] != '@') return -1; /* rist:// as input always listens */
+    if (strlen(uri) >= sizeof s->rist_uri) return -1;
     s->kind = URI_RIST;
     bufcpy(s->rist_uri, sizeof s->rist_uri, uri);
     return 0;
@@ -65,16 +63,13 @@ static int parse_uri(const char *uri, source_t *s) {
   if (strncmp(uri, "srt://", 6) == 0) {
     const char *rest = uri + 6;
     int listen = *rest == '@';
-    if (listen)
-      rest++;
-    if (argutil_addrport_parse(rest, &s->srt_family, s->srt_host, sizeof s->srt_host, &s->srt_port))
-      return -1;
+    if (listen) rest++;
+    if (argutil_addrport_parse(rest, &s->srt_family, s->srt_host, sizeof s->srt_host, &s->srt_port)) return -1;
     s->kind = URI_SRT;
     s->srt_listen = listen;
     return 0;
   }
-  if (strlen(uri) >= sizeof s->file_path)
-    return -1;
+  if (strlen(uri) >= sizeof s->file_path) return -1;
   s->kind = URI_FILE;
   bufcpy(s->file_path, sizeof s->file_path, uri);
   return 0;
@@ -120,24 +115,20 @@ static int parse_out_uri(const char *uri, out_target_t *o) {
     return parse_mcast_addrport(uri + 6, &o->family, o->group, sizeof o->group, &o->port);
   }
   if (strncmp(uri, "rist://", 7) == 0) {
-    if (strlen(uri) >= sizeof o->rist_uri)
-      return -1;
+    if (strlen(uri) >= sizeof o->rist_uri) return -1;
     o->kind = OUT_RIST;
     bufcpy(o->rist_uri, sizeof o->rist_uri, uri);
     return 0;
   }
   if (strncmp(uri, "srt://", 6) == 0) {
-    if (uri[6] == '@') /* srt:// output always calls out, no listener mode */
-      return -1;
-    if (argutil_addrport_parse(uri + 6, &o->srt_family, o->srt_host, sizeof o->srt_host, &o->srt_port))
-      return -1;
+    if (uri[6] == '@') return -1; /* srt:// output always calls out, no listener mode */
+    if (argutil_addrport_parse(uri + 6, &o->srt_family, o->srt_host, sizeof o->srt_host, &o->srt_port)) return -1;
     o->kind = OUT_SRT;
     return 0;
   }
   {
     int r = uriparse_rtmp_or_file(uri, o->rtmp_url, sizeof o->rtmp_url, o->file_path, sizeof o->file_path);
-    if (r < 0)
-      return -1;
+    if (r < 0) return -1;
     o->kind = r == 2 ? OUT_RTMPS : r == 1 ? OUT_RTMP : OUT_FILE;
     return 0;
   }
@@ -174,9 +165,7 @@ void out_describe(const out_target_t *o, char *buf, size_t n) {
 }
 
 long duration_parse(const char *s) {
-  if (!s || !*s)
-    return -1;
-
+  if (!s || !*s) return -1;
   if (strchr(s, ':')) {
     long parts[3];
     int n = 0;
@@ -185,16 +174,13 @@ long duration_parse(const char *s) {
     for (;;) {
       char *end;
       long v;
-      if (!isdigit((unsigned char)*p) || n >= 3)
-        return -1;
+      if (!isdigit((unsigned char)*p) || n >= 3) return -1;
       v = strtol(p, &end, 10);
-      if (v < 0)
-        return -1;
+      if (v < 0) return -1;
       parts[n++] = v;
       if (*end == '\0')
         break;
-      if (*end != ':')
-        return -1;
+      if (*end != ':') return -1;
       p = end + 1;
     }
     if (n == 2) {
@@ -207,8 +193,7 @@ long duration_parse(const char *s) {
     } else {
       return -1;
     }
-    if (sec > 59 || (n == 3 && m > 59))
-      return -1;
+    if (sec > 59 || (n == 3 && m > 59)) return -1;
     h = h * 3600 + m * 60 + sec;
     return h > 0 ? h : -1;
   }
@@ -221,8 +206,7 @@ long duration_parse(const char *s) {
       char *end;
       long v;
       int rank;
-      if (!isdigit((unsigned char)*p))
-        return -1;
+      if (!isdigit((unsigned char)*p)) return -1;
       v = strtol(p, &end, 10);
       if (v < 0)
         return -1;
@@ -242,8 +226,7 @@ long duration_parse(const char *s) {
       default:
         return -1;
       }
-      if (rank <= last) /* bad order or duplicate */
-        return -1;
+      if (rank <= last) return -1; /* bad order or duplicate */
       last = rank;
       p = end + 1;
     }
@@ -253,8 +236,7 @@ long duration_parse(const char *s) {
   {
     char *end;
     long v = strtol(s, &end, 10);
-    if (*end != '\0' || v <= 0)
-      return -1;
+    if (*end != '\0' || v <= 0) return -1;
     return v;
   }
 }
@@ -263,8 +245,7 @@ long duration_parse(const char *s) {
 static int pid_parse(const char *s, unsigned *out) {
   char *end;
   unsigned long v = strtoul(s, &end, 0);
-  if (*end != '\0' || v < 0x0010 || v > 0x1FFE)
-    return -1;
+  if (*end != '\0' || v < 0x0010 || v > 0x1FFE) return -1;
   *out = (unsigned)v;
   return 0;
 }
@@ -274,8 +255,7 @@ static int parse_pmt_sel(const char *s, config_t *cfg) {
     cfg->pmt_sel = PMT_SEL_ALL;
     return 0;
   }
-  if (pid_parse(s, &cfg->pmt_pid))
-    return -1;
+  if (pid_parse(s, &cfg->pmt_pid)) return -1;
   cfg->pmt_sel = PMT_SEL_PID;
   return 0;
 }
@@ -440,6 +420,9 @@ static void print_help(void) {
       "  -I, --iface <iface>      interface for -i's multicast join\n"
       "  -O, --out-iface <iface>  interface for -o rtp://udp://'s multicast send\n"
       "      --ttl <n>            multicast TTL/hop-limit for -o rtp://udp:// (default: kernel, 1)\n"
+      "      --al-fec <L>:<D>     Annex E Layer 1 FEC (SMPTE 2022-1), -i/-o rtp:// only,\n"
+      "                           L*D<=400, L<=40\n"
+      "      --al-fec-port <port> repair stream UDP port, requires --al-fec\n"
       "      --profile <p>        simple|main; -o rist:// only (default: simple)\n"
       "      --secret <psk>       -o rist:// pre-shared key; requires --profile main\n"
       "      --cname <name>       -o rist:// cname (default: library default)\n"
@@ -510,6 +493,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"pace", no_argument, 0, 1008},
       {"out-iface", required_argument, 0, 'O'},
       {"ttl", required_argument, 0, 1010},
+      {"al-fec", required_argument, 0, 1030},
+      {"al-fec-port", required_argument, 0, 1031},
       {"profile", required_argument, 0, 1011},
       {"secret", required_argument, 0, 1012},
       {"cname", required_argument, 0, 1013},
@@ -667,6 +652,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->out_ttl = (int)v;
         break;
       }
+      case 1030:
+        if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
+          argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1031:
+        if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
+          argerr("invalid --al-fec-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
       case 1011:
         profile_arg = optarg;
         break;
@@ -826,30 +823,26 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
   } else {
     cfg->format = FMT_TS;
-    for (int i = 0; i < cfg->n_out; i++)
-      if (cfg->out[i].kind == OUT_FILE && strcmp(cfg->out[i].file_path, "-") != 0) {
-        fmt_from_suffix(cfg->out[i].file_path, &cfg->format);
-        break;
-      }
+    for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_FILE && strcmp(cfg->out[i].file_path, "-") != 0) {
+      fmt_from_suffix(cfg->out[i].file_path, &cfg->format);
+      break;
+    }
   }
   {
-    int has_rtp_udp = 0, has_rtmp = 0, has_rtmps = 0, has_non_file = 0, n_non_rtmp = 0;
+    int has_rtp_udp = 0, has_rtp = 0, has_rtmp = 0, has_rtmps = 0, has_non_file = 0, n_non_rtmp = 0;
     for (int i = 0; i < cfg->n_out; i++) {
       out_kind_t k = cfg->out[i].kind;
-      if (k == OUT_RTP || k == OUT_UDP)
-        has_rtp_udp = 1;
+      if (k == OUT_RTP || k == OUT_UDP) has_rtp_udp = 1;
+      if (k == OUT_RTP) has_rtp = 1;
       if (k == OUT_RTMP || k == OUT_RTMPS) {
         has_rtmp = 1;
       } else {
         n_non_rtmp++;
-        if (k != OUT_FILE)
-          has_non_file = 1;
+        if (k != OUT_FILE) has_non_file = 1;
       }
-      if (k == OUT_RTMPS)
-        has_rtmps = 1;
+      if (k == OUT_RTMPS) has_rtmps = 1;
     }
-    if ((cfg->format == FMT_MKV || cfg->format == FMT_MKA || cfg->format == FMT_MP4 || cfg->format == FMT_M4A) &&
-        (has_non_file || n_non_rtmp != 1)) {
+    if ((cfg->format == FMT_MKV || cfg->format == FMT_MKA || cfg->format == FMT_MP4 || cfg->format == FMT_M4A) && (has_non_file || n_non_rtmp != 1)) {
       argerr("-f mkv/mka/mp4/m4a requires exactly one -o file target (plus optional rtmp(s) targets)");
       return ARGS_ERR;
     }
@@ -857,17 +850,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       argerr("-f raw is incompatible with an -o rtmp://rtmps:// target");
       return ARGS_ERR;
     }
-    if (cfg->iface_out && !has_rtp_udp)
-      log_line(TOOL_NAME ": --out-iface has no effect, no -o rtp:// or udp:// target");
-    if (cfg->out_ttl && !has_rtp_udp)
-      log_line(TOOL_NAME ": --ttl has no effect, no -o rtp:// or udp:// target");
-    if (cfg->insecure_tls && !has_rtmps && !(cfg->source.kind == URI_HTTP && cfg->source.http.tls))
-      log_line(TOOL_NAME ": --insecure has no effect, no -o rtmps:// target or -i https:// source");
+    if (cfg->iface_out && !has_rtp_udp) log_line(TOOL_NAME ": --out-iface has no effect, no -o rtp:// or udp:// target");
+    if (cfg->out_ttl && !has_rtp_udp) log_line(TOOL_NAME ": --ttl has no effect, no -o rtp:// or udp:// target");
+    if (cfg->al_fec_l && !cfg->al_fec_port) {
+      argerr("--al-fec requires --al-fec-port");
+      return ARGS_ERR;
+    }
+    if (!cfg->al_fec_l && cfg->al_fec_port) log_line(TOOL_NAME ": --al-fec-port has no effect without --al-fec");
+    if (cfg->al_fec_l && !has_rtp && cfg->source.kind != URI_RTP) log_line(TOOL_NAME ": --al-fec has no effect, no -i rtp:// or -o rtp:// target");
+    if (cfg->insecure_tls && !has_rtmps && !(cfg->source.kind == URI_HTTP && cfg->source.http.tls)) log_line(TOOL_NAME ": --insecure has no effect, no -o rtmps:// target or -i https:// source");
   }
-  if (strip_arg && cfg->format != FMT_TS)
-    log_line(TOOL_NAME ": --strip has no effect outside -f ts");
-  if (cfg->subs == SUB_SRT && cfg->format != FMT_MKV && cfg->format != FMT_MKA &&
-      cfg->format != FMT_MP4 && cfg->format != FMT_M4A) {
+  if (strip_arg && cfg->format != FMT_TS) log_line(TOOL_NAME ": --strip has no effect outside -f ts");
+  if (cfg->subs == SUB_SRT && cfg->format != FMT_MKV && cfg->format != FMT_MKA && cfg->format != FMT_MP4 && cfg->format != FMT_M4A) {
     argerr("-s srt requires -f mkv, mka, mp4 or m4a");
     return ARGS_ERR;
   }
@@ -882,11 +876,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   {
     int has_rist = 0;
-    for (int i = 0; i < cfg->n_out; i++)
-      if (cfg->out[i].kind == OUT_RIST)
-        has_rist = 1;
-    if (!has_rist && (profile_arg || have_secret || have_cname || have_buffer))
-      log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer have no effect, no -o rist:// target");
+    for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RIST) has_rist = 1;
+    if (!has_rist && (profile_arg || have_secret || have_cname || have_buffer)) log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer have no effect, no -o rist:// target");
     if (has_rist && have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
       argerr("--secret requires --profile main");
       return ARGS_ERR;
@@ -905,22 +896,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
     cfg->rist_profile_in = (rist_profile_sel_t)v;
   }
-  if (profile_in_arg && cfg->source.kind != URI_RIST)
-    log_line(TOOL_NAME ": --profile-in has no effect, no -i rist:// source");
-  if (validate_srt_passphrase(cfg->srt_passphrase_in, cfg->srt_pbkeylen_in, "-in"))
-    return ARGS_ERR;
-  if (cfg->source.kind != URI_SRT && (cfg->srt_passphrase_in[0] || cfg->srt_pbkeylen_in || cfg->srt_streamid_in[0] ||
-                                       cfg->srt_packetfilter_in[0] || cfg->srt_latency_in_ms))
+  if (profile_in_arg && cfg->source.kind != URI_RIST) log_line(TOOL_NAME ": --profile-in has no effect, no -i rist:// source");
+  if (validate_srt_passphrase(cfg->srt_passphrase_in, cfg->srt_pbkeylen_in, "-in")) return ARGS_ERR;
+  if (cfg->source.kind != URI_SRT && (cfg->srt_passphrase_in[0] || cfg->srt_pbkeylen_in || cfg->srt_streamid_in[0] || cfg->srt_packetfilter_in[0] || cfg->srt_latency_in_ms))
     log_line(TOOL_NAME ": --srt-*-in has no effect, no -i srt:// source");
-  if (validate_srt_passphrase(cfg->srt_passphrase, cfg->srt_pbkeylen, ""))
-    return ARGS_ERR;
+  if (validate_srt_passphrase(cfg->srt_passphrase, cfg->srt_pbkeylen, "")) return ARGS_ERR;
+
   {
     int has_srt_out = 0;
-    for (int i = 0; i < cfg->n_out; i++)
-      if (cfg->out[i].kind == OUT_SRT)
-        has_srt_out = 1;
-    if (!has_srt_out && (cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] ||
-                         cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
+    for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_SRT) has_srt_out = 1;
+    if (!has_srt_out && (cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
       log_line(TOOL_NAME ": --srt-* has no effect, no -o srt:// target");
   }
   return ARGS_OK;

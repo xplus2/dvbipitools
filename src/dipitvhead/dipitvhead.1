@@ -251,6 +251,19 @@ Output DSCP marking (ETSI TS 102 034 Table 29):
 or a raw DSCP value 0..63. Default
 .BR video-high .
 .TP
+.BR \-\-al\-fec " " \fIL\fR:\fID\fR
+Annex E Layer 1 FEC (SMPTE 2022-1): sends a parity repair stream alongside
+.B \-m
+output.
+.IR L " * " D " <= 400, " L " <= 40. Requires RTP output and "
+.BR \-\-al\-fec\-port .
+.TP
+.BR \-\-al\-fec\-port " " \fIport\fR
+Repair stream UDP port, same multicast group as
+.BR \-m .
+Requires
+.BR \-\-al\-fec .
+.TP
 .BR \-R ", " \-\-rist " " \fIuri\fR
 .B rist://host:port\fR[\fI?query\fR]
 or

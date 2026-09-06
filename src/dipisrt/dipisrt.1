@@ -147,6 +147,20 @@ sender side; the queue is sized automatically from the observed input
 bitrate and current latency, bounded by available memory. Default
 .BR 4 .
 .TP
+.BR \-\-al\-fec " " \fIL\fR:\fID\fR
+Annex E Layer 1 FEC (SMPTE 2022-1) on the
+.B rtp://
+side: sends or expects a parity repair stream. Unrelated to
+.BR \-\-packetfilter ", SRT's own native FEC inside the SRT leg."
+.IR L " * " D " <= 400, " L " <= 40. Requires "
+.BR \-\-al\-fec\-port .
+.TP
+.BR \-\-al\-fec\-port " " \fIport\fR
+Repair stream UDP port, same multicast group as the
+.B rtp://
+side. Requires
+.BR \-\-al\-fec .
+.TP
 .B \-\-color \fIwhen\fR
 Colorize log output:
 .BR auto ,

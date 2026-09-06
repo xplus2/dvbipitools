@@ -123,6 +123,8 @@ int channels_resolve(const channels_t *ch, unsigned list_num, unsigned item_num,
     rf->ret = it->ret;
     rf->has_fcc = it->has_fcc;
     rf->fcc = it->fcc;
+    rf->has_fec = it->has_fec;
+    rf->fec = it->fec;
   }
   reader_exit();
   return route_resolve_channel_uri(uri, family, addr, addrsz, port, rtp);

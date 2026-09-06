@@ -13,23 +13,25 @@ dipirist -i <uri> -o <uri> [options]
 
 ## Options
 
-| flag | long form            | argument              | default                            |
-|------|----------------------|-----------------------|------------------------------------|
-| `-i` | `--in`               | `<uri>`               | required                           |
-| `-o` | `--out`              | `<uri>`               | required                           |
-| `-I` | `--iface`            | `<iface>`             | kernel route (non-RIST side only)  |
-| `-k` | `--insecure`         |                       | off (`-i https://` source only)    |
-|      | `--profile`          | `simple\|main`        | `simple`                           |
-|      | `--secret`           | `<psk>`               | none (requires `--profile main`)   |
-|      | `--cname`            | `<name>`              | library default                    |
-|      | `--buffer`           | `<ms>`                | library default                    |
-|      | `--color`            | `auto\|always\|never` | `auto`                             |
-|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`    |
-|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set) |
-|      | `--metrics-interval` | `<s>`                 | `5`                                |
-| `-v` | `--verbose`          |                       | off                                |
-| `-d` | `--daemonize`        |                       | off (foreground)                   |
-| `-h` | `--help`             |                       |                                    |
+| flag | long form            | argument              | default                                      |
+|------|----------------------|-----------------------|----------------------------------------------|
+| `-i` | `--in`               | `<uri>`               | required                                     |
+| `-o` | `--out`              | `<uri>`               | required                                     |
+| `-I` | `--iface`            | `<iface>`             | kernel route (non-RIST side only)            |
+| `-k` | `--insecure`         |                       | off (`-i https://` source only)              |
+|      | `--profile`          | `simple\|main`        | `simple`                                     |
+|      | `--secret`           | `<psk>`               | none (requires `--profile main`)             |
+|      | `--cname`            | `<name>`              | library default                              |
+|      | `--buffer`           | `<ms>`                | library default                              |
+|      | `--al-fec`           | `<L>:<D>`             | off (Annex E Layer 1 FEC, rtp:// side only)  |
+|      | `--al-fec-port`      | `<port>`              | required with `--al-fec`                     |
+|      | `--color`            | `auto\|always\|never` | `auto`                                       |
+|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`              |
+|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)           |
+|      | `--metrics-interval` | `<s>`                 | `5`                                          |
+| `-v` | `--verbose`          |                       | off                                          |
+| `-d` | `--daemonize`        |                       | off (foreground)                             |
+| `-h` | `--help`             |                       |                                              |
 
 ## Endpoints (`-i`/`-o`)
 
@@ -50,6 +52,10 @@ leave it off to call out.
 
 That's librist's own URL syntax, its query parameters (`buffer`, `secret`, `cname`, `weight`, ...) work here too.
 If you set `--secret`, `--cname`, or `--buffer` on the command line, those win over whatever a URI's own query parameters included.
+
+`--al-fec <L>:<D>` sends or expects a parallel SMPTE 2022-1 (ETSI TS 102 034 Annex E) repair stream on the `rtp://` side, 
+same multicast group at `--al-fec-port`. Columns * rows <= 400, columns <= 40. Both ends need the same `<L>:<D>` and port.
+Recovers at most one lost packet per column. No effect on the RIST side, which already has its own reliability.
 
 ## Examples
 

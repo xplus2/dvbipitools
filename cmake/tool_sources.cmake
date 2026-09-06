@@ -182,6 +182,7 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -449,6 +450,7 @@ function(dipiradiohead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_core.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mpts.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
@@ -524,7 +526,9 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
             ${TLS_SRC}
@@ -634,7 +638,9 @@ function(dipirist_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
@@ -720,7 +726,9 @@ function(dipisrt_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssink.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
             ${RIST_SRC}
             ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
@@ -939,6 +947,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
@@ -963,6 +972,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pmtselect.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/pmt_filter.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/core/status.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/core/tlscert.c
@@ -1193,6 +1203,7 @@ function(dipitvhead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/retryset.c
             ${TLS_SRC}
             ${RIST_SRC}
@@ -1211,6 +1222,7 @@ function(dipitvhead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mpts.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c

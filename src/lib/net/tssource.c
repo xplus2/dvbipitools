@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../demux/fec2022.h"
 #include "../demux/rtp.h"
 
 #include "httpclient/httpclient.h"
@@ -26,6 +27,8 @@ typedef enum { DEFRAME_DETECT, DEFRAME_RAW, DEFRAME_RTP } deframe_state_t;
 struct tssrc {
   tssrc_kind_t kind;
   mcast_t *m;
+  mcast_t *fec_m;
+  fec2022_dec_t *fec_dec;
   http_t *h;
   ristin_t *rist;
   srtsrc_t *srt;
@@ -43,8 +46,7 @@ tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
   const char *ua = cfg->user_agent ? cfg->user_agent : "dvbipitools";
   tssrc_t *s = calloc(1, sizeof *s);
   if (!s) {
-    if (reason_out)
-      *reason_out = NET_ERR_OTHER;
+    if (reason_out) *reason_out = NET_ERR_OTHER;
     return NULL;
   }
   s->kind = cfg->kind;
@@ -54,9 +56,20 @@ tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
     s->m = mcast_open(cfg->family, cfg->group, cfg->port, cfg->iface, 1000);
     if (!s->m) {
       free(s);
-      if (reason_out)
-        *reason_out = NET_ERR_CONNECT;
+      if (reason_out) *reason_out = NET_ERR_CONNECT;
       return NULL;
+    }
+    if (cfg->kind == TSSRC_RTP && cfg->al_fec_l) {
+      s->fec_m = mcast_open(cfg->family, cfg->group, cfg->al_fec_port, cfg->iface, 0);
+      s->fec_dec = s->fec_m ? fec2022_dec_new(cfg->al_fec_l, cfg->al_fec_d) : NULL;
+      if (!s->fec_m || !s->fec_dec || mcast_set_nonblock(s->fec_m)) {
+        if (s->fec_dec) fec2022_dec_free(s->fec_dec);
+        if (s->fec_m) mcast_close(s->fec_m);
+        mcast_close(s->m);
+        free(s);
+        if (reason_out) *reason_out = NET_ERR_CONNECT;
+        return NULL;
+      }
     }
     return s;
   case TSSRC_HTTP:
@@ -91,8 +104,7 @@ tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
     s->rist = ristin_open(&rc);
     if (!s->rist) {
       free(s);
-      if (reason_out)
-        *reason_out = NET_ERR_CONNECT;
+      if (reason_out) *reason_out = NET_ERR_CONNECT;
       return NULL;
     }
     return s;
@@ -114,8 +126,7 @@ tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
     s->srt = srtsrc_open(&sc);
     if (!s->srt) {
       free(s);
-      if (reason_out)
-        *reason_out = NET_ERR_CONNECT;
+      if (reason_out) *reason_out = NET_ERR_CONNECT;
       return NULL;
     }
     return s;
@@ -128,15 +139,12 @@ tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
 static ssize_t raw_fd_read(int fd, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
   ssize_t n = read(fd, buf, cap);
   if (n == 0) {
-    if (reason_out)
-      *reason_out = NET_ERR_EOF;
+    if (reason_out) *reason_out = NET_ERR_EOF;
     return -1;
   }
   if (n < 0) {
-    if (errno == EINTR)
-      return 0;
-    if (reason_out)
-      *reason_out = NET_ERR_READ;
+    if (errno == EINTR) return 0;
+    if (reason_out) *reason_out = NET_ERR_READ;
     return -1;
   }
   return n;
@@ -148,9 +156,7 @@ static ssize_t raw_fd_read(int fd, unsigned char *buf, size_t cap, net_err_reaso
 /* checks that the first nn 188-byte TS packets in this candidate RTP-framed stride
    are sync-aligned (0x47 at their start) */
 static int rtp_stride_candidate_ok(const unsigned char *b, int nn) {
-  for (size_t k = 0; k < (size_t)nn; k++)
-    if (b[12 + 188 * k] != 0x47)
-      return 0;
+  for (size_t k = 0; k < (size_t)nn; k++) if (b[12 + 188 * k] != 0x47) return 0;
   return 1;
 }
 
@@ -190,10 +196,8 @@ static size_t rtp_deframe_step(tssrc_t *s, unsigned char *dst, size_t dstcap) {
       size_t need = 12 - in_stride;
       size_t avail = s->raw_len - i;
       if (in_stride == 0 && avail >= 12)
-        s->last_rtp_ts = ((uint32_t)s->rawbuf[i + 4] << 24) | ((uint32_t)s->rawbuf[i + 5] << 16) |
-                          ((uint32_t)s->rawbuf[i + 6] << 8) | s->rawbuf[i + 7];
-      if (need > avail)
-        need = avail;
+        s->last_rtp_ts = ((uint32_t)s->rawbuf[i + 4] << 24) | ((uint32_t)s->rawbuf[i + 5] << 16) | ((uint32_t)s->rawbuf[i + 6] << 8) | s->rawbuf[i + 7];
+      if (need > avail) need = avail;
       i += need;
       s->rtp_pos += need;
       continue;
@@ -203,8 +207,7 @@ static size_t rtp_deframe_step(tssrc_t *s, unsigned char *dst, size_t dstcap) {
       size_t avail = s->raw_len - i;
       size_t room = dstcap - o;
       size_t take = chunk < avail ? chunk : avail;
-      if (take > room)
-        take = room;
+      if (take > room) take = room;
       memcpy(dst + o, s->rawbuf + i, take);
       i += take;
       o += take;
@@ -222,10 +225,8 @@ static size_t rtp_deframe_step(tssrc_t *s, unsigned char *dst, size_t dstcap) {
 /* handles a failed raw_fd_read() during framing detection. 1: EOF with data buffered
    (caller should detect framing from what's there). 0: real error (reason_out set) */
 static int handle_detect_read_error(tssrc_t *s, net_err_reason_t r, net_err_reason_t *reason_out) {
-  if (r == NET_ERR_EOF && s->raw_len > 0)
-    return 1;
-  if (reason_out)
-    *reason_out = r;
+  if (r == NET_ERR_EOF && s->raw_len > 0) return 1;
+  if (reason_out) *reason_out = r;
   return 0;
 }
 
@@ -235,13 +236,11 @@ static ssize_t deframe_read(tssrc_t *s, int fd, unsigned char *buf, size_t cap, 
   if (s->deframe_state == DEFRAME_DETECT) {
     ssize_t got = raw_fd_read(fd, s->rawbuf + s->raw_len, TSSRC_DETECT_CAP - s->raw_len, &r);
     if (got < 0) {
-      if (!handle_detect_read_error(s, r, reason_out))
-        return -1;
+      if (!handle_detect_read_error(s, r, reason_out)) return -1;
       detect_framing(s);
     } else {
       s->raw_len += (size_t)got;
-      if (s->raw_len < TSSRC_DETECT_CAP)
-        return 0;
+      if (s->raw_len < TSSRC_DETECT_CAP) return 0;
       detect_framing(s);
     }
   }
@@ -256,8 +255,7 @@ static ssize_t deframe_read(tssrc_t *s, int fd, unsigned char *buf, size_t cap, 
       return (ssize_t)take;
     }
     got = raw_fd_read(fd, buf, cap, &r);
-    if (got < 0 && reason_out)
-      *reason_out = r;
+    if (got < 0 && reason_out) *reason_out = r;
     return got;
   }
 
@@ -266,8 +264,7 @@ static ssize_t deframe_read(tssrc_t *s, int fd, unsigned char *buf, size_t cap, 
     if (out == 0) {
       ssize_t got = raw_fd_read(fd, s->rawbuf + s->raw_len, sizeof s->rawbuf - s->raw_len, &r);
       if (got < 0) {
-        if (reason_out)
-          *reason_out = r;
+        if (reason_out) *reason_out = r;
         return -1;
       }
       s->raw_len += (size_t)got;
@@ -277,21 +274,38 @@ static ssize_t deframe_read(tssrc_t *s, int fd, unsigned char *buf, size_t cap, 
   }
 }
 
+static ssize_t rtp_strip(unsigned char *buf, size_t n) {
+  size_t off = rtp_payload_offset(buf, n);
+  if (off) {
+    memmove(buf, buf + off, n - off);
+    n -= off;
+  }
+  return (ssize_t)n;
+}
+
 ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
   switch (s->kind) {
   case TSSRC_RTP:
   case TSSRC_UDP: {
-    ssize_t n = mcast_recv(s->m, buf, cap, reason_out);
-    size_t off;
-    if (n <= 0)
-      return n;
-    off = rtp_payload_offset(buf, (size_t)n);
-    if (off) {
-      /* offset+len contract instead of copy: needs a tssrc_read() API change across both tools, saves a sub-us memmove. not worth it. */
-      memmove(buf, buf + off, (size_t)n - off);
-      n -= (ssize_t)off;
+    ssize_t n;
+
+    if (s->fec_dec) {
+      unsigned char repair_buf[FEC2022_MAX_REPAIR];
+      ssize_t rn = mcast_recv(s->fec_m, repair_buf, sizeof repair_buf, NULL);
+      if (rn > 0) fec2022_dec_repair(s->fec_dec, repair_buf, (size_t)rn);
+
+      n = mcast_recv(s->m, buf, cap, reason_out);
+      if (n < 0) return n;
+      if (n > 0) fec2022_dec_source(s->fec_dec, buf, (size_t)n);
+
+      n = (ssize_t)fec2022_dec_drain(s->fec_dec, buf, cap);
+      if (n == 0) return 0;
+      return rtp_strip(buf, (size_t)n);
     }
-    return n;
+
+    n = mcast_recv(s->m, buf, cap, reason_out);
+    if (n <= 0) return n;
+    return rtp_strip(buf, (size_t)n);
   }
   case TSSRC_HTTP:
     return http_read(s->h, buf, cap, reason_out);
@@ -312,12 +326,9 @@ uint32_t tssrc_last_rtp_ts(const tssrc_t *s) { return s->last_rtp_ts; }
 
 void tssrc_rewind(tssrc_t *s) {
   int fd;
-
-  if (s->kind != TSSRC_FILE && s->kind != TSSRC_STDIN)
-    return;
+  if (s->kind != TSSRC_FILE && s->kind != TSSRC_STDIN) return;
   fd = (s->kind == TSSRC_FILE) ? s->fd : STDIN_FILENO;
-  if (lseek(fd, 0, SEEK_SET) < 0)
-    return;
+  if (lseek(fd, 0, SEEK_SET) < 0) return;
   s->raw_len = 0;
   s->rtp_pos = 0;
 }
@@ -344,18 +355,14 @@ int tssrc_fd(const tssrc_t *s) {
 }
 
 void tssrc_close(tssrc_t *s) {
-  if (!s)
-    return;
-  if (s->m)
-    mcast_close(s->m);
-  if (s->h)
-    http_close(s->h);
-  if (s->rist)
-    ristin_close(s->rist);
-  if (s->srt)
-    srtsrc_close(s->srt);
-  if (s->kind == TSSRC_FILE)
-    close(s->fd);
+  if (!s) return;
+  if (s->fec_dec) fec2022_dec_free(s->fec_dec);
+  if (s->fec_m) mcast_close(s->fec_m);
+  if (s->m) mcast_close(s->m);
+  if (s->h) http_close(s->h);
+  if (s->rist) ristin_close(s->rist);
+  if (s->srt) srtsrc_close(s->srt);
+  if (s->kind == TSSRC_FILE) close(s->fd);
   free(s);
 }
 
@@ -367,8 +374,7 @@ struct tssrc_open {
 
 tssrc_open_t *tssrc_open_async_start(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out) {
   tssrc_open_t *o = calloc(1, sizeof *o);
-  if (!o)
-    return NULL;
+  if (!o) return NULL;
   if (cfg->kind == TSSRC_HTTP) {
     const char *ua = cfg->user_agent ? cfg->user_agent : "dvbipitools";
     o->ha = http_async_start(&cfg->http, ua, cfg->insecure_tls, NULL, reason_out);
@@ -388,38 +394,31 @@ tssrc_open_t *tssrc_open_async_start(const tssrc_cfg_t *cfg, net_err_reason_t *r
 }
 
 int tssrc_open_async_poll_fd(const tssrc_open_t *o) {
-  if (o->ha)
-    return http_async_poll_fd(o->ha);
+  if (o->ha) return http_async_poll_fd(o->ha);
   return -1;
 }
 
 short tssrc_open_async_poll_events(const tssrc_open_t *o) {
-  if (o->ha)
-    return http_async_poll_events(o->ha);
+  if (o->ha) return http_async_poll_events(o->ha);
   return 0;
 }
 
 tssrc_open_state_t tssrc_open_async_step(tssrc_open_t *o, net_err_reason_t *reason_out) {
   http_async_state_t st;
 
-  if (o->done)
-    return TSSRC_OPEN_DONE;
-
+  if (o->done) return TSSRC_OPEN_DONE;
   st = http_async_step(o->ha, reason_out);
-  if (st == HTTP_ASYNC_PENDING)
-    return TSSRC_OPEN_PENDING;
+  if (st == HTTP_ASYNC_PENDING) return TSSRC_OPEN_PENDING;
   if (st == HTTP_ASYNC_ERROR) {
     http_async_free(o->ha);
     o->ha = NULL;
     return TSSRC_OPEN_ERROR;
   }
-
   o->result = calloc(1, sizeof *o->result);
   if (!o->result) {
     http_close(http_async_take(o->ha));
     o->ha = NULL;
-    if (reason_out)
-      *reason_out = NET_ERR_OTHER;
+    if (reason_out) *reason_out = NET_ERR_OTHER;
     return TSSRC_OPEN_ERROR;
   }
   o->result->kind = TSSRC_HTTP;
@@ -436,11 +435,8 @@ tssrc_t *tssrc_open_async_take(tssrc_open_t *o) {
 }
 
 void tssrc_open_async_free(tssrc_open_t *o) {
-  if (!o)
-    return;
-  if (o->ha)
-    http_async_free(o->ha);
-  if (o->result)
-    tssrc_close(o->result);
+  if (!o) return;
+  if (o->ha) http_async_free(o->ha);
+  if (o->result) tssrc_close(o->result);
   free(o);
 }

@@ -81,6 +81,14 @@ int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
         rc = 1;
         goto done;
       }
+      if (cfg->al_fec_l) {
+        out.fec_mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->al_fec_port, cfg->iface_out, (int)cfg->ttl);
+        out.fec_enc = out.fec_mc ? fec2022_enc_new(cfg->al_fec_l, cfg->al_fec_d, 96) : NULL;
+        if (!out.fec_mc || !out.fec_enc) {
+          rc = 1;
+          goto done;
+        }
+      }
     }
   }
   if (cfg->n_rist > 0) {
@@ -237,6 +245,8 @@ done:
   if (mpts) mpts_free(mpts);
   if (rs) retryset_free(rs);
   if (cas) cas_stop(cas);
+  if (out.fec_enc) fec2022_enc_free(out.fec_enc);
+  if (out.fec_mc) mcast_close(out.fec_mc);
   if (out.rtph) rtpheader_free(out.rtph);
   if (out.rist) ristout_close(out.rist);
   if (out.srt) srtsink_close(out.srt);

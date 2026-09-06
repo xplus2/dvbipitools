@@ -116,6 +116,8 @@ static void append_sds_entries(channel_list_t *l, const sds_service_t *entries, 
     it->ret = entries[i].ret;
     it->has_fcc = entries[i].has_fcc;
     it->fcc = entries[i].fcc;
+    it->has_fec = entries[i].has_fec;
+    it->fec = entries[i].fec;
   }
 }
 

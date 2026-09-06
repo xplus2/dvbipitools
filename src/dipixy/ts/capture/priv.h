@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <stdatomic.h>
 
+#include "lib/demux/fec2022.h"
 #include "lib/fccret/fcc_client.h"
 #include "lib/fccret/ret_client.h"
 #include "lib/helper/log.h"
@@ -29,6 +30,8 @@ struct capture_ctx {
   mcast_t *m;
   ret_client_t *ret;
   fcc_client_t *fcc;
+  mcast_t *fec_m;
+  fec2022_dec_t *fec_dec;
 
   /* rist/srt/stdin/http share these fields */
   tssrc_t *ts;
@@ -75,6 +78,9 @@ void rebuild_snapshot(void); /* caller holds g_lock */
 void unlink_ctx(capture_ctx_t *ctx);
 void free_ctx_resources(capture_ctx_t *ctx);
 void reclaim_retired_snapshots(void); /* caller holds no lock, not on a pump thread */
+
+/* capture.c */
+ssize_t capture_fec_read(capture_ctx_t *ctx, unsigned char *buf, size_t cap);
 
 /* pump.c */
 int next_pump_shard(void);

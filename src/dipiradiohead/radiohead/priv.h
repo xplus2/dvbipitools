@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 
+#include "lib/mux/fec2022.h"
 #include "lib/mux/mpts.h"
 #include "lib/mux/rtpheader.h"
 #include "lib/net/multicast.h"
@@ -22,6 +23,8 @@ typedef struct {
   mcast_t *mc; /* NULL unless -m given */
   int rtp;
   rtpheader_t *rtph;
+  mcast_t *fec_mc;
+  fec2022_enc_t *fec_enc;
   ristout_t *rist; /* NULL unless -R rist:// given (bonded peers), sent alongside mc if both present */
   srtsink_t *srt;  /* NULL unless -R srt:// given (bonded peers), sent alongside mc if both present */
   uint64_t cur_pts;
@@ -56,6 +59,7 @@ srtsink_t *radiohead_srt_open(const config_t *cfg);
 /* ticks o->srt connect/reconnect + flush. no-op if !o->srt. call every loop iter. */
 void radiohead_srt_service(out_ctx_t *o);
 void flush_batch(out_ctx_t *o);
+void free_rtp_out(out_ctx_t *o);
 void packet_cb(void *ctx, const unsigned char *pkt188);
 const char *codec_name(source_codec_t c);
 

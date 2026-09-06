@@ -19,6 +19,8 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<po
 | `-r`  | `--rtp`              |                                         | off (plain UDP)                                 |           |
 | `-T`  | `--ttl`              | `<n>`                                   | 1 (kernel default)                              |           |
 |       | `--dscp`             | `<v>`                                   | `video-high`                                    |           |
+|       | `--al-fec`           | `<L>:<D>`                               | off (Annex E Layer 1 FEC, needs `-r`)           |           |
+|       | `--al-fec-port`      | `<port>`                                | required with `--al-fec`                        |           |
 | `-R`  | `--rist`             | `rist://host:port` or `srt://host:port` | none, repeatable (bonded, one scheme at a time) |           |
 |       | `--profile`          | `simple\|main`                          | `simple` (`-R rist://` peers only)              |           |
 |       | `--secret`           | `<psk>`                                 | none (`-R rist://` peers only)                  |           |
@@ -146,6 +148,11 @@ peer needs no extra flags, more than one needs `--srt-group-mode broadcast|backu
 scheme at a time, so `rist://` and `srt://` peers can't mix in the same run.
 Encryption/streamid/latency/packet filtering apply to every `-R srt://` peer via `--srt-passphrase`/`--srt-pbkeylen`/
 `--srt-streamid`/`--srt-packetfilter`/`--srt-latency`.
+
+`--al-fec <L>:<D>` sends a parallel SMPTE 2022-1 (ETSI TS 102 034 Annex E) repair stream alongside
+`-m`, on the same multicast group at `--al-fec-port`. Columns * rows <= 400, columns <= 40. 
+A receiver needs the same `<L>:<D>` and the repair port to recover from loss. Recovers at most one
+lost packet per column. Requires `-r` (RTP output).
 
 ## Now-playing metadata
 

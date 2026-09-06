@@ -51,6 +51,11 @@ int src_open(const config_t *cfg, src_t *s) {
     tc.group = cfg->source.group;
     tc.port = cfg->source.port;
     tc.iface = cfg->iface_in;
+    if (s->kind == URI_RTP) {
+      tc.al_fec_l = cfg->al_fec_l;
+      tc.al_fec_d = cfg->al_fec_d;
+      tc.al_fec_port = cfg->al_fec_port;
+    }
   }
 
   s->t = tssrc_open(&tc, NULL);
@@ -182,6 +187,11 @@ int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
     tc.port = t->port;
     tc.iface = cfg->iface_out;
     tc.ttl = cfg->out_ttl;
+    if (t->kind == OUT_RTP) {
+      tc.al_fec_l = cfg->al_fec_l;
+      tc.al_fec_d = cfg->al_fec_d;
+      tc.al_fec_port = cfg->al_fec_port;
+    }
     o->net = tssink_open(&tc);
   }
   return o->net ? 0 : -1;

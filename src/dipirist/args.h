@@ -27,6 +27,7 @@ typedef struct {
   char cname[128];    /* "" = library default */
   unsigned buffer_ms; /* recovery_length_min/max on every peer. 0 = library default */
   const char *iface;  /* non-RIST side multicast join/send interface. NULL = kernel default */
+  unsigned al_fec_l, al_fec_d, al_fec_port;
   int verbose;
   int daemonize; /* -d, --daemonize: fork to background after startup */
   int color_mode;

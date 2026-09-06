@@ -22,6 +22,12 @@ void meta_cb(void *ctx, const char *artist, const char *title) {
   if (m->rm) m->rm->metadata_updates_total++;
 }
 
+void free_rtp_out(out_ctx_t *o) {
+  if (o->fec_enc) fec2022_enc_free(o->fec_enc);
+  if (o->fec_mc) mcast_close(o->fec_mc);
+  if (o->rtph) rtpheader_free(o->rtph);
+}
+
 ristout_t *radiohead_rist_open(const config_t *cfg) {
   ristout_cfg_t rc;
 
@@ -74,6 +80,11 @@ void flush_batch(out_ctx_t *o) {
     if (o->rtp) {
       rtpheader_build(o->rtph, (uint32_t)o->cur_pts, o->batch, 12);
       note_send_result(mcast_send(o->mc, o->batch, 12 + n) >= 0, &o->mc_had_error, &o->errors, "mcast");
+      if (o->fec_enc) {
+        unsigned char repair[FEC2022_MAX_REPAIR];
+        size_t rlen = fec2022_enc_feed(o->fec_enc, o->batch, 12 + n, (uint32_t)o->cur_pts, repair, sizeof repair);
+        if (rlen) mcast_send(o->fec_mc, repair, rlen);
+      }
     } else {
       note_send_result(mcast_send(o->mc, o->batch + 12, n) >= 0, &o->mc_had_error, &o->errors, "mcast");
     }
@@ -222,12 +233,21 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
         mcast_close(mc);
         return 1;
       }
+      if (cfg->al_fec_l) {
+        out.fec_mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->al_fec_port, cfg->iface, (int)cfg->ttl);
+        out.fec_enc = out.fec_mc ? fec2022_enc_new(cfg->al_fec_l, cfg->al_fec_d, 96) : NULL;
+        if (!out.fec_mc || !out.fec_enc) {
+          free_rtp_out(&out);
+          mcast_close(mc);
+          return 1;
+        }
+      }
     }
   }
   if (cfg->n_rist > 0) {
     out.rist = radiohead_rist_open(cfg);
     if (!out.rist) {
-      if (out.rtph) rtpheader_free(out.rtph);
+      free_rtp_out(&out);
       if (mc) mcast_close(mc);
       return 1;
     }
@@ -236,7 +256,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     out.srt = radiohead_srt_open(cfg);
     if (!out.srt) {
       if (out.rist) ristout_close(out.rist);
-      if (out.rtph) rtpheader_free(out.rtph);
+      free_rtp_out(&out);
       if (mc) mcast_close(mc);
       return 1;
     }
@@ -320,7 +340,7 @@ done:
   flush_batch(&out);
   if (tsp) tspacketizer_free(tsp);
   if (cas) cas_stop(cas);
-  if (out.rtph) rtpheader_free(out.rtph);
+  free_rtp_out(&out);
   if (out.rist) ristout_close(out.rist);
   if (out.srt) srtsink_close(out.srt);
   if (mc) mcast_close(mc);

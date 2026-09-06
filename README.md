@@ -118,12 +118,12 @@ between real-world usage of media formats and the standard.
 * dipisrt
   - Secure Reliable Transport (SRT) is not part of DVB.
 * dipixy
-  - HLS, LL-HLS and MPEG-DASH are not part of DVB-IPI.
+  - HLS, LL-HLS, MPEG-DASH and LL-DASH are not part of DVB-IPI.
 
 ### Known gaps
 On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 
-* FEC (Annex E) 
+* FEC (Annex E Layer 2): Raptor RFC 5053/6330
 * Companion Stream FCC (Annex J)
 * DVB Companion Screens and Streams
 * SD&S record type "CoD Discovery" and "Services From Other SPs"

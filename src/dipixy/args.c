@@ -10,6 +10,7 @@
 #include <strings.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/mux/fec2022.h"
 #include "lib/helper/base64.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
@@ -187,6 +188,9 @@ static void print_help(void) {
       "      --no-http3              disable HTTP/3\n"
       "      --no-fcc                ignore SDS fcc\n"
       "      --no-ret                ignore SDS ret\n"
+      "      --al-fec <L>:<D>        Annex E Layer 1 FEC (SMPTE 2022-1) matrix size for any\n"
+      "                              SDS-advertised repair stream, L*D<=400, L<=40\n"
+      "      --no-al-fec             ignore SDS FECBaseLayer\n"
       "      --no-status             disable /ui/status.js\n"
       "      --status-tpl <path>     use file instead of the built-in page\n"
       "      --auth <user:pass>      HTTP Basic Auth for /, /ui/status.js, /ui/ws/  [off]\n"
@@ -254,6 +258,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"no-http3", no_argument, 0, 1041},
       {"no-fcc", no_argument, 0, 1042},
       {"no-ret", no_argument, 0, 1043},
+      {"al-fec", required_argument, 0, 1053},
+      {"no-al-fec", no_argument, 0, 1054},
       {"no-status", no_argument, 0, 1023},
       {"status-tpl", required_argument, 0, 1027},
       {"auth", required_argument, 0, 1037},
@@ -514,6 +520,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1043:
         cfg->no_ret = 1;
+        break;
+      case 1053:
+        if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
+          argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1054:
+        cfg->no_al_fec = 1;
         break;
       case 1023:
         cfg->no_status = 1;

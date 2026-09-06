@@ -25,6 +25,8 @@ typedef struct {
   sds_ret_t ret;
   int has_fcc;
   sds_fcc_t fcc;
+  int has_fec;
+  sds_fec_t fec;
   capture_ctx_t *static_ctx; /* srt/http items only, opened at channels_build() */
 } channel_item_t;
 
@@ -33,6 +35,8 @@ typedef struct {
   sds_ret_t ret;
   int has_fcc;
   sds_fcc_t fcc;
+  int has_fec;
+  sds_fec_t fec;
 } channel_ret_fcc_t;
 
 typedef struct {

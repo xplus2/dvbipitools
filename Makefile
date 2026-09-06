@@ -311,6 +311,8 @@ dipirec_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
+	src/lib/mux/fec2022.c \
+	src/lib/demux/fec2022.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
 	$(dipirec_TLS_SRC) \
@@ -489,6 +491,7 @@ dipiradiohead_SRCS := \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/cas/cas_core.c \
 	src/lib/mux/rtpheader.c \
+	src/lib/mux/fec2022.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/mpts.c \
 	src/lib/mux/tspacket_write.c \
@@ -614,6 +617,7 @@ dipitvhead_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/retryset.c \
 	$(dipitvhead_TLS_SRC) \
 	$(dipitvhead_RIST_SRC) \
@@ -632,6 +636,7 @@ dipitvhead_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/rtp.c \
 	src/lib/mux/rtpheader.c \
+	src/lib/mux/fec2022.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/mpts.c \
 	src/lib/mux/tspacket_write.c \
@@ -793,6 +798,7 @@ dipidescramble_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/tls.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -903,6 +909,8 @@ dipirist_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
+	src/lib/mux/fec2022.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/plain_endpoint.c \
 	src/lib/net/rist/ristout.c \
 	src/lib/net/rist/ristin.c \
@@ -977,6 +985,8 @@ dipisrt_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
+	src/lib/mux/fec2022.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/plain_endpoint.c \
 	$(dipisrt_RIST_SRC) \
 	src/lib/net/srt/srtsrc.c \
@@ -1107,6 +1117,7 @@ dipixy_SRCS := \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -1131,6 +1142,7 @@ dipixy_SRCS := \
 	src/dipixy/ts/pidfilter.c \
 	src/dipixy/ts/pmtselect.c \
 	src/lib/mux/psi_build.c \
+	src/lib/mux/fec2022.c \
 	src/lib/mux/pmt_filter.c \
 	src/dipixy/core/status.c \
 	src/dipixy/core/tlscert.c \
@@ -1317,7 +1329,7 @@ dvbipitools: $(DVBIPITOOLS_OBJS)
 
 UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
 	lib_demux_mpts_probe \
-	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
+	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mp4 lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild \
 	lib_net_netconnect lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_tssource_async lib_net_tssource_file lib_net_retryset lib_net_dvbstp \
 	lib_mux_mpts \
@@ -1716,6 +1728,7 @@ dipirist_args_BIN := tests/unit/dipirist/test_args
 dipirist_args_SRCS := \
 	tests/unit/dipirist/test_args.c \
 	src/dipirist/args.c \
+	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/net/httpclient/url.c \
@@ -1740,6 +1753,8 @@ dipirist_bridge_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
+	src/lib/mux/fec2022.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/plain_endpoint.c \
 	src/lib/net/rist/ristout.c \
 	src/lib/net/rist/ristin.c \
@@ -1798,6 +1813,7 @@ dipisrt_args_BIN := tests/unit/dipisrt/test_args
 dipisrt_args_SRCS := \
 	tests/unit/dipisrt/test_args.c \
 	src/dipisrt/args.c \
+	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/net/httpclient/url.c \
@@ -1822,6 +1838,8 @@ dipisrt_bridge_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
 	src/lib/net/tssink.c \
+	src/lib/mux/fec2022.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/plain_endpoint.c \
 	src/lib/net/rist/ristin_stub.c \
 	src/lib/net/rist/ristlog_stub.c \
@@ -2032,6 +2050,7 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/mux/psi_build.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/rist/ristin_stub.c \
 	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/srt/srtsrc_stub.c \
@@ -2102,6 +2121,14 @@ lib_mux_rtpheader_BIN := tests/unit/lib/mux/test_rtpheader
 lib_mux_rtpheader_SRCS := \
 	tests/unit/lib/mux/test_rtpheader.c \
 	src/lib/mux/rtpheader.c \
+	src/lib/demux/rtp.c
+
+lib_mux_fec2022_BIN := tests/unit/lib/mux/test_fec2022
+lib_mux_fec2022_SRCS := \
+	tests/unit/lib/mux/test_fec2022.c \
+	src/lib/mux/fec2022.c \
+	src/lib/mux/rtpheader.c \
+	src/lib/demux/fec2022.c \
 	src/lib/demux/rtp.c
 
 lib_mux_rtx_BIN := tests/unit/lib/mux/test_rtx
@@ -2483,6 +2510,7 @@ dipiradiohead_radiohead_SRCS := \
 	src/dipiradiohead/cas/cas.c \
 	src/lib/mux/cadescbuild.c \
 	src/lib/mux/rtpheader.c \
+	src/lib/mux/fec2022.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/mux/mpts.c \
@@ -2579,6 +2607,7 @@ dipiradiohead_args_BIN := tests/unit/dipiradiohead/test_args
 dipiradiohead_args_SRCS := \
 	tests/unit/dipiradiohead/test_args.c \
 	src/dipiradiohead/args.c \
+	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/signal.c \
@@ -2665,6 +2694,7 @@ dipitvhead_source_SRCS := \
 	tests/unit/dipitvhead/input/test_source.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/rist/ristin_stub.c \
 	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/srt/srtsrc_stub.c \
@@ -2686,6 +2716,7 @@ dipitvhead_args_BIN := tests/unit/dipitvhead/test_args
 dipitvhead_args_SRCS := \
 	tests/unit/dipitvhead/test_args.c \
 	src/dipitvhead/args.c \
+	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/cas/cas_args.c \
@@ -2713,6 +2744,7 @@ dipitvhead_discover_SRCS := \
 	src/dipitvhead/tvhead/discover.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/rist/ristin_stub.c \
 	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/srt/srtsrc_stub.c \
@@ -2824,6 +2856,7 @@ dipitvhead_output_SRCS := \
 	src/dipitvhead/cas/cas.c \
 	src/lib/mux/cadescbuild.c \
 	src/lib/mux/rtpheader.c \
+	src/lib/mux/fec2022.c \
 	src/lib/demux/rtp.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
@@ -2863,6 +2896,7 @@ dipitvhead_output_SRCS := \
 	src/lib/net/srt/srtsink_stub.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -3038,6 +3072,7 @@ lib_net_tssource_async_BIN := tests/unit/lib/net/test_tssource_async
 lib_net_tssource_async_SRCS := \
 	tests/unit/lib/net/test_tssource_async.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/rist/ristin_stub.c \
 	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/srt/srtsrc_stub.c \
@@ -3059,6 +3094,7 @@ lib_net_tssource_file_BIN := tests/unit/lib/net/test_tssource_file
 lib_net_tssource_file_SRCS := \
 	tests/unit/lib/net/test_tssource_file.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/rist/ristin_stub.c \
 	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/srt/srtsrc_stub.c \
@@ -3167,7 +3203,9 @@ dipirec_record_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/tssink.c \
+	src/lib/mux/fec2022.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/rtmp/auth_stub.c \
 	src/lib/net/rist/ristout_stub.c \
@@ -3254,6 +3292,7 @@ dipirec_args_BIN := tests/unit/dipirec/test_args
 dipirec_args_SRCS := \
 	tests/unit/dipirec/test_args.c \
 	src/dipirec/args.c \
+	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/net/httpclient/url.c \
@@ -3391,6 +3430,7 @@ dipixy_args_SRCS := \
 	tests/unit/dipixy/test_args.c \
 	src/dipixy/args.c \
 	src/dipixy/core/route.c \
+	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/base64.c \
 	src/lib/helper/ioutil.c \
@@ -3445,6 +3485,7 @@ dipixy_playlist_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/demux/rtp.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -3477,6 +3518,7 @@ dipixy_capture_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/demux/rtp.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -3531,6 +3573,7 @@ dipixy_channels_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/demux/rtp.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -3688,6 +3731,7 @@ dipixy_ws_sources_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/demux/rtp.c \
 	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \

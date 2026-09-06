@@ -15,6 +15,7 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
+#include "lib/mux/fec2022.h"
 #include "lib/net/netconnect.h"
 
 #include "args.h"
@@ -67,6 +68,8 @@ static void print_help(void) {
       "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
       "      --dscp <v>             output DSCP marking: video-high|video-low|voice|\n"
       "                             signalling|best-effort|0..63 (default: video-high)\n"
+      "      --al-fec <L>:<D>       Annex E Layer 1 FEC (SMPTE 2022-1), L*D<=400, L<=40\n"
+      "      --al-fec-port <port>   repair stream UDP port, requires --al-fec\n"
       "  -n, --nit <text>           NIT network_name\n"
       "  -R, --rist <uri>           rist://host:port[?query] or srt://host:port output,\n"
       "                             bonded with any other -R of the same scheme given\n"
@@ -232,6 +235,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"srt-packetfilter", required_argument, 0, 1034},
       {"srt-latency", required_argument, 0, 1035},
       {"dscp", required_argument, 0, 1053},
+      {"al-fec", required_argument, 0, 1054},
+      {"al-fec-port", required_argument, 0, 1055},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
@@ -517,6 +522,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
+      case 1054:
+        if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
+          argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1055:
+        if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
+          argerr("invalid --al-fec-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
       case 1048:
         any_cas_flag = 1;
         if (cfg->n_cas_vendors == 0) {
@@ -751,6 +768,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--metrics/--metrics-interval require --metrics-id");
     return ARGS_ERR;
   }
+  if (cfg->al_fec_l && !cfg->al_fec_port) {
+    argerr("--al-fec requires --al-fec-port");
+    return ARGS_ERR;
+  }
+  if (!cfg->al_fec_l && cfg->al_fec_port)
+    log_line(TOOL_NAME ": --al-fec-port has no effect without --al-fec");
+  if (cfg->al_fec_l && !cfg->rtp) {
+    argerr("--al-fec requires -r/--rtp output");
+    return ARGS_ERR;
+  }
+  if (cfg->al_fec_l && !cfg->mcast_port)
+    log_line(TOOL_NAME ": --al-fec has no effect without -m");
   if (profile_arg) {
     static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
     int v;

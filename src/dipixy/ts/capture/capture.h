@@ -20,7 +20,7 @@ void capture_set_ring_cap(size_t bytes);
 
 /* 1 join per unique (family, group, port, iface). repeat calls share it (refcount).
    rtp: nonzero unwraps RTP before buffer. ret/fcc: NULL = none */
-capture_ctx_t *capture_open(int family, const char *group, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc);
+capture_ctx_t *capture_open(int family, const char *group, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned al_fec_l, unsigned al_fec_d);
 
 void capture_close(capture_ctx_t *ctx);
 

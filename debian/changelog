@@ -13,6 +13,14 @@ dvbipitools (2.4.1-1) unstable; urgency=low
     + dipiradiohead (default: NET_DSCP_VIDEO_HIGH)
     + dipibcg (default: NET_DSCP_SIGNALLING)
     + dipisds (default: NET_DSCP_SIGNALLING)
+  * Annex E AL-FEC Layer 1 (SMPTE 2022-1 parity) / RFC 2733
+    + dipitvhead (sender)
+    + dipiradiohead (sender)
+    + dipisrt (sender, receiver)
+    + dipirist (sender, receiver)
+    + dipirec (sender, receiver)
+    + dipixy (receiver)
+    + dipisds (signaling)
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.0-1) unstable; urgency=medium

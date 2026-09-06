@@ -10,47 +10,49 @@ dipisds -l -m <mcast>:<port> [options]
 
 ## Options
 
-| flag | long form         | argument                    | default                                   |
-|------|-------------------|-----------------------------|--------------------------------------------|
-| `-a` | `--announce`      |                             | headend mode: read `-i`, transmit on `-m`  |
-| `-l` | `--listen`        |                             | client mode: receive on `-m`, write `-o`   |
-| `-i` | `--input`         | `<path>`                    | announce: required                         |
-| `-p` | `--provider`      | `<name>`                    | announce: required unless `-i` is `.xml`   |
-| `-O` | `--offering`      | `<name>`                    | announce: required unless `-i` is `.xml`   |
-| `-L` | `--lang`          | `<code>`                    | announce: `deu`                            |
-| `-m` | `--mcast`         | `<g>:<p>`                   | required                                   |
-| `-I` | `--iface`         | `<iface>`                   | kernel default                             |
-|      | `--dscp`          | `<v>`                       | announce: `signalling`                     |
-| `-t` | `--interval`      | `<s>`                       | announce: `5`                              |
-| `-t` | `--timeout`       | `<s>`                       | listen: `35`                               |
-| `-o` | `--output`        | `<path>` / `-`              | listen: `-` (stdout)                       |
-| `-f` | `--format`        | `m3u\|csv\|xspf\|xml\|null` | listen: from `-o` suffix                  |
-| `-v` | `--verbose`       |                             | off                                        |
-|      | `--color`         | `auto\|always\|never`       | `auto`                                     |
-|      | `--ret-addr`      | `<addr>:<port>`             | announce: off (no RET advertised)          |
-|      | `--ret-rtx-time`  | `<ms>`                      | announce: `2000`                           |
-|      | `--ret-rtx-pt`    | `<n>`                       | announce: `99`                             |
-|      | `--ret-mc`        |                             | announce: off (unicast RET only)           |
-|      | `--ret-mc-port`   | `<port>`                    | announce: each service's own port          |
-|      | `--fcc-addr`      | `<addr>:<port>`             | announce: off (no FCC advertised)          |
-|      | `--fcc-rtx-time`  | `<ms>`                      | announce: `2000`                           |
-|      | `--fcc-rtx-pt`    | `<n>`                       | announce: `99`                             |
-|      | `--metrics`       | `<path>`                    | announce: `/run/dvbipitools/metrics.sock`  |
+| flag | long form         | argument                    | default                                      |
+|------|-------------------|-----------------------------|----------------------------------------------|
+| `-a` | `--announce`      |                             | headend mode: read `-i`, transmit on `-m`    |
+| `-l` | `--listen`        |                             | client mode: receive on `-m`, write `-o`     |
+| `-i` | `--input`         | `<path>`                    | announce: required                           |
+| `-p` | `--provider`      | `<name>`                    | announce: required unless `-i` is `.xml`     |
+| `-O` | `--offering`      | `<name>`                    | announce: required unless `-i` is `.xml`     |
+| `-L` | `--lang`          | `<code>`                    | announce: `deu`                              |
+| `-m` | `--mcast`         | `<g>:<p>`                   | required                                     |
+| `-I` | `--iface`         | `<iface>`                   | kernel default                               |
+|      | `--dscp`          | `<v>`                       | announce: `signalling`                       |
+| `-t` | `--interval`      | `<s>`                       | announce: `5`                                |
+| `-t` | `--timeout`       | `<s>`                       | listen: `35`                                 |
+| `-o` | `--output`        | `<path>` / `-`              | listen: `-` (stdout)                         |
+| `-f` | `--format`        | `m3u\|csv\|xspf\|xml\|null` | listen: from `-o` suffix                     |
+| `-v` | `--verbose`       |                             | off                                          |
+|      | `--color`         | `auto\|always\|never`       | `auto`                                       |
+|      | `--ret-addr`      | `<addr>:<port>`             | announce: off (no RET advertised)            |
+|      | `--ret-rtx-time`  | `<ms>`                      | announce: `2000`                             |
+|      | `--ret-rtx-pt`    | `<n>`                       | announce: `99`                               |
+|      | `--ret-mc`        |                             | announce: off (unicast RET only)             |
+|      | `--ret-mc-port`   | `<port>`                    | announce: each service's own port            |
+|      | `--fcc-addr`      | `<addr>:<port>`             | announce: off (no FCC advertised)            |
+|      | `--fcc-rtx-time`  | `<ms>`                      | announce: `2000`                             |
+|      | `--fcc-rtx-pt`    | `<n>`                       | announce: `99`                               |
+|      | `--al-fec-addr`   | `<addr>:<port>`             | announce: off (no Annex E FEC advertised)    |
+|      | `--al-fec-pt`     | `<n>`                       | announce: `96`, requires `--al-fec-addr`     |
+|      | `--metrics`       | `<path>`                    | announce: `/run/dvbipitools/metrics.sock`    |
 |      | `--metrics-id`    | `<name>`                    | announce: none (metrics disabled unless set) |
-|      | `--metrics-interval` | `<s>`                    | announce: `5`                              |
-|      | `--packages`      | `<path>`                    | announce: off (no Package Discovery)       |
+|      | `--metrics-interval` | `<s>`                    | announce: `5`                                |
+|      | `--packages`      | `<path>`                    | announce: off (no Package Discovery)         |
 |      | `--cells`         | `<path>`                    | announce: off (no Regionalisation Discovery) |
-|      | `--rms-name`      | `<name>`                    | announce: off (no RMS-FUS Discovery)       |
-|      | `--rms-lang`      | `<code>`                    | announce: `deu`                            |
-|      | `--rms-location`  | `<uri>`                     | announce: required with `--rms-name`       |
-|      | `--rms-logo`      | `<uri>`                     | announce: off                              |
-|      | `--fus-name`      | `<name>`                    | announce: off (no RMS-FUS Discovery)       |
-|      | `--fus-lang`      | `<code>`                    | announce: `deu`                            |
-|      | `--fus-id`        | `<n>`                       | announce: required with `--fus-name`       |
-|      | `--fus-announce`  | `<addr>:<port>`             | announce: off                              |
-|      | `--fus-logo`      | `<uri>`                     | announce: off                              |
-| `-d` | `--daemonize`     |                             | off (foreground)                           |
-| `-h` | `--help`          |                             |                                             |
+|      | `--rms-name`      | `<name>`                    | announce: off (no RMS-FUS Discovery)         |
+|      | `--rms-lang`      | `<code>`                    | announce: `deu`                              |
+|      | `--rms-location`  | `<uri>`                     | announce: required with `--rms-name`         |
+|      | `--rms-logo`      | `<uri>`                     | announce: off                                |
+|      | `--fus-name`      | `<name>`                    | announce: off (no RMS-FUS Discovery)         |
+|      | `--fus-lang`      | `<code>`                    | announce: `deu`                              |
+|      | `--fus-id`        | `<n>`                       | announce: required with `--fus-name`         |
+|      | `--fus-announce`  | `<addr>:<port>`             | announce: off                                |
+|      | `--fus-logo`      | `<uri>`                     | announce: off                                |
+| `-d` | `--daemonize`     |                             | off (foreground)                             |
+| `-h` | `--help`          |                             |                                              |
 
 ## Announce (`-a`)
 
@@ -183,6 +185,25 @@ per the spec an HNED using both services is meant to use only this element, igno
   `DestinationPort-ForRTCPReporting`, `trr-int`, `RTSPControlURL`, and the RTCPReporting-side
   `rtcp-bandwidth`/`rtcp-rsize`/`dvb-*` attributes.
 
+
+## Advertising Annex E Layer 1 FEC (`--al-fec-addr`)
+
+Off by default. `--al-fec-addr <addr>:<port>` adds a `FECBaseLayer` element (ETSI TS 102 034 clause 5.2.12.10, `FECLayerAddressType`)
+to every service's `IPMulticastAddress` (`McastType`, clause 5.2.12.14), a direct sibling of `RTPRetransmission`/
+`ServerBasedEnhancementServiceInfo`.
+
+`--al-fec-pt <n>` sets `PayloadTypeNumber` (default `96`). This only advertises where the repair stream is.
+The `<L>:<D>` matrix parameters themselves aren't part of this schema anywhere and must be
+configured independently on both the sender (e.g. `dipitvhead --al-fec`) and receiver.
+
+> Note: `.xml` passthrough is an exception. The provided XML will not get changed.
+
+### Example
+```xml
+<IPMulticastAddress Address="239.19.75.1" Port="8700" Streaming="rtp">
+  <FECBaseLayer Address="239.19.75.1" Port="8701"/>
+</IPMulticastAddress>
+```
 
 ## Package Discovery (`--packages`)
 

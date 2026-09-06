@@ -288,7 +288,7 @@ START_TEST(list_for_each_passes_fcc_through) {
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, buf, sizeof buf);
   ck_assert_uint_gt(len, 0u);
 
   {
@@ -358,7 +358,7 @@ START_TEST(channels_resolve_passes_ret_and_fcc_through) {
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, &fcc, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, &fcc, NULL, buf, sizeof buf);
   ck_assert_uint_gt(len, 0u);
 
   {

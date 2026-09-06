@@ -116,6 +116,20 @@ RTCP cname. Default is library-generated.
 RIST recovery buffer size in milliseconds, 1 to 60000 (sets both min and
 max). Default is the library default.
 .TP
+.BR \-\-al\-fec " " \fIL\fR:\fID\fR
+Annex E Layer 1 FEC (SMPTE 2022-1) on the
+.B rtp://
+side: sends or expects a parity repair stream.
+.IR L " * " D " <= 400, " L " <= 40. Requires "
+.BR \-\-al\-fec\-port .
+No effect on the RIST side.
+.TP
+.BR \-\-al\-fec\-port " " \fIport\fR
+Repair stream UDP port, same multicast group as the
+.B rtp://
+side. Requires
+.BR \-\-al\-fec .
+.TP
 .B \-\-color \fIwhen\fR
 Colorize log output:
 .BR auto ,

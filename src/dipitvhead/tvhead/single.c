@@ -8,10 +8,15 @@
 #include "lib/helper/signal.h"
 #include "priv.h"
 
+static void free_rtp_out(out_ctx_t *o) {
+  if (o->fec_enc) fec2022_enc_free(o->fec_enc);
+  if (o->fec_mc) mcast_close(o->fec_mc);
+  if (o->rtph) rtpheader_free(o->rtph);
+}
+
 /* rx is already built (discovery succeeded): sets up pacing/cas and runs until this
    connection ends, then tears rx back down */
-static void run_single_input(const config_t *cfg, tvsrc_t *src, psi_t *psi, out_ctx_t *out, remux_t *rx,
-                              metrics_exporter_t *mx, input_metrics_t *im_p, ts_metrics_t *tsm_p) {
+static void run_single_input(const config_t *cfg, tvsrc_t *src, psi_t *psi, out_ctx_t *out, remux_t *rx, metrics_exporter_t *mx, input_metrics_t *im_p, ts_metrics_t *tsm_p) {
   cas_t *cas = NULL;
   int cas_wanted;
 
@@ -26,16 +31,13 @@ static void run_single_input(const config_t *cfg, tvsrc_t *src, psi_t *psi, out_
     int es_count;
     const out_es_t *es = remux_es(rx, &es_count);
     cas = cas_start(cfg, psi, es, es_count, remux_pcr_pid_out(rx));
-    if (cas)
-      remux_set_cas(rx, cas);
-    else
-      log_line("cas setup failed");
+    if (cas) remux_set_cas(rx, cas);
+    else log_line("cas setup failed");
   }
   if (!cas_wanted || cas) {
     print_discovered(psi);
     run_output(src, rx, out, cfg, cas, mx, im_p, tsm_p);
-    if (cas)
-      cas_stop(cas);
+    if (cas) cas_stop(cas);
   }
   bitrate_pacer_free(out->pacer);
   out->pacer = NULL;
@@ -67,12 +69,21 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
         mcast_close(outmc);
         return 1;
       }
+      if (cfg->al_fec_l) {
+        out.fec_mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->al_fec_port, cfg->iface_out, (int)cfg->ttl);
+        out.fec_enc = out.fec_mc ? fec2022_enc_new(cfg->al_fec_l, cfg->al_fec_d, 96) : NULL;
+        if (!out.fec_mc || !out.fec_enc) {
+          free_rtp_out(&out);
+          mcast_close(outmc);
+          return 1;
+        }
+      }
     }
   }
   if (cfg->n_rist > 0) {
     out.rist = tvhead_rist_open(cfg);
     if (!out.rist) {
-      if (out.rtph) rtpheader_free(out.rtph);
+      free_rtp_out(&out);
       if (outmc) mcast_close(outmc);
       return 1;
     }
@@ -81,7 +92,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     out.srt = tvhead_srt_open(cfg);
     if (!out.srt) {
       if (out.rist) ristout_close(out.rist);
-      if (out.rtph) rtpheader_free(out.rtph);
+      free_rtp_out(&out);
       if (outmc) mcast_close(outmc);
       return 1;
     }
@@ -92,7 +103,6 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     tvsrc_t *src = tvsrc_open(cfg, &cfg->inputs[0], &reason);
     psi_t *psi;
     int r;
-
     if (!src) {
       if (metrics_on) {
         im.up = 0;
@@ -123,7 +133,6 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     if (r == 1) {
       out_program_pids_t pids;
       remux_t *rx;
-
       out_program_pids(0, &pids);
       rx = remux_new(cfg, &cfg->inputs[0], psi, &pids, 1);
       if (!rx)
@@ -147,7 +156,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
   flush_batch(&out);
-  if (out.rtph) rtpheader_free(out.rtph);
+  free_rtp_out(&out);
   if (out.rist) ristout_close(out.rist);
   if (out.srt) srtsink_close(out.srt);
   if (outmc) mcast_close(outmc);
