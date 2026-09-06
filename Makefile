@@ -3885,6 +3885,7 @@ fuzz_dvbstp_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
@@ -3909,6 +3910,7 @@ fuzz_ssdp_SRCS := \
 	src/dipixy/dlna/ssdp.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
@@ -3928,6 +3930,7 @@ fuzz_gen_seeds_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/signal.c
 
 define FUZZ_TARGET_template

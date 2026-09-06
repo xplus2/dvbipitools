@@ -85,14 +85,10 @@ static size_t bpf_dispatch_len(size_t nv4, size_t nv6) {
 
 /* assumes A = ethertype on entry. base: ethernet-payload offset (14 no vlan, 18 vlan tag unwrapped) */
 static int emit_dispatch_block(bpf_buf_t *b, unsigned base, const cidr_t *ranges, size_t range_count) {
-  size_t nv4 = 0, nv6 = 0;
+  size_t nv4 = 0;
   unsigned v4_section_len;
 
-  for (size_t i = 0; i < range_count; i++)
-    if (ranges[i].family == AF_INET)
-      nv4++;
-    else
-      nv6++;
+  for (size_t i = 0; i < range_count; i++) if (ranges[i].family == AF_INET) nv4++;
   v4_section_len = (unsigned)(BPF_V4_CLAUSE_INSNS * nv4 + 1);
 
   if (bpf_emit(b, (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, ETH_P_IP, 0, v4_section_len)) < 0)
