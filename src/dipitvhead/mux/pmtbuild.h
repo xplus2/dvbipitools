@@ -51,7 +51,8 @@ int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned strip_mask, un
 void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, unsigned emm_pid, unsigned emm_ca_system_id, unsigned es_pid_base, unsigned video_pid, out_es_t *out_es, int *n, int cap, int *dropped);
 
 /* build multi-ES PMT section. prog_desc/prog_desc_len: program_info descriptor bytes (e.g. cadescbuild_ca_descriptor()), NULL/0 if none.
-   extra/extra_len: pre-built ES-loop bytes appended before the CRC (e.g. aitbuild_pmt_entry()), NULL/0 if none. 0 on overflow */
-size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, const unsigned char *prog_desc, size_t prog_desc_len, const out_es_t *es, int es_count, const unsigned char *extra, size_t extra_len, unsigned char *out, size_t cap);
+   extra/extra_len: pre-built ES-loop bytes appended before the CRC (e.g. aitbuild_pmt_entry()), NULL/0 if none. 0 on overflow.
+   *desc_truncated=1: ES descriptors didn't fit */
+size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, const unsigned char *prog_desc, size_t prog_desc_len, const out_es_t *es, int es_count, const unsigned char *extra, size_t extra_len, unsigned char *out, size_t cap, int *desc_truncated);
 
 #endif

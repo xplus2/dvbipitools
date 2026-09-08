@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "lib/demux/psi/section_asm.h"
+#include "lib/helper/log.h"
 
 #include "../../cas/cas.h"
 #include "../aitbuild.h"
@@ -47,6 +48,7 @@ struct remux {
   unsigned char last_pmt[4096];
   size_t last_pmt_len;
   int have_last_pmt;
+  log_throttle_t pmt_desc_truncated_throttle;
 
   unsigned char cc_pat;
   unsigned char cc_pmt;

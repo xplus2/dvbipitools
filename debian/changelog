@@ -21,6 +21,7 @@ dvbipitools (2.4.1-1) unstable; urgency=low
     + dipirec (sender, receiver)
     + dipixy (receiver)
     + dipisds (signaling)
+  * ES descriptor passing in dipitvhead
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.0-1) unstable; urgency=medium

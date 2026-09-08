@@ -111,11 +111,14 @@ START_TEST(pmtbuild_map_es_reports_dropped_beyond_cap) {
 END_TEST
 
 START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
+  /* CA_descriptor(0x09) & stream_identifier_descriptor(0x52, EN 300 468 6.2.39) */
+  static const unsigned char video_desc[] = {0x09, 4, 0x4A, 0x75, 0xE0, 0x20, 0x52, 1, 7};
+  static const unsigned char audio_desc[] = {0x0A, 4, 'd', 'e', 'u', 0x00};
   psi_es_t es[4];
   out_es_t out_es[8];
   out_program_pids_t pids;
   unsigned pcr_pid;
-  int n, dropped;
+  int n, dropped, desc_truncated;
   unsigned char section[512], pkt[188], pat_section[32];
   size_t slen, pat_len;
   psi_t *p;
@@ -127,10 +130,13 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
   es[0].pid = 0x0101;
   es[0].cls = PID_VIDEO;
   es[0].codec = CODEC_H264;
+  memcpy(es[0].desc, video_desc, sizeof video_desc);
+  es[0].desc_len = sizeof video_desc;
   es[1].pid = 0x0102;
   es[1].cls = PID_AUDIO;
   es[1].codec = CODEC_AAC;
-  snprintf(es[1].lang, sizeof es[1].lang, "deu");
+  memcpy(es[1].desc, audio_desc, sizeof audio_desc);
+  es[1].desc_len = sizeof audio_desc;
   es[2].pid = 0x0103;
   es[2].cls = PID_SUBTITLE;
   es[2].sub_type = 1;
@@ -146,8 +152,9 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
   ck_assert_int_eq(n, 4);
   ck_assert_int_eq(dropped, 0);
 
-  slen = pmtbuild_pmt(1, 55, pcr_pid, NULL, 0, out_es, n, NULL, 0, section, sizeof section);
+  slen = pmtbuild_pmt(1, 55, pcr_pid, NULL, 0, out_es, n, NULL, 0, section, sizeof section, &desc_truncated);
   ck_assert_uint_ne(slen, 0u);
+  ck_assert_int_eq(desc_truncated, 0);
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
 
   p = psi_new();
@@ -165,6 +172,8 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
   ck_assert_uint_eq(dec[0].pid, pids.video_pid);
   ck_assert_int_eq(dec[0].cls, PID_VIDEO);
   ck_assert_int_eq(dec[0].codec, CODEC_H264);
+  ck_assert_uint_eq(dec[0].desc_len, 3u);
+  ck_assert_mem_eq(dec[0].desc, video_desc + 6, 3);
 
   ck_assert_int_eq(dec[1].cls, PID_AUDIO);
   ck_assert_int_eq(dec[1].codec, CODEC_AAC);
@@ -184,11 +193,43 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
 }
 END_TEST
 
+START_TEST(pmtbuild_pmt_truncates_es_descriptors_gracefully) {
+  /* 20x3-byte descriptors */
+  unsigned char big_desc[60];
+  psi_es_t src;
+  out_es_t out_es[1];
+  unsigned char out[48];
+  size_t slen;
+  int desc_truncated;
+  for (int i = 0; i < 20; i++) {
+    big_desc[i * 3] = 0x80;
+    big_desc[i * 3 + 1] = 1;
+    big_desc[i * 3 + 2] = (unsigned char)i;
+  }
+  memset(&src, 0, sizeof src);
+  src.cls = PID_VIDEO;
+  src.codec = CODEC_H264;
+  memcpy(src.desc, big_desc, sizeof big_desc);
+  src.desc_len = sizeof big_desc;
+  memset(out_es, 0, sizeof out_es);
+  out_es[0].out_pid = 0x0101;
+  out_es[0].stream_type = 0x1B;
+  out_es[0].src = &src;
+  slen = pmtbuild_pmt(0, 1, 0x0101, NULL, 0, out_es, 1, NULL, 0, out, sizeof out, &desc_truncated);
+
+  ck_assert_uint_ne(slen, 0u);
+  ck_assert_int_eq(desc_truncated, 1);
+  ck_assert_uint_eq(crc32_mpeg(out, slen), 0u);
+  ck_assert_uint_le(slen, sizeof out);
+}
+END_TEST
+
 START_TEST(pmtbuild_pmt_rejects_small_cap) {
   out_es_t es[1];
   unsigned char out[8];
+  int desc_truncated;
   memset(es, 0, sizeof es);
-  ck_assert_uint_eq(pmtbuild_pmt(0, 1, 0x100, NULL, 0, es, 0, NULL, 0, out, sizeof out), 0u);
+  ck_assert_uint_eq(pmtbuild_pmt(0, 1, 0x100, NULL, 0, es, 0, NULL, 0, out, sizeof out, &desc_truncated), 0u);
 }
 END_TEST
 
@@ -199,6 +240,7 @@ START_TEST(pmtbuild_pmt_places_prog_desc_in_program_info) {
   out_program_pids_t pids;
   unsigned char out[64];
   size_t slen;
+  int desc_truncated;
 
   out_program_pids(0, &pids);
   memset(&src, 0, sizeof src);
@@ -208,7 +250,7 @@ START_TEST(pmtbuild_pmt_places_prog_desc_in_program_info) {
   es[0].stream_type = 0x1B;
   es[0].src = &src;
 
-  slen = pmtbuild_pmt(0, 1, pids.video_pid, ca_desc, sizeof ca_desc, es, 1, NULL, 0, out, sizeof out);
+  slen = pmtbuild_pmt(0, 1, pids.video_pid, ca_desc, sizeof ca_desc, es, 1, NULL, 0, out, sizeof out, &desc_truncated);
   ck_assert_uint_ne(slen, 0u);
 
   ck_assert_uint_eq(out[10], (unsigned char)(0xF0 | ((sizeof ca_desc >> 8) & 0x0F)));
@@ -225,6 +267,7 @@ static Suite *pmtbuild_suite(void) {
   tcase_add_test(tc, pmtbuild_map_es_defaults_pcr_to_first_es_when_no_match);
   tcase_add_test(tc, pmtbuild_map_es_reports_dropped_beyond_cap);
   tcase_add_test(tc, pmtbuild_pmt_round_trips_video_audio_subtitle_teletext);
+  tcase_add_test(tc, pmtbuild_pmt_truncates_es_descriptors_gracefully);
   tcase_add_test(tc, pmtbuild_pmt_rejects_small_cap);
   tcase_add_test(tc, pmtbuild_pmt_places_prog_desc_in_program_info);
   suite_add_tcase(s, tc);

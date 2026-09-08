@@ -129,21 +129,6 @@ void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, un
   }
 }
 
-static size_t put_registration(unsigned char *out, const char *fourcc) {
-  out[0] = 0x05;
-  out[1] = 4;
-  memcpy(out + 2, fourcc, 4);
-  return 6;
-}
-
-static size_t put_iso639(unsigned char *out, const char *lang) {
-  out[0] = 0x0A;
-  out[1] = 4;
-  memcpy(out + 2, lang, 3);
-  out[5] = 0x00; /* audio_type: undefined */
-  return 6;
-}
-
 static size_t put_teletext(unsigned char *out, const psi_es_t *e) {
   unsigned mag = (e->ttx_page / 100 == 8) ? 0 : (e->ttx_page / 100);
   unsigned page = e->ttx_page % 100;
@@ -166,16 +151,19 @@ static size_t put_subtitling(unsigned char *out, const psi_es_t *e) {
 }
 
 /* copies source ES descriptor loop verbatim, minus CA_descriptor (tag 0x09): CA_PID would
-   point at stale ECM pid once remapped. returns new n, or (size_t)-1 on overflow */
-static size_t put_data_descriptors(unsigned char *out, size_t n, size_t cap, const psi_es_t *src) {
+   point at stale ECM pid once remapped (ETSI EN 300 468/ISO 13818-1).
+   possible overflow: won't copy ES's remaining descriptors, set *truncated. returns new n. */
+static size_t put_opaque_descriptors(unsigned char *out, size_t n, size_t cap, const psi_es_t *src, int *truncated) {
   size_t i = 0;
   while (i + 2 <= src->desc_len) {
     size_t l = src->desc[i + 1];
     if (i + 2 + l > src->desc_len)
       break;
     if (src->desc[i] != 0x09) {
-      if (n + 2 + l > cap)
-        return (size_t)-1;
+      if (n + 2 + l > cap) {
+        *truncated = 1;
+        break;
+      }
       memcpy(out + n, src->desc + i, 2 + l);
       n += 2 + l;
     }
@@ -184,33 +172,10 @@ static size_t put_data_descriptors(unsigned char *out, size_t n, size_t cap, con
   return n;
 }
 
-/* appends AC-3/EAC3/Opus registration + ISO 639 language descriptors for an audio ES.
-   returns new n, or (size_t)-1 if it would overflow cap */
-static size_t put_audio_descriptors(unsigned char *out, size_t n, size_t cap, const out_es_t *e) {
-  if (e->src->codec == CODEC_AC3) {
-    if (n + 6 > cap)
-      return (size_t)-1;
-    n += put_registration(out + n, "AC-3");
-  } else if (e->src->codec == CODEC_EAC3) {
-    if (n + 6 > cap)
-      return (size_t)-1;
-    n += put_registration(out + n, "EAC3");
-  } else if (e->src->codec == CODEC_OPUS) {
-    if (n + 6 > cap)
-      return (size_t)-1;
-    n += put_registration(out + n, "Opus");
-  }
-  if (e->src->cls == PID_AUDIO && e->src->lang[0]) {
-    if (n + 6 > cap)
-      return (size_t)-1;
-    n += put_iso639(out + n, e->src->lang);
-  }
-  return n;
-}
-
-size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, const unsigned char *prog_desc, size_t prog_desc_len, const out_es_t *es, int es_count, const unsigned char *extra, size_t extra_len, unsigned char *out, size_t cap) {
+size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, const unsigned char *prog_desc, size_t prog_desc_len, const out_es_t *es, int es_count, const unsigned char *extra, size_t extra_len, unsigned char *out, size_t cap, int *desc_truncated) {
   size_t n = 0;
 
+  *desc_truncated = 0;
   if (cap < 20 + prog_desc_len)
     return 0;
   out[n++] = 0x02;
@@ -249,14 +214,8 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
       if (n + 10 > cap)
         return 0;
       n += put_subtitling(out + n, e->src);
-    } else if (e->src->cls == PID_DATA) {
-      n = put_data_descriptors(out, n, cap, e->src);
-      if (n == (size_t)-1)
-        return 0;
     } else {
-      n = put_audio_descriptors(out, n, cap, e);
-      if (n == (size_t)-1)
-        return 0;
+      n = put_opaque_descriptors(out, n, cap - 4, e->src, desc_truncated); /* -4: leave room for psi_finish_section's CRC */
     }
 
     unsigned esinfo = (unsigned)(n - (es_info_pos + 2));

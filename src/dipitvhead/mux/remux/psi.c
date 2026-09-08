@@ -64,8 +64,11 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
       if (n)
         ts_packet_emit(OUT_PID_PAT, &r->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
-    n = pmtbuild_pmt(0, r->input.sid, r->pcr_pid_out, prog_desc_len ? prog_desc : NULL, prog_desc_len, r->es, r->es_count, r->send_ait ? r->ait_pmt_entry : NULL, r->send_ait ? r->ait_pmt_entry_len : 0, sec, sizeof sec);
+    int desc_truncated;
+    n = pmtbuild_pmt(0, r->input.sid, r->pcr_pid_out, prog_desc_len ? prog_desc : NULL, prog_desc_len, r->es, r->es_count, r->send_ait ? r->ait_pmt_entry : NULL, r->send_ait ? r->ait_pmt_entry_len : 0, sec, sizeof sec, &desc_truncated);
     psi_note(tsm, PSI_TABLE_PMT, n);
+    if (n && desc_truncated)
+      log_throttled(&r->pmt_desc_truncated_throttle, LOG_THROTTLE_WINDOW_S, "program %u: PMT section too small, some ES descriptors dropped", r->src_service_id);
     if (n) {
       /* diffing itself metrics-only, skipped whole when tsm NULL, not just its counter.
          "updated" relative to this remux_t's own history: fresh remux_t (reconnect) has

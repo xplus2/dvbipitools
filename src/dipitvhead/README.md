@@ -237,7 +237,8 @@ signaling all survive the remux.
 ECM/EMM (`--hbbtv`, `--cas-*`, BISS) are not affected.
 
 `DATA` streams are forwarded: original `stream_type` and descriptors are kept as-is, minus
-`CA_descriptor`s, whose PID would be stale after remapping.
+`CA_descriptor`s, whose PID would be stale after remapping. Video and audio ES keep their own
+PMT descriptors (`stream_identifier_descriptor`, `AC-3_descriptor`, etc.) the same way.
 
 `ECM` controls the source CA/ECM passthrough: if the source is already scrambled and dipitvhead isn't
 running its own `--cas-*`/BISS, its CAT, one program-level `CA_descriptor`, the ECM PID and the
