@@ -22,7 +22,7 @@ dvbipitools (2.4.1-1) unstable; urgency=low
     + dipixy (receiver)
     + dipisds (signaling)
   * ES descriptor passing in dipitvhead
- -- dvbipitools authors <unspecified@example.com>  tbd
+ -- dvbipitools authors <unspecified@example.com>  Thu, 10 Sep 2026 00:00:00 +0200
 
 dvbipitools (2.4.0-1) unstable; urgency=medium
   * added optional metrics export to the following tools:
