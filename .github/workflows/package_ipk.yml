@@ -166,6 +166,8 @@ jobs:
         install -m 0755 build/src/dipimetrics/dipimetrics "${STAGING}/usr/bin/"
         install -m 0755 build/src/dipifccret/dipifccret "${STAGING}/usr/bin/"
         install -m 0755 build/src/dipidescramble/dipidescramble "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dipixy/dipixy "${STAGING}/usr/bin/"
+        install -m 0755 build/src/dvbipitools/dvbipitools "${STAGING}/usr/bin/"
         [ -f build/src/dipicam378/dipicam378 ] && install -m 0755 build/src/dipicam378/dipicam378 "${STAGING}/usr/bin/"
         [ -f build/src/dipirist/dipirist ] && install -m 0755 build/src/dipirist/dipirist "${STAGING}/usr/bin/"
         [ -f build/src/dipisrt/dipisrt ] && install -m 0755 build/src/dipisrt/dipisrt "${STAGING}/usr/bin/"
