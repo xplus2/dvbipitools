@@ -40,7 +40,9 @@ static void send_frame(int epfd, conn_t *c, int opcode, const void *payload, siz
     ws->out_cap = flen;
   }
   ws_frame_encode(ws->out_buf, opcode, payload, len);
+  pthread_mutex_lock(&c->out_lock); /* c->out also written by ws_sink() on other threads */
   conn_queue(c, ws->out_buf, flen);
+  pthread_mutex_unlock(&c->out_lock);
   reactor_ws_flush(epfd, c);
 }
 
@@ -76,8 +78,7 @@ void reactor_ws_begin(int epfd, conn_t *c) {
 }
 
 void reactor_ws_close(int epfd, conn_t *c) {
-  if (!conn_claim_teardown(c))
-    return;
+  if (!conn_claim_teardown(c)) return;
   ws_broadcast_unregister(ws_sink, c);
   conn_unpublish(c);
   epoll_ctl(epfd, EPOLL_CTL_DEL, c->fd, NULL);
@@ -98,9 +99,12 @@ void reactor_ws_close(int epfd, conn_t *c) {
 }
 
 void reactor_ws_flush(int epfd, conn_t *c) {
-  int rc, caf;
+  int rc, caf, dead;
   pthread_mutex_lock(&c->out_lock);
-  rc = c->dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
+  dead = c->dead;
+  pthread_mutex_unlock(&c->out_lock);
+  rc = dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
+  pthread_mutex_lock(&c->out_lock);
   caf = c->close_after_flush;
   pthread_mutex_unlock(&c->out_lock);
   if (rc == CONN_FLUSH_ERROR || (rc == CONN_FLUSH_DONE && caf))
@@ -119,14 +123,11 @@ static void handle_text(int epfd, conn_t *c, const char *msg, size_t len) {
     return;
   }
   if (memmem(msg, len, "\"clients.get\"", 13)) {
-    if (!ws_clients_build_snapshot(&json))
-      send_frame(epfd, c, WS_OP_TEXT, json, strlen(json));
+    if (!ws_clients_build_snapshot(&json)) send_frame(epfd, c, WS_OP_TEXT, json, strlen(json));
     return;
   }
-  if (!memmem(msg, len, "\"sources.get\"", 13))
-    return;
-  if (ws_sources_build_snapshot(reactor_cfg(), reactor_channels(), &json))
-    return;
+  if (!memmem(msg, len, "\"sources.get\"", 13)) return;
+  if (ws_sources_build_snapshot(reactor_cfg(), reactor_channels(), &json)) return;
   send_frame(epfd, c, WS_OP_TEXT, json, strlen(json));
 }
 
@@ -147,8 +148,7 @@ void reactor_ws_readable(int epfd, conn_t *c) {
       reactor_ws_close(epfd, c);
       return;
     }
-    if (errno == EAGAIN || errno == EWOULDBLOCK)
-      break;
+    if (errno == EAGAIN || errno == EWOULDBLOCK) break;
     reactor_ws_close(epfd, c);
     return;
   }
@@ -162,8 +162,7 @@ void reactor_ws_readable(int epfd, conn_t *c) {
       reactor_ws_close(epfd, c);
       return;
     }
-    if (!got)
-      break;
+    if (!got) break;
     if (opcode == WS_OP_CLOSE) {
       send_frame(epfd, c, WS_OP_CLOSE, payload, plen <= 125 ? plen : 0);
       c->close_after_flush = 1;
@@ -178,9 +177,7 @@ void reactor_ws_readable(int epfd, conn_t *c) {
 
 static int ci_contains(const char *hay, const char *needle) {
   size_t nlen = strlen(needle);
-  for (; *hay; hay++)
-    if (!strncasecmp(hay, needle, nlen))
-      return 1;
+  for (; *hay; hay++) if (!strncasecmp(hay, needle, nlen)) return 1;
   return 0;
 }
 
@@ -190,14 +187,10 @@ int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers
   char input[128];
 
   (void)keep_alive;
-  if (strcmp(path, "/ui/ws/") && strcmp(path, "/ui/ws"))
-    return 0;
-  if (!find_header(headers, num_headers, "Connection", conn_val, sizeof conn_val) || !ci_contains(conn_val, "upgrade"))
-    return 1;
-  if (!find_header(headers, num_headers, "Upgrade", upg_val, sizeof upg_val) || strcasecmp(upg_val, "websocket"))
-    return 1;
-  if (!find_header(headers, num_headers, "Sec-WebSocket-Key", key, sizeof key))
-    return 1;
+  if (strcmp(path, "/ui/ws/") && strcmp(path, "/ui/ws")) return 0;
+  if (!find_header(headers, num_headers, "Connection", conn_val, sizeof conn_val) || !ci_contains(conn_val, "upgrade")) return 1;
+  if (!find_header(headers, num_headers, "Upgrade", upg_val, sizeof upg_val) || strcasecmp(upg_val, "websocket")) return 1;
+  if (!find_header(headers, num_headers, "Sec-WebSocket-Key", key, sizeof key)) return 1;
 
   {
     size_t klen = bufcpy(input, sizeof input, key);
@@ -208,8 +201,8 @@ int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers
 
   {
     size_t off = bufcpy(hdr, sizeof hdr,
-                         "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                         "Sec-WebSocket-Accept: ");
+                        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                        "Sec-WebSocket-Accept: ");
     off += bufcpy(hdr + off, sizeof hdr - off, accept);
     off += bufcpy(hdr + off, sizeof hdr - off, "\r\n\r\n");
     conn_queue(c, hdr, off);

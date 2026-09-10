@@ -233,19 +233,16 @@ void dash_lldash_init(int max_clients) {
 
 int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int proto) {
   hls_store_t *s;
+  hls_snapshot_t *snap;
   uint64_t want_t_ms;
   uint32_t want_seg;
   int idx = -1;
 
   if (!parse_dash_seg_filename(filename, &want_t_ms)) return -1;
-  s = find_store_locked(ctx, filter, pmt_pid, SEG_CONTAINER_FMP4);
-  if (!s || s->part_target <= 0.0 || s->cum_ms != want_t_ms) {
-    if (s) pthread_mutex_unlock(store_lock(s));
-    return -1;
-  }
-  want_seg = s->live_msn;
-  pthread_mutex_unlock(store_lock(s));
-
+  s = find_store(ctx, filter, pmt_pid, SEG_CONTAINER_FMP4);
+  snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
+  if (!snap || snap->part_target <= 0.0 || snap->cum_ms != want_t_ms) return -1;
+  want_seg = snap->live_msn;
   for (int i = 0; i < g_subs_n; i++) {
     int expected = DASHCHUNK_SUB_FREE;
     if (atomic_compare_exchange_strong_explicit(&g_subs[i].alive, &expected, DASHCHUNK_SUB_ALIVE, memory_order_acquire, memory_order_relaxed)) {

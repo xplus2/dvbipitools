@@ -1,3 +1,9 @@
+dvbipitools (2.4.2-1) unstable; urgency=low
+  * dipixy
+    + lock-free client handling (buffer pools were already there)
+  * cmake build flags simplified
+ -- dvbipitools authors <unspecified@example.com>  tbd
+
 dvbipitools (2.4.1-1) unstable; urgency=low
   * dipixy
     + playlist /export/ convenience feature: m3u and xspf for VLC, Kodi Simple IPTV, tvheadend, ..

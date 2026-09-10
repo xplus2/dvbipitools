@@ -15,6 +15,7 @@
 #include "../version.h"
 #include "lib/helper/log.h"
 #include "reactor_tls.h"
+#include "qsbr.h"
 #include "../core/tlscert.h"
 #ifdef HAVE_HTTP3
 #include "../http3/http3.h"
@@ -174,7 +175,7 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
 
   __atomic_store_n(&g_workers, workers, __ATOMIC_RELAXED);
   tls_gc_init(workers);
-
+  qsbr_init(workers);
   n_pump = workers > CAPTURE_PUMP_MAX_THREADS ? CAPTURE_PUMP_MAX_THREADS : workers;
   capture_pump_set_thread_count(n_pump);
 

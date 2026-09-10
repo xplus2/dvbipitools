@@ -1,7 +1,7 @@
 # dvbipitools
 
 Tools for handling DVB-IPI.
-Build carrier-grade IPTV infrastructure (a bit retro). Or just pretend you do in your basement.
+Build carrier-grade IPTV infrastructure. Or just pretend you do in your basement.
 
 GitHub is not the primary development repository, but releases are published here and pull requests are welcome.
 
@@ -10,24 +10,24 @@ I did not let it mess up the hard parts.
 
 ## Fantastic tools and where to deploy them
 
-| Tool                                           | Contrib | Headend | Edge | Client | Lab | Purpose                                  |
-|------------------------------------------------|---------|---------|------|--------|-----|------------------------------------------|
-| [dipitvhead](src/dipitvhead/README.md)         | ✔️      | ✔️      |      |        | ✔️  | IPTV SCS/Muxer/Scrambler                 |
-| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      | ✔️      |      |        | ✔️  | Radio SCS/Muxer/Scrambler                |
-| [dipirist](src/dipirist/README.md)             | ✔️      | ✔️      |      |        | ✔️  | RTP/TS RIST bridge                       |
-| [dipisrt](src/dipisrt/README.md)               | ✔️      | ✔️      |      |        | ✔️  | RTP/TS SRT bridge                        |
-| [dipimetrics](src/dipimetrics/README.md)       | ✔️      | ✔️      | ✔️   |        | ✔️  | Per-host OpenMetrics                     |
-| [dipifccret](src/dipifccret/README.md)         |         | ✔️      | ✔️   |        | ✔️  | FCC (Annex I), RET (Annex F) server      |
-| [dipisds](src/dipisds/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/SD&S (announce & listen)          |
-| [dipibcg](src/dipibcg/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/TVA BCG (publisher & reader)      |
-| [dipixmltv](src/dipixmltv/README.md)           |         | ✔️      |      | ✔️     | ✔️  | XMLTV ↔ DVB-IPI TVA XML converter        |
-| [dipirec](src/dipirec/README.md)               |         |         |      | ✔️     | ✔️  | record and replay (FCC/RET client)       |
-| [dipiscan](src/dipiscan/README.md)             |         |         |      | ✔️     | ✔️  | Multicast TV/radio scanner (w/o SD&S)    |
-| [dipixy](src/dipixy/README.md)                 |         |         | ✔️   | ✔️HN   | ✔️  | MC/RIST/SRT → (LL)HLS/(LL)DASH/TS + DLNA |
-| [dipibim](src/dipibim/README.md)               |         |         |      |        | ✔️  | TVA XML BiM enc/dec (debug `dipibcg`)    |
-| [dipicam378](src/dipicam378/README.md)         |         |         |      |        | ✔️  | cs378x CAS test CAM                      |
-| [dipidescramble](src/dipidescramble/README.md) |         | ✔️      |      |        | ✔️  | descrambler (BISS & CAS validation)      |
-| [dvbipitools](src/dvbipitools/README.md)       | ✔️      | ✔️      | ✔️   | ✔️     | ✔️  | All of the above (multicall)             |
+| Tool                                           | Contrib | Headend | Edge | Client | Lab | Purpose                                      |
+|------------------------------------------------|---------|---------|------|--------|-----|----------------------------------------------|
+| [dipitvhead](src/dipitvhead/README.md)         | ✔️      | ✔️      |      |        | ✔️  | IPTV SCS/Muxer/Scrambler                     |
+| [dipiradiohead](src/dipiradiohead/README.md)   | ✔️      | ✔️      |      |        | ✔️  | Radio SCS/Muxer/Scrambler                    |
+| [dipirist](src/dipirist/README.md)             | ✔️      | ✔️      |      |        | ✔️  | RTP/TS RIST bridge                           |
+| [dipisrt](src/dipisrt/README.md)               | ✔️      | ✔️      |      |        | ✔️  | RTP/TS SRT bridge                            |
+| [dipimetrics](src/dipimetrics/README.md)       | ✔️      | ✔️      | ✔️   |        | ✔️  | Per-host OpenMetrics                         |
+| [dipifccret](src/dipifccret/README.md)         |         | ✔️      | ✔️   |        | ✔️  | FCC (Annex I), RET (Annex F) server          |
+| [dipisds](src/dipisds/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/SD&S (announce & listen)              |
+| [dipibcg](src/dipibcg/README.md)               |         | ✔️      |      | ✔️     | ✔️  | DVBSTP/TVA BCG (publisher & reader)          |
+| [dipixmltv](src/dipixmltv/README.md)           |         | ✔️      |      | ✔️     | ✔️  | XMLTV ↔ DVB-IPI TVA XML converter            |
+| [dipirec](src/dipirec/README.md)               |         |         |      | ✔️     | ✔️  | record and replay (FCC/RET client)           |
+| [dipiscan](src/dipiscan/README.md)             |         |         |      | ✔️     | ✔️  | Multicast TV/radio scanner (w/o SD&S)        |
+| [dipixy](src/dipixy/README.md)                 |         |         | ✔️   | ✔️HN   | ✔️  | MC/RIST/SRT → (LL)HLS/(LL)DASH/MP4/TS + DLNA |
+| [dipibim](src/dipibim/README.md)               |         |         |      |        | ✔️  | TVA XML BiM enc/dec (debug `dipibcg`)        |
+| [dipicam378](src/dipicam378/README.md)         |         |         |      |        | ✔️  | cs378x CAS test CAM                          |
+| [dipidescramble](src/dipidescramble/README.md) |         | ✔️      |      |        | ✔️  | descrambler (BISS & CAS validation)          |
+| [dvbipitools](src/dvbipitools/README.md)       | ✔️      | ✔️      | ✔️   | ✔️     | ✔️  | All of the above (multicall)                 |
 
 > HN: Home Network, not directly _on_ client devices.
 
@@ -40,15 +40,16 @@ cmake --build build
 ```
 
 ### Options
-| CMake                                                                    | configure               |                                                      |
-|--------------------------------------------------------------------------|-------------------------|------------------------------------------------------|
-| `-DCMAKE_BUILD_TYPE=Debug\|Release`                                      | `--debug` / `--release` | Build type                                           |
-| `-DDVBIPITOOLS_STATIC=ON`                                                | `--static`              | Static linking                                       |
-| `-DDIPIRADIOHEAD_TLS=OFF` / `-DDIPITVHEAD_TLS=OFF` / `-DDIPIREC_TLS=OFF` | `--no-tls`              | Build the respective tool without TLS source support |
-| `-DDIPITVHEAD_CSA=OFF` / `-DDIPIRADIOHEAD_CSA=OFF` / `-DDIPIDESCRAMBLE_CSA=OFF` | `--no-csa`   | Build the respective tool without CSA1/CSA2/BISS1    | 
-| `-DDIPIBCG_ZLIB=OFF`                                                     | `--no-zlib`             | Build `dipibcg` without BCG container compression support |
-| `-DDVBIPITOOLS_RIST=OFF`                                                 | `--no-rist`             | Skip librist detection, disable `dipirist`/rist:// support |
-| `-DDVBIPITOOLS_SRT=OFF`                                                  | `--no-srt`              | Skip libsrt detection, disable `dipisrt`                  |
+| CMake                                        | configure                                    |                                             |
+|----------------------------------------------|----------------------------------------------|---------------------------------------------|
+| `-DCMAKE_BUILD_TYPE=Debug\|Release`          | `--debug` / `--release`                      | Build type                                  |
+| `-DDVBIPITOOLS_STATIC=ON`                    | `--static`                                   | Static linking                              |
+| `-DDVBIPITOOLS_TLS=OFF`                      | `--no-tls`                                   | Build without TLS support                   |
+| `-DDVBIPITOOLS_CSA=OFF`                      | `--no-csa`                                   | Build without CSA1/CSA2/BISS1               | 
+| `-DDIPIBCG_ZLIB=OFF`                         | `--no-zlib`                                  | Build `dipibcg` without compression support |
+| `-DDVBIPITOOLS_RIST=OFF`                     | `--no-rist`                                  | Skip librist detection, disable rist://     |
+| `-DDVBIPITOOLS_SRT=OFF`                      | `--no-srt`                                   | Skip libsrt detection, disable srt://       |
+| `-DDIPIXY_HTTP3=OFF` / `-DDIPIXY_HTTP2=OFF`  | `--no-http3` / `--no-http2` / `--no-nghttp2` | Build `dipixy` without HTTP/2/3 support     |
 
 > Note: The build automatically disables TLS support if OpenSSL is not found.
 
@@ -61,15 +62,17 @@ cmake --build build
     Mode CA RSA-OAEP receiver keys) in `dipitvhead` and `dipiradiohead`.
   + Required to build `dipicam378`/`dipidescramble` at all - RSA/AES crypto is their
     whole purpose, so both are skipped entirely if not found.
+  + Required for `dipimetrics` and `dipixy` to serve HTTPS.
 * zlib
   * Optional: `-Z`/`--compress` in `dipibcg` (zlib/RFC 1950 compression of BCG containers)
 * libdvbcsa
   + Not a build dependency: If present, `dipitvhead`, `dipiradiohead` and `dipidescramble` can use it to enable CSA1/CSA2/BISS1 support.
 * librist
   + Required to build `dipirist` at all.
-  + Optional: adds RIST support to `dipitvhead`, `dipiradiohead` and `dipirec`.
+  + Optional: adds RIST support to `dipitvhead`, `dipiradiohead`, `dipirec`, `dipixy` and `dipidescramble`
 * libsrt
   + Required to build `dipisrt` at all.
+  + Optional: adds SRT support to `dipitvhead`, `dipiradiohead`, `dipirec`, `dipixy` and `dipidescramble`
 * libnghttp2, libngtcp2, libngtcp2_crypto_ossl and libnghttp3
   + HTTP/2 and HTTP/3 support in `dipixy`.
 

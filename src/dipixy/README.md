@@ -22,7 +22,7 @@ dipixy [-l addr:port] [-i source ...] [options]
 | `-L` | `--listen-tls`           | `<addr>:<port>`       | `all:9443`                                              |       |
 |      | `--tls-cert`             | `<path>`              | search default paths, see below                         |       |
 |      | `--tls-key`              | `<path>`              | search default paths, see below                         |       |
-| `-j` | `--workers`              | `-1\|-2\|-3` or `<n>` | `-1` (that many x cpu cores) or <n> threads             |       |
+| `-j` | `--workers`              | `-1\|-2\|-3` or `<n>` | `-1` (that many x cpu cores) or <n> reactor threads     |       |
 | `-c` | `--max-clients`          | `<n>`                 | `256`; cap on concurrent streams                        |       |
 |      | `--max-channels`         | `<n>`                 | `32`; cap on concurrent (source,filter,pmt,container)   |       |
 |      | `--capture-ring-size`    | `<KiB>`               | `4096`; per-source ingress ring buffer                  |       |
@@ -229,10 +229,31 @@ Missing any of these disables that feature rather than failing the build.
 
 RIST and SRT input need `librist`/`libsrt` the same as every other tool here.
 
+## Concurrency
+
+`-j`|`--workers` worker threads (default: one per CPU core. Negative 2 or 3 are multiple of SMT cores, positive numbers are the exact amount).
+Each worker owns an `SO_REUSEPORT` socket + epoll() loop, so incoming client requests are handled in parallel without a shared lock.
+As long as a client uses the same channel+filter/pmt combination, segments and buffers in memory get re-used (lock-free).
+
+For sizing, the following factors should be considered (spoiler: basically just memory-related):
+  * Available memory
+    + The number of different concurrent channels to support (+filters/pmt selection) (`--max-channels` )
+    + The number of different concurrent clients to support (`--max-clients` ). It defaults to `256` as a reasonable 
+      pre-allocated middle-ground for lab/home scenario. Set it much lower to run it on a modem/gateway or as high as
+      your installed memory allows for "infrastructure" operation. 
+    + `--capture-ring-size` is the third knob to tweak.
+    + To a smaller extent, if you enable HTTP/2 and/or HTTP/3, because of their inherent memory needs.
+  * Network throughput
+
+CPU is usually not the limiting factor, maybe if you're running out of PCIe lanes for NICs or the offloading
+support in NIC drivers is broken.  
+
+Disk I/O: doesn't happen.
+
 ## Signals
 
 * `^C`, SIGINT or SIGTERM: stop
-* SIGHUP: re-read every `sds://`/playlist source and swap in the result; a source that fails to
+* SIGHUP: re-read every `sds://`/playlist source and swap in the result. A source that fails to
   reload keeps serving its last-known-good list rather than going empty
 * SIGUSR1: reload the TLS certificate
 
@@ -245,7 +266,7 @@ RIST and SRT input need `librist`/`libsrt` the same as every other tool here.
   Others go full OTT, deliver raw streams or pack them into an MPTS until it's the size of their smallest TV profile.
   Similar for client support. VLC or Kodi will happily play a DLNA radio playlist, Samsung or LG most probably won't -
   or maybe they do.
-* No transcoding here. While burts won't be a problem, your DVB-IPI provider dislikes them as much as you do, heavy use
+* No transcoding here. While bursts won't be a problem, your DVB-IPI provider dislikes them as much as you do, heavy use
   of B-frames or a long GoP will collide with short segment sizes in HLS or DASH.
 * M3U and XSPF input playlists can contain `rtp://`, `udp://`, `srt://` or HTTP(S)/TS, not RIST, HLS or DASH.
 

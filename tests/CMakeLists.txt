@@ -2397,6 +2397,7 @@ dvbipitools_add_unit_test(dipixy_ws_sources
 dvbipitools_add_unit_test(dipixy_hls
     unit/dipixy/test_hls.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/segstore.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/respfmt.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_serve.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_llhls.c
@@ -2408,6 +2409,15 @@ dvbipitools_add_unit_test(dipixy_hls
 target_link_libraries(test_dipixy_hls PRIVATE m)
 target_compile_options(test_dipixy_hls PRIVATE -ffunction-sections -fdata-sections)
 target_link_options(test_dipixy_hls PRIVATE -Wl,--gc-sections)
+
+dvbipitools_add_unit_test(dipixy_segstore_concurrency
+    unit/dipixy/test_segstore_concurrency.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/segstore.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+target_link_libraries(test_dipixy_segstore_concurrency PRIVATE m)
 
 dvbipitools_add_unit_test(dipixy_mp4push
     unit/dipixy/test_mp4push.c

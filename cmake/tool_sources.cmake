@@ -130,8 +130,7 @@ function(dipidescramble_resolve_sources)
         message(WARNING "dipidescramble: OpenSSL not found, skipping this tool entirely (RSA/AES crypto is its whole purpose)")
         return()
     endif ()
-    option(DIPIDESCRAMBLE_CSA "build dipidescramble with DVB-CSA (CSA1/CSA2/BISS1) support" ON)
-    if (DIPIDESCRAMBLE_CSA)
+    if (DVBIPITOOLS_CSA)
         set(CSA2_SRC ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2.c)
     else ()
         set(CSA2_SRC ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c)
@@ -231,7 +230,7 @@ function(dipidescramble_resolve_sources)
             ${RIST_SRC}
             ${SRT_SRC})
     set(DIPIDESCRAMBLE_SRCS ${DIPIDESCRAMBLE_SRCS} PARENT_SCOPE)
-    set(DIPIDESCRAMBLE_CSA ${DIPIDESCRAMBLE_CSA} PARENT_SCOPE)
+    set(DIPIDESCRAMBLE_CSA ${DVBIPITOOLS_CSA} PARENT_SCOPE)
     set(DIPIDESCRAMBLE_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
 endfunction()
 
@@ -282,9 +281,8 @@ function(dipifccret_resolve_sources)
 endfunction()
 
 function(dipimetrics_resolve_sources)
-    option(DIPIMETRICS_TLS "build dipimetrics with HTTPS/TLS support (requires OpenSSL)" ON)
     set(DIPIMETRICS_HAVE_TLS FALSE)
-    if (DIPIMETRICS_TLS)
+    if (DVBIPITOOLS_TLS)
         if (DVBIPITOOLS_STATIC)
             set(OPENSSL_USE_STATIC_LIBS TRUE)
             set(ATOMIC_LIB atomic)
@@ -324,9 +322,8 @@ function(dipimetrics_resolve_sources)
 endfunction()
 
 function(dipiradiohead_resolve_sources)
-    option(DIPIRADIOHEAD_TLS "build dipiradiohead with HTTPS/TLS support (requires OpenSSL)" ON)
     set(DIPIRADIOHEAD_HAVE_TLS FALSE)
-    if (DIPIRADIOHEAD_TLS)
+    if (DVBIPITOOLS_TLS)
         if (DVBIPITOOLS_STATIC)
             set(OPENSSL_USE_STATIC_LIBS TRUE)
             set(ATOMIC_LIB atomic)
@@ -370,8 +367,7 @@ function(dipiradiohead_resolve_sources)
         set(CWENC_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c)
     endif ()
 
-    option(DIPIRADIOHEAD_CSA "build dipiradiohead with DVB-CSA (CSA1/CSA2/BISS1) support" ON)
-    if (DIPIRADIOHEAD_CSA)
+    if (DVBIPITOOLS_CSA)
         set(CSA2_SRC ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2.c)
     else ()
         set(CSA2_SRC ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c)
@@ -464,14 +460,13 @@ function(dipiradiohead_resolve_sources)
     set(DIPIRADIOHEAD_SRCS ${DIPIRADIOHEAD_SRCS} PARENT_SCOPE)
     set(DIPIRADIOHEAD_HAVE_TLS ${DIPIRADIOHEAD_HAVE_TLS} PARENT_SCOPE)
     set(DIPIRADIOHEAD_HAVE_CISSA ${DIPIRADIOHEAD_HAVE_CISSA} PARENT_SCOPE)
-    set(DIPIRADIOHEAD_CSA ${DIPIRADIOHEAD_CSA} PARENT_SCOPE)
+    set(DIPIRADIOHEAD_CSA ${DVBIPITOOLS_CSA} PARENT_SCOPE)
     set(DIPIRADIOHEAD_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
 endfunction()
 
 function(dipirec_resolve_sources)
-    option(DIPIREC_TLS "build dipirec with HTTPS/TLS support (requires OpenSSL)" ON)
     set(DIPIREC_HAVE_TLS FALSE)
-    if (DIPIREC_TLS)
+    if (DVBIPITOOLS_TLS)
         if (DVBIPITOOLS_STATIC)
             set(OPENSSL_USE_STATIC_LIBS TRUE)
             set(ATOMIC_LIB atomic)
@@ -597,9 +592,8 @@ function(dipirist_resolve_sources)
         return()
     endif ()
 
-    option(DIPIRIST_TLS "build dipirist with HTTPS/TLS support for -i https:// sources (requires OpenSSL)" ON)
     set(DIPIRIST_HAVE_TLS FALSE)
-    if (DIPIRIST_TLS)
+    if (DVBIPITOOLS_TLS)
         if (DVBIPITOOLS_STATIC)
             set(OPENSSL_USE_STATIC_LIBS TRUE)
             set(ATOMIC_LIB atomic)
@@ -686,9 +680,8 @@ function(dipisrt_resolve_sources)
         return()
     endif ()
 
-    option(DIPISRT_TLS "build dipisrt with HTTPS/TLS support for -i https:// sources (requires OpenSSL)" ON)
     set(DIPISRT_HAVE_TLS FALSE)
-    if (DIPISRT_TLS)
+    if (DVBIPITOOLS_TLS)
         if (DVBIPITOOLS_STATIC)
             set(OPENSSL_USE_STATIC_LIBS TRUE)
         endif ()
@@ -782,9 +775,8 @@ function(dipiscan_resolve_sources)
 endfunction()
 
 function(dipixy_resolve_sources)
-    option(DIPIXY_TLS "build dipixy with HTTPS/TLS support (requires OpenSSL)" ON)
     set(DIPIXY_HAVE_TLS FALSE)
-    if (DIPIXY_TLS)
+    if (DVBIPITOOLS_TLS)
         if (DVBIPITOOLS_STATIC)
             set(OPENSSL_USE_STATIC_LIBS TRUE)
             set(ATOMIC_LIB atomic)
@@ -877,36 +869,45 @@ function(dipixy_resolve_sources)
             pkg_check_modules(NGTCP2_CRYPTO_OSSL IMPORTED_TARGET libngtcp2_crypto_ossl)
             pkg_check_modules(NGHTTP3 IMPORTED_TARGET libnghttp3)
             if (NGTCP2_FOUND AND NGTCP2_CRYPTO_OSSL_FOUND AND NGHTTP3_FOUND)
-                include(CheckCSourceCompiles)
-                check_c_source_compiles("
-                    #include <openssl/opensslv.h>
-                    #if OPENSSL_VERSION_NUMBER < 0x30500000L
-                    #error no quic
-                    #endif
-                    int main(void) { return 0; }" DIPIXY_HAVE_OPENSSL_QUIC)
-                if (DIPIXY_HAVE_OPENSSL_QUIC)
-                    set(DIPIXY_HAVE_HTTP3 TRUE)
-                    if (DVBIPITOOLS_STATIC)
-                        set(CMAKE_REQUIRED_LIBRARIES ${NGTCP2_STATIC_LDFLAGS} ${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS} ${NGHTTP3_STATIC_LDFLAGS})
-                        set(CMAKE_REQUIRED_LINK_OPTIONS -static ${NGTCP2_STATIC_LDFLAGS_OTHER} ${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS_OTHER}
-                                ${NGHTTP3_STATIC_LDFLAGS_OTHER})
-                        check_c_source_compiles("int main(void) { return 0; }" DIPIXY_HTTP3_STATIC_LINKS)
-                        unset(CMAKE_REQUIRED_LIBRARIES)
-                        unset(CMAKE_REQUIRED_LINK_OPTIONS)
-                        if (DIPIXY_HTTP3_STATIC_LINKS)
-                            set_target_properties(PkgConfig::NGTCP2 PROPERTIES
-                                    INTERFACE_LINK_LIBRARIES "${NGTCP2_STATIC_LDFLAGS}"
-                                    INTERFACE_LINK_OPTIONS "${NGTCP2_STATIC_LDFLAGS_OTHER}")
-                            set_target_properties(PkgConfig::NGTCP2_CRYPTO_OSSL PROPERTIES
-                                    INTERFACE_LINK_LIBRARIES "${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS}"
-                                    INTERFACE_LINK_OPTIONS "${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS_OTHER}")
-                            set_target_properties(PkgConfig::NGHTTP3 PROPERTIES
-                                    INTERFACE_LINK_LIBRARIES "${NGHTTP3_STATIC_LDFLAGS}"
-                                    INTERFACE_LINK_OPTIONS "${NGHTTP3_STATIC_LDFLAGS_OTHER}")
-                        else ()
-                            set(DIPIXY_HAVE_HTTP3 FALSE)
+                if (DVBIPITOOLS_STATIC)
+                    set(OPENSSL_USE_STATIC_LIBS TRUE)
+                    set(ATOMIC_LIB atomic)
+                endif ()
+                find_package(OpenSSL)
+                if (OpenSSL_FOUND)
+                    include(CheckCSourceCompiles)
+                    check_c_source_compiles("
+                        #include <openssl/opensslv.h>
+                        #if OPENSSL_VERSION_NUMBER < 0x30500000L
+                        #error no quic
+                        #endif
+                        int main(void) { return 0; }" DIPIXY_HAVE_OPENSSL_QUIC)
+                    if (DIPIXY_HAVE_OPENSSL_QUIC)
+                        set(DIPIXY_HAVE_HTTP3 TRUE)
+                        if (DVBIPITOOLS_STATIC)
+                            set(CMAKE_REQUIRED_LIBRARIES ${NGTCP2_STATIC_LDFLAGS} ${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS} ${NGHTTP3_STATIC_LDFLAGS})
+                            set(CMAKE_REQUIRED_LINK_OPTIONS -static ${NGTCP2_STATIC_LDFLAGS_OTHER} ${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS_OTHER}
+                                    ${NGHTTP3_STATIC_LDFLAGS_OTHER})
+                            check_c_source_compiles("int main(void) { return 0; }" DIPIXY_HTTP3_STATIC_LINKS)
+                            unset(CMAKE_REQUIRED_LIBRARIES)
+                            unset(CMAKE_REQUIRED_LINK_OPTIONS)
+                            if (DIPIXY_HTTP3_STATIC_LINKS)
+                                set_target_properties(PkgConfig::NGTCP2 PROPERTIES
+                                        INTERFACE_LINK_LIBRARIES "${NGTCP2_STATIC_LDFLAGS}"
+                                        INTERFACE_LINK_OPTIONS "${NGTCP2_STATIC_LDFLAGS_OTHER}")
+                                set_target_properties(PkgConfig::NGTCP2_CRYPTO_OSSL PROPERTIES
+                                        INTERFACE_LINK_LIBRARIES "${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS}"
+                                        INTERFACE_LINK_OPTIONS "${NGTCP2_CRYPTO_OSSL_STATIC_LDFLAGS_OTHER}")
+                                set_target_properties(PkgConfig::NGHTTP3 PROPERTIES
+                                        INTERFACE_LINK_LIBRARIES "${NGHTTP3_STATIC_LDFLAGS}"
+                                        INTERFACE_LINK_OPTIONS "${NGHTTP3_STATIC_LDFLAGS_OTHER}")
+                            else ()
+                                set(DIPIXY_HAVE_HTTP3 FALSE)
+                            endif ()
                         endif ()
                     endif ()
+                else ()
+                    message(WARNING "dipixy: OpenSSL not found, building without HTTP/3 support")
                 endif ()
             endif ()
         endif ()
@@ -939,6 +940,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_listen.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_loop.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/channels.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
@@ -1084,9 +1086,8 @@ function(dipisds_resolve_sources)
 endfunction()
 
 function(dipitvhead_resolve_sources)
-    option(DIPITVHEAD_TLS "build dipitvhead with HTTPS/TLS support (requires OpenSSL)" ON)
     set(DIPITVHEAD_HAVE_TLS FALSE)
-    if (DIPITVHEAD_TLS)
+    if (DVBIPITOOLS_TLS)
         if (DVBIPITOOLS_STATIC)
             set(OPENSSL_USE_STATIC_LIBS TRUE)
             set(ATOMIC_LIB atomic)
@@ -1130,8 +1131,7 @@ function(dipitvhead_resolve_sources)
         set(CWENC_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c)
     endif ()
 
-    option(DIPITVHEAD_CSA "build dipitvhead with DVB-CSA (CSA1/CSA2/BISS1) support" ON)
-    if (DIPITVHEAD_CSA)
+    if (DVBIPITOOLS_CSA)
         set(CSA2_SRC ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2.c)
     else ()
         set(CSA2_SRC ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c)
@@ -1236,7 +1236,7 @@ function(dipitvhead_resolve_sources)
     set(DIPITVHEAD_SRCS ${DIPITVHEAD_SRCS} PARENT_SCOPE)
     set(DIPITVHEAD_HAVE_TLS ${DIPITVHEAD_HAVE_TLS} PARENT_SCOPE)
     set(DIPITVHEAD_HAVE_CISSA ${DIPITVHEAD_HAVE_CISSA} PARENT_SCOPE)
-    set(DIPITVHEAD_CSA ${DIPITVHEAD_CSA} PARENT_SCOPE)
+    set(DIPITVHEAD_CSA ${DVBIPITOOLS_CSA} PARENT_SCOPE)
     set(DIPITVHEAD_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
 endfunction()
 

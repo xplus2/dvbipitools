@@ -31,33 +31,43 @@ typedef struct {
 /* ftyp+moov worst case: FMP4_MAX_TRACKS(4) x FMP4_CPRIV_MAX(512) plus box overhead */
 #define HLS_INIT_SEG_MAX 8192
 
-typedef struct hls_store_t {
-  capture_ctx_t *cap_ctx;
-  pid_filter_t filter;
-  unsigned pmt_pid; /* 0 = auto */
-  int open;
-  double seg_target;
-  double td_hw; /* target duration high-water mark, monotonic */
-  int max_segs;
-  codec_t video_codec; /* drives HLS VERSION + DASH codecs= */
-  seg_container_t container;
-  uint8_t init_data[HLS_INIT_SEG_MAX]; /* SEG_CONTAINER_FMP4 only */
-  size_t init_size;
-  int init_gen; /* bumped each hls_set_init_segment(), part of init.mp4's ETag */
-  time_t opened_at; /* MPD availabilityStartTime */
+typedef struct hls_snapshot {
   hls_seg_t segs[HLS_MAX_SEGS];
   int head; /* index of oldest segment in ring */
   int count;
   uint32_t oldest_seq;
   uint32_t next_seq;
   uint64_t cum_ms; /* next segment's start_ms, never reset by eviction */
+  double td_hw; /* target dur high water mark */
+
+  uint8_t init_data[HLS_INIT_SEG_MAX]; /* SEG_CONTAINER_FMP4 only */
+  size_t init_size;
+  int init_gen; /* bump on hls_set_init_segment(), init.mp4 ETag component */
+  codec_t video_codec; /* HLS VERSION + DASH codecs= */
 
   double part_target; /* 0 = LL disabled */
   uint8_t *live_data;  /* in-progress segment bytes, hls_push_part()-accumulated */
   size_t live_len, live_cap;
   hls_parts_t live_parts;
   uint32_t live_msn; /* == next_seq while this segment is in progress */
+} hls_snapshot_t;
+
+#define HLS_SNAP_RETIRE_DEPTH 4
+
+typedef struct hls_store_t {
+  capture_ctx_t *cap_ctx;
+  pid_filter_t filter;
+  unsigned pmt_pid; /* 0 = auto */
+  double seg_target;
+  int max_segs;
+  seg_container_t container;
+  time_t opened_at; /* MPD availabilityStartTime */
   _Atomic int lldash_sub_head;
+  _Atomic(hls_snapshot_t *) snap; /* published; NULL till 1st push */
+
+  hls_snapshot_t *retiring[HLS_SNAP_RETIRE_DEPTH];
+  uint64_t *retiring_mark[HLS_SNAP_RETIRE_DEPTH];
+  int retiring_n;
 } hls_store_t;
 
 typedef struct {
@@ -66,10 +76,10 @@ typedef struct {
   size_t len;
 } strbuf_t;
 
-/* segstore.c: buffer pool + store registry */
+/* store_lock() is writer only */
 pthread_mutex_t *store_lock(const hls_store_t *s);
-hls_store_t *find_store_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
-int hls_target_duration(const hls_store_t *s);
+hls_store_t *find_store(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
+int hls_target_duration(const hls_snapshot_t *snap);
 uint8_t *seg_buf_alloc(size_t size);
 void seg_buf_ref(uint8_t *data);
 void seg_buf_unref(uint8_t *data);

@@ -6,8 +6,7 @@
 #include <pthread.h>
 #include <string.h>
 
-/* caller holds store_lock(s) */
-void snapshot_ll_playlist(const hls_store_t *s, ll_playlist_snap_t *snap) {
+void snapshot_ll_playlist(const hls_snapshot_t *s, ll_playlist_snap_t *snap) {
   int i;
   snap->td = hls_target_duration(s);
   snap->part_target = s->part_target;
@@ -74,17 +73,14 @@ size_t format_ll_playlist(const ll_playlist_snap_t *snap, char *m3u8, size_t cap
   for (i = 0; i < snap->seg_count; i++) {
     const ll_seg_snap_t *ss = &snap->segs[i];
     for (int p = 0; p < ss->part_count; p++) {
-      if ((size_t)(end - mp) < 128)
-        goto done;
+      if ((size_t)(end - mp) < 128) goto done;
       mp = write_part_line(mp, ss->part_duration[p], ss->seq, p, ss->part_independent[p]);
     }
-    if ((size_t)(end - mp) < 64)
-      goto done;
+    if ((size_t)(end - mp) < 64) goto done;
     mp = write_extinf_line(mp, ss->duration, ss->seq);
   }
   for (i = 0; i < snap->live_count; i++) {
-    if ((size_t)(end - mp) < 128)
-      goto done;
+    if ((size_t)(end - mp) < 128) goto done;
     mp = write_part_line(mp, snap->live_duration[i], snap->live_msn, i, snap->live_independent[i]);
   }
   if ((size_t)(end - mp) >= 96) {
@@ -100,6 +96,7 @@ done:
 
 int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes) {
   hls_store_t *s;
+  hls_snapshot_t *snap;
   uint32_t req_seq;
   int req_part;
   char etag[48];
@@ -107,22 +104,21 @@ int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsi
   const uint8_t *body = NULL;
   size_t body_len = 0;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
+  s = find_store(ctx, filter, pmt_pid, SEG_CONTAINER_TS);
+  snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
+
   if (!strcmp(filename, "index_ll.m3u8")) {
     char m3u8[16384];
-    ll_playlist_snap_t snap;
-    s = find_store_locked(ctx, filter, pmt_pid, SEG_CONTAINER_TS);
-    if (!s || s->part_target <= 0.0 || (s->count == 0 && s->live_parts.count == 0)) {
-      if (s) pthread_mutex_unlock(store_lock(s));
+    ll_playlist_snap_t llsnap;
+    if (!snap || snap->part_target <= 0.0 || (snap->count == 0 && snap->live_parts.count == 0)) {
       queue_status(c, "404 Not Found", keep_alive);
       return 1;
     }
-    snapshot_ll_playlist(s, &snap);
-    pthread_mutex_unlock(store_lock(s));
+    snapshot_ll_playlist(snap, &llsnap);
     {
-      size_t m3u8_len = format_ll_playlist(&snap, m3u8, sizeof m3u8);
+      size_t m3u8_len = format_ll_playlist(&llsnap, m3u8, sizeof m3u8);
       queue_m3u8(c, m3u8, m3u8_len, is_head, keep_alive, cors_hdr);
-      if (out_bytes)
-        *out_bytes = m3u8_len;
+      if (out_bytes) *out_bytes = m3u8_len;
     }
     return 1;
   }
@@ -130,15 +126,14 @@ int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsi
   if (!parse_part_filename(filename, &req_seq, &req_part))
     return 0;
 
-  s = find_store_locked(ctx, filter, pmt_pid, SEG_CONTAINER_TS);
-  if (s && s->live_msn == req_seq && req_part < s->live_parts.count) {
-    body = s->live_data + s->live_parts.offset[req_part];
-    body_len = s->live_parts.size[req_part];
+  if (snap && snap->live_msn == req_seq && req_part < snap->live_parts.count) {
+    body = snap->live_data + snap->live_parts.offset[req_part];
+    body_len = snap->live_parts.size[req_part];
     part_etag(req_seq, req_part, body_len, etag, sizeof etag);
-  } else if (s && s->count > 0) {
-    uint32_t oldest = s->oldest_seq, last = oldest + (uint32_t)s->count - 1u;
+  } else if (snap && snap->count > 0) {
+    uint32_t oldest = snap->oldest_seq, last = oldest + (uint32_t)snap->count - 1u;
     if (req_seq >= oldest && req_seq <= last) {
-      const hls_seg_t *seg = &s->segs[(s->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
+      const hls_seg_t *seg = &snap->segs[(snap->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
       if (req_part < seg->parts.count) {
         body = seg->data + seg->parts.offset[req_part];
         body_len = seg->parts.size[req_part];
@@ -147,16 +142,14 @@ int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsi
     }
   }
   if (!body) {
-    if (s) pthread_mutex_unlock(store_lock(s));
     queue_status(c, "404 Not Found", keep_alive);
     return 1;
   }
   if (if_none_match && !strcmp(if_none_match, etag)) {
     queue_not_modified(c, etag, keep_alive);
-  } else { /* conn_queue() copies before returning, safe to unlock right after */
+  } else {
     queue_segment(c, body, body_len, "video/mp2t", etag, is_head, keep_alive, cors_hdr);
     if (out_bytes) *out_bytes = body_len;
   }
-  pthread_mutex_unlock(store_lock(s));
   return 1;
 }

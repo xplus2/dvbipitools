@@ -44,11 +44,11 @@ typedef struct {
 
 /* hls_serve.c */
 int parse_part_filename(const char *fn, uint32_t *seq, int *part);
-void snapshot_plain_playlist(const hls_store_t *s, plain_playlist_snap_t *snap);
+void snapshot_plain_playlist(const hls_snapshot_t *s, seg_container_t container, plain_playlist_snap_t *snap);
 size_t format_plain_playlist(const plain_playlist_snap_t *snap, char *m3u8, size_t cap);
 
 /* hls_llhls.c */
-void snapshot_ll_playlist(const hls_store_t *s, ll_playlist_snap_t *snap); /* caller holds store_lock(s) */
+void snapshot_ll_playlist(const hls_snapshot_t *s, ll_playlist_snap_t *snap);
 size_t format_ll_playlist(const ll_playlist_snap_t *snap, char *m3u8, size_t cap);
 
 #endif

@@ -158,7 +158,7 @@ this tool for that. `--srt-passphrase-in`/`--srt-pbkeylen-in`/`--srt-streamid-in
 | `rist://@<host>:<port>[?query]` | single-peer RIST receiver, requires librist |
 | `srt://@<host>:<port>`          | single-peer SRT, requires libsrt            |
 
-RTP headers stripped automatically. HTTPS: build-time option (`-DDIPITVHEAD_TLS=OFF`, auto-off
+RTP headers stripped automatically. HTTPS: build-time option (`-DDVBIPITOOLS_TLS=OFF`, auto-off
 without OpenSSL).
 
 

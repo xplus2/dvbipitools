@@ -1109,6 +1109,7 @@ dipixy_SRCS := \
 	src/dipixy/reactor/reactor.c \
 	src/dipixy/reactor/reactor_listen.c \
 	src/dipixy/reactor/reactor_loop.c \
+	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/channels/channels.c \
 	src/dipixy/ts/channels/build.c \
 	src/dipixy/ts/channels/reload.c \
@@ -3423,7 +3424,7 @@ dipifccret_capture_SRCS := \
 	src/lib/demux/rtp.c \
 	src/lib/helper/signal.c
 
-UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_mp4push lib_playlist_in
+UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_mp4push lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
@@ -3669,6 +3670,7 @@ dipixy_hls_BIN := tests/unit/dipixy/test_hls
 dipixy_hls_SRCS := \
 	tests/unit/dipixy/test_hls.c \
 	src/dipixy/segstore.c \
+	src/dipixy/reactor/qsbr.c \
 	src/dipixy/respfmt.c \
 	src/dipixy/hls/hls_serve.c \
 	src/dipixy/hls/hls_llhls.c \
@@ -3679,6 +3681,15 @@ dipixy_hls_SRCS := \
 	src/lib/helper/log.c
 dipixy_hls_EXTRA_CFLAGS := -ffunction-sections -fdata-sections
 dipixy_hls_EXTRA_LDFLAGS := -Wl,--gc-sections
+
+dipixy_segstore_concurrency_BIN := tests/unit/dipixy/test_segstore_concurrency
+dipixy_segstore_concurrency_SRCS := \
+	tests/unit/dipixy/test_segstore_concurrency.c \
+	src/dipixy/segstore.c \
+	src/dipixy/reactor/qsbr.c \
+	src/dipixy/ts/pidfilter.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c
 
 dipixy_mp4push_BIN := tests/unit/dipixy/test_mp4push
 dipixy_mp4push_SRCS := \

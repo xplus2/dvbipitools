@@ -5,6 +5,7 @@
 #include "internal.h"
 #include "reactor.h"
 #include "reactor_tls.h"
+#include "qsbr.h"
 
 #include "../core/htdocs.h"
 #include "../core/metrics.h"
@@ -201,6 +202,7 @@ void *worker_thread(void *arg) {
     h3_ws_flush();
     h3_tick();
 #endif
+    qsbr_worker_quiescent(tid); /* no store/snapshot ref held past this point */
   }
 
   reactor_teardown_listeners(&rl, tid);
@@ -210,8 +212,7 @@ void *worker_thread(void *arg) {
 
 static void capture_pump_feed(capture_ctx_t *ctx, void *user, const unsigned char *pkt) {
   (void)user;
-  if (tspack_pid(pkt) == 0x1FFF) /* stuffing, no payload, matches dipirec's STRIP_NUL default */
-    return;
+  if (tspack_pid(pkt) == 0x1FFF) return; /* stuffing, no payload, matches dipirec's STRIP_NUL default */
   ts_push_feed_pkt(ctx, pkt);
   hls_seg_feed_all(ctx, pkt);
 }
@@ -225,6 +226,7 @@ void *pump_thread(void *arg) {
       if (++sweep_counter >= 500) {
         hls_seg_sweep_idle();
         hls_seg_pool_trim_idle();
+        hls_store_slot_reclaim_sweep();
         dipixy_status_tick();
         ws_clients_tick();
         tls_gc_sweep();

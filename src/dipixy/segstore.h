@@ -29,6 +29,9 @@ void hls_set_seg_pool_cap(int n);
 
 void hls_seg_pool_trim_idle(void);
 
+/* reclaim closed slots, recurring maint call */
+void hls_store_slot_reclaim_sweep(void);
+
 /* open store for (ctx, filter, pmt_pid) wiped + restarted. pmt_pid: 0 = auto (first PMT that resolves), else program.
    seg_target: target seg seconds for EXT-X-TARGETDURATION. max_segs: playlist sliding-window size, clamped to [2, HLS_MAX_SEGS] */
 void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double seg_target, int max_segs, seg_container_t container);

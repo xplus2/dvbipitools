@@ -18,6 +18,10 @@ if (DIPIXY_HAVE_TLS)
     target_link_libraries(dipixy PRIVATE OpenSSL::SSL OpenSSL::Crypto ${DIPIXY_ATOMIC_LIB})
 endif ()
 
+if (DIPIXY_HAVE_HTTP3 AND NOT DIPIXY_HAVE_TLS)
+    target_link_libraries(dipixy PRIVATE OpenSSL::SSL OpenSSL::Crypto ${DIPIXY_ATOMIC_LIB})
+endif ()
+
 if (DVBIPITOOLS_HAVE_RIST)
     target_link_libraries(dipixy PRIVATE PkgConfig::RIST)
 endif ()
