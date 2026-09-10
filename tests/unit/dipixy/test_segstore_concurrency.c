@@ -34,7 +34,9 @@ static int uniform(const uint8_t *buf, size_t len) {
 
 static void *writer_thread(void *arg) {
   pid_filter_t f;
-  uint8_t seg[SEG_LEN], part[PART_LEN], init[64];
+  uint8_t seg[SEG_LEN];
+  uint8_t part[PART_LEN];
+  uint8_t init[64];
   (void)arg;
   memset(&f, 0, sizeof f);
   hls_store_open(CTX, &f, 0, 0.01, 6, SEG_CONTAINER_FMP4);
@@ -59,11 +61,11 @@ typedef struct {
 } reader_arg_t;
 
 static void *reader_thread(void *arg) {
-  reader_arg_t *ra = arg;
+  const reader_arg_t *ra = arg;
   pid_filter_t f;
   memset(&f, 0, sizeof f);
   while (!atomic_load_explicit(&g_stop, memory_order_relaxed)) {
-    hls_store_t *s = find_store(CTX, &f, 0, SEG_CONTAINER_FMP4);
+    const hls_store_t *s = find_store(CTX, &f, 0, SEG_CONTAINER_FMP4);
     if (s) {
       const hls_snapshot_t *snap = atomic_load_explicit(&s->snap, memory_order_acquire);
       if (snap) {

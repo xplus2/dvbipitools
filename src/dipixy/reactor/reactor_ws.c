@@ -99,7 +99,9 @@ void reactor_ws_close(int epfd, conn_t *c) {
 }
 
 void reactor_ws_flush(int epfd, conn_t *c) {
-  int rc, caf, dead;
+  int rc;
+  int caf;
+  int dead;
   pthread_mutex_lock(&c->out_lock);
   dead = c->dead;
   pthread_mutex_unlock(&c->out_lock);

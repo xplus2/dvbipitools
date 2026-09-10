@@ -195,8 +195,8 @@ static size_t build_mpd(const hls_store_t *s, const hls_snapshot_t *snap, char *
 }
 
 int dash_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int want_ll, const char *utc_url, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
-  hls_store_t *s;
-  hls_snapshot_t *snap;
+  const hls_store_t *s;
+  const hls_snapshot_t *snap;
   char mpd[8192];
   char cors_hdr[192];
   size_t mpd_len;
@@ -236,8 +236,8 @@ static const hls_seg_t *find_seg_by_time(const hls_snapshot_t *snap, uint64_t t_
 }
 
 int dash_serve_seg(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
-  hls_store_t *s;
-  hls_snapshot_t *snap;
+  const hls_store_t *s;
+  const hls_snapshot_t *snap;
   const hls_seg_t *seg;
   uint64_t req_t;
   char etag[48];
@@ -265,8 +265,8 @@ int dash_serve_seg(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, un
 }
 
 int dash_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int want_ll, const char *utc_url, int is_head, hls_resp_t *out) {
-  hls_store_t *s;
-  hls_snapshot_t *snap;
+  const hls_store_t *s;
+  const hls_snapshot_t *snap;
   char mpd[8192];
   size_t mpd_len;
   memset(out, 0, sizeof *out);
@@ -282,8 +282,8 @@ int dash_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid
 }
 
 int dash_render_seg(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, hls_resp_t *out) {
-  hls_store_t *s;
-  hls_snapshot_t *snap;
+  const hls_store_t *s;
+  const hls_snapshot_t *snap;
   const hls_seg_t *seg;
   uint64_t req_t;
   char etag[48];

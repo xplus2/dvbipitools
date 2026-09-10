@@ -96,7 +96,7 @@ done:
 
 int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes) {
   hls_store_t *s;
-  hls_snapshot_t *snap;
+  const hls_snapshot_t *snap;
   uint32_t req_seq;
   int req_part;
   char etag[48];
@@ -131,7 +131,8 @@ int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsi
     body_len = snap->live_parts.size[req_part];
     part_etag(req_seq, req_part, body_len, etag, sizeof etag);
   } else if (snap && snap->count > 0) {
-    uint32_t oldest = snap->oldest_seq, last = oldest + (uint32_t)snap->count - 1u;
+    uint32_t oldest = snap->oldest_seq;
+    uint32_t last = oldest + (uint32_t)snap->count - 1u;
     if (req_seq >= oldest && req_seq <= last) {
       const hls_seg_t *seg = &snap->segs[(snap->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
       if (req_part < seg->parts.count) {

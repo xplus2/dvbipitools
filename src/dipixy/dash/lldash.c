@@ -233,7 +233,7 @@ void dash_lldash_init(int max_clients) {
 
 int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int proto) {
   hls_store_t *s;
-  hls_snapshot_t *snap;
+  const hls_snapshot_t *snap;
   uint64_t want_t_ms;
   uint32_t want_seg;
   int idx = -1;

@@ -118,7 +118,9 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
   out_es_t out_es[8];
   out_program_pids_t pids;
   unsigned pcr_pid;
-  int n, dropped, desc_truncated;
+  int n;
+  int dropped;
+  int desc_truncated;
   unsigned char section[512], pkt[188], pat_section[32];
   size_t slen, pat_len;
   psi_t *p;
