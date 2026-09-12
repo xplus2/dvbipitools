@@ -336,7 +336,7 @@ static int assign_missing_sids(config_t *cfg) {
   return 0;
 }
 
-static args_status_t validate_output_target(config_t *cfg, int have_mcast) {
+static args_status_t validate_output_target(const config_t *cfg, int have_mcast) {
   unsigned n_rist_in = 0;
   for (unsigned i = 0; i < cfg->n_inputs; i++) if (cfg->inputs[i].input.kind == SRC_RIST) n_rist_in++;
   if (n_rist_in > 1) {
@@ -354,7 +354,7 @@ static args_status_t validate_output_target(config_t *cfg, int have_mcast) {
   return ARGS_OK;
 }
 
-static args_status_t validate_bitrate_alfec(config_t *cfg) {
+static args_status_t validate_bitrate_alfec(const config_t *cfg) {
   if ((cfg->stuff || cfg->burst_limit) && !cfg->bitrate_kbps) {
     argerr("-S/--stuff and -B/--burst-limit need -b/--bitrate");
     return ARGS_ERR;
@@ -424,9 +424,9 @@ static args_status_t validate_srt_group(config_t *cfg, const char *srt_group_mod
   return ARGS_OK;
 }
 
-static args_status_t validate_per_input_srt_hbbtv(config_t *cfg) {
+static args_status_t validate_per_input_srt_hbbtv(const config_t *cfg) {
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
-    dipitvhead_input_t *in = &cfg->inputs[i];
+    const dipitvhead_input_t *in = &cfg->inputs[i];
     if (in->srt_passphrase_in[0] && (strlen(in->srt_passphrase_in) < 10 || strlen(in->srt_passphrase_in) > 79)) {
       argerr("--srt-passphrase-in must be 10..79 characters");
       return ARGS_ERR;

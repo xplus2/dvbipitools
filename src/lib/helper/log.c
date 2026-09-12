@@ -88,7 +88,8 @@ static void strip_ansi(char *s) {
 }
 
 void log_line(const char *fmt, ...) {
-  char ts[20], msg[4096];
+  char ts[20];
+  char msg[4096];
   va_list ap;
   stamp(ts, sizeof ts);
   va_start(ap, fmt);

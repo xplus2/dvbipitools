@@ -409,7 +409,9 @@ END_TEST
 
 START_TEST(ts_filter_strip_lcevc_drops_standalone_es) {
   ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_LCEVC);
-  unsigned char sec[256], pkt[188], out[188];
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char out[188];
   size_t slen;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
@@ -429,7 +431,9 @@ END_TEST
 
 START_TEST(ts_filter_strip_none_keeps_lcevc_pid) {
   ts_filter_t *f = ts_filter_new(1, 0, 0, 0, 0);
-  unsigned char sec[256], pkt[188], out[188];
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char out[188];
   size_t slen;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);

@@ -37,7 +37,7 @@ static void h2_submit_mp4push_response(h2_conn_t *conn, int32_t stream_id, h2_mp
 
 void h2_mp4push_wake(int sub_idx) {
   conn_t *c = mp4push_sub_h2c(sub_idx);
-  h2_mp4push_stream_t *tcs = mp4push_sub_h2_slot(sub_idx);
+  const h2_mp4push_stream_t *tcs = mp4push_sub_h2_slot(sub_idx);
   h2_wake_stream(c, tcs ? tcs->sid : 0);
 }
 

@@ -41,7 +41,8 @@ static nghttp3_ssize h3_resp_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec 
 void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, int zc, const char *origin_hdr) {
   const char *status_buf;
   char len_buf[24];
-  size_t len_n, etag_n;
+  size_t len_n;
+  size_t etag_n;
   char etag_buf[56];
   nghttp3_nv nva[6];
   size_t nvlen = 0;

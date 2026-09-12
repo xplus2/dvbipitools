@@ -24,8 +24,7 @@ struct bitrate_pacer {
 
 bitrate_pacer_t *bitrate_pacer_new(double target_bps, int stuff, int burst_limit) {
   bitrate_pacer_t *p = calloc(1, sizeof *p);
-  if (!p)
-    return NULL;
+  if (!p) return NULL;
   p->target_bps = target_bps;
   p->stuff = stuff;
   p->burst_limit = burst_limit;
@@ -38,8 +37,7 @@ void bitrate_pacer_free(bitrate_pacer_t *p) { free(p); }
 
 void bitrate_pace(bitrate_pacer_t *p) {
   double ahead_s;
-  if (!p || !p->burst_limit || p->target_bps <= 0.0)
-    return;
+  if (!p || !p->burst_limit || p->target_bps <= 0.0) return;
   ahead_s = ((double)p->bits_sent - (mono_seconds() - p->start) * p->target_bps) / p->target_bps;
   if (ahead_s > 0.0) {
     struct timespec ts = {(time_t)ahead_s, (long)((ahead_s - (time_t)ahead_s) * 1e9)};
@@ -49,12 +47,9 @@ void bitrate_pace(bitrate_pacer_t *p) {
 
 void bitrate_account_n(bitrate_pacer_t *p, unsigned n) {
   double now, ahead_s;
-
-  if (!p)
-    return;
+  if (!p) return;
   p->bits_sent += (unsigned long long)PACKET_BITS * n;
-  if (p->target_bps <= 0.0)
-    return;
+  if (p->target_bps <= 0.0) return;
   now = mono_seconds();
   ahead_s = ((double)p->bits_sent - (now - p->start) * p->target_bps) / p->target_bps;
   if (ahead_s > OVERAGE_THRESHOLD_S && (p->last_overage_log < 0.0 || now - p->last_overage_log >= OVERAGE_LOG_COOLDOWN_S)) {
@@ -66,8 +61,10 @@ void bitrate_account_n(bitrate_pacer_t *p, unsigned n) {
 void bitrate_account(bitrate_pacer_t *p) { bitrate_account_n(p, 1); }
 
 int bitrate_stuff_due(bitrate_pacer_t *p) {
-  double behind_bits, cap_bits;
-  int n, cap;
+  double behind_bits;
+  double cap_bits;
+  int n;
+  int cap;
   if (!p->stuff || p->target_bps <= 0.0) return 0;
   behind_bits = (mono_seconds() - p->start) * p->target_bps - (double)p->bits_sent;
   if (behind_bits <= 0.0) return 0;

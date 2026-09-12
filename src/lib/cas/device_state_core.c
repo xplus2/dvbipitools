@@ -137,7 +137,7 @@ int device_core_on_emm(device_core_t *core, const unsigned char *emm, size_t emm
 }
 
 int device_core_copy_service_key(device_core_t *core, unsigned service_id, int allow_sole_fallback, unsigned char sk_copy[CRYPTO_KEY_LEN]) {
-  service_key_t *sk;
+  const service_key_t *sk;
   int have;
   device_core_lock(core);
   sk = device_core_service_slot_locked(core, service_id, 0);

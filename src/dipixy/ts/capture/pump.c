@@ -155,7 +155,8 @@ static void pump_release_pin(capture_ctx_t *c) {
 int capture_pump_tick(int pid, void (*sink)(capture_ctx_t *ctx, void *user, const unsigned char *pkt), void *user) {
   capture_ctx_t *snap_pin[CAPTURE_PUMP_SNAPSHOT_MAX];
   int n = 0, i, total = 0, idx, start;
-  int shard_off, shard_cnt;
+  int shard_off;
+  int shard_cnt;
   const capture_snapshot_t *snap;
 
   snap = atomic_load_explicit(&g_snapshot, memory_order_acquire);

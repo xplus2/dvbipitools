@@ -42,7 +42,7 @@ static void h2_submit_dashchunk_response(h2_conn_t *conn, int32_t stream_id, h2_
 
 void h2_dashchunk_wake(int sub_idx) {
   conn_t *c = dash_lldash_sub_h2c(sub_idx);
-  h2_dashchunk_stream_t *tcs = dash_lldash_sub_h2_slot(sub_idx);
+  const h2_dashchunk_stream_t *tcs = dash_lldash_sub_h2_slot(sub_idx);
   h2_wake_stream(c, tcs ? tcs->sid : 0);
 }
 

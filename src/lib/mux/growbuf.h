@@ -8,7 +8,8 @@
 
 typedef struct {
   unsigned char *p;
-  size_t len, cap;
+  size_t len;
+  size_t cap;
   int err; /* alloc failed */
 } muxbuf_t;
 

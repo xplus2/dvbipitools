@@ -204,7 +204,7 @@ static void snap_free(hls_snapshot_t *ns) {
 }
 
 const cached_text_t *snapshot_cache_text(_Atomic(cached_text_t *) *slot, text_fmt_fn fmt, void *ctx, size_t buf_cap) {
-  cached_text_t *cur = atomic_load_explicit(slot, memory_order_acquire);
+  const cached_text_t *cur = atomic_load_explicit(slot, memory_order_acquire);
   cached_text_t *nc;
   char *buf;
   cached_text_t *expected;
@@ -508,13 +508,13 @@ int hls_push_segment_at(hls_store_t *s, const uint8_t *data, size_t size, double
   return 0;
 }
 
-int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const uint8_t *data, size_t size, double duration) {
+int hls_push_segment(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const uint8_t *data, size_t size, double duration) {
   hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   if (!s) return -1;
   return hls_push_segment_at(s, data, size, duration);
 }
 
-void hls_llhls_enable(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, double part_target) {
+void hls_llhls_enable(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, double part_target) {
   hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   hls_snapshot_t *old;
   hls_snapshot_t *ns;
@@ -587,7 +587,7 @@ int hls_push_part_at(hls_store_t *s, const uint8_t *data, size_t size, double du
   return 0;
 }
 
-int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const uint8_t *data, size_t size, double duration, int independent) {
+int hls_push_part(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const uint8_t *data, size_t size, double duration, int independent) {
   hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   if (!s) return -1;
   return hls_push_part_at(s, data, size, duration, independent);
@@ -648,13 +648,13 @@ int hls_push_segment_ll_at(hls_store_t *s, double duration) {
   return 0;
 }
 
-int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, double duration) {
+int hls_push_segment_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, double duration) {
   hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   if (!s) return -1;
   return hls_push_segment_ll_at(s, duration);
 }
 
-int hls_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
+int hls_store_ready(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
   const hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   const hls_snapshot_t *snap;
   if (!s) return 0;
@@ -662,7 +662,7 @@ int hls_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   return snap && snap->count > 0;
 }
 
-int hls_ll_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
+int hls_ll_store_ready(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
   const hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   const hls_snapshot_t *snap;
   if (!s) return 0;
@@ -670,7 +670,7 @@ int hls_ll_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned 
   return snap && snap->part_target > 0.0 && (snap->count > 0 || snap->live_parts.count > 0);
 }
 
-int hls_part_available(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, uint32_t want_seg, int want_part) {
+int hls_part_available(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, uint32_t want_seg, int want_part) {
   const hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   const hls_snapshot_t *snap;
   if (!s) return 0;

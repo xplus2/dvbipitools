@@ -171,10 +171,12 @@ void esc_handle_vvc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, 
 }
 
 void esc_split_nals(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *d, size_t len, int *key, const lcevc_strip_t *strip) {
-  size_t p, scl = 0;
+  size_t p;
+  size_t scl = 0;
   p = find_startcode(d, len, 0, &scl);
   while (p < len) {
-    size_t ns = p + scl, scl2 = 0;
+    size_t ns = p + scl;
+    size_t scl2 = 0;
     size_t q = find_startcode(d, len, ns, &scl2);
     size_t n = q - ns;
     unsigned type;

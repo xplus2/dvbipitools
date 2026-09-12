@@ -71,7 +71,7 @@ typedef struct {
 
 /* fd: h2 ts_push_subscribe() needs conn fd for ring wake lookups.
    h3: subscriber to conn/stream_id after subscribe (-1) */
-void httpng_dispatch(const httpng_ops_t *ops, void *conn, void *req, httpng_req_hdrs_t *hdrs, const char *client_ip, int fd);
+void httpng_dispatch(const httpng_ops_t *ops, void *conn, void *req, const httpng_req_hdrs_t *hdrs, const char *client_ip, int fd);
 
 #endif /* HAVE_HTTP2 || HAVE_HTTP3 */
 #endif /* DIPIXY_HTTPNG_H */

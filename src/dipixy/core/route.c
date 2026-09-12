@@ -108,7 +108,8 @@ static int dash_seg_filename(const char *s) {
 
 /* "segNNNNN.PP.ts": LL-HLS part, distinct from plain "segNNNNN.ts" */
 static int llhls_part_filename(const char *s) {
-  size_t n, n2;
+  size_t n;
+  size_t n2;
   if (strncmp(s, "seg", 3) != 0) return 0;
   n = digit_run(s + 3);
   if (n == 0 || s[3 + n] != '.') return 0;

@@ -110,7 +110,9 @@ int reactor_flush_rc(conn_t *c, int epfd) {
 }
 
 void reactor_flush_or_close(int epfd, conn_t *c, void (*close_fn)(int, conn_t *)) {
-  int dead, caf, rc;
+  int dead;
+  int caf;
+  int rc;
   pthread_mutex_lock(&c->out_lock);
   dead = c->dead;
   caf = c->close_after_flush;

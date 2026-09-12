@@ -125,7 +125,7 @@ between real-world usage of media formats and the standard.
   - Secure Reliable Transport (SRT) is not part of DVB.
 * dipixy
   - HLS, LL-HLS, MPEG-DASH and LL-DASH output are not part of DVB-IPI.
-  - LCEVC is too young for DVB-IPI, but just fits.
+  - MPEG-5 LCEVC is too young for DVB-IPI, but just fits.
 
 ### Known gaps
 On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.

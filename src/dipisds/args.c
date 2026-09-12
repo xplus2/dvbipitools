@@ -100,15 +100,24 @@ static void print_help(void) {
 }
 
 typedef struct {
-  int have_a, have_l, have_mcast, have_t;
+  int have_a;
+  int have_l;
+  int have_mcast;
+  int have_t;
   long t_value;
-  int have_ret_rtx_time, have_ret_rtx_pt, have_ret_mc_port;
-  int have_fcc_rtx_time, have_fcc_rtx_pt, have_fcc_resolve_max_channels;
+  int have_ret_rtx_time;
+  int have_ret_rtx_pt;
+  int have_ret_mc_port;
+  int have_fcc_rtx_time;
+  int have_fcc_rtx_pt;
+  int have_fcc_resolve_max_channels;
   int have_al_fec_pt;
-  int have_rms_lang, have_fus_lang, have_fus_id;
+  int have_rms_lang;
+  int have_fus_lang;
+  int have_fus_id;
 } args_flags_t;
 
-static args_status_t validate_mode_mcast(config_t *cfg, const args_flags_t *fl) {
+static args_status_t validate_mode_mcast(const config_t *cfg, const args_flags_t *fl) {
   if (fl->have_a == fl->have_l) {
     argerr("exactly one of -a/--announce or -l/--listen is required");
     return ARGS_ERR;

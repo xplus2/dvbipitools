@@ -178,13 +178,13 @@ void link_lcevc(psi_es_t *es, int count) {
     psi_es_t *ve = &es[v];
     size_t ll;
     const unsigned char *link;
-    unsigned cnt, t;
+    unsigned cnt;
     if (ve->cls != PID_VIDEO) continue;
     link = find_ext_desc(ve->desc, ve->desc_len, 0x18, &ll);
     if (!link || ll < 1) continue;
     cnt = link[0];
     if (1 + cnt > ll) continue;
-    for (t = 0; t < cnt && ve->lcevc_pid_count < PSI_LCEVC_MAX_LINKS; t++) {
+    for (unsigned t = 0; t < cnt && ve->lcevc_pid_count < PSI_LCEVC_MAX_LINKS; t++) {
       unsigned tag = link[1 + t];
       for (int x = 0; x < count; x++) {
         psi_es_t *ee = &es[x];

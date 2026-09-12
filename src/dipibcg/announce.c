@@ -242,8 +242,8 @@ typedef struct {
   int metrics_on;
 } bcg_announce_ctx_t;
 
-static void bcg_announce_ready(void *ctx_, mcast_t *m) {
-  bcg_announce_ctx_t *ctx = ctx_;
+static void bcg_announce_ready(void *ctx_, const mcast_t *m) {
+  const bcg_announce_ctx_t *ctx = ctx_;
   char mcast_txt[80];
   (void)m;
   mcast_describe(ctx->cfg, mcast_txt, sizeof mcast_txt);

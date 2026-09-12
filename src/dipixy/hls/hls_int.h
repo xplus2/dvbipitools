@@ -83,7 +83,7 @@ typedef struct {
   size_t body_len;
 } hls_ll_resolve_t;
 
-int hls_resolve_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
+int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
                    const char *filename, const char *if_none_match, hls_ll_resolve_t *r);
 
 #endif

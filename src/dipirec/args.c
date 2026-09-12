@@ -802,7 +802,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     if (cfg->insecure_tls && !has_rtmps && !(cfg->source.kind == URI_HTTP && cfg->source.http.tls)) log_line(TOOL_NAME ": --insecure needs -o rtmps:// target or -i https:// source");
   }
   /* LCEVC also strips mp4/mkv/rtmp inline data, unlike others */
-  if (strip_arg && cfg->format != FMT_TS && (cfg->strip_mask & ~(unsigned)STRIP_LCEVC)) log_line(TOOL_NAME ": --strip has no effect outside -f ts");
+  if (strip_arg && cfg->format != FMT_TS && (cfg->strip_mask & ~STRIP_LCEVC)) log_line(TOOL_NAME ": --strip has no effect outside -f ts");
   if (cfg->subs == SUB_SRT && cfg->format != FMT_MKV && cfg->format != FMT_MKA && cfg->format != FMT_MP4 && cfg->format != FMT_M4A) {
     argerr("-s srt requires -f mkv, mka, mp4 or m4a");
     return ARGS_ERR;

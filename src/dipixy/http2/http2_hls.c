@@ -62,7 +62,8 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
   const char *status_buf;
   char len_buf[24];
   char etag_buf[56];
-  size_t len_n, etag_n;
+  size_t len_n;
+  size_t etag_n;
   nghttp2_nv nva[6];
   size_t nvlen = 0;
   nghttp2_data_provider dp;

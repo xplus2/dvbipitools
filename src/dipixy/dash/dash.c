@@ -177,7 +177,9 @@ static uint64_t mpd_bandwidth(const hls_snapshot_t *snap) {
 /* codecs: comma-joined video+audio (audio omitted if none). want_ll: route-selected, not derived from snap->part_target */
 static size_t build_mpd(const hls_store_t *s, const hls_snapshot_t *snap, char *mpd, size_t cap, int want_ll, const char *utc_url) {
   char *mp = mpd;
-  char avail[32], publish[32], codecs[64];
+  char avail[32];
+  char publish[32];
+  char codecs[64];
   double min_update, tsb_depth, pres_delay, min_buffer;
 
   iso8601_utc(s->opened_at, avail, sizeof avail);
@@ -224,8 +226,13 @@ static size_t build_mpd(const hls_store_t *s, const hls_snapshot_t *snap, char *
 /* one AdaptationSet per alternative, reuse base timeline */
 static size_t build_mpd_lcevc_all(const hls_store_t *s, const hls_snapshot_t *snap, char *mpd, size_t cap, int want_ll, const char *utc_url) {
   char *mp = mpd;
-  char avail[32], publish[32], codecs[64];
-  double min_update, tsb_depth, pres_delay, min_buffer;
+  char avail[32];
+  char publish[32];
+  char codecs[64];
+  double min_update;
+  double tsb_depth;
+  double pres_delay;
+  double min_buffer;
   uint64_t bandwidth;
   int alt_count = snap->lcevc_pid_count + 1;
 
@@ -317,7 +324,7 @@ typedef struct {
   size_t body_len;
 } dash_seg_resolve_t;
 
-static int dash_resolve_mpd(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int want_ll, const char *utc_url,
+static int dash_resolve_mpd(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int want_ll, const char *utc_url,
                             dash_mpd_resolve_t *r) {
   const hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4);
   hls_snapshot_t *snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
@@ -380,7 +387,7 @@ static const hls_seg_t *find_seg_by_time(const hls_snapshot_t *snap, uint64_t t_
   return NULL;
 }
 
-static int dash_resolve_seg(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, dash_seg_resolve_t *r) {
+static int dash_resolve_seg(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, dash_seg_resolve_t *r) {
   const hls_store_t *s;
   const hls_snapshot_t *snap;
   const hls_seg_t *seg;

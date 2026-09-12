@@ -11,7 +11,8 @@
 void muxbuf_free(muxbuf_t *b) {
   free(b->p);
   b->p = NULL;
-  b->len = b->cap = 0;
+  b->cap = 0;
+  b->len = 0;
 }
 
 void muxbuf_append(muxbuf_t *b, const void *data, size_t n, size_t initial_cap) {

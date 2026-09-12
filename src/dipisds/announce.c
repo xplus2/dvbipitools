@@ -218,8 +218,8 @@ typedef struct {
   int metrics_on;
 } sds_announce_ctx_t;
 
-static void sds_announce_ready(void *ctx_, mcast_t *m) {
-  sds_announce_ctx_t *ctx = ctx_;
+static void sds_announce_ready(void *ctx_, const mcast_t *m) {
+  const sds_announce_ctx_t *ctx = ctx_;
   (void)m;
   if (ctx->st.in.kind == INPUT_RAW_XML) {
     log_line("announcing raw %s (payload 0x%02x) on %s:%u every %lds", ctx->cfg->input_path, ctx->st.in.raw_payload_id, ctx->cfg->mcast_group,

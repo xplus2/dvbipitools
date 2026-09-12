@@ -114,7 +114,8 @@ static const char *trak_entry_fourcc_for(codec_t codec) {
 }
 
 void trak_build_tref(mp4buf_t *out, unsigned depends_on_track_id) {
-  mp4buf_t tref, sbas;
+  mp4buf_t tref;
+  mp4buf_t sbas;
   if (!depends_on_track_id) return;
   memset(&sbas, 0, sizeof sbas);
   mb_u32(&sbas, depends_on_track_id);

@@ -38,7 +38,9 @@ int bitreader_get(bitreader_t *br, int nbits, uint64_t *out) {
 }
 
 int bitreader_get_vluimsbf8(bitreader_t *br, uint64_t *out) {
-  uint64_t v = 0, cont, group;
+  uint64_t v = 0;
+  uint64_t cont;
+  uint64_t group;
   for (;;) {
     if (bitreader_get(br, 1, &cont)) return -1;
     if (bitreader_get(br, 7, &group)) return -1;
@@ -51,7 +53,8 @@ int bitreader_get_vluimsbf8(bitreader_t *br, uint64_t *out) {
 
 int bitreader_get_vluimsbf4(bitreader_t *br, uint64_t *out) {
   int n = 0;
-  uint64_t bit, v;
+  uint64_t bit;
+  uint64_t v;
   do {
     if (bitreader_get(br, 1, &bit)) return -1;
     n++;

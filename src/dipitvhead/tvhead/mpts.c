@@ -34,7 +34,8 @@ typedef struct {
   unsigned char cat_cc;
   double last_cat;
   unsigned rr_start;
-  double run_start, last_stat;
+  double run_start;
+  double last_stat;
   int rc;
   input_metrics_t input_stats[ARGS_MAX_INPUTS]; /* outlives mpts_program_t's per-reconnect memset */
   ts_metrics_t tsm;
@@ -42,7 +43,7 @@ typedef struct {
   ts_metrics_t *tsm_p;
 } mpts_run_ctx_t;
 
-static int mpts_setup(const config_t *cfg, metrics_exporter_t *mx, mpts_run_ctx_t *c) {
+static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_run_ctx_t *c) {
   c->n = cfg->n_inputs;
   c->cas_wanted = cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled;
   c->cas_needs_discovery = c->cas_wanted && (cfg->cas_pids_video || cfg->cas_pids_audio);

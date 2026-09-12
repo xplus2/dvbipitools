@@ -199,13 +199,13 @@ static int h2ops_mp4push_dispatch(void *connv, void *reqv, int sub, int ws_handl
 
 static int h2ops_hls_cold_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, hls_cold_kind_t kind,
                                    seg_container_t container, int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle) {
-  h2_req_ctx_t *rq = reqv;
+  const h2_req_ctx_t *rq = reqv;
   return h2_hls_cold_try_park(connv, rq->stream->id, ctx, filter, pmt_pid, lcevc, filename, kind, container, want_ll, is_head, origin_hdr, timeout_ms, ws_handle);
 }
 
 static int h2ops_llhls_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head,
                                 const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle) {
-  h2_req_ctx_t *rq = reqv;
+  const h2_req_ctx_t *rq = reqv;
   return h2_llhls_try_park(connv, rq->c, rq->stream->id, ctx, filter, pmt_pid, lcevc, filename, is_head, inm, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
 }
 

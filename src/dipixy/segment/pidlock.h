@@ -15,7 +15,7 @@ void pidlock_snapshot(const psi_t *psi, unsigned *allowed, int *n_allowed, int c
 int pidlock_allowed(const unsigned *allowed, int n_allowed, unsigned pid);
 
 /* resolves lcevc pick, adds the rest to filter's excludes */
-void pidlock_apply_lcevc(lcevc_select_t *lcevc, pid_filter_t *filter, const unsigned *pids, int count);
+void pidlock_apply_lcevc(const lcevc_select_t *lcevc, pid_filter_t *filter, const unsigned *pids, int count);
 
 /* silent fallback to pkt: no section yet, or rewrite doesn't fit one packet. *cc_pmt advances only on success */
 const unsigned char *pidlock_rewrite_pmt(const psi_t *tp, const pid_filter_t *filter, unsigned char *cc_pmt,

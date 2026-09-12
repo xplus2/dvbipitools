@@ -83,7 +83,7 @@ size_t format_lcevc_master_playlist(const lcevc_master_snap_t *snap, char *m3u8,
   return (size_t)(mp - m3u8);
 }
 
-int hls_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
+int hls_serve(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
               const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes) {
   char cors_hdr[192];
   hls_resolve_t r;

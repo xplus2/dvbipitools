@@ -62,7 +62,8 @@ size_t rbsp_unescape(const unsigned char *s, size_t len, unsigned char *d, size_
 }
 
 size_t rbsp_escape(const unsigned char *s, size_t len, unsigned char *d, size_t cap) {
-  size_t o = 0, zeros = 0;
+  size_t o = 0;
+  size_t zeros = 0;
   for (size_t i = 0; i < len; i++) {
     if (zeros >= 2 && s[i] <= 0x03) {
       if (o >= cap) return 0;

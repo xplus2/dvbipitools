@@ -39,12 +39,17 @@ void put_desc(mp4buf_t *out, unsigned tag, mp4buf_t *payload);
 typedef struct {
   unsigned track_id;
   pid_class_t cls;
-  unsigned width, height;
+  unsigned width;
+  unsigned height;
   codec_t codec;
   const unsigned char *cpriv;
   size_t cpriv_len;
-  unsigned rate, channels;
-  unsigned char ac3_bsid, ac3_bsmod, ac3_acmod, ac3_lfeon;
+  unsigned rate;
+  unsigned channels;
+  unsigned char ac3_bsid;
+  unsigned char ac3_bsmod;
+  unsigned char ac3_acmod;
+  unsigned char ac3_lfeon;
   unsigned ac3_bitrate_code;
 } trak_meta_t;
 

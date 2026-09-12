@@ -46,7 +46,12 @@ void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigne
       s->audio.audio_bsmod = f.bsmod;
       s->audio.audio_acmod = f.acmod;
       s->audio.audio_lfeon = f.lfeon;
-      s->audio.audio_bitrate_code = s->demux.audio_codec == CODEC_EAC3 ? (unsigned)((uint64_t)f.consumed * 8 * f.rate / (f.samples ? f.samples : 1) / 1000) : f.bitrate_code;
+      if (s->demux.audio_codec == CODEC_EAC3) {
+        unsigned samples = f.samples ? f.samples : 1;
+        s->audio.audio_bitrate_code = (unsigned)((uint64_t)f.consumed * 8 * f.rate / samples / 1000);
+      } else {
+        s->audio.audio_bitrate_code = f.bitrate_code;
+      }
       s->audio.audio_ready = 1;
       try_create_fmux(s);
     }

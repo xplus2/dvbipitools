@@ -301,7 +301,9 @@ typedef struct {
 /* build 1-prog PMT (table_id 0x02) from a list of ES, each with its raw descriptor loop B, CRC included */
 static size_t build_pmt_es(unsigned char *out, unsigned prog_num, unsigned pcr_pid, const es_spec_t *es, size_t es_count) {
   unsigned char body[256];
-  size_t n = 0, hdr, crc_at, i;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = (unsigned char)(prog_num >> 8);
@@ -314,7 +316,7 @@ static size_t build_pmt_es(unsigned char *out, unsigned prog_num, unsigned pcr_p
   body[n++] = 0xF0; /* program_info_length = 0 */
   body[n++] = 0x00;
 
-  for (i = 0; i < es_count; i++) {
+  for (size_t i = 0; i < es_count; i++) {
     body[n++] = (unsigned char)es[i].stream_type;
     body[n++] = (unsigned char)(0xE0 | ((es[i].pid >> 8) & 0x1F));
     body[n++] = (unsigned char)es[i].pid;
@@ -803,7 +805,8 @@ END_TEST
 
 START_TEST(psi_classifies_lcevc_stream_type) {
   psi_t *p = psi_new();
-  unsigned char section[256], pkt[188];
+  unsigned char section[256];
+  unsigned char pkt[188];
   size_t slen;
   int count;
   const psi_es_t *es;
@@ -833,7 +836,8 @@ END_TEST
 
 START_TEST(psi_links_lcevc_enhancement_to_base_video) {
   psi_t *p = psi_new();
-  unsigned char section[256], pkt[188];
+  unsigned char section[256];
+  unsigned char pkt[188];
   size_t slen;
   int count;
   const psi_es_t *es;
@@ -865,7 +869,8 @@ END_TEST
 
 START_TEST(psi_links_multiple_lcevc_enhancement_layers) {
   psi_t *p = psi_new();
-  unsigned char section[256], pkt[188];
+  unsigned char section[256];
+  unsigned char pkt[188];
   size_t slen;
   int count;
   const psi_es_t *es;
@@ -902,7 +907,8 @@ END_TEST
 
 START_TEST(psi_lcevc_unpaired_when_tags_dont_match) {
   psi_t *p = psi_new();
-  unsigned char section[256], pkt[188];
+  unsigned char section[256];
+  unsigned char pkt[188];
   size_t slen;
   int count;
   const psi_es_t *es;

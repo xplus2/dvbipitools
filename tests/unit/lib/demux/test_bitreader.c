@@ -92,7 +92,8 @@ END_TEST
 
 START_TEST(rbsp_escape_unescape_roundtrip) {
   static const unsigned char in[] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x03, 0xAB};
-  unsigned char escaped[32], back[32];
+  unsigned char escaped[32];
+  unsigned char back[32];
   size_t elen = rbsp_escape(in, sizeof in, escaped, sizeof escaped);
   size_t blen = rbsp_unescape(escaped, elen, back, sizeof back);
   ck_assert_uint_eq(blen, sizeof in);

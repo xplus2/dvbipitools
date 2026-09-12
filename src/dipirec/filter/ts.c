@@ -90,7 +90,8 @@ static size_t pat_rewrite(const unsigned char *src, size_t srclen, unsigned char
 }
 
 static size_t pmt_rewrite_es_entry(const ts_filter_t *f, const unsigned char *src, size_t i, size_t esil, unsigned char *dst, size_t o) {
-  size_t es_o = o, newesil;
+  size_t es_o = o;
+  size_t newesil;
   dst[es_o] = src[i];
   dst[es_o + 1] = src[i + 1];
   dst[es_o + 2] = src[i + 2];

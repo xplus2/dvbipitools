@@ -113,7 +113,7 @@ int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
 
 #define HLS_LL_PLAYLIST_BUF_CAP 16384
 
-int hls_resolve_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
+int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
                     const char *filename, const char *if_none_match, hls_ll_resolve_t *r) {
   hls_store_t *s;
   hls_snapshot_t *snap;

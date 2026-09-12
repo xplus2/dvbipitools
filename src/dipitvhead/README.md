@@ -64,28 +64,28 @@ across every input.
 with the `--cas-ecmg` immediately before them, same convention as `-i`'s per-input flags above -
 using one before any `--cas-ecmg` is an error. Everything else is shared across every vendor.
 
-| long form              | argument                  | default                                    | scope      |
-|------------------------|---------------------------|--------------------------------------------|------------|
-| `--cas-algo`           | `cissa\|csa2\|csa1`       | disabled                                   |            |
-| `--cas-ecmg`           | `tcp://host:port`         | at least one required with `--cas-algo`    |            |
-| `--cas-ecmg-version`   | `2\|3`                    | auto-negotiate                             | per-vendor |
-| `--cas-super-id`       | `<n>`                     | required per vendor                        | per-vendor |
-| `--cas-ecm-id`         | `<n>`                     | required per vendor                        | per-vendor |
-| `--cas-ecm-pid`        | `<pid>`                   | `0x0020`                                   | per-vendor |
-| `--cas-emmg-port`      | `<n>`                     | `8002`                                     | per-vendor |
-| `--cas-emmg-max-conns` | `<n>`                     | `8` (max `64`)                             | per-vendor |
-| `--cas-emmg-version`   | `2\|3`                    | accept client's proposal                   | per-vendor |
-| `--cas-emm-pid`        | `<pid>`                   | `0x0021`                                   | per-vendor |
-| `--cas-resilience`     | `frozen\|cycling\|silent` | `frozen`                                   | per-vendor |
-| `--cas-required`       |                           | off                                        | per-vendor |
-| `--cas-cwenc-algo`     | `des56\|aes128\|aes256`   | off (plaintext)                            | per-vendor |
-| `--cas-cwenc-aes-mode` | `stream\|ecb`             | `stream`                                    | per-vendor |
-| `--cas-cwenc-fixed-key`| `<hex>`                   | `des56`'s Annex D ROM key; none for aes*    | per-vendor |
-| `--cas-cwenc-key-list-a`| `<path>`                | none                                        | per-vendor |
-| `--cas-cwenc-key-list-b`| `<path>`                | none                                        | per-vendor |
-| `--cas-pids`           | `<list>`                  | `video,audio`                              |            |
-| `--cas-cp-duration`    | `<ms>`                    | `10000`                                    |            |
-| `--cas-fallback-clear` |                           | off (stay scrambled on last known-good CW) |            |
+| long form                | argument                  | default                                    | scope      |
+|--------------------------|---------------------------|--------------------------------------------|------------|
+| `--cas-algo`             | `cissa\|csa2\|csa1`       | disabled                                   |            |
+| `--cas-ecmg`             | `tcp://host:port`         | at least one required with `--cas-algo`    |            |
+| `--cas-ecmg-version`     | `2\|3`                    | auto-negotiate                             | per-vendor |
+| `--cas-super-id`         | `<n>`                     | required per vendor                        | per-vendor |
+| `--cas-ecm-id`           | `<n>`                     | required per vendor                        | per-vendor |
+| `--cas-ecm-pid`          | `<pid>`                   | `0x0020`                                   | per-vendor |
+| `--cas-emmg-port`        | `<n>`                     | `8002`                                     | per-vendor |
+| `--cas-emmg-max-conns`   | `<n>`                     | `8` (max `64`)                             | per-vendor |
+| `--cas-emmg-version`     | `2\|3`                    | accept client's proposal                   | per-vendor |
+| `--cas-emm-pid`          | `<pid>`                   | `0x0021`                                   | per-vendor |
+| `--cas-resilience`       | `frozen\|cycling\|silent` | `frozen`                                   | per-vendor |
+| `--cas-required`         |                           | off                                        | per-vendor |
+| `--cas-cwenc-algo`       | `des56\|aes128\|aes256`   | off (plaintext)                            | per-vendor |
+| `--cas-cwenc-aes-mode`   | `stream\|ecb`             | `stream`                                   | per-vendor |
+| `--cas-cwenc-fixed-key`  | `<hex>`                   | `des56`'s Annex D ROM key; none for aes*   | per-vendor |
+| `--cas-cwenc-key-list-a` | `<path>`                  | none                                       | per-vendor |
+| `--cas-cwenc-key-list-b` | `<path>`                  | none                                       | per-vendor |
+| `--cas-pids`             | `<list>`                  | `video,audio`                              |            |
+| `--cas-cp-duration`      | `<ms>`                    | `10000`                                    |            |
+| `--cas-fallback-clear`   |                           | off (stay scrambled on last known-good CW) |            |
 
 ### Conditional Access: BISS
 
@@ -101,14 +101,14 @@ BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each o
 
 
 ### Related to RIST Input/Output
-| flag | long form            | argument                                | default                                         | scope     |
-|------|----------------------|-----------------------------------------|-------------------------------------------------|-----------|
-|      | `--rist-profile-in`  | `simple\|main`                          | `simple` (`-i rist://` only)                    | per-input |
-| `-R` | `--rist`             | `rist://host:port` or `srt://host:port` | none, repeatable (bonded, one scheme at a time) |           |
-|      | `--profile`          | `simple\|main`                          | `simple` (`-R rist://` peers only)              |           |
-|      | `--secret`           | `<psk>`                                 | none (`-R rist://` peers only)                  |           |
-|      | `--cname`            | `<name>`                                | library default (`-R rist://` peers only)       |           |
-|      | `--buffer`           | `<ms>`                                  | library default (`-R rist://` peers only)       |           |
+| flag | long form            | argument                                | default                                   | scope     |
+|------|----------------------|-----------------------------------------|-------------------------------------------|-----------|
+|      | `--rist-profile-in`  | `simple\|main`                          | `simple` (`-i rist://` only)              | per-input |
+| `-R` | `--rist`             | `rist://host:port` or `srt://host:port` | none, repeatable (bonded, one at a time)  |           |
+|      | `--profile`          | `simple\|main`                          | `simple` (`-R rist://` peers only)        |           |
+|      | `--secret`           | `<psk>`                                 | none (`-R rist://` peers only)            |           |
+|      | `--cname`            | `<name>`                                | library default (`-R rist://` peers only) |           |
+|      | `--buffer`           | `<ms>`                                  | library default (`-R rist://` peers only) |           |
 
 `rist://@host:port[?query]` is also accepted, requires librist.
 `@` is required, since an input peer always listens.
@@ -555,19 +555,22 @@ ffmpeg -i <source> -c:v libx264 -c:a aac -f mpegts - | dipitvhead -i - -m 239.5.
 
 # feeding radio + multiple tv stations into a single MPTS
 # m3u/pls/plain stream radio stations to mpts using dipiradiohead
-./dipiradiohead -i http://radio.example.com/listen.pls \
-                -i http://radio.example.net/aac \
-                -i http://radio.example.org/music.m3u \
-                -i http://radio.example.com/mp3 \
-                -m 239.1.2.0:5001 -O enx00deadbeef02
+./dipiradiohead -m 239.1.2.0:5001 -O enx00deadbeef02 \
+  -i http://radio.example.com/listen.pls \
+  -i http://radio.example.net/aac \
+  -i http://radio.example.org/music.m3u \
+  -i http://radio.example.com/mp3
 # let dipitvhead fill the mux (dipiradiohead's PMT PIDs are assigned in order of definition)
-./dipitvhead -i rtp://239.2.3.1:5001 --sdt 'MC TV 1' -I enx00deadbeef00 \
-             -i rtp://239.2.3.2:5001 --sdt 'MC TV 2' -I enx00deadbeef00 \
-             -i http://receiver:8001/1:0:19:0:0:0:C00000:0:0:0: -I enx00deadbeef03 --sdt 'Sat TV 3' \
-             -i udp://239.3.4.1:4500 --sdt 'MC Radio 1' -I enx00deadbeef00 \
-             -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1000 --sdt 'dipiradiohead Radio 1' \
-             -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1001 --sdt 'dipiradiohead Radio 2' \
-             -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1002 --sdt 'dipiradiohead Radio 3' \
-             -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1003 --sdt 'dipiradiohead Radio 4' \
-             -m 239.1.1.1:5000 -O enx00deadbeef01
+./dipitvhead -m 239.1.1.1:5000 -O enx00deadbeef01 -n "LookMomICanDoBroadcasting" \
+  -i rtp://239.2.3.1:5001 -I enx00deadbeef00 --sdt 'MC TV 1' --provider "FrankenMux" \
+  -i rtp://239.2.3.2:5001 -I enx00deadbeef00 --sdt 'MC TV 2' --provider "FrankenMux" \
+  -i http://ird001.headend.internal:8001/1:0:19:0:0:0:C00000:0:0:0: -I enx00deadbeef03 --sdt 'Sat TV 3' --provider "FrankenMux" \
+  -i udp://239.3.4.1:4500 -I enx00deadbeef00 --sdt 'MC Radio 1' --provider "FrankenMux" \
+  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1000 --sdt 'radiohead 1' --provider "FrankenMux" \
+  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1001 --sdt 'radiohead 2' --provider "FrankenMux" \
+  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1002 --sdt 'radiohead 3' --provider "FrankenMux" \
+  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1003 --sdt 'radiohead 4' --provider "FrankenMux"
+# VLC test (use Playback->Program for MPTS program selection) - enx00deadbeef01 will not be the same as above, but
+# should be in the same network as dipitvhead's enx00deadbeef01
+vlc --miface enx00deadbeef01 rtp://@239.1.1.1:5000
 ```

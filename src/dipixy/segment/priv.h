@@ -76,7 +76,8 @@ typedef struct {
 typedef struct {
   pts_unwrap_t ptswrap;
   unsigned char *pend_data;
-  size_t pend_len, pend_cap;
+  size_t pend_len;
+  size_t pend_cap;
   int64_t pend_ts_ms;
   int have_pend;
   int seeded; /* seed_dts() done, relative to fmp4_anchor_ms */

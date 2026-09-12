@@ -106,7 +106,7 @@ void tls_get_client_cert_cn(int fd, char *buf, size_t bufsz) {
 
 int reload_tls(void) { return -1; }
 
-void tls_ctx_gc_sweep(void) {}
+void tls_ctx_gc_sweep(void) {} /* no ctx to sweep, stub build */
 
 void tls_cert_info(char *buf, size_t sz, const char *path, int from_file) {
   (void)path;

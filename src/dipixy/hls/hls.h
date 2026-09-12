@@ -12,7 +12,7 @@
    if_none_match: raw If-None-Match header value or NULL, checked against init.mp4/segments only.
    origin_hdr: raw Origin request header value or NULL, drives Access-Control-Allow-Origin.
    out_bytes: response byte count, NULL ok. 1 handled, 0 no HLS filename */
-int hls_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
+int hls_serve(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
               const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes);
 
 /* filename is bare: "index_ll.m3u8" or "segNNNNN.PP.ts". same conn_queue()/

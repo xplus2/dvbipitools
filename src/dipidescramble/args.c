@@ -463,7 +463,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   }
   {
-    int has_rtmps = 0, has_rtmp = 0, n_file = 0;
+    int has_rtmps = 0;
+    int has_rtmp = 0;
+    int n_file = 0;
     for (int i = 0; i < cfg->n_out; i++) {
       if (cfg->out[i].kind == OUT_FILE) n_file++;
       if (cfg->out[i].kind == OUT_RTMPS) has_rtmps = 1;

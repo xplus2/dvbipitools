@@ -275,13 +275,14 @@ static void dispatch_mp4_route(httpng_req_t *rq) {
 }
 
 /* matches reactor/dispatch.c's HTTP/1.1 dispatch */
-void httpng_dispatch(const httpng_ops_t *ops, void *conn, void *req, httpng_req_hdrs_t *hdrs, const char *client_ip, int fd) {
+void httpng_dispatch(const httpng_ops_t *ops, void *conn, void *req, const httpng_req_hdrs_t *hdrs, const char *client_ip, int fd) {
   route_t rt;
   pid_filter_t filter;
   lcevc_select_t lcevc;
   route_item_bufs_t item_bufs;
   client_info_t cinfo;
-  char *qmark, *query;
+  char *qmark;
+  char *query;
   httpng_req_t rq;
 
   if (!strcmp(hdrs->method, "CONNECT") && !strcmp(hdrs->protocol, "websocket")) {

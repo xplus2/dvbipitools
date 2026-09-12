@@ -8,7 +8,7 @@
 
 typedef struct {
   void *ctx;
-  void (*on_ready)(void *ctx, mcast_t *m);
+  void (*on_ready)(void *ctx, const mcast_t *m);
   void (*reload)(void *ctx);
   int (*run_cycle)(void *ctx, mcast_t *m, unsigned cycle);
   void (*cleanup)(void *ctx);

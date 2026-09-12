@@ -146,7 +146,8 @@ static uint32_t crc32_castagnoli_table[256];
 __attribute__((constructor))
 static void crc32_zlib_tables_init(void) {
   for (unsigned n = 0; n < 256; n++) {
-    uint32_t z = n, c = n;
+    uint32_t z = n;
+    uint32_t c = n;
     for (int k = 0; k < 8; k++) {
       z = (z & 1) ? (0xEDB88320u ^ (z >> 1)) : (z >> 1);
       c = (c & 1) ? (0x82F63B78u ^ (c >> 1)) : (c >> 1);

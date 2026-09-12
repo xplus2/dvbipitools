@@ -43,7 +43,7 @@ static void h2_submit_tspush_response(h2_conn_t *conn, int32_t stream_id, h2_tsp
 
 void h2_tspush_wake(int sub_idx) {
   conn_t *c;
-  h2_tspush_stream_t *tcs;
+  const h2_tspush_stream_t *tcs;
   if (sub_idx < 0 || sub_idx >= g_ts_subs_n) return;
   c = g_ts_subs[sub_idx].h2c;
   tcs = g_ts_subs[sub_idx].h2_slot;

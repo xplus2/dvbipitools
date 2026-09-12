@@ -78,7 +78,8 @@ void stripe_rehash_if_needed(ws_stripe_t *stripe) {
   for (i = 0; i < stripe->hash_cap; i++) fresh[i] = WS_HASH_EMPTY;
   for (i = 0; i < stripe->hash_cap; i++) {
     int idx = stripe->hash[i];
-    uint32_t h, j;
+    uint32_t h;
+    uint32_t j;
     if (idx == WS_HASH_EMPTY || idx == WS_HASH_TOMB) continue;
     h = g_clients[idx].hash;
     j = h & stripe->hash_mask;

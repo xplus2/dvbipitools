@@ -70,12 +70,12 @@ int listen_run(const config_t *cfg) {
     } else {
       char *xml = malloc(len + 1);
       sds_service_t entries[SDS_MAX_SERVICES];
-      int i, count, truncated;
+      int count, truncated;
       if (!xml) continue;
       memcpy(xml, data, len);
       xml[len] = '\0';
       count = sds_parse_broadcast(xml, entries, SDS_MAX_SERVICES, &truncated);
-      for (i = 0; i < count; i++) format_out_item(f, cfg->format, &entries[i]);
+      for (int i = 0; i < count; i++) format_out_item(f, cfg->format, &entries[i]);
       total_services += (unsigned)count;
       free(xml);
       if (truncated)
