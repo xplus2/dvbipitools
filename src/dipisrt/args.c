@@ -11,46 +11,13 @@
 #include "lib/helper/argutil.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/helper/uriparse.h"
 #include "lib/mux/fec2022.h"
+#include "lib/net/plain_endpoint.h"
 
 #include "args.h"
 #include "version.h"
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
-
-/* rest: [@]addr:port, multicast literal required */
-static int parse_direct(const char *rest, plain_endpoint_t *s) {
-  if (*rest == '@') rest++;
-  return uriparse_mcast_addrport(rest, &s->family, s->group, sizeof s->group, &s->port);
-}
-
-static int parse_nonsrt(const char *uri, plain_endpoint_t *s, int is_sink) {
-  memset(s, 0, sizeof *s);
-  if (strcmp(uri, "-") == 0) {
-    s->kind = PLAIN_EP_FILE; /* file_path[0] == '\0': stdin (source) / stdout (sink) */
-    return 0;
-  }
-  if (strncmp(uri, "rtp://", 6) == 0) {
-    s->kind = PLAIN_EP_RTP;
-    s->rtp_wrapped = 1;
-    return parse_direct(uri + 6, s);
-  }
-  if (strncmp(uri, "udp://", 6) == 0) {
-    s->kind = PLAIN_EP_UDP;
-    s->rtp_wrapped = 0;
-    return parse_direct(uri + 6, s);
-  }
-  if (strncmp(uri, "http://", 7) == 0 || strncmp(uri, "https://", 8) == 0) {
-    if (is_sink) return -1; /* an HTTP TS source makes no sense as an output */
-    s->kind = PLAIN_EP_HTTP;
-    return http_url_parse(uri, &s->http);
-  }
-  if (strlen(uri) >= sizeof s->file_path) return -1;
-  s->kind = PLAIN_EP_FILE;
-  bufcpy(s->file_path, sizeof s->file_path, uri);
-  return 0;
-}
 
 /* count: prior calls for this -i/-o (caller's n_in/n_out). first call: decides is_srt.
    later calls: must match, or rejected. bonded srt:// peers: must agree on @ (listen) */
@@ -81,7 +48,7 @@ static int parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *
     bufcpy(e->srt_host[e->n_srt], sizeof e->srt_host[0], host);
     e->srt_port[e->n_srt] = port;
     e->n_srt++;
-  } else if (parse_nonsrt(uri, &e->nonsrt, is_sink)) {
+  } else if (plain_endpoint_parse(uri, &e->nonsrt, is_sink)) {
     return -1;
   }
   (*count)++;
@@ -253,10 +220,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1003:
-        if (bufcpy(cfg->passphrase, sizeof cfg->passphrase, optarg) >= sizeof cfg->passphrase) {
-          argerr("--passphrase too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->passphrase, sizeof cfg->passphrase, optarg, "--passphrase"))
           return ARGS_ERR;
-        }
         break;
       case 1004: {
         char *end;
@@ -269,16 +234,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1005:
-        if (bufcpy(cfg->streamid, sizeof cfg->streamid, optarg) >= sizeof cfg->streamid) {
-          argerr("--streamid too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->streamid, sizeof cfg->streamid, optarg, "--streamid"))
           return ARGS_ERR;
-        }
         break;
       case 1006:
-        if (bufcpy(cfg->packetfilter, sizeof cfg->packetfilter, optarg) >= sizeof cfg->packetfilter) {
-          argerr("--packetfilter too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->packetfilter, sizeof cfg->packetfilter, optarg, "--packetfilter"))
           return ARGS_ERR;
-        }
         break;
       case 1007:
         if (argutil_uint_range(optarg, 1, 60000, &cfg->latency_ms)) {
@@ -320,10 +281,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->metrics_id = optarg;
         break;
       case 1011:
-        if (argutil_uint_range(optarg, 1, 86400, &cfg->metrics_interval_s)) {
-          argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
-          return ARGS_ERR;
-        }
+        if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
       case 'v':
         cfg->verbose = 1;
@@ -387,10 +345,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--pbkeylen requires --passphrase");
     return ARGS_ERR;
   }
-  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
-    argerr("--metrics/--metrics-interval require --metrics-id");
-    return ARGS_ERR;
-  }
+  if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
   if (cfg->al_fec_l && !cfg->al_fec_port) {
     argerr("--al-fec requires --al-fec-port");
     return ARGS_ERR;
@@ -405,8 +360,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     ne->al_fec_port = cfg->al_fec_port;
   }
   if (cfg->insecure_tls && !(cfg->in.nonsrt.kind == PLAIN_EP_HTTP && cfg->in.nonsrt.http.tls))
-    log_line(TOOL_NAME ": --insecure has no effect, no -i https:// source");
+    log_line(TOOL_NAME ": --insecure needs -i https://");
   if (cfg->send_buffer_mult && !config_is_sender(cfg))
-    log_line(TOOL_NAME ": --send-buffer-mult has no effect, no -o srt:// sender side");
+    log_line(TOOL_NAME ": --send-buffer-mult needs -o srt://");
   return ARGS_OK;
 }

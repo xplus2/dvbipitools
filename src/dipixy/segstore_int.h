@@ -10,6 +10,13 @@
 #include <time.h>
 
 #include "segstore.h"
+#include "ts/lcevcselect.h"
+#include "reactor/qsbr.h"
+
+typedef struct {
+  char *text;
+  size_t len;
+} cached_text_t;
 
 typedef struct {
   size_t offset[HLS_MAX_PARTS]; /* offsets index owning data: hls_seg_t.data or store's live_data */
@@ -40,16 +47,27 @@ typedef struct hls_snapshot {
   uint64_t cum_ms; /* next segment's start_ms, never reset by eviction */
   double td_hw; /* target dur high water mark */
 
-  uint8_t init_data[HLS_INIT_SEG_MAX]; /* SEG_CONTAINER_FMP4 only */
+  uint8_t *init_data; /* SEG_CONTAINER_FMP4 only, seg_buf_alloc'd */
   size_t init_size;
   int init_gen; /* bump on hls_set_init_segment(), init.mp4 ETag component */
   codec_t video_codec; /* HLS VERSION + DASH codecs= */
+  char vcodec_str[32];
+  char acodec_str[32];
 
   double part_target; /* 0 = LL disabled */
   uint8_t *live_data;  /* in-progress segment bytes, hls_push_part()-accumulated */
   size_t live_len, live_cap;
   hls_parts_t live_parts;
   uint32_t live_msn; /* == next_seq while this segment is in progress */
+
+  unsigned lcevc_pid[PSI_LCEVC_MAX_LINKS]; /* base video ES's own paired PIDs */
+  int lcevc_pid_count; /* 0: no LCEVC, or not known (yet) */
+
+  _Atomic(cached_text_t *) cache_plain;
+  _Atomic(cached_text_t *) cache_ll;
+  _Atomic(cached_text_t *) cache_lcevc[2];
+  _Atomic(cached_text_t *) cache_mpd;
+  _Atomic(cached_text_t *) cache_mpd_ll;
 } hls_snapshot_t;
 
 #define HLS_SNAP_RETIRE_DEPTH 4
@@ -58,6 +76,7 @@ typedef struct hls_store_t {
   capture_ctx_t *cap_ctx;
   pid_filter_t filter;
   unsigned pmt_pid; /* 0 = auto */
+  lcevc_select_t lcevc;
   double seg_target;
   int max_segs;
   seg_container_t container;
@@ -66,7 +85,7 @@ typedef struct hls_store_t {
   _Atomic(hls_snapshot_t *) snap; /* published; NULL till 1st push */
 
   hls_snapshot_t *retiring[HLS_SNAP_RETIRE_DEPTH];
-  uint64_t *retiring_mark[HLS_SNAP_RETIRE_DEPTH];
+  uint64_t retiring_mark[HLS_SNAP_RETIRE_DEPTH][QSBR_MAX_WORKERS];
   int retiring_n;
 } hls_store_t;
 
@@ -78,12 +97,14 @@ typedef struct {
 
 /* store_lock() is writer only */
 pthread_mutex_t *store_lock(const hls_store_t *s);
-hls_store_t *find_store(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
 int hls_target_duration(const hls_snapshot_t *snap);
 uint8_t *seg_buf_alloc(size_t size);
 void seg_buf_ref(uint8_t *data);
 void seg_buf_unref(uint8_t *data);
 void seg_buf_release_cb(void *arg);
+
+typedef size_t (*text_fmt_fn)(void *ctx, char *buf, size_t cap);
+const cached_text_t *snapshot_cache_text(_Atomic(cached_text_t *) *slot, text_fmt_fn fmt, void *ctx, size_t buf_cap);
 
 /* respfmt.c: response formatting primitives, shared by hls/dash serve/render */
 void hls_sb_init(strbuf_t *b, char *buf, size_t cap);

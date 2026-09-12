@@ -9,6 +9,7 @@
 #define PSI_MAX_ES 32
 #define PSI_NAME 64
 #define PSI_ES_DESC_MAX 255 /* raw ES descriptor loop bytes kept for opaque passthrough */
+#define PSI_LCEVC_MAX_LINKS 4
 
 typedef enum {
   PID_UNKNOWN = 0,
@@ -23,7 +24,8 @@ typedef enum {
   PID_VIDEO, PID_AUDIO, PID_TELETEXT, PID_SUBTITLE,
   PID_AIT,
   PID_ECM,
-  PID_DATA
+  PID_DATA,
+  PID_LCEVC
 } pid_class_t;
 
 typedef enum {
@@ -37,7 +39,8 @@ typedef enum {
   CODEC_AAC_LATM,
   CODEC_AC3,
   CODEC_EAC3,
-  CODEC_OPUS
+  CODEC_OPUS,
+  CODEC_LCEVC
 } codec_t;
 
 typedef struct {
@@ -51,6 +54,8 @@ typedef struct {
   unsigned ca_system_id; /* ES CA descriptor's CA_system_id, 0 if none */
   unsigned char desc[PSI_ES_DESC_MAX]; /* raw ES descriptor loop, for opaque passthrough */
   size_t desc_len; /* 0 if none captured (incl. too long for desc[]) */
+  unsigned lcevc_pid[PSI_LCEVC_MAX_LINKS]; /* enhancement PID(s) on video ES, base PID(s) on LCEVC ES */
+  int lcevc_pid_count; /* 0 if unpaired */
   unsigned ttx_page;   /* teletext page (e.g. 777), 0 if none */
   int ttx_type;        /* teletext_type; 2/5 = subtitle */
   char ttx_lang[4];    /* teletext ISO 639 language */

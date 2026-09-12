@@ -11,6 +11,7 @@ typedef struct {
   unsigned audio_track;  /* 1-based audio track index, used unless audio_all */
   int subs_srt;          /* mux a teletext page as a tx3g subtitle track */
   long sub_lead_ms;      /* subtitle cues shifted earlier by this much */
+  int strip_lcevc;       /* drop inline lcevc (sei-wrapped and dedicated nal types) */
 } mp4_opts_t;
 
 typedef struct mp4mux mp4_t;

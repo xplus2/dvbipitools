@@ -65,6 +65,7 @@ static int handle_emm_u(device_core_t *core, const unsigned char *p, size_t len,
   unsigned addr_len;
   const unsigned char *ct;
   size_t ct_len;
+  unsigned char bk[CRYPTO_KEY_LEN];
 
   if (len < 3) return 0;
   addr_len = p[0];
@@ -73,8 +74,11 @@ static int handle_emm_u(device_core_t *core, const unsigned char *p, size_t len,
     return 0; /* not ours, skip. serial_len 0: no filtering */
   ct = p + 1 + addr_len + 2;
   ct_len = len - (1 + addr_len + 2);
-  if (device_emm_u_decrypt(core->ek, ct, ct_len, core->bk) == 0) {
+  if (device_emm_u_decrypt(core->ek, ct, ct_len, bk) == 0) {
+    device_core_lock(core);
+    memcpy(core->bk, bk, sizeof core->bk);
     core->have_bk = 1;
+    device_core_unlock(core);
     log_line("%sEMM-U decrypted, BK updated", log_prefix);
     return 1;
   }
@@ -85,17 +89,31 @@ static int handle_emm_u(device_core_t *core, const unsigned char *p, size_t len,
 static int handle_emm_g(device_core_t *core, const unsigned char *p, size_t len, const char *log_prefix) {
   unsigned service_id;
   service_key_t *sk;
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk_buf[CRYPTO_KEY_LEN];
 
-  if (len < 4 + CRYPTO_EMM_G_LEN || !core->have_bk) return 0;
+  if (len < 4 + CRYPTO_EMM_G_LEN) return 0;
   service_id = ((unsigned)p[0] << 8) | p[1];
 
+  device_core_lock(core);
+  if (!core->have_bk) {
+    device_core_unlock(core);
+    return 0;
+  }
   sk = device_core_service_slot_locked(core, service_id, 1);
   if (!sk) {
+    device_core_unlock(core);
     log_line("%sservice key cache full (%zu services), dropping EMM-G for service %04X", log_prefix, core->max_services, service_id);
     return 0;
   }
-  if (device_emm_g_decrypt(core->bk, p + 4, sk->sk) == 0) {
+  memcpy(bk, core->bk, sizeof bk);
+  device_core_unlock(core);
+
+  if (device_emm_g_decrypt(bk, p + 4, sk_buf) == 0) {
+    device_core_lock(core);
+    memcpy(sk->sk, sk_buf, sizeof sk->sk);
     sk->have = 1;
+    device_core_unlock(core);
     log_line("%sEMM-G decrypted, SK updated for service %04X", log_prefix, service_id);
     return 1;
   }
@@ -110,18 +128,22 @@ int device_core_on_emm(device_core_t *core, const unsigned char *emm, size_t emm
   size_t hdr_len = 3;
   const unsigned char *payload;
   size_t payload_len;
-  int changed;
 
   if (emm_len < hdr_len) return 0;
   payload = emm + hdr_len;
   payload_len = emm_len - hdr_len;
+  if (payload_len == EMM_G_PAYLOAD_LEN) return handle_emm_g(core, payload, payload_len, log_prefix);
+  return handle_emm_u(core, payload, payload_len, log_prefix);
+}
 
+int device_core_copy_service_key(device_core_t *core, unsigned service_id, int allow_sole_fallback, unsigned char sk_copy[CRYPTO_KEY_LEN]) {
+  service_key_t *sk;
+  int have;
   device_core_lock(core);
-  if (payload_len == EMM_G_PAYLOAD_LEN)
-    changed = handle_emm_g(core, payload, payload_len, log_prefix);
-  else
-    changed = handle_emm_u(core, payload, payload_len, log_prefix);
-
+  sk = device_core_service_slot_locked(core, service_id, 0);
+  if (!sk && allow_sole_fallback && core->service_count == 1) sk = &core->services[0];
+  have = sk && sk->have;
+  if (have) memcpy(sk_copy, sk->sk, CRYPTO_KEY_LEN);
   device_core_unlock(core);
-  return changed;
+  return have ? 0 : -1;
 }

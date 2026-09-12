@@ -53,6 +53,7 @@ typedef struct {
   unsigned sid;            /* --sid right after this -i; 0 here = auto-assign post-parse */
   table_mode_t sdt_mode;   /* -s right after this -i */
   char sdt_text[256];      /* -s <text> right after this -i */
+  char provider_text[256]; /* --provider (-i scoped); empty=TOOL_NAME or source */
   const char *iface_in;    /* -I right after this -i; NULL = kernel default route */
   int strip_eit;           /* --strip-eit right after this -i */
   unsigned strip_mask;     /* --strip right after this -i, TVSTRIP_* bits (mux/pmtbuild.h). default 0: nothing stripped */
@@ -100,6 +101,7 @@ typedef struct {
   size_t cas_pid_count;
   int cas_pids_video; /* --cas-pids "video" token, or default when --cas-pids omitted */
   int cas_pids_audio; /* --cas-pids "audio" token, or default when --cas-pids omitted */
+  int cas_pids_lcevc; /* --cas-pids "lcevc" token */
   unsigned cas_cp_duration_ms;     /* --cas-cp-duration; default 10000 */
   int biss2_enabled;                /* --biss2-sw given; mutually exclusive with --cas-algo/--cas-ecmg */
   unsigned char biss2_sw[BISS_KEY_LEN]; /* --biss2-sw, parsed */

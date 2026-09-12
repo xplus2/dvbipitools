@@ -14,20 +14,21 @@
 
 #include <stdint.h>
 
+typedef enum { DASH_PROTO_H1 = 1, DASH_PROTO_H2 = 2, DASH_PROTO_H3 = 3 } dash_proto_t;
+
 /* call once at startup, before any traffic */
 void dash_lldash_init(int max_clients);
 
 /* c: headers not yet queued.1 attached (caller must not touch c), 0 no store/filename: 404 */
-int dash_lldash_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int keep_alive, const char *origin_hdr, int ws_handle);
+int dash_lldash_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int keep_alive, const char *origin_hdr, int ws_handle);
 
-/* protocol-agnostic: proto: 2 h2, 3 h3. -1: not applicable/full, caller falls to normal render path */
-int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int proto);
+/* protocol-agnostic. -1: not applicable/full, caller falls to normal render path */
+int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, dash_proto_t proto);
 
-/* h2: binds fd + owning reactor thread + ws_handle on a slot from dash_lldash_subscribe(proto=2) */
-void dash_lldash_h2_bind(int slot, int fd, int reactor_tid, int ws_handle);
+void dash_lldash_h2_bind(int slot, void *h2c, void *h2_slot, int reactor_tid, int ws_handle);
 
-/* h2: slot's bound fd, -1 if unbound/out of range */
-int dash_lldash_sub_fd(int slot);
+void *dash_lldash_sub_h2c(int slot);
+void *dash_lldash_sub_h2_slot(int slot);
 
 void dash_lldash_h3_bind(int slot, void *h3c, int64_t h3_sid, int reactor_tid, int ws_handle);
 

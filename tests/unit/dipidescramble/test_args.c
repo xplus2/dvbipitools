@@ -32,6 +32,22 @@ START_TEST(minimal_valid_args_ok) {
 }
 END_TEST
 
+START_TEST(strip_lcevc_flag_is_parsed) {
+  char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.mka", "-f", "mka", "--strip-lcevc", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.strip_lcevc, 1);
+}
+END_TEST
+
+START_TEST(strip_lcevc_defaults_off) {
+  char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.strip_lcevc, 0);
+}
+END_TEST
+
 START_TEST(metrics_options_require_metrics_id) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts",
                   "--metrics", "/tmp/x.sock", NULL};
@@ -171,6 +187,8 @@ static Suite *args_suite(void) {
   Suite *s = suite_create("dipidescramble_args");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, missing_input_is_rejected);
+  tcase_add_test(tc, strip_lcevc_flag_is_parsed);
+  tcase_add_test(tc, strip_lcevc_defaults_off);
   tcase_add_test(tc, missing_output_is_rejected);
   tcase_add_test(tc, minimal_valid_args_ok);
   tcase_add_test(tc, metrics_options_require_metrics_id);

@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "lib/bim/bitreader.h"
+#include "lib/bim/bimreader.h"
 #include "lib/bim/bitwriter.h"
 
 START_TEST(bitwriter_put_packs_msb_first) {
@@ -109,7 +109,6 @@ START_TEST(bitwriter_vluimsbf8_encodes_uint64_max_without_overflow) {
   data = bitwriter_data(&bw, &len);
   ck_assert_ptr_nonnull(data);
   ck_assert_uint_eq(len, 10u);
-
   bitwriter_free(&bw);
 }
 END_TEST
@@ -125,7 +124,6 @@ START_TEST(bitwriter_vluimsbf8_matches_known_encoding) {
   ck_assert_uint_eq(len, 2u);
   ck_assert_uint_eq(data[0], 0x81u);
   ck_assert_uint_eq(data[1], 0x48u);
-
   bitwriter_free(&bw);
 }
 END_TEST
@@ -160,7 +158,6 @@ START_TEST(bitwriter_vluimsbf4_encodes_uint64_max_without_overflow) {
   data = bitwriter_data(&bw, &len);
   ck_assert_ptr_nonnull(data);
   ck_assert_uint_eq(len, 10u);
-
   bitwriter_free(&bw);
 }
 END_TEST

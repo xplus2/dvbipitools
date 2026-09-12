@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/helper/describe.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
@@ -77,30 +78,24 @@ static int parse_uri(const char *uri, source_t *s) {
 
 void source_describe(const source_t *s, char *buf, size_t n) {
   switch (s->kind) {
-  case URI_RTP:
-  case URI_UDP: {
-    const char *scheme = (s->kind == URI_RTP) ? "rtp" : "udp";
-    if (s->family == AF_INET6)
-      snprintf(buf, n, "%s://@[%s]:%u", scheme, s->group, s->port);
-    else
-      snprintf(buf, n, "%s://@%s:%u", scheme, s->group, s->port);
-    break;
-  }
-  case URI_HTTP:
-    snprintf(buf, n, "%s://%s:%u%s", s->http.tls ? "https" : "http", s->http.host, s->http.port, s->http.path);
-    break;
-  case URI_FILE:
-    bufcpy(buf, n, s->file_path[0] ? s->file_path : "- (stdin)");
-    break;
-  case URI_RIST:
-    bufcpy(buf, n, s->rist_uri);
-    break;
-  case URI_SRT:
-    if (s->srt_family == AF_INET6)
-      snprintf(buf, n, "srt://%s[%s]:%u", s->srt_listen ? "@" : "", s->srt_host, s->srt_port);
-    else
-      snprintf(buf, n, "srt://%s%s:%u", s->srt_listen ? "@" : "", s->srt_host, s->srt_port);
-    break;
+    case URI_RTP:
+      describe_mcast_uri(buf, n, "rtp", s->family, s->group, s->port);
+      break;
+    case URI_UDP:
+      describe_mcast_uri(buf, n, "udp", s->family, s->group, s->port);
+      break;
+    case URI_HTTP:
+      describe_http_uri(buf, n, s->http.tls, s->http.host, s->http.port, s->http.path);
+      break;
+    case URI_FILE:
+      bufcpy(buf, n, s->file_path[0] ? s->file_path : "- (stdin)");
+      break;
+    case URI_RIST:
+      bufcpy(buf, n, s->rist_uri);
+      break;
+    case URI_SRT:
+      describe_srt_uri(buf, n, s->srt_family, s->srt_listen, s->srt_host, s->srt_port);
+      break;
   }
 }
 
@@ -136,31 +131,27 @@ static int parse_out_uri(const char *uri, out_target_t *o) {
 
 void out_describe(const out_target_t *o, char *buf, size_t n) {
   switch (o->kind) {
-  case OUT_RTP:
-  case OUT_UDP: {
-    const char *scheme = (o->kind == OUT_RTP) ? "rtp" : "udp";
-    if (o->family == AF_INET6)
-      snprintf(buf, n, "%s://@[%s]:%u", scheme, o->group, o->port);
-    else
-      snprintf(buf, n, "%s://@%s:%u", scheme, o->group, o->port);
-    break;
-  }
-  case OUT_RIST:
-    bufcpy(buf, n, o->rist_uri);
-    break;
-  case OUT_RTMP:
-  case OUT_RTMPS:
-    bufcpy(buf, n, o->rtmp_url);
-    break;
-  case OUT_FILE:
-    bufcpy(buf, n, strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
-    break;
-  case OUT_SRT:
-    if (o->srt_family == AF_INET6)
-      snprintf(buf, n, "srt://[%s]:%u", o->srt_host, o->srt_port);
-    else
-      snprintf(buf, n, "srt://%s:%u", o->srt_host, o->srt_port);
-    break;
+    case OUT_RTP:
+    case OUT_UDP: {
+      const char *scheme = (o->kind == OUT_RTP) ? "rtp" : "udp";
+      if (o->family == AF_INET6) snprintf(buf, n, "%s://@[%s]:%u", scheme, o->group, o->port);
+      else snprintf(buf, n, "%s://@%s:%u", scheme, o->group, o->port);
+      break;
+    }
+    case OUT_RIST:
+      bufcpy(buf, n, o->rist_uri);
+      break;
+    case OUT_RTMP:
+    case OUT_RTMPS:
+      bufcpy(buf, n, o->rtmp_url);
+      break;
+    case OUT_FILE:
+      bufcpy(buf, n, strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
+      break;
+    case OUT_SRT:
+      if (o->srt_family == AF_INET6) snprintf(buf, n, "srt://[%s]:%u", o->srt_host, o->srt_port);
+      else snprintf(buf, n, "srt://%s:%u", o->srt_host, o->srt_port);
+      break;
   }
 }
 
@@ -178,8 +169,7 @@ long duration_parse(const char *s) {
       v = strtol(p, &end, 10);
       if (v < 0) return -1;
       parts[n++] = v;
-      if (*end == '\0')
-        break;
+      if (*end == '\0') break;
       if (*end != ':') return -1;
       p = end + 1;
     }
@@ -190,9 +180,7 @@ long duration_parse(const char *s) {
       h = parts[0];
       m = parts[1];
       sec = parts[2];
-    } else {
-      return -1;
-    }
+    } else return -1;
     if (sec > 59 || (n == 3 && m > 59)) return -1;
     h = h * 3600 + m * 60 + sec;
     return h > 0 ? h : -1;
@@ -208,23 +196,12 @@ long duration_parse(const char *s) {
       int rank;
       if (!isdigit((unsigned char)*p)) return -1;
       v = strtol(p, &end, 10);
-      if (v < 0)
-        return -1;
+      if (v < 0) return -1;
       switch (*end) {
-      case 'h':
-        rank = 1;
-        total += v * 3600;
-        break;
-      case 'm':
-        rank = 2;
-        total += v * 60;
-        break;
-      case 's':
-        rank = 3;
-        total += v;
-        break;
-      default:
-        return -1;
+        case 'h':        rank = 1;        total += v * 3600;   break;
+        case 'm':        rank = 2;        total += v * 60;     break;
+        case 's':        rank = 3;        total += v;          break;
+        default:         return -1;
       }
       if (rank <= last) return -1; /* bad order or duplicate */
       last = rank;
@@ -234,10 +211,9 @@ long duration_parse(const char *s) {
   }
 
   {
-    char *end;
-    long v = strtol(s, &end, 10);
-    if (*end != '\0' || v <= 0) return -1;
-    return v;
+    unsigned v;
+    if (argutil_uint_range(s, 1, UINT_MAX, &v)) return -1;
+    return (long)v;
   }
 }
 
@@ -261,13 +237,12 @@ static int parse_pmt_sel(const char *s, config_t *cfg) {
 }
 
 /* comma-separated STRIP_* tokens, or "none".
-   SDT/BAT: keep. hw receivers likely need SDT as much as PAT/PMT.
-   TDT/TOT: both mean "drop pid 0x14" */
+   SDT/BAT: keep. hw receivers likely need SDT as much as PAT/PMT. TDT/TOT: both mean "drop pid 0x14" */
 static int parse_strip(const char *s, config_t *cfg) {
   static const enum_map_t map[] = {
       {"NUL", STRIP_NUL}, {"NIT", STRIP_NIT}, {"AIT", STRIP_AIT}, {"EIT", STRIP_EIT},
       {"CAT", STRIP_CAT}, {"ECM", STRIP_ECM}, {"EMM", STRIP_EMM}, {"RST", STRIP_RST},
-      {"TDT", STRIP_TDT}, {"TOT", STRIP_TOT}, {"INT", STRIP_INT}};
+      {"TDT", STRIP_TDT}, {"TOT", STRIP_TOT}, {"INT", STRIP_INT}, {"LCEVC", STRIP_LCEVC}};
   unsigned mask = 0;
   const char *p = s;
 
@@ -280,42 +255,34 @@ static int parse_strip(const char *s, config_t *cfg) {
     size_t len = comma ? (size_t)(comma - p) : strlen(p);
     char tok[8];
     int v;
-    if (len == 0 || len >= sizeof tok)
-      return -1;
+    if (len == 0 || len >= sizeof tok) return -1;
     memcpy(tok, p, len);
     tok[len] = '\0';
-    if (map_lookup(map, sizeof map / sizeof map[0], tok, &v))
-      return -1;
+    if (map_lookup(map, sizeof map / sizeof map[0], tok, &v)) return -1;
     mask |= (unsigned)v;
     p += len;
-    if (*p == ',')
-      p++;
+    if (*p == ',') p++;
   }
   cfg->strip_mask = mask;
   return 0;
 }
 
 static int parse_audio(const char *s, config_t *cfg) {
-  char *end;
-  long v;
-
+  unsigned v;
   if (strcmp(s, "all") == 0) {
     cfg->audio_all = 1;
     return 0;
   }
-  v = strtol(s, &end, 10);
-  if (*end != '\0' || v < 1 || v > 65535)
-    return -1;
+  if (argutil_uint_range(s, 1, 65535, &v)) return -1;
   cfg->audio_all = 0;
-  cfg->audio_track = (unsigned)v;
+  cfg->audio_track = v;
   return 0;
 }
 
 static int fmt_from_name(const char *s, out_fmt_t *f) {
   static const enum_map_t map[] = {{"raw", FMT_RAW}, {"ts", FMT_TS}, {"mkv", FMT_MKV}, {"mka", FMT_MKA}, {"mp4", FMT_MP4}, {"m4a", FMT_M4A}};
   int v;
-  if (map_lookup(map, sizeof map / sizeof map[0], s, &v))
-    return -1;
+  if (map_lookup(map, sizeof map / sizeof map[0], s, &v)) return -1;
   *f = (out_fmt_t)v;
   return 0;
 }
@@ -327,27 +294,14 @@ static int fmt_from_suffix(const char *path, out_fmt_t *f) {
   char lower[8];
   size_t i;
   int v;
-
-  if (!dot)
-    return 0;
+  if (!dot) return 0;
   dot++;
-  for (i = 0; i < sizeof lower - 1 && dot[i]; i++)
-    lower[i] = (char)tolower((unsigned char)dot[i]);
-  if (dot[i]) /* too long to be any known suffix */
-    return 0;
+  for (i = 0; i < sizeof lower - 1 && dot[i]; i++) lower[i] = (char)tolower((unsigned char)dot[i]);
+  if (dot[i]) return 0;
   lower[i] = '\0';
-  if (map_lookup(map, sizeof map / sizeof map[0], lower, &v))
-    return 0;
+  if (map_lookup(map, sizeof map / sizeof map[0], lower, &v)) return 0;
   *f = (out_fmt_t)v;
   return 1;
-}
-
-static int parse_bufcpy_opt(char *dst, size_t dstsz, const char *val, const char *optname) {
-  if (bufcpy(dst, dstsz, val) >= dstsz) {
-    argerr("%s too long", optname);
-    return -1;
-  }
-  return 0;
 }
 
 static int parse_pbkeylen_opt(const char *val, int *out, const char *optname) {
@@ -375,100 +329,92 @@ static int validate_srt_passphrase(const char *passphrase, int pbkeylen, const c
 
 static void print_help(void) {
   printf(
-      "usage: %s -i <uri> -o <target> [options]\n\n"
-      "record a DVB-IPI stream to a file or stdout\n\n"
-      "sources (-i):\n"
-      "  rtp://@<group>:<port>    RTP wrapped SPTS multicast (@ optional)\n"
-      "  udp://@<group>:<port>    raw SPTS multicast (@ optional)\n"
-      "  http://<host>:<port>/<path>    HTTP TS stream\n"
-      "  https://<host>:<port>/<path>   same, TLS (--insecure skips verification)\n"
-      "  -                        stdin, TS or RTP-wrapped TS (auto-detected)\n"
-      "  <path>                   a file, TS or RTP-wrapped TS (auto-detected)\n"
-      "  rist://@<host>:<port>[?query]  RIST receiver, single peer (@ required,\n"
-      "                           requires librist; no bonding, use dipirist for that)\n"
-      "  srt://[@]<host>:<port>   SRT receiver, single peer (@ = listen, else calls\n"
-      "                           out; requires libsrt; no bonding/rendezvous, use\n"
-      "                           dipisrt for that)\n"
-      "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8700\n\n"
-      "outputs (-o, repeatable for multiple destinations at once), beyond a\n"
-      "file path or \"-\" for stdout:\n"
-      "  rtp://@<group>:<port>    RTP-wrapped multicast (-f raw|ts only)\n"
-      "  udp://@<group>:<port>    raw multicast, no RTP header (-f raw|ts only)\n"
-      "  rist://<host>:<port>[?query]  RIST sender, single peer (-f raw|ts only,\n"
-      "                           requires librist)\n"
-      "  srt://<host>:<port>      SRT sender, single peer per target, not bonded -\n"
-      "                           repeat -o for more (-f raw|ts only, requires\n"
-      "                           libsrt, always calls out, use dipisrt for bonding)\n"
-      "  rtmp(s)://<host>[:port]/<app>/<key>  RTMP(S) publish, H.264/HEVC video,\n"
-      "                           AC-3/E-AC-3/AAC audio\n\n"
-      "options:\n"
-      "  -o, --out <target>       output, repeatable: file, \"-\" for stdout, or\n"
-      "                           rtp://udp://rist://srt://rtmp://rtmps:// (see below)\n"
-      "  -i, --in <uri>           input source (see above)\n"
-      "  -a, --audio <track>      audio track from 1, or \"all\" (default: all)\n"
-      "  -f, --format <format>    raw|ts|mkv|mka|mp4|m4a (default: from -o suffix,\n"
-      "                           else ts; mkv/mka/mp4/m4a rejected with a network\n"
-      "                           -o; raw rejected alongside any -o rtmp://rtmps://\n"
-      "                           target)\n"
-      "  -p, --pmt-pid <pid|all>  MPTS source only: pin one PMT pid, or record\n"
-      "                           every program (\"all\"; rejected with -f mkv/mp4).\n"
-      "                           ignored (warned) on an SPTS source. omitted on\n"
-      "                           an MPTS source: fails early, lists programs\n"
-      "  -s, --subtitles <mode>   strip|keep|srt (srt: mkv/mka/mp4/m4a only;\n"
-      "                           default: keep)\n"
-      "  -t, --time <duration>    e.g. 90, 5m, 5m30s, 1h3m20s, 01:20:03, 10:20\n"
-      "  -I, --iface <iface>      interface for -i's multicast join\n"
-      "  -O, --out-iface <iface>  interface for -o rtp://udp://'s multicast send\n"
-      "      --ttl <n>            multicast TTL/hop-limit for -o rtp://udp:// (default: kernel, 1)\n"
-      "      --al-fec <L>:<D>     Annex E Layer 1 FEC (SMPTE 2022-1), -i/-o rtp:// only,\n"
-      "                           L*D<=400, L<=40\n"
-      "      --al-fec-port <port> repair stream UDP port, requires --al-fec\n"
-      "      --profile <p>        simple|main; -o rist:// only (default: simple)\n"
-      "      --secret <psk>       -o rist:// pre-shared key; requires --profile main\n"
-      "      --cname <name>       -o rist:// cname (default: library default)\n"
-      "      --buffer <ms>        -o rist:// recovery buffer (default: library default)\n"
-      "      --profile-in <p>     simple|main; -i rist:// only (default: simple)\n"
-      "      --srt-passphrase-in <pw>   passphrase for -i srt://, 10..79 chars\n"
-      "      --srt-pbkeylen-in <n>      AES key length for --srt-passphrase-in: 16|24|32\n"
-      "      --srt-streamid-in <id>     SRTO_STREAMID for -i srt://\n"
-      "      --srt-packetfilter-in <c>  SRTO_PACKETFILTER for -i srt://\n"
-      "      --srt-latency-in <ms>      SRTO_LATENCY for -i srt://\n"
-      "      --srt-passphrase <pw>      passphrase for every -o srt:// target\n"
-      "      --srt-pbkeylen <n>         AES key length for --srt-passphrase: 16|24|32\n"
-      "      --srt-streamid <id>        SRTO_STREAMID for every -o srt:// target\n"
-      "      --srt-packetfilter <c>     SRTO_PACKETFILTER for every -o srt:// target\n"
-      "      --srt-latency <ms>         SRTO_LATENCY for every -o srt:// target\n"
-      "      --insecure           skip TLS verification for -o rtmps://\n"
-      "  -v, --verbose            periodic recording stats on stderr\n"
-      "      --sub-lead <ms>      shift subtitles earlier (default 1000)\n"
-      "      --color <when>       auto|always|never (default auto)\n"
-      "      --metrics <path>     Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
-      "      --metrics-id <name>  stable instance id; metrics disabled unless set\n"
-      "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
-      "      --ret <addr>:<port>  RET server unicast address (rtp:// only; enables gap repair)\n"
-      "      --no-ret-mc          skip joining the RET server's multicast repair session\n"
-      "      --ret-mc-port <port> override the repair session port (default: -i's port)\n"
-      "      --ret-pt <n>         RTX payload type, must match the RET server (default 99)\n"
-      "      --ret-wait <ms>      hold budget after a NACK before giving up on a gap (default 200)\n"
-      "      --pace               file/stdin source only: pace output to the input's own\n"
-      "                           timing (RTP timestamp if RTP-framed, else PCR)\n"
-      "      --strip <list>       -f ts only: comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,\n"
-      "                           RST,TDT,TOT,INT to drop, or \"none\" (default: NUL,NIT,AIT,EIT)\n"
-      "  -h, --help               this help\n\n"
-      "formats:\n"
-      "  raw   unwrap RTP only, transport stream otherwise untouched\n"
-      "  ts    single program transport stream; drops stuffing, NIT, EIT,\n"
-      "        AIT and CA/EMM, keeps SDT, rewrites PAT/PMT\n"
-      "  mkv   Matroska: H.264/HEVC video, AC3/EAC3/MP2/MP3/AAC/AAC-LATM audio\n"
-      "  mka   same, audio only\n\n"
-      "examples:\n"
-      "  %s -i rtp://@239.19.75.1:8700 -o show.ts\n"
-      "  %s -i rtp://@239.19.75.1:8700 -o show.mkv -s srt -t 1h30m -v\n"
-      "  %s -i udp://@239.0.175.1:8700 -o radio.mka -I eth0\n"
-      "  %s -i http://10.0.0.1:4022/rtp/239.19.75.1:8700 -o show.ts\n"
-      "  %s -i show.ts --pace -o rtp://@239.9.9.9:6000 -O eth1 --ttl 16\n"
-      "  %s -i rtp://@239.19.75.1:8700 -o rtmp://live.example.com/app/key\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+    "usage: %s -i <uri> -o <target> [options]\n\n"
+    "record a DVB-IPI stream to a file or stdout\n\n"
+    "sources (-i):\n"
+    "  rtp://@<group>:<port>        RTP wrapped TS multicast (@ optional)\n"
+    "  udp://@<group>:<port>        raw TS multicast (@ optional)\n"
+    "  http://<host>:<port>/<path>  HTTP TS stream\n"
+    "  https://<host>:<port>/<path> same, TLS (--insecure skips verification)\n"
+    "  -                            stdin, TS or RTP wrapped TS\n"
+    "  <path>                       a file, TS or RTP wrapped TS\n"
+    "  rist://@<host>:<port>[?q]    RIST receiver, single peer (@ required)\n"
+    "  srt://[@]<host>:<port>       SRT receiver, single peer (@=listen, else call out)\n"
+    "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8700\n\n"
+    "outputs (-o, repeat for multiple destinations)\n"
+    "  -                            stdout\n"
+    "  rtp://@<group>:<port>        RTP wrapped multicast (-f raw|ts only)\n"
+    "  udp://@<group>:<port>        raw multicast (-f raw|ts only)\n"
+    "  rist://<host>:<port>[?q]     RIST sender, single peer (-f raw|ts only)\n"
+    "  srt://<host>:<port>          SRT sender, single peer (-f raw|ts only)\n"
+    "  rtmp(s)://<host>[:port]/<app>/<key>  RTMP(S) publish, H.264/HEVC+(E-)AC-3/AAC\n\n"
+    "options:\n"
+    "  -o, --out <target>           output, repeatable: file, \"-\" for stdout, or\n"
+    "                               rtp://udp://rist://srt://rtmp://rtmps://\n"
+    "  -i, --in <uri>               input source\n"
+    "  -a, --audio <track>          audio track from 1, or \"all\" (default: all)\n"
+    "  -f, --format <format>        raw|ts|mkv|mka|mp4|m4a (default: from -o suffix,\n"
+    "                               else ts; mkv/mka/mp4/m4a rejected with a network\n"
+    "                               -o, raw rejected on -o rtmp://rtmps://\n"
+    "  -p, --pmt-pid <pid|all>      MPTS source only: pin one PMT pid, or record\n"
+    "                               every program (\"all\"; rejected with -f mkv/mp4).\n"
+    "                               fails on SPTS.\n"
+    "  -s, --subtitles <mode>       strip|keep|srt. srt on mkv/mka/mp4/m4a only\n"
+    "                               (default: keep) - this \"srt\" means SubRip\n"
+    "  -t, --time <duration>        e.g. 90, 5m, 5m30s, 1h3m20s, 01:20:03, 10:20\n"
+    "  -I, --iface <iface>          interface name for -i's multicast join\n"
+    "  -O, --out-iface <iface>      interface for -o rtp://udp://'s multicast send\n"
+    "      --ttl <n>                multicast TTL for -o rtp://udp:// (default: kernel, 1)\n"
+    "      --al-fec <L>:<D>         Annex E Layer 1 FEC (SMPTE 2022-1), -i/-o rtp:// only,\n"
+    "                               L*D<=400, L<=40\n"
+    "      --al-fec-port <port>     AL-FEC stream UDP port, requires --al-fec\n"
+    "      --profile <p>            simple|main. -o rist:// only (default: simple)\n"
+    "      --secret <psk>           -o rist:// pre-shared key. requires --profile main\n"
+    "      --cname <name>           -o rist:// cname (default: library default)\n"
+    "      --buffer <ms>            -o rist:// recovery buffer (default: library default)\n"
+    "      --profile-in <p>         simple|main; -i rist:// only (default: simple)\n"
+    "      --srt-passphrase-in <pw> passphrase for -i srt://, 10..79 chars\n"
+    "      --srt-pbkeylen-in <n>      AES key length for --srt-passphrase-in: 16|24|32\n"
+    "      --srt-streamid-in <id>     SRTO_STREAMID for -i srt://\n"
+    "      --srt-packetfilter-in <c>  SRTO_PACKETFILTER for -i srt://\n"
+    "      --srt-latency-in <ms>      SRTO_LATENCY for -i srt://\n"
+    "      --srt-passphrase <pw>      passphrase for every -o srt:// target\n"
+    "      --srt-pbkeylen <n>         AES key length for --srt-passphrase: 16|24|32\n"
+    "      --srt-streamid <id>        SRTO_STREAMID for every -o srt:// target\n"
+    "      --srt-packetfilter <c>     SRTO_PACKETFILTER for every -o srt:// target\n"
+    "      --srt-latency <ms>         SRTO_LATENCY for every -o srt:// target\n"
+    "      --insecure                 skip TLS verification at -o rtmps://\n"
+    "  -v, --verbose                  periodic recording stats on stderr\n"
+    "      --sub-lead <ms>            shift VT->SRT captions earlier (default 1000)\n"
+    "      --color <when>             stdout colors: auto|always|never (default auto)\n"
+    "      --metrics <path>           socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+    "      --metrics-id <name>        stable instance id. metrics are disabled unless set\n"
+    "      --metrics-interval <s>     snapshot interval in seconds (default: 5)\n"
+    "      --ret <addr>:<port>        RET/RAMS server unicast address (rtp:// only)\n"
+    "      --no-ret-mc                skip joining the RET/RAMS multicast repair session\n"
+    "      --ret-mc-port <port>       override the repair session port (default: -i's port)\n"
+    "      --ret-pt <n>               RTX payload type, must match the RET server (default 99)\n"
+    "      --ret-wait <ms>            NACK timeout (default 200)\n"
+    "      --pace                     file/stdin source only: pace output to the input's own\n"
+    "                                 timing (RTP timestamp if RTP-framed, else PCR)\n"
+    "      --strip <list>             comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT\n"
+    "                                 (-f ts only) or LCEVC to drop, or \"none\"\n"
+    "                                 (default: NUL,NIT,AIT,EIT)\n"
+    "  -h, --help                     this help\n\n"
+    "formats:\n"
+    "  raw   unwrap RTP only, transport stream otherwise untouched\n"
+    "  ts    single program transport stream; drops stuffing, NIT, EIT,\n"
+    "        AIT and CA/EMM, keeps SDT, rewrites PAT/PMT\n"
+    "  mkv   Matroska: H.264/HEVC video, AC3/EAC3/MP2/MP3/AAC/AAC-LATM audio\n"
+    "  mka   same, audio only\n\n"
+    "examples:\n"
+    "  %s -i rtp://@239.19.75.1:8700 -o show.ts\n"
+    "  %s -i rtp://@239.19.75.1:8700 -o show.mkv -s srt -t 1h30m -v\n"
+    "  %s -i udp://@239.0.175.1:8700 -o radio.mka -I eth0\n"
+    "  %s -i http://10.0.0.1:4022/rtp/239.19.75.1:8700 -o show.ts\n"
+    "  %s -i show.ts --pace -o rtp://@239.9.9.9:6000 -O eth1 --ttl 16\n"
+    "  %s -i rtp://@239.19.75.1:8700 -o rtmp://live.example.com/app/key\n",
+    TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -537,8 +483,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->ret.wait_ms = 200;
   cfg->strip_mask = STRIP_DEFAULT;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "o:i:a:f:p:s:t:I:O:vh", longopts, NULL)) !=
-         -1) {
+  while ((c = getopt_long(argc, argv, "o:i:a:f:p:s:t:I:O:vh", longopts, NULL)) != -1) {
     switch (c) {
       case 'o':
         if (cfg->n_out >= DIPIREC_MAX_OUT) {
@@ -668,17 +613,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         profile_arg = optarg;
         break;
       case 1012:
-        if (bufcpy(cfg->rist_secret, sizeof cfg->rist_secret, optarg) >= sizeof cfg->rist_secret) {
-          argerr("--secret too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_secret, sizeof cfg->rist_secret, optarg, "--secret"))
           return ARGS_ERR;
-        }
         have_secret = 1;
         break;
       case 1013:
-        if (bufcpy(cfg->rist_cname, sizeof cfg->rist_cname, optarg) >= sizeof cfg->rist_cname) {
-          argerr("--cname too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_cname, sizeof cfg->rist_cname, optarg, "--cname"))
           return ARGS_ERR;
-        }
         have_cname = 1;
         break;
       case 1014:
@@ -698,16 +639,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->metrics_id = optarg;
         break;
       case 1018:
-        if (argutil_uint_range(optarg, 1, 86400, &cfg->metrics_interval_s)) {
-          argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
-          return ARGS_ERR;
-        }
+        if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
       case 1019:
         profile_in_arg = optarg;
         break;
       case 1020:
-        if (parse_bufcpy_opt(cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, optarg, "--srt-passphrase-in"))
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, optarg, "--srt-passphrase-in"))
           return ARGS_ERR;
         break;
       case 1021:
@@ -715,11 +653,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         break;
       case 1022:
-        if (parse_bufcpy_opt(cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, optarg, "--srt-streamid-in"))
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, optarg, "--srt-streamid-in"))
           return ARGS_ERR;
         break;
       case 1023:
-        if (parse_bufcpy_opt(cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, optarg, "--srt-packetfilter-in"))
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, optarg, "--srt-packetfilter-in"))
           return ARGS_ERR;
         break;
       case 1024:
@@ -729,7 +667,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 1025:
-        if (parse_bufcpy_opt(cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg, "--srt-passphrase"))
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg, "--srt-passphrase"))
           return ARGS_ERR;
         break;
       case 1026:
@@ -737,11 +675,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         break;
       case 1027:
-        if (parse_bufcpy_opt(cfg->srt_streamid, sizeof cfg->srt_streamid, optarg, "--srt-streamid"))
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid, sizeof cfg->srt_streamid, optarg, "--srt-streamid"))
           return ARGS_ERR;
         break;
       case 1028:
-        if (parse_bufcpy_opt(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg, "--srt-packetfilter"))
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg, "--srt-packetfilter"))
           return ARGS_ERR;
         break;
       case 1029:
@@ -771,9 +709,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   {
     int n_rist_out = 0;
-    for (int i = 0; i < cfg->n_out; i++)
-      if (cfg->out[i].kind == OUT_RIST)
-        n_rist_out++;
+    for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RIST) n_rist_out++;
     if (n_rist_out > 1) {
       argerr("at most one -o rist:// target: librist isn't safe with more than one context per process");
       return ARGS_ERR;
@@ -796,7 +732,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   }
   if (strip_arg && parse_strip(strip_arg, cfg)) {
-    argerr("invalid --strip: %s (comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT, or \"none\")", strip_arg);
+    argerr("invalid --strip: %s (comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT,LCEVC, or \"none\")", strip_arg);
     return ARGS_ERR;
   }
   if (sub_arg) {
@@ -855,17 +791,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       argerr("-f raw is incompatible with an -o rtmp://rtmps:// target");
       return ARGS_ERR;
     }
-    if (cfg->iface_out && !has_rtp_udp) log_line(TOOL_NAME ": --out-iface has no effect, no -o rtp:// or udp:// target");
-    if (cfg->out_ttl && !has_rtp_udp) log_line(TOOL_NAME ": --ttl has no effect, no -o rtp:// or udp:// target");
+    if (cfg->iface_out && !has_rtp_udp) log_line(TOOL_NAME ": --out-iface needs -o rtp:// or udp:// target");
+    if (cfg->out_ttl && !has_rtp_udp) log_line(TOOL_NAME ": --ttl needs -o rtp:// or udp:// target");
     if (cfg->al_fec_l && !cfg->al_fec_port) {
       argerr("--al-fec requires --al-fec-port");
       return ARGS_ERR;
     }
-    if (!cfg->al_fec_l && cfg->al_fec_port) log_line(TOOL_NAME ": --al-fec-port has no effect without --al-fec");
-    if (cfg->al_fec_l && !has_rtp && cfg->source.kind != URI_RTP) log_line(TOOL_NAME ": --al-fec has no effect, no -i rtp:// or -o rtp:// target");
-    if (cfg->insecure_tls && !has_rtmps && !(cfg->source.kind == URI_HTTP && cfg->source.http.tls)) log_line(TOOL_NAME ": --insecure has no effect, no -o rtmps:// target or -i https:// source");
+    if (!cfg->al_fec_l && cfg->al_fec_port) log_line(TOOL_NAME ": --al-fec-port needs --al-fec");
+    if (cfg->al_fec_l && !has_rtp && cfg->source.kind != URI_RTP) log_line(TOOL_NAME ": --al-fec needs -i rtp:// or -o rtp:// target");
+    if (cfg->insecure_tls && !has_rtmps && !(cfg->source.kind == URI_HTTP && cfg->source.http.tls)) log_line(TOOL_NAME ": --insecure needs -o rtmps:// target or -i https:// source");
   }
-  if (strip_arg && cfg->format != FMT_TS) log_line(TOOL_NAME ": --strip has no effect outside -f ts");
+  /* LCEVC also strips mp4/mkv/rtmp inline data, unlike others */
+  if (strip_arg && cfg->format != FMT_TS && (cfg->strip_mask & ~(unsigned)STRIP_LCEVC)) log_line(TOOL_NAME ": --strip has no effect outside -f ts");
   if (cfg->subs == SUB_SRT && cfg->format != FMT_MKV && cfg->format != FMT_MKA && cfg->format != FMT_MP4 && cfg->format != FMT_M4A) {
     argerr("-s srt requires -f mkv, mka, mp4 or m4a");
     return ARGS_ERR;
@@ -882,16 +819,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   {
     int has_rist = 0;
     for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RIST) has_rist = 1;
-    if (!has_rist && (profile_arg || have_secret || have_cname || have_buffer)) log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer have no effect, no -o rist:// target");
+    if (!has_rist && (profile_arg || have_secret || have_cname || have_buffer)) log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer need -o rist:// target");
     if (has_rist && have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
       argerr("--secret requires --profile main");
       return ARGS_ERR;
     }
   }
-  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
-    argerr("--metrics/--metrics-interval require --metrics-id");
-    return ARGS_ERR;
-  }
+  if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
   if (profile_in_arg) {
     static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
     int v;
@@ -901,17 +835,17 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
     cfg->rist_profile_in = (rist_profile_sel_t)v;
   }
-  if (profile_in_arg && cfg->source.kind != URI_RIST) log_line(TOOL_NAME ": --profile-in has no effect, no -i rist:// source");
+  if (profile_in_arg && cfg->source.kind != URI_RIST) log_line(TOOL_NAME ": --profile-in needs -i rist:// source");
   if (validate_srt_passphrase(cfg->srt_passphrase_in, cfg->srt_pbkeylen_in, "-in")) return ARGS_ERR;
   if (cfg->source.kind != URI_SRT && (cfg->srt_passphrase_in[0] || cfg->srt_pbkeylen_in || cfg->srt_streamid_in[0] || cfg->srt_packetfilter_in[0] || cfg->srt_latency_in_ms))
-    log_line(TOOL_NAME ": --srt-*-in has no effect, no -i srt:// source");
+    log_line(TOOL_NAME ": --srt-*-in needs -i srt:// source");
   if (validate_srt_passphrase(cfg->srt_passphrase, cfg->srt_pbkeylen, "")) return ARGS_ERR;
 
   {
     int has_srt_out = 0;
     for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_SRT) has_srt_out = 1;
     if (!has_srt_out && (cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
-      log_line(TOOL_NAME ": --srt-* has no effect, no -o srt:// target");
+      log_line(TOOL_NAME ": --srt-* needs -o srt:// target");
   }
   return ARGS_OK;
 }

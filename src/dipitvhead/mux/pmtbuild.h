@@ -12,13 +12,13 @@
 #define OUT_PID_CAT 0x0001
 #define OUT_PID_NIT 0x0010
 #define OUT_PID_SDT 0x0011
-#define OUT_PID_EIT 0x0012 /* fixed DVB-SI pid (ETSI EN 300 468), never per-program */
-#define OUT_PID_PMT_BASE 0x1000 /* + prog_idx, matches ffmpeg's pmt_start_pid default */
+#define OUT_PID_EIT 0x0012                  /* fixed DVB-SI pid (ETSI EN 300 468) */
+#define OUT_PID_PMT_BASE 0x1000             /* + prog_idx, ffmpeg pmt_start_pid default */
 #define OUT_PROGRAM_BLOCK_BASE 0x0100
-#define OUT_MAX_ES 32 /* per-program block: video+ES(cap) plus one AIT slot */
+#define OUT_MAX_ES 32                       /* per-program block: video+ES(cap) plus AIT slot */
 #define OUT_PROGRAM_ES_CAP (OUT_MAX_ES - 1) /* last block slot is AIT */
 
-/* --strip bits, per-input (args.h's dipitvhead_input_t.strip_mask). default 0: nothing stripped */
+/* --strip bits, per-input (args.h's dipitvhead_input_t.strip_mask). default 0: keep */
 #define TVSTRIP_DATA 0x01 /* carousels, SCTE-35, any other unrecognized PMT ES entry */
 #define TVSTRIP_ECM 0x02  /* source CAT/ECM/EMM passthrough */
 
@@ -26,27 +26,29 @@ typedef struct {
   unsigned pmt_pid, video_pid, es_pid_base, ait_pid;
 } out_program_pids_t;
 
-/* fixed pid block from 0-based program index (always 0 for standalone). idx=0 keeps
-   pmt/video/es_pid_base unchanged (0x1000/0x0100/0x0101); ait_pid moves off the old 0x0020
-   default (collided with default --cas-ecm-pid) into the per-program block. */
+/* fixed pid block from 0-based program index (always 0 for standalone).
+   idx=0 keeps pmt/video/es_pid_base unchanged (0x1000/0x0100/0x0101).
+   ait_pid moves off old 0x0020 default (collided with default --cas-ecm-pid) to per-program block */
 void out_program_pids(unsigned idx, out_program_pids_t *out);
+
+/* neither passthrough kind gets its own PMT stream_type entry */
+typedef enum { CA_PASS_NONE, CA_PASS_ECM, CA_PASS_EMM } ca_pass_t;
 
 typedef struct {
   unsigned in_pid;  /* source pid, for remux's packet -> out_es_t lookup */
   unsigned out_pid;
   unsigned stream_type; /* our own output stream_type, not source's */
   const psi_es_t *src;  /* borrowed, valid as long as discovery psi_t is alive. NULL if is_ca */
-  int is_ca; /* 0: normal PMT ES entry. 1: ECM passthrough. 2: EMM passthrough. neither gets own PMT stream_type entry */
-  unsigned ca_system_id; /* meaningful only if is_ca != 0 */
+  ca_pass_t is_ca;
+  unsigned ca_system_id; /* meaningful only if is_ca != CA_PASS_NONE */
 } out_es_t;
 
-/* video -> video_pid, rest -> es_pid_base.. in order. drops unsupported ES.
+/* video->video_pid, rest->es_pid_base. in order. drops unsupported ES.
    PID_DATA (carousels, SCTE-35, any other unrecognized stream_type) counts supported unless strip_mask & TVSTRIP_DATA.
-   retval: count, *pcr_pid = mapped output pid of PCR ES (or first ES fallback),
-   *dropped = supported ES beyond cap, left unmapped */
+   retval: count, *pcr_pid = mapped output pid of PCR ES (or first ES fallback), *dropped = supported ES beyond cap, left unmapped */
 int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned strip_mask, unsigned src_pcr_pid, unsigned video_pid, unsigned es_pid_base, out_es_t *out_es, int cap, unsigned *pcr_pid, int *dropped);
 
-/* appends up to 2 synthetic out_es[] entries (is_ca 1/2), ECM/EMM at next free pid
+/* appends up to 2 synthetic out_es[] entries (CA_PASS_ECM/CA_PASS_EMM), ECM/EMM at next free pid
    after out_es[0..n). ecm_pid/emm_pid 0 = none. same cap/overflow bookkeeping as pmtbuild_map_es(). */
 void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, unsigned emm_pid, unsigned emm_ca_system_id, unsigned es_pid_base, unsigned video_pid, out_es_t *out_es, int *n, int cap, int *dropped);
 

@@ -8,7 +8,6 @@
 
 #include <sched.h>
 #include <stdlib.h>
-#include <time.h>
 
 static _Atomic(hls_seg_ctx_t *) *g_stores;
 static int g_stores_n;
@@ -28,10 +27,8 @@ void hls_seg_init(int max_channels) {
 static int seg_try_pin(hls_seg_ctx_t *s) {
   int cur = atomic_load_explicit(&s->refcount, memory_order_relaxed);
   for (;;) {
-    if (cur <= 0)
-      return 0;
-    if (atomic_compare_exchange_weak_explicit(&s->refcount, &cur, cur + 1, memory_order_acquire, memory_order_relaxed))
-      return 1;
+    if (cur <= 0) return 0;
+    if (atomic_compare_exchange_weak_explicit(&s->refcount, &cur, cur + 1, memory_order_acquire, memory_order_relaxed)) return 1;
   }
 }
 
@@ -39,14 +36,8 @@ static void seg_unpin(hls_seg_ctx_t *s) {
   atomic_fetch_sub_explicit(&s->refcount, 1, memory_order_release);
 }
 
-static int seg_key_equal(const hls_seg_ctx_t *s, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
-  return s->cap_ctx == ctx && s->pmt_pid == pmt_pid && s->container == container && pid_filter_equal(&s->filter, filter);
-}
-
-static int64_t now_ms(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+static int seg_key_equal(const hls_seg_ctx_t *s, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
+  return s->cap_ctx == ctx && s->pmt_pid == pmt_pid && s->container == container && pid_filter_equal(&s->filter, filter) && lcevc_select_equal(&s->lcevc, lcevc);
 }
 
 int buf_reserve(unsigned char **buf, size_t *cap, size_t need) {
@@ -57,10 +48,10 @@ int buf_reserve(unsigned char **buf, size_t *cap, size_t need) {
 #define HLS_SEG_BUF_ASSUMED_BPS (20 * 1000 * 1000 / 8)
 
 /* caller must hold g_mtx. container in key: ts, fmp4 segmenters coexist per channel */
-static hls_seg_ctx_t *find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
+static hls_seg_ctx_t *find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
   for (int i = 0; i < g_stores_n; i++) {
     hls_seg_ctx_t *s = atomic_load_explicit(&g_stores[i], memory_order_relaxed);
-    if (s && seg_key_equal(s, ctx, filter, pmt_pid, container)) return s;
+    if (s && seg_key_equal(s, ctx, filter, pmt_pid, lcevc, container)) return s;
   }
   return NULL;
 }
@@ -68,42 +59,41 @@ static hls_seg_ctx_t *find_locked(const capture_ctx_t *ctx, const pid_filter_t *
 void hls_seg_registry_lock(void) { pthread_mutex_lock(&g_mtx); }
 void hls_seg_registry_unlock(void) { pthread_mutex_unlock(&g_mtx); }
 
-hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
-  return find_locked(ctx, filter, pmt_pid, container);
+hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
+  return find_locked(ctx, filter, pmt_pid, lcevc, container);
 }
 
 /* lock free touch, somewhat. fails if s mid removal by sweep_idle, caller retries under g_mtx */
 static int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_on) {
   if (!seg_try_pin(s)) return 0;
   atomic_store_explicit(&s->last_request_ms, now_ms(), memory_order_relaxed);
-  *llhls_newly_on = part_target > 0.0 && atomic_load_explicit(&s->part_target, memory_order_relaxed) <= 0.0;
-  if (part_target > 0.0) atomic_store_explicit(&s->part_target, part_target, memory_order_release);
+  *llhls_newly_on = part_target > 0.0 && atomic_load_explicit(&s->part.part_target, memory_order_relaxed) <= 0.0;
+  if (part_target > 0.0) atomic_store_explicit(&s->part.part_target, part_target, memory_order_release);
   seg_unpin(s);
   return 1;
 }
 
-int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double seg_target, int max_segs, seg_container_t container, double part_target) {
+int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, double seg_target, int max_segs, seg_container_t container, double part_target) {
   hls_seg_ctx_t *s;
   int i;
   int llhls_newly_on = 0;
-
   for (i = 0; i < g_stores_n; i++) {
     s = atomic_load_explicit(&g_stores[i], memory_order_acquire);
-    if (s && seg_key_equal(s, ctx, filter, pmt_pid, container) && touch_pinned(s, part_target, &llhls_newly_on)) {
+    if (s && seg_key_equal(s, ctx, filter, pmt_pid, lcevc, container) && touch_pinned(s, part_target, &llhls_newly_on)) {
       capture_close(ctx); /* redundant ref: existing segmenter already holds its own */
-      if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, container, part_target);
+      if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
       return 1;
     }
   }
 
   pthread_mutex_lock(&g_mtx);
-  s = find_locked(ctx, filter, pmt_pid, container);
+  s = find_locked(ctx, filter, pmt_pid, lcevc, container);
   if (s) {
     /* g_mtx excludes sweep removal: pin here cannot fail */
     touch_pinned(s, part_target, &llhls_newly_on);
     pthread_mutex_unlock(&g_mtx);
     capture_close(ctx);
-    if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, container, part_target);
+    if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
     return 1;
   }
   s = calloc(1, sizeof *s);
@@ -115,23 +105,24 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   s->cap_ctx = ctx;
   s->filter = *filter;
   s->pmt_pid = pmt_pid;
-  s->seg_target = seg_target;
+  s->lcevc = *lcevc;
+  s->video.seg_target = seg_target;
   buf_reserve(&s->buf, &s->cap, (size_t)(seg_target * HLS_SEG_BUF_ASSUMED_BPS));
-  s->max_segs = max_segs;
-  s->boot_left = max_segs;
+  s->video.max_segs = max_segs;
+  s->video.boot_left = max_segs;
   s->container = container;
-  atomic_store_explicit(&s->part_target, part_target, memory_order_relaxed);
-  s->first_ts_ms = -1;
-  s->fmp4_audio_track_idx = -1;
+  atomic_store_explicit(&s->part.part_target, part_target, memory_order_relaxed);
+  s->video.first_ts_ms = -1;
+  s->fmp4.fmp4_audio_track_idx = -1;
   atomic_store_explicit(&s->mp4push_sub_head, -1, memory_order_relaxed);
   atomic_store_explicit(&s->last_request_ms, now_ms(), memory_order_relaxed);
   atomic_store_explicit(&s->refcount, 1, memory_order_relaxed);
-  s->psi = psi_new();
-  if (s->psi && pmt_pid) psi_select_pmt_pid(s->psi, pmt_pid);
-  s->pes = s->psi ? pes_new(hls_seg_on_pes, s) : NULL;
-  if (!s->psi || !s->pes) {
-    psi_free(s->psi);
-    pes_free(s->pes);
+  s->demux.psi = psi_new();
+  if (s->demux.psi && pmt_pid) psi_select_pmt_pid(s->demux.psi, pmt_pid);
+  s->demux.pes = s->demux.psi ? pes_new(hls_seg_on_pes, s) : NULL;
+  if (!s->demux.psi || !s->demux.pes) {
+    psi_free(s->demux.psi);
+    pes_free(s->demux.pes);
     free(s);
     pthread_mutex_unlock(&g_mtx);
     capture_close(ctx);
@@ -140,8 +131,8 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
 
   for (i = 0; i < g_stores_n; i++) if (!atomic_load_explicit(&g_stores[i], memory_order_relaxed)) break;
   if (i == g_stores_n) {
-    psi_free(s->psi);
-    pes_free(s->pes);
+    psi_free(s->demux.psi);
+    pes_free(s->demux.pes);
     free(s);
     pthread_mutex_unlock(&g_mtx);
     capture_close(ctx); /* registry full */
@@ -156,8 +147,9 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   atomic_store_explicit(&g_stores[i], s, memory_order_release);
   pthread_mutex_unlock(&g_mtx);
 
-  hls_store_open(ctx, filter, pmt_pid, seg_target, max_segs, container);
-  if (part_target > 0.0) hls_llhls_enable(ctx, filter, pmt_pid, container, part_target);
+  hls_store_open(ctx, filter, pmt_pid, lcevc, seg_target, max_segs, container);
+  s->store = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+  if (part_target > 0.0) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
   return 1;
 }
 
@@ -188,7 +180,7 @@ void hls_seg_sweep_idle(void) {
   pthread_mutex_lock(&g_mtx);
   for (i = 0; i < g_stores_n; i++) {
     hls_seg_ctx_t *s = atomic_load_explicit(&g_stores[i], memory_order_relaxed);
-    if (s && now - atomic_load_explicit(&s->last_request_ms, memory_order_relaxed) > (int64_t)(s->seg_target * (double)s->max_segs * 1500.0) &&
+    if (s && now - atomic_load_explicit(&s->last_request_ms, memory_order_relaxed) > (int64_t)(s->video.seg_target * (double)s->video.max_segs * 1500.0) &&
         atomic_load_explicit(&s->mp4push_sub_head, memory_order_relaxed) == -1) {
       victims[nvictims++] = s;
       atomic_store_explicit(&g_stores[i], NULL, memory_order_release);
@@ -199,22 +191,22 @@ void hls_seg_sweep_idle(void) {
   for (i = 0; i < nvictims; i++) {
     /* releases array's pin. nonzero: racing touch pinned first, wait its unpin */
     if (atomic_fetch_sub_explicit(&victims[i]->refcount, 1, memory_order_acq_rel) != 1) {
-      while (atomic_load_explicit(&victims[i]->refcount, memory_order_acquire) != 0)
-        sched_yield();
+      while (atomic_load_explicit(&victims[i]->refcount, memory_order_acquire) != 0) sched_yield();
     }
   }
   if (nvictims) capture_wait_pumps_quiescent(); /* victim's owning pump thread may still be mid feed_one() unlocked */
   for (i = 0; i < nvictims; i++) {
     hls_seg_ctx_t *s = victims[i];
-    hls_store_close(s->cap_ctx, &s->filter, s->pmt_pid, s->container);
+    hls_store_close(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, s->container);
     capture_close(s->cap_ctx);
-    psi_free(s->psi);
-    pes_free(s->pes);
+    psi_free(s->demux.psi);
+    pes_free(s->demux.pes);
     free(s->buf);
-    free(s->nal_scratch);
-    fmp4_mux_free(s->fmux);
-    free(s->fmp4_pend_data);
-    free(s->audio_rem);
+    free(s->video.nal_scratch);
+    fmp4_mux_free(s->fmp4.fmux);
+    free(s->fmp4.fmp4_pend_data);
+    free(s->audio.audio_rem);
+    free(s->lcevc_track.pend_data);
     free(s);
   }
 }

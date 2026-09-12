@@ -6,7 +6,9 @@
 
 #include <stdatomic.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 
 /* null-terminated, malloc'd. 0 ok, -1 error */
 int read_all(FILE *f, char **out, size_t *out_len);
@@ -21,6 +23,9 @@ size_t uint_to_str_pad(char *dst, unsigned val, unsigned min_width);
 
 /* uint_to_str_pad(dst, val, 0): plain decimal, no padding */
 size_t uint_to_str(char *dst, unsigned val);
+
+/* decimal digits of val into dst, NUL-terminated, no padding. dst needs >= 21. returns strlen(dst) */
+size_t u64_to_dec(char *dst, uint64_t val);
 
 /* grow arr for need elems of elemsz B, doubling *cap (16 initial, or need if bigger).
    new arr on success, NULL on OOM (arr, *cap unchanged) */
@@ -76,6 +81,13 @@ static inline size_t next_pow2(size_t n) {
   size_t p = 1;
   while (p < n) p <<= 1;
   return p;
+}
+
+/* CLOCK_MONOTONIC, ms */
+static inline int64_t now_ms(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return (int64_t)t.tv_sec * 1000 + t.tv_nsec / 1000000;
 }
 
 #endif

@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "bitreader.h"
+#include "bimreader.h"
 #include "bitwriter.h"
 #include "strrepo.h"
 

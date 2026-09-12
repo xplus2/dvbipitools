@@ -15,8 +15,7 @@
 static const char *suffix(const char *path) {
   const char *dot = strrchr(path, '.');
   const char *slash = strrchr(path, '/');
-  if (!dot || (slash && dot < slash))
-    return "";
+  if (!dot || (slash && dot < slash)) return "";
   return dot;
 }
 
@@ -24,8 +23,7 @@ static int read_whole_file(const char *path, unsigned char **out, size_t *out_le
   FILE *f = fopen(path, "rb");
   long sz;
   unsigned char *buf;
-  if (!f)
-    return -1;
+  if (!f) return -1;
   if (fseek(f, 0, SEEK_END)) {
     fclose(f);
     return -1;
@@ -58,36 +56,26 @@ static int parse_mcast_uri(const char *uri, sds_service_t *s) {
   const char *p;
   char addr[SDS_MAX_ADDR];
   size_t alen;
-
-  if (!strncmp(uri, "rtp://", 6))
-    s->rtp = 1;
-  else if (!strncmp(uri, "udp://", 6))
-    s->rtp = 0;
-  else
-    return -1;
+  if (!strncmp(uri, "rtp://", 6)) s->rtp = 1;
+  else if (!strncmp(uri, "udp://", 6)) s->rtp = 0;
+  else return -1;
   p = uri + 6;
-  if (*p == '@')
-    p++;
+  if (*p == '@') p++;
   if (*p == '[') {
     const char *close = strchr(p, ']');
-    if (!close)
-      return -1;
+    if (!close) return -1;
     alen = (size_t)(close - (p + 1));
-    if (alen == 0 || alen >= sizeof addr)
-      return -1;
+    if (alen == 0 || alen >= sizeof addr) return -1;
     memcpy(addr, p + 1, alen);
     addr[alen] = '\0';
-    if (close[1] != ':')
-      return -1;
+    if (close[1] != ':') return -1;
     p = close + 2;
     s->family = AF_INET6;
   } else {
     const char *colon = strchr(p, ':');
-    if (!colon)
-      return -1;
+    if (!colon) return -1;
     alen = (size_t)(colon - p);
-    if (alen == 0 || alen >= sizeof addr)
-      return -1;
+    if (alen == 0 || alen >= sizeof addr) return -1;
     memcpy(addr, p, alen);
     addr[alen] = '\0';
     p = colon + 1;
@@ -96,8 +84,7 @@ static int parse_mcast_uri(const char *uri, sds_service_t *s) {
   {
     char *end;
     unsigned long v = strtoul(p, &end, 10);
-    if (*end != '\0' || v == 0 || v > 65535)
-      return -1;
+    if (*end != '\0' || v == 0 || v > 65535) return -1;
     s->port = (unsigned)v;
   }
   bufcpy(s->address, sizeof s->address, addr);
@@ -114,8 +101,7 @@ static int load_csv(FILE *f, input_t *in) {
     sds_service_t *s;
     lineno++;
     chomp(line);
-    if (!line[0])
-      continue;
+    if (!line[0]) continue;
     nf = csv_split(line, fields, 5);
     if (nf < 2) {
       fprintf(stderr, TOOL_NAME ": line %d: expected name,uri\n", lineno);
@@ -149,8 +135,7 @@ static int load_m3u(FILE *f, input_t *in) {
 
   while (fgets(line, sizeof line, f)) {
     chomp(line);
-    if (!line[0])
-      continue;
+    if (!line[0]) continue;
     if (!strncmp(line, "#EXTINF:", 8)) {
       char *comma = strrchr(line, ',');
       char tmp[32];
@@ -170,8 +155,7 @@ static int load_m3u(FILE *f, input_t *in) {
       have_pending = 1;
       continue;
     }
-    if (line[0] == '#' || !have_pending)
-      continue;
+    if (line[0] == '#' || !have_pending) continue;
     if (idx >= SDS_MAX_SERVICES) {
       fprintf(stderr, TOOL_NAME ": too many entries (max %d)\n", SDS_MAX_SERVICES);
       return -1;
@@ -198,8 +182,7 @@ static int load_m3u(FILE *f, input_t *in) {
 /* copies [tb,te) into title, truncating to fit */
 static void copy_title_field(char *title, size_t title_cap, const char *tb, const char *te) {
   size_t n = (size_t)(te - tb);
-  if (n >= title_cap)
-    n = title_cap - 1;
+  if (n >= title_cap) n = title_cap - 1;
   memcpy(title, tb, n);
   title[n] = '\0';
 }
@@ -207,23 +190,19 @@ static void copy_title_field(char *title, size_t title_cap, const char *tb, cons
 static int load_xspf(input_t *in, const unsigned char *buf) {
   const char *p = (const char *)buf;
   int idx = 0;
-
   for (;;) {
     const char *tag = strstr(p, "<track");
     const char *end, *lb, *le, *tb;
     char loc[SDS_MAX_ADDR + 16], title[SDS_MAX_NAME], tmp[32];
     sds_service_t *s;
 
-    if (!tag)
-      break;
+    if (!tag) break;
     end = strstr(tag, "</track>");
-    if (!end)
-      break;
+    if (!end) break;
     if (idx >= SDS_MAX_SERVICES) {
       fprintf(stderr, TOOL_NAME ": too many entries (max %d)\n", SDS_MAX_SERVICES);
       return -1;
     }
-
     lb = strstr(tag, "<location>");
     if (!lb || lb >= end) {
       fprintf(stderr, TOOL_NAME ": xspf track missing <location>\n");
@@ -237,20 +216,17 @@ static int load_xspf(input_t *in, const unsigned char *buf) {
     }
     {
       size_t n = (size_t)(le - lb);
-      if (n >= sizeof loc)
-        n = sizeof loc - 1;
+      if (n >= sizeof loc) n = sizeof loc - 1;
       memcpy(loc, lb, n);
       loc[n] = '\0';
     }
-
     title[0] = '\0';
     tb = strstr(tag, "<title>");
     if (tb && tb < end) {
       const char *te;
       tb += 7;
       te = strstr(tb, "</title>");
-      if (te && te <= end)
-        copy_title_field(title, sizeof title, tb, te);
+      if (te && te <= end) copy_title_field(title, sizeof title, tb, te);
     }
 
     s = &in->services[idx];
@@ -273,7 +249,6 @@ static int load_xspf(input_t *in, const unsigned char *buf) {
 int input_load(const char *path, input_t *in) {
   const char *sfx = suffix(path);
   memset(in, 0, sizeof *in);
-
   if (!strcmp(sfx, ".xml")) {
     unsigned char *buf;
     size_t len;
@@ -281,20 +256,24 @@ int input_load(const char *path, input_t *in) {
       fprintf(stderr, TOOL_NAME ": cannot read %s\n", path);
       return -1;
     }
-    if (strstr((char *)buf, "<BroadcastDiscovery"))
-      in->raw_payload_id = DVBSTP_PAYLOAD_BROADCAST_DISCOVERY;
-    else if (strstr((char *)buf, "<ServiceProviderDiscovery"))
-      in->raw_payload_id = DVBSTP_PAYLOAD_SP_DISCOVERY;
-    else if (strstr((char *)buf, "<PackageDiscovery"))
-      in->raw_payload_id = DVBSTP_PAYLOAD_PACKAGE_DISCOVERY;
-    else if (strstr((char *)buf, "<RegionalisationDiscovery"))
-      in->raw_payload_id = DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY;
-    else if (strstr((char *)buf, "<RMSFUSDiscovery"))
-      in->raw_payload_id = DVBSTP_PAYLOAD_RMSFUS_DISCOVERY;
-    else {
-      fprintf(stderr, TOOL_NAME ": %s: no recognized SD&S root element\n", path);
-      free(buf);
-      return -1;
+    {
+      static const struct { const char *tag; unsigned payload_id; } root_tags[] = {
+        {"<BroadcastDiscovery", DVBSTP_PAYLOAD_BROADCAST_DISCOVERY},
+        {"<ServiceProviderDiscovery", DVBSTP_PAYLOAD_SP_DISCOVERY},
+        {"<PackageDiscovery", DVBSTP_PAYLOAD_PACKAGE_DISCOVERY},
+        {"<RegionalisationDiscovery", DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY},
+        {"<RMSFUSDiscovery", DVBSTP_PAYLOAD_RMSFUS_DISCOVERY},
+      };
+      size_t i;
+      for (i = 0; i < sizeof root_tags / sizeof root_tags[0]; i++) if (strstr((char *)buf, root_tags[i].tag)) {
+        in->raw_payload_id = root_tags[i].payload_id;
+        break;
+      }
+      if (i == sizeof root_tags / sizeof root_tags[0]) {
+        fprintf(stderr, TOOL_NAME ": %s: no recognized SD&S root element\n", path);
+        free(buf);
+        return -1;
+      }
     }
     in->kind = INPUT_RAW_XML;
     in->raw_xml = buf;
@@ -323,10 +302,8 @@ int input_load(const char *path, input_t *in) {
       fprintf(stderr, TOOL_NAME ": cannot open %s\n", path);
       return -1;
     }
-    if (!strcmp(sfx, ".csv"))
-      rc = load_csv(f, in);
-    else if (!strcmp(sfx, ".m3u"))
-      rc = load_m3u(f, in);
+    if (!strcmp(sfx, ".csv")) rc = load_csv(f, in);
+    else if (!strcmp(sfx, ".m3u")) rc = load_m3u(f, in);
     else {
       fprintf(stderr, TOOL_NAME ": %s: unrecognized suffix, expected .csv/.m3u/.xspf/.xml\n", path);
       rc = -1;
@@ -357,32 +334,27 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
     sds_package_t *pkg;
     lineno++;
     chomp(line);
-    if (!line[0])
-      continue;
+    if (!line[0]) continue;
     nf = csv_split(line, fields, 5);
     if (nf < 5) {
       fprintf(stderr, TOOL_NAME ": %s: line %d: expected id,name,lang,visible,svc1|svc2|...\n", path, lineno);
-      fclose(f);
-      return -1;
+      goto fail;
     }
     if (idx >= max) {
       fprintf(stderr, TOOL_NAME ": %s: too many packages (max %d)\n", path, max);
-      fclose(f);
-      return -1;
+      goto fail;
     }
     pkg = &out[idx];
     memset(pkg, 0, sizeof *pkg);
     pkg->id = (unsigned)strtoul(fields[0], &end, 10);
     if (*end != '\0') {
       fprintf(stderr, TOOL_NAME ": %s: line %d: bad package id: %s\n", path, lineno, fields[0]);
-      fclose(f);
-      return -1;
+      goto fail;
     }
     bufcpy(pkg->name, sizeof pkg->name, fields[1]);
     if (strlen(fields[2]) != 3) {
       fprintf(stderr, TOOL_NAME ": %s: line %d: bad lang: %s\n", path, lineno, fields[2]);
-      fclose(f);
-      return -1;
+      goto fail;
     }
     memcpy(pkg->lang, fields[2], 3);
     pkg->visible = fields[3][0] == '\0' || fields[3][0] == '1';
@@ -390,8 +362,7 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
     while (svc) {
       if (pkg->service_count >= SDS_MAX_PKG_SERVICES) {
         fprintf(stderr, TOOL_NAME ": %s: line %d: too many services in package (max %d)\n", path, lineno, SDS_MAX_PKG_SERVICES);
-        fclose(f);
-        return -1;
+        goto fail;
       }
       bufcpy(pkg->service_names[pkg->service_count], sizeof pkg->service_names[0], svc);
       pkg->service_count++;
@@ -399,14 +370,17 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
     }
     if (pkg->service_count == 0) {
       fprintf(stderr, TOOL_NAME ": %s: line %d: package has no services\n", path, lineno);
-      fclose(f);
-      return -1;
+      goto fail;
     }
     idx++;
   }
   *count = idx;
   fclose(f);
   return 0;
+
+fail:
+  fclose(f);
+  return -1;
 }
 
 int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
@@ -423,27 +397,23 @@ int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
     sds_cell_t *cell;
     lineno++;
     chomp(line);
-    if (!line[0])
-      continue;
+    if (!line[0]) continue;
     if (idx >= max) {
       fprintf(stderr, TOOL_NAME ": %s: too many cells (max %d)\n", path, max);
-      fclose(f);
-      return -1;
+      goto fail;
     }
     cell = &out[idx];
     memset(cell, 0, sizeof *cell);
     tok = strtok_r(line, ",", &tok_save);
     if (!tok) {
       fprintf(stderr, TOOL_NAME ": %s: line %d: expected id,country,type:value,...\n", path, lineno);
-      fclose(f);
-      return -1;
+      goto fail;
     }
     bufcpy(cell->id, sizeof cell->id, tok);
     tok = strtok_r(NULL, ",", &tok_save);
     if (!tok || strlen(tok) != 2) {
       fprintf(stderr, TOOL_NAME ": %s: line %d: bad country code: %s\n", path, lineno, tok ? tok : "(missing)");
-      fclose(f);
-      return -1;
+      goto fail;
     }
     bufcpy(cell->country, sizeof cell->country, tok);
     while ((tok = strtok_r(NULL, ",", &tok_save)) != NULL) {
@@ -451,32 +421,32 @@ int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
       char *end;
       if (!colon) {
         fprintf(stderr, TOOL_NAME ": %s: line %d: bad CA entry: %s\n", path, lineno, tok);
-        fclose(f);
-        return -1;
+        goto fail;
       }
       if (cell->ca_depth >= SDS_MAX_CA_DEPTH) {
         fprintf(stderr, TOOL_NAME ": %s: line %d: too many CA entries (max %d)\n", path, lineno, SDS_MAX_CA_DEPTH);
-        fclose(f);
-        return -1;
+        goto fail;
       }
       *colon = '\0';
       cell->ca[cell->ca_depth].type = (unsigned)strtoul(tok, &end, 10);
       if (*end != '\0') {
         fprintf(stderr, TOOL_NAME ": %s: line %d: bad CA type: %s\n", path, lineno, tok);
-        fclose(f);
-        return -1;
+        goto fail;
       }
       bufcpy(cell->ca[cell->ca_depth].value, sizeof cell->ca[cell->ca_depth].value, colon + 1);
       cell->ca_depth++;
     }
     if (cell->ca_depth == 0) {
       fprintf(stderr, TOOL_NAME ": %s: line %d: cell has no CA entries\n", path, lineno);
-      fclose(f);
-      return -1;
+      goto fail;
     }
     idx++;
   }
   *count = idx;
   fclose(f);
   return 0;
+
+fail:
+  fclose(f);
+  return -1;
 }

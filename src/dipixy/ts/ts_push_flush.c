@@ -45,12 +45,9 @@ void ts_push_flush_ready(int tid) {
   while (i != -1) {
     ts_sub_t *s = &g_ts_subs[i];
     int next = s->tid_next; /* captured before ts_push_drop_sub() may unlink i */
-    if (atomic_load_explicit(&s->alive, memory_order_acquire) != TS_SUB_ALIVE)
-      goto next_sub;
-    if (!atomic_load_explicit(&s->ready, memory_order_acquire))
-      goto next_sub;
-    if (s->reactor_tid != tid)
-      goto next_sub;
+    if (atomic_load_explicit(&s->alive, memory_order_acquire) != TS_SUB_ALIVE) goto next_sub;
+    if (!atomic_load_explicit(&s->ready, memory_order_acquire)) goto next_sub;
+    if (s->reactor_tid != tid) goto next_sub;
 #ifdef HAVE_HTTP2
     if (s->proto == 2) {
       if (atomic_load_explicit(&s->h2_ring.wpos, memory_order_acquire) != atomic_load_explicit(&s->h2_ring.rpos, memory_order_relaxed))
@@ -58,8 +55,14 @@ void ts_push_flush_ready(int tid) {
       goto next_sub;
     }
 #endif
-    if (s->proto != 1)
+#ifdef HAVE_HTTP3
+    if (s->proto == 3) {
+      if (atomic_load_explicit(&s->h3_ring.wpos, memory_order_acquire) != atomic_load_explicit(&s->h3_ring.rpos, memory_order_relaxed))
+        h3_tspush_wake(i);
       goto next_sub;
+    }
+#endif
+    if (s->proto != 1) goto next_sub;
     if (atomic_load_explicit(&s->pkt_overrun, memory_order_acquire)) {
       ts_push_drop_sub(s, i);
       goto next_sub;
@@ -69,8 +72,7 @@ void ts_push_flush_ready(int tid) {
       const uint8_t *p;
       conn_t *c;
       p = byte_ring_peek(&s->pkt_ring, &contig);
-      if (!p)
-        break;
+      if (!p) break;
       c = conn_for_fd(s->fd);
       if (!c || conn_send_buffered(c, p, contig, NULL, 0) < 0) {
         ts_push_drop_sub(s, i);

@@ -93,7 +93,9 @@ dipisds_SRCS := \
 	src/dipisds/input.c \
 	src/dipisds/format_out.c \
 	src/dipisds/announce.c \
+	src/lib/net/announce_driver.c \
 	src/dipisds/listen.c \
+	src/lib/helper/fileutil.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/log.c \
 	src/lib/helper/toolmain.c \
@@ -113,6 +115,7 @@ dipisds_SRCS := \
 dipixmltv_SRCS := \
 	src/dipixmltv/main.c \
 	src/dipixmltv/args.c \
+	src/lib/helper/fileutil.c \
 	src/dipixmltv/revmap.c \
 	src/dipixmltv/suggest.c \
 	src/lib/helper/log.c \
@@ -129,6 +132,7 @@ dipixmltv_SRCS := \
 dipibim_SRCS := \
 	src/dipibim/main.c \
 	src/dipibim/args.c \
+	src/lib/helper/fileutil.c \
 	src/lib/helper/log.c \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
@@ -137,7 +141,7 @@ dipibim_SRCS := \
 	src/lib/tva/bcg_doc.c \
 	src/lib/tva/tva_xml.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/bim/bitreader.c \
+	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/bim/codec.c \
 	src/lib/bim/fragment.c \
@@ -172,7 +176,9 @@ dipibcg_SRCS := \
 	src/dipibcg/main.c \
 	src/dipibcg/args.c \
 	src/dipibcg/announce.c \
+	src/lib/net/announce_driver.c \
 	src/dipibcg/listen.c \
+	src/lib/helper/fileutil.c \
 	src/dipibcg/container.c \
 	$(dipibcg_ZLIB_SRC) \
 	src/lib/helper/log.c \
@@ -194,7 +200,7 @@ dipibcg_SRCS := \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/bim/bitreader.c \
+	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/bim/codec.c \
 	src/lib/bim/fragment.c \
@@ -267,7 +273,9 @@ endif
 endif
 
 ifeq ($(HAVE_RIST),yes)
-dipirec_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c
+dipirec_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c \
+src/lib/helper/pipereader.c \
+src/lib/net/rist/ristpeer.c
 dipirec_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipirec_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -280,6 +288,7 @@ endif
 
 ifeq ($(HAVE_SRT),yes)
 dipirec_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c \
+src/lib/helper/pipereader.c \
 	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
 dipirec_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
@@ -296,6 +305,7 @@ dipirec_EXTRA_LDFLAGS += -pthread
 dipirec_SRCS := \
 	src/dipirec/main.c \
 	src/dipirec/args.c \
+	src/lib/helper/describe.c \
 	src/dipirec/record.c \
 	src/dipirec/record/sink.c \
 	src/dipirec/record/rtmp_fanout.c \
@@ -337,6 +347,7 @@ dipirec_SRCS := \
 	src/lib/mux/rtcp_build.c \
 	src/lib/mux/rtpheader.c \
 	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
 	src/lib/mux/mkv/mkv.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/escodec/aubuild.c \
@@ -347,7 +358,6 @@ dipirec_SRCS := \
 	src/lib/mux/mkv/feed.c \
 	src/lib/mux/fmp4/box.c \
 	src/lib/mux/mp4/mp4.c \
-	src/lib/mux/mp4/video.c \
 	src/lib/mux/mp4/write.c \
 	src/lib/mux/mp4/feed.c \
 	src/lib/mux/mp4/moov.c \
@@ -411,7 +421,8 @@ dipiradiohead_EXTRA_CFLAGS += -pthread
 dipiradiohead_EXTRA_LDFLAGS += -pthread
 
 ifeq ($(HAVE_RIST),yes)
-dipiradiohead_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristlog.c
+dipiradiohead_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristlog.c \
+src/lib/net/rist/ristpeer.c
 dipiradiohead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -548,7 +559,9 @@ dipitvhead_EXTRA_CFLAGS += -pthread
 dipitvhead_EXTRA_LDFLAGS += -pthread
 
 ifeq ($(HAVE_RIST),yes)
-dipitvhead_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c
+dipitvhead_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c \
+src/lib/helper/pipereader.c \
+src/lib/net/rist/ristpeer.c
 dipitvhead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -561,6 +574,7 @@ endif
 
 ifeq ($(HAVE_SRT),yes)
 dipitvhead_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c \
+src/lib/helper/pipereader.c \
 	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
 dipitvhead_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
@@ -575,6 +589,7 @@ endif
 dipitvhead_SRCS := \
 	src/dipitvhead/main.c \
 	src/dipitvhead/args.c \
+	src/lib/helper/describe.c \
 	src/dipitvhead/tvhead/tvhead.c \
 	src/dipitvhead/tvhead/discover.c \
 	src/dipitvhead/tvhead/output.c \
@@ -710,6 +725,7 @@ dipicam378_SRCS := \
 	src/dipicam378/args.c \
 	src/dipicam378/cs378x/cs378x.c \
 	src/dipicam378/cs378x/crypto.c \
+	src/lib/demux/crc32.c \
 	src/dipicam378/cs378x/protocol.c \
 	src/dipicam378/cs378x/worker.c \
 	src/dipicam378/device.c \
@@ -745,7 +761,9 @@ dipidescramble_CSA2_SRC := src/lib/scrambler/csa2_stub.c
 endif
 
 ifeq ($(HAVE_RIST),yes)
-dipidescramble_RIST_SRC := src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c
+dipidescramble_RIST_SRC := src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c \
+src/lib/helper/pipereader.c \
+src/lib/net/rist/ristpeer.c
 dipidescramble_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipidescramble_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -758,6 +776,7 @@ endif
 
 ifeq ($(HAVE_SRT),yes)
 dipidescramble_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c \
+src/lib/helper/pipereader.c \
 	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
 dipidescramble_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
@@ -775,6 +794,7 @@ dipidescramble_SRCS := \
 	src/dipidescramble/main.c \
 	src/dipidescramble/pipeline.c \
 	src/dipidescramble/args.c \
+	src/lib/helper/describe.c \
 	src/dipidescramble/crypto.c \
 	src/dipidescramble/device.c \
 	src/dipidescramble/ecm_profile/common.c \
@@ -816,6 +836,7 @@ dipidescramble_SRCS := \
 	src/lib/demux/pes.c \
 	src/lib/demux/mpts_probe.c \
 	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
 	src/lib/mux/mkv/mkv.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/escodec/aubuild.c \
@@ -884,7 +905,8 @@ dipirist_TLS_SRC := src/lib/net/tls_stub.c
 endif
 
 ifeq ($(HAVE_SRT),yes)
-dipirist_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c src/lib/net/srt/srtcommon.c
+dipirist_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c src/lib/net/srt/srtcommon.c \
+src/lib/helper/pipereader.c
 dipirist_EXTRA_CFLAGS += -pthread $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipirist_EXTRA_LDFLAGS += -pthread $(shell pkg-config --static --libs srt)
@@ -914,6 +936,8 @@ dipirist_SRCS := \
 	src/lib/net/plain_endpoint.c \
 	src/lib/net/rist/ristout.c \
 	src/lib/net/rist/ristin.c \
+	src/lib/helper/pipereader.c \
+	src/lib/net/rist/ristpeer.c \
 	src/lib/net/rist/ristlog.c \
 	$(dipirist_SRT_SRC) \
 	$(dipirist_TLS_SRC) \
@@ -960,7 +984,9 @@ dipisrt_TLS_SRC := src/lib/net/tls_stub.c
 endif
 
 ifeq ($(HAVE_RIST),yes)
-dipisrt_RIST_SRC := src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c
+dipisrt_RIST_SRC := src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c \
+src/lib/helper/pipereader.c \
+src/lib/net/rist/ristpeer.c
 dipisrt_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipisrt_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -990,6 +1016,7 @@ dipisrt_SRCS := \
 	src/lib/net/plain_endpoint.c \
 	$(dipisrt_RIST_SRC) \
 	src/lib/net/srt/srtsrc.c \
+	src/lib/helper/pipereader.c \
 	src/lib/net/srt/srtcommon.c \
 	src/lib/net/srt/srtout.c \
 	src/lib/net/srt/srtin.c \
@@ -1034,7 +1061,9 @@ endif
 endif
 
 ifeq ($(HAVE_RIST),yes)
-dipixy_RIST_SRC := src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c
+dipixy_RIST_SRC := src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c \
+src/lib/helper/pipereader.c \
+src/lib/net/rist/ristpeer.c
 dipixy_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
@@ -1047,6 +1076,7 @@ endif
 
 ifeq ($(HAVE_SRT),yes)
 dipixy_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c \
+src/lib/helper/pipereader.c \
 	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
 dipixy_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
@@ -1087,6 +1117,11 @@ ifeq ($(HAVE_LIBNGTCP2),yes)
 else ifneq ($(HTTP3),no)
 $(warning dipixy: libngtcp2/libnghttp3 not found via pkg-config, building without HTTP/3 support)
 endif
+endif
+
+dipixy_HTTPNG_SRC :=
+ifneq ($(HAVE_HTTP2)$(HAVE_HTTP3),nono)
+dipixy_HTTPNG_SRC := src/dipixy/httpng/httpng.c
 endif
 
 # gen_htdocs -> build time: NOT a cross build
@@ -1136,12 +1171,14 @@ dipixy_SRCS := \
 	src/dipixy/reactor/reactor_dashchunk.c \
 	src/dipixy/reactor/reactor_mp4push.c \
 	src/dipixy/reactor/reactor_ws.c \
+	src/dipixy/reactor/ws_dispatch.c \
 	src/dipixy/ts/ts_push.c \
 	src/dipixy/ts/ts_push_feed.c \
 	src/dipixy/ts/ts_push_flush.c \
 	src/dipixy/ts/rawaudio.c \
 	src/dipixy/ts/pidfilter.c \
 	src/dipixy/ts/pmtselect.c \
+	src/dipixy/ts/lcevcselect.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/fec2022.c \
 	src/lib/mux/pmt_filter.c \
@@ -1163,6 +1200,7 @@ dipixy_SRCS := \
 	src/dipixy/hls/hls_render.c \
 	src/dipixy/segment/segment.c \
 	src/dipixy/segment/demux.c \
+	src/dipixy/segment/pidlock.c \
 	src/dipixy/segment/video.c \
 	src/dipixy/segment/audio.c \
 	src/dipixy/segment/mux.c \
@@ -1171,11 +1209,13 @@ dipixy_SRCS := \
 	src/dipixy/dlna/dlna.c \
 	src/dipixy/dlna/dlna_soap.c \
 	src/dipixy/dlna/dlna_oid.c \
+	src/dipixy/dlna/strbuf.c \
 	src/dipixy/dlna/dlna_didl.c \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/gena.c \
 	src/dipixy/core/metrics.c \
 	src/lib/mux/fmp4/box.c \
+	src/lib/mux/growbuf.c \
 	src/lib/mux/fmp4/fmp4.c \
 	src/lib/mux/fmp4/fmp4_moov.c \
 	src/lib/mux/fmp4/fmp4_frag.c \
@@ -1220,7 +1260,8 @@ dipixy_SRCS := \
 	$(dipixy_RIST_SRC) \
 	$(dipixy_SRT_SRC) \
 	$(dipixy_HTTP2_SRC) \
-	$(dipixy_HTTP3_SRC)
+	$(dipixy_HTTP3_SRC) \
+	$(dipixy_HTTPNG_SRC)
 
 ALL_OBJS :=
 
@@ -1328,7 +1369,7 @@ build/dvbipitools/src/%.o: src/%.c config.mk
 dvbipitools: $(DVBIPITOOLS_OBJS)
 	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) -o $@
 
-UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
+UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mp4 lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild \
@@ -1452,6 +1493,7 @@ dipicam378_args_SRCS := \
 	tests/unit/dipicam378/test_args.c \
 	src/dipicam378/args.c \
 	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
 ifeq ($(HAVE_OPENSSL),yes)
@@ -1482,6 +1524,7 @@ dipicam378_cs378x_SRCS := \
 	tests/unit/dipicam378/test_cs378x.c \
 	src/dipicam378/cs378x/cs378x.c \
 	src/dipicam378/cs378x/crypto.c \
+	src/lib/demux/crc32.c \
 	src/dipicam378/cs378x/protocol.c \
 	src/dipicam378/cs378x/worker.c \
 	src/lib/helper/log.c \
@@ -1494,6 +1537,7 @@ dipidescramble_crypto_BIN := tests/unit/dipidescramble/test_crypto
 dipidescramble_crypto_SRCS := \
 	tests/unit/dipidescramble/test_crypto.c \
 	src/dipidescramble/crypto.c \
+	src/lib/demux/crc32.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/helper/secure_zero.c
 dipidescramble_crypto_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
@@ -1505,6 +1549,7 @@ dipidescramble_device_SRCS := \
 	tests/unit/dipidescramble/test_device.c \
 	src/dipidescramble/device.c \
 	src/dipidescramble/crypto.c \
+	src/lib/demux/crc32.c \
 	src/dipidescramble/ecm_profile/common.c \
 	src/dipidescramble/ecm_profile/parse.c \
 	src/dipidescramble/ecm_profile/validate.c \
@@ -1514,6 +1559,7 @@ dipidescramble_device_SRCS := \
 	src/lib/cas/device_state_core.c \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
 	src/lib/helper/secure_zero.c
 dipidescramble_device_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_device_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -1528,9 +1574,11 @@ dipidescramble_ecm_profile_SRCS := \
 	src/dipidescramble/ecm_profile/wire.c \
 	src/dipidescramble/ecm_profile/crypto.c \
 	src/dipidescramble/crypto.c \
+	src/lib/demux/crc32.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
 	src/lib/helper/secure_zero.c
 dipidescramble_ecm_profile_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_ecm_profile_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -1578,6 +1626,7 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/pes.c \
 	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
 	src/lib/mux/teletext.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/mkv/mkv.c \
@@ -1624,6 +1673,7 @@ dipidescramble_ipiclient_SRCS := \
 	src/dipidescramble/emmcache.c \
 	src/dipidescramble/device.c \
 	src/dipidescramble/crypto.c \
+	src/lib/demux/crc32.c \
 	src/dipidescramble/ecm_profile/common.c \
 	src/dipidescramble/ecm_profile/parse.c \
 	src/dipidescramble/ecm_profile/validate.c \
@@ -1652,12 +1702,14 @@ dipidescramble_args_BIN := tests/unit/dipidescramble/test_args
 dipidescramble_args_SRCS := \
 	tests/unit/dipidescramble/test_args.c \
 	src/dipidescramble/args.c \
+	src/lib/helper/describe.c \
 	src/dipidescramble/ecm_profile/common.c \
 	src/dipidescramble/ecm_profile/parse.c \
 	src/dipidescramble/ecm_profile/validate.c \
 	src/dipidescramble/ecm_profile/wire.c \
 	src/dipidescramble/ecm_profile/crypto.c \
 	src/dipidescramble/crypto.c \
+	src/lib/demux/crc32.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/cas/biss/hex.c \
 	src/lib/helper/uriparse.c \
@@ -1733,6 +1785,7 @@ dipirist_args_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/net/httpclient/url.c \
+	src/lib/net/plain_endpoint.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
@@ -1759,6 +1812,8 @@ dipirist_bridge_SRCS := \
 	src/lib/net/plain_endpoint.c \
 	src/lib/net/rist/ristout.c \
 	src/lib/net/rist/ristin.c \
+	src/lib/helper/pipereader.c \
+	src/lib/net/rist/ristpeer.c \
 	src/lib/net/rist/ristlog.c \
 	src/lib/net/srt/srtsrc_stub.c \
 	src/lib/net/tls_stub.c \
@@ -1799,6 +1854,8 @@ lib_net_rist_ristin_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
 lib_net_rist_ristin_SRCS := \
 	tests/unit/lib/net/rist/test_ristin.c \
 	src/lib/net/rist/ristin.c \
+	src/lib/helper/pipereader.c \
+	src/lib/net/rist/ristpeer.c \
 	src/lib/net/rist/ristlog.c \
 	src/lib/helper/log.c \
 	src/lib/helper/ioutil.c \
@@ -1818,6 +1875,7 @@ dipisrt_args_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/net/httpclient/url.c \
+	src/lib/net/plain_endpoint.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
@@ -1887,6 +1945,7 @@ dipisds_listen_BIN := tests/unit/dipisds/test_listen
 dipisds_listen_SRCS := \
 	tests/unit/dipisds/test_listen.c \
 	src/dipisds/listen.c \
+	src/lib/helper/fileutil.c \
 	src/dipisds/args.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
@@ -1906,6 +1965,7 @@ dipisds_announce_BIN := tests/unit/dipisds/test_announce
 dipisds_announce_SRCS := \
 	tests/unit/dipisds/test_announce.c \
 	src/dipisds/announce.c \
+	src/lib/net/announce_driver.c \
 	src/dipisds/input.c \
 	src/lib/helper/sds_xml.c \
 	src/lib/helper/xml_util.c \
@@ -1956,6 +2016,7 @@ dipibcg_announce_BIN := tests/unit/dipibcg/test_announce
 dipibcg_announce_SRCS := \
 	tests/unit/dipibcg/test_announce.c \
 	src/dipibcg/announce.c \
+	src/lib/net/announce_driver.c \
 	src/dipibcg/args.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
@@ -1968,7 +2029,7 @@ dipibcg_announce_SRCS := \
 	src/lib/helper/ioutil.c \
 	src/lib/bim/accessunit.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/bim/bitreader.c \
+	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/bim/fragment.c \
 	src/lib/bim/codec.c \
@@ -1987,6 +2048,7 @@ dipibcg_listen_BIN := tests/unit/dipibcg/test_listen
 dipibcg_listen_SRCS := \
 	tests/unit/dipibcg/test_listen.c \
 	src/dipibcg/listen.c \
+	src/lib/helper/fileutil.c \
 	src/dipibcg/args.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
@@ -1999,7 +2061,7 @@ dipibcg_listen_SRCS := \
 	src/lib/helper/ioutil.c \
 	src/lib/bim/accessunit.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/bim/bitreader.c \
+	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/bim/fragment.c \
 	src/lib/bim/codec.c \
@@ -2073,6 +2135,14 @@ lib_demux_bitreader_BIN := tests/unit/lib/demux/test_bitreader
 lib_demux_bitreader_SRCS := \
 	tests/unit/lib/demux/test_bitreader.c \
 	src/lib/demux/bitreader.c
+
+lib_demux_escodec_aubuild_BIN := tests/unit/lib/demux/escodec/test_aubuild
+lib_demux_escodec_aubuild_SRCS := \
+	tests/unit/lib/demux/escodec/test_aubuild.c \
+	src/lib/demux/escodec/aubuild.c \
+	src/lib/demux/bitreader.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c
 
 lib_demux_rtp_BIN := tests/unit/lib/demux/test_rtp
 lib_demux_rtp_SRCS := \
@@ -2154,6 +2224,7 @@ lib_mux_ebml_BIN := tests/unit/lib/mux/test_ebml
 lib_mux_ebml_SRCS := \
 	tests/unit/lib/mux/test_ebml.c \
 	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
 	src/lib/helper/ioutil.c
 
 lib_mux_teletext_BIN := tests/unit/lib/mux/test_teletext
@@ -2178,6 +2249,7 @@ lib_mux_mkv_SRCS := \
 	src/lib/mux/mkv/feed.c \
 	src/lib/helper/ioutil.c \
 	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
 	src/lib/mux/teletext.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/pes.c \
@@ -2195,7 +2267,7 @@ lib_mux_mp4_SRCS := \
 	src/lib/mux/mp4/mp4.c \
 	src/lib/mux/mp4/moov.c \
 	src/lib/mux/fmp4/box.c \
-	src/lib/mux/mp4/video.c \
+	src/lib/mux/growbuf.c \
 	src/lib/mux/mp4/write.c \
 	src/lib/mux/mp4/feed.c \
 	src/lib/demux/bitreader.c \
@@ -2218,6 +2290,7 @@ lib_mux_fmp4_BIN := tests/unit/lib/mux/test_fmp4
 lib_mux_fmp4_SRCS := \
 	tests/unit/lib/mux/test_fmp4.c \
 	src/lib/mux/fmp4/box.c \
+	src/lib/mux/growbuf.c \
 	src/lib/mux/fmp4/fmp4.c \
 	src/lib/mux/fmp4/fmp4_moov.c \
 	src/lib/mux/fmp4/fmp4_frag.c \
@@ -2235,6 +2308,7 @@ lib_mux_flv_SRCS := \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/amf.c \
 	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/pes.c \
 	src/lib/demux/psi/psi.c \
@@ -2250,12 +2324,12 @@ lib_bim_bitwriter_BIN := tests/unit/lib/bim/test_bitwriter
 lib_bim_bitwriter_SRCS := \
 	tests/unit/lib/bim/test_bitwriter.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/bim/bitreader.c
+	src/lib/bim/bimreader.c
 
 lib_bim_bitreader_BIN := tests/unit/lib/bim/test_bitreader
 lib_bim_bitreader_SRCS := \
 	tests/unit/lib/bim/test_bitreader.c \
-	src/lib/bim/bitreader.c
+	src/lib/bim/bimreader.c
 
 lib_bim_strrepo_BIN := tests/unit/lib/bim/test_strrepo
 lib_bim_strrepo_SRCS := \
@@ -2267,7 +2341,7 @@ lib_bim_codec_SRCS := \
 	tests/unit/lib/bim/test_codec.c \
 	src/lib/bim/codec.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/bim/bitreader.c \
+	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/helper/ioutil.c
 
@@ -2324,7 +2398,7 @@ BIM_FRAGMENT_DEPS := \
 	src/lib/bim/fragment.c \
 	src/lib/bim/codec.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/bim/bitreader.c \
+	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/tva/tva_xml.c \
 	src/lib/tva/bcg_doc.c \
@@ -2348,6 +2422,7 @@ dipibim_args_SRCS := \
 	tests/unit/dipibim/test_args.c \
 	src/dipibim/args.c \
 	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
 dipiscan_format_BIN := tests/unit/dipiscan/test_format
@@ -2394,6 +2469,7 @@ dipixmltv_args_SRCS := \
 	tests/unit/dipixmltv/test_args.c \
 	src/dipixmltv/args.c \
 	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
 dipixmltv_revmap_BIN := tests/unit/dipixmltv/test_revmap
@@ -2717,6 +2793,7 @@ dipitvhead_args_BIN := tests/unit/dipitvhead/test_args
 dipitvhead_args_SRCS := \
 	tests/unit/dipitvhead/test_args.c \
 	src/dipitvhead/args.c \
+	src/lib/helper/describe.c \
 	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
@@ -3032,6 +3109,7 @@ lib_net_rtmp_SRCS := \
 	src/lib/net/rtmp/auth_stub.c \
 	src/lib/mux/amf.c \
 	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
@@ -3047,6 +3125,7 @@ lib_net_rtmpout_SRCS := \
 	src/lib/net/rtmp/auth_stub.c \
 	src/lib/mux/amf.c \
 	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -3189,12 +3268,13 @@ dipirec_record_SRCS := \
 	src/dipirec/record/run.c \
 	src/lib/fccret/ret_client.c \
 	src/lib/mux/mp4/mp4.c \
-	src/lib/mux/mp4/video.c \
 	src/lib/mux/mp4/write.c \
 	src/lib/mux/mp4/feed.c \
 	src/lib/mux/mp4/moov.c \
 	src/lib/mux/fmp4/box.c \
+	src/lib/mux/growbuf.c \
 	src/dipirec/args.c \
+	src/lib/helper/describe.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
 	src/lib/helper/log.c \
@@ -3293,6 +3373,7 @@ dipirec_args_BIN := tests/unit/dipirec/test_args
 dipirec_args_SRCS := \
 	tests/unit/dipirec/test_args.c \
 	src/dipirec/args.c \
+	src/lib/helper/describe.c \
 	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
@@ -3306,6 +3387,7 @@ dipifccret_args_SRCS := \
 	src/dipifccret/args.c \
 	src/dipifccret/capture/ranges.c \
 	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
 dipifccret_listen_BIN := tests/unit/dipifccret/test_listen
@@ -3424,7 +3506,7 @@ dipifccret_capture_SRCS := \
 	src/lib/demux/rtp.c \
 	src/lib/helper/signal.c
 
-UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_mp4push lib_playlist_in
+UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_mp4push lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
@@ -3453,6 +3535,7 @@ dipixy_playlist_SRCS := \
 	src/dipixy/core/playlist.c \
 	src/dipixy/core/route.c \
 	src/dipixy/ts/pidfilter.c \
+	src/dipixy/ts/lcevcselect.c \
 	src/dipixy/ts/channels/channels.c \
 	src/dipixy/ts/channels/build.c \
 	src/dipixy/ts/channels/reload.c \
@@ -3463,8 +3546,10 @@ dipixy_playlist_SRCS := \
 	src/dipixy/dlna/dlna_didl.c \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/ssdp.c \
+	src/dipixy/dlna/strbuf.c \
 	src/dipixy/ts/capture/capture.c \
 	src/dipixy/ts/capture/pump.c \
+	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/dipixy/ws/ws_broadcast.c \
@@ -3509,6 +3594,7 @@ dipixy_capture_SRCS := \
 	tests/unit/dipixy/test_capture.c \
 	src/dipixy/ts/capture/capture.c \
 	src/dipixy/ts/capture/pump.c \
+	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/lib/helper/ioutil.c \
@@ -3551,8 +3637,10 @@ dipixy_channels_SRCS := \
 	src/dipixy/dlna/dlna_didl.c \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/ssdp.c \
+	src/dipixy/dlna/strbuf.c \
 	src/dipixy/ts/capture/capture.c \
 	src/dipixy/ts/capture/pump.c \
+	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/dipixy/core/route.c \
@@ -3602,6 +3690,13 @@ dipixy_pmtselect_BIN := tests/unit/dipixy/test_pmtselect
 dipixy_pmtselect_SRCS := \
 	tests/unit/dipixy/test_pmtselect.c \
 	src/dipixy/ts/pmtselect.c \
+	src/dipixy/ts/pidfilter.c \
+	src/lib/helper/ioutil.c
+
+dipixy_lcevcselect_BIN := tests/unit/dipixy/test_lcevcselect
+dipixy_lcevcselect_SRCS := \
+	tests/unit/dipixy/test_lcevcselect.c \
+	src/dipixy/ts/lcevcselect.c \
 	src/dipixy/ts/pidfilter.c \
 	src/lib/helper/ioutil.c
 
@@ -3677,6 +3772,7 @@ dipixy_hls_SRCS := \
 	src/dipixy/dash/dash.c \
 	src/dipixy/hls/hls_render.c \
 	src/dipixy/ts/pidfilter.c \
+	src/dipixy/ts/lcevcselect.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 dipixy_hls_EXTRA_CFLAGS := -ffunction-sections -fdata-sections
@@ -3688,6 +3784,7 @@ dipixy_segstore_concurrency_SRCS := \
 	src/dipixy/segstore.c \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/pidfilter.c \
+	src/dipixy/ts/lcevcselect.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
@@ -3703,6 +3800,8 @@ dipixy_conn_SRCS := \
 	tests/unit/dipixy/test_conn.c \
 	src/dipixy/reactor/conn.c \
 	src/dipixy/reactor/reactor_tls_stub.c \
+	src/dipixy/reactor/reactor_threadlocal_stub.c \
+	src/dipixy/reactor/qsbr.c \
 	src/lib/helper/log.c
 
 dipixy_ws_sources_BIN := tests/unit/dipixy/test_ws_sources
@@ -3720,13 +3819,129 @@ dipixy_ws_sources_SRCS := \
 	src/dipixy/dlna/dlna_didl.c \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/ssdp.c \
+	src/dipixy/dlna/strbuf.c \
 	src/dipixy/ts/capture/capture.c \
 	src/dipixy/ts/capture/pump.c \
+	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/dipixy/core/route.c \
 	src/dipixy/ws/ws_broadcast.c \
 	src/dipixy/ws/ws_frame.c \
+	src/lib/helper/playlist_in.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c \
+	src/lib/helper/signal.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/sds_xml.c \
+	src/lib/helper/xml_util.c \
+	src/lib/helper/jsonbuf.c \
+	src/lib/net/dvbstp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/rtp.c \
+	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
+	src/lib/net/srt/srtsrc_stub.c \
+	src/lib/net/srt/srtsink_stub.c \
+	src/lib/demux/rtx.c \
+	src/lib/demux/rtcp.c \
+	src/lib/mux/rtx.c \
+	src/lib/mux/rtcp_build.c \
+	src/lib/fccret/ret_client.c \
+	src/lib/fccret/fcc_client.c
+
+dipixy_gena_BIN := tests/unit/dipixy/test_gena
+dipixy_gena_SRCS := \
+	tests/unit/dipixy/test_gena.c \
+	src/dipixy/reactor/reactor_threadlocal_stub.c \
+	src/dipixy/dlna/dlna.c \
+	src/dipixy/dlna/dlna_soap.c \
+	src/dipixy/dlna/dlna_oid.c \
+	src/dipixy/dlna/dlna_didl.c \
+	src/dipixy/dlna/dlna_control.c \
+	src/dipixy/dlna/gena.c \
+	src/dipixy/dlna/ssdp.c \
+	src/dipixy/dlna/strbuf.c \
+	src/dipixy/ts/channels/channels.c \
+	src/dipixy/ts/channels/build.c \
+	src/dipixy/ts/channels/reload.c \
+	src/dipixy/ts/capture/capture.c \
+	src/dipixy/ts/capture/pump.c \
+	src/dipixy/reactor/qsbr.c \
+	src/dipixy/ts/capture/service.c \
+	src/dipixy/ts/capture/source.c \
+	src/dipixy/core/route.c \
+	src/dipixy/ws/ws_broadcast.c \
+	src/dipixy/ws/ws_frame.c \
+	src/dipixy/ws/ws_sources.c \
+	src/lib/helper/playlist_in.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c \
+	src/lib/helper/signal.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/sds_xml.c \
+	src/lib/helper/xml_util.c \
+	src/lib/helper/jsonbuf.c \
+	src/lib/net/dvbstp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/rtp.c \
+	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
+	src/lib/net/srt/srtsrc_stub.c \
+	src/lib/net/srt/srtsink_stub.c \
+	src/lib/demux/rtx.c \
+	src/lib/demux/rtcp.c \
+	src/lib/mux/rtx.c \
+	src/lib/mux/rtcp_build.c \
+	src/lib/fccret/ret_client.c \
+	src/lib/fccret/fcc_client.c
+
+dipixy_dlna_BIN := tests/unit/dipixy/test_dlna
+dipixy_dlna_SRCS := \
+	tests/unit/dipixy/test_dlna.c \
+	src/dipixy/reactor/reactor_threadlocal_stub.c \
+	src/dipixy/dlna/dlna.c \
+	src/dipixy/dlna/dlna_soap.c \
+	src/dipixy/dlna/dlna_oid.c \
+	src/dipixy/dlna/dlna_didl.c \
+	src/dipixy/dlna/dlna_control.c \
+	src/dipixy/dlna/gena.c \
+	src/dipixy/dlna/ssdp.c \
+	src/dipixy/dlna/strbuf.c \
+	src/dipixy/ts/channels/channels.c \
+	src/dipixy/ts/channels/build.c \
+	src/dipixy/ts/channels/reload.c \
+	src/dipixy/ts/capture/capture.c \
+	src/dipixy/ts/capture/pump.c \
+	src/dipixy/reactor/qsbr.c \
+	src/dipixy/ts/capture/service.c \
+	src/dipixy/ts/capture/source.c \
+	src/dipixy/core/route.c \
+	src/dipixy/ws/ws_broadcast.c \
+	src/dipixy/ws/ws_frame.c \
+	src/dipixy/ws/ws_sources.c \
 	src/lib/helper/playlist_in.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/ioutil.c \
@@ -3849,7 +4064,7 @@ FUZZ_BIM_DEPS := \
 	src/lib/bim/fragment.c \
 	src/lib/bim/codec.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/bim/bitreader.c \
+	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/tva/tva_xml.c \
 	src/lib/tva/bcg_doc.c \
@@ -3963,6 +4178,7 @@ fuzz_ssdp_BIN := tests/fuzz/fuzz_ssdp
 fuzz_ssdp_SRCS := \
 	tests/fuzz/fuzz_ssdp.c \
 	src/dipixy/dlna/ssdp.c \
+	src/dipixy/dlna/strbuf.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \

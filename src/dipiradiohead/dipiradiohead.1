@@ -5,7 +5,7 @@ dipiradiohead \- re-mux an Icecast/Shoutcast stream as a DVB-IPI multicast
 .B dipiradiohead
 .B \-i
 .I uri
-[\fB\-\-sid\fP \fIn\fP] [\fB\-\-sdt\fP \fIname\fP] [\fB\-i\fP \fIuri\fP ...]
+[\fB\-\-sid\fP \fIn\fP] [\fB\-\-sdt\fP \fIname\fP] [\fB\-\-provider\fP \fIname\fP] [\fB\-i\fP \fIuri\fP ...]
 {\fB\-m\fP \fIgroup\fP:\fIport\fP | \fB\-R\fP \fIuri\fP} [\fIoptions\fP]
 .SH DESCRIPTION
 .B dipiradiohead
@@ -94,6 +94,12 @@ SDT service_name for the
 immediately before this option. Default: auto (
 .B dipiradiohead
 for a single input, "dipiradiohead \fIn\fR" per input for an MPTS).
+.TP
+.B \-\-provider \fIname\fR
+SDT service_provider_name for the
+.B \-i
+immediately before this option. Default:
+.BR dipiradiohead .
 .SS Output
 .TP
 .BR \-m ", " \-\-mcast " " \fIgroup\fR:\fIport\fR
@@ -103,7 +109,7 @@ for IPv6. Required unless
 .B \-R
 is given.
 .TP
-.BR \-I ", " \-\-iface " " \fIiface\fR
+.BR \-O ", " \-\-out\-iface " " \fIiface\fR
 Outgoing multicast interface.
 .TP
 .BR \-r ", " \-\-rtp

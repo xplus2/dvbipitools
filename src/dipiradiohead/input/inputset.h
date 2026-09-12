@@ -28,6 +28,7 @@ void inputset_free(inputset_t *is);
 unsigned inputset_count(const inputset_t *is);
 unsigned inputset_sid(const inputset_t *is, unsigned idx);
 const char *inputset_service_name(const inputset_t *is, unsigned idx);
+const char *inputset_provider_name(const inputset_t *is, unsigned idx);
 unsigned inputset_pmt_pid(const inputset_t *is, unsigned idx);
 unsigned inputset_audio_pid(const inputset_t *is, unsigned idx);
 

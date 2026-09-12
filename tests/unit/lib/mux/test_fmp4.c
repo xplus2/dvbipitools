@@ -367,6 +367,65 @@ START_TEST(vvc_stsd_has_vvc1_vvcc_entry) {
 }
 END_TEST
 
+/* nth (0-based) direct child box named fourcc within buf */
+static int find_nth_box(const unsigned char *buf, size_t len, const char *fourcc, int n, const unsigned char **out, size_t *outlen) {
+  const unsigned char *p = buf;
+  size_t rem = len;
+  int seen = 0;
+  while (rem >= 8) {
+    uint32_t bsize = rd32(p);
+    if (bsize < 8 || bsize > rem) return 0;
+    if (memcmp(p + 4, fourcc, 4) == 0) {
+      if (seen == n) {
+        *out = p + 8;
+        *outlen = bsize - 8;
+        return 1;
+      }
+      seen++;
+    }
+    p += bsize;
+    rem -= bsize;
+  }
+  return 0;
+}
+
+START_TEST(lcevc_stsd_has_lvc1_lvcc_entry_and_tref_sbas) {
+  fmp4_track_cfg_t trk[2];
+  fmp4_mux_t *m;
+  unsigned char *out;
+  const unsigned char *moov, *trak2, *stsd, *lvc1, *lvcc, *tref;
+  size_t len, moov_len, trak2_len, stsd_len, lvc1_len, lvcc_len, tref_len;
+
+  memset(trk, 0, sizeof trk);
+  trk[0].codec = CODEC_H264;
+  trk[0].track_id = 1;
+  trk[0].timescale = 90000;
+  trk[0].width = 1920;
+  trk[0].height = 1080;
+  trk[1].codec = CODEC_LCEVC;
+  trk[1].track_id = 3;
+  trk[1].timescale = 90000;
+  trk[1].depends_on_track_id = 1;
+  m = fmp4_mux_new(trk, 2);
+
+  len = fmp4_init_segment(m, &out);
+  ck_assert(find_box(out, len, "moov", &moov, &moov_len));
+  ck_assert(find_nth_box(moov, moov_len, "trak", 1, &trak2, &trak2_len));
+
+  ck_assert(find_box(trak2, trak2_len, "tref", &tref, &tref_len));
+  ck_assert_uint_eq(tref_len, 12);
+  ck_assert_int_eq(memcmp(tref + 4, "sbas", 4), 0);
+  ck_assert_uint_eq(rd32(tref + 8), 1);
+
+  ck_assert(find_box(trak2, trak2_len, "mdia.minf.stbl.stsd", &stsd, &stsd_len));
+  ck_assert(find_box(stsd + 8, stsd_len - 8, "lvc1", &lvc1, &lvc1_len));
+  ck_assert(find_box(lvc1 + 78, lvc1_len - 78, "lvcC", &lvcc, &lvcc_len));
+  ck_assert_uint_eq(lvcc_len, 0);
+
+  fmp4_mux_free(m);
+}
+END_TEST
+
 START_TEST(opus_stsd_has_opus_dops_entry) {
   fmp4_mux_t *m = make_opus_mux(2);
   unsigned char *out;
@@ -402,6 +461,7 @@ Suite *fmp4_suite(void) {
   tcase_add_test(tc, ac3_stsd_has_dac3_with_bsi_fields);
   tcase_add_test(tc, eac3_stsd_has_dec3_with_bsi_fields);
   tcase_add_test(tc, vvc_stsd_has_vvc1_vvcc_entry);
+  tcase_add_test(tc, lcevc_stsd_has_lvc1_lvcc_entry_and_tref_sbas);
   tcase_add_test(tc, opus_stsd_has_opus_dops_entry);
   suite_add_tcase(s, tc);
   return s;

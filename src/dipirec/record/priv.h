@@ -42,6 +42,7 @@ int open_output(const char *path);
 /* file/stdout via a plain fd, rtp/udp via tssink, rist:// via ristout, srt:// via srtsink.
    fd valid: run_mkv needs it, always file/stdout case (args rejects mkv/mka with net -o) */
 typedef struct {
+  out_kind_t kind;
   int fd;
   tssink_t *net;    /* NULL unless -o rtp:// or udp:// */
   ristout_t *rist;  /* NULL unless -o rist:// */
@@ -75,17 +76,15 @@ int rtmp_fanout_open(const config_t *cfg, rtmp_fanout_t *r);
 void rtmp_fanout_close(const rtmp_fanout_t *r);
 void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len);
 
-void push_metrics(metrics_exporter_t *mx, const config_t *cfg, const out_sink_t *sinks, int n_sinks,
-                  const rtmp_fanout_t *rf, unsigned long long bytes, double start);
+void push_metrics(metrics_exporter_t *mx, const config_t *cfg, const out_sink_t *sinks, int n_sinks, const rtmp_fanout_t *rf, unsigned long long bytes, double start);
 
 /* one same-line stats update, tty only */
 void stats_show(const config_t *cfg, double elapsed, unsigned long long bytes, const psi_t *psi);
 
 int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, const rtmp_fanout_t *rf,
             metrics_exporter_t *mx, unsigned long long *bytes, double start, pace_ctrl_t *pace);
-int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, int mkv_fd, rtmp_fanout_t *rf,
-               metrics_exporter_t *mx, unsigned long long *bytes, double start, int video_ok, unsigned pmt_pid,
-               const unsigned *all_pids, int n_all_pids, pace_ctrl_t *pace);
+int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, int mkv_fd, rtmp_fanout_t *rf, metrics_exporter_t *mx, unsigned long long *bytes,
+               double start, int video_ok, unsigned pmt_pid, const unsigned *all_pids, int n_all_pids, pace_ctrl_t *pace);
 
 /* mpts discovery + -p decision. 0: proceed (pmt_pid/all_pids/n_all_pids filled in).
    1: abort, message already printed. raw skips this, nothing to select there. */

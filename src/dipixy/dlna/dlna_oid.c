@@ -115,45 +115,6 @@ static void pct_encode_seg(const char *s, char *out, size_t outcap) {
   out[oi] = '\0';
 }
 
-void sb_init(strbuf_t *b, char *buf, size_t cap) {
-  b->buf = buf;
-  b->cap = cap;
-  b->len = 0;
-  if (cap)
-    buf[0] = '\0';
-}
-
-void sb_add_n(strbuf_t *b, const char *s, size_t maxn) {
-  size_t n = strlen(s);
-  size_t room = b->cap > b->len ? b->cap - b->len - 1 : 0;
-  if (n > maxn)
-    n = maxn;
-  if (n > room)
-    n = room;
-  memcpy(b->buf + b->len, s, n);
-  b->len += n;
-  b->buf[b->len] = '\0';
-}
-
-void sb_add(strbuf_t *b, const char *s) { sb_add_n(b, s, strlen(s)); }
-
-void sb_add_u64(strbuf_t *b, uint64_t v) {
-  char tmp[20], rev[21];
-  size_t n = 0;
-  if (!v) {
-    tmp[n++] = '0';
-  } else {
-    while (v) {
-      tmp[n++] = (char)('0' + v % 10);
-      v /= 10;
-    }
-  }
-  for (size_t i = 0; i < n; i++)
-    rev[i] = tmp[n - 1 - i];
-  rev[n] = '\0';
-  sb_add(b, rev);
-}
-
 void build_play_path(const config_t *cfg, oid_kind_t kind, unsigned ord, unsigned item_num, media_type_t media_type, char *out, size_t outsz) {
   char name_enc[192];
   const char *fmt = media_type == MEDIA_RADIO ? "rawaudio" : "spts";

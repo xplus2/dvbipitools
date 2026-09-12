@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #include "dlna.h"
+#include "strbuf.h"
 
 #define CD_URN "urn:schemas-upnp-org:service:ContentDirectory:1"
 #define CM_URN "urn:schemas-upnp-org:service:ConnectionManager:1"
@@ -25,24 +26,13 @@ typedef struct {
 
 typedef struct {
   char *buf;
-  size_t cap;
-  size_t len;
-} strbuf_t;
-
-typedef struct {
-  char *buf;
   size_t len, cap;
 } gbuf_t;
 
 /* dlna_oid.c */
 int parse_object_id(const char *s, oid_t *out);
 const source_def_t *find_source(const config_t *cfg, unsigned ord);
-const char *source_kind_str(source_kind_t k);
 const char *strip_scheme_at(const char *uri);
-void sb_init(strbuf_t *b, char *buf, size_t cap);
-void sb_add_n(strbuf_t *b, const char *s, size_t maxn);
-void sb_add(strbuf_t *b, const char *s);
-void sb_add_u64(strbuf_t *b, uint64_t v);
 void build_play_path(const config_t *cfg, oid_kind_t kind, unsigned ord, unsigned item_num, media_type_t media_type, char *out, size_t outsz);
 
 /* dlna_soap.c */

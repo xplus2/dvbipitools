@@ -35,6 +35,10 @@ typedef struct {
   size_t remlen, remcap;
   unsigned char *vbuf; /* video: length-prefixed AU */
   size_t vbuflen, vbufcap;
+  unsigned char *lcevc_rb; /* strip_lcevc scratch, see esc_strip_lcevc_sei() */
+  size_t lcevc_rbcap;
+  unsigned char *lcevc_esc;
+  size_t lcevc_esccap;
   int got_key; /* first keyframe seen */
   ttx_t *ttx;  /* damn teletext */
   esc_track_t es; /* avcC/hvcC/ASC, param sets, LATM cache */

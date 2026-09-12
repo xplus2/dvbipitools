@@ -28,6 +28,7 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 |       | `--insecure`            |                       | off (`-u`, or `-o rtmps://`)                        |
 | `-o`  | `--output`              | `<target>`            | required, repeatable                                |
 | `-f`  | `--format`              | `ts\|mkv\|mka`        | `ts`                                                |
+|       | `--strip-lcevc`         |                       | off (`mkv`/`mka`/`rtmp(s)://` only)                 |
 | `-p`  | `--pmt-pid`             | `<pid>` / `all`       | none (see below)                                    |
 | `-I`  | `--iface`               | `<iface>`             | kernel default                                      |
 |       | `--ecm-profile`         | `<spec>`              | `ecm_profile` templating, see below                 |
@@ -176,6 +177,10 @@ A push target reconnects on its own on a drop, other `-o` targets keep going reg
 directly rather than feeding the raw `.ts` through a separate remux step. All audio tracks are muxed, no subtitle output.
 
 This only applies to plain file `-o` targets; an `rtmp(s)://` target always gets FLV, see above.
+
+`--strip-lcevc` drops inline LCEVC data (SEI-wrapped and dedicated NAL) from `mkv`/`mka`/`rtmp(s)://` output.
+It lives inside the base video's own PES stream, not a separate pid, so it survives an ordinary remux otherwise.
+No effect on raw `ts` output with no `rtmp(s)://` target.
 
 ### BISS (`--biss1-sw`, `--biss2-sw`, `--biss2-esw`/`--biss2-id`)
 

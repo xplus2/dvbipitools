@@ -59,10 +59,8 @@ ssize_t tls_net_send(int fd, const void *buf, size_t len) { return send(fd, buf,
 ssize_t tls_net_send_zc(int fd, const void *buf, size_t len, int *used_zc) {
   *used_zc = 0;
   ssize_t r = send(fd, buf, len, MSG_NOSIGNAL | MSG_ZEROCOPY);
-  if (r < 0 && (errno == EINVAL || errno == ENOBUFS))
-    return send(fd, buf, len, MSG_NOSIGNAL); /* zerocopy unavailable/exhausted, used_zc stays 0 */
-  if (r > 0)
-    *used_zc = 1;
+  if (r < 0 && (errno == EINVAL || errno == ENOBUFS)) return send(fd, buf, len, MSG_NOSIGNAL); /* zerocopy unavailable/exhausted, used_zc stays 0 */
+  if (r > 0) *used_zc = 1;
   return r;
 }
 
@@ -75,18 +73,14 @@ int tls_zc_drain(int fd, int *hi_out) {
     memset(&msg, 0, sizeof msg);
     msg.msg_control = cbuf;
     msg.msg_controllen = sizeof cbuf;
-    if (recvmsg(fd, &msg, MSG_ERRQUEUE | MSG_DONTWAIT) < 0)
-      break;
+    if (recvmsg(fd, &msg, MSG_ERRQUEUE | MSG_DONTWAIT) < 0) break;
     for (struct cmsghdr *cm = CMSG_FIRSTHDR(&msg); cm; cm = CMSG_NXTHDR(&msg, cm)) {
-      if (!((cm->cmsg_level == SOL_IP && cm->cmsg_type == IP_RECVERR) ||
-            (cm->cmsg_level == SOL_IPV6 && cm->cmsg_type == IPV6_RECVERR)))
+      if (!((cm->cmsg_level == SOL_IP && cm->cmsg_type == IP_RECVERR) || (cm->cmsg_level == SOL_IPV6 && cm->cmsg_type == IPV6_RECVERR)))
         continue;
       const struct sock_extended_err *serr = (const struct sock_extended_err *)CMSG_DATA(cm);
-      if (serr->ee_errno != 0 || serr->ee_origin != SO_EE_ORIGIN_ZEROCOPY)
-        continue;
+      if (serr->ee_errno != 0 || serr->ee_origin != SO_EE_ORIGIN_ZEROCOPY) continue;
       found = 1;
-      if ((int)serr->ee_data > *hi_out)
-        *hi_out = (int)serr->ee_data;
+      if ((int)serr->ee_data > *hi_out) *hi_out = (int)serr->ee_data;
     }
   }
   return found;
@@ -111,6 +105,8 @@ void tls_get_client_cert_cn(int fd, char *buf, size_t bufsz) {
 }
 
 int reload_tls(void) { return -1; }
+
+void tls_ctx_gc_sweep(void) {}
 
 void tls_cert_info(char *buf, size_t sz, const char *path, int from_file) {
   (void)path;

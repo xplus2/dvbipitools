@@ -23,32 +23,24 @@ int pid_token_parse(const char *s, char **end, unsigned long *out) {
 void pid_filter_parse(const char *value, pid_filter_t *out) {
   const char *p = value;
   out->count = 0;
-  if (!p)
-    return;
+  if (!p) return;
   while (*p && out->count < PID_FILTER_MAX) {
     char *end;
     unsigned long v;
-
-    while (*p == ' ' || *p == ',')
-      p++;
-    if (!*p)
-      break;
+    while (*p == ' ' || *p == ',') p++;
+    if (!*p) break;
     if (!pid_token_parse(p, &end, &v)) { /* unparsable token: skip to next comma */
-      while (*p && *p != ',')
-        p++;
+      while (*p && *p != ',') p++;
       continue;
     }
-    if (v <= 8191)
-      out->pids[out->count++] = (uint16_t)v;
+    if (v <= 8191) out->pids[out->count++] = (uint16_t)v;
     p = end;
   }
-  if (out->count > 1)
-    qsort(out->pids, (size_t)out->count, sizeof out->pids[0], cmp_u16);
+  if (out->count > 1) qsort(out->pids, (size_t)out->count, sizeof out->pids[0], cmp_u16);
+
   {
     int w = 0;
-    for (int i = 0; i < out->count; i++)
-      if (i == 0 || out->pids[i] != out->pids[w - 1])
-        out->pids[w++] = out->pids[i];
+    for (int i = 0; i < out->count; i++) if (i == 0 || out->pids[i] != out->pids[w - 1]) out->pids[w++] = out->pids[i];
     out->count = w;
   }
 }
@@ -57,12 +49,9 @@ int pid_filter_excludes(const pid_filter_t *f, unsigned pid) {
   int lo = 0, hi = f->count - 1;
   while (lo <= hi) {
     int mid = (lo + hi) / 2;
-    if (f->pids[mid] == pid)
-      return 1;
-    if (f->pids[mid] < pid)
-      lo = mid + 1;
-    else
-      hi = mid - 1;
+    if (f->pids[mid] == pid) return 1;
+    if (f->pids[mid] < pid) lo = mid + 1;
+    else hi = mid - 1;
   }
   return 0;
 }
@@ -71,16 +60,20 @@ int pid_filter_equal(const pid_filter_t *a, const pid_filter_t *b) {
   return a->count == b->count && (a->count == 0 || !memcmp(a->pids, b->pids, (size_t)a->count * sizeof a->pids[0]));
 }
 
+void pid_filter_add(pid_filter_t *f, unsigned pid) {
+  if (pid_filter_excludes(f, pid) || f->count >= PID_FILTER_MAX) return;
+  f->pids[f->count++] = (uint16_t)pid;
+  qsort(f->pids, (size_t)f->count, sizeof f->pids[0], cmp_u16);
+}
+
 void pid_filter_format(const pid_filter_t *f, char *buf, size_t bufsz) {
   size_t off = 0;
-  if (!bufsz)
-    return;
+  if (!bufsz) return;
   buf[0] = '\0';
   for (int i = 0; i < f->count && off < bufsz; i++) {
     char frag[8];
     size_t flen = 0;
-    if (i)
-      frag[flen++] = ',';
+    if (i) frag[flen++] = ',';
     flen += uint_to_str(frag + flen, f->pids[i]);
     off += bufcpy(buf + off, bufsz - off, frag);
   }
@@ -91,11 +84,9 @@ int query_param_extract(const char *query, const char *key, char *buf, size_t bu
   const char *f = query ? strstr(query, key) : NULL;
   size_t i = 0;
   const char *p;
-  if (!f || !bufsz)
-    return 0;
+  if (!f || !bufsz) return 0;
   p = f + keylen;
-  while (*p && *p != '&' && i + 1 < bufsz)
-    buf[i++] = *p++;
+  while (*p && *p != '&' && i + 1 < bufsz) buf[i++] = *p++;
   buf[i] = '\0';
   return 1;
 }

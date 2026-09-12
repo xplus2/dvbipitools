@@ -6,8 +6,8 @@
 #include <stdatomic.h>
 #include <string.h>
 
+#include "lib/helper/ioutil.h"
 #include "lib/helper/signal.h"
-
 #include "../ts/capture/capture.h"
 #include "../reactor/reactor.h"
 #include "../ts/ts_push.h"
@@ -69,20 +69,9 @@ static void sb_add(strbuf_t *b, const char *s) {
 }
 
 static void sb_add_u64(strbuf_t *b, uint64_t v) {
-  char tmp[20], rev[21];
-  size_t n = 0;
-  if (!v) {
-    tmp[n++] = '0';
-  } else {
-    while (v) {
-      tmp[n++] = (char)('0' + v % 10);
-      v /= 10;
-    }
-  }
-  for (size_t i = 0; i < n; i++)
-    rev[i] = tmp[n - 1 - i];
-  rev[n] = '\0';
-  sb_add(b, rev);
+  char tmp[21];
+  u64_to_dec(tmp, v);
+  sb_add(b, tmp);
 }
 
 int dipixy_metrics_render_prometheus(char **out, size_t *out_len) {
@@ -120,8 +109,8 @@ int dipixy_metrics_render_prometheus(char **out, size_t *out_len) {
   sb_add_u64(&b, (uint64_t)ts_push_active_count());
   sb_add(&b, "\n");
 
-  if (b.truncated) /* fixed template, should never truncate at this cap */
-    return -1;
+  if (b.truncated) return -1; /* fixed template, should never truncate */
+
   *out = buf;
   *out_len = b.len;
   return 0;

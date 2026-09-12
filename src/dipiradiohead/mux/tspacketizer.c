@@ -74,6 +74,10 @@ void tspacketizer_set_cas(tspacketizer_t *t, cas_t *cas) {
   t->last_cat = UINT64_MAX;
 }
 
+static const char *provider_name(const tspacketizer_t *t) {
+  return (t->cfg.provider_name && t->cfg.provider_name[0]) ? t->cfg.provider_name : TOOL_NAME;
+}
+
 static int due(uint64_t now, uint64_t *last, uint64_t interval) {
   if (*last == UINT64_MAX || now - *last >= interval) {
     *last = now;
@@ -92,50 +96,42 @@ static size_t emit_cas_ecm_emm(tspacketizer_t *t, size_t vi, double now, unsigne
 }
 
 size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, double now, const unsigned char *frame, size_t frame_len, ts_packet_cb cb, void *ctx) {
-  unsigned char sec[4096], pesbuf[8192], prog_desc[32];
+  unsigned char sec[4096], pesbuf[8192], prog_desc[32] = {0};
   unsigned char ptr0 = 0x00;
   size_t n, count = 0, prog_desc_len = 0;
 
   if (due(pts_90k, &t->last_pat, INTERVAL_PAT_PMT)) {
-    if (t->cas)
-      prog_desc_len = cas_prog_desc(t->cas, prog_desc, sizeof prog_desc);
+    if (t->cas) prog_desc_len = cas_prog_desc(t->cas, prog_desc, sizeof prog_desc);
     if (t->cfg.standalone) {
       n = psi_build_pat(t->cfg.tsid, t->ver_pat, t->cfg.sid, t->pmt_pid, sec, sizeof sec);
-      if (n)
-        count += ts_packet_emit(PID_PAT, &t->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
+      if (n) count += ts_packet_emit(PID_PAT, &t->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     n = psi_build_pmt(t->ver_pmt, t->cfg.sid, t->pmt_pid, t->cfg.stream_type, t->audio_pid, prog_desc, prog_desc_len, sec, sizeof sec);
-    if (n)
-      count += ts_packet_emit(t->pmt_pid, &t->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
+    if (n) count += ts_packet_emit(t->pmt_pid, &t->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
   }
   if (t->cfg.standalone) {
     if (t->cas && due(pts_90k, &t->last_cat, INTERVAL_PAT_PMT)) {
       n = cas_build_cat(t->cas, sec, sizeof sec);
-      if (n)
-        count += ts_packet_emit(PID_CAT, &t->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);
+      if (n) count += ts_packet_emit(PID_CAT, &t->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     if (due(pts_90k, &t->last_sdt, INTERVAL_SDT)) {
-      n = psi_build_sdt(t->ver_sdt, t->cfg.tsid, t->cfg.onid, t->cfg.sid, 0x02, TOOL_NAME, t->cfg.service_name, sec, sizeof sec);
-      if (n)
-        count += ts_packet_emit(PID_SDT, &t->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
+      n = psi_build_sdt(t->ver_sdt, t->cfg.tsid, t->cfg.onid, t->cfg.sid, 0x02, provider_name(t), t->cfg.service_name, sec, sizeof sec);
+      if (n) count += ts_packet_emit(PID_SDT, &t->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     if (t->cfg.network_name[0] && due(pts_90k, &t->last_nit, INTERVAL_NIT)) {
       n = psi_build_nit(t->ver_nit, t->cfg.onid, t->cfg.tsid, t->cfg.network_name, sec, sizeof sec);
-      if (n)
-        count += ts_packet_emit(PID_NIT, &t->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
+      if (n) count += ts_packet_emit(PID_NIT, &t->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
     }
 
     int timer_due = due(pts_90k, &t->last_eit, INTERVAL_EIT);
     int meta_due = t->meta_changed || timer_due;
     if (meta_due) {
       n = tspacketizer_build_eit(t, sec, sizeof sec);
-      if (n)
-        count += ts_packet_emit(PID_EIT, &t->cc_eit, &ptr0, sec, n, 0, 0, cb, ctx);
+      if (n) count += ts_packet_emit(PID_EIT, &t->cc_eit, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     if (t->cas) {
       size_t vi, n_vendors = cas_vendor_count(t->cas);
-      for (vi = 0; vi < n_vendors; vi++)
-        count += emit_cas_ecm_emm(t, vi, now, sec, sizeof sec, &ptr0, cb, ctx);
+      for (vi = 0; vi < n_vendors; vi++) count += emit_cas_ecm_emm(t, vi, now, sec, sizeof sec, &ptr0, cb, ctx);
     }
   }
   n = pes_build(pts_90k, frame, frame_len, pesbuf, sizeof pesbuf);
@@ -154,7 +150,7 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, double now, const 
 int tspacketizer_get_sdt_info(tspacketizer_t *t, psi_sdt_entry_t *out) {
   out->service_id = t->cfg.sid;
   out->service_type = 0x02;
-  out->provider = TOOL_NAME;
+  out->provider = provider_name(t);
   out->service_name = t->cfg.service_name;
   return 0;
 }

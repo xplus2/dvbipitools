@@ -294,6 +294,175 @@ static void browse_root_children(root_walk_t *w) {
 
 static _Thread_local gbuf_t t_didl_gbuf;
 
+static void didl_root(FILE *f, const config_t *cfg, const channels_t *channels, int metadata, unsigned starting_index, unsigned requested_count, unsigned *number_returned, unsigned *total_matches) {
+  if (metadata) {
+    didl_container_open(f, "0", "-1", root_child_count(cfg));
+    didl_title_class(f, TOOL_NAME, "object.container.storageFolder");
+    didl_container_close(f);
+    *number_returned = 1;
+    *total_matches = 1;
+  } else {
+    root_walk_t w = {f, cfg, channels, starting_index, requested_count, 0, 0};
+    browse_root_children(&w);
+    *number_returned = w.emitted;
+    *total_matches = root_child_count(cfg);
+  }
+}
+
+static void didl_stdin_rist(FILE *f, const config_t *cfg, const oid_t *oid, int metadata, unsigned *number_returned, unsigned *total_matches) {
+  const char *id = oid->kind == OID_STDIN ? "stdin" : "rist";
+  const char *name = oid->kind == OID_STDIN ? cfg->stdin_name : cfg->rist_name;
+  media_type_t media_type = oid->kind == OID_STDIN ? cfg->stdin_media_type : cfg->rist_media_type;
+  if (!metadata) {
+    *number_returned = 0;
+    *total_matches = 0;
+    return;
+  }
+  {
+    char path[224];
+    build_play_path(cfg, oid->kind, 0, 0, media_type, path, sizeof path);
+    didl_item(f, cfg, id, "0", name ? name : id, path, NULL, media_type, NULL);
+  }
+  *number_returned = 1;
+  *total_matches = 1;
+}
+
+static int didl_http(FILE *f, const config_t *cfg, const channels_t *channels, const oid_t *oid, int metadata, unsigned *number_returned, unsigned *total_matches) {
+  const source_def_t *src = find_source(cfg, oid->ord);
+  char title[192];
+  if (!src || src->kind != SRC_HTTP) return -1;
+  if (!metadata) {
+    *number_returned = 0;
+    *total_matches = 0;
+    return 0;
+  }
+  {
+    char id[24], path[224];
+    strbuf_t b;
+    sb_init(&b, id, sizeof id);
+    sb_add(&b, "H");
+    sb_add_u64(&b, oid->ord);
+    build_play_path(cfg, OID_HTTP, oid->ord, 0, src->media_type, path, sizeof path);
+    sb_init(&b, title, sizeof title);
+    sb_add(&b, "#");
+    sb_add_u64(&b, oid->ord);
+    sb_add(&b, " ");
+    if (src->name) {
+      sb_add(&b, src->name);
+    } else {
+      char first[192];
+      first_name_ctx_t tc = {first, sizeof first, 0};
+      first[0] = '\0';
+      channels_list_for_each(channels, oid->ord, capture_first_name, &tc);
+      sb_add_n(&b, first, sizeof title - 13);
+    }
+    didl_item(f, cfg, id, "0", title, path, NULL, src->media_type, NULL);
+  }
+  *number_returned = 1;
+  *total_matches = 1;
+  return 0;
+}
+
+static int didl_list(FILE *f, const config_t *cfg, const channels_t *channels, const oid_t *oid, int metadata, unsigned starting_index, unsigned requested_count, unsigned *number_returned, unsigned *total_matches) {
+  const source_def_t *src = find_source(cfg, oid->ord);
+  if (!src || src->kind == SRC_HTTP) return -1;
+  if (metadata) {
+    char id[24], title[192];
+    unsigned count = (unsigned)channels_list_for_each(channels, oid->ord, NULL, NULL);
+    strbuf_t b;
+    sb_init(&b, id, sizeof id);
+    sb_add(&b, "L");
+    sb_add_u64(&b, oid->ord);
+    sb_init(&b, title, sizeof title);
+    if (src->name) {
+      sb_add(&b, "#");
+      sb_add_u64(&b, oid->ord);
+      sb_add(&b, " ");
+      sb_add(&b, src->name);
+    } else {
+      sb_add(&b, "Playlist #");
+      sb_add_u64(&b, (uint64_t)src->ordinal);
+      sb_add(&b, " [");
+      sb_add(&b, source_kind_str(src->kind));
+      sb_add(&b, "]");
+    }
+    didl_container_open(f, id, "0", count);
+    didl_title_class(f, title, "object.container.storageFolder");
+    didl_container_close(f);
+    *number_returned = 1;
+    *total_matches = 1;
+  } else {
+    list_walk_t w;
+    memset(&w, 0, sizeof w);
+    w.f = f;
+    w.cfg = cfg;
+    w.ord = oid->ord;
+    w.skip = starting_index;
+    w.take = requested_count;
+    w.media_type = src->media_type;
+    {
+      strbuf_t b;
+      sb_init(&b, w.parent, sizeof w.parent);
+      sb_add(&b, "L");
+      sb_add_u64(&b, oid->ord);
+    }
+    *total_matches = (unsigned)channels_list_for_each(channels, oid->ord, list_emit_item, &w);
+    *number_returned = w.emitted;
+  }
+  return 0;
+}
+
+static int didl_item_kind(FILE *f, const config_t *cfg, const channels_t *channels, const oid_t *oid, int metadata, unsigned *number_returned, unsigned *total_matches) {
+  const source_def_t *src = find_source(cfg, oid->ord);
+  item_lookup_ctx_t lk;
+  if (!src || src->kind == SRC_HTTP) return -1;
+  memset(&lk, 0, sizeof lk);
+  lk.target = oid->item_num;
+  channels_list_for_each(channels, oid->ord, item_lookup_cb, &lk);
+  if (!lk.found) return -1;
+  if (!metadata) {
+    *number_returned = 0;
+    *total_matches = 0;
+    return 0;
+  }
+  {
+    char id[32], parent[24], path[224], title[192];
+    didl_item_meta_t meta = {.src_uri = lk.uri,
+                              .name = lk.name,
+                              .tsid = lk.tsid,
+                              .onid = lk.onid,
+                              .sid = lk.sid,
+                              .max_bitrate_kbps = lk.max_bitrate_kbps,
+                              .has_bitrate = lk.has_bitrate,
+                              .content_nibble = lk.content_nibble,
+                              .has_content_nibble = lk.has_content_nibble};
+    {
+      strbuf_t b;
+      sb_init(&b, id, sizeof id);
+      sb_add(&b, "L");
+      sb_add_u64(&b, oid->ord);
+      sb_add(&b, "I");
+      sb_add_u64(&b, oid->item_num);
+      sb_init(&b, parent, sizeof parent);
+      sb_add(&b, "L");
+      sb_add_u64(&b, oid->ord);
+    }
+    build_play_path(cfg, OID_ITEM, oid->ord, oid->item_num, src->media_type, path, sizeof path);
+    {
+      strbuf_t b;
+      sb_init(&b, title, sizeof title);
+      sb_add(&b, "#");
+      sb_add_u64(&b, oid->item_num);
+      sb_add(&b, " ");
+      sb_add_n(&b, lk.name[0] ? lk.name : strip_scheme_at(lk.uri), sizeof title - 13);
+    }
+    didl_item(f, cfg, id, parent, title, path, &meta, src->media_type, lk.icon[0] ? lk.icon : NULL);
+  }
+  *number_returned = 1;
+  *total_matches = 1;
+  return 0;
+}
+
 int build_didl(const config_t *cfg, const channels_t *channels, const oid_t *oid, int metadata, unsigned starting_index, unsigned requested_count, char **out_didl, unsigned *number_returned, unsigned *total_matches) {
   FILE *f = gbuf_open(&t_didl_gbuf);
   if (!f)
@@ -302,183 +471,30 @@ int build_didl(const config_t *cfg, const channels_t *channels, const oid_t *oid
   fputs("<DIDL-Lite xmlns=\"urn:schemas-upnp-org:didl-lite\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\">", f);
   switch (oid->kind) {
     case OID_ROOT:
-      if (metadata) {
-        didl_container_open(f, "0", "-1", root_child_count(cfg));
-        didl_title_class(f, TOOL_NAME, "object.container.storageFolder");
-        didl_container_close(f);
-        *number_returned = 1;
-        *total_matches = 1;
-      } else {
-        root_walk_t w = {f, cfg, channels, starting_index, requested_count, 0, 0};
-        browse_root_children(&w);
-        *number_returned = w.emitted;
-        *total_matches = root_child_count(cfg);
-      }
+      didl_root(f, cfg, channels, metadata, starting_index, requested_count, number_returned, total_matches);
       break;
     case OID_STDIN:
-    case OID_RIST: {
-      const char *id = oid->kind == OID_STDIN ? "stdin" : "rist";
-      const char *name = oid->kind == OID_STDIN ? cfg->stdin_name : cfg->rist_name;
-      media_type_t media_type = oid->kind == OID_STDIN ? cfg->stdin_media_type : cfg->rist_media_type;
-      if (!metadata) {
-        *number_returned = 0;
-        *total_matches = 0;
-        break;
-      }
-      {
-        char path[224];
-        build_play_path(cfg, oid->kind, 0, 0, media_type, path, sizeof path);
-        didl_item(f, cfg, id, "0", name ? name : id, path, NULL, media_type, NULL);
-      }
-      *number_returned = 1;
-      *total_matches = 1;
+    case OID_RIST:
+      didl_stdin_rist(f, cfg, oid, metadata, number_returned, total_matches);
       break;
-    }
-    case OID_HTTP: {
-      const source_def_t *src = find_source(cfg, oid->ord);
-      char title[192];
-      if (!src || src->kind != SRC_HTTP) {
+    case OID_HTTP:
+      if (didl_http(f, cfg, channels, oid, metadata, number_returned, total_matches)) {
         fclose(f);
         return -1;
       }
-      if (!metadata) {
-        *number_returned = 0;
-        *total_matches = 0;
-        break;
-      }
-      {
-        char id[24], path[224];
-        strbuf_t b;
-        sb_init(&b, id, sizeof id);
-        sb_add(&b, "H");
-        sb_add_u64(&b, oid->ord);
-        build_play_path(cfg, OID_HTTP, oid->ord, 0, src->media_type, path, sizeof path);
-        sb_init(&b, title, sizeof title);
-        sb_add(&b, "#");
-        sb_add_u64(&b, oid->ord);
-        sb_add(&b, " ");
-        if (src->name) {
-          sb_add(&b, src->name);
-        } else {
-          char first[192];
-          first_name_ctx_t tc = {first, sizeof first, 0};
-          first[0] = '\0';
-          channels_list_for_each(channels, oid->ord, capture_first_name, &tc);
-          sb_add_n(&b, first, sizeof title - 13);
-        }
-        didl_item(f, cfg, id, "0", title, path, NULL, src->media_type, NULL);
-      }
-      *number_returned = 1;
-      *total_matches = 1;
       break;
-    }
-    case OID_LIST: {
-      const source_def_t *src = find_source(cfg, oid->ord);
-      if (!src || src->kind == SRC_HTTP) {
+    case OID_LIST:
+      if (didl_list(f, cfg, channels, oid, metadata, starting_index, requested_count, number_returned, total_matches)) {
         fclose(f);
         return -1;
       }
-      if (metadata) {
-        char id[24], title[192];
-        unsigned count = (unsigned)channels_list_for_each(channels, oid->ord, NULL, NULL);
-        strbuf_t b;
-        sb_init(&b, id, sizeof id);
-        sb_add(&b, "L");
-        sb_add_u64(&b, oid->ord);
-        sb_init(&b, title, sizeof title);
-        if (src->name) {
-          sb_add(&b, "#");
-          sb_add_u64(&b, oid->ord);
-          sb_add(&b, " ");
-          sb_add(&b, src->name);
-        } else {
-          sb_add(&b, "Playlist #");
-          sb_add_u64(&b, (uint64_t)src->ordinal);
-          sb_add(&b, " [");
-          sb_add(&b, source_kind_str(src->kind));
-          sb_add(&b, "]");
-        }
-        didl_container_open(f, id, "0", count);
-        didl_title_class(f, title, "object.container.storageFolder");
-        didl_container_close(f);
-        *number_returned = 1;
-        *total_matches = 1;
-      } else {
-        list_walk_t w;
-        memset(&w, 0, sizeof w);
-        w.f = f;
-        w.cfg = cfg;
-        w.ord = oid->ord;
-        w.skip = starting_index;
-        w.take = requested_count;
-        w.media_type = src->media_type;
-        {
-          strbuf_t b;
-          sb_init(&b, w.parent, sizeof w.parent);
-          sb_add(&b, "L");
-          sb_add_u64(&b, oid->ord);
-        }
-        *total_matches = (unsigned)channels_list_for_each(channels, oid->ord, list_emit_item, &w);
-        *number_returned = w.emitted;
-      }
       break;
-    }
-    case OID_ITEM: {
-      const source_def_t *src = find_source(cfg, oid->ord);
-      item_lookup_ctx_t lk;
-      if (!src || src->kind == SRC_HTTP) {
+    case OID_ITEM:
+      if (didl_item_kind(f, cfg, channels, oid, metadata, number_returned, total_matches)) {
         fclose(f);
         return -1;
       }
-      memset(&lk, 0, sizeof lk);
-      lk.target = oid->item_num;
-      channels_list_for_each(channels, oid->ord, item_lookup_cb, &lk);
-      if (!lk.found) {
-        fclose(f);
-        return -1;
-      }
-      if (!metadata) {
-        *number_returned = 0;
-        *total_matches = 0;
-        break;
-      }
-      {
-        char id[32], parent[24], path[224], title[192];
-        didl_item_meta_t meta = {.src_uri = lk.uri,
-                                  .name = lk.name,
-                                  .tsid = lk.tsid,
-                                  .onid = lk.onid,
-                                  .sid = lk.sid,
-                                  .max_bitrate_kbps = lk.max_bitrate_kbps,
-                                  .has_bitrate = lk.has_bitrate,
-                                  .content_nibble = lk.content_nibble,
-                                  .has_content_nibble = lk.has_content_nibble};
-        {
-          strbuf_t b;
-          sb_init(&b, id, sizeof id);
-          sb_add(&b, "L");
-          sb_add_u64(&b, oid->ord);
-          sb_add(&b, "I");
-          sb_add_u64(&b, oid->item_num);
-          sb_init(&b, parent, sizeof parent);
-          sb_add(&b, "L");
-          sb_add_u64(&b, oid->ord);
-        }
-        build_play_path(cfg, OID_ITEM, oid->ord, oid->item_num, src->media_type, path, sizeof path);
-        {
-          strbuf_t b;
-          sb_init(&b, title, sizeof title);
-          sb_add(&b, "#");
-          sb_add_u64(&b, oid->item_num);
-          sb_add(&b, " ");
-          sb_add_n(&b, lk.name[0] ? lk.name : strip_scheme_at(lk.uri), sizeof title - 13);
-        }
-        didl_item(f, cfg, id, parent, title, path, &meta, src->media_type, lk.icon[0] ? lk.icon : NULL);
-      }
-      *number_returned = 1;
-      *total_matches = 1;
       break;
-    }
     default:
       fclose(f);
       return -1;

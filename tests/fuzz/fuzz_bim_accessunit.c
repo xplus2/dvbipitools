@@ -9,7 +9,7 @@
 #include <stdlib.h>
 
 #include "lib/bim/accessunit.h"
-#include "lib/bim/bitreader.h"
+#include "lib/bim/bimreader.h"
 #include "lib/tva/bcg_doc.h"
 
 int main(int argc, char **argv) {
@@ -28,8 +28,7 @@ int main(int argc, char **argv) {
     return 1;
   }
   f = fopen(argv[1], "rb");
-  if (!f)
-    return 1;
+  if (!f) return 1;
   if (fseek(f, 0, SEEK_END)) {
     fclose(f);
     return 1;
@@ -56,15 +55,12 @@ int main(int argc, char **argv) {
     free(buf);
     return 0;
   }
-
   bcg_doc_init(&doc);
   accessunit_scratch_init(&sc);
   bitreader_init(&br, buf + 4, bits_len);
-  if (!strrepo_reader_init(&sr, buf + 4 + bits_len, n - 4 - bits_len))
-    accessunit_decode(&sc, &br, &sr, &doc, &nfuu);
+  if (!strrepo_reader_init(&sr, buf + 4 + bits_len, n - 4 - bits_len)) accessunit_decode(&sc, &br, &sr, &doc, &nfuu);
   accessunit_scratch_free(&sc);
   bcg_doc_free(&doc);
-
   free(buf);
   return 0;
 }

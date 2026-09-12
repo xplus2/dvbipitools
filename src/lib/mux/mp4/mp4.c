@@ -18,8 +18,7 @@ mp4_t *mp4_new(int fd, const mp4_opts_t *opts, int video_ok, unsigned long long 
   m->opts = opts;
   m->video_ok = video_ok;
   m->bytes = bytes;
-  if (n_pids > MP4_MAX_PROGRAMS)
-    n_pids = MP4_MAX_PROGRAMS;
+  if (n_pids > MP4_MAX_PROGRAMS) n_pids = MP4_MAX_PROGRAMS;
   m->npsi = (n_pids > 0) ? n_pids : 1;
   for (int i = 0; i < m->npsi; i++) {
     m->psi[i] = psi_new();
@@ -70,6 +69,8 @@ void mp4_close(mp4_t *m) {
   for (int i = 0; i < m->ntrk; i++) {
     free(m->trk[i].rem);
     free(m->trk[i].vbuf);
+    free(m->trk[i].lcevc_rb);
+    free(m->trk[i].lcevc_esc);
     free(m->trk[i].samp);
     ttx_free(m->trk[i].ttx);
   }

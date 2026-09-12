@@ -321,19 +321,22 @@ vendor's own ECM (`--cas-ecm-pid`) and EMM (`--cas-emm-pid`) streams.
 ### Selecting PIDs to scramble (`--cas-pids`)
 
 Comma-separated list, each entry is either an output PID (dec or `0x`-hex) or one of the keywords
-`video`/`audio`, meaning every video/audio elementary stream on the output. Freely mixable:
+`video`/`audio`/`lcevc`, meaning every video/audio/LCEVC elementary stream on the output. Freely
+mixable:
 
 * `--cas-pids video,audio`: all video and audio streams (same as the default)
 * `--cas-pids video`: just the video stream
 * `--cas-pids 0x0103,video`: PID 0x0103 plus every video stream
 * `--cas-pids audio,0x0104,0x0106`: all audio streams plus PIDs 0x0104 and 0x0106
+* `--cas-pids video,audio,lcevc`: also scramble every standalone LCEVC enhancement stream
 
-Omit `--cas-pids` entirely and it defaults to `video,audio`. PIDs are given/resolved on the
-*output* side (see the remapped PIDs under Codec support above), matched against the source
-PMT's `stream_type` once it's known - resolving to nothing (e.g. `video` requested but the
-source has no video ES) is a startup error.
+Omit `--cas-pids` entirely and it defaults to `video,audio` - `lcevc` is never implied by either
+one, or by the default: scrambling an LCEVC enhancement stream is always an explicit choice.
+PIDs are given/resolved on the *output* side (see the remapped PIDs under Codec support above),
+matched against the source PMT's `stream_type` once it's known - resolving to nothing (e.g.
+`video` requested but the source has no video ES) is a startup error.
 
-With multiple `-i`, `video`/`audio` resolve against *every* program's own discovered ES, so
+With multiple `-i`, `video`/`audio`/`lcevc` resolve against *every* program's own discovered ES, so
 every input must be discovered within 15s of startup for CAS to start at all - past that,
 `dipitvhead` fails fast and names whichever input(s) never made it, rather than start
 scrambling with an incomplete pid list or block forever. Numeric PIDs sidestep this entirely
@@ -561,7 +564,7 @@ ffmpeg -i <source> -c:v libx264 -c:a aac -f mpegts - | dipitvhead -i - -m 239.5.
 ./dipitvhead -i rtp://239.2.3.1:5001 --sdt 'MC TV 1' -I enx00deadbeef00 \
              -i rtp://239.2.3.2:5001 --sdt 'MC TV 2' -I enx00deadbeef00 \
              -i http://receiver:8001/1:0:19:0:0:0:C00000:0:0:0: -I enx00deadbeef03 --sdt 'Sat TV 3' \
-             -i udp://239.3.4.1:4500 --sdt 'MC Radio 1' -I enx00deadbeef00 \             
+             -i udp://239.3.4.1:4500 --sdt 'MC Radio 1' -I enx00deadbeef00 \
              -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1000 --sdt 'dipiradiohead Radio 1' \
              -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1001 --sdt 'dipiradiohead Radio 2' \
              -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1002 --sdt 'dipiradiohead Radio 3' \

@@ -19,6 +19,8 @@
 #include "lib/helper/signal.h"
 #include "lib/net/multicast.h"
 
+#include "strbuf.h"
+
 #include "../version.h"
 
 #define SSDP_ADDR "239.255.255.250"
@@ -102,39 +104,6 @@ static pthread_t g_thread;
 static mcast_t *g_send;
 static ssdp_arg_t g_ssdp_arg;
 
-typedef struct {
-  char *buf;
-  size_t cap;
-  size_t len;
-  int truncated;
-} strbuf_t;
-
-static void sb_init(strbuf_t *b, char *buf, size_t cap) {
-  b->buf = buf;
-  b->cap = cap;
-  b->len = 0;
-  b->truncated = 0;
-  buf[0] = '\0';
-}
-
-static void sb_add(strbuf_t *b, const char *s) {
-  size_t n = strlen(s);
-  size_t room = b->cap > b->len + 1 ? b->cap - b->len - 1 : 0;
-  if (n > room) {
-    n = room;
-    b->truncated = 1;
-  }
-  memcpy(b->buf + b->len, s, n);
-  b->len += n;
-  b->buf[b->len] = '\0';
-}
-
-static void sb_add_uint(strbuf_t *b, unsigned v) {
-  char buf[16];
-  uint_to_str(buf, v);
-  sb_add(b, buf);
-}
-
 static void build_usn(const char *uuid, const char *nt /* NULL = bare device uuid */, char *out, size_t outsz) {
   size_t off = bufcpy(out, outsz, "uuid:");
   off += bufcpy(out + off, outsz - off, uuid);
@@ -206,7 +175,7 @@ int ssdp_msearch_header(const char *headers, const char *name, char *out, size_t
 }
 
 static void send_msearch_reply_one(int fd, const struct sockaddr *peer, socklen_t peerlen, const config_t *cfg,
-                                    const char *uuid, const char *nt /* NULL = bare device uuid */) {
+                                   const char *uuid, const char *nt /* NULL = bare device uuid */) {
   char usn[192], pkt[768];
   strbuf_t b;
 
@@ -223,26 +192,22 @@ static void send_msearch_reply_one(int fd, const struct sockaddr *peer, socklen_
   sb_add(&b, "\r\nUSN: ");
   sb_add(&b, usn);
   sb_add(&b, "\r\n\r\n");
-  if (!b.truncated)
-    sendto(fd, pkt, b.len, 0, peer, peerlen);
+  if (!b.truncated) sendto(fd, pkt, b.len, 0, peer, peerlen);
 }
 
 static void handle_msearch(int fd, const char *buf, const struct sockaddr *peer, socklen_t peerlen,
-                            const config_t *cfg, const char *uuid) {
+                           const config_t *cfg, const char *uuid) {
   const char *line_end;
   char st[192];
   size_t i;
 
-  if (strncmp(buf, "M-SEARCH", 8) != 0)
-    return;
+  if (strncmp(buf, "M-SEARCH", 8) != 0) return;
   line_end = strstr(buf, "\r\n");
-  if (!line_end || !ssdp_msearch_header(line_end + 2, "ST", st, sizeof st))
-    return;
+  if (!line_end || !ssdp_msearch_header(line_end + 2, "ST", st, sizeof st)) return;
 
   if (!strcmp(st, "ssdp:all")) {
     send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, NULL);
-    for (i = 0; i < SSDP_NTYPES; i++)
-      send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, ssdp_types[i]);
+    for (i = 0; i < SSDP_NTYPES; i++) send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, ssdp_types[i]);
     return;
   }
   {
@@ -265,15 +230,12 @@ static void *ssdp_thread_fn(void *arg) {
   mcast_t *recv_m;
   int fd;
   double next_announce;
-
   recv_m = mcast_open(AF_INET, SSDP_ADDR, SSDP_PORT, a->cfg->ssdp_iface, SSDP_RECV_TIMEOUT_MS);
   if (!recv_m) {
     log_line(TOOL_NAME ": ssdp: cannot join " SSDP_ADDR ":%d, DLNA discovery disabled", SSDP_PORT);
-    free(a);
     return NULL;
   }
   fd = mcast_fd(recv_m);
-
   next_announce = 0.0;
   send_notify_all(a->cfg, a->uuid, 1);
   log_line_ansi(TOOL_NAME ": ssdp: announcing uuid:%s at \e[0;34mhttp://%s/dlna/desc.xml\e[0m", a->uuid, a->cfg->dlna_host);
@@ -306,8 +268,7 @@ static void *ssdp_thread_fn(void *arg) {
 }
 
 void ssdp_start(const config_t *cfg) {
-  if (!cfg->enable_dlna)
-    return;
+  if (!cfg->enable_dlna) return;
   g_send = mcast_open_send(AF_INET, SSDP_ADDR, SSDP_PORT, cfg->ssdp_iface, cfg->ssdp_ttl);
   if (!g_send) {
     log_line(TOOL_NAME ": ssdp: cannot open send socket, DLNA discovery disabled");
@@ -325,8 +286,7 @@ void ssdp_start(const config_t *cfg) {
 }
 
 void ssdp_stop(void) {
-  if (!g_running)
-    return;
+  if (!g_running) return;
   g_running = 0;
   pthread_join(g_thread, NULL);
   if (g_send) {

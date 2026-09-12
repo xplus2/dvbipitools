@@ -13,6 +13,7 @@
 #include "../dash/lldash.h"
 #include "../segment/segment.h"
 #include "../segment/mp4push.h"
+#include "../ts/lcevcselect.h"
 #include "../ts/pidfilter.h"
 #include "../ts/pmtselect.h"
 #include "../reactor/internal.h"
@@ -20,6 +21,7 @@
 #include "../reactor/dispatch/route_common.h"
 #include "../core/route.h"
 #include "../ts/ts_push.h"
+#include "../httpng/httpng.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -28,6 +30,7 @@
 #include <unistd.h>
 
 #define H2_READ_BUF 65536
+#define H2_READ_MAX_ITER 16
 
 static h2_stream_t *h2_find_stream(h2_conn_t *conn, int32_t id) {
   for (int i = 0; i < H2_MAX_STREAMS; i++) if (conn->streams[i].id == id) return &conn->streams[i];
@@ -47,33 +50,35 @@ static void h2_free_stream(h2_conn_t *conn, int32_t id) {
   for (int i = 0; i < H2_MAX_STREAMS; i++) if (conn->streams[i].id == id) conn->streams[i].id = 0;
 }
 
+static int h2_conn_active_count(const h2_conn_t *conn) {
+  int n = 0;
+  for (int i = 0; i < H2_MAX_STREAMS; i++) if (conn->streams[i].id) n++;
+  return n;
+}
+
 static int cb_begin_headers(nghttp2_session *ng, const nghttp2_frame *frame, void *ud) {
   h2_conn_t *conn = ud;
-  if (frame->hd.type != NGHTTP2_HEADERS || frame->headers.cat != NGHTTP2_HCAT_REQUEST) return 0;
-  if (!h2_alloc_stream(conn, frame->hd.stream_id)) nghttp2_submit_rst_stream(ng, NGHTTP2_FLAG_NONE, frame->hd.stream_id, NGHTTP2_REFUSED_STREAM);
+  if (frame->hd.type != NGHTTP2_HEADERS) return 0;
+  if (frame->headers.cat == NGHTTP2_HCAT_REQUEST) {
+    conn->hdr_stream = h2_alloc_stream(conn, frame->hd.stream_id);
+    if (!conn->hdr_stream) nghttp2_submit_rst_stream(ng, NGHTTP2_FLAG_NONE, frame->hd.stream_id, NGHTTP2_REFUSED_STREAM);
+  } else {
+    conn->hdr_stream = h2_find_stream(conn, frame->hd.stream_id);
+  }
   return 0;
 }
 
 static int cb_on_header(nghttp2_session *ng, const nghttp2_frame *frame, const uint8_t *name, size_t namelen, const uint8_t *value, size_t valuelen, uint8_t flags, void *ud) {
   (void)ng;
   (void)flags;
+  (void)frame;
   h2_conn_t *conn = ud;
-  h2_stream_t *s = h2_find_stream(conn, frame->hd.stream_id);
+  h2_stream_t *s = conn->hdr_stream;
   if (!s) return 0;
-  if (namelen == 7 && memcmp(name, ":method", 7) == 0) {
-    hdr_value_copy(s->method, sizeof s->method, value, valuelen);
-  } else if (namelen == 5 && memcmp(name, ":path", 5) == 0) {
-    hdr_value_copy(s->path, sizeof s->path, value, valuelen);
-  } else if (namelen == 13 && memcmp(name, "if-none-match", 13) == 0) {
-    hdr_value_copy(s->inm, sizeof s->inm, value, valuelen);
-    strip_etag_quotes(s->inm);
-  } else if (namelen == 6 && memcmp(name, "origin", 6) == 0) {
-    hdr_value_copy(s->origin, sizeof s->origin, value, valuelen);
-  } else if (namelen == 13 && memcmp(name, "authorization", 13) == 0) {
-    hdr_value_copy(s->authz, sizeof s->authz, value, valuelen);
-  } else if (namelen == 9 && memcmp(name, ":protocol", 9) == 0) {
-    hdr_value_copy(s->protocol, sizeof s->protocol, value, valuelen);
-  }
+  httpng_parse_known_header((const char *)name, namelen, (const char *)value, valuelen,
+                            s->method, sizeof s->method, s->path, sizeof s->path,
+                            s->inm, sizeof s->inm, s->origin, sizeof s->origin,
+                            s->authz, sizeof s->authz, s->protocol, sizeof s->protocol);
   return 0;
 }
 
@@ -88,8 +93,11 @@ static int cb_frame_recv(nghttp2_session *ng, const nghttp2_frame *frame, void *
   (void)ng;
   h2_conn_t *conn = ud;
   if (frame->hd.type == NGHTTP2_HEADERS && (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS)) {
-    h2_stream_t *s = h2_find_stream(conn, frame->hd.stream_id);
-    if (s) s->dispatch_pending = 1;
+    h2_stream_t *s = conn->hdr_stream;
+    if (s && s->id == frame->hd.stream_id && !s->dispatch_pending) {
+      s->dispatch_pending = 1;
+      conn->pending[conn->pending_n++] = s;
+    }
   }
   if (frame->hd.type == NGHTTP2_GOAWAY) conn->done = 1;
   return 0;
@@ -107,6 +115,12 @@ static int cb_stream_close(nghttp2_session *ng, int32_t stream_id, uint32_t erro
   h2_hls_cold_on_stream_close(conn, stream_id);
   h2_ws_on_stream_close(conn, stream_id);
   return 0;
+}
+
+void h2_wake_stream(conn_t *c, int32_t sid) {
+  if (!c || !sid) return;
+  nghttp2_session_resume_data(((h2_conn_t *)c->h2)->ng, sid);
+  if (!atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) conn_epoll_mod(c, c->epfd, 1);
 }
 
 void h2_flush_tx(h2_conn_t *conn, conn_t *c) {
@@ -140,196 +154,79 @@ static void h2_respond_hls(h2_conn_t *conn, int32_t stream_id, int handled, cons
     h2_submit_resp(conn, stream_id, resp->status, resp->content_type, resp->etag, resp->body_len, resp->body, resp->zc, origin_hdr);
 }
 
-/* matches reactor/dispatch.c's HTTP/1.1 dispatch */
+/* httpng_dispatch() opaque req: h2 per-request state spans transient stream
+   slot plus owning conn_t (out_lock/epfd), unlike h3's single h3_req_t */
+typedef struct {
+  conn_t *c;
+  h2_stream_t *stream;
+} h2_req_ctx_t;
+
+static void h2ops_respond_status(void *connv, void *reqv, const char *status) {
+  h2_respond_status(connv, ((h2_req_ctx_t *)reqv)->stream->id, status);
+}
+
+static void h2ops_respond_401(void *connv, void *reqv) {
+  h2_respond_401(connv, ((h2_req_ctx_t *)reqv)->stream->id);
+}
+
+static void h2ops_respond_hls(void *connv, void *reqv, int handled, const hls_resp_t *resp, const char *origin_hdr) {
+  h2_respond_hls(connv, ((h2_req_ctx_t *)reqv)->stream->id, handled, resp, origin_hdr);
+}
+
+static void h2ops_ws_dispatch(void *connv, void *reqv) {
+  h2_req_ctx_t *rq = reqv;
+  h2_ws_dispatch(connv, rq->c, rq->stream->id);
+}
+
+static int h2ops_admission_ok(void *connv) {
+  return h2_conn_active_count(connv) <= H2_MAX_STREAMS - H2_WS_RESERVE;
+}
+
+static int h2ops_tspush_dispatch(void *connv, void *reqv, int sub) {
+  h2_req_ctx_t *rq = reqv;
+  return h2_tspush_dispatch(connv, rq->c, rq->stream->id, sub);
+}
+
+static int h2ops_dashchunk_dispatch(void *connv, void *reqv, int sub, int ws_handle) {
+  h2_req_ctx_t *rq = reqv;
+  return h2_dashchunk_dispatch(connv, rq->c, rq->stream->id, sub, ws_handle);
+}
+
+static int h2ops_mp4push_dispatch(void *connv, void *reqv, int sub, int ws_handle) {
+  h2_req_ctx_t *rq = reqv;
+  return h2_mp4push_dispatch(connv, rq->c, rq->stream->id, sub, ws_handle);
+}
+
+static int h2ops_hls_cold_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, hls_cold_kind_t kind,
+                                   seg_container_t container, int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle) {
+  h2_req_ctx_t *rq = reqv;
+  return h2_hls_cold_try_park(connv, rq->stream->id, ctx, filter, pmt_pid, lcevc, filename, kind, container, want_ll, is_head, origin_hdr, timeout_ms, ws_handle);
+}
+
+static int h2ops_llhls_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head,
+                                const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle) {
+  h2_req_ctx_t *rq = reqv;
+  return h2_llhls_try_park(connv, rq->c, rq->stream->id, ctx, filter, pmt_pid, lcevc, filename, is_head, inm, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
+}
+
+static const httpng_ops_t h2_httpng_ops = {
+    .proto = 2,
+    .respond_status = h2ops_respond_status,
+    .respond_401 = h2ops_respond_401,
+    .respond_hls = h2ops_respond_hls,
+    .ws_dispatch = h2ops_ws_dispatch,
+    .admission_ok = h2ops_admission_ok,
+    .tspush_dispatch = h2ops_tspush_dispatch,
+    .dashchunk_dispatch = h2ops_dashchunk_dispatch,
+    .mp4push_dispatch = h2ops_mp4push_dispatch,
+    .hls_cold_try_park = h2ops_hls_cold_try_park,
+    .llhls_try_park = h2ops_llhls_try_park,
+};
+
 static void h2_dispatch_stream(h2_conn_t *conn, conn_t *c, h2_stream_t *stream) {
-  route_t rt;
-  pid_filter_t filter;
-  unsigned pmt_pid;
-  unsigned list_num;
-  route_item_bufs_t item_bufs;
-  client_info_t cinfo;
-  char *qmark, *query;
-  int is_head;
-  capture_ctx_t *ctx;
-
-  if (!strcmp(stream->method, "CONNECT") && !strcmp(stream->protocol, "websocket")) {
-    if (reactor_cfg()->no_status || strcmp(stream->path, "/ui/ws/"))
-      h2_respond_status(conn, stream->id, "404");
-    else if (!http_auth_ok(reactor_cfg(), stream->authz[0] ? stream->authz : NULL))
-      h2_respond_401(conn, stream->id);
-    else
-      h2_ws_dispatch(conn, c, stream->id);
-    return;
-  }
-
-  if (strcmp(stream->method, "GET") != 0 && strcmp(stream->method, "HEAD") != 0) {
-    h2_respond_status(conn, stream->id, "405");
-    return;
-  }
-  is_head = !strcmp(stream->method, "HEAD");
-  qmark = strchr(stream->path, '?');
-  query = qmark ? qmark + 1 : NULL;
-  filter.count = 0;
-  if (!reactor_cfg()->no_pid_filters) pid_filter_parse_query(query, &filter);
-  pmt_pid = pmt_select_parse_query(query);
-  if (qmark) *qmark = '\0';
-  if (route_parse(stream->path, &rt) || route_disabled(&rt)) {
-    h2_respond_status(conn, stream->id, "404");
-    return;
-  }
-
-  switch (rt.fmt) {
-    case ROUTE_FMT_TS:
-    case ROUTE_FMT_SPTS: {
-      int sub;
-      ctx = open_source(&rt, &list_num);
-      if (!ctx) {
-        h2_respond_status(conn, stream->id, "404");
-        return;
-      }
-      route_client_info(&rt, list_num, &filter, rt.fmt == ROUTE_FMT_SPTS ? pmt_pid : 0, c->client_ip, 2, &item_bufs, &cinfo);
-      sub = ts_push_subscribe(ctx, &filter, 2, c->fd, rt.fmt == ROUTE_FMT_SPTS ? pmt_pid : 0, rt.fmt == ROUTE_FMT_SPTS, 0, &cinfo);
-      if (sub < 0) {
-        capture_close(ctx);
-        h2_respond_status(conn, stream->id, "501");
-        return;
-      }
-      if (!h2_tspush_dispatch(conn, c, stream->id, sub)) {
-        ts_push_unsubscribe_by_idx(sub);
-        h2_respond_status(conn, stream->id, "501");
-      }
-      return;
-    }
-    case ROUTE_FMT_HLS:
-    case ROUTE_FMT_HLS_FMP4: {
-      seg_container_t container = rt.fmt == ROUTE_FMT_HLS_FMP4 ? SEG_CONTAINER_FMP4 : SEG_CONTAINER_TS;
-      hls_resp_t resp;
-      route_setup_t rs;
-      route_setup_status_t st;
-      int handled;
-      st = route_setup(&rt, &list_num, &filter, pmt_pid, c->client_ip, 2, &item_bufs, &cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
-                        container, container == SEG_CONTAINER_FMP4 ? 0.0 : reactor_cfg()->hls_part_size, &rs);
-      if (st == ROUTE_SETUP_404) {
-        h2_respond_status(conn, stream->id, "404");
-        return;
-      }
-      if (st == ROUTE_SETUP_501) {
-        h2_respond_status(conn, stream->id, "501");
-        return;
-      }
-      ctx = rs.ctx;
-      if (!strcmp(rt.hls_file, "index.m3u8") && !hls_store_ready(ctx, &filter, pmt_pid, container) &&
-          h2_hls_cold_try_park(conn, stream->id, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_HLS, container, 0, is_head,
-                               stream->origin[0] ? stream->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
-        return;
-      handled = hls_render(ctx, &filter, pmt_pid, container, rt.hls_file, is_head, stream->inm[0] ? stream->inm : NULL, &resp);
-      h2_respond_hls(conn, stream->id, handled, &resp, stream->origin[0] ? stream->origin : NULL);
-      if (handled && resp.status == 200) ws_clients_add_bytes(rs.ws_handle, resp.body_len);
-      return;
-    }
-
-    case ROUTE_FMT_LLHLS: {
-      uint32_t want_seg;
-      int want_part;
-      hls_resp_t resp;
-      route_setup_t rs;
-      route_setup_status_t st;
-      int handled;
-      st = route_setup(&rt, &list_num, &filter, pmt_pid, c->client_ip, 2, &item_bufs, &cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_TS, reactor_cfg()->hls_part_size, &rs);
-      if (st == ROUTE_SETUP_404) {
-        h2_respond_status(conn, stream->id, "404");
-        return;
-      }
-      if (st == ROUTE_SETUP_501) {
-        h2_respond_status(conn, stream->id, "501");
-        return;
-      }
-      ctx = rs.ctx;
-      if (!strcmp(rt.hls_file, "index_ll.m3u8") && !hls_ll_store_ready(ctx, &filter, pmt_pid, SEG_CONTAINER_TS) &&
-          h2_hls_cold_try_park(conn, stream->id, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_LLHLS, SEG_CONTAINER_TS, 0, is_head,
-                               stream->origin[0] ? stream->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
-        return;
-      if (!strcmp(rt.hls_file, "index_ll.m3u8") && parse_blocking_reload(query, &want_seg, &want_part) &&
-          !hls_part_available(ctx, &filter, pmt_pid, SEG_CONTAINER_TS, want_seg, want_part) &&
-          h2_llhls_try_park(conn, c, stream->id, ctx, &filter, pmt_pid, rt.hls_file, is_head,
-                            stream->inm[0] ? stream->inm : NULL, stream->origin[0] ? stream->origin : NULL, want_seg, want_part,
-                            (int)(reactor_cfg()->hls_part_size * 2000.0), rs.ws_handle))
-        return;
-      handled = hls_render_ll(ctx, &filter, pmt_pid, rt.hls_file, is_head, stream->inm[0] ? stream->inm : NULL, &resp);
-      h2_respond_hls(conn, stream->id, handled, &resp, stream->origin[0] ? stream->origin : NULL);
-      if (handled && resp.status == 200) ws_clients_add_bytes(rs.ws_handle, resp.body_len);
-      return;
-    }
-
-    case ROUTE_FMT_DASH:
-    case ROUTE_FMT_LLDASH: {
-      int want_ll = rt.fmt == ROUTE_FMT_LLDASH;
-      hls_resp_t resp;
-      route_setup_t rs;
-      route_setup_status_t st;
-      int handled;
-      st = route_setup(&rt, &list_num, &filter, pmt_pid, c->client_ip, 2, &item_bufs, &cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
-                       SEG_CONTAINER_FMP4, want_ll ? reactor_cfg()->dash_part_size : 0.0, &rs);
-      if (st == ROUTE_SETUP_404) {
-        h2_respond_status(conn, stream->id, "404");
-        return;
-      }
-      if (st == ROUTE_SETUP_501) {
-        h2_respond_status(conn, stream->id, "501");
-        return;
-      }
-      ctx = rs.ctx;
-      if (strcmp(rt.hls_file, "manifest.mpd") != 0) {
-        if (!reactor_cfg()->no_lldash && !is_head) {
-          int sub = dash_lldash_subscribe(ctx, &filter, pmt_pid, rt.hls_file, 2);
-          if (sub >= 0) {
-            if (h2_dashchunk_dispatch(conn, c, stream->id, sub, rs.ws_handle)) return;
-            dash_lldash_sub_close(sub);
-          }
-        }
-        handled = dash_render_seg(ctx, &filter, pmt_pid, rt.hls_file, is_head, &resp);
-      } else {
-        if (!hls_store_ready(ctx, &filter, pmt_pid, SEG_CONTAINER_FMP4) &&
-            h2_hls_cold_try_park(conn, stream->id, ctx, &filter, pmt_pid, rt.hls_file, HLS_COLD_DASH, SEG_CONTAINER_FMP4, want_ll, is_head,
-            stream->origin[0] ? stream->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
-          return;
-        handled = dash_render(ctx, &filter, pmt_pid, want_ll, reactor_cfg()->dash_utc_url, is_head, &resp);
-      }
-      h2_respond_hls(conn, stream->id, handled, &resp, stream->origin[0] ? stream->origin : NULL);
-      if (handled && resp.status == 200) ws_clients_add_bytes(rs.ws_handle, resp.body_len);
-      return;
-    }
-
-    case ROUTE_FMT_MP4: {
-      route_setup_t rs;
-      route_setup_status_t st;
-      st = route_setup(&rt, &list_num, &filter, pmt_pid, c->client_ip, 2, &item_bufs, &cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
-                       SEG_CONTAINER_FMP4, 0.0, &rs);
-      if (st == ROUTE_SETUP_404) {
-        h2_respond_status(conn, stream->id, "404");
-        return;
-      }
-      if (st == ROUTE_SETUP_501) {
-        h2_respond_status(conn, stream->id, "501");
-        return;
-      }
-      ctx = rs.ctx;
-      if (!hls_store_ready(ctx, &filter, pmt_pid, SEG_CONTAINER_FMP4) &&
-          h2_hls_cold_try_park(conn, stream->id, ctx, &filter, pmt_pid, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, is_head, stream->origin[0] ? stream->origin : NULL, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
-        return;
-      {
-        int sub = mp4push_subscribe(ctx, &filter, pmt_pid, 2);
-        if (sub >= 0 && h2_mp4push_dispatch(conn, c, stream->id, sub, rs.ws_handle)) return;
-        if (sub >= 0) mp4push_sub_close(sub);
-      }
-      h2_respond_status(conn, stream->id, "501");
-      return;
-    }
-
-    default:
-      h2_respond_status(conn, stream->id, "501");
-      return;
-  }
+  h2_req_ctx_t rq = {c, stream};
+  httpng_req_hdrs_t hdrs = {stream->method, stream->path, stream->inm, stream->origin, stream->authz, stream->protocol};
+  httpng_dispatch(&h2_httpng_ops, conn, &rq, &hdrs, c->client_ip, c->fd);
 }
 
 int h2_conn_attach(conn_t *c) {
@@ -348,7 +245,6 @@ int h2_conn_attach(conn_t *c) {
   }
   conn->fd = c->fd;
   conn->c = c;
-
   if (nghttp2_session_server_new(&conn->ng, cbs, conn) != 0) {
     nghttp2_session_callbacks_del(cbs);
     free(conn);
@@ -361,10 +257,9 @@ int h2_conn_attach(conn_t *c) {
       {NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, 1},
   };
   nghttp2_submit_settings(conn->ng, NGHTTP2_FLAG_NONE, iv, sizeof iv / sizeof iv[0]);
-
   c->h2 = conn;
   c->state = CONN_H2;
-  conn_publish(c);      /* h2_tspush_wake() finds conns by fd */
+  conn_publish(c);
   h2_flush_tx(conn, c); /* flush initial SETTINGS, might arm EPOLLOUT */
   return 0;
 }
@@ -372,7 +267,8 @@ int h2_conn_attach(conn_t *c) {
 void h2_handle_readable(int epfd, conn_t *c) {
   h2_conn_t *conn = (h2_conn_t *)c->h2;
   uint8_t inbuf[H2_READ_BUF];
-  for (;;) {
+  conn->pending_n = 0;
+  for (int iter = 0; iter < H2_READ_MAX_ITER; iter++) {
     ssize_t nread = tls_net_recv(c->fd, inbuf, sizeof inbuf);
     if (nread > 0) {
       ssize_t consumed = nghttp2_session_mem_recv(conn->ng, inbuf, (size_t)nread);
@@ -389,15 +285,14 @@ void h2_handle_readable(int epfd, conn_t *c) {
     break; /* EAGAIN */
   }
 
-  for (int i = 0; i < H2_MAX_STREAMS; i++) {
-    if (conn->streams[i].id && conn->streams[i].dispatch_pending) {
-      int32_t sid = conn->streams[i].id;
-      conn->streams[i].dispatch_pending = 0;
-      h2_dispatch_stream(conn, c, &conn->streams[i]);
-      h2_free_stream(conn, sid);
-    }
+  for (int i = 0; i < conn->pending_n; i++) {
+    h2_stream_t *s = conn->pending[i];
+    if (!s->id || !s->dispatch_pending) continue;
+    int32_t sid = s->id;
+    s->dispatch_pending = 0;
+    h2_dispatch_stream(conn, c, s);
+    h2_free_stream(conn, sid);
   }
-
   if (conn->done || (!nghttp2_session_want_read(conn->ng) && !nghttp2_session_want_write(conn->ng))) {
     h2_conn_close(epfd, c);
     return;
@@ -424,8 +319,7 @@ void h2_handle_writable(int epfd, conn_t *c) {
       break;
     }
   conn_flush(c, c->epfd);
-  if (conn->done ||
-      (!nghttp2_session_want_read(conn->ng) && !nghttp2_session_want_write(conn->ng)))
+  if (conn->done || (!nghttp2_session_want_read(conn->ng) && !nghttp2_session_want_write(conn->ng)))
     h2_conn_close(epfd, c);
 }
 

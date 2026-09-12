@@ -104,6 +104,7 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
       tc.stream_type = f.stream_type;
       tc.network_name = "";
       tc.service_name = inputset_service_name(tk->is, i);
+      tc.provider_name = inputset_provider_name(tk->is, i);
       tc.pmt_pid = inputset_pmt_pid(tk->is, i);
       tc.audio_pid = inputset_audio_pid(tk->is, i);
       tc.standalone = 0;
@@ -135,10 +136,9 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
 }
 
 int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
-  mcast_t *mc = NULL;
   out_ctx_t out;
   meta_state_t metas[RADIOHEAD_MAX_INPUTS];
-  void *meta_ctxs[RADIOHEAD_MAX_INPUTS];
+  void *meta_ctxs[RADIOHEAD_MAX_INPUTS] = {0};
   tspacketizer_t *tsps[RADIOHEAD_MAX_INPUTS];
   uint64_t samples_total[RADIOHEAD_MAX_INPUTS];
   int was_connected[RADIOHEAD_MAX_INPUTS];
@@ -163,45 +163,9 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   memset(last_synced_bytes, 0, sizeof last_synced_bytes);
   memset(&rm, 0, sizeof rm);
 
-  if (cfg->mcast_port) {
-    mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, (int)cfg->ttl);
-    if (!mc) return 1;
-    mcast_set_tos(mc, cfg->dscp);
-    out.mc = mc;
-    out.rtp = cfg->rtp;
-    if (cfg->rtp) {
-      out.rtph = rtpheader_new();
-      if (!out.rtph) {
-        mcast_close(mc);
-        return 1;
-      }
-      if (cfg->al_fec_l) {
-        out.fec_mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->al_fec_port, cfg->iface, (int)cfg->ttl);
-        out.fec_enc = out.fec_mc ? fec2022_enc_new(cfg->al_fec_l, cfg->al_fec_d, 96) : NULL;
-        if (!out.fec_mc || !out.fec_enc) {
-          free_rtp_out(&out);
-          mcast_close(mc);
-          return 1;
-        }
-      }
-    }
-  }
-  if (cfg->n_rist > 0) {
-    out.rist = radiohead_rist_open(cfg);
-    if (!out.rist) {
-      free_rtp_out(&out);
-      if (mc) mcast_close(mc);
-      return 1;
-    }
-  }
-  if (cfg->n_srt > 0) {
-    out.srt = radiohead_srt_open(cfg);
-    if (!out.srt) {
-      if (out.rist) ristout_close(out.rist);
-      free_rtp_out(&out);
-      if (mc) mcast_close(mc);
-      return 1;
-    }
+  if (radiohead_output_open(cfg, &out)) {
+    radiohead_output_close(&out);
+    return 1;
   }
 
   for (unsigned i = 0; i < n; i++) {
@@ -224,7 +188,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
   if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled) {
-    unsigned audio_pids[RADIOHEAD_MAX_INPUTS];
+    unsigned audio_pids[RADIOHEAD_MAX_INPUTS] = {0};
     for (unsigned i = 0; i < n; i++) audio_pids[i] = inputset_audio_pid(is, i);
     cas = cas_start(cfg, audio_pids, n);
     if (!cas) {
@@ -244,13 +208,11 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     double now;
     time_t now_t, deadline;
     int timeout_ms = MPTS_POLL_MAX_MS;
-
     deadline = inputset_next_deadline(is);
     if (deadline != INPUTSET_NEVER) {
       long remain_s = (long)(deadline - time(NULL));
       int remain_ms = remain_s <= 0 ? 0 : (int)(remain_s * 1000);
-      if (remain_ms < timeout_ms)
-        timeout_ms = remain_ms;
+      if (remain_ms < timeout_ms) timeout_ms = remain_ms;
     }
     for (unsigned i = 0; i < n; i++) {
       int fd = inputset_poll_fd(is, i);
@@ -329,10 +291,7 @@ done:
   if (mpts) mpts_free(mpts);
   if (is) inputset_free(is);
   if (cas) cas_stop(cas);
-  free_rtp_out(&out);
-  if (out.rist) ristout_close(out.rist);
-  if (out.srt) srtsink_close(out.srt);
-  if (mc) mcast_close(mc);
+  radiohead_output_close(&out);
   if (cfg->verbose && log_stderr_is_tty()) fputc('\n', stderr);
   if (rc == 0) log_line("stopped.");
   return rc;

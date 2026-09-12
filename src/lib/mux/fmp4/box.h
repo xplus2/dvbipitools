@@ -7,12 +7,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "lib/demux/psi/psi.h"
+#include "lib/mux/growbuf.h"
+
 /* growable ISOBMFF box build buffer */
-typedef struct {
-  unsigned char *p;
-  size_t len, cap;
-  int err; /* alloc failed */
-} mp4buf_t;
+typedef muxbuf_t mp4buf_t;
 
 void mp4buf_free(mp4buf_t *b);
 void mb_bytes(mp4buf_t *b, const void *data, size_t n);
@@ -28,5 +27,33 @@ void mb_patch_u32(mp4buf_t *b, size_t pos, uint32_t v);
 
 /* frees child */
 void mb_box(mp4buf_t *parent, const char fourcc[4], mp4buf_t *child);
+
+/* identity matrix, tkhd/mvhd matrix field */
+void put_matrix_unity(mp4buf_t *b);
+
+/* MPEG-4 descriptor length, base-128 continuation encoding */
+void put_desc_size(mp4buf_t *out, size_t len);
+/* frees payload */
+void put_desc(mp4buf_t *out, unsigned tag, mp4buf_t *payload);
+
+typedef struct {
+  unsigned track_id;
+  pid_class_t cls;
+  unsigned width, height;
+  codec_t codec;
+  const unsigned char *cpriv;
+  size_t cpriv_len;
+  unsigned rate, channels;
+  unsigned char ac3_bsid, ac3_bsmod, ac3_acmod, ac3_lfeon;
+  unsigned ac3_bitrate_code;
+} trak_meta_t;
+
+void trak_build_hdlr(mp4buf_t *out, pid_class_t cls);
+void trak_build_vmhd(mp4buf_t *out);
+void trak_build_smhd(mp4buf_t *out);
+void trak_build_dinf(mp4buf_t *out);
+void trak_build_stsd(mp4buf_t *out, const trak_meta_t *t);
+/* tref/sbas: depends_on_track_id */
+void trak_build_tref(mp4buf_t *out, unsigned depends_on_track_id);
 
 #endif

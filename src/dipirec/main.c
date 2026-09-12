@@ -41,19 +41,8 @@ int main(int argc, char **argv) {
   char src[1024];
   dstrbuf_t sb_out;
   dstrbuf_t sb_line;
-  args_status_t st;
 
-  log_set_color(log_color_prescan(argc, argv));
-
-  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
-  st = args_parse(argc, argv, &cfg);
-  if (st == ARGS_OK) log_set_color((log_color_t)cfg.color_mode);
-  if (st == ARGS_HELP) return 0;
-  if (st == ARGS_ERR) {
-    fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
-    return 2;
-  }
-
+  TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
   dstrbuf_init(&sb_out);
   for (int i = 0; i < cfg.n_out; i++) {
     char one[600];
@@ -78,7 +67,6 @@ int main(int argc, char **argv) {
   {
     metrics_exporter_t mx;
     int rc;
-
     metrics_exporter_init(&mx, METRICS_COMPONENT_REC, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
     rc = record_run(&cfg, &mx);
     metrics_exporter_close(&mx);

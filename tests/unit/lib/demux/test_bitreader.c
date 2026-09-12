@@ -71,6 +71,35 @@ START_TEST(rbsp_unescape_leaves_non_escape_zeros_alone) {
 }
 END_TEST
 
+START_TEST(rbsp_escape_inserts_emulation_prevention) {
+  static const unsigned char in[] = {0x00, 0x00, 0x01, 0x00, 0x00, 0x02};
+  static const unsigned char want[] = {0x00, 0x00, 0x03, 0x01, 0x00, 0x00, 0x03, 0x02};
+  unsigned char out[16];
+  size_t n = rbsp_escape(in, sizeof in, out, sizeof out);
+  ck_assert_uint_eq(n, sizeof want);
+  ck_assert_mem_eq(out, want, sizeof want);
+}
+END_TEST
+
+START_TEST(rbsp_escape_leaves_non_trigger_bytes_alone) {
+  static const unsigned char in[] = {0x00, 0x00, 0x05};
+  unsigned char out[8];
+  size_t n = rbsp_escape(in, sizeof in, out, sizeof out);
+  ck_assert_uint_eq(n, sizeof in);
+  ck_assert_mem_eq(out, in, sizeof in);
+}
+END_TEST
+
+START_TEST(rbsp_escape_unescape_roundtrip) {
+  static const unsigned char in[] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x03, 0xAB};
+  unsigned char escaped[32], back[32];
+  size_t elen = rbsp_escape(in, sizeof in, escaped, sizeof escaped);
+  size_t blen = rbsp_unescape(escaped, elen, back, sizeof back);
+  ck_assert_uint_eq(blen, sizeof in);
+  ck_assert_mem_eq(back, in, sizeof in);
+}
+END_TEST
+
 START_TEST(find_startcode_finds_3_and_4_byte_codes) {
   static const unsigned char three[] = {0x01, 0x02, 0x00, 0x00, 0x01, 0x03};
   static const unsigned char four[] = {0x00, 0x00, 0x00, 0x01};
@@ -142,6 +171,9 @@ static Suite *bitreader_suite(void) {
   tcase_add_test(tc, br_se_maps_ue_to_signed);
   tcase_add_test(tc, rbsp_unescape_strips_emulation_prevention);
   tcase_add_test(tc, rbsp_unescape_leaves_non_escape_zeros_alone);
+  tcase_add_test(tc, rbsp_escape_inserts_emulation_prevention);
+  tcase_add_test(tc, rbsp_escape_leaves_non_trigger_bytes_alone);
+  tcase_add_test(tc, rbsp_escape_unescape_roundtrip);
   tcase_add_test(tc, find_startcode_finds_3_and_4_byte_codes);
   tcase_add_test(tc, br_slice_byte_aligned_start_copies_whole_and_partial_bytes);
   tcase_add_test(tc, br_slice_byte_aligned_exact_byte_count_needs_no_partial_byte);

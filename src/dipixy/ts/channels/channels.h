@@ -10,6 +10,7 @@
 #include "lib/helper/sds_xml.h"
 
 #include "../../args.h"
+#include "../../reactor/qsbr.h"
 #include "../capture/capture.h"
 
 typedef struct {
@@ -53,6 +54,7 @@ typedef struct {
 /* list index = source's ordinal (-i position), 1-based.
    -/rist:// slot or failed source: empty list at that number. NULL only on alloc failure */
 channels_t *channels_build(const config_t *cfg);
+void channels_set_qsbr(qsbr_domain_t *d);
 
 /* spawns background thread: re-runs SDS discovery per --sds source on interval.
    rebuild src on SIGHUP, swap results to ch under internal lock. noop w/ no sources */

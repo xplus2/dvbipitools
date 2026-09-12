@@ -12,47 +12,13 @@
 #include "lib/helper/argutil.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/helper/uriparse.h"
 #include "lib/mux/fec2022.h"
+#include "lib/net/plain_endpoint.h"
 
 #include "args.h"
 #include "version.h"
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
-
-/* rest: [@]addr:port, multicast literal required */
-static int parse_direct(const char *rest, plain_endpoint_t *s) {
-  if (*rest == '@')
-    rest++;
-  return uriparse_mcast_addrport(rest, &s->family, s->group, sizeof s->group, &s->port);
-}
-
-static int parse_nonrist(const char *uri, plain_endpoint_t *s, int is_sink) {
-  memset(s, 0, sizeof *s);
-  if (strcmp(uri, "-") == 0) {
-    s->kind = PLAIN_EP_FILE; /* file_path[0] == '\0': stdin (source) / stdout (sink) */
-    return 0;
-  }
-  if (strncmp(uri, "rtp://", 6) == 0) {
-    s->kind = PLAIN_EP_RTP;
-    s->rtp_wrapped = 1;
-    return parse_direct(uri + 6, s);
-  }
-  if (strncmp(uri, "udp://", 6) == 0) {
-    s->kind = PLAIN_EP_UDP;
-    s->rtp_wrapped = 0;
-    return parse_direct(uri + 6, s);
-  }
-  if (strncmp(uri, "http://", 7) == 0 || strncmp(uri, "https://", 8) == 0) {
-    if (is_sink) return -1; /* an HTTP TS source makes no sense as an output */
-    s->kind = PLAIN_EP_HTTP;
-    return http_url_parse(uri, &s->http);
-  }
-  if (strlen(uri) >= sizeof s->file_path) return -1;
-  s->kind = PLAIN_EP_FILE;
-  bufcpy(s->file_path, sizeof s->file_path, uri);
-  return 0;
-}
 
 /* *count tracks with this flag: 0 = decides is_rist, further rist:// bond onto same endpoint, others (mixed, or a repeated non-RIST endpoint) rejected */
 static int parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *count) {
@@ -76,7 +42,7 @@ static int parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *
     /* -i rist:// listens for sender, -o rist:// calls out to receiver */
     if (is_sink == has_at) return -1;
     bufcpy(e->rist_uri[e->n_rist++], sizeof e->rist_uri[0], uri);
-  } else if (parse_nonrist(uri, &e->nonrist, is_sink)) {
+  } else if (plain_endpoint_parse(uri, &e->nonrist, is_sink)) {
     return -1;
   }
   (*count)++;
@@ -217,16 +183,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1001:
-        if (bufcpy(cfg->secret, sizeof cfg->secret, optarg) >= sizeof cfg->secret) {
-          argerr("--secret too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->secret, sizeof cfg->secret, optarg, "--secret"))
           return ARGS_ERR;
-        }
         break;
       case 1002:
-        if (bufcpy(cfg->cname, sizeof cfg->cname, optarg) >= sizeof cfg->cname) {
-          argerr("--cname too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->cname, sizeof cfg->cname, optarg, "--cname"))
           return ARGS_ERR;
-        }
         break;
       case 1003:
         if (argutil_uint_range(optarg, 1, 60000, &cfg->buffer_ms)) {
@@ -250,10 +212,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->metrics_id = optarg;
         break;
       case 1007:
-        if (argutil_uint_range(optarg, 1, 86400, &cfg->metrics_interval_s)) {
-          argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
-          return ARGS_ERR;
-        }
+        if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
       case 1008:
         if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
@@ -300,10 +259,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--secret requires --profile main");
     return ARGS_ERR;
   }
-  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
-    argerr("--metrics/--metrics-interval require --metrics-id");
-    return ARGS_ERR;
-  }
+  if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
   if (cfg->al_fec_l && !cfg->al_fec_port) {
     argerr("--al-fec requires --al-fec-port");
     return ARGS_ERR;
@@ -318,6 +274,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     ne->al_fec_port = cfg->al_fec_port;
   }
   if (cfg->insecure_tls && !(cfg->in.nonrist.kind == PLAIN_EP_HTTP && cfg->in.nonrist.http.tls))
-    log_line(TOOL_NAME ": --insecure has no effect, no -i https:// source");
+    log_line(TOOL_NAME ": --insecure needs -i https://");
   return ARGS_OK;
 }

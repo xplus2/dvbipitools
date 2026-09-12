@@ -43,7 +43,6 @@ cs378x_server_t *cs378x_server_start(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_
 void cs378x_server_stop(cs378x_server_t *s);
 
 /* pure wire-format/crypto helpers, exposed for unit tests with synthetic buffers */
-void cs378x_crc32_init_table(void);
 uint32_t cs378x_crc32(const unsigned char *buf, size_t len);
 int cs378x_md5(const unsigned char *data, size_t len, unsigned char out[16]);
 int cs378x_aes128_ecb(const unsigned char key[16], unsigned char *buf, size_t len, int encrypt);

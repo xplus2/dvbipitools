@@ -23,17 +23,19 @@ static size_t g_fake_init_len;
 void hls_seg_registry_lock(void) { pthread_mutex_lock(&g_fake_lock); }
 void hls_seg_registry_unlock(void) { pthread_mutex_unlock(&g_fake_lock); }
 
-hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
+hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
   (void)filter;
+  (void)lcevc;
   if (!g_fake_seg_present || ctx != g_fake_ctx || pmt_pid != g_fake_pmt || container != SEG_CONTAINER_FMP4) return NULL;
   return &g_fake_seg;
 }
 
-int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container,
+int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
                const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
   (void)ctx;
   (void)filter;
   (void)pmt_pid;
+  (void)lcevc;
   (void)container;
   (void)filename;
   (void)is_head;
@@ -89,6 +91,7 @@ void h2_mp4push_wake(int sub_idx) { (void)sub_idx; }
 void h3_mp4push_wake(int sub_idx) { (void)sub_idx; }
 
 static int g_ctx_marker;
+static const lcevc_select_t full = {LCEVC_SEL_FULL, 0, 0};
 
 static void setup(void) {
   memset(&g_fake_seg, 0, sizeof g_fake_seg);
@@ -102,12 +105,12 @@ static void setup(void) {
 START_TEST(subscribe_fails_without_a_registered_segmenter) {
   g_fake_seg_present = 0;
   for (int i = 0; i < 200; i++)
-    ck_assert_int_eq(mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, 1), -1);
+    ck_assert_int_eq(mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 1), -1);
 }
 END_TEST
 
 START_TEST(subscribe_links_onto_the_segmenter_chain) {
-  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, 1);
+  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 1);
   ck_assert_int_ge(idx, 0);
   ck_assert_int_eq(g_fake_seg.mp4push_sub_head, idx);
   mp4push_sub_close(idx);
@@ -117,14 +120,14 @@ END_TEST
 
 START_TEST(subscribe_wrong_key_does_not_match) {
   g_fake_pmt = 7;
-  ck_assert_int_eq(mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 3, 1), -1);
+  ck_assert_int_eq(mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 3, &full, 1), -1);
 }
 END_TEST
 
 START_TEST(proto2_subscribe_preseeds_ring_with_init_segment) {
   memcpy(g_fake_init_data, "ftypISOM", 8);
   g_fake_init_len = 8;
-  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, 2);
+  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 2);
   ck_assert_int_ge(idx, 0);
   ck_assert_int_eq(mp4push_ring_pending(idx), 1);
   unsigned char buf[64];
@@ -137,7 +140,7 @@ START_TEST(proto2_subscribe_preseeds_ring_with_init_segment) {
 END_TEST
 
 START_TEST(proto2_subscribe_without_init_segment_ready_still_succeeds) {
-  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, 2);
+  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 2);
   ck_assert_int_ge(idx, 0);
   ck_assert_int_eq(mp4push_ring_pending(idx), 0);
   mp4push_sub_close(idx);
@@ -145,8 +148,8 @@ START_TEST(proto2_subscribe_without_init_segment_ready_still_succeeds) {
 END_TEST
 
 START_TEST(deliver_fans_out_to_every_live_subscriber) {
-  int a = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, 2);
-  int b = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, 3);
+  int a = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 2);
+  int b = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 3);
   ck_assert_int_ge(a, 0);
   ck_assert_int_ge(b, 0);
 
@@ -169,7 +172,7 @@ START_TEST(deliver_fans_out_to_every_live_subscriber) {
 END_TEST
 
 START_TEST(deliver_overflow_marks_ring_errored) {
-  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, 2);
+  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 2);
   ck_assert_int_ge(idx, 0);
   unsigned char *big = malloc(200000);
   memset(big, 'x', 200000);
@@ -188,8 +191,9 @@ START_TEST(sub_close_on_invalid_or_free_slot_is_a_safe_noop) {
 END_TEST
 
 START_TEST(ring_and_bind_queries_on_invalid_slot_return_safe_defaults) {
-  ck_assert_int_eq(mp4push_sub_fd(-1), -1);
-  ck_assert_int_eq(mp4push_sub_fd(999999), -1);
+  ck_assert_ptr_null(mp4push_sub_h2c(-1));
+  ck_assert_ptr_null(mp4push_sub_h2c(999999));
+  ck_assert_ptr_null(mp4push_sub_h2_slot(-1));
   ck_assert_ptr_null(mp4push_sub_h3c(-1));
   ck_assert_int_eq(mp4push_sub_h3_sid(-1), -1);
   ck_assert_int_eq(mp4push_ring_pending(-1), 0);
@@ -200,7 +204,7 @@ START_TEST(ring_and_bind_queries_on_invalid_slot_return_safe_defaults) {
   ck_assert_ptr_null(mp4push_ring_peek(-1, &len));
   ck_assert_uint_eq(len, 0);
   mp4push_ring_advance(-1, 4); /* no crash */
-  mp4push_h2_bind(-1, 5, 0, -1);
+  mp4push_h2_bind(-1, NULL, NULL, 0, -1);
   mp4push_h3_bind(-1, NULL, 0, 0, -1);
 }
 END_TEST

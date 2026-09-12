@@ -13,6 +13,7 @@ typedef struct {
 } listen_spec_t;
 
 typedef enum { SRC_SDS, SRC_M3U, SRC_XSPF, SRC_CSV, SRC_XML, SRC_HTTP } source_kind_t;
+const char *source_kind_str(source_kind_t k);
 
 typedef enum { MEDIA_TV, MEDIA_RADIO } media_type_t; /* MEDIA_TV = 0, default */
 
@@ -71,6 +72,7 @@ typedef struct {
   int no_url_udp;           /* --no-url-udp: disables /udp/... routes */
   int no_url_srt;           /* --no-url-srt: disables /srt/... routes */
   int no_pid_filters;       /* --no-pid-filters: ?filter= ignored */
+  int no_lcevc;             /* --no-lcevc: ?lcevc= ignored */
   int no_http2;             /* --no-http2: disable h2 */
   int no_http3;             /* --no-http3: disable h3 */
   int no_fcc;               /* --no-fcc: ignore SDS fcc */

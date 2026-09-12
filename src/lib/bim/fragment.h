@@ -4,7 +4,7 @@
 #ifndef DIPIBIM_FRAGMENT_H
 #define DIPIBIM_FRAGMENT_H
 
-#include "bitreader.h"
+#include "bimreader.h"
 #include "bitwriter.h"
 #include "lib/tva/bcg_doc.h"
 #include "strrepo.h"

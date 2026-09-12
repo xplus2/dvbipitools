@@ -29,6 +29,7 @@
 #include "../dash/lldash.h"
 #include "../segment/mp4push.h"
 #include "../reactor/internal.h"
+#include "../ws/ws_frame.h"
 
 #define H3_MAX_REQS 16
 /* TS-push holds its slot for the stream's life, unlike HLS/DASH GETs.
@@ -59,7 +60,7 @@ typedef struct h3_req {
   int dashchunk_sub_idx;  /* -1 normal req, >=0 dash/lldash.c subscriber slot */
   int mp4push_sub_idx;    /* -1 normal req, >=0 segment/mp4push.c subscriber slot */
   int ws_active;
-  void *ws_parser;        /* ws_parser_t*, void* to keep ws_frame.h out of this header */
+  ws_parser_t ws_parser;
   uint8_t *ws_pending;    /* not yet handed to nghttp3 */
   size_t ws_pending_len, ws_pending_cap;
   int ws_inflight;
@@ -91,6 +92,7 @@ typedef struct h3_conn {
   int done;
   int active_idx; /* position in t_h3_active[], for O(1) swap-remove */
   int pool_slot;
+  int ws_active_count;
   ngtcp2_tstamp last_rx;
 } h3_conn_t;
 
@@ -100,6 +102,11 @@ extern _Thread_local h3_conn_t **t_h3_active;
 extern _Thread_local int t_h3_active_cnt;
 extern _Thread_local h3_conn_t **t_h3_hash;
 extern _Thread_local int t_h3_init;
+
+extern _Thread_local struct sockaddr_storage t_h3_udp4_local;
+extern _Thread_local socklen_t t_h3_udp4_local_len;
+extern _Thread_local struct sockaddr_storage t_h3_udp6_local;
+extern _Thread_local socklen_t t_h3_udp6_local_len;
 
 static inline ngtcp2_tstamp h3_ts(void) {
   struct timespec ts;
@@ -113,16 +120,14 @@ static inline h3_req_t *find_req(h3_conn_t *c, int64_t sid) {
 }
 
 static inline h3_req_t *alloc_req(h3_conn_t *c, int64_t sid) {
-  for (int i = 0; i < H3_MAX_REQS; i++) {
-    if (!c->reqs[i].active) {
-      memset(&c->reqs[i], 0, sizeof(h3_req_t));
-      c->reqs[i].active = 1;
-      c->reqs[i].stream_id = sid;
-      c->reqs[i].tspush_sub_idx = -1;
-      c->reqs[i].dashchunk_sub_idx = -1;
-      c->reqs[i].mp4push_sub_idx = -1;
-      return &c->reqs[i];
-    }
+  for (int i = 0; i < H3_MAX_REQS; i++) if (!c->reqs[i].active) {
+    memset(&c->reqs[i], 0, sizeof(h3_req_t));
+    c->reqs[i].active = 1;
+    c->reqs[i].stream_id = sid;
+    c->reqs[i].tspush_sub_idx = -1;
+    c->reqs[i].dashchunk_sub_idx = -1;
+    c->reqs[i].mp4push_sub_idx = -1;
+    return &c->reqs[i];
   }
   return NULL;
 }
@@ -172,24 +177,27 @@ void h3_respond_hls(h3_conn_t *c, h3_req_t *r, int handled, const hls_resp_t *re
 
 /* from http3_tspush.c */
 nghttp3_ssize h3_tspush_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec, size_t veccnt, uint32_t *pflags, void *conn_ud, void *stream_ud);
+int h3_tspush_dispatch(h3_conn_t *c, h3_req_t *r, int sub);
 
 /* from http3_dashchunk.c */
 nghttp3_ssize h3_dashchunk_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec, size_t veccnt, uint32_t *pflags, void *conn_ud, void *stream_ud);
+int h3_dashchunk_dispatch(h3_conn_t *c, h3_req_t *r, int sub, int ws_handle);
 
 /* from http3_mp4push.c */
 nghttp3_ssize h3_mp4push_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec, size_t veccnt, uint32_t *pflags, void *conn_ud, void *stream_ud);
+int h3_mp4push_dispatch(h3_conn_t *c, h3_req_t *r, int sub, int ws_handle);
 
 /* from http3_llhls.c */
-int h3_llhls_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, const char *inm, const char *origin_hdr,
-                       uint32_t want_seg, int want_part, int timeout_ms, int ws_handle);
+int h3_llhls_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, const char *inm, const char *origin_hdr,
+                      uint32_t want_seg, int want_part, int timeout_ms, int ws_handle);
 void h3_llhls_flush_waiters(void);
 void h3_llhls_on_stream_close(const h3_conn_t *c, int64_t stream_id);
 void h3_llhls_on_conn_close(const h3_conn_t *c);
 
 /* from http3_hls_cold.c */
-int h3_hls_cold_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid,
-                          const char *filename, hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head,
-                          const char *origin_hdr, int timeout_ms, int ws_handle);
+int h3_hls_cold_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
+                         const char *filename, hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head,
+                         const char *origin_hdr, int timeout_ms, int ws_handle);
 void h3_hls_cold_flush_waiters(void);
 void h3_hls_cold_on_stream_close(const h3_conn_t *c, int64_t stream_id);
 void h3_hls_cold_on_conn_close(const h3_conn_t *c);

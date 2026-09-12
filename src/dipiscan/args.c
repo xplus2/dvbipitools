@@ -13,7 +13,6 @@
 
 #include "lib/helper/argutil.h"
 #include "lib/helper/log.h"
-
 #include "args.h"
 #include "version.h"
 
@@ -23,18 +22,14 @@
 static int base_parse(const char *s, int *family, unsigned char *base) {
   if (strchr(s, ':')) {
     struct in6_addr a6;
-    if (inet_pton(AF_INET6, s, &a6) != 1)
-      return -1;
-    if (a6.s6_addr[0] != 0xFF) /* ff00::/8 */
-      return -1;
+    if (inet_pton(AF_INET6, s, &a6) != 1) return -1;
+    if (a6.s6_addr[0] != 0xFF) return -1;
     memcpy(base, &a6, 16);
     *family = AF_INET6;
   } else {
     struct in_addr a;
-    if (inet_pton(AF_INET, s, &a) != 1)
-      return -1;
-    if ((ntohl(a.s_addr) >> 28) != 0xE) /* 224.0.0.0/4 */
-      return -1;
+    if (inet_pton(AF_INET, s, &a) != 1) return -1;
+    if ((ntohl(a.s_addr) >> 28) != 0xE) return -1; /* 224.0.0.0/4 */
     memcpy(base, &a, 4);
     *family = AF_INET;
   }
@@ -75,11 +70,8 @@ static int addr_diff_capped(const unsigned char *start, const unsigned char *end
     }
     diff[i] = (unsigned char)d;
   }
-  if (borrow)
-    return -1;
-  for (int i = 0; i < alen - 4; i++)
-    if (diff[i])
-      return -1;
+  if (borrow) return -1;
+  for (int i = 0; i < alen - 4; i++) if (diff[i]) return -1;
   {
     unsigned val = 0;
     for (int i = alen >= 4 ? alen - 4 : 0; i < alen; i++) val = (val << 8) | diff[i];
@@ -95,21 +87,15 @@ static int cidr_parse(const char *addrs, const char *prefixs, int *family, unsig
   int fam, alen, maxprefix, hostbits, bit;
   char *pend;
   long prefix;
-
   if (base_parse(addrs, &fam, addr)) return -1;
   errno = 0;
   prefix = strtol(prefixs, &pend, 10);
-  if (errno || pend == prefixs || *pend != '\0' || prefix < 0)
-    return -1;
-
+  if (errno || pend == prefixs || *pend != '\0' || prefix < 0) return -1;
   alen = (fam == AF_INET6) ? 16 : 4;
   maxprefix = alen * 8;
-  if (prefix > maxprefix - 2) /* need >= 2 host bits */
-    return -1;
+  if (prefix > maxprefix - 2) return -1; /* need >= 2 host bits */
   hostbits = maxprefix - (int)prefix;
-  if (hostbits > MAX_SWEEP_HOSTBITS)
-    return -1;
-
+  if (hostbits > MAX_SWEEP_HOSTBITS) return -1;
   memcpy(net, addr, (size_t)alen);
   memcpy(top, addr, (size_t)alen);
   bit = 0;
@@ -135,17 +121,11 @@ static int range_parse(const char *los, const char *his, int *family, unsigned c
   int fam_lo, fam_hi, alen;
   unsigned char lo[16], hi[16];
   unsigned diff;
-
-  if (base_parse(los, &fam_lo, lo) || base_parse(his, &fam_hi, hi))
-    return -1;
-  if (fam_lo != fam_hi)
-    return -1;
+  if (base_parse(los, &fam_lo, lo) || base_parse(his, &fam_hi, hi)) return -1;
+  if (fam_lo != fam_hi) return -1;
   alen = (fam_lo == AF_INET6) ? 16 : 4;
-  if (memcmp(lo, hi, (size_t)alen) > 0)
-    return -1;
-  if (addr_diff_capped(lo, hi, alen, MAX_SWEEP_ADDRS - 1u, &diff))
-    return -1;
-
+  if (memcmp(lo, hi, (size_t)alen) > 0) return -1;
+  if (addr_diff_capped(lo, hi, alen, MAX_SWEEP_ADDRS - 1u, &diff)) return -1;
   *family = fam_lo;
   memcpy(start, lo, 16);
   memcpy(end, hi, 16);
@@ -167,12 +147,10 @@ static void plain_parse(const unsigned char *addr, int family, unsigned char *st
 static int mcast_range_parse(const char *s, int *family, unsigned char *start, unsigned char *end, unsigned *total) {
   const char *slash = strchr(s, '/');
   const char *dash = strchr(s, '-');
-
   if (slash) {
     char addrbuf[64];
     size_t len = (size_t)(slash - s);
-    if (len == 0 || len >= sizeof addrbuf)
-      return -1;
+    if (len == 0 || len >= sizeof addrbuf) return -1;
     memcpy(addrbuf, s, len);
     addrbuf[len] = '\0';
     return cidr_parse(addrbuf, slash + 1, family, start, end, total);
@@ -180,58 +158,37 @@ static int mcast_range_parse(const char *s, int *family, unsigned char *start, u
   if (dash) {
     char lobuf[64];
     size_t len = (size_t)(dash - s);
-    if (len == 0 || len >= sizeof lobuf)
-      return -1;
+    if (len == 0 || len >= sizeof lobuf) return -1;
     memcpy(lobuf, s, len);
     lobuf[len] = '\0';
     return range_parse(lobuf, dash + 1, family, start, end, total);
   }
   {
     unsigned char addr[16];
-    if (base_parse(s, family, addr))
-      return -1;
+    if (base_parse(s, family, addr)) return -1;
     plain_parse(addr, *family, start, end, total);
     return 0;
   }
-}
-
-/* port 1..65535, digits only */
-static int port_num_parse(const char *p, unsigned *out) {
-  char *end;
-  unsigned long v;
-  if (*p == '\0')
-    return -1;
-  errno = 0;
-  v = strtoul(p, &end, 10);
-  if (errno || *end != '\0' || v == 0 || v > 65535)
-    return -1;
-  *out = (unsigned)v;
-  return 0;
 }
 
 /* port or port-port, inclusive range */
 static int port_range_parse(const char *s, unsigned *lo, unsigned *hi) {
   const char *dash = strchr(s, '-');
   if (!dash) {
-    if (port_num_parse(s, lo))
-      return -1;
+    if (argutil_port_parse(s, lo)) return -1;
     *hi = *lo;
     return 0;
   }
   {
     char buf[16];
     size_t len = (size_t)(dash - s);
-    if (len == 0 || len >= sizeof buf)
-      return -1;
+    if (len == 0 || len >= sizeof buf) return -1;
     memcpy(buf, s, len);
     buf[len] = '\0';
-    if (port_num_parse(buf, lo))
-      return -1;
+    if (argutil_port_parse(buf, lo)) return -1;
   }
-  if (port_num_parse(dash + 1, hi))
-    return -1;
-  if (*lo > *hi)
-    return -1;
+  if (argutil_port_parse(dash + 1, hi)) return -1;
+  if (*lo > *hi) return -1;
   return 0;
 }
 
@@ -239,33 +196,26 @@ static int port_range_parse(const char *s, unsigned *lo, unsigned *hi) {
 static int http_proxy_parse(const char *s, config_t *cfg) {
   const char *p = s;
   size_t len;
-
   if (*p == '[') {
     const char *close = strchr(p, ']');
-    if (!close)
-      return -1;
+    if (!close) return -1;
     len = (size_t)(close - (p + 1));
-    if (len == 0 || len >= sizeof cfg->http_proxy_host)
-      return -1;
+    if (len == 0 || len >= sizeof cfg->http_proxy_host) return -1;
     memcpy(cfg->http_proxy_host, p + 1, len);
     cfg->http_proxy_host[len] = '\0';
     p = close + 1;
   } else {
     const char *hp = p;
-    while (*hp && *hp != ':')
-      hp++;
+    while (*hp && *hp != ':') hp++;
     len = (size_t)(hp - p);
-    if (len == 0 || len >= sizeof cfg->http_proxy_host)
-      return -1;
+    if (len == 0 || len >= sizeof cfg->http_proxy_host) return -1;
     memcpy(cfg->http_proxy_host, p, len);
     cfg->http_proxy_host[len] = '\0';
     p = hp;
   }
 
-  if (*p == ':')
-    return port_num_parse(p + 1, &cfg->http_proxy_port);
-  if (*p != '\0')
-    return -1;
+  if (*p == ':') return argutil_port_parse(p + 1, &cfg->http_proxy_port);
+  if (*p != '\0') return -1;
   cfg->http_proxy_port = 80;
   return 0;
 }
@@ -275,8 +225,7 @@ static int http_path_tmpl_valid(const char *t) {
   while (*t) {
     size_t step = 1;
     if (*t == '%') {
-      if (t[1] != 'g' && t[1] != 'p' && t[1] != '%')
-        return -1;
+      if (t[1] != 'g' && t[1] != 'p' && t[1] != '%') return -1;
       step = 2;
     }
     t += step;
@@ -287,8 +236,7 @@ static int http_path_tmpl_valid(const char *t) {
 static int fmt_from_name(const char *s, out_fmt_t *f) {
   static const enum_map_t map[] = {{"m3u", OUT_M3U}, {"csv", OUT_CSV}, {"xspf", OUT_XSPF}, {"xml", OUT_XML}, {"null", OUT_NULL}};
   int v;
-  if (map_lookup(map, sizeof map / sizeof map[0], s, &v))
-    return -1;
+  if (map_lookup(map, sizeof map / sizeof map[0], s, &v)) return -1;
   *f = (out_fmt_t)v;
   return 0;
 }
@@ -348,10 +296,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int c;
-
-  if (argc == 1)
-    return ARGS_NOARGS;
-
+  if (argc == 1) return ARGS_NOARGS;
   memset(cfg, 0, sizeof *cfg);
   {
     unsigned char def[16];
@@ -390,9 +335,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->out_path = optarg;
         break;
       case 't': {
-        char *end;
-        long v = strtol(optarg, &end, 10);
-        if (*end != '\0' || v <= 0 || v > 3600) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, 3600, &v)) {
           argerr("invalid -t timeout: %s (1..3600 seconds)", optarg);
           return ARGS_ERR;
         }
@@ -400,13 +344,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 'j': {
-        char *end;
-        long v = strtol(optarg, &end, 10);
-        if (*end != '\0' || v < 1 || v > DIPISCAN_MAX_JETS) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, DIPISCAN_MAX_JETS, &v)) {
           argerr("invalid -j jets: %s (1..%d)", optarg, DIPISCAN_MAX_JETS);
           return ARGS_ERR;
         }
-        cfg->jets = (unsigned)v;
+        cfg->jets = v;
         break;
       }
       case 'M':
@@ -456,7 +399,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -P provider (required for -f xml)");
     return ARGS_ERR;
   }
-  if (cfg->http_path_tmpl && !cfg->http_proxy)
-    log_line(TOOL_NAME ": --http-path has no effect without -u/--http-proxy");
+  if (cfg->http_path_tmpl && !cfg->http_proxy) log_line(TOOL_NAME ": --http-path needs -u/--http-proxy");
   return ARGS_OK;
 }

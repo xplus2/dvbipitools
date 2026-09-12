@@ -75,16 +75,15 @@ struct remux {
   uint64_t last_pcr27;
   double last_pcr_wall;
 
-  /* non-standalone: source EIT reassembled into a drainable queue (remux_emit_eit()).
-     eit_drain_off: offset into eit_queue[0] mid-emit */
+  /* non-standalone: source EIT reassembled into drainable queue (remux_emit_eit()). eit_drain_off: offset into eit_queue[0] mid-emit */
   psi_section_asm_t eit_asm;
   eit_section_t eit_queue[EIT_QUEUE_CAP];
   int eit_queue_count;
   size_t eit_drain_off;
 };
 
-/* is_ca 1 (ECM) or 2 (EMM) entry, NULL if this program carries none */
-const out_es_t *find_ca_passthrough(const remux_t *r, int is_ca);
+/* NULL if this program carries no entry of that kind */
+const out_es_t *find_ca_passthrough(const remux_t *r, ca_pass_t is_ca);
 
 /* non-standalone: reassemble source EIT, filter to own service_id, enqueue */
 void capture_eit_section(remux_t *r, const unsigned char *pkt188, ts_metrics_t *tsm);

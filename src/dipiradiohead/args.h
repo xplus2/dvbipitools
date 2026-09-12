@@ -18,8 +18,9 @@ typedef enum { SRT_BOND_NONE, SRT_BOND_BROADCAST, SRT_BOND_BACKUP } srt_bond_mod
 
 typedef struct {
   const char *uri;    /* -i, icecast/shoutcast http(s) */
-  unsigned sid;       /* --sid right after this -i; 0 here = auto-assign post-parse */
-  char sdt_text[256]; /* --sdt right after this -i; empty here = auto-default post-parse */
+  unsigned sid;       /* --sid right after this -i; 0=auto-assign post-parse */
+  char sdt_text[256]; /* --sdt right after this -i; empty=auto-default post-parse */
+  char provider_text[256]; /* --provider (-i scoped); empty=TOOL_NAME */
 } radio_input_t;
 
 typedef struct {
@@ -28,7 +29,7 @@ typedef struct {
   int family;                /* AF_INET or AF_INET6, from -m group */
   char mcast_group[64];      /* -m group */
   unsigned mcast_port;       /* -m port */
-  const char *iface;         /* -I; NULL = kernel default route */
+  const char *iface;         /* -O; NULL = kernel default route */
   int rtp;                   /* -r */
   unsigned ttl;              /* -T; 0 = kernel default (1) */
   int dscp;                  /* --dscp, default NET_DSCP_VIDEO_HIGH */

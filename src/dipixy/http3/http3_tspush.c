@@ -5,7 +5,6 @@
 
 #include "http3.h"
 #include "http3_int.h"
-
 #include "lib/helper/byte_ring.h"
 
 /* data reader for TS push streams: drains per-subscriber SPSC ring */
@@ -26,8 +25,7 @@ nghttp3_ssize h3_tspush_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec,
   }
   size_t contig;
   const uint8_t *p = byte_ring_peek(&sub->h3_ring, &contig);
-  if (!p)
-    return NGHTTP3_ERR_WOULDBLOCK;
+  if (!p) return NGHTTP3_ERR_WOULDBLOCK;
   vec[0].base = (uint8_t *)p;
   vec[0].len = contig;
   *pflags = NGHTTP3_DATA_FLAG_NONE;
@@ -35,24 +33,37 @@ nghttp3_ssize h3_tspush_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec,
   return 1;
 }
 
-/* per-reactor tspush eventfd handler: resumes H3 streams with ring data */
-void ts_push_h3_flush(void) {
-  for (int ci = 0; ci < t_h3_active_cnt; ci++) {
-    h3_conn_t *c = t_h3_active[ci];
-    int fd;
-    if (c->done) continue;
-    fd = c->local_addr.ss_family == AF_INET6 ? t_h3_udp6 : t_h3_udp4;
-    if (fd < 0) continue;
-    for (int ri = 0; ri < H3_MAX_REQS; ri++) {
-      h3_req_t *r = &c->reqs[ri];
-      ts_sub_t *sub;
-      if (!r->active || r->tspush_sub_idx < 0) continue;
-      sub = &g_ts_subs[r->tspush_sub_idx];
-      if (atomic_load_explicit(&sub->h3_ring.wpos, memory_order_acquire) == atomic_load_explicit(&sub->h3_ring.rpos, memory_order_relaxed)) continue;
-      nghttp3_conn_resume_stream(c->h3conn, r->stream_id);
-      flush_tx(c, fd);
-    }
-  }
+/* registers TS push stream, submits response. always 1 = dispatched (h3 has
+   no separate slot table, unlike h2) */
+int h3_tspush_dispatch(h3_conn_t *c, h3_req_t *r, int sub) {
+  nghttp3_nv nva[] = {
+      {(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP3_NV_FLAG_NONE},
+      {(uint8_t *)"content-type", (uint8_t *)"video/mp2t", 12, 10, NGHTTP3_NV_FLAG_NONE},
+  };
+  nghttp3_data_reader dr;
+  g_ts_subs[sub].h3c = c;
+  g_ts_subs[sub].h3_sid = r->stream_id;
+  ts_push_set_reactor_tid(sub, t_reactor_tid);
+  r->tspush_sub_idx = sub;
+  dr.read_data = h3_tspush_read_cb;
+  nghttp3_conn_set_stream_user_data(c->h3conn, r->stream_id, r);
+  nghttp3_conn_submit_response(c->h3conn, r->stream_id, nva, 2, &dr);
+  atomic_store_explicit(&g_ts_subs[sub].ready, 1, memory_order_release);
+  return 1;
+}
+
+void h3_tspush_wake(int sub_idx) {
+  ts_sub_t *sub;
+  h3_conn_t *c;
+  int fd;
+  if (sub_idx < 0 || sub_idx >= g_ts_subs_n) return;
+  sub = &g_ts_subs[sub_idx];
+  c = sub->h3c;
+  if (!c || c->done) return;
+  fd = c->local_addr.ss_family == AF_INET6 ? t_h3_udp6 : t_h3_udp4;
+  if (fd < 0) return;
+  nghttp3_conn_resume_stream(c->h3conn, sub->h3_sid);
+  flush_tx(c, fd);
 }
 
 #endif /* HAVE_HTTP3 */

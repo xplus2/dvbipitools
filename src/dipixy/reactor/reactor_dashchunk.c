@@ -28,28 +28,21 @@ void reactor_dashchunk_close(int epfd, conn_t *c) {
   if (!conn_claim_teardown(c)) return;
   dash_lldash_sub_close(c->slot);
   conn_unpublish(c);
-  epoll_ctl(epfd, EPOLL_CTL_DEL, c->fd, NULL);
-  tls_close_fd(c->fd);
-  conn_free(c);
+  reactor_teardown_common(epfd, c);
 }
 
 void reactor_dashchunk_readable(int epfd, conn_t *c) {
-  reactor_push_conn_readable(epfd, c, reactor_dashchunk_close, reactor_dashchunk_flush);
+  reactor_push_conn_readable(epfd, c, reactor_dashchunk_close, reactor_dashchunk_flush, 0);
 }
 
 void reactor_dashchunk_flush(int epfd, conn_t *c) {
-  int rc;
-  int close_after;
-  int keep;
-  int dead;
+  int dead, close_after, keep, rc;
   pthread_mutex_lock(&c->out_lock);
   dead = c->dead;
-  pthread_mutex_unlock(&c->out_lock);
-  rc = dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
-  pthread_mutex_lock(&c->out_lock);
   close_after = c->close_after_flush;
   keep = c->keep_alive;
   pthread_mutex_unlock(&c->out_lock);
+  rc = dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
   if (rc == CONN_FLUSH_ERROR) {
     reactor_dashchunk_close(epfd, c);
     return;

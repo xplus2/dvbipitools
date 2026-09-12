@@ -14,32 +14,45 @@
 #include "lib/helper/log.h"
 #include "lib/mux/fmp4/fmp4.h"
 
+#include "../ts/lcevcselect.h"
+
 #include "segment.h"
 
-typedef struct hls_seg_ctx {
-  capture_ctx_t *cap_ctx;
-  _Atomic(struct hls_seg_ctx *) chain_next;
-  pid_filter_t filter;
-  unsigned pmt_pid; /* 0 = auto */
-  unsigned char cc_pmt; /* SEG_CONTAINER_TS: rewritten PMT packets' own cc */
-  _Atomic int64_t last_request_ms;
-  _Atomic int refcount;
-
+/* pid locking: which pid is video/audio, once psi_ready(). demux.c owns this */
+typedef struct {
   psi_t *psi;
   pes_t *pes;
   int video_pid_known;
   unsigned video_pid;
   codec_t video_codec;
+  int audio_pid_known;
+  unsigned audio_pid;
+  codec_t audio_codec;
+  int lcevc_pid_known; /* fmp4 only: one specific standalone-ES lcevc pid resolved */
+  unsigned lcevc_pid;
 
   /* locked program's own pids only, built once video_pid_known: PAT, its PMT, PCR, PES. MPTS -> SPTS */
   unsigned allowed_pids[PSI_MAX_ES + 3];
   int n_allowed;
+} seg_demux_t;
 
-  /* fmp4 only, ts already carries audio raw. picked at video pid lock-on */
+/* video ES decode + classic (non-fmp4) segmentation cadence. video.c owns this */
+typedef struct {
+  esc_track_t es;              /* SPS/PPS scratch, also feeds cpriv for fmp4's avcC/hvcC */
+  unsigned char *nal_scratch;  /* esc_handle_*_nal's AU buffer, discarded each AU */
+  size_t nal_scratch_len, nal_scratch_cap;
+  pts_unwrap_t ptswrap, dtswrap;
+
+  int seg_open;          /* 1 once first keyframe seen */
+  int64_t first_ts_ms;   /* decode-order ms (dts, or pts if no dts) at segment start, -1 if unknown */
+  double seg_target;
+  int max_segs;
+  int boot_left; /* classic TS cold-open cut countdown */
+} seg_video_t;
+
+/* fmp4 only, ts already carries audio raw. picked at video pid lock-on. audio.c owns this */
+typedef struct {
   int audio_present;   /* 1: locked program has a supported audio ES */
-  int audio_pid_known;
-  unsigned audio_pid;
-  codec_t audio_codec;
   esc_track_t es_audio; /* AAC ASC / LATM state, next_frame()'s scratch */
   unsigned char *audio_rem;
   size_t audio_remlen, audio_remcap;
@@ -47,7 +60,6 @@ typedef struct hls_seg_ctx {
   unsigned audio_rate, audio_channels;
   unsigned audio_bsid, audio_bsmod, audio_acmod, audio_lfeon; /* AC3/EAC3 only */
   unsigned audio_bitrate_code; /* AC3: frmsizecod. EAC3: estimated data_rate kbps */
-  int fmp4_audio_track_idx; /* -1 until fmux created with an audio track */
 
   /* nominal audio duration drifts unbounded off encoder clock, pes pts corrects. nominal kept in exact native samples,
      never ms: ms accumulation truncates frames */
@@ -57,37 +69,31 @@ typedef struct hls_seg_ctx {
   int64_t audio_anchor_nominal_samples;
   int64_t audio_nominal_samples;
   int64_t audio_pending_drift_samples;
+  int fmp4_audio_seeded;
+} seg_audio_t;
 
-  /* accumulates every incoming packet (all PIDs) since last cut */
-  unsigned char *buf;
-  size_t len, cap;
+/* fmp4 lcevc track, 1 pes = 1 au. video.c owns */
+typedef struct {
+  pts_unwrap_t ptswrap;
+  unsigned char *pend_data;
+  size_t pend_len, pend_cap;
+  int64_t pend_ts_ms;
+  int have_pend;
+  int seeded; /* seed_dts() done, relative to fmp4_anchor_ms */
+} seg_lcevc_t;
 
-  /* offset in buf marking start of PES currently being reassembled by pes.c.
-     pes.c's callback fires for PES only once its successor's PUSI arrives, one AU late -> "pending" */
-  size_t pending_pes_off;
-  int have_pending_pes;
-
-  int seg_open;          /* 1 once first keyframe seen */
-  int64_t first_ts_ms;   /* decode-order ms (dts, or pts if no dts) at segment start, -1 if unknown */
-  pts_unwrap_t ptswrap, dtswrap;
-  double seg_target;
-  int max_segs;
-  int boot_left; /* classic TS cold-open cut countdown */
-
-  esc_track_t es;              /* SPS/PPS scratch, also feeds cpriv for fmp4's avcC/hvcC */
-  unsigned char *nal_scratch;  /* esc_handle_*_nal's AU buffer, discarded each AU */
-  size_t nal_scratch_len, nal_scratch_cap;
-
-  seg_container_t container;
+/* fmp4 fragment/segment mux state. mux.c owns this */
+typedef struct {
   fmp4_mux_t *fmux; /* SEG_CONTAINER_FMP4 only, created once SPS/PPS known */
   int fmp4_frag_open;
   int64_t fmp4_frag_start_ts_ms; /* current open fragment's first sample ts, drives chunk_now */
   int fmp4_frag_key;             /* current open fragment's first sample keyframe flag */
   uint32_t fmp4_seq;
   int64_t fmp4_anchor_ms;
-  int fmp4_audio_seeded;
+  int fmp4_audio_track_idx; /* -1 until fmux created with an audio track */
+  int fmp4_lcevc_track_idx; /* -1 until fmux created with an lcevc track */
 
-  /* fmp4 duration: next au's dts minus this one's. delayed one au past pending_pes_off above */
+  /* fmp4 duration: next au's dts minus this one's. delayed one au past pending_pes_off below */
   unsigned char *fmp4_pend_data;
   size_t fmp4_pend_len, fmp4_pend_cap;
   int fmp4_pend_key;
@@ -97,9 +103,12 @@ typedef struct hls_seg_ctx {
   int fmp4_pend_ends_seg;   /* set alongside starts_frag: this boundary also closes the enclosing segment */
   double fmp4_pend_elapsed; /* set alongside starts_frag, used if this pend later closes a segment */
   int fmp4_have_pend;
+} seg_fmp4_t;
 
+/* LL-HLS/LL-DASH part boundary tracking, both container kinds */
+typedef struct {
   /* 0 = LL off. TS: part closes on keyframe or part_target secs, whichever first.
-     FMP4: chunk closes on part_target secs, sample-aligned, independent of keyframe.
+     FMP4: chunk closes on part_target secs, sample-aligned, keyframe independent.
      atomic: hls_seg_touch() write vs pump's unlocked read */
   _Atomic double part_target;
   size_t part_start_off;
@@ -112,6 +121,35 @@ typedef struct hls_seg_ctx {
   int64_t last_au_ts_ms;
   int last_au_key;
   int have_last_au;
+} seg_part_t;
+
+typedef struct hls_seg_ctx {
+  capture_ctx_t *cap_ctx;
+  _Atomic(struct hls_seg_ctx *) chain_next;
+  hls_store_t *store;
+  pid_filter_t filter;
+  unsigned pmt_pid; /* 0 = auto */
+  unsigned char cc_pmt; /* SEG_CONTAINER_TS: rewritten PMT packets' own cc */
+  lcevc_select_t lcevc;
+  _Atomic int64_t last_request_ms;
+  _Atomic int refcount;
+
+  seg_demux_t demux;
+  seg_video_t video;
+  seg_audio_t audio;
+  seg_lcevc_t lcevc_track;
+  seg_fmp4_t fmp4;
+  seg_part_t part;
+
+  /* accumulates every incoming packet (all PIDs) since last cut */
+  unsigned char *buf;
+  size_t len, cap;
+
+  /* offset in buf marking start of PES currently being reassembled by pes.c.
+     pes.c's callback fires for PES only once its successor's PUSI arrives, one AU late -> "pending" */
+  size_t pending_pes_off;
+  int have_pending_pes;
+  seg_container_t container;
 
   log_throttle_t seg_push_fail_throttle;
   log_throttle_t oom_drop_throttle;
@@ -124,7 +162,7 @@ typedef struct hls_seg_ctx {
 int buf_reserve(unsigned char **buf, size_t *cap, size_t need);
 void hls_seg_registry_lock(void);
 void hls_seg_registry_unlock(void);
-hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container);
+hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container);
 
 /* mp4push.c */
 void mp4push_deliver(const hls_seg_ctx_t *s, const unsigned char *data, size_t len);
@@ -133,9 +171,11 @@ void mp4push_deliver(const hls_seg_ctx_t *s, const unsigned char *data, size_t l
 void try_create_fmux(hls_seg_ctx_t *s);
 void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, int32_t cts_ticks, int open_now, int cut_now, double elapsed);
 void fmp4_feed_audio_au(hls_seg_ctx_t *s, const esc_frame_t *f);
+void fmp4_feed_lcevc_au(hls_seg_ctx_t *s, int64_t ts_ms, const unsigned char *data, size_t len);
 
 /* video.c */
 void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len);
+void handle_lcevc_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigned char *data, size_t len);
 
 /* audio.c */
 void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigned char *data, size_t len);

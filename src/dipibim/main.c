@@ -3,22 +3,19 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "args.h"
 #include "lib/bim/accessunit.h"
-#include "lib/bim/bitreader.h"
+#include "lib/bim/bimreader.h"
 #include "lib/bim/bitwriter.h"
 #include "lib/bim/strrepo.h"
+#include "lib/helper/fileutil.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
 #include "lib/tva/bcg_doc.h"
 #include "lib/tva/tva_xml.h"
 #include "version.h"
-
-static FILE *open_input(const char *path) { return strcmp(path, "-") ? fopen(path, "r") : stdin; }
-static FILE *open_output(const char *path) { return strcmp(path, "-") ? fopen(path, "w") : stdout; }
 
 static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
   bcg_doc_t doc;
@@ -31,7 +28,6 @@ static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
   accessunit_scratch_init(&sc);
-
   if (tva_xml_read(in, &doc)) {
     rc = -1;
   } else if (accessunit_encode(&sc, &doc, &bw, &sw, &nfuu)) {
@@ -77,7 +73,6 @@ static int decode_bim_to_xml(FILE *in, FILE *out, int verbose) {
     size_t bits_len = ((size_t)ubuf[0] << 24) | ((size_t)ubuf[1] << 16) | ((size_t)ubuf[2] << 8) | (size_t)ubuf[3];
     bitreader_t br;
     strrepo_reader_t sr;
-
     if (bits_len > len - 4) {
       rc = -1;
       goto done;
@@ -92,8 +87,7 @@ static int decode_bim_to_xml(FILE *in, FILE *out, int verbose) {
       goto done;
     }
     tva_xml_write(out, &doc);
-    if (verbose)
-      log_line("%d channels, %d programmes, %d fragments read", doc.channel_count, doc.programme_count, nfuu);
+    if (verbose) log_line("%d channels, %d programmes, %d fragments read", doc.channel_count, doc.programme_count, nfuu);
   }
 
 done:
@@ -105,36 +99,23 @@ done:
 
 int main(int argc, char **argv) {
   config_t cfg;
-  args_status_t st;
   FILE *in, *out;
   int rc;
 
-  log_set_color(log_color_prescan(argc, argv));
-  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
-  st = args_parse(argc, argv, &cfg);
-  if (st == ARGS_OK) log_set_color((log_color_t)cfg.color_mode);
-  if (st == ARGS_HELP) return 0;
-  if (st == ARGS_ERR) {
-    fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
-    return 2;
-  }
-
-  in = open_input(cfg.input_path);
+  TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
+  in = fileutil_open_std(cfg.input_path, "r");
   if (!in) {
     fprintf(stderr, TOOL_NAME ": cannot open %s\n", cfg.input_path);
     return 1;
   }
-  out = open_output(cfg.output_path);
+  out = fileutil_open_std(cfg.output_path, "w");
   if (!out) {
     fprintf(stderr, TOOL_NAME ": cannot open %s\n", cfg.output_path);
     if (in != stdin) fclose(in);
     return 1;
   }
-
-  if (cfg.format == FMT_XML)
-    rc = encode_xml_to_bim(in, out, cfg.verbose) ? 1 : 0;
-  else
-    rc = decode_bim_to_xml(in, out, cfg.verbose) ? 1 : 0;
+  if (cfg.format == FMT_XML) rc = encode_xml_to_bim(in, out, cfg.verbose) ? 1 : 0;
+  else rc = decode_bim_to_xml(in, out, cfg.verbose) ? 1 : 0;
 
   if (in != stdin) fclose(in);
   if (out != stdout && fclose(out) && rc == 0) {

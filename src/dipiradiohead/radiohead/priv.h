@@ -56,10 +56,11 @@ void meta_cb(void *ctx, const char *artist, const char *title);
 ristout_t *radiohead_rist_open(const config_t *cfg);
 /* caller only calls this when cfg->n_srt > 0; NULL on err */
 srtsink_t *radiohead_srt_open(const config_t *cfg);
+int radiohead_output_open(const config_t *cfg, out_ctx_t *o);
+void radiohead_output_close(out_ctx_t *o);
 /* ticks o->srt connect/reconnect + flush. no-op if !o->srt. call every loop iter. */
 void radiohead_srt_service(out_ctx_t *o);
 void flush_batch(out_ctx_t *o);
-void free_rtp_out(out_ctx_t *o);
 void packet_cb(void *ctx, const unsigned char *pkt188);
 const char *codec_name(source_codec_t c);
 

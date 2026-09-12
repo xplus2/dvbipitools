@@ -64,6 +64,8 @@ struct capture_reader {
 typedef struct capture_snapshot {
   struct capture_snapshot *retired_next; /* g_retired list, g_lock protected */
   int n;
+  int shard_start[CAPTURE_PUMP_MAX_THREADS];
+  int shard_count[CAPTURE_PUMP_MAX_THREADS];
   capture_ctx_t *ctxs[];
 } capture_snapshot_t;
 
@@ -81,6 +83,9 @@ void reclaim_retired_snapshots(void); /* caller holds no lock, not on a pump thr
 
 /* capture.c */
 ssize_t capture_fec_read(capture_ctx_t *ctx, unsigned char *buf, size_t cap);
+
+/* service.c */
+ssize_t capture_read_dispatch(capture_ctx_t *ctx, unsigned char *buf, size_t bufcap, int *unwrapped);
 
 /* pump.c */
 int next_pump_shard(void);

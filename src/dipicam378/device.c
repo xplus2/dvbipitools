@@ -36,28 +36,20 @@ void device_on_emm(device_state_t *d, const unsigned char *emm, size_t emm_len) 
 #define SC_SECTION_TID_ECM_ODD 0x81
 
 int device_resolve_cw(device_state_t *d, const unsigned char *ecm, size_t ecm_len, unsigned srvid, unsigned caid, unsigned char cw_out[16]) {
-  service_key_t *sk;
   unsigned char sk_copy[CRYPTO_KEY_LEN];
   unsigned char cw[16];
-  int have;
 
   if (d->caid && caid != d->caid) return -2; /* permanent: wrong caid, never answerable regardless of EMM state */
 
   /* section header(3) + CP_CW_COMBINATION's cp_number(2), then encrypted CW block */
   if (ecm_len < 5 + CRYPTO_CW_ENC_LEN) return -1;
-  device_core_lock(&d->core);
-  sk = device_core_service_slot_locked(&d->core, srvid, 0);
-  have = sk && sk->have;
-  if (have) memcpy(sk_copy, sk->sk, sizeof sk_copy);
-  device_core_unlock(&d->core);
-  if (!have) return -1;
+  if (device_core_copy_service_key(&d->core, srvid, 0, sk_copy) != 0) return -1;
 
   if (device_ecm_decrypt(sk_copy, ecm + 5, d->cw_len, cw) != 0) {
     secure_zero(sk_copy, sizeof sk_copy);
     return -1;
   }
   secure_zero(sk_copy, sizeof sk_copy);
-
   memset(cw_out, 0, 16);
   if (d->cw_len == 16) {
     memcpy(cw_out, cw, 16);

@@ -73,6 +73,20 @@ size_t uint_to_str_pad(char *dst, unsigned val, unsigned min_width) {
 
 size_t uint_to_str(char *dst, unsigned val) { return uint_to_str_pad(dst, val, 0); }
 
+size_t u64_to_dec(char *dst, uint64_t val) {
+  char tmp[20];
+  unsigned n = 0;
+  if (val == 0) {
+    tmp[n++] = '0';
+  } else while (val) {
+    tmp[n++] = (char)('0' + val % 10);
+    val /= 10;
+  }
+  for (unsigned i = 0; i < n; i++) dst[i] = tmp[n - 1 - i];
+  dst[n] = '\0';
+  return n;
+}
+
 void *array_grow(void *arr, int *cap, int need, size_t elemsz) {
   int newcap;
   void *p;
@@ -163,7 +177,6 @@ long date_to_mjd(int y, int mo, int d) {
 int pipe_write_all(int fd, const unsigned char *buf, size_t n, const atomic_int *stop) {
   while (n) {
     ssize_t w = write(fd, buf, n);
-
     if (w > 0) {
       buf += (size_t)w;
       n -= (size_t)w;

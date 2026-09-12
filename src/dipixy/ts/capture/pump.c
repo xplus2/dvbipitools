@@ -2,11 +2,11 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "priv.h"
-
+#include "../../reactor/qsbr.h"
 #include "lib/demux/rtp.h"
+#include "lib/helper/signal.h"
 
 #include <poll.h>
-#include <sched.h>
 #include <string.h>
 #include <time.h>
 
@@ -18,8 +18,9 @@ static int g_pump_resume_idx[CAPTURE_PUMP_MAX_THREADS];
 /* set once by capture_pump_set_thread_count() before any pump/worker thread starts, read-only after: plain int safe */
 static int g_n_pump_threads = 1;
 
-/* odd=mid-sweep, even=idle. thread writes only its own slot. waiters wait for all even before freeing r-unlocked mem */
-static _Atomic uint64_t g_pump_gen[CAPTURE_PUMP_MAX_THREADS];
+static qsbr_domain_t *g_pump_qsbr;
+
+_Thread_local int t_pump_tid = -1;
 
 static _Atomic int g_shard_ctr;
 
@@ -28,18 +29,10 @@ int next_pump_shard(void) {
 }
 
 void capture_pump_set_thread_count(int n) {
-  if (n < 1)
-    n = 1;
-  if (n > CAPTURE_PUMP_MAX_THREADS)
-    n = CAPTURE_PUMP_MAX_THREADS;
+  if (n < 1) n = 1;
+  if (n > CAPTURE_PUMP_MAX_THREADS) n = CAPTURE_PUMP_MAX_THREADS;
   g_n_pump_threads = n;
-}
-
-void capture_wait_pumps_quiescent(void) {
-  for (int i = 0; i < g_n_pump_threads; i++) {
-    uint64_t g = atomic_load_explicit(&g_pump_gen[i], memory_order_acquire);
-    if (g & 1) while (atomic_load_explicit(&g_pump_gen[i], memory_order_acquire) == g) sched_yield();
-  }
+  g_pump_qsbr = qsbr_domain_create(n);
 }
 
 static int try_pin(capture_ctx_t *c) {
@@ -56,6 +49,20 @@ static int64_t monotonic_ms(void) {
   return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
+void capture_wait_pumps_quiescent(void) {
+  uint64_t mark[CAPTURE_PUMP_MAX_THREADS];
+  int64_t stop_deadline = 0;
+  int spins = 0;
+  qsbr_mark(g_pump_qsbr, mark);
+  while (!qsbr_mark_passed_excl(g_pump_qsbr, mark, t_pump_tid)) {
+    if (signal_stop_requested()) {
+      if (!stop_deadline) stop_deadline = monotonic_ms() + 2000;
+      else if (monotonic_ms() >= stop_deadline) break;
+    }
+    qsbr_backoff(spins++);
+  }
+}
+
 /* stdin/http aren't packet-aligned: reassembles 188B packets across calls */
 static int tssrc_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned char *pkt), void *user) {
   int64_t deadline = monotonic_ms() + CAPTURE_TSSRC_DRAIN_BUDGET_MS;
@@ -67,8 +74,7 @@ static int tssrc_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsign
     ssize_t n;
     if (monotonic_ms() >= deadline) return 0;
     if (fd >= 0) {
-      /* underlying fd (stdin above all) may be a blocking descriptor with
-         nothing to read: poll first, never call tssrc_read() blind */
+      /* underlying fd (stdin above all) may be blocking with nothing to read: poll first, never call tssrc_read() blind */
       struct pollfd pfd = {fd, POLLIN, 0};
       if (poll(&pfd, 1, 0) <= 0) return 0;
     }
@@ -103,22 +109,8 @@ int capture_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned ch
     const unsigned char *payload;
     size_t len;
     ssize_t n;
-    int unwrapped = 0;
-    if (ctx->fcc) {
-      unwrapped = 1;
-      n = fcc_client_read(ctx->fcc, ctx->m, buf, sizeof buf);
-      if (fcc_client_done(ctx->fcc)) {
-        fcc_client_close(ctx->fcc);
-        ctx->fcc = NULL;
-      }
-    } else if (ctx->ret) {
-      unwrapped = 1;
-      n = ret_client_read(ctx->ret, ctx->m, buf, sizeof buf);
-    } else if (ctx->fec_dec) {
-      n = capture_fec_read(ctx, buf, sizeof buf);
-    } else {
-      n = mcast_recv(ctx->m, buf, sizeof buf, NULL);
-    }
+    int unwrapped;
+    n = capture_read_dispatch(ctx, buf, sizeof buf, &unwrapped);
     if (n < 0) return -1;
     if (n == 0) return 0;
     atomic_fetch_add_explicit(&ctx->write_total, (uint64_t)n, memory_order_relaxed);
@@ -163,28 +155,30 @@ static void pump_release_pin(capture_ctx_t *c) {
 int capture_pump_tick(int pid, void (*sink)(capture_ctx_t *ctx, void *user, const unsigned char *pkt), void *user) {
   capture_ctx_t *snap_pin[CAPTURE_PUMP_SNAPSHOT_MAX];
   int n = 0, i, total = 0, idx, start;
+  int shard_off, shard_cnt;
   const capture_snapshot_t *snap;
 
-  atomic_fetch_add_explicit(&g_pump_gen[pid], 1, memory_order_release);
   snap = atomic_load_explicit(&g_snapshot, memory_order_acquire);
   if (snap != g_pump_last_snap[pid]) {
     g_pump_last_snap[pid] = snap;
     g_pump_resume_idx[pid] = 0;
   }
   if (snap) {
+    shard_off = snap->shard_start[pid];
+    shard_cnt = snap->shard_count[pid];
     start = g_pump_resume_idx[pid];
-    for (idx = start; idx < snap->n && n < CAPTURE_PUMP_SNAPSHOT_MAX; idx++) {
-      capture_ctx_t *c = snap->ctxs[idx];
-      if (c->pump_shard != pid || !try_pin(c)) continue;
+    for (idx = start; idx < shard_cnt && n < CAPTURE_PUMP_SNAPSHOT_MAX; idx++) {
+      capture_ctx_t *c = snap->ctxs[shard_off + idx];
+      if (!try_pin(c)) continue;
       snap_pin[n++] = c;
     }
     if (n < CAPTURE_PUMP_SNAPSHOT_MAX) /* end reached b4 cap: wrap to head */
       for (idx = 0; idx < start && n < CAPTURE_PUMP_SNAPSHOT_MAX; idx++) {
-        capture_ctx_t *c = snap->ctxs[idx];
-        if (c->pump_shard != pid || !try_pin(c)) continue;
+        capture_ctx_t *c = snap->ctxs[shard_off + idx];
+        if (!try_pin(c)) continue;
         snap_pin[n++] = c;
       }
-    g_pump_resume_idx[pid] = idx >= snap->n ? 0 : idx;
+    g_pump_resume_idx[pid] = idx >= shard_cnt ? 0 : idx;
   }
 
   for (i = 0; i < n; i++) {
@@ -197,6 +191,6 @@ int capture_pump_tick(int pid, void (*sink)(capture_ctx_t *ctx, void *user, cons
       log_throttled(&snap_pin[i]->drain_err_throttle, LOG_THROTTLE_WINDOW_S, "capture: source read error");
   }
   for (i = 0; i < n; i++) pump_release_pin(snap_pin[i]);
-  atomic_fetch_add_explicit(&g_pump_gen[pid], 1, memory_order_release);
+  qsbr_worker_quiescent(g_pump_qsbr, pid);
   return total;
 }

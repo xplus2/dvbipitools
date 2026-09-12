@@ -64,6 +64,8 @@ typedef struct {
   /* set by emit_downstream(). a void scrambler_emit_cb can't return an error code. this is how a failed mkv_feed/write reaches pkt_cb's int return */
   int emit_failed;
   int fatal; /* CAS/BISS scheme could not be resolved (missing key material, unsupported mode) */
+  int emmcache_dirty;
+  double emmcache_last_save;
 } loop_ctx_t;
 
 /* CAS resolve -> ECM/EMM reassembly -> CW resolve -> descramble in place. lc must be
@@ -83,5 +85,8 @@ void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const
 void srt_service_all(loop_ctx_t *lc);
 
 void pipeline_service_unicast_emm(loop_ctx_t *lc);
+
+void pipeline_service_emmcache(loop_ctx_t *lc);
+void pipeline_flush_emmcache(loop_ctx_t *lc);
 
 #endif

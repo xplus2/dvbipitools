@@ -10,9 +10,7 @@
 
 /* existing candidate for this pmt_pid, or NULL */
 pmt_cand_t *find_cand(psi_t *c, unsigned pmt_pid) {
-  for (int k = 0; k < c->pmt_cand_count; k++)
-    if (c->pmt_cand[k].pmt_pid == pmt_pid)
-      return &c->pmt_cand[k];
+  for (int k = 0; k < c->pmt_cand_count; k++) if (c->pmt_cand[k].pmt_pid == pmt_pid) return &c->pmt_cand[k];
   return NULL;
 }
 
@@ -23,10 +21,8 @@ void rebuild_class_table(psi_t *c) {
   memset(c->class_by_pid, 0, sizeof c->class_by_pid); /* PID_UNKNOWN == 0 */
   if (c->have_pmt) {
     c->class_by_pid[c->pcr_pid] = PID_PCR;
-    for (int i = 0; i < c->ecm_count; i++)
-      c->class_by_pid[c->ecm[i]] = PID_ECM;
-    for (int i = 0; i < c->es_count; i++)
-      c->class_by_pid[c->es[i].pid] = c->es[i].cls;
+    for (int i = 0; i < c->ecm_count; i++) c->class_by_pid[c->ecm[i]] = PID_ECM;
+    for (int i = 0; i < c->es_count; i++)  c->class_by_pid[c->es[i].pid] = c->es[i].cls;
     c->class_by_pid[c->pmt_pid] = PID_PMT;
   } else if (c->have_pat) {
     c->class_by_pid[c->pmt_pid] = PID_PMT;
@@ -45,8 +41,7 @@ void rebuild_class_table(psi_t *c) {
 
 psi_t *psi_new(void) {
   psi_t *c = calloc(1, sizeof(psi_t));
-  if (c)
-    rebuild_class_table(c); /* seeds fixed pids before any packet arrives */
+  if (c) rebuild_class_table(c); /* seeds fixed pids before any packet arrives */
   return c;
 }
 
@@ -59,8 +54,7 @@ static void note_pmt_resolved(psi_t *c, int k) {
     c->pmt_locked = 1;
     c->pmt_lock_idx = k;
   }
-  if (c->multi_mode)
-    c->multi[k].resolved = 1;
+  if (c->multi_mode) c->multi[k].resolved = 1;
 }
 
 void psi_feed(psi_t *c, const unsigned char *pkt) {
@@ -69,43 +63,33 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
   size_t plen;
   const unsigned char *pl;
 
-  if (pkt[0] != 0x47)
-    return;
+  if (pkt[0] != 0x47) return;
   pid = tspack_pid(pkt);
-  if (!tspack_payload(pkt, &pl, &plen, &pusi))
-    return;
-
+  if (!tspack_payload(pkt, &pl, &plen, &pusi)) return;
   switch (pid) {
     case TS_PID_PAT:
-      if (psi_section_asm_feed(&c->pat, pl, plen, pusi))
-        parse_pat(c);
+      if (psi_section_asm_feed(&c->pat, pl, plen, pusi)) parse_pat(c);
       return;
     case TS_PID_NIT:
-      if (psi_section_asm_feed(&c->nit, pl, plen, pusi))
-        parse_nit(c);
+      if (psi_section_asm_feed(&c->nit, pl, plen, pusi)) parse_nit(c);
       return;
     case TS_PID_SDT:
-      if (psi_section_asm_feed(&c->sdt, pl, plen, pusi))
-        parse_sdt(c);
+      if (psi_section_asm_feed(&c->sdt, pl, plen, pusi)) parse_sdt(c);
       return;
     case TS_PID_CAT:
-      if (psi_section_asm_feed(&c->cat, pl, plen, pusi))
-        parse_cat(c);
+      if (psi_section_asm_feed(&c->cat, pl, plen, pusi)) parse_cat(c);
       return;
     default:
       break;
   }
 
   if (c->pmt_locked && !c->multi_mode) {
-    if (pid == c->pmt_pid && psi_section_asm_feed(&c->pmt_cand[c->pmt_lock_idx].asm_, pl, plen, pusi))
-      parse_pmt(c, &c->pmt_cand[c->pmt_lock_idx]);
+    if (pid == c->pmt_pid && psi_section_asm_feed(&c->pmt_cand[c->pmt_lock_idx].asm_, pl, plen, pusi)) parse_pmt(c, &c->pmt_cand[c->pmt_lock_idx]);
   } else if (c->have_pat) {
     for (int k = 0; k < c->pmt_cand_count; k++) {
       pmt_cand_t *cand = &c->pmt_cand[k];
-      if (cand->pmt_pid != pid)
-        continue;
-      if (psi_section_asm_feed(&cand->asm_, pl, plen, pusi) && parse_pmt(c, cand))
-        note_pmt_resolved(c, k);
+      if (cand->pmt_pid != pid) continue;
+      if (psi_section_asm_feed(&cand->asm_, pl, plen, pusi) && parse_pmt(c, cand)) note_pmt_resolved(c, k);
       break;
     }
   }
@@ -121,8 +105,7 @@ int psi_wants_pid(const psi_t *c, unsigned pid) {
     default:
       break;
   }
-  if (c->pmt_locked && !c->multi_mode)
-    return pid == c->pmt_pid;
+  if (c->pmt_locked && !c->multi_mode) return pid == c->pmt_pid;
   return c->have_pat && pid < 8192 && c->pmt_wanted[pid];
 }
 
@@ -131,14 +114,12 @@ void psi_select_pmt_pid(psi_t *c, unsigned pmt_pid) { c->preferred_pmt_pid = pmt
 void psi_enable_multi_program(psi_t *c) { c->multi_mode = 1; }
 
 const psi_multi_program_t *psi_multi_programs(const psi_t *c, int *count) {
-  if (count)
-    *count = c->multi_count;
+  if (count) *count = c->multi_count;
   return c->multi;
 }
 
 const psi_program_t *psi_pat_programs(const psi_t *c, int *count) {
-  if (count)
-    *count = c->pat_program_count;
+  if (count) *count = c->pat_program_count;
   return c->pat_programs;
 }
 
@@ -161,8 +142,7 @@ unsigned psi_pmt_ca_system_id(const psi_t *c) { return c->pmt_ca_system_id; }
 unsigned psi_pmt_ca_pid(const psi_t *c) { return c->pmt_ca_pid; }
 
 const psi_es_t *psi_es(const psi_t *c, int *count) {
-  if (count)
-    *count = c->es_count;
+  if (count) *count = c->es_count;
   return c->es;
 }
 
@@ -176,23 +156,19 @@ pid_class_t psi_classify(const psi_t *c, unsigned pid) { return c->class_by_pid[
 
 const unsigned char *psi_pat_section(const psi_t *c, size_t *len) {
   if (!c->have_pat) {
-    if (len)
-      *len = 0;
+    if (len) *len = 0;
     return NULL;
   }
-  if (len)
-    *len = c->pat.expect;
+  if (len) *len = c->pat.expect;
   return c->pat.buf;
 }
 
 const unsigned char *psi_pmt_section(const psi_t *c, size_t *len) {
   if (!c->have_pmt || !c->pmt_locked) {
-    if (len)
-      *len = 0;
+    if (len) *len = 0;
     return NULL;
   }
-  if (len)
-    *len = c->pmt_cand[c->pmt_lock_idx].asm_.expect;
+  if (len) *len = c->pmt_cand[c->pmt_lock_idx].asm_.expect;
   return c->pmt_cand[c->pmt_lock_idx].asm_.buf;
 }
 
@@ -214,6 +190,7 @@ const char *pid_class_name(pid_class_t k) {
     case PID_AIT:       return "AIT";
     case PID_ECM:       return "ECM";
     case PID_DATA:      return "data";
+    case PID_LCEVC:     return "LCEVC";
     case PID_UNKNOWN:   return "unknown";
   }
   return "unknown";
@@ -231,6 +208,7 @@ const char *codec_name(codec_t k) {
     case CODEC_AC3:       return "ac3";
     case CODEC_EAC3:      return "eac3";
     case CODEC_OPUS:      return "opus";
+    case CODEC_LCEVC:     return "lcevc";
     case CODEC_NONE:      return "none";
   }
   return "none";

@@ -23,8 +23,7 @@ static int ranges_parse(const char *s, config_t *cfg) {
   char buf[ARGS_MAX_RANGES * 64];
   char *tok, *save = NULL;
   size_t slen = strlen(s);
-  if (slen >= sizeof buf)
-    return -1;
+  if (slen >= sizeof buf) return -1;
   memcpy(buf, s, slen + 1);
   cfg->range_count = 0;
   for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
@@ -34,16 +33,12 @@ static int ranges_parse(const char *s, config_t *cfg) {
     struct in6_addr a6;
     long prefix;
     char *end;
-    if (cfg->range_count >= ARGS_MAX_RANGES)
-      return -1;
-    if (!slash)
-      return -1;
+    if (cfg->range_count >= ARGS_MAX_RANGES) return -1;
+    if (!slash) return -1;
     *slash = '\0';
-    if (is_v6 ? inet_pton(AF_INET6, tok, &a6) != 1 : inet_pton(AF_INET, tok, &a4) != 1)
-      return -1;
+    if (is_v6 ? inet_pton(AF_INET6, tok, &a6) != 1 : inet_pton(AF_INET, tok, &a4) != 1) return -1;
     prefix = strtol(slash + 1, &end, 10);
-    if (*end != '\0' || prefix < 0 || prefix > (is_v6 ? 128 : 32))
-      return -1;
+    if (*end != '\0' || prefix < 0 || prefix > (is_v6 ? 128 : 32)) return -1;
     *slash = '/';
     {
       size_t tlen = strlen(tok);
@@ -61,13 +56,11 @@ static int cidr_list_parse(const char *s, cidr_t *out, size_t *count, size_t max
   char buf[ARGS_MAX_RANGES * 64];
   char *tok, *save = NULL;
   size_t slen = strlen(s);
-  if (slen >= sizeof buf)
-    return -1;
+  if (slen >= sizeof buf) return -1;
   memcpy(buf, s, slen + 1);
   *count = 0;
   for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
-    if (*count >= max || cidr_parse(tok, &out[*count]) != 0)
-      return -1;
+    if (*count >= max || cidr_parse(tok, &out[*count]) != 0) return -1;
     (*count)++;
   }
   return *count ? 0 : -1;
@@ -380,10 +373,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->metrics_id = optarg;
         break;
       case 1024:
-        if (argutil_uint_range(optarg, 1, 86400, &cfg->metrics_interval_s)) {
-          argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
-          return ARGS_ERR;
-        }
+        if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
       case 'h':
         print_help();
@@ -420,9 +410,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     long n = sysconf(_SC_NPROCESSORS_ONLN);
     cfg->workers = n > 0 ? (unsigned)n : 1;
   }
-  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
-    argerr("--metrics/--metrics-interval require --metrics-id");
-    return ARGS_ERR;
-  }
+  if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
   return ARGS_OK;
 }

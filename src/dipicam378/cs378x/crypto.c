@@ -3,25 +3,12 @@
 
 #include <openssl/evp.h>
 
+#include "lib/demux/crc32.h"
+
 #include "cs378x.h"
 
-static uint32_t crc32_table[256];
-
-void cs378x_crc32_init_table(void) {
-  for (int n = 0; n < 256; n++) {
-    uint32_t c = (uint32_t)n;
-    for (int k = 0; k < 8; k++)
-      c = (c & 1) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1);
-    crc32_table[n] = c;
-  }
-}
-
-/* zlib-standard CRC-32 (reflected, poly 0xEDB88320) */
 uint32_t cs378x_crc32(const unsigned char *buf, size_t len) {
-  uint32_t crc = 0xFFFFFFFFu;
-  for (size_t i = 0; i < len; i++)
-    crc = crc32_table[(crc ^ buf[i]) & 0xFF] ^ (crc >> 8);
-  return crc ^ 0xFFFFFFFFu;
+  return crc32_zlib(0, buf, len);
 }
 
 int cs378x_md5(const unsigned char *data, size_t len, unsigned char out[16]) {
@@ -33,11 +20,9 @@ int cs378x_md5(const unsigned char *data, size_t len, unsigned char out[16]) {
 int cs378x_aes128_ecb(const unsigned char key[16], unsigned char *buf, size_t len, int encrypt) {
   EVP_CIPHER_CTX *ctx;
   int outlen, ok = 0;
-  if (len == 0 || len % 16 != 0)
-    return -1;
+  if (len == 0 || len % 16 != 0) return -1;
   ctx = EVP_CIPHER_CTX_new();
-  if (!ctx)
-    return -1;
+  if (!ctx) return -1;
   if (encrypt ? EVP_EncryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL) != 1
               : EVP_DecryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL) != 1)
     goto done;

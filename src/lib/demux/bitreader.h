@@ -22,6 +22,9 @@ size_t br_slice(const br_t *b, size_t from, size_t to, unsigned char *out, size_
 /* strip H.264/HEVC emulation prevention (00 00 03 -> 00 00) */
 size_t rbsp_unescape(const unsigned char *s, size_t len, unsigned char *d, size_t cap);
 
+/* inverse of rbsp_unescape */
+size_t rbsp_escape(const unsigned char *s, size_t len, unsigned char *d, size_t cap);
+
 /* next Annex-B start code (00 00 01 or 00 00 00 01) at/after 'from'. *sclen = 3 or 4 */
 size_t find_startcode(const unsigned char *d, size_t len, size_t from, size_t *sclen);
 

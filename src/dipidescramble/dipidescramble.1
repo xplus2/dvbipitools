@@ -198,6 +198,17 @@ targets may mix;
 .B mka
 needs exactly one plain file target.
 .TP
+.B \-\-strip\-lcevc
+Drop inline LCEVC (SEI-wrapped and dedicated NAL types) from
+.BR mkv / mka
+and
+.B rtmp(s)://
+output. No effect on raw
+.B ts
+output with no
+.B rtmp(s)://
+target.
+.TP
 .BR \-p ", " \-\-pmt\-pid " " \fIpid\fR|\fBall\fR
 MPTS source only: pin one PMT pid (0x0010..0x1FFE, rejected if not in the
 PAT), or descramble every program

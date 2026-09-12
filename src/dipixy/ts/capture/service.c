@@ -24,26 +24,33 @@ static void ring_write(capture_ctx_t *c, const unsigned char *data, size_t len) 
   atomic_store_explicit(&c->write_total, wt + len, memory_order_release);
 }
 
+ssize_t capture_read_dispatch(capture_ctx_t *ctx, unsigned char *buf, size_t bufcap, int *unwrapped) {
+  ssize_t n;
+  *unwrapped = 0;
+  if (ctx->fcc) {
+    *unwrapped = 1;
+    n = fcc_client_read(ctx->fcc, ctx->m, buf, bufcap);
+    if (fcc_client_done(ctx->fcc)) {
+      fcc_client_close(ctx->fcc);
+      ctx->fcc = NULL;
+    }
+  } else if (ctx->ret) {
+    *unwrapped = 1;
+    n = ret_client_read(ctx->ret, ctx->m, buf, bufcap);
+  } else if (ctx->fec_dec) {
+    n = capture_fec_read(ctx, buf, bufcap);
+  } else {
+    n = mcast_recv(ctx->m, buf, bufcap, NULL);
+  }
+  return n;
+}
+
 int capture_service(capture_ctx_t *ctx) {
   for (;;) {
     unsigned char buf[CAPTURE_RECV_BUF];
     ssize_t n;
-    int unwrapped = 0;
-    if (ctx->fcc) {
-      unwrapped = 1;
-      n = fcc_client_read(ctx->fcc, ctx->m, buf, sizeof buf);
-      if (fcc_client_done(ctx->fcc)) {
-        fcc_client_close(ctx->fcc);
-        ctx->fcc = NULL;
-      }
-    } else if (ctx->ret) {
-      unwrapped = 1;
-      n = ret_client_read(ctx->ret, ctx->m, buf, sizeof buf);
-    } else if (ctx->fec_dec) {
-      n = capture_fec_read(ctx, buf, sizeof buf);
-    } else {
-      n = mcast_recv(ctx->m, buf, sizeof buf, NULL);
-    }
+    int unwrapped;
+    n = capture_read_dispatch(ctx, buf, sizeof buf, &unwrapped);
     if (n < 0)    return -1;
     if (n == 0)   return 0;
     if (unwrapped) {

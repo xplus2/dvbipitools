@@ -19,7 +19,7 @@ set(FUZZ_BIM_DEPS
     ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/codec.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
-    ${CMAKE_SOURCE_DIR}/src/lib/bim/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
@@ -101,6 +101,7 @@ dvbipitools_add_fuzz_harness(route
 dvbipitools_add_fuzz_harness(ssdp
     fuzz_ssdp.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/strbuf.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
@@ -129,4 +130,5 @@ add_executable(fuzz_gen_seeds
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c)

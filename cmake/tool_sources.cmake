@@ -32,7 +32,9 @@ function(dipibcg_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipibcg/main.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/args.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/announce.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/announce_driver.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/listen.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/container.c
             ${ZLIB_SRC}
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
@@ -54,7 +56,7 @@ function(dipibcg_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/tva/xmltv.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/bitreader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/codec.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment.c
@@ -67,6 +69,7 @@ function(dipibim_resolve_sources)
     set(DIPIBIM_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipibim/main.c
             ${CMAKE_SOURCE_DIR}/src/dipibim/args.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
@@ -75,7 +78,7 @@ function(dipibim_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/bitreader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/codec.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment.c
@@ -101,6 +104,7 @@ function(dipicam378_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipicam378/args.c
             ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/cs378x.c
             ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/crypto.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/protocol.c
             ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/worker.c
             ${CMAKE_SOURCE_DIR}/src/dipicam378/device.c
@@ -144,6 +148,8 @@ function(dipidescramble_resolve_sources)
     endif ()
     if (DVBIPITOOLS_HAVE_SRT)
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
@@ -158,7 +164,9 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/main.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/pipeline.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/args.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/common.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/parse.c
@@ -199,6 +207,7 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/mpts_probe.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
@@ -375,6 +384,7 @@ function(dipiradiohead_resolve_sources)
 
     if (DVBIPITOOLS_HAVE_RIST)
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c)
     else ()
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
@@ -496,6 +506,8 @@ function(dipirec_resolve_sources)
     endif ()
     if (DVBIPITOOLS_HAVE_SRT)
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
@@ -507,6 +519,7 @@ function(dipirec_resolve_sources)
     set(DIPIREC_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipirec/main.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/record.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/record/sink.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/record/rtmp_fanout.c
@@ -547,6 +560,7 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/rtcp_build.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/rtpheader.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
@@ -557,7 +571,6 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/feed.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/mp4.c
-            ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/video.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/write.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/feed.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/moov.c
@@ -613,6 +626,7 @@ function(dipirist_resolve_sources)
 
     if (DVBIPITOOLS_HAVE_SRT)
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
     else ()
@@ -638,6 +652,8 @@ function(dipirist_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
             ${SRT_SRC}
             ${TLS_SRC}
@@ -700,6 +716,8 @@ function(dipisrt_resolve_sources)
 
     if (DVBIPITOOLS_HAVE_RIST)
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c)
     else ()
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
@@ -725,6 +743,7 @@ function(dipisrt_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
             ${RIST_SRC}
             ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
@@ -802,6 +821,8 @@ function(dipixy_resolve_sources)
 
     if (DVBIPITOOLS_HAVE_RIST)
         set(DIPIXY_RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c)
     else ()
         set(DIPIXY_RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
@@ -810,6 +831,7 @@ function(dipixy_resolve_sources)
 
     if (DVBIPITOOLS_HAVE_SRT)
         set(DIPIXY_SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
@@ -931,6 +953,12 @@ function(dipixy_resolve_sources)
         set(DIPIXY_HTTP3_SRCS)
     endif ()
 
+    if (DIPIXY_HAVE_HTTP2 OR DIPIXY_HAVE_HTTP3)
+        set(DIPIXY_HTTPNG_SRCS ${CMAKE_SOURCE_DIR}/src/dipixy/httpng/httpng.c)
+    else ()
+        set(DIPIXY_HTTPNG_SRCS)
+    endif ()
+
     set(DIPIXY_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipixy/main.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/args.c
@@ -967,12 +995,14 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_dashchunk.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_mp4push.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_ws.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/ws_dispatch.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push_feed.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push_flush.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/rawaudio.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pmtselect.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/ts/lcevcselect.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/pmt_filter.c
@@ -994,6 +1024,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_render.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/segment/segment.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/segment/demux.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/segment/pidlock.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/segment/video.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/segment/audio.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/segment/mux.c
@@ -1002,11 +1033,13 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_soap.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_oid.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/strbuf.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_didl.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/core/metrics.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/fmp4.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/fmp4_moov.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/fmp4_frag.c
@@ -1051,7 +1084,8 @@ function(dipixy_resolve_sources)
             ${DIPIXY_RIST_SRC}
             ${DIPIXY_SRT_SRC}
             ${DIPIXY_HTTP2_SRCS}
-            ${DIPIXY_HTTP3_SRCS})
+            ${DIPIXY_HTTP3_SRCS}
+            ${DIPIXY_HTTPNG_SRCS})
     set(DIPIXY_SRCS ${DIPIXY_SRCS} PARENT_SCOPE)
     set(DIPIXY_HAVE_TLS ${DIPIXY_HAVE_TLS} PARENT_SCOPE)
     set(DIPIXY_HAVE_HTTP2 ${DIPIXY_HAVE_HTTP2} PARENT_SCOPE)
@@ -1066,7 +1100,9 @@ function(dipisds_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipisds/input.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/format_out.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/announce.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/announce_driver.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/listen.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
@@ -1140,6 +1176,8 @@ function(dipitvhead_resolve_sources)
     if (DVBIPITOOLS_HAVE_RIST)
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
+                ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c)
     else ()
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
@@ -1149,6 +1187,7 @@ function(dipitvhead_resolve_sources)
 
     if (DVBIPITOOLS_HAVE_SRT)
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
@@ -1161,6 +1200,7 @@ function(dipitvhead_resolve_sources)
     set(DIPITVHEAD_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/main.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/args.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/tvhead.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/discover.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/output.c
@@ -1244,6 +1284,7 @@ function(dipixmltv_resolve_sources)
     set(DIPIXMLTV_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipixmltv/main.c
             ${CMAKE_SOURCE_DIR}/src/dipixmltv/args.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
             ${CMAKE_SOURCE_DIR}/src/dipixmltv/revmap.c
             ${CMAKE_SOURCE_DIR}/src/dipixmltv/suggest.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c

@@ -28,6 +28,7 @@ typedef struct {
   char file_path[512]; /* "" = stdin (source) or stdout (sink) */
 } plain_endpoint_t;
 
+int plain_endpoint_parse(const char *uri, plain_endpoint_t *s, int is_sink);
 void plain_endpoint_to_tssrc_cfg(const plain_endpoint_t *s, const char *iface, const char *user_agent, int insecure_tls, tssrc_cfg_t *tc);
 void plain_endpoint_to_tssink_cfg(const plain_endpoint_t *s, const char *iface, tssink_cfg_t *tk);
 

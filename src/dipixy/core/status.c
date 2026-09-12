@@ -72,6 +72,8 @@ static uint64_t status_rss_bytes(void) {
   return (uint64_t)rss_pages * (uint64_t)sysconf(_SC_PAGESIZE);
 }
 
+#define JBOOL(name, cond) do { jbuf_key(&j, name); jbuf_str(&j, (cond) ? "true" : "false"); } while (0)
+
 int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) {
   static _Thread_local jbuf_t j;
   struct tm tmv;
@@ -236,8 +238,7 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
 
   jbuf_key(&j, "metrics");
   jbuf_str(&j, "{");
-  jbuf_key(&j, "enabled");
-  jbuf_str(&j, cfg->metrics_id ? "true" : "false");
+  JBOOL("enabled", cfg->metrics_id);
   jbuf_str(&j, ",");
   jbuf_key(&j, "id");
   if (cfg->metrics_id)
@@ -248,16 +249,14 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   jbuf_key(&j, "interval_s");
   jbuf_fmt(&j, "%u", cfg->metrics_interval_s);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "http");
-  jbuf_str(&j, cfg->metrics_http ? "true" : "false");
+  JBOOL("http", cfg->metrics_http);
   jbuf_str(&j, "},");
 
   jbuf_key(&j, "cors_origins");
   jbuf_json_string(&j, cfg->cors_origins ? cfg->cors_origins : "*");
   jbuf_str(&j, ",");
 
-  jbuf_key(&j, "auth_enabled");
-  jbuf_str(&j, cfg->http_auth[0] ? "true" : "false");
+  JBOOL("auth_enabled", cfg->http_auth[0]);
   jbuf_str(&j, ",");
 
   jbuf_key(&j, "tls");
@@ -288,8 +287,7 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
 
   jbuf_key(&j, "dlna");
   jbuf_str(&j, "{");
-  jbuf_key(&j, "enabled");
-  jbuf_str(&j, cfg->enable_dlna ? "true" : "false");
+  JBOOL("enabled", cfg->enable_dlna);
   jbuf_str(&j, ",");
   jbuf_key(&j, "ssdp_ttl");
   jbuf_fmt(&j, "%d", cfg->ssdp_ttl);
@@ -311,9 +309,9 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
     jbuf_json_string(&j, cfg->dlna_name);
   else
     jbuf_str(&j, "null");
+
   jbuf_str(&j, ",");
-  jbuf_key(&j, "keep_multicast");
-  jbuf_str(&j, cfg->dlna_keep_multicast ? "true" : "false");
+  JBOOL("keep_multicast", cfg->dlna_keep_multicast);
   jbuf_str(&j, ",");
   jbuf_key(&j, "ssdp_interval_s");
   jbuf_fmt(&j, "%.3f", cfg->ssdp_interval_s);
@@ -324,53 +322,39 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
 
   jbuf_key(&j, "flags");
   jbuf_str(&j, "{");
-  jbuf_key(&j, "no_hls");
-  jbuf_str(&j, cfg->no_hls ? "true" : "false");
+  JBOOL("no_hls", cfg->no_hls);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_llhls");
-  jbuf_str(&j, cfg->no_llhls ? "true" : "false");
+  JBOOL("no_llhls", cfg->no_llhls);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_dash");
-  jbuf_str(&j, cfg->no_dash ? "true" : "false");
+  JBOOL("no_dash", cfg->no_dash);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_lldash");
-  jbuf_str(&j, cfg->no_lldash ? "true" : "false");
+  JBOOL("no_lldash", cfg->no_lldash);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_ts");
-  jbuf_str(&j, cfg->no_ts ? "true" : "false");
+  JBOOL("no_ts", cfg->no_ts);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_spts");
-  jbuf_str(&j, cfg->no_spts ? "true" : "false");
+  JBOOL("no_spts", cfg->no_spts);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_rawaudio");
-  jbuf_str(&j, cfg->no_rawaudio ? "true" : "false");
+  JBOOL("no_rawaudio", cfg->no_rawaudio);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_mp4");
-  jbuf_str(&j, cfg->no_mp4 ? "true" : "false");
+  JBOOL("no_mp4", cfg->no_mp4);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_url_rtp");
-  jbuf_str(&j, cfg->no_url_rtp ? "true" : "false");
+  JBOOL("no_url_rtp", cfg->no_url_rtp);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_url_udp");
-  jbuf_str(&j, cfg->no_url_udp ? "true" : "false");
+  JBOOL("no_url_udp", cfg->no_url_udp);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_url_srt");
-  jbuf_str(&j, cfg->no_url_srt ? "true" : "false");
+  JBOOL("no_url_srt", cfg->no_url_srt);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_pid_filters");
-  jbuf_str(&j, cfg->no_pid_filters ? "true" : "false");
+  JBOOL("no_pid_filters", cfg->no_pid_filters);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_http2");
-  jbuf_str(&j, cfg->no_http2 ? "true" : "false");
+  JBOOL("no_lcevc", cfg->no_lcevc);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_http3");
-  jbuf_str(&j, cfg->no_http3 ? "true" : "false");
+  JBOOL("no_http2", cfg->no_http2);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_fcc");
-  jbuf_str(&j, cfg->no_fcc ? "true" : "false");
+  JBOOL("no_http3", cfg->no_http3);
   jbuf_str(&j, ",");
-  jbuf_key(&j, "no_ret");
-  jbuf_str(&j, cfg->no_ret ? "true" : "false");
+  JBOOL("no_fcc", cfg->no_fcc);
+  jbuf_str(&j, ",");
+  JBOOL("no_ret", cfg->no_ret);
   jbuf_str(&j, "}");
   jbuf_str(&j, "}"); /* root */
 

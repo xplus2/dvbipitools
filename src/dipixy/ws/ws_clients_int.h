@@ -29,6 +29,7 @@ typedef struct {
   char src_name[64];
   unsigned item_num;
   char item_name[128];
+  uint32_t hash;
   _Atomic uint64_t bytes_total;
   uint64_t bytes_prev; /* tick-thread-only */
   _Atomic unsigned gen; /* bumped on every claim/remove: see pack_handle() */
@@ -60,6 +61,7 @@ typedef struct {
   int *hash;
   uint32_t hash_cap;
   uint32_t hash_mask;
+  uint32_t tomb_count;
   pthread_mutex_t lock;
 } ws_stripe_t;
 
@@ -73,6 +75,7 @@ extern ws_stripe_t g_stripes[WS_STRIPE_COUNT_MAX];
 extern int g_stripe_count;
 ws_stripe_t *stripe_for_entry(int idx);
 void hash_delete(ws_stripe_t *stripe, int idx);
+void stripe_rehash_if_needed(ws_stripe_t *stripe);
 
 /* ws_clients_tick.c, allocated by ws_clients_init() in ws_clients.c */
 extern int *g_expired_scratch;
@@ -82,6 +85,7 @@ extern tick_rate_t *g_tick_rate_scratch;
 void snapshot_client(ws_client_snapshot_t *dst, const ws_client_t *src);
 void emit_client_json(jbuf_t *j, int id, const ws_client_snapshot_t *e);
 void publish_client_event(const char *type, int id);
+void publish_client_event_snap(const char *type, int id, const ws_client_snapshot_t *snap);
 void jbuf_i64(jbuf_t *j, long long v);
 void jbuf_fixed3(jbuf_t *j, double v);
 

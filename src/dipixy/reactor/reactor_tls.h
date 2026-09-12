@@ -39,8 +39,7 @@ int tls_is_running(void); /* non-zero when SSL_CTX is active */
 int tls_accept(int fd);
 int tls_handshake(int fd); /* 1=done, 0=needs I/O (EAGAIN), -1=error */
 void tls_close_fd(int fd);
-void tls_gc_sweep(
-    void); /* free deferred-close SSL objects older than g_tls_socket_gc_ms */
+void tls_gc_sweep(void); /* free deferred-close SSL objects older than g_tls_socket_gc_ms */
 ssize_t tls_net_send(int fd, const void *buf, size_t len);
 ssize_t tls_net_recv(int fd, void *buf, size_t len);
 /* MSG_ZEROCOPY send, falls back to plain send() on EINVAL/ENOBUFS. used_zc: 1 if zerocopy hit */
@@ -52,6 +51,7 @@ int tls_client_cert_verified(int fd);
 /* CN of verified client cert into buf, empty string if none */
 void tls_get_client_cert_cn(int fd, char *buf, size_t bufsz);
 int reload_tls(void); /* rereads cert/key from tls_init()'s paths. 0 ok, -1 fail (old ctx kept running) */
+void tls_ctx_gc_sweep(void);
 void tls_cert_info(char *buf, size_t sz, const char *path, int from_file);
 
 int tls_has_pending(int fd);

@@ -18,13 +18,11 @@ START_TEST(crc32_matches_standard_check_value) {
   /* "123456789" -> 0xCBF43926 is the universal CRC-32/ISO-HDLC check value,
      confirms this is the same reflected/0xEDB88320/0xFFFFFFFF variant oscam uses */
   const unsigned char data[] = "123456789";
-  cs378x_crc32_init_table();
   ck_assert_uint_eq(cs378x_crc32(data, 9), 0xCBF43926u);
 }
 END_TEST
 
 START_TEST(crc32_of_empty_is_zero) {
-  cs378x_crc32_init_table();
   ck_assert_uint_eq(cs378x_crc32((const unsigned char *)"", 0), 0);
 }
 END_TEST

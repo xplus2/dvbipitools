@@ -3,6 +3,7 @@
 
 #include <arpa/inet.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,7 +13,6 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/protocol.h"
-
 #include "args.h"
 #include "version.h"
 
@@ -65,53 +65,52 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   optind = 1;
   while ((c = getopt_long(argc, argv, "S:l:e:vdh", longopts, NULL)) != -1) {
     switch (c) {
-    case 'S':
-      cfg->sock_path = optarg;
-      break;
-    case 'l':
-      if (argutil_addrport_parse(optarg, &cfg->family, cfg->listen_addr, sizeof cfg->listen_addr, &cfg->listen_port)) {
-        argerr("invalid -l addr:port: %s", optarg);
-        return ARGS_ERR;
+      case 'S':
+        cfg->sock_path = optarg;
+        break;
+      case 'l':
+        if (argutil_addrport_parse(optarg, &cfg->family, cfg->listen_addr, sizeof cfg->listen_addr, &cfg->listen_port)) {
+          argerr("invalid -l addr:port: %s", optarg);
+          return ARGS_ERR;
+        }
+        have_l = 1;
+        break;
+      case 'e': {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
+          argerr("invalid -e expiry seconds: %s", optarg);
+          return ARGS_ERR;
+        }
+        e_value = v;
+        have_e = 1;
+        break;
       }
-      have_l = 1;
-      break;
-    case 'e': {
-      char *end;
-      long v = strtol(optarg, &end, 10);
-      if (*end != '\0' || v <= 0) {
-        argerr("invalid -e expiry seconds: %s", optarg);
-        return ARGS_ERR;
+      case 1001:
+        cfg->tls_cert = optarg;
+        break;
+      case 1002:
+        cfg->tls_key = optarg;
+        break;
+      case 'v':
+        cfg->verbose = 1;
+        break;
+      case 'd':
+        cfg->daemonize = 1;
+        break;
+      case 1000: {
+        log_color_t v;
+        if (log_color_from_string(optarg, &v)) {
+          argerr("invalid --color: %s (auto|always|never)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->color_mode = v;
+        break;
       }
-      e_value = v;
-      have_e = 1;
-      break;
-    }
-    case 1001:
-      cfg->tls_cert = optarg;
-      break;
-    case 1002:
-      cfg->tls_key = optarg;
-      break;
-    case 'v':
-      cfg->verbose = 1;
-      break;
-    case 'd':
-      cfg->daemonize = 1;
-      break;
-    case 1000: {
-      log_color_t v;
-      if (log_color_from_string(optarg, &v)) {
-        argerr("invalid --color: %s (auto|always|never)", optarg);
+      case 'h':
+        print_help();
+        return ARGS_HELP;
+      default:
         return ARGS_ERR;
-      }
-      cfg->color_mode = v;
-      break;
-    }
-    case 'h':
-      print_help();
-      return ARGS_HELP;
-    default:
-      return ARGS_ERR;
     }
   }
   if (optind < argc) {
@@ -127,8 +126,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   }
 
-  if (!cfg->sock_path)
-    cfg->sock_path = METRICS_DEFAULT_SOCK_PATH;
+  if (!cfg->sock_path) cfg->sock_path = METRICS_DEFAULT_SOCK_PATH;
   if (!have_l) {
     cfg->family = AF_INET;
     bufcpy(cfg->listen_addr, sizeof cfg->listen_addr, DEFAULT_LISTEN_ADDR);

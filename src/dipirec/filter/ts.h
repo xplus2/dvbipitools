@@ -25,6 +25,7 @@ typedef struct ts_filter ts_filter_t;
 #define STRIP_TDT 0x100u
 #define STRIP_TOT 0x200u
 #define STRIP_INT 0x400u
+#define STRIP_LCEVC 0x800u
 #define STRIP_DEFAULT (STRIP_NUL | STRIP_NIT | STRIP_AIT | STRIP_EIT)
 
 /* preferred_pmt_pid: 0 = auto (first candidate), else pin via psi_select_pmt_pid() */

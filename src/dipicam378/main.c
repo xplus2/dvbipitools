@@ -50,23 +50,12 @@ static void emm_cb(const unsigned char *emm, size_t emm_len, unsigned caid, unsi
 
 int main(int argc, char **argv) {
   config_t cfg;
-  args_status_t st;
   device_state_t *dev;
   cs378x_cfg_t srv_cfg;
   cs378x_server_t *srv;
   metrics_exporter_t mx;
 
-  log_set_color(log_color_prescan(argc, argv));
-  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
-  st = args_parse(argc, argv, &cfg);
-  if (st == ARGS_OK)
-    log_set_color((log_color_t)cfg.color_mode);
-  if (st == ARGS_HELP)
-    return 0;
-  if (st == ARGS_ERR) {
-    fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
-    return 2;
-  }
+  TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
   if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
   dev = device_state_new(cfg.key_path, cfg.cw_len, cfg.serial, cfg.caid);
   if (!dev) {

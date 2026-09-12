@@ -17,6 +17,7 @@ typedef void (*flv_tag_cb)(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms
 
 typedef struct {
   unsigned audio_track; /* 1-based audio_index, 0 = first available */
+  int strip_lcevc;      /* drop inline lcevc (sei-wrapped and dedicated nal types) */
 } flv_opts_t;
 
 typedef struct flv flv_t;

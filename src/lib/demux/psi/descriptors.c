@@ -5,46 +5,58 @@
 
 #include "priv.h"
 
-/* find descriptor by tag; returns data */
-const unsigned char *find_desc(const unsigned char *d, size_t len, unsigned tag, size_t *dlen) {
+typedef const unsigned char *(*desc_match_fn)(unsigned tag, const unsigned char *payload, size_t plen, void *ctx, size_t *out_len);
+
+static const unsigned char *desc_scan(const unsigned char *d, size_t len, desc_match_fn match, void *ctx, size_t *dlen) {
   size_t i = 0;
   while (i + 2 <= len) {
     unsigned t = d[i], l = d[i + 1];
-    if (i + 2 + l > len)
-      break;
-    if (t == tag) {
-      *dlen = l;
-      return d + i + 2;
-    }
+    const unsigned char *r;
+    if (i + 2 + l > len) break;
+    r = match(t, d + i + 2, l, ctx, dlen);
+    if (r) return r;
     i += 2 + l;
   }
   return NULL;
+}
+
+static const unsigned char *match_tag(unsigned t, const unsigned char *payload, size_t plen, void *ctx, size_t *out_len) {
+  if (t != *(unsigned *)ctx) return NULL;
+  *out_len = plen;
+  return payload;
+}
+
+const unsigned char *find_desc(const unsigned char *d, size_t len, unsigned tag, size_t *dlen) {
+  return desc_scan(d, len, match_tag, &tag, dlen);
+}
+
+static const unsigned char *match_ext_tag(unsigned t, const unsigned char *payload, size_t plen, void *ctx, size_t *out_len) {
+  if (t != 0x3F || plen < 1 || payload[0] != *(unsigned *)ctx) return NULL;
+  *out_len = plen - 1;
+  return payload + 1;
+}
+
+/* like find_desc, matches ext_desc sub-tag, scans every 0x3f */
+static const unsigned char *find_ext_desc(const unsigned char *d, size_t len, unsigned ext_tag, size_t *dlen) {
+  return desc_scan(d, len, match_ext_tag, &ext_tag, dlen);
 }
 
 /* DVB text: skip charset prefix, controls -> space. not ISO 6937 */
 void copy_name(char *dst, size_t dstsz, const unsigned char *src, size_t len) {
   size_t i = 0, o = 0;
   if (len && src[0] < 0x20) {
-    if (src[0] == 0x10 && len >= 3)
-      i = 3;
-    else if (src[0] == 0x1F && len >= 2)
-      i = 2;
-    else
-      i = 1;
+    if (src[0] == 0x10 && len >= 3) i = 3;
+    else if (src[0] == 0x1F && len >= 2) i = 2;
+    else i = 1;
   }
-  for (; i < len && o + 1 < dstsz; i++)
-    dst[o++] = (src[i] < 0x20) ? ' ' : (char)src[i];
+  for (; i < len && o + 1 < dstsz; i++) dst[o++] = (src[i] < 0x20) ? ' ' : (char)src[i];
   dst[o] = '\0';
 }
 
 void add_ecm(psi_t *c, unsigned pid) {
-  if (pid == 0 || pid == 0x1FFF)
-    return;
-  for (int k = 0; k < c->ecm_count; k++)
-    if (c->ecm[k] == pid)
-      return;
-  if (c->ecm_count < PSI_MAX_ES)
-    c->ecm[c->ecm_count++] = pid;
+  if (pid == 0 || pid == 0x1FFF) return;
+  for (int k = 0; k < c->ecm_count; k++) if (c->ecm[k] == pid) return;
+  if (c->ecm_count < PSI_MAX_ES) c->ecm[c->ecm_count++] = pid;
 }
 
 /* parses a teletext descriptor (tag 0x56): 5-byte entries, prefers subtitle types (2/5) */
@@ -61,16 +73,14 @@ static void parse_teletext_desc(psi_es_t *e, const unsigned char *ld, size_t l) 
       memcpy(e->ttx_lang, ld + x, 3);
       e->ttx_lang[3] = '\0';
     }
-    if (ty == 2 || ty == 5)
-      break;
+    if (ty == 2 || ty == 5) break;
   }
 }
 
 /* parses a DVB subtitling descriptor (tag 0x59) */
 static void parse_subtitle_desc(psi_es_t *e, const unsigned char *ld, size_t l) {
   e->cls = PID_SUBTITLE;
-  if (l < 8)
-    return;
+  if (l < 8) return;
   e->sub_type = ld[3];
   e->sub_composition_page = ((unsigned)ld[4] << 8) | ld[5];
   e->sub_ancillary_page = ((unsigned)ld[6] << 8) | ld[7];
@@ -104,6 +114,10 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
     case 0x33:
       e->cls = PID_VIDEO;
       e->codec = CODEC_VVC;
+      break;
+    case 0x36:
+      e->cls = PID_LCEVC;
+      e->codec = CODEC_LCEVC;
       break;
     case 0x03:
     case 0x04:
@@ -143,8 +157,7 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
       }
       break;
     case 0x05:
-      if (find_desc(desc, dlen, 0x6F, &l))
-        e->cls = PID_AIT;
+      if (find_desc(desc, dlen, 0x6F, &l)) e->cls = PID_AIT;
       break;
     default:
       break;
@@ -159,20 +172,44 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
   }
 }
 
+/* base/LCEVC ES by tag, cls must be set */
+void link_lcevc(psi_es_t *es, int count) {
+  for (int v = 0; v < count; v++) {
+    psi_es_t *ve = &es[v];
+    size_t ll;
+    const unsigned char *link;
+    unsigned cnt, t;
+    if (ve->cls != PID_VIDEO) continue;
+    link = find_ext_desc(ve->desc, ve->desc_len, 0x18, &ll);
+    if (!link || ll < 1) continue;
+    cnt = link[0];
+    if (1 + cnt > ll) continue;
+    for (t = 0; t < cnt && ve->lcevc_pid_count < PSI_LCEVC_MAX_LINKS; t++) {
+      unsigned tag = link[1 + t];
+      for (int x = 0; x < count; x++) {
+        psi_es_t *ee = &es[x];
+        size_t vl;
+        const unsigned char *own;
+        if (ee->cls != PID_LCEVC) continue;
+        own = find_ext_desc(ee->desc, ee->desc_len, 0x17, &vl);
+        if (!own || vl < 1 || own[0] != tag) continue;
+        ve->lcevc_pid[ve->lcevc_pid_count++] = ee->pid;
+        if (ee->lcevc_pid_count < PSI_LCEVC_MAX_LINKS) ee->lcevc_pid[ee->lcevc_pid_count++] = ve->pid;
+      }
+    }
+  }
+}
+
 /* service_descriptor (0x48): provider then service name, DVB-text
    length-prefixed. dst untouched if absent/malformed. */
 void decode_service_desc(const unsigned char *d, size_t dll, char *provider_dst, char *service_dst) {
   size_t l, pnl, snl;
   const unsigned char *sd = find_desc(d, dll, 0x48, &l);
-  if (!sd || l < 2)
-    return;
+  if (!sd || l < 2) return;
   pnl = sd[1];
-  if (2 + pnl > l)
-    return;
+  if (2 + pnl > l) return;
   copy_name(provider_dst, PSI_NAME, sd + 2, pnl);
-  if (2 + pnl >= l)
-    return;
+  if (2 + pnl >= l) return;
   snl = sd[2 + pnl];
-  if (3 + pnl + snl <= l)
-    copy_name(service_dst, PSI_NAME, sd + 3 + pnl, snl);
+  if (3 + pnl + snl <= l) copy_name(service_dst, PSI_NAME, sd + 3 + pnl, snl);
 }

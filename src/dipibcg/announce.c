@@ -14,6 +14,7 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/export.h"
+#include "lib/net/announce_driver.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
 #include "lib/net/netconnect.h"
@@ -68,10 +69,8 @@ static int chan_idx_find(const chan_idx_t *idx, int n, const char *id) {
     int mid = (lo + hi) / 2;
     int c = strcmp(id, idx[mid].id);
     if (c == 0) return idx[mid].idx;
-    if (c < 0)
-      hi = mid - 1;
-    else
-      lo = mid + 1;
+    if (c < 0) hi = mid - 1;
+    else       lo = mid + 1;
   }
   return -1;
 }
@@ -234,73 +233,93 @@ static void publish_document(mcast_t *m, bitwriter_t *bw, const strrepo_writer_t
   }
 }
 
-int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
+typedef struct {
+  const config_t *cfg;
+  metrics_exporter_t *mx;
   bcg_doc_t doc;
-  mcast_t *m;
-  unsigned cycles = 0;
-  int rc = 0;
-  char mcast_txt[80];
   bcg_metrics_t bm;
   accessunit_scratch_t sc;
-  int metrics_on = metrics_exporter_enabled(mx);
+  int metrics_on;
+} bcg_announce_ctx_t;
 
-  memset(&bm, 0, sizeof bm);
-  accessunit_scratch_init(&sc);
-  if (load_doc(cfg, &doc)) {
-    if (metrics_on) bm.source_errors_total[NET_ERR_FORMAT]++;
-    return 1;
+static void bcg_announce_ready(void *ctx_, mcast_t *m) {
+  bcg_announce_ctx_t *ctx = ctx_;
+  char mcast_txt[80];
+  (void)m;
+  mcast_describe(ctx->cfg, mcast_txt, sizeof mcast_txt);
+  log_line("announcing %d channels, %d programmes (window %ldh) on %s every %lds", ctx->doc.channel_count, ctx->doc.programme_count,
+            ctx->cfg->window_hours, mcast_txt, ctx->cfg->interval_s);
+}
+
+static void bcg_announce_reload(void *ctx_) {
+  bcg_announce_ctx_t *ctx = ctx_;
+  reload_doc(ctx->cfg, &ctx->doc, &ctx->bm, ctx->metrics_on);
+}
+
+static int bcg_announce_cycle(void *ctx_, mcast_t *m, unsigned cycle) {
+  bcg_announce_ctx_t *ctx = ctx_;
+  bcg_doc_t windowed;
+  bitwriter_t bw;
+  strrepo_writer_t sw;
+  int nfuu = 0;
+  long sched_start, sched_end;
+  int have_sched;
+
+  if (build_windowed_doc(&ctx->doc, &windowed, now_minutes(), ctx->cfg->window_hours * 60, &sched_start, &sched_end, &have_sched)) {
+    bcg_doc_free(&windowed);
+    if (ctx->metrics_on) ctx->bm.document_errors_total++;
+    return -1;
   }
-  if (metrics_on) bm.sources_up = 1;
-  m = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, 0);
-  if (!m) {
-    log_line("cannot open %s:%u for sending", cfg->mcast_group, cfg->mcast_port);
-    bcg_doc_free(&doc);
-    return 1;
-  }
-  mcast_set_tos(m, cfg->dscp);
 
-  mcast_describe(cfg, mcast_txt, sizeof mcast_txt);
-  log_line("announcing %d channels, %d programmes (window %ldh) on %s every %lds", doc.channel_count, doc.programme_count, cfg->window_hours, mcast_txt, cfg->interval_s);
-
-  while (!signal_stop_requested()) {
-    bcg_doc_t windowed;
-    bitwriter_t bw;
-    strrepo_writer_t sw;
-    int nfuu = 0;
-    long sched_start, sched_end;
-    int have_sched;
-
-    if (signal_reload_requested()) reload_doc(cfg, &doc, &bm, metrics_on);
-    if (build_windowed_doc(&doc, &windowed, now_minutes(), cfg->window_hours * 60, &sched_start, &sched_end, &have_sched)) {
-      bcg_doc_free(&windowed);
-      if (metrics_on) bm.document_errors_total++;
-      rc = 1;
-      break;
-    }
-
-    bitwriter_init(&bw);
-    strrepo_writer_init(&sw);
-    if (accessunit_encode(&sc, &windowed, &bw, &sw, &nfuu)) {
-      bitwriter_free(&bw);
-      strrepo_writer_free(&sw);
-      bcg_doc_free(&windowed);
-      if (metrics_on) bm.document_errors_total++;
-      rc = 1;
-      break;
-    }
-    publish_document(m, &bw, &sw, cycles, cfg->compress, &bm, metrics_on);
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  if (accessunit_encode(&ctx->sc, &windowed, &bw, &sw, &nfuu)) {
     bitwriter_free(&bw);
     strrepo_writer_free(&sw);
-    cycles++;
-    if (cfg->verbose) log_line("cycle %u sent, %d fragments", cycles, nfuu);
-    emit_metrics(mx, mono_seconds(), &doc, &windowed, &bm, sched_start, sched_end, have_sched);
     bcg_doc_free(&windowed);
-    sleep_interruptible((double)cfg->interval_s);
+    if (ctx->metrics_on) ctx->bm.document_errors_total++;
+    return -1;
   }
+  publish_document(m, &bw, &sw, cycle - 1, ctx->cfg->compress, &ctx->bm, ctx->metrics_on);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+  if (ctx->cfg->verbose) log_line("cycle %u sent, %d fragments", cycle, nfuu);
+  emit_metrics(ctx->mx, mono_seconds(), &ctx->doc, &windowed, &ctx->bm, sched_start, sched_end, have_sched);
+  bcg_doc_free(&windowed);
+  return 0;
+}
 
-  accessunit_scratch_free(&sc);
-  mcast_close(m);
-  bcg_doc_free(&doc);
-  log_line("stopped after %u cycle%s", cycles, cycles == 1 ? "" : "s");
-  return rc;
+static void bcg_announce_cleanup(void *ctx_) {
+  bcg_announce_ctx_t *ctx = ctx_;
+  accessunit_scratch_free(&ctx->sc);
+  bcg_doc_free(&ctx->doc);
+}
+
+int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
+  bcg_announce_ctx_t ctx;
+  announce_driver_t d;
+
+  memset(&ctx, 0, sizeof ctx);
+  ctx.cfg = cfg;
+  ctx.mx = mx;
+  ctx.metrics_on = metrics_exporter_enabled(mx);
+  accessunit_scratch_init(&ctx.sc);
+  if (load_doc(cfg, &ctx.doc)) {
+    if (ctx.metrics_on) ctx.bm.source_errors_total[NET_ERR_FORMAT]++;
+    return 1;
+  }
+  if (ctx.metrics_on) ctx.bm.sources_up = 1;
+
+  d.ctx = &ctx;
+  d.on_ready = bcg_announce_ready;
+  d.reload = bcg_announce_reload;
+  d.run_cycle = bcg_announce_cycle;
+  d.cleanup = bcg_announce_cleanup;
+  d.family = cfg->family;
+  d.mcast_group = cfg->mcast_group;
+  d.mcast_port = cfg->mcast_port;
+  d.iface = cfg->iface;
+  d.dscp = cfg->dscp;
+  d.interval_s = cfg->interval_s;
+  return announce_driver_run(&d);
 }

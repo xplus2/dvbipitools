@@ -148,38 +148,28 @@ int emmcache_load(emmcache_t *c, device_state_t *d, const char *path) {
 }
 
 int emmcache_save(const emmcache_t *c, const char *path) {
-  unsigned char *buf = malloc((EMMCACHE_MAX_SERVICES_CEILING + 1) * PSI_SECTION_ASM_BUF_LEN);
-  size_t off = 0;
   FILE *f;
   int rc = 0;
-
-  if (!buf)
-    return -1;
-
-  if (c->have_emm_u) {
-    memcpy(buf + off, c->emm_u.raw, c->emm_u.len);
-    off += c->emm_u.len;
-  }
-  for (size_t i = 0; i < c->service_count; i++) {
-    memcpy(buf + off, c->services[i].sec.raw, c->services[i].sec.len);
-    off += c->services[i].sec.len;
-  }
 
   f = fopen(path, "wb");
   if (!f) {
     log_line(TOOL_NAME ": cannot write emm cache %s: %s", path, strerror(errno));
-    free(buf);
     return -1;
   }
-  if (off && fwrite(buf, 1, off, f) != off) {
+  if (c->have_emm_u && fwrite(c->emm_u.raw, 1, c->emm_u.len, f) != c->emm_u.len) {
     log_line(TOOL_NAME ": short write to emm cache %s", path);
     rc = -1;
+  }
+  for (size_t i = 0; rc == 0 && i < c->service_count; i++) {
+    if (fwrite(c->services[i].sec.raw, 1, c->services[i].sec.len, f) != c->services[i].sec.len) {
+      log_line(TOOL_NAME ": short write to emm cache %s", path);
+      rc = -1;
+    }
   }
   if (fclose(f)) {
     log_line(TOOL_NAME ": error writing emm cache %s: %s", path, strerror(errno));
     rc = -1;
   }
-  free(buf);
   return rc;
 }
 

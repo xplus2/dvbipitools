@@ -34,12 +34,10 @@ void reactor_tspush_begin(int epfd, conn_t *c) {
 void reactor_tspush_close(int epfd, conn_t *c) {
   if (!conn_claim_teardown(c)) return;
   conn_unpublish(c);
-  epoll_ctl(epfd, EPOLL_CTL_DEL, c->fd, NULL);
   ts_push_unsubscribe_by_idx(c->slot);
-  tls_close_fd(c->fd);
-  conn_free(c);
+  reactor_teardown_common(epfd, c);
 }
 
 void reactor_tspush_readable(int epfd, conn_t *c) {
-  reactor_push_conn_readable(epfd, c, reactor_tspush_close, reactor_conn_flush);
+  reactor_push_conn_readable(epfd, c, reactor_tspush_close, reactor_conn_flush, 1);
 }

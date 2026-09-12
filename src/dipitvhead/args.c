@@ -13,6 +13,7 @@
 #include "lib/cas/biss/biss.h"
 #include "lib/cas/cas_args.h"
 #include "lib/cas/emmg_server/emmg_server.h"
+#include "lib/helper/describe.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
@@ -44,8 +45,7 @@
 
 /* [@]<addr>:<port> or [@][<addr6>]:<port>, multicast literal required */
 static int mcast_group_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
-  if (*s == '@')
-    s++;
+  if (*s == '@') s++;
   return uriparse_mcast_addrport(s, family, addr_out, addr_out_sz, port_out);
 }
 
@@ -72,10 +72,8 @@ static int source_parse(const char *uri, source_t *s) {
     return http_url_parse(uri, &s->http);
   }
   if (strncmp(uri, "rist://", 7) == 0) {
-    if (uri[7] != '@') /* rist:// as input always listens */
-      return -1;
-    if (strlen(uri) >= sizeof s->rist_uri)
-      return -1;
+    if (uri[7] != '@') return -1; /* rist:// as input always listens */
+    if (strlen(uri) >= sizeof s->rist_uri) return -1;
     s->kind = SRC_RIST;
     bufcpy(s->rist_uri, sizeof s->rist_uri, uri);
     return 0;
@@ -83,10 +81,8 @@ static int source_parse(const char *uri, source_t *s) {
   if (strncmp(uri, "srt://", 6) == 0) {
     const char *rest = uri + 6;
     int listen = *rest == '@';
-    if (listen)
-      rest++;
-    if (argutil_addrport_parse(rest, &s->srt_family, s->srt_host, sizeof s->srt_host, &s->srt_port))
-      return -1;
+    if (listen) rest++;
+    if (argutil_addrport_parse(rest, &s->srt_family, s->srt_host, sizeof s->srt_host, &s->srt_port)) return -1;
     s->kind = SRC_SRT;
     s->srt_listen = listen;
     return 0;
@@ -96,38 +92,30 @@ static int source_parse(const char *uri, source_t *s) {
 
 void source_describe(const source_t *s, char *buf, size_t n) {
   switch (s->kind) {
-  case SRC_RTP:
-  case SRC_UDP: {
-    const char *scheme = (s->kind == SRC_RTP) ? "rtp" : "udp";
-    if (s->family == AF_INET6)
-      snprintf(buf, n, "%s://@[%s]:%u", scheme, s->group, s->port);
-    else
-      snprintf(buf, n, "%s://@%s:%u", scheme, s->group, s->port);
-    break;
-  }
-  case SRC_HTTP:
-    snprintf(buf, n, "%s://%s:%u%s", s->http.tls ? "https" : "http", s->http.host, s->http.port, s->http.path);
-    break;
-  case SRC_STDIN:
-    bufcpy(buf, n, "-");
-    break;
-  case SRC_RIST:
-    bufcpy(buf, n, s->rist_uri);
-    break;
-  case SRC_SRT:
-    if (s->srt_family == AF_INET6)
-      snprintf(buf, n, "srt://%s[%s]:%u", s->srt_listen ? "@" : "", s->srt_host, s->srt_port);
-    else
-      snprintf(buf, n, "srt://%s%s:%u", s->srt_listen ? "@" : "", s->srt_host, s->srt_port);
-    break;
+    case SRC_RTP:
+      describe_mcast_uri(buf, n, "rtp", s->family, s->group, s->port);
+      break;
+    case SRC_UDP:
+      describe_mcast_uri(buf, n, "udp", s->family, s->group, s->port);
+      break;
+    case SRC_HTTP:
+      describe_http_uri(buf, n, s->http.tls, s->http.host, s->http.port, s->http.path);
+      break;
+    case SRC_STDIN:
+      bufcpy(buf, n, "-");
+      break;
+    case SRC_RIST:
+      bufcpy(buf, n, s->rist_uri);
+      break;
+    case SRC_SRT:
+      describe_srt_uri(buf, n, s->srt_family, s->srt_listen, s->srt_host, s->srt_port);
+      break;
   }
 }
 
 void mcast_describe(const config_t *cfg, char *buf, size_t n) {
-  if (cfg->family == AF_INET6)
-    snprintf(buf, n, "[%s]:%u", cfg->mcast_group, cfg->mcast_port);
-  else
-    snprintf(buf, n, "%s:%u", cfg->mcast_group, cfg->mcast_port);
+  if (cfg->family == AF_INET6) snprintf(buf, n, "[%s]:%u", cfg->mcast_group, cfg->mcast_port);
+  else                         snprintf(buf, n, "%s:%u", cfg->mcast_group, cfg->mcast_port);
 }
 
 static int id_parse(const char *s, unsigned *out) {
@@ -148,7 +136,7 @@ static int pid_parse(const char *s, unsigned *out) {
   return 0;
 }
 
-/* comma-separated PIDs and/or the "video"/"audio" keywords, e.g. "0x0103,video" or "audio,0x0104,0x0106" */
+/* pids and/or video/audio/lcevc keywords, e.g. 0x0103,video */
 static int cas_pids_parse(const char *s, config_t *cfg) {
   char buf[512];
   char *save = NULL;
@@ -157,6 +145,7 @@ static int cas_pids_parse(const char *s, config_t *cfg) {
   cfg->cas_pid_count = 0;
   cfg->cas_pids_video = 0;
   cfg->cas_pids_audio = 0;
+  cfg->cas_pids_lcevc = 0;
   for (const char *tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
     unsigned pid;
     if (strcmp(tok, "video") == 0) {
@@ -167,11 +156,15 @@ static int cas_pids_parse(const char *s, config_t *cfg) {
       cfg->cas_pids_audio = 1;
       continue;
     }
+    if (strcmp(tok, "lcevc") == 0) {
+      cfg->cas_pids_lcevc = 1;
+      continue;
+    }
     if (cfg->cas_pid_count >= ARGS_MAX_CAS_PIDS) return -1;
     if (pid_parse(tok, &pid) || pid == 0) return -1;
     cfg->cas_pids[cfg->cas_pid_count++] = pid;
   }
-  return (cfg->cas_pid_count || cfg->cas_pids_video || cfg->cas_pids_audio) ? 0 : -1;
+  return (cfg->cas_pid_count || cfg->cas_pids_video || cfg->cas_pids_audio || cfg->cas_pids_lcevc) ? 0 : -1;
 }
 
 /* comma-separated TVSTRIP_* tokens, or "none" (default) */
@@ -202,134 +195,115 @@ static int parse_strip(const char *s, unsigned *mask) {
 
 static void print_help(void) {
   printf(
-      "usage: %s -i <uri> [per-input options] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]\n\n"
-      "re-package one or more transport streams (already-muxed, not raw ES) as one DVB-IPI\n"
-      "multicast. A single -i: normal SPTS. Multiple -i: MPTS, one program per input.\n\n"
-      "options:\n"
-      "  -i, --input <uri>          udp://, rtp://, http(s)://, rist://@host:port[?query]\n"
-      "                             (single peer, requires librist; @ marks it listening; no\n"
-      "                             bonding, use dipirist for that), srt://[@]host:port (single\n"
-      "                             peer, requires libsrt; no bonding/rendezvous, use dipisrt\n"
-      "                             for that), or \"-\" for stdin; repeatable.\n"
-      "                             each RIST/SRT input costs an extra thread\n"
-      "  -p, --pmt-pid <pid>        for -i right before: select program by PMT PID\n"
-      "                             (dec or 0x-hex; default: first live one)\n"
-      "      --sid <n>              for -i right before: service_id/program_number\n"
-      "                             (default: auto)\n"
-      "  -s, --sdt <text|->         for -i right before: SDT service_name - default\n"
-      "                             passthrough source; \"-\" drops it; text = our own\n"
-      "  -I, --iface <iface>        for -i right before: incoming multicast interface\n"
-      "      --strip-eit            for -i right before: drop source EIT (default: passed through)\n"
-      "      --strip <list>|none    for -i right before: comma list of DATA,ECM to drop (default: none)\n"
-      "      --hbbtv <url>          for -i right before: inject an AIT signalling this\n"
-      "                             HbbTV app (default: none)\n"
-      "      --hbbtv-org-id <n>     for -i right before: HbbTV organisation_id\n"
-      "                             (required with --hbbtv)\n"
-      "      --hbbtv-app-id <n>     for -i right before: HbbTV application_id\n"
-      "                             (required with --hbbtv)\n"
-      "      --rist-profile-in <p>  for -i right before: simple|main; -i rist:// only\n"
-      "                             (default: simple)\n"
-      "      --srt-passphrase-in <pw>   for -i right before: passphrase, 10..79 chars;\n"
-      "                             -i srt:// only\n"
-      "      --srt-pbkeylen-in <n>  for -i right before: AES key length 16|24|32, requires\n"
-      "                             --srt-passphrase-in\n"
-      "      --srt-streamid-in <id> for -i right before: SRTO_STREAMID; -i srt:// only\n"
-      "      --srt-packetfilter-in <c>  for -i right before: SRTO_PACKETFILTER; -i srt:// only\n"
-      "      --srt-latency-in <ms>  for -i right before: SRTO_LATENCY; -i srt:// only\n"
-      "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
-      "  -O, --out-iface <iface>    outgoing multicast interface\n"
-      "  -u, --udp                  plain UDP output (default: RTP-wrapped; -m output only)\n"
-      "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
-      "      --dscp <v>             output DSCP marking: video-high|video-low|voice|\n"
-      "                             signalling|best-effort|0..63 (default: video-high)\n"
-      "      --al-fec <L>:<D>       Annex E Layer 1 FEC (SMPTE 2022-1), L*D<=400, L<=40\n"
-      "      --al-fec-port <port>   repair stream UDP port, requires --al-fec\n"
-      "  -R, --rist <uri>           rist://host:port[?query] or srt://host:port output,\n"
-      "                             bonded with any other -R of the same scheme given\n"
-      "                             (requires librist/libsrt respectively; one scheme at a\n"
-      "                             time, rist:// and srt:// don't mix)\n"
-      "      --profile <p>          simple|main; -R rist:// peers only (default: simple)\n"
-      "      --secret <psk>         -R rist:// pre-shared key; requires --profile main\n"
-      "      --cname <name>         -R rist:// cname (default: library default)\n"
-      "      --buffer <ms>          -R rist:// recovery buffer (default: library default)\n"
-      "      --srt-group-mode <m>   broadcast|backup; required when bonding more than one\n"
-      "                             -R srt:// peer\n"
-      "      --srt-passphrase <pw>  passphrase for every -R srt:// peer, 10..79 chars\n"
-      "      --srt-pbkeylen <n>     AES key length for --srt-passphrase: 16|24|32\n"
-      "      --srt-streamid <id>    SRTO_STREAMID for every -R srt:// peer\n"
-      "      --srt-packetfilter <c> SRTO_PACKETFILTER for every -R srt:// peer\n"
-      "      --srt-latency <ms>     SRTO_LATENCY for every -R srt:// peer\n"
-      "  -n, --nit <text|->         NIT (whole output): default passthrough source; \"-\" drops\n"
-      "                             it; text = our own\n"
-      "  -b, --bitrate <kbps>       target output bitrate, shared across all inputs (default: no shaping)\n"
-      "  -S, --stuff                null-packet stuffing up to -b's target (needs -b)\n"
-      "  -B, --burst-limit          cap output at -b's target, never above (needs -b)\n"
-      "  -e, --error <seconds>      on input error, reconnect after N s (default: fail once;\n"
-      "                             always retries when more than one -i is given)\n"
-      "  -k, --insecure             skip TLS verification (self-signed, hostname, expiry)\n"
-      "      --tsid <n>             transport_stream_id (default 1)\n"
-      "      --onid <n>             original_network_id (default 1)\n"
-      "  -v, --verbose              periodic stats on stderr\n"
-      "      --color <when>         auto|always|never (default auto)\n"
-      "      --metrics <path>       Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
-      "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
-      "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
-      "      --cas-algo <a>         enable CAS: cissa|csa2|csa1 (default: disabled)\n"
-      "      --cas-ecmg <ep>        ECMG address, tcp://host:port; repeatable, one CAS vendor\n"
-      "                             per --cas-ecmg (required with --cas-algo)\n"
-      "      --cas-ecmg-version <n> for the --cas-ecmg right before this: protocol version 2|3\n"
-      "                             (default: auto-negotiate)\n"
-      "      --cas-super-id <n>     for the --cas-ecmg right before this: Super_CAS_id, dec or\n"
-      "                             0x-hex (required per vendor)\n"
-      "      --cas-ecm-id <n>       for the --cas-ecmg right before this: ECM_id (required per vendor)\n"
-      "      --cas-ecm-pid <pid>    for the --cas-ecmg right before this: output PID for its ECM\n"
-      "                             stream (default: 0x0020)\n"
-      "      --cas-emmg-port <n>    for the --cas-ecmg right before this: our EMMG listener port\n"
-      "                             (default: 8002)\n"
-      "      --cas-emmg-max-conns <n> for the --cas-ecmg right before this: max concurrent EMMG\n"
-      "                             client connections (default: 8, max: 64)\n"
-      "      --cas-emmg-version <n> for the --cas-ecmg right before this: EMMG protocol version\n"
-      "                             2|3 (default: accept client's proposal)\n"
-      "      --cas-emm-pid <pid>    for the --cas-ecmg right before this: output PID for its EMM\n"
-      "                             stream (default: 0x0021)\n"
-      "      --cas-resilience <r>   for the --cas-ecmg right before this: on its own ECMG loss,\n"
-      "                             frozen|cycling|silent (default: frozen)\n"
-      "      --cas-required         for the --cas-ecmg right before this: its outage forces the\n"
-      "                             global fallback regardless of other vendors\n"
-      "      --cas-cwenc-algo <a>   for the --cas-ecmg right before this: encrypt CW_provision's\n"
-      "                             CWs per Annex D, des56|aes128|aes256 (default: off)\n"
-      "      --cas-cwenc-aes-mode <m> for the --cas-ecmg right before this: stream|ecb, aes* only\n"
-      "                             (default: stream)\n"
-      "      --cas-cwenc-fixed-key <hex> for the --cas-ecmg right before this: 14/32/64 hex chars\n"
-      "                             for des56/aes128/aes256 (default: des56's Annex D ROM key)\n"
-      "      --cas-cwenc-key-list-a <path> for the --cas-ecmg right before this: 2048-byte Annex D\n"
-      "                             key list file\n"
-      "      --cas-cwenc-key-list-b <path> for the --cas-ecmg right before this: same, second list\n"
-      "      --cas-pids <list>      PIDs to scramble: comma-separated pids and/or video/audio keywords\n"
-      "                             (default: video,audio - all video and audio streams)\n"
-      "      --cas-cp-duration <ms> crypto-period duration in ms, shared by every vendor (default: 10000)\n"
-      "      --cas-fallback-clear   on total outage (or a --cas-required vendor down): clear\n"
-      "                             instead of staying scrambled on the last known-good CW\n"
-      "      --biss2-sw <hex32>      enable BISS2 Mode 1/E: 32 hex char Session Word, scrambles\n"
-      "                             with CISSA. No ECMG/EMMG. Mutually exclusive with --cas-algo\n"
-      "      --biss2-emit-esw <id>   with --biss2-sw: log the AES-128-ECB Encrypted Session Word\n"
-      "                             for this 32 hex char receiver ID, for out-of-band distribution\n"
-      "      --biss1-sw <hex12>     enable legacy BISS1 Mode 1: 12 hex char Session Word,\n"
-      "                             scrambles with CSA1. Mutually exclusive with --biss2-sw/--cas-algo\n"
-      "      --biss2-ca-receivers <dir> enable BISS2 Mode CA: directory of PEM public keys, one\n"
-      "                             per entitled receiver/group. Rescanned on SIGHUP; a receiver\n"
-      "                             removed from the directory is revoked (forces a Session Key\n"
-      "                             change). Mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo\n"
-      "      --biss2-ca-session-id <n> administratively unique entitlement_session_id, dec or\n"
-      "                             0x-hex, 16 bit (default: random at startup)\n"
-      "  -d, --daemonize            fork to background after startup, detach from terminal\n"
-      "  -h, --help                 this help\n\n"
-      "examples:\n"
-      "  %s -i rtp://@239.19.75.1:8700 -m 239.1.1.1:5000 -s \"My Channel\"\n"
-      "  %s -i https://host/live/x/y.ts -m 239.1.1.2:5000 -b 8000 -S -B\n"
-      "  %s -i rtp://@239.19.75.1:8700 --sdt \"Channel A\" -i rtp://@239.19.75.2:8700 --sdt \"Channel B\" \\\n"
-      "     -m 239.1.1.3:5000 -e 5\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+    "usage: %s -i <uri> [per-input options] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]\n\n"
+    "re-package one or more transport streams (already-muxed, not raw ES) as one multicast.\n"
+    "A single -i: normal SPTS. Multiple -i: MPTS, one program per input.\n\n"
+    "options:\n"
+    "  -i, --input <uri>          udp://, rtp://, http(s)://, rist://@host:port[?query]\n"
+    "                             (single peer, @ marks it listening, srt://[@]host:port\n"
+    "                             (single peer, or \"-\" for stdin; repeatable.\n"
+    "                             each RIST/SRT input is an extra thread.\n"
+    "                             see options scoped to this below.\n"
+    "  -p, --pmt-pid <pid>        -i before: select program by PMT PID\n"
+    "                             (dec or 0x-hex; default: first live one)\n"
+    "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for IPv6)\n"
+    "  -O, --out-iface <iface>    outgoing multicast interface name\n"
+    "  -u, --udp                  plain UDP output (default: RTP-wrapped; -m output only)\n"
+    "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
+    "      --dscp <v>             output DSCP marking: video-high|video-low|voice|\n"
+    "                             signalling|best-effort|0..63 (default: video-high)\n"
+    "      --al-fec <L>:<D>       Annex E Layer 1 FEC (SMPTE 2022-1), L*D<=400, L<=40\n"
+    "      --al-fec-port <port>   AL-FEC stream UDP port, requires --al-fec\n"
+    "  -R, --rist <uri>           rist://host:port[?query] or srt://host:port output,\n"
+    "                             bonded with any other -R of the same scheme given.\n"
+    "                             one scheme at a time, rist:// and srt:// don't mix\n"
+    "      --profile <p>          simple|main; -R rist:// peers only (default: simple)\n"
+    "      --secret <psk>         -R rist:// pre-shared key; requires --profile main\n"
+    "      --cname <name>         -R rist:// cname (default: library default)\n"
+    "      --buffer <ms>          -R rist:// recovery buffer (default: library default)\n"
+    "      --srt-group-mode <m>   broadcast|backup. required to bond >1 -R srt:// peer\n"
+    "      --srt-passphrase <pw>  passphrase for every -R srt:// peer, 10..79 chars\n"
+    "      --srt-pbkeylen <n>     AES key length for --srt-passphrase: 16|24|32\n"
+    "      --srt-streamid <id>    SRTO_STREAMID for every -R srt:// peer\n"
+    "      --srt-packetfilter <c> SRTO_PACKETFILTER for every -R srt:// peer\n"
+    "      --srt-latency <ms>     SRTO_LATENCY for every -R srt:// peer\n"
+    "  -n, --nit <text|->         NIT (whole output): default passthrough; \"-\" drops\n"
+    "  -b, --bitrate <kbps>       target output bitrate across all inputs (default: no shaping)\n"
+    "  -S, --stuff                null-packet stuffing up to -b's target (needs -b)\n"
+    "  -B, --burst-limit          cap output at -b's target, never above (needs -b)\n"
+    "  -e, --error <seconds>      on input error, reconnect after N s (default: fail once;\n"
+    "                             always retries when more than one -i is given)\n"
+    "  -k, --insecure             skip TLS verification\n"
+    "      --tsid <n>             transport_stream_id (default 1)\n"
+    "      --onid <n>             original_network_id (default 1)\n"
+    "  -v, --verbose              periodic stats on stderr\n"
+    "      --color <when>         auto|always|never (default auto)\n"
+    "      --metrics <path>       socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+    "      --metrics-id <name>    stable instance id. metrics are disabled unless set\n"
+    "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
+    "      --cas-algo <a>         enable CAS: cissa|csa2|csa1 (default: disabled)\n"
+    "      --cas-ecmg <ep>        ECMG address, tcp://host:port. repeatable, one CAS vendor\n"
+    "                             per --cas-ecmg (required with --cas-algo)\n"
+    "                             see options scoped to this below.\n"
+    "      --cas-pids <list>      PIDs to scramble: comma-separated pids and/or video/audio/lcevc\n"
+    "                             keywords (default: video,audio - lcevc never implied by either)\n"
+    "      --cas-cp-duration <ms> crypto-period duration in ms, shared by every vendor (default: 10000)\n"
+    "      --cas-fallback-clear   on total outage (or a --cas-required vendor down): clear\n"
+    "                             instead of staying scrambled on the last known-good CW\n"
+    "      --biss2-sw <hex32>     enable BISS2 Mode 1/E: 32 hex char Session Word, scrambles\n"
+    "                             with CISSA. No ECMG/EMMG. Mutually exclusive with --cas-algo\n"
+    "      --biss2-emit-esw <id>  with --biss2-sw: log the AES-128-ECB Encrypted Session Word\n"
+    "                             for this 32 hex char receiver ID, for out-of-band distribution\n"
+    "      --biss1-sw <hex12>     enable legacy BISS1 Mode 1: 12 hex char Session Word,\n"
+    "                             scrambles with CSA1. Mutually exclusive with --biss2-sw/--cas-algo\n"
+    "      --biss2-ca-receivers <dir> enable BISS2 Mode CA: directory of PEM public keys, one\n"
+    "                             per entitled receiver/group. Rescanned on SIGHUP. a receiver\n"
+    "                             removed from the directory is revoked (forces a Session Key\n"
+    "                             change). Mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo\n"
+    "      --biss2-ca-session-id <n> administratively unique entitlement_session_id, dec or\n"
+    "                             0x-hex, 16 bit (default: random at startup)\n"
+    "  -d, --daemonize            fork to background after startup, detach from terminal\n"
+    "  -h, --help                 this help\n\n"
+    "scoped to the -i input right before:\n"
+    "      --sid <n>                 service_id/program_number (default: auto)\n"
+    "  -s, --sdt <text|->            SDT service_name. default=passthrough, \"-\" drops\n"
+    "      --provider <text>         SDT service_provider_name.\n"
+    "                                default=passthrough (or " TOOL_NAME " with -s)\n"
+    "  -I, --iface <iface>           incoming multicast interface name\n"
+    "      --strip-eit               drop source EIT (default: passed through)\n"
+    "      --strip <list>|none       comma list of DATA,ECM to drop (default: none)\n"
+    "      --hbbtv <url>             inject an AIT (default: none)\n"
+    "      --hbbtv-org-id <n>        HbbTV organisation_id (required with --hbbtv)\n"
+    "      --hbbtv-app-id <n>        HbbTV application_id (required with --hbbtv)\n"
+    "      --rist-profile-in <p>     simple|main; -i rist:// only (default: simple)\n"
+    "      --srt-passphrase-in <p>   passphrase, 10..79 chars.  -i srt:// only\n"
+    "      --srt-pbkeylen-in <n>     AES key length 16|24|32, requires --srt-passphrase-in\n"
+    "      --srt-streamid-in <id>    SRTO_STREAMID; -i srt:// only\n"
+    "      --srt-packetfilter-in <c> SRTO_PACKETFILTER; -i srt:// only\n"
+    "      --srt-latency-in <ms>     SRTO_LATENCY; -i srt:// only\n\n"
+    "scoped to --cas-ecmg right before:\n"
+    "      --cas-ecmg-version <n>     protocol version 2|3 (default: auto-negotiate)\n"
+    "      --cas-super-id <n>         Super_CAS_id, dec or 0x-hex (required per vendor)\n"
+    "      --cas-ecm-id <n>           ECM_id (required per vendor)\n"
+    "      --cas-ecm-pid <pid>        ECM stream PID (default: 0x0020)\n"
+    "      --cas-emmg-port <n>        our EMMG listener port (default: 8002)\n"
+    "      --cas-emmg-max-conns <n>   max concurrent EMMG client conns (default: 8, max: 64)\n"
+    "      --cas-emmg-version <n>     EMMG protocol version 2|3 (default: client proposal)\n"
+    "      --cas-emm-pid <pid>        output PID for its EMM stream (default: 0x0021)\n"
+    "      --cas-resilience <r>       ECMG loss handling, frozen|cycling|silent (default: frozen)\n"
+    "      --cas-required             its outage forces the global fallback regardless of others\n"
+    "      --cas-cwenc-algo <a>       encrypt CW_provision's CWs per Annex D, des56|aes128|aes256 (default: off)\n"
+    "      --cas-cwenc-aes-mode <m>   stream|ecb, aes* only (default: stream)\n"
+    "      --cas-cwenc-fixed-key <hx> 14/32/64 hex chars for des56/aes128/aes256 (default: Annex D ROM)\n"
+    "      --cas-cwenc-key-list-a <p> 2048-byte Annex D key list file\n"
+    "      --cas-cwenc-key-list-b <p> same, second list\n\n"
+
+    "examples:\n"
+    "  %s -i rtp://@239.19.75.1:8700 -m 239.1.1.1:5000 -s \"My Channel\"\n"
+    "  %s -i https://host/live/x/y.ts -m 239.1.1.2:5000 -b 8000 -S -B\n"
+    "  %s -i rtp://@239.19.75.1:8700 --sdt \"Channel A\" -i rtp://@239.19.75.2:8700 --sdt \"Channel B\" \\\n"
+    "     -m 239.1.1.3:5000 -e 5\n",
+    TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
 static int is_sid_used(const unsigned *used, unsigned n_used, unsigned sid) {
@@ -360,6 +334,146 @@ static int assign_missing_sids(config_t *cfg) {
     next++;
   }
   return 0;
+}
+
+static args_status_t validate_output_target(config_t *cfg, int have_mcast) {
+  unsigned n_rist_in = 0;
+  for (unsigned i = 0; i < cfg->n_inputs; i++) if (cfg->inputs[i].input.kind == SRC_RIST) n_rist_in++;
+  if (n_rist_in > 1) {
+    argerr("at most one -i rist:// input: librist isn't safe with more than one context per process");
+    return ARGS_ERR;
+  }
+  if (n_rist_in && cfg->n_rist) {
+    argerr("-i rist:// and -R rist:// cannot combine: librist isn't safe with more than one context per process");
+    return ARGS_ERR;
+  }
+  if (!have_mcast && cfg->n_rist == 0 && cfg->n_srt == 0) {
+    argerr("need -m output multicast or at least one -R peer");
+    return ARGS_ERR;
+  }
+  return ARGS_OK;
+}
+
+static args_status_t validate_bitrate_alfec(config_t *cfg) {
+  if ((cfg->stuff || cfg->burst_limit) && !cfg->bitrate_kbps) {
+    argerr("-S/--stuff and -B/--burst-limit need -b/--bitrate");
+    return ARGS_ERR;
+  }
+  if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
+  if (cfg->al_fec_l && !cfg->al_fec_port) {
+    argerr("--al-fec requires --al-fec-port");
+    return ARGS_ERR;
+  }
+  if (!cfg->al_fec_l && cfg->al_fec_port) log_line(TOOL_NAME ": --al-fec-port has no effect without --al-fec");
+  if (cfg->al_fec_l && !cfg->rtp) {
+    argerr("--al-fec requires RTP output, not -u/--udp");
+    return ARGS_ERR;
+  }
+  if (cfg->al_fec_l && !cfg->mcast_port) log_line(TOOL_NAME ": --al-fec has no effect without -m");
+  return ARGS_OK;
+}
+
+static args_status_t validate_rist_profile(config_t *cfg, const char *profile_arg, int have_secret) {
+  if (profile_arg) {
+    static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
+    int v;
+    if (map_lookup(map, sizeof map / sizeof map[0], profile_arg, &v)) {
+      argerr("invalid --profile: %s (simple|main)", profile_arg);
+      return ARGS_ERR;
+    }
+    cfg->rist_profile = (rist_profile_sel_t)v;
+  }
+  if (cfg->n_rist == 0 && (profile_arg || have_secret || cfg->rist_cname[0] || cfg->rist_buffer_ms))
+    log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer have no effect without -R");
+  if (cfg->n_rist > 0 && have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
+    argerr("--secret requires --profile main");
+    return ARGS_ERR;
+  }
+  return ARGS_OK;
+}
+
+static args_status_t validate_srt_group(config_t *cfg, const char *srt_group_mode_arg) {
+  if (srt_group_mode_arg) {
+    static const enum_map_t map[] = {{"broadcast", SRT_BOND_BROADCAST}, {"backup", SRT_BOND_BACKUP}};
+    int v;
+    if (map_lookup(map, sizeof map / sizeof map[0], srt_group_mode_arg, &v)) {
+      argerr("invalid --srt-group-mode: %s (broadcast|backup)", srt_group_mode_arg);
+      return ARGS_ERR;
+    }
+    cfg->srt_group_mode = (srt_bond_mode_t)v;
+  }
+  if (cfg->n_srt > 1 && cfg->srt_group_mode == SRT_BOND_NONE) {
+    argerr("bonding several -R srt:// peers requires --srt-group-mode");
+    return ARGS_ERR;
+  }
+  if (cfg->n_srt == 1 && cfg->srt_group_mode != SRT_BOND_NONE) {
+    argerr("--srt-group-mode has no effect with a single -R srt:// peer");
+    return ARGS_ERR;
+  }
+  if (cfg->n_srt == 0 && (srt_group_mode_arg || cfg->srt_passphrase[0] || cfg->srt_pbkeylen ||
+                          cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
+    log_line(TOOL_NAME ": --srt-* has no effect without an -R srt:// peer");
+  if (cfg->srt_passphrase[0] && (strlen(cfg->srt_passphrase) < 10 || strlen(cfg->srt_passphrase) > 79)) {
+    argerr("--srt-passphrase must be 10..79 characters");
+    return ARGS_ERR;
+  }
+  if (cfg->srt_pbkeylen && !cfg->srt_passphrase[0]) {
+    argerr("--srt-pbkeylen requires --srt-passphrase");
+    return ARGS_ERR;
+  }
+  return ARGS_OK;
+}
+
+static args_status_t validate_per_input_srt_hbbtv(config_t *cfg) {
+  for (unsigned i = 0; i < cfg->n_inputs; i++) {
+    dipitvhead_input_t *in = &cfg->inputs[i];
+    if (in->srt_passphrase_in[0] && (strlen(in->srt_passphrase_in) < 10 || strlen(in->srt_passphrase_in) > 79)) {
+      argerr("--srt-passphrase-in must be 10..79 characters");
+      return ARGS_ERR;
+    }
+    if (in->srt_pbkeylen_in && !in->srt_passphrase_in[0]) {
+      argerr("--srt-pbkeylen-in requires --srt-passphrase-in");
+      return ARGS_ERR;
+    }
+    if (in->input.kind != SRC_SRT && (in->srt_passphrase_in[0] || in->srt_pbkeylen_in || in->srt_streamid_in[0] || in->srt_packetfilter_in[0] || in->srt_latency_in_ms))
+      log_line(TOOL_NAME ": --srt-*-in has no effect, that -i isn't srt://");
+    if (in->hbbtv_url && (!in->hbbtv_org_id || !in->hbbtv_app_id)) {
+      argerr("--hbbtv requires --hbbtv-org-id and --hbbtv-app-id");
+      return ARGS_ERR;
+    }
+    if ((in->hbbtv_org_id || in->hbbtv_app_id) && !in->hbbtv_url) {
+      argerr("--hbbtv-org-id/--hbbtv-app-id need --hbbtv");
+      return ARGS_ERR;
+    }
+  }
+  return ARGS_OK;
+}
+
+static args_status_t validate_cas(config_t *cfg, int any_cas_flag, int have_cas_pids) {
+  if (any_cas_flag && cfg->cas_algo == CAS_ALGO_NONE && !cfg->biss2_enabled && !cfg->biss1_enabled && !cfg->biss2_ca_enabled) {
+    argerr("--cas-* options require --cas-algo (or --cas-pids alone under --biss2-sw/--biss1-sw/--biss2-ca-receivers)");
+    return ARGS_ERR;
+  }
+  if (cas_args_validate(TOOL_NAME, cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
+                        cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms) != 0)
+    return ARGS_ERR;
+  if (cfg->cas_algo != CAS_ALGO_NONE && !have_cas_pids) {
+    /* default: scramble all video and audio elementary streams */
+    cfg->cas_pids_video = 1;
+    cfg->cas_pids_audio = 1;
+  }
+  if ((cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled) && !have_cas_pids) {
+    /* same default as --cas-algo's own pid selection above */
+    cfg->cas_pids_video = 1;
+    cfg->cas_pids_audio = 1;
+  }
+  if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss1_enabled || cfg->biss2_enabled || cfg->biss2_ca_enabled) {
+    for (unsigned i = 0; i < cfg->n_inputs; i++) if (!(cfg->inputs[i].strip_mask & TVSTRIP_ECM)) {
+      log_line(TOOL_NAME ": source CA/ECM passthrough disabled: --cas-algo/--biss* already scrambling this mux");
+      break;
+    }
+  }
+  return ARGS_OK;
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -437,6 +551,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"srt-streamid", required_argument, 0, 1045},
       {"srt-packetfilter", required_argument, 0, 1046},
       {"srt-latency", required_argument, 0, 1047},
+      {"provider", required_argument, 0, 1056},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_mcast = 0;
@@ -509,7 +624,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           cfg->nit_mode = TABLE_DROP;
         } else {
           cfg->nit_mode = TABLE_OVERRIDE;
-          bufcpy(cfg->nit_text, sizeof cfg->nit_text, optarg);
+          if (argutil_bufcpy_opt(TOOL_NAME, cfg->nit_text, sizeof cfg->nit_text, optarg, "-n nit-text"))
+            return ARGS_ERR;
         }
         break;
       case 's':
@@ -518,8 +634,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           cfg->inputs[cfg->n_inputs - 1].sdt_mode = TABLE_DROP;
         } else {
           cfg->inputs[cfg->n_inputs - 1].sdt_mode = TABLE_OVERRIDE;
-          bufcpy(cfg->inputs[cfg->n_inputs - 1].sdt_text, sizeof cfg->inputs[0].sdt_text, optarg);
+          if (argutil_bufcpy_opt(TOOL_NAME, cfg->inputs[cfg->n_inputs - 1].sdt_text, sizeof cfg->inputs[0].sdt_text, optarg, "-s sdt-text"))
+            return ARGS_ERR;
         }
+        break;
+      case 1056:
+        REQUIRE_INPUT("--provider");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->inputs[cfg->n_inputs - 1].provider_text, sizeof cfg->inputs[0].provider_text, optarg, "--provider text"))
+          return ARGS_ERR;
         break;
       case 'b': {
         unsigned v;
@@ -738,15 +860,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1021:
         cfg->metrics_id = optarg;
         break;
-      case 1022: {
-        unsigned v;
-        if (argutil_uint_range(optarg, 1, 86400, &v)) {
-          argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->metrics_interval_s = v;
+      case 1022:
+        if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
-      }
       case 1023:
         any_cas_flag = 1;
         REQUIRE_CAS_VENDOR("--cas-required");
@@ -773,29 +889,20 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1050:
         any_cas_flag = 1;
         REQUIRE_CAS_VENDOR("--cas-cwenc-fixed-key");
-        if (bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_fixed_key_hex, sizeof cfg->cas_vendors[0].cwenc_fixed_key_hex, optarg) >=
-            sizeof cfg->cas_vendors[0].cwenc_fixed_key_hex) {
-          argerr("--cas-cwenc-fixed-key too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_fixed_key_hex, sizeof cfg->cas_vendors[0].cwenc_fixed_key_hex, optarg, "--cas-cwenc-fixed-key"))
           return ARGS_ERR;
-        }
         break;
       case 1051:
         any_cas_flag = 1;
         REQUIRE_CAS_VENDOR("--cas-cwenc-key-list-a");
-        if (bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_key_list_a_path, sizeof cfg->cas_vendors[0].cwenc_key_list_a_path, optarg) >=
-            sizeof cfg->cas_vendors[0].cwenc_key_list_a_path) {
-          argerr("--cas-cwenc-key-list-a too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_key_list_a_path, sizeof cfg->cas_vendors[0].cwenc_key_list_a_path, optarg, "--cas-cwenc-key-list-a"))
           return ARGS_ERR;
-        }
         break;
       case 1052:
         any_cas_flag = 1;
         REQUIRE_CAS_VENDOR("--cas-cwenc-key-list-b");
-        if (bufcpy(cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_key_list_b_path, sizeof cfg->cas_vendors[0].cwenc_key_list_b_path, optarg) >=
-            sizeof cfg->cas_vendors[0].cwenc_key_list_b_path) {
-          argerr("--cas-cwenc-key-list-b too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->cas_vendors[cfg->n_cas_vendors - 1].cwenc_key_list_b_path, sizeof cfg->cas_vendors[0].cwenc_key_list_b_path, optarg, "--cas-cwenc-key-list-b"))
           return ARGS_ERR;
-        }
         break;
       case 1024:
         any_cas_flag = 1;
@@ -871,10 +978,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
             argerr("too many -R peers (max %d)", ARGS_MAX_RIST_PEERS);
             return ARGS_ERR;
           }
-          if (bufcpy(cfg->rist_uri[cfg->n_rist], sizeof cfg->rist_uri[0], optarg) >= sizeof cfg->rist_uri[0]) {
-            argerr("-R rist uri too long: %s", optarg);
+          if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_uri[cfg->n_rist], sizeof cfg->rist_uri[0], optarg, "-R rist uri"))
             return ARGS_ERR;
-          }
           cfg->n_rist++;
         } else if (strncmp(optarg, "srt://", 6) == 0) {
           if (cfg->n_rist > 0) {
@@ -904,17 +1009,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         profile_arg = optarg;
         break;
       case 1031:
-        if (bufcpy(cfg->rist_secret, sizeof cfg->rist_secret, optarg) >= sizeof cfg->rist_secret) {
-          argerr("--secret too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_secret, sizeof cfg->rist_secret, optarg, "--secret"))
           return ARGS_ERR;
-        }
         have_secret = 1;
         break;
       case 1032:
-        if (bufcpy(cfg->rist_cname, sizeof cfg->rist_cname, optarg) >= sizeof cfg->rist_cname) {
-          argerr("--cname too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_cname, sizeof cfg->rist_cname, optarg, "--cname"))
           return ARGS_ERR;
-        }
         break;
       case 1033: {
         unsigned v;
@@ -938,11 +1039,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       }
       case 1037:
         REQUIRE_INPUT("--srt-passphrase-in");
-        if (bufcpy(cfg->inputs[cfg->n_inputs - 1].srt_passphrase_in, sizeof cfg->inputs[0].srt_passphrase_in, optarg) >=
-            sizeof cfg->inputs[0].srt_passphrase_in) {
-          argerr("--srt-passphrase-in too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->inputs[cfg->n_inputs - 1].srt_passphrase_in, sizeof cfg->inputs[0].srt_passphrase_in, optarg, "--srt-passphrase-in"))
           return ARGS_ERR;
-        }
         break;
       case 1038: {
         char *end;
@@ -958,19 +1056,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       }
       case 1039:
         REQUIRE_INPUT("--srt-streamid-in");
-        if (bufcpy(cfg->inputs[cfg->n_inputs - 1].srt_streamid_in, sizeof cfg->inputs[0].srt_streamid_in, optarg) >=
-            sizeof cfg->inputs[0].srt_streamid_in) {
-          argerr("--srt-streamid-in too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->inputs[cfg->n_inputs - 1].srt_streamid_in, sizeof cfg->inputs[0].srt_streamid_in, optarg, "--srt-streamid-in"))
           return ARGS_ERR;
-        }
         break;
       case 1040:
         REQUIRE_INPUT("--srt-packetfilter-in");
-        if (bufcpy(cfg->inputs[cfg->n_inputs - 1].srt_packetfilter_in, sizeof cfg->inputs[0].srt_packetfilter_in, optarg) >=
-            sizeof cfg->inputs[0].srt_packetfilter_in) {
-          argerr("--srt-packetfilter-in too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->inputs[cfg->n_inputs - 1].srt_packetfilter_in, sizeof cfg->inputs[0].srt_packetfilter_in, optarg, "--srt-packetfilter-in"))
           return ARGS_ERR;
-        }
         break;
       case 1041: {
         unsigned v;
@@ -986,10 +1078,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         srt_group_mode_arg = optarg;
         break;
       case 1043:
-        if (bufcpy(cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg) >= sizeof cfg->srt_passphrase) {
-          argerr("--srt-passphrase too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg, "--srt-passphrase"))
           return ARGS_ERR;
-        }
         break;
       case 1044: {
         char *end;
@@ -1002,16 +1092,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1045:
-        if (bufcpy(cfg->srt_streamid, sizeof cfg->srt_streamid, optarg) >= sizeof cfg->srt_streamid) {
-          argerr("--srt-streamid too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid, sizeof cfg->srt_streamid, optarg, "--srt-streamid"))
           return ARGS_ERR;
-        }
         break;
       case 1046:
-        if (bufcpy(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg) >= sizeof cfg->srt_packetfilter) {
-          argerr("--srt-packetfilter too long");
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg, "--srt-packetfilter"))
           return ARGS_ERR;
-        }
         break;
       case 1047: {
         unsigned v;
@@ -1038,128 +1124,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   }
   {
-    unsigned n_rist_in = 0;
-    for (unsigned i = 0; i < cfg->n_inputs; i++)
-      if (cfg->inputs[i].input.kind == SRC_RIST)
-        n_rist_in++;
-    if (n_rist_in > 1) {
-      argerr("at most one -i rist:// input: librist isn't safe with more than one context per process");
-      return ARGS_ERR;
-    }
-    if (n_rist_in && cfg->n_rist) {
-      argerr("-i rist:// and -R rist:// cannot combine: librist isn't safe with more than one context per process");
-      return ARGS_ERR;
-    }
-  }
-  if (!have_mcast && cfg->n_rist == 0 && cfg->n_srt == 0) {
-    argerr("need -m output multicast or at least one -R peer");
-    return ARGS_ERR;
-  }
-  if ((cfg->stuff || cfg->burst_limit) && !cfg->bitrate_kbps) {
-    argerr("-S/--stuff and -B/--burst-limit need -b/--bitrate");
-    return ARGS_ERR;
-  }
-  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
-    argerr("--metrics/--metrics-interval require --metrics-id");
-    return ARGS_ERR;
-  }
-  if (cfg->al_fec_l && !cfg->al_fec_port) {
-    argerr("--al-fec requires --al-fec-port");
-    return ARGS_ERR;
-  }
-  if (!cfg->al_fec_l && cfg->al_fec_port) log_line(TOOL_NAME ": --al-fec-port has no effect without --al-fec");
-  if (cfg->al_fec_l && !cfg->rtp) {
-    argerr("--al-fec requires RTP output, not -u/--udp");
-    return ARGS_ERR;
-  }
-  if (cfg->al_fec_l && !cfg->mcast_port) log_line(TOOL_NAME ": --al-fec has no effect without -m");
-  if (profile_arg) {
-    static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
-    int v;
-    if (map_lookup(map, sizeof map / sizeof map[0], profile_arg, &v)) {
-      argerr("invalid --profile: %s (simple|main)", profile_arg);
-      return ARGS_ERR;
-    }
-    cfg->rist_profile = (rist_profile_sel_t)v;
-  }
-  if (cfg->n_rist == 0 && (profile_arg || have_secret || cfg->rist_cname[0] || cfg->rist_buffer_ms))
-    log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer have no effect without -R");
-  if (cfg->n_rist > 0 && have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
-    argerr("--secret requires --profile main");
-    return ARGS_ERR;
-  }
-  if (srt_group_mode_arg) {
-    static const enum_map_t map[] = {{"broadcast", SRT_BOND_BROADCAST}, {"backup", SRT_BOND_BACKUP}};
-    int v;
-    if (map_lookup(map, sizeof map / sizeof map[0], srt_group_mode_arg, &v)) {
-      argerr("invalid --srt-group-mode: %s (broadcast|backup)", srt_group_mode_arg);
-      return ARGS_ERR;
-    }
-    cfg->srt_group_mode = (srt_bond_mode_t)v;
-  }
-  if (cfg->n_srt > 1 && cfg->srt_group_mode == SRT_BOND_NONE) {
-    argerr("bonding several -R srt:// peers requires --srt-group-mode");
-    return ARGS_ERR;
-  }
-  if (cfg->n_srt == 1 && cfg->srt_group_mode != SRT_BOND_NONE) {
-    argerr("--srt-group-mode has no effect with a single -R srt:// peer");
-    return ARGS_ERR;
-  }
-  if (cfg->n_srt == 0 && (srt_group_mode_arg || cfg->srt_passphrase[0] || cfg->srt_pbkeylen ||
-                          cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
-    log_line(TOOL_NAME ": --srt-* has no effect without an -R srt:// peer");
-  if (cfg->srt_passphrase[0] && (strlen(cfg->srt_passphrase) < 10 || strlen(cfg->srt_passphrase) > 79)) {
-    argerr("--srt-passphrase must be 10..79 characters");
-    return ARGS_ERR;
-  }
-  if (cfg->srt_pbkeylen && !cfg->srt_passphrase[0]) {
-    argerr("--srt-pbkeylen requires --srt-passphrase");
-    return ARGS_ERR;
-  }
-  for (unsigned i = 0; i < cfg->n_inputs; i++) {
-    dipitvhead_input_t *in = &cfg->inputs[i];
-    if (in->srt_passphrase_in[0] && (strlen(in->srt_passphrase_in) < 10 || strlen(in->srt_passphrase_in) > 79)) {
-      argerr("--srt-passphrase-in must be 10..79 characters");
-      return ARGS_ERR;
-    }
-    if (in->srt_pbkeylen_in && !in->srt_passphrase_in[0]) {
-      argerr("--srt-pbkeylen-in requires --srt-passphrase-in");
-      return ARGS_ERR;
-    }
-    if (in->input.kind != SRC_SRT && (in->srt_passphrase_in[0] || in->srt_pbkeylen_in || in->srt_streamid_in[0] || in->srt_packetfilter_in[0] || in->srt_latency_in_ms))
-      log_line(TOOL_NAME ": --srt-*-in has no effect, that -i isn't srt://");
-    if (in->hbbtv_url && (!in->hbbtv_org_id || !in->hbbtv_app_id)) {
-      argerr("--hbbtv requires --hbbtv-org-id and --hbbtv-app-id");
-      return ARGS_ERR;
-    }
-    if ((in->hbbtv_org_id || in->hbbtv_app_id) && !in->hbbtv_url) {
-      argerr("--hbbtv-org-id/--hbbtv-app-id need --hbbtv");
-      return ARGS_ERR;
-    }
-  }
-  if (any_cas_flag && cfg->cas_algo == CAS_ALGO_NONE && !cfg->biss2_enabled && !cfg->biss1_enabled && !cfg->biss2_ca_enabled) {
-    argerr("--cas-* options require --cas-algo (or --cas-pids alone under --biss2-sw/--biss1-sw/--biss2-ca-receivers)");
-    return ARGS_ERR;
-  }
-  if (cas_args_validate(TOOL_NAME, cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
-                        cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms) != 0)
-    return ARGS_ERR;
-  if (cfg->cas_algo != CAS_ALGO_NONE && !have_cas_pids) {
-    /* default: scramble all video and audio elementary streams */
-    cfg->cas_pids_video = 1;
-    cfg->cas_pids_audio = 1;
-  }
-  if ((cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled) && !have_cas_pids) {
-    /* same default as --cas-algo's own pid selection above */
-    cfg->cas_pids_video = 1;
-    cfg->cas_pids_audio = 1;
-  }
-
-  if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss1_enabled || cfg->biss2_enabled || cfg->biss2_ca_enabled) {
-    for (unsigned i = 0; i < cfg->n_inputs; i++) if (!(cfg->inputs[i].strip_mask & TVSTRIP_ECM)) {
-      log_line(TOOL_NAME ": source CA/ECM passthrough disabled: --cas-algo/--biss* already scrambling this mux");
-      break;
-    }
+    args_status_t st;
+    if ((st = validate_output_target(cfg, have_mcast)) != ARGS_OK) return st;
+    if ((st = validate_bitrate_alfec(cfg)) != ARGS_OK) return st;
+    if ((st = validate_rist_profile(cfg, profile_arg, have_secret)) != ARGS_OK) return st;
+    if ((st = validate_srt_group(cfg, srt_group_mode_arg)) != ARGS_OK) return st;
+    if ((st = validate_per_input_srt_hbbtv(cfg)) != ARGS_OK) return st;
+    if ((st = validate_cas(cfg, any_cas_flag, have_cas_pids)) != ARGS_OK) return st;
   }
   if (assign_missing_sids(cfg) != 0) return ARGS_ERR;
   return ARGS_OK;

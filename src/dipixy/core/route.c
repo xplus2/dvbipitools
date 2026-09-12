@@ -54,12 +54,9 @@ int fmt_parse(const char *s, route_fmt_t *out) {
 }
 
 static int hexval(int c) {
-  if (c >= '0' && c <= '9')
-    return c - '0';
-  if (c >= 'a' && c <= 'f')
-    return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F')
-    return c - 'A' + 10;
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
   return -1;
 }
 
@@ -70,8 +67,7 @@ static int pct_decode(char *s) {
     if (*s == '%') {
       int hi = hexval((unsigned char)s[1]);
       int lo = hi >= 0 ? hexval((unsigned char)s[2]) : -1;
-      if (lo < 0)
-        return -1;
+      if (lo < 0) return -1;
       *w++ = (char)((hi << 4) | lo);
       s += 3;
     } else {
@@ -82,49 +78,42 @@ static int pct_decode(char *s) {
   return 0;
 }
 
+static size_t digit_run(const char *s) {
+  size_t i = 0;
+  while (s[i] >= '0' && s[i] <= '9') i++;
+  return i;
+}
+
 static int hls_ts_seg_filename(const char *s) {
-  size_t i;
-  if (strncmp(s, "seg", 3) != 0)
-    return 0;
-  for (i = 3; s[i] >= '0' && s[i] <= '9'; i++)
-    ;
-  return i > 3 && !strcmp(s + i, ".ts");
+  size_t n;
+  if (strncmp(s, "seg", 3) != 0) return 0;
+  n = digit_run(s + 3);
+  return n > 0 && !strcmp(s + 3 + n, ".ts");
 }
 
 static int hls_fmp4_seg_filename(const char *s) {
-  size_t i;
-  if (strncmp(s, "seg", 3) != 0)
-    return 0;
-  for (i = 3; s[i] >= '0' && s[i] <= '9'; i++)
-    ;
-  return i > 3 && !strcmp(s + i, ".m4s");
+  size_t n;
+  if (strncmp(s, "seg", 3) != 0) return 0;
+  n = digit_run(s + 3);
+  return n > 0 && !strcmp(s + 3 + n, ".m4s");
 }
 
 /* "dsegTTTT.m4s": DASH media segment, addressed by start time (ms). NOT like hls-fmp4 */
 static int dash_seg_filename(const char *s) {
-  size_t i;
-  if (strncmp(s, "dseg", 4) != 0)
-    return 0;
-  for (i = 4; s[i] >= '0' && s[i] <= '9'; i++)
-    ;
-  return i > 4 && !strcmp(s + i, ".m4s");
+  size_t n;
+  if (strncmp(s, "dseg", 4) != 0) return 0;
+  n = digit_run(s + 4);
+  return n > 0 && !strcmp(s + 4 + n, ".m4s");
 }
 
 /* "segNNNNN.PP.ts": LL-HLS part, distinct from plain "segNNNNN.ts" */
 static int llhls_part_filename(const char *s) {
-  size_t i;
-  if (strncmp(s, "seg", 3) != 0)
-    return 0;
-  for (i = 3; s[i] >= '0' && s[i] <= '9'; i++)
-    ;
-  if (i == 3 || s[i] != '.')
-    return 0;
-  i++;
-  if (s[i] < '0' || s[i] > '9')
-    return 0;
-  for (; s[i] >= '0' && s[i] <= '9'; i++)
-    ;
-  return !strcmp(s + i, ".ts");
+  size_t n, n2;
+  if (strncmp(s, "seg", 3) != 0) return 0;
+  n = digit_run(s + 3);
+  if (n == 0 || s[3 + n] != '.') return 0;
+  n2 = digit_run(s + 3 + n + 1);
+  return n2 > 0 && !strcmp(s + 3 + n + 1 + n2, ".ts");
 }
 
 /* playlist-referenced segment/init filenames carry no format token */
@@ -163,25 +152,42 @@ static int fmt_or_hls_file_parse(const char *s, route_t *out) {
 static const char *const route_reserved_names[] = {"rtp", "udp", "srt", "rist", "stdin", "list", "metrics", "ui", "api", "dlna", "export"};
 
 int route_name_valid(const char *name) {
-  if (!name || !*name || strlen(name) > ROUTE_NAME_MAX)
-    return 0;
-  if (strchr(name, '/') || name[0] == '.')
-    return 0;
+  if (!name || !*name || strlen(name) > ROUTE_NAME_MAX) return 0;
+  if (strchr(name, '/') || name[0] == '.') return 0;
   for (size_t i = 0; i < sizeof route_reserved_names / sizeof route_reserved_names[0]; i++)
-    if (!strcmp(name, route_reserved_names[i]))
-      return 0;
+    if (!strcmp(name, route_reserved_names[i])) return 0;
   return 1;
+}
+
+static int parse_trailing_fmt(const char *fmt_seg, route_t *out) {
+  if (fmt_seg) return fmt_or_hls_file_parse(fmt_seg, out);
+  out->fmt = ROUTE_FMT_TS;
+  return 0;
 }
 
 static int uint_parse(const char *s, unsigned *out) {
   char *end;
   unsigned long v;
-  if (*s == '\0' || !isdigit((unsigned char)*s))
-    return -1;
+  if (*s == '\0' || !isdigit((unsigned char)*s)) return -1;
   v = strtoul(s, &end, 10);
-  if (*end != '\0')
-    return -1;
+  if (*end != '\0') return -1;
   *out = (unsigned)v;
+  return 0;
+}
+
+static int parse_item_tail(const char *item_seg, const char *fmt_seg, route_t *out) {
+  if (uint_parse(item_seg, &out->item_num) || out->item_num == 0) return -1;
+  if (parse_trailing_fmt(fmt_seg, out)) return -1;
+  out->kind = ROUTE_LIST_ITEM;
+  return 0;
+}
+
+static int parse_name_tail(char *name_seg, const char *fmt_seg, route_t *out) {
+  if (pct_decode(name_seg)) return -1;
+  if (strlen(name_seg) >= sizeof out->item_name) return -1;
+  bufcpy(out->item_name, sizeof out->item_name, name_seg);
+  if (parse_trailing_fmt(fmt_seg, out)) return -1;
+  out->kind = ROUTE_LIST_NAME;
   return 0;
 }
 
@@ -207,25 +213,16 @@ int route_parse_srt_uri(const char *uri, char *host, size_t hostsz, unsigned *po
   int family;
   size_t len;
 
-  if (strncmp(uri, "srt://", 6))
-    return -1;
+  if (strncmp(uri, "srt://", 6)) return -1;
   rest = uri + 6;
-  if (*rest == '@')
-    rest++;
-  if (*rest == '\0')
-    return -1;
-
-  if (!argutil_addrport_parse(rest, &family, host, hostsz, port))
-    return 0;
-  if (*rest == '[')
-    return -1;
-
+  if (*rest == '@') rest++;
+  if (*rest == '\0') return -1;
+  if (!argutil_addrport_parse(rest, &family, host, hostsz, port)) return 0;
+  if (*rest == '[') return -1;
   colon = strrchr(rest, ':');
-  if (!colon || colon == rest)
-    return -1;
+  if (!colon || colon == rest) return -1;
   len = (size_t)(colon - rest);
-  if (len >= hostsz)
-    return -1;
+  if (len >= hostsz) return -1;
   memcpy(host, rest, len);
   host[len] = '\0';
   return argutil_port_parse(colon + 1, port);
@@ -237,31 +234,19 @@ int route_parse(const char *path, route_t *out) {
   int nseg = 0;
   char *save;
 
-  if (!path || path[0] != '/')
-    return -1;
-  if (strlen(path + 1) >= sizeof buf)
-    return -1;
+  if (!path || path[0] != '/') return -1;
+  if (strlen(path + 1) >= sizeof buf) return -1;
   bufcpy(buf, sizeof buf, path + 1);
-
   for (char *p = strtok_r(buf, "/", &save); p && nseg < MAX_SEGS; p = strtok_r(NULL, "/", &save))
     seg[nseg++] = p;
 
-  if (nseg > 0 && pct_decode(seg[0]))
-    return -1;
-
+  if (nseg > 0 && pct_decode(seg[0])) return -1;
   memset(out, 0, sizeof *out);
-
   if ((nseg == 3 || nseg == 2) && (!strcmp(seg[0], "rtp") || !strcmp(seg[0], "udp") || !strcmp(seg[0], "srt"))) {
     int family;
     unsigned port;
-    if (argutil_addrport_parse(seg[1], &family, out->addr, sizeof out->addr, &port))
-      return -1;
-    if (nseg == 3) {
-      if (fmt_or_hls_file_parse(seg[2], out))
-        return -1;
-    } else {
-      out->fmt = ROUTE_FMT_TS; /* no format segment: default to raw TS push */
-    }
+    if (argutil_addrport_parse(seg[1], &family, out->addr, sizeof out->addr, &port)) return -1;
+    if (parse_trailing_fmt(nseg == 3 ? seg[2] : NULL, out)) return -1;
     if (!strcmp(seg[0], "rtp"))
       out->kind = ROUTE_RTP;
     else if (!strcmp(seg[0], "udp"))
@@ -274,47 +259,18 @@ int route_parse(const char *path, route_t *out) {
   }
 
   if ((nseg == 2 || nseg == 1) && (!strcmp(seg[0], "rist") || !strcmp(seg[0], "stdin"))) {
-    if (nseg == 2) {
-      if (fmt_or_hls_file_parse(seg[1], out))
-        return -1;
-    } else {
-      out->fmt = ROUTE_FMT_TS;
-    }
+    if (parse_trailing_fmt(nseg == 2 ? seg[1] : NULL, out)) return -1;
     out->kind = !strcmp(seg[0], "rist") ? ROUTE_RIST : ROUTE_STDIN;
     return 0;
   }
-
   if ((nseg == 5 || nseg == 4) && !strcmp(seg[0], "list") && !strcmp(seg[2], "item")) {
-    if (uint_parse(seg[1], &out->list_num) || out->list_num == 0)
-      return -1;
-    if (uint_parse(seg[3], &out->item_num) || out->item_num == 0)
-      return -1;
-    if (nseg == 5) {
-      if (fmt_or_hls_file_parse(seg[4], out))
-        return -1;
-    } else {
-      out->fmt = ROUTE_FMT_TS;
-    }
-    out->kind = ROUTE_LIST_ITEM;
-    return 0;
+    if (uint_parse(seg[1], &out->list_num) || out->list_num == 0) return -1;
+    return parse_item_tail(seg[3], nseg == 5 ? seg[4] : NULL, out);
   }
 
   if ((nseg == 5 || nseg == 4) && !strcmp(seg[0], "list") && !strcmp(seg[2], "name")) {
-    if (uint_parse(seg[1], &out->list_num) || out->list_num == 0)
-      return -1;
-    if (pct_decode(seg[3]))
-      return -1;
-    if (strlen(seg[3]) >= sizeof out->item_name)
-      return -1;
-    bufcpy(out->item_name, sizeof out->item_name, seg[3]);
-    if (nseg == 5) {
-      if (fmt_or_hls_file_parse(seg[4], out))
-        return -1;
-    } else {
-      out->fmt = ROUTE_FMT_TS;
-    }
-    out->kind = ROUTE_LIST_NAME;
-    return 0;
+    if (uint_parse(seg[1], &out->list_num) || out->list_num == 0) return -1;
+    return parse_name_tail(seg[3], nseg == 5 ? seg[4] : NULL, out);
   }
 
   if (nseg >= 1 && nseg <= 4 && route_name_valid(seg[0])) {
@@ -325,38 +281,18 @@ int route_parse(const char *path, route_t *out) {
       return 0;
     }
     if (nseg == 2) {
-      if (fmt_or_hls_file_parse(seg[1], out))
-        return -1;
+      if (fmt_or_hls_file_parse(seg[1], out)) return -1;
       out->kind = ROUTE_NAMED_BARE;
       bufcpy(out->src_name, sizeof out->src_name, seg[0]);
       return 0;
     }
     if (!strcmp(seg[1], "item")) {
-      if (uint_parse(seg[2], &out->item_num) || out->item_num == 0)
-        return -1;
-      if (nseg == 4) {
-        if (fmt_or_hls_file_parse(seg[3], out))
-          return -1;
-      } else {
-        out->fmt = ROUTE_FMT_TS;
-      }
-      out->kind = ROUTE_LIST_ITEM;
+      if (parse_item_tail(seg[2], nseg == 4 ? seg[3] : NULL, out)) return -1;
       bufcpy(out->src_name, sizeof out->src_name, seg[0]);
       return 0;
     }
     if (!strcmp(seg[1], "name")) {
-      if (pct_decode(seg[2]))
-        return -1;
-      if (strlen(seg[2]) >= sizeof out->item_name)
-        return -1;
-      bufcpy(out->item_name, sizeof out->item_name, seg[2]);
-      if (nseg == 4) {
-        if (fmt_or_hls_file_parse(seg[3], out))
-          return -1;
-      } else {
-        out->fmt = ROUTE_FMT_TS;
-      }
-      out->kind = ROUTE_LIST_NAME;
+      if (parse_name_tail(seg[2], nseg == 4 ? seg[3] : NULL, out)) return -1;
       bufcpy(out->src_name, sizeof out->src_name, seg[0]);
       return 0;
     }

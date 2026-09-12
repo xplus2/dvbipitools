@@ -4,6 +4,7 @@
 #ifdef HAVE_HTTP3
 
 #include "../reactor/internal.h"
+#include "../httpng/httpng.h"
 #include "http3.h"
 #include "http3_int.h"
 
@@ -36,37 +37,11 @@ static nghttp3_ssize h3_resp_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec 
   return 1;
 }
 
-/* hls_resp_t.status is always one of these */
-static const char *h3_status_str(int status) {
-  switch (status) {
-    case 200: return "200";
-    case 304: return "304";
-    case 404: return "404";
-    default: return "500";
-  }
-}
-
-static size_t u64_to_dec(char *buf, uint64_t v) {
-  char tmp[20];
-  size_t n = 0;
-  if (!v) {
-    buf[0] = '0';
-    return 1;
-  }
-  while (v) {
-    tmp[n++] = (char)('0' + v % 10);
-    v /= 10;
-  }
-  for (size_t i = 0; i < n; i++)
-    buf[i] = tmp[n - 1 - i];
-  return n;
-}
-
 /* body ownership transfers in: released by free_req() on stream close */
 void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, int zc, const char *origin_hdr) {
   const char *status_buf;
   char len_buf[24];
-  size_t len_n;
+  size_t len_n, etag_n;
   char etag_buf[56];
   nghttp3_nv nva[6];
   size_t nvlen = 0;
@@ -74,20 +49,15 @@ void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_t
   int cors_vary;
   const char *cors_val = cors_match(reactor_cfg(), origin_hdr, &cors_vary);
 
-  status_buf = h3_status_str(status);
+  status_buf = httpng_status_str(status);
   nva[nvlen++] = (nghttp3_nv){(uint8_t *)":status", (uint8_t *)status_buf, 7, 3, NGHTTP3_NV_FLAG_NONE};
   if (content_type)
     nva[nvlen++] = (nghttp3_nv){(uint8_t *)"content-type", (uint8_t *)content_type, 12, strlen(content_type), NGHTTP3_NV_FLAG_NONE};
-  len_n = u64_to_dec(len_buf, content_length);
+  len_n = httpng_u64_to_dec(len_buf, content_length);
   nva[nvlen++] = (nghttp3_nv){(uint8_t *)"content-length", (uint8_t *)len_buf, 14, len_n, NGHTTP3_NV_FLAG_NONE};
-  if (etag && etag[0]) {
-    size_t elen = strlen(etag);
-    if (elen > sizeof etag_buf - 2) elen = sizeof etag_buf - 2; /* local clamp: independent of hls_resp_t.etag's own size */
-    etag_buf[0] = '"';
-    memcpy(etag_buf + 1, etag, elen);
-    etag_buf[1 + elen] = '"';
-    nva[nvlen++] = (nghttp3_nv){(uint8_t *)"etag", (uint8_t *)etag_buf, 4, elen + 2, NGHTTP3_NV_FLAG_NONE};
-  }
+  etag_n = httpng_format_etag(etag_buf, sizeof etag_buf, etag);
+  if (etag_n)
+    nva[nvlen++] = (nghttp3_nv){(uint8_t *)"etag", (uint8_t *)etag_buf, 4, etag_n, NGHTTP3_NV_FLAG_NONE};
   if (cors_val) {
     nva[nvlen++] = (nghttp3_nv){(uint8_t *)"access-control-allow-origin", (uint8_t *)cors_val, 28, strlen(cors_val),NGHTTP3_NV_FLAG_NONE};
     if (cors_vary) nva[nvlen++] = (nghttp3_nv){(uint8_t *)"vary", (uint8_t *)"Origin", 4, 6, NGHTTP3_NV_FLAG_NONE};

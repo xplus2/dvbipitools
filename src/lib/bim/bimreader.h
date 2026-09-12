@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIBIM_BITREADER_H
-#define DIPIBIM_BITREADER_H
+#ifndef DIPIBIM_BIMREADER_H
+#define DIPIBIM_BIMREADER_H
 
 #include <stddef.h>
 #include <stdint.h>

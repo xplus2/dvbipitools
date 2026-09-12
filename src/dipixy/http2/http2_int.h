@@ -23,6 +23,8 @@
 #include "../ws/ws_frame.h"
 
 #define H2_MAX_STREAMS 32 /* concurrent in-flight requests per conn */
+/* TS-push holds a slot for stream lifetime, unlike HLS/DASH GETs. reserved: keeps WS reachable */
+#define H2_WS_RESERVE 2
 #define H2_PATH_MAX 512
 #define H2_TSPUSH_MAX 4 /* concurrent TS push streams per H2 connection */
 #define H2_DASHCHUNK_MAX 4 /* concurrent LL-DASH chunk streams per H2 connection */
@@ -74,6 +76,9 @@ typedef struct h2_conn {
   int fd;
   nghttp2_session *ng;
   h2_stream_t streams[H2_MAX_STREAMS];
+  h2_stream_t *hdr_stream;
+  h2_stream_t *pending[H2_MAX_STREAMS];
+  int pending_n;
   int done;
   conn_t *c; /* owning conn_t (for out_lock and epfd) */
   h2_tspush_stream_t tspush[H2_TSPUSH_MAX];
@@ -86,6 +91,7 @@ typedef struct h2_conn {
 
 /* from http2.c */
 void h2_flush_tx(h2_conn_t *conn, conn_t *c);
+void h2_wake_stream(conn_t *c, int32_t sid);
 
 /* from http2_tspush.c */
 void h2_tspush_on_stream_close(h2_conn_t *conn, int32_t stream_id);
@@ -104,12 +110,12 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
 
 /* from http2_hls.c: LL-HLS blocking-reload parking, mirrors dispatch.c's llhls_try_park() for H2 streams */
 int h2_llhls_try_park(h2_conn_t *conn, const conn_t *c, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter,
-                      unsigned pmt_pid, const char *filename, int is_head, const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle);
+                      unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle);
 void h2_llhls_on_stream_close(const h2_conn_t *conn, int32_t stream_id);
 void h2_llhls_on_conn_close(const h2_conn_t *conn);
 
 /* from http2_hls.c */
-int h2_hls_cold_try_park(h2_conn_t *conn, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, hls_cold_kind_t kind, seg_container_t container,
+int h2_hls_cold_try_park(h2_conn_t *conn, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, hls_cold_kind_t kind, seg_container_t container,
                          int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle);
 void h2_hls_cold_on_stream_close(const h2_conn_t *conn, int32_t stream_id);
 void h2_hls_cold_on_conn_close(const h2_conn_t *conn);

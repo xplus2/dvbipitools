@@ -23,10 +23,10 @@ static int g_ts_push_reactor_efds[TS_PUSH_MAX_REACTOR_THREADS];
    every begin/close path for subscription runs on its own owning thread (H1/H2/H3 don't migrate threads) */
 int g_tid_head[TS_PUSH_MAX_REACTOR_THREADS];
 
-void ts_push_wake_reactor(int tid) {
-  int efd;
-  if (tid < 0 || tid >= TS_PUSH_MAX_REACTOR_THREADS) return;
-  efd = g_ts_push_reactor_efds[tid];
+static _Thread_local uint32_t *t_wake_batch;
+
+static void ts_push_wake_reactor_now(int tid) {
+  int efd = g_ts_push_reactor_efds[tid];
   if (efd >= 0) {
     uint64_t one = 1;
     ssize_t r = write(efd, &one, sizeof one);
@@ -34,9 +34,33 @@ void ts_push_wake_reactor(int tid) {
   }
 }
 
-void ts_push_ring_enqueue(ts_sub_t *s, const uint8_t *data, size_t len) {
-  if (!len)
+void ts_push_wake_reactor(int tid) {
+  if (tid < 0 || tid >= TS_PUSH_MAX_REACTOR_THREADS) return;
+  if (t_wake_batch) {
+    *t_wake_batch |= 1u << tid;
     return;
+  }
+  ts_push_wake_reactor_now(tid);
+}
+
+void ts_push_wake_batch_begin(void) {
+  static _Thread_local uint32_t batch;
+  batch = 0;
+  t_wake_batch = &batch;
+}
+
+void ts_push_wake_batch_end(void) {
+  uint32_t m = t_wake_batch ? *t_wake_batch : 0;
+  t_wake_batch = NULL;
+  while (m) {
+    int tid = __builtin_ctz(m);
+    m &= m - 1;
+    ts_push_wake_reactor_now(tid);
+  }
+}
+
+void ts_push_ring_enqueue(ts_sub_t *s, const uint8_t *data, size_t len) {
+  if (!len) return;
   if (!byte_ring_write(&s->pkt_ring, data, len)) {
     atomic_store_explicit(&s->pkt_overrun, 1, memory_order_release);
     ts_push_wake_reactor(s->reactor_tid);
@@ -53,7 +77,6 @@ void ts_push_ring_enqueue(ts_sub_t *s, const uint8_t *data, size_t len) {
 
 void ts_push_init(int prealloc, int max_clients) {
   int i, n;
-
   n = (max_clients > 0 ? max_clients : 0) + TS_PUSH_SUBS_HEADROOM;
   if (n < TS_PUSH_SUBS_FLOOR) n = TS_PUSH_SUBS_FLOOR;
   if (n > TS_PUSH_MAX_SUBS) n = TS_PUSH_MAX_SUBS;
@@ -87,16 +110,17 @@ void ts_push_register_reactor_efd(int tid, int efd) {
 }
 
 int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto, int fd, unsigned pmt_pid, int spts,
-                       int rawaudio, const client_info_t *info) {
+                       int rawaudio, const client_info_t *info, const lcevc_select_t *lcevc) {
   psi_t *spts_psi = NULL;
   psi_t *filter_psi = NULL;
   rawaudio_demux_t *rawaudio_demux = NULL;
   int i, ws_handle;
+  int lcevc_may_exclude = lcevc->mode == LCEVC_SEL_BASE || lcevc->mode == LCEVC_SEL_N;
   if (spts) {
     spts_psi = psi_new();
     if (!spts_psi) return -1;
     if (pmt_pid) psi_select_pmt_pid(spts_psi, pmt_pid);
-  } else if (!rawaudio && filter->count > 0) {
+  } else if (!rawaudio && (filter->count > 0 || lcevc_may_exclude)) {
     filter_psi = psi_new();
     if (!filter_psi) return -1;
   }
@@ -164,7 +188,8 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto,
     s->proto = proto;
     s->fd = fd;
     atomic_store_explicit(&s->ready, 0, memory_order_relaxed);
-    s->h2_sid = -1;
+    s->h2c = NULL;
+    s->h2_slot = NULL;
     s->reactor_tid = -1;
     s->tid_next = -1;
     s->h3c = NULL;
@@ -177,6 +202,8 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto,
     s->spts_n_allowed = 0;
     s->filter_psi = filter_psi;
     s->cc_pmt = 0;
+    s->lcevc = *lcevc;
+    s->lcevc_locked = 0;
     s->rawaudio = rawaudio_demux;
     {
       _Atomic int *head = capture_ts_push_head_ptr(ctx);
@@ -241,12 +268,10 @@ void ts_push_unsubscribe_by_idx(int idx) {
   ts_sub_t *s;
   capture_ctx_t *ctx;
   int expected;
-  if (idx < 0 || idx >= g_ts_subs_n)
-    return;
+  if (idx < 0 || idx >= g_ts_subs_n) return;
   s = &g_ts_subs[idx];
   expected = TS_SUB_ALIVE;
-  if (!atomic_compare_exchange_strong_explicit(&s->alive, &expected, TS_SUB_CLOSING, memory_order_acquire,
-                                                memory_order_relaxed))
+  if (!atomic_compare_exchange_strong_explicit(&s->alive, &expected, TS_SUB_CLOSING, memory_order_acquire, memory_order_relaxed))
     return; /* already closing or already closed */
   capture_wait_pumps_quiescent();
   ts_push_unlink_tid(idx);

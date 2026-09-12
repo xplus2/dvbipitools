@@ -47,6 +47,10 @@ typedef struct {
   unsigned char *vbuf; /* video: length-prefixed AU */
   size_t vbuflen;
   size_t vbufcap;
+  unsigned char *lcevc_rb; /* strip_lcevc scratch, see esc_strip_lcevc_sei() */
+  size_t lcevc_rbcap;
+  unsigned char *lcevc_esc;
+  size_t lcevc_esccap;
   int got_key;
   ttx_t *ttx;
   esc_track_t es;
@@ -98,9 +102,6 @@ struct mp4mux {
   unsigned char *pend_arena;
   uint64_t mdat_hdr_pos; /* file offset of mdat's size+largesize fields */
 };
-
-/* video.c: mp4-specific sample entry fourccs, rest -> lib/demux/escodec */
-const char *p4_entry_fourcc_for(codec_t codec);
 
 /* write.c */
 void p4_wfd(mp4_t *m, const void *p, size_t n);

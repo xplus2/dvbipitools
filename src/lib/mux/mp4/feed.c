@@ -2,18 +2,11 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <string.h>
-#include <time.h>
 
 #include "lib/demux/escodec/aubuild.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "priv.h"
-
-static int64_t now_ms(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (int64_t)t.tv_sec * 1000 + t.tv_nsec / 1000000;
-}
 
 static void video_emit(mp4_t *m, track_t *t, int64_t pts_ms, int64_t dts_ms, const unsigned char *d, size_t n, int key) {
   if (t->prev_dur_slot) {
@@ -50,7 +43,6 @@ static int all_psi_named(const mp4_t *m) {
 
 void p4_all_ready(mp4_t *m) {
   int64_t grace_ms = (m->npsi > 1) ? 3000 : 2000;
-
   for (int i = 0; i < m->ntrk; i++) {
     const track_t *t = &m->trk[i];
     if (!t->hdr_parsed) return;
@@ -65,8 +57,7 @@ void p4_all_ready(mp4_t *m) {
 }
 
 static void try_parse_h264_hdr(mp4_t *m, track_t *t) {
-  if (h264_dims(t->es.sps, t->es.spslen, &t->width, &t->height) != 0)
-    return;
+  if (h264_dims(t->es.sps, t->es.spslen, &t->width, &t->height) != 0) return;
   t->es.cpriv_len = build_avcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
   if (t->es.cpriv_len) {
     t->hdr_parsed = 1;
@@ -93,43 +84,18 @@ static void try_parse_vvc_hdr(mp4_t *m, track_t *t) {
 }
 
 static void handle_video(mp4_t *m, track_t *t, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *d, size_t len) {
-  size_t p;
-  size_t scl = 0;
   int key = 0;
-
-  if (m->flushing)
-    return;
+  lcevc_strip_t strip;
+  if (m->flushing) return;
   if (has_pts)
     t->pts_ms = pts_unwrap(&t->pts_uw, pts);
   t->ts_ms = has_dts ? pts_unwrap(&t->dts_uw, dts) : t->pts_ms;
   t->vbuflen = 0;
-
-  p = find_startcode(d, len, 0, &scl);
-  while (p < len) {
-    size_t ns = p + scl;
-    size_t scl2 = 0;
-    size_t q = find_startcode(d, len, ns, &scl2);
-    size_t n = q - ns;
-    unsigned type;
-    if (!n) {
-      p = q;
-      scl = scl2;
-      continue;
-    }
-    if (t->es.codec == CODEC_H264) {
-      type = d[ns] & 0x1F;
-      esc_handle_h264_nal(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, type, d + ns, n, &key);
-    } else if (t->es.codec == CODEC_HEVC) {
-      type = (d[ns] >> 1) & 0x3F;
-      esc_handle_hevc_nal(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, type, d + ns, n, &key);
-    } else {
-      type = n > 1 ? (d[ns + 1] >> 3) & 0x1F : 0;
-      esc_handle_vvc_nal(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, type, d + ns, n, &key);
-    }
-    p = q;
-    scl = scl2;
-  }
-
+  strip.rb = &t->lcevc_rb;
+  strip.rbcap = &t->lcevc_rbcap;
+  strip.esc = &t->lcevc_esc;
+  strip.esccap = &t->lcevc_esccap;
+  esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, m->opts->strip_lcevc ? &strip : NULL);
   if (!t->hdr_parsed) {
     if (t->es.codec == CODEC_H264 && t->es.spslen && t->es.ppslen)
       try_parse_h264_hdr(m, t);
@@ -138,10 +104,8 @@ static void handle_video(mp4_t *m, track_t *t, int has_pts, uint64_t pts, int ha
     else if (t->es.codec == CODEC_VVC && t->es.vpslen && t->es.spslen && t->es.ppslen)
       try_parse_vvc_hdr(m, t);
   }
-  if (key)
-    t->got_key = 1;
-  if (t->hdr_parsed && t->got_key && t->vbuflen)
-    video_emit(m, t, t->pts_ms, t->ts_ms, t->vbuf, t->vbuflen, key);
+  if (key) t->got_key = 1;
+  if (t->hdr_parsed && t->got_key && t->vbuflen) video_emit(m, t, t->pts_ms, t->ts_ms, t->vbuf, t->vbuflen, key);
 }
 
 static void handle_audio(mp4_t *m, track_t *t, int has_pts, uint64_t pts, const unsigned char *data, size_t len) {
@@ -171,10 +135,8 @@ static void handle_audio(mp4_t *m, track_t *t, int has_pts, uint64_t pts, const 
       t->hdr_parsed = 1;
       p4_all_ready(m);
     }
-    if (f.outlen)
-      p4_route(m, t, t->ts_ms, 0, f.out, f.outlen, 1, t->es.rate ? (uint32_t)(f.samples * 1000 / t->es.rate) : 0);
-    if (t->es.rate && f.samples)
-      t->ts_ms += (int64_t)f.samples * 1000 / (int64_t)t->es.rate;
+    if (f.outlen) p4_route(m, t, t->ts_ms, 0, f.out, f.outlen, 1, t->es.rate ? (uint32_t)(f.samples * 1000 / t->es.rate) : 0);
+    if (t->es.rate && f.samples) t->ts_ms += (int64_t)f.samples * 1000 / (int64_t)t->es.rate;
     pos += f.consumed;
   }
   if (pos) {
@@ -212,8 +174,7 @@ static void add_track(mp4_t *m, const psi_es_t *es, int psi_idx) {
   t->cls = es->cls;
   t->psi_idx = psi_idx;
   memcpy(t->lang, es->lang, sizeof t->lang);
-  if (pes_track(m->pes, t->pid))
-    log_line("mp4: pes tracker full, pid 0x%04x will not be reassembled", t->pid);
+  if (pes_track(m->pes, t->pid)) log_line("mp4: pes tracker full, pid 0x%04x not reassembled", t->pid);
   m->ntrk++;
 }
 
@@ -262,7 +223,6 @@ void p4_setup(mp4_t *m) {
       break;
     }
   }
-  if (!m->ntrk)
-    log_line("mp4=no_mux");
+  if (!m->ntrk) log_line("mp4=no_mux");
   m->setup = 1;
 }

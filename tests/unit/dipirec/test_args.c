@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "dipirec/args.h"
+#include "dipirec/filter/ts.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
@@ -30,6 +31,29 @@ START_TEST(rist_out_default_format_is_ts) {
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.format, FMT_TS);
+}
+END_TEST
+
+START_TEST(strip_lcevc_token_is_accepted) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "out.ts", "--strip", "LCEVC", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.strip_mask, STRIP_LCEVC);
+}
+END_TEST
+
+START_TEST(strip_lcevc_combines_with_other_tokens) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "out.ts", "--strip", "NUL,LCEVC", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.strip_mask, STRIP_NUL | STRIP_LCEVC);
+}
+END_TEST
+
+START_TEST(strip_unknown_token_is_rejected) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "out.ts", "--strip", "BOGUS", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
 }
 END_TEST
 
@@ -273,6 +297,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, rist_out_uri_is_parsed);
   tcase_add_test(tc, rist_out_rejects_mkv_format);
   tcase_add_test(tc, rist_out_default_format_is_ts);
+  tcase_add_test(tc, strip_lcevc_token_is_accepted);
+  tcase_add_test(tc, strip_lcevc_combines_with_other_tokens);
+  tcase_add_test(tc, strip_unknown_token_is_rejected);
   tcase_add_test(tc, default_profile_is_simple);
   tcase_add_test(tc, profile_main_is_accepted);
   tcase_add_test(tc, unknown_profile_is_rejected);

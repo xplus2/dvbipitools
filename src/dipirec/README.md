@@ -191,25 +191,29 @@ If `-f` is omitted the format is taken from the `-o` suffix (`.ts`, `.mkv`, `.mk
 
 `-f ts` drops a configurable set of tables/pids. Default, with no `--strip` given: `NUL,NIT,AIT,EIT`.
 
-| token  | what                                                                                        |
-|--------|---------------------------------------------------------------------------------------------|
-| `NUL`  | CBR stuffing (null packets, pid 0x1FFF)                                                     |
-| `NIT`  | network info table, and its entry in the PAT                                                |
-| `AIT`  | application signalling table, and its PMT ES entry                                          |
-| `EIT`  | event info (EPG)                                                                            |
-| `CAT`  | conditional access table                                                                    |
-| `ECM`  | entitlement control messages, and the PMT's ES-level CA descriptor referencing them         |
-| `EMM`  | entitlement management messages, and the PMT's program-level CA descriptor referencing them |
-| `RST`  | running status table                                                                        |
-| `TDT`  | time/date table - shares a pid with TOT, either token drops both                            |
-| `TOT`  | time offset table - shares a pid with TDT, either token drops both                          |
-| `INT`  | IP/MAC notification table (identified by table_id, not a fixed pid)                         |
+| token   | what                                                                                        |
+|---------|---------------------------------------------------------------------------------------------|
+| `NUL`   | CBR stuffing (null packets, pid 0x1FFF)                                                     |
+| `NIT`   | network info table, and its entry in the PAT                                                |
+| `AIT`   | application signalling table, and its PMT ES entry                                          |
+| `EIT`   | event info (EPG)                                                                            |
+| `CAT`   | conditional access table                                                                    |
+| `ECM`   | entitlement control messages, and the PMT's ES-level CA descriptor referencing them         |
+| `EMM`   | entitlement management messages, and the PMT's program-level CA descriptor referencing them |
+| `RST`   | running status table                                                                        |
+| `TDT`   | time/date table - shares a pid with TOT, either token drops both                            |
+| `TOT`   | time offset table - shares a pid with TDT, either token drops both                          |
+| `INT`   | IP/MAC notification table (identified by table_id, not a fixed pid)                         |
+| `LCEVC` | LCEVC (standalone ES, and inline SEI/NAL) - see below, not `-f ts`-only like the rest       |
 
 `--strip none` disables stripping entirely.
-Given `--strip` with any format other than `-f ts`, it's ignored with a warning.
+`LCEVC` drops inline LCEVC data from `ts`/`mp4`/`mkv`/`m4a`/`mka`/RTMP output, since that data lives inside
+the base video's own PES stream rather than a separate pid.
+Every other token given with a format other than `-f ts` is ignored with a warning.
 
-What always survives: `PAT`/`PMT` (rewritten to drop whatever their own entries pointed at, but there's no
-TS without them), `SDT`, and every `PES` stream.
+What always survives, `-f ts` only: `PAT`/`PMT` (rewritten to drop whatever
+their own entries pointed at, but there's no TS without them), `SDT`, and
+every `PES` stream except a standalone LCEVC one dropped via `--strip LCEVC`.
 
 What's changed regardless: continuity counters, CRC32 recalculation on any rewritten section.
 

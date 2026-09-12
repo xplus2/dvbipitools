@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +19,7 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 
+#include "internal.h"
 #include "reactor_tls_int.h"
 #include "../version.h"
 
@@ -50,8 +52,7 @@ static char g_tls_key[512];
    tls_init(), reused by reload_tls() so a reload gets identical ctx config */
 static SSL_CTX *build_ssl_ctx(const char *cert_path, const char *key_path) {
   SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
-  if (!ctx)
-    return NULL;
+  if (!ctx) return NULL;
 
   SSL_CTX_set_mode(ctx, SSL_MODE_RELEASE_BUFFERS);
   SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_SERVER);
@@ -90,8 +91,7 @@ int tls_init(const char *cert_path, const char *key_path, int fd_table_cap) {
 
   OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
   ctx = build_ssl_ctx(cert_path, key_path);
-  if (!ctx)
-    return 0;
+  if (!ctx) return 0;
 
   if (fd_table_cap > CONN_TABLE_MAX) {
     log_line("tls_init: fd table cap %d exceeds max supported %d", fd_table_cap, CONN_TABLE_MAX);
@@ -179,12 +179,35 @@ void tls_cleanup(void) {
   free(tls_gc_shards);
   tls_gc_shards = NULL;
   tls_gc_nshards = 0;
-
   if (g_ssl_ctx) {
     SSL_CTX_free(g_ssl_ctx);
     g_ssl_ctx = NULL;
   }
   g_tls_fd_max = 0;
+}
+
+#define TLS_CTX_RETIRE_MAX 8
+
+typedef struct {
+  SSL_CTX *ctx;
+  uint64_t mark[QSBR_MAX_WORKERS];
+} tls_ctx_retiree_t;
+
+static tls_ctx_retiree_t g_ctx_retiring[TLS_CTX_RETIRE_MAX];
+static int g_ctx_retiring_n;
+static pthread_mutex_t g_ctx_retiring_lock = PTHREAD_MUTEX_INITIALIZER;
+
+void tls_ctx_gc_sweep(void) {
+  pthread_mutex_lock(&g_ctx_retiring_lock);
+  for (int i = 0; i < g_ctx_retiring_n;) {
+    if (qsbr_mark_passed(reactor_qsbr(), g_ctx_retiring[i].mark)) {
+      SSL_CTX_free(g_ctx_retiring[i].ctx);
+      g_ctx_retiring[i] = g_ctx_retiring[--g_ctx_retiring_n];
+    } else {
+      i++;
+    }
+  }
+  pthread_mutex_unlock(&g_ctx_retiring_lock);
 }
 
 /* builds fresh SSL_CTX, swaps it in. never mutates live ctx's cert store in
@@ -196,6 +219,15 @@ int reload_tls(void) {
   if (!fresh) return -1;
   old = g_ssl_ctx;
   g_ssl_ctx = fresh;
-  SSL_CTX_free(old);
+  tls_ctx_gc_sweep();
+  pthread_mutex_lock(&g_ctx_retiring_lock);
+  if (g_ctx_retiring_n < TLS_CTX_RETIRE_MAX) {
+    qsbr_mark(reactor_qsbr(), g_ctx_retiring[g_ctx_retiring_n].mark);
+    g_ctx_retiring[g_ctx_retiring_n].ctx = old;
+    g_ctx_retiring_n++;
+  } else {
+    log_line(TOOL_NAME ": tls reload: retire queue full, leaking one SSL_CTX");
+  }
+  pthread_mutex_unlock(&g_ctx_retiring_lock);
   return 0;
 }

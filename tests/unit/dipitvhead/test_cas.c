@@ -164,6 +164,38 @@ START_TEST(resolve_pids_audio_keyword_multiple) {
 }
 END_TEST
 
+START_TEST(resolve_pids_lcevc_keyword_not_implied_by_video_or_audio) {
+  config_t cfg;
+  psi_es_t pe[3];
+  out_es_t es[3];
+  unsigned out[16];
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pids_video = 1;
+  cfg.cas_pids_audio = 1;
+  set_es(&es[0], &pe[0], 0x0100, PID_VIDEO);
+  set_es(&es[1], &pe[1], 0x0101, PID_AUDIO);
+  set_es(&es[2], &pe[2], 0x0102, PID_LCEVC);
+  ck_assert_uint_eq(cas_resolve_pids(&cfg, es, 3, out, 16), 2);
+  ck_assert_uint_eq(out[0], 0x0100);
+  ck_assert_uint_eq(out[1], 0x0101);
+}
+END_TEST
+
+START_TEST(resolve_pids_lcevc_keyword) {
+  config_t cfg;
+  psi_es_t pe[3];
+  out_es_t es[3];
+  unsigned out[16];
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cas_pids_lcevc = 1;
+  set_es(&es[0], &pe[0], 0x0100, PID_VIDEO);
+  set_es(&es[1], &pe[1], 0x0101, PID_AUDIO);
+  set_es(&es[2], &pe[2], 0x0102, PID_LCEVC);
+  ck_assert_uint_eq(cas_resolve_pids(&cfg, es, 3, out, 16), 1);
+  ck_assert_uint_eq(out[0], 0x0102);
+}
+END_TEST
+
 START_TEST(resolve_pids_mixed_explicit_and_keyword_dedupes) {
   config_t cfg;
   psi_es_t pe[2];
@@ -323,6 +355,8 @@ static Suite *cas_suite(void) {
   tcase_add_test(tc, resolve_pids_explicit_only);
   tcase_add_test(tc, resolve_pids_video_keyword);
   tcase_add_test(tc, resolve_pids_audio_keyword_multiple);
+  tcase_add_test(tc, resolve_pids_lcevc_keyword_not_implied_by_video_or_audio);
+  tcase_add_test(tc, resolve_pids_lcevc_keyword);
   tcase_add_test(tc, resolve_pids_mixed_explicit_and_keyword_dedupes);
   tcase_add_test(tc, resolve_pids_default_video_and_audio);
   tcase_add_test(tc, resolve_pids_caps_at_limit);

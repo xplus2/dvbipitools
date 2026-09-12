@@ -37,6 +37,9 @@ int pid_filter_excludes(const pid_filter_t *f, unsigned pid);
 /* 1 if a and b are same set, order never matters (parse already sorts) */
 int pid_filter_equal(const pid_filter_t *a, const pid_filter_t *b);
 
+/* dedup safe, sorts */
+void pid_filter_add(pid_filter_t *f, unsigned pid);
+
 /* "101,32" decimal csv, empty string if f->count == 0. truncates on bufsz overflow */
 void pid_filter_format(const pid_filter_t *f, char *buf, size_t bufsz);
 

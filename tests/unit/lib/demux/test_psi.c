@@ -291,6 +291,54 @@ static size_t build_pmt_with_ca(unsigned char *out, unsigned prog_num, unsigned 
   return crc_at + 4;
 }
 
+typedef struct {
+  unsigned stream_type;
+  unsigned pid;
+  const unsigned char *desc;
+  size_t desc_len;
+} es_spec_t;
+
+/* build 1-prog PMT (table_id 0x02) from a list of ES, each with its raw descriptor loop B, CRC included */
+static size_t build_pmt_es(unsigned char *out, unsigned prog_num, unsigned pcr_pid, const es_spec_t *es, size_t es_count) {
+  unsigned char body[256];
+  size_t n = 0, hdr, crc_at, i;
+  uint32_t crc;
+
+  body[n++] = (unsigned char)(prog_num >> 8);
+  body[n++] = (unsigned char)prog_num;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = (unsigned char)(0xE0 | ((pcr_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)pcr_pid;
+  body[n++] = 0xF0; /* program_info_length = 0 */
+  body[n++] = 0x00;
+
+  for (i = 0; i < es_count; i++) {
+    body[n++] = (unsigned char)es[i].stream_type;
+    body[n++] = (unsigned char)(0xE0 | ((es[i].pid >> 8) & 0x1F));
+    body[n++] = (unsigned char)es[i].pid;
+    body[n++] = (unsigned char)(0xF0 | ((es[i].desc_len >> 8) & 0x0F));
+    body[n++] = (unsigned char)es[i].desc_len;
+    memcpy(body + n, es[i].desc, es[i].desc_len);
+    n += es[i].desc_len;
+  }
+
+  hdr = n + 4;
+  out[0] = 0x02;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
 /* builds a CAT section (table_id 0x01) with one CA_descriptor (tag 0x09,
  * ca_system_id + ca_pid, no private data), CRC included, returns length */
 static size_t build_cat(unsigned char *out, unsigned ca_system_id, unsigned emm_pid) {
@@ -353,16 +401,14 @@ static size_t build_cat_empty(unsigned char *out) {
 }
 
 /* wraps one PSI section (pusi=1, pointer_field=0) into a single 188-byte TS packet */
-static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, unsigned char cc,
-                            const unsigned char *section, size_t slen) {
+static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, unsigned char cc, const unsigned char *section, size_t slen) {
   pkt[0] = 0x47;
   pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
   pkt[2] = (unsigned char)pid;
   pkt[3] = (unsigned char)(0x10 | (cc & 0x0F)); /* adaptation_field_control = payload only */
   pkt[4] = 0x00;                                /* pointer_field */
   memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++)
-    pkt[i] = 0xFF;
+  for (size_t i = 5 + slen; i < 188; i++) pkt[i] = 0xFF;
 }
 
 START_TEST(psi_parses_pat_and_pmt) {
@@ -755,6 +801,135 @@ START_TEST(psi_classifies_opus_via_registration_descriptor) {
 }
 END_TEST
 
+START_TEST(psi_classifies_lcevc_stream_type) {
+  psi_t *p = psi_new();
+  unsigned char section[256], pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  es_spec_t spec[2] = {
+    {0x1B, 0x0101, NULL, 0},
+    {0x36, 0x0102, NULL, 0},
+  };
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pmt_es(section, 1, 0x0101, spec, 2);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  ck_assert_int_eq(psi_ready(p), 1);
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 2);
+  ck_assert_int_eq(es[1].cls, PID_LCEVC);
+  ck_assert_int_eq(es[1].codec, CODEC_LCEVC);
+  ck_assert_int_eq(es[1].lcevc_pid_count, 0);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_links_lcevc_enhancement_to_base_video) {
+  psi_t *p = psi_new();
+  unsigned char section[256], pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  static const unsigned char video_desc[] = {0x3F, 0x03, 0x18, 0x01, 0x07};
+  static const unsigned char lcevc_desc[] = {0x3F, 0x02, 0x17, 0x07};
+  es_spec_t spec[2] = {
+    {0x1B, 0x0101, video_desc, sizeof video_desc},
+    {0x36, 0x0102, lcevc_desc, sizeof lcevc_desc},
+  };
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pmt_es(section, 1, 0x0101, spec, 2);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 2);
+  ck_assert_int_eq(es[0].lcevc_pid_count, 1);
+  ck_assert_uint_eq(es[0].lcevc_pid[0], 0x0102u);
+  ck_assert_int_eq(es[1].lcevc_pid_count, 1);
+  ck_assert_uint_eq(es[1].lcevc_pid[0], 0x0101u);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_links_multiple_lcevc_enhancement_layers) {
+  psi_t *p = psi_new();
+  unsigned char section[256], pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  static const unsigned char video_desc[] = {0x3F, 0x04, 0x18, 0x02, 0x07, 0x09};
+  static const unsigned char lcevc1_desc[] = {0x3F, 0x02, 0x17, 0x07};
+  static const unsigned char lcevc2_desc[] = {0x3F, 0x02, 0x17, 0x09};
+  es_spec_t spec[3] = {
+    {0x1B, 0x0101, video_desc, sizeof video_desc},
+    {0x36, 0x0103, lcevc1_desc, sizeof lcevc1_desc},
+    {0x36, 0x0104, lcevc2_desc, sizeof lcevc2_desc},
+  };
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pmt_es(section, 1, 0x0101, spec, 3);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 3);
+  ck_assert_int_eq(es[0].lcevc_pid_count, 2);
+  ck_assert_uint_eq(es[0].lcevc_pid[0], 0x0103u);
+  ck_assert_uint_eq(es[0].lcevc_pid[1], 0x0104u);
+  ck_assert_int_eq(es[1].lcevc_pid_count, 1);
+  ck_assert_uint_eq(es[1].lcevc_pid[0], 0x0101u);
+  ck_assert_int_eq(es[2].lcevc_pid_count, 1);
+  ck_assert_uint_eq(es[2].lcevc_pid[0], 0x0101u);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_lcevc_unpaired_when_tags_dont_match) {
+  psi_t *p = psi_new();
+  unsigned char section[256], pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  static const unsigned char video_desc[] = {0x3F, 0x03, 0x18, 0x01, 0x05};
+  static const unsigned char lcevc_desc[] = {0x3F, 0x02, 0x17, 0x06};
+  es_spec_t spec[2] = {
+    {0x1B, 0x0101, video_desc, sizeof video_desc},
+    {0x36, 0x0102, lcevc_desc, sizeof lcevc_desc},
+  };
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pmt_es(section, 1, 0x0101, spec, 2);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 2);
+  ck_assert_int_eq(es[0].lcevc_pid_count, 0);
+  ck_assert_int_eq(es[1].lcevc_pid_count, 0);
+
+  psi_free(p);
+}
+END_TEST
+
 static Suite *psi_suite(void) {
   Suite *s = suite_create("psi");
   TCase *tc = tcase_create("core");
@@ -775,6 +950,10 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_wants_pid_tracks_new_pid_when_program_moves);
   tcase_add_test(tc, psi_classifies_vvc_video_stream_type);
   tcase_add_test(tc, psi_classifies_opus_via_registration_descriptor);
+  tcase_add_test(tc, psi_classifies_lcevc_stream_type);
+  tcase_add_test(tc, psi_links_lcevc_enhancement_to_base_video);
+  tcase_add_test(tc, psi_links_multiple_lcevc_enhancement_layers);
+  tcase_add_test(tc, psi_lcevc_unpaired_when_tags_dont_match);
   suite_add_tcase(s, tc);
   return s;
 }

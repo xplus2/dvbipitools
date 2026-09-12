@@ -17,10 +17,12 @@
 #include "../args.h"
 #include "../ts/capture/capture.h"
 #include "../ts/channels/channels.h"
+#include "../ts/lcevcselect.h"
 #include "../hls/hls.h"
 #include "../core/route.h"
 #include "../ws/ws_clients.h"
 #include "conn.h"
+#include "qsbr.h"
 #include "reactor_tls.h"
 #include "lib/vendor/picohttpparser/picohttpparser.h"
 
@@ -35,6 +37,7 @@ void reactor_conn_flush(int epfd, conn_t *c);
 /* cfg/channels handed to reactor_run(), read-only for its lifetime */
 const config_t *reactor_cfg(void);
 const channels_t *reactor_channels(void);
+qsbr_domain_t *reactor_qsbr(void);
 
 /* re-reads every source right now, same as channels_reload_all() from a SIGHUP */
 void reactor_reload_channels(void);
@@ -65,6 +68,9 @@ typedef struct {
 void reactor_arm(int epfd, conn_t *c, int want_out);
 void reactor_finish(int epfd, conn_t *c);
 void reactor_close(int epfd, conn_t *c);
+void reactor_teardown_common(int epfd, conn_t *c);
+int reactor_flush_rc(conn_t *c, int epfd);
+void reactor_flush_or_close(int epfd, conn_t *c, void (*close_fn)(int, conn_t *));
 
 /* reactor.c: metrics exporter handed to reactor_run(), read-only for its lifetime */
 metrics_exporter_t *reactor_metrics(void);
@@ -121,12 +127,7 @@ void llhls_flush_waiters(void);
 /* dispatch.c. purges c's waiter slot, call before reactor_close() frees it */
 void llhls_waiter_conn_closing(const conn_t *c);
 
-/* clock_gettime(CLOCK_MONOTONIC) in ms, shared by dispatch.c/http2_hls.c/http3_req.c */
-static inline int64_t now_ms(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
-}
+/* now_ms(): lib/helper/ioutil.h */
 
 /* parses _HLS_msn=<N>&_HLS_part=<P> from a query string. 1 if both present */
 static inline int parse_blocking_reload(const char *query, uint32_t *want_seg, int *want_part) {
@@ -150,6 +151,7 @@ typedef struct {
   capture_ctx_t *cap_ctx;
   pid_filter_t filter;
   unsigned pmt_pid;
+  lcevc_select_t lcevc;
   char filename[32];
   int is_head;
   int keep_alive; /* h1 only, unused by h2/h3 */
@@ -169,26 +171,26 @@ typedef int (*llhls_waiter_ready_fn)(llhls_waiter_t *w);
 typedef void (*llhls_waiter_finish_fn)(llhls_waiter_t *w);
 
 static inline int llhls_ready_part(llhls_waiter_t *w) {
-  return hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, SEG_CONTAINER_TS, w->want_seg, w->want_part);
+  return hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, SEG_CONTAINER_TS, w->want_seg, w->want_part);
 }
 
 static inline int hls_cold_ready(llhls_waiter_t *w) {
-  return w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, w->container) : hls_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, w->container);
+  return w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container) : hls_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container);
 }
 
 /* 1 parked (caller stops touching conn/stream), 0 table full */
 static inline int llhls_waiter_pool_try_park(llhls_waiter_t *slots, int cap, int *active_count, void *owner,  int64_t stream_id, capture_ctx_t *cap_ctx, const pid_filter_t *filter,
-                                             unsigned pmt_pid, const char *filename, int is_head, int keep_alive, const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part,
+                                             unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, int keep_alive, const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part,
                                              int timeout_ms, int ws_handle) {
   for (int i = 0; i < cap; i++) {
     llhls_waiter_t *w = &slots[i];
-    if (w->active)
-      continue;
+    if (w->active) continue;
     w->owner = owner;
     w->stream_id = stream_id;
     w->cap_ctx = cap_ctx;
     w->filter = *filter;
     w->pmt_pid = pmt_pid;
+    w->lcevc = *lcevc;
     bufcpy(w->filename, sizeof w->filename, filename);
     w->is_head = is_head;
     w->keep_alive = keep_alive;
@@ -207,17 +209,17 @@ static inline int llhls_waiter_pool_try_park(llhls_waiter_t *slots, int cap, int
 
 /* 1 parked (caller stops touching conn/stream), 0 table full. keep_alive: h1 only, pass 0 for h2/h3 */
 static inline int hls_cold_waiter_pool_try_park(llhls_waiter_t *slots, int cap, int *active_count, void *owner, int64_t stream_id, capture_ctx_t *cap_ctx, const pid_filter_t *filter,
-                                                unsigned pmt_pid, const char *filename, hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head, int keep_alive,
+                                                unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head, int keep_alive,
                                                 const char *origin_hdr, int timeout_ms, int ws_handle) {
   for (int i = 0; i < cap; i++) {
     llhls_waiter_t *w = &slots[i];
-    if (w->active)
-      continue;
+    if (w->active) continue;
     w->owner = owner;
     w->stream_id = stream_id;
     w->cap_ctx = cap_ctx;
     w->filter = *filter;
     w->pmt_pid = pmt_pid;
+    w->lcevc = *lcevc;
     bufcpy(w->filename, sizeof w->filename, filename);
     w->kind = kind;
     w->container = container;
@@ -270,13 +272,18 @@ void reactor_accept(int epfd, reactor_listener *L);
 typedef void (*reactor_push_close_fn)(int epfd, conn_t *c);
 typedef void (*reactor_push_flush_fn)(int epfd, conn_t *c);
 
-/* shared by tspush/dashchunk/mp4push: server->client push connections drain & discard client bytes, half-close on EOF, flush on EAGAIN */
-static inline void reactor_push_conn_readable(int epfd, conn_t *c, reactor_push_close_fn close_fn, reactor_push_flush_fn flush_fn) {
+#define REACTOR_PUSH_DISCARD_MAX_ITER 64
+
+static inline void reactor_push_conn_readable(int epfd, conn_t *c, reactor_push_close_fn close_fn, reactor_push_flush_fn flush_fn, int close_on_eof) {
   char buf[256];
-  for (;;) {
+  for (int iter = 0; iter < REACTOR_PUSH_DISCARD_MAX_ITER; iter++) {
     ssize_t n = tls_net_recv(c->fd, buf, sizeof buf);
     if (n > 0) continue;
     if (n == 0) {
+      if (close_on_eof) {
+        close_fn(epfd, c);
+        return;
+      }
       atomic_store_explicit(&c->read_done, 1, memory_order_relaxed);
       conn_epoll_mod(c, epfd, c->want_write); /* epoll reports FIN forever: stop polling */
       return; /* half-close: not a disconnect */

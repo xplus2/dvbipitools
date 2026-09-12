@@ -7,15 +7,16 @@
 #define DIPIXY_HLS_SEGMENT_H
 
 #include "../ts/capture/capture.h"
+#include "../ts/lcevcselect.h"
 #include "../ts/pidfilter.h"
 #include "../segstore.h"
 
 void hls_seg_init(int max_channels);
 
-/* always take ownership of ctx's capture_open() ref: existing segmenter for (ctx, filter, pmt_pid) gets+drops it, a new one keeps it.
+/* take ownership of ctx capture_open() ref: existing segmenter for (ctx, filter, pmt_pid) gets+drops, new one keeps it.
    caller never calls ref's capture_close(). pmt_pid: 0 = auto (first PMT that resolves), else forces one program's PMT PID.
-   1 ok, ctx still valid for caller's own use. 0 failed (OOM or registry full), ctx may be pre-freed, caller must not touch it again */
-int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double seg_target, int max_segs, seg_container_t container, double part_target);
+   1 ok, ctx still valid for caller's own use. 0 failed (OOM or registry full), ctx may be pre-freed, caller must not touch it */
+int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, double seg_target, int max_segs, seg_container_t container, double part_target);
 
 /* capture pump thread: routes one TS packet to every segmenter open for ctx */
 void hls_seg_feed_all(capture_ctx_t *ctx, const unsigned char *pkt);

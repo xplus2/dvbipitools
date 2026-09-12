@@ -29,8 +29,11 @@ typedef struct {
   capture_ctx_t *cap_ctx;
   pid_filter_t filter;
   unsigned pmt_pid;
+  lcevc_select_t lcevc;
   int proto;
   int fd;
+  void *h2c;
+  void *h2_slot;
   void *h3c;
   int64_t h3_sid;
   int ws_handle;
@@ -167,10 +170,9 @@ void mp4push_init(int max_clients) {
   }
 }
 
-int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int proto) {
+int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int proto) {
   hls_seg_ctx_t *s;
   int idx = -1;
-
   pthread_mutex_lock(&g_free_lock);
   if (g_free_slots_n > 0) idx = g_free_slots[--g_free_slots_n];
   pthread_mutex_unlock(&g_free_lock);
@@ -180,8 +182,11 @@ int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
   g_subs[idx].cap_ctx = ctx;
   g_subs[idx].filter = *filter;
   g_subs[idx].pmt_pid = pmt_pid;
+  g_subs[idx].lcevc = *lcevc;
   g_subs[idx].proto = proto;
   g_subs[idx].fd = -1;
+  g_subs[idx].h2c = NULL;
+  g_subs[idx].h2_slot = NULL;
   g_subs[idx].h3c = NULL;
   g_subs[idx].h3_sid = -1;
   g_subs[idx].ws_handle = -1;
@@ -195,14 +200,14 @@ int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
       free_slot(idx);
       return -1;
     }
-    if (hls_render(ctx, filter, pmt_pid, SEG_CONTAINER_FMP4, "init.mp4", 0, NULL, &resp) && resp.status == 200) {
+    if (hls_render(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4, "init.mp4", 0, NULL, &resp) && resp.status == 200) {
       ring_enqueue(&g_subs[idx], resp.body, resp.body_len);
       hls_resp_body_release(resp.body, resp.zc);
     }
   }
 
   hls_seg_registry_lock();
-  s = hls_seg_find_locked(ctx, filter, pmt_pid, SEG_CONTAINER_FMP4);
+  s = hls_seg_find_locked(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4);
   if (s) seg_link(s, idx);
   hls_seg_registry_unlock();
   if (!s) {
@@ -212,16 +217,16 @@ int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
   return idx;
 }
 
-int mp4push_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int ws_handle) {
+int mp4push_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int ws_handle) {
   static const char hdr[] = "HTTP/1.1 200 OK\r\nServer: " TOOL_NAME "/" TOOL_VERSION "\r\nContent-Type: video/mp4\r\nConnection: close\r\n\r\n";
   hls_resp_t resp;
   int idx;
   conn_queue(c, hdr, strlen(hdr));
-  if (hls_render(ctx, filter, pmt_pid, SEG_CONTAINER_FMP4, "init.mp4", 0, NULL, &resp) && resp.status == 200) {
+  if (hls_render(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4, "init.mp4", 0, NULL, &resp) && resp.status == 200) {
     conn_queue(c, resp.body, resp.body_len);
     hls_resp_body_release(resp.body, resp.zc);
   }
-  idx = mp4push_subscribe(ctx, filter, pmt_pid, 1);
+  idx = mp4push_subscribe(ctx, filter, pmt_pid, lcevc, 1);
   if (idx < 0) return 0;
   g_subs[idx].fd = c->fd;
   g_subs[idx].ws_handle = ws_handle;
@@ -230,17 +235,23 @@ int mp4push_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter
   return 1;
 }
 
-void mp4push_h2_bind(int slot, int fd, int reactor_tid, int ws_handle) {
+void mp4push_h2_bind(int slot, void *h2c, void *h2_slot, int reactor_tid, int ws_handle) {
   if (slot < 0 || slot >= g_subs_n) return;
-  g_subs[slot].fd = fd;
+  g_subs[slot].h2c = h2c;
+  g_subs[slot].h2_slot = h2_slot;
   g_subs[slot].reactor_tid = reactor_tid;
   g_subs[slot].ws_handle = ws_handle;
   link_tid_chain(slot, reactor_tid);
 }
 
-int mp4push_sub_fd(int slot) {
-  if (slot < 0 || slot >= g_subs_n) return -1;
-  return g_subs[slot].fd;
+void *mp4push_sub_h2c(int slot) {
+  if (slot < 0 || slot >= g_subs_n) return NULL;
+  return g_subs[slot].h2c;
+}
+
+void *mp4push_sub_h2_slot(int slot) {
+  if (slot < 0 || slot >= g_subs_n) return NULL;
+  return g_subs[slot].h2_slot;
 }
 
 void mp4push_h3_bind(int slot, void *h3c, int64_t h3_sid, int reactor_tid, int ws_handle) {
@@ -324,11 +335,10 @@ void mp4push_sub_close(int slot) {
   if (slot < 0 || slot >= g_subs_n) return;
   s = &g_subs[slot];
   expected = MP4PUSH_SUB_ALIVE;
-  if (!atomic_compare_exchange_strong_explicit(&s->alive, &expected, MP4PUSH_SUB_CLOSING, memory_order_acquire, memory_order_relaxed))
-    return;
+  if (!atomic_compare_exchange_strong_explicit(&s->alive, &expected, MP4PUSH_SUB_CLOSING, memory_order_acquire, memory_order_relaxed)) return;
   capture_wait_pumps_quiescent();
   hls_seg_registry_lock();
-  seg = hls_seg_find_locked(s->cap_ctx, &s->filter, s->pmt_pid, SEG_CONTAINER_FMP4);
+  seg = hls_seg_find_locked(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, SEG_CONTAINER_FMP4);
   if (seg) seg_unlink(seg, slot);
   hls_seg_registry_unlock();
   if (s->proto == 2 || s->proto == 3) unlink_tid_chain(slot);

@@ -15,7 +15,7 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<po
 |       | `--sid`              | `<n>`                                   | auto (see below)                                | per-input |
 | `-s`  | `--sdt`              | `<name>`                                | auto (see below)                                | per-input |
 | `-m`  | `--mcast`            | `<group>:<port>` / `[<group6>]:<port>`  | required unless `-R` given                      |           |
-| `-I`  | `--iface`            | `<iface>`                               | kernel route                                    |           |
+| `-O`  | `--out-iface`        | `<iface>`                               | kernel route                                    |           |
 | `-r`  | `--rtp`              |                                         | off (plain UDP)                                 |           |
 | `-T`  | `--ttl`              | `<n>`                                   | 1 (kernel default)                              |           |
 |       | `--dscp`             | `<v>`                                   | `video-high`                                    |           |
@@ -127,9 +127,9 @@ same `-s` default of plain `dipiradiohead`.
 > Note: Multi Program Transport Streams rely on your local clock reference.
 > It is not something you would usually run on a Raspberry Pi.
 
-## Output (`-m`, `-I`, `-r`, `-R`)
+## Output (`-m`, `-O`, `-r`, `-R`)
 
-`-m <group>:<port>` / `-m [<group6>]:<port>`. `-I` sets the outgoing interface (default: kernel
+`-m <group>:<port>` / `-m [<group6>]:<port>`. `-O` sets the outgoing interface (default: kernel
 route). `-r` wraps output in RTP, matching `dipirec -i rtp://`; without it, plain UDP, matching
 `-i udp://`. 7 TS packets (1316 B) per datagram either way. `-T` sets the multicast TTL / hop
 limit (default 1, i.e. link-local only - raise it to route beyond the first hop).

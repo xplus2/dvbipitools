@@ -44,85 +44,69 @@ size_t format_plain_playlist(const plain_playlist_snap_t *snap, char *m3u8, size
   return (size_t)(mp - m3u8);
 }
 
-int hls_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container,
-              const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes) {
-  hls_store_t *s;
-  hls_snapshot_t *snap;
-  char m3u8[4096];
-  char etag[48];
-  char cors_hdr[192];
-  int m3u8_len;
-  const char *ext;
-  unsigned long seq_ul;
-  uint32_t req_seq, oldest, last;
-  uint8_t *body = NULL;
-  size_t body_len = 0;
-
-  ext = hls_filename_ext(filename);
-  if (!ext) return 0;
-  cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
-  s = find_store(ctx, filter, pmt_pid, container);
-  snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
-
-  if (!strcmp(ext, "index")) {
-    plain_playlist_snap_t psnap;
-    if (!snap || snap->count == 0) {
-      queue_status(c, "404 Not Found", keep_alive);
-      return 1;
-    }
-    snapshot_plain_playlist(snap, container, &psnap);
-    m3u8_len = (int)format_plain_playlist(&psnap, m3u8, sizeof m3u8);
-    queue_m3u8(c, m3u8, (size_t)m3u8_len, is_head, keep_alive, cors_hdr);
-    if (out_bytes) *out_bytes = (size_t)m3u8_len;
-    return 1;
+void snapshot_lcevc_master(const hls_snapshot_t *s, lcevc_master_snap_t *snap) {
+  uint64_t bw_bits = 0;
+  double bw_secs = 0.0;
+  snap->alt_count = s->lcevc_pid_count + 1;
+  snap->alt_pid[0] = 0;
+  for (int i = 0; i < s->lcevc_pid_count; i++) snap->alt_pid[i + 1] = s->lcevc_pid[i];
+  for (int i = 0; i < s->count; i++) {
+    const hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
+    bw_bits += (uint64_t)seg->size * 8;
+    bw_secs += seg->duration;
   }
+  snap->bandwidth = bw_secs > 0.0 ? (uint64_t)(bw_bits / bw_secs) : 1000000ULL;
+}
 
-  if (!strcmp(ext, "init")) {
-    if (snap && snap->init_size) {
-      body = snap->init_data;
-      body_len = snap->init_size;
-      init_etag(snap->init_gen, snap->init_size, etag, sizeof etag);
-    }
-    if (!body) {
-      queue_status(c, "404 Not Found", keep_alive);
-      return 1;
-    }
-    if (if_none_match && !strcmp(if_none_match, etag)) {
-      queue_not_modified(c, etag, keep_alive);
+size_t format_lcevc_master_playlist(const lcevc_master_snap_t *snap, char *m3u8, size_t cap) {
+  char *mp = m3u8;
+  mp = WRITE_LIT(mp, "#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n");
+  for (int i = 0; i < snap->alt_count; i++) {
+    if ((size_t)(mp - m3u8) + 128 > cap) break;
+    mp = WRITE_LIT(mp, "#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID=\"lcevc\",NAME=\"");
+    if (snap->alt_pid[i]) {
+      mp = WRITE_LIT(mp, "pid ");
+      mp = write_u32(mp, snap->alt_pid[i], 0);
     } else {
-      queue_segment(c, body, body_len, "video/mp4", etag, is_head, keep_alive, cors_hdr);
-      if (out_bytes) *out_bytes = body_len;
+      mp = WRITE_LIT(mp, "base");
     }
-    return 1;
+    mp = WRITE_LIT(mp, "\",AUTOSELECT=YES");
+    if (i == 0) mp = WRITE_LIT(mp, ",DEFAULT=YES");
+    mp = WRITE_LIT(mp, ",URI=\"?lcevc=");
+    if (snap->alt_pid[i]) mp = write_u32(mp, snap->alt_pid[i], 0);
+    else mp = WRITE_LIT(mp, "base");
+    mp = WRITE_LIT(mp, "\"\n");
   }
+  mp = WRITE_LIT(mp, "#EXT-X-STREAM-INF:BANDWIDTH=");
+  mp = write_u64_gen(mp, snap->bandwidth, 0);
+  mp = WRITE_LIT(mp, ",VIDEO=\"lcevc\"\n?lcevc=base\n");
+  return (size_t)(mp - m3u8);
+}
 
-  seq_ul = strtoul(filename + 3, NULL, 10);
-  req_seq = (uint32_t)seq_ul;
-  if (snap && snap->count > 0) {
-    oldest = snap->oldest_seq;
-    last = oldest + (uint32_t)snap->count - 1u;
-    if (req_seq >= oldest && req_seq <= last) {
-      const hls_seg_t *seg = &snap->segs[(snap->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
-      body = seg->data;
-      body_len = seg->size;
-      seg_etag(seg->seq, seg->size, etag, sizeof etag);
-    }
-  }
-  if (!body) {
+int hls_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
+              const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes) {
+  char cors_hdr[192];
+  hls_resolve_t r;
+
+  cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
+  if (!hls_resolve(ctx, filter, pmt_pid, lcevc, container, filename, if_none_match, &r)) return 0;
+  if (r.status == 404) {
     queue_status(c, "404 Not Found", keep_alive);
     return 1;
   }
-  if (if_none_match && !strcmp(if_none_match, etag)) {
-    queue_not_modified(c, etag, keep_alive);
-  } else {
-    if (hls_zc_eligible(c, body_len, is_head)) {
-      seg_buf_ref(body);
-      queue_segment_zc(c, body, body_len, !strcmp(ext, "m4s") ? "video/mp4" : "video/mp2t", etag, keep_alive, cors_hdr);
-    } else {
-      queue_segment(c, body, body_len, !strcmp(ext, "m4s") ? "video/mp4" : "video/mp2t", etag, is_head, keep_alive, cors_hdr);
-    }
-    if (out_bytes) *out_bytes = body_len;
+  if (r.status == 304) {
+    queue_not_modified(c, r.etag, keep_alive);
+    return 1;
   }
+  if (r.kind == HLS_RESOLVE_PLAYLIST) {
+    queue_m3u8(c, (const char *)r.body, r.body_len, is_head, keep_alive, cors_hdr);
+  } else if (r.kind == HLS_RESOLVE_SEGMENT && hls_zc_eligible(c, r.body_len, is_head)) {
+    seg_buf_ref(r.body);
+    queue_segment_zc(c, r.body, r.body_len, r.content_type, r.etag, keep_alive, cors_hdr);
+  } else {
+    queue_segment(c, r.body, r.body_len, r.content_type, r.etag, is_head, keep_alive, cors_hdr);
+  }
+  if (out_bytes) *out_bytes = r.body_len;
   return 1;
 }
 
@@ -131,7 +115,6 @@ int parse_part_filename(const char *fn, uint32_t *seq, int *part) {
   const char *p;
   char *end;
   unsigned long v;
-
   if (strncmp(fn, "seg", 3) != 0) return 0;
   p = fn + 3;
   if (*p < '0' || *p > '9') return 0;

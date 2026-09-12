@@ -28,12 +28,10 @@ void ws_clients_tick(void) {
   int i;
 
   g_tick_prev_t = now_mono;
-
   pthread_mutex_lock(&g_clients_mtx);
   for (i = 0; i < g_clients_cap; i++) {
     ws_client_t *e = &g_clients[i];
-    if (!e->used)
-      continue;
+    if (!e->used) continue;
     if (!e->persistent && now - e->last_seen > WS_CLIENTS_PULL_IDLE_SEC) {
       ws_stripe_t *stripe = stripe_for_entry(i);
       pthread_mutex_lock(&stripe->lock);
@@ -54,6 +52,13 @@ void ws_clients_tick(void) {
     }
   }
   pthread_mutex_unlock(&g_clients_mtx);
+
+  for (i = 0; i < g_stripe_count; i++) {
+    ws_stripe_t *stripe = &g_stripes[i];
+    pthread_mutex_lock(&stripe->lock);
+    stripe_rehash_if_needed(stripe);
+    pthread_mutex_unlock(&stripe->lock);
+  }
 
   if (!has_sinks) return;
 

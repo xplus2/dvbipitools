@@ -19,10 +19,12 @@
 
 static int g_ctx_marker;
 #define CTX ((capture_ctx_t *)&g_ctx_marker)
+static const lcevc_select_t full = {LCEVC_SEL_FULL, 0, 0};
 
 static _Atomic int g_stop;
 static _Atomic int g_bad;
 static _Atomic uint32_t g_fill_counter;
+static qsbr_domain_t *g_test_qsbr;
 
 static void fill(uint8_t *buf, size_t len, uint8_t v) { memset(buf, v, len); }
 
@@ -39,20 +41,20 @@ static void *writer_thread(void *arg) {
   uint8_t init[64];
   (void)arg;
   memset(&f, 0, sizeof f);
-  hls_store_open(CTX, &f, 0, 0.01, 6, SEG_CONTAINER_FMP4);
+  hls_store_open(CTX, &f, 0, &full, 0.01, 6, SEG_CONTAINER_FMP4);
   while (!atomic_load_explicit(&g_stop, memory_order_relaxed)) {
     uint32_t n = atomic_fetch_add_explicit(&g_fill_counter, 1, memory_order_relaxed);
     uint8_t v = (uint8_t)(n / 4); /* constant across one live-segment cycle (4 parts) */
     fill(init, sizeof init, v);
-    hls_set_init_segment(CTX, &f, 0, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
+    hls_set_init_segment(CTX, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
     fill(part, sizeof part, v);
-    hls_push_part(CTX, &f, 0, SEG_CONTAINER_FMP4, part, sizeof part, 0.005, 1);
+    hls_push_part(CTX, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.005, 1);
     if (n % 4 == 3) {
       fill(seg, sizeof seg, v);
-      hls_push_segment_ll(CTX, &f, 0, SEG_CONTAINER_FMP4, 0.02);
+      hls_push_segment_ll(CTX, &f, 0, &full, SEG_CONTAINER_FMP4, 0.02);
     }
   }
-  hls_store_close(CTX, &f, 0, SEG_CONTAINER_FMP4);
+  hls_store_close(CTX, &f, 0, &full, SEG_CONTAINER_FMP4);
   return NULL;
 }
 
@@ -65,7 +67,7 @@ static void *reader_thread(void *arg) {
   pid_filter_t f;
   memset(&f, 0, sizeof f);
   while (!atomic_load_explicit(&g_stop, memory_order_relaxed)) {
-    const hls_store_t *s = find_store(CTX, &f, 0, SEG_CONTAINER_FMP4);
+    const hls_store_t *s = hls_store_find(CTX, &f, 0, &full, SEG_CONTAINER_FMP4);
     if (s) {
       const hls_snapshot_t *snap = atomic_load_explicit(&s->snap, memory_order_acquire);
       if (snap) {
@@ -80,8 +82,8 @@ static void *reader_thread(void *arg) {
           atomic_store_explicit(&g_bad, 1, memory_order_relaxed);
       }
     }
-    if (ra->tid == 0) hls_llhls_enable(CTX, &f, 0, SEG_CONTAINER_FMP4, 0.005);
-    qsbr_worker_quiescent(ra->tid);
+    if (ra->tid == 0) hls_llhls_enable(CTX, &f, 0, &full, SEG_CONTAINER_FMP4, 0.005);
+    qsbr_worker_quiescent(g_test_qsbr, ra->tid);
   }
   return NULL;
 }
@@ -91,7 +93,8 @@ START_TEST(concurrent_readers_see_no_torn_or_freed_data) {
   pthread_t readers[NREADERS];
   reader_arg_t rargs[NREADERS];
 
-  qsbr_init(NREADERS);
+  g_test_qsbr = qsbr_domain_create(NREADERS);
+  hls_store_set_qsbr(g_test_qsbr);
   atomic_store_explicit(&g_stop, 0, memory_order_relaxed);
   atomic_store_explicit(&g_bad, 0, memory_order_relaxed);
   atomic_store_explicit(&g_fill_counter, 0, memory_order_relaxed);

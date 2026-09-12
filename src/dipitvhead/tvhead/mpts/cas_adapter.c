@@ -33,8 +33,7 @@ static const mpts_cas_ops_t mpts_cas_ops = {mpts_cas_build_cat, mpts_cas_ecm_due
 void tvhead_mpts_set_cas(mpts_t *mpts, cas_t *cas) {
   mpts_cas_vendor_pid_t vendors[MPTS_MAX_CAS_VENDORS];
   size_t n = cas_vendor_count(cas);
-  if (n > MPTS_MAX_CAS_VENDORS)
-    n = MPTS_MAX_CAS_VENDORS;
+  if (n > MPTS_MAX_CAS_VENDORS) n = MPTS_MAX_CAS_VENDORS;
   for (size_t i = 0; i < n; i++) {
     vendors[i].ecm_pid = cas_vendor_ecm_pid(cas, i);
     vendors[i].emm_pid = cas_vendor_emm_pid(cas, i);
@@ -43,31 +42,25 @@ void tvhead_mpts_set_cas(mpts_t *mpts, cas_t *cas) {
 }
 
 int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, unsigned n, mpts_t *mpts,
-                              double cas_gate_deadline, cas_t **cas_out) {
+                             double cas_gate_deadline, cas_t **cas_out) {
   unsigned ready_count = 0;
-  for (unsigned i = 0; i < n; i++)
-    if (progs[i].rx)
-      ready_count++;
+  for (unsigned i = 0; i < n; i++) if (progs[i].rx) ready_count++;
   if (ready_count == n) {
-    const out_es_t *es_lists[ARGS_MAX_INPUTS];
-    int es_counts[ARGS_MAX_INPUTS];
+    const out_es_t *es_lists[ARGS_MAX_INPUTS] = {0};
+    int es_counts[ARGS_MAX_INPUTS] = {0};
     cas_t *cas;
-    for (unsigned i = 0; i < n; i++)
-      es_lists[i] = remux_es(progs[i].rx, &es_counts[i]);
+    for (unsigned i = 0; i < n; i++) es_lists[i] = remux_es(progs[i].rx, &es_counts[i]);
     cas = cas_start_multi(cfg, es_lists, es_counts, n);
     if (!cas) {
       log_line("cas: failed to start");
       return -1;
     }
     tvhead_mpts_set_cas(mpts, cas);
-    for (unsigned i = 0; i < n; i++)
-      remux_set_cas(progs[i].rx, cas);
+    for (unsigned i = 0; i < n; i++) remux_set_cas(progs[i].rx, cas);
     *cas_out = cas;
   } else if (mono_seconds() >= cas_gate_deadline) {
     log_line("cas: --cas-pids-video/--cas-pids-audio need every -i discovered within %.0fs:", CAS_KEYWORD_DISCOVERY_TIMEOUT_S);
-    for (unsigned i = 0; i < n; i++)
-      if (!progs[i].rx)
-        log_line("  input %u: %s", i, progs[i].psi ? "still discovering" : "not connected");
+    for (unsigned i = 0; i < n; i++) if (!progs[i].rx) log_line("  input %u: %s", i, progs[i].psi ? "still discovering" : "not connected");
     return -1;
   }
   return 0;
@@ -82,22 +75,18 @@ void emit_source_cat_passthrough(const mpts_program_t *progs, unsigned n, unsign
   size_t sl;
   for (unsigned i = 0; i < n; i++) {
     size_t dl;
-    if (!progs[i].rx || cat_desc_len + 6 > sizeof cat_desc)
-      continue;
+    if (!progs[i].rx || cat_desc_len + 6 > sizeof cat_desc) continue;
     dl = remux_source_emm_descriptor(progs[i].rx, cat_desc + cat_desc_len, sizeof cat_desc - cat_desc_len);
     if (dl) {
       cat_desc_len += dl;
       have_desc = 1;
     }
   }
-  if (!have_desc)
-    return;
-
+  if (!have_desc) return;
   sl = psi_build_cat(0, cat_desc, cat_desc_len, sec, sizeof sec);
   if (sl) {
     ts_packet_emit(OUT_PID_CAT, cat_cc, &ptr0, sec, sl, 0, 0, cb, ctx);
-    if (tsm_p)
-      tsm_p->psi_sections_total[PSI_TABLE_CAT]++;
+    if (tsm_p) tsm_p->psi_sections_total[PSI_TABLE_CAT]++;
   } else if (tsm_p) {
     tsm_p->psi_errors_total[PSI_TABLE_CAT]++;
   }

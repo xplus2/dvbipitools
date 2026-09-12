@@ -144,7 +144,7 @@ static int cas_group_any_alive(cas_group_t *g) {
 }
 
 static int cas_group_fallback_active(cas_group_t *g) {
-  int required[CAS_GROUP_MAX_VENDORS], alive[CAS_GROUP_MAX_VENDORS];
+  int required[CAS_GROUP_MAX_VENDORS] = {0}, alive[CAS_GROUP_MAX_VENDORS] = {0};
   for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     required[i] = g->vendors[i].required;
     alive[i] = vendor_alive(&g->vendors[i]);
@@ -183,7 +183,6 @@ static void cas_lazy_start(cas_group_t *g) {
     ecfg.cw_source.get_cw = vendor_cw_get;
     ecfg.cw_source.on_connected = vendor_cw_connected;
     ecfg.cw_source.ctx = &v->cw_ctx;
-
     v->ecmg = ecmg_client_start(&ecfg, &g->cp_clock_ms, g->cfg.cp_duration_ms, g->lookahead_ms);
     if (!v->ecmg) {
       log_line("cas_group: ECMG client %zu failed to start", i);
@@ -207,8 +206,7 @@ cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
   unsigned lm;
 
   g = calloc(1, sizeof *g);
-  if (!g)
-    return NULL;
+  if (!g) return NULL;
   g->cfg = *cfg;
   g->flush_pid = flush_pid;
   if (cfg->algo == SCRAMBLE_ALGO_CISSA)
@@ -232,22 +230,17 @@ cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
   }
   g->clock_wait_deadline = mono() + CAS_CORE_CLOCK_DETECT_TIMEOUT_S;
   lm = cfg->cp_duration_ms / 4;
-  if (lm > 2000)
-    lm = 2000;
-  if (lm < 100)
-    lm = 100;
+  if (lm > 2000) lm = 2000;
+  if (lm < 100) lm = 100;
   g->lookahead_ms = lm;
   return g;
 }
 
 void cas_group_stop(cas_group_t *g) {
-  if (!g)
-    return;
+  if (!g) return;
   for (size_t i = 0; i < g->cfg.vendor_count; i++) {
-    if (g->vendors[i].ecmg)
-      ecmg_client_stop(g->vendors[i].ecmg);
-    if (g->vendors[i].emmg)
-      emmg_server_stop(g->vendors[i].emmg);
+    if (g->vendors[i].ecmg) ecmg_client_stop(g->vendors[i].ecmg);
+    if (g->vendors[i].emmg) emmg_server_stop(g->vendors[i].emmg);
   }
   cas_scramble_engine_stop(g->engine);
   pthread_mutex_destroy(&g->cw_lock);
@@ -278,15 +271,11 @@ static void refresh_group_cw(cas_group_t *g, scrambler_emit_cb emit, void *ctx) 
   unsigned long epoch;
   unsigned char cw[ECMG_MAX_CW_LEN];
   size_t cw_len;
-
-  if (!cas_group_any_alive(g))
-    return;
+  if (!cas_group_any_alive(g)) return;
   epoch = group_current_epoch(g);
-  if (epoch == g->cw_epoch_published)
-    return;
+  if (epoch == g->cw_epoch_published) return;
   cw_len = scrambler_cw_len(g->cfg.algo);
-  if (group_cw_for_epoch(g, epoch, cw, cw_len) < 0)
-    return;
+  if (group_cw_for_epoch(g, epoch, cw, cw_len) < 0) return;
   g->cw_epoch_published = epoch;
   cas_scramble_engine_set_cw(g->engine, (int)(epoch & 1), cw, cw_len, emit, ctx);
 }
@@ -296,9 +285,7 @@ void cas_group_scramble_packet(cas_group_t *g, unsigned out_pid, double now, uns
   int target_parity;
   int cw_valid;
 
-  if (g->have_clock)
-    refresh_group_cw(g, emit, ctx);
-
+  if (g->have_clock) refresh_group_cw(g, emit, ctx);
   for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     cas_group_vendor_t *v = &g->vendors[i];
     if (vendor_alive(v) && ecmg_client_ecm_epoch(v->ecmg) != 0) {
@@ -308,39 +295,34 @@ void cas_group_scramble_packet(cas_group_t *g, unsigned out_pid, double now, uns
   }
   target_parity = (int)(g->cw_epoch_published & 1);
   cw_valid = !(g->cfg.fallback_clear && cas_group_fallback_active(g));
-
   cas_scramble_engine_scramble_packet(g->engine, out_pid, g->have_clock, have_target, target_parity, cw_valid, now, pkt188, emit, ctx);
 }
 
 void cas_group_flush(cas_group_t *g, scrambler_emit_cb emit, void *ctx) {
-  if (g)
-    cas_scramble_engine_flush(g->engine, emit, ctx);
+  if (g) cas_scramble_engine_flush(g->engine, emit, ctx);
 }
 
 size_t cas_group_prog_desc(cas_group_t *g, unsigned char *out, size_t cap) {
   size_t total = 0;
   for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     size_t n = cadescbuild_ca_descriptor(g->vendors[i].ca_system_id, g->vendors[i].ecm_pid, out + total, cap - total);
-    if (!n)
-      return 0;
+    if (!n) return 0;
     total += n;
   }
   {
     size_t n = cadescbuild_scrambling_descriptor(g->scrambling_mode, out + total, cap - total);
-    if (!n)
-      return 0;
+    if (!n) return 0;
     total += n;
   }
   return total;
 }
 
 size_t cas_group_build_cat(cas_group_t *g, unsigned char *out, size_t cap) {
-  unsigned char desc[CAS_GROUP_MAX_VENDORS * 16];
+  unsigned char desc[CAS_GROUP_MAX_VENDORS * 16] = {0};
   size_t total = 0;
   for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     size_t n = cadescbuild_ca_descriptor(g->vendors[i].ca_system_id, g->vendors[i].emm_pid, desc + total, sizeof desc - total);
-    if (!n)
-      return 0;
+    if (!n) return 0;
     total += n;
   }
   return psi_build_cat(0, desc, total, out, cap);
@@ -354,23 +336,18 @@ unsigned cas_group_vendor_super_cas_id(cas_group_t *g, size_t idx) { return g->c
 int cas_group_vendor_ecm_due(cas_group_t *g, size_t idx, double now, unsigned char *out, size_t cap, size_t *out_len) {
   cas_group_vendor_t *v = &g->vendors[idx];
   unsigned rep_ms;
-  if (!v->ecmg)
-    return -1;
+  if (!v->ecmg) return -1;
   rep_ms = ecmg_client_ecm_rep_period_ms(v->ecmg);
-  if (!rep_ms)
-    rep_ms = 500;
-  if (v->last_ecm_send >= 0.0 && now - v->last_ecm_send < (double)rep_ms / 1000.0)
-    return -1;
-  if (ecmg_client_get_ecm(v->ecmg, out, cap, out_len) < 0)
-    return -1;
+  if (!rep_ms) rep_ms = 500;
+  if (v->last_ecm_send >= 0.0 && now - v->last_ecm_send < (double)rep_ms / 1000.0) return -1;
+  if (ecmg_client_get_ecm(v->ecmg, out, cap, out_len) < 0) return -1;
   v->last_ecm_send = now;
   return 0;
 }
 
 int cas_group_vendor_next_emm(cas_group_t *g, size_t idx, unsigned char *out, size_t cap, size_t *out_len) {
   cas_group_vendor_t *v = &g->vendors[idx];
-  if (!v->emmg)
-    return -1;
+  if (!v->emmg) return -1;
   return emmg_server_dequeue_emm(v->emmg, out, cap, out_len);
 }
 

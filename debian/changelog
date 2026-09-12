@@ -2,6 +2,22 @@ dvbipitools (2.4.2-1) unstable; urgency=low
   * dipixy
     + lock-free client handling (buffer pools were already there)
   * cmake build flags simplified
+  * dipiradiohead
+    + -I is now -O for dipitvhead parity
+    + --provider to set SDT provider name
+  * dipitvhead
+    + made stuffing less bursty
+    + --provider to set SDT provider name
+  * lcevc detection, descriptor passing and filters
+    + limited to 4 enhancement layers per stream
+    + three modes: standalone ES, SEI wrapped NAL, unwrapped NAL
+    + dipirec and dipidescramble: optionally strip enhancement layers
+    + dipixy: allow filtering to ...
+      - base: strip enhancement layers
+      - full: pass unchanged
+      - all: where applicable (playlist/manifest), provide base+N iterations
+      - [n]: index number, decimal or hex pid of base+layer
+    + dipitvhead: detection, scrambling "alias"
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.1-1) unstable; urgency=low

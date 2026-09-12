@@ -60,44 +60,33 @@ int dlna_device_desc_xml(const config_t *cfg, char **out, size_t *out_len) {
   return 0;
 }
 
+#define ARG(name, dir, statevar) "<argument><name>" name "</name><direction>" dir "</direction><relatedStateVariable>" statevar "</relatedStateVariable></argument>"
+
 static const char CD_SCPD[] =
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
     "<scpd xmlns=\"urn:schemas-upnp-org:service-1-0\">"
     "<specVersion><major>1</major><minor>0</minor></specVersion>"
     "<actionList>"
     "<action><name>Browse</name><argumentList>"
-    "<argument><name>ObjectID</name><direction>in</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_ObjectID</relatedStateVariable></argument>"
-    "<argument><name>BrowseFlag</name><direction>in</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_BrowseFlag</relatedStateVariable></argument>"
-    "<argument><name>Filter</name><direction>in</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_Filter</relatedStateVariable></argument>"
-    "<argument><name>StartingIndex</name><direction>in</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_Index</relatedStateVariable></argument>"
-    "<argument><name>RequestedCount</name><direction>in</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_Count</relatedStateVariable></argument>"
-    "<argument><name>SortCriteria</name><direction>in</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_SortCriteria</relatedStateVariable></argument>"
-    "<argument><name>Result</name><direction>out</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_Result</relatedStateVariable></argument>"
-    "<argument><name>NumberReturned</name><direction>out</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_Count</relatedStateVariable></argument>"
-    "<argument><name>TotalMatches</name><direction>out</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_Count</relatedStateVariable></argument>"
-    "<argument><name>UpdateID</name><direction>out</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_UpdateID</relatedStateVariable></argument>"
+    ARG("ObjectID", "in", "A_ARG_TYPE_ObjectID")
+    ARG("BrowseFlag", "in", "A_ARG_TYPE_BrowseFlag")
+    ARG("Filter", "in", "A_ARG_TYPE_Filter")
+    ARG("StartingIndex", "in", "A_ARG_TYPE_Index")
+    ARG("RequestedCount", "in", "A_ARG_TYPE_Count")
+    ARG("SortCriteria", "in", "A_ARG_TYPE_SortCriteria")
+    ARG("Result", "out", "A_ARG_TYPE_Result")
+    ARG("NumberReturned", "out", "A_ARG_TYPE_Count")
+    ARG("TotalMatches", "out", "A_ARG_TYPE_Count")
+    ARG("UpdateID", "out", "A_ARG_TYPE_UpdateID")
     "</argumentList></action>"
     "<action><name>GetSearchCapabilities</name><argumentList>"
-    "<argument><name>SearchCaps</name><direction>out</direction>"
-    "<relatedStateVariable>SearchCapabilities</relatedStateVariable></argument>"
+    ARG("SearchCaps", "out", "SearchCapabilities")
     "</argumentList></action>"
     "<action><name>GetSortCapabilities</name><argumentList>"
-    "<argument><name>SortCaps</name><direction>out</direction>"
-    "<relatedStateVariable>SortCapabilities</relatedStateVariable></argument>"
+    ARG("SortCaps", "out", "SortCapabilities")
     "</argumentList></action>"
     "<action><name>GetSystemUpdateID</name><argumentList>"
-    "<argument><name>Id</name><direction>out</direction>"
-    "<relatedStateVariable>SystemUpdateID</relatedStateVariable></argument>"
+    ARG("Id", "out", "SystemUpdateID")
     "</argumentList></action>"
     "</actionList>"
     "<serviceStateTable>"
@@ -123,32 +112,21 @@ static const char CM_SCPD[] =
     "<specVersion><major>1</major><minor>0</minor></specVersion>"
     "<actionList>"
     "<action><name>GetProtocolInfo</name><argumentList>"
-    "<argument><name>Source</name><direction>out</direction>"
-    "<relatedStateVariable>SourceProtocolInfo</relatedStateVariable></argument>"
-    "<argument><name>Sink</name><direction>out</direction>"
-    "<relatedStateVariable>SinkProtocolInfo</relatedStateVariable></argument>"
+    ARG("Source", "out", "SourceProtocolInfo")
+    ARG("Sink", "out", "SinkProtocolInfo")
     "</argumentList></action>"
     "<action><name>GetCurrentConnectionIDs</name><argumentList>"
-    "<argument><name>ConnectionIDs</name><direction>out</direction>"
-    "<relatedStateVariable>CurrentConnectionIDs</relatedStateVariable></argument>"
+    ARG("ConnectionIDs", "out", "CurrentConnectionIDs")
     "</argumentList></action>"
     "<action><name>GetCurrentConnectionInfo</name><argumentList>"
-    "<argument><name>ConnectionID</name><direction>in</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_ConnectionID</relatedStateVariable></argument>"
-    "<argument><name>RcsID</name><direction>out</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_RcsID</relatedStateVariable></argument>"
-    "<argument><name>AVTransportID</name><direction>out</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_AVTransportID</relatedStateVariable></argument>"
-    "<argument><name>ProtocolInfo</name><direction>out</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_ProtocolInfo</relatedStateVariable></argument>"
-    "<argument><name>PeerConnectionManager</name><direction>out</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_ConnectionManager</relatedStateVariable></argument>"
-    "<argument><name>PeerConnectionID</name><direction>out</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_ConnectionID</relatedStateVariable></argument>"
-    "<argument><name>Direction</name><direction>out</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_Direction</relatedStateVariable></argument>"
-    "<argument><name>Status</name><direction>out</direction>"
-    "<relatedStateVariable>A_ARG_TYPE_ConnectionStatus</relatedStateVariable></argument>"
+    ARG("ConnectionID", "in", "A_ARG_TYPE_ConnectionID")
+    ARG("RcsID", "out", "A_ARG_TYPE_RcsID")
+    ARG("AVTransportID", "out", "A_ARG_TYPE_AVTransportID")
+    ARG("ProtocolInfo", "out", "A_ARG_TYPE_ProtocolInfo")
+    ARG("PeerConnectionManager", "out", "A_ARG_TYPE_ConnectionManager")
+    ARG("PeerConnectionID", "out", "A_ARG_TYPE_ConnectionID")
+    ARG("Direction", "out", "A_ARG_TYPE_Direction")
+    ARG("Status", "out", "A_ARG_TYPE_ConnectionStatus")
     "</argumentList></action>"
     "</actionList>"
     "<serviceStateTable>"

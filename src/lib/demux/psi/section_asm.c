@@ -4,13 +4,14 @@
 #include "../tspack.h"
 #include "section_asm.h"
 
+#include <string.h>
+
 int psi_section_asm_feed(psi_section_asm_t *a, const unsigned char *pl, size_t plen, int pusi) {
   size_t i = 0;
 
   if (pusi) {
     unsigned ptr;
-    if (plen < 1)
-      return 0;
+    if (plen < 1) return 0;
     ptr = pl[0];
     i = 1 + (size_t)ptr;
     if (i > plen) {
@@ -23,17 +24,28 @@ int psi_section_asm_feed(psi_section_asm_t *a, const unsigned char *pl, size_t p
   } else if (!a->active) {
     return 0;
   }
-  for (; i < plen; i++) {
-    if (a->len < sizeof a->buf)
-      a->buf[a->len++] = pl[i];
-    if (a->expect == 0 && a->len >= 3) {
-      a->expect = tspack_length12(a->buf + 1) + 3;
-      if (a->expect > sizeof a->buf) {
-        a->active = 0;
-        return 0;
+  while (i < plen) {
+    if (a->expect == 0) {
+      if (a->len < sizeof a->buf) a->buf[a->len++] = pl[i];
+      i++;
+      if (a->len >= 3) {
+        a->expect = tspack_length12(a->buf + 1) + 3;
+        if (a->expect > sizeof a->buf) {
+          a->active = 0;
+          return 0;
+        }
       }
+      continue;
     }
-    if (a->expect != 0 && a->len >= a->expect) {
+    {
+      size_t need = a->expect - a->len;
+      size_t avail = plen - i;
+      size_t take = need < avail ? need : avail;
+      memcpy(a->buf + a->len, pl + i, take);
+      a->len += take;
+      i += take;
+    }
+    if (a->len >= a->expect) {
       a->active = 0;
       return 1;
     }

@@ -50,6 +50,7 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--no-url-udp`           |                       | off (deactivate `/udp/`)                                |       |
 |      | `--no-url-srt`           |                       | off (deactivate `/srt/`)                                |       |
 |      | `--no-pid-filters`       |                       | off (deactivate `?filter=`)                             |       |
+|      | `--no-lcevc`             |                       | off (deactivate `?lcevc=`)                              |       |
 |      | `--no-fcc`               |                       | off (ignore SDS fcc)                                    |       |
 |      | `--no-ret`               |                       | off (ignore SDS ret)                                    |       |
 |      | `--al-fec`               | `<L>:<D>`             | off (Annex E Layer 1 FEC matrix size)                   |       |
@@ -161,6 +162,14 @@ You can override this by selecting a specific PMT:`?pmt=<pid>` (decimal or `0x`-
 `rawaudio` locks the same way (`?pmt=`, default first PMT that resolves), then picks that program's lowest-numbered audio ES 
 that is not dropped by `?filter=` and forwards its PES payload as-is: raw data.
 
+When a locked program carries LCEVC (MPEG-5 Part 2) enhancement, `hls`/`hls-fmp4`/`llhls`/`dash`/`lldash`
+accept `?lcevc=<mode>` to pick what goes out: 
+* `base`: strip all LCEVC
+* `full`: default, strip nothing
+* `all`: list every alternative in the manifest instead of picking one, or a single digit/PID
+(e.g. `?lcevc=1` or `?lcevc=0x102`) to pick one enhancement layer by index or PID. This has no effect
+on a program without LCEVC.
+
 
 ## Playlist export
 
@@ -194,6 +203,10 @@ Other video codecs won't cut cleanly on an IDR/I-frame.
 `mp4`, `hls-fmp4`, `llhls`, `dash` and `lldash` build actual ISOBMFF (fMP4) sample entries, so their codec support is narrower:
 * video: H.264/AVC, H.265/HEVC, H.266/VVC. MPEG-2 Video has no fMP4 sample entry and won't produce output.
 * audio: AAC (ADTS or LATM), AC-3, Enhanced AC-3 (E-AC-3), MPEG-1 Layer II (MP2), Opus.
+
+LCEVC (MPEG-5 Part 2) enhancement, when present, is detected either as its own standalone
+elementary stream, inline SEI-wrapped NAL units, or inline dedicated NAL unit types on the
+base video ES. See `?lcevc=` above to control what carries through.
 
 `rawaudio` just forwards a program's lowest-numbered audio ES's PES payload as-is, codec-agnostic.
 

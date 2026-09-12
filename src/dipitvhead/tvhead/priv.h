@@ -41,6 +41,7 @@ typedef struct {
   bitrate_pacer_t *pacer;
   unsigned char batch[12 + TS_PER_DGRAM * 188]; /* [0,12): RTP header headroom, unused if !rtp */
   int batch_count;
+  double batch_open_time;
   int mc_had_error;   /* edge-log gate; a send failure here never stops process */
   int rist_had_error; /* edge-log gate; a write failure here never stops process */
   int srt_connected;  /* edge-log gate for connect/link-down transitions */
@@ -65,9 +66,12 @@ int discover(tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, input_me
 ristout_t *tvhead_rist_open(const config_t *cfg);
 /* caller only calls this when cfg->n_srt > 0; NULL on err */
 srtsink_t *tvhead_srt_open(const config_t *cfg);
+int tvhead_output_open(const config_t *cfg, out_ctx_t *o);
+void tvhead_output_close(out_ctx_t *o);
 /* ticks o->srt connect/reconnect + flush. no-op if !o->srt. call every loop iter. */
 void tvhead_srt_service(out_ctx_t *o);
 void flush_batch(out_ctx_t *o);
+void flush_batch_if_stale(out_ctx_t *o);
 void packet_cb(void *ctx, const unsigned char *pkt188);
 void send_null_packet(out_ctx_t *o);
 int remux_cb(void *v, const unsigned char *pkt);

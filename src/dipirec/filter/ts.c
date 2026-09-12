@@ -19,29 +19,27 @@ struct ts_filter {
   int bad_track;        /* -a track missing from PMT */
   unsigned strip_mask;  /* --strip, STRIP_* bits */
   unsigned char int_pending[8192]; /* STRIP_INT: pid currently mid an INT section */
+  unsigned char audio_drop[8192]; /* rebuilt each PMT parse, see rebuild_audio_drop() */
 };
 
-/* audio ES not selected by -a */
-static int audio_dropped(const ts_filter_t *f, unsigned pid) {
+/* audio ES not selected by -a. rebuilt on every PMT parse, not per packet */
+static void rebuild_audio_drop(ts_filter_t *f) {
   const psi_es_t *es;
   int count;
-  if (f->audio_all)
-    return 0;
+  memset(f->audio_drop, 0, sizeof f->audio_drop);
+  if (f->audio_all) return;
   es = psi_es(f->psi, &count);
-  for (int k = 0; k < count; k++)
-    if (es[k].pid == pid && es[k].cls == PID_AUDIO)
-      return es[k].audio_index != (int)f->audio_track;
-  return 0;
+  for (int k = 0; k < count; k++) if (es[k].cls == PID_AUDIO) f->audio_drop[es[k].pid] = es[k].audio_index != (int)f->audio_track;
 }
+
+static int audio_dropped(const ts_filter_t *f, unsigned pid) { return f->audio_drop[pid]; }
 
 /* ES dropped by -a or -s */
 static int es_dropped(const ts_filter_t *f, unsigned pid) {
-  if (audio_dropped(f, pid))
-    return 1;
+  if (audio_dropped(f, pid)) return 1;
   if (f->strip_subs) {
     pid_class_t c = psi_classify(f->psi, pid);
-    if (c == PID_TELETEXT || c == PID_SUBTITLE)
-      return 1;
+    if (c == PID_TELETEXT || c == PID_SUBTITLE) return 1;
   }
   return 0;
 }
@@ -51,8 +49,7 @@ static size_t filter_descs(const unsigned char *s, size_t slen, unsigned drop, u
   size_t i = 0, o = 0;
   while (i + 2 <= slen) {
     size_t l = s[i + 1];
-    if (i + 2 + l > slen)
-      break;
+    if (i + 2 + l > slen) break;
     if (s[i] != drop) {
       memcpy(d + o, s + i, 2 + l);
       o += 2 + l;
@@ -78,8 +75,7 @@ static void finish_section(unsigned char *dst, const unsigned char *src, size_t 
 /* PAT minus program 0 (NIT) entry */
 static size_t pat_rewrite(const unsigned char *src, size_t srclen, unsigned char *dst) {
   size_t i, o = 8, end;
-  if (srclen < 12 || src[0] != 0x00)
-    return 0;
+  if (srclen < 12 || src[0] != 0x00) return 0;
   memcpy(dst, src, 8);
   end = srclen - 4;
   for (i = 8; i + 4 <= end; i += 4) {
@@ -93,19 +89,34 @@ static size_t pat_rewrite(const unsigned char *src, size_t srclen, unsigned char
   return o + 4;
 }
 
+static size_t pmt_rewrite_es_entry(const ts_filter_t *f, const unsigned char *src, size_t i, size_t esil, unsigned char *dst, size_t o) {
+  size_t es_o = o, newesil;
+  dst[es_o] = src[i];
+  dst[es_o + 1] = src[i + 1];
+  dst[es_o + 2] = src[i + 2];
+  o = es_o + 5;
+  if (f->strip_mask & STRIP_ECM) {
+    newesil = filter_descs(src + i + 5, esil, 0x09, dst + o);
+  } else {
+    memcpy(dst + o, src + i + 5, esil);
+    newesil = esil;
+  }
+  o += newesil;
+  dst[es_o + 3] = (src[i + 3] & 0xF0) | (unsigned char)((newesil >> 8) & 0x0F);
+  dst[es_o + 4] = (unsigned char)(newesil & 0xFF);
+  return o;
+}
+
 /* PMT minus AIT (--strip AIT), unselected audio/subs (-a/-s), CA descriptors
    (ES-level = ECM pid, program-level = EMM pid, each own --strip bit) */
 static size_t pmt_rewrite(const ts_filter_t *f, const unsigned char *src, size_t srclen, unsigned char *dst) {
   size_t i, o, end, pil, newpil;
 
-  if (srclen < 16 || src[0] != 0x02)
-    return 0;
+  if (srclen < 16 || src[0] != 0x02) return 0;
   memcpy(dst, src, 12);
   pil = (((size_t)src[10] & 0x0F) << 8) | src[11];
   end = srclen - 4;
-  if (12 + pil > end)
-    return 0;
-
+  if (12 + pil > end) return 0;
   if (f->strip_mask & STRIP_EMM) {
     o = 12 + filter_descs(src + 12, pil, 0x09, dst + 12);
   } else {
@@ -120,39 +131,21 @@ static size_t pmt_rewrite(const ts_filter_t *f, const unsigned char *src, size_t
   while (i + 5 <= end) {
     unsigned pid = (((unsigned)src[i + 1] & 0x1F) << 8) | src[i + 2];
     size_t esil = (((size_t)src[i + 3] & 0x0F) << 8) | src[i + 4];
-    size_t es_o, newesil;
-    if (i + 5 + esil > end)
-      break;
+    if (i + 5 + esil > end) break;
     if (((f->strip_mask & STRIP_AIT) && psi_classify(f->psi, pid) == PID_AIT) || es_dropped(f, pid)) {
       i += 5 + esil;
       continue;
     }
-    es_o = o;
-    dst[es_o] = src[i];
-    dst[es_o + 1] = src[i + 1];
-    dst[es_o + 2] = src[i + 2];
-    o = es_o + 5;
-    if (f->strip_mask & STRIP_ECM) {
-      newesil = filter_descs(src + i + 5, esil, 0x09, dst + o);
-    } else {
-      memcpy(dst + o, src + i + 5, esil);
-      newesil = esil;
-    }
-    o += newesil;
-    dst[es_o + 3] =
-        (src[i + 3] & 0xF0) | (unsigned char)((newesil >> 8) & 0x0F);
-    dst[es_o + 4] = (unsigned char)(newesil & 0xFF);
+    o = pmt_rewrite_es_entry(f, src, i, esil, dst, o);
     i += 5 + esil;
   }
-
   finish_section(dst, src, o);
   return o + 4;
 }
 
 /* section -> one TS packet, 0xFF padded */
 static int emit_section(unsigned char *out, unsigned pid, unsigned char cc, const unsigned char *sec, size_t seclen) {
-  if (seclen + 1 > 184)
-    return 0;
+  if (seclen + 1 > 184) return 0;
   memset(out, 0xFF, 188);
   out[0] = 0x47;
   out[1] = 0x40 | (unsigned char)((pid >> 8) & 0x1F);
@@ -163,18 +156,15 @@ static int emit_section(unsigned char *out, unsigned pid, unsigned char cc, cons
   return 1;
 }
 
-ts_filter_t *ts_filter_new(int audio_all, unsigned audio_track, int strip_subs, unsigned preferred_pmt_pid,
-                            unsigned strip_mask) {
+ts_filter_t *ts_filter_new(int audio_all, unsigned audio_track, int strip_subs, unsigned preferred_pmt_pid, unsigned strip_mask) {
   ts_filter_t *f = calloc(1, sizeof *f);
-  if (!f)
-    return NULL;
+  if (!f) return NULL;
   f->psi = psi_new();
   if (!f->psi) {
     free(f);
     return NULL;
   }
-  if (preferred_pmt_pid)
-    psi_select_pmt_pid(f->psi, preferred_pmt_pid);
+  if (preferred_pmt_pid) psi_select_pmt_pid(f->psi, preferred_pmt_pid);
   f->audio_all = audio_all;
   f->audio_track = audio_track;
   f->strip_subs = strip_subs;
@@ -183,8 +173,7 @@ ts_filter_t *ts_filter_new(int audio_all, unsigned audio_track, int strip_subs, 
 }
 
 void ts_filter_free(ts_filter_t *f) {
-  if (!f)
-    return;
+  if (!f) return;
   psi_free(f->psi);
   free(f);
 }
@@ -194,12 +183,9 @@ static int section_table_id(const unsigned char *pkt) {
   const unsigned char *pl;
   size_t plen, ptr;
   int pusi;
-
-  if (!tspack_payload(pkt, &pl, &plen, &pusi) || !pusi || plen < 1)
-    return -1;
+  if (!tspack_payload(pkt, &pl, &plen, &pusi) || !pusi || plen < 1) return -1;
   ptr = pl[0];
-  if (1 + ptr >= plen)
-    return -1;
+  if (1 + ptr >= plen) return -1;
   return pl[1 + ptr];
 }
 
@@ -207,8 +193,7 @@ static int section_table_id(const unsigned char *pkt) {
    continuation packets too. harmless on ES pids: PES never reads as 0x4C. */
 static int int_dropped(ts_filter_t *f, unsigned pid, const unsigned char *pkt) {
   int tid = section_table_id(pkt);
-  if (tid >= 0)
-    f->int_pending[pid] = (tid == 0x4C) ? 1 : 0;
+  if (tid >= 0) f->int_pending[pid] = (tid == 0x4C) ? 1 : 0;
   return f->int_pending[pid];
 }
 
@@ -216,18 +201,13 @@ static int int_dropped(ts_filter_t *f, unsigned pid, const unsigned char *pkt) {
    INT excluded, needs raw packet, see int_dropped() */
 static int table_dropped(const ts_filter_t *f, unsigned pid, pid_class_t cls) {
   switch (cls) {
-    case PID_NULL:
-      return (f->strip_mask & STRIP_NUL) != 0;
-    case PID_NIT:
-      return (f->strip_mask & STRIP_NIT) != 0;
-    case PID_EIT:
-      return (f->strip_mask & STRIP_EIT) != 0;
-    case PID_CAT:
-      return (f->strip_mask & STRIP_CAT) != 0;
-    case PID_AIT:
-      return (f->strip_mask & STRIP_AIT) != 0;
-    case PID_ECM:
-      return (f->strip_mask & STRIP_ECM) != 0;
+    case PID_NULL:     return (f->strip_mask & STRIP_NUL) != 0;
+    case PID_NIT:      return (f->strip_mask & STRIP_NIT) != 0;
+    case PID_EIT:      return (f->strip_mask & STRIP_EIT) != 0;
+    case PID_CAT:      return (f->strip_mask & STRIP_CAT) != 0;
+    case PID_AIT:      return (f->strip_mask & STRIP_AIT) != 0;
+    case PID_ECM:      return (f->strip_mask & STRIP_ECM) != 0;
+    case PID_LCEVC:    return (f->strip_mask & STRIP_LCEVC) != 0;
     case PID_UNKNOWN:
     case PID_PAT:
     case PID_PMT:
@@ -242,12 +222,9 @@ static int table_dropped(const ts_filter_t *f, unsigned pid, pid_class_t cls) {
       break;
   }
   /* raw-pid checks below apply regardless of cls, switch above only covers class-based ones */
-  if ((f->strip_mask & STRIP_EMM) && psi_emm_pid(f->psi) && pid == psi_emm_pid(f->psi))
-    return 1;
-  if ((f->strip_mask & (STRIP_TDT | STRIP_TOT)) && pid == 0x0014)
-    return 1;
-  if ((f->strip_mask & STRIP_RST) && pid == 0x0013)
-    return 1;
+  if ((f->strip_mask & STRIP_EMM) && psi_emm_pid(f->psi) && pid == psi_emm_pid(f->psi)) return 1;
+  if ((f->strip_mask & (STRIP_TDT | STRIP_TOT)) && pid == 0x0014) return 1;
+  if ((f->strip_mask & STRIP_RST) && pid == 0x0013) return 1;
   return 0;
 }
 
@@ -256,28 +233,23 @@ const unsigned char *ts_filter_packet(ts_filter_t *f, const unsigned char *in, u
   int pusi;
   pid_class_t cls;
   psi_feed(f->psi, in);
-  if (in[0] != 0x47)
-    return NULL;
+  if (in[0] != 0x47) return NULL;
   pid = tspack_pid(in);
   pusi = in[1] & 0x40;
-  if (!f->audio_all && psi_have_pmt(f->psi) && (int)f->audio_track > psi_audio_count(f->psi))
-    f->bad_track = 1;
+  if (!f->audio_all && psi_have_pmt(f->psi) && (int)f->audio_track > psi_audio_count(f->psi)) f->bad_track = 1;
 
   if (pid == 0x0000) {
     /* output is never larger than input, sized to psi.c's section cap */
     unsigned char rw[PSI_SECTION_ASM_BUF_LEN];
     size_t sl, rl;
     const unsigned char *sec;
-    if (!(f->strip_mask & STRIP_NIT))
-      return in;
+    if (!(f->strip_mask & STRIP_NIT)) return in;
     sec = psi_pat_section(f->psi, &sl);
-    if (!sec || !pusi)
-      return NULL;
+    if (!sec || !pusi) return NULL;
     rl = pat_rewrite(sec, sl, rw);
     if (rl) {
       f->cc_pat = (f->cc_pat + 1) & 0x0F;
-      if (emit_section(out, 0x0000, f->cc_pat, rw, rl))
-        return out;
+      if (emit_section(out, 0x0000, f->cc_pat, rw, rl)) return out;
     }
     return in; /* fallback: original */
   }
@@ -287,29 +259,22 @@ const unsigned char *ts_filter_packet(ts_filter_t *f, const unsigned char *in, u
     unsigned char rw[PSI_SECTION_ASM_BUF_LEN];
     size_t sl, rl;
     const unsigned char *sec = psi_pmt_section(f->psi, &sl);
-    if (!sec || !pusi)
-      return NULL;
+    if (!sec || !pusi) return NULL;
+    rebuild_audio_drop(f);
     rl = pmt_rewrite(f, sec, sl, rw);
     if (rl) {
       f->cc_pmt = (f->cc_pmt + 1) & 0x0F;
-      if (emit_section(out, pid, f->cc_pmt, rw, rl))
-        return out;
+      if (emit_section(out, pid, f->cc_pmt, rw, rl)) return out;
     }
     return in;
   }
 
   cls = psi_classify(f->psi, pid);
-  if (table_dropped(f, pid, cls))
-    return NULL;
-  if ((f->strip_mask & STRIP_INT) && int_dropped(f, pid, in))
-    return NULL;
-  if (es_dropped(f, pid)) /* -a / -s drop */
-    return NULL;
+  if (table_dropped(f, pid, cls)) return NULL;
+  if ((f->strip_mask & STRIP_INT) && int_dropped(f, pid, in)) return NULL;
+  if (es_dropped(f, pid))    return NULL; /* -a / -s drop */
   /* hold unclassified ES until PMT */
-  if ((!f->audio_all || f->strip_subs) && !psi_have_pmt(f->psi) &&
-      cls == PID_UNKNOWN)
-    return NULL;
-
+  if ((!f->audio_all || f->strip_subs) && !psi_have_pmt(f->psi) && cls == PID_UNKNOWN) return NULL;
   return in;
 }
 

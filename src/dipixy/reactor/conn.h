@@ -149,6 +149,7 @@ conn_t *conn_for_fd(int fd);
 
 /* callable from any thread. over backpressure cap marks conn dead, returns -1, else 0 */
 int conn_send_buffered(conn_t *c, const void *a, size_t alen, const void *b, size_t blen);
+int conn_send_buffered3(conn_t *c, const void *a, size_t alen, const void *b, size_t blen, const void *cc, size_t clen);
 
 /* safe from any thread, flushes pending output first. caller handles slot_reset/room cleanup, owner only closes fd + frees conn */
 void conn_request_close(conn_t *c);

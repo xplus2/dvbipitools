@@ -266,6 +266,11 @@ Deactivate
 .BR ?filter= .
 Default: off.
 .TP
+.B \-\-no\-lcevc
+Deactivate
+.BR ?lcevc= .
+Default: off.
+.TP
 .B \-\-no\-http2
 disable HTTP/2, default: off.
 .TP
@@ -474,6 +479,27 @@ default first PMT that resolves), then picks that program's
 lowest-numbered audio ES that is not dropped by
 .B ?filter=
 and forwards its PES payload as-is: raw data.
+.PP
+When a locked program carries LCEVC (MPEG-5 Part 2) enhancement,
+.BR hls / hls\-fmp4 / llhls / dash / lldash
+accept
+.BI ?lcevc= mode
+to pick what goes out:
+.BR base
+(strip all LCEVC),
+.BR full
+(default, strip nothing),
+.BR all
+(list every alternative in the manifest instead of picking one), or
+a single digit/PID
+(e.g.
+.B ?lcevc=1
+or
+.BR ?lcevc=0x102 )
+to pick one enhancement layer by index or PID. Has no effect on a
+program without LCEVC.
+Disable this feature with
+.BR \-\-no\-lcevc .
 .SH PLAYLIST EXPORT
 The "List Export" page, or
 .BI /export/ fmt / type
@@ -520,24 +546,30 @@ and plain
 .B hls
 (TS segments) are a straight TS remux: any video/audio codec passes
 through untouched. Segmenting still needs to locate keyframes,
-understood for MPEG-2 Video, H.264/AVC and HEVC/H.265; other video
-codecs won't cut cleanly on an IDR/I-frame.
+understood for MPEG-2 Video, H.264/AVC, HEVC/H.265 and H.266/VVC;
+other video codecs won't cut cleanly on an IDR/I-frame.
 .PP
 .BR hls\-fmp4 ", " llhls ", " dash " and " lldash
 build actual ISOBMFF (fMP4) sample entries, so their codec support is
 narrower:
 .RS
 .IP \(bu 2
-video: H.264/AVC, HEVC/H.265. MPEG-2 Video has no fMP4 sample entry
-and won't produce output.
+video: H.264/AVC, HEVC/H.265, H.266/VVC. MPEG-2 Video has no fMP4
+sample entry and won't produce output.
 .IP \(bu 2
 audio: AAC (ADTS or LATM), AC-3, Enhanced AC-3 (E-AC-3), MPEG-1 Layer
-II (MP2).
+II (MP2), Opus.
 .RE
 .PP
 .B rawaudio
 just forwards a program's lowest-numbered audio ES's PES payload
 as-is, codec-agnostic.
+.PP
+LCEVC (MPEG-5 Part 2) enhancement, when present, is detected either as
+its own standalone elementary stream, inline SEI-wrapped NAL units, or
+inline dedicated NAL unit types on the base video ES; see
+.B ?lcevc=
+above to control what carries through.
 .SH DLNA
 .B dipixy
 comes with an integrated DLNA server, disabled by default.

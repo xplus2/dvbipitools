@@ -60,17 +60,12 @@ void parse_pat(psi_t *c) {
       log_line("psi: PAT has more than %d programs, dropping the rest", PSI_MAX_PROGRAMS);
       c->pat_program_overflow_logged = 1;
     }
-    if (c->pmt_locked && !c->multi_mode)
-      continue;
-    if (c->preferred_pmt_pid && pid != c->preferred_pmt_pid)
-      continue;
-    if (!find_cand(c, pid))
-      add_pmt_candidate(c, prog, pid);
+    if (c->pmt_locked && !c->multi_mode) continue;
+    if (c->preferred_pmt_pid && pid != c->preferred_pmt_pid) continue;
+    if (!find_cand(c, pid)) add_pmt_candidate(c, prog, pid);
   }
-  if (c->pat_program_count < PSI_MAX_PROGRAMS)
-    c->pat_program_overflow_logged = 0;
-  if (c->pmt_cand_count < PSI_MAX_PROGRAMS)
-    c->pmt_cand_overflow_logged = 0;
+  if (c->pat_program_count < PSI_MAX_PROGRAMS) c->pat_program_overflow_logged = 0;
+  if (c->pmt_cand_count < PSI_MAX_PROGRAMS) c->pmt_cand_overflow_logged = 0;
   c->have_pat = 1;
   rebuild_class_table(c);
 }
@@ -86,9 +81,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
     return 0;
   }
   prog = ((unsigned)b[3] << 8) | b[4];
-  if (prog != cand->program_number)
-    return 0;
-
+  if (prog != cand->program_number) return 0;
   c->program_number = prog;
   c->pmt_pid = cand->pmt_pid;
   c->pcr_pid = (((unsigned)b[8] & 0x1F) << 8) | b[9];
@@ -118,8 +111,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
     psi_es_t *e = &c->es[c->es_count];
     size_t esil = tspack_length12(b + i + 3);
     const unsigned char *desc = b + i + 5;
-    if (i + 5 + esil > end)
-      break;
+    if (i + 5 + esil > end) break;
     memset(e, 0, sizeof *e);
     e->stream_type = b[i];
     e->pid = (((unsigned)b[i + 1] & 0x1F) << 8) | b[i + 2];
@@ -145,9 +137,8 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   } else {
     c->es_overflow_logged = 0;
   }
-  for (int k = 0; k < c->es_count; k++)
-    if (c->es[k].cls == PID_AUDIO)
-      c->es[k].audio_index = ++c->audio_count;
+  for (int k = 0; k < c->es_count; k++) if (c->es[k].cls == PID_AUDIO) c->es[k].audio_index = ++c->audio_count;
+  link_lcevc(c->es, c->es_count);
   c->have_pmt = 1;
   rebuild_class_table(c);
   return 1;
@@ -155,9 +146,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
 
 /* index into pmt_cand[]/multi[] for program_number, -1 if unknown */
 static int find_multi_index(const psi_t *c, unsigned program_number) {
-  for (int k = 0; k < c->pmt_cand_count; k++)
-    if (c->pmt_cand[k].program_number == program_number)
-      return k;
+  for (int k = 0; k < c->pmt_cand_count; k++) if (c->pmt_cand[k].program_number == program_number) return k;
   return -1;
 }
 
@@ -176,14 +165,11 @@ void parse_sdt(psi_t *c) {
     unsigned sid = ((unsigned)b[i] << 8) | b[i + 1];
     const unsigned char *d = b + i + 5;
     size_t dll = tspack_length12(b + i + 3);
-    if (i + 5 + dll > end)
-      break;
-    if (sid == c->program_number)
-      decode_service_desc(d, dll, c->provider_name, c->service_name);
+    if (i + 5 + dll > end) break;
+    if (sid == c->program_number) decode_service_desc(d, dll, c->provider_name, c->service_name);
     if (c->multi_mode) {
       int k = find_multi_index(c, sid);
-      if (k >= 0)
-        decode_service_desc(d, dll, c->multi[k].provider_name, c->multi[k].service_name);
+      if (k >= 0) decode_service_desc(d, dll, c->multi[k].provider_name, c->multi[k].service_name);
     }
     i += 5 + dll;
   }
@@ -205,19 +191,16 @@ void parse_nit(psi_t *c) {
     return;
   }
   nn = find_desc(b + 10, ndl, 0x40, &l);
-  if (nn)
-    copy_name(c->network_name, sizeof c->network_name, nn, l);
+  if (nn) copy_name(c->network_name, sizeof c->network_name, nn, l);
   c->have_nit = 1;
 }
 
-/* ISO/IEC 13818-1 table 2-30: table_id + 7 more header bytes (same shape as PAT's
-   program loop header), then a plain descriptor loop up to CRC, no program-like
-   entries. takes first CA_descriptor found (tag 0x09), single-CAS assumption */
+/* ISO/IEC 13818-1 table 2-30: table_id + 7 more header bytes (same shape as PAT's program loop header),
+   plain descriptor loop up to CRC. takes first CA_descriptor found (tag 0x09), single-CAS assumption */
 void parse_cat(psi_t *c) {
   const unsigned char *b = c->cat.buf;
   size_t n = c->cat.expect, l;
   const unsigned char *ca;
-
   if (n < 12 || b[0] != 0x01 || crc32_mpeg(b, n) != 0) {
     log_throttled(&c->cat_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed CAT section dropped");
     return;

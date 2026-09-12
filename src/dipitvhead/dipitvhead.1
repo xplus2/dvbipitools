@@ -132,6 +132,18 @@ source's own SDT.
 .B \-
 drops it; text sets our own.
 .TP
+.B \-\-provider \fItext\fR
+For the
+.B \-i
+right before this: SDT service_provider_name. Default: passthrough of
+the source's own SDT provider, or
+.B dipitvhead
+if
+.B \-s/\-\-sdt
+overrides the service_name without a
+.B \-\-provider
+of its own.
+.TP
 .BR \-I ", " \-\-iface " " \fIiface\fR
 For the
 .B \-i
@@ -556,17 +568,18 @@ right before this: second Annex D key list file, same format as
 .B \-\-cas\-pids \fIlist\fR
 PIDs to scramble: comma-separated output-side PIDs (decimal or
 0x-hex) and/or the
-.B video
-/
-.B audio
-keywords, meaning every video/audio elementary stream on the output.
-Freely mixable, e.g.
+.BR video / audio / lcevc
+keywords, meaning every video/audio/LCEVC elementary stream on the
+output. Freely mixable, e.g.
 .BR 0x0103,video .
 Default
 .B video,audio
-(all video and audio streams). Content is scrambled exactly once
-regardless of vendor count; also used, with the same default, under
-any BISS mode below.
+(all video and audio streams) -
+.B lcevc
+is never implied by either, or by the default: scrambling an LCEVC
+enhancement stream is always an explicit choice. Content is scrambled
+exactly once regardless of vendor count; also used, with the same
+default, under any BISS mode below.
 .TP
 .B \-\-cas\-cp\-duration \fIms\fR
 Crypto-period duration in milliseconds, 1..86400000, shared by every

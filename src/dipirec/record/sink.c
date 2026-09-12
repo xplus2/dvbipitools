@@ -59,9 +59,7 @@ int src_open(const config_t *cfg, src_t *s) {
   }
 
   s->t = tssrc_open(&tc, NULL);
-  if (!s->t)
-    return -1;
-
+  if (!s->t) return -1;
   if (s->kind != URI_HTTP && cfg->ret.enabled) {
     ret_client_cfg_t rc;
     memset(&rc, 0, sizeof rc);
@@ -86,38 +84,31 @@ int src_open(const config_t *cfg, src_t *s) {
 }
 
 ssize_t src_read(src_t *s, unsigned char *buf, size_t cap) {
-  if (s->ret)
-    return ret_client_read(s->ret, tssrc_mcast(s->t), buf, cap);
+  if (s->ret) return ret_client_read(s->ret, tssrc_mcast(s->t), buf, cap);
   return tssrc_read(s->t, buf, cap, NULL);
 }
 
 int src_wait_readable(src_t *s, int timeout_ms) {
   struct pollfd pfd;
   int pr;
-  if (s->ret)
-    return 1; /* --ret already bounds its own poll */
+  if (s->ret) return 1; /* --ret already bounds its own poll */
   pfd.fd = tssrc_fd(s->t);
   pfd.events = POLLIN;
   pr = poll(&pfd, 1, timeout_ms);
-  if (pr < 0)
-    return errno == EINTR ? 0 : -1;
+  if (pr < 0) return errno == EINTR ? 0 : -1;
   return pr > 0;
 }
 
 void src_close(src_t *s) {
-  if (s->ret)
-    ret_client_close(s->ret);
+  if (s->ret) ret_client_close(s->ret);
   tssrc_close(s->t);
 }
 
 int open_output(const char *path) {
   int fd;
-
-  if (strcmp(path, "-") == 0)
-    return STDOUT_FILENO;
+  if (strcmp(path, "-") == 0) return STDOUT_FILENO;
   fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0640);
-  if (fd < 0)
-    log_line("open %s: %s", path, strerror(errno));
+  if (fd < 0) log_line("open %s: %s", path, strerror(errno));
   return fd;
 }
 
@@ -125,8 +116,7 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
   while (n) {
     ssize_t w = write(fd, p, n);
     if (w < 0) {
-      if (errno == EINTR)
-        continue;
+      if (errno == EINTR) continue;
       log_line("w:%s", strerror(errno));
       return -1;
     }
@@ -137,6 +127,7 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
 }
 
 int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
+  o->kind = t->kind;
   o->net = NULL;
   o->rist = NULL;
   o->srt = NULL;
@@ -211,17 +202,21 @@ void note_send_result(int ok, int *had_error, uint64_t *errors_total, const char
 }
 
 int sink_write(out_sink_t *o, const unsigned char *p, size_t n) {
-  if (o->rist) {
-    note_send_result(ristout_write(o->rist, p, n) >= 0, &o->rist_had_error, &o->errors_total, "rist");
-    return 0;
-  }
-  if (o->srt) {
-    srtsink_write(o->srt, p, n);
-    return 0;
-  }
-  if (o->net) {
-    note_send_result(tssink_write(o->net, p, n) >= 0, &o->net_had_error, &o->errors_total, "net");
-    return 0;
+  switch (o->kind) {
+    case OUT_RIST:
+      note_send_result(ristout_write(o->rist, p, n) >= 0, &o->rist_had_error, &o->errors_total, "rist");
+      return 0;
+    case OUT_SRT:
+      srtsink_write(o->srt, p, n);
+      return 0;
+    case OUT_RTP:
+    case OUT_UDP:
+      note_send_result(tssink_write(o->net, p, n) >= 0, &o->net_had_error, &o->errors_total, "net");
+      return 0;
+    case OUT_FILE:
+    case OUT_RTMP:
+    case OUT_RTMPS:
+      break;
   }
   return write_all(o->fd, p, n);
 }
@@ -229,8 +224,7 @@ int sink_write(out_sink_t *o, const unsigned char *p, size_t n) {
 void sinks_service_srt(out_sink_t *sinks, int n_sinks) {
   for (int i = 0; i < n_sinks; i++) {
     srtsink_status_t st;
-    if (!sinks[i].srt)
-      continue;
+    if (!sinks[i].srt) continue;
     srtsink_service(sinks[i].srt, &st);
     if (st.connected != sinks[i].srt_connected) {
       log_line("srt[%d] output: %s", i, st.connected ? "connected" : "link down, reconnecting");
@@ -240,18 +234,21 @@ void sinks_service_srt(out_sink_t *sinks, int n_sinks) {
 }
 
 void sink_close(out_sink_t *o) {
-  if (o->rist) {
-    ristout_close(o->rist);
-    return;
+  switch (o->kind) {
+    case OUT_RIST:
+      ristout_close(o->rist);
+      return;
+    case OUT_SRT:
+      srtsink_close(o->srt);
+      return;
+    case OUT_RTP:
+    case OUT_UDP:
+      tssink_close(o->net);
+      return;
+    case OUT_FILE:
+    case OUT_RTMP:
+    case OUT_RTMPS:
+      break;
   }
-  if (o->srt) {
-    srtsink_close(o->srt);
-    return;
-  }
-  if (o->net) {
-    tssink_close(o->net);
-    return;
-  }
-  if (o->fd >= 0 && o->fd != STDOUT_FILENO)
-    close(o->fd);
+  if (o->fd >= 0 && o->fd != STDOUT_FILENO) close(o->fd);
 }

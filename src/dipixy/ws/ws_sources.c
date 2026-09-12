@@ -5,18 +5,6 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/jsonbuf.h"
 
-static const char *source_kind_name(source_kind_t k) {
-  switch (k) {
-    case SRC_SDS:   return "sds";
-    case SRC_M3U:   return "m3u";
-    case SRC_XSPF:  return "xspf";
-    case SRC_CSV:   return "csv";
-    case SRC_XML:   return "xml";
-    case SRC_HTTP:  return "http";
-  }
-  return "?";
-}
-
 typedef struct {
   jbuf_t *j;
   int n;
@@ -24,8 +12,7 @@ typedef struct {
 
 static void emit_item_json(void *vctx, const channel_item_t *item) {
   item_emit_ctx_t *c = vctx;
-  if (c->n++)
-    jbuf_str(c->j, ",");
+  if (c->n++) jbuf_str(c->j, ",");
   jbuf_str(c->j, "{");
   jbuf_key(c->j, "name");
   jbuf_json_string(c->j, item->name);
@@ -41,15 +28,14 @@ static void emit_source_json(jbuf_t *j, const channels_t *channels, const char *
   jbuf_json_string(j, kind);
   jbuf_str(j, ",");
   jbuf_key(j, "name");
-  if (name)
-    jbuf_json_string(j, name);
-  else
-    jbuf_str(j, "null");
+  if (name) jbuf_json_string(j, name);
+  else      jbuf_str(j, "null");
   jbuf_str(j, ",");
   jbuf_key(j, "list_num");
   {
     char numbuf[11];
-    jbuf_raw(j, numbuf, uint_to_str(numbuf, ordinal));
+    size_t numlen = uint_to_str(numbuf, ordinal);
+    jbuf_raw(j, numbuf, numlen);
   }
   if (has_items) {
     item_emit_ctx_t ictx = {j, 0};
@@ -68,10 +54,8 @@ int ws_sources_build_snapshot(const config_t *cfg, const channels_t *channels, c
 
   jbuf_reset(&j);
   max_ord = cfg->stdin_ordinal;
-  if (cfg->rist_ordinal > max_ord)
-    max_ord = cfg->rist_ordinal;
-  if (cfg->n_sources > 0 && cfg->sources[cfg->n_sources - 1].ordinal > max_ord)
-    max_ord = cfg->sources[cfg->n_sources - 1].ordinal;
+  if (cfg->rist_ordinal > max_ord) max_ord = cfg->rist_ordinal;
+  if (cfg->n_sources > 0 && cfg->sources[cfg->n_sources - 1].ordinal > max_ord) max_ord = cfg->sources[cfg->n_sources - 1].ordinal;
 
   jbuf_str(&j, "{");
   jbuf_key(&j, "type");
@@ -88,13 +72,12 @@ int ws_sources_build_snapshot(const config_t *cfg, const channels_t *channels, c
     else if (ord == cfg->rist_ordinal)
       emit_source_json(&j, channels, "rist", cfg->rist_name, (unsigned)ord, 0);
     else if (si < cfg->n_sources && cfg->sources[si].ordinal == ord) {
-      emit_source_json(&j, channels, source_kind_name(cfg->sources[si].kind), cfg->sources[si].name, (unsigned)ord, 1);
+      emit_source_json(&j, channels, source_kind_str(cfg->sources[si].kind), cfg->sources[si].name, (unsigned)ord, 1);
       si++;
     }
   }
   jbuf_str(&j, "]}");
-  if (j.failed)
-    return -1;
+  if (j.failed) return -1;
   *out = j.buf;
   return 0;
 }
@@ -108,10 +91,9 @@ int ws_sources_build_update(const channels_t *channels, const source_def_t *src,
   jbuf_str(&j, ",");
   jbuf_key(&j, "sources");
   jbuf_str(&j, "[");
-  emit_source_json(&j, channels, source_kind_name(src->kind), src->name, list_num, 1);
+  emit_source_json(&j, channels, source_kind_str(src->kind), src->name, list_num, 1);
   jbuf_str(&j, "]}");
-  if (j.failed)
-    return -1;
+  if (j.failed) return -1;
   *out = j.buf;
   return 0;
 }

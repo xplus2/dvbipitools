@@ -316,11 +316,15 @@ File/stdin source only: pace output to the input's own timing (RTP
 timestamp if RTP-framed, else PCR).
 .TP
 .B \-\-strip \fI<list>\fR
+Comma list of
+.IR NUL , NIT , AIT , EIT , CAT , ECM , EMM , RST , TDT , TOT , INT
+(\fB\-f ts\fR only) or
+.I LCEVC
+(every format: drops a standalone LCEVC PID from
 .B \-f
 .B ts
-only: comma list of
-.IR NUL , NIT , AIT , EIT , CAT , ECM , EMM , RST , TDT , TOT , INT
-to drop, or \fBnone\fR. Default: \fBNUL,NIT,AIT,EIT\fR.
+output, and inline LCEVC data from mp4/mkv/m4a/mka/rtmp output) to
+drop, or \fBnone\fR. Default: \fBNUL,NIT,AIT,EIT\fR.
 .TP
 .BR \-h ", " \-\-help
 Show usage and exit.

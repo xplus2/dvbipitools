@@ -69,6 +69,7 @@ const unsigned char *find_desc(const unsigned char *d, size_t len, unsigned tag,
 void copy_name(char *dst, size_t dstsz, const unsigned char *src, size_t len);
 void add_ecm(psi_t *c, unsigned pid);
 void classify(psi_es_t *e, const unsigned char *desc, size_t dlen);
+void link_lcevc(psi_es_t *es, int count);
 void decode_service_desc(const unsigned char *d, size_t dll, char *provider_dst, char *service_dst);
 
 /* parse.c */

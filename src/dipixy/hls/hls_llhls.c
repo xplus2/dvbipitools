@@ -40,8 +40,7 @@ static char *write_part_line(char *mp, double duration, uint32_t seq, int part, 
   *mp++ = '.';
   mp = write_u32(mp, (uint32_t)part, 0);
   mp = WRITE_LIT(mp, ".ts\"");
-  if (independent)
-    mp = WRITE_LIT(mp, ",INDEPENDENT=YES");
+  if (independent) mp = WRITE_LIT(mp, ",INDEPENDENT=YES");
   *mp++ = '\n';
   return mp;
 }
@@ -94,63 +93,24 @@ done:
   return (size_t)(mp - m3u8);
 }
 
-int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes) {
-  hls_store_t *s;
-  const hls_snapshot_t *snap;
-  uint32_t req_seq;
-  int req_part;
-  char etag[48];
+int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes) {
   char cors_hdr[192];
-  const uint8_t *body = NULL;
-  size_t body_len = 0;
+  hls_ll_resolve_t r;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
-  s = find_store(ctx, filter, pmt_pid, SEG_CONTAINER_TS);
-  snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
-
-  if (!strcmp(filename, "index_ll.m3u8")) {
-    char m3u8[16384];
-    ll_playlist_snap_t llsnap;
-    if (!snap || snap->part_target <= 0.0 || (snap->count == 0 && snap->live_parts.count == 0)) {
-      queue_status(c, "404 Not Found", keep_alive);
-      return 1;
-    }
-    snapshot_ll_playlist(snap, &llsnap);
-    {
-      size_t m3u8_len = format_ll_playlist(&llsnap, m3u8, sizeof m3u8);
-      queue_m3u8(c, m3u8, m3u8_len, is_head, keep_alive, cors_hdr);
-      if (out_bytes) *out_bytes = m3u8_len;
-    }
-    return 1;
-  }
-
-  if (!parse_part_filename(filename, &req_seq, &req_part))
-    return 0;
-
-  if (snap && snap->live_msn == req_seq && req_part < snap->live_parts.count) {
-    body = snap->live_data + snap->live_parts.offset[req_part];
-    body_len = snap->live_parts.size[req_part];
-    part_etag(req_seq, req_part, body_len, etag, sizeof etag);
-  } else if (snap && snap->count > 0) {
-    uint32_t oldest = snap->oldest_seq;
-    uint32_t last = oldest + (uint32_t)snap->count - 1u;
-    if (req_seq >= oldest && req_seq <= last) {
-      const hls_seg_t *seg = &snap->segs[(snap->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
-      if (req_part < seg->parts.count) {
-        body = seg->data + seg->parts.offset[req_part];
-        body_len = seg->parts.size[req_part];
-        part_etag(req_seq, req_part, body_len, etag, sizeof etag);
-      }
-    }
-  }
-  if (!body) {
+  if (!hls_resolve_ll(ctx, filter, pmt_pid, lcevc, filename, if_none_match, &r)) return 0;
+  if (r.status == 404) {
     queue_status(c, "404 Not Found", keep_alive);
     return 1;
   }
-  if (if_none_match && !strcmp(if_none_match, etag)) {
-    queue_not_modified(c, etag, keep_alive);
-  } else {
-    queue_segment(c, body, body_len, "video/mp2t", etag, is_head, keep_alive, cors_hdr);
-    if (out_bytes) *out_bytes = body_len;
+  if (r.status == 304) {
+    queue_not_modified(c, r.etag, keep_alive);
+    return 1;
   }
+  if (r.kind == HLS_RESOLVE_PLAYLIST) {
+    queue_m3u8(c, (const char *)r.body, r.body_len, is_head, keep_alive, cors_hdr);
+  } else {
+    queue_segment(c, r.body, r.body_len, r.content_type, r.etag, is_head, keep_alive, cors_hdr);
+  }
+  if (out_bytes) *out_bytes = r.body_len;
   return 1;
 }

@@ -39,17 +39,9 @@ void hls_sb_add_hex2(strbuf_t *b, unsigned v) {
 }
 
 void hls_sb_add_u64(strbuf_t *b, uint64_t v) {
-  char tmp[20], rev[21];
-  size_t n = 0;
-  if (!v) {
-    tmp[n++] = '0';
-  } else while (v) {
-    tmp[n++] = (char)('0' + v % 10);
-    v /= 10;
-  }
-  for (size_t i = 0; i < n; i++) rev[i] = tmp[n - 1 - i];
-  rev[n] = '\0';
-  hls_sb_add(b, rev);
+  char tmp[21];
+  u64_to_dec(tmp, v);
+  hls_sb_add(b, tmp);
 }
 
 /* every call site here is "404 Not Found": counts as an HTTP error */

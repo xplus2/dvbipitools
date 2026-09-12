@@ -4,6 +4,8 @@
 /* HTTP/3 QUIC transport: connection lifecycle, ngtcp2 callbacks, handshake,
    TX/RX loops, global TLS context */
 
+#define _GNU_SOURCE
+
 #ifdef HAVE_HTTP3
 
 #include "http3.h"
@@ -14,6 +16,7 @@
 #include <openssl/rand.h>
 
 #include <arpa/inet.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 static SSL_CTX *g_h3_ssl_ctx = NULL;
@@ -35,6 +38,10 @@ _Thread_local h3_conn_t **t_h3_hash = NULL;
 _Thread_local int t_h3_init = 0;
 _Thread_local int t_h3_udp4 = -1;
 _Thread_local int t_h3_udp6 = -1;
+_Thread_local struct sockaddr_storage t_h3_udp4_local;
+_Thread_local socklen_t t_h3_udp4_local_len;
+_Thread_local struct sockaddr_storage t_h3_udp6_local;
+_Thread_local socklen_t t_h3_udp6_local_len;
 
 static _Thread_local h3_conn_t *t_h3_pool = NULL;
 static _Thread_local int *t_h3_pool_free = NULL;
@@ -91,8 +98,7 @@ static void h3_hash_insert(const uint8_t *key, size_t keylen, h3_conn_t *c) {
 static void h3_hash_delete(const uint8_t *key, size_t keylen, const h3_conn_t *c) {
   uint32_t i = cid_hash(key, keylen) & (t_h3_hash_cap - 1);
   for (uint32_t n = 0; n < t_h3_hash_cap; n++, i = (i + 1) & (t_h3_hash_cap - 1)) {
-    if (t_h3_hash[i] == NULL)
-      return;
+    if (t_h3_hash[i] == NULL) return;
     if (t_h3_hash[i] == c) {
       t_h3_hash[i] = H3_HASH_TOMB;
       return;
@@ -122,13 +128,9 @@ static int cb_recv_stream_data(ngtcp2_conn *qconn, uint32_t flags, int64_t strea
   (void)offset;
   (void)stream_ud;
   h3_conn_t *c = ud;
-  if (!c->h3conn)
-    return 0;
-
+  if (!c->h3conn) return 0;
   nghttp3_ssize consumed = nghttp3_conn_read_stream(c->h3conn, stream_id, data, datalen, (flags & NGTCP2_STREAM_DATA_FLAG_FIN) != 0);
-  if (consumed < 0)
-    return NGTCP2_ERR_CALLBACK_FAILURE;
-
+  if (consumed < 0) return NGTCP2_ERR_CALLBACK_FAILURE;
   ngtcp2_conn_extend_max_stream_offset(qconn, stream_id, (uint64_t)consumed);
   ngtcp2_conn_extend_max_offset(qconn, (uint64_t)consumed);
   return 0;
@@ -140,15 +142,13 @@ static int cb_acked_stream_data_offset(ngtcp2_conn *qconn, int64_t stream_id, ui
   (void)offset;
   (void)stream_ud;
   h3_conn_t *c = ud;
-  if (c->h3conn && nghttp3_conn_add_ack_offset(c->h3conn, stream_id, datalen) != 0)
-    return NGTCP2_ERR_CALLBACK_FAILURE;
+  if (c->h3conn && nghttp3_conn_add_ack_offset(c->h3conn, stream_id, datalen) != 0) return NGTCP2_ERR_CALLBACK_FAILURE;
   return 0;
 }
 
 static int cb_stream_open(ngtcp2_conn *qconn, int64_t stream_id, void *ud) {
   (void)qconn;
-  if ((stream_id & 0x02) == 0) /* bidi only, uni streams (control/qpack) need no req slot */
-    alloc_req(ud, stream_id);
+  if ((stream_id & 0x02) == 0) alloc_req(ud, stream_id); /* bidi only, uni streams (control/qpack) need no req slot */
   return 0;
 }
 
@@ -158,8 +158,7 @@ static int cb_stream_close(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id
   (void)app_err;
   (void)stream_ud;
   h3_conn_t *c = ud;
-  if (c->h3conn)
-    nghttp3_conn_close_stream(c->h3conn, stream_id, app_err);
+  if (c->h3conn) nghttp3_conn_close_stream(c->h3conn, stream_id, app_err);
   h3_llhls_on_stream_close(c, stream_id);
   h3_hls_cold_on_stream_close(c, stream_id);
   h3_ws_on_stream_close(c, stream_id);
@@ -167,16 +166,31 @@ static int cb_stream_close(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id
   return 0;
 }
 
+#define H3_FLUSH_BATCH 32
+
+static void flush_batch(int udp_fd, const struct sockaddr_storage *peer, socklen_t peerlen, struct iovec *iov, struct mmsghdr *msgs, int n) {
+  for (int i = 0; i < n; i++) {
+    memset(&msgs[i], 0, sizeof msgs[i]);
+    msgs[i].msg_hdr.msg_name = (void *)peer;
+    msgs[i].msg_hdr.msg_namelen = peerlen;
+    msgs[i].msg_hdr.msg_iov = &iov[i];
+    msgs[i].msg_hdr.msg_iovlen = 1;
+  }
+  sendmmsg(udp_fd, msgs, (unsigned)n, 0);
+}
+
 void flush_tx(h3_conn_t *c, int udp_fd) {
   ngtcp2_tstamp ts = h3_ts();
-  uint8_t pkt[H3_PKT_MAX];
+  static _Thread_local uint8_t pkt_buf[H3_FLUSH_BATCH][H3_PKT_MAX];
+  struct iovec iov[H3_FLUSH_BATCH];
+  struct mmsghdr msgs[H3_FLUSH_BATCH];
+  int n = 0;
 
   for (;;) {
     int64_t stream_id = -1;
     int fin = 0;
     ngtcp2_vec qvec[16];
     size_t qvcnt = 0;
-
     if (c->h3conn) {
       nghttp3_vec h3vec[16];
       nghttp3_ssize nread = nghttp3_conn_writev_stream(c->h3conn, &stream_id, &fin, h3vec, 16);
@@ -188,7 +202,6 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
         qvcnt = (size_t)nread;
       }
     }
-
     ngtcp2_ssize ndatalen = 0;
     /* bare ngtcp2_path has uninit addr pointers, path_storage needed. output unused (we send to peer_addr) */
     ngtcp2_path_storage ps;
@@ -196,38 +209,36 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
     ngtcp2_pkt_info pi;
     /* qvcnt==0 with fin set: must still carry FIN and report via add_write_offset(...,0), or stream never terminates */
     uint32_t flags = fin ? NGTCP2_WRITE_STREAM_FLAG_FIN : 0;
-    ngtcp2_ssize pktlen = ngtcp2_conn_writev_stream_versioned(c->qconn, &ps.path, NGTCP2_PKT_INFO_VERSION, &pi, pkt, sizeof pkt, &ndatalen, flags, stream_id, qvcnt > 0 ? qvec : NULL, qvcnt, ts);
-    if (pktlen == 0)
-      break;
+    ngtcp2_ssize pktlen = ngtcp2_conn_writev_stream_versioned(c->qconn, &ps.path, NGTCP2_PKT_INFO_VERSION, &pi, pkt_buf[n], sizeof pkt_buf[n], &ndatalen, flags, stream_id, qvcnt > 0 ? qvec : NULL, qvcnt, ts);
+    if (pktlen == 0) break;
     if (pktlen < 0) {
       if (pktlen == NGTCP2_ERR_WRITE_MORE) {
-        if (ndatalen >= 0 && c->h3conn)
-          nghttp3_conn_add_write_offset(c->h3conn, stream_id, (uint64_t)ndatalen);
+        if (ndatalen >= 0 && c->h3conn) nghttp3_conn_add_write_offset(c->h3conn, stream_id, (uint64_t)ndatalen);
         continue;
       }
       c->done = 1;
       break;
     }
-    sendto(udp_fd, pkt, (size_t)pktlen, 0, (const struct sockaddr *)&c->peer_addr, c->peer_addrlen);
-    if (ndatalen >= 0 && c->h3conn)
-      nghttp3_conn_add_write_offset(c->h3conn, stream_id, (uint64_t)ndatalen);
+    iov[n].iov_base = pkt_buf[n];
+    iov[n].iov_len = (size_t)pktlen;
+    n++;
+    if (ndatalen >= 0 && c->h3conn) nghttp3_conn_add_write_offset(c->h3conn, stream_id, (uint64_t)ndatalen);
+    if (n == H3_FLUSH_BATCH) {
+      flush_batch(udp_fd, &c->peer_addr, c->peer_addrlen, iov, msgs, n);
+      n = 0;
+    }
   }
+  if (n > 0) flush_batch(udp_fd, &c->peer_addr, c->peer_addrlen, iov, msgs, n);
 }
 
 static void h3_pool_release(const h3_conn_t *c) { t_h3_pool_free[t_h3_pool_free_n++] = c->pool_slot; }
 
 h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr *local, socklen_t locallen) {
   ngtcp2_pkt_hd hd;
-  if (ngtcp2_accept(&hd, pkt, pktlen) != 0)
-    return NULL;
-
-  if (!h3_tables_alloc())
-    return NULL;
-  if (t_h3_active_cnt >= g_h3_max_conns)
-    return NULL;
-
-  if (t_h3_pool_free_n == 0)
-    return NULL;
+  if (ngtcp2_accept(&hd, pkt, pktlen) != 0) return NULL;
+  if (!h3_tables_alloc()) return NULL;
+  if (t_h3_active_cnt >= g_h3_max_conns) return NULL;
+  if (t_h3_pool_free_n == 0) return NULL;
   int slot = t_h3_pool_free[--t_h3_pool_free_n];
   h3_conn_t *c = &t_h3_pool[slot];
   memset(c, 0, sizeof *c);
@@ -323,8 +334,7 @@ h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *
 }
 
 void h3conn_del(h3_conn_t *c) {
-  if (!c)
-    return;
+  if (!c) return;
   h3_llhls_on_conn_close(c);
   h3_hls_cold_on_conn_close(c);
   h3_ws_on_conn_close(c);
@@ -364,34 +374,26 @@ void h3conn_del(h3_conn_t *c) {
 
   h3_hash_delete(c->scid.data, c->scid.datalen, c);
   h3_hash_delete(c->odcid.data, c->odcid.datalen, c);
-
   int last = --t_h3_active_cnt;
   if (c->active_idx != last) {
     t_h3_active[c->active_idx] = t_h3_active[last];
     t_h3_active[c->active_idx]->active_idx = c->active_idx;
   }
   t_h3_active[last] = NULL;
-
   h3_pool_release(c);
 }
 
 h3_conn_t *find_conn(const uint8_t *pkt, size_t pktlen) {
   /* ngtcp2's untrusted first-pass parse (long/short hdrs, length checks, fixed DCID len = our SCID len).
      Malformed/version-negotiation packets return non-zero, routed as "new". */
-  if (!t_h3_init)
-    return NULL;
-
+  if (!t_h3_init) return NULL;
   ngtcp2_version_cid vc;
-  if (ngtcp2_pkt_decode_version_cid(&vc, pkt, pktlen, H3_SCID_LEN) != 0)
-    return NULL;
-
+  if (ngtcp2_pkt_decode_version_cid(&vc, pkt, pktlen, H3_SCID_LEN) != 0) return NULL;
   uint32_t i = cid_hash(vc.dcid, vc.dcidlen) & (t_h3_hash_cap - 1);
   for (uint32_t n = 0; n < t_h3_hash_cap; n++, i = (i + 1) & (t_h3_hash_cap - 1)) {
     h3_conn_t *c = t_h3_hash[i];
-    if (!c)
-      return NULL;
-    if (c == H3_HASH_TOMB || c->done)
-      continue;
+    if (!c) return NULL;
+    if (c == H3_HASH_TOMB || c->done) continue;
     if ((c->scid.datalen == vc.dcidlen && memcmp(c->scid.data, vc.dcid, vc.dcidlen) == 0) ||
         (c->odcid.datalen == vc.dcidlen && memcmp(c->odcid.data, vc.dcid, vc.dcidlen) == 0))
       return c;
@@ -410,16 +412,12 @@ static int h3_alpn_select_cb(SSL *ssl, const unsigned char **out, unsigned char 
 
 void h3_init(const char *cert_path, const char *key_path) {
   ngtcp2_crypto_ossl_init();
-
   g_h3_ssl_ctx = SSL_CTX_new(TLS_server_method());
-  if (!g_h3_ssl_ctx)
-    return;
-
+  if (!g_h3_ssl_ctx) return;
   SSL_CTX_set_min_proto_version(g_h3_ssl_ctx, TLS1_3_VERSION);
   SSL_CTX_set_max_proto_version(g_h3_ssl_ctx, TLS1_3_VERSION);
   SSL_CTX_set_mode(g_h3_ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
   SSL_CTX_set_alpn_select_cb(g_h3_ssl_ctx, h3_alpn_select_cb, NULL);
-
   if (SSL_CTX_use_certificate_chain_file(g_h3_ssl_ctx, cert_path) != 1 || SSL_CTX_use_PrivateKey_file(g_h3_ssl_ctx, key_path, SSL_FILETYPE_PEM) != 1) {
     SSL_CTX_free(g_h3_ssl_ctx);
     g_h3_ssl_ctx = NULL;
@@ -438,13 +436,9 @@ void h3_cleanup(void) {
 /* caller (reactor.c) owns epoll registration, its dispatch loop keys off
    reactor_listener pointers not raw fds */
 int h3_create_udp_sock(int port, const char *host) {
-  if (!g_h3_ssl_ctx)
-    return -1;
-
+  if (!g_h3_ssl_ctx) return -1;
   int sock = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0);
-  if (sock < 0)
-    return -1;
-
+  if (sock < 0) return -1;
   int opt = 1;
   setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt);
   setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof opt);
@@ -461,17 +455,16 @@ int h3_create_udp_sock(int port, const char *host) {
     close(sock);
     return -1;
   }
+  memset(&t_h3_udp4_local, 0, sizeof t_h3_udp4_local);
+  memcpy(&t_h3_udp4_local, &saddr, sizeof saddr);
+  t_h3_udp4_local_len = sizeof saddr;
   return sock;
 }
 
 int h3_create_udp_sock6(int port, const char *host6) {
-  if (!g_h3_ssl_ctx)
-    return -1;
-
+  if (!g_h3_ssl_ctx) return -1;
   int sock = socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0);
-  if (sock < 0)
-    return -1;
-
+  if (sock < 0) return -1;
   int opt = 1;
   setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt);
   setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof opt);
@@ -492,6 +485,9 @@ int h3_create_udp_sock6(int port, const char *host6) {
     close(sock);
     return -1;
   }
+  memset(&t_h3_udp6_local, 0, sizeof t_h3_udp6_local);
+  memcpy(&t_h3_udp6_local, &saddr6, sizeof saddr6);
+  t_h3_udp6_local_len = sizeof saddr6;
   return sock;
 }
 

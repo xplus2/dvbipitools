@@ -87,13 +87,14 @@ static void add_program_cas_pids(const config_t *cfg, const out_es_t *es, int es
   for (int i = 0; i < es_count; i++) {
     if (cfg->cas_pids_video && es[i].src->cls == PID_VIDEO) add_pid(out, count, cap, es[i].out_pid);
     if (cfg->cas_pids_audio && es[i].src->cls == PID_AUDIO) add_pid(out, count, cap, es[i].out_pid);
+    if (cfg->cas_pids_lcevc && es[i].src->cls == PID_LCEVC) add_pid(out, count, cap, es[i].out_pid);
   }
 }
 
 size_t cas_resolve_pids_multi(const config_t *cfg, const out_es_t *const *es_lists, const int *es_counts, unsigned n_programs, unsigned *out, size_t cap) {
   size_t count = 0;
   for (size_t k = 0; k < cfg->cas_pid_count; k++) add_pid(out, &count, cap, cfg->cas_pids[k]);
-  if (cfg->cas_pids_video || cfg->cas_pids_audio) for (unsigned p = 0; p < n_programs; p++)
+  if (cfg->cas_pids_video || cfg->cas_pids_audio || cfg->cas_pids_lcevc) for (unsigned p = 0; p < n_programs; p++)
     add_program_cas_pids(cfg, es_lists[p], es_counts[p], out, &count, cap);
   return count;
 }

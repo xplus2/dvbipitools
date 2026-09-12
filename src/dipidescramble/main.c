@@ -175,7 +175,6 @@ static void close_outputs(loop_ctx_t *lc, int mkv_fd) {
 
 int main(int argc, char **argv) {
   config_t cfg;
-  args_status_t st;
   tssrc_cfg_t tc;
   tssrc_t *src = NULL;
   tspack_t pz;
@@ -193,16 +192,7 @@ int main(int argc, char **argv) {
   int rc = 1;
 
   memset(&lc, 0, sizeof lc);
-
-  log_set_color(log_color_prescan(argc, argv));
-  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
-  st = args_parse(argc, argv, &cfg);
-  if (st == ARGS_OK) log_set_color((log_color_t)cfg.color_mode);
-  if (st == ARGS_HELP) return 0;
-  if (st == ARGS_ERR) {
-    fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
-    return 2;
-  }
+  TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
   if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
 
   {
@@ -219,30 +209,35 @@ int main(int argc, char **argv) {
   log_line(TOOL_NAME ": i:%s k:%s s:%s e:%s o:%s%s", in_desc, cfg.key_path ? cfg.key_path : "(none)", cfg.serial ? cfg.serial : "(none)", cfg.emm_file ? cfg.emm_file : "(none)", outdesc, cfg.unicast_emm_uri ? " unicast-emm:yes" : "");
 
   lc.cache = emmcache_new(cfg.max_services);
-  if (!lc.cache)
-    goto cleanup;
+  if (!lc.cache) goto cleanup;
 
   memset(&tc, 0, sizeof tc);
   tc.kind = tssrc_kind_of(cfg.input.kind);
   tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
-  if (cfg.input.kind == INPUT_RIST) {
-    tc.rist_uri = cfg.input.rist_uri;
-    tc.rist_profile_main = cfg.rist_profile_main;
-  } else if (cfg.input.kind == INPUT_SRT) {
-    tc.srt_host = cfg.input.srt_host;
-    tc.srt_port = cfg.input.srt_port;
-    tc.srt_listen = cfg.input.srt_listen;
-    tc.srt_passphrase = cfg.srt_passphrase_in;
-    tc.srt_pbkeylen = cfg.srt_pbkeylen_in;
-    tc.srt_streamid = cfg.srt_streamid_in;
-    tc.srt_packetfilter = cfg.srt_packetfilter_in;
-    tc.srt_latency_ms = cfg.srt_latency_in_ms;
-    tc.srt_verbose = cfg.verbose;
-  } else {
-    tc.family = cfg.input.family;
-    tc.group = cfg.input.group;
-    tc.port = cfg.input.port;
-    tc.iface = cfg.iface_in;
+  switch (cfg.input.kind) {
+    case INPUT_RIST:
+      tc.rist_uri = cfg.input.rist_uri;
+      tc.rist_profile_main = cfg.rist_profile_main;
+      break;
+    case INPUT_SRT:
+      tc.srt_host = cfg.input.srt_host;
+      tc.srt_port = cfg.input.srt_port;
+      tc.srt_listen = cfg.input.srt_listen;
+      tc.srt_passphrase = cfg.srt_passphrase_in;
+      tc.srt_pbkeylen = cfg.srt_pbkeylen_in;
+      tc.srt_streamid = cfg.srt_streamid_in;
+      tc.srt_packetfilter = cfg.srt_packetfilter_in;
+      tc.srt_latency_ms = cfg.srt_latency_in_ms;
+      tc.srt_verbose = cfg.verbose;
+      break;
+    case INPUT_RTP:
+    case INPUT_UDP:
+    case INPUT_STDIN:
+      tc.family = cfg.input.family;
+      tc.group = cfg.input.group;
+      tc.port = cfg.input.port;
+      tc.iface = cfg.iface_in;
+      break;
   }
 
   src = tssrc_open(&tc, NULL);
@@ -262,6 +257,7 @@ int main(int argc, char **argv) {
     mkv_opts.audio_all = 1;
     mkv_opts.app_name = mkv_app_name;
     mkv_opts.source_desc = in_desc;
+    mkv_opts.strip_lcevc = cfg.strip_lcevc;
     if (n_all_pids > 0)
       lc.mkv = mkv_new(mkv_fd, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, all_pids, n_all_pids);
     else if (pmt_pid)
@@ -275,6 +271,7 @@ int main(int argc, char **argv) {
   }
   if (lc.n_rtmp > 0) {
     memset(&flv_opts, 0, sizeof flv_opts);
+    flv_opts.strip_lcevc = cfg.strip_lcevc;
     lc.flv = flv_new(&flv_opts, pmt_pid, rtmp_fanout_cb, &lc, NULL);
     if (!lc.flv) {
       log_line(TOOL_NAME ": cannot start flv mux");
@@ -300,6 +297,7 @@ int main(int argc, char **argv) {
 
     srt_service_all(&lc);
     pipeline_service_unicast_emm(&lc);
+    pipeline_service_emmcache(&lc);
 
     pfd.fd = tssrc_fd(src);
     pfd.events = POLLIN;
@@ -323,6 +321,7 @@ int main(int argc, char **argv) {
 
   metrics_exporter_close(&mx);
   pipeline_flush(&lc);
+  pipeline_flush_emmcache(&lc);
   if (!signal_stop_requested() && lc.n_srt > 0) {
     /* eof/err, not live stop: drain srt retransmits before teardown */
     unsigned drain_ms = cfg.srt_latency_ms ? cfg.srt_latency_ms : DIPIDESCRAMBLE_SRT_DRAIN_MS_DEFAULT;

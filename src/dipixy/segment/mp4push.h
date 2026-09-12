@@ -9,18 +9,20 @@
 #include <stdint.h>
 
 #include "../ts/capture/capture.h"
+#include "../ts/lcevcselect.h"
 #include "../ts/pidfilter.h"
 #include "../reactor/conn.h"
 
 void mp4push_init(int max_clients);
 
-int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int proto);
+int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int proto);
 void mp4push_sub_close(int slot);
 
-int mp4push_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, int ws_handle);
+int mp4push_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int ws_handle);
 
-void mp4push_h2_bind(int slot, int fd, int reactor_tid, int ws_handle);
-int mp4push_sub_fd(int slot);
+void mp4push_h2_bind(int slot, void *h2c, void *h2_slot, int reactor_tid, int ws_handle);
+void *mp4push_sub_h2c(int slot);
+void *mp4push_sub_h2_slot(int slot);
 
 void mp4push_h3_bind(int slot, void *h3c, int64_t h3_sid, int reactor_tid, int ws_handle);
 void *mp4push_sub_h3c(int slot);

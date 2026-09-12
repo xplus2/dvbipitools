@@ -54,4 +54,6 @@ unsigned device_core_services_active(device_core_t *core);
    log_prefix prepended to progress log lines. 1 if state changed, 0 otherwise */
 int device_core_on_emm(device_core_t *core, const unsigned char *emm, size_t emm_len, const char *log_prefix);
 
+int device_core_copy_service_key(device_core_t *core, unsigned service_id, int allow_sole_fallback, unsigned char sk_copy[CRYPTO_KEY_LEN]);
+
 #endif

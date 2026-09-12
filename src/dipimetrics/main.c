@@ -59,24 +59,14 @@ static void drain_uds_snapshots(int uds_fd, store_t *store, double now, int verb
 
 int main(int argc, char **argv) {
   config_t cfg;
-  args_status_t st;
   int uds_fd, http_fd;
   http_server_t *hs;
   tls_server_ctx_t *tls_ctx = NULL;
   static store_t store; /* ~1.9MB, keeps off stack */
 
-  log_set_color(log_color_prescan(argc, argv));
-  toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
-  st = args_parse(argc, argv, &cfg);
-  if (st == ARGS_HELP) return 0;
-  if (st == ARGS_ERR) {
-    fprintf(stderr, "try '%s --help' for usage\n", TOOL_NAME);
-    return 2;
-  }
-  log_set_color((log_color_t)cfg.color_mode);
+  TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
   if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
   signals_install();
-
   if (cfg.tls_cert) {
     tls_ctx = tls_server_ctx_new(cfg.tls_cert, cfg.tls_key);
     if (!tls_ctx) return 1;

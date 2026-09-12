@@ -3,13 +3,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
 
 #include "container.h"
 #include "lib/bim/accessunit.h"
-#include "lib/bim/bitreader.h"
+#include "lib/bim/bimreader.h"
 #include "lib/bim/strrepo.h"
+#include "lib/helper/fileutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
@@ -30,12 +30,10 @@ void write_csvmap(const char *path, const bcg_doc_t *doc) {
   }
   for (int i = 0; i < doc->channel_count; i++) {
     const bcg_channel_t *c = &doc->channels[i];
-    if (!c->uri[0])
-      continue;
+    if (!c->uri[0]) continue;
     fprintf(f, "%s,%s,%u,%u,%u\n", c->id, c->uri, c->tsid, c->onid, c->sid);
   }
-  if (fclose(f))
-    log_line("error writing %s", path);
+  if (fclose(f)) log_line("error writing %s", path);
 }
 
 int listen_run(const config_t *cfg) {
@@ -49,7 +47,6 @@ int listen_run(const config_t *cfg) {
   bcg_doc_t doc;
   int have_doc = 0;
   accessunit_scratch_t sc;
-
   accessunit_scratch_init(&sc);
   mcast_describe(cfg, mcast, sizeof mcast);
   m = mcast_open(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, 500);
@@ -64,9 +61,7 @@ int listen_run(const config_t *cfg) {
     return 1;
   }
   bcg_doc_init(&doc);
-
   log_line("listening on %s for %lds", mcast, cfg->timeout_s);
-
   deadline = mono_seconds() + (double)cfg->timeout_s;
   while (mono_seconds() < deadline && !signal_stop_requested()) {
     unsigned char buf[RECV_BUF];
@@ -82,19 +77,13 @@ int listen_run(const config_t *cfg) {
     strrepo_reader_t sr;
     bcg_doc_t candidate;
     int nfuu = 0;
-
-    if (n <= 0)
-      continue;
-    if (!dvbstp_reasm_feed(r, buf, (size_t)n, &hdr, &data, &len))
-      continue;
-    if (hdr.payload_id != DVBSTP_PAYLOAD_BCG_DATA_CONTAINER)
-      continue;
-    if (already_seen(seen, &seen_count, &hdr))
-      continue;
+    if (n <= 0) continue;
+    if (!dvbstp_reasm_feed(r, buf, (size_t)n, &hdr, &data, &len)) continue;
+    if (hdr.payload_id != DVBSTP_PAYLOAD_BCG_DATA_CONTAINER) continue;
+    if (already_seen(seen, &seen_count, &hdr)) continue;
     segments++;
 
-    if (wrapper_parse(data, len, &unwrapped, &unwrapped_len))
-      continue;
+    if (wrapper_parse(data, len, &unwrapped, &unwrapped_len)) continue;
     if (container_parse(unwrapped, unwrapped_len, &au, &au_len, &sr_bytes, &sr_len)) {
       free(unwrapped);
       continue;
@@ -111,18 +100,16 @@ int listen_run(const config_t *cfg) {
       continue;
     }
     free(unwrapped);
-    if (have_doc)
-      bcg_doc_free(&doc);
+    if (have_doc) bcg_doc_free(&doc);
     doc = candidate;
     have_doc = 1;
     captures++;
-    if (cfg->verbose)
-      log_line("segment %u: %d channels, %d programmes, %d fragments", segments, doc.channel_count, doc.programme_count, nfuu);
+    if (cfg->verbose) log_line("segment %u: %d channels, %d programmes, %d fragments", segments, doc.channel_count, doc.programme_count, nfuu);
   }
 
   int write_failed = 0;
   if (have_doc) {
-    FILE *f = strcmp(cfg->output_path, "-") == 0 ? stdout : fopen(cfg->output_path, "w");
+    FILE *f = fileutil_open_std(cfg->output_path, "w");
     if (!f) {
       log_line("cannot open %s for writing", cfg->output_path);
       write_failed = 1;
@@ -133,8 +120,7 @@ int listen_run(const config_t *cfg) {
         write_failed = 1;
       }
     }
-    if (cfg->csvmap_path)
-      write_csvmap(cfg->csvmap_path, &doc);
+    if (cfg->csvmap_path) write_csvmap(cfg->csvmap_path, &doc);
   }
 
   accessunit_scratch_free(&sc);

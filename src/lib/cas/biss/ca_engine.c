@@ -292,7 +292,7 @@ static void rebuild_ecm(biss_ca_engine_t *e) {
 }
 
 static void rebuild_emm(biss_ca_engine_t *e) {
-  biss_ca_emm_entry_t entries[BISS_CA_ENGINE_MAX_RECEIVERS];
+  biss_ca_emm_entry_t entries[BISS_CA_ENGINE_MAX_RECEIVERS] = {0};
   unsigned char session_data[BISS_CA_SESSION_DATA_LEN];
   size_t n = 0, len;
 

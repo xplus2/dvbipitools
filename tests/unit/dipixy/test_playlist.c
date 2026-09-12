@@ -11,6 +11,8 @@
 #include "dipixy/ts/channels/channels.h"
 #include "dipixy/ts/pidfilter.h"
 
+static const lcevc_select_t full = {LCEVC_SEL_FULL, 0, 0};
+
 static void write_temp_file(char *path, const char *content) {
   char tmpl[] = "/tmp/dvbipitools_test_playlist_XXXXXX.m3u";
   int fd;
@@ -113,7 +115,7 @@ START_TEST(render_m3u_builds_http_play_paths_with_triplet_and_icon) {
   cfg.n_sources = 2;
   cfg.listen.port = 9080;
 
-  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &nofilter, ROUTE_FMT_HLS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &nofilter, &full, ROUTE_FMT_HLS, PLAYLIST_M3U, &out, &out_len), 0);
   ck_assert_ptr_nonnull(strstr(out, "http://127.0.0.1:9080/list/1/item/1/hls"));
   ck_assert_ptr_nonnull(strstr(out, "http://127.0.0.1:9080/list/1/item/2/hls"));
   ck_assert_ptr_nonnull(strstr(out, "http://127.0.0.1:9080/list/2/item/1/hls"));
@@ -142,7 +144,7 @@ START_TEST(render_xspf_uses_image_element_for_icon) {
   cfg.n_sources = 2;
   cfg.listen.port = 9080;
 
-  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &nofilter, ROUTE_FMT_DASH, PLAYLIST_XSPF, &out, &out_len), 0);
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &nofilter, &full, ROUTE_FMT_DASH, PLAYLIST_XSPF, &out, &out_len), 0);
   ck_assert_ptr_nonnull(strstr(out, "<image>http://icons/a.png</image>"));
   ck_assert_ptr_null(strstr(out, "<image></image>"));
 
@@ -168,7 +170,7 @@ START_TEST(render_input_param_restricts_to_listed_ordinals) {
   cfg.n_sources = 2;
   cfg.listen.port = 9080;
 
-  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, "input=2", &nofilter, ROUTE_FMT_TS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, "input=2", &nofilter, &full, ROUTE_FMT_TS, PLAYLIST_M3U, &out, &out_len), 0);
   ck_assert_ptr_null(strstr(out, "/list/1/item/"));
   ck_assert_ptr_nonnull(strstr(out, "/list/2/item/1/ts"));
 
@@ -197,13 +199,51 @@ START_TEST(render_filter_forwarded_to_http_entries_only) {
   cfg.n_sources = 2;
   cfg.listen.port = 9080;
 
-  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &filter, ROUTE_FMT_SPTS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &filter, &full, ROUTE_FMT_SPTS, PLAYLIST_M3U, &out, &out_len), 0);
   ck_assert_ptr_nonnull(strstr(out, "/list/1/item/1/spts?filter=32,101"));
   free(out);
 
-  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, "keep_multicast", &filter, ROUTE_FMT_SPTS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, "keep_multicast", &filter, &full, ROUTE_FMT_SPTS, PLAYLIST_M3U, &out, &out_len), 0);
   ck_assert_ptr_nonnull(strstr(out, "rtp://239.1.1.1:5000"));
   ck_assert_ptr_null(strstr(out, "rtp://239.1.1.1:5000?filter"));
+  free(out);
+
+  unlink(path_a);
+  unlink(path_b);
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(render_lcevc_forwarded_to_http_entries_only) {
+  char path_a[160];
+  char path_b[160];
+  source_def_t src[2];
+  config_t cfg;
+  channels_t *ch = build_two_lists(path_a, path_b, src);
+  char *out;
+  size_t out_len;
+  pid_filter_t nofilter = {.count = 0};
+  pid_filter_t filter = {.count = 0};
+  lcevc_select_t base = {LCEVC_SEL_BASE, 0, 0};
+
+  pid_filter_parse("101", &filter);
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.sources = src;
+  cfg.n_sources = 2;
+  cfg.listen.port = 9080;
+
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &nofilter, &base, ROUTE_FMT_HLS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_ptr_nonnull(strstr(out, "/list/1/item/1/hls?lcevc=base"));
+  free(out);
+
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &filter, &base, ROUTE_FMT_HLS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_ptr_nonnull(strstr(out, "/list/1/item/1/hls?filter=101&lcevc=base"));
+  free(out);
+
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, "keep_multicast", &nofilter, &base, ROUTE_FMT_HLS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_ptr_nonnull(strstr(out, "rtp://239.1.1.1:5000"));
+  ck_assert_ptr_null(strstr(out, "lcevc"));
   free(out);
 
   unlink(path_a);
@@ -228,15 +268,15 @@ START_TEST(render_host_override_and_scheme_follow_request) {
   cfg.listen.port = 9080;
   cfg.listen_tls.port = 9443;
 
-  ck_assert_int_eq(playlist_render(&cfg, ch, 0, "example.org:8080", NULL, &nofilter, ROUTE_FMT_TS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, "example.org:8080", NULL, &nofilter, &full, ROUTE_FMT_TS, PLAYLIST_M3U, &out, &out_len), 0);
   ck_assert_ptr_nonnull(strstr(out, "http://example.org:9080/list/1/item/1/ts"));
   free(out);
 
-  ck_assert_int_eq(playlist_render(&cfg, ch, 1, NULL, "host=example.org", &nofilter, ROUTE_FMT_TS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_int_eq(playlist_render(&cfg, ch, 1, NULL, "host=example.org", &nofilter, &full, ROUTE_FMT_TS, PLAYLIST_M3U, &out, &out_len), 0);
   ck_assert_ptr_nonnull(strstr(out, "https://example.org:9443/list/1/item/1/ts"));
   free(out);
 
-  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &nofilter, ROUTE_FMT_TS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &nofilter, &full, ROUTE_FMT_TS, PLAYLIST_M3U, &out, &out_len), 0);
   ck_assert_ptr_nonnull(strstr(out, "http://127.0.0.1:9080/list/1/item/1/ts"));
   free(out);
 
@@ -268,7 +308,7 @@ START_TEST(render_named_source_uses_name_in_path) {
   ch = channels_build(&cfg);
   ck_assert_ptr_nonnull(ch);
 
-  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &nofilter, ROUTE_FMT_HLS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &nofilter, &full, ROUTE_FMT_HLS, PLAYLIST_M3U, &out, &out_len), 0);
   ck_assert_ptr_nonnull(strstr(out, "/mychan/item/1/hls"));
   ck_assert_ptr_null(strstr(out, "/list/1/"));
 
@@ -290,7 +330,7 @@ START_TEST(render_stdin_singleton_has_no_item_segment) {
   cfg.listen.port = 9080;
   ch = channels_build(&cfg);
   ck_assert_ptr_nonnull(ch);
-  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &nofilter, ROUTE_FMT_TS, PLAYLIST_M3U, &out, &out_len), 0);
+  ck_assert_int_eq(playlist_render(&cfg, ch, 0, NULL, NULL, &nofilter, &full, ROUTE_FMT_TS, PLAYLIST_M3U, &out, &out_len), 0);
   ck_assert_ptr_nonnull(strstr(out, "http://127.0.0.1:9080/stdin/ts"));
   free(out);
   channels_free(ch);
@@ -308,6 +348,7 @@ Suite *playlist_suite(void) {
   tcase_add_test(tc, render_xspf_uses_image_element_for_icon);
   tcase_add_test(tc, render_input_param_restricts_to_listed_ordinals);
   tcase_add_test(tc, render_filter_forwarded_to_http_entries_only);
+  tcase_add_test(tc, render_lcevc_forwarded_to_http_entries_only);
   tcase_add_test(tc, render_host_override_and_scheme_follow_request);
   tcase_add_test(tc, render_named_source_uses_name_in_path);
   tcase_add_test(tc, render_stdin_singleton_has_no_item_segment);

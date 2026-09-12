@@ -19,6 +19,7 @@ typedef struct {
   unsigned stream_type; /* PMT stream_type of detected codec */
   const char *network_name; /* "" = no NIT network_name descriptor; pointer must outlive packetizer */
   const char *service_name; /* pointer must outlive packetizer */
+  const char *provider_name; /* SDT service_provider_name; NULL or "" = TOOL_NAME. pointer must outlive packetizer */
   unsigned pmt_pid;   /* 0 = default 0x0100 */
   unsigned audio_pid; /* 0 = default TSPACKETIZER_PID_AUDIO (0x0101) */
   /* 1: self-contained SPTS, emits PAT/CAT/NIT/SDT/EIT/ECM/EMM too (today's behavior).

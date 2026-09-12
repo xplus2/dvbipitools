@@ -9,6 +9,7 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/export.h"
+#include "lib/net/announce_driver.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
 #include "lib/helper/signal.h"
@@ -41,6 +42,15 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const sds_state_t *
   metrics_writer_put(&w, METRICS_ID_SDS_ANNOUNCEMENT_ERRORS_TOTAL, NULL, sm->announcement_errors_total);
   metrics_writer_put(&w, METRICS_ID_SDS_LAST_SUCCESS_TIME_SECONDS, NULL, (uint64_t)sm->last_success_time);
   metrics_exporter_send(mx, &w);
+}
+
+static void *doc_alloc(sds_state_t *st, const char *what) {
+  void *p = malloc(DOC_CAP);
+  if (!p) {
+    log_line("out of memory building %s document", what);
+    state_free(st);
+  }
+  return p;
 }
 
 void state_free(sds_state_t *st) {
@@ -98,13 +108,10 @@ int state_load(const config_t *cfg, sds_state_t *st) {
     if (cfg->cells_path) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY;
     if (cfg->rms_enabled || cfg->fus_enabled) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_RMSFUS_DISCOVERY;
 
-    st->broadcast_doc = malloc(DOC_CAP);
-    st->sp_doc = malloc(DOC_CAP);
-    if (!st->broadcast_doc || !st->sp_doc) {
-      log_line("out of memory building SD&S documents");
-      state_free(st);
-      return -1;
-    }
+    st->broadcast_doc = doc_alloc(st, "Broadcast Discovery");
+    if (!st->broadcast_doc) return -1;
+    st->sp_doc = doc_alloc(st, "Service Provider Discovery");
+    if (!st->sp_doc) return -1;
     st->broadcast_len = sds_build_broadcast(cfg->provider, 1, st->in.services, st->in.service_count, ret, fcc, fec, st->broadcast_doc, DOC_CAP);
     st->sp_len = sds_build_sp(cfg->provider, cfg->offering, cfg->lang, 1, cfg->mcast_group, cfg->mcast_port, extra_payload_ids, extra_count, st->sp_doc, DOC_CAP);
     if (!st->broadcast_len || !st->sp_len) {
@@ -120,11 +127,9 @@ int state_load(const config_t *cfg, sds_state_t *st) {
         state_free(st);
         return -1;
       }
-      st->package_doc = malloc(DOC_CAP);
+      st->package_doc = doc_alloc(st, "Package Discovery");
       if (!st->package_doc) {
         free(pkgs);
-        log_line("out of memory building Package Discovery document");
-        state_free(st);
         return -1;
       }
       st->package_len = sds_build_package(cfg->provider, 1, pkgs, pkg_count, st->in.services, st->in.service_count, st->package_doc, DOC_CAP);
@@ -144,11 +149,9 @@ int state_load(const config_t *cfg, sds_state_t *st) {
         state_free(st);
         return -1;
       }
-      st->cell_doc = malloc(DOC_CAP);
+      st->cell_doc = doc_alloc(st, "Regionalisation Discovery");
       if (!st->cell_doc) {
         free(cells);
-        log_line("out of memory building Regionalisation Discovery document");
-        state_free(st);
         return -1;
       }
       st->cell_len = sds_build_regionalisation(cfg->provider, 1, cells, cell_count, st->cell_doc, DOC_CAP);
@@ -181,12 +184,8 @@ int state_load(const config_t *cfg, sds_state_t *st) {
         fus_val.logo_uri = cfg->fus_logo;
         fus_count = 1;
       }
-      st->rmsfus_doc = malloc(DOC_CAP);
-      if (!st->rmsfus_doc) {
-        log_line("out of memory building RMS-FUS Discovery document");
-        state_free(st);
-        return -1;
-      }
+      st->rmsfus_doc = doc_alloc(st, "RMS-FUS Discovery");
+      if (!st->rmsfus_doc) return -1;
       st->rmsfus_len = sds_build_rms_fus(cfg->provider, 1, &rms_val, rms_count, &fus_val, fus_count, st->rmsfus_doc, DOC_CAP);
       if (!st->rmsfus_len) {
         log_line("RMS-FUS Discovery document too large (max %d bytes)", DOC_CAP);
@@ -211,60 +210,80 @@ static void reload_state(const config_t *cfg, sds_state_t *st, sds_metrics_t *sm
   if (metrics_on) sm->documents_generated_total++;
 }
 
-int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
+typedef struct {
+  const config_t *cfg;
+  metrics_exporter_t *mx;
   sds_state_t st;
-  mcast_t *m;
-  unsigned cycles = 0;
   sds_metrics_t sm;
-  int metrics_on = metrics_exporter_enabled(mx);
+  int metrics_on;
+} sds_announce_ctx_t;
 
-  memset(&sm, 0, sizeof sm);
-  if (state_load(cfg, &st)) return 1;
-  if (metrics_on) sm.documents_generated_total++;
-  m = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, 0);
-  if (!m) {
-    log_line("cannot open %s:%u for sending", cfg->mcast_group, cfg->mcast_port);
-    state_free(&st);
-    return 1;
-  }
-  mcast_set_tos(m, cfg->dscp);
-  if (st.in.kind == INPUT_RAW_XML) {
-    log_line("announcing raw %s (payload 0x%02x) on %s:%u every %lds", cfg->input_path, st.in.raw_payload_id, cfg->mcast_group, cfg->mcast_port, cfg->interval_s);
+static void sds_announce_ready(void *ctx_, mcast_t *m) {
+  sds_announce_ctx_t *ctx = ctx_;
+  (void)m;
+  if (ctx->st.in.kind == INPUT_RAW_XML) {
+    log_line("announcing raw %s (payload 0x%02x) on %s:%u every %lds", ctx->cfg->input_path, ctx->st.in.raw_payload_id, ctx->cfg->mcast_group,
+             ctx->cfg->mcast_port, ctx->cfg->interval_s);
   } else {
-    log_line("announcing %d service%s on %s:%u every %lds", st.in.service_count, st.in.service_count == 1 ? "" : "s", cfg->mcast_group, cfg->mcast_port, cfg->interval_s);
+    log_line("announcing %d service%s on %s:%u every %lds", ctx->st.in.service_count, ctx->st.in.service_count == 1 ? "" : "s",
+             ctx->cfg->mcast_group, ctx->cfg->mcast_port, ctx->cfg->interval_s);
   }
+}
 
-  while (!signal_stop_requested()) {
-    int ok;
-    if (signal_reload_requested()) reload_state(cfg, &st, &sm, metrics_on);
-    if (st.in.kind == INPUT_RAW_XML) {
-      ok = dvbstp_send_segment(m, st.in.raw_payload_id, 1, 1, 0, 0, 0, 1, st.in.raw_xml, st.in.raw_xml_len) == 0;
+static void sds_announce_reload(void *ctx_) {
+  sds_announce_ctx_t *ctx = ctx_;
+  reload_state(ctx->cfg, &ctx->st, &ctx->sm, ctx->metrics_on);
+}
+
+static int sds_announce_cycle(void *ctx_, mcast_t *m, unsigned cycle) {
+  sds_announce_ctx_t *ctx = ctx_;
+  int ok;
+  if (ctx->st.in.kind == INPUT_RAW_XML) {
+    ok = dvbstp_send_segment(m, ctx->st.in.raw_payload_id, 1, 1, 0, 0, 0, 1, ctx->st.in.raw_xml, ctx->st.in.raw_xml_len) == 0;
+  } else {
+    ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_BROADCAST_DISCOVERY, 1, 1, 0, 0, 0, 1, ctx->st.broadcast_doc, ctx->st.broadcast_len) == 0;
+    ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_SP_DISCOVERY, 1, 1, 0, 0, 0, 1, ctx->st.sp_doc, ctx->st.sp_len) == 0 && ok;
+    if (ctx->st.package_doc) ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_PACKAGE_DISCOVERY, 1, 1, 0, 0, 0, 1, ctx->st.package_doc, ctx->st.package_len) == 0 && ok;
+    if (ctx->st.cell_doc) ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY, 1, 1, 0, 0, 0, 1, ctx->st.cell_doc, ctx->st.cell_len) == 0 && ok;
+    if (ctx->st.rmsfus_doc) ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_RMSFUS_DISCOVERY, 1, 1, 0, 0, 0, 1, ctx->st.rmsfus_doc, ctx->st.rmsfus_len) == 0 && ok;
+  }
+  if (ctx->metrics_on) {
+    if (ok) {
+      ctx->sm.announcements_total++;
+      ctx->sm.last_success_time = (double)time(NULL);
     } else {
-      ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_BROADCAST_DISCOVERY, 1, 1, 0, 0, 0, 1, st.broadcast_doc, st.broadcast_len) == 0;
-      ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_SP_DISCOVERY, 1, 1, 0, 0, 0, 1, st.sp_doc, st.sp_len) == 0 && ok;
-      if (st.package_doc)
-        ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_PACKAGE_DISCOVERY, 1, 1, 0, 0, 0, 1, st.package_doc, st.package_len) == 0 && ok;
-      if (st.cell_doc)
-        ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY, 1, 1, 0, 0, 0, 1, st.cell_doc, st.cell_len) == 0 && ok;
-      if (st.rmsfus_doc)
-        ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_RMSFUS_DISCOVERY, 1, 1, 0, 0, 0, 1, st.rmsfus_doc, st.rmsfus_len) == 0 && ok;
+      ctx->sm.announcement_errors_total++;
     }
-    if (metrics_on) {
-      if (ok) {
-        sm.announcements_total++;
-        sm.last_success_time = (double)time(NULL);
-      } else {
-        sm.announcement_errors_total++;
-      }
-    }
-    cycles++;
-    if (cfg->verbose) log_line("cycle %u sent", cycles);
-    emit_metrics(mx, mono_seconds(), &st, &sm);
-    sleep_interruptible((double)cfg->interval_s);
   }
-
-  state_free(&st);
-  mcast_close(m);
-  log_line("stopped after %u cycle%s", cycles, cycles == 1 ? "" : "s");
+  if (ctx->cfg->verbose) log_line("cycle %u sent", cycle);
+  emit_metrics(ctx->mx, mono_seconds(), &ctx->st, &ctx->sm);
   return 0;
+}
+
+static void sds_announce_cleanup(void *ctx_) {
+  sds_announce_ctx_t *ctx = ctx_;
+  state_free(&ctx->st);
+}
+
+int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
+  sds_announce_ctx_t ctx;
+  announce_driver_t d;
+  memset(&ctx, 0, sizeof ctx);
+  ctx.cfg = cfg;
+  ctx.mx = mx;
+  ctx.metrics_on = metrics_exporter_enabled(mx);
+  if (state_load(cfg, &ctx.st)) return 1;
+  if (ctx.metrics_on) ctx.sm.documents_generated_total++;
+  d.ctx = &ctx;
+  d.on_ready = sds_announce_ready;
+  d.reload = sds_announce_reload;
+  d.run_cycle = sds_announce_cycle;
+  d.cleanup = sds_announce_cleanup;
+  d.family = cfg->family;
+  d.mcast_group = cfg->mcast_group;
+  d.mcast_port = cfg->mcast_port;
+  d.iface = cfg->iface;
+  d.dscp = cfg->dscp;
+  d.interval_s = cfg->interval_s;
+  return announce_driver_run(&d);
 }

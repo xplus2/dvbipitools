@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "lib/bim/bitreader.h"
+#include "lib/bim/bimreader.h"
 
 START_TEST(bitreader_get_reads_msb_first) {
   static const unsigned char d[] = {0xB5}; /* 101 10101 */
@@ -55,8 +55,7 @@ START_TEST(bitreader_vluimsbf8_matches_known_encoding) {
 END_TEST
 
 START_TEST(bitreader_vluimsbf4_matches_known_encoding) {
-  /* value=20 needs 2 nibbles (1 nibble caps at 15): unary prefix "10" (continue
-     once, then stop), then n*4=8 payload bits = 20 -> bits 1 0 0001 0100 */
+  /* value=20 needs 2 nibbles (1 nibble caps at 15): unary prefix "10" (continue once, then stop), then n*4=8 payload bits = 20 -> bits 1 0 0001 0100 */
   static const unsigned char d[] = {0x85, 0x00}; /* 1,0 prefix + 00010100 (20) payload */
   bitreader_t br;
   uint64_t v;

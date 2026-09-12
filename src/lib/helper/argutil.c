@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "argutil.h"
+#include "ioutil.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -26,13 +27,44 @@ void argutil_err(const char *tool, const char *fmt, ...) {
 int argutil_port_parse(const char *p, unsigned *out) {
   char *end;
   unsigned long v;
-  if (*p == '\0')
-    return -1;
+  if (*p == '\0') return -1;
   errno = 0;
   v = strtoul(p, &end, 10);
-  if (errno || *end != '\0' || v == 0 || v > 65535)
-    return -1;
+  if (errno || *end != '\0' || v == 0 || v > 65535) return -1;
   *out = (unsigned)v;
+  return 0;
+}
+
+int argutil_bufcpy_opt(const char *tool, char *dst, size_t dstsz, const char *val, const char *optname) {
+  if (bufcpy(dst, dstsz, val) >= dstsz) {
+    argutil_err(tool, "%s too long", optname);
+    return -1;
+  }
+  return 0;
+}
+
+int argutil_srt_passphrase_opt(const char *tool, const char *passphrase, const char *optname) {
+  size_t len = strlen(passphrase);
+  if (passphrase[0] && (len < 10 || len > 79)) {
+    argutil_err(tool, "%s must be 10..79 characters", optname);
+    return -1;
+  }
+  return 0;
+}
+
+int argutil_metrics_interval_opt(const char *tool, const char *val, unsigned *out) {
+  if (argutil_uint_range(val, 1, 86400, out)) {
+    argutil_err(tool, "invalid --metrics-interval: %s (seconds, 1..86400)", val);
+    return -1;
+  }
+  return 0;
+}
+
+int argutil_metrics_opts_validate(const char *tool, const char *sock, const char *id, unsigned interval_s) {
+  if ((sock || interval_s) && !id) {
+    argutil_err(tool, "--metrics/--metrics-interval require --metrics-id");
+    return -1;
+  }
   return 0;
 }
 
@@ -57,7 +89,6 @@ int map_lookup(const enum_map_t *m, size_t n, const char *s, int *out) {
 
 int argutil_addrport_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
   char addr[64];
-
   if (*s == '[') {
     const char *close = strchr(s, ']');
     size_t len;
@@ -79,7 +110,6 @@ int argutil_addrport_parse(const char *s, int *family, char *addr_out, size_t ad
     if (argutil_port_parse(colon + 1, port_out)) return -1;
     *family = AF_INET;
   }
-
   if (*family == AF_INET) {
     struct in_addr a;
     if (inet_pton(AF_INET, addr, &a) != 1) return -1;

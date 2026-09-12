@@ -4,6 +4,8 @@
 #include "ws_clients_int.h"
 #include "ws_broadcast.h"
 
+#include "lib/helper/ioutil.h"
+
 #include <string.h>
 
 void snapshot_client(ws_client_snapshot_t *dst, const ws_client_t *src) {
@@ -37,39 +39,20 @@ static const char *route_fmt_name(route_fmt_t fmt) {
 }
 
 void jbuf_i64(jbuf_t *j, long long v) {
-  char tmp[20], buf[21];
-  size_t n = 0, off = 0;
+  char buf[22];
+  size_t off = 0;
   unsigned long long uv;
   int neg = v < 0;
   uv = neg ? (unsigned long long)(-(v + 1)) + 1ULL : (unsigned long long)v;
-  if (!uv) {
-    tmp[n++] = '0';
-  } else {
-    while (uv) {
-      tmp[n++] = (char)('0' + uv % 10);
-      uv /= 10;
-    }
-  }
   if (neg)
     buf[off++] = '-';
-  for (size_t i = 0; i < n; i++)
-    buf[off++] = tmp[n - 1 - i];
+  off += u64_to_dec(buf + off, uv);
   jbuf_raw(j, buf, off);
 }
 
 static void jbuf_u64(jbuf_t *j, unsigned long long v) {
-  char tmp[20], buf[20];
-  size_t n = 0;
-  if (!v) {
-    tmp[n++] = '0';
-  } else {
-    while (v) {
-      tmp[n++] = (char)('0' + v % 10);
-      v /= 10;
-    }
-  }
-  for (size_t i = 0; i < n; i++)
-    buf[i] = tmp[n - 1 - i];
+  char buf[21];
+  size_t n = u64_to_dec(buf, v);
   jbuf_raw(j, buf, n);
 }
 
@@ -122,21 +105,28 @@ void publish_client_event(const char *type, int id) {
   ws_client_snapshot_t snap;
   static _Thread_local jbuf_t j;
   if (!ws_broadcast_has_sinks()) return;
-  jbuf_reset(&j);
   if (strcmp(type, "clients.remove") == 0) {
+    jbuf_reset(&j);
     jbuf_str(&j, "{\"type\":\"clients.remove\",\"id\":");
     jbuf_i64(&j, id);
     jbuf_str(&j, "}");
-  } else {
-    pthread_mutex_lock(&g_clients_mtx);
-    snapshot_client(&snap, &g_clients[id]);
-    pthread_mutex_unlock(&g_clients_mtx);
-    jbuf_str(&j, "{\"type\":\"");
-    jbuf_str(&j, type);
-    jbuf_str(&j, "\",\"client\":");
-    emit_client_json(&j, id, &snap);
-    jbuf_str(&j, "}");
+    if (!j.failed) ws_broadcast_publish(j.buf);
+    return;
   }
-  if (!j.failed)
-    ws_broadcast_publish(j.buf);
+  pthread_mutex_lock(&g_clients_mtx);
+  snapshot_client(&snap, &g_clients[id]);
+  pthread_mutex_unlock(&g_clients_mtx);
+  publish_client_event_snap(type, id, &snap);
+}
+
+void publish_client_event_snap(const char *type, int id, const ws_client_snapshot_t *snap) {
+  static _Thread_local jbuf_t j;
+  if (!ws_broadcast_has_sinks()) return;
+  jbuf_reset(&j);
+  jbuf_str(&j, "{\"type\":\"");
+  jbuf_str(&j, type);
+  jbuf_str(&j, "\",\"client\":");
+  emit_client_json(&j, id, snap);
+  jbuf_str(&j, "}");
+  if (!j.failed) ws_broadcast_publish(j.buf);
 }

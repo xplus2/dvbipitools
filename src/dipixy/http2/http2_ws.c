@@ -6,8 +6,10 @@
 #define _GNU_SOURCE
 #include "../reactor/internal.h"
 #include "../reactor/reactor_tls.h"
+#include "../reactor/ws_dispatch.h"
 #include "../ws/ws_broadcast.h"
 #include "../ws/ws_sources.h"
+#include "../httpng/httpng.h"
 #include "http2_int.h"
 #include "lib/helper/ioutil.h"
 
@@ -26,8 +28,7 @@ static ssize_t ws_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *buf, 
     return NGHTTP2_ERR_DEFERRED;
   }
   size_t n = ws->send_len - ws->send_off;
-  if (n > length)
-    n = length;
+  if (n > length) n = length;
   memcpy(buf, ws->send_data + ws->send_off, n);
   ws->send_off += n;
   if (ws->send_off >= ws->send_len) {
@@ -54,20 +55,31 @@ static void queue_prebuilt_frame(h2_ws_stream_t *ws, const uint8_t *frame, size_
   memcpy(ws->pending + ws->pending_len, frame, flen);
   ws->pending_len += flen;
   pthread_mutex_unlock(&ws->pending_lock);
-  if (!atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed))
-    conn_epoll_mod(c, c->epfd, 1);
+  if (!atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) conn_epoll_mod(c, c->epfd, 1);
 }
 
 static void queue_frame(h2_ws_stream_t *ws, int opcode, const void *payload, size_t len) {
-  size_t flen;
-  uint8_t *frame = ws_build_frame(opcode, payload, len, &flen);
-  if (!frame)
+  conn_t *c = ws->c;
+  size_t hdr = ws_frame_hdr_len(len);
+  size_t flen = hdr + len;
+  pthread_mutex_lock(&ws->pending_lock);
+  if (!ws->sid) {
+    pthread_mutex_unlock(&ws->pending_lock);
     return;
-  queue_prebuilt_frame(ws, frame, flen);
-  free(frame);
+  }
+  if (growbuf_reserve((void **)&ws->pending, &ws->pending_cap, 1, ws->pending_len + flen, 4096)) {
+    pthread_mutex_unlock(&ws->pending_lock);
+    return;
+  }
+  ws_frame_encode(ws->pending + ws->pending_len, opcode, payload, len);
+  ws->pending_len += flen;
+  pthread_mutex_unlock(&ws->pending_lock);
+  if (!atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) conn_epoll_mod(c, c->epfd, 1);
 }
 
 static void ws_sink(void *ctx, const uint8_t *frame, size_t flen) { queue_prebuilt_frame(ctx, frame, flen); }
+
+static void queue_frame_cb(void *ctx, int opcode, const void *payload, size_t len) { queue_frame(ctx, opcode, payload, len); }
 
 void h2_ws_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id) {
   nghttp2_nv nva[] = {{(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP2_NV_FLAG_NONE}};
@@ -91,7 +103,6 @@ void h2_ws_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id) {
   ws_parser_init(&conn->ws[slot].parser);
   conn->ws[slot].pending = malloc(4096);
   conn->ws[slot].pending_cap = conn->ws[slot].pending ? 4096 : 0;
-
   dp.read_callback = ws_read_cb;
   dp.source.ptr = &conn->ws[slot];
   nghttp2_submit_response(conn->ng, stream_id, nva, 1, &dp);
@@ -99,9 +110,7 @@ void h2_ws_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id) {
 }
 
 static h2_ws_stream_t *find_ws(h2_conn_t *conn, int32_t stream_id) {
-  for (int i = 0; i < H2_WS_MAX; i++)
-    if (conn->ws[i].sid == stream_id)
-      return &conn->ws[i];
+  for (int i = 0; i < H2_WS_MAX; i++) if (conn->ws[i].sid == stream_id) return &conn->ws[i];
   return NULL;
 }
 
@@ -111,41 +120,12 @@ void h2_ws_data_chunk(h2_conn_t *conn, int32_t stream_id, const uint8_t *data, s
   const uint8_t *payload;
   size_t plen;
 
-  if (!ws)
-    return;
-  if (ws_parser_feed(&ws->parser, data, len))
-    return;
-
+  if (!ws) return;
+  if (ws_parser_feed(&ws->parser, data, len)) return;
   for (;;) {
     got = ws_parser_next(&ws->parser, &opcode, &payload, &plen);
-    if (got <= 0)
-      return;
-    if (opcode == WS_OP_PING) {
-      queue_frame(ws, WS_OP_PONG, payload, plen);
-    } else if (opcode == WS_OP_CLOSE) {
-      queue_frame(ws, WS_OP_CLOSE, payload, plen <= 125 ? plen : 0);
-    } else if (opcode == WS_OP_TEXT) {
-      char *json;
-      if (memmem(payload, plen, "\"playlists.reload\"", 18)) {
-        reactor_reload_channels();
-        continue;
-      }
-      if (memmem(payload, plen, "\"tls.reload\"", 12)) {
-        const char *resp = reload_tls() == 0 ? "{\"type\":\"tls.reload\",\"ok\":true}" : "{\"type\":\"tls.reload\",\"ok\":false}";
-        queue_frame(ws, WS_OP_TEXT, resp, strlen(resp));
-        continue;
-      }
-      if (memmem(payload, plen, "\"clients.get\"", 13)) {
-        if (!ws_clients_build_snapshot(&json))
-          queue_frame(ws, WS_OP_TEXT, json, strlen(json));
-        continue;
-      }
-      if (!memmem(payload, plen, "\"sources.get\"", 13))
-        continue;
-      if (ws_sources_build_snapshot(reactor_cfg(), reactor_channels(), &json))
-        continue;
-      queue_frame(ws, WS_OP_TEXT, json, strlen(json));
-    }
+    if (got <= 0) return;
+    ws_dispatch_frame(ws, queue_frame_cb, opcode, payload, plen);
   }
 }
 
@@ -153,19 +133,11 @@ void h2_ws_flush(h2_conn_t *conn) {
   int i;
   for (i = 0; i < H2_WS_MAX; i++) {
     h2_ws_stream_t *ws = &conn->ws[i];
-    if (!ws->sid || ws->inflight)
+    uint8_t *data;
+    size_t len;
+    if (!ws->sid || ws->inflight) continue;
+    if (!httpng_ws_drain_pending(&ws->pending_lock, &ws->pending, &ws->pending_len, &ws->pending_cap, &data, &len))
       continue;
-    pthread_mutex_lock(&ws->pending_lock);
-    uint8_t *data = ws->pending;
-    size_t len = ws->pending_len;
-    ws->pending = NULL;
-    ws->pending_len = 0;
-    ws->pending_cap = 0;
-    pthread_mutex_unlock(&ws->pending_lock);
-    if (!len) {
-      free(data);
-      continue;
-    }
     ws->send_data = data;
     ws->send_len = len;
     ws->send_off = 0;
@@ -186,8 +158,7 @@ static void ws_stream_cleanup(h2_ws_stream_t *ws) {
 
 void h2_ws_on_stream_close(h2_conn_t *conn, int32_t stream_id) {
   h2_ws_stream_t *ws = find_ws(conn, stream_id);
-  if (ws)
-    ws_stream_cleanup(ws);
+  if (ws) ws_stream_cleanup(ws);
 }
 
 void h2_ws_on_conn_close(h2_conn_t *conn) {

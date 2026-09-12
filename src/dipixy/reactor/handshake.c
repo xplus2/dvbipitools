@@ -47,6 +47,8 @@ void reactor_handshake(int epfd, conn_t *c) {
   reactor_after_handshake(epfd, c);
 }
 
+static char tls_pending_marker;
+
 /* accept finish: sockopts, conn_new, client_ip, epoll add. shared by io_uring + accept4() paths */
 static void reactor_accept_setup(int epfd, const reactor_listener *L, int fd, const struct sockaddr_storage *saddr) {
   __atomic_add_fetch(&g_connections_total, 1, __ATOMIC_RELAXED);
@@ -60,7 +62,7 @@ static void reactor_accept_setup(int epfd, const reactor_listener *L, int fd, co
     int zc = 1;
     setsockopt(fd, SOL_SOCKET, SO_ZEROCOPY, &zc, sizeof(zc));
   }
-  conn_t *c = conn_new(fd, L->is_tls ? (void *)1 : NULL);
+  conn_t *c = conn_new(fd, L->is_tls ? &tls_pending_marker : NULL);
   if (!c) {
     tls_close_fd(fd);
     return;
@@ -85,8 +87,7 @@ void reactor_accept(int epfd, reactor_listener *L) {
     struct sockaddr_storage saddr;
     socklen_t addrlen = sizeof(saddr);
     int fd = accept4(L->fd, (struct sockaddr *)&saddr, &addrlen,SOCK_NONBLOCK | SOCK_CLOEXEC);
-    if (fd < 0)
-      break; /* EAGAIN: backlog drained (or a transient error) */
+    if (fd < 0) break; /* EAGAIN: backlog drained (or a transient error) */
     reactor_accept_setup(epfd, L, fd, &saddr);
   }
 }

@@ -13,6 +13,7 @@ typedef struct {
   long sub_lead_ms;        /* subtitle cues shifted earlier by this much */
   const char *app_name;    /* Segment MuxingApp/WritingApp, e.g. "dipirec 1.2.3" */
   const char *source_desc; /* SOURCE tag; NULL/empty to omit */
+  int strip_lcevc;         /* drop inline lcevc (sei-wrapped and dedicated nal types) */
 } mkv_opts_t;
 
 typedef struct mkv mkv_t;

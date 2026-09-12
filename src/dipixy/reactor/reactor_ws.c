@@ -4,6 +4,7 @@
 #define _GNU_SOURCE
 #include "internal.h"
 #include "reactor_tls.h"
+#include "ws_dispatch.h"
 #include "../ws/ws_broadcast.h"
 #include "../ws/ws_frame.h"
 #include "../ws/ws_sources.h"
@@ -12,6 +13,7 @@
 #include "lib/helper/sha1.h"
 
 #include <errno.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -33,11 +35,18 @@ static void send_frame(int epfd, conn_t *c, int opcode, const void *payload, siz
   ws_conn_state_t *ws = c->ws;
   size_t flen = ws_frame_hdr_len(len) + len;
   if (flen > ws->out_cap) {
-    uint8_t *p = realloc(ws->out_buf, flen);
-    if (!p)
-      return;
+    size_t ncap = ws->out_cap ? ws->out_cap : 256;
+    while (ncap < flen) {
+      if (ncap > (SIZE_MAX >> 1)) {
+        ncap = flen;
+        break;
+      }
+      ncap <<= 1;
+    }
+    uint8_t *p = realloc(ws->out_buf, ncap);
+    if (!p) return;
     ws->out_buf = p;
-    ws->out_cap = flen;
+    ws->out_cap = ncap;
   }
   ws_frame_encode(ws->out_buf, opcode, payload, len);
   pthread_mutex_lock(&c->out_lock); /* c->out also written by ws_sink() on other threads */
@@ -81,56 +90,26 @@ void reactor_ws_close(int epfd, conn_t *c) {
   if (!conn_claim_teardown(c)) return;
   ws_broadcast_unregister(ws_sink, c);
   conn_unpublish(c);
-  epoll_ctl(epfd, EPOLL_CTL_DEL, c->fd, NULL);
   if (c->ws) {
     ws_conn_state_t *ws = c->ws;
     ws_parser_free(&ws->parser);
     free(ws->out_buf);
     ws->out_buf = NULL;
     ws->out_cap = 0;
-    if (t_ws_pool_n < WS_CONN_POOL_MAX)
-      t_ws_pool[t_ws_pool_n++] = ws;
-    else
-      free(ws);
+    if (t_ws_pool_n < WS_CONN_POOL_MAX) t_ws_pool[t_ws_pool_n++] = ws;
+    else free(ws);
     c->ws = NULL;
   }
-  tls_close_fd(c->fd);
-  conn_free(c);
+  reactor_teardown_common(epfd, c);
 }
 
 void reactor_ws_flush(int epfd, conn_t *c) {
-  int rc;
-  int caf;
-  int dead;
-  pthread_mutex_lock(&c->out_lock);
-  dead = c->dead;
-  pthread_mutex_unlock(&c->out_lock);
-  rc = dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
-  pthread_mutex_lock(&c->out_lock);
-  caf = c->close_after_flush;
-  pthread_mutex_unlock(&c->out_lock);
-  if (rc == CONN_FLUSH_ERROR || (rc == CONN_FLUSH_DONE && caf))
-    reactor_ws_close(epfd, c);
+  reactor_flush_or_close(epfd, c, reactor_ws_close);
 }
 
-static void handle_text(int epfd, conn_t *c, const char *msg, size_t len) {
-  char *json;
-  if (memmem(msg, len, "\"playlists.reload\"", 18)) {
-    reactor_reload_channels();
-    return;
-  }
-  if (memmem(msg, len, "\"tls.reload\"", 12)) {
-    const char *resp = reload_tls() == 0 ? "{\"type\":\"tls.reload\",\"ok\":true}" : "{\"type\":\"tls.reload\",\"ok\":false}";
-    send_frame(epfd, c, WS_OP_TEXT, resp, strlen(resp));
-    return;
-  }
-  if (memmem(msg, len, "\"clients.get\"", 13)) {
-    if (!ws_clients_build_snapshot(&json)) send_frame(epfd, c, WS_OP_TEXT, json, strlen(json));
-    return;
-  }
-  if (!memmem(msg, len, "\"sources.get\"", 13)) return;
-  if (ws_sources_build_snapshot(reactor_cfg(), reactor_channels(), &json)) return;
-  send_frame(epfd, c, WS_OP_TEXT, json, strlen(json));
+static void dispatch_queue_cb(void *ctx, int opcode, const void *payload, size_t len) {
+  conn_t *c = ctx;
+  send_frame(c->epfd, c, opcode, payload, len);
 }
 
 void reactor_ws_readable(int epfd, conn_t *c) {
@@ -165,14 +144,8 @@ void reactor_ws_readable(int epfd, conn_t *c) {
       return;
     }
     if (!got) break;
-    if (opcode == WS_OP_CLOSE) {
-      send_frame(epfd, c, WS_OP_CLOSE, payload, plen <= 125 ? plen : 0);
-      c->close_after_flush = 1;
-    } else if (opcode == WS_OP_PING) {
-      send_frame(epfd, c, WS_OP_PONG, payload, plen);
-    } else if (opcode == WS_OP_TEXT) {
-      handle_text(epfd, c, (const char *)payload, plen);
-    }
+    ws_dispatch_frame(c, dispatch_queue_cb, opcode, payload, plen);
+    if (opcode == WS_OP_CLOSE) c->close_after_flush = 1;
   }
   reactor_ws_flush(epfd, c);
 }
@@ -203,8 +176,8 @@ int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers
 
   {
     size_t off = bufcpy(hdr, sizeof hdr,
-                        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                        "Sec-WebSocket-Accept: ");
+      "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+      "Sec-WebSocket-Accept: ");
     off += bufcpy(hdr + off, sizeof hdr - off, accept);
     off += bufcpy(hdr + off, sizeof hdr - off, "\r\n\r\n");
     conn_queue(c, hdr, off);

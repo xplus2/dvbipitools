@@ -7,12 +7,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "growbuf.h"
+
 /* growable element build buffer */
-typedef struct {
-    unsigned char *p;
-    size_t len, cap;
-    int err;                    /* alloc failed */
-} ebuf_t;
+typedef muxbuf_t ebuf_t;
 
 void ebuf_free(ebuf_t *b);
 void eb_bytes(ebuf_t *b, const void *data, size_t n);

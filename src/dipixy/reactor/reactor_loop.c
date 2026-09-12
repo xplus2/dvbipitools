@@ -46,44 +46,44 @@ static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, str
 
   if (ptr >= (void *)&rl->L[0] && ptr <= (void *)&rl->L[rl->nL - 1]) {
     reactor_listener *lp = ptr;
-    if (lp->kind == RL_TSPUSH_EFD) {
-      uint64_t v = 0;
-      ssize_t r = read(lp->fd, &v, sizeof v);
-      (void)r;
-      ts_push_flush_ready(tid);
+    switch (lp->kind) {
+      case RL_TSPUSH_EFD: {
+        uint64_t v = 0;
+        ssize_t r = read(lp->fd, &v, sizeof v);
+        (void)r;
+        ts_push_flush_ready(tid);
+        return;
+      }
+      case RL_DASHCHUNK_EFD: {
+        uint64_t v = 0;
+        ssize_t r = read(lp->fd, &v, sizeof v);
+        (void)r;
+        dash_lldash_flush_ready(tid);
+        return;
+      }
+      case RL_MP4PUSH_EFD: {
+        uint64_t v = 0;
+        ssize_t r = read(lp->fd, &v, sizeof v);
+        (void)r;
+        mp4push_flush_ready(tid);
+        return;
+      }
 #ifdef HAVE_HTTP3
-      ts_push_h3_flush();
+      case RL_H3_UDP:
+        h3_handle_readable(lp->fd);
+        return;
 #endif
-      return;
+      case RL_ACCEPT:
+      default:
+        break;
     }
-    if (lp->kind == RL_DASHCHUNK_EFD) {
-      uint64_t v = 0;
-      ssize_t r = read(lp->fd, &v, sizeof v);
-      (void)r;
-      dash_lldash_flush_ready(tid);
-      return;
-    }
-    if (lp->kind == RL_MP4PUSH_EFD) {
-      uint64_t v = 0;
-      ssize_t r = read(lp->fd, &v, sizeof v);
-      (void)r;
-      mp4push_flush_ready(tid);
-      return;
-    }
-#ifdef HAVE_HTTP3
-    if (lp->kind == RL_H3_UDP) {
-      h3_handle_readable(lp->fd);
-      return;
-    }
-#endif
     reactor_accept(epfd, lp);
     return;
   }
 
   c = ptr;
   e = evp->events;
-  if (e & EPOLLERR)
-    conn_zc_drain(c);
+  if (e & EPOLLERR) conn_zc_drain(c);
   if ((e & EPOLLHUP || (e & EPOLLERR && socket_has_error(c->fd))) && !(e & EPOLLIN)) {
     switch (c->state) {
       case CONN_TSPUSH:
@@ -111,28 +111,20 @@ static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, str
   }
   switch (c->state) {
     case CONN_TSPUSH:
-      if (e & EPOLLIN)
-        reactor_tspush_readable(epfd, c);
-      else
-        reactor_conn_flush(epfd, c);
+      if (e & EPOLLIN) reactor_tspush_readable(epfd, c);
+      else             reactor_conn_flush(epfd, c);
       break;
     case CONN_DASHCHUNK:
-      if (e & EPOLLIN)
-        reactor_dashchunk_readable(epfd, c);
-      else
-        reactor_dashchunk_flush(epfd, c);
+      if (e & EPOLLIN) reactor_dashchunk_readable(epfd, c);
+      else             reactor_dashchunk_flush(epfd, c);
       break;
     case CONN_MP4PUSH:
-      if (e & EPOLLIN)
-        reactor_mp4push_readable(epfd, c);
-      else
-        reactor_mp4push_flush(epfd, c);
+      if (e & EPOLLIN) reactor_mp4push_readable(epfd, c);
+      else             reactor_mp4push_flush(epfd, c);
       break;
     case CONN_WS:
-      if (e & EPOLLIN)
-        reactor_ws_readable(epfd, c);
-      else
-        reactor_ws_flush(epfd, c);
+      if (e & EPOLLIN) reactor_ws_readable(epfd, c);
+      else             reactor_ws_flush(epfd, c);
       break;
     case CONN_WRITING:
       reactor_finish(epfd, c);
@@ -144,10 +136,8 @@ static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, str
       break; /* LL-HLS blocking-reload park: llhls_flush_waiters() resumes it, not epoll events */
 #ifdef HAVE_HTTP2
     case CONN_H2:
-      if (e & EPOLLIN)
-        h2_handle_readable(epfd, c);
-      else
-        h2_handle_writable(epfd, c);
+      if (e & EPOLLIN) h2_handle_readable(epfd, c);
+      else             h2_handle_writable(epfd, c);
       break;
 #endif
     default:
@@ -165,10 +155,8 @@ void *worker_thread(void *arg) {
   epfd = epoll_create1(EPOLL_CLOEXEC);
   if (epfd < 0) return NULL;
   t_reactor_epfd = epfd;
-
   reactor_setup_listeners(&rl, epfd, tid);
   if (tid == 0) reactor_notify_listening();
-
   for (;;) {
     struct epoll_event events[256];
     int nev, timeout_ms = 200;
@@ -202,7 +190,7 @@ void *worker_thread(void *arg) {
     h3_ws_flush();
     h3_tick();
 #endif
-    qsbr_worker_quiescent(tid); /* no store/snapshot ref held past this point */
+    qsbr_worker_quiescent(reactor_qsbr(), tid); /* no store/snapshot ref held past this point */
   }
 
   reactor_teardown_listeners(&rl, tid);
@@ -220,8 +208,12 @@ static void capture_pump_feed(capture_ctx_t *ctx, void *user, const unsigned cha
 void *pump_thread(void *arg) {
   int pid = (int)(intptr_t)arg;
   int sweep_counter = 0;
+  t_pump_tid = pid;
   while (!signal_stop_requested()) {
-    int drained = capture_pump_tick(pid, capture_pump_feed, NULL);
+    int drained;
+    ts_push_wake_batch_begin();
+    drained = capture_pump_tick(pid, capture_pump_feed, NULL);
+    ts_push_wake_batch_end();
     if (pid == 0) { /* periodic maintenance: one pump thread only, not per-shard */
       if (++sweep_counter >= 500) {
         hls_seg_sweep_idle();
@@ -230,6 +222,7 @@ void *pump_thread(void *arg) {
         dipixy_status_tick();
         ws_clients_tick();
         tls_gc_sweep();
+        tls_ctx_gc_sweep();
         sweep_counter = 0;
       }
       if (signal_tls_reload_requested()) log_line(TOOL_NAME ": SIGUSR1: TLS cert reload %s", reload_tls() == 0 ? "ok" : "failed");

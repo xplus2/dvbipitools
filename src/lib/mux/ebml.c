@@ -1,27 +1,16 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdlib.h>
 #include <string.h>
-#include "lib/helper/ioutil.h"
 #include "ebml.h"
 
 void ebuf_free(ebuf_t *b) {
-  free(b->p);
-  b->p = NULL;
-  b->len = b->cap = 0;
+  muxbuf_free(b);
   b->err = 0;
 }
 
 void eb_bytes(ebuf_t *b, const void *data, size_t n) {
-  if (b->err)
-    return;
-  if (growbuf_reserve((void **)&b->p, &b->cap, 1, b->len + n, 4096)) {
-    b->err = 1;
-    return;
-  }
-  memcpy(b->p + b->len, data, n);
-  b->len += n;
+  muxbuf_append(b, data, n, 4096);
 }
 
 static void eb_be(ebuf_t *b, uint64_t v, int n) {
@@ -53,8 +42,7 @@ void eb_size(ebuf_t *b, uint64_t size) {
 
 static int uint_len(uint64_t v) {
   int n = 1;
-  while ((v >>= 8) && n < 8)
-    n++;
+  while ((v >>= 8) && n < 8) n++;
   return n;
 }
 
@@ -87,8 +75,7 @@ void eb_float(ebuf_t *b, uint32_t id, double val) {
 }
 
 void eb_master(ebuf_t *parent, uint32_t id, ebuf_t *child) {
-  if (child->err)
-    parent->err = 1;
+  if (child->err) parent->err = 1;
   eb_id(parent, id);
   eb_size(parent, child->len);
   eb_bytes(parent, child->p, child->len);

@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -106,9 +107,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       cfg->map_path = optarg;
       break;
     case 'w': {
-      char *end;
-      long v = strtol(optarg, &end, 10);
-      if (*end != '\0' || v <= 0) {
+      unsigned v;
+      if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
         argerr("invalid -w window hours: %s", optarg);
         return ARGS_ERR;
       }
@@ -127,9 +127,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       cfg->iface = optarg;
       break;
     case 't': {
-      char *end;
-      long v = strtol(optarg, &end, 10);
-      if (*end != '\0' || v < 0) {
+      unsigned v;
+      if (argutil_uint_range(optarg, 0, UINT_MAX, &v)) {
         argerr("invalid -t seconds: %s", optarg);
         return ARGS_ERR;
       }
@@ -167,16 +166,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     case 1002:
       cfg->metrics_id = optarg;
       break;
-    case 1003: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || v == 0 || v > 86400UL) {
-        argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->metrics_interval_s = (unsigned)v;
+    case 1003:
+      if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
       break;
-    }
     case 1004:
       if (net_dscp_parse(optarg, &cfg->dscp)) {
         argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
@@ -202,10 +194,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -m multicast group:port");
     return ARGS_ERR;
   }
-  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
-    argerr("--metrics/--metrics-interval require --metrics-id");
-    return ARGS_ERR;
-  }
+  if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
 
   if (cfg->mode == MODE_ANNOUNCE) {
     if (!cfg->input_path) {
@@ -227,8 +216,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       argerr("-Z/--compress is announce-only");
       return ARGS_ERR;
     }
-    if (!cfg->output_path)
-      cfg->output_path = "-";
+    if (!cfg->output_path) cfg->output_path = "-";
     cfg->timeout_s = have_t ? t_value : 35;
   }
   return ARGS_OK;

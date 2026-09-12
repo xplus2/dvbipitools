@@ -29,6 +29,7 @@ typedef struct {
 typedef struct {
   unsigned sid;
   const char *service_name;
+  const char *provider_name;
   unsigned pmt_pid, audio_pid;
 } slot_meta_t;
 
@@ -43,13 +44,11 @@ static void *slot_open_start(void *ctx) {
   slot_ctx_t *c = ctx;
   net_err_reason_t reason = NET_ERR_OTHER;
   slot_opening_t *w = calloc(1, sizeof *w);
-  if (!w)
-    return NULL;
+  if (!w) return NULL;
   w->im = c->im;
   w->o = source_open_async_start(c->uri, c->insecure, c->cb, c->meta_ctx, &reason);
   if (!w->o) {
-    if (c->im)
-      c->im->errors_total[reason]++;
+    if (c->im) c->im->errors_total[reason]++;
     free(w);
     return NULL;
   }
@@ -68,15 +67,13 @@ static retryset_open_state_t slot_open_step(void *o) {
   switch (source_open_async_step(w->o, &reason)) {
   case SOURCE_OPEN_DONE:
     if (w->im) {
-      if (w->im->seen_open)
-        w->im->reconnects_total++;
+      if (w->im->seen_open) w->im->reconnects_total++;
       w->im->seen_open = 1;
       w->im->up = 1;
     }
     return RETRYSET_OPEN_DONE;
   case SOURCE_OPEN_ERROR:
-    if (w->im)
-      w->im->errors_total[reason]++;
+    if (w->im) w->im->errors_total[reason]++;
     return RETRYSET_OPEN_ERROR;
   default:
     return RETRYSET_OPEN_PENDING;
@@ -106,11 +103,9 @@ static const retryset_ops_t slot_ops = {
 
 inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ctxs, input_metrics_t *input_stats) {
   inputset_t *is = calloc(1, sizeof *is);
-  void *slot_ctxs[RADIOHEAD_MAX_INPUTS];
+  void *slot_ctxs[RADIOHEAD_MAX_INPUTS] = {0};
 
-  if (!is)
-    return NULL;
-
+  if (!is) return NULL;
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
     is->ctxs[i].uri = cfg->inputs[i].uri;
     is->ctxs[i].insecure = cfg->insecure_tls;
@@ -119,6 +114,7 @@ inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ct
     is->ctxs[i].im = input_stats ? &input_stats[i] : NULL;
     is->meta[i].sid = cfg->inputs[i].sid;
     is->meta[i].service_name = cfg->inputs[i].sdt_text;
+    is->meta[i].provider_name = cfg->inputs[i].provider_text;
     is->meta[i].pmt_pid = INPUTSET_PMT_PID_BASE + i;
     is->meta[i].audio_pid = INPUTSET_AUDIO_PID_BASE + i;
     is->labels[i] = is->meta[i].service_name;
@@ -143,6 +139,7 @@ void inputset_free(inputset_t *is) {
 unsigned inputset_count(const inputset_t *is) { return retryset_count(is->rs); }
 unsigned inputset_sid(const inputset_t *is, unsigned idx) { return is->meta[idx].sid; }
 const char *inputset_service_name(const inputset_t *is, unsigned idx) { return is->meta[idx].service_name; }
+const char *inputset_provider_name(const inputset_t *is, unsigned idx) { return is->meta[idx].provider_name; }
 unsigned inputset_pmt_pid(const inputset_t *is, unsigned idx) { return is->meta[idx].pmt_pid; }
 unsigned inputset_audio_pid(const inputset_t *is, unsigned idx) { return is->meta[idx].audio_pid; }
 

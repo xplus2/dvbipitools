@@ -90,6 +90,9 @@ between real-world usage of media formats and the standard.
 
 
 ### Notable additions
+> Note: Some of the mentioned formats or protocols are supported across the toolchain. To keep it short, they get
+> only mentioned once: at their most relevant/affected tool.
+
 * dipitvhead
   - HbbTV AIT injection (`--hbbtv`, ETSI TS 102 809) is hybrid broadcast/broadband signaling, a separate spec.
   - MPTS support is more like an interpretation than "specs driven".
@@ -121,7 +124,8 @@ between real-world usage of media formats and the standard.
 * dipisrt
   - Secure Reliable Transport (SRT) is not part of DVB.
 * dipixy
-  - HLS, LL-HLS, MPEG-DASH and LL-DASH are not part of DVB-IPI.
+  - HLS, LL-HLS, MPEG-DASH and LL-DASH output are not part of DVB-IPI.
+  - LCEVC is too young for DVB-IPI, but just fits.
 
 ### Known gaps
 On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.

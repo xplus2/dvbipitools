@@ -8,6 +8,7 @@
 
 #include "../args.h"
 #include "../ts/channels/channels.h"
+#include "../ts/lcevcselect.h"
 #include "../ts/pidfilter.h"
 #include "route.h"
 
@@ -19,6 +20,6 @@ int playlist_query_has_flag(const char *query, const char *name);
 
 /* *out malloc'd via open_memstream, caller frees */
 int playlist_render(const config_t *cfg, const channels_t *ch, int is_tls, const char *host_hdr, const char *query, const pid_filter_t *filter,
-                    route_fmt_t fmt, playlist_type_t ptype, char **out, size_t *out_len);
+                    const lcevc_select_t *lcevc, route_fmt_t fmt, playlist_type_t ptype, char **out, size_t *out_len);
 
 #endif

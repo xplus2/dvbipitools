@@ -33,24 +33,16 @@ int device_on_emm(device_state_t *d, const unsigned char *emm, size_t emm_len) {
 }
 
 int device_resolve_cw(device_state_t *d, const unsigned char *ecm, size_t ecm_len, unsigned srvid, int cw_len, unsigned ecm_pid, unsigned char cw_out[16]) {
-  service_key_t *sk;
   unsigned char sk_copy[CRYPTO_KEY_LEN];
   unsigned char cw[16];
   unsigned cp_number;
-  int have;
 
   if (cw_len != 8 && cw_len != 16) return -1;
   /* section header(3) + CP_CW_COMBINATION's cp_number(2), then profile's (or legacy fixed) payload */
   if (ecm_len < 5) return -1;
-  device_core_lock(&d->core);
   /* srvid = local PAT program_number, not CAS's service_id. MPTS CW is mux-wide,
      --sid unrelated. one session per process: lone cached key unambiguous. */
-  sk = device_core_service_slot_locked(&d->core, srvid, 0);
-  if (!sk && d->core.service_count == 1) sk = &d->core.services[0];
-  have = sk && sk->have;
-  if (have) memcpy(sk_copy, sk->sk, sizeof sk_copy);
-  device_core_unlock(&d->core);
-  if (!have) return -1;
+  if (device_core_copy_service_key(&d->core, srvid, 1, sk_copy) != 0) return -1;
 
   cp_number = ((unsigned)ecm[3] << 8) | ecm[4];
   if (d->profile.set) {

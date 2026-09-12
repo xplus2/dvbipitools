@@ -24,6 +24,10 @@ typedef struct {
   size_t remlen, remcap;
   unsigned char *vbuf; /* video: length-prefixed AU (AVCC/HVCC framed NALUs) */
   size_t vbuflen, vbufcap;
+  unsigned char *lcevc_rb; /* strip_lcevc scratch, see esc_strip_lcevc_sei() */
+  size_t lcevc_rbcap;
+  unsigned char *lcevc_esc;
+  size_t lcevc_esccap;
   int got_key;      /* first keyframe seen */
   int seqhdr_sent;  /* avcC/hvcC/ASC sequence-start tag already emitted */
   esc_track_t es;

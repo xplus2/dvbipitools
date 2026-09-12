@@ -27,23 +27,15 @@ void reactor_mp4push_begin(int epfd, conn_t *c) {
 void reactor_mp4push_close(int epfd, conn_t *c) {
   if (!conn_claim_teardown(c)) return;
   conn_unpublish(c);
-  epoll_ctl(epfd, EPOLL_CTL_DEL, c->fd, NULL);
   mp4push_sub_close(c->slot);
-  tls_close_fd(c->fd);
-  conn_free(c);
+  reactor_teardown_common(epfd, c);
 }
 
 void reactor_mp4push_readable(int epfd, conn_t *c) {
-  reactor_push_conn_readable(epfd, c, reactor_mp4push_close, reactor_mp4push_flush);
+  reactor_push_conn_readable(epfd, c, reactor_mp4push_close, reactor_mp4push_flush, 0);
 }
 
 void reactor_mp4push_flush(int epfd, conn_t *c) {
-  int rc;
-  int dead;
-  pthread_mutex_lock(&c->out_lock);
-  dead = c->dead;
-  pthread_mutex_unlock(&c->out_lock);
-  rc = dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
-  if (rc == CONN_FLUSH_ERROR)
+  if (reactor_flush_rc(c, epfd) == CONN_FLUSH_ERROR)
     reactor_mp4push_close(epfd, c);
 }

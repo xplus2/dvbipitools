@@ -10,6 +10,15 @@
 
 typedef enum { M_GAUGE, M_COUNTER, M_INFO } metric_kind_t;
 
+static const char *metric_kind_name(metric_kind_t k) {
+  switch (k) {
+    case M_COUNTER: return "counter";
+    case M_INFO:    return "info";
+    case M_GAUGE:   return "gauge";
+  }
+  return "gauge";
+}
+
 typedef struct {
   metrics_id_t id;
   const char *name;
@@ -184,8 +193,7 @@ typedef struct {
 static void fill_entry_refs(const store_t *st, const int *def_idx, entry_ref_t *refs, size_t *cursor) {
   for (int si = 0; si < STORE_MAX_INSTANCES; si++) {
     const store_slot_t *slot = &st->slots[si];
-    if (!slot->used)
-      continue;
+    if (!slot->used) continue;
     for (int j = 0; j < slot->entry_count; j++) {
       unsigned id = (unsigned)slot->entries[j].id;
       int di = (id < DEF_ID_MAX) ? def_idx[id] : -1;
@@ -204,20 +212,16 @@ static void render_grouped(dstrbuf_t *sb, const store_t *st) {
   size_t count[N_DEFS], start[N_DEFS], cursor[N_DEFS];
   entry_ref_t *refs = NULL;
   size_t total = 0;
-
-  for (unsigned i = 0; i < DEF_ID_MAX; i++)
-    def_idx[i] = -1;
+  for (unsigned i = 0; i < DEF_ID_MAX; i++) def_idx[i] = -1;
   for (unsigned i = 0; i < N_DEFS; i++) {
     count[i] = 0;
     start[i] = 0;
-    if ((unsigned)DEFS[i].id < DEF_ID_MAX)
-      def_idx[DEFS[i].id] = (int)i;
+    if ((unsigned)DEFS[i].id < DEF_ID_MAX) def_idx[DEFS[i].id] = (int)i;
   }
 
   for (int si = 0; si < STORE_MAX_INSTANCES; si++) {
     const store_slot_t *slot = &st->slots[si];
-    if (!slot->used)
-      continue;
+    if (!slot->used) continue;
     for (int j = 0; j < slot->entry_count; j++) {
       unsigned id = (unsigned)slot->entries[j].id;
       int di = (id < DEF_ID_MAX) ? def_idx[id] : -1;
@@ -243,9 +247,8 @@ static void render_grouped(dstrbuf_t *sb, const store_t *st) {
 
   for (unsigned i = 0; i < N_DEFS; i++) {
     const metric_def_t *def = &DEFS[i];
-    const char *kind_name = def->kind == M_COUNTER ? "counter" : def->kind == M_INFO ? "info" : "gauge";
-    if (!count[i] || !refs)
-      continue;
+    const char *kind_name = metric_kind_name(def->kind);
+    if (!count[i] || !refs) continue;
     dstrbuf_appendf(sb, "# HELP %s %s\n", def->name, def->help);
     dstrbuf_appendf(sb, "# TYPE %s %s\n", def->name, kind_name);
     for (size_t k = start[i]; k < start[i] + count[i]; k++) {

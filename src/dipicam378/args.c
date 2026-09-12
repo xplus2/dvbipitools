@@ -9,7 +9,6 @@
 
 #include "lib/helper/argutil.h"
 #include "lib/helper/log.h"
-
 #include "args.h"
 #include "version.h"
 
@@ -21,11 +20,9 @@
 static int caid_parse(const char *p, unsigned *out) {
   char *end;
   unsigned long v;
-  if (*p == '\0')
-    return -1;
+  if (*p == '\0') return -1;
   v = strtoul(p, &end, 16);
-  if (*end != '\0' || v == 0 || v > 0xFFFF)
-    return -1;
+  if (*end != '\0' || v == 0 || v > 0xFFFF) return -1;
   *out = (unsigned)v;
   return 0;
 }
@@ -82,83 +79,76 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   optind = 1;
   while ((c = getopt_long(argc, argv, "k:s:p:a:vdh", longopts, NULL)) != -1) {
     switch (c) {
-    case 'k':
-      cfg->key_path = optarg;
-      have_key = 1;
-      break;
-    case 's':
-      cfg->serial = optarg;
-      break;
-    case 'p':
-      if (argutil_port_parse(optarg, &cfg->port)) {
-        argerr("invalid -p port: %s", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case 'a': {
-      char *colon = strchr(optarg, ':');
-      if (colon) {
-        *colon = '\0';
-        cfg->username = optarg;
-        cfg->password = colon + 1;
-      } else {
-        cfg->password = optarg;
-      }
-      break;
-    }
-    case 1002:
-      if (caid_parse(optarg, &cfg->caid)) {
-        argerr("invalid --caid: %s", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case 1001:
-      if (!strcmp(optarg, "csa2"))
-        cfg->cw_len = 8;
-      else if (!strcmp(optarg, "cissa"))
-        cfg->cw_len = 16;
-      else {
-        argerr("invalid --algo: %s (cissa|csa2)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case 'v':
-      cfg->verbose = 1;
-      break;
-    case 'd':
-      cfg->daemonize = 1;
-      break;
-    case 1000:
-      {
-        log_color_t v;
-        if (log_color_from_string(optarg, &v)) {
-          argerr("invalid --color: %s (auto|always|never)", optarg);
+      case 'k':
+        cfg->key_path = optarg;
+        have_key = 1;
+        break;
+      case 's':
+        cfg->serial = optarg;
+        break;
+      case 'p':
+        if (argutil_port_parse(optarg, &cfg->port)) {
+          argerr("invalid -p port: %s", optarg);
           return ARGS_ERR;
         }
-        cfg->color_mode = v;
+        break;
+      case 'a': {
+        char *colon = strchr(optarg, ':');
+        if (colon) {
+          *colon = '\0';
+          cfg->username = optarg;
+          cfg->password = colon + 1;
+        } else {
+          cfg->password = optarg;
+        }
+        break;
       }
-      break;
-    case 1003:
-      cfg->metrics_sock = optarg;
-      break;
-    case 1004:
-      cfg->metrics_id = optarg;
-      break;
-    case 1005: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || v == 0 || v > 86400UL) {
-        argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->metrics_interval_s = (unsigned)v;
-      break;
-    }
-    case 'h':
-      print_help();
-      return ARGS_HELP;
-    default:
-      return ARGS_ERR; /* getopt already reported */
+      case 1002:
+        if (caid_parse(optarg, &cfg->caid)) {
+          argerr("invalid --caid: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1001:
+        if (!strcmp(optarg, "csa2"))
+          cfg->cw_len = 8;
+        else if (!strcmp(optarg, "cissa"))
+          cfg->cw_len = 16;
+        else {
+          argerr("invalid --algo: %s (cissa|csa2)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 'v':
+        cfg->verbose = 1;
+        break;
+      case 'd':
+        cfg->daemonize = 1;
+        break;
+      case 1000:
+        {
+          log_color_t v;
+          if (log_color_from_string(optarg, &v)) {
+            argerr("invalid --color: %s (auto|always|never)", optarg);
+            return ARGS_ERR;
+          }
+          cfg->color_mode = v;
+        }
+        break;
+      case 1003:
+        cfg->metrics_sock = optarg;
+        break;
+      case 1004:
+        cfg->metrics_id = optarg;
+        break;
+      case 1005:
+        if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
+        break;
+      case 'h':
+        print_help();
+        return ARGS_HELP;
+      default:
+        return ARGS_ERR; /* getopt already reported */
     }
   }
   if (optind < argc) {
@@ -169,9 +159,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -k device key");
     return ARGS_ERR;
   }
-  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
-    argerr("--metrics/--metrics-interval require --metrics-id");
-    return ARGS_ERR;
-  }
+  if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
   return ARGS_OK;
 }

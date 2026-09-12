@@ -52,6 +52,7 @@ typedef struct {
   out_target_t out[DIPIDESCRAMBLE_MAX_OUT]; /* -o, repeatable, required */
   int n_out;
   out_fmt_t format;            /* -f, ts|mkv|mka, default ts */
+  int strip_lcevc;             /* --strip-lcevc, drop inline lcevc from mkv/mka/rtmp dest */
   pmt_sel_t pmt_sel;           /* -p, AUTO if not given */
   unsigned pmt_pid;            /* -p <pid>, valid iff pmt_sel == PMT_SEL_PID */
   const char *iface_in;        /* -I, NULL = kernel default route */

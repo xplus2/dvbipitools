@@ -37,8 +37,7 @@ static int g_seg_pool_cap = 8;
 void hls_set_seg_pool_cap(int n) {
   if (n < 1) n = 1;
   g_seg_pool_cap = n;
-  for (int i = 0; i < SEG_POOL_CLASSES; i++)
-    seg_pool[i].slots = calloc((size_t)n, sizeof *seg_pool[i].slots);
+  for (int i = 0; i < SEG_POOL_CLASSES; i++) seg_pool[i].slots = calloc((size_t)n, sizeof *seg_pool[i].slots);
 }
 
 static int seg_pool_class_for(size_t size) {
@@ -126,6 +125,11 @@ enum { STORE_FREE = 0, STORE_OPENING = 1, STORE_OPEN = 2, STORE_CLOSING = 3 };
 static _Atomic int *g_slot_state; /* kept out of hls_store_t: open() sets fields, no memset */
 
 static hls_store_closing_cb g_store_closing_cb;
+static hls_init_codecs_fn g_init_codecs_cb;
+
+static qsbr_domain_t *g_segstore_qsbr;
+
+void hls_store_set_qsbr(qsbr_domain_t *d) { g_segstore_qsbr = d; }
 
 void hls_store_init(int max_channels) {
   int n = max_channels > 0 ? max_channels : 1;
@@ -149,10 +153,11 @@ void hls_store_init(int max_channels) {
 pthread_mutex_t *store_lock(const hls_store_t *s) { return &g_store_locks[s - g_stores]; }
 static _Atomic int *slot_state(const hls_store_t *s) { return &g_slot_state[s - g_stores]; }
 
-hls_store_t *find_store(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
+hls_store_t *hls_store_find(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
   for (int i = 0; i < g_stores_n; i++) {
     if (atomic_load_explicit(&g_slot_state[i], memory_order_acquire) != STORE_OPEN) continue;
-    if (g_stores[i].cap_ctx == ctx && g_stores[i].pmt_pid == pmt_pid && g_stores[i].container == container && pid_filter_equal(&g_stores[i].filter, filter))
+    if (g_stores[i].cap_ctx == ctx && g_stores[i].pmt_pid == pmt_pid && g_stores[i].container == container &&
+        pid_filter_equal(&g_stores[i].filter, filter) && lcevc_select_equal(&g_stores[i].lcevc, lcevc))
       return &g_stores[i];
   }
   return NULL;
@@ -168,14 +173,56 @@ static hls_snapshot_t *snap_clone(const hls_snapshot_t *base) {
   *ns = *base;
   for (int i = 0; i < ns->count; i++) seg_buf_ref(ns->segs[(ns->head + i) % HLS_MAX_SEGS].data);
   seg_buf_ref(ns->live_data);
+  seg_buf_ref(ns->init_data);
+  atomic_store_explicit(&ns->cache_plain, NULL, memory_order_relaxed);
+  atomic_store_explicit(&ns->cache_ll, NULL, memory_order_relaxed);
+  atomic_store_explicit(&ns->cache_lcevc[0], NULL, memory_order_relaxed);
+  atomic_store_explicit(&ns->cache_lcevc[1], NULL, memory_order_relaxed);
+  atomic_store_explicit(&ns->cache_mpd, NULL, memory_order_relaxed);
+  atomic_store_explicit(&ns->cache_mpd_ll, NULL, memory_order_relaxed);
   return ns;
+}
+
+static void cached_text_free(cached_text_t *t) {
+  if (!t) return;
+  free(t->text);
+  free(t);
 }
 
 static void snap_free(hls_snapshot_t *ns) {
   if (!ns) return;
   for (int i = 0; i < ns->count; i++) seg_buf_unref(ns->segs[(ns->head + i) % HLS_MAX_SEGS].data);
   seg_buf_unref(ns->live_data);
+  seg_buf_unref(ns->init_data);
+  cached_text_free(atomic_load_explicit(&ns->cache_plain, memory_order_relaxed));
+  cached_text_free(atomic_load_explicit(&ns->cache_ll, memory_order_relaxed));
+  cached_text_free(atomic_load_explicit(&ns->cache_lcevc[0], memory_order_relaxed));
+  cached_text_free(atomic_load_explicit(&ns->cache_lcevc[1], memory_order_relaxed));
+  cached_text_free(atomic_load_explicit(&ns->cache_mpd, memory_order_relaxed));
+  cached_text_free(atomic_load_explicit(&ns->cache_mpd_ll, memory_order_relaxed));
   free(ns);
+}
+
+const cached_text_t *snapshot_cache_text(_Atomic(cached_text_t *) *slot, text_fmt_fn fmt, void *ctx, size_t buf_cap) {
+  cached_text_t *cur = atomic_load_explicit(slot, memory_order_acquire);
+  cached_text_t *nc;
+  char *buf;
+  cached_text_t *expected;
+  if (cur) return cur;
+  nc = malloc(sizeof *nc);
+  if (!nc) return NULL;
+  buf = malloc(buf_cap);
+  if (!buf) {
+    free(nc);
+    return NULL;
+  }
+  nc->len = fmt(ctx, buf, buf_cap);
+  nc->text = buf;
+  expected = NULL;
+  if (atomic_compare_exchange_strong_explicit(slot, &expected, nc, memory_order_release, memory_order_acquire)) return nc;
+  free(buf);
+  free(nc);
+  return expected;
 }
 
 /* pump-thread only: worker self-block risks deadlock */
@@ -183,11 +230,10 @@ static void snap_retire(hls_store_t *s, hls_snapshot_t *old) {
   if (!old) return;
   for (;;) {
     for (int i = 0; i < s->retiring_n; ) {
-      if (qsbr_mark_passed(s->retiring_mark[i])) {
+      if (qsbr_mark_passed(g_segstore_qsbr, s->retiring_mark[i])) {
         snap_free(s->retiring[i]);
-        free(s->retiring_mark[i]);
         s->retiring[i] = s->retiring[--s->retiring_n];
-        s->retiring_mark[i] = s->retiring_mark[s->retiring_n];
+        memcpy(s->retiring_mark[i], s->retiring_mark[s->retiring_n], sizeof s->retiring_mark[i]);
       } else i++;
     }
     if (s->retiring_n < HLS_SNAP_RETIRE_DEPTH) break;
@@ -196,14 +242,9 @@ static void snap_retire(hls_store_t *s, hls_snapshot_t *old) {
     pthread_mutex_lock(store_lock(s));
   }
 
-  {
-    int nw = qsbr_worker_count();
-    nw = nw > 0 ? nw : 1;
-    s->retiring_mark[s->retiring_n] = calloc((size_t)nw, sizeof(uint64_t));
-    if (s->retiring_mark[s->retiring_n]) qsbr_mark(s->retiring_mark[s->retiring_n]);
-    s->retiring[s->retiring_n] = old;
-    s->retiring_n++;
-  }
+  qsbr_mark(g_segstore_qsbr, s->retiring_mark[s->retiring_n]);
+  s->retiring[s->retiring_n] = old;
+  s->retiring_n++;
 }
 
 typedef struct slot_retire_node {
@@ -230,7 +271,7 @@ void hls_store_slot_reclaim_sweep(void) {
   slot_retire_node_t *keep_tail = NULL;
   while (chain) {
     slot_retire_node_t *next = atomic_load_explicit(&chain->next, memory_order_relaxed);
-    if (!chain->mark || qsbr_mark_passed(chain->mark)) {
+    if (!chain->mark || qsbr_mark_passed(g_segstore_qsbr, chain->mark)) {
       for (int i = 0; i < chain->nsnaps; i++) snap_free(chain->snaps[i]);
       if (chain->idx >= 0) atomic_store_explicit(&g_slot_state[chain->idx], STORE_FREE, memory_order_release);
       free(chain->mark);
@@ -264,10 +305,10 @@ static void snap_retire_async(hls_snapshot_t *snap) {
   node->idx = -1;
   node->nsnaps = 1;
   node->snaps[0] = snap;
-  nw = qsbr_worker_count();
+  nw = qsbr_worker_count(g_segstore_qsbr);
   nw = nw > 0 ? nw : 1;
   node->mark = calloc((size_t)nw, sizeof *node->mark);
-  if (node->mark) qsbr_mark(node->mark);
+  if (node->mark) qsbr_mark(g_segstore_qsbr, node->mark);
   slot_retire_push(node);
 }
 
@@ -275,10 +316,7 @@ static void snap_retire_async(hls_snapshot_t *snap) {
 static void snap_drain_all_async(hls_store_t *s) {
   hls_snapshot_t *cur = atomic_exchange_explicit(&s->snap, NULL, memory_order_acq_rel);
   snap_retire_async(cur);
-  for (int i = 0; i < s->retiring_n; i++) {
-    snap_retire_async(s->retiring[i]);
-    free(s->retiring_mark[i]);
-  }
+  for (int i = 0; i < s->retiring_n; i++) snap_retire_async(s->retiring[i]);
   s->retiring_n = 0;
 }
 
@@ -288,18 +326,17 @@ int hls_target_duration(const hls_snapshot_t *snap) {
   return td > 0 ? td : 1;
 }
 
-void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, double seg_target, int max_segs, seg_container_t container) {
+void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, double seg_target, int max_segs, seg_container_t container) {
   hls_store_t *s;
   int expected;
   if (max_segs < 2) max_segs = 2;
   if (max_segs > HLS_MAX_SEGS) max_segs = HLS_MAX_SEGS;
 
   for (;;) {
-    s = find_store(ctx, filter, pmt_pid, container);
+    s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
     if (s) {
       expected = STORE_OPEN;
-      if (atomic_compare_exchange_strong_explicit(slot_state(s), &expected, STORE_OPENING, memory_order_acq_rel, memory_order_relaxed))
-        break;
+      if (atomic_compare_exchange_strong_explicit(slot_state(s), &expected, STORE_OPENING, memory_order_acq_rel, memory_order_relaxed)) break;
       continue;
     }
     for (int i = 0; i < g_stores_n; i++) {
@@ -312,12 +349,12 @@ void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
     break;
   }
   if (!s) return;
-
   pthread_mutex_lock(store_lock(s));
   snap_drain_all_async(s);
   s->cap_ctx = ctx;
   s->filter = *filter;
   s->pmt_pid = pmt_pid;
+  s->lcevc = *lcevc;
   s->seg_target = seg_target;
   s->max_segs = max_segs;
   s->container = container;
@@ -327,15 +364,13 @@ void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   pthread_mutex_unlock(store_lock(s));
 }
 
-void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
-  hls_store_t *s = find_store(ctx, filter, pmt_pid, container);
+void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
+  hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   int expected = STORE_OPEN;
   slot_retire_node_t *node;
   int nw;
   if (!s) return;
-  if (!atomic_compare_exchange_strong_explicit(slot_state(s), &expected, STORE_CLOSING, memory_order_acq_rel, memory_order_relaxed))
-    return;
-
+  if (!atomic_compare_exchange_strong_explicit(slot_state(s), &expected, STORE_CLOSING, memory_order_acq_rel, memory_order_relaxed)) return;
   node = malloc(sizeof *node);
   if (!node) {
     log_line(TOOL_NAME ": hls: close retire alloc failed, freeing slot without a QSBR wait");
@@ -350,31 +385,26 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
     hls_snapshot_t *cur = atomic_exchange_explicit(&s->snap, NULL, memory_order_acq_rel);
     if (cur) node->snaps[node->nsnaps++] = cur;
     for (int i = 0; i < s->retiring_n; i++) node->snaps[node->nsnaps++] = s->retiring[i];
-    for (int i = 0; i < s->retiring_n; i++) free(s->retiring_mark[i]);
     s->retiring_n = 0;
   }
   pthread_mutex_unlock(store_lock(s));
 
-  nw = qsbr_worker_count();
+  nw = qsbr_worker_count(g_segstore_qsbr);
   nw = nw > 0 ? nw : 1;
   node->mark = calloc((size_t)nw, sizeof *node->mark);
-  if (node->mark) qsbr_mark(node->mark);
+  if (node->mark) qsbr_mark(g_segstore_qsbr, node->mark);
   slot_retire_push(node);
 
   if (g_store_closing_cb) g_store_closing_cb(s);
 }
 
-int hls_set_init_segment(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, codec_t video_codec, const uint8_t *data, size_t size) {
-  hls_store_t *s;
+int hls_set_init_segment_at(hls_store_t *s, codec_t video_codec, const uint8_t *data, size_t size) {
   hls_snapshot_t *old;
   hls_snapshot_t *ns;
   if (size > HLS_INIT_SEG_MAX) {
     log_line("hls_set_init_segment: %zu exceeds HLS_INIT_SEG_MAX %d", size, HLS_INIT_SEG_MAX);
     return -1;
   }
-  s = find_store(ctx, filter, pmt_pid, container);
-  if (!s) return -1;
-
   pthread_mutex_lock(store_lock(s));
   old = atomic_load_explicit(&s->snap, memory_order_acquire);
   ns = snap_clone(old);
@@ -382,18 +412,61 @@ int hls_set_init_segment(const capture_ctx_t *ctx, const pid_filter_t *filter, u
     pthread_mutex_unlock(store_lock(s));
     return -1;
   }
-  memcpy(ns->init_data, data, size);
+  {
+    uint8_t *nd = seg_buf_alloc(size);
+    if (!nd) {
+      snap_free(ns);
+      pthread_mutex_unlock(store_lock(s));
+      return -1;
+    }
+    memcpy(nd, data, size);
+    seg_buf_unref(ns->init_data);
+    ns->init_data = nd;
+  }
   ns->init_size = size;
   ns->init_gen++;
   ns->video_codec = video_codec;
+  if (g_init_codecs_cb)
+    g_init_codecs_cb(ns->init_data, ns->init_size, video_codec, ns->vcodec_str, sizeof ns->vcodec_str, ns->acodec_str, sizeof ns->acodec_str);
+  else {
+    ns->vcodec_str[0] = '\0';
+    ns->acodec_str[0] = '\0';
+  }
   atomic_store_explicit(&s->snap, ns, memory_order_release);
   snap_retire(s, old);
   pthread_mutex_unlock(store_lock(s));
   return 0;
 }
 
-int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const uint8_t *data, size_t size, double duration) {
+int hls_set_init_segment(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, codec_t video_codec, const uint8_t *data, size_t size) {
+  hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+  if (!s) return -1;
+  return hls_set_init_segment_at(s, video_codec, data, size);
+}
+
+int hls_set_lcevc_pids(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const unsigned *lcevc_pid, int lcevc_pid_count) {
   hls_store_t *s;
+  hls_snapshot_t *old;
+  hls_snapshot_t *ns;
+  if (lcevc_pid_count > PSI_LCEVC_MAX_LINKS) lcevc_pid_count = PSI_LCEVC_MAX_LINKS;
+  s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+  if (!s) return -1;
+  pthread_mutex_lock(store_lock(s));
+  old = atomic_load_explicit(&s->snap, memory_order_acquire);
+  ns = snap_clone(old);
+  if (!ns) {
+    pthread_mutex_unlock(store_lock(s));
+    return -1;
+  }
+  for (int i = 0; i < lcevc_pid_count; i++) ns->lcevc_pid[i] = lcevc_pid[i];
+  ns->lcevc_pid_count = lcevc_pid_count;
+  atomic_store_explicit(&s->snap, ns, memory_order_release);
+  snap_retire(s, old);
+  pthread_mutex_unlock(store_lock(s));
+  return 0;
+}
+
+int hls_push_segment_at(hls_store_t *s, const uint8_t *data, size_t size, double duration) {
   hls_snapshot_t *old;
   hls_snapshot_t *ns;
   uint8_t *copy;
@@ -402,11 +475,6 @@ int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
   copy = seg_buf_alloc(size);
   if (!copy) return -1;
   memcpy(copy, data, size);
-  s = find_store(ctx, filter, pmt_pid, container);
-  if (!s) {
-    seg_buf_unref(copy);
-    return -1;
-  }
 
   pthread_mutex_lock(store_lock(s));
   old = atomic_load_explicit(&s->snap, memory_order_acquire);
@@ -440,8 +508,14 @@ int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
   return 0;
 }
 
-void hls_llhls_enable(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, double part_target) {
-  hls_store_t *s = find_store(ctx, filter, pmt_pid, container);
+int hls_push_segment(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const uint8_t *data, size_t size, double duration) {
+  hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+  if (!s) return -1;
+  return hls_push_segment_at(s, data, size, duration);
+}
+
+void hls_llhls_enable(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, double part_target) {
+  hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   hls_snapshot_t *old;
   hls_snapshot_t *ns;
   if (!s) return;
@@ -477,16 +551,14 @@ static hls_segment_done_cb g_segment_done_cb;
 void hls_set_part_pushed_cb(hls_part_pushed_cb cb) { g_part_pushed_cb = cb; }
 void hls_set_segment_done_cb(hls_segment_done_cb cb) { g_segment_done_cb = cb; }
 void hls_set_store_closing_cb(hls_store_closing_cb cb) { g_store_closing_cb = cb; }
+void hls_set_init_codecs_cb(hls_init_codecs_fn cb) { g_init_codecs_cb = cb; }
 
-int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, const uint8_t *data, size_t size, double duration, int independent) {
-  hls_store_t *s;
+int hls_push_part_at(hls_store_t *s, const uint8_t *data, size_t size, double duration, int independent) {
   hls_snapshot_t *old;
   hls_snapshot_t *ns;
   int n;
   uint32_t live_msn;
 
-  s = find_store(ctx, filter, pmt_pid, container);
-  if (!s) return -1;
   pthread_mutex_lock(store_lock(s));
   old = atomic_load_explicit(&s->snap, memory_order_acquire);
   ns = snap_clone(old);
@@ -515,16 +587,18 @@ int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   return 0;
 }
 
-int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, double duration) {
-  hls_store_t *s;
+int hls_push_part(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const uint8_t *data, size_t size, double duration, int independent) {
+  hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+  if (!s) return -1;
+  return hls_push_part_at(s, data, size, duration, independent);
+}
+
+int hls_push_segment_ll_at(hls_store_t *s, double duration) {
   hls_snapshot_t *old;
   hls_snapshot_t *ns;
   int idx;
   uint32_t seq;
   uint8_t *copy = NULL;
-
-  s = find_store(ctx, filter, pmt_pid, container);
-  if (!s) return -1;
 
   pthread_mutex_lock(store_lock(s));
   old = atomic_load_explicit(&s->snap, memory_order_acquire);
@@ -574,24 +648,30 @@ int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned
   return 0;
 }
 
-int hls_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
-  const hls_store_t *s = find_store(ctx, filter, pmt_pid, container);
+int hls_push_segment_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, double duration) {
+  hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+  if (!s) return -1;
+  return hls_push_segment_ll_at(s, duration);
+}
+
+int hls_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
+  const hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   const hls_snapshot_t *snap;
   if (!s) return 0;
   snap = atomic_load_explicit(&s->snap, memory_order_acquire);
   return snap && snap->count > 0;
 }
 
-int hls_ll_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container) {
-  const hls_store_t *s = find_store(ctx, filter, pmt_pid, container);
+int hls_ll_store_ready(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
+  const hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   const hls_snapshot_t *snap;
   if (!s) return 0;
   snap = atomic_load_explicit(&s->snap, memory_order_acquire);
   return snap && snap->part_target > 0.0 && (snap->count > 0 || snap->live_parts.count > 0);
 }
 
-int hls_part_available(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, seg_container_t container, uint32_t want_seg, int want_part) {
-  const hls_store_t *s = find_store(ctx, filter, pmt_pid, container);
+int hls_part_available(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, uint32_t want_seg, int want_part) {
+  const hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   const hls_snapshot_t *snap;
   if (!s) return 0;
   snap = atomic_load_explicit(&s->snap, memory_order_acquire);

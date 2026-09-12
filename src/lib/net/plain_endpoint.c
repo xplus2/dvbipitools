@@ -3,7 +3,42 @@
 
 #include <string.h>
 
+#include "lib/helper/ioutil.h"
+#include "lib/helper/uriparse.h"
+
 #include "plain_endpoint.h"
+
+static int plain_endpoint_parse_direct(const char *rest, plain_endpoint_t *s) {
+  if (*rest == '@') rest++;
+  return uriparse_mcast_addrport(rest, &s->family, s->group, sizeof s->group, &s->port);
+}
+
+int plain_endpoint_parse(const char *uri, plain_endpoint_t *s, int is_sink) {
+  memset(s, 0, sizeof *s);
+  if (strcmp(uri, "-") == 0) {
+    s->kind = PLAIN_EP_FILE; /* file_path[0] == '\0': stdin (source) / stdout (sink) */
+    return 0;
+  }
+  if (strncmp(uri, "rtp://", 6) == 0) {
+    s->kind = PLAIN_EP_RTP;
+    s->rtp_wrapped = 1;
+    return plain_endpoint_parse_direct(uri + 6, s);
+  }
+  if (strncmp(uri, "udp://", 6) == 0) {
+    s->kind = PLAIN_EP_UDP;
+    s->rtp_wrapped = 0;
+    return plain_endpoint_parse_direct(uri + 6, s);
+  }
+  if (strncmp(uri, "http://", 7) == 0 || strncmp(uri, "https://", 8) == 0) {
+    if (is_sink) return -1; /* an HTTP TS source makes no sense as an output */
+    s->kind = PLAIN_EP_HTTP;
+    return http_url_parse(uri, &s->http);
+  }
+  if (strlen(uri) >= sizeof s->file_path) return -1;
+  s->kind = PLAIN_EP_FILE;
+  bufcpy(s->file_path, sizeof s->file_path, uri);
+  return 0;
+}
 
 void plain_endpoint_to_tssrc_cfg(const plain_endpoint_t *s, const char *iface, const char *user_agent, int insecure_tls, tssrc_cfg_t *tc) {
   memset(tc, 0, sizeof *tc);

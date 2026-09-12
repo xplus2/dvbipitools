@@ -6,6 +6,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "lib/helper/fileutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
@@ -29,7 +30,7 @@ int listen_run(const config_t *cfg) {
   double deadline;
 
   mcast_describe(cfg, mcast, sizeof mcast);
-  f = strcmp(cfg->output_path, "-") == 0 ? stdout : fopen(cfg->output_path, "w");
+  f = fileutil_open_std(cfg->output_path, "w");
   if (!f) {
     log_line("cannot open %s for writing", cfg->output_path);
     return 1;
@@ -37,23 +38,20 @@ int listen_run(const config_t *cfg) {
   m = mcast_open(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, 500);
   if (!m) {
     log_line("cannot join %s", mcast);
-    if (f != stdout)
-      fclose(f);
+    if (f != stdout) fclose(f);
     return 1;
   }
   r = dvbstp_reasm_new();
   if (!r) {
     log_line("out of memory");
     mcast_close(m);
-    if (f != stdout)
-      fclose(f);
+    if (f != stdout) fclose(f);
     return 1;
   }
 
   snprintf(invocation, sizeof invocation, "%s --listen --mcast %s --timeout %ld", TOOL_NAME, mcast, cfg->timeout_s);
   format_out_init(f, cfg->format, invocation);
   log_line("listening on %s for %lds", mcast, cfg->timeout_s);
-
   deadline = mono_seconds() + (double)cfg->timeout_s;
   while (mono_seconds() < deadline && !signal_stop_requested()) {
     unsigned char buf[RECV_BUF];
@@ -61,15 +59,10 @@ int listen_run(const config_t *cfg) {
     dvbstp_header_t hdr;
     const unsigned char *data;
     size_t len;
-
-    if (n <= 0)
-      continue;
-    if (!dvbstp_reasm_feed(r, buf, (size_t)n, &hdr, &data, &len))
-      continue;
-    if (hdr.payload_id != DVBSTP_PAYLOAD_BROADCAST_DISCOVERY)
-      continue;
-    if (already_seen(seen, &seen_count, &hdr))
-      continue;
+    if (n <= 0) continue;
+    if (!dvbstp_reasm_feed(r, buf, (size_t)n, &hdr, &data, &len)) continue;
+    if (hdr.payload_id != DVBSTP_PAYLOAD_BROADCAST_DISCOVERY) continue;
+    if (already_seen(seen, &seen_count, &hdr)) continue;
     segments++;
 
     if (cfg->format == OUT_XML) {
@@ -78,13 +71,11 @@ int listen_run(const config_t *cfg) {
       char *xml = malloc(len + 1);
       sds_service_t entries[SDS_MAX_SERVICES];
       int i, count, truncated;
-      if (!xml)
-        continue;
+      if (!xml) continue;
       memcpy(xml, data, len);
       xml[len] = '\0';
       count = sds_parse_broadcast(xml, entries, SDS_MAX_SERVICES, &truncated);
-      for (i = 0; i < count; i++)
-        format_out_item(f, cfg->format, &entries[i]);
+      for (i = 0; i < count; i++) format_out_item(f, cfg->format, &entries[i]);
       total_services += (unsigned)count;
       free(xml);
       if (truncated)

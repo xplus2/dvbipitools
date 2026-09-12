@@ -22,8 +22,7 @@ static uint32_t crc32_table[256];
 static void crc32_table_init(void) {
   for (unsigned n = 0; n < 256; n++) {
     uint32_t c = (uint32_t)n << 24;
-    for (int k = 0; k < 8; k++)
-      c = (c & 0x80000000u) ? (c << 1) ^ 0x04C11DB7u : (c << 1);
+    for (int k = 0; k < 8; k++) c = (c & 0x80000000u) ? (c << 1) ^ 0x04C11DB7u : (c << 1);
     crc32_table[n] = c;
   }
 }
@@ -32,8 +31,7 @@ static void crc32_table_init(void) {
    used both as portable fallback and as tail path after a chunked
    accelerated backend has consumed bulk of buffer. */
 static uint32_t crc32_mpeg_table_update(uint32_t crc, const unsigned char *data, size_t len) {
-  for (size_t i = 0; i < len; i++)
-    crc = (crc << 8) ^ crc32_table[((crc >> 24) ^ data[i]) & 0xFF];
+  for (size_t i = 0; i < len; i++) crc = (crc << 8) ^ crc32_table[((crc >> 24) ^ data[i]) & 0xFF];
   return crc;
 }
 
@@ -86,12 +84,6 @@ uint32_t crc32_mpeg_pclmul(const unsigned char *data, size_t len) {
 #endif
 
 #ifdef CRC32_MPEG_HAVE_ARM
-/* MPEG-2 CRC32 (non-reflected) is the bit-reversal of the reflected
- * CRC-32 (0xEDB88320) the ARMv8 CRC32 extension implements natively:
- * crc32_mpeg(data) == bitrev32(hwcrc32(bitrev8(data))), since both the
- * init (0xFFFFFFFF) and xorout (0) are 32-bit bit-palindromes. Verified
- * in Python against the bit-serial reference; not execution-tested here
- * for lack of ARM hardware. */
 static unsigned char crc32_mpeg_bitrev8[256];
 
 static void crc32_mpeg_bitrev8_init(void) {
@@ -146,4 +138,27 @@ static void crc32_mpeg_select(void) {
 
 uint32_t crc32_mpeg(const unsigned char *data, size_t len) {
   return crc32_mpeg_impl(data, len);
+}
+
+static uint32_t crc32_zlib_table[256];
+static uint32_t crc32_castagnoli_table[256];
+
+__attribute__((constructor))
+static void crc32_zlib_tables_init(void) {
+  for (unsigned n = 0; n < 256; n++) {
+    uint32_t z = n, c = n;
+    for (int k = 0; k < 8; k++) {
+      z = (z & 1) ? (0xEDB88320u ^ (z >> 1)) : (z >> 1);
+      c = (c & 1) ? (0x82F63B78u ^ (c >> 1)) : (c >> 1);
+    }
+    crc32_zlib_table[n] = z;
+    crc32_castagnoli_table[n] = c;
+  }
+}
+
+uint32_t crc32_zlib(int castagnoli, const unsigned char *data, size_t len) {
+  const uint32_t *table = castagnoli ? crc32_castagnoli_table : crc32_zlib_table;
+  uint32_t crc = 0xFFFFFFFFu;
+  for (size_t i = 0; i < len; i++) crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
+  return crc ^ 0xFFFFFFFFu;
 }

@@ -95,6 +95,19 @@ main{flex:1;padding:16px;overflow:auto}
 <label for="pmtInp">pmt</label>
 <input type="text" id="pmtInp" placeholder="0x1000" oninput="updUrl()">
 </div>
+<div class="field" id="lcevcField">
+<label for="lcevcSel">lcevc</label>
+<select id="lcevcSel" onchange="updUrl()">
+<option value="full" selected>full</option>
+<option value="base">base</option>
+<option value="all">all</option>
+<option value="n">pick one</option>
+</select>
+</div>
+<div class="field" id="lcevcNField" style="display:none">
+<label for="lcevcNInp">index or pid</label>
+<input type="text" id="lcevcNInp" placeholder="0 or 0x1234" oninput="updUrl()">
+</div>
 <div class="field" id="listByField" style="display:none">
 <label>list by</label>
 <span class="radio-group">
@@ -151,6 +164,19 @@ main{flex:1;padding:16px;overflow:auto}
 <div class="field" id="plFilterField">
 <label for="plFilterInp">filter (pids)</label>
 <input type="text" id="plFilterInp" placeholder="101,0x20" oninput="updExportUrl()">
+</div>
+<div class="field" id="plLcevcField">
+<label for="plLcevcSel">lcevc</label>
+<select id="plLcevcSel" onchange="updExportUrl()">
+<option value="full" selected>full</option>
+<option value="base">base</option>
+<option value="all">all</option>
+<option value="n">pick one</option>
+</select>
+</div>
+<div class="field" id="plLcevcNField" style="display:none">
+<label for="plLcevcNInp">index or pid</label>
+<input type="text" id="plLcevcNInp" placeholder="0 or 0x1234" oninput="updExportUrl()">
 </div>
 <div class="field">
 <label><input type="checkbox" id="plKeepMcast" onchange="updExportUrl()"> keep_multicast</label>
@@ -221,6 +247,14 @@ function appFlags() {
   });
   $('filterField').style.display = flags.no_pid_filters ? 'none' : 'block';
   $('plFilterField').style.display = flags.no_pid_filters ? 'none' : 'block';
+  $('lcevcField').style.display = flags.no_lcevc ? 'none' : 'block';
+  $('plLcevcField').style.display = flags.no_lcevc ? 'none' : 'block';
+  if (flags.no_lcevc) {
+    $('lcevcNField').style.display = 'none';
+    $('plLcevcNField').style.display = 'none';
+  }
+  syncLcevcAll('fmtSel', 'lcevcSel');
+  syncLcevcAll('plFmtSel', 'plLcevcSel');
 }
 function renderSrc() {
   var list = $('srcList');
@@ -297,6 +331,26 @@ function renderPlSrc() {
     list.appendChild(row);
   });
 }
+function lcevcAllSupported(fmt) {
+  return fmt === 'hls' || fmt === 'hls-fmp4' || fmt === 'llhls' || fmt === 'dash' || fmt === 'lldash';
+}
+function syncLcevcAll(fmtId, selId) {
+  var ok = lcevcAllSupported($(fmtId).value);
+  var opt = $(selId).querySelector('option[value="all"]');
+  opt.disabled = !ok;
+  if (!ok && $(selId).value === 'all') $(selId).value = 'full';
+}
+function lcevcToggle(selId, fieldId) {
+  $(fieldId).style.display = $(selId).value === 'n' ? 'block' : 'none';
+}
+function lcevcParam(selId, nId) {
+  var mode = $(selId).value;
+  if (mode === 'n') {
+    var n = $(nId).value.trim();
+    return n ? 'lcevc=' + encodeURIComponent(n) : null;
+  }
+  return mode !== 'full' ? 'lcevc=' + mode : null;
+}
 function buildExportUrl() {
   var fmt = $('plFmtSel').value;
   var type = $('plTypeSel').value;
@@ -307,13 +361,17 @@ function buildExportUrl() {
   if (active.length && active.length < lists.length)
     params.push('input=' + active.map(function (s) { return s.list_num; }).join(','));
   var filter = $('plFilterInp').value.trim();
+  var lp = lcevcParam('plLcevcSel', 'plLcevcNInp');
   if (filter) params.push('filter=' + encodeURIComponent(filter));
+  if (lp) params.push(lp);
   if ($('plKeepMcast').checked) params.push('keep_multicast');
   if ($('plPlain').checked) params.push('plain');
   if (params.length) path += '?' + params.join('&');
   return location.origin + path;
 }
 function updExportUrl() {
+  syncLcevcAll('plFmtSel', 'plLcevcSel');
+  lcevcToggle('plLcevcSel', 'plLcevcNField');
   $('plUrlOutput').value = buildExportUrl();
 }
 function select(sel, showGroup, el) {
@@ -349,12 +407,16 @@ function buildUrl() {
   var params = [];
   var filter = $('filterInp').value.trim();
   var pmt = $('pmtInp').value.trim();
+  var lp = lcevcParam('lcevcSel', 'lcevcNInp');
   if (filter) params.push('filter=' + encodeURIComponent(filter));
   if (pmt) params.push('pmt=' + encodeURIComponent(pmt));
+  if (lp) params.push(lp);
   if (params.length) path += '?' + params.join('&');
   return location.origin + path;
 }
 function updUrl() {
+  syncLcevcAll('fmtSel', 'lcevcSel');
+  lcevcToggle('lcevcSel', 'lcevcNField');
   $('urlOutput').value = buildUrl();
 }
 $('copyBtn').onclick = function () {

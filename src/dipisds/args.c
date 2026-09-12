@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +12,6 @@
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
 #include "lib/net/netconnect.h"
-
 #include "args.h"
 #include "version.h"
 
@@ -99,6 +99,158 @@ static void print_help(void) {
       TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
+typedef struct {
+  int have_a, have_l, have_mcast, have_t;
+  long t_value;
+  int have_ret_rtx_time, have_ret_rtx_pt, have_ret_mc_port;
+  int have_fcc_rtx_time, have_fcc_rtx_pt, have_fcc_resolve_max_channels;
+  int have_al_fec_pt;
+  int have_rms_lang, have_fus_lang, have_fus_id;
+} args_flags_t;
+
+static args_status_t validate_mode_mcast(config_t *cfg, const args_flags_t *fl) {
+  if (fl->have_a == fl->have_l) {
+    argerr("exactly one of -a/--announce or -l/--listen is required");
+    return ARGS_ERR;
+  }
+  if (!fl->have_mcast) {
+    argerr("missing -m multicast group:port");
+    return ARGS_ERR;
+  }
+  if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
+  return ARGS_OK;
+}
+
+static args_status_t validate_announce_input(config_t *cfg, const args_flags_t *fl) {
+  if (!cfg->input_path) {
+    argerr("missing -i input");
+    return ARGS_ERR;
+  }
+  if (!has_suffix(cfg->input_path, ".xml")) {
+    if (!cfg->provider) {
+      argerr("missing -p provider (required unless -i is .xml)");
+      return ARGS_ERR;
+    }
+    if (!cfg->offering) {
+      argerr("missing -O offering (required unless -i is .xml)");
+      return ARGS_ERR;
+    }
+  }
+  if (!cfg->lang[0]) memcpy(cfg->lang, "deu", 3);
+  cfg->interval_s = fl->have_t ? fl->t_value : 5;
+  return ARGS_OK;
+}
+
+static args_status_t validate_announce_ret(config_t *cfg, const args_flags_t *fl) {
+  if (cfg->ret_enabled && has_suffix(cfg->input_path, ".xml")) {
+    argerr("--ret-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
+    return ARGS_ERR;
+  }
+  if (!cfg->ret_enabled && (fl->have_ret_rtx_time || fl->have_ret_rtx_pt || cfg->ret_mc || fl->have_ret_mc_port || cfg->ret_rsi_mc_ret)) {
+    argerr("--ret-rtx-time/--ret-rtx-pt/--ret-mc/--ret-mc-port/--ret-rsi-mc-ret require --ret-addr");
+    return ARGS_ERR;
+  }
+  if (cfg->ret_rsi_mc_ret && !cfg->ret_mc) {
+    argerr("--ret-rsi-mc-ret requires --ret-mc");
+    return ARGS_ERR;
+  }
+  if (cfg->ret_enabled) {
+    if (!fl->have_ret_rtx_time) cfg->ret_rtx_time = 2000;
+    if (!fl->have_ret_rtx_pt) cfg->ret_rtx_pt = 99;
+  }
+  return ARGS_OK;
+}
+
+static args_status_t validate_announce_fcc(config_t *cfg, const args_flags_t *fl) {
+  if (cfg->fcc_enabled && has_suffix(cfg->input_path, ".xml")) {
+    argerr("--fcc-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
+    return ARGS_ERR;
+  }
+  if (!cfg->fcc_enabled && (fl->have_fcc_rtx_time || fl->have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || fl->have_fcc_resolve_max_channels)) {
+    argerr("--fcc-rtx-time/--fcc-rtx-pt/--fcc-resolve-* require --fcc-addr");
+    return ARGS_ERR;
+  }
+  if (cfg->fcc_enabled) {
+    if (!fl->have_fcc_rtx_time) cfg->fcc_rtx_time = 2000;
+    if (!fl->have_fcc_rtx_pt) cfg->fcc_rtx_pt = 99;
+    if (!fl->have_fcc_resolve_max_channels) cfg->fcc_resolve_max_channels = 300;
+  }
+  return ARGS_OK;
+}
+
+static args_status_t validate_announce_al_fec(config_t *cfg, const args_flags_t *fl) {
+  if (cfg->al_fec_enabled && has_suffix(cfg->input_path, ".xml")) {
+    argerr("--al-fec-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
+    return ARGS_ERR;
+  }
+  if (!cfg->al_fec_enabled && fl->have_al_fec_pt) {
+    argerr("--al-fec-pt requires --al-fec-addr");
+    return ARGS_ERR;
+  }
+  if (cfg->al_fec_enabled && !fl->have_al_fec_pt) cfg->al_fec_pt = 96;
+  return ARGS_OK;
+}
+
+static args_status_t validate_announce_rms_fus(config_t *cfg, const args_flags_t *fl) {
+  if ((cfg->packages_path || cfg->cells_path || cfg->rms_enabled || cfg->fus_enabled) && has_suffix(cfg->input_path, ".xml")) {
+    argerr("--packages/--cells/--rms-name/--fus-name have no effect with a raw .xml -i input (that path is sent through unparsed)");
+    return ARGS_ERR;
+  }
+  if (cfg->rms_enabled && cfg->fus_enabled) {
+    argerr("--rms-name and --fus-name are mutually exclusive (RMSFUSDiscovery carries one or the other, never both)");
+    return ARGS_ERR;
+  }
+  if (!cfg->rms_enabled && (fl->have_rms_lang || cfg->rms_location || cfg->rms_logo)) {
+    argerr("--rms-lang/--rms-location/--rms-logo require --rms-name");
+    return ARGS_ERR;
+  }
+  if (cfg->rms_enabled) {
+    if (!cfg->rms_location) {
+      argerr("--rms-name requires --rms-location");
+      return ARGS_ERR;
+    }
+    if (!fl->have_rms_lang) memcpy(cfg->rms_lang, "deu", 3);
+  }
+  if (!cfg->fus_enabled && (fl->have_fus_lang || fl->have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo)) {
+    argerr("--fus-lang/--fus-id/--fus-announce/--fus-logo require --fus-name");
+    return ARGS_ERR;
+  }
+  if (cfg->fus_enabled) {
+    if (!fl->have_fus_id) {
+      argerr("--fus-name requires --fus-id");
+      return ARGS_ERR;
+    }
+    if (!fl->have_fus_lang) memcpy(cfg->fus_lang, "deu", 3);
+  }
+  return ARGS_OK;
+}
+
+static args_status_t validate_listen(config_t *cfg, const args_flags_t *fl) {
+  if (cfg->ret_enabled || fl->have_ret_rtx_time || fl->have_ret_rtx_pt || cfg->ret_mc || fl->have_ret_mc_port || cfg->ret_rsi_mc_ret) {
+    argerr("--ret-* options are announce-only");
+    return ARGS_ERR;
+  }
+  if (cfg->fcc_enabled || fl->have_fcc_rtx_time || fl->have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || fl->have_fcc_resolve_max_channels) {
+    argerr("--fcc-* options are announce-only");
+    return ARGS_ERR;
+  }
+  if (cfg->metrics_id) {
+    argerr("--metrics-id is announce-only");
+    return ARGS_ERR;
+  }
+  if (cfg->packages_path || cfg->cells_path || cfg->rms_enabled || fl->have_rms_lang || cfg->rms_location || cfg->rms_logo ||
+      cfg->fus_enabled || fl->have_fus_lang || fl->have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo) {
+    argerr("--packages/--cells/--rms-*/--fus-* options are announce-only");
+    return ARGS_ERR;
+  }
+  if (!cfg->output_path) cfg->output_path = "-";
+  if (fl->have_t)
+    cfg->timeout_s = fl->t_value;
+  else
+    cfg->timeout_s = 35;
+  return ARGS_OK;
+}
+
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   static const struct option longopts[] = {
       {"announce", no_argument, 0, 'a'},
@@ -161,412 +313,285 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   optind = 1;
   while ((c = getopt_long(argc, argv, "ali:p:O:L:m:I:t:o:f:vdh", longopts, NULL)) != -1) {
     switch (c) {
-    case 'a':
-      have_a = 1;
-      cfg->mode = MODE_ANNOUNCE;
-      break;
-    case 'l':
-      have_l = 1;
-      cfg->mode = MODE_LISTEN;
-      break;
-    case 'i':
-      cfg->input_path = optarg;
-      break;
-    case 'p':
-      cfg->provider = optarg;
-      break;
-    case 'O':
-      cfg->offering = optarg;
-      break;
-    case 'L':
-      if (strlen(optarg) != 3) {
-        argerr("invalid -L lang: %s (3-letter ISO 639-2 code)", optarg);
-        return ARGS_ERR;
+      case 'a':
+        have_a = 1;
+        cfg->mode = MODE_ANNOUNCE;
+        break;
+      case 'l':
+        have_l = 1;
+        cfg->mode = MODE_LISTEN;
+        break;
+      case 'i':
+        cfg->input_path = optarg;
+        break;
+      case 'p':
+        cfg->provider = optarg;
+        break;
+      case 'O':
+        cfg->offering = optarg;
+        break;
+      case 'L':
+        if (strlen(optarg) != 3) {
+          argerr("invalid -L lang: %s (3-letter ISO 639-2 code)", optarg);
+          return ARGS_ERR;
+        }
+        memcpy(cfg->lang, optarg, 3);
+        break;
+      case 'm':
+        if (mcast_parse(optarg, cfg)) {
+          argerr("invalid -m group:port: %s", optarg);
+          return ARGS_ERR;
+        }
+        have_mcast = 1;
+        break;
+      case 'I':
+        cfg->iface = optarg;
+        break;
+      case 1027:
+        if (net_dscp_parse(optarg, &cfg->dscp)) {
+          argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 't': {
+        unsigned v;
+        if (argutil_uint_range(optarg, 0, UINT_MAX, &v)) {
+          argerr("invalid -t seconds: %s", optarg);
+          return ARGS_ERR;
+        }
+        t_value = v;
+        have_t = 1;
+        break;
       }
-      memcpy(cfg->lang, optarg, 3);
-      break;
-    case 'm':
-      if (mcast_parse(optarg, cfg)) {
-        argerr("invalid -m group:port: %s", optarg);
-        return ARGS_ERR;
+      case 'o':
+        cfg->output_path = optarg;
+        break;
+      case 'f': {
+        static const enum_map_t map[] = {{"m3u", OUT_M3U}, {"csv", OUT_CSV}, {"xspf", OUT_XSPF}, {"xml", OUT_XML}, {"null", OUT_NULL}};
+        int v;
+        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+          argerr("invalid --format: %s (m3u|csv|xspf|xml|null)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->format = (out_fmt_t)v;
+        break;
       }
-      have_mcast = 1;
-      break;
-    case 'I':
-      cfg->iface = optarg;
-      break;
-    case 1027:
-      if (net_dscp_parse(optarg, &cfg->dscp)) {
-        argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
-        return ARGS_ERR;
+      case 'v':
+        cfg->verbose = 1;
+        break;
+      case 'd':
+        cfg->daemonize = 1;
+        break;
+      case 1000: {
+        log_color_t v;
+        if (log_color_from_string(optarg, &v)) {
+          argerr("invalid --color: %s (auto|always|never)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->color_mode = v;
+        break;
       }
-      break;
-    case 't': {
-      char *end;
-      long v = strtol(optarg, &end, 10);
-      if (*end != '\0' || v < 0) {
-        argerr("invalid -t seconds: %s", optarg);
-        return ARGS_ERR;
+      case 1001:
+        if (ret_addr_parse(optarg, cfg->ret_addr, sizeof cfg->ret_addr, &cfg->ret_port)) {
+          argerr("invalid --ret-addr: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->ret_enabled = 1;
+        break;
+      case 1002: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
+          argerr("invalid --ret-rtx-time: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->ret_rtx_time = v;
+        have_ret_rtx_time = 1;
+        break;
       }
-      t_value = v;
-      have_t = 1;
-      break;
-    }
-    case 'o':
-      cfg->output_path = optarg;
-      break;
-    case 'f': {
-      static const enum_map_t map[] = {{"m3u", OUT_M3U}, {"csv", OUT_CSV}, {"xspf", OUT_XSPF}, {"xml", OUT_XML}, {"null", OUT_NULL}};
-      int v;
-      if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-        argerr("invalid --format: %s (m3u|csv|xspf|xml|null)", optarg);
-        return ARGS_ERR;
+      case 1003: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 0, 127, &v)) {
+          argerr("invalid --ret-rtx-pt: %s (0..127)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->ret_rtx_pt = (unsigned char)v;
+        have_ret_rtx_pt = 1;
+        break;
       }
-      cfg->format = (out_fmt_t)v;
-      break;
-    }
-    case 'v':
-      cfg->verbose = 1;
-      break;
-    case 'd':
-      cfg->daemonize = 1;
-      break;
-    case 1000: {
-      log_color_t v;
-      if (log_color_from_string(optarg, &v)) {
-        argerr("invalid --color: %s (auto|always|never)", optarg);
-        return ARGS_ERR;
+      case 1004:
+        cfg->ret_mc = 1;
+        break;
+      case 1005: {
+        unsigned v;
+        if (argutil_port_parse(optarg, &v)) {
+          argerr("invalid --ret-mc-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->ret_mc_port = v;
+        have_ret_mc_port = 1;
+        break;
       }
-      cfg->color_mode = v;
-      break;
-    }
-    case 1001:
-      if (ret_addr_parse(optarg, cfg->ret_addr, sizeof cfg->ret_addr, &cfg->ret_port)) {
-        argerr("invalid --ret-addr: %s", optarg);
-        return ARGS_ERR;
+      case 1012:
+        cfg->ret_rsi_mc_ret = 1;
+        break;
+      case 1006:
+        if (ret_addr_parse(optarg, cfg->fcc_addr, sizeof cfg->fcc_addr, &cfg->fcc_port)) {
+          argerr("invalid --fcc-addr: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->fcc_enabled = 1;
+        break;
+      case 1028:
+        if (ret_addr_parse(optarg, cfg->al_fec_addr, sizeof cfg->al_fec_addr, &cfg->al_fec_port)) {
+          argerr("invalid --al-fec-addr: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->al_fec_enabled = 1;
+        break;
+      case 1029: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 0, 127, &v)) {
+          argerr("invalid --al-fec-pt: %s (0..127)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->al_fec_pt = (unsigned char)v;
+        have_al_fec_pt = 1;
+        break;
       }
-      cfg->ret_enabled = 1;
-      break;
-    case 1002: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || v == 0) {
-        argerr("invalid --ret-rtx-time: %s", optarg);
-        return ARGS_ERR;
+      case 1007: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
+          argerr("invalid --fcc-rtx-time: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->fcc_rtx_time = v;
+        have_fcc_rtx_time = 1;
+        break;
       }
-      cfg->ret_rtx_time = (unsigned)v;
-      have_ret_rtx_time = 1;
-      break;
-    }
-    case 1003: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || v > 127) {
-        argerr("invalid --ret-rtx-pt: %s (0..127)", optarg);
-        return ARGS_ERR;
+      case 1008: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 0, 127, &v)) {
+          argerr("invalid --fcc-rtx-pt: %s (0..127)", optarg);
+          return ARGS_ERR;
+        }
+        cfg->fcc_rtx_pt = (unsigned char)v;
+        have_fcc_rtx_pt = 1;
+        break;
       }
-      cfg->ret_rtx_pt = (unsigned char)v;
-      have_ret_rtx_pt = 1;
-      break;
-    }
-    case 1004:
-      cfg->ret_mc = 1;
-      break;
-    case 1005: {
-      unsigned v;
-      if (argutil_port_parse(optarg, &v)) {
-        argerr("invalid --ret-mc-port: %s", optarg);
-        return ARGS_ERR;
+      case 1013:
+        cfg->fcc_resolve_by_port = 1;
+        break;
+      case 1014: {
+        unsigned v;
+        if (argutil_port_parse(optarg, &v)) {
+          argerr("invalid --fcc-resolve-base-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->fcc_resolve_base_port = v;
+        break;
       }
-      cfg->ret_mc_port = v;
-      have_ret_mc_port = 1;
-      break;
-    }
-    case 1012:
-      cfg->ret_rsi_mc_ret = 1;
-      break;
-    case 1006:
-      if (ret_addr_parse(optarg, cfg->fcc_addr, sizeof cfg->fcc_addr, &cfg->fcc_port)) {
-        argerr("invalid --fcc-addr: %s", optarg);
-        return ARGS_ERR;
+      case 1015: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
+          argerr("invalid --fcc-resolve-max-channels: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->fcc_resolve_max_channels = (size_t)v;
+        have_fcc_resolve_max_channels = 1;
+        break;
       }
-      cfg->fcc_enabled = 1;
-      break;
-    case 1028:
-      if (ret_addr_parse(optarg, cfg->al_fec_addr, sizeof cfg->al_fec_addr, &cfg->al_fec_port)) {
-        argerr("invalid --al-fec-addr: %s", optarg);
-        return ARGS_ERR;
+      case 1009:
+        cfg->metrics_sock = optarg;
+        break;
+      case 1010:
+        cfg->metrics_id = optarg;
+        break;
+      case 1011:
+        if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
+        break;
+      case 1016:
+        cfg->packages_path = optarg;
+        break;
+      case 1017:
+        cfg->cells_path = optarg;
+        break;
+      case 1018:
+        cfg->rms_name = optarg;
+        cfg->rms_enabled = 1;
+        break;
+      case 1019:
+        if (strlen(optarg) != 3) {
+          argerr("invalid --rms-lang: %s (3-letter ISO 639-2 code)", optarg);
+          return ARGS_ERR;
+        }
+        memcpy(cfg->rms_lang, optarg, 3);
+        have_rms_lang = 1;
+        break;
+      case 1020:
+        cfg->rms_location = optarg;
+        break;
+      case 1021:
+        cfg->rms_logo = optarg;
+        break;
+      case 1022:
+        cfg->fus_name = optarg;
+        cfg->fus_enabled = 1;
+        break;
+      case 1023:
+        if (strlen(optarg) != 3) {
+          argerr("invalid --fus-lang: %s (3-letter ISO 639-2 code)", optarg);
+          return ARGS_ERR;
+        }
+        memcpy(cfg->fus_lang, optarg, 3);
+        have_fus_lang = 1;
+        break;
+      case 1024: {
+        char *end;
+        unsigned long v = strtoul(optarg, &end, 10);
+        if (*end != '\0') {
+          argerr("invalid --fus-id: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->fus_id = v;
+        have_fus_id = 1;
+        break;
       }
-      cfg->al_fec_enabled = 1;
-      break;
-    case 1029: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || v > 127) {
-        argerr("invalid --al-fec-pt: %s (0..127)", optarg);
+      case 1025:
+        if (ret_addr_parse(optarg, cfg->fus_announce_addr, sizeof cfg->fus_announce_addr, &cfg->fus_announce_port)) {
+          argerr("invalid --fus-announce: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      case 1026:
+        cfg->fus_logo = optarg;
+        break;
+      case 'h':
+        print_help();
+        return ARGS_HELP;
+      default:
         return ARGS_ERR;
-      }
-      cfg->al_fec_pt = (unsigned char)v;
-      have_al_fec_pt = 1;
-      break;
-    }
-    case 1007: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || v == 0) {
-        argerr("invalid --fcc-rtx-time: %s", optarg);
-        return ARGS_ERR;
-      }
-      cfg->fcc_rtx_time = (unsigned)v;
-      have_fcc_rtx_time = 1;
-      break;
-    }
-    case 1008: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || v > 127) {
-        argerr("invalid --fcc-rtx-pt: %s (0..127)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->fcc_rtx_pt = (unsigned char)v;
-      have_fcc_rtx_pt = 1;
-      break;
-    }
-    case 1013:
-      cfg->fcc_resolve_by_port = 1;
-      break;
-    case 1014: {
-      unsigned v;
-      if (argutil_port_parse(optarg, &v)) {
-        argerr("invalid --fcc-resolve-base-port: %s", optarg);
-        return ARGS_ERR;
-      }
-      cfg->fcc_resolve_base_port = v;
-      break;
-    }
-    case 1015: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || v == 0) {
-        argerr("invalid --fcc-resolve-max-channels: %s", optarg);
-        return ARGS_ERR;
-      }
-      cfg->fcc_resolve_max_channels = (size_t)v;
-      have_fcc_resolve_max_channels = 1;
-      break;
-    }
-    case 1009:
-      cfg->metrics_sock = optarg;
-      break;
-    case 1010:
-      cfg->metrics_id = optarg;
-      break;
-    case 1011: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || v == 0 || v > 86400UL) {
-        argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->metrics_interval_s = (unsigned)v;
-      break;
-    }
-    case 1016:
-      cfg->packages_path = optarg;
-      break;
-    case 1017:
-      cfg->cells_path = optarg;
-      break;
-    case 1018:
-      cfg->rms_name = optarg;
-      cfg->rms_enabled = 1;
-      break;
-    case 1019:
-      if (strlen(optarg) != 3) {
-        argerr("invalid --rms-lang: %s (3-letter ISO 639-2 code)", optarg);
-        return ARGS_ERR;
-      }
-      memcpy(cfg->rms_lang, optarg, 3);
-      have_rms_lang = 1;
-      break;
-    case 1020:
-      cfg->rms_location = optarg;
-      break;
-    case 1021:
-      cfg->rms_logo = optarg;
-      break;
-    case 1022:
-      cfg->fus_name = optarg;
-      cfg->fus_enabled = 1;
-      break;
-    case 1023:
-      if (strlen(optarg) != 3) {
-        argerr("invalid --fus-lang: %s (3-letter ISO 639-2 code)", optarg);
-        return ARGS_ERR;
-      }
-      memcpy(cfg->fus_lang, optarg, 3);
-      have_fus_lang = 1;
-      break;
-    case 1024: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0') {
-        argerr("invalid --fus-id: %s", optarg);
-        return ARGS_ERR;
-      }
-      cfg->fus_id = v;
-      have_fus_id = 1;
-      break;
-    }
-    case 1025:
-      if (ret_addr_parse(optarg, cfg->fus_announce_addr, sizeof cfg->fus_announce_addr, &cfg->fus_announce_port)) {
-        argerr("invalid --fus-announce: %s", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case 1026:
-      cfg->fus_logo = optarg;
-      break;
-    case 'h':
-      print_help();
-      return ARGS_HELP;
-    default:
-      return ARGS_ERR;
     }
   }
   if (optind < argc) {
     argerr("unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  if (have_a == have_l) {
-    argerr("exactly one of -a/--announce or -l/--listen is required");
-    return ARGS_ERR;
-  }
-  if (!have_mcast) {
-    argerr("missing -m multicast group:port");
-    return ARGS_ERR;
-  }
-  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
-    argerr("--metrics/--metrics-interval require --metrics-id");
-    return ARGS_ERR;
-  }
-
-  if (cfg->mode == MODE_ANNOUNCE) {
-    if (!cfg->input_path) {
-      argerr("missing -i input");
-      return ARGS_ERR;
+  {
+    args_flags_t fl = {.have_a = have_a, .have_l = have_l, .have_mcast = have_mcast, .have_t = have_t, .t_value = t_value,
+                        .have_ret_rtx_time = have_ret_rtx_time, .have_ret_rtx_pt = have_ret_rtx_pt, .have_ret_mc_port = have_ret_mc_port,
+                        .have_fcc_rtx_time = have_fcc_rtx_time, .have_fcc_rtx_pt = have_fcc_rtx_pt, .have_fcc_resolve_max_channels = have_fcc_resolve_max_channels,
+                        .have_al_fec_pt = have_al_fec_pt, .have_rms_lang = have_rms_lang, .have_fus_lang = have_fus_lang, .have_fus_id = have_fus_id};
+    args_status_t st;
+    if ((st = validate_mode_mcast(cfg, &fl)) != ARGS_OK) return st;
+    if (cfg->mode == MODE_ANNOUNCE) {
+      if ((st = validate_announce_input(cfg, &fl)) != ARGS_OK) return st;
+      if ((st = validate_announce_ret(cfg, &fl)) != ARGS_OK) return st;
+      if ((st = validate_announce_fcc(cfg, &fl)) != ARGS_OK) return st;
+      if ((st = validate_announce_al_fec(cfg, &fl)) != ARGS_OK) return st;
+      if ((st = validate_announce_rms_fus(cfg, &fl)) != ARGS_OK) return st;
+    } else {
+      if ((st = validate_listen(cfg, &fl)) != ARGS_OK) return st;
     }
-    if (!has_suffix(cfg->input_path, ".xml")) {
-      if (!cfg->provider) {
-        argerr("missing -p provider (required unless -i is .xml)");
-        return ARGS_ERR;
-      }
-      if (!cfg->offering) {
-        argerr("missing -O offering (required unless -i is .xml)");
-        return ARGS_ERR;
-      }
-    }
-    if (!cfg->lang[0])
-      memcpy(cfg->lang, "deu", 3);
-    cfg->interval_s = have_t ? t_value : 5;
-    if (cfg->ret_enabled && has_suffix(cfg->input_path, ".xml")) {
-      argerr("--ret-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
-      return ARGS_ERR;
-    }
-    if (!cfg->ret_enabled && (have_ret_rtx_time || have_ret_rtx_pt || cfg->ret_mc || have_ret_mc_port || cfg->ret_rsi_mc_ret)) {
-      argerr("--ret-rtx-time/--ret-rtx-pt/--ret-mc/--ret-mc-port/--ret-rsi-mc-ret require --ret-addr");
-      return ARGS_ERR;
-    }
-    if (cfg->ret_rsi_mc_ret && !cfg->ret_mc) {
-      argerr("--ret-rsi-mc-ret requires --ret-mc");
-      return ARGS_ERR;
-    }
-    if (cfg->ret_enabled) {
-      if (!have_ret_rtx_time)
-        cfg->ret_rtx_time = 2000;
-      if (!have_ret_rtx_pt)
-        cfg->ret_rtx_pt = 99;
-    }
-    if (cfg->fcc_enabled && has_suffix(cfg->input_path, ".xml")) {
-      argerr("--fcc-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
-      return ARGS_ERR;
-    }
-    if (!cfg->fcc_enabled && (have_fcc_rtx_time || have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || have_fcc_resolve_max_channels)) {
-      argerr("--fcc-rtx-time/--fcc-rtx-pt/--fcc-resolve-* require --fcc-addr");
-      return ARGS_ERR;
-    }
-    if (cfg->fcc_enabled) {
-      if (!have_fcc_rtx_time)
-        cfg->fcc_rtx_time = 2000;
-      if (!have_fcc_rtx_pt)
-        cfg->fcc_rtx_pt = 99;
-      if (!have_fcc_resolve_max_channels)
-        cfg->fcc_resolve_max_channels = 300;
-    }
-    if (cfg->al_fec_enabled && has_suffix(cfg->input_path, ".xml")) {
-      argerr("--al-fec-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
-      return ARGS_ERR;
-    }
-    if (!cfg->al_fec_enabled && have_al_fec_pt) {
-      argerr("--al-fec-pt requires --al-fec-addr");
-      return ARGS_ERR;
-    }
-    if (cfg->al_fec_enabled && !have_al_fec_pt) cfg->al_fec_pt = 96;
-    if ((cfg->packages_path || cfg->cells_path || cfg->rms_enabled || cfg->fus_enabled) && has_suffix(cfg->input_path, ".xml")) {
-      argerr("--packages/--cells/--rms-name/--fus-name have no effect with a raw .xml -i input (that path is sent through unparsed)");
-      return ARGS_ERR;
-    }
-    if (cfg->rms_enabled && cfg->fus_enabled) {
-      argerr("--rms-name and --fus-name are mutually exclusive (RMSFUSDiscovery carries one or the other, never both)");
-      return ARGS_ERR;
-    }
-    if (!cfg->rms_enabled && (have_rms_lang || cfg->rms_location || cfg->rms_logo)) {
-      argerr("--rms-lang/--rms-location/--rms-logo require --rms-name");
-      return ARGS_ERR;
-    }
-    if (cfg->rms_enabled) {
-      if (!cfg->rms_location) {
-        argerr("--rms-name requires --rms-location");
-        return ARGS_ERR;
-      }
-      if (!have_rms_lang)
-        memcpy(cfg->rms_lang, "deu", 3);
-    }
-    if (!cfg->fus_enabled && (have_fus_lang || have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo)) {
-      argerr("--fus-lang/--fus-id/--fus-announce/--fus-logo require --fus-name");
-      return ARGS_ERR;
-    }
-    if (cfg->fus_enabled) {
-      if (!have_fus_id) {
-        argerr("--fus-name requires --fus-id");
-        return ARGS_ERR;
-      }
-      if (!have_fus_lang)
-        memcpy(cfg->fus_lang, "deu", 3);
-    }
-  } else {
-    if (cfg->ret_enabled || have_ret_rtx_time || have_ret_rtx_pt || cfg->ret_mc || have_ret_mc_port || cfg->ret_rsi_mc_ret) {
-      argerr("--ret-* options are announce-only");
-      return ARGS_ERR;
-    }
-    if (cfg->fcc_enabled || have_fcc_rtx_time || have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || have_fcc_resolve_max_channels) {
-      argerr("--fcc-* options are announce-only");
-      return ARGS_ERR;
-    }
-    if (cfg->metrics_id) {
-      argerr("--metrics-id is announce-only");
-      return ARGS_ERR;
-    }
-    if (cfg->packages_path || cfg->cells_path || cfg->rms_enabled || have_rms_lang || cfg->rms_location || cfg->rms_logo ||
-        cfg->fus_enabled || have_fus_lang || have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo) {
-      argerr("--packages/--cells/--rms-*/--fus-* options are announce-only");
-      return ARGS_ERR;
-    }
-    if (!cfg->output_path) cfg->output_path = "-";
-    if (have_t)
-      cfg->timeout_s = t_value;
-    else
-      cfg->timeout_s = 35;
   }
   return ARGS_OK;
 }

@@ -13,15 +13,16 @@
 #define FMP4_CPRIV_MAX 512 /* avcC/hvcC config record, copied in */
 
 typedef struct {
-  codec_t codec; /* CODEC_H264/HEVC (video) or CODEC_AAC/AAC_LATM/AC3/EAC3/MP2A (audio) */
+  codec_t codec; /* CODEC_H264/HEVC/LCEVC (video) or audio codecs */
   unsigned track_id;
   unsigned timescale;
   unsigned width, height;   /* video only */
   unsigned rate, channels;  /* audio only */
-  const unsigned char *cpriv; /* video: avcC/hvcC. AAC/AAC_LATM: AudioSpecificConfig. else: unused */
+  const unsigned char *cpriv; /* video: avcC/hvcC/lvcC. AAC: AudioSpecificConfig */
   size_t cpriv_len;
   unsigned char ac3_bsid, ac3_bsmod, ac3_acmod, ac3_lfeon; /* AC3/EAC3 dac3/dec3 fields */
   unsigned ac3_bitrate_code; /* AC3: 5-bit frmsizecod. EAC3: 13-bit data_rate estimate, kbps */
+  unsigned depends_on_track_id; /* 0: none. else: tref/sbas to this track_id */
 } fmp4_track_cfg_t;
 
 typedef struct {

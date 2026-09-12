@@ -78,7 +78,7 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
       ts_packet_emit(r->pids.pmt_pid, &r->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     /* r->cas, source EMM passthrough: mutually exclusive (remux_new()) */
-    if (r->standalone && (r->cas || find_ca_passthrough(r, 2)) && due(now, &r->last_cat, INTERVAL_PAT_PMT_S)) {
+    if (r->standalone && (r->cas || find_ca_passthrough(r, CA_PASS_EMM)) && due(now, &r->last_cat, INTERVAL_PAT_PMT_S)) {
       if (r->cas) {
         n = cas_build_cat(r->cas, sec, sizeof sec);
       } else {
@@ -87,28 +87,24 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
         n = emm_desc_len ? psi_build_cat(0, emm_desc, emm_desc_len, sec, sizeof sec) : 0;
       }
       psi_note(tsm, PSI_TABLE_CAT, n);
-      if (n)
-        ts_packet_emit(OUT_PID_CAT, &r->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);
+      if (n) ts_packet_emit(OUT_PID_CAT, &r->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
   }
   if (r->standalone) {
     if (r->send_sdt && due(now, &r->last_sdt, INTERVAL_SDT_S)) {
       n = psi_build_sdt(0, r->cfg.tsid, r->cfg.onid, r->input.sid, 0x01, r->provider_name, r->service_name, sec, sizeof sec);
       psi_note(tsm, PSI_TABLE_SDT, n);
-      if (n)
-        ts_packet_emit(OUT_PID_SDT, &r->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
+      if (n) ts_packet_emit(OUT_PID_SDT, &r->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     if (r->send_nit && due(now, &r->last_nit, INTERVAL_NIT_S)) {
       n = psi_build_nit(0, r->cfg.onid, r->cfg.tsid, r->network_name, sec, sizeof sec);
       psi_note(tsm, PSI_TABLE_NIT, n);
-      if (n)
-        ts_packet_emit(OUT_PID_NIT, &r->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
+      if (n) ts_packet_emit(OUT_PID_NIT, &r->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
     }
   }
   if (r->send_ait && due(now, &r->last_ait, INTERVAL_AIT_S)) {
     ts_packet_emit(r->pids.ait_pid, &r->cc_ait, &ptr0, r->ait_section, r->ait_section_len, 0, 0, cb, ctx);
-    if (tsm)
-      tsm->ait_sections_total++;
+    if (tsm) tsm->ait_sections_total++;
   }
 
   if (r->standalone && r->cas) {

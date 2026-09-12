@@ -12,6 +12,7 @@
 #define PACKET_BITS (188.0 * 8.0)
 #define OVERAGE_THRESHOLD_S 2.0     /* sustained backlog before it's a real misconfiguration, not a burst */
 #define OVERAGE_LOG_COOLDOWN_S 30.0 /* don't spam if it stays misconfigured */
+#define STUFF_TICK_S 0.1
 
 struct bitrate_pacer {
   double target_bps;
@@ -65,11 +66,13 @@ void bitrate_account_n(bitrate_pacer_t *p, unsigned n) {
 void bitrate_account(bitrate_pacer_t *p) { bitrate_account_n(p, 1); }
 
 int bitrate_stuff_due(bitrate_pacer_t *p) {
-  double behind_bits;
-  if (!p->stuff || p->target_bps <= 0.0)
-    return 0;
+  double behind_bits, cap_bits;
+  int n, cap;
+  if (!p->stuff || p->target_bps <= 0.0) return 0;
   behind_bits = (mono_seconds() - p->start) * p->target_bps - (double)p->bits_sent;
-  if (behind_bits <= 0.0)
-    return 0;
-  return (int)(behind_bits / PACKET_BITS);
+  if (behind_bits <= 0.0) return 0;
+  n = (int)(behind_bits / PACKET_BITS);
+  cap_bits = p->target_bps * STUFF_TICK_S;
+  cap = (int)(cap_bits / PACKET_BITS) + 1;
+  return n < cap ? n : cap;
 }

@@ -7,10 +7,7 @@
 #include "../segment/mp4push.h"
 #include "http2_int.h"
 
-#include <pthread.h>
-#include <stdatomic.h>
 #include <string.h>
-#include <sys/epoll.h>
 
 static ssize_t mp4push_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *buf, size_t length, uint32_t *data_flags, nghttp2_data_source *source, void *ud) {
   (void)ng;
@@ -39,26 +36,9 @@ static void h2_submit_mp4push_response(h2_conn_t *conn, int32_t stream_id, h2_mp
 }
 
 void h2_mp4push_wake(int sub_idx) {
-  int fd = mp4push_sub_fd(sub_idx);
-  conn_t *c;
-  h2_conn_t *conn;
-  h2_mp4push_stream_t *tcs = NULL;
-  if (fd < 0) return;
-  c = conn_for_fd(fd);
-  if (!c) return;
-  conn = (h2_conn_t *)c->h2;
-  if (!conn) return;
-  for (int i = 0; i < H2_MP4PUSH_MAX; i++) if (conn->mp4push[i].sid && conn->mp4push[i].sub_idx == sub_idx) {
-    tcs = &conn->mp4push[i];
-    break;
-  }
-  if (!tcs) return;
-  nghttp2_session_resume_data(conn->ng, tcs->sid);
-  pthread_mutex_lock(&c->out_lock);
-  if (!atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) {
-    conn_epoll_mod(c, c->epfd, 1);
-  }
-  pthread_mutex_unlock(&c->out_lock);
+  conn_t *c = mp4push_sub_h2c(sub_idx);
+  h2_mp4push_stream_t *tcs = mp4push_sub_h2_slot(sub_idx);
+  h2_wake_stream(c, tcs ? tcs->sid : 0);
 }
 
 int h2_mp4push_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int sub_idx, int ws_handle) {
@@ -72,7 +52,7 @@ int h2_mp4push_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int sub_i
   tcs->sub_idx = sub_idx;
   tcs->sid = stream_id;
   h2_submit_mp4push_response(conn, stream_id, tcs);
-  mp4push_h2_bind(sub_idx, c->fd, t_reactor_tid, ws_handle);
+  mp4push_h2_bind(sub_idx, c, tcs, t_reactor_tid, ws_handle);
   return 1;
 }
 

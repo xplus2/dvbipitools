@@ -13,63 +13,47 @@
 #include <stdlib.h>
 #include <string.h>
 
+void serve_body(conn_t *c, const char *content_type, const char *body, size_t len, int is_head, int keep_alive) {
+  char hdr[192];
+  size_t n = build_ok_header(hdr, sizeof hdr, content_type, len, keep_alive);
+  conn_queue(c, hdr, n);
+  if (!is_head) conn_queue(c, body, len);
+  set_persistence(c, keep_alive);
+}
+
 void serve_metrics(conn_t *c, int is_head, int keep_alive) {
   char *body;
   size_t len;
-  char hdr[192];
-  size_t n;
-
   if (dipixy_metrics_render_prometheus(&body, &len)) {
     respond_status(c, RESP_501, keep_alive);
     return;
   }
-  n = build_ok_header(hdr, sizeof hdr, "text/plain; version=0.0.4", len, keep_alive);
-  conn_queue(c, hdr, n);
-  if (!is_head) conn_queue(c, body, len);
-  set_persistence(c, keep_alive);
+  serve_body(c, "text/plain; version=0.0.4", body, len, is_head, keep_alive);
 }
 
 void serve_status(conn_t *c, int is_head, int keep_alive) {
   char *body;
   size_t len;
-  char hdr[192];
-  size_t n;
   if (dipixy_status_render_json(reactor_cfg(), &body, &len)) {
     respond_status(c, RESP_501, keep_alive);
     return;
   }
-  n = build_ok_header(hdr, sizeof hdr, "application/json", len, keep_alive);
-  conn_queue(c, hdr, n);
-  if (!is_head) conn_queue(c, body, len);
-  set_persistence(c, keep_alive);
+  serve_body(c, "application/json", body, len, is_head, keep_alive);
 }
 
-void serve_playlist(conn_t *c, route_fmt_t fmt, playlist_type_t ptype, const char *host_hdr, const char *query, const pid_filter_t *filter, int is_head, int keep_alive) {
+void serve_playlist(conn_t *c, route_fmt_t fmt, playlist_type_t ptype, const char *host_hdr, const char *query, const pid_filter_t *filter, const lcevc_select_t *lcevc, int is_head, int keep_alive) {
   char *body;
   size_t len;
-  char hdr[192];
-  size_t n;
   const char *mime;
-  if (playlist_render(reactor_cfg(), reactor_channels(), c->ssl != NULL, host_hdr, query, filter, fmt, ptype, &body, &len)) {
+  if (playlist_render(reactor_cfg(), reactor_channels(), c->ssl != NULL, host_hdr, query, filter, lcevc, fmt, ptype, &body, &len)) {
     respond_status(c, RESP_501, keep_alive);
     return;
   }
   if (playlist_query_has_flag(query, "plain")) mime = "text/plain; charset=utf-8";
   else if (ptype == PLAYLIST_M3U) mime = "audio/x-mpegurl";
   else mime = "application/xspf+xml";
-  n = build_ok_header(hdr, sizeof hdr, mime, len, keep_alive);
-  conn_queue(c, hdr, n);
-  if (!is_head) conn_queue(c, body, len);
+  serve_body(c, mime, body, len, is_head, keep_alive);
   free(body);
-  set_persistence(c, keep_alive);
-}
-
-void serve_dlna_xml(conn_t *c, const char *body, size_t len, int is_head, int keep_alive) {
-  char hdr[128];
-  size_t n = build_ok_header(hdr, sizeof hdr, "text/xml; charset=utf-8", len, keep_alive);
-  conn_queue(c, hdr, n);
-  if (!is_head) conn_queue(c, body, len);
-  set_persistence(c, keep_alive);
 }
 
 void serve_dlna_desc(conn_t *c, int is_head, int keep_alive) {
@@ -79,21 +63,21 @@ void serve_dlna_desc(conn_t *c, int is_head, int keep_alive) {
     respond_status(c, RESP_501, keep_alive);
     return;
   }
-  serve_dlna_xml(c, body, len, is_head, keep_alive);
+  serve_body(c, "text/xml; charset=utf-8", body, len, is_head, keep_alive);
 }
 
 void serve_dlna_cd_scpd(conn_t *c, int is_head, int keep_alive) {
   const char *body;
   size_t len;
   dlna_cd_scpd_xml(&body, &len);
-  serve_dlna_xml(c, body, len, is_head, keep_alive);
+  serve_body(c, "text/xml; charset=utf-8", body, len, is_head, keep_alive);
 }
 
 void serve_dlna_cm_scpd(conn_t *c, int is_head, int keep_alive) {
   const char *body;
   size_t len;
   dlna_cm_scpd_xml(&body, &len);
-  serve_dlna_xml(c, body, len, is_head, keep_alive);
+  serve_body(c, "text/xml; charset=utf-8", body, len, is_head, keep_alive);
 }
 
 void serve_dlna_control(conn_t *c, const char *service, const struct phr_header *headers, size_t num_headers, const char *body, size_t body_len, int keep_alive) {
@@ -132,11 +116,11 @@ void serve_dlna_subscribe(conn_t *c, const char *service, const struct phr_heade
 
   callback = find_header(headers, num_headers, "CALLBACK", callback_buf, sizeof callback_buf) ? callback_buf : NULL;
   sid_hdr = find_header(headers, num_headers, "SID", sid_buf, sizeof sid_buf) ? sid_buf : NULL;
-  if (sid_hdr)
+  if (sid_hdr) {
     gena_renew(sid_hdr, sid, sizeof sid);
-  else
+  } else {
     gena_subscribe_new(reactor_cfg(), service, callback, sid, sizeof sid);
-
+  }
   dispatch_sb_init(&b, hdr, sizeof hdr);
   dispatch_sb_add(&b, "HTTP/1.1 200 OK\r\nSID: ");
   dispatch_sb_add(&b, sid);
@@ -161,13 +145,8 @@ void serve_dlna_unsubscribe(conn_t *c, const struct phr_header *headers, size_t 
 }
 
 void serve_htdocs_index(conn_t *c, int is_head, int keep_alive) {
-  char hdr[128];
   const char *body;
   size_t len;
-  size_t n;
   htdocs_get(&body, &len);
-  n = build_ok_header(hdr, sizeof hdr, "text/html; charset=utf-8", len, keep_alive);
-  conn_queue(c, hdr, n);
-  if (!is_head) conn_queue(c, body, len);
-  set_persistence(c, keep_alive);
+  serve_body(c, "text/html; charset=utf-8", body, len, is_head, keep_alive);
 }

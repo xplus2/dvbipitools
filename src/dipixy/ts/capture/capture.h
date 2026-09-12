@@ -24,6 +24,8 @@ capture_ctx_t *capture_open(int family, const char *group, unsigned port, const 
 
 void capture_close(capture_ctx_t *ctx);
 
+extern _Thread_local int t_pump_tid;
+
 /* drain pending into ring. 0 ok, -1 fatal read error */
 int capture_service(capture_ctx_t *ctx);
 

@@ -40,6 +40,13 @@ dvbipitools_add_unit_test(lib_demux_bitreader
     unit/lib/demux/test_bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c)
 
+dvbipitools_add_unit_test(lib_demux_escodec_aubuild
+    unit/lib/demux/escodec/test_aubuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
 dvbipitools_add_unit_test(lib_demux_rtp
     unit/lib/demux/test_rtp.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c)
@@ -137,6 +144,7 @@ dvbipitools_add_unit_test(lib_mux_tspacket_write
 dvbipitools_add_unit_test(lib_mux_ebml
     unit/lib/mux/test_ebml.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
 
 dvbipitools_add_unit_test(lib_mux_teletext
@@ -159,6 +167,7 @@ dvbipitools_add_unit_test(lib_mux_mkv
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/feed.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
@@ -175,7 +184,7 @@ dvbipitools_add_unit_test(lib_mux_mp4
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/mp4.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/moov.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
-    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/video.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/write.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/feed.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
@@ -197,6 +206,7 @@ dvbipitools_add_unit_test(lib_mux_mp4
 dvbipitools_add_unit_test(lib_mux_fmp4
     unit/lib/mux/test_fmp4.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/fmp4.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/fmp4_moov.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/fmp4_frag.c
@@ -213,6 +223,7 @@ dvbipitools_add_unit_test(lib_mux_flv
     ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
@@ -248,6 +259,7 @@ dvbipitools_add_unit_test(lib_net_rtmp
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
@@ -262,6 +274,7 @@ dvbipitools_add_unit_test(lib_net_rtmpout
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
@@ -412,6 +425,7 @@ dvbipitools_add_unit_test(dipicam378_args
     unit/dipicam378/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipicam378/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 if (OpenSSL_FOUND)
@@ -434,6 +448,7 @@ if (OpenSSL_FOUND)
         unit/dipicam378/test_cs378x.c
         ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/cs378x.c
         ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/protocol.c
         ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/worker.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
@@ -443,6 +458,7 @@ if (OpenSSL_FOUND)
     dvbipitools_add_unit_test(dipidescramble_crypto
         unit/dipidescramble/test_crypto.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
     target_link_libraries(test_dipidescramble_crypto PRIVATE OpenSSL::Crypto)
@@ -451,6 +467,7 @@ if (OpenSSL_FOUND)
         unit/dipidescramble/test_device.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_state_core.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/common.c
@@ -460,6 +477,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
     target_link_libraries(test_dipidescramble_device PRIVATE OpenSSL::Crypto)
 
@@ -471,9 +489,11 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/wire.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/crypto.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
     target_link_libraries(test_dipidescramble_ecm_profile PRIVATE OpenSSL::Crypto)
 
@@ -515,6 +535,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
@@ -558,6 +579,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/emmcache.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_state_core.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/common.c
@@ -583,12 +605,14 @@ if (OpenSSL_FOUND)
     dvbipitools_add_unit_test(dipidescramble_args
         unit/dipidescramble/test_args.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/args.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/common.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/parse.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/validate.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/wire.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/crypto.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
@@ -604,11 +628,11 @@ endif ()
 dvbipitools_add_unit_test(lib_bim_bitwriter
     unit/lib/bim/test_bitwriter.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
-    ${CMAKE_SOURCE_DIR}/src/lib/bim/bitreader.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c)
 
 dvbipitools_add_unit_test(lib_bim_bitreader
     unit/lib/bim/test_bitreader.c
-    ${CMAKE_SOURCE_DIR}/src/lib/bim/bitreader.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c)
 
 dvbipitools_add_unit_test(lib_bim_strrepo
     unit/lib/bim/test_strrepo.c
@@ -618,7 +642,7 @@ dvbipitools_add_unit_test(lib_bim_codec
     unit/lib/bim/test_codec.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/codec.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
-    ${CMAKE_SOURCE_DIR}/src/lib/bim/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
 
@@ -668,7 +692,7 @@ set(BIM_FRAGMENT_DEPS
     ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/codec.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
-    ${CMAKE_SOURCE_DIR}/src/lib/bim/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
@@ -689,6 +713,7 @@ dvbipitools_add_unit_test(dipibim_args
     unit/dipibim/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipibim/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_unit_test(dipiscan_format
@@ -732,6 +757,7 @@ dvbipitools_add_unit_test(dipixmltv_args
     unit/dipixmltv/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipixmltv/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_unit_test(dipixmltv_revmap
@@ -1038,6 +1064,7 @@ dvbipitools_add_unit_test(dipitvhead_source
 dvbipitools_add_unit_test(dipitvhead_args
     unit/dipitvhead/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
@@ -1369,12 +1396,13 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/dipirec/record/run.c
     ${CMAKE_SOURCE_DIR}/src/lib/fccret/ret_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/mp4.c
-    ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/video.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/write.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/feed.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/moov.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
@@ -1470,6 +1498,7 @@ dvbipitools_add_unit_test(lib_fccret_fcc_client
 dvbipitools_add_unit_test(dipirec_args
     unit/dipirec/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
@@ -1482,6 +1511,7 @@ dvbipitools_add_unit_test(dipifccret_args
     ${CMAKE_SOURCE_DIR}/src/dipifccret/args.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/ranges.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_unit_test(dipifccret_listen
@@ -1731,6 +1761,7 @@ dvbipitools_add_unit_test(dipibcg_args
 dvbipitools_add_unit_test(dipibcg_announce
     unit/dipibcg/test_announce.c
     ${CMAKE_SOURCE_DIR}/src/dipibcg/announce.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/announce_driver.c
     ${CMAKE_SOURCE_DIR}/src/dipibcg/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
@@ -1742,7 +1773,7 @@ dvbipitools_add_unit_test(dipibcg_announce
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/accessunit.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
-    ${CMAKE_SOURCE_DIR}/src/lib/bim/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/codec.c
@@ -1761,6 +1792,7 @@ dvbipitools_add_unit_test(dipibcg_announce
 dvbipitools_add_unit_test(dipibcg_listen
     unit/dipibcg/test_listen.c
     ${CMAKE_SOURCE_DIR}/src/dipibcg/listen.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
     ${CMAKE_SOURCE_DIR}/src/dipibcg/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
@@ -1773,7 +1805,7 @@ dvbipitools_add_unit_test(dipibcg_listen
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/accessunit.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
-    ${CMAKE_SOURCE_DIR}/src/lib/bim/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/codec.c
@@ -1812,6 +1844,7 @@ dvbipitools_add_unit_test(dipirist_args
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
@@ -1834,6 +1867,8 @@ if (TARGET dipirist)
         ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
@@ -1864,6 +1899,8 @@ if (DVBIPITOOLS_HAVE_RIST)
     dvbipitools_add_unit_test(lib_net_rist_ristin
         unit/lib/net/rist/test_ristin.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
@@ -1890,6 +1927,7 @@ dvbipitools_add_unit_test(dipisrt_args
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 target_compile_definitions(test_dipisrt_args PRIVATE DIPISRT_HAVE_BONDING)
@@ -1954,6 +1992,7 @@ dvbipitools_add_unit_test(dipisds_format_out
 dvbipitools_add_unit_test(dipisds_listen
     unit/dipisds/test_listen.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/listen.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
@@ -1972,6 +2011,7 @@ dvbipitools_add_unit_test(dipisds_listen
 dvbipitools_add_unit_test(dipisds_announce
     unit/dipisds/test_announce.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/announce.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/announce_driver.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/input.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
@@ -2022,6 +2062,7 @@ dvbipitools_add_unit_test(dipixy_capture
     unit/dipixy/test_capture.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
@@ -2063,8 +2104,10 @@ dvbipitools_add_unit_test(dipixy_channels
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_didl.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/strbuf.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
@@ -2110,6 +2153,7 @@ dvbipitools_add_unit_test(dipixy_playlist
     ${CMAKE_SOURCE_DIR}/src/dipixy/core/playlist.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/lcevcselect.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/channels.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
@@ -2120,8 +2164,10 @@ dvbipitools_add_unit_test(dipixy_playlist
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_didl.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/strbuf.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_broadcast.c
@@ -2171,11 +2217,13 @@ dvbipitools_add_unit_test(dipixy_gena
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/strbuf.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/channels.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
@@ -2225,11 +2273,13 @@ dvbipitools_add_unit_test(dipixy_dlna
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/strbuf.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/channels.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
@@ -2277,6 +2327,12 @@ dvbipitools_add_unit_test(dipixy_pidfilter
 dvbipitools_add_unit_test(dipixy_pmtselect
     unit/dipixy/test_pmtselect.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pmtselect.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
+
+dvbipitools_add_unit_test(dipixy_lcevcselect
+    unit/dipixy/test_lcevcselect.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/lcevcselect.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
 
@@ -2338,6 +2394,8 @@ dvbipitools_add_unit_test(dipixy_conn
     unit/dipixy/test_conn.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/conn.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tls_stub.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_threadlocal_stub.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_unit_test(dipixy_ws_sources
@@ -2354,8 +2412,10 @@ dvbipitools_add_unit_test(dipixy_ws_sources
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_didl.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/strbuf.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
@@ -2404,6 +2464,7 @@ dvbipitools_add_unit_test(dipixy_hls
     ${CMAKE_SOURCE_DIR}/src/dipixy/dash/dash.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_render.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/lcevcselect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 target_link_libraries(test_dipixy_hls PRIVATE m)
@@ -2415,6 +2476,7 @@ dvbipitools_add_unit_test(dipixy_segstore_concurrency
     ${CMAKE_SOURCE_DIR}/src/dipixy/segstore.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/lcevcselect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 target_link_libraries(test_dipixy_segstore_concurrency PRIVATE m)

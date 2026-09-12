@@ -15,19 +15,14 @@
 int playlist_path_parse(const char *path, route_fmt_t *fmt, playlist_type_t *ptype) {
   char buf[64];
   char *slash;
-  if (!path || strncmp(path, "/export/", 8))
-    return -1;
-  if (strlen(path + 8) >= sizeof buf)
-    return -1;
+  if (!path || strncmp(path, "/export/", 8)) return -1;
+  if (strlen(path + 8) >= sizeof buf) return -1;
   bufcpy(buf, sizeof buf, path + 8);
   slash = strchr(buf, '/');
-  if (!slash)
-    return -1;
+  if (!slash) return -1;
   *slash = '\0';
-  if (strchr(slash + 1, '/'))
-    return -1;
-  if (fmt_parse(buf, fmt))
-    return -1;
+  if (strchr(slash + 1, '/')) return -1;
+  if (fmt_parse(buf, fmt)) return -1;
   if (!strcmp(slash + 1, "m3u"))
     *ptype = PLAYLIST_M3U;
   else if (!strcmp(slash + 1, "xspf"))
@@ -58,8 +53,7 @@ int playlist_query_has_flag(const char *query, const char *name) {
   namelen = strlen(name);
   for (const char *p = query; (p = strstr(p, name)) != NULL; p += namelen) {
     char after = p[namelen];
-    if ((p == query || p[-1] == '&') && (after == '\0' || after == '&' || after == '='))
-      return 1;
+    if ((p == query || p[-1] == '&') && (after == '\0' || after == '&' || after == '=')) return 1;
   }
   return 0;
 }
@@ -162,6 +156,14 @@ static void append_filter(char *target, size_t targetsz, size_t used, const pid_
   sb_add(target, targetsz, used, filterbuf);
 }
 
+static void append_lcevc(char *target, size_t targetsz, size_t used, int has_filter, const lcevc_select_t *lcevc) {
+  char lcevcbuf[16];
+  if (!lcevc || lcevc->mode == LCEVC_SEL_FULL || used >= targetsz) return;
+  lcevc_select_format(lcevc, lcevcbuf, sizeof lcevcbuf);
+  used = sb_add(target, targetsz, used, has_filter ? "&lcevc=" : "?lcevc=");
+  sb_add(target, targetsz, used, lcevcbuf);
+}
+
 static void emit_out(FILE *f, playlist_type_t ptype, const char *name, const char *target, const char *icon_uri, unsigned tsid, unsigned onid, unsigned sid) {
   if (ptype == PLAYLIST_M3U)
     playlist_out_m3u_item(f, name, target, icon_uri, tsid, onid, sid);
@@ -169,7 +171,7 @@ static void emit_out(FILE *f, playlist_type_t ptype, const char *name, const cha
     playlist_out_xspf_item(f, name, target, icon_uri, tsid, onid, sid);
 }
 
-static void emit_singleton(FILE *f, playlist_type_t ptype, route_fmt_t fmt, const char *scheme, const char *hostport, const pid_filter_t *filter, const char *kind, const char *name) {
+static void emit_singleton(FILE *f, playlist_type_t ptype, route_fmt_t fmt, const char *scheme, const char *hostport, const pid_filter_t *filter, const lcevc_select_t *lcevc, const char *kind, const char *name) {
   char target[300];
   char name_enc[192];
   const char *seg;
@@ -188,6 +190,8 @@ static void emit_singleton(FILE *f, playlist_type_t ptype, route_fmt_t fmt, cons
   n = sb_add(target, sizeof target, n, "/");
   n = sb_add(target, sizeof target, n, fmt_str(fmt));
   append_filter(target, sizeof target, n, filter);
+  n = strlen(target);
+  append_lcevc(target, sizeof target, n, filter && filter->count, lcevc);
   emit_out(f, ptype, name ? name : kind, target, NULL, 0, 0, 0);
 }
 
@@ -198,6 +202,7 @@ typedef struct {
   const char *scheme;
   const char *hostport;
   const pid_filter_t *filter;
+  const lcevc_select_t *lcevc;
   int keep_multicast;
   unsigned ordinal;
   const char *src_name;
@@ -237,12 +242,14 @@ static void emit_item(void *vctx, const channel_item_t *item) {
     n = sb_add(target, sizeof target, n, "/");
     n = sb_add(target, sizeof target, n, fmt_str(rc->fmt));
     append_filter(target, sizeof target, n, rc->filter);
+    n = strlen(target);
+    append_lcevc(target, sizeof target, n, rc->filter && rc->filter->count, rc->lcevc);
   }
   emit_out(rc->f, rc->ptype, item->name, target, item->icon_uri, item->tsid, item->onid, item->sid);
 }
 
 int playlist_render(const config_t *cfg, const channels_t *ch, int is_tls, const char *host_hdr, const char *query, const pid_filter_t *filter,
-                    route_fmt_t fmt, playlist_type_t ptype, char **out, size_t *out_len) {
+                    const lcevc_select_t *lcevc, route_fmt_t fmt, playlist_type_t ptype, char **out, size_t *out_len) {
   FILE *f;
   char hostport[160];
   char input_csv[256];
@@ -263,9 +270,9 @@ int playlist_render(const config_t *cfg, const channels_t *ch, int is_tls, const
   si = 0;
   for (int ord = 1; ord <= max_ord; ord++) {
     if (ord == cfg->stdin_ordinal) {
-      if (ordinal_included(input_filter, (unsigned)ord)) emit_singleton(f, ptype, fmt, scheme, hostport, filter, "stdin", cfg->stdin_name);
+      if (ordinal_included(input_filter, (unsigned)ord)) emit_singleton(f, ptype, fmt, scheme, hostport, filter, lcevc, "stdin", cfg->stdin_name);
     } else if (ord == cfg->rist_ordinal) {
-      if (ordinal_included(input_filter, (unsigned)ord)) emit_singleton(f, ptype, fmt, scheme, hostport, filter, "rist", cfg->rist_name);
+      if (ordinal_included(input_filter, (unsigned)ord)) emit_singleton(f, ptype, fmt, scheme, hostport, filter, lcevc, "rist", cfg->rist_name);
     } else if (si < cfg->n_sources && cfg->sources[si].ordinal == ord) {
       if (ordinal_included(input_filter, (unsigned)ord)) {
         emit_ctx_t rc = {0};
@@ -275,6 +282,7 @@ int playlist_render(const config_t *cfg, const channels_t *ch, int is_tls, const
         rc.scheme = scheme;
         rc.hostport = hostport;
         rc.filter = filter;
+        rc.lcevc = lcevc;
         rc.keep_multicast = keep_multicast;
         rc.ordinal = (unsigned)ord;
         rc.src_name = cfg->sources[si].name;

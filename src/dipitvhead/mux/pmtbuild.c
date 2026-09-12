@@ -4,7 +4,6 @@
 #include <string.h>
 
 #include "lib/mux/psi_build.h"
-
 #include "pmtbuild.h"
 
 /* stream_type per codec, matches reference multicasts where verified live */
@@ -20,19 +19,27 @@ static unsigned out_stream_type(codec_t c) {
     case CODEC_AC3:      return 0x81;
     case CODEC_EAC3:     return 0x87;
     case CODEC_OPUS:     return 0x06;
+    case CODEC_LCEVC:    return 0x36;
     case CODEC_NONE:     return 0;
   }
   return 0;
 }
 
 static int supported(const psi_es_t *e, unsigned strip_mask) {
-  if (e->cls == PID_VIDEO || e->cls == PID_AUDIO)
-    return e->codec != CODEC_NONE;
-  if (e->cls == PID_TELETEXT || e->cls == PID_SUBTITLE)
-    return 1;
-  if (e->cls == PID_DATA)
-    return !(strip_mask & TVSTRIP_DATA);
-  return 0;
+  switch (e->cls) {
+    case PID_VIDEO:
+    case PID_AUDIO:
+      return e->codec != CODEC_NONE;
+    case PID_TELETEXT:
+    case PID_SUBTITLE:
+      return 1;
+    case PID_DATA:
+      return !(strip_mask & TVSTRIP_DATA);
+    case PID_LCEVC:
+      return 1;
+    default:
+      return 0;
+  }
 }
 
 void out_program_pids(unsigned idx, out_program_pids_t *out) {
@@ -46,48 +53,49 @@ void out_program_pids(unsigned idx, out_program_pids_t *out) {
 int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned strip_mask, unsigned src_pcr_pid, unsigned video_pid, unsigned es_pid_base, out_es_t *out_es, int cap, unsigned *pcr_pid, int *dropped) {
   int n = 0;
   unsigned next_pid = es_pid_base;
-
   *dropped = 0;
-
-  /* video first, fixed pid, so PCR (usually the video pid) lands somewhere predictable */
+  /* video first, fixed pid */
   for (int i = 0; i < in_count && n < cap; i++) {
-    if (in_es[i].cls != PID_VIDEO || !supported(&in_es[i], strip_mask))
-      continue;
+    if (in_es[i].cls != PID_VIDEO || !supported(&in_es[i], strip_mask)) continue;
     out_es[n].in_pid = in_es[i].pid;
     out_es[n].out_pid = video_pid;
     out_es[n].stream_type = out_stream_type(in_es[i].codec);
     out_es[n].src = &in_es[i];
-    out_es[n].is_ca = 0;
+    out_es[n].is_ca = CA_PASS_NONE;
     n++;
     break; /* one video track */
   }
   for (int i = 0; i < in_count; i++) {
-    if (in_es[i].cls == PID_VIDEO || !supported(&in_es[i], strip_mask))
-      continue;
+    if (in_es[i].cls == PID_VIDEO || !supported(&in_es[i], strip_mask)) continue;
     if (n >= cap) {
       (*dropped)++;
       continue;
     }
     out_es[n].in_pid = in_es[i].pid;
     out_es[n].out_pid = next_pid++;
-    if (in_es[i].cls == PID_TELETEXT || in_es[i].cls == PID_SUBTITLE)
-      out_es[n].stream_type = 0x06;
-    else if (in_es[i].cls == PID_DATA)
-      out_es[n].stream_type = in_es[i].stream_type; /* opaque passthrough: keep source's own */
-    else
-      out_es[n].stream_type = out_stream_type(in_es[i].codec);
+    switch (in_es[i].cls) {
+      case PID_TELETEXT:
+      case PID_SUBTITLE:
+        out_es[n].stream_type = 0x06;
+        break;
+      case PID_DATA:
+        out_es[n].stream_type = in_es[i].stream_type; /* opaque passthrough: keep source's own */
+        break;
+      default:
+        out_es[n].stream_type = out_stream_type(in_es[i].codec);
+        break;
+    }
     out_es[n].src = &in_es[i];
-    out_es[n].is_ca = 0;
+    out_es[n].is_ca = CA_PASS_NONE;
     n++;
   }
 
   if (n > 0) {
     *pcr_pid = out_es[0].out_pid;
-    for (int i = 0; i < n; i++)
-      if (out_es[i].in_pid == src_pcr_pid) {
-        *pcr_pid = out_es[i].out_pid;
-        break;
-      }
+    for (int i = 0; i < n; i++) if (out_es[i].in_pid == src_pcr_pid) {
+      *pcr_pid = out_es[i].out_pid;
+      break;
+    }
   }
   return n;
 }
@@ -96,11 +104,8 @@ void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, un
   int non_video = 0;
   unsigned next_pid;
 
-  for (int i = 0; i < *n; i++)
-    if (out_es[i].out_pid != video_pid)
-      non_video++;
+  for (int i = 0; i < *n; i++) if (out_es[i].out_pid != video_pid) non_video++;
   next_pid = es_pid_base + (unsigned)non_video;
-
   if (ecm_pid) {
     if (*n >= cap) {
       (*dropped)++;
@@ -109,7 +114,7 @@ void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, un
       out_es[*n].out_pid = next_pid++;
       out_es[*n].stream_type = 0;
       out_es[*n].src = NULL;
-      out_es[*n].is_ca = 1;
+      out_es[*n].is_ca = CA_PASS_ECM;
       out_es[*n].ca_system_id = ecm_ca_system_id;
       (*n)++;
     }
@@ -122,7 +127,7 @@ void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, un
       out_es[*n].out_pid = next_pid++;
       out_es[*n].stream_type = 0;
       out_es[*n].src = NULL;
-      out_es[*n].is_ca = 2;
+      out_es[*n].is_ca = CA_PASS_EMM;
       out_es[*n].ca_system_id = emm_ca_system_id;
       (*n)++;
     }
@@ -150,15 +155,14 @@ static size_t put_subtitling(unsigned char *out, const psi_es_t *e) {
   return 10;
 }
 
-/* copies source ES descriptor loop verbatim, minus CA_descriptor (tag 0x09): CA_PID would
-   point at stale ECM pid once remapped (ETSI EN 300 468/ISO 13818-1).
+/* copies source ES descriptor loop, minus CA_descriptor (tag 0x09):
+   CA_PID would point at stale ECM pid once remapped (ETSI EN 300 468/ISO 13818-1).
    possible overflow: won't copy ES's remaining descriptors, set *truncated. returns new n. */
 static size_t put_opaque_descriptors(unsigned char *out, size_t n, size_t cap, const psi_es_t *src, int *truncated) {
   size_t i = 0;
   while (i + 2 <= src->desc_len) {
     size_t l = src->desc[i + 1];
-    if (i + 2 + l > src->desc_len)
-      break;
+    if (i + 2 + l > src->desc_len) break;
     if (src->desc[i] != 0x09) {
       if (n + 2 + l > cap) {
         *truncated = 1;
@@ -176,8 +180,7 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
   size_t n = 0;
 
   *desc_truncated = 0;
-  if (cap < 20 + prog_desc_len)
-    return 0;
+  if (cap < 20 + prog_desc_len) return 0;
   out[n++] = 0x02;
   n += 2;
   psi_put16(out + n, program_number);
@@ -196,10 +199,8 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
 
   for (int i = 0; i < es_count; i++) {
     const out_es_t *e = &es[i];
-    if (e->is_ca) /* ECM/EMM passthrough: carried as a pid, not a PMT stream entry */
-      continue;
-    if (n + 5 > cap)
-      return 0;
+    if (e->is_ca) continue; /* ECM/EMM passthrough: carried as a pid, not a PMT stream entry */
+    if (n + 5 > cap) return 0;
     out[n++] = (unsigned char)e->stream_type;
     psi_put16(out + n, 0xE000 | (e->out_pid & 0x1FFF));
     n += 2;
@@ -207,24 +208,20 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
     n += 2;
 
     if (e->src->cls == PID_TELETEXT) {
-      if (n + 7 > cap)
-        return 0;
+      if (n + 7 > cap) return 0;
       n += put_teletext(out + n, e->src);
     } else if (e->src->cls == PID_SUBTITLE) {
-      if (n + 10 > cap)
-        return 0;
+      if (n + 10 > cap) return 0;
       n += put_subtitling(out + n, e->src);
     } else {
       n = put_opaque_descriptors(out, n, cap - 4, e->src, desc_truncated); /* -4: leave room for psi_finish_section's CRC */
     }
-
     unsigned esinfo = (unsigned)(n - (es_info_pos + 2));
     out[es_info_pos] = (unsigned char)(0xF0 | ((esinfo >> 8) & 0x0F));
     out[es_info_pos + 1] = (unsigned char)esinfo;
   }
   if (extra_len) {
-    if (n + extra_len > cap)
-      return 0;
+    if (n + extra_len > cap) return 0;
     memcpy(out + n, extra, extra_len);
     n += extra_len;
   }

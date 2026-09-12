@@ -121,6 +121,35 @@ START_TEST(null_query_leaves_empty) {
 }
 END_TEST
 
+START_TEST(add_inserts_sorted) {
+  pid_filter_t f;
+  pid_filter_parse("101", &f);
+  pid_filter_add(&f, 32);
+  ck_assert_int_eq(f.count, 2);
+  ck_assert_uint_eq(f.pids[0], 32u);
+  ck_assert_uint_eq(f.pids[1], 101u);
+}
+END_TEST
+
+START_TEST(add_ignores_duplicate) {
+  pid_filter_t f;
+  pid_filter_parse("101", &f);
+  pid_filter_add(&f, 101);
+  ck_assert_int_eq(f.count, 1);
+}
+END_TEST
+
+START_TEST(add_ignores_when_full) {
+  pid_filter_t f;
+  f.count = 0;
+  for (unsigned i = 0; i < PID_FILTER_MAX; i++)
+    pid_filter_add(&f, i);
+  ck_assert_int_eq(f.count, PID_FILTER_MAX);
+  pid_filter_add(&f, 9000);
+  ck_assert_int_eq(f.count, PID_FILTER_MAX);
+}
+END_TEST
+
 static Suite *pidfilter_suite(void) {
   Suite *s = suite_create("dipixy_pidfilter");
   TCase *tc = tcase_create("core");
@@ -138,6 +167,9 @@ static Suite *pidfilter_suite(void) {
   tcase_add_test(tc, query_stops_at_next_param);
   tcase_add_test(tc, query_without_filter_param_leaves_empty);
   tcase_add_test(tc, null_query_leaves_empty);
+  tcase_add_test(tc, add_inserts_sorted);
+  tcase_add_test(tc, add_ignores_duplicate);
+  tcase_add_test(tc, add_ignores_when_full);
   suite_add_tcase(s, tc);
   return s;
 }

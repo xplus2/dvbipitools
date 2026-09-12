@@ -9,11 +9,9 @@
 
 #include "lib/helper/byte_ring.h"
 
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/epoll.h>
 #include <unistd.h>
 
 /* DATA read callback: pulls straight from subscriber's h2_ring
@@ -43,26 +41,13 @@ static void h2_submit_tspush_response(h2_conn_t *conn, int32_t stream_id, h2_tsp
   nghttp2_submit_response(conn->ng, stream_id, nva, 2, &dp);
 }
 
-/* new ring data for sub_idx: resume DATA provider, arm EPOLLOUT for next
-   h2_flush_tx */
 void h2_tspush_wake(int sub_idx) {
+  conn_t *c;
+  h2_tspush_stream_t *tcs;
   if (sub_idx < 0 || sub_idx >= g_ts_subs_n) return;
-  int fd = g_ts_subs[sub_idx].fd;
-  conn_t *c = conn_for_fd(fd);
-  if (!c) return;
-  h2_conn_t *conn = (h2_conn_t *)c->h2;
-  if (!conn) return;
-  h2_tspush_stream_t *tcs = NULL;
-  for (int i = 0; i < H2_TSPUSH_MAX; i++)
-    if (conn->tspush[i].sid && conn->tspush[i].sub_idx == sub_idx) {
-      tcs = &conn->tspush[i];
-      break;
-    }
-  if (!tcs) return;
-  nghttp2_session_resume_data(conn->ng, tcs->sid);
-  pthread_mutex_lock(&c->out_lock);
-  if (!atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) conn_epoll_mod(c, c->epfd, 1);
-  pthread_mutex_unlock(&c->out_lock);
+  c = g_ts_subs[sub_idx].h2c;
+  tcs = g_ts_subs[sub_idx].h2_slot;
+  h2_wake_stream(c, tcs ? tcs->sid : 0);
 }
 
 /* registers a TS push stream. 1 = dispatched, 0 = slot table full (caller sends an error response) */
@@ -77,8 +62,8 @@ int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush
   tcs->sub_idx = tspush_sub;
   tcs->sid = stream_id;
   h2_submit_tspush_response(conn, stream_id, tcs);
-  g_ts_subs[tspush_sub].fd = c->fd;
-  g_ts_subs[tspush_sub].h2_sid = stream_id;
+  g_ts_subs[tspush_sub].h2c = c;
+  g_ts_subs[tspush_sub].h2_slot = tcs;
   ts_push_set_reactor_tid(tspush_sub, t_reactor_tid);
   atomic_store_explicit(&g_ts_subs[tspush_sub].ready, 1, memory_order_release);
   return 1;

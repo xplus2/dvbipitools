@@ -226,6 +226,34 @@ static void feed_pat_pmt(ts_filter_t *f) {
   ts_filter_packet(f, pkt, out);
 }
 
+/* PMT: video(0x101, H264), standalone lcevc(0x102, stream_type 0x36) */
+static size_t build_pmt_with_lcevc(unsigned char *out, unsigned prog_num, unsigned video_pid, unsigned lcevc_pid) {
+  size_t n = 0;
+  out[n++] = 0x02;
+  n += 2;
+  out[n++] = (unsigned char)(prog_num >> 8);
+  out[n++] = (unsigned char)prog_num;
+  out[n++] = 0xC1;
+  out[n++] = 0x00;
+  out[n++] = 0x00;
+  out[n++] = (unsigned char)(0xE0 | ((video_pid >> 8) & 0x1F));
+  out[n++] = (unsigned char)video_pid;
+  out[n++] = 0xF0;
+  out[n++] = 0x00;
+  out[n++] = 0x1B; /* video H264 */
+  out[n++] = (unsigned char)(0xE0 | ((video_pid >> 8) & 0x1F));
+  out[n++] = (unsigned char)video_pid;
+  out[n++] = 0xF0;
+  out[n++] = 0x00;
+  out[n++] = 0x36; /* LCEVC */
+  out[n++] = (unsigned char)(0xE0 | ((lcevc_pid >> 8) & 0x1F));
+  out[n++] = (unsigned char)lcevc_pid;
+  out[n++] = 0xF0;
+  out[n++] = 0x00;
+  finish(out, n, 0xB0);
+  return n + 4;
+}
+
 static int filter_pid(ts_filter_t *f, unsigned pid) {
   unsigned char pkt[188], out[188];
   memset(pkt, 0xCD, sizeof pkt);
@@ -379,6 +407,45 @@ START_TEST(ts_filter_strip_cat_ecm_emm_drops_ca_pids) {
 }
 END_TEST
 
+START_TEST(ts_filter_strip_lcevc_drops_standalone_es) {
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_LCEVC);
+  unsigned char sec[256], pkt[188], out[188];
+  size_t slen;
+
+  slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  slen = build_pmt_with_lcevc(sec, 101, 0x0101, 0x0102);
+  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  ck_assert_int_eq(filter_pid(f, 0x0102), 0); /* lcevc dropped */
+  ck_assert_int_eq(filter_pid(f, 0x0101), 1); /* video kept */
+
+  ts_filter_free(f);
+}
+END_TEST
+
+START_TEST(ts_filter_strip_none_keeps_lcevc_pid) {
+  ts_filter_t *f = ts_filter_new(1, 0, 0, 0, 0);
+  unsigned char sec[256], pkt[188], out[188];
+  size_t slen;
+
+  slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  slen = build_pmt_with_lcevc(sec, 101, 0x0101, 0x0102);
+  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  ts_filter_packet(f, pkt, out);
+
+  ck_assert_int_eq(filter_pid(f, 0x0102), 1); /* lcevc kept */
+
+  ts_filter_free(f);
+}
+END_TEST
+
 START_TEST(ts_filter_strip_none_keeps_ca_pids) {
   ts_filter_t *f = ts_filter_new(1, 0, 0, 0, 0);
   unsigned char sec[256], pkt[188], out[188];
@@ -456,6 +523,8 @@ static Suite *ts_filter_suite(void) {
   tcase_add_test(tc, ts_filter_preferred_pmt_pid_pins_non_first_candidate);
   tcase_add_test(tc, ts_filter_strip_none_keeps_nit_and_null);
   tcase_add_test(tc, ts_filter_strip_cat_ecm_emm_drops_ca_pids);
+  tcase_add_test(tc, ts_filter_strip_lcevc_drops_standalone_es);
+  tcase_add_test(tc, ts_filter_strip_none_keeps_lcevc_pid);
   tcase_add_test(tc, ts_filter_strip_none_keeps_ca_pids);
   tcase_add_test(tc, ts_filter_strip_tdt_drops_pid_0x14);
   tcase_add_test(tc, ts_filter_strip_tot_also_drops_pid_0x14);

@@ -4,7 +4,7 @@
 #ifndef LIB_BIM_ACCESSUNIT_H
 #define LIB_BIM_ACCESSUNIT_H
 
-#include "bitreader.h"
+#include "bimreader.h"
 #include "bitwriter.h"
 #include "lib/tva/bcg_doc.h"
 #include "strrepo.h"

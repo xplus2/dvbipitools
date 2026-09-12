@@ -4,6 +4,9 @@
 /* t_reactor_tid, defined in reactor.c: standalone definition for
    tests that link channels.c (RCU reader slot index) w/o reactor */
 
+#include "qsbr.h"
 #include "reactor_tls.h"
 
 _Thread_local int t_reactor_tid = -1;
+
+qsbr_domain_t *reactor_qsbr(void) { return NULL; }

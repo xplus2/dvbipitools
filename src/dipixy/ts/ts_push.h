@@ -5,8 +5,7 @@
    threads:
      pump: ts_push_feed_pkt()
      reactor H1: conn_send_buffered() -> CONN_TSPUSH state machine
-     reactor H2: SPSC ring + per-reactor efd -> h2_tspush_wake() -> nghttp2 read_cb pulls ring
-     reactor H3: SPSC ring + per-reactor efd -> ts_push_h3_flush() */
+     reactor H2: SPSC ring + per-reactor efd -> h2_tspush_wake() -> nghttp2 read_cb pulls ring */
 
 #ifndef DIPIXY_TS_PUSH_H
 #define DIPIXY_TS_PUSH_H
@@ -16,6 +15,7 @@
 #include <stdint.h>
 
 #include "capture/capture.h"
+#include "lcevcselect.h"
 #include "pidfilter.h"
 #include "rawaudio.h"
 #include "lib/demux/psi/psi.h"
@@ -42,8 +42,9 @@ typedef struct {
   int proto; /* 1=H1, 2=H2, 3=H3 */
   _Atomic int alive;
   _Atomic int ready;
-  int fd; /* H1: socket fd. H2: H2 conn fd. H3: -1 */
-  int32_t h2_sid;
+  int fd;
+  void *h2c;
+  void *h2_slot;
   int reactor_tid; /* H3: owning reactor thread id */
   int tid_next; /* ts_push_set_reactor_tid()'s per-tid chain. owning thread only */
   void *h3c;
@@ -58,8 +59,10 @@ typedef struct {
   int spts_locked;
   unsigned spts_allowed[PSI_MAX_ES + 3]; /* PAT, locked PMT pid, PCR pid, every ES */
   int spts_n_allowed;
-  psi_t *filter_psi; /* non-spts, filter.count>0: tracks PMT for pmt_filter_rewrite(). NULL: none */
+  psi_t *filter_psi; /* non-spts: tracks PMT when filter/lcevc may exclude */
   unsigned char cc_pmt; /* rewritten PMT packets' own cc, spts_psi/filter_psi share this: mutually exclusive */
+  lcevc_select_t lcevc;
+  int lcevc_locked;
   rawaudio_demux_t *rawaudio; /* non-NULL = /rawaudio subscriber */
   int ws_handle;              /* ws_clients.c registry handle, -1 none */
   log_throttle_t ring_drop_throttle;
@@ -74,6 +77,9 @@ void ts_push_init(int prealloc, int max_clients);
 void ts_push_register_reactor_efd(int tid, int efd);
 void ts_push_flush_ready(int tid);
 
+void ts_push_wake_batch_begin(void);
+void ts_push_wake_batch_end(void);
+
 /* records idx's tid, links into flush_ready(tid) chain.
    call once, from tid's own thread, when ready to send */
 void ts_push_set_reactor_tid(int idx, int tid);
@@ -82,8 +88,9 @@ void ts_push_set_reactor_tid(int idx, int tid);
    filter: PID excludes.
    spts 1: pmt_pid 0 auto else forced.
    rawaudio 1: /rawaudio demux. spts/rawaudio exclusive.
+   lcevc: known after PMT
    -1: room full/OOM */
-int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto, int fd, unsigned pmt_pid, int spts, int rawaudio, const client_info_t *info);
+int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto, int fd, unsigned pmt_pid, int spts, int rawaudio, const client_info_t *info, const lcevc_select_t *lcevc);
 
 void ts_push_unsubscribe_by_idx(int idx);
 
@@ -94,11 +101,8 @@ void ts_push_feed_pkt(capture_ctx_t *ctx, const uint8_t *pkt);
 int ts_push_active_count(void);
 
 void h2_tspush_wake(int sub_idx);
+void h3_tspush_wake(int sub_idx);
 void ts_push_h2_enqueue(int sub_idx, const uint8_t *pkt, size_t len);
 void ts_push_h3_enqueue(int sub_idx, const uint8_t *pkt, size_t len);
-
-#ifdef HAVE_HTTP3
-void ts_push_h3_flush(void);
-#endif
 
 #endif

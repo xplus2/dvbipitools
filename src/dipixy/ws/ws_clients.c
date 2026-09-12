@@ -24,8 +24,7 @@ int g_stripe_count;
 
 static uint32_t fnv1a_mix(uint32_t h, const void *data, size_t len) {
   const unsigned char *p = data;
-  for (size_t i = 0; i < len; i++)
-    h = (h ^ p[i]) * 16777619u;
+  for (size_t i = 0; i < len; i++) h = (h ^ p[i]) * 16777619u;
   return h;
 }
 
@@ -57,23 +56,45 @@ static void hash_insert(ws_stripe_t *stripe, uint32_t h, int idx) {
 
 void hash_delete(ws_stripe_t *stripe, int idx) {
   uint32_t i;
-  uint32_t h;
-  const ws_client_t *e = &g_clients[idx];
-  h = client_hash(e->ip, e->fmt, e->pmt_pid, e->filter, e->src_proto, e->src_addr, e->src_ordinal, e->src_name, e->item_num, e->item_name);
+  uint32_t h = g_clients[idx].hash;
   i = h & stripe->hash_mask;
   for (uint32_t n = 0; n < stripe->hash_cap; n++, i = (i + 1) & stripe->hash_mask) {
     if (stripe->hash[i] == WS_HASH_EMPTY) return;
     if (stripe->hash[i] == idx) {
       stripe->hash[i] = WS_HASH_TOMB;
+      stripe->tomb_count++;
       return;
     }
   }
 }
 
+/* caller holds stripe->lock */
+void stripe_rehash_if_needed(ws_stripe_t *stripe) {
+  int *fresh;
+  uint32_t i;
+  if (stripe->tomb_count < stripe->hash_cap / 4) return;
+  fresh = malloc(stripe->hash_cap * sizeof *fresh);
+  if (!fresh) return;
+  for (i = 0; i < stripe->hash_cap; i++) fresh[i] = WS_HASH_EMPTY;
+  for (i = 0; i < stripe->hash_cap; i++) {
+    int idx = stripe->hash[i];
+    uint32_t h, j;
+    if (idx == WS_HASH_EMPTY || idx == WS_HASH_TOMB) continue;
+    h = g_clients[idx].hash;
+    j = h & stripe->hash_mask;
+    for (uint32_t n = 0; n < stripe->hash_cap; n++, j = (j + 1) & stripe->hash_mask)
+      if (fresh[j] == WS_HASH_EMPTY) {
+        fresh[j] = idx;
+        break;
+      }
+  }
+  free(stripe->hash);
+  stripe->hash = fresh;
+  stripe->tomb_count = 0;
+}
+
 ws_stripe_t *stripe_for_entry(int idx) {
-  const ws_client_t *e = &g_clients[idx];
-  uint32_t h = client_hash(e->ip, e->fmt, e->pmt_pid, e->filter, e->src_proto, e->src_addr, e->src_ordinal, e->src_name, e->item_num, e->item_name);
-  return &g_stripes[h % (uint32_t)g_stripe_count];
+  return &g_stripes[g_clients[idx].hash % (uint32_t)g_stripe_count];
 }
 
 /* handle = slot index + gen. stale handle must not hit a slot idle-eviction gave to new clients */
@@ -165,8 +186,12 @@ int ws_clients_add_persistent(const client_info_t *info) {
   g_clients[i].persistent = 1;
   g_clients[i].connect_time = time(NULL);
   g_clients[i].used = 1;
-  pthread_mutex_unlock(&g_clients_mtx);
-  publish_client_event("clients.add", i);
+  {
+    ws_client_snapshot_t snap;
+    snapshot_client(&snap, &g_clients[i]);
+    pthread_mutex_unlock(&g_clients_mtx);
+    publish_client_event_snap("clients.add", i, &snap);
+  }
   return pack_handle(i, gen);
 }
 
@@ -264,13 +289,16 @@ int ws_clients_touch(const client_info_t *info) {
   free_slot = g_free_slots[--g_free_slots_n];
   {
     unsigned gen = claim_slot(free_slot);
+    ws_client_snapshot_t snap;
     fill_entry(&g_clients[free_slot], info, filt);
+    g_clients[free_slot].hash = h;
     g_clients[free_slot].connect_time = g_clients[free_slot].last_seen = now;
     g_clients[free_slot].used = 1;
     hash_insert(stripe, h, free_slot);
+    snapshot_client(&snap, &g_clients[free_slot]);
     pthread_mutex_unlock(&stripe->lock);
     pthread_mutex_unlock(&g_clients_mtx);
-    publish_client_event("clients.add", free_slot);
+    publish_client_event_snap("clients.add", free_slot, &snap);
     return pack_handle(free_slot, gen);
   }
 }

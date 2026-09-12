@@ -38,14 +38,10 @@ void addr_at(const config_t *cfg, unsigned i, char *buf, size_t n) {
 int multi_all_named(const psi_t *psi) {
   int count;
   const psi_multi_program_t *m;
-  if (!psi_have_pat(psi))
-    return 0;
+  if (!psi_have_pat(psi)) return 0;
   m = psi_multi_programs(psi, &count);
-  if (count == 0)
-    return 0;
-  for (int i = 0; i < count; i++)
-    if (!m[i].resolved || !m[i].service_name[0])
-      return 0;
+  if (count == 0) return 0;
+  for (int i = 0; i < count; i++) if (!m[i].resolved || !m[i].service_name[0]) return 0;
   return 1;
 }
 
@@ -53,8 +49,7 @@ int probe_cb(void *v, const unsigned char *pkt) {
   probe_ctx_t *pc = v;
   pc->pkts++;
   psi_feed(pc->psi, pkt);
-  if (pc->multi)
-    return multi_all_named(pc->psi) ? 1 : 0;
+  if (pc->multi) return multi_all_named(pc->psi) ? 1 : 0;
   return (psi_have_pat(pc->psi) && psi_service_name(pc->psi)[0]) ? 1 : 0;
 }
 
@@ -80,28 +75,22 @@ void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_
   }
   pc.pkts = 0;
   pc.multi = multi;
-  if (multi)
-    psi_enable_multi_program(pc.psi);
+  if (multi) psi_enable_multi_program(pc.psi);
   deadline = mono_seconds() + (double)timeout_ms / 1000.0;
   quiet_deadline = mono_seconds() + (double)PROBE_QUIET_MS / 1000.0;
-  if (quiet_deadline > deadline)
-    quiet_deadline = deadline;
+  if (quiet_deadline > deadline) quiet_deadline = deadline;
   while (mono_seconds() < (pc.pkts ? deadline : quiet_deadline) && !signal_stop_requested()) {
     ssize_t n = rf(rctx, buf, sizeof buf);
     size_t off;
-    if (n < 0)
-      break;
-    if (n == 0)
-      continue;
+    if (n < 0) break;
+    if (n == 0) continue;
     off = rtp_payload_offset(buf, (size_t)n);
-    if (r->rtp_wrapped < 0)
-      r->rtp_wrapped = off ? 1 : 0;
+    if (r->rtp_wrapped < 0) r->rtp_wrapped = off ? 1 : 0;
     if (off) {
       memmove(buf, buf + off, (size_t)n - off);
       n -= (ssize_t)off;
     }
-    if (tspack_feed(&pz, buf, (size_t)n, probe_cb, &pc))
-      break;
+    if (tspack_feed(&pz, buf, (size_t)n, probe_cb, &pc)) break;
   }
   r->pkts = pc.pkts;
   if (pc.pkts == 0) {
@@ -113,8 +102,7 @@ void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_
     r->onid = psi_original_network_id(pc.psi);
     for (int i = 0; i < count && r->program_count < PSI_MAX_PROGRAMS; i++) {
       scan_program_t *p;
-      if (!m[i].resolved)
-        continue;
+      if (!m[i].resolved) continue;
       p = &r->programs[r->program_count++];
       p->sid = m[i].program_number;
       bufcpy(p->name, sizeof p->name, m[i].service_name[0] ? m[i].service_name : "(no SDT)");
@@ -141,27 +129,21 @@ void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_
 static void http_path_expand(const char *tmpl, const char *group, unsigned port, char *out, size_t outcap) {
   char portbuf[16];
   size_t o = 0;
-  if (outcap == 0)
-    return;
+  if (outcap == 0) return;
   uint_to_str(portbuf, port);
   for (; *tmpl && o + 1 < outcap; tmpl++) {
     const char *ins = NULL;
     if (*tmpl == '%') {
       tmpl++;
-      if (*tmpl == 'g')
-        ins = group;
-      else if (*tmpl == 'p')
-        ins = portbuf;
-      else if (*tmpl == '%')
-        ins = "%";
-      else
-        break;
+      if (*tmpl == 'g')       ins = group;
+      else if (*tmpl == 'p')  ins = portbuf;
+      else if (*tmpl == '%')  ins = "%";
+      else break;
     }
     if (ins) {
       size_t l = strlen(ins);
       size_t space = outcap - 1 - o; /* o+1 < outcap above: never underflows */
-      if (l > space)
-        l = space;
+      if (l > space) l = space;
       memcpy(out + o, ins, l);
       o += l;
     } else {
@@ -221,6 +203,7 @@ static void report_single_program(const config_t *cfg, FILE *out, const probe_re
     log_line("%u/%u %-28s %-32s [%u pkts]", i, cfg->total, uri, name, r->pkts);
   else
     log_line("%u/%u %-28s %s", i, cfg->total, uri, name);
+
   format_item(out, cfg->format, name, uri, cfg->family, group, port, r->rtp_wrapped == 1, r->tsid, r->onid, r->sid);
 }
 
@@ -268,8 +251,9 @@ static void *scan_worker(void *arg) {
           snprintf(uri, sizeof uri, "%s://@%s:%u", proto, group, port);
 
         pthread_mutex_lock(&job->mtx);
-        while (job->next_commit != i)
-          pthread_cond_wait(&job->cv, &job->mtx);
+        while (job->next_commit != i) pthread_cond_wait(&job->cv, &job->mtx);
+
+        pthread_mutex_unlock(&job->mtx);
         job->total++;
         if (r.kind == PROBE_NONE)
           log_line_ansi("%u/%u %-28s \e[0;31mno stream\e[0m", i, cfg->total, uri);
@@ -277,13 +261,13 @@ static void *scan_worker(void *arg) {
           report_mpts_programs(cfg, job->out, &r, i, uri, group, port, &job->found);
         else
           report_single_program(cfg, job->out, &r, i, uri, group, port, &job->found);
+
         last = (port == cfg->port_hi) || signal_stop_requested();
-        if (last)
-          job->next_commit = i + 1;
+        pthread_mutex_lock(&job->mtx);
+        if (last) job->next_commit = i + 1;
         pthread_cond_broadcast(&job->cv);
         pthread_mutex_unlock(&job->mtx);
-        if (last)
-          break;
+        if (last) break;
       }
     }
   }
@@ -306,8 +290,8 @@ int scan_run(const config_t *cfg, FILE *out) {
     snprintf(invocation, sizeof invocation, "%s --mcast %s --port %u --timeout %d", TOOL_NAME, basestr, cfg->port_lo, cfg->timeout_ms / 1000);
   else
     snprintf(invocation, sizeof invocation, "%s --mcast %s --port %u-%u --timeout %d", TOOL_NAME, basestr, cfg->port_lo, cfg->port_hi, cfg->timeout_ms / 1000);
-  format_init(out, cfg->format, invocation, cfg->provider);
 
+  format_init(out, cfg->format, invocation, cfg->provider);
   job.cfg = cfg;
   job.out = out;
   atomic_init(&job.next_claim, 0u);
@@ -327,5 +311,6 @@ int scan_run(const config_t *cfg, FILE *out) {
     log_line("interrupted: found %u station%s (of %u probed) in %.1fs", job.found, job.found == 1 ? "" : "s", job.total, mono_seconds() - start);
   else
     log_line("found %u station%s in %.1fs", job.found, job.found == 1 ? "" : "s", mono_seconds() - start);
+
   return interrupted;
 }

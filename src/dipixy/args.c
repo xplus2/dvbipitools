@@ -3,6 +3,7 @@
 
 #include <arpa/inet.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -94,16 +95,11 @@ static int format_parse(const char *s, config_t *cfg) {
 static int playlist_kind_from_ext(const char *path, source_kind_t *out) {
   const char *dot = strrchr(path, '.');
   if (!dot) return -1;
-  if (!strcasecmp(dot, ".m3u") || !strcasecmp(dot, ".m3u8"))
-    *out = SRC_M3U;
-  else if (!strcasecmp(dot, ".xspf"))
-    *out = SRC_XSPF;
-  else if (!strcasecmp(dot, ".csv"))
-    *out = SRC_CSV;
-  else if (!strcasecmp(dot, ".xml"))
-    *out = SRC_XML;
-  else
-    return -1;
+  if (!strcasecmp(dot, ".m3u") || !strcasecmp(dot, ".m3u8")) *out = SRC_M3U;
+  else if (!strcasecmp(dot, ".xspf"))                        *out = SRC_XSPF;
+  else if (!strcasecmp(dot, ".csv"))                         *out = SRC_CSV;
+  else if (!strcasecmp(dot, ".xml"))                         *out = SRC_XML;
+  else return -1;
   return 0;
 }
 
@@ -135,94 +131,100 @@ void args_free(config_t *cfg) {
 
 static void print_help(void) {
   printf(
-      "usage: %s [options]\n\n"
-      "serve DVB-IPI multicast streams over HTTP as raw TS push, HLS,\n"
-      "LL-HLS, or MPEG-DASH\n\n"
-      "options:\n"
-      "  -I, --iface <iface>         interface for multicast joins           [kernel]\n"
-      "  -l, --listen <a>:<p>        HTTP listen address:port                [all:9080]\n"
-      "  -L, --listen-tls <a>:<p>    HTTPS listen address:port               [all:9443]\n"
-      "      --tls-cert <path>       certificate file (PEM)\n"
-      "      --tls-key <path>        private key file (PEM)\n"
-      "  -j, --workers <spec>        -1/-2/-3: that many x cpu cores,\n"
-      "                              or <N>: an absolute thread count        [-1]\n"
-      "  -c, --max-clients <n>       cap on concurrent streams               [256]\n"
-      "      --max-channels <n>      cap on concurrent\n"
-      "                              (source,filter,pmt,container)           [32]\n"
-      "      --idle-timeout <s>      close a conn idle this long, 0 = off    [0]\n"
-      "      --capture-ring-size <n> per-source ingress ring buffer, KiB     [4096]\n"
-      "  -i, --input <source>        add an input, repeatable, by form:\n"
-      "                              -                      stdin, /stdin/<fmt>\n"
-      "                              rist://@host:port      RIST, /rist/<fmt>\n"
-      "                              sds://addr:port        live SD&S/DVBSTP\n"
-      "                              http(s)://url          raw TS/RTP source\n"
-      "                              *.m3u/.xspf/.csv/.xml  playlist file\n"
-      "                              list index = position among all -i flags, so\n"
-      "                              a -/rist:// slot leaves that number unused\n"
-      "  -n, --name <name>           name the -i right before it; that name can then\n"
-      "                              be used in URLs instead of /list/<n>/ or /rist//stdin\n"
-      "                              no '/', no leading '.', not a reserved word, unique\n"
-      "      --media-type <t>        radio|tv, DLNA upnp:class               [tv]\n"
-      "  -k, --insecure              skip TLS verification on https:// input\n"
-      "      --sds-timeout <s>       sds:// discovery wait at startup/reload [3]\n"
-      "      --sds-refresh-interval <s>  sds:// re-poll period               [30]\n"
-      "      --segment-size <s>      target segment duration, seconds        [3]\n"
-      "                              (hls, hls-fmp4, llhls, dash, lldash)\n"
-      "      --segment-count <n>     playlist/manifest sliding-window size   [4]\n"
-      "      --hls-part-size <s>     LL-HLS target part duration, seconds    [0.35]\n"
-      "      --dash-part-size <s>    LL-DASH target chunk duration, seconds  [0.333]\n"
-      "      --dash-utc-url <url>    LL-DASH MPD UTCTiming source, http-xsiso\n"
-      "                              [http://time.akamai.com/?iso&ms]\n"
-      "      --hls-seg-pool <n>      segment buffer freelist cap per size    [8]\n"
-      "      --metrics <path>        metrics sock [/run/dvbipitools/metrics.sock]\n"
-      "      --metrics-id <name>     stable instance id, disabled if not set\n"
-      "      --metrics-interval <s>  snapshot interval (default: 5 seconds)\n"
-      "      --metrics-http          also serve /metrics ourselves           [off]\n"
-      "  -f, --format <list>         comma-separated route whitelist, from\n"
-      "                              ts,spts,rawaudio,hls,llhls,dash,lldash  [all]\n"
-      "      --no-url-rtp            disable /rtp/... routes\n"
-      "      --no-url-udp            disable /udp/... routes\n"
-      "      --no-url-srt            disable /srt/... routes\n"
-      "      --no-pid-filters        ignore ?filter= on every route\n"
-      "      --no-http2              disable HTTP/2\n"
-      "      --no-http3              disable HTTP/3\n"
-      "      --no-fcc                ignore SDS fcc\n"
-      "      --no-ret                ignore SDS ret\n"
-      "      --al-fec <L>:<D>        Annex E Layer 1 FEC (SMPTE 2022-1) matrix size for any\n"
-      "                              SDS-advertised repair stream, L*D<=400, L<=40\n"
-      "      --no-al-fec             ignore SDS FECBaseLayer\n"
-      "      --no-status             disable /ui/status.js\n"
-      "      --status-tpl <path>     use file instead of the built-in page\n"
-      "      --auth <user:pass>      HTTP Basic Auth for /, /ui/status.js, /ui/ws/  [off]\n"
-      "      --cors-origin <list>    comma-separated hls/hls-fmp4/llhls/dash/lldash\n"
-      "                              origins  [\"*\"]\n"
-      "      --ssdp-ttl <n>          SSDP multicast TTL                      [3]\n"
-      "      --ssdp-iface <iface>    interface for SSDP announce/reply       [kernel]\n"
-      "      --ssdp-interval <s>     SSDP NOTIFY re-announce period          [60]\n"
-      "      --ssdp-max-age <s>      CACHE-CONTROL max-age, >= 2x interval   [1800]\n"
-      "      --enable-dlna           serve SSDP + a UPnP MediaServer (DLNA)  [off]\n"
-      "      --dlna-host <h>[:<p>]   host[:port] advertised in SSDP/DIDL     [-l/--listen]\n"
-      "      --dlna-name <name>      DLNA friendlyName                       [%s (host)]\n"
-      "      --dlna-keep-multicast   rtp/udp items: dvb-igmp/dvb-mld, mgroup [off]\n"
-      "  -d, --daemonize             fork to background after startup\n"
-      "  -v, --verbose               per-connection diagnostics on stderr\n"
-      "      --color <when>          auto|always|never                       [auto]\n"
-      "  -h, --help                  this help\n"
-      "\n"
-      "Each -i flag's list index is its own position on the command line.\n"
-      "any URL takes ?filter=<pids> to drop PIDs, e.g. ?filter=101,0x20.\n\n"
-      "/export/<fmt>/<type> (type: m3u|xspf) lists every channel as one\n"
-      "playlist. ?host=, ?input=1,3,4, ?filter=, ?keep_multicast, ?plain.\n\n"
-      "on an MPTS source, hls/hls-fmp4/llhls/dash/lldash demux the first\n"
-      "arriving PMT.\n"
-      "use ?pmt=<pid> (dec or 0x-hex) to pick a different one. ts\n"
-      "passes the whole MPTS through.\n"
-      "\n"
-      "Examples:\n"
-      "  %s -i sds://239.19.75.1:3937\n"
-      "  %s -l 0.0.0.0:9080 -i channels.m3u\n"
-      "  %s -L [::]:9443 --tls-cert server.crt --tls-key server.key -i ch.xspf\n\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+    "usage: %s [options]\n\n"
+    "serve DVB-IPI multicast streams over HTTP as raw TS push, HLS,\n"
+    "LL-HLS, or MPEG-DASH\n\n"
+    "options:\n"
+    "  -I, --iface <iface>         interface name for multicast joins      [kernel]\n"
+    "  -l, --listen <a>:<p>        HTTP listen address:port                [all:9080]\n"
+    "  -L, --listen-tls <a>:<p>    HTTPS listen address:port               [all:9443]\n"
+    "      --tls-cert <path>       certificate file (PEM)\n"
+    "      --tls-key <path>        private key file (PEM)\n"
+    "  -j, --workers <spec>        -1/-2/-3: that many x cpu cores,\n"
+    "                              or <N>: an absolute thread count        [-1]\n"
+    "  -c, --max-clients <n>       cap on concurrent streams               [256]\n"
+    "      --max-channels <n>      cap on concurrent\n"
+    "                              (source,filter,pmt,container)           [32]\n"
+    "      --idle-timeout <s>      close a conn idle this long, 0 = off    [0]\n"
+    "      --capture-ring-size <n> per-source ingress ring buffer, KiB     [4096]\n"
+    "  -i, --input <source>        add an input, repeatable, by form:\n"
+    "                              -                      stdin, /stdin/<fmt>\n"
+    "                              rist://@host:port      RIST, /rist/<fmt>\n"
+    "                              sds://addr:port        live SD&S/DVBSTP\n"
+    "                              http(s)://url          raw TS/RTP source\n"
+    "                              *.m3u/.xspf/.csv/.xml  playlist file\n"
+    "                              list index = position among all -i flags, so\n"
+    "                              a -/rist:// slot leaves that number unused\n"
+    "  -n, --name <name>           name the -i right before it; that name can then\n"
+    "                              be used in URLs instead of /list/<n>/ or /rist//stdin\n"
+    "                              no '/', no leading '.', not a reserved word, unique\n"
+    "      --media-type <t>        radio|tv, DLNA upnp:class               [tv]\n"
+    "  -k, --insecure              skip TLS verification on https:// input\n"
+    "      --sds-timeout <s>       sds:// discovery wait at startup/reload [3]\n"
+    "      --sds-refresh-interval <s>  sds:// re-poll period               [30]\n"
+    "      --segment-size <s>      target segment duration, seconds        [3]\n"
+    "                              (hls, hls-fmp4, llhls, dash, lldash)\n"
+    "      --segment-count <n>     playlist/manifest sliding-window size   [4]\n"
+    "      --hls-part-size <s>     LL-HLS target part duration, seconds    [0.35]\n"
+    "      --dash-part-size <s>    LL-DASH target chunk duration, seconds  [0.333]\n"
+    "      --dash-utc-url <url>    LL-DASH MPD UTCTiming source, http-xsiso\n"
+    "                              [http://time.akamai.com/?iso&ms]\n"
+    "      --hls-seg-pool <n>      segment buffer freelist cap per size    [8]\n"
+    "      --metrics <path>        metrics sock [/run/dvbipitools/metrics.sock]\n"
+    "      --metrics-id <name>     stable instance id, disabled if not set\n"
+    "      --metrics-interval <s>  snapshot interval (default: 5 seconds)\n"
+    "      --metrics-http          also serve /metrics ourselves           [off]\n"
+    "  -f, --format <list>         comma-separated route whitelist, from\n"
+    "                              ts,spts,rawaudio,hls,llhls,dash,lldash  [all]\n"
+    "      --no-url-rtp            disable /rtp/... routes\n"
+    "      --no-url-udp            disable /udp/... routes\n"
+    "      --no-url-srt            disable /srt/... routes\n"
+    "      --no-pid-filters        ignore ?filter= on every route\n"
+    "      --no-lcevc              ignore ?lcevc= on every route\n"
+    "      --no-http2              disable HTTP/2\n"
+    "      --no-http3              disable HTTP/3\n"
+    "      --no-fcc                ignore SDS fcc\n"
+    "      --no-ret                ignore SDS ret\n"
+    "      --al-fec <L>:<D>        Annex E Layer 1 FEC (SMPTE 2022-1) matrix size for any\n"
+    "                              SDS-advertised repair stream, L*D<=400, L<=40\n"
+    "      --no-al-fec             ignore SDS FECBaseLayer\n"
+    "      --no-status             disable /ui/status.js\n"
+    "      --status-tpl <path>     use file instead of the built-in page\n"
+    "      --auth <user:pass>      HTTP Basic Auth for /, /ui/status.js, /ui/ws/  [off]\n"
+    "      --cors-origin <list>    comma-separated hls/hls-fmp4/llhls/dash/lldash\n"
+    "                              origins  [\"*\"]\n"
+    "      --ssdp-ttl <n>          SSDP multicast TTL                      [3]\n"
+    "      --ssdp-iface <iface>    interface for SSDP announce/reply       [kernel]\n"
+    "      --ssdp-interval <s>     SSDP NOTIFY re-announce period          [60]\n"
+    "      --ssdp-max-age <s>      CACHE-CONTROL max-age, >= 2x interval   [1800]\n"
+    "      --enable-dlna           serve SSDP + a UPnP MediaServer (DLNA)  [off]\n"
+    "      --dlna-host <h>[:<p>]   host[:port] advertised in SSDP/DIDL     [-l/--listen]\n"
+    "      --dlna-name <name>      DLNA friendlyName                       [%s (host)]\n"
+    "      --dlna-keep-multicast   rtp/udp items: dvb-igmp/dvb-mld, mgroup [off]\n"
+    "  -d, --daemonize             fork to background after startup\n"
+    "  -v, --verbose               per-connection diagnostics on stderr\n"
+    "      --color <when>          auto|always|never                       [auto]\n"
+    "  -h, --help                  this help\n"
+    "\n"
+    "Each -i flag's list index is its own position on the command line.\n"
+    "any URL takes ?filter=<pids> to drop PIDs, e.g. ?filter=101,0x20.\n\n"
+    "/export/<fmt>/<type> (type: m3u|xspf) lists every channel as one\n"
+    "playlist. ?host=, ?input=1,3,4, ?filter=, ?keep_multicast, ?plain.\n\n"
+    "on an MPTS source, hls/hls-fmp4/llhls/dash/lldash demux the first\n"
+    "arriving PMT.\n"
+    "use ?pmt=<pid> (dec or 0x-hex) to pick a different one. ts\n"
+    "passes the whole MPTS through.\n"
+    "\n"
+    "on a program carrying LCEVC, hls/hls-fmp4/llhls/dash/lldash accept\n"
+    "?lcevc=base|full|all|<n>: strip it, keep it (default), list every\n"
+    "alternative in the manifest, or pick one by index/PID.\n"
+    "disable this feature with --no-lcevc.\n"
+    "\n"
+    "Examples:\n"
+    "  %s -i sds://239.19.75.1:3937\n"
+    "  %s -l 0.0.0.0:9080 -i channels.m3u\n"
+    "  %s -L [::]:9443 --tls-cert server.crt --tls-key server.key -i ch.xspf\n\n",
+    TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -254,6 +256,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"no-url-udp", no_argument, 0, 1021},
       {"no-url-srt", no_argument, 0, 1026},
       {"no-pid-filters", no_argument, 0, 1022},
+      {"no-lcevc", no_argument, 0, 1055},
       {"no-http2", no_argument, 0, 1040},
       {"no-http3", no_argument, 0, 1041},
       {"no-fcc", no_argument, 0, 1042},
@@ -342,9 +345,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 'c': {
-        char *end;
-        long v = strtol(optarg, &end, 10);
-        if (*end != '\0' || v < 1 || v > 65536) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, 65536, &v)) {
           argerr("invalid -c/--max-clients: %s (1..65536)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -353,9 +355,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1051: {
-        char *end;
-        long v = strtol(optarg, &end, 10);
-        if (*end != '\0' || v < 1 || v > 1024) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, 1024, &v)) {
           argerr("invalid --max-channels: %s (1..1024)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -364,25 +365,23 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1052: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v > 86400UL) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 0, 86400, &v)) {
           argerr("invalid --idle-timeout: %s (seconds, 0..86400, 0 = off)", optarg);
           args_free(cfg);
           return ARGS_ERR;
         }
-        cfg->idle_timeout_s = (unsigned)v;
+        cfg->idle_timeout_s = v;
         break;
       }
       case 1048: {
-        char *end;
-        long v = strtol(optarg, &end, 10);
-        if (*end != '\0' || v < 1) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
           argerr("invalid --capture-ring-size: %s (KiB, min 1)", optarg);
           args_free(cfg);
           return ARGS_ERR;
         }
-        cfg->capture_ring_kib = (unsigned)v;
+        cfg->capture_ring_kib = v;
         break;
       }
       case 1044: {
@@ -419,9 +418,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1009: {
-        char *end;
-        long v = strtol(optarg, &end, 10);
-        if (*end != '\0' || v < 3 || v > 1000) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 3, 1000, &v)) {
           argerr("invalid --segment-count: %s (min 3)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -460,9 +458,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->dash_utc_url = optarg;
         break;
       case 1039: {
-        char *end;
-        long v = strtol(optarg, &end, 10);
-        if (*end != '\0' || v < 1) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
           argerr("invalid --hls-seg-pool: %s (min 1)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -476,17 +473,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1013:
         cfg->metrics_id = optarg;
         break;
-      case 1014: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0 || v > 86400UL) {
-          argerr("invalid --metrics-interval: %s (seconds, 1..86400)", optarg);
+      case 1014:
+        if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) {
           args_free(cfg);
           return ARGS_ERR;
         }
-        cfg->metrics_interval_s = (unsigned)v;
         break;
-      }
       case 1015:
         cfg->metrics_http = 1;
         break;
@@ -508,6 +500,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1022:
         cfg->no_pid_filters = 1;
+        break;
+      case 1055:
+        cfg->no_lcevc = 1;
         break;
       case 1040:
         cfg->no_http2 = 1;
@@ -560,9 +555,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->cors_origins = optarg;
         break;
       case 1029: {
-        char *end;
-        long v = strtol(optarg, &end, 10);
-        if (*end != '\0' || v < 1 || v > 255) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, 255, &v)) {
           argerr("invalid --ssdp-ttl: %s (1..255)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -585,14 +579,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1047: {
-        char *end;
-        unsigned long v = strtoul(optarg, &end, 10);
-        if (*end != '\0' || v == 0) {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
           argerr("invalid --ssdp-max-age: %s (seconds, > 0)", optarg);
           args_free(cfg);
           return ARGS_ERR;
         }
-        cfg->ssdp_max_age_s = (unsigned)v;
+        cfg->ssdp_max_age_s = v;
         break;
       }
       case 1031:
@@ -810,8 +803,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     args_free(cfg);
     return ARGS_ERR;
   }
-  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) {
-    argerr("--metrics/--metrics-interval require --metrics-id");
+  if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) {
     args_free(cfg);
     return ARGS_ERR;
   }
@@ -827,12 +819,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (cfg->enable_dlna) {
     if (dlna_host_arg) {
-      if (strlen(dlna_host_arg) >= sizeof cfg->dlna_host) {
-        argerr("--dlna-host too long: %s", dlna_host_arg);
+      if (argutil_bufcpy_opt(TOOL_NAME, cfg->dlna_host, sizeof cfg->dlna_host, dlna_host_arg, "--dlna-host")) {
         args_free(cfg);
         return ARGS_ERR;
       }
-      bufcpy(cfg->dlna_host, sizeof cfg->dlna_host, dlna_host_arg);
     } else if (cfg->listen.scope != LISTEN_ANY) {
       char portbuf[12];
       size_t off;

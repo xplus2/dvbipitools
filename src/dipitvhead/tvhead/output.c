@@ -49,6 +49,43 @@ srtsink_t *tvhead_srt_open(const config_t *cfg) {
   return srtsink_open(&sc);
 }
 
+void tvhead_output_close(out_ctx_t *o) {
+  if (o->fec_enc) fec2022_enc_free(o->fec_enc);
+  if (o->fec_mc) mcast_close(o->fec_mc);
+  if (o->rtph) rtpheader_free(o->rtph);
+  if (o->rist) ristout_close(o->rist);
+  if (o->srt) srtsink_close(o->srt);
+  if (o->pacer) bitrate_pacer_free(o->pacer);
+  if (o->mc) mcast_close(o->mc);
+}
+
+int tvhead_output_open(const config_t *cfg, out_ctx_t *o) {
+  if (cfg->mcast_port) {
+    o->mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface_out, (int)cfg->ttl);
+    if (!o->mc) return -1;
+    mcast_set_tos(o->mc, cfg->dscp);
+    o->rtp = cfg->rtp;
+    if (cfg->rtp) {
+      o->rtph = rtpheader_new();
+      if (!o->rtph) return -1;
+      if (cfg->al_fec_l) {
+        o->fec_mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->al_fec_port, cfg->iface_out, (int)cfg->ttl);
+        o->fec_enc = o->fec_mc ? fec2022_enc_new(cfg->al_fec_l, cfg->al_fec_d, 96) : NULL;
+        if (!o->fec_mc || !o->fec_enc) return -1;
+      }
+    }
+  }
+  if (cfg->n_rist > 0) {
+    o->rist = tvhead_rist_open(cfg);
+    if (!o->rist) return -1;
+  }
+  if (cfg->n_srt > 0) {
+    o->srt = tvhead_srt_open(cfg);
+    if (!o->srt) return -1;
+  }
+  return 0;
+}
+
 void tvhead_srt_service(out_ctx_t *o) {
   srtsink_status_t st;
   if (!o->srt) return;
@@ -85,10 +122,18 @@ void flush_batch(out_ctx_t *o) {
 
 void packet_cb(void *ctx, const unsigned char *pkt188) {
   out_ctx_t *o = ctx;
+  if (o->batch_count == 0) o->batch_open_time = mono_seconds();
   memcpy(o->batch + 12 + (size_t)o->batch_count * 188, pkt188, 188);
   o->batch_count++;
   o->packets++;
   if (o->batch_count == TS_PER_DGRAM) flush_batch(o);
+}
+
+#define TVHEAD_BATCH_IDLE_MS 100.0
+
+void flush_batch_if_stale(out_ctx_t *o) {
+  if (o->batch_count == 0) return;
+  if ((mono_seconds() - o->batch_open_time) * 1000.0 >= TVHEAD_BATCH_IDLE_MS) flush_batch(o);
 }
 
 void send_null_packet(out_ctx_t *o) {
@@ -162,7 +207,7 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
 
 /* steady-state: read, remux, send, until stop/hard error. returns 0 clean stop, -1 error */
 int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, cas_t *cas, metrics_exporter_t *mx, input_metrics_t *im,
-                ts_metrics_t *tsm) {
+               ts_metrics_t *tsm) {
   unsigned char buf[65536];
   tspack_t pz;
   feed_ctx_t fc;
@@ -184,12 +229,12 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
     pfd.fd = tvsrc_fd(src);
     pfd.events = POLLIN;
     pr = poll(&pfd, 1, 100); /* bounded: keeps tvhead_srt_service() ticking on quiet input too */
+    flush_batch_if_stale(out);
     if (pr < 0 && errno != EINTR) {
       cas_flush(cas, packet_cb, out);
       return -1;
     }
     if (pr <= 0) continue;
-
     reason = NET_ERR_OTHER;
     n = tvsrc_read(src, buf, sizeof buf, &reason);
     input_metrics_note_read(im, n, reason);
