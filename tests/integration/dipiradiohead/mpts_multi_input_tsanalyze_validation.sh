@@ -46,7 +46,7 @@ tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 6000 \
 TSPID=$!
 sleep 0.3
 
-timeout 20 "$BIN" -I lo -m $MCAST:$PORT \
+timeout 20 "$BIN" -O lo -m $MCAST:$PORT \
     -i "http://127.0.0.1:$HTTP_PORT1/stream.mp3" --sid 101 -s "Station One" \
     -i "http://127.0.0.1:$HTTP_PORT2/stream.mp3" --sid 102 -s "Station Two" || true
 

@@ -39,7 +39,7 @@ out="$WORK/descrambled.ts"
 DESCPID=$!
 sleep 0.3
 
-timeout 12 "$DIPIRADIOHEAD" -I lo -m $MCAST:$PORT -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "BISS Radio Test" \
+timeout 12 "$DIPIRADIOHEAD" -O lo -m $MCAST:$PORT -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "BISS Radio Test" \
     --biss2-sw "$SW" \
     >"$WORK/dipiradiohead.log" 2>&1 || true
 

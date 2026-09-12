@@ -70,7 +70,7 @@ tsp -I ip $MCAST:$PORT1 --local-address 127.0.0.1 --receive-timeout 15000 \
 TSPID=$!
 sleep 0.3
 
-timeout 20 "$BIN" -I lo -m $MCAST:$PORT1 -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "Multi CAS Steady" \
+timeout 20 "$BIN" -O lo -m $MCAST:$PORT1 -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "Multi CAS Steady" \
     --cas-algo cissa \
     --cas-ecmg "tcp://127.0.0.1:$ECMG_A_PORT" --cas-ecmg-version 2 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
                --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port $EMMG_A_PORT --cas-required \
@@ -110,7 +110,7 @@ tsp -I ip $MCAST:$PORT2 --local-address 127.0.0.1 --receive-timeout 15000 -O fil
 TSPID=$!
 sleep 0.3
 
-timeout 20 "$BIN" -I lo -m $MCAST:$PORT2 -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "Multi CAS Nonrequired Down" \
+timeout 20 "$BIN" -O lo -m $MCAST:$PORT2 -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "Multi CAS Nonrequired Down" \
     --cas-algo cissa \
     --cas-ecmg "tcp://127.0.0.1:$ECMG_A_PORT" --cas-ecmg-version 2 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
                --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port $EMMG_A_PORT --cas-required \
@@ -146,7 +146,7 @@ tsp -I ip $MCAST:$PORT3 --local-address 127.0.0.1 --receive-timeout 15000 -O fil
 TSPID=$!
 sleep 0.3
 
-timeout 20 "$BIN" -I lo -m $MCAST:$PORT3 -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "Multi CAS Required Down" \
+timeout 20 "$BIN" -O lo -m $MCAST:$PORT3 -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "Multi CAS Required Down" \
     --cas-algo cissa \
     --cas-ecmg "tcp://127.0.0.1:19998" --cas-ecmg-version 2 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
                --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port $EMMG_A_PORT --cas-required \
