@@ -33,7 +33,11 @@ static void make_rtp_header(unsigned char hdr[12]) {
 
 static size_t drain(capture_ctx_t *c, capture_reader_t *r, unsigned char *buf, size_t cap) {
   for (int i = 0; i < 40; i++) {
+    size_t n;
     capture_service(c);
+    n = capture_reader_read(r, buf, cap);
+    if (n > 0)
+      return n;
     usleep(5000);
   }
   return capture_reader_read(r, buf, cap);

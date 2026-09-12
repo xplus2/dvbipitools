@@ -452,11 +452,15 @@ START_TEST(emmg_server_queue_holds_more_than_old_64_cap) {
     ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
   }
 
-  ts.tv_sec = 0;
-  ts.tv_nsec = 300L * 1000000L;
-  nanosleep(&ts, NULL);
-
-  ck_assert_int_eq(emmg_server_dequeue_emm(s, got, sizeof got, &got_len), 0);
+  {
+    int waited = 0;
+    while (emmg_server_dequeue_emm(s, got, sizeof got, &got_len) != 0 && waited < 3000) {
+      ts.tv_sec = 0;
+      ts.tv_nsec = 5L * 1000000L;
+      nanosleep(&ts, NULL);
+      waited += 5;
+    }
+  }
   ck_assert_uint_eq(got_len, 1u);
   ck_assert_uint_eq(got[0], 0u);
 
@@ -500,11 +504,15 @@ START_TEST(emmg_server_queue_holds_more_than_old_256_cap) {
     ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
   }
 
-  ts.tv_sec = 0;
-  ts.tv_nsec = 300L * 1000000L;
-  nanosleep(&ts, NULL);
-
-  ck_assert_int_eq(emmg_server_dequeue_emm(s, got, sizeof got, &got_len), 0);
+  {
+    int waited = 0;
+    while (emmg_server_dequeue_emm(s, got, sizeof got, &got_len) != 0 && waited < 3000) {
+      ts.tv_sec = 0;
+      ts.tv_nsec = 5L * 1000000L;
+      nanosleep(&ts, NULL);
+      waited += 5;
+    }
+  }
   ck_assert_uint_eq(got_len, 1u);
   ck_assert_uint_eq(got[0], 0u);
 

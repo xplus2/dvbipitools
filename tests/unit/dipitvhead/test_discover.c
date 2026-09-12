@@ -7,17 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
 #include "dipitvhead/tvhead/priv.h"
-
-static void wait_ms(int ms) {
-  struct timespec ts = {0, (long)ms * 1000000L};
-  nanosleep(&ts, NULL);
-}
 
 /* zero-ES PMT section (table_id 0x02), CRC included */
 static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid) {
@@ -129,7 +123,6 @@ START_TEST(discover_completes_once_pat_pmt_sdt_arrive) {
   sendto(sock, pat, sizeof pat, 0, (const struct sockaddr *)&dst, sizeof dst);
   sendto(sock, pmt, sizeof pmt, 0, (const struct sockaddr *)&dst, sizeof dst);
   sendto(sock, sdt, sizeof sdt, 0, (const struct sockaddr *)&dst, sizeof dst);
-  wait_ms(50);
   rc = discover(src, &in, psi, &im);
   close(sock);
 
@@ -161,7 +154,6 @@ START_TEST(discover_fails_when_requested_pmt_pid_absent_from_pat) {
   wrap_ts_packet(pat, 0x0000, sec, slen);
 
   sendto(sock, pat, sizeof pat, 0, (const struct sockaddr *)&dst, sizeof dst);
-  wait_ms(50);
   rc = discover(src, &in, psi, &im);
   close(sock);
 
