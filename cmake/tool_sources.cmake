@@ -118,6 +118,7 @@ function(dipicam378_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/antidebug.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
     set(DIPICAM378_SRCS ${DIPICAM378_SRCS} PARENT_SCOPE)
     set(DIPICAM378_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
@@ -161,6 +162,7 @@ function(dipidescramble_resolve_sources)
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
     set(DIPIDESCRAMBLE_SRCS
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/antidebug.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/main.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/pipeline.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/args.c
@@ -400,6 +402,7 @@ function(dipiradiohead_resolve_sources)
     endif ()
 
     set(DIPIRADIOHEAD_SRCS
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/antidebug.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/main.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/args.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/radiohead/radiohead.c
@@ -1198,6 +1201,7 @@ function(dipitvhead_resolve_sources)
     endif ()
 
     set(DIPITVHEAD_SRCS
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/antidebug.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/main.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/args.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c

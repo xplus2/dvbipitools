@@ -12,6 +12,7 @@
 #include "lib/demux/mpts_probe.h"
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/tspack.h"
+#include "lib/helper/antidebug.h"
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
 #include "lib/metrics/export.h"
@@ -192,6 +193,7 @@ int main(int argc, char **argv) {
   int rc = 1;
 
   memset(&lc, 0, sizeof lc);
+  antidebug_install();
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
   if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
 

@@ -446,6 +446,7 @@ dipiradiohead_SRT_SRC := src/lib/net/srt/srtsink_stub.c
 endif
 
 dipiradiohead_SRCS := \
+	src/lib/helper/antidebug.c \
 	src/dipiradiohead/main.c \
 	src/dipiradiohead/args.c \
 	src/dipiradiohead/radiohead/radiohead.c \
@@ -587,6 +588,7 @@ dipitvhead_SRT_SRC := src/lib/net/srt/srtsrc_stub.c src/lib/net/srt/srtsink_stub
 endif
 
 dipitvhead_SRCS := \
+	src/lib/helper/antidebug.c \
 	src/dipitvhead/main.c \
 	src/dipitvhead/args.c \
 	src/lib/helper/describe.c \
@@ -721,6 +723,7 @@ else
 dipicam378_EXTRA_LDFLAGS := -pthread $(shell pkg-config --libs openssl)
 endif
 dipicam378_SRCS := \
+	src/lib/helper/antidebug.c \
 	src/dipicam378/main.c \
 	src/dipicam378/args.c \
 	src/dipicam378/cs378x/cs378x.c \
@@ -791,6 +794,7 @@ dipidescramble_EXTRA_CFLAGS += -pthread
 dipidescramble_EXTRA_LDFLAGS += -pthread
 
 dipidescramble_SRCS := \
+	src/lib/helper/antidebug.c \
 	src/dipidescramble/main.c \
 	src/dipidescramble/pipeline.c \
 	src/dipidescramble/args.c \

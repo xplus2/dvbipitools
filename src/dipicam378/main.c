@@ -5,6 +5,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "lib/helper/antidebug.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
@@ -55,6 +56,7 @@ int main(int argc, char **argv) {
   cs378x_server_t *srv;
   metrics_exporter_t mx;
 
+  antidebug_install();
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
   if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
   dev = device_state_new(cfg.key_path, cfg.cw_len, cfg.serial, cfg.caid);
