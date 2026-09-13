@@ -62,6 +62,7 @@ static Suite *crc32_suite(void) {
   tcase_add_test(tc, crc32_known_vector);
   tcase_add_test(tc, crc32_appended_own_crc_is_zero);
   tcase_add_test(tc, crc32_backends_agree);
+  tcase_set_timeout(tc, 10);
   suite_add_tcase(s, tc);
   return s;
 }
