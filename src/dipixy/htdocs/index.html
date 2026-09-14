@@ -222,6 +222,7 @@ function loadStat() {
       ['Capacity', 'max-clients ' + d.server.max_clients + ', max-channels ' + d.server.max_channels + ', capture-ring ' + d.server.capture_ring_kib + ' KiB'],
       ['Segments', d.segment.size_s + 's x ' + d.segment.count + ' (hls-part ' + d.segment.hls_part_size_s + 's, dash-part ' + d.segment.dash_part_size_s + 's, pool ' + d.segment.hls_seg_pool + ')'],
       ['SD&S', 'timeout ' + d.sds.timeout_s + 's, refresh ' + d.sds.refresh_interval_s + 's, fcc ' + (d.flags.no_fcc ? 'off' : 'on') + ', ret ' + (d.flags.no_ret ? 'off' : 'on')],
+      ['Join all', d.flags.join_all ? 'enabled' : 'disabled'],
       ['Disabled', Object.keys(d.flags).filter(function (k) { return k.indexOf('no_') === 0 && d.flags[k]; }).map(function (k) { return k.slice(3).replace(/_/g, '-'); }).join(', ') || 'none'],
       ['CORS', d.cors_origins],
       ['Auth', d.auth_enabled ? 'enabled' : 'disabled'],

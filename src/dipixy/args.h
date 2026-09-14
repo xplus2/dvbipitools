@@ -27,75 +27,75 @@ typedef struct {
 
 typedef struct {
   const char *iface;        /* -I, NULL = kernel default */
-  int insecure_tls;         /* -k, --insecure: skip TLS verification */
-  listen_spec_t listen;     /* -l/--listen */
-  listen_spec_t listen_tls; /* -L/--listen-tls */
-  const char *tls_cert;     /* --tls-cert, NULL = search default paths */
-  const char *tls_key;      /* --tls-key */
+  int insecure_tls;
+  listen_spec_t listen;
+  listen_spec_t listen_tls;
+  const char *tls_cert;
+  const char *tls_key;
   int workers_spec;         /* -j: -1/-2/-3 relative to core count, >=1 absolute */
-  int max_clients;          /* -c/--max-clients: cap on concurrent streams [256] */
+  int max_clients;
   int max_channels;
   unsigned idle_timeout_s;
-  unsigned capture_ring_kib; /* --capture-ring-size: per-source ingress ring, KiB [4096] */
-  double sds_timeout_s;      /* --sds-timeout: sds:// discovery wait, seconds [3] */
-  double sds_refresh_interval_s; /* --sds-refresh-interval: sds:// re-poll period, seconds [30] */
+  unsigned capture_ring_kib;
+  double sds_timeout_s;
+  double sds_refresh_interval_s;
+  int join_all;
   source_def_t *sources;    /* -i sources: sds://, playlist path, or http(s):// */
   int n_sources;
   int sources_cap;
-  const char *stdin_path;   /* -i -. NULL = disabled */
-  const char *stdin_name;   /* -n/--name right after -i -. NULL = unnamed */
-  int stdin_ordinal;        /* -i position among all -i flags. 0: no stdin */
-  media_type_t stdin_media_type; /* --media-type right after -i -. default tv */
-  const char *rist_uri;     /* -i rist://@host:port. NULL = disabled */
-  const char *rist_name;    /* -n/--name right after -i rist://... NULL = unnamed */
-  int rist_ordinal;         /* -i position among all -i flags. 0: no rist */
-  media_type_t rist_media_type; /* --media-type right after -i rist://... default tv */
-  double segment_size;      /* --segment-size, seconds, min 2. hls/hls-fmp4/llhls/dash share it */
-  int segment_count;        /* --segment-count, min 3 */
-  double hls_part_size;     /* --hls-part-size, seconds, must be < segment_size */
-  double dash_part_size;    /* --dash-part-size, seconds, must be < segment_size. 0 = LL-DASH off */
-  const char *dash_utc_url; /* --dash-utc-url. LL-DASH MPD UTCTiming/ProducerReferenceTime src, xsiso */
-  int hls_seg_pool;         /* --hls-seg-pool, per-size-class freelist cap, min 1 */
-  const char *metrics_sock; /* --metrics. NULL = default socket path */
-  const char *metrics_id;   /* --metrics-id. NULL = metrics disabled */
-  unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
-  int metrics_http;         /* --metrics-http: serve /metrics on our own listener too */
-  int no_hls;               /* -f/--format: hls absent, disables hls and hls-fmp4 routes */
-  int no_llhls;             /* -f/--format: llhls absent */
-  int no_dash;              /* -f/--format: dash absent */
-  int no_lldash;            /* -f/--format: lldash absent */
-  int no_ts;                /* -f/--format: ts absent, disables raw TS push routes */
-  int no_spts;              /* -f/--format: spts absent, disables single-program TS push routes */
-  int no_rawaudio;          /* -f/--format: rawaudio absent, disables /rawaudio routes */
-  int no_mp4;               /* -f/--format: mp4 absent, disables /mp4 routes */
-  int no_url_rtp;           /* --no-url-rtp: disables /rtp/... routes */
-  int no_url_udp;           /* --no-url-udp: disables /udp/... routes */
-  int no_url_srt;           /* --no-url-srt: disables /srt/... routes */
-  int no_pid_filters;       /* --no-pid-filters: ?filter= ignored */
-  int no_lcevc;             /* --no-lcevc: ?lcevc= ignored */
-  int no_http2;             /* --no-http2: disable h2 */
-  int no_http3;             /* --no-http3: disable h3 */
-  int no_fcc;               /* --no-fcc: ignore SDS fcc */
-  int no_ret;               /* --no-ret: ignore SDS ret */
+  const char *stdin_path;
+  const char *stdin_name;
+  int stdin_ordinal;
+  media_type_t stdin_media_type;
+  const char *rist_uri;
+  const char *rist_name;
+  int rist_ordinal;
+  media_type_t rist_media_type;
+  double segment_size;
+  int segment_count;
+  double hls_part_size;
+  double dash_part_size;
+  const char *dash_utc_url;
+  int hls_seg_pool;
+  const char *metrics_sock;
+  const char *metrics_id;
+  unsigned metrics_interval_s;
+  int metrics_http;
+  int no_hls;
+  int no_llhls;
+  int no_dash;
+  int no_lldash;
+  int no_ts;
+  int no_spts;
+  int no_rawaudio;
+  int no_mp4;
+  int no_url_rtp;
+  int no_url_udp;
+  int no_url_srt;
+  int no_pid_filters;
+  int no_lcevc;
+  int no_http2;
+  int no_http3;
+  int no_fcc;
+  int no_ret;
   unsigned al_fec_l;
   unsigned al_fec_d;
   int no_al_fec;
-  int no_status;            /* --no-status: disables /ui/status.js */
-  const char *status_template; /* --status-tpl <path>. NULL = embedded default. SIGHUP reloads */
-  char http_auth[200];      /* --auth user:pass, precomputed "Basic <base64>". empty: disabled.
-                                guards /, /ui/status.js, /ui/ws/ across h1/h2/h3 */
-  const char *cors_origins;    /* --cors-origin <list>. NULL: always "*". else allowlist vs Origin hdr */
-  int ssdp_ttl;              /* --ssdp-ttl: multicast TTL for SSDP packets, 1..255 */
-  const char *ssdp_iface;    /* --ssdp-iface. NULL = kernel default */
-  double ssdp_interval_s;   /* --ssdp-interval: NOTIFY re-announce period, seconds [60] */
-  unsigned ssdp_max_age_s;  /* --ssdp-max-age: advertised CACHE-CONTROL max-age, seconds [1800] */
-  int enable_dlna;           /* --enable-dlna: serve SSDP + UPnP MediaServer */
-  char dlna_host[80];        /* --dlna-host, or --listen if concrete and --dlna-host unset */
-  const char *dlna_name;     /* --dlna-name, NULL = default friendlyName */
-  int dlna_keep_multicast;   /* --dlna-keep-multicast: rtp/udp items get dvb-igmp/dvb-mld res, skip http proxy */
-  int daemonize;            /* -d, --daemonize: fork to background after startup */
+  int no_status;
+  const char *status_template;
+  char http_auth[200];
+  const char *cors_origins;
+  int ssdp_ttl;
+  const char *ssdp_iface;
+  double ssdp_interval_s;
+  unsigned ssdp_max_age_s;
+  int enable_dlna;
+  char dlna_host[80];
+  const char *dlna_name;
+  int dlna_keep_multicast;
+  int daemonize;
   int verbose;
-  int color_mode;           /* log_color_t */
+  int color_mode;
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_NOARGS, ARGS_ERR } args_status_t;

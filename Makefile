@@ -212,7 +212,7 @@ else
 HAVE_CSA := yes
 endif
 
-# real libdvbcsa-dev, only for lib_scrambler_csa2's correctness. no build-time dependency
+# libdvbcsa-dev, only for lib_scrambler_csa2's correctness. no build-time dependency
 HAVE_DVBCSA := $(shell printf '#include <dvbcsa/dvbcsa.h>\nint main(void){return 0;}\n' | $(CC) -xc - -ldvbcsa -o /dev/null >/dev/null 2>&1 && echo yes)
 
 HAVE_LIBRIST := $(shell pkg-config --exists librist && echo yes)
@@ -667,11 +667,9 @@ dipitvhead_SRCS := \
 
 TOOLS += dipifccret
 dipifccret_EXTRA_CFLAGS := -pthread
-# channel.c's lock-free ring buffers use C11 64-bit atomics; platforms without
-# a native 8-byte atomic instruction (32-bit ARM) need libatomic's runtime
-# helpers (__atomic_load_8/__atomic_store_8). Safe unconditionally: this
-# project only targets Linux, where libatomic ships alongside libgcc on
-# every GCC/Clang toolchain.
+# channel.c's lock-free ring buffers use C11 64-bit atomics.
+# platforms without a native 8-byte atomic instruction (32-bit ARM) need libatomic's runtime
+# helpers (__atomic_load_8/__atomic_store_8).
 dipifccret_EXTRA_LDFLAGS := -pthread -latomic
 dipifccret_SRCS := \
 	src/dipifccret/main.c \
@@ -872,7 +870,7 @@ dipidescramble_SRCS := \
 	$(dipidescramble_RIST_SRC) \
 	$(dipidescramble_SRT_SRC)
 else
-$(warning dipidescramble: OpenSSL not found via pkg-config, skipping this tool entirely (RSA/AES crypto is its whole purpose))
+$(warning dipidescramble: OpenSSL not found via pkg-config, skipping this tool entirely)
 endif
 
 ifeq ($(HAVE_RIST),yes)
@@ -955,7 +953,7 @@ dipirist_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c
 else
-$(warning dipirist: librist not found via pkg-config, skipping this tool entirely (RIST support is its whole purpose))
+$(warning dipirist: librist not found via pkg-config, skipping this tool entirely)
 endif
 
 ifeq ($(HAVE_SRT),yes)
@@ -1035,7 +1033,7 @@ dipisrt_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c
 else
-$(warning dipisrt: libsrt not found via pkg-config, skipping this tool entirely (SRT support is its whole purpose))
+$(warning dipisrt: libsrt not found via pkg-config, skipping this tool entirely)
 endif
 
 TOOLS += dipixy
@@ -3986,10 +3984,7 @@ lib_playlist_in_SRCS := \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/xml_util.c
 
-# _BIN/_SRCS/TEST_BINS stay unconditional (unlike TESTS=yes gate below),
-# 'make clean' finds these paths regardless of current config.mk state -
-# a prior '--tests' build's artifacts must clean up even after
-# reconfiguring without --tests.
+# _BIN/_SRCS/TEST_BINS stay unconditional (unlike TESTS=yes gate below).
 define UNIT_TEST_template
 $(1)_OBJS := $$($(1)_SRCS:.c=.o)
 ALL_OBJS += $$($(1)_OBJS)
@@ -4076,10 +4071,7 @@ FUZZ_BIM_DEPS := \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
-# _BIN/_SRCS and FUZZ_BINS stay unconditional (unlike FUZZING=yes gate
-# below), 'make clean' finds these paths regardless of current config.mk
-# state - a prior '--fuzz' build's artifacts must clean up even after
-# reconfiguring without --fuzz.
+# _BIN/_SRCS and FUZZ_BINS stay unconditional.
 FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_dvbstp fuzz_ws_frame fuzz_route fuzz_ssdp
 
 fuzz_psi_BIN := tests/fuzz/fuzz_psi
@@ -4117,8 +4109,7 @@ fuzz_simulcrypt_msg_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/helper/signal.c
 
-# ecmg_client.c/emmg_server.c pull in real pthread usage even though the fuzzed functions
-# themselves are pure - link pthread on both like dipitvhead itself does
+# ecmg_client.c/emmg_server.c pull in real pthread usage even though fuzzed functions are pure. link pthread on both.
 fuzz_ecmg_channel_status_BIN := tests/fuzz/fuzz_ecmg_channel_status
 fuzz_ecmg_channel_status_SRCS := \
 	tests/fuzz/fuzz_ecmg_channel_status.c \
@@ -4177,7 +4168,6 @@ fuzz_route_SRCS := \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/uriparse.c
 
-# ssdp.c pulls in real pthread usage even though the fuzzed function itself is pure
 fuzz_ssdp_BIN := tests/fuzz/fuzz_ssdp
 fuzz_ssdp_SRCS := \
 	tests/fuzz/fuzz_ssdp.c \

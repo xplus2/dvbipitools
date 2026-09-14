@@ -67,6 +67,7 @@ channels_t *channels_build(const config_t *cfg) {
         build_from_http(l, cfg->sources[i].value, cfg->insecure_tls);
         break;
     }
+    channels_join_all(l, cfg);
   }
   return ch;
 }

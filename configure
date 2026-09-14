@@ -44,42 +44,40 @@ usage: ./configure [options]
 EOF
 }
 
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --debug)    BUILD_TYPE=Debug ;;
-        --release)  BUILD_TYPE=Release ;;
-        --static)   BUILD_LINK=static ;;
-        --sanitize) SANITIZE=yes ;;
-        --tsan)     TSAN=yes ;;
-        --tests)    TESTS=yes ;;
-        --fuzz)     FUZZING=yes ;;
-        --no-tls)   TLS=no ;;
-        --no-csa)   CSA=no ;;
-        --no-rist)  RIST=no ;;
-        --no-srt)   SRT=no ;;
-        --no-zlib)  ZLIB=no ;;
-        --no-http2) HTTP2=no ;;
-        --no-http3) HTTP3=no ;;
-        --cc=*)     CC=${1#--cc=} ;;
-        -h|--help)  usage; exit 0 ;;
-        *) echo "configure: unknown option: $1" >&2; usage >&2; exit 1 ;;
-    esac
-    shift
+while [ $# -gt 0 ]; do; case "$1" in
+  --debug)    BUILD_TYPE=Debug ;;
+  --release)  BUILD_TYPE=Release ;;
+  --static)   BUILD_LINK=static ;;
+  --sanitize) SANITIZE=yes ;;
+  --tsan)     TSAN=yes ;;
+  --tests)    TESTS=yes ;;
+  --fuzz)     FUZZING=yes ;;
+  --no-tls)   TLS=no ;;
+  --no-csa)   CSA=no ;;
+  --no-rist)  RIST=no ;;
+  --no-srt)   SRT=no ;;
+  --no-zlib)  ZLIB=no ;;
+  --no-http2) HTTP2=no ;;
+  --no-http3) HTTP3=no ;;
+  --cc=*)     CC=${1#--cc=} ;;
+  -h|--help)  usage; exit 0 ;;
+  *) echo "configure: unknown option: $1" >&2; usage >&2; exit 1 ;;
+esac
+shift
 done
 
 if [ "$SANITIZE" = yes ] && [ "$BUILD_LINK" = static ]; then
-    echo "configure: --sanitize and --static cannot be combined" >&2
-    exit 1
+  echo "configure: --sanitize and --static cannot be combined" >&2
+  exit 1
 fi
-
 if [ "$TSAN" = yes ] && [ "$BUILD_LINK" = static ]; then
-    echo "configure: --tsan and --static cannot be combined" >&2
-    exit 1
+  echo "configure: --tsan and --static cannot be combined" >&2
+  exit 1
 fi
 
 if [ "$SANITIZE" = yes ] && [ "$TSAN" = yes ]; then
-    echo "configure: --sanitize and --tsan cannot be combined" >&2
-    exit 1
+  echo "configure: --sanitize and --tsan cannot be combined" >&2
+  exit 1
 fi
 
 BUILD_ARCH=$(uname -m)
@@ -89,9 +87,9 @@ CFLAGS="$CFLAGS -DBUILD_ARCH=\\\"$BUILD_ARCH\\\""
 CFLAGS="$CFLAGS -DBUILD_TYPE=\\\"$BUILD_TYPE\\\""
 CFLAGS="$CFLAGS -DBUILD_LINK=\\\"$BUILD_LINK\\\""
 if [ "$BUILD_TYPE" = Release ]; then
-    CFLAGS="$CFLAGS -O2 -DNDEBUG"
+  CFLAGS="$CFLAGS -O2 -DNDEBUG"
 else
-    CFLAGS="$CFLAGS -g -O0"
+  CFLAGS="$CFLAGS -g -O0"
 fi
 
 LDFLAGS=""
@@ -99,24 +97,24 @@ LDFLAGS=""
 [ "$BUILD_TYPE" = Release ] && LDFLAGS="$LDFLAGS -s"
 
 if [ "$SANITIZE" = yes ]; then
-    CFLAGS="$CFLAGS -fsanitize=address,undefined -fno-omit-frame-pointer"
-    LDFLAGS="$LDFLAGS -fsanitize=address,undefined"
+  CFLAGS="$CFLAGS -fsanitize=address,undefined -fno-omit-frame-pointer"
+  LDFLAGS="$LDFLAGS -fsanitize=address,undefined"
 fi
 
 if [ "$TSAN" = yes ]; then
-    CFLAGS="$CFLAGS -fsanitize=thread -fno-omit-frame-pointer"
-    LDFLAGS="$LDFLAGS -fsanitize=thread"
+  CFLAGS="$CFLAGS -fsanitize=thread -fno-omit-frame-pointer"
+  LDFLAGS="$LDFLAGS -fsanitize=thread"
 fi
 
 CHECK_CFLAGS=""
 CHECK_LIBS=""
 if [ "$TESTS" = yes ]; then
-    if ! pkg-config --exists check; then
-        echo "configure: --tests requires Check (pkg-config module 'check') which was not found" >&2
-        exit 1
-    fi
-    CHECK_CFLAGS=$(pkg-config --cflags check)
-    CHECK_LIBS=$(pkg-config --libs check)
+  if ! pkg-config --exists check; then
+    echo "configure: --tests requires Check (pkg-config module 'check')" >&2
+    exit 1
+  fi
+  CHECK_CFLAGS=$(pkg-config --cflags check)
+  CHECK_LIBS=$(pkg-config --libs check)
 fi
 
 cat > config.mk <<EOF
@@ -140,3 +138,5 @@ EOF
 
 echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING tls=$TLS csa=$CSA rist=$RIST srt=$SRT zlib=$ZLIB http2=$HTTP2 http3=$HTTP3"
 echo "run 'make' to build."
+
+#EOF

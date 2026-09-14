@@ -29,6 +29,7 @@ dipixy [-l addr:port] [-i source ...] [options]
 | `-i` | `--input`                | `<source>`            | none, repeatable                                        |       |
 | `-n` | `--name`                 | `<name>`              | none; names the input                                   | input |
 |      | `--media-type`           | `radio\|tv`           | `tv`; only needed for DLNA                              | input |
+| `-J` | `--join-all`             |                       | off; join all inputs at startup, never leave            |       |
 | `-k` | `--insecure`             |                       | off; skip TLS input verification                        |       |
 |      | `--sds-timeout`          | `<seconds>`           | `3`; sds:// discovery wait                              |       |
 |      | `--sds-refresh-interval` | `<seconds>`           | `30`; sds:// retry                                      |       |

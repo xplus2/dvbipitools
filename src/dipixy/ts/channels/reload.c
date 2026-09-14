@@ -23,8 +23,7 @@ static void free_list_items(channel_list_t l) {
     free(l.items[j].name);
     free(l.items[j].uri);
     free(l.items[j].icon_uri);
-    if (l.items[j].static_ctx)
-      capture_close(l.items[j].static_ctx);
+    if (l.items[j].static_ctx) capture_close(l.items[j].static_ctx);
   }
   free(l.items);
 }
@@ -54,6 +53,7 @@ static void reload_one_list(channels_t *ch, int idx, const source_def_t *src, co
     case SRC_HTTP:
       break; /* live connection: nothing to reparse */
   }
+  channels_join_all(&fresh, cfg);
   if (fresh.count == 0) {
     free_list_items(fresh);
     return;
@@ -95,13 +95,10 @@ static pthread_t g_refresh_thread;
 static void *refresh_thread_fn(void *arg) {
   refresh_arg_t *a = arg;
   double next = mono_seconds() + a->cfg->sds_refresh_interval_s;
-
   while (g_refresh_running && !signal_stop_requested()) {
     if (signal_reload_requested()) channels_reload_all(a->ch, a->cfg);
     if (mono_seconds() >= next) {
-      for (int i = 0; i < a->cfg->n_sources; i++)
-        if (a->cfg->sources[i].kind == SRC_SDS)
-          reload_one_list(a->ch, a->cfg->sources[i].ordinal - 1, &a->cfg->sources[i], a->cfg);
+      for (int i = 0; i < a->cfg->n_sources; i++) if (a->cfg->sources[i].kind == SRC_SDS) reload_one_list(a->ch, a->cfg->sources[i].ordinal - 1, &a->cfg->sources[i], a->cfg);
       next = mono_seconds() + a->cfg->sds_refresh_interval_s;
     }
     usleep(200000);

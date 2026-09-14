@@ -159,6 +159,7 @@ static void print_help(void) {
     "                              be used in URLs instead of /list/<n>/ or /rist//stdin\n"
     "                              no '/', no leading '.', not a reserved word, unique\n"
     "      --media-type <t>        radio|tv, DLNA upnp:class               [tv]\n"
+    "  -J, --join-all              join all inputs at startup, never leave [off]\n"
     "  -k, --insecure              skip TLS verification on https:// input\n"
     "      --sds-timeout <s>       sds:// discovery wait at startup/reload [3]\n"
     "      --sds-refresh-interval <s>  sds:// re-poll period               [30]\n"
@@ -277,6 +278,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"dlna-keep-multicast", no_argument, 0, 1038},
       {"media-type", required_argument, 0, 1034},
       {"input", required_argument, 0, 'i'},
+      {"join-all", no_argument, 0, 'J'},
       {"insecure", no_argument, 0, 'k'},
       {"name", required_argument, 0, 'n'},
       {"daemonize", no_argument, 0, 'd'},
@@ -312,7 +314,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   cfg->ssdp_interval_s = 60.0;
   cfg->ssdp_max_age_s = 1800;
   optind = 1;
-  while ((c = getopt_long(argc, argv, "I:i:kl:L:j:c:f:n:dvh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "I:i:Jkl:L:j:c:f:n:dvh", longopts, NULL)) != -1) {
     switch (c) {
       case 'I':
         cfg->iface = optarg;
@@ -746,6 +748,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       }
+      case 'J':
+        cfg->join_all = 1;
+        break;
       case 'k':
         cfg->insecure_tls = 1;
         break;

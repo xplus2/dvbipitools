@@ -64,10 +64,8 @@ static void status_bitrate(double *in_mbps, double *out_mbps) {
 static uint64_t status_rss_bytes(void) {
   FILE *f = fopen("/proc/self/statm", "r");
   long total_pages = 0, rss_pages = 0;
-  if (!f)
-    return 0;
-  if (fscanf(f, "%ld %ld", &total_pages, &rss_pages) != 2)
-    rss_pages = 0;
+  if (!f) return 0;
+  if (fscanf(f, "%ld %ld", &total_pages, &rss_pages) != 2) rss_pages = 0;
   fclose(f);
   return (uint64_t)rss_pages * (uint64_t)sysconf(_SC_PAGESIZE);
 }
@@ -84,28 +82,14 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
 
   jbuf_str(&j, "{");
 
-  jbuf_key(&j, "tool");
-  jbuf_json_string(&j, TOOL_NAME);
-  jbuf_str(&j, ",");
-
-  jbuf_key(&j, "version");
-  jbuf_json_string(&j, TOOL_VERSION);
-  jbuf_str(&j, ",");
-
-  jbuf_key(&j, "build");
-  jbuf_str(&j, "{");
-  jbuf_key(&j, "type");
-  jbuf_json_string(&j, BUILD_TYPE);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "arch");
-  jbuf_json_string(&j, BUILD_ARCH);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "link");
-  jbuf_json_string(&j, BUILD_LINK);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "features");
-  jbuf_str(&j, "{");
-  jbuf_key(&j, "tls");
+  jbuf_key(&j, "tool");       jbuf_json_string(&j, TOOL_NAME);     jbuf_str(&j, ",");
+  jbuf_key(&j, "version");    jbuf_json_string(&j, TOOL_VERSION);  jbuf_str(&j, ",");
+  jbuf_key(&j, "build");      jbuf_str(&j, "{");
+    jbuf_key(&j, "type");     jbuf_json_string(&j, BUILD_TYPE);    jbuf_str(&j, ",");
+    jbuf_key(&j, "arch");     jbuf_json_string(&j, BUILD_ARCH);    jbuf_str(&j, ",");
+    jbuf_key(&j, "link");     jbuf_json_string(&j, BUILD_LINK);    jbuf_str(&j, ",");
+    jbuf_key(&j, "features");jbuf_str(&j, "{");
+      jbuf_key(&j, "tls");
 #ifdef HAVE_TLS
   jbuf_str(&j, "true");
 #else
@@ -241,10 +225,8 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   JBOOL("enabled", cfg->metrics_id);
   jbuf_str(&j, ",");
   jbuf_key(&j, "id");
-  if (cfg->metrics_id)
-    jbuf_json_string(&j, cfg->metrics_id);
-  else
-    jbuf_str(&j, "null");
+  if (cfg->metrics_id) jbuf_json_string(&j, cfg->metrics_id);
+  else                 jbuf_str(&j, "null");
   jbuf_str(&j, ",");
   jbuf_key(&j, "interval_s");
   jbuf_fmt(&j, "%u", cfg->metrics_interval_s);
@@ -311,8 +293,7 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
     jbuf_str(&j, "null");
 
   jbuf_str(&j, ",");
-  JBOOL("keep_multicast", cfg->dlna_keep_multicast);
-  jbuf_str(&j, ",");
+  JBOOL("keep_multicast", cfg->dlna_keep_multicast);     jbuf_str(&j, ",");
   jbuf_key(&j, "ssdp_interval_s");
   jbuf_fmt(&j, "%.3f", cfg->ssdp_interval_s);
   jbuf_str(&j, ",");
@@ -322,40 +303,24 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
 
   jbuf_key(&j, "flags");
   jbuf_str(&j, "{");
-  JBOOL("no_hls", cfg->no_hls);
-  jbuf_str(&j, ",");
-  JBOOL("no_llhls", cfg->no_llhls);
-  jbuf_str(&j, ",");
-  JBOOL("no_dash", cfg->no_dash);
-  jbuf_str(&j, ",");
-  JBOOL("no_lldash", cfg->no_lldash);
-  jbuf_str(&j, ",");
-  JBOOL("no_ts", cfg->no_ts);
-  jbuf_str(&j, ",");
-  JBOOL("no_spts", cfg->no_spts);
-  jbuf_str(&j, ",");
-  JBOOL("no_rawaudio", cfg->no_rawaudio);
-  jbuf_str(&j, ",");
-  JBOOL("no_mp4", cfg->no_mp4);
-  jbuf_str(&j, ",");
-  JBOOL("no_url_rtp", cfg->no_url_rtp);
-  jbuf_str(&j, ",");
-  JBOOL("no_url_udp", cfg->no_url_udp);
-  jbuf_str(&j, ",");
-  JBOOL("no_url_srt", cfg->no_url_srt);
-  jbuf_str(&j, ",");
-  JBOOL("no_pid_filters", cfg->no_pid_filters);
-  jbuf_str(&j, ",");
-  JBOOL("no_lcevc", cfg->no_lcevc);
-  jbuf_str(&j, ",");
-  JBOOL("no_http2", cfg->no_http2);
-  jbuf_str(&j, ",");
-  JBOOL("no_http3", cfg->no_http3);
-  jbuf_str(&j, ",");
-  JBOOL("no_fcc", cfg->no_fcc);
-  jbuf_str(&j, ",");
-  JBOOL("no_ret", cfg->no_ret);
-  jbuf_str(&j, "}");
+  JBOOL("no_hls", cfg->no_hls);                         jbuf_str(&j, ",");
+  JBOOL("no_llhls", cfg->no_llhls);                     jbuf_str(&j, ",");
+  JBOOL("no_dash", cfg->no_dash);                       jbuf_str(&j, ",");
+  JBOOL("no_lldash", cfg->no_lldash);                   jbuf_str(&j, ",");
+  JBOOL("no_ts", cfg->no_ts);                           jbuf_str(&j, ",");
+  JBOOL("no_spts", cfg->no_spts);                       jbuf_str(&j, ",");
+  JBOOL("no_rawaudio", cfg->no_rawaudio);               jbuf_str(&j, ",");
+  JBOOL("no_mp4", cfg->no_mp4);                         jbuf_str(&j, ",");
+  JBOOL("no_url_rtp", cfg->no_url_rtp);                 jbuf_str(&j, ",");
+  JBOOL("no_url_udp", cfg->no_url_udp);                 jbuf_str(&j, ",");
+  JBOOL("no_url_srt", cfg->no_url_srt);                 jbuf_str(&j, ",");
+  JBOOL("no_pid_filters", cfg->no_pid_filters);         jbuf_str(&j, ",");
+  JBOOL("no_lcevc", cfg->no_lcevc);                     jbuf_str(&j, ",");
+  JBOOL("no_http2", cfg->no_http2);                     jbuf_str(&j, ",");
+  JBOOL("no_http3", cfg->no_http3);                     jbuf_str(&j, ",");
+  JBOOL("no_fcc", cfg->no_fcc);                         jbuf_str(&j, ",");
+  JBOOL("no_ret", cfg->no_ret);                         jbuf_str(&j, ",");
+  JBOOL("join_all", cfg->join_all);                     jbuf_str(&j, "}");
   jbuf_str(&j, "}"); /* root */
 
   if (j.failed) return -1;

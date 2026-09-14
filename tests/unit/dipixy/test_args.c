@@ -798,6 +798,33 @@ START_TEST(dlna_keep_multicast_is_recorded) {
 }
 END_TEST
 
+START_TEST(join_all_defaults_to_off) {
+  char *argv[] = {"dipixy", "-i", "channels.m3u", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.join_all, 0);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(join_all_short_flag_is_recorded) {
+  char *argv[] = {"dipixy", "-i", "channels.m3u", "-J", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.join_all, 1);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(join_all_long_flag_is_recorded) {
+  char *argv[] = {"dipixy", "-i", "channels.m3u", "--join-all", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.join_all, 1);
+  args_free(&cfg);
+}
+END_TEST
+
 START_TEST(invalid_color_mode_is_rejected) {
   char *argv[] = {"dipixy", "--color", "sometimes", NULL};
   config_t cfg;
@@ -916,6 +943,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, dlna_name_defaults_to_null);
   tcase_add_test(tc, dlna_keep_multicast_defaults_to_off);
   tcase_add_test(tc, dlna_keep_multicast_is_recorded);
+  tcase_add_test(tc, join_all_defaults_to_off);
+  tcase_add_test(tc, join_all_short_flag_is_recorded);
+  tcase_add_test(tc, join_all_long_flag_is_recorded);
   tcase_add_test(tc, invalid_color_mode_is_rejected);
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
   tcase_add_test(tc, help_returns_help_status);
