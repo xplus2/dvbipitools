@@ -25,7 +25,8 @@ int next_mpa(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame
   unsigned pad;
   unsigned br;
   unsigned sr;
-  int mpeg1, ly;
+  int mpeg1;
+  int ly;
   (void)t;
   if (len < 4) return 1;
   if (d[0] != 0xFF || (d[1] & 0xE0) != 0xE0) return -1;

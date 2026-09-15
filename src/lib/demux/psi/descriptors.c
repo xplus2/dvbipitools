@@ -244,16 +244,21 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen, int hdmv) {
       } else if (find_dvb_ext_desc(desc, dlen, 0x15, &l) != NULL) {
         e->cls = PID_AUDIO;
         e->codec = CODEC_AC4;
-      } else if (find_desc(desc, dlen, 0x7B, &l) || find_desc(desc, dlen, 0x73, &l) || ((ld = find_desc(desc, dlen, 0x05, &l)) != NULL && l >= 4 &&
-                  (!memcmp(ld, "DTS1", 4) || !memcmp(ld, "DTS2", 4) || !memcmp(ld, "DTS3", 4)))) {
+      } else if (find_desc(desc, dlen, 0x7B, &l) || find_desc(desc, dlen, 0x73, &l)) {
         e->cls = PID_AUDIO;
         e->codec = CODEC_DTS;
-      } else if ((ld = find_desc(desc, dlen, 0x05, &l)) != NULL && l >= 4 && !memcmp(ld, "AV01", 4)) {
-        e->cls = PID_VIDEO;
-        e->codec = CODEC_AV1;
-      } else if ((ld = find_desc(desc, dlen, 0x05, &l)) != NULL && l >= 4 && !memcmp(ld, "Opus", 4)) {
-        e->cls = PID_AUDIO;
-        e->codec = CODEC_OPUS;
+      } else {
+        ld = find_desc(desc, dlen, 0x05, &l);
+        if (ld && l >= 4 && (!memcmp(ld, "DTS1", 4) || !memcmp(ld, "DTS2", 4) || !memcmp(ld, "DTS3", 4))) {
+          e->cls = PID_AUDIO;
+          e->codec = CODEC_DTS;
+        } else if (ld && l >= 4 && !memcmp(ld, "AV01", 4)) {
+          e->cls = PID_VIDEO;
+          e->codec = CODEC_AV1;
+        } else if (ld && l >= 4 && !memcmp(ld, "Opus", 4)) {
+          e->cls = PID_AUDIO;
+          e->codec = CODEC_OPUS;
+        }
       }
       break;
     case 0x05:
