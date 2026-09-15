@@ -349,7 +349,6 @@ static size_t build_pmt_es_with_proginfo(unsigned char *out, unsigned prog_num, 
   size_t hdr;
   size_t crc_at;
   uint32_t crc;
-  size_t i;
 
   body[n++] = (unsigned char)(prog_num >> 8);
   body[n++] = (unsigned char)prog_num;
@@ -362,7 +361,7 @@ static size_t build_pmt_es_with_proginfo(unsigned char *out, unsigned prog_num, 
   body[n++] = (unsigned char)prog_desc_len;
   memcpy(body + n, prog_desc, prog_desc_len);
   n += prog_desc_len;
-  for (i = 0; i < es_count; i++) {
+  for (size_t i = 0; i < es_count; i++) {
     body[n++] = (unsigned char)es[i].stream_type;
     body[n++] = (unsigned char)(0xE0 | ((es[i].pid >> 8) & 0x1F));
     body[n++] = (unsigned char)es[i].pid;
@@ -391,8 +390,7 @@ static size_t build_pmt_es_with_proginfo(unsigned char *out, unsigned prog_num, 
 typedef struct { unsigned char *buf; size_t bitpos; } bw_t;
 
 static void bw_put(bw_t *w, unsigned v, int n) {
-  int i;
-  for (i = n - 1; i >= 0; i--) {
+  for (int i = n - 1; i >= 0; i--) {
     unsigned bit = (v >> i) & 1;
     size_t byte = w->bitpos >> 3;
     unsigned off = 7 - (unsigned)(w->bitpos & 7);

@@ -39,7 +39,8 @@ static void try_parse_hevc_hdr(flv_t *f, flv_track_t *t) {
 }
 
 static void try_parse_vvc_hdr(flv_t *f, flv_track_t *t) {
-  unsigned w, h;
+  unsigned w;
+  unsigned h;
   if (vvc_dims(t->es.sps, t->es.spslen, &w, &h) != 0) return;
   t->es.cpriv_len = build_vvcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
   if (t->es.cpriv_len) {
@@ -49,7 +50,8 @@ static void try_parse_vvc_hdr(flv_t *f, flv_track_t *t) {
 }
 
 static void try_parse_av1_hdr(flv_t *f, flv_track_t *t) {
-  unsigned w, h;
+  unsigned w;
+  unsigned h;
   av1_seq_hdr_t info;
   if (av1_seq_hdr_info(t->es.sps, t->es.spslen, &info, &w, &h) != 0) return;
   t->es.cpriv_len = build_av1c(&info, t->es.sps, t->es.spslen, t->es.cpriv, sizeof t->es.cpriv);

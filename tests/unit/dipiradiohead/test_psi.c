@@ -55,8 +55,10 @@ START_TEST(psi_build_pmt_round_trips_through_psi_feed) {
 END_TEST
 
 START_TEST(psi_build_pmt_includes_aac_descriptor_when_profile_level_set) {
-  unsigned char section_with[64], section_without[64];
-  size_t slen_with, slen_without;
+  unsigned char section_with[64];
+  unsigned char section_without[64];
+  size_t slen_with;
+  size_t slen_without;
   slen_with = psi_build_pmt(0, 1, 0x100, 0x11, 0x101, 0x58, NULL, 0, section_with, sizeof section_with);
   slen_without = psi_build_pmt(0, 1, 0x100, 0x11, 0x101, 0, NULL, 0, section_without, sizeof section_without);
   ck_assert_uint_ne(slen_with, 0u);

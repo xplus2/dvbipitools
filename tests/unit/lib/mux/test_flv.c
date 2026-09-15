@@ -75,7 +75,9 @@ static void feed_discovery(flv_t *f) {
 
   {
     unsigned char body[32];
-    size_t n = 0, hdr, crc_at;
+    size_t n = 0;
+    size_t hdr;
+    size_t crc_at;
     uint32_t crc;
     body[n++] = (unsigned char)(101 >> 8);
     body[n++] = (unsigned char)101;
@@ -115,7 +117,9 @@ static void feed_discovery(flv_t *f) {
 /* one video ES PMT, given stream_type. ES pid = pmt_pid+1 */
 static size_t build_pmt_video(unsigned char *out, unsigned prog_num, unsigned pmt_pid, unsigned char stream_type) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
   unsigned es_pid = pmt_pid + 1;
 
@@ -166,7 +170,9 @@ static size_t build_vvc_au(unsigned char *out) {
 /* AV1 video ES PMT: stream_type 0x06 + a tag-0x05 "AV01" */
 static size_t build_pmt_av1_video(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
   unsigned char body[20];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
   unsigned es_pid = pmt_pid + 1;
 
@@ -345,8 +351,13 @@ START_TEST(flv_emits_vvc1_fourcc_and_vvcc_seqhdr) {
   flv_opts_t opts;
   flv_t *f;
   tag_capture_t cap;
-  unsigned char sec[256], pkt[188], au[64], pes[128];
-  size_t slen, alen, plen;
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char au[64];
+  unsigned char pes[128];
+  size_t slen;
+  size_t alen;
+  size_t plen;
   static const unsigned char expect_vvcc[] = {
     0xFE, 0x03,
     0x8E, 0x00, 0x01, 0x00, 0x04, 0x00, 0x71, 0xAA, 0xBB,
@@ -366,11 +377,11 @@ START_TEST(flv_emits_vvc1_fourcc_and_vvcc_seqhdr) {
   flv_feed(f, pkt);
 
   /* AU1: VPS+SPS+PPS+IDR bundled, buffered */
-  alen = (size_t)build_vvc_au(au);
+  alen = build_vvc_au(au);
   plen = build_pes_with_pts(pes, 90000, au, alen);
   wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
   flv_feed(f, pkt);
-  alen = (size_t)build_vvc_au(au);
+  alen = build_vvc_au(au);
   plen = build_pes_with_pts(pes, 93000, au, alen);
   wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
   flv_feed(f, pkt);
@@ -396,8 +407,13 @@ START_TEST(flv_emits_av01_fourcc_and_av1c_seqhdr) {
   flv_opts_t opts;
   flv_t *f;
   tag_capture_t cap;
-  unsigned char sec[256], pkt[188], au[64], pes[128];
-  size_t slen, alen, plen;
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char au[64];
+  unsigned char pes[128];
+  size_t slen;
+  size_t alen;
+  size_t plen;
   static const unsigned char expect_av1c[] = {
     0x81, 0x00, 0x0C, 0x00,
     0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x01,
@@ -417,12 +433,12 @@ START_TEST(flv_emits_av01_fourcc_and_av1c_seqhdr) {
   wrap_section_packet(pkt, 0x0100, sec, slen);
   flv_feed(f, pkt);
 
-  alen = (size_t)build_av1_au(au);
+  alen = build_av1_au(au);
   plen = build_pes_with_pts(pes, 90000, au, alen);
   wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
   flv_feed(f, pkt);
 
-  alen = (size_t)build_av1_au(au);
+  alen = build_av1_au(au);
   plen = build_pes_with_pts(pes, 93000, au, alen);
   wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
   flv_feed(f, pkt);

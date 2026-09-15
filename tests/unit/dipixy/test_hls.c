@@ -325,7 +325,8 @@ END_TEST
 
 START_TEST(dash_compute_codecs_av01_string) {
   static const uint8_t init[] = {0, 0, 0, 0, 'a', 'v', '1', 'C', 0x81, 0x00, 0x0C, 0x00};
-  char vcodec[32], acodec[32];
+  char vcodec[32];
+  char acodec[32];
   dash_compute_codecs(init, sizeof init, CODEC_AV1, vcodec, sizeof vcodec, acodec, sizeof acodec);
   ck_assert_str_eq(vcodec, "av01.0.00M.08");
 }

@@ -6,9 +6,9 @@
 
 #include "../escodec.h"
 
-int next_ac3(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f);
-int next_eac3(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f);
-int next_mpa(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f);
+int next_ac3(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f);
+int next_eac3(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f);
+int next_mpa(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f);
 int next_aac(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f);
 int next_latm(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f);
 int next_opus(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f);

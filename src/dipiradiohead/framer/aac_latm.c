@@ -55,8 +55,11 @@ static unsigned profile_level(unsigned channels, unsigned rate, int sbr, int ps)
 
 static int audio_specific_config(br_t *b, unsigned *sample_rate, unsigned *channels, unsigned *aac_profile_level) {
   static const unsigned rates[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000,  7350};
-  unsigned sr_idx, chcfg, aot;
-  int sbr = 0, ps = 0;
+  unsigned sr_idx;
+  unsigned chcfg;
+  unsigned aot;
+  int sbr = 0;
+  int ps = 0;
 
   aot = get_audio_object_type(b);
   sr_idx = br_u(b, 4);

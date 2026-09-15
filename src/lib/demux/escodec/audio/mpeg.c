@@ -17,8 +17,14 @@ static const unsigned short mpa_br[2][3][16] = {
 };
 static const unsigned mpa_sample_rates[4][3] = {{11025, 12000, 8000},{0, 0, 0},{22050, 24000, 16000},{44100, 48000, 32000}};
 
-int next_mpa(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
-  unsigned ver, lay, bri, sri, pad, br, sr;
+int next_mpa(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
+  unsigned ver;
+  unsigned lay;
+  unsigned bri;
+  unsigned sri;
+  unsigned pad;
+  unsigned br;
+  unsigned sr;
   int mpeg1, ly;
   (void)t;
   if (len < 4) return 1;
@@ -40,7 +46,9 @@ int next_mpa(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f)
 
   if (f->consumed < 4) return -1;
   if (len < f->consumed) return 1;
-  f->samples = (ly == 1) ? 384 : (ly == 2) ? 1152 : (mpeg1 ? 1152 : 576);
+  if (ly == 1) f->samples = 384;
+  else if (ly == 2) f->samples = 1152;
+  else f->samples = mpeg1 ? 1152 : 576;
   f->rate = sr;
   f->ch = (((d[3] >> 6) & 3) == 3) ? 1 : 2;
   f->layer = ly;

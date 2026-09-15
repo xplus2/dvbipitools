@@ -10,7 +10,8 @@ static const unsigned dts_sfreq_rate[16] = {0, 8000, 16000, 32000, 0, 0, 11025, 
 /* TS 102 114 clause 7.5.2 tab 7-2, only nuExtSSFsize */
 static int dts_ext_substream_size(const unsigned char *d, size_t len, size_t *out_size) {
   br_t b;
-  unsigned hdr_type, fsize_bits;
+  unsigned hdr_type;
+  unsigned fsize_bits;
   if (len < 6) return 0;
   if (d[0] != 0x64 || d[1] != 0x58 || d[2] != 0x20 || d[3] != 0x25) return 0;
   b.d = d + 4;
@@ -28,8 +29,12 @@ static int dts_ext_substream_size(const unsigned char *d, size_t len, size_t *ou
 
 int next_dts(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   br_t b;
-  unsigned nblks = 0, fsize = 0, amode = 0, sfreq = 0;
-  size_t core_size = 0, ext_size = 0;
+  unsigned nblks = 0;
+  unsigned fsize = 0;
+  unsigned amode = 0;
+  unsigned sfreq = 0;
+  size_t core_size = 0;
+  size_t ext_size = 0;
   int have_core = 0;
   if (len < 9) return 1;
   if (d[0] == 0x7F && d[1] == 0xFE && d[2] == 0x80 && d[3] == 0x01) {

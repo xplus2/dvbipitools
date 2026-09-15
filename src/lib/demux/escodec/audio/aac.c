@@ -8,7 +8,11 @@
 static const unsigned aac_sample_rates[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000,  7350};
 
 int next_aac(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
-  unsigned prof, sfi, chcfg, fl, hl;
+  unsigned prof;
+  unsigned sfi;
+  unsigned chcfg;
+  unsigned fl;
+  unsigned hl;
   if (len < 7) return 1;
   if (d[0] != 0xFF || (d[1] & 0xF6) != 0xF0) return -1;
   prof = (d[2] >> 6) & 3;
@@ -43,15 +47,19 @@ static void skip_ext_sampling_freq(br_t *b) {
 }
 
 static int latm_cfg(br_t *b, esc_track_t *t) {
-  unsigned amv, sfi, ch, aot;
-  size_t asc_start, asc_end;
+  unsigned amv;
+  unsigned sfi;
+  unsigned ch;
+  unsigned aot;
+  size_t asc_start;
+  size_t asc_end;
   amv = br_u(b, 1);
   if (amv) {
     if (br_u(b, 1)) return -1;
 
     {
-      unsigned n = br_u(b, 2), i;
-      for (i = 0; i <= n; i++) br_u(b, 8);
+      unsigned n = br_u(b, 2);
+      for (unsigned i = 0; i <= n; i++) br_u(b, 8);
     }
   }
   if (!br_u(b, 1)) return -1;
@@ -63,7 +71,7 @@ static int latm_cfg(br_t *b, esc_track_t *t) {
   ch = br_u(b, 4);
   if (aot == 5 || aot == 29) {
     skip_ext_sampling_freq(b);
-    aot = read_aot(b);
+    read_aot(b);
   }
   br_u(b, 1);
   if (br_u(b, 1)) br_u(b, 14);
@@ -90,7 +98,8 @@ static int latm_cfg(br_t *b, esc_track_t *t) {
 
 int next_latm(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   br_t b;
-  size_t total, plen = 0, i;
+  size_t total;
+  size_t plen = 0;
   unsigned v;
   if (len < 3) return 1;
   if (d[0] != 0x56 || (d[1] & 0xE0) != 0xE0) return -1;
@@ -113,7 +122,7 @@ int next_latm(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f
     memcpy(t->au, b.d + (b.bit >> 3), plen);
     b.bit += plen * 8;
   } else {
-    for (i = 0; i < plen; i++) t->au[i] = (unsigned char)br_u(&b, 8);
+    for (size_t i = 0; i < plen; i++) t->au[i] = (unsigned char)br_u(&b, 8);
     if (b.err) return -1;
   }
   f->consumed = total;

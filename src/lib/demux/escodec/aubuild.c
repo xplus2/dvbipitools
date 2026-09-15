@@ -189,7 +189,8 @@ void esc_handle_vvc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, 
 
 static unsigned av1_reduced_still_picture_flag(const unsigned char *obu, size_t n) {
   br_t b;
-  unsigned ext, has_size;
+  unsigned ext;
+  unsigned has_size;
   b.d = obu;
   b.len = n;
   b.bit = 0;
@@ -200,15 +201,19 @@ static unsigned av1_reduced_still_picture_flag(const unsigned char *obu, size_t 
   has_size = br_u(&b, 1);
   br_u(&b, 1);
   if (ext) br_u(&b, 8);
-  if (has_size) for (int i = 0; i < 8 && (br_u(&b, 8) & 0x80); i++) {}
+  if (has_size) for (int i = 0; i < 8 && (br_u(&b, 8) & 0x80); i++) ;
   br_u(&b, 3);
   br_u(&b, 1);
   return br_u(&b, 1);
 }
 
 void esc_handle_av1_obu(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, unsigned type, const unsigned char *p, size_t n, int *key, const lcevc_strip_t *strip) {
-  unsigned char hdr0, ext, has_size, out_hdr[2];
-  size_t hn, payload_off;
+  unsigned char hdr0;
+  unsigned char ext;
+  unsigned char has_size;
+  unsigned char out_hdr[2];
+  size_t hn;
+  size_t payload_off;
 
   (void)strip;
   if (!n) return;
@@ -240,7 +245,8 @@ void esc_handle_av1_obu(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, 
 
   if ((type == OBU_FRAME || type == OBU_FRAME_HEADER) && es->spslen) {
     br_t b;
-    unsigned show_existing = 0, frame_type = 0;
+    unsigned show_existing = 0;
+    unsigned frame_type = 0;
     b.d = p + payload_off;
     b.len = n - payload_off;
     b.bit = 0;
@@ -265,10 +271,12 @@ void esc_handle_av1_obu(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, 
 }
 
 void esc_split_obus(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *d, size_t len, int *key, unsigned char **rb, size_t *rbcap) {
-  size_t p, scl = 0;
+  size_t p;
+  size_t scl = 0;
   p = find_startcode(d, len, 0, &scl);
   while (p < len) {
-    size_t ns = p + scl, scl2 = 0;
+    size_t ns = p + scl;
+    size_t scl2 = 0;
     size_t q = find_startcode(d, len, ns, &scl2);
     size_t n = q - ns;
     if (n) {

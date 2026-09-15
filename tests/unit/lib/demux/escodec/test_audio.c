@@ -11,7 +11,8 @@
 static size_t build_latm_frame(unsigned char *out, size_t cap, unsigned aot, unsigned sr_idx, unsigned ch, int hierarchical, unsigned ext_aot) {
   bitwriter_t bw;
   const unsigned char *payload;
-  size_t plen, total;
+  size_t plen;
+  size_t total;
   bitwriter_init(&bw);
   bitwriter_put(&bw, 0, 1);
   bitwriter_put(&bw, 0, 1);

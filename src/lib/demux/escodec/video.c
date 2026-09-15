@@ -287,12 +287,32 @@ size_t build_hvcc(const esc_track_t *t, unsigned char *o, size_t cap) {
 
 int av1_seq_hdr_info(const unsigned char *obu, size_t len, av1_seq_hdr_t *info, unsigned *w, unsigned *h) {
   br_t b;
-  unsigned ext, has_size, reduced, seq_profile;
-  unsigned timing_present, dec_model_present = 0, init_delay_present, op_cnt, buf_delay_bits = 0;
-  unsigned fwbits, fhbits, high_bitdepth, twelve_bit = 0, bitdepth12;
-  unsigned choose_sct, force_sct, enable_order_hint;
-  unsigned color_desc, cp, tc, mc, ssx, ssy, csp;
-  unsigned level0 = 0, tier0 = 0;
+  unsigned ext;
+  unsigned has_size;
+  unsigned reduced;
+  unsigned seq_profile;
+  unsigned timing_present;
+  unsigned dec_model_present = 0;
+  unsigned init_delay_present;
+  unsigned op_cnt;
+  unsigned buf_delay_bits = 0;
+  unsigned fwbits;
+  unsigned fhbits;
+  unsigned high_bitdepth;
+  unsigned twelve_bit = 0;
+  unsigned bitdepth12;
+  unsigned choose_sct;
+  unsigned force_sct;
+  unsigned enable_order_hint;
+  unsigned color_desc;
+  unsigned cp;
+  unsigned tc;
+  unsigned mc;
+  unsigned ssx;
+  unsigned ssy;
+  unsigned csp;
+  unsigned level0 = 0;
+  unsigned tier0 = 0;
 
   b.d = obu;
   b.len = len;
@@ -305,7 +325,7 @@ int av1_seq_hdr_info(const unsigned char *obu, size_t len, av1_seq_hdr_t *info, 
   has_size = br_u(&b, 1);
   br_u(&b, 1);
   if (ext) br_u(&b, 8);
-  if (has_size) for (int i = 0; i < 8 && (br_u(&b, 8) & 0x80); i++) {}
+  if (has_size) for (int i = 0; i < 8 && (br_u(&b, 8) & 0x80); i++) ;
   seq_profile = br_u(&b, 3);
   br_u(&b, 1);
   reduced = br_u(&b, 1);
@@ -328,7 +348,8 @@ int av1_seq_hdr_info(const unsigned char *obu, size_t len, av1_seq_hdr_t *info, 
     init_delay_present = br_u(&b, 1);
     op_cnt = br_u(&b, 5) + 1;
     for (unsigned i = 0; i < op_cnt && !b.err; i++) {
-      unsigned level, tier;
+      unsigned level;
+      unsigned tier;
       br_u(&b, 12);
       level = br_u(&b, 5);
       tier = (level > 7) ? br_u(&b, 1) : 0;
@@ -385,21 +406,27 @@ int av1_seq_hdr_info(const unsigned char *obu, size_t len, av1_seq_hdr_t *info, 
     tc = br_u(&b, 8);
     mc = br_u(&b, 8);
   } else {
-    cp = tc = mc = 0xFF;
+    cp = 0xFF;
+    tc = 0xFF;
+    mc = 0xFF;
   }
   if (info->monochrome) {
     br_u(&b, 1);
-    ssx = ssy = 1;
+    ssx = 1;
+    ssy = 1;
     csp = 0;
   } else if (cp == 1 && tc == 13 && mc == 0) { /* BT.709/sRGB/Identity: no subsampling */
-    ssx = ssy = 0;
+    ssx = 0;
+    ssy = 0;
     csp = 0;
   } else {
     br_u(&b, 1);
     if (seq_profile == 0) {
-      ssx = ssy = 1;
+      ssx = 1;
+      ssy = 1;
     } else if (seq_profile == 1) {
-      ssx = ssy = 0;
+      ssx = 0;
+      ssy = 0;
     } else if (bitdepth12) {
       ssx = br_u(&b, 1);
       ssy = ssx ? br_u(&b, 1) : 0;

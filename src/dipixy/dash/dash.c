@@ -44,10 +44,17 @@ static void dash_codecs(const uint8_t *init, size_t initsz, codec_t vcodec, char
   }
   if (vcodec == CODEC_AV1) {
     for (size_t i = 0; i + 7 <= initsz; i++) if (init[i] == 'a' && init[i + 1] == 'v' && init[i + 2] == '1' && init[i + 3] == 'C') {
-      unsigned pl = init[i + 5], th = init[i + 6];
-      unsigned profile = (pl >> 5) & 0x07, level = pl & 0x1F;
-      unsigned tier = (th >> 7) & 1, hbd = (th >> 6) & 1, twelve = (th >> 5) & 1;
-      unsigned bitdepth = twelve ? 12 : (hbd ? 10 : 8);
+      unsigned pl = init[i + 5];
+      unsigned th = init[i + 6];
+      unsigned profile = (pl >> 5) & 0x07;
+      unsigned level = pl & 0x1F;
+      unsigned tier = (th >> 7) & 1;
+      unsigned hbd = (th >> 6) & 1;
+      unsigned twelve = (th >> 5) & 1;
+      unsigned bitdepth;
+      if (twelve) bitdepth = 12;
+      else if (hbd) bitdepth = 10;
+      else bitdepth = 8;
       snprintf(out, outsz, "av01.%u.%02u%c.%02u", profile, level, tier ? 'H' : 'M', bitdepth);
       return;
     }

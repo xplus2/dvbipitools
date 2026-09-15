@@ -61,7 +61,7 @@ static int dts_asset_construction_is_ma(unsigned ac) {
 /* scan DTS-HD_descriptor (annex G tab G.6f/G.9) for asset_info().asset_construction for XLL */
 static int dts_hd_has_ma_asset(const unsigned char *d, size_t len) {
   br_t b;
-  unsigned flags, i;
+  unsigned flags;
   if (len < 1) return 0;
   b.d = d;
   b.len = len;
@@ -69,9 +69,11 @@ static int dts_hd_has_ma_asset(const unsigned char *d, size_t len) {
   b.err = 0;
   flags = br_u(&b, 5);
   br_u(&b, 3);
-  for (i = 0; i < 5 && !b.err; i++) {
-    size_t si_start_bit, si_end_bit;
-    unsigned substream_length, num_assets, a;
+  for (unsigned i = 0; i < 5 && !b.err; i++) {
+    size_t si_start_bit;
+    size_t si_end_bit;
+    unsigned substream_length;
+    unsigned num_assets;
     if (!((flags >> (4 - i)) & 1)) continue;
     si_start_bit = b.bit;
     substream_length = br_u(&b, 8);
@@ -82,9 +84,10 @@ static int dts_hd_has_ma_asset(const unsigned char *d, size_t len) {
     br_u(&b, 4); /* sampling_frequency */
     br_u(&b, 1); /* sample_resolution */
     br_u(&b, 2); /* reserved_future_use */
-    for (a = 0; a <= num_assets && !b.err; a++) {
+    for (unsigned a = 0; a <= num_assets && !b.err; a++) {
       unsigned asset_construction = br_u(&b, 5);
-      unsigned ctf, lcf;
+      unsigned ctf;
+      unsigned lcf;
       br_u(&b, 1); /* vbr_flag */
       br_u(&b, 1); /* post_encode_br_scaling_flag */
       ctf = br_u(&b, 1);
@@ -241,7 +244,8 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen, int hdmv) {
       } else if (find_dvb_ext_desc(desc, dlen, 0x15, &l) != NULL) {
         e->cls = PID_AUDIO;
         e->codec = CODEC_AC4;
-      } else if (find_desc(desc, dlen, 0x7B, &l) || find_desc(desc, dlen, 0x73, &l)) {
+      } else if (find_desc(desc, dlen, 0x7B, &l) || find_desc(desc, dlen, 0x73, &l) || ((ld = find_desc(desc, dlen, 0x05, &l)) != NULL && l >= 4 &&
+                  (!memcmp(ld, "DTS1", 4) || !memcmp(ld, "DTS2", 4) || !memcmp(ld, "DTS3", 4)))) {
         e->cls = PID_AUDIO;
         e->codec = CODEC_DTS;
       } else if ((ld = find_desc(desc, dlen, 0x05, &l)) != NULL && l >= 4 && !memcmp(ld, "AV01", 4)) {
@@ -250,9 +254,6 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen, int hdmv) {
       } else if ((ld = find_desc(desc, dlen, 0x05, &l)) != NULL && l >= 4 && !memcmp(ld, "Opus", 4)) {
         e->cls = PID_AUDIO;
         e->codec = CODEC_OPUS;
-      } else if ((ld = find_desc(desc, dlen, 0x05, &l)) != NULL && l >= 4 && (!memcmp(ld, "DTS1", 4) || !memcmp(ld, "DTS2", 4) || !memcmp(ld, "DTS3", 4))) {
-        e->cls = PID_AUDIO;
-        e->codec = CODEC_DTS;
       }
       break;
     case 0x05:

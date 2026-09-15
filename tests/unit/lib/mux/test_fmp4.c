@@ -200,8 +200,13 @@ START_TEST(aac_stsd_has_mp4a_esds_with_asc) {
   static const unsigned char asc[] = {0x12, 0x10};
   fmp4_mux_t *m = make_aac_mux(CODEC_AAC, asc, sizeof asc);
   unsigned char *out;
-  const unsigned char *stsd, *mp4a, *esds;
-  size_t len, stsd_len, mp4a_len, esds_len;
+  const unsigned char *stsd;
+  const unsigned char *mp4a;
+  const unsigned char *esds;
+  size_t len;
+  size_t stsd_len;
+  size_t mp4a_len;
+  size_t esds_len;
 
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
@@ -223,8 +228,13 @@ END_TEST
 START_TEST(mp2a_stsd_esds_has_no_decoder_specific_info) {
   fmp4_mux_t *m = make_aac_mux(CODEC_MP2A, NULL, 0);
   unsigned char *out;
-  const unsigned char *stsd, *mp4a, *esds;
-  size_t len, stsd_len, mp4a_len, esds_len;
+  const unsigned char *stsd;
+  const unsigned char *mp4a;
+  const unsigned char *esds;
+  size_t len;
+  size_t stsd_len;
+  size_t mp4a_len;
+  size_t esds_len;
 
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
@@ -565,8 +575,13 @@ END_TEST
 START_TEST(dts_hd_ma_with_core_stsd_has_dtsh_entry) {
   fmp4_mux_t *m = make_dts_mux(CODEC_DTS_HD_MA, 1);
   unsigned char *out;
-  const unsigned char *stsd, *entry, *ddts;
-  size_t len, stsd_len, entry_len, ddts_len;
+  const unsigned char *stsd;
+  const unsigned char *entry;
+  const unsigned char *ddts;
+  size_t len;
+  size_t stsd_len;
+  size_t entry_len;
+  size_t ddts_len;
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
   ck_assert(find_box(stsd + 8, stsd_len - 8, "dtsh", &entry, &entry_len));
@@ -579,8 +594,13 @@ END_TEST
 START_TEST(dts_hd_ma_without_core_stsd_has_dtsl_entry) {
   fmp4_mux_t *m = make_dts_mux(CODEC_DTS_HD_MA, 0);
   unsigned char *out;
-  const unsigned char *stsd, *entry, *ddts;
-  size_t len, stsd_len, entry_len, ddts_len;
+  const unsigned char *stsd;
+  const unsigned char *entry;
+  const unsigned char *ddts;
+  size_t len;
+  size_t stsd_len;
+  size_t entry_len;
+  size_t ddts_len;
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
   ck_assert(find_box(stsd + 8, stsd_len - 8, "dtsl", &entry, &entry_len));
@@ -593,8 +613,11 @@ END_TEST
 START_TEST(dts_hd_with_core_stsd_has_dtsh_entry) {
   fmp4_mux_t *m = make_dts_mux(CODEC_DTS_HD, 1);
   unsigned char *out;
-  const unsigned char *stsd, *entry;
-  size_t len, stsd_len, entry_len;
+  const unsigned char *stsd;
+  const unsigned char *entry;
+  size_t len;
+  size_t stsd_len;
+  size_t entry_len;
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
   ck_assert(find_box(stsd + 8, stsd_len - 8, "dtsh", &entry, &entry_len));
@@ -605,8 +628,11 @@ END_TEST
 START_TEST(dts_hd_without_core_stsd_has_dtse_entry) {
   fmp4_mux_t *m = make_dts_mux(CODEC_DTS_HD, 0);
   unsigned char *out;
-  const unsigned char *stsd, *entry;
-  size_t len, stsd_len, entry_len;
+  const unsigned char *stsd;
+  const unsigned char *entry;
+  size_t len;
+  size_t stsd_len;
+  size_t entry_len;
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
   ck_assert(find_box(stsd + 8, stsd_len - 8, "dtse", &entry, &entry_len));

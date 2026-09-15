@@ -88,7 +88,9 @@ static void feed_discovery(mkv_t *m) {
 
   {
     unsigned char body[32];
-    size_t n = 0, hdr, crc_at;
+    size_t n = 0;
+    size_t hdr;
+    size_t crc_at;
     uint32_t crc;
     body[n++] = (unsigned char)(101 >> 8);
     body[n++] = (unsigned char)101;
@@ -138,7 +140,9 @@ static void feed_discovery_two_audio(mkv_t *m) {
 
   {
     unsigned char body[32];
-    size_t n = 0, hdr, crc_at;
+    size_t n = 0;
+    size_t hdr;
+    size_t crc_at;
     uint32_t crc;
     body[n++] = (unsigned char)(101 >> 8);
     body[n++] = (unsigned char)101;
@@ -324,7 +328,9 @@ START_TEST(mkv_no_supported_tracks_writes_nothing_and_no_error) {
 
   {
     unsigned char body[32];
-    size_t n = 0, hdr, crc_at;
+    size_t n = 0;
+    size_t hdr;
+    size_t crc_at;
     uint32_t crc;
     body[n++] = (unsigned char)(101 >> 8);
     body[n++] = (unsigned char)101;
@@ -371,7 +377,9 @@ END_TEST
 /* one-AAC-ES PMT for prog_num, ES pid = pmt_pid+1 */
 static size_t build_pmt_aac(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
   unsigned es_pid = pmt_pid + 1;
 
@@ -405,7 +413,9 @@ static size_t build_pmt_aac(unsigned char *out, unsigned prog_num, unsigned pmt_
 
 static size_t build_pmt_video(unsigned char *out, unsigned prog_num, unsigned pmt_pid, unsigned char stream_type) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
   unsigned es_pid = pmt_pid + 1;
 
@@ -440,7 +450,9 @@ static size_t build_pmt_video(unsigned char *out, unsigned prog_num, unsigned pm
 /* AV1 video ES PMT: stream_type 0x06 + a tag-0x05 AV01 */
 static size_t build_pmt_av1_video(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
   unsigned char body[20];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
   unsigned es_pid = pmt_pid + 1;
 
@@ -621,8 +633,13 @@ START_TEST(mkv_writes_vvc_codecid_and_vvcc_cpriv) {
   unsigned long long bytes = 0;
   mkv_opts_t cfg = base_cfg();
   mkv_t *m;
-  unsigned char sec[256], pkt[188], au[64], pes[128];
-  size_t slen, alen, plen;
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char au[64];
+  unsigned char pes[128];
+  size_t slen;
+  size_t alen;
+  size_t plen;
   static const unsigned char expect_vvcc[] = {
     0xFE, 0x03,
     0x8E, 0x00, 0x01, 0x00, 0x04, 0x00, 0x71, 0xAA, 0xBB,
@@ -648,12 +665,12 @@ START_TEST(mkv_writes_vvc_codecid_and_vvcc_cpriv) {
   mkv_feed(m, pkt);
 
   /* AU1: VPS+SPS+PPS+IDR */
-  alen = (size_t)build_vvc_au(au);
+  alen = build_vvc_au(au);
   plen = build_pes_with_pts(pes, 90000, au, alen);
   wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
   mkv_feed(m, pkt);
 
-  alen = (size_t)build_vvc_au(au);
+  alen = build_vvc_au(au);
   plen = build_pes_with_pts(pes, 93000, au, alen);
   wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
   mkv_feed(m, pkt);
@@ -685,8 +702,13 @@ START_TEST(mkv_writes_av1_codecid_and_av1c_cpriv) {
   unsigned long long bytes = 0;
   mkv_opts_t cfg = base_cfg();
   mkv_t *m;
-  unsigned char sec[256], pkt[188], au[64], pes[128];
-  size_t slen, alen, plen;
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char au[64];
+  unsigned char pes[128];
+  size_t slen;
+  size_t alen;
+  size_t plen;
   static const unsigned char expect_av1c[] = {
     0x81, 0x00, 0x0C, 0x00,
     0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x01,
@@ -710,11 +732,11 @@ START_TEST(mkv_writes_av1_codecid_and_av1c_cpriv) {
   mkv_feed(m, pkt);
 
   /* AU1: sequence hdr + Frame OBU (key) */
-  alen = (size_t)build_av1_au(au);
+  alen = build_av1_au(au);
   plen = build_pes_with_pts(pes, 90000, au, alen);
   wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
   mkv_feed(m, pkt);
-  alen = (size_t)build_av1_au(au);
+  alen = build_av1_au(au);
   plen = build_pes_with_pts(pes, 93000, au, alen);
   wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
   mkv_feed(m, pkt);

@@ -59,6 +59,7 @@ static void build_audio_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk,
   switch (s->demux.audio_codec) {
     case CODEC_AAC:
     case CODEC_AAC_LATM:
+    case CODEC_AC4:
       trk->cpriv = s->audio.es_audio.cpriv;
       trk->cpriv_len = s->audio.es_audio.cpriv_len;
       break;
@@ -78,10 +79,6 @@ static void build_audio_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk,
     case CODEC_DTS_HD:
     case CODEC_DTS_HD_MA:
       trk->dts_has_core = s->audio.audio_dts_has_core;
-      break;
-    case CODEC_AC4:
-      trk->cpriv = s->audio.es_audio.cpriv;
-      trk->cpriv_len = s->audio.es_audio.cpriv_len;
       break;
     default:
       break;
@@ -149,7 +146,8 @@ static void fmp4_open_fragment(hls_seg_ctx_t *s) {
 /* open_now/cut_now apply once au is pending, 1 call later. ts_ms: decode-order (dts, or pts if no dts). cts_ticks: (pts-dts) in track ticks, 0 wo dts */
 void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, int32_t cts_ticks, int open_now, int cut_now, double elapsed) {
   double pt;
-  int chunk_now, wants_cut;
+  int chunk_now;
+  int wants_cut;
   try_create_fmux(s);
   if (!s->fmp4.fmux) return;
   pt = atomic_load_explicit(&s->part.part_target, memory_order_acquire);

@@ -293,7 +293,7 @@ static void trak_build_dmlp(mp4buf_t *out, const trak_meta_t *t) {
   mp4buf_t b;
   memset(&b, 0, sizeof b);
   mb_u32(&b, t->truehd_format_info);
-  mb_u16(&b, (unsigned)(t->truehd_peak_data_rate << 1));
+  mb_u16(&b, t->truehd_peak_data_rate << 1);
   mb_u32(&b, 0);
   mb_box(out, "dmlp", &b);
 }

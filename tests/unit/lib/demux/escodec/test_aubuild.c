@@ -303,8 +303,11 @@ END_TEST
 
 START_TEST(av1_seq_hdr_obu_cached_verbatim) {
   esc_track_t es;
-  unsigned char *vbuf = NULL, *rb = NULL;
-  size_t vbuflen = 0, vbufcap = 0, rbcap = 0;
+  unsigned char *vbuf = NULL;
+  unsigned char *rb = NULL;
+  size_t vbuflen = 0;
+  size_t vbufcap = 0;
+  size_t rbcap = 0;
   int key = 0;
   static const unsigned char buf[] = {0x00, 0x00, 0x01, 0x08, 0xAA, 0xBB, 0xCC};
 
@@ -322,8 +325,11 @@ END_TEST
 
 START_TEST(av1_temporal_delimiter_dropped_frame_reframed_to_lobf) {
   esc_track_t es;
-  unsigned char *vbuf = NULL, *rb = NULL;
-  size_t vbuflen = 0, vbufcap = 0, rbcap = 0;
+  unsigned char *vbuf = NULL;
+  unsigned char *rb = NULL;
+  size_t vbuflen = 0;
+  size_t vbufcap = 0;
+  size_t rbcap = 0;
   int key = 0;
   static const unsigned char buf[] = {
     0x00, 0x00, 0x01, 0x10,
@@ -343,8 +349,11 @@ END_TEST
 
 START_TEST(av1_inter_frame_not_marked_key) {
   esc_track_t es;
-  unsigned char *vbuf = NULL, *rb = NULL;
-  size_t vbuflen = 0, vbufcap = 0, rbcap = 0;
+  unsigned char *vbuf = NULL;
+  unsigned char *rb = NULL;
+  size_t vbuflen = 0;
+  size_t vbufcap = 0;
+  size_t rbcap = 0;
   int key = 0;
   static const unsigned char buf[] = {0x00, 0x00, 0x01, 0x30, 0x20, 0xAB, 0xCD};
   memset(&es, 0, sizeof es);
@@ -359,8 +368,11 @@ END_TEST
 
 START_TEST(av1_source_size_field_stripped_and_rebuilt) {
   esc_track_t es;
-  unsigned char *vbuf = NULL, *rb = NULL;
-  size_t vbuflen = 0, vbufcap = 0, rbcap = 0;
+  unsigned char *vbuf = NULL;
+  unsigned char *rb = NULL;
+  size_t vbuflen = 0;
+  size_t vbufcap = 0;
+  size_t rbcap = 0;
   int key = 0;
   static const unsigned char buf[] = {0x00, 0x00, 0x01, 0x32, 0x03, 0x00, 0xAB, 0xCD};
   static const unsigned char expect[] = {0x32, 0x03, 0x00, 0xAB, 0xCD};

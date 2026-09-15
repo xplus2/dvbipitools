@@ -40,17 +40,25 @@ typedef struct {
   unsigned bsid, bsmod, acmod, lfeon; /* AC3/EAC3 dac3/dec3 fields, unset otherwise */
   unsigned bitrate_code;              /* AC3 only: 5-bit frmsizecod, dac3's bit_rate_code */
   int atmos;
-  unsigned truehd_format_info, truehd_peak_data_rate;
+  unsigned truehd_format_info;
+  unsigned truehd_peak_data_rate;
   int dts_has_core;
   int ac4_iframe;
   unsigned ac4_bitstream_version;
-  unsigned ac4_presentation_version, ac4_mdcompat;
+  unsigned ac4_presentation_version;
+  unsigned ac4_mdcompat;
 } esc_frame_t;
 
 typedef struct {
-  unsigned seq_profile, seq_level_idx0, seq_tier0;
-  unsigned high_bitdepth, twelve_bit, monochrome;
-  unsigned subsampling_x, subsampling_y, chroma_sample_pos;
+  unsigned seq_profile;
+  unsigned seq_level_idx0;
+  unsigned seq_tier0;
+  unsigned high_bitdepth;
+  unsigned twelve_bit;
+  unsigned monochrome;
+  unsigned subsampling_x;
+  unsigned subsampling_y;
+  unsigned chroma_sample_pos;
 } av1_seq_hdr_t;
 
 /* video.c */

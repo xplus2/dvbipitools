@@ -21,8 +21,10 @@ static const unsigned short ac3_fsz[38][3] = {
 static const unsigned ac3_rate[3] = {48000, 44100, 32000};
 static const unsigned ac3_ch[8] = {2, 1, 2, 3, 3, 4, 4, 5};
 
-int next_ac3(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
-  unsigned fscod, frmsizecod, acmod;
+int next_ac3(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
+  unsigned fscod;
+  unsigned frmsizecod;
+  unsigned acmod;
   br_t b;
   (void)t;
   if (len < 7) return 1;
@@ -53,10 +55,12 @@ int next_ac3(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f)
   return 0;
 }
 
-int next_eac3(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
+int next_eac3(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   static const unsigned blk[4] = {1, 2, 3, 6};
   static const unsigned rate2[3] = {24000, 22050, 16000};
-  unsigned frmsiz, fscod, numblkscod;
+  unsigned frmsiz;
+  unsigned fscod;
+  unsigned numblkscod;
 
   (void)t;
   if (len < 6) return 1;

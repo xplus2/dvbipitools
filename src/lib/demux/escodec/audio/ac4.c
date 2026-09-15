@@ -8,7 +8,8 @@
 static const unsigned short ac4_frame_len48[14] = {1920, 1920, 2048, 1536, 1536, 960, 960, 1024, 768, 768, 512, 384, 384, 2048};
 
 static unsigned br_variable_bits(br_t *b, int n_bits) {
-  unsigned value = 0, more;
+  unsigned value = 0;
+  unsigned more;
   do {
     value += br_u(b, n_bits);
     more = br_u(b, 1);
@@ -23,7 +24,8 @@ static unsigned br_variable_bits(br_t *b, int n_bits) {
 static int ac4_channel_count(br_t *b) {
   static const unsigned char ch4[3] = {3, 5, 6};
   static const unsigned char ch7[6] = {7, 8, 7, 8, 7, 8};
-  unsigned v2, v3;
+  unsigned v2;
+  unsigned v3;
   if (!br_u(b, 1)) return 1;
   if (!br_u(b, 1)) return 2;
   v2 = br_u(b, 2);
@@ -45,7 +47,9 @@ static void ac4_skip_emdf_info(br_t *b) {
     if (substream_index == 3) br_variable_bits(b, 2);
   }
   {
-    unsigned lp = br_u(b, 2), ls = br_u(b, 2), n_skip = 0;
+    unsigned lp = br_u(b, 2);
+    unsigned ls = br_u(b, 2);
+    unsigned n_skip = 0;
     if (lp) n_skip += 1u << (2 * (lp - 1));
     if (ls) n_skip += 1u << (2 * (ls - 1));
     while (n_skip-- && !b->err) br_u(b, 8);
@@ -129,9 +133,13 @@ static void ac4_build_dsi(esc_track_t *t, unsigned bitstream_version, unsigned f
 }
 
 int next_ac4(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
-  size_t hdrlen, frame_size, total;
+  size_t hdrlen;
+  size_t frame_size;
+  size_t total;
   br_t b;
-  unsigned bitstream_version, fs_index, frame_rate_index;
+  unsigned bitstream_version;
+  unsigned fs_index;
+  unsigned frame_rate_index;
   int crc;
 
   if (len < 4) return 1;

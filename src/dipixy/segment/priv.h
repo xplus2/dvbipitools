@@ -62,10 +62,12 @@ typedef struct {
   unsigned audio_rate, audio_channels;
   unsigned audio_bsid, audio_bsmod, audio_acmod, audio_lfeon; /* AC3/EAC3 only */
   unsigned audio_bitrate_code; /* AC3: frmsizecod. EAC3: estimated data_rate kbps */
-  unsigned audio_truehd_format_info, audio_truehd_peak_data_rate; /* TrueHD only */
+  unsigned audio_truehd_format_info; /* TrueHD only */
+  unsigned audio_truehd_peak_data_rate; /* TrueHD only */
   int audio_dts_has_core; /* DTS/DTS-HD/DTS-HD-MA only */
   unsigned audio_ac4_bitstream_version;
-  unsigned audio_ac4_presentation_version, audio_ac4_mdcompat;
+  unsigned audio_ac4_presentation_version;
+  unsigned audio_ac4_mdcompat;
   int audio_ac4_last_iframe;
   int64_t audio_ac4_frame_count;
 

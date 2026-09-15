@@ -270,9 +270,14 @@ START_TEST(pmtbuild_pmt_round_trips_av1_registration_descriptor) {
   out_es_t out_es[4];
   out_program_pids_t pids;
   unsigned pcr_pid;
-  int n, dropped, desc_truncated;
-  unsigned char section[512], pkt[188], pat_section[32];
-  size_t slen, pat_len;
+  int n;
+  int dropped;
+  int desc_truncated;
+  unsigned char section[512];
+  unsigned char pkt[188];
+  unsigned char pat_section[32];
+  size_t slen;
+  size_t pat_len;
   psi_t *p;
   const psi_es_t *dec;
   int count;

@@ -7,13 +7,14 @@
 static const unsigned char thd_chancount[13] = {2, 1, 1, 2, 2, 2, 2, 1, 1, 2, 2, 1, 1};
 
 static int truehd_ch(unsigned chanmap) {
-  int ch = 0, i;
-  for (i = 0; i < 13; i++) if ((chanmap >> i) & 1) ch += thd_chancount[i];
+  int ch = 0;
+  for (int i = 0; i < 13; i++) if ((chanmap >> i) & 1) ch += thd_chancount[i];
   return ch;
 }
 
 int next_truehd(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
-  unsigned au_size, ratebits;
+  unsigned au_size;
+  unsigned ratebits;
   int has_major_sync;
   if (len < 8) return 1;
   au_size = (((unsigned)d[0] << 8 | d[1]) & 0x0FFF) * 2;
@@ -22,7 +23,9 @@ int next_truehd(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t 
   has_major_sync = d[4] == 0xF8 && d[5] == 0x72 && d[6] == 0x6F && (d[7] == 0xBA || d[7] == 0xBB);
   if (has_major_sync && d[7] == 0xBA && au_size >= 22) {
     br_t b;
-    unsigned num_substreams, substream_info, chanmap2;
+    unsigned num_substreams;
+    unsigned substream_info;
+    unsigned chanmap2;
     b.d = d + 8;
     b.len = au_size - 8;
     b.bit = 0;

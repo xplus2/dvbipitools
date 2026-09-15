@@ -158,7 +158,8 @@ void channels_join_all(channel_list_t *l, const config_t *cfg) {
   if (!cfg->join_all) return;
   for (int i = 0; i < l->count; i++) {
     channel_item_t *it = &l->items[i];
-    int family, rtp;
+    int family;
+    int rtp;
     char addr[64];
     unsigned port;
     if (it->static_ctx) continue;
