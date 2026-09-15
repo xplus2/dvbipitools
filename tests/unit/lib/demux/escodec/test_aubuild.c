@@ -301,6 +301,83 @@ START_TEST(esc_split_nals_strips_lcevc_end_to_end) {
 }
 END_TEST
 
+START_TEST(av1_seq_hdr_obu_cached_verbatim) {
+  esc_track_t es;
+  unsigned char *vbuf = NULL, *rb = NULL;
+  size_t vbuflen = 0, vbufcap = 0, rbcap = 0;
+  int key = 0;
+  static const unsigned char buf[] = {0x00, 0x00, 0x01, 0x08, 0xAA, 0xBB, 0xCC};
+
+  memset(&es, 0, sizeof es);
+  esc_split_obus(&es, &vbuf, &vbuflen, &vbufcap, buf, sizeof buf, &key, &rb, &rbcap);
+
+  ck_assert_uint_eq(es.spslen, 4u);
+  ck_assert_mem_eq(es.sps, "\x08\xAA\xBB\xCC", 4);
+  ck_assert_uint_eq(vbuflen, 0u);
+
+  free(vbuf);
+  free(rb);
+}
+END_TEST
+
+START_TEST(av1_temporal_delimiter_dropped_frame_reframed_to_lobf) {
+  esc_track_t es;
+  unsigned char *vbuf = NULL, *rb = NULL;
+  size_t vbuflen = 0, vbufcap = 0, rbcap = 0;
+  int key = 0;
+  static const unsigned char buf[] = {
+    0x00, 0x00, 0x01, 0x10,
+    0x00, 0x00, 0x01, 0x30, 0x00, 0xAB, 0xCD,
+  };
+  static const unsigned char expect[] = {0x32, 0x03, 0x00, 0xAB, 0xCD};
+  memset(&es, 0, sizeof es);
+  es.spslen = 1;
+  esc_split_obus(&es, &vbuf, &vbuflen, &vbufcap, buf, sizeof buf, &key, &rb, &rbcap);
+  ck_assert_int_eq(key, 1);
+  ck_assert_uint_eq(vbuflen, sizeof expect);
+  ck_assert_mem_eq(vbuf, expect, sizeof expect);
+  free(vbuf);
+  free(rb);
+}
+END_TEST
+
+START_TEST(av1_inter_frame_not_marked_key) {
+  esc_track_t es;
+  unsigned char *vbuf = NULL, *rb = NULL;
+  size_t vbuflen = 0, vbufcap = 0, rbcap = 0;
+  int key = 0;
+  static const unsigned char buf[] = {0x00, 0x00, 0x01, 0x30, 0x20, 0xAB, 0xCD};
+  memset(&es, 0, sizeof es);
+  es.spslen = 1;
+  esc_split_obus(&es, &vbuf, &vbuflen, &vbufcap, buf, sizeof buf, &key, &rb, &rbcap);
+  ck_assert_int_eq(key, 0);
+  ck_assert_uint_gt(vbuflen, 0u);
+  free(vbuf);
+  free(rb);
+}
+END_TEST
+
+START_TEST(av1_source_size_field_stripped_and_rebuilt) {
+  esc_track_t es;
+  unsigned char *vbuf = NULL, *rb = NULL;
+  size_t vbuflen = 0, vbufcap = 0, rbcap = 0;
+  int key = 0;
+  static const unsigned char buf[] = {0x00, 0x00, 0x01, 0x32, 0x03, 0x00, 0xAB, 0xCD};
+  static const unsigned char expect[] = {0x32, 0x03, 0x00, 0xAB, 0xCD};
+
+  memset(&es, 0, sizeof es);
+  es.spslen = 1;
+  esc_split_obus(&es, &vbuf, &vbuflen, &vbufcap, buf, sizeof buf, &key, &rb, &rbcap);
+
+  ck_assert_int_eq(key, 1);
+  ck_assert_uint_eq(vbuflen, sizeof expect);
+  ck_assert_mem_eq(vbuf, expect, sizeof expect);
+
+  free(vbuf);
+  free(rb);
+}
+END_TEST
+
 static Suite *aubuild_suite(void) {
   Suite *s = suite_create("lib_demux_escodec_aubuild");
   TCase *tc = tcase_create("core");
@@ -317,6 +394,10 @@ static Suite *aubuild_suite(void) {
   tcase_add_test(tc, esc_handle_h264_nal_keeps_sei_when_strip_disabled);
   tcase_add_test(tc, esc_handle_h264_nal_drops_dedicated_lcevc_nal_when_stripping);
   tcase_add_test(tc, esc_split_nals_strips_lcevc_end_to_end);
+  tcase_add_test(tc, av1_seq_hdr_obu_cached_verbatim);
+  tcase_add_test(tc, av1_temporal_delimiter_dropped_frame_reframed_to_lobf);
+  tcase_add_test(tc, av1_inter_frame_not_marked_key);
+  tcase_add_test(tc, av1_source_size_field_stripped_and_rebuilt);
   suite_add_tcase(s, tc);
   return s;
 }

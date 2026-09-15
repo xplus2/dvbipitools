@@ -75,6 +75,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   const unsigned char *b = cand->asm_.buf;
   size_t n = cand->asm_.expect, i, end, pil, l;
   unsigned prog;
+  int hdmv = 0;
   const unsigned char *ca;
   if (n < 16 || b[0] != 0x02 || crc32_mpeg(b, n) != 0) {
     log_throttled(&c->pmt_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed PMT section dropped");
@@ -101,8 +102,9 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
       add_ecm(c, c->pmt_ca_pid);
     }
     sd = find_desc(b + 12, pil, 0x65, &l);
-    if (sd && l >= 1)
-      c->scrambling_mode = sd[0];
+    if (sd && l >= 1) c->scrambling_mode = sd[0];
+    sd = find_desc(b + 12, pil, 0x05, &l);
+    if (sd && l >= 4 && (!memcmp(sd, "HDMV", 4) || !memcmp(sd, "HDPR", 4))) hdmv = 1;
   }
 
   end = n - 4;
@@ -115,7 +117,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
     memset(e, 0, sizeof *e);
     e->stream_type = b[i];
     e->pid = (((unsigned)b[i + 1] & 0x1F) << 8) | b[i + 2];
-    classify(e, desc, esil);
+    classify(e, desc, esil, hdmv);
     if (esil <= sizeof e->desc) {
       memcpy(e->desc, desc, esil);
       e->desc_len = esil;

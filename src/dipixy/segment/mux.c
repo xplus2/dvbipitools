@@ -6,8 +6,10 @@
 
 #include <string.h>
 
+#define AC4_DEFER_MAX_FRAMES 4
+
 /* 1 ok (trk filled), 0 not enough decoded yet (no SPS/PPS, or malformed) */
-static int build_video_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned char *cpriv, size_t cpriv_cap) {
+int build_video_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned char *cpriv, size_t cpriv_cap) {
   unsigned w = 0, h = 0;
   size_t cpriv_len;
 
@@ -27,8 +29,14 @@ static int build_video_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, 
       if (!s->video.es.spslen || vvc_dims(s->video.es.sps, s->video.es.spslen, &w, &h)) return 0;
       cpriv_len = build_vvcc(&s->video.es, cpriv, cpriv_cap);
       break;
+    case CODEC_AV1: {
+      av1_seq_hdr_t info;
+      if (!s->video.es.spslen || av1_seq_hdr_info(s->video.es.sps, s->video.es.spslen, &info, &w, &h)) return 0;
+      cpriv_len = build_av1c(&info, s->video.es.sps, s->video.es.spslen, cpriv, cpriv_cap);
+      break;
+    }
     default:
-      return 0; /* fmp4: H.264/HEVC/VVC only, no MPEG-2 sample entry */
+      return 0;
   }
   memset(trk, 0, sizeof *trk);
   trk->codec = s->demux.video_codec;
@@ -61,6 +69,19 @@ static void build_audio_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk,
       trk->ac3_acmod = (unsigned char)s->audio.audio_acmod;
       trk->ac3_lfeon = (unsigned char)s->audio.audio_lfeon;
       trk->ac3_bitrate_code = s->audio.audio_bitrate_code;
+      break;
+    case CODEC_TRUEHD:
+      trk->truehd_format_info = s->audio.audio_truehd_format_info;
+      trk->truehd_peak_data_rate = s->audio.audio_truehd_peak_data_rate;
+      break;
+    case CODEC_DTS:
+    case CODEC_DTS_HD:
+    case CODEC_DTS_HD_MA:
+      trk->dts_has_core = s->audio.audio_dts_has_core;
+      break;
+    case CODEC_AC4:
+      trk->cpriv = s->audio.es_audio.cpriv;
+      trk->cpriv_len = s->audio.es_audio.cpriv_len;
       break;
     default:
       break;
@@ -128,21 +149,35 @@ static void fmp4_open_fragment(hls_seg_ctx_t *s) {
 /* open_now/cut_now apply once au is pending, 1 call later. ts_ms: decode-order (dts, or pts if no dts). cts_ticks: (pts-dts) in track ticks, 0 wo dts */
 void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, int32_t cts_ticks, int open_now, int cut_now, double elapsed) {
   double pt;
-  int chunk_now;
+  int chunk_now, wants_cut;
   try_create_fmux(s);
   if (!s->fmp4.fmux) return;
   pt = atomic_load_explicit(&s->part.part_target, memory_order_acquire);
   chunk_now = pt > 0.0 && s->fmp4.fmp4_frag_open && ts_ms >= 0 && s->fmp4.fmp4_frag_start_ts_ms >= 0 && (double)(ts_ms - s->fmp4.fmp4_frag_start_ts_ms) / 1000.0 >= pt;
+  wants_cut = open_now || cut_now || chunk_now;
+  if (s->fmp4.fmp4_ac4_defer) {
+    if (s->audio.audio_ac4_last_iframe || s->audio.audio_ac4_frame_count - s->fmp4.fmp4_ac4_defer_start_count >= AC4_DEFER_MAX_FRAMES) {
+      s->fmp4.fmp4_ac4_defer = 0;
+      wants_cut = 1;
+      cut_now = s->fmp4.fmp4_ac4_defer_ends_seg;
+      elapsed = s->fmp4.fmp4_ac4_defer_elapsed;
+    } else {
+      wants_cut = 0;
+    }
+  } else if (wants_cut && s->demux.audio_codec == CODEC_AC4 && s->audio.audio_present && s->audio.audio_ready && !s->audio.audio_ac4_last_iframe) {
+    s->fmp4.fmp4_ac4_defer = 1;
+    s->fmp4.fmp4_ac4_defer_start_count = s->audio.audio_ac4_frame_count;
+    s->fmp4.fmp4_ac4_defer_ends_seg = cut_now;
+    s->fmp4.fmp4_ac4_defer_elapsed = elapsed;
+    wants_cut = 0;
+  }
   if (s->fmp4.fmp4_have_pend && ts_ms >= 0 && s->fmp4.fmp4_pend_ts_ms >= 0 && (s->fmp4.fmp4_frag_open || s->fmp4.fmp4_pend_starts_frag)) {
     fmp4_sample_t samp;
     int64_t dur_ms = ts_ms - s->fmp4.fmp4_pend_ts_ms;
     if (dur_ms < 0) dur_ms = 0;
     if (s->fmp4.fmp4_pend_starts_frag) {
-      if (s->fmp4.fmp4_frag_open)
-        fmp4_close_fragment(s, pt);
-      else
-        s->fmp4.fmp4_anchor_ms = s->fmp4.fmp4_pend_ts_ms;
-
+      if (s->fmp4.fmp4_frag_open) fmp4_close_fragment(s, pt);
+      else s->fmp4.fmp4_anchor_ms = s->fmp4.fmp4_pend_ts_ms;
       fmp4_open_fragment(s);
     }
     memset(&samp, 0, sizeof samp);
@@ -162,7 +197,7 @@ void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, int32_t cts_ticks, in
   s->fmp4.fmp4_pend_key = kf;
   s->fmp4.fmp4_pend_ts_ms = ts_ms;
   s->fmp4.fmp4_pend_cts = cts_ticks;
-  s->fmp4.fmp4_pend_starts_frag = open_now || cut_now || chunk_now;
+  s->fmp4.fmp4_pend_starts_frag = wants_cut;
   s->fmp4.fmp4_pend_ends_seg = cut_now;
   s->fmp4.fmp4_pend_elapsed = elapsed;
   s->fmp4.fmp4_have_pend = 1;
@@ -228,6 +263,6 @@ void fmp4_feed_audio_au(hls_seg_ctx_t *s, const esc_frame_t *f) {
   samp.data = f->out;
   samp.size = f->outlen;
   samp.duration = (uint32_t)dur;
-  samp.keyframe = 1;
+  samp.keyframe = s->demux.audio_codec == CODEC_AC4 ? f->ac4_iframe : 1;
   fmp4_segment_add_sample(s->fmp4.fmux, &samp);
 }

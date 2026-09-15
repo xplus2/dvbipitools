@@ -5,16 +5,14 @@
 #include <time.h>
 
 #include "lib/mux/psi_build.h"
-
 #include "psi.h"
 
-size_t psi_build_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, unsigned stream_type, unsigned es_pid, const unsigned char *prog_desc, size_t prog_desc_len, unsigned char *out, size_t cap) {
+size_t psi_build_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, unsigned stream_type, unsigned es_pid, unsigned aac_profile_level, const unsigned char *prog_desc, size_t prog_desc_len, unsigned char *out, size_t cap) {
   static const unsigned char lang[3] = {'u', 'n', 'd'};
   size_t n = 0, es_info_pos;
   unsigned esinfo;
 
-  if (cap < 32 + prog_desc_len)
-    return 0;
+  if (cap < 32 + prog_desc_len) return 0;
   out[n++] = 0x02;
   n += 2;
   psi_put16(out + n, program_number);
@@ -41,6 +39,11 @@ size_t psi_build_pmt(unsigned version, unsigned program_number, unsigned pcr_pid
   memcpy(out + n, lang, 3);
   n += 3;
   out[n++] = 0x00; /* audio_type: undefined */
+  if (aac_profile_level) {
+    out[n++] = 0x7C; /* AAC_descriptor */
+    out[n++] = 1;
+    out[n++] = (unsigned char)aac_profile_level;
+  }
   esinfo = (unsigned)(n - (es_info_pos + 2));
   out[es_info_pos] = (unsigned char)(0xF0 | ((esinfo >> 8) & 0x0F));
   out[es_info_pos + 1] = (unsigned char)esinfo;
@@ -67,8 +70,7 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   time_t now;
   struct tm tmv;
 
-  if (cap < 40)
-    return 0;
+  if (cap < 40) return 0;
   out[n++] = 0x4E;
   n += 2;
   psi_put16(out + n, service_id);
@@ -117,8 +119,7 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
     alen = psi_utf8_clamp(artist, alen, sizeof combined - 1);
     memcpy(combined, artist, alen);
     o = alen;
-    if (alen && tlen && o + 1 < sizeof combined)
-      combined[o++] = ' ';
+    if (alen && tlen && o + 1 < sizeof combined) combined[o++] = ' ';
     if (tlen && o < sizeof combined - 1) {
       size_t room = sizeof combined - 1 - o;
       tlen = psi_utf8_clamp(title, tlen, room);

@@ -203,6 +203,7 @@ void hls_seg_sweep_idle(void) {
     pes_free(s->demux.pes);
     free(s->buf);
     free(s->video.nal_scratch);
+    free(s->video.av1_rb);
     fmp4_mux_free(s->fmp4.fmux);
     free(s->fmp4.fmp4_pend_data);
     free(s->audio.audio_rem);

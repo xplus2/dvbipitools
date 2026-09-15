@@ -14,6 +14,7 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<po
 | `-i`  | `--input`            | `<uri>`                                 | required, repeatable                            |           |
 |       | `--sid`              | `<n>`                                   | auto (see below)                                | per-input |
 | `-s`  | `--sdt`              | `<name>`                                | auto (see below)                                | per-input |
+|       | `--provider`         | `<name>`                                | `dipiradiohead`                                 | per-input |
 | `-m`  | `--mcast`            | `<group>:<port>` / `[<group6>]:<port>`  | required unless `-R` given                      |           |
 | `-O`  | `--out-iface`        | `<iface>`                               | kernel route                                    |           |
 | `-r`  | `--rtp`              |                                         | off (plain UDP)                                 |           |
@@ -92,6 +93,8 @@ BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each o
 ## Input (`-i`)
 
 `http://` or `https://`. Codec: mp3, mp2, AAC ADTS, AAC LATM/LOAS, auto-detected from stream sync bytes.
+
+LATM/LOAS sources explicitly signaling HE-AAC or HE-AACv2 get a PMT `AAC_descriptor` with the matching `profile_and_level`.
 
 `https://` verifies the cert chain, hostname and expiry by default; `-k` skips all three (self-signed lab/test sources).
 
@@ -172,8 +175,8 @@ audio 0x0101. Per-program PIDs (multiple `-i`): see "Multiple inputs" above.
 
 ## Service info (`-n`, `-s`)
 
-`-n` NIT `network_name`, one for the whole output. `-s` SDT `service_name` per program (provider
-name is fixed: `dipiradiohead`). UTF-8.
+`-n` NIT `network_name`, one for the whole output. `-s` SDT `service_name` per program.
+`--provider` SDT `service_provider_name` per program, default `dipiradiohead`. UTF-8.
 
 ## Identifiers (`--tsid`, `--onid`, `--sid`)
 

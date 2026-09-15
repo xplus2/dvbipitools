@@ -52,8 +52,7 @@ static void cas_relay_cb(void *ctx, const unsigned char *pkt188) {
 
 tspacketizer_t *tspacketizer_new(const tspacketizer_cfg_t *cfg) {
   tspacketizer_t *t = calloc(1, sizeof *t);
-  if (!t)
-    return NULL;
+  if (!t) return NULL;
   t->cfg = *cfg;
   t->pmt_pid = cfg->pmt_pid ? cfg->pmt_pid : 0x0100;
   t->audio_pid = cfg->audio_pid ? cfg->audio_pid : TSPACKETIZER_PID_AUDIO;
@@ -108,7 +107,7 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, double now, const 
       n = psi_build_pat(t->cfg.tsid, t->ver_pat, t->cfg.sid, t->pmt_pid, sec, sizeof sec);
       if (n) count += ts_packet_emit(PID_PAT, &t->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
-    n = psi_build_pmt(t->ver_pmt, t->cfg.sid, t->pmt_pid, t->cfg.stream_type, t->audio_pid, prog_desc, prog_desc_len, sec, sizeof sec);
+    n = psi_build_pmt(t->ver_pmt, t->cfg.sid, t->pmt_pid, t->cfg.stream_type, t->audio_pid, t->cfg.aac_profile_level, prog_desc, prog_desc_len, sec, sizeof sec);
     if (n) count += ts_packet_emit(t->pmt_pid, &t->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
   }
   if (t->cfg.standalone) {

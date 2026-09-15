@@ -10,6 +10,8 @@ typedef struct aac_latm aac_latm_t;
 
 typedef struct {
   unsigned sample_rate;
+  unsigned channels;
+  unsigned aac_profile_level; /* DVB AAC_descriptor profile_and_level, 0 if not representable */
   unsigned samples_per_frame; /* 1024 */
   size_t frame_len;           /* whole LOAS frame, header included */
 } aac_latm_info_t;

@@ -60,7 +60,7 @@ int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, unsigne
     *cas_out = cas;
   } else if (mono_seconds() >= cas_gate_deadline) {
     log_line("cas: --cas-pids-video/--cas-pids-audio need every -i discovered within %.0fs:", CAS_KEYWORD_DISCOVERY_TIMEOUT_S);
-    for (unsigned i = 0; i < n; i++) if (!progs[i].rx) log_line("  input %u: %s", i, progs[i].psi ? "still discovering" : "not connected");
+    for (unsigned i = 0; i < n; i++) if (!progs[i].rx) log_line_ansi("  input \e[1;30m%u\e[0m: %s", i, progs[i].psi ? "still discovering" : "not connected");
     return -1;
   }
   return 0;

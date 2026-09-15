@@ -38,6 +38,27 @@ static void try_parse_hevc_hdr(flv_t *f, flv_track_t *t) {
   }
 }
 
+static void try_parse_vvc_hdr(flv_t *f, flv_track_t *t) {
+  unsigned w, h;
+  if (vvc_dims(t->es.sps, t->es.spslen, &w, &h) != 0) return;
+  t->es.cpriv_len = build_vvcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
+  if (t->es.cpriv_len) {
+    t->hdr_parsed = 1;
+    flv_all_ready(f);
+  }
+}
+
+static void try_parse_av1_hdr(flv_t *f, flv_track_t *t) {
+  unsigned w, h;
+  av1_seq_hdr_t info;
+  if (av1_seq_hdr_info(t->es.sps, t->es.spslen, &info, &w, &h) != 0) return;
+  t->es.cpriv_len = build_av1c(&info, t->es.sps, t->es.spslen, t->es.cpriv, sizeof t->es.cpriv);
+  if (t->es.cpriv_len) {
+    t->hdr_parsed = 1;
+    flv_all_ready(f);
+  }
+}
+
 /* one video PES = one Annex-B access unit */
 static void handle_video(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   int key = 0;
@@ -49,14 +70,21 @@ static void handle_video(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, co
   strip.rbcap = &t->lcevc_rbcap;
   strip.esc = &t->lcevc_esc;
   strip.esccap = &t->lcevc_esccap;
-  esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, f->opts->strip_lcevc ? &strip : NULL);
+  if (t->es.codec == CODEC_AV1)
+    esc_split_obus(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, &t->av1_rb, &t->av1_rbcap);
+  else
+    esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, f->opts->strip_lcevc ? &strip : NULL);
+  if (key) t->got_key = 1; /* try_parse's flv_all_ready() reads got_key */
   if (!t->hdr_parsed) {
     if (t->es.codec == CODEC_H264 && t->es.spslen && t->es.ppslen)
       try_parse_h264_hdr(f, t);
     else if (t->es.codec == CODEC_HEVC && t->es.vpslen && t->es.spslen && t->es.ppslen)
       try_parse_hevc_hdr(f, t);
+    else if (t->es.codec == CODEC_VVC && t->es.vpslen && t->es.spslen && t->es.ppslen)
+      try_parse_vvc_hdr(f, t);
+    else if (t->es.codec == CODEC_AV1 && t->es.spslen)
+      try_parse_av1_hdr(f, t);
   }
-  if (key) t->got_key = 1;
   if (f->started && t->hdr_parsed && t->got_key && t->vbuflen) flv_emit_video(f, t, t->vbuf, t->vbuflen, key);
 }
 
@@ -106,9 +134,9 @@ void flv_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts,
   else handle_audio(f, t, has_pts, pts, data, len);
 }
 
-/* RTMP model: 1 H.264/HEVC video + 1 AC-3/E-AC-3/AAC audio max. MPEG-2 video,
+/* RTMP model: 1 H.264/HEVC/VVC video + 1 AC-3/E-AC-3/AAC audio max. MPEG-2 video,
    MP2 audio: no FLV slot, no Enhanced FourCC, skipped+logged. */
-static int video_supported(codec_t c) { return c == CODEC_H264 || c == CODEC_HEVC; }
+static int video_supported(codec_t c) { return c == CODEC_H264 || c == CODEC_HEVC || c == CODEC_VVC || c == CODEC_AV1; }
 static int audio_supported(codec_t c) { return c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_AAC || c == CODEC_AAC_LATM; }
 
 void flv_setup(flv_t *f) {

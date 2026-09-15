@@ -51,6 +51,8 @@ typedef struct {
   size_t lcevc_rbcap;
   unsigned char *lcevc_esc;
   size_t lcevc_esccap;
+  unsigned char *av1_rb;
+  size_t av1_rbcap;
   int got_key;
   ttx_t *ttx;
   esc_track_t es;
@@ -59,6 +61,9 @@ typedef struct {
   unsigned char ac3_acmod;
   unsigned char ac3_lfeon;
   unsigned ac3_bitrate_code;
+  unsigned truehd_format_info;
+  unsigned truehd_peak_data_rate;
+  int dts_has_core;
 
   mp4_samp_t *samp;
   int nsamp;

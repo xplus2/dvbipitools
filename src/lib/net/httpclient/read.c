@@ -64,6 +64,11 @@ ssize_t http_read(http_t *h, void *buf, size_t cap, net_err_reason_t *reason_out
 
 int http_fd(const http_t *h) { return h->fd; }
 
+int http_has_buffered(const http_t *h) {
+  if (h->hpos < h->hlen) return 1;
+  return h->tls && tls_pending(h->tls) > 0;
+}
+
 void http_close(http_t *h) {
   if (!h)
     return;

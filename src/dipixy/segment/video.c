@@ -4,11 +4,12 @@
 #include "priv.h"
 
 #include "lib/demux/bitreader.h"
+#include "lib/helper/ioutil.h"
 
 #include <string.h>
 
 /* builds s->video.nal_scratch (AVCC AU bytes) as a side effect, used by fmp4 mode */
-static int detect_keyframe(hls_seg_ctx_t *s, const unsigned char *d, size_t len) {
+int detect_keyframe(hls_seg_ctx_t *s, const unsigned char *d, size_t len) {
   size_t p, scl = 0;
   int key = 0;
   if (s->demux.video_codec == CODEC_MPEG2V) {
@@ -47,6 +48,15 @@ static int detect_keyframe(hls_seg_ctx_t *s, const unsigned char *d, size_t len)
             esc_handle_vvc_nal(&s->video.es, &s->video.nal_scratch, &s->video.nal_scratch_len, &s->video.nal_scratch_cap, type, d + ns, n, &key, NULL);
           }
           break;
+        case CODEC_AV1: {
+          if (growbuf_reserve((void **)&s->video.av1_rb, &s->video.av1_rbcap, 1, n, 4096)) break;
+          size_t rblen = rbsp_unescape(d + ns, n, s->video.av1_rb, s->video.av1_rbcap);
+          if (rblen) {
+            type = (unsigned)(s->video.av1_rb[0] >> 3) & 0x0F;
+            esc_handle_av1_obu(&s->video.es, &s->video.nal_scratch, &s->video.nal_scratch_len, &s->video.nal_scratch_cap, type, s->video.av1_rb, rblen, &key, NULL);
+          }
+          break;
+        }
         default:
           break;
       }

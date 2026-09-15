@@ -15,6 +15,7 @@ typedef struct {
   unsigned stream_type; /* PMT stream_type */
   unsigned sample_rate;
   unsigned samples; /* samples in this frame, for PTS advance */
+  unsigned aac_profile_level; /* AAC_descriptor profile_and_level, 0 = none (LATM only) */
   const unsigned char *data; /* into source_t's internal buffer, valid until next source_next_frame call */
   size_t len;
 } source_frame_t;
@@ -25,7 +26,7 @@ typedef void (*source_meta_cb)(void *ctx, const char *artist, const char *title)
 
 /* resolves playlists, connects, detects codec + metadata mode. insecure skips TLS verify.
    NULL on failure. reason_out: nullable, set only on NULL return */
-source_t *source_open(const char *uri, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out);
+source_t *source_open(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out);
 
 /* 1 + fills *out, 0 transient (retry), -1 hard error (caller should reconnect).
    reason_out: nullable, set only on -1 */
@@ -33,6 +34,8 @@ int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
 
 /* underlying socket fd, for caller's own poll(); valid for life of s */
 int source_fd(const source_t *s);
+
+int source_has_buffered(const source_t *s);
 
 /* cumulative bytes read off wire for this source_t's lifetime. resets on reconnect:
    caller folds into its own persistent total before discarding s */
@@ -43,10 +46,12 @@ void source_close(source_t *s);
 typedef enum { SOURCE_OPEN_PENDING, SOURCE_OPEN_DONE, SOURCE_OPEN_ERROR } source_open_state_t;
 typedef struct source_open source_open_t;
 
-/* async source_open(): never blocks, caller polls. same semantics (playlist redirects, codec/metadata sniff).
+/* async source_open(): never blocks, caller polls.
    no internal timeout, caller decides when to give up. NULL only on immediate setup failure (calloc logged).
    reason_out: nullable, set only on NULL return */
-source_open_t *source_open_async_start(const char *uri, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out);
+source_open_t *source_open_async_start(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out);
+
+const char *source_open_async_resolved_uri(const source_open_t *o);
 
 int source_open_async_poll_fd(const source_open_t *o);
 short source_open_async_poll_events(const source_open_t *o);

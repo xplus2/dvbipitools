@@ -7,6 +7,7 @@
 #include "lib/helper/ioutil.h"
 
 #include <pthread.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -41,6 +42,18 @@ static void dash_codecs(const uint8_t *init, size_t initsz, codec_t vcodec, char
     bufcpy(out, outsz, "vvc1.1.L1.CQ");
     return;
   }
+  if (vcodec == CODEC_AV1) {
+    for (size_t i = 0; i + 7 <= initsz; i++) if (init[i] == 'a' && init[i + 1] == 'v' && init[i + 2] == '1' && init[i + 3] == 'C') {
+      unsigned pl = init[i + 5], th = init[i + 6];
+      unsigned profile = (pl >> 5) & 0x07, level = pl & 0x1F;
+      unsigned tier = (th >> 7) & 1, hbd = (th >> 6) & 1, twelve = (th >> 5) & 1;
+      unsigned bitdepth = twelve ? 12 : (hbd ? 10 : 8);
+      snprintf(out, outsz, "av01.%u.%02u%c.%02u", profile, level, tier ? 'H' : 'M', bitdepth);
+      return;
+    }
+    bufcpy(out, outsz, "av01.0.04M.08");
+    return;
+  }
   for (size_t i = 0; i + 8 <= initsz; i++) if (init[i] == 'a' && init[i + 1] == 'v' && init[i + 2] == 'c' && init[i + 3] == 'C') {
     strbuf_t b;
     hls_sb_init(&b, out, outsz);
@@ -69,15 +82,33 @@ static void dash_audio_codecs(const uint8_t *init, size_t initsz, char *out, siz
       bufcpy(out, outsz, "opus");
       return;
     }
+    if (!memcmp(init + i, "dtsc", 4) || !memcmp(init + i, "dtsh", 4) || !memcmp(init + i, "dtse", 4) || !memcmp(init + i, "dtsl", 4)) {
+      char fourcc[5];
+      memcpy(fourcc, init + i, 4);
+      fourcc[4] = '\0';
+      bufcpy(out, outsz, fourcc);
+      return;
+    }
+    if (!memcmp(init + i, "mlpa", 4)) {
+      bufcpy(out, outsz, "mlpa");
+      return;
+    }
+    if (!memcmp(init + i, "dac4", 4) && i + 6 <= initsz) {
+      strbuf_t b;
+      unsigned bs_ver = (unsigned)(((init[i + 4] & 0x1F) << 2) | (init[i + 5] >> 6));
+      hls_sb_init(&b, out, outsz);
+      hls_sb_add(&b, "ac-4.");
+      hls_sb_add_hex2(&b, (unsigned char)bs_ver);
+      hls_sb_add(&b, ".00.00");
+      return;
+    }
     if (!memcmp(init + i, "esds", 4) && i + 31 <= initsz) {
       if (init[i + 15] == 0x40) {
         strbuf_t b;
         hls_sb_init(&b, out, outsz);
         hls_sb_add(&b, "mp4a.40.");
         hls_sb_add_u64(&b, (uint64_t)(init[i + 30] >> 3));
-      } else {
-        bufcpy(out, outsz, "mp4a.6B");
-      }
+      } else bufcpy(out, outsz, "mp4a.6B");
       return;
     }
   }

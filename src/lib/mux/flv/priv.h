@@ -28,6 +28,8 @@ typedef struct {
   size_t lcevc_rbcap;
   unsigned char *lcevc_esc;
   size_t lcevc_esccap;
+  unsigned char *av1_rb;
+  size_t av1_rbcap;
   int got_key;      /* first keyframe seen */
   int seqhdr_sent;  /* avcC/hvcC/ASC sequence-start tag already emitted */
   esc_track_t es;

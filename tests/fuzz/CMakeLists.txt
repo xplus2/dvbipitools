@@ -10,6 +10,7 @@ dvbipitools_add_fuzz_harness(psi
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c

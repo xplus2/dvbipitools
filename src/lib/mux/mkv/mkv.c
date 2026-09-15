@@ -68,6 +68,7 @@ void mkv_close(mkv_t *m) {
     free(m->trk[i].vbuf);
     free(m->trk[i].lcevc_rb);
     free(m->trk[i].lcevc_esc);
+    free(m->trk[i].av1_rb);
     ttx_free(m->trk[i].ttx);
   }
   ebuf_free(&m->cl);

@@ -63,7 +63,16 @@ static void build_mdhd(mp4buf_t *out, const fmp4_trk_t *t) {
 }
 
 static int codec_is_audio(codec_t c) {
-  return c == CODEC_AAC || c == CODEC_AAC_LATM || c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_MP2A || c == CODEC_OPUS;
+  return c == CODEC_AAC
+      || c == CODEC_AAC_LATM
+      || c == CODEC_AC3 || c == CODEC_EAC3
+      || c == CODEC_MP2A
+      || c == CODEC_OPUS
+      || c == CODEC_DTS
+      || c == CODEC_DTS_HD
+      || c == CODEC_DTS_HD_MA
+      || c == CODEC_TRUEHD
+      || c == CODEC_AC4;
 }
 
 static void trak_meta_from_trk(trak_meta_t *tm, const fmp4_trk_t *t) {
@@ -82,6 +91,9 @@ static void trak_meta_from_trk(trak_meta_t *tm, const fmp4_trk_t *t) {
   tm->ac3_acmod = t->cfg.ac3_acmod;
   tm->ac3_lfeon = t->cfg.ac3_lfeon;
   tm->ac3_bitrate_code = t->cfg.ac3_bitrate_code;
+  tm->truehd_format_info = t->cfg.truehd_format_info;
+  tm->truehd_peak_data_rate = t->cfg.truehd_peak_data_rate;
+  tm->dts_has_core = t->cfg.dts_has_core;
 }
 
 static void build_empty_table(mp4buf_t *out, const char fourcc[4]) {

@@ -28,6 +28,23 @@ int esc_vbuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const u
   return 0;
 }
 
+int esc_obuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *data, size_t n) {
+  unsigned char lb[8];
+  size_t lbn = 0;
+  size_t v = n;
+  do {
+    unsigned char byte = (unsigned char)(v & 0x7F);
+    v >>= 7;
+    lb[lbn++] = (unsigned char)(byte | (v ? 0x80 : 0));
+  } while (v);
+  if (growbuf_reserve((void **)vbuf, vbufcap, 1, *vbuflen + lbn + n, 65536)) return -1;
+  memcpy(*vbuf + *vbuflen, lb, lbn);
+  *vbuflen += lbn;
+  memcpy(*vbuf + *vbuflen, data, n);
+  *vbuflen += n;
+  return 0;
+}
+
 void esc_ps_store(unsigned char *dst, size_t *dlen, const unsigned char *s, size_t n) {
   if (n && n <= ESCODEC_PS_MAX) {
     memcpy(dst, s, n);
@@ -167,6 +184,107 @@ void esc_handle_vvc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, 
     default:
       if (type >= VVC_NAL_IRAP_FIRST && type <= VVC_NAL_IRAP_LAST) *key = 1;
       if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0) log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, vvc nal dropped");
+  }
+}
+
+static unsigned av1_reduced_still_picture_flag(const unsigned char *obu, size_t n) {
+  br_t b;
+  unsigned ext, has_size;
+  b.d = obu;
+  b.len = n;
+  b.bit = 0;
+  b.err = 0;
+  br_u(&b, 1);
+  br_u(&b, 4);
+  ext = br_u(&b, 1);
+  has_size = br_u(&b, 1);
+  br_u(&b, 1);
+  if (ext) br_u(&b, 8);
+  if (has_size) for (int i = 0; i < 8 && (br_u(&b, 8) & 0x80); i++) {}
+  br_u(&b, 3);
+  br_u(&b, 1);
+  return br_u(&b, 1);
+}
+
+void esc_handle_av1_obu(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, unsigned type, const unsigned char *p, size_t n, int *key, const lcevc_strip_t *strip) {
+  unsigned char hdr0, ext, has_size, out_hdr[2];
+  size_t hn, payload_off;
+
+  (void)strip;
+  if (!n) return;
+  switch (type) {
+    case OBU_SEQUENCE_HEADER:
+      esc_ps_store(es->sps, &es->spslen, p, n);
+      es->av1_reduced_still_picture_header = av1_reduced_still_picture_flag(p, n);
+      return;
+    case OBU_FRAME:
+    case OBU_FRAME_HEADER:
+    case OBU_REDUNDANT_FRAME_HEADER:
+    case OBU_TILE_GROUP:
+    case OBU_METADATA:                                                  break;
+    default:                                                            return;
+  }
+
+  hdr0 = p[0];
+  ext = (unsigned char)((hdr0 >> 2) & 1);
+  has_size = (unsigned char)((hdr0 >> 1) & 1);
+  hn = (size_t)(1 + ext);
+  payload_off = hn;
+  if (has_size) {
+    size_t i = 0;
+    while (payload_off + i < n && i < 8 && (p[payload_off + i] & 0x80)) i++;
+    if (payload_off + i >= n) return;
+    payload_off += i + 1;
+  }
+  if (payload_off > n) return;
+
+  if ((type == OBU_FRAME || type == OBU_FRAME_HEADER) && es->spslen) {
+    br_t b;
+    unsigned show_existing = 0, frame_type = 0;
+    b.d = p + payload_off;
+    b.len = n - payload_off;
+    b.bit = 0;
+    b.err = 0;
+    if (!es->av1_reduced_still_picture_header) {
+      show_existing = br_u(&b, 1);
+      if (!show_existing) frame_type = br_u(&b, 2);
+    }
+    if (!b.err && !show_existing && frame_type == 0) *key = 1;
+  }
+
+  out_hdr[0] = (unsigned char)(hdr0 | 0x02);
+  if (ext) out_hdr[1] = p[1];
+  if (growbuf_reserve((void **)vbuf, vbufcap, 1, *vbuflen + hn, 65536)) {
+    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, av1 obu dropped");
+    return;
+  }
+  memcpy(*vbuf + *vbuflen, out_hdr, hn);
+  *vbuflen += hn;
+  if (esc_obuf_add(vbuf, vbuflen, vbufcap, p + payload_off, n - payload_off) < 0)
+    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, av1 obu dropped");
+}
+
+void esc_split_obus(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *d, size_t len, int *key, unsigned char **rb, size_t *rbcap) {
+  size_t p, scl = 0;
+  p = find_startcode(d, len, 0, &scl);
+  while (p < len) {
+    size_t ns = p + scl, scl2 = 0;
+    size_t q = find_startcode(d, len, ns, &scl2);
+    size_t n = q - ns;
+    if (n) {
+      size_t rblen;
+      if (growbuf_reserve((void **)rb, rbcap, 1, n, 4096)) {
+        log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: av1 obu unescape alloc failed");
+      } else {
+        rblen = rbsp_unescape(d + ns, n, *rb, *rbcap);
+        if (rblen) {
+          unsigned type = (unsigned)((*rb)[0] >> 3) & 0x0F;
+          esc_handle_av1_obu(es, vbuf, vbuflen, vbufcap, type, *rb, rblen, key, NULL);
+        }
+      }
+    }
+    p = q;
+    scl = scl2;
   }
 }
 

@@ -96,7 +96,7 @@ void radiohead_srt_service(out_ctx_t *o) {
   if (!o->srt) return;
   srtsink_service(o->srt, &st);
   if (st.connected != o->srt_connected) {
-    log_line("srt output: %s", st.connected ? "connected" : "link down, reconnecting");
+    log_line_ansi("srt output: %s", st.connected ? "\e[0;32mconnected\e[0m" : "\e[0;31mlink down, reconnecting\e[0m");
     o->srt_connected = st.connected;
   }
 }
@@ -182,6 +182,7 @@ static int process_single_frame(single_tick_t *tk, source_t *src) {
     tc.onid = tk->cfg->onid;
     tc.sid = tk->cfg->inputs[0].sid;
     tc.stream_type = f.stream_type;
+    tc.aac_profile_level = f.aac_profile_level;
     tc.network_name = tk->cfg->nit_text;
     tc.service_name = tk->cfg->inputs[0].sdt_text;
     tc.provider_name = tk->cfg->inputs[0].provider_text;
@@ -191,12 +192,12 @@ static int process_single_frame(single_tick_t *tk, source_t *src) {
     *tk->tsp = tspacketizer_new(&tc);
     if (!*tk->tsp) return -2;
     if (tk->cas) tspacketizer_set_cas(*tk->tsp, tk->cas);
-    log_line("codec detected: %s, %u Hz", codec_name(f.codec), f.sample_rate);
+    log_line_ansi("codec detected: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", codec_name(f.codec), f.sample_rate);
   }
   if (tk->meta->dirty) {
     tspacketizer_set_metadata(*tk->tsp, tk->meta->artist, tk->meta->title);
     tk->meta->dirty = 0;
-    log_line("now playing: %s%s%s", tk->meta->artist, (tk->meta->artist[0] && tk->meta->title[0]) ? " - " : "", tk->meta->title);
+    log_line_ansi("now playing: \e[0;36m%s%s%s\e[0m", tk->meta->artist, (tk->meta->artist[0] && tk->meta->title[0]) ? " - " : "", tk->meta->title);
   }
 
   now = mono_seconds();
@@ -206,7 +207,7 @@ static int process_single_frame(single_tick_t *tk, source_t *src) {
   if (tk->cas) {
     cas_clock_tick(tk->cas, pts);
     if (cas_failed(tk->cas)) {
-      log_line("cas: fatal, stopping");
+      log_line_ansi("cas: \e[0;31mfatal, stopping\e[0m");
       return -2;
     }
     if (signal_reload_requested()) cas_reload_receivers(tk->cas);
@@ -243,7 +244,6 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   single_tick_t tk;
 
   if (cfg->n_inputs > 1) return radiohead_run_mpts(cfg, mx);
-
   memset(&meta, 0, sizeof meta);
   memset(&out, 0, sizeof out);
   memset(&im, 0, sizeof im);
@@ -281,7 +281,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
 
   while (!signal_stop_requested()) {
     net_err_reason_t reason = NET_ERR_OTHER;
-    source_t *src = source_open(cfg->inputs[0].uri, cfg->insecure_tls, meta_cb, &meta, &reason);
+    source_t *src = source_open(cfg->inputs[0].uri, 0, cfg->inputs[0].sdt_text, cfg->insecure_tls, meta_cb, &meta, &reason);
     samples_total = 0;
 
     if (!src) {

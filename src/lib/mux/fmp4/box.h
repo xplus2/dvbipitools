@@ -51,6 +51,9 @@ typedef struct {
   unsigned char ac3_acmod;
   unsigned char ac3_lfeon;
   unsigned ac3_bitrate_code;
+  unsigned truehd_format_info;
+  unsigned truehd_peak_data_rate;
+  int dts_has_core;
 } trak_meta_t;
 
 void trak_build_hdlr(mp4buf_t *out, pid_class_t cls);

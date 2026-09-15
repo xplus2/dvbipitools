@@ -16,6 +16,7 @@
 
 #define MPTS_POLL_MAX_MS 100
 #define MPTS_MAX_FRAMES_PER_TICK 32 /* per input, per tick. caps one input's backlog delaying others */
+#define MPTS_PACE_TOLERANCE_S 0.3
 
 /* lib/mux/mpts.c is tool-agnostic (shared with dipitvhead). these adapt our concrete types to its void*-based ops vtable. */
 static int mpts_program_get_sdt_info(void *ctx, psi_sdt_entry_t *out) {
@@ -37,6 +38,7 @@ typedef struct {
   tspacketizer_t **tsps;
   meta_state_t *metas;
   uint64_t *samples_total;
+  double *pace_deadline;
   int *was_connected;
   input_metrics_t *input_stats;
   unsigned long long *last_synced_bytes;
@@ -63,20 +65,20 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
   if (connected_now && !tk->was_connected[i]) {
     tk->samples_total[i] = 0;
     tk->last_synced_bytes[i] = 0;
+    tk->pace_deadline[i] = tk->now;
   }
   tk->was_connected[i] = connected_now;
   if (!src) return 0;
 
-  /* only read a slot poll() actually reported ready. source_next_frame() can block for several seconds
-     (http_read()'s SO_RCVTIMEO) on a connected-but-currently-silent source, which would otherwise stall other inputs */
   for (unsigned pfd_i = 0; pfd_i < tk->npfd; pfd_i++) if (tk->pfd_slot[pfd_i] == i && (tk->pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP))) {
     ready = 1;
     break;
   }
+  if (!ready) ready = source_has_buffered(src);
   if (!ready) return 0;
 
   unsigned frames_this_visit = 0;
-  while (frames_this_visit < MPTS_MAX_FRAMES_PER_TICK) {
+  while (frames_this_visit < MPTS_MAX_FRAMES_PER_TICK && tk->pace_deadline[i] <= tk->now + MPTS_PACE_TOLERANCE_S) {
     source_frame_t f;
     uint64_t pts;
     net_err_reason_t reason = NET_ERR_OTHER;
@@ -102,6 +104,7 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
       tc.onid = tk->cfg->onid;
       tc.sid = inputset_sid(tk->is, i);
       tc.stream_type = f.stream_type;
+      tc.aac_profile_level = f.aac_profile_level;
       tc.network_name = "";
       tc.service_name = inputset_service_name(tk->is, i);
       tc.provider_name = inputset_provider_name(tk->is, i);
@@ -111,17 +114,18 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
       tk->tsps[i] = tspacketizer_new(&tc);
       if (!tk->tsps[i]) return -1;
       if (tk->cas) tspacketizer_set_cas(tk->tsps[i], tk->cas);
-      log_line("input %u (%s): codec detected: %s, %u Hz", i, inputset_service_name(tk->is, i), codec_name(f.codec), f.sample_rate);
+      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): codec detected: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", i, inputset_service_name(tk->is, i), codec_name(f.codec), f.sample_rate);
     }
     mpts_set_program(tk->mpts, i, tk->tsps[i]);
 
     if (tk->metas[i].dirty) {
       tspacketizer_set_metadata(tk->tsps[i], tk->metas[i].artist, tk->metas[i].title);
       tk->metas[i].dirty = 0;
-      log_line("input %u (%s): now playing: %s%s%s", i, inputset_service_name(tk->is, i), tk->metas[i].artist, (tk->metas[i].artist[0] && tk->metas[i].title[0]) ? " - " : "", tk->metas[i].title);
+      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): now playing: \e[0;36m%s%s%s\e[0m", i, inputset_service_name(tk->is, i), tk->metas[i].artist, (tk->metas[i].artist[0] && tk->metas[i].title[0]) ? " - " : "", tk->metas[i].title);
     }
     pts = tk->samples_total[i] * 90000ULL / f.sample_rate;
     tk->samples_total[i] += f.samples;
+    tk->pace_deadline[i] += (double)f.samples / (double)f.sample_rate;
     tk->out->cur_pts = pts;
     tspacketizer_feed(tk->tsps[i], pts, tk->now, f.data, f.len, packet_cb, tk->out);
   }
@@ -141,6 +145,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   void *meta_ctxs[RADIOHEAD_MAX_INPUTS] = {0};
   tspacketizer_t *tsps[RADIOHEAD_MAX_INPUTS];
   uint64_t samples_total[RADIOHEAD_MAX_INPUTS];
+  double pace_deadline[RADIOHEAD_MAX_INPUTS];
   int was_connected[RADIOHEAD_MAX_INPUTS];
   psi_pat_entry_t entries[RADIOHEAD_MAX_INPUTS];
   input_metrics_t input_stats[RADIOHEAD_MAX_INPUTS];
@@ -158,6 +163,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   memset(metas, 0, sizeof metas);
   memset(tsps, 0, sizeof tsps);
   memset(samples_total, 0, sizeof samples_total);
+  memset(pace_deadline, 0, sizeof pace_deadline);
   memset(was_connected, 0, sizeof was_connected);
   memset(input_stats, 0, sizeof input_stats);
   memset(last_synced_bytes, 0, sizeof last_synced_bytes);
@@ -192,7 +198,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     for (unsigned i = 0; i < n; i++) audio_pids[i] = inputset_audio_pid(is, i);
     cas = cas_start(cfg, audio_pids, n);
     if (!cas) {
-      log_line("cas: failed to start");
+      log_line_ansi("cas: \e[0;31mfailed to start\e[0m");
       rc = 1;
       goto done;
     }
@@ -239,6 +245,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       tk.tsps = tsps;
       tk.metas = metas;
       tk.samples_total = samples_total;
+      tk.pace_deadline = pace_deadline;
       tk.was_connected = was_connected;
       tk.input_stats = input_stats;
       tk.last_synced_bytes = last_synced_bytes;
@@ -266,7 +273,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     if (cas) {
       cas_clock_tick(cas, (uint64_t)(now * 90000.0));
       if (cas_failed(cas)) {
-        log_line("cas: fatal, stopping");
+        log_line("cas: \e[0;31mfatal, stopping\e[0m");
         rc = 1;
         goto done;
       }

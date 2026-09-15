@@ -100,17 +100,30 @@ void put_desc(mp4buf_t *out, unsigned tag, mp4buf_t *payload) {
   mp4buf_free(payload);
 }
 
-static const char *trak_entry_fourcc_for(codec_t codec) {
-  switch (codec) {
-    case CODEC_HEVC:  return "hvc1";
-    case CODEC_VVC:   return "vvc1";
-    case CODEC_LCEVC: return "lvc1";
-    case CODEC_AC3:   return "ac-3";
-    case CODEC_EAC3:  return "ec-3";
-    case CODEC_H264:  return "avc1";
-    case CODEC_OPUS:  return "Opus";
-    default:          return "mp4a";
+static const char *trak_entry_fourcc_for(const trak_meta_t *t) {
+  switch (t->codec) {
+    case CODEC_HEVC:      return "hvc1";
+    case CODEC_VVC:       return "vvc1";
+    case CODEC_AV1:       return "av01";
+    case CODEC_LCEVC:     return "lvc1";
+    case CODEC_AC3:       return "ac-3";
+    case CODEC_EAC3:      return "ec-3";
+    case CODEC_H264:      return "avc1";
+    case CODEC_OPUS:      return "Opus";
+    case CODEC_DTS:       return "dtsc";
+    case CODEC_DTS_HD:    return t->dts_has_core ? "dtsh" : "dtse";
+    case CODEC_DTS_HD_MA: return t->dts_has_core ? "dtsh" : "dtsl";
+    case CODEC_TRUEHD:    return "mlpa";
+    case CODEC_AC4:       return "ac-4";
+    default:              return "mp4a";
   }
+}
+
+/* EN 300 468 annex G table G.10, ~match row for codec_t+core */
+static unsigned dts_asset_construction(const trak_meta_t *t) {
+  if (t->codec == CODEC_DTS) return 1;
+  if (t->codec == CODEC_DTS_HD_MA) return t->dts_has_core ? 14 : 17;
+  return t->dts_has_core ? 6 : 18;
 }
 
 void trak_build_tref(mp4buf_t *out, unsigned depends_on_track_id) {
@@ -260,6 +273,38 @@ static void trak_build_dops(mp4buf_t *out, const trak_meta_t *t) {
   mb_box(out, "dOps", &b);
 }
 
+static void trak_build_ddts(mp4buf_t *out, const trak_meta_t *t) {
+  mp4buf_t b;
+  memset(&b, 0, sizeof b);
+  mb_u32(&b, (uint32_t)t->rate);
+  mb_u32(&b, 0);
+  mb_u32(&b, 0);
+  mb_u8(&b, 0);
+  mb_u8(&b, (unsigned char)(dts_asset_construction(t) << 1));
+  mb_u8(&b, 0);
+  mb_u8(&b, 0);
+  mb_u8(&b, 0);
+  mb_u16(&b, 0);
+  mb_u8(&b, 0);
+  mb_box(out, "ddts", &b);
+}
+
+static void trak_build_dmlp(mp4buf_t *out, const trak_meta_t *t) {
+  mp4buf_t b;
+  memset(&b, 0, sizeof b);
+  mb_u32(&b, t->truehd_format_info);
+  mb_u16(&b, (unsigned)(t->truehd_peak_data_rate << 1));
+  mb_u32(&b, 0);
+  mb_box(out, "dmlp", &b);
+}
+
+static void trak_build_dac4(mp4buf_t *out, const trak_meta_t *t) {
+  mp4buf_t b;
+  memset(&b, 0, sizeof b);
+  mb_bytes(&b, t->cpriv, t->cpriv_len);
+  mb_box(out, "dac4", &b);
+}
+
 static void trak_build_audio_entry(mp4buf_t *stsd, const trak_meta_t *t) {
   mp4buf_t entry;
   memset(&entry, 0, sizeof entry);
@@ -272,11 +317,15 @@ static void trak_build_audio_entry(mp4buf_t *stsd, const trak_meta_t *t) {
   mb_u16(&entry, 0);
   mb_u16(&entry, 0);
   mb_u32(&entry, (uint32_t)t->rate << 16);
-  if (t->codec == CODEC_AC3)       trak_build_dac3(&entry, t);
-  else if (t->codec == CODEC_EAC3) trak_build_dec3(&entry, t);
-  else if (t->codec == CODEC_OPUS) trak_build_dops(&entry, t);
-  else                             trak_build_esds(&entry, t);
-  mb_box(stsd, trak_entry_fourcc_for(t->codec), &entry);
+  if (t->codec == CODEC_AC3)         trak_build_dac3(&entry, t);
+  else if (t->codec == CODEC_EAC3)   trak_build_dec3(&entry, t);
+  else if (t->codec == CODEC_OPUS)   trak_build_dops(&entry, t);
+  else if (t->codec == CODEC_DTS || t->codec == CODEC_DTS_HD || t->codec == CODEC_DTS_HD_MA)
+                                     trak_build_ddts(&entry, t);
+  else if (t->codec == CODEC_TRUEHD) trak_build_dmlp(&entry, t);
+  else if (t->codec == CODEC_AC4)    trak_build_dac4(&entry, t);
+  else                               trak_build_esds(&entry, t);
+  mb_box(stsd, trak_entry_fourcc_for(t), &entry);
 }
 
 static void trak_build_video_entry(mp4buf_t *stsd, const trak_meta_t *t) {
@@ -285,6 +334,7 @@ static void trak_build_video_entry(mp4buf_t *stsd, const trak_meta_t *t) {
   const char *cfg_fourcc;
   if (t->codec == CODEC_HEVC) cfg_fourcc = "hvcC";
   else if (t->codec == CODEC_VVC) cfg_fourcc = "vvcC";
+  else if (t->codec == CODEC_AV1) cfg_fourcc = "av1C";
   else if (t->codec == CODEC_LCEVC) cfg_fourcc = "lvcC";
   else cfg_fourcc = "avcC";
   int i;
@@ -308,7 +358,7 @@ static void trak_build_video_entry(mp4buf_t *stsd, const trak_meta_t *t) {
   memset(&cfgbox, 0, sizeof cfgbox);
   mb_bytes(&cfgbox, t->cpriv, t->cpriv_len);
   mb_box(&entry, cfg_fourcc, &cfgbox);
-  mb_box(stsd, trak_entry_fourcc_for(t->codec), &entry);
+  mb_box(stsd, trak_entry_fourcc_for(t), &entry);
 }
 
 static void trak_build_text_entry(mp4buf_t *stsd) {

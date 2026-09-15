@@ -228,31 +228,33 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
     tvhead_srt_service(out);
     pfd.fd = tvsrc_fd(src);
     pfd.events = POLLIN;
-    pr = poll(&pfd, 1, 100); /* bounded: keeps tvhead_srt_service() ticking on quiet input too */
+    pr = poll(&pfd, 1, 100); /* bounded: keeps srt service + stuffing/stats below ticking on quiet input too */
     flush_batch_if_stale(out);
     if (pr < 0 && errno != EINTR) {
       cas_flush(cas, packet_cb, out);
       return -1;
     }
-    if (pr <= 0) continue;
-    reason = NET_ERR_OTHER;
-    n = tvsrc_read(src, buf, sizeof buf, &reason);
-    input_metrics_note_read(im, n, reason);
-    if (n < 0) {
-      cas_flush(cas, packet_cb, out);
-      return -1;
-    }
     now = mono_seconds();
-    if (n > 0) {
-      fc.now = now;
-      tspack_feed(&pz, buf, (size_t)n, remux_cb, &fc);
+    if (pr > 0) {
+      reason = NET_ERR_OTHER;
+      n = tvsrc_read(src, buf, sizeof buf, &reason);
+      input_metrics_note_read(im, n, reason);
+      if (n < 0) {
+        cas_flush(cas, packet_cb, out);
+        return -1;
+      }
+      if (n > 0) {
+        fc.now = now;
+        tspack_feed(&pz, buf, (size_t)n, remux_cb, &fc);
+      }
+      if (cas && cas_failed(cas)) {
+        log_line("cas: fatal error, stopping");
+        cas_flush(cas, packet_cb, out);
+        return -1;
+      }
+      if (cas && signal_reload_requested()) cas_reload_receivers(cas);
     }
-    if (cas && cas_failed(cas)) {
-      log_line("cas: fatal error, stopping");
-      cas_flush(cas, packet_cb, out);
-      return -1;
-    }
-    if (cas && signal_reload_requested()) cas_reload_receivers(cas);
+    /* every tick, not just at data inputs: keep CBR stuffing paced off the clock  */
     stuff_n = bitrate_stuff_due(out->pacer);
     for (int k = 0; k < stuff_n; k++) send_null_packet(out);
     if (cfg->verbose && now - last_stat >= 1.0) {

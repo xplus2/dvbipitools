@@ -164,7 +164,7 @@ and `--srt-latency` apply to every `-o srt://` target.
 
 ### RTMP(S)
 
-RTMP output ignores `-f`: H.264/HEVC video. Unsupported video (MPEG-2) or audio
+RTMP output ignores `-f`: H.264/HEVC/VVC/AV1 video. Unsupported video (MPEG-2) or audio
 (MP2) is dropped from that push.
 
 `-f raw` can't be combined with an `rtmp(s)://` target. `-f
@@ -220,7 +220,8 @@ What's changed regardless: continuity counters, CRC32 recalculation on any rewri
 
 ### Matroska details
 
-Video doesn't get transcoded. MPEG2, H.264 (`V_MPEG4/ISO/AVC`) and HEVC (`V_MPEGH/ISO/HEVC`) get handled properly.
+Video doesn't get transcoded. MPEG2, H.264 (`V_MPEG4/ISO/AVC`), HEVC (`V_MPEGH/ISO/HEVC`), 
+VVC (`V_MPEGI/ISO/VVC`) and AV1 (`V_AV1`) get handled properly.
 
 Audio covers AC3, E-AC3, MPEG layer 1/2/3, AAC (ADTS) and AAC_LATM. Each audio track keeps the ISO 639
 language from the PMT, or `und` when the stream does not signal one.

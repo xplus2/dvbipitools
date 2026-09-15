@@ -71,6 +71,7 @@ void mp4_close(mp4_t *m) {
     free(m->trk[i].vbuf);
     free(m->trk[i].lcevc_rb);
     free(m->trk[i].lcevc_esc);
+    free(m->trk[i].av1_rb);
     free(m->trk[i].samp);
     ttx_free(m->trk[i].ttx);
   }

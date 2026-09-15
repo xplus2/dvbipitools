@@ -1,14 +1,23 @@
 dvbipitools (2.4.2-1) unstable; urgency=low
   * dipixy
     + lock-free client handling (buffer pools were already there)
+    + -J|--join-all optionally pre-warm all inputs, never leave
   * cmake build flags simplified
   * dipiradiohead
     + -I is now -O for dipitvhead parity
     + --provider to set SDT provider name
+    + fixes for suboptimal sources
+      - better buffer handling (undrained updates)
+      - short-time microburst flattening
+      - input index/sdt name in error messages
+      - minimal m3u cache for reconnects
   * dipitvhead
-    + made stuffing less bursty
+    + made stuffing less bursty and solved quiet input stalling
     + --provider to set SDT provider name
-  * lcevc detection, descriptor passing and filters
+  * dipirec
+    + VVC in mkv outputs and in enhanced RTMP
+    + AV1 in mkv outputs and in enhanced RTMP
+  * MPEG-5 LCEVC detection, descriptor passing and filters
     + limited to 4 enhancement layers per stream
     + three modes: standalone ES, SEI wrapped NAL, unwrapped NAL
     + dipirec and dipidescramble: optionally strip enhancement layers
@@ -18,6 +27,12 @@ dvbipitools (2.4.2-1) unstable; urgency=low
       - all: where applicable (playlist/manifest), provide base+N iterations
       - [n]: index number, decimal or hex pid of base+layer
     + dipitvhead: detection, scrambling "alias"
+  * AC-4/TrueHD/Atmos/DTS/DTS-HD-MA/HE-AAC/HE-AACv2 detection+remux/segmenting
+    + AC-4
+      - A_AC4 in Matroska output is more like an educated guess
+      - TS 101 154 clause 6.6.1 AC-4 scope only: fs_index=1, 48/96/192kHz only
+      - Mandatory Iframe alignment only waits for 4 AC-4 frames
+  * AV1 detection+remux/segmenting
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.1-1) unstable; urgency=low

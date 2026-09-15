@@ -403,6 +403,107 @@ static size_t build_pmt_aac(unsigned char *out, unsigned prog_num, unsigned pmt_
   return crc_at + 4;
 }
 
+static size_t build_pmt_video(unsigned char *out, unsigned prog_num, unsigned pmt_pid, unsigned char stream_type) {
+  unsigned char body[16];
+  size_t n = 0, hdr, crc_at;
+  uint32_t crc;
+  unsigned es_pid = pmt_pid + 1;
+
+  body[n++] = (unsigned char)(prog_num >> 8);
+  body[n++] = (unsigned char)prog_num;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)es_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  body[n++] = stream_type;
+  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)es_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  hdr = n + 4;
+  out[0] = 0x02;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
+/* AV1 video ES PMT: stream_type 0x06 + a tag-0x05 AV01 */
+static size_t build_pmt_av1_video(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
+  unsigned char body[20];
+  size_t n = 0, hdr, crc_at;
+  uint32_t crc;
+  unsigned es_pid = pmt_pid + 1;
+
+  body[n++] = (unsigned char)(prog_num >> 8);
+  body[n++] = (unsigned char)prog_num;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)es_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  body[n++] = 0x06;
+  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)es_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x06;
+  body[n++] = 0x05;
+  body[n++] = 0x04;
+  memcpy(body + n, "AV01", 4);
+  n += 4;
+  hdr = n + 4;
+  out[0] = 0x02;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
+static size_t build_vvc_au(unsigned char *out) {
+  static const unsigned char vps[] = {0x00, 0x71, 0xAA, 0xBB};
+  static const unsigned char sps[] = {0x00, 0x79, 0x11, 0x0B, 0xFF, 0xFF, 0xDF, 0x00, 0x12};
+  static const unsigned char pps[] = {0x00, 0x81, 0xCC, 0xDD};
+  static const unsigned char idr[] = {0x00, 0x39, 0xEE};
+  static const unsigned char sc[] = {0x00, 0x00, 0x01};
+  size_t n = 0;
+#define APPEND(a) memcpy(out + n, a, sizeof a); n += sizeof a
+  APPEND(sc); APPEND(vps);
+  APPEND(sc); APPEND(sps);
+  APPEND(sc); APPEND(pps);
+  APPEND(sc); APPEND(idr);
+#undef APPEND
+  return n;
+}
+
+static size_t build_av1_au(unsigned char *out) {
+  static const unsigned char seqhdr[] = {0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x01};
+  static const unsigned char frame[] = {0x30, 0x00, 0xAB, 0xCD};
+  static const unsigned char sc[] = {0x00, 0x00, 0x01};
+  size_t n = 0;
+#define APPEND(a) memcpy(out + n, a, sizeof a); n += sizeof a
+  APPEND(sc); APPEND(seqhdr);
+  APPEND(sc); APPEND(frame);
+#undef APPEND
+  return n;
+}
+
 START_TEST(mkv_multi_program_labels_tracks_with_program_names) {
   char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
   int fd = mkstemp(path);
@@ -514,6 +615,131 @@ START_TEST(mkv_single_program_still_omits_track_name) {
 }
 END_TEST
 
+START_TEST(mkv_writes_vvc_codecid_and_vvcc_cpriv) {
+  char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mkv_opts_t cfg = base_cfg();
+  mkv_t *m;
+  unsigned char sec[256], pkt[188], au[64], pes[128];
+  size_t slen, alen, plen;
+  static const unsigned char expect_vvcc[] = {
+    0xFE, 0x03,
+    0x8E, 0x00, 0x01, 0x00, 0x04, 0x00, 0x71, 0xAA, 0xBB,
+    0x8F, 0x00, 0x01, 0x00, 0x09, 0x00, 0x79, 0x11, 0x0B, 0xFF, 0xFF, 0xDF, 0x00, 0x12,
+    0x90, 0x00, 0x01, 0x00, 0x04, 0x00, 0x81, 0xCC, 0xDD,
+  };
+  FILE *f;
+  unsigned char *buf;
+  long fsize;
+
+  ck_assert_int_ge(fd, 0);
+  m = mkv_new(fd, &cfg, 1 /* video */, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+
+  slen = psi_build_pat(0x1234, 0, 101, 0x0100, sec, sizeof sec);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
+  mkv_feed(m, pkt);
+  slen = build_pmt_video(sec, 101, 0x0100, 0x33 /* VVC */);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
+  mkv_feed(m, pkt);
+  slen = psi_build_sdt(0, 0x1234, 2, 101, 0x01, "Provider", "Service", sec, sizeof sec);
+  wrap_section_packet(pkt, 0x0011, sec, slen);
+  mkv_feed(m, pkt);
+
+  /* AU1: VPS+SPS+PPS+IDR */
+  alen = (size_t)build_vvc_au(au);
+  plen = build_pes_with_pts(pes, 90000, au, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  mkv_feed(m, pkt);
+
+  alen = (size_t)build_vvc_au(au);
+  plen = build_pes_with_pts(pes, 93000, au, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  mkv_feed(m, pkt);
+
+  ck_assert_int_eq(mkv_error(m), 0);
+  mkv_close(m);
+  close(fd);
+
+  f = fopen(path, "rb");
+  ck_assert_ptr_nonnull(f);
+  fseek(f, 0, SEEK_END);
+  fsize = ftell(f);
+  rewind(f);
+  ck_assert(fsize > 0);
+  buf = malloc((size_t)fsize);
+  ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
+  fclose(f);
+
+  ck_assert_ptr_nonnull(memmem(buf, (size_t)fsize, "V_MPEGI/ISO/VVC", 15));
+  ck_assert_ptr_nonnull(memmem(buf, (size_t)fsize, expect_vvcc, sizeof expect_vvcc));
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(mkv_writes_av1_codecid_and_av1c_cpriv) {
+  char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mkv_opts_t cfg = base_cfg();
+  mkv_t *m;
+  unsigned char sec[256], pkt[188], au[64], pes[128];
+  size_t slen, alen, plen;
+  static const unsigned char expect_av1c[] = {
+    0x81, 0x00, 0x0C, 0x00,
+    0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x01,
+  };
+  FILE *f;
+  unsigned char *buf;
+  long fsize;
+
+  ck_assert_int_ge(fd, 0);
+  m = mkv_new(fd, &cfg, 1 /* video */, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+
+  slen = psi_build_pat(0x1234, 0, 101, 0x0100, sec, sizeof sec);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
+  mkv_feed(m, pkt);
+  slen = build_pmt_av1_video(sec, 101, 0x0100);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
+  mkv_feed(m, pkt);
+  slen = psi_build_sdt(0, 0x1234, 2, 101, 0x01, "Provider", "Service", sec, sizeof sec);
+  wrap_section_packet(pkt, 0x0011, sec, slen);
+  mkv_feed(m, pkt);
+
+  /* AU1: sequence hdr + Frame OBU (key) */
+  alen = (size_t)build_av1_au(au);
+  plen = build_pes_with_pts(pes, 90000, au, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  mkv_feed(m, pkt);
+  alen = (size_t)build_av1_au(au);
+  plen = build_pes_with_pts(pes, 93000, au, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  mkv_feed(m, pkt);
+
+  ck_assert_int_eq(mkv_error(m), 0);
+  mkv_close(m);
+  close(fd);
+
+  f = fopen(path, "rb");
+  ck_assert_ptr_nonnull(f);
+  fseek(f, 0, SEEK_END);
+  fsize = ftell(f);
+  rewind(f);
+  ck_assert(fsize > 0);
+  buf = malloc((size_t)fsize);
+  ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
+  fclose(f);
+
+  ck_assert_ptr_nonnull(memmem(buf, (size_t)fsize, "V_AV1", 5));
+  ck_assert_ptr_nonnull(memmem(buf, (size_t)fsize, expect_av1c, sizeof expect_av1c));
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
 static Suite *mkv_suite(void) {
   Suite *s = suite_create("mkv");
   TCase *tc = tcase_create("core");
@@ -522,6 +748,8 @@ static Suite *mkv_suite(void) {
   tcase_add_test(tc, mkv_multi_program_labels_tracks_with_program_names);
   tcase_add_test(tc, mkv_single_program_still_omits_track_name);
   tcase_add_test(tc, mkv_pts_wraparound_is_rebased_not_dropped);
+  tcase_add_test(tc, mkv_writes_vvc_codecid_and_vvcc_cpriv);
+  tcase_add_test(tc, mkv_writes_av1_codecid_and_av1c_cpriv);
   suite_add_tcase(s, tc);
   return s;
 }

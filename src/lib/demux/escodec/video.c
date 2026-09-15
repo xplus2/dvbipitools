@@ -284,3 +284,151 @@ size_t build_hvcc(const esc_track_t *t, unsigned char *o, size_t cap) {
   }
   return n;
 }
+
+int av1_seq_hdr_info(const unsigned char *obu, size_t len, av1_seq_hdr_t *info, unsigned *w, unsigned *h) {
+  br_t b;
+  unsigned ext, has_size, reduced, seq_profile;
+  unsigned timing_present, dec_model_present = 0, init_delay_present, op_cnt, buf_delay_bits = 0;
+  unsigned fwbits, fhbits, high_bitdepth, twelve_bit = 0, bitdepth12;
+  unsigned choose_sct, force_sct, enable_order_hint;
+  unsigned color_desc, cp, tc, mc, ssx, ssy, csp;
+  unsigned level0 = 0, tier0 = 0;
+
+  b.d = obu;
+  b.len = len;
+  b.bit = 0;
+  b.err = 0;
+
+  br_u(&b, 1);
+  br_u(&b, 4);
+  ext = br_u(&b, 1);
+  has_size = br_u(&b, 1);
+  br_u(&b, 1);
+  if (ext) br_u(&b, 8);
+  if (has_size) for (int i = 0; i < 8 && (br_u(&b, 8) & 0x80); i++) {}
+  seq_profile = br_u(&b, 3);
+  br_u(&b, 1);
+  reduced = br_u(&b, 1);
+  if (reduced) {
+    level0 = br_u(&b, 5);
+  } else {
+    timing_present = br_u(&b, 1);
+    if (timing_present) {
+      br_u(&b, 32);
+      br_u(&b, 32);
+      if (br_u(&b, 1)) br_ue(&b);
+      dec_model_present = br_u(&b, 1);
+      if (dec_model_present) {
+        buf_delay_bits = br_u(&b, 5) + 1;
+        br_u(&b, 32);
+        br_u(&b, 5);
+        br_u(&b, 5);
+      }
+    }
+    init_delay_present = br_u(&b, 1);
+    op_cnt = br_u(&b, 5) + 1;
+    for (unsigned i = 0; i < op_cnt && !b.err; i++) {
+      unsigned level, tier;
+      br_u(&b, 12);
+      level = br_u(&b, 5);
+      tier = (level > 7) ? br_u(&b, 1) : 0;
+      if (i == 0) {
+        level0 = level;
+        tier0 = tier;
+      }
+      if (dec_model_present && br_u(&b, 1)) {
+        br_u(&b, buf_delay_bits);
+        br_u(&b, buf_delay_bits);
+        br_u(&b, 1);
+      }
+      if (init_delay_present && br_u(&b, 1)) br_u(&b, 4);
+    }
+  }
+  fwbits = br_u(&b, 4) + 1;
+  fhbits = br_u(&b, 4) + 1;
+  *w = br_u(&b, fwbits) + 1;
+  *h = br_u(&b, fhbits) + 1;
+
+  if (!reduced && br_u(&b, 1)) {
+    br_u(&b, 4);
+    br_u(&b, 3);
+  }
+  br_u(&b, 1);
+  br_u(&b, 1);
+  br_u(&b, 1);
+  if (!reduced) {
+    br_u(&b, 1);
+    br_u(&b, 1);
+    br_u(&b, 1);
+    br_u(&b, 1);
+    enable_order_hint = br_u(&b, 1);
+    if (enable_order_hint) {
+      br_u(&b, 1);
+      br_u(&b, 1);
+    }
+    choose_sct = br_u(&b, 1);
+    force_sct = choose_sct ? 2 : br_u(&b, 1);
+    if (force_sct > 0 && !br_u(&b, 1)) br_u(&b, 1);
+    if (enable_order_hint) br_u(&b, 3);
+  }
+  br_u(&b, 1);
+  br_u(&b, 1);
+  br_u(&b, 1);
+
+  high_bitdepth = br_u(&b, 1);
+  if (seq_profile == 2 && high_bitdepth) twelve_bit = br_u(&b, 1);
+  bitdepth12 = twelve_bit;
+  info->monochrome = (seq_profile == 1) ? 0 : br_u(&b, 1);
+  color_desc = br_u(&b, 1);
+  if (color_desc) {
+    cp = br_u(&b, 8);
+    tc = br_u(&b, 8);
+    mc = br_u(&b, 8);
+  } else {
+    cp = tc = mc = 0xFF;
+  }
+  if (info->monochrome) {
+    br_u(&b, 1);
+    ssx = ssy = 1;
+    csp = 0;
+  } else if (cp == 1 && tc == 13 && mc == 0) { /* BT.709/sRGB/Identity: no subsampling */
+    ssx = ssy = 0;
+    csp = 0;
+  } else {
+    br_u(&b, 1);
+    if (seq_profile == 0) {
+      ssx = ssy = 1;
+    } else if (seq_profile == 1) {
+      ssx = ssy = 0;
+    } else if (bitdepth12) {
+      ssx = br_u(&b, 1);
+      ssy = ssx ? br_u(&b, 1) : 0;
+    } else {
+      ssx = 1;
+      ssy = 0;
+    }
+    csp = (ssx && ssy) ? br_u(&b, 2) : 0;
+  }
+  info->seq_profile = seq_profile;
+  info->seq_level_idx0 = level0;
+  info->seq_tier0 = tier0;
+  info->high_bitdepth = high_bitdepth;
+  info->twelve_bit = twelve_bit;
+  info->subsampling_x = ssx;
+  info->subsampling_y = ssy;
+  info->chroma_sample_pos = csp;
+  if (b.err || !*w || !*h) return -1;
+  return 0;
+}
+
+size_t build_av1c(const av1_seq_hdr_t *info, const unsigned char *sps, size_t spslen, unsigned char *o, size_t cap) {
+  if (4 + spslen > cap) return 0;
+  o[0] = 0x80 | (unsigned char)1;
+  o[1] = (unsigned char)((info->seq_profile << 5) | info->seq_level_idx0);
+  o[2] = (unsigned char)((info->seq_tier0 << 7) | (info->high_bitdepth << 6) | (info->twelve_bit << 5)
+                        | (info->monochrome << 4) | (info->subsampling_x << 3) | (info->subsampling_y << 2)
+                        | info->chroma_sample_pos);
+  o[3] = 0;
+  memcpy(o + 4, sps, spslen);
+  return 4 + spslen;
+}

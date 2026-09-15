@@ -307,6 +307,30 @@ START_TEST(seg_pool_cap_and_trim_idle_do_not_crash) {
 }
 END_TEST
 
+START_TEST(av1_ts_container_playlist_uses_version_7) {
+  pid_filter_t f;
+  hls_resp_t r;
+  const uint8_t data[188] = {0x47};
+  const uint8_t init[4] = {0};
+  no_filter(&f);
+  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
+  hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, CODEC_AV1, init, sizeof init);
+  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(r.status, 200);
+  ck_assert(memmem(r.body, r.body_len, "#EXT-X-VERSION:7", 16) != NULL);
+  hls_resp_body_release(r.body, r.zc);
+}
+END_TEST
+
+START_TEST(dash_compute_codecs_av01_string) {
+  static const uint8_t init[] = {0, 0, 0, 0, 'a', 'v', '1', 'C', 0x81, 0x00, 0x0C, 0x00};
+  char vcodec[32], acodec[32];
+  dash_compute_codecs(init, sizeof init, CODEC_AV1, vcodec, sizeof vcodec, acodec, sizeof acodec);
+  ck_assert_str_eq(vcodec, "av01.0.00M.08");
+}
+END_TEST
+
 static Suite *hls_suite(void) {
   Suite *s = suite_create("dipixy_hls");
   TCase *tc = tcase_create("core");
@@ -327,6 +351,8 @@ static Suite *hls_suite(void) {
   tcase_add_test(tc, store_ready_reflects_pushed_segments);
   tcase_add_test(tc, lcevc_all_emits_master_playlist_once_pids_known);
   tcase_add_test(tc, seg_pool_cap_and_trim_idle_do_not_crash);
+  tcase_add_test(tc, av1_ts_container_playlist_uses_version_7);
+  tcase_add_test(tc, dash_compute_codecs_av01_string);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -44,6 +44,8 @@ ssize_t http_read(http_t *h, void *buf, size_t cap, net_err_reason_t *reason_out
 /* underlying socket fd, for caller's own poll(); valid for life of h */
 int http_fd(const http_t *h);
 
+int http_has_buffered(const http_t *h);
+
 void http_close(http_t *h);
 
 typedef struct http_async http_async_t;

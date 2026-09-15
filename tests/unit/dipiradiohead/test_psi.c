@@ -20,8 +20,7 @@ static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned 
   pkt[3] = 0x10;
   pkt[4] = 0x00;
   memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++)
-    pkt[i] = 0xFF;
+  for (size_t i = 5 + slen; i < 188; i++) pkt[i] = 0xFF;
 }
 
 START_TEST(psi_build_pmt_round_trips_through_psi_feed) {
@@ -30,23 +29,18 @@ START_TEST(psi_build_pmt_round_trips_through_psi_feed) {
   psi_t *p;
   const psi_es_t *es;
   int count;
-
   p = psi_new();
-
   /* psi_feed only recognizes a PMT pid once the PAT has pointed at it */
   slen = psi_build_pat(0x2222, 0, 101, 0x0100, section, sizeof section);
   ck_assert_uint_ne(slen, 0u);
   wrap_ts_packet(pkt, 0x0000, section, slen);
   psi_feed(p, pkt);
   ck_assert_int_eq(psi_have_pat(p), 1);
-
-  slen = psi_build_pmt(3, 101, 0x0101, 0x0F, 0x0101, NULL, 0, section, sizeof section);
+  slen = psi_build_pmt(3, 101, 0x0101, 0x0F, 0x0101, 0, NULL, 0, section, sizeof section);
   ck_assert_uint_ne(slen, 0u);
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
-
   wrap_ts_packet(pkt, 0x0100, section, slen);
   psi_feed(p, pkt);
-
   ck_assert_int_eq(psi_have_pmt(p), 1);
   ck_assert_uint_eq(psi_program_number(p), 101u);
   ck_assert_uint_eq(psi_pcr_pid(p), 0x0101u);
@@ -60,9 +54,22 @@ START_TEST(psi_build_pmt_round_trips_through_psi_feed) {
 }
 END_TEST
 
+START_TEST(psi_build_pmt_includes_aac_descriptor_when_profile_level_set) {
+  unsigned char section_with[64], section_without[64];
+  size_t slen_with, slen_without;
+  slen_with = psi_build_pmt(0, 1, 0x100, 0x11, 0x101, 0x58, NULL, 0, section_with, sizeof section_with);
+  slen_without = psi_build_pmt(0, 1, 0x100, 0x11, 0x101, 0, NULL, 0, section_without, sizeof section_without);
+  ck_assert_uint_ne(slen_with, 0u);
+  ck_assert_uint_eq(slen_with, slen_without + 3);
+  ck_assert_uint_eq(section_with[23], 0x7C);
+  ck_assert_uint_eq(section_with[24], 1);
+  ck_assert_uint_eq(section_with[25], 0x58);
+}
+END_TEST
+
 START_TEST(psi_build_pmt_rejects_small_cap) {
   unsigned char section[16];
-  ck_assert_uint_eq(psi_build_pmt(0, 1, 0x100, 0x0F, 0x101, NULL, 0, section, sizeof section), 0u);
+  ck_assert_uint_eq(psi_build_pmt(0, 1, 0x100, 0x0F, 0x101, 0, NULL, 0, section, sizeof section), 0u);
 }
 END_TEST
 
@@ -128,6 +135,7 @@ static Suite *psi_suite(void) {
   Suite *s = suite_create("dipiradiohead_psi");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, psi_build_pmt_round_trips_through_psi_feed);
+  tcase_add_test(tc, psi_build_pmt_includes_aac_descriptor_when_profile_level_set);
   tcase_add_test(tc, psi_build_pmt_rejects_small_cap);
   tcase_add_test(tc, psi_build_eit_has_valid_header_and_crc);
   tcase_add_test(tc, psi_build_eit_uses_title_only_when_no_artist);

@@ -3,6 +3,7 @@
 
 #include <string.h>
 
+#include "lib/demux/bitreader.h"
 #include "priv.h"
 
 typedef const unsigned char *(*desc_match_fn)(unsigned tag, const unsigned char *payload, size_t plen, void *ctx, size_t *out_len);
@@ -39,6 +40,66 @@ static const unsigned char *match_ext_tag(unsigned t, const unsigned char *paylo
 /* like find_desc, matches ext_desc sub-tag, scans every 0x3f */
 static const unsigned char *find_ext_desc(const unsigned char *d, size_t len, unsigned ext_tag, size_t *dlen) {
   return desc_scan(d, len, match_ext_tag, &ext_tag, dlen);
+}
+
+static const unsigned char *match_dvb_ext_tag(unsigned t, const unsigned char *payload, size_t plen, void *ctx, size_t *out_len) {
+  if (t != 0x7F || plen < 1 || payload[0] != *(unsigned *)ctx) return NULL;
+  *out_len = plen - 1;
+  return payload + 1;
+}
+
+/* DVB SI extension_descriptor, EN 300 468 clause 6.2.16, tag 0x7F */
+static const unsigned char *find_dvb_ext_desc(const unsigned char *d, size_t len, unsigned ext_tag, size_t *dlen) {
+  return desc_scan(d, len, match_dvb_ext_tag, &ext_tag, dlen);
+}
+
+/* EN 300 468 annex G table G.10: asset_construction, substream carries XLL (lossless) = DTS-HD Master Audio */
+static int dts_asset_construction_is_ma(unsigned ac) {
+  return ac == 14 || ac == 15 || ac == 16 || ac == 17 || ac == 21;
+}
+
+/* scan DTS-HD_descriptor (annex G tab G.6f/G.9) for asset_info().asset_construction for XLL */
+static int dts_hd_has_ma_asset(const unsigned char *d, size_t len) {
+  br_t b;
+  unsigned flags, i;
+  if (len < 1) return 0;
+  b.d = d;
+  b.len = len;
+  b.bit = 0;
+  b.err = 0;
+  flags = br_u(&b, 5);
+  br_u(&b, 3);
+  for (i = 0; i < 5 && !b.err; i++) {
+    size_t si_start_bit, si_end_bit;
+    unsigned substream_length, num_assets, a;
+    if (!((flags >> (4 - i)) & 1)) continue;
+    si_start_bit = b.bit;
+    substream_length = br_u(&b, 8);
+    si_end_bit = si_start_bit + 8 + (size_t)substream_length * 8;
+    num_assets = br_u(&b, 3);
+    br_u(&b, 5); /* channel_count */
+    br_u(&b, 1); /* lfe_flag */
+    br_u(&b, 4); /* sampling_frequency */
+    br_u(&b, 1); /* sample_resolution */
+    br_u(&b, 2); /* reserved_future_use */
+    for (a = 0; a <= num_assets && !b.err; a++) {
+      unsigned asset_construction = br_u(&b, 5);
+      unsigned ctf, lcf;
+      br_u(&b, 1); /* vbr_flag */
+      br_u(&b, 1); /* post_encode_br_scaling_flag */
+      ctf = br_u(&b, 1);
+      lcf = br_u(&b, 1);
+      br_u(&b, 13); /* bit_rate_scaled or bit_rate, same width */
+      br_u(&b, 2);  /* reserved_future_use */
+      if (ctf) br_u(&b, 8);  /* component_type */
+      if (lcf) br_u(&b, 24); /* ISO_639_language_code */
+      if (dts_asset_construction_is_ma(asset_construction)) return 1;
+    }
+    if (b.err) break;
+    if (b.bit > si_end_bit) return 0;
+    b.bit = si_end_bit;
+  }
+  return 0;
 }
 
 /* DVB text: skip charset prefix, controls -> space. not ISO 6937 */
@@ -90,10 +151,9 @@ static void parse_subtitle_desc(psi_es_t *e, const unsigned char *ld, size_t l) 
   }
 }
 
-void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
+void classify(psi_es_t *e, const unsigned char *desc, size_t dlen, int hdmv) {
   size_t l;
   const unsigned char *ld;
-
   e->codec = CODEC_NONE;
   e->cls = PID_DATA;
   e->lang[0] = '\0';
@@ -140,6 +200,30 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
       e->cls = PID_AUDIO;
       e->codec = CODEC_EAC3;
       break;
+    case 0x82:
+      if (hdmv) {
+        e->cls = PID_AUDIO;
+        e->codec = CODEC_DTS;
+      }
+      break;
+    case 0x83:
+      if (hdmv) {
+        e->cls = PID_AUDIO;
+        e->codec = CODEC_TRUEHD;
+      }
+      break;
+    case 0x85:
+      if (hdmv) {
+        e->cls = PID_AUDIO;
+        e->codec = CODEC_DTS_HD;
+      }
+      break;
+    case 0x86:
+      if (hdmv) {
+        e->cls = PID_AUDIO;
+        e->codec = CODEC_DTS_HD_MA;
+      }
+      break;
     case 0x06:
       if ((ld = find_desc(desc, dlen, 0x56, &l)) != NULL) {
         parse_teletext_desc(e, ld, l);
@@ -151,9 +235,24 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen) {
       } else if (find_desc(desc, dlen, 0x7A, &l)) {
         e->cls = PID_AUDIO;
         e->codec = CODEC_EAC3;
+      } else if ((ld = find_dvb_ext_desc(desc, dlen, 0x0E, &l)) != NULL) {
+        e->cls = PID_AUDIO;
+        e->codec = dts_hd_has_ma_asset(ld, l) ? CODEC_DTS_HD_MA : CODEC_DTS_HD;
+      } else if (find_dvb_ext_desc(desc, dlen, 0x15, &l) != NULL) {
+        e->cls = PID_AUDIO;
+        e->codec = CODEC_AC4;
+      } else if (find_desc(desc, dlen, 0x7B, &l) || find_desc(desc, dlen, 0x73, &l)) {
+        e->cls = PID_AUDIO;
+        e->codec = CODEC_DTS;
+      } else if ((ld = find_desc(desc, dlen, 0x05, &l)) != NULL && l >= 4 && !memcmp(ld, "AV01", 4)) {
+        e->cls = PID_VIDEO;
+        e->codec = CODEC_AV1;
       } else if ((ld = find_desc(desc, dlen, 0x05, &l)) != NULL && l >= 4 && !memcmp(ld, "Opus", 4)) {
         e->cls = PID_AUDIO;
         e->codec = CODEC_OPUS;
+      } else if ((ld = find_desc(desc, dlen, 0x05, &l)) != NULL && l >= 4 && (!memcmp(ld, "DTS1", 4) || !memcmp(ld, "DTS2", 4) || !memcmp(ld, "DTS3", 4))) {
+        e->cls = PID_AUDIO;
+        e->codec = CODEC_DTS;
       }
       break;
     case 0x05:

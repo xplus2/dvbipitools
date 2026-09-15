@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 
+#include "lib/helper/ioutil.h"
 #include "lib/metrics/export.h"
 #include "lib/net/retryset.h"
 
@@ -13,10 +14,14 @@
 
 typedef struct {
   const char *uri;
+  unsigned idx;
+  const char *label;
   int insecure;
   source_meta_cb cb;
   void *meta_ctx;
   input_metrics_t *im;
+  char resolved_uri[2048];
+  int have_resolved;
 } slot_ctx_t;
 
 /* retryset_ops_t's open_step() only gets the opening handle, not slot_ctx.
@@ -24,6 +29,7 @@ typedef struct {
 typedef struct {
   source_open_t *o;
   input_metrics_t *im;
+  slot_ctx_t *ctx;
 } slot_opening_t;
 
 typedef struct {
@@ -43,10 +49,12 @@ struct inputset {
 static void *slot_open_start(void *ctx) {
   slot_ctx_t *c = ctx;
   net_err_reason_t reason = NET_ERR_OTHER;
+  const char *uri = c->have_resolved ? c->resolved_uri : c->uri;
   slot_opening_t *w = calloc(1, sizeof *w);
   if (!w) return NULL;
   w->im = c->im;
-  w->o = source_open_async_start(c->uri, c->insecure, c->cb, c->meta_ctx, &reason);
+  w->ctx = c;
+  w->o = source_open_async_start(uri, c->idx, c->label, c->insecure, c->cb, c->meta_ctx, &reason);
   if (!w->o) {
     if (c->im) c->im->errors_total[reason]++;
     free(w);
@@ -66,6 +74,8 @@ static retryset_open_state_t slot_open_step(void *o) {
   net_err_reason_t reason = NET_ERR_OTHER;
   switch (source_open_async_step(w->o, &reason)) {
   case SOURCE_OPEN_DONE:
+    bufcpy(w->ctx->resolved_uri, sizeof w->ctx->resolved_uri, source_open_async_resolved_uri(w->o));
+    w->ctx->have_resolved = 1;
     if (w->im) {
       if (w->im->seen_open) w->im->reconnects_total++;
       w->im->seen_open = 1;
@@ -73,6 +83,7 @@ static retryset_open_state_t slot_open_step(void *o) {
     }
     return RETRYSET_OPEN_DONE;
   case SOURCE_OPEN_ERROR:
+    w->ctx->have_resolved = 0;
     if (w->im) w->im->errors_total[reason]++;
     return RETRYSET_OPEN_ERROR;
   default:
@@ -108,6 +119,8 @@ inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ct
   if (!is) return NULL;
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
     is->ctxs[i].uri = cfg->inputs[i].uri;
+    is->ctxs[i].idx = i;
+    is->ctxs[i].label = cfg->inputs[i].sdt_text;
     is->ctxs[i].insecure = cfg->insecure_tls;
     is->ctxs[i].cb = cb;
     is->ctxs[i].meta_ctx = ctxs ? ctxs[i] : NULL;

@@ -22,6 +22,8 @@ typedef struct {
   size_t cpriv_len;
   unsigned char ac3_bsid, ac3_bsmod, ac3_acmod, ac3_lfeon; /* AC3/EAC3 dac3/dec3 fields */
   unsigned ac3_bitrate_code; /* AC3: 5-bit frmsizecod. EAC3: 13-bit data_rate estimate, kbps */
+  unsigned truehd_format_info, truehd_peak_data_rate; /* dmlp fields */
+  int dts_has_core; /* DTS/DTS-HD/DTS-HD-MA: core substream */
   unsigned depends_on_track_id; /* 0: none. else: tref/sbas to this track_id */
 } fmp4_track_cfg_t;
 

@@ -17,6 +17,7 @@
 typedef struct {
   unsigned tsid, onid, sid;
   unsigned stream_type; /* PMT stream_type of detected codec */
+  unsigned aac_profile_level; /* AAC_descriptor profile_and_level, 0 = none */
   const char *network_name; /* "" = no NIT network_name descriptor; pointer must outlive packetizer */
   const char *service_name; /* pointer must outlive packetizer */
   const char *provider_name; /* SDT service_provider_name; NULL or "" = TOOL_NAME. pointer must outlive packetizer */

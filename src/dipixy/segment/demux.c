@@ -10,7 +10,16 @@
 #include <string.h>
 
 static int audio_codec_supported(codec_t c) {
-  return c == CODEC_AAC || c == CODEC_AAC_LATM || c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_MP2A || c == CODEC_OPUS;
+  return c == CODEC_AAC
+      || c == CODEC_AAC_LATM
+      || c == CODEC_AC3  || c == CODEC_EAC3
+      || c == CODEC_MP2A
+      || c == CODEC_OPUS
+      || c == CODEC_DTS
+      || c == CODEC_DTS_HD
+      || c == CODEC_DTS_HD_MA
+      || c == CODEC_TRUEHD
+      || c == CODEC_AC4;
 }
 
 /* called once, when video_pid_known first -> true: snapshots locked own pids, drops pre-lock stuff in s->buf */

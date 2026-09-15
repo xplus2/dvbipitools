@@ -13,6 +13,7 @@ static unsigned out_stream_type(codec_t c) {
     case CODEC_H264:     return 0x1B;
     case CODEC_HEVC:     return 0x24;
     case CODEC_VVC:      return 0x33;
+    case CODEC_AV1:      return 0x06;
     case CODEC_MP2A:     return 0x03;
     case CODEC_AAC:      return 0x0F;
     case CODEC_AAC_LATM: return 0x11;
@@ -20,6 +21,11 @@ static unsigned out_stream_type(codec_t c) {
     case CODEC_EAC3:     return 0x87;
     case CODEC_OPUS:     return 0x06;
     case CODEC_LCEVC:    return 0x36;
+    case CODEC_DTS:      return 0x06; /* ETSI TS 101 154 annex F.4.1.2 */
+    case CODEC_DTS_HD:   return 0x06; /* EN 300 468 annex G */
+    case CODEC_DTS_HD_MA: return 0x06;
+    case CODEC_TRUEHD:   return 0x83;
+    case CODEC_AC4:      return 0x06; /* ETSI TS 103 190-2 annex D.2.3 */
     case CODEC_NONE:     return 0;
   }
   return 0;

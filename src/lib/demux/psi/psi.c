@@ -202,6 +202,7 @@ const char *codec_name(codec_t k) {
     case CODEC_H264:      return "h264";
     case CODEC_HEVC:      return "hevc";
     case CODEC_VVC:       return "vvc";
+    case CODEC_AV1:       return "av1";
     case CODEC_MP2A:      return "mp2";
     case CODEC_AAC:       return "aac";
     case CODEC_AAC_LATM:  return "aac_latm";
@@ -209,6 +210,11 @@ const char *codec_name(codec_t k) {
     case CODEC_EAC3:      return "eac3";
     case CODEC_OPUS:      return "opus";
     case CODEC_LCEVC:     return "lcevc";
+    case CODEC_DTS:       return "dts";
+    case CODEC_DTS_HD:    return "dts_hd";
+    case CODEC_DTS_HD_MA: return "dts_hd_ma";
+    case CODEC_TRUEHD:    return "truehd";
+    case CODEC_AC4:       return "ac4";
     case CODEC_NONE:      return "none";
   }
   return "none";

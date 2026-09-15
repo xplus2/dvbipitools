@@ -113,6 +113,8 @@ ssize_t tls_read(tls_t *t, void *buf, size_t cap) {
   return -1;
 }
 
+int tls_pending(const tls_t *t) { return SSL_pending(t->ssl); }
+
 ssize_t tls_write(tls_t *t, const void *buf, size_t len) {
   int n, err;
   if (len > INT_MAX) len = INT_MAX;

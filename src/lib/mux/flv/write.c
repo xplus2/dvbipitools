@@ -26,6 +26,14 @@
 #define FLV_EX_APT_CODED_FRAMES 1
 
 static const unsigned char FOURCC_HVC1[4] = {'h', 'v', 'c', '1'};
+static const unsigned char FOURCC_VVC1[4] = {'v', 'v', 'c', '1'};
+static const unsigned char FOURCC_AV01[4] = {'a', 'v', '0', '1'};
+
+static const unsigned char *ex_video_fourcc(codec_t c) {
+  if (c == CODEC_VVC) return FOURCC_VVC1;
+  if (c == CODEC_AV1) return FOURCC_AV01;
+  return FOURCC_HVC1;
+}
 static const unsigned char FOURCC_AC3[4] = {'a', 'c', '-', '3'};
 static const unsigned char FOURCC_EAC3[4] = {'e', 'c', '-', '3'};
 
@@ -35,15 +43,12 @@ void flv_send_tag(flv_t *f, flv_tag_type_t type, uint32_t ts, const unsigned cha
   b->len = 0; /* keep f->tagbuf's allocation, this tag reuses it */
   b->err = 0;
   eb_bytes(b, hdr, hn);
-  if (pn)
-    eb_bytes(b, payload, pn);
+  if (pn) eb_bytes(b, payload, pn);
   if (b->err) {
     f->err = 1;
   } else {
-    if (f->bytes)
-      *f->bytes += b->len;
-    if (f->cb)
-      f->cb(f->cb_ctx, type, ts, b->p, b->len);
+    if (f->bytes) *f->bytes += b->len;
+    if (f->cb) f->cb(f->cb_ctx, type, ts, b->p, b->len);
   }
 }
 
@@ -71,10 +76,8 @@ void flv_emit_metadata(flv_t *f) {
   if (b.err) {
     f->err = 1;
   } else {
-    if (f->bytes)
-      *f->bytes += b.len;
-    if (f->cb)
-      f->cb(f->cb_ctx, FLV_TAG_SCRIPT, 0, b.p, b.len);
+    if (f->bytes) *f->bytes += b.len;
+    if (f->cb) f->cb(f->cb_ctx, FLV_TAG_SCRIPT, 0, b.p, b.len);
   }
   ebuf_free(&b);
 }
@@ -89,9 +92,9 @@ static void video_seqhdr(flv_t *f, flv_track_t *t) {
     hdr[hn++] = 0;
     hdr[hn++] = 0;
     hdr[hn++] = 0; /* CompositionTime = 0 */
-  } else {          /* HEVC: no classic CodecID slot, Enhanced RTMP only */
+  } else {          /* HEVC/VVC/AV1: no classic CodecID slot, Enhanced RTMP only */
     hdr[hn++] = (unsigned char)(0x80 | (FLV_FRAME_KEY << 4) | FLV_EX_PT_SEQ_START);
-    memcpy(hdr + hn, FOURCC_HVC1, 4);
+    memcpy(hdr + hn, ex_video_fourcc(t->es.codec), 4);
     hn += 4;
   }
   t->seqhdr_sent = 1;
@@ -105,9 +108,7 @@ void flv_emit_video(flv_t *f, flv_track_t *t, const unsigned char *d, size_t n, 
   uint32_t ts = rel > 0 ? (uint32_t)rel : 0;
   int frame_type = key ? FLV_FRAME_KEY : FLV_FRAME_INTER;
 
-  if (!t->seqhdr_sent)
-    video_seqhdr(f, t);
-
+  if (!t->seqhdr_sent) video_seqhdr(f, t);
   if (t->es.codec == CODEC_H264) {
     hdr[hn++] = (unsigned char)((frame_type << 4) | FLV_CODECID_AVC);
     hdr[hn++] = FLV_AVC_NALU;
@@ -116,7 +117,7 @@ void flv_emit_video(flv_t *f, flv_track_t *t, const unsigned char *d, size_t n, 
     hdr[hn++] = 0; /* CompositionTime = 0 */
   } else {
     hdr[hn++] = (unsigned char)(0x80 | (frame_type << 4) | FLV_EX_PT_CODED_FRAMES_X);
-    memcpy(hdr + hn, FOURCC_HVC1, 4);
+    memcpy(hdr + hn, ex_video_fourcc(t->es.codec), 4);
     hn += 4;
   }
   flv_send_tag(f, FLV_TAG_VIDEO, ts, hdr, hn, d, n);
@@ -147,9 +148,7 @@ void flv_emit_audio(flv_t *f, flv_track_t *t, const unsigned char *d, size_t n) 
   int64_t rel = t->ts_ms - f->t0;
   uint32_t ts = rel > 0 ? (uint32_t)rel : 0;
 
-  if (!t->seqhdr_sent)
-    audio_seqhdr(f, t);
-
+  if (!t->seqhdr_sent) audio_seqhdr(f, t);
   if (t->es.codec == CODEC_AAC || t->es.codec == CODEC_AAC_LATM) {
     hdr[hn++] = (unsigned char)((FLV_SOUNDFMT_AAC << 4) | 0x0F);
     hdr[hn++] = FLV_AAC_RAW;

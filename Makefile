@@ -80,6 +80,7 @@ dipiscan_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c
 
@@ -351,7 +352,14 @@ dipirec_SRCS := \
 	src/lib/mux/mkv/mkv.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/escodec/aubuild.c \
-	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
 	src/lib/mux/mkv/write.c \
@@ -649,6 +657,7 @@ dipitvhead_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/rtp.c \
@@ -706,6 +715,7 @@ dipifccret_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
@@ -842,7 +852,14 @@ dipidescramble_SRCS := \
 	src/lib/mux/mkv/mkv.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/escodec/aubuild.c \
-	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
 	src/lib/mux/mkv/write.c \
@@ -1193,7 +1210,11 @@ dipixy_SRCS := \
 	src/dipixy/ws/ws_clients.c \
 	src/dipixy/ws/ws_clients_json.c \
 	src/dipixy/ws/ws_clients_tick.c \
-	src/dipixy/segstore.c \
+	src/dipixy/segstore/pool.c \
+	src/dipixy/segstore/store.c \
+	src/dipixy/segstore/retire.c \
+	src/dipixy/segstore/snapshot.c \
+	src/dipixy/segstore/push.c \
 	src/dipixy/respfmt.c \
 	src/dipixy/hls/hls_serve.c \
 	src/dipixy/hls/hls_llhls.c \
@@ -1249,7 +1270,14 @@ dipixy_SRCS := \
 	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/escodec/aubuild.c \
-	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/demux/rtx.c \
 	src/lib/demux/rtcp.c \
@@ -1371,7 +1399,7 @@ build/dvbipitools/src/%.o: src/%.c config.mk
 dvbipitools: $(DVBIPITOOLS_OBJS)
 	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) -o $@
 
-UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
+UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mp4 lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild \
@@ -1634,7 +1662,14 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/mux/mkv/mkv.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/escodec/aubuild.c \
-	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
 	src/lib/mux/mkv/write.c \
@@ -2092,6 +2127,7 @@ lib_demux_psi_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -2110,6 +2146,7 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
@@ -2146,6 +2183,20 @@ lib_demux_escodec_aubuild_SRCS := \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
+lib_demux_escodec_audio_BIN := tests/unit/lib/demux/escodec/test_audio
+lib_demux_escodec_audio_SRCS := \
+	tests/unit/lib/demux/escodec/test_audio.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
+	src/lib/demux/bitreader.c \
+	src/lib/bim/bitwriter.c
+
 lib_demux_rtp_BIN := tests/unit/lib/demux/test_rtp
 lib_demux_rtp_SRCS := \
 	tests/unit/lib/demux/test_rtp.c \
@@ -2177,6 +2228,7 @@ lib_mux_psi_build_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -2244,7 +2296,14 @@ lib_mux_mkv_SRCS := \
 	src/lib/mux/mkv/mkv.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/escodec/aubuild.c \
-	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
 	src/lib/mux/mkv/write.c \
@@ -2274,7 +2333,14 @@ lib_mux_mp4_SRCS := \
 	src/lib/mux/mp4/feed.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/escodec/aubuild.c \
-	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/helper/ioutil.c \
 	src/lib/mux/teletext.c \
@@ -2306,7 +2372,14 @@ lib_mux_flv_SRCS := \
 	src/lib/mux/flv/feed.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/escodec/aubuild.c \
-	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/amf.c \
 	src/lib/mux/ebml.c \
@@ -2449,6 +2522,7 @@ dipiscan_scan_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/rtp.c \
@@ -2516,6 +2590,7 @@ dipiradiohead_psi_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -2563,6 +2638,7 @@ dipiradiohead_tspacketizer_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -2668,6 +2744,7 @@ dipiradiohead_cas_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -2763,6 +2840,7 @@ lib_mux_mpts_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -2842,6 +2920,7 @@ dipitvhead_discover_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/mux/psi_build.c \
@@ -2859,6 +2938,7 @@ dipitvhead_pmtbuild_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -2908,6 +2988,7 @@ dipitvhead_remux_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -2956,6 +3037,7 @@ dipitvhead_output_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -3005,6 +3087,7 @@ dipitvhead_ecmg_client_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -3027,6 +3110,7 @@ dipitvhead_emmg_server_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -3041,6 +3125,7 @@ dipitvhead_simulcrypt_msg_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -3070,6 +3155,7 @@ dipitvhead_cas_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -3233,6 +3319,7 @@ lib_cas_cas_group_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -3249,6 +3336,7 @@ dipirec_ts_filter_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -3320,7 +3408,14 @@ dipirec_record_SRCS := \
 	src/lib/mux/mkv/mkv.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/escodec/aubuild.c \
-	src/lib/demux/escodec/audio.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/mux/mkv/video.c \
 	src/lib/mux/mkv/write.c \
@@ -3413,6 +3508,7 @@ dipifccret_channel_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
@@ -3445,6 +3541,7 @@ dipifccret_burst_table_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
@@ -3464,6 +3561,7 @@ dipifccret_burst_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
@@ -3487,6 +3585,7 @@ dipifccret_ret_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
@@ -3508,7 +3607,7 @@ dipifccret_capture_SRCS := \
 	src/lib/demux/rtp.c \
 	src/lib/helper/signal.c
 
-UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_mp4push lib_playlist_in
+UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_mp4push dipixy_segment_video lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
@@ -3713,6 +3812,7 @@ dipixy_rawaudio_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/helper/log.c \
 	src/lib/helper/ioutil.c
@@ -3766,7 +3866,11 @@ dipixy_dispatch_EXTRA_LDFLAGS := -Wl,--gc-sections
 dipixy_hls_BIN := tests/unit/dipixy/test_hls
 dipixy_hls_SRCS := \
 	tests/unit/dipixy/test_hls.c \
-	src/dipixy/segstore.c \
+	src/dipixy/segstore/pool.c \
+	src/dipixy/segstore/store.c \
+	src/dipixy/segstore/retire.c \
+	src/dipixy/segstore/snapshot.c \
+	src/dipixy/segstore/push.c \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/respfmt.c \
 	src/dipixy/hls/hls_serve.c \
@@ -3783,7 +3887,11 @@ dipixy_hls_EXTRA_LDFLAGS := -Wl,--gc-sections
 dipixy_segstore_concurrency_BIN := tests/unit/dipixy/test_segstore_concurrency
 dipixy_segstore_concurrency_SRCS := \
 	tests/unit/dipixy/test_segstore_concurrency.c \
-	src/dipixy/segstore.c \
+	src/dipixy/segstore/pool.c \
+	src/dipixy/segstore/store.c \
+	src/dipixy/segstore/retire.c \
+	src/dipixy/segstore/snapshot.c \
+	src/dipixy/segstore/push.c \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/pidfilter.c \
 	src/dipixy/ts/lcevcselect.c \
@@ -3795,6 +3903,25 @@ dipixy_mp4push_SRCS := \
 	tests/unit/dipixy/test_mp4push.c \
 	src/dipixy/segment/mp4push.c \
 	src/lib/helper/byte_ring.c \
+	src/lib/helper/log.c
+
+dipixy_segment_video_BIN := tests/unit/dipixy/test_segment_video
+dipixy_segment_video_SRCS := \
+	tests/unit/dipixy/test_segment_video.c \
+	src/dipixy/segment/video.c \
+	src/dipixy/segment/mux.c \
+	src/lib/demux/escodec/aubuild.c \
+	src/lib/demux/escodec/video.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/bitreader.c \
+	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
 dipixy_conn_BIN := tests/unit/dipixy/test_conn
@@ -4080,6 +4207,7 @@ fuzz_psi_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \

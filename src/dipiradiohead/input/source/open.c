@@ -6,7 +6,6 @@
 
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
-
 #include "../../version.h"
 #include "../playlist.h"
 #include "priv.h"
@@ -17,8 +16,7 @@ static ssize_t sniff_fill(http_t *h, unsigned char *buf, size_t cap, net_err_rea
 
   while (got < cap && stalls < 3) {
     ssize_t n = http_read(h, buf + got, cap - got, reason_out);
-    if (n < 0)
-      return got > 0 ? (ssize_t)got : -1; /* connection close after a full small (e.g. playlist) body is not an error */
+    if (n < 0) return got > 0 ? (ssize_t)got : -1; /* connection close after a full small (e.g. playlist) body is not an error */
     if (n == 0) {
       stalls++;
       continue;
@@ -29,12 +27,14 @@ static ssize_t sniff_fill(http_t *h, unsigned char *buf, size_t cap, net_err_rea
   return (ssize_t)got;
 }
 
-source_t *build_source(http_t *h, const unsigned char *sniff, size_t got, source_meta_cb cb, void *ctx) {
+source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigned char *sniff, size_t got, source_meta_cb cb, void *ctx) {
   source_t *s = calloc(1, sizeof *s);
   if (!s) {
     http_close(h);
     return NULL;
   }
+  s->idx = idx;
+  s->label = label;
   s->http = h;
   s->id3 = id3_new(cb, ctx);
   if (!s->id3) {
@@ -65,9 +65,8 @@ source_t *build_source(http_t *h, const unsigned char *sniff, size_t got, source
   return s;
 }
 
-source_t *source_open(const char *uri, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out) {
+source_t *source_open(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out) {
   char cur_uri[2048];
-
   bufcpy(cur_uri, sizeof cur_uri, uri);
   for (int hops = 0; hops < SRC_MAX_HOPS; hops++) {
     http_url_t u;
@@ -76,20 +75,16 @@ source_t *source_open(const char *uri, int insecure, source_meta_cb cb, void *ct
     ssize_t got;
     char next[2048];
     if (http_url_parse(cur_uri, &u)) {
-      log_line("source: invalid uri: %s", cur_uri);
-      if (reason_out)
-        *reason_out = NET_ERR_FORMAT;
+      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31minvalid uri\e[0m: %s", idx, label ? label : "?", cur_uri);
+      if (reason_out) *reason_out = NET_ERR_FORMAT;
       return NULL;
     }
     h = http_get(&u, TOOL_NAME "/" TOOL_VERSION, insecure, NULL, reason_out);
-    if (!h)
-      return NULL;
-
-    if (reason_out)
-      *reason_out = NET_ERR_TIMEOUT; /* default if sniff_fill stalls out without a harder error */
+    if (!h) return NULL;
+    if (reason_out) *reason_out = NET_ERR_TIMEOUT; /* default if sniff_fill stalls out without a harder error */
     got = sniff_fill(h, sniff, sizeof sniff, reason_out);
     if (got <= 0) {
-      log_line("source: empty response from %s", cur_uri);
+      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mempty response\e[0m from %s", idx, label ? label : "?", cur_uri);
       http_close(h);
       return NULL;
     }
@@ -99,13 +94,10 @@ source_t *source_open(const char *uri, int insecure, source_meta_cb cb, void *ct
       bufcpy(cur_uri, sizeof cur_uri, next);
       continue;
     }
-
-    if (reason_out)
-      *reason_out = NET_ERR_OTHER; /* build_source() only fails on allocation */
-    return build_source(h, sniff, (size_t)got, cb, ctx);
+    if (reason_out) *reason_out = NET_ERR_OTHER; /* build_source() only fails on allocation */
+    return build_source(h, idx, label, sniff, (size_t)got, cb, ctx);
   }
-  log_line("source: too many playlist redirects");
-  if (reason_out)
-    *reason_out = NET_ERR_FORMAT;
+  log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mtoo many playlist redirects\e[0m", idx, label ? label : "?");
+  if (reason_out) *reason_out = NET_ERR_FORMAT;
   return NULL;
 }

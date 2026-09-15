@@ -198,12 +198,12 @@ A channel's `tvg-logo`/`<image>` (M3U/XSPF) carries through if the source playli
 ## Codecs
 
 `ts`/`spts` and plain `hls` (TS segments) are a straight TS remux: any video/audio codec passes through untouched.
-Segmenting still needs to locate keyframes, understood for MPEG-2 Video, H.264/AVC, H.265/HEVC, and H.266/VVC.
+Segmenting still needs to locate keyframes, understood for MPEG-2 Video, H.264/AVC, H.265/HEVC, H.266/VVC, and AV1.
 Other video codecs won't cut cleanly on an IDR/I-frame.
 
 `mp4`, `hls-fmp4`, `llhls`, `dash` and `lldash` build actual ISOBMFF (fMP4) sample entries, so their codec support is narrower:
-* video: H.264/AVC, H.265/HEVC, H.266/VVC. MPEG-2 Video has no fMP4 sample entry and won't produce output.
-* audio: AAC (ADTS or LATM), AC-3, Enhanced AC-3 (E-AC-3), MPEG-1 Layer II (MP2), Opus.
+* video: H.264/AVC, H.265/HEVC, H.266/VVC, AV1. MPEG-2 Video has no fMP4 sample entry and won't produce output.
+* audio: AAC (ADTS or LATM), AC-3, E-AC-3, MP2, MP3, Opus, DTS, DTS-HD, DTS-HD-MA, TrueHD (incl. Atmos over TrueHD), AC-4.
 
 LCEVC (MPEG-5 Part 2) enhancement, when present, is detected either as its own standalone
 elementary stream, inline SEI-wrapped NAL units, or inline dedicated NAL unit types on the

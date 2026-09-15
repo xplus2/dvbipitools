@@ -75,6 +75,27 @@ static void try_parse_hevc_hdr(mkv_t *m, track_t *t) {
   }
 }
 
+static void try_parse_vvc_hdr(mkv_t *m, track_t *t) {
+  if (vvc_dims(t->es.sps, t->es.spslen, &t->width, &t->height) != 0) return;
+  t->es.cpriv_len = build_vvcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
+  if (t->es.cpriv_len) {
+    codec_id_for(t->es.codec, NULL, t->codecid, sizeof t->codecid);
+    t->hdr_parsed = 1;
+    all_ready(m);
+  }
+}
+
+static void try_parse_av1_hdr(mkv_t *m, track_t *t) {
+  av1_seq_hdr_t info;
+  if (av1_seq_hdr_info(t->es.sps, t->es.spslen, &info, &t->width, &t->height) != 0) return;
+  t->es.cpriv_len = build_av1c(&info, t->es.sps, t->es.spslen, t->es.cpriv, sizeof t->es.cpriv);
+  if (t->es.cpriv_len) {
+    codec_id_for(t->es.codec, NULL, t->codecid, sizeof t->codecid);
+    t->hdr_parsed = 1;
+    all_ready(m);
+  }
+}
+
 static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   int key = 0;
   lcevc_strip_t strip;
@@ -87,12 +108,19 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   strip.rbcap = &t->lcevc_rbcap;
   strip.esc = &t->lcevc_esc;
   strip.esccap = &t->lcevc_esccap;
-  esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, m->opts->strip_lcevc ? &strip : NULL);
+  if (t->es.codec == CODEC_AV1)
+    esc_split_obus(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, &t->av1_rb, &t->av1_rbcap);
+  else
+    esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, m->opts->strip_lcevc ? &strip : NULL);
   if (!t->hdr_parsed) {
     if (t->es.codec == CODEC_H264 && t->es.spslen && t->es.ppslen)
       try_parse_h264_hdr(m, t);
     else if (t->es.codec == CODEC_HEVC && t->es.vpslen && t->es.spslen && t->es.ppslen)
       try_parse_hevc_hdr(m, t);
+    else if (t->es.codec == CODEC_VVC && t->es.vpslen && t->es.spslen && t->es.ppslen)
+      try_parse_vvc_hdr(m, t);
+    else if (t->es.codec == CODEC_AV1 && t->es.spslen)
+      try_parse_av1_hdr(m, t);
   }
   /* undecodable before first keyframe */
   if (key) t->got_key = 1;
@@ -153,7 +181,7 @@ static void handle_audio(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
       t->hdr_parsed = 1;
       all_ready(m);
     }
-    if (f.outlen) emit(m, t, f.out, f.outlen, 1);
+    if (f.outlen) emit(m, t, f.out, f.outlen, t->es.codec == CODEC_AC4 ? f.ac4_iframe : 1);
     if (t->es.rate && f.samples) t->ts_ms += (int64_t)f.samples * 1000 / (int64_t)t->es.rate;
     pos += f.consumed;
   }
@@ -180,7 +208,9 @@ void on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uin
 }
 
 static int audio_supported(codec_t c) {
-  return c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_MP2A || c == CODEC_AAC || c == CODEC_AAC_LATM;
+  return c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_MP2A || c == CODEC_AAC || c == CODEC_AAC_LATM
+      || c == CODEC_OPUS || c == CODEC_DTS || c == CODEC_DTS_HD || c == CODEC_DTS_HD_MA || c == CODEC_TRUEHD
+      || c == CODEC_AC4;
 }
 
 static void add_track(mkv_t *m, const psi_es_t *es, int psi_idx) {
@@ -203,7 +233,7 @@ void setup(mkv_t *m) {
     es = psi_es(m->psi[0], &c);
     for (k = 0; k < c && m->ntrk < MKV_MAX_TRACKS; k++) {
       if (es[k].cls != PID_VIDEO) continue;
-      if (es[k].codec != CODEC_H264 && es[k].codec != CODEC_HEVC && es[k].codec != CODEC_MPEG2V) {
+      if (es[k].codec != CODEC_H264 && es[k].codec != CODEC_HEVC && es[k].codec != CODEC_VVC && es[k].codec != CODEC_AV1 && es[k].codec != CODEC_MPEG2V) {
         log_line("mkv=no_vc(%s)", codec_name(es[k].codec));
         continue;
       }

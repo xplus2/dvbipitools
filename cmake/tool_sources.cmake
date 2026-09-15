@@ -213,7 +213,14 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
-            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/ac3.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/mpeg.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/aac.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/opus.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/truehd.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/dts.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/ac4.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/audio.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/video.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/write.c
@@ -283,6 +290,7 @@ function(dipifccret_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -567,7 +575,14 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/mkv.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
-            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/ac3.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/mpeg.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/aac.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/opus.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/truehd.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/dts.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/ac4.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/audio.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/video.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/write.c
@@ -791,6 +806,7 @@ function(dipiscan_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c)
     set(DIPISCAN_SRCS ${DIPISCAN_SRCS} PARENT_SCOPE)
@@ -1018,7 +1034,11 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_clients.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_clients_json.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_clients_tick.c
-            ${CMAKE_SOURCE_DIR}/src/dipixy/segstore.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/segstore/pool.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/segstore/store.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/segstore/retire.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/segstore/snapshot.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/segstore/push.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/respfmt.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_serve.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_llhls.c
@@ -1074,7 +1094,14 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/aubuild.c
-            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/ac3.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/mpeg.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/aac.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/opus.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/truehd.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/dts.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/ac4.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/audio.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/rtx.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/rtcp.c
@@ -1262,6 +1289,7 @@ function(dipitvhead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c

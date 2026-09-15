@@ -136,6 +136,9 @@ static void trak_meta_from_track(trak_meta_t *tm, const track_t *t) {
   tm->ac3_acmod = t->ac3_acmod;
   tm->ac3_lfeon = t->ac3_lfeon;
   tm->ac3_bitrate_code = t->ac3_bitrate_code;
+  tm->truehd_format_info = t->truehd_format_info;
+  tm->truehd_peak_data_rate = t->truehd_peak_data_rate;
+  tm->dts_has_core = t->dts_has_core;
 }
 
 static void build_stts(mp4buf_t *out, const track_t *t) {
@@ -274,10 +277,8 @@ static void build_stbl(mp4buf_t *out, const track_t *t) {
   memset(&stbl, 0, sizeof stbl);
   trak_build_stsd(&stbl, &tm);
   build_stts(&stbl, t);
-  if (t->cls == PID_VIDEO) {
-    build_ctts(&stbl, t);
-    build_stss(&stbl, t);
-  }
+  if (t->cls == PID_VIDEO) build_ctts(&stbl, t);
+  if (t->cls == PID_VIDEO || t->cls == PID_AUDIO) build_stss(&stbl, t);
   build_stsc(&stbl, t);
   build_stsz(&stbl, t);
   build_co64(&stbl, t);

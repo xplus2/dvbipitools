@@ -16,6 +16,8 @@
 #define SRC_MAX_HOPS 5
 
 struct source {
+  unsigned idx;
+  const char *label;
   http_t *http;
   icy_t *icy; /* NULL: no icy-metaint, ID3-only metadata */
   id3_t *id3;
@@ -23,7 +25,6 @@ struct source {
   int codec_known;
   source_codec_t codec;
   aac_latm_t *latm;
-
   unsigned char buf[SRC_BUF_CAP];
   size_t buf_len;
   size_t pending_consume; /* last returned frame's byte count, dropped next call */
@@ -31,6 +32,6 @@ struct source {
 };
 
 /* h absorbed either way: closed on failure, owned by returned source_t on success */
-source_t *build_source(http_t *h, const unsigned char *sniff, size_t got, source_meta_cb cb, void *ctx);
+source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigned char *sniff, size_t got, source_meta_cb cb, void *ctx);
 
 #endif

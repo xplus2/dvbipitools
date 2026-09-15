@@ -41,6 +41,8 @@ typedef struct {
   esc_track_t es;              /* SPS/PPS scratch, also feeds cpriv for fmp4's avcC/hvcC */
   unsigned char *nal_scratch;  /* esc_handle_*_nal's AU buffer, discarded each AU */
   size_t nal_scratch_len, nal_scratch_cap;
+  unsigned char *av1_rb;
+  size_t av1_rbcap;
   pts_unwrap_t ptswrap, dtswrap;
 
   int seg_open;          /* 1 once first keyframe seen */
@@ -60,6 +62,12 @@ typedef struct {
   unsigned audio_rate, audio_channels;
   unsigned audio_bsid, audio_bsmod, audio_acmod, audio_lfeon; /* AC3/EAC3 only */
   unsigned audio_bitrate_code; /* AC3: frmsizecod. EAC3: estimated data_rate kbps */
+  unsigned audio_truehd_format_info, audio_truehd_peak_data_rate; /* TrueHD only */
+  int audio_dts_has_core; /* DTS/DTS-HD/DTS-HD-MA only */
+  unsigned audio_ac4_bitstream_version;
+  unsigned audio_ac4_presentation_version, audio_ac4_mdcompat;
+  int audio_ac4_last_iframe;
+  int64_t audio_ac4_frame_count;
 
   /* nominal audio duration drifts unbounded off encoder clock, pes pts corrects. nominal kept in exact native samples,
      never ms: ms accumulation truncates frames */
@@ -104,6 +112,11 @@ typedef struct {
   int fmp4_pend_ends_seg;   /* set alongside starts_frag: this boundary also closes the enclosing segment */
   double fmp4_pend_elapsed; /* set alongside starts_frag, used if this pend later closes a segment */
   int fmp4_have_pend;
+
+  int fmp4_ac4_defer;
+  int64_t fmp4_ac4_defer_start_count;
+  int fmp4_ac4_defer_ends_seg;
+  double fmp4_ac4_defer_elapsed;
 } seg_fmp4_t;
 
 /* LL-HLS/LL-DASH part boundary tracking, both container kinds */
@@ -173,10 +186,12 @@ void try_create_fmux(hls_seg_ctx_t *s);
 void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, int32_t cts_ticks, int open_now, int cut_now, double elapsed);
 void fmp4_feed_audio_au(hls_seg_ctx_t *s, const esc_frame_t *f);
 void fmp4_feed_lcevc_au(hls_seg_ctx_t *s, int64_t ts_ms, const unsigned char *data, size_t len);
+int build_video_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned char *cpriv, size_t cpriv_cap);
 
 /* video.c */
 void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len);
 void handle_lcevc_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigned char *data, size_t len);
+int detect_keyframe(hls_seg_ctx_t *s, const unsigned char *d, size_t len);
 
 /* audio.c */
 void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigned char *data, size_t len);

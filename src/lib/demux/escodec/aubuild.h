@@ -41,6 +41,16 @@
 #define VVC_NAL_SEI_SUFFIX 24
 #define VVC_NAL_LCEVC 31
 
+#define OBU_SEQUENCE_HEADER 1
+#define OBU_TEMPORAL_DELIMITER 2
+#define OBU_FRAME_HEADER 3
+#define OBU_TILE_GROUP 4
+#define OBU_METADATA 5
+#define OBU_FRAME 6
+#define OBU_REDUNDANT_FRAME_HEADER 7
+#define OBU_TILE_LIST 8
+#define OBU_PADDING 15
+
 /* NULL: inline LCEVC untouched, else strip it */
 typedef struct {
   unsigned char **rb;
@@ -55,6 +65,8 @@ int esc_rem_append(unsigned char **rem, size_t *remlen, size_t *remcap, const un
 /* prefixes nal with 4-byte BE length before appending. 0 ok, -1 realloc failed */
 int esc_vbuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *nal, size_t n);
 
+int esc_obuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *data, size_t n);
+
 void esc_ps_store(unsigned char *dst, size_t *dlen, const unsigned char *s, size_t n);
 
 /* param sets to es, AUD/filler dropped, rest to *vbuf via esc_vbuf_add(). sets *key on IDR/IRAP.
@@ -62,8 +74,10 @@ void esc_ps_store(unsigned char *dst, size_t *dlen, const unsigned char *s, size
 void esc_handle_h264_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, unsigned type, const unsigned char *p, size_t n, int *key, const lcevc_strip_t *strip);
 void esc_handle_hevc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, unsigned type, const unsigned char *p, size_t n, int *key, const lcevc_strip_t *strip);
 void esc_handle_vvc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, unsigned type, const unsigned char *p, size_t n, int *key, const lcevc_strip_t *strip);
+void esc_handle_av1_obu(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, unsigned type, const unsigned char *p, size_t n, int *key, const lcevc_strip_t *strip);
 
 void esc_split_nals(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *d, size_t len, int *key, const lcevc_strip_t *strip);
+void esc_split_obus(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *d, size_t len, int *key, unsigned char **rb, size_t *rbcap);
 
 /* 0 unchanged. 1: outlen 0 drop NAL else result in *esc */
 int esc_strip_lcevc_sei(const unsigned char *nal, size_t n, unsigned hdrlen, unsigned char **rb, size_t *rbcap, unsigned char **esc, size_t *esccap, size_t *outlen);

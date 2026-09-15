@@ -83,6 +83,16 @@ static void try_parse_vvc_hdr(mp4_t *m, track_t *t) {
   }
 }
 
+static void try_parse_av1_hdr(mp4_t *m, track_t *t) {
+  av1_seq_hdr_t info;
+  if (av1_seq_hdr_info(t->es.sps, t->es.spslen, &info, &t->width, &t->height) != 0) return;
+  t->es.cpriv_len = build_av1c(&info, t->es.sps, t->es.spslen, t->es.cpriv, sizeof t->es.cpriv);
+  if (t->es.cpriv_len) {
+    t->hdr_parsed = 1;
+    p4_all_ready(m);
+  }
+}
+
 static void handle_video(mp4_t *m, track_t *t, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *d, size_t len) {
   int key = 0;
   lcevc_strip_t strip;
@@ -95,7 +105,10 @@ static void handle_video(mp4_t *m, track_t *t, int has_pts, uint64_t pts, int ha
   strip.rbcap = &t->lcevc_rbcap;
   strip.esc = &t->lcevc_esc;
   strip.esccap = &t->lcevc_esccap;
-  esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, m->opts->strip_lcevc ? &strip : NULL);
+  if (t->es.codec == CODEC_AV1)
+    esc_split_obus(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, &t->av1_rb, &t->av1_rbcap);
+  else
+    esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, m->opts->strip_lcevc ? &strip : NULL);
   if (!t->hdr_parsed) {
     if (t->es.codec == CODEC_H264 && t->es.spslen && t->es.ppslen)
       try_parse_h264_hdr(m, t);
@@ -103,6 +116,8 @@ static void handle_video(mp4_t *m, track_t *t, int has_pts, uint64_t pts, int ha
       try_parse_hevc_hdr(m, t);
     else if (t->es.codec == CODEC_VVC && t->es.vpslen && t->es.spslen && t->es.ppslen)
       try_parse_vvc_hdr(m, t);
+    else if (t->es.codec == CODEC_AV1 && t->es.spslen)
+      try_parse_av1_hdr(m, t);
   }
   if (key) t->got_key = 1;
   if (t->hdr_parsed && t->got_key && t->vbuflen) video_emit(m, t, t->pts_ms, t->ts_ms, t->vbuf, t->vbuflen, key);
@@ -131,11 +146,16 @@ static void handle_audio(mp4_t *m, track_t *t, int has_pts, uint64_t pts, const 
         t->ac3_acmod = (unsigned char)f.acmod;
         t->ac3_lfeon = (unsigned char)f.lfeon;
         t->ac3_bitrate_code = f.bitrate_code;
+      } else if (t->es.codec == CODEC_TRUEHD) {
+        t->truehd_format_info = f.truehd_format_info;
+        t->truehd_peak_data_rate = f.truehd_peak_data_rate;
+      } else if (t->es.codec == CODEC_DTS || t->es.codec == CODEC_DTS_HD || t->es.codec == CODEC_DTS_HD_MA) {
+        t->dts_has_core = f.dts_has_core;
       }
       t->hdr_parsed = 1;
       p4_all_ready(m);
     }
-    if (f.outlen) p4_route(m, t, t->ts_ms, 0, f.out, f.outlen, 1, t->es.rate ? (uint32_t)(f.samples * 1000 / t->es.rate) : 0);
+    if (f.outlen) p4_route(m, t, t->ts_ms, 0, f.out, f.outlen, t->es.codec == CODEC_AC4 ? f.ac4_iframe : 1, t->es.rate ? (uint32_t)(f.samples * 1000 / t->es.rate) : 0);
     if (t->es.rate && f.samples) t->ts_ms += (int64_t)f.samples * 1000 / (int64_t)t->es.rate;
     pos += f.consumed;
   }
@@ -158,11 +178,13 @@ void p4_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, 
 }
 
 static int video_supported(codec_t c) {
-  return c == CODEC_H264 || c == CODEC_HEVC || c == CODEC_VVC;
+  return c == CODEC_H264 || c == CODEC_HEVC || c == CODEC_VVC || c == CODEC_AV1;
 }
 
 static int audio_supported(codec_t c) {
-  return c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_MP2A || c == CODEC_AAC || c == CODEC_AAC_LATM;
+  return c == CODEC_AC3 || c == CODEC_EAC3 || c == CODEC_MP2A || c == CODEC_AAC || c == CODEC_AAC_LATM
+      || c == CODEC_OPUS || c == CODEC_DTS || c == CODEC_DTS_HD || c == CODEC_DTS_HD_MA || c == CODEC_TRUEHD
+      || c == CODEC_AC4;
 }
 
 static void add_track(mp4_t *m, const psi_es_t *es, int psi_idx) {

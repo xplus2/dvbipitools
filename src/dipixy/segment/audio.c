@@ -46,6 +46,12 @@ void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigne
       s->audio.audio_bsmod = f.bsmod;
       s->audio.audio_acmod = f.acmod;
       s->audio.audio_lfeon = f.lfeon;
+      s->audio.audio_truehd_format_info = f.truehd_format_info;
+      s->audio.audio_truehd_peak_data_rate = f.truehd_peak_data_rate;
+      s->audio.audio_dts_has_core = f.dts_has_core;
+      s->audio.audio_ac4_bitstream_version = f.ac4_bitstream_version;
+      s->audio.audio_ac4_presentation_version = f.ac4_presentation_version;
+      s->audio.audio_ac4_mdcompat = f.ac4_mdcompat;
       if (s->demux.audio_codec == CODEC_EAC3) {
         unsigned samples = f.samples ? f.samples : 1;
         s->audio.audio_bitrate_code = (unsigned)((uint64_t)f.consumed * 8 * f.rate / samples / 1000);
@@ -56,6 +62,10 @@ void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigne
       try_create_fmux(s);
     }
     if (f.samples) s->audio.audio_nominal_samples += (int64_t)f.samples;
+    if (s->demux.audio_codec == CODEC_AC4) {
+      s->audio.audio_ac4_last_iframe = f.ac4_iframe;
+      s->audio.audio_ac4_frame_count++;
+    }
     if (f.outlen) fmp4_feed_audio_au(s, &f);
     pos += f.consumed;
   }

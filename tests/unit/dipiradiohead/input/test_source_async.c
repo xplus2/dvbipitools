@@ -96,7 +96,7 @@ START_TEST(source_open_async_completes_for_plain_body) {
   ck_assert_int_eq(pthread_create(&th, NULL, serve_once, &sarg), 0);
 
   snprintf(uri, sizeof uri, "http://127.0.0.1:%u/stream", port);
-  o = source_open_async_start(uri, 0, noop_meta_cb, NULL, NULL);
+  o = source_open_async_start(uri, 0, "test", 0, noop_meta_cb, NULL, NULL);
   ck_assert_ptr_nonnull(o);
   ck_assert_int_eq(drive(o, 200), SOURCE_OPEN_DONE);
 
@@ -133,7 +133,7 @@ START_TEST(source_open_async_follows_playlist_redirect) {
   ck_assert_int_eq(pthread_create(&th_b, NULL, serve_once, &sarg_b), 0);
 
   snprintf(uri, sizeof uri, "http://127.0.0.1:%u/playlist.m3u", port_a);
-  o = source_open_async_start(uri, 0, noop_meta_cb, NULL, NULL);
+  o = source_open_async_start(uri, 0, "test", 0, noop_meta_cb, NULL, NULL);
   ck_assert_ptr_nonnull(o);
   ck_assert_int_eq(drive(o, 200), SOURCE_OPEN_DONE);
 
@@ -149,7 +149,7 @@ START_TEST(source_open_async_follows_playlist_redirect) {
 END_TEST
 
 START_TEST(source_open_async_reports_error_on_refused_connection) {
-  source_open_t *o = source_open_async_start("http://127.0.0.1:1/nothing", 0, noop_meta_cb, NULL, NULL); /* port 1: nothing listens here */
+  source_open_t *o = source_open_async_start("http://127.0.0.1:1/nothing", 0, "test", 0, noop_meta_cb, NULL, NULL); /* port 1: nothing listens here */
   ck_assert_ptr_nonnull(o);
   ck_assert_int_eq(drive(o, 200), SOURCE_OPEN_ERROR);
   source_open_async_free(o);

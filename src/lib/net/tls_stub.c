@@ -38,4 +38,9 @@ ssize_t tls_write(tls_t *t, const void *buf, size_t len) {
   return -1;
 }
 
+int tls_pending(const tls_t *t) {
+  (void)t;
+  return 0;
+}
+
 void tls_close(tls_t *t) { (void)t; }

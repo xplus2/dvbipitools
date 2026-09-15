@@ -164,19 +164,22 @@ without OpenSSL).
 
 ### Program selection (`-p`)
 
-PAT watched on startup and logged. No `-p`: first PAT-listed program whose PMT actually arrives
-wins (real MPTS sources often list many services, stream one). `-p <pid>` forces a PMT PID.
+PAT gets watched on startup and logged. 
+No `-p`: The first PAT-listed program whose PMT actually arrives wins (MPTS sources often list many services, but stream just one).
+`-p <pid>` forces a specific PMT PID.
 
 ### Codec support
 
-Video: MPEG-2, H.264, HEVC. Audio: MPEG-1/2 (layer 1/2/3), AC-3, E-AC-3, AAC (ADTS/LATM).
-Subtitles: EBU teletext, DVB bitmap.
+* Video: MPEG-2, H.264, HEVC, VVC, AV1. LCEVC enhancement layer. 
+* Audio: MPEG-1/2 (layer 1/2/3), AAC (ADTS/LATM, HE-AAC, HE-AACv2), AC-3, E-AC-3, DTS, DTS-HD, DTS-HD MA, TrueHD, AC-4, Opus. 
+* Subtitles: EBU teletext, DVB bitmap.
 
-Output PIDs: PAT `0x0000`, NIT `0x0010`, SDT `0x0011`, EIT `0x0012`, CAT `0x0001` - fixed,
-mux-wide, shared by every program (real DVB-SI reserved PIDs, per ETSI EN 300 468). Every other
-table is per-program, in a fixed 32-PID block per input's position among the `-i` flags (0-based
-index `i`): PMT `0x1000 + i`, video `0x0100 + i*32`, other ES `0x0101 + i*32 ..` in discovery
-order, AIT `0x011F + i*32`. With a single `-i` this is identical to before (`i` = 0).
+Output PIDs: PAT `0x0000`, NIT `0x0010`, SDT `0x0011`, EIT `0x0012`, CAT `0x0001` are fixed and mux-wide, 
+shared by every program (real DVB-SI reserved PIDs, per ETSI EN 300 468).
+
+Every other table is per-program, in a fixed 32-PID block per input's position among the `-i` flags 
+(0-based index `i`): PMT `0x1000 + i`, video `0x0100 + i*32`, other ES `0x0101 + i*32 ..` in discovery
+order, AIT `0x011F + i*32`.
 
 ### Multiple inputs (MPTS)
 

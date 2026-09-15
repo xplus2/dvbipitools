@@ -37,20 +37,30 @@ START_TEST(crc32_appended_own_crc_is_zero) {
 }
 END_TEST
 
+static void crc32_backends_check(const unsigned char *data, size_t len) {
+  uint32_t gen = crc32_mpeg_generic(data, len);
+  ck_assert_uint_eq(crc32_mpeg(data, len), gen);
+#if defined(__x86_64__) || defined(__i386__)
+  ck_assert_uint_eq(crc32_mpeg_pclmul(data, len), gen);
+#endif
+}
+
 START_TEST(crc32_backends_agree) {
   unsigned char buf[4099];
+  size_t len, i;
   int trial;
-  for (trial = 0; trial < 20000; trial++) {
-    size_t len = (size_t)(rand() % (int)(sizeof buf));
-    size_t i;
-    for (i = 0; i < len; i++)
-      buf[i] = (unsigned char)rand();
-    uint32_t pub = crc32_mpeg(buf, len);
-    uint32_t gen = crc32_mpeg_generic(buf, len);
-    ck_assert_uint_eq(pub, gen);
-#if defined(__x86_64__) || defined(__i386__)
-    ck_assert_uint_eq(crc32_mpeg_pclmul(buf, len), gen);
-#endif
+
+  /* pclmul backend chunks 8 bytes at a time. exhaustive lengths 0..64 hit
+     remainders (0..7) in 0..8 chunks + multi chunk carry. */
+  for (len = 0; len <= 64; len++) {
+    for (i = 0; i < len; i++) buf[i] = (unsigned char)rand();
+    crc32_backends_check(buf, len);
+  }
+
+  for (trial = 0; trial < 200; trial++) {
+    len = (size_t)(rand() % (int)(sizeof buf));
+    for (i = 0; i < len; i++) buf[i] = (unsigned char)rand();
+    crc32_backends_check(buf, len);
   }
 }
 END_TEST

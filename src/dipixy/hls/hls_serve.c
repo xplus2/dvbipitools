@@ -24,7 +24,7 @@ size_t format_plain_playlist(const plain_playlist_snap_t *snap, char *m3u8, size
   char *mp = m3u8;
   const char *seg_ext = snap->container == SEG_CONTAINER_FMP4 ? "m4s" : "ts";
   mp = WRITE_LIT(mp, "#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n#EXT-X-VERSION:");
-  mp = write_u32(mp, snap->container == SEG_CONTAINER_FMP4 || snap->video_codec == CODEC_HEVC || snap->video_codec == CODEC_VVC ? 7u : 3u, 0);
+  mp = write_u32(mp, snap->container == SEG_CONTAINER_FMP4 || snap->video_codec == CODEC_HEVC || snap->video_codec == CODEC_VVC || snap->video_codec == CODEC_AV1 ? 7u : 3u, 0);
   mp = WRITE_LIT(mp, "\n#EXT-X-TARGETDURATION:");
   mp = write_u32(mp, (uint32_t)snap->td, 0);
   mp = WRITE_LIT(mp, "\n#EXT-X-MEDIA-SEQUENCE:");

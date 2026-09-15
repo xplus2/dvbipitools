@@ -38,8 +38,7 @@ static int find_box(const unsigned char *buf, size_t len, const char *path, cons
     size_t qrem = rem;
     while (qrem >= 8) {
       uint32_t bsize = rd32(q);
-      if (bsize < 8 || bsize > qrem)
-        return 0;
+      if (bsize < 8 || bsize > qrem) return 0;
       if (memcmp(q + 4, seg, 4) == 0) {
         found = q + 8;
         foundlen = bsize - 8;
@@ -48,8 +47,7 @@ static int find_box(const unsigned char *buf, size_t len, const char *path, cons
       q += bsize;
       qrem -= bsize;
     }
-    if (!found)
-      return 0;
+    if (!found) return 0;
     p = found;
     rem = foundlen;
     seg = strtok_r(NULL, ".", &save);
@@ -100,6 +98,20 @@ static fmp4_mux_t *make_vvc_mux(unsigned track_id, unsigned w, unsigned h) {
   return fmp4_mux_new(&trk, 1);
 }
 
+static fmp4_mux_t *make_av1_mux(unsigned track_id, unsigned w, unsigned h) {
+  static const unsigned char fake_av1c[] = {0x81, 0x0C, 0x00, 0x00, 0xAA, 0xBB};
+  fmp4_track_cfg_t trk;
+  memset(&trk, 0, sizeof trk);
+  trk.codec = CODEC_AV1;
+  trk.track_id = track_id;
+  trk.timescale = 90000;
+  trk.width = w;
+  trk.height = h;
+  trk.cpriv = fake_av1c;
+  trk.cpriv_len = sizeof fake_av1c;
+  return fmp4_mux_new(&trk, 1);
+}
+
 static fmp4_mux_t *make_opus_mux(unsigned channels) {
   fmp4_track_cfg_t trk;
   memset(&trk, 0, sizeof trk);
@@ -108,6 +120,31 @@ static fmp4_mux_t *make_opus_mux(unsigned channels) {
   trk.timescale = 48000;
   trk.rate = 48000;
   trk.channels = channels;
+  return fmp4_mux_new(&trk, 1);
+}
+
+static fmp4_mux_t *make_dts_mux(codec_t codec, int has_core) {
+  fmp4_track_cfg_t trk;
+  memset(&trk, 0, sizeof trk);
+  trk.codec = codec;
+  trk.track_id = 2;
+  trk.timescale = 48000;
+  trk.rate = 48000;
+  trk.channels = 2;
+  trk.dts_has_core = has_core;
+  return fmp4_mux_new(&trk, 1);
+}
+
+static fmp4_mux_t *make_truehd_mux(unsigned format_info, unsigned peak_data_rate) {
+  fmp4_track_cfg_t trk;
+  memset(&trk, 0, sizeof trk);
+  trk.codec = CODEC_TRUEHD;
+  trk.track_id = 2;
+  trk.timescale = 48000;
+  trk.rate = 48000;
+  trk.channels = 6;
+  trk.truehd_format_info = format_info;
+  trk.truehd_peak_data_rate = peak_data_rate;
   return fmp4_mux_new(&trk, 1);
 }
 
@@ -126,6 +163,38 @@ static fmp4_mux_t *make_ac3_mux(codec_t codec, unsigned char bsid, unsigned char
   trk.ac3_bitrate_code = bitrate_code;
   return fmp4_mux_new(&trk, 1);
 }
+
+static fmp4_mux_t *make_ac4_mux(unsigned channels, const unsigned char *dsi, size_t dsilen) {
+  fmp4_track_cfg_t trk;
+  memset(&trk, 0, sizeof trk);
+  trk.codec = CODEC_AC4;
+  trk.track_id = 2;
+  trk.timescale = 48000;
+  trk.rate = 48000;
+  trk.channels = channels;
+  trk.cpriv = dsi;
+  trk.cpriv_len = dsilen;
+  return fmp4_mux_new(&trk, 1);
+}
+
+START_TEST(ac4_stsd_has_ac4_dac4_entry) {
+  static const unsigned char dsi[] = {0x20, 0x2c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3f, 0xff, 0xff, 0xff, 0xc0};
+  fmp4_mux_t *m = make_ac4_mux(1, dsi, sizeof dsi);
+  unsigned char *out;
+  const unsigned char *stsd, *entry, *dac4;
+  size_t len, stsd_len, entry_len, dac4_len;
+
+  len = fmp4_init_segment(m, &out);
+  ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
+  ck_assert(find_box(stsd + 8, stsd_len - 8, "ac-4", &entry, &entry_len));
+  ck_assert_uint_eq(rd16(entry + 16), 1);
+  ck_assert(find_box(entry + 28, entry_len - 28, "dac4", &dac4, &dac4_len));
+  ck_assert_uint_eq(dac4_len, sizeof dsi);
+  ck_assert_int_eq(memcmp(dac4, dsi, sizeof dsi), 0);
+
+  fmp4_mux_free(m);
+}
+END_TEST
 
 START_TEST(aac_stsd_has_mp4a_esds_with_asc) {
   static const unsigned char asc[] = {0x12, 0x10};
@@ -367,6 +436,27 @@ START_TEST(vvc_stsd_has_vvc1_vvcc_entry) {
 }
 END_TEST
 
+START_TEST(av01_stsd_has_av01_av1c_entry) {
+  fmp4_mux_t *m = make_av1_mux(3, 1920, 1080);
+  unsigned char *out;
+  const unsigned char *stsd;
+  const unsigned char *av01;
+  const unsigned char *av1c;
+  size_t len;
+  size_t stsd_len;
+  size_t av01_len;
+  size_t av1c_len;
+  len = fmp4_init_segment(m, &out);
+  ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
+  ck_assert(find_box(stsd + 8, stsd_len - 8, "av01", &av01, &av01_len));
+  ck_assert_uint_eq(rd16(av01 + 24), 1920);
+  ck_assert_uint_eq(rd16(av01 + 26), 1080);
+  ck_assert(find_box(av01 + 78, av01_len - 78, "av1C", &av1c, &av1c_len));
+  ck_assert_int_eq(av1c[0], 0x81);
+  fmp4_mux_free(m);
+}
+END_TEST
+
 /* nth (0-based) direct child box named fourcc within buf */
 static int find_nth_box(const unsigned char *buf, size_t len, const char *fourcc, int n, const unsigned char **out, size_t *outlen) {
   const unsigned char *p = buf;
@@ -449,6 +539,103 @@ START_TEST(opus_stsd_has_opus_dops_entry) {
 }
 END_TEST
 
+START_TEST(dts_stsd_has_dtsc_ddts_entry) {
+  fmp4_mux_t *m = make_dts_mux(CODEC_DTS, 1);
+  unsigned char *out;
+  const unsigned char *stsd;
+  const unsigned char *entry;
+  const unsigned char *ddts;
+  size_t len;
+  size_t stsd_len;
+  size_t entry_len;
+  size_t ddts_len;
+  len = fmp4_init_segment(m, &out);
+  ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
+  ck_assert(find_box(stsd + 8, stsd_len - 8, "dtsc", &entry, &entry_len));
+  ck_assert_uint_eq(rd16(entry + 16), 2);          /* channelcount */
+  ck_assert(find_box(entry + 28, entry_len - 28, "ddts", &ddts, &ddts_len));
+  ck_assert_uint_eq(ddts_len, 20);
+  ck_assert_uint_eq(rd32(ddts), 48000);      /* SamplingFrequency */
+  ck_assert_uint_eq(ddts[12], 0);            /* SampleDepth */
+  ck_assert_uint_eq((ddts[13] >> 1) & 0x1F, 1); /* StreamConstruction */
+  fmp4_mux_free(m);
+}
+END_TEST
+
+START_TEST(dts_hd_ma_with_core_stsd_has_dtsh_entry) {
+  fmp4_mux_t *m = make_dts_mux(CODEC_DTS_HD_MA, 1);
+  unsigned char *out;
+  const unsigned char *stsd, *entry, *ddts;
+  size_t len, stsd_len, entry_len, ddts_len;
+  len = fmp4_init_segment(m, &out);
+  ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
+  ck_assert(find_box(stsd + 8, stsd_len - 8, "dtsh", &entry, &entry_len));
+  ck_assert(find_box(entry + 28, entry_len - 28, "ddts", &ddts, &ddts_len));
+  ck_assert_uint_eq((ddts[13] >> 1) & 0x1F, 14); /* StreamConstruction: core+XLL */
+  fmp4_mux_free(m);
+}
+END_TEST
+
+START_TEST(dts_hd_ma_without_core_stsd_has_dtsl_entry) {
+  fmp4_mux_t *m = make_dts_mux(CODEC_DTS_HD_MA, 0);
+  unsigned char *out;
+  const unsigned char *stsd, *entry, *ddts;
+  size_t len, stsd_len, entry_len, ddts_len;
+  len = fmp4_init_segment(m, &out);
+  ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
+  ck_assert(find_box(stsd + 8, stsd_len - 8, "dtsl", &entry, &entry_len));
+  ck_assert(find_box(entry + 28, entry_len - 28, "ddts", &ddts, &ddts_len));
+  ck_assert_uint_eq((ddts[13] >> 1) & 0x1F, 17); /* StreamConstruction: XLL only */
+  fmp4_mux_free(m);
+}
+END_TEST
+
+START_TEST(dts_hd_with_core_stsd_has_dtsh_entry) {
+  fmp4_mux_t *m = make_dts_mux(CODEC_DTS_HD, 1);
+  unsigned char *out;
+  const unsigned char *stsd, *entry;
+  size_t len, stsd_len, entry_len;
+  len = fmp4_init_segment(m, &out);
+  ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
+  ck_assert(find_box(stsd + 8, stsd_len - 8, "dtsh", &entry, &entry_len));
+  fmp4_mux_free(m);
+}
+END_TEST
+
+START_TEST(dts_hd_without_core_stsd_has_dtse_entry) {
+  fmp4_mux_t *m = make_dts_mux(CODEC_DTS_HD, 0);
+  unsigned char *out;
+  const unsigned char *stsd, *entry;
+  size_t len, stsd_len, entry_len;
+  len = fmp4_init_segment(m, &out);
+  ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
+  ck_assert(find_box(stsd + 8, stsd_len - 8, "dtse", &entry, &entry_len));
+  fmp4_mux_free(m);
+}
+END_TEST
+
+START_TEST(truehd_stsd_has_mlpa_dmlp_entry) {
+  fmp4_mux_t *m = make_truehd_mux(0xAABBCCDD, 0x3FFF);
+  unsigned char *out;
+  const unsigned char *stsd;
+  const unsigned char *entry;
+  const unsigned char *dmlp;
+  size_t len;
+  size_t stsd_len;
+  size_t entry_len;
+  size_t dmlp_len;
+  len = fmp4_init_segment(m, &out);
+  ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
+  ck_assert(find_box(stsd + 8, stsd_len - 8, "mlpa", &entry, &entry_len));
+  ck_assert_uint_eq(rd16(entry + 16), 6);          /* channelcount */
+  ck_assert(find_box(entry + 28, entry_len - 28, "dmlp", &dmlp, &dmlp_len));
+  ck_assert_uint_eq(dmlp_len, 10);
+  ck_assert_uint_eq(rd32(dmlp), 0xAABBCCDD);        /* format_info */
+  ck_assert_uint_eq(rd16(dmlp + 4), (0x3FFF << 1) & 0xFFFF); /* peak_data_rate */
+  fmp4_mux_free(m);
+}
+END_TEST
+
 Suite *fmp4_suite(void) {
   Suite *s = suite_create("fmp4");
   TCase *tc = tcase_create("core");
@@ -461,8 +648,16 @@ Suite *fmp4_suite(void) {
   tcase_add_test(tc, ac3_stsd_has_dac3_with_bsi_fields);
   tcase_add_test(tc, eac3_stsd_has_dec3_with_bsi_fields);
   tcase_add_test(tc, vvc_stsd_has_vvc1_vvcc_entry);
+  tcase_add_test(tc, av01_stsd_has_av01_av1c_entry);
   tcase_add_test(tc, lcevc_stsd_has_lvc1_lvcc_entry_and_tref_sbas);
   tcase_add_test(tc, opus_stsd_has_opus_dops_entry);
+  tcase_add_test(tc, dts_stsd_has_dtsc_ddts_entry);
+  tcase_add_test(tc, dts_hd_ma_with_core_stsd_has_dtsh_entry);
+  tcase_add_test(tc, dts_hd_ma_without_core_stsd_has_dtsl_entry);
+  tcase_add_test(tc, dts_hd_with_core_stsd_has_dtsh_entry);
+  tcase_add_test(tc, dts_hd_without_core_stsd_has_dtse_entry);
+  tcase_add_test(tc, truehd_stsd_has_mlpa_dmlp_entry);
+  tcase_add_test(tc, ac4_stsd_has_ac4_dac4_entry);
   suite_add_tcase(s, tc);
   return s;
 }

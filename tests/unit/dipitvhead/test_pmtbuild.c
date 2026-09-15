@@ -1,6 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#define _GNU_SOURCE /* memmem */
+
 #include <check.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -262,6 +264,55 @@ START_TEST(pmtbuild_pmt_places_prog_desc_in_program_info) {
 }
 END_TEST
 
+START_TEST(pmtbuild_pmt_round_trips_av1_registration_descriptor) {
+  static const unsigned char av1_desc[] = {0x05, 4, 'A', 'V', '0', '1'};
+  psi_es_t es[1];
+  out_es_t out_es[4];
+  out_program_pids_t pids;
+  unsigned pcr_pid;
+  int n, dropped, desc_truncated;
+  unsigned char section[512], pkt[188], pat_section[32];
+  size_t slen, pat_len;
+  psi_t *p;
+  const psi_es_t *dec;
+  int count;
+
+  out_program_pids(0, &pids);
+  memset(es, 0, sizeof es);
+  es[0].pid = 0x0101;
+  es[0].cls = PID_VIDEO;
+  es[0].codec = CODEC_AV1;
+  memcpy(es[0].desc, av1_desc, sizeof av1_desc);
+  es[0].desc_len = sizeof av1_desc;
+
+  n = pmtbuild_map_es(es, 1, 0, 0x0101, pids.video_pid, pids.es_pid_base, out_es, 4, &pcr_pid, &dropped);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(dropped, 0);
+
+  slen = pmtbuild_pmt(1, 55, pcr_pid, NULL, 0, out_es, n, NULL, 0, section, sizeof section, &desc_truncated);
+  ck_assert_uint_ne(slen, 0u);
+  ck_assert_int_eq(desc_truncated, 0);
+  ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
+  ck_assert_uint_eq(section[12], 0x06); /* stream_type: AV1 has no dedicated value, shares 0x06 */
+  ck_assert_ptr_nonnull(memmem(section, slen, av1_desc, sizeof av1_desc));
+
+  p = psi_new();
+  pat_len = psi_build_pat(0x1234, 0, 55, pids.pmt_pid, pat_section, sizeof pat_section);
+  wrap_ts_packet(pkt, OUT_PID_PAT, pat_section, pat_len);
+  psi_feed(p, pkt);
+  wrap_ts_packet(pkt, pids.pmt_pid, section, slen);
+  psi_feed(p, pkt);
+
+  ck_assert_int_eq(psi_have_pmt(p), 1);
+  dec = psi_es(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_int_eq(dec[0].cls, PID_VIDEO);
+  ck_assert_int_eq(dec[0].codec, CODEC_AV1);
+
+  psi_free(p);
+}
+END_TEST
+
 static Suite *pmtbuild_suite(void) {
   Suite *s = suite_create("pmtbuild");
   TCase *tc = tcase_create("core");
@@ -272,6 +323,7 @@ static Suite *pmtbuild_suite(void) {
   tcase_add_test(tc, pmtbuild_pmt_truncates_es_descriptors_gracefully);
   tcase_add_test(tc, pmtbuild_pmt_rejects_small_cap);
   tcase_add_test(tc, pmtbuild_pmt_places_prog_desc_in_program_info);
+  tcase_add_test(tc, pmtbuild_pmt_round_trips_av1_registration_descriptor);
   suite_add_tcase(s, tc);
   return s;
 }

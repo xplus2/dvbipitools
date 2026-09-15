@@ -39,6 +39,66 @@ static size_t build_full_config_frame(unsigned char *out, size_t cap, unsigned c
   return 3 + plen;
 }
 
+static size_t build_hierarchical_config_frame(unsigned char *out, size_t cap, unsigned ext_aot, unsigned core_sr_idx, unsigned channel_config) {
+  bitwriter_t bw;
+  const unsigned char *payload;
+  size_t plen;
+  bitwriter_init(&bw);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, 0, 6);
+  bitwriter_put(&bw, 0, 4);
+  bitwriter_put(&bw, 0, 3);
+  bitwriter_put(&bw, ext_aot, 5);
+  bitwriter_put(&bw, core_sr_idx, 4);
+  bitwriter_put(&bw, channel_config, 4);
+  bitwriter_put(&bw, 3, 4);
+  bitwriter_put(&bw, 2, 5);
+  payload = bitwriter_data(&bw, &plen);
+  if (3 + plen > cap) {
+    bitwriter_free(&bw);
+    return 0;
+  }
+  out[0] = 0x56;
+  out[1] = (unsigned char)(0xE0 | ((plen >> 8) & 0x1F));
+  out[2] = (unsigned char)plen;
+  memcpy(out + 3, payload, plen);
+  bitwriter_free(&bw);
+  return 3 + plen;
+}
+
+static size_t build_frame_with_trailing_bits(unsigned char *out, size_t cap, unsigned channel_config) {
+  bitwriter_t bw;
+  const unsigned char *payload;
+  size_t plen;
+
+  bitwriter_init(&bw);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, 0, 6);
+  bitwriter_put(&bw, 0, 4);
+  bitwriter_put(&bw, 0, 3);
+  bitwriter_put(&bw, 2, 5);
+  bitwriter_put(&bw, 4, 4);
+  bitwriter_put(&bw, channel_config, 4);
+  bitwriter_put(&bw, 0x2B7, 11);
+  bitwriter_put(&bw, 0x1F, 5);
+
+  payload = bitwriter_data(&bw, &plen);
+  if (3 + plen > cap) {
+    bitwriter_free(&bw);
+    return 0;
+  }
+  out[0] = 0x56;
+  out[1] = (unsigned char)(0xE0 | ((plen >> 8) & 0x1F));
+  out[2] = (unsigned char)plen;
+  memcpy(out + 3, payload, plen);
+  bitwriter_free(&bw);
+  return 3 + plen;
+}
+
 /* builds a "reuse previous config" frame: just the useSameStreamMux=1 bit, no payload beyond it */
 static size_t build_reuse_config_frame(unsigned char *out, size_t cap) {
   bitwriter_t bw;
@@ -75,6 +135,45 @@ START_TEST(aac_latm_probe_parses_full_stream_mux_config) {
 }
 END_TEST
 
+START_TEST(aac_latm_probe_parses_hierarchical_sbr_config) {
+  aac_latm_t *c = aac_latm_new();
+  unsigned char frame[32];
+  size_t len = build_hierarchical_config_frame(frame, sizeof frame, 5, 6, 2);
+  aac_latm_info_t info;
+  ck_assert_int_eq(aac_latm_probe(c, frame, len, &info), 1);
+  ck_assert_uint_eq(info.sample_rate, 24000u);
+  ck_assert_uint_eq(info.channels, 2u);
+  ck_assert_uint_eq(info.aac_profile_level, 0x58u);
+  aac_latm_free(c);
+}
+END_TEST
+
+START_TEST(aac_latm_probe_parses_hierarchical_ps_config) {
+  aac_latm_t *c = aac_latm_new();
+  unsigned char frame[32];
+  size_t len = build_hierarchical_config_frame(frame, sizeof frame, 29, 6, 1);
+  aac_latm_info_t info;
+  ck_assert_int_eq(aac_latm_probe(c, frame, len, &info), 1);
+  ck_assert_uint_eq(info.sample_rate, 24000u);
+  ck_assert_uint_eq(info.channels, 1u);
+  ck_assert_uint_eq(info.aac_profile_level, 0x60u);
+  aac_latm_free(c);
+}
+END_TEST
+
+START_TEST(aac_latm_probe_ignores_trailing_bits_after_plain_config) {
+  aac_latm_t *c = aac_latm_new();
+  unsigned char frame[32];
+  size_t len = build_frame_with_trailing_bits(frame, sizeof frame, 2);
+  aac_latm_info_t info;
+  ck_assert_int_eq(aac_latm_probe(c, frame, len, &info), 1);
+  ck_assert_uint_eq(info.sample_rate, 44100u);
+  ck_assert_uint_eq(info.channels, 2u);
+  ck_assert_uint_eq(info.aac_profile_level, 0x51u);
+  aac_latm_free(c);
+}
+END_TEST
+
 START_TEST(aac_latm_probe_reuses_config_across_frames) {
   aac_latm_t *c = aac_latm_new();
   unsigned char frame1[32], frame2[32];
@@ -85,7 +184,6 @@ START_TEST(aac_latm_probe_reuses_config_across_frames) {
   ck_assert_int_eq(aac_latm_probe(c, frame1, len1, &info), 1);
   ck_assert_int_eq(aac_latm_probe(c, frame2, len2, &info), 1);
   ck_assert_uint_eq(info.sample_rate, 44100u); /* carried over from the first frame's config */
-
   aac_latm_free(c);
 }
 END_TEST
@@ -95,9 +193,7 @@ START_TEST(aac_latm_probe_rejects_reuse_before_any_config_seen) {
   unsigned char frame[32];
   size_t len = build_reuse_config_frame(frame, sizeof frame);
   aac_latm_info_t info;
-
   ck_assert_int_eq(aac_latm_probe(c, frame, len, &info), -1);
-
   aac_latm_free(c);
 }
 END_TEST
@@ -115,10 +211,8 @@ START_TEST(aac_latm_probe_needs_more_bytes) {
   unsigned char frame[32];
   aac_latm_info_t info;
   size_t len = build_full_config_frame(frame, sizeof frame, 1);
-
   ck_assert_int_eq(aac_latm_probe(c, frame, len - 1, &info), 0); /* payload truncated */
   ck_assert_int_eq(aac_latm_probe(c, frame, 2, &info), 0);       /* not even the length header yet */
-
   aac_latm_free(c);
 }
 END_TEST
@@ -127,6 +221,9 @@ static Suite *aac_latm_suite(void) {
   Suite *s = suite_create("aac_latm");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, aac_latm_probe_parses_full_stream_mux_config);
+  tcase_add_test(tc, aac_latm_probe_parses_hierarchical_sbr_config);
+  tcase_add_test(tc, aac_latm_probe_parses_hierarchical_ps_config);
+  tcase_add_test(tc, aac_latm_probe_ignores_trailing_bits_after_plain_config);
   tcase_add_test(tc, aac_latm_probe_reuses_config_across_frames);
   tcase_add_test(tc, aac_latm_probe_rejects_reuse_before_any_config_seen);
   tcase_add_test(tc, aac_latm_is_sync_checks_header_bits);

@@ -112,6 +112,108 @@ static void feed_discovery(flv_t *f) {
   flv_feed(f, pkt);
 }
 
+/* one video ES PMT, given stream_type. ES pid = pmt_pid+1 */
+static size_t build_pmt_video(unsigned char *out, unsigned prog_num, unsigned pmt_pid, unsigned char stream_type) {
+  unsigned char body[16];
+  size_t n = 0, hdr, crc_at;
+  uint32_t crc;
+  unsigned es_pid = pmt_pid + 1;
+
+  body[n++] = (unsigned char)(prog_num >> 8);
+  body[n++] = (unsigned char)prog_num;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)es_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  body[n++] = stream_type;
+  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)es_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  hdr = n + 4;
+  out[0] = 0x02;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
+static size_t build_vvc_au(unsigned char *out) {
+  static const unsigned char vps[] = {0x00, 0x71, 0xAA, 0xBB};
+  static const unsigned char sps[] = {0x00, 0x79, 0x11, 0x0B, 0xFF, 0xFF, 0xDF, 0x00, 0x12};
+  static const unsigned char pps[] = {0x00, 0x81, 0xCC, 0xDD};
+  static const unsigned char idr[] = {0x00, 0x39, 0xEE};
+  static const unsigned char sc[] = {0x00, 0x00, 0x01};
+  size_t n = 0;
+#define APPEND(a) memcpy(out + n, a, sizeof a); n += sizeof a
+  APPEND(sc); APPEND(vps);
+  APPEND(sc); APPEND(sps);
+  APPEND(sc); APPEND(pps);
+  APPEND(sc); APPEND(idr);
+#undef APPEND
+  return n;
+}
+
+/* AV1 video ES PMT: stream_type 0x06 + a tag-0x05 "AV01" */
+static size_t build_pmt_av1_video(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
+  unsigned char body[20];
+  size_t n = 0, hdr, crc_at;
+  uint32_t crc;
+  unsigned es_pid = pmt_pid + 1;
+
+  body[n++] = (unsigned char)(prog_num >> 8);
+  body[n++] = (unsigned char)prog_num;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)es_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  body[n++] = 0x06;
+  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)es_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x06;
+  body[n++] = 0x05;
+  body[n++] = 0x04;
+  memcpy(body + n, "AV01", 4);
+  n += 4;
+  hdr = n + 4;
+  out[0] = 0x02;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
+static size_t build_av1_au(unsigned char *out) {
+  static const unsigned char seqhdr[] = {0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x01};
+  static const unsigned char frame[] = {0x30, 0x00, 0xAB, 0xCD};
+  static const unsigned char sc[] = {0x00, 0x00, 0x01};
+  size_t n = 0;
+#define APPEND(a) memcpy(out + n, a, sizeof a); n += sizeof a
+  APPEND(sc); APPEND(seqhdr);
+  APPEND(sc); APPEND(frame);
+#undef APPEND
+  return n;
+}
+
 typedef struct {
   flv_tag_type_t type;
   uint32_t timestamp_ms;
@@ -238,11 +340,117 @@ START_TEST(flv_no_supported_tracks_emits_nothing_and_no_error) {
 }
 END_TEST
 
+START_TEST(flv_emits_vvc1_fourcc_and_vvcc_seqhdr) {
+  unsigned long long bytes = 0;
+  flv_opts_t opts;
+  flv_t *f;
+  tag_capture_t cap;
+  unsigned char sec[256], pkt[188], au[64], pes[128];
+  size_t slen, alen, plen;
+  static const unsigned char expect_vvcc[] = {
+    0xFE, 0x03,
+    0x8E, 0x00, 0x01, 0x00, 0x04, 0x00, 0x71, 0xAA, 0xBB,
+    0x8F, 0x00, 0x01, 0x00, 0x09, 0x00, 0x79, 0x11, 0x0B, 0xFF, 0xFF, 0xDF, 0x00, 0x12,
+    0x90, 0x00, 0x01, 0x00, 0x04, 0x00, 0x81, 0xCC, 0xDD,
+  };
+  int found = 0;
+  memset(&opts, 0, sizeof opts);
+  memset(&cap, 0, sizeof cap);
+  f = flv_new(&opts, 0, capture_cb, &cap, &bytes);
+  ck_assert_ptr_nonnull(f);
+  slen = psi_build_pat(0x1234, 0, 101, 0x0100, sec, sizeof sec);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
+  flv_feed(f, pkt);
+  slen = build_pmt_video(sec, 101, 0x0100, 0x33 /* VVC */);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
+  flv_feed(f, pkt);
+
+  /* AU1: VPS+SPS+PPS+IDR bundled, buffered */
+  alen = (size_t)build_vvc_au(au);
+  plen = build_pes_with_pts(pes, 90000, au, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  flv_feed(f, pkt);
+  alen = (size_t)build_vvc_au(au);
+  plen = build_pes_with_pts(pes, 93000, au, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  flv_feed(f, pkt);
+
+  ck_assert_int_eq(flv_error(f), 0);
+  flv_close(f);
+  for (int i = 0; i < cap.n; i++) {
+    const captured_tag_t *tag = &cap.tags[i];
+    if (tag->type != FLV_TAG_VIDEO || tag->len < 5) continue;
+    if (tag->data[0] != 0x90) continue; /* ExVideoHeader | FrameType=key | PacketType=SequenceStart */
+    if (memcmp(tag->data + 1, "vvc1", 4) != 0) continue;
+    ck_assert_uint_ge(tag->len, 5 + sizeof expect_vvcc);
+    ck_assert_mem_eq(tag->data + 5, expect_vvcc, sizeof expect_vvcc);
+    found = 1;
+    break;
+  }
+  ck_assert(found);
+}
+END_TEST
+
+START_TEST(flv_emits_av01_fourcc_and_av1c_seqhdr) {
+  unsigned long long bytes = 0;
+  flv_opts_t opts;
+  flv_t *f;
+  tag_capture_t cap;
+  unsigned char sec[256], pkt[188], au[64], pes[128];
+  size_t slen, alen, plen;
+  static const unsigned char expect_av1c[] = {
+    0x81, 0x00, 0x0C, 0x00,
+    0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x01,
+  };
+  int found = 0;
+
+  memset(&opts, 0, sizeof opts);
+  memset(&cap, 0, sizeof cap);
+
+  f = flv_new(&opts, 0, capture_cb, &cap, &bytes);
+  ck_assert_ptr_nonnull(f);
+
+  slen = psi_build_pat(0x1234, 0, 101, 0x0100, sec, sizeof sec);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
+  flv_feed(f, pkt);
+  slen = build_pmt_av1_video(sec, 101, 0x0100);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
+  flv_feed(f, pkt);
+
+  alen = (size_t)build_av1_au(au);
+  plen = build_pes_with_pts(pes, 90000, au, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  flv_feed(f, pkt);
+
+  alen = (size_t)build_av1_au(au);
+  plen = build_pes_with_pts(pes, 93000, au, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  flv_feed(f, pkt);
+
+  ck_assert_int_eq(flv_error(f), 0);
+  flv_close(f);
+
+  for (int i = 0; i < cap.n; i++) {
+    const captured_tag_t *tag = &cap.tags[i];
+    if (tag->type != FLV_TAG_VIDEO || tag->len < 5) continue;
+    if (tag->data[0] != 0x90) continue;
+    if (memcmp(tag->data + 1, "av01", 4) != 0) continue;
+    ck_assert_uint_ge(tag->len, 5 + sizeof expect_av1c);
+    ck_assert_mem_eq(tag->data + 5, expect_av1c, sizeof expect_av1c);
+    found = 1;
+    break;
+  }
+  ck_assert(found);
+}
+END_TEST
+
 static Suite *flv_suite(void) {
   Suite *s = suite_create("flv");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, flv_emits_metadata_and_audio_tags_for_audio_only);
   tcase_add_test(tc, flv_no_supported_tracks_emits_nothing_and_no_error);
+  tcase_add_test(tc, flv_emits_vvc1_fourcc_and_vvcc_seqhdr);
+  tcase_add_test(tc, flv_emits_av01_fourcc_and_av1c_seqhdr);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -39,6 +39,8 @@ typedef struct {
   size_t lcevc_rbcap;
   unsigned char *lcevc_esc;
   size_t lcevc_esccap;
+  unsigned char *av1_rb;
+  size_t av1_rbcap;
   int got_key; /* first keyframe seen */
   ttx_t *ttx;  /* damn teletext */
   esc_track_t es; /* avcC/hvcC/ASC, param sets, LATM cache */

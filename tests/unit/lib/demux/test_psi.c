@@ -341,6 +341,97 @@ static size_t build_pmt_es(unsigned char *out, unsigned prog_num, unsigned pcr_p
   return crc_at + 4;
 }
 
+static size_t build_pmt_es_with_proginfo(unsigned char *out, unsigned prog_num, unsigned pcr_pid,
+                                         const unsigned char *prog_desc, size_t prog_desc_len,
+                                         const es_spec_t *es, size_t es_count) {
+  unsigned char body[256];
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
+  uint32_t crc;
+  size_t i;
+
+  body[n++] = (unsigned char)(prog_num >> 8);
+  body[n++] = (unsigned char)prog_num;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = (unsigned char)(0xE0 | ((pcr_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)pcr_pid;
+  body[n++] = (unsigned char)(0xF0 | ((prog_desc_len >> 8) & 0x0F));
+  body[n++] = (unsigned char)prog_desc_len;
+  memcpy(body + n, prog_desc, prog_desc_len);
+  n += prog_desc_len;
+  for (i = 0; i < es_count; i++) {
+    body[n++] = (unsigned char)es[i].stream_type;
+    body[n++] = (unsigned char)(0xE0 | ((es[i].pid >> 8) & 0x1F));
+    body[n++] = (unsigned char)es[i].pid;
+    body[n++] = (unsigned char)(0xF0 | ((es[i].desc_len >> 8) & 0x0F));
+    body[n++] = (unsigned char)es[i].desc_len;
+    memcpy(body + n, es[i].desc, es[i].desc_len);
+    n += es[i].desc_len;
+  }
+
+  hdr = n + 4;
+  out[0] = 0x02;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
+/* MSB-first bit writer, test fixtures only */
+typedef struct { unsigned char *buf; size_t bitpos; } bw_t;
+
+static void bw_put(bw_t *w, unsigned v, int n) {
+  int i;
+  for (i = n - 1; i >= 0; i--) {
+    unsigned bit = (v >> i) & 1;
+    size_t byte = w->bitpos >> 3;
+    unsigned off = 7 - (unsigned)(w->bitpos & 7);
+    if (off == 7) w->buf[byte] = 0;
+    w->buf[byte] = (unsigned char)(w->buf[byte] | (bit << off));
+    w->bitpos++;
+  }
+}
+
+/* EN 300 468 annex G tables G.6/G.7/G.9 */
+static size_t build_dts_hd_descriptor(unsigned char *out, unsigned asset_construction) {
+  unsigned char payload[7];
+  bw_t w;
+  w.buf = payload;
+  w.bitpos = 0;
+  bw_put(&w, 1, 1); /* substream_core_flag */
+  bw_put(&w, 0, 4); /* substream_0..3_flag */
+  bw_put(&w, 0, 3); /* reserved_future_use */
+  bw_put(&w, 5, 8); /* substream_length: 5 bytes follow */
+  bw_put(&w, 0, 3); /* num_assets - 1 */
+  bw_put(&w, 2, 5); /* channel_count */
+  bw_put(&w, 0, 1); /* lfe_flag */
+  bw_put(&w, 0, 4); /* sampling_frequency */
+  bw_put(&w, 0, 1); /* sample_resolution */
+  bw_put(&w, 0, 2); /* reserved_future_use */
+  bw_put(&w, asset_construction, 5);
+  bw_put(&w, 0, 1); /* vbr_flag */
+  bw_put(&w, 0, 1); /* post_encode_br_scaling_flag */
+  bw_put(&w, 0, 1); /* component_type_flag */
+  bw_put(&w, 0, 1); /* language_code_flag */
+  bw_put(&w, 0, 13); /* bit_rate */
+  bw_put(&w, 0, 2); /* reserved_future_use */
+  out[0] = 0x7F;
+  out[1] = 8; /* ext_tag + 7 payload bytes */
+  out[2] = 0x0E;
+  memcpy(out + 3, payload, sizeof payload);
+  return 10;
+}
+
 /* builds a CAT section (table_id 0x01) with one CA_descriptor (tag 0x09,
  * ca_system_id + ca_pid, no private data), CRC included, returns length */
 static size_t build_cat(unsigned char *out, unsigned ca_system_id, unsigned emm_pid) {
@@ -803,6 +894,28 @@ START_TEST(psi_classifies_opus_via_registration_descriptor) {
 }
 END_TEST
 
+START_TEST(psi_classifies_av1_video_stream_type) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_with_audio_registration(section, 1, 0x0101, 0x0101, 0x1B, 0x0102, "AV01");
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_ready(p), 1);
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 2);
+  ck_assert_int_eq(es[1].cls, PID_VIDEO);
+  ck_assert_int_eq(es[1].codec, CODEC_AV1);
+  psi_free(p);
+}
+END_TEST
+
 START_TEST(psi_classifies_lcevc_stream_type) {
   psi_t *p = psi_new();
   unsigned char section[256];
@@ -936,6 +1049,246 @@ START_TEST(psi_lcevc_unpaired_when_tags_dont_match) {
 }
 END_TEST
 
+START_TEST(psi_classifies_dts_via_current_descriptor) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  static const unsigned char dts_desc[] = {0x7B, 0x00};
+  es_spec_t spec[1] = {{0x06, 0x0101, dts_desc, sizeof dts_desc}};
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_es(section, 1, 0x0101, spec, 1);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_int_eq(es[0].cls, PID_AUDIO);
+  ck_assert_int_eq(es[0].codec, CODEC_DTS);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_classifies_dts_via_legacy_descriptor) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  static const unsigned char dts_desc[] = {0x73, 0x00};
+  es_spec_t spec[1] = {{0x06, 0x0101, dts_desc, sizeof dts_desc}};
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_es(section, 1, 0x0101, spec, 1);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_int_eq(es[0].cls, PID_AUDIO);
+  ck_assert_int_eq(es[0].codec, CODEC_DTS);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_classifies_dts_via_registration_descriptor) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  static const unsigned char reg_desc[] = {0x05, 0x04, 'D', 'T', 'S', '2'};
+  es_spec_t spec[1] = {{0x06, 0x0101, reg_desc, sizeof reg_desc}};
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_es(section, 1, 0x0101, spec, 1);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_int_eq(es[0].cls, PID_AUDIO);
+  ck_assert_int_eq(es[0].codec, CODEC_DTS);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_classifies_dts_hd_plain_via_extension_descriptor) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  unsigned char dts_hd_desc[10];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  es_spec_t spec[1];
+
+  build_dts_hd_descriptor(dts_hd_desc, 1); /* asset_construction=1: core only */
+  spec[0].stream_type = 0x06;
+  spec[0].pid = 0x0101;
+  spec[0].desc = dts_hd_desc;
+  spec[0].desc_len = sizeof dts_hd_desc;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_es(section, 1, 0x0101, spec, 1);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_int_eq(es[0].cls, PID_AUDIO);
+  ck_assert_int_eq(es[0].codec, CODEC_DTS_HD);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_classifies_ac4_via_extension_descriptor) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  unsigned char ac4_desc[3] = {0x7F, 0x01, 0x15};
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  es_spec_t spec[1];
+
+  spec[0].stream_type = 0x06;
+  spec[0].pid = 0x0101;
+  spec[0].desc = ac4_desc;
+  spec[0].desc_len = sizeof ac4_desc;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_es(section, 1, 0x0101, spec, 1);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_int_eq(es[0].cls, PID_AUDIO);
+  ck_assert_int_eq(es[0].codec, CODEC_AC4);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_classifies_dts_hd_ma_via_extension_descriptor) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  unsigned char dts_hd_desc[10];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  es_spec_t spec[1];
+
+  build_dts_hd_descriptor(dts_hd_desc, 14); /* asset_construction=14: core+XLL */
+  spec[0].stream_type = 0x06;
+  spec[0].pid = 0x0101;
+  spec[0].desc = dts_hd_desc;
+  spec[0].desc_len = sizeof dts_hd_desc;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_es(section, 1, 0x0101, spec, 1);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_int_eq(es[0].cls, PID_AUDIO);
+  ck_assert_int_eq(es[0].codec, CODEC_DTS_HD_MA);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_classifies_truehd_stream_type_under_hdmv_program) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  static const unsigned char hdmv_desc[] = {0x05, 0x04, 'H', 'D', 'M', 'V'};
+  es_spec_t spec[1] = {{0x83, 0x0101, NULL, 0}};
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_es_with_proginfo(section, 1, 0x0101, hdmv_desc, sizeof hdmv_desc, spec, 1);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_int_eq(es[0].cls, PID_AUDIO);
+  ck_assert_int_eq(es[0].codec, CODEC_TRUEHD);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_ignores_truehd_stream_type_without_hdmv_program) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  es_spec_t spec[1] = {{0x83, 0x0101, NULL, 0}};
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_es(section, 1, 0x0101, spec, 1);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_int_eq(es[0].codec, CODEC_NONE);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_classifies_dts_hd_ma_via_hdmv_stream_type) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  static const unsigned char hdpr_desc[] = {0x05, 0x04, 'H', 'D', 'P', 'R'};
+  es_spec_t spec[1] = {{0x86, 0x0101, NULL, 0}};
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_es_with_proginfo(section, 1, 0x0101, hdpr_desc, sizeof hdpr_desc, spec, 1);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_int_eq(es[0].cls, PID_AUDIO);
+  ck_assert_int_eq(es[0].codec, CODEC_DTS_HD_MA);
+  psi_free(p);
+}
+END_TEST
+
 static Suite *psi_suite(void) {
   Suite *s = suite_create("psi");
   TCase *tc = tcase_create("core");
@@ -956,10 +1309,20 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_wants_pid_tracks_new_pid_when_program_moves);
   tcase_add_test(tc, psi_classifies_vvc_video_stream_type);
   tcase_add_test(tc, psi_classifies_opus_via_registration_descriptor);
+  tcase_add_test(tc, psi_classifies_av1_video_stream_type);
   tcase_add_test(tc, psi_classifies_lcevc_stream_type);
   tcase_add_test(tc, psi_links_lcevc_enhancement_to_base_video);
   tcase_add_test(tc, psi_links_multiple_lcevc_enhancement_layers);
   tcase_add_test(tc, psi_lcevc_unpaired_when_tags_dont_match);
+  tcase_add_test(tc, psi_classifies_dts_via_current_descriptor);
+  tcase_add_test(tc, psi_classifies_dts_via_legacy_descriptor);
+  tcase_add_test(tc, psi_classifies_dts_via_registration_descriptor);
+  tcase_add_test(tc, psi_classifies_ac4_via_extension_descriptor);
+  tcase_add_test(tc, psi_classifies_dts_hd_plain_via_extension_descriptor);
+  tcase_add_test(tc, psi_classifies_dts_hd_ma_via_extension_descriptor);
+  tcase_add_test(tc, psi_classifies_truehd_stream_type_under_hdmv_program);
+  tcase_add_test(tc, psi_ignores_truehd_stream_type_without_hdmv_program);
+  tcase_add_test(tc, psi_classifies_dts_hd_ma_via_hdmv_stream_type);
   suite_add_tcase(s, tc);
   return s;
 }
