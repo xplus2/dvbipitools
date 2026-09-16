@@ -9,7 +9,7 @@
 #include "lib/demux/crc32.h"
 #include "lib/demux/rawaudio.h"
 
-static int pf_excludes_cb(void *ctx, unsigned pid) { return pid_filter_excludes((const pid_filter_t *)ctx, pid); }
+static int pf_excludes_cb(const void *ctx, unsigned pid) { return pid_filter_excludes((const pid_filter_t *)ctx, pid); }
 
 static size_t build_pat(unsigned char *out, unsigned tsid, unsigned prog_num, unsigned pmt_pid) {
   unsigned char body[16];

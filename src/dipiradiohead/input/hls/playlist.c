@@ -14,7 +14,7 @@ static int is_url_line(const char *l) { return !strncasecmp(l, "http://", 7) || 
 
 int hls_playlist_parse(char *body, const http_url_t *base, hls_playlist_t *out) {
   char *cur = playlist_skip_blank(body);
-  char *line;
+  const char *line;
   int have_extinf = 0;
 
   memset(out, 0, sizeof *out);

@@ -89,8 +89,6 @@ static int codec_sync_at(source_t *s, size_t off) {
 /* 1: codec now known (just resolved or already was), caller proceeds this iteration.
    0: refilled, caller should continue its loop. -1: caller should return *ret */
 static int ensure_codec_known(source_t *s, net_err_reason_t *reason_out, int *ret) {
-  size_t off;
-
   if (s->codec_known) return 1;
   if (s->buf_len < 2) {
     int rf = refill(s, reason_out);
@@ -101,7 +99,7 @@ static int ensure_codec_known(source_t *s, net_err_reason_t *reason_out, int *re
     return 0;
   }
 
-  for (off = 0; off + 1 < s->buf_len; off++) {
+  for (size_t off = 0; off + 1 < s->buf_len; off++) {
     if (!codec_sync_at(s, off)) continue;
     if (off) {
       memmove(s->buf, s->buf + off, s->buf_len - off);

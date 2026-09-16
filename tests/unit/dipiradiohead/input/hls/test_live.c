@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "dipiradiohead/input/hls/live.h"
@@ -25,7 +26,7 @@ typedef struct {
 } scripted_server_t;
 
 static void *serve_scripted(void *arg) {
-  scripted_server_t *a = arg;
+  const scripted_server_t *a = arg;
   for (int i = 0; i < a->n_responses; i++) {
     int cfd = accept(a->listen_fd, NULL, NULL);
     struct timeval tv = {2, 0};
@@ -46,7 +47,7 @@ static void *serve_scripted(void *arg) {
 }
 
 static void *serve_one_conn_scripted(void *arg) {
-  scripted_server_t *a = arg;
+  const scripted_server_t *a = arg;
   int cfd = accept(a->listen_fd, NULL, NULL);
   struct timeval tv = {2, 0};
   close(a->listen_fd);
@@ -74,6 +75,7 @@ static int make_listener(unsigned *port_out) {
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in addr;
   socklen_t alen = sizeof addr;
+  ck_assert_int_ge(fd, 0);
   memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -86,7 +88,9 @@ static int make_listener(unsigned *port_out) {
 
 static size_t build_pat(unsigned char *out, unsigned pmt_pid) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
   body[n++] = 0x00;
   body[n++] = 0x01;
@@ -113,7 +117,9 @@ static size_t build_pat(unsigned char *out, unsigned pmt_pid) {
 
 static size_t build_pmt_1audio(unsigned char *out, unsigned pid) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
   body[n++] = 0x00;
   body[n++] = 0x01;
@@ -167,7 +173,8 @@ static void wrap_pes_packet(unsigned char pkt[188], unsigned pid, const unsigned
 /* 2nd PES needed: flush waits for next PUSI */
 static size_t build_segment(unsigned char *out, const char *tag) {
   unsigned char section[32];
-  size_t slen, off = 0;
+  size_t slen;
+  size_t off = 0;
 
   slen = build_pat(section, 0x100);
   wrap_psi_packet(out + off, 0x0000, section, slen);
@@ -194,7 +201,10 @@ static int drive_until_contains(hls_live_t *h, unsigned char *acc, size_t acc_ca
       pfd.events = hls_live_poll_events(h);
       pfd.revents = 0;
       poll(&pfd, 1, 100);
-    } else usleep(20000);
+    } else {
+      struct timespec ts = {0, 20000000};
+      nanosleep(&ts, NULL);
+    }
     n = hls_live_read(h, tmp, sizeof tmp, NULL);
     if (n < 0) return -1;
     if (n <= 0) continue;
@@ -207,11 +217,15 @@ static int drive_until_contains(hls_live_t *h, unsigned char *acc, size_t acc_ca
 }
 
 START_TEST(hls_live_joins_n_segments_back_and_skips_older_segments) {
-  unsigned pl_port, seg_ports[3];
+  unsigned pl_port;
+  unsigned seg_ports[3];
   int pl_fd = make_listener(&pl_port);
   int seg_fds[3];
-  pthread_t pl_th, seg_ths[3];
-  char pl_body[768], pl_uri[64], seg_body_raw[3][188 * 4];
+  pthread_t pl_th;
+  pthread_t seg_ths[3];
+  char pl_body[768];
+  char pl_uri[64];
+  char seg_body_raw[3][188 * 4];
   size_t seg_len[3];
   char seg_resp[3][188 * 4 + 256];
   size_t seg_resp_len[3];
@@ -219,7 +233,8 @@ START_TEST(hls_live_joins_n_segments_back_and_skips_older_segments) {
   size_t pl_lens[1];
   const char *seg_responses[3][1];
   size_t seg_lens[3][1];
-  scripted_server_t pl_srv, seg_srv[3];
+  scripted_server_t pl_srv;
+  scripted_server_t seg_srv[3];
   http_url_t pl_url;
   hls_live_t *h;
   unsigned char buf[4096];
@@ -278,21 +293,35 @@ START_TEST(hls_live_joins_n_segments_back_and_skips_older_segments) {
 END_TEST
 
 START_TEST(hls_live_fetches_only_newly_appended_segment) {
-  unsigned pl_port, segA_port, segB_port;
+  unsigned pl_port;
+  unsigned segA_port;
+  unsigned segB_port;
   int pl_fd = make_listener(&pl_port);
   int segA_fd = make_listener(&segA_port);
   int segB_fd = make_listener(&segB_port);
-  pthread_t pl_th, segA_th, segB_th;
-  char pl_body1[512], pl_body2[512], pl_uri[64];
-  unsigned char segA_raw[188 * 4], segB_raw[188 * 4];
-  size_t segA_len, segB_len;
-  char segA_resp[188 * 4 + 256], segB_resp[188 * 4 + 256];
-  size_t segA_resp_len, segB_resp_len;
+  pthread_t pl_th;
+  pthread_t segA_th;
+  pthread_t segB_th;
+  char pl_body1[512];
+  char pl_body2[512];
+  char pl_uri[64];
+  unsigned char segA_raw[188 * 4];
+  unsigned char segB_raw[188 * 4];
+  size_t segA_len;
+  size_t segB_len;
+  char segA_resp[188 * 4 + 256];
+  char segB_resp[188 * 4 + 256];
+  size_t segA_resp_len;
+  size_t segB_resp_len;
   const char *pl_responses[2];
   size_t pl_lens[2];
-  const char *segA_responses[1], *segB_responses[1];
-  size_t segA_lens[1], segB_lens[1];
-  scripted_server_t pl_srv, segA_srv, segB_srv;
+  const char *segA_responses[1];
+  const char *segB_responses[1];
+  size_t segA_lens[1];
+  size_t segB_lens[1];
+  scripted_server_t pl_srv;
+  scripted_server_t segA_srv;
+  scripted_server_t segB_srv;
   http_url_t pl_url;
   hls_live_t *h;
   unsigned char buf[4096];
@@ -368,9 +397,13 @@ START_TEST(hls_live_reuses_connection_for_playlist_and_segment) {
   unsigned port;
   int listen_fd = make_listener(&port);
   pthread_t th;
-  char pl_body[512], seg_resp[188 * 4 + 256], pl_uri[64];
+  char pl_body[512];
+  char seg_resp[188 * 4 + 256];
+  char pl_uri[64];
   unsigned char seg_raw[188 * 4];
-  size_t seg_len, seg_resp_len, pl_resp_len;
+  size_t seg_len;
+  size_t seg_resp_len;
+  size_t pl_resp_len;
   char pl_resp[768];
   const char *responses[2];
   size_t response_lens[2];

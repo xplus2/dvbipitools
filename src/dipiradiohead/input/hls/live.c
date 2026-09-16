@@ -51,7 +51,8 @@ struct hls_live {
   rawaudio_demux_t *demux;
 
   unsigned char out_buf[HLS_OUT_BUF_CAP];
-  size_t out_len, out_pos;
+  size_t out_len;
+  size_t out_pos;
 };
 
 static void hls_emit(void *ctx, const unsigned char *data, size_t len) {
@@ -141,7 +142,8 @@ static double poll_interval(const hls_live_t *h) {
 
 static int handle_playlist_done(hls_live_t *h, net_err_reason_t *reason_out) {
   size_t len;
-  int status, truncated;
+  int status;
+  int truncated;
   char etag[HLS_ETAG_MAX];
 
   http_fetch_take(h->fetch, &len, &status, etag, sizeof etag, &truncated, &h->reuse);
@@ -194,20 +196,14 @@ static int handle_segment_done(hls_live_t *h) {
 }
 
 ssize_t hls_live_read(hls_live_t *h, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
-  if (h->phase == HLS_LIVE_IDLE) {
-    if (h->pending_idx < h->pl.n_segments) {
-      if (sizeof h->out_buf - h->out_len >= HLS_OUT_BUF_PREFETCH_HEADROOM) {
-        if (!start_segment_fetch(h, h->pl.segments[h->pending_idx].url)) {
-          if (reason_out) *reason_out = NET_ERR_OTHER;
-          return -1;
-        }
-      }
-    } else if (mono_seconds() >= h->next_poll_at) {
-      if (!start_playlist_fetch(h)) {
-        if (reason_out) *reason_out = NET_ERR_OTHER;
-        return -1;
-      }
+  if (h->phase == HLS_LIVE_IDLE && h->pending_idx < h->pl.n_segments) {
+    if (sizeof h->out_buf - h->out_len >= HLS_OUT_BUF_PREFETCH_HEADROOM && !start_segment_fetch(h, h->pl.segments[h->pending_idx].url)) {
+      if (reason_out) *reason_out = NET_ERR_OTHER;
+      return -1;
     }
+  } else if (h->phase == HLS_LIVE_IDLE && mono_seconds() >= h->next_poll_at && !start_playlist_fetch(h)) {
+    if (reason_out) *reason_out = NET_ERR_OTHER;
+    return -1;
   }
 
   if (h->phase != HLS_LIVE_IDLE) {
@@ -231,7 +227,10 @@ ssize_t hls_live_read(hls_live_t *h, unsigned char *buf, size_t cap, net_err_rea
     if (n > cap) n = cap;
     memcpy(buf, h->out_buf + h->out_pos, n);
     h->out_pos += n;
-    if (h->out_pos == h->out_len) h->out_pos = h->out_len = 0;
+    if (h->out_pos == h->out_len) {
+      h->out_pos = 0;
+      h->out_len = 0;
+    }
     return (ssize_t)n;
   }
   return 0;

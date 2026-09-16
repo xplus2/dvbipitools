@@ -18,7 +18,8 @@ struct http_fetch {
   http_async_t *ha;
   http_t *h;
   unsigned char *buf;
-  size_t cap, len;
+  size_t cap;
+  size_t len;
   int status;
   int truncated;
   char etag[HTTP_FETCH_ETAG_MAX];

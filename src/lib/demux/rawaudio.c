@@ -14,7 +14,7 @@ struct rawaudio_demux {
   psi_t *psi;
   pes_t *pes;
   rawaudio_pid_excluded_cb excluded;
-  void *excluded_ctx;
+  const void *excluded_ctx;
   unsigned pid;
   int pid_known;
   int no_audio;
@@ -37,7 +37,7 @@ static void on_pes(void *vctx, unsigned pid, int has_pts, uint64_t pts, int has_
   d->emit(d->ctx, data, len);
 }
 
-rawaudio_demux_t *rawaudio_demux_new(unsigned pmt_pid, rawaudio_pid_excluded_cb excluded, void *excluded_ctx, rawaudio_emit_cb emit, void *ctx) {
+rawaudio_demux_t *rawaudio_demux_new(unsigned pmt_pid, rawaudio_pid_excluded_cb excluded, const void *excluded_ctx, rawaudio_emit_cb emit, void *ctx) {
   rawaudio_demux_t *d;
   if (t_rawaudio_pool_n > 0) d = t_rawaudio_pool[--t_rawaudio_pool_n];
   else d = malloc(sizeof *d);
@@ -72,7 +72,8 @@ void rawaudio_demux_free(rawaudio_demux_t *d) {
 }
 
 static void rawaudio_pick_pid(rawaudio_demux_t *d) {
-  int n, best_idx = 0;
+  int n;
+  int best_idx = 0;
   unsigned best_pid = 0;
   const psi_es_t *es = psi_es(d->psi, &n);
   for (int i = 0; i < n; i++) {

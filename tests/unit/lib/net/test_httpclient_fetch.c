@@ -53,7 +53,7 @@ static void *serve_once(void *arg) {
 }
 
 static void *serve_two_on_one_conn(void *arg) {
-  server_arg_t *a = arg;
+  const server_arg_t *a = arg;
   int cfd = accept(a->listen_fd, NULL, NULL);
   struct timeval tv = {2, 0};
   close(a->listen_fd);
@@ -78,6 +78,7 @@ static int make_listener(unsigned *port_out) {
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in addr;
   socklen_t alen = sizeof addr;
+  ck_assert_int_ge(fd, 0);
   memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -248,8 +249,10 @@ START_TEST(http_fetch_reuses_connection_across_two_requests) {
   http_url_t url;
   http_fetch_t *f;
   http_t *reuse = NULL;
-  unsigned char buf1[64], buf2[64];
-  size_t len1, len2;
+  unsigned char buf1[64];
+  unsigned char buf2[64];
+  size_t len1;
+  size_t len2;
   char uri[64];
 
   sarg.listen_fd = listen_fd;
@@ -281,18 +284,24 @@ START_TEST(http_fetch_reuses_connection_across_two_requests) {
 END_TEST
 
 START_TEST(http_fetch_falls_back_when_reuse_host_mismatches) {
-  unsigned port_a, port_b;
+  unsigned port_a;
+  unsigned port_b;
   int listen_a = make_listener(&port_a);
   int listen_b = make_listener(&port_b);
-  pthread_t th_a, th_b;
-  server_arg_t sarg_a = {0}, sarg_b = {0};
+  pthread_t th_a;
+  pthread_t th_b;
+  server_arg_t sarg_a = {0};
+  server_arg_t sarg_b = {0};
   const char *resp_a = "HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA";
   const char *resp_b = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nB";
-  http_url_t url_a, url_b;
+  http_url_t url_a;
+  http_url_t url_b;
   http_fetch_t *f;
   http_t *reuse = NULL;
-  unsigned char buf_a[16], buf_b[16];
-  size_t len_a, len_b;
+  unsigned char buf_a[16];
+  unsigned char buf_b[16];
+  size_t len_a;
+  size_t len_b;
   char uri[64];
 
   sarg_a.listen_fd = listen_a;

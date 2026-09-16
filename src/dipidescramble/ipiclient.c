@@ -113,7 +113,8 @@ short ipiclient_poll_events(const ipiclient_poll_t *p) { return http_fetch_poll_
 
 ipiclient_poll_state_t ipiclient_poll_step(ipiclient_poll_t *p) {
   http_fetch_state_t st;
-  int status, truncated;
+  int status;
+  int truncated;
   char etag[IPICLIENT_ETAG_MAX];
 
   if (mono_seconds() > p->deadline) {

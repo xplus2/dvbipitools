@@ -19,7 +19,8 @@ struct http {
   tls_t *tls; /* NULL: plain http */
   http_url_t url;
   unsigned char hold[8192]; /* body read with headers, drained first */
-  size_t hlen, hpos;
+  size_t hlen;
+  size_t hpos;
   int status;
   int minor_version;
   struct {
@@ -31,7 +32,8 @@ struct http {
   int chunk_done;
   struct phr_chunked_decoder decoder;
   int has_content_length;
-  size_t content_length, body_consumed;
+  size_t content_length;
+  size_t body_consumed;
 };
 
 typedef enum { HA_CONNECTING, HA_TLS_HANDSHAKE, HA_SENDING, HA_READING_HEADERS } http_async_phase_t;
@@ -48,7 +50,8 @@ struct http_async {
   int redirects;
   struct http *h; /* reused (memset + refilled) across redirect hops */
   char reqbuf[2048];
-  size_t req_len, req_sent;
+  size_t req_len;
+  size_t req_sent;
   size_t hdr_got; /* bytes accumulated in h->hold while headers aren't complete yet */
 };
 
