@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include <time.h>
 
+#include "lib/helper/ioutil.h"
+
 #include "segstore.h"
 #include "ts/lcevcselect.h"
 #include "reactor/qsbr.h"
@@ -89,12 +91,6 @@ typedef struct hls_store_t {
   int retiring_n;
 } hls_store_t;
 
-typedef struct {
-  char *buf;
-  size_t cap;
-  size_t len;
-} strbuf_t;
-
 /* store_lock() is writer only */
 pthread_mutex_t *store_lock(const hls_store_t *s);
 int hls_target_duration(const hls_snapshot_t *snap);
@@ -106,11 +102,6 @@ void seg_buf_release_cb(void *arg);
 typedef size_t (*text_fmt_fn)(void *ctx, char *buf, size_t cap);
 const cached_text_t *snapshot_cache_text(_Atomic(cached_text_t *) *slot, text_fmt_fn fmt, void *ctx, size_t buf_cap);
 
-/* respfmt.c: response formatting primitives, shared by hls/dash serve/render */
-void hls_sb_init(strbuf_t *b, char *buf, size_t cap);
-void hls_sb_add(strbuf_t *b, const char *s);
-void hls_sb_add_hex2(strbuf_t *b, unsigned v);
-void hls_sb_add_u64(strbuf_t *b, uint64_t v);
 void queue_status(conn_t *c, const char *status, int keep_alive);
 void queue_not_modified(conn_t *c, const char *etag, int keep_alive);
 void cors_prepare(const char *origin_hdr, char *out, size_t outsz);

@@ -14,6 +14,8 @@
 #include <string.h>
 #include <unistd.h>
 
+static int ts_push_pid_excluded(void *ctx, unsigned pid) { return pid_filter_excludes((const pid_filter_t *)ctx, pid); }
+
 ts_sub_t *g_ts_subs;
 int g_ts_subs_n;
 
@@ -137,8 +139,7 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto,
     s = &g_ts_subs[i];
 
     /* rings never freed: pump reads s->*_ring unlocked off alive,
-       free-on-unsubscribe races it (UAF). reuse prior occupant's ring
-       if sized for proto, else allocate once */
+       free-on-unsubscribe race (UAF). reuse prior occupant's ring if sized for proto, else allocate */
     if (proto == 3) {
       byte_ring_reset(&s->h3_ring, TS_RING_H3_BYTES);
       if (!s->h3_ring.buf) {
@@ -166,7 +167,7 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto,
     }
 
     if (rawaudio) {
-      rawaudio_demux = rawaudio_demux_new(pmt_pid, filter, ts_push_rawaudio_emit, s);
+      rawaudio_demux = rawaudio_demux_new(pmt_pid, ts_push_pid_excluded, (void *)filter, ts_push_rawaudio_emit, s);
       if (!rawaudio_demux) {
         atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
         psi_free(spts_psi);

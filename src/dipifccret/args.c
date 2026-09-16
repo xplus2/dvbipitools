@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 
 #include "args.h"
@@ -42,8 +43,7 @@ static int ranges_parse(const char *s, config_t *cfg) {
     *slash = '/';
     {
       size_t tlen = strlen(tok);
-      if (tlen >= sizeof cfg->ranges[0])
-        return -1;
+      if (tlen >= sizeof cfg->ranges[0]) return -1;
       memcpy(cfg->ranges[cfg->range_count], tok, tlen + 1);
     }
     cfg->range_ptrs[cfg->range_count] = cfg->ranges[cfg->range_count];
@@ -297,7 +297,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           argerr("--rsi-hostname too long: %s", optarg);
           return ARGS_ERR;
         }
-        snprintf(cfg->rsi_hostname, sizeof cfg->rsi_hostname, "%s", optarg);
+        bufcpy(cfg->rsi_hostname, sizeof cfg->rsi_hostname, optarg);
         break;
       case 1004:
         cfg->no_fcc = 1;

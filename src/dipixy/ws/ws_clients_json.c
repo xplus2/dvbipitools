@@ -4,8 +4,6 @@
 #include "ws_clients_int.h"
 #include "ws_broadcast.h"
 
-#include "lib/helper/ioutil.h"
-
 #include <string.h>
 
 void snapshot_client(ws_client_snapshot_t *dst, const ws_client_t *src) {
@@ -36,39 +34,6 @@ static const char *route_fmt_name(route_fmt_t fmt) {
     case ROUTE_FMT_MP4: return "mp4";
   }
   return "?";
-}
-
-void jbuf_i64(jbuf_t *j, long long v) {
-  char buf[22];
-  size_t off = 0;
-  unsigned long long uv;
-  int neg = v < 0;
-  uv = neg ? (unsigned long long)(-(v + 1)) + 1ULL : (unsigned long long)v;
-  if (neg)
-    buf[off++] = '-';
-  off += u64_to_dec(buf + off, uv);
-  jbuf_raw(j, buf, off);
-}
-
-static void jbuf_u64(jbuf_t *j, unsigned long long v) {
-  char buf[21];
-  size_t n = u64_to_dec(buf, v);
-  jbuf_raw(j, buf, n);
-}
-
-/* 3-decimal fixed point, assumes v >= 0 (mbps, always non-negative here) */
-void jbuf_fixed3(jbuf_t *j, double v) {
-  uint32_t scaled = (uint32_t)(v * 1000.0 + 0.5);
-  jbuf_u64(j, scaled / 1000);
-  jbuf_str(j, ".");
-  {
-    char buf[3];
-    unsigned frac = scaled % 1000;
-    buf[0] = (char)('0' + frac / 100);
-    buf[1] = (char)('0' + (frac / 10) % 10);
-    buf[2] = (char)('0' + frac % 10);
-    jbuf_raw(j, buf, 3);
-  }
 }
 
 void emit_client_json(jbuf_t *j, int id, const ws_client_snapshot_t *e) {

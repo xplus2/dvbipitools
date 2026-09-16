@@ -391,18 +391,18 @@ void dash_lldash_flush_ready(int tid) {
 int dash_lldash_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int keep_alive, const char *origin_hdr, int ws_handle) {
   char cors_hdr[192];
   char hdr[384];
-  strbuf_t b;
+  sbuf_t b;
   int idx = dash_lldash_subscribe(ctx, filter, pmt_pid, lcevc, filename, 1);
   if (idx < 0) return 0;
   g_subs[idx].fd = c->fd;
   g_subs[idx].ws_handle = ws_handle;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
-  hls_sb_init(&b, hdr, sizeof hdr);
-  hls_sb_add(&b, "HTTP/1.1 200 OK\r\nServer: " TOOL_NAME "/" TOOL_VERSION "\r\nContent-Type: video/mp4\r\nTransfer-Encoding: chunked\r\nCache-Control: no-cache, no-store, must-revalidate\r\n");
-  hls_sb_add(&b, cors_hdr);
-  hls_sb_add(&b, "Connection: ");
-  hls_sb_add(&b, keep_alive ? "keep-alive" : "close");
-  hls_sb_add(&b, "\r\n\r\n");
+  sbuf_init(&b, hdr, sizeof hdr);
+  sbuf_add(&b, "HTTP/1.1 200 OK\r\nServer: " TOOL_NAME "/" TOOL_VERSION "\r\nContent-Type: video/mp4\r\nTransfer-Encoding: chunked\r\nCache-Control: no-cache, no-store, must-revalidate\r\n");
+  sbuf_add(&b, cors_hdr);
+  sbuf_add(&b, "Connection: ");
+  sbuf_add(&b, keep_alive ? "keep-alive" : "close");
+  sbuf_add(&b, "\r\n\r\n");
   conn_queue(c, hdr, b.len);
   c->slot = idx;
   c->become_dashchunk = 1;

@@ -102,7 +102,6 @@ dvbipitools_add_fuzz_harness(route
 dvbipitools_add_fuzz_harness(ssdp
     fuzz_ssdp.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
-    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/strbuf.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c

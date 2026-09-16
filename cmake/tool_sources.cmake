@@ -198,6 +198,7 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
@@ -433,10 +434,20 @@ function(dipiradiohead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/rawaudio.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
+            ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/hls/playlist.c
+            ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/hls/live.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/icy.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/id3.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
@@ -1018,7 +1029,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push_feed.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push_flush.c
-            ${CMAKE_SOURCE_DIR}/src/dipixy/ts/rawaudio.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/rawaudio.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pmtselect.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/lcevcselect.c
@@ -1056,7 +1067,6 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_soap.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_oid.c
-            ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/strbuf.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_didl.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c

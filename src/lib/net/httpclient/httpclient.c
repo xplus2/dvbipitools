@@ -20,8 +20,7 @@
 
 static void set_rcvtimeo(int fd, double secs) {
   struct timeval tv;
-  if (secs < 0)
-    secs = 0;
+  if (secs < 0) secs = 0;
   tv.tv_sec = (time_t)secs;
   tv.tv_usec = (suseconds_t)((secs - (double)tv.tv_sec) * 1e6);
   setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
@@ -30,15 +29,12 @@ static void set_rcvtimeo(int fd, double secs) {
 static int tcp_connect(const char *host, unsigned port, net_err_reason_t *reason_out) {
   int fd = netconnect_tcp(host, port, HTTP_CONNECT_TIMEOUT_MS, reason_out);
   int flags;
-
-  if (fd < 0)
-    return -1;
+  if (fd < 0) return -1;
   /* clear O_NONBLOCK: raw_recv/raw_send_all expect a blocking socket paced by SO_RCVTIMEO */
   flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0 || fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
     log_line("httpclient: fcntl O_NONBLOCK: %s", strerror(errno));
-    if (reason_out)
-      *reason_out = NET_ERR_OTHER;
+    if (reason_out) *reason_out = NET_ERR_OTHER;
     close(fd);
     return -1;
   }
@@ -50,25 +46,20 @@ ssize_t raw_recv(struct http *h, void *buf, size_t cap, net_err_reason_t *reason
 
   if (h->tls) {
     n = tls_read(h->tls, buf, cap);
-    if (n < 0 && reason_out)
-      *reason_out = NET_ERR_TLS;
+    if (n < 0 && reason_out) *reason_out = NET_ERR_TLS;
     return n;
   }
   for (;;) {
     n = recv(h->fd, buf, cap, 0);
     if (n < 0) {
-      if (errno == EINTR)
-        continue; /* EINTR: not a real timeout, retry */
-      if (errno == EAGAIN || errno == EWOULDBLOCK)
-        return 0;
+      if (errno == EINTR) continue; /* EINTR: not a real timeout, retry */
+      if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
       log_line("recv: %s", strerror(errno));
-      if (reason_out)
-        *reason_out = NET_ERR_READ;
+      if (reason_out) *reason_out = NET_ERR_READ;
       return -1;
     }
     if (n == 0) {
-      if (reason_out)
-        *reason_out = NET_ERR_EOF;
+      if (reason_out) *reason_out = NET_ERR_EOF;
       return -1;
     }
     return n;
@@ -79,13 +70,11 @@ static int raw_send_all(struct http *h, const char *buf, size_t n) {
   while (n) {
     ssize_t w = h->tls ? tls_write(h->tls, buf, n) : send(h->fd, buf, n, MSG_NOSIGNAL);
     if (w < 0) {
-      if (!h->tls && (errno == EINTR))
-        continue;
+      if (!h->tls && (errno == EINTR)) continue;
       log_line("send: %s", h->tls ? "tls write failed" : strerror(errno));
       return -1;
     }
-    if (w == 0)
-      continue; /* transient, retry */
+    if (w == 0) continue; /* transient, retry */
     buf += w;
     n -= (size_t)w;
   }
@@ -93,8 +82,7 @@ static int raw_send_all(struct http *h, const char *buf, size_t n) {
 }
 
 static void hdr_lower(char *s) {
-  for (; *s; s++)
-    *s = (char)tolower((unsigned char)*s);
+  for (; *s; s++) *s = (char)tolower((unsigned char)*s);
 }
 
 int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out) {
@@ -106,19 +94,17 @@ int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out)
   int pret;
 
   pret = phr_parse_response((const char *)h->hold, got, &minor_version, &status, &msg, &msg_len, headers, &num_headers, 0);
-  (void)minor_version;
   (void)msg;
   (void)msg_len;
-  if (pret == -2)
-    return 0;
+  if (pret == -2) return 0;
   if (pret == -1) {
     log_line("http: malformed response status line/headers");
-    if (reason_out)
-      *reason_out = NET_ERR_FORMAT;
+    if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
 
   h->status = status;
+  h->minor_version = minor_version;
   if (num_headers > HTTP_HDR_MAX) {
     log_line("http: response has more than %d headers, dropping rest", HTTP_HDR_MAX);
     num_headers = HTTP_HDR_MAX;
@@ -126,17 +112,22 @@ int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out)
   for (size_t i = 0; i < num_headers; i++) {
     size_t nlen = headers[i].name_len;
     size_t vlen = headers[i].value_len;
-    if (nlen >= sizeof h->hdr[0].name)
-      nlen = sizeof h->hdr[0].name - 1;
+    if (nlen >= sizeof h->hdr[0].name) nlen = sizeof h->hdr[0].name - 1;
     memcpy(h->hdr[i].name, headers[i].name, nlen);
     h->hdr[i].name[nlen] = '\0';
     hdr_lower(h->hdr[i].name);
-    if (vlen >= sizeof h->hdr[0].value)
-      vlen = sizeof h->hdr[0].value - 1;
+    if (vlen >= sizeof h->hdr[0].value) vlen = sizeof h->hdr[0].value - 1;
     memcpy(h->hdr[i].value, headers[i].value, vlen);
     h->hdr[i].value[vlen] = '\0';
   }
   h->hdr_count = (int)num_headers;
+
+  {
+    const char *cl = http_header(h, "content-length");
+    h->has_content_length = cl != NULL;
+    h->content_length = cl ? strtoul(cl, NULL, 10) : 0;
+    h->body_consumed = 0;
+  }
 
   h->hlen = got - (size_t)pret;
   memmove(h->hold, h->hold + pret, h->hlen);
@@ -146,20 +137,17 @@ int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out)
 
 static int transfer_encoding_is_chunked(const char *v) {
   size_t n = strlen(v);
-  while (n && (v[n - 1] == ' ' || v[n - 1] == '\t'))
-    n--;
+  while (n && (v[n - 1] == ' ' || v[n - 1] == '\t')) n--;
   return n == 7 && !strncasecmp(v, "chunked", 7);
 }
 
 /* rejects transfer-coding other than chunked (gzip, compress, identity, ...) */
 int setup_transfer_encoding(struct http *h, net_err_reason_t *reason_out) {
   const char *te = http_header(h, "transfer-encoding");
-  if (!te)
-    return 0;
+  if (!te) return 0;
   if (!transfer_encoding_is_chunked(te)) {
     log_line("http: unsupported transfer-encoding: %s", te);
-    if (reason_out)
-      *reason_out = NET_ERR_FORMAT;
+    if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
   h->chunked = 1;
@@ -174,12 +162,10 @@ int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *
   unsigned default_port = url->tls ? 443 : 80;
   int rl;
 
-  if (extra_header)
-    snprintf(hdrline, sizeof hdrline, "%s\r\n", extra_header);
-  if (url->port == default_port)
-    bufcpy(hostport, sizeof hostport, url->host);
-  else
-    snprintf(hostport, sizeof hostport, "%s:%u", url->host, url->port);
+  if (extra_header) snprintf(hdrline, sizeof hdrline, "%s\r\n", extra_header);
+  if (url->port == default_port) bufcpy(hostport, sizeof hostport, url->host);
+  else snprintf(hostport, sizeof hostport, "%s:%u", url->host, url->port);
+
   rl = snprintf(buf, cap, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nIcy-MetaData: 1\r\n%sConnection: close\r\n\r\n", url->path, hostport, user_agent, hdrline);
   if (rl < 0 || rl >= (int)cap) {
     log_line("http request too long");
@@ -197,13 +183,41 @@ const char *http_header(const http_t *h, const char *name) {
 
   bufcpy(key, sizeof key, name);
   hdr_lower(key);
-  for (int i = 0; i < h->hdr_count; i++)
-    if (!strcmp(h->hdr[i].name, key))
-      return h->hdr[i].value;
+  for (int i = 0; i < h->hdr_count; i++) if (!strcmp(h->hdr[i].name, key)) return h->hdr[i].value;
   return NULL;
 }
 
 const http_url_t *http_final_url(const http_t *h) { return &h->url; }
+
+static int has_close_token(const char *v) {
+  char buf[256];
+  bufcpy(buf, sizeof buf, v);
+  hdr_lower(buf);
+  return strstr(buf, "close") != NULL;
+}
+
+int http_can_reuse(const http_t *h) {
+  const char *conn;
+  if (h->minor_version < 1) return 0;
+  if (h->status != 304) {
+    if (h->chunked) {
+      if (!h->chunk_done) return 0;
+    } else if (h->has_content_length) {
+      if (h->body_consumed != h->content_length) return 0;
+    } else return 0;
+  }
+  conn = http_header(h, "connection");
+  return !(conn && has_close_token(conn));
+}
+
+void reset_http_for_reuse(struct http *h, const http_url_t *url) {
+  int fd = h->fd;
+  tls_t *tls = h->tls;
+  memset(h, 0, sizeof *h);
+  h->fd = fd;
+  h->tls = tls;
+  h->url = *url;
+}
 
 int http_status(const http_t *h) { return h->status; }
 
@@ -212,8 +226,7 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
   char req[2048];
   int rl;
 
-  if (!h)
-    return NULL;
+  if (!h) return NULL;
   h->url = *url;
   h->fd = tcp_connect(h->url.host, h->url.port, reason_out);
   if (h->fd < 0) {
@@ -226,21 +239,18 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
     if (!h->tls) {
       close(h->fd);
       free(h);
-      if (reason_out)
-        *reason_out = NET_ERR_TLS;
+      if (reason_out) *reason_out = NET_ERR_TLS;
       return NULL;
     }
   }
 
   rl = build_get_request(req, sizeof req, &h->url, user_agent, extra_header);
   if (rl < 0) {
-    if (reason_out)
-      *reason_out = NET_ERR_FORMAT;
+    if (reason_out) *reason_out = NET_ERR_FORMAT;
     goto fail;
   }
   if (raw_send_all(h, req, (size_t)rl)) {
-    if (reason_out)
-      *reason_out = NET_ERR_READ;
+    if (reason_out) *reason_out = NET_ERR_READ;
     goto fail;
   }
   {
@@ -253,8 +263,7 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
       int pr;
       if (remain <= 0) {
         log_line("http: timed out waiting for response headers");
-        if (reason_out)
-          *reason_out = NET_ERR_TIMEOUT;
+        if (reason_out) *reason_out = NET_ERR_TIMEOUT;
         goto fail;
       }
       set_rcvtimeo(h->fd, remain);
@@ -265,14 +274,12 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
       }
       if (n == 0) {
         log_line("http: timed out waiting for response headers");
-        if (reason_out)
-          *reason_out = NET_ERR_TIMEOUT;
+        if (reason_out) *reason_out = NET_ERR_TIMEOUT;
         goto fail;
       }
       got += (size_t)n;
       pr = try_parse_response(h, got, reason_out);
-      if (pr < 0)
-        goto fail;
+      if (pr < 0) goto fail;
       if (pr > 0) {
         have = 1;
         break;
@@ -281,20 +288,16 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
     set_rcvtimeo(h->fd, (double)HTTP_HEADER_TIMEOUT_MS / 1000.0);
     if (!have) {
       log_line("http: response headers too large");
-      if (reason_out)
-        *reason_out = NET_ERR_FORMAT;
+      if (reason_out) *reason_out = NET_ERR_FORMAT;
       goto fail;
     }
   }
-  if (setup_transfer_encoding(h, reason_out) != 0)
-    goto fail;
+  if (setup_transfer_encoding(h, reason_out) != 0) goto fail;
   return h;
 
 fail:
-  if (h->tls)
-    tls_close(h->tls);
-  else if (h->fd >= 0)
-    close(h->fd);
+  if (h->tls) tls_close(h->tls);
+  else if (h->fd >= 0) close(h->fd);
   free(h);
   return NULL;
 }
@@ -304,8 +307,7 @@ static int resolve_redirect(struct http *h, http_url_t *next, net_err_reason_t *
   const char *loc = http_header(h, "location");
   if (!loc || resolve_location(next, loc) != 0) {
     log_line("http: redirect without usable Location");
-    if (reason_out)
-      *reason_out = NET_ERR_FORMAT;
+    if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
   return 0;
@@ -314,11 +316,9 @@ static int resolve_redirect(struct http *h, http_url_t *next, net_err_reason_t *
 http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure, const char *extra_header, net_err_reason_t *reason_out) {
   http_url_t url = *url_in;
   const char *ua = user_agent ? user_agent : "dvbipitools";
-
   for (int redirects = 0; redirects <= HTTP_REDIRECT_MAX; redirects++) {
     struct http *h = fetch_once(&url, ua, insecure, extra_header, reason_out);
-    if (!h)
-      return NULL;
+    if (!h) return NULL;
     if (http_is_redirect_status(h->status) && redirects < HTTP_REDIRECT_MAX) {
       http_url_t next = url;
       if (resolve_redirect(h, &next, reason_out) != 0) {
@@ -329,19 +329,16 @@ http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure,
       url = next;
       continue;
     }
-    if (h->status == 304)
-      return h; /* not-modified: caller checks http_status(), body is empty */
+    if (h->status == 304) return h; /* not-modified: caller checks http_status(), body is empty */
     if (h->status < 200 || h->status >= 300) {
       log_line("http %d fetching %s%s", h->status, h->url.host, h->url.path);
       http_close(h);
-      if (reason_out)
-        *reason_out = NET_ERR_HTTP;
+      if (reason_out) *reason_out = NET_ERR_HTTP;
       return NULL;
     }
     return h;
   }
   log_line("http: too many redirects");
-  if (reason_out)
-    *reason_out = NET_ERR_HTTP;
+  if (reason_out) *reason_out = NET_ERR_HTTP;
   return NULL;
 }

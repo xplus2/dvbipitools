@@ -136,9 +136,9 @@ static void *on_listening_thread(void *arg) {
 
 static void reactor_log_status_url(const char *scheme, const listen_spec_t *ls) {
   char host[80];
-  if       (ls->scope == LISTEN_ANY) snprintf(host, sizeof host, "0.0.0.0");
+  if       (ls->scope == LISTEN_ANY) bufcpy(host, sizeof host, "0.0.0.0");
   else if  (ls->scope == LISTEN_V6) snprintf(host, sizeof host, "[%s]", ls->addr);
-  else     snprintf(host, sizeof host, "%s", ls->addr);
+  else     bufcpy(host, sizeof host, ls->addr);
   log_line_ansi(TOOL_NAME ": status \e[0;34m%s://%s:%u/\e[0m", scheme, host, ls->port);
 }
 

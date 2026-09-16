@@ -19,8 +19,6 @@
 #include "lib/helper/signal.h"
 #include "lib/net/multicast.h"
 
-#include "strbuf.h"
-
 #include "../version.h"
 
 #define SSDP_ADDR "239.255.255.250"
@@ -115,29 +113,29 @@ static void build_usn(const char *uuid, const char *nt /* NULL = bare device uui
 
 static void send_notify_one(const config_t *cfg, const char *uuid, const char *nt, int alive) {
   char usn[192], pkt[768];
-  strbuf_t b;
+  sbuf_t b;
 
   build_usn(uuid, nt, usn, sizeof usn);
-  sb_init(&b, pkt, sizeof pkt);
-  sb_add(&b, "NOTIFY * HTTP/1.1\r\nHOST: " SSDP_ADDR ":" STRINGIFY(SSDP_PORT) "\r\n");
+  sbuf_init(&b, pkt, sizeof pkt);
+  sbuf_add(&b, "NOTIFY * HTTP/1.1\r\nHOST: " SSDP_ADDR ":" STRINGIFY(SSDP_PORT) "\r\n");
   if (alive) {
-    sb_add(&b, "CACHE-CONTROL: max-age=");
-    sb_add_uint(&b, cfg->ssdp_max_age_s);
-    sb_add(&b, "\r\nLOCATION: http://");
-    sb_add(&b, cfg->dlna_host);
-    sb_add(&b, "/dlna/desc.xml\r\nSERVER: dipixy/");
-    sb_add(&b, TOOL_VERSION);
-    sb_add(&b, " UPnP/1.0 DLNA/1.0\r\nNT: ");
-    sb_add(&b, nt ? nt : usn);
-    sb_add(&b, "\r\nNTS: ssdp:alive\r\nUSN: ");
-    sb_add(&b, usn);
-    sb_add(&b, "\r\n\r\n");
+    sbuf_add(&b, "CACHE-CONTROL: max-age=");
+    sbuf_add_uint(&b, cfg->ssdp_max_age_s);
+    sbuf_add(&b, "\r\nLOCATION: http://");
+    sbuf_add(&b, cfg->dlna_host);
+    sbuf_add(&b, "/dlna/desc.xml\r\nSERVER: dipixy/");
+    sbuf_add(&b, TOOL_VERSION);
+    sbuf_add(&b, " UPnP/1.0 DLNA/1.0\r\nNT: ");
+    sbuf_add(&b, nt ? nt : usn);
+    sbuf_add(&b, "\r\nNTS: ssdp:alive\r\nUSN: ");
+    sbuf_add(&b, usn);
+    sbuf_add(&b, "\r\n\r\n");
   } else {
-    sb_add(&b, "NT: ");
-    sb_add(&b, nt ? nt : usn);
-    sb_add(&b, "\r\nNTS: ssdp:byebye\r\nUSN: ");
-    sb_add(&b, usn);
-    sb_add(&b, "\r\n\r\n");
+    sbuf_add(&b, "NT: ");
+    sbuf_add(&b, nt ? nt : usn);
+    sbuf_add(&b, "\r\nNTS: ssdp:byebye\r\nUSN: ");
+    sbuf_add(&b, usn);
+    sbuf_add(&b, "\r\n\r\n");
   }
   if (!b.truncated)
     mcast_send(g_send, pkt, b.len);
@@ -177,21 +175,21 @@ int ssdp_msearch_header(const char *headers, const char *name, char *out, size_t
 static void send_msearch_reply_one(int fd, const struct sockaddr *peer, socklen_t peerlen, const config_t *cfg,
                                    const char *uuid, const char *nt /* NULL = bare device uuid */) {
   char usn[192], pkt[768];
-  strbuf_t b;
+  sbuf_t b;
 
   build_usn(uuid, nt, usn, sizeof usn);
-  sb_init(&b, pkt, sizeof pkt);
-  sb_add(&b, "HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age=");
-  sb_add_uint(&b, cfg->ssdp_max_age_s);
-  sb_add(&b, "\r\nEXT:\r\nLOCATION: http://");
-  sb_add(&b, cfg->dlna_host);
-  sb_add(&b, "/dlna/desc.xml\r\nSERVER: dipixy/");
-  sb_add(&b, TOOL_VERSION);
-  sb_add(&b, " UPnP/1.0 DLNA/1.0\r\nST: ");
-  sb_add(&b, nt ? nt : usn);
-  sb_add(&b, "\r\nUSN: ");
-  sb_add(&b, usn);
-  sb_add(&b, "\r\n\r\n");
+  sbuf_init(&b, pkt, sizeof pkt);
+  sbuf_add(&b, "HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age=");
+  sbuf_add_uint(&b, cfg->ssdp_max_age_s);
+  sbuf_add(&b, "\r\nEXT:\r\nLOCATION: http://");
+  sbuf_add(&b, cfg->dlna_host);
+  sbuf_add(&b, "/dlna/desc.xml\r\nSERVER: dipixy/");
+  sbuf_add(&b, TOOL_VERSION);
+  sbuf_add(&b, " UPnP/1.0 DLNA/1.0\r\nST: ");
+  sbuf_add(&b, nt ? nt : usn);
+  sbuf_add(&b, "\r\nUSN: ");
+  sbuf_add(&b, usn);
+  sbuf_add(&b, "\r\n\r\n");
   if (!b.truncated) sendto(fd, pkt, b.len, 0, peer, peerlen);
 }
 

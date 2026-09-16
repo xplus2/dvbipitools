@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,8 +35,7 @@ static int split_userinfo(const char *uri, char *token_out, size_t token_out_sz,
   const char *at;
   size_t scheme_len;
 
-  if (!scheme_end)
-    return -1;
+  if (!scheme_end) return -1;
   scheme_len = (size_t)(scheme_end - uri) + 3;
   at = strchr(scheme_end + 3, '@');
   if (!at) {
@@ -84,94 +82,63 @@ ipiclient_t *ipiclient_new(const char *uri, int insecure, const char *token_head
 
 void ipiclient_free(ipiclient_t *c) { free(c); }
 
-typedef enum { IPI_FETCHING, IPI_READING_BODY } ipi_phase_t;
-
 struct ipiclient_poll {
-  ipi_phase_t phase;
   ipiclient_t *c;
-  http_async_t *ha;
-  http_t *h;
+  http_fetch_t *f;
   double deadline;
   unsigned char body[IPICLIENT_BODY_MAX];
   size_t len;
 };
 
 ipiclient_poll_t *ipiclient_poll_start(ipiclient_t *c) {
-  char hdr[IPICLIENT_TOKEN_HEADER_MAX + IPICLIENT_TOKEN_MAX + IPICLIENT_ETAG_MAX + 32];
+  char hdr[IPICLIENT_TOKEN_HEADER_MAX + IPICLIENT_TOKEN_MAX + 8];
   ipiclient_poll_t *p;
 
-  if (c->etag[0])
-    snprintf(hdr, sizeof hdr, "%s: %s\r\nIf-None-Match: %s", c->token_header, c->token, c->etag);
-  else
-    snprintf(hdr, sizeof hdr, "%s: %s", c->token_header, c->token);
-
+  snprintf(hdr, sizeof hdr, "%s: %s", c->token_header, c->token);
   p = calloc(1, sizeof *p);
-  if (!p)
-    return NULL;
+  if (!p) return NULL;
   p->c = c;
   p->deadline = mono_seconds() + IPICLIENT_POLL_TIMEOUT_S;
-  p->ha = http_async_start(&c->url, TOOL_NAME "/" TOOL_VERSION, c->insecure, hdr, NULL);
-  if (!p->ha) {
+  p->f = http_fetch_start(&c->url, TOOL_NAME "/" TOOL_VERSION, c->insecure, hdr, c->etag[0] ? c->etag : NULL, p->body, sizeof p->body, NULL, NULL);
+  if (!p->f) {
     free(p);
     return NULL;
   }
-  p->phase = IPI_FETCHING;
   return p;
 }
 
-int ipiclient_poll_fd(const ipiclient_poll_t *p) { return p->phase == IPI_FETCHING ? http_async_poll_fd(p->ha) : http_fd(p->h); }
+int ipiclient_poll_fd(const ipiclient_poll_t *p) { return http_fetch_poll_fd(p->f); }
 
-short ipiclient_poll_events(const ipiclient_poll_t *p) { return p->phase == IPI_FETCHING ? http_async_poll_events(p->ha) : POLLIN; }
+short ipiclient_poll_events(const ipiclient_poll_t *p) { return http_fetch_poll_events(p->f); }
 
 ipiclient_poll_state_t ipiclient_poll_step(ipiclient_poll_t *p) {
+  http_fetch_state_t st;
+  int status, truncated;
+  char etag[IPICLIENT_ETAG_MAX];
+
   if (mono_seconds() > p->deadline) {
     log_line(TOOL_NAME ": -u/--unicast-emm fetch timed out");
     return IPICLIENT_POLL_ERROR;
   }
-
-  if (p->phase == IPI_FETCHING) {
-    http_async_state_t st = http_async_step(p->ha, NULL);
-    const char *etag;
-    if (st == HTTP_ASYNC_PENDING) return IPICLIENT_POLL_PENDING;
-    if (st == HTTP_ASYNC_ERROR) {
-      http_async_free(p->ha);
-      p->ha = NULL;
-      return IPICLIENT_POLL_ERROR; /* fetch failed, already logged by httpclient */
-    }
-    p->h = http_async_take(p->ha);
-    p->ha = NULL;
-    if (http_status(p->h) == 304) {
-      http_close(p->h);
-      p->h = NULL;
-      return IPICLIENT_POLL_DONE;
-    }
-    etag = http_header(p->h, "etag");
-    if (etag) bufcpy(p->c->etag, sizeof p->c->etag, etag);
-    p->phase = IPI_READING_BODY;
+  st = http_fetch_step(p->f, NULL);
+  if (st == HTTP_FETCH_PENDING) return IPICLIENT_POLL_PENDING;
+  if (st == HTTP_FETCH_ERROR) {
+    http_fetch_free(p->f);
+    p->f = NULL;
+    return IPICLIENT_POLL_ERROR; /* fetch failed, already logged by httpclient */
   }
 
-  for (;;) {
-    ssize_t n = http_read(p->h, p->body + p->len, sizeof p->body - p->len, NULL);
-    if (n < 0) {
-      http_close(p->h);
-      p->h = NULL;
-      return IPICLIENT_POLL_DONE;
-    }
-    if (n == 0) return IPICLIENT_POLL_PENDING;
-    p->len += (size_t)n;
-    if (p->len >= sizeof p->body) {
-      log_line(TOOL_NAME ": -u/--unicast-emm response too large, truncated");
-      http_close(p->h);
-      p->h = NULL;
-      return IPICLIENT_POLL_DONE;
-    }
-  }
+  http_fetch_take(p->f, &p->len, &status, etag, sizeof etag, &truncated, NULL);
+  p->f = NULL;
+  if (status == 304) return IPICLIENT_POLL_DONE;
+  if (etag[0]) bufcpy(p->c->etag, sizeof p->c->etag, etag);
+  if (truncated) log_line(TOOL_NAME ": -u/--unicast-emm response too large, truncated");
+  return IPICLIENT_POLL_DONE;
 }
 
 int ipiclient_poll_take(ipiclient_poll_t *p, emmcache_t *cache, device_state_t *d) {
   int changed = 0;
   size_t off = 0;
-
   while (off + 3 <= p->len) {
     size_t ulen = ((size_t)p->body[off + 1] << 8) | p->body[off + 2];
     if (off + 3 + ulen > p->len) break;
@@ -184,7 +151,6 @@ int ipiclient_poll_take(ipiclient_poll_t *p, emmcache_t *cache, device_state_t *
 
 void ipiclient_poll_free(ipiclient_poll_t *p) {
   if (!p) return;
-  if (p->ha) http_async_free(p->ha);
-  if (p->h) http_close(p->h);
+  if (p->f) http_fetch_free(p->f);
   free(p);
 }

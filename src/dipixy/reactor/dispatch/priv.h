@@ -15,16 +15,6 @@ extern const char RESP_405[];
 extern const char RESP_431[];
 extern const char RESP_501[];
 
-typedef struct {
-  char *buf;
-  size_t cap;
-  size_t len;
-} strbuf_t;
-
-void dispatch_sb_init(strbuf_t *b, char *buf, size_t cap);
-void dispatch_sb_add(strbuf_t *b, const char *s);
-void dispatch_sb_add_u64(strbuf_t *b, uint64_t v);
-
 /* resp.c */
 void respond_status(conn_t *c, const char *status, int keep_alive);
 void respond_401(conn_t *c, int keep_alive);

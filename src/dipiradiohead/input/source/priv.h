@@ -7,6 +7,7 @@
 #include "lib/net/httpclient/httpclient.h"
 
 #include "../../framer/aac_latm.h"
+#include "../hls/live.h"
 #include "../icy.h"
 #include "../id3.h"
 #include "../source.h"
@@ -18,7 +19,8 @@
 struct source {
   unsigned idx;
   const char *label;
-  http_t *http;
+  http_t *http;    /* NULL: HLS-backed */
+  hls_live_t *hls; /* NULL: plain stream via http */
   icy_t *icy; /* NULL: no icy-metaint, ID3-only metadata */
   id3_t *id3;
 
@@ -33,5 +35,8 @@ struct source {
 
 /* h absorbed either way: closed on failure, owned by returned source_t on success */
 source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigned char *sniff, size_t got, source_meta_cb cb, void *ctx);
+
+/* NULL on OOM */
+source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx);
 
 #endif

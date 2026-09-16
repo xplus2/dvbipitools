@@ -6,14 +6,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/demux/pes.h"
-#include "lib/demux/psi/psi.h"
-#include "lib/demux/tspack.h"
+#include "pes.h"
+#include "psi/psi.h"
+#include "tspack.h"
 
 struct rawaudio_demux {
   psi_t *psi;
   pes_t *pes;
-  pid_filter_t filter;
+  rawaudio_pid_excluded_cb excluded;
+  void *excluded_ctx;
   unsigned pid;
   int pid_known;
   int no_audio;
@@ -36,43 +37,38 @@ static void on_pes(void *vctx, unsigned pid, int has_pts, uint64_t pts, int has_
   d->emit(d->ctx, data, len);
 }
 
-rawaudio_demux_t *rawaudio_demux_new(unsigned pmt_pid, const pid_filter_t *filter, rawaudio_emit_cb emit, void *ctx) {
+rawaudio_demux_t *rawaudio_demux_new(unsigned pmt_pid, rawaudio_pid_excluded_cb excluded, void *excluded_ctx, rawaudio_emit_cb emit, void *ctx) {
   rawaudio_demux_t *d;
-  if (t_rawaudio_pool_n > 0)
-    d = t_rawaudio_pool[--t_rawaudio_pool_n];
-  else
-    d = malloc(sizeof *d);
-  if (!d)
-    return NULL;
+  if (t_rawaudio_pool_n > 0) d = t_rawaudio_pool[--t_rawaudio_pool_n];
+  else d = malloc(sizeof *d);
+
+  if (!d) return NULL;
   memset(d, 0, sizeof *d);
   d->psi = psi_new();
   if (!d->psi) {
     free(d);
     return NULL;
   }
-  if (pmt_pid)
-    psi_select_pmt_pid(d->psi, pmt_pid);
+  if (pmt_pid) psi_select_pmt_pid(d->psi, pmt_pid);
   d->pes = pes_new(on_pes, d);
   if (!d->pes) {
     psi_free(d->psi);
     free(d);
     return NULL;
   }
-  d->filter = *filter;
+  d->excluded = excluded;
+  d->excluded_ctx = excluded_ctx;
   d->emit = emit;
   d->ctx = ctx;
   return d;
 }
 
 void rawaudio_demux_free(rawaudio_demux_t *d) {
-  if (!d)
-    return;
+  if (!d) return;
   pes_free(d->pes);
   psi_free(d->psi);
-  if (t_rawaudio_pool_n < RAWAUDIO_POOL_MAX)
-    t_rawaudio_pool[t_rawaudio_pool_n++] = d;
-  else
-    free(d);
+  if (t_rawaudio_pool_n < RAWAUDIO_POOL_MAX) t_rawaudio_pool[t_rawaudio_pool_n++] = d;
+  else free(d);
 }
 
 static void rawaudio_pick_pid(rawaudio_demux_t *d) {
@@ -80,8 +76,7 @@ static void rawaudio_pick_pid(rawaudio_demux_t *d) {
   unsigned best_pid = 0;
   const psi_es_t *es = psi_es(d->psi, &n);
   for (int i = 0; i < n; i++) {
-    if (!es[i].audio_index || pid_filter_excludes(&d->filter, es[i].pid))
-      continue;
+    if (!es[i].audio_index || (d->excluded && d->excluded(d->excluded_ctx, es[i].pid))) continue;
     if (!best_idx || es[i].audio_index < best_idx) {
       best_idx = es[i].audio_index;
       best_pid = es[i].pid;
@@ -91,22 +86,16 @@ static void rawaudio_pick_pid(rawaudio_demux_t *d) {
     d->pid = best_pid;
     pes_track(d->pes, d->pid);
     d->pid_known = 1;
-  } else {
-    d->no_audio = 1;
-  }
+  } else d->no_audio = 1;
 }
 
 void rawaudio_demux_feed(rawaudio_demux_t *d, const unsigned char *pkt) {
   unsigned pid = tspack_pid(pkt);
-  if (d->no_audio)
-    return;
+  if (d->no_audio) return;
   if (!d->pid_known) {
-    if (psi_wants_pid(d->psi, pid))
-      psi_feed(d->psi, pkt);
-    if (psi_ready(d->psi))
-      rawaudio_pick_pid(d);
+    if (psi_wants_pid(d->psi, pid)) psi_feed(d->psi, pkt);
+    if (psi_ready(d->psi)) rawaudio_pick_pid(d);
     return;
   }
-  if (pid == d->pid)
-    pes_feed(d->pes, pkt);
+  if (pid == d->pid) pes_feed(d->pes, pkt);
 }

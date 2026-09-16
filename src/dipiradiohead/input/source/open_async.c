@@ -101,9 +101,21 @@ source_open_state_t source_open_async_step(source_open_t *o, net_err_reason_t *r
     o->sniff_got += (size_t)n;
   }
 
+  if (playlist_is_hls_media(o->sniff, o->sniff_got)) {
+    const http_url_t *pu = http_final_url(o->h);
+    o->result = build_hls_source(pu, o->idx, o->label, o->insecure, o->cb, o->ctx);
+    http_close(o->h);
+    o->h = NULL;
+    if (!o->result) {
+      if (reason_out) *reason_out = NET_ERR_OTHER;
+      return SOURCE_OPEN_ERROR;
+    }
+    return SOURCE_OPEN_DONE;
+  }
+
   {
     char next[2048];
-    if (playlist_extract(o->sniff, o->sniff_got, next, sizeof next)) {
+    if (playlist_extract(o->sniff, o->sniff_got, http_final_url(o->h), next, sizeof next)) {
       http_close(o->h);
       o->h = NULL;
       o->hops++;

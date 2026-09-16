@@ -76,6 +76,21 @@ void dstrbuf_appendf(dstrbuf_t *sb, const char *fmt, ...)
 #endif
     ;
 
+typedef struct {
+  char *buf;
+  size_t cap;
+  size_t len;
+  int truncated;
+} sbuf_t;
+
+/* fixed cap buf */
+void sbuf_init(sbuf_t *b, char *buf, size_t cap);
+void sbuf_add_n(sbuf_t *b, const char *s, size_t maxn);
+void sbuf_add(sbuf_t *b, const char *s);
+void sbuf_add_u64(sbuf_t *b, uint64_t v);
+void sbuf_add_uint(sbuf_t *b, unsigned v);
+void sbuf_add_hex2(sbuf_t *b, unsigned v);
+
 /* power of two >= n, 1 if n == 0 */
 static inline size_t next_pow2(size_t n) {
   size_t p = 1;

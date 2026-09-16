@@ -59,11 +59,10 @@ size_t uint_to_str_pad(char *dst, unsigned val, unsigned min_width) {
   unsigned pad;
   if (val == 0)
     tmp[n++] = '0';
-  else
-    while (val) {
-      tmp[n++] = (char)('0' + val % 10);
-      val /= 10;
-    }
+  else while (val) {
+    tmp[n++] = (char)('0' + val % 10);
+    val /= 10;
+  }
   pad = n < min_width ? min_width - n : 0;
   for (unsigned i = 0; i < pad; i++) dst[i] = '0';
   for (unsigned i = 0; i < n; i++) dst[pad + i] = tmp[n - 1 - i];
@@ -192,6 +191,50 @@ int pipe_write_all(int fd, const unsigned char *buf, size_t n, const atomic_int 
     return -1; /* EPIPE: reader gone */
   }
   return 0;
+}
+
+void sbuf_init(sbuf_t *b, char *buf, size_t cap) {
+  b->buf = buf;
+  b->cap = cap;
+  b->len = 0;
+  b->truncated = 0;
+  if (cap) buf[0] = '\0';
+}
+
+void sbuf_add_n(sbuf_t *b, const char *s, size_t maxn) {
+  size_t n = strlen(s);
+  size_t room = b->cap > b->len ? b->cap - b->len - 1 : 0;
+  if (n > maxn) n = maxn;
+  if (n > room) {
+    n = room;
+    b->truncated = 1;
+  }
+  memcpy(b->buf + b->len, s, n);
+  b->len += n;
+  b->buf[b->len] = '\0';
+}
+
+void sbuf_add(sbuf_t *b, const char *s) { sbuf_add_n(b, s, strlen(s)); }
+
+void sbuf_add_u64(sbuf_t *b, uint64_t v) {
+  char tmp[21];
+  u64_to_dec(tmp, v);
+  sbuf_add(b, tmp);
+}
+
+void sbuf_add_uint(sbuf_t *b, unsigned v) {
+  char tmp[16];
+  uint_to_str(tmp, v);
+  sbuf_add(b, tmp);
+}
+
+void sbuf_add_hex2(sbuf_t *b, unsigned v) {
+  static const char digits[] = "0123456789abcdef";
+  char tmp[3];
+  tmp[0] = digits[(v >> 4) & 0xf];
+  tmp[1] = digits[v & 0xf];
+  tmp[2] = '\0';
+  sbuf_add(b, tmp);
 }
 
 void dstrbuf_init(dstrbuf_t *sb) {

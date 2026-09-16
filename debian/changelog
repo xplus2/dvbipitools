@@ -11,6 +11,9 @@ dvbipitools (2.4.2-1) unstable; urgency=low
       - short-time microburst flattening
       - input index/sdt name in error messages
       - minimal m3u cache for reconnects
+    + support relative urls in -i m3u8
+    + HLS radio input support (like BBC Radio)
+    + plain MP3 stream input support
   * dipitvhead
     + made stuffing less bursty and solved quiet input stalling
     + --provider to set SDT provider name

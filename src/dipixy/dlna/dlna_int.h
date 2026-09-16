@@ -7,8 +7,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "lib/helper/ioutil.h"
+
 #include "dlna.h"
-#include "strbuf.h"
 
 #define CD_URN "urn:schemas-upnp-org:service:ContentDirectory:1"
 #define CM_URN "urn:schemas-upnp-org:service:ConnectionManager:1"

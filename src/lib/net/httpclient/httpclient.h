@@ -46,6 +46,8 @@ int http_fd(const http_t *h);
 
 int http_has_buffered(const http_t *h);
 
+int http_can_reuse(const http_t *h);
+
 void http_close(http_t *h);
 
 typedef struct http_async http_async_t;
@@ -69,7 +71,22 @@ http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out
 /* DONE only: hands over http_t http_get() would've returned, frees async handle */
 http_t *http_async_take(http_async_t *a);
 
+http_async_t *http_async_start_reuse(http_t *h, const http_url_t *url, const char *user_agent, int insecure, const char *extra_header, net_err_reason_t *reason_out);
+
 /* frees handle + owned state; safe at any state incl. PENDING */
 void http_async_free(http_async_t *a);
+
+typedef struct http_fetch http_fetch_t;
+
+typedef enum { HTTP_FETCH_PENDING, HTTP_FETCH_DONE, HTTP_FETCH_ERROR } http_fetch_state_t;
+
+http_fetch_t *http_fetch_start(const http_url_t *url, const char *user_agent, int insecure, const char *extra_header, const char *etag_in,
+                               unsigned char *buf, size_t cap, http_t *reuse, net_err_reason_t *reason_out);
+
+int http_fetch_poll_fd(const http_fetch_t *f);
+short http_fetch_poll_events(const http_fetch_t *f);
+http_fetch_state_t http_fetch_step(http_fetch_t *f, net_err_reason_t *reason_out);
+void http_fetch_take(http_fetch_t *f, size_t *len_out, int *status_out, char *etag_out, size_t etag_out_sz, int *truncated_out, http_t **reusable_out);
+void http_fetch_free(http_fetch_t *f);
 
 #endif

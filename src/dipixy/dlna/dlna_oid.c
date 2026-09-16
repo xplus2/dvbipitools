@@ -10,11 +10,9 @@
 static int parse_uint(const char *s, unsigned *out) {
   char *end;
   unsigned long v;
-  if (!*s || !isdigit((unsigned char)*s))
-    return -1;
+  if (!*s || !isdigit((unsigned char)*s)) return -1;
   v = strtoul(s, &end, 10);
-  if (*end != '\0')
-    return -1;
+  if (*end != '\0') return -1;
   *out = (unsigned)v;
   return 0;
 }
@@ -34,8 +32,7 @@ int parse_object_id(const char *s, oid_t *out) {
     return 0;
   }
   if (s[0] == 'H') {
-    if (parse_uint(s + 1, &out->ord) || out->ord == 0)
-      return -1;
+    if (parse_uint(s + 1, &out->ord) || out->ord == 0) return -1;
     out->kind = OID_HTTP;
     return 0;
   }
@@ -48,15 +45,12 @@ int parse_object_id(const char *s, oid_t *out) {
         return -1;
       memcpy(ordbuf, s + 1, ordlen);
       ordbuf[ordlen] = '\0';
-      if (parse_uint(ordbuf, &out->ord) || out->ord == 0)
-        return -1;
-      if (parse_uint(isep + 1, &out->item_num) || out->item_num == 0)
-        return -1;
+      if (parse_uint(ordbuf, &out->ord) || out->ord == 0) return -1;
+      if (parse_uint(isep + 1, &out->item_num) || out->item_num == 0) return -1;
       out->kind = OID_ITEM;
       return 0;
     }
-    if (parse_uint(s + 1, &out->ord) || out->ord == 0)
-      return -1;
+    if (parse_uint(s + 1, &out->ord) || out->ord == 0) return -1;
     out->kind = OID_LIST;
     return 0;
   }
@@ -76,20 +70,16 @@ const char *source_kind_str(source_kind_t k) {
 }
 
 const source_def_t *find_source(const config_t *cfg, unsigned ord) {
-  for (int i = 0; i < cfg->n_sources; i++)
-    if ((unsigned)cfg->sources[i].ordinal == ord)
-      return &cfg->sources[i];
+  for (int i = 0; i < cfg->n_sources; i++) if ((unsigned)cfg->sources[i].ordinal == ord) return &cfg->sources[i];
   return NULL;
 }
 
 /* uri -> "addr:port" display form, fallback title source */
 const char *strip_scheme_at(const char *uri) {
   const char *p = strstr(uri, "://");
-  if (!p)
-    return uri;
+  if (!p) return uri;
   p += 3;
-  if (*p == '@')
-    p++;
+  if (*p == '@') p++;
   return p;
 }
 
@@ -104,8 +94,7 @@ static void pct_encode_seg(const char *s, char *out, size_t outcap) {
       out[oi++] = *s;
     } else {
       unsigned char c = (unsigned char)*s;
-      if (oi + 4 > outcap)
-        break;
+      if (oi + 4 > outcap) break;
       out[oi] = '%';
       out[oi + 1] = path_seg_hex[c >> 4];
       out[oi + 2] = path_seg_hex[c & 0xF];
@@ -118,46 +107,46 @@ static void pct_encode_seg(const char *s, char *out, size_t outcap) {
 void build_play_path(const config_t *cfg, oid_kind_t kind, unsigned ord, unsigned item_num, media_type_t media_type, char *out, size_t outsz) {
   char name_enc[192];
   const char *fmt = media_type == MEDIA_RADIO ? "rawaudio" : "spts";
-  strbuf_t b;
-  sb_init(&b, out, outsz);
+  sbuf_t b;
+  sbuf_init(&b, out, outsz);
   switch (kind) {
     case OID_STDIN:
       if (cfg->stdin_name) {
         pct_encode_seg(cfg->stdin_name, name_enc, sizeof name_enc);
-        sb_add(&b, "/");
-        sb_add(&b, name_enc);
-        sb_add(&b, "/");
-        sb_add(&b, fmt);
+        sbuf_add(&b, "/");
+        sbuf_add(&b, name_enc);
+        sbuf_add(&b, "/");
+        sbuf_add(&b, fmt);
       } else {
-        sb_add(&b, "/stdin/");
-        sb_add(&b, fmt);
+        sbuf_add(&b, "/stdin/");
+        sbuf_add(&b, fmt);
       }
       break;
     case OID_RIST:
       if (cfg->rist_name) {
         pct_encode_seg(cfg->rist_name, name_enc, sizeof name_enc);
-        sb_add(&b, "/");
-        sb_add(&b, name_enc);
-        sb_add(&b, "/");
-        sb_add(&b, fmt);
+        sbuf_add(&b, "/");
+        sbuf_add(&b, name_enc);
+        sbuf_add(&b, "/");
+        sbuf_add(&b, fmt);
       } else {
-        sb_add(&b, "/rist/");
-        sb_add(&b, fmt);
+        sbuf_add(&b, "/rist/");
+        sbuf_add(&b, fmt);
       }
       break;
     case OID_HTTP: {
       const source_def_t *src = find_source(cfg, ord);
       if (src && src->name) {
         pct_encode_seg(src->name, name_enc, sizeof name_enc);
-        sb_add(&b, "/");
-        sb_add(&b, name_enc);
-        sb_add(&b, "/item/1/");
-        sb_add(&b, fmt);
+        sbuf_add(&b, "/");
+        sbuf_add(&b, name_enc);
+        sbuf_add(&b, "/item/1/");
+        sbuf_add(&b, fmt);
       } else {
-        sb_add(&b, "/list/");
-        sb_add_u64(&b, ord);
-        sb_add(&b, "/item/1/");
-        sb_add(&b, fmt);
+        sbuf_add(&b, "/list/");
+        sbuf_add_u64(&b, ord);
+        sbuf_add(&b, "/item/1/");
+        sbuf_add(&b, fmt);
       }
       break;
     }
@@ -165,19 +154,19 @@ void build_play_path(const config_t *cfg, oid_kind_t kind, unsigned ord, unsigne
       const source_def_t *src = find_source(cfg, ord);
       if (src && src->name) {
         pct_encode_seg(src->name, name_enc, sizeof name_enc);
-        sb_add(&b, "/");
-        sb_add(&b, name_enc);
-        sb_add(&b, "/item/");
-        sb_add_u64(&b, item_num);
-        sb_add(&b, "/");
-        sb_add(&b, fmt);
+        sbuf_add(&b, "/");
+        sbuf_add(&b, name_enc);
+        sbuf_add(&b, "/item/");
+        sbuf_add_u64(&b, item_num);
+        sbuf_add(&b, "/");
+        sbuf_add(&b, fmt);
       } else {
-        sb_add(&b, "/list/");
-        sb_add_u64(&b, ord);
-        sb_add(&b, "/item/");
-        sb_add_u64(&b, item_num);
-        sb_add(&b, "/");
-        sb_add(&b, fmt);
+        sbuf_add(&b, "/list/");
+        sbuf_add_u64(&b, ord);
+        sbuf_add(&b, "/item/");
+        sbuf_add_u64(&b, item_num);
+        sbuf_add(&b, "/");
+        sbuf_add(&b, fmt);
       }
       break;
     }

@@ -17,16 +17,16 @@
 #include "capture/capture.h"
 #include "lcevcselect.h"
 #include "pidfilter.h"
-#include "rawaudio.h"
 #include "lib/demux/psi/psi.h"
+#include "lib/demux/rawaudio.h"
 #include "lib/helper/byte_ring.h"
 #include "lib/helper/log.h"
 #include "../ws/ws_clients.h"
 
 #define TS_PUSH_MAX_SUBS 4096
 #define TS_PUSH_MAX_REACTOR_THREADS 32
-/* byte rings, not packet-count. ts/spts always push 188B/call. rawaudio
-   push variable length. capacity stays ^2, wrap bitmask */
+/* byte rings, not packet-count. ts/spts always push 188B/call.
+   rawaudio push variable length. capacity stays ^2, wrap bitmask */
 #define TS_RING_H3_BYTES (1u << 16) /* 64 KiB, was 256 * 188 B (~48.1 KiB) */
 #define TS_RING_H2_BYTES (1u << 16) /* 64 KiB, per-stream ring like h3_ring */
 #define TS_RING_PUSH_BYTES (1u << 20) /* 1 MiB */

@@ -21,6 +21,12 @@ void jbuf_raw(jbuf_t *j, const char *s, size_t n);
 void jbuf_str(jbuf_t *j, const char *s);
 void jbuf_fmt(jbuf_t *j, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
+void jbuf_u64(jbuf_t *j, unsigned long long v);
+void jbuf_i64(jbuf_t *j, long long v);
+
+/* 3-decimal fixed point, v >= 0 */
+void jbuf_fixed3(jbuf_t *j, double v);
+
 /* escapes + quotes s for JSON */
 void jbuf_json_string(jbuf_t *j, const char *s);
 

@@ -14,7 +14,7 @@ unsigned long long source_bytes_total(const source_t *s) { return s->bytes_total
 
 static int refill(source_t *s, net_err_reason_t *reason_out) {
   unsigned char tmp[4096];
-  ssize_t n = http_read(s->http, tmp, sizeof tmp, reason_out);
+  ssize_t n = s->hls ? hls_live_read(s->hls, tmp, sizeof tmp, reason_out) : http_read(s->http, tmp, sizeof tmp, reason_out);
   size_t clean_cap;
   size_t produced;
 
@@ -67,9 +67,30 @@ static size_t find_resync_offset(const source_t *s) {
   return s->buf_len;
 }
 
+/* checks s->buf+off for any codec's sync word, sets s->codec on match */
+static int codec_sync_at(source_t *s, size_t off) {
+  const unsigned char *p = s->buf + off;
+  size_t avail = s->buf_len - off;
+  if (aac_latm_is_sync(p, avail)) {
+    s->codec = SRC_AAC_LATM;
+    return 1;
+  }
+  if (aac_adts_is_sync(p, avail)) {
+    s->codec = SRC_AAC_ADTS;
+    return 1;
+  }
+  if (mpegaudio_is_sync(p, avail)) {
+    s->codec = SRC_MPEG_AUDIO;
+    return 1;
+  }
+  return 0;
+}
+
 /* 1: codec now known (just resolved or already was), caller proceeds this iteration.
    0: refilled, caller should continue its loop. -1: caller should return *ret */
 static int ensure_codec_known(source_t *s, net_err_reason_t *reason_out, int *ret) {
+  size_t off;
+
   if (s->codec_known) return 1;
   if (s->buf_len < 2) {
     int rf = refill(s, reason_out);
@@ -79,26 +100,39 @@ static int ensure_codec_known(source_t *s, net_err_reason_t *reason_out, int *re
     }
     return 0;
   }
-  if (aac_latm_is_sync(s->buf, s->buf_len)) {
-    s->codec = SRC_AAC_LATM;
-    s->latm = aac_latm_new();
-    if (!s->latm) {
-      if (reason_out) *reason_out = NET_ERR_OTHER;
-      *ret = -1;
-      return -1;
+
+  for (off = 0; off + 1 < s->buf_len; off++) {
+    if (!codec_sync_at(s, off)) continue;
+    if (off) {
+      memmove(s->buf, s->buf + off, s->buf_len - off);
+      s->buf_len -= off;
     }
-  } else if (aac_adts_is_sync(s->buf, s->buf_len)) {
-    s->codec = SRC_AAC_ADTS;
-  } else if (mpegaudio_is_sync(s->buf, s->buf_len)) {
-    s->codec = SRC_MPEG_AUDIO;
-  } else {
+    if (s->codec == SRC_AAC_LATM) {
+      s->latm = aac_latm_new();
+      if (!s->latm) {
+        if (reason_out) *reason_out = NET_ERR_OTHER;
+        *ret = -1;
+        return -1;
+      }
+    }
+    s->codec_known = 1;
+    return 1;
+  }
+
+  if (s->buf_len >= SRC_BUF_CAP) {
     log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33munrecognized audio sync\e[0m (%02x %02x)", s->idx, s->label ? s->label : "?", s->buf[0], s->buf[1]);
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     *ret = -1;
     return -1;
   }
-  s->codec_known = 1;
-  return 1;
+  {
+    int rf = refill(s, reason_out);
+    if (rf <= 0) {
+      *ret = rf;
+      return -1;
+    }
+  }
+  return 0;
 }
 
 enum { PROBE_STEP_RETURN, PROBE_STEP_CONTINUE, PROBE_STEP_PROCEED };
@@ -241,15 +275,16 @@ int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
   }
 }
 
-int source_fd(const source_t *s) { return http_fd(s->http); }
+int source_fd(const source_t *s) { return s->hls ? hls_live_poll_fd(s->hls) : http_fd(s->http); }
 
-int source_has_buffered(const source_t *s) { return http_has_buffered(s->http); }
+int source_has_buffered(const source_t *s) { return s->hls ? hls_live_has_buffered(s->hls) : http_has_buffered(s->http); }
 
 void source_close(source_t *s) {
   if (!s) return;
   if (s->latm) aac_latm_free(s->latm);
   if (s->icy) icy_free(s->icy);
   if (s->id3) id3_free(s->id3);
+  if (s->hls) hls_live_free(s->hls);
   if (s->http) http_close(s->http);
   free(s);
 }

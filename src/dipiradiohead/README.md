@@ -103,8 +103,10 @@ found); a build without it fails cleanly on any `https://` source instead of con
 
 Response body sniff (not URL suffix):
 * audio (ID3 tag or MPEG/ADTS/LATM sync at offset 0) -> used as-is.
-* M3U (`#EXTM3U` or bare `http(s)://` line) -> first URL line followed.
+* M3U (`#EXTM3U` or bare `http(s)://` line) -> first URL line followed;
+  entries may be relative to the playlist's own URL.
 * PLS (`[playlist]`, `FileN=<url>`) -> first `FileN=` followed.
+* HLS -> joins at the newest listed segment.
 
 Max 5 playlist hops, each re-sniffed.
 

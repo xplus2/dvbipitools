@@ -51,6 +51,34 @@ void jbuf_fmt(jbuf_t *j, const char *fmt, ...) {
   jbuf_str(j, tmp);
 }
 
+void jbuf_u64(jbuf_t *j, unsigned long long v) {
+  char buf[21];
+  size_t n = u64_to_dec(buf, v);
+  jbuf_raw(j, buf, n);
+}
+
+void jbuf_i64(jbuf_t *j, long long v) {
+  char buf[22];
+  size_t off = 0;
+  int neg = v < 0;
+  unsigned long long uv = neg ? (unsigned long long)(-(v + 1)) + 1ULL : (unsigned long long)v;
+  if (neg) buf[off++] = '-';
+  off += u64_to_dec(buf + off, uv);
+  jbuf_raw(j, buf, off);
+}
+
+void jbuf_fixed3(jbuf_t *j, double v) {
+  uint32_t scaled = (uint32_t)(v * 1000.0 + 0.5);
+  char buf[3];
+  unsigned frac = scaled % 1000;
+  jbuf_u64(j, scaled / 1000);
+  jbuf_str(j, ".");
+  buf[0] = (char)('0' + frac / 100);
+  buf[1] = (char)('0' + (frac / 10) % 10);
+  buf[2] = (char)('0' + frac % 10);
+  jbuf_raw(j, buf, 3);
+}
+
 void jbuf_json_string(jbuf_t *j, const char *s) {
   jbuf_str(j, "\"");
   for (; *s; s++) {
@@ -59,16 +87,11 @@ void jbuf_json_string(jbuf_t *j, const char *s) {
       jbuf_raw(j, "\\", 1);
       jbuf_raw(j, (const char *)&c, 1);
     }
-    else if (c == '\n')
-      jbuf_str(j, "\\n");
-    else if (c == '\r')
-      jbuf_str(j, "\\r");
-    else if (c == '\t')
-      jbuf_str(j, "\\t");
-    else if (c < 0x20)
-      jbuf_fmt(j, "\\u%04x", c);
-    else
-      jbuf_raw(j, (const char *)&c, 1);
+    else if (c == '\n')      jbuf_str(j, "\\n");
+    else if (c == '\r')      jbuf_str(j, "\\r");
+    else if (c == '\t')      jbuf_str(j, "\\t");
+    else if (c < 0x20)       jbuf_fmt(j, "\\u%04x", c);
+    else                     jbuf_raw(j, (const char *)&c, 1);
   }
   jbuf_str(j, "\"");
 }

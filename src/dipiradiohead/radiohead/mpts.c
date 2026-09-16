@@ -14,10 +14,6 @@
 #include "../mux/tspacketizer.h"
 #include "priv.h"
 
-#define MPTS_POLL_MAX_MS 100
-#define MPTS_MAX_FRAMES_PER_TICK 32 /* per input, per tick. caps one input's backlog delaying others */
-#define MPTS_PACE_TOLERANCE_S 0.3
-
 /* lib/mux/mpts.c is tool-agnostic (shared with dipitvhead). these adapt our concrete types to its void*-based ops vtable. */
 static int mpts_program_get_sdt_info(void *ctx, psi_sdt_entry_t *out) {
   return tspacketizer_get_sdt_info((tspacketizer_t *)ctx, out);
@@ -52,7 +48,7 @@ typedef struct {
   nfds_t npfd;
 } mpts_tick_t;
 
-/* processes one input slot for this poll tick: reads up to MPTS_MAX_FRAMES_PER_TICK frames,
+/* processes one input slot for this poll tick: reads up to RADIOHEAD_MAX_FRAMES_PER_TICK frames,
    feeds the packetizer, updates metrics. -1: fatal (tspacketizer_new() OOM), caller must abort */
 static int process_input_slot(mpts_tick_t *tk, unsigned i) {
   source_t *src;
@@ -61,7 +57,6 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
 
   src = inputset_source(tk->is, i);
   connected_now = src != NULL;
-
   if (connected_now && !tk->was_connected[i]) {
     tk->samples_total[i] = 0;
     tk->last_synced_bytes[i] = 0;
@@ -69,7 +64,6 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
   }
   tk->was_connected[i] = connected_now;
   if (!src) return 0;
-
   for (unsigned pfd_i = 0; pfd_i < tk->npfd; pfd_i++) if (tk->pfd_slot[pfd_i] == i && (tk->pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP))) {
     ready = 1;
     break;
@@ -78,7 +72,7 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
   if (!ready) return 0;
 
   unsigned frames_this_visit = 0;
-  while (frames_this_visit < MPTS_MAX_FRAMES_PER_TICK && tk->pace_deadline[i] <= tk->now + MPTS_PACE_TOLERANCE_S) {
+  while (frames_this_visit < RADIOHEAD_MAX_FRAMES_PER_TICK && tk->pace_deadline[i] <= tk->now + RADIOHEAD_PACE_TOLERANCE_S) {
     source_frame_t f;
     uint64_t pts;
     net_err_reason_t reason = NET_ERR_OTHER;
@@ -97,7 +91,6 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
       tk->input_stats[i].last_data_time = (double)time(NULL);
       tk->rm->frames_total[f.codec]++;
     }
-
     if (!tk->tsps[i]) {
       tspacketizer_cfg_t tc;
       tc.tsid = tk->cfg->tsid;
@@ -114,7 +107,7 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
       tk->tsps[i] = tspacketizer_new(&tc);
       if (!tk->tsps[i]) return -1;
       if (tk->cas) tspacketizer_set_cas(tk->tsps[i], tk->cas);
-      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): codec detected: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", i, inputset_service_name(tk->is, i), codec_name(f.codec), f.sample_rate);
+      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): codec detected: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", i, inputset_service_name(tk->is, i), source_codec_name(f.codec), f.sample_rate);
     }
     mpts_set_program(tk->mpts, i, tk->tsps[i]);
 
@@ -213,7 +206,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     nfds_t npfd = 0;
     double now;
     time_t now_t, deadline;
-    int timeout_ms = MPTS_POLL_MAX_MS;
+    int timeout_ms = RADIOHEAD_POLL_MAX_MS;
     deadline = inputset_next_deadline(is);
     if (deadline != INPUTSET_NEVER) {
       long remain_s = (long)(deadline - time(NULL));

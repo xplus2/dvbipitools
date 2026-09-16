@@ -86,7 +86,5 @@ void snapshot_client(ws_client_snapshot_t *dst, const ws_client_t *src);
 void emit_client_json(jbuf_t *j, int id, const ws_client_snapshot_t *e);
 void publish_client_event(const char *type, int id);
 void publish_client_event_snap(const char *type, int id, const ws_client_snapshot_t *snap);
-void jbuf_i64(jbuf_t *j, long long v);
-void jbuf_fixed3(jbuf_t *j, double v);
 
 #endif

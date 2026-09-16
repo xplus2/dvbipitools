@@ -9,24 +9,19 @@
 #include "../version.h"
 #include "priv.h"
 
-/* common + output + input + CAS + radio metrics, on mx's own interval
-   (metrics_exporter_due gates/no-ops when disabled) */
+/* common + output + input + CAS + radio metrics, on mx's interval (metrics_exporter_due gates/no-ops if disabled) */
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
-                   const input_metrics_t *inputs, unsigned n_inputs, const radio_metrics_t *rm, cas_t *cas) {
+                  const input_metrics_t *inputs, unsigned n_inputs, const radio_metrics_t *rm, cas_t *cas) {
   metrics_writer_t w;
-
-  if (!metrics_exporter_due(mx, now))
-    return;
-  if (metrics_exporter_begin(mx, &w, TOOL_VERSION))
-    return;
+  if (!metrics_exporter_due(mx, now)) return;
+  if (metrics_exporter_begin(mx, &w, TOOL_VERSION)) return;
   metrics_writer_put(&w, METRICS_ID_OUTPUT_PACKETS_TOTAL, NULL, out->packets);
   metrics_writer_put(&w, METRICS_ID_OUTPUT_BYTES_TOTAL, NULL, out->packets * 188ULL);
   metrics_writer_put(&w, METRICS_ID_OUTPUT_ERRORS_TOTAL, NULL, out->errors);
   metrics_writer_put(&w, METRICS_ID_CONFIGURED_SERVICES, NULL, configured_services);
   metrics_writer_put(&w, METRICS_ID_ACTIVE_SERVICES, NULL, active_services);
   metrics_writer_put_inputs(&w, inputs, n_inputs);
-  for (unsigned c = 0; c <= SRC_AAC_LATM; c++)
-    metrics_writer_put(&w, METRICS_ID_RADIO_AUDIO_FRAMES_TOTAL, codec_name((source_codec_t)c), rm->frames_total[c]);
+  for (unsigned c = 0; c <= SRC_AAC_LATM; c++) metrics_writer_put(&w, METRICS_ID_RADIO_AUDIO_FRAMES_TOTAL, source_codec_name((source_codec_t)c), rm->frames_total[c]);
   metrics_writer_put(&w, METRICS_ID_RADIO_AUDIO_FRAMING_ERRORS_TOTAL, NULL, rm->framing_errors_total);
   metrics_writer_put(&w, METRICS_ID_RADIO_METADATA_UPDATES_TOTAL, NULL, rm->metadata_updates_total);
   if (cas) {
@@ -67,8 +62,7 @@ static const mpts_cas_ops_t mpts_cas_ops = {mpts_cas_build_cat, mpts_cas_ecm_due
 void radiohead_mpts_set_cas(mpts_t *mpts, cas_t *cas) {
   mpts_cas_vendor_pid_t vendors[MPTS_MAX_CAS_VENDORS];
   size_t n = cas_vendor_count(cas);
-  if (n > MPTS_MAX_CAS_VENDORS)
-    n = MPTS_MAX_CAS_VENDORS;
+  if (n > MPTS_MAX_CAS_VENDORS) n = MPTS_MAX_CAS_VENDORS;
   for (size_t i = 0; i < n; i++) {
     vendors[i].ecm_pid = cas_vendor_ecm_pid(cas, i);
     vendors[i].emm_pid = cas_vendor_emm_pid(cas, i);

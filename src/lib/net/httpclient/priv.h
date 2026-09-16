@@ -21,6 +21,7 @@ struct http {
   unsigned char hold[8192]; /* body read with headers, drained first */
   size_t hlen, hpos;
   int status;
+  int minor_version;
   struct {
     char name[64];
     char value[512];
@@ -29,6 +30,8 @@ struct http {
   int chunked;
   int chunk_done;
   struct phr_chunked_decoder decoder;
+  int has_content_length;
+  size_t content_length, body_consumed;
 };
 
 typedef enum { HA_CONNECTING, HA_TLS_HANDSHAKE, HA_SENDING, HA_READING_HEADERS } http_async_phase_t;
@@ -57,6 +60,7 @@ ssize_t raw_recv(struct http *h, void *buf, size_t cap, net_err_reason_t *reason
 int setup_transfer_encoding(struct http *h, net_err_reason_t *reason_out);
 int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *user_agent, const char *extra_header);
 int http_is_redirect_status(int status);
+void reset_http_for_reuse(struct http *h, const http_url_t *url);
 
 int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out);
 

@@ -24,7 +24,6 @@ START_TEST(meta_cb_copies_artist_and_title_and_marks_dirty) {
   m.rm = &rm;
 
   meta_cb(&m, "The Artist", "The Title");
-
   ck_assert_str_eq(m.artist, "The Artist");
   ck_assert_str_eq(m.title, "The Title");
   ck_assert_int_eq(m.dirty, 1);
@@ -41,10 +40,10 @@ START_TEST(meta_cb_tolerates_null_metrics) {
 }
 END_TEST
 
-START_TEST(codec_name_maps_every_known_codec) {
-  ck_assert_str_eq(codec_name(SRC_MPEG_AUDIO), "mpeg-audio");
-  ck_assert_str_eq(codec_name(SRC_AAC_ADTS), "aac-adts");
-  ck_assert_str_eq(codec_name(SRC_AAC_LATM), "aac-latm");
+START_TEST(source_codec_name_maps_every_known_codec) {
+  ck_assert_str_eq(source_codec_name(SRC_MPEG_AUDIO), "mpeg-audio");
+  ck_assert_str_eq(source_codec_name(SRC_AAC_ADTS), "aac-adts");
+  ck_assert_str_eq(source_codec_name(SRC_AAC_LATM), "aac-latm");
 }
 END_TEST
 
@@ -76,9 +75,7 @@ START_TEST(packet_cb_batches_until_ts_per_dgram_then_flushes) {
 
   n = mcast_recv(recv, rbuf, sizeof rbuf, NULL);
   ck_assert_int_eq(n, TS_PER_DGRAM * 188);
-  for (i = 0; i < TS_PER_DGRAM; i++)
-    ck_assert_uint_eq(rbuf[i * 188 + 2], (unsigned char)i);
-
+  for (i = 0; i < TS_PER_DGRAM; i++) ck_assert_uint_eq(rbuf[i * 188 + 2], (unsigned char)i);
   mcast_close(send);
   mcast_close(recv);
 }
@@ -90,7 +87,6 @@ START_TEST(flush_batch_is_a_no_op_when_empty) {
   ck_assert_ptr_nonnull(send);
   memset(&o, 0, sizeof o);
   o.mc = send;
-
   flush_batch(&o);
   ck_assert_int_eq(o.batch_count, 0);
   ck_assert_uint_eq(o.packets, 0u);
@@ -142,7 +138,7 @@ static Suite *radiohead_suite(void) {
   tcase_set_timeout(tc, 10);
   tcase_add_test(tc, meta_cb_copies_artist_and_title_and_marks_dirty);
   tcase_add_test(tc, meta_cb_tolerates_null_metrics);
-  tcase_add_test(tc, codec_name_maps_every_known_codec);
+  tcase_add_test(tc, source_codec_name_maps_every_known_codec);
   tcase_add_test(tc, packet_cb_batches_until_ts_per_dgram_then_flushes);
   tcase_add_test(tc, flush_batch_is_a_no_op_when_empty);
   tcase_add_test(tc, flush_batch_prefixes_rtp_header_when_rtp_enabled);

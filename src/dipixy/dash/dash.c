@@ -62,12 +62,12 @@ static void dash_codecs(const uint8_t *init, size_t initsz, codec_t vcodec, char
     return;
   }
   for (size_t i = 0; i + 8 <= initsz; i++) if (init[i] == 'a' && init[i + 1] == 'v' && init[i + 2] == 'c' && init[i + 3] == 'C') {
-    strbuf_t b;
-    hls_sb_init(&b, out, outsz);
-    hls_sb_add(&b, "avc1.");
-    hls_sb_add_hex2(&b, init[i + 5]);
-    hls_sb_add_hex2(&b, init[i + 6]);
-    hls_sb_add_hex2(&b, init[i + 7]);
+    sbuf_t b;
+    sbuf_init(&b, out, outsz);
+    sbuf_add(&b, "avc1.");
+    sbuf_add_hex2(&b, init[i + 5]);
+    sbuf_add_hex2(&b, init[i + 6]);
+    sbuf_add_hex2(&b, init[i + 7]);
     return;
   }
   bufcpy(out, outsz, "avc1.640028");
@@ -101,20 +101,20 @@ static void dash_audio_codecs(const uint8_t *init, size_t initsz, char *out, siz
       return;
     }
     if (!memcmp(init + i, "dac4", 4) && i + 6 <= initsz) {
-      strbuf_t b;
+      sbuf_t b;
       unsigned bs_ver = (unsigned)(((init[i + 4] & 0x1F) << 2) | (init[i + 5] >> 6));
-      hls_sb_init(&b, out, outsz);
-      hls_sb_add(&b, "ac-4.");
-      hls_sb_add_hex2(&b, (unsigned char)bs_ver);
-      hls_sb_add(&b, ".00.00");
+      sbuf_init(&b, out, outsz);
+      sbuf_add(&b, "ac-4.");
+      sbuf_add_hex2(&b, (unsigned char)bs_ver);
+      sbuf_add(&b, ".00.00");
       return;
     }
     if (!memcmp(init + i, "esds", 4) && i + 31 <= initsz) {
       if (init[i + 15] == 0x40) {
-        strbuf_t b;
-        hls_sb_init(&b, out, outsz);
-        hls_sb_add(&b, "mp4a.40.");
-        hls_sb_add_u64(&b, (uint64_t)(init[i + 30] >> 3));
+        sbuf_t b;
+        sbuf_init(&b, out, outsz);
+        sbuf_add(&b, "mp4a.40.");
+        sbuf_add_u64(&b, (uint64_t)(init[i + 30] >> 3));
       } else bufcpy(out, outsz, "mp4a.6B");
       return;
     }

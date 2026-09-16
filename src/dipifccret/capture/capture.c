@@ -20,8 +20,8 @@
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 
+#include "lib/helper/ioutil.h"
 #include "lib/helper/signal.h"
-
 #include "capture.h"
 
 #define CAPTURE_TP_BLOCK_SIZE (1u << 20) /* 1 MiB, page-multiple */
@@ -54,7 +54,7 @@ capture_t *capture_open(const char *iface, const char *const *ranges, size_t ran
   struct sock_fprog fprog;
 
   if (!iface) {
-    snprintf(errbuf, errbuf_len, "capture interface required");
+    bufcpy(errbuf, errbuf_len, "capture interface required");
     return NULL;
   }
   if (strlen(iface) >= IFNAMSIZ) {
@@ -67,14 +67,14 @@ capture_t *capture_open(const char *iface, const char *const *ranges, size_t ran
 
   cap = calloc(1, sizeof *cap);
   if (!cap) {
-    snprintf(errbuf, errbuf_len, "out of memory");
+    bufcpy(errbuf, errbuf_len, "out of memory");
     return NULL;
   }
   cap->fd = -1;
 
   cap->parsed_ranges = calloc(range_count, sizeof *cap->parsed_ranges);
   if (!cap->parsed_ranges) {
-    snprintf(errbuf, errbuf_len, "out of memory");
+    bufcpy(errbuf, errbuf_len, "out of memory");
     goto fail;
   }
   cap->range_count = range_count;
@@ -88,7 +88,7 @@ capture_t *capture_open(const char *iface, const char *const *ranges, size_t ran
   cap->fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
   if (cap->fd < 0) {
     if (errno == EPERM)
-      snprintf(errbuf, errbuf_len, "capture needs CAP_NET_RAW (setcap cap_net_raw+ep on the binary, or run as root and use -u to drop privileges after opening)");
+      bufcpy(errbuf, errbuf_len, "capture needs CAP_NET_RAW (setcap cap_net_raw+ep on the binary, or run as root and use -u to drop privileges after opening)");
     else
       snprintf(errbuf, errbuf_len, "socket: %s", strerror(errno));
     goto fail;
@@ -159,7 +159,7 @@ capture_t *capture_open(const char *iface, const char *const *ranges, size_t ran
 
   prog = capture_build_bpf(cap->parsed_ranges, cap->range_count, &prog_len);
   if (!prog) {
-    snprintf(errbuf, errbuf_len, "failed to build capture filter (too many -g ranges, or out of memory)");
+    bufcpy(errbuf, errbuf_len, "failed to build capture filter (too many -g ranges, or out of memory)");
     goto fail;
   }
   fprog.len = (unsigned short)prog_len;
@@ -173,22 +173,17 @@ capture_t *capture_open(const char *iface, const char *const *ranges, size_t ran
 
 fail:
   free(prog);
-  if (cap->ring)
-    munmap(cap->ring, cap->ring_size);
-  if (cap->fd >= 0)
-    close(cap->fd);
+  if (cap->ring) munmap(cap->ring, cap->ring_size);
+  if (cap->fd >= 0) close(cap->fd);
   free(cap->parsed_ranges);
   free(cap);
   return NULL;
 }
 
 void capture_close(capture_t *cap) {
-  if (!cap)
-    return;
-  if (cap->ring)
-    munmap(cap->ring, cap->ring_size);
-  if (cap->fd >= 0)
-    close(cap->fd);
+  if (!cap) return;
+  if (cap->ring) munmap(cap->ring, cap->ring_size);
+  if (cap->fd >= 0) close(cap->fd);
   free(cap->parsed_ranges);
   free(cap);
 }
@@ -198,14 +193,11 @@ int capture_drop_privileges(const char *user) {
   char *buf;
   long bufsize;
   int rc;
-  if (!user)
-    return 0;
+  if (!user) return 0;
   bufsize = sysconf(_SC_GETPW_R_SIZE_MAX);
-  if (bufsize <= 0)
-    bufsize = 16384;
+  if (bufsize <= 0) bufsize = 16384;
   buf = malloc((size_t)bufsize);
-  if (!buf)
-    return -1;
+  if (!buf) return -1;
   rc = getpwnam_r(user, &pwbuf, buf, (size_t)bufsize, &pw);
   if (rc != 0 || !pw) {
     free(buf);
@@ -232,16 +224,13 @@ static void capture_drain_ring(capture_t *cap, capture_frame_cb cb, void *user) 
     struct tpacket_block_desc *bd = (struct tpacket_block_desc *)(cap->ring + cap->block_idx * cap->block_size);
     struct tpacket3_hdr *ppd;
 
-    if (!(bd->hdr.bh1.block_status & TP_STATUS_USER))
-      break;
-
+    if (!(bd->hdr.bh1.block_status & TP_STATUS_USER)) break;
     ppd = (struct tpacket3_hdr *)((unsigned char *)bd + bd->hdr.bh1.offset_to_first_pkt);
     for (unsigned i = 0; i < bd->hdr.bh1.num_pkts; i++) {
       const unsigned char *pkt = (const unsigned char *)ppd + ppd->tp_mac;
       capture_handle_frame(pkt, ppd->tp_snaplen, cap->parsed_ranges, cap->range_count, cb, user);
       ppd = (struct tpacket3_hdr *)((unsigned char *)ppd + ppd->tp_next_offset);
     }
-
     bd->hdr.bh1.block_status = TP_STATUS_KERNEL;
     cap->block_idx = (cap->block_idx + 1) % cap->block_nr;
   }
@@ -251,16 +240,13 @@ void capture_run(capture_t *cap, capture_frame_cb cb, void *user) {
   struct pollfd pfd;
   pfd.fd = cap->fd;
   pfd.events = POLLIN;
-
   while (!signal_stop_requested()) {
     int n = poll(&pfd, 1, CAPTURE_POLL_TIMEOUT_MS);
     if (n < 0) {
-      if (errno == EINTR)
-        continue;
+      if (errno == EINTR) continue;
       break;
     }
-    if (n == 0)
-      continue;
+    if (n == 0) continue;
     capture_drain_ring(cap, cb, user);
   }
 }

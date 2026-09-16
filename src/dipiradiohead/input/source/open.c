@@ -65,6 +65,26 @@ source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigne
   return s;
 }
 
+source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx) {
+  source_t *s = calloc(1, sizeof *s);
+  if (!s)
+    return NULL;
+  s->idx = idx;
+  s->label = label;
+  s->id3 = id3_new(cb, ctx);
+  if (!s->id3) {
+    free(s);
+    return NULL;
+  }
+  s->hls = hls_live_new(playlist_url, TOOL_NAME "/" TOOL_VERSION, insecure, idx, label);
+  if (!s->hls) {
+    id3_free(s->id3);
+    free(s);
+    return NULL;
+  }
+  return s;
+}
+
 source_t *source_open(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out) {
   char cur_uri[2048];
   bufcpy(cur_uri, sizeof cur_uri, uri);
@@ -89,7 +109,14 @@ source_t *source_open(const char *uri, unsigned idx, const char *label, int inse
       return NULL;
     }
 
-    if (playlist_extract(sniff, (size_t)got, next, sizeof next)) {
+    if (playlist_is_hls_media(sniff, (size_t)got)) {
+      const http_url_t *pu = http_final_url(h);
+      source_t *s = build_hls_source(pu, idx, label, insecure, cb, ctx);
+      http_close(h);
+      if (!s && reason_out) *reason_out = NET_ERR_OTHER;
+      return s;
+    }
+    if (playlist_extract(sniff, (size_t)got, http_final_url(h), next, sizeof next)) {
       http_close(h);
       bufcpy(cur_uri, sizeof cur_uri, next);
       continue;

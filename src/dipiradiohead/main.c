@@ -5,6 +5,7 @@
 
 #include "args.h"
 #include "lib/helper/antidebug.h"
+#include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/export.h"
 #include "lib/helper/signal.h"
@@ -22,8 +23,7 @@ int main(int argc, char **argv) {
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
   if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
   if (cfg.mcast_port) mcast_describe(&cfg, mcast, sizeof mcast);
-  else snprintf(mcast, sizeof mcast, "-");
-
+  else bufcpy(mcast, sizeof mcast, "-");
   if (cfg.n_inputs == 1) {
     log_line_ansi("\e[1mi:\e[0m\e[0;37m%s\e[0m \e[1mm:\e[0m\e[0;37m%s\e[0m \e[1mrtp:\e[0m\e[0;37m%s\e[0m", cfg.inputs[0].uri, mcast, cfg.rtp ? "yes" : "no");
   } else {

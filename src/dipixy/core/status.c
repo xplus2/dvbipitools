@@ -119,10 +119,10 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   jbuf_json_string(&j, start_str);
   jbuf_str(&j, ",");
   jbuf_key(&j, "start_time_unix");
-  jbuf_fmt(&j, "%lld", (long long)g_start_unix);
+  jbuf_i64(&j, (long long)g_start_unix);
   jbuf_str(&j, ",");
   jbuf_key(&j, "uptime_seconds");
-  jbuf_fmt(&j, "%lld", (long long)(time(NULL) - g_start_unix));
+  jbuf_i64(&j, (long long)(time(NULL) - g_start_unix));
   jbuf_str(&j, ",");
 
   jbuf_key(&j, "exec_args");
@@ -136,31 +136,31 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   jbuf_key(&j, "threads");
   jbuf_str(&j, "{");
   jbuf_key(&j, "workers");
-  jbuf_fmt(&j, "%d", reactor_worker_count());
+  jbuf_i64(&j, reactor_worker_count());
   jbuf_str(&j, ",");
   jbuf_key(&j, "pump");
   jbuf_str(&j, "1,");
   jbuf_key(&j, "channels_refresh");
-  jbuf_fmt(&j, "%d", channels_refresh_active());
+  jbuf_i64(&j, channels_refresh_active());
   jbuf_str(&j, ",");
   jbuf_key(&j, "total");
-  jbuf_fmt(&j, "%d", reactor_worker_count() + 1 + channels_refresh_active());
+  jbuf_i64(&j, reactor_worker_count() + 1 + channels_refresh_active());
   jbuf_str(&j, "},");
 
   jbuf_key(&j, "memory");
   jbuf_str(&j, "{");
   jbuf_key(&j, "rss_bytes");
-  jbuf_fmt(&j, "%llu", (unsigned long long)status_rss_bytes());
+  jbuf_u64(&j, (unsigned long long)status_rss_bytes());
   jbuf_str(&j, "},");
 
   status_bitrate(&in_mbps, &out_mbps);
   jbuf_key(&j, "bitrate");
   jbuf_str(&j, "{");
   jbuf_key(&j, "in_mbps");
-  jbuf_fmt(&j, "%.3f", in_mbps);
+  jbuf_fixed3(&j, in_mbps);
   jbuf_str(&j, ",");
   jbuf_key(&j, "out_mbps");
-  jbuf_fmt(&j, "%.3f", out_mbps);
+  jbuf_fixed3(&j, out_mbps);
   jbuf_str(&j, "},");
 
   jbuf_key(&j, "listen");
@@ -169,55 +169,55 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   jbuf_json_string(&j, cfg->listen.scope == LISTEN_ANY ? "all" : cfg->listen.addr);
   jbuf_str(&j, ",");
   jbuf_key(&j, "port");
-  jbuf_fmt(&j, "%u", cfg->listen.port);
+  jbuf_u64(&j, cfg->listen.port);
   jbuf_str(&j, ",");
   jbuf_key(&j, "tls_addr");
   jbuf_json_string(&j, cfg->listen_tls.scope == LISTEN_ANY ? "all" : cfg->listen_tls.addr);
   jbuf_str(&j, ",");
   jbuf_key(&j, "tls_port");
-  jbuf_fmt(&j, "%u", cfg->listen_tls.port);
+  jbuf_u64(&j, cfg->listen_tls.port);
   jbuf_str(&j, "},");
 
   jbuf_key(&j, "server");
   jbuf_str(&j, "{");
   jbuf_key(&j, "workers_spec");
-  jbuf_fmt(&j, "%d", cfg->workers_spec);
+  jbuf_i64(&j, cfg->workers_spec);
   jbuf_str(&j, ",");
   jbuf_key(&j, "max_clients");
-  jbuf_fmt(&j, "%d", cfg->max_clients);
+  jbuf_i64(&j, cfg->max_clients);
   jbuf_str(&j, ",");
   jbuf_key(&j, "max_channels");
-  jbuf_fmt(&j, "%d", cfg->max_channels);
+  jbuf_i64(&j, cfg->max_channels);
   jbuf_str(&j, ",");
   jbuf_key(&j, "capture_ring_kib");
-  jbuf_fmt(&j, "%u", cfg->capture_ring_kib);
+  jbuf_u64(&j, cfg->capture_ring_kib);
   jbuf_str(&j, "},");
 
   jbuf_key(&j, "segment");
   jbuf_str(&j, "{");
   jbuf_key(&j, "size_s");
-  jbuf_fmt(&j, "%.3f", cfg->segment_size);
+  jbuf_fixed3(&j, cfg->segment_size);
   jbuf_str(&j, ",");
   jbuf_key(&j, "count");
-  jbuf_fmt(&j, "%d", cfg->segment_count);
+  jbuf_i64(&j, cfg->segment_count);
   jbuf_str(&j, ",");
   jbuf_key(&j, "hls_part_size_s");
-  jbuf_fmt(&j, "%.3f", cfg->hls_part_size);
+  jbuf_fixed3(&j, cfg->hls_part_size);
   jbuf_str(&j, ",");
   jbuf_key(&j, "dash_part_size_s");
-  jbuf_fmt(&j, "%.3f", cfg->dash_part_size);
+  jbuf_fixed3(&j, cfg->dash_part_size);
   jbuf_str(&j, ",");
   jbuf_key(&j, "hls_seg_pool");
-  jbuf_fmt(&j, "%d", cfg->hls_seg_pool);
+  jbuf_i64(&j, cfg->hls_seg_pool);
   jbuf_str(&j, "},");
 
   jbuf_key(&j, "sds");
   jbuf_str(&j, "{");
   jbuf_key(&j, "timeout_s");
-  jbuf_fmt(&j, "%.3f", cfg->sds_timeout_s);
+  jbuf_fixed3(&j, cfg->sds_timeout_s);
   jbuf_str(&j, ",");
   jbuf_key(&j, "refresh_interval_s");
-  jbuf_fmt(&j, "%.3f", cfg->sds_refresh_interval_s);
+  jbuf_fixed3(&j, cfg->sds_refresh_interval_s);
   jbuf_str(&j, "},");
 
   jbuf_key(&j, "metrics");
@@ -229,7 +229,7 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   else                 jbuf_str(&j, "null");
   jbuf_str(&j, ",");
   jbuf_key(&j, "interval_s");
-  jbuf_fmt(&j, "%u", cfg->metrics_interval_s);
+  jbuf_u64(&j, cfg->metrics_interval_s);
   jbuf_str(&j, ",");
   JBOOL("http", cfg->metrics_http);
   jbuf_str(&j, "},");
@@ -272,7 +272,7 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   JBOOL("enabled", cfg->enable_dlna);
   jbuf_str(&j, ",");
   jbuf_key(&j, "ssdp_ttl");
-  jbuf_fmt(&j, "%d", cfg->ssdp_ttl);
+  jbuf_i64(&j, cfg->ssdp_ttl);
   jbuf_str(&j, ",");
   jbuf_key(&j, "ssdp_iface");
   if (cfg->ssdp_iface)
@@ -295,10 +295,10 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   jbuf_str(&j, ",");
   JBOOL("keep_multicast", cfg->dlna_keep_multicast);     jbuf_str(&j, ",");
   jbuf_key(&j, "ssdp_interval_s");
-  jbuf_fmt(&j, "%.3f", cfg->ssdp_interval_s);
+  jbuf_fixed3(&j, cfg->ssdp_interval_s);
   jbuf_str(&j, ",");
   jbuf_key(&j, "ssdp_max_age_s");
-  jbuf_fmt(&j, "%u", cfg->ssdp_max_age_s);
+  jbuf_u64(&j, cfg->ssdp_max_age_s);
   jbuf_str(&j, "},");
 
   jbuf_key(&j, "flags");
