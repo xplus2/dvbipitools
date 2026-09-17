@@ -14,6 +14,7 @@
 
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
+#include "lib/helper/secure_zero.h"
 #include "lib/net/tls.h"
 #include "lib/net/tls_server.h"
 #include "lib/vendor/picohttpparser/picohttpparser.h"
@@ -113,12 +114,10 @@ http_server_t *http_server_new(int listen_fd, tls_server_ctx_t *tls_ctx, const c
 
 void http_server_free(http_server_t *hs) {
   if (!hs) return;
-  for (int i = 0; i < HTTP_MAX_CONNS; i++) {
-    if (hs->conns[i].used) {
-      if (hs->conns[i].tls) tls_close(hs->conns[i].tls);
-      else close(hs->conns[i].fd);
-      free(hs->conns[i].resp);
-    }
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) if (hs->conns[i].used) {
+    if (hs->conns[i].tls) tls_close(hs->conns[i].tls);
+    else close(hs->conns[i].fd);
+    free(hs->conns[i].resp);
   }
   free(hs);
 }
@@ -144,20 +143,16 @@ void http_server_poll_fds(http_server_t *hs, struct pollfd *pfds, int cap, int *
     }
     c->pfd_idx = *n;
     pfds[*n].fd = c->fd;
-    if (c->handshaking)
-      pfds[*n].events = (short)(c->tls_want_write ? POLLOUT : POLLIN);
-    else
-      pfds[*n].events = (short)(c->reading ? POLLIN : POLLOUT);
+    if (c->handshaking) pfds[*n].events = (short)(c->tls_want_write ? POLLOUT : POLLIN);
+    else                pfds[*n].events = (short)(c->reading ? POLLIN : POLLOUT);
     pfds[*n].revents = 0;
     (*n)++;
   }
 }
 
 static void conn_close(http_conn_t *c) {
-  if (c->tls)
-    tls_close(c->tls);
-  else
-    close(c->fd);
+  if (c->tls) tls_close(c->tls);
+  else        close(c->fd);
   free(c->resp);
   memset(c, 0, sizeof *c);
 }
@@ -165,11 +160,10 @@ static void conn_close(http_conn_t *c) {
 static void conn_accept(http_server_t *hs, int fd, double now_mono) {
   int flags;
   http_conn_t *c = NULL;
-  for (int i = 0; i < HTTP_MAX_CONNS; i++)
-    if (!hs->conns[i].used) {
-      c = &hs->conns[i];
-      break;
-    }
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) if (!hs->conns[i].used) {
+    c = &hs->conns[i];
+    break;
+  }
   if (!c) {
     close(fd); /* pool full, drop rather than let it queue up unbounded */
     return;
@@ -192,27 +186,25 @@ static void conn_accept(http_server_t *hs, int fd, double now_mono) {
       return;
     }
     c->handshaking = 1;
-  } else {
-    c->reading = 1;
-  }
+  } else c->reading = 1;
 }
 
 static void conn_handshake_step(http_conn_t *c) {
   switch (tls_server_handshake_step(c->tls)) {
-  case TLS_HANDSHAKE_DONE:
-    c->handshaking = 0;
-    c->reading = 1;
-    break;
-  case TLS_HANDSHAKE_WANT_WRITE:
-    c->tls_want_write = 1;
-    break;
-  case TLS_HANDSHAKE_WANT_READ:
-    c->tls_want_write = 0;
-    break;
-  case TLS_HANDSHAKE_ERROR:
-  default:
-    conn_close(c);
-    break;
+    case TLS_HANDSHAKE_DONE:
+      c->handshaking = 0;
+      c->reading = 1;
+      break;
+    case TLS_HANDSHAKE_WANT_WRITE:
+      c->tls_want_write = 1;
+      break;
+    case TLS_HANDSHAKE_WANT_READ:
+      c->tls_want_write = 0;
+      break;
+    case TLS_HANDSHAKE_ERROR:
+    default:
+      conn_close(c);
+      break;
   }
 }
 
@@ -233,8 +225,7 @@ static void conn_read_step(http_conn_t *c) {
   } else {
     got = recv(c->fd, c->reqbuf + c->reqlen, sizeof c->reqbuf - 1 - c->reqlen, 0);
     if (got < 0) {
-      if (errno != EAGAIN && errno != EWOULDBLOCK)
-        conn_close(c);
+      if (errno != EAGAIN && errno != EWOULDBLOCK) conn_close(c);
       return;
     }
     if (got == 0) {
@@ -310,7 +301,7 @@ static int authz_matches(const struct phr_header *headers, size_t num_headers, c
   size_t elen = strlen(expected);
   for (size_t i = 0; i < num_headers; i++)
     if (headers[i].name_len == 13 && !strncasecmp(headers[i].name, "Authorization", 13))
-      return headers[i].value_len == elen && !memcmp(headers[i].value, expected, elen);
+      return headers[i].value_len == elen && secure_eq(headers[i].value, expected, elen);
   return 0;
 }
 
@@ -397,8 +388,7 @@ void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, st
     if (!c->used) continue;
     rev = (c->pfd_idx >= 0 && c->pfd_idx < n) ? pfds[c->pfd_idx].revents : 0;
     if (c->handshaking) {
-      if (rev & (POLLIN | POLLOUT | POLLHUP | POLLERR))
-        conn_handshake_step(c);
+      if (rev & (POLLIN | POLLOUT | POLLHUP | POLLERR)) conn_handshake_step(c);
     } else if (c->reading) {
       if (rev & (POLLIN | POLLHUP | POLLERR)) conn_read_step(c);
       if (c->used && c->reading && request_headers_complete(c->reqbuf, c->reqlen)) conn_build_response(c, st, now_mono, verbose, hs->http_auth);

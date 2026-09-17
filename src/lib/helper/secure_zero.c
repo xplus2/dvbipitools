@@ -18,3 +18,11 @@ void secure_zero(void *ptr, size_t len) {
     *p++ = 0;
 #endif
 }
+
+int secure_eq(const void *a, const void *b, size_t len) {
+  const volatile unsigned char *pa = a;
+  const volatile unsigned char *pb = b;
+  unsigned char diff = 0;
+  for (size_t i = 0; i < len; i++) diff |= pa[i] ^ pb[i];
+  return diff == 0;
+}

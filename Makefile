@@ -46,6 +46,7 @@ dipimetrics_SRCS := \
 	src/dipimetrics/httpserver.c \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/helper/log.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/base64.c \
@@ -1258,6 +1259,7 @@ dipixy_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
 	src/lib/helper/log.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/ioutil.c \

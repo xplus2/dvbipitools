@@ -10,4 +10,7 @@
    (memset can get optimized out when the buffer isn't read again) */
 void secure_zero(void *ptr, size_t len);
 
+/* constant time comparison */
+int secure_eq(const void *a, const void *b, size_t len);
+
 #endif

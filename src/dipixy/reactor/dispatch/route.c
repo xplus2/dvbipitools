@@ -4,6 +4,7 @@
 #include "priv.h"
 
 #include "lib/helper/ioutil.h"
+#include "lib/helper/secure_zero.h"
 
 #include <string.h>
 #include <strings.h>
@@ -59,8 +60,11 @@ void strip_etag_quotes(char *v) {
 
 /* shared with http2.c/http3_req.c: those transports only ever guard /ui/ws/'s CONNECT */
 int http_auth_ok(const char *expected, const char *auth_hdr) {
+  size_t elen;
   if (!expected[0]) return 1;
-  return auth_hdr && !strcmp(auth_hdr, expected);
+  if (!auth_hdr) return 0;
+  elen = strlen(expected);
+  return strlen(auth_hdr) == elen && secure_eq(auth_hdr, expected, elen);
 }
 
 int route_disabled(const route_t *rt) {
