@@ -142,7 +142,9 @@ function(dipidescramble_resolve_sources)
     endif ()
     if (DVBIPITOOLS_HAVE_RIST)
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c)
+                ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
+                ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c)
     else ()
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog_stub.c)
@@ -150,7 +152,6 @@ function(dipidescramble_resolve_sources)
     if (DVBIPITOOLS_HAVE_SRT)
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
-        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
@@ -523,7 +524,9 @@ function(dipirec_resolve_sources)
     if (DVBIPITOOLS_HAVE_RIST)
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c)
+                ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c
+                ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c)
     else ()
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin_stub.c
@@ -532,7 +535,6 @@ function(dipirec_resolve_sources)
     if (DVBIPITOOLS_HAVE_SRT)
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
-        ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
