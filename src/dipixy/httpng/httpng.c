@@ -288,7 +288,7 @@ void httpng_dispatch(const httpng_ops_t *ops, void *conn, void *req, const httpn
   if (!strcmp(hdrs->method, "CONNECT") && !strcmp(hdrs->protocol, "websocket")) {
     if (reactor_cfg()->no_status || strcmp(hdrs->path, "/ui/ws/"))
       ops->respond_status(conn, req, "404");
-    else if (!http_auth_ok(reactor_cfg(), hdrs->authz[0] ? hdrs->authz : NULL))
+    else if (!http_auth_ok(reactor_cfg()->http_auth, hdrs->authz[0] ? hdrs->authz : NULL))
       ops->respond_401(conn, req);
     else
       ops->ws_dispatch(conn, req);

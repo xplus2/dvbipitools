@@ -117,8 +117,7 @@ static inline void hdr_value_copy(char *dst, size_t dst_cap, const uint8_t *valu
 /* origin_hdr vs cors_origins allowlist ("*" ok). unset: always "*". match sets *vary, else NULL */
 const char *cors_match(const config_t *cfg, const char *origin_hdr, int *vary);
 
-/* Authorization header value vs cfg->http_auth. 1: auth disabled or matches, 0: reject */
-int http_auth_ok(const config_t *cfg, const char *auth_hdr);
+int http_auth_ok(const char *expected, const char *auth_hdr);
 
 /* dispatch.c. runs each worker loop iteration, resumes CONN_DISPATCH-parked
    LL-HLS blocking-reload waits */

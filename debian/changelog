@@ -2,10 +2,17 @@ dvbipitools (2.4.2-1) unstable; urgency=low
   * dipixy
     + lock-free client handling (buffer pools were already there)
     + -J|--join-all optionally pre-warm all inputs, never leave
-  * cmake build flags simplified
+    + allow MPEG-5 LCEVC filtering to:
+      - base: strip enhancement layers
+      - full: pass unchanged
+      - all: where applicable (playlist/manifest), provide base+N iterations
+      - [n]: index number, decimal or hex pid of base+layer
+    + optional basic auth on /metrics
   * dipiradiohead
     + -I is now -O for dipitvhead parity
-    + --provider to set SDT provider name
+    + --provider to set SDT provider name (per programme)
+    + --default-provider to set SDT provider name (per process)
+      --provider still overrides this
     + fixes for suboptimal sources
       - better buffer handling (undrained updates)
       - short-time microburst flattening
@@ -14,28 +21,39 @@ dvbipitools (2.4.2-1) unstable; urgency=low
     + support relative urls in -i m3u8
     + HLS radio input support (like BBC Radio)
     + plain MP3 stream input support
+    + http client keep-alive support
+    + fixed --cas-emmg-version
+    + --cas-emmg-reverse to dial out instead
   * dipitvhead
     + made stuffing less bursty and solved quiet input stalling
-    + --provider to set SDT provider name
+    + LCEVC detection, scrambling "alias"
+    + --provider to set SDT provider name  (per programme)
+    + --default-provider to set SDT provider name (per process)
+      --provider still overrides this
+    + fixed --cas-emmg-version
+    + --cas-emmg-reverse to dial out instead
   * dipirec
-    + VVC in mkv outputs and in enhanced RTMP
-    + AV1 in mkv outputs and in enhanced RTMP
-  * MPEG-5 LCEVC detection, descriptor passing and filters
-    + limited to 4 enhancement layers per stream
-    + three modes: standalone ES, SEI wrapped NAL, unwrapped NAL
-    + dipirec and dipidescramble: optionally strip enhancement layers
-    + dipixy: allow filtering to ...
-      - base: strip enhancement layers
-      - full: pass unchanged
-      - all: where applicable (playlist/manifest), provide base+N iterations
-      - [n]: index number, decimal or hex pid of base+layer
-    + dipitvhead: detection, scrambling "alias"
-  * AC-4/TrueHD/Atmos/DTS/DTS-HD-MA/HE-AAC/HE-AACv2 detection+remux/segmenting
+    + VVC+AV1 in mkv outputs and in enhanced RTMP
+    + optionally strip LCEVC enhancement layers
+  * dipidescramble
+    + optionally strip LCEVC enhancement layers
+    + http client keep-alive support
+  * dipimetrics
+    + optional basic auth on /metrics
+  * general, spanning multiple tools
+    + cmake build flags simplified
+  * codec detection/remux/segmenting
+    + MPEG-5 LCEVC
+      - limited to 4 enhancement layers per stream
+      - three modes: standalone ES, SEI wrapped NAL, unwrapped NAL
+    + TrueHD (+TrueHD Atmos)
+    + DTS/DTS-HD-MA
+    + HE-AAC/HE-AACv2
+    + AV1
     + AC-4
       - A_AC4 in Matroska output is more like an educated guess
-      - TS 101 154 clause 6.6.1 AC-4 scope only: fs_index=1, 48/96/192kHz only
+      - TS 101 154 clause 6.6.1 scope only: fs_index=1, 48/96/192kHz
       - Mandatory Iframe alignment only waits for 4 AC-4 frames
-  * AV1 detection+remux/segmenting
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.1-1) unstable; urgency=low

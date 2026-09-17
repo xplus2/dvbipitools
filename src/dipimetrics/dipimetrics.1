@@ -74,6 +74,11 @@ Private key file (PEM). Requires
 .B \-\-tls\-cert
 too.
 .TP
+.BI \-\-auth " user\fR:\fBpass"
+HTTP Basic Auth for
+.B GET /metrics.
+Default: off.
+.TP
 .BR \-e ", " \-\-expiry\ \fI<s>\fR
 Drop an instance after this many seconds without a new snapshot.
 Default:
@@ -106,8 +111,13 @@ once, a 5-second read/write budget per connection so a stalled client
 can't wedge the collector, and
 .B Connection: close
 on every response. This is a local diagnostics endpoint meant for
-infrequent scraping, not a general-purpose web server. There is no
-authentication.
+infrequent scraping, not a general-purpose web server. Authentication is
+off unless
+.B \-\-auth
+is given, in which case a request missing or mismatching the
+.B Authorization
+header gets
+.BR 401 .
 .PP
 .BR \-\-tls\-cert / \-\-tls\-key
 (PEM, both required together) switch
@@ -180,6 +190,9 @@ Reachable from another host, with a longer expiry.
 .TP
 .B dipimetrics \-l 0.0.0.0:9109 \-\-tls\-cert srv.crt \-\-tls\-key srv.key
 Serve over HTTPS.
+.TP
+.B dipimetrics \-l 0.0.0.0:9109 \-\-auth scraper:hunter2
+Require HTTP Basic Auth for the scrape.
 .SH EXIT STATUS
 .B 0
 on success.

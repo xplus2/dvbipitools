@@ -14,7 +14,8 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<po
 | `-i`  | `--input`            | `<uri>`                                 | required, repeatable                            |           |
 |       | `--sid`              | `<n>`                                   | auto (see below)                                | per-input |
 | `-s`  | `--sdt`              | `<name>`                                | auto (see below)                                | per-input |
-|       | `--provider`         | `<name>`                                | `dipiradiohead`                                 | per-input |
+|       | `--provider`         | `<name>`                                | `--default-provider`                            | per-input |
+|       | `--default-provider` | `<provider>`                            | `dipiradiohead`                                 |           |
 | `-m`  | `--mcast`            | `<group>:<port>` / `[<group6>]:<port>`  | required unless `-R` given                      |           |
 | `-O`  | `--out-iface`        | `<iface>`                               | kernel route                                    |           |
 | `-r`  | `--rtp`              |                                         | off (plain UDP)                                 |           |
@@ -175,10 +176,12 @@ table type (SDT/EIT sections cycle across programs on those shared PIDs, not dup
 program). Fixed PIDs (single `-i`): PAT 0x0000, NIT 0x0010, SDT 0x0011, EIT 0x0012, PMT 0x0100,
 audio 0x0101. Per-program PIDs (multiple `-i`): see "Multiple inputs" above.
 
-## Service info (`-n`, `-s`)
+## Service info (`-n`, `-s`, `--provider`)
 
 `-n` NIT `network_name`, one for the whole output. `-s` SDT `service_name` per program.
-`--provider` SDT `service_provider_name` per program, default `dipiradiohead`. UTF-8.
+`--provider` SDT `service_provider_name` per program, default `--default-provider`.
+`--default-provider` sets that default once for every program that doesn't set its own
+`--provider`, default `dipiradiohead`. UTF-8.
 
 ## Identifiers (`--tsid`, `--onid`, `--sid`)
 

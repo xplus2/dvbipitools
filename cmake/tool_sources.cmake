@@ -330,6 +330,7 @@ function(dipimetrics_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/base64.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
@@ -474,6 +475,7 @@ function(dipiradiohead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
+            ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/dial.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_core.c
@@ -1271,6 +1273,7 @@ function(dipitvhead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
+            ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/dial.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_core.c

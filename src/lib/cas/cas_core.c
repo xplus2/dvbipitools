@@ -220,6 +220,9 @@ void cas_core_fill_group_cfg(cas_algo_t cas_algo, unsigned cp_duration_ms, int f
     gv->emm_pid = v->emm_pid;
     gv->emmg_port = v->emmg_port;
     gv->emmg_max_conns = v->emmg_max_conns;
+    gv->emmg_version = v->emmg_version;
+    gv->emmg_reverse_host = v->emmg_reverse_host[0] ? v->emmg_reverse_host : NULL;
+    gv->emmg_reverse_port = v->emmg_reverse_port;
     gv->required = v->required;
     gv->outage_mode = map_outage_mode(v->resilience);
     gv->cwenc_algorithm = v->cwenc_algorithm;

@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/helper/base64.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/protocol.h"
@@ -19,8 +20,27 @@
 #define DEFAULT_LISTEN_ADDR "127.0.0.1"
 #define DEFAULT_LISTEN_PORT 9109
 #define DEFAULT_EXPIRY_S 30
+#define ARGS_AUTH_CREDS_MAX 128
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
+
+static int basic_auth_parse(const char *val, char *out, size_t outsz) {
+  const char *colon = strchr(val, ':');
+  char b64[192];
+  size_t n;
+  if (!colon || colon == val) {
+    argerr("invalid --auth: %s (need user:password)", val);
+    return -1;
+  }
+  if (strlen(val) >= ARGS_AUTH_CREDS_MAX) {
+    argerr("--auth credentials too long: %s", val);
+    return -1;
+  }
+  base64_encode(val, strlen(val), b64);
+  n = bufcpy(out, outsz, "Basic ");
+  bufcpy(out + n, outsz - n, b64);
+  return 0;
+}
 
 static void print_help(void) {
   printf(
@@ -29,16 +49,17 @@ static void print_help(void) {
       "dipiradiohead, dipisds and dipibcg over a Unix datagram socket, serves\n"
       "them as Prometheus/OpenMetrics text at GET /metrics\n\n"
       "options:\n"
-      "  -S, --sock <path>     Unix datagram socket for snapshots on (default: %s)\n"
-      "  -l, --listen <a>:<p>  HTTP listen address:port (default: %s:%u)\n"
-      "      --tls-cert <path> certificate file (PEM), HTTPS on -l, requires --tls-key\n"
-      "      --tls-key <path>  private key file (PEM), requires --tls-cert\n"
-      "  -e, --expiry <s>      drop an instance after this many seconds without a\n"
-      "                        new snapshot (default: %d)\n"
-      "  -v, --verbose         log rejected/dropped snapshots to stderr\n"
-      "      --color <when>    auto|always|never (default auto)\n"
-      "  -d, --daemonize       fork to background after startup, detach from terminal\n"
-      "  -h, --help            this help\n\n"
+      "  -S, --sock <path>        socket for snapshots on (default: %s)\n"
+      "  -l, --listen <a>:<p>     HTTP listen address:port (default: %s:%u)\n"
+      "      --tls-cert <path>    certificate file (PEM), HTTPS on -l, requires --tls-key\n"
+      "      --tls-key <path>     private key file (PEM), requires --tls-cert\n"
+      "      --auth <user>:<pass> HTTP Basic Auth for GET /metrics (default: off)\n"
+      "  -e, --expiry <s>         drop an instance after this many seconds without a\n"
+      "                           new snapshot (default: %d)\n"
+      "  -v, --verbose            log rejected/dropped snapshots to stderr\n"
+      "      --color <when>       auto|always|never (default auto)\n"
+      "  -d, --daemonize          fork to background after startup, detach from terminal\n"
+      "  -h, --help               this help\n\n"
       "example:\n"
       "  %s -l 0.0.0.0:9109\n"
       "  %s -l 0.0.0.0:9109 --tls-cert srv.crt --tls-key srv.key\n",
@@ -52,6 +73,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"expiry", required_argument, 0, 'e'},
       {"tls-cert", required_argument, 0, 1001},
       {"tls-key", required_argument, 0, 1002},
+      {"auth", required_argument, 0, 1003},
       {"verbose", no_argument, 0, 'v'},
       {"color", required_argument, 0, 1000},
       {"daemonize", no_argument, 0, 'd'},
@@ -90,6 +112,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1002:
         cfg->tls_key = optarg;
+        break;
+      case 1003:
+        if (basic_auth_parse(optarg, cfg->http_auth, sizeof cfg->http_auth)) return ARGS_ERR;
         break;
       case 'v':
         cfg->verbose = 1;

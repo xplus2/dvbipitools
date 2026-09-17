@@ -37,6 +37,7 @@ typedef struct {
   unsigned al_fec_d;
   unsigned al_fec_port;
   char nit_text[256];        /* -n; empty = no NIT network_name descriptor */
+  char default_provider_text[256];
   long error_retry_s;        /* -e; 0 = no retry, fail on first input error (single input only) */
   int insecure_tls;          /* -k; skip TLS verification */
   unsigned tsid;             /* --tsid, default 1 */

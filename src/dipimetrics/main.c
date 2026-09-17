@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
     tls_server_ctx_free(tls_ctx);
     return 1;
   }
-  hs = http_server_new(http_fd, tls_ctx);
+  hs = http_server_new(http_fd, tls_ctx, cfg.http_auth);
   if (!hs) {
     close(uds_fd);
     close(http_fd);

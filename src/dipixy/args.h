@@ -84,6 +84,7 @@ typedef struct {
   int no_status;
   const char *status_template;
   char http_auth[200];
+  char http_metrics_auth[200];
   const char *cors_origins;
   int ssdp_ttl;
   const char *ssdp_iface;

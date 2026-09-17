@@ -20,40 +20,42 @@ dipitvhead -i <uri> [per-input options] [-i <uri> ...] {-m <mcast>:<port>|-R <ur
 (ffmpeg-style) - using one before any `-i` is an error. Everything else is mux-wide, shared
 across every input.
 
-| flag | long form               | argument                                | default                                         | scope     |
-|------|-------------------------|-----------------------------------------|-------------------------------------------------|-----------|
-| `-i` | `--input`               | `<uri>` / `-`                           | required                                        |           |
-| `-p` | `--pmt-pid`             | `<pid>`                                 | auto: first PAT program whose PMT arrives       | per-input |
-|      | `--sid`                 | `<n>`                                   | auto-assigned (lowest free integer)             | per-input |
-| `-s` | `--sdt`                 | `<text>` / `-`                          | set SDT, see below                              | per-input |
-| `-I` | `--iface`               | `<iface>`                               | kernel route (incoming)                         | per-input |
-|      | `--strip-eit`           |                                         | off (source EIT passed through)                 | per-input |
-|      | `--strip`               | `<list>` / `none`                       | `none` (no strip)                               | per-input |
-|      | `--hbbtv`               | `<url>`                                 | none (no AIT sent)                              | per-input |
-|      | `--hbbtv-org-id`        | `<n>`                                   | required with `--hbbtv`                         | per-input |
-|      | `--hbbtv-app-id`        | `<n>`                                   | required with `--hbbtv`                         | per-input |
-| `-m` | `--mcast`               | `<group(6)>:<port>`                     | required unless `-R` given                      |           |
-| `-O` | `--out-iface`           | `<iface>`                               | kernel route (outgoing)                         |           |
-| `-u` | `--udp`                 |                                         | off (RTP)                                       |           |
-| `-T` | `--ttl`                 | `<n>`                                   | 1                                               |           |
-|      | `--dscp`                | `<v>`                                   | `video-high`                                    |           |
-|      | `--al-fec`              | `<L>:<D>`                               | off (Annex E Layer 1 FEC, needs RTP output)     |           |
-|      | `--al-fec-port`         | `<port>`                                | required with `--al-fec`                        |           |
-| `-n` | `--nit`                 | `<text>` / `-`                          | set NIT, see below                              |           |
-| `-b` | `--bitrate`             | `<kbps>`                                | none (no shaping)                               |           |
-| `-S` | `--stuff`               |                                         | off (needs `-b`)                                |           |
-| `-B` | `--burst-limit`         |                                         | off (needs `-b`)                                |           |
-| `-e` | `--error`               | `<seconds>`                             | fail once (always retries in MPTS mode)         |           |
-| `-k` | `--insecure`            |                                         | off (TLS verified)                              |           |
-|      | `--tsid`                | `<n>`                                   | 1                                               |           |
-|      | `--onid`                | `<n>`                                   | 1                                               |           |
-| `-v` | `--verbose`             |                                         | off                                             |           |
-|      | `--color`               | `auto\|always\|never`                   | `auto`                                          |           |
-|      | `--metrics`             | `<path>`                                | `/run/dvbipitools/metrics.sock`                 |           |
-|      | `--metrics-id`          | `<name>`                                | none (metrics disabled unless set)              |           |
-|      | `--metrics-interval`    | `<s>`                                   | `5`                                             |           |
-| `-d` | `--daemonize`           |                                         | off (foreground)                                |           |
-| `-h` | `--help`                |                                         |                                                 |           |
+| flag | long form             | argument                                | default                                     | scope     |
+|------|-----------------------|-----------------------------------------|---------------------------------------------|-----------|
+| `-i` | `--input`             | `<uri>` / `-`                           | required                                    |           |
+| `-p` | `--pmt-pid`           | `<pid>`                                 | auto: first PAT program whose PMT arrives   | per-input |
+|      | `--sid`               | `<n>`                                   | auto-assigned (lowest free integer)         | per-input |
+| `-s` | `--sdt`               | `<text>` / `-`                          | set SDT, see below                          | per-input |
+|      | `--provider`          | `<text>`                                | passthrough                                 | per-input |
+| `-I` | `--iface`             | `<iface>`                               | kernel route (incoming)                     | per-input |
+|      | `--strip-eit`         |                                         | off (source EIT passed through)             | per-input |
+|      | `--strip`             | `<list>` / `none`                       | `none` (no strip)                           | per-input |
+|      | `--hbbtv`             | `<url>`                                 | none (no AIT sent)                          | per-input |
+|      | `--hbbtv-org-id`      | `<n>`                                   | required with `--hbbtv`                     | per-input |
+|      | `--hbbtv-app-id`      | `<n>`                                   | required with `--hbbtv`                     | per-input |
+| `-m` | `--mcast`             | `<group(6)>:<port>`                     | required unless `-R` given                  |           |
+| `-O` | `--out-iface`         | `<iface>`                               | kernel route (outgoing)                     |           |
+| `-u` | `--udp`               |                                         | off (RTP)                                   |           |
+| `-T` | `--ttl`               | `<n>`                                   | 1                                           |           |
+|      | `--dscp`              | `<v>`                                   | `video-high`                                |           |
+|      | `--al-fec`            | `<L>:<D>`                               | off (Annex E Layer 1 FEC, needs RTP output) |           |
+|      | `--al-fec-port`       | `<port>`                                | required with `--al-fec`                    |           |
+| `-n` | `--nit`               | `<text>` / `-`                          | set NIT, see below                          |           |
+|      | `--default-provider`  | `<provider>`                            | `dipitvhead`                                |           |
+| `-b` | `--bitrate`           | `<kbps>`                                | none (no shaping)                           |           |
+| `-S` | `--stuff`             |                                         | off (needs `-b`)                            |           |
+| `-B` | `--burst-limit`       |                                         | off (needs `-b`)                            |           |
+| `-e` | `--error`             | `<seconds>`                             | fail once (always retries in MPTS mode)     |           |
+| `-k` | `--insecure`          |                                         | off (TLS verified)                          |           |
+|      | `--tsid`              | `<n>`                                   | 1                                           |           |
+|      | `--onid`              | `<n>`                                   | 1                                           |           |
+| `-v` | `--verbose`           |                                         | off                                         |           |
+|      | `--color`             | `auto\|always\|never`                   | `auto`                                      |           |
+|      | `--metrics`           | `<path>`                                | `/run/dvbipitools/metrics.sock`             |           |
+|      | `--metrics-id`        | `<name>`                                | none (metrics disabled unless set)          |           |
+|      | `--metrics-interval`  | `<s>`                                   | `5`                                         |           |
+| `-d` | `--daemonize`         |                                         | off (foreground)                            |           |
+| `-h` | `--help`              |                                         |                                             |           |
 
 > Note that the default output changed from _plain UDP_ to _RTP_, since neither FCC nor RET would work
 > on plain streams. You can restore the old behavior by setting `-u`|`--udp`.
@@ -564,15 +566,15 @@ ffmpeg -i <source> -c:v libx264 -c:a aac -f mpegts - | dipitvhead -i - -m 239.5.
   -i http://radio.example.org/music.m3u \
   -i http://radio.example.com/mp3
 # let dipitvhead fill the mux (dipiradiohead's PMT PIDs are assigned in order of definition)
-./dipitvhead -m 239.1.1.1:5000 -O enx00deadbeef01 -n "LookMomICanDoBroadcasting" \
-  -i rtp://239.2.3.1:5001 -I enx00deadbeef00 --sdt 'MC TV 1' --provider "FrankenMux" \
-  -i rtp://239.2.3.2:5001 -I enx00deadbeef00 --sdt 'MC TV 2' --provider "FrankenMux" \
-  -i http://ird001.headend.internal:8001/1:0:19:0:0:0:C00000:0:0:0: -I enx00deadbeef03 --sdt 'Sat TV 3' --provider "FrankenMux" \
-  -i udp://239.3.4.1:4500 -I enx00deadbeef00 --sdt 'MC Radio 1' --provider "FrankenMux" \
-  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1000 --sdt 'radiohead 1' --provider "FrankenMux" \
-  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1001 --sdt 'radiohead 2' --provider "FrankenMux" \
-  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1002 --sdt 'radiohead 3' --provider "FrankenMux" \
-  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1003 --sdt 'radiohead 4' --provider "FrankenMux"
+./dipitvhead -m 239.1.1.1:5000 -O enx00deadbeef01 -n "LookMomICanDoBroadcasting" --default-provider "FrankenMux" \
+  -i rtp://239.2.3.1:5001 -I enx00deadbeef00 --sdt 'MC TV 1' \
+  -i rtp://239.2.3.2:5001 -I enx00deadbeef00 --sdt 'MC TV 2' \
+  -i http://ird001.headend.internal:8001/1:0:19:0:0:0:C00000:0:0:0: -I enx00deadbeef03 --sdt 'Sat TV 3' --provider "Sat" \
+  -i udp://239.3.4.1:4500 -I enx00deadbeef00 --sdt 'MC Radio 1' \
+  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1000 --sdt 'radiohead 1' \
+  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1001 --sdt 'radiohead 2' \
+  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1002 --sdt 'radiohead 3' \
+  -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1003 --sdt 'radiohead 4'
 # VLC test (use Playback->Program for MPTS program selection) - enx00deadbeef01 will not be the same as above, but
 # should be in the same network as dipitvhead's enx00deadbeef01
 vlc --miface enx00deadbeef01 rtp://@239.1.1.1:5000

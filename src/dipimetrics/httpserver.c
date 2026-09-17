@@ -8,9 +8,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/tls.h"
 #include "lib/net/tls_server.h"
@@ -95,15 +97,17 @@ struct http_server {
   int listen_fd;
   int listen_pfd_idx;
   tls_server_ctx_t *tls_ctx;
+  char http_auth[200];
   http_conn_t conns[HTTP_MAX_CONNS];
 };
 
-http_server_t *http_server_new(int listen_fd, tls_server_ctx_t *tls_ctx) {
+http_server_t *http_server_new(int listen_fd, tls_server_ctx_t *tls_ctx, const char *http_auth) {
   http_server_t *hs = calloc(1, sizeof *hs);
   if (!hs) return NULL;
   hs->listen_fd = listen_fd;
   hs->listen_pfd_idx = -1;
   hs->tls_ctx = tls_ctx;
+  bufcpy(hs->http_auth, sizeof hs->http_auth, http_auth);
   return hs;
 }
 
@@ -289,6 +293,27 @@ static void build_404_response(http_conn_t *c) {
   set_response(c, hdr, (size_t)hdr_len, body, sizeof body - 1);
 }
 
+static void build_401_response(http_conn_t *c) {
+  static const char body[] = "unauthorized\n";
+  char hdr[200];
+  int hdr_len = snprintf(hdr, sizeof hdr,
+    "HTTP/1.1 401 Unauthorized\r\n"
+    "WWW-Authenticate: Basic realm=\"metrics\"\r\n"
+    "Content-Type: text/plain; charset=utf-8\r\n"
+    "Content-Length: %zu\r\n"
+    "Connection: close\r\n\r\n",
+    sizeof body - 1);
+  set_response(c, hdr, (size_t)hdr_len, body, sizeof body - 1);
+}
+
+static int authz_matches(const struct phr_header *headers, size_t num_headers, const char *expected) {
+  size_t elen = strlen(expected);
+  for (size_t i = 0; i < num_headers; i++)
+    if (headers[i].name_len == 13 && !strncasecmp(headers[i].name, "Authorization", 13))
+      return headers[i].value_len == elen && !memcmp(headers[i].value, expected, elen);
+  return 0;
+}
+
 static int request_headers_complete(const char *buf, size_t len) {
   const char *method, *path;
   size_t method_len, path_len;
@@ -298,7 +323,7 @@ static int request_headers_complete(const char *buf, size_t len) {
   return phr_parse_request(buf, len, &method, &method_len, &path, &path_len, &minor_version, headers, &num_headers, 0) != -2;
 }
 
-static void conn_build_response(http_conn_t *c, store_t *st, double now_mono, int verbose) {
+static void conn_build_response(http_conn_t *c, store_t *st, double now_mono, int verbose, const char *http_auth) {
   const char *pmethod, *ppath;
   size_t method_len = 0, path_len = 0;
   int minor_version;
@@ -316,8 +341,12 @@ static void conn_build_response(http_conn_t *c, store_t *st, double now_mono, in
   }
 
   if (!strcmp(method, "GET") && !strcmp(strip_query(path), "/metrics")) {
-    st->stats.http_requests_200++;
-    build_metrics_response(c, st, now_mono);
+    if (http_auth[0] && !authz_matches(headers, num_headers, http_auth)) {
+      build_401_response(c);
+    } else {
+      st->stats.http_requests_200++;
+      build_metrics_response(c, st, now_mono);
+    }
   } else {
     if (verbose && method[0]) log_line("dipimetrics: 404 %s %s", method, path);
     st->stats.http_requests_404++;
@@ -372,7 +401,7 @@ void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, st
         conn_handshake_step(c);
     } else if (c->reading) {
       if (rev & (POLLIN | POLLHUP | POLLERR)) conn_read_step(c);
-      if (c->used && c->reading && request_headers_complete(c->reqbuf, c->reqlen)) conn_build_response(c, st, now_mono, verbose);
+      if (c->used && c->reading && request_headers_complete(c->reqbuf, c->reqlen)) conn_build_response(c, st, now_mono, verbose, hs->http_auth);
     } else if (rev & (POLLOUT | POLLERR)) {
       conn_write_step(c);
     }

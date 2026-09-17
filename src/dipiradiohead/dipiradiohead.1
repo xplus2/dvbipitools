@@ -100,6 +100,14 @@ for a single input, "dipiradiohead \fIn\fR" per input for an MPTS).
 SDT service_provider_name for the
 .B \-i
 immediately before this option. Default:
+.BR \-\-default\-provider .
+.TP
+.B \-\-default\-provider \fIprovider\fR
+SDT service_provider_name for every
+.B \-i
+that does not set its own
+.B \-\-provider .
+Default:
 .BR dipiradiohead .
 .SS Output
 .TP
@@ -319,6 +327,13 @@ immediately before this option: EMMG protocol version,
 or
 .BR 3 .
 Default: accept whichever the EMMG client proposes.
+.TP
+.B \-\-cas\-emmg\-reverse \fItcp://host:port\fR
+For the
+.B \-\-cas\-ecmg
+right before this: dial out to this EMMG instead of listening for it.
+Mutually exclusive with
+.BR \-\-cas\-emmg\-port " and " \-\-cas\-emmg\-max\-conns .
 .TP
 .B \-\-cas\-emm\-pid \fIpid\fR
 For the

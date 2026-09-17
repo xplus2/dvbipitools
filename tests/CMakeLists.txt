@@ -894,6 +894,7 @@ dvbipitools_add_unit_test(dipiradiohead_tspacketizer
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/dial.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
@@ -996,6 +997,7 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/dial.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
@@ -1152,6 +1154,7 @@ dvbipitools_add_unit_test(dipiradiohead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/dial.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
@@ -1301,6 +1304,7 @@ dvbipitools_add_unit_test(dipitvhead_remux
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/dial.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
@@ -1349,6 +1353,7 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/dial.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
@@ -1437,6 +1442,7 @@ dvbipitools_add_unit_test(dipitvhead_emmg_server
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/dial.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
@@ -1447,7 +1453,8 @@ dvbipitools_add_unit_test(dipitvhead_emmg_server
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
 
 dvbipitools_add_unit_test(dipitvhead_cas
     unit/dipitvhead/test_cas.c
@@ -1462,6 +1469,7 @@ dvbipitools_add_unit_test(dipitvhead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/dial.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_group.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
@@ -1499,6 +1507,7 @@ dvbipitools_add_unit_test(lib_cas_cas_group
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/dial.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/cadescbuild.c
@@ -1888,6 +1897,7 @@ dvbipitools_add_unit_test(dipimetrics_args
     unit/dipimetrics/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipimetrics/args.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/base64.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 

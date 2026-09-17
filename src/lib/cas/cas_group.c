@@ -193,6 +193,9 @@ static void cas_lazy_start(cas_group_t *g) {
     memset(&mcfg, 0, sizeof mcfg);
     mcfg.port = vc->emmg_port;
     mcfg.max_conns = vc->emmg_max_conns;
+    mcfg.required_version = vc->emmg_version;
+    mcfg.dial_host = vc->emmg_reverse_host;
+    mcfg.dial_port = vc->emmg_reverse_port;
     v->emmg = emmg_server_start(&mcfg);
     if (!v->emmg) {
       log_line("cas_group: EMMG server %zu failed to start", i);
@@ -209,12 +212,9 @@ cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
   if (!g) return NULL;
   g->cfg = *cfg;
   g->flush_pid = flush_pid;
-  if (cfg->algo == SCRAMBLE_ALGO_CISSA)
-    g->scrambling_mode = CADESC_SCRAMBLING_MODE_CISSA;
-  else if (cfg->legacy_csa1)
-    g->scrambling_mode = CADESC_SCRAMBLING_MODE_CSA1;
-  else
-    g->scrambling_mode = CADESC_SCRAMBLING_MODE_CSA2;
+  if (cfg->algo == SCRAMBLE_ALGO_CISSA) g->scrambling_mode = CADESC_SCRAMBLING_MODE_CISSA;
+  else if (cfg->legacy_csa1)            g->scrambling_mode = CADESC_SCRAMBLING_MODE_CSA1;
+  else                                  g->scrambling_mode = CADESC_SCRAMBLING_MODE_CSA2;
   g->engine = cas_scramble_engine_start(cfg->algo, cfg->pids, cfg->pid_count, flush_pid);
   if (!g->engine) {
     free(g);

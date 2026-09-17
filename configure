@@ -44,7 +44,7 @@ usage: ./configure [options]
 EOF
 }
 
-while [ $# -gt 0 ]; do; case "$1" in
+while [ $# -gt 0 ]; do case "$1" in
   --debug)    BUILD_TYPE=Debug ;;
   --release)  BUILD_TYPE=Release ;;
   --static)   BUILD_LINK=static ;;

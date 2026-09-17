@@ -58,9 +58,9 @@ void strip_etag_quotes(char *v) {
 }
 
 /* shared with http2.c/http3_req.c: those transports only ever guard /ui/ws/'s CONNECT */
-int http_auth_ok(const config_t *cfg, const char *auth_hdr) {
-  if (!cfg->http_auth[0]) return 1;
-  return auth_hdr && !strcmp(auth_hdr, cfg->http_auth);
+int http_auth_ok(const char *expected, const char *auth_hdr) {
+  if (!expected[0]) return 1;
+  return auth_hdr && !strcmp(auth_hdr, expected);
 }
 
 int route_disabled(const route_t *rt) {

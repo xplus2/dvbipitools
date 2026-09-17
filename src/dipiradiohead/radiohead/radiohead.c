@@ -192,7 +192,7 @@ static int process_single_frame(single_tick_t *tk, source_t *src) {
       tc.aac_profile_level = f.aac_profile_level;
       tc.network_name = tk->cfg->nit_text;
       tc.service_name = tk->cfg->inputs[0].sdt_text;
-      tc.provider_name = tk->cfg->inputs[0].provider_text;
+      tc.provider_name = tk->cfg->inputs[0].provider_text[0] ? tk->cfg->inputs[0].provider_text : tk->cfg->default_provider_text;
       tc.pmt_pid = 0;
       tc.audio_pid = 0;
       tc.standalone = 1;

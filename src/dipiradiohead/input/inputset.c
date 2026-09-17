@@ -127,7 +127,7 @@ inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ct
     is->ctxs[i].im = input_stats ? &input_stats[i] : NULL;
     is->meta[i].sid = cfg->inputs[i].sid;
     is->meta[i].service_name = cfg->inputs[i].sdt_text;
-    is->meta[i].provider_name = cfg->inputs[i].provider_text;
+    is->meta[i].provider_name = cfg->inputs[i].provider_text[0] ? cfg->inputs[i].provider_text : cfg->default_provider_text;
     is->meta[i].pmt_pid = INPUTSET_PMT_PID_BASE + i;
     is->meta[i].audio_pid = INPUTSET_AUDIO_PID_BASE + i;
     is->labels[i] = is->meta[i].service_name;

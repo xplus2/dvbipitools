@@ -129,6 +129,24 @@ void args_free(config_t *cfg) {
   cfg->sources_cap = 0;
 }
 
+static int basic_auth_parse(const char *flag, const char *val, char *out, size_t outsz) {
+  const char *colon = strchr(val, ':');
+  char b64[192];
+  size_t n;
+  if (!colon || colon == val) {
+    argerr("invalid %s: %s (need user:password)", flag, val);
+    return -1;
+  }
+  if (strlen(val) >= ARGS_AUTH_CREDS_MAX) {
+    argerr("%s credentials too long: %s", flag, val);
+    return -1;
+  }
+  base64_encode(val, strlen(val), b64);
+  n = bufcpy(out, outsz, "Basic ");
+  bufcpy(out + n, outsz - n, b64);
+  return 0;
+}
+
 static void print_help(void) {
   printf(
     "usage: %s [options]\n\n"
@@ -175,6 +193,7 @@ static void print_help(void) {
     "      --metrics-id <name>     stable instance id, disabled if not set\n"
     "      --metrics-interval <s>  snapshot interval (default: 5 seconds)\n"
     "      --metrics-http          also serve /metrics ourselves           [off]\n"
+    "      --metrics-auth <u>:<p>  HTTP Basic Auth for GET /metrics        [off]\n"
     "  -f, --format <list>         comma-separated route whitelist, from\n"
     "                              ts,spts,rawaudio,hls,llhls,dash,lldash  [all]\n"
     "      --no-url-rtp            disable /rtp/... routes\n"
@@ -252,6 +271,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"metrics-id", required_argument, 0, 1013},
       {"metrics-interval", required_argument, 0, 1014},
       {"metrics-http", no_argument, 0, 1015},
+      {"metrics-auth", required_argument, 0, 1056},
       {"format", required_argument, 0, 'f'},
       {"no-url-rtp", no_argument, 0, 1020},
       {"no-url-udp", no_argument, 0, 1021},
@@ -533,26 +553,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1027:
         cfg->status_template = optarg;
         break;
-      case 1037: {
-        const char *colon = strchr(optarg, ':');
-        char b64[192];
-        if (!colon || colon == optarg) {
-          argerr("invalid --auth: %s (need user:password)", optarg);
+      case 1037:
+        if (basic_auth_parse("--auth", optarg, cfg->http_auth, sizeof cfg->http_auth)) {
           args_free(cfg);
           return ARGS_ERR;
-        }
-        if (strlen(optarg) >= ARGS_AUTH_CREDS_MAX) {
-          argerr("--auth credentials too long: %s", optarg);
-          args_free(cfg);
-          return ARGS_ERR;
-        }
-        base64_encode(optarg, strlen(optarg), b64);
-        {
-          size_t n = bufcpy(cfg->http_auth, sizeof cfg->http_auth, "Basic ");
-          bufcpy(cfg->http_auth + n, sizeof cfg->http_auth - n, b64);
         }
         break;
-      }
+      case 1056:
+        if (basic_auth_parse("--metrics-auth", optarg, cfg->http_metrics_auth, sizeof cfg->http_metrics_auth)) {
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        break;
       case 1036:
         cfg->cors_origins = optarg;
         break;

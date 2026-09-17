@@ -77,8 +77,8 @@ END_TEST
 START_TEST(auth_disabled_when_cfg_empty) {
   config_t cfg;
   memset(&cfg, 0, sizeof cfg);
-  ck_assert_int_eq(http_auth_ok(&cfg, NULL), 1);
-  ck_assert_int_eq(http_auth_ok(&cfg, "Basic anything"), 1);
+  ck_assert_int_eq(http_auth_ok(cfg.http_auth, NULL), 1);
+  ck_assert_int_eq(http_auth_ok(cfg.http_auth, "Basic anything"), 1);
 }
 END_TEST
 
@@ -86,9 +86,19 @@ START_TEST(auth_requires_exact_match_when_enabled) {
   config_t cfg;
   memset(&cfg, 0, sizeof cfg);
   strcpy(cfg.http_auth, "Basic dXNlcjpwYXNz");
-  ck_assert_int_eq(http_auth_ok(&cfg, NULL), 0);
-  ck_assert_int_eq(http_auth_ok(&cfg, "Basic wrong"), 0);
-  ck_assert_int_eq(http_auth_ok(&cfg, "Basic dXNlcjpwYXNz"), 1);
+  ck_assert_int_eq(http_auth_ok(cfg.http_auth, NULL), 0);
+  ck_assert_int_eq(http_auth_ok(cfg.http_auth, "Basic wrong"), 0);
+  ck_assert_int_eq(http_auth_ok(cfg.http_auth, "Basic dXNlcjpwYXNz"), 1);
+}
+END_TEST
+
+START_TEST(metrics_auth_is_independent_of_auth) {
+  config_t cfg;
+  memset(&cfg, 0, sizeof cfg);
+  strcpy(cfg.http_metrics_auth, "Basic dXNlcjpwYXNz");
+  ck_assert_int_eq(http_auth_ok(cfg.http_auth, NULL), 1);
+  ck_assert_int_eq(http_auth_ok(cfg.http_metrics_auth, NULL), 0);
+  ck_assert_int_eq(http_auth_ok(cfg.http_metrics_auth, "Basic dXNlcjpwYXNz"), 1);
 }
 END_TEST
 
@@ -154,6 +164,7 @@ static Suite *dispatch_suite(void) {
   tcase_add_test(tc, strip_etag_quotes_leaves_unquoted_alone);
   tcase_add_test(tc, auth_disabled_when_cfg_empty);
   tcase_add_test(tc, auth_requires_exact_match_when_enabled);
+  tcase_add_test(tc, metrics_auth_is_independent_of_auth);
   tcase_add_test(tc, cors_defaults_to_star_when_unset);
   tcase_add_test(tc, cors_star_entry_in_list_matches_anything);
   tcase_add_test(tc, cors_allowlist_matches_and_sets_vary);

@@ -11,14 +11,21 @@ size_t emmg_build_channel_status(unsigned char *out, size_t cap, unsigned char v
   unsigned char cid[4];
   psi_put16(cid, client_id >> 16);
   psi_put16(cid + 2, client_id);
-  if (simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_CHANNEL_STATUS) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_CLIENT_ID, cid, sizeof cid) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_CHANNEL_ID, (unsigned char[]){(unsigned char)(data_channel_id >> 8), (unsigned char)data_channel_id}, 2) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_SECTION_TSPKT_FLAG, (unsigned char[]){0x00}, 1) < 0)
-    return 0;
+  if (simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_CHANNEL_STATUS) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_CLIENT_ID, cid, sizeof cid) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_CHANNEL_ID, (unsigned char[]){(unsigned char)(data_channel_id >> 8), (unsigned char)data_channel_id}, 2) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_SECTION_TSPKT_FLAG, (unsigned char[]){0x00}, 1) < 0) return 0;
+  return simulcrypt_writer_finish(&w);
+}
+
+size_t emmg_build_channel_error(unsigned char *out, size_t cap, unsigned char version, unsigned client_id, unsigned short error_status) {
+  simulcrypt_writer_t w;
+  unsigned char cid[4];
+  psi_put16(cid, client_id >> 16);
+  psi_put16(cid + 2, client_id);
+  if (simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_CHANNEL_ERROR) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_CLIENT_ID, cid, sizeof cid) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_ERROR_STATUS, (unsigned char[]){(unsigned char)(error_status >> 8), (unsigned char)error_status}, 2) < 0) return 0;
   return simulcrypt_writer_finish(&w);
 }
 
@@ -27,18 +34,12 @@ size_t emmg_build_stream_status(unsigned char *out, size_t cap, unsigned char ve
   unsigned char cid[4];
   psi_put16(cid, client_id >> 16);
   psi_put16(cid + 2, client_id);
-  if (simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_STREAM_STATUS) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_CLIENT_ID, cid, sizeof cid) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_CHANNEL_ID, (unsigned char[]){(unsigned char)(data_channel_id >> 8), (unsigned char)data_channel_id}, 2) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_STREAM_ID, (unsigned char[]){(unsigned char)(data_stream_id >> 8), (unsigned char)data_stream_id}, 2) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_ID, (unsigned char[]){(unsigned char)(data_id >> 8), (unsigned char)data_id}, 2) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_TYPE, (unsigned char[]){(unsigned char)data_type}, 1) < 0)
-    return 0;
+  if (simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_STREAM_STATUS) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_CLIENT_ID, cid, sizeof cid) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_CHANNEL_ID, (unsigned char[]){(unsigned char)(data_channel_id >> 8), (unsigned char)data_channel_id}, 2) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_STREAM_ID, (unsigned char[]){(unsigned char)(data_stream_id >> 8), (unsigned char)data_stream_id}, 2) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_ID, (unsigned char[]){(unsigned char)(data_id >> 8), (unsigned char)data_id}, 2) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_TYPE, (unsigned char[]){(unsigned char)data_type}, 1) < 0) return 0;
   return simulcrypt_writer_finish(&w);
 }
 
@@ -47,14 +48,10 @@ size_t emmg_build_stream_close_response(unsigned char *out, size_t cap, unsigned
   unsigned char cid[4];
   psi_put16(cid, client_id >> 16);
   psi_put16(cid + 2, client_id);
-  if (simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_STREAM_CLOSE_RESPONSE) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_CLIENT_ID, cid, sizeof cid) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_CHANNEL_ID, (unsigned char[]){(unsigned char)(data_channel_id >> 8), (unsigned char)data_channel_id}, 2) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_STREAM_ID, (unsigned char[]){(unsigned char)(data_stream_id >> 8), (unsigned char)data_stream_id}, 2) < 0)
-    return 0;
+  if (simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_STREAM_CLOSE_RESPONSE) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_CLIENT_ID, cid, sizeof cid) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_CHANNEL_ID, (unsigned char[]){(unsigned char)(data_channel_id >> 8), (unsigned char)data_channel_id}, 2) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_STREAM_ID, (unsigned char[]){(unsigned char)(data_stream_id >> 8), (unsigned char)data_stream_id}, 2) < 0) return 0;
   return simulcrypt_writer_finish(&w);
 }
 
@@ -63,16 +60,11 @@ size_t emmg_build_stream_bw_allocation(unsigned char *out, size_t cap, unsigned 
   unsigned char cid[4];
   psi_put16(cid, client_id >> 16);
   psi_put16(cid + 2, client_id);
-  if (simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_STREAM_BW_ALLOCATION) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_CLIENT_ID, cid, sizeof cid) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_CHANNEL_ID, (unsigned char[]){(unsigned char)(data_channel_id >> 8), (unsigned char)data_channel_id}, 2) < 0)
-    return 0;
-  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_STREAM_ID, (unsigned char[]){(unsigned char)(data_stream_id >> 8), (unsigned char)data_stream_id}, 2) < 0)
-    return 0;
-  if (have_bandwidth && simulcrypt_writer_put_tlv(&w, EMMG_P_BANDWIDTH, (unsigned char[]){(unsigned char)(bandwidth_kbps >> 8), (unsigned char)bandwidth_kbps}, 2) < 0)
-    return 0;
+  if (simulcrypt_writer_begin(&w, out, cap, version, EMMG_MSG_STREAM_BW_ALLOCATION) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_CLIENT_ID, cid, sizeof cid) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_CHANNEL_ID, (unsigned char[]){(unsigned char)(data_channel_id >> 8), (unsigned char)data_channel_id}, 2) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, EMMG_P_DATA_STREAM_ID, (unsigned char[]){(unsigned char)(data_stream_id >> 8), (unsigned char)data_stream_id}, 2) < 0) return 0;
+  if (have_bandwidth && simulcrypt_writer_put_tlv(&w, EMMG_P_BANDWIDTH, (unsigned char[]){(unsigned char)(bandwidth_kbps >> 8), (unsigned char)bandwidth_kbps}, 2) < 0) return 0;
   return simulcrypt_writer_finish(&w);
 }
 

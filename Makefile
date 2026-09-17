@@ -48,6 +48,7 @@ dipimetrics_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
+	src/lib/helper/base64.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/ioutil.c \
 	src/lib/metrics/protocol.c \
@@ -517,6 +518,7 @@ dipiradiohead_SRCS := \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/emmg_server/dial.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/cas/cas_core.c \
@@ -639,6 +641,7 @@ dipitvhead_SRCS := \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/emmg_server/dial.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/cas/cas_core.c \
@@ -1795,6 +1798,7 @@ dipimetrics_args_SRCS := \
 	tests/unit/dipimetrics/test_args.c \
 	src/dipimetrics/args.c \
 	src/lib/helper/argutil.c \
+	src/lib/helper/base64.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
@@ -2641,6 +2645,7 @@ dipiradiohead_tspacketizer_SRCS := \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/emmg_server/dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -2690,6 +2695,7 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/emmg_server/dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -2758,6 +2764,7 @@ dipiradiohead_cas_SRCS := \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/emmg_server/dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -3064,6 +3071,7 @@ dipitvhead_remux_SRCS := \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/emmg_server/dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -3113,6 +3121,7 @@ dipitvhead_output_SRCS := \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/emmg_server/dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -3190,6 +3199,7 @@ dipitvhead_emmg_server_SRCS := \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/emmg_server/dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/psi/psi.c \
@@ -3200,7 +3210,8 @@ dipitvhead_emmg_server_SRCS := \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c \
-	src/lib/helper/signal.c
+	src/lib/helper/signal.c \
+	src/lib/helper/ioutil.c
 
 dipitvhead_simulcrypt_msg_BIN := tests/unit/dipitvhead/test_simulcrypt_msg
 dipitvhead_simulcrypt_msg_SRCS := \
@@ -3231,6 +3242,7 @@ dipitvhead_cas_SRCS := \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/emmg_server/dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -3413,6 +3425,7 @@ lib_cas_cas_group_SRCS := \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/emmg_server/dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/mux/cadescbuild.c \
@@ -4365,11 +4378,13 @@ fuzz_emmg_datagrams_SRCS := \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
+	src/lib/cas/emmg_server/dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c \
-	src/lib/helper/signal.c
+	src/lib/helper/signal.c \
+	src/lib/helper/ioutil.c
 fuzz_emmg_datagrams_EXTRA_LDFLAGS := -pthread
 
 fuzz_dvbstp_BIN := tests/fuzz/fuzz_dvbstp

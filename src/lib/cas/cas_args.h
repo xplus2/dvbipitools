@@ -32,6 +32,9 @@ typedef struct {
   unsigned emmg_port;            /* --cas-emmg-port right after this --cas-ecmg; default 8002 */
   unsigned emmg_max_conns;       /* --cas-emmg-max-conns right after this --cas-ecmg. 0 = default (8) */
   unsigned emmg_version;         /* --cas-emmg-version right after this --cas-ecmg; 0 = accept client's proposal */
+  char emmg_reverse_host[256];   /* --cas-emmg-reverse right after this --cas-ecmg; empty = standard (listening) EMMG */
+  unsigned emmg_reverse_port;
+  int emmg_port_given;
   unsigned emm_pid;              /* --cas-emm-pid right after this --cas-ecmg; default 0x0021 */
   cas_outage_mode_t resilience;  /* --cas-resilience right after this --cas-ecmg; default frozen */
   int required;                  /* --cas-required right after this --cas-ecmg */

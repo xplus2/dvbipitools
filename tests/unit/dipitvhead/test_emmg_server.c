@@ -550,6 +550,42 @@ START_TEST(emmg_server_rejects_stream_setup_before_channel_setup) {
 }
 END_TEST
 
+START_TEST(emmg_server_rejects_channel_setup_wrong_version) {
+  emmg_server_cfg_t cfg = {0};
+  emmg_server_t *s;
+  unsigned port;
+  int fd;
+  unsigned char msg[512], payload[512];
+  simulcrypt_hdr_t hdr;
+  size_t n;
+  unsigned err = 0;
+  ssize_t rn;
+
+  cfg.port = 0;
+  cfg.required_version = 3;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+  port = emmg_server_port(s);
+
+  fd = fake_connect(port);
+  ck_assert_int_ge(fd, 0);
+
+  n = fake_build_channel_setup(msg, sizeof msg, 2, 0x4A750001, 1);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+  ck_assert_int_eq(fake_read_reply(fd, &hdr, payload, sizeof payload), 0);
+  ck_assert_uint_eq(hdr.type, EMMG_MSG_CHANNEL_ERROR);
+  ck_assert_uint_eq(hdr.version, 2);
+  ck_assert_int_eq(simulcrypt_find_u16(payload, hdr.payload_len, EMMG_P_ERROR_STATUS, &err), 1);
+  ck_assert_uint_eq(err, EMMG_ERR_UNSUPPORTED_PROTOCOL_VERSION);
+
+  rn = read(fd, msg, sizeof msg);
+  ck_assert_int_eq(rn, 0);
+
+  close(fd);
+  emmg_server_stop(s);
+}
+END_TEST
+
 static double monotonic_seconds(void) {
   struct timespec ts;
   ck_assert_int_eq(clock_gettime(CLOCK_MONOTONIC, &ts), 0);
@@ -565,18 +601,132 @@ static void assert_closed_by_server(int fd) {
     ssize_t rn;
     int remain_ms = (int)((deadline - monotonic_seconds()) * 1000.0);
     int pr;
-    if (remain_ms <= 0)
-      ck_abort_msg("fd %d: server never closed the connection", fd);
+    if (remain_ms <= 0) ck_abort_msg("fd %d: server never closed the connection", fd);
     pr = poll(&pfd, 1, remain_ms);
     ck_assert_msg(pr > 0, "fd %d: expected server-side close to be observable, poll returned %d", fd, pr);
     rn = read(fd, buf, sizeof buf);
-    if (rn == 0)
-      return;
-    if (rn < 0 && errno == ECONNRESET)
-      return;
+    if (rn == 0) return;
+    if (rn < 0 && errno == ECONNRESET) return;
     ck_assert_msg(rn > 0, "fd %d: unexpected read error, rn=%zd errno=%d", fd, rn, errno);
   }
 }
+
+static int test_listen_loopback(unsigned *port_out) {
+  struct sockaddr_in addr;
+  socklen_t alen = sizeof addr;
+  int on = 1;
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  ck_assert_int_ge(fd, 0);
+  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
+  ck_assert_int_eq(listen(fd, 4), 0);
+  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
+  *port_out = ntohs(addr.sin_port);
+  return fd;
+}
+
+static int test_accept_with_timeout(int listen_fd, int timeout_ms) {
+  struct pollfd pfd = {listen_fd, POLLIN, 0};
+  if (poll(&pfd, 1, timeout_ms) <= 0) return -1;
+  return accept(listen_fd, NULL, NULL);
+}
+
+START_TEST(emmg_server_dial_mode_completes_handshake_and_queues_datagram) {
+  emmg_server_cfg_t cfg = {0};
+  emmg_server_t *s;
+  int listen_fd, fd;
+  unsigned port;
+  unsigned char msg[512], payload[512];
+  simulcrypt_hdr_t hdr;
+  size_t n;
+  static const unsigned char dg[] = {0xAA, 0xBB, 0xCC};
+  unsigned char got[64];
+  size_t got_len;
+  int waited;
+
+  listen_fd = test_listen_loopback(&port);
+  cfg.dial_host = "127.0.0.1";
+  cfg.dial_port = port;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+
+  fd = test_accept_with_timeout(listen_fd, 3000);
+  ck_assert_int_ge(fd, 0);
+
+  n = fake_build_channel_setup(msg, sizeof msg, 3, 0x4A750099, 1);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+  ck_assert_int_eq(fake_read_reply(fd, &hdr, payload, sizeof payload), 0);
+  ck_assert_uint_eq(hdr.type, EMMG_MSG_CHANNEL_STATUS);
+
+  n = fake_build_stream_setup(msg, sizeof msg, 3, 1, 1, 0);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+  ck_assert_int_eq(fake_read_reply(fd, &hdr, payload, sizeof payload), 0);
+  ck_assert_uint_eq(hdr.type, EMMG_MSG_STREAM_STATUS);
+
+  n = fake_build_data_provision(msg, sizeof msg, 3, dg, sizeof dg);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+
+  waited = 0;
+  while (emmg_server_dequeue_emm(s, got, sizeof got, &got_len) != 0 && waited < 3000) {
+    struct timespec ts = {0, 20L * 1000000L};
+    nanosleep(&ts, NULL);
+    waited += 20;
+  }
+  ck_assert_uint_eq(got_len, sizeof dg);
+  ck_assert_mem_eq(got, dg, sizeof dg);
+  ck_assert_uint_eq(emmg_server_client_count(s), 1u);
+
+  close(fd);
+  emmg_server_stop(s);
+  close(listen_fd);
+}
+END_TEST
+
+START_TEST(emmg_server_dial_mode_reconnects_after_drop) {
+  emmg_server_cfg_t cfg = {0};
+  emmg_server_t *s;
+  int listen_fd, fd1, fd2;
+  unsigned port;
+
+  listen_fd = test_listen_loopback(&port);
+
+  cfg.dial_host = "127.0.0.1";
+  cfg.dial_port = port;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+
+  fd1 = test_accept_with_timeout(listen_fd, 3000);
+  ck_assert_int_ge(fd1, 0);
+  close(fd1);
+
+  fd2 = test_accept_with_timeout(listen_fd, 3000);
+  ck_assert_int_ge(fd2, 0);
+
+  close(fd2);
+  emmg_server_stop(s);
+  close(listen_fd);
+}
+END_TEST
+
+START_TEST(emmg_server_dial_mode_stop_is_prompt_when_target_unreachable) {
+  emmg_server_cfg_t cfg = {0};
+  emmg_server_t *s;
+  double t0, t1;
+
+  cfg.dial_host = "127.0.0.1";
+  cfg.dial_port = 1;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+
+  t0 = monotonic_seconds();
+  emmg_server_stop(s);
+  t1 = monotonic_seconds();
+  ck_assert_msg(t1 - t0 < 2.0, "emmg_server_stop took %.2fs, backoff not interruptible", t1 - t0);
+}
+END_TEST
 
 /* fills EMMG_MAX_CONNS (8) slots: idle, post-handshake idle, and parked
    mid-header (fewer than SIMULCRYPT_HDR_LEN bytes, rest never arrives).
@@ -652,6 +802,10 @@ static Suite *emmg_server_suite(void) {
     tcase_set_timeout(tc_integ, 15);
     tcase_add_test(tc_integ, emmg_server_completes_real_handshake_and_queues_datagram);
     tcase_add_test(tc_integ, emmg_server_rejects_stream_setup_before_channel_setup);
+    tcase_add_test(tc_integ, emmg_server_rejects_channel_setup_wrong_version);
+    tcase_add_test(tc_integ, emmg_server_dial_mode_completes_handshake_and_queues_datagram);
+    tcase_add_test(tc_integ, emmg_server_dial_mode_reconnects_after_drop);
+    tcase_add_test(tc_integ, emmg_server_dial_mode_stop_is_prompt_when_target_unreachable);
     tcase_add_test(tc_integ, emmg_server_accepts_up_to_new_conn_cap);
     tcase_add_test(tc_integ, emmg_server_max_conns_override_caps_below_default);
     tcase_add_test(tc_integ, emmg_server_queue_holds_more_than_old_64_cap);

@@ -137,12 +137,20 @@ For the
 .B \-i
 right before this: SDT service_provider_name. Default: passthrough of
 the source's own SDT provider, or
-.B dipitvhead
+.B \-\-default\-provider
 if
 .B \-s/\-\-sdt
 overrides the service_name without a
 .B \-\-provider
 of its own.
+.TP
+.B \-\-default\-provider \fIprovider\fR
+SDT service_provider_name used in place of
+.B dipitvhead
+wherever the above
+.B \-\-provider
+fallback applies. Default:
+.BR dipitvhead .
 .TP
 .BR \-I ", " \-\-iface " " \fIiface\fR
 For the
@@ -472,6 +480,13 @@ For the
 right before this: EMMG protocol version
 .BR 2 " or " 3 .
 Default: accept the client's proposal.
+.TP
+.B \-\-cas\-emmg\-reverse \fItcp://host:port\fR
+For the
+.B \-\-cas\-ecmg
+right before this: dial out to this EMMG instead of listening for it.
+Mutually exclusive with
+.BR \-\-cas\-emmg\-port " and " \-\-cas\-emmg\-max\-conns .
 .TP
 .B \-\-cas\-emm\-pid \fIpid\fR
 For the

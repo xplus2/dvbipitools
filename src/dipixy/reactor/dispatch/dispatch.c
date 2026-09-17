@@ -148,12 +148,20 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
   if (!reactor_cfg()->no_pid_filters) pid_filter_parse_query(query, &filter);
   pmt_pid = pmt_select_parse_query(query);
   lcevc_select_parse_query(reactor_cfg()->no_lcevc ? NULL : query, &lcevc);
-  if (reactor_cfg()->http_auth[0] && (!strcmp(path, "/") || !strcmp(path, "/index.html") || !strcmp(path, "/ui/status.js") || !strcmp(path, "/ui/ws/") || !strcmp(path, "/ui/ws"))) {
-    char authz_buf[200];
-    const char *authz = find_header(headers, num_headers, "Authorization", authz_buf, sizeof authz_buf) ? authz_buf : NULL;
-    if (!http_auth_ok(reactor_cfg(), authz)) {
-      respond_401(c, keep_alive);
-      goto finish;
+  {
+    const char *want_auth = NULL;
+    if (!strcmp(path, "/") || !strcmp(path, "/index.html") || !strcmp(path, "/ui/status.js") || !strcmp(path, "/ui/ws/") || !strcmp(path, "/ui/ws")) {
+      if (reactor_cfg()->http_auth[0]) want_auth = reactor_cfg()->http_auth;
+    } else if (!strcmp(path, "/metrics")) {
+      if (reactor_cfg()->http_metrics_auth[0]) want_auth = reactor_cfg()->http_metrics_auth;
+    }
+    if (want_auth) {
+      char authz_buf[200];
+      const char *authz = find_header(headers, num_headers, "Authorization", authz_buf, sizeof authz_buf) ? authz_buf : NULL;
+      if (!http_auth_ok(want_auth, authz)) {
+        respond_401(c, keep_alive);
+        goto finish;
+      }
     }
   }
 

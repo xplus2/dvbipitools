@@ -12,17 +12,18 @@ dipimetrics [options]
 
 ## Options
 
-| flag | long form     | argument              | default                         |
-|------|---------------|-----------------------|---------------------------------|
-| `-S` | `--sock`      | `<path>`              | `/run/dvbipitools/metrics.sock` |
-| `-l` | `--listen`    | `<addr>:<port>`       | `127.0.0.1:9109`                |
-|      | `--tls-cert`  | `<path>`              | off (plain HTTP)                |
-|      | `--tls-key`   | `<path>`              | off (plain HTTP)                |
-| `-e` | `--expiry`    | `<s>`                 | `30`                            |
-| `-v` | `--verbose`   |                       | off                             |
-|      | `--color`     | `auto\|always\|never` | `auto`                          |
-| `-d` | `--daemonize` |                       | off (foreground)                |
-| `-h` | `--help`      |                       |                                 |
+| flag | long form     | argument              | default                             |
+|------|---------------|-----------------------|-------------------------------------|
+| `-S` | `--sock`      | `<path>`              | `/run/dvbipitools/metrics.sock`     |
+| `-l` | `--listen`    | `<addr>:<port>`       | `127.0.0.1:9109`                    |
+|      | `--tls-cert`  | `<path>`              | off (plain HTTP)                    |
+|      | `--tls-key`   | `<path>`              | off (plain HTTP)                    |
+|      | `--auth`      | `<user>:<pass>`       | off, HTTP Basic Auth for `/metrics` |
+| `-e` | `--expiry`    | `<s>`                 | `30`                                |
+| `-v` | `--verbose`   |                       | off                                 |
+|      | `--color`     | `auto\|always\|never` | `auto`                              |
+| `-d` | `--daemonize` |                       | off (foreground)                    |
+| `-h` | `--help`      |                       |                                     |
 
 ## How it works
 
@@ -46,7 +47,7 @@ only, pass e.g. `-l 0.0.0.0:9109` for "any"). Every other path returns `404`.
 The server is intentionally minimal: one request handled at a time, `Connection: close` on every response, 
 a several-second read/write budget per connection so a stalled client can't wedge the collector. 
 This is a local diagnostics endpoint meant for infrequent scraping, not
-a general-purpose web server. There is no authentication.
+a general-purpose web server. Authentication is off unless `--auth <user>:<pass>` is given.
 
 `--tls-cert`/`--tls-key` (PEM, both required together) switch `-l` from plain HTTP to HTTPS.
 The certificate is reloaded from the same paths on `SIGUSR1`, without dropping the listener or
@@ -121,6 +122,9 @@ dipimetrics -l 0.0.0.0:9109 -e 60
 
 # HTTPS
 dipimetrics -l 0.0.0.0:9109 --tls-cert srv.crt --tls-key srv.key
+
+# require HTTP Basic Auth on the scrape
+dipimetrics -l 0.0.0.0:9109 --auth scraper:hunter2
 
 # let dipitvhead report in
 dipitvhead ... --metrics-id headend1-tv1 --metrics-interval 5

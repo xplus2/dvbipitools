@@ -722,6 +722,66 @@ START_TEST(cors_origin_is_recorded) {
 }
 END_TEST
 
+START_TEST(auth_defaults_to_off) {
+  char *argv[] = {"dipixy", "-I", "eth0", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.http_auth[0], '\0');
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(auth_encodes_user_password) {
+  char *argv[] = {"dipixy", "--auth", "user:pass", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.http_auth, "Basic dXNlcjpwYXNz");
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(auth_rejects_missing_colon) {
+  char *argv[] = {"dipixy", "--auth", "userpass", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(metrics_auth_defaults_to_off) {
+  char *argv[] = {"dipixy", "-I", "eth0", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.http_metrics_auth[0], '\0');
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(metrics_auth_encodes_user_password) {
+  char *argv[] = {"dipixy", "--metrics-auth", "user:pass", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.http_metrics_auth, "Basic dXNlcjpwYXNz");
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(metrics_auth_rejects_missing_colon) {
+  char *argv[] = {"dipixy", "--metrics-auth", "userpass", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(metrics_auth_is_independent_of_auth) {
+  char *argv[] = {"dipixy", "--auth", "user:pass", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.http_auth, "Basic dXNlcjpwYXNz");
+  ck_assert_int_eq(cfg.http_metrics_auth[0], '\0');
+  args_free(&cfg);
+}
+END_TEST
+
 START_TEST(enable_dlna_falls_back_to_concrete_listen) {
   char *argv[] = {"dipixy", "-l", "192.0.2.1:9080", "--enable-dlna", NULL};
   config_t cfg;
@@ -934,6 +994,13 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, ssdp_iface_is_recorded);
   tcase_add_test(tc, cors_origin_defaults_to_null);
   tcase_add_test(tc, cors_origin_is_recorded);
+  tcase_add_test(tc, auth_defaults_to_off);
+  tcase_add_test(tc, auth_encodes_user_password);
+  tcase_add_test(tc, auth_rejects_missing_colon);
+  tcase_add_test(tc, metrics_auth_defaults_to_off);
+  tcase_add_test(tc, metrics_auth_encodes_user_password);
+  tcase_add_test(tc, metrics_auth_rejects_missing_colon);
+  tcase_add_test(tc, metrics_auth_is_independent_of_auth);
   tcase_add_test(tc, enable_dlna_falls_back_to_concrete_listen);
   tcase_add_test(tc, enable_dlna_without_host_or_concrete_listen_rejected);
   tcase_add_test(tc, enable_dlna_records_explicit_host);

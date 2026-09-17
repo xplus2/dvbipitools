@@ -57,89 +57,92 @@ static cas_vendor_t *current_cas_vendor(config_t *cfg, const char *flag) {
 
 static void print_help(void) {
   printf(
-      "usage: %s -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]\n\n"
-      "fetch one or more icecast/shoutcast streams and re-mux them as one DVB-IPI multicast\n"
-      "(a single -i: normal SPTS. multiple -i: MPTS, one program per input)\n\n"
-      "options:\n"
-      "  -i, --input <uri>          icecast/shoutcast source, http:// or https://. repeatable\n"
-      "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
-      "  -O, --out-iface <iface>    outgoing multicast interface\n"
-      "  -r, --rtp                  wrap output in RTP (default: plain UDP; -m output only)\n"
-      "  -T, --ttl <n>              multicast TTL (default: 1)\n"
-      "      --dscp <v>             output DSCP marking: video-high|video-low|voice|\n"
-      "                             signalling|best-effort|0..63 (default: video-high)\n"
-      "      --al-fec <L>:<D>       Annex E Layer 1 FEC (SMPTE 2022-1), L*D<=400, L<=40\n"
-      "      --al-fec-port <port>   AL-FEC stream UDP port, requires --al-fec\n"
-      "  -n, --nit <text>           NIT network_name\n"
-      "  -R, --rist <uri>           rist://host:port[?query] or srt://host:port output,\n"
-      "                             bonded with any other -R of the same scheme given\n"
-      "                             (requires librist/libsrt respectively; a single -R set\n"
-      "                             is one scheme at a time, rist:// and srt:// don't mix)\n"
-      "      --profile <p>          simple|main -R rist:// peers only (default: simple)\n"
-      "      --secret <psk>         -R rist:// pre-shared key (requires --profile main)\n"
-      "      --cname <name>         -R rist:// cname (default: library default)\n"
-      "      --buffer <ms>          -R rist:// recovery buffer (default: library default)\n"
-      "      --srt-group-mode <m>   broadcast|backup required when bonding >1 -R srt:// peer\n"
-      "      --srt-passphrase <pw>  passphrase for every -R srt:// peer, 10..79 chars\n"
-      "      --srt-pbkeylen <n>     AES key length for --srt-passphrase: 16|24|32\n"
-      "      --srt-streamid <id>    SRTO_STREAMID for every -R srt:// peer\n"
-      "      --srt-packetfilter <c> SRTO_PACKETFILTER for every -R srt:// peer\n"
-      "      --srt-latency <ms>     SRTO_LATENCY for every -R srt:// peer\n"
-      "  -e, --error <seconds>      on input error, reconnect after N s (default: fail once,\n"
-      "                             always retries when more than one -i is given)\n"
-      "  -k, --insecure             skip TLS verification\n"
-      "      --tsid <n>             transport_stream_id (default 1)\n"
-      "      --onid <n>             original_network_id (default 1)\n"
-      "  -v, --verbose              periodic stats on stderr\n"
-      "      --color <when>         auto|always|never (default auto)\n"
-      "      --metrics <path>       socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
-      "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
-      "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
-      "      --cas-algo <a>         enable CAS: cissa|csa2|csa1 (default: disabled)\n"
-      "      --cas-ecmg <ep>        ECMG address, tcp://host:port; repeatable, one CAS vendor\n"
-      "                             per --cas-ecmg (required with --cas-algo)\n"
-      "      --cas-cp-duration <ms> crypto-period duration in ms, shared by every vendor (default: 10000)\n"
-      "      --cas-fallback-clear   on total outage (or a --cas-required vendor down): clear\n"
-      "                             instead of staying scrambled on the last known-good CW\n"
-      "      --biss2-sw <hex32>     enable BISS2 Mode 1/E: 32 hex char Session Word, scrambles\n"
-      "                             with CISSA. No ECMG/EMMG. Mutually exclusive with --cas-algo\n"
-      "      --biss2-emit-esw <id>  with --biss2-sw: log the AES-128-ECB Encrypted Session Word\n"
-      "                             for this 32 hex char receiver ID, for out-of-band distribution\n"
-      "      --biss1-sw <hex12>     enable legacy BISS1 Mode 1: 12 hex char Session Word,\n"
-      "                             scrambles with CSA1. Mutually exclusive with --biss2-sw/--cas-algo\n"
-      "      --biss2-ca-receivers <dir> enable BISS2 Mode CA: directory of PEM public keys, one\n"
-      "                             per entitled receiver/group. Rescanned on SIGHUP; a receiver\n"
-      "                             removed from the directory is revoked (forces a Session Key\n"
-      "                             change). Mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo\n"
-      "      --biss2-ca-session-id <n> unique entitlement_session_id, dec or 0x-hex, 16 bit\n"
-      "                                (default: random at startup)\n"
-      "  -d, --daemonize            fork to background after startup, detach from terminal\n"
-      "  -h, --help                 this help\n\n"
-      "scoped to the -i input right before:\n"
-      "      --sid <n>              service_id/program_number (default: auto)\n"
-      "  -s, --sdt <name>           SDT service_name (default: auto)\n"
-      "      --provider <name>      SDT service_provider_name (default: " TOOL_NAME ")\n\n"
-      "scoped to the --cas-ecmg right before:\n"
-      "      --cas-ecmg-version <n> protocol version 2|3 (default: autoneg)\n"
-      "      --cas-super-id <n>     Super_CAS_id, dec or 0x-hex (per vendor)\n"
-      "      --cas-ecm-id <n>       ECM_id (per vendor)\n"
-      "      --cas-ecm-pid <pid>    output ECM PID (default: 0x0020)\n"
-      "      --cas-emmg-port <n>    our EMMG listener port (default: 8002)\n"
-      "      --cas-emmg-max-conns <n> max concurrent EMMG clients (default: 8, max: 64)\n"
-      "      --cas-emmg-version <n> EMMG protocol 2|3 (default: client)\n"
-      "      --cas-emm-pid <pid>    EMM output PID (default: 0x0021)\n"
-      "      --cas-resilience <r>   ECMG loss frozen|cycling|silent (default: frozen)\n"
-      "      --cas-required         outage forces global fallback regardless of others\n"
-      "      --cas-cwenc-algo <a>   encrypt CW_provision's\n"
-      "                             CWs per Annex D, des56|aes128|aes256 (default: off)\n"
-      "      --cas-cwenc-aes-mode <m>      stream|ecb, aes* only (default: stream)\n"
-      "      --cas-cwenc-fixed-key <hex>   14/32/64 hex chars for des56/aes128/aes256 (default: Annex D ROM)\n"
-      "      --cas-cwenc-key-list-a <path> 2048-byte Annex D key list file\n"
-      "      --cas-cwenc-key-list-b <path> same, second list\n\n"
-      "examples:\n"
-      "  %s -i https://example.com/radio.m3u --sdt \"Channel 1\" -m 239.1.1.1:5000\n"
-      "  %s -i http://example.com/somechannel/aac --sdt \"Some Channel\" -i https://example.com/radio.m3u --sdt \"Channel 1\" -m 239.1.1.2:5000 -r -e 5\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME);
+    "usage: %s -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]\n\n"
+    "fetch one or more icecast/shoutcast streams and re-mux them as one DVB-IPI multicast\n"
+    "(a single -i: normal SPTS. multiple -i: MPTS, one program per input)\n\n"
+    "options:\n"
+    "  -i, --input <uri>          icecast/shoutcast source, http:// or https://. repeatable\n"
+    "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for v6)\n"
+    "  -O, --out-iface <iface>    outgoing multicast interface\n"
+    "  -r, --rtp                  wrap output in RTP (default: plain UDP; -m output only)\n"
+    "  -T, --ttl <n>              multicast TTL (default: 1)\n"
+    "      --dscp <v>             output DSCP marking: video-high|video-low|voice|\n"
+    "                             signalling|best-effort|0..63 (default: video-high)\n"
+    "      --al-fec <L>:<D>       Annex E Layer 1 FEC (SMPTE 2022-1), L*D<=400, L<=40\n"
+    "      --al-fec-port <port>   AL-FEC stream UDP port, requires --al-fec\n"
+    "  -n, --nit <text>           NIT network_name\n"
+    "      --default-provider <p> SDT default provider name, if not overridden\n"
+    "                             by --provider at programme level (default: " TOOL_NAME ")\n"
+    "  -R, --rist <uri>           rist://host:port[?query] or srt://host:port output,\n"
+    "                             bonded with any other -R of the same scheme given\n"
+    "                             (requires librist/libsrt respectively; a single -R set\n"
+    "                             is one scheme at a time, rist:// and srt:// don't mix)\n"
+    "      --profile <p>          simple|main -R rist:// peers only (default: simple)\n"
+    "      --secret <psk>         -R rist:// pre-shared key (requires --profile main)\n"
+    "      --cname <name>         -R rist:// cname (default: library default)\n"
+    "      --buffer <ms>          -R rist:// recovery buffer (default: library default)\n"
+    "      --srt-group-mode <m>   broadcast|backup required when bonding >1 -R srt:// peer\n"
+    "      --srt-passphrase <pw>  passphrase for every -R srt:// peer, 10..79 chars\n"
+    "      --srt-pbkeylen <n>     AES key length for --srt-passphrase: 16|24|32\n"
+    "      --srt-streamid <id>    SRTO_STREAMID for every -R srt:// peer\n"
+    "      --srt-packetfilter <c> SRTO_PACKETFILTER for every -R srt:// peer\n"
+    "      --srt-latency <ms>     SRTO_LATENCY for every -R srt:// peer\n"
+    "  -e, --error <seconds>      on input error, reconnect after N s (default: fail once,\n"
+    "                             always retries when more than one -i is given)\n"
+    "  -k, --insecure             skip TLS verification\n"
+    "      --tsid <n>             transport_stream_id (default 1)\n"
+    "      --onid <n>             original_network_id (default 1)\n"
+    "  -v, --verbose              periodic stats on stderr\n"
+    "      --color <when>         auto|always|never (default auto)\n"
+    "      --metrics <path>       socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+    "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
+    "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
+    "      --cas-algo <a>         enable CAS: cissa|csa2|csa1 (default: disabled)\n"
+    "      --cas-ecmg <ep>        ECMG address, tcp://host:port; repeatable, one CAS vendor\n"
+    "                             per --cas-ecmg (required with --cas-algo)\n"
+    "      --cas-cp-duration <ms> crypto-period duration in ms, shared by every vendor (default: 10000)\n"
+    "      --cas-fallback-clear   on total outage (or a --cas-required vendor down): clear\n"
+    "                             instead of staying scrambled on the last known-good CW\n"
+    "      --biss2-sw <hex32>     enable BISS2 Mode 1/E: 32 hex char Session Word, scrambles\n"
+    "                             with CISSA. No ECMG/EMMG. Mutually exclusive with --cas-algo\n"
+    "      --biss2-emit-esw <id>  with --biss2-sw: log the AES-128-ECB Encrypted Session Word\n"
+    "                             for this 32 hex char receiver ID, for out-of-band distribution\n"
+    "      --biss1-sw <hex12>     enable legacy BISS1 Mode 1: 12 hex char Session Word,\n"
+    "                             scrambles with CSA1. Mutually exclusive with --biss2-sw/--cas-algo\n"
+    "      --biss2-ca-receivers <dir> enable BISS2 Mode CA: directory of PEM public keys, one\n"
+    "                             per entitled receiver/group. Rescanned on SIGHUP; a receiver\n"
+    "                             removed from the directory is revoked (forces a Session Key\n"
+    "                             change). Mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo\n"
+    "      --biss2-ca-session-id <n> unique entitlement_session_id, dec or 0x-hex, 16 bit\n"
+    "                                (default: random at startup)\n"
+    "  -d, --daemonize            fork to background after startup, detach from terminal\n"
+    "  -h, --help                 this help\n\n"
+    "scoped to the -i input right before:\n"
+    "      --sid <n>                  service_id/program_number (default: auto)\n"
+    "  -s, --sdt <name>               SDT service_name (default: auto)\n"
+    "      --provider <name>          SDT service_provider_name (default: " TOOL_NAME ")\n\n"
+    "scoped to the --cas-ecmg right before:\n"
+    "      --cas-ecmg-version <n>     protocol version 2|3 (default: autoneg)\n"
+    "      --cas-super-id <n>         Super_CAS_id, dec or 0x-hex (per vendor)\n"
+    "      --cas-ecm-id <n>           ECM_id (per vendor)\n"
+    "      --cas-ecm-pid <pid>        output ECM PID (default: 0x0020)\n"
+    "      --cas-emmg-port <n>        our EMMG listener port (default: 8002)\n"
+    "      --cas-emmg-max-conns <n>   max concurrent EMMG clients (default: 8, max: 64)\n"
+    "      --cas-emmg-version <n>     EMMG protocol 2|3 (default: client)\n"
+    "      --cas-emmg-reverse <ep>    reverse EMMG, dial out to tcp://host:port\n"
+    "      --cas-emm-pid <pid>        EMM output PID (default: 0x0021)\n"
+    "      --cas-resilience <r>       ECMG loss frozen|cycling|silent (default: frozen)\n"
+    "      --cas-required             outage forces global fallback regardless of others\n"
+    "      --cas-cwenc-algo <a>       encrypt CW_provision's\n"
+    "                                 CWs per Annex D, des56|aes128|aes256 (default: off)\n"
+    "      --cas-cwenc-aes-mode <m>   stream|ecb, aes* only (default: stream)\n"
+    "      --cas-cwenc-fixed-key <hx> 14/32/64 hex chars for des56/aes128/aes256 (default: Annex D ROM)\n"
+    "      --cas-cwenc-key-list-a <p> 2048-byte Annex D key list file\n"
+    "      --cas-cwenc-key-list-b <p> same, second list\n\n"
+    "examples:\n"
+    "  %s -i https://example.com/radio.m3u --sdt \"Channel 1\" -m 239.1.1.1:5000\n"
+    "  %s -i http://example.com/somechannel/aac --sdt \"Some Channel\" -i https://example.com/radio.m3u --sdt \"Channel 1\" -m 239.1.1.2:5000 -r -e 5\n",
+    TOOL_NAME, TOOL_NAME, TOOL_NAME);
 }
 
 static int is_sid_used(const unsigned *used, unsigned n_used, unsigned sid) {
@@ -196,6 +199,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"cas-emmg-port", required_argument, 0, 1010},
       {"cas-emmg-version", required_argument, 0, 1011},
       {"cas-emmg-max-conns", required_argument, 0, 1029},
+      {"cas-emmg-reverse", required_argument, 0, 1057},
       {"cas-emm-pid", required_argument, 0, 1012},
       {"cas-cp-duration", required_argument, 0, 1013},
       {"cas-resilience", required_argument, 0, 1014},
@@ -229,6 +233,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"al-fec", required_argument, 0, 1054},
       {"al-fec-port", required_argument, 0, 1055},
       {"provider", required_argument, 0, 1056},
+      {"default-provider", required_argument, 0, 1058},
       {"daemonize", no_argument, 0, 'd'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
@@ -297,6 +302,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->inputs[cfg->n_inputs - 1].provider_text, sizeof cfg->inputs[0].provider_text, optarg, "--provider text"))
+          return ARGS_ERR;
+        break;
+      case 1058:
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->default_provider_text, sizeof cfg->default_provider_text, optarg, "--default-provider text"))
           return ARGS_ERR;
         break;
       case 'e': {
@@ -418,6 +427,17 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         if (!vend) return ARGS_ERR;
         if (argutil_port_parse(optarg, &vend->emmg_port)) {
           argerr("invalid --cas-emmg-port: %s", optarg);
+          return ARGS_ERR;
+        }
+        vend->emmg_port_given = 1;
+        break;
+      }
+      case 1057: {
+        cas_vendor_t *vend = current_cas_vendor(cfg, "cas-emmg-reverse");
+        any_cas_flag = 1;
+        if (!vend) return ARGS_ERR;
+        if (cas_endpoint_parse(optarg, vend->emmg_reverse_host, sizeof vend->emmg_reverse_host, &vend->emmg_reverse_port)) {
+          argerr("invalid --cas-emmg-reverse endpoint: %s", optarg);
           return ARGS_ERR;
         }
         break;

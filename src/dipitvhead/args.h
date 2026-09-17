@@ -83,6 +83,7 @@ typedef struct {
   unsigned al_fec_port;
   table_mode_t nit_mode;     /* -n; one NIT for whole output */
   char nit_text[256];        /* -n <text> */
+  char default_provider_text[256];
   unsigned bitrate_kbps;     /* -b; 0 = no shaping, passthrough rate; one shared budget for whole output */
   int stuff;                 /* -S; needs -b */
   int burst_limit;           /* -B; needs -b */

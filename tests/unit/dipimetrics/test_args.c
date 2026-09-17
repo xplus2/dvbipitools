@@ -88,6 +88,29 @@ START_TEST(tls_key_without_cert_is_rejected) {
 }
 END_TEST
 
+START_TEST(auth_defaults_to_off) {
+  char *argv[] = {"dipimetrics", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.http_auth[0], '\0');
+}
+END_TEST
+
+START_TEST(auth_encodes_user_password) {
+  char *argv[] = {"dipimetrics", "--auth", "user:pass", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.http_auth, "Basic dXNlcjpwYXNz");
+}
+END_TEST
+
+START_TEST(auth_rejects_missing_colon) {
+  char *argv[] = {"dipimetrics", "--auth", "userpass", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 START_TEST(invalid_color_mode_is_rejected) {
   char *argv[] = {"dipimetrics", "--color", "sometimes", NULL};
   config_t cfg;
@@ -121,6 +144,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, tls_cert_and_key_together_are_accepted);
   tcase_add_test(tc, tls_cert_without_key_is_rejected);
   tcase_add_test(tc, tls_key_without_cert_is_rejected);
+  tcase_add_test(tc, auth_defaults_to_off);
+  tcase_add_test(tc, auth_encodes_user_password);
+  tcase_add_test(tc, auth_rejects_missing_colon);
   tcase_add_test(tc, invalid_color_mode_is_rejected);
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
   tcase_add_test(tc, help_returns_help_status);

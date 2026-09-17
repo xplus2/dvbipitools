@@ -17,8 +17,9 @@ typedef struct http_server http_server_t;
 /* binds+listens (nonblocking fd, SO_REUSEADDR). -1 on failure */
 int http_listen(int family, const char *addr, unsigned port);
 
-/* owns HTTP_MAX_CONNS connection slots against listen_fd. NULL on OOM */
-http_server_t *http_server_new(int listen_fd, tls_server_ctx_t *tls_ctx);
+/* owns HTTP_MAX_CONNS connection slots against listen_fd. NULL on OOM.
+   http_auth: "Basic <b64>" to require on GET /metrics, "" to allow anyone */
+http_server_t *http_server_new(int listen_fd, tls_server_ctx_t *tls_ctx, const char *http_auth);
 void http_server_free(http_server_t *hs);
 
 /* append hs's listen fd + every open conn's fd to pfds[*n..cap), advancing *n.

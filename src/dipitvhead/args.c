@@ -228,6 +228,8 @@ static void print_help(void) {
     "      --srt-packetfilter <c> SRTO_PACKETFILTER for every -R srt:// peer\n"
     "      --srt-latency <ms>     SRTO_LATENCY for every -R srt:// peer\n"
     "  -n, --nit <text|->         NIT (whole output): default passthrough; \"-\" drops\n"
+    "      --default-provider <p> SDT default provider name, if not overridden\n"
+    "                             by --provider at programme level (default: " TOOL_NAME ")\n"
     "  -b, --bitrate <kbps>       target output bitrate across all inputs (default: no shaping)\n"
     "  -S, --stuff                null-packet stuffing up to -b's target (needs -b)\n"
     "  -B, --burst-limit          cap output at -b's target, never above (needs -b)\n"
@@ -265,22 +267,22 @@ static void print_help(void) {
     "  -d, --daemonize            fork to background after startup, detach from terminal\n"
     "  -h, --help                 this help\n\n"
     "scoped to the -i input right before:\n"
-    "      --sid <n>                 service_id/program_number (default: auto)\n"
-    "  -s, --sdt <text|->            SDT service_name. default=passthrough, \"-\" drops\n"
-    "      --provider <text>         SDT service_provider_name.\n"
-    "                                default=passthrough (or " TOOL_NAME " with -s)\n"
-    "  -I, --iface <iface>           incoming multicast interface name\n"
-    "      --strip-eit               drop source EIT (default: passed through)\n"
-    "      --strip <list>|none       comma list of DATA,ECM to drop (default: none)\n"
-    "      --hbbtv <url>             inject an AIT (default: none)\n"
-    "      --hbbtv-org-id <n>        HbbTV organisation_id (required with --hbbtv)\n"
-    "      --hbbtv-app-id <n>        HbbTV application_id (required with --hbbtv)\n"
-    "      --rist-profile-in <p>     simple|main; -i rist:// only (default: simple)\n"
-    "      --srt-passphrase-in <p>   passphrase, 10..79 chars.  -i srt:// only\n"
-    "      --srt-pbkeylen-in <n>     AES key length 16|24|32, requires --srt-passphrase-in\n"
-    "      --srt-streamid-in <id>    SRTO_STREAMID; -i srt:// only\n"
-    "      --srt-packetfilter-in <c> SRTO_PACKETFILTER; -i srt:// only\n"
-    "      --srt-latency-in <ms>     SRTO_LATENCY; -i srt:// only\n\n"
+    "      --sid <n>                  service_id/program_number (default: auto)\n"
+    "  -s, --sdt <text|->             SDT service_name. default=passthrough, \"-\" drops\n"
+    "      --provider <text>          SDT service_provider_name.\n"
+    "                                 default=passthrough (or --default-provider with -s)\n"
+    "  -I, --iface <iface>            incoming multicast interface name\n"
+    "      --strip-eit                drop source EIT (default: passed through)\n"
+    "      --strip <list>|none        comma list of DATA,ECM to drop (default: none)\n"
+    "      --hbbtv <url>              inject an AIT (default: none)\n"
+    "      --hbbtv-org-id <n>         HbbTV organisation_id (required with --hbbtv)\n"
+    "      --hbbtv-app-id <n>         HbbTV application_id (required with --hbbtv)\n"
+    "      --rist-profile-in <p>      simple|main; -i rist:// only (default: simple)\n"
+    "      --srt-passphrase-in <p>    passphrase, 10..79 chars.  -i srt:// only\n"
+    "      --srt-pbkeylen-in <n>      AES key length 16|24|32, requires --srt-passphrase-in\n"
+    "      --srt-streamid-in <id>     SRTO_STREAMID; -i srt:// only\n"
+    "      --srt-packetfilter-in <c>  SRTO_PACKETFILTER; -i srt:// only\n"
+    "      --srt-latency-in <ms>      SRTO_LATENCY; -i srt:// only\n\n"
     "scoped to --cas-ecmg right before:\n"
     "      --cas-ecmg-version <n>     protocol version 2|3 (default: auto-negotiate)\n"
     "      --cas-super-id <n>         Super_CAS_id, dec or 0x-hex (required per vendor)\n"
@@ -289,6 +291,7 @@ static void print_help(void) {
     "      --cas-emmg-port <n>        our EMMG listener port (default: 8002)\n"
     "      --cas-emmg-max-conns <n>   max concurrent EMMG client conns (default: 8, max: 64)\n"
     "      --cas-emmg-version <n>     EMMG protocol version 2|3 (default: client proposal)\n"
+    "      --cas-emmg-reverse <ep>    reverse EMMG, dial out to tcp://host:port\n"
     "      --cas-emm-pid <pid>        output PID for its EMM stream (default: 0x0021)\n"
     "      --cas-resilience <r>       ECMG loss handling, frozen|cycling|silent (default: frozen)\n"
     "      --cas-required             its outage forces the global fallback regardless of others\n"
@@ -510,6 +513,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"cas-emmg-port", required_argument, 0, 1014},
       {"cas-emmg-version", required_argument, 0, 1015},
       {"cas-emmg-max-conns", required_argument, 0, 1035},
+      {"cas-emmg-reverse", required_argument, 0, 1057},
       {"cas-emm-pid", required_argument, 0, 1016},
       {"cas-pids", required_argument, 0, 1017},
       {"cas-cp-duration", required_argument, 0, 1018},
@@ -552,6 +556,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"srt-packetfilter", required_argument, 0, 1046},
       {"srt-latency", required_argument, 0, 1047},
       {"provider", required_argument, 0, 1056},
+      {"default-provider", required_argument, 0, 1058},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_mcast = 0;
@@ -641,6 +646,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1056:
         REQUIRE_INPUT("--provider");
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->inputs[cfg->n_inputs - 1].provider_text, sizeof cfg->inputs[0].provider_text, optarg, "--provider text"))
+          return ARGS_ERR;
+        break;
+      case 1058:
+        if (argutil_bufcpy_opt(TOOL_NAME, cfg->default_provider_text, sizeof cfg->default_provider_text, optarg, "--default-provider text"))
           return ARGS_ERR;
         break;
       case 'b': {
@@ -796,7 +805,19 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           argerr("invalid --cas-emmg-port: %s", optarg);
           return ARGS_ERR;
         }
+        cfg->cas_vendors[cfg->n_cas_vendors - 1].emmg_port_given = 1;
         break;
+      case 1057: {
+        cas_vendor_t *vend;
+        any_cas_flag = 1;
+        REQUIRE_CAS_VENDOR("--cas-emmg-reverse");
+        vend = &cfg->cas_vendors[cfg->n_cas_vendors - 1];
+        if (cas_endpoint_parse(optarg, vend->emmg_reverse_host, sizeof vend->emmg_reverse_host, &vend->emmg_reverse_port)) {
+          argerr("invalid --cas-emmg-reverse endpoint: %s", optarg);
+          return ARGS_ERR;
+        }
+        break;
+      }
       case 1015:
         any_cas_flag = 1;
         REQUIRE_CAS_VENDOR("--cas-emmg-version");

@@ -71,11 +71,13 @@ dvbipitools_add_fuzz_harness(emmg_datagrams
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/worker.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/dial.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
 
 dvbipitools_add_fuzz_harness(dvbstp
     fuzz_dvbstp.c

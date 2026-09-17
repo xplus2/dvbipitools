@@ -16,8 +16,7 @@
 #include "priv.h"
 
 static void reap_worker_slot(emmg_server_t *s, int slot) {
-  if (!s->worker_thread_joinable[slot])
-    return;
+  if (!s->worker_thread_joinable[slot]) return;
   pthread_join(s->worker_thread[slot], NULL);
   s->worker_thread_joinable[slot] = 0;
 }
@@ -29,103 +28,104 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
 
   log_line("emmg: rx version=0x%02x type=0x%04x body_len=%zu", version, type, body_len);
   switch (type) {
-  case EMMG_MSG_CHANNEL_SETUP: {
-    unsigned client_id, data_channel_id;
-    if (!simulcrypt_find_u32(body, body_len, EMMG_P_CLIENT_ID, &client_id) || !simulcrypt_find_u16(body, body_len, EMMG_P_DATA_CHANNEL_ID, &data_channel_id)) {
-      *should_close = 1;
-      return;
+    case EMMG_MSG_CHANNEL_SETUP: {
+      unsigned client_id, data_channel_id;
+      if (!simulcrypt_find_u32(body, body_len, EMMG_P_CLIENT_ID, &client_id) || !simulcrypt_find_u16(body, body_len, EMMG_P_DATA_CHANNEL_ID, &data_channel_id)) {
+        *should_close = 1;
+        return;
+      }
+      if (s->required_version && version != s->required_version) {
+        *reply_len = emmg_build_channel_error(reply, SIMULCRYPT_MAX_FRAME, version, client_id, EMMG_ERR_UNSUPPORTED_PROTOCOL_VERSION);
+        *should_close = 1;
+        return;
+      }
+      cs->client_id = client_id;
+      cs->data_channel_id = data_channel_id;
+      cs->have_channel = 1;
+      *reply_len = emmg_build_channel_status(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id);
+      break;
     }
-    cs->client_id = client_id;
-    cs->data_channel_id = data_channel_id;
-    cs->have_channel = 1;
-    *reply_len = emmg_build_channel_status(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id);
-    break;
-  }
-  case EMMG_MSG_CHANNEL_TEST:
-    if (!cs->have_channel) {
-      *should_close = 1;
-      return;
+    case EMMG_MSG_CHANNEL_TEST:
+      if (!cs->have_channel) {
+        *should_close = 1;
+        return;
+      }
+      *reply_len = emmg_build_channel_status(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id);
+      break;
+    case EMMG_MSG_STREAM_SETUP: {
+      unsigned data_stream_id, data_id, data_type;
+      if (!cs->have_channel) {
+        *should_close = 1;
+        return;
+      }
+      if (!simulcrypt_find_u16(body, body_len, EMMG_P_DATA_STREAM_ID, &data_stream_id) || !simulcrypt_find_u16(body, body_len, EMMG_P_DATA_ID, &data_id) || !simulcrypt_find_u8(body, body_len, EMMG_P_DATA_TYPE, &data_type)) {
+        *should_close = 1;
+        return;
+      }
+      cs->data_stream_id = data_stream_id;
+      cs->data_id = data_id;
+      cs->data_type = data_type;
+      cs->have_stream = 1;
+      *reply_len = emmg_build_stream_status(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id, cs->data_stream_id, cs->data_id, cs->data_type);
+      break;
     }
-    *reply_len = emmg_build_channel_status(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id);
-    break;
-  case EMMG_MSG_STREAM_SETUP: {
-    unsigned data_stream_id, data_id, data_type;
-    if (!cs->have_channel) {
-      *should_close = 1;
-      return;
+    case EMMG_MSG_STREAM_TEST:
+      if (!cs->have_stream) {
+        *should_close = 1;
+        return;
+      }
+      *reply_len = emmg_build_stream_status(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id, cs->data_stream_id, cs->data_id, cs->data_type);
+      break;
+    case EMMG_MSG_STREAM_BW_REQUEST: {
+      unsigned bw = 0;
+      int have_bw;
+      if (!cs->have_stream) {
+        *should_close = 1;
+        return;
+      }
+      have_bw = simulcrypt_find_u16(body, body_len, EMMG_P_BANDWIDTH, &bw);
+      *reply_len = emmg_build_stream_bw_allocation(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id, cs->data_stream_id, have_bw, bw);
+      break;
     }
-    if (!simulcrypt_find_u16(body, body_len, EMMG_P_DATA_STREAM_ID, &data_stream_id) || !simulcrypt_find_u16(body, body_len, EMMG_P_DATA_ID, &data_id) || !simulcrypt_find_u8(body, body_len, EMMG_P_DATA_TYPE, &data_type)) {
+    case EMMG_MSG_STREAM_CLOSE_REQUEST:
+      if (!cs->have_stream) {
+        *should_close = 1;
+        return;
+      }
+      *reply_len = emmg_build_stream_close_response(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id, cs->data_stream_id);
       *should_close = 1;
-      return;
-    }
-    cs->data_stream_id = data_stream_id;
-    cs->data_id = data_id;
-    cs->data_type = data_type;
-    cs->have_stream = 1;
-    *reply_len = emmg_build_stream_status(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id, cs->data_stream_id, cs->data_id, cs->data_type);
-    break;
-  }
-  case EMMG_MSG_STREAM_TEST:
-    if (!cs->have_stream) {
+      break;
+    case EMMG_MSG_CHANNEL_CLOSE:
       *should_close = 1;
-      return;
-    }
-    *reply_len = emmg_build_stream_status(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id, cs->data_stream_id, cs->data_id, cs->data_type);
-    break;
-  case EMMG_MSG_STREAM_BW_REQUEST: {
-    unsigned bw = 0;
-    int have_bw;
-    if (!cs->have_stream) {
+      break;
+    case EMMG_MSG_CHANNEL_ERROR:
+    case EMMG_MSG_STREAM_ERROR: {
+      unsigned err = 0;
+      simulcrypt_find_u16(body, body_len, EMMG_P_ERROR_STATUS, &err);
+      log_line("emmg: client reported error (message 0x%04x, error_status 0x%04x)", type, err);
       *should_close = 1;
-      return;
+      break;
     }
-    have_bw = simulcrypt_find_u16(body, body_len, EMMG_P_BANDWIDTH, &bw);
-    *reply_len = emmg_build_stream_bw_allocation(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id, cs->data_stream_id, have_bw, bw);
-    break;
-  }
-  case EMMG_MSG_STREAM_CLOSE_REQUEST:
-    if (!cs->have_stream) {
-      *should_close = 1;
-      return;
+    case EMMG_MSG_DATA_PROVISION: {
+      int n;
+      if (!cs->have_stream) {
+        *should_close = 1;
+        return;
+      }
+      n = emmg_extract_datagrams(body, body_len, publish_datagram_cb, s);
+      if (n < 0) {
+        *should_close = 1;
+        return;
+      }
+      log_line("emmg: data_provision, %d datagram(s) queued", n);
+      break;
     }
-    *reply_len = emmg_build_stream_close_response(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id, cs->data_stream_id);
-    *should_close = 1;
-    break;
-  case EMMG_MSG_CHANNEL_CLOSE:
-    *should_close = 1;
-    break;
-  case EMMG_MSG_CHANNEL_ERROR:
-  case EMMG_MSG_STREAM_ERROR: {
-    unsigned err = 0;
-    simulcrypt_find_u16(body, body_len, EMMG_P_ERROR_STATUS, &err);
-    log_line("emmg: client reported error (message 0x%04x, error_status 0x%04x)", type, err);
-    *should_close = 1;
-    break;
-  }
-  case EMMG_MSG_DATA_PROVISION: {
-    int n;
-    if (!cs->have_stream) {
-      *should_close = 1;
-      return;
-    }
-    n = emmg_extract_datagrams(body, body_len, publish_datagram_cb, s);
-    if (n < 0) {
-      *should_close = 1;
-      return;
-    }
-    log_line("emmg: data_provision, %d datagram(s) queued", n);
-    break;
-  }
-  default:
-    break; /* clause 4.4.1/5.1.8: unknown message_type is ignored, not an inconsistency */
+    default:
+      break; /* clause 4.4.1/5.1.8: unknown message_type is ignored, not an inconsistency */
   }
 }
 
-static void *worker_main(void *arg) {
-  worker_arg_t *wa = arg;
-  emmg_server_t *s = wa->s;
-  int fd = wa->fd;
-  int slot = wa->slot;
+void emmg_run_session(emmg_server_t *s, int fd, int slot) {
   emmg_conn_state_t cs;
   simulcrypt_reader_t rd;
   int flags;
@@ -136,11 +136,9 @@ static void *worker_main(void *arg) {
   flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
     log_line("emmg: fcntl O_NONBLOCK (slot %d): %s", slot, strerror(errno));
-    close(fd);
-    atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
-    return NULL;
+    return;
   }
-  log_line("emmg: connection accepted (slot %d)", slot);
+  log_line("emmg: connection established (slot %d)", slot);
 
   while (!atomic_load_explicit(&s->stop, memory_order_relaxed) && !signal_stop_requested()) {
     simulcrypt_hdr_t hdr;
@@ -152,10 +150,8 @@ static void *worker_main(void *arg) {
     size_t qlen = atomic_load_explicit(&s->queue_len, memory_order_relaxed);
 
     /* stop draining this socket above high watermark: TCP flow control pushes back on sender */
-    if (!backpressured && qlen >= EMMG_QUEUE_HIGH_WATERMARK)
-      backpressured = 1;
-    else if (backpressured && qlen <= EMMG_QUEUE_LOW_WATERMARK)
-      backpressured = 0;
+    if (!backpressured && qlen >= EMMG_QUEUE_HIGH_WATERMARK)    backpressured = 1;
+    else if (backpressured && qlen <= EMMG_QUEUE_LOW_WATERMARK) backpressured = 0;
     if (backpressured) {
       struct timespec backoff = {0, EMMG_POLL_INTERVAL_MS * 1000000L};
       nanosleep(&backoff, NULL);
@@ -167,7 +163,6 @@ static void *worker_main(void *arg) {
       break;
     }
     if (rc == 0) continue;
-
     handle_message(s, &cs, hdr.version, hdr.type, payload, hdr.payload_len, reply, &reply_len, &should_close);
     if (reply_len) {
       log_line("emmg: tx version=0x%02x type=0x%04x", reply[0], ((unsigned)reply[1] << 8) | reply[2]);
@@ -178,7 +173,15 @@ static void *worker_main(void *arg) {
     }
     if (should_close) break;
   }
+}
 
+static void *worker_main(void *arg) {
+  worker_arg_t *wa = arg;
+  emmg_server_t *s = wa->s;
+  int fd = wa->fd;
+  int slot = wa->slot;
+
+  emmg_run_session(s, fd, slot);
   close(fd);
   atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
   return NULL;

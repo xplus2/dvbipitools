@@ -17,6 +17,9 @@
 #define EMMG_QUEUE_LOW_WATERMARK ((EMMG_QUEUE_CAP * 3) / 4)
 #define EMMG_POLL_INTERVAL_MS 150
 #define EMMG_SEND_TIMEOUT_MS 3000
+#define EMMG_CONNECT_TIMEOUT_MS 3000
+#define EMMG_RECONNECT_BACKOFF_MIN_MS 500
+#define EMMG_RECONNECT_BACKOFF_MAX_MS 30000
 
 typedef struct {
   unsigned char data[EMMG_MAX_DATAGRAM_LEN];
@@ -30,10 +33,15 @@ typedef struct {
 } worker_arg_t;
 
 struct emmg_server {
-  int listen_fd;
+  int listen_fd; /* -1 in dial mode */
   atomic_int stop;
-  pthread_t accept_thread;
+  pthread_t accept_thread; /* dial mode thread */
   unsigned max_conns; /* set once at start, 1..EMMG_MAX_CONNS_CEILING */
+  unsigned char required_version;
+  int dial_mode;
+  const char *dial_host;
+  unsigned dial_port;
+  atomic_int dial_connected;
 
   atomic_int worker_active[EMMG_MAX_CONNS_CEILING];
   pthread_t worker_thread[EMMG_MAX_CONNS_CEILING];
@@ -67,5 +75,9 @@ void publish_datagram_cb(const unsigned char *data, unsigned short len, void *us
 
 /* worker.c */
 void *accept_main(void *arg);
+void emmg_run_session(emmg_server_t *s, int fd, int slot);
+
+/* dial.c */
+void *dial_main(void *arg);
 
 #endif

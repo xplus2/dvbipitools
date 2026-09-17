@@ -211,7 +211,7 @@ START_TEST(tls_get_metrics_returns_200_over_https) {
   store_init(&st);
   lfd = http_listen(AF_INET, "127.0.0.1", 0);
   ck_assert_int_ge(lfd, 0);
-  hs = http_server_new(lfd, tls_ctx);
+  hs = http_server_new(lfd, tls_ctx, "");
   ck_assert_ptr_nonnull(hs);
 
   cfd = connect_to(lfd);
@@ -242,7 +242,7 @@ START_TEST(get_metrics_returns_200_and_openmetrics_body) {
   store_init(&st);
   lfd = http_listen(AF_INET, "127.0.0.1", 0);
   ck_assert_int_ge(lfd, 0);
-  hs = http_server_new(lfd, NULL);
+  hs = http_server_new(lfd, NULL, "");
   ck_assert_ptr_nonnull(hs);
 
   cfd = connect_to(lfd);
@@ -269,7 +269,7 @@ START_TEST(unknown_path_returns_404) {
 
   store_init(&st);
   lfd = http_listen(AF_INET, "127.0.0.1", 0);
-  hs = http_server_new(lfd, NULL);
+  hs = http_server_new(lfd, NULL, "");
   cfd = connect_to(lfd);
   ck_assert_int_eq((int)send(cfd, req, sizeof req - 1, 0), (int)sizeof req - 1);
 
@@ -292,7 +292,7 @@ START_TEST(post_to_metrics_also_returns_404) {
 
   store_init(&st);
   lfd = http_listen(AF_INET, "127.0.0.1", 0);
-  hs = http_server_new(lfd, NULL);
+  hs = http_server_new(lfd, NULL, "");
   cfd = connect_to(lfd);
   ck_assert_int_eq((int)send(cfd, req, sizeof req - 1, 0), (int)sizeof req - 1);
 
@@ -315,7 +315,7 @@ START_TEST(query_string_is_stripped_before_matching) {
 
   store_init(&st);
   lfd = http_listen(AF_INET, "127.0.0.1", 0);
-  hs = http_server_new(lfd, NULL);
+  hs = http_server_new(lfd, NULL, "");
   cfd = connect_to(lfd);
   ck_assert_int_eq((int)send(cfd, req, sizeof req - 1, 0), (int)sizeof req - 1);
 
@@ -337,7 +337,7 @@ START_TEST(sequential_scrapes_each_get_a_correct_independent_response) {
 
   store_init(&st);
   lfd = http_listen(AF_INET, "127.0.0.1", 0);
-  hs = http_server_new(lfd, NULL);
+  hs = http_server_new(lfd, NULL, "");
 
   c1 = connect_to(lfd);
   ck_assert_int_gt((int)send(c1, "GET /metrics HTTP/1.1\r\n\r\n", 26, 0), 0);
@@ -367,7 +367,7 @@ START_TEST(request_counters_reflect_status_and_include_current_request) {
 
   store_init(&st);
   lfd = http_listen(AF_INET, "127.0.0.1", 0);
-  hs = http_server_new(lfd, NULL);
+  hs = http_server_new(lfd, NULL, "");
 
   c1 = connect_to(lfd);
   ck_assert_int_gt((int)send(c1, "GET /metrics HTTP/1.1\r\n\r\n", 26, 0), 0);
@@ -406,7 +406,7 @@ START_TEST(idle_connection_past_deadline_is_reaped) {
 
   store_init(&st);
   lfd = http_listen(AF_INET, "127.0.0.1", 0);
-  hs = http_server_new(lfd, NULL);
+  hs = http_server_new(lfd, NULL, "");
 
   cfd = connect_to(lfd);
   ck_assert_int_gt((int)send(cfd, "GET ", 4, 0), 0); /* never completes request line */
@@ -442,6 +442,76 @@ START_TEST(idle_connection_past_deadline_is_reaped) {
 }
 END_TEST
 
+START_TEST(metrics_requires_auth_when_configured) {
+  store_t st;
+  int lfd, cfd;
+  http_server_t *hs;
+  char buf[8192];
+  const char req[] = "GET /metrics HTTP/1.1\r\nHost: x\r\n\r\n";
+
+  store_init(&st);
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+  hs = http_server_new(lfd, NULL, "Basic dXNlcjpwYXNz");
+  cfd = connect_to(lfd);
+  ck_assert_int_eq((int)send(cfd, req, sizeof req - 1, 0), (int)sizeof req - 1);
+
+  drive_until_closed(hs, &st, cfd);
+  recv_all(cfd, buf, sizeof buf);
+  ck_assert(strstr(buf, "HTTP/1.1 401 Unauthorized") == buf);
+  ck_assert(strstr(buf, "WWW-Authenticate: Basic realm=\"metrics\"") != NULL);
+
+  close(cfd);
+  http_server_free(hs);
+  close(lfd);
+}
+END_TEST
+
+START_TEST(metrics_with_correct_auth_returns_200) {
+  store_t st;
+  int lfd, cfd;
+  http_server_t *hs;
+  char buf[8192];
+  const char req[] = "GET /metrics HTTP/1.1\r\nHost: x\r\nAuthorization: Basic dXNlcjpwYXNz\r\n\r\n";
+
+  store_init(&st);
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+  hs = http_server_new(lfd, NULL, "Basic dXNlcjpwYXNz");
+  cfd = connect_to(lfd);
+  ck_assert_int_eq((int)send(cfd, req, sizeof req - 1, 0), (int)sizeof req - 1);
+
+  drive_until_closed(hs, &st, cfd);
+  recv_all(cfd, buf, sizeof buf);
+  ck_assert(strstr(buf, "HTTP/1.1 200 OK") == buf);
+
+  close(cfd);
+  http_server_free(hs);
+  close(lfd);
+}
+END_TEST
+
+START_TEST(metrics_with_wrong_auth_returns_401) {
+  store_t st;
+  int lfd, cfd;
+  http_server_t *hs;
+  char buf[8192];
+  const char req[] = "GET /metrics HTTP/1.1\r\nHost: x\r\nAuthorization: Basic d3Jvbmc=\r\n\r\n";
+
+  store_init(&st);
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+  hs = http_server_new(lfd, NULL, "Basic dXNlcjpwYXNz");
+  cfd = connect_to(lfd);
+  ck_assert_int_eq((int)send(cfd, req, sizeof req - 1, 0), (int)sizeof req - 1);
+
+  drive_until_closed(hs, &st, cfd);
+  recv_all(cfd, buf, sizeof buf);
+  ck_assert(strstr(buf, "HTTP/1.1 401 Unauthorized") == buf);
+
+  close(cfd);
+  http_server_free(hs);
+  close(lfd);
+}
+END_TEST
+
 static Suite *httpserver_suite(void) {
   Suite *s = suite_create("dipimetrics_httpserver");
   TCase *tc = tcase_create("core");
@@ -454,6 +524,9 @@ static Suite *httpserver_suite(void) {
   tcase_add_test(tc, request_counters_reflect_status_and_include_current_request);
   tcase_add_test(tc, idle_connection_past_deadline_is_reaped);
   tcase_add_test(tc, tls_get_metrics_returns_200_over_https);
+  tcase_add_test(tc, metrics_requires_auth_when_configured);
+  tcase_add_test(tc, metrics_with_correct_auth_returns_200);
+  tcase_add_test(tc, metrics_with_wrong_auth_returns_401);
   suite_add_tcase(s, tc);
   return s;
 }

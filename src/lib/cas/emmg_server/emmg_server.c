@@ -41,8 +41,7 @@ int emmg_server_dequeue_emm(emmg_server_t *s, unsigned char *out, size_t cap, si
   int have;
 
   /* called every packet, almost always empty: skip lock on miss. */
-  if (!atomic_load_explicit(&s->queue_len, memory_order_relaxed))
-    return -1;
+  if (!atomic_load_explicit(&s->queue_len, memory_order_relaxed)) return -1;
 
   pthread_mutex_lock(&s->queue_lock);
   have = atomic_load_explicit(&s->queue_len, memory_order_relaxed) > 0;
@@ -65,9 +64,8 @@ unsigned long emmg_server_emm_dropped_total(emmg_server_t *s) { return atomic_lo
 
 unsigned emmg_server_client_count(emmg_server_t *s) {
   unsigned i, n = 0;
-  for (i = 0; i < s->max_conns; i++)
-    if (atomic_load_explicit(&s->worker_active[i], memory_order_relaxed))
-      n++;
+  if (s->dial_mode) return atomic_load_explicit(&s->dial_connected, memory_order_relaxed) ? 1 : 0;
+  for (i = 0; i < s->max_conns; i++) if (atomic_load_explicit(&s->worker_active[i], memory_order_relaxed)) n++;
   return n;
 }
 
@@ -76,7 +74,6 @@ unsigned long emmg_server_emm_total(emmg_server_t *s) { return atomic_load_expli
 static int tcp_listen_dualstack(unsigned port) {
   struct sockaddr_in6 addr;
   int fd, on = 1, off = 0, flags;
-
   fd = socket(AF_INET6, SOCK_STREAM, 0);
   if (fd < 0) {
     log_line("emmg: socket: %s", strerror(errno));
@@ -113,20 +110,28 @@ emmg_server_t *emmg_server_start(const emmg_server_cfg_t *cfg) {
   if (!s)
     return NULL;
 
-  s->max_conns = cfg->max_conns ? cfg->max_conns : 8;
-  if (s->max_conns > EMMG_MAX_CONNS_CEILING)
-    s->max_conns = EMMG_MAX_CONNS_CEILING;
+  s->required_version = (unsigned char)cfg->required_version;
+  s->dial_mode = cfg->dial_host && cfg->dial_host[0];
 
-  s->listen_fd = tcp_listen_dualstack(cfg->port);
-  if (s->listen_fd < 0) {
-    free(s);
-    return NULL;
+  if (s->dial_mode) {
+    s->listen_fd = -1;
+    s->dial_host = cfg->dial_host;
+    s->dial_port = cfg->dial_port;
+  } else {
+    s->max_conns = cfg->max_conns ? cfg->max_conns : 8;
+    if (s->max_conns > EMMG_MAX_CONNS_CEILING)
+      s->max_conns = EMMG_MAX_CONNS_CEILING;
+    s->listen_fd = tcp_listen_dualstack(cfg->port);
+    if (s->listen_fd < 0) {
+      free(s);
+      return NULL;
+    }
   }
   pthread_mutex_init(&s->queue_lock, NULL);
-
-  if (pthread_create(&s->accept_thread, NULL, accept_main, s) != 0) {
+  if (pthread_create(&s->accept_thread, NULL, s->dial_mode ? dial_main : accept_main, s) != 0) {
     log_line("emmg: pthread_create: %s", strerror(errno));
-    close(s->listen_fd);
+    if (s->listen_fd >= 0)
+      close(s->listen_fd);
     pthread_mutex_destroy(&s->queue_lock);
     free(s);
     return NULL;
@@ -138,23 +143,19 @@ emmg_server_t *emmg_server_start(const emmg_server_cfg_t *cfg) {
 unsigned emmg_server_port(emmg_server_t *s) {
   struct sockaddr_in6 addr;
   socklen_t alen = sizeof addr;
-  if (getsockname(s->listen_fd, (struct sockaddr *)&addr, &alen) < 0)
-    return 0;
+  if (getsockname(s->listen_fd, (struct sockaddr *)&addr, &alen) < 0) return 0;
   return ntohs(addr.sin6_port);
 }
 
 void emmg_server_stop(emmg_server_t *s) {
-  if (!s)
-    return;
+  if (!s) return;
   atomic_store_explicit(&s->stop, 1, memory_order_relaxed);
   pthread_join(s->accept_thread, NULL);
-  close(s->listen_fd);
-
-  for (unsigned i = 0; i < s->max_conns; i++)
-    if (s->worker_thread_joinable[i]) {
-      pthread_join(s->worker_thread[i], NULL);
-      s->worker_thread_joinable[i] = 0;
-    }
+  if (s->listen_fd >= 0) close(s->listen_fd);
+  for (unsigned i = 0; i < s->max_conns; i++) if (s->worker_thread_joinable[i]) {
+    pthread_join(s->worker_thread[i], NULL);
+    s->worker_thread_joinable[i] = 0;
+  }
   pthread_mutex_destroy(&s->queue_lock);
   free(s);
 }

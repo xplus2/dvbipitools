@@ -238,6 +238,13 @@ Also serve
 .B /metrics
 ourselves. Default: off.
 .TP
+.BI \-\-metrics\-auth " user\fR:\fBpass"
+HTTP Basic Auth for
+.B GET /metrics
+(HTTP/1.1 only, requires
+.BR \-\-metrics\-http ).
+Default: off.
+.TP
 .BI "\-f, \-\-format " list
 Comma-separated route whitelist, from
 .BR ts ", " spts ", " rawaudio ", " mp4 ", " hls ", " llhls ", " dash ", " lldash
@@ -398,7 +405,11 @@ runtime, easing your development.
 puts
 .BR / ", " /ui/status.js " and " /ui/ws/
 behind HTTP Basic Auth (checked on HTTP/1.1, HTTP/2 and HTTP/3
-alike). Every other route stays open.
+alike).
+.BI \-\-metrics\-auth\ user : pass
+separately protects
+.B /metrics
+(HTTP/1.1 only). Every other route stays open.
 .RE
 .PP
 Anyway, here are the details. These routes address a source directly

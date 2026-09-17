@@ -11,6 +11,9 @@
 typedef struct {
   unsigned port; /* dual-stack (v4+v6) wildcard listener */
   unsigned max_conns; /* 0 = default (8), else 1..EMMG_MAX_CONNS_CEILING */
+  unsigned required_version;
+  const char *dial_host; /* reverse: dial out to host:port instead */
+  unsigned dial_port;
 } emmg_server_cfg_t;
 
 typedef struct emmg_server emmg_server_t;
@@ -60,10 +63,14 @@ unsigned long emmg_server_emm_dropped_total(emmg_server_t *s);
 #define EMMG_P_DATA_ID 0x0008
 #define EMMG_P_ERROR_STATUS 0x7000
 
+/* ETSI TS 103 197 clause 6.4, error_status: shared with EMMG_ERR */
+#define EMMG_ERR_UNSUPPORTED_PROTOCOL_VERSION 0x0002
+
 #define EMMG_MAX_DATAGRAM_LEN 4096
 
 /* all builders: 0 on overflow, else total frame bytes */
 size_t emmg_build_channel_status(unsigned char *out, size_t cap, unsigned char version, unsigned client_id, unsigned data_channel_id);
+size_t emmg_build_channel_error(unsigned char *out, size_t cap, unsigned char version, unsigned client_id, unsigned short error_status);
 size_t emmg_build_stream_status(unsigned char *out, size_t cap, unsigned char version, unsigned client_id, unsigned data_channel_id, unsigned data_stream_id, unsigned data_id, unsigned data_type);
 size_t emmg_build_stream_close_response(unsigned char *out, size_t cap, unsigned char version, unsigned client_id, unsigned data_channel_id, unsigned data_stream_id);
 /* have_bandwidth: 0 = omit bandwidth field ("allocated bandwidth not known" per spec) */
