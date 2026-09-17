@@ -42,6 +42,8 @@ dvbipitools (2.4.2-1) unstable; urgency=low
     + optional basic auth on /metrics
   * general, spanning multiple tools
     + cmake build flags simplified
+    + no core dumps or strace attach on release builds of
+      dipitvhead, dipiradiohead, dipidescramble, dipicam378
   * codec detection/remux/segmenting
     + MPEG-5 LCEVC
       - limited to 4 enhancement layers per stream
@@ -54,7 +56,7 @@ dvbipitools (2.4.2-1) unstable; urgency=low
       - A_AC4 in Matroska output is more like an educated guess
       - TS 101 154 clause 6.6.1 scope only: fs_index=1, 48/96/192kHz
       - Mandatory Iframe alignment only waits for 4 AC-4 frames
- -- dvbipitools authors <unspecified@example.com>  tbd
+ -- dvbipitools authors <unspecified@example.com>  Thu, 17 Sep 2026 00:00:00 +0200
 
 dvbipitools (2.4.1-1) unstable; urgency=low
   * dipixy
