@@ -2207,6 +2207,7 @@ dvbipitools_add_unit_test(dipimetrics_httpserver
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_server.c)
@@ -2555,7 +2556,8 @@ dvbipitools_add_unit_test(dipixy_dispatch
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/content.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/route.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/route_common.c
-    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/waiters.c)
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/waiters.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
 target_compile_options(test_dipixy_dispatch PRIVATE -ffunction-sections -fdata-sections)
 target_link_options(test_dipixy_dispatch PRIVATE -Wl,--gc-sections)
 
