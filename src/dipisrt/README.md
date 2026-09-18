@@ -62,6 +62,10 @@ broadcast|backup`). Every bonded peer of one endpoint must agree on caller vs. l
 `--rendezvous` lets both ends actively dial each other without a listener (NAT-to-NAT links).
 It needs `--local` and cannot be combined with `srt://@` or `--group-mode`. 
 
+## Running under systemd
+
+See [dipisrt.service](dipisrt.service) for a reasonable starting point.
+
 ## Examples
 
 ```sh

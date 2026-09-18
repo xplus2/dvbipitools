@@ -472,36 +472,12 @@ Install it on the machine running the tool if you want CSA1/CSA2/BISS1.
 
 ## Running under systemd
 
-If you intend to run `dipitvhead` as a systemd service, the unit below is a reasonable starting point.
-`-e` is included so a dropped SPTS input reopens itself instead of relying on a full process restart.
+See [dipitvhead_mux01.service](dipitvhead_mux01.service) for a reasonable starting point.
+Replace the `mux01` when running multiple instances on the same host.
 
 > Note: This service is a micro SCS/muxer/scrambler. How many of them you want to pack on a host is entirely yours.
 > Make sure to do integration tests particularly addressing how the load resulting from this decision is handled.
-> Replace `instancename` to make them easier to distinguish.
 
-```ini
-[Unit]
-Description=dipitvhead-instancename
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/dipitvhead -i rtp://@239.19.75.1:8700 -e 5 -m 239.1.1.1:5000 -s "My Channel"
-Restart=on-failure
-RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=10
-DynamicUser=yes
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-PrivateDevices=yes
-
-[Install]
-WantedBy=multi-user.target
-```
 
 ## Examples
 

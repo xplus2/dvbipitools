@@ -287,33 +287,7 @@ Disk I/O: doesn't happen.
 
 ## Running under systemd
 
-For a systemd-managed deployment, the unit below is a reasonable starting point. If
-`--metrics-id` is set, dipixy also needs write access to the metrics socket, same as any other
-reporter, see [dipimetrics](../dipimetrics/README.md#running-under-systemd).
-
-```ini
-[Unit]
-Description=dipixy
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/dipixy -l 0.0.0.0:9080 -L 0.0.0.0:9443 -i /etc/dvbipitools/channels.m3u -n MyChannels
-Restart=on-failure
-RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=10
-DynamicUser=yes
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-ReadOnlyPaths=/etc/dvbipitools
-
-[Install]
-WantedBy=multi-user.target
-```
+See [dipixy.service](dipixy.service) for a reasonable starting point.
 
 ## ETSI TS 102 905 (DVB-HN) "persona"
 

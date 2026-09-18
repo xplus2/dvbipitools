@@ -1,0 +1,30 @@
+[Unit]
+Description=dipibcg
+After=network-online.target dipimetrics.service
+Wants=network-online.target dipimetrics.service
+PartOf=dipimetrics.service
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+# announce mode example: change the arguments to your needs before actually using the service
+ExecStart=/usr/bin/dipibcg \
+  -a -i /etc/dvbipitools/dipibcg/guide.xml \
+  -M /etc/dvbipitools/dipibcg/mapping.csv -m 239.255.0.2:3938 \
+  --metrics-id bcg --metrics /run/dvbipitools/metrics.sock
+Restart=on-failure
+RestartSec=5
+# needs to be the same as dipimetrics for metrics
+User=dvbipitools
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+# for listening mode,  swap this for a writeable path
+ReadOnlyPaths=/etc/dvbipitools/dipibcg
+# metrics socket, drop together with --metrics-id
+ReadWritePaths=/run/dvbipitools
+
+[Install]
+WantedBy=multi-user.target

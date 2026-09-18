@@ -1,0 +1,29 @@
+[Unit]
+Description=dipisds
+After=network-online.target dipimetrics.service
+Wants=network-online.target dipimetrics.service
+PartOf=dipimetrics.service
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+# announce mode example: change the arguments to your needs before actually using the service
+ExecStart=/usr/bin/dipisds \
+    -a -i /etc/dvbipitools/dipisds/channels.csv \
+    -p example.org -O "My Headend" -m 239.255.0.1:3937 \
+    --metrics-id sds --metrics /run/dvbipitools/metrics.sock
+Restart=on-failure
+RestartSec=5
+User=dvbipitools
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+# for listening mode,  swap this for a writeable path
+ReadOnlyPaths=/etc/dvbipitools/dipisds
+# metrics socket, drop together with --metrics-id
+ReadWritePaths=/run/dvbipitools
+
+[Install]
+WantedBy=multi-user.target

@@ -304,33 +304,9 @@ and BiM is not implemented.
 
 ## Running under systemd
 
-If you want dipisds announcing continuously under systemd, the unit below is a reasonable
-starting point for `-a` mode; `-l` mode works the same way, swapped for `-l`/`-o` and a
-writable path instead of `ReadOnlyPaths`.
-
-```ini
-[Unit]
-Description=dipisds
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/dipisds -a -i /etc/dipisds/channels.csv -p example.org -O "My Headend" -m 239.255.0.1:3937
-Restart=on-failure
-RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=10
-DynamicUser=yes
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-ReadOnlyPaths=/etc/dipisds
-
-[Install]
-WantedBy=multi-user.target
-```
+See [dipisds.service](dipisds.service) for a reasonable starting point (announce mode).
+`-l` listening mode works the same way, swapped for `-l`/`-o` and a writable path
+instead of `ReadOnlyPaths`.
 
 ## Examples
 

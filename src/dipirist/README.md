@@ -57,6 +57,10 @@ If you set `--secret`, `--cname`, or `--buffer` on the command line, those win o
 same multicast group at `--al-fec-port`. Columns * rows <= 400, columns <= 40. Both ends need the same `<L>:<D>` and port.
 Recovers at most one lost packet per column. No effect on the RIST side, which already has its own reliability.
 
+## Running under systemd
+
+See [dipirist.service](dipirist.service) for a reasonable starting point.
+
 ## Examples
 
 ```sh

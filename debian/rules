@@ -43,3 +43,13 @@ override_dh_auto_install:
 	install -D -m 0644 src/dipidescramble/dipidescramble.1 debian/dvbipitools/usr/share/man/man1/dipidescramble.1
 	install -D -m 0644 src/dipixy/dipixy.1 debian/dvbipitools/usr/share/man/man1/dipixy.1
 	install -D -m 0644 src/dvbipitools/dvbipitools.1 debian/dvbipitools/usr/share/man/man1/dvbipitools.1
+	install -D -m 0644 src/dipibcg/dipibcg.service debian/dvbipitools/usr/share/dvbipitools/service/dipibcg.service
+	install -D -m 0644 src/dipicam378/dipicam378.service debian/dvbipitools/usr/share/dvbipitools/service/dipicam378.service
+	install -D -m 0644 src/dipifccret/dipifccret.service debian/dvbipitools/usr/share/dvbipitools/service/dipifccret.service
+	install -D -m 0644 src/dipimetrics/dipimetrics.service debian/dvbipitools/usr/share/dvbipitools/service/dipimetrics.service
+	install -D -m 0644 src/dipiradiohead/dipiradiohead_mux01.service debian/dvbipitools/usr/share/dvbipitools/service/dipiradiohead_mux01.service
+	install -D -m 0644 src/dipisds/dipisds.service debian/dvbipitools/usr/share/dvbipitools/service/dipisds.service
+	install -D -m 0644 src/dipitvhead/dipitvhead_mux01.service debian/dvbipitools/usr/share/dvbipitools/service/dipitvhead_mux01.service
+	install -D -m 0644 src/dipixy/dipixy.service debian/dvbipitools/usr/share/dvbipitools/service/dipixy.service
+	install -D -m 0644 src/dipirist/dipirist.service debian/dvbipitools/usr/share/dvbipitools/service/dipirist.service
+	install -D -m 0644 src/dipisrt/dipisrt.service debian/dvbipitools/usr/share/dvbipitools/service/dipisrt.service

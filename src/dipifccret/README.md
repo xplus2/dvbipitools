@@ -23,55 +23,52 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 ```
 
 ## Options
-```
-  -g, --range <cidr>[,<cidr>...]   multicast range(s) to capture, IPv4 or IPv6
-  -l, --listen <addr>:<port>       unicast bind, shared by RET and FCC traffic
-  -I, --iface <iface>              capture interface (required, single Ethernet NIC)
-  -M, --max-channels <n>           preallocated channel slots (default: 0 = 300)
-  -R, --rtx-pt <n>                 RTP payload type for retransmitted/burst packets (default: 99)
-  -w, --workers <n>                -l socket worker threads (default: 0 = online CPU cores)
-  -u, --user <user>                drop privileges to this user after opening the capture handle
-  -v, --verbose                    periodic stats on stderr
-      --color <when>               auto|always|never (default auto)
-      --metrics <path>             Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)
-      --metrics-id <name>          stable instance id; metrics disabled unless set
-      --metrics-interval <s>       snapshot interval in seconds (default: 5)
-  -d, --daemonize                  fork to background after startup, detach from terminal
-  -h, --help                       this help
-```
+| flag | long form          | argument        | default                       | description                                                   |
+|------|--------------------|-----------------|-------------------------------|---------------------------------------------------------------|
+| -g   | --range            | cidr[,cidr...]  | all                           | multicast range(s) to capture, IPv4 or IPv6                   |
+| -l   | --listen           | addr:<port      |                               | unicast bind, shared by RET and FCC traffic                   |
+| -I,  | --iface            | iface           |                               | capture interface (required, single Ethernet NIC)             |
+| -M   | --max-channels     | n               |                               | 300. preallocated channel slots                               |
+| -R   | --rtx-pt           | n               | 99                            | RTP payload type for retransmitted/burst packets              |
+| -w   | --workers          | n               | <CPU Cores>                   | -l socket worker threads                                      |
+| -u   | --user             | user            | off                           | drop privileges to this user after opening the capture handle |
+| -v   | --verbose          |                 | off                           | periodic stats on stderr                                      |
+|      | --color            | when            | auto                          | auto\|always\|never                                           |
+|      | --metrics          | path            | /run/dvbipitools/metrics.sock | Unix datagram socket for metrics                              | 
+|      | --metrics-id       | name            |                               | stable instance id, metrics disabled unless set               |
+|      | --metrics-interval | s               | 5                             | snapshot interval in seconds                                  |
+| -d   | --daemonize        |                 |                               | fork to background after startup, detach from terminal        |
+| -h   | --help             |                 |                               | prints help                                                   |
+
 
 ### RET (Annex F)
-```
-      --no-ret                     disable RET entirely
-  -B, --buffer <ms>                per-channel retransmission buffer depth (default: 2000)
-  -F, --ff-port <port>             multicast RET session port (default: 0 = original channel's port)
-      --no-mc-ret                  disable the multicast RET session, unicast-only repair
-      --max-ret-clients <n>        pre-allocated unicast RTX per-client sequence slots,
-                                   F.3.2.1 (default: 16384)
-      --ret-client-idle-timeout <s> free a unicast RTX client slot after this many
-                                   seconds with no NACKs (default: 300, 0 = never reap)
-      --no-rsi                     disable RSI self-announcement
-      --rsi-interval <s>           RSI self-announcement interval (default: 5 seconds)
-```
+| flag | long form                 | argument | default       | description                                      |
+|------|---------------------------|----------|---------------|--------------------------------------------------|
+|      | --no-ret                  |          |               | disable RET                                      |
+| -B   | --buffer                  | <ms>     | 2000          | per-channel retransmission buffer size           |
+| -F   | --ff-port                 | <port>   | original port | multicast RET session port                       |
+|      | --no-mc-ret               |          |               | disable multicast RET session                    |
+|      | --max-ret-clients         | <n>      | 16384         | pre-allocated unicast RTX client slots, F.3.2.1  |
+|      | --ret-client-idle-timeout | <s>      | 300           | free RTX client slot after X seconds (0 = never) |
+|      | --no-rsi                  |          |               | disable RSI self-announcement                    |
+|      | --rsi-interval            | <s>      | 5             | RSI self-announcement interval (seconds)         |
+
 
 ### FCC (Annex I)
-```
-      --no-fcc                     disable FCC entirely
-  -G, --gop-cap <ms>               safety cap on cached GOP-in-progress duration (default: 8000)
-  -C, --max-bursts <n>             preallocated concurrent burst-session slots (default: 4096)
-  -X, --burst-multiplier <n>       burst rate as multiple of observed nominal bitrate (default: 1.5)
-  -D, --burst-duration-cap <ms>    hard max burst duration regardless of signaling (default: 10000)
-      --max-buffer-fill-bound <ms> reject a RAMS-R Min RAMS Buffer Fill Requirement above this
-                                   (default: 30000, 0 = none)
-      --fcc-resolve-by-port        resolve ignore-media-ssrc RAMS-R by dedicated per-channel
-                                   port instead of rejecting with 510 (default: off)
-      --fcc-resolve-base-port <p>  base port for --fcc-resolve-by-port (default: 0 = -l port + 1)
-      --congestion-nack-threshold <n>  NACKs during one burst before terminating it as
-                                   congested (default: 5, 0 = disabled)
-      --fcc-range <cidr>[,...]     restrict FCC to these -g sub-ranges (default: all of -g)
-      --fcc-client-range <cidr>[,...] restrict FCC requests to these client source ranges
-                                   (default: any client)
-```
+| flag | long form                   | argument   | default   | description                                                              |
+|------|-----------------------------|------------|-----------|--------------------------------------------------------------------------|
+|      | --no-fcc                    |            |           | disable FCC                                                              |
+| -G   | --gop-cap                   | ms         | 8000      | safety cap on cached GOP-in-progress duration                            |
+| -C   | --max-bursts                | n          | 4096      | preallocated concurrent burst-session slots                              |
+| -X   | --burst-multiplier          | n          | 1.5       | burst rate as multiple of observed nominal bitrate                       |
+| -D   | --burst-duration-cap        | ms         | 10000     | hard max burst duration regardless of signaling                          |
+|      | --max-buffer-fill-bound     | ms         | 30000     | reject a RAMS-R Min RAMS Buffer Fill Requirement above this (0 = none)   |
+|      | --fcc-resolve-by-port       |            | off       | resolve ignore-media-ssrc RAMS-R by dedicated per-channel port           |
+|      | --fcc-resolve-base-port     | port       | -l port+1 | base port for --fcc-resolve-by-port                                      |
+|      | --congestion-nack-threshold | n          | 5         | NACKs during one burst before terminating it as congested (0 = disabled) |
+|      | --fcc-range                 | cidr[,...] | all of -g | restrict FCC to these -g sub-ranges                                      |
+|      | --fcc-client-range          | cidr[,...] | any       | restrict FCC requests to these client source ranges                      |
+
 
 ## Why passive capture, not an IGMP join
 
@@ -135,40 +132,17 @@ Capture needs `CAP_NET_RAW`. Either grant it directly (`setcap cap_net_raw+ep` o
 systemd `AmbientCapabilities=CAP_NET_RAW`) and run as an unprivileged user, or start as root and
 use `-u` to drop to an unprivileged user right after the capture handle opens.
 
+
 ## Stopping
 
 `^C`, SIGINT or SIGTERM: stop the tool.
 
+
 ## Running under systemd
 
 Since dipifccret only needs `CAP_NET_RAW`, not root, a unit granting just that capability
-(instead of `-u`) is a reasonable starting point:
+(instead of `-u`) is a reasonable starting point. See [dipifccret.service](dipifccret.service) for an example.
 
-```ini
-[Unit]
-Description=dipifccret
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/dipifccret -g 239.19.0.0/16 -l 10.0.0.1:6000 -I eth0
-Restart=on-failure
-RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=10
-DynamicUser=yes
-AmbientCapabilities=CAP_NET_RAW
-CapabilityBoundingSet=CAP_NET_RAW
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-LimitNOFILE=65536
-
-[Install]
-WantedBy=multi-user.target
-```
 
 ## Known gaps
 

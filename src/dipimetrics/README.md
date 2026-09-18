@@ -82,34 +82,10 @@ and every `404`, with enough detail to diagnose a misbehaving exporter or a stra
 
 ## Running under systemd
 
+See [dipimetrics.service](dipimetrics.service) for a reasonable starting point.
+
 Make sure that the processes reporting to the metrics.sock have the according permissions to do so.
-
 For example, use `User=dvbipitools` in their systemd units.
-
-```ini
-[Unit]
-Description=dipimetrics
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=dvbipitools
-RuntimeDirectory=dvbipitools
-ExecStart=/usr/bin/dipimetrics --sock /run/dvbipitools/metrics.sock --listen 127.0.0.1:9109
-Restart=on-failure
-RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=10
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-
-[Install]
-WantedBy=multi-user.target
-```
-
 
 ## Examples
 

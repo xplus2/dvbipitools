@@ -86,33 +86,9 @@ the error is logged. (No effect in `-l` mode).
 
 ## Running under systemd
 
-If `dipibcg` is meant to run continuously under systemd, the unit below is a reasonable starting
-point for `-a` mode; `-l` mode works the same way, swapped for `-l`/`-o` and a writable path
+See [dipibcg.service](dipibcg.service) for a reasonable starting point (announce mode).
+`-l` listening mode works the same way, swapped for `-l`/`-o` and a writable path
 instead of `ReadOnlyPaths`.
-
-```ini
-[Unit]
-Description=dipibcg
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/dipibcg -a -i /etc/dipibcg/guide.xml -M /etc/dipibcg/mapping.csv -m 239.255.0.2:3938
-Restart=on-failure
-RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=10
-DynamicUser=yes
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-ReadOnlyPaths=/etc/dipibcg
-
-[Install]
-WantedBy=multi-user.target
-```
 
 ## Examples
 

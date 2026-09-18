@@ -1,0 +1,29 @@
+
+[Unit]
+Description=dipixy
+After=network-online.target dipimetrics.service
+Wants=network-online.target dipimetrics.service
+PartOf=dipimetrics.service
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+# example: change the arguments to your needs before actually using the service
+# TLS listener stays unbound without server.crt/server.key in /etc/dvbipitools
+ExecStart=/usr/bin/dipixy \
+  -l 0.0.0.0:9080 -L 0.0.0.0:9443 -i /etc/dvbipitools/channels.m3u -n MyChannels \
+  --metrics-id xy --metrics /run/dvbipitools/metrics.sock
+Restart=on-failure
+RestartSec=5
+User=dvbipitools
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/etc/dvbipitools
+# metrics socket, drop together with --metrics-id
+ReadWritePaths=/run/dvbipitools
+
+[Install]
+WantedBy=multi-user.target

@@ -9,21 +9,21 @@ dipicam378 -k <keyfile> [options]
 
 ## Options
 
-| flag | long form            | argument              | default             |
-|------|----------------------|-----------------------|---------------------|
-| `-k` | `--key`              | `<path>`              | required            |
-| `-s` | `--serial`           | `<id>`                | none = no filtering |
-| `-p` | `--port`             | `<n>`                 | `27500`             |
-| `-a` | `--auth`             | `[user:]<pass>`       | `dipicam378`        |
-|      | `--caid`             | `<hex>`               | none = no filtering |
-|      | `--algo`             | `cissa\|csa2`         | `cissa`             |
-| `-v` | `--verbose`          |                       |                     |
-|      | `--color`            | `auto\|always\|never` | `auto`              |
+| flag | long form            | argument              | default                         |
+|------|----------------------|-----------------------|---------------------------------|
+| `-k` | `--key`              | `<path>`              | required                        |
+| `-s` | `--serial`           | `<id>`                | none = no filtering             |
+| `-p` | `--port`             | `<n>`                 | `27500`                         |
+| `-a` | `--auth`             | `[user:]<pass>`       | `dipicam378`                    |
+|      | `--caid`             | `<hex>`               | none = no filtering             |
+|      | `--algo`             | `cissa\|csa2`         | `cissa`                         |
+| `-v` | `--verbose`          |                       |                                 |
+|      | `--color`            | `auto\|always\|never` | `auto`                          |
 |      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock` |
-|      | `--metrics-id`       | `<name>`              | none = metrics disabled |
-|      | `--metrics-interval` | `<s>`                 | `5`                 |
-| `-d` | `--daemonize`        |                       | off (foreground)    |
-| `-h` | `--help`             |                       |                     |
+|      | `--metrics-id`       | `<name>`              | none = metrics disabled         |
+|      | `--metrics-interval` | `<s>`                 | `5`                             |
+| `-d` | `--daemonize`        |                       | off (foreground)                |
+| `-h` | `--help`             |                       |                                 |
 
 This tool is for debugging and validation only. A password is required because the
 protocol's encryption relies on it. A username is optional, give one only if you
@@ -69,6 +69,17 @@ Nothing else.
 
 Connection accept/close and cs378x message types in/out are logged unconditionally.
 `-v` adds finer detail like ECM/EMM request fields
+
+## Running under systemd
+
+See [dipicam378.service](dipicam378.service) for a reasonable starting point.
+
+The device key is handed to the service via `LoadCredential=`, so it can stay
+root-only (`0600`) in `/etc/dvbipitools/dipicam378/` while the service runs as `dvbipitools`,
+the user owning the metrics socket (see dipimetrics).
+
+The password given with `-a` is visible in the process list. Fine for a test tool,
+but keep it in mind on shared hosts.
 
 ## Example
 

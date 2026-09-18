@@ -1,0 +1,28 @@
+
+[Unit]
+Description=dipitvhead_mux01
+After=network-online.target dipimetrics.service
+Wants=network-online.target dipimetrics.service
+PartOf=dipimetrics.service
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+# example: change the arguments to your needs before actually using the service
+ExecStart=/usr/bin/dipitvhead \
+    -i rtp://@239.19.75.1:8700 -e 5 -m 239.1.2.1:5000 -s "My Channel" --provider "dvbipitools" \
+    --metrics-id tvhead_mux01 --metrics /run/dvbipitools/metrics.sock
+Restart=on-failure
+RestartSec=5
+User=dvbipitools
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+# metrics socket, drop together with --metrics-id
+ReadWritePaths=/run/dvbipitools
+
+[Install]
+WantedBy=multi-user.target
