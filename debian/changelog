@@ -1,3 +1,7 @@
+dvbipitools (2.5.0-1) unstable; urgency=low
+  * example systemd units
+ -- dvbipitools authors <unspecified@example.com>  tbd
+
 dvbipitools (2.4.2-1) unstable; urgency=low
   * dipixy
     + lock-free client handling (buffer pools were already there)
