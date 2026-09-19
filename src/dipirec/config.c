@@ -345,9 +345,9 @@ static const yamlcfg_key_t keys[] = {
   {"srt.latency", apply_srt_latency, 0, 0},
 };
 
-int rec_cfg_load(config_t *cfg, const char *path) {
+int rec_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
-  return yamlcfg_load(&y, TOOL_NAME, 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg) == YAMLCFG_ERROR ? -1 : 0;
+  return yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_STRICT : 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg) == YAMLCFG_ERROR ? -1 : 0;
 }
 
 static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
@@ -360,7 +360,7 @@ static int count_kind(const config_t *cfg, out_kind_t k) {
   return n;
 }
 
-int rec_cfg_test(const char *path) {
+int rec_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   config_t cfg;
   int n_rist = 0;
@@ -371,7 +371,7 @@ int rec_cfg_test(const char *path) {
   const args_flags_t *fl = &cfg.fl;
 
   rec_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, 1, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
   n_rist = count_kind(&cfg, OUT_RIST);
   n_file = count_kind(&cfg, OUT_FILE);
   n_rtmp = count_kind(&cfg, OUT_RTMP) + count_kind(&cfg, OUT_RTMPS);
@@ -396,6 +396,5 @@ int rec_cfg_test(const char *path) {
   warn_if(&y, cfg.srt_passphrase[0] && (strlen(cfg.srt_passphrase) < 10 || strlen(cfg.srt_passphrase) > 79), "srt.passphrase must be 10..79 characters");
   warn_if(&y, cfg.srt_pbkeylen && !cfg.srt_passphrase[0], "srt.pbkeylen requires srt.passphrase");
   warn_if(&y, !has_srt && (cfg.srt_passphrase[0] || cfg.srt_streamid[0] || cfg.srt_packetfilter[0] || cfg.srt_latency_ms) && cfg.n_out, "srt.* settings need an srt:// out target");
-  yamlcfg_report(&y);
-  return 0;
+  return yamlcfg_report(&y);
 }

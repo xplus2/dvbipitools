@@ -15,58 +15,59 @@ dipixy [-l addr:port] [-i source ...] [options]
 
 ## Options
 
-| flag | long form                | argument              | default                                                   | scope |
-|------|--------------------------|-----------------------|-----------------------------------------------------------|-------|
-| `-I` | `--iface`                | `<iface>`             | kernel default route                                      |       |
-| `-l` | `--listen`               | `<addr>:<port>`       | `all:9080`                                                |       |
-| `-L` | `--listen-tls`           | `<addr>:<port>`       | `all:9443`                                                |       |
-|      | `--tls-cert`             | `<path>`              | search default paths, see below                           |       |
-|      | `--tls-key`              | `<path>`              | search default paths, see below                           |       |
-| `-j` | `--workers`              | `-1\|-2\|-3` or `<n>` | `-1` (that many x cpu cores) or <n> reactor threads       |       |
-|      | `--max-clients`          | `<n>`                 | `256`, cap on concurrent streams                          |       |
-|      | `--max-channels`         | `<n>`                 | `32`, cap on concurrent (source,filter,pmt,container)     |       |
-|      | `--idle-timeout`         | `<seconds>`           | `0` (off), close a connection idle this long              |       |
-|      | `--capture-ring-size`    | `<KiB>`               | `4096`, per-source ingress ring buffer                    |       |
-| `-i` | `--input`                | `<source>`            | none, repeatable                                          |       |
-| `-n` | `--name`                 | `<name>`              | none, names the input                                     | input |
-|      | `--media-type`           | `radio\|tv`           | `tv` only needed for DLNA                                 | input |
-| `-J` | `--join-all`             |                       | off, join all inputs at startup, never leave              |       |
-| `-k` | `--insecure`             |                       | off, skip TLS input verification                          |       |
-|      | `--sds-timeout`          | `<seconds>`           | `3`, sds:// discovery wait                                |       |
-|      | `--sds-refresh-interval` | `<seconds>`           | `30`, sds:// retry                                        |       |
-|      | `--segment-size`         | `<seconds>`           | `3` (hls, hls-fmp4, llhls, dash, lldash)                  |       |
-|      | `--segment-count`        | `<n>`                 | `4`                                                       |       |
-|      | `--hls-part-size`        | `<seconds>`           | `0.35` (llhls, must be `<` segment-size)                  |       |
-|      | `--dash-part-size`       | `<seconds>`           | `0.333` (`lldash`, must be `<` segment-size)              |       |
-|      | `--dash-utc-url`         | `<url>`               | `http://time.akamai.com/?iso&ms` (`lldash`)               |       |
-|      | `--hls-seg-pool`         | `<n>`                 | `8`, per-size-class segment buffer cap                    |       |
-|      | `--metrics`              | `<path>`              | `/run/dvbipitools/metrics.sock`                           |       |
-|      | `--metrics-id`           | `<name>`              | none (metrics disabled unless set)                        |       |
-|      | `--metrics-interval`     | `<s>`                 | `5`                                                       |       |
-|      | `--metrics-http`         |                       | off (also serve `/metrics` ourselves)                     |       |
-|      | `--metrics-auth`         | `<user:pass>`         | off (HTTP Basic Auth for `/metrics`, if `--metrics-http`) |       |
-|      | `--status-tpl`           | `<path>`              | built-in, override with your own                          |       |
-|      | `--auth`                 | `<user:pass>`         | off (HTTP Basic Auth for status)                          |       |
-|      | `--cors-origin`          | `<list>`              | `*` (comma-separated allowlist vs `Origin`)               |       |
-| `-f` | `--format`               | `<list>`              | all, allow `ts,spts,rawaudio,mp4,hls,llhls,dash,lldash`   |       |
-|      | `--no-url-rtp`           |                       | off (deactivate `/rtp/`)                                  |       |
-|      | `--no-url-udp`           |                       | off (deactivate `/udp/`)                                  |       |
-|      | `--no-url-srt`           |                       | off (deactivate `/srt/`)                                  |       |
-|      | `--no-pid-filters`       |                       | off (deactivate `?filter=`)                               |       |
-|      | `--no-lcevc`             |                       | off (deactivate `?lcevc=`)                                |       |
-|      | `--no-http2`             |                       | off (disable HTTP/2)                                      |       |
-|      | `--no-http3`             |                       | off (disable HTTP/3)                                      |       |
-|      | `--no-fcc`               |                       | off (ignore SDS fcc)                                      |       |
-|      | `--no-ret`               |                       | off (ignore SDS ret)                                      |       |
-|      | `--al-fec`               | `<L>:<D>`             | off (Annex E Layer 1 FEC matrix size)                     |       |
-|      | `--no-al-fec`            |                       | off (ignore SDS FECBaseLayer)                             |       |
-|      | `--no-status`            |                       | off (deactivate `/ui/status.js`)                          |       |
-| `-d` | `--daemonize`            |                       | off (fork to background after startup)                    |       |
-| `-v` | `--verbose`              |                       | off                                                       |       |
-|      | `--color`                | `auto\|always\|never` | `auto`                                                    |       |
-| `-c` | `--config`               | `<path>`              | `/etc/dvbipitools/dipixy.yaml`                            |       |
-|      | `--configtest`           |                       | check the config file, then exit                          |       |
-| `-h` | `--help`                 |                       |                                                           |       |
+| flag | long form                | argument              | default                                           | scope |
+|------|--------------------------|-----------------------|---------------------------------------------------|-------|
+| `-I` | `--iface`                | `<iface>`             | kernel default route                              |       |
+| `-l` | `--listen`               | `<addr>:<port>`       | `all:9080`                                        |       |
+| `-L` | `--listen-tls`           | `<addr>:<port>`       | `all:9443`                                        |       |
+|      | `--tls-cert`             | `<path>`              | search default paths, see below                   |       |
+|      | `--tls-key`              | `<path>`              | search default paths, see below                   |       |
+| `-j` | `--workers`              | `-[123]` or `<n>`     | `-1` ("-" cpu core multiplier) or thread count    |       |
+|      | `--max-clients`          | `<n>`                 | `256`, cap on concurrent streams                  |       |
+|      | `--max-channels`         | `<n>`                 | `32`, concurrency (source,filter,pmt,container)   |       |
+|      | `--idle-timeout`         | `<seconds>`           | `0` (off), close a connection idle this long      |       |
+|      | `--capture-ring-size`    | `<KiB>`               | `4096`, per-source ingress ring buffer            |       |
+| `-i` | `--input`                | `<source>`            | none, repeatable                                  |       |
+| `-n` | `--name`                 | `<name>`              | none, names the input                             | input |
+|      | `--media-type`           | `radio\|tv`           | `tv` only needed for DLNA                         | input |
+| `-J` | `--join-all`             |                       | off, join all inputs at startup, never leave      |       |
+| `-k` | `--insecure`             |                       | off, skip TLS input verification                  |       |
+|      | `--sds-timeout`          | `<seconds>`           | `3`, sds:// discovery wait                        |       |
+|      | `--sds-refresh-interval` | `<seconds>`           | `30`, sds:// retry                                |       |
+|      | `--segment-size`         | `<seconds>`           | `3` (hls, hls-fmp4, llhls, dash, lldash)          |       |
+|      | `--segment-count`        | `<n>`                 | `4`                                               |       |
+|      | `--hls-part-size`        | `<seconds>`           | `0.35` (llhls, must be `<` segment-size)          |       |
+|      | `--dash-part-size`       | `<seconds>`           | `0.333` (`lldash`, must be `<` segment-size)      |       |
+|      | `--dash-utc-url`         | `<url>`               | `http://time.akamai.com/?iso&ms` (`lldash`)       |       |
+|      | `--hls-seg-pool`         | `<n>`                 | `8`, per-size-class segment buffer cap            |       |
+|      | `--metrics`              | `<path>`              | `/run/dvbipitools/metrics.sock`                   |       |
+|      | `--metrics-id`           | `<name>`              | none (metrics disabled unless set)                |       |
+|      | `--metrics-interval`     | `<s>`                 | `5`                                               |       |
+|      | `--metrics-http`         |                       | off (also serve `/metrics` ourselves)             |       |
+|      | `--metrics-auth`         | `<user:pass>`         | off (`/metrics` Basic Auth)                       |       |
+|      | `--status-tpl`           | `<path>`              | built-in, override with your own                  |       |
+|      | `--auth`                 | `<user:pass>`         | off (HTTP Basic Auth for status)                  |       |
+|      | `--cors-origin`          | `<list>`              | `*` (comma-separated allowlist vs `Origin`)       |       |
+| `-f` | `--format`               | `<list>`              | all, `ts,spts,rawaudio,mp4,hls,llhls,dash,lldash` |       |
+|      | `--no-url-rtp`           |                       | off (deactivate `/rtp/`)                          |       |
+|      | `--no-url-udp`           |                       | off (deactivate `/udp/`)                          |       |
+|      | `--no-url-srt`           |                       | off (deactivate `/srt/`)                          |       |
+|      | `--no-pid-filters`       |                       | off (deactivate `?filter=`)                       |       |
+|      | `--no-lcevc`             |                       | off (deactivate `?lcevc=`)                        |       |
+|      | `--no-http2`             |                       | off (disable HTTP/2)                              |       |
+|      | `--no-http3`             |                       | off (disable HTTP/3)                              |       |
+|      | `--no-fcc`               |                       | off (ignore SDS fcc)                              |       |
+|      | `--no-ret`               |                       | off (ignore SDS ret)                              |       |
+|      | `--al-fec`               | `<L>:<D>`             | off (Annex E Layer 1 FEC matrix size)             |       |
+|      | `--no-al-fec`            |                       | off (ignore SDS FECBaseLayer)                     |       |
+|      | `--no-status`            |                       | off (deactivate `/ui/status.js`)                  |       |
+| `-d` | `--daemonize`            |                       | off (fork to background after startup)            |       |
+| `-v` | `--verbose`              |                       | off                                               |       |
+|      | `--color`                | `auto\|always\|never` | `auto`                                            |       |
+| `-c` | `--config`               | `<path>`              | `/etc/dvbipitools/dipixy.yaml`                    |       |
+|      | `--config-strict`        |                       | config file issues are errors                     |       |
+|      | `--configtest`           |                       | check the config file, then exit                  |       |
+| `-h` | `--help`                 |                       |                                                   |       |
 
 ### Related to DLNA/UPnP-AV
 
@@ -85,11 +86,16 @@ dipixy [-l addr:port] [-i source ...] [options]
 
 ## Configuration file
 
-All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipixy.yaml](dipixy.yaml)
-(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipixy.yaml](dipixy.yaml).
+Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipixy.yaml` is read if it exists.
 `--configtest` checks the file and exits.
+
+Configuration file issues (unknown or duplicate keys, invalid values, conflicting settings, referenced files
+that are not readable) are reported as warnings and the affected entries are skipped or overridden (last one wins).
+
+With `--config-strict` they are errors instead: all of them are listed and the tool fails early.
 
 ## Input (`-i`)
 

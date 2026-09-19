@@ -12,9 +12,9 @@
 
 void cam378_cfg_defaults(config_t *cfg);
 
-int cam378_cfg_load(config_t *cfg, const char *path);
+int cam378_cfg_load(config_t *cfg, const char *path, int strict);
 
-int cam378_cfg_test(const char *path);
+int cam378_cfg_test(const char *path, int strict);
 
 int cam378_cfg_caid(const char *p, unsigned *out);
 

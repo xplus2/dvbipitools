@@ -10,8 +10,8 @@
 
 void bcg_cfg_defaults(config_t *cfg);
 
-int bcg_cfg_load(config_t *cfg, const char *path);
+int bcg_cfg_load(config_t *cfg, const char *path, int strict);
 
-int bcg_cfg_test(const char *path);
+int bcg_cfg_test(const char *path, int strict);
 
 #endif

@@ -15,9 +15,9 @@
 
 void metrics_cfg_defaults(config_t *cfg);
 
-int metrics_cfg_load(config_t *cfg, const char *path);
+int metrics_cfg_load(config_t *cfg, const char *path, int strict);
 
-int metrics_cfg_test(const char *path);
+int metrics_cfg_test(const char *path, int strict);
 
 const char *metrics_cfg_conflict(const config_t *cfg);
 

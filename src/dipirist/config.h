@@ -10,8 +10,8 @@
 
 void rist_cfg_defaults(config_t *cfg);
 
-int rist_cfg_load(config_t *cfg, const char *path);
+int rist_cfg_load(config_t *cfg, const char *path, int strict);
 
-int rist_cfg_test(const char *path);
+int rist_cfg_test(const char *path, int strict);
 
 #endif

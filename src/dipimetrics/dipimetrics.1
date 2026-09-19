@@ -103,6 +103,11 @@ YAML configuration file. Keys mirror the options above. Without this option,
 .I /etc/dvbipitools/dipimetrics.yaml
 is read if it exists.
 .TP
+.B \-\-config\-strict
+Treat configuration file issues (unknown or duplicate keys, invalid values,
+conflicting settings, unreadable referenced files) as errors instead of
+warnings.
+.TP
 .B \-\-configtest
 Check the configuration file (from
 .B \-c

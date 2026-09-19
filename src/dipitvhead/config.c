@@ -530,9 +530,9 @@ static const yamlcfg_key_t keys[] = {
 {"biss2.ca-session-id", apply_biss2_ca_session_id, 0, 0},
 };
 
-int tvh_cfg_load(config_t *cfg, const char *path) {
+int tvh_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
-  return yamlcfg_load_items(&y, TOOL_NAME, 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg, item_hook) == YAMLCFG_ERROR ? -1 : 0;
+  return yamlcfg_load_items(&y, TOOL_NAME, strict ? YAMLCFG_STRICT : 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg, item_hook) == YAMLCFG_ERROR ? -1 : 0;
 }
 
 typedef struct {
@@ -550,17 +550,16 @@ static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
   if (cond) yamlcfg_warn(y, "%s", msg);
 }
 
-int tvh_cfg_test(const char *path) {
+int tvh_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   config_t cfg;
   report_t r = {&y, 0};
   int fatal;
   tvh_cfg_defaults(&cfg);
-  if (yamlcfg_load_items(&y, TOOL_NAME, 1, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg, item_hook) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load_items(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg, item_hook) != YAMLCFG_LOADED) return -1;
   warn_if(&y, cfg.n_inputs == 0, "input not set (required unless given on the command line)");
   warn_if(&y, !cfg.mcast_port && cfg.n_rist == 0 && cfg.n_srt == 0, "mcast or rist not set (one is required unless given on the command line)");
   fatal = tvh_cfg_check(&cfg, 1, warn_report, &r);
   if (fatal > r.fatal) y.warnings += (unsigned)(fatal - r.fatal);
-  yamlcfg_report(&y);
-  return 0;
+  return yamlcfg_report(&y);
 }

@@ -12,8 +12,8 @@ int scan_cfg_default_exists(void);
 
 void scan_cfg_defaults(config_t *cfg);
 
-int scan_cfg_load(config_t *cfg, const char *path);
+int scan_cfg_load(config_t *cfg, const char *path, int strict);
 
-int scan_cfg_test(const char *path);
+int scan_cfg_test(const char *path, int strict);
 
 #endif

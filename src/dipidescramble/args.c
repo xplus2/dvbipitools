@@ -223,6 +223,7 @@ static void print_help(void) {
     "      --srt-latency <ms>     SRTO_LATENCY (ms) for every -o srt:// target\n"
     "  -d, --daemonize            fork to background after startup, detach from terminal\n"
     "  -c, --config <path>        YAML config file (default: %s, if present)\n"
+    "      --config-strict        fail on config file issues instead of warnings\n"
     "      --configtest           check the config file, then exit\n"
     "  -h, --help                 this help\n\n"
     "examples:\n"
@@ -272,17 +273,19 @@ static const struct option longopts[] = {
   {"strip-lcevc", no_argument, 0, 1026},
   {"daemonize", no_argument, 0, 'd'},
   {"config", required_argument, 0, 'c'},
+  {"config-strict", no_argument, 0, 1028},
   {"configtest", no_argument, 0, 1027},
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
-static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest, int *strict) {
   int c;
   optind = 1;
   opterr = 0;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     if (c == 'c') *cfg_path = optarg;
     if (c == 1027) *configtest = 1;
+    if (c == 1028) *strict = 1;
     if (c == 'h') {
       print_help();
       opterr = 1;
@@ -296,16 +299,17 @@ static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
+  int strict = 0;
   int cli_out = 0;
   args_status_t pst;
   int c;
 
-  pst = prescan(argc, argv, &cfg_path, &configtest);
+  pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
   if (pst != ARGS_OK) return pst;
-  if (configtest) return dscr_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+  if (configtest) return dscr_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
 
   dscr_cfg_defaults(cfg);
-  if (dscr_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+  if (dscr_cfg_load(cfg, cfg_path, strict)) return ARGS_ERR;
 
   optind = 1;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
@@ -509,6 +513,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 'c':
+      case 1028:
       case 1027:
         break;
       case 'h':

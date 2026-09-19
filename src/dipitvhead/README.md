@@ -20,44 +20,45 @@ dipitvhead -i <uri> [per-input options] [-i <uri> ...] {-m <mcast>:<port>|-R <ur
 (ffmpeg-style) - using one before any `-i` is an error. Everything else is mux-wide, shared
 across every input.
 
-| flag | long form             | argument                                | default                                     | scope     |
-|------|-----------------------|-----------------------------------------|---------------------------------------------|-----------|
-| `-i` | `--input`             | `<uri>` / `-`                           | required                                    |           |
-| `-p` | `--pmt-pid`           | `<pid>`                                 | auto: first PAT program whose PMT arrives   | per-input |
-|      | `--sid`               | `<n>`                                   | auto-assigned (lowest free integer)         | per-input |
-| `-s` | `--sdt`               | `<text>` / `-`                          | set SDT, see below                          | per-input |
-|      | `--provider`          | `<text>`                                | passthrough                                 | per-input |
-| `-I` | `--iface`             | `<iface>`                               | kernel route (incoming)                     | per-input |
-|      | `--strip-eit`         |                                         | off (source EIT passed through)             | per-input |
-|      | `--strip`             | `<list>` / `none`                       | `none` (no strip)                           | per-input |
-|      | `--hbbtv`             | `<url>`                                 | none (no AIT sent)                          | per-input |
-|      | `--hbbtv-org-id`      | `<n>`                                   | required with `--hbbtv`                     | per-input |
-|      | `--hbbtv-app-id`      | `<n>`                                   | required with `--hbbtv`                     | per-input |
-| `-m` | `--mcast`             | `<group(6)>:<port>`                     | required unless `-R` given                  |           |
-| `-O` | `--out-iface`         | `<iface>`                               | kernel route (outgoing)                     |           |
-| `-u` | `--udp`               |                                         | off (RTP)                                   |           |
-| `-T` | `--ttl`               | `<n>`                                   | 1                                           |           |
-|      | `--dscp`              | `<v>`                                   | `video-high`                                |           |
-|      | `--al-fec`            | `<L>:<D>`                               | off (Annex E Layer 1 FEC, needs RTP output) |           |
-|      | `--al-fec-port`       | `<port>`                                | required with `--al-fec`                    |           |
-| `-n` | `--nit`               | `<text>` / `-`                          | set NIT, see below                          |           |
-|      | `--default-provider`  | `<provider>`                            | `dipitvhead`                                |           |
-| `-b` | `--bitrate`           | `<kbps>`                                | none (no shaping)                           |           |
-| `-S` | `--stuff`             |                                         | off (needs `-b`)                            |           |
-| `-B` | `--burst-limit`       |                                         | off (needs `-b`)                            |           |
-| `-e` | `--error`             | `<seconds>`                             | fail once (always retries in MPTS mode)     |           |
-| `-k` | `--insecure`          |                                         | off (TLS verified)                          |           |
-|      | `--tsid`              | `<n>`                                   | 1                                           |           |
-|      | `--onid`              | `<n>`                                   | 1                                           |           |
-| `-v` | `--verbose`           |                                         | off                                         |           |
-|      | `--color`             | `auto\|always\|never`                   | `auto`                                      |           |
-|      | `--metrics`           | `<path>`                                | `/run/dvbipitools/metrics.sock`             |           |
-|      | `--metrics-id`        | `<name>`                                | none (metrics disabled unless set)          |           |
-|      | `--metrics-interval`  | `<s>`                                   | `5`                                         |           |
-| `-d` | `--daemonize`         |                                         | off (foreground)                            |           |
-| `-c` | `--config`            | `<path>`                                | `/etc/dvbipitools/dipitvhead.yaml`          |           |
-|      | `--configtest`        |                                         | check the config file, then exit            |           |
-| `-h` | `--help`              |                                         |                                             |           |
+| flag | long form            | argument              | default                              | scope     |
+|------|----------------------|-----------------------|--------------------------------------|-----------|
+| `-i` | `--input`            | `<uri>` / `-`         | required                             |           |
+| `-p` | `--pmt-pid`          | `<pid>`               | auto: first PAT program with a PMT   | per-input |
+|      | `--sid`              | `<n>`                 | auto-assigned (lowest free integer)  | per-input |
+| `-s` | `--sdt`              | `<text>` / `-`        | set SDT, see below                   | per-input |
+|      | `--provider`         | `<text>`              | passthrough                          | per-input |
+| `-I` | `--iface`            | `<iface>`             | kernel route (incoming)              | per-input |
+|      | `--strip-eit`        |                       | off (source EIT passed through)      | per-input |
+|      | `--strip`            | `<list>` / `none`     | `none` (no strip)                    | per-input |
+|      | `--hbbtv`            | `<url>`               | none (no AIT sent)                   | per-input |
+|      | `--hbbtv-org-id`     | `<n>`                 | required with `--hbbtv`              | per-input |
+|      | `--hbbtv-app-id`     | `<n>`                 | required with `--hbbtv`              | per-input |
+| `-m` | `--mcast`            | `<group(6)>:<port>`   | required unless `-R` given           |           |
+| `-O` | `--out-iface`        | `<iface>`             | kernel route (outgoing)              |           |
+| `-u` | `--udp`              |                       | off (RTP)                            |           |
+| `-T` | `--ttl`              | `<n>`                 | 1                                    |           |
+|      | `--dscp`             | `<v>`                 | `video-high`                         |           |
+|      | `--al-fec`           | `<L>:<D>`             | off (Annex E Layer 1 FEC, needs RTP) |           |
+|      | `--al-fec-port`      | `<port>`              | required with `--al-fec`             |           |
+| `-n` | `--nit`              | `<text>` / `-`        | set NIT, see below                   |           |
+|      | `--default-provider` | `<provider>`          | `dipitvhead`                         |           |
+| `-b` | `--bitrate`          | `<kbps>`              | none (no shaping)                    |           |
+| `-S` | `--stuff`            |                       | off (needs `-b`)                     |           |
+| `-B` | `--burst-limit`      |                       | off (needs `-b`)                     |           |
+| `-e` | `--error`            | `<seconds>`           | fail once (always retries on MPTS)   |           |
+| `-k` | `--insecure`         |                       | off (TLS verified)                   |           |
+|      | `--tsid`             | `<n>`                 | 1                                    |           |
+|      | `--onid`             | `<n>`                 | 1                                    |           |
+| `-v` | `--verbose`          |                       | off                                  |           |
+|      | `--color`            | `auto\|always\|never` | `auto`                               |           |
+|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`      |           |
+|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)   |           |
+|      | `--metrics-interval` | `<s>`                 | `5`                                  |           |
+| `-d` | `--daemonize`        |                       | off (foreground)                     |           |
+| `-c` | `--config`           | `<path>`              | `/etc/dvbipitools/dipitvhead.yaml`   |           |
+|      | `--config-strict`    |                       | config file issues are errors        |           |
+|      | `--configtest`       |                       | check the config file, then exit     |           |
+| `-h` | `--help`             |                       |                                      |           |
 
 > Note that the default output changed from _plain UDP_ to _RTP_, since neither FCC nor RET would work
 > on plain streams. You can restore the old behavior by setting `-u`|`--udp`.
@@ -152,11 +153,16 @@ this tool for that. `--srt-passphrase-in`/`--srt-pbkeylen-in`/`--srt-streamid-in
 
 ## Configuration file
 
-All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipitvhead.yaml](dipitvhead.yaml)
-(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipitvhead.yaml](dipitvhead.yaml).
+Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipitvhead.yaml` is read if it exists.
 `--configtest` checks the file and exits.
+
+Configuration file issues (unknown or duplicate keys, invalid values, conflicting settings, referenced files
+that are not readable) are reported as warnings and the affected entries are skipped or overridden (last one wins).
+
+With `--config-strict` they are errors instead: all of them are listed and the tool fails early.
 
 ## Parameters
 

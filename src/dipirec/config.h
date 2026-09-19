@@ -10,8 +10,8 @@
 
 void rec_cfg_defaults(config_t *cfg);
 
-int rec_cfg_load(config_t *cfg, const char *path);
+int rec_cfg_load(config_t *cfg, const char *path, int strict);
 
-int rec_cfg_test(const char *path);
+int rec_cfg_test(const char *path, int strict);
 
 #endif

@@ -42,6 +42,10 @@ typedef struct {
   int depth;
 } walk_t;
 
+static int soft(const yamlcfg_t *y) {
+  return y->check || y->strict;
+}
+
 static void vreport(const yamlcfg_t *y, const char *kind, int line, const char *fmt, va_list ap) __attribute__((format(printf, 4, 0)));
 
 static void vreport(const yamlcfg_t *y, const char *kind, int line, const char *fmt, va_list ap) {
@@ -66,7 +70,7 @@ static void warn_at(yamlcfg_t *y, int line, const char *fmt, ...) __attribute__(
 static void warn_at(yamlcfg_t *y, int line, const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  vreport(y, "warning: ", line, fmt, ap);
+  vreport(y, y->strict ? "error: " : "warning: ", line, fmt, ap);
   va_end(ap);
   y->warnings++;
 }
@@ -74,14 +78,16 @@ static void warn_at(yamlcfg_t *y, int line, const char *fmt, ...) {
 void yamlcfg_warn(yamlcfg_t *y, const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  vreport(y, "warning: ", 0, fmt, ap);
+  vreport(y, y->strict ? "error: " : "warning: ", 0, fmt, ap);
   va_end(ap);
   y->warnings++;
 }
 
-void yamlcfg_report(const yamlcfg_t *y) {
-  if (y->warnings) argutil_err(y->tool, "%s: %u warning%s", y->path, y->warnings, y->warnings == 1 ? "" : "s");
+int yamlcfg_report(const yamlcfg_t *y) {
+  const char *noun = y->strict ? "error" : "warning";
+  if (y->warnings) argutil_err(y->tool, "%s: %u %s%s", y->path, y->warnings, noun, y->warnings == 1 ? "" : "s");
   else             argutil_err(y->tool, "%s: ok", y->path);
+  return y->strict && y->warnings ? -1 : 0;
 }
 
 int yamlcfg_parse_bool(const char *val, int *out) {
@@ -125,18 +131,18 @@ static int apply_value(walk_t *w, const char *val, int line, int in_seq, unsigne
     return 0;
   }
   if (in_seq && !w->keys[i].list) {
-    if (!y->check) return fail(y, line, "%s: not a list", w->path);
+    if (!soft(y)) return fail(y, line, "%s: not a list", w->path);
     warn_at(y, line, "%s: not a list", w->path);
     return 0;
   }
   if (w->seen[i] && item == 0) warn_at(y, line, "duplicate key '%s', last one wins", w->path);
   w->seen[i] = 1;
   if (w->keys[i].apply(w->cfg, val, err, sizeof err)) {
-    if (!y->check) return fail(y, line, "%s: %s", w->path, err[0] ? err : "invalid value");
+    if (!soft(y)) return fail(y, line, "%s: %s", w->path, err[0] ? err : "invalid value");
     warn_at(y, line, "%s: %s", w->path, err[0] ? err : "invalid value");
     return 0;
   }
-  if (y->check && w->keys[i].must_exist && access(val, R_OK)) warn_at(y, line, "%s: %s: %s", w->path, val, strerror(errno));
+  if (soft(y) && w->keys[i].must_exist && access(val, R_OK)) warn_at(y, line, "%s: %s: %s", w->path, val, strerror(errno));
   return 0;
 }
 
@@ -148,7 +154,7 @@ static int list_kind(const walk_t *w) {
 static int item_event(walk_t *w, int begin, int line) {
   char err[192] = "";
   if (!w->item_fn || !w->item_fn(w->cfg, w->path, begin, err, sizeof err)) return 0;
-  if (!w->y->check) return fail(w->y, line, "%s: %s", w->path, err[0] ? err : "invalid item");
+  if (!soft(w->y)) return fail(w->y, line, "%s: %s", w->path, err[0] ? err : "invalid item");
   warn_at(w->y, line, "%s: %s", w->path, err[0] ? err : "invalid item");
   return 0;
 }
@@ -181,11 +187,11 @@ static int on_map_start(walk_t *w, int line) {
 static int on_seq_start(walk_t *w, int line) {
   const frame_t *top;
   if (w->depth == 0) return fail(w->y, line, "top level must be a mapping");
+  if (w->depth >= MAX_DEPTH) return fail(w->y, line, "nesting too deep");
   top = &w->st[w->depth - 1];
   if (top->is_seq) return fail(w->y, line, "nested lists not supported");
   if (top->want_key) return fail(w->y, line, "list used as key");
   if (top->opts) return fail(w->y, line, "%s: options must be a mapping", w->path);
-  if (w->depth >= MAX_DEPTH) return fail(w->y, line, "nesting too deep");
   w->st[w->depth].plen = strlen(w->path);
   w->st[w->depth].want_key = 0;
   w->st[w->depth].is_seq = 1;
@@ -207,7 +213,8 @@ static void on_seq_end(walk_t *w) {
 }
 
 static int on_map_end(walk_t *w, int line) {
-  int item, rc;
+  int item;
+  int rc;
   if (w->depth < 1) return fail(w->y, line, "unbalanced mapping end");
   item = w->st[w->depth - 1].is_item;
   rc = item ? item_event(w, 0, line) : 0;
@@ -231,7 +238,7 @@ static int on_scalar(walk_t *w, const yaml_event_t *e, int line) {
     return apply_value(w, (const char *)e->data.scalar.value, line, 1, top->items++);
   }
   if (top->want_key) {
-    if (top->keyed) {
+    if (top->keyed && w->depth > 1) {
       rc = apply_value(w, (const char *)e->data.scalar.value, line, 1, w->st[w->depth - 2].items++);
       top->want_key = 0;
       top->opts = 1;
@@ -245,7 +252,7 @@ static int on_scalar(walk_t *w, const yaml_event_t *e, int line) {
     top->opts = 0;
     top->want_key = 1;
     if (scalar_is_null(e)) return 0;
-    if (!w->y->check) return fail(w->y, line, "%s: options must be a mapping", w->path);
+    if (!soft(w->y)) return fail(w->y, line, "%s: options must be a mapping", w->path);
     warn_at(w->y, line, "%s: options must be a mapping", w->path);
     return 0;
   }
@@ -267,7 +274,8 @@ static int walk(walk_t *w, yaml_parser_t *p) {
 
   for (;;) {
     yaml_event_t ev;
-    int line, rc = 0;
+    int line;
+    int rc = 0;
     int done = 0;
     if (!yaml_parser_parse(p, &ev)) return parse_fail(w->y, p);
     line = (int)ev.start_mark.line + 1;
@@ -304,11 +312,11 @@ static int walk(walk_t *w, yaml_parser_t *p) {
   }
 }
 
-int yamlcfg_load(yamlcfg_t *y, const char *tool, int check, const char *path, const char *default_path, const yamlcfg_key_t *keys, size_t nkeys, void *cfg) {
-  return yamlcfg_load_items(y, tool, check, path, default_path, keys, nkeys, cfg, NULL);
+int yamlcfg_load(yamlcfg_t *y, const char *tool, int mode, const char *path, const char *default_path, const yamlcfg_key_t *keys, size_t nkeys, void *cfg) {
+  return yamlcfg_load_items(y, tool, mode, path, default_path, keys, nkeys, cfg, NULL);
 }
 
-int yamlcfg_load_items(yamlcfg_t *y, const char *tool, int check, const char *path, const char *default_path, const yamlcfg_key_t *keys, size_t nkeys, void *cfg, yamlcfg_item_fn item) {
+int yamlcfg_load_items(yamlcfg_t *y, const char *tool, int mode, const char *path, const char *default_path, const yamlcfg_key_t *keys, size_t nkeys, void *cfg, yamlcfg_item_fn item) {
   const char *use = path ? path : default_path;
   yaml_parser_t p;
   struct stat sb;
@@ -318,13 +326,14 @@ int yamlcfg_load_items(yamlcfg_t *y, const char *tool, int check, const char *pa
 
   memset(y, 0, sizeof *y);
   y->tool = tool;
-  y->check = check;
+  y->check = mode & YAMLCFG_CHECK;
+  y->strict = mode & YAMLCFG_STRICT;
   if (!use) return YAMLCFG_ABSENT;
   bufcpy(y->path, sizeof y->path, use);
 
   f = fopen(use, "r");
   if (!f) {
-    if (!path && !check && errno == ENOENT) return YAMLCFG_ABSENT;
+    if (!path && !y->check && errno == ENOENT) return YAMLCFG_ABSENT;
     return fail(y, 0, "%s", strerror(errno));
   }
   if (fstat(fileno(f), &sb) || !S_ISREG(sb.st_mode)) {
@@ -354,7 +363,12 @@ int yamlcfg_load_items(yamlcfg_t *y, const char *tool, int check, const char *pa
   free(w);
   yaml_parser_delete(&p);
   fclose(f);
-  return rc ? YAMLCFG_ERROR : YAMLCFG_LOADED;
+  if (rc) return YAMLCFG_ERROR;
+  if (y->strict && !y->check && y->warnings) {
+    yamlcfg_report(y);
+    return YAMLCFG_ERROR;
+  }
+  return YAMLCFG_LOADED;
 }
 
 typedef struct strnode {

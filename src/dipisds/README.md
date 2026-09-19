@@ -53,16 +53,22 @@ dipisds -l -m <mcast>:<port> [options]
 |      | `--fus-logo`      | `<uri>`                     | announce: off                                |
 | `-d` | `--daemonize`     |                             | off (foreground)                             |
 | `-c` | `--config`        | `<path>`                    | `/etc/dvbipitools/dipisds.yaml`              |
+|      | `--config-strict` |                             | config file issues are errors                |
 |      | `--configtest`    |                             | check the config file, then exit             |
 | `-h` | `--help`          |                             |                                              |
 
 ## Configuration file
 
-All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipisds.yaml](dipisds.yaml)
-(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipisds.yaml](dipisds.yaml).
+Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipisds.yaml` is read if it exists.
 `--configtest` checks the file and exits.
+
+Configuration file issues (unknown or duplicate keys, invalid values, conflicting settings, referenced files
+that are not readable) are reported as warnings and the affected entries are skipped or overridden (last one wins).
+
+With `--config-strict` they are errors instead: all of them are listed and the tool fails early.
 
 ## Announce (`-a`)
 

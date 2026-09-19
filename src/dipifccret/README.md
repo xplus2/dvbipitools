@@ -23,25 +23,26 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 ```
 
 ## Options
-| flag | long form               | argument    | default                           | description                                         |
-|------|-------------------------|-------------|-----------------------------------|-----------------------------------------------------|
-| -g   | --range                 | cidr[,...]  | all                               | multicast range(s) to capture                       |
-| -l   | --listen                | addr:<port  |                                   | unicast bind, shared by RET and FCC traffic         |
-| -I,  | --iface                 | iface       |                                   | capture interface (required, single Ethernet NIC)   |
-| -M   | --max-channels          | n           |                                   | 300. preallocated channel slots                     |
-|      | --channel-idle-timeout  | s           | 120                               | free channel slot after silent seconds (0 = never)  |
-| -R   | --rtx-pt                | n           | 99                                | RTP payload type for retransmitted/burst packets    |
-| -w   | --workers               | n           | <CPU Cores>                       | -l socket worker threads                            |
-| -u   | --user                  | user        | off                               | drop privileges to this user                        |
-| -v   | --verbose               |             | off                               | periodic stats on stderr                            |
-|      | --color                 | when        | auto                              | auto\|always\|never                                 |
-|      | --metrics               | path        | /run/dvbipitools/metrics.sock     | Unix datagram socket for metrics                    |
-|      | --metrics-id            | name        |                                   | stable instance id, metrics disabled unless set     |
-|      | --metrics-interval      | s           | 5                                 | snapshot interval in seconds                        |
-| -d   | --daemonize             |             |                                   | fork to background after startup                    |
-| -c   | --config                | path        | /etc/dvbipitools/dipifccret.yaml  | YAML config file                                    |
-|      | --configtest            |             |                                   | check the config file, then exit                    |
-| -h   | --help                  |             |                                   | prints help                                         |
+| flag | long form               | argument    | default                            | description                                         |
+|------|-------------------------|-------------|------------------------------------|-----------------------------------------------------|
+| -g   | --range                 | cidr[,...]  | all                                | multicast range(s) to capture                       |
+| -l   | --listen                | addr:<port  |                                    | unicast bind, shared by RET and FCC traffic         |
+| -I,  | --iface                 | iface       |                                    | capture interface (required, single Ethernet NIC)   |
+| -M   | --max-channels          | n           |                                    | 300. preallocated channel slots                     |
+|      | --channel-idle-timeout  | s           | 120                                | free channel slot after silent seconds (0 = never)  |
+| -R   | --rtx-pt                | n           | 99                                 | RTP payload type for retransmitted/burst packets    |
+| -w   | --workers               | n           | <CPU cores>                        | -l socket worker threads                            |
+| -u   | --user                  | user        | off                                | drop privileges to this user                        |
+| -v   | --verbose               |             | off                                | periodic stats on stderr                            |
+|      | --color                 | when        | auto                               | auto\|always\|never                                 |
+|      | --metrics               | path        | `/run/dvbipitools/metrics.sock`    | Unix datagram socket for metrics                    |
+|      | --metrics-id            | name        |                                    | stable instance id, metrics disabled unless set     |
+|      | --metrics-interval      | s           | 5                                  | snapshot interval in seconds                        |
+| -d   | --daemonize             |             |                                    | fork to background after startup                    |
+| -c   | --config                | path        | `/etc/dvbipitools/dipifccret.yaml` | YAML config file                                    |
+|      | --config-strict         |             |                                    | config file issues are errors                       |
+|      | --configtest            |             |                                    | check the config file, then exit                    |
+| -h   | --help                  |             |                                    | prints help                                         |
 
 
 ### RET (Annex F)
@@ -77,11 +78,16 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 
 ## Configuration file
 
-All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipifccret.yaml](dipifccret.yaml)
-(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipifccret.yaml](dipifccret.yaml).
+Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipifccret.yaml` is read if it exists.
 `--configtest` checks the file and exits.
+
+Configuration file issues (unknown or duplicate keys, invalid values, conflicting settings, referenced files
+that are not readable) are reported as warnings and the affected entries are skipped or overridden (last one wins).
+
+With `--config-strict` they are errors instead: all of them are listed and the tool fails early.
 
 ## Why passive capture, not an IGMP join
 

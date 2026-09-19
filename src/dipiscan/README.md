@@ -8,33 +8,39 @@ dipiscan [options] 1>playlist 2>log
 
 ## Options
 
-| flag | long form     | argument                    | default                          |
-|------|---------------|-----------------------------|----------------------------------|
-| `-m` | `--mcast`     | `<addr>`                    | `239.19.75.0`                    |
-|      |               | or `<addr>/<prefixlen>`     |                                  |
-|      |               | or `<startaddr>-<stopaddr>` |                                  |
-| `-p` | `--port`      | `<port[-port]>`             | `8700`                           |
-| `-f` | `--format`    | `m3u\|csv\|xspf\|xml\|null` | `m3u`                            |
-| `-P` | `--provider`  | `<name>`                    | required with `-f xml`           |
-| `-o` | `--out`       | `<path>` / `-`              | `-` (stdout)                     |
-| `-t` | `--timeout`   | `<secs>`                    | `1`                              |
-| `-j` | `--jets`      | `<jets>`                    | `1` (concurrency)                |
-| `-M` | `--mpts`      |                             | off (SPTS or first program only) |
-| `-u` | `--http-proxy`| `<ip:port>`                 | off (direct IGMP/MLD join)       |
-| `-I` | `--iface`     | `<iface>`                   | kernel default                   |
-| `-v` | `--verbose`   |                             | off                              |
-|      | `--color`     | `auto\|always\|never`       | `auto`                           |
-| `-c` | `--config`    | `<path>`                    | `/etc/dvbipitools/dipiscan.yaml` (if present) |
-|      | `--configtest`|                             | check the config file, then exit |
-| `-h` | `--help`      |                             |                                  |
+| flag | long form          | argument                    | default                           |
+|------|--------------------|-----------------------------|-----------------------------------|
+| `-m` | `--mcast`          | `<addr>`                    | `239.19.75.0`                     |
+|      |                    | or `<addr>/<prefixlen>`     |                                   |
+|      |                    | or `<startaddr>-<stopaddr>` |                                   |
+| `-p` | `--port`           | `<port[-port]>`             | `8700`                            |
+| `-f` | `--format`         | `m3u\|csv\|xspf\|xml\|null` | `m3u`                             |
+| `-P` | `--provider`       | `<name>`                    | required with `-f xml`            |
+| `-o` | `--out`            | `<path>` / `-`              | `-` (stdout)                      |
+| `-t` | `--timeout`        | `<secs>`                    | `1`                               |
+| `-j` | `--jets`           | `<jets>`                    | `1` (concurrency)                 |
+| `-M` | `--mpts`           |                             | off (SPTS or first program only)  |
+| `-u` | `--http-proxy`     | `<ip:port>`                 | off (direct IGMP/MLD join)        |
+| `-I` | `--iface`          | `<iface>`                   | kernel default                    |
+| `-v` | `--verbose`        |                             | off                               |
+|      | `--color`          | `auto\|always\|never`       | `auto`                            |
+| `-c` | `--config`         | `<path>`                    | `/etc/dvbipitools/dipiscan.yaml`  |
+|      | `--config-strict`  |                             | config file issues are errors     |
+|      | `--configtest`     |                             | check the config file, then exit  |
+| `-h` | `--help`           |                             |                                   |
 
 ## Configuration file
 
-All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipiscan.yaml](dipiscan.yaml)
-(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipiscan.yaml](dipiscan.yaml).
+Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipiscan.yaml` is read if it exists.
 `--configtest` checks the file and exits.
+
+Configuration file issues (unknown or duplicate keys, invalid values, conflicting settings, referenced files
+that are not readable) are reported as warnings and the affected entries are skipped or overridden (last one wins).
+
+With `--config-strict` they are errors instead: all of them are listed and the tool fails early.
 
 ## Scan range (`-m`, `-p`)
 

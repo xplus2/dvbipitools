@@ -102,9 +102,10 @@ static int apply_auth(void *c, const char *val, char *err, size_t errsz) {
 }
 
 static int apply_expiry(void *c, const char *val, char *err, size_t errsz) {
+  const unsigned max = UINT_MAX;
   unsigned v;
-  if (argutil_uint_range(val, 1, UINT_MAX, &v)) {
-    snprintf(err, errsz, "invalid seconds '%s' (need 1..%u)", val, UINT_MAX);
+  if (argutil_uint_range(val, 1, max, &v)) {
+    snprintf(err, errsz, "invalid seconds '%s' (need 1..%u)", val, max);
     return -1;
   }
   ((config_t *)c)->expiry_s = v;
@@ -149,20 +150,19 @@ static const yamlcfg_key_t keys[] = {
     {"color", apply_color, 0, 0},
 };
 
-int metrics_cfg_load(config_t *cfg, const char *path) {
+int metrics_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
-  return yamlcfg_load(&y, TOOL_NAME, 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg) == YAMLCFG_ERROR ? -1 : 0;
+  return yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_STRICT : 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg) == YAMLCFG_ERROR ? -1 : 0;
 }
 
-int metrics_cfg_test(const char *path) {
+int metrics_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   config_t cfg;
   const char *conflict;
 
   metrics_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, 1, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
   conflict = metrics_cfg_conflict(&cfg);
   if (conflict) yamlcfg_warn(&y, "%s", conflict);
-  yamlcfg_report(&y);
-  return 0;
+  return yamlcfg_report(&y);
 }

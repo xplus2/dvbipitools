@@ -12,6 +12,9 @@
 
 #define YAMLCFG_LIST_KEYED 2
 
+#define YAMLCFG_CHECK 1
+#define YAMLCFG_STRICT 2
+
 typedef struct {
   const char *key;
   int (*apply)(void *cfg, const char *val, char *err, size_t errsz);
@@ -24,17 +27,18 @@ typedef int (*yamlcfg_item_fn)(void *cfg, const char *list, int begin, char *err
 typedef struct {
   const char *tool;
   int check;
+  int strict;
   unsigned warnings;
   char path[4096];
 } yamlcfg_t;
 
-int yamlcfg_load(yamlcfg_t *y, const char *tool, int check, const char *path, const char *default_path, const yamlcfg_key_t *keys, size_t nkeys, void *cfg);
+int yamlcfg_load(yamlcfg_t *y, const char *tool, int mode, const char *path, const char *default_path, const yamlcfg_key_t *keys, size_t nkeys, void *cfg);
 
-int yamlcfg_load_items(yamlcfg_t *y, const char *tool, int check, const char *path, const char *default_path, const yamlcfg_key_t *keys, size_t nkeys, void *cfg, yamlcfg_item_fn item);
+int yamlcfg_load_items(yamlcfg_t *y, const char *tool, int mode, const char *path, const char *default_path, const yamlcfg_key_t *keys, size_t nkeys, void *cfg, yamlcfg_item_fn item);
 
 void yamlcfg_warn(yamlcfg_t *y, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
-void yamlcfg_report(const yamlcfg_t *y);
+int yamlcfg_report(const yamlcfg_t *y);
 
 int yamlcfg_parse_bool(const char *val, int *out);
 

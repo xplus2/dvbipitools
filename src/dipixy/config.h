@@ -10,8 +10,8 @@
 
 void dixy_cfg_defaults(config_t *cfg);
 
-int dixy_cfg_load(config_t *cfg, const char *path);
+int dixy_cfg_load(config_t *cfg, const char *path, int strict);
 
-int dixy_cfg_test(const char *path);
+int dixy_cfg_test(const char *path, int strict);
 
 #endif

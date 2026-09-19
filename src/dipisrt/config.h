@@ -10,8 +10,8 @@
 
 void srt_cfg_defaults(config_t *cfg);
 
-int srt_cfg_load(config_t *cfg, const char *path);
+int srt_cfg_load(config_t *cfg, const char *path, int strict);
 
-int srt_cfg_test(const char *path);
+int srt_cfg_test(const char *path, int strict);
 
 #endif

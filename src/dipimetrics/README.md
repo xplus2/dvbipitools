@@ -12,28 +12,34 @@ dipimetrics [options]
 
 ## Options
 
-| flag | long form     | argument              | default                             |
-|------|---------------|-----------------------|-------------------------------------|
-| `-S` | `--sock`      | `<path>`              | `/run/dvbipitools/metrics.sock`     |
-| `-l` | `--listen`    | `<addr>:<port>`       | `127.0.0.1:9109`                    |
-|      | `--tls-cert`  | `<path>`              | off (plain HTTP)                    |
-|      | `--tls-key`   | `<path>`              | off (plain HTTP)                    |
-|      | `--auth`      | `<user>:<pass>`       | off, HTTP Basic Auth for `/metrics` |
-| `-e` | `--expiry`    | `<s>`                 | `30`                                |
-| `-v` | `--verbose`   |                       | off                                 |
-|      | `--color`     | `auto\|always\|never` | `auto`                              |
-| `-d` | `--daemonize` |                       | off (foreground)                    |
-| `-c` | `--config`    | `<path>`              | `/etc/dvbipitools/dipimetrics.yaml` |
-|      | `--configtest`|                       | check the config file, then exit    |
-| `-h` | `--help`      |                       |                                     |
+| flag | long form          | argument              | default                             |
+|------|--------------------|-----------------------|-------------------------------------|
+| `-S` | `--sock`           | `<path>`              | `/run/dvbipitools/metrics.sock`     |
+| `-l` | `--listen`         | `<addr>:<port>`       | `127.0.0.1:9109`                    |
+|      | `--tls-cert`       | `<path>`              | off (plain HTTP)                    |
+|      | `--tls-key`        | `<path>`              | off (plain HTTP)                    |
+|      | `--auth`           | `<user>:<pass>`       | off, HTTP Basic Auth for `/metrics` |
+| `-e` | `--expiry`         | `<s>`                 | `30`                                |
+| `-v` | `--verbose`        |                       | off                                 |
+|      | `--color`          | `auto\|always\|never` | `auto`                              |
+| `-d` | `--daemonize`      |                       | off (foreground)                    |
+| `-c` | `--config`         | `<path>`              | `/etc/dvbipitools/dipimetrics.yaml` |
+|      | `--config-strict`  |                       | config file issues are errors       |
+|      | `--configtest`     |                       | check the config file, then exit    |
+| `-h` | `--help`           |                       |                                     |
 
 ## Configuration file
 
-All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipimetrics.yaml](dipimetrics.yaml)
-(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipimetrics.yaml](dipimetrics.yaml).
+Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipimetrics.yaml` is read if it exists.
 `--configtest` checks the file and exits.
+
+Configuration file issues (unknown or duplicate keys, invalid values, conflicting settings, referenced files
+that are not readable) are reported as warnings and the affected entries are skipped or overridden (last one wins).
+
+With `--config-strict` they are errors instead: all of them are listed and the tool fails early.
 
 ## How it works
 

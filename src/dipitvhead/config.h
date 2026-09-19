@@ -14,9 +14,9 @@ typedef void (*tvh_report_fn)(void *ud, int fatal, const char *msg);
 
 void tvh_cfg_defaults(config_t *cfg);
 
-int tvh_cfg_load(config_t *cfg, const char *path);
+int tvh_cfg_load(config_t *cfg, const char *path, int strict);
 
-int tvh_cfg_test(const char *path);
+int tvh_cfg_test(const char *path, int strict);
 
 int tvh_cfg_mcast(config_t *cfg, const char *s);
 int tvh_cfg_pid(const char *s, unsigned *out);

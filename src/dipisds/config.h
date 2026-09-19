@@ -10,8 +10,8 @@
 
 void sds_cfg_defaults(config_t *cfg);
 
-int sds_cfg_load(config_t *cfg, const char *path);
+int sds_cfg_load(config_t *cfg, const char *path, int strict);
 
-int sds_cfg_test(const char *path);
+int sds_cfg_test(const char *path, int strict);
 
 #endif

@@ -45,6 +45,7 @@ static void print_help(void) {
       "      --color <when>       auto|always|never (default auto)\n"
       "  -d, --daemonize          fork to background after startup, detach from terminal\n"
       "  -c, --config <path>      YAML config file (default: %s, if present)\n"
+      "      --config-strict      fail on config file issues instead of warnings\n"
       "      --configtest         check the config file, then exit\n"
       "  -h, --help               this help\n\n"
       "example:\n"
@@ -58,6 +59,7 @@ static void print_help(void) {
 #define OPT_TLS_KEY 1002
 #define OPT_AUTH 1003
 #define OPT_CONFIGTEST 1004
+#define OPT_CONFIG_STRICT 1005
 
 static const char *const shortopts = "S:l:e:c:vdh";
 
@@ -72,17 +74,19 @@ static const struct option longopts[] = {
     {"color", required_argument, 0, OPT_COLOR},
     {"daemonize", no_argument, 0, 'd'},
     {"config", required_argument, 0, 'c'},
+    {"config-strict", no_argument, 0, OPT_CONFIG_STRICT},
     {"configtest", no_argument, 0, OPT_CONFIGTEST},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}};
 
-static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest, int *strict) {
   int c;
   optind = 1;
   opterr = 0;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     if (c == 'c') *cfg_path = optarg;
     if (c == OPT_CONFIGTEST) *configtest = 1;
+    if (c == OPT_CONFIG_STRICT) *strict = 1;
     if (c == 'h') {
       print_help();
       opterr = 1;
@@ -97,15 +101,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   const char *conflict;
   int configtest = 0;
+  int strict = 0;
   args_status_t st;
   int c;
 
-  st = prescan(argc, argv, &cfg_path, &configtest);
+  st = prescan(argc, argv, &cfg_path, &configtest, &strict);
   if (st != ARGS_OK) return st;
-  if (configtest) return metrics_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+  if (configtest) return metrics_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
 
   metrics_cfg_defaults(cfg);
-  if (metrics_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+  if (metrics_cfg_load(cfg, cfg_path, strict)) return ARGS_ERR;
 
   optind = 1;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
@@ -153,6 +158,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 'c':
+      case OPT_CONFIG_STRICT:
       case OPT_CONFIGTEST:
         break;
       default:

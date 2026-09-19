@@ -55,6 +55,7 @@ static void print_help(void) {
       "      --metrics-interval <s> announce: snapshot interval in seconds (default: 5)\n"
       "  -d, --daemonize        fork to background after startup, detach from terminal\n"
       "  -c, --config <path>    YAML config file (default: %s, if present)\n"
+      "      --config-strict    fail on config file issues instead of warnings\n"
       "      --configtest       check the config file, then exit\n"
       "  -h, --help             this help\n\n"
       "examples:\n"
@@ -86,17 +87,19 @@ static const struct option longopts[] = {
     {"dscp", required_argument, 0, 1004},
     {"daemonize", no_argument, 0, 'd'},
     {"config", required_argument, 0, 'c'},
+    {"config-strict", no_argument, 0, 1006},
     {"configtest", no_argument, 0, 1005},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}};
 
-static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest, int *strict) {
   int c;
   optind = 1;
   opterr = 0;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     if (c == 'c') *cfg_path = optarg;
     if (c == 1005) *configtest = 1;
+    if (c == 1006) *strict = 1;
     if (c == 'h') {
       print_help();
       opterr = 1;
@@ -110,15 +113,16 @@ static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
+  int strict = 0;
   args_status_t pst;
   int cli_mode = 0;
   int c;
 
-  pst = prescan(argc, argv, &cfg_path, &configtest);
+  pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
   if (pst != ARGS_OK) return pst;
-  if (configtest) return bcg_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+  if (configtest) return bcg_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
   bcg_cfg_defaults(cfg);
-  if (bcg_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+  if (bcg_cfg_load(cfg, cfg_path, strict)) return ARGS_ERR;
 
   optind = 1;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
@@ -133,6 +137,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       if (c == 'a') cfg->fl.have_a = 1;
       else          cfg->fl.have_l = 1;
       break;
+    case 1006:
     case 1005:
     case 'c':
       break;

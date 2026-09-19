@@ -20,7 +20,7 @@ static int emmg_stopping(const emmg_server_t *s) {
 }
 
 /* 1 connected, -1 refused/err, 0 timed out, stop request */
-static int wait_connect(emmg_server_t *s, int fd) {
+static int wait_connect(const emmg_server_t *s, int fd) {
   int elapsed = 0;
   while (elapsed < EMMG_CONNECT_TIMEOUT_MS) {
     struct pollfd pfd;
@@ -46,7 +46,31 @@ static int wait_connect(emmg_server_t *s, int fd) {
   return 0;
 }
 
-static int tcp_dial(emmg_server_t *s, const char *host, unsigned port) {
+static int dial_addr(const emmg_server_t *s, const struct addrinfo *ai, int *save_errno) {
+  int flags;
+  int cr;
+  int fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+  if (fd < 0) return -1;
+  flags = fcntl(fd, F_GETFL, 0);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    *save_errno = errno;
+    close(fd);
+    return -1;
+  }
+  if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0) return fd;
+  if (errno != EINPROGRESS) {
+    *save_errno = errno;
+    close(fd);
+    return -1;
+  }
+  cr = wait_connect(s, fd);
+  if (cr == 1) return fd;
+  *save_errno = (cr == -1) ? errno : ETIMEDOUT;
+  close(fd);
+  return -1;
+}
+
+static int tcp_dial(const emmg_server_t *s, const char *host, unsigned port) {
   struct addrinfo hints;
   struct addrinfo *res;
   char portstr[6];
@@ -64,30 +88,8 @@ static int tcp_dial(emmg_server_t *s, const char *host, unsigned port) {
     return -1;
   }
   for (const struct addrinfo *ai = res; ai; ai = ai->ai_next) {
-    int flags;
-    int cr;
-    fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-    if (fd < 0) continue;
-    flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-      save_errno = errno;
-      close(fd);
-      fd = -1;
-      continue;
-    }
-    if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0) break;
-    if (errno != EINPROGRESS) {
-      save_errno = errno;
-      close(fd);
-      fd = -1;
-      continue;
-    }
-    cr = wait_connect(s, fd);
-    if (cr == 1) break;
-    save_errno = (cr == -1) ? errno : ETIMEDOUT;
-    close(fd);
-    fd = -1;
-    if (emmg_stopping(s)) break;
+    fd = dial_addr(s, ai, &save_errno);
+    if (fd >= 0 || emmg_stopping(s)) break;
   }
   freeaddrinfo(res);
   if (fd < 0) {
@@ -97,7 +99,7 @@ static int tcp_dial(emmg_server_t *s, const char *host, unsigned port) {
   return fd;
 }
 
-static void interruptible_backoff(emmg_server_t *s, unsigned ms) {
+static void interruptible_backoff(const emmg_server_t *s, unsigned ms) {
   unsigned waited = 0;
   while (waited < ms && !emmg_stopping(s)) {
     unsigned step = (ms - waited < EMMG_POLL_INTERVAL_MS) ? ms - waited : EMMG_POLL_INTERVAL_MS;

@@ -386,22 +386,22 @@ static int load(yamlcfg_t *y, int check, config_t *cfg, const char *path) {
   return rc;
 }
 
-int dixy_cfg_load(config_t *cfg, const char *path) {
+int dixy_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
-  return load(&y, 0, cfg, path) == YAMLCFG_ERROR ? -1 : 0;
+  return load(&y, strict ? YAMLCFG_STRICT : 0, cfg, path) == YAMLCFG_ERROR ? -1 : 0;
 }
 
 static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
   if (cond) yamlcfg_warn(y, "%s", msg);
 }
 
-int dixy_cfg_test(const char *path) {
+int dixy_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   config_t cfg;
   int rc;
 
   dixy_cfg_defaults(&cfg);
-  rc = load(&y, 1, &cfg, path);
+  rc = load(&y, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, &cfg, path);
   if (rc != YAMLCFG_LOADED) {
     args_free(&cfg);
     return -1;
@@ -415,7 +415,7 @@ int dixy_cfg_test(const char *path) {
   warn_if(&y, cfg.enable_dlna && cfg.no_spts, "enable-dlna requires spts in format");
   warn_if(&y, cfg.enable_dlna && cfg.no_rawaudio, "enable-dlna requires rawaudio in format");
   warn_if(&y, cfg.enable_dlna && !cfg.dlna_host_opt && cfg.listen.scope == LISTEN_ANY, "enable-dlna needs dlna.host or a concrete listen address, not 'all'");
-  yamlcfg_report(&y);
+  rc = yamlcfg_report(&y);
   args_free(&cfg);
-  return 0;
+  return rc;
 }

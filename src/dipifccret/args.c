@@ -100,6 +100,7 @@ static void print_help(void) {
       "      --metrics-interval <s>       snapshot interval in seconds (default: 5)\n"
       "  -d, --daemonize                  fork to background after startup, detach from terminal\n"
       "  -c, --config <path>              YAML config file (default: %s, if present)\n"
+      "      --config-strict              fail on config file issues instead of warnings\n"
       "      --configtest                 check the config file, then exit\n"
       "  -h, --help                       this help\n\n"
       "RET (Annex F) options:\n"
@@ -177,17 +178,19 @@ static const struct option longopts[] = {
   {"metrics-interval", required_argument, 0, 1024},
   {"daemonize", no_argument, 0, 'd'},
   {"config", required_argument, 0, 'c'},
+  {"config-strict", no_argument, 0, 1026},
   {"configtest", no_argument, 0, 1025},
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
-static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest, int *strict) {
   int c;
   optind = 1;
   opterr = 0;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     if (c == 'c') *cfg_path = optarg;
     if (c == 1025) *configtest = 1;
+    if (c == 1026) *strict = 1;
     if (c == 'h') {
       print_help();
       opterr = 1;
@@ -201,15 +204,16 @@ static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
+  int strict = 0;
   args_status_t pst;
   int c;
 
-  pst = prescan(argc, argv, &cfg_path, &configtest);
+  pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
   if (pst != ARGS_OK) return pst;
-  if (configtest) return fccret_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+  if (configtest) return fccret_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
 
   fccret_cfg_defaults(cfg);
-  if (fccret_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+  if (fccret_cfg_load(cfg, cfg_path, strict)) return ARGS_ERR;
 
   optind = 1;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
@@ -406,6 +410,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
       case 'c':
+      case 1026:
       case 1025:
         break;
       case 'h':

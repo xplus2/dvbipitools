@@ -13,35 +13,41 @@ dipirist -i <uri> -o <uri> [options]
 
 ## Options
 
-| flag | long form            | argument              | default                                      |
-|------|----------------------|-----------------------|----------------------------------------------|
-| `-i` | `--in`               | `<uri>`               | required                                     |
-| `-o` | `--out`              | `<uri>`               | required                                     |
-| `-I` | `--iface`            | `<iface>`             | kernel route (non-RIST side only)            |
-| `-k` | `--insecure`         |                       | off (`-i https://` source only)              |
-|      | `--profile`          | `simple\|main`        | `simple`                                     |
-|      | `--secret`           | `<psk>`               | none (requires `--profile main`)             |
-|      | `--cname`            | `<name>`              | library default                              |
-|      | `--buffer`           | `<ms>`                | library default                              |
-|      | `--al-fec`           | `<L>:<D>`             | off (Annex E Layer 1 FEC, rtp:// side only)  |
-|      | `--al-fec-port`      | `<port>`              | required with `--al-fec`                     |
-|      | `--color`            | `auto\|always\|never` | `auto`                                       |
-|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`              |
-|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)           |
-|      | `--metrics-interval` | `<s>`                 | `5`                                          |
-| `-v` | `--verbose`          |                       | off                                          |
-| `-d` | `--daemonize`        |                       | off (foreground)                             |
-| `-c` | `--config`           | `<path>`              | `/etc/dvbipitools/dipirist.yaml` (if present) |
-|      | `--configtest`       |                       | check the config file, then exit |
-| `-h` | `--help`             |                       |                                              |
+| flag | long form            | argument              | default                                 |
+|------|----------------------|-----------------------|-----------------------------------------|
+| `-i` | `--in`               | `<uri>`               | required                                |
+| `-o` | `--out`              | `<uri>`               | required                                |
+| `-I` | `--iface`            | `<iface>`             | kernel route (non-RIST side only)       |
+| `-k` | `--insecure`         |                       | off (`-i https://` source only)         |
+|      | `--profile`          | `simple\|main`        | `simple`                                |
+|      | `--secret`           | `<psk>`               | none (requires `--profile main`)        |
+|      | `--cname`            | `<name>`              | library default                         |
+|      | `--buffer`           | `<ms>`                | library default                         |
+|      | `--al-fec`           | `<L>:<D>`             | off (Annex E Layer 1 FEC, rtp:// only)  |
+|      | `--al-fec-port`      | `<port>`              | required with `--al-fec`                |
+|      | `--color`            | `auto\|always\|never` | `auto`                                  |
+|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`         |
+|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)      |
+|      | `--metrics-interval` | `<s>`                 | `5`                                     |
+| `-v` | `--verbose`          |                       | off                                     |
+| `-d` | `--daemonize`        |                       | off (foreground)                        |
+| `-c` | `--config`           | `<path>`              | `/etc/dvbipitools/dipirist.yaml`        |
+|      | `--config-strict`    |                       | config file issues are errors           |
+|      | `--configtest`       |                       | check the config file, then exit        |
+| `-h` | `--help`             |                       |                                         |
 
 ## Configuration file
 
-All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipirist.yaml](dipirist.yaml)
-(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipirist.yaml](dipirist.yaml).
+Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipirist.yaml` is read if it exists.
 `--configtest` checks the file and exits.
+
+Configuration file issues (unknown or duplicate keys, invalid values, conflicting settings, referenced files
+that are not readable) are reported as warnings and the affected entries are skipped or overridden (last one wins).
+
+With `--config-strict` they are errors instead: all of them are listed and the tool fails early.
 
 ## Endpoints (`-i`/`-o`)
 
