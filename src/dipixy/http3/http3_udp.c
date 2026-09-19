@@ -44,8 +44,10 @@ int h3_udp_init(size_t payload) {
 void h3_udp_free(void) {
   free(t_rx_buf);
   free(t_tx_buf);
-  t_rx_buf = t_tx_buf = NULL;
-  t_rx_payload = t_tx_cap = 0;
+  t_rx_buf = NULL;
+  t_tx_buf = NULL;
+  t_rx_payload = 0;
+  t_tx_cap = 0;
 }
 
 size_t h3_udp_tx_cap(void) {

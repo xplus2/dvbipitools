@@ -75,6 +75,7 @@ stop_bg() {
     [ -n "$RPID" ] && wait $RPID 2>/dev/null
     kill $DPID 2>/dev/null
     wait $DPID 2>/dev/null
+    return 0
 }
 
 grep -q "http3: quic context ready" "$WORK/dipixy.log" || {

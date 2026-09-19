@@ -41,7 +41,8 @@ static int send_and_find(const uint8_t *pkt, size_t len) {
   int tx = socket(AF_INET, SOCK_DGRAM, 0);
   fd_set rfds;
   struct timeval tv = {1, 0};
-  int maxfd = 0, found = -1;
+  int maxfd = 0;
+  int found = -1;
   ck_assert_int_ge(tx, 0);
   ck_assert_int_eq((int)sendto(tx, pkt, len, 0, (struct sockaddr *)&dst, sizeof dst), (int)len);
   close(tx);

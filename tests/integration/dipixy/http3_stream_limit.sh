@@ -31,6 +31,7 @@ sleep 0.7
 stop_bg() {
     kill $DPID 2>/dev/null
     wait $DPID 2>/dev/null
+    return 0
 }
 
 grep -q "http3: quic context ready" "$WORK/dipixy.log" || {

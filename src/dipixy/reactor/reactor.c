@@ -200,7 +200,10 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
 
 #ifdef HAVE_HTTP3
       if (!cfg->no_http3) {
-        h3_stateless_set_retry(cfg->h3_retry == H3_RETRY_CFG_OFF ? H3_RETRY_OFF : cfg->h3_retry == H3_RETRY_CFG_ALWAYS ? H3_RETRY_ALWAYS : H3_RETRY_AUTO);
+        h3_retry_mode_t retry = H3_RETRY_AUTO;
+        if (cfg->h3_retry == H3_RETRY_CFG_OFF) retry = H3_RETRY_OFF;
+        else if (cfg->h3_retry == H3_RETRY_CFG_ALWAYS) retry = H3_RETRY_ALWAYS;
+        h3_stateless_set_retry(retry);
         h3_init(cert_path, key_path);
         if (h3_ready()) altsvc_set(cfg->h3_altsvc_port ? cfg->h3_altsvc_port : cfg->listen_tls.port);
       }

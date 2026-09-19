@@ -113,8 +113,12 @@ void serve_dlna_control(conn_t *c, const char *service, const struct phr_header 
 }
 
 void serve_dlna_subscribe(conn_t *c, const char *service, const struct phr_header *headers, size_t num_headers, int keep_alive) {
-  char callback_buf[600], sid_buf[64], sid[64], hdr[256];
-  const char *callback, *sid_hdr;
+  char callback_buf[600];
+  char sid_buf[64];
+  char sid[64];
+  char hdr[256];
+  const char *callback;
+  const char *sid_hdr;
   sbuf_t b;
 
   callback = find_header(headers, num_headers, "CALLBACK", callback_buf, sizeof callback_buf) ? callback_buf : NULL;
@@ -137,7 +141,8 @@ void serve_dlna_subscribe(conn_t *c, const char *service, const struct phr_heade
 }
 
 void serve_dlna_unsubscribe(conn_t *c, const struct phr_header *headers, size_t num_headers, int keep_alive) {
-  char sid_buf[64], hdr[160];
+  char sid_buf[64];
+  char hdr[160];
   const char *sid_hdr = find_header(headers, num_headers, "SID", sid_buf, sizeof sid_buf) ? sid_buf : NULL;
   sbuf_t b;
   gena_unsubscribe(sid_hdr);

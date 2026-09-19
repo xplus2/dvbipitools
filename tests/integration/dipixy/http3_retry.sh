@@ -77,14 +77,16 @@ EOF
 
 DPID=""
 start() {
-    timeout 30 "$BIN" -l "127.0.0.1:$HTTPPORT" -L "127.0.0.1:$TLSPORT" --h3-retry "$1" \
-        --tls-cert "$WORK/cert.pem" --tls-key "$WORK/key.pem" >"$WORK/dipixy_$1.log" 2>&1 &
+    mode=$1
+    timeout 30 "$BIN" -l "127.0.0.1:$HTTPPORT" -L "127.0.0.1:$TLSPORT" --h3-retry "$mode" \
+        --tls-cert "$WORK/cert.pem" --tls-key "$WORK/key.pem" >"$WORK/dipixy_$mode.log" 2>&1 &
     DPID=$!
     sleep 0.7
-    grep -q "http3: quic context ready" "$WORK/dipixy_$1.log" || {
+    grep -q "http3: quic context ready" "$WORK/dipixy_$mode.log" || {
         stop
         skip "dipixy was built without HTTP/3"
     }
+    return 0
 }
 
 stop() {
@@ -95,7 +97,9 @@ stop() {
 }
 
 probe() {
-    python3 "$WORK/probe.py" "$TLSPORT" "$1" 2>"$WORK/probe.err" || fail "probe $1 failed: $(cat "$WORK/probe.err")"
+    what=$1
+    python3 "$WORK/probe.py" "$TLSPORT" "$what" 2>"$WORK/probe.err" || fail "probe $what failed: $(cat "$WORK/probe.err")"
+    return 0
 }
 
 expect() {
@@ -104,13 +108,16 @@ expect() {
     want=$3
     got=$(probe "$what")
     [ "$got" = "$want" ] || fail "retry=$mode probe '$what': expected '$want', got '$got'"
+    return 0
 }
 
 fetch() {
+    mode=$1
     curl -sk --http3-only --max-time 10 -o /dev/null -w "%{http_version} %{http_code}\n" \
         "https://127.0.0.1:$TLSPORT/nonexistent" >"$WORK/curl.out" 2>"$WORK/curl.err" \
-        || fail "retry=$1: curl failed, see $WORK/curl.err and $WORK/dipixy_$1.log"
-    [ "$(cat "$WORK/curl.out")" = "3 404" ] || fail "retry=$1: unexpected curl result: $(cat "$WORK/curl.out")"
+        || fail "retry=$mode: curl failed, see $WORK/curl.err and $WORK/dipixy_$mode.log"
+    [ "$(cat "$WORK/curl.out")" = "3 404" ] || fail "retry=$mode: unexpected curl result: $(cat "$WORK/curl.out")"
+    return 0
 }
 
 start always

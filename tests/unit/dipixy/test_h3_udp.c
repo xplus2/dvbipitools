@@ -15,7 +15,8 @@
 
 #define PAYLOAD 1500
 
-static int rx_fd, tx_fd;
+static int rx_fd;
+static int tx_fd;
 static struct sockaddr_storage dst;
 static socklen_t dstlen;
 

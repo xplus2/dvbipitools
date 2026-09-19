@@ -52,7 +52,9 @@ void h3_set_transport(unsigned max_udp, unsigned window_kib, int cc) {
   if (max_udp > H3_DEFAULT_MAX_UDP) g_h3_probes[g_h3_nprobes++] = H3_DEFAULT_MAX_UDP;
   if (max_udp > NGTCP2_MAX_UDP_PAYLOAD_SIZE) g_h3_probes[g_h3_nprobes++] = (uint16_t)max_udp;
   g_h3_window = (window_kib ? window_kib : H3_DEFAULT_WINDOW_KIB) * 1024ULL;
-  g_h3_cc = cc == 1 ? NGTCP2_CC_ALGO_BBR : cc == 2 ? NGTCP2_CC_ALGO_RENO : NGTCP2_CC_ALGO_CUBIC;
+  g_h3_cc = NGTCP2_CC_ALGO_CUBIC;
+  if (cc == 1) g_h3_cc = NGTCP2_CC_ALGO_BBR;
+  else if (cc == 2) g_h3_cc = NGTCP2_CC_ALGO_RENO;
 }
 
 void h3_set_max_conns_per_thread(int n) {
@@ -264,7 +266,9 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
   struct sockaddr_storage dst;
   socklen_t dstlen = 0;
   int tx_fd = udp_fd;
-  size_t pos = 0, seg = 0, nseg = 0;
+  size_t pos = 0;
+  size_t seg = 0;
+  size_t nseg = 0;
 
   if (max_segs > H3_GSO_MAX_SEGS) max_segs = H3_GSO_MAX_SEGS;
   if (max_segs > h3_udp_tx_cap() / max_udp) max_segs = h3_udp_tx_cap() / max_udp;
@@ -298,7 +302,9 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
       if (nseg == 0) break;
       /* no room at gso size: send queued. retry at full size */
       h3_udp_send(tx_fd, &dst, dstlen, buf, pos, seg);
-      pos = seg = nseg = 0;
+      pos = 0;
+      seg = 0;
+      nseg = 0;
       continue;
     }
     if (pktlen < 0) {
@@ -315,7 +321,9 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
       /* validation probes to new path, rest to old */
       h3_udp_send(tx_fd, &dst, dstlen, buf, pos, seg);
       memmove(buf, buf + pos, (size_t)pktlen);
-      pos = seg = nseg = 0;
+      pos = 0;
+      seg = 0;
+      nseg = 0;
     }
     if (nseg == 0) {
       memcpy(&dst, ps.path.remote.addr, plen);
@@ -329,7 +337,9 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
     if (ndatalen >= 0 && c->h3conn) nghttp3_conn_add_write_offset(c->h3conn, stream_id, (uint64_t)ndatalen);
     if ((size_t)pktlen < seg || nseg >= max_segs) {
       h3_udp_send(tx_fd, &dst, dstlen, buf, pos, seg);
-      pos = seg = nseg = 0;
+      pos = 0;
+      seg = 0;
+      nseg = 0;
     }
   }
   h3_udp_send(tx_fd, &dst, dstlen, buf, pos, seg);

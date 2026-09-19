@@ -50,7 +50,9 @@ END_TEST
 START_TEST(retry_token_rejects_other_address) {
   struct sockaddr_in peer = addr_of("192.0.2.7", 4433);
   struct sockaddr_in other = addr_of("192.0.2.8", 4433);
-  ngtcp2_cid retry_scid = cid_of(0x10, 16), odcid = cid_of(0x40, 8), got;
+  ngtcp2_cid retry_scid = cid_of(0x10, 16);
+  ngtcp2_cid odcid = cid_of(0x40, 8);
+  ngtcp2_cid got;
   uint8_t tok[NGTCP2_CRYPTO_MAX_RETRY_TOKENLEN2];
   ngtcp2_ssize n = h3_token_retry_make(tok, (struct sockaddr *)&peer, sizeof peer, NGTCP2_PROTO_VER_V1, &retry_scid, &odcid, 5 * SEC);
   ck_assert_int_gt(n, 0);
@@ -60,7 +62,10 @@ END_TEST
 
 START_TEST(retry_token_rejects_other_dcid) {
   struct sockaddr_in peer = addr_of("192.0.2.7", 4433);
-  ngtcp2_cid retry_scid = cid_of(0x10, 16), odcid = cid_of(0x40, 8), wrong = cid_of(0x11, 16), got;
+  ngtcp2_cid retry_scid = cid_of(0x10, 16);
+  ngtcp2_cid odcid = cid_of(0x40, 8);
+  ngtcp2_cid wrong = cid_of(0x11, 16);
+  ngtcp2_cid got;
   uint8_t tok[NGTCP2_CRYPTO_MAX_RETRY_TOKENLEN2];
   ngtcp2_ssize n = h3_token_retry_make(tok, (struct sockaddr *)&peer, sizeof peer, NGTCP2_PROTO_VER_V1, &retry_scid, &odcid, 5 * SEC);
   ck_assert_int_gt(n, 0);
@@ -70,7 +75,9 @@ END_TEST
 
 START_TEST(retry_token_expires) {
   struct sockaddr_in peer = addr_of("192.0.2.7", 4433);
-  ngtcp2_cid retry_scid = cid_of(0x10, 16), odcid = cid_of(0x40, 8), got;
+  ngtcp2_cid retry_scid = cid_of(0x10, 16);
+  ngtcp2_cid odcid = cid_of(0x40, 8);
+  ngtcp2_cid got;
   uint8_t tok[NGTCP2_CRYPTO_MAX_RETRY_TOKENLEN2];
   ngtcp2_ssize n = h3_token_retry_make(tok, (struct sockaddr *)&peer, sizeof peer, NGTCP2_PROTO_VER_V1, &retry_scid, &odcid, 5 * SEC);
   ck_assert_int_gt(n, 0);
@@ -81,7 +88,9 @@ END_TEST
 
 START_TEST(retry_token_rejects_tampering) {
   struct sockaddr_in peer = addr_of("192.0.2.7", 4433);
-  ngtcp2_cid retry_scid = cid_of(0x10, 16), odcid = cid_of(0x40, 8), got;
+  ngtcp2_cid retry_scid = cid_of(0x10, 16);
+  ngtcp2_cid odcid = cid_of(0x40, 8);
+  ngtcp2_cid got;
   uint8_t tok[NGTCP2_CRYPTO_MAX_RETRY_TOKENLEN2];
   ngtcp2_ssize n = h3_token_retry_make(tok, (struct sockaddr *)&peer, sizeof peer, NGTCP2_PROTO_VER_V1, &retry_scid, &odcid, 5 * SEC);
   ck_assert_int_gt(n, 0);
@@ -131,7 +140,8 @@ END_TEST
 
 START_TEST(retry_token_is_not_a_new_token) {
   struct sockaddr_in peer = addr_of("192.0.2.7", 4433);
-  ngtcp2_cid retry_scid = cid_of(0x10, 16), odcid = cid_of(0x40, 8);
+  ngtcp2_cid retry_scid = cid_of(0x10, 16);
+  ngtcp2_cid odcid = cid_of(0x40, 8);
   uint8_t tok[NGTCP2_CRYPTO_MAX_RETRY_TOKENLEN2];
   ngtcp2_ssize n = h3_token_retry_make(tok, (struct sockaddr *)&peer, sizeof peer, NGTCP2_PROTO_VER_V1, &retry_scid, &odcid, 5 * SEC);
   ck_assert_int_gt(n, 0);
@@ -140,8 +150,11 @@ START_TEST(retry_token_is_not_a_new_token) {
 END_TEST
 
 START_TEST(reset_token_is_stable_per_cid) {
-  ngtcp2_cid a = cid_of(0x20, 16), b = cid_of(0x21, 16);
-  uint8_t t1[16], t2[16], t3[16];
+  ngtcp2_cid a = cid_of(0x20, 16);
+  ngtcp2_cid b = cid_of(0x21, 16);
+  uint8_t t1[16];
+  uint8_t t2[16];
+  uint8_t t3[16];
   ck_assert_int_eq(h3_reset_token(t1, &a), 0);
   ck_assert_int_eq(h3_reset_token(t2, &a), 0);
   ck_assert_int_eq(h3_reset_token(t3, &b), 0);

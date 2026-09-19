@@ -43,6 +43,7 @@ cleanup_all() {
     stop_srv
     kill $FFPID 2>/dev/null
     wait $FFPID 2>/dev/null
+    return 0
 }
 
 run_case() {
@@ -72,6 +73,7 @@ run_case() {
     done
     [ $n -ge 1 ] || fail "$name: nothing compared"
     stop_srv
+    return 0
 }
 
 run_case default
