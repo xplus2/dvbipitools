@@ -388,7 +388,9 @@ static int load(yamlcfg_t *y, int check, config_t *cfg, const char *path) {
 
 int dixy_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
-  return load(&y, strict ? YAMLCFG_STRICT : 0, cfg, path) == YAMLCFG_ERROR ? -1 : 0;
+  int mode = strict ? YAMLCFG_STRICT : 0;
+  int rc = load(&y, mode, cfg, path);
+  return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
 static void warn_if(yamlcfg_t *y, int cond, const char *msg) {

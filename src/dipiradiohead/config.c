@@ -467,7 +467,9 @@ static const yamlcfg_key_t keys[] = {
 
 int rdh_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
-  return yamlcfg_load_items(&y, TOOL_NAME, strict ? YAMLCFG_STRICT : 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg, item_hook) == YAMLCFG_ERROR ? -1 : 0;
+  int mode = strict ? YAMLCFG_STRICT : 0;
+  int rc = yamlcfg_load_items(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg, item_hook);
+  return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
 static void warn_if(yamlcfg_t *y, int cond, const char *msg) {

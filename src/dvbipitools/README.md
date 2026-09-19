@@ -13,6 +13,8 @@ This is the solution.
 dvbipitools <tool> [args...]
 dipi <short-name> [args...]    # this tool, renamed to "dipi"
 <toolname> [args...]           # symlink/hardlink to <toolname>
+dvbipitools --list             # list compiled-in applets
+dvbipitools --install [-h] DIR # create symlinks (-h for hardlinks) in DIR
 ```
 
 > Fairness note: as of now, it's as static as glibc can be.
@@ -43,29 +45,34 @@ ln -s dvbipitools dipi
 ```
 
 ### 4. only copy/keep this one and symlink or hardlink all tools
-For a copy&paste friendly setup:
+Let the binary create the links for you:
+```sh
+dvbipitools --install /usr/local/bin      # symlinks
+dvbipitools --install -h /usr/local/bin   # hardlinks
+```
+Copy&paste variant, by hand:
 ```sh
 ln -s dvbipitools dipitvhead
-ln -s dvbipitools dipiradiohead
-ln -s dvbipitools dipimetrics
-ln -s dvbipitools dipirist
-ln -s dvbipitools dipisrt
-ln -s dvbipitools dipifccret
-ln -s dvbipitools dipisds
-ln -s dvbipitools dipibcg
-ln -s dvbipitools dipixmltv
 ln -s dvbipitools dipirec
-ln -s dvbipitools dipiscan
-ln -s dvbipitools dipibim
-ln -s dvbipitools dipicam378
-ln -s dvbipitools dipidescramble
-ln -s dvbipitools dipixy
-
-# your scripts nand your units stay unchanged 
+# ... one per tool, see "Applets" below
+```
+Then your scripts and your units stay unchanged:
+```sh
 ./dipirec -i udp://239.1.1.1:5000 -o out.ts
 ```
 Renaming would work too, but who wants to do that?
 
+
+## Installing links
+
+```sh
+dvbipitools --list
+dvbipitools --install [-h] DIR
+```
+* `--list` lists all compiled-in applets.
+* `--install` creates applet symlinks in `DIR`. `-h` for hardlinks.
+* `DIR` is required and must already exist.
+* Symlinks point to the absolute path of the running binary.
 
 ## Applets
 
@@ -96,12 +103,12 @@ Run `dvbipitools` or `dipi` with no arguments for the full applet list.
 
 A tool's own options, exit status, and behavior are unchanged from running it standalone.
 See that tool's own README/`-h`. 
-`dvbipitools` itself adds no options of its own.
 
 ## Exit status
 
-| code  | meaning                                                         |
-|-------|-----------------------------------------------------------------|
-| `0`   | success, or invocation with no arguments (applet list printed)  |
-| `2`   | unrecognized applet name or subcommand                          |
-| other | whatever the dispatched tool itself returns                     |
+| code  | meaning                                                          |
+|-------|------------------------------------------------------------------|
+| `0`   | success, or invocation with no arguments (applet list printed)   |
+| `1`   | `--install` failed (bad `DIR`, link error)                       |
+| `2`   | unrecognized applet name or subcommand, or `--install` arg error |
+| other | whatever the dispatched tool itself returns                      |

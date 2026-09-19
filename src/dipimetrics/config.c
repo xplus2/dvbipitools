@@ -152,7 +152,9 @@ static const yamlcfg_key_t keys[] = {
 
 int metrics_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
-  return yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_STRICT : 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg) == YAMLCFG_ERROR ? -1 : 0;
+  int mode = strict ? YAMLCFG_STRICT : 0;
+  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg);
+  return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
 int metrics_cfg_test(const char *path, int strict) {

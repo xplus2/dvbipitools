@@ -9,6 +9,11 @@ dvbipitools \- multicall binary bundling every dvbipitools tool
 \fIshort\-name\fR [\fIargs\fR ...]
 .br
 \fItool\fR [\fIargs\fR ...]
+.br
+.B dvbipitools \-\-list
+.br
+.B dvbipitools \-\-install
+[\fB\-h\fR] \fIDIR\fR
 .SH DESCRIPTION
 .B dvbipitools
 is one executable containing every tool in this project
@@ -39,12 +44,22 @@ with no arguments for the full applet list. Once dispatched, a tool's own
 options, exit status, and behavior are identical to running it standalone;
 see that tool's own manual page.
 .B dvbipitools
-itself adds no options of its own.
+itself only adds the options described below.
 .PP
 Not all 15 tools are necessarily present: \fBdipicam378\fR and
 \fBdipidescramble\fR require OpenSSL, \fBdipirist\fR requires librist,
 \fBdipisrt\fR requires libsrt, each built in only if that dependency was
 found (matching the standalone build).
+.SH OPTIONS
+.TP
+.B \-\-list
+Print the name of every applet.
+.TP
+\fB\-\-install\fR [\fB\-h\fR] \fIDIR\fR
+Create a symlink per applet in \fIDIR\fR, each pointing to the
+absolute path of the running binary.
+.BR \-h ,
+creates hardlinks.
 .SH APPLETS
 Full name and short name (for the
 .B dipi
@@ -91,13 +106,22 @@ Same, via the short form.
 .TP
 .B ln \-s dvbipitools dipirec && ./dipirec \-i ... \-o ...
 Run \fBdipirec\fR via a symlink to \fBdvbipitools\fR.
+.TP
+.B dvbipitools \-\-install /usr/local/bin
+Symlink every applet at \fI/usr/local/bin\fR.
+.TP
+.B dvbipitools \-\-install \-h /opt/dipi
+(hardlinks)
 .SH EXIT STATUS
 .TP
 .B 0
 Success, or bare invocation with no arguments (applet list printed).
 .TP
+.B 1
+\fB\-\-install\fR failed (bad \fIDIR\fR, or a link could not be created).
+.TP
 .B 2
-Unrecognized applet name or subcommand.
+Unrecognized applet name or subcommand, or bad \fB\-\-list\fR/\fB\-\-install\fR usage.
 .TP
 .B other
 Whatever the dispatched tool itself returns.

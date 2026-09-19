@@ -186,7 +186,7 @@ static int on_map_start(walk_t *w, int line) {
 
 static int on_seq_start(walk_t *w, int line) {
   const frame_t *top;
-  if (w->depth == 0) return fail(w->y, line, "top level must be a mapping");
+  if (w->depth <= 0) return fail(w->y, line, "top level must be a mapping");
   if (w->depth >= MAX_DEPTH) return fail(w->y, line, "nesting too deep");
   top = &w->st[w->depth - 1];
   if (top->is_seq) return fail(w->y, line, "nested lists not supported");
@@ -231,7 +231,7 @@ static int on_map_end(walk_t *w, int line) {
 static int on_scalar(walk_t *w, const yaml_event_t *e, int line) {
   frame_t *top;
   int rc = 0;
-  if (w->depth == 0) return fail(w->y, line, "top level must be a mapping");
+  if (w->depth <= 0) return fail(w->y, line, "top level must be a mapping");
   top = &w->st[w->depth - 1];
   if (top->is_seq) {
     if (scalar_is_null(e)) return 0;

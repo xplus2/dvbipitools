@@ -3,6 +3,7 @@ dvbipitools (2.5.0-1) unstable; urgency=low
   * config file alternative to cmdline args (-c|--config)
     + search path: /etc/dvbipitools/[toolname].yaml
     * --configtest to check config
+    * --config-strict to fail on warnings
     + affected tools
       - dipimetrics
       - dipisds
@@ -17,6 +18,7 @@ dvbipitools (2.5.0-1) unstable; urgency=low
       - dipixy
       - dipiradiohead
       - dipitvhead
+  * multicall binary: --install sym/hardlink creation
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.2-1) unstable; urgency=low
