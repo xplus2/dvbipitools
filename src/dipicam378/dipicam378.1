@@ -82,6 +82,16 @@ Snapshot interval in seconds. Default: 5.
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.
 .TP
+.BR \-c ", " \-\-config\ \fI<path>\fR
+YAML configuration file. Keys mirror the options above. Without this option,
+.I /etc/dvbipitools/dipicam378.yaml
+is read if it exists.
+.TP
+.B \-\-configtest
+Check the configuration file (from
+.B \-c
+or the default location) and exit.
+.TP
 .BR \-h ", " \-\-help
 Show usage and exit.
 .SH EXAMPLES
@@ -93,6 +103,12 @@ EMM-U by serial, verbose logging, username+password auth.
 .B 0
 on success.
 A non-zero status is returned on argument errors or socket failure.
+.SH FILES
+.TP
+.I /etc/dvbipitools/dipicam378.yaml
+Default configuration file, read if present. A commented template with all
+defaults ships as
+.IR /usr/share/dvbipitools/etc/dipicam378.yaml .
 .SH SEE ALSO
 .BR dipitvhead (1),
 .BR dipiradiohead (1),

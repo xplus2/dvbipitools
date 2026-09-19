@@ -98,6 +98,16 @@ Default:
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.
 .TP
+.BR \-c ", " \-\-config\ \fI<path>\fR
+YAML configuration file. Keys mirror the options above. Without this option,
+.I /etc/dvbipitools/dipimetrics.yaml
+is read if it exists.
+.TP
+.B \-\-configtest
+Check the configuration file (from
+.B \-c
+or the default location) and exit.
+.TP
 .BR \-h ", " \-\-help
 Show usage and exit.
 .SH HTTP ENDPOINT
@@ -196,8 +206,14 @@ Require HTTP Basic Auth for the scrape.
 .SH EXIT STATUS
 .B 0
 on success.
-A non-zero status is returned on argument errors or socket/bind failure.
+A non-zero status is returned on argument errors, configuration file errors
+or socket/bind failure.
 .SH FILES
+.TP
+.I /etc/dvbipitools/dipimetrics.yaml
+Default configuration file, read if present. A commented template with all
+defaults ships as
+.IR /usr/share/dvbipitools/etc/dipimetrics.yaml .
 .TP
 .I /run/dvbipitools/metrics.sock
 Default Unix datagram socket for receiving snapshots from exporters,

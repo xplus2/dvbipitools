@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dipiradiohead/args.h"
 
@@ -181,7 +182,7 @@ END_TEST
 
 START_TEST(rist_secret_without_profile_main_is_rejected) {
   char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000",
-                  "-R", "rist://1.2.3.4:6000", "--secret", "hunter2", NULL};
+                  "-R", "rist://1.2.3.4:6000", "--rist-secret", "hunter2", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
 }
@@ -189,7 +190,7 @@ END_TEST
 
 START_TEST(rist_secret_with_profile_main_is_accepted) {
   char *argv[] = {"dipiradiohead", "-i", "http://a", "-m", "239.1.1.1:5000",
-                  "-R", "rist://1.2.3.4:6000", "--profile", "main", "--secret", "hunter2", NULL};
+                  "-R", "rist://1.2.3.4:6000", "--rist-profile", "main", "--rist-secret", "hunter2", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.rist_profile, RIST_PROF_MAIN);
@@ -258,6 +259,126 @@ START_TEST(srt_pbkeylen_requires_passphrase) {
 }
 END_TEST
 
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipiradiohead_cfg_XXXXXX";
+  char *argv[] = {"dipiradiohead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - http://a\n  - http://b\nmcast: 239.1.1.1:5000\nrtp: on\nttl: 4\nnit: Net\nmetrics:\n  id: rh\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.n_inputs, 2u);
+  ck_assert_str_eq(cfg.inputs[0].uri, "http://a");
+  ck_assert_uint_eq(cfg.inputs[0].sid, 1u);
+  ck_assert_str_eq(cfg.inputs[1].uri, "http://b");
+  ck_assert_uint_eq(cfg.inputs[1].sid, 2u);
+  ck_assert_uint_eq(cfg.mcast_port, 5000u);
+  ck_assert_int_eq(cfg.rtp, 1);
+  ck_assert_uint_eq(cfg.ttl, 4u);
+  ck_assert_str_eq(cfg.metrics_id, "rh");
+}
+END_TEST
+
+START_TEST(config_inputs_and_vendors_take_items) {
+  char path[] = "/tmp/dipiradiohead_cfg_XXXXXX";
+  char *argv[] = {"dipiradiohead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - http://a:\n      sid: 7\n      sdt: A\n      provider: P\nmcast: 239.1.1.1:5000\ncas:\n  algo: csa2\n  ecmg:\n    - tcp://h1:2222:\n        super-id: 0x1234\n        ecm-id: 5\n        ecmg-version: 3\n        required: on\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_str_eq(cfg.inputs[0].uri, "http://a");
+  ck_assert_uint_eq(cfg.inputs[0].sid, 7u);
+  ck_assert_str_eq(cfg.inputs[0].sdt_text, "A");
+  ck_assert_str_eq(cfg.inputs[0].provider_text, "P");
+  ck_assert_uint_eq(cfg.n_cas_vendors, 1u);
+  ck_assert_str_eq(cfg.cas_vendors[0].ecmg_host, "h1");
+  ck_assert_uint_eq(cfg.cas_vendors[0].ecmg_version, 3u);
+  ck_assert_int_eq(cfg.cas_vendors[0].required, 1);
+}
+END_TEST
+
+START_TEST(config_item_without_source_is_error) {
+  char path[] = "/tmp/dipiradiohead_cfg_XXXXXX";
+  char *argv[] = {"dipiradiohead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - sid: 3\nmcast: 239.1.1.1:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(cmdline_lists_replace_config_lists) {
+  char path[] = "/tmp/dipiradiohead_cfg_XXXXXX";
+  char *argv[] = {"dipiradiohead", "-c", path, "-i", "http://c", "--sid", "9", "-R", "srt://127.0.0.1:7000", NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - http://a\n  - http://b\nrist:\n  - rist://h:1\nmcast: 239.1.1.1:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.n_inputs, 1u);
+  ck_assert_str_eq(cfg.inputs[0].uri, "http://c");
+  ck_assert_uint_eq(cfg.inputs[0].sid, 9u);
+  ck_assert_uint_eq(cfg.n_rist, 0u);
+  ck_assert_uint_eq(cfg.n_srt, 1u);
+}
+END_TEST
+
+START_TEST(cmdline_scoped_option_needs_its_own_input) {
+  char path[] = "/tmp/dipiradiohead_cfg_XXXXXX";
+  char *argv[] = {"dipiradiohead", "-c", path, "--sid", "9", NULL};
+  config_t cfg;
+  write_cfg(path, "input: http://a\nmcast: 239.1.1.1:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipiradiohead", "-c", "/nonexistent/dipiradiohead.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipiradiohead_cfg_XXXXXX";
+  char *argv[] = {"dipiradiohead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input: http://a\nmcast: 239.1.1.1:5000\nttl: 300\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_conflict_is_rejected) {
+  char path[] = "/tmp/dipiradiohead_cfg_XXXXXX";
+  char *argv[] = {"dipiradiohead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input: http://a\nmcast: 239.1.1.1:5000\nal-fec: 5:5\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipiradiohead_cfg_XXXXXX";
+  char *argv[] = {"dipiradiohead", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipiradiohead", "--configtest", "-c", "/nonexistent/dipiradiohead.yaml", NULL};
+  char *argv3[] = {"dipiradiohead", "--configtest", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(argv3), argv3, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("args");
   TCase *tc = tcase_create("core");
@@ -288,6 +409,15 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, rist_and_srt_peers_cannot_mix);
   tcase_add_test(tc, srt_passphrase_length_is_validated);
   tcase_add_test(tc, srt_pbkeylen_requires_passphrase);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, config_inputs_and_vendors_take_items);
+  tcase_add_test(tc, config_item_without_source_is_error);
+  tcase_add_test(tc, cmdline_lists_replace_config_lists);
+  tcase_add_test(tc, cmdline_scoped_option_needs_its_own_input);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, config_conflict_is_rejected);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);
   return s;
 }

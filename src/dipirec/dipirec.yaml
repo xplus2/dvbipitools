@@ -1,0 +1,90 @@
+# -i|--in [not set]
+#in: rtp://@239.19.75.1:8700
+# -o|--out [not set]
+#out:
+#  - show.ts
+
+# -a|--audio all
+audio: all
+# -f|--format [from out suffix, else ts] # raw|ts|mkv|mka|mp4|m4a
+#format: ts
+# -p|--pmt-pid [not set]
+#pmt-pid: all
+# -s|--subtitles keep # strip|keep|srt
+subtitles: keep
+# -t|--time [not set]
+#time: 1h30m
+# -I|--iface [not set]
+#iface: <iface>
+# -O|--out-iface [not set]
+#out-iface: <iface>
+# --ttl [not set]
+#ttl: 16
+# --al-fec [not set]
+#al-fec: <L>:<D>
+# --al-fec-port [not set]
+#al-fec-port: <port>
+# --profile simple # simple|main
+#profile: simple
+# --secret [not set]
+#secret: <psk>
+# --cname [not set]
+#cname: <name>
+# --buffer [not set] # ms
+#buffer: <ms>
+# --profile-in simple # simple|main
+#profile-in: simple
+# --insecure off
+insecure: off
+# -v|--verbose off
+verbose: off
+# --sub-lead 1000 # ms
+sub-lead: 1000
+# --color auto # auto|always|never
+color: auto
+# --pace off
+#pace: off
+# --strip NUL,NIT,AIT,EIT
+#strip: NUL,NIT,AIT,EIT
+
+metrics:
+  # --metrics /run/dvbipitools/metrics.sock
+  #sock: /run/dvbipitools/metrics.sock
+  # --metrics-id [not set]
+  #id: <name>
+  # --metrics-interval 5 # seconds
+  #interval: 5
+
+# --ret [not set]
+ret:
+  #addr: <addr>:<port>
+  # --no-ret-mc off
+  #no-mc: off
+  # --ret-mc-port [not set]
+  #mc-port: <port>
+  # --ret-pt 99
+  #pt: 99
+  # --ret-wait 200 # ms
+  #wait: 200
+
+srt:
+  # --srt-passphrase-in [not set]
+  #passphrase-in: <pw>
+  # --srt-pbkeylen-in [not set] # 16|24|32
+  #pbkeylen-in: 16
+  # --srt-streamid-in [not set]
+  #streamid-in: <id>
+  # --srt-packetfilter-in [not set]
+  #packetfilter-in: <cfg>
+  # --srt-latency-in [not set] # ms
+  #latency-in: <ms>
+  # --srt-passphrase [not set]
+  #passphrase: <pw>
+  # --srt-pbkeylen [not set] # 16|24|32
+  #pbkeylen: 16
+  # --srt-streamid [not set]
+  #streamid: <id>
+  # --srt-packetfilter [not set]
+  #packetfilter: <cfg>
+  # --srt-latency [not set] # ms
+  #latency: <ms>

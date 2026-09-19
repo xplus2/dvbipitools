@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dipirec/args.h"
 #include "dipirec/filter/ts.h"
@@ -291,6 +292,72 @@ START_TEST(srt_pbkeylen_requires_passphrase) {
 }
 END_TEST
 
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipirec_cfg_XXXXXX";
+  char *argv[] = {"dipirec", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "in: udp://@239.1.1.1:5000\nout:\n  - a.ts\n  - rtp://@239.2.2.2:6000\nformat: ts\nsubtitles: strip\ntime: 5m\nret:\n  wait: 300\nsrt:\n  latency: 100\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.n_out, 2);
+  ck_assert_int_eq(cfg.source.kind, URI_UDP);
+  ck_assert_int_eq(cfg.format, FMT_TS);
+  ck_assert_int_eq(cfg.subs, SUB_STRIP);
+  ck_assert_int_eq(cfg.duration_s, 300);
+  ck_assert_uint_eq(cfg.ret.wait_ms, 300u);
+  ck_assert_uint_eq(cfg.srt_latency_ms, 100u);
+}
+END_TEST
+
+START_TEST(cmdline_wins_over_config) {
+  char path[] = "/tmp/dipirec_cfg_XXXXXX";
+  char *argv[] = {"dipirec", "-c", path, "-o", "b.ts", "-f", "raw", NULL};
+  config_t cfg;
+  write_cfg(path, "in: udp://@239.1.1.1:5000\nout:\n  - a.ts\n  - c.ts\nformat: mkv\nsubtitles: keep\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.n_out, 1);
+  ck_assert_str_eq(cfg.out[0].file_path, "b.ts");
+  ck_assert_int_eq(cfg.format, FMT_RAW);
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipirec", "-c", "/nonexistent/dipirec.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipirec_cfg_XXXXXX";
+  char *argv[] = {"dipirec", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "in: udp://@239.1.1.1:5000\nout: a.ts\nttl: 300\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipirec_cfg_XXXXXX";
+  char *argv[] = {"dipirec", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipirec", "--configtest", "-c", "/nonexistent/dipirec.yaml", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipirec_args");
   TCase *tc = tcase_create("core");
@@ -329,6 +396,11 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, srt_input_and_srt_output_together_is_accepted);
   tcase_add_test(tc, srt_passphrase_length_is_validated);
   tcase_add_test(tc, srt_pbkeylen_requires_passphrase);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, cmdline_wins_over_config);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);
   return s;
 }

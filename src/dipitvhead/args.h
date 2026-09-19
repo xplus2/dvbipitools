@@ -97,6 +97,7 @@ typedef struct {
   cas_algo_t cas_algo;       /* --cas-algo; NONE = CAS disabled */
   cas_vendor_t cas_vendors[ARGS_MAX_CAS_VENDORS]; /* --cas-ecmg, repeatable; per-vendor options pair with --cas-ecmg right before them */
   unsigned n_cas_vendors;
+  int any_cas_flag;
   int cas_fallback_clear; /* --cas-fallback-clear: clear instead of frozen on total outage / a required vendor down */
   unsigned cas_pids[ARGS_MAX_CAS_PIDS]; /* --cas-pids explicit numeric PIDs (output-side) */
   size_t cas_pid_count;
@@ -117,12 +118,13 @@ typedef struct {
   const char *metrics_sock;        /* --metrics; NULL = default socket path */
   const char *metrics_id;          /* --metrics-id; NULL = metrics disabled */
   unsigned metrics_interval_s;     /* --metrics-interval; 0 = default */
-  char rist_uri[ARGS_MAX_RIST_PEERS][256]; /* -R/--rist, repeatable; bonded onto one sender, simultaneous with -m */
+  char rist_uri[ARGS_MAX_RIST_PEERS][256]; /* -R/--remote, repeatable; bonded onto one sender, simultaneous with -m */
   unsigned n_rist;
-  rist_profile_sel_t rist_profile; /* --profile; n_rist>0 only */
-  char rist_secret[128];  /* --secret; n_rist>0 + --profile main only, "" = none */
-  char rist_cname[128];   /* --cname; n_rist>0 only, "" = library default */
-  unsigned rist_buffer_ms; /* --buffer; n_rist>0 only, 0 = library default */
+  rist_profile_sel_t rist_profile; /* --rist-profile; n_rist>0 only */
+  int rist_profile_given;
+  char rist_secret[128];  /* --rist-secret; n_rist>0 + --rist-profile main only, "" = none */
+  char rist_cname[128];   /* --rist-cname; n_rist>0 only, "" = library default */
+  unsigned rist_buffer_ms; /* --rist-buffer; n_rist>0 only, 0 = library default */
   /* -R srt://, repeatable, bonded onto one group when >1 (--srt-group-mode).
      one scheme at a time: rist:// and srt:// peers can't mix in one -R set */
   int srt_family[ARGS_MAX_SRT_PEERS]; /* AF_INET or AF_INET6, display only */

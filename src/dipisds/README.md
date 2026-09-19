@@ -24,7 +24,7 @@ dipisds -l -m <mcast>:<port> [options]
 | `-t` | `--interval`      | `<s>`                       | announce: `5`                                |
 | `-t` | `--timeout`       | `<s>`                       | listen: `35`                                 |
 | `-o` | `--output`        | `<path>` / `-`              | listen: `-` (stdout)                         |
-| `-f` | `--format`        | `m3u\|csv\|xspf\|xml\|null` | listen: from `-o` suffix                     |
+| `-f` | `--format`        | `m3u\|csv\|xspf\|xml\|null` | listen: from `-o` suffix, else `m3u`         |
 | `-v` | `--verbose`       |                             | off                                          |
 |      | `--color`         | `auto\|always\|never`       | `auto`                                       |
 |      | `--ret-addr`      | `<addr>:<port>`             | announce: off (no RET advertised)            |
@@ -52,7 +52,17 @@ dipisds -l -m <mcast>:<port> [options]
 |      | `--fus-announce`  | `<addr>:<port>`             | announce: off                                |
 |      | `--fus-logo`      | `<uri>`                     | announce: off                                |
 | `-d` | `--daemonize`     |                             | off (foreground)                             |
+| `-c` | `--config`        | `<path>`                    | `/etc/dvbipitools/dipisds.yaml`              |
+|      | `--configtest`    |                             | check the config file, then exit             |
 | `-h` | `--help`          |                             |                                              |
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipisds.yaml](dipisds.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipisds.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## Announce (`-a`)
 

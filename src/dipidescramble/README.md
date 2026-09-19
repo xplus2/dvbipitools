@@ -40,6 +40,8 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 |       | `--max-services`        | `<n>`                 | `32` (max `256`)                                    |
 |       | `--profile`             | `simple\|main`        | `simple`, `-i rist://` only                         |
 | `-d`  | `--daemonize`           |                       | off (foreground)                                    |
+| `-c`  | `--config`              | `<path>`              | `/etc/dvbipitools/dipidescramble.yaml` (if present) |
+|       | `--configtest`          |                       | check the config file, then exit                    |
 | `-h`  | `--help`                |                       |                                                     |
 
 ### Related to BISS
@@ -66,6 +68,14 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 |       | `--srt-latency`         | `<ms>`                | library default, every `-o srt://` target           |
 
 ---
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipidescramble.yaml](dipidescramble.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipidescramble.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## Parameters
 

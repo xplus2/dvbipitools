@@ -16,6 +16,7 @@
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
 #include "args.h"
+#include "config.h"
 #include "version.h"
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
@@ -137,6 +138,41 @@ void out_describe(const out_target_t *o, char *buf, size_t n) {
   }
 }
 
+int dscr_cfg_set_input(config_t *cfg, const char *s) {
+  if (input_parse(s, &cfg->input)) return -1;
+  cfg->have_input = 1;
+  return 0;
+}
+
+int dscr_cfg_add_out(config_t *cfg, const char *s) {
+  if (cfg->n_out >= DIPIDESCRAMBLE_MAX_OUT || parse_out_uri(s, &cfg->out[cfg->n_out])) return -1;
+  cfg->n_out++;
+  return 0;
+}
+
+int dscr_cfg_format(config_t *cfg, const char *s) {
+  return fmt_from_name(s, &cfg->format);
+}
+
+int dscr_cfg_pmt(config_t *cfg, const char *s) {
+  return parse_pmt_sel(s, cfg);
+}
+
+int dscr_cfg_token_header(config_t *cfg, const char *s) {
+  if (!s[0] || strpbrk(s, ":\r\n ")) return -1;
+  cfg->unicast_emm_token_header = s;
+  return 0;
+}
+
+int dscr_cfg_profile(config_t *cfg, const char *s) {
+  static const enum_map_t map[] = {{"simple", 0}, {"main", 1}};
+  int v;
+  if (map_lookup(map, sizeof map / sizeof map[0], s, &v)) return -1;
+  cfg->rist_profile_main = v;
+  cfg->profile_given = 1;
+  return 0;
+}
+
 static void print_help(void) {
   printf(
     "usage: %s -i <uri> -k <keyfile> -s <serial> -e <emmfile> -o <output> [options]\n\n"
@@ -186,67 +222,99 @@ static void print_help(void) {
     "      --srt-packetfilter <cfg>SRTO_PACKETFILTER for every -o srt:// target\n"
     "      --srt-latency <ms>     SRTO_LATENCY (ms) for every -o srt:// target\n"
     "  -d, --daemonize            fork to background after startup, detach from terminal\n"
+    "  -c, --config <path>        YAML config file (default: %s, if present)\n"
+    "      --configtest           check the config file, then exit\n"
     "  -h, --help                 this help\n\n"
     "examples:\n"
     "  %s -i rtp://@239.0.0.1:1975 -k device.key -s e2e-01 -e emm.cache -o out.ts -v\n"
     "  %s -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o out.ts\n"
     "  %s -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o rtmp://live.example.com/app/key\n",
-    TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+    TOOL_NAME, DEFAULT_CONFIG_PATH, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+}
+
+static const char shortopts[] = "i:k:s:e:u:o:f:p:I:c:vdh";
+
+static const struct option longopts[] = {
+  {"input", required_argument, 0, 'i'},
+  {"key", required_argument, 0, 'k'},
+  {"serial", required_argument, 0, 's'},
+  {"emm-file", required_argument, 0, 'e'},
+  {"unicast-emm", required_argument, 0, 'u'},
+  {"insecure", no_argument, 0, 1003},
+  {"token-header", required_argument, 0, 1010},
+  {"output", required_argument, 0, 'o'},
+  {"format", required_argument, 0, 'f'},
+  {"pmt-pid", required_argument, 0, 'p'},
+  {"iface", required_argument, 0, 'I'},
+  {"verbose", no_argument, 0, 'v'},
+  {"color", required_argument, 0, 1000},
+  {"biss2-sw", required_argument, 0, 1004},
+  {"biss2-esw", required_argument, 0, 1005},
+  {"biss2-id", required_argument, 0, 1006},
+  {"biss1-sw", required_argument, 0, 1007},
+  {"biss2-ca-key", required_argument, 0, 1008},
+  {"ecm-profile", required_argument, 0, 1009},
+  {"metrics", required_argument, 0, 1011},
+  {"metrics-id", required_argument, 0, 1012},
+  {"metrics-interval", required_argument, 0, 1013},
+  {"max-services", required_argument, 0, 1014},
+  {"profile", required_argument, 0, 1015},
+  {"srt-passphrase-in", required_argument, 0, 1016},
+  {"srt-pbkeylen-in", required_argument, 0, 1017},
+  {"srt-streamid-in", required_argument, 0, 1018},
+  {"srt-packetfilter-in", required_argument, 0, 1019},
+  {"srt-latency-in", required_argument, 0, 1020},
+  {"srt-passphrase", required_argument, 0, 1021},
+  {"srt-pbkeylen", required_argument, 0, 1022},
+  {"srt-streamid", required_argument, 0, 1023},
+  {"srt-packetfilter", required_argument, 0, 1024},
+  {"srt-latency", required_argument, 0, 1025},
+  {"strip-lcevc", no_argument, 0, 1026},
+  {"daemonize", no_argument, 0, 'd'},
+  {"config", required_argument, 0, 'c'},
+  {"configtest", no_argument, 0, 1027},
+  {"help", no_argument, 0, 'h'},
+  {0, 0, 0, 0}};
+
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+  int c;
+  optind = 1;
+  opterr = 0;
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    if (c == 'c') *cfg_path = optarg;
+    if (c == 1027) *configtest = 1;
+    if (c == 'h') {
+      print_help();
+      opterr = 1;
+      return ARGS_HELP;
+    }
+  }
+  opterr = 1;
+  return ARGS_OK;
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
-  static const struct option longopts[] = {
-      {"input", required_argument, 0, 'i'},
-      {"key", required_argument, 0, 'k'},
-      {"serial", required_argument, 0, 's'},
-      {"emm-file", required_argument, 0, 'e'},
-      {"unicast-emm", required_argument, 0, 'u'},
-      {"insecure", no_argument, 0, 1003},
-      {"token-header", required_argument, 0, 1010},
-      {"output", required_argument, 0, 'o'},
-      {"format", required_argument, 0, 'f'},
-      {"pmt-pid", required_argument, 0, 'p'},
-      {"iface", required_argument, 0, 'I'},
-      {"verbose", no_argument, 0, 'v'},
-      {"color", required_argument, 0, 1000},
-      {"biss2-sw", required_argument, 0, 1004},
-      {"biss2-esw", required_argument, 0, 1005},
-      {"biss2-id", required_argument, 0, 1006},
-      {"biss1-sw", required_argument, 0, 1007},
-      {"biss2-ca-key", required_argument, 0, 1008},
-      {"ecm-profile", required_argument, 0, 1009},
-      {"metrics", required_argument, 0, 1011},
-      {"metrics-id", required_argument, 0, 1012},
-      {"metrics-interval", required_argument, 0, 1013},
-      {"max-services", required_argument, 0, 1014},
-      {"profile", required_argument, 0, 1015},
-      {"srt-passphrase-in", required_argument, 0, 1016},
-      {"srt-pbkeylen-in", required_argument, 0, 1017},
-      {"srt-streamid-in", required_argument, 0, 1018},
-      {"srt-packetfilter-in", required_argument, 0, 1019},
-      {"srt-latency-in", required_argument, 0, 1020},
-      {"srt-passphrase", required_argument, 0, 1021},
-      {"srt-pbkeylen", required_argument, 0, 1022},
-      {"srt-streamid", required_argument, 0, 1023},
-      {"srt-packetfilter", required_argument, 0, 1024},
-      {"srt-latency", required_argument, 0, 1025},
-      {"strip-lcevc", no_argument, 0, 1026},
-      {"daemonize", no_argument, 0, 'd'},
-      {"help", no_argument, 0, 'h'},
-      {0, 0, 0, 0}};
-  int have_input = 0, have_biss_id = 0, profile_given = 0;
+  const char *cfg_path = NULL;
+  int configtest = 0;
+  int cli_out = 0;
+  args_status_t pst;
   int c;
 
-  memset(cfg, 0, sizeof *cfg);
+  pst = prescan(argc, argv, &cfg_path, &configtest);
+  if (pst != ARGS_OK) return pst;
+  if (configtest) return dscr_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+
+  dscr_cfg_defaults(cfg);
+  if (dscr_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+
   optind = 1;
-  while ((c = getopt_long(argc, argv, "i:k:s:e:u:o:f:p:I:vdh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
-        if (input_parse(optarg, &cfg->input)) {
+        if (dscr_cfg_set_input(cfg, optarg)) {
           argerr("invalid -i input: %s", optarg);
           return ARGS_ERR;
         }
-        have_input = 1;
         break;
       case 'k':
         cfg->key_path = optarg;
@@ -267,31 +335,33 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->strip_lcevc = 1;
         break;
       case 1010:
-        if (!optarg[0] || strpbrk(optarg, ":\r\n ")) {
+        if (dscr_cfg_token_header(cfg, optarg)) {
           argerr("invalid --token-header: %s", optarg);
           return ARGS_ERR;
         }
-        cfg->unicast_emm_token_header = optarg;
         break;
       case 'o':
+        if (!cli_out) {
+          cfg->n_out = 0;
+          cli_out = 1;
+        }
         if (cfg->n_out >= DIPIDESCRAMBLE_MAX_OUT) {
           argerr("too many -o targets (max %d)", DIPIDESCRAMBLE_MAX_OUT);
           return ARGS_ERR;
         }
-        if (parse_out_uri(optarg, &cfg->out[cfg->n_out])) {
+        if (dscr_cfg_add_out(cfg, optarg)) {
           argerr("invalid -o target: %s", optarg);
           return ARGS_ERR;
         }
-        cfg->n_out++;
         break;
       case 'f':
-        if (fmt_from_name(optarg, &cfg->format)) {
+        if (dscr_cfg_format(cfg, optarg)) {
           argerr("invalid -f format: %s (ts|mkv|mka)", optarg);
           return ARGS_ERR;
         }
         break;
       case 'p':
-        if (parse_pmt_sel(optarg, cfg)) {
+        if (dscr_cfg_pmt(cfg, optarg)) {
           argerr("invalid -p pmt-pid: %s (0x0010..0x1FFE, or \"all\")", optarg);
           return ARGS_ERR;
         }
@@ -334,7 +404,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           argerr("invalid --biss2-id: %s (32 hex chars)", optarg);
           return ARGS_ERR;
         }
-        have_biss_id = 1;
+        cfg->biss2_id_given = 1;
         break;
       case 1007:
         if (biss1_parse_sw(optarg, cfg->biss1_sw)) {
@@ -370,17 +440,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->max_services = v;
         break;
       }
-      case 1015: {
-        static const enum_map_t map[] = {{"simple", 0}, {"main", 1}};
-        int v;
-        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+      case 1015:
+        if (dscr_cfg_profile(cfg, optarg)) {
           argerr("invalid --profile: %s (simple|main)", optarg);
           return ARGS_ERR;
         }
-        cfg->rist_profile_main = v;
-        profile_given = 1;
         break;
-      }
       case 1016:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, optarg, "--srt-passphrase-in"))
           return ARGS_ERR;
@@ -443,6 +508,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->srt_latency_ms = v;
         break;
       }
+      case 'c':
+      case 1027:
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -454,7 +522,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  if (!have_input) {
+  if (!cfg->have_input) {
     argerr("missing -i input");
     return ARGS_ERR;
   }
@@ -482,11 +550,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--biss2-sw and --biss2-esw are mutually exclusive");
     return ARGS_ERR;
   }
-  if (cfg->biss2_esw_given && !have_biss_id) {
+  if (cfg->biss2_esw_given && !cfg->biss2_id_given) {
     argerr("--biss2-esw requires --biss2-id");
     return ARGS_ERR;
   }
-  if (have_biss_id && !cfg->biss2_esw_given) {
+  if (cfg->biss2_id_given && !cfg->biss2_esw_given) {
     argerr("--biss2-id requires --biss2-esw");
     return ARGS_ERR;
   }
@@ -495,7 +563,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
-  if (profile_given && cfg->input.kind != INPUT_RIST)
+  if (cfg->profile_given && cfg->input.kind != INPUT_RIST)
     log_line(TOOL_NAME ": --profile needs -i rist://");
   if (argutil_srt_passphrase_opt(TOOL_NAME, cfg->srt_passphrase_in, "--srt-passphrase-in")) return ARGS_ERR;
   if (cfg->srt_pbkeylen_in && !cfg->srt_passphrase_in[0]) {

@@ -15,6 +15,7 @@
 #include "lib/helper/log.h"
 
 #include "args.h"
+#include "config.h"
 #include "version.h"
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
@@ -66,6 +67,18 @@ static int cidr_list_parse(const char *s, cidr_t *out, size_t *count, size_t max
   return *count ? 0 : -1;
 }
 
+int fccret_cfg_range(config_t *cfg, const char *s) {
+  return ranges_parse(s, cfg);
+}
+
+int fccret_cfg_fcc_range(config_t *cfg, const char *s) {
+  return cidr_list_parse(s, cfg->fcc_ranges, &cfg->fcc_range_count, ARGS_MAX_RANGES);
+}
+
+int fccret_cfg_fcc_client_range(config_t *cfg, const char *s) {
+  return cidr_list_parse(s, cfg->fcc_client_ranges, &cfg->fcc_client_range_count, ARGS_MAX_RANGES);
+}
+
 static void print_help(void) {
   printf(
       "usage: %s -g <range> -l <addr>:<port> -I <iface> [options]\n\n"
@@ -86,6 +99,8 @@ static void print_help(void) {
       "      --metrics-id <name>          stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s>       snapshot interval in seconds (default: 5)\n"
       "  -d, --daemonize                  fork to background after startup, detach from terminal\n"
+      "  -c, --config <path>              YAML config file (default: %s, if present)\n"
+      "      --configtest                 check the config file, then exit\n"
       "  -h, --help                       this help\n\n"
       "RET (Annex F) options:\n"
       "      --no-ret                     disable RET entirely\n"
@@ -120,84 +135,99 @@ static void print_help(void) {
       "                                   (default: any client)\n\n"
       "example:\n"
       "  %s -g 239.0.0.0/8 -l 10.0.0.1:6000 -I eth0\n",
-      TOOL_NAME, TOOL_NAME);
+      TOOL_NAME, DEFAULT_CONFIG_PATH, TOOL_NAME);
+}
+
+static const char shortopts[] = "g:l:I:M:R:w:u:c:vdhB:F:G:C:X:D:";
+
+static const struct option longopts[] = {
+  {"range", required_argument, 0, 'g'},
+  {"listen", required_argument, 0, 'l'},
+  {"iface", required_argument, 0, 'I'},
+  {"max-channels", required_argument, 0, 'M'},
+  {"channel-idle-timeout", required_argument, 0, 1005},
+  {"rtx-pt", required_argument, 0, 'R'},
+  {"workers", required_argument, 0, 'w'},
+  {"user", required_argument, 0, 'u'},
+  {"verbose", no_argument, 0, 'v'},
+  {"color", required_argument, 0, 1002},
+  {"no-ret", no_argument, 0, 1003},
+  {"buffer", required_argument, 0, 'B'},
+  {"ff-port", required_argument, 0, 'F'},
+  {"no-mc-ret", no_argument, 0, 1001},
+  {"max-ret-clients", required_argument, 0, 1020},
+  {"ret-client-idle-timeout", required_argument, 0, 1021},
+  {"no-rsi", no_argument, 0, 1006},
+  {"rsi-interval", required_argument, 0, 1007},
+  {"rsi-mc-ret", no_argument, 0, 1008},
+  {"rsi-hostname", required_argument, 0, 1013},
+  {"no-fcc", no_argument, 0, 1004},
+  {"gop-cap", required_argument, 0, 'G'},
+  {"max-bursts", required_argument, 0, 'C'},
+  {"burst-multiplier", required_argument, 0, 'X'},
+  {"burst-duration-cap", required_argument, 0, 'D'},
+  {"max-buffer-fill-bound", required_argument, 0, 1014},
+  {"fcc-resolve-by-port", no_argument, 0, 1015},
+  {"fcc-resolve-base-port", required_argument, 0, 1016},
+  {"congestion-nack-threshold", required_argument, 0, 1017},
+  {"fcc-range", required_argument, 0, 1018},
+  {"fcc-client-range", required_argument, 0, 1019},
+  {"metrics", required_argument, 0, 1022},
+  {"metrics-id", required_argument, 0, 1023},
+  {"metrics-interval", required_argument, 0, 1024},
+  {"daemonize", no_argument, 0, 'd'},
+  {"config", required_argument, 0, 'c'},
+  {"configtest", no_argument, 0, 1025},
+  {"help", no_argument, 0, 'h'},
+  {0, 0, 0, 0}};
+
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+  int c;
+  optind = 1;
+  opterr = 0;
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    if (c == 'c') *cfg_path = optarg;
+    if (c == 1025) *configtest = 1;
+    if (c == 'h') {
+      print_help();
+      opterr = 1;
+      return ARGS_HELP;
+    }
+  }
+  opterr = 1;
+  return ARGS_OK;
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
-  static const struct option longopts[] = {
-      {"range", required_argument, 0, 'g'},
-      {"listen", required_argument, 0, 'l'},
-      {"iface", required_argument, 0, 'I'},
-      {"max-channels", required_argument, 0, 'M'},
-      {"channel-idle-timeout", required_argument, 0, 1005},
-      {"rtx-pt", required_argument, 0, 'R'},
-      {"workers", required_argument, 0, 'w'},
-      {"user", required_argument, 0, 'u'},
-      {"verbose", no_argument, 0, 'v'},
-      {"color", required_argument, 0, 1002},
-      {"no-ret", no_argument, 0, 1003},
-      {"buffer", required_argument, 0, 'B'},
-      {"ff-port", required_argument, 0, 'F'},
-      {"no-mc-ret", no_argument, 0, 1001},
-      {"max-ret-clients", required_argument, 0, 1020},
-      {"ret-client-idle-timeout", required_argument, 0, 1021},
-      {"no-rsi", no_argument, 0, 1006},
-      {"rsi-interval", required_argument, 0, 1007},
-      {"rsi-mc-ret", no_argument, 0, 1008},
-      {"rsi-hostname", required_argument, 0, 1013},
-      {"no-fcc", no_argument, 0, 1004},
-      {"gop-cap", required_argument, 0, 'G'},
-      {"max-bursts", required_argument, 0, 'C'},
-      {"burst-multiplier", required_argument, 0, 'X'},
-      {"burst-duration-cap", required_argument, 0, 'D'},
-      {"max-buffer-fill-bound", required_argument, 0, 1014},
-      {"fcc-resolve-by-port", no_argument, 0, 1015},
-      {"fcc-resolve-base-port", required_argument, 0, 1016},
-      {"congestion-nack-threshold", required_argument, 0, 1017},
-      {"fcc-range", required_argument, 0, 1018},
-      {"fcc-client-range", required_argument, 0, 1019},
-      {"metrics", required_argument, 0, 1022},
-      {"metrics-id", required_argument, 0, 1023},
-      {"metrics-interval", required_argument, 0, 1024},
-      {"daemonize", no_argument, 0, 'd'},
-      {"help", no_argument, 0, 'h'},
-      {0, 0, 0, 0}};
-  int have_range = 0, have_listen = 0, have_iface = 0;
+  const char *cfg_path = NULL;
+  int configtest = 0;
+  args_status_t pst;
   int c;
 
-  memset(cfg, 0, sizeof *cfg);
-  cfg->buffer_ms = 2000;
-  cfg->rtx_pt = 99;
-  cfg->gop_cap_ms = 8000;
-  cfg->max_bursts = 4096;
-  cfg->burst_multiplier = 1.5;
-  cfg->duration_cap_ms = 10000;
-  cfg->max_buffer_fill_bound_ms = 30000;
-  cfg->congestion_nack_threshold = 5;
-  cfg->channel_idle_timeout_s = 120;
-  cfg->max_ret_clients = 16384;
-  cfg->ret_client_idle_timeout_s = 300;
-  cfg->rsi_interval_s = 5;
+  pst = prescan(argc, argv, &cfg_path, &configtest);
+  if (pst != ARGS_OK) return pst;
+  if (configtest) return fccret_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+
+  fccret_cfg_defaults(cfg);
+  if (fccret_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+
   optind = 1;
-  while ((c = getopt_long(argc, argv, "g:l:I:M:R:w:u:vdhB:F:G:C:X:D:", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     switch (c) {
       case 'g':
-        if (ranges_parse(optarg, cfg)) {
+        if (fccret_cfg_range(cfg, optarg)) {
           argerr("invalid -g range: %s", optarg);
           return ARGS_ERR;
         }
-        have_range = 1;
         break;
       case 'l':
         if (argutil_addrport_parse(optarg, &cfg->listen_family, cfg->listen_addr, sizeof cfg->listen_addr, &cfg->listen_port)) {
           argerr("invalid -l addr:port: %s", optarg);
           return ARGS_ERR;
         }
-        have_listen = 1;
         break;
       case 'I':
         cfg->iface = optarg;
-        have_iface = 1;
         break;
       case 'M': {
         unsigned v;
@@ -355,13 +385,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 1018:
-        if (cidr_list_parse(optarg, cfg->fcc_ranges, &cfg->fcc_range_count, ARGS_MAX_RANGES)) {
+        if (fccret_cfg_fcc_range(cfg, optarg)) {
           argerr("invalid --fcc-range: %s", optarg);
           return ARGS_ERR;
         }
         break;
       case 1019:
-        if (cidr_list_parse(optarg, cfg->fcc_client_ranges, &cfg->fcc_client_range_count, ARGS_MAX_RANGES)) {
+        if (fccret_cfg_fcc_client_range(cfg, optarg)) {
           argerr("invalid --fcc-client-range: %s", optarg);
           return ARGS_ERR;
         }
@@ -375,6 +405,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1024:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
+      case 'c':
+      case 1025:
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -386,15 +419,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  if (!have_range) {
+  if (!cfg->range_count) {
     argerr("missing -g range");
     return ARGS_ERR;
   }
-  if (!have_listen) {
+  if (!cfg->listen_port) {
     argerr("missing -l listen");
     return ARGS_ERR;
   }
-  if (!have_iface) {
+  if (!cfg->iface) {
     argerr("missing -I iface");
     return ARGS_ERR;
   }

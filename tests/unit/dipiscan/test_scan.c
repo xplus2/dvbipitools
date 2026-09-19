@@ -6,10 +6,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
 #include "dipiscan/scan.h"
+
+#define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1)
 
 START_TEST(addr_at_sweeps_last_octet_ipv4) {
   config_t cfg;
@@ -428,6 +431,73 @@ START_TEST(probe_common_multi_mode_resolves_every_program) {
 }
 END_TEST
 
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipiscan_cfg_XXXXXX";
+  char *argv[] = {"dipiscan", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "mcast: 239.5.5.0\nport: 8000-8002\nformat: csv\ntimeout: 3\njets: 4\nmpts: on\nhttp-proxy: 10.0.0.1:8080\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.port_lo, 8000u);
+  ck_assert_uint_eq(cfg.port_hi, 8002u);
+  ck_assert_int_eq(cfg.format, OUT_CSV);
+  ck_assert_int_eq(cfg.timeout_ms, 3000);
+  ck_assert_uint_eq(cfg.jets, 4u);
+  ck_assert_int_eq(cfg.mpts, 1);
+  ck_assert_int_eq(cfg.http_proxy, 1);
+  ck_assert_uint_eq(cfg.http_proxy_port, 8080u);
+}
+END_TEST
+
+START_TEST(cmdline_wins_over_config) {
+  char path[] = "/tmp/dipiscan_cfg_XXXXXX";
+  char *argv[] = {"dipiscan", "-c", path, "-t", "9", NULL};
+  config_t cfg;
+  write_cfg(path, "port: 8000\ntimeout: 3\njets: 4\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.timeout_ms, 9000);
+  ck_assert_uint_eq(cfg.port_lo, 8000u);
+  ck_assert_uint_eq(cfg.jets, 4u);
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipiscan", "-c", "/nonexistent/dipiscan.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipiscan_cfg_XXXXXX";
+  char *argv[] = {"dipiscan", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "jets: 0\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipiscan_cfg_XXXXXX";
+  char *argv[] = {"dipiscan", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipiscan", "--configtest", "-c", "/nonexistent/dipiscan.yaml", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *scan_suite(void) {
   Suite *s = suite_create("dipiscan_scan");
   TCase *tc = tcase_create("core");
@@ -448,6 +518,11 @@ static Suite *scan_suite(void) {
   tcase_add_test(tc, probe_common_detects_rtp_wrapping_and_strips_header);
   tcase_add_test(tc, probe_common_times_out_with_no_data);
   tcase_add_test(tc, probe_common_multi_mode_resolves_every_program);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, cmdline_wins_over_config);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);
   return s;
 }

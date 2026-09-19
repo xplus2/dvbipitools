@@ -23,7 +23,17 @@ dipimetrics [options]
 | `-v` | `--verbose`   |                       | off                                 |
 |      | `--color`     | `auto\|always\|never` | `auto`                              |
 | `-d` | `--daemonize` |                       | off (foreground)                    |
+| `-c` | `--config`    | `<path>`              | `/etc/dvbipitools/dipimetrics.yaml` |
+|      | `--configtest`|                       | check the config file, then exit    |
 | `-h` | `--help`      |                       |                                     |
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipimetrics.yaml](dipimetrics.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipimetrics.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## How it works
 

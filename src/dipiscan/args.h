@@ -36,6 +36,12 @@ typedef enum { ARGS_OK, ARGS_HELP, ARGS_NOARGS, ARGS_ERR } args_status_t;
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg);
 
+int scan_cfg_mcast(config_t *cfg, const char *s);
+int scan_cfg_port(config_t *cfg, const char *s);
+int scan_cfg_format(config_t *cfg, const char *s);
+int scan_cfg_http_proxy(config_t *cfg, const char *s);
+int scan_cfg_http_path(const char *s);
+
 /* range "start-stop" */
 void args_range_describe(const config_t *cfg, char *buf, size_t n);
 

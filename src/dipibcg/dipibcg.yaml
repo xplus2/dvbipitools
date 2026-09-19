@@ -1,0 +1,48 @@
+# exactly one of announce|listen is required
+# -a|--announce [not set]
+announce: on
+# -l|--listen [not set]
+#listen: on
+
+
+# -m|--mcast [not set]
+mcast: 239.255.0.2:3938
+# -M|--map [not set]
+#map: <path>
+# -w|--window 24 # hours
+window: 24
+# -I|--iface [not set]
+#iface: <iface>
+metrics:
+  # --metrics /run/dvbipitools/metrics.sock
+  #sock: /run/dvbipitools/metrics.sock
+  # --metrics-id [not set]
+  #id: <name>
+  # --metrics-interval 5 # seconds
+  #interval: 5
+
+# -v|--verbose off
+verbose: off
+# --color auto # auto|always|never
+color: auto
+# -d|--daemonize off
+daemonize: off
+
+## announce-only
+# -i|--input [not set]
+#input: <path>
+# --dscp signalling
+dscp: signalling
+# -t|--interval 5 # seconds
+interval: 5
+# -Z|--compress off
+compress: off
+
+## listen-only
+# -t|--timeout 35 # seconds
+timeout: 35
+# -o|--output -
+#output: <path>
+# -C|--csv-map [not set]
+#csv-map: <path>
+

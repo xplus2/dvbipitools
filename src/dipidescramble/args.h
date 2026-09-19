@@ -64,6 +64,7 @@ typedef struct {
   int biss2_esw_given;                   /* --biss2-esw, mutually exclusive with --biss2-sw */
   unsigned char biss2_esw[BISS_KEY_LEN]; /* --biss2-esw, parsed */
   unsigned char biss2_id[BISS_KEY_LEN];  /* --biss2-id, required with --biss2-esw */
+  int biss2_id_given;                    /* --biss2-id */
   int biss1_sw_given;                    /* --biss1-sw, mutually exclusive with --biss2-sw/--biss2-esw */
   unsigned char biss1_sw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into full checksummed CSA1 CW */
   const char *biss2_ca_key_path;         /* --biss2-ca-key, receiver RSA private key PEM, required only if stream turns out to be BISS Mode CA */
@@ -73,6 +74,8 @@ typedef struct {
   unsigned metrics_interval_s;           /* --metrics-interval. 0 = default */
   unsigned max_services;                 /* --max-services. 0 = default (32) */
   int rist_profile_main;                 /* --profile, -i rist:// only. 0 = simple (default) */
+  int profile_given;                     /* --profile */
+  int have_input;                        /* -i */
   char srt_passphrase_in[128];           /* --srt-passphrase-in, -i srt:// only. "" = no encryption */
   int srt_pbkeylen_in;                   /* --srt-pbkeylen-in, requires --srt-passphrase-in. 0 = library default (16) */
   char srt_streamid_in[128];             /* --srt-streamid-in, -i srt:// only. "" = none */
@@ -88,6 +91,13 @@ typedef struct {
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg);
+
+int dscr_cfg_set_input(config_t *cfg, const char *s);
+int dscr_cfg_add_out(config_t *cfg, const char *s);
+int dscr_cfg_format(config_t *cfg, const char *s);
+int dscr_cfg_pmt(config_t *cfg, const char *s);
+int dscr_cfg_token_header(config_t *cfg, const char *s);
+int dscr_cfg_profile(config_t *cfg, const char *s);
 
 /* input source as text */
 void input_describe(const input_t *s, char *buf, size_t n);

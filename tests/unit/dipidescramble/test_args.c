@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dipidescramble/args.h"
 
@@ -183,6 +184,81 @@ START_TEST(srt_pbkeylen_requires_passphrase) {
 }
 END_TEST
 
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipidescramble_cfg_XXXXXX";
+  char *argv[] = {"dipidescramble", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input: udp://@239.1.1.1:5000\noutput:\n  - a.ts\n  - b.ts\nformat: ts\nserial: e2e-01\nmax-services: 64\nbiss2:\n  sw: 00112233445566778899aabbccddeeff\nsrt:\n  latency-in: 100\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.n_out, 2);
+  ck_assert_int_eq(cfg.input.kind, INPUT_UDP);
+  ck_assert_str_eq(cfg.serial, "e2e-01");
+  ck_assert_uint_eq(cfg.max_services, 64u);
+  ck_assert_int_eq(cfg.biss2_sw_given, 1);
+  ck_assert_uint_eq(cfg.srt_latency_in_ms, 100u);
+}
+END_TEST
+
+START_TEST(cmdline_wins_over_config) {
+  char path[] = "/tmp/dipidescramble_cfg_XXXXXX";
+  char *argv[] = {"dipidescramble", "-c", path, "-o", "c.ts", "-s", "cli", NULL};
+  config_t cfg;
+  write_cfg(path, "input: udp://@239.1.1.1:5000\noutput:\n  - a.ts\n  - b.ts\nserial: cfg\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.n_out, 1);
+  ck_assert_str_eq(cfg.out[0].file_path, "c.ts");
+  ck_assert_str_eq(cfg.serial, "cli");
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipidescramble", "-c", "/nonexistent/dipidescramble.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipidescramble_cfg_XXXXXX";
+  char *argv[] = {"dipidescramble", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input: udp://@239.1.1.1:5000\noutput: a.ts\nmax-services: 300\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_biss_conflict_is_rejected) {
+  char path[] = "/tmp/dipidescramble_cfg_XXXXXX";
+  char *argv[] = {"dipidescramble", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input: udp://@239.1.1.1:5000\noutput: a.ts\nbiss2:\n  sw: 00112233445566778899aabbccddeeff\n  esw: 00112233445566778899aabbccddeeff\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipidescramble_cfg_XXXXXX";
+  char *argv[] = {"dipidescramble", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipidescramble", "--configtest", "-c", "/nonexistent/dipidescramble.yaml", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipidescramble_args");
   TCase *tc = tcase_create("core");
@@ -207,6 +283,12 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, srt_output_repeatable_independent_targets);
   tcase_add_test(tc, srt_passphrase_length_is_validated);
   tcase_add_test(tc, srt_pbkeylen_requires_passphrase);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, cmdline_wins_over_config);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, config_biss_conflict_is_rejected);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);
   return s;
 }

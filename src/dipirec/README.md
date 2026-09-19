@@ -36,6 +36,8 @@ dipirec -i <uri> -o <target> [options]
 |      | `--metrics`             | `<path>`              | `/run/dvbipitools/metrics.sock`                   |
 |      | `--metrics-id`          | `<name>`              | none (metrics disabled unless set)                |
 |      | `--metrics-interval`    | `<s>`                 | `5`                                               |
+| `-c` | `--config`              | `<path>`              | `/etc/dvbipitools/dipirec.yaml` (if present)      |
+|      | `--configtest`          |                       | check the config file, then exit                  |
 | `-h` | `--help`                |                       |                                                   |
 
 ### Related to RIST Input/Output
@@ -63,6 +65,14 @@ dipirec -i <uri> -o <target> [options]
 |      | `--srt-latency`         | `<ms>`                | library default (every `-o srt://` target)    |
 
 ---
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipirec.yaml](dipirec.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipirec.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## Input (`-i`)
 

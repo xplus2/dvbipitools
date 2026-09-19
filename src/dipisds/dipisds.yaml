@@ -1,0 +1,110 @@
+# exactly one of announce|listen is required
+# -a|--announce [not set]
+announce: on
+# -l|--listen [not set]
+#listen: on
+
+
+# -m|--mcast [not set]
+#mcast: 239.255.0.1:3937
+# -I|--iface [not set]
+#iface: <iface>
+
+metrics:
+  # --metrics /run/dvbipitools/metrics.sock
+  #sock: /run/dvbipitools/metrics.sock
+  # --metrics-id [not set]
+  #id: sds
+  # --metrics-interval 5 # seconds
+  #interval: 5
+
+# -v|--verbose off
+verbose: off
+# --color auto # auto|always|never
+color: auto
+# -d|--daemonize off
+daemonize: off
+
+## announce-only
+# -i|--input [not set]
+#input: <path>
+# -p|--provider [not set]
+#provider: <name>
+# -O|--offering [not set]
+#offering: <name>
+# -L|--lang deu
+#lang: deu
+# --dscp signalling
+dscp: signalling
+# -t|--interval 5 # seconds
+interval: 5
+
+# --ret-addr [not set]
+ret:
+  #addr: <addr>:<port>
+  # --ret-rtx-time 2000
+  #rtx-time: 2000
+  # --ret-rtx-pt 99
+  #rtx-pt: 99
+  # --ret-mc off
+  #mc: off
+  # --ret-mc-port [not set]
+  #mc-port: <port>
+  # --ret-rsi-mc-ret off
+  #rsi-mc-ret: off
+
+# --fcc-addr [not set]
+fcc:
+  #addr: <addr>:<port>
+  # --fcc-rtx-time 2000
+  #rtx-time: 2000
+  # --fcc-rtx-pt 99
+  #rtx-pt: 99
+  # --fcc-resolve-by-port off
+  #resolve-by-port: off
+  # --fcc-resolve-base-port [not set]
+  #resolve-base-port: <port>
+  # --fcc-resolve-max-channels 300
+  #resolve-max-channels: 300
+
+# --al-fec-addr [not set]
+al-fec:
+  #addr: <addr>:<port>
+  # --al-fec-pt 96
+  #pt: 96
+
+# --packages [not set]
+#packages: <path>
+# --cells [not set]
+#cells: <path>
+
+# --rms-name [not set]
+rms:
+  #name: <name>
+  # --rms-lang deu
+  #lang: deu
+  # --rms-location [not set]
+  #location: <uri>
+  # --rms-logo [not set]
+  #logo: <uri>
+
+# --fus-name [not set]
+fus:
+  #name: <name>
+  # --fus-lang deu
+  #lang: deu
+  # --fus-id [not set]
+  #id: <n>
+  # --fus-announce [not set]
+  #announce: <addr>:<port>
+  # --fus-logo [not set]
+  #logo: <uri>
+
+
+## listen-only
+# -t|--timeout 35 # seconds
+timeout: 35
+# -o|--output -
+#output: <path>
+# -f|--format [from output suffix, else m3u] # m3u|csv|xspf|xml|null
+#format: m3u

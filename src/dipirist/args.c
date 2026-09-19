@@ -16,6 +16,7 @@
 #include "lib/net/plain_endpoint.h"
 
 #include "args.h"
+#include "config.h"
 #include "version.h"
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
@@ -47,6 +48,10 @@ static int parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *
   }
   (*count)++;
   return 0;
+}
+
+int rist_cfg_add_endpoint(config_t *cfg, int is_out, const char *uri) {
+  return is_out ? parse_endpoint_uri(uri, &cfg->out, 1, &cfg->n_out) : parse_endpoint_uri(uri, &cfg->in, 0, &cfg->n_in);
 }
 
 int config_is_sender(const config_t *cfg) {
@@ -118,50 +123,92 @@ static void print_help(void) {
       "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
       "  -v, --verbose              periodic bridge stats on stderr\n"
       "  -d, --daemonize            fork to background after startup, detach from terminal\n"
+      "  -c, --config <path>        YAML config file (default: %s, if present)\n"
+      "      --configtest           check the config file, then exit\n"
       "  -h, --help                 this help\n\n"
       "examples:\n"
       "  %s -i rtp://@239.1.1.1:5000 -o rist://1.2.3.4:6000 --buffer 1000\n"
       "  %s -i rist://@0.0.0.0:6000 -o rtp://@239.1.1.1:5000 --buffer 1000\n"
       "  %s -i rtp://@239.1.1.1:5000 -o rist://1.2.3.4:6000 -o rist://5.6.7.8:6000\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+      TOOL_NAME, DEFAULT_CONFIG_PATH, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+}
+
+static const char *const shortopts = "i:o:I:c:kvdh";
+
+static const struct option longopts[] = {
+    {"in", required_argument, 0, 'i'},
+    {"out", required_argument, 0, 'o'},
+    {"iface", required_argument, 0, 'I'},
+    {"insecure", no_argument, 0, 'k'},
+    {"profile", required_argument, 0, 1000},
+    {"secret", required_argument, 0, 1001},
+    {"cname", required_argument, 0, 1002},
+    {"buffer", required_argument, 0, 1003},
+    {"color", required_argument, 0, 1004},
+    {"metrics", required_argument, 0, 1005},
+    {"metrics-id", required_argument, 0, 1006},
+    {"metrics-interval", required_argument, 0, 1007},
+    {"al-fec", required_argument, 0, 1008},
+    {"al-fec-port", required_argument, 0, 1009},
+    {"verbose", no_argument, 0, 'v'},
+    {"daemonize", no_argument, 0, 'd'},
+    {"config", required_argument, 0, 'c'},
+    {"configtest", no_argument, 0, 1010},
+    {"help", no_argument, 0, 'h'},
+    {0, 0, 0, 0}};
+
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+  int c;
+  optind = 1;
+  opterr = 0;
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    if (c == 'c') *cfg_path = optarg;
+    if (c == 1010) *configtest = 1;
+    if (c == 'h') {
+      print_help();
+      opterr = 1;
+      return ARGS_HELP;
+    }
+  }
+  opterr = 1;
+  return ARGS_OK;
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
-  static const struct option longopts[] = {
-      {"in", required_argument, 0, 'i'},
-      {"out", required_argument, 0, 'o'},
-      {"iface", required_argument, 0, 'I'},
-      {"insecure", no_argument, 0, 'k'},
-      {"profile", required_argument, 0, 1000},
-      {"secret", required_argument, 0, 1001},
-      {"cname", required_argument, 0, 1002},
-      {"buffer", required_argument, 0, 1003},
-      {"color", required_argument, 0, 1004},
-      {"metrics", required_argument, 0, 1005},
-      {"metrics-id", required_argument, 0, 1006},
-      {"metrics-interval", required_argument, 0, 1007},
-      {"al-fec", required_argument, 0, 1008},
-      {"al-fec-port", required_argument, 0, 1009},
-      {"verbose", no_argument, 0, 'v'},
-      {"daemonize", no_argument, 0, 'd'},
-      {"help", no_argument, 0, 'h'},
-      {0, 0, 0, 0}};
-  int n_in = 0, n_out = 0;
+  const char *cfg_path = NULL;
+  int configtest = 0;
+  args_status_t pst;
+  int cli_in = 0, cli_out = 0;
   int c;
 
-  memset(cfg, 0, sizeof *cfg);
-  cfg->profile = RIST_PROF_SIMPLE;
+  pst = prescan(argc, argv, &cfg_path, &configtest);
+  if (pst != ARGS_OK) return pst;
+  if (configtest) return rist_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+
+  rist_cfg_defaults(cfg);
+  if (rist_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+
   optind = 1;
-  while ((c = getopt_long(argc, argv, "i:o:I:kvdh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     switch (c) {
       case 'i':
-        if (parse_endpoint_uri(optarg, &cfg->in, 0, &n_in)) {
+        if (!cli_in) {
+          memset(&cfg->in, 0, sizeof cfg->in);
+          cfg->n_in = 0;
+          cli_in = 1;
+        }
+        if (parse_endpoint_uri(optarg, &cfg->in, 0, &cfg->n_in)) {
           argerr("invalid -i: %s", optarg);
           return ARGS_ERR;
         }
         break;
       case 'o':
-        if (parse_endpoint_uri(optarg, &cfg->out, 1, &n_out)) {
+        if (!cli_out) {
+          memset(&cfg->out, 0, sizeof cfg->out);
+          cfg->n_out = 0;
+          cli_out = 1;
+        }
+        if (parse_endpoint_uri(optarg, &cfg->out, 1, &cfg->n_out)) {
           argerr("invalid -o: %s", optarg);
           return ARGS_ERR;
         }
@@ -232,6 +279,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'd':
         cfg->daemonize = 1;
         break;
+      case 'c':
+      case 1010:
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -243,11 +293,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  if (!n_in) {
+  if (!cfg->n_in) {
     argerr("missing -i input");
     return ARGS_ERR;
   }
-  if (!n_out) {
+  if (!cfg->n_out) {
     argerr("missing -o output");
     return ARGS_ERR;
   }

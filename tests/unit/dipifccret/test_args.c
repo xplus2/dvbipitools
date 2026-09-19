@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dipifccret/args.h"
 
@@ -401,6 +402,83 @@ START_TEST(metrics_id_alone_is_accepted) {
 }
 END_TEST
 
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipifccret_cfg_XXXXXX";
+  char *argv[] = {"dipifccret", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "range: 239.0.0.0/8,ff15::/16\nlisten: 10.0.0.1:6000\niface: eth0\nburst-multiplier: 2.5\nfcc:\n  range: 239.1.0.0/16\n  resolve-by-port: on\nrsi:\n  interval: 9\nmetrics:\n  id: a\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.range_count, 2u);
+  ck_assert_uint_eq(cfg.listen_port, 6000u);
+  ck_assert_str_eq(cfg.iface, "eth0");
+  ck_assert_double_eq_tol(cfg.burst_multiplier, 2.5, 1e-9);
+  ck_assert_uint_eq(cfg.fcc_range_count, 1u);
+  ck_assert_int_eq(cfg.fcc_resolve_by_port, 1);
+  ck_assert_uint_eq(cfg.rsi_interval_s, 9u);
+  ck_assert_str_eq(cfg.metrics_id, "a");
+}
+END_TEST
+
+START_TEST(cmdline_wins_over_config) {
+  char path[] = "/tmp/dipifccret_cfg_XXXXXX";
+  char *argv[] = {"dipifccret", "-c", path, "-g", "224.0.0.0/4", "-B", "500", NULL};
+  config_t cfg;
+  write_cfg(path, "range: 239.0.0.0/8,ff15::/16\nlisten: 10.0.0.1:6000\niface: eth0\nbuffer: 900\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.range_count, 1u);
+  ck_assert_str_eq(cfg.ranges[0], "224.0.0.0/4");
+  ck_assert_uint_eq(cfg.buffer_ms, 500u);
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipifccret", "-c", "/nonexistent/dipifccret.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipifccret_cfg_XXXXXX";
+  char *argv[] = {"dipifccret", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "range: 239.0.0.0/8\nlisten: 10.0.0.1:6000\niface: eth0\nburst-multiplier: 1.0\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_conflict_is_rejected) {
+  char path[] = "/tmp/dipifccret_cfg_XXXXXX";
+  char *argv[] = {"dipifccret", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "range: 239.0.0.0/8\nlisten: 10.0.0.1:6000\niface: eth0\nno-ret: on\nno-fcc: on\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipifccret_cfg_XXXXXX";
+  char *argv[] = {"dipifccret", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipifccret", "--configtest", "-c", "/nonexistent/dipifccret.yaml", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipifccret_args");
   TCase *tc = tcase_create("core");
@@ -450,6 +528,12 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, help_returns_help_status);
   tcase_add_test(tc, metrics_options_require_metrics_id);
   tcase_add_test(tc, metrics_id_alone_is_accepted);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, cmdline_wins_over_config);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, config_conflict_is_rejected);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);
   return s;
 }

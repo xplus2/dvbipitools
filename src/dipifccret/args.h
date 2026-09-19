@@ -65,4 +65,8 @@ typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg);
 
+int fccret_cfg_range(config_t *cfg, const char *s);
+int fccret_cfg_fcc_range(config_t *cfg, const char *s);
+int fccret_cfg_fcc_client_range(config_t *cfg, const char *s);
+
 #endif

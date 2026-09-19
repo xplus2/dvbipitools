@@ -1,0 +1,24 @@
+# -S|--sock /run/dvbipitools/metrics.sock
+sock: /run/dvbipitools/metrics.sock
+# -l|--listen 127.0.0.1:9109
+listen: 127.0.0.1:9109
+tls:
+  # --tls-cert [not set]
+  #cert: <path>
+  # --tls-key [not set]
+  #key: <path>
+
+# --auth [not set]
+#auth: 'user:password'
+
+# -e|--expiry 30 # seconds
+expiry: 30
+
+# -d|--daemonize off
+daemonize: off
+
+# -v|--verbose off
+verbose: off
+
+# --color auto # auto|always|never
+color: auto

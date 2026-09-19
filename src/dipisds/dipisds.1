@@ -170,6 +170,16 @@ default
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.
 .TP
+.BR \-c ", " \-\-config\ \fI<path>\fR
+YAML configuration file. Keys mirror the options above. Without this option,
+.I /etc/dvbipitools/dipisds.yaml
+is read if it exists.
+.TP
+.B \-\-configtest
+Check the configuration file (from
+.B \-c
+or the default location) and exit.
+.TP
 .BR \-h ", " \-\-help
 Show help and exit.
 .SS Announce mode options (\-a)
@@ -379,7 +389,7 @@ for stdout (default).
 .RI ( m3u | csv | xspf | xml | null ,
 default taken from the
 .B \-o
-suffix).
+suffix (.csv, .xspf, .xml), else m3u).
 .SH SCOPE
 DVBSTP framing is generic; on announce, the structured (non-.xml) side
 understands Service Provider Discovery, Broadcast Discovery, Package
@@ -409,6 +419,12 @@ Success.
 .TP
 .B non-zero
 Argument error, or I/O or network failure.
+.SH FILES
+.TP
+.I /etc/dvbipitools/dipisds.yaml
+Default configuration file, read if present. A commented template with all
+defaults ships as
+.IR /usr/share/dvbipitools/etc/dipisds.yaml .
 .SH SEE ALSO
 .BR dipiscan (1),
 .BR dipibcg (1),

@@ -23,22 +23,25 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 ```
 
 ## Options
-| flag | long form          | argument        | default                       | description                                                   |
-|------|--------------------|-----------------|-------------------------------|---------------------------------------------------------------|
-| -g   | --range            | cidr[,cidr...]  | all                           | multicast range(s) to capture, IPv4 or IPv6                   |
-| -l   | --listen           | addr:<port      |                               | unicast bind, shared by RET and FCC traffic                   |
-| -I,  | --iface            | iface           |                               | capture interface (required, single Ethernet NIC)             |
-| -M   | --max-channels     | n               |                               | 300. preallocated channel slots                               |
-| -R   | --rtx-pt           | n               | 99                            | RTP payload type for retransmitted/burst packets              |
-| -w   | --workers          | n               | <CPU Cores>                   | -l socket worker threads                                      |
-| -u   | --user             | user            | off                           | drop privileges to this user after opening the capture handle |
-| -v   | --verbose          |                 | off                           | periodic stats on stderr                                      |
-|      | --color            | when            | auto                          | auto\|always\|never                                           |
-|      | --metrics          | path            | /run/dvbipitools/metrics.sock | Unix datagram socket for metrics                              | 
-|      | --metrics-id       | name            |                               | stable instance id, metrics disabled unless set               |
-|      | --metrics-interval | s               | 5                             | snapshot interval in seconds                                  |
-| -d   | --daemonize        |                 |                               | fork to background after startup, detach from terminal        |
-| -h   | --help             |                 |                               | prints help                                                   |
+| flag | long form               | argument    | default                           | description                                         |
+|------|-------------------------|-------------|-----------------------------------|-----------------------------------------------------|
+| -g   | --range                 | cidr[,...]  | all                               | multicast range(s) to capture                       |
+| -l   | --listen                | addr:<port  |                                   | unicast bind, shared by RET and FCC traffic         |
+| -I,  | --iface                 | iface       |                                   | capture interface (required, single Ethernet NIC)   |
+| -M   | --max-channels          | n           |                                   | 300. preallocated channel slots                     |
+|      | --channel-idle-timeout  | s           | 120                               | free channel slot after silent seconds (0 = never)  |
+| -R   | --rtx-pt                | n           | 99                                | RTP payload type for retransmitted/burst packets    |
+| -w   | --workers               | n           | <CPU Cores>                       | -l socket worker threads                            |
+| -u   | --user                  | user        | off                               | drop privileges to this user                        |
+| -v   | --verbose               |             | off                               | periodic stats on stderr                            |
+|      | --color                 | when        | auto                              | auto\|always\|never                                 |
+|      | --metrics               | path        | /run/dvbipitools/metrics.sock     | Unix datagram socket for metrics                    |
+|      | --metrics-id            | name        |                                   | stable instance id, metrics disabled unless set     |
+|      | --metrics-interval      | s           | 5                                 | snapshot interval in seconds                        |
+| -d   | --daemonize             |             |                                   | fork to background after startup                    |
+| -c   | --config                | path        | /etc/dvbipitools/dipifccret.yaml  | YAML config file                                    |
+|      | --configtest            |             |                                   | check the config file, then exit                    |
+| -h   | --help                  |             |                                   | prints help                                         |
 
 
 ### RET (Annex F)
@@ -52,6 +55,8 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 |      | --ret-client-idle-timeout | <s>      | 300           | free RTX client slot after X seconds (0 = never) |
 |      | --no-rsi                  |          |               | disable RSI self-announcement                    |
 |      | --rsi-interval            | <s>      | 5             | RSI self-announcement interval (seconds)         |
+|      | --rsi-mc-ret              |          |               | RSI rides the MC RET session, needs MC RET       |
+|      | --rsi-hostname            | <name>   | -l address    | announce this hostname (SRBT 2) in RSI           |
 
 
 ### FCC (Annex I)
@@ -69,6 +74,14 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 |      | --fcc-range                 | cidr[,...] | all of -g | restrict FCC to these -g sub-ranges                                      |
 |      | --fcc-client-range          | cidr[,...] | any       | restrict FCC requests to these client source ranges                      |
 
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipifccret.yaml](dipifccret.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipifccret.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## Why passive capture, not an IGMP join
 

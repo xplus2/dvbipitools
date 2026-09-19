@@ -1,0 +1,132 @@
+# -I|--iface [not set]
+#iface: <iface>
+# -l|--listen all:9080
+listen: all:9080
+# -L|--listen-tls all:9443
+#listen-tls: all:9443
+tls:
+  # --tls-cert [not set]
+  #cert: <path>
+  # --tls-key [not set]
+  #key: <path>
+
+# -j|--workers -1 # -1|-2|-3 x cpu cores, or an absolute count
+#workers: -1
+# --max-clients 256
+#max-clients: 256
+# --max-channels 32
+#max-channels: 32
+# --idle-timeout 0 # seconds, 0 = off
+#idle-timeout: 0
+# --capture-ring-size 4096 # KiB
+#capture-ring-size: 4096
+# -J|--join-all off
+#join-all: off
+# -k|--insecure off
+#insecure: off
+# --status-tpl [not set]
+#status-tpl: <path>
+# --auth [not set]
+#auth: 'user:password'
+# --cors-origin *
+#cors-origin: '*'
+
+# -i|--input [not set, repeatable]
+#input:
+#  - sds://239.19.75.1:3937
+#  - channels.m3u:
+      # -n|--name [not set]
+      #name: MyChannels
+      # --media-type tv # tv|radio
+      #media-type: tv
+
+sds:
+  # --sds-timeout 3 # seconds
+  timeout: 3
+  # --sds-refresh-interval 30 # seconds
+  refresh-interval: 30
+
+# --segment-size 3 # seconds
+segment-size: 3
+# --segment-count 4
+segment-count: 4
+hls:
+  # --hls-part-size 0.35 # seconds
+  part-size: 0.35
+  # --hls-seg-pool 8
+  seg-pool: 8
+dash:
+  # --dash-part-size 0.333 # seconds
+  part-size: 0.333
+  # --dash-utc-url http://time.akamai.com/?iso&ms
+  utc-url: http://time.akamai.com/?iso&ms
+
+metrics:
+  # --metrics /run/dvbipitools/metrics.sock
+  #sock: /run/dvbipitools/metrics.sock
+  # --metrics-id [not set]
+  #id: <name>
+  # --metrics-interval 5 # seconds
+  #interval: 5
+  # --metrics-http off
+  http: off
+  # --metrics-auth [not set]
+  #auth: 'user:password'
+
+# -f|--format ts,spts,rawaudio,hls,llhls,dash,lldash
+format: ts,spts,rawaudio,hls,llhls,dash,lldash
+
+# --al-fec [not set]
+#al-fec: <L>:<D>
+
+# disable features
+no:
+  # --no-url-rtp off
+  url-rtp: off
+  # --no-url-udp off
+  url-udp: off
+  # --no-url-srt off
+  url-srt: off
+  # --no-pid-filters off
+  pid-filters: off
+  # --no-lcevc off
+  lcevc: off
+  # --no-http2 off
+  http2: off
+  # --no-http3 off
+  http3: off
+  # --no-fcc off
+  fcc: off
+  # --no-ret off
+  ret: off
+  # --no-al-fec off
+  al-fec: off
+  # --no-status off
+  status: off
+
+ssdp:
+  # --ssdp-ttl 3
+  ttl: 3
+  # --ssdp-iface [not set]
+  #iface: <iface>
+  # --ssdp-interval 60 # seconds
+  interval: 60
+  # --ssdp-max-age 1800 # seconds
+  max-age: 1800
+
+# --enable-dlna off
+enable-dlna: off
+dlna:
+  # --dlna-host [from listen]
+  #host: <host>[:<port>]
+  # --dlna-name [not set]
+  #name: <name>
+  # --dlna-keep-multicast off
+  keep-multicast: off
+
+# -d|--daemonize off
+daemonize: off
+# -v|--verbose off
+verbose: off
+# --color auto # auto|always|never
+color: auto

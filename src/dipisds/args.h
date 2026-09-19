@@ -10,6 +10,26 @@ typedef enum { MODE_ANNOUNCE, MODE_LISTEN } sds_mode_t;
 typedef enum { OUT_M3U, OUT_CSV, OUT_XSPF, OUT_XML, OUT_NULL } out_fmt_t;
 
 typedef struct {
+  int have_a;
+  int have_l;
+  int have_mcast;
+  int have_t;
+  int have_format;
+  long t_value;
+  int have_ret_rtx_time;
+  int have_ret_rtx_pt;
+  int have_ret_mc_port;
+  int have_fcc_rtx_time;
+  int have_fcc_rtx_pt;
+  int have_fcc_resolve_max_channels;
+  int have_al_fec_pt;
+  int have_rms_lang;
+  int have_fus_lang;
+  int have_fus_id;
+} args_flags_t;
+
+typedef struct {
+  args_flags_t fl;
   sds_mode_t mode;
   const char *input_path;  /* -i, announce */
   const char *provider;    /* -p, announce: DomainName */

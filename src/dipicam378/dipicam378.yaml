@@ -1,0 +1,29 @@
+# -k|--key [not set]
+#key: <path>
+# -s|--serial [not set]
+#serial: <id>
+# -p|--port 27500
+port: 27500
+# -a|--auth dipicam378
+auth: dipicam378
+# --caid [not set]
+#caid: <hex>
+# --algo cissa # cissa|csa2
+algo: cissa
+
+metrics:
+  # --metrics /run/dvbipitools/metrics.sock
+  #sock: /run/dvbipitools/metrics.sock
+  # --metrics-id [not set]
+  #id: <name>
+  # --metrics-interval 5 # seconds
+  #interval: 5
+
+# -v|--verbose off
+verbose: off
+
+# --color auto # auto|always|never
+color: auto
+
+# -d|--daemonize off
+daemonize: off

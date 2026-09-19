@@ -141,11 +141,14 @@ that many times the cpu core count, or
 .RI < N >:
 an absolute thread count. Default: \-1.
 .TP
-.BR \-c ", " \-\-max\-clients " \fIn\fR"
+.B \-\-max\-clients \fIn\fR
 Cap on concurrent streams. Default: 256.
 .TP
 .B \-\-max\-channels \fIn\fR
 Cap on concurrent (source,filter,pmt,container) stores. Default: 32.
+.TP
+.B \-\-idle\-timeout \fIs\fR
+Close a connection idle this long, in seconds. Default: 0 (off).
 .TP
 .B \-\-capture\-ring\-size \fIKiB\fR
 Per\-source ingress ring buffer. Default: 4096.
@@ -371,6 +374,16 @@ Per-connection diagnostics on stderr. Default: off.
 .B \-\-color \fIwhen\fR
 .BR auto | always | never .
 Default: auto.
+.TP
+.BR \-c ", " \-\-config\ \fI<path>\fR
+YAML configuration file. Keys mirror the options above. Without this option,
+.I /etc/dvbipitools/dipixy.yaml
+is read if it exists.
+.TP
+.B \-\-configtest
+Check the configuration file (from
+.B \-c
+or the default location) and exit.
 .TP
 .BR \-h ", " \-\-help
 Show usage and exit.
@@ -782,6 +795,12 @@ Success.
 .TP
 .B nonzero
 Argument error, or listen-socket setup failure.
+.SH FILES
+.TP
+.I /etc/dvbipitools/dipixy.yaml
+Default configuration file, read if present. A commented template with all
+defaults ships as
+.IR /usr/share/dvbipitools/etc/dipixy.yaml .
 .SH SEE ALSO
 .BR dipiscan (1),
 .BR dipisds (1),

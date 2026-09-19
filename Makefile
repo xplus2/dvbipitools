@@ -41,10 +41,16 @@ endif
 dipimetrics_SRCS := \
 	src/dipimetrics/main.c \
 	src/dipimetrics/args.c \
+	src/dipimetrics/config.c \
 	src/dipimetrics/store.c \
 	src/dipimetrics/render.c \
 	src/dipimetrics/httpserver.c \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/log.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/helper/toolmain.c \
@@ -59,6 +65,12 @@ dipimetrics_SRCS := \
 dipiscan_SRCS := \
 	src/dipiscan/main.c \
 	src/dipiscan/args.c \
+	src/dipiscan/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/dipiscan/format.c \
 	src/dipiscan/scan.c \
 	src/lib/helper/playlist_out.c \
@@ -93,6 +105,12 @@ dipiscan_EXTRA_LDFLAGS += -pthread
 dipisds_SRCS := \
 	src/dipisds/main.c \
 	src/dipisds/args.c \
+	src/dipisds/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/dipisds/input.c \
 	src/dipisds/format_out.c \
 	src/dipisds/announce.c \
@@ -178,6 +196,12 @@ endif
 dipibcg_SRCS := \
 	src/dipibcg/main.c \
 	src/dipibcg/args.c \
+	src/dipibcg/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/dipibcg/announce.c \
 	src/lib/net/announce_driver.c \
 	src/dipibcg/listen.c \
@@ -308,6 +332,12 @@ dipirec_EXTRA_LDFLAGS += -pthread
 dipirec_SRCS := \
 	src/dipirec/main.c \
 	src/dipirec/args.c \
+	src/dipirec/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/describe.c \
 	src/dipirec/record.c \
 	src/dipirec/record/sink.c \
@@ -459,6 +489,12 @@ dipiradiohead_SRCS := \
 	src/lib/helper/antidebug.c \
 	src/dipiradiohead/main.c \
 	src/dipiradiohead/args.c \
+	src/dipiradiohead/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/dipiradiohead/radiohead/radiohead.c \
 	src/dipiradiohead/radiohead/metrics.c \
 	src/dipiradiohead/radiohead/mpts.c \
@@ -612,6 +648,12 @@ dipitvhead_SRCS := \
 	src/lib/helper/antidebug.c \
 	src/dipitvhead/main.c \
 	src/dipitvhead/args.c \
+	src/dipitvhead/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/describe.c \
 	src/dipitvhead/tvhead/tvhead.c \
 	src/dipitvhead/tvhead/discover.c \
@@ -701,6 +743,12 @@ dipifccret_SRCS := \
 	src/dipifccret/run/rsi.c \
 	src/dipifccret/run/metrics.c \
 	src/dipifccret/args.c \
+	src/dipifccret/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/dipifccret/capture/capture.c \
 	src/dipifccret/capture/ranges.c \
 	src/dipifccret/capture/bpf.c \
@@ -748,6 +796,12 @@ dipicam378_SRCS := \
 	src/lib/helper/antidebug.c \
 	src/dipicam378/main.c \
 	src/dipicam378/args.c \
+	src/dipicam378/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/dipicam378/cs378x/cs378x.c \
 	src/dipicam378/cs378x/crypto.c \
 	src/lib/demux/crc32.c \
@@ -820,6 +874,12 @@ dipidescramble_SRCS := \
 	src/dipidescramble/main.c \
 	src/dipidescramble/pipeline.c \
 	src/dipidescramble/args.c \
+	src/dipidescramble/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/describe.c \
 	src/dipidescramble/crypto.c \
 	src/dipidescramble/device.c \
@@ -954,6 +1014,12 @@ endif
 dipirist_SRCS := \
 	src/dipirist/main.c \
 	src/dipirist/args.c \
+	src/dipirist/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/dipirist/bridge.c \
 	src/lib/helper/log.c \
 	src/lib/helper/toolmain.c \
@@ -1034,6 +1100,12 @@ endif
 dipisrt_SRCS := \
 	src/dipisrt/main.c \
 	src/dipisrt/args.c \
+	src/dipisrt/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/dipisrt/bridge.c \
 	src/lib/helper/log.c \
 	src/lib/helper/toolmain.c \
@@ -1171,6 +1243,12 @@ src/dipixy/htdocs_index.gen.c: src/dipixy/htdocs/index.html $(GEN_HTDOCS_BIN)
 dipixy_SRCS := \
 	src/dipixy/main.c \
 	src/dipixy/args.c \
+	src/dipixy/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/dipixy/core/route.c \
 	src/dipixy/core/playlist.c \
 	src/dipixy/htdocs_index.gen.c \
@@ -1537,6 +1615,12 @@ dipicam378_args_BIN := tests/unit/dipicam378/test_args
 dipicam378_args_SRCS := \
 	tests/unit/dipicam378/test_args.c \
 	src/dipicam378/args.c \
+	src/dipicam378/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
@@ -1756,6 +1840,12 @@ dipidescramble_args_BIN := tests/unit/dipidescramble/test_args
 dipidescramble_args_SRCS := \
 	tests/unit/dipidescramble/test_args.c \
 	src/dipidescramble/args.c \
+	src/dipidescramble/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/describe.c \
 	src/dipidescramble/ecm_profile/common.c \
 	src/dipidescramble/ecm_profile/parse.c \
@@ -1799,6 +1889,12 @@ dipimetrics_args_BIN := tests/unit/dipimetrics/test_args
 dipimetrics_args_SRCS := \
 	tests/unit/dipimetrics/test_args.c \
 	src/dipimetrics/args.c \
+	src/dipimetrics/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/base64.c \
 	src/lib/helper/ioutil.c \
@@ -1825,6 +1921,12 @@ dipisds_args_BIN := tests/unit/dipisds/test_args
 dipisds_args_SRCS := \
 	tests/unit/dipisds/test_args.c \
 	src/dipisds/args.c \
+	src/dipisds/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/signal.c \
@@ -1836,6 +1938,12 @@ dipirist_args_BIN := tests/unit/dipirist/test_args
 dipirist_args_SRCS := \
 	tests/unit/dipirist/test_args.c \
 	src/dipirist/args.c \
+	src/dipirist/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
@@ -1853,6 +1961,12 @@ dipirist_bridge_SRCS := \
 	tests/unit/dipirist/test_bridge.c \
 	src/dipirist/bridge.c \
 	src/dipirist/args.c \
+	src/dipirist/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/ioutil.c \
@@ -1926,6 +2040,12 @@ dipisrt_args_BIN := tests/unit/dipisrt/test_args
 dipisrt_args_SRCS := \
 	tests/unit/dipisrt/test_args.c \
 	src/dipisrt/args.c \
+	src/dipisrt/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
@@ -1943,6 +2063,12 @@ dipisrt_bridge_SRCS := \
 	tests/unit/dipisrt/test_bridge.c \
 	src/dipisrt/bridge.c \
 	src/dipisrt/args.c \
+	src/dipisrt/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/ioutil.c \
@@ -2002,6 +2128,12 @@ dipisds_listen_SRCS := \
 	src/dipisds/listen.c \
 	src/lib/helper/fileutil.c \
 	src/dipisds/args.c \
+	src/dipisds/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/dipisds/format_out.c \
@@ -2060,6 +2192,12 @@ dipibcg_args_BIN := tests/unit/dipibcg/test_args
 dipibcg_args_SRCS := \
 	tests/unit/dipibcg/test_args.c \
 	src/dipibcg/args.c \
+	src/dipibcg/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/signal.c \
@@ -2073,6 +2211,12 @@ dipibcg_announce_SRCS := \
 	src/dipibcg/announce.c \
 	src/lib/net/announce_driver.c \
 	src/dipibcg/args.c \
+	src/dipibcg/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/tva/bcg_doc.c \
@@ -2105,6 +2249,12 @@ dipibcg_listen_SRCS := \
 	src/dipibcg/listen.c \
 	src/lib/helper/fileutil.c \
 	src/dipibcg/args.c \
+	src/dipibcg/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/dipibcg/container.c \
@@ -2532,6 +2682,12 @@ dipiscan_scan_SRCS := \
 	tests/unit/dipiscan/test_scan.c \
 	src/dipiscan/scan.c \
 	src/dipiscan/args.c \
+	src/dipiscan/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/dipiscan/format.c \
 	src/lib/helper/playlist_out.c \
@@ -2794,6 +2950,12 @@ dipiradiohead_args_BIN := tests/unit/dipiradiohead/test_args
 dipiradiohead_args_SRCS := \
 	tests/unit/dipiradiohead/test_args.c \
 	src/dipiradiohead/args.c \
+	src/dipiradiohead/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/netconnect.c \
@@ -2967,6 +3129,12 @@ dipitvhead_args_BIN := tests/unit/dipitvhead/test_args
 dipitvhead_args_SRCS := \
 	tests/unit/dipitvhead/test_args.c \
 	src/dipitvhead/args.c \
+	src/dipitvhead/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/describe.c \
 	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
@@ -3480,6 +3648,12 @@ dipirec_record_SRCS := \
 	src/lib/mux/fmp4/box.c \
 	src/lib/mux/growbuf.c \
 	src/dipirec/args.c \
+	src/dipirec/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/describe.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
@@ -3586,6 +3760,12 @@ dipirec_args_BIN := tests/unit/dipirec/test_args
 dipirec_args_SRCS := \
 	tests/unit/dipirec/test_args.c \
 	src/dipirec/args.c \
+	src/dipirec/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/describe.c \
 	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \
@@ -3598,6 +3778,12 @@ dipifccret_args_BIN := tests/unit/dipifccret/test_args
 dipifccret_args_SRCS := \
 	tests/unit/dipifccret/test_args.c \
 	src/dipifccret/args.c \
+	src/dipifccret/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/dipifccret/capture/ranges.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/ioutil.c \
@@ -3734,6 +3920,12 @@ dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
 	tests/unit/dipixy/test_args.c \
 	src/dipixy/args.c \
+	src/dipixy/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/dipixy/core/route.c \
 	src/lib/mux/fec2022.c \
 	src/lib/helper/argutil.c \

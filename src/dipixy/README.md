@@ -23,16 +23,17 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--tls-cert`             | `<path>`              | search default paths, see below                           |       |
 |      | `--tls-key`              | `<path>`              | search default paths, see below                           |       |
 | `-j` | `--workers`              | `-1\|-2\|-3` or `<n>` | `-1` (that many x cpu cores) or <n> reactor threads       |       |
-| `-c` | `--max-clients`          | `<n>`                 | `256`, cap on concurrent streams                          |       |
+|      | `--max-clients`          | `<n>`                 | `256`, cap on concurrent streams                          |       |
 |      | `--max-channels`         | `<n>`                 | `32`, cap on concurrent (source,filter,pmt,container)     |       |
-|      | `--capture-ring-size`    | `<KiB>`               | `4096`; per-source ingress ring buffer                    |       |
+|      | `--idle-timeout`         | `<seconds>`           | `0` (off), close a connection idle this long              |       |
+|      | `--capture-ring-size`    | `<KiB>`               | `4096`, per-source ingress ring buffer                    |       |
 | `-i` | `--input`                | `<source>`            | none, repeatable                                          |       |
 | `-n` | `--name`                 | `<name>`              | none, names the input                                     | input |
 |      | `--media-type`           | `radio\|tv`           | `tv` only needed for DLNA                                 | input |
-| `-J` | `--join-all`             |                       | off; join all inputs at startup, never leave              |       |
-| `-k` | `--insecure`             |                       | off; skip TLS input verification                          |       |
-|      | `--sds-timeout`          | `<seconds>`           | `3`; sds:// discovery wait                                |       |
-|      | `--sds-refresh-interval` | `<seconds>`           | `30`; sds:// retry                                        |       |
+| `-J` | `--join-all`             |                       | off, join all inputs at startup, never leave              |       |
+| `-k` | `--insecure`             |                       | off, skip TLS input verification                          |       |
+|      | `--sds-timeout`          | `<seconds>`           | `3`, sds:// discovery wait                                |       |
+|      | `--sds-refresh-interval` | `<seconds>`           | `30`, sds:// retry                                        |       |
 |      | `--segment-size`         | `<seconds>`           | `3` (hls, hls-fmp4, llhls, dash, lldash)                  |       |
 |      | `--segment-count`        | `<n>`                 | `4`                                                       |       |
 |      | `--hls-part-size`        | `<seconds>`           | `0.35` (llhls, must be `<` segment-size)                  |       |
@@ -53,6 +54,8 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--no-url-srt`           |                       | off (deactivate `/srt/`)                                  |       |
 |      | `--no-pid-filters`       |                       | off (deactivate `?filter=`)                               |       |
 |      | `--no-lcevc`             |                       | off (deactivate `?lcevc=`)                                |       |
+|      | `--no-http2`             |                       | off (disable HTTP/2)                                      |       |
+|      | `--no-http3`             |                       | off (disable HTTP/3)                                      |       |
 |      | `--no-fcc`               |                       | off (ignore SDS fcc)                                      |       |
 |      | `--no-ret`               |                       | off (ignore SDS ret)                                      |       |
 |      | `--al-fec`               | `<L>:<D>`             | off (Annex E Layer 1 FEC matrix size)                     |       |
@@ -61,6 +64,8 @@ dipixy [-l addr:port] [-i source ...] [options]
 | `-d` | `--daemonize`            |                       | off (fork to background after startup)                    |       |
 | `-v` | `--verbose`              |                       | off                                                       |       |
 |      | `--color`                | `auto\|always\|never` | `auto`                                                    |       |
+| `-c` | `--config`               | `<path>`              | `/etc/dvbipitools/dipixy.yaml`                            |       |
+|      | `--configtest`           |                       | check the config file, then exit                          |       |
 | `-h` | `--help`                 |                       |                                                           |       |
 
 ### Related to DLNA/UPnP-AV
@@ -77,6 +82,14 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--dlna-keep-multicast`  |                       | off (force DVB-HN 9.2 multicast passing) |       |
 
 ---
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipixy.yaml](dipixy.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipixy.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## Input (`-i`)
 

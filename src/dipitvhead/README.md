@@ -55,6 +55,8 @@ across every input.
 |      | `--metrics-id`        | `<name>`                                | none (metrics disabled unless set)          |           |
 |      | `--metrics-interval`  | `<s>`                                   | `5`                                         |           |
 | `-d` | `--daemonize`         |                                         | off (foreground)                            |           |
+| `-c` | `--config`            | `<path>`                                | `/etc/dvbipitools/dipitvhead.yaml`          |           |
+|      | `--configtest`        |                                         | check the config file, then exit            |           |
 | `-h` | `--help`              |                                         |                                             |           |
 
 > Note that the default output changed from _plain UDP_ to _RTP_, since neither FCC nor RET would work
@@ -66,28 +68,29 @@ across every input.
 with the `--cas-ecmg` immediately before them, same convention as `-i`'s per-input flags above -
 using one before any `--cas-ecmg` is an error. Everything else is shared across every vendor.
 
-| long form                | argument                  | default                                    | scope      |
-|--------------------------|---------------------------|--------------------------------------------|------------|
-| `--cas-algo`             | `cissa\|csa2\|csa1`       | disabled                                   |            |
-| `--cas-ecmg`             | `tcp://host:port`         | at least one required with `--cas-algo`    |            |
-| `--cas-ecmg-version`     | `2\|3`                    | auto-negotiate                             | per-vendor |
-| `--cas-super-id`         | `<n>`                     | required per vendor                        | per-vendor |
-| `--cas-ecm-id`           | `<n>`                     | required per vendor                        | per-vendor |
-| `--cas-ecm-pid`          | `<pid>`                   | `0x0020`                                   | per-vendor |
-| `--cas-emmg-port`        | `<n>`                     | `8002`                                     | per-vendor |
-| `--cas-emmg-max-conns`   | `<n>`                     | `8` (max `64`)                             | per-vendor |
-| `--cas-emmg-version`     | `2\|3`                    | accept client's proposal                   | per-vendor |
-| `--cas-emm-pid`          | `<pid>`                   | `0x0021`                                   | per-vendor |
-| `--cas-resilience`       | `frozen\|cycling\|silent` | `frozen`                                   | per-vendor |
-| `--cas-required`         |                           | off                                        | per-vendor |
-| `--cas-cwenc-algo`       | `des56\|aes128\|aes256`   | off (plaintext)                            | per-vendor |
-| `--cas-cwenc-aes-mode`   | `stream\|ecb`             | `stream`                                   | per-vendor |
-| `--cas-cwenc-fixed-key`  | `<hex>`                   | `des56`'s Annex D ROM key; none for aes*   | per-vendor |
-| `--cas-cwenc-key-list-a` | `<path>`                  | none                                       | per-vendor |
-| `--cas-cwenc-key-list-b` | `<path>`                  | none                                       | per-vendor |
-| `--cas-pids`             | `<list>`                  | `video,audio`                              |            |
-| `--cas-cp-duration`      | `<ms>`                    | `10000`                                    |            |
-| `--cas-fallback-clear`   |                           | off (stay scrambled on last known-good CW) |            |
+| long form                | argument                  | default                                  | scope      |
+|--------------------------|---------------------------|------------------------------------------|------------|
+| `--cas-algo`             | `cissa\|csa2\|csa1`       | disabled                                 |            |
+| `--cas-ecmg`             | `tcp://host:port`         | at least one required with `--cas-algo`  |            |
+| `--cas-ecmg-version`     | `2\|3`                    | auto-negotiate                           | per-vendor |
+| `--cas-super-id`         | `<n>`                     | required per vendor                      | per-vendor |
+| `--cas-ecm-id`           | `<n>`                     | required per vendor                      | per-vendor |
+| `--cas-ecm-pid`          | `<pid>`                   | `0x0020`                                 | per-vendor |
+| `--cas-emmg-port`        | `<n>`                     | `8002`                                   | per-vendor |
+| `--cas-emmg-max-conns`   | `<n>`                     | `8` (max `64`)                           | per-vendor |
+| `--cas-emmg-version`     | `2\|3`                    | accept client's proposal                 | per-vendor |
+| `--cas-emmg-reverse`     | `tcp://host:port`         | listening EMMG                           | per-vendor |
+| `--cas-emm-pid`          | `<pid>`                   | `0x0021`                                 | per-vendor |
+| `--cas-resilience`       | `frozen\|cycling\|silent` | `frozen`                                 | per-vendor |
+| `--cas-required`         |                           | off                                      | per-vendor |
+| `--cas-cwenc-algo`       | `des56\|aes128\|aes256`   | off (plaintext)                          | per-vendor |
+| `--cas-cwenc-aes-mode`   | `stream\|ecb`             | `stream`                                 | per-vendor |
+| `--cas-cwenc-fixed-key`  | `<hex>`                   | `des56`'s Annex D ROM key, none for AES* | per-vendor |
+| `--cas-cwenc-key-list-a` | `<path>`                  | none                                     | per-vendor |
+| `--cas-cwenc-key-list-b` | `<path>`                  | none                                     | per-vendor |
+| `--cas-pids`             | `<list>`                  | `video,audio`                            |            |
+| `--cas-cp-duration`      | `<ms>`                    | `10000`                                  |            |
+| `--cas-fallback-clear`   |                           | off (use last known-good CW)             |            |
 
 ### Conditional Access: BISS
 
@@ -103,14 +106,14 @@ BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each o
 
 
 ### Related to RIST Input/Output
-| flag | long form            | argument                                | default                                   | scope     |
-|------|----------------------|-----------------------------------------|-------------------------------------------|-----------|
-|      | `--rist-profile-in`  | `simple\|main`                          | `simple` (`-i rist://` only)              | per-input |
-| `-R` | `--rist`             | `rist://host:port` or `srt://host:port` | none, repeatable (bonded, one at a time)  |           |
-|      | `--profile`          | `simple\|main`                          | `simple` (`-R rist://` peers only)        |           |
-|      | `--secret`           | `<psk>`                                 | none (`-R rist://` peers only)            |           |
-|      | `--cname`            | `<name>`                                | library default (`-R rist://` peers only) |           |
-|      | `--buffer`           | `<ms>`                                  | library default (`-R rist://` peers only) |           |
+| flag | long form            | argument            | default                                   | scope     |
+|------|----------------------|---------------------|-------------------------------------------|-----------|
+|      | `--rist-profile-in`  | `simple\|main`      | `simple` (`-i rist://` only)              | per-input |
+| `-R` | `--remote`           | `rist://host:port`  | none, repeatable (bonded, one at a time)  |           |
+|      | `--rist-profile`     | `simple\|main`      | `simple` (`-R rist://` peers only)        |           |
+|      | `--rist-secret`      | `<psk>`             | none (`-R rist://` peers only)            |           |
+|      | `--rist-cname`       | `<name>`            | library default (`-R rist://` peers only) |           |
+|      | `--rist-buffer`      | `<ms>`              | library default (`-R rist://` peers only) |           |
 
 `rist://@host:port[?query]` is also accepted, requires librist.
 `@` is required, since an input peer always listens.
@@ -131,6 +134,7 @@ on the URI.
 |      | `--srt-streamid-in`     | `<id>`              | none (`-i srt://` only)                     | per-input |
 |      | `--srt-packetfilter-in` | `<cfg>`             | none (`-i srt://` only)                     | per-input |
 |      | `--srt-latency-in`      | `<ms>`              | library default (`-i srt://` only)          | per-input |
+| `-R` | `--remote`              | `srt://host:port`   | none, repeatable (bonded, one at a time)    |           |
 |      | `--srt-group-mode`      | `broadcast\|backup` | none, required bonding >1 `-R srt://` peer  |           |
 |      | `--srt-passphrase`      | `<pw>`              | none (`-R srt://` peers only, 10..79 chars) |           |
 |      | `--srt-pbkeylen`        | `16\|24\|32`        | `16`, requires `--srt-passphrase`           |           |
@@ -145,6 +149,14 @@ this tool for that. `--srt-passphrase-in`/`--srt-pbkeylen-in`/`--srt-streamid-in
 `--srt-passphrase-in`.
 
 ---
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipitvhead.yaml](dipitvhead.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipitvhead.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## Parameters
 
@@ -269,8 +281,8 @@ without it. One of `-m`/`-R` is required (requires librist or libsrt).
 output. Neither RIST nor SRT is ever RTP-wrapped.
 
 `rist://host:port` peers bond the same way as [dipirist](../dipirist/README.md).
-`--profile`/`--secret`/`--cname`/`--buffer` configure them (profile, pre-shared key, cname,
-recovery buffer); `--secret` requires `--profile main`.
+`--rist-profile`/`--rist-secret`/`--rist-cname`/`--rist-buffer` configure them (profile, pre-shared key, cname,
+recovery buffer); `--rist-secret` requires `--rist-profile main`.
 
 `srt://host:port` peers (requires libsrt) bond the same way as
 [dipisrt](../dipisrt/README.md): a single peer needs no extra flags, more than one requires

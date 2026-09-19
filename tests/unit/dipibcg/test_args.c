@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/socket.h>
 
 #include "dipibcg/args.h"
@@ -207,6 +208,78 @@ START_TEST(mcast_describe_formats_ipv6) {
 }
 END_TEST
 
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipibcg_cfg_XXXXXX";
+  char *argv[] = {"dipibcg", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "announce: on\nmcast: 239.1.2.3:5000\ninput: g.xml\nmap: m.csv\nwindow: 12\ncompress: on\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.mode, MODE_ANNOUNCE);
+  ck_assert_str_eq(cfg.mcast_group, "239.1.2.3");
+  ck_assert_int_eq(cfg.window_hours, 12);
+  ck_assert_int_eq(cfg.compress, 1);
+}
+END_TEST
+
+START_TEST(cmdline_wins_over_config) {
+  char path[] = "/tmp/dipibcg_cfg_XXXXXX";
+  char *argv[] = {"dipibcg", "-c", path, "-l", "-t", "3", NULL};
+  config_t cfg;
+  write_cfg(path, "announce: on\nmcast: 239.1.2.3:5000\ninterval: 9\ntimeout: 50\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.mode, MODE_LISTEN);
+  ck_assert_int_eq(cfg.timeout_s, 3);
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipibcg", "-c", "/nonexistent/dipibcg.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipibcg_cfg_XXXXXX";
+  char *argv[] = {"dipibcg", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "listen: on\nmcast: 239.1.2.3:5000\nwindow: 0\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_both_modes_is_error) {
+  char path[] = "/tmp/dipibcg_cfg_XXXXXX";
+  char *argv[] = {"dipibcg", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "announce: on\nlisten: on\nmcast: 239.1.2.3:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipibcg_cfg_XXXXXX";
+  char *argv[] = {"dipibcg", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipibcg", "--configtest", "-c", "/nonexistent/dipibcg.yaml", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\nannounce: on\nlisten: on\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipibcg_args");
   TCase *tc = tcase_create("core");
@@ -234,6 +307,12 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, compress_flag_is_announce_only);
   tcase_add_test(tc, mcast_describe_formats_ipv4);
   tcase_add_test(tc, mcast_describe_formats_ipv6);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, cmdline_wins_over_config);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, config_both_modes_is_error);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);
   return s;
 }

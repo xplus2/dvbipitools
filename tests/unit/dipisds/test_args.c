@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dipisds/args.h"
 
@@ -349,6 +350,93 @@ START_TEST(unexpected_positional_argument_is_rejected) {
 }
 END_TEST
 
+START_TEST(listen_format_follows_output_suffix) {
+  char *argv[] = {"dipisds", "-l", "-m", "239.1.2.3:5000", "-o", "out.csv", NULL};
+  char *argv2[] = {"dipisds", "-l", "-m", "239.1.2.3:5000", "-o", "out.csv", "-f", "xspf", NULL};
+  char *argv3[] = {"dipisds", "-l", "-m", "239.1.2.3:5000", "-o", "out.txt", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.format, OUT_CSV);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.format, OUT_XSPF);
+  ck_assert_int_eq(args_parse(ARGC(argv3), argv3, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.format, OUT_M3U);
+}
+END_TEST
+
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipisds_cfg_XXXXXX";
+  char *argv[] = {"dipisds", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "announce: on\nmcast: 239.1.2.3:5000\ninput: /tmp/x.xml\ninterval: 9\nmetrics:\n  id: sds\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.mode, MODE_ANNOUNCE);
+  ck_assert_str_eq(cfg.mcast_group, "239.1.2.3");
+  ck_assert_int_eq(cfg.interval_s, 9);
+  ck_assert_str_eq(cfg.metrics_id, "sds");
+}
+END_TEST
+
+START_TEST(cmdline_wins_over_config) {
+  char path[] = "/tmp/dipisds_cfg_XXXXXX";
+  char *argv[] = {"dipisds", "-c", path, "-l", "-t", "3", "-o", "/tmp/out.m3u", NULL};
+  config_t cfg;
+  write_cfg(path, "announce: on\nmcast: 239.1.2.3:5000\ninterval: 9\ntimeout: 50\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.mode, MODE_LISTEN);
+  ck_assert_int_eq(cfg.timeout_s, 3);
+  ck_assert_str_eq(cfg.output_path, "/tmp/out.m3u");
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipisds", "-c", "/nonexistent/dipisds.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipisds_cfg_XXXXXX";
+  char *argv[] = {"dipisds", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "listen: on\nmcast: 239.1.2.3:5000\nformat: bogus\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_both_modes_is_error) {
+  char path[] = "/tmp/dipisds_cfg_XXXXXX";
+  char *argv[] = {"dipisds", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "announce: on\nlisten: on\nmcast: 239.1.2.3:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipisds_cfg_XXXXXX";
+  char *argv[] = {"dipisds", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipisds", "--configtest", "-c", "/nonexistent/dipisds.yaml", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\nannounce: on\nlisten: on\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipisds_args");
   TCase *tc = tcase_create("core");
@@ -392,6 +480,13 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, rms_and_fus_options_are_announce_only);
   tcase_add_test(tc, help_returns_help_status);
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
+  tcase_add_test(tc, listen_format_follows_output_suffix);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, cmdline_wins_over_config);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, config_both_modes_is_error);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);
   return s;
 }

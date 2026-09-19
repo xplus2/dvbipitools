@@ -10,22 +10,10 @@
 #include "lib/helper/argutil.h"
 #include "lib/helper/log.h"
 #include "args.h"
+#include "config.h"
 #include "version.h"
 
-#define ARGS_DEFAULT_PORT 27500u
-#define ARGS_DEFAULT_PASSWORD TOOL_NAME
-
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
-
-static int caid_parse(const char *p, unsigned *out) {
-  char *end;
-  unsigned long v;
-  if (*p == '\0') return -1;
-  v = strtoul(p, &end, 16);
-  if (*end != '\0' || v == 0 || v > 0xFFFF) return -1;
-  *out = (unsigned)v;
-  return 0;
-}
 
 static void print_help(void) {
   printf(
@@ -47,41 +35,69 @@ static void print_help(void) {
       "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
       "  -d, --daemonize            fork to background after startup, detach from terminal\n"
+      "  -c, --config <path>        YAML config file (default: %s, if present)\n"
+      "      --configtest           check the config file, then exit\n"
       "  -h, --help                 this help\n\n"
       "example:\n"
       "  %s -k device.key -s e2e-01 -p %u\n",
-      TOOL_NAME, ARGS_DEFAULT_PORT, ARGS_DEFAULT_PASSWORD, TOOL_NAME, ARGS_DEFAULT_PORT);
+      TOOL_NAME, ARGS_DEFAULT_PORT, ARGS_DEFAULT_PASSWORD, DEFAULT_CONFIG_PATH, TOOL_NAME, ARGS_DEFAULT_PORT);
+}
+
+static const char *const shortopts = "k:s:p:a:c:vdh";
+
+static const struct option longopts[] = {
+    {"key", required_argument, 0, 'k'},
+    {"serial", required_argument, 0, 's'},
+    {"port", required_argument, 0, 'p'},
+    {"auth", required_argument, 0, 'a'},
+    {"caid", required_argument, 0, 1002},
+    {"algo", required_argument, 0, 1001},
+    {"verbose", no_argument, 0, 'v'},
+    {"color", required_argument, 0, 1000},
+    {"metrics", required_argument, 0, 1003},
+    {"metrics-id", required_argument, 0, 1004},
+    {"metrics-interval", required_argument, 0, 1005},
+    {"daemonize", no_argument, 0, 'd'},
+    {"config", required_argument, 0, 'c'},
+    {"configtest", no_argument, 0, 1006},
+    {"help", no_argument, 0, 'h'},
+    {0, 0, 0, 0}};
+
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+  int c;
+  optind = 1;
+  opterr = 0;
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    if (c == 'c') *cfg_path = optarg;
+    if (c == 1006) *configtest = 1;
+    if (c == 'h') {
+      print_help();
+      opterr = 1;
+      return ARGS_HELP;
+    }
+  }
+  opterr = 1;
+  return ARGS_OK;
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
-  static const struct option longopts[] = {
-      {"key", required_argument, 0, 'k'},
-      {"serial", required_argument, 0, 's'},
-      {"port", required_argument, 0, 'p'},
-      {"auth", required_argument, 0, 'a'},
-      {"caid", required_argument, 0, 1002},
-      {"algo", required_argument, 0, 1001},
-      {"verbose", no_argument, 0, 'v'},
-      {"color", required_argument, 0, 1000},
-      {"metrics", required_argument, 0, 1003},
-      {"metrics-id", required_argument, 0, 1004},
-      {"metrics-interval", required_argument, 0, 1005},
-      {"daemonize", no_argument, 0, 'd'},
-      {"help", no_argument, 0, 'h'},
-      {0, 0, 0, 0}};
-  int have_key = 0;
+  const char *cfg_path = NULL;
+  int configtest = 0;
+  args_status_t pst;
   int c;
 
-  memset(cfg, 0, sizeof *cfg);
-  cfg->port = ARGS_DEFAULT_PORT;
-  cfg->password = ARGS_DEFAULT_PASSWORD;
-  cfg->cw_len = 16;
+  pst = prescan(argc, argv, &cfg_path, &configtest);
+  if (pst != ARGS_OK) return pst;
+  if (configtest) return cam378_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+
+  cam378_cfg_defaults(cfg);
+  if (cam378_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+
   optind = 1;
-  while ((c = getopt_long(argc, argv, "k:s:p:a:vdh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     switch (c) {
       case 'k':
         cfg->key_path = optarg;
-        have_key = 1;
         break;
       case 's':
         cfg->serial = optarg;
@@ -104,7 +120,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 1002:
-        if (caid_parse(optarg, &cfg->caid)) {
+        if (cam378_cfg_caid(optarg, &cfg->caid)) {
           argerr("invalid --caid: %s", optarg);
           return ARGS_ERR;
         }
@@ -144,6 +160,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1005:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
+      case 'c':
+      case 1006:
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -155,7 +174,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  if (!have_key) {
+  if (!cfg->key_path) {
     argerr("missing -k device key");
     return ARGS_ERR;
   }

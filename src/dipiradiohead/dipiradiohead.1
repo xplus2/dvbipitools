@@ -147,17 +147,16 @@ Repair stream UDP port, same multicast group as
 .BR \-m .
 Requires
 .BR \-\-al\-fec .
+.SS "RIST output"
 .TP
-.BR \-R ", " \-\-rist " " \fIuri\fR
-.B rist://host:port[?query]
-or
-.B srt://host:port
-output. Repeatable; every peer bonds onto a single sender (requires
-librist or libsrt respectively). One scheme at a time within a single run
-- rist:// and srt:// peers don't mix. May be combined with
+.BR \-R ", " \-\-remote " " \fIrist://host:port\fR[\fI?query\fR]
+RIST output peer. Repeatable; every peer bonds onto a single sender
+(requires librist). Mixing with
+.B srt://
+peers in a single run is rejected. May be combined with
 .BR \-m .
 .TP
-.B \-\-profile \fIp\fR
+.B \-\-rist\-profile \fIp\fR
 RIST profile,
 .B simple
 or
@@ -167,21 +166,31 @@ Applies only to
 peers. Default:
 .BR simple .
 .TP
-.B \-\-secret \fIpsk\fR
+.B \-\-rist\-secret \fIpsk\fR
 RIST pre-shared key. Applies only to
 .B \-R rist://
 peers. Requires
-.BR \-\-profile\ main .
+.BR \-\-rist\-profile\ main .
 .TP
-.B \-\-cname \fIname\fR
+.B \-\-rist\-cname \fIname\fR
 RIST cname. Applies only to
 .B \-R rist://
 peers. Default: library default.
 .TP
-.B \-\-buffer \fIms\fR
+.B \-\-rist\-buffer \fIms\fR
 RIST recovery buffer, in milliseconds. Applies only to
 .B \-R rist://
 peers. Default: library default.
+.SS "SRT output"
+.TP
+.BR \-R ", " \-\-remote " " \fIsrt://host:port\fR
+SRT output peer. Repeatable; every peer bonds onto a single sender
+(requires libsrt); more than one requires
+.BR \-\-srt\-group\-mode .
+Mixing with
+.B rist://
+peers in a single run is rejected. May be combined with
+.BR \-m .
 .TP
 .B \-\-srt\-group\-mode \fIbroadcast\fR|\fIbackup\fR
 Required when bonding more than one
@@ -473,6 +482,16 @@ Default: random at startup.
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.
 .TP
+.BR \-c ", " \-\-config\ \fI<path>\fR
+YAML configuration file. Keys mirror the options above. Without this option,
+.I /etc/dvbipitools/dipiradiohead.yaml
+is read if it exists.
+.TP
+.B \-\-configtest
+Check the configuration file (from
+.B \-c
+or the default location) and exit.
+.TP
 .BR \-h ", " \-\-help
 Show usage and exit.
 .SH EXAMPLES
@@ -487,6 +506,12 @@ error after 5 seconds.
 .B 0
 on success.
 Non-zero on argument errors or I/O/network failure.
+.SH FILES
+.TP
+.I /etc/dvbipitools/dipiradiohead.yaml
+Default configuration file, read if present. A commented template with all
+defaults ships as
+.IR /usr/share/dvbipitools/etc/dipiradiohead.yaml .
 .SH SEE ALSO
 .BR dipitvhead (1),
 .BR dipimetrics (1),

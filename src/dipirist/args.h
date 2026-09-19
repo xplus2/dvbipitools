@@ -22,6 +22,8 @@ typedef enum { RIST_PROF_SIMPLE, RIST_PROF_MAIN } rist_profile_sel_t;
 typedef struct {
   endpoint_t in;  /* -i */
   endpoint_t out; /* -o */
+  int n_in;
+  int n_out;
   rist_profile_sel_t profile;
   char secret[128];   /* "" = none; --profile main only */
   char cname[128];    /* "" = library default */
@@ -45,6 +47,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg);
 
 /* 1 if -o is rist:// (this process sends into RIST), 0 if -i is (receives from RIST) */
 int config_is_sender(const config_t *cfg);
+
+int rist_cfg_add_endpoint(config_t *cfg, int is_out, const char *uri);
 
 void endpoint_describe(const endpoint_t *e, char *buf, size_t n);
 

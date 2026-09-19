@@ -24,7 +24,17 @@ dipiscan [options] 1>playlist 2>log
 | `-I` | `--iface`     | `<iface>`                   | kernel default                   |
 | `-v` | `--verbose`   |                             | off                              |
 |      | `--color`     | `auto\|always\|never`       | `auto`                           |
+| `-c` | `--config`    | `<path>`                    | `/etc/dvbipitools/dipiscan.yaml` (if present) |
+|      | `--configtest`|                             | check the config file, then exit |
 | `-h` | `--help`      |                             |                                  |
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipiscan.yaml](dipiscan.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipiscan.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## Scan range (`-m`, `-p`)
 

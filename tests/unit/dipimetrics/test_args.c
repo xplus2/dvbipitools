@@ -5,7 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
+#include "lib/helper/log.h"
 #include "lib/metrics/protocol.h"
 
 #include "dipimetrics/args.h"
@@ -132,6 +134,146 @@ START_TEST(help_returns_help_status) {
 }
 END_TEST
 
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_sets_all_keys) {
+  char path[] = "/tmp/dipimetrics_cfg_XXXXXX";
+  char *argv[] = {"dipimetrics", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path,
+            "sock: /tmp/x.sock\nlisten: '0.0.0.0:8080'\ntls:\n  cert: c.pem\n  key: k.pem\n"
+            "auth: 'user:pass'\nexpiry: 99\ndaemonize: on\nverbose: yes\ncolor: never\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_str_eq(cfg.sock_path, "/tmp/x.sock");
+  ck_assert_str_eq(cfg.listen_addr, "0.0.0.0");
+  ck_assert_uint_eq(cfg.listen_port, 8080u);
+  ck_assert_str_eq(cfg.tls_cert, "c.pem");
+  ck_assert_str_eq(cfg.tls_key, "k.pem");
+  ck_assert_str_eq(cfg.http_auth, "Basic dXNlcjpwYXNz");
+  ck_assert_int_eq(cfg.expiry_s, 99);
+  ck_assert_int_eq(cfg.daemonize, 1);
+  ck_assert_int_eq(cfg.verbose, 1);
+  ck_assert_int_eq(cfg.color_mode, LOG_COLOR_NEVER);
+}
+END_TEST
+
+START_TEST(cmdline_wins_over_config) {
+  char path[] = "/tmp/dipimetrics_cfg_XXXXXX";
+  char *argv[] = {"dipimetrics", "-e", "5", "--config", path, "-S", "/tmp/cli.sock", NULL};
+  config_t cfg;
+  write_cfg(path, "sock: /tmp/x.sock\nexpiry: 99\nlisten: 0.0.0.0:8080\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.expiry_s, 5);
+  ck_assert_str_eq(cfg.sock_path, "/tmp/cli.sock");
+  ck_assert_uint_eq(cfg.listen_port, 8080u);
+}
+END_TEST
+
+START_TEST(config_defaults_file_changes_nothing) {
+  char path[] = "/tmp/dipimetrics_cfg_XXXXXX";
+  char *argv[] = {"dipimetrics", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "sock: /run/dvbipitools/metrics.sock\nlisten: 127.0.0.1:9109\ntls:\n  #cert: x\nexpiry: 30\ndaemonize: off\nverbose: off\ncolor: auto\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_str_eq(cfg.sock_path, METRICS_DEFAULT_SOCK_PATH);
+  ck_assert_int_eq(cfg.expiry_s, 30);
+  ck_assert_int_eq(cfg.daemonize, 0);
+  ck_assert_ptr_eq(cfg.tls_cert, NULL);
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipimetrics", "-c", "/nonexistent/dipimetrics.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipimetrics_cfg_XXXXXX";
+  char *argv[] = {"dipimetrics", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "expiry: 0\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_syntax_error_is_error) {
+  char path[] = "/tmp/dipimetrics_cfg_XXXXXX";
+  char *argv[] = {"dipimetrics", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "expiry: [1, 2\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_cert_without_key_is_error) {
+  char path[] = "/tmp/dipimetrics_cfg_XXXXXX";
+  char *argv[] = {"dipimetrics", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "tls:\n  cert: c.pem\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_cert_plus_cmdline_key_is_ok) {
+  char path[] = "/tmp/dipimetrics_cfg_XXXXXX";
+  char *argv[] = {"dipimetrics", "-c", path, "--tls-key", "k.pem", NULL};
+  config_t cfg;
+  write_cfg(path, "tls:\n  cert: c.pem\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_unknown_key_only_warns) {
+  char path[] = "/tmp/dipimetrics_cfg_XXXXXX";
+  char *argv[] = {"dipimetrics", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_ok_returns_exit_status) {
+  char path[] = "/tmp/dipimetrics_cfg_XXXXXX";
+  char *argv[] = {"dipimetrics", "--configtest", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\nexpiry: 0\ntls:\n  cert: /nonexistent/c.pem\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_missing_file_fails) {
+  char *argv[] = {"dipimetrics", "--configtest", "-c", "/nonexistent/dipimetrics.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(configtest_syntax_error_fails) {
+  char path[] = "/tmp/dipimetrics_cfg_XXXXXX";
+  char *argv[] = {"dipimetrics", "--configtest", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "a: b: c\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipimetrics_args");
   TCase *tc = tcase_create("core");
@@ -150,6 +292,18 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, invalid_color_mode_is_rejected);
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
   tcase_add_test(tc, help_returns_help_status);
+  tcase_add_test(tc, config_file_sets_all_keys);
+  tcase_add_test(tc, cmdline_wins_over_config);
+  tcase_add_test(tc, config_defaults_file_changes_nothing);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, config_syntax_error_is_error);
+  tcase_add_test(tc, config_cert_without_key_is_error);
+  tcase_add_test(tc, config_cert_plus_cmdline_key_is_ok);
+  tcase_add_test(tc, config_unknown_key_only_warns);
+  tcase_add_test(tc, configtest_ok_returns_exit_status);
+  tcase_add_test(tc, configtest_missing_file_fails);
+  tcase_add_test(tc, configtest_syntax_error_fails);
   suite_add_tcase(s, tc);
   return s;
 }

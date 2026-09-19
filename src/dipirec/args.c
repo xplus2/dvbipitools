@@ -19,6 +19,7 @@
 #include "lib/mux/fec2022.h"
 
 #include "args.h"
+#include "config.h"
 #include "filter/ts.h"
 #include "version.h"
 
@@ -327,6 +328,67 @@ static int validate_srt_passphrase(const char *passphrase, int pbkeylen, const c
   return 0;
 }
 
+int rec_cfg_set_in(config_t *cfg, const char *s) {
+  if (parse_uri(s, &cfg->source)) return -1;
+  cfg->fl.have_in = 1;
+  return 0;
+}
+
+int rec_cfg_add_out(config_t *cfg, const char *s) {
+  if (cfg->n_out >= DIPIREC_MAX_OUT || parse_out_uri(s, &cfg->out[cfg->n_out])) return -1;
+  cfg->n_out++;
+  return 0;
+}
+
+int rec_cfg_audio(config_t *cfg, const char *s) {
+  return parse_audio(s, cfg);
+}
+
+int rec_cfg_pmt(config_t *cfg, const char *s) {
+  return parse_pmt_sel(s, cfg);
+}
+
+int rec_cfg_format(config_t *cfg, const char *s) {
+  if (fmt_from_name(s, &cfg->format)) return -1;
+  cfg->fl.have_format = 1;
+  return 0;
+}
+
+int rec_cfg_subs(config_t *cfg, const char *s) {
+  static const enum_map_t map[] = {{"strip", SUB_STRIP}, {"keep", SUB_KEEP}, {"srt", SUB_SRT}};
+  int v;
+  if (map_lookup(map, sizeof map / sizeof map[0], s, &v)) return -1;
+  cfg->subs = (sub_mode_t)v;
+  return 0;
+}
+
+int rec_cfg_time(config_t *cfg, const char *s) {
+  long d = duration_parse(s);
+  if (d < 0) return -1;
+  cfg->duration_s = d;
+  return 0;
+}
+
+int rec_cfg_strip(config_t *cfg, const char *s) {
+  if (parse_strip(s, cfg)) return -1;
+  cfg->fl.have_strip = 1;
+  return 0;
+}
+
+int rec_cfg_profile(config_t *cfg, const char *s, int is_in) {
+  static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
+  int v;
+  if (map_lookup(map, sizeof map / sizeof map[0], s, &v)) return -1;
+  if (is_in) {
+    cfg->rist_profile_in = (rist_profile_sel_t)v;
+    cfg->fl.have_profile_in = 1;
+  } else {
+    cfg->rist_profile = (rist_profile_sel_t)v;
+    cfg->fl.have_profile = 1;
+  }
+  return 0;
+}
+
 static void print_help(void) {
   printf(
     "usage: %s -i <uri> -o <target> [options]\n\n"
@@ -400,6 +462,8 @@ static void print_help(void) {
     "      --strip <list>             comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT\n"
     "                                 (-f ts only) or LCEVC to drop, or \"none\"\n"
     "                                 (default: NUL,NIT,AIT,EIT)\n"
+    "  -c, --config <path>            YAML config file (default: %s, if present)\n"
+    "      --configtest               check the config file, then exit\n"
     "  -h, --help                     this help\n\n"
     "formats:\n"
     "  raw   unwrap RTP only, transport stream otherwise untouched\n"
@@ -415,94 +479,111 @@ static void print_help(void) {
     "  %s -i http://10.0.0.1:4022/rtp/239.19.75.1:8700 -o show.ts\n"
     "  %s -i show.ts --pace -o rtp://@239.9.9.9:6000 -O eth1 --ttl 16\n"
     "  %s -i rtp://@239.19.75.1:8700 -o rtmp://live.example.com/app/key\n",
-    TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+    TOOL_NAME, DEFAULT_CONFIG_PATH, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+}
+
+static const char *const shortopts = "o:i:a:f:p:s:t:I:O:c:vh";
+
+static const struct option longopts[] = {
+    {"out", required_argument, 0, 'o'},
+    {"in", required_argument, 0, 'i'},
+    {"audio", required_argument, 0, 'a'},
+    {"format", required_argument, 0, 'f'},
+    {"pmt-pid", required_argument, 0, 'p'},
+    {"subtitles", required_argument, 0, 's'},
+    {"time", required_argument, 0, 't'},
+    {"iface", required_argument, 0, 'I'},
+    {"verbose", no_argument, 0, 'v'},
+    {"sub-lead", required_argument, 0, 1000},
+    {"color", required_argument, 0, 1001},
+    {"ret", required_argument, 0, 1002},
+    {"no-ret-mc", no_argument, 0, 1003},
+    {"ret-mc-port", required_argument, 0, 1004},
+    {"ret-pt", required_argument, 0, 1005},
+    {"ret-wait", required_argument, 0, 1006},
+    {"strip", required_argument, 0, 1007},
+    {"pace", no_argument, 0, 1008},
+    {"out-iface", required_argument, 0, 'O'},
+    {"ttl", required_argument, 0, 1010},
+    {"al-fec", required_argument, 0, 1030},
+    {"al-fec-port", required_argument, 0, 1031},
+    {"profile", required_argument, 0, 1011},
+    {"secret", required_argument, 0, 1012},
+    {"cname", required_argument, 0, 1013},
+    {"buffer", required_argument, 0, 1014},
+    {"insecure", no_argument, 0, 1015},
+    {"metrics", required_argument, 0, 1016},
+    {"metrics-id", required_argument, 0, 1017},
+    {"metrics-interval", required_argument, 0, 1018},
+    {"profile-in", required_argument, 0, 1019},
+    {"srt-passphrase-in", required_argument, 0, 1020},
+    {"srt-pbkeylen-in", required_argument, 0, 1021},
+    {"srt-streamid-in", required_argument, 0, 1022},
+    {"srt-packetfilter-in", required_argument, 0, 1023},
+    {"srt-latency-in", required_argument, 0, 1024},
+    {"srt-passphrase", required_argument, 0, 1025},
+    {"srt-pbkeylen", required_argument, 0, 1026},
+    {"srt-streamid", required_argument, 0, 1027},
+    {"srt-packetfilter", required_argument, 0, 1028},
+    {"srt-latency", required_argument, 0, 1029},
+    {"config", required_argument, 0, 'c'},
+    {"configtest", no_argument, 0, 1032},
+    {"help", no_argument, 0, 'h'},
+    {0, 0, 0, 0}};
+
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+  int c;
+  optind = 1;
+  opterr = 0;
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    if (c == 'c') *cfg_path = optarg;
+    if (c == 1032) *configtest = 1;
+    if (c == 'h') {
+      print_help();
+      opterr = 1;
+      return ARGS_HELP;
+    }
+  }
+  opterr = 1;
+  return ARGS_OK;
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
-  static const struct option longopts[] = {
-      {"out", required_argument, 0, 'o'},
-      {"in", required_argument, 0, 'i'},
-      {"audio", required_argument, 0, 'a'},
-      {"format", required_argument, 0, 'f'},
-      {"pmt-pid", required_argument, 0, 'p'},
-      {"subtitles", required_argument, 0, 's'},
-      {"time", required_argument, 0, 't'},
-      {"iface", required_argument, 0, 'I'},
-      {"verbose", no_argument, 0, 'v'},
-      {"sub-lead", required_argument, 0, 1000},
-      {"color", required_argument, 0, 1001},
-      {"ret", required_argument, 0, 1002},
-      {"no-ret-mc", no_argument, 0, 1003},
-      {"ret-mc-port", required_argument, 0, 1004},
-      {"ret-pt", required_argument, 0, 1005},
-      {"ret-wait", required_argument, 0, 1006},
-      {"strip", required_argument, 0, 1007},
-      {"pace", no_argument, 0, 1008},
-      {"out-iface", required_argument, 0, 'O'},
-      {"ttl", required_argument, 0, 1010},
-      {"al-fec", required_argument, 0, 1030},
-      {"al-fec-port", required_argument, 0, 1031},
-      {"profile", required_argument, 0, 1011},
-      {"secret", required_argument, 0, 1012},
-      {"cname", required_argument, 0, 1013},
-      {"buffer", required_argument, 0, 1014},
-      {"insecure", no_argument, 0, 1015},
-      {"metrics", required_argument, 0, 1016},
-      {"metrics-id", required_argument, 0, 1017},
-      {"metrics-interval", required_argument, 0, 1018},
-      {"profile-in", required_argument, 0, 1019},
-      {"srt-passphrase-in", required_argument, 0, 1020},
-      {"srt-pbkeylen-in", required_argument, 0, 1021},
-      {"srt-streamid-in", required_argument, 0, 1022},
-      {"srt-packetfilter-in", required_argument, 0, 1023},
-      {"srt-latency-in", required_argument, 0, 1024},
-      {"srt-passphrase", required_argument, 0, 1025},
-      {"srt-pbkeylen", required_argument, 0, 1026},
-      {"srt-streamid", required_argument, 0, 1027},
-      {"srt-packetfilter", required_argument, 0, 1028},
-      {"srt-latency", required_argument, 0, 1029},
-      {"help", no_argument, 0, 'h'},
-      {0, 0, 0, 0}};
-  const char *fmt_arg = NULL;
-  const char *sub_arg = NULL;
-  const char *time_arg = NULL;
-  const char *strip_arg = NULL;
-  const char *profile_arg = NULL;
-  const char *profile_in_arg = NULL;
-  int have_in = 0;
-  int have_secret = 0;
-  int have_cname = 0;
-  int have_buffer = 0;
+  const char *cfg_path = NULL;
+  int configtest = 0;
+  args_status_t pst;
+  int cli_out = 0;
   int c;
 
-  memset(cfg, 0, sizeof *cfg);
-  cfg->audio_all = 1;
-  cfg->subs = SUB_KEEP;
-  cfg->sub_lead_ms = 1000;   /* teletext trails speech */
-  cfg->ret.mc_enabled = 1;
-  cfg->ret.rtx_pt = 99;
-  cfg->ret.wait_ms = 200;
-  cfg->strip_mask = STRIP_DEFAULT;
+  pst = prescan(argc, argv, &cfg_path, &configtest);
+  if (pst != ARGS_OK) return pst;
+  if (configtest) return rec_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+
+  rec_cfg_defaults(cfg);
+  if (rec_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+
   optind = 1;
-  while ((c = getopt_long(argc, argv, "o:i:a:f:p:s:t:I:O:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     switch (c) {
       case 'o':
+        if (!cli_out) {
+          cfg->n_out = 0;
+          cli_out = 1;
+        }
         if (cfg->n_out >= DIPIREC_MAX_OUT) {
           argerr("too many -o targets (max %d)", DIPIREC_MAX_OUT);
           return ARGS_ERR;
         }
-        if (parse_out_uri(optarg, &cfg->out[cfg->n_out])) {
+        if (rec_cfg_add_out(cfg, optarg)) {
           argerr("invalid -o target: %s", optarg);
           return ARGS_ERR;
         }
-        cfg->n_out++;
         break;
       case 'i':
-        if (parse_uri(optarg, &cfg->source)) {
+        if (rec_cfg_set_in(cfg, optarg)) {
           argerr("invalid -i uri: %s", optarg);
           return ARGS_ERR;
         }
-        have_in = 1;
         break;
       case 'a':
         if (parse_audio(optarg, cfg)) {
@@ -511,7 +592,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 'f':
-        fmt_arg = optarg;
+        if (rec_cfg_format(cfg, optarg)) {
+          argerr("invalid -f format: %s (raw|ts|mkv|mka|mp4|m4a)", optarg);
+          return ARGS_ERR;
+        }
         break;
       case 'p':
         if (parse_pmt_sel(optarg, cfg)) {
@@ -520,10 +604,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 's':
-        sub_arg = optarg;
+        if (rec_cfg_subs(cfg, optarg)) {
+          argerr("invalid -s: %s (strip|keep|srt)", optarg);
+          return ARGS_ERR;
+        }
         break;
       case 't':
-        time_arg = optarg;
+        if (rec_cfg_time(cfg, optarg)) {
+          argerr("invalid -t duration: %s", optarg);
+          return ARGS_ERR;
+        }
         break;
       case 'I':
         cfg->iface_in = optarg;
@@ -581,7 +671,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 1007:
-        strip_arg = optarg;
+        if (rec_cfg_strip(cfg, optarg)) {
+          argerr("invalid --strip: %s (comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT,LCEVC, or \"none\")", optarg);
+          return ARGS_ERR;
+        }
         break;
       case 1008:
         cfg->pace = 1;
@@ -611,24 +704,27 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       case 1011:
-        profile_arg = optarg;
+        if (rec_cfg_profile(cfg, optarg, 0)) {
+          argerr("invalid --profile: %s (simple|main)", optarg);
+          return ARGS_ERR;
+        }
         break;
       case 1012:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_secret, sizeof cfg->rist_secret, optarg, "--secret"))
           return ARGS_ERR;
-        have_secret = 1;
+        cfg->fl.have_secret = 1;
         break;
       case 1013:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_cname, sizeof cfg->rist_cname, optarg, "--cname"))
           return ARGS_ERR;
-        have_cname = 1;
+        cfg->fl.have_cname = 1;
         break;
       case 1014:
         if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->rist_buffer_ms)) {
           argerr("invalid --buffer: %s (ms)", optarg);
           return ARGS_ERR;
         }
-        have_buffer = 1;
+        cfg->fl.have_buffer = 1;
         break;
       case 1015:
         cfg->insecure_tls = 1;
@@ -643,7 +739,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
       case 1019:
-        profile_in_arg = optarg;
+        if (rec_cfg_profile(cfg, optarg, 1)) {
+          argerr("invalid --profile-in: %s (simple|main)", optarg);
+          return ARGS_ERR;
+        }
         break;
       case 1020:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, optarg, "--srt-passphrase-in"))
@@ -689,6 +788,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
+      case 'c':
+      case 1032:
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -704,7 +806,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -o output");
     return ARGS_ERR;
   }
-  if (!have_in) {
+  if (!cfg->fl.have_in) {
     argerr("missing -i input");
     return ARGS_ERR;
   }
@@ -732,33 +834,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--pace requires -i - or -i <path>");
     return ARGS_ERR;
   }
-  if (strip_arg && parse_strip(strip_arg, cfg)) {
-    argerr("invalid --strip: %s (comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT,LCEVC, or \"none\")", strip_arg);
-    return ARGS_ERR;
-  }
-  if (sub_arg) {
-    static const enum_map_t map[] = {{"strip", SUB_STRIP}, {"keep", SUB_KEEP}, {"srt", SUB_SRT}};
-    int v;
-    if (map_lookup(map, sizeof map / sizeof map[0], sub_arg, &v)) {
-      argerr("invalid -s: %s (strip|keep|srt)", sub_arg);
-      return ARGS_ERR;
-    }
-    cfg->subs = (sub_mode_t)v;
-  }
-  if (time_arg) {
-    long d = duration_parse(time_arg);
-    if (d < 0) {
-      argerr("invalid -t duration: %s", time_arg);
-      return ARGS_ERR;
-    }
-    cfg->duration_s = d;
-  }
-  if (fmt_arg) {
-    if (fmt_from_name(fmt_arg, &cfg->format)) {
-      argerr("invalid -f format: %s (raw|ts|mkv|mka|mp4|m4a)", fmt_arg);
-      return ARGS_ERR;
-    }
-  } else {
+  if (!cfg->fl.have_format) {
     cfg->format = FMT_TS;
     for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_FILE && strcmp(cfg->out[i].file_path, "-") != 0) {
       fmt_from_suffix(cfg->out[i].file_path, &cfg->format);
@@ -803,40 +879,22 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     if (cfg->insecure_tls && !has_rtmps && !(cfg->source.kind == URI_HTTP && cfg->source.http.tls)) log_line(TOOL_NAME ": --insecure needs -o rtmps:// target or -i https:// source");
   }
   /* LCEVC also strips mp4/mkv/rtmp inline data, unlike others */
-  if (strip_arg && cfg->format != FMT_TS && (cfg->strip_mask & ~STRIP_LCEVC)) log_line(TOOL_NAME ": --strip has no effect outside -f ts");
+  if (cfg->fl.have_strip && cfg->format != FMT_TS && (cfg->strip_mask & ~STRIP_LCEVC)) log_line(TOOL_NAME ": --strip has no effect outside -f ts");
   if (cfg->subs == SUB_SRT && cfg->format != FMT_MKV && cfg->format != FMT_MKA && cfg->format != FMT_MP4 && cfg->format != FMT_M4A) {
     argerr("-s srt requires -f mkv, mka, mp4 or m4a");
     return ARGS_ERR;
   }
-  if (profile_arg) {
-    static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
-    int v;
-    if (map_lookup(map, sizeof map / sizeof map[0], profile_arg, &v)) {
-      argerr("invalid --profile: %s (simple|main)", profile_arg);
-      return ARGS_ERR;
-    }
-    cfg->rist_profile = (rist_profile_sel_t)v;
-  }
   {
     int has_rist = 0;
     for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RIST) has_rist = 1;
-    if (!has_rist && (profile_arg || have_secret || have_cname || have_buffer)) log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer need -o rist:// target");
-    if (has_rist && have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
+    if (!has_rist && (cfg->fl.have_profile || cfg->fl.have_secret || cfg->fl.have_cname || cfg->fl.have_buffer)) log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer need -o rist:// target");
+    if (has_rist && cfg->fl.have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
       argerr("--secret requires --profile main");
       return ARGS_ERR;
     }
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
-  if (profile_in_arg) {
-    static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
-    int v;
-    if (map_lookup(map, sizeof map / sizeof map[0], profile_in_arg, &v)) {
-      argerr("invalid --profile-in: %s (simple|main)", profile_in_arg);
-      return ARGS_ERR;
-    }
-    cfg->rist_profile_in = (rist_profile_sel_t)v;
-  }
-  if (profile_in_arg && cfg->source.kind != URI_RIST) log_line(TOOL_NAME ": --profile-in needs -i rist:// source");
+  if (cfg->fl.have_profile_in && cfg->source.kind != URI_RIST) log_line(TOOL_NAME ": --profile-in needs -i rist:// source");
   if (validate_srt_passphrase(cfg->srt_passphrase_in, cfg->srt_pbkeylen_in, "-in")) return ARGS_ERR;
   if (cfg->source.kind != URI_SRT && (cfg->srt_passphrase_in[0] || cfg->srt_pbkeylen_in || cfg->srt_streamid_in[0] || cfg->srt_packetfilter_in[0] || cfg->srt_latency_in_ms))
     log_line(TOOL_NAME ": --srt-*-in needs -i srt:// source");

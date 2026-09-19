@@ -191,6 +191,16 @@ Print periodic bridge statistics on stderr.
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.
 .TP
+.BR \-c ", " \-\-config\ \fI<path>\fR
+YAML configuration file. Keys mirror the options above. Without this option,
+.I /etc/dvbipitools/dipisrt.yaml
+is read if it exists.
+.TP
+.B \-\-configtest
+Check the configuration file (from
+.B \-c
+or the default location) and exit.
+.TP
 .BR \-h ", " \-\-help
 Show usage and exit.
 .SH EXAMPLES
@@ -211,6 +221,12 @@ Sender with encryption.
 .B 0
 on success.
 Non-zero on argument errors or I/O/network failure.
+.SH FILES
+.TP
+.I /etc/dvbipitools/dipisrt.yaml
+Default configuration file, read if present. A commented template with all
+defaults ships as
+.IR /usr/share/dvbipitools/etc/dipisrt.yaml .
 .SH SEE ALSO
 .BR dipirec (1),
 .BR dipirist (1),

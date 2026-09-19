@@ -1,0 +1,146 @@
+# -i|--input [not set]
+#input:
+  #- https://example.com/radio.m3u
+    # --sid [auto]
+    #sid: 2
+    # -s|--sdt [auto]
+    #sdt: Some Channel
+    # --provider [not set]
+    #provider: <name>
+  #- http://example.com/somechannel/aac:
+    # --sid [auto]
+    #sid: 2
+    # -s|--sdt [auto]
+    #sdt: Some Channel
+    # --provider [not set]
+    #provider: <name>
+
+# -m|--mcast [not set]
+#mcast: 239.1.1.1:5000
+# -O|--out-iface [not set]
+#out-iface: <iface>
+# -r|--rtp off
+#rtp: off
+# -T|--ttl 1
+#ttl: 1
+# --dscp video-high # video-high|video-low|voice|signalling|best-effort|0..63
+#dscp: video-high
+# --al-fec [not set]
+
+#al-fec: <L>:<D>
+# --al-fec-port [not set]
+#al-fec-port: <port>
+# -n|--nit [not set]
+
+#nit: <text>
+# --default-provider dipiradiohead
+#default-provider: <name>
+# -e|--error 0 # seconds, 0 = fail once
+#error: 0
+# -k|--insecure off
+#insecure: off
+# --tsid 1
+#tsid: 1
+# --onid 1
+#onid: 1
+
+# -R|--remote [not set]
+#remote:
+  #- rist://host:port
+
+rist:
+  # --rist-profile simple # simple|main
+  #profile: simple
+  # --rist-secret [not set]
+  #secret: <psk>
+  # --rist-cname [not set]
+  #cname: <name>
+  # --rist-buffer [not set] # ms
+  #buffer: <ms>
+
+srt:
+  # --srt-group-mode [not set] # broadcast|backup
+  #group-mode: broadcast
+  # --srt-passphrase [not set]
+  #passphrase: <pw>
+  # --srt-pbkeylen [not set] # 16|24|32
+  #pbkeylen: 16
+  # --srt-streamid [not set]
+  #streamid: <id>
+  # --srt-packetfilter [not set]
+  #packetfilter: <cfg>
+  # --srt-latency [not set] # ms
+  #latency: <ms>
+
+metrics:
+  # --metrics /run/dvbipitools/metrics.sock
+  #sock: /run/dvbipitools/metrics.sock
+  # --metrics-id [not set]
+  #id: <name>
+  # --metrics-interval 5 # seconds
+  #interval: 5
+
+cas:
+  # --cas-algo [not set] # cissa|csa2|csa1
+  #algo: csa2
+  # --cas-cp-duration 10000 # ms
+  #cp-duration: 10000
+  # --cas-fallback-clear off
+  #fallback-clear: off
+  # --cas-ecmg [not set]
+  #ecmg:
+    #- tcp://host:2222
+    #- tcp://host:2223:
+      # --cas-ecmg-version [auto-negotiate] # 2|3
+      #ecmg-version: 3
+      # --cas-super-id [not set]
+      #super-id: 0x1234
+      # --cas-ecm-id [not set]
+      #ecm-id: 1
+      # --cas-ecm-pid 0x0020
+      #ecm-pid: 0x0020
+      # --cas-emmg-port 8002
+      #emmg-port: 8002
+      # --cas-emmg-max-conns 8 # max 64
+      #emmg-max-conns: 8
+      # --cas-emmg-version [client proposal] # 2|3
+      #emmg-version: 3
+      # --cas-emmg-reverse [not set]
+      #emmg-reverse: tcp://host:8003
+      # --cas-emm-pid 0x0021
+      #emm-pid: 0x0021
+      # --cas-resilience frozen # frozen|cycling|silent
+      #resilience: frozen
+      # --cas-required off
+      #required: off
+      # --cas-cwenc-algo [not set] # des56|aes128|aes256
+      #cwenc-algo: aes128
+      # --cas-cwenc-aes-mode stream # stream|ecb
+      #cwenc-aes-mode: stream
+      # --cas-cwenc-fixed-key [Annex D ROM]
+      #cwenc-fixed-key: <hex>
+      # --cas-cwenc-key-list-a [not set]
+      #cwenc-key-list-a: <path>
+      # --cas-cwenc-key-list-b [not set]
+      #cwenc-key-list-b: <path>
+
+biss1:
+  # --biss1-sw [not set] # 12 hex chars
+  #sw: <hex12>
+
+biss2:
+  # --biss2-sw [not set] # 32 hex chars
+  #sw: <hex32>
+  # --biss2-emit-esw [not set] # 32 hex chars
+  #emit-esw: <hex32>
+  # --biss2-ca-receivers [not set]
+  #ca-receivers: <dir>
+  # --biss2-ca-session-id [random] # 16 bit, dec or 0x-hex
+  #ca-session-id: <n>
+
+# -v|--verbose off
+verbose: off
+# --color auto # auto|always|never
+color: auto
+# -d|--daemonize off
+daemonize: off

@@ -48,30 +48,32 @@ typedef struct {
   cas_algo_t cas_algo;       /* --cas-algo; NONE = CAS disabled */
   cas_vendor_t cas_vendors[ARGS_MAX_CAS_VENDORS]; /* --cas-ecmg, repeatable; per-vendor options pair with --cas-ecmg right before them */
   unsigned n_cas_vendors;
-  int cas_fallback_clear; /* --cas-fallback-clear: clear instead of frozen on total outage / a required vendor down */
-  unsigned cas_cp_duration_ms;      /* --cas-cp-duration; default 10000 */
-  int biss2_enabled;                 /* --biss2-sw given; mutually exclusive with --cas-algo/--cas-ecmg */
+  int any_cas_flag;          /* any --cas-* option given */
+  int cas_fallback_clear;    /* --cas-fallback-clear: clear instead of frozen on total outage / a required vendor down */
+  unsigned cas_cp_duration_ms;          /* --cas-cp-duration; default 10000 */
+  int biss2_enabled;                    /* --biss2-sw given; mutually exclusive with --cas-algo/--cas-ecmg */
   unsigned char biss2_sw[BISS_KEY_LEN]; /* --biss2-sw, parsed */
-  int biss2_emit_esw;                /* --biss2-emit-esw given; requires --biss2-sw */
+  int biss2_emit_esw;                   /* --biss2-emit-esw given; requires --biss2-sw */
   unsigned char biss2_esw_id[BISS_KEY_LEN]; /* --biss2-emit-esw <id>, parsed */
-  int biss1_enabled;                 /* --biss1-sw given; mutually exclusive with --biss2-sw/--cas-algo/--cas-ecmg */
-  unsigned char biss1_cw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into full checksummed CSA1 CW */
-  int biss2_ca_enabled;              /* --biss2-ca-receivers given; mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo/--cas-ecmg */
-  const char *biss2_ca_receivers_dir; /* --biss2-ca-receivers <dir>: PEM public keys, one per receiver/group */
-  unsigned biss2_ca_session_id;      /* --biss2-ca-session-id <hex16>; random at startup if not given */
-  int biss2_ca_session_id_given;     /* --biss2-ca-session-id given */
-  const char *metrics_sock;         /* --metrics; NULL = default socket path */
-  const char *metrics_id;           /* --metrics-id; NULL = metrics disabled */
-  unsigned metrics_interval_s;      /* --metrics-interval; 0 = default */
-  char rist_uri[ARGS_MAX_RIST_PEERS][256]; /* -R/--rist, repeatable; bonded onto one sender, simultaneous with -m */
+  int biss1_enabled;                    /* --biss1-sw given; mutually exclusive with --biss2-sw/--cas-algo/--cas-ecmg */
+  unsigned char biss1_cw[BISS1_KEY_LEN];/* --biss1-sw, parsed into full checksummed CSA1 CW */
+  int biss2_ca_enabled;                 /* --biss2-ca-receivers given; mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo/--cas-ecmg */
+  const char *biss2_ca_receivers_dir;   /* --biss2-ca-receivers <dir>: PEM public keys, one per receiver/group */
+  unsigned biss2_ca_session_id;         /* --biss2-ca-session-id <hex16>; random at startup if not given */
+  int biss2_ca_session_id_given;        /* --biss2-ca-session-id given */
+  const char *metrics_sock;             /* --metrics; NULL = default socket path */
+  const char *metrics_id;               /* --metrics-id; NULL = metrics disabled */
+  unsigned metrics_interval_s;          /* --metrics-interval; 0 = default */
+  char rist_uri[ARGS_MAX_RIST_PEERS][256]; /* -R/--remote, repeatable; bonded onto one sender, simultaneous with -m */
   unsigned n_rist;
-  rist_profile_sel_t rist_profile; /* --profile; n_rist>0 only */
-  char rist_secret[128];  /* --secret; n_rist>0 + --profile main only, "" = none */
-  char rist_cname[128];   /* --cname; n_rist>0 only, "" = library default */
-  unsigned rist_buffer_ms; /* --buffer; n_rist>0 only, 0 = library default */
-  /* -R srt://, repeatable, bonded onto one group when >1 (--srt-group-mode).
-     one scheme at a time: rist:// and srt:// peers can't mix in one -R set */
-  int srt_family[ARGS_MAX_SRT_PEERS]; /* AF_INET or AF_INET6, display only */
+  rist_profile_sel_t rist_profile;      /* --rist-profile; n_rist>0 only */
+  int rist_profile_given;               /* --rist-profile */
+  char rist_secret[128];                /* --rist-secret; n_rist>0 + --rist-profile main only, "" = none */
+  char rist_cname[128];                 /* --rist-cname; n_rist>0 only, "" = library default */
+  unsigned rist_buffer_ms;              /* --rist-buffer; n_rist>0 only, 0 = library default */
+
+  /* -R srt://, repeatable, bonded if >1 (--srt-group-mode). 1 at a time: rist:// and srt:// can't mix in -R */
+  int srt_family[ARGS_MAX_SRT_PEERS];   /* AF_INET or AF_INET6, display only */
   char srt_host[ARGS_MAX_SRT_PEERS][64];
   unsigned srt_port[ARGS_MAX_SRT_PEERS];
   unsigned n_srt;

@@ -22,6 +22,8 @@ typedef struct {
 typedef struct {
   endpoint_t in;  /* -i */
   endpoint_t out; /* -o */
+  int n_in;
+  int n_out;
   srtgroup_mode_t group_mode; /* NONE unless srt:// side bonds (n_srt > 1) */
   int rendezvous;             /* srt:// side uses srt_rendezvous(); not combinable with @ or bonding */
   char local_host[64]; /* --local host:port; required with --rendezvous */
@@ -51,6 +53,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg);
 
 /* 1 if -o is srt:// (this process sends into SRT), 0 if -i is (receives from SRT) */
 int config_is_sender(const config_t *cfg);
+
+int srt_cfg_add_endpoint(config_t *cfg, int is_out, const char *uri);
 
 void endpoint_describe(const endpoint_t *e, char *buf, size_t n);
 

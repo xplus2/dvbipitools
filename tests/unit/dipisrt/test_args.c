@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dipisrt/args.h"
 
@@ -283,6 +284,68 @@ START_TEST(unexpected_positional_argument_is_rejected) {
 }
 END_TEST
 
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipisrt_cfg_XXXXXX";
+  char *argv[] = {"dipisrt", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "in:\n  - srt://@0.0.0.0:9000\nout: rtp://@239.1.1.1:5000\nlatency: 300\npassphrase: 0123456789ab\npbkeylen: 24\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.n_in, 1);
+  ck_assert_int_eq(cfg.in.n_srt, 1);
+  ck_assert_uint_eq(cfg.latency_ms, 300u);
+  ck_assert_int_eq(cfg.pbkeylen, 24);
+}
+END_TEST
+
+START_TEST(cmdline_wins_over_config) {
+  char path[] = "/tmp/dipisrt_cfg_XXXXXX";
+  char *argv[] = {"dipisrt", "-c", path, "-i", "srt://@0.0.0.0:9100", NULL};
+  config_t cfg;
+  write_cfg(path, "in: srt://@0.0.0.0:9000\nout: rtp://@239.1.1.1:5000\nlatency: 300\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.in.srt_port[0], 9100u);
+  ck_assert_uint_eq(cfg.latency_ms, 300u);
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipisrt", "-c", "/nonexistent/dipisrt.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipisrt_cfg_XXXXXX";
+  char *argv[] = {"dipisrt", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "in: srt://@0.0.0.0:9000\nout: rtp://@239.1.1.1:5000\npbkeylen: 20\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipisrt_cfg_XXXXXX";
+  char *argv[] = {"dipisrt", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipisrt", "--configtest", "-c", "/nonexistent/dipisrt.yaml", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipisrt_args");
   TCase *tc = tcase_create("core");
@@ -319,6 +382,11 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, metrics_id_alone_is_accepted);
   tcase_add_test(tc, help_returns_help_status);
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, cmdline_wins_over_config);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);
   return s;
 }

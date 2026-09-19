@@ -13,6 +13,7 @@
 #include "lib/helper/uriparse.h"
 #include "lib/net/netconnect.h"
 #include "args.h"
+#include "config.h"
 #include "version.h"
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
@@ -92,30 +93,14 @@ static void print_help(void) {
       "      --fus-announce <a>:<p> a: FUS MulticastAnnouncementAddress\n"
       "      --fus-logo <uri>    a: FUSType LogoURI\n"
       "  -d, --daemonize         fork to background after startup, detach from terminal\n"
+      "  -c, --config <path>     YAML config file (default: %s, if present)\n"
+      "      --configtest        check the config file, then exit\n"
       "  -h, --help              this help\n\n"
       "examples:\n"
       "  %s -a -i channels.csv -p example.org -O \"My Headend\" -m 239.255.0.1:3937\n"
       "  %s -l -m 239.255.0.1:3937 -o discovered.m3u\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+      TOOL_NAME, TOOL_NAME, DEFAULT_CONFIG_PATH, TOOL_NAME, TOOL_NAME);
 }
-
-typedef struct {
-  int have_a;
-  int have_l;
-  int have_mcast;
-  int have_t;
-  long t_value;
-  int have_ret_rtx_time;
-  int have_ret_rtx_pt;
-  int have_ret_mc_port;
-  int have_fcc_rtx_time;
-  int have_fcc_rtx_pt;
-  int have_fcc_resolve_max_channels;
-  int have_al_fec_pt;
-  int have_rms_lang;
-  int have_fus_lang;
-  int have_fus_id;
-} args_flags_t;
 
 static args_status_t validate_mode_mcast(const config_t *cfg, const args_flags_t *fl) {
   if (fl->have_a == fl->have_l) {
@@ -146,7 +131,7 @@ static args_status_t validate_announce_input(config_t *cfg, const args_flags_t *
     }
   }
   if (!cfg->lang[0]) memcpy(cfg->lang, "deu", 3);
-  cfg->interval_s = fl->have_t ? fl->t_value : 5;
+  if (fl->have_t) cfg->interval_s = fl->t_value;
   return ARGS_OK;
 }
 
@@ -253,82 +238,112 @@ static args_status_t validate_listen(config_t *cfg, const args_flags_t *fl) {
     return ARGS_ERR;
   }
   if (!cfg->output_path) cfg->output_path = "-";
-  if (fl->have_t)
-    cfg->timeout_s = fl->t_value;
-  else
-    cfg->timeout_s = 35;
+  if (!fl->have_format) {
+    if (has_suffix(cfg->output_path, ".csv"))       cfg->format = OUT_CSV;
+    else if (has_suffix(cfg->output_path, ".xspf")) cfg->format = OUT_XSPF;
+    else if (has_suffix(cfg->output_path, ".xml"))  cfg->format = OUT_XML;
+  }
+  if (fl->have_t) cfg->timeout_s = fl->t_value;
+  return ARGS_OK;
+}
+
+static const char *const shortopts = "ali:p:O:L:m:I:t:o:f:c:vdh";
+
+static const struct option longopts[] = {
+    {"announce", no_argument, 0, 'a'},
+    {"listen", no_argument, 0, 'l'},
+    {"input", required_argument, 0, 'i'},
+    {"provider", required_argument, 0, 'p'},
+    {"offering", required_argument, 0, 'O'},
+    {"lang", required_argument, 0, 'L'},
+    {"mcast", required_argument, 0, 'm'},
+    {"iface", required_argument, 0, 'I'},
+    {"interval", required_argument, 0, 't'},
+    {"timeout", required_argument, 0, 't'},
+    {"output", required_argument, 0, 'o'},
+    {"format", required_argument, 0, 'f'},
+    {"verbose", no_argument, 0, 'v'},
+    {"color", required_argument, 0, 1000},
+    {"ret-addr", required_argument, 0, 1001},
+    {"ret-rtx-time", required_argument, 0, 1002},
+    {"ret-rtx-pt", required_argument, 0, 1003},
+    {"ret-mc", no_argument, 0, 1004},
+    {"ret-mc-port", required_argument, 0, 1005},
+    {"ret-rsi-mc-ret", no_argument, 0, 1012},
+    {"fcc-addr", required_argument, 0, 1006},
+    {"fcc-rtx-time", required_argument, 0, 1007},
+    {"fcc-rtx-pt", required_argument, 0, 1008},
+    {"fcc-resolve-by-port", no_argument, 0, 1013},
+    {"fcc-resolve-base-port", required_argument, 0, 1014},
+    {"fcc-resolve-max-channels", required_argument, 0, 1015},
+    {"al-fec-addr", required_argument, 0, 1028},
+    {"al-fec-pt", required_argument, 0, 1029},
+    {"metrics", required_argument, 0, 1009},
+    {"metrics-id", required_argument, 0, 1010},
+    {"metrics-interval", required_argument, 0, 1011},
+    {"packages", required_argument, 0, 1016},
+    {"cells", required_argument, 0, 1017},
+    {"rms-name", required_argument, 0, 1018},
+    {"rms-lang", required_argument, 0, 1019},
+    {"rms-location", required_argument, 0, 1020},
+    {"rms-logo", required_argument, 0, 1021},
+    {"fus-name", required_argument, 0, 1022},
+    {"fus-lang", required_argument, 0, 1023},
+    {"fus-id", required_argument, 0, 1024},
+    {"fus-announce", required_argument, 0, 1025},
+    {"fus-logo", required_argument, 0, 1026},
+    {"dscp", required_argument, 0, 1027},
+    {"daemonize", no_argument, 0, 'd'},
+    {"config", required_argument, 0, 'c'},
+    {"configtest", no_argument, 0, 1030},
+    {"help", no_argument, 0, 'h'},
+    {0, 0, 0, 0}};
+
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+  int c;
+  optind = 1;
+  opterr = 0;
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    if (c == 'c') *cfg_path = optarg;
+    if (c == 1030) *configtest = 1;
+    if (c == 'h') {
+      print_help();
+      opterr = 1;
+      return ARGS_HELP;
+    }
+  }
+  opterr = 1;
   return ARGS_OK;
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
-  static const struct option longopts[] = {
-      {"announce", no_argument, 0, 'a'},
-      {"listen", no_argument, 0, 'l'},
-      {"input", required_argument, 0, 'i'},
-      {"provider", required_argument, 0, 'p'},
-      {"offering", required_argument, 0, 'O'},
-      {"lang", required_argument, 0, 'L'},
-      {"mcast", required_argument, 0, 'm'},
-      {"iface", required_argument, 0, 'I'},
-      {"interval", required_argument, 0, 't'},
-      {"timeout", required_argument, 0, 't'},
-      {"output", required_argument, 0, 'o'},
-      {"format", required_argument, 0, 'f'},
-      {"verbose", no_argument, 0, 'v'},
-      {"color", required_argument, 0, 1000},
-      {"ret-addr", required_argument, 0, 1001},
-      {"ret-rtx-time", required_argument, 0, 1002},
-      {"ret-rtx-pt", required_argument, 0, 1003},
-      {"ret-mc", no_argument, 0, 1004},
-      {"ret-mc-port", required_argument, 0, 1005},
-      {"ret-rsi-mc-ret", no_argument, 0, 1012},
-      {"fcc-addr", required_argument, 0, 1006},
-      {"fcc-rtx-time", required_argument, 0, 1007},
-      {"fcc-rtx-pt", required_argument, 0, 1008},
-      {"fcc-resolve-by-port", no_argument, 0, 1013},
-      {"fcc-resolve-base-port", required_argument, 0, 1014},
-      {"fcc-resolve-max-channels", required_argument, 0, 1015},
-      {"al-fec-addr", required_argument, 0, 1028},
-      {"al-fec-pt", required_argument, 0, 1029},
-      {"metrics", required_argument, 0, 1009},
-      {"metrics-id", required_argument, 0, 1010},
-      {"metrics-interval", required_argument, 0, 1011},
-      {"packages", required_argument, 0, 1016},
-      {"cells", required_argument, 0, 1017},
-      {"rms-name", required_argument, 0, 1018},
-      {"rms-lang", required_argument, 0, 1019},
-      {"rms-location", required_argument, 0, 1020},
-      {"rms-logo", required_argument, 0, 1021},
-      {"fus-name", required_argument, 0, 1022},
-      {"fus-lang", required_argument, 0, 1023},
-      {"fus-id", required_argument, 0, 1024},
-      {"fus-announce", required_argument, 0, 1025},
-      {"fus-logo", required_argument, 0, 1026},
-      {"dscp", required_argument, 0, 1027},
-      {"daemonize", no_argument, 0, 'd'},
-      {"help", no_argument, 0, 'h'},
-      {0, 0, 0, 0}};
-  int have_a = 0, have_l = 0, have_mcast = 0, have_t = 0;
-  int have_ret_rtx_time = 0, have_ret_rtx_pt = 0, have_ret_mc_port = 0;
-  int have_fcc_rtx_time = 0, have_fcc_rtx_pt = 0, have_fcc_resolve_max_channels = 0;
-  int have_al_fec_pt = 0;
-  int have_rms_lang = 0, have_fus_lang = 0, have_fus_id = 0;
-  long t_value = 0;
+  const char *cfg_path = NULL;
+  int configtest = 0;
+  args_status_t pst;
+  int cli_mode = 0;
   int c;
 
-  memset(cfg, 0, sizeof *cfg);
-  cfg->format = OUT_M3U;
-  cfg->dscp = NET_DSCP_SIGNALLING;
+  pst = prescan(argc, argv, &cfg_path, &configtest);
+  if (pst != ARGS_OK) return pst;
+  if (configtest) return sds_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+
+  sds_cfg_defaults(cfg);
+  if (sds_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+
   optind = 1;
-  while ((c = getopt_long(argc, argv, "ali:p:O:L:m:I:t:o:f:vdh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     switch (c) {
       case 'a':
-        have_a = 1;
-        cfg->mode = MODE_ANNOUNCE;
-        break;
       case 'l':
-        have_l = 1;
-        cfg->mode = MODE_LISTEN;
+        if (!cli_mode) cfg->fl.have_a = cfg->fl.have_l = 0;
+        cli_mode = 1;
+        if (c == 'a')
+          cfg->fl.have_a = 1;
+        else
+          cfg->fl.have_l = 1;
+        break;
+      case 1030:
+      case 'c':
         break;
       case 'i':
         cfg->input_path = optarg;
@@ -351,7 +366,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           argerr("invalid -m group:port: %s", optarg);
           return ARGS_ERR;
         }
-        have_mcast = 1;
+        cfg->fl.have_mcast = 1;
         break;
       case 'I':
         cfg->iface = optarg;
@@ -368,8 +383,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           argerr("invalid -t seconds: %s", optarg);
           return ARGS_ERR;
         }
-        t_value = v;
-        have_t = 1;
+        cfg->fl.t_value = v;
+        cfg->fl.have_t = 1;
         break;
       }
       case 'o':
@@ -383,6 +398,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->format = (out_fmt_t)v;
+        cfg->fl.have_format = 1;
         break;
       }
       case 'v':
@@ -414,7 +430,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->ret_rtx_time = v;
-        have_ret_rtx_time = 1;
+        cfg->fl.have_ret_rtx_time = 1;
         break;
       }
       case 1003: {
@@ -424,7 +440,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->ret_rtx_pt = (unsigned char)v;
-        have_ret_rtx_pt = 1;
+        cfg->fl.have_ret_rtx_pt = 1;
         break;
       }
       case 1004:
@@ -437,7 +453,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->ret_mc_port = v;
-        have_ret_mc_port = 1;
+        cfg->fl.have_ret_mc_port = 1;
         break;
       }
       case 1012:
@@ -464,7 +480,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->al_fec_pt = (unsigned char)v;
-        have_al_fec_pt = 1;
+        cfg->fl.have_al_fec_pt = 1;
         break;
       }
       case 1007: {
@@ -474,7 +490,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->fcc_rtx_time = v;
-        have_fcc_rtx_time = 1;
+        cfg->fl.have_fcc_rtx_time = 1;
         break;
       }
       case 1008: {
@@ -484,7 +500,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->fcc_rtx_pt = (unsigned char)v;
-        have_fcc_rtx_pt = 1;
+        cfg->fl.have_fcc_rtx_pt = 1;
         break;
       }
       case 1013:
@@ -506,7 +522,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->fcc_resolve_max_channels = (size_t)v;
-        have_fcc_resolve_max_channels = 1;
+        cfg->fl.have_fcc_resolve_max_channels = 1;
         break;
       }
       case 1009:
@@ -534,7 +550,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         memcpy(cfg->rms_lang, optarg, 3);
-        have_rms_lang = 1;
+        cfg->fl.have_rms_lang = 1;
         break;
       case 1020:
         cfg->rms_location = optarg;
@@ -552,7 +568,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         memcpy(cfg->fus_lang, optarg, 3);
-        have_fus_lang = 1;
+        cfg->fl.have_fus_lang = 1;
         break;
       case 1024: {
         char *end;
@@ -562,7 +578,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->fus_id = v;
-        have_fus_id = 1;
+        cfg->fl.have_fus_id = 1;
         break;
       }
       case 1025:
@@ -586,20 +602,17 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   }
   {
-    args_flags_t fl = {.have_a = have_a, .have_l = have_l, .have_mcast = have_mcast, .have_t = have_t, .t_value = t_value,
-                        .have_ret_rtx_time = have_ret_rtx_time, .have_ret_rtx_pt = have_ret_rtx_pt, .have_ret_mc_port = have_ret_mc_port,
-                        .have_fcc_rtx_time = have_fcc_rtx_time, .have_fcc_rtx_pt = have_fcc_rtx_pt, .have_fcc_resolve_max_channels = have_fcc_resolve_max_channels,
-                        .have_al_fec_pt = have_al_fec_pt, .have_rms_lang = have_rms_lang, .have_fus_lang = have_fus_lang, .have_fus_id = have_fus_id};
     args_status_t st;
-    if ((st = validate_mode_mcast(cfg, &fl)) != ARGS_OK) return st;
+    cfg->mode = cfg->fl.have_l ? MODE_LISTEN : MODE_ANNOUNCE;
+    if ((st = validate_mode_mcast(cfg, &cfg->fl)) != ARGS_OK) return st;
     if (cfg->mode == MODE_ANNOUNCE) {
-      if ((st = validate_announce_input(cfg, &fl)) != ARGS_OK) return st;
-      if ((st = validate_announce_ret(cfg, &fl)) != ARGS_OK) return st;
-      if ((st = validate_announce_fcc(cfg, &fl)) != ARGS_OK) return st;
-      if ((st = validate_announce_al_fec(cfg, &fl)) != ARGS_OK) return st;
-      if ((st = validate_announce_rms_fus(cfg, &fl)) != ARGS_OK) return st;
+      if ((st = validate_announce_input(cfg, &cfg->fl)) != ARGS_OK) return st;
+      if ((st = validate_announce_ret(cfg, &cfg->fl)) != ARGS_OK) return st;
+      if ((st = validate_announce_fcc(cfg, &cfg->fl)) != ARGS_OK) return st;
+      if ((st = validate_announce_al_fec(cfg, &cfg->fl)) != ARGS_OK) return st;
+      if ((st = validate_announce_rms_fus(cfg, &cfg->fl)) != ARGS_OK) return st;
     } else {
-      if ((st = validate_listen(cfg, &fl)) != ARGS_OK) return st;
+      if ((st = validate_listen(cfg, &cfg->fl)) != ARGS_OK) return st;
     }
   }
   return ARGS_OK;

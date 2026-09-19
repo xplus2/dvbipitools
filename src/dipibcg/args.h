@@ -9,6 +9,15 @@
 typedef enum { MODE_ANNOUNCE, MODE_LISTEN } bcg_mode_t;
 
 typedef struct {
+  int have_a;
+  int have_l;
+  int have_mcast;
+  int have_t;
+  long t_value;
+} args_flags_t;
+
+typedef struct {
+  args_flags_t fl;
   bcg_mode_t mode;
   const char *input_path;   /* -i, announce: xmltv source */
   const char *map_path;     /* -M, announce: xmltv id -> uri,tsid,onid,sid csv */

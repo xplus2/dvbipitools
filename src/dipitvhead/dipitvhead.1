@@ -284,28 +284,27 @@ Repair stream UDP port, same multicast group as
 Requires
 .BR \-\-al\-fec .
 .TP
-.BR \-R ", " \-\-rist " " \fIuri\fR
-.B rist://host:port\fR[\fI?query\fR]
-or
-.B srt://host:port
-output, bonded with any other
-.B \-R
-of the same scheme given, alongside
+.BR \-n ", " \-\-nit " " \fItext\fR | \fB\-\fR
+NIT for the whole output.
+.B \-
+drops it; text sets our own. Default: SPTS passes through the
+source's own NIT if present; MPTS sends no NIT.
+.SS RIST output
+.TP
+.BR \-R ", " \-\-remote " " \fIrist://host:port\fR[\fI?query\fR]
+RIST output peer, bonded with any other
+.B \-R rist://
+peer given, alongside
 .B \-m
-if given, or standalone without it.
-.B \-R
-is one scheme at a time; mixing
-.B rist://
-and
+if given, or standalone without it. Repeatable. Mixing with
 .B srt://
-peers is rejected. Requires librist or libsrt. Neither RIST nor SRT
-output is ever RTP-wrapped;
+peers is rejected. Requires librist. Never RTP-wrapped;
 .B \-u
 only affects
 .B \-m
 output.
 .TP
-.B \-\-profile \fIp\fR
+.B \-\-rist\-profile \fIp\fR
 .B simple
 or
 .BR main ;
@@ -313,18 +312,34 @@ or
 peers only. Default
 .BR simple .
 .TP
-.B \-\-secret \fIpsk\fR
+.B \-\-rist\-secret \fIpsk\fR
 .B \-R rist://
 pre-shared key. Requires
-.BR \-\-profile\ main .
+.BR \-\-rist\-profile\ main .
 .TP
-.B \-\-cname \fIname\fR
+.B \-\-rist\-cname \fIname\fR
 .B \-R rist://
 RTCP cname. Default: library default.
 .TP
-.B \-\-buffer \fIms\fR
+.B \-\-rist\-buffer \fIms\fR
 .B \-R rist://
 recovery buffer. Default: library default.
+.SS SRT output
+.TP
+.BR \-R ", " \-\-remote " " \fIsrt://host:port\fR
+SRT output peer, bonded with any other
+.B \-R srt://
+peer given, alongside
+.B \-m
+if given, or standalone without it. Repeatable; more than one requires
+.BR \-\-srt\-group\-mode .
+Mixing with
+.B rist://
+peers is rejected. Requires libsrt. Never RTP-wrapped;
+.B \-u
+only affects
+.B \-m
+output.
 .TP
 .B \-\-srt\-group\-mode \fIbroadcast\fR|\fIbackup\fR
 Bonding mode across more than one
@@ -355,12 +370,6 @@ packet filter config string. Default: none.
 .B \-\-srt\-latency \fIms\fR
 .B \-R srt://
 latency. Default: library default.
-.TP
-.BR \-n ", " \-\-nit " " \fItext\fR | \fB\-\fR
-NIT for the whole output.
-.B \-
-drops it; text sets our own. Default: SPTS passes through the
-source's own NIT if present; MPTS sends no NIT.
 .SS Bitrate control
 .TP
 .BR \-b ", " \-\-bitrate " " \fIkbps\fR
@@ -643,6 +652,16 @@ Administratively unique entitlement_session_id, decimal or 0x-hex,
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.
 .TP
+.BR \-c ", " \-\-config\ \fI<path>\fR
+YAML configuration file. Keys mirror the options above. Without this option,
+.I /etc/dvbipitools/dipitvhead.yaml
+is read if it exists.
+.TP
+.B \-\-configtest
+Check the configuration file (from
+.B \-c
+or the default location) and exit.
+.TP
 .BR \-h ", " \-\-help
 Show usage and exit.
 .SH PID ALLOCATION
@@ -750,7 +769,7 @@ Legacy BISS1 Mode 1: 12 hex char Session Word, CSA1.
 BISS2 Mode CA: per-receiver RSA entitlement, one PEM pubkey per file
 under the directory.
 .TP
-.B dipitvhead \-i rtp://@239.19.75.1:8700 \-R rist://recv1.example:2000 \-R rist://recv2.example:2000 \-\-profile main \-\-secret s3cr3t12345
+.B dipitvhead \-i rtp://@239.19.75.1:8700 \-R rist://recv1.example:2000 \-R rist://recv2.example:2000 \-\-rist\-profile main \-\-rist\-secret s3cr3t12345
 RIST output bonded to two peers, PSK-encrypted.
 .TP
 .B dipitvhead \-i rtp://@239.19.75.1:8700 \-R srt://recv.example:9000 \-\-srt\-passphrase s3cr3t12345
@@ -759,6 +778,12 @@ SRT output to a single peer, encrypted.
 .B 0
 on success.
 Non-zero on argument errors or I/O/network failure.
+.SH FILES
+.TP
+.I /etc/dvbipitools/dipitvhead.yaml
+Default configuration file, read if present. A commented template with all
+defaults ships as
+.IR /usr/share/dvbipitools/etc/dipitvhead.yaml .
 .SH SEE ALSO
 .BR dipiradiohead (1),
 .BR dipimetrics (1),

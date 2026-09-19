@@ -36,7 +36,17 @@ dipisrt -i <uri> -o <uri> [options]
 |      | `--metrics-interval` | `<s>`                 | `5`                                          |
 | `-v` | `--verbose`          |                       | off                                          |
 | `-d` | `--daemonize`        |                       | off (foreground)                             |
+| `-c` | `--config`           | `<path>`              | `/etc/dvbipitools/dipisrt.yaml` (if present) |
+|      | `--configtest`       |                       | check the config file, then exit |
 | `-h` | `--help`             |                       |                                              |
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipisrt.yaml](dipisrt.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipisrt.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## Endpoints (`-i`/`-o`)
 

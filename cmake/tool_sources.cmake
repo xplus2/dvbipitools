@@ -31,6 +31,12 @@ function(dipibcg_resolve_sources)
     set(DIPIBCG_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipibcg/main.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipibcg/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/announce.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/announce_driver.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/listen.c
@@ -102,6 +108,12 @@ function(dipicam378_resolve_sources)
     set(DIPICAM378_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipicam378/main.c
             ${CMAKE_SOURCE_DIR}/src/dipicam378/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipicam378/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/cs378x.c
             ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/crypto.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -167,6 +179,12 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/main.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/pipeline.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipidescramble/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -264,6 +282,12 @@ function(dipifccret_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipifccret/run/rsi.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/run/metrics.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipifccret/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/capture.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/ranges.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/bpf.c
@@ -325,10 +349,16 @@ function(dipimetrics_resolve_sources)
     set(DIPIMETRICS_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/main.c
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipimetrics/config.c
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/store.c
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/render.c
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/httpserver.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
@@ -417,6 +447,12 @@ function(dipiradiohead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/antidebug.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/main.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/radiohead/radiohead.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/radiohead/metrics.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/radiohead/mpts.c
@@ -546,6 +582,12 @@ function(dipirec_resolve_sources)
     set(DIPIREC_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipirec/main.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipirec/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/record.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/record/sink.c
@@ -670,6 +712,12 @@ function(dipirist_resolve_sources)
     set(DIPIRIST_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipirist/main.c
             ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipirist/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/dipirist/bridge.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
@@ -761,6 +809,12 @@ function(dipisrt_resolve_sources)
     set(DIPISRT_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipisrt/main.c
             ${CMAKE_SOURCE_DIR}/src/dipisrt/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipisrt/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/dipisrt/bridge.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
@@ -799,6 +853,12 @@ function(dipiscan_resolve_sources)
     set(DIPISCAN_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipiscan/main.c
             ${CMAKE_SOURCE_DIR}/src/dipiscan/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipiscan/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/dipiscan/format.c
             ${CMAKE_SOURCE_DIR}/src/dipiscan/scan.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
@@ -997,6 +1057,12 @@ function(dipixy_resolve_sources)
     set(DIPIXY_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipixy/main.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/core/playlist.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/core/htdocs.c
@@ -1143,6 +1209,12 @@ function(dipisds_resolve_sources)
     set(DIPISDS_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipisds/main.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipisds/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/input.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/format_out.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/announce.c
@@ -1247,6 +1319,12 @@ function(dipitvhead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/antidebug.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/main.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/args.c
+            ${CMAKE_SOURCE_DIR}/src/dipitvhead/config.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/tvhead.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/discover.c

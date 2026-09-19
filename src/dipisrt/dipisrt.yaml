@@ -1,0 +1,49 @@
+# -i|--in [not set]
+#in:
+#  - rtp://@239.1.1.1:5000
+# -o|--out [not set]
+#out:
+#  - srt://1.2.3.4:9000
+# -I|--iface [not set]
+#iface: <iface>
+# -k|--insecure off
+insecure: off
+# --group-mode [not set] # broadcast|backup
+#group-mode: broadcast
+# --rendezvous off
+rendezvous: off
+# --local [not set]
+#local: <host>:<port>
+# --passphrase [not set]
+#passphrase: <pw>
+# --pbkeylen 16 # 16|24|32
+#pbkeylen: 16
+# --streamid [not set]
+#streamid: <id>
+# --packetfilter [not set]
+#packetfilter: <cfg>
+# --latency [not set] # ms
+#latency: <ms>
+# --send-buffer-mult 4
+#send-buffer-mult: 4
+# --al-fec [not set]
+#al-fec: <L>:<D>
+# --al-fec-port [not set]
+#al-fec-port: <port>
+
+metrics:
+  # --metrics /run/dvbipitools/metrics.sock
+  #sock: /run/dvbipitools/metrics.sock
+  # --metrics-id [not set]
+  #id: <name>
+  # --metrics-interval 5 # seconds
+  #interval: 5
+
+# --color auto # auto|always|never
+color: auto
+
+# -v|--verbose off
+verbose: off
+
+# -d|--daemonize off
+daemonize: off

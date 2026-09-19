@@ -11,28 +11,38 @@ dipibcg -l -m <mcast>:<port> [options]
 
 ## Options
 
-| flag | long form   | argument               | default                                    |
-|------|-------------|-------------------------|--------------------------------------------|
-| `-a` | `--announce`|                         | headend mode: read `-i`, transmit on `-m`  |
-| `-l` | `--listen`  |                         | client mode: receive on `-m`, write `-o`   |
-| `-i` | `--input`   | `<path>`                | announce: required                         |
-| `-M` | `--map`     | `<path>`                | announce: required                         |
-| `-w` | `--window`  | `<hours>`               | announce: `24`                             |
-| `-m` | `--mcast`   | `<g>:<p>`               | required                                   |
-| `-I` | `--iface`   | `<iface>`               | kernel route                               |
-|      | `--dscp`    | `<v>`                   | announce: `signalling`                     |
-| `-t` | `--interval`| `<s>`                   | announce: `5`                              |
-| `-t` | `--timeout` | `<s>`                   | listen: `35`                               |
-| `-o` | `--output`  | `<path>` / `-`          | listen: `-` (stdout)                       |
-| `-C` | `--csv-map` | `<path>`                | listen: off                                |
-| `-Z` | `--compress`|                         | announce: off                              |
-| `-v` | `--verbose` |                         | off                                        |
-|      | `--color`   | `auto\|always\|never`   | `auto`                                     |
-|      | `--metrics` | `<path>`                | announce: `/run/dvbipitools/metrics.sock`  |
-|      | `--metrics-id` | `<name>`             | announce: none (metrics disabled unless set) |
-|      | `--metrics-interval` | `<s>`          | announce: `5`                              |
-| `-d` | `--daemonize` |                       | off (foreground)                           |
-| `-h` | `--help`    |                         |                                             |
+| flag | long form            | argument              | default                                      |
+|------|----------------------|-----------------------|----------------------------------------------|
+| `-a` | `--announce`         |                       | headend mode: read `-i`, transmit on `-m`    |
+| `-l` | `--listen`           |                       | client mode: receive on `-m`, write `-o`     |
+| `-i` | `--input`            | `<path>`              | announce: required                           |
+| `-M` | `--map`              | `<path>`              | announce: required                           |
+| `-w` | `--window`           | `<hours>`             | announce: `24`                               |
+| `-m` | `--mcast`            | `<g>:<p>`             | required                                     |
+| `-I` | `--iface`            | `<iface>`             | kernel route                                 |
+|      | `--dscp`             | `<v>`                 | announce: `signalling`                       |
+| `-t` | `--interval`         | `<s>`                 | announce: `5`                                |
+| `-t` | `--timeout`          | `<s>`                 | listen: `35`                                 |
+| `-o` | `--output`           | `<path>` / `-`        | listen: `-` (stdout)                         |
+| `-C` | `--csv-map`          | `<path>`              | listen: off                                  |
+| `-Z` | `--compress`         |                       | announce: off                                |
+| `-v` | `--verbose`          |                       | off                                          |
+|      | `--color`            | `auto\|always\|never` | `auto`                                       |
+|      | `--metrics`          | `<path>`              | announce: `/run/dvbipitools/metrics.sock`    |
+|      | `--metrics-id`       | `<name>`              | announce: none (metrics disabled unless set) |
+|      | `--metrics-interval` | `<s>`                 | announce: `5`                                |
+| `-d` | `--daemonize`        |                       | off (foreground)                             |
+| `-c` | `--config`           | `<path>`              | `/etc/dvbipitools/dipibcg.yaml`              |
+|      | `--configtest`       |                       | check the config file, then exit             |
+| `-h` | `--help`             |                       |                                              |
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipibcg.yaml](dipibcg.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipibcg.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## Announce (`-a`)
 

@@ -45,11 +45,37 @@ typedef struct {
   char cwenc_key_list_b_path[256];
 } cas_vendor_t;
 
-/* biss2/biss1/biss2-ca/simulcrypt mutual exclusivity, plus per-vendor cross-checks
-   (super-id/ecm-id required, ecm/emm pid collisions, emmg port reuse). errors go through
-   argutil_verr() tagged with tool_name. 0 ok, -1 err (message already printed) */
+/* shared by cmd line + yaml. 0 ok, -1 with reason in err */
+void cas_vendor_defaults(cas_vendor_t *v);
+
+int cas_vendor_add(cas_vendor_t *vendors, unsigned *n_vendors, const char *endpoint, char *err, size_t errsz);
+int cas_vendor_set_endpoint(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_ecmg_version(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_super_id(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_ecm_id(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_ecm_pid(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_emmg_port(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_emmg_reverse(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_emmg_version(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_emmg_max_conns(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_emm_pid(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_resilience(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_cwenc_algo(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_cwenc_aes_mode(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_cwenc_fixed_key(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_cwenc_key_list_a(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_cwenc_key_list_b(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+
+int cas_set_algo(cas_algo_t *dst, const char *val, char *err, size_t errsz);
+int cas_set_cp_duration(unsigned *dst, const char *val, char *err, size_t errsz);
+int cas_set_biss2_sw(int *enabled, unsigned char *sw, const char *val, char *err, size_t errsz);
+int cas_set_biss2_emit_esw(int *enabled, unsigned char *id, const char *val, char *err, size_t errsz);
+int cas_set_biss1_sw(int *enabled, unsigned char *cw, const char *val, char *err, size_t errsz);
+int cas_set_biss2_ca_session_id(unsigned *dst, int *given, const char *val, char *err, size_t errsz);
+
+/* biss2/biss1/biss2-ca/simulcrypt are mutually exclusive, 0 ok, -1 err (message already printed) */
 int cas_args_validate(const char *tool_name, cas_algo_t cas_algo, const cas_vendor_t *vendors, unsigned n_vendors,
-                       int biss2_enabled, int biss1_enabled, int biss2_ca_enabled, int biss2_emit_esw,
-                       int biss2_ca_session_id_given, unsigned cas_cp_duration_ms);
+    int biss2_enabled, int biss1_enabled, int biss2_ca_enabled, int biss2_emit_esw,
+    int biss2_ca_session_id_given, unsigned cas_cp_duration_ms);
 
 #endif

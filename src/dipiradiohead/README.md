@@ -23,17 +23,6 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<po
 |       | `--dscp`             | `<v>`                                   | `video-high`                                    |           |
 |       | `--al-fec`           | `<L>:<D>`                               | off (Annex E Layer 1 FEC, needs `-r`)           |           |
 |       | `--al-fec-port`      | `<port>`                                | required with `--al-fec`                        |           |
-| `-R`  | `--rist`             | `rist://host:port` or `srt://host:port` | none, repeatable (bonded, one scheme at a time) |           |
-|       | `--profile`          | `simple\|main`                          | `simple` (`-R rist://` peers only)              |           |
-|       | `--secret`           | `<psk>`                                 | none (`-R rist://` peers only)                  |           |
-|       | `--cname`            | `<name>`                                | library default (`-R rist://` peers only)       |           |
-|       | `--buffer`           | `<ms>`                                  | library default (`-R rist://` peers only)       |           |
-|       | `--srt-group-mode`   | `broadcast\|backup`                     | none, required bonding >1 `-R srt://` peer      |           |
-|       | `--srt-passphrase`   | `<pw>`                                  | none (`-R srt://` peers only, 10..79 chars)     |           |
-|       | `--srt-pbkeylen`     | `16\|24\|32`                            | `16`, requires `--srt-passphrase`               |           |
-|       | `--srt-streamid`     | `<id>`                                  | none (`-R srt://` peers only)                   |           |
-|       | `--srt-packetfilter` | `<cfg>`                                 | none (`-R srt://` peers only)                   |           |
-|       | `--srt-latency`      | `<ms>`                                  | library default (`-R srt://` peers only)        |           |
 | `-n`  | `--nit`              | `<text>`                                | none                                            |           |
 | `-e`  | `--error`            | `<seconds>`                             | see below                                       |           |
 | `-k`  | `--insecure`         |                                         | off (TLS verified)                              |           |
@@ -45,10 +34,32 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<po
 |       | `--metrics-id`       | `<name>`                                | none (metrics disabled unless set)              |           |
 |       | `--metrics-interval` | `<s>`                                   | `5`                                             |           |
 | `-d`  | `--daemonize`        |                                         | off (foreground)                                |           |
+| `-c`  | `--config`           | `<path>`                                | `/etc/dvbipitools/dipiradiohead.yaml`           |           |
+|       | `--configtest`       |                                         | check the config file, then exit                |           |
 | `-h`  | `--help`             |                                         |                                                 |           |
 
 `--sid`/`-s` pair with whichever `-i` came right before them - like ffmpeg's per-input options,
 not global flags. Order matters: `--sid`/`-s` before the first `-i` is an error.
+
+### Related to RIST Output
+| flag | long form        | argument           | default                                         | scope |
+|------|------------------|--------------------|-------------------------------------------------|-------|
+| `-R` | `--remote`       | `rist://host:port` | none, repeatable (bonded, one scheme at a time) |       |
+|      | `--rist-profile` | `simple\|main`     | `simple` (`-R rist://` peers only)              |       |
+|      | `--rist-secret`  | `<psk>`            | none (`-R rist://` peers only)                  |       |
+|      | `--rist-cname`   | `<name>`           | library default (`-R rist://` peers only)       |       |
+|      | `--rist-buffer`  | `<ms>`             | library default (`-R rist://` peers only)       |       |
+
+### Related to SRT Output
+| flag | long form            | argument            | default                                         | scope |
+|------|----------------------|---------------------|-------------------------------------------------|-------|
+| `-R` | `--remote`           | `srt://host:port`   | none, repeatable (bonded, one scheme at a time) |       |
+|      | `--srt-group-mode`   | `broadcast\|backup` | none, required bonding >1 `-R srt://` peer      |       |
+|      | `--srt-passphrase`   | `<pw>`              | none (`-R srt://` peers only, 10..79 chars)     |       |
+|      | `--srt-pbkeylen`     | `16\|24\|32`        | `16`, requires `--srt-passphrase`               |       |
+|      | `--srt-streamid`     | `<id>`              | none (`-R srt://` peers only)                   |       |
+|      | `--srt-packetfilter` | `<cfg>`             | none (`-R srt://` peers only)                   |       |
+|      | `--srt-latency`      | `<ms>`              | library default (`-R srt://` peers only)        |       |
 
 ### Conditional Access: SimulCrypt
 
@@ -67,6 +78,7 @@ using one before any `--cas-ecmg` is an error. Everything else is shared across 
 | `--cas-emmg-port`        | `<n>`                     | `8002`                                     | per-vendor |
 | `--cas-emmg-max-conns`   | `<n>`                     | `8` (max `64`)                             | per-vendor |
 | `--cas-emmg-version`     | `2\|3`                    | accept client's proposal                   | per-vendor |
+| `--cas-emmg-reverse`     | `tcp://host:port`         | standard (listening) EMMG                  | per-vendor |
 | `--cas-emm-pid`          | `<pid>`                   | `0x0021`                                   | per-vendor |
 | `--cas-resilience`       | `frozen\|cycling\|silent` | `frozen`                                   | per-vendor |
 | `--cas-required`         |                           | off                                        | per-vendor |
@@ -90,6 +102,14 @@ BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each o
 | `--biss2-ca-receivers`  | `<dir>`    | BISS2 Mode CA: directory of receiver PEM pubkeys    |
 | `--biss2-ca-session-id` | `<n>`      | dec or 0x-hex, 16 bit; random if not given          |
 
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipiradiohead.yaml](dipiradiohead.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipiradiohead.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## Input (`-i`)
 
@@ -146,8 +166,8 @@ Repeatable, every peer bonds onto a single RIST sender context,
 same bonding model as [dipirist](../dipirist/README.md). `-r` only affects the
 `-m` output.
 RIST is never RTP-wrapped. 
-`--profile`/`--secret`/`--cname`/`--buffer` configure the RIST peers.
-`--secret` requires `--profile main`.
+`--rist-profile`/`--rist-secret`/`--rist-cname`/`--rist-buffer` configure the RIST peers.
+`--rist-secret` requires `--rist-profile main`.
 
 `-R srt://host:port` (requires libsrt) works the same way but bonds SRT peers instead: a single
 peer needs no extra flags, more than one needs `--srt-group-mode broadcast|backup`. `-R` is one

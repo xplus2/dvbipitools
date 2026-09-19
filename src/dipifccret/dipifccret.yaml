@@ -1,0 +1,81 @@
+# -g|--range [not set]
+#range: 239.0.0.0/8
+# -l|--listen [not set]
+#listen: 10.0.0.1:6000
+# -I|--iface [not set]
+#iface: <iface>
+# -M|--max-channels 300
+#max-channels: 300
+# --channel-idle-timeout 120 # seconds, 0 = never reap
+#channel-idle-timeout: 120
+# -R|--rtx-pt 99
+#rtx-pt: 99
+# -w|--workers 0 # 0 = online CPU cores
+#workers: 0
+# -u|--user [not set]
+#user: <user>
+
+# -B|--buffer 2000 # ms
+buffer: 2000
+# -F|--ff-port 0 # 0 = original channel's port
+#ff-port: 0
+# --no-mc-ret off
+#no-mc-ret: off
+# --max-ret-clients 16384
+#max-ret-clients: 16384
+# --no-rsi off
+#no-rsi: off
+
+# --no-ret off
+no-ret: off
+ret:
+  # --ret-client-idle-timeout 300 # seconds, 0 = never reap
+  client-idle-timeout: 300
+
+rsi:
+  # --rsi-interval 5 # seconds
+  interval: 5
+  # --rsi-mc-ret off
+  mc-ret: off
+  # --rsi-hostname [not set]
+  #hostname: <name>
+
+# -G|--gop-cap 8000 # ms
+gop-cap: 8000
+# -C|--max-bursts 4096
+max-bursts: 4096
+# -X|--burst-multiplier 1.5
+burst-multiplier: 1.5
+# -D|--burst-duration-cap 10000 # ms
+burst-duration-cap: 10000
+# --max-buffer-fill-bound 30000 # ms, 0 = no bound
+max-buffer-fill-bound: 30000
+# --congestion-nack-threshold 5 # 0 = disabled
+congestion-nack-threshold: 5
+
+# --no-fcc off
+no-fcc: off
+fcc:
+  # --fcc-resolve-by-port off
+  resolve-by-port: off
+  # --fcc-resolve-base-port 0 # 0 = listen port + 1
+  resolve-base-port: 0
+  # --fcc-range [not set]
+  #range: 239.1.0.0/16
+  # --fcc-client-range [not set]
+  #client-range: 10.0.0.0/8
+
+metrics:
+  # --metrics /run/dvbipitools/metrics.sock
+  #sock: /run/dvbipitools/metrics.sock
+  # --metrics-id [not set]
+  #id: <name>
+  # --metrics-interval 5 # seconds
+  #interval: 5
+
+# -v|--verbose off
+verbose: off
+# --color auto # auto|always|never
+color: auto
+# -d|--daemonize off
+daemonize: off

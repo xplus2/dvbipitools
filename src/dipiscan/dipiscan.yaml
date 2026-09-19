@@ -1,0 +1,26 @@
+# -m|--mcast 239.19.75.0
+#mcast: 239.19.75.0
+# -p|--port 8700
+#port: 8700
+# -f|--format m3u # m3u|csv|xspf|xml|null
+#format: m3u
+# -P|--provider [not set]
+#provider: <name>
+# -o|--out -
+#out: '-'
+# -t|--timeout 1
+timeout: 1
+# -j|--jets 1
+#jets: 1
+# -M|--mpts off
+mpts: off
+# -u|--http-proxy [not set]
+#http-proxy: <host>:<port>
+# -x|--http-path /udp/%g:%p/
+#http-path: /udp/%g:%p/
+# -I|--iface [not set]
+#iface: <iface>
+# -v|--verbose off
+verbose: off
+# --color auto # auto|always|never
+color: auto

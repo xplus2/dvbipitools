@@ -4,11 +4,13 @@
 #include <arpa/inet.h>
 #include <getopt.h>
 #include <limits.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <unistd.h>
 
 #include "lib/helper/argutil.h"
 #include "lib/mux/fec2022.h"
@@ -17,6 +19,7 @@
 #include "lib/helper/log.h"
 
 #include "args.h"
+#include "config.h"
 #include "core/route.h"
 #include "version.h"
 
@@ -25,7 +28,7 @@
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* "all:<port>" (wildcard, both families) or "<addr>:<port>" / "[<addr6>]:<port>" */
-static int listen_parse(const char *s, listen_spec_t *out) {
+int dixy_cfg_listen(listen_spec_t *out, const char *s) {
   if (strncmp(s, "all:", 4) == 0) {
     unsigned port;
     if (argutil_port_parse(s + 4, &port)) return -1;
@@ -45,7 +48,7 @@ static int listen_parse(const char *s, listen_spec_t *out) {
 }
 
 /* -1/-2/-3 (that many x core count) or a positive absolute thread count */
-static int workers_parse(const char *s, int *out) {
+int dixy_cfg_workers(int *out, const char *s) {
   char *end;
   long v = strtol(s, &end, 10);
   if (*end != '\0') return -1;
@@ -62,7 +65,7 @@ static int workers_parse(const char *s, int *out) {
 
 /* -f/--format <list>: comma-separated list.
    listed formats 0, everything else 1. 0 ok, -1 empty or unknown token */
-static int format_parse(const char *s, config_t *cfg) {
+int dixy_cfg_format(config_t *cfg, const char *s) {
   struct {
     const char *name;
     int *flag;
@@ -129,6 +132,151 @@ void args_free(config_t *cfg) {
   cfg->sources_cap = 0;
 }
 
+void dixy_cfg_reset_inputs(config_t *cfg) {
+  args_free(cfg);
+  cfg->stdin_path = NULL;
+  cfg->stdin_name = NULL;
+  cfg->stdin_ordinal = 0;
+  cfg->stdin_media_type = MEDIA_TV;
+  cfg->rist_uri = NULL;
+  cfg->rist_name = NULL;
+  cfg->rist_ordinal = 0;
+  cfg->rist_media_type = MEDIA_TV;
+  cfg->input_ordinal = 0;
+  cfg->last_input = LAST_NONE;
+  cfg->media_type_seen = 0;
+}
+
+int dixy_cfg_add_input(config_t *cfg, const char *val, char *err, size_t errsz) {
+  source_kind_t kind;
+  int ordinal = cfg->input_ordinal + 1;
+  if (strcmp(val, "-") == 0) {
+    cfg->stdin_path = val;
+    cfg->stdin_ordinal = ordinal;
+    cfg->last_input = LAST_STDIN;
+  } else if (strncmp(val, "rist://", 7) == 0) {
+    if (cfg->rist_uri) {
+      snprintf(err, errsz, "at most one rist:// input");
+      return -1;
+    }
+    if (val[7] != '@') {
+      snprintf(err, errsz, "invalid '%s' (rist:// needs rist://@host:port)", val);
+      return -1;
+    }
+    cfg->rist_uri = val;
+    cfg->rist_ordinal = ordinal;
+    cfg->last_input = LAST_RIST;
+  } else {
+    const char *value = val;
+    if (strncmp(val, "sds://", 6) == 0) {
+      int family;
+      char addr[64];
+      unsigned port;
+      value = val + 6;
+      if (argutil_addrport_parse(value, &family, addr, sizeof addr, &port)) {
+        snprintf(err, errsz, "invalid '%s' (sds:// needs sds://addr:port)", val);
+        return -1;
+      }
+      kind = SRC_SDS;
+    } else if (strncmp(val, "http://", 7) == 0 || strncmp(val, "https://", 8) == 0) {
+      kind = SRC_HTTP;
+    } else if (playlist_kind_from_ext(val, &kind)) {
+      snprintf(err, errsz, "can't tell what '%s' is (expected -, sds://, rist://, http(s)://, or a .m3u/.xspf/.csv/.xml path)", val);
+      return -1;
+    }
+    if (sources_append(cfg, kind, value, ordinal)) {
+      snprintf(err, errsz, "out of memory");
+      return -1;
+    }
+    cfg->last_input = LAST_SOURCE;
+  }
+  cfg->input_ordinal = ordinal;
+  cfg->media_type_seen = 0;
+  return 0;
+}
+
+int dixy_cfg_set_name(config_t *cfg, const char *name, char *err, size_t errsz) {
+  const char **slot;
+  if (!route_name_valid(name)) {
+    snprintf(err, errsz, "invalid name '%s' (no '/', not starting with '.', not a reserved word, max %d chars)", name, ROUTE_NAME_MAX);
+    return -1;
+  }
+  if (name_in_use(cfg, name)) {
+    snprintf(err, errsz, "duplicate name '%s'", name);
+    return -1;
+  }
+  switch (cfg->last_input) {
+    case LAST_STDIN:
+      slot = &cfg->stdin_name;
+      break;
+    case LAST_RIST:
+      slot = &cfg->rist_name;
+      break;
+    case LAST_SOURCE:
+      slot = &cfg->sources[cfg->n_sources - 1].name;
+      break;
+    default:
+      snprintf(err, errsz, "name must directly follow the input it names");
+      return -1;
+  }
+  if (*slot) {
+    snprintf(err, errsz, "name given twice for the same input");
+    return -1;
+  }
+  *slot = name;
+  return 0;
+}
+
+int dixy_cfg_set_media_type(config_t *cfg, const char *val, char *err, size_t errsz) {
+  media_type_t mt;
+  if (!strcmp(val, "tv"))
+    mt = MEDIA_TV;
+  else if (!strcmp(val, "radio"))
+    mt = MEDIA_RADIO;
+  else {
+    snprintf(err, errsz, "invalid '%s' (radio or tv)", val);
+    return -1;
+  }
+  if (cfg->media_type_seen) {
+    snprintf(err, errsz, "media type given twice for the same input");
+    return -1;
+  }
+  switch (cfg->last_input) {
+    case LAST_STDIN:
+      cfg->stdin_media_type = mt;
+      break;
+    case LAST_RIST:
+      cfg->rist_media_type = mt;
+      break;
+    case LAST_SOURCE:
+      cfg->sources[cfg->n_sources - 1].media_type = mt;
+      break;
+    default:
+      snprintf(err, errsz, "media type must directly follow the input it applies to");
+      return -1;
+  }
+  cfg->media_type_seen = 1;
+  return 0;
+}
+
+int dixy_cfg_auth(const char *val, char *out, size_t outsz, char *err, size_t errsz) {
+  const char *colon = strchr(val, ':');
+  char b64[192];
+  size_t n;
+  if (!colon || colon == val) {
+    snprintf(err, errsz, "invalid '%s' (need user:password)", val);
+    return -1;
+  }
+  if (strlen(val) >= ARGS_AUTH_CREDS_MAX) {
+    snprintf(err, errsz, "credentials too long");
+    return -1;
+  }
+  base64_encode(val, strlen(val), b64);
+  n = bufcpy(out, outsz, "Basic ");
+  bufcpy(out + n, outsz - n, b64);
+  return 0;
+}
+
 static int basic_auth_parse(const char *flag, const char *val, char *out, size_t outsz) {
   const char *colon = strchr(val, ':');
   char b64[192];
@@ -160,7 +308,7 @@ static void print_help(void) {
     "      --tls-key <path>        private key file (PEM)\n"
     "  -j, --workers <spec>        -1/-2/-3: that many x cpu cores,\n"
     "                              or <N>: an absolute thread count        [-1]\n"
-    "  -c, --max-clients <n>       cap on concurrent streams               [256]\n"
+    "      --max-clients <n>       cap on concurrent streams               [256]\n"
     "      --max-channels <n>      cap on concurrent\n"
     "                              (source,filter,pmt,container)           [32]\n"
     "      --idle-timeout <s>      close a conn idle this long, 0 = off    [0]\n"
@@ -224,18 +372,20 @@ static void print_help(void) {
     "  -d, --daemonize             fork to background after startup\n"
     "  -v, --verbose               per-connection diagnostics on stderr\n"
     "      --color <when>          auto|always|never                       [auto]\n"
+    "  -c, --config <path>         YAML config file                        [%s, if present]\n"
+    "      --configtest            check the config file, then exit\n"
     "  -h, --help                  this help\n"
     "\n"
-    "Each -i flag's list index is its own position on the command line.\n"
+    "Each -i's list index is its own position on the command line.\n"
     "any URL takes ?filter=<pids> to drop PIDs, e.g. ?filter=101,0x20.\n\n"
     "/export/<fmt>/<type> (type: m3u|xspf) lists every channel as one\n"
     "playlist. ?host=, ?input=1,3,4, ?filter=, ?keep_multicast, ?plain.\n\n"
     "on an MPTS source, hls/hls-fmp4/llhls/dash/lldash demux the first\n"
     "arriving PMT.\n"
-    "use ?pmt=<pid> (dec or 0x-hex) to pick a different one. ts\n"
-    "passes the whole MPTS through.\n"
+    "Úse ?pmt=<pid> (dec or 0x-hex) to pick a different one. ts\n"
+    "passes the whole MPTS.\n"
     "\n"
-    "on a program carrying LCEVC, hls/hls-fmp4/llhls/dash/lldash accept\n"
+    "On a program carrying LCEVC, hls/hls-fmp4/llhls/dash/lldash accept\n"
     "?lcevc=base|full|all|<n>: strip it, keep it (default), list every\n"
     "alternative in the manifest, or pick one by index/PID.\n"
     "disable this feature with --no-lcevc.\n"
@@ -244,110 +394,127 @@ static void print_help(void) {
     "  %s -i sds://239.19.75.1:3937\n"
     "  %s -l 0.0.0.0:9080 -i channels.m3u\n"
     "  %s -L [::]:9443 --tls-cert server.crt --tls-key server.key -i ch.xspf\n\n",
-    TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+    TOOL_NAME, TOOL_NAME, DEFAULT_CONFIG_PATH, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+}
+
+static const char shortopts[] = "I:i:Jkl:L:j:c:f:n:dvh";
+
+static const struct option longopts[] = {
+  {"iface", required_argument, 0, 'I'},
+  {"listen", required_argument, 0, 'l'},
+  {"listen-tls", required_argument, 0, 'L'},
+  {"tls-cert", required_argument, 0, 1001},
+  {"tls-key", required_argument, 0, 1002},
+  {"workers", required_argument, 0, 'j'},
+  {"max-clients", required_argument, 0, 1057},
+  {"max-channels", required_argument, 0, 1051},
+  {"idle-timeout", required_argument, 0, 1052},
+  {"capture-ring-size", required_argument, 0, 1048},
+  {"sds-timeout", required_argument, 0, 1044},
+  {"sds-refresh-interval", required_argument, 0, 1045},
+  {"segment-size", required_argument, 0, 1008},
+  {"segment-count", required_argument, 0, 1009},
+  {"hls-part-size", required_argument, 0, 1010},
+  {"dash-part-size", required_argument, 0, 1049},
+  {"dash-utc-url", required_argument, 0, 1050},
+  {"hls-seg-pool", required_argument, 0, 1039},
+  {"metrics", required_argument, 0, 1012},
+  {"metrics-id", required_argument, 0, 1013},
+  {"metrics-interval", required_argument, 0, 1014},
+  {"metrics-http", no_argument, 0, 1015},
+  {"metrics-auth", required_argument, 0, 1056},
+  {"format", required_argument, 0, 'f'},
+  {"no-url-rtp", no_argument, 0, 1020},
+  {"no-url-udp", no_argument, 0, 1021},
+  {"no-url-srt", no_argument, 0, 1026},
+  {"no-pid-filters", no_argument, 0, 1022},
+  {"no-lcevc", no_argument, 0, 1055},
+  {"no-http2", no_argument, 0, 1040},
+  {"no-http3", no_argument, 0, 1041},
+  {"no-fcc", no_argument, 0, 1042},
+  {"no-ret", no_argument, 0, 1043},
+  {"al-fec", required_argument, 0, 1053},
+  {"no-al-fec", no_argument, 0, 1054},
+  {"no-status", no_argument, 0, 1023},
+  {"status-tpl", required_argument, 0, 1027},
+  {"auth", required_argument, 0, 1037},
+  {"cors-origin", required_argument, 0, 1036},
+  {"ssdp-ttl", required_argument, 0, 1029},
+  {"ssdp-iface", required_argument, 0, 1030},
+  {"ssdp-interval", required_argument, 0, 1046},
+  {"ssdp-max-age", required_argument, 0, 1047},
+  {"enable-dlna", no_argument, 0, 1031},
+  {"dlna-host", required_argument, 0, 1032},
+  {"dlna-name", required_argument, 0, 1033},
+  {"dlna-keep-multicast", no_argument, 0, 1038},
+  {"media-type", required_argument, 0, 1034},
+  {"input", required_argument, 0, 'i'},
+  {"join-all", no_argument, 0, 'J'},
+  {"insecure", no_argument, 0, 'k'},
+  {"name", required_argument, 0, 'n'},
+  {"daemonize", no_argument, 0, 'd'},
+  {"verbose", no_argument, 0, 'v'},
+  {"color", required_argument, 0, 1007},
+  {"config", required_argument, 0, 'c'},
+  {"configtest", no_argument, 0, 1058},
+  {"help", no_argument, 0, 'h'},
+  {0, 0, 0, 0}};
+
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+  int c;
+  optind = 1;
+  opterr = 0;
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    if (c == 'c') *cfg_path = optarg;
+    if (c == 1058) *configtest = 1;
+    if (c == 'h') {
+      print_help();
+      opterr = 1;
+      return ARGS_HELP;
+    }
+  }
+  opterr = 1;
+  return ARGS_OK;
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
-  static const struct option longopts[] = {
-      {"iface", required_argument, 0, 'I'},
-      {"listen", required_argument, 0, 'l'},
-      {"listen-tls", required_argument, 0, 'L'},
-      {"tls-cert", required_argument, 0, 1001},
-      {"tls-key", required_argument, 0, 1002},
-      {"workers", required_argument, 0, 'j'},
-      {"max-clients", required_argument, 0, 'c'},
-      {"max-channels", required_argument, 0, 1051},
-      {"idle-timeout", required_argument, 0, 1052},
-      {"capture-ring-size", required_argument, 0, 1048},
-      {"sds-timeout", required_argument, 0, 1044},
-      {"sds-refresh-interval", required_argument, 0, 1045},
-      {"segment-size", required_argument, 0, 1008},
-      {"segment-count", required_argument, 0, 1009},
-      {"hls-part-size", required_argument, 0, 1010},
-      {"dash-part-size", required_argument, 0, 1049},
-      {"dash-utc-url", required_argument, 0, 1050},
-      {"hls-seg-pool", required_argument, 0, 1039},
-      {"metrics", required_argument, 0, 1012},
-      {"metrics-id", required_argument, 0, 1013},
-      {"metrics-interval", required_argument, 0, 1014},
-      {"metrics-http", no_argument, 0, 1015},
-      {"metrics-auth", required_argument, 0, 1056},
-      {"format", required_argument, 0, 'f'},
-      {"no-url-rtp", no_argument, 0, 1020},
-      {"no-url-udp", no_argument, 0, 1021},
-      {"no-url-srt", no_argument, 0, 1026},
-      {"no-pid-filters", no_argument, 0, 1022},
-      {"no-lcevc", no_argument, 0, 1055},
-      {"no-http2", no_argument, 0, 1040},
-      {"no-http3", no_argument, 0, 1041},
-      {"no-fcc", no_argument, 0, 1042},
-      {"no-ret", no_argument, 0, 1043},
-      {"al-fec", required_argument, 0, 1053},
-      {"no-al-fec", no_argument, 0, 1054},
-      {"no-status", no_argument, 0, 1023},
-      {"status-tpl", required_argument, 0, 1027},
-      {"auth", required_argument, 0, 1037},
-      {"cors-origin", required_argument, 0, 1036},
-      {"ssdp-ttl", required_argument, 0, 1029},
-      {"ssdp-iface", required_argument, 0, 1030},
-      {"ssdp-interval", required_argument, 0, 1046},
-      {"ssdp-max-age", required_argument, 0, 1047},
-      {"enable-dlna", no_argument, 0, 1031},
-      {"dlna-host", required_argument, 0, 1032},
-      {"dlna-name", required_argument, 0, 1033},
-      {"dlna-keep-multicast", no_argument, 0, 1038},
-      {"media-type", required_argument, 0, 1034},
-      {"input", required_argument, 0, 'i'},
-      {"join-all", no_argument, 0, 'J'},
-      {"insecure", no_argument, 0, 'k'},
-      {"name", required_argument, 0, 'n'},
-      {"daemonize", no_argument, 0, 'd'},
-      {"verbose", no_argument, 0, 'v'},
-      {"color", required_argument, 0, 1007},
-      {"help", no_argument, 0, 'h'},
-      {0, 0, 0, 0}};
-  int c;
+  const char *cfg_path = NULL;
+  int configtest = 0;
+  int cli_input = 0;
   int i_ordinal = 0;
-  const char *dlna_host_arg = NULL;
-  enum { LAST_NONE, LAST_STDIN, LAST_RIST, LAST_SOURCE } last_input = LAST_NONE;
   int media_type_seen = 0;
+  last_input_t last_input = LAST_NONE;
+  args_status_t pst;
+  int c;
 
-  if (argc == 1)
+  if (argc == 1 && access(DEFAULT_CONFIG_PATH, R_OK))
     return ARGS_NOARGS;
 
-  memset(cfg, 0, sizeof *cfg);
-  listen_parse("all:9080", &cfg->listen);
-  listen_parse("all:9443", &cfg->listen_tls);
-  cfg->workers_spec = -1;
-  cfg->max_clients = 256;
-  cfg->max_channels = 32;
-  cfg->capture_ring_kib = 4096;
-  cfg->sds_timeout_s = 3.0;
-  cfg->sds_refresh_interval_s = 30.0;
-  cfg->segment_size = 3.0;
-  cfg->segment_count = 4;
-  cfg->hls_part_size = 0.35;
-  cfg->dash_part_size = 0.333;
-  cfg->dash_utc_url = "http://time.akamai.com/?iso&ms";
-  cfg->hls_seg_pool = 8;
-  cfg->ssdp_ttl = 3;
-  cfg->ssdp_interval_s = 60.0;
-  cfg->ssdp_max_age_s = 1800;
+  pst = prescan(argc, argv, &cfg_path, &configtest);
+  if (pst != ARGS_OK) return pst;
+  if (configtest) return dixy_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+
+  dixy_cfg_defaults(cfg);
+  if (dixy_cfg_load(cfg, cfg_path)) {
+    args_free(cfg);
+    return ARGS_ERR;
+  }
+
   optind = 1;
-  while ((c = getopt_long(argc, argv, "I:i:Jkl:L:j:c:f:n:dvh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     switch (c) {
       case 'I':
         cfg->iface = optarg;
         break;
       case 'l':
-        if (listen_parse(optarg, &cfg->listen)) {
+        if (dixy_cfg_listen(&cfg->listen, optarg)) {
           argerr("invalid -l/--listen address: %s", optarg);
           args_free(cfg);
           return ARGS_ERR;
         }
         break;
       case 'L':
-        if (listen_parse(optarg, &cfg->listen_tls)) {
+        if (dixy_cfg_listen(&cfg->listen_tls, optarg)) {
           argerr("invalid -L/--listen-tls address: %s", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -360,16 +527,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->tls_key = optarg;
         break;
       case 'j':
-        if (workers_parse(optarg, &cfg->workers_spec)) {
+        if (dixy_cfg_workers(&cfg->workers_spec, optarg)) {
           argerr("invalid -j/--workers: %s (-1/-2/-3, or a positive count)", optarg);
           args_free(cfg);
           return ARGS_ERR;
         }
         break;
-      case 'c': {
+      case 1057: {
         unsigned v;
         if (argutil_uint_range(optarg, 1, 65536, &v)) {
-          argerr("invalid -c/--max-clients: %s (1..65536)", optarg);
+          argerr("invalid --max-clients: %s (1..65536)", optarg);
           args_free(cfg);
           return ARGS_ERR;
         }
@@ -409,7 +576,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1044: {
         char *end;
         double v = strtod(optarg, &end);
-        if (*end != '\0' || v <= 0.0) {
+        if (*end != '\0' || !isfinite(v) || v <= 0.0 || v > 1e9) {
           argerr("invalid --sds-timeout: %s (seconds, > 0)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -420,7 +587,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1045: {
         char *end;
         double v = strtod(optarg, &end);
-        if (*end != '\0' || v <= 0.0) {
+        if (*end != '\0' || !isfinite(v) || v <= 0.0 || v > 1e9) {
           argerr("invalid --sds-refresh-interval: %s (seconds, > 0)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -431,7 +598,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1008: {
         char *end;
         double v = strtod(optarg, &end);
-        if (*end != '\0' || v < 2.0) {
+        if (*end != '\0' || !isfinite(v) || v < 2.0 || v > 1e9) {
           argerr("invalid --segment-size: %s (seconds, min 2)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -452,7 +619,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1010: {
         char *end;
         double v = strtod(optarg, &end);
-        if (*end != '\0' || v < 0.05 || v > 5.0) {
+        if (*end != '\0' || !isfinite(v) || v < 0.05 || v > 5.0) {
           argerr("invalid --hls-part-size: %s (seconds, 0.05-5.0)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -463,7 +630,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1049: {
         char *end;
         double v = strtod(optarg, &end);
-        if (*end != '\0' || v < 0.05 || v > 5.0) {
+        if (*end != '\0' || !isfinite(v) || v < 0.05 || v > 5.0) {
           argerr("invalid --dash-part-size: %s (seconds, 0.05-5.0)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -481,7 +648,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1039: {
         unsigned v;
-        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
+        if (argutil_uint_range(optarg, 1, INT_MAX, &v)) {
           argerr("invalid --hls-seg-pool: %s (min 1)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -505,7 +672,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->metrics_http = 1;
         break;
       case 'f':
-        if (format_parse(optarg, cfg)) {
+        if (dixy_cfg_format(cfg, optarg)) {
           argerr("invalid -f/--format: %s (comma-separated list of ts,spts,rawaudio,hls,llhls,dash,lldash)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -584,7 +751,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1046: {
         char *end;
         double v = strtod(optarg, &end);
-        if (*end != '\0' || v <= 0.0) {
+        if (*end != '\0' || !isfinite(v) || v <= 0.0 || v > 1e9) {
           argerr("invalid --ssdp-interval: %s (seconds, > 0)", optarg);
           args_free(cfg);
           return ARGS_ERR;
@@ -606,7 +773,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->enable_dlna = 1;
         break;
       case 1032:
-        dlna_host_arg = optarg;
+        cfg->dlna_host_opt = optarg;
         break;
       case 1033:
         cfg->dlna_name = optarg;
@@ -616,6 +783,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 'i': {
         source_kind_t kind;
+        if (!cli_input) {
+          dixy_cfg_reset_inputs(cfg);
+          cli_input = 1;
+        }
         i_ordinal++;
         media_type_seen = 0;
         if (strcmp(optarg, "-") == 0) {
@@ -782,6 +953,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->color_mode = v;
         break;
       }
+      case 'c':
+      case 1058:
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;
@@ -835,8 +1009,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   }
   if (cfg->enable_dlna) {
-    if (dlna_host_arg) {
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->dlna_host, sizeof cfg->dlna_host, dlna_host_arg, "--dlna-host")) {
+    if (cfg->dlna_host_opt) {
+      if (argutil_bufcpy_opt(TOOL_NAME, cfg->dlna_host, sizeof cfg->dlna_host, cfg->dlna_host_opt, "--dlna-host")) {
         args_free(cfg);
         return ARGS_ERR;
       }

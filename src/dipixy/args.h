@@ -4,6 +4,8 @@
 #ifndef DIPIXY_ARGS_H
 #define DIPIXY_ARGS_H
 
+#include <stddef.h>
+
 typedef enum { LISTEN_ANY, LISTEN_V4, LISTEN_V6 } listen_scope_t;
 
 typedef struct {
@@ -16,6 +18,8 @@ typedef enum { SRC_SDS, SRC_M3U, SRC_XSPF, SRC_CSV, SRC_XML, SRC_HTTP } source_k
 const char *source_kind_str(source_kind_t k);
 
 typedef enum { MEDIA_TV, MEDIA_RADIO } media_type_t; /* MEDIA_TV = 0, default */
+
+typedef enum { LAST_NONE, LAST_STDIN, LAST_RIST, LAST_SOURCE } last_input_t;
 
 typedef struct {
   source_kind_t kind;
@@ -94,6 +98,10 @@ typedef struct {
   char dlna_host[80];
   const char *dlna_name;
   int dlna_keep_multicast;
+  const char *dlna_host_opt; /* --dlna-host as given, resolved into dlna_host after parsing */
+  int input_ordinal;         /* ordinal handed to the latest -i */
+  last_input_t last_input;   /* what -n/--media-type attach to */
+  int media_type_seen;       /* --media-type given for the latest -i */
   int daemonize;
   int verbose;
   int color_mode;
@@ -105,5 +113,17 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg);
 
 /* frees cfg->sources */
 void args_free(config_t *cfg);
+
+/* drops every input taken so far, next -i starts at ordinal 1 */
+void dixy_cfg_reset_inputs(config_t *cfg);
+
+/* 0 ok, -1 with reason in err */
+int dixy_cfg_add_input(config_t *cfg, const char *val, char *err, size_t errsz);
+int dixy_cfg_set_name(config_t *cfg, const char *name, char *err, size_t errsz);
+int dixy_cfg_set_media_type(config_t *cfg, const char *val, char *err, size_t errsz);
+int dixy_cfg_auth(const char *val, char *out, size_t outsz, char *err, size_t errsz);
+int dixy_cfg_listen(listen_spec_t *out, const char *s);
+int dixy_cfg_workers(int *out, const char *s);
+int dixy_cfg_format(config_t *cfg, const char *s);
 
 #endif

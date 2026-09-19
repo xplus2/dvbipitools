@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dipitvhead/args.h"
 
@@ -263,7 +264,7 @@ END_TEST
 
 START_TEST(rist_secret_without_profile_main_is_rejected) {
   char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
-                  "-R", "rist://1.2.3.4:6000", "--secret", "hunter2", NULL};
+                  "-R", "rist://1.2.3.4:6000", "--rist-secret", "hunter2", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
 }
@@ -271,7 +272,7 @@ END_TEST
 
 START_TEST(rist_secret_with_profile_main_is_accepted) {
   char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
-                  "-R", "rist://1.2.3.4:6000", "--profile", "main", "--secret", "hunter2", NULL};
+                  "-R", "rist://1.2.3.4:6000", "--rist-profile", "main", "--rist-secret", "hunter2", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.rist_profile, RIST_PROF_MAIN);
@@ -431,14 +432,173 @@ START_TEST(srt_pbkeylen_requires_passphrase) {
 END_TEST
 
 START_TEST(rist_options_without_any_rist_peer_are_rejected_by_profile_check_only) {
-  /* --secret without --profile main still fails validation even with no -R;
+  /* --rist-secret without --rist-profile main still fails validation even with no -R;
      the no-op warning (logged, not fatal) doesn't change ARGS_OK/ARGS_ERR here */
   char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000",
-                  "--buffer", "500", NULL};
+                  "--rist-buffer", "500", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.n_rist, 0u);
   ck_assert_uint_eq(cfg.rist_buffer_ms, 500u);
+}
+END_TEST
+
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - udp://@239.1.1.1:5000\n  - udp://@239.1.1.2:5000\nmcast: 239.1.2.1:5000\nttl: 4\nudp: on\nnit: Net\nbitrate: 8000\nstuff: on\nmetrics:\n  id: tvh\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.n_inputs, 2u);
+  ck_assert_uint_eq(cfg.inputs[0].sid, 1u);
+  ck_assert_uint_eq(cfg.inputs[1].sid, 2u);
+  ck_assert_uint_eq(cfg.mcast_port, 5000u);
+  ck_assert_uint_eq(cfg.ttl, 4u);
+  ck_assert_int_eq(cfg.rtp, 0);
+  ck_assert_int_eq(cfg.nit_mode, TABLE_OVERRIDE);
+  ck_assert_str_eq(cfg.nit_text, "Net");
+  ck_assert_uint_eq(cfg.bitrate_kbps, 8000u);
+  ck_assert_int_eq(cfg.stuff, 1);
+  ck_assert_str_eq(cfg.metrics_id, "tvh");
+}
+END_TEST
+
+START_TEST(config_inputs_take_keyed_items) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - udp://@239.1.1.1:5000\n  - udp://@239.1.1.2:5000:\n      sid: 7\n      sdt: A\n      provider: P\n      pmt-pid: 0x0100\n      strip-eit: on\n      hbbtv: http://h/app\n      hbbtv-org-id: 5\n      hbbtv-app-id: 6\nmcast: 239.1.3.1:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.n_inputs, 2u);
+  ck_assert_uint_eq(cfg.inputs[0].sid, 1u);
+  ck_assert_uint_eq(cfg.inputs[1].sid, 7u);
+  ck_assert_int_eq(cfg.inputs[1].sdt_mode, TABLE_OVERRIDE);
+  ck_assert_str_eq(cfg.inputs[1].sdt_text, "A");
+  ck_assert_str_eq(cfg.inputs[1].provider_text, "P");
+  ck_assert_uint_eq(cfg.inputs[1].pmt_pid, 0x0100u);
+  ck_assert_int_eq(cfg.inputs[1].strip_eit, 1);
+  ck_assert_str_eq(cfg.inputs[1].hbbtv_url, "http://h/app");
+  ck_assert_uint_eq(cfg.inputs[1].hbbtv_org_id, 5u);
+  ck_assert_uint_eq(cfg.inputs[1].hbbtv_app_id, 6u);
+}
+END_TEST
+
+START_TEST(config_input_srt_keys_pair_with_their_input) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - srt://1.2.3.4:7000:\n      srt-passphrase-in: 0123456789ab\n      srt-latency-in: 200\nmcast: 239.1.3.1:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_str_eq(cfg.inputs[0].srt_passphrase_in, "0123456789ab");
+  ck_assert_uint_eq(cfg.inputs[0].srt_latency_in_ms, 200u);
+}
+END_TEST
+
+START_TEST(config_cas_ecmg_takes_keyed_items) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input: udp://@239.1.1.1:5000\nmcast: 239.1.3.1:5000\ncas:\n  algo: csa2\n  ecmg:\n    - tcp://h1:2222:\n        super-id: 0x1234\n        ecm-id: 5\n        ecmg-version: 3\n        required: on\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.n_cas_vendors, 1u);
+  ck_assert_str_eq(cfg.cas_vendors[0].ecmg_host, "h1");
+  ck_assert_uint_eq(cfg.cas_vendors[0].ecmg_version, 3u);
+  ck_assert_int_eq(cfg.cas_vendors[0].required, 1);
+}
+END_TEST
+
+START_TEST(config_item_without_source_is_error) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - sid: 3\nmcast: 239.1.3.1:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(cmdline_lists_replace_config_lists) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, "-i", "udp://@239.9.9.9:5000", "--sid", "9", "-R", "srt://127.0.0.1:7000", NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - udp://@239.1.1.1:5000\n  - udp://@239.1.1.2:5000\nrist:\n  - rist://h:1\nmcast: 239.1.3.1:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.n_inputs, 1u);
+  ck_assert_uint_eq(cfg.inputs[0].sid, 9u);
+  ck_assert_uint_eq(cfg.n_rist, 0u);
+  ck_assert_uint_eq(cfg.n_srt, 1u);
+}
+END_TEST
+
+START_TEST(cmdline_scoped_option_needs_its_own_input) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, "--sid", "9", NULL};
+  config_t cfg;
+  write_cfg(path, "input: udp://@239.1.1.1:5000\nmcast: 239.1.3.1:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(cmdline_wins_over_config) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, "-T", "9", NULL};
+  config_t cfg;
+  write_cfg(path, "input: udp://@239.1.1.1:5000\nmcast: 239.1.3.1:5000\nttl: 4\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.ttl, 9u);
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipitvhead", "-c", "/nonexistent/dipitvhead.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input: udp://@239.1.1.1:5000\nmcast: 239.1.3.1:5000\nttl: 300\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_conflict_is_rejected) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input: udp://@239.1.1.1:5000\nmcast: 239.1.3.1:5000\nal-fec: 5:5\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipitvhead", "--configtest", "-c", "/nonexistent/dipitvhead.yaml", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  unlink(path);
 }
 END_TEST
 
@@ -491,6 +651,18 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, srt_input_and_srt_output_together_is_accepted);
   tcase_add_test(tc, srt_passphrase_length_is_validated);
   tcase_add_test(tc, srt_pbkeylen_requires_passphrase);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, config_inputs_take_keyed_items);
+  tcase_add_test(tc, config_input_srt_keys_pair_with_their_input);
+  tcase_add_test(tc, config_cas_ecmg_takes_keyed_items);
+  tcase_add_test(tc, config_item_without_source_is_error);
+  tcase_add_test(tc, cmdline_lists_replace_config_lists);
+  tcase_add_test(tc, cmdline_scoped_option_needs_its_own_input);
+  tcase_add_test(tc, cmdline_wins_over_config);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, config_conflict_is_rejected);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);
   return s;
 }

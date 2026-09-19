@@ -476,6 +476,12 @@ endif ()
 dvbipitools_add_unit_test(dipicam378_args
     unit/dipicam378/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipicam378/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipicam378/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
@@ -666,6 +672,12 @@ if (OpenSSL_FOUND)
     dvbipitools_add_unit_test(dipidescramble_args
         unit/dipidescramble/test_args.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/args.c
+        ${CMAKE_SOURCE_DIR}/src/dipidescramble/config.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+        ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/common.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/parse.c
@@ -789,6 +801,12 @@ dvbipitools_add_unit_test(dipiscan_scan
     unit/dipiscan/test_scan.c
     ${CMAKE_SOURCE_DIR}/src/dipiscan/scan.c
     ${CMAKE_SOURCE_DIR}/src/dipiscan/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipiscan/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/dipiscan/format.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
@@ -922,6 +940,12 @@ dvbipitools_add_unit_test(dipiradiohead_tspacketizer
 dvbipitools_add_unit_test(dipiradiohead_args
     unit/dipiradiohead/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -1203,6 +1227,12 @@ dvbipitools_add_unit_test(dipitvhead_source
 dvbipitools_add_unit_test(dipitvhead_args
     unit/dipitvhead/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
@@ -1557,6 +1587,12 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipirec/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
@@ -1660,6 +1696,12 @@ dvbipitools_add_unit_test(lib_fccret_fcc_client
 dvbipitools_add_unit_test(dipirec_args
     unit/dipirec/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipirec/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
@@ -1671,6 +1713,12 @@ dvbipitools_add_unit_test(dipirec_args
 dvbipitools_add_unit_test(dipifccret_args
     unit/dipifccret/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/ranges.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
@@ -1896,6 +1944,12 @@ dvbipitools_add_unit_test(lib_metrics_export
 dvbipitools_add_unit_test(dipimetrics_args
     unit/dipimetrics/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipimetrics/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipimetrics/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/base64.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
@@ -1923,6 +1977,12 @@ dvbipitools_add_unit_test(dipibcg_container
 dvbipitools_add_unit_test(dipibcg_args
     unit/dipibcg/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipibcg/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipibcg/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
@@ -1935,6 +1995,12 @@ dvbipitools_add_unit_test(dipibcg_announce
     ${CMAKE_SOURCE_DIR}/src/dipibcg/announce.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/announce_driver.c
     ${CMAKE_SOURCE_DIR}/src/dipibcg/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipibcg/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
@@ -1966,6 +2032,12 @@ dvbipitools_add_unit_test(dipibcg_listen
     ${CMAKE_SOURCE_DIR}/src/dipibcg/listen.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
     ${CMAKE_SOURCE_DIR}/src/dipibcg/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipibcg/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/dipibcg/container.c
@@ -2002,6 +2074,12 @@ endif ()
 dvbipitools_add_unit_test(dipisds_args
     unit/dipisds/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipisds/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
@@ -2012,6 +2090,12 @@ dvbipitools_add_unit_test(dipisds_args
 dvbipitools_add_unit_test(dipirist_args
     unit/dipirist/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipirist/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
@@ -2025,6 +2109,12 @@ if (TARGET dipirist)
         unit/dipirist/test_bridge.c
         ${CMAKE_SOURCE_DIR}/src/dipirist/bridge.c
         ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
+        ${CMAKE_SOURCE_DIR}/src/dipirist/config.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+        ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
@@ -2095,6 +2185,12 @@ endif ()
 dvbipitools_add_unit_test(dipisrt_args
     unit/dipisrt/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipisrt/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipisrt/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
@@ -2109,6 +2205,12 @@ if (TARGET dipisrt)
         unit/dipisrt/test_bridge.c
         ${CMAKE_SOURCE_DIR}/src/dipisrt/bridge.c
         ${CMAKE_SOURCE_DIR}/src/dipisrt/args.c
+        ${CMAKE_SOURCE_DIR}/src/dipisrt/config.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+        ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+        ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
@@ -2166,6 +2268,12 @@ dvbipitools_add_unit_test(dipisds_listen
     ${CMAKE_SOURCE_DIR}/src/dipisds/listen.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipisds/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/format_out.c
@@ -2216,6 +2324,12 @@ target_link_libraries(test_dipimetrics_httpserver PRIVATE OpenSSL::SSL OpenSSL::
 dvbipitools_add_unit_test(dipixy_args
     unit/dipixy/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c

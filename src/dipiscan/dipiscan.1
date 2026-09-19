@@ -114,6 +114,16 @@ Print per-candidate packet counts on stderr, in addition to the name.
 .B \-\-color \fIwhen\fR
 Control colored output: auto, always, or never. Default: auto.
 .TP
+.BR \-c ", " \-\-config\ \fI<path>\fR
+YAML configuration file. Keys mirror the options above. Without this option,
+.I /etc/dvbipitools/dipiscan.yaml
+is read if it exists.
+.TP
+.B \-\-configtest
+Check the configuration file (from
+.B \-c
+or the default location) and exit.
+.TP
 .BR \-h ", " \-\-help
 Show usage and exit.
 .SH STOPPING
@@ -151,6 +161,12 @@ done).
 .B nonzero
 Argument error, output file could not be opened, or the scan was
 interrupted by a signal.
+.SH FILES
+.TP
+.I /etc/dvbipitools/dipiscan.yaml
+Default configuration file, read if present. A commented template with all
+defaults ships as
+.IR /usr/share/dvbipitools/etc/dipiscan.yaml .
 .SH SEE ALSO
 .BR dipisds (1),
 .BR dipixy (1)

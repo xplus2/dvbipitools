@@ -1,0 +1,81 @@
+# -i|--input [not set]
+#input: rtp://@239.19.75.1:8700
+# -k|--key [not set]
+#key: <path>
+# -s|--serial [not set]
+#serial: <id>
+# -e|--emm-file [not set]
+#emm-file: <path>
+# -u|--unicast-emm [not set]
+#unicast-emm: https://<token>@<host>:<port>/device/<serial>/emm
+# --insecure off
+insecure: off
+# --token-header X-Device-Token
+#token-header: X-Device-Token
+# -o|--output [not set]
+#output:
+#  - out.ts
+# -f|--format ts # ts|mkv|mka
+#format: ts
+# --strip-lcevc off
+#strip-lcevc: off
+# -p|--pmt-pid [not set] # <pid>|all
+#pmt-pid: all
+# -I|--iface [not set]
+#iface: <iface>
+# --ecm-profile [not set]
+#ecm-profile: <spec>
+# --max-services 32 # 1..256
+#max-services: 32
+# --profile simple # simple|main
+#profile: simple
+# -v|--verbose off
+verbose: off
+# --color auto # auto|always|never
+color: auto
+# -d|--daemonize off
+daemonize: off
+
+biss1:
+  # --biss1-sw [not set] # 12 hex chars
+  #sw: <hex12>
+
+biss2:
+  # --biss2-sw [not set] # 32 hex chars
+  #sw: <hex32>
+  # --biss2-esw [not set] # 32 hex chars
+  #esw: <hex32>
+  # --biss2-id [not set] # 32 hex chars
+  #id: <hex32>
+  # --biss2-ca-key [not set]
+  #ca-key: <path>
+
+metrics:
+  # --metrics /run/dvbipitools/metrics.sock
+  #sock: /run/dvbipitools/metrics.sock
+  # --metrics-id [not set]
+  #id: <name>
+  # --metrics-interval 5 # seconds
+  #interval: 5
+
+srt:
+  # --srt-passphrase-in [not set]
+  #passphrase-in: <pw>
+  # --srt-pbkeylen-in [not set] # 16|24|32
+  #pbkeylen-in: 16
+  # --srt-streamid-in [not set]
+  #streamid-in: <id>
+  # --srt-packetfilter-in [not set]
+  #packetfilter-in: <cfg>
+  # --srt-latency-in [not set] # ms
+  #latency-in: <ms>
+  # --srt-passphrase [not set]
+  #passphrase: <pw>
+  # --srt-pbkeylen [not set] # 16|24|32
+  #pbkeylen: 16
+  # --srt-streamid [not set]
+  #streamid: <id>
+  # --srt-packetfilter [not set]
+  #packetfilter: <cfg>
+  # --srt-latency [not set] # ms
+  #latency: <ms>

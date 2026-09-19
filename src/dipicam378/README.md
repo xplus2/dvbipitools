@@ -23,11 +23,21 @@ dipicam378 -k <keyfile> [options]
 |      | `--metrics-id`       | `<name>`              | none = metrics disabled         |
 |      | `--metrics-interval` | `<s>`                 | `5`                             |
 | `-d` | `--daemonize`        |                       | off (foreground)                |
+| `-c` | `--config`           | `<path>`              | `/etc/dvbipitools/dipicam378.yaml` (if present) |
+|      | `--configtest`       |                       | check the config file, then exit |
 | `-h` | `--help`             |                       |                                 |
 
 This tool is for debugging and validation only. A password is required because the
 protocol's encryption relies on it. A username is optional, give one only if you
 want this server to reject connections that don't send it.
+
+## Configuration file
+
+All options (except `-h`, `-c` and `--configtest`) can be set in a YAML file, see [dipicam378.yaml](dipicam378.yaml)
+(debian installs config examples to: `/usr/share/dvbipitools/etc/`).
+
+Without `-c`, `/etc/dvbipitools/dipicam378.yaml` is read if it exists.
+`--configtest` checks the file and exits.
 
 ## Parameters
 
@@ -78,8 +88,8 @@ The device key is handed to the service via `LoadCredential=`, so it can stay
 root-only (`0600`) in `/etc/dvbipitools/dipicam378/` while the service runs as `dvbipitools`,
 the user owning the metrics socket (see dipimetrics).
 
-The password given with `-a` is visible in the process list. Fine for a test tool,
-but keep it in mind on shared hosts.
+The password given with `-a` is visible in the process list. Consider using `-c` and a config file
+when using it outside of a lab.
 
 ## Example
 

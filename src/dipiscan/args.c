@@ -14,6 +14,7 @@
 #include "lib/helper/argutil.h"
 #include "lib/helper/log.h"
 #include "args.h"
+#include "config.h"
 #include "version.h"
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
@@ -241,6 +242,29 @@ static int fmt_from_name(const char *s, out_fmt_t *f) {
   return 0;
 }
 
+int scan_cfg_mcast(config_t *cfg, const char *s) {
+  return mcast_range_parse(s, &cfg->family, cfg->start, cfg->end, &cfg->total);
+}
+
+int scan_cfg_port(config_t *cfg, const char *s) {
+  return port_range_parse(s, &cfg->port_lo, &cfg->port_hi);
+}
+
+int scan_cfg_format(config_t *cfg, const char *s) {
+  return fmt_from_name(s, &cfg->format);
+}
+
+int scan_cfg_http_proxy(config_t *cfg, const char *s) {
+  if (http_proxy_parse(s, cfg)) return -1;
+  cfg->http_proxy = 1;
+  return 0;
+}
+
+int scan_cfg_http_path(const char *s) {
+  if (http_path_tmpl_valid(s)) return -1;
+  return 0;
+}
+
 static void print_help(void) {
   printf(
       "usage: %s [options] 1>playlist 2>log\n\n"
@@ -266,6 +290,8 @@ static void print_help(void) {
       "  -I, --iface <iface>      interface for the multicast join      [kernel default]\n"
       "  -v, --verbose            per-candidate diagnostics on stderr\n"
       "      --color <when>       auto|always|never                     [auto]\n"
+      "  -c, --config <path>      YAML config file                      [%s, if present]\n"
+      "      --configtest         check the config file, then exit\n"
       "  -h, --help               this help\n\n"
       "examples:\n"
       "  %s -m 239.19.75.0 -p 8700-8705 >hd.m3u\n"
@@ -275,40 +301,63 @@ static void print_help(void) {
       "  %s -M -t 3 -f xml -P example.org -o scan.xml  # MPTS addresses too\n"
       "  %s -m 239.19.75.0/23 -p 8700-8705 >hd.m3u  # sweep a CIDR block\n"
       "  %s -m 239.19.75.10-239.19.75.20 >hd.m3u    # sweep an explicit range\n\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+      TOOL_NAME, DEFAULT_CONFIG_PATH, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+}
+
+static const char *const shortopts = "m:p:f:P:o:t:j:Mu:x:I:c:vh";
+
+static const struct option longopts[] = {
+    {"mcast", required_argument, 0, 'm'},
+    {"port", required_argument, 0, 'p'},
+    {"format", required_argument, 0, 'f'},
+    {"provider", required_argument, 0, 'P'},
+    {"out", required_argument, 0, 'o'},
+    {"timeout", required_argument, 0, 't'},
+    {"jets", required_argument, 0, 'j'},
+    {"mpts", no_argument, 0, 'M'},
+    {"http-proxy", required_argument, 0, 'u'},
+    {"http-path", required_argument, 0, 'x'},
+    {"iface", required_argument, 0, 'I'},
+    {"verbose", no_argument, 0, 'v'},
+    {"color", required_argument, 0, 1001},
+    {"config", required_argument, 0, 'c'},
+    {"configtest", no_argument, 0, 1002},
+    {"help", no_argument, 0, 'h'},
+    {0, 0, 0, 0}};
+
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+  int c;
+  optind = 1;
+  opterr = 0;
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    if (c == 'c') *cfg_path = optarg;
+    if (c == 1002) *configtest = 1;
+    if (c == 'h') {
+      print_help();
+      opterr = 1;
+      return ARGS_HELP;
+    }
+  }
+  opterr = 1;
+  return ARGS_OK;
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
-  static const struct option longopts[] = {
-      {"mcast", required_argument, 0, 'm'},
-      {"port", required_argument, 0, 'p'},
-      {"format", required_argument, 0, 'f'},
-      {"provider", required_argument, 0, 'P'},
-      {"out", required_argument, 0, 'o'},
-      {"timeout", required_argument, 0, 't'},
-      {"jets", required_argument, 0, 'j'},
-      {"mpts", no_argument, 0, 'M'},
-      {"http-proxy", required_argument, 0, 'u'},
-      {"http-path", required_argument, 0, 'x'},
-      {"iface", required_argument, 0, 'I'},
-      {"verbose", no_argument, 0, 'v'},
-      {"color", required_argument, 0, 1001},
-      {"help", no_argument, 0, 'h'},
-      {0, 0, 0, 0}};
+  const char *cfg_path = NULL;
+  int configtest = 0;
+  args_status_t pst;
   int c;
-  if (argc == 1) return ARGS_NOARGS;
-  memset(cfg, 0, sizeof *cfg);
-  {
-    unsigned char def[16];
-    base_parse("239.19.75.0", &cfg->family, def);
-    plain_parse(def, cfg->family, cfg->start, cfg->end, &cfg->total);
-  }
-  cfg->port_lo = cfg->port_hi = 8700;
-  cfg->format = OUT_M3U;
-  cfg->timeout_ms = 1000;
-  cfg->jets = 1;
+
+  if (argc == 1 && !scan_cfg_default_exists()) return ARGS_NOARGS;
+  pst = prescan(argc, argv, &cfg_path, &configtest);
+  if (pst != ARGS_OK) return pst;
+  if (configtest) return scan_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+
+  scan_cfg_defaults(cfg);
+  if (scan_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+
   optind = 1;
-  while ((c = getopt_long(argc, argv, "m:p:f:P:o:t:j:Mu:x:I:vh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     switch (c) {
       case 'm':
         if (mcast_range_parse(optarg, &cfg->family, cfg->start, cfg->end, &cfg->total)) {
@@ -384,6 +433,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->color_mode = v;
         break;
       }
+      case 'c':
+      case 1002:
+        break;
       case 'h':
         print_help();
         return ARGS_HELP;

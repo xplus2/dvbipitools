@@ -75,6 +75,18 @@ typedef struct {
 } ret_cfg_t;
 
 typedef struct {
+  int have_in;
+  int have_format;
+  int have_strip;
+  int have_profile;
+  int have_profile_in;
+  int have_secret;
+  int have_cname;
+  int have_buffer;
+} args_flags_t;
+
+typedef struct {
+  args_flags_t fl;
   out_target_t out[DIPIREC_MAX_OUT]; /* -o, repeatable */
   int n_out;
   source_t source;      /* -i */
@@ -121,6 +133,16 @@ typedef struct {
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg);
+
+int rec_cfg_set_in(config_t *cfg, const char *s);
+int rec_cfg_add_out(config_t *cfg, const char *s);
+int rec_cfg_audio(config_t *cfg, const char *s);
+int rec_cfg_pmt(config_t *cfg, const char *s);
+int rec_cfg_format(config_t *cfg, const char *s);
+int rec_cfg_subs(config_t *cfg, const char *s);
+int rec_cfg_time(config_t *cfg, const char *s);
+int rec_cfg_strip(config_t *cfg, const char *s);
+int rec_cfg_profile(config_t *cfg, const char *s, int is_in);
 
 /* seconds >0, -1 on error */
 long duration_parse(const char *s);

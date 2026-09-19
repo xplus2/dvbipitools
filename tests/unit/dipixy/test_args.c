@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dipixy/args.h"
 
@@ -223,19 +224,10 @@ START_TEST(max_clients_is_overridable) {
 }
 END_TEST
 
-START_TEST(max_clients_short_flag_accepted) {
-  char *argv[] = {"dipixy", "-c", "10", NULL};
-  config_t cfg;
-  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
-  ck_assert_int_eq(cfg.max_clients, 10);
-  args_free(&cfg);
-}
-END_TEST
-
 START_TEST(max_clients_rejects_zero_and_out_of_range) {
-  char *argv1[] = {"dipixy", "-c", "0", NULL};
-  char *argv2[] = {"dipixy", "-c", "65537", NULL};
-  char *argv3[] = {"dipixy", "-c", "abc", NULL};
+  char *argv1[] = {"dipixy", "--max-clients", "0", NULL};
+  char *argv2[] = {"dipixy", "--max-clients", "65537", NULL};
+  char *argv3[] = {"dipixy", "--max-clients", "abc", NULL};
   config_t cfg;
   ck_assert_int_eq(args_parse(ARGC(argv1), argv1, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
@@ -913,6 +905,191 @@ START_TEST(no_argv_at_all_returns_noargs) {
 }
 END_TEST
 
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "iface: eth0\nlisten: 127.0.0.1:8080\nmax-clients: 64\nsegment-size: 4\nformat: ts,hls\nhls:\n  part-size: 0.5\nssdp:\n  ttl: 5\nmetrics:\n  id: xy\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_str_eq(cfg.iface, "eth0");
+  ck_assert_int_eq(cfg.listen.scope, LISTEN_V4);
+  ck_assert_uint_eq(cfg.listen.port, 8080u);
+  ck_assert_int_eq(cfg.max_clients, 64);
+  ck_assert_double_eq_tol(cfg.segment_size, 4.0, 1e-9);
+  ck_assert_double_eq_tol(cfg.hls_part_size, 0.5, 1e-9);
+  ck_assert_int_eq(cfg.no_ts, 0);
+  ck_assert_int_eq(cfg.no_dash, 1);
+  ck_assert_int_eq(cfg.ssdp_ttl, 5);
+  ck_assert_str_eq(cfg.metrics_id, "xy");
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(config_inputs_take_scalars) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - sds://239.1.1.1:3937\n  - radio.m3u\n  - tv.xspf\n  - '-'\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.n_sources, 3);
+  ck_assert_int_eq(cfg.sources[0].ordinal, 1);
+  ck_assert_ptr_null(cfg.sources[0].name);
+  ck_assert_int_eq(cfg.sources[1].ordinal, 2);
+  ck_assert_int_eq(cfg.stdin_ordinal, 4);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(config_inputs_take_items) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - sds://239.1.1.1:3937:\n      name: Sds\n  - radio.m3u:\n      name: Radio\n      media-type: radio\n  - tv.xspf:\n      name: TV\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.n_sources, 3);
+  ck_assert_str_eq(cfg.sources[0].name, "Sds");
+  ck_assert_str_eq(cfg.sources[1].name, "Radio");
+  ck_assert_int_eq(cfg.sources[1].media_type, MEDIA_RADIO);
+  ck_assert_str_eq(cfg.sources[2].name, "TV");
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(non_finite_and_oversized_numbers_are_rejected) {
+  char *a1[] = {"dipixy", "--sds-timeout", "nan", NULL};
+  char *a2[] = {"dipixy", "--segment-size", "inf", NULL};
+  char *a3[] = {"dipixy", "--hls-part-size", "nan", NULL};
+  char *a4[] = {"dipixy", "--ssdp-interval", "inf", NULL};
+  char *a5[] = {"dipixy", "--hls-seg-pool", "4294967295", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(a1), a1, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(a2), a2, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(a3), a3, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(a4), a4, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(a5), a5, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_no_group_disables_features) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "no:\n  url-rtp: on\n  url-udp: on\n  url-srt: on\n  pid-filters: on\n  lcevc: on\n  http2: on\n  http3: on\n  fcc: on\n  ret: on\n  al-fec: on\n  status: on\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.no_url_rtp, 1);
+  ck_assert_int_eq(cfg.no_url_udp, 1);
+  ck_assert_int_eq(cfg.no_url_srt, 1);
+  ck_assert_int_eq(cfg.no_pid_filters, 1);
+  ck_assert_int_eq(cfg.no_lcevc, 1);
+  ck_assert_int_eq(cfg.no_http2, 1);
+  ck_assert_int_eq(cfg.no_http3, 1);
+  ck_assert_int_eq(cfg.no_fcc, 1);
+  ck_assert_int_eq(cfg.no_ret, 1);
+  ck_assert_int_eq(cfg.no_al_fec, 1);
+  ck_assert_int_eq(cfg.no_status, 1);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(config_flat_no_keys_have_no_effect) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "no-fcc: on\nno-ret: on\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.no_fcc, 0);
+  ck_assert_int_eq(cfg.no_ret, 0);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(config_input_item_without_source_is_error) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - name: Radio\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(cmdline_input_replaces_config_inputs) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, "-i", "b.csv", "-n", "B", "--max-clients", "8", NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - a.m3u\n  - c.xspf\nmax-clients: 64\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.n_sources, 1);
+  ck_assert_str_eq(cfg.sources[0].value, "b.csv");
+  ck_assert_int_eq(cfg.sources[0].ordinal, 1);
+  ck_assert_str_eq(cfg.sources[0].name, "B");
+  ck_assert_int_eq(cfg.max_clients, 8);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(cmdline_name_needs_its_own_input) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, "-n", "X", NULL};
+  config_t cfg;
+  write_cfg(path, "input:\n  - a.m3u\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipixy", "-c", "/nonexistent/dipixy.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "max-clients: 0\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_conflict_is_rejected) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "tls:\n  cert: /nonexistent/server.crt\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipixy", "--configtest", "-c", "/nonexistent/dipixy.yaml", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipixy_args");
   TCase *tc = tcase_create("core");
@@ -940,7 +1117,6 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, workers_absolute_value_accepted);
   tcase_add_test(tc, workers_rejects_zero_and_out_of_range);
   tcase_add_test(tc, max_clients_is_overridable);
-  tcase_add_test(tc, max_clients_short_flag_accepted);
   tcase_add_test(tc, max_clients_rejects_zero_and_out_of_range);
   tcase_add_test(tc, sources_recorded_in_definition_order);
   tcase_add_test(tc, sds_rejects_malformed_addr);
@@ -1017,6 +1193,19 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
   tcase_add_test(tc, help_returns_help_status);
   tcase_add_test(tc, no_argv_at_all_returns_noargs);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, config_inputs_take_scalars);
+  tcase_add_test(tc, config_inputs_take_items);
+  tcase_add_test(tc, non_finite_and_oversized_numbers_are_rejected);
+  tcase_add_test(tc, config_no_group_disables_features);
+  tcase_add_test(tc, config_flat_no_keys_have_no_effect);
+  tcase_add_test(tc, config_input_item_without_source_is_error);
+  tcase_add_test(tc, cmdline_input_replaces_config_inputs);
+  tcase_add_test(tc, cmdline_name_needs_its_own_input);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, config_conflict_is_rejected);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -310,6 +310,16 @@ target. Default library.
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.
 .TP
+.BR \-c ", " \-\-config\ \fI<path>\fR
+YAML configuration file. Keys mirror the options above. Without this option,
+.I /etc/dvbipitools/dipidescramble.yaml
+is read if it exists.
+.TP
+.B \-\-configtest
+Check the configuration file (from
+.B \-c
+or the default location) and exit.
+.TP
 .BR \-h ", " \-\-help
 Show usage and exit.
 .SH EXAMPLES
@@ -336,6 +346,12 @@ server at the same time.
 .B 0
 on success.
 Non-zero on argument errors or decryption/I/O failure.
+.SH FILES
+.TP
+.I /etc/dvbipitools/dipidescramble.yaml
+Default configuration file, read if present. A commented template with all
+defaults ships as
+.IR /usr/share/dvbipitools/etc/dipidescramble.yaml .
 .SH SEE ALSO
 .BR dipitvhead (1),
 .BR dipiradiohead (1),

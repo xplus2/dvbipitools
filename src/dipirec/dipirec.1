@@ -326,6 +326,16 @@ Comma list of
 output, and inline LCEVC data from mp4/mkv/m4a/mka/rtmp output) to
 drop, or \fBnone\fR. Default: \fBNUL,NIT,AIT,EIT\fR.
 .TP
+.BR \-c ", " \-\-config\ \fI<path>\fR
+YAML configuration file. Keys mirror the options above. Without this option,
+.I /etc/dvbipitools/dipirec.yaml
+is read if it exists.
+.TP
+.B \-\-configtest
+Check the configuration file (from
+.B \-c
+or the default location) and exit.
+.TP
 .BR \-h ", " \-\-help
 Show usage and exit.
 .SH EXAMPLES
@@ -363,6 +373,12 @@ Success.
 .TP
 .B nonzero
 Argument error, or I/O failure.
+.SH FILES
+.TP
+.I /etc/dvbipitools/dipirec.yaml
+Default configuration file, read if present. A commented template with all
+defaults ships as
+.IR /usr/share/dvbipitools/etc/dipirec.yaml .
 .SH SEE ALSO
 .BR dipiscan (1),
 .BR dipisds (1),

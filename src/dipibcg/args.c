@@ -14,6 +14,7 @@
 #include "lib/net/netconnect.h"
 
 #include "args.h"
+#include "config.h"
 #include "version.h"
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
@@ -53,52 +54,84 @@ static void print_help(void) {
       "      --metrics-id <name> announce: stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s> announce: snapshot interval in seconds (default: 5)\n"
       "  -d, --daemonize        fork to background after startup, detach from terminal\n"
+      "  -c, --config <path>    YAML config file (default: %s, if present)\n"
+      "      --configtest       check the config file, then exit\n"
       "  -h, --help             this help\n\n"
       "examples:\n"
       "  %s -a -i guide.xml -M mapping.csv -m 239.255.0.2:3938\n"
       "  %s -l -m 239.255.0.2:3938 -o guide.xml -C mapping.csv\n",
-      TOOL_NAME, TOOL_NAME, TOOL_NAME, TOOL_NAME);
+      TOOL_NAME, TOOL_NAME, DEFAULT_CONFIG_PATH, TOOL_NAME, TOOL_NAME);
+}
+
+static const char *const shortopts = "ali:M:w:m:I:t:o:C:c:Zvdh";
+
+static const struct option longopts[] = {
+    {"announce", no_argument, 0, 'a'},
+    {"listen", no_argument, 0, 'l'},
+    {"input", required_argument, 0, 'i'},
+    {"map", required_argument, 0, 'M'},
+    {"window", required_argument, 0, 'w'},
+    {"mcast", required_argument, 0, 'm'},
+    {"iface", required_argument, 0, 'I'},
+    {"interval", required_argument, 0, 't'},
+    {"timeout", required_argument, 0, 't'},
+    {"output", required_argument, 0, 'o'},
+    {"csv-map", required_argument, 0, 'C'},
+    {"compress", no_argument, 0, 'Z'},
+    {"verbose", no_argument, 0, 'v'},
+    {"color", required_argument, 0, 1000},
+    {"metrics", required_argument, 0, 1001},
+    {"metrics-id", required_argument, 0, 1002},
+    {"metrics-interval", required_argument, 0, 1003},
+    {"dscp", required_argument, 0, 1004},
+    {"daemonize", no_argument, 0, 'd'},
+    {"config", required_argument, 0, 'c'},
+    {"configtest", no_argument, 0, 1005},
+    {"help", no_argument, 0, 'h'},
+    {0, 0, 0, 0}};
+
+static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest) {
+  int c;
+  optind = 1;
+  opterr = 0;
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    if (c == 'c') *cfg_path = optarg;
+    if (c == 1005) *configtest = 1;
+    if (c == 'h') {
+      print_help();
+      opterr = 1;
+      return ARGS_HELP;
+    }
+  }
+  opterr = 1;
+  return ARGS_OK;
 }
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
-  static const struct option longopts[] = {
-      {"announce", no_argument, 0, 'a'},
-      {"listen", no_argument, 0, 'l'},
-      {"input", required_argument, 0, 'i'},
-      {"map", required_argument, 0, 'M'},
-      {"window", required_argument, 0, 'w'},
-      {"mcast", required_argument, 0, 'm'},
-      {"iface", required_argument, 0, 'I'},
-      {"interval", required_argument, 0, 't'},
-      {"timeout", required_argument, 0, 't'},
-      {"output", required_argument, 0, 'o'},
-      {"csv-map", required_argument, 0, 'C'},
-      {"compress", no_argument, 0, 'Z'},
-      {"verbose", no_argument, 0, 'v'},
-      {"color", required_argument, 0, 1000},
-      {"metrics", required_argument, 0, 1001},
-      {"metrics-id", required_argument, 0, 1002},
-      {"metrics-interval", required_argument, 0, 1003},
-      {"dscp", required_argument, 0, 1004},
-      {"daemonize", no_argument, 0, 'd'},
-      {"help", no_argument, 0, 'h'},
-      {0, 0, 0, 0}};
-  int have_a = 0, have_l = 0, have_mcast = 0, have_t = 0, have_w = 0;
-  long t_value = 0, w_value = 0;
+  const char *cfg_path = NULL;
+  int configtest = 0;
+  args_status_t pst;
+  int cli_mode = 0;
   int c;
 
-  memset(cfg, 0, sizeof *cfg);
-  cfg->dscp = NET_DSCP_SIGNALLING;
+  pst = prescan(argc, argv, &cfg_path, &configtest);
+  if (pst != ARGS_OK) return pst;
+  if (configtest) return bcg_cfg_test(cfg_path) ? ARGS_ERR : ARGS_HELP;
+  bcg_cfg_defaults(cfg);
+  if (bcg_cfg_load(cfg, cfg_path)) return ARGS_ERR;
+
   optind = 1;
-  while ((c = getopt_long(argc, argv, "ali:M:w:m:I:t:o:C:Zvdh", longopts, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     switch (c) {
     case 'a':
-      have_a = 1;
-      cfg->mode = MODE_ANNOUNCE;
-      break;
     case 'l':
-      have_l = 1;
-      cfg->mode = MODE_LISTEN;
+      if (!cli_mode) cfg->fl.have_a = cfg->fl.have_l = 0;
+      cli_mode = 1;
+      if (c == 'a') cfg->fl.have_a = 1;
+      else          cfg->fl.have_l = 1;
+      break;
+    case 1005:
+    case 'c':
       break;
     case 'i':
       cfg->input_path = optarg;
@@ -112,8 +145,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         argerr("invalid -w window hours: %s", optarg);
         return ARGS_ERR;
       }
-      w_value = v;
-      have_w = 1;
+      cfg->window_hours = v;
       break;
     }
     case 'm':
@@ -121,7 +153,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         argerr("invalid -m group:port: %s", optarg);
         return ARGS_ERR;
       }
-      have_mcast = 1;
+      cfg->fl.have_mcast = 1;
       break;
     case 'I':
       cfg->iface = optarg;
@@ -132,8 +164,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         argerr("invalid -t seconds: %s", optarg);
         return ARGS_ERR;
       }
-      t_value = v;
-      have_t = 1;
+      cfg->fl.t_value = v;
+      cfg->fl.have_t = 1;
       break;
     }
     case 'o':
@@ -186,11 +218,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  if (have_a == have_l) {
+  cfg->mode = cfg->fl.have_l ? MODE_LISTEN : MODE_ANNOUNCE;
+  if (cfg->fl.have_a == cfg->fl.have_l) {
     argerr("exactly one of -a/--announce or -l/--listen is required");
     return ARGS_ERR;
   }
-  if (!have_mcast) {
+  if (!cfg->fl.have_mcast) {
     argerr("missing -m multicast group:port");
     return ARGS_ERR;
   }
@@ -205,8 +238,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       argerr("missing -M map");
       return ARGS_ERR;
     }
-    cfg->window_hours = have_w ? w_value : 24;
-    cfg->interval_s = have_t ? t_value : 5;
+    if (cfg->fl.have_t) cfg->interval_s = cfg->fl.t_value;
   } else {
     if (cfg->metrics_id) {
       argerr("--metrics-id is announce-only");
@@ -217,7 +249,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       return ARGS_ERR;
     }
     if (!cfg->output_path) cfg->output_path = "-";
-    cfg->timeout_s = have_t ? t_value : 35;
+    if (cfg->fl.have_t) cfg->timeout_s = cfg->fl.t_value;
   }
   return ARGS_OK;
 }

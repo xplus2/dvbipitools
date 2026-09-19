@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dipicam378/args.h"
 
@@ -153,6 +154,71 @@ START_TEST(metrics_id_alone_is_accepted) {
 }
 END_TEST
 
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipicam378_cfg_XXXXXX";
+  char *argv[] = {"dipicam378", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "key: /tmp/k.pem\nport: 1234\nauth: 'bob:secret'\nalgo: csa2\ncaid: 0B00\nmetrics:\n  id: cam\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_str_eq(cfg.key_path, "/tmp/k.pem");
+  ck_assert_uint_eq(cfg.port, 1234u);
+  ck_assert_str_eq(cfg.username, "bob");
+  ck_assert_str_eq(cfg.password, "secret");
+  ck_assert_int_eq(cfg.cw_len, 8);
+  ck_assert_uint_eq(cfg.caid, 0x0B00u);
+  ck_assert_str_eq(cfg.metrics_id, "cam");
+}
+END_TEST
+
+START_TEST(cmdline_wins_over_config) {
+  char path[] = "/tmp/dipicam378_cfg_XXXXXX";
+  char *argv[] = {"dipicam378", "-c", path, "-p", "999", NULL};
+  config_t cfg;
+  write_cfg(path, "key: /tmp/k.pem\nport: 1234\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.port, 999u);
+  ck_assert_str_eq(cfg.key_path, "/tmp/k.pem");
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipicam378", "-c", "/nonexistent/dipicam378.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipicam378_cfg_XXXXXX";
+  char *argv[] = {"dipicam378", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "key: /tmp/k.pem\nport: 0\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipicam378_cfg_XXXXXX";
+  char *argv[] = {"dipicam378", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipicam378", "--configtest", "-c", "/nonexistent/dipicam378.yaml", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipicam378_args");
   TCase *tc = tcase_create("core");
@@ -174,6 +240,11 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, serial_and_verbose_are_recorded);
   tcase_add_test(tc, metrics_options_require_metrics_id);
   tcase_add_test(tc, metrics_id_alone_is_accepted);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, cmdline_wins_over_config);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);
   return s;
 }

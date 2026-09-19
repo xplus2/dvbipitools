@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dipirist/args.h"
 
@@ -213,6 +214,79 @@ START_TEST(unexpected_positional_argument_is_rejected) {
 }
 END_TEST
 
+static void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+START_TEST(config_file_provides_settings) {
+  char path[] = "/tmp/dipirist_cfg_XXXXXX";
+  char *argv[] = {"dipirist", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "in: rtp://@239.1.1.1:5000\nout:\n  - rist://1.2.3.4:6000\n  - rist://5.6.7.8:6000\nbuffer: 500\nprofile: main\nsecret: pw\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.n_in, 1);
+  ck_assert_int_eq(cfg.n_out, 2);
+  ck_assert_int_eq(cfg.out.n_rist, 2);
+  ck_assert_uint_eq(cfg.buffer_ms, 500u);
+  ck_assert_int_eq(cfg.profile, RIST_PROF_MAIN);
+}
+END_TEST
+
+START_TEST(cmdline_wins_over_config) {
+  char path[] = "/tmp/dipirist_cfg_XXXXXX";
+  char *argv[] = {"dipirist", "-c", path, "-o", "rist://9.9.9.9:7000", NULL};
+  config_t cfg;
+  write_cfg(path, "in: rtp://@239.1.1.1:5000\nout:\n  - rist://1.2.3.4:6000\n  - rist://5.6.7.8:6000\nbuffer: 500\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.out.n_rist, 1);
+  ck_assert_str_eq(cfg.out.rist_uri[0], "rist://9.9.9.9:7000");
+  ck_assert_uint_eq(cfg.buffer_ms, 500u);
+}
+END_TEST
+
+START_TEST(config_missing_file_is_error) {
+  char *argv[] = {"dipirist", "-c", "/nonexistent/dipirist.yaml", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(config_invalid_value_is_error) {
+  char path[] = "/tmp/dipirist_cfg_XXXXXX";
+  char *argv[] = {"dipirist", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "in: rtp://@239.1.1.1:5000\nout: rist://1.2.3.4:6000\nbuffer: 0\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(configtest_reports_by_exit_status) {
+  char path[] = "/tmp/dipirist_cfg_XXXXXX";
+  char *argv[] = {"dipirist", "--configtest", "-c", path, NULL};
+  char *argv2[] = {"dipirist", "--configtest", "-c", "/nonexistent/dipirist.yaml", NULL};
+  config_t cfg;
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+START_TEST(config_scalar_key_rejects_list) {
+  char path[] = "/tmp/dipirist_cfg_XXXXXX";
+  char *argv[] = {"dipirist", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "in: rtp://@239.1.1.1:5000\nout: rist://1.2.3.4:6000\nbuffer: [1, 2]\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipirist_args");
   TCase *tc = tcase_create("core");
@@ -242,6 +316,12 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, metrics_id_alone_is_accepted);
   tcase_add_test(tc, help_returns_help_status);
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
+  tcase_add_test(tc, config_file_provides_settings);
+  tcase_add_test(tc, cmdline_wins_over_config);
+  tcase_add_test(tc, config_missing_file_is_error);
+  tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, configtest_reports_by_exit_status);
+  tcase_add_test(tc, config_scalar_key_rejects_list);
   suite_add_tcase(s, tc);
   return s;
 }
