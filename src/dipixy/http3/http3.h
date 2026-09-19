@@ -42,6 +42,9 @@ void h3_thread_cleanup(void);
 /* global HTTP/3 state (SSL_CTX for QUIC). called once after tls_init() */
 void h3_init(const char *cert_path, const char *key_path);
 
+/* 1 once QUIC context is built by h3_init() */
+int h3_ready(void);
+
 void h3_set_max_conns_per_thread(int n);
 
 void h3_cleanup(void);

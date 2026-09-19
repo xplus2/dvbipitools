@@ -290,6 +290,11 @@ disable HTTP/2, default: off.
 .B \-\-no\-http3
 disable HTTP/3, default: off.
 .TP
+.BI \-\-h3\-altsvc\-port " n"
+UDP port announced in the Alt-Svc header of TLS responses, default: the
+.B \-\-listen\-tls
+port. Set this if HTTP/3 is reachable under a different port (NAT, proxy).
+.TP
 .B \-\-no\-fcc
 Ignore SDS fcc. Default: off.
 .TP

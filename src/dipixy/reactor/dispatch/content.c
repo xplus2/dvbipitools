@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "priv.h"
+#include "../../altsvc.h"
 #include "../../core/htdocs.h"
 #include "../../core/metrics.h"
 #include "../../core/status.h"
@@ -14,8 +15,8 @@
 #include <string.h>
 
 void serve_body(conn_t *c, const char *content_type, const char *body, size_t len, int is_head, int keep_alive) {
-  char hdr[192];
-  size_t n = build_ok_header(hdr, sizeof hdr, content_type, len, keep_alive);
+  char hdr[256];
+  size_t n = build_ok_header(hdr, sizeof hdr, content_type, len, keep_alive, c->ssl != NULL);
   conn_queue(c, hdr, n);
   if (!is_head) conn_queue(c, body, len);
   set_persistence(c, keep_alive);
@@ -91,7 +92,7 @@ void serve_dlna_control(conn_t *c, const char *service, const struct phr_header 
   }
   status = dlna_handle_control(reactor_cfg(), reactor_channels(), service, action, body, body_len, &resp, &resp_len);
   {
-    char hdr[160];
+    char hdr[224];
     sbuf_t b;
     sbuf_init(&b, hdr, sizeof hdr);
     sbuf_add(&b, "HTTP/1.1 ");
@@ -101,7 +102,9 @@ void serve_dlna_control(conn_t *c, const char *service, const struct phr_header 
     sbuf_add_u64(&b, (uint64_t)resp_len);
     sbuf_add(&b, "\r\nConnection: ");
     sbuf_add(&b, keep_alive ? "keep-alive" : "close");
-    sbuf_add(&b, "\r\n\r\n");
+    sbuf_add(&b, "\r\n");
+    sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
+    sbuf_add(&b, "\r\n");
     conn_queue(c, hdr, b.len);
     conn_queue(c, resp, resp_len);
   }
@@ -110,7 +113,7 @@ void serve_dlna_control(conn_t *c, const char *service, const struct phr_header 
 }
 
 void serve_dlna_subscribe(conn_t *c, const char *service, const struct phr_header *headers, size_t num_headers, int keep_alive) {
-  char callback_buf[600], sid_buf[64], sid[64], hdr[192];
+  char callback_buf[600], sid_buf[64], sid[64], hdr[256];
   const char *callback, *sid_hdr;
   sbuf_t b;
 
@@ -126,20 +129,24 @@ void serve_dlna_subscribe(conn_t *c, const char *service, const struct phr_heade
   sbuf_add(&b, sid);
   sbuf_add(&b, "\r\nTIMEOUT: Second-1800\r\nContent-Length: 0\r\nConnection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");
-  sbuf_add(&b, "\r\n\r\n");
+  sbuf_add(&b, "\r\n");
+  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
+  sbuf_add(&b, "\r\n");
   conn_queue(c, hdr, b.len);
   set_persistence(c, keep_alive);
 }
 
 void serve_dlna_unsubscribe(conn_t *c, const struct phr_header *headers, size_t num_headers, int keep_alive) {
-  char sid_buf[64], hdr[96];
+  char sid_buf[64], hdr[160];
   const char *sid_hdr = find_header(headers, num_headers, "SID", sid_buf, sizeof sid_buf) ? sid_buf : NULL;
   sbuf_t b;
   gena_unsubscribe(sid_hdr);
   sbuf_init(&b, hdr, sizeof hdr);
   sbuf_add(&b, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");
-  sbuf_add(&b, "\r\n\r\n");
+  sbuf_add(&b, "\r\n");
+  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
+  sbuf_add(&b, "\r\n");
   conn_queue(c, hdr, b.len);
   set_persistence(c, keep_alive);
 }

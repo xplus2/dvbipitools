@@ -2,8 +2,8 @@ dvbipitools (2.5.0-1) unstable; urgency=low
   * example systemd units
   * config file alternative to cmdline args (-c|--config)
     + search path: /etc/dvbipitools/[toolname].yaml
-    * --configtest to check config
-    * --config-strict to fail on warnings
+    + --configtest to check config
+    + --config-strict to fail on warnings
     + affected tools
       - dipimetrics
       - dipisds
@@ -19,6 +19,8 @@ dvbipitools (2.5.0-1) unstable; urgency=low
       - dipiradiohead
       - dipitvhead
   * multicall binary: --install sym/hardlink creation
+  * dipixy HTTP/3
+    + alt-svc
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.2-1) unstable; urgency=low

@@ -135,16 +135,18 @@ void h2_flush_tx(h2_conn_t *conn, conn_t *c) {
 }
 
 static void h2_respond_status(h2_conn_t *conn, int32_t stream_id, const char *status) {
-  nghttp2_nv nva[] = {{(uint8_t *)":status", (uint8_t *)status, 7, strlen(status), NGHTTP2_NV_FLAG_NONE}};
-  nghttp2_submit_response(conn->ng, stream_id, nva, 1, NULL);
+  nghttp2_nv nva[2] = {{(uint8_t *)":status", (uint8_t *)status, 7, strlen(status), NGHTTP2_NV_FLAG_NONE}};
+  size_t nvlen = h2_nv_altsvc(nva, 1);
+  nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, NULL);
 }
 
 static void h2_respond_401(h2_conn_t *conn, int32_t stream_id) {
-  nghttp2_nv nva[] = {
+  nghttp2_nv nva[3] = {
       {(uint8_t *)":status", (uint8_t *)"401", 7, 3, NGHTTP2_NV_FLAG_NONE},
       {(uint8_t *)"www-authenticate", (uint8_t *)"Basic realm=\"dipixy\"", 16, 20, NGHTTP2_NV_FLAG_NONE},
   };
-  nghttp2_submit_response(conn->ng, stream_id, nva, 2, NULL);
+  size_t nvlen = h2_nv_altsvc(nva, 2);
+  nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, NULL);
 }
 
 static void h2_respond_hls(h2_conn_t *conn, int32_t stream_id, int handled, const hls_resp_t *resp, const char *origin_hdr) {

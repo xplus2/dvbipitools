@@ -61,6 +61,7 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--al-fec`               | `<L>:<D>`             | off (Annex E Layer 1 FEC matrix size)             |       |
 |      | `--no-al-fec`            |                       | off (ignore SDS FECBaseLayer)                     |       |
 |      | `--no-status`            |                       | off (deactivate `/ui/status.js`)                  |       |
+|      | `--h3-altsvc-port`       | `<n>`                 | external HTTP/3 TLS port (if it differs)          |       |
 | `-d` | `--daemonize`            |                       | off (fork to background after startup)            |       |
 | `-v` | `--verbose`              |                       | off                                               |       |
 |      | `--color`                | `auto\|always\|never` | `auto`                                            |       |

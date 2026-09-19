@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "segstore_int.h"
+#include "altsvc.h"
 #include "core/metrics.h"
 #include "reactor/internal.h"
 #include "version.h"
@@ -18,14 +19,16 @@ void set_persistence(conn_t *c, int keep_alive) {
 
 /* every call site here is "404 Not Found": counts as an HTTP error */
 void queue_status(conn_t *c, const char *status, int keep_alive) {
-  char hdr[128];
+  char hdr[192];
   sbuf_t b;
   sbuf_init(&b, hdr, sizeof hdr);
   sbuf_add(&b, "HTTP/1.1 ");
   sbuf_add(&b, status);
   sbuf_add(&b, "\r\nConnection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");
-  sbuf_add(&b, "\r\nContent-Length: 0\r\n\r\n");
+  sbuf_add(&b, "\r\nContent-Length: 0\r\n");
+  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
+  sbuf_add(&b, "\r\n");
   conn_queue(c, hdr, b.len);
   set_persistence(c, keep_alive);
   dipixy_metrics_note_http_error();
@@ -33,14 +36,16 @@ void queue_status(conn_t *c, const char *status, int keep_alive) {
 
 /* 304 never carries a body regardless of is_head, ETag repeated per RFC 9110 */
 void queue_not_modified(conn_t *c, const char *etag, int keep_alive) {
-  char hdr[192];
+  char hdr[256];
   sbuf_t b;
   sbuf_init(&b, hdr, sizeof hdr);
   sbuf_add(&b, "HTTP/1.1 304 Not Modified\r\nETag: \"");
   sbuf_add(&b, etag);
   sbuf_add(&b, "\"\r\nConnection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");
-  sbuf_add(&b, "\r\nContent-Length: 0\r\n\r\n");
+  sbuf_add(&b, "\r\nContent-Length: 0\r\n");
+  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
+  sbuf_add(&b, "\r\n");
   conn_queue(c, hdr, b.len);
   set_persistence(c, keep_alive);
 }
@@ -67,6 +72,7 @@ void queue_m3u8(conn_t *c, const char *body, size_t body_len, int is_head, int k
   sbuf_add_u64(&b, (uint64_t)body_len);
   sbuf_add(&b, "\r\nCache-Control: no-cache, no-store, must-revalidate\r\n");
   sbuf_add(&b, cors_hdr);
+  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
   sbuf_add(&b, "Connection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");
   sbuf_add(&b, "\r\n\r\n");
@@ -76,7 +82,7 @@ void queue_m3u8(conn_t *c, const char *body, size_t body_len, int is_head, int k
 }
 
 static void queue_segment_hdr(conn_t *c, size_t body_len, const char *content_type, const char *etag, int keep_alive, const char *cors_hdr) {
-  char hdr[512];
+  char hdr[576];
   sbuf_t b;
   sbuf_init(&b, hdr, sizeof hdr);
   sbuf_add(&b, "HTTP/1.1 200 OK\r\nServer: " TOOL_NAME "/" TOOL_VERSION "\r\nContent-Type: ");
@@ -87,6 +93,7 @@ static void queue_segment_hdr(conn_t *c, size_t body_len, const char *content_ty
   sbuf_add(&b, etag);
   sbuf_add(&b, "\"\r\nCache-Control: max-age=10\r\n");
   sbuf_add(&b, cors_hdr);
+  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
   sbuf_add(&b, "Connection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");
   sbuf_add(&b, "\r\n\r\n");
@@ -161,6 +168,7 @@ void queue_mpd(conn_t *c, const char *body, size_t body_len, int is_head, int ke
   sbuf_add_u64(&b, (uint64_t)body_len);
   sbuf_add(&b, "\r\nCache-Control: no-cache, no-store, must-revalidate\r\n");
   sbuf_add(&b, cors_hdr);
+  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
   sbuf_add(&b, "Connection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");
   sbuf_add(&b, "\r\n\r\n");

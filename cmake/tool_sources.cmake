@@ -1122,6 +1122,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/segstore/snapshot.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/segstore/push.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/respfmt.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/altsvc.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_serve.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_llhls.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dash/dash.c

@@ -3,11 +3,13 @@
 
 #include "mp4push.h"
 #include "priv.h"
+#include "../altsvc.h"
 #include "../hls/hls.h"
 #include "../version.h"
 #include "../ws/ws_clients.h"
 
 #include "lib/helper/byte_ring.h"
+#include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 
 #include <pthread.h>
@@ -218,10 +220,15 @@ int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
 }
 
 int mp4push_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int ws_handle) {
-  static const char hdr[] = "HTTP/1.1 200 OK\r\nServer: " TOOL_NAME "/" TOOL_VERSION "\r\nContent-Type: video/mp4\r\nConnection: close\r\n\r\n";
+  char hdr[192];
+  sbuf_t b;
   hls_resp_t resp;
   int idx;
-  conn_queue(c, hdr, strlen(hdr));
+  sbuf_init(&b, hdr, sizeof hdr);
+  sbuf_add(&b, "HTTP/1.1 200 OK\r\nServer: " TOOL_NAME "/" TOOL_VERSION "\r\nContent-Type: video/mp4\r\nConnection: close\r\n");
+  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
+  sbuf_add(&b, "\r\n");
+  conn_queue(c, hdr, b.len);
   if (hls_render(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4, "init.mp4", 0, NULL, &resp) && resp.status == 200) {
     conn_queue(c, resp.body, resp.body_len);
     hls_resp_body_release(resp.body, resp.zc);

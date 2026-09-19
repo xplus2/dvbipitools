@@ -357,6 +357,7 @@ static void print_help(void) {
     "                              SDS-advertised repair stream, L*D<=400, L<=40\n"
     "      --no-al-fec             ignore SDS FECBaseLayer\n"
     "      --no-status             disable /ui/status.js\n"
+    "      --h3-altsvc-port <n>    port announced in Alt-Svc               [TLS port]\n"
     "      --status-tpl <path>     use file instead of the built-in page\n"
     "      --auth <user:pass>      HTTP Basic Auth for /, /ui/status.js, /ui/ws/  [off]\n"
     "      --cors-origin <list>    comma-separated hls/hls-fmp4/llhls/dash/lldash\n"
@@ -432,6 +433,7 @@ static const struct option longopts[] = {
   {"no-lcevc", no_argument, 0, 1055},
   {"no-http2", no_argument, 0, 1040},
   {"no-http3", no_argument, 0, 1041},
+  {"h3-altsvc-port", required_argument, 0, 1060},
   {"no-fcc", no_argument, 0, 1042},
   {"no-ret", no_argument, 0, 1043},
   {"al-fec", required_argument, 0, 1053},
@@ -703,6 +705,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1041:
         cfg->no_http3 = 1;
         break;
+      case 1060: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, 65535, &v)) {
+          argerr("invalid --h3-altsvc-port: %s (1..65535)", optarg);
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        cfg->h3_altsvc_port = v;
+        break;
+      }
       case 1042:
         cfg->no_fcc = 1;
         break;

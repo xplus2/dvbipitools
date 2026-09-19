@@ -10,6 +10,7 @@
 
 #include "../ts/capture/capture.h"
 #include "../ts/pidfilter.h"
+#include "../altsvc.h"
 #include "../reactor/conn.h"
 #include "../reactor/internal.h"
 
@@ -18,6 +19,7 @@
 #include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/types.h>
 
 #include "../ws/ws_frame.h"
@@ -88,6 +90,13 @@ typedef struct h2_conn {
 } h2_conn_t;
 
 #define MAKE_NV_LIT(k, v) {(uint8_t *)(k), (uint8_t *)(v), sizeof(k)-1, sizeof(v)-1, NGHTTP2_NV_FLAG_NONE}
+
+/* append alt-svc if HTTP/3 is enabled, nva needs a spare slot. returns new count */
+static inline size_t h2_nv_altsvc(nghttp2_nv *nva, size_t n) {
+  const char *v = altsvc_value();
+  if (v) nva[n++] = (nghttp2_nv){(uint8_t *)"alt-svc", (uint8_t *)v, 7, strlen(v), NGHTTP2_NV_FLAG_NONE};
+  return n;
+}
 
 /* from http2.c */
 void h2_flush_tx(h2_conn_t *conn, conn_t *c);

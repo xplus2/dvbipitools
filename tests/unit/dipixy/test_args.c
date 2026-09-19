@@ -680,6 +680,31 @@ START_TEST(ssdp_ttl_is_overridable) {
 }
 END_TEST
 
+START_TEST(h3_altsvc_port_defaults_to_zero) {
+  char *argv[] = {"dipixy", "-I", "eth0", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.h3_altsvc_port, 0);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(h3_altsvc_port_is_overridable) {
+  char *argv[] = {"dipixy", "--h3-altsvc-port", "8443", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.h3_altsvc_port, 8443);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(h3_altsvc_port_rejects_out_of_range) {
+  char *argv[] = {"dipixy", "--h3-altsvc-port", "70000", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 START_TEST(ssdp_ttl_rejects_out_of_range) {
   char *argv[] = {"dipixy", "--ssdp-ttl", "0", NULL};
   config_t cfg;
@@ -1167,6 +1192,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, dlna_disabled_by_default);
   tcase_add_test(tc, ssdp_ttl_is_overridable);
   tcase_add_test(tc, ssdp_ttl_rejects_out_of_range);
+  tcase_add_test(tc, h3_altsvc_port_defaults_to_zero);
+  tcase_add_test(tc, h3_altsvc_port_is_overridable);
+  tcase_add_test(tc, h3_altsvc_port_rejects_out_of_range);
   tcase_add_test(tc, ssdp_iface_is_recorded);
   tcase_add_test(tc, cors_origin_defaults_to_null);
   tcase_add_test(tc, cors_origin_is_recorded);

@@ -18,6 +18,7 @@
 #include "reactor_tls.h"
 #include "qsbr.h"
 #include "../core/tlscert.h"
+#include "../altsvc.h"
 #ifdef HAVE_HTTP3
 #include "../http3/http3.h"
 #endif
@@ -196,7 +197,10 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
       if (tls_init(cert_path, key_path, conn_cap)) log_line(TOOL_NAME ": TLS init failed, --listen-tls not bound");
 
 #ifdef HAVE_HTTP3
-      if (!cfg->no_http3) h3_init(cert_path, key_path);
+      if (!cfg->no_http3) {
+        h3_init(cert_path, key_path);
+        if (h3_ready()) altsvc_set(cfg->h3_altsvc_port ? cfg->h3_altsvc_port : cfg->listen_tls.port);
+      }
 #endif
     } else log_line(TOOL_NAME ": no usable TLS certificate found, --listen-tls not bound");
   }

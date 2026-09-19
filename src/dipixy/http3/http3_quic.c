@@ -426,6 +426,10 @@ void h3_init(const char *cert_path, const char *key_path) {
   log_line("http3: quic context ready");
 }
 
+int h3_ready(void) {
+  return g_h3_ssl_ctx != NULL;
+}
+
 void h3_cleanup(void) {
   if (g_h3_ssl_ctx) {
     SSL_CTX_free(g_h3_ssl_ctx);

@@ -2758,6 +2758,7 @@ dvbipitools_add_unit_test(dipixy_hls
     ${CMAKE_SOURCE_DIR}/src/dipixy/segstore/push.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/respfmt.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/altsvc.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_serve.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_llhls.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dash/dash.c
@@ -2787,8 +2788,14 @@ target_link_libraries(test_dipixy_segstore_concurrency PRIVATE m)
 dvbipitools_add_unit_test(dipixy_mp4push
     unit/dipixy/test_mp4push.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/segment/mp4push.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/altsvc.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/byte_ring.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
+dvbipitools_add_unit_test(dipixy_altsvc
+    unit/dipixy/test_altsvc.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/altsvc.c)
 
 dvbipitools_add_unit_test(dipixy_segment_video
     unit/dipixy/test_segment_video.c

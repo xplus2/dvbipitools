@@ -1309,6 +1309,7 @@ dipixy_SRCS := \
 	src/dipixy/segstore/snapshot.c \
 	src/dipixy/segstore/push.c \
 	src/dipixy/respfmt.c \
+	src/dipixy/altsvc.c \
 	src/dipixy/hls/hls_serve.c \
 	src/dipixy/hls/hls_llhls.c \
 	src/dipixy/dash/dash.c \
@@ -3926,7 +3927,7 @@ dipifccret_capture_SRCS := \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/signal.c
 
-UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_mp4push dipixy_segment_video lib_playlist_in
+UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
@@ -4196,6 +4197,7 @@ dipixy_hls_SRCS := \
 	src/dipixy/segstore/push.c \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/respfmt.c \
+	src/dipixy/altsvc.c \
 	src/dipixy/hls/hls_serve.c \
 	src/dipixy/hls/hls_llhls.c \
 	src/dipixy/dash/dash.c \
@@ -4225,8 +4227,15 @@ dipixy_mp4push_BIN := tests/unit/dipixy/test_mp4push
 dipixy_mp4push_SRCS := \
 	tests/unit/dipixy/test_mp4push.c \
 	src/dipixy/segment/mp4push.c \
+	src/dipixy/altsvc.c \
 	src/lib/helper/byte_ring.c \
+	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
+
+dipixy_altsvc_BIN := tests/unit/dipixy/test_altsvc
+dipixy_altsvc_SRCS := \
+	tests/unit/dipixy/test_altsvc.c \
+	src/dipixy/altsvc.c
 
 dipixy_segment_video_BIN := tests/unit/dipixy/test_segment_video
 dipixy_segment_video_SRCS := \

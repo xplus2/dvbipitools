@@ -31,14 +31,15 @@ static ssize_t tspush_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *b
 }
 
 static void h2_submit_tspush_response(h2_conn_t *conn, int32_t stream_id, h2_tspush_stream_t *tcs) {
-  nghttp2_nv nva[] = {
+  nghttp2_nv nva[3] = {
       {(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP2_NV_FLAG_NONE},
       {(uint8_t *)"content-type", (uint8_t *)"video/mp2t", 12, 10, NGHTTP2_NV_FLAG_NONE},
   };
+  size_t nvlen = h2_nv_altsvc(nva, 2);
   nghttp2_data_provider dp;
   dp.read_callback = tspush_read_cb;
   dp.source.ptr = tcs;
-  nghttp2_submit_response(conn->ng, stream_id, nva, 2, &dp);
+  nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, &dp);
 }
 
 void h2_tspush_wake(int sub_idx) {

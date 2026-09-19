@@ -3,6 +3,7 @@
 
 #include "lldash.h"
 #include "dash_int.h"
+#include "../altsvc.h"
 #include "../reactor/internal.h"
 #include "../version.h"
 #include "../ws/ws_clients.h"
@@ -390,7 +391,7 @@ void dash_lldash_flush_ready(int tid) {
 
 int dash_lldash_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int keep_alive, const char *origin_hdr, int ws_handle) {
   char cors_hdr[192];
-  char hdr[384];
+  char hdr[448];
   sbuf_t b;
   int idx = dash_lldash_subscribe(ctx, filter, pmt_pid, lcevc, filename, 1);
   if (idx < 0) return 0;
@@ -400,6 +401,7 @@ int dash_lldash_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *fi
   sbuf_init(&b, hdr, sizeof hdr);
   sbuf_add(&b, "HTTP/1.1 200 OK\r\nServer: " TOOL_NAME "/" TOOL_VERSION "\r\nContent-Type: video/mp4\r\nTransfer-Encoding: chunked\r\nCache-Control: no-cache, no-store, must-revalidate\r\n");
   sbuf_add(&b, cors_hdr);
+  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
   sbuf_add(&b, "Connection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");
   sbuf_add(&b, "\r\n\r\n");

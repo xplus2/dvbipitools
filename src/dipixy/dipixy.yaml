@@ -12,6 +12,8 @@ tls:
 
 # -j|--workers -1 # -1|-2|-3 x cpu cores, or an absolute count
 #workers: -1
+# --h3-altsvc-port [TLS port]
+#h3-altsvc-port: 9443
 # --max-clients 256
 #max-clients: 256
 # --max-channels 32

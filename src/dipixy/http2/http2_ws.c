@@ -82,7 +82,8 @@ static void ws_sink(void *ctx, const uint8_t *frame, size_t flen) { queue_prebui
 static void queue_frame_cb(void *ctx, int opcode, const void *payload, size_t len) { queue_frame(ctx, opcode, payload, len); }
 
 void h2_ws_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id) {
-  nghttp2_nv nva[] = {{(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP2_NV_FLAG_NONE}};
+  nghttp2_nv nva[2] = {{(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP2_NV_FLAG_NONE}};
+  size_t nvlen = h2_nv_altsvc(nva, 1);
   nghttp2_data_provider dp;
   int i, slot = -1;
 
@@ -105,7 +106,7 @@ void h2_ws_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id) {
   conn->ws[slot].pending_cap = conn->ws[slot].pending ? 4096 : 0;
   dp.read_callback = ws_read_cb;
   dp.source.ptr = &conn->ws[slot];
-  nghttp2_submit_response(conn->ng, stream_id, nva, 1, &dp);
+  nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, &dp);
   ws_broadcast_register(ws_sink, &conn->ws[slot]);
 }
 

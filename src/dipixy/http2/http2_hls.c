@@ -64,7 +64,7 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
   char etag_buf[56];
   size_t len_n;
   size_t etag_n;
-  nghttp2_nv nva[6];
+  nghttp2_nv nva[7];
   size_t nvlen = 0;
   nghttp2_data_provider dp;
   h2_body_src_t *src;
@@ -84,6 +84,7 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
     nva[nvlen++] = (nghttp2_nv){(uint8_t *)"access-control-allow-origin", (uint8_t *)cors_val, 28, strlen(cors_val),NGHTTP2_NV_FLAG_NONE};
     if (cors_vary) nva[nvlen++] = (nghttp2_nv){(uint8_t *)"vary", (uint8_t *)"Origin", 4, 6, NGHTTP2_NV_FLAG_NONE};
   }
+  nvlen = h2_nv_altsvc(nva, nvlen);
   if (!body) {
     nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, NULL);
     return;

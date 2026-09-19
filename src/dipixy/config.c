@@ -239,6 +239,10 @@ static int apply_no_http3(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_bool(&((config_t *)c)->no_http3, v, e, n);
 }
 
+static int apply_h3_altsvc_port(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_uint(&((config_t *)c)->h3_altsvc_port, v, 1, 65535, e, n);
+}
+
 static int apply_no_fcc(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_bool(&((config_t *)c)->no_fcc, v, e, n);
 }
@@ -358,6 +362,7 @@ static const yamlcfg_key_t keys[] = {
   {"no.lcevc", apply_no_lcevc, 0, 0},
   {"no.http2", apply_no_http2, 0, 0},
   {"no.http3", apply_no_http3, 0, 0},
+  {"h3-altsvc-port", apply_h3_altsvc_port, 0, 0},
   {"no.fcc", apply_no_fcc, 0, 0},
   {"no.ret", apply_no_ret, 0, 0},
   {"al-fec", apply_al_fec, 0, 0},

@@ -80,6 +80,7 @@ typedef struct {
   int no_lcevc;
   int no_http2;
   int no_http3;
+  unsigned h3_altsvc_port;
   int no_fcc;
   int no_ret;
   unsigned al_fec_l;

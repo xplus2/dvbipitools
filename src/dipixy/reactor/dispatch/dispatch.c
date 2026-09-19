@@ -182,9 +182,8 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
     case ROUTE_FMT_SPTS:
     case ROUTE_FMT_RAWAUDIO: {
       /* unbounded body, must frame with connection close, no keep-alive */
-      static const char ts_header[] = "HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\nConnection: close\r\n\r\n";
-      static const char ra_header[] = "HTTP/1.1 200 OK\r\nContent-Type: audio/mpeg\r\nConnection: close\r\n\r\n";
-      const char *header = rt.fmt == ROUTE_FMT_RAWAUDIO ? ra_header : ts_header;
+      char header[160];
+      size_t header_len = build_stream_header(header, sizeof header, rt.fmt == ROUTE_FMT_RAWAUDIO ? "audio/mpeg" : "video/mp2t", c->ssl != NULL);
       unsigned tp_pmt_pid = rt.fmt == ROUTE_FMT_TS ? 0 : pmt_pid;
       int spts = rt.fmt == ROUTE_FMT_SPTS;
       int rawaudio = rt.fmt == ROUTE_FMT_RAWAUDIO;
@@ -195,7 +194,7 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
       }
       if (is_head) {
         capture_close(ctx);
-        conn_queue(c, header, strlen(header));
+        conn_queue(c, header, header_len);
         break;
       }
       {
@@ -209,7 +208,7 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
         }
         c->slot = sub;
       }
-      conn_queue(c, header, strlen(header));
+      conn_queue(c, header, header_len);
       c->become_tspush = 1;
       break;
     }
@@ -316,7 +315,8 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
     }
 
     case ROUTE_FMT_MP4: {
-      static const char mp4_head_header[] = "HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\nConnection: close\r\n\r\n";
+      char mp4_head_header[160];
+      size_t mp4_head_len = build_stream_header(mp4_head_header, sizeof mp4_head_header, "video/mp4", c->ssl != NULL);
       int wsh;
       capture_ctx_t *ctx = open_source(&rt, &list_num);
       if (!ctx) {
@@ -325,7 +325,7 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
       }
       if (is_head) {
         capture_close(ctx);
-        conn_queue(c, mp4_head_header, strlen(mp4_head_header));
+        conn_queue(c, mp4_head_header, mp4_head_len);
         break;
       }
       route_client_info(&rt, list_num, &filter, pmt_pid, c->client_ip, 1, &item_bufs, &cinfo);

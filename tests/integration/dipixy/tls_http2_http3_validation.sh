@@ -62,6 +62,18 @@ grep -q "using HTTP/2" "$WORK/curl_h2.log" || fail "curl did not negotiate HTTP/
 [ -s "$h2cap" ] || fail "no packets captured over HTTP/2"
 check_cap "$h2cap" "http2"
 
+if grep -q "http3: quic context ready" "$WORK/dipixy.log"; then
+    for proto in http1.1 http2; do
+        curl -sk --$proto -D "$WORK/hdr_$proto.txt" -o /dev/null "https://127.0.0.1:$TLSPORT/nonexistent" \
+            || fail "$proto: request failed"
+        grep -qi "^alt-svc: h3=\":$TLSPORT\"" "$WORK/hdr_$proto.txt" \
+            || fail "$proto: no Alt-Svc for h3 on port $TLSPORT, see $WORK/hdr_$proto.txt"
+    done
+    curl -s -D "$WORK/hdr_plain.txt" -o /dev/null "http://127.0.0.1:$HTTPPORT/nonexistent" \
+        || fail "plain: request failed"
+    ! grep -qi "^alt-svc:" "$WORK/hdr_plain.txt" || fail "plain http must not carry Alt-Svc"
+fi
+
 if [ "$curl_has_http3" -eq 0 ]; then
     stop_bg
     skip "curl was not built with HTTP/3 support"
