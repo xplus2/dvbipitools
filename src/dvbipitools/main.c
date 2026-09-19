@@ -76,21 +76,19 @@ static const char *basename_of(const char *path) {
 }
 
 static const applet_t *find_by_full_name(const char *name) {
-  size_t i;
-  for (i = 0; i < N_APPLETS; i++) if (strcmp(APPLETS[i].full_name, name) == 0) return &APPLETS[i];
+  for (size_t i = 0; i < N_APPLETS; i++) if (strcmp(APPLETS[i].full_name, name) == 0) return &APPLETS[i];
   return NULL;
 }
 
 static const applet_t *find_by_full_or_short_name(const char *name) {
-  size_t i;
-  for (i = 0; i < N_APPLETS; i++)
+  for (size_t i = 0; i < N_APPLETS; i++)
     if (strcmp(APPLETS[i].full_name, name) == 0 || strcmp(APPLETS[i].short_name, name) == 0) return &APPLETS[i];
   return NULL;
 }
 
 static int resolve_self(const char *argv0, char *buf, size_t size) {
   ssize_t n = readlink("/proc/self/exe", buf, size - 1);
-  if (n > 0) {
+  if (n > 0 && (size_t)n < size) {
     buf[n] = '\0';
     return 0;
   }
@@ -105,7 +103,6 @@ static int install_applets(const char *argv0, const char *dir, int hard) {
   char self[PATH_MAX];
   char path[PATH_MAX];
   struct stat st;
-  size_t i;
   int failed = 0;
 
   if (stat(dir, &st) != 0) {
@@ -120,7 +117,7 @@ static int install_applets(const char *argv0, const char *dir, int hard) {
     fprintf(stderr, "dvbipitools: cannot resolve own path, '%s' is not absolute\n", argv0);
     return 1;
   }
-  for (i = 0; i < N_APPLETS; i++) {
+  for (size_t i = 0; i < N_APPLETS; i++) {
     int n = snprintf(path, sizeof(path), "%s/%s", dir, APPLETS[i].full_name);
     if (n < 0 || (size_t)n >= sizeof(path)) {
       fprintf(stderr, "dvbipitools: %s/%s: path too long\n", dir, APPLETS[i].full_name);
@@ -141,8 +138,7 @@ static int install_applets(const char *argv0, const char *dir, int hard) {
 }
 
 static void list_applets(void) {
-  size_t i;
-  for (i = 0; i < N_APPLETS; i++) puts(APPLETS[i].full_name);
+  for (size_t i = 0; i < N_APPLETS; i++) puts(APPLETS[i].full_name);
 }
 
 static int run_option(const char *base, int argc, char **argv) {
@@ -169,14 +165,12 @@ static void print_deichkind(void) {
     0x36, 0x36, 0x7a, 0x7c, 0x7a, 0x28, 0x3f, 0x37, 0x37, 0x33, 0x3e, 0x3f, 0x37, 0x37, 0x33, 0x7b, 0x50
   };
   char buf[sizeof(enc) + 1];
-  size_t i;
-  for (i = 0; i < sizeof(enc); i++) buf[i] = (char)(enc[i] ^ 0x5a);
+  for (size_t i = 0; i < sizeof(enc); i++) buf[i] = (char)(enc[i] ^ 0x5a);
   buf[sizeof(enc)] = '\0';
   fputs(buf, stdout);
 }
 
 static void print_help(const char *invoked_as) {
-  size_t i;
   fprintf(stderr, "%s - dvbipitools multicall binary (v%s)\n\n", TOOL_NAME, TOOL_VERSION);
   fprintf(stderr, "usage: %s <tool>   [args...]   full name\n", invoked_as);
   fprintf(stderr, "       %s <short>  [args...]   short form\n", invoked_as);
@@ -184,7 +178,7 @@ static void print_help(const char *invoked_as) {
   fprintf(stderr, "       %s --list               list applet names\n", invoked_as);
   fprintf(stderr, "       %s --install [-h] DIR   symlink (-h hardlink) all applets at DIR\n\n", invoked_as);
   fprintf(stderr, "applets:\n");
-  for (i = 0; i < N_APPLETS; i++) fprintf(stderr, "  %-16s%s\n", APPLETS[i].full_name, APPLETS[i].short_name);
+  for (size_t i = 0; i < N_APPLETS; i++) fprintf(stderr, "  %-16s%s\n", APPLETS[i].full_name, APPLETS[i].short_name);
 }
 
 int main(int argc, char **argv) {
