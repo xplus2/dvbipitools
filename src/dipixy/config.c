@@ -243,6 +243,34 @@ static int apply_h3_altsvc_port(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->h3_altsvc_port, v, 1, 65535, e, n);
 }
 
+static int apply_h3_max_streams(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_uint(&((config_t *)c)->h3_max_streams, v, 4, 1000, e, n);
+}
+
+static int apply_h3_max_conns(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_uint(&((config_t *)c)->h3_max_conns, v, 1, 65536, e, n);
+}
+
+static int apply_h3_idle_timeout(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_uint(&((config_t *)c)->h3_idle_s, v, 1, 86400, e, n);
+}
+
+static int apply_h3_retry(void *c, const char *v, char *e, size_t n) {
+  return dixy_cfg_set_h3_retry(c, v, e, n);
+}
+
+static int apply_h3_max_udp(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_uint(&((config_t *)c)->h3_max_udp, v, 1200, 65507, e, n);
+}
+
+static int apply_h3_window(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_uint(&((config_t *)c)->h3_window_kib, v, 16, 1048576, e, n);
+}
+
+static int apply_h3_cc(void *c, const char *v, char *e, size_t n) {
+  return dixy_cfg_set_h3_cc(c, v, e, n);
+}
+
 static int apply_no_fcc(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_bool(&((config_t *)c)->no_fcc, v, e, n);
 }
@@ -362,7 +390,14 @@ static const yamlcfg_key_t keys[] = {
   {"no.lcevc", apply_no_lcevc, 0, 0},
   {"no.http2", apply_no_http2, 0, 0},
   {"no.http3", apply_no_http3, 0, 0},
-  {"h3-altsvc-port", apply_h3_altsvc_port, 0, 0},
+  {"h3.altsvc-port", apply_h3_altsvc_port, 0, 0},
+  {"h3.max-streams", apply_h3_max_streams, 0, 0},
+  {"h3.max-conns", apply_h3_max_conns, 0, 0},
+  {"h3.idle-timeout", apply_h3_idle_timeout, 0, 0},
+  {"h3.retry", apply_h3_retry, 0, 0},
+  {"h3.max-udp-payload", apply_h3_max_udp, 0, 0},
+  {"h3.window", apply_h3_window, 0, 0},
+  {"h3.cc", apply_h3_cc, 0, 0},
   {"no.fcc", apply_no_fcc, 0, 0},
   {"no.ret", apply_no_ret, 0, 0},
   {"al-fec", apply_al_fec, 0, 0},

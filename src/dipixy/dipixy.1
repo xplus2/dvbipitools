@@ -295,6 +295,41 @@ UDP port announced in the Alt-Svc header of TLS responses, default: the
 .B \-\-listen\-tls
 port. Set this if HTTP/3 is reachable under a different port (NAT, proxy).
 .TP
+.BI \-\-h3\-max\-streams " n"
+Concurrent requests per HTTP/3 connection, 4 to 1000, default: 100. Streams
+that stay open (TS push, LL-HLS blocking reloads, WebSocket) each hold one.
+.TP
+.BI \-\-h3\-max\-conns " n"
+Upper bound of HTTP/3 connections per worker, default: 256. The effective
+value is the lower of this and
+.B \-\-max\-clients
+divided by the worker count.
+.TP
+.BI \-\-h3\-idle\-timeout " s"
+Seconds until an idle HTTP/3 connection is dropped, default: 30.
+.TP
+.BI \-\-h3\-retry " mode"
+QUIC address validation. Stop spoofed-source floods.
+.B off
+never does that,
+.B always
+does it for every new connection, and
+.B auto
+(default) only once half of the per-worker connection slots are in use.
+Clients that completed a handshake receive a token for later visits and skip
+this extra round trip.
+.TP
+.BI \-\-h3\-max\-udp\-payload " n"
+Largest UDP datagram payload HTTP/3 sends and accepts, 1200 to 65507, default:
+1452. Raise it only on paths that carry larger packets (jumbo, loopback).
+.TP
+.BI \-\-h3\-window " KiB"
+HTTP/3 receive window per stream, default: 256. Connection window is 4x
+times that. This limits data clients send to dipixy, not what it sends.
+.TP
+.BI \-\-h3\-cc " algo"
+HTTP/3 congestion control: \fBcubic\fR (default), \fBbbr\fR or \fBreno\fR.
+.TP
 .B \-\-no\-fcc
 Ignore SDS fcc. Default: off.
 .TP

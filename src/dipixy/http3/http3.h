@@ -6,6 +6,9 @@
 
 #ifdef HAVE_HTTP3
 
+#include "http3_stateless.h"
+#include "http3_steer.h"
+
 #include <netinet/in.h>
 #include <stddef.h>
 #include <sys/socket.h>
@@ -44,6 +47,12 @@ void h3_init(const char *cert_path, const char *key_path);
 
 /* 1 once QUIC context is built by h3_init() */
 int h3_ready(void);
+
+/* 0 = built-in default. call before h3_set_max_conns_per_thread() */
+void h3_set_limits(unsigned max_streams, unsigned max_conns, unsigned idle_s);
+
+/* 0 = built-in default. cc: 0 cubic, 1 bbr, 2 reno. call before workers start */
+void h3_set_transport(unsigned max_udp, unsigned window_kib, int cc);
 
 void h3_set_max_conns_per_thread(int n);
 

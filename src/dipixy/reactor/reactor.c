@@ -187,6 +187,8 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
     return -1;
   }
 #ifdef HAVE_HTTP3
+  h3_set_limits(cfg->h3_max_streams, cfg->h3_max_conns, cfg->h3_idle_s);
+  h3_set_transport(cfg->h3_max_udp, cfg->h3_window_kib, cfg->h3_cc);
   h3_set_max_conns_per_thread(cfg->max_clients / workers);
 #endif
 
@@ -198,6 +200,7 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
 
 #ifdef HAVE_HTTP3
       if (!cfg->no_http3) {
+        h3_stateless_set_retry(cfg->h3_retry == H3_RETRY_CFG_OFF ? H3_RETRY_OFF : cfg->h3_retry == H3_RETRY_CFG_ALWAYS ? H3_RETRY_ALWAYS : H3_RETRY_AUTO);
         h3_init(cert_path, key_path);
         if (h3_ready()) altsvc_set(cfg->h3_altsvc_port ? cfg->h3_altsvc_port : cfg->listen_tls.port);
       }

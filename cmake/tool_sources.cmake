@@ -1036,6 +1036,9 @@ function(dipixy_resolve_sources)
         set(DIPIXY_HTTP3_SRCS
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_quic.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_stateless.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_steer.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_udp.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_req.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_resp.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_tspush.c

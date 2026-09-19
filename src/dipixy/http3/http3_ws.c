@@ -115,7 +115,7 @@ void h3_ws_on_stream_close(h3_conn_t *c, int64_t stream_id) {
 }
 
 void h3_ws_on_conn_close(h3_conn_t *c) {
-  for (int i = 0; i < H3_MAX_REQS; i++) if (c->reqs[i].active) h3_ws_req_cleanup(c, &c->reqs[i]);
+  for (int i = 0; i < c->max_reqs; i++) if (c->reqs[i].active) h3_ws_req_cleanup(c, &c->reqs[i]);
 }
 
 /* per-reactor eventfd handler: resumes H3 WS streams with data queued from any thread */
@@ -126,7 +126,7 @@ void h3_ws_flush(void) {
     if (c->done || !c->ws_active_count) continue;
     fd = c->local_addr.ss_family == AF_INET6 ? t_h3_udp6 : t_h3_udp4;
     if (fd < 0) continue;
-    for (ri = 0; ri < H3_MAX_REQS; ri++) {
+    for (ri = 0; ri < c->max_reqs; ri++) {
       h3_req_t *r = &c->reqs[ri];
       uint8_t *data;
       size_t len;

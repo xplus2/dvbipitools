@@ -81,6 +81,13 @@ typedef struct {
   int no_http2;
   int no_http3;
   unsigned h3_altsvc_port;
+  int h3_retry;
+  unsigned h3_max_udp;
+  unsigned h3_window_kib;
+  int h3_cc;
+  unsigned h3_max_streams;
+  unsigned h3_max_conns;
+  unsigned h3_idle_s;
   int no_fcc;
   int no_ret;
   unsigned al_fec_l;
@@ -122,6 +129,11 @@ void dixy_cfg_reset_inputs(config_t *cfg);
 int dixy_cfg_add_input(config_t *cfg, const char *val, char *err, size_t errsz);
 int dixy_cfg_set_name(config_t *cfg, const char *name, char *err, size_t errsz);
 int dixy_cfg_set_media_type(config_t *cfg, const char *val, char *err, size_t errsz);
+
+enum { H3_RETRY_CFG_AUTO = 0, H3_RETRY_CFG_OFF, H3_RETRY_CFG_ALWAYS };
+enum { H3_CC_CFG_CUBIC = 0, H3_CC_CFG_BBR, H3_CC_CFG_RENO };
+int dixy_cfg_set_h3_cc(config_t *cfg, const char *val, char *err, size_t errsz);
+int dixy_cfg_set_h3_retry(config_t *cfg, const char *val, char *err, size_t errsz);
 int dixy_cfg_auth(const char *val, char *out, size_t outsz, char *err, size_t errsz);
 int dixy_cfg_listen(listen_spec_t *out, const char *s);
 int dixy_cfg_workers(int *out, const char *s);

@@ -21,6 +21,10 @@ dvbipitools (2.5.0-1) unstable; urgency=low
   * multicall binary: --install sym/hardlink creation
   * dipixy HTTP/3
     + alt-svc
+    + configurable "streaming friendly" concurrency+timeouts
+    * retry, version negotiation, stateless reset
+    * connection migration
+    * congestion control
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.2-1) unstable; urgency=low

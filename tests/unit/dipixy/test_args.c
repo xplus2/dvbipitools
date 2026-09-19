@@ -705,6 +705,114 @@ START_TEST(h3_altsvc_port_rejects_out_of_range) {
 }
 END_TEST
 
+START_TEST(h3_limits_default_to_builtin) {
+  char *argv[] = {"dipixy", "-I", "eth0", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.h3_max_streams, 0);
+  ck_assert_uint_eq(cfg.h3_max_conns, 0);
+  ck_assert_uint_eq(cfg.h3_idle_s, 0);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(h3_limits_are_overridable) {
+  char *argv[] = {"dipixy", "--h3-max-streams", "250", "--h3-max-conns", "64", "--h3-idle-timeout", "120", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.h3_max_streams, 250);
+  ck_assert_uint_eq(cfg.h3_max_conns, 64);
+  ck_assert_uint_eq(cfg.h3_idle_s, 120);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(h3_max_streams_rejects_out_of_range) {
+  char *lo[] = {"dipixy", "--h3-max-streams", "3", NULL};
+  char *hi[] = {"dipixy", "--h3-max-streams", "1001", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(lo), lo, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(hi), hi, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(h3_max_conns_and_idle_reject_zero) {
+  char *conns[] = {"dipixy", "--h3-max-conns", "0", NULL};
+  char *idle[] = {"dipixy", "--h3-idle-timeout", "0", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(conns), conns, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(idle), idle, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(h3_retry_defaults_to_auto) {
+  char *argv[] = {"dipixy", "-I", "eth0", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.h3_retry, H3_RETRY_CFG_AUTO);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(h3_retry_accepts_each_mode) {
+  char *off[] = {"dipixy", "--h3-retry", "off", NULL};
+  char *always[] = {"dipixy", "--h3-retry", "always", NULL};
+  char *autom[] = {"dipixy", "--h3-retry", "auto", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(off), off, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.h3_retry, H3_RETRY_CFG_OFF);
+  args_free(&cfg);
+  ck_assert_int_eq(args_parse(ARGC(always), always, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.h3_retry, H3_RETRY_CFG_ALWAYS);
+  args_free(&cfg);
+  ck_assert_int_eq(args_parse(ARGC(autom), autom, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.h3_retry, H3_RETRY_CFG_AUTO);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(h3_retry_rejects_unknown_mode) {
+  char *argv[] = {"dipixy", "--h3-retry", "sometimes", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(h3_transport_defaults) {
+  char *argv[] = {"dipixy", "-I", "eth0", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.h3_max_udp, 0);
+  ck_assert_uint_eq(cfg.h3_window_kib, 0);
+  ck_assert_int_eq(cfg.h3_cc, H3_CC_CFG_CUBIC);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(h3_transport_options_are_read) {
+  char *argv[] = {"dipixy", "--h3-max-udp-payload", "9000", "--h3-window", "1024", "--h3-cc", "bbr", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.h3_max_udp, 9000);
+  ck_assert_uint_eq(cfg.h3_window_kib, 1024);
+  ck_assert_int_eq(cfg.h3_cc, H3_CC_CFG_BBR);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(h3_transport_options_reject_bad_values) {
+  char *udp_lo[] = {"dipixy", "--h3-max-udp-payload", "1199", NULL};
+  char *udp_hi[] = {"dipixy", "--h3-max-udp-payload", "65508", NULL};
+  char *win[] = {"dipixy", "--h3-window", "8", NULL};
+  char *cc[] = {"dipixy", "--h3-cc", "vegas", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(udp_lo), udp_lo, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(udp_hi), udp_hi, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(win), win, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(cc), cc, &cfg), ARGS_ERR);
+}
+END_TEST
+
 START_TEST(ssdp_ttl_rejects_out_of_range) {
   char *argv[] = {"dipixy", "--ssdp-ttl", "0", NULL};
   config_t cfg;
@@ -1093,6 +1201,67 @@ START_TEST(config_invalid_value_is_error) {
 }
 END_TEST
 
+START_TEST(config_h3_section_provides_settings) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "h3:\n  altsvc-port: 8443\n  max-streams: 200\n  max-conns: 32\n  idle-timeout: 90\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.h3_altsvc_port, 8443);
+  ck_assert_uint_eq(cfg.h3_max_streams, 200);
+  ck_assert_uint_eq(cfg.h3_max_conns, 32);
+  ck_assert_uint_eq(cfg.h3_idle_s, 90);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(config_h3_retry_mode_is_read) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "h3:\n  retry: always\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.h3_retry, H3_RETRY_CFG_ALWAYS);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(config_h3_retry_invalid_is_error) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "h3:\n  retry: maybe\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(config_h3_transport_keys_are_read) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "h3:\n  max-udp-payload: 1300\n  window: 512\n  cc: reno\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_uint_eq(cfg.h3_max_udp, 1300);
+  ck_assert_uint_eq(cfg.h3_window_kib, 512);
+  ck_assert_int_eq(cfg.h3_cc, H3_CC_CFG_RENO);
+  args_free(&cfg);
+}
+END_TEST
+
+START_TEST(config_h3_max_streams_out_of_range_is_error) {
+  char path[] = "/tmp/dipixy_cfg_XXXXXX";
+  char *argv[] = {"dipixy", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "h3:\n  max-streams: 3\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(config_conflict_is_rejected) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
@@ -1195,6 +1364,17 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, h3_altsvc_port_defaults_to_zero);
   tcase_add_test(tc, h3_altsvc_port_is_overridable);
   tcase_add_test(tc, h3_altsvc_port_rejects_out_of_range);
+  tcase_add_test(tc, h3_limits_default_to_builtin);
+  tcase_add_test(tc, h3_retry_defaults_to_auto);
+  tcase_add_test(tc, h3_transport_defaults);
+  tcase_add_test(tc, h3_transport_options_are_read);
+  tcase_add_test(tc, h3_transport_options_reject_bad_values);
+  tcase_add_test(tc, config_h3_transport_keys_are_read);
+  tcase_add_test(tc, h3_retry_accepts_each_mode);
+  tcase_add_test(tc, h3_retry_rejects_unknown_mode);
+  tcase_add_test(tc, h3_limits_are_overridable);
+  tcase_add_test(tc, h3_max_streams_rejects_out_of_range);
+  tcase_add_test(tc, h3_max_conns_and_idle_reject_zero);
   tcase_add_test(tc, ssdp_iface_is_recorded);
   tcase_add_test(tc, cors_origin_defaults_to_null);
   tcase_add_test(tc, cors_origin_is_recorded);
@@ -1232,6 +1412,10 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, cmdline_name_needs_its_own_input);
   tcase_add_test(tc, config_missing_file_is_error);
   tcase_add_test(tc, config_invalid_value_is_error);
+  tcase_add_test(tc, config_h3_section_provides_settings);
+  tcase_add_test(tc, config_h3_max_streams_out_of_range_is_error);
+  tcase_add_test(tc, config_h3_retry_mode_is_read);
+  tcase_add_test(tc, config_h3_retry_invalid_is_error);
   tcase_add_test(tc, config_conflict_is_rejected);
   tcase_add_test(tc, configtest_reports_by_exit_status);
   suite_add_tcase(s, tc);

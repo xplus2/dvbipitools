@@ -78,28 +78,27 @@ void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
 
   {
     int fd = create_listen_sock_for_spec(&reactor_cfg()->listen);
-    if (fd >= 0)
-      rl->L[rl->nL++] = (reactor_listener){fd, 0, RL_ACCEPT};
+    if (fd >= 0) rl->L[rl->nL++] = (reactor_listener){fd, 0, RL_ACCEPT};
   }
   if (tls_is_running()) {
     int fd = create_listen_sock_for_spec(&reactor_cfg()->listen_tls);
-    if (fd >= 0)
-      rl->L[rl->nL++] = (reactor_listener){fd, 1, RL_ACCEPT};
+    if (fd >= 0) rl->L[rl->nL++] = (reactor_listener){fd, 1, RL_ACCEPT};
   }
 
 #ifdef HAVE_HTTP3
   if (!reactor_cfg()->no_http3) {
     const listen_spec_t *lt = &reactor_cfg()->listen_tls;
+    h3_steer_begin();
     if (lt->scope != LISTEN_V6) {
       t_h3_udp4 = h3_create_udp_sock((int)lt->port, lt->scope == LISTEN_ANY ? "0.0.0.0" : lt->addr);
-      if (t_h3_udp4 >= 0)
-        rl->L[rl->nL++] = (reactor_listener){t_h3_udp4, 0, RL_H3_UDP};
+      if (t_h3_udp4 >= 0) rl->L[rl->nL++] = (reactor_listener){t_h3_udp4, 0, RL_H3_UDP};
     }
     if (lt->scope != LISTEN_V4) {
       t_h3_udp6 = h3_create_udp_sock6((int)lt->port, lt->scope == LISTEN_ANY ? "::" : lt->addr);
-      if (t_h3_udp6 >= 0)
-        rl->L[rl->nL++] = (reactor_listener){t_h3_udp6, 0, RL_H3_UDP};
+      if (t_h3_udp6 >= 0) rl->L[rl->nL++] = (reactor_listener){t_h3_udp6, 0, RL_H3_UDP};
     }
+    if (h3_steer_end(t_h3_udp4, t_h3_udp6) != 0)
+      log_line("http3: reuseport steering unavailable, conn migration will only work with -j 1");
   }
 #endif
 

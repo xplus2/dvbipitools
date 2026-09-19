@@ -76,6 +76,7 @@ START_TEST(build_medium_payload_uses_16bit_length) {
   size_t out_len;
   size_t plen = 200;
   char *payload = malloc(plen);
+  ck_assert_ptr_nonnull(payload);
   memset(payload, 'a', plen);
   uint8_t *out = ws_build_frame(WS_OP_BINARY, payload, plen, &out_len);
   ck_assert_ptr_nonnull(out);
@@ -92,6 +93,7 @@ START_TEST(build_large_payload_uses_64bit_length) {
   size_t out_len;
   size_t plen = 70000;
   char *payload = malloc(plen);
+  ck_assert_ptr_nonnull(payload);
   memset(payload, 'z', plen);
   uint8_t *out = ws_build_frame(WS_OP_BINARY, payload, plen, &out_len);
   ck_assert_ptr_nonnull(out);
@@ -155,6 +157,7 @@ START_TEST(medium_length_payload_round_trips) {
   ws_parser_t p;
   size_t flen, plen = 300;
   char *payload_in = malloc(plen);
+  ck_assert_ptr_nonnull(payload_in);
   uint8_t *frame;
   int opcode;
   const uint8_t *payload;
@@ -209,6 +212,7 @@ START_TEST(two_frames_in_one_feed_drain_in_order) {
   uint8_t *f1 = build_client_frame(1, WS_OP_TEXT, "one", 3, 0x11, &f1len);
   uint8_t *f2 = build_client_frame(1, WS_OP_TEXT, "two", 3, 0x22, &f2len);
   uint8_t *both = malloc(f1len + f2len);
+  ck_assert_ptr_nonnull(both);
   int opcode;
   const uint8_t *payload;
   size_t payload_len;

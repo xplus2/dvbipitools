@@ -47,10 +47,8 @@ static int cb_h3_recv_header(nghttp3_conn *h3, int64_t sid, int32_t token, nghtt
   nghttp3_vec n = nghttp3_rcbuf_get_buf(name);
   nghttp3_vec v = nghttp3_rcbuf_get_buf(value);
 
-  httpng_parse_known_header((const char *)n.base, n.len, (const char *)v.base, v.len,
-                            r->method, sizeof r->method, r->path, sizeof r->path,
-                            r->inm, sizeof r->inm, r->origin, sizeof r->origin,
-                            r->authz, sizeof r->authz, r->protocol, sizeof r->protocol);
+  httpng_parse_known_header((const char *)n.base, n.len, (const char *)v.base, v.len, r->method, sizeof r->method, r->path, H3_PATH_MAX,
+    r->inm, sizeof r->inm, r->origin, sizeof r->origin, r->authz, sizeof r->authz, r->protocol, sizeof r->protocol);
   return 0;
 }
 
@@ -73,10 +71,20 @@ static int cb_h3_end_headers(nghttp3_conn *h3, int64_t sid, int fin, void *ud, v
   return 0;
 }
 
+static int cb_h3_deferred_consume(nghttp3_conn *h3, int64_t sid, size_t consumed, void *ud, void *stream_ud) {
+  h3_conn_t *c = ud;
+  (void)h3;
+  (void)stream_ud;
+  ngtcp2_conn_extend_max_stream_offset(c->qconn, sid, consumed);
+  ngtcp2_conn_extend_max_offset(c->qconn, consumed);
+  return 0;
+}
+
 /* ngtcp2 handshake_completed cb: creates H3 session */
 int cb_handshake_completed(ngtcp2_conn *qconn, void *ud) {
   h3_conn_t *c = ud;
   c->handshake_done = 1;
+  h3_stateless_offer_token(qconn, (struct sockaddr *)&c->peer_addr, c->peer_addrlen);
   if (ngtcp2_conn_open_uni_stream(qconn, &c->h3_ctrl, NULL) != 0 || ngtcp2_conn_open_uni_stream(qconn, &c->h3_qenc, NULL) != 0 || ngtcp2_conn_open_uni_stream(qconn, &c->h3_qdec, NULL) != 0)
     return NGTCP2_ERR_CALLBACK_FAILURE;
 
@@ -85,6 +93,7 @@ int cb_handshake_completed(ngtcp2_conn *qconn, void *ud) {
   h3cbs.recv_header = cb_h3_recv_header;
   h3cbs.end_headers = cb_h3_end_headers;
   h3cbs.recv_data = cb_h3_recv_data;
+  h3cbs.deferred_consume = cb_h3_deferred_consume;
   nghttp3_settings h3s;
   nghttp3_settings_default_versioned(NGHTTP3_SETTINGS_VERSION, &h3s);
   h3s.enable_connect_protocol = 1;
@@ -98,7 +107,7 @@ int cb_handshake_completed(ngtcp2_conn *qconn, void *ud) {
 
 static int h3_conn_active_count(const h3_conn_t *c) {
   int n = 0;
-  for (int i = 0; i < H3_MAX_REQS; i++) if (c->reqs[i].active) n++;
+  for (int i = 0; i < c->max_reqs; i++) if (c->reqs[i].active) n++;
   return n;
 }
 
@@ -126,7 +135,7 @@ static void h3ops_respond_hls(void *connv, void *reqv, int handled, const hls_re
 static void h3ops_ws_dispatch(void *connv, void *reqv) { h3_ws_dispatch(connv, reqv); }
 
 static int h3ops_admission_ok(void *connv) {
-  return h3_conn_active_count(connv) <= H3_MAX_REQS - H3_WS_RESERVE;
+  return h3_conn_active_count(connv) <= ((const h3_conn_t *)connv)->max_reqs - H3_WS_RESERVE;
 }
 
 static int h3ops_tspush_dispatch(void *connv, void *reqv, int sub) { return h3_tspush_dispatch(connv, reqv, sub); }
@@ -135,13 +144,13 @@ static int h3ops_dashchunk_dispatch(void *connv, void *reqv, int sub, int ws_han
 
 static int h3ops_mp4push_dispatch(void *connv, void *reqv, int sub, int ws_handle) { return h3_mp4push_dispatch(connv, reqv, sub, ws_handle); }
 
-static int h3ops_hls_cold_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, hls_cold_kind_t kind,
-                                   seg_container_t container, int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle) {
+static int h3ops_hls_cold_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
+  const char *filename, hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle) {
   return h3_hls_cold_try_park(connv, ((h3_req_t *)reqv)->stream_id, ctx, filter, pmt_pid, lcevc, filename, kind, container, want_ll, is_head, origin_hdr, timeout_ms, ws_handle);
 }
 
-static int h3ops_llhls_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head,
-                                const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle) {
+static int h3ops_llhls_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename,
+  int is_head, const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle) {
   return h3_llhls_try_park(connv, ((h3_req_t *)reqv)->stream_id, ctx, filter, pmt_pid, lcevc, filename, is_head, inm, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
 }
 

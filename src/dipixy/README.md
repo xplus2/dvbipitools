@@ -62,6 +62,13 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--no-al-fec`            |                       | off (ignore SDS FECBaseLayer)                     |       |
 |      | `--no-status`            |                       | off (deactivate `/ui/status.js`)                  |       |
 |      | `--h3-altsvc-port`       | `<n>`                 | external HTTP/3 TLS port (if it differs)          |       |
+|      | `--h3-max-streams`       | `<n>`                 | `100` (HTTP/3 concurrent reqs per conn, 4-1000)   |       |
+|      | `--h3-max-conns`         | `<n>`                 | `256` (HTTP/3 conns per worker, upper bound)      |       |
+|      | `--h3-idle-timeout`      | `<s>`                 | `30` (HTTP/3 idle timeout, seconds)               |       |
+|      | `--h3-retry`             | `off\|auto\|always`   | `auto` (QUIC address validation via Retry)        |       |
+|      | `--h3-max-udp-payload`   | `<n>`                 | `1452` (largest HTTP/3 UDP datagram, 1200-65507)  |       |
+|      | `--h3-window`            | `<KiB>`               | `256` (HTTP/3 recv win per stream)                |       |
+|      | `--h3-cc`                | `cubic\|bbr\|reno`    | `cubic` (HTTP/3 congestion control)               |       |
 | `-d` | `--daemonize`            |                       | off (fork to background after startup)            |       |
 | `-v` | `--verbose`              |                       | off                                               |       |
 |      | `--color`                | `auto\|always\|never` | `auto`                                            |       |

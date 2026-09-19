@@ -10,10 +10,26 @@ tls:
   # --tls-key [not set]
   #key: <path>
 
+h3:
+  # --h3-altsvc-port [TLS port]
+  #altsvc-port: 9443
+  # --h3-max-streams 100
+  max-streams: 100
+  # --h3-max-conns 256 # per worker
+  max-conns: 256
+  # --h3-idle-timeout 30 # seconds
+  idle-timeout: 30
+  # --h3-retry auto # off|auto|always
+  retry: auto
+  # --h3-max-udp-payload 1452
+  max-udp-payload: 1452
+  # --h3-window 256 # KiB per stream
+  window: 256
+  # --h3-cc cubic # cubic|bbr|reno
+  cc: cubic
+
 # -j|--workers -1 # -1|-2|-3 x cpu cores, or an absolute count
 #workers: -1
-# --h3-altsvc-port [TLS port]
-#h3-altsvc-port: 9443
 # --max-clients 256
 #max-clients: 256
 # --max-channels 32

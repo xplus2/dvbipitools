@@ -1216,7 +1216,7 @@ dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs libngtcp2 libngtcp2_c
 else
 dipixy_EXTRA_LDFLAGS += $(shell pkg-config --libs libngtcp2 libngtcp2_crypto_ossl libnghttp3)
 endif
-dipixy_HTTP3_SRC := src/dipixy/http3/http3.c src/dipixy/http3/http3_quic.c src/dipixy/http3/http3_req.c src/dipixy/http3/http3_resp.c src/dipixy/http3/http3_tspush.c src/dipixy/http3/http3_dashchunk.c src/dipixy/http3/http3_mp4push.c src/dipixy/http3/http3_llhls.c src/dipixy/http3/http3_hls_cold.c src/dipixy/http3/http3_ws.c
+dipixy_HTTP3_SRC := src/dipixy/http3/http3.c src/dipixy/http3/http3_quic.c src/dipixy/http3/http3_stateless.c src/dipixy/http3/http3_steer.c src/dipixy/http3/http3_udp.c src/dipixy/http3/http3_req.c src/dipixy/http3/http3_resp.c src/dipixy/http3/http3_tspush.c src/dipixy/http3/http3_dashchunk.c src/dipixy/http3/http3_mp4push.c src/dipixy/http3/http3_llhls.c src/dipixy/http3/http3_hls_cold.c src/dipixy/http3/http3_ws.c
 else
 dipixy_HTTP3_SRC :=
 ifeq ($(HAVE_LIBNGTCP2),yes)
@@ -4236,6 +4236,30 @@ dipixy_altsvc_BIN := tests/unit/dipixy/test_altsvc
 dipixy_altsvc_SRCS := \
 	tests/unit/dipixy/test_altsvc.c \
 	src/dipixy/altsvc.c
+
+ifeq ($(HAVE_HTTP3),yes)
+UNIT_TESTS += dipixy_h3_stateless dipixy_h3_steer dipixy_h3_udp
+endif
+dipixy_h3_steer_BIN := tests/unit/dipixy/test_h3_steer
+dipixy_h3_steer_SRCS := \
+	tests/unit/dipixy/test_h3_steer.c \
+	src/dipixy/http3/http3_steer.c
+dipixy_h3_steer_EXTRA_CFLAGS := -DHAVE_HTTP3
+dipixy_h3_udp_BIN := tests/unit/dipixy/test_h3_udp
+dipixy_h3_udp_SRCS := \
+	tests/unit/dipixy/test_h3_udp.c \
+	src/dipixy/http3/http3_udp.c
+dipixy_h3_udp_EXTRA_CFLAGS := -DHAVE_HTTP3
+dipixy_h3_stateless_BIN := tests/unit/dipixy/test_h3_stateless
+dipixy_h3_stateless_SRCS := \
+	tests/unit/dipixy/test_h3_stateless.c \
+	src/dipixy/http3/http3_stateless.c
+dipixy_h3_stateless_EXTRA_CFLAGS := -DHAVE_HTTP3 $(shell pkg-config --cflags libngtcp2 libngtcp2_crypto_ossl openssl)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipixy_h3_stateless_EXTRA_LDFLAGS := $(shell pkg-config --static --libs libngtcp2 libngtcp2_crypto_ossl openssl)
+else
+dipixy_h3_stateless_EXTRA_LDFLAGS := $(shell pkg-config --libs libngtcp2 libngtcp2_crypto_ossl openssl)
+endif
 
 dipixy_segment_video_BIN := tests/unit/dipixy/test_segment_video
 dipixy_segment_video_SRCS := \

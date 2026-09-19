@@ -2797,6 +2797,30 @@ dvbipitools_add_unit_test(dipixy_altsvc
     unit/dipixy/test_altsvc.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/altsvc.c)
 
+set(DIPIXY_TEST_HTTP3 FALSE)
+if (TARGET dipixy)
+    get_target_property(_dipixy_defs dipixy COMPILE_DEFINITIONS)
+    if (_dipixy_defs AND "HAVE_HTTP3" IN_LIST _dipixy_defs)
+        set(DIPIXY_TEST_HTTP3 TRUE)
+    endif ()
+endif ()
+if (DIPIXY_TEST_HTTP3)
+    pkg_check_modules(H3TEST REQUIRED IMPORTED_TARGET libngtcp2 libngtcp2_crypto_ossl)
+    dvbipitools_add_unit_test(dipixy_h3_stateless
+        unit/dipixy/test_h3_stateless.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_stateless.c)
+    target_compile_definitions(test_dipixy_h3_stateless PRIVATE HAVE_HTTP3)
+    target_link_libraries(test_dipixy_h3_stateless PRIVATE PkgConfig::H3TEST OpenSSL::SSL OpenSSL::Crypto)
+    dvbipitools_add_unit_test(dipixy_h3_steer
+        unit/dipixy/test_h3_steer.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_steer.c)
+    target_compile_definitions(test_dipixy_h3_steer PRIVATE HAVE_HTTP3)
+    dvbipitools_add_unit_test(dipixy_h3_udp
+        unit/dipixy/test_h3_udp.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_udp.c)
+    target_compile_definitions(test_dipixy_h3_udp PRIVATE HAVE_HTTP3)
+endif ()
+
 dvbipitools_add_unit_test(dipixy_segment_video
     unit/dipixy/test_segment_video.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/segment/video.c

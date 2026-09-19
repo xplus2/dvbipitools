@@ -215,6 +215,7 @@ START_TEST(flush_full_send_buffer_arms_epollout_then_drains) {
   ck_assert_int_eq(epoll_ctl(epfd, EPOLL_CTL_ADD, c->fd, &ev), 0);
 
   big = malloc(biglen);
+  ck_assert_ptr_nonnull(big);
   memset(big, 'a', biglen);
   conn_queue(c, big, biglen);
   free(big);
@@ -230,8 +231,7 @@ START_TEST(flush_full_send_buffer_arms_epollout_then_drains) {
     int drained_any = 0;
     for (;;) {
       got = recv(fds[1], drain, sizeof drain, MSG_DONTWAIT);
-      if (got <= 0)
-        break;
+      if (got <= 0) break;
       drained_any += (int)got;
     }
     ck_assert(drained_any > 0);
@@ -359,6 +359,7 @@ END_TEST
 START_TEST(send_buffered_over_cap_marks_dead_without_queuing) {
   conn_t *c = conn_new(-1, NULL);
   char *huge = malloc(5u * 1024 * 1024);
+  ck_assert_ptr_nonnull(huge);
   memset(huge, 'x', 5u * 1024 * 1024);
   ck_assert_int_eq(conn_send_buffered(c, huge, 5u * 1024 * 1024, NULL, 0), -1);
   ck_assert_int_eq(c->dead, 1);

@@ -30,22 +30,34 @@
 #include "../segment/mp4push.h"
 #include "../reactor/internal.h"
 #include "../ws/ws_frame.h"
+#include "http3_stateless.h"
+#include "http3_udp.h"
 
-#define H3_MAX_REQS 16
+#define H3_DEFAULT_MAX_REQS 100
+#define H3_MIN_MAX_REQS 4
+#define H3_DEFAULT_MAX_UDP 1452
+#define H3_DEFAULT_WINDOW_KIB 256
+#define H3_MAX_MAX_REQS 1000
 /* TS-push holds its slot for the stream's life, unlike HLS/DASH GETs.
    reserved so it can't starve WS out of every slot on this connection */
 #define H3_WS_RESERVE 2
-#define H3_SCID_LEN 16
 #define H3_PKT_MAX 1452
-#define H3_IDLE_NS (30 * 1000000000ULL)
+#define H3_DEFAULT_IDLE_S 30
 #define H3_PATH_MAX 8192
-#define H3_MAX_CONNS_PER_THREAD 256
+#define H3_DEFAULT_MAX_CONNS 256
+#define H3_MAX_CIDS 16
+#define H3_HASH_PER_CONN 8
+
+extern int g_h3_max_reqs;
+extern int g_h3_max_conns;
+extern size_t g_h3_max_udp;
+extern uint64_t g_h3_idle_ns;
 
 typedef struct h3_req {
   int active;
   int64_t stream_id;
   char method[16];
-  char path[H3_PATH_MAX];
+  char *path;             /* H3_PATH_MAX bytes, owned while active */
   char inm[80];           /* if-none-match header value, empty if absent */
   char origin[128];       /* origin header value, empty if absent */
   char protocol[16];      /* :protocol pseudo-header, RFC9220 extended CONNECT */
@@ -84,10 +96,14 @@ typedef struct h3_conn {
   uint8_t scid_data[H3_SCID_LEN];
   ngtcp2_cid odcid; /* client's original DCID */
   uint8_t odcid_data[NGTCP2_MAX_CIDLEN];
+  ngtcp2_cid cids[H3_MAX_CIDS]; /* issued, in t_h3_hash */
+  int ncids;
+  int tx_dirty; /* queued for flush_tx after rx batch */
   int64_t h3_ctrl;
   int64_t h3_qenc;
   int64_t h3_qdec;
-  h3_req_t reqs[H3_MAX_REQS];
+  h3_req_t *reqs;
+  int max_reqs;
   int handshake_done;
   int done;
   int active_idx; /* position in t_h3_active[], for O(1) swap-remove */
@@ -96,11 +112,16 @@ typedef struct h3_conn {
   ngtcp2_tstamp last_rx;
 } h3_conn_t;
 
-/* t_h3_active[]: dense, no holes, iterate for "all connections" (h3_tick,
-   idle sweeps, ts_push_h3_flush). t_h3_hash[]: open-addressing lookup by raw CID bytes, keyed SCID+ODCID. */
+/* t_h3_active[]: dense, no holes, iterate for "all connections" (h3_tick, idle sweeps, ts_push_h3_flush).
+   t_h3_hash[]: open-addressing lookup by raw CID bytes, 1 entry per issued CID + ODCID. */
+typedef struct {
+  h3_conn_t *c; /* NULL empty, H3_HASH_TOMB deleted */
+  ngtcp2_cid cid;
+} h3_hent_t;
+
 extern _Thread_local h3_conn_t **t_h3_active;
 extern _Thread_local int t_h3_active_cnt;
-extern _Thread_local h3_conn_t **t_h3_hash;
+extern _Thread_local h3_hent_t *t_h3_hash;
 extern _Thread_local int t_h3_init;
 
 extern _Thread_local struct sockaddr_storage t_h3_udp4_local;
@@ -108,20 +129,18 @@ extern _Thread_local socklen_t t_h3_udp4_local_len;
 extern _Thread_local struct sockaddr_storage t_h3_udp6_local;
 extern _Thread_local socklen_t t_h3_udp6_local_len;
 
-static inline ngtcp2_tstamp h3_ts(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (ngtcp2_tstamp)ts.tv_sec * 1000000000ULL + (ngtcp2_tstamp)ts.tv_nsec;
-}
-
 static inline h3_req_t *find_req(h3_conn_t *c, int64_t sid) {
-  for (int i = 0; i < H3_MAX_REQS; i++) if (c->reqs[i].active && c->reqs[i].stream_id == sid) return &c->reqs[i];
+  for (int i = 0; i < c->max_reqs; i++) if (c->reqs[i].active && c->reqs[i].stream_id == sid) return &c->reqs[i];
   return NULL;
 }
 
 static inline h3_req_t *alloc_req(h3_conn_t *c, int64_t sid) {
-  for (int i = 0; i < H3_MAX_REQS; i++) if (!c->reqs[i].active) {
+  for (int i = 0; i < c->max_reqs; i++) if (!c->reqs[i].active) {
+    char *path = malloc(H3_PATH_MAX);
+    if (!path) return NULL;
+    path[0] = '\0';
     memset(&c->reqs[i], 0, sizeof(h3_req_t));
+    c->reqs[i].path = path;
     c->reqs[i].active = 1;
     c->reqs[i].stream_id = sid;
     c->reqs[i].tspush_sub_idx = -1;
@@ -133,7 +152,7 @@ static inline h3_req_t *alloc_req(h3_conn_t *c, int64_t sid) {
 }
 
 static inline void free_req(h3_conn_t *c, int64_t sid) {
-  for (int i = 0; i < H3_MAX_REQS; i++) {
+  for (int i = 0; i < c->max_reqs; i++) {
     if (c->reqs[i].active && c->reqs[i].stream_id == sid) {
       hls_resp_body_release(c->reqs[i].resp_data, c->reqs[i].resp_zc);
       c->reqs[i].resp_data = NULL;
@@ -152,6 +171,8 @@ static inline void free_req(h3_conn_t *c, int64_t sid) {
       free(c->reqs[i].ws_pending);
       free(c->reqs[i].ws_send_data);
       free(c->reqs[i].ws_prev_data);
+      free(c->reqs[i].path);
+      c->reqs[i].path = NULL;
       c->reqs[i].active = 0;
       return;
     }
@@ -159,10 +180,11 @@ static inline void free_req(h3_conn_t *c, int64_t sid) {
 }
 
 /* from http3_quic.c */
-h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr *local, socklen_t locallen);
+h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr *local, socklen_t locallen, const h3_admit_t *ai);
 void h3conn_del(h3_conn_t *c);
 h3_conn_t *find_conn(const uint8_t *pkt, size_t pktlen);
 void flush_tx(h3_conn_t *c, int udp_fd);
+void h3_tables_free(void);
 int h3_tables_alloc(void); /* 1 = ready (already inited or just alloc'd), 0 = alloc failure */
 
 /* from http3_req.c */

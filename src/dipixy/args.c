@@ -227,6 +227,28 @@ int dixy_cfg_set_name(config_t *cfg, const char *name, char *err, size_t errsz) 
   return 0;
 }
 
+int dixy_cfg_set_h3_retry(config_t *cfg, const char *val, char *err, size_t errsz) {
+  if (!strcmp(val, "auto"))        cfg->h3_retry = H3_RETRY_CFG_AUTO;
+  else if (!strcmp(val, "off"))    cfg->h3_retry = H3_RETRY_CFG_OFF;
+  else if (!strcmp(val, "always")) cfg->h3_retry = H3_RETRY_CFG_ALWAYS;
+  else {
+    snprintf(err, errsz, "invalid '%s' (off, auto or always)", val);
+    return -1;
+  }
+  return 0;
+}
+
+int dixy_cfg_set_h3_cc(config_t *cfg, const char *val, char *err, size_t errsz) {
+  if (!strcmp(val, "cubic"))     cfg->h3_cc = H3_CC_CFG_CUBIC;
+  else if (!strcmp(val, "bbr"))  cfg->h3_cc = H3_CC_CFG_BBR;
+  else if (!strcmp(val, "reno")) cfg->h3_cc = H3_CC_CFG_RENO;
+  else {
+    snprintf(err, errsz, "invalid '%s' (cubic, bbr or reno)", val);
+    return -1;
+  }
+  return 0;
+}
+
 int dixy_cfg_set_media_type(config_t *cfg, const char *val, char *err, size_t errsz) {
   media_type_t mt;
   if (!strcmp(val, "tv"))
@@ -358,6 +380,13 @@ static void print_help(void) {
     "      --no-al-fec             ignore SDS FECBaseLayer\n"
     "      --no-status             disable /ui/status.js\n"
     "      --h3-altsvc-port <n>    port announced in Alt-Svc               [TLS port]\n"
+    "      --h3-max-streams <n>    concurrent requests per HTTP/3 conn     [100]\n"
+    "      --h3-max-conns <n>      HTTP/3 conns per worker, upper bound    [256]\n"
+    "      --h3-idle-timeout <s>   HTTP/3 connection idle timeout          [30]\n"
+    "      --h3-retry <mode>       HTTP/3 addr validation: off|auto|always [auto]\n"
+    "      --h3-max-udp-payload <n> largest HTTP/3 UDP datagram, 1200..65507 [1452]\n"
+    "      --h3-window <KiB>       HTTP/3 receive window per stream        [256]\n"
+    "      --h3-cc <algo>          HTTP/3 congestion ctrl: cubic|bbr|reno  [cubic]\n"
     "      --status-tpl <path>     use file instead of the built-in page\n"
     "      --auth <user:pass>      HTTP Basic Auth for /, /ui/status.js, /ui/ws/  [off]\n"
     "      --cors-origin <list>    comma-separated hls/hls-fmp4/llhls/dash/lldash\n"
@@ -434,6 +463,13 @@ static const struct option longopts[] = {
   {"no-http2", no_argument, 0, 1040},
   {"no-http3", no_argument, 0, 1041},
   {"h3-altsvc-port", required_argument, 0, 1060},
+  {"h3-max-streams", required_argument, 0, 1061},
+  {"h3-max-conns", required_argument, 0, 1062},
+  {"h3-idle-timeout", required_argument, 0, 1063},
+  {"h3-retry", required_argument, 0, 1064},
+  {"h3-max-udp-payload", required_argument, 0, 1065},
+  {"h3-window", required_argument, 0, 1066},
+  {"h3-cc", required_argument, 0, 1067},
   {"no-fcc", no_argument, 0, 1042},
   {"no-ret", no_argument, 0, 1043},
   {"al-fec", required_argument, 0, 1053},
@@ -713,6 +749,74 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         cfg->h3_altsvc_port = v;
+        break;
+      }
+      case 1061: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 4, 1000, &v)) {
+          argerr("invalid --h3-max-streams: %s (4..1000)", optarg);
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        cfg->h3_max_streams = v;
+        break;
+      }
+      case 1062: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, 65536, &v)) {
+          argerr("invalid --h3-max-conns: %s (1..65536)", optarg);
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        cfg->h3_max_conns = v;
+        break;
+      }
+      case 1063: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, 86400, &v)) {
+          argerr("invalid --h3-idle-timeout: %s (seconds, 1..86400)", optarg);
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        cfg->h3_idle_s = v;
+        break;
+      }
+      case 1064: {
+        char err[96];
+        if (dixy_cfg_set_h3_retry(cfg, optarg, err, sizeof err)) {
+          argerr("invalid --h3-retry: %s", err);
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        break;
+      }
+      case 1065: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1200, 65507, &v)) {
+          argerr("invalid --h3-max-udp-payload: %s (1200..65507)", optarg);
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        cfg->h3_max_udp = v;
+        break;
+      }
+      case 1066: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 16, 1048576, &v)) {
+          argerr("invalid --h3-window: %s (KiB, 16..1048576)", optarg);
+          args_free(cfg);
+          return ARGS_ERR;
+        }
+        cfg->h3_window_kib = v;
+        break;
+      }
+      case 1067: {
+        char err[96];
+        if (dixy_cfg_set_h3_cc(cfg, optarg, err, sizeof err)) {
+          argerr("invalid --h3-cc: %s", err);
+          args_free(cfg);
+          return ARGS_ERR;
+        }
         break;
       }
       case 1042:
