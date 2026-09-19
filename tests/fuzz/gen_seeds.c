@@ -205,6 +205,18 @@ static void gen_emmg_datagrams(const char *dir) {
   write_file(dir, "emmg_datagrams_min.bin", body, sizeof body);
 }
 
+static void gen_yamlcfg(const char *dir) {
+  /* first byte is load mode: 0 normal, 1 check, 2 strict, 3 both */
+  static const char scalars[] = "\0name: hello\non: yes\ncount: 42\nnet:\n  port: 8080\nfile: /dev/null\n";
+  static const char lists[] = "\1list:\n  - a\n  - b\n  -\nitems:\n  - first:\n      opt: 5\n  - second\n";
+  static const char broken[] = "\2name: &a x\nbogus: *a\ncount: 999\ncount: 1\n---\nlist: [a, [b]]\n";
+  static const char flow[] = "\3{name: \"q: [1]\", list: [x, y], net: {port: 1}}\n";
+  write_file(dir, "yamlcfg_scalars.yaml", (const unsigned char *)scalars, sizeof scalars - 1);
+  write_file(dir, "yamlcfg_lists.yaml", (const unsigned char *)lists, sizeof lists - 1);
+  write_file(dir, "yamlcfg_broken.yaml", (const unsigned char *)broken, sizeof broken - 1);
+  write_file(dir, "yamlcfg_flow.yaml", (const unsigned char *)flow, sizeof flow - 1);
+}
+
 int main(int argc, char **argv) {
   if (argc != 2) {
     fprintf(stderr, "usage: %s <output-dir>\n", argv[0]);
@@ -219,5 +231,6 @@ int main(int argc, char **argv) {
   gen_emmg_datagrams(argv[1]);
   gen_dvbstp(argv[1]);
   gen_dvbstp_bcg_compressed(argv[1]);
+  gen_yamlcfg(argv[1]);
   return 0;
 }

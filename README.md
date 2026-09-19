@@ -3,6 +3,11 @@
 Tools for handling DVB-IPI.
 Build carrier-grade IPTV infrastructure. Or just pretend you do in your basement.
 
+Although DVB-IPI provides the conceptual backbone for the toolkit, individual services are intentionally decoupled.
+You don’t need a complete DVB-IPI environment to benefit from them.
+Components like `dipitvhead` or `dipiradiohead` work just as well feeding an RF modulator, acting as stream processors,
+or powering custom video distribution setups.
+
 GitHub is not the primary development repository, but releases are published here and pull requests are welcome.
 
 AI helped with the README files, `-h` boilerplate, man pages and test scaffolding.

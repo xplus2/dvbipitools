@@ -111,6 +111,17 @@ dvbipitools_add_fuzz_harness(ssdp
     ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
+dvbipitools_add_fuzz_harness(yamlcfg
+    fuzz_yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
 # ecmg_client.c/emmg_server.c/ssdp.c pull in real pthread usage even though fuzzed
 # functions themselves are pure. link Threads on all like dipitvhead itself does
 find_package(Threads REQUIRED)

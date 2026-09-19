@@ -1500,7 +1500,7 @@ UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section
 	lib_mux_mpts \
 	lib_cas_cas_group \
 	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec \
-	lib_xml_util lib_tva_timefmt lib_tva_bcg_doc lib_tva_mapping lib_tva_xmltv lib_tva_tva_xml \
+	lib_xml_util lib_yamlcfg lib_tva_timefmt lib_tva_bcg_doc lib_tva_mapping lib_tva_xmltv lib_tva_tva_xml \
 	lib_bim_fragment lib_bim_accessunit \
 	lib_sds_xml lib_fccret_fcc_client dipibim_args dipiscan_format dipiscan_scan dipixmltv_args dipixmltv_revmap dipixmltv_suggest \
 	dipiradiohead_mpegaudio dipiradiohead_aac_adts dipiradiohead_aac_latm \
@@ -2592,6 +2592,18 @@ lib_xml_util_BIN := tests/unit/lib/test_xml_util
 lib_xml_util_SRCS := \
 	tests/unit/lib/test_xml_util.c \
 	src/lib/helper/xml_util.c
+
+lib_yamlcfg_BIN := tests/unit/lib/test_yamlcfg
+lib_yamlcfg_SRCS := \
+	tests/unit/lib/test_yamlcfg.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c
 
 lib_sds_xml_BIN := tests/unit/lib/test_sds_xml
 lib_sds_xml_SRCS := \
@@ -4507,7 +4519,7 @@ FUZZ_BIM_DEPS := \
 	src/lib/helper/log.c
 
 # _BIN/_SRCS and FUZZ_BINS stay unconditional.
-FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_dvbstp fuzz_ws_frame fuzz_route fuzz_ssdp
+FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_dvbstp fuzz_ws_frame fuzz_route fuzz_ssdp fuzz_yamlcfg
 
 fuzz_psi_BIN := tests/fuzz/fuzz_psi
 fuzz_psi_SRCS := \
@@ -4617,6 +4629,18 @@ fuzz_ssdp_SRCS := \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
 fuzz_ssdp_EXTRA_LDFLAGS := -pthread
+
+fuzz_yamlcfg_BIN := tests/fuzz/fuzz_yamlcfg
+fuzz_yamlcfg_SRCS := \
+	tests/fuzz/fuzz_yamlcfg.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c
 
 fuzz_gen_seeds_BIN := tests/fuzz/gen_seeds
 fuzz_gen_seeds_SRCS := \

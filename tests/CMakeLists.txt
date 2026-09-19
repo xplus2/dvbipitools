@@ -723,6 +723,17 @@ dvbipitools_add_unit_test(lib_xml_util
     unit/lib/test_xml_util.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c)
 
+dvbipitools_add_unit_test(lib_yamlcfg
+    unit/lib/test_yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
 dvbipitools_add_unit_test(lib_sds_xml
     unit/lib/test_sds_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
