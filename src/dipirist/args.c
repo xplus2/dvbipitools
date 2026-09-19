@@ -178,7 +178,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
   args_status_t pst;
-  int cli_in = 0, cli_out = 0;
+  int cli_in = 0;
+  int cli_out = 0;
   int c;
 
   pst = prescan(argc, argv, &cfg_path, &configtest);

@@ -289,7 +289,8 @@ START_TEST(emmg_server_completes_real_handshake_and_queues_datagram) {
   emmg_server_t *s;
   unsigned port;
   int fd;
-  unsigned char msg[512], payload[512];
+  unsigned char msg[512];
+  unsigned char payload[512];
   simulcrypt_hdr_t hdr;
   size_t n;
   static const unsigned char dg[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x01};
@@ -344,7 +345,8 @@ START_TEST(emmg_server_accepts_up_to_new_conn_cap) {
   unsigned port;
   int fd[8], extra;
   int i;
-  unsigned char msg[512], payload[512];
+  unsigned char msg[512];
+  unsigned char payload[512];
   simulcrypt_hdr_t hdr;
   size_t n;
 
@@ -423,7 +425,8 @@ START_TEST(emmg_server_queue_holds_more_than_old_64_cap) {
   emmg_server_t *s;
   unsigned port;
   int fd;
-  unsigned char msg[512], payload[512];
+  unsigned char msg[512];
+  unsigned char payload[512];
   simulcrypt_hdr_t hdr;
   size_t n;
   unsigned char got[64];
@@ -474,7 +477,8 @@ START_TEST(emmg_server_queue_holds_more_than_old_256_cap) {
   emmg_server_t *s;
   unsigned port;
   int fd;
-  unsigned char msg[512], payload[512];
+  unsigned char msg[512];
+  unsigned char payload[512];
   simulcrypt_hdr_t hdr;
   size_t n;
   unsigned char got[64];
@@ -555,7 +559,8 @@ START_TEST(emmg_server_rejects_channel_setup_wrong_version) {
   emmg_server_t *s;
   unsigned port;
   int fd;
-  unsigned char msg[512], payload[512];
+  unsigned char msg[512];
+  unsigned char payload[512];
   simulcrypt_hdr_t hdr;
   size_t n;
   unsigned err = 0;
@@ -639,7 +644,8 @@ START_TEST(emmg_server_dial_mode_completes_handshake_and_queues_datagram) {
   emmg_server_t *s;
   int listen_fd, fd;
   unsigned port;
-  unsigned char msg[512], payload[512];
+  unsigned char msg[512];
+  unsigned char payload[512];
   simulcrypt_hdr_t hdr;
   size_t n;
   static const unsigned char dg[] = {0xAA, 0xBB, 0xCC};
@@ -688,7 +694,9 @@ END_TEST
 START_TEST(emmg_server_dial_mode_reconnects_after_drop) {
   emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
-  int listen_fd, fd1, fd2;
+  int listen_fd;
+  int fd1;
+  int fd2;
   unsigned port;
 
   listen_fd = test_listen_loopback(&port);
@@ -714,7 +722,8 @@ END_TEST
 START_TEST(emmg_server_dial_mode_stop_is_prompt_when_target_unreachable) {
   emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
-  double t0, t1;
+  double t0;
+  double t1;
 
   cfg.dial_host = "127.0.0.1";
   cfg.dial_port = 1;
@@ -737,10 +746,12 @@ START_TEST(emmg_server_stop_reaps_all_max_conns_in_mixed_states) {
   unsigned port;
   int fd[8];
   int i;
-  unsigned char msg[512], payload[512];
+  unsigned char msg[512];
+  unsigned char payload[512];
   simulcrypt_hdr_t hdr;
   size_t n;
-  double start, elapsed;
+  double start;
+  double elapsed;
   struct timespec settle = {0, 100L * 1000000L};
   static const unsigned char partial_hdr[2] = {3, 0};
 

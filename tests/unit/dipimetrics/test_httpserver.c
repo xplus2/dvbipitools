@@ -192,7 +192,8 @@ static size_t tls_recv_all(http_server_t *hs, store_t *st, tls_t *client, char *
 
 START_TEST(tls_get_metrics_returns_200_over_https) {
   store_t st;
-  int lfd, cfd;
+  int lfd;
+  int cfd;
   http_server_t *hs;
   char cert_path[] = "/tmp/dipimetrics_test_cert_XXXXXX";
   char key_path[] = "/tmp/dipimetrics_test_key_XXXXXX";
@@ -262,7 +263,8 @@ END_TEST
 
 START_TEST(unknown_path_returns_404) {
   store_t st;
-  int lfd, cfd;
+  int lfd;
+  int cfd;
   http_server_t *hs;
   char buf[8192];
   const char req[] = "GET /nope HTTP/1.1\r\nHost: x\r\n\r\n";
@@ -285,7 +287,8 @@ END_TEST
 
 START_TEST(post_to_metrics_also_returns_404) {
   store_t st;
-  int lfd, cfd;
+  int lfd;
+  int cfd;
   http_server_t *hs;
   char buf[8192];
   const char req[] = "POST /metrics HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n";
@@ -308,7 +311,8 @@ END_TEST
 
 START_TEST(query_string_is_stripped_before_matching) {
   store_t st;
-  int lfd, cfd;
+  int lfd;
+  int cfd;
   http_server_t *hs;
   char buf[8192];
   const char req[] = "GET /metrics?foo=bar HTTP/1.1\r\nHost: x\r\n\r\n";
@@ -400,7 +404,8 @@ END_TEST
 
 START_TEST(idle_connection_past_deadline_is_reaped) {
   store_t st;
-  int lfd, cfd;
+  int lfd;
+  int cfd;
   http_server_t *hs;
   char buf[8];
 
@@ -444,7 +449,8 @@ END_TEST
 
 START_TEST(metrics_requires_auth_when_configured) {
   store_t st;
-  int lfd, cfd;
+  int lfd;
+  int cfd;
   http_server_t *hs;
   char buf[8192];
   const char req[] = "GET /metrics HTTP/1.1\r\nHost: x\r\n\r\n";
@@ -468,7 +474,8 @@ END_TEST
 
 START_TEST(metrics_with_correct_auth_returns_200) {
   store_t st;
-  int lfd, cfd;
+  int lfd;
+  int cfd;
   http_server_t *hs;
   char buf[8192];
   const char req[] = "GET /metrics HTTP/1.1\r\nHost: x\r\nAuthorization: Basic dXNlcjpwYXNz\r\n\r\n";
@@ -491,7 +498,8 @@ END_TEST
 
 START_TEST(metrics_with_wrong_auth_returns_401) {
   store_t st;
-  int lfd, cfd;
+  int lfd;
+  int cfd;
   http_server_t *hs;
   char buf[8192];
   const char req[] = "GET /metrics HTTP/1.1\r\nHost: x\r\nAuthorization: Basic d3Jvbmc=\r\n\r\n";

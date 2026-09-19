@@ -380,7 +380,7 @@ static const yamlcfg_key_t keys[] = {
 };
 
 static int load(yamlcfg_t *y, int check, config_t *cfg, const char *path) {
-  int rc = yamlcfg_load_items(y, TOOL_NAME, check, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof *keys, cfg, item_hook);
+  int rc = yamlcfg_load_items(y, TOOL_NAME, check, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg, item_hook);
   cfg->last_input = LAST_NONE;
   cfg->media_type_seen = 0;
   return rc;

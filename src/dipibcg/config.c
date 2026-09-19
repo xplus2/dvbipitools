@@ -136,7 +136,7 @@ static const yamlcfg_key_t keys[] = {
 
 int bcg_cfg_load(config_t *cfg, const char *path) {
   yamlcfg_t y;
-  return yamlcfg_load(&y, TOOL_NAME, 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof *keys, cfg) == YAMLCFG_ERROR ? -1 : 0;
+  return yamlcfg_load(&y, TOOL_NAME, 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg) == YAMLCFG_ERROR ? -1 : 0;
 }
 
 static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
@@ -148,7 +148,7 @@ int bcg_cfg_test(const char *path) {
   config_t cfg;
   const args_flags_t *fl = &cfg.fl;
   bcg_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, 1, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof *keys, &cfg) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load(&y, TOOL_NAME, 1, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
   warn_if(&y, !fl->have_a && !fl->have_l, "neither announce nor listen set (required unless given on the command line)");
   warn_if(&y, !fl->have_mcast, "mcast not set (required unless given on the command line)");
   warn_if(&y, fl->have_a && !fl->have_l && !cfg.input_path, "input not set (required for announce unless given on the command line)");

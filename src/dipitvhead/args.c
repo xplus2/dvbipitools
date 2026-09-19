@@ -396,7 +396,7 @@ static int has_duplicate_sid(const config_t *cfg) {
   return 0;
 }
 
-int tvh_cfg_check(config_t *cfg, int partial, tvh_report_fn rep, void *ud) {
+int tvh_cfg_check(const config_t *cfg, int partial, tvh_report_fn rep, void *ud) {
   int fatal = 0;
   unsigned n_rist_in = 0;
   size_t pwlen = strlen(cfg->srt_passphrase);
@@ -608,7 +608,9 @@ static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
-  int cli_inputs = 0, cli_vendors = 0, cli_peers = 0;
+  int cli_inputs = 0;
+  int cli_vendors = 0;
+  int cli_peers = 0;
   args_status_t pst;
   char err[192];
   int c;

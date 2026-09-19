@@ -264,7 +264,9 @@ static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
-  int cli_inputs = 0, cli_vendors = 0, cli_peers = 0;
+  int cli_inputs = 0;
+  int cli_vendors = 0;
+  int cli_peers = 0;
   args_status_t pst;
   int have_mcast = 0;
   int any_cas_flag = 0;

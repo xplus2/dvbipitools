@@ -27,6 +27,6 @@ int tvh_cfg_strip(unsigned *mask, const char *s);
 int tvh_cfg_add_peer(config_t *cfg, const char *uri, char *err, size_t errsz);
 int tvh_cfg_profile(config_t *cfg, const char *val, char *err, size_t errsz);
 int tvh_cfg_group_mode(config_t *cfg, const char *val, char *err, size_t errsz);
-int tvh_cfg_check(config_t *cfg, int partial, tvh_report_fn rep, void *ud);
+int tvh_cfg_check(const config_t *cfg, int partial, tvh_report_fn rep, void *ud);
 
 #endif

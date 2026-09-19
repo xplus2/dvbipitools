@@ -125,7 +125,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     switch (c) {
     case 'a':
     case 'l':
-      if (!cli_mode) cfg->fl.have_a = cfg->fl.have_l = 0;
+      if (!cli_mode) {
+        cfg->fl.have_a = 0;
+        cfg->fl.have_l = 0;
+      }
       cli_mode = 1;
       if (c == 'a') cfg->fl.have_a = 1;
       else          cfg->fl.have_l = 1;

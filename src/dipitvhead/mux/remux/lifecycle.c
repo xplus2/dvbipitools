@@ -15,9 +15,10 @@ static void resolve_sdt(remux_t *r, const psi_t *psi) {
     r->send_sdt = 0;
   } else if (r->input.sdt_mode == TABLE_OVERRIDE) {
     bufcpy(r->service_name, sizeof r->service_name, r->input.sdt_text);
-    bufcpy(r->provider_name, sizeof r->provider_name,
-           r->input.provider_text[0] ? r->input.provider_text :
-           r->cfg.default_provider_text[0] ? r->cfg.default_provider_text : TOOL_NAME);
+    const char *prov = r->input.provider_text;
+    if (!prov[0]) prov = r->cfg.default_provider_text;
+    if (!prov[0]) prov = TOOL_NAME;
+    bufcpy(r->provider_name, sizeof r->provider_name, prov);
     r->send_sdt = 1;
   } else {
     bufcpy(r->service_name, sizeof r->service_name, psi_service_name(psi));

@@ -87,8 +87,7 @@ void yamlcfg_report(const yamlcfg_t *y) {
 int yamlcfg_parse_bool(const char *val, int *out) {
   static const char *const yes[] = {"on", "yes", "true", "1"};
   static const char *const no[] = {"off", "no", "false", "0"};
-  size_t i;
-  for (i = 0; i < sizeof yes / sizeof *yes; i++) {
+  for (size_t i = 0; i < sizeof yes / sizeof yes[0]; i++) {
     if (!strcasecmp(val, yes[i])) {
       *out = 1;
       return 0;
@@ -142,8 +141,7 @@ static int apply_value(walk_t *w, const char *val, int line, int in_seq, unsigne
 }
 
 static int list_kind(const walk_t *w) {
-  size_t i;
-  for (i = 0; i < w->nkeys; i++) if (!strcmp(w->keys[i].key, w->path)) return w->keys[i].list;
+  for (size_t i = 0; i < w->nkeys; i++) if (!strcmp(w->keys[i].key, w->path)) return w->keys[i].list;
   return 0;
 }
 
@@ -156,8 +154,8 @@ static int item_event(walk_t *w, int begin, int line) {
 }
 
 static void item_reset_seen(walk_t *w) {
-  size_t plen = strlen(w->path), i;
-  for (i = 0; i < w->nkeys; i++) if (!strncmp(w->keys[i].key, w->path, plen) && w->keys[i].key[plen] == '.') w->seen[i] = 0;
+  size_t plen = strlen(w->path);
+  for (size_t i = 0; i < w->nkeys; i++) if (!strncmp(w->keys[i].key, w->path, plen) && w->keys[i].key[plen] == '.') w->seen[i] = 0;
 }
 
 static int on_map_start(walk_t *w, int line) {
@@ -181,7 +179,7 @@ static int on_map_start(walk_t *w, int line) {
 }
 
 static int on_seq_start(walk_t *w, int line) {
-  frame_t *top;
+  const frame_t *top;
   if (w->depth == 0) return fail(w->y, line, "top level must be a mapping");
   top = &w->st[w->depth - 1];
   if (top->is_seq) return fail(w->y, line, "nested lists not supported");
@@ -201,6 +199,7 @@ static int on_seq_start(walk_t *w, int line) {
 
 static void on_seq_end(walk_t *w) {
   frame_t *top;
+  if (w->depth < 2) return;
   w->depth--;
   top = &w->st[w->depth - 1];
   w->path[top->plen] = 0;
@@ -208,8 +207,10 @@ static void on_seq_end(walk_t *w) {
 }
 
 static int on_map_end(walk_t *w, int line) {
-  int item = w->st[w->depth - 1].is_item;
-  int rc = item ? item_event(w, 0, line) : 0;
+  int item, rc;
+  if (w->depth < 1) return fail(w->y, line, "unbalanced mapping end");
+  item = w->st[w->depth - 1].is_item;
+  rc = item ? item_event(w, 0, line) : 0;
   w->depth--;
   if (w->depth > 0) {
     frame_t *top = &w->st[w->depth - 1];
@@ -266,7 +267,8 @@ static int walk(walk_t *w, yaml_parser_t *p) {
 
   for (;;) {
     yaml_event_t ev;
-    int line, rc = 0, done = 0;
+    int line, rc = 0;
+    int done = 0;
     if (!yaml_parser_parse(p, &ev)) return parse_fail(w->y, p);
     line = (int)ev.start_mark.line + 1;
     switch (ev.type) {

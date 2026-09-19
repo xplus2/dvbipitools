@@ -347,7 +347,7 @@ static const yamlcfg_key_t keys[] = {
 
 int rec_cfg_load(config_t *cfg, const char *path) {
   yamlcfg_t y;
-  return yamlcfg_load(&y, TOOL_NAME, 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof *keys, cfg) == YAMLCFG_ERROR ? -1 : 0;
+  return yamlcfg_load(&y, TOOL_NAME, 0, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg) == YAMLCFG_ERROR ? -1 : 0;
 }
 
 static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
@@ -363,12 +363,15 @@ static int count_kind(const config_t *cfg, out_kind_t k) {
 int rec_cfg_test(const char *path) {
   yamlcfg_t y;
   config_t cfg;
-  int n_rist = 0, n_file = 0, n_rtmp = 0, has_srt = 0;
+  int n_rist = 0;
+  int n_file = 0;
+  int n_rtmp = 0;
+  int has_srt = 0;
   int container;
   const args_flags_t *fl = &cfg.fl;
 
   rec_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, 1, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof *keys, &cfg) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load(&y, TOOL_NAME, 1, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
   n_rist = count_kind(&cfg, OUT_RIST);
   n_file = count_kind(&cfg, OUT_FILE);
   n_rtmp = count_kind(&cfg, OUT_RTMP) + count_kind(&cfg, OUT_RTMPS);
