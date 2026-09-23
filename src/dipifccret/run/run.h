@@ -61,6 +61,8 @@ typedef struct {
   unsigned idle_timeout_s; /* 0 = reaping disabled */
   unsigned ret_client_idle_timeout_s; /* 0 = reaping disabled */
 
+  tsinspect_agg_t *agg; /* NULL: inspect-ts off */
+
   atomic_int nack_truncated_logged; /* re-armed on next non-truncated NACK. racy across workers, relaxed ok */
 } dispatch_ctx_t;
 

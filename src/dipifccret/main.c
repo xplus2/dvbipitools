@@ -33,6 +33,7 @@ int main(int argc, char **argv) {
   args_status_t st;
   size_t max_channels, ring_slots, cache_cap;
   channel_table_t *channels = NULL;
+  tsinspect_agg_t *agg = NULL;
   mcsend_table_t *mt = NULL;
   mcsend_table_t *rsi_mt = NULL;
   ret_ctx_t *ret = NULL;
@@ -133,7 +134,13 @@ int main(int argc, char **argv) {
     }
   }
 
+  agg = tsinspect_agg_new(cfg.metrics_inspect_ts);
+  if (agg) {
+    channel_table_set_inspect(channels, agg);
+    metrics_exporter_set_extra(&mx, tsinspect_agg_put_cb, agg);
+  }
   dispatch_ctx.channels = channels;
+  dispatch_ctx.agg = agg;
   dispatch_ctx.mt = mt;
   dispatch_ctx.ff_port = cfg.ff_port;
   dispatch_ctx.rsi_mt = rsi_mt;
@@ -238,5 +245,6 @@ cleanup:
   if (mt) mcsend_table_free(mt);
   if (rsi_mt) mcsend_table_free(rsi_mt);
   if (channels) channel_table_free(channels);
+  tsinspect_agg_free(agg);
   return rc;
 }

@@ -16,9 +16,12 @@
 typedef struct {
   unsigned program_number, pmt_pid;
   psi_section_asm_t asm_;
+  double obs_last;
+  int obs_ver;
 } pmt_cand_t;
 
 struct psi {
+  psi_obs_t *obs;
   psi_section_asm_t pat, sdt, nit, cat;
   int have_pat, have_pmt, have_sdt, have_nit, have_cat;
   unsigned program_number, pmt_pid, pcr_pid, nit_pid;
@@ -45,10 +48,10 @@ struct psi {
   int multi_count;
 
   pid_class_t class_by_pid[8192]; /* direct pid->class, rebuilt on parse_pat/parse_pmt */
+  uint16_t service_by_pid[8192];
   unsigned char pmt_wanted[8192]; /* direct pid->ever-a-candidate, mirrors pmt_cand[] growth, set-only */
 
-  /* overflow logging, edge-triggered: logged once when a repeat first exceeds
-     a cap, cleared once a repeat no longer does - avoids spamming every PAT/PMT cycle */
+  /* overflow logging, edge-triggered: logged once when a repeat first exceeds a cap, cleared once a repeat no longer does. avoids spamming every PAT/PMT cycle */
   int pat_program_overflow_logged;
   int pmt_cand_overflow_logged;
   int es_overflow_logged;
@@ -73,6 +76,7 @@ void link_lcevc(psi_es_t *es, int count);
 void decode_service_desc(const unsigned char *d, size_t dll, char *provider_dst, char *service_dst);
 
 /* parse.c */
+void obs_version(psi_t *c, psi_obs_id_t id, const unsigned char *b, pmt_cand_t *cand);
 void parse_pat(psi_t *c);
 int parse_pmt(psi_t *c, pmt_cand_t *cand);
 void parse_sdt(psi_t *c);

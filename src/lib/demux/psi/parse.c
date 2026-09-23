@@ -9,12 +9,28 @@
 
 #include "priv.h"
 
+void obs_version(psi_t *c, psi_obs_id_t id, const unsigned char *b, pmt_cand_t *cand) {
+  int *ver, v;
+  if (!c->obs || !(b[5] & 1)) return;
+  ver = cand ? &cand->obs_ver : &c->obs->t[id].version;
+  v = (b[5] >> 1) & 0x1F;
+  if (*ver >= 0 && *ver != v) c->obs->t[id].changes++;
+  *ver = v;
+}
+
+static int section_bad(psi_t *c, psi_obs_id_t id, const unsigned char *b, size_t n) {
+  if (crc32_mpeg(b, n) == 0) return 0;
+  if (c->obs) c->obs->t[id].crc_errors++;
+  return 1;
+}
+
 /* registers pid as a new PMT candidate for program prog (assumes pid isn't already a
    candidate). also mirrors into c->multi[] when multi-program mode is on */
 static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
   if (c->pmt_cand_count < PSI_MAX_PROGRAMS) {
     pmt_cand_t *cand = &c->pmt_cand[c->pmt_cand_count];
     memset(cand, 0, sizeof *cand);
+    cand->obs_ver = -1;
     cand->program_number = prog;
     cand->pmt_pid = pid;
     c->pmt_cand_count++;
@@ -35,10 +51,11 @@ static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
 void parse_pat(psi_t *c) {
   const unsigned char *b = c->pat.buf;
   size_t n = c->pat.expect, end;
-  if (n < 12 || b[0] != 0x00 || crc32_mpeg(b, n) != 0) {
+  if (n < 12 || b[0] != 0x00 || section_bad(c, PSI_OBS_PAT, b, n)) {
     log_throttled(&c->pat_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed PAT section dropped");
     return;
   }
+  obs_version(c, PSI_OBS_PAT, b, NULL);
   c->nit_pid = 0;
   c->pat_program_count = 0;
   /* pmt_cand[] deliberately not reset here: a candidate's PMT may still be
@@ -77,12 +94,13 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   unsigned prog;
   int hdmv = 0;
   const unsigned char *ca;
-  if (n < 16 || b[0] != 0x02 || crc32_mpeg(b, n) != 0) {
+  if (n < 16 || b[0] != 0x02 || section_bad(c, PSI_OBS_PMT, b, n)) {
     log_throttled(&c->pmt_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed PMT section dropped");
     return 0;
   }
   prog = ((unsigned)b[3] << 8) | b[4];
   if (prog != cand->program_number) return 0;
+  obs_version(c, PSI_OBS_PMT, b, cand);
   c->program_number = prog;
   c->pmt_pid = cand->pmt_pid;
   c->pcr_pid = (((unsigned)b[8] & 0x1F) << 8) | b[9];
@@ -141,6 +159,11 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   }
   for (int k = 0; k < c->es_count; k++) if (c->es[k].cls == PID_AUDIO) c->es[k].audio_index = ++c->audio_count;
   link_lcevc(c->es, c->es_count);
+  for (unsigned k = 0; k < 8192; k++) if (c->service_by_pid[k] == prog) c->service_by_pid[k] = 0;
+  c->service_by_pid[cand->pmt_pid] = (uint16_t)prog;
+  c->service_by_pid[c->pcr_pid] = (uint16_t)prog;
+  for (int k = 0; k < c->es_count; k++) c->service_by_pid[c->es[k].pid] = (uint16_t)prog;
+  for (int k = 0; k < c->ecm_count; k++) c->service_by_pid[c->ecm[k]] = (uint16_t)prog;
   c->have_pmt = 1;
   rebuild_class_table(c);
   return 1;
@@ -156,10 +179,11 @@ void parse_sdt(psi_t *c) {
   const unsigned char *b = c->sdt.buf;
   size_t n = c->sdt.expect, i, end;
 
-  if (n < 12 || b[0] != 0x42 || crc32_mpeg(b, n) != 0) {
+  if (n < 12 || b[0] != 0x42 || section_bad(c, PSI_OBS_SDT, b, n)) {
     log_throttled(&c->sdt_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed SDT section dropped");
     return;
   }
+  obs_version(c, PSI_OBS_SDT, b, NULL);
   c->onid = ((unsigned)b[8] << 8) | b[9];
   end = n - 4;
   i = 11;
@@ -183,10 +207,11 @@ void parse_nit(psi_t *c) {
   size_t n = c->nit.expect, ndl, l;
   const unsigned char *nn;
 
-  if (n < 12 || b[0] != 0x40 || crc32_mpeg(b, n) != 0) {
+  if (n < 12 || b[0] != 0x40 || section_bad(c, PSI_OBS_NIT, b, n)) {
     log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed NIT section dropped");
     return;
   }
+  obs_version(c, PSI_OBS_NIT, b, NULL);
   ndl = tspack_length12(b + 8);
   if (10 + ndl > n) {
     log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: NIT network descriptor loop overruns section, dropped");
@@ -203,10 +228,11 @@ void parse_cat(psi_t *c) {
   const unsigned char *b = c->cat.buf;
   size_t n = c->cat.expect, l;
   const unsigned char *ca;
-  if (n < 12 || b[0] != 0x01 || crc32_mpeg(b, n) != 0) {
+  if (n < 12 || b[0] != 0x01 || section_bad(c, PSI_OBS_CAT, b, n)) {
     log_throttled(&c->cat_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed CAT section dropped");
     return;
   }
+  obs_version(c, PSI_OBS_CAT, b, NULL);
   c->emm_pid = 0;
   c->ca_system_id = 0;
   ca = find_desc(b + 8, n - 12, 0x09, &l);

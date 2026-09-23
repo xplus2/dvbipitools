@@ -24,3 +24,8 @@ void srtsink_write(srtsink_t *r, const unsigned char *buf, size_t n) {
 }
 
 void srtsink_close(srtsink_t *r) { (void)r; }
+
+void srtsink_put_queue_metrics(metrics_writer_t *w, void *ctx) {
+  (void)w;
+  (void)ctx;
+}

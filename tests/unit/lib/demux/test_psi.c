@@ -563,6 +563,35 @@ START_TEST(psi_rejects_pat_with_bad_crc) {
 }
 END_TEST
 
+START_TEST(psi_observer_records_last_seen_and_crc_errors) {
+  psi_t *p = psi_new();
+  psi_obs_t obs;
+  double now = 10.0;
+  unsigned char section[64], pkt[188];
+  size_t slen = build_pat(section, 0x1234, 1, 0x0100);
+
+  psi_obs_init(&obs, &now);
+  psi_set_observer(p, &obs);
+  ck_assert_double_eq(obs.t[PSI_OBS_PAT].last_seen, 0.0);
+  ck_assert_int_eq(obs.t[PSI_OBS_PAT].version, -1);
+
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_double_eq(obs.t[PSI_OBS_PAT].last_seen, 10.0);
+  ck_assert_int_ge(obs.t[PSI_OBS_PAT].version, 0);
+  ck_assert_uint_eq(obs.t[PSI_OBS_PAT].crc_errors, 0u);
+
+  now = 11.5;
+  section[slen - 1] ^= 0xFF;
+  wrap_ts_packet(pkt, 0x0000, 1, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq(obs.t[PSI_OBS_PAT].crc_errors, 1u);
+  ck_assert_double_eq(obs.t[PSI_OBS_PAT].last_seen, 11.5);
+
+  psi_free(p);
+}
+END_TEST
+
 START_TEST(psi_ignores_pointer_field_beyond_payload) {
   psi_t *p = psi_new();
   unsigned char pkt[188];
@@ -773,6 +802,43 @@ START_TEST(psi_multi_mode_resolves_every_pmt_and_sdt_name) {
   ck_assert_str_eq(m[0].service_name, "One");
   ck_assert_str_eq(m[1].service_name, "Two");
   ck_assert_uint_eq(psi_original_network_id(p), 0x0055u);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_service_of_pid_maps_every_parsed_pmt) {
+  psi_t *p = psi_new();
+  unsigned char section[128], pkt[188];
+  size_t slen;
+
+  psi_enable_multi_program(p);
+  slen = build_pat2(section, 0x1234, 1, 0x0100, 2, 0x0200);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0101), 0u);
+
+  slen = build_pmt(section, 1, 0x0101, 0x0101, 0x1B, 0x0102, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt(section, 2, 0x0201, 0x0201, 0x1B, 0x0202, 0x0F);
+  wrap_ts_packet(pkt, 0x0200, 0, section, slen);
+  psi_feed(p, pkt);
+
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0100), 1u);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0101), 1u);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0102), 1u);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0200), 2u);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0201), 2u);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0202), 2u);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0300), 0u);
+
+  slen = build_pmt(section, 1, 0x0101, 0x0101, 0x1B, 0x0103, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 1, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0102), 0u);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0103), 1u);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0202), 2u);
 
   psi_free(p);
 }
@@ -1302,6 +1368,8 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_pmt_with_no_ca_descriptor_leaves_pmt_ca_system_id_zero);
   tcase_add_test(tc, psi_without_multi_mode_locks_first_pmt_only);
   tcase_add_test(tc, psi_multi_mode_resolves_every_pmt_and_sdt_name);
+  tcase_add_test(tc, psi_service_of_pid_maps_every_parsed_pmt);
+  tcase_add_test(tc, psi_observer_records_last_seen_and_crc_errors);
   tcase_add_test(tc, psi_wants_pid_picks_up_program_added_before_lock);
   tcase_add_test(tc, psi_wants_pid_picks_up_program_added_in_multi_mode);
   tcase_add_test(tc, psi_wants_pid_tracks_new_pid_when_program_moves);

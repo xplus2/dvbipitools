@@ -9,35 +9,37 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<po
 
 ## Options
 
-| flag  | long form            | argument                                | default                                         | scope     |
-|-------|----------------------|-----------------------------------------|-------------------------------------------------|-----------|
-| `-i`  | `--input`            | `<uri>`                                 | required, repeatable                            |           |
-|       | `--sid`              | `<n>`                                   | auto (see below)                                | per-input |
-| `-s`  | `--sdt`              | `<name>`                                | auto (see below)                                | per-input |
-|       | `--provider`         | `<name>`                                | `--default-provider`                            | per-input |
-|       | `--default-provider` | `<provider>`                            | `dipiradiohead`                                 |           |
-| `-m`  | `--mcast`            | `<group>:<port>` / `[<group6>]:<port>`  | required unless `-R` given                      |           |
-| `-O`  | `--out-iface`        | `<iface>`                               | kernel route                                    |           |
-| `-r`  | `--rtp`              |                                         | off (plain UDP)                                 |           |
-| `-T`  | `--ttl`              | `<n>`                                   | 1 (kernel default)                              |           |
-|       | `--dscp`             | `<v>`                                   | `video-high`                                    |           |
-|       | `--al-fec`           | `<L>:<D>`                               | off (Annex E Layer 1 FEC, needs `-r`)           |           |
-|       | `--al-fec-port`      | `<port>`                                | required with `--al-fec`                        |           |
-| `-n`  | `--nit`              | `<text>`                                | none                                            |           |
-| `-e`  | `--error`            | `<seconds>`                             | see below                                       |           |
-| `-k`  | `--insecure`         |                                         | off (TLS verified)                              |           |
-|       | `--tsid`             | `<n>`                                   | 1                                               |           |
-|       | `--onid`             | `<n>`                                   | 1                                               |           |
-| `-v`  | `--verbose`          |                                         | off                                             |           |
-|       | `--color`            | `auto\|always\|never`                   | `auto`                                          |           |
-|       | `--metrics`          | `<path>`                                | `/run/dvbipitools/metrics.sock`                 |           |
-|       | `--metrics-id`       | `<name>`                                | none (metrics disabled unless set)              |           |
-|       | `--metrics-interval` | `<s>`                                   | `5`                                             |           |
-| `-d`  | `--daemonize`        |                                         | off (foreground)                                |           |
-| `-c`  | `--config`           | `<path>`                                | `/etc/dvbipitools/dipiradiohead.yaml`           |           |
-|       | `--config-strict`    |                                         | config file issues are errors                   |           |
-|       | `--configtest`       |                                         | check the config file, then exit                |           |
-| `-h`  | `--help`             |                                         |                                                 |           |
+| flag | long form                    | argument                               | default                               | scope     |
+|------|------------------------------|----------------------------------------|---------------------------------------|-----------|
+| `-i` | `--input`                    | `<uri>`                                | required, repeatable                  |           |
+|      | `--sid`                      | `<n>`                                  | auto (see below)                      | per-input |
+| `-s` | `--sdt`                      | `<name>`                               | auto (see below)                      | per-input |
+|      | `--provider`                 | `<name>`                               | `--default-provider`                  | per-input |
+|      | `--default-provider`         | `<provider>`                           | `dipiradiohead`                       |           |
+| `-m` | `--mcast`                    | `<group>:<port>` / `[<group6>]:<port>` | required unless `-R` given            |           |
+| `-O` | `--out-iface`                | `<iface>`                              | kernel route                          |           |
+| `-r` | `--rtp`                      |                                        | off (plain UDP)                       |           |
+| `-T` | `--ttl`                      | `<n>`                                  | 1 (kernel default)                    |           |
+|      | `--dscp`                     | `<v>`                                  | `video-high`                          |           |
+|      | `--al-fec`                   | `<L>:<D>`                              | off (Annex E Layer 1 FEC, needs `-r`) |           |
+|      | `--al-fec-port`              | `<port>`                               | required with `--al-fec`              |           |
+| `-n` | `--nit`                      | `<text>`                               | none                                  |           |
+| `-e` | `--error`                    | `<seconds>`                            | see below                             |           |
+| `-k` | `--insecure`                 |                                        | off (TLS verified)                    |           |
+|      | `--tsid`                     | `<n>`                                  | 1                                     |           |
+|      | `--onid`                     | `<n>`                                  | 1                                     |           |
+| `-v` | `--verbose`                  |                                        | off                                   |           |
+|      | `--color`                    | `auto\|always\|never`                  | `auto`                                |           |
+|      | `--metrics`                  | `<path>`                               | `/run/dvbipitools/metrics.sock`       |           |
+|      | `--metrics-id`               | `<name>`                               | none (metrics disabled unless set)    |           |
+|      | `--metrics-interval`         | `<s>`                                  | `5`                                   |           |
+|      | `--metrics-inspect-ts`       | `off\|basic\|medium\|full`             | `off`                                 |           |
+|      | `--metrics-inspect-ts-pids`  | `<pid,pid,...>`                        | none                                  |           |
+| `-d` | `--daemonize`                |                                        | off (foreground)                      |           |
+| `-c` | `--config`                   | `<path>`                               | `/etc/dvbipitools/dipiradiohead.yaml` |           |
+|      | `--config-strict`            |                                        | config file issues are errors         |           |
+|      | `--configtest`               |                                        | check the config file, then exit      |           |
+| `-h` | `--help`                     |                                        |                                       |           |
 
 `--sid`/`-s` pair with whichever `-i` came right before them - like ffmpeg's per-input options,
 not global flags. Order matters: `--sid`/`-s` before the first `-i` is an error.

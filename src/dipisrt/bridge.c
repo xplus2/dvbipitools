@@ -12,6 +12,7 @@
 #include "lib/net/srt/srtout.h"
 #include "lib/net/tssink.h"
 #include "lib/net/tssource.h"
+#include "lib/tsinspect/inspect.h"
 #include "lib/helper/signal.h"
 
 #include "args.h"
@@ -34,6 +35,8 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   tssrc_t *src;
   srtout_cfg_t rcfg;
   srtout_t *srt;
+  tsinspect_t *insp;
+  tsinspect_set_t set = {&insp, 1, NULL, 0};
   struct pollfd pfd;
   unsigned char buf[65536];
   int rc = 0;
@@ -58,12 +61,17 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   rcfg.mx = mx;
   rcfg.tool_version = TOOL_VERSION;
   rcfg.safety_mult = cfg->send_buffer_mult;
+  rcfg.queue_metrics = cfg->metrics_inspect_ts == METRICS_INSPECT_TS_OFF ? 0 : cfg->metrics_inspect_ts == METRICS_INSPECT_TS_BASIC ? 1 : 2;
 
   srt = srtout_open(&rcfg);
   if (!srt) {
     tssrc_close(src);
     return 1;
   }
+
+  insp = tsinspect_new_relay(cfg->metrics_inspect_ts);
+  if (insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
+  if (tsinspect_wants_rx_ns(insp)) tssrc_enable_rx_timestamps(src);
 
   pfd.fd = tssrc_fd(src);
   pfd.events = POLLIN;
@@ -73,6 +81,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     int pr;
 
     srtout_service(srt, &st);
+    if (insp) tsinspect_tick(insp, mono_seconds());
     if (st.connected != was_connected) {
       log_line(st.connected ? "srt output: connected" : "srt output: link down, reconnecting");
       was_connected = st.connected;
@@ -94,7 +103,13 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
         rc = 1;
         break;
       }
-      if (n > 0) srtout_write(srt, buf, (size_t)n);
+      if (n > 0) {
+        if (insp) {
+          tsinspect_set_rx_ns(insp, tssrc_last_rx_ns(src));
+          tsinspect_grid(insp, buf, (size_t)n);
+        }
+        srtout_write(srt, buf, (size_t)n);
+      }
     }
   }
   if (rc) {
@@ -103,6 +118,8 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     struct timespec ts = {(time_t)(drain_ms / 1000), (long)(drain_ms % 1000) * 1000000L};
     nanosleep(&ts, NULL);
   }
+  if (insp) metrics_exporter_set_extra(mx, NULL, NULL);
+  tsinspect_free(insp);
   srtout_close(srt);
   tssrc_close(src);
   return rc;
@@ -115,6 +132,8 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   tssink_t *sink;
   srtin_cfg_t rcfg;
   srtin_t *srt;
+  tsinspect_t *insp_in, *insp_out;
+  tsinspect_set_t set = {&insp_in, 1, &insp_out, 1};
   unsigned char buf[65536];
   unsigned char (*dedup_hist)[65536] = malloc(sizeof(unsigned char[RECV_DEDUP_HISTORY][65536]));
   int dedup_hist_len[RECV_DEDUP_HISTORY] = {0};
@@ -153,9 +172,19 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
     return signal_stop_requested() ? 0 : 1;
   }
 
+  insp_in = tsinspect_new_relay(cfg->metrics_inspect_ts);
+  insp_out = tsinspect_new_relay(cfg->metrics_inspect_ts);
+  if (insp_in) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
+
   while (!signal_stop_requested()) {
     int reconnected = 0;
     int n = srtin_read(srt, buf, sizeof buf, &reconnected);
+
+    if (insp_in) {
+      double now = mono_seconds();
+      tsinspect_tick(insp_in, now);
+      if (insp_out) tsinspect_tick(insp_out, now);
+    }
 
     if (n < 0) {
       rc = 1;
@@ -163,6 +192,7 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
     }
     if (reconnected) dedup_active = 1;
     if (n == 0) continue;
+    if (insp_in) tsinspect_grid(insp_in, buf, (size_t)n);
     if (dedup_active) {
       int is_dup = 0;
       for (int h = 0; h < RECV_DEDUP_HISTORY; h++) {
@@ -178,11 +208,15 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
       rc = 1;
       break;
     }
+    if (insp_out) tsinspect_grid(insp_out, buf, (size_t)n);
     memcpy(dedup_hist[dedup_hist_next], buf, (size_t)n);
     dedup_hist_len[dedup_hist_next] = n;
     dedup_hist_next = (dedup_hist_next + 1) % RECV_DEDUP_HISTORY;
   }
 
+  if (insp_in) metrics_exporter_set_extra(mx, NULL, NULL);
+  tsinspect_free(insp_in);
+  tsinspect_free(insp_out);
   srtin_close(srt);
   tssink_close(sink);
   free(dedup_hist);

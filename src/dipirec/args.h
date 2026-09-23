@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 
+#include "lib/helper/argutil.h"
 #include "lib/net/httpclient/httpclient.h"
 
 typedef enum {
@@ -118,6 +119,9 @@ typedef struct {
   const char *metrics_sock;      /* --metrics. NULL = default socket path */
   const char *metrics_id;        /* --metrics-id. NULL = metrics disabled */
   unsigned metrics_interval_s;   /* --metrics-interval. 0 = default */
+  metrics_inspect_ts_t metrics_inspect_ts;
+  unsigned metrics_known_pids[METRICS_KNOWN_PIDS_MAX];
+  unsigned metrics_n_known_pids;
   char srt_passphrase_in[128];   /* --srt-passphrase-in, -i srt:// only. "" = no encryption */
   int srt_pbkeylen_in;           /* --srt-pbkeylen-in, requires --srt-passphrase-in. 0 = library default (16) */
   char srt_streamid_in[128];     /* --srt-streamid-in, -i srt:// only. "" = none */

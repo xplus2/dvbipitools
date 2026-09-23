@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "lib/config/yamlcfg.h"
+#include "lib/helper/ioutil.h"
 #include "lib/mux/fec2022.h"
 #include "config.h"
 #include "version.h"
@@ -194,6 +195,14 @@ static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->metrics_interval_s, v, 1, 86400, e, n);
 }
 
+static int apply_metrics_inspect_ts(void *c, const char *v, char *e, size_t n) {
+  if (metrics_inspect_ts_parse(v, &((config_t *)c)->metrics_inspect_ts)) {
+    bufcpy(e, n, "must be off|basic|medium|full");
+    return -1;
+  }
+  return 0;
+}
+
 static int apply_metrics_http(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_bool(&((config_t *)c)->metrics_http, v, e, n);
 }
@@ -380,6 +389,7 @@ static const yamlcfg_key_t keys[] = {
   {"metrics.sock", apply_metrics_sock, 0, 0},
   {"metrics.id", apply_metrics_id, 0, 0},
   {"metrics.interval", apply_metrics_interval, 0, 0},
+  {"metrics.inspect-ts", apply_metrics_inspect_ts, 0, 0},
   {"metrics.http", apply_metrics_http, 0, 0},
   {"metrics.auth", apply_metrics_auth, 0, 0},
   {"format", apply_format, 0, 0},
@@ -454,6 +464,7 @@ int dixy_cfg_test(const char *path, int strict) {
   warn_if(&y, cfg.dash_part_size >= cfg.segment_size, "dash.part-size must be smaller than segment-size");
   warn_if(&y, (double)cfg.ssdp_max_age_s < 2.0 * cfg.ssdp_interval_s, "ssdp.max-age must be at least 2x ssdp.interval");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
+  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
   warn_if(&y, cfg.enable_dlna && cfg.no_spts, "enable-dlna requires spts in format");
   warn_if(&y, cfg.enable_dlna && cfg.no_rawaudio, "enable-dlna requires rawaudio in format");
   warn_if(&y, cfg.enable_dlna && !cfg.dlna_host_opt && cfg.listen.scope == LISTEN_ANY, "enable-dlna needs dlna.host or a concrete listen address, not 'all'");

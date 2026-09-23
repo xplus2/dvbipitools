@@ -25,6 +25,15 @@ dvbipitools (2.5.0-1) unstable; urgency=low
     * retry, version negotiation, stateless reset
     * connection migration
     * congestion control
+  * TS inspection / health indicators, in and out to be exposed in metrics
+    + dipimetrics is down compatible, deploy it first
+    + available in all TS-handling tools
+      - --metrics-inspect-ts off|basic|medium|full
+        off: no impact, no ts-based metrics
+        basic: low impact on performance/latency/cpu/rss
+        medium: medium impact
+        full: most metrics, comes at a cost
+    + TR 101 290 subset (+ a few others)
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.2-1) unstable; urgency=low

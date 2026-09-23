@@ -187,6 +187,23 @@ static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->metrics_interval_s, v, 1, 86400, e, n);
 }
 
+static int apply_metrics_known_pids(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
+  if (metrics_known_pids_parse(v, cfg->metrics_known_pids, &cfg->metrics_n_known_pids)) {
+    bufcpy(e, n, "must be comma separated pids, 0..8191");
+    return -1;
+  }
+  return 0;
+}
+
+static int apply_metrics_inspect_ts(void *c, const char *v, char *e, size_t n) {
+  if (metrics_inspect_ts_parse(v, &((config_t *)c)->metrics_inspect_ts)) {
+    bufcpy(e, n, "must be off|basic|medium|full");
+    return -1;
+  }
+  return 0;
+}
+
 static int apply_max_services(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->max_services, v, 1, DEVICE_MAX_SERVICES_CEILING, e, n);
 }
@@ -272,6 +289,8 @@ static const yamlcfg_key_t keys[] = {
   {"metrics.sock", apply_metrics_sock, 0, 0},
   {"metrics.id", apply_metrics_id, 0, 0},
   {"metrics.interval", apply_metrics_interval, 0, 0},
+  {"metrics.inspect-ts", apply_metrics_inspect_ts, 0, 0},
+  {"metrics.inspect-ts-pids", apply_metrics_known_pids, 0, 0},
   {"srt.passphrase-in", apply_srt_passphrase_in, 0, 0},
   {"srt.pbkeylen-in", apply_srt_pbkeylen_in, 0, 0},
   {"srt.streamid-in", apply_srt_streamid_in, 0, 0},
@@ -325,6 +344,7 @@ int dscr_cfg_test(const char *path, int strict) {
   warn_if(&y, cfg.biss2_id_given && !cfg.biss2_esw_given, "biss2.id requires biss2.esw");
   warn_if(&y, cfg.biss1_sw_given && (cfg.biss2_sw_given || cfg.biss2_esw_given), "biss1.sw is mutually exclusive with biss2.sw/biss2.esw");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
+  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
   warn_if(&y, cfg.profile_given && cfg.have_input && cfg.input.kind != INPUT_RIST, "profile needs input rist://");
   warn_if(&y, cfg.srt_passphrase_in[0] && (strlen(cfg.srt_passphrase_in) < 10 || strlen(cfg.srt_passphrase_in) > 79), "srt.passphrase-in must be 10..79 characters");
   warn_if(&y, cfg.srt_pbkeylen_in && !cfg.srt_passphrase_in[0], "srt.pbkeylen-in requires srt.passphrase-in");

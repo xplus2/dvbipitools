@@ -13,28 +13,29 @@ dipirist -i <uri> -o <uri> [options]
 
 ## Options
 
-| flag | long form            | argument              | default                                 |
-|------|----------------------|-----------------------|-----------------------------------------|
-| `-i` | `--in`               | `<uri>`               | required                                |
-| `-o` | `--out`              | `<uri>`               | required                                |
-| `-I` | `--iface`            | `<iface>`             | kernel route (non-RIST side only)       |
-| `-k` | `--insecure`         |                       | off (`-i https://` source only)         |
-|      | `--profile`          | `simple\|main`        | `simple`                                |
-|      | `--secret`           | `<psk>`               | none (requires `--profile main`)        |
-|      | `--cname`            | `<name>`              | library default                         |
-|      | `--buffer`           | `<ms>`                | library default                         |
-|      | `--al-fec`           | `<L>:<D>`             | off (Annex E Layer 1 FEC, rtp:// only)  |
-|      | `--al-fec-port`      | `<port>`              | required with `--al-fec`                |
-|      | `--color`            | `auto\|always\|never` | `auto`                                  |
-|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`         |
-|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)      |
-|      | `--metrics-interval` | `<s>`                 | `5`                                     |
-| `-v` | `--verbose`          |                       | off                                     |
-| `-d` | `--daemonize`        |                       | off (foreground)                        |
-| `-c` | `--config`           | `<path>`              | `/etc/dvbipitools/dipirist.yaml`        |
-|      | `--config-strict`    |                       | config file issues are errors           |
-|      | `--configtest`       |                       | check the config file, then exit        |
-| `-h` | `--help`             |                       |                                         |
+| flag | long form               | argument                    | default                                |
+|------|-------------------------|-----------------------------|----------------------------------------|
+| `-i` | `--in`                  | `<uri>`                     | required                               |
+| `-o` | `--out`                 | `<uri>`                     | required                               |
+| `-I` | `--iface`               | `<iface>`                   | kernel route (non-RIST side only)      |
+| `-k` | `--insecure`            |                             | off (`-i https://` source only)        |
+|      | `--profile`             | `simple\|main`              | `simple`                               |
+|      | `--secret`              | `<psk>`                     | none (requires `--profile main`)       |
+|      | `--cname`               | `<name>`                    | library default                        |
+|      | `--buffer`              | `<ms>`                      | library default                        |
+|      | `--al-fec`              | `<L>:<D>`                   | off (Annex E Layer 1 FEC, rtp:// only) |
+|      | `--al-fec-port`         | `<port>`                    | required with `--al-fec`               |
+|      | `--color`               | `auto\|always\|never`       | `auto`                                 |
+|      | `--metrics`             | `<path>`                    | `/run/dvbipitools/metrics.sock`        |
+|      | `--metrics-id`          | `<name>`                    | none (metrics disabled unless set)     |
+|      | `--metrics-interval`    | `<s>`                       | `5`                                    |
+|      | `--metrics-inspect-ts`  | `off\|basic\|medium\|full`  | `off`                                  |
+| `-v` | `--verbose`             |                             | off                                    |
+| `-d` | `--daemonize`           |                             | off (foreground)                       |
+| `-c` | `--config`              | `<path>`                    | `/etc/dvbipitools/dipirist.yaml`       |
+|      | `--config-strict`       |                             | config file issues are errors          |
+|      | `--configtest`          |                             | check the config file, then exit       |
+| `-h` | `--help`                |                             |                                        |
 
 ## Configuration file
 
@@ -94,3 +95,5 @@ dipirist -i rtp://@239.1.1.1:5000 -o rist://1.2.3.4:6000 -o rist://5.6.7.8:6000
 
 * `dipirist` doesn't use RIST's OOB channel
 * `dipirist` only works in one direction per process. 
+* `--metrics-inspect-ts` covers packet-level and PCR checks only, no PSI/SI checks at any level.
+  `medium` adds PCR jitter and accuracy for UDP and RTP inputs.

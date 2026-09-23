@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/helper/describe.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/mux/fec2022.h"
@@ -60,25 +61,27 @@ int config_is_sender(const config_t *cfg) {
 
 void endpoint_describe(const endpoint_t *e, char *buf, size_t n) {
   if (e->is_rist) {
-    if (e->n_rist == 1)
+    if (e->n_rist == 1) {
       bufcpy(buf, n, e->rist_uri[0]);
-    else
-      snprintf(buf, n, "%s +%d more", e->rist_uri[0], e->n_rist - 1);
+    } else {
+      sbuf_t b;
+      sbuf_init(&b, buf, n);
+      sbuf_add(&b, e->rist_uri[0]);
+      sbuf_add(&b, " +");
+      sbuf_add_uint(&b, (unsigned)(e->n_rist - 1));
+      sbuf_add(&b, " more");
+    }
     return;
   }
   switch (e->nonrist.kind) {
   case PLAIN_EP_RTP:
   case PLAIN_EP_UDP: {
     const char *scheme = (e->nonrist.kind == PLAIN_EP_RTP) ? "rtp" : "udp";
-    if (e->nonrist.family == AF_INET6)
-      snprintf(buf, n, "%s://@[%s]:%u", scheme, e->nonrist.group, e->nonrist.port);
-    else
-      snprintf(buf, n, "%s://@%s:%u", scheme, e->nonrist.group, e->nonrist.port);
+    describe_mcast_uri(buf, n, scheme, e->nonrist.family, e->nonrist.group, e->nonrist.port);
     break;
   }
   case PLAIN_EP_HTTP:
-    snprintf(buf, n, "%s://%s:%u%s", e->nonrist.http.tls ? "https" : "http", e->nonrist.http.host, e->nonrist.http.port,
-              e->nonrist.http.path);
+    describe_http_uri(buf, n, e->nonrist.http.tls, e->nonrist.http.host, e->nonrist.http.port, e->nonrist.http.path);
     break;
   case PLAIN_EP_FILE:
     bufcpy(buf, n, e->nonrist.file_path[0] ? e->nonrist.file_path : "- (stdin/stdout)");
@@ -106,27 +109,27 @@ static void print_help(void) {
       "  <path>                         a file\n"
       "  IPv6 groups in brackets, e.g. rtp://@[ff3e::1]:8700\n\n"
       "options:\n"
-      "  -i, --in <uri>             input (see above), repeatable if rist://\n"
-      "  -o, --out <uri>            output (see above), repeatable if rist://\n"
-      "  -I, --iface <iface>        interface for the non-RIST side's multicast join/send\n"
-      "  -k, --insecure             skip TLS verification, -i https:// only\n"
-      "      --profile <name>       simple|main (default simple); main adds encryption\n"
-      "      --secret <psk>         pre-shared key; requires --profile main\n"
-      "      --cname <name>         RTCP cname; default library-generated\n"
-      "      --buffer <ms>          RIST recovery buffer (min=max=<ms>); default library\n"
-      "      --al-fec <L>:<D>       Annex E Layer 1 FEC (SMPTE 2022-1) on the rtp:// leg,\n"
-      "                             L*D<=400, L<=40\n"
-      "      --al-fec-port <port>   repair stream UDP port, requires --al-fec\n"
-      "      --color <when>         auto|always|never (default auto)\n"
-      "      --metrics <path>       Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
-      "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
-      "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
-      "  -v, --verbose              periodic bridge stats on stderr\n"
-      "  -d, --daemonize            fork to background after startup, detach from terminal\n"
-      "  -c, --config <path>        YAML config file (default: %s, if present)\n"
-      "      --config-strict        fail on config file issues instead of warnings\n"
-      "      --configtest           check the config file, then exit\n"
-      "  -h, --help                 this help\n\n"
+      "  -i, --in <uri>                 input (see above), repeatable if rist://\n"
+      "  -o, --out <uri>                output (see above), repeatable if rist://\n"
+      "  -I, --iface <iface>            interface for the non-RIST side's multicast join/send\n"
+      "  -k, --insecure                 skip TLS verification, -i https:// only\n"
+      "      --profile <name>           simple|main (default simple); main adds encryption\n"
+      "      --secret <psk>             pre-shared key; requires --profile main\n"
+      "      --cname <name>             RTCP cname; default library-generated\n"
+      "      --buffer <ms>              RIST recovery buffer (min=max=<ms>); default library\n"
+      "      --al-fec <L>:<D>           Annex E Layer 1 FEC (SMPTE 2022-1) on rtp:// L*D<=400, L<=40\n"
+      "      --al-fec-port <port>       repair stream UDP port, requires --al-fec\n"
+      "      --color <when>             auto|always|never (default auto)\n"
+      "      --metrics <path>           socket for metrics (/run/dvbipitools/metrics.sock)\n"
+      "      --metrics-id <name>        stable instance id; metrics disabled unless set\n"
+      "      --metrics-interval <s>     snapshot interval in seconds (default: 5)\n"
+      "      --metrics-inspect-ts <lvl> TS health metrics: off|basic|medium|full (default: off)\n"
+      "  -v, --verbose                  periodic bridge stats on stderr\n"
+      "  -d, --daemonize                fork to background after startup\n"
+      "  -c, --config <path>            YAML config file (default: %s, if present)\n"
+      "      --config-strict            fail on config file issues instead of warnings\n"
+      "      --configtest               check the config file, then exit\n"
+      "  -h, --help                     this help\n\n"
       "examples:\n"
       "  %s -i rtp://@239.1.1.1:5000 -o rist://1.2.3.4:6000 --buffer 1000\n"
       "  %s -i rist://@0.0.0.0:6000 -o rtp://@239.1.1.1:5000 --buffer 1000\n"
@@ -149,6 +152,7 @@ static const struct option longopts[] = {
     {"metrics", required_argument, 0, 1005},
     {"metrics-id", required_argument, 0, 1006},
     {"metrics-interval", required_argument, 0, 1007},
+    {"metrics-inspect-ts", required_argument, 0, 1012},
     {"al-fec", required_argument, 0, 1008},
     {"al-fec-port", required_argument, 0, 1009},
     {"verbose", no_argument, 0, 'v'},
@@ -266,6 +270,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1007:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
+      case 1012:
+        if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
+        break;
       case 1008:
         if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
           argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
@@ -316,6 +323,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
+  if (argutil_metrics_inspect_ts_validate(TOOL_NAME, cfg->metrics_id, cfg->metrics_inspect_ts)) return ARGS_ERR;
   if (cfg->al_fec_l && !cfg->al_fec_port) {
     argerr("--al-fec requires --al-fec-port");
     return ARGS_ERR;

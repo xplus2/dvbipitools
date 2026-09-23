@@ -39,6 +39,7 @@ typedef struct {
 } fcc_ring_entry_t;
 
 struct channel_table {
+  tsinspect_agg_t *agg;
   channel_t *chan; /* fixed array, size max_channels, preallocated once */
   size_t max_channels;
   size_t ring_slots;
@@ -63,8 +64,9 @@ struct channel_table {
   size_t ssrc_hash_used;
   _Atomic unsigned ssrc_gen;
 
-  _Atomic size_t *resolve_hash; /* hash(family,addr,port)%max_channels -> slot+1, no probe, sized max_channels,
-                                    not padded. single-word publish, read cross-thread by resolve-by-port listeners. */
+  /* hash(family,addr,port)%max_channels -> slot+1, no probe, sized max_channels,
+     not padded. single-word publish, read cross-thread by resolve-by-port listeners. */
+  _Atomic size_t *resolve_hash;
 
   size_t reap_cursor; /* channel_table_reap_step()'s scan position, wraps at max_channels */
 };

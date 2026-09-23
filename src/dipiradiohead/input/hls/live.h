@@ -9,10 +9,12 @@
 
 #include "lib/net/httpclient/httpclient.h"
 
+#include "../source.h"
+
 typedef struct hls_live hls_live_t;
 
 /* playlist_url: media playlist's URL (post redir). user_agent copied, need not persist. NULL=OOM */
-hls_live_t *hls_live_new(const http_url_t *playlist_url, const char *user_agent, int insecure, unsigned idx, const char *label);
+hls_live_t *hls_live_new(const http_url_t *playlist_url, const char *user_agent, int insecure, unsigned idx, const char *label, const source_insp_t *si);
 
 void hls_live_free(hls_live_t *h);
 

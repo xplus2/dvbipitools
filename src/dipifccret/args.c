@@ -95,9 +95,10 @@ static void print_help(void) {
       "  -u, --user <user>                drop privileges to this user after opening the capture handle\n"
       "  -v, --verbose                    periodic stats on stderr\n"
       "      --color <when>               auto|always|never (default auto)\n"
-      "      --metrics <path>             Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+      "      --metrics <path>             socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
       "      --metrics-id <name>          stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s>       snapshot interval in seconds (default: 5)\n"
+      "      --metrics-inspect-ts <lvl>   TS health metrics: off|basic|medium|full (default: off)\n"
       "  -d, --daemonize                  fork to background after startup, detach from terminal\n"
       "  -c, --config <path>              YAML config file (default: %s, if present)\n"
       "      --config-strict              fail on config file issues instead of warnings\n"
@@ -176,6 +177,7 @@ static const struct option longopts[] = {
   {"metrics", required_argument, 0, 1022},
   {"metrics-id", required_argument, 0, 1023},
   {"metrics-interval", required_argument, 0, 1024},
+  {"metrics-inspect-ts", required_argument, 0, 1027},
   {"daemonize", no_argument, 0, 'd'},
   {"config", required_argument, 0, 'c'},
   {"config-strict", no_argument, 0, 1026},
@@ -409,6 +411,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1024:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
+      case 1027:
+        if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
+        break;
       case 'c':
       case 1026:
       case 1025:
@@ -449,5 +454,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     cfg->workers = n > 0 ? (unsigned)n : 1;
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
+  if (argutil_metrics_inspect_ts_validate(TOOL_NAME, cfg->metrics_id, cfg->metrics_inspect_ts)) return ARGS_ERR;
   return ARGS_OK;
 }

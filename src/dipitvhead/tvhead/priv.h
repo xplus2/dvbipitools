@@ -14,6 +14,7 @@
 #include "lib/net/multicast.h"
 #include "lib/net/rist/ristout.h"
 #include "lib/net/srt/srtsink.h"
+#include "lib/tsinspect/inspect.h"
 
 #include "../cas/cas.h"
 #include "../input/source.h"
@@ -28,6 +29,7 @@
 typedef struct {
   tspack_t pz;
   int listed, checked_pmt_pid;
+  tsinspect_t *insp;
 } discover_state_t;
 
 typedef struct {
@@ -47,6 +49,7 @@ typedef struct {
   int srt_connected;  /* edge-log gate for connect/link-down transitions */
   unsigned long long packets;
   unsigned long long errors;
+  tsinspect_t *insp;
 } out_ctx_t;
 
 typedef struct {
@@ -54,12 +57,14 @@ typedef struct {
   out_ctx_t *out;
   double now;
   ts_metrics_t *tsm;
+  tsinspect_t *insp;
 } feed_ctx_t;
 
 /* discover.c */
 void print_discovered(const psi_t *psi);
 int discover_step(discover_state_t *ds, tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, input_metrics_t *im);
 int discover(tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, input_metrics_t *im);
+int discover_insp(tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, input_metrics_t *im, tsinspect_t *insp);
 
 /* output.c */
 /* caller only calls this when cfg->n_rist > 0; NULL on err */
@@ -75,9 +80,10 @@ void flush_batch_if_stale(out_ctx_t *o);
 void packet_cb(void *ctx, const unsigned char *pkt188);
 void send_null_packet(out_ctx_t *o);
 int remux_cb(void *v, const unsigned char *pkt);
+int remux_cb_inspect(void *v, const unsigned char *pkt);
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
-                  const input_metrics_t *inputs, unsigned n_inputs, const ts_metrics_t *tsm, cas_t *cas);
-int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, cas_t *cas, metrics_exporter_t *mx, input_metrics_t *im, ts_metrics_t *tsm);
+  const input_metrics_t *inputs, unsigned n_inputs, const ts_metrics_t *tsm, cas_t *cas);
+int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, cas_t *cas, metrics_exporter_t *mx, input_metrics_t *im, ts_metrics_t *tsm, tsinspect_t *insp);
 
 /* single.c */
 int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx);

@@ -279,7 +279,7 @@ START_TEST(hls_live_joins_n_segments_back_and_skips_older_segments) {
   }
   snprintf(pl_uri, sizeof pl_uri, "http://127.0.0.1:%u/live.m3u8", pl_port);
   ck_assert_int_eq(http_url_parse(pl_uri, &pl_url), 0);
-  h = hls_live_new(&pl_url, "test-agent", 0, 0, "test");
+  h = hls_live_new(&pl_url, "test-agent", 0, 0, "test", NULL);
   ck_assert_ptr_nonnull(h);
   ck_assert_int_eq(drive_until_contains(h, buf, sizeof buf, &buf_len, "SEG202", 200), 1);
   ck_assert_int_eq(drive_until_contains(h, buf, sizeof buf, &buf_len, "SEG203", 200), 1);
@@ -379,7 +379,7 @@ START_TEST(hls_live_fetches_only_newly_appended_segment) {
 
   snprintf(pl_uri, sizeof pl_uri, "http://127.0.0.1:%u/live.m3u8", pl_port);
   ck_assert_int_eq(http_url_parse(pl_uri, &pl_url), 0);
-  h = hls_live_new(&pl_url, "test-agent", 0, 0, "test");
+  h = hls_live_new(&pl_url, "test-agent", 0, 0, "test", NULL);
   ck_assert_ptr_nonnull(h);
   ck_assert_int_eq(drive_until_contains(h, buf, sizeof buf, &buf_len, "SEGA", 200), 1);
   ck_assert_int_eq(drive_until_contains(h, buf, sizeof buf, &buf_len, "SEGB", 200), 1);
@@ -393,7 +393,7 @@ START_TEST(hls_live_fetches_only_newly_appended_segment) {
 }
 END_TEST
 
-START_TEST(hls_live_reuses_connection_for_playlist_and_segment) {
+static void run_reuse_case(const source_insp_t *si) {
   unsigned port;
   int listen_fd = make_listener(&port);
   pthread_t th;
@@ -434,11 +434,33 @@ START_TEST(hls_live_reuses_connection_for_playlist_and_segment) {
   ck_assert_int_eq(pthread_create(&th, NULL, serve_one_conn_scripted, &srv), 0);
   snprintf(pl_uri, sizeof pl_uri, "http://127.0.0.1:%u/live.m3u8", port);
   ck_assert_int_eq(http_url_parse(pl_uri, &pl_url), 0);
-  h = hls_live_new(&pl_url, "test-agent", 0, 0, "test");
+  h = hls_live_new(&pl_url, "test-agent", 0, 0, "test", si);
   ck_assert_ptr_nonnull(h);
   ck_assert_int_eq(drive_until_contains(h, buf, sizeof buf, &buf_len, "REUSED", 200), 1);
   hls_live_free(h);
   pthread_join(th, NULL);
+}
+
+START_TEST(hls_live_reuses_connection_for_playlist_and_segment) { run_reuse_case(NULL); }
+END_TEST
+
+START_TEST(hls_live_inspects_segments_when_on) {
+  tsinspect_t *insp = NULL;
+  source_insp_t si = {&insp, METRICS_INSPECT_TS_BASIC, NULL, 0};
+
+  run_reuse_case(&si);
+  ck_assert_ptr_nonnull(insp);
+  ck_assert_uint_eq(tsinspect_counters(insp)->packets, 4);
+  tsinspect_free(insp);
+}
+END_TEST
+
+START_TEST(hls_live_creates_no_inspector_when_off) {
+  tsinspect_t *insp = NULL;
+  source_insp_t si = {&insp, METRICS_INSPECT_TS_OFF, NULL, 0};
+
+  run_reuse_case(&si);
+  ck_assert_ptr_null(insp);
 }
 END_TEST
 
@@ -449,6 +471,8 @@ static Suite *hls_live_suite(void) {
   tcase_add_test(tc, hls_live_joins_n_segments_back_and_skips_older_segments);
   tcase_add_test(tc, hls_live_fetches_only_newly_appended_segment);
   tcase_add_test(tc, hls_live_reuses_connection_for_playlist_and_segment);
+  tcase_add_test(tc, hls_live_inspects_segments_when_on);
+  tcase_add_test(tc, hls_live_creates_no_inspector_when_off);
   suite_add_tcase(s, tc);
   return s;
 }

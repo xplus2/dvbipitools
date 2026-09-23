@@ -10,6 +10,7 @@
 
 #include <srt/srt.h>
 
+#include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/signal.h"
 
@@ -47,6 +48,10 @@ struct srtout {
   int pending_cap;
   int pending_head;  /* index of oldest queued chunk */
   int pending_count;
+  int queue_metrics;
+  void (*note_enqueue)(srtout_t *);
+  int pending_hwm;
+  uint64_t queue_dropped;
   int drop_logged;   /* throttles "queue full" logging to once per overflow streak */
 
   size_t bytes_since_check; /* fed to bitrate EMA at each resize tick */
@@ -158,12 +163,19 @@ static void teardown_for_reconnect(srtout_t *r, const char *why) {
 
 static unsigned char *pending_slot(srtout_t *r, int idx) { return r->pending + (size_t)idx * SRTOUT_PLSIZE; }
 
+static void note_enqueue_off(srtout_t *r) { (void)r; }
+
+static void note_enqueue_hwm(srtout_t *r) {
+  if (r->pending_count > r->pending_hwm) r->pending_hwm = r->pending_count;
+}
+
 static void enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
   int tail;
 
   if (r->pending_count == r->pending_cap) {
     r->pending_head = (r->pending_head + 1) % r->pending_cap;
     r->pending_count--;
+    r->queue_dropped++;
     if (!r->drop_logged) {
       log_line("srt output: send queue full, dropping oldest queued chunk");
       r->drop_logged = 1;
@@ -175,6 +187,7 @@ static void enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
   memcpy(pending_slot(r, tail), buf, (size_t)len);
   r->pending_len[tail] = len;
   r->pending_count++;
+  r->note_enqueue(r);
 }
 
 /* sends what it can without blocking. stops at first still-full result.
@@ -279,6 +292,7 @@ static void resize_pending_if_needed(srtout_t *r) {
 
 srtout_t *srtout_open(const srtout_cfg_t *cfg) {
   srtout_t *r;
+  sbuf_t pl;
 
   if (cfg->npeers <= 0 || cfg->npeers > SRTCOMMON_MAX_PEERS) {
     log_line("srt: invalid peer count %d", cfg->npeers);
@@ -316,9 +330,14 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
   r->tool_version = cfg->tool_version;
   r->cfg = *cfg;
   r->safety_mult = cfg->safety_mult ? cfg->safety_mult : SRTOUT_SAFETY_MULT_DEFAULT;
+  r->queue_metrics = cfg->queue_metrics;
+  r->note_enqueue = cfg->queue_metrics > 1 ? note_enqueue_hwm : note_enqueue_off;
   if (r->safety_mult > SRTOUT_SAFETY_MULT_MAX)
     r->safety_mult = SRTOUT_SAFETY_MULT_MAX;
-  snprintf(r->peer_label, sizeof r->peer_label, "%s:%u", cfg->peers[0].host, cfg->peers[0].port);
+  sbuf_init(&pl, r->peer_label, sizeof r->peer_label);
+  sbuf_add(&pl, cfg->peers[0].host);
+  sbuf_add(&pl, ":");
+  sbuf_add_uint(&pl, cfg->peers[0].port);
 
   r->pending_cap = SRTOUT_PENDING_FLOOR_CHUNKS;
   r->pending = malloc((size_t)r->pending_cap * SRTOUT_PLSIZE);
@@ -350,13 +369,27 @@ static void push_stats(srtout_t *r) {
     return;
   {
     metrics_entry_t e[] = {
-        {METRICS_ID_SRT_SENDER_SENT_TOTAL, r->peer_label, (uint64_t)st.pktSentTotal},
-        {METRICS_ID_SRT_SENDER_RETRANSMITTED_TOTAL, r->peer_label, (uint64_t)st.pktRetransTotal},
-        {METRICS_ID_SRT_SENDER_RTT_MILLISECONDS, r->peer_label, (uint64_t)st.msRTT},
-        {METRICS_ID_SRT_SENDER_LOST_TOTAL, r->peer_label, (uint64_t)st.pktSndLossTotal},
-        {METRICS_ID_SRT_SENDER_DROPPED_TOTAL, r->peer_label, (uint64_t)st.pktSndDropTotal},
+  {METRICS_ID_SRT_SENDER_SENT_TOTAL, r->peer_label, (uint64_t)st.pktSentTotal},
+  {METRICS_ID_SRT_SENDER_RETRANSMITTED_TOTAL, r->peer_label, (uint64_t)st.pktRetransTotal},
+  {METRICS_ID_SRT_SENDER_RTT_MILLISECONDS, r->peer_label, (uint64_t)st.msRTT},
+  {METRICS_ID_SRT_SENDER_LOST_TOTAL, r->peer_label, (uint64_t)st.pktSndLossTotal},
+  {METRICS_ID_SRT_SENDER_DROPPED_TOTAL, r->peer_label, (uint64_t)st.pktSndDropTotal},
     };
-    metrics_push_entries(r->mx, r->tool_version, e, sizeof e / sizeof e[0]);
+    metrics_entry_t q[] = {
+  {METRICS_ID_SRT_SENDER_QUEUE_CHUNKS, r->peer_label, (uint64_t)r->pending_count},
+  {METRICS_ID_SRT_SENDER_QUEUE_CAPACITY_CHUNKS, r->peer_label, (uint64_t)r->pending_cap},
+  {METRICS_ID_SRT_SENDER_QUEUE_HIGH_WATERMARK_CHUNKS, r->peer_label, (uint64_t)r->pending_hwm},
+  {METRICS_ID_SRT_SENDER_QUEUE_DROPPED_CHUNKS_TOTAL, r->peer_label, r->queue_dropped},
+    };
+    metrics_entry_t all[sizeof e / sizeof e[0] + sizeof q / sizeof q[0]];
+    size_t n = sizeof e / sizeof e[0];
+    memcpy(all, e, sizeof e);
+    if (r->queue_metrics) {
+      size_t nq = r->queue_metrics > 1 ? 4 : 2;
+      memcpy(all + n, q, nq * sizeof q[0]);
+      n += nq;
+    }
+    metrics_push_entries(r->mx, r->tool_version, all, n);
   }
 }
 
@@ -428,8 +461,7 @@ static void drain_before_close(SRTSOCKET sock) {
     nanosleep(&ts, NULL);
     waited_ms += 20;
   }
-  if (srt_getsockopt(sock, 0, SRTO_PEERLATENCY, &peer_latency, &optlen) == 0 && peer_latency > floor_ms)
-    floor_ms = peer_latency;
+  if (srt_getsockopt(sock, 0, SRTO_PEERLATENCY, &peer_latency, &optlen) == 0 && peer_latency > floor_ms) floor_ms = peer_latency;
   if (floor_ms > SRTOUT_CLOSE_DRAIN_MAX_MS) floor_ms = SRTOUT_CLOSE_DRAIN_MAX_MS;
   if (floor_ms > waited_ms) {
     struct timespec ts;
@@ -438,6 +470,14 @@ static void drain_before_close(SRTSOCKET sock) {
     ts.tv_nsec = (long)(remain_ms % 1000) * 1000000L;
     nanosleep(&ts, NULL);
   }
+}
+
+void srtout_queue_stats(const srtout_t *r, srtout_queue_stats_t *out) {
+  out->peer_label = r->peer_label;
+  out->chunks = r->pending_count;
+  out->capacity = r->pending_cap;
+  out->high_watermark = r->pending_hwm;
+  out->dropped = r->queue_dropped;
 }
 
 void srtout_close(srtout_t *r) {

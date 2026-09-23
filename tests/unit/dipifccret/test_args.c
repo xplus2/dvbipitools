@@ -479,6 +479,47 @@ START_TEST(configtest_reports_by_exit_status) {
 }
 END_TEST
 
+START_TEST(inspect_ts_level_is_recorded) {
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "--metrics-id", "inst1", "--metrics-inspect-ts", "medium", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_MEDIUM);
+}
+END_TEST
+
+START_TEST(inspect_ts_defaults_to_off) {
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "--metrics-id", "inst1", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_OFF);
+}
+END_TEST
+
+START_TEST(inspect_ts_requires_metrics_id) {
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "--metrics-inspect-ts", "basic", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(inspect_ts_rejects_unknown_level) {
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "--metrics-id", "inst1", "--metrics-inspect-ts", "bogus", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(inspect_ts_from_yaml) {
+  char path[] = "/tmp/dipifccret_inspect_XXXXXX";
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "metrics:\n  id: a\n  inspect-ts: full\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_FULL);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipifccret_args");
   TCase *tc = tcase_create("core");
@@ -534,6 +575,11 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, config_invalid_value_is_error);
   tcase_add_test(tc, config_conflict_is_rejected);
   tcase_add_test(tc, configtest_reports_by_exit_status);
+  tcase_add_test(tc, inspect_ts_level_is_recorded);
+  tcase_add_test(tc, inspect_ts_defaults_to_off);
+  tcase_add_test(tc, inspect_ts_requires_metrics_id);
+  tcase_add_test(tc, inspect_ts_rejects_unknown_level);
+  tcase_add_test(tc, inspect_ts_from_yaml);
   suite_add_tcase(s, tc);
   return s;
 }

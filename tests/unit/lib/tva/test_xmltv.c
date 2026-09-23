@@ -66,6 +66,7 @@ START_TEST(xmltv_write_falls_back_to_id_when_no_names) {
   snprintf(c->id, sizeof c->id, "channel1");
 
   f = tmpfile();
+  ck_assert_ptr_nonnull(f);
   xmltv_write(f, &doc, "dvbipitools-test");
   rewind(f);
 
@@ -95,6 +96,7 @@ START_TEST(xmltv_write_untitled_fallback_for_empty_title) {
   snprintf(pr->start, sizeof pr->start, "2020-12-15T12:30:45Z");
 
   f = tmpfile();
+  ck_assert_ptr_nonnull(f);
   xmltv_write(f, &doc, "dvbipitools-test");
   rewind(f);
 

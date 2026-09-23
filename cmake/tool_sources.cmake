@@ -177,6 +177,11 @@ function(dipidescramble_resolve_sources)
     set(DIPIDESCRAMBLE_SRCS
             ${CMAKE_SOURCE_DIR}/src/lib/helper/antidebug.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/main.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/pipeline.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/args.c
             ${CMAKE_SOURCE_DIR}/src/dipidescramble/config.c
@@ -277,6 +282,11 @@ function(dipifccret_resolve_sources)
     find_package(Threads REQUIRED)
     set(DIPIFCCRET_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipifccret/main.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/run/dispatch.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/run/pacer.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/run/rsi.c
@@ -446,8 +456,18 @@ function(dipiradiohead_resolve_sources)
     set(DIPIRADIOHEAD_SRCS
             ${CMAKE_SOURCE_DIR}/src/lib/helper/antidebug.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/main.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/args.c
-            ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config.c
+            ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/core.c
+            ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/input.c
+            ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/network.c
+            ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/cas.c
+            ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/general.c
+            ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/load.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
@@ -589,6 +609,11 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
             ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/record.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/record/sink.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/record/rtmp_fanout.c
@@ -711,7 +736,20 @@ function(dipirist_resolve_sources)
 
     set(DIPIRIST_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipirist/main.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
             ${CMAKE_SOURCE_DIR}/src/dipirist/config.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
@@ -808,7 +846,20 @@ function(dipisrt_resolve_sources)
 
     set(DIPISRT_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipisrt/main.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/dipisrt/args.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
             ${CMAKE_SOURCE_DIR}/src/dipisrt/config.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
@@ -861,6 +912,7 @@ function(dipiscan_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/dipiscan/format.c
             ${CMAKE_SOURCE_DIR}/src/dipiscan/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
@@ -1035,7 +1087,12 @@ function(dipixy_resolve_sources)
     if (DIPIXY_HAVE_HTTP3)
         set(DIPIXY_HTTP3_SRCS
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3.c
-                ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_quic.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/http3/quic/limits.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/http3/quic/pool.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/http3/quic/callbacks.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/http3/quic/tx.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/http3/quic/conn.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/http3/quic/tls.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_stateless.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_steer.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_udp.c
@@ -1059,6 +1116,11 @@ function(dipixy_resolve_sources)
 
     set(DIPIXY_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipixy/main.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/args.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/config.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
@@ -1221,6 +1283,7 @@ function(dipisds_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/input.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/format_out.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/announce.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/announce_driver.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/listen.c
@@ -1322,8 +1385,18 @@ function(dipitvhead_resolve_sources)
     set(DIPITVHEAD_SRCS
             ${CMAKE_SOURCE_DIR}/src/lib/helper/antidebug.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/main.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/args.c
-            ${CMAKE_SOURCE_DIR}/src/dipitvhead/config.c
+            ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/core.c
+            ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/input.c
+            ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/network.c
+            ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/cas.c
+            ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/general.c
+            ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/load.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c

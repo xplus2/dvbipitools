@@ -15,6 +15,7 @@ void dipixy_metrics_init(metrics_exporter_t *exp, const config_t *cfg);
 void dipixy_metrics_close(metrics_exporter_t *exp);
 
 /* call once/loop iteration. due-gated internally, noop if disabled */
+void dipixy_put_queue_metrics(metrics_writer_t *w, void *ctx);
 void dipixy_metrics_push(metrics_exporter_t *exp);
 
 /* bumps HTTP-layer counters, read by both UDS push and --metrics-http */

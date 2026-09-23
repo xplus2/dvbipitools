@@ -6,7 +6,9 @@
 
 #include <stddef.h>
 
+#include "lib/helper/argutil.h"
 #include "lib/net/netconnect.h"
+#include "lib/tsinspect/inspect.h"
 
 typedef enum { SRC_MPEG_AUDIO, SRC_AAC_ADTS, SRC_AAC_LATM } source_codec_t;
 
@@ -22,11 +24,18 @@ typedef struct {
 
 typedef struct source source_t;
 
+typedef struct {
+  tsinspect_t **slot;
+  metrics_inspect_ts_t level;
+  const unsigned *known_pids;
+  unsigned n_known_pids;
+} source_insp_t;
+
 typedef void (*source_meta_cb)(void *ctx, const char *artist, const char *title);
 
 /* resolves playlists, connects, detects codec + metadata mode. insecure skips TLS verify.
    NULL on failure. reason_out: nullable, set only on NULL return */
-source_t *source_open(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out);
+source_t *source_open(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, const source_insp_t *si, net_err_reason_t *reason_out);
 
 /* 1 + fills *out, 0 transient (retry), -1 hard error (caller should reconnect).
    reason_out: nullable, set only on -1 */
@@ -49,7 +58,7 @@ typedef struct source_open source_open_t;
 /* async source_open(): never blocks, caller polls.
    no internal timeout, caller decides when to give up. NULL only on immediate setup failure (calloc logged).
    reason_out: nullable, set only on NULL return */
-source_open_t *source_open_async_start(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out);
+source_open_t *source_open_async_start(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, const source_insp_t *si, net_err_reason_t *reason_out);
 
 const char *source_open_async_resolved_uri(const source_open_t *o);
 

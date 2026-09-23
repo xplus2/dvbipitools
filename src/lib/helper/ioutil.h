@@ -76,6 +76,10 @@ void dstrbuf_appendf(dstrbuf_t *sb, const char *fmt, ...)
 #endif
     ;
 
+void dstrbuf_add_n(dstrbuf_t *sb, const char *s, size_t n);
+void dstrbuf_add(dstrbuf_t *sb, const char *s);
+void dstrbuf_add_u64(dstrbuf_t *sb, uint64_t v);
+
 typedef struct {
   char *buf;
   size_t cap;

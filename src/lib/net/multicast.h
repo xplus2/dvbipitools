@@ -5,6 +5,7 @@
 #define DIPIREC_NET_MULTICAST_H
 
 #include <stddef.h>
+#include <stdint.h>
 #include <sys/types.h>
 
 #include "netconnect.h"
@@ -19,6 +20,9 @@ mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char
 
 /* one datagram. >0 len, 0 timeout, -1 error. reason_out: nullable, set only on -1 */
 ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_out);
+
+int mcast_enable_rx_timestamps(mcast_t *m);
+uint64_t mcast_last_rx_ns(const mcast_t *m);
 
 /* underlying fd, for poll()/select() alongside other sockets */
 int mcast_fd(const mcast_t *m);

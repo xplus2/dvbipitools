@@ -46,7 +46,7 @@ static void crc32_backends_check(const unsigned char *data, size_t len) {
 }
 
 START_TEST(crc32_backends_agree) {
-  unsigned char buf[4099];
+  unsigned char buf[4099] = {0};
   size_t len, i;
   int trial;
 

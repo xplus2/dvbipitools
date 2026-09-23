@@ -72,6 +72,8 @@ metrics:
   #id: <name>
   # --metrics-interval 5 # seconds
   #interval: 5
+  # --metrics-inspect-ts off # off|basic|medium|full
+  #inspect-ts: off
 
 # -v|--verbose off
 verbose: off

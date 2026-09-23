@@ -52,6 +52,12 @@ extern int g_h3_max_reqs;
 extern int g_h3_max_conns;
 extern size_t g_h3_max_udp;
 extern uint64_t g_h3_idle_ns;
+extern uint64_t g_h3_window;
+extern ngtcp2_cc_algo g_h3_cc;
+extern uint16_t g_h3_probes[2];
+extern size_t g_h3_nprobes;
+extern uint32_t g_h3_hash_cap;
+extern SSL_CTX *g_h3_ssl_ctx;
 
 typedef struct h3_req {
   int active;
@@ -129,6 +135,11 @@ extern _Thread_local socklen_t t_h3_udp4_local_len;
 extern _Thread_local struct sockaddr_storage t_h3_udp6_local;
 extern _Thread_local socklen_t t_h3_udp6_local_len;
 
+extern _Thread_local h3_conn_t *t_h3_pool;
+extern _Thread_local int *t_h3_pool_free;
+extern _Thread_local int t_h3_pool_free_n;
+extern _Thread_local uint32_t t_h3_hash_cap;
+
 static inline h3_req_t *find_req(h3_conn_t *c, int64_t sid) {
   for (int i = 0; i < c->max_reqs; i++) if (c->reqs[i].active && c->reqs[i].stream_id == sid) return &c->reqs[i];
   return NULL;
@@ -186,6 +197,18 @@ h3_conn_t *find_conn(const uint8_t *pkt, size_t pktlen);
 void flush_tx(h3_conn_t *c, int udp_fd);
 void h3_tables_free(void);
 int h3_tables_alloc(void); /* 1 = ready (already inited or just alloc'd), 0 = alloc failure */
+int h3_cid_add(h3_conn_t *c, const ngtcp2_cid *cid);
+void h3_cid_remove(h3_conn_t *c, const ngtcp2_cid *cid);
+int h3_hash_insert(const ngtcp2_cid *cid, h3_conn_t *c);
+void h3_hash_delete(const ngtcp2_cid *cid, const h3_conn_t *c);
+void cb_rand(uint8_t *dest, size_t destlen, const ngtcp2_rand_ctx *ctx);
+int cb_get_new_connection_id2(ngtcp2_conn *qconn, ngtcp2_cid *cid, ngtcp2_stateless_reset_token *token, size_t cidlen, void *ud);
+int cb_remove_connection_id(ngtcp2_conn *qconn, const ngtcp2_cid *cid, void *ud);
+int cb_path_validation(ngtcp2_conn *qconn, uint32_t flags, const ngtcp2_path *path, const ngtcp2_path *fallback, ngtcp2_path_validation_result res, void *ud);
+int cb_recv_stream_data(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id, uint64_t offset, const uint8_t *data, size_t datalen, void *ud, void *stream_ud);
+int cb_acked_stream_data_offset(ngtcp2_conn *qconn, int64_t stream_id, uint64_t offset, uint64_t datalen, void *ud, void *stream_ud);
+int cb_stream_open(ngtcp2_conn *qconn, int64_t stream_id, void *ud);
+int cb_stream_close(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id, uint64_t app_err, void *ud, void *stream_ud);
 
 /* from http3_req.c */
 void dispatch_req(h3_conn_t *c, h3_req_t *r);

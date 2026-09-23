@@ -74,6 +74,25 @@ dvbipitools_add_unit_test(lib_demux_tspack
     unit/lib/demux/test_tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c)
 
+dvbipitools_add_unit_test(lib_tsinspect_inspect
+    unit/lib/tsinspect/test_inspect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
 dvbipitools_add_unit_test(lib_demux_pes
     unit/lib/demux/test_pes.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
@@ -567,6 +586,12 @@ if (OpenSSL_FOUND)
     dvbipitools_add_unit_test(dipidescramble_pipeline
         unit/dipidescramble/test_pipeline.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/pipeline.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
@@ -811,6 +836,7 @@ dvbipitools_add_unit_test(dipiscan_format
 dvbipitools_add_unit_test(dipiscan_scan
     unit/dipiscan/test_scan.c
     ${CMAKE_SOURCE_DIR}/src/dipiscan/scan.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
     ${CMAKE_SOURCE_DIR}/src/dipiscan/args.c
     ${CMAKE_SOURCE_DIR}/src/dipiscan/config.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
@@ -951,7 +977,12 @@ dvbipitools_add_unit_test(dipiradiohead_tspacketizer
 dvbipitools_add_unit_test(dipiradiohead_args
     unit/dipiradiohead/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/args.c
-    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/core.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/input.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/network.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/general.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/load.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
@@ -981,6 +1012,12 @@ dvbipitools_add_unit_test(dipiradiohead_source_async
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/icy.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/id3.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/framer/mpegaudio.c
@@ -1011,6 +1048,11 @@ dvbipitools_add_unit_test(dipiradiohead_source_async
 dvbipitools_add_unit_test(dipiradiohead_radiohead
     unit/dipiradiohead/test_radiohead.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/radiohead/radiohead.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/radiohead/mpts.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/radiohead/metrics.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/mux/tspacketizer.c
@@ -1100,6 +1142,12 @@ dvbipitools_add_unit_test(dipiradiohead_hls_playlist
 dvbipitools_add_unit_test(dipiradiohead_hls_live
     unit/dipiradiohead/input/hls/test_live.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rawaudio.c
@@ -1134,6 +1182,12 @@ dvbipitools_add_unit_test(dipiradiohead_inputset
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/icy.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/id3.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/framer/mpegaudio.c
@@ -1238,7 +1292,12 @@ dvbipitools_add_unit_test(dipitvhead_source
 dvbipitools_add_unit_test(dipitvhead_args
     unit/dipitvhead/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/args.c
-    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/core.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/input.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/network.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/general.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/load.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
@@ -1270,6 +1329,11 @@ dvbipitools_add_unit_test(dipitvhead_args
 dvbipitools_add_unit_test(dipitvhead_discover
     unit/dipitvhead/test_discover.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/discover.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/input/source.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tssource.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
@@ -1373,6 +1437,11 @@ dvbipitools_add_unit_test(dipitvhead_remux
 dvbipitools_add_unit_test(dipitvhead_output
     unit/dipitvhead/test_output.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/tvhead/output.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/lifecycle.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/psi.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/eit.c
@@ -1590,6 +1659,11 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/dipirec/record/rtmp_fanout.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/record/stats.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/record/run.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
     ${CMAKE_SOURCE_DIR}/src/lib/fccret/ret_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/mp4.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/write.c
@@ -1748,6 +1822,13 @@ target_link_libraries(test_dipifccret_listen PRIVATE Threads::Threads)
 dvbipitools_add_unit_test(dipifccret_channel
     unit/dipifccret/test_channel.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/hash.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/ring.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
@@ -1787,6 +1868,13 @@ dvbipitools_add_unit_test(dipifccret_burst_table
     ${CMAKE_SOURCE_DIR}/src/lib/net/sockaddr_index.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/fcc/burst.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/hash.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/ring.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtx.c
@@ -1807,6 +1895,13 @@ dvbipitools_add_unit_test(dipifccret_burst
     unit/dipifccret/test_burst.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/fcc/burst.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/hash.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/ring.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/rtx.c
@@ -1913,6 +2008,13 @@ dvbipitools_add_unit_test(dipifccret_ret
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/rtx_session_table.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/sockaddr_index.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/hash.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/ring.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtcp.c
@@ -2101,6 +2203,7 @@ dvbipitools_add_unit_test(dipisds_args
 dvbipitools_add_unit_test(dipirist_args
     unit/dipirist/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
     ${CMAKE_SOURCE_DIR}/src/dipirist/config.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
@@ -2119,7 +2222,20 @@ if (TARGET dipirist)
     dvbipitools_add_unit_test(dipirist_bridge
         unit/dipirist/test_bridge.c
         ${CMAKE_SOURCE_DIR}/src/dipirist/bridge.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/dipirist/args.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
         ${CMAKE_SOURCE_DIR}/src/dipirist/config.c
         ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
         ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
@@ -2196,6 +2312,7 @@ endif ()
 dvbipitools_add_unit_test(dipisrt_args
     unit/dipisrt/test_args.c
     ${CMAKE_SOURCE_DIR}/src/dipisrt/args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
     ${CMAKE_SOURCE_DIR}/src/dipisrt/config.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
@@ -2215,7 +2332,20 @@ if (TARGET dipisrt)
     dvbipitools_add_unit_test(dipisrt_bridge
         unit/dipisrt/test_bridge.c
         ${CMAKE_SOURCE_DIR}/src/dipisrt/bridge.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+        ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/dipisrt/args.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
         ${CMAKE_SOURCE_DIR}/src/dipisrt/config.c
         ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
         ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
@@ -2271,6 +2401,8 @@ dvbipitools_add_unit_test(dipisds_input
 dvbipitools_add_unit_test(dipisds_format_out
     unit/dipisds/test_format_out.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/format_out.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c)
 
@@ -2288,6 +2420,7 @@ dvbipitools_add_unit_test(dipisds_listen
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/format_out.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
@@ -2359,6 +2492,19 @@ dvbipitools_add_unit_test(dipixy_route
 dvbipitools_add_unit_test(dipixy_capture
     unit/dipixy/test_capture.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
@@ -2403,6 +2549,18 @@ dvbipitools_add_unit_test(dipixy_channels
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
@@ -2462,6 +2620,18 @@ dvbipitools_add_unit_test(dipixy_playlist
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
@@ -2517,6 +2687,18 @@ dvbipitools_add_unit_test(dipixy_gena
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
@@ -2572,6 +2754,18 @@ dvbipitools_add_unit_test(dipixy_dlna
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
@@ -2617,6 +2811,23 @@ dvbipitools_add_unit_test(dipixy_pidfilter
     unit/dipixy/test_pidfilter.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
+
+dvbipitools_add_unit_test(dipixy_ts_push_queue
+    unit/dipixy/test_ts_push_queue.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/ts_push.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/byte_ring.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/rawaudio.c)
 
 dvbipitools_add_unit_test(dipixy_pmtselect
     unit/dipixy/test_pmtselect.c
@@ -2709,6 +2920,18 @@ dvbipitools_add_unit_test(dipixy_ws_sources
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/metrics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/agg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c

@@ -5,6 +5,6 @@
 #define DIPIMETRICS_VERSION_H
 
 #define TOOL_NAME    "dipimetrics"
-#define TOOL_VERSION "1.2.0"
+#define TOOL_VERSION "2.0.0"
 
 #endif

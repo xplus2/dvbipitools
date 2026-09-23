@@ -6,6 +6,8 @@
 
 #include <stddef.h>
 
+#include "lib/helper/argutil.h"
+
 typedef enum { LISTEN_ANY, LISTEN_V4, LISTEN_V6 } listen_scope_t;
 
 typedef struct {
@@ -64,6 +66,7 @@ typedef struct {
   const char *metrics_sock;
   const char *metrics_id;
   unsigned metrics_interval_s;
+  metrics_inspect_ts_t metrics_inspect_ts;
   int metrics_http;
   int no_hls;
   int no_llhls;

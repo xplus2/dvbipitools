@@ -248,6 +248,36 @@ void dstrbuf_init(dstrbuf_t *sb) {
   sb->buf[0] = '\0';
 }
 
+void dstrbuf_add_n(dstrbuf_t *sb, const char *s, size_t n) {
+  if (!sb->buf) return;
+  if (sb->cap - sb->len <= n) {
+    size_t ncap = sb->cap;
+    char *p;
+    while (ncap - sb->len <= n) ncap *= 2;
+    p = realloc(sb->buf, ncap);
+    if (!p) {
+      free(sb->buf);
+      sb->buf = NULL;
+      sb->len = 0;
+      sb->cap = 0;
+      return;
+    }
+    sb->buf = p;
+    sb->cap = ncap;
+  }
+  memcpy(sb->buf + sb->len, s, n);
+  sb->len += n;
+  sb->buf[sb->len] = '\0';
+}
+
+void dstrbuf_add(dstrbuf_t *sb, const char *s) { dstrbuf_add_n(sb, s, strlen(s)); }
+
+void dstrbuf_add_u64(dstrbuf_t *sb, uint64_t v) {
+  char tmp[21];
+  u64_to_dec(tmp, v);
+  dstrbuf_add(sb, tmp);
+}
+
 void dstrbuf_appendf(dstrbuf_t *sb, const char *fmt, ...) {
   if (!sb->buf) return;
   for (;;) {

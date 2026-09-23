@@ -20,6 +20,7 @@ typedef struct {
   source_meta_cb cb;
   void *meta_ctx;
   input_metrics_t *im;
+  source_insp_t si;
   char resolved_uri[2048];
   int have_resolved;
 } slot_ctx_t;
@@ -54,7 +55,7 @@ static void *slot_open_start(void *ctx) {
   if (!w) return NULL;
   w->im = c->im;
   w->ctx = c;
-  w->o = source_open_async_start(uri, c->idx, c->label, c->insecure, c->cb, c->meta_ctx, &reason);
+  w->o = source_open_async_start(uri, c->idx, c->label, c->insecure, c->cb, c->meta_ctx, c->si.slot ? &c->si : NULL, &reason);
   if (!w->o) {
     if (c->im) c->im->errors_total[reason]++;
     free(w);
@@ -112,7 +113,7 @@ static const retryset_ops_t slot_ops = {
   slot_open_step,   slot_open_take,    slot_open_free,
   slot_result_fd,   slot_result_close};
 
-inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ctxs, input_metrics_t *input_stats) {
+inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ctxs, input_metrics_t *input_stats, const source_insp_t *insps) {
   inputset_t *is = calloc(1, sizeof *is);
   void *slot_ctxs[RADIOHEAD_MAX_INPUTS] = {0};
 
@@ -125,6 +126,7 @@ inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ct
     is->ctxs[i].cb = cb;
     is->ctxs[i].meta_ctx = ctxs ? ctxs[i] : NULL;
     is->ctxs[i].im = input_stats ? &input_stats[i] : NULL;
+    if (insps) is->ctxs[i].si = insps[i];
     is->meta[i].sid = cfg->inputs[i].sid;
     is->meta[i].service_name = cfg->inputs[i].sdt_text;
     is->meta[i].provider_name = cfg->inputs[i].provider_text[0] ? cfg->inputs[i].provider_text : cfg->default_provider_text;

@@ -96,8 +96,7 @@ void source_describe(const source_t *s, char *buf, size_t n) {
 }
 
 void mcast_describe(const config_t *cfg, char *buf, size_t n) {
-  if (cfg->family == AF_INET6) snprintf(buf, n, "[%s]:%u", cfg->mcast_group, cfg->mcast_port);
-  else                         snprintf(buf, n, "%s:%u", cfg->mcast_group, cfg->mcast_port);
+  uriparse_mcast_describe(cfg->family, cfg->mcast_group, cfg->mcast_port, buf, n);
 }
 
 int tvh_cfg_source(source_t *dst, const char *uri, char *err, size_t errsz) {
@@ -268,76 +267,77 @@ static void print_help(void) {
     "re-package one or more transport streams (already-muxed, not raw ES) as one multicast.\n"
     "A single -i: normal SPTS. Multiple -i: MPTS, one program per input.\n\n"
     "options:\n"
-    "  -i, --input <uri>          udp://, rtp://, http(s)://, rist://@host:port[?query]\n"
-    "                             (single peer, @ marks it listening, srt://[@]host:port\n"
-    "                             (single peer, or \"-\" for stdin; repeatable.\n"
-    "                             each RIST/SRT input is an extra thread.\n"
-    "                             see options scoped to this below.\n"
-    "  -p, --pmt-pid <pid>        -i before: select program by PMT PID\n"
-    "                             (dec or 0x-hex; default: first live one)\n"
-    "  -m, --mcast <g>:<p>        output multicast group:port ([addr6]:port for IPv6)\n"
-    "  -O, --out-iface <iface>    outgoing multicast interface name\n"
-    "  -u, --udp                  plain UDP output (default: RTP-wrapped; -m output only)\n"
-    "  -T, --ttl <n>              multicast TTL / hop limit (default: 1)\n"
-    "      --dscp <v>             output DSCP marking: video-high|video-low|voice|\n"
-    "                             signalling|best-effort|0..63 (default: video-high)\n"
-    "      --al-fec <L>:<D>       Annex E Layer 1 FEC (SMPTE 2022-1), L*D<=400, L<=40\n"
-    "      --al-fec-port <port>   AL-FEC stream UDP port, requires --al-fec\n"
-    "  -R, --remote <uri>         rist://host:port[?query] or srt://host:port output,\n"
-    "                             bonded with any other -R of the same scheme given.\n"
-    "                             one scheme at a time, rist:// and srt:// don't mix\n"
-    "      --rist-profile <p>     simple|main; -R rist:// peers only (default: simple)\n"
-    "      --rist-secret <psk>    -R rist:// pre-shared key; requires --rist-profile main\n"
-    "      --rist-cname <name>    -R rist:// cname (default: library default)\n"
-    "      --rist-buffer <ms>     -R rist:// recovery buffer (default: library default)\n"
-    "      --srt-group-mode <m>   broadcast|backup. required to bond >1 -R srt:// peer\n"
-    "      --srt-passphrase <pw>  passphrase for every -R srt:// peer, 10..79 chars\n"
-    "      --srt-pbkeylen <n>     AES key length for --srt-passphrase: 16|24|32\n"
-    "      --srt-streamid <id>    SRTO_STREAMID for every -R srt:// peer\n"
-    "      --srt-packetfilter <c> SRTO_PACKETFILTER for every -R srt:// peer\n"
-    "      --srt-latency <ms>     SRTO_LATENCY for every -R srt:// peer\n"
-    "  -n, --nit <text|->         NIT (whole output): default passthrough; \"-\" drops\n"
-    "      --default-provider <p> SDT default provider name, if not overridden\n"
-    "                             by --provider at programme level (default: " TOOL_NAME ")\n"
-    "  -b, --bitrate <kbps>       target output bitrate across all inputs (default: no shaping)\n"
-    "  -S, --stuff                null-packet stuffing up to -b's target (needs -b)\n"
-    "  -B, --burst-limit          cap output at -b's target, never above (needs -b)\n"
-    "  -e, --error <seconds>      on input error, reconnect after N s (default: fail once,\n"
-    "                             always retries when more than one -i is given)\n"
-    "  -k, --insecure             skip TLS verification\n"
-    "      --tsid <n>             transport_stream_id (default 1)\n"
-    "      --onid <n>             original_network_id (default 1)\n"
-    "  -v, --verbose              periodic stats on stderr\n"
-    "      --color <when>         auto|always|never (default auto)\n"
-    "      --metrics <path>       socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
-    "      --metrics-id <name>    stable instance id. metrics are disabled unless set\n"
-    "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
-    "      --cas-algo <a>         enable CAS: cissa|csa2|csa1 (default: disabled)\n"
-    "      --cas-ecmg <ep>        ECMG address, tcp://host:port. repeatable, one CAS vendor\n"
-    "                             per --cas-ecmg (required with --cas-algo)\n"
-    "                             see options scoped to this below.\n"
-    "      --cas-pids <list>      PIDs to scramble: comma-separated pids and/or video/audio/lcevc\n"
-    "                             keywords (default: video,audio - lcevc never implied by either)\n"
-    "      --cas-cp-duration <ms> crypto-period duration in ms, shared by every vendor (default: 10000)\n"
-    "      --cas-fallback-clear   on total outage (or a --cas-required vendor down): clear\n"
-    "                             instead of staying scrambled on the last known-good CW\n"
-    "      --biss2-sw <hex32>     enable BISS2 Mode 1/E: 32 hex char Session Word, scrambles\n"
-    "                             with CISSA. No ECMG/EMMG. Mutually exclusive with --cas-algo\n"
-    "      --biss2-emit-esw <id>  with --biss2-sw: log the AES-128-ECB Encrypted Session Word\n"
-    "                             for this 32 hex char receiver ID, for out-of-band distribution\n"
-    "      --biss1-sw <hex12>     enable legacy BISS1 Mode 1: 12 hex char Session Word,\n"
-    "                             scrambles with CSA1. Mutually exclusive with --biss2-sw/--cas-algo\n"
+    "  -i, --input <uri>              udp://, rtp://, http(s)://, rist://@host:port[?query]\n"
+    "                                 (single peer, @ marks it listening, srt://[@]host:port\n"
+    "                                 (single peer, or \"-\" for stdin; repeatable.\n"
+    "                                 each RIST/SRT input is an extra thread.\n"
+    "  -p, --pmt-pid <pid>            -i before: select program by PMT PID\n"
+    "                                 (dec or 0x-hex; default: first live one)\n"
+    "  -m, --mcast <g>:<p>            output multicast group:port ([addr6]:port for IPv6)\n"
+    "  -O, --out-iface <iface>        outgoing multicast interface name\n"
+    "  -u, --udp                      plain UDP output (default: RTP-wrapped; -m output only)\n"
+    "  -T, --ttl <n>                  multicast TTL / hop limit (default: 1)\n"
+    "      --dscp <v>                 output DSCP marking: video-high|video-low|voice|\n"
+    "                                 signalling|best-effort|0..63 (default: video-high)\n"
+    "      --al-fec <L>:<D>           Annex E Layer 1 FEC (SMPTE 2022-1), L*D<=400, L<=40\n"
+    "      --al-fec-port <port>       AL-FEC stream UDP port, requires --al-fec\n"
+    "  -R, --remote <uri>             rist://host:port[?query] or srt://host:port output,\n"
+    "                                 bonded with any other -R of the same scheme given.\n"
+    "                                 one scheme at a time, rist:// and srt:// don't mix\n"
+    "      --rist-profile <p>         simple|main; -R rist:// peers only (default: simple)\n"
+    "      --rist-secret <psk>        -R rist:// pre-shared key; requires --rist-profile main\n"
+    "      --rist-cname <name>        -R rist:// cname (default: library default)\n"
+    "      --rist-buffer <ms>         -R rist:// recovery buffer (default: library default)\n"
+    "      --srt-group-mode <m>       broadcast|backup. required to bond >1 -R srt:// peer\n"
+    "      --srt-passphrase <pw>      passphrase for every -R srt:// peer, 10..79 chars\n"
+    "      --srt-pbkeylen <n>         AES key length for --srt-passphrase: 16|24|32\n"
+    "      --srt-streamid <id>        SRTO_STREAMID for every -R srt:// peer\n"
+    "      --srt-packetfilter <c>     SRTO_PACKETFILTER for every -R srt:// peer\n"
+    "      --srt-latency <ms>         SRTO_LATENCY for every -R srt:// peer\n"
+    "  -n, --nit <text|->             NIT (whole output): default passthrough; \"-\" drops\n"
+    "      --default-provider <p>     SDT default provider name, if not overridden\n"
+    "                                 by --provider at programme level (default: " TOOL_NAME ")\n"
+    "  -b, --bitrate <kbps>           target output bitrate across inputs (default: no shaping)\n"
+    "  -S, --stuff                    null-packet stuffing up to -b's target (needs -b)\n"
+    "  -B, --burst-limit              cap output at -b's target, never above (needs -b)\n"
+    "  -e, --error <seconds>          on input error, reconnect after N s (default: fail once,\n"
+    "                                 always retries when more than one -i is given)\n"
+    "  -k, --insecure                 skip TLS verification\n"
+    "      --tsid <n>                 transport_stream_id (default 1)\n"
+    "      --onid <n>                 original_network_id (default 1)\n"
+    "  -v, --verbose                  periodic stats on stderr\n"
+    "      --color <when>             auto|always|never (default auto)\n"
+    "      --metrics <path>           socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+    "      --metrics-id <name>        stable instance id. metrics are disabled unless set\n"
+    "      --metrics-interval <s>     snapshot interval in seconds (default: 5)\n"
+    "      --metrics-inspect-ts <lvl> TS health metrics: off|basic|medium|full (default: off)\n"
+    "      --metrics-inspect-ts-pids <list> per pid and per service counters (default: none)\n"
+    "      --cas-algo <a>             enable CAS: cissa|csa2|csa1 (default: disabled)\n"
+    "      --cas-ecmg <ep>            ECMG address, tcp://host:port. repeatable, one CAS vendor\n"
+    "                                 per --cas-ecmg (required with --cas-algo)\n"
+    "                                 see options scoped to this below.\n"
+    "      --cas-pids <list>          PIDs to scramble: comma-separated pids and/or video/audio/lcevc\n"
+    "                                 keywords (default: video,audio - lcevc never implied)\n"
+    "      --cas-cp-duration <ms>     crypto-period in ms, shared by vendors (default: 10000)\n"
+    "      --cas-fallback-clear       on total outage (or a --cas-required vendor down): clear\n"
+    "                                 instead of staying scrambled on the last known-good CW\n"
+    "      --biss2-sw <hex32>         enable BISS2 Mode 1/E: 32 hex char Session Word, scrambles\n"
+    "                                 with CISSA. No ECMG/EMMG. Mutually exclusive with --cas-algo\n"
+    "      --biss2-emit-esw <id>      with --biss2-sw: log the AES-128-ECB Encrypted Session Word\n"
+    "                                 for this 32 hex char receiver ID, for out-of-band distribution\n"
+    "      --biss1-sw <hex12>         enable legacy BISS1 Mode 1: 12 hex char Session Word,\n"
+    "                                 scrambles with CSA1. Mutually exclusive with --biss2-sw/--cas-algo\n"
     "      --biss2-ca-receivers <dir> enable BISS2 Mode CA: directory of PEM public keys, one\n"
-    "                             per entitled receiver/group. Rescanned on SIGHUP. a receiver\n"
-    "                             removed from the directory is revoked (forces a Session Key\n"
-    "                             change). Mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo\n"
+    "                                 per entitled receiver/group. Rescanned on SIGHUP. Removed = revoked\n"
+    "                                 (forces a Session Key change).\n"
+    "                                 Mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo\n"
     "      --biss2-ca-session-id <n> administratively unique entitlement_session_id, dec or\n"
-    "                             0x-hex, 16 bit (default: random at startup)\n"
-    "  -d, --daemonize            fork to background after startup, detach from terminal\n"
-    "  -c, --config <path>        YAML config file (default: %s, if present)\n"
-    "      --config-strict        fail on config file issues instead of warnings\n"
-    "      --configtest           check the config file, then exit\n"
-    "  -h, --help                 this help\n\n"
+    "                                 0x-hex, 16 bit (default: random at startup)\n"
+    "  -d, --daemonize                fork to background after startup\n"
+    "  -c, --config <path>            YAML config file (default: %s, if present)\n"
+    "      --config-strict            fail on config file issues instead of warnings\n"
+    "      --configtest               check the config file, then exit\n"
+    "  -h, --help                     this help\n\n"
     "scoped to the -i input right before:\n"
     "      --sid <n>                  service_id/program_number (default: auto)\n"
     "  -s, --sdt <text|->             SDT service_name. default=passthrough, \"-\" drops\n"
@@ -412,6 +412,8 @@ int tvh_cfg_check(const config_t *cfg, int partial, tvh_report_fn rep, void *ud)
   if (!partial && !cfg->mcast_port && cfg->n_rist == 0 && cfg->n_srt == 0) FATAL("need -m output multicast or at least one -R peer");
   if ((cfg->stuff || cfg->burst_limit) && !cfg->bitrate_kbps) FATAL("-S/--stuff and -B/--burst-limit need -b/--bitrate");
   if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) FATAL("--metrics/--metrics-interval require --metrics-id");
+  if (cfg->metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg->metrics_id) FATAL("--metrics-inspect-ts requires --metrics-id");
+  if (cfg->metrics_n_known_pids && cfg->metrics_inspect_ts != METRICS_INSPECT_TS_FULL) FATAL("--metrics-inspect-ts-pids requires --metrics-inspect-ts full");
   if (cfg->al_fec_l && !cfg->al_fec_port) FATAL("--al-fec requires --al-fec-port");
   if (!cfg->al_fec_l && cfg->al_fec_port) NOTE("--al-fec-port has no effect without --al-fec");
   if (cfg->al_fec_l && !cfg->rtp) FATAL("--al-fec requires RTP output, not -u/--udp");
@@ -523,6 +525,8 @@ static const struct option longopts[] = {
   {"metrics", required_argument, 0, 1020},
   {"metrics-id", required_argument, 0, 1021},
   {"metrics-interval", required_argument, 0, 1022},
+  {"metrics-inspect-ts", required_argument, 0, 1061},
+  {"metrics-inspect-ts-pids", required_argument, 0, 1062},
   {"cas-required", no_argument, 0, 1023},
   {"cas-cwenc-algo", required_argument, 0, 1048},
   {"cas-cwenc-aes-mode", required_argument, 0, 1049},
@@ -862,6 +866,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 1022:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
+        break;
+      case 1061:
+        if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
+        break;
+      case 1062:
+        if (argutil_metrics_known_pids_opt(TOOL_NAME, optarg, cfg->metrics_known_pids, &cfg->metrics_n_known_pids)) return ARGS_ERR;
         break;
       case 1023:
         CAS_VENDOR("--cas-required");

@@ -16,6 +16,7 @@
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
 #include "lib/metrics/export.h"
+#include "lib/tsinspect/inspect.h"
 #include "lib/mux/flv/flv.h"
 #include "lib/net/rtmp/rtmpout.h"
 #include "lib/net/tssource.h"
@@ -129,6 +130,7 @@ static int open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
       sc.packetfilter = cfg->srt_packetfilter;
       sc.latency_ms = cfg->srt_latency_ms;
       sc.verbose = cfg->verbose;
+      sc.queue_metrics = metrics_queue_level(cfg->metrics_inspect_ts);
       lc->srt[lc->n_srt] = srtsink_open(&sc);
       if (!lc->srt[lc->n_srt]) return -1;
       lc->srt_connected[lc->n_srt] = 0;
@@ -180,6 +182,8 @@ int main(int argc, char **argv) {
   tssrc_t *src = NULL;
   tspack_t pz;
   loop_ctx_t lc;
+  tsinspect_set_t insp_set = {&lc.insp_in, 1, &lc.insp_out, 1};
+  srtsink_queue_ctx_t qctx;
   metrics_exporter_t mx;
   unsigned char buf[65536];
   char mkv_app_name[64];
@@ -291,12 +295,31 @@ int main(int argc, char **argv) {
   signals_install();
   start = last_stat = mono_seconds();
   metrics_exporter_init(&mx, METRICS_COMPONENT_DESCRAMBLE, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
+  lc.insp_in = tsinspect_new(cfg.metrics_inspect_ts);
+  lc.insp_out = tsinspect_new(cfg.metrics_inspect_ts);
+  if (lc.insp_in) tsinspect_bind_psi(lc.insp_in, lc.psi);
+  if (lc.insp_in) tsinspect_set_known_pids(lc.insp_in, cfg.metrics_known_pids, cfg.metrics_n_known_pids);
+  if (lc.insp_out) tsinspect_set_known_pids(lc.insp_out, cfg.metrics_known_pids, cfg.metrics_n_known_pids);
+  if (tsinspect_wants_rx_ns(lc.insp_in)) tssrc_enable_rx_timestamps(src);
+  if (lc.insp_out && tsinspect_enable_own_psi(lc.insp_out, 0)) {
+    tsinspect_free(lc.insp_out);
+    lc.insp_out = NULL;
+  }
+  if (lc.insp_in || lc.insp_out) metrics_exporter_set_extra(&mx, tsinspect_set_put, &insp_set);
+  qctx.sinks = lc.srt;
+  qctx.n = (unsigned)lc.n_srt;
+  qctx.queue_metrics = metrics_queue_level(cfg.metrics_inspect_ts);
+  if (lc.n_srt > 0 && qctx.queue_metrics) metrics_exporter_add_extra(&mx, srtsink_put_queue_metrics, &qctx);
 
   while (!signal_stop_requested()) {
     struct pollfd pfd;
     ssize_t n;
     int pr;
-
+    if (lc.insp_in || lc.insp_out) {
+      double now = mono_seconds();
+      if (lc.insp_in) tsinspect_tick(lc.insp_in, now);
+      if (lc.insp_out) tsinspect_tick(lc.insp_out, now);
+    }
     srt_service_all(&lc);
     pipeline_service_unicast_emm(&lc);
     pipeline_service_emmcache(&lc);
@@ -313,7 +336,12 @@ int main(int argc, char **argv) {
     n = tssrc_read(src, buf, sizeof buf, NULL);
     if (n < 0) break;
     if (n == 0) continue;
-    if (tspack_feed(&pz, buf, (size_t)n, pkt_cb, &lc)) break;
+    if (lc.insp_in) {
+      tsinspect_set_rx_ns(lc.insp_in, tssrc_last_rx_ns(src));
+      if (tspack_feed_sync(&pz, buf, (size_t)n, pkt_cb_inspect, &lc, tsinspect_sync(lc.insp_in))) break;
+    } else if (tspack_feed(&pz, buf, (size_t)n, pkt_cb, &lc)) {
+      break;
+    }
     if (cfg.verbose && mono_seconds() - last_stat >= 1.0) {
       log_line(TOOL_NAME ": %llu packets, %.0fs elapsed", lc.packets, mono_seconds() - start);
       last_stat = mono_seconds();
@@ -321,6 +349,7 @@ int main(int argc, char **argv) {
     if (metrics_exporter_enabled(&mx)) push_metrics(&mx, &lc);
   }
 
+  metrics_exporter_clear_extras(&mx);
   metrics_exporter_close(&mx);
   pipeline_flush(&lc);
   pipeline_flush_emmcache(&lc);
@@ -333,6 +362,8 @@ int main(int argc, char **argv) {
   rc = (lc.fatal || lc.emit_failed) ? 1 : 0;
 
 cleanup:
+  tsinspect_free(lc.insp_in);
+  tsinspect_free(lc.insp_out);
   ipiclient_poll_free(lc.ipi_pending);
   ipiclient_free(lc.ipi);
   scrambler_free(lc.scr);

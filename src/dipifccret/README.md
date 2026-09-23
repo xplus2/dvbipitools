@@ -38,6 +38,7 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 |      | --metrics               | path        | `/run/dvbipitools/metrics.sock`    | Unix datagram socket for metrics                    |
 |      | --metrics-id            | name        |                                    | stable instance id, metrics disabled unless set     |
 |      | --metrics-interval      | s           | 5                                  | snapshot interval in seconds                        |
+|      | --metrics-inspect-ts    | level       | off                                | TS health metrics: off, basic, medium or full       |
 | -d   | --daemonize             |             |                                    | fork to background after startup                    |
 | -c   | --config                | path        | `/etc/dvbipitools/dipifccret.yaml` | YAML config file                                    |
 |      | --config-strict         |             |                                    | config file issues are errors                       |

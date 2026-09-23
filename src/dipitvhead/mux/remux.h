@@ -25,6 +25,7 @@ const char *psi_table_name(psi_table_t table);
 /* cumulative, caller-owned. survives remux_t reconnects: fresh remux_t's
    per-pid CC/PCR tracking state does not, and should not. */
 typedef struct {
+  int ts_checks_off;
   unsigned long long ts_packets;
   unsigned long long ts_sync_errors;
   unsigned long long ts_continuity_errors;

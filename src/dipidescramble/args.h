@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 
+#include "lib/helper/argutil.h"
 #include "ecm_profile.h"
 #include "lib/cas/biss/biss.h"
 
@@ -72,6 +73,9 @@ typedef struct {
   const char *metrics_sock;              /* --metrics. NULL = default socket path */
   const char *metrics_id;                /* --metrics-id. NULL = metrics disabled */
   unsigned metrics_interval_s;           /* --metrics-interval. 0 = default */
+  metrics_inspect_ts_t metrics_inspect_ts;
+  unsigned metrics_known_pids[METRICS_KNOWN_PIDS_MAX];
+  unsigned metrics_n_known_pids;
   unsigned max_services;                 /* --max-services. 0 = default (32) */
   int rist_profile_main;                 /* --profile, -i rist:// only. 0 = simple (default) */
   int profile_given;                     /* --profile */

@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
   int uds_fd, http_fd;
   http_server_t *hs;
   tls_server_ctx_t *tls_ctx = NULL;
-  static store_t store; /* ~1.9MB, keeps off stack */
+  static store_t store;
 
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
   if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
@@ -127,6 +127,7 @@ int main(int argc, char **argv) {
   close(uds_fd);
   close(http_fd);
   unlink(cfg.sock_path);
+  store_free(&store);
   tls_server_ctx_free(tls_ctx);
   log_line("stopped");
   return 0;

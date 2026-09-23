@@ -97,6 +97,17 @@ Stable instance id. Metrics stay disabled unless this is set.
 .B \-\-metrics\-interval \fI<s>\fR
 Snapshot interval in seconds. Default: 5.
 .TP
+.B \-\-metrics\-inspect\-ts \fIlevel\fR
+MPEG-TS health metrics level, one of
+.BR off ,
+.BR basic ,
+.BR medium ,
+.BR full .
+Default
+.BR off .
+Requires
+.BR \-\-metrics\-id .
+.TP
 .BR \-d ", " \-\-daemonize
 Fork to background after startup, detach from terminal.
 .TP

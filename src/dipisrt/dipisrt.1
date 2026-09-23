@@ -185,6 +185,20 @@ Metrics snapshot interval in seconds, 1 to 86400. Requires
 Default
 .BR 5 .
 .TP
+.B \-\-metrics\-inspect\-ts \fIlevel\fR
+MPEG-TS health metrics level, one of
+.BR off ,
+.BR basic ,
+.BR medium ,
+.BR full .
+Default
+.BR off .
+Requires
+.BR \-\-metrics\-id .
+Packet-level and PCR checks only, no PSI/SI checks at any level.
+.B medium
+adds PCR jitter and accuracy for UDP and RTP inputs.
+.TP
 .BR \-v ", " \-\-verbose
 Print periodic bridge statistics on stderr.
 .TP

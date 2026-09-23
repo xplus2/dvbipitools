@@ -28,6 +28,9 @@ int record_run(const config_t *cfg, metrics_exporter_t *mx) {
   unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
   int n_all_pids;
   pace_ctrl_t *pace;
+  rec_insp_t ri = {NULL, NULL};
+  tsinspect_set_t insp_set = {&ri.in, 1, &ri.out, 1};
+  int use_raw;
 
   rf.n = 0;
   for (int i = 0; i < cfg->n_out && !rc; i++) {
@@ -65,12 +68,34 @@ int record_run(const config_t *cfg, metrics_exporter_t *mx) {
     tssrc_rewind(s.t);
 
   pace = cfg->pace ? pace_new() : NULL;
+  use_raw = cfg->format == FMT_RAW || (cfg->format == FMT_TS && n_all_pids > 0);
+  if (cfg->format == FMT_RAW || cfg->format == FMT_TS) {
+    ri.in = tsinspect_new(cfg->metrics_inspect_ts);
+    if (ri.in && tsinspect_enable_own_psi(ri.in, 1)) {
+      tsinspect_free(ri.in);
+      ri.in = NULL;
+    }
+    if (ri.in) tsinspect_set_known_pids(ri.in, cfg->metrics_known_pids, cfg->metrics_n_known_pids);
+    if (ri.in && !s.ret && tsinspect_wants_rx_ns(ri.in)) tssrc_enable_rx_timestamps(s.t);
+    if (ri.in && !use_raw) {
+      ri.out = tsinspect_new(cfg->metrics_inspect_ts);
+      if (ri.out && tsinspect_enable_own_psi(ri.out, 0)) {
+        tsinspect_free(ri.out);
+        ri.out = NULL;
+      }
+      if (ri.out) tsinspect_set_known_pids(ri.out, cfg->metrics_known_pids, cfg->metrics_n_known_pids);
+    }
+    if (ri.in) metrics_exporter_set_extra(mx, tsinspect_set_put, &insp_set);
+  }
   start = mono_seconds();
-  if (cfg->format == FMT_RAW || (cfg->format == FMT_TS && n_all_pids > 0))
+  if (use_raw)
     /* -p all under -f ts: nothing left to filter, mkv/flv both need one fixed program anyway */
-    rc = run_raw(&s, cfg, sinks, n_sinks, &rf, mx, &bytes, start, pace);
+    rc = run_raw(&s, cfg, sinks, n_sinks, &rf, mx, &bytes, start, pace, &ri);
   else
-    rc = run_stream(&s, cfg, sinks, n_sinks, mkv_fd, &rf, mx, &bytes, start, cfg->format == FMT_MKV || cfg->format == FMT_MP4, pmt_pid, all_pids, n_all_pids, pace);
+    rc = run_stream(&s, cfg, sinks, n_sinks, mkv_fd, &rf, mx, &bytes, start, cfg->format == FMT_MKV || cfg->format == FMT_MP4, pmt_pid, all_pids, n_all_pids, pace, &ri);
+  metrics_exporter_clear_extras(mx);
+  tsinspect_free(ri.in);
+  tsinspect_free(ri.out);
   pace_free(pace);
 
   if (!stop_now(cfg, start)) {

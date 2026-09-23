@@ -14,6 +14,7 @@
 
 size_t g_capture_ring_cap = 4 * 1024 * 1024;
 capture_ctx_t *g_open;
+tsinspect_agg_t *g_insp_agg;
 pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 _Atomic(capture_snapshot_t *) g_snapshot;
 capture_snapshot_t *g_retired;
@@ -98,7 +99,12 @@ void unlink_ctx(capture_ctx_t *ctx) {
   pthread_mutex_unlock(&g_lock);
 }
 
+void capture_set_inspect(tsinspect_agg_t *agg) {
+  g_insp_agg = agg;
+}
+
 void free_ctx_resources(capture_ctx_t *ctx) {
+  if (ctx->insp) tsinspect_agg_remove(g_insp_agg, ctx->insp);
   if (ctx->backend == CAP_BACKEND_TSSRC) {
     tssrc_close(ctx->ts);
     free(ctx->key);

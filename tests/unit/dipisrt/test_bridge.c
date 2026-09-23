@@ -130,9 +130,60 @@ START_TEST(tssink_cfg_udp_kind) {
 }
 END_TEST
 
+static srtout_t *open_unconnected(int queue_metrics) {
+  srtout_cfg_t cfg;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.peers[0].host = "127.0.0.1";
+  cfg.peers[0].port = 1;
+  cfg.npeers = 1;
+  cfg.group_mode = SRTGROUP_NONE;
+  cfg.queue_metrics = queue_metrics;
+  return srtout_open(&cfg);
+}
+
+START_TEST(srtout_queue_stats_count_chunks_watermark_and_drops) {
+  srtout_t *r = open_unconnected(2);
+  srtout_queue_stats_t st;
+  unsigned char chunk[1316];
+  const int written = 300;
+
+  ck_assert_ptr_nonnull(r);
+  memset(chunk, 0x47, sizeof chunk);
+  srtout_queue_stats(r, &st);
+  ck_assert_int_eq(st.chunks, 0);
+  ck_assert_int_gt(st.capacity, 0);
+  ck_assert_str_eq(st.peer_label, "127.0.0.1:1");
+
+  for (int i = 0; i < written; i++) srtout_write(r, chunk, sizeof chunk);
+  srtout_queue_stats(r, &st);
+  ck_assert_int_eq(st.chunks, st.capacity);
+  ck_assert_int_eq(st.high_watermark, st.capacity);
+  ck_assert_uint_gt(st.dropped, 0u);
+  ck_assert_uint_eq(st.dropped + (uint64_t)st.chunks, (uint64_t)written);
+  srtout_close(r);
+}
+END_TEST
+
+START_TEST(srtout_queue_watermark_stays_zero_below_level_two) {
+  srtout_t *r = open_unconnected(1);
+  srtout_queue_stats_t st;
+  unsigned char chunk[1316];
+
+  ck_assert_ptr_nonnull(r);
+  memset(chunk, 0x47, sizeof chunk);
+  for (int i = 0; i < 10; i++) srtout_write(r, chunk, sizeof chunk);
+  srtout_queue_stats(r, &st);
+  ck_assert_int_eq(st.chunks, 10);
+  ck_assert_int_eq(st.high_watermark, 0);
+  srtout_close(r);
+}
+END_TEST
+
 static Suite *bridge_suite(void) {
   Suite *s = suite_create("dipisrt_bridge");
   TCase *tc = tcase_create("core");
+  tcase_set_timeout(tc, 30);
   tcase_add_test(tc, tssrc_cfg_file_with_path);
   tcase_add_test(tc, tssrc_cfg_file_empty_path_is_stdin);
   tcase_add_test(tc, tssrc_cfg_http_carries_tls_and_insecure);
@@ -142,6 +193,8 @@ static Suite *bridge_suite(void) {
   tcase_add_test(tc, tssink_cfg_file_empty_path_is_stdout);
   tcase_add_test(tc, tssink_cfg_rtp_carries_family_group_port_iface);
   tcase_add_test(tc, tssink_cfg_udp_kind);
+  tcase_add_test(tc, srtout_queue_stats_count_chunks_watermark_and_drops);
+  tcase_add_test(tc, srtout_queue_watermark_stays_zero_below_level_two);
   suite_add_tcase(s, tc);
   return s;
 }

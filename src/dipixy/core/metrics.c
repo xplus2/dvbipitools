@@ -25,6 +25,18 @@ void dipixy_metrics_note_request(void) { atomic_fetch_add_explicit(&g_requests_t
 
 void dipixy_metrics_note_http_error(void) { atomic_fetch_add_explicit(&g_http_errors_total, 1, memory_order_relaxed); }
 
+void dipixy_put_queue_metrics(metrics_writer_t *w, void *ctx) {
+  ts_push_queue_stats_t st;
+  int level = *(const int *)ctx;
+  ts_push_queue_stats(&st);
+  metrics_writer_put(w, METRICS_ID_XY_TSPUSH_QUEUE_BYTES, NULL, st.bytes);
+  metrics_writer_put(w, METRICS_ID_XY_TSPUSH_QUEUE_MAX_BYTES, NULL, st.max_bytes);
+  if (level > 1) {
+    metrics_writer_put(w, METRICS_ID_XY_TSPUSH_QUEUE_HIGH_WATERMARK_BYTES, NULL, ts_push_queue_high_watermark());
+    metrics_writer_put(w, METRICS_ID_XY_TSPUSH_QUEUE_DROPPED_TOTAL, NULL, ts_push_queue_dropped());
+  }
+}
+
 void dipixy_metrics_push(metrics_exporter_t *exp) {
   metrics_writer_t w;
   if (!metrics_exporter_due(exp, mono_seconds()) || metrics_exporter_begin(exp, &w, TOOL_VERSION)) return;

@@ -146,6 +146,36 @@ START_TEST(metrics_id_alone_is_accepted) {
 }
 END_TEST
 
+START_TEST(inspect_ts_level_is_recorded) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts", "--metrics-id", "inst1", "--metrics-inspect-ts", "medium", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_MEDIUM);
+}
+END_TEST
+
+START_TEST(inspect_ts_defaults_to_off) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts", "--metrics-id", "inst1", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_OFF);
+}
+END_TEST
+
+START_TEST(inspect_ts_requires_metrics_id) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts", "--metrics-inspect-ts", "basic", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(inspect_ts_rejects_unknown_level) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts", "--metrics-id", "inst1", "--metrics-inspect-ts", "bogus", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
 START_TEST(rist_in_uri_with_at_is_accepted) {
   char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", NULL};
   config_t cfg;
@@ -299,6 +329,34 @@ static void write_cfg(char *path, const char *text) {
   close(fd);
 }
 
+START_TEST(inspect_ts_pids_parsed) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts", "--metrics-id", "inst1", "--metrics-inspect-ts", "full", "--metrics-inspect-ts-pids", "0x100,300", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.metrics_n_known_pids, 2u);
+  ck_assert_uint_eq(cfg.metrics_known_pids[0], 256u);
+  ck_assert_uint_eq(cfg.metrics_known_pids[1], 300u);
+}
+END_TEST
+
+START_TEST(inspect_ts_pids_require_full) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts", "--metrics-id", "inst1", "--metrics-inspect-ts", "basic", "--metrics-inspect-ts-pids", "256", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(inspect_ts_from_yaml) {
+  char path[] = "/tmp/dipirec_inspect_XXXXXX";
+  char *argv[] = {"dipirec", "-c", path, NULL};
+  config_t cfg;
+  write_cfg(path, "in: udp://@239.1.1.1:5000\nout: a.ts\nmetrics:\n  id: a\n  inspect-ts: full\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_FULL);
+}
+END_TEST
+
 START_TEST(config_file_provides_settings) {
   char path[] = "/tmp/dipirec_cfg_XXXXXX";
   char *argv[] = {"dipirec", "-c", path, NULL};
@@ -378,6 +436,10 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, out_iface_has_no_effect_on_rist_but_is_not_an_error);
   tcase_add_test(tc, metrics_options_require_metrics_id);
   tcase_add_test(tc, metrics_id_alone_is_accepted);
+  tcase_add_test(tc, inspect_ts_level_is_recorded);
+  tcase_add_test(tc, inspect_ts_defaults_to_off);
+  tcase_add_test(tc, inspect_ts_requires_metrics_id);
+  tcase_add_test(tc, inspect_ts_rejects_unknown_level);
   tcase_add_test(tc, rist_in_uri_with_at_is_accepted);
   tcase_add_test(tc, rist_in_uri_without_at_is_rejected);
   tcase_add_test(tc, profile_in_main_is_accepted);
@@ -396,6 +458,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, srt_input_and_srt_output_together_is_accepted);
   tcase_add_test(tc, srt_passphrase_length_is_validated);
   tcase_add_test(tc, srt_pbkeylen_requires_passphrase);
+  tcase_add_test(tc, inspect_ts_pids_parsed);
+  tcase_add_test(tc, inspect_ts_pids_require_full);
+  tcase_add_test(tc, inspect_ts_from_yaml);
   tcase_add_test(tc, config_file_provides_settings);
   tcase_add_test(tc, cmdline_wins_over_config);
   tcase_add_test(tc, config_missing_file_is_error);

@@ -46,6 +46,7 @@ srtsink_t *tvhead_srt_open(const config_t *cfg) {
   sc.packetfilter = cfg->srt_packetfilter;
   sc.latency_ms = cfg->srt_latency_ms;
   sc.verbose = cfg->verbose;
+  sc.queue_metrics = metrics_queue_level(cfg->metrics_inspect_ts);
   return srtsink_open(&sc);
 }
 
@@ -57,6 +58,8 @@ void tvhead_output_close(out_ctx_t *o) {
   if (o->srt) srtsink_close(o->srt);
   if (o->pacer) bitrate_pacer_free(o->pacer);
   if (o->mc) mcast_close(o->mc);
+  tsinspect_free(o->insp);
+  o->insp = NULL;
 }
 
 int tvhead_output_open(const config_t *cfg, out_ctx_t *o) {
@@ -83,6 +86,12 @@ int tvhead_output_open(const config_t *cfg, out_ctx_t *o) {
     o->srt = tvhead_srt_open(cfg);
     if (!o->srt) return -1;
   }
+  o->insp = tsinspect_new(cfg->metrics_inspect_ts);
+  if (o->insp && tsinspect_enable_own_psi(o->insp, cfg->n_inputs > 1)) {
+    tsinspect_free(o->insp);
+    o->insp = NULL;
+  }
+  if (o->insp) tsinspect_set_known_pids(o->insp, cfg->metrics_known_pids, cfg->metrics_n_known_pids);
   return 0;
 }
 
@@ -122,6 +131,7 @@ void flush_batch(out_ctx_t *o) {
 
 void packet_cb(void *ctx, const unsigned char *pkt188) {
   out_ctx_t *o = ctx;
+  if (o->insp) tsinspect_packet(o->insp, pkt188);
   if (o->batch_count == 0) o->batch_open_time = mono_seconds();
   memcpy(o->batch + 12 + (size_t)o->batch_count * 188, pkt188, 188);
   o->batch_count++;
@@ -152,6 +162,13 @@ int remux_cb(void *v, const unsigned char *pkt) {
   return 0;
 }
 
+int remux_cb_inspect(void *v, const unsigned char *pkt) {
+  feed_ctx_t *f = v;
+  tsinspect_packet(f->insp, pkt);
+  remux_feed(f->rx, f->now, pkt, packet_cb, f->out, f->tsm);
+  return 0;
+}
+
 /* common + output + input + TS-integrity + CAS metrics, on mx's own interval
    (metrics_exporter_due gates/no-ops when disabled) */
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
@@ -166,11 +183,13 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
   metrics_writer_put(&w, METRICS_ID_ACTIVE_SERVICES, NULL, active_services);
   metrics_writer_put(&w, METRICS_ID_TV_SOURCE_PROGRAM_UP, NULL, active_services > 0 ? 1 : 0);
   metrics_writer_put_inputs(&w, inputs, n_inputs);
-  metrics_writer_put(&w, METRICS_ID_TS_PACKETS_TOTAL, NULL, tsm->ts_packets);
-  metrics_writer_put(&w, METRICS_ID_TS_SYNC_ERRORS_TOTAL, NULL, tsm->ts_sync_errors);
-  metrics_writer_put(&w, METRICS_ID_TS_CONTINUITY_ERRORS_TOTAL, NULL, tsm->ts_continuity_errors);
-  metrics_writer_put(&w, METRICS_ID_TS_DISCONTINUITIES_TOTAL, NULL, tsm->ts_discontinuities);
-  metrics_writer_put(&w, METRICS_ID_PCR_DISCONTINUITIES_TOTAL, NULL, tsm->pcr_discontinuities);
+  if (!tsm->ts_checks_off) {
+    metrics_writer_put(&w, METRICS_ID_TS_PACKETS_TOTAL, NULL, tsm->ts_packets);
+    metrics_writer_put(&w, METRICS_ID_TS_SYNC_ERRORS_TOTAL, NULL, tsm->ts_sync_errors);
+    metrics_writer_put(&w, METRICS_ID_TS_CONTINUITY_ERRORS_TOTAL, NULL, tsm->ts_continuity_errors);
+    metrics_writer_put(&w, METRICS_ID_TS_DISCONTINUITIES_TOTAL, NULL, tsm->ts_discontinuities);
+    metrics_writer_put(&w, METRICS_ID_PCR_DISCONTINUITIES_TOTAL, NULL, tsm->pcr_discontinuities);
+  }
   {
     for (psi_table_t t = 0; t < PSI_TABLE_COUNT; t++) {
       metrics_writer_put(&w, METRICS_ID_PSI_SECTIONS_TOTAL, psi_table_name(t), tsm->psi_sections_total[t]);
@@ -207,7 +226,7 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
 
 /* steady-state: read, remux, send, until stop/hard error. returns 0 clean stop, -1 error */
 int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, cas_t *cas, metrics_exporter_t *mx, input_metrics_t *im,
-               ts_metrics_t *tsm) {
+               ts_metrics_t *tsm, tsinspect_t *insp) {
   unsigned char buf[65536];
   tspack_t pz;
   feed_ctx_t fc;
@@ -218,6 +237,7 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
   fc.rx = rx;
   fc.out = out;
   fc.tsm = tsm;
+  fc.insp = insp;
 
   while (!signal_stop_requested()) {
     struct pollfd pfd;
@@ -235,6 +255,8 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
       return -1;
     }
     now = mono_seconds();
+    if (insp) tsinspect_tick(insp, now);
+    if (out->insp) tsinspect_tick(out->insp, now);
     if (pr > 0) {
       reason = NET_ERR_OTHER;
       n = tvsrc_read(src, buf, sizeof buf, &reason);
@@ -243,9 +265,11 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
         cas_flush(cas, packet_cb, out);
         return -1;
       }
+      if (insp) tsinspect_set_rx_ns(insp, tvsrc_last_rx_ns(src));
       if (n > 0) {
         fc.now = now;
-        tspack_feed(&pz, buf, (size_t)n, remux_cb, &fc);
+        if (insp) tspack_feed_sync(&pz, buf, (size_t)n, remux_cb_inspect, &fc, tsinspect_sync(insp));
+        else tspack_feed(&pz, buf, (size_t)n, remux_cb, &fc);
       }
       if (cas && cas_failed(cas)) {
         log_line("cas: fatal error, stopping");

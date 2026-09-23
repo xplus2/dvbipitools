@@ -46,10 +46,10 @@ srtsink_t *srtsink_open(const srtsink_cfg_t *cfg) {
   oc.mx = cfg->mx;
   oc.tool_version = cfg->tool_version;
   oc.safety_mult = cfg->safety_mult;
+  oc.queue_metrics = cfg->queue_metrics;
 
   r = calloc(1, sizeof *r);
-  if (!r)
-    return NULL;
+  if (!r) return NULL;
   r->o = srtout_open(&oc);
   if (!r->o) {
     free(r);
@@ -67,8 +67,23 @@ void srtsink_service(srtsink_t *r, srtsink_status_t *out) {
 void srtsink_write(srtsink_t *r, const unsigned char *buf, size_t n) { srtout_write(r->o, buf, n); }
 
 void srtsink_close(srtsink_t *r) {
-  if (!r)
-    return;
+  if (!r) return;
   srtout_close(r->o);
   free(r);
+}
+
+void srtsink_put_queue_metrics(metrics_writer_t *w, void *ctx) {
+  const srtsink_queue_ctx_t *q = ctx;
+
+  for (unsigned i = 0; i < q->n; i++) {
+    srtout_queue_stats_t st;
+    if (!q->sinks[i]) continue;
+    srtout_queue_stats(q->sinks[i]->o, &st);
+    metrics_writer_put(w, METRICS_ID_SRT_SENDER_QUEUE_CHUNKS, st.peer_label, (uint64_t)st.chunks);
+    metrics_writer_put(w, METRICS_ID_SRT_SENDER_QUEUE_CAPACITY_CHUNKS, st.peer_label, (uint64_t)st.capacity);
+    if (q->queue_metrics > 1) {
+      metrics_writer_put(w, METRICS_ID_SRT_SENDER_QUEUE_HIGH_WATERMARK_CHUNKS, st.peer_label, (uint64_t)st.high_watermark);
+      metrics_writer_put(w, METRICS_ID_SRT_SENDER_QUEUE_DROPPED_CHUNKS_TOTAL, st.peer_label, st.dropped);
+    }
+  }
 }

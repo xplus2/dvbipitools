@@ -41,6 +41,10 @@ typedef struct {
   ts_metrics_t tsm;
   int metrics_on;
   ts_metrics_t *tsm_p;
+  tsinspect_t *insp_in[ARGS_MAX_INPUTS];
+  int insp_on;
+  tsinspect_set_t insp_set;
+  srtsink_queue_ctx_t qctx;
 } mpts_run_ctx_t;
 
 static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_run_ctx_t *c) {
@@ -79,6 +83,23 @@ static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_ru
     c->rc = 1;
     return -1;
   }
+  for (unsigned i = 0; i < c->n; i++) {
+    c->insp_in[i] = tsinspect_new(cfg->metrics_inspect_ts);
+    if (c->insp_in[i] && tsinspect_enable_own_psi(c->insp_in[i], 0)) {
+      tsinspect_free(c->insp_in[i]);
+      c->insp_in[i] = NULL;
+    }
+    if (c->insp_in[i]) tsinspect_set_known_pids(c->insp_in[i], cfg->metrics_known_pids, cfg->metrics_n_known_pids);
+    c->insp_on |= c->insp_in[i] != NULL;
+  }
+  c->tsm.ts_checks_off = c->insp_on;
+  c->insp_set.in = c->insp_in;
+  c->insp_set.n_in = c->n;
+  c->insp_set.out = &c->out.insp;
+  c->insp_set.n_out = 1;
+  c->qctx.sinks = &c->out.srt;
+  c->qctx.n = 1;
+  c->qctx.queue_metrics = metrics_queue_level(cfg->metrics_inspect_ts);
   c->out.pacer = bitrate_pacer_new(cfg->bitrate_kbps ? (double)cfg->bitrate_kbps * 1000.0 : 0.0, cfg->stuff, cfg->burst_limit);
   if (!c->out.pacer) {
     log_line("bitrate pacer setup failed");
@@ -132,6 +153,8 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
     flush_batch_if_stale(&c->out);
     now = mono_seconds();
     now_t = time(NULL);
+    if (c->insp_on) for (unsigned i = 0; i < n; i++) if (c->insp_in[i]) tsinspect_tick(c->insp_in[i], now);
+    if (c->out.insp) tsinspect_tick(c->out.insp, now);
     for (unsigned i = 0; i < n; i++) retryset_service(c->rs, i, now_t);
 
     {
@@ -145,6 +168,7 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
       tk.metrics_on = c->metrics_on;
       tk.out = &c->out;
       tk.tsm = c->tsm_p;
+      tk.insp = c->insp_on ? c->insp_in : NULL;
       tk.now = now;
       tk.now_t = now_t;
 
@@ -217,6 +241,7 @@ static void mpts_teardown(const config_t *cfg, mpts_run_ctx_t *c) {
   flush_batch(&c->out);
   for (unsigned i = 0; c->progs && i < c->n; i++) program_reset(&c->progs[i]);
   free(c->progs);
+  for (unsigned i = 0; i < c->n; i++) tsinspect_free(c->insp_in[i]);
   if (c->mpts) mpts_free(c->mpts);
   if (c->rs) retryset_free(c->rs);
   if (c->cas) cas_stop(c->cas);
@@ -228,7 +253,12 @@ static void mpts_teardown(const config_t *cfg, mpts_run_ctx_t *c) {
 int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   mpts_run_ctx_t c;
   memset(&c, 0, sizeof c);
-  if (mpts_setup(cfg, mx, &c) == 0) mpts_run_loop(cfg, mx, &c);
+  if (mpts_setup(cfg, mx, &c) == 0) {
+    if (c.insp_on || c.out.insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &c.insp_set);
+    if (c.out.srt && c.qctx.queue_metrics) metrics_exporter_add_extra(mx, srtsink_put_queue_metrics, &c.qctx);
+    mpts_run_loop(cfg, mx, &c);
+    metrics_exporter_clear_extras(mx);
+  }
   mpts_teardown(cfg, &c);
   return c.rc ? 1 : 0;
 }

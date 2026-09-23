@@ -91,10 +91,14 @@ static int tssrc_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsign
       ctx->leftover_len += take;
       off += take;
       if (ctx->leftover_len < 188) continue;
+      if (ctx->insp) tsinspect_packet(ctx->insp, ctx->leftover);
       sink(user, ctx->leftover);
       ctx->leftover_len = 0;
     }
-    for (; off + 188 <= len; off += 188) sink(user, buf + off);
+    for (; off + 188 <= len; off += 188) {
+      if (ctx->insp) tsinspect_packet(ctx->insp, buf + off);
+      sink(user, buf + off);
+    }
     if (off < len) {
       ctx->leftover_len = len - off;
       memcpy(ctx->leftover, buf + off, ctx->leftover_len);
@@ -103,6 +107,8 @@ static int tssrc_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsign
 }
 
 int capture_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned char *pkt), void *user) {
+  if (g_insp_agg && !ctx->insp) ctx->insp = tsinspect_agg_add(g_insp_agg);
+  if (ctx->insp) tsinspect_tick(ctx->insp, mono_seconds());
   if (ctx->backend == CAP_BACKEND_TSSRC) return tssrc_drain(ctx, sink, user);
   for (;;) {
     unsigned char buf[CAPTURE_RECV_BUF];
@@ -126,6 +132,7 @@ int capture_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned ch
       payload = buf;
       len = (size_t)n;
     }
+    if (ctx->insp) tsinspect_grid(ctx->insp, payload, len);
     for (size_t off = 0; off + 188 <= len; off += 188) sink(user, payload + off);
   }
 }

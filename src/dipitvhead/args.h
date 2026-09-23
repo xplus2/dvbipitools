@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 
+#include "lib/helper/argutil.h"
 #include "lib/cas/biss/biss.h"
 #include "lib/cas/cas_args.h"
 #include "lib/net/httpclient/httpclient.h"
@@ -118,6 +119,9 @@ typedef struct {
   const char *metrics_sock;        /* --metrics; NULL = default socket path */
   const char *metrics_id;          /* --metrics-id; NULL = metrics disabled */
   unsigned metrics_interval_s;     /* --metrics-interval; 0 = default */
+  metrics_inspect_ts_t metrics_inspect_ts;
+  unsigned metrics_known_pids[METRICS_KNOWN_PIDS_MAX];
+  unsigned metrics_n_known_pids;
   char rist_uri[ARGS_MAX_RIST_PEERS][256]; /* -R/--remote, repeatable; bonded onto one sender, simultaneous with -m */
   unsigned n_rist;
   rist_profile_sel_t rist_profile; /* --rist-profile; n_rist>0 only */

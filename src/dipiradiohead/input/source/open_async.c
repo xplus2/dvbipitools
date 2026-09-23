@@ -22,6 +22,7 @@ struct source_open {
   const char *label;
   source_meta_cb cb;
   void *ctx;
+  source_insp_t si;
   http_async_t *ha; /* during SO_FETCHING */
   http_t *h;        /* during SO_SNIFFING */
   unsigned char sniff[SRC_SNIFF_CAP];
@@ -43,7 +44,7 @@ static int so_start_fetch(source_open_t *o, net_err_reason_t *reason_out) {
   return 0;
 }
 
-source_open_t *source_open_async_start(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out) {
+source_open_t *source_open_async_start(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, const source_insp_t *si, net_err_reason_t *reason_out) {
   source_open_t *o = calloc(1, sizeof *o);
   if (!o) return NULL;
   bufcpy(o->cur_uri, sizeof o->cur_uri, uri);
@@ -52,6 +53,7 @@ source_open_t *source_open_async_start(const char *uri, unsigned idx, const char
   o->label = label;
   o->cb = cb;
   o->ctx = ctx;
+  if (si) o->si = *si;
   if (so_start_fetch(o, reason_out) != 0) {
     free(o);
     return NULL;
@@ -103,7 +105,7 @@ source_open_state_t source_open_async_step(source_open_t *o, net_err_reason_t *r
 
   if (playlist_is_hls_media(o->sniff, o->sniff_got)) {
     const http_url_t *pu = http_final_url(o->h);
-    o->result = build_hls_source(pu, o->idx, o->label, o->insecure, o->cb, o->ctx);
+    o->result = build_hls_source(pu, o->idx, o->label, o->insecure, o->cb, o->ctx, &o->si);
     http_close(o->h);
     o->h = NULL;
     if (!o->result) {

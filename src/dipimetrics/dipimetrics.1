@@ -21,9 +21,13 @@ and
 .BR dipixy (1).
 Each of these, if started with its own
 .B \-\-metrics-id
-option, periodically sends a self-contained snapshot of its own counters
-over a Unix datagram socket: a header (component, instance id, process
-start time, sequence number, timestamp) followed by metric entries.
+option, periodically sends a snapshot of its own counters.
+A snapshot replaces the previous one only once it has arrived completely.
+Upgrade
+.B dipimetrics
+before the exporters: an older
+.B dipimetrics
+rejects snapshots from newer exporters.
 .B dipimetrics
 retains the latest snapshot per (component, instance) pair and serves
 them all as one Prometheus/OpenMetrics text document at
@@ -155,7 +159,7 @@ and
 .BR headend_id="<the\ exporter's\ \-\-metrics\-id>" ,
 plus whatever label the metric itself carries
 .RB ( reason ", " input ", " table ", " cas ", " codec ", " transport ", "
-.BR peer ", " output ", " mode ).
+.BR peer ", " output ", " mode ", " direction ", " stream ).
 The label is deliberately not called
 .BR instance :
 Prometheus assigns its own
@@ -179,13 +183,84 @@ tracked:
 (gauge, exporter instances currently held in the store),
 .BR dvbipi_metrics_snapshots_received_total
 (counter),
-.BR dvbipi_metrics_snapshots_rejected_total{reason="malformed|stale|full|version"}
+.BR dvbipi_metrics_snapshots_rejected_total{reason="malformed|stale|full|version|toolarge"}
 (counter, one series per reason),
-.BR dvbipi_metrics_snapshot_entries_dropped_total
-(counter, metric entries dropped from an otherwise-accepted snapshot
-past its per-snapshot entry cap) and
+.BR dvbipi_metrics_snapshots_incomplete_total
+(counter, snapshots discarded because a piece of them was lost),
+.BR dvbipi_metrics_parts_orphaned_total
+(counter, stray snapshot pieces dropped) and
 .BR dvbipi_metrics_http_requests_total{status="200|404"}
-(counter, one series per status).
+(counter, one series per status). Each exporter additionally reports
+.BR dvbipi_metrics_parts_dropped_total
+(counter, snapshot pieces it failed to send).
+.SH TRANSPORT STREAM HEALTH
+Tools started with
+.B \-\-metrics\-inspect\-ts
+.I level
+(yaml
+.BR metrics.inspect-ts ,
+needs
+.BR \-\-metrics\-id )
+report
+.B dvbipi_ts_*
+series per stream, labeled
+.B direction
+.RB ( input
+or
+.BR output )
+and
+.B stream
+.RB ( input0 ", " output0 ", ...)."
+The default
+.B off
+runs and exports nothing.
+.TP
+.B basic
+Sync loss and sync byte errors, transport error packets, continuity errors, PAT, PMT, CAT,
+SDT, NIT, EIT present/following, RST and TDT/TOT presence and repetition, PMT-referenced pids
+missing, PCR repetition and discontinuities, PTS gaps, packet, null and scrambled counters, stalls,
+table versions and last-seen timestamps.
+.TP
+.B medium
+Adds CRC checks of EIT, TOT and BAT, and PCR arrival jitter from kernel receive timestamps on
+UDP/RTP inputs.
+.TP
+.B full
+Adds packets and pids the PMT does not reference, and per pid and per service packet and scrambled packet counters
+for the pids the PMT references when
+.BR \-\-metrics\-inspect\-ts\-pids
+is set.
+.PP
+Counters count since process start. A missing or late table counts once per episode. Series named
+.B *_timestamp_seconds
+are unix times. The checks follow ETSI TR 101 290 where a receiver can measure them, this is not a
+conformance test.
+.B dipifccret
+and
+.B dipixy
+report one aggregate
+.B input0
+with the header-level checks only,
+.B dipirist
+and
+.B dipisrt
+the input stream, and
+.B dipisrt
+as receiver the output too.
+.B dipiradiohead
+reports its generated output, and an input for every HLS input, whose segments are transport streams.
+.B dipirec
+reports its input with
+.B \-f raw
+and
+.BR "\-f ts" ,
+and with
+.B \-f ts
+its filtered output too.
+A continuity error can also come from packets lost on the receiving host
+itself (UDP socket or NIC buffers). The old unlabeled
+.B dipitvhead
+series with these names are replaced by the labeled ones when the option is on.
 .SH SIGNALS
 .BR \(haC ,
 SIGINT or SIGTERM stop the process: sockets are closed and the Unix

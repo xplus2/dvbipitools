@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <time.h>
@@ -39,6 +38,29 @@ void metrics_exporter_close(metrics_exporter_t *exp) {
   exp->enabled = 0;
 }
 
+void metrics_exporter_set_extra(metrics_exporter_t *exp, metrics_extra_fn fn, void *ctx) {
+  exp->extra[0] = fn;
+  exp->extra_ctx[0] = ctx;
+}
+
+int metrics_exporter_add_extra(metrics_exporter_t *exp, metrics_extra_fn fn, void *ctx) {
+  for (int i = 1; i < METRICS_EXTRA_MAX; i++) {
+    if (!exp->extra[i]) {
+      exp->extra[i] = fn;
+      exp->extra_ctx[i] = ctx;
+      return 0;
+    }
+  }
+  return -1;
+}
+
+void metrics_exporter_clear_extras(metrics_exporter_t *exp) {
+  for (int i = 0; i < METRICS_EXTRA_MAX; i++) {
+    exp->extra[i] = NULL;
+    exp->extra_ctx[i] = NULL;
+  }
+}
+
 int metrics_exporter_enabled(const metrics_exporter_t *exp) {
   return exp->enabled;
 }
@@ -55,6 +77,16 @@ void metrics_exporter_note_error(metrics_exporter_t *exp, net_err_reason_t reaso
   exp->errors_total[reason]++;
 }
 
+static int exporter_send_part(void *ctx, const unsigned char *buf, size_t len) {
+  metrics_exporter_t *exp = ctx;
+  ssize_t n = sendto(exp->fd, buf, len, MSG_DONTWAIT | MSG_NOSIGNAL, (const struct sockaddr *)&exp->dest, exp->dest_len);
+  if (n < 0 || (size_t)n != len) {
+    exp->parts_dropped++;
+    return -1;
+  }
+  return 0;
+}
+
 int metrics_exporter_begin(metrics_exporter_t *exp, metrics_writer_t *w, const char *version) {
   metrics_hdr_t hdr;
   if (!exp->enabled) return -1;
@@ -67,25 +99,23 @@ int metrics_exporter_begin(metrics_exporter_t *exp, metrics_writer_t *w, const c
   hdr.snapshot_time = (uint64_t)time(NULL);
 
   if (metrics_writer_begin(w, &hdr)) return -1;
+  w->flush = exporter_send_part;
+  w->flush_ctx = exp;
   if (metrics_writer_put(w, METRICS_ID_HEADEND_INFO, version, 1)) return -1;
   if (metrics_writer_put(w, METRICS_ID_METRICS_SNAPSHOTS_DROPPED_TOTAL, NULL, exp->snapshots_dropped)) return -1;
+  if (metrics_writer_put(w, METRICS_ID_METRICS_PARTS_DROPPED_TOTAL, NULL, exp->parts_dropped)) return -1;
   for (unsigned i = 0; i < NET_ERR_COUNT; i++) if (metrics_writer_put(w, METRICS_ID_ERRORS_TOTAL, net_err_reason_name((net_err_reason_t)i), exp->errors_total[i]))
     return -1;
+  for (int i = 0; i < METRICS_EXTRA_MAX; i++) if (exp->extra[i]) exp->extra[i](w, exp->extra_ctx[i]);
 
   return 0;
 }
 
 void metrics_exporter_send(metrics_exporter_t *exp, metrics_writer_t *w) {
   size_t len;
-  ssize_t n;
   if (!exp->enabled) return;
   len = metrics_writer_finish(w);
-  if (!len) {
-    exp->snapshots_dropped++;
-    return;
-  }
-  n = sendto(exp->fd, w->buf, len, MSG_DONTWAIT | MSG_NOSIGNAL, (const struct sockaddr *)&exp->dest, exp->dest_len);
-  if (n < 0 || (size_t)n != len) exp->snapshots_dropped++;
+  if (!len || exporter_send_part(exp, w->buf, len)) exp->snapshots_dropped++;
 }
 
 void metrics_push_entries(metrics_exporter_t *exp, const char *version, const metrics_entry_t *entries, size_t n) {
@@ -109,14 +139,22 @@ void metrics_writer_put_inputs(metrics_writer_t *w, const input_metrics_t *input
   for (unsigned i = 0; i < n; i++) {
     const input_metrics_t *im = &inputs[i];
     char label[16];
-    snprintf(label, sizeof label, "i%u", i);
+    sbuf_t lb;
+    sbuf_init(&lb, label, sizeof label);
+    sbuf_add(&lb, "i");
+    sbuf_add_uint(&lb, i);
     metrics_writer_put(w, METRICS_ID_INPUT_UP, label, im->up ? 1 : 0);
     metrics_writer_put(w, METRICS_ID_INPUT_BYTES_TOTAL, label, im->bytes_total);
     metrics_writer_put(w, METRICS_ID_INPUT_RECONNECTS_TOTAL, label, im->reconnects_total);
     metrics_writer_put(w, METRICS_ID_INPUT_LAST_DATA_TIME_SECONDS, label, (uint64_t)im->last_data_time);
     for (unsigned r = 0; r < NET_ERR_COUNT; r++) if (im->errors_total[r]) {
       char combined[16 + 1 + 8];
-      snprintf(combined, sizeof combined, "%s%c%s", label, METRICS_LABEL_SEP, net_err_reason_name((net_err_reason_t)r));
+      const char sep[2] = {METRICS_LABEL_SEP, '\0'};
+      sbuf_t cb;
+      sbuf_init(&cb, combined, sizeof combined);
+      sbuf_add(&cb, label);
+      sbuf_add(&cb, sep);
+      sbuf_add(&cb, net_err_reason_name((net_err_reason_t)r));
       metrics_writer_put(w, METRICS_ID_INPUT_ERRORS_TOTAL, combined, im->errors_total[r]);
     }
   }

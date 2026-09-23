@@ -28,6 +28,8 @@ metrics:
   #id: <name>
   # --metrics-interval 5 # seconds
   #interval: 5
+  # --metrics-inspect-ts off # off|basic|medium|full
+  #inspect-ts: off
 
 # --color auto # auto|always|never
 color: auto

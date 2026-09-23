@@ -12,6 +12,7 @@
 #include "lib/net/multicast.h"
 #include "lib/net/rist/ristout.h"
 #include "lib/net/srt/srtsink.h"
+#include "lib/tsinspect/inspect.h"
 
 #include "../cas/cas.h"
 #include "../input/source.h"
@@ -39,6 +40,7 @@ typedef struct {
   int srt_connected;  /* edge-log gate for connect/link-down transitions */
   unsigned long long packets;
   unsigned long long errors;
+  tsinspect_t *insp;
 } out_ctx_t;
 
 /* tool-wide, not per-input. matches spec's unlabeled radio_* metric names */
@@ -66,11 +68,12 @@ void radiohead_output_close(out_ctx_t *o);
 void radiohead_srt_service(out_ctx_t *o);
 void flush_batch(out_ctx_t *o);
 void packet_cb(void *ctx, const unsigned char *pkt188);
+void packet_cb_inspect(void *ctx, const unsigned char *pkt188);
 const char *source_codec_name(source_codec_t c);
 
 /* metrics.c */
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
-                  const input_metrics_t *inputs, unsigned n_inputs, const radio_metrics_t *rm, cas_t *cas);
+  const input_metrics_t *inputs, unsigned n_inputs, const radio_metrics_t *rm, cas_t *cas);
 void radiohead_mpts_set_cas(mpts_t *mpts, cas_t *cas);
 
 /* mpts.c */

@@ -16,6 +16,7 @@
 #include "reactor/reactor.h"
 #include "ts/capture/capture.h"
 #include "ts/channels/channels.h"
+#include "ts/ts_push.h"
 #include "version.h"
 
 static const char *source_kind_name(source_kind_t k) {
@@ -35,6 +36,8 @@ int main(int argc, char **argv) {
   args_status_t st;
   channels_t *channels;
   metrics_exporter_t mx;
+  tsinspect_agg_t *agg = NULL;
+  int queue_level = 0;
   int workers;
   int rc;
 
@@ -84,32 +87,39 @@ int main(int argc, char **argv) {
         channel_list_t *l = atomic_load_explicit(&channels->lists[i - 1], memory_order_relaxed);
         int count = l ? l->count : 0;
         const char *kind = source_kind_name(src->kind);
-        if (src->name)
-          log_line(TOOL_NAME ": input #%d: %d channel%s [%s] \"%s\"", i, count, count == 1 ? "" : "s", kind, src->name);
-        else
-          log_line(TOOL_NAME ": input #%d: %d channel%s [%s]", i, count, count == 1 ? "" : "s", kind);
+        if (src->name) log_line(TOOL_NAME ": input #%d: %d channel%s [%s] \"%s\"", i, count, count == 1 ? "" : "s", kind, src->name);
+        else           log_line(TOOL_NAME ": input #%d: %d channel%s [%s]", i, count, count == 1 ? "" : "s", kind);
       } else if (i == cfg.stdin_ordinal) {
-        if (cfg.stdin_name)
-          log_line(TOOL_NAME ": input #%d: 1 channel [stdin] \"%s\"", i, cfg.stdin_name);
-        else
-          log_line(TOOL_NAME ": input #%d: 1 channel [stdin]", i);
+        if (cfg.stdin_name) log_line(TOOL_NAME ": input #%d: 1 channel [stdin] \"%s\"", i, cfg.stdin_name);
+        else                log_line(TOOL_NAME ": input #%d: 1 channel [stdin]", i);
       } else if (i == cfg.rist_ordinal) {
-        if (cfg.rist_name)
-          log_line(TOOL_NAME ": input #%d: 1 channel [rist] \"%s\"", i, cfg.rist_name);
-        else
-          log_line(TOOL_NAME ": input #%d: 1 channel [rist]", i);
+        if (cfg.rist_name) log_line(TOOL_NAME ": input #%d: 1 channel [rist] \"%s\"", i, cfg.rist_name);
+        else               log_line(TOOL_NAME ": input #%d: 1 channel [rist]", i);
       }
     }
   }
   capture_rist_init(cfg.rist_uri);
   if (cfg.stdin_path) capture_stdin_init();
   dipixy_metrics_init(&mx, &cfg);
+  agg = tsinspect_agg_new(cfg.metrics_inspect_ts);
+  if (agg) {
+    capture_set_inspect(agg);
+    metrics_exporter_set_extra(&mx, tsinspect_agg_put_cb, agg);
+  }
+  queue_level = metrics_queue_level(cfg.metrics_inspect_ts);
+  if (queue_level) {
+    ts_push_set_queue_metrics(queue_level);
+    metrics_exporter_add_extra(&mx, dipixy_put_queue_metrics, &queue_level);
+  }
   channels_start_refresh(channels, &cfg);
   rc = reactor_run(&cfg, channels, &mx, ssdp_start);
   ssdp_stop();
   channels_stop_refresh();
+  metrics_exporter_clear_extras(&mx);
   dipixy_metrics_close(&mx);
   channels_free(channels);
+  capture_set_inspect(NULL);
+  tsinspect_agg_free(agg);
   args_free(&cfg);
   log_line(TOOL_NAME ": shutdown complete");
   return rc ? 1 : 0;

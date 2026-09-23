@@ -14,15 +14,17 @@ START_TEST(suggest_map_classifies_exact_fuzzy_and_unmatched) {
   size_t len;
 
   xmltv_f = tmpfile();
+  ck_assert_ptr_nonnull(xmltv_f);
   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<tv>\n"
-        "<channel id=\"channel1\"><display-name>Channel One</display-name></channel>\n"
-        "<channel id=\"channel2\"><display-name>Channel 2</display-name></channel>\n"
-        "<channel id=\"mystery\"><display-name>Mystery Channel</display-name></channel>\n"
-        "</tv>\n",
-        xmltv_f);
+    "<channel id=\"channel1\"><display-name>Channel One</display-name></channel>\n"
+    "<channel id=\"channel2\"><display-name>Channel 2</display-name></channel>\n"
+    "<channel id=\"mystery\"><display-name>Mystery Channel</display-name></channel>\n"
+    "</tv>\n",
+    xmltv_f);
   rewind(xmltv_f);
 
   scan_f = tmpfile();
+  ck_assert_ptr_nonnull(scan_f);
   fputs("Channel One,rtp://239.1.1.1:5000,1,2,101\nChannel 2 HD,rtp://239.1.1.2:5000,1,2,102\n", scan_f);
   rewind(scan_f);
 

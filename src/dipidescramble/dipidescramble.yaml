@@ -57,6 +57,10 @@ metrics:
   #id: <name>
   # --metrics-interval 5 # seconds
   #interval: 5
+  # --metrics-inspect-ts off # off|basic|medium|full
+  #inspect-ts: off
+  # --metrics-inspect-ts-pids [not set]
+  #inspect-ts-pids: 0x100,0x101
 
 srt:
   # --srt-passphrase-in [not set]

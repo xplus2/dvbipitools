@@ -432,6 +432,41 @@ Stable instance id. Metrics are disabled unless set.
 .B \-\-metrics\-interval \fIs\fR
 Snapshot interval in seconds. Default
 .BR 5 .
+.TP
+.B \-\-metrics\-inspect\-ts \fIlevel\fR
+MPEG-TS health metrics level, one of
+.BR off ,
+.BR basic ,
+.BR medium ,
+.BR full .
+Default
+.BR off .
+Requires
+.BR \-\-metrics\-id .
+.TP
+.B \-\-metrics\-inspect\-ts\-pids \fIpid,pid,...\fR
+Pids that carry data the PMT does not reference (for example private streams) and that the
+.B full
+level of
+.B \-\-metrics\-inspect\-ts
+should treat as known. Packets on them still count in
+.BR dvbipi_ts_unreferenced_packets_total ,
+and their first appearance is left out of
+.BR dvbipi_ts_unreferenced_unlisted_pids_total .
+Setting this option also gives every pid the PMT references (at most 32 per stream) its own packet and scrambled packet counters,
+.B dvbipi_ts_pid_packets_total
+and
+.BR dvbipi_ts_pid_scrambled_packets_total ,
+labeled
+.BR pid ,
+and the same counted per service over all pids its PMT references,
+.B dvbipi_ts_service_packets_total
+and
+.BR dvbipi_ts_service_scrambled_packets_total ,
+labeled
+.BR service .
+Decimal or 0x hex, 0 to 8191. Requires
+.BR \-\-metrics\-inspect\-ts\ full .
 .SS Conditional access: Simulcrypt
 .TP
 .B \-\-cas\-algo \fIa\fR

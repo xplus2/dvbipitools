@@ -12,9 +12,11 @@ void ts_push_h2_enqueue(int sub_idx, const uint8_t *pkt, size_t len) {
   if (sub_idx < 0 || sub_idx >= g_ts_subs_n || !len) return;
   s = &g_ts_subs[sub_idx];
   if (!byte_ring_write(&s->h2_ring, pkt, len)) {
+    ts_push_note_enqueue(&s->h2_ring, 0);
     log_throttled(&s->ring_drop_throttle, LOG_THROTTLE_WINDOW_S, "ts_push: h2 ring full, dropping packet");
     return;
   }
+  ts_push_note_enqueue(&s->h2_ring, 1);
   ws_clients_add_bytes(s->ws_handle, len);
   ts_push_wake_reactor(s->reactor_tid);
 }
@@ -26,9 +28,11 @@ void ts_push_h3_enqueue(int sub_idx, const uint8_t *pkt, size_t len) {
   if (sub_idx < 0 || sub_idx >= g_ts_subs_n || !len) return;
   s = &g_ts_subs[sub_idx];
   if (!byte_ring_write(&s->h3_ring, pkt, len)) {
+    ts_push_note_enqueue(&s->h3_ring, 0);
     log_throttled(&s->ring_drop_throttle, LOG_THROTTLE_WINDOW_S, "ts_push: h3 ring full, dropping packet");
     return;
   }
+  ts_push_note_enqueue(&s->h3_ring, 1);
   ws_clients_add_bytes(s->ws_handle, len);
   ts_push_wake_reactor(s->reactor_tid);
 }

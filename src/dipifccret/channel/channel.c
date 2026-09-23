@@ -83,6 +83,10 @@ fail: {
   }
 }
 
+void channel_table_set_inspect(channel_table_t *t, tsinspect_agg_t *agg) {
+  t->agg = agg;
+}
+
 void channel_table_free(channel_table_t *t) {
   if (!t) return;
   for (size_t i = 0; i < t->max_channels; i++) {
@@ -123,6 +127,7 @@ channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size
       unsigned saved_generation = atomic_load_explicit(&c->generation, memory_order_relaxed);
 
       if (c->psi) psi_free(c->psi);
+      if (c->insp) tsinspect_agg_remove(t->agg, c->insp);
       memset(c, 0, sizeof *c);
       c->ring = saved_ring;
       c->ring_size = saved_ring_size;
@@ -391,8 +396,7 @@ static void reap_slot(channel_table_t *t, size_t i, time_t now, time_t max_age_s
 
 void channel_table_reap(channel_table_t *t, time_t max_age_s) {
   time_t now = time(NULL);
-  for (size_t i = 0; i < t->max_channels; i++)
-    reap_slot(t, i, now, max_age_s);
+  for (size_t i = 0; i < t->max_channels; i++) reap_slot(t, i, now, max_age_s);
 }
 
 void channel_table_reap_step(channel_table_t *t, time_t max_age_s, size_t max_scan) {

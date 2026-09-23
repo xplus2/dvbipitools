@@ -236,6 +236,17 @@ Stable instance id. Default: none (metrics disabled unless set).
 .B \-\-metrics\-interval \fIs\fR
 Snapshot interval. Default: 5.
 .TP
+.B \-\-metrics\-inspect\-ts \fIlevel\fR
+MPEG-TS health metrics level, one of
+.BR off ,
+.BR basic ,
+.BR medium ,
+.BR full .
+Default
+.BR off .
+Requires
+.BR \-\-metrics\-id .
+.TP
 .B \-\-metrics\-http
 Also serve
 .B /metrics

@@ -21,8 +21,9 @@ typedef struct inputset inputset_t;
 /* slot per cfg->inputs[i], retried independently. cfg must outlive inputset (borrowed uri/service_name).
    ctxs[i] (or ctxs itself) may be NULL: per-input source_meta_cb ctx, cb shared.
    retry: error_retry_s > 0 -> that interval, always. == 0 && n_inputs > 1 -> 5s default == 0 && n_inputs == 1 -> never
-   input_stats[i] (or input_stats itself): nullable, one input_metrics_t per slot, caller-owned - must outlive inputset, survives reconnects. */
-inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ctxs, input_metrics_t *input_stats);
+   input_stats[i] (or input_stats itself): nullable, one input_metrics_t per slot, caller-owned, must outlive inputset.
+   insps[i]: nullable, HLS-TS target per slot. */
+inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ctxs, input_metrics_t *input_stats, const source_insp_t *insps);
 void inputset_free(inputset_t *is);
 
 unsigned inputset_count(const inputset_t *is);

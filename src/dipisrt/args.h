@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 
+#include "lib/helper/argutil.h"
 #include "lib/net/plain_endpoint.h"
 #include "lib/net/srt/srtcommon.h"
 
@@ -45,6 +46,7 @@ typedef struct {
   const char *metrics_sock;    /* --metrics. NULL = default socket path */
   const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
   unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
+  metrics_inspect_ts_t metrics_inspect_ts;
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

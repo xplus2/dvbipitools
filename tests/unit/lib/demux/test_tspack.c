@@ -86,6 +86,45 @@ START_TEST(tspack_feed_stops_when_callback_returns_nonzero) {
 }
 END_TEST
 
+START_TEST(tspack_feed_sync_counts_resync_once) {
+  tspack_t pz = {{0}, 0};
+  tspack_sync_t sync;
+  unsigned char buf[188 * 13];
+
+  memset(&sync, 0, sizeof sync);
+  for (unsigned i = 0; i < 13; i++)
+    fill_packet(buf + 188 * i);
+  memset(buf + 188 * 6, 0x11, 188);
+  g_calls = 0;
+  g_stop_after_first = 0;
+
+  ck_assert_int_eq(tspack_feed_sync(&pz, buf, sizeof buf, capture_cb, NULL, &sync), 0);
+  ck_assert_int_eq(g_calls, 12);
+  ck_assert_uint_eq(sync.byte_errors, 1u);
+  ck_assert_uint_eq(sync.losses, 0u);
+  ck_assert_int_eq(sync.in_sync, 1);
+}
+END_TEST
+
+START_TEST(tspack_feed_sync_clean_stream_has_no_errors) {
+  tspack_t pz = {{0}, 0};
+  tspack_sync_t sync;
+  unsigned char buf[188 * 8];
+
+  memset(&sync, 0, sizeof sync);
+  for (unsigned i = 0; i < 8; i++)
+    fill_packet(buf + 188 * i);
+  g_calls = 0;
+  g_stop_after_first = 0;
+
+  ck_assert_int_eq(tspack_feed_sync(&pz, buf, 100, capture_cb, NULL, &sync), 0);
+  ck_assert_int_eq(tspack_feed_sync(&pz, buf + 100, sizeof buf - 100, capture_cb, NULL, &sync), 0);
+  ck_assert_int_eq(g_calls, 8);
+  ck_assert_uint_eq(sync.byte_errors, 0u);
+  ck_assert_int_eq(sync.in_sync, 1);
+}
+END_TEST
+
 static Suite *tspack_suite(void) {
   Suite *s = suite_create("tspack");
   TCase *tc = tcase_create("core");
@@ -93,6 +132,8 @@ static Suite *tspack_suite(void) {
   tcase_add_test(tc, tspack_feed_reassembles_split_input);
   tcase_add_test(tc, tspack_feed_resyncs_past_garbage);
   tcase_add_test(tc, tspack_feed_stops_when_callback_returns_nonzero);
+  tcase_add_test(tc, tspack_feed_sync_counts_resync_once);
+  tcase_add_test(tc, tspack_feed_sync_clean_stream_has_no_errors);
   suite_add_tcase(s, tc);
   return s;
 }

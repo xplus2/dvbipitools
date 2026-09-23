@@ -65,6 +65,9 @@ tssrc_t *tssrc_open(const tssrc_cfg_t *cfg, net_err_reason_t *reason_out);
    RTP framing stripped here too, once detected. */
 ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out);
 
+int tssrc_enable_rx_timestamps(tssrc_t *s);
+uint64_t tssrc_last_rx_ns(const tssrc_t *s);
+
 /* TSSRC_STDIN/TSSRC_FILE, valid after first tssrc_read(): 1 if RTP-wrapped.
    0 before that, and always for every other kind. */
 int tssrc_is_rtp_framed(const tssrc_t *s);

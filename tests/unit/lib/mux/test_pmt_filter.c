@@ -27,7 +27,7 @@ static size_t build_pmt(unsigned char *out, unsigned pcr_pid, const unsigned cha
   out[o++] = (unsigned char)pcr_pid;
   out[o++] = (unsigned char)(0xF0 | ((prog_info_len >> 8) & 0x0F));
   out[o++] = (unsigned char)prog_info_len;
-  memcpy(out + o, prog_info, prog_info_len);
+  if (prog_info_len) memcpy(out + o, prog_info, prog_info_len);
   o += prog_info_len;
   for (size_t i = 0; i < n_es; i++) {
     out[o++] = (unsigned char)es[i].stream_type;

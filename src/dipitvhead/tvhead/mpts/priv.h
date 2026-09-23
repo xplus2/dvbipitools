@@ -57,6 +57,7 @@ typedef struct {
   int metrics_on;
   out_ctx_t *out;
   ts_metrics_t *tsm;
+  tsinspect_t **insp;
   double now;
   time_t now_t;
 } mpts_tick_t;
@@ -80,8 +81,7 @@ void tvhead_mpts_set_cas(mpts_t *mpts, cas_t *cas);
 /* once every input's rx exists (all keyword-CAS pids resolved), starts CAS with the full
    pid list. past the gate deadline without that, fails fast naming the stragglers.
    0: ok (*cas_out set if cas just started). -1: fatal, caller must abort */
-int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, unsigned n, mpts_t *mpts,
-                             double cas_gate_deadline, cas_t **cas_out);
+int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, unsigned n, mpts_t *mpts, double cas_gate_deadline, cas_t **cas_out);
 
 /* EMM passthrough: mux-wide CAT, merged from each program's descriptor.
    exclusive with own CAS (remux_new()). mp version of remux.c send_psi_tables()'s CAT handler */

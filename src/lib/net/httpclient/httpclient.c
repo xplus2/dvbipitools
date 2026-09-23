@@ -162,9 +162,21 @@ int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *
   unsigned default_port = url->tls ? 443 : 80;
   int rl;
 
-  if (extra_header) snprintf(hdrline, sizeof hdrline, "%s\r\n", extra_header);
-  if (url->port == default_port) bufcpy(hostport, sizeof hostport, url->host);
-  else snprintf(hostport, sizeof hostport, "%s:%u", url->host, url->port);
+  if (extra_header) {
+    sbuf_t hb;
+    sbuf_init(&hb, hdrline, sizeof hdrline);
+    sbuf_add(&hb, extra_header);
+    sbuf_add(&hb, "\r\n");
+  }
+  if (url->port == default_port) {
+    bufcpy(hostport, sizeof hostport, url->host);
+  } else {
+    sbuf_t pb;
+    sbuf_init(&pb, hostport, sizeof hostport);
+    sbuf_add(&pb, url->host);
+    sbuf_add(&pb, ":");
+    sbuf_add_uint(&pb, url->port);
+  }
 
   rl = snprintf(buf, cap, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nIcy-MetaData: 1\r\n%sConnection: close\r\n\r\n", url->path, hostport, user_agent, hdrline);
   if (rl < 0 || rl >= (int)cap) {

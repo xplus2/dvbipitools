@@ -68,6 +68,16 @@ typedef struct {
   log_throttle_t ring_drop_throttle;
 } ts_sub_t;
 
+typedef struct {
+  uint64_t bytes;
+  uint64_t max_bytes;
+} ts_push_queue_stats_t;
+
+void ts_push_set_queue_metrics(int level);
+void ts_push_queue_stats(ts_push_queue_stats_t *out);
+uint64_t ts_push_queue_high_watermark(void);
+uint64_t ts_push_queue_dropped(void);
+
 extern ts_sub_t *g_ts_subs; /* calloc by ts_push_init, g_ts_subs_n entries */
 extern int g_ts_subs_n;
 

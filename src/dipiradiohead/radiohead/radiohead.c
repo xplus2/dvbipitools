@@ -30,6 +30,8 @@ void radiohead_output_close(out_ctx_t *o) {
   if (o->rist) ristout_close(o->rist);
   if (o->srt) srtsink_close(o->srt);
   if (o->mc) mcast_close(o->mc);
+  tsinspect_free(o->insp);
+  o->insp = NULL;
 }
 
 ristout_t *radiohead_rist_open(const config_t *cfg) {
@@ -62,6 +64,7 @@ srtsink_t *radiohead_srt_open(const config_t *cfg) {
   sc.packetfilter = cfg->srt_packetfilter;
   sc.latency_ms = cfg->srt_latency_ms;
   sc.verbose = cfg->verbose;
+  sc.queue_metrics = metrics_queue_level(cfg->metrics_inspect_ts);
   return srtsink_open(&sc);
 }
 
@@ -89,6 +92,12 @@ int radiohead_output_open(const config_t *cfg, out_ctx_t *o) {
     o->srt = radiohead_srt_open(cfg);
     if (!o->srt) return -1;
   }
+  o->insp = tsinspect_new(cfg->metrics_inspect_ts);
+  if (o->insp && tsinspect_enable_own_psi(o->insp, cfg->n_inputs > 1)) {
+    tsinspect_free(o->insp);
+    o->insp = NULL;
+  }
+  if (o->insp) tsinspect_set_known_pids(o->insp, cfg->metrics_known_pids, cfg->metrics_n_known_pids);
   return 0;
 }
 
@@ -130,6 +139,12 @@ void packet_cb(void *ctx, const unsigned char *pkt188) {
   o->batch_count++;
   o->packets++;
   if (o->batch_count == TS_PER_DGRAM) flush_batch(o);
+}
+
+void packet_cb_inspect(void *ctx, const unsigned char *pkt188) {
+  out_ctx_t *o = ctx;
+  tsinspect_packet(o->insp, pkt188);
+  packet_cb(ctx, pkt188);
 }
 
 const char *source_codec_name(source_codec_t c) {
@@ -220,7 +235,7 @@ static int process_single_frame(single_tick_t *tk, source_t *src) {
       }
       if (signal_reload_requested()) cas_reload_receivers(tk->cas);
     }
-    tspacketizer_feed(*tk->tsp, pts, now, f.data, f.len, packet_cb, tk->out);
+    tspacketizer_feed(*tk->tsp, pts, now, f.data, f.len, tk->out->insp ? packet_cb_inspect : packet_cb, tk->out);
     if (tk->cfg->verbose && now - *tk->last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - tk->start, tk->out->packets);
       fflush(stderr);
@@ -252,6 +267,10 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   double pace_deadline = 0;
   int metrics_on = metrics_exporter_enabled(mx);
   single_tick_t tk;
+  tsinspect_t *in_insp = NULL;
+  source_insp_t sins = {&in_insp, cfg->metrics_inspect_ts, cfg->metrics_known_pids, cfg->metrics_n_known_pids};
+  tsinspect_set_t set = {&in_insp, 1, &out.insp, 1};
+  srtsink_queue_ctx_t qctx = {&out.srt, 1, metrics_queue_level(cfg->metrics_inspect_ts)};
 
   if (cfg->n_inputs > 1) return radiohead_run_mpts(cfg, mx);
   memset(&meta, 0, sizeof meta);
@@ -263,6 +282,8 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     radiohead_output_close(&out);
     return 1;
   }
+  if (out.insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
+  if (out.srt && qctx.queue_metrics) metrics_exporter_add_extra(mx, srtsink_put_queue_metrics, &qctx);
 
   if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled) {
     unsigned audio_pid = TSPACKETIZER_PID_AUDIO;
@@ -292,7 +313,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
 
   while (!signal_stop_requested()) {
     net_err_reason_t reason = NET_ERR_OTHER;
-    source_t *src = source_open(cfg->inputs[0].uri, 0, cfg->inputs[0].sdt_text, cfg->insecure_tls, meta_cb, &meta, &reason);
+    source_t *src = source_open(cfg->inputs[0].uri, 0, cfg->inputs[0].sdt_text, cfg->insecure_tls, meta_cb, &meta, &sins, &reason);
     samples_total = 0;
     pace_deadline = mono_seconds();
 
@@ -325,6 +346,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
       poll(&pfd, 1, RADIOHEAD_POLL_MAX_MS);
       if (signal_stop_requested()) break;
       radiohead_srt_service(&out);
+      if (out.insp) tsinspect_tick(out.insp, mono_seconds());
       step = process_single_frame(&tk, src);
       if (step == -2) {
         rc = 1;
@@ -344,11 +366,13 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
 done:
-  if (cas) cas_flush(cas, packet_cb, &out);
+  if (cas) cas_flush(cas, out.insp ? packet_cb_inspect : packet_cb, &out);
   flush_batch(&out);
   if (tsp) tspacketizer_free(tsp);
   if (cas) cas_stop(cas);
+  metrics_exporter_clear_extras(mx);
   radiohead_output_close(&out);
+  tsinspect_free(in_insp);
   if (cfg->verbose && log_stderr_is_tty()) fputc('\n', stderr);
   if (rc == 0) log_line("stopped.");
   return rc;

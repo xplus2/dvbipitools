@@ -42,8 +42,10 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
       return;
     }
     tk->progs[i].discover_start = mono_seconds();
+    if (tk->insp && tsinspect_wants_rx_ns(tk->insp[i])) tvsrc_enable_rx_timestamps(src);
     if (tk->cfg->inputs[i].pmt_pid) psi_select_pmt_pid(tk->progs[i].psi, tk->cfg->inputs[i].pmt_pid);
   }
+  tk->progs[i].ds.insp = tk->insp ? tk->insp[i] : NULL;
   r = discover_step(&tk->progs[i].ds, src, &tk->cfg->inputs[i], tk->progs[i].psi, tk->metrics_on ? &tk->input_stats[i] : NULL);
   if (r == 0 && mono_seconds() - tk->progs[i].discover_start < DISCOVERY_TIMEOUT_S) return;
   if (r <= 0) {
@@ -75,6 +77,10 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   mpts_set_program(tk->mpts, i, tk->progs[i].rx);
 }
 
+static int fc_insp_ready(const mpts_tick_t *tk, unsigned i) {
+  return tk->insp && tk->insp[i];
+}
+
 void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   feed_ctx_t fc;
   read_backlog_t *bl = &tk->progs[i].backlog;
@@ -92,6 +98,7 @@ void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
       return;
     }
     if (rn == 0) return;
+    if (fc_insp_ready(tk, i)) tsinspect_set_rx_ns(tk->insp[i], tvsrc_last_rx_ns(src));
     bl->len = (size_t)rn;
     bl->off = 0;
     remaining = bl->len;
@@ -101,7 +108,9 @@ void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   fc.out = tk->out;
   fc.now = tk->now;
   fc.tsm = tk->tsm;
-  tspack_feed(&tk->progs[i].pz, bl->buf + bl->off, chunk, remux_cb, &fc);
+  fc.insp = tk->insp ? tk->insp[i] : NULL;
+  if (fc.insp) tspack_feed_sync(&tk->progs[i].pz, bl->buf + bl->off, chunk, remux_cb_inspect, &fc, tsinspect_sync(fc.insp));
+  else tspack_feed(&tk->progs[i].pz, bl->buf + bl->off, chunk, remux_cb, &fc);
   bl->off += chunk;
   if (bl->off >= bl->len) {
     bl->off = 0;

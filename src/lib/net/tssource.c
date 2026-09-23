@@ -283,40 +283,49 @@ static ssize_t rtp_strip(unsigned char *buf, size_t n) {
   return (ssize_t)n;
 }
 
+int tssrc_enable_rx_timestamps(tssrc_t *s) {
+  if ((s->kind != TSSRC_UDP && s->kind != TSSRC_RTP) || !s->m) return -1;
+  return mcast_enable_rx_timestamps(s->m);
+}
+
+uint64_t tssrc_last_rx_ns(const tssrc_t *s) {
+  return s->m ? mcast_last_rx_ns(s->m) : 0;
+}
+
 ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
   switch (s->kind) {
-  case TSSRC_RTP:
-  case TSSRC_UDP: {
-    ssize_t n;
+    case TSSRC_RTP:
+    case TSSRC_UDP: {
+      ssize_t n;
 
-    if (s->fec_dec) {
-      unsigned char repair_buf[FEC2022_MAX_REPAIR];
-      ssize_t rn = mcast_recv(s->fec_m, repair_buf, sizeof repair_buf, NULL);
-      if (rn > 0) fec2022_dec_repair(s->fec_dec, repair_buf, (size_t)rn);
+      if (s->fec_dec) {
+        unsigned char repair_buf[FEC2022_MAX_REPAIR];
+        ssize_t rn = mcast_recv(s->fec_m, repair_buf, sizeof repair_buf, NULL);
+        if (rn > 0) fec2022_dec_repair(s->fec_dec, repair_buf, (size_t)rn);
+
+        n = mcast_recv(s->m, buf, cap, reason_out);
+        if (n < 0) return n;
+        if (n > 0) fec2022_dec_source(s->fec_dec, buf, (size_t)n);
+
+        n = (ssize_t)fec2022_dec_drain(s->fec_dec, buf, cap);
+        if (n == 0) return 0;
+        return rtp_strip(buf, (size_t)n);
+      }
 
       n = mcast_recv(s->m, buf, cap, reason_out);
-      if (n < 0) return n;
-      if (n > 0) fec2022_dec_source(s->fec_dec, buf, (size_t)n);
-
-      n = (ssize_t)fec2022_dec_drain(s->fec_dec, buf, cap);
-      if (n == 0) return 0;
+      if (n <= 0) return n;
       return rtp_strip(buf, (size_t)n);
     }
-
-    n = mcast_recv(s->m, buf, cap, reason_out);
-    if (n <= 0) return n;
-    return rtp_strip(buf, (size_t)n);
-  }
-  case TSSRC_HTTP:
-    return http_read(s->h, buf, cap, reason_out);
-  case TSSRC_STDIN:
-    return deframe_read(s, STDIN_FILENO, buf, cap, reason_out);
-  case TSSRC_FILE:
-    return deframe_read(s, s->fd, buf, cap, reason_out);
-  case TSSRC_RIST:
-    return raw_fd_read(ristin_fd(s->rist), buf, cap, reason_out);
-  case TSSRC_SRT:
-    return raw_fd_read(srtsrc_fd(s->srt), buf, cap, reason_out);
+    case TSSRC_HTTP:
+      return http_read(s->h, buf, cap, reason_out);
+    case TSSRC_STDIN:
+      return deframe_read(s, STDIN_FILENO, buf, cap, reason_out);
+    case TSSRC_FILE:
+      return deframe_read(s, s->fd, buf, cap, reason_out);
+    case TSSRC_RIST:
+      return raw_fd_read(ristin_fd(s->rist), buf, cap, reason_out);
+    case TSSRC_SRT:
+      return raw_fd_read(srtsrc_fd(s->srt), buf, cap, reason_out);
   }
   return -1;
 }

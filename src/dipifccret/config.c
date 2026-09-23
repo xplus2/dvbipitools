@@ -195,6 +195,14 @@ static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->metrics_interval_s, v, 1, 86400, e, n);
 }
 
+static int apply_metrics_inspect_ts(void *c, const char *v, char *e, size_t n) {
+  if (metrics_inspect_ts_parse(v, &((config_t *)c)->metrics_inspect_ts)) {
+    bufcpy(e, n, "must be off|basic|medium|full");
+    return -1;
+  }
+  return 0;
+}
+
 static const yamlcfg_key_t keys[] = {
   {"range", apply_range, 0, 0},
   {"listen", apply_listen, 0, 0},
@@ -231,6 +239,7 @@ static const yamlcfg_key_t keys[] = {
   {"metrics.sock", apply_metrics_sock, 0, 0},
   {"metrics.id", apply_metrics_id, 0, 0},
   {"metrics.interval", apply_metrics_interval, 0, 0},
+  {"metrics.inspect-ts", apply_metrics_inspect_ts, 0, 0},
 };
 
 int fccret_cfg_load(config_t *cfg, const char *path, int strict) {
@@ -257,5 +266,6 @@ int fccret_cfg_test(const char *path, int strict) {
   warn_if(&y, cfg.no_ret && cfg.no_fcc, "no-ret and no-fcc together leave nothing to run");
   warn_if(&y, cfg.rsi_mc_ret && (cfg.no_mc_ret || cfg.no_ret), "rsi.mc-ret requires RET and MC RET (no-ret/no-mc-ret not set)");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
+  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
   return yamlcfg_report(&y);
 }

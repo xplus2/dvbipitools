@@ -5,6 +5,6 @@
 #define DIPISRT_VERSION_H
 
 #define TOOL_NAME    "dipisrt"
-#define TOOL_VERSION "0.3.0"
+#define TOOL_VERSION "0.3.1"
 
 #endif

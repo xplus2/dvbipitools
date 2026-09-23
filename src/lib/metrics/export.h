@@ -13,6 +13,10 @@
 #include "../net/netconnect.h"
 #include "protocol.h"
 
+#define METRICS_EXTRA_MAX 4
+
+typedef void (*metrics_extra_fn)(metrics_writer_t *w, void *ctx);
+
 typedef struct {
   int enabled;
   int fd;
@@ -25,6 +29,9 @@ typedef struct {
   double interval_s;
   double last_send_mono; /* 0 = never sent yet */
   uint64_t snapshots_dropped;
+  uint64_t parts_dropped;
+  metrics_extra_fn extra[METRICS_EXTRA_MAX];
+  void *extra_ctx[METRICS_EXTRA_MAX];
   uint64_t errors_total[NET_ERR_COUNT];
 } metrics_exporter_t;
 
@@ -32,6 +39,13 @@ typedef struct {
 void metrics_exporter_init(metrics_exporter_t *exp, metrics_component_t component, const char *metrics_id, const char *sock_path, double interval_s);
 
 void metrics_exporter_close(metrics_exporter_t *exp);
+
+/* extra runs in metrics_exporter_begin after commons, caller thread */
+void metrics_exporter_set_extra(metrics_exporter_t *exp, metrics_extra_fn fn, void *ctx);
+
+/* further cbs in slots 1 to 3. -1 if full. set_extra(NULL) clears slot 0, clear_extras all */
+int metrics_exporter_add_extra(metrics_exporter_t *exp, metrics_extra_fn fn, void *ctx);
+void metrics_exporter_clear_extras(metrics_exporter_t *exp);
 
 int metrics_exporter_enabled(const metrics_exporter_t *exp);
 
@@ -44,7 +58,7 @@ void metrics_exporter_note_error(metrics_exporter_t *exp, net_err_reason_t reaso
 /* fills header + common metrics (info/dropped/errors). caller adds component entries via metrics_writer_put() before send(). -1 = disabled */
 int metrics_exporter_begin(metrics_exporter_t *exp, metrics_writer_t *w, const char *version);
 
-/* nonblocking. any failure (oversized/full buffer/no collector) counts as dropped, no retry */
+/* nonblocking. any failure (full buffer/no collector) counts as dropped, no retry. earlier parts out while building */
 void metrics_exporter_send(metrics_exporter_t *exp, metrics_writer_t *w);
 
 typedef struct {

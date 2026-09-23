@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../crc32.h"
 #include "../tspack.h"
 
 #include "priv.h"
@@ -47,14 +48,74 @@ psi_t *psi_new(void) {
 
 void psi_free(psi_t *c) { free(c); }
 
-/* records that pmt_cand[k] just resolved: locks onto it (single-mode, first resolution
-   only) and marks it resolved in multi-mode */
+/* records that pmt_cand[k] just resolved: locks onto it (single-mode, first resolution only),
+   marks it resolved in multi-mode */
 static void note_pmt_resolved(psi_t *c, int k) {
   if (!c->pmt_locked) {
     c->pmt_locked = 1;
     c->pmt_lock_idx = k;
   }
   if (c->multi_mode) c->multi[k].resolved = 1;
+}
+
+void psi_obs_init(psi_obs_t *o, const double *now) {
+  memset(o, 0, sizeof *o);
+  o->now = now;
+  for (int i = 0; i < PSI_OBS_COUNT; i++) o->t[i].version = -1;
+}
+
+void psi_set_observer(psi_t *c, psi_obs_t *o) { c->obs = o; }
+
+double psi_obs_oldest_section(const psi_obs_t *o, psi_obs_id_t id) {
+  int k = id == PSI_OBS_NIT;
+  double oldest = 0.0;
+  for (unsigned i = 0; i < o->sec_count[k]; i++) {
+    if (o->sec_last[k][i] == 0.0) return 0.0;
+    if (oldest == 0.0 || o->sec_last[k][i] < oldest) oldest = o->sec_last[k][i];
+  }
+  return oldest;
+}
+
+double psi_obs_oldest_other(const psi_obs_t *o, psi_obs_id_t id) {
+  int k = id == PSI_OBS_NIT_OTHER;
+  double oldest = 0.0;
+  for (unsigned i = 0; i < o->other_n[k]; i++)
+    if (oldest == 0.0 || o->other[k][i].last < oldest) oldest = o->other[k][i].last;
+  return oldest;
+}
+
+double psi_pmt_oldest_seen(const psi_t *c) {
+  double oldest = 0.0;
+  for (int k = 0; k < c->pmt_cand_count; k++) {
+    if (c->pmt_cand[k].obs_last == 0.0) return 0.0;
+    if (oldest == 0.0 || c->pmt_cand[k].obs_last < oldest) oldest = c->pmt_cand[k].obs_last;
+  }
+  return oldest;
+}
+
+static void obs_note(psi_t *c, psi_obs_id_t id, const unsigned char *b, size_t n, unsigned tid, pmt_cand_t *cand) {
+  psi_obs_stat_t *s;
+  if (!c->obs || n < 8 || b[0] != tid) return;
+  s = &c->obs->t[id];
+  if (cand) cand->obs_last = *c->obs->now;
+  s->last_seen = *c->obs->now;
+  if (id == PSI_OBS_BAT && c->obs->crc_bat && n >= 12 && crc32_mpeg(b, n) != 0) s->crc_errors++;
+  if (id == PSI_OBS_SDT_OTHER || id == PSI_OBS_NIT_OTHER) {
+    int k = id == PSI_OBS_NIT_OTHER;
+    uint32_t key = ((uint32_t)b[3] << 16) | ((uint32_t)b[4] << 8) | b[6];
+    unsigned i;
+    for (i = 0; i < c->obs->other_n[k] && c->obs->other[k][i].key != key; i++) ;
+    if (i == c->obs->other_n[k] && i < 128) {
+      c->obs->other[k][i].key = key;
+      c->obs->other_n[k]++;
+    }
+    if (i < 128) c->obs->other[k][i].last = *c->obs->now;
+  }
+  if (id == PSI_OBS_SDT || id == PSI_OBS_NIT) {
+    int k = id == PSI_OBS_NIT;
+    c->obs->sec_last[k][b[6]] = *c->obs->now;
+    c->obs->sec_count[k] = (unsigned)b[7] + 1;
+  }
 }
 
 void psi_feed(psi_t *c, const unsigned char *pkt) {
@@ -68,28 +129,50 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
   if (!tspack_payload(pkt, &pl, &plen, &pusi)) return;
   switch (pid) {
     case TS_PID_PAT:
-      if (psi_section_asm_feed(&c->pat, pl, plen, pusi)) parse_pat(c);
+      if (psi_section_asm_feed(&c->pat, pl, plen, pusi)) {
+        obs_note(c, PSI_OBS_PAT, c->pat.buf, c->pat.expect, 0x00, NULL);
+        parse_pat(c);
+      }
       return;
     case TS_PID_NIT:
-      if (psi_section_asm_feed(&c->nit, pl, plen, pusi)) parse_nit(c);
+      if (psi_section_asm_feed(&c->nit, pl, plen, pusi)) {
+        obs_note(c, PSI_OBS_NIT, c->nit.buf, c->nit.expect, 0x40, NULL);
+        obs_note(c, PSI_OBS_NIT_OTHER, c->nit.buf, c->nit.expect, 0x41, NULL);
+        parse_nit(c);
+      }
       return;
     case TS_PID_SDT:
-      if (psi_section_asm_feed(&c->sdt, pl, plen, pusi)) parse_sdt(c);
+      if (psi_section_asm_feed(&c->sdt, pl, plen, pusi)) {
+        obs_note(c, PSI_OBS_SDT, c->sdt.buf, c->sdt.expect, 0x42, NULL);
+        obs_note(c, PSI_OBS_SDT_OTHER, c->sdt.buf, c->sdt.expect, 0x46, NULL);
+        obs_note(c, PSI_OBS_BAT, c->sdt.buf, c->sdt.expect, 0x4A, NULL);
+        parse_sdt(c);
+      }
       return;
     case TS_PID_CAT:
-      if (psi_section_asm_feed(&c->cat, pl, plen, pusi)) parse_cat(c);
+      if (psi_section_asm_feed(&c->cat, pl, plen, pusi)) {
+        obs_note(c, PSI_OBS_CAT, c->cat.buf, c->cat.expect, 0x01, NULL);
+        parse_cat(c);
+      }
       return;
     default:
       break;
   }
 
   if (c->pmt_locked && !c->multi_mode) {
-    if (pid == c->pmt_pid && psi_section_asm_feed(&c->pmt_cand[c->pmt_lock_idx].asm_, pl, plen, pusi)) parse_pmt(c, &c->pmt_cand[c->pmt_lock_idx]);
+    if (pid == c->pmt_pid && psi_section_asm_feed(&c->pmt_cand[c->pmt_lock_idx].asm_, pl, plen, pusi)) {
+      pmt_cand_t *cand = &c->pmt_cand[c->pmt_lock_idx];
+      obs_note(c, PSI_OBS_PMT, cand->asm_.buf, cand->asm_.expect, 0x02, cand);
+      parse_pmt(c, cand);
+    }
   } else if (c->have_pat) {
     for (int k = 0; k < c->pmt_cand_count; k++) {
       pmt_cand_t *cand = &c->pmt_cand[k];
       if (cand->pmt_pid != pid) continue;
-      if (psi_section_asm_feed(&cand->asm_, pl, plen, pusi) && parse_pmt(c, cand)) note_pmt_resolved(c, k);
+      if (psi_section_asm_feed(&cand->asm_, pl, plen, pusi)) {
+        obs_note(c, PSI_OBS_PMT, cand->asm_.buf, cand->asm_.expect, 0x02, cand);
+        if (parse_pmt(c, cand)) note_pmt_resolved(c, k);
+      }
       break;
     }
   }
@@ -153,6 +236,8 @@ const char *psi_provider_name(const psi_t *c) { return c->provider_name; }
 const char *psi_network_name(const psi_t *c) { return c->network_name; }
 
 pid_class_t psi_classify(const psi_t *c, unsigned pid) { return c->class_by_pid[pid]; }
+
+unsigned psi_service_of_pid(const psi_t *c, unsigned pid) { return c->service_by_pid[pid]; }
 
 const unsigned char *psi_pat_section(const psi_t *c, size_t *len) {
   if (!c->have_pat) {

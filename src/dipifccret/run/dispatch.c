@@ -10,6 +10,7 @@
 
 #include "lib/demux/rtcp.h"
 #include "lib/helper/log.h"
+#include "lib/helper/signal.h"
 #include "lib/mux/rtcp_build.h"
 
 #include "../fcc/burst.h"
@@ -78,6 +79,13 @@ void capture_cb(int family, const void *addr, size_t addr_len, unsigned port, un
 
   c = channel_lookup(ctx->channels, family, addr, addr_len, port);
   if (!c) return; /* max-channels cap, already logged by channel_lookup */
+  if (ctx->agg) {
+    if (!c->insp) c->insp = tsinspect_agg_add(ctx->agg);
+    if (c->insp) {
+      tsinspect_tick(c->insp, mono_seconds());
+      tsinspect_grid(c->insp, payload, payload_len);
+    }
+  }
   channel_store(ctx->channels, c, ssrc, seq, timestamp, dscp, payload, payload_len);
   if (ctx->mt) mcsend_ensure(ctx->mt, c, ctx->ff_port); /* cheap no-op if c already has a socket */
   if (ctx->rsi_mt) mcsend_ensure(ctx->rsi_mt, c, 0); /* always own port per channel, RSI address, not -F's */

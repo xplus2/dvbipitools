@@ -132,8 +132,7 @@ void out_describe(const out_target_t *o, char *buf, size_t n) {
       bufcpy(buf, n, strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
       break;
     case OUT_SRT:
-      if (o->srt_family == AF_INET6) snprintf(buf, n, "srt://[%s]:%u", o->srt_host, o->srt_port);
-      else                           snprintf(buf, n, "srt://%s:%u", o->srt_host, o->srt_port);
+      describe_srt_uri(buf, n, o->srt_family, 0, o->srt_host, o->srt_port);
       break;
   }
 }
@@ -180,52 +179,54 @@ static void print_help(void) {
     "given the device's RSA private key or a BISS session word. The CAS scheme is auto-detected from\n"
     "the stream; -k/-s/-e or --biss-* are only required once the stream turns out to need them.\n\n"
     "options:\n"
-    "  -i, --input <uri>          udp://, rtp://, rist://@host:port[?query] (single peer)\n"
-    "                             srt://[@]host:port (single peer), or \"-\" for stdin (required)\n"
-    "  -k, --key <path>           device RSA private key, PEM (required for ECM/EMM-driven CAS)\n"
-    "  -s, --serial <id>          this device's serial, matched against EMM-U addressing (required for ECM/EMM-driven CAS)\n"
-    "  -e, --emm-file <path>      EMM cache: loaded on startup, rewritten on update (required for ECM/EMM-driven CAS)\n"
-    "  -u, --unicast-emm <uri>    unicast EMM pull endpoint, auth token as URI userinfo\n"
-    "                             (e.g. https://<token>@<host>:<port>/device/<serial>/emm)\n"
-    "      --insecure             skip TLS verification for -u/--unicast-emm and -o rtmps://\n"
-    "      --token-header <name>  HTTP header carrying the token for -u/--unicast-emm (default X-Device-Token)\n"
-    "      --biss2-sw <hex32>     BISS2 Mode 1: 32 hex char Session Word\n"
-    "      --biss2-esw <hex32>    BISS2 Mode E: 32 hex char Encrypted Session Word (needs --biss2-id)\n"
-    "      --biss2-id <hex32>     BISS2 Mode E: 32 hex char receiver ID for --biss2-esw\n"
-    "      --biss1-sw <hex12>     legacy BISS1 Mode 1: 12 hex char Session Word\n"
-    "      --biss2-ca-key <path>  BISS Mode CA: receiver RSA private key, PEM\n"
-    "      --ecm-profile <spec>   ecm_profile template, comma key=value (see README)\n"
-    "  -o, --output <target>      descrambled output, repeatable: file, \"-\" for stdout, rtmp(s)://,\n"
-    "                             or srt://host:port, rtmp(s)://<host>[:port]/<app>/<key>\n"
-    "  -f, --format <fmt>         ts|mkv|mka output container (default ts; raw ts and rtmp(s) targets\n"
-    "                             may mix, mkv/mka needs exactly one plain file target)\n"
-    "      --strip-lcevc          drop inline LCEVC (SEI/NAL) from mkv/mka/rtmp output\n"
-    "  -p, --pmt-pid <pid|all>    MPTS source only: pin one PMT pid, or descramble every program\n"
-    "                             (\"all\"; rejected with -f mkv). ignored on an SPTS\n"
-    "                             source. omitted on an MPTS source: lists programs\n"
-    "  -I, --iface <iface>        incoming multicast interface name\n"
-    "  -v, --verbose              periodic stats + BK/SK/CW update lines on stderr\n"
-    "      --color <when>         auto|always|never (default auto)\n"
-    "      --metrics <path>       socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
-    "      --metrics-id <name>    stable instance id. metrics are disabled unless set\n"
-    "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
-    "      --max-services <n>     max distinct EMM-G service_ids cached (default: 32, max: 256)\n"
-    "      --profile <p>          simple|main; -i rist:// only (default: simple)\n"
-    "      --srt-passphrase-in <p>passphrase for -i srt://, 10..79 chars\n"
-    "      --srt-pbkeylen-in <n>  AES key length for --srt-passphrase-in: 16|24|32 (default 16)\n"
-    "      --srt-streamid-in <id> SRTO_STREAMID for -i srt://\n"
+    "  -i, --input <uri>              udp://, rtp://, rist://@host:port[?query] (single peer)\n"
+    "                                 srt://[@]host:port (single peer), or \"-\" for stdin (required)\n"
+    "  -k, --key <path>               RSA private key, PEM (required for ECM/EMM-driven CAS)\n"
+    "  -s, --serial <id>              device's serial, matched against EMM-U (required for CAS)\n"
+    "  -e, --emm-file <path>          EMM cache: loaded on startup, rewritten on update (required for CAS)\n"
+    "  -u, --unicast-emm <uri>        unicast EMM pull endpoint, auth token as URI userinfo\n"
+    "                                 (e.g. https://<token>@<host>:<port>/device/<serial>/emm)\n"
+    "      --insecure                 skip TLS verification for -u/--unicast-emm and -o rtmps://\n"
+    "      --token-header <name>      HTTP header carrying the token for -u/--unicast-emm (X-Device-Token)\n"
+    "      --biss2-sw <hex32>         BISS2 Mode 1: 32 hex char Session Word\n"
+    "      --biss2-esw <hex32>        BISS2 Mode E: 32 hex char Encrypted Session Word (needs --biss2-id)\n"
+    "      --biss2-id <hex32>         BISS2 Mode E: 32 hex char receiver ID for --biss2-esw\n"
+    "      --biss1-sw <hex12>         legacy BISS1 Mode 1: 12 hex char Session Word\n"
+    "      --biss2-ca-key <path>      BISS Mode CA: receiver RSA private key, PEM\n"
+    "      --ecm-profile <spec>       ecm_profile template, comma key=value (see README)\n"
+    "  -o, --output <target>          descrambled output, repeatable: file, \"-\" for stdout, rtmp(s)://,\n"
+    "                                 or srt://host:port, rtmp(s)://<host>[:port]/<app>/<key>\n"
+    "  -f, --format <fmt>             ts|mkv|mka output container (ts. raw ts and rtmp(s) targets\n"
+    "                                 may mix, mkv/mka needs exactly one plain file target)\n"
+    "      --strip-lcevc              drop inline LCEVC (SEI/NAL) from mkv/mka/rtmp output\n"
+    "  -p, --pmt-pid <pid|all>        MPTS source only: pin one PMT pid, or descramble every program\n"
+    "                                 (\"all\"; rejected with -f mkv). ignored on SPTS source.\n"
+    "                                 omitted on an MPTS source: lists programs\n"
+    "  -I, --iface <iface>            incoming multicast interface name\n"
+    "  -v, --verbose                  periodic stats + BK/SK/CW update lines on stderr\n"
+    "      --color <when>             auto|always|never (default auto)\n"
+    "      --metrics <path>           socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+    "      --metrics-id <name>        stable instance id. metrics are disabled unless set\n"
+    "      --metrics-interval <s>     snapshot interval in seconds (default: 5)\n"
+    "      --metrics-inspect-ts <lvl> TS health metrics: off|basic|medium|full (default: off)\n"
+    "      --metrics-inspect-ts-pids <list> per pid and per service counters (default: none)\n"
+    "      --max-services <n>         max distinct EMM-G service_ids cached (32, max: 256)\n"
+    "      --profile <p>              simple|main; -i rist:// only (default: simple)\n"
+    "      --srt-passphrase-in <p>    passphrase for -i srt://, 10..79 chars\n"
+    "      --srt-pbkeylen-in <n>      AES key length for --srt-passphrase-in: 16|24|32 (default 16)\n"
+    "      --srt-streamid-in <id>     SRTO_STREAMID for -i srt://\n"
     "      --srt-packetfilter-in <cfg>SRTO_PACKETFILTER for -i srt://, e.g. fec,cols:10,rows:5\n"
-    "      --srt-latency-in <ms>  SRTO_LATENCY (ms) for -i srt://\n"
-    "      --srt-passphrase <pw>  passphrase for every -o srt:// target, 10..79 chars\n"
-    "      --srt-pbkeylen <n>     AES key length for --srt-passphrase: 16|24|32 (default 16)\n"
-    "      --srt-streamid <id>    SRTO_STREAMID for every -o srt:// target\n"
-    "      --srt-packetfilter <cfg>SRTO_PACKETFILTER for every -o srt:// target\n"
-    "      --srt-latency <ms>     SRTO_LATENCY (ms) for every -o srt:// target\n"
-    "  -d, --daemonize            fork to background after startup, detach from terminal\n"
-    "  -c, --config <path>        YAML config file (default: %s, if present)\n"
-    "      --config-strict        fail on config file issues instead of warnings\n"
-    "      --configtest           check the config file, then exit\n"
-    "  -h, --help                 this help\n\n"
+    "      --srt-latency-in <ms>      SRTO_LATENCY (ms) for -i srt://\n"
+    "      --srt-passphrase <pw>      passphrase for every -o srt:// target, 10..79 chars\n"
+    "      --srt-pbkeylen <n>         AES key length for --srt-passphrase: 16|24|32 (default 16)\n"
+    "      --srt-streamid <id>        SRTO_STREAMID for every -o srt:// target\n"
+    "      --srt-packetfilter <cfg>   SRTO_PACKETFILTER for every -o srt:// target\n"
+    "      --srt-latency <ms>         SRTO_LATENCY (ms) for every -o srt:// target\n"
+    "  -d, --daemonize                fork to background after startup\n"
+    "  -c, --config <path>            YAML config file (default: %s, if present)\n"
+    "      --config-strict            fail on config file issues instead of warnings\n"
+    "      --configtest               check the config file, then exit\n"
+    "  -h, --help                     this help\n\n"
     "examples:\n"
     "  %s -i rtp://@239.0.0.1:1975 -k device.key -s e2e-01 -e emm.cache -o out.ts -v\n"
     "  %s -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o out.ts\n"
@@ -258,6 +259,8 @@ static const struct option longopts[] = {
   {"metrics", required_argument, 0, 1011},
   {"metrics-id", required_argument, 0, 1012},
   {"metrics-interval", required_argument, 0, 1013},
+  {"metrics-inspect-ts", required_argument, 0, 1029},
+  {"metrics-inspect-ts-pids", required_argument, 0, 1030},
   {"max-services", required_argument, 0, 1014},
   {"profile", required_argument, 0, 1015},
   {"srt-passphrase-in", required_argument, 0, 1016},
@@ -435,6 +438,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1013:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
+      case 1029:
+        if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
+        break;
+      case 1030:
+        if (argutil_metrics_known_pids_opt(TOOL_NAME, optarg, cfg->metrics_known_pids, &cfg->metrics_n_known_pids)) return ARGS_ERR;
+        break;
       case 1014: {
         unsigned v;
         if (argutil_uint_range(optarg, 1, DEVICE_MAX_SERVICES_CEILING, &v)) {
@@ -568,6 +577,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
+  if (argutil_metrics_inspect_ts_validate(TOOL_NAME, cfg->metrics_id, cfg->metrics_inspect_ts)) return ARGS_ERR;
+  if (cfg->metrics_n_known_pids && cfg->metrics_inspect_ts != METRICS_INSPECT_TS_FULL) {
+    argutil_err(TOOL_NAME, "--metrics-inspect-ts-pids requires --metrics-inspect-ts full");
+    return ARGS_ERR;
+  }
   if (cfg->profile_given && cfg->input.kind != INPUT_RIST)
     log_line(TOOL_NAME ": --profile needs -i rist://");
   if (argutil_srt_passphrase_opt(TOOL_NAME, cfg->srt_passphrase_in, "--srt-passphrase-in")) return ARGS_ERR;

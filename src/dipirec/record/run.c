@@ -27,6 +27,7 @@ typedef struct {
   psi_t *psi;        /* NULL unless -v or --pace */
   pace_ctrl_t *pace;  /* NULL unless --pace */
   int pace_pcr;       /* 1: this chunk wasn't RTP-framed, pace per packet */
+  tsinspect_t *insp;
 } raw_ctx_t;
 
 static int raw_cb(void *v, const unsigned char *pkt) {
@@ -36,9 +37,18 @@ static int raw_cb(void *v, const unsigned char *pkt) {
   return 0;
 }
 
+static int raw_cb_inspect(void *v, const unsigned char *pkt) {
+  tsinspect_packet(((raw_ctx_t *)v)->insp, pkt);
+  return raw_cb(v, pkt);
+}
+
+static void inspect_rx_ns(const src_t *s, tsinspect_t *insp) {
+  if (!s->ret) tsinspect_set_rx_ns(insp, tssrc_last_rx_ns(s->t));
+}
+
 /* no flv/rtmp path here, args.c already rejects -f raw + an rtmp(s) target */
 int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, const rtmp_fanout_t *rf,
-            metrics_exporter_t *mx, unsigned long long *bytes, double start, pace_ctrl_t *pace) {
+            metrics_exporter_t *mx, unsigned long long *bytes, double start, pace_ctrl_t *pace, const rec_insp_t *ri) {
   unsigned char buf[65536];
   tspack_t pz = {{0}, 0};
   raw_ctx_t ctx;
@@ -47,11 +57,13 @@ int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, const
   ctx.psi = (cfg->verbose || pace) ? psi_new() : NULL;
   ctx.pace = pace;
   ctx.pace_pcr = 0;
+  ctx.insp = ri->in;
 
   while (!stop_now(cfg, start)) {
     ssize_t n;
     int pr;
     sinks_service_srt(sinks, n_sinks);
+    if (ctx.insp) tsinspect_tick(ctx.insp, mono_seconds());
     pr = src_wait_readable(s, 100);
     if (pr < 0) break;
     if (pr == 0) continue;
@@ -66,7 +78,9 @@ int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, const
         ctx.pace_pcr = 1;
       }
     }
-    if (ctx.psi) tspack_feed(&pz, buf, (size_t)n, raw_cb, &ctx);
+    if (ctx.insp) inspect_rx_ns(s, ctx.insp);
+    if (ctx.insp) tspack_feed_sync(&pz, buf, (size_t)n, raw_cb_inspect, &ctx, tsinspect_sync(ctx.insp));
+    else if (ctx.psi) tspack_feed(&pz, buf, (size_t)n, raw_cb, &ctx);
     for (int i = 0; i < n_sinks; i++)
       if (sink_write(&sinks[i], buf, (size_t)n)) {
         rc = 1;
@@ -95,6 +109,8 @@ typedef struct {
   int bad;
   pace_ctrl_t *pace; /* NULL unless --pace */
   int pace_pcr;       /* 1: this chunk wasn't RTP-framed, pace per packet */
+  tsinspect_t *in;
+  tsinspect_t *out;
 } stream_ctx_t;
 
 static int write_to_sinks(out_sink_t *sinks, int n_sinks, const unsigned char *buf, size_t len) {
@@ -102,8 +118,8 @@ static int write_to_sinks(out_sink_t *sinks, int n_sinks, const unsigned char *b
   return 0;
 }
 
-static int stream_cb(void *v, const unsigned char *pkt) {
-  stream_ctx_t *c = v;
+static inline int stream_feed(stream_ctx_t *c, const unsigned char *pkt, int inspect) {
+  if (inspect) tsinspect_packet(c->in, pkt);
   if (c->pace_pcr) {
     const psi_t *p;
     if (c->f)        p = ts_filter_psi(c->f);
@@ -116,6 +132,7 @@ static int stream_cb(void *v, const unsigned char *pkt) {
     unsigned char o[188];
     const unsigned char *r = ts_filter_packet(c->f, pkt, o);
     if (r) {
+      if (inspect && c->out) tsinspect_packet(c->out, r);
       if (write_to_sinks(c->sinks, c->n_sinks, r, 188)) return 1;
       *c->bytes += 188;
     }
@@ -139,11 +156,15 @@ static int stream_cb(void *v, const unsigned char *pkt) {
   return 0;
 }
 
+static int stream_cb(void *v, const unsigned char *pkt) { return stream_feed(v, pkt, 0); }
+
+static int stream_cb_inspect(void *v, const unsigned char *pkt) { return stream_feed(v, pkt, 1); }
+
 /* ts and/or mkv/mka/mp4/m4a sinks, plus an optional flv+rtmp fan-out, one shared packet feed.
    mkv_fd < 0: no container target. rf->n == 0: no rtmp(s) target.
    pmt_pid/all_pids/n_all_pids: as resolve_pmt_selection filled them in */
 int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, int mkv_fd, rtmp_fanout_t *rf, metrics_exporter_t *mx, unsigned long long *bytes,
-               double start, int video_ok, unsigned pmt_pid, const unsigned *all_pids, int n_all_pids, pace_ctrl_t *pace) {
+               double start, int video_ok, unsigned pmt_pid, const unsigned *all_pids, int n_all_pids, pace_ctrl_t *pace, const rec_insp_t *ri) {
   unsigned char buf[65536];
   tspack_t pz = {{0}, 0};
   stream_ctx_t ctx;
@@ -157,6 +178,8 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
   ctx.n_sinks = n_sinks;
   ctx.bytes = bytes;
   ctx.pace = pace;
+  ctx.in = ri->in;
+  ctx.out = ri->out;
 
   if (n_sinks > 0 && !is_container) {
     ctx.f = ts_filter_new(cfg->audio_all, cfg->audio_track, cfg->subs == SUB_STRIP, pmt_pid, cfg->strip_mask);
@@ -218,6 +241,8 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
     ssize_t n;
     int pr;
     sinks_service_srt(sinks, n_sinks);
+    if (ctx.in) tsinspect_tick(ctx.in, mono_seconds());
+    if (ctx.out) tsinspect_tick(ctx.out, mono_seconds());
     pr = src_wait_readable(s, 100);
     if (pr < 0) break;
     if (pr == 0) continue;
@@ -232,7 +257,8 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
         ctx.pace_pcr = 1;
       }
     }
-    if (tspack_feed(&pz, buf, (size_t)n, stream_cb, &ctx)) {
+    if (ctx.in) inspect_rx_ns(s, ctx.in);
+    if (ctx.in ? tspack_feed_sync(&pz, buf, (size_t)n, stream_cb_inspect, &ctx, tsinspect_sync(ctx.in)) : tspack_feed(&pz, buf, (size_t)n, stream_cb, &ctx)) {
       if (ctx.bad)
         log_line_ansi("audio track \e[0;31m%u\e[0;33m not found (\e[0;33m%d\e[0;33m present)", cfg->audio_track, psi_audio_count(ts_filter_psi(ctx.f)));
       rc = 1;

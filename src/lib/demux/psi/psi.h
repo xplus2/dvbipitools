@@ -5,6 +5,7 @@
 #define DIPIREC_DEMUX_PSI_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #define PSI_MAX_ES 32
 #define PSI_NAME 64
@@ -86,6 +87,36 @@ typedef struct {
 
 typedef struct psi psi_t;
 
+typedef enum { PSI_OBS_PAT, PSI_OBS_PMT, PSI_OBS_CAT, PSI_OBS_SDT, PSI_OBS_NIT, PSI_OBS_SDT_OTHER, PSI_OBS_NIT_OTHER, PSI_OBS_BAT, PSI_OBS_COUNT } psi_obs_id_t;
+
+typedef struct {
+  uint64_t crc_errors;
+  uint64_t changes;
+  double last_seen;
+  int version;
+} psi_obs_stat_t;
+
+typedef struct {
+  const double *now;
+  psi_obs_stat_t t[PSI_OBS_COUNT];
+  double sec_last[2][256];
+  unsigned sec_count[2];
+  struct {
+    uint32_t key;
+    double last;
+  } other[2][128];
+  unsigned other_n[2];
+  int crc_bat;
+} psi_obs_t;
+
+void psi_obs_init(psi_obs_t *o, const double *now);
+void psi_set_observer(psi_t *c, psi_obs_t *o);
+
+double psi_obs_oldest_section(const psi_obs_t *o, psi_obs_id_t id);
+
+double psi_obs_oldest_other(const psi_obs_t *o, psi_obs_id_t id);
+double psi_pmt_oldest_seen(const psi_t *c);
+
 psi_t *psi_new(void);
 void psi_free(psi_t *c);
 void psi_feed(psi_t *c, const unsigned char *pkt); /* one 188-byte packet */
@@ -144,6 +175,8 @@ const char *psi_provider_name(const psi_t *c);
 const char *psi_network_name(const psi_t *c);
 
 pid_class_t psi_classify(const psi_t *c, unsigned pid);
+
+unsigned psi_service_of_pid(const psi_t *c, unsigned pid);
 
 /* 1 if psi_feed() would act on this pid (table pid, locked pmt, or a pmt candidate), 0: no-op */
 int psi_wants_pid(const psi_t *c, unsigned pid);

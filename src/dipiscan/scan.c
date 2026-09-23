@@ -11,6 +11,7 @@
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/rtp.h"
 #include "lib/demux/tspack.h"
+#include "lib/helper/describe.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/httpclient/httpclient.h"
@@ -181,29 +182,22 @@ static void probe_address(const config_t *cfg, const char *group, unsigned port,
   }
 }
 
-static void report_mpts_programs(const config_t *cfg, FILE *out, const probe_result_t *r, unsigned i,
-                                  const char *uri, const char *group, unsigned port, unsigned *found) {
+static void report_mpts_programs(const config_t *cfg, FILE *out, const probe_result_t *r, unsigned i, const char *uri, const char *group, unsigned port, unsigned *found) {
   for (int k = 0; k < r->program_count; k++) {
     (*found)++;
-    if (cfg->verbose)
-      log_line("%u/%u %-28s %-32s sid=%u [%u pkts]", i, cfg->total, uri, r->programs[k].name, r->programs[k].sid, r->pkts);
-    else
-      log_line("%u/%u %-28s %s (sid=%u)", i, cfg->total, uri, r->programs[k].name, r->programs[k].sid);
+    if (cfg->verbose) log_line("%u/%u %-28s %-32s sid=%u [%u pkts]", i, cfg->total, uri, r->programs[k].name, r->programs[k].sid, r->pkts);
+    else              log_line("%u/%u %-28s %s (sid=%u)", i, cfg->total, uri, r->programs[k].name, r->programs[k].sid);
     format_item(out, cfg->format, r->programs[k].name, uri, cfg->family, group, port, r->rtp_wrapped == 1, r->tsid, r->onid, r->programs[k].sid);
   }
   if (r->program_count == 0)
     log_line_ansi("%u/%u %-28s \e[0;33mstream present, no program resolved\e[0m", i, cfg->total, uri);
 }
 
-static void report_single_program(const config_t *cfg, FILE *out, const probe_result_t *r, unsigned i,
-                                   const char *uri, const char *group, unsigned port, unsigned *found) {
+static void report_single_program(const config_t *cfg, FILE *out, const probe_result_t *r, unsigned i, const char *uri, const char *group, unsigned port, unsigned *found) {
   const char *name = (r->kind == PROBE_NAMED) ? r->name : "(no SDT)";
   (*found)++;
-  if (cfg->verbose)
-    log_line("%u/%u %-28s %-32s [%u pkts]", i, cfg->total, uri, name, r->pkts);
-  else
-    log_line("%u/%u %-28s %s", i, cfg->total, uri, name);
-
+  if (cfg->verbose) log_line("%u/%u %-28s %-32s [%u pkts]", i, cfg->total, uri, name, r->pkts);
+  else              log_line("%u/%u %-28s %s", i, cfg->total, uri, name);
   format_item(out, cfg->format, name, uri, cfg->family, group, port, r->rtp_wrapped == 1, r->tsid, r->onid, r->sid);
 }
 
@@ -245,10 +239,7 @@ static void *scan_worker(void *arg) {
 
         probe_address(cfg, group, port, &r);
         proto = (r.rtp_wrapped == 1) ? "rtp" : "udp";
-        if (cfg->family == AF_INET6)
-          snprintf(uri, sizeof uri, "%s://@[%s]:%u", proto, group, port);
-        else
-          snprintf(uri, sizeof uri, "%s://@%s:%u", proto, group, port);
+        describe_mcast_uri(uri, sizeof uri, proto, cfg->family, group, port);
 
         pthread_mutex_lock(&job->mtx);
         while (job->next_commit != i) pthread_cond_wait(&job->cv, &job->mtx);

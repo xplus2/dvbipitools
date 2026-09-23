@@ -11,6 +11,7 @@
 #include "lib/net/rist/ristout.h"
 #include "lib/net/tssink.h"
 #include "lib/net/tssource.h"
+#include "lib/tsinspect/inspect.h"
 #include "lib/helper/signal.h"
 
 #include "args.h"
@@ -97,13 +98,19 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   tssrc_t *src;
   ristout_cfg_t rcfg;
   ristout_t *rist;
+  tsinspect_t *insp = tsinspect_new_relay(cfg->metrics_inspect_ts);
+  tsinspect_set_t set = {&insp, 1, NULL, 0};
   unsigned char buf[65536];
   int rc = 0;
 
   plain_endpoint_to_tssrc_cfg(&cfg->in.nonrist, cfg->iface, TOOL_NAME "/" TOOL_VERSION, cfg->insecure_tls, &tc);
   src = tssrc_open(&tc, NULL);
-  if (!src)
+  if (!src) {
+    tsinspect_free(insp);
     return 1;
+  }
+  if (insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
+  if (tsinspect_wants_rx_ns(insp)) tssrc_enable_rx_timestamps(src);
 
   memset(&rcfg, 0, sizeof rcfg);
   for (int i = 0; i < cfg->out.n_rist; i++)
@@ -119,6 +126,8 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
 
   rist = ristout_open(&rcfg);
   if (!rist) {
+    if (insp) metrics_exporter_set_extra(mx, NULL, NULL);
+    tsinspect_free(insp);
     tssrc_close(src);
     return 1;
   }
@@ -130,12 +139,17 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
       net_err_reason_t reason = NET_ERR_OTHER;
       ssize_t n = tssrc_read(src, buf, sizeof buf, &reason);
 
+      if (insp) tsinspect_tick(insp, mono_seconds());
       if (n < 0) {
         rc = 1;
         break;
       }
       if (n == 0)
         continue;
+      if (insp) {
+        tsinspect_set_rx_ns(insp, tssrc_last_rx_ns(src));
+        tsinspect_grid(insp, buf, (size_t)n);
+      }
       if (ristout_write(rist, buf, (size_t)n) < 0) {
         if (!rist_had_error) {
           log_line("rist output: write failed, will keep retrying");
@@ -154,6 +168,8 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     nanosleep(&ts, NULL);
   }
   ristout_close(rist);
+  if (insp) metrics_exporter_set_extra(mx, NULL, NULL);
+  tsinspect_free(insp);
   tssrc_close(src);
   return rc;
 }
@@ -163,34 +179,44 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   tssink_t *sink;
   struct rist_ctx *ctx;
   struct rist_logging_settings *log_settings;
+  tsinspect_t *insp = tsinspect_new_relay(cfg->metrics_inspect_ts);
+  tsinspect_set_t set = {&insp, 1, NULL, 0};
   int rc = 0;
 
   plain_endpoint_to_tssink_cfg(&cfg->out.nonrist, cfg->iface, &tk);
   sink = tssink_open(&tk);
-  if (!sink) return 1;
+  if (!sink) {
+    tsinspect_free(insp);
+    return 1;
+  }
   log_settings = open_logging(cfg->verbose);
   if (rist_receiver_create(&ctx, profile_of(cfg->profile), log_settings) != 0) {
     log_line("rist: receiver create failed");
     if (log_settings) rist_logging_settings_free2(&log_settings);
     tssink_close(sink);
+    tsinspect_free(insp);
     return 1;
   }
   if (add_peers(ctx, &cfg->in, cfg) || rist_start(ctx) != 0) {
     rist_destroy(ctx);
     if (log_settings) rist_logging_settings_free2(&log_settings);
     tssink_close(sink);
+    tsinspect_free(insp);
     return 1;
   }
+  if (insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
   rist_stats_callback_set(ctx, RIST_STATS_INTERVAL_MS, receiver_stats_cb, mx);
 
   while (!signal_stop_requested()) {
     struct rist_data_block *db = NULL;
     int ret = rist_receiver_data_read2(ctx, &db, RIST_READ_TIMEOUT_MS);
+    if (insp) tsinspect_tick(insp, mono_seconds());
     if (ret < 0) {
       rc = 1;
       break;
     }
     if (ret == 0 || !db) continue;
+    if (insp) tsinspect_grid(insp, db->payload, db->payload_len);
     if (tssink_write(sink, db->payload, db->payload_len) < 0) {
       rc = 1;
       rist_receiver_data_block_free2(&db);
@@ -200,6 +226,8 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
   rist_destroy(ctx);
+  if (insp) metrics_exporter_set_extra(mx, NULL, NULL);
+  tsinspect_free(insp);
   if (log_settings) rist_logging_settings_free2(&log_settings);
   tssink_close(sink);
   return rc;

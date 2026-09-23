@@ -248,6 +248,7 @@ START_TEST(mkv_pts_wraparound_is_rebased_not_dropped) {
   rewind(f);
   ck_assert(fsize > 0);
   buf = malloc((size_t)fsize);
+  ck_assert_ptr_nonnull(buf);
   ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
   fclose(f);
 
@@ -289,6 +290,7 @@ START_TEST(mkv_writes_a_valid_container_for_audio_only) {
   rewind(f);
   ck_assert(fsize > 0);
   buf = malloc((size_t)fsize);
+  ck_assert_ptr_nonnull(buf);
   ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
   fclose(f);
 
@@ -365,6 +367,7 @@ START_TEST(mkv_no_supported_tracks_writes_nothing_and_no_error) {
   mkv_close(m);
   close(fd);
   f = fopen(path, "rb");
+  ck_assert_ptr_nonnull(f);
   fseek(f, 0, SEEK_END);
   fsize = ftell(f);
   fclose(f);
@@ -576,6 +579,7 @@ START_TEST(mkv_multi_program_labels_tracks_with_program_names) {
   rewind(f);
   ck_assert(fsize > 0);
   buf = malloc((size_t)fsize);
+  ck_assert_ptr_nonnull(buf);
   ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
   fclose(f);
 
@@ -617,6 +621,7 @@ START_TEST(mkv_single_program_still_omits_track_name) {
   fsize = ftell(f);
   rewind(f);
   buf = malloc((size_t)fsize);
+  ck_assert_ptr_nonnull(buf);
   ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
   fclose(f);
 
@@ -686,6 +691,7 @@ START_TEST(mkv_writes_vvc_codecid_and_vvcc_cpriv) {
   rewind(f);
   ck_assert(fsize > 0);
   buf = malloc((size_t)fsize);
+  ck_assert_ptr_nonnull(buf);
   ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
   fclose(f);
 
@@ -752,6 +758,7 @@ START_TEST(mkv_writes_av1_codecid_and_av1c_cpriv) {
   rewind(f);
   ck_assert(fsize > 0);
   buf = malloc((size_t)fsize);
+  ck_assert_ptr_nonnull(buf);
   ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
   fclose(f);
 

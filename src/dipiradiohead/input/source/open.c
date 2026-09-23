@@ -56,19 +56,18 @@ source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigne
     }
   }
 
-  if (s->icy)
+  if (s->icy) {
     s->buf_len = icy_feed(s->icy, sniff, got, s->buf, sizeof s->buf);
-  else {
+  } else {
     s->buf_len = got < sizeof s->buf ? got : sizeof s->buf;
     memcpy(s->buf, sniff, s->buf_len);
   }
   return s;
 }
 
-source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx) {
+source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, const source_insp_t *si) {
   source_t *s = calloc(1, sizeof *s);
-  if (!s)
-    return NULL;
+  if (!s) return NULL;
   s->idx = idx;
   s->label = label;
   s->id3 = id3_new(cb, ctx);
@@ -76,7 +75,7 @@ source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const c
     free(s);
     return NULL;
   }
-  s->hls = hls_live_new(playlist_url, TOOL_NAME "/" TOOL_VERSION, insecure, idx, label);
+  s->hls = hls_live_new(playlist_url, TOOL_NAME "/" TOOL_VERSION, insecure, idx, label, si);
   if (!s->hls) {
     id3_free(s->id3);
     free(s);
@@ -85,7 +84,7 @@ source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const c
   return s;
 }
 
-source_t *source_open(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, net_err_reason_t *reason_out) {
+source_t *source_open(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, const source_insp_t *si, net_err_reason_t *reason_out) {
   char cur_uri[2048];
   bufcpy(cur_uri, sizeof cur_uri, uri);
   for (int hops = 0; hops < SRC_MAX_HOPS; hops++) {
@@ -111,7 +110,7 @@ source_t *source_open(const char *uri, unsigned idx, const char *label, int inse
 
     if (playlist_is_hls_media(sniff, (size_t)got)) {
       const http_url_t *pu = http_final_url(h);
-      source_t *s = build_hls_source(pu, idx, label, insecure, cb, ctx);
+      source_t *s = build_hls_source(pu, idx, label, insecure, cb, ctx, si);
       http_close(h);
       if (!s && reason_out) *reason_out = NET_ERR_OTHER;
       return s;

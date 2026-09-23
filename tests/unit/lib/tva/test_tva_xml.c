@@ -77,6 +77,7 @@ START_TEST(tva_xml_write_drops_channels_without_uri) {
   snprintf(pr->title, sizeof pr->title, "Should be dropped");
 
   f = tmpfile();
+  ck_assert_ptr_nonnull(f);
   tva_xml_write(f, &doc);
   rewind(f);
 

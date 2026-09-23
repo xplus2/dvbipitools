@@ -159,6 +159,7 @@ START_TEST(mp4_writes_a_valid_container_for_audio_only) {
   rewind(f);
   ck_assert(fsize > 0);
   buf = malloc((size_t)fsize);
+  ck_assert_ptr_nonnull(buf);
   ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
   fclose(f);
 
@@ -235,6 +236,7 @@ START_TEST(mp4_no_supported_tracks_writes_nothing_and_no_error) {
   mp4_close(m);
   close(fd);
   f = fopen(path, "rb");
+  ck_assert_ptr_nonnull(f);
   fseek(f, 0, SEEK_END);
   fsize = ftell(f);
   fclose(f);
@@ -341,6 +343,7 @@ START_TEST(mp4_multi_program_writes_two_audio_tracks) {
   rewind(f);
   ck_assert(fsize > 0);
   buf = malloc((size_t)fsize);
+  ck_assert_ptr_nonnull(buf);
   ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
   fclose(f);
 

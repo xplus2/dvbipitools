@@ -18,6 +18,7 @@
 #include "lib/net/rtmp/rtmpout.h"
 #include "lib/net/srt/srtsink.h"
 #include "lib/scrambler/scrambler.h"
+#include "lib/tsinspect/inspect.h"
 
 /* raw-fd output batch size: cuts write() syscalls ~64x vs one per 188B packet */
 #define PIPELINE_OUT_BATCH_PKTS 64
@@ -38,6 +39,8 @@ typedef struct {
   int n_srt;
   unsigned long long packets;
   psi_t *psi;
+  tsinspect_t *insp_in;
+  tsinspect_t *insp_out;
   unsigned ecm_pid, emm_pid; /* 0 = not yet resolved */
   int cas_logged;
   const char *cas_mode; /* NULL until cas_logged: "classic"/"biss1e"/"biss-ca" */
@@ -73,6 +76,7 @@ typedef struct {
    or lc->mkv/lc->flv set up first).
    0 ok, 1 stop (lc->fatal or lc->emit_failed explains why) */
 int pkt_cb(void *v, const unsigned char *pkt);
+int pkt_cb_inspect(void *v, const unsigned char *pkt);
 
 /* drains any packets scrambler_set_key() queued for last crypto-period's batch */
 void pipeline_flush(loop_ctx_t *lc);

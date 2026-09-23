@@ -18,32 +18,34 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 
 ## Options
 
-| flag  | long form               | argument              | default                                      |
-|-------|-------------------------|-----------------------|----------------------------------------------|
-| `-i`  | `--input`               | `<uri>`               | required                                     |
-| `-k`  | `--key`                 | `<path>`              | required for ECM/EMM-driven CAS              |
-| `-s`  | `--serial`              | `<id>`                | required for ECM/EMM-driven CAS              |
-| `-e`  | `--emm-file`            | `<path>`              | required for ECM/EMM-driven CAS (cache file) |
-| `-u`  | `--unicast-emm`         | `<uri>`               |                                              |
-|       | `--insecure`            |                       | off (`-u`, or `-o rtmps://`)                 |
-| `-o`  | `--output`              | `<target>`            | required, repeatable                         |
-| `-f`  | `--format`              | `ts\|mkv\|mka`        | `ts`                                         |
-|       | `--strip-lcevc`         |                       | off (`mkv`/`mka`/`rtmp(s)://` only)          |
-| `-p`  | `--pmt-pid`             | `<pid>` / `all`       | none (see below)                             |
-| `-I`  | `--iface`               | `<iface>`             | kernel default                               |
-|       | `--ecm-profile`         | `<spec>`              | `ecm_profile` templating, see below          |
-| `-v`  | `--verbose`             |                       | off                                          |
-|       | `--color`               | `auto\|always\|never` | `auto`                                       |
-|       | `--metrics`             | `<path>`              | `/run/dvbipitools/metrics.sock`              |
-|       | `--metrics-id`          | `<name>`              | none (metrics disabled unless set)           |
-|       | `--metrics-interval`    | `<s>`                 | `5`                                          |
-|       | `--max-services`        | `<n>`                 | `32` (max `256`)                             |
-|       | `--profile`             | `simple\|main`        | `simple`, `-i rist://` only                  |
-| `-d`  | `--daemonize`           |                       | off (foreground)                             |
-| `-c`  | `--config`              | `<path>`              | `/etc/dvbipitools/dipidescramble.yaml`       |
-|       | `--config-strict`       |                       | config file issues are errors                |
-|       | `--configtest`          |                       | check the config file, then exit             |
-| `-h`  | `--help`                |                       |                                              |
+| flag | long form                   | argument                   | default                                      |
+|------|-----------------------------|----------------------------|----------------------------------------------|
+| `-i` | `--input`                   | `<uri>`                    | required                                     |
+| `-k` | `--key`                     | `<path>`                   | required for ECM/EMM-driven CAS              |
+| `-s` | `--serial`                  | `<id>`                     | required for ECM/EMM-driven CAS              |
+| `-e` | `--emm-file`                | `<path>`                   | required for ECM/EMM-driven CAS (cache file) |
+| `-u` | `--unicast-emm`             | `<uri>`                    |                                              |
+|      | `--insecure`                |                            | off (`-u`, or `-o rtmps://`)                 |
+| `-o` | `--output`                  | `<target>`                 | required, repeatable                         |
+| `-f` | `--format`                  | `ts\|mkv\|mka`             | `ts`                                         |
+|      | `--strip-lcevc`             |                            | off (`mkv`/`mka`/`rtmp(s)://` only)          |
+| `-p` | `--pmt-pid`                 | `<pid>` / `all`            | none (see below)                             |
+| `-I` | `--iface`                   | `<iface>`                  | kernel default                               |
+|      | `--ecm-profile`             | `<spec>`                   | `ecm_profile` templating, see below          |
+| `-v` | `--verbose`                 |                            | off                                          |
+|      | `--color`                   | `auto\|always\|never`      | `auto`                                       |
+|      | `--metrics`                 | `<path>`                   | `/run/dvbipitools/metrics.sock`              |
+|      | `--metrics-id`              | `<name>`                   | none (metrics disabled unless set)           |
+|      | `--metrics-interval`        | `<s>`                      | `5`                                          |
+|      | `--metrics-inspect-ts`      | `off\|basic\|medium\|full` | `off`                                        |
+|      | `--metrics-inspect-ts-pids` | `<pid,pid,...>`            | none                                         |
+|      | `--max-services`            | `<n>`                      | `32` (max `256`)                             |
+|      | `--profile`                 | `simple\|main`             | `simple`, `-i rist://` only                  |
+| `-d` | `--daemonize`               |                            | off (foreground)                             |
+| `-c` | `--config`                  | `<path>`                   | `/etc/dvbipitools/dipidescramble.yaml`       |
+|      | `--config-strict`           |                            | config file issues are errors                |
+|      | `--configtest`              |                            | check the config file, then exit             |
+| `-h` | `--help`                    |                            |                                              |
 
 ### Related to BISS
 | flag  | long form               | argument              | default                                             |

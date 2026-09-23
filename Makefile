@@ -73,6 +73,7 @@ dipiscan_SRCS := \
 	src/lib/config/yamlcfg.c \
 	src/dipiscan/format.c \
 	src/dipiscan/scan.c \
+	src/lib/helper/describe.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/log.c \
 	src/lib/helper/toolmain.c \
@@ -113,6 +114,7 @@ dipisds_SRCS := \
 	src/lib/config/yamlcfg.c \
 	src/dipisds/input.c \
 	src/dipisds/format_out.c \
+	src/lib/helper/describe.c \
 	src/dipisds/announce.c \
 	src/lib/net/announce_driver.c \
 	src/dipisds/listen.c \
@@ -339,6 +341,11 @@ dipirec_SRCS := \
 	src/lib/vendor/libyaml/parser.c \
 	src/lib/config/yamlcfg.c \
 	src/lib/helper/describe.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
 	src/dipirec/record.c \
 	src/dipirec/record/sink.c \
 	src/dipirec/record/rtmp_fanout.c \
@@ -488,8 +495,18 @@ endif
 dipiradiohead_SRCS := \
 	src/lib/helper/antidebug.c \
 	src/dipiradiohead/main.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
 	src/dipiradiohead/args.c \
-	src/dipiradiohead/config.c \
+	src/dipiradiohead/config/core.c \
+	src/dipiradiohead/config/input.c \
+	src/dipiradiohead/config/network.c \
+	src/dipiradiohead/config/cas.c \
+	src/dipiradiohead/config/general.c \
+	src/dipiradiohead/config/load.c \
 	src/lib/vendor/libyaml/api.c \
 	src/lib/vendor/libyaml/reader.c \
 	src/lib/vendor/libyaml/scanner.c \
@@ -647,8 +664,18 @@ endif
 dipitvhead_SRCS := \
 	src/lib/helper/antidebug.c \
 	src/dipitvhead/main.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
 	src/dipitvhead/args.c \
-	src/dipitvhead/config.c \
+	src/dipitvhead/config/core.c \
+	src/dipitvhead/config/input.c \
+	src/dipitvhead/config/network.c \
+	src/dipitvhead/config/cas.c \
+	src/dipitvhead/config/general.c \
+	src/dipitvhead/config/load.c \
 	src/lib/vendor/libyaml/api.c \
 	src/lib/vendor/libyaml/reader.c \
 	src/lib/vendor/libyaml/scanner.c \
@@ -738,6 +765,11 @@ dipifccret_EXTRA_CFLAGS := -pthread
 dipifccret_EXTRA_LDFLAGS := -pthread -latomic
 dipifccret_SRCS := \
 	src/dipifccret/main.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
 	src/dipifccret/run/dispatch.c \
 	src/dipifccret/run/pacer.c \
 	src/dipifccret/run/rsi.c \
@@ -872,6 +904,11 @@ dipidescramble_EXTRA_LDFLAGS += -pthread
 dipidescramble_SRCS := \
 	src/lib/helper/antidebug.c \
 	src/dipidescramble/main.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
 	src/dipidescramble/pipeline.c \
 	src/dipidescramble/args.c \
 	src/dipidescramble/config.c \
@@ -1013,7 +1050,20 @@ endif
 
 dipirist_SRCS := \
 	src/dipirist/main.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/crc32.c \
 	src/dipirist/args.c \
+	src/lib/helper/describe.c \
 	src/dipirist/config.c \
 	src/lib/vendor/libyaml/api.c \
 	src/lib/vendor/libyaml/reader.c \
@@ -1099,7 +1149,20 @@ endif
 
 dipisrt_SRCS := \
 	src/dipisrt/main.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/crc32.c \
 	src/dipisrt/args.c \
+	src/lib/helper/describe.c \
 	src/dipisrt/config.c \
 	src/lib/vendor/libyaml/api.c \
 	src/lib/vendor/libyaml/reader.c \
@@ -1216,7 +1279,7 @@ dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs libngtcp2 libngtcp2_c
 else
 dipixy_EXTRA_LDFLAGS += $(shell pkg-config --libs libngtcp2 libngtcp2_crypto_ossl libnghttp3)
 endif
-dipixy_HTTP3_SRC := src/dipixy/http3/http3.c src/dipixy/http3/http3_quic.c src/dipixy/http3/http3_stateless.c src/dipixy/http3/http3_steer.c src/dipixy/http3/http3_udp.c src/dipixy/http3/http3_req.c src/dipixy/http3/http3_resp.c src/dipixy/http3/http3_tspush.c src/dipixy/http3/http3_dashchunk.c src/dipixy/http3/http3_mp4push.c src/dipixy/http3/http3_llhls.c src/dipixy/http3/http3_hls_cold.c src/dipixy/http3/http3_ws.c
+dipixy_HTTP3_SRC := src/dipixy/http3/http3.c src/dipixy/http3/quic/limits.c src/dipixy/http3/quic/pool.c src/dipixy/http3/quic/callbacks.c src/dipixy/http3/quic/tx.c src/dipixy/http3/quic/conn.c src/dipixy/http3/quic/tls.c src/dipixy/http3/http3_stateless.c src/dipixy/http3/http3_steer.c src/dipixy/http3/http3_udp.c src/dipixy/http3/http3_req.c src/dipixy/http3/http3_resp.c src/dipixy/http3/http3_tspush.c src/dipixy/http3/http3_dashchunk.c src/dipixy/http3/http3_mp4push.c src/dipixy/http3/http3_llhls.c src/dipixy/http3/http3_hls_cold.c src/dipixy/http3/http3_ws.c
 else
 dipixy_HTTP3_SRC :=
 ifeq ($(HAVE_LIBNGTCP2),yes)
@@ -1242,6 +1305,11 @@ src/dipixy/htdocs_index.gen.c: src/dipixy/htdocs/index.html $(GEN_HTDOCS_BIN)
 
 dipixy_SRCS := \
 	src/dipixy/main.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
 	src/dipixy/args.c \
 	src/dipixy/config.c \
 	src/lib/vendor/libyaml/api.c \
@@ -1493,7 +1561,7 @@ build/dvbipitools/src/%.o: src/%.c config.mk
 dvbipitools: $(DVBIPITOOLS_OBJS)
 	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) -o $@
 
-UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes \
+UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mp4 lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild \
@@ -1730,6 +1798,12 @@ dipidescramble_pipeline_BIN := tests/unit/dipidescramble/test_pipeline
 dipidescramble_pipeline_SRCS := \
 	tests/unit/dipidescramble/test_pipeline.c \
 	src/dipidescramble/pipeline.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
 	src/dipidescramble/device.c \
 	src/dipidescramble/crypto.c \
 	src/dipidescramble/ecm_profile/common.c \
@@ -1939,6 +2013,7 @@ dipirist_args_BIN := tests/unit/dipirist/test_args
 dipirist_args_SRCS := \
 	tests/unit/dipirist/test_args.c \
 	src/dipirist/args.c \
+	src/lib/helper/describe.c \
 	src/dipirist/config.c \
 	src/lib/vendor/libyaml/api.c \
 	src/lib/vendor/libyaml/reader.c \
@@ -1961,7 +2036,20 @@ dipirist_bridge_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
 dipirist_bridge_SRCS := \
 	tests/unit/dipirist/test_bridge.c \
 	src/dipirist/bridge.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/crc32.c \
 	src/dipirist/args.c \
+	src/lib/helper/describe.c \
 	src/dipirist/config.c \
 	src/lib/vendor/libyaml/api.c \
 	src/lib/vendor/libyaml/reader.c \
@@ -2041,6 +2129,7 @@ dipisrt_args_BIN := tests/unit/dipisrt/test_args
 dipisrt_args_SRCS := \
 	tests/unit/dipisrt/test_args.c \
 	src/dipisrt/args.c \
+	src/lib/helper/describe.c \
 	src/dipisrt/config.c \
 	src/lib/vendor/libyaml/api.c \
 	src/lib/vendor/libyaml/reader.c \
@@ -2063,7 +2152,20 @@ dipisrt_bridge_EXTRA_LDFLAGS := $(shell pkg-config --libs srt)
 dipisrt_bridge_SRCS := \
 	tests/unit/dipisrt/test_bridge.c \
 	src/dipisrt/bridge.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/crc32.c \
 	src/dipisrt/args.c \
+	src/lib/helper/describe.c \
 	src/dipisrt/config.c \
 	src/lib/vendor/libyaml/api.c \
 	src/lib/vendor/libyaml/reader.c \
@@ -2120,6 +2222,8 @@ dipisds_format_out_BIN := tests/unit/dipisds/test_format_out
 dipisds_format_out_SRCS := \
 	tests/unit/dipisds/test_format_out.c \
 	src/dipisds/format_out.c \
+	src/lib/helper/describe.c \
+	src/lib/helper/ioutil.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/xml_util.c
 
@@ -2138,6 +2242,7 @@ dipisds_listen_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/dipisds/format_out.c \
+	src/lib/helper/describe.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/sds_xml.c \
 	src/lib/helper/xml_util.c \
@@ -2178,6 +2283,7 @@ dipimetrics_httpserver_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/helper/ioutil.c \
 	$(dipimetrics_TLS_SRC) \
 	$(dipimetrics_TLSSERVER_SRC)
@@ -2381,6 +2487,26 @@ lib_demux_tspack_BIN := tests/unit/lib/demux/test_tspack
 lib_demux_tspack_SRCS := \
 	tests/unit/lib/demux/test_tspack.c \
 	src/lib/demux/tspack.c
+
+lib_tsinspect_inspect_BIN := tests/unit/lib/tsinspect/test_inspect
+lib_tsinspect_inspect_SRCS := \
+	tests/unit/lib/tsinspect/test_inspect.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/crc32.c \
+	src/lib/metrics/protocol.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/signal.c \
+	src/lib/helper/log.c
 
 lib_demux_pes_BIN := tests/unit/lib/demux/test_pes
 lib_demux_pes_SRCS := \
@@ -2694,6 +2820,7 @@ dipiscan_scan_BIN := tests/unit/dipiscan/test_scan
 dipiscan_scan_SRCS := \
 	tests/unit/dipiscan/test_scan.c \
 	src/dipiscan/scan.c \
+	src/lib/helper/describe.c \
 	src/dipiscan/args.c \
 	src/dipiscan/config.c \
 	src/lib/vendor/libyaml/api.c \
@@ -2845,6 +2972,11 @@ dipiradiohead_radiohead_BIN := tests/unit/dipiradiohead/test_radiohead
 dipiradiohead_radiohead_SRCS := \
 	tests/unit/dipiradiohead/test_radiohead.c \
 	src/dipiradiohead/radiohead/radiohead.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
 	src/dipiradiohead/radiohead/mpts.c \
 	src/dipiradiohead/radiohead/metrics.c \
 	src/dipiradiohead/mux/tspacketizer.c \
@@ -2963,7 +3095,12 @@ dipiradiohead_args_BIN := tests/unit/dipiradiohead/test_args
 dipiradiohead_args_SRCS := \
 	tests/unit/dipiradiohead/test_args.c \
 	src/dipiradiohead/args.c \
-	src/dipiradiohead/config.c \
+	src/dipiradiohead/config/core.c \
+	src/dipiradiohead/config/input.c \
+	src/dipiradiohead/config/network.c \
+	src/dipiradiohead/config/cas.c \
+	src/dipiradiohead/config/general.c \
+	src/dipiradiohead/config/load.c \
 	src/lib/vendor/libyaml/api.c \
 	src/lib/vendor/libyaml/reader.c \
 	src/lib/vendor/libyaml/scanner.c \
@@ -2994,6 +3131,12 @@ dipiradiohead_source_async_SRCS := \
 	src/dipiradiohead/input/playlist.c \
 	src/dipiradiohead/input/hls/playlist.c \
 	src/dipiradiohead/input/hls/live.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
 	src/dipiradiohead/input/icy.c \
 	src/dipiradiohead/input/id3.c \
 	src/dipiradiohead/framer/mpegaudio.c \
@@ -3038,6 +3181,12 @@ dipiradiohead_hls_live_BIN := tests/unit/dipiradiohead/input/hls/test_live
 dipiradiohead_hls_live_SRCS := \
 	tests/unit/dipiradiohead/input/hls/test_live.c \
 	src/dipiradiohead/input/hls/live.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
 	src/dipiradiohead/input/hls/playlist.c \
 	src/dipiradiohead/input/playlist.c \
 	src/lib/demux/rawaudio.c \
@@ -3073,6 +3222,12 @@ dipiradiohead_inputset_SRCS := \
 	src/dipiradiohead/input/playlist.c \
 	src/dipiradiohead/input/hls/playlist.c \
 	src/dipiradiohead/input/hls/live.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
 	src/dipiradiohead/input/icy.c \
 	src/dipiradiohead/input/id3.c \
 	src/dipiradiohead/framer/mpegaudio.c \
@@ -3142,7 +3297,12 @@ dipitvhead_args_BIN := tests/unit/dipitvhead/test_args
 dipitvhead_args_SRCS := \
 	tests/unit/dipitvhead/test_args.c \
 	src/dipitvhead/args.c \
-	src/dipitvhead/config.c \
+	src/dipitvhead/config/core.c \
+	src/dipitvhead/config/input.c \
+	src/dipitvhead/config/network.c \
+	src/dipitvhead/config/cas.c \
+	src/dipitvhead/config/general.c \
+	src/dipitvhead/config/load.c \
 	src/lib/vendor/libyaml/api.c \
 	src/lib/vendor/libyaml/reader.c \
 	src/lib/vendor/libyaml/scanner.c \
@@ -3175,6 +3335,11 @@ dipitvhead_discover_BIN := tests/unit/dipitvhead/test_discover
 dipitvhead_discover_SRCS := \
 	tests/unit/dipitvhead/test_discover.c \
 	src/dipitvhead/tvhead/discover.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
 	src/lib/demux/fec2022.c \
@@ -3283,6 +3448,11 @@ dipitvhead_output_BIN := tests/unit/dipitvhead/test_output
 dipitvhead_output_SRCS := \
 	tests/unit/dipitvhead/test_output.c \
 	src/dipitvhead/tvhead/output.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
 	src/dipitvhead/mux/remux/lifecycle.c \
 	src/dipitvhead/mux/remux/psi.c \
 	src/dipitvhead/mux/remux/eit.c \
@@ -3653,6 +3823,11 @@ dipirec_record_SRCS := \
 	src/dipirec/record/rtmp_fanout.c \
 	src/dipirec/record/stats.c \
 	src/dipirec/record/run.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
 	src/lib/fccret/ret_client.c \
 	src/lib/mux/mp4/mp4.c \
 	src/lib/mux/mp4/write.c \
@@ -3817,6 +3992,13 @@ dipifccret_channel_BIN := tests/unit/dipifccret/test_channel
 dipifccret_channel_SRCS := \
 	tests/unit/dipifccret/test_channel.c \
 	src/dipifccret/channel/channel.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/helper/signal.c \
 	src/dipifccret/channel/hash.c \
 	src/dipifccret/channel/ring.c \
 	src/lib/mux/psi_build.c \
@@ -3848,6 +4030,13 @@ dipifccret_burst_table_SRCS := \
 	src/lib/net/sockaddr_index.c \
 	src/dipifccret/fcc/burst.c \
 	src/dipifccret/channel/channel.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/helper/signal.c \
 	src/dipifccret/channel/hash.c \
 	src/dipifccret/channel/ring.c \
 	src/lib/mux/rtx.c \
@@ -3869,6 +4058,13 @@ dipifccret_burst_SRCS := \
 	tests/unit/dipifccret/test_burst.c \
 	src/dipifccret/fcc/burst.c \
 	src/dipifccret/channel/channel.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/helper/signal.c \
 	src/dipifccret/channel/hash.c \
 	src/dipifccret/channel/ring.c \
 	src/lib/mux/rtx.c \
@@ -3892,6 +4088,13 @@ dipifccret_ret_SRCS := \
 	src/dipifccret/ret/rtx_session_table.c \
 	src/lib/net/sockaddr_index.c \
 	src/dipifccret/channel/channel.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/helper/signal.c \
 	src/dipifccret/channel/hash.c \
 	src/dipifccret/channel/ring.c \
 	src/lib/demux/rtcp.c \
@@ -3927,7 +4130,7 @@ dipifccret_capture_SRCS := \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/signal.c
 
-UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
+UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_ts_push_queue dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
@@ -3974,6 +4177,18 @@ dipixy_playlist_SRCS := \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/ssdp.c \
 	src/dipixy/ts/capture/capture.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
@@ -4019,6 +4234,19 @@ dipixy_capture_BIN := tests/unit/dipixy/test_capture
 dipixy_capture_SRCS := \
 	tests/unit/dipixy/test_capture.c \
 	src/dipixy/ts/capture/capture.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/crc32.c \
+	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
@@ -4064,6 +4292,18 @@ dipixy_channels_SRCS := \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/ssdp.c \
 	src/dipixy/ts/capture/capture.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
@@ -4110,6 +4350,24 @@ dipixy_pidfilter_SRCS := \
 	tests/unit/dipixy/test_pidfilter.c \
 	src/dipixy/ts/pidfilter.c \
 	src/lib/helper/ioutil.c
+
+dipixy_ts_push_queue_BIN := tests/unit/dipixy/test_ts_push_queue
+dipixy_ts_push_queue_SRCS := \
+	tests/unit/dipixy/test_ts_push_queue.c \
+	src/dipixy/ts/ts_push.c \
+	src/dipixy/ts/pidfilter.c \
+	src/lib/helper/byte_ring.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/pes.c \
+	src/lib/demux/rawaudio.c
 
 dipixy_pmtselect_BIN := tests/unit/dipixy/test_pmtselect
 dipixy_pmtselect_SRCS := \
@@ -4183,7 +4441,8 @@ dipixy_dispatch_SRCS := \
 	src/dipixy/reactor/dispatch/content.c \
 	src/dipixy/reactor/dispatch/route.c \
 	src/dipixy/reactor/dispatch/route_common.c \
-	src/dipixy/reactor/dispatch/waiters.c
+	src/dipixy/reactor/dispatch/waiters.c \
+	src/lib/helper/secure_zero.c
 dipixy_dispatch_EXTRA_CFLAGS := -ffunction-sections -fdata-sections
 dipixy_dispatch_EXTRA_LDFLAGS := -Wl,--gc-sections
 
@@ -4305,6 +4564,18 @@ dipixy_ws_sources_SRCS := \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/ssdp.c \
 	src/dipixy/ts/capture/capture.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
@@ -4360,6 +4631,18 @@ dipixy_gena_SRCS := \
 	src/dipixy/ts/channels/build.c \
 	src/dipixy/ts/channels/reload.c \
 	src/dipixy/ts/capture/capture.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
@@ -4416,6 +4699,18 @@ dipixy_dlna_SRCS := \
 	src/dipixy/ts/channels/build.c \
 	src/dipixy/ts/channels/reload.c \
 	src/dipixy/ts/capture/capture.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \

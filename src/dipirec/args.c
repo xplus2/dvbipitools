@@ -135,8 +135,7 @@ void out_describe(const out_target_t *o, char *buf, size_t n) {
     case OUT_RTP:
     case OUT_UDP: {
       const char *scheme = (o->kind == OUT_RTP) ? "rtp" : "udp";
-      if (o->family == AF_INET6) snprintf(buf, n, "%s://@[%s]:%u", scheme, o->group, o->port);
-      else snprintf(buf, n, "%s://@%s:%u", scheme, o->group, o->port);
+      describe_mcast_uri(buf, n, scheme, o->family, o->group, o->port);
       break;
     }
     case OUT_RIST:
@@ -150,8 +149,7 @@ void out_describe(const out_target_t *o, char *buf, size_t n) {
       bufcpy(buf, n, strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);
       break;
     case OUT_SRT:
-      if (o->srt_family == AF_INET6) snprintf(buf, n, "srt://[%s]:%u", o->srt_host, o->srt_port);
-      else snprintf(buf, n, "srt://%s:%u", o->srt_host, o->srt_port);
+      describe_srt_uri(buf, n, o->srt_family, 0, o->srt_host, o->srt_port);
       break;
   }
 }
@@ -452,6 +450,8 @@ static void print_help(void) {
     "      --metrics <path>           socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
     "      --metrics-id <name>        stable instance id. metrics are disabled unless set\n"
     "      --metrics-interval <s>     snapshot interval in seconds (default: 5)\n"
+    "      --metrics-inspect-ts <lvl> TS health metrics: off|basic|medium|full (default: off)\n"
+    "      --metrics-inspect-ts-pids <list> per pid and per service counters (default: none)\n"
     "      --ret <addr>:<port>        RET/RAMS server unicast address (rtp:// only)\n"
     "      --no-ret-mc                skip joining the RET/RAMS multicast repair session\n"
     "      --ret-mc-port <port>       override the repair session port (default: -i's port)\n"
@@ -516,6 +516,8 @@ static const struct option longopts[] = {
     {"metrics", required_argument, 0, 1016},
     {"metrics-id", required_argument, 0, 1017},
     {"metrics-interval", required_argument, 0, 1018},
+    {"metrics-inspect-ts", required_argument, 0, 1034},
+    {"metrics-inspect-ts-pids", required_argument, 0, 1035},
     {"profile-in", required_argument, 0, 1019},
     {"srt-passphrase-in", required_argument, 0, 1020},
     {"srt-pbkeylen-in", required_argument, 0, 1021},
@@ -742,6 +744,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1018:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
+      case 1034:
+        if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
+        break;
+      case 1035:
+        if (argutil_metrics_known_pids_opt(TOOL_NAME, optarg, cfg->metrics_known_pids, &cfg->metrics_n_known_pids)) return ARGS_ERR;
+        break;
       case 1019:
         if (rec_cfg_profile(cfg, optarg, 1)) {
           argerr("invalid --profile-in: %s (simple|main)", optarg);
@@ -899,6 +907,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
+  if (argutil_metrics_inspect_ts_validate(TOOL_NAME, cfg->metrics_id, cfg->metrics_inspect_ts)) return ARGS_ERR;
+  if (cfg->metrics_n_known_pids && cfg->metrics_inspect_ts != METRICS_INSPECT_TS_FULL) {
+    argutil_err(TOOL_NAME, "--metrics-inspect-ts-pids requires --metrics-inspect-ts full");
+    return ARGS_ERR;
+  }
   if (cfg->fl.have_profile_in && cfg->source.kind != URI_RIST) log_line(TOOL_NAME ": --profile-in needs -i rist:// source");
   if (validate_srt_passphrase(cfg->srt_passphrase_in, cfg->srt_pbkeylen_in, "-in")) return ARGS_ERR;
   if (cfg->source.kind != URI_SRT && (cfg->srt_passphrase_in[0] || cfg->srt_pbkeylen_in || cfg->srt_streamid_in[0] || cfg->srt_packetfilter_in[0] || cfg->srt_latency_in_ms))

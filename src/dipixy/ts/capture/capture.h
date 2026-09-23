@@ -9,11 +9,15 @@
 #include <stdint.h>
 
 #include "lib/helper/sds_xml.h"
+#include "lib/tsinspect/inspect.h"
 
 typedef struct capture_ctx capture_ctx_t;
 typedef struct capture_reader capture_reader_t;
 
 #define CAPTURE_PUMP_MAX_THREADS 32
+
+/* main() only, before any capture_open/capture_rist_init/capture_stdin_init call. NULL: inspect-ts off */
+void capture_set_inspect(tsinspect_agg_t *agg);
 
 /* main() only, before any capture_open/capture_rist_init/capture_stdin_init call */
 void capture_set_ring_cap(size_t bytes);

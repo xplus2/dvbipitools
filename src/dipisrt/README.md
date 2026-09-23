@@ -13,33 +13,34 @@ dipisrt -i <uri> -o <uri> [options]
 
 ## Options
 
-| flag | long form            | argument              | default                                 |
-|------|----------------------|-----------------------|-----------------------------------------|
-| `-i` | `--in`               | `<uri>`               | required                                |
-| `-o` | `--out`              | `<uri>`               | required                                |
-| `-I` | `--iface`            | `<iface>`             | kernel route (non-SRT side only)        |
-| `-k` | `--insecure`         |                       | off (`-i https://` source only)         |
-|      | `--group-mode`       | `broadcast\|backup`   | none (required when bonding)            |
-|      | `--rendezvous`       |                       | off (needs `--local`)                   |
-|      | `--local`            | `<host:port>`         | none (required with `--rendezvous`)     |
-|      | `--passphrase`       | `<pw>`                | none (10..79 chars)                     |
-|      | `--pbkeylen`         | `16\|24\|32`          | `16` (only with `--passphrase`)         |
-|      | `--streamid`         | `<id>`                | none                                    |
-|      | `--packetfilter`     | `<cfg>`               | none, e.g. `fec,cols:10,rows:5`         |
-|      | `--latency`          | `<ms>`                | library default                         |
-|      | `--send-buffer-mult` | `<n>` (1..32)         | `4` (sender side only)                  |
-|      | `--al-fec`           | `<L>:<D>`             | off (Annex E Layer 1 FEC, rtp:// only)  |
-|      | `--al-fec-port`      | `<port>`              | required with `--al-fec`                |
-|      | `--color`            | `auto\|always\|never` | `auto`                                  |
-|      | `--metrics`          | `<path>`              | `/run/dvbipitools/metrics.sock`         |
-|      | `--metrics-id`       | `<name>`              | none (metrics disabled unless set)      |
-|      | `--metrics-interval` | `<s>`                 | `5`                                     |
-| `-v` | `--verbose`          |                       | off                                     |
-| `-d` | `--daemonize`        |                       | off (foreground)                        |
-| `-c` | `--config`           | `<path>`              | `/etc/dvbipitools/dipisrt.yaml`         |
-|      | `--config-strict`    |                       | config file issues are errors           |
-|      | `--configtest`       |                       | check the config file, then exit        |
-| `-h` | `--help`             |                       |                                         |
+| flag | long form               | argument                    | default                                |
+|------|-------------------------|-----------------------------|----------------------------------------|
+| `-i` | `--in`                  | `<uri>`                     | required                               |
+| `-o` | `--out`                 | `<uri>`                     | required                               |
+| `-I` | `--iface`               | `<iface>`                   | kernel route (non-SRT side only)       |
+| `-k` | `--insecure`            |                             | off (`-i https://` source only)        |
+|      | `--group-mode`          | `broadcast\|backup`         | none (required when bonding)           |
+|      | `--rendezvous`          |                             | off (needs `--local`)                  |
+|      | `--local`               | `<host:port>`               | none (required with `--rendezvous`)    |
+|      | `--passphrase`          | `<pw>`                      | none (10..79 chars)                    |
+|      | `--pbkeylen`            | `16\|24\|32`                | `16` (only with `--passphrase`)        |
+|      | `--streamid`            | `<id>`                      | none                                   |
+|      | `--packetfilter`        | `<cfg>`                     | none, e.g. `fec,cols:10,rows:5`        |
+|      | `--latency`             | `<ms>`                      | library default                        |
+|      | `--send-buffer-mult`    | `<n>` (1..32)               | `4` (sender side only)                 |
+|      | `--al-fec`              | `<L>:<D>`                   | off (Annex E Layer 1 FEC, rtp:// only) |
+|      | `--al-fec-port`         | `<port>`                    | required with `--al-fec`               |
+|      | `--color`               | `auto\|always\|never`       | `auto`                                 |
+|      | `--metrics`             | `<path>`                    | `/run/dvbipitools/metrics.sock`        |
+|      | `--metrics-id`          | `<name>`                    | none (metrics disabled unless set)     |
+|      | `--metrics-interval`    | `<s>`                       | `5`                                    |
+|      | `--metrics-inspect-ts`  | `off\|basic\|medium\|full`  | `off`                                  |
+| `-v` | `--verbose`             |                             | off                                    |
+| `-d` | `--daemonize`           |                             | off (foreground)                       |
+| `-c` | `--config`              | `<path>`                    | `/etc/dvbipitools/dipisrt.yaml`        |
+|      | `--config-strict`       |                             | config file issues are errors          |
+|      | `--configtest`          |                             | check the config file, then exit       |
+| `-h` | `--help`                |                             |                                        |
 
 ## Configuration file
 
@@ -101,6 +102,8 @@ dipisrt -i rtp://@239.1.1.1:5000 -o srt://1.2.3.4:9000 --passphrase correcthorse
 ## Notes
 
 * `dipisrt` only works in one direction per process.
+* `--metrics-inspect-ts` covers packet-level and PCR checks only, no PSI/SI checks at any level.
+  `medium` adds PCR jitter and accuracy for UDP and RTP inputs.
 * Bonding (`--group-mode`): 
   + Most shipped binaries of libsrt have this disabled.
     `dipisrt` detects this at runtime and enables the feature only if the linked library supports it.

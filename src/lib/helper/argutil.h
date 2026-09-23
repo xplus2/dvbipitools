@@ -24,6 +24,26 @@ int argutil_srt_passphrase_opt(const char *tool, const char *passphrase, const c
 int argutil_metrics_interval_opt(const char *tool, const char *val, unsigned *out);
 int argutil_metrics_opts_validate(const char *tool, const char *sock, const char *id, unsigned interval_s);
 
+typedef enum {
+  METRICS_INSPECT_TS_OFF,
+  METRICS_INSPECT_TS_BASIC,
+  METRICS_INSPECT_TS_MEDIUM,
+  METRICS_INSPECT_TS_FULL
+} metrics_inspect_ts_t;
+
+#define METRICS_KNOWN_PIDS_MAX 64
+
+/* comma separated pids, decimal or 0x hex, each 0..8191. 0 ok, -1 bad or too many */
+int metrics_known_pids_parse(const char *s, unsigned *out, unsigned *n);
+int argutil_metrics_known_pids_opt(const char *tool, const char *val, unsigned *out, unsigned *n);
+static inline int metrics_queue_level(metrics_inspect_ts_t l) {
+  return l == METRICS_INSPECT_TS_OFF ? 0 : l == METRICS_INSPECT_TS_BASIC ? 1 : 2;
+}
+
+int metrics_inspect_ts_parse(const char *s, metrics_inspect_ts_t *out);
+int argutil_metrics_inspect_ts_opt(const char *tool, const char *val, metrics_inspect_ts_t *out);
+int argutil_metrics_inspect_ts_validate(const char *tool, const char *id, metrics_inspect_ts_t level);
+
 typedef struct {
   const char *name;
   int value;

@@ -2,10 +2,13 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
 
+#include "lib/helper/ioutil.h"
 #include "lib/metrics/export.h"
 
 START_TEST(disabled_without_metrics_id) {
@@ -160,7 +163,7 @@ START_TEST(put_inputs_labels_and_skips_zero_error_reasons) {
   memset(&hdr, 0, sizeof hdr);
   hdr.proto_version = METRICS_PROTO_VERSION;
   hdr.component = METRICS_COMPONENT_TVHEAD;
-  snprintf(hdr.metrics_id, sizeof hdr.metrics_id, "inst1");
+  bufcpy(hdr.metrics_id, sizeof hdr.metrics_id, "inst1");
   ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
   metrics_writer_put_inputs(&w, inputs, 2);
 
@@ -179,6 +182,125 @@ START_TEST(put_inputs_labels_and_skips_zero_error_reasons) {
 }
 END_TEST
 
+START_TEST(large_snapshot_is_sent_as_ordered_parts) {
+  static const char path[] = "/tmp/dvbipitools-test-export-parts.sock";
+  struct sockaddr_un addr;
+  metrics_exporter_t mx;
+  metrics_writer_t w;
+  metrics_reader_t r;
+  metrics_hdr_t hdr;
+  metrics_id_t id;
+  char label[METRICS_LABEL_MAX + 1];
+  unsigned char buf[METRICS_MAX_SNAPSHOT_BYTES];
+  uint64_t value;
+  unsigned parts = 0, entries = 0;
+  int rfd;
+
+  rfd = socket(AF_UNIX, SOCK_DGRAM | SOCK_NONBLOCK, 0);
+  ck_assert_int_ge(rfd, 0);
+  unlink(path);
+  memset(&addr, 0, sizeof addr);
+  addr.sun_family = AF_UNIX;
+  bufcpy(addr.sun_path, sizeof addr.sun_path, path);
+  ck_assert_int_eq(bind(rfd, (struct sockaddr *)&addr, sizeof addr), 0);
+
+  metrics_exporter_init(&mx, METRICS_COMPONENT_SDS, "inst1", path, 5.0);
+  ck_assert_int_eq(metrics_exporter_begin(&mx, &w, "1.0"), 0);
+  for (unsigned i = 0; i < 120; i++) {
+    char num[16];
+    size_t nl = uint_to_str(num, i);
+    memset(label, 'a', METRICS_LABEL_MAX);
+    label[METRICS_LABEL_MAX] = '\0';
+    memcpy(label, num, nl);
+    ck_assert_int_eq(metrics_writer_put(&w, METRICS_ID_INPUT_BYTES_TOTAL, label, i), 0);
+  }
+  metrics_exporter_send(&mx, &w);
+  ck_assert_uint_eq(mx.snapshots_dropped, 0u);
+  ck_assert_uint_eq(mx.parts_dropped, 0u);
+
+  for (;;) {
+    ssize_t n = recv(rfd, buf, sizeof buf, 0);
+    ck_assert_int_gt(n, 0);
+    ck_assert_int_eq(metrics_reader_init(&r, buf, (size_t)n, &hdr), 0);
+    ck_assert_uint_eq(hdr.part, parts);
+    ck_assert_uint_eq(hdr.sequence, 1u);
+    parts++;
+    while (metrics_reader_next(&r, &id, label, sizeof label, &value) == 1) if (id == METRICS_ID_INPUT_BYTES_TOTAL) entries++;
+    if (hdr.flags & METRICS_FLAG_LAST) break;
+  }
+  ck_assert_uint_gt(parts, 1u);
+  ck_assert_uint_eq(entries, 120u);
+  metrics_exporter_close(&mx);
+  close(rfd);
+  unlink(path);
+}
+END_TEST
+
+static void extra_put(metrics_writer_t *w, void *ctx) {
+  metrics_writer_put(w, (metrics_id_t)(uintptr_t)ctx, NULL, 1);
+}
+
+static unsigned count_id(metrics_writer_t *w, metrics_id_t want) {
+  metrics_reader_t r;
+  metrics_hdr_t hdr;
+  metrics_id_t id;
+  char label[METRICS_LABEL_MAX + 1];
+  uint64_t v;
+  unsigned n = 0;
+
+  ck_assert_int_eq(metrics_reader_init(&r, w->buf, w->len, &hdr), 0);
+  while (metrics_reader_next(&r, &id, label, sizeof label, &v) == 1) n += id == want;
+  return n;
+}
+
+START_TEST(extra_chain_runs_every_slot_and_clears) {
+  metrics_exporter_t mx;
+  metrics_writer_t w;
+
+  metrics_exporter_init(&mx, METRICS_COMPONENT_TVHEAD, "inst1", "/tmp/dvbipitools-test-no-such-collector.sock", 5.0);
+  metrics_exporter_set_extra(&mx, extra_put, (void *)(uintptr_t)METRICS_ID_TS_PACKETS_TOTAL);
+  ck_assert_int_eq(metrics_exporter_add_extra(&mx, extra_put, (void *)(uintptr_t)METRICS_ID_TS_BYTES_TOTAL), 0);
+  ck_assert_int_eq(metrics_exporter_add_extra(&mx, extra_put, (void *)(uintptr_t)METRICS_ID_TS_NULL_PACKETS_TOTAL), 0);
+  ck_assert_int_eq(metrics_exporter_add_extra(&mx, extra_put, (void *)(uintptr_t)METRICS_ID_TS_CLEAR_PACKETS_TOTAL), 0);
+  ck_assert_int_eq(metrics_exporter_add_extra(&mx, extra_put, (void *)(uintptr_t)METRICS_ID_TS_SCRAMBLED_PACKETS_TOTAL), -1);
+
+  ck_assert_int_eq(metrics_exporter_begin(&mx, &w, "1.0"), 0);
+  ck_assert_uint_eq(count_id(&w, METRICS_ID_TS_PACKETS_TOTAL), 1u);
+  ck_assert_uint_eq(count_id(&w, METRICS_ID_TS_BYTES_TOTAL), 1u);
+  ck_assert_uint_eq(count_id(&w, METRICS_ID_TS_NULL_PACKETS_TOTAL), 1u);
+  ck_assert_uint_eq(count_id(&w, METRICS_ID_TS_CLEAR_PACKETS_TOTAL), 1u);
+  ck_assert_uint_eq(count_id(&w, METRICS_ID_TS_SCRAMBLED_PACKETS_TOTAL), 0u);
+
+  metrics_exporter_set_extra(&mx, NULL, NULL);
+  ck_assert_int_eq(metrics_exporter_begin(&mx, &w, "1.0"), 0);
+  ck_assert_uint_eq(count_id(&w, METRICS_ID_TS_PACKETS_TOTAL), 0u);
+  ck_assert_uint_eq(count_id(&w, METRICS_ID_TS_BYTES_TOTAL), 1u);
+
+  metrics_exporter_clear_extras(&mx);
+  ck_assert_int_eq(metrics_exporter_begin(&mx, &w, "1.0"), 0);
+  ck_assert_uint_eq(count_id(&w, METRICS_ID_TS_BYTES_TOTAL), 0u);
+  ck_assert_uint_eq(count_id(&w, METRICS_ID_TS_CLEAR_PACKETS_TOTAL), 0u);
+  metrics_exporter_close(&mx);
+}
+END_TEST
+
+START_TEST(failed_part_counts_dropped_and_skips_snapshot) {
+  metrics_exporter_t mx;
+  metrics_writer_t w;
+  char label[METRICS_LABEL_MAX + 1];
+
+  metrics_exporter_init(&mx, METRICS_COMPONENT_SDS, "inst1", "/tmp/dvbipitools-test-no-such-collector.sock", 5.0);
+  ck_assert_int_eq(metrics_exporter_begin(&mx, &w, "1.0"), 0);
+  memset(label, 'a', METRICS_LABEL_MAX);
+  label[METRICS_LABEL_MAX] = '\0';
+  for (unsigned i = 0; i < 120; i++) metrics_writer_put(&w, METRICS_ID_INPUT_BYTES_TOTAL, label, i);
+  metrics_exporter_send(&mx, &w);
+  ck_assert_uint_eq(mx.snapshots_dropped, 1u);
+  ck_assert_uint_eq(mx.parts_dropped, 1u);
+  metrics_exporter_close(&mx);
+}
+END_TEST
+
 static Suite *export_suite(void) {
   Suite *s = suite_create("metrics_export");
   TCase *tc = tcase_create("core");
@@ -192,6 +314,9 @@ static Suite *export_suite(void) {
   tcase_add_test(tc, errors_total_reflects_note_error_by_reason);
   tcase_add_test(tc, input_metrics_note_read_accumulates);
   tcase_add_test(tc, put_inputs_labels_and_skips_zero_error_reasons);
+  tcase_add_test(tc, large_snapshot_is_sent_as_ordered_parts);
+  tcase_add_test(tc, extra_chain_runs_every_slot_and_clears);
+  tcase_add_test(tc, failed_part_counts_dropped_and_skips_snapshot);
   suite_add_tcase(s, tc);
   return s;
 }

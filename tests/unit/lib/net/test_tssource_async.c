@@ -56,6 +56,54 @@ START_TEST(tssrc_open_async_completes_immediately_for_udp) {
 }
 END_TEST
 
+static uint64_t read_one_rx_ns(tssrc_t *s, int sock, const struct sockaddr_in *dst) {
+  unsigned char pkt[188], buf[2048];
+  struct pollfd pfd;
+
+  memset(pkt, 0xFF, sizeof pkt);
+  pkt[0] = 0x47;
+  ck_assert_int_eq((int)sendto(sock, pkt, sizeof pkt, 0, (const struct sockaddr *)dst, sizeof *dst), 188);
+  pfd.fd = tssrc_fd(s);
+  pfd.events = POLLIN;
+  pfd.revents = 0;
+  ck_assert_int_eq(poll(&pfd, 1, 1000), 1);
+  ck_assert_int_eq((int)tssrc_read(s, buf, sizeof buf, NULL), 188);
+  return tssrc_last_rx_ns(s);
+}
+
+START_TEST(tssrc_rx_timestamps_only_after_enable_and_advance) {
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+  struct sockaddr_in dst;
+  int sock = socket(AF_INET, SOCK_DGRAM, 0);
+  uint64_t first, second;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_UDP;
+  cfg.family = AF_INET;
+  cfg.group = "239.1.5.6";
+  cfg.port = 15006;
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_ge(sock, 0);
+  memset(&dst, 0, sizeof dst);
+  dst.sin_family = AF_INET;
+  dst.sin_port = htons(15006);
+  inet_pton(AF_INET, "239.1.5.6", &dst.sin_addr);
+
+  ck_assert_uint_eq(read_one_rx_ns(s, sock, &dst), 0u);
+  ck_assert_int_eq(tssrc_enable_rx_timestamps(s), 0);
+  first = read_one_rx_ns(s, sock, &dst);
+  ck_assert_uint_gt(first, 0u);
+  usleep(20000);
+  second = read_one_rx_ns(s, sock, &dst);
+  ck_assert_uint_ge(second - first, 15000000u);
+
+  close(sock);
+  tssrc_close(s);
+}
+END_TEST
+
 START_TEST(tssrc_open_async_completes_immediately_for_stdin) {
   tssrc_cfg_t cfg;
   tssrc_open_t *o;
@@ -177,6 +225,7 @@ static Suite *tssource_async_suite(void) {
   Suite *s = suite_create("tssource_async");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, tssrc_open_async_completes_immediately_for_udp);
+  tcase_add_test(tc, tssrc_rx_timestamps_only_after_enable_and_advance);
   tcase_add_test(tc, tssrc_open_async_completes_immediately_for_stdin);
   tcase_add_test(tc, tssrc_open_async_completes_for_http_and_reads_body);
   tcase_add_test(tc, tssrc_open_async_reports_error_on_refused_connection);

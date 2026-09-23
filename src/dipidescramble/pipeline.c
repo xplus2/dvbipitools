@@ -35,6 +35,9 @@ static int algo_from_mode(unsigned char mode, scramble_algo_t *out) {
 }
 
 static void emit_downstream(void *ctx, const unsigned char pkt[188]);
+static void emit_downstream_inspect(void *ctx, const unsigned char pkt[188]);
+
+#define EMIT(lc) ((lc)->insp_out ? emit_downstream_inspect : emit_downstream)
 
 /* edge-log gate, one rtmp target down never affects others */
 static void rtmp_note_result(int ok, int *had_error, int idx) {
@@ -85,7 +88,7 @@ static void handle_ecm_section(loop_ctx_t *lc) {
   memcpy(lc->last_cw[parity], cw, sizeof cw);
   lc->have_cw[parity] = 1;
   lc->cryptoperiod_transitions_total++;
-  scrambler_set_key(lc->scr, parity, cw, (size_t)lc->cw_len, emit_downstream, lc);
+  scrambler_set_key(lc->scr, parity, cw, (size_t)lc->cw_len, EMIT(lc), lc);
   log_line(TOOL_NAME ": CW updated (parity=%s)", parity == SCRAMBLE_PARITY_EVEN ? "even" : "odd");
 }
 
@@ -94,7 +97,7 @@ static void update_biss_ca_cw(loop_ctx_t *lc, int parity, const unsigned char sw
   memcpy(lc->last_cw[parity], sw, BISS_CA_SW_LEN);
   lc->have_cw[parity] = 1;
   lc->cryptoperiod_transitions_total++;
-  scrambler_set_key(lc->scr, parity, sw, BISS_CA_SW_LEN, emit_downstream, lc);
+  scrambler_set_key(lc->scr, parity, sw, BISS_CA_SW_LEN, EMIT(lc), lc);
   log_line(TOOL_NAME ": biss-ca: CW updated (parity=%s)", parity == SCRAMBLE_PARITY_EVEN ? "even" : "odd");
 }
 
@@ -309,6 +312,18 @@ static int detect_cas_scheme(loop_ctx_t *lc) {
   return 0;
 }
 
+static void emit_downstream_inspect(void *ctx, const unsigned char pkt[188]) {
+  loop_ctx_t *lc = ctx;
+  tsinspect_packet(lc->insp_out, pkt);
+  emit_downstream(ctx, pkt);
+}
+
+int pkt_cb_inspect(void *v, const unsigned char *pkt) {
+  loop_ctx_t *lc = v;
+  tsinspect_packet(lc->insp_in, pkt);
+  return pkt_cb(v, pkt);
+}
+
 int pkt_cb(void *v, const unsigned char *pkt) {
   loop_ctx_t *lc = v;
   unsigned pid;
@@ -341,14 +356,14 @@ int pkt_cb(void *v, const unsigned char *pkt) {
   /* pkt is always genuinely mutable (tspack_t's acc[] or main()'s buffer). const is just tspack_feed()'s callback contract */
   if (lc->scr) {
     /* -1: reserved control value or key not loaded yet. fwd as-is */
-    if (scrambler_decrypt_packet_queued(lc->scr, (unsigned char *)pkt, emit_downstream, lc) != 0) {
+    if (scrambler_decrypt_packet_queued(lc->scr, (unsigned char *)pkt, EMIT(lc), lc) != 0) {
       lc->unexpected_clear_packets_total++;
-      emit_downstream(lc, pkt);
+      EMIT(lc)(lc, pkt);
     } else {
       lc->scrambled_packets_total++;
     }
   } else {
-    emit_downstream(lc, pkt);
+    EMIT(lc)(lc, pkt);
   }
   return lc->emit_failed ? 1 : 0;
 }
@@ -356,6 +371,6 @@ int pkt_cb(void *v, const unsigned char *pkt) {
 /* drains scrambler_set_key()'s queued last batch packets through emit_downstream() at shutdown,
    then flushes any bytes still sitting in raw-fd output batch buffers */
 void pipeline_flush(loop_ctx_t *lc) {
-  scrambler_flush(lc->scr, emit_downstream, lc);
+  scrambler_flush(lc->scr, EMIT(lc), lc);
   if (!lc->mkv) for (int i = 0; i < lc->n_outfd; i++) flush_outfd(lc, i);
 }

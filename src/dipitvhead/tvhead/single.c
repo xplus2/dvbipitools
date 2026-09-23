@@ -10,7 +10,7 @@
 
 /* rx is already built (discovery succeeded): sets up pacing/cas and runs until this
    connection ends, then tears rx back down */
-static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi, out_ctx_t *out, remux_t *rx, metrics_exporter_t *mx, input_metrics_t *im_p, ts_metrics_t *tsm_p) {
+static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi, out_ctx_t *out, remux_t *rx, metrics_exporter_t *mx, input_metrics_t *im_p, ts_metrics_t *tsm_p, tsinspect_t *insp) {
   cas_t *cas = NULL;
   int cas_wanted;
 
@@ -30,7 +30,7 @@ static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi
   }
   if (!cas_wanted || cas) {
     print_discovered(psi);
-    run_output(src, rx, out, cfg, cas, mx, im_p, tsm_p);
+    run_output(src, rx, out, cfg, cas, mx, im_p, tsm_p, insp);
     if (cas) cas_stop(cas);
   }
   bitrate_pacer_free(out->pacer);
@@ -46,6 +46,9 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   int metrics_on = metrics_exporter_enabled(mx);
   input_metrics_t *im_p = metrics_on ? &im : NULL;
   ts_metrics_t *tsm_p = metrics_on ? &tsm : NULL;
+  tsinspect_t *insp_in;
+  tsinspect_set_t set = {&insp_in, 1, &out.insp, 1};
+  srtsink_queue_ctx_t qctx = {&out.srt, 1, metrics_queue_level(cfg->metrics_inspect_ts)};
 
   memset(&out, 0, sizeof out);
   memset(&im, 0, sizeof im);
@@ -54,6 +57,15 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     tvhead_output_close(&out);
     return 1;
   }
+  insp_in = tsinspect_new(cfg->metrics_inspect_ts);
+  if (insp_in && tsinspect_enable_own_psi(insp_in, 0)) {
+    tsinspect_free(insp_in);
+    insp_in = NULL;
+  }
+  if (insp_in) tsinspect_set_known_pids(insp_in, cfg->metrics_known_pids, cfg->metrics_n_known_pids);
+  tsm.ts_checks_off = insp_in != NULL;
+  if (insp_in || out.insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
+  if (out.srt && qctx.queue_metrics) metrics_exporter_add_extra(mx, srtsink_put_queue_metrics, &qctx);
 
   while (!signal_stop_requested()) {
     net_err_reason_t reason = NET_ERR_OTHER;
@@ -78,6 +90,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
       im.seen_open = 1;
       im.up = 1;
     }
+    if (tsinspect_wants_rx_ns(insp_in)) tvsrc_enable_rx_timestamps(src);
 
     psi = psi_new();
     if (!psi) {
@@ -86,16 +99,14 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
       break;
     }
 
-    r = discover(src, &cfg->inputs[0], psi, im_p);
+    r = discover_insp(src, &cfg->inputs[0], psi, im_p, insp_in);
     if (r == 1) {
       out_program_pids_t pids;
       remux_t *rx;
       out_program_pids(0, &pids);
       rx = remux_new(cfg, &cfg->inputs[0], psi, &pids, 1);
-      if (!rx)
-        log_line("remux setup failed");
-      else
-        run_single_input(cfg, src, psi, &out, rx, mx, im_p, tsm_p);
+      if (!rx) log_line("remux setup failed");
+      else run_single_input(cfg, src, psi, &out, rx, mx, im_p, tsm_p, insp_in);
     } else if (r == 0) {
       log_line("no live PMT found within %.0fs (use -p to select one, or check the source)", DISCOVERY_TIMEOUT_S);
     }
@@ -112,6 +123,8 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
   flush_batch(&out);
+  metrics_exporter_clear_extras(mx);
+  tsinspect_free(insp_in);
   tvhead_output_close(&out);
   if (cfg->verbose && log_stderr_is_tty()) fputc('\n', stderr);
   if (rc == 0) log_line("stopped.");

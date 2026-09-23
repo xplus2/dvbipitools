@@ -111,7 +111,7 @@ START_TEST(inputset_pid_allocation_is_index_based) {
   snprintf(cfg.inputs[2].sdt_text, sizeof cfg.inputs[2].sdt_text, "C");
   cfg.error_retry_s = 1;
 
-  is = inputset_new(&cfg, noop_meta_cb, NULL, NULL);
+  is = inputset_new(&cfg, noop_meta_cb, NULL, NULL, NULL);
   ck_assert_ptr_nonnull(is);
   ck_assert_uint_eq(inputset_count(is), 3u);
 
@@ -149,7 +149,7 @@ START_TEST(inputset_connects_and_reports_source) {
   cfg.inputs[0].sid = 1;
   snprintf(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "Test");
 
-  is = inputset_new(&cfg, noop_meta_cb, NULL, NULL);
+  is = inputset_new(&cfg, noop_meta_cb, NULL, NULL, NULL);
   ck_assert_ptr_nonnull(is);
   ck_assert_ptr_null(inputset_source(is, 0));
 
@@ -192,7 +192,7 @@ START_TEST(inputset_retries_independently_per_slot) {
   snprintf(cfg.inputs[1].sdt_text, sizeof cfg.inputs[1].sdt_text, "Dead");
   /* error_retry_s left 0: n_inputs > 1 must still auto-default to a retry, never give up */
 
-  is = inputset_new(&cfg, noop_meta_cb, NULL, NULL);
+  is = inputset_new(&cfg, noop_meta_cb, NULL, NULL, NULL);
   ck_assert_ptr_nonnull(is);
 
   drive_all(is, 300);
@@ -220,7 +220,7 @@ START_TEST(inputset_single_input_no_retry_when_error_retry_s_is_zero) {
   snprintf(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "Dead");
   cfg.error_retry_s = 0;
 
-  is = inputset_new(&cfg, noop_meta_cb, NULL, NULL);
+  is = inputset_new(&cfg, noop_meta_cb, NULL, NULL, NULL);
   ck_assert_ptr_nonnull(is);
 
   drive_all(is, 100);

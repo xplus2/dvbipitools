@@ -61,13 +61,63 @@ void ts_push_wake_batch_end(void) {
   }
 }
 
+static _Atomic uint64_t g_queue_hwm;
+static _Atomic uint64_t g_queue_dropped;
+
+static void note_enqueue_off(const byte_ring_t *r, int wrote) {
+  (void)r;
+  (void)wrote;
+}
+
+static void note_enqueue_on(const byte_ring_t *r, int wrote) {
+  uint64_t used, cur;
+  if (!wrote) {
+    atomic_fetch_add_explicit(&g_queue_dropped, 1, memory_order_relaxed);
+    return;
+  }
+  used = (uint32_t)(atomic_load_explicit(&r->wpos, memory_order_relaxed) - atomic_load_explicit(&r->rpos, memory_order_relaxed));
+  cur = atomic_load_explicit(&g_queue_hwm, memory_order_relaxed);
+  while (used > cur && !atomic_compare_exchange_weak_explicit(&g_queue_hwm, &cur, used, memory_order_relaxed, memory_order_relaxed)) {}
+}
+
+void (*ts_push_note_enqueue)(const byte_ring_t *, int) = note_enqueue_off;
+
+void ts_push_set_queue_metrics(int level) {
+  ts_push_note_enqueue = level > 1 ? note_enqueue_on : note_enqueue_off;
+}
+
+uint64_t ts_push_queue_high_watermark(void) {
+  return atomic_load_explicit(&g_queue_hwm, memory_order_relaxed);
+}
+
+uint64_t ts_push_queue_dropped(void) {
+  return atomic_load_explicit(&g_queue_dropped, memory_order_relaxed);
+}
+
+void ts_push_queue_stats(ts_push_queue_stats_t *out) {
+  out->bytes = 0;
+  out->max_bytes = 0;
+  for (int i = 0; i < g_ts_subs_n; i++) {
+    const ts_sub_t *s = &g_ts_subs[i];
+    const byte_ring_t *r;
+    uint64_t used;
+    if (atomic_load_explicit(&s->alive, memory_order_relaxed) != TS_SUB_ALIVE) continue;
+    r = s->proto == 2 ? &s->h2_ring : s->proto == 3 ? &s->h3_ring : &s->pkt_ring;
+    used = (uint32_t)(atomic_load_explicit(&r->wpos, memory_order_relaxed) - atomic_load_explicit(&r->rpos, memory_order_relaxed));
+    out->bytes += used;
+    if (used > out->max_bytes) out->max_bytes = used;
+  }
+}
+
 void ts_push_ring_enqueue(ts_sub_t *s, const uint8_t *data, size_t len) {
   if (!len) return;
   if (!byte_ring_write(&s->pkt_ring, data, len)) {
+    ts_push_note_enqueue(&s->pkt_ring, 0);
     atomic_store_explicit(&s->pkt_overrun, 1, memory_order_release);
     ts_push_wake_reactor(s->reactor_tid);
     return;
   }
+  ts_push_note_enqueue(&s->pkt_ring, 1);
   ws_clients_add_bytes(s->ws_handle, len);
   ts_push_wake_reactor(s->reactor_tid);
 }

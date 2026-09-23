@@ -47,6 +47,7 @@ struct capture_ctx {
   _Atomic int ts_push_head; /* ts_push.c's per-ctx subscriber chain, -1: none */
   _Atomic(void *) hls_seg_head;
 
+  tsinspect_t *insp;
   int pump_shard; /* owning pump thread, set once at creation, read-only after */
 
   log_throttle_t drain_err_throttle;
@@ -72,6 +73,7 @@ typedef struct capture_snapshot {
 /* capture.c */
 extern size_t g_capture_ring_cap; /* capture_set_ring_cap()'d, default 4 MiB */
 extern capture_ctx_t *g_open;
+extern tsinspect_agg_t *g_insp_agg;
 extern pthread_mutex_t g_lock;
 extern _Atomic(capture_snapshot_t *) g_snapshot;
 extern capture_snapshot_t *g_retired; /* superseded snapshots pending reclaim, g_lock protected */

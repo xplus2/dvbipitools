@@ -31,6 +31,7 @@ struct hls_live {
   int insecure;
   unsigned idx;
   const char *label;
+  source_insp_t si;
 
   hls_live_phase_t phase;
   http_fetch_t *fetch;
@@ -69,7 +70,7 @@ static int on_ts_packet(void *ctx, const unsigned char *pkt) {
   return 0;
 }
 
-hls_live_t *hls_live_new(const http_url_t *playlist_url, const char *user_agent, int insecure, unsigned idx, const char *label) {
+hls_live_t *hls_live_new(const http_url_t *playlist_url, const char *user_agent, int insecure, unsigned idx, const char *label, const source_insp_t *si) {
   hls_live_t *h = calloc(1, sizeof *h);
   if (!h) return NULL;
   h->playlist_url = *playlist_url;
@@ -77,6 +78,7 @@ hls_live_t *hls_live_new(const http_url_t *playlist_url, const char *user_agent,
   h->insecure = insecure;
   h->idx = idx;
   h->label = label;
+  if (si) h->si = *si;
   h->phase = HLS_LIVE_IDLE;
   h->demux = rawaudio_demux_new(0, NULL, NULL, hls_emit, h);
   if (!h->demux) {
@@ -182,6 +184,20 @@ static int handle_playlist_done(hls_live_t *h, net_err_reason_t *reason_out) {
   return 1;
 }
 
+static void inspect_segment(hls_live_t *h, size_t len) {
+  if (!*h->si.slot) {
+    tsinspect_t *t = tsinspect_new(h->si.level);
+    if (!t) return;
+    if (tsinspect_enable_own_psi(t, 0)) {
+      tsinspect_free(t);
+      return;
+    }
+    tsinspect_set_known_pids(t, h->si.known_pids, h->si.n_known_pids);
+    *h->si.slot = t;
+  }
+  tsinspect_grid(*h->si.slot, h->segment_buf, len);
+}
+
 static int handle_segment_done(hls_live_t *h) {
   size_t len;
 
@@ -189,6 +205,7 @@ static int handle_segment_done(hls_live_t *h) {
   h->fetch = NULL;
   h->phase = HLS_LIVE_IDLE;
   h->tspack.acclen = 0;
+  if (h->si.slot && h->si.level != METRICS_INSPECT_TS_OFF) inspect_segment(h, len);
   tspack_feed(&h->tspack, h->segment_buf, len, on_ts_packet, h);
   h->pending_idx++;
   h->next_seq++;
@@ -196,6 +213,7 @@ static int handle_segment_done(hls_live_t *h) {
 }
 
 ssize_t hls_live_read(hls_live_t *h, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
+  if (h->si.slot && *h->si.slot) tsinspect_tick(*h->si.slot, mono_seconds());
   if (h->phase == HLS_LIVE_IDLE && h->pending_idx < h->pl.n_segments) {
     if (sizeof h->out_buf - h->out_len >= HLS_OUT_BUF_PREFETCH_HEADROOM && !start_segment_fetch(h, h->pl.segments[h->pending_idx].url)) {
       if (reason_out) *reason_out = NET_ERR_OTHER;

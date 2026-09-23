@@ -16,6 +16,7 @@
 #include "lib/net/srt/srtsink.h"
 #include "lib/net/tssink.h"
 #include "lib/net/tssource.h"
+#include "lib/tsinspect/inspect.h"
 
 #include "../args.h"
 #include "../filter/pace.h"
@@ -81,10 +82,15 @@ void push_metrics(metrics_exporter_t *mx, const config_t *cfg, const out_sink_t 
 /* one same-line stats update, tty only */
 void stats_show(const config_t *cfg, double elapsed, unsigned long long bytes, const psi_t *psi);
 
+typedef struct {
+  tsinspect_t *in;
+  tsinspect_t *out;
+} rec_insp_t;
+
 int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, const rtmp_fanout_t *rf,
-            metrics_exporter_t *mx, unsigned long long *bytes, double start, pace_ctrl_t *pace);
+            metrics_exporter_t *mx, unsigned long long *bytes, double start, pace_ctrl_t *pace, const rec_insp_t *ri);
 int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, int mkv_fd, rtmp_fanout_t *rf, metrics_exporter_t *mx, unsigned long long *bytes,
-               double start, int video_ok, unsigned pmt_pid, const unsigned *all_pids, int n_all_pids, pace_ctrl_t *pace);
+  double start, int video_ok, unsigned pmt_pid, const unsigned *all_pids, int n_all_pids, pace_ctrl_t *pace, const rec_insp_t *ri);
 
 /* mpts discovery + -p decision. 0: proceed (pmt_pid/all_pids/n_all_pids filled in).
    1: abort, message already printed. raw skips this, nothing to select there. */

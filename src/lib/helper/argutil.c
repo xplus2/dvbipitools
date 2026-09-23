@@ -68,6 +68,60 @@ int argutil_metrics_opts_validate(const char *tool, const char *sock, const char
   return 0;
 }
 
+int metrics_known_pids_parse(const char *s, unsigned *out, unsigned *n) {
+  unsigned cnt = 0;
+  while (*s) {
+    char *end;
+    unsigned long v;
+    errno = 0;
+    v = strtoul(s, &end, 0);
+    if (end == s || errno || v > 8191 || cnt == METRICS_KNOWN_PIDS_MAX) return -1;
+    out[cnt++] = (unsigned)v;
+    if (*end == ',') end++;
+    else if (*end) return -1;
+    s = end;
+  }
+  *n = cnt;
+  return cnt ? 0 : -1;
+}
+
+int argutil_metrics_known_pids_opt(const char *tool, const char *val, unsigned *out, unsigned *n) {
+  if (metrics_known_pids_parse(val, out, n)) {
+    argutil_err(tool, "invalid --metrics-inspect-ts-pids: %s (comma separated pids, 0..8191)", val);
+    return -1;
+  }
+  return 0;
+}
+
+int metrics_inspect_ts_parse(const char *s, metrics_inspect_ts_t *out) {
+  static const enum_map_t levels[] = {
+    {"off", METRICS_INSPECT_TS_OFF},
+    {"basic", METRICS_INSPECT_TS_BASIC},
+    {"medium", METRICS_INSPECT_TS_MEDIUM},
+    {"full", METRICS_INSPECT_TS_FULL},
+  };
+  int v;
+  if (map_lookup(levels, sizeof levels / sizeof *levels, s, &v)) return -1;
+  *out = (metrics_inspect_ts_t)v;
+  return 0;
+}
+
+int argutil_metrics_inspect_ts_opt(const char *tool, const char *val, metrics_inspect_ts_t *out) {
+  if (metrics_inspect_ts_parse(val, out)) {
+    argutil_err(tool, "invalid --metrics-inspect-ts: %s (off|basic|medium|full)", val);
+    return -1;
+  }
+  return 0;
+}
+
+int argutil_metrics_inspect_ts_validate(const char *tool, const char *id, metrics_inspect_ts_t level) {
+  if (level != METRICS_INSPECT_TS_OFF && !id) {
+    argutil_err(tool, "--metrics-inspect-ts requires --metrics-id");
+    return -1;
+  }
+  return 0;
+}
+
 int argutil_uint_range(const char *s, unsigned min, unsigned max, unsigned *out) {
   char *end;
   unsigned long v;

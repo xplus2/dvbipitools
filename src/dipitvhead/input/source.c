@@ -15,18 +15,12 @@ struct tvsrc {
 
 static tssrc_kind_t tssrc_kind_of(src_kind_t k) {
   switch (k) {
-  case SRC_RTP:
-    return TSSRC_RTP;
-  case SRC_UDP:
-    return TSSRC_UDP;
-  case SRC_HTTP:
-    return TSSRC_HTTP;
-  case SRC_STDIN:
-    return TSSRC_STDIN;
-  case SRC_RIST:
-    return TSSRC_RIST;
-  case SRC_SRT:
-    return TSSRC_SRT;
+    case SRC_RTP:   return TSSRC_RTP;
+    case SRC_UDP:   return TSSRC_UDP;
+    case SRC_HTTP:  return TSSRC_HTTP;
+    case SRC_STDIN: return TSSRC_STDIN;
+    case SRC_RIST:  return TSSRC_RIST;
+    case SRC_SRT:   return TSSRC_SRT;
   }
   return TSSRC_STDIN;
 }
@@ -34,9 +28,7 @@ static tssrc_kind_t tssrc_kind_of(src_kind_t k) {
 tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_err_reason_t *reason_out) {
   tssrc_cfg_t tc;
   tvsrc_t *s = calloc(1, sizeof *s);
-  if (!s)
-    return NULL;
-
+  if (!s) return NULL;
   memset(&tc, 0, sizeof tc);
   tc.kind = tssrc_kind_of(input->input.kind);
   tc.family = input->input.family;
@@ -70,9 +62,12 @@ ssize_t tvsrc_read(tvsrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t 
 
 int tvsrc_fd(const tvsrc_t *s) { return tssrc_fd(s->t); }
 
+int tvsrc_enable_rx_timestamps(tvsrc_t *s) { return tssrc_enable_rx_timestamps(s->t); }
+
+uint64_t tvsrc_last_rx_ns(const tvsrc_t *s) { return tssrc_last_rx_ns(s->t); }
+
 void tvsrc_close(tvsrc_t *s) {
-  if (!s)
-    return;
+  if (!s) return;
   tssrc_close(s->t);
   free(s);
 }
@@ -84,8 +79,7 @@ struct tvsrc_open {
 tvsrc_open_t *tvsrc_open_async_start(const config_t *cfg, const dipitvhead_input_t *input, net_err_reason_t *reason_out) {
   tssrc_cfg_t tc;
   tvsrc_open_t *o = calloc(1, sizeof *o);
-  if (!o)
-    return NULL;
+  if (!o) return NULL;
 
   memset(&tc, 0, sizeof tc);
   tc.kind = tssrc_kind_of(input->input.kind);
@@ -121,12 +115,9 @@ short tvsrc_open_async_poll_events(const tvsrc_open_t *o) { return tssrc_open_as
 
 tvsrc_open_state_t tvsrc_open_async_step(tvsrc_open_t *o, net_err_reason_t *reason_out) {
   switch (tssrc_open_async_step(o->o, reason_out)) {
-  case TSSRC_OPEN_DONE:
-    return TVSRC_OPEN_DONE;
-  case TSSRC_OPEN_ERROR:
-    return TVSRC_OPEN_ERROR;
-  default:
-    return TVSRC_OPEN_PENDING;
+    case TSSRC_OPEN_DONE:  return TVSRC_OPEN_DONE;
+    case TSSRC_OPEN_ERROR: return TVSRC_OPEN_ERROR;
+    default:               return TVSRC_OPEN_PENDING;
   }
 }
 
@@ -143,8 +134,7 @@ tvsrc_t *tvsrc_open_async_take(tvsrc_open_t *o) {
 }
 
 void tvsrc_open_async_free(tvsrc_open_t *o) {
-  if (!o)
-    return;
+  if (!o) return;
   tssrc_open_async_free(o->o);
   free(o);
 }

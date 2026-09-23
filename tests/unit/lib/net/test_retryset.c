@@ -31,9 +31,9 @@ static void *mock_open_start(void *ctx) {
   mock_opening_t *o;
 
   spec->open_start_calls++;
-  if (spec->fail_immediately)
-    return NULL;
+  if (spec->fail_immediately) return NULL;
   o = calloc(1, sizeof *o);
+  if (!o) return NULL;
   o->spec = spec;
   o->steps_remaining = spec->steps_to_done;
   o->fail = spec->fail_after;
@@ -52,14 +52,14 @@ static short mock_open_poll_events(const void *o) {
 
 static retryset_open_state_t mock_open_step(void *ov) {
   mock_opening_t *o = ov;
-  if (o->steps_remaining-- > 0)
-    return RETRYSET_OPEN_PENDING;
+  if (o->steps_remaining-- > 0) return RETRYSET_OPEN_PENDING;
   return o->fail ? RETRYSET_OPEN_ERROR : RETRYSET_OPEN_DONE;
 }
 
 static void *mock_open_take(void *ov) {
   mock_opening_t *o = ov;
   mock_result_t *r = calloc(1, sizeof *r);
+  if (!r) return NULL;
   r->spec = o->spec;
   r->fd = 42;
   free(o);

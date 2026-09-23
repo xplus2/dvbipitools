@@ -62,6 +62,14 @@ static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->metrics_interval_s, v, 1, 86400, e, n);
 }
 
+static int apply_metrics_inspect_ts(void *c, const char *v, char *e, size_t n) {
+  if (metrics_inspect_ts_parse(v, &((config_t *)c)->metrics_inspect_ts)) {
+    bufcpy(e, n, "must be off|basic|medium|full");
+    return -1;
+  }
+  return 0;
+}
+
 static int set_buf(char *dst, size_t sz, const char *v, char *e, size_t n) {
   if (strlen(v) >= sz) {
     snprintf(e, n, "too long (max %zu)", sz - 1);
@@ -126,6 +134,7 @@ static const yamlcfg_key_t keys[] = {
     {"metrics.sock", apply_metrics_sock, 0, 0},
     {"metrics.id", apply_metrics_id, 0, 0},
     {"metrics.interval", apply_metrics_interval, 0, 0},
+    {"metrics.inspect-ts", apply_metrics_inspect_ts, 0, 0},
     {"color", apply_color, 0, 0},
     {"verbose", apply_verbose, 0, 0},
     {"daemonize", apply_daemonize, 0, 0},
@@ -153,6 +162,7 @@ int rist_cfg_test(const char *path, int strict) {
   warn_if(&y, cfg.n_in && cfg.n_out && cfg.in.is_rist == cfg.out.is_rist, "exactly one of in/out must be rist://, the other a plain endpoint");
   warn_if(&y, cfg.secret[0] && cfg.profile != RIST_PROF_MAIN, "secret requires profile main");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
+  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
   warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "al-fec requires al-fec-port");
   warn_if(&y, !cfg.al_fec_l && cfg.al_fec_port, "al-fec-port has no effect without al-fec");
   return yamlcfg_report(&y);

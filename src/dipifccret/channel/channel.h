@@ -13,6 +13,7 @@
 
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/rtcp.h"
+#include "lib/tsinspect/inspect.h"
 
 #define CHANNEL_DEFAULT_MAX 300 /* max_channels 0 default */
 #define CHANNEL_BITRATE_WINDOW_S 2
@@ -94,6 +95,7 @@ typedef struct {
   int oversized_logged; /* channel_store: re-armed once a payload is back within CHANNEL_MAX_PAYLOAD */
   _Atomic double nominal_bps;
   psi_t *psi; /* FCC RAP detection only */
+  tsinspect_t *insp;
   void *ring; /* RET ring */
   size_t ring_size;
   rap_cache_t cache;
@@ -107,6 +109,8 @@ typedef struct channel_table channel_table_t;
 /* ring_slots 0 = no RET, cache_cap 0 = no FCC */
 channel_table_t *channel_table_new(size_t max_channels, size_t ring_slots, size_t cache_cap);
 void channel_table_free(channel_table_t *t);
+
+void channel_table_set_inspect(channel_table_t *t, tsinspect_agg_t *agg);
 
 channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size_t addr_len, unsigned port);
 

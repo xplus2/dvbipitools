@@ -86,6 +86,8 @@ metrics:
   #id: <name>
   # --metrics-interval 5 # seconds
   #interval: 5
+  # --metrics-inspect-ts off # off|basic|medium|full
+  #inspect-ts: off
   # --metrics-http off
   http: off
   # --metrics-auth [not set]

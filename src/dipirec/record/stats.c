@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <time.h>
 
+#include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/signal.h"
 
@@ -84,6 +85,7 @@ void push_metrics(metrics_exporter_t *mx, const config_t *cfg, const out_sink_t 
                    const rtmp_fanout_t *rf, unsigned long long bytes, double start) {
   metrics_writer_t w;
   char label[16];
+  sbuf_t lb;
 
   if (!metrics_exporter_due(mx, mono_seconds()) || metrics_exporter_begin(mx, &w, TOOL_VERSION))
     return;
@@ -93,12 +95,16 @@ void push_metrics(metrics_exporter_t *mx, const config_t *cfg, const out_sink_t 
   for (int i = 0; i < n_sinks; i++) {
     if (!sinks[i].net && !sinks[i].rist)
       continue;
-    snprintf(label, sizeof label, "o%d", i);
+    sbuf_init(&lb, label, sizeof label);
+    sbuf_add(&lb, "o");
+    sbuf_add_uint(&lb, (unsigned)i);
     metrics_writer_put(&w, METRICS_ID_REC_OUTPUT_UP, label, (sinks[i].net_had_error || sinks[i].rist_had_error) ? 0 : 1);
     metrics_writer_put(&w, METRICS_ID_REC_OUTPUT_ERRORS_TOTAL, label, sinks[i].errors_total);
   }
   for (int i = 0; i < rf->n; i++) {
-    snprintf(label, sizeof label, "rtmp%d", i);
+    sbuf_init(&lb, label, sizeof label);
+    sbuf_add(&lb, "rtmp");
+    sbuf_add_uint(&lb, (unsigned)i);
     metrics_writer_put(&w, METRICS_ID_REC_OUTPUT_UP, label, rf->had_error[i] ? 0 : 1);
     metrics_writer_put(&w, METRICS_ID_REC_OUTPUT_ERRORS_TOTAL, label, rf->errors_total[i]);
   }

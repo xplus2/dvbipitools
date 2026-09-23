@@ -3,6 +3,7 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <stdint.h>
 #include <fcntl.h>
 #include <net/if.h>
 #include <netinet/in.h>
@@ -10,6 +11,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #include "../helper/log.h"
@@ -30,6 +32,8 @@ struct mcast {
     struct sockaddr_in v4;
     struct sockaddr_in6 v6;
   } dest; /* send-side only */
+  int ts_on;
+  uint64_t last_rx_ns;
 };
 
 /* socket+SO_REUSEADDR+SO_RCVBUF+iface resolve+bind, shared ASM/SSM open.
@@ -183,14 +187,50 @@ fail:
   return NULL;
 }
 
+int mcast_enable_rx_timestamps(mcast_t *m) {
+  int on = 1;
+  if (setsockopt(m->fd, SOL_SOCKET, SO_TIMESTAMPNS, &on, sizeof on) < 0) return -1;
+  m->ts_on = 1;
+  return 0;
+}
+
+uint64_t mcast_last_rx_ns(const mcast_t *m) {
+  return m->last_rx_ns;
+}
+
+static ssize_t recv_stamped(mcast_t *m, void *buf, size_t cap) {
+  struct iovec iov = {buf, cap};
+  union {
+    struct cmsghdr align;
+    char space[CMSG_SPACE(sizeof(struct timespec))];
+  } ctl;
+  struct msghdr mh;
+  ssize_t n;
+
+  memset(&mh, 0, sizeof mh);
+  mh.msg_iov = &iov;
+  mh.msg_iovlen = 1;
+  mh.msg_control = ctl.space;
+  mh.msg_controllen = sizeof ctl.space;
+  n = recvmsg(m->fd, &mh, 0);
+  if (n < 0) return n;
+  m->last_rx_ns = 0;
+  for (struct cmsghdr *c = CMSG_FIRSTHDR(&mh); c; c = CMSG_NXTHDR(&mh, c)) {
+    if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_TIMESTAMPNS && c->cmsg_len >= CMSG_LEN(sizeof(struct timespec))) {
+      struct timespec ts;
+      memcpy(&ts, CMSG_DATA(c), sizeof ts);
+      m->last_rx_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+    }
+  }
+  return n;
+}
+
 ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_out) {
-  ssize_t n = recv(m->fd, buf, cap, 0);
+  ssize_t n = m->ts_on ? recv_stamped(m, buf, cap) : recv(m->fd, buf, cap, 0);
   if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-      return 0;
+    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) return 0;
     log_line("recv: %s", strerror(errno));
-    if (reason_out)
-      *reason_out = NET_ERR_READ;
+    if (reason_out) *reason_out = NET_ERR_READ;
     return -1;
   }
   return n;
@@ -200,8 +240,7 @@ int mcast_fd(const mcast_t *m) { return m->fd; }
 
 int mcast_set_nonblock(const mcast_t *m) {
   int flags = fcntl(m->fd, F_GETFL, 0);
-  if (flags < 0)
-    return -1;
+  if (flags < 0) return -1;
   return fcntl(m->fd, F_SETFL, flags | O_NONBLOCK);
 }
 
@@ -209,8 +248,7 @@ mcast_t *mcast_open_send(int family, const char *group, unsigned port, const cha
   mcast_t *m = calloc(1, sizeof *m);
   unsigned ifidx = 0;
 
-  if (!m)
-    return NULL;
+  if (!m) return NULL;
   m->family = family;
   m->sender = 1;
   m->fd = socket(family, SOCK_DGRAM, IPPROTO_UDP);
@@ -268,8 +306,7 @@ mcast_t *mcast_open_send(int family, const char *group, unsigned port, const cha
   return m;
 
 fail:
-  if (m->fd >= 0)
-    close(m->fd);
+  if (m->fd >= 0) close(m->fd);
   free(m);
   return NULL;
 }
@@ -299,17 +336,14 @@ int mcast_set_tos(mcast_t *m, int tos) {
 }
 
 void mcast_close(mcast_t *m) {
-  if (!m)
-    return;
+  if (!m) return;
   if (m->fd >= 0) {
     if (m->ssm) {
       int level = (m->family == AF_INET) ? IPPROTO_IP : IPPROTO_IPV6;
       setsockopt(m->fd, level, MCAST_LEAVE_SOURCE_GROUP, &m->gsr, sizeof m->gsr);
     } else if (!m->sender) {
-      if (m->family == AF_INET)
-        setsockopt(m->fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &m->mreq.v4, sizeof m->mreq.v4);
-      else
-        setsockopt(m->fd, IPPROTO_IPV6, IPV6_LEAVE_GROUP, &m->mreq.v6, sizeof m->mreq.v6);
+      if (m->family == AF_INET) setsockopt(m->fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &m->mreq.v4, sizeof m->mreq.v4);
+      else                      setsockopt(m->fd, IPPROTO_IPV6, IPV6_LEAVE_GROUP, &m->mreq.v6, sizeof m->mreq.v6);
     }
     close(m->fd);
   }

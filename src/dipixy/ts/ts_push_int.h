@@ -10,6 +10,7 @@
 extern int g_tid_head[TS_PUSH_MAX_REACTOR_THREADS];
 void ts_push_wake_reactor(int tid);
 void ts_push_ring_enqueue(ts_sub_t *s, const uint8_t *data, size_t len);
+extern void (*ts_push_note_enqueue)(const byte_ring_t *r, int wrote);
 
 /* ts_push_feed.c */
 void ts_push_rawaudio_emit(void *vctx, const unsigned char *data, size_t len);

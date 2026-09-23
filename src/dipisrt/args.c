@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/helper/describe.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/mux/fec2022.h"
@@ -67,28 +68,28 @@ int config_is_sender(const config_t *cfg) {
 void endpoint_describe(const endpoint_t *e, char *buf, size_t n) {
   if (e->is_srt) {
     char first[96];
-    if (e->family[0] == AF_INET6)
-      snprintf(first, sizeof first, "srt://%s[%s]:%u", e->listen ? "@" : "", e->srt_host[0], e->srt_port[0]);
-    else
-      snprintf(first, sizeof first, "srt://%s%s:%u", e->listen ? "@" : "", e->srt_host[0], e->srt_port[0]);
-    if (e->n_srt == 1)
+    describe_srt_uri(first, sizeof first, e->family[0], e->listen, e->srt_host[0], e->srt_port[0]);
+    if (e->n_srt == 1) {
       bufcpy(buf, n, first);
-    else
-      snprintf(buf, n, "%s +%d more", first, e->n_srt - 1);
+    } else {
+      sbuf_t b;
+      sbuf_init(&b, buf, n);
+      sbuf_add(&b, first);
+      sbuf_add(&b, " +");
+      sbuf_add_uint(&b, (unsigned)(e->n_srt - 1));
+      sbuf_add(&b, " more");
+    }
     return;
   }
   switch (e->nonsrt.kind) {
   case PLAIN_EP_RTP:
   case PLAIN_EP_UDP: {
     const char *scheme = (e->nonsrt.kind == PLAIN_EP_RTP) ? "rtp" : "udp";
-    if (e->nonsrt.family == AF_INET6)
-      snprintf(buf, n, "%s://@[%s]:%u", scheme, e->nonsrt.group, e->nonsrt.port);
-    else
-      snprintf(buf, n, "%s://@%s:%u", scheme, e->nonsrt.group, e->nonsrt.port);
+    describe_mcast_uri(buf, n, scheme, e->nonsrt.family, e->nonsrt.group, e->nonsrt.port);
     break;
   }
   case PLAIN_EP_HTTP:
-    snprintf(buf, n, "%s://%s:%u%s", e->nonsrt.http.tls ? "https" : "http", e->nonsrt.http.host, e->nonsrt.http.port, e->nonsrt.http.path);
+    describe_http_uri(buf, n, e->nonsrt.http.tls, e->nonsrt.http.host, e->nonsrt.http.port, e->nonsrt.http.path);
     break;
   case PLAIN_EP_FILE:
     bufcpy(buf, n, e->nonsrt.file_path[0] ? e->nonsrt.file_path : "- (stdin/stdout)");
@@ -103,45 +104,45 @@ static void print_help(void) {
       "direction: exactly one of -i/-o must be srt://, the other a regular\n"
       "dipirec-style endpoint\n\n"
       "endpoints:\n"
-      "  srt://<host>:<port>           SRT peer, calls out (caller)\n"
-      "  srt://@<host>:<port>          SRT peer, binds/listens/accepts (listener)\n"
-      "                                repeat -i/-o to bond several links (--group-mode)\n"
-      "                                <host> is a numeric IP, not a hostname\n"
-      "  rtp://@<group>:<port>         RTP wrapped SPTS multicast (@ optional)\n"
-      "  udp://@<group>:<port>         raw SPTS multicast (@ optional)\n"
-      "  http://<host>:<port>/<path>   HTTP TS stream, -i only\n"
-      "  https://<host>:<port>/<path>  same, TLS (-k skips verification), -i only\n"
-      "  -                             stdin (-i) or stdout (-o)\n"
-      "  <path>                        a file\n"
+      "  srt://<host>:<port>            SRT peer, calls out (caller)\n"
+      "  srt://@<host>:<port>           SRT peer, binds/listens/accepts (listener)\n"
+      "                                 repeat -i/-o to bond several links (--group-mode)\n"
+      "                                 <host> is a numeric IP, not a hostname\n"
+      "  rtp://@<group>:<port>          RTP wrapped SPTS multicast (@ optional)\n"
+      "  udp://@<group>:<port>          raw SPTS multicast (@ optional)\n"
+      "  http://<host>:<port>/<path>    HTTP TS stream, -i only\n"
+      "  https://<host>:<port>/<path>   same, TLS (-k skips verification), -i only\n"
+      "  -                              stdin (-i) or stdout (-o)\n"
+      "  <path>                         a file\n"
       "  IPv6 addrs/groups in brackets, e.g. srt://@[::1]:9000, rtp://@[ff3e::1]:8700\n\n"
       "options:\n"
-      "  -i, --in <uri>             input (see above), repeatable if srt://\n"
-      "  -o, --out <uri>            output (see above), repeatable if srt://\n"
-      "  -I, --iface <iface>        interface for the non-SRT side's multicast join/send\n"
-      "  -k, --insecure             skip TLS verification, -i https:// only\n"
-      "      --group-mode <mode>    broadcast|backup; required when bonding (repeated srt://)\n"
-      "      --rendezvous           srt_rendezvous() instead of connect/listen; needs --local,\n"
-      "                             not combinable with @ or --group-mode\n"
-      "      --local <host:port>    local bind address for --rendezvous\n"
-      "      --passphrase <pw>      encryption passphrase, 10..79 chars\n"
-      "      --pbkeylen <n>         16|24|32 (AES key length); default 16 if --passphrase set\n"
-      "      --streamid <id>        SRTO_STREAMID, passed to a listening peer on accept\n"
-      "      --packetfilter <cfg>   SRTO_PACKETFILTER config string, e.g. fec,cols:10,rows:5\n"
-      "      --latency <ms>         SRTO_LATENCY; default library\n"
-      "      --send-buffer-mult <n> sender queue depth in latency windows, 1..32; default 4\n"
-      "      --al-fec <L>:<D>       Annex E Layer 1 FEC (SMPTE 2022-1) on the rtp:// leg,\n"
-      "                             L*D<=400, L<=40\n"
-      "      --al-fec-port <port>   repair stream UDP port, requires --al-fec\n"
-      "      --color <when>         auto|always|never (default auto)\n"
-      "      --metrics <path>       Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
-      "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
-      "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
-      "  -v, --verbose              periodic bridge stats on stderr\n"
-      "  -d, --daemonize            fork to background after startup, detach from terminal\n"
-      "  -c, --config <path>        YAML config file (default: %s, if present)\n"
-      "      --config-strict        fail on config file issues instead of warnings\n"
-      "      --configtest           check the config file, then exit\n"
-      "  -h, --help                 this help\n\n"
+      "  -i, --in <uri>                 input (see above), repeatable if srt://\n"
+      "  -o, --out <uri>                output (see above), repeatable if srt://\n"
+      "  -I, --iface <iface>            interface for the non-SRT side's multicast join/send\n"
+      "  -k, --insecure                 skip TLS verification, -i https:// only\n"
+      "      --group-mode <mode>        broadcast|backup; required when bonding (repeated srt://)\n"
+      "      --rendezvous               srt_rendezvous() instead of connect/listen; needs --local,\n"
+      "                                 not combinable with @ or --group-mode\n"
+      "      --local <host:port>        local bind address for --rendezvous\n"
+      "      --passphrase <pw>          encryption passphrase, 10..79 chars\n"
+      "      --pbkeylen <n>             16|24|32 (AES key length); default 16 if --passphrase set\n"
+      "      --streamid <id>            SRTO_STREAMID, passed to a listening peer on accept\n"
+      "      --packetfilter <cfg>       SRTO_PACKETFILTER config string, e.g. fec,cols:10,rows:5\n"
+      "      --latency <ms>             SRTO_LATENCY; default library\n"
+      "      --send-buffer-mult <n>     sender queue depth in latency windows, 1..32; default 4\n"
+      "      --al-fec <L>:<D>           Annex E Layer 1 FEC (SMPTE 2022-1) on rtp:// L*D<=400, L<=40\n"
+      "      --al-fec-port <port>       repair stream UDP port, requires --al-fec\n"
+      "      --color <when>             auto|always|never (default auto)\n"
+      "      --metrics <path>           socket for metrics (/run/dvbipitools/metrics.sock)\n"
+      "      --metrics-id <name>        stable instance id; metrics disabled unless set\n"
+      "      --metrics-interval <s>     snapshot interval in seconds (default: 5)\n"
+      "      --metrics-inspect-ts <lvl> TS health metrics: off|basic|medium|full (default: off)\n"
+      "  -v, --verbose                  periodic bridge stats on stderr\n"
+      "  -d, --daemonize                fork to background after startup\n"
+      "  -c, --config <path>            YAML config file (default: %s, if present)\n"
+      "      --config-strict            fail on config file issues instead of warnings\n"
+      "      --configtest               check the config file, then exit\n"
+      "  -h, --help                     this help\n\n"
       "examples:\n"
       "  %s -i rtp://@239.1.1.1:5000 -o srt://1.2.3.4:9000 --latency 200\n"
       "  %s -i srt://@0.0.0.0:9000 -o rtp://@239.1.1.1:5000\n"
@@ -171,6 +172,7 @@ static const struct option longopts[] = {
     {"metrics", required_argument, 0, 1009},
     {"metrics-id", required_argument, 0, 1010},
     {"metrics-interval", required_argument, 0, 1011},
+    {"metrics-inspect-ts", required_argument, 0, 1017},
     {"verbose", no_argument, 0, 'v'},
     {"daemonize", no_argument, 0, 'd'},
     {"config", required_argument, 0, 'c'},
@@ -334,6 +336,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 1011:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
+      case 1017:
+        if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
+        break;
       case 'v':
         cfg->verbose = 1;
         break;
@@ -401,6 +406,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     return ARGS_ERR;
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
+  if (argutil_metrics_inspect_ts_validate(TOOL_NAME, cfg->metrics_id, cfg->metrics_inspect_ts)) return ARGS_ERR;
   if (cfg->al_fec_l && !cfg->al_fec_port) {
     argerr("--al-fec requires --al-fec-port");
     return ARGS_ERR;

@@ -44,7 +44,8 @@ static size_t build_ttx_pes(unsigned char *out, unsigned page, unsigned pkt, con
   out[n++] = rev8_local(hamm_raw(d0)); /* mpag byte 1 (magazine + pkt bit0) */
   out[n++] = rev8_local(hamm_raw(d1)); /* mpag byte 2 (pkt bits 1-4) */
   for (size_t i = 0; i < 40; i++) {
-    unsigned char c = (i < tlen) ? (unsigned char)text[i] : 0x20;
+    unsigned char c = 0x20;
+    if (i < tlen) c = (unsigned char)text[i];
     out[n++] = rev8_local(c);
   }
   return n;
