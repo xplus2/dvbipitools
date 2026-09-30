@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <arpa/inet.h>
 #include <limits.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -64,6 +65,17 @@ static SSL_CTX *client_ctx(int insecure) {
   return g_secure_ctx;
 }
 
+static int set_verify_host(SSL *ssl, const char *host) {
+#if OPENSSL_VERSION_NUMBER >= 0x40000000L
+  unsigned char raw[sizeof(struct in6_addr)];
+  if (inet_pton(AF_INET, host, raw) == 1 || inet_pton(AF_INET6, host, raw) == 1)
+    return SSL_set1_ipaddr(ssl, host);
+  return SSL_set1_dnsname(ssl, host);
+#else
+  return SSL_set1_host(ssl, host);
+#endif
+}
+
 /* shared by tls_connect() and tls_connect_start(): everything up to (not incl.) SSL_connect() */
 static tls_t *tls_setup(int fd, const char *host, int insecure) {
   tls_t *t = calloc(1, sizeof *t);
@@ -85,7 +97,7 @@ static tls_t *tls_setup(int fd, const char *host, int insecure) {
     tls_log_ssl_error("SSL SNI setup");
     goto fail;
   }
-  if (!insecure && SSL_set1_host(t->ssl, host) != 1) {
+  if (!insecure && set_verify_host(t->ssl, host) != 1) {
     tls_log_ssl_error("SSL hostname verification setup");
     goto fail;
   }

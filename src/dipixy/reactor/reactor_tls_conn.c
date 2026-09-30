@@ -11,6 +11,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#define SSL_get1_peer_certificate SSL_get_peer_certificate
+#endif
+
 SSL **fd_ssl;
 tls_gc_shard_t *tls_gc_shards = NULL;
 int tls_gc_nshards = 0;
@@ -50,7 +54,7 @@ int tls_client_cert_verified(int fd) {
   const SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
   if (!ssl) return 0;
   if (SSL_get_verify_result(ssl) != X509_V_OK) return 0;
-  X509 *cert = SSL_get_peer_certificate(ssl);
+  X509 *cert = SSL_get1_peer_certificate(ssl);
   if (!cert) return 0;
   X509_free(cert);
   return 1;
@@ -62,10 +66,10 @@ void tls_get_client_cert_cn(int fd, char *buf, size_t bufsz) {
   if (fd < 0 || fd >= g_tls_fd_max) return;
   const SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
   if (!ssl) return;
-  X509 *cert = SSL_get_peer_certificate(ssl);
+  X509 *cert = SSL_get1_peer_certificate(ssl);
   if (!cert) return;
   const X509_NAME *subj = X509_get_subject_name(cert);
-  if (subj) X509_NAME_get_text_by_NID(subj, NID_commonName, buf, (int)bufsz);
+  if (subj) tls_name_cn(subj, buf, bufsz);
   X509_free(cert);
 }
 

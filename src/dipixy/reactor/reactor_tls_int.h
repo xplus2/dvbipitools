@@ -5,6 +5,7 @@
 #define DIPIXY_REACTOR_TLS_INT_H
 
 #include <openssl/ssl.h>
+#include <openssl/x509.h>
 #include <stdatomic.h>
 
 #include "conn.h"
@@ -31,5 +32,8 @@ extern int g_tls_fd_max;
 extern SSL **fd_ssl;
 extern tls_gc_shard_t *tls_gc_shards;
 extern int tls_gc_nshards;
+
+/* reactor_tls_cert.c. subject CN in buf, 0 ok, -1 absent */
+int tls_name_cn(const X509_NAME *name, char *buf, size_t bufsz);
 
 #endif

@@ -12,6 +12,20 @@
 
 #include "lib/helper/ioutil.h"
 
+int tls_name_cn(const X509_NAME *name, char *buf, size_t bufsz) {
+  if (!buf || !bufsz) return -1;
+  int idx = X509_NAME_get_index_by_NID(name, NID_commonName, -1);
+  if (idx < 0) return -1;
+  const ASN1_STRING *str = X509_NAME_ENTRY_get_data(X509_NAME_get_entry(name, idx));
+  const unsigned char *d = ASN1_STRING_get0_data(str);
+  if (!d) return -1;
+  size_t n = (size_t)ASN1_STRING_length(str);
+  if (n >= bufsz) n = bufsz - 1;
+  memcpy(buf, d, n);
+  buf[n] = '\0';
+  return 0;
+}
+
 static void asn1time_to_str(const ASN1_TIME *t, char *buf, size_t sz) {
   BIO *bio = BIO_new(BIO_s_mem());
   if (!bio) {
@@ -29,7 +43,7 @@ static void asn1time_to_str(const ASN1_TIME *t, char *buf, size_t sz) {
 static void x509_to_info(const X509 *cert, char *buf, size_t sz) {
   char cn[256] = "(unknown)";
   const X509_NAME *subj = X509_get_subject_name(cert);
-  if (subj) X509_NAME_get_text_by_NID(subj, NID_commonName, cn, (int)sizeof(cn));
+  if (subj) tls_name_cn(subj, cn, sizeof(cn));
   char nb[64];
   char na[64];
   size_t off;
@@ -86,7 +100,7 @@ static void x509_to_detail(const X509 *cert, tls_cert_detail_t *out) {
 
   const X509_NAME *subj = X509_get_subject_name(cert);
   if (subj)
-    X509_NAME_get_text_by_NID(subj, NID_commonName, out->cn,(int)sizeof(out->cn));
+    tls_name_cn(subj, out->cn, sizeof(out->cn));
   else
     bufcpy(out->cn, sizeof(out->cn), "(unknown)");
 

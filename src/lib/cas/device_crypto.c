@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <openssl/pem.h>
+#include <openssl/rsa.h>
 
 #include "lib/helper/secure_zero.h"
 
