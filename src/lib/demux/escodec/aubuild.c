@@ -54,7 +54,7 @@ void esc_ps_store(unsigned char *dst, size_t *dlen, const unsigned char *s, size
 
 static void vbuf_add_logged(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *nal, size_t n, const char *what) {
   if (esc_vbuf_add(vbuf, vbuflen, vbufcap, nal, n) < 0)
-    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, what);
+    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s", what);
 }
 
 /* 1: handled (kept/dropped). 0: not sei or off */
