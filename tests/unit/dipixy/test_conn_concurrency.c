@@ -22,7 +22,14 @@ static qsbr_domain_t *g_test_qsbr;
 qsbr_domain_t *reactor_qsbr(void) { return g_test_qsbr; }
 
 /* conn.c pool/retire lists: per thread, reactor workers don't quit (but test threads do, freeing their TLS, leaking still-pooled conn_t to LSan */
-#if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))
+#if defined(__SANITIZE_ADDRESS__)
+#define CONN_ASAN 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define CONN_ASAN 1
+#endif
+#endif
+#ifdef CONN_ASAN
 const char *__lsan_default_options(void) { return "detect_leaks=0"; }
 #endif
 
