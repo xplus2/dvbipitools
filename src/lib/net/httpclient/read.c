@@ -29,8 +29,8 @@ static ssize_t body_read_raw(struct http *h, void *buf, size_t cap, net_err_reas
   }
   /* small cap: buffer via hold, 1 recv() not N (chunk framing bytes). big cap: bypass. */
   if (cap < sizeof h->hold) {
-    ssize_t n = raw_recv(h, h->hold, sizeof h->hold, reason_out);
     size_t k;
+    n = raw_recv(h, h->hold, sizeof h->hold, reason_out);
     if (n <= 0) return n;
     h->hlen = (size_t)n;
     k = h->hlen < cap ? h->hlen : cap;

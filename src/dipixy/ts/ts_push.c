@@ -71,20 +71,23 @@ static void note_enqueue_off(const byte_ring_t *r, int wrote) {
 }
 
 static void note_enqueue_on(const byte_ring_t *r, int wrote) {
-  uint64_t used, cur;
+  uint64_t used;
+  uint64_t cur;
   if (!wrote) {
     atomic_fetch_add_explicit(&g_queue_dropped, 1, memory_order_relaxed);
     return;
   }
-  used = (uint32_t)(atomic_load_explicit(&r->wpos, memory_order_relaxed) - atomic_load_explicit(&r->rpos, memory_order_relaxed));
+  used = atomic_load_explicit(&r->wpos, memory_order_relaxed) - atomic_load_explicit(&r->rpos, memory_order_relaxed);
   cur = atomic_load_explicit(&g_queue_hwm, memory_order_relaxed);
-  while (used > cur && !atomic_compare_exchange_weak_explicit(&g_queue_hwm, &cur, used, memory_order_relaxed, memory_order_relaxed)) {}
+  while (used > cur) {
+    if (atomic_compare_exchange_weak_explicit(&g_queue_hwm, &cur, used, memory_order_relaxed, memory_order_relaxed)) break;
+  }
 }
 
 void (*ts_push_note_enqueue)(const byte_ring_t *, int) = note_enqueue_off;
 
 void ts_push_set_queue_metrics(int level) {
-  ts_push_note_enqueue = level > 1 ? note_enqueue_on : note_enqueue_off;
+  ts_push_note_enqueue = level > 1 ? &note_enqueue_on : &note_enqueue_off;
 }
 
 uint64_t ts_push_queue_high_watermark(void) {
@@ -103,7 +106,9 @@ void ts_push_queue_stats(ts_push_queue_stats_t *out) {
     const byte_ring_t *r;
     uint64_t used;
     if (atomic_load_explicit(&s->alive, memory_order_relaxed) != TS_SUB_ALIVE) continue;
-    r = s->proto == CONN_PROTO_H2 ? &s->h2_ring : s->proto == CONN_PROTO_H3 ? &s->h3_ring : &s->pkt_ring;
+    r = &s->pkt_ring;
+    if (s->proto == CONN_PROTO_H2) r = &s->h2_ring;
+    else if (s->proto == CONN_PROTO_H3) r = &s->h3_ring;
     used = (uint32_t)(atomic_load_explicit(&r->wpos, memory_order_relaxed) - atomic_load_explicit(&r->rpos, memory_order_relaxed));
     out->bytes += used;
     if (used > out->max_bytes) out->max_bytes = used;

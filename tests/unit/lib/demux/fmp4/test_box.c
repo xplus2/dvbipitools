@@ -42,7 +42,15 @@ START_TEST(fmp4_box_read_walks_moov_trak_mdia_minf_stbl_stsd) {
   fmp4_mux_t *m = build_one_video_track_mux();
   unsigned char *out;
   size_t len;
-  fmp4_box_t moov, trak, tkhd, mdia, mdhd, hdlr, minf, stbl, stsd;
+  fmp4_box_t moov;
+  fmp4_box_t trak;
+  fmp4_box_t tkhd;
+  fmp4_box_t mdia;
+  fmp4_box_t mdhd;
+  fmp4_box_t hdlr;
+  fmp4_box_t minf;
+  fmp4_box_t stbl;
+  fmp4_box_t stsd;
   ck_assert_ptr_nonnull(m);
   len = fmp4_init_segment(m, &out);
 
@@ -69,7 +77,8 @@ START_TEST(fmp4_box_read_walks_moov_mvhd) {
   fmp4_mux_t *m = build_one_video_track_mux();
   unsigned char *out;
   size_t len;
-  fmp4_box_t moov, mvhd;
+  fmp4_box_t moov;
+  fmp4_box_t mvhd;
   ck_assert_ptr_nonnull(m);
   len = fmp4_init_segment(m, &out);
   ck_assert_int_eq(fmp4_box_find(out, len, "moov", &moov), 1);
@@ -80,11 +89,19 @@ END_TEST
 
 START_TEST(fmp4_box_read_walks_moof_mfhd_traf_tfhd_tfdt_trun_and_mdat) {
   fmp4_mux_t *m = build_one_video_track_mux();
-  unsigned char *initbuf, *out;
-  size_t initlen, len;
+  unsigned char *initbuf;
+  unsigned char *out;
+  size_t initlen;
+  size_t len;
   fmp4_sample_t s;
   static const unsigned char frame[] = {0x00, 0x00, 0x00, 0x04, 0x65, 0xAA, 0xBB, 0xCC};
-  fmp4_box_t moof, mfhd, traf, tfhd, tfdt, trun, mdat;
+  fmp4_box_t moof;
+  fmp4_box_t mfhd;
+  fmp4_box_t traf;
+  fmp4_box_t tfhd;
+  fmp4_box_t tfdt;
+  fmp4_box_t trun;
+  fmp4_box_t mdat;
 
   ck_assert_ptr_nonnull(m);
   initlen = fmp4_init_segment(m, &initbuf);

@@ -61,7 +61,8 @@ int pid_filter_equal(const pid_filter_t *a, const pid_filter_t *b) {
 }
 
 void pid_filter_add(pid_filter_t *f, unsigned pid) {
-  int lo = 0, hi = f->count - 1;
+  int lo = 0;
+  int hi = f->count - 1;
   int pos;
   if (f->count >= PID_FILTER_MAX) return;
   while (lo <= hi) {

@@ -82,7 +82,8 @@ void revmap_free(revmap_t *m) {
 
 const char *revmap_lookup(const revmap_t *m, const char *uri) {
   if (m->idx) {
-    int lo = 0, hi = m->count - 1;
+    int lo = 0;
+    int hi = m->count - 1;
     while (lo <= hi) {
       int mid = (lo + hi) / 2;
       int c = strcmp(uri, m->idx[mid].uri);

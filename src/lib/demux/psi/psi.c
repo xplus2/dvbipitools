@@ -104,7 +104,8 @@ static void obs_note(psi_t *c, psi_obs_id_t id, const unsigned char *b, size_t n
     int k = id == PSI_OBS_NIT_OTHER;
     uint32_t key = ((uint32_t)b[3] << 16) | ((uint32_t)b[4] << 8) | b[6];
     unsigned i;
-    for (i = 0; i < c->obs->other_n[k] && c->obs->other[k][i].key != key; i++) { }
+    i = 0;
+    while (i < c->obs->other_n[k] && c->obs->other[k][i].key != key) i++;
     if (i == c->obs->other_n[k] && i < PSI_OBS_OTHER_MAX) {
       c->obs->other[k][i].key = key;
       c->obs->other_n[k]++;

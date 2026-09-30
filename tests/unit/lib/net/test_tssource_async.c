@@ -57,7 +57,8 @@ START_TEST(tssrc_open_async_completes_immediately_for_udp) {
 END_TEST
 
 static uint64_t read_one_rx_ns(tssrc_t *s, int sock, const struct sockaddr_in *dst) {
-  unsigned char pkt[188], buf[2048];
+  unsigned char pkt[188];
+  unsigned char buf[2048];
   struct pollfd pfd;
 
   memset(pkt, 0xFF, sizeof pkt);

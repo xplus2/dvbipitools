@@ -47,14 +47,14 @@ static int revmap_rename_cmp(const void *a, const void *b) {
 static void apply_revmap(bcg_doc_t *doc, const revmap_t *rev) {
   revmap_rename_t *renames;
   int n = 0;
-  int i, j;
+  int i;
 
   if (doc->channel_count == 0) return;
   renames = malloc(sizeof *renames * (size_t)doc->channel_count);
   if (!renames) return;
 
   for (i = 0; i < doc->channel_count; i++) {
-    bcg_channel_t *c = &doc->channels[i];
+    const bcg_channel_t *c = &doc->channels[i];
     const char *preferred = revmap_lookup(rev, c->uri);
     if (!preferred) continue;
     bufcpy(renames[n].old_id, sizeof renames[n].old_id, c->id);
@@ -64,8 +64,9 @@ static void apply_revmap(bcg_doc_t *doc, const revmap_t *rev) {
   }
   if (n > 0) {
     qsort(renames, (size_t)n, sizeof *renames, revmap_rename_cmp);
-    for (j = 0; j < doc->programme_count; j++) {
-      int lo = 0, hi = n - 1;
+    for (int j = 0; j < doc->programme_count; j++) {
+      int lo = 0;
+      int hi = n - 1;
       while (lo <= hi) {
         int mid = (lo + hi) / 2;
         int c2 = strcmp(doc->programmes[j].channel_id, renames[mid].old_id);

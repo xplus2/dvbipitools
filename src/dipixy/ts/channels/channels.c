@@ -89,7 +89,8 @@ static const channel_item_t *channel_list_get_item(const channel_list_t *l, unsi
 static const channel_item_t *channel_list_find_name(const channel_list_t *l, const char *name) {
   if (!l) return NULL;
   if (l->name_order) {
-    int lo = 0, hi = l->count - 1;
+    int lo = 0;
+    int hi = l->count - 1;
     while (lo <= hi) {
       int mid = (lo + hi) / 2;
       int c = strcmp(l->name_order[mid].name, name);

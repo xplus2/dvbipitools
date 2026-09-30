@@ -15,7 +15,8 @@
 typedef struct {
   char id[64];
   unsigned bandwidth;
-  unsigned width, height;
+  unsigned width;
+  unsigned height;
   char init_url[2048];
   char media_url_tmpl[2048];
   unsigned timescale;
@@ -39,13 +40,16 @@ typedef struct {
   dash_period_t periods[DASH_MAX_PERIODS];
   unsigned n_periods;
   int is_low_latency;
-  unsigned latency_target_ms, latency_min_ms, latency_max_ms;
-  double playback_rate_min, playback_rate_max;
+  unsigned latency_target_ms;
+  unsigned latency_min_ms;
+  unsigned latency_max_ms;
+  double playback_rate_min;
+  double playback_rate_max;
   int is_dynamic;
   unsigned minimum_update_period_ms;
 } dash_mpd_t;
 
-int dash_mpd_parse(char *body, const http_url_t *base, dash_mpd_t *out);
+int dash_mpd_parse(const char *body, const http_url_t *base, dash_mpd_t *out);
 
 int dash_pick_highest(const dash_adaptation_set_t *as);
 

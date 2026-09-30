@@ -63,7 +63,7 @@ START_TEST(sleep_interruptible_returns_after_duration_without_stop) {
 END_TEST
 
 static void *sleeper_thread(void *arg) {
-  double *secs = arg;
+  const double *secs = arg;
   sleep_interruptible(*secs);
   return NULL;
 }

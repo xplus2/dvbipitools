@@ -11,7 +11,7 @@ static tsinspect_t *new_inspector(metrics_inspect_ts_t level, int light, int rel
   if (level == METRICS_INSPECT_TS_OFF) return NULL;
   t = calloc(1, sizeof *t);
   if (!t) return NULL;
-  t->packet = level >= METRICS_INSPECT_TS_FULL ? packet_full : packet_base;
+  t->packet = level >= METRICS_INSPECT_TS_FULL ? &packet_full : &packet_base;
   if (!light) {
     t->x = calloc(1, sizeof *t->x);
     if (!t->x) {

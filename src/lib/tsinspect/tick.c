@@ -64,6 +64,7 @@ static void check_tables(tsinspect_t *t) {
     psi_obs_id_t id = LIMITS[i].id;
     double last;
     double ref;
+    if (id >= PSI_OBS_COUNT) continue;
     switch (id) {
       case PSI_OBS_PMT:
         last = psi_pmt_oldest_seen(t->psi);
@@ -148,7 +149,10 @@ static void check_referenced_pids(tsinspect_t *t) {
     for (int k = 0; k < i && k < n; k++) if (es[k].pid == pid) { dup = 1; break; }
     if (dup) continue;
     if (t->cc[pid] & CC_WIN) t->x->miss_run[pid] = 0;
-    else if (t->x->miss_run[pid] < 255 && ++t->x->miss_run[pid] == PID_MISSING_WINDOWS) t->counters.referenced_pid_missing++;
+    else if (t->x->miss_run[pid] < 255) {
+      t->x->miss_run[pid]++;
+      if (t->x->miss_run[pid] == PID_MISSING_WINDOWS) t->counters.referenced_pid_missing++;
+    }
   }
   if (t->level >= METRICS_INSPECT_TS_FULL) check_unreferenced(t);
   for (unsigned i = 0; i < 8192; i++) t->cc[i] &= (unsigned char)~CC_WIN;
@@ -316,6 +320,6 @@ void tsinspect_tick(tsinspect_t *t, double now) {
   }
   t->prev_now = now;
   check_cat(t);
-  if (t->psi) tick_psi(t);
+  if (t->psi && t->x) tick_psi(t);
   if (t->pub_at == 0.0 || now - t->pub_at >= PUBLISH_S) publish(t);
 }

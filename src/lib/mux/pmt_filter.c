@@ -8,12 +8,15 @@
 #include "psi_build.h"
 
 static int drop_pid_cmp(const void *a, const void *b) {
-  unsigned x = *(const unsigned *)a, y = *(const unsigned *)b;
-  return x < y ? -1 : x > y ? 1 : 0;
+  unsigned x = *(const unsigned *)a;
+  unsigned y = *(const unsigned *)b;
+  if (x < y) return -1;
+  return x > y;
 }
 
 static int pid_in_set(unsigned pid, const unsigned *sorted_pids, size_t n) {
-  size_t lo = 0, hi = n;
+  size_t lo = 0;
+  size_t hi = n;
   while (lo < hi) {
     size_t mid = lo + (hi - lo) / 2;
     if (sorted_pids[mid] == pid) return 1;

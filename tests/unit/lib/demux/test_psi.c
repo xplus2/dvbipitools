@@ -567,7 +567,8 @@ START_TEST(psi_observer_records_last_seen_and_crc_errors) {
   psi_t *p = psi_new();
   psi_obs_t obs;
   double now = 10.0;
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen = build_pat(section, 0x1234, 1, 0x0100);
 
   psi_obs_init(&obs, &now);
@@ -809,7 +810,8 @@ END_TEST
 
 START_TEST(psi_service_of_pid_maps_every_parsed_pmt) {
   psi_t *p = psi_new();
-  unsigned char section[128], pkt[188];
+  unsigned char section[128];
+  unsigned char pkt[188];
   size_t slen;
 
   psi_enable_multi_program(p);

@@ -235,7 +235,7 @@ static int process_single_frame(single_tick_t *tk, source_t *src) {
       }
       if (signal_reload_requested()) cas_reload_receivers(tk->cas);
     }
-    tspacketizer_feed(*tk->tsp, pts, now, f.data, f.len, tk->out->insp ? packet_cb_inspect : packet_cb, tk->out);
+    tspacketizer_feed(*tk->tsp, pts, now, f.data, f.len, tk->out->insp ? &packet_cb_inspect : &packet_cb, tk->out);
     if (tk->cfg->verbose && now - *tk->last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - tk->start, tk->out->packets);
       fflush(stderr);
@@ -379,7 +379,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
 done:
-  if (cas) cas_flush(cas, out.insp ? packet_cb_inspect : packet_cb, &out);
+  if (cas) cas_flush(cas, out.insp ? &packet_cb_inspect : &packet_cb, &out);
   flush_batch(&out);
   if (tsp) tspacketizer_free(tsp);
   if (cas) cas_stop(cas);

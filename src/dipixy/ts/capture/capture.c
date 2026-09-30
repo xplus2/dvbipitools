@@ -257,7 +257,7 @@ uint64_t capture_bytes_total(void) {
   return total;
 }
 
-uint64_t capture_ctx_bytes(capture_ctx_t *ctx) {
+uint64_t capture_ctx_bytes(const capture_ctx_t *ctx) {
   return atomic_load_explicit(&ctx->write_total, memory_order_acquire);
 }
 

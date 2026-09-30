@@ -52,7 +52,8 @@ START_TEST(conn_free_null_is_a_noop) {
 END_TEST
 
 START_TEST(pooled_conn_reuse_keeps_out_lock_usable) {
-  conn_t *first, *second;
+  conn_t *first;
+  conn_t *second;
 
   first = conn_new(5, NULL);
   ck_assert_ptr_nonnull(first);

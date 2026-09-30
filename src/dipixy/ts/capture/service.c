@@ -29,7 +29,10 @@ typedef enum { CAP_RD_FCC, CAP_RD_RET, CAP_RD_FEC, CAP_RD_PLAIN } cap_read_backe
 
 ssize_t capture_read_dispatch(capture_ctx_t *ctx, unsigned char *buf, size_t bufcap, int *unwrapped) {
   ssize_t n;
-  cap_read_backend_t backend = ctx->fcc ? CAP_RD_FCC : ctx->ret ? CAP_RD_RET : ctx->fec_dec ? CAP_RD_FEC : CAP_RD_PLAIN;
+  cap_read_backend_t backend = CAP_RD_PLAIN;
+  if (ctx->fcc) backend = CAP_RD_FCC;
+  else if (ctx->ret) backend = CAP_RD_RET;
+  else if (ctx->fec_dec) backend = CAP_RD_FEC;
   *unwrapped = 0;
   switch (backend) {
     case CAP_RD_FCC:

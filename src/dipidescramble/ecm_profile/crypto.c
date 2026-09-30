@@ -61,8 +61,9 @@ static int compute_tag(const ecm_profile_t *p, const unsigned char mac_key[CRYPT
   unsigned char full[CRYPTO_HMAC_SHA256_LEN];
   size_t want;
   if (data_len + assoc_len > sizeof buf) return -1;
+  if ((data_len && !data) || (assoc_len && !assoc)) return -1;
   if (data_len) memcpy(buf, data, data_len);
-  memcpy(buf + data_len, assoc, assoc_len);
+  if (assoc_len) memcpy(buf + data_len, assoc, assoc_len);
   if (p->integrity.type == ECM_INTEGRITY_CRC32) {
     uint32_t crc = crypto_crc32(p->integrity.crc32_variant == ECM_CRC32_CASTAGNOLI, buf, data_len + assoc_len);
     serialize_crc32(crc, p->integrity.crc32_endian, tag_out);
@@ -184,7 +185,7 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
       rc = -1;
       goto done;
     }
-    if (tag_len != lay.integrity_tag_len || memcmp(tag, itag_ptr, tag_len) != 0) {
+    if (tag_len != lay.integrity_tag_len || !itag_ptr || memcmp(tag, itag_ptr, tag_len) != 0) {
       rc = -1;
       goto done;
     }

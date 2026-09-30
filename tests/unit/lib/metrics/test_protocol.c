@@ -209,10 +209,10 @@ START_TEST(varint_values_roundtrip) {
 
   make_hdr(&hdr, "x");
   ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
-  for (size_t i = 0; i < sizeof vals / sizeof *vals; i++)
+  for (size_t i = 0; i < sizeof vals / sizeof vals[0]; i++)
     ck_assert_int_eq(metrics_writer_put(&w, METRICS_ID_OUTPUT_PACKETS_TOTAL, NULL, vals[i]), 0);
   ck_assert_int_eq(metrics_reader_init(&r, w.buf, w.len, &hdr), 0);
-  for (size_t i = 0; i < sizeof vals / sizeof *vals; i++) {
+  for (size_t i = 0; i < sizeof vals / sizeof vals[0]; i++) {
     ck_assert_int_eq(metrics_reader_next(&r, &id, label, sizeof label, &value), 1);
     ck_assert_uint_eq(value, vals[i]);
   }
@@ -330,7 +330,8 @@ START_TEST(reader_accepts_v1_entries) {
   unsigned char buf[METRICS_HDR_LEN + 11 + 3 + 3 + 8];
   metrics_writer_t w;
   metrics_reader_t r;
-  metrics_hdr_t hdr, out;
+  metrics_hdr_t hdr;
+  metrics_hdr_t out;
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
   uint64_t value;
@@ -362,7 +363,8 @@ END_TEST
 START_TEST(reader_rejects_malformed_v2_groups) {
   metrics_writer_t w;
   metrics_reader_t r;
-  metrics_hdr_t hdr, out;
+  metrics_hdr_t hdr;
+  metrics_hdr_t out;
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
   uint64_t value;

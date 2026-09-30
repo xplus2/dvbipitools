@@ -88,7 +88,10 @@ int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
   if (b.err) return -1;
   subw = (chroma == 1 || chroma == 2) ? 2 : 1;
   subh = (chroma == 1) ? 2 : 1;
-  if (chroma == 0) subw = subh = 1;
+  if (chroma == 0) {
+    subw = 1;
+    subh = 1;
+  }
   *w = (wmbs + 1) * 16 - (cl + cr) * subw;
   *h = (2 - fmo) * (hmus + 1) * 16 - (ct + cb) * subh * (2 - fmo);
   return (*w && *h) ? 0 : -1;

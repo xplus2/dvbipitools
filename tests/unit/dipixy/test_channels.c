@@ -401,7 +401,8 @@ START_TEST(resolve_by_name_finds_correct_entry_regardless_of_input_order) {
   char path[160];
   char content[2048] = "";
   channels_t *ch;
-  int family, rtp;
+  int family;
+  int rtp;
   char addr[64];
   unsigned port;
 
@@ -437,7 +438,9 @@ START_TEST(item_lookup_by_name_reports_correct_original_ordinal) {
   char content[2048] = "";
   channels_t *ch;
   unsigned out_item_num = 999;
-  char out_name[64], out_proto[16], out_addr[64];
+  char out_name[64];
+  char out_proto[16];
+  char out_addr[64];
 
   strcat(content, "#EXTINF:-1,Zulu\nrtp://@239.1.1.26:5000\n");
   strcat(content, "#EXTINF:-1,Alpha\nrtp://@239.1.1.1:5001\n");
@@ -468,7 +471,8 @@ START_TEST(resolve_by_name_works_across_a_larger_list) {
   char content[8192] = "";
   char line[128];
   channels_t *ch;
-  int family, rtp;
+  int family;
+  int rtp;
   char addr[64];
   unsigned port;
   int i;
@@ -500,7 +504,8 @@ START_TEST(resolve_by_name_after_reload_uses_fresh_index) {
   channels_t *ch;
   config_t cfg;
   source_def_t src;
-  int family, rtp;
+  int family;
+  int rtp;
   char addr[64];
   unsigned port;
 
@@ -533,7 +538,8 @@ START_TEST(direct_mcast_source_builds_single_item_list) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  int family, rtp;
+  int family;
+  int rtp;
   char addr[64];
   unsigned port;
 
@@ -562,7 +568,8 @@ START_TEST(direct_mcast_source_survives_sighup_reload) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  int family, rtp;
+  int family;
+  int rtp;
   char addr[64];
   unsigned port;
 

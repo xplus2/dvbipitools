@@ -337,7 +337,7 @@ void mp4push_flush_ready(int tid) {
 
 static void mp4push_finish_sub_close(void *arg) {
   int slot = (int)(intptr_t)arg;
-  mp4push_sub_t *s = &g_subs[slot];
+  const mp4push_sub_t *s = &g_subs[slot];
   hls_seg_ctx_t *seg;
   hls_seg_registry_lock();
   seg = hls_seg_find_locked(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, SEG_CONTAINER_FMP4);

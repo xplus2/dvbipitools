@@ -243,7 +243,8 @@ int dixy_cfg_add_input(config_t *cfg, const char *val, char *err, size_t errsz) 
       kind = SRC_HTTP;
     } else if (strncmp(val, "rtp://", 6) == 0 || strncmp(val, "udp://", 6) == 0) {
       const char *scheme = val[0] == 'r' ? "rtp" : "udp";
-      int family, rtp;
+      int family;
+      int rtp;
       char addr[64];
       unsigned port;
       if (route_resolve_channel_uri(val, &family, addr, sizeof addr, &port, &rtp)) {

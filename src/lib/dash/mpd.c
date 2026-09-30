@@ -147,7 +147,7 @@ static int period_cb(const char *tag, const char *blk_end, void *vctx) {
   return 0;
 }
 
-int dash_mpd_parse(char *body, const http_url_t *base, dash_mpd_t *out) {
+int dash_mpd_parse(const char *body, const http_url_t *base, dash_mpd_t *out) {
   const char *end = body + strlen(body);
   period_ctx_t ctx;
   const char *mpd_tag;

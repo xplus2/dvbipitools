@@ -101,7 +101,7 @@ int metrics_inspect_ts_parse(const char *s, metrics_inspect_ts_t *out) {
     {"full", METRICS_INSPECT_TS_FULL},
   };
   int v;
-  if (map_lookup(levels, sizeof levels / sizeof *levels, s, &v)) return -1;
+  if (map_lookup(levels, sizeof levels / sizeof levels[0], s, &v)) return -1;
   *out = (metrics_inspect_ts_t)v;
   return 0;
 }

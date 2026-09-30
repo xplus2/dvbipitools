@@ -116,7 +116,6 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   out[n++] = 'd';
   alen = artist[0] ? strlen(artist) : 0;
   tlen = title[0] ? strlen(title) : 0;
-  o = 0;
 
   alen = psi_utf8_clamp(artist, alen, sizeof combined - 1);
   memcpy(combined, artist, alen);

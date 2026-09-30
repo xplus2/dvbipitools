@@ -144,7 +144,8 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   tssink_t *sink;
   srtin_cfg_t rcfg;
   srtin_t *srt;
-  tsinspect_t *insp_in, *insp_out;
+  tsinspect_t *insp_in;
+  tsinspect_t *insp_out;
   tsinspect_set_t set = {&insp_in, 1, &insp_out, 1};
   unsigned char buf[65536];
   dedup_entry_t dedup_hist[RECV_DEDUP_HISTORY] = {{0, 0}};

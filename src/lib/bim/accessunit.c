@@ -67,7 +67,7 @@ int accessunit_encode(accessunit_scratch_t *sc, const bcg_doc_t *doc, bitwriter_
     if (!prog_channel) goto done;
     for (i = 0; i < doc->programme_count; i++) {
       prog_channel[i] = channel_idx_find(cidx, doc->channel_count, doc->programmes[i].channel_id);
-      if (prog_channel[i] >= 0) channel_has_prog[prog_channel[i]] = 1;
+      if (channel_has_prog && prog_channel[i] >= 0) channel_has_prog[prog_channel[i]] = 1;
     }
   }
 

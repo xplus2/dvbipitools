@@ -8,7 +8,8 @@
 
 typedef struct {
   unsigned ordinal;
-  int is_stdin, is_rist;
+  int is_stdin;
+  int is_rist;
   const char *name;
   media_type_t media_type;
   const source_def_t *src;

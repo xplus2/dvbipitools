@@ -125,7 +125,7 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
     tk->samples_total[i] += f.samples;
     tk->pace_deadline[i] += (double)f.samples / (double)f.sample_rate;
     tk->out->cur_pts = pts;
-    tspacketizer_feed(tk->tsps[i], pts, tk->now, f.data, f.len, tk->out->insp ? packet_cb_inspect : packet_cb, tk->out);
+    tspacketizer_feed(tk->tsps[i], pts, tk->now, f.data, f.len, tk->out->insp ? &packet_cb_inspect : &packet_cb, tk->out);
   }
   if (tk->metrics_on) {
     unsigned long long sb = source_bytes_total(src);
@@ -219,7 +219,8 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     struct pollfd pfds[RADIOHEAD_MAX_INPUTS];
     unsigned pfd_slot[RADIOHEAD_MAX_INPUTS];
     nfds_t npfd = 0;
-    double now, now_pre;
+    double now;
+    double now_pre;
     time_t now_t, deadline;
     int timeout_ms = RADIOHEAD_POLL_MAX_MS;
     mpts_tick_t tk;
@@ -285,7 +286,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     if (n) rr_start = (rr_start + 1) % n;
 
     if (out.insp) tsinspect_tick(out.insp, now);
-    mpts_tick(mpts, now, out.insp ? packet_cb_inspect : packet_cb, &out);
+    mpts_tick(mpts, now, out.insp ? &packet_cb_inspect : &packet_cb, &out);
     if (cas) {
       cas_clock_tick(cas, (uint64_t)(now * 90000.0));
       if (cas_failed(cas)) {
@@ -306,7 +307,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   }
 
 done:
-  if (cas) cas_flush(cas, out.insp ? packet_cb_inspect : packet_cb, &out);
+  if (cas) cas_flush(cas, out.insp ? &packet_cb_inspect : &packet_cb, &out);
   flush_batch(&out);
   for (unsigned i = 0; i < n; i++) if (tsps[i]) tspacketizer_free(tsps[i]);
   if (mpts) mpts_free(mpts);

@@ -65,7 +65,6 @@ int ws_parser_next(ws_parser_t *p, int *opcode, const uint8_t **payload, size_t 
   for (;;) {
     size_t need;
     size_t hdr;
-    size_t i;
     int fin;
     int op;
     int masked;
@@ -85,7 +84,7 @@ int ws_parser_next(ws_parser_t *p, int *opcode, const uint8_t **payload, size_t 
     } else if (plen64 == 127) {
       if (p->len < 10) return 0;
       plen64 = 0;
-      for (i = 0; i < 8; i++) plen64 = (plen64 << 8) | p->buf[2 + i];
+      for (size_t i = 0; i < 8; i++) plen64 = (plen64 << 8) | p->buf[2 + i];
       hdr = 10;
     }
 

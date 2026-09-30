@@ -8,7 +8,7 @@
 
 #include "priv.h"
 
-static int tcp_dial(ecmg_client_t *c, const char *host, unsigned port) {
+static int tcp_dial(const ecmg_client_t *c, const char *host, unsigned port) {
   return cas_tcp_dial(&c->stop, host, port, ECMG_POLL_INTERVAL_MS, ECMG_HANDSHAKE_TIMEOUT_MS, "ecmg");
 }
 

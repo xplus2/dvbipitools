@@ -280,7 +280,8 @@ static void section_pkt(unsigned char *pkt, unsigned pid, const unsigned char *s
 }
 
 static void pcr_pkt(unsigned char *pkt, unsigned pid, unsigned cc, uint64_t pcr27, int disc) {
-  uint64_t base = pcr27 / 300, ext = pcr27 % 300;
+  uint64_t base = pcr27 / 300;
+  uint64_t ext = pcr27 % 300;
   memset(pkt, 0xFF, 188);
   pkt[0] = 0x47;
   pkt[1] = (unsigned char)(pid >> 8);
@@ -329,7 +330,8 @@ END_TEST
 START_TEST(pat_crc_error_and_version_changes_counted) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   psi_t *psi = psi_new();
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len = build_pat(sec, 0, 1, 0x100);
 
   tsinspect_bind_psi(t, psi);
@@ -353,7 +355,8 @@ END_TEST
 START_TEST(pmt_late_repetition_counted) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   psi_t *psi = psi_new();
-  unsigned char sec[128], pkt[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
   size_t len;
 
   tsinspect_bind_psi(t, psi);
@@ -376,7 +379,9 @@ END_TEST
 START_TEST(referenced_pid_missing_after_five_windows) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   psi_t *psi = psi_new();
-  unsigned char sec[128], pkt[188], es[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
+  unsigned char es[188];
   size_t len;
 
   tsinspect_bind_psi(t, psi);
@@ -407,7 +412,8 @@ END_TEST
 START_TEST(pcr_repetition_and_discontinuity_checks) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   psi_t *psi = psi_new();
-  unsigned char sec[128], pkt[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
   size_t len;
   const tsinspect_counters_t *c = tsinspect_counters(t);
 
@@ -466,7 +472,9 @@ END_TEST
 START_TEST(pts_gap_over_700ms_counted_once_and_recovers) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   psi_t *psi = psi_new();
-  unsigned char sec[128], pkt[188], pes[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
+  unsigned char pes[188];
   size_t len;
 
   tsinspect_bind_psi(t, psi);
@@ -537,7 +545,8 @@ END_TEST
 START_TEST(pid_added_and_removed_on_pmt_change) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   psi_t *psi = psi_new();
-  unsigned char sec[128], pkt[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
   size_t len;
 
   tsinspect_bind_psi(t, psi);
@@ -600,7 +609,8 @@ END_TEST
 
 START_TEST(tdt_missing_and_wrong_table_id) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len;
 
   tsinspect_tick(t, 1.0);
@@ -624,7 +634,8 @@ END_TEST
 
 START_TEST(rst_wrong_table_id_counted) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len = build_si(sec, 0x71, 0, 0, 0);
 
   section_pkt(pkt, 0x13, sec, len);
@@ -641,7 +652,8 @@ END_TEST
 START_TEST(si_crc_checked_only_from_medium) {
   tsinspect_t *basic = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   tsinspect_t *medium = tsinspect_new(METRICS_INSPECT_TS_MEDIUM);
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len = build_si(sec, 0x50, 0x1234, 0, 6);
 
   sec[len - 1] ^= 0xFF;
@@ -658,7 +670,8 @@ END_TEST
 START_TEST(sdt_other_checked_only_once_seen) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   psi_t *psi = psi_new();
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len;
 
   tsinspect_bind_psi(t, psi);
@@ -680,7 +693,8 @@ END_TEST
 
 START_TEST(eit_other_checked_only_once_seen) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len = build_si(sec, 0x4F, 0x1234, 0, 6);
 
   tsinspect_tick(t, 1.0);
@@ -707,7 +721,10 @@ START_TEST(put_metrics_emits_stream_labeled_series_by_level) {
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
   uint64_t value;
-  int seen_packets = 0, seen_crc = 0, seen_pat = 0, seen_sync = 0;
+  int seen_packets = 0;
+  int seen_crc = 0;
+  int seen_pat = 0;
+  int seen_sync = 0;
 
   memset(&hdr, 0, sizeof hdr);
   hdr.proto_version = METRICS_PROTO_VERSION;
@@ -765,7 +782,9 @@ START_TEST(aggregate_sums_live_and_retired_streams) {
   metrics_reader_t r;
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
-  uint64_t value, packets = 0, cc = 0;
+  uint64_t value;
+  uint64_t packets = 0;
+  uint64_t cc = 0;
 
   memset(&hdr, 0, sizeof hdr);
   hdr.proto_version = METRICS_PROTO_VERSION;
@@ -801,7 +820,8 @@ END_TEST
 
 START_TEST(light_inspector_skips_si_and_psi_state) {
   tsinspect_t *t = tsinspect_new_light(METRICS_INSPECT_TS_BASIC);
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len = build_si(sec, 0x71, 0, 0, 0);
 
   ck_assert_ptr_null(tsinspect_psi(t));
@@ -817,7 +837,8 @@ END_TEST
 
 START_TEST(own_psi_follows_packets_without_a_tool_psi) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
-  unsigned char sec[128], pkt[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
   size_t len;
 
   ck_assert_int_eq(tsinspect_enable_own_psi(t, 0), 0);
@@ -838,7 +859,9 @@ START_TEST(unreferenced_pids_only_from_full_level) {
   tsinspect_t *full = tsinspect_new(METRICS_INSPECT_TS_FULL);
   tsinspect_t *med = tsinspect_new(METRICS_INSPECT_TS_MEDIUM);
   tsinspect_t *both[2] = {full, med};
-  unsigned char sec[128], pkt[188], p[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
+  unsigned char p[188];
   size_t len;
 
   for (int i = 0; i < 2; i++) {
@@ -868,7 +891,8 @@ START_TEST(bat_crc_checked_from_medium) {
   tsinspect_t *basic = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   tsinspect_t *med = tsinspect_new(METRICS_INSPECT_TS_MEDIUM);
   tsinspect_t *both[2] = {basic, med};
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len = build_si(sec, 0x4A, 0x1234, 0, 6);
 
   sec[len - 1] ^= 0xFF;
@@ -902,7 +926,8 @@ static unsigned count_series(tsinspect_t *t, metrics_id_t want, const char *labe
   tsinspect_put_metrics(t, &w, "input0", 6.0, 1000.0);
   ck_assert_int_eq(metrics_reader_init(&r, w.buf, w.len, &hdr), 0);
   while (metrics_reader_next(&r, &id, label, sizeof label, &v) == 1) {
-    size_t ll = strlen(label), sl = label_suffix ? strlen(label_suffix) : 0;
+    size_t ll = strlen(label);
+    size_t sl = label_suffix ? strlen(label_suffix) : 0;
     if (id == want && (!sl || (ll >= sl && !strcmp(label + ll - sl, label_suffix)))) n++;
   }
   return n;
@@ -941,14 +966,16 @@ END_TEST
 START_TEST(pcr_jitter_from_arrival_timestamps) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_MEDIUM);
   psi_t *psi = psi_new();
-  unsigned char sec[128], pkt[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
   size_t len;
   metrics_writer_t w;
   metrics_hdr_t hdr;
   metrics_reader_t r;
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
-  uint64_t value, jitter = 0;
+  uint64_t value;
+  uint64_t jitter = 0;
 
   memset(&hdr, 0, sizeof hdr);
   hdr.proto_version = METRICS_PROTO_VERSION;
@@ -989,7 +1016,8 @@ END_TEST
 
 START_TEST(relay_detects_pcr_without_psi_and_skips_si) {
   tsinspect_t *t = tsinspect_new_relay(METRICS_INSPECT_TS_MEDIUM);
-  unsigned char buf[188 * 3], sec[64];
+  unsigned char buf[188 * 3];
+  unsigned char sec[64];
   size_t len = build_si(sec, 0x42, 0, 0, 0);
 
   ck_assert_ptr_null(tsinspect_psi(t));
@@ -1013,7 +1041,8 @@ END_TEST
 START_TEST(other_tables_checked_per_section_and_service) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   psi_t *psi = psi_new();
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len;
 
   tsinspect_bind_psi(t, psi);
@@ -1053,7 +1082,9 @@ END_TEST
 START_TEST(known_pids_split_the_two_unreferenced_definitions) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_FULL);
   unsigned known[1] = {0x300};
-  unsigned char sec[128], pkt[188], p[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
+  unsigned char p[188];
   size_t len;
 
   tsinspect_enable_own_psi(t, 0);
@@ -1079,7 +1110,9 @@ END_TEST
 START_TEST(pmt_pids_get_packet_and_scrambled_counters_with_detail_flag) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_FULL);
   unsigned listed[1] = {0x300};
-  unsigned char p[188], sec[128], pkt[188];
+  unsigned char p[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
   size_t len;
   metrics_writer_t w;
   metrics_hdr_t hdr;
@@ -1088,8 +1121,12 @@ START_TEST(pmt_pids_get_packet_and_scrambled_counters_with_detail_flag) {
   char label[METRICS_LABEL_MAX + 1];
   const char sep[2] = {METRICS_LABEL_SEP, '\0'};
   uint64_t v;
-  uint64_t pkts101 = 0, scr101 = 0, pkts100 = 0, other = 0;
-  uint64_t svc_pkts = 0, svc_scr = 0;
+  uint64_t pkts101 = 0;
+  uint64_t scr101 = 0;
+  uint64_t pkts100 = 0;
+  uint64_t other = 0;
+  uint64_t svc_pkts = 0;
+  uint64_t svc_scr = 0;
   unsigned n_svc = 0;
 
   tsinspect_enable_own_psi(t, 0);
@@ -1153,7 +1190,9 @@ START_TEST(pid_and_service_detail_absent_below_full_level) {
   tsinspect_t *basic = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   tsinspect_t *med = tsinspect_new(METRICS_INSPECT_TS_MEDIUM);
   tsinspect_t *both[2] = {basic, med};
-  unsigned char sec[128], pkt[188], p[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
+  unsigned char p[188];
   size_t len;
 
   for (int i = 0; i < 2; i++) {
@@ -1184,7 +1223,9 @@ START_TEST(mgb1_and_mgb2_bitrates_follow_the_packet_rate) {
   metrics_reader_t r;
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
-  uint64_t value, m1 = 0, m2 = 0;
+  uint64_t value;
+  uint64_t m1 = 0;
+  uint64_t m2 = 0;
   double now = 10.0;
 
   memset(&hdr, 0, sizeof hdr);

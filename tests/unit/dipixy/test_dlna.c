@@ -269,7 +269,8 @@ START_TEST(root_browse_direct_children_lists_rist_default_name_and_unnamed_playl
   config_t cfg;
   source_def_t sources[1];
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
@@ -396,7 +397,8 @@ START_TEST(list_source_metadata_named) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
@@ -420,7 +422,8 @@ START_TEST(list_source_metadata_unnamed_uses_kind_fallback_title) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
@@ -441,7 +444,8 @@ START_TEST(item_metadata_title_uses_index_and_channel_name) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
@@ -462,7 +466,8 @@ START_TEST(list_direct_children_item_title_uses_index_and_channel_name) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);

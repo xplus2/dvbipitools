@@ -18,8 +18,10 @@ typedef struct {
 
 typedef struct {
   codec_t codec;
-  unsigned width, height;
-  unsigned rate, channels;
+  unsigned width;
+  unsigned height;
+  unsigned rate;
+  unsigned channels;
   fmp4_nal_t vps[FMP4_PS_MAX];
   unsigned n_vps;
   fmp4_nal_t sps[FMP4_PS_MAX];
@@ -28,7 +30,10 @@ typedef struct {
   unsigned n_pps;
   const unsigned char *cpriv;
   size_t cpriv_len;
-  unsigned char ac3_bsid, ac3_bsmod, ac3_acmod, ac3_lfeon;
+  unsigned char ac3_bsid;
+  unsigned char ac3_bsmod;
+  unsigned char ac3_acmod;
+  unsigned char ac3_lfeon;
   unsigned ac3_bitrate_code;
   unsigned truehd_format_info;
   unsigned truehd_peak_data_rate;

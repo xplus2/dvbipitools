@@ -36,7 +36,8 @@ static capture_ctx_t *tssrc_ctx_new(char *key, const tssrc_cfg_t *cfg, net_err_r
 
 capture_ctx_t *capture_open_srt(const char *host, unsigned port) {
   char key[300];
-  capture_ctx_t *c, *dup;
+  capture_ctx_t *c;
+  capture_ctx_t *dup;
   tssrc_cfg_t cfg;
   char *keydup;
   char portbuf[12];
@@ -87,7 +88,8 @@ capture_ctx_t *capture_open_srt(const char *host, unsigned port) {
 
 capture_ctx_t *capture_open_http_static(const char *url, int insecure_tls) {
   tssrc_cfg_t cfg;
-  capture_ctx_t *c, *dup;
+  capture_ctx_t *c;
+  capture_ctx_t *dup;
   http_url_t hu;
   net_err_reason_t reason;
   char *keydup;

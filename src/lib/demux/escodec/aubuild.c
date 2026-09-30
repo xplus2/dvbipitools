@@ -205,7 +205,11 @@ static unsigned av1_reduced_still_picture_flag(const unsigned char *obu, size_t 
   has_size = br_u(&b, 1);
   br_u(&b, 1);
   if (ext) br_u(&b, 8);
-  if (has_size) for (int i = 0; i < 8 && (br_u(&b, 8) & 0x80); i++) { }
+  if (has_size) {
+    for (int i = 0; i < 8; i++) {
+      if (!(br_u(&b, 8) & 0x80)) break;
+    }
+  }
   br_u(&b, 3);
   br_u(&b, 1);
   return br_u(&b, 1);

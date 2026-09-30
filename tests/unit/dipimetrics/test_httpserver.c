@@ -283,7 +283,7 @@ START_TEST(fragmented_request_across_multiple_writes_still_returns_200) {
   for (int i = 0; i < 3; i++) {
     struct pollfd pfds[1 + HTTP_MAX_CONNS];
     int n = 0;
-    http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
+    http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof pfds[0]), &n);
     poll(pfds, (nfds_t)n, 20);
     http_server_service(hs, pfds, n, &st, mono(), 0);
   }

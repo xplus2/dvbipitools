@@ -235,7 +235,8 @@ typedef struct {
 static void capture_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
   tag_capture_t *c = ctx;
   size_t len = hn + pn;
-  size_t take_h, take_p;
+  size_t take_h;
+  size_t take_p;
   if (c->n >= (int)(sizeof c->tags / sizeof c->tags[0]))
     return;
   c->tags[c->n].type = type;

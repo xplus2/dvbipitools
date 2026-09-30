@@ -132,7 +132,9 @@ void simulcrypt_reader_init(simulcrypt_reader_t *r) {
 
 int simulcrypt_reader_poll(simulcrypt_reader_t *r, int fd, int timeout_ms, simulcrypt_hdr_t *hdr, const unsigned char **payload) {
   struct pollfd pfds[2];
-  int pret, npfd, wake_fd;
+  int pret;
+  int npfd;
+  int wake_fd;
 
   pfds[0].fd = fd;
   pfds[0].events = POLLIN;

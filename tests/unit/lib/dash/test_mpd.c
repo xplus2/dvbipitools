@@ -86,8 +86,8 @@ START_TEST(dash_mpd_parse_multiple_representations_and_adaptation_sets) {
 
   {
     const dash_representation_t *lo = &mpd.periods[0].adaptation_sets[0].representations[0];
-    ck_assert_uint_eq(lo->duration, 540000ull);
-    ck_assert_uint_eq(lo->start_number, 1ull);
+    ck_assert_uint_eq(lo->duration, 540000ULL);
+    ck_assert_uint_eq(lo->start_number, 1ULL);
   }
 }
 END_TEST
@@ -150,7 +150,7 @@ START_TEST(dash_mpd_parse_detects_low_latency_via_service_description) {
   ck_assert_uint_eq(mpd.latency_target_ms, 3500u);
   ck_assert_uint_eq(mpd.latency_min_ms, 2000u);
   ck_assert_uint_eq(mpd.latency_max_ms, 10000u);
-  ck_assert_uint_eq(mpd.periods[0].adaptation_sets[0].representations[0].availability_time_offset_ms, 4500ull);
+  ck_assert_uint_eq(mpd.periods[0].adaptation_sets[0].representations[0].availability_time_offset_ms, 4500ULL);
 }
 END_TEST
 
@@ -170,7 +170,7 @@ START_TEST(dash_mpd_parse_detects_low_latency_via_ato_alone) {
 
   ck_assert_int_eq(dash_mpd_parse(body, &base, &mpd), 1);
   ck_assert_int_eq(mpd.is_low_latency, 1);
-  ck_assert_uint_eq(mpd.periods[0].adaptation_sets[0].representations[0].availability_time_offset_ms, 1500ull);
+  ck_assert_uint_eq(mpd.periods[0].adaptation_sets[0].representations[0].availability_time_offset_ms, 1500ULL);
 }
 END_TEST
 
@@ -223,8 +223,8 @@ START_TEST(dash_mpd_parse_static_type) {
 END_TEST
 
 START_TEST(dash_effective_availability_ms_subtracts_offset) {
-  ck_assert_uint_eq(dash_effective_availability_ms(6000, 4500), 1500ull);
-  ck_assert_uint_eq(dash_effective_availability_ms(1000, 4500), 0ull);
+  ck_assert_uint_eq(dash_effective_availability_ms(6000, 4500), 1500ULL);
+  ck_assert_uint_eq(dash_effective_availability_ms(1000, 4500), 0ULL);
 }
 END_TEST
 

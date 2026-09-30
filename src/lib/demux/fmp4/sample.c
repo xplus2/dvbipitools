@@ -66,7 +66,6 @@ unsigned fmp4_parse_trun_samples(const unsigned char *trun_body, size_t trun_len
   int have_first_sample_flags = 0;
   const unsigned char *cursor;
   unsigned n = 0;
-  unsigned i;
 
   if (trun_len < 8) return 0;
   flags = fmp4_rb_u24(p + 1);
@@ -79,12 +78,13 @@ unsigned fmp4_parse_trun_samples(const unsigned char *trun_body, size_t trun_len
   cursor = moof->start + (have_data_offset ? data_offset : 0);
   if (cursor < mdat_body || (size_t)(cursor - mdat_body) > mdat_len) return 0;
 
-  for (i = 0; i < sample_count && n < max; i++) {
+  for (unsigned i = 0; i < sample_count && n < max; i++) {
     fmp4_dec_sample_t *s = &out[n];
     uint32_t duration = tfhd->have_default_sample_duration ? tfhd->default_sample_duration : 0;
     uint32_t size = tfhd->have_default_sample_size ? tfhd->default_sample_size : 0;
-    uint32_t sflags = (have_first_sample_flags && i == 0) ? first_sample_flags : (tfhd->have_default_sample_flags ? tfhd->default_sample_flags : 0);
+    uint32_t sflags = tfhd->have_default_sample_flags ? tfhd->default_sample_flags : 0;
     int32_t cts = 0;
+    if (have_first_sample_flags && i == 0) sflags = first_sample_flags;
     FMP4_OPT_U32(0x000100, break, duration, fmp4_rb_u32(p), (void)0);
     FMP4_OPT_U32(0x000200, break, size, fmp4_rb_u32(p), (void)0);
     FMP4_OPT_U32(0x000400, break, sflags, fmp4_rb_u32(p), (void)0);

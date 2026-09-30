@@ -81,7 +81,7 @@ static void check_pts(tsinspect_t *t, const unsigned char *pkt, unsigned afc, un
   t->x->pts[slot].last = t->now;
 }
 
-static void eit_section(tsinspect_t *t, const unsigned char *b, eit_slot_t *slots, int *n) {
+static void eit_section(const tsinspect_t *t, const unsigned char *b, eit_slot_t *slots, int *n) {
   unsigned sid = ((unsigned)b[3] << 8) | b[4];
   unsigned sec = b[6];
   eit_slot_t *e = NULL;
@@ -92,7 +92,8 @@ static void eit_section(tsinspect_t *t, const unsigned char *b, eit_slot_t *slot
     if (*n == PSI_MAX_PROGRAMS) return;
     e = &slots[(*n)++];
     e->sid = sid;
-    e->last[0] = e->last[1] = t->now;
+    e->last[0] = t->now;
+    e->last[1] = t->now;
   }
   e->last[sec] = t->now;
 }
@@ -140,7 +141,8 @@ static void count_detail(detail_t *d, unsigned svc, unsigned pid, int scrambled)
   s = d->pid_slot[pid];
   if (!s && d->n_pid < PID_DETAIL_MAX) {
     d->pid_list[d->n_pid] = pid;
-    s = d->pid_slot[pid] = (unsigned char)++d->n_pid;
+    d->pid_slot[pid] = (unsigned char)++d->n_pid;
+    s = d->pid_slot[pid];
   }
   if (s) {
     d->pid_pkts[s - 1]++;
@@ -149,7 +151,8 @@ static void count_detail(detail_t *d, unsigned svc, unsigned pid, int scrambled)
   s = d->svc_slot[svc];
   if (!s && d->n_svc < SVC_DETAIL_MAX) {
     d->svc_list[d->n_svc] = svc;
-    s = d->svc_slot[svc] = (unsigned char)++d->n_svc;
+    d->svc_slot[svc] = (unsigned char)++d->n_svc;
+    s = d->svc_slot[svc];
   }
   if (s) {
     d->svc_pkts[s - 1]++;
@@ -159,7 +162,9 @@ static void count_detail(detail_t *d, unsigned svc, unsigned pid, int scrambled)
 
 static inline void packet_body(tsinspect_t *t, const unsigned char *pkt, int full) {
   tsinspect_counters_t *c = &t->counters;
-  unsigned pid, afc, cc;
+  unsigned pid;
+  unsigned afc;
+  unsigned cc;
   int disc;
   if (pkt[0] != 0x47) return;
   c->packets++;
@@ -182,7 +187,7 @@ static inline void packet_body(tsinspect_t *t, const unsigned char *pkt, int ful
   if (disc) c->discontinuity_indicators++;
   if (afc) check_cc(t, pid, afc, cc, disc);
   t->cc[pid] |= CC_WIN;
-  if (full && t->psi && t->x->obs.t[PSI_OBS_PMT].last_seen != 0.0 && psi_classify(t->psi, pid) == PID_UNKNOWN) c->unreferenced_packets++;
+  if (full && t->psi && t->x && t->x->obs.t[PSI_OBS_PMT].last_seen != 0.0 && psi_classify(t->psi, pid) == PID_UNKNOWN) c->unreferenced_packets++;
   if (t->relay && t->pcr_pid == PID_NONE && afc >= 2 && pkt[4] >= 7 && (pkt[5] & 0x10)) t->pcr_pid = pid;
   if (pid == t->pcr_pid && afc >= 2) check_pcr(t, pkt, disc);
   if (!t->x) return;

@@ -25,10 +25,10 @@ static int psi_cb_inspect(void *v, const unsigned char *pkt) {
 }
 
 static void print_program_list(const psi_t *psi) {
-  int n, i;
+  int n;
   const psi_program_t *p = psi_pat_programs(psi, &n);
   log_line("PAT: %d program(s) found", n);
-  for (i = 0; i < n; i++) log_line("  program %u, PMT pid 0x%x", p[i].program_number, p[i].pmt_pid);
+  for (int i = 0; i < n; i++) log_line("  program %u, PMT pid 0x%x", p[i].program_number, p[i].pmt_pid);
 }
 
 void print_discovered(const psi_t *psi) {

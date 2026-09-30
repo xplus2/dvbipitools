@@ -176,7 +176,9 @@ int rtmp_session_feed(struct rtmp *r, const unsigned char *data, size_t bytes) {
       case RTMP_PARSE_INIT:
         p->buffer[0] = data[offset++];
         p->bytes = 1;
-        p->basic_bytes = ((p->buffer[0] & 0x3F) == 0) ? 2 : ((p->buffer[0] & 0x3F) == 1) ? 3 : 1;
+        p->basic_bytes = 1;
+        if ((p->buffer[0] & 0x3F) == 0) p->basic_bytes = 2;
+        else if ((p->buffer[0] & 0x3F) == 1) p->basic_bytes = 3;
         p->pkt = NULL;
         p->state = RTMP_PARSE_BASIC_HEADER;
         break;

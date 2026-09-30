@@ -21,7 +21,7 @@ typedef struct {
 } server_arg_t;
 
 static void *serve_once(void *arg) {
-  server_arg_t *a = arg;
+  const server_arg_t *a = arg;
   int cfd = accept(a->listen_fd, NULL, NULL);
   struct timeval tv = {2, 0};
   char buf[4096];

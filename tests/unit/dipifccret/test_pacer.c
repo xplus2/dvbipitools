@@ -118,7 +118,8 @@ START_TEST(pacer_exits_promptly_on_stop_with_no_active_bursts) {
   burst_table_t *t = burst_table_new(1);
   pthread_t th;
   pacer_ctx_t pc;
-  struct timespec t0, t1;
+  struct timespec t0;
+  struct timespec t1;
   double elapsed_s;
 
   pc.bursts = t;

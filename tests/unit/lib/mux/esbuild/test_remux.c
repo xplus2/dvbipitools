@@ -144,11 +144,17 @@ END_TEST
 START_TEST(esbuild_remux_pmt_version_changes_only_with_track_set) {
   fmp4_mux_t *vm = build_mux();
   fmp4_mux_t *am = build_audio_mux();
-  unsigned char *vinit, *ainit, *segbuf;
-  size_t vinit_len, ainit_len, seglen;
+  unsigned char *vinit;
+  unsigned char *ainit;
+  unsigned char *segbuf;
+  size_t vinit_len;
+  size_t ainit_len;
+  size_t seglen;
   esbuild_remux_t r;
   collected_t c;
-  int v1, v2, v3;
+  int v1;
+  int v2;
+  int v3;
 
   ck_assert_ptr_nonnull(vm);
   ck_assert_ptr_nonnull(am);

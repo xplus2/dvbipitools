@@ -261,8 +261,8 @@ void cas_group_scramble_packet(cas_group_t *g, unsigned out_pid, double now, uns
   int any_alive = 0;
   int target_parity;
   int cw_valid;
-  int alive[CAS_GROUP_MAX_VENDORS];
-  int required[CAS_GROUP_MAX_VENDORS];
+  int alive[CAS_GROUP_MAX_VENDORS] = {0};
+  int required[CAS_GROUP_MAX_VENDORS] = {0};
 
   for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     cas_group_vendor_t *v = &g->vendors[i];

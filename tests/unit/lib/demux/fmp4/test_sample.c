@@ -97,11 +97,15 @@ END_TEST
 
 START_TEST(fmp4_parse_trun_samples_second_segment_has_nonzero_base_dts) {
   fmp4_mux_t *m = build_mux();
-  unsigned char *initbuf, *segbuf;
-  size_t initlen, seglen;
+  unsigned char *initbuf;
+  unsigned char *segbuf;
+  size_t initlen;
+  size_t seglen;
   static const unsigned char frame[] = {0x00, 0x00, 0x00, 0x02, 0x65, 0x01};
   fmp4_sample_t s;
-  fmp4_box_t moof, traf, tfdt_box;
+  fmp4_box_t moof;
+  fmp4_box_t traf;
+  fmp4_box_t tfdt_box;
   uint64_t base_dts;
 
   ck_assert_ptr_nonnull(m);

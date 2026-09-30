@@ -14,8 +14,7 @@ static codec_t codec_for_fourcc(const char *fourcc, int *is_video) {
 {"mlpa", CODEC_TRUEHD, 0}, {"ac-4", CODEC_AC4, 0},
 {"mp4a", CODEC_AAC, 0}, /* esds oti disambiguates AAC-family vs MP2A below */
   };
-  size_t i;
-  for (i = 0; i < sizeof map / sizeof map[0]; i++)
+  for (size_t i = 0; i < sizeof map / sizeof map[0]; i++)
     if (!memcmp(fourcc, map[i].fourcc, 4)) {
       *is_video = map[i].is_video;
       return map[i].codec;
@@ -32,7 +31,9 @@ static void add_ps(fmp4_nal_t *arr, unsigned *n, const unsigned char *data, size
 }
 
 static void parse_avcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
-  unsigned n_sps, n_pps, i;
+  unsigned n_sps;
+  unsigned n_pps;
+  unsigned i;
   if (end - p < 6) return;
   p += 5; /* configurationVersion, profile, compat, level, lengthSizeMinusOne-byte */
   n_sps = *p++ & 0x1F;
@@ -55,19 +56,18 @@ static void parse_avcc(const unsigned char *p, const unsigned char *end, fmp4_st
 }
 
 static void parse_hvcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
-  unsigned num_arrays, a;
+  unsigned num_arrays;
   if (end - p < 23) return;
   p += 22; /* configurationVersion(1)+ptl(12)+min_spatial_seg(2)+parallelism(1)+chroma(1)+
               bitDepthLuma(1)+bitDepthChroma(1)+avgFrameRate(2)+lengthSize/etc(1) */
   num_arrays = *p++;
-  for (a = 0; a < num_arrays && end - p >= 3; a++) {
+  for (unsigned a = 0; a < num_arrays && end - p >= 3; a++) {
     unsigned nal_type = p[0] & 0x3F;
     unsigned num_nalus;
-    unsigned i;
     p += 1;
     num_nalus = fmp4_rb_u16(p);
     p += 2;
-    for (i = 0; i < num_nalus && end - p >= 2; i++) {
+    for (unsigned i = 0; i < num_nalus && end - p >= 2; i++) {
       size_t len = fmp4_rb_u16(p);
       p += 2;
       if ((size_t)(end - p) < len) return;
@@ -111,7 +111,8 @@ static void parse_esds(const unsigned char *p, const unsigned char *end, fmp4_st
   unsigned tag;
   const unsigned char *body;
   size_t size;
-  const unsigned char *es_end, *q;
+  const unsigned char *es_end;
+  const unsigned char *q;
   if (end - p < 4) return;
   p += 4;
   parse_esds_desc(&p, end, &tag, &body, &size);
@@ -122,7 +123,8 @@ static void parse_esds(const unsigned char *p, const unsigned char *end, fmp4_st
     unsigned dtag;
     const unsigned char *dbody;
     size_t dsize;
-    const unsigned char *dc_end, *r;
+    const unsigned char *dc_end;
+    const unsigned char *r;
     parse_esds_desc(&q, es_end, &dtag, &dbody, &dsize);
     if (!dtag) break;
     if (dtag != 0x04 || dsize < 1) continue;
@@ -182,18 +184,17 @@ static void parse_dac4(const unsigned char *p, const unsigned char *end, fmp4_st
 }
 
 static void parse_vvcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
-  unsigned num_arrays, a;
+  unsigned num_arrays;
   if (end - p < 2) return;
   num_arrays = p[1];
   p += 2; /* byte0: ptl_present_flag+reserved. byte1: numOfArrays */
-  for (a = 0; a < num_arrays && end - p >= 5; a++) {
+  for (unsigned a = 0; a < num_arrays && end - p >= 5; a++) {
     unsigned nal_type = p[0] & 0x1F;
     unsigned num_nalus;
-    unsigned i;
     p += 1; /* type_byte */
     num_nalus = fmp4_rb_u16(p);
     p += 2;
-    for (i = 0; i < num_nalus && end - p >= 2; i++) {
+    for (unsigned i = 0; i < num_nalus && end - p >= 2; i++) {
       size_t len = fmp4_rb_u16(p);
       p += 2;
       if ((size_t)(end - p) < len) return;
@@ -206,7 +207,7 @@ static void parse_vvcc(const unsigned char *p, const unsigned char *end, fmp4_st
 }
 
 static void parse_video_config(const fmp4_box_t *cfg, fmp4_stsd_entry_t *out) {
-  const unsigned char *p = (const unsigned char *)cfg->body;
+  const unsigned char *p = cfg->body;
   const unsigned char *end = p + cfg->body_len;
   if (!memcmp(cfg->fourcc, "avcC", 4)) parse_avcc(p, end, out);
   else if (!memcmp(cfg->fourcc, "hvcC", 4)) parse_hvcc(p, end, out);

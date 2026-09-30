@@ -101,7 +101,7 @@ static void gap_shift(ret_client_t *r) {
 
 void ret_client_flush_ready(ret_client_t *r, double now) {
   while (r->gap_pending) {
-    ret_hold_t *h = hold_slot(r, 0);
+    const ret_hold_t *h = hold_slot(r, 0);
     if (h->used) {
       outq_push(r, h->data, h->len);
       gap_shift(r);
@@ -119,7 +119,7 @@ void ret_client_flush_ready(ret_client_t *r, double now) {
 /* forces the gap closed now, ignoring the deadline; used on ssrc change or a disjoint new gap */
 static void abandon_gap(ret_client_t *r) {
   while (r->gap_pending) {
-    ret_hold_t *h = hold_slot(r, 0);
+    const ret_hold_t *h = hold_slot(r, 0);
     if (h->used)
       outq_push(r, h->data, h->len);
     else

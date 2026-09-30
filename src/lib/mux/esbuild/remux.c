@@ -100,8 +100,7 @@ int esbuild_remux_init(esbuild_remux_t *r, const unsigned char *init_data, size_
 }
 
 static esbuild_remux_track_t *find_track(esbuild_remux_t *r, unsigned stream_idx, unsigned fmp4_track_id) {
-  unsigned i;
-  for (i = 0; i < r->n_tracks; i++)
+  for (unsigned i = 0; i < r->n_tracks; i++)
     if (r->tracks[i].stream_idx == stream_idx && r->tracks[i].fmp4_track_id == fmp4_track_id) return &r->tracks[i];
   return NULL;
 }
@@ -111,13 +110,12 @@ static void emit_pat_pmt(esbuild_remux_t *r, ts_packet_cb cb, void *cb_ctx) {
   unsigned char ptr = 0x00;
   size_t n;
   esbuild_es_t es_list[ESBUILD_MAX_ES];
-  unsigned i;
 
   n = esbuild_build_pat(1, 0, 1, sec, sizeof sec);
   if (n) ts_packet_emit(0x0000, &r->pat_cc, &ptr, sec, n, 0, 0, cb, cb_ctx);
 
   ptr = 0x00;
-  for (i = 0; i < r->n_tracks; i++) es_list[i] = r->tracks[i].es;
+  for (unsigned i = 0; i < r->n_tracks; i++) es_list[i] = r->tracks[i].es;
   n = esbuild_build_pmt(r->pmt_version, 1, es_list, r->n_tracks, sec, sizeof sec);
   if (n) ts_packet_emit(ESBUILD_PMT_PID, &r->pmt_cc, &ptr, sec, n, 0, 0, cb, cb_ctx);
 }
@@ -147,7 +145,6 @@ void esbuild_remux_feed(esbuild_remux_t *r, unsigned stream_idx, const unsigned 
     fmp4_dec_sample_t samples[FMP4_MAX_SAMPLES];
     unsigned n_samples;
     uint64_t dts;
-    unsigned i;
 
     if (!fmp4_box_read(p, end, &traf)) break;
     if (memcmp(traf.fourcc, "traf", 4)) {
@@ -172,7 +169,7 @@ void esbuild_remux_feed(esbuild_remux_t *r, unsigned stream_idx, const unsigned 
       n_samples = fmp4_parse_trun_samples(trun_box.body, trun_box.body_len, &tfhd, &moof, mdat.body, mdat.body_len, samples, FMP4_MAX_SAMPLES);
 
     dts = base_dts;
-    for (i = 0; i < n_samples; i++) {
+    for (unsigned i = 0; i < n_samples; i++) {
       size_t eslen = esbuild_convert_sample(&rt->track, &samples[i], r->esbuf, sizeof r->esbuf);
       if (eslen) {
         uint64_t dts_90k = dts * 90000ULL / rt->timescale;

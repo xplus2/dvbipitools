@@ -141,7 +141,9 @@ h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *
     return NULL;
   }
   ngtcp2_conn_set_tls_native_handle(c->qconn, c->ossl_ctx);
-  c->h3_ctrl = c->h3_qenc = c->h3_qdec = -1;
+  c->h3_ctrl = -1;
+  c->h3_qenc = -1;
+  c->h3_qdec = -1;
   c->last_rx = h3_ts();
   c->active_idx = t_h3_active_cnt;
   t_h3_active[t_h3_active_cnt++] = c;

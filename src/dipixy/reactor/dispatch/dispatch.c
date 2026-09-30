@@ -82,8 +82,7 @@ static int dispatch_special_path(conn_t *c, const char *path, int is_head, const
     static const struct { const char *path; void (*fn)(conn_t *, int, int); } dlna_paths[] = {
       {"/dlna/desc.xml", serve_dlna_desc}, {"/dlna/cd_scpd.xml", serve_dlna_cd_scpd}, {"/dlna/cm_scpd.xml", serve_dlna_cm_scpd},
     };
-    size_t i;
-    for (i = 0; i < sizeof dlna_paths / sizeof dlna_paths[0]; i++)
+    for (size_t i = 0; i < sizeof dlna_paths / sizeof dlna_paths[0]; i++)
       if (!strcmp(path, dlna_paths[i].path)) {
         dlna_paths[i].fn(c, is_head, keep_alive);
         return 1;
@@ -316,7 +315,7 @@ static route_result_t dispatch_route_mp4(conn_t *c, const route_t *rt, const pid
 static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t method_len, const char *path_in, size_t path_len, int minor_version, const struct phr_header *headers, size_t num_headers, size_t header_bytes) {
   char *path;
   char *qmark;
-  char *query;
+  const char *query;
   char inm_buf[80];
   char origin_buf[128];
   const char *if_none_match;

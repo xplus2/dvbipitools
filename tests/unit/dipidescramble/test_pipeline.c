@@ -241,7 +241,8 @@ START_TEST(biss1e_ecm_on_null_dev_does_not_crash) {
 END_TEST
 
 START_TEST(biss1e_emm_on_null_dev_does_not_crash) {
-  unsigned char pkt[188], sec[64];
+  unsigned char pkt[188];
+  unsigned char sec[64];
   size_t slen;
   setup_biss1e();
   slen = build_pat(sec, 1, PMT_PID);

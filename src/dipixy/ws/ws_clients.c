@@ -31,7 +31,11 @@ static uint32_t fnv1a_mix(uint32_t h, const void *data, size_t len) {
 static const char *nz(const char *s) { return s ? s : ""; }
 
 static uint32_t client_hash(const client_info_t *info, const char *filt) {
-  const char *ip = nz(info->ip), *src_proto = nz(info->src_proto), *src_addr = nz(info->src_addr), *src_name = nz(info->src_name), *item_name = nz(info->item_name);
+  const char *ip = nz(info->ip);
+  const char *src_proto = nz(info->src_proto);
+  const char *src_addr = nz(info->src_addr);
+  const char *src_name = nz(info->src_name);
+  const char *item_name = nz(info->item_name);
   uint32_t h = 2166136261u;
   h = fnv1a_mix(h, ip, strlen(ip));
   h = fnv1a_mix(h, &info->fmt, sizeof info->fmt);

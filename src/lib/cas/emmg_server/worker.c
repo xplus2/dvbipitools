@@ -199,7 +199,8 @@ void *accept_main(void *arg) {
 
   while (!atomic_load_explicit(&s->stop, memory_order_relaxed) && !signal_stop_requested()) {
     struct pollfd pfds[2];
-    int pret, npfd;
+    int pret;
+    int npfd;
     int fd;
     int slot;
     worker_arg_t *wa;

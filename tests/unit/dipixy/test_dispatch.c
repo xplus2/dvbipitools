@@ -10,7 +10,8 @@
 #include "dipixy/dlna/dlna.h"
 #include "dipixy/reactor/internal.h"
 
-void dipixy_metrics_note_http_error(void) {}
+static unsigned g_http_errors;
+void dipixy_metrics_note_http_error(void) { g_http_errors++; }
 const char *altsvc_h1_line(int is_tls) { (void)is_tls; return ""; }
 int conn_queue(conn_t *c, const void *data, size_t len) { (void)c; (void)data; (void)len; return 0; }
 void set_persistence(conn_t *c, int keep_alive) { (void)c; (void)keep_alive; }

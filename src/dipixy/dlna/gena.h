@@ -10,8 +10,6 @@ void gena_subscribe_new(char *out_sid);
 
 void gena_renew(const char *sid_hdr, char *out_sid, size_t out_sidsz);
 
-void gena_unsubscribe(void);
-
 void gena_notify_system_update(void);
 
 unsigned gena_system_update_id(void);

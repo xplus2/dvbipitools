@@ -471,7 +471,6 @@ int tssrc_fd(const tssrc_t *s) {
 }
 
 void tssrc_close(tssrc_t *s) {
-  unsigned i;
   if (!s) return;
   if (s->fec_dec) fec2022_dec_free(s->fec_dec);
   if (s->fec_m) mcast_close(s->fec_m);
@@ -480,7 +479,7 @@ void tssrc_close(tssrc_t *s) {
   if (s->rist) ristin_close(s->rist);
   if (s->srt) srtsrc_close(s->srt);
   if (s->kind == TSSRC_FILE) close(s->fd);
-  for (i = 0; i < s->n_media; i++) {
+  for (unsigned i = 0; i < s->n_media; i++) {
     if (s->hls[i]) hls_live_free(s->hls[i]);
     if (s->dash[i]) dash_live_free(s->dash[i]);
   }
@@ -533,9 +532,8 @@ static int http_body_read_step(http_t *h, unsigned char *buf, size_t cap, size_t
 }
 
 static int dash_find_adaptation_set(const dash_period_t *p, const char *mime_prefix) {
-  unsigned i;
   size_t n = strlen(mime_prefix);
-  for (i = 0; i < p->n_adaptation_sets; i++)
+  for (unsigned i = 0; i < p->n_adaptation_sets; i++)
     if (!strncmp(p->adaptation_sets[i].mime_type, mime_prefix, n)) return (int)i;
   return -1;
 }
@@ -709,9 +707,12 @@ static http_open_step_t step_sniff_manifest(tssrc_open_t *o, net_err_reason_t *r
 
   if (hls_body_is_master((char *)o->buf)) {
     hls_master_t hm;
-    int best;
+    int best = -1;
+    int parsed;
     const hls_audio_rendition_t *ar;
-    if (!hls_master_parse((char *)o->buf, &base, &hm) || (best = hls_master_pick_highest(&hm)) < 0) {
+    parsed = hls_master_parse((char *)o->buf, &base, &hm);
+    if (parsed) best = hls_master_pick_highest(&hm);
+    if (!parsed || best < 0) {
       http_close(o->h);
       o->h = NULL;
       if (reason_out) *reason_out = NET_ERR_FORMAT;

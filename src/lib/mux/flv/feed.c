@@ -74,14 +74,8 @@ static void handle_video(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, co
   strip.rbcap = &t->lcevc_rbcap;
   strip.esc = &t->lcevc_esc;
   strip.esccap = &t->lcevc_esccap;
-  switch (t->es.codec) {
-    case CODEC_AV1:
-      esc_split_obus(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, &t->av1_rb, &t->av1_rbcap);
-      break;
-    default:
-      esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, f->opts->strip_lcevc ? &strip : NULL);
-      break;
-  }
+  if (t->es.codec == CODEC_AV1) esc_split_obus(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, &t->av1_rb, &t->av1_rbcap);
+  else esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, f->opts->strip_lcevc ? &strip : NULL);
   if (key) t->got_key = 1; /* try_parse's flv_all_ready() reads got_key */
   if (!t->hdr_parsed) {
     if (t->es.codec == CODEC_H264 && t->es.spslen && t->es.ppslen)

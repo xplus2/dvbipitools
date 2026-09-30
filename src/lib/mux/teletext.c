@@ -233,9 +233,8 @@ static int nat_from_lang(const char *lang) {
     {"swe", G0_SWE}, {"fin", G0_SWE}, {"hun", G0_SWE}, {"por", G0_ESP}, {"spa", G0_ESP},
     {"ces", G0_CZE}, {"cze", G0_CZE}, {"slk", G0_CZE}, {"slo", G0_CZE},
   };
-  size_t i;
   if (!lang || !*lang) return G0_ENG;
-  for (i = 0; i < sizeof map / sizeof map[0]; i++) if (!strncmp(lang, map[i].code, 3)) return map[i].nat;
+  for (size_t i = 0; i < sizeof map / sizeof map[0]; i++) if (!strncmp(lang, map[i].code, 3)) return map[i].nat;
   return G0_ENG;
 }
 

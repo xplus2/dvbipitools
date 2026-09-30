@@ -12,9 +12,8 @@ static int is_video_codec(codec_t c) {
 }
 
 unsigned esbuild_assign_pids(const codec_t *codecs, unsigned n, esbuild_es_t *out) {
-  unsigned i;
   if (n > ESBUILD_MAX_ES) n = ESBUILD_MAX_ES;
-  for (i = 0; i < n; i++) {
+  for (unsigned i = 0; i < n; i++) {
     out[i].codec = codecs[i];
     out[i].pid = ESBUILD_FIRST_ES_PID + i;
   }

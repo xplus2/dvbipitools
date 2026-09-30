@@ -15,15 +15,21 @@ static size_t resync_skip(const unsigned char *d, size_t len) {
 
 void tspack_sync_good(tspack_sync_t *s) {
   s->bad_run = 0;
-  if (s->good_run < 5 && ++s->good_run == 5) s->in_sync = 1;
+  if (s->good_run < 5) {
+    s->good_run++;
+    if (s->good_run == 5) s->in_sync = 1;
+  }
 }
 
 void tspack_sync_bad(tspack_sync_t *s) {
   s->byte_errors++;
   s->good_run = 0;
-  if (s->bad_run < 2 && ++s->bad_run == 2 && s->in_sync) {
-    s->in_sync = 0;
-    s->losses++;
+  if (s->bad_run < 2) {
+    s->bad_run++;
+    if (s->bad_run == 2 && s->in_sync) {
+      s->in_sync = 0;
+      s->losses++;
+    }
   }
 }
 

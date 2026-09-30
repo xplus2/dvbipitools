@@ -344,9 +344,8 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
   r->cfg = *cfg;
   r->safety_mult = cfg->safety_mult ? cfg->safety_mult : SRTOUT_SAFETY_MULT_DEFAULT;
   r->queue_metrics = cfg->queue_metrics;
-  r->note_enqueue = cfg->queue_metrics == SRT_QUEUE_METRICS_FULL ? note_enqueue_hwm : note_enqueue_off;
-  if (r->safety_mult > SRTOUT_SAFETY_MULT_MAX)
-    r->safety_mult = SRTOUT_SAFETY_MULT_MAX;
+  r->note_enqueue = cfg->queue_metrics == SRT_QUEUE_METRICS_FULL ? &note_enqueue_hwm : &note_enqueue_off;
+  if (r->safety_mult > SRTOUT_SAFETY_MULT_MAX) r->safety_mult = SRTOUT_SAFETY_MULT_MAX;
   sbuf_init(&pl, r->peer_label, sizeof r->peer_label);
   sbuf_add(&pl, cfg->peers[0].host);
   sbuf_add(&pl, ":");

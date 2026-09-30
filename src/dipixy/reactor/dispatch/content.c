@@ -139,7 +139,6 @@ void serve_dlna_subscribe(conn_t *c, const struct phr_header *headers, size_t nu
 void serve_dlna_unsubscribe(conn_t *c, int keep_alive) {
   char hdr[160];
   sbuf_t b;
-  gena_unsubscribe();
   sbuf_init(&b, hdr, sizeof hdr);
   sbuf_add(&b, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");

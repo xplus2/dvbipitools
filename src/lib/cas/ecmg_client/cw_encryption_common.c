@@ -84,7 +84,6 @@ int cwenc_config_init(cwenc_config_t *cfg, const char *algorithm, const char *ae
     static const struct { const char *name; cwenc_aes_mode_t mode; } mode_map[] = {
       {"stream", CWENC_AES_MODE_STREAM}, {"ecb", CWENC_AES_MODE_ECB},
     };
-    size_t i;
     for (i = 0; i < sizeof mode_map / sizeof mode_map[0]; i++) if (!strcmp(aes_mode, mode_map[i].name)) break;
     if (i == sizeof mode_map / sizeof mode_map[0]) {
       log_line("cw_encryption: invalid aes_mode '%s' (stream|ecb)", aes_mode);

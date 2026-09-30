@@ -32,8 +32,7 @@ int log_color_from_string(const char *s, log_color_t *out) {
   static const struct { const char *name; log_color_t val; } map[] = {
     {"auto", LOG_COLOR_AUTO}, {"always", LOG_COLOR_ALWAYS}, {"never", LOG_COLOR_NEVER},
   };
-  size_t i;
-  for (i = 0; i < sizeof map / sizeof map[0]; i++)
+  for (size_t i = 0; i < sizeof map / sizeof map[0]; i++)
     if (!strcmp(s, map[i].name)) {
       *out = map[i].val;
       return 0;

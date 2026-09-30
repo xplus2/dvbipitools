@@ -73,7 +73,7 @@ int capture_active_count(void);
 uint64_t capture_bytes_total(void);
 
 /* B written. 0: igmp ok, but nothing arrives */
-uint64_t capture_ctx_bytes(capture_ctx_t *ctx);
+uint64_t capture_ctx_bytes(const capture_ctx_t *ctx);
 
 /* librist: one ctx per process, ever. NULL uri = off. 0/-1 ok/failed, logged */
 int capture_rist_init(const char *rist_uri);

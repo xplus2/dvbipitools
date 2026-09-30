@@ -10,7 +10,8 @@
 
 static void build_and_find_entry(const trak_meta_t *t, unsigned char *buf, size_t bufcap, fmp4_box_t *entry_out) {
   mp4buf_t stsd;
-  fmp4_box_t stsd_box, e;
+  fmp4_box_t stsd_box;
+  fmp4_box_t e;
   const char *entry_fourcc;
   memset(&stsd, 0, sizeof stsd);
   trak_build_stsd(&stsd, t);

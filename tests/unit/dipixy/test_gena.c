@@ -28,11 +28,6 @@ START_TEST(renew_without_sid_returns_a_fresh_one) {
 }
 END_TEST
 
-START_TEST(unsubscribe_is_a_noop) {
-  gena_unsubscribe();
-}
-END_TEST
-
 START_TEST(system_update_id_stays_fixed) {
   ck_assert_uint_eq(gena_system_update_id(), 1);
   gena_notify_system_update();
@@ -46,7 +41,6 @@ static Suite *gena_suite(void) {
   tcase_add_test(tc, subscribe_new_returns_a_sid);
   tcase_add_test(tc, renew_echoes_given_sid);
   tcase_add_test(tc, renew_without_sid_returns_a_fresh_one);
-  tcase_add_test(tc, unsubscribe_is_a_noop);
   tcase_add_test(tc, system_update_id_stays_fixed);
   suite_add_tcase(s, tc);
   return s;

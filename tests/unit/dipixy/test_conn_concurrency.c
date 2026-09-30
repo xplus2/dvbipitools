@@ -68,7 +68,7 @@ static void *reader_thread(void *arg) {
   const reader_arg_t *ra = arg;
   t_reactor_tid = ra->tid;
   while (!atomic_load_explicit(&g_stop, memory_order_relaxed)) {
-    conn_t *c = conn_for_fd(TEST_FD);
+    const conn_t *c = conn_for_fd(TEST_FD);
     if (c) {
       size_t len = c->out.len;
       if (len > MARKER_LEN || !uniform(c->out.buf, len)) atomic_store_explicit(&g_bad, 1, memory_order_relaxed);

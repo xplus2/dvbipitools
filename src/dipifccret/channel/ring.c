@@ -13,7 +13,7 @@ void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, unsigned cha
   size_t nwords = (payload_len + 7) / 8;
   uint64_t words[RET_PAYLOAD_WORDS];
 
-  memset(words, 0, nwords * sizeof *words);
+  memset(words, 0, nwords * sizeof words[0]);
   memcpy(words, payload, payload_len);
 
   slot = &((ret_ring_entry_t *)c->ring)[seq % c->ring_size];

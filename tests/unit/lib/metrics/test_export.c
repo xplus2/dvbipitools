@@ -193,7 +193,8 @@ START_TEST(large_snapshot_is_sent_as_ordered_parts) {
   char label[METRICS_LABEL_MAX + 1];
   unsigned char buf[METRICS_MAX_SNAPSHOT_BYTES];
   uint64_t value;
-  unsigned parts = 0, entries = 0;
+  unsigned parts = 0;
+  unsigned entries = 0;
   int rfd;
 
   rfd = socket(AF_UNIX, SOCK_DGRAM | SOCK_NONBLOCK, 0);
@@ -240,7 +241,7 @@ static void extra_put(metrics_writer_t *w, void *ctx) {
   metrics_writer_put(w, (metrics_id_t)(uintptr_t)ctx, NULL, 1);
 }
 
-static unsigned count_id(metrics_writer_t *w, metrics_id_t want) {
+static unsigned count_id(const metrics_writer_t *w, metrics_id_t want) {
   metrics_reader_t r;
   metrics_hdr_t hdr;
   metrics_id_t id;

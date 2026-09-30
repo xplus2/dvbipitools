@@ -48,9 +48,6 @@ void gena_renew(const char *sid_hdr, char *out_sid, size_t out_sidsz) {
   else         make_sid(out_sid);
 }
 
-void gena_unsubscribe(void) {
-}
-
 void gena_notify_system_update(void) {
 }
 

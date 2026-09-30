@@ -169,7 +169,7 @@ typedef struct {
   int ws_handle;
 } hls_waiter_t;
 
-typedef int (*hls_waiter_ready_fn)(hls_waiter_t *w);
+typedef int (*hls_waiter_ready_fn)(const hls_waiter_t *w);
 typedef void (*hls_waiter_finish_fn)(hls_waiter_t *w);
 
 typedef struct {
@@ -204,11 +204,11 @@ typedef struct {
   int ws_handle;
 } hls_cold_park_req_t;
 
-static inline int llhls_ready_part(hls_waiter_t *w) {
+static inline int llhls_ready_part(const hls_waiter_t *w) {
   return hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, SEG_CONTAINER_TS, w->want_seg, w->want_part);
 }
 
-static inline int hls_cold_ready(hls_waiter_t *w) {
+static inline int hls_cold_ready(const hls_waiter_t *w) {
   return w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container) : hls_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container);
 }
 

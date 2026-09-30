@@ -7,7 +7,7 @@ BIN=$1
 
 command -v curl >/dev/null 2>&1 || fail "required tool 'curl' not found on PATH"
 
-HTTPPORT=19204
+HTTPPORT=19208
 MCAST=239.255.9.30
 MPORT=18200
 

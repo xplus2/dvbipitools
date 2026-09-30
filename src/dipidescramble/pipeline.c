@@ -115,7 +115,7 @@ static void handle_biss_ca_ecm_section(loop_ctx_t *lc) {
 }
 
 /* full or partial write-retry, EINTR aside. 0 ok, -1 error */
-static int flush_outfd(loop_ctx_t *lc, int i) {
+static int flush_outfd(const loop_ctx_t *lc, int i) {
   size_t off = 0;
   while (off < lc->outbuf_len) {
     ssize_t n = write(lc->outfd[i], lc->outbuf + off, lc->outbuf_len - off);

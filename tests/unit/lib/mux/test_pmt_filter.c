@@ -105,11 +105,13 @@ START_TEST(pmt_filter_rewrite_drops_multiple_es_out_of_order_drop_list) {
 END_TEST
 
 START_TEST(pmt_filter_rewrite_pid_not_present_leaves_es_loop_unchanged) {
-  unsigned char in[64], out[64];
+  unsigned char in[64];
+  unsigned char out[64];
   pmt_es_spec_t es[] = {{0x0100, 0x1B}, {0x0101, 0x0F}};
   unsigned drop[] = {0x01FF};
   unsigned pids[4];
-  size_t inlen, outlen;
+  size_t inlen;
+  size_t outlen;
 
   inlen = build_pmt(in, 0x0100, NULL, 0, es, 2);
   outlen = pmt_filter_rewrite(in, inlen, drop, 1, out, sizeof out);

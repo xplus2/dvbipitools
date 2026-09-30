@@ -100,7 +100,8 @@ void mapping_free(mapping_t *m) {
 }
 
 static int mapping_idx_find(const mapping_t *m, const char *id) {
-  int lo = 0, hi = m->count - 1;
+  int lo = 0;
+  int hi = m->count - 1;
   while (lo <= hi) {
     int mid = (lo + hi) / 2;
     int c = strcmp(id, m->idx[mid].id);

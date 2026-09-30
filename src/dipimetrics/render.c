@@ -331,7 +331,8 @@ static void fill_entry_refs(const store_t *st, const int *def_idx, entry_ref_t *
 /* one pass over every stored entry, bucketed by def instead of one scan per def */
 static void render_grouped(dstrbuf_t *sb, const store_t *st) {
   int def_idx[DEF_ID_MAX]; /* metrics_id_t -> DEFS[] index, -1 if unused */
-  size_t count[N_DEFS], start[N_DEFS];
+  size_t count[N_DEFS];
+  size_t start[N_DEFS];
   entry_ref_t *refs = NULL;
   size_t total = 0;
   for (unsigned i = 0; i < DEF_ID_MAX; i++) def_idx[i] = -1;
