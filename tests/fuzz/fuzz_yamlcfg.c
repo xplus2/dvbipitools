@@ -9,6 +9,7 @@
 #include "lib/config/yamlcfg.h"
 
 typedef struct {
+  void *pool;
   const char *str;
   const char *list[4];
   unsigned nlist;
@@ -17,7 +18,7 @@ typedef struct {
 } fcfg_t;
 
 static int ap_str(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((fcfg_t *)c)->str, v, e, n);
+  return yamlcfg_set_str(&((fcfg_t *)c)->pool, &((fcfg_t *)c)->str, v, e, n);
 }
 
 static int ap_bool(void *c, const char *v, char *e, size_t n) {
@@ -31,7 +32,7 @@ static int ap_num(void *c, const char *v, char *e, size_t n) {
 static int ap_list(void *c, const char *v, char *e, size_t n) {
   fcfg_t *t = c;
   if (t->nlist >= sizeof t->list / sizeof t->list[0]) t->nlist = 0;
-  return yamlcfg_set_str(&t->list[t->nlist++], v, e, n);
+  return yamlcfg_set_str(&t->pool, &t->list[t->nlist++], v, e, n);
 }
 
 static int item_cb(void *c, const char *list, int begin, char *e, size_t n) {
@@ -58,6 +59,7 @@ static void poke_setters(const char *s) {
   char err[64];
   char addr[32];
   char lang[4];
+  void *pool = NULL;
   const char *str;
   int i;
   int fam;
@@ -71,7 +73,8 @@ static void poke_setters(const char *s) {
   yamlcfg_set_lang(lang, s, err, sizeof err);
   yamlcfg_set_addrport(&fam, addr, sizeof addr, &port, s, err, sizeof err);
   yamlcfg_set_color(&i, s, err, sizeof err);
-  if (*s) yamlcfg_set_str(&str, s, err, sizeof err);
+  if (*s) yamlcfg_set_str(&pool, &str, s, err, sizeof err);
+  yamlcfg_strpool_free(pool);
 }
 
 int main(int argc, char **argv) {
@@ -128,6 +131,7 @@ int main(int argc, char **argv) {
   memset(&cfg, 0, sizeof cfg);
   yamlcfg_load_items(&y, "fuzz", buf[0] & (YAMLCFG_CHECK | YAMLCFG_STRICT), path, NULL, KEYS, sizeof KEYS / sizeof KEYS[0], &cfg, item_cb);
   yamlcfg_report(&y);
+  yamlcfg_strpool_free(cfg.pool);
   unlink(path);
   poke_setters((const char *)buf + 1);
   free(buf);
