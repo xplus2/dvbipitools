@@ -17,6 +17,7 @@
 #include "lib/net/dvbstp.h"
 #include "lib/helper/sds_xml.h"
 #include "lib/tva/bcg_doc.h"
+#include "lib/helper/ioutil.h"
 
 static int write_file(const char *dir, const char *name, const unsigned char *data, size_t len) {
   char path[512];
@@ -66,18 +67,18 @@ static void gen_bim(const char *dir) {
 
   bcg_doc_init(&doc);
   c = bcg_add_channel(&doc);
-  snprintf(c->id, sizeof c->id, "channel1");
-  snprintf(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
+  bufcpy(c->id, sizeof c->id, "channel1");
+  bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
   c->onid = 2;
   c->tsid = 1;
   c->sid = 101;
   bcg_channel_add_name(c, "Channel One");
 
   pr = bcg_add_programme(&doc);
-  snprintf(pr->channel_id, sizeof pr->channel_id, "channel1");
-  snprintf(pr->start, sizeof pr->start, "2020-12-15T12:00:00Z");
-  snprintf(pr->stop, sizeof pr->stop, "2020-12-15T12:30:00Z");
-  snprintf(pr->title, sizeof pr->title, "News");
+  bufcpy(pr->channel_id, sizeof pr->channel_id, "channel1");
+  bufcpy(pr->start, sizeof pr->start, "2020-12-15T12:00:00Z");
+  bufcpy(pr->stop, sizeof pr->stop, "2020-12-15T12:30:00Z");
+  bufcpy(pr->title, sizeof pr->title, "News");
 
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
@@ -119,8 +120,8 @@ static void gen_sds(const char *dir) {
   size_t n;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.name, sizeof svc.name, "Channel One HD");
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.name, sizeof svc.name, "Channel One HD");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.family = 2; /* AF_INET */
   svc.port = 5000;
   svc.rtp = 1;

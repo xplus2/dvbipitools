@@ -18,6 +18,10 @@ static int handle_browse(const config_t *cfg, const channels_t *channels, const 
   char *didl = NULL;
   int metadata, status;
   const char *end = body + body_len;
+  char nr[16];
+  char tm[16];
+  char uid[16];
+  soap_field_t fields[4];
 
   xml_elem_text(body, end, "ObjectID", objid, sizeof objid);
   xml_elem_text(body, end, "BrowseFlag", flag, sizeof flag);
@@ -30,22 +34,14 @@ static int handle_browse(const config_t *cfg, const channels_t *channels, const 
   if (parse_object_id(objid, &oid) || build_didl(cfg, channels, &oid, metadata, starting_index, requested_count, &didl, &number_returned, &total_matches))
     return soap_fault(out, out_len, 701, "No such object");
 
-  {
-    char nr[16], tm[16], uid[16];
-    soap_field_t fields[4];
-    uint_to_str(nr, number_returned);
-    uint_to_str(tm, total_matches);
-    uint_to_str(uid, gena_system_update_id());
-    fields[0].name = "Result";
-    fields[0].value = didl;
-    fields[1].name = "NumberReturned";
-    fields[1].value = nr;
-    fields[2].name = "TotalMatches";
-    fields[2].value = tm;
-    fields[3].name = "UpdateID";
-    fields[3].value = uid;
-    status = soap_action_response(out, out_len, CD_URN, "BrowseResponse", fields, 4);
-  }
+  uint_to_str(nr, number_returned);
+  uint_to_str(tm, total_matches);
+  uint_to_str(uid, gena_system_update_id());
+  fields[0] = (soap_field_t){.name = "Result", .value = didl};
+  fields[1] = (soap_field_t){.name = "NumberReturned", .value = nr};
+  fields[2] = (soap_field_t){.name = "TotalMatches", .value = tm};
+  fields[3] = (soap_field_t){.name = "UpdateID", .value = uid};
+  status = soap_action_response(out, out_len, CD_URN, "BrowseResponse", fields, 4);
   return status;
 }
 

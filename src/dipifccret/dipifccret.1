@@ -11,23 +11,23 @@ dipifccret \- RTP retransmission (RET) and Fast Channel Change (FCC/RAMS) server
 .B dipifccret
 is an RTP retransmission (RET, DVB-IPI Annex F, RFC 4588) and server-based
 Fast Channel Change (FCC, DVB-IPI Annex I, built on RFC 6285 RAMS) edge
-server. It implements RAMS-based FCC only; Companion Stream FCC (Annex J)
-is out of scope for this tool.
+server. It implements RAMS-based FCC, not Companion Stream FCC (Annex J).
 .PP
 It passively watches a mirrored or SPAN-ported multicast segment through a
 raw AF_PACKET capture on the interface given with \fB\-I\fR, rather than
-joining channels via IGMP/MLD. A single capture thread feeds per-channel
-state for every multicast group inside the \fB\-g\fR range(s); channels are
-discovered dynamically as traffic appears, not configured one by one. The
+joining channels via IGMP/MLD.
+
+Channels are discovered dynamically as traffic appears. The
 kernel-side capture filter built from \fB\-g\fR always unwraps a single
-802.1Q VLAN tag before matching, so a tagged trunk mirror port needs no
-extra configuration; only a single VLAN tag is supported (no QinQ).
+802.1Q VLAN tag (no QinQ) before matching, so a tagged trunk mirror port needs no
+extra configuration.
 .PP
-For RET, the capture thread keeps a short sequence-keyed ring per channel.
+For RET, a short sequence-keyed ring is kept per channel.
 A client NACK on the \fB\-l\fR socket always gets a direct unicast repair
 reply, and, when the multicast RET session is enabled, is additionally
-repaired over that session (Annex F.5.2). The multicast RET session reuses
-the original channel's destination group and port by default (F.6.2.2);
+repaired over that session (Annex F.5.2).
+The multicast RET session reuses the original channel's destination group
+and port by default (F.6.2.2).
 \fB\-F\fR overrides the port, and \fB\-\-no\-mc\-ret\fR disables the session
 entirely without affecting the unicast reply path. \fB\-\-no\-rsi\fR turns
 off periodic RTCP RSI self-announcement of the \fB\-l\fR target for NACKs.
@@ -38,17 +38,17 @@ answered with a burst of the cached data at an accelerated rate
 (\fB\-X\fR times the channel's observed nominal bitrate, capped by the
 client's requested Max Receive Bitrate if lower), so the receiver can start
 decoding immediately instead of waiting for the next RAP in the live
-stream. Burst duration is bounded by \fB\-D\fR regardless of signaling, and
+stream.
+Burst duration is bounded by \fB\-D\fR regardless of signaling, and
 a burst is terminated early as congested once
 \fB\-\-congestion\-nack\-threshold\fR client NACKs arrive during it.
 .PP
 RET and FCC can each be disabled independently (\fB\-\-no\-ret\fR,
-\fB\-\-no\-fcc\fR), but not both at once. Both protocols share the single
-capture thread and the single \fB\-l\fR listen socket, served by \fB\-w\fR
-worker threads. Raw packet capture requires the \fBCAP_NET_RAW\fR
-capability; either grant it to the binary and run unprivileged, or start
-as root and use \fB\-u\fR to drop privileges right after the capture handle
-opens.
+\fB\-\-no\-fcc\fR). Both protocols share the same \fB\-l\fR listen socket,
+served by \fB\-w\fR event-driven worker threads. Raw packet capture requires
+the \fBCAP_NET_RAW\fR capability. Either grant it to the binary and run
+unprivileged (recommended), or start it with elevated privileges
+and use \fB\-u\fR to drop them  right after the capture handle opens.
 .SH OPTIONS
 .SS General options
 .TP
@@ -229,15 +229,6 @@ RET only, no FCC.
 .TP
 .B dipifccret \-g 239.0.0.0/8 \-l 10.0.0.1:6000 \-I eth0 \-\-no\-ret \-G 4000 \-X 2.0
 FCC only, tighter GOP cache and burst rate.
-.SH EXIT STATUS
-.B 0
-on success.
-A non-zero status is returned on argument errors or capture/socket
-failure. Raw AF_PACKET capture typically requires the
-.B CAP_NET_RAW
-capability or root privileges; see
-.B \-u
-above to drop privileges after the capture handle is opened.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipifccret.yaml

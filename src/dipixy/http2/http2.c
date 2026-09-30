@@ -76,9 +76,9 @@ static int cb_on_header(nghttp2_session *ng, const nghttp2_frame *frame, const u
   h2_stream_t *s = conn->hdr_stream;
   if (!s) return 0;
   httpng_parse_known_header((const char *)name, namelen, (const char *)value, valuelen,
-                            s->method, sizeof s->method, s->path, sizeof s->path,
+                            &(httpng_hdr_out_t){s->method, sizeof s->method, s->path, sizeof s->path,
                             s->inm, sizeof s->inm, s->origin, sizeof s->origin,
-                            s->authz, sizeof s->authz, s->protocol, sizeof s->protocol);
+                            s->authz, sizeof s->authz, s->protocol, sizeof s->protocol});
   return 0;
 }
 
@@ -199,16 +199,14 @@ static int h2ops_mp4push_dispatch(void *connv, void *reqv, int sub, int ws_handl
   return h2_mp4push_dispatch(connv, rq->c, rq->stream->id, sub, ws_handle);
 }
 
-static int h2ops_hls_cold_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, hls_cold_kind_t kind,
-                                   seg_container_t container, int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle) {
+static int h2ops_hls_cold_try_park(void *connv, void *reqv, const hls_cold_park_req_t *req) {
   const h2_req_ctx_t *rq = reqv;
-  return h2_hls_cold_try_park(connv, rq->stream->id, ctx, filter, pmt_pid, lcevc, filename, kind, container, want_ll, is_head, origin_hdr, timeout_ms, ws_handle);
+  return h2_hls_cold_try_park(connv, rq->stream->id, req);
 }
 
-static int h2ops_llhls_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head,
-                                const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle) {
+static int h2ops_llhls_try_park(void *connv, void *reqv, const llhls_park_req_t *req) {
   const h2_req_ctx_t *rq = reqv;
-  return h2_llhls_try_park(connv, rq->c, rq->stream->id, ctx, filter, pmt_pid, lcevc, filename, is_head, inm, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
+  return h2_llhls_try_park(connv, rq->c, rq->stream->id, req);
 }
 
 static const httpng_ops_t h2_httpng_ops = {

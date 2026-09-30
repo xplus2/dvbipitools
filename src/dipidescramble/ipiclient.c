@@ -34,6 +34,8 @@ static int split_userinfo(const char *uri, char *token_out, size_t token_out_sz,
   const char *scheme_end = strstr(uri, "://");
   const char *at;
   size_t scheme_len;
+  size_t tlen;
+  size_t rest_len;
 
   if (!scheme_end) return -1;
   scheme_len = (size_t)(scheme_end - uri) + 3;
@@ -43,16 +45,13 @@ static int split_userinfo(const char *uri, char *token_out, size_t token_out_sz,
     token_out[0] = '\0';
     return 0;
   }
-
-  {
-    size_t tlen = (size_t)(at - (scheme_end + 3));
-    size_t rest_len = scheme_len + strlen(at + 1);
-    if (tlen >= token_out_sz || rest_len >= uri_out_sz) return -1;
-    memcpy(token_out, scheme_end + 3, tlen);
-    token_out[tlen] = '\0';
-    memcpy(uri_out, uri, scheme_len);
-    bufcpy(uri_out + scheme_len, uri_out_sz - scheme_len, at + 1);
-  }
+  tlen = (size_t)(at - (scheme_end + 3));
+  rest_len = scheme_len + strlen(at + 1);
+  if (tlen >= token_out_sz || rest_len >= uri_out_sz) return -1;
+  memcpy(token_out, scheme_end + 3, tlen);
+  token_out[tlen] = '\0';
+  memcpy(uri_out, uri, scheme_len);
+  bufcpy(uri_out + scheme_len, uri_out_sz - scheme_len, at + 1);
   return 0;
 }
 

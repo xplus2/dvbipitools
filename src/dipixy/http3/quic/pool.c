@@ -29,25 +29,11 @@ int h3_tables_alloc(void) {
   t_h3_active = malloc(sizeof *t_h3_active * (size_t)g_h3_max_conns);
   t_h3_hash = calloc((size_t)g_h3_hash_cap, sizeof *t_h3_hash);
   if (!t_h3_pool || !t_h3_pool_free || !t_h3_active || !t_h3_hash) {
-    free(t_h3_pool);
-    free(t_h3_pool_free);
-    free(t_h3_active);
-    free(t_h3_hash);
-    t_h3_pool = NULL;
-    t_h3_pool_free = NULL;
-    t_h3_active = NULL;
-    t_h3_hash = NULL;
+    h3_tables_free();
     return 0;
   }
   if (h3_udp_init(g_h3_max_udp) != 0) {
-    free(t_h3_pool);
-    free(t_h3_pool_free);
-    free(t_h3_active);
-    free(t_h3_hash);
-    t_h3_pool = NULL;
-    t_h3_pool_free = NULL;
-    t_h3_active = NULL;
-    t_h3_hash = NULL;
+    h3_tables_free();
     return 0;
   }
   for (int i = 0; i < g_h3_max_conns; i++)

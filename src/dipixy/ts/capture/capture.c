@@ -199,7 +199,7 @@ capture_ctx_t *capture_open(int family, const char *group, unsigned port, const 
   c->pump_shard = next_pump_shard();
   c->ring = malloc(g_capture_ring_cap);
   if (!c->ring) {
-    free(c);
+    free_ctx_resources(c);
     return NULL;
   }
   c->backend = CAP_BACKEND_MCAST;
@@ -210,10 +210,7 @@ capture_ctx_t *capture_open(int family, const char *group, unsigned port, const 
   c->rtp = rtp;
   c->m = mcast_open(family, group, port, iface, 0); /* blocking join, unlocked */
   if (!c->m || mcast_set_nonblock(c->m)) {
-    if (c->m) mcast_close(c->m);
-    free(c->iface);
-    free(c->ring);
-    free(c);
+    free_ctx_resources(c);
     return NULL;
   }
   if (ret) c->ret = open_ret(ret, family, group, port, iface);
@@ -225,12 +222,7 @@ capture_ctx_t *capture_open(int family, const char *group, unsigned port, const 
   if (dup) {
     atomic_fetch_add_explicit(&dup->refcount, 1, memory_order_relaxed);
     pthread_mutex_unlock(&g_lock);
-    if (c->fcc) fcc_client_close(c->fcc);
-    if (c->ret) ret_client_close(c->ret);
-    mcast_close(c->m);
-    free(c->iface);
-    free(c->ring);
-    free(c);
+    free_ctx_resources(c);
     return dup;
   }
   c->next = g_open;
@@ -263,6 +255,10 @@ uint64_t capture_bytes_total(void) {
   for (capture_ctx_t *c = g_open; c; c = c->next) total += atomic_load_explicit(&c->write_total, memory_order_relaxed);
   pthread_mutex_unlock(&g_lock);
   return total;
+}
+
+uint64_t capture_ctx_bytes(capture_ctx_t *ctx) {
+  return atomic_load_explicit(&ctx->write_total, memory_order_acquire);
 }
 
 capture_ctx_t *capture_ref(capture_ctx_t *ctx) {

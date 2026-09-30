@@ -20,7 +20,7 @@ static ssize_t tspush_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *b
   (void)ng;
   (void)stream_id;
   (void)ud;
-  h2_tspush_stream_t *tcs = source->ptr;
+  h2_push_slot_t *tcs = source->ptr;
   ts_sub_t *sub = &g_ts_subs[tcs->sub_idx];
   size_t n = byte_ring_read(&sub->h2_ring, buf, length);
   if (!n) {
@@ -30,7 +30,7 @@ static ssize_t tspush_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *b
   return (ssize_t)n;
 }
 
-static void h2_submit_tspush_response(h2_conn_t *conn, int32_t stream_id, h2_tspush_stream_t *tcs) {
+static void h2_submit_tspush_response(h2_conn_t *conn, int32_t stream_id, h2_push_slot_t *tcs) {
   nghttp2_nv nva[3] = {
       {(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP2_NV_FLAG_NONE},
       {(uint8_t *)"content-type", (uint8_t *)"video/mp2t", 12, 10, NGHTTP2_NV_FLAG_NONE},
@@ -44,7 +44,7 @@ static void h2_submit_tspush_response(h2_conn_t *conn, int32_t stream_id, h2_tsp
 
 void h2_tspush_wake(int sub_idx) {
   conn_t *c;
-  const h2_tspush_stream_t *tcs;
+  const h2_push_slot_t *tcs;
   if (sub_idx < 0 || sub_idx >= g_ts_subs_n) return;
   c = g_ts_subs[sub_idx].h2c;
   tcs = g_ts_subs[sub_idx].h2_slot;
@@ -53,13 +53,9 @@ void h2_tspush_wake(int sub_idx) {
 
 /* registers a TS push stream. 1 = dispatched, 0 = slot table full (caller sends an error response) */
 int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush_sub) {
-  int ci = -1;
-  for (int i = 0; i < H2_TSPUSH_MAX; i++) if (!conn->tspush[i].sid) {
-    ci = i;
-    break;
-  }
+  int ci = h2_push_slot_find_free(conn->tspush, H2_TSPUSH_MAX);
   if (ci < 0) return 0;
-  h2_tspush_stream_t *tcs = &conn->tspush[ci];
+  h2_push_slot_t *tcs = &conn->tspush[ci];
   tcs->sub_idx = tspush_sub;
   tcs->sid = stream_id;
   h2_submit_tspush_response(conn, stream_id, tcs);
@@ -71,15 +67,8 @@ int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush
 }
 
 void h2_tspush_on_stream_close(h2_conn_t *conn, int32_t stream_id) {
-  for (int i = 0; i < H2_TSPUSH_MAX; i++) {
-    h2_tspush_stream_t *tcs = &conn->tspush[i];
-    if (tcs->sid != stream_id) continue;
-    int sub = tcs->sub_idx;
-    tcs->sid = 0;
-    tcs->sub_idx = -1;
-    ts_push_unsubscribe_by_idx(sub);
-    return;
-  }
+  int sub = h2_push_slot_clear_by_sid(conn->tspush, H2_TSPUSH_MAX, stream_id);
+  if (sub >= 0) ts_push_unsubscribe_by_idx(sub);
 }
 
 #endif /* HAVE_HTTP2 */

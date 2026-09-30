@@ -205,12 +205,14 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
 
   for (int i = 0; i < es_count; i++) {
     const out_es_t *e = &es[i];
+    size_t es_info_pos;
+    unsigned esinfo;
     if (e->is_ca) continue; /* ECM/EMM passthrough: carried as a pid, not a PMT stream entry */
     if (n + 5 > cap) return 0;
     out[n++] = (unsigned char)e->stream_type;
     psi_put16(out + n, 0xE000 | (e->out_pid & 0x1FFF));
     n += 2;
-    size_t es_info_pos = n;
+    es_info_pos = n;
     n += 2;
 
     if (e->src->cls == PID_TELETEXT) {
@@ -222,7 +224,7 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
     } else {
       n = put_opaque_descriptors(out, n, cap - 4, e->src, desc_truncated); /* -4: leave room for psi_finish_section's CRC */
     }
-    unsigned esinfo = (unsigned)(n - (es_info_pos + 2));
+    esinfo = (unsigned)(n - (es_info_pos + 2));
     out[es_info_pos] = (unsigned char)(0xF0 | ((esinfo >> 8) & 0x0F));
     out[es_info_pos + 1] = (unsigned char)esinfo;
   }

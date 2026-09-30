@@ -36,27 +36,14 @@ tssink_t *tssink_open(const tssink_cfg_t *cfg) {
     case TSSINK_UDP:
     case TSSINK_RTP:
       s->mc = mcast_open_send(cfg->family, cfg->group, cfg->port, cfg->iface, cfg->ttl);
-      if (!s->mc) {
-        free(s);
-        return NULL;
-      }
+      if (!s->mc) goto fail;
       if (cfg->kind == TSSINK_RTP) {
         s->rtph = rtpheader_new();
-        if (!s->rtph) {
-          mcast_close(s->mc);
-          free(s);
-          return NULL;
-        }
+        if (!s->rtph) goto fail;
         if (cfg->al_fec_l) {
           s->fec_mc = mcast_open_send(cfg->family, cfg->group, cfg->al_fec_port, cfg->iface, cfg->ttl);
           s->fec_enc = s->fec_mc ? fec2022_enc_new(cfg->al_fec_l, cfg->al_fec_d, AL_FEC_PT) : NULL;
-          if (!s->fec_mc || !s->fec_enc) {
-            if (s->fec_mc) mcast_close(s->fec_mc);
-            rtpheader_free(s->rtph);
-            mcast_close(s->mc);
-            free(s);
-            return NULL;
-          }
+          if (!s->fec_mc || !s->fec_enc) goto fail;
         }
       }
       break;
@@ -67,12 +54,18 @@ tssink_t *tssink_open(const tssink_cfg_t *cfg) {
       s->fd = open(cfg->file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
       if (s->fd < 0) {
         log_line("open %s: %s", cfg->file_path, strerror(errno));
-        free(s);
-        return NULL;
+        goto fail;
       }
       break;
   }
   return s;
+
+fail:
+  if (s->fec_mc) mcast_close(s->fec_mc);
+  if (s->rtph) rtpheader_free(s->rtph);
+  if (s->mc) mcast_close(s->mc);
+  free(s);
+  return NULL;
 }
 
 static int write_all(int fd, const unsigned char *p, size_t n) {
@@ -90,18 +83,23 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
 }
 
 static int write_net(tssink_t *s, const unsigned char *buf, size_t n) {
+  unsigned char hdr[12];
   unsigned char dgram[12 + TS_PER_DGRAM * 188];
   unsigned char repair[FEC2022_MAX_REPAIR];
   while (n) {
     size_t chunk = n < TS_PER_DGRAM * 188 ? n : TS_PER_DGRAM * 188;
+    size_t rlen;
     if (s->rtph) {
       uint32_t ts90k = (uint32_t)(mono_seconds() * 90000.0);
-      rtpheader_build(s->rtph, ts90k, dgram, 12);
-      memcpy(dgram + 12, buf, chunk);
-      if (mcast_send(s->mc, dgram, 12 + chunk) < 0) return -1;
       if (s->fec_enc) {
-        size_t rlen = fec2022_enc_feed(s->fec_enc, dgram, 12 + chunk, ts90k, repair, sizeof repair);
+        rtpheader_build(s->rtph, ts90k, dgram, 12);
+        memcpy(dgram + 12, buf, chunk);
+        if (mcast_send(s->mc, dgram, 12 + chunk) < 0) return -1;
+        rlen = fec2022_enc_feed(s->fec_enc, dgram, 12 + chunk, ts90k, repair, sizeof repair);
         if (rlen && mcast_send(s->fec_mc, repair, rlen) < 0) return -1;
+      } else {
+        rtpheader_build(s->rtph, ts90k, hdr, 12);
+        if (mcast_sendv(s->mc, hdr, 12, buf, chunk) < 0) return -1;
       }
     } else if (mcast_send(s->mc, buf, chunk) < 0) {
       return -1;
@@ -113,7 +111,14 @@ static int write_net(tssink_t *s, const unsigned char *buf, size_t n) {
 }
 
 int tssink_write(tssink_t *s, const unsigned char *buf, size_t n) {
-  if (s->kind == TSSINK_UDP || s->kind == TSSINK_RTP) return write_net(s, buf, n);
+  switch (s->kind) {
+    case TSSINK_UDP:
+    case TSSINK_RTP:
+      return write_net(s, buf, n);
+    case TSSINK_STDOUT:
+    case TSSINK_FILE:
+      return write_all(s->fd, buf, n);
+  }
   return write_all(s->fd, buf, n);
 }
 

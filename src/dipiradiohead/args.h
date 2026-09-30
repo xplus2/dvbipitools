@@ -18,6 +18,13 @@ typedef enum { RIST_PROF_SIMPLE, RIST_PROF_MAIN } rist_profile_sel_t;
 typedef enum { SRT_BOND_NONE, SRT_BOND_BROADCAST, SRT_BOND_BACKUP } srt_bond_mode_t;
 
 typedef struct {
+  int input;
+  int have_input;
+  int vendor;
+  int have_vendor;
+} item_state_t;
+
+typedef struct {
   const char *uri;    /* -i, icecast/shoutcast http(s) */
   unsigned sid;       /* --sid right after this -i; 0=auto-assign post-parse */
   char sdt_text[256]; /* --sdt right after this -i; empty=auto-default post-parse */
@@ -87,6 +94,8 @@ typedef struct {
   char srt_streamid[128];         /* --srt-streamid; n_srt>0 only, "" = none */
   char srt_packetfilter[256];     /* --srt-packetfilter; n_srt>0 only, "" = none */
   unsigned srt_latency_ms;        /* --srt-latency; n_srt>0 only, 0 = library default */
+  item_state_t parse_item;
+  void *str_pool;
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

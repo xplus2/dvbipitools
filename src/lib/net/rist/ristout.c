@@ -33,14 +33,13 @@ static int sender_stats_cb(void *arg, const struct rist_stats *stats) {
     rist_stats_free(stats);
     return 0;
   }
-  {
-    metrics_entry_t e[] = {
-        {METRICS_ID_RIST_SENDER_SENT_TOTAL, p->cname, p->sent},
-        {METRICS_ID_RIST_SENDER_RETRANSMITTED_TOTAL, p->cname, p->retransmitted},
-        {METRICS_ID_RIST_SENDER_RTT_MILLISECONDS, p->cname, p->rtt},
-    };
-    return rist_push_stats_if_due(r->mx, r->tool_version, e, sizeof e / sizeof e[0], stats);
-  }
+  metrics_entry_t e[] = {
+  {METRICS_ID_RIST_SENDER_SENT_TOTAL, p->cname, p->sent},
+  {METRICS_ID_RIST_SENDER_RETRANSMITTED_TOTAL, p->cname, p->retransmitted},
+  {METRICS_ID_RIST_SENDER_RTT_MILLISECONDS, p->cname, p->rtt},
+  };
+  rist_push_stats_if_due(r->mx, r->tool_version, e, sizeof e / sizeof e[0], stats);
+  return 0;
 }
 
 ristout_t *ristout_open(const ristout_cfg_t *cfg) {

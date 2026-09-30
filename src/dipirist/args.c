@@ -20,6 +20,20 @@
 #include "config.h"
 #include "version.h"
 
+#define OPT_PROFILE 1000
+#define OPT_SECRET 1001
+#define OPT_CNAME 1002
+#define OPT_BUFFER 1003
+#define OPT_COLOR 1004
+#define OPT_METRICS 1005
+#define OPT_METRICS_ID 1006
+#define OPT_METRICS_INTERVAL 1007
+#define OPT_METRICS_INSPECT_TS 1012
+#define OPT_AL_FEC 1008
+#define OPT_AL_FEC_PORT 1009
+#define OPT_CONFIG_STRICT 1011
+#define OPT_CONFIGTEST 1010
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* *count tracks with this flag: 0 = decides is_rist, further rist:// bond onto same endpoint, others (mixed, or a repeated non-RIST endpoint) rejected */
@@ -144,22 +158,22 @@ static const struct option longopts[] = {
     {"out", required_argument, 0, 'o'},
     {"iface", required_argument, 0, 'I'},
     {"insecure", no_argument, 0, 'k'},
-    {"profile", required_argument, 0, 1000},
-    {"secret", required_argument, 0, 1001},
-    {"cname", required_argument, 0, 1002},
-    {"buffer", required_argument, 0, 1003},
-    {"color", required_argument, 0, 1004},
-    {"metrics", required_argument, 0, 1005},
-    {"metrics-id", required_argument, 0, 1006},
-    {"metrics-interval", required_argument, 0, 1007},
-    {"metrics-inspect-ts", required_argument, 0, 1012},
-    {"al-fec", required_argument, 0, 1008},
-    {"al-fec-port", required_argument, 0, 1009},
+    {"profile", required_argument, 0, OPT_PROFILE},
+    {"secret", required_argument, 0, OPT_SECRET},
+    {"cname", required_argument, 0, OPT_CNAME},
+    {"buffer", required_argument, 0, OPT_BUFFER},
+    {"color", required_argument, 0, OPT_COLOR},
+    {"metrics", required_argument, 0, OPT_METRICS},
+    {"metrics-id", required_argument, 0, OPT_METRICS_ID},
+    {"metrics-interval", required_argument, 0, OPT_METRICS_INTERVAL},
+    {"metrics-inspect-ts", required_argument, 0, OPT_METRICS_INSPECT_TS},
+    {"al-fec", required_argument, 0, OPT_AL_FEC},
+    {"al-fec-port", required_argument, 0, OPT_AL_FEC_PORT},
     {"verbose", no_argument, 0, 'v'},
     {"daemonize", no_argument, 0, 'd'},
     {"config", required_argument, 0, 'c'},
-    {"config-strict", no_argument, 0, 1011},
-    {"configtest", no_argument, 0, 1010},
+    {"config-strict", no_argument, 0, OPT_CONFIG_STRICT},
+    {"configtest", no_argument, 0, OPT_CONFIGTEST},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}};
 
@@ -189,6 +203,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int cli_in = 0;
   int cli_out = 0;
   int c;
+  plain_endpoint_t *ne;
 
   pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
   if (pst != ARGS_OK) return pst;
@@ -228,7 +243,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'k':
         cfg->insecure_tls = 1;
         break;
-      case 1000: {
+      case OPT_PROFILE: {
         static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
         int v;
         if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
@@ -238,21 +253,21 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->profile = (rist_profile_sel_t)v;
         break;
       }
-      case 1001:
+      case OPT_SECRET:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->secret, sizeof cfg->secret, optarg, "--secret"))
           return ARGS_ERR;
         break;
-      case 1002:
+      case OPT_CNAME:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->cname, sizeof cfg->cname, optarg, "--cname"))
           return ARGS_ERR;
         break;
-      case 1003:
+      case OPT_BUFFER:
         if (argutil_uint_range(optarg, 1, 60000, &cfg->buffer_ms)) {
           argerr("invalid --buffer: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1004: {
+      case OPT_COLOR: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
           argerr("invalid --color: %s (auto|always|never)", optarg);
@@ -261,25 +276,25 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->color_mode = v;
         break;
       }
-      case 1005:
+      case OPT_METRICS:
         cfg->metrics_sock = optarg;
         break;
-      case 1006:
+      case OPT_METRICS_ID:
         cfg->metrics_id = optarg;
         break;
-      case 1007:
+      case OPT_METRICS_INTERVAL:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
-      case 1012:
+      case OPT_METRICS_INSPECT_TS:
         if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
         break;
-      case 1008:
+      case OPT_AL_FEC:
         if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
           argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1009:
+      case OPT_AL_FEC_PORT:
         if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
           argerr("invalid --al-fec-port: %s", optarg);
           return ARGS_ERR;
@@ -292,8 +307,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->daemonize = 1;
         break;
       case 'c':
-      case 1011:
-      case 1010:
+      case OPT_CONFIG_STRICT:
+      case OPT_CONFIGTEST:
         break;
       case 'h':
         print_help();
@@ -330,13 +345,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (!cfg->al_fec_l && cfg->al_fec_port) log_line(TOOL_NAME ": --al-fec-port has no effect without --al-fec");
 
-  {
-    plain_endpoint_t *ne = cfg->in.is_rist ? &cfg->out.nonrist : &cfg->in.nonrist;
-    if (cfg->al_fec_l && ne->kind != PLAIN_EP_RTP) log_line(TOOL_NAME ": --al-fec has no effect, non-rist:// side isn't rtp://");
-    ne->al_fec_l = cfg->al_fec_l;
-    ne->al_fec_d = cfg->al_fec_d;
-    ne->al_fec_port = cfg->al_fec_port;
-  }
+  ne = cfg->in.is_rist ? &cfg->out.nonrist : &cfg->in.nonrist;
+  if (cfg->al_fec_l && ne->kind != PLAIN_EP_RTP) log_line(TOOL_NAME ": --al-fec has no effect, non-rist:// side isn't rtp://");
+  ne->al_fec_l = cfg->al_fec_l;
+  ne->al_fec_d = cfg->al_fec_d;
+  ne->al_fec_port = cfg->al_fec_port;
   if (cfg->insecure_tls && !(cfg->in.nonrist.kind == PLAIN_EP_HTTP && cfg->in.nonrist.http.tls))
     log_line(TOOL_NAME ": --insecure needs -i https://");
   return ARGS_OK;

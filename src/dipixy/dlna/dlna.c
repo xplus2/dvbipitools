@@ -12,6 +12,8 @@ int dlna_device_desc_xml(const config_t *cfg, char **out, size_t *out_len) {
   static _Thread_local char buf[4096];
   char uuid[37];
   FILE *f = fmemopen(buf, sizeof buf, "w");
+  long pos;
+  int err;
   if (!f)
     return -1;
   ssdp_device_uuid(cfg, uuid);
@@ -48,15 +50,12 @@ int dlna_device_desc_xml(const config_t *cfg, char **out, size_t *out_len) {
         "</serviceList>",
         f);
   fputs("</device></root>\r\n", f);
-  {
-    long pos = ftell(f);
-    int err = ferror(f);
-    fclose(f);
-    if (err || pos < 0)
-      return -1;
-    *out = buf;
-    *out_len = (size_t)pos;
-  }
+  pos = ftell(f);
+  err = ferror(f);
+  fclose(f);
+  if (err || pos < 0) return -1;
+  *out = buf;
+  *out_len = (size_t)pos;
   return 0;
 }
 

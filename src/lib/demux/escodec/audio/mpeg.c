@@ -41,15 +41,19 @@ int next_mpa(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame
   br = mpa_br[mpeg1 ? 0 : 1][ly - 1][bri] * 1000u;
   sr = mpa_sample_rates[ver][sri];
   if (!br || !sr) return -1;
-  if (ly == 1) f->consumed = (12 * br / sr + pad) * 4;
-  else if (ly == 2) f->consumed = 144 * br / sr + pad;
-  else f->consumed = (mpeg1 ? 144u : 72u) * br / sr + pad;
+  switch (ly) {
+    case 1: f->consumed = (12 * br / sr + pad) * 4; break;
+    case 2: f->consumed = 144 * br / sr + pad; break;
+    default: f->consumed = (mpeg1 ? 144u : 72u) * br / sr + pad; break;
+  }
 
   if (f->consumed < 4) return -1;
   if (len < f->consumed) return 1;
-  if (ly == 1) f->samples = 384;
-  else if (ly == 2) f->samples = 1152;
-  else f->samples = mpeg1 ? 1152 : 576;
+  switch (ly) {
+    case 1: f->samples = 384; break;
+    case 2: f->samples = 1152; break;
+    default: f->samples = mpeg1 ? 1152 : 576; break;
+  }
   f->rate = sr;
   f->ch = (((d[3] >> 6) & 3) == 3) ? 1 : 2;
   f->layer = ly;

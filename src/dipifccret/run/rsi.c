@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <poll.h>
 #include <stdatomic.h>
 #include <time.h>
 
@@ -26,13 +27,21 @@ void *rsi_pacer_main(void *arg) {
   struct timespec chunk = {0, 200 * 1000 * 1000}; /* 200ms: stop signal noticed promptly */
   unsigned chunks_per_cycle = pc->interval_s * 5;
   time_t collision_max_age = (time_t)pc->interval_s * 3; /* report collision ~3 cycles after last seen */
+  int wfd = signal_wake_fd();
 
   if (!chunks_per_cycle) chunks_per_cycle = 1;
   while (!signal_stop_requested()) {
     size_t cap;
     uint32_t ntp_sec;
     uint32_t ntp_frac;
-    for (unsigned i = 0; i < chunks_per_cycle && !signal_stop_requested(); i++) nanosleep(&chunk, NULL);
+    for (unsigned i = 0; i < chunks_per_cycle && !signal_stop_requested(); i++) {
+      if (wfd >= 0) {
+        struct pollfd pfd = {wfd, POLLIN, 0};
+        poll(&pfd, 1, 200);
+      } else {
+        nanosleep(&chunk, NULL);
+      }
+    }
     if (signal_stop_requested())
       break;
 
@@ -70,8 +79,7 @@ void *rsi_pacer_main(void *arg) {
         sub_len = rtcp_build_rsi_srbt_collision(collisions, collision_n, pkt + off, sizeof(pkt) - off);
         off += sub_len;
       }
-      if (rtcp_build_rsi_header(ssrc, ssrc, ntp_sec, ntp_frac, off, pkt, sizeof pkt) == 0)
-        continue;
+      if (rtcp_build_rsi_header(ssrc, ssrc, ntp_sec, ntp_frac, off, pkt, sizeof pkt) == 0) continue;
       ret_send_mc_impl(c, pkt, off, NET_DSCP_SIGNALLING, pc->send_ctx);
     }
   }

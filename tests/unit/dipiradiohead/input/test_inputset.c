@@ -16,6 +16,7 @@
 
 #include "dipiradiohead/args.h"
 #include "dipiradiohead/input/inputset.h"
+#include "lib/helper/ioutil.h"
 
 typedef struct {
   int listen_fd;
@@ -102,13 +103,13 @@ START_TEST(inputset_pid_allocation_is_index_based) {
   cfg.n_inputs = 3;
   cfg.inputs[0].uri = "http://127.0.0.1:1/a";
   cfg.inputs[0].sid = 10;
-  snprintf(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "A");
+  bufcpy(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "A");
   cfg.inputs[1].uri = "http://127.0.0.1:1/b";
   cfg.inputs[1].sid = 20;
-  snprintf(cfg.inputs[1].sdt_text, sizeof cfg.inputs[1].sdt_text, "B");
+  bufcpy(cfg.inputs[1].sdt_text, sizeof cfg.inputs[1].sdt_text, "B");
   cfg.inputs[2].uri = "http://127.0.0.1:1/c";
   cfg.inputs[2].sid = 30;
-  snprintf(cfg.inputs[2].sdt_text, sizeof cfg.inputs[2].sdt_text, "C");
+  bufcpy(cfg.inputs[2].sdt_text, sizeof cfg.inputs[2].sdt_text, "C");
   cfg.error_retry_s = 1;
 
   is = inputset_new(&cfg, noop_meta_cb, NULL, NULL, NULL);
@@ -147,7 +148,7 @@ START_TEST(inputset_connects_and_reports_source) {
   cfg.n_inputs = 1;
   cfg.inputs[0].uri = uri;
   cfg.inputs[0].sid = 1;
-  snprintf(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "Test");
+  bufcpy(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "Test");
 
   is = inputset_new(&cfg, noop_meta_cb, NULL, NULL, NULL);
   ck_assert_ptr_nonnull(is);
@@ -186,10 +187,10 @@ START_TEST(inputset_retries_independently_per_slot) {
   cfg.n_inputs = 2;
   cfg.inputs[0].uri = uri_ok;
   cfg.inputs[0].sid = 1;
-  snprintf(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "OK");
+  bufcpy(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "OK");
   cfg.inputs[1].uri = "http://127.0.0.1:1/dead"; /* nothing listens here */
   cfg.inputs[1].sid = 2;
-  snprintf(cfg.inputs[1].sdt_text, sizeof cfg.inputs[1].sdt_text, "Dead");
+  bufcpy(cfg.inputs[1].sdt_text, sizeof cfg.inputs[1].sdt_text, "Dead");
   /* error_retry_s left 0: n_inputs > 1 must still auto-default to a retry, never give up */
 
   is = inputset_new(&cfg, noop_meta_cb, NULL, NULL, NULL);
@@ -217,7 +218,7 @@ START_TEST(inputset_single_input_no_retry_when_error_retry_s_is_zero) {
   cfg.n_inputs = 1;
   cfg.inputs[0].uri = "http://127.0.0.1:1/dead";
   cfg.inputs[0].sid = 1;
-  snprintf(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "Dead");
+  bufcpy(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "Dead");
   cfg.error_retry_s = 0;
 
   is = inputset_new(&cfg, noop_meta_cb, NULL, NULL, NULL);

@@ -11,8 +11,7 @@
 
 #include "../../version.h"
 
-/* calloc+tssrc_open+backend/refcount=1. key: caller-owned strdup, NULL for rist/stdin.
-   locking left to caller: srt/http hold g_lock throughout, rist/stdin call unlocked */
+/* calloc+tssrc_open+backend/refcount=1. key: caller-owned strdup, NULL for rist/stdin. */
 static capture_ctx_t *tssrc_ctx_new(char *key, const tssrc_cfg_t *cfg, net_err_reason_t *reason) {
   capture_ctx_t *c = calloc(1, sizeof *c);
   if (!c) {
@@ -37,18 +36,17 @@ static capture_ctx_t *tssrc_ctx_new(char *key, const tssrc_cfg_t *cfg, net_err_r
 
 capture_ctx_t *capture_open_srt(const char *host, unsigned port) {
   char key[300];
-  capture_ctx_t *c;
+  capture_ctx_t *c, *dup;
   tssrc_cfg_t cfg;
   char *keydup;
+  char portbuf[12];
+  size_t off;
 
-  {
-    char portbuf[12];
-    size_t off = bufcpy(key, sizeof key, "srt:");
-    off += bufcpy(key + off, sizeof key - off, host);
-    off += bufcpy(key + off, sizeof key - off, ":");
-    uint_to_str(portbuf, port);
-    bufcpy(key + off, sizeof key - off, portbuf);
-  }
+  off = bufcpy(key, sizeof key, "srt:");
+  off += bufcpy(key + off, sizeof key - off, host);
+  off += bufcpy(key + off, sizeof key - off, ":");
+  uint_to_str(portbuf, port);
+  bufcpy(key + off, sizeof key - off, portbuf);
 
   pthread_mutex_lock(&g_lock);
   c = find_existing_tssrc(key);
@@ -57,12 +55,10 @@ capture_ctx_t *capture_open_srt(const char *host, unsigned port) {
     pthread_mutex_unlock(&g_lock);
     return c;
   }
+  pthread_mutex_unlock(&g_lock);
 
   keydup = strdup(key);
-  if (!keydup) {
-    pthread_mutex_unlock(&g_lock);
-    return NULL;
-  }
+  if (!keydup) return NULL;
   memset(&cfg, 0, sizeof cfg);
   cfg.kind = TSSRC_SRT;
   cfg.srt_listen = 0;
@@ -70,9 +66,17 @@ capture_ctx_t *capture_open_srt(const char *host, unsigned port) {
   cfg.srt_port = port;
   c = tssrc_ctx_new(keydup, &cfg, NULL);
   if (!c) {
-    pthread_mutex_unlock(&g_lock);
     log_line(TOOL_NAME ": srt source %s:%u: connect failed, source left unavailable", host, port);
     return NULL;
+  }
+
+  pthread_mutex_lock(&g_lock);
+  dup = find_existing_tssrc(key);
+  if (dup) {
+    atomic_fetch_add_explicit(&dup->refcount, 1, memory_order_relaxed);
+    pthread_mutex_unlock(&g_lock);
+    free_ctx_resources(c);
+    return dup;
   }
   c->next = g_open;
   g_open = c;
@@ -83,7 +87,7 @@ capture_ctx_t *capture_open_srt(const char *host, unsigned port) {
 
 capture_ctx_t *capture_open_http_static(const char *url, int insecure_tls) {
   tssrc_cfg_t cfg;
-  capture_ctx_t *c;
+  capture_ctx_t *c, *dup;
   http_url_t hu;
   net_err_reason_t reason;
   char *keydup;
@@ -99,21 +103,27 @@ capture_ctx_t *capture_open_http_static(const char *url, int insecure_tls) {
     pthread_mutex_unlock(&g_lock);
     return c;
   }
+  pthread_mutex_unlock(&g_lock);
 
   keydup = strdup(url);
-  if (!keydup) {
-    pthread_mutex_unlock(&g_lock);
-    return NULL;
-  }
+  if (!keydup) return NULL;
   memset(&cfg, 0, sizeof cfg);
   cfg.kind = TSSRC_HTTP;
   cfg.http = hu;
   cfg.insecure_tls = insecure_tls;
   c = tssrc_ctx_new(keydup, &cfg, &reason);
   if (!c) {
-    pthread_mutex_unlock(&g_lock);
     log_line(TOOL_NAME ": http source %s: %s, source left unavailable", url, net_err_reason_name(reason));
     return NULL;
+  }
+
+  pthread_mutex_lock(&g_lock);
+  dup = find_existing_tssrc(url);
+  if (dup) {
+    atomic_fetch_add_explicit(&dup->refcount, 1, memory_order_relaxed);
+    pthread_mutex_unlock(&g_lock);
+    free_ctx_resources(c);
+    return dup;
   }
   c->next = g_open;
   g_open = c;

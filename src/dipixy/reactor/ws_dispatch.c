@@ -21,20 +21,20 @@ void ws_dispatch_frame(void *ctx, ws_dispatch_queue_fn queue, int opcode, const 
       queue(ctx, WS_OP_CLOSE, payload, plen <= 125 ? plen : 0);
       break;
     case WS_OP_TEXT:
-      if (memmem(payload, plen, "\"playlists.reload\"", 18)) {
+      if (memmem(payload, plen, "\"type\":\"playlists.reload\"", sizeof "\"type\":\"playlists.reload\"" - 1)) {
         reactor_reload_channels();
         return;
       }
-      if (memmem(payload, plen, "\"tls.reload\"", 12)) {
+      if (memmem(payload, plen, "\"type\":\"tls.reload\"", sizeof "\"type\":\"tls.reload\"" - 1)) {
         const char *resp = reload_tls() == 0 ? "{\"type\":\"tls.reload\",\"ok\":true}" : "{\"type\":\"tls.reload\",\"ok\":false}";
         queue(ctx, WS_OP_TEXT, resp, strlen(resp));
         return;
       }
-      if (memmem(payload, plen, "\"clients.get\"", 13)) {
+      if (memmem(payload, plen, "\"type\":\"clients.get\"", sizeof "\"type\":\"clients.get\"" - 1)) {
         if (!ws_clients_build_snapshot(&json)) queue(ctx, WS_OP_TEXT, json, strlen(json));
         return;
       }
-      if (!memmem(payload, plen, "\"sources.get\"", 13)) return;
+      if (!memmem(payload, plen, "\"type\":\"sources.get\"", sizeof "\"type\":\"sources.get\"" - 1)) return;
       if (ws_sources_build_snapshot(reactor_cfg(), reactor_channels(), &json)) return;
       queue(ctx, WS_OP_TEXT, json, strlen(json));
       break;

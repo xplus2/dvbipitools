@@ -33,6 +33,7 @@ void send_rams_i(const unicast_dest_t *dst, uint32_t sender_ssrc, uint32_t media
 
 typedef struct {
   mcsend_table_t *mt; /* NULL: RET disabled or --no-mc-ret */
+  int last_dscp;
 } ret_send_ctx_t;
 
 void ret_send_mc_impl(const channel_t *c, const unsigned char *pkt, size_t len, int dscp, void *user);

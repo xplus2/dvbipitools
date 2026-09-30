@@ -44,19 +44,23 @@ static int apply_input(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_key(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->key_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->key_path, v, e, n);
 }
 
 static int apply_serial(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->serial, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->serial, v, e, n);
 }
 
 static int apply_emm_file(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->emm_file, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->emm_file, v, e, n);
 }
 
 static int apply_unicast_emm(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->unicast_emm_uri, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->unicast_emm_uri, v, e, n);
 }
 
 static int apply_insecure(void *c, const char *v, char *e, size_t n) {
@@ -64,8 +68,9 @@ static int apply_insecure(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_token_header(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
   const char *hdr;
-  if (yamlcfg_set_str(&hdr, v, e, n)) return -1;
+  if (yamlcfg_set_str(&cfg->str_pool, &hdr, v, e, n)) return -1;
   if (dscr_cfg_token_header(c, hdr)) {
     snprintf(e, n, "invalid '%s' (no space or colon)", v);
     return -1;
@@ -107,7 +112,8 @@ static int apply_pmt_pid(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_iface(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->iface_in, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->iface_in, v, e, n);
 }
 
 static int apply_verbose(void *c, const char *v, char *e, size_t n) {
@@ -163,7 +169,8 @@ static int apply_biss1_sw(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_biss2_ca_key(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->biss2_ca_key_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->biss2_ca_key_path, v, e, n);
 }
 
 static int apply_ecm_profile(void *c, const char *v, char *e, size_t n) {
@@ -176,11 +183,13 @@ static int apply_ecm_profile(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_metrics_sock(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_sock, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_sock, v, e, n);
 }
 
 static int apply_metrics_id(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_id, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_id, v, e, n);
 }
 
 static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {

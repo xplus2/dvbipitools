@@ -8,30 +8,16 @@ dipiradiohead \- re-mux an Icecast/Shoutcast stream as a DVB-IPI multicast
 [\fB\-\-sid\fP \fIn\fP] [\fB\-\-sdt\fP \fIname\fP] [\fB\-\-provider\fP \fIname\fP] [\fB\-i\fP \fIuri\fP ...]
 {\fB\-m\fP \fIgroup\fP:\fIport\fP | \fB\-R\fP \fIuri\fP} [\fIoptions\fP]
 .SH DESCRIPTION
-.B dipiradiohead
-fetches one or more Icecast/Shoutcast streams over
-.B http://
-or
-.B https://
-and re-muxes them, without transcoding, as one DVB-IPI multicast (or one or
-more RIST links). A single
-.B \-i
-produces a normal SPTS; more than one
-.B \-i
-produces an MPTS, one program per input. Icecast/Shoutcast as an input
-source is not itself part of DVB; it exists here to bridge real-world
-streaming sources into a DVB-IPI output.
-.PP
-Output is UDP or RTP multicast via
-.BR \-m ,
-one or more RIST or SRT peers via
-.B \-R
-(bonded onto a single sender, requires librist or libsrt respectively -
-one scheme at a time, not mixed), or both at once; at least one of
-.B \-m
-/
-.B \-R
-is required.
+.B dipiradiohead fetches one or more Icecast/Shoutcast/HLS/raw audio streams and re-muxes them as one transport stream.
+Output can be a DVB-IPI multicast, SRT or RIST.
+
+No transcoding. A single
+.B -i
+gives a normal SPTS, more than one gives an MPTS, one program per input.
+
+Optionally, it scrambles selected PES using DVB Simulcrypt or BISS 1/2/CA (see below) or adds Annex E Layer 1 FEC.
+SDT can be set, passed or overwritten.
+
 .B dipiradiohead
 generates PAT/PMT/SDT/NIT/EIT signaling itself, including now-playing EIT
 present-event text taken from ICY
@@ -40,36 +26,25 @@ metadata or inline ID3v2
 .B TIT2
 /
 .B TPE1
-tags, auto-detected per stream; this ICY/ID3-to-EIT mapping is a
-.B dipiradiohead
-addition, not a DVB-IPI feature.
-.PP
-.B https://
-sources are TLS-verified by default (certificate chain, hostname, expiry);
-.B \-k
-disables all three for self-signed lab or test sources. HTTPS support needs
-OpenSSL (libssl) and is a build-time option; a build without it fails
-cleanly on any
-.B https://
-source rather than connecting insecurely.
+tags, auto-detected per stream.
 .PP
 .B dipiradiohead
-can also scramble its output. As a DVB Simulcrypt SCS and EMMG-side MUX
+can also scramble its output. As a DVB SimulCrypt SCS and EMMG-side MUX
 (ETSI TS 103 197, protocol versions 2 and 3) it drives one or more ECMGs via
 .B \-\-cas\-algo
 /
 .BR \-\-cas\-ecmg ,
 scrambling with CISSA (ETSI TS 103 127, needs OpenSSL) or CSA1/CSA2 (need
-libdvbcsa, loaded at runtime if present). Independently of Simulcrypt, it
-also supports standalone BISS scrambling with no ECMG/EMMG at all: legacy
+libdvbcsa, loaded at runtime if present).
+It also supports standalone BISS scrambling: legacy
 BISS1 Mode 1, BISS2 Mode 1/E, and BISS2 Mode CA (EBU Tech 3292/3292-s1,
-per-receiver RSA-2048-OAEP entitlement). Simulcrypt CAS and the BISS modes
+per-receiver RSA-2048-OAEP entitlement). SimulCrypt and the BISS modes
 are mutually exclusive with each other.
 .SH OPTIONS
 .SS Input
 .TP
 .BR \-i ", " \-\-input " " \fIuri\fR
-Icecast/Shoutcast source,
+stream source,
 .B http://
 or
 .BR https:// .
@@ -77,8 +52,7 @@ Repeatable; each
 .B \-i
 becomes one program of the output MPTS (or the single program of an SPTS
 if given only once). Codec (mp3, mp2, AAC ADTS, AAC LATM/LOAS) is
-auto-detected from stream sync bytes, not from the URI. The response
-body is sniffed, not the URL suffix: an M3U or PLS playlist is
+auto-detected from stream sync bytes. An M3U or PLS playlist is
 recognized and its first URL line followed instead (entries may be
 relative to the playlist's own URL), up to 5 hops. An HLS live media
 playlist is joined at its newest listed segment.
@@ -542,10 +516,6 @@ Single station, plain UDP multicast output.
 .B dipiradiohead \-i http://example.com/somechannel/aac \-\-sdt \(dqSome Channel\(dq \-i https://example.com/radio.m3u \-\-sdt \(dqChannel 1\(dq \-m 239.1.1.2:5000 \-r \-e 5
 Two stations muxed into one MPTS, RTP-wrapped output, reconnect on input
 error after 5 seconds.
-.SH EXIT STATUS
-.B 0
-on success.
-Non-zero on argument errors or I/O/network failure.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipiradiohead.yaml

@@ -73,13 +73,24 @@ static int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_o
   return 1;
 }
 
+static _Thread_local hls_seg_ctx_t *t_touch_hint;
+
 int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, double seg_target, int max_segs, seg_container_t container, double part_target) {
   hls_seg_ctx_t *s;
   int i;
   int llhls_newly_on = 0;
+  _Atomic(void *) *head;
+  void *old_head;
+  s = t_touch_hint;
+  if (s && seg_key_equal(s, ctx, filter, pmt_pid, lcevc, container) && touch_pinned(s, part_target, &llhls_newly_on)) {
+    capture_close(ctx);
+    if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
+    return 1;
+  }
   for (i = 0; i < g_stores_n; i++) {
     s = atomic_load_explicit(&g_stores[i], memory_order_acquire);
     if (s && seg_key_equal(s, ctx, filter, pmt_pid, lcevc, container) && touch_pinned(s, part_target, &llhls_newly_on)) {
+      t_touch_hint = s;
       capture_close(ctx); /* redundant ref: existing segmenter already holds its own */
       if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
       return 1;
@@ -120,30 +131,14 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   s->demux.psi = psi_new();
   if (s->demux.psi && pmt_pid) psi_select_pmt_pid(s->demux.psi, pmt_pid);
   s->demux.pes = s->demux.psi ? pes_new(hls_seg_on_pes, s) : NULL;
-  if (!s->demux.psi || !s->demux.pes) {
-    psi_free(s->demux.psi);
-    pes_free(s->demux.pes);
-    free(s);
-    pthread_mutex_unlock(&g_mtx);
-    capture_close(ctx);
-    return 0;
-  }
+  if (!s->demux.psi || !s->demux.pes) goto fail;
 
   for (i = 0; i < g_stores_n; i++) if (!atomic_load_explicit(&g_stores[i], memory_order_relaxed)) break;
-  if (i == g_stores_n) {
-    psi_free(s->demux.psi);
-    pes_free(s->demux.pes);
-    free(s);
-    pthread_mutex_unlock(&g_mtx);
-    capture_close(ctx); /* registry full */
-    return 0;
-  }
-  {
-    _Atomic(void *) *head = capture_hls_seg_head_ptr(ctx);
-    void *old_head = atomic_load_explicit(head, memory_order_acquire);
-    atomic_store_explicit(&s->chain_next, old_head, memory_order_relaxed);
-    atomic_store_explicit(head, s, memory_order_release);
-  }
+  if (i == g_stores_n) goto fail; /* registry full */
+  head = capture_hls_seg_head_ptr(ctx);
+  old_head = atomic_load_explicit(head, memory_order_acquire);
+  atomic_store_explicit(&s->chain_next, old_head, memory_order_relaxed);
+  atomic_store_explicit(head, s, memory_order_release);
   atomic_store_explicit(&g_stores[i], s, memory_order_release);
   pthread_mutex_unlock(&g_mtx);
 
@@ -151,6 +146,14 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   s->store = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   if (part_target > 0.0) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
   return 1;
+
+fail:
+  psi_free(s->demux.psi);
+  pes_free(s->demux.pes);
+  free(s);
+  pthread_mutex_unlock(&g_mtx);
+  capture_close(ctx);
+  return 0;
 }
 
 static void unlink_from_ctx_chain(hls_seg_ctx_t *victim) {
@@ -205,8 +208,8 @@ void hls_seg_sweep_idle(void) {
     free(s->video.nal_scratch);
     free(s->video.av1_rb);
     fmp4_mux_free(s->fmp4.fmux);
-    free(s->fmp4.fmp4_pend_data);
-    free(s->audio.audio_rem);
+    free(s->fmp4.pend_data);
+    free(s->audio.rem);
     free(s->lcevc_track.pend_data);
     free(s);
   }

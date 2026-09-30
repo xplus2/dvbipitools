@@ -17,23 +17,6 @@ void set_persistence(conn_t *c, int keep_alive) {
   c->close_after_flush = keep_alive ? 0 : 1;
 }
 
-/* every call site here is "404 Not Found": counts as an HTTP error */
-void queue_status(conn_t *c, const char *status, int keep_alive) {
-  char hdr[192];
-  sbuf_t b;
-  sbuf_init(&b, hdr, sizeof hdr);
-  sbuf_add(&b, "HTTP/1.1 ");
-  sbuf_add(&b, status);
-  sbuf_add(&b, "\r\nConnection: ");
-  sbuf_add(&b, keep_alive ? "keep-alive" : "close");
-  sbuf_add(&b, "\r\nContent-Length: 0\r\n");
-  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
-  sbuf_add(&b, "\r\n");
-  conn_queue(c, hdr, b.len);
-  set_persistence(c, keep_alive);
-  dipixy_metrics_note_http_error();
-}
-
 /* 304 never carries a body regardless of is_head, ETag repeated per RFC 9110 */
 void queue_not_modified(conn_t *c, const char *etag, int keep_alive) {
   char hdr[256];
@@ -64,11 +47,13 @@ void cors_prepare(const char *origin_hdr, char *out, size_t outsz) {
   }
 }
 
-void queue_m3u8(conn_t *c, const char *body, size_t body_len, int is_head, int keep_alive, const char *cors_hdr) {
+void queue_text_resp(conn_t *c, const char *content_type, const char *body, size_t body_len, int is_head, int keep_alive, const char *cors_hdr) {
   char hdr[448];
   sbuf_t b;
   sbuf_init(&b, hdr, sizeof hdr);
-  sbuf_add(&b, "HTTP/1.1 200 OK\r\nServer: " TOOL_NAME "/" TOOL_VERSION "\r\nContent-Type: application/vnd.apple.mpegurl\r\nContent-Length: ");
+  sbuf_add(&b, "HTTP/1.1 200 OK\r\nServer: " TOOL_NAME "/" TOOL_VERSION "\r\nContent-Type: ");
+  sbuf_add(&b, content_type);
+  sbuf_add(&b, "\r\nContent-Length: ");
   sbuf_add_u64(&b, (uint64_t)body_len);
   sbuf_add(&b, "\r\nCache-Control: no-cache, no-store, must-revalidate\r\n");
   sbuf_add(&b, cors_hdr);
@@ -160,38 +145,13 @@ const char *hls_filename_ext(const char *fn) {
   return NULL;
 }
 
-void queue_mpd(conn_t *c, const char *body, size_t body_len, int is_head, int keep_alive, const char *cors_hdr) {
-  char hdr[448];
-  sbuf_t b;
-  sbuf_init(&b, hdr, sizeof hdr);
-  sbuf_add(&b, "HTTP/1.1 200 OK\r\nServer: " TOOL_NAME "/" TOOL_VERSION "\r\nContent-Type: application/dash+xml\r\nContent-Length: ");
-  sbuf_add_u64(&b, (uint64_t)body_len);
-  sbuf_add(&b, "\r\nCache-Control: no-cache, no-store, must-revalidate\r\n");
-  sbuf_add(&b, cors_hdr);
-  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
-  sbuf_add(&b, "Connection: ");
-  sbuf_add(&b, keep_alive ? "keep-alive" : "close");
-  sbuf_add(&b, "\r\n\r\n");
-  conn_queue(c, hdr, b.len);
-  if (!is_head) conn_queue(c, body, body_len);
-  set_persistence(c, keep_alive);
-}
-
 char *write_lit(char *dst, const char *lit, size_t len) {
   memcpy(dst, lit, len);
   return dst + len;
 }
 
 char *write_u32(char *dst, uint32_t v, int min_digits) {
-  char tmp[10];
-  int n = 0;
-  do {
-    tmp[n++] = (char)('0' + v % 10);
-    v /= 10;
-  } while (v);
-  while (n < min_digits) tmp[n++] = '0';
-  for (int i = 0; i < n; i++) dst[i] = tmp[n - 1 - i];
-  return dst + n;
+  return write_u64_gen(dst, v, min_digits);
 }
 
 char *write_u64_gen(char *dst, uint64_t v, int min_digits) {
@@ -259,7 +219,23 @@ void resp_set_zc(hls_resp_t *out, int status, const char *content_type, const ch
   out->zc = 1;
 }
 
+void resp_set_zc_cached(hls_resp_t *out, int status, const char *content_type, const char *etag, const uint8_t *body, size_t body_len, int is_head) {
+  if (!body || is_head) {
+    resp_set(out, status, content_type, etag, body, body_len, is_head);
+    return;
+  }
+  out->status = status;
+  out->content_type = content_type;
+  if (etag) bufcpy(out->etag, sizeof out->etag, etag);
+  else out->etag[0] = '\0';
+  cached_text_ref((const char *)body);
+  out->body = (uint8_t *)body;
+  out->body_len = body_len;
+  out->zc = 2;
+}
+
 void hls_resp_body_release(uint8_t *body, int zc) {
-  if (zc) seg_buf_unref(body);
+  if (zc == 1) seg_buf_unref(body);
+  else if (zc == 2) cached_text_unref((const char *)body);
   else free(body);
 }

@@ -22,11 +22,11 @@ static void reap_worker_slot(emmg_server_t *s, int slot) {
 }
 
 static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned char version, unsigned short type,
-                           const unsigned char *body, size_t body_len, unsigned char *reply, size_t *reply_len, int *should_close) {
+  const unsigned char *body, size_t body_len, unsigned char *reply, size_t *reply_len, int *should_close) {
   *reply_len = 0;
   *should_close = 0;
 
-  log_line("emmg: rx version=0x%02x type=0x%04x body_len=%zu", version, type, body_len);
+  log_throttled(&s->rx_msg_throttle, LOG_THROTTLE_WINDOW_S, "emmg: rx version=0x%02x type=0x%04x body_len=%zu", version, type, body_len);
   switch (type) {
     case EMMG_MSG_CHANNEL_SETUP: {
       unsigned client_id, data_channel_id;
@@ -117,7 +117,7 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
         *should_close = 1;
         return;
       }
-      log_line("emmg: data_provision, %d datagram(s) queued", n);
+      log_throttled(&s->data_provision_throttle, LOG_THROTTLE_WINDOW_S, "emmg: data_provision, %d datagram(s) queued", n);
       break;
     }
     default:
@@ -130,6 +130,7 @@ void emmg_run_session(emmg_server_t *s, int fd, int slot) {
   simulcrypt_reader_t rd;
   int flags;
   int backpressured = 0;
+  int wfd = signal_wake_fd();
 
   memset(&cs, 0, sizeof cs);
   simulcrypt_reader_init(&rd);
@@ -153,8 +154,13 @@ void emmg_run_session(emmg_server_t *s, int fd, int slot) {
     if (!backpressured && qlen >= EMMG_QUEUE_HIGH_WATERMARK)    backpressured = 1;
     else if (backpressured && qlen <= EMMG_QUEUE_LOW_WATERMARK) backpressured = 0;
     if (backpressured) {
-      struct timespec backoff = {0, EMMG_POLL_INTERVAL_MS * 1000000L};
-      nanosleep(&backoff, NULL);
+      if (wfd >= 0) {
+        struct pollfd pfd = {wfd, POLLIN, 0};
+        poll(&pfd, 1, EMMG_POLL_INTERVAL_MS);
+      } else {
+        struct timespec backoff = {0, EMMG_POLL_INTERVAL_MS * 1000000L};
+        nanosleep(&backoff, NULL);
+      }
       continue;
     }
     rc = simulcrypt_reader_poll(&rd, fd, EMMG_POLL_INTERVAL_MS, &hdr, &payload);
@@ -189,15 +195,29 @@ static void *worker_main(void *arg) {
 
 void *accept_main(void *arg) {
   emmg_server_t *s = arg;
+  int wfd = signal_wake_fd();
 
   while (!atomic_load_explicit(&s->stop, memory_order_relaxed) && !signal_stop_requested()) {
-    struct pollfd pfd;
-    int pret, fd, slot;
+    struct pollfd pfds[2];
+    int pret, npfd;
+    int fd;
+    int slot;
+    worker_arg_t *wa;
+    pthread_t th;
 
-    pfd.fd = s->listen_fd;
-    pfd.events = POLLIN;
-    pret = poll(&pfd, 1, EMMG_POLL_INTERVAL_MS);
+    pfds[0].fd = s->listen_fd;
+    pfds[0].events = POLLIN;
+    pfds[0].revents = 0;
+    npfd = 1;
+    if (wfd >= 0) {
+      pfds[1].fd = wfd;
+      pfds[1].events = POLLIN;
+      pfds[1].revents = 0;
+      npfd = 2;
+    }
+    pret = poll(pfds, (nfds_t)npfd, npfd == 2 ? -1 : EMMG_POLL_INTERVAL_MS);
     if (pret <= 0) continue;
+    if (!(pfds[0].revents & POLLIN)) continue;
 
     fd = accept(s->listen_fd, NULL, NULL);
     if (fd < 0) {
@@ -220,21 +240,18 @@ void *accept_main(void *arg) {
       continue;
     }
 
-    {
-      worker_arg_t *wa = &s->worker_args[slot];
-      pthread_t th;
-      reap_worker_slot(s, slot);
-      wa->s = s;
-      wa->fd = fd;
-      wa->slot = slot;
-      if (pthread_create(&th, NULL, worker_main, wa) != 0) {
-        log_line("emmg: pthread_create: %s", strerror(errno));
-        close(fd);
-        atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
-      } else {
-        s->worker_thread[slot] = th;
-        s->worker_thread_joinable[slot] = 1;
-      }
+    wa = &s->worker_args[slot];
+    reap_worker_slot(s, slot);
+    wa->s = s;
+    wa->fd = fd;
+    wa->slot = slot;
+    if (pthread_create(&th, NULL, worker_main, wa) != 0) {
+      log_line("emmg: pthread_create: %s", strerror(errno));
+      close(fd);
+      atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
+    } else {
+      s->worker_thread[slot] = th;
+      s->worker_thread_joinable[slot] = 1;
     }
   }
   return NULL;

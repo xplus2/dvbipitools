@@ -11,13 +11,11 @@
 /* ETSI TS 103 127 clause 6.3.1.2, fixed IV for all CISSA v1 traffic */
 static const unsigned char cissa_iv[16] = { 0x44, 0x56, 0x42, 0x54, 0x4d, 0x43, 0x50, 0x54, 0x41, 0x45, 0x53, 0x43, 0x49, 0x53, 0x53, 0x41};
 
-#define CISSA_DIR_NONE 0
-#define CISSA_DIR_ENCRYPT 1
-#define CISSA_DIR_DECRYPT 2
+typedef enum { CISSA_DIR_NONE, CISSA_DIR_ENCRYPT, CISSA_DIR_DECRYPT } cissa_dir_t;
 
 struct cissa_key {
   EVP_CIPHER_CTX *ctx;
-  int dir; /* which direction ctx's key schedule is currently set up for */
+  cissa_dir_t dir; /* which direction ctx's key schedule is currently set up for */
   unsigned char cw[CISSA_CW_LEN];
 };
 

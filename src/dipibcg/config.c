@@ -35,11 +35,13 @@ static int apply_listen(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_input(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->input_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->input_path, v, e, n);
 }
 
 static int apply_map(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->map_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->map_path, v, e, n);
 }
 
 static int apply_window(void *c, const char *v, char *e, size_t n) {
@@ -57,7 +59,8 @@ static int apply_mcast(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_iface(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->iface, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->iface, v, e, n);
 }
 
 static int apply_dscp(void *c, const char *v, char *e, size_t n) {
@@ -77,11 +80,13 @@ static int apply_timeout(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_output(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->output_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->output_path, v, e, n);
 }
 
 static int apply_csv_map(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->csvmap_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->csvmap_path, v, e, n);
 }
 
 static int apply_compress(void *c, const char *v, char *e, size_t n) {
@@ -101,11 +106,13 @@ static int apply_daemonize(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_metrics_sock(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_sock, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_sock, v, e, n);
 }
 
 static int apply_metrics_id(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_id, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_id, v, e, n);
 }
 
 static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {

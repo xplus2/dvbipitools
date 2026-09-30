@@ -55,12 +55,8 @@ int h3_dashchunk_dispatch(h3_conn_t *c, h3_req_t *r, int sub, int ws_handle) {
 void h3_dashchunk_wake(int sub_idx) {
   h3_conn_t *c = dash_lldash_sub_h3c(sub_idx);
   int64_t sid = dash_lldash_sub_h3_sid(sub_idx);
-  int fd;
   if (!c) return;
-  fd = c->local_addr.ss_family == AF_INET6 ? t_h3_udp6 : t_h3_udp4;
-  if (fd < 0) return;
-  nghttp3_conn_resume_stream(c->h3conn, sid);
-  flush_tx(c, fd);
+  h3_push_resume(c, sid);
 }
 
 #endif /* HAVE_HTTP3 */

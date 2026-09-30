@@ -14,7 +14,7 @@ static ssize_t dashchunk_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t
   (void)ng;
   (void)stream_id;
   (void)ud;
-  h2_dashchunk_stream_t *tcs = source->ptr;
+  h2_push_slot_t *tcs = source->ptr;
   size_t n;
   if (dash_lldash_ring_errored(tcs->sub_idx)) return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
   n = dash_lldash_ring_read(tcs->sub_idx, buf, length);
@@ -29,7 +29,7 @@ static ssize_t dashchunk_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t
   return (ssize_t)n;
 }
 
-static void h2_submit_dashchunk_response(h2_conn_t *conn, int32_t stream_id, h2_dashchunk_stream_t *tcs) {
+static void h2_submit_dashchunk_response(h2_conn_t *conn, int32_t stream_id, h2_push_slot_t *tcs) {
   nghttp2_nv nva[3] = {
       {(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP2_NV_FLAG_NONE},
       {(uint8_t *)"content-type", (uint8_t *)"video/mp4", 12, 9, NGHTTP2_NV_FLAG_NONE},
@@ -43,19 +43,15 @@ static void h2_submit_dashchunk_response(h2_conn_t *conn, int32_t stream_id, h2_
 
 void h2_dashchunk_wake(int sub_idx) {
   conn_t *c = dash_lldash_sub_h2c(sub_idx);
-  const h2_dashchunk_stream_t *tcs = dash_lldash_sub_h2_slot(sub_idx);
+  const h2_push_slot_t *tcs = dash_lldash_sub_h2_slot(sub_idx);
   h2_wake_stream(c, tcs ? tcs->sid : 0);
 }
 
 /* registers a dash-chunk stream. 1 = dispatched, 0 = slot table full (caller falls through) */
 int h2_dashchunk_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int sub_idx, int ws_handle) {
-  int ci = -1;
-  for (int i = 0; i < H2_DASHCHUNK_MAX; i++) if (!conn->dashchunk[i].sid) {
-    ci = i;
-    break;
-  }
+  int ci = h2_push_slot_find_free(conn->dashchunk, H2_DASHCHUNK_MAX);
   if (ci < 0) return 0;
-  h2_dashchunk_stream_t *tcs = &conn->dashchunk[ci];
+  h2_push_slot_t *tcs = &conn->dashchunk[ci];
   tcs->sub_idx = sub_idx;
   tcs->sid = stream_id;
   h2_submit_dashchunk_response(conn, stream_id, tcs);
@@ -64,15 +60,8 @@ int h2_dashchunk_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int sub
 }
 
 void h2_dashchunk_on_stream_close(h2_conn_t *conn, int32_t stream_id) {
-  for (int i = 0; i < H2_DASHCHUNK_MAX; i++) {
-    h2_dashchunk_stream_t *tcs = &conn->dashchunk[i];
-    if (tcs->sid != stream_id) continue;
-    int sub = tcs->sub_idx;
-    tcs->sid = 0;
-    tcs->sub_idx = -1;
-    dash_lldash_sub_close(sub);
-    return;
-  }
+  int sub = h2_push_slot_clear_by_sid(conn->dashchunk, H2_DASHCHUNK_MAX, stream_id);
+  if (sub >= 0) dash_lldash_sub_close(sub);
 }
 
 #endif /* HAVE_HTTP2 */

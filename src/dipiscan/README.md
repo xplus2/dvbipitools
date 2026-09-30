@@ -1,7 +1,8 @@
 # dipiscan
 
-Scan a multicast /24 (or analogous IPv6 range) for DVB-IPI services, write a playlist of what answered.
+Scan a multicast (or analogous IPv6) range for IPTV services, write a playlist of what answered.
 
+## Usage
 ```sh
 dipiscan [options] 1>playlist 2>log
 ```

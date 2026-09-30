@@ -1149,6 +1149,33 @@ START_TEST(pmt_pids_get_packet_and_scrambled_counters_with_detail_flag) {
 }
 END_TEST
 
+START_TEST(pid_and_service_detail_absent_below_full_level) {
+  tsinspect_t *basic = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  tsinspect_t *med = tsinspect_new(METRICS_INSPECT_TS_MEDIUM);
+  tsinspect_t *both[2] = {basic, med};
+  unsigned char sec[128], pkt[188], p[188];
+  size_t len;
+
+  for (int i = 0; i < 2; i++) {
+    tsinspect_enable_own_psi(both[i], 0);
+    tsinspect_tick(both[i], 1.0);
+    len = build_pat(sec, 0, 1, 0x100);
+    section_pkt(pkt, 0, sec, len);
+    tsinspect_packet(both[i], pkt);
+    len = build_pmt(sec, 0, 1, 0x101, 0x101);
+    section_pkt(pkt, 0x100, sec, len);
+    tsinspect_packet(both[i], pkt);
+    make_pkt(p, 0x101, 1, 0);
+    tsinspect_packet(both[i], p);
+    tsinspect_tick(both[i], 2.0);
+    ck_assert_uint_eq(count_series(both[i], METRICS_ID_TS_PID_PACKETS_TOTAL, NULL), 0u);
+    ck_assert_uint_eq(count_series(both[i], METRICS_ID_TS_SERVICE_PACKETS_TOTAL, NULL), 0u);
+  }
+  tsinspect_free(basic);
+  tsinspect_free(med);
+}
+END_TEST
+
 START_TEST(mgb1_and_mgb2_bitrates_follow_the_packet_rate) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   unsigned char p[188];
@@ -1230,6 +1257,7 @@ static Suite *inspect_suite(void) {
   tcase_add_test(tc, other_tables_checked_per_section_and_service);
   tcase_add_test(tc, known_pids_split_the_two_unreferenced_definitions);
   tcase_add_test(tc, pmt_pids_get_packet_and_scrambled_counters_with_detail_flag);
+  tcase_add_test(tc, pid_and_service_detail_absent_below_full_level);
   tcase_add_test(tc, exported_series_cover_tables_gap_stalls_and_bat_crc_by_level);
   tcase_add_test(tc, mgb1_and_mgb2_bitrates_follow_the_packet_rate);
   suite_add_tcase(s, tc);

@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DVBIPITOOLS_LIB_SCRAMBLER_SCRAMBLER_H
-#define DVBIPITOOLS_LIB_SCRAMBLER_SCRAMBLER_H
+#ifndef DVBIPITOOLS_LIB_SCRAMBLER_H
+#define DVBIPITOOLS_LIB_SCRAMBLER_H
 
 #include <stddef.h>
 
@@ -10,8 +10,7 @@ typedef struct scrambler scrambler_t;
 
 typedef enum { SCRAMBLE_ALGO_CISSA, SCRAMBLE_ALGO_CSA2 } scramble_algo_t;
 
-#define SCRAMBLE_PARITY_EVEN 0
-#define SCRAMBLE_PARITY_ODD 1
+typedef enum { SCRAMBLE_PARITY_EVEN, SCRAMBLE_PARITY_ODD } scramble_parity_t;
 
 scrambler_t *scrambler_new(scramble_algo_t algo);
 void scrambler_free(scrambler_t *s);

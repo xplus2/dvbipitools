@@ -60,6 +60,7 @@ void hls_resp_body_release(uint8_t *body, int zc) {
 }
 
 void capture_wait_pumps_quiescent(void) { /* fake: no pumps here */ }
+int capture_defer_after_quiescent(qsbr_deferred_fn fn, void *arg) { (void)fn; (void)arg; return 0; }
 
 conn_t *conn_for_fd(int fd) {
   (void)fd;

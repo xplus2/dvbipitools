@@ -9,6 +9,7 @@
 
 #include "lib/bim/accessunit.h"
 #include "lib/bim/fragment.h"
+#include "lib/helper/ioutil.h"
 
 static bcg_doc_t *build_doc(void) {
   static bcg_doc_t doc;
@@ -18,28 +19,28 @@ static bcg_doc_t *build_doc(void) {
   bcg_doc_init(&doc);
 
   c = bcg_add_channel(&doc);
-  snprintf(c->id, sizeof c->id, "channel1");
-  snprintf(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
+  bufcpy(c->id, sizeof c->id, "channel1");
+  bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
   c->onid = 2;
   c->tsid = 1;
   c->sid = 101;
   bcg_channel_add_name(c, "Channel One");
 
   c = bcg_add_channel(&doc); /* no uri: must be excluded entirely */
-  snprintf(c->id, sizeof c->id, "nouri");
+  bufcpy(c->id, sizeof c->id, "nouri");
 
   pr = bcg_add_programme(&doc);
-  snprintf(pr->channel_id, sizeof pr->channel_id, "channel1");
-  snprintf(pr->start, sizeof pr->start, "2020-12-15T12:00:00Z");
-  snprintf(pr->stop, sizeof pr->stop, "2020-12-15T12:30:00Z");
-  snprintf(pr->title, sizeof pr->title, "News");
-  snprintf(pr->desc, sizeof pr->desc, "Evening news");
-  snprintf(pr->category, sizeof pr->category, "Current affairs");
+  bufcpy(pr->channel_id, sizeof pr->channel_id, "channel1");
+  bufcpy(pr->start, sizeof pr->start, "2020-12-15T12:00:00Z");
+  bufcpy(pr->stop, sizeof pr->stop, "2020-12-15T12:30:00Z");
+  bufcpy(pr->title, sizeof pr->title, "News");
+  bufcpy(pr->desc, sizeof pr->desc, "Evening news");
+  bufcpy(pr->category, sizeof pr->category, "Current affairs");
 
   pr = bcg_add_programme(&doc);
-  snprintf(pr->channel_id, sizeof pr->channel_id, "channel1");
-  snprintf(pr->start, sizeof pr->start, "2020-12-15T13:00:00Z");
-  snprintf(pr->title, sizeof pr->title, "Weather");
+  bufcpy(pr->channel_id, sizeof pr->channel_id, "channel1");
+  bufcpy(pr->start, sizeof pr->start, "2020-12-15T13:00:00Z");
+  bufcpy(pr->title, sizeof pr->title, "Weather");
 
   return &doc;
 }
@@ -297,11 +298,11 @@ START_TEST(accessunit_decode_rejects_schedule_fuu_before_program_information_fuu
   int nfuu = -1;
 
   memset(&pr, 0, sizeof pr);
-  snprintf(pr.channel_id, sizeof pr.channel_id, "channel1");
-  snprintf(pr.start, sizeof pr.start, "2020-12-15T12:00:00Z");
-  snprintf(pr.title, sizeof pr.title, "News");
-  snprintf(pr.desc, sizeof pr.desc, "Evening news");
-  snprintf(pr.category, sizeof pr.category, "Current affairs");
+  bufcpy(pr.channel_id, sizeof pr.channel_id, "channel1");
+  bufcpy(pr.start, sizeof pr.start, "2020-12-15T12:00:00Z");
+  bufcpy(pr.title, sizeof pr.title, "News");
+  bufcpy(pr.desc, sizeof pr.desc, "Evening news");
+  bufcpy(pr.category, sizeof pr.category, "Current affairs");
 
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);

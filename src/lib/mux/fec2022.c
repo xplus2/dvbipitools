@@ -3,10 +3,9 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-#include <unistd.h>
 
 #include "../helper/beutil.h"
+#include "../helper/ioutil.h"
 #include "fec2022.h"
 
 typedef struct {
@@ -40,8 +39,7 @@ fec2022_enc_t *fec2022_enc_new(unsigned l, unsigned d, unsigned char pt) {
   e->l = l;
   e->d = d;
   e->pt = pt;
-  srand((unsigned)(time(NULL) ^ getpid()));
-  e->seq = (uint16_t)rand();
+  e->seq = (uint16_t)rand_seed32();
   return e;
 }
 

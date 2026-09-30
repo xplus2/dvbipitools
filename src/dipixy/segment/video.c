@@ -10,12 +10,14 @@
 
 /* builds s->video.nal_scratch (AVCC AU bytes) as a side effect, used by fmp4 mode */
 int detect_keyframe(hls_seg_ctx_t *s, const unsigned char *d, size_t len) {
-  size_t p, scl = 0;
+  size_t p;
+  size_t scl = 0;
   int key = 0;
   if (s->demux.video_codec == CODEC_MPEG2V) {
     p = find_startcode(d, len, 0, &scl);
     while (p < len) {
-      size_t ns = p + scl, scl2 = 0;
+      size_t ns = p + scl;
+      size_t scl2 = 0;
       size_t q = find_startcode(d, len, ns, &scl2);
       unsigned code = (ns < len) ? d[ns] : 0xFF;
       if (code == 0x00 && q >= ns + 3 && ((d[ns + 2] >> 3) & 0x07) == 1) key = 1; /* picture_coding_type: 1 = I */
@@ -26,43 +28,10 @@ int detect_keyframe(hls_seg_ctx_t *s, const unsigned char *d, size_t len) {
   }
 
   s->video.nal_scratch_len = 0;
-  p = find_startcode(d, len, 0, &scl);
-  while (p < len) {
-    size_t ns = p + scl, scl2 = 0;
-    size_t q = find_startcode(d, len, ns, &scl2);
-    size_t n = q - ns;
-    unsigned type;
-    if (n) {
-      switch (s->demux.video_codec) {
-        case CODEC_H264:
-          type = d[ns] & 0x1F;
-          esc_handle_h264_nal(&s->video.es, &s->video.nal_scratch, &s->video.nal_scratch_len, &s->video.nal_scratch_cap, type, d + ns, n, &key, NULL);
-          break;
-        case CODEC_HEVC:
-          type = (d[ns] >> 1) & 0x3F;
-          esc_handle_hevc_nal(&s->video.es, &s->video.nal_scratch, &s->video.nal_scratch_len, &s->video.nal_scratch_cap, type, d + ns, n, &key, NULL);
-          break;
-        case CODEC_VVC:
-          if (n >= 2) {
-            type = (d[ns + 1] >> 3) & 0x1F;
-            esc_handle_vvc_nal(&s->video.es, &s->video.nal_scratch, &s->video.nal_scratch_len, &s->video.nal_scratch_cap, type, d + ns, n, &key, NULL);
-          }
-          break;
-        case CODEC_AV1: {
-          if (growbuf_reserve((void **)&s->video.av1_rb, &s->video.av1_rbcap, 1, n, 4096)) break;
-          size_t rblen = rbsp_unescape(d + ns, n, s->video.av1_rb, s->video.av1_rbcap);
-          if (rblen) {
-            type = (unsigned)(s->video.av1_rb[0] >> 3) & 0x0F;
-            esc_handle_av1_obu(&s->video.es, &s->video.nal_scratch, &s->video.nal_scratch_len, &s->video.nal_scratch_cap, type, s->video.av1_rb, rblen, &key, NULL);
-          }
-          break;
-        }
-        default:
-          break;
-      }
-    }
-    p = q;
-    scl = scl2;
+  if (s->demux.video_codec == CODEC_AV1) {
+    esc_split_obus(&s->video.es, &s->video.nal_scratch, &s->video.nal_scratch_len, &s->video.nal_scratch_cap, d, len, &key, &s->video.av1_rb, &s->video.av1_rbcap);
+  } else if (s->demux.video_codec == CODEC_H264 || s->demux.video_codec == CODEC_HEVC || s->demux.video_codec == CODEC_VVC) {
+    esc_split_nals(&s->video.es, &s->video.nal_scratch, &s->video.nal_scratch_len, &s->video.nal_scratch_cap, d, len, &key, NULL);
   }
   return key;
 }
@@ -110,10 +79,14 @@ static void ts_part_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, size_t au_o
 
 void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len) {
   size_t cut_off;
-  int64_t pts_ms, ts_ms;
+  int64_t pts_ms;
+  int64_t ts_ms;
   int32_t cts_ticks;
   double elapsed;
-  int kf, open_now, cut_now;
+  double pt;
+  int kf;
+  int open_now;
+  int cut_now;
   if (!s->have_pending_pes) return; /* stream start: no offset recorded yet for this PES */
   cut_off = s->pending_pes_off;
   kf = detect_keyframe(s, data, len);
@@ -122,14 +95,12 @@ void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, 
   cts_ticks = (has_dts && pts_ms >= 0) ? (int32_t)((pts_ms - ts_ms) * 90) : 0;
   open_now = kf && !s->video.seg_open;
   elapsed = (kf && s->video.seg_open && ts_ms >= 0 && s->video.first_ts_ms >= 0) ? (double)(ts_ms - s->video.first_ts_ms) / 1000.0 : 0.0;
-  {
-    double pt = atomic_load_explicit(&s->part.part_target, memory_order_acquire);
-    cut_now = kf && s->video.seg_open && (elapsed >= s->video.seg_target || (s->container == SEG_CONTAINER_TS && pt <= 0.0 && s->video.boot_left > 0));
-    if (s->container == SEG_CONTAINER_FMP4)
-      fmp4_feed_au(s, kf, ts_ms, cts_ticks, open_now, cut_now, elapsed);
-    else if (s->container == SEG_CONTAINER_TS && pt > 0.0 && (s->video.seg_open || open_now))
-      ts_part_feed_au(s, kf, ts_ms, cut_off, open_now || cut_now);
-  }
+  pt = atomic_load_explicit(&s->part.part_target, memory_order_acquire);
+  cut_now = kf && s->video.seg_open && (elapsed >= s->video.seg_target || (s->container == SEG_CONTAINER_TS && pt <= 0.0 && s->video.boot_left > 0));
+  if (s->container == SEG_CONTAINER_FMP4)
+    fmp4_feed_au(s, kf, ts_ms, cts_ticks, open_now, cut_now, elapsed);
+  else if (s->container == SEG_CONTAINER_TS && pt > 0.0 && (s->video.seg_open || open_now))
+    ts_part_feed_au(s, kf, ts_ms, cut_off, open_now || cut_now);
   if (!kf) return;
   if (open_now) {
     /* first keyframe ever: drop any pre-keyframe garbage, start segment 0 here */
@@ -141,7 +112,7 @@ void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, 
   }
   if (!cut_now) return;
   if (s->container == SEG_CONTAINER_TS) {
-    if (atomic_load_explicit(&s->part.part_target, memory_order_acquire) > 0.0) {
+    if (pt > 0.0) {
       if (!s->store || hls_push_segment_ll_at(s->store, elapsed) < 0)
         log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_segment_ll failed, segment lost");
     } else {

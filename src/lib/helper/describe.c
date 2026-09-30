@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <arpa/inet.h>
+#include <string.h>
 
 #include "describe.h"
 #include "ioutil.h"
@@ -24,11 +25,10 @@ void describe_mcast_uri(char *buf, size_t n, const char *scheme, int family, con
 
 void describe_http_uri(char *buf, size_t n, int tls, const char *host, unsigned port, const char *path) {
   sbuf_t b;
+  int family = strchr(host, ':') ? AF_INET6 : AF_INET;
   sbuf_init(&b, buf, n);
   sbuf_add(&b, tls ? "https://" : "http://");
-  sbuf_add(&b, host);
-  sbuf_add(&b, ":");
-  sbuf_add_uint(&b, port);
+  add_host_port(&b, family, host, port);
   sbuf_add(&b, path);
 }
 

@@ -63,11 +63,13 @@ int tvh_apply_color(void *c, const char *v, char *e, size_t n) {
 }
 
 int tvh_apply_metrics_sock(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_sock, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_sock, v, e, n);
 }
 
 int tvh_apply_metrics_id(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_id, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_id, v, e, n);
 }
 
 int tvh_apply_metrics_interval(void *c, const char *v, char *e, size_t n) {

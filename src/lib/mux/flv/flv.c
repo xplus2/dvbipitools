@@ -54,7 +54,6 @@ void flv_close(flv_t *f) {
   free(f->vtrk.av1_rb);
   free(f->atrk.rem);
   free(f->atrk.vbuf);
-  ebuf_free(&f->tagbuf);
   pes_free(f->pes);
   psi_free(f->psi);
   free(f);

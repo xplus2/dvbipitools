@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "lib/tva/tva_xml.h"
+#include "lib/helper/ioutil.h"
 
 START_TEST(tva_xml_write_read_round_trips) {
   bcg_doc_t doc, doc2;
@@ -16,20 +17,20 @@ START_TEST(tva_xml_write_read_round_trips) {
 
   bcg_doc_init(&doc);
   c = bcg_add_channel(&doc);
-  snprintf(c->id, sizeof c->id, "bbc1");
-  snprintf(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
+  bufcpy(c->id, sizeof c->id, "bbc1");
+  bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
   c->tsid = 1;
   c->onid = 2;
   c->sid = 101;
   bcg_channel_add_name(c, "BBC One");
 
   pr = bcg_add_programme(&doc);
-  snprintf(pr->channel_id, sizeof pr->channel_id, "bbc1");
-  snprintf(pr->start, sizeof pr->start, "2024-03-15T12:30:45Z");
-  snprintf(pr->stop, sizeof pr->stop, "2024-03-15T13:00:00Z");
-  snprintf(pr->title, sizeof pr->title, "News & <Weather>");
+  bufcpy(pr->channel_id, sizeof pr->channel_id, "bbc1");
+  bufcpy(pr->start, sizeof pr->start, "2024-03-15T12:30:45Z");
+  bufcpy(pr->stop, sizeof pr->stop, "2024-03-15T13:00:00Z");
+  bufcpy(pr->title, sizeof pr->title, "News & <Weather>");
   snprintf(pr->desc, sizeof pr->desc, "Today's \"top\" stories");
-  snprintf(pr->category, sizeof pr->category, "News");
+  bufcpy(pr->category, sizeof pr->category, "News");
 
   f = tmpfile();
   ck_assert_ptr_nonnull(f);
@@ -70,11 +71,11 @@ START_TEST(tva_xml_write_drops_channels_without_uri) {
 
   bcg_doc_init(&doc);
   c = bcg_add_channel(&doc); /* no uri set */
-  snprintf(c->id, sizeof c->id, "noturi");
+  bufcpy(c->id, sizeof c->id, "noturi");
   pr = bcg_add_programme(&doc);
-  snprintf(pr->channel_id, sizeof pr->channel_id, "noturi");
-  snprintf(pr->start, sizeof pr->start, "2024-03-15T12:30:45Z");
-  snprintf(pr->title, sizeof pr->title, "Should be dropped");
+  bufcpy(pr->channel_id, sizeof pr->channel_id, "noturi");
+  bufcpy(pr->start, sizeof pr->start, "2024-03-15T12:30:45Z");
+  bufcpy(pr->title, sizeof pr->title, "Should be dropped");
 
   f = tmpfile();
   ck_assert_ptr_nonnull(f);

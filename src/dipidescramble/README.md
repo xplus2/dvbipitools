@@ -1,13 +1,12 @@
 # dipidescramble
 
 Standalone counterpart to `dipitvhead`'s scrambling: 
-It reads a (possibly scrambled) transport stream, extracts CAT/PMT, 
-pulls ECM/EMM off their PIDs (or once at startup via unicast interface),
+It reads a (possibly scrambled) transport stream, extracts CAT/PMT, pulls ECM/EMM off their PIDs (or once at startup via unicast interface),
 matches if it's ours (`-s`), decrypts the RSA -> BK -> SK -> CW chain with the device's private key
 and descrambles the stream in place, writing plain `.ts`/`.mkv`/`.mka`, or pushing it live to an 
 RTMP(S) ingest server. 
 
-This tool is mainly meant for automated tests.
+This tool is mainly meant for automated tests and as a reference.
 Since it uses/needs the device's private key, end-users can hardly ever provide what's needed.
 
 To speed up tests and/or to simulate an already provisioned client, the EMM cache

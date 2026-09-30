@@ -13,25 +13,26 @@ int build_video_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigne
   unsigned w = 0, h = 0;
   size_t cpriv_len;
 
+  if (!s->video.es.spslen) return 0;
   switch (s->demux.video_codec) {
     case CODEC_H264:
-      if (!s->video.es.spslen || h264_dims(s->video.es.sps, s->video.es.spslen, &w, &h)) return 0; /* h264_dims: 0 ok, -1 malformed */
+      if (h264_dims(s->video.es.sps, s->video.es.spslen, &w, &h)) return 0; /* h264_dims: 0 ok, -1 malformed */
       cpriv_len = build_avcc(&s->video.es, cpriv, cpriv_cap);
       break;
     case CODEC_HEVC: {
       unsigned char ptl[12];
       unsigned chroma;
-      if (!s->video.es.spslen || hevc_info(s->video.es.sps, s->video.es.spslen, ptl, &chroma, &w, &h)) return 0; /* hevc_info: 0 ok, -1 malformed */
+      if (hevc_info(s->video.es.sps, s->video.es.spslen, ptl, &chroma, &w, &h)) return 0; /* hevc_info: 0 ok, -1 malformed */
       cpriv_len = build_hvcc(&s->video.es, cpriv, cpriv_cap);
       break;
     }
     case CODEC_VVC:
-      if (!s->video.es.spslen || vvc_dims(s->video.es.sps, s->video.es.spslen, &w, &h)) return 0;
+      if (vvc_dims(s->video.es.sps, s->video.es.spslen, &w, &h)) return 0;
       cpriv_len = build_vvcc(&s->video.es, cpriv, cpriv_cap);
       break;
     case CODEC_AV1: {
       av1_seq_hdr_t info;
-      if (!s->video.es.spslen || av1_seq_hdr_info(s->video.es.sps, s->video.es.spslen, &info, &w, &h)) return 0;
+      if (av1_seq_hdr_info(s->video.es.sps, s->video.es.spslen, &info, &w, &h)) return 0;
       cpriv_len = build_av1c(&info, s->video.es.sps, s->video.es.spslen, cpriv, cpriv_cap);
       break;
     }
@@ -53,32 +54,32 @@ static void build_audio_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk,
   memset(trk, 0, sizeof *trk);
   trk->codec = s->demux.audio_codec;
   trk->track_id = track_id;
-  trk->timescale = s->audio.audio_rate;
-  trk->rate = s->audio.audio_rate;
-  trk->channels = s->audio.audio_channels;
+  trk->timescale = s->audio.rate;
+  trk->rate = s->audio.rate;
+  trk->channels = s->audio.channels;
   switch (s->demux.audio_codec) {
     case CODEC_AAC:
     case CODEC_AAC_LATM:
     case CODEC_AC4:
-      trk->cpriv = s->audio.es_audio.cpriv;
-      trk->cpriv_len = s->audio.es_audio.cpriv_len;
+      trk->cpriv = s->audio.es.cpriv;
+      trk->cpriv_len = s->audio.es.cpriv_len;
       break;
     case CODEC_AC3:
     case CODEC_EAC3:
-      trk->ac3_bsid = (unsigned char)s->audio.audio_bsid;
-      trk->ac3_bsmod = (unsigned char)s->audio.audio_bsmod;
-      trk->ac3_acmod = (unsigned char)s->audio.audio_acmod;
-      trk->ac3_lfeon = (unsigned char)s->audio.audio_lfeon;
-      trk->ac3_bitrate_code = s->audio.audio_bitrate_code;
+      trk->ac3_bsid = (unsigned char)s->audio.bsid;
+      trk->ac3_bsmod = (unsigned char)s->audio.bsmod;
+      trk->ac3_acmod = (unsigned char)s->audio.acmod;
+      trk->ac3_lfeon = (unsigned char)s->audio.lfeon;
+      trk->ac3_bitrate_code = s->audio.bitrate_code;
       break;
     case CODEC_TRUEHD:
-      trk->truehd_format_info = s->audio.audio_truehd_format_info;
-      trk->truehd_peak_data_rate = s->audio.audio_truehd_peak_data_rate;
+      trk->truehd_format_info = s->audio.truehd_format_info;
+      trk->truehd_peak_data_rate = s->audio.truehd_peak_data_rate;
       break;
     case CODEC_DTS:
     case CODEC_DTS_HD:
     case CODEC_DTS_HD_MA:
-      trk->dts_has_core = s->audio.audio_dts_has_core;
+      trk->dts_has_core = s->audio.dts_has_core;
       break;
     default:
       break;
@@ -98,8 +99,8 @@ void try_create_fmux(hls_seg_ctx_t *s) {
   ntrk = 1;
   s->fmp4.fmp4_audio_track_idx = -1;
   s->fmp4.fmp4_lcevc_track_idx = -1;
-  if (s->audio.audio_present) {
-    if (!s->audio.audio_ready) return;
+  if (s->audio.present) {
+    if (!s->audio.ready) return;
     build_audio_track_cfg(s, &trk[ntrk], (unsigned)(ntrk + 1));
     s->fmp4.fmp4_audio_track_idx = ntrk;
     ntrk++;
@@ -126,12 +127,12 @@ static void fmp4_close_fragment(hls_seg_ctx_t *s, double pt) {
   if (!outlen) return;
   mp4push_deliver(s, out, outlen);
   if (pt > 0.0) {
-    double chunk_dur = (double)(s->fmp4.fmp4_pend_ts_ms - s->fmp4.fmp4_frag_start_ts_ms) / 1000.0;
+    double chunk_dur = (double)(s->fmp4.pend_ts_ms - s->fmp4.fmp4_frag_start_ts_ms) / 1000.0;
     if (!s->store || hls_push_part_at(s->store, out, outlen, chunk_dur, s->fmp4.fmp4_frag_key) < 0)
       log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_part failed, fmp4 chunk lost");
-    if (s->fmp4.fmp4_pend_ends_seg && (!s->store || hls_push_segment_ll_at(s->store, s->fmp4.fmp4_pend_elapsed) < 0))
+    if (s->fmp4.pend_ends_seg && (!s->store || hls_push_segment_ll_at(s->store, s->fmp4.pend_elapsed) < 0))
       log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_segment_ll failed, fmp4 segment lost");
-  } else if (!s->store || hls_push_segment_at(s->store, out, outlen, s->fmp4.fmp4_pend_elapsed) < 0) {
+  } else if (!s->store || hls_push_segment_at(s->store, out, outlen, s->fmp4.pend_elapsed) < 0) {
     log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_segment failed, fmp4 segment lost");
   }
 }
@@ -139,8 +140,27 @@ static void fmp4_close_fragment(hls_seg_ctx_t *s, double pt) {
 static void fmp4_open_fragment(hls_seg_ctx_t *s) {
   fmp4_segment_begin(s->fmp4.fmux, s->fmp4.fmp4_seq++);
   s->fmp4.fmp4_frag_open = 1;
-  s->fmp4.fmp4_frag_start_ts_ms = s->fmp4.fmp4_pend_ts_ms;
-  s->fmp4.fmp4_frag_key = s->fmp4.fmp4_pend_key;
+  s->fmp4.fmp4_frag_start_ts_ms = s->fmp4.pend_ts_ms;
+  s->fmp4.fmp4_frag_key = s->fmp4.pend_key;
+}
+
+static void ac4_defer_apply(hls_seg_ctx_t *s, int *wants_cut, int *cut_now, double *elapsed) {
+  if (s->fmp4.fmp4_ac4_defer) {
+    if (s->audio.ac4_last_iframe || s->audio.ac4_frame_count - s->fmp4.fmp4_ac4_defer_start_count >= AC4_DEFER_MAX_FRAMES) {
+      s->fmp4.fmp4_ac4_defer = 0;
+      *wants_cut = 1;
+      *cut_now = s->fmp4.fmp4_ac4_defer_ends_seg;
+      *elapsed = s->fmp4.fmp4_ac4_defer_elapsed;
+    } else {
+      *wants_cut = 0;
+    }
+  } else if (*wants_cut && s->demux.audio_codec == CODEC_AC4 && s->audio.present && s->audio.ready && !s->audio.ac4_last_iframe) {
+    s->fmp4.fmp4_ac4_defer = 1;
+    s->fmp4.fmp4_ac4_defer_start_count = s->audio.ac4_frame_count;
+    s->fmp4.fmp4_ac4_defer_ends_seg = *cut_now;
+    s->fmp4.fmp4_ac4_defer_elapsed = *elapsed;
+    *wants_cut = 0;
+  }
 }
 
 /* open_now/cut_now apply once au is pending, 1 call later. ts_ms: decode-order (dts, or pts if no dts). cts_ticks: (pts-dts) in track ticks, 0 wo dts */
@@ -153,51 +173,37 @@ void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, int32_t cts_ticks, in
   pt = atomic_load_explicit(&s->part.part_target, memory_order_acquire);
   chunk_now = pt > 0.0 && s->fmp4.fmp4_frag_open && ts_ms >= 0 && s->fmp4.fmp4_frag_start_ts_ms >= 0 && (double)(ts_ms - s->fmp4.fmp4_frag_start_ts_ms) / 1000.0 >= pt;
   wants_cut = open_now || cut_now || chunk_now;
-  if (s->fmp4.fmp4_ac4_defer) {
-    if (s->audio.audio_ac4_last_iframe || s->audio.audio_ac4_frame_count - s->fmp4.fmp4_ac4_defer_start_count >= AC4_DEFER_MAX_FRAMES) {
-      s->fmp4.fmp4_ac4_defer = 0;
-      wants_cut = 1;
-      cut_now = s->fmp4.fmp4_ac4_defer_ends_seg;
-      elapsed = s->fmp4.fmp4_ac4_defer_elapsed;
-    } else {
-      wants_cut = 0;
-    }
-  } else if (wants_cut && s->demux.audio_codec == CODEC_AC4 && s->audio.audio_present && s->audio.audio_ready && !s->audio.audio_ac4_last_iframe) {
-    s->fmp4.fmp4_ac4_defer = 1;
-    s->fmp4.fmp4_ac4_defer_start_count = s->audio.audio_ac4_frame_count;
-    s->fmp4.fmp4_ac4_defer_ends_seg = cut_now;
-    s->fmp4.fmp4_ac4_defer_elapsed = elapsed;
-    wants_cut = 0;
-  }
-  if (s->fmp4.fmp4_have_pend && ts_ms >= 0 && s->fmp4.fmp4_pend_ts_ms >= 0 && (s->fmp4.fmp4_frag_open || s->fmp4.fmp4_pend_starts_frag)) {
+  ac4_defer_apply(s, &wants_cut, &cut_now, &elapsed);
+  if (s->fmp4.fmp4_have_pend && ts_ms >= 0 && s->fmp4.pend_ts_ms >= 0 && (s->fmp4.fmp4_frag_open || s->fmp4.pend_starts_frag)) {
     fmp4_sample_t samp;
-    int64_t dur_ms = ts_ms - s->fmp4.fmp4_pend_ts_ms;
+    int64_t dur_ms = ts_ms - s->fmp4.pend_ts_ms;
     if (dur_ms < 0) dur_ms = 0;
-    if (s->fmp4.fmp4_pend_starts_frag) {
+    if (s->fmp4.pend_starts_frag) {
       if (s->fmp4.fmp4_frag_open) fmp4_close_fragment(s, pt);
-      else s->fmp4.fmp4_anchor_ms = s->fmp4.fmp4_pend_ts_ms;
+      else s->fmp4.fmp4_anchor_ms = s->fmp4.pend_ts_ms;
       fmp4_open_fragment(s);
     }
     memset(&samp, 0, sizeof samp);
     samp.track_idx = 0;
-    samp.data = s->fmp4.fmp4_pend_data;
-    samp.size = s->fmp4.fmp4_pend_len;
+    samp.data = s->fmp4.pend_data;
+    samp.size = s->fmp4.pend_len;
     samp.duration = (uint32_t)(dur_ms * 90);
-    samp.cts_offset = s->fmp4.fmp4_pend_cts;
-    samp.keyframe = s->fmp4.fmp4_pend_key;
+    samp.cts_offset = s->fmp4.pend_cts;
+    samp.keyframe = s->fmp4.pend_key;
     fmp4_segment_add_sample(s->fmp4.fmux, &samp);
   }
-  if (buf_reserve(&s->fmp4.fmp4_pend_data, &s->fmp4.fmp4_pend_cap, s->video.nal_scratch_len) < 0) {
-    log_throttled(&s->oom_drop_throttle, LOG_THROTTLE_WINDOW_S, "hls: buf_reserve failed, fmp4 access unit dropped"); return;
+  if (buf_reserve(&s->fmp4.pend_data, &s->fmp4.pend_cap, s->video.nal_scratch_len) < 0) {
+    log_throttled(&s->oom_drop_throttle, LOG_THROTTLE_WINDOW_S, "hls: buf_reserve failed, fmp4 access unit dropped");
+    return;
   }
-  memcpy(s->fmp4.fmp4_pend_data, s->video.nal_scratch, s->video.nal_scratch_len);
-  s->fmp4.fmp4_pend_len = s->video.nal_scratch_len;
-  s->fmp4.fmp4_pend_key = kf;
-  s->fmp4.fmp4_pend_ts_ms = ts_ms;
-  s->fmp4.fmp4_pend_cts = cts_ticks;
-  s->fmp4.fmp4_pend_starts_frag = wants_cut;
-  s->fmp4.fmp4_pend_ends_seg = cut_now;
-  s->fmp4.fmp4_pend_elapsed = elapsed;
+  memcpy(s->fmp4.pend_data, s->video.nal_scratch, s->video.nal_scratch_len);
+  s->fmp4.pend_len = s->video.nal_scratch_len;
+  s->fmp4.pend_key = kf;
+  s->fmp4.pend_ts_ms = ts_ms;
+  s->fmp4.pend_cts = cts_ticks;
+  s->fmp4.pend_starts_frag = wants_cut;
+  s->fmp4.pend_ends_seg = cut_now;
+  s->fmp4.pend_elapsed = elapsed;
   s->fmp4.fmp4_have_pend = 1;
 }
 
@@ -236,24 +242,25 @@ void fmp4_feed_lcevc_au(hls_seg_ctx_t *s, int64_t ts_ms, const unsigned char *da
 void fmp4_feed_audio_au(hls_seg_ctx_t *s, const esc_frame_t *f) {
   fmp4_sample_t samp;
   int32_t dur;
+  int64_t start_samples;
+  double est_ms;
+  double delta_ms;
   if (!s->fmp4.fmux || !s->fmp4.fmp4_frag_open || s->fmp4.fmp4_audio_track_idx < 0) return;
   if (!s->audio.fmp4_audio_seeded) {
-    if (!s->audio.audio_pts_anchored) return; /* position vs video unknown yet: drop, retry next frame */
+    if (!s->audio.pts_anchored) return; /* position vs video unknown yet: drop, retry next frame */
 
-    {
-      int64_t start_samples = s->audio.audio_nominal_samples - (int64_t)f->samples;
-      double est_ms = (double)s->audio.audio_anchor_pts_ms + (double)(start_samples - s->audio.audio_anchor_nominal_samples) * 1000.0 / (double)s->audio.audio_rate;
-      double delta_ms = est_ms - (double)s->fmp4.fmp4_anchor_ms;
-      if (delta_ms < 0.0) return; /* frame predates video's start: drop, retry next frame */
-      fmp4_track_seed_dts(s->fmp4.fmux, s->fmp4.fmp4_audio_track_idx, (uint64_t)(delta_ms * (double)s->audio.audio_rate / 1000.0 + 0.5));
-    }
+    start_samples = s->audio.nominal_samples - (int64_t)f->samples;
+    est_ms = (double)s->audio.anchor_pts_ms + (double)(start_samples - s->audio.anchor_nominal_samples) * 1000.0 / (double)s->audio.rate;
+    delta_ms = est_ms - (double)s->fmp4.fmp4_anchor_ms;
+    if (delta_ms < 0.0) return; /* frame predates video's start: drop, retry next frame */
+    fmp4_track_seed_dts(s->fmp4.fmux, s->fmp4.fmp4_audio_track_idx, (uint64_t)(delta_ms * (double)s->audio.rate / 1000.0 + 0.5));
     s->audio.fmp4_audio_seeded = 1;
-    s->audio.audio_pending_drift_samples = 0; /* stale: measured against dropped frames */
+    s->audio.pending_drift_samples = 0; /* stale: measured against dropped frames */
   }
   dur = (int32_t)f->samples;
-  if (s->audio.audio_pending_drift_samples) {
-    int32_t corr = (int32_t)s->audio.audio_pending_drift_samples;
-    s->audio.audio_pending_drift_samples = 0;
+  if (s->audio.pending_drift_samples) {
+    int32_t corr = (int32_t)s->audio.pending_drift_samples;
+    s->audio.pending_drift_samples = 0;
     if (dur + corr > 0) dur += corr;
   }
   memset(&samp, 0, sizeof samp);

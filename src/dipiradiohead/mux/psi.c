@@ -69,6 +69,9 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   char combined[EIT_MAX_EVENT_NAME + 1];
   time_t now;
   struct tm tmv;
+  size_t alen;
+  size_t tlen;
+  size_t o;
 
   if (cap < 40) return 0;
   out[n++] = 0x4E;
@@ -111,23 +114,21 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   out[n++] = 'u';
   out[n++] = 'n';
   out[n++] = 'd';
-  {
-    size_t alen = artist[0] ? strlen(artist) : 0;
-    size_t tlen = title[0] ? strlen(title) : 0;
-    size_t o = 0;
+  alen = artist[0] ? strlen(artist) : 0;
+  tlen = title[0] ? strlen(title) : 0;
+  o = 0;
 
-    alen = psi_utf8_clamp(artist, alen, sizeof combined - 1);
-    memcpy(combined, artist, alen);
-    o = alen;
-    if (alen && tlen && o + 1 < sizeof combined) combined[o++] = ' ';
-    if (tlen && o < sizeof combined - 1) {
-      size_t room = sizeof combined - 1 - o;
-      tlen = psi_utf8_clamp(title, tlen, room);
-      memcpy(combined + o, title, tlen);
-      o += tlen;
-    }
-    combined[o] = '\0';
+  alen = psi_utf8_clamp(artist, alen, sizeof combined - 1);
+  memcpy(combined, artist, alen);
+  o = alen;
+  if (alen && tlen && o + 1 < sizeof combined) combined[o++] = ' ';
+  if (tlen && o < sizeof combined - 1) {
+    size_t room = sizeof combined - 1 - o;
+    tlen = psi_utf8_clamp(title, tlen, room);
+    memcpy(combined + o, title, tlen);
+    o += tlen;
   }
+  combined[o] = '\0';
   enl_pos = n;
   n++;
   enl = psi_put_text(out + n, cap - n, combined);

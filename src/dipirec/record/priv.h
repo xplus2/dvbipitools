@@ -75,7 +75,7 @@ typedef struct {
 
 int rtmp_fanout_open(const config_t *cfg, rtmp_fanout_t *r);
 void rtmp_fanout_close(const rtmp_fanout_t *r);
-void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len);
+void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn);
 
 void push_metrics(metrics_exporter_t *mx, const config_t *cfg, const out_sink_t *sinks, int n_sinks, const rtmp_fanout_t *rf, unsigned long long bytes, double start);
 

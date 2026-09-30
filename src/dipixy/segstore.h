@@ -102,7 +102,7 @@ typedef struct {
   char etag[48];             /* empty string: no ETag on this response */
   uint8_t *body;             /* NULL for 304/404 or a HEAD request */
   size_t body_len;
-  int zc;                    /* 1: body is a seg_buf ref, not a private copy */
+  int zc;
 } hls_resp_t;
 
 /* releases *out's body. safe on NULL. call exactly once */

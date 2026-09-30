@@ -27,7 +27,9 @@
 #define RTCP_RAMS_T_TLV_FIRST_MC_SEQNUM 61
 
 size_t rtcp_build_ff(uint32_t sender_ssrc, uint32_t media_ssrc, const rtcp_nack_entry_t *entries, size_t entry_count, unsigned char *out, size_t cap) {
-  size_t total, words, i;
+  size_t total;
+  size_t words;
+  size_t i;
 
   if (entry_count == 0)
     return 0;
@@ -91,7 +93,9 @@ size_t rtcp_build_rsi_srbt_addr(const unsigned char *addr, size_t addr_len, uint
 }
 
 size_t rtcp_build_rsi_srbt_dns(const char *name, size_t name_len, uint16_t port, unsigned char *out, size_t cap) {
-  size_t data_len, padded, total;
+  size_t data_len;
+  size_t padded;
+  size_t total;
 
   if (name_len == 0 || name_len > 250)
     return 0;
@@ -146,7 +150,9 @@ size_t rtcp_build_rsi_srbt_collision(const uint32_t *ssrcs, size_t count, unsign
 }
 
 size_t rtcp_build_rams_r(const rtcp_rams_r_t *req, unsigned char *out, size_t cap) {
-  size_t total, words, off;
+  size_t total;
+  size_t words;
+  size_t off;
 
   total = 16;
   if (req->ignore_media_ssrc)
@@ -202,7 +208,8 @@ size_t rtcp_build_rams_r(const rtcp_rams_r_t *req, unsigned char *out, size_t ca
 }
 
 size_t rtcp_build_rams_t(const rtcp_rams_t_t *term, unsigned char *out, size_t cap) {
-  size_t total, words;
+  size_t total;
+  size_t words;
 
   total = 16;
   if (term->has_first_mc_seqnum)
@@ -231,7 +238,9 @@ size_t rtcp_build_rams_t(const rtcp_rams_t_t *term, unsigned char *out, size_t c
 }
 
 size_t rtcp_build_rams_i(uint32_t sender_ssrc, uint32_t media_ssrc, uint8_t msn, uint16_t response, const rtcp_rams_i_tlvs_t *tlvs, unsigned char *out, size_t cap) {
-  size_t total, words, off;
+  size_t total;
+  size_t words;
+  size_t off;
 
   total = 16; /* header(4) + sender_ssrc(4) + media_ssrc(4) + SFMT/MSN/Response(4) */
   if (tlvs) {
@@ -260,41 +269,43 @@ size_t rtcp_build_rams_i(uint32_t sender_ssrc, uint32_t media_ssrc, uint8_t msn,
   be16_put(out + 14, response);
 
   off = 16;
-  if (tlvs && tlvs->has_media_ssrc_tlv) {
-    out[off] = RTCP_RAMS_TLV_MEDIA_SSRC;
-    out[off + 1] = 0;
-    be16_put(out + off + 2, 4);
-    be32_put(out + off + 4, tlvs->media_ssrc_tlv);
-    off += 8;
-  }
-  if (tlvs && tlvs->has_first_packet_seqnum) {
-    out[off] = RTCP_RAMS_TLV_FIRST_PACKET_SEQNUM;
-    out[off + 1] = 0;
-    be16_put(out + off + 2, 2);
-    be16_put(out + off + 4, tlvs->first_packet_seqnum);
-    out[off + 6] = 0; /* padding to 4-byte boundary */
-    out[off + 7] = 0;
-    off += 8;
-  }
-  if (tlvs && tlvs->has_earliest_join_time) {
-    out[off] = RTCP_RAMS_TLV_EARLIEST_JOIN_TIME;
-    out[off + 1] = 0;
-    be16_put(out + off + 2, 4);
-    be32_put(out + off + 4, tlvs->earliest_join_time_ms);
-    off += 8;
-  }
-  if (tlvs && tlvs->has_burst_duration) {
-    out[off] = RTCP_RAMS_TLV_BURST_DURATION;
-    out[off + 1] = 0;
-    be16_put(out + off + 2, 4);
-    be32_put(out + off + 4, tlvs->burst_duration_ms);
-    off += 8;
-  }
-  if (tlvs && tlvs->has_max_transmit_bitrate) {
-    out[off] = RTCP_RAMS_TLV_MAX_TRANSMIT_BITRATE;
-    out[off + 1] = 0;
-    be16_put(out + off + 2, 8);
-    be64_put(out + off + 4, tlvs->max_transmit_bitrate_bps);
+  if (tlvs) {
+    if (tlvs->has_media_ssrc_tlv) {
+      out[off] = RTCP_RAMS_TLV_MEDIA_SSRC;
+      out[off + 1] = 0;
+      be16_put(out + off + 2, 4);
+      be32_put(out + off + 4, tlvs->media_ssrc_tlv);
+      off += 8;
+    }
+    if (tlvs->has_first_packet_seqnum) {
+      out[off] = RTCP_RAMS_TLV_FIRST_PACKET_SEQNUM;
+      out[off + 1] = 0;
+      be16_put(out + off + 2, 2);
+      be16_put(out + off + 4, tlvs->first_packet_seqnum);
+      out[off + 6] = 0; /* padding to 4-byte boundary */
+      out[off + 7] = 0;
+      off += 8;
+    }
+    if (tlvs->has_earliest_join_time) {
+      out[off] = RTCP_RAMS_TLV_EARLIEST_JOIN_TIME;
+      out[off + 1] = 0;
+      be16_put(out + off + 2, 4);
+      be32_put(out + off + 4, tlvs->earliest_join_time_ms);
+      off += 8;
+    }
+    if (tlvs->has_burst_duration) {
+      out[off] = RTCP_RAMS_TLV_BURST_DURATION;
+      out[off + 1] = 0;
+      be16_put(out + off + 2, 4);
+      be32_put(out + off + 4, tlvs->burst_duration_ms);
+      off += 8;
+    }
+    if (tlvs->has_max_transmit_bitrate) {
+      out[off] = RTCP_RAMS_TLV_MAX_TRANSMIT_BITRATE;
+      out[off + 1] = 0;
+      be16_put(out + off + 2, 8);
+      be64_put(out + off + 4, tlvs->max_transmit_bitrate_bps);
+    }
   }
 
   return total;

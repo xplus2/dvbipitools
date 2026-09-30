@@ -58,16 +58,16 @@ static const unsigned char *maybe_rewrite_pmt(ts_sub_t *s, const unsigned char *
 void ts_push_rawaudio_emit(void *vctx, const unsigned char *data, size_t len) {
   ts_sub_t *s = vctx;
   switch (s->proto) {
-    case 1:
+    case CONN_PROTO_H1:
       ts_push_ring_enqueue(s, data, len);
       break;
 #ifdef HAVE_HTTP2
-    case 2:
+    case CONN_PROTO_H2:
       ts_push_h2_enqueue((int)(s - g_ts_subs), data, len);
       break;
 #endif
 #ifdef HAVE_HTTP3
-    case 3:
+    case CONN_PROTO_H3:
       ts_push_h3_enqueue((int)(s - g_ts_subs), data, len);
       break;
 #endif
@@ -77,12 +77,11 @@ void ts_push_rawaudio_emit(void *vctx, const unsigned char *data, size_t len) {
 }
 
 void ts_push_drop_sub(const ts_sub_t *s, int idx) {
-  if (s->proto == 1) {
+  if (s->proto == CONN_PROTO_H1) {
     conn_t *c = conn_for_fd(s->fd);
     if (c) conn_request_close(c);
   }
   ts_push_unsubscribe_by_idx(idx);
-  (void)s;
 }
 
 void ts_push_feed_pkt(capture_ctx_t *ctx, const uint8_t *pkt) {
@@ -107,16 +106,16 @@ void ts_push_feed_pkt(capture_ctx_t *ctx, const uint8_t *pkt) {
     if (pid_filter_excludes(&s->filter, pid)) goto next_sub;
     out = maybe_rewrite_pmt(s, pkt, pid, pmt_rw, pmt_pkt);
     switch (s->proto) {
-      case 1:
+      case CONN_PROTO_H1:
         ts_push_ring_enqueue(s, out, 188);
         break;
 #ifdef HAVE_HTTP2
-      case 2:
+      case CONN_PROTO_H2:
         ts_push_h2_enqueue(i, out, 188);
         break;
 #endif
 #ifdef HAVE_HTTP3
-      case 3:
+      case CONN_PROTO_H3:
         ts_push_h3_enqueue(i, out, 188);
         break;
 #endif

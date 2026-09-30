@@ -232,6 +232,253 @@ START_TEST(device_desc_omits_x_dvbdoc) {
 }
 END_TEST
 
+START_TEST(root_browse_direct_children_lists_stdin_and_named_http_source) {
+  config_t cfg;
+  source_def_t sources[1];
+  channels_t *ch;
+  char *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.stdin_ordinal = 1;
+  cfg.stdin_name = "My Stdin";
+  cfg.stdin_media_type = MEDIA_TV;
+  ch = channels_build(&cfg);
+  ck_assert_ptr_nonnull(ch);
+  memset(sources, 0, sizeof sources);
+  sources[0].kind = SRC_HTTP;
+  sources[0].value = "http://example.invalid/list.m3u";
+  sources[0].ordinal = 2;
+  sources[0].name = "My HTTP";
+  sources[0].media_type = MEDIA_TV;
+  cfg.sources = sources;
+  cfg.n_sources = 1;
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "0", "BrowseDirectChildren", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "id=&quot;stdin&quot;"));
+  ck_assert_ptr_nonnull(strstr(out, "My Stdin"));
+  ck_assert_ptr_nonnull(strstr(out, "id=&quot;H2&quot;"));
+  ck_assert_ptr_nonnull(strstr(out, "#2 My HTTP"));
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(root_browse_direct_children_lists_rist_default_name_and_unnamed_playlist) {
+  config_t cfg;
+  source_def_t sources[1];
+  channels_t *ch;
+  char path[160], *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.rist_ordinal = 1;
+  cfg.rist_media_type = MEDIA_TV;
+  write_temp_file(path, "m3u", "#EXTINF:-1,RTP Channel\nrtp://@239.1.1.1:5000\n");
+  memset(sources, 0, sizeof sources);
+  sources[0].kind = SRC_M3U;
+  sources[0].value = path;
+  sources[0].ordinal = 2;
+  cfg.sources = sources;
+  cfg.n_sources = 1;
+  ch = channels_build(&cfg);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "0", "BrowseDirectChildren", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "id=&quot;rist&quot;"));
+  ck_assert_ptr_nonnull(strstr(out, "&gt;rist&lt;"));
+  ck_assert_ptr_nonnull(strstr(out, "id=&quot;L2&quot;"));
+  ck_assert_ptr_nonnull(strstr(out, "Playlist #2 [m3u]"));
+  ck_assert_ptr_nonnull(strstr(out, "childCount=&quot;1&quot;"));
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(root_browse_metadata_returns_root_container) {
+  config_t cfg;
+  channels_t *ch;
+  char *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.stdin_ordinal = 1;
+  cfg.rist_ordinal = 2;
+  ch = channels_build(&cfg);
+  ck_assert_ptr_nonnull(ch);
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "0", "BrowseMetadata", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "id=&quot;0&quot;"));
+  ck_assert_ptr_nonnull(strstr(out, "childCount=&quot;2&quot;"));
+  ck_assert_ptr_nonnull(strstr(out, "TotalMatches>1<"));
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(stdin_metadata_returns_item_with_name) {
+  config_t cfg;
+  channels_t *ch;
+  char *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.stdin_ordinal = 1;
+  cfg.stdin_name = "My Stdin";
+  cfg.stdin_media_type = MEDIA_TV;
+  ch = channels_build(&cfg);
+  ck_assert_ptr_nonnull(ch);
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "stdin", "BrowseMetadata", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "id=&quot;stdin&quot; parentID=&quot;0&quot;"));
+  ck_assert_ptr_nonnull(strstr(out, "My Stdin"));
+  ck_assert_ptr_nonnull(strstr(out, "http://dvb.example:9080/"));
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(rist_metadata_returns_item_default_name) {
+  config_t cfg;
+  channels_t *ch;
+  char *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.rist_ordinal = 1;
+  cfg.rist_media_type = MEDIA_TV;
+  ch = channels_build(&cfg);
+  ck_assert_ptr_nonnull(ch);
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "rist", "BrowseMetadata", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "id=&quot;rist&quot; parentID=&quot;0&quot;"));
+  ck_assert_ptr_nonnull(strstr(out, "&gt;rist&lt;"));
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(http_source_metadata_named) {
+  config_t cfg;
+  source_def_t sources[1];
+  channels_t *ch;
+  char *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  ch = channels_build(&cfg);
+  ck_assert_ptr_nonnull(ch);
+  memset(sources, 0, sizeof sources);
+  sources[0].kind = SRC_HTTP;
+  sources[0].value = "http://example.invalid/list.m3u";
+  sources[0].ordinal = 1;
+  sources[0].name = "My HTTP";
+  sources[0].media_type = MEDIA_TV;
+  cfg.sources = sources;
+  cfg.n_sources = 1;
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "H1", "BrowseMetadata", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "id=&quot;H1&quot; parentID=&quot;0&quot;"));
+  ck_assert_ptr_nonnull(strstr(out, "#1 My HTTP"));
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(list_source_metadata_named) {
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+  char path[160], *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  write_temp_file(path, "m3u", "#EXTINF:-1,RTP Channel\nrtp://@239.1.1.1:5000\n");
+  ch = build_single_list(&cfg, &src, SRC_M3U, path);
+  src.name = "My List";
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "L1", "BrowseMetadata", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "id=&quot;L1&quot; parentID=&quot;0&quot;"));
+  ck_assert_ptr_nonnull(strstr(out, "#1 My List"));
+  ck_assert_ptr_nonnull(strstr(out, "childCount=&quot;1&quot;"));
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(list_source_metadata_unnamed_uses_kind_fallback_title) {
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+  char path[160], *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  write_temp_file(path, "m3u", "#EXTINF:-1,RTP Channel\nrtp://@239.1.1.1:5000\n");
+  ch = build_single_list(&cfg, &src, SRC_M3U, path);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "L1", "BrowseMetadata", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "Playlist #1 [m3u]"));
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(item_metadata_title_uses_index_and_channel_name) {
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+  char path[160], *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  write_temp_file(path, "m3u", "#EXTINF:-1,RTP Channel\nrtp://@239.1.1.1:5000\n");
+  ch = build_single_list(&cfg, &src, SRC_M3U, path);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "L1I1", "BrowseMetadata", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "&lt;dc:title&gt;#1 RTP Channel&lt;/dc:title&gt;"));
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(list_direct_children_item_title_uses_index_and_channel_name) {
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+  char path[160], *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  write_temp_file(path, "m3u", "#EXTINF:-1,RTP Channel\nrtp://@239.1.1.1:5000\n");
+  ch = build_single_list(&cfg, &src, SRC_M3U, path);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "L1", "BrowseDirectChildren", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "&lt;dc:title&gt;#1 RTP Channel&lt;/dc:title&gt;"));
+
+  channels_free(ch);
+}
+END_TEST
+
 static Suite *dlna_suite(void) {
   Suite *s = suite_create("dipixy_dlna");
   TCase *tc = tcase_create("core");
@@ -244,6 +491,16 @@ static Suite *dlna_suite(void) {
   tcase_add_test(tc, device_desc_omits_x_dvbdoc);
   tcase_add_test(tc, get_protocol_info_lists_video);
   tcase_add_test(tc, get_protocol_info_lists_multicast_when_keep_multicast_set);
+  tcase_add_test(tc, root_browse_direct_children_lists_stdin_and_named_http_source);
+  tcase_add_test(tc, root_browse_direct_children_lists_rist_default_name_and_unnamed_playlist);
+  tcase_add_test(tc, root_browse_metadata_returns_root_container);
+  tcase_add_test(tc, stdin_metadata_returns_item_with_name);
+  tcase_add_test(tc, rist_metadata_returns_item_default_name);
+  tcase_add_test(tc, http_source_metadata_named);
+  tcase_add_test(tc, list_source_metadata_named);
+  tcase_add_test(tc, list_source_metadata_unnamed_uses_kind_fallback_title);
+  tcase_add_test(tc, item_metadata_title_uses_index_and_channel_name);
+  tcase_add_test(tc, list_direct_children_item_title_uses_index_and_channel_name);
   suite_add_tcase(s, tc);
   return s;
 }

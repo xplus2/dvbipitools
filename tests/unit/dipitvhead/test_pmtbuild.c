@@ -11,6 +11,7 @@
 #include "dipitvhead/mux/pmtbuild.h"
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
+#include "lib/helper/ioutil.h"
 
 static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
   pkt[0] = 0x47;
@@ -38,20 +39,20 @@ START_TEST(pmtbuild_map_es_picks_video_first_and_drops_unsupported) {
   es[1].pid = 0x0102;
   es[1].cls = PID_AUDIO;
   es[1].codec = CODEC_AAC;
-  snprintf(es[1].lang, sizeof es[1].lang, "deu");
+  bufcpy(es[1].lang, sizeof es[1].lang, "deu");
   es[2].pid = 0x0103;
   es[2].cls = PID_SUBTITLE;
   es[2].sub_type = 1;
   es[2].sub_composition_page = 100;
   es[2].sub_ancillary_page = 200;
-  snprintf(es[2].lang, sizeof es[2].lang, "deu");
+  bufcpy(es[2].lang, sizeof es[2].lang, "deu");
   es[3].pid = 0x0104;
   es[3].cls = PID_DATA; /* unsupported, must be dropped */
   es[4].pid = 0x0105;
   es[4].cls = PID_TELETEXT;
   es[4].ttx_page = 777;
   es[4].ttx_type = 2;
-  snprintf(es[4].ttx_lang, sizeof es[4].ttx_lang, "deu");
+  bufcpy(es[4].ttx_lang, sizeof es[4].ttx_lang, "deu");
 
   n = pmtbuild_map_es(es, 5, TVSTRIP_DATA, 0x0102 /* PCR on the audio pid */, pids.video_pid, pids.es_pid_base, out_es, 8, &pcr_pid, &dropped);
 
@@ -150,7 +151,7 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
   es[3].cls = PID_TELETEXT;
   es[3].ttx_page = 777;
   es[3].ttx_type = 2;
-  snprintf(es[3].ttx_lang, sizeof es[3].ttx_lang, "deu");
+  bufcpy(es[3].ttx_lang, sizeof es[3].ttx_lang, "deu");
 
   n = pmtbuild_map_es(es, 4, 0, 0x0101, pids.video_pid, pids.es_pid_base, out_es, 8, &pcr_pid, &dropped);
   ck_assert_int_eq(n, 4);

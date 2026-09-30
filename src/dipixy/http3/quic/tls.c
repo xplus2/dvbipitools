@@ -72,7 +72,10 @@ int h3_create_udp_sock(int port, const char *host) {
   struct sockaddr_in saddr = {0};
   saddr.sin_family = AF_INET;
   saddr.sin_port = htons((uint16_t)port);
-  inet_pton(AF_INET, host, &saddr.sin_addr);
+  if (inet_pton(AF_INET, host, &saddr.sin_addr) != 1) {
+    close(sock);
+    return -1;
+  }
 
   if (bind(sock, (struct sockaddr *)&saddr, sizeof saddr) < 0) {
     close(sock);
@@ -99,8 +102,12 @@ int h3_create_udp_sock6(int port, const char *host6) {
   struct sockaddr_in6 saddr6 = {0};
   saddr6.sin6_family = AF_INET6;
   saddr6.sin6_port = htons((uint16_t)port);
-  if (!host6 || !host6[0] || strcmp(host6, "::") == 0) saddr6.sin6_addr = in6addr_any;
-  else inet_pton(AF_INET6, host6, &saddr6.sin6_addr);
+  if (!host6 || !host6[0] || strcmp(host6, "::") == 0) {
+    saddr6.sin6_addr = in6addr_any;
+  } else if (inet_pton(AF_INET6, host6, &saddr6.sin6_addr) != 1) {
+    close(sock);
+    return -1;
+  }
 
   if (bind(sock, (struct sockaddr *)&saddr6, sizeof saddr6) < 0) {
     close(sock);

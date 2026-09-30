@@ -81,7 +81,7 @@ void srtsink_put_queue_metrics(metrics_writer_t *w, void *ctx) {
     srtout_queue_stats(q->sinks[i]->o, &st);
     metrics_writer_put(w, METRICS_ID_SRT_SENDER_QUEUE_CHUNKS, st.peer_label, (uint64_t)st.chunks);
     metrics_writer_put(w, METRICS_ID_SRT_SENDER_QUEUE_CAPACITY_CHUNKS, st.peer_label, (uint64_t)st.capacity);
-    if (q->queue_metrics > 1) {
+    if (q->queue_metrics == SRT_QUEUE_METRICS_FULL) {
       metrics_writer_put(w, METRICS_ID_SRT_SENDER_QUEUE_HIGH_WATERMARK_CHUNKS, st.peer_label, (uint64_t)st.high_watermark);
       metrics_writer_put(w, METRICS_ID_SRT_SENDER_QUEUE_DROPPED_CHUNKS_TOTAL, st.peer_label, st.dropped);
     }

@@ -1,30 +1,20 @@
 dvbipitools (2.5.0-1) unstable; urgency=low
   * example systemd units
-  * config file alternative to cmdline args (-c|--config)
+  * yaml config file alternative to cmdline args (-c|--config)
     + search path: /etc/dvbipitools/[toolname].yaml
     + --configtest to check config
     + --config-strict to fail on warnings
-    + affected tools
-      - dipimetrics
-      - dipisds
-      - dipibcg
-      - dipicam378
-      - dipidescramble
-      - dipirist
-      - dipisrt
-      - dipiscan
-      - dipirec
-      - dipifccret
-      - dipixy
-      - dipiradiohead
-      - dipitvhead
+    + affected tools: all except for dipixmltv and dipibim
   * multicall binary: --install sym/hardlink creation
-  * dipixy HTTP/3
-    + alt-svc
-    + configurable "streaming friendly" concurrency+timeouts
-    * retry, version negotiation, stateless reset
-    * connection migration
-    * congestion control
+  * dipixy
+    + HTTP/3
+      - proper alt-svc
+      - configurable "streaming friendly" concurrency+timeouts
+      - retry, version negotiation, stateless reset
+      - connection migration
+      - congestion control
+    + also accept direct rtp|udp:// -i without a playlist
+    + --ts-startup-timeout: handle valid addr+igmp but no multicast case
   * TS inspection / health indicators, in and out to be exposed in metrics
     + dipimetrics is down compatible, deploy it first
     + available in all TS-handling tools
@@ -34,6 +24,9 @@ dvbipitools (2.5.0-1) unstable; urgency=low
         medium: medium impact
         full: most metrics, comes at a cost
     + TR 101 290 subset (+ a few others)
+  * extended http(s):// inputs auto-detection and support on dipitvhead, dipixy and dipirec
+    + ladders take best quality
+    + detected/supported: HLS/LL-HLS/HLS+fMP4/LL-DASH/DASH/TSpush
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.2-1) unstable; urgency=low

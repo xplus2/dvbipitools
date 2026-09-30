@@ -30,6 +30,7 @@ typedef struct {
   const char *iface;
   int verbose;
   int color_mode; /* log_color_t */
+  void *str_pool;
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_NOARGS, ARGS_ERR } args_status_t;

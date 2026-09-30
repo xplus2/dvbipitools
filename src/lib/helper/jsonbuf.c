@@ -80,19 +80,24 @@ void jbuf_fixed3(jbuf_t *j, double v) {
 }
 
 void jbuf_json_string(jbuf_t *j, const char *s) {
+  const char *run = s;
   jbuf_str(j, "\"");
   for (; *s; s++) {
     unsigned char c = (unsigned char)*s;
-    if (c == '"' || c == '\\') {
-      jbuf_raw(j, "\\", 1);
-      jbuf_raw(j, (const char *)&c, 1);
+    if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t' || c < 0x20) {
+      if (s > run) jbuf_raw(j, run, (size_t)(s - run));
+      if (c == '"' || c == '\\') {
+        jbuf_raw(j, "\\", 1);
+        jbuf_raw(j, (const char *)&c, 1);
+      }
+      else if (c == '\n') jbuf_str(j, "\\n");
+      else if (c == '\r') jbuf_str(j, "\\r");
+      else if (c == '\t') jbuf_str(j, "\\t");
+      else                jbuf_fmt(j, "\\u%04x", c);
+      run = s + 1;
     }
-    else if (c == '\n')      jbuf_str(j, "\\n");
-    else if (c == '\r')      jbuf_str(j, "\\r");
-    else if (c == '\t')      jbuf_str(j, "\\t");
-    else if (c < 0x20)       jbuf_fmt(j, "\\u%04x", c);
-    else                     jbuf_raw(j, (const char *)&c, 1);
   }
+  if (s > run) jbuf_raw(j, run, (size_t)(s - run));
   jbuf_str(j, "\"");
 }
 

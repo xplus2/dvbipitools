@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
@@ -25,6 +26,7 @@ typedef struct {
   void *user;
   pthread_t thread;
   atomic_int *stop;
+  int has_wake;
 } worker_t;
 
 struct listen_pool {
@@ -66,11 +68,9 @@ static void *worker_main(void *arg) {
   unsigned char buf[2048];
 
   while (!signal_stop_requested() && !atomic_load_explicit(w->stop, memory_order_relaxed)) {
-    struct epoll_event ev;
-    int n = epoll_wait(w->epfd, &ev, 1, 100);
-    if (n <= 0)
-      continue;
-    drain_socket(w->fd, buf, sizeof buf, "recv", worker_recv_cb, w);
+    struct epoll_event evs[2];
+    int n = epoll_wait(w->epfd, evs, 2, w->has_wake ? -1 : 100);
+    for (int i = 0; i < n; i++) if (evs[i].data.fd == w->fd) drain_socket(w->fd, buf, sizeof buf, "recv", worker_recv_cb, w);
   }
   return NULL;
 }
@@ -116,11 +116,9 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
   listen_pool_t *p;
   int fd, epfd, rc;
 
-  if (workers == 0)
-    workers = 1;
+  if (workers == 0) workers = 1;
   p = calloc(1, sizeof *p);
-  if (!p)
-    return NULL;
+  if (!p) return NULL;
   p->workers = calloc(workers, sizeof *p->workers);
   if (!p->workers) {
     free(p);
@@ -131,10 +129,10 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
   for (unsigned i = 0; i < workers; i++) {
     struct epoll_event ev;
     worker_t *w = &p->workers[i];
-
+    int wfd;
+    struct epoll_event wev;
     fd = open_reuseport_socket(family, addr, port);
-    if (fd < 0)
-      goto fail;
+    if (fd < 0) goto fail;
     epfd = epoll_create1(0);
     if (epfd < 0) {
       log_line(TOOL_NAME ": epoll_create1: %s", strerror(errno));
@@ -154,6 +152,16 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
     w->cb = cb;
     w->user = user;
     w->stop = &p->stop;
+    w->has_wake = 0;
+    wfd = signal_wake_fd();
+    if (wfd >= 0) {
+      wev.events = EPOLLIN;
+      wev.data.fd = wfd;
+      if (epoll_ctl(epfd, EPOLL_CTL_ADD, wfd, &wev) == 0)
+        w->has_wake = 1;
+      else
+        log_line(TOOL_NAME ": epoll_ctl (wake fd): %s, falling back to bounded poll", strerror(errno));
+    }
     rc = pthread_create(&w->thread, NULL, worker_main, w);
     if (rc != 0) {
       log_line(TOOL_NAME ": pthread_create: %s", strerror(rc));
@@ -198,7 +206,10 @@ struct listen_multi {
   pthread_t thread;
   listen_multi_cb cb;
   void *user;
+  int has_wake;
 };
+
+#define LISTEN_MULTI_WAKE_SLOT ((uint64_t)-1)
 
 typedef struct {
   listen_multi_t *p;
@@ -217,11 +228,15 @@ static void *multi_worker_main(void *arg) {
   struct epoll_event events[32];
 
   while (!signal_stop_requested()) {
-    int n = epoll_wait(p->epfd, events, 32, 100);
+    int n = epoll_wait(p->epfd, events, 32, p->has_wake ? -1 : 100);
     for (int e = 0; e < n; e++) {
-      size_t slot = (size_t)events[e].data.u64;
-      int fd = p->fds[slot];
-      multi_drain_ctx_t dc = {p, slot};
+      size_t slot;
+      int fd;
+      multi_drain_ctx_t dc;
+      if (events[e].data.u64 == LISTEN_MULTI_WAKE_SLOT) continue;
+      slot = (size_t)events[e].data.u64;
+      fd = p->fds[slot];
+      dc = (multi_drain_ctx_t){p, slot};
       drain_socket(fd, buf, sizeof buf, "resolve recv", multi_recv_cb, &dc);
     }
   }
@@ -232,12 +247,12 @@ listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_p
   listen_multi_t *p;
   size_t opened = 0;
   int rc;
+  int wfd;
+  struct epoll_event wev;
 
-  if (count == 0)
-    return NULL;
+  if (count == 0) return NULL;
   p = calloc(1, sizeof *p);
-  if (!p)
-    return NULL;
+  if (!p) return NULL;
   p->fds = calloc(count, sizeof *p->fds);
   if (!p->fds) {
     free(p);
@@ -258,8 +273,7 @@ listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_p
   for (size_t i = 0; i < count; i++) {
     struct epoll_event ev;
     int fd = open_reuseport_socket(family, addr, base_port + (unsigned)i);
-    if (fd < 0)
-      goto fail;
+    if (fd < 0) goto fail;
     ev.events = EPOLLIN;
     ev.data.u64 = i;
     if (epoll_ctl(p->epfd, EPOLL_CTL_ADD, fd, &ev) < 0) {
@@ -271,6 +285,16 @@ listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_p
     opened++;
   }
 
+  wfd = signal_wake_fd();
+  if (wfd >= 0) {
+    wev.events = EPOLLIN;
+    wev.data.u64 = LISTEN_MULTI_WAKE_SLOT;
+    if (epoll_ctl(p->epfd, EPOLL_CTL_ADD, wfd, &wev) == 0)
+      p->has_wake = 1;
+    else
+      log_line(TOOL_NAME ": epoll_ctl (wake fd): %s, falling back to bounded poll", strerror(errno));
+  }
+
   rc = pthread_create(&p->thread, NULL, multi_worker_main, p);
   if (rc != 0) {
     log_line(TOOL_NAME ": pthread_create: %s", strerror(rc));
@@ -279,8 +303,7 @@ listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_p
   return p;
 
 fail:
-  for (size_t i = 0; i < opened; i++)
-    close(p->fds[i]);
+  for (size_t i = 0; i < opened; i++) close(p->fds[i]);
   close(p->epfd);
   free(p->fds);
   free(p);
@@ -288,11 +311,9 @@ fail:
 }
 
 void listen_multi_stop(listen_multi_t *p) {
-  if (!p)
-    return;
+  if (!p) return;
   pthread_join(p->thread, NULL);
-  for (size_t i = 0; i < p->count; i++)
-    close(p->fds[i]);
+  for (size_t i = 0; i < p->count; i++) close(p->fds[i]);
   close(p->epfd);
   free(p->fds);
   free(p);

@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 
+#include "lib/helper/argutil.h"
 #include "lib/metrics/export.h"
 
 /* zero-dep wrapper on srtout_t (unlike srtout.h, no <srt/srt.h> dependency). */
@@ -31,7 +32,7 @@ typedef struct {
   metrics_exporter_t *mx;           /* NULL = no stats push */
   const char *tool_version;         /* required if mx set */
   unsigned safety_mult;             /* pending-queue latency-window multiplier, 0 = default 4, clamped to 32 */
-  int queue_metrics;
+  srt_queue_metrics_t queue_metrics;
 } srtsink_cfg_t;
 
 typedef struct srtsink srtsink_t;
@@ -57,7 +58,7 @@ void srtsink_close(srtsink_t *r);
 typedef struct {
   srtsink_t **sinks;
   unsigned n;
-  int queue_metrics;
+  srt_queue_metrics_t queue_metrics;
 } srtsink_queue_ctx_t;
 
 /* metrics_extra_fn: queue occupancy of every non-NULL sink in ctx */

@@ -32,16 +32,15 @@ static int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
     rist_stats_free(stats);
     return 0;
   }
-  {
-    metrics_entry_t e[] = {
-        {METRICS_ID_RIST_RECEIVER_RECEIVED_TOTAL, NULL, f->received},
-        {METRICS_ID_RIST_RECEIVER_MISSING_TOTAL, NULL, f->missing},
-        {METRICS_ID_RIST_RECEIVER_RECOVERED_TOTAL, NULL, f->recovered},
-        {METRICS_ID_RIST_RECEIVER_LOST_TOTAL, NULL, f->lost},
-        {METRICS_ID_RIST_RECEIVER_RTT_MILLISECONDS, NULL, f->rtt},
-    };
-    return rist_push_stats_if_due(r->mx, r->tool_version, e, sizeof e / sizeof e[0], stats);
-  }
+  metrics_entry_t e[] = {
+  {METRICS_ID_RIST_RECEIVER_RECEIVED_TOTAL, NULL, f->received},
+  {METRICS_ID_RIST_RECEIVER_MISSING_TOTAL, NULL, f->missing},
+  {METRICS_ID_RIST_RECEIVER_RECOVERED_TOTAL, NULL, f->recovered},
+  {METRICS_ID_RIST_RECEIVER_LOST_TOTAL, NULL, f->lost},
+  {METRICS_ID_RIST_RECEIVER_RTT_MILLISECONDS, NULL, f->rtt},
+  };
+  rist_push_stats_if_due(r->mx, r->tool_version, e, sizeof e / sizeof e[0], stats);
+  return 0;
 }
 
 static void *reader_main(void *arg) {

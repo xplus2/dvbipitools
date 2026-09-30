@@ -19,7 +19,8 @@
 typedef struct {
   unsigned char pid_slot[8192];
   unsigned char svc_slot[65536];
-  unsigned n_pid, n_svc;
+  unsigned n_pid;
+  unsigned n_svc;
   unsigned pid_list[PID_DETAIL_MAX];
   uint64_t pid_pkts[PID_DETAIL_MAX];
   uint64_t pid_scr[PID_DETAIL_MAX];
@@ -48,10 +49,13 @@ typedef struct {
   int relay;
   psi_obs_stat_t psi[PSI_OBS_COUNT];
   double pcr_jitter_us;
-  double mgb1_bps, mgb2_bps;
-  int mgb1_valid, mgb2_valid;
+  double mgb1_bps;
+  double mgb2_bps;
+  int mgb1_valid;
+  int mgb2_valid;
   int known_set;
-  unsigned n_pid, n_svc;
+  unsigned n_pid;
+  unsigned n_svc;
   unsigned pid_list[PID_DETAIL_MAX];
   uint64_t pid_pkts[PID_DETAIL_MAX];
   uint64_t pid_scr[PID_DETAIL_MAX];
@@ -100,10 +104,13 @@ struct tsinspect {
   unsigned pcr_pid;
   int pcr_have;
   uint64_t pcr_last;
-  double pcr_max_cur, pcr_max_prev, pcr_win_start;
+  double pcr_max_cur;
+  double pcr_max_prev;
+  double pcr_win_start;
   uint64_t rx_ns;
   uint64_t pcr_rx_last;
-  double pcr_jit_cur, pcr_jit_prev;
+  double pcr_jit_cur;
+  double pcr_jit_prev;
   int rx_used;
   int eit_n;
   double tdt_last;
@@ -127,7 +134,8 @@ struct tsinspect {
   double last_packet;
   uint64_t seen_packets;
   int stalled;
-  double gap_max_cur, gap_max_prev;
+  double gap_max_cur;
+  double gap_max_prev;
   unsigned short ref[PSI_MAX_ES + 1];
   int ref_n;
   int ref_valid;

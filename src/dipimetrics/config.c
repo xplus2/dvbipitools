@@ -36,11 +36,11 @@ int metrics_cfg_auth(const char *val, char *out, size_t outsz, char *err, size_t
   char b64[192];
   size_t n;
   if (!colon || colon == val) {
-    snprintf(err, errsz, "need user:password");
+    bufcpy(err, errsz, "need user:password");
     return -1;
   }
   if (strlen(val) >= ARGS_AUTH_CREDS_MAX) {
-    snprintf(err, errsz, "credentials too long");
+    bufcpy(err, errsz, "credentials too long");
     return -1;
   }
   base64_encode(val, strlen(val), b64);
@@ -57,11 +57,11 @@ const char *metrics_cfg_conflict(const config_t *cfg) {
 
 static int set_path(char *buf, size_t bufsz, const char **dst, const char *val, char *err, size_t errsz) {
   if (!*val) {
-    snprintf(err, errsz, "empty path");
+    bufcpy(err, errsz, "empty path");
     return -1;
   }
   if (strlen(val) >= bufsz) {
-    snprintf(err, errsz, "path too long");
+    bufcpy(err, errsz, "path too long");
     return -1;
   }
   bufcpy(buf, bufsz, val);

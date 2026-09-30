@@ -8,8 +8,8 @@
 
 #include "tls.h"
 
-/* shared by tls.c (client) and tls_server.c (server). ctx: per-connection for a client handle.
-   NULL for server-accepted (owned by tls_server_ctx_t), tls_close() then skips freeing it */
+/* shared by tls.c (client) and tls_server.c (server). ctx: always borrowed, never owned here,
+   tls_close() never frees it */
 struct tls {
   SSL_CTX *ctx;
   SSL *ssl;

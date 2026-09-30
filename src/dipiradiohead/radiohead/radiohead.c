@@ -340,10 +340,23 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     while (!signal_stop_requested()) {
       int step;
       struct pollfd pfd;
-      pfd.fd = source_fd(src);
-      pfd.events = POLLIN;
-      pfd.revents = 0;
-      poll(&pfd, 1, RADIOHEAD_POLL_MAX_MS);
+      nfds_t npfd = 1;
+      int timeout_ms = RADIOHEAD_POLL_MAX_MS;
+      double now_pre = mono_seconds();
+
+      /* sock readable, skip&sleep. avoid poll() spin. */
+      if (pace_deadline > now_pre + RADIOHEAD_PACE_TOLERANCE_S) {
+        /* ceil, not trunc */
+        int wait_ms = 1 + (int)((pace_deadline - now_pre - RADIOHEAD_PACE_TOLERANCE_S) * 1000.0);
+        if (wait_ms < 1) wait_ms = 1;
+        if (wait_ms < timeout_ms) timeout_ms = wait_ms;
+        npfd = 0;
+      } else {
+        pfd.fd = source_fd(src);
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+      }
+      poll(npfd ? &pfd : NULL, npfd, timeout_ms);
       if (signal_stop_requested()) break;
       radiohead_srt_service(&out);
       if (out.insp) tsinspect_tick(out.insp, mono_seconds());

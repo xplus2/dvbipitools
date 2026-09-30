@@ -154,12 +154,18 @@ static void text_frame(const unsigned char *body, size_t len, char *out, size_t 
   enc = body[0];
   body++;
   len--;
-  if (enc == 0x01 || enc == 0x02)
-    utf16_to_utf8(body, len, out, cap, &o);
-  else if (enc == 0x00)
-    latin1_to_utf8(body, len, out, cap, &o);
-  else
-    utf8_copy(body, len, out, cap, &o);
+  switch (enc) {
+    case 0x01:
+    case 0x02:
+      utf16_to_utf8(body, len, out, cap, &o);
+      break;
+    case 0x00:
+      latin1_to_utf8(body, len, out, cap, &o);
+      break;
+    default:
+      utf8_copy(body, len, out, cap, &o);
+      break;
+  }
   out[o] = '\0';
 }
 

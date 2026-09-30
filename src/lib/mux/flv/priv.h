@@ -21,9 +21,11 @@ typedef struct {
   int64_t ts_ms;
   pts_unwrap_t pts;
   unsigned char *rem; /* audio: partial frame carry-over */
-  size_t remlen, remcap;
+  size_t remlen;
+  size_t remcap;
   unsigned char *vbuf; /* video: length-prefixed AU (AVCC/HVCC framed NALUs) */
-  size_t vbuflen, vbufcap;
+  size_t vbuflen;
+  size_t vbufcap;
   unsigned char *lcevc_rb; /* strip_lcevc scratch, see esc_strip_lcevc_sei() */
   size_t lcevc_rbcap;
   unsigned char *lcevc_esc;
@@ -40,13 +42,17 @@ struct flv {
   unsigned long long *bytes;
   psi_t *psi;
   pes_t *pes;
-  flv_track_t vtrk, atrk;
-  int have_v, have_a;
-  int setup, started, err, flushing;
+  flv_track_t vtrk;
+  flv_track_t atrk;
+  int have_v;
+  int have_a;
+  int setup;
+  int started;
+  int err;
+  int flushing;
   int64_t t0;
   flv_tag_cb cb;
   void *cb_ctx;
-  ebuf_t tagbuf; /* flv_send_tag()'s scratch buffer, reused across tags */
 };
 
 /* feed.c */

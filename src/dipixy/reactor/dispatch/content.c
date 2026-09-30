@@ -82,51 +82,47 @@ void serve_dlna_cm_scpd(conn_t *c, int is_head, int keep_alive) {
 }
 
 void serve_dlna_control(conn_t *c, const char *service, const struct phr_header *headers, size_t num_headers, const char *body, size_t body_len, int keep_alive) {
-  char soapaction_raw[256], action[64];
+  char soapaction_raw[256];
+  char action[64];
   char *resp;
   size_t resp_len;
   int status;
+  char hdr[224];
+  sbuf_t b;
   if (!find_header(headers, num_headers, "SOAPACTION", soapaction_raw, sizeof soapaction_raw) || dlna_soap_action_name(soapaction_raw, action, sizeof action)) {
     respond_status(c, RESP_400, keep_alive);
     return;
   }
   status = dlna_handle_control(reactor_cfg(), reactor_channels(), service, action, body, body_len, &resp, &resp_len);
-  {
-    char hdr[224];
-    sbuf_t b;
-    sbuf_init(&b, hdr, sizeof hdr);
-    sbuf_add(&b, "HTTP/1.1 ");
-    sbuf_add_u64(&b, (uint64_t)status);
-    sbuf_add(&b, status == 200 ? " OK" : " Internal Server Error");
-    sbuf_add(&b, "\r\nContent-Type: text/xml; charset=utf-8\r\nContent-Length: ");
-    sbuf_add_u64(&b, (uint64_t)resp_len);
-    sbuf_add(&b, "\r\nConnection: ");
-    sbuf_add(&b, keep_alive ? "keep-alive" : "close");
-    sbuf_add(&b, "\r\n");
-    sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
-    sbuf_add(&b, "\r\n");
-    conn_queue(c, hdr, b.len);
-    conn_queue(c, resp, resp_len);
-  }
+  sbuf_init(&b, hdr, sizeof hdr);
+  sbuf_add(&b, "HTTP/1.1 ");
+  sbuf_add_u64(&b, (uint64_t)status);
+  sbuf_add(&b, status == 200 ? " OK" : " Internal Server Error");
+  sbuf_add(&b, "\r\nContent-Type: text/xml; charset=utf-8\r\nContent-Length: ");
+  sbuf_add_u64(&b, (uint64_t)resp_len);
+  sbuf_add(&b, "\r\nConnection: ");
+  sbuf_add(&b, keep_alive ? "keep-alive" : "close");
+  sbuf_add(&b, "\r\n");
+  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
+  sbuf_add(&b, "\r\n");
+  conn_queue(c, hdr, b.len);
+  conn_queue(c, resp, resp_len);
   set_persistence(c, keep_alive);
   if (status != 200) dipixy_metrics_note_http_error();
 }
 
-void serve_dlna_subscribe(conn_t *c, const char *service, const struct phr_header *headers, size_t num_headers, int keep_alive) {
-  char callback_buf[600];
+void serve_dlna_subscribe(conn_t *c, const struct phr_header *headers, size_t num_headers, int keep_alive) {
   char sid_buf[64];
   char sid[64];
   char hdr[256];
-  const char *callback;
   const char *sid_hdr;
   sbuf_t b;
 
-  callback = find_header(headers, num_headers, "CALLBACK", callback_buf, sizeof callback_buf) ? callback_buf : NULL;
   sid_hdr = find_header(headers, num_headers, "SID", sid_buf, sizeof sid_buf) ? sid_buf : NULL;
   if (sid_hdr) {
     gena_renew(sid_hdr, sid, sizeof sid);
   } else {
-    gena_subscribe_new(reactor_cfg(), service, callback, sid, sizeof sid);
+    gena_subscribe_new(sid);
   }
   sbuf_init(&b, hdr, sizeof hdr);
   sbuf_add(&b, "HTTP/1.1 200 OK\r\nSID: ");
@@ -140,12 +136,10 @@ void serve_dlna_subscribe(conn_t *c, const char *service, const struct phr_heade
   set_persistence(c, keep_alive);
 }
 
-void serve_dlna_unsubscribe(conn_t *c, const struct phr_header *headers, size_t num_headers, int keep_alive) {
-  char sid_buf[64];
+void serve_dlna_unsubscribe(conn_t *c, int keep_alive) {
   char hdr[160];
-  const char *sid_hdr = find_header(headers, num_headers, "SID", sid_buf, sizeof sid_buf) ? sid_buf : NULL;
   sbuf_t b;
-  gena_unsubscribe(sid_hdr);
+  gena_unsubscribe();
   sbuf_init(&b, hdr, sizeof hdr);
   sbuf_add(&b, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");

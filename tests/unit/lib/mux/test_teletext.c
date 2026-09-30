@@ -2,6 +2,8 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <inttypes.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -114,6 +116,50 @@ START_TEST(ttx_lead_ms_shifts_cue_times_earlier) {
 }
 END_TEST
 
+#define CONCURRENT_TTX_THREADS 16
+
+typedef struct {
+  int calls;
+  ttx_cue_t cue;
+} thread_capture_t;
+
+static void thread_capture_cb(void *ctx, const ttx_cue_t *cue) {
+  thread_capture_t *c = ctx;
+  c->calls++;
+  c->cue = *cue;
+}
+
+static void *ttx_new_from_thread(void *arg) {
+  thread_capture_t *c = arg;
+  unsigned char pes[64];
+  size_t n;
+  ttx_t *t = ttx_new(777, "eng", 0, thread_capture_cb, c);
+  if (!t) return (void *)(intptr_t)1;
+  n = build_ttx_pes(pes, 777, 1, "HELLO");
+  ttx_pes(t, 1, 0, pes, n);
+  ttx_flush(t);
+  ttx_free(t);
+  return (void *)(intptr_t)(c->calls == 1 && !strncmp(c->cue.text, "HELLO", 5) ? 0 : 1);
+}
+
+/* unham_init() (the hamming-decode table build) is lazily run on first ttx_new(),
+   from a pthread_once - exercises that every concurrent caller gets a fully built
+   table and a working decode, none racing on the table build itself */
+START_TEST(ttx_new_is_safe_under_concurrent_first_use) {
+  pthread_t th[CONCURRENT_TTX_THREADS];
+  thread_capture_t caps[CONCURRENT_TTX_THREADS];
+  void *res;
+
+  memset(caps, 0, sizeof caps);
+  for (int i = 0; i < CONCURRENT_TTX_THREADS; i++)
+    ck_assert_int_eq(pthread_create(&th[i], NULL, ttx_new_from_thread, &caps[i]), 0);
+  for (int i = 0; i < CONCURRENT_TTX_THREADS; i++) {
+    ck_assert_int_eq(pthread_join(th[i], &res), 0);
+    ck_assert_ptr_eq(res, (void *)0);
+  }
+}
+END_TEST
+
 static Suite *teletext_suite(void) {
   Suite *s = suite_create("teletext");
   TCase *tc = tcase_create("core");
@@ -121,6 +167,7 @@ static Suite *teletext_suite(void) {
   tcase_add_test(tc, ttx_ignores_packets_on_a_different_magazine);
   tcase_add_test(tc, ttx_skips_the_page_ident_row);
   tcase_add_test(tc, ttx_lead_ms_shifts_cue_times_earlier);
+  tcase_add_test(tc, ttx_new_is_safe_under_concurrent_first_use);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -35,6 +35,7 @@ static unsigned channel_count(unsigned chcfg) {
 }
 
 static unsigned profile_level(unsigned channels, unsigned rate, int sbr, int ps) {
+  unsigned base;
   if (!channels || !rate) return 0;
   if (!sbr) {
     if (channels <= 2 && rate <= 24000) return 0x50;
@@ -43,14 +44,12 @@ static unsigned profile_level(unsigned channels, unsigned rate, int sbr, int ps)
     if (channels <= 5 && rate <= 96000) return 0x53;
     return 0;
   }
-  {
-    unsigned base = ps ? 0x60 : 0x58;
-    if (channels <= 2 && rate <= 24000) return base;
-    if (channels <= 2 && rate <= 48000) return base + 1;
-    if (channels <= 5 && rate <= 24000) return base + 2;
-    if (channels <= 5 && rate <= 48000) return base + 3;
-    return 0;
-  }
+  base = ps ? 0x60 : 0x58;
+  if (channels <= 2 && rate <= 24000) return base;
+  if (channels <= 2 && rate <= 48000) return base + 1;
+  if (channels <= 5 && rate <= 24000) return base + 2;
+  if (channels <= 5 && rate <= 48000) return base + 3;
+  return 0;
 }
 
 static int audio_specific_config(br_t *b, unsigned *sample_rate, unsigned *channels, unsigned *aac_profile_level) {

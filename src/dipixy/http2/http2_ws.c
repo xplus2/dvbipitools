@@ -85,7 +85,8 @@ void h2_ws_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id) {
   nghttp2_nv nva[2] = {{(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP2_NV_FLAG_NONE}};
   size_t nvlen = h2_nv_altsvc(nva, 1);
   nghttp2_data_provider dp;
-  int i, slot = -1;
+  int i;
+  int slot = -1;
 
   for (i = 0; i < H2_WS_MAX; i++)
     if (!conn->ws[i].sid) {

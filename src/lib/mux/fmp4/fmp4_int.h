@@ -23,9 +23,11 @@ typedef struct {
 
 typedef struct {
   frag_sample_t *samples;
-  int nsamples, cap;
+  int nsamples;
+  int cap;
   unsigned char *data;
-  size_t data_len, data_cap;
+  size_t data_len;
+  size_t data_cap;
 } frag_track_t;
 
 struct fmp4_mux {

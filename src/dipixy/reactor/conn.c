@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,11 +19,27 @@
 #include <unistd.h>
 
 static atomic_long g_conn_active = 0;
-static atomic_ullong g_bytes_served_total = 0;
+
+typedef struct {
+  _Alignas(64) atomic_ullong bytes;
+} bytes_slot_t;
+
+static bytes_slot_t g_bytes_served[REACTOR_MAX_WORKERS];
+static bytes_slot_t g_bytes_served_fallback;
 
 long reactor_connections_active(void) { return atomic_load_explicit(&g_conn_active, memory_order_relaxed); }
 
-unsigned long long reactor_bytes_served_total(void) { return atomic_load_explicit(&g_bytes_served_total, memory_order_relaxed); }
+unsigned long long reactor_bytes_served_total(void) {
+  unsigned long long total = atomic_load_explicit(&g_bytes_served_fallback.bytes, memory_order_relaxed);
+  for (int i = 0; i < REACTOR_MAX_WORKERS; i++) total += atomic_load_explicit(&g_bytes_served[i].bytes, memory_order_relaxed);
+  return total;
+}
+
+static void conn_add_bytes_served(size_t len) {
+  int tid = t_reactor_tid;
+  bytes_slot_t *slot = (tid >= 0 && tid < REACTOR_MAX_WORKERS) ? &g_bytes_served[tid] : &g_bytes_served_fallback;
+  atomic_fetch_add_explicit(&slot->bytes, len, memory_order_relaxed);
+}
 
 /* Unsent backlog cap: past this, drop conn (stuck consumer). */
 #define CONN_OUT_MAX (4u * 1024 * 1024)
@@ -108,12 +125,8 @@ conn_t *conn_new(int fd, void *ssl) {
     if (!c) return NULL;
     pthread_mutex_init(&c->out_lock, NULL);
   }
-  {
-    /* out_lock stays live across reuse: never destroyed/reinitialized */
-    pthread_mutex_t lock = c->out_lock;
-    memset(c, 0, sizeof *c);
-    c->out_lock = lock;
-  }
+  memset(c, 0, offsetof(conn_t, out_lock));
+  memset((char *)c + offsetof(conn_t, out_lock) + sizeof c->out_lock, 0, sizeof *c - offsetof(conn_t, out_lock) - sizeof c->out_lock);
   c->fd = fd;
   c->ssl = ssl;
   c->state = ssl ? CONN_TLS_HANDSHAKE : CONN_READING;
@@ -223,9 +236,12 @@ void conn_request_close(conn_t *c) {
 }
 
 void conn_sweep_idle(unsigned idle_timeout_s) {
+  static time_t last_sweep = 0;
   time_t now;
   if (!idle_timeout_s || !g_fd_conn_max) return;
   now = time(NULL);
+  if (now == last_sweep) return; /* called on every epoll wake, cap scan rate to 1/s */
+  last_sweep = now;
   for (int fd = 0; fd < g_fd_conn_max; fd++) {
     conn_t *c = __atomic_load_n(&g_fd_conn[fd], __ATOMIC_ACQUIRE);
     if (c && (unsigned)(now - c->last_active) > idle_timeout_s) conn_request_close(c);
@@ -265,11 +281,11 @@ int conn_send_buffered(conn_t *c, const void *a, size_t alen, const void *b, siz
 
 int conn_queue(conn_t *c, const void *data, size_t len) {
   if (len == 0) return 0;
-  buf_compact(&c->out);
+  if (c->out.cap - c->out.len < len) buf_compact(&c->out);
   if (buf_ensure(&c->out, c->out.len + len) < 0) return -1;
   memcpy(c->out.buf + c->out.len, data, len);
   c->out.len += len;
-  atomic_fetch_add_explicit(&g_bytes_served_total, len, memory_order_relaxed);
+  conn_add_bytes_served(len);
   return 0;
 }
 
@@ -291,7 +307,7 @@ int conn_queue_zc(conn_t *c, const void *data, size_t len, conn_zc_release_fn re
   c->zc.release = release;
   c->zc.release_arg = release_arg;
   c->zc.active = 1;
-  atomic_fetch_add_explicit(&g_bytes_served_total, len, memory_order_relaxed);
+  conn_add_bytes_served(len);
   return 0;
 }
 
@@ -310,7 +326,6 @@ void conn_zc_drain(conn_t *c) {
 #define CONN_FLUSH_CHUNK 65536
 
 int conn_flush(conn_t *c, int epfd) {
-  unsigned char chunk[CONN_FLUSH_CHUNK];
   conn_zc_drain(c);
   for (;;) {
     size_t pending;
@@ -323,11 +338,9 @@ int conn_flush(conn_t *c, int epfd) {
       pthread_mutex_unlock(&c->out_lock);
       break;
     }
-    tocopy = pending < sizeof chunk ? pending : sizeof chunk;
-    memcpy(chunk, c->out.buf + c->out.off, tocopy);
-    pthread_mutex_unlock(&c->out_lock);
+    tocopy = pending < CONN_FLUSH_CHUNK ? pending : CONN_FLUSH_CHUNK;
     while (sent < tocopy) {
-      ssize_t n = tls_net_send(c->fd, chunk + sent, tocopy - sent);
+      ssize_t n = tls_net_send(c->fd, c->out.buf + c->out.off + sent, tocopy - sent);
       if (n > 0) {
         sent += (size_t)n;
         continue;
@@ -335,8 +348,6 @@ int conn_flush(conn_t *c, int epfd) {
       last_errno = errno;
       break;
     }
-
-    pthread_mutex_lock(&c->out_lock);
     c->out.off += sent;
     pthread_mutex_unlock(&c->out_lock);
     if (sent < tocopy) {

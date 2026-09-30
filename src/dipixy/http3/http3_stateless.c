@@ -29,8 +29,11 @@ void h3_stateless_set_retry(h3_retry_mode_t mode) {
 }
 
 int h3_retry_needed(h3_retry_mode_t mode, int active, int max_conns) {
-  if (mode == H3_RETRY_ALWAYS) return 1;
-  if (mode == H3_RETRY_AUTO) return active >= max_conns / 2;
+  switch (mode) {
+    case H3_RETRY_ALWAYS: return 1;
+    case H3_RETRY_AUTO:   return active >= max_conns / 2;
+    case H3_RETRY_OFF:    return 0;
+  }
   return 0;
 }
 

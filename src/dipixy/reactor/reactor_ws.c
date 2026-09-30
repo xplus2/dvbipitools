@@ -76,7 +76,7 @@ void reactor_ws_begin(int epfd, conn_t *c) {
   ws->out_cap = 0;
   c->ws = ws;
   c->in.len = c->in.off = 0;
-  c->become_ws = 0;
+  c->next_state = CONN_NEXT_NONE;
   c->close_after_flush = 0;
   c->state = CONN_WS;
   c->epfd = epfd;
@@ -156,32 +156,33 @@ static int ci_contains(const char *hay, const char *needle) {
   return 0;
 }
 
-int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers, size_t num_headers, int keep_alive) {
-  char conn_val[64], upg_val[32], key[80], accept[64], hdr[256];
+int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers, size_t num_headers) {
+  char conn_val[64];
+  char upg_val[32];
+  char key[80];
+  char accept[64];
+  char hdr[256];
   uint8_t digest[20];
   char input[128];
+  size_t klen;
+  size_t off;
 
-  (void)keep_alive;
   if (strcmp(path, "/ui/ws/") && strcmp(path, "/ui/ws")) return 0;
   if (!find_header(headers, num_headers, "Connection", conn_val, sizeof conn_val) || !ci_contains(conn_val, "upgrade")) return 1;
   if (!find_header(headers, num_headers, "Upgrade", upg_val, sizeof upg_val) || strcasecmp(upg_val, "websocket")) return 1;
   if (!find_header(headers, num_headers, "Sec-WebSocket-Key", key, sizeof key)) return 1;
 
-  {
-    size_t klen = bufcpy(input, sizeof input, key);
-    bufcpy(input + klen, sizeof input - klen, WS_GUID);
-  }
+  klen = bufcpy(input, sizeof input, key);
+  bufcpy(input + klen, sizeof input - klen, WS_GUID);
   sha1(input, strlen(input), digest);
   base64_encode(digest, 20, accept);
 
-  {
-    size_t off = bufcpy(hdr, sizeof hdr,
-      "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-      "Sec-WebSocket-Accept: ");
-    off += bufcpy(hdr + off, sizeof hdr - off, accept);
-    off += bufcpy(hdr + off, sizeof hdr - off, "\r\n\r\n");
-    conn_queue(c, hdr, off);
-  }
-  c->become_ws = 1;
+  off = bufcpy(hdr, sizeof hdr,
+    "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+    "Sec-WebSocket-Accept: ");
+  off += bufcpy(hdr + off, sizeof hdr - off, accept);
+  off += bufcpy(hdr + off, sizeof hdr - off, "\r\n\r\n");
+  conn_queue(c, hdr, off);
+  c->next_state = CONN_NEXT_WS;
   return 1;
 }

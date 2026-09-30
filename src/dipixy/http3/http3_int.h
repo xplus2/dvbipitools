@@ -23,6 +23,8 @@
 #include <sys/socket.h>
 #include <time.h>
 
+#include "http3.h"
+
 #include "../hls/hls.h"
 #include "../ts/pidfilter.h"
 #include "../ts/ts_push.h"
@@ -162,32 +164,35 @@ static inline h3_req_t *alloc_req(h3_conn_t *c, int64_t sid) {
   return NULL;
 }
 
-static inline void free_req(h3_conn_t *c, int64_t sid) {
-  for (int i = 0; i < c->max_reqs; i++) {
-    if (c->reqs[i].active && c->reqs[i].stream_id == sid) {
-      hls_resp_body_release(c->reqs[i].resp_data, c->reqs[i].resp_zc);
-      c->reqs[i].resp_data = NULL;
-      if (c->reqs[i].tspush_sub_idx >= 0) {
-        ts_push_unsubscribe_by_idx(c->reqs[i].tspush_sub_idx);
-        c->reqs[i].tspush_sub_idx = -1;
-      }
-      if (c->reqs[i].dashchunk_sub_idx >= 0) {
-        dash_lldash_sub_close(c->reqs[i].dashchunk_sub_idx);
-        c->reqs[i].dashchunk_sub_idx = -1;
-      }
-      if (c->reqs[i].mp4push_sub_idx >= 0) {
-        mp4push_sub_close(c->reqs[i].mp4push_sub_idx);
-        c->reqs[i].mp4push_sub_idx = -1;
-      }
-      free(c->reqs[i].ws_pending);
-      free(c->reqs[i].ws_send_data);
-      free(c->reqs[i].ws_prev_data);
-      free(c->reqs[i].path);
-      c->reqs[i].path = NULL;
-      c->reqs[i].active = 0;
-      return;
-    }
+static inline void release_req(h3_req_t *r) {
+  hls_resp_body_release(r->resp_data, r->resp_zc);
+  r->resp_data = NULL;
+  if (r->tspush_sub_idx >= 0) {
+    ts_push_unsubscribe_by_idx(r->tspush_sub_idx);
+    r->tspush_sub_idx = -1;
   }
+  if (r->dashchunk_sub_idx >= 0) {
+    dash_lldash_sub_close(r->dashchunk_sub_idx);
+    r->dashchunk_sub_idx = -1;
+  }
+  if (r->mp4push_sub_idx >= 0) {
+    mp4push_sub_close(r->mp4push_sub_idx);
+    r->mp4push_sub_idx = -1;
+  }
+  free(r->ws_pending);
+  r->ws_pending = NULL;
+  free(r->ws_send_data);
+  r->ws_send_data = NULL;
+  free(r->ws_prev_data);
+  r->ws_prev_data = NULL;
+  free(r->path);
+  r->path = NULL;
+  r->active = 0;
+}
+
+static inline void free_req(h3_conn_t *c, int64_t sid) {
+  h3_req_t *r = find_req(c, sid);
+  if (r) release_req(r);
 }
 
 /* from http3_quic.c */
@@ -209,6 +214,13 @@ int cb_recv_stream_data(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id, u
 int cb_acked_stream_data_offset(ngtcp2_conn *qconn, int64_t stream_id, uint64_t offset, uint64_t datalen, void *ud, void *stream_ud);
 int cb_stream_open(ngtcp2_conn *qconn, int64_t stream_id, void *ud);
 int cb_stream_close(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id, uint64_t app_err, void *ud, void *stream_ud);
+
+static inline void h3_push_resume(h3_conn_t *c, int64_t sid) {
+  int fd = c->local_addr.ss_family == AF_INET6 ? t_h3_udp6 : t_h3_udp4;
+  if (fd < 0) return;
+  nghttp3_conn_resume_stream(c->h3conn, sid);
+  flush_tx(c, fd);
+}
 
 /* from http3_req.c */
 void dispatch_req(h3_conn_t *c, h3_req_t *r);
@@ -233,16 +245,13 @@ nghttp3_ssize h3_mp4push_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec
 int h3_mp4push_dispatch(h3_conn_t *c, h3_req_t *r, int sub, int ws_handle);
 
 /* from http3_llhls.c */
-int h3_llhls_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, const char *inm, const char *origin_hdr,
-                      uint32_t want_seg, int want_part, int timeout_ms, int ws_handle);
+int h3_llhls_try_park(h3_conn_t *conn, int64_t stream_id, const llhls_park_req_t *req);
 void h3_llhls_flush_waiters(void);
 void h3_llhls_on_stream_close(const h3_conn_t *c, int64_t stream_id);
 void h3_llhls_on_conn_close(const h3_conn_t *c);
 
 /* from http3_hls_cold.c */
-int h3_hls_cold_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
-                         const char *filename, hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head,
-                         const char *origin_hdr, int timeout_ms, int ws_handle);
+int h3_hls_cold_try_park(h3_conn_t *conn, int64_t stream_id, const hls_cold_park_req_t *req);
 void h3_hls_cold_flush_waiters(void);
 void h3_hls_cold_on_stream_close(const h3_conn_t *c, int64_t stream_id);
 void h3_hls_cold_on_conn_close(const h3_conn_t *c);

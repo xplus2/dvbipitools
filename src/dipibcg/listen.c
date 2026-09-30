@@ -40,9 +40,10 @@ int listen_run(const config_t *cfg) {
   char mcast[80];
   mcast_t *m;
   dvbstp_reasm_t *r;
-  seen_t seen[LISTEN_SEEN_MAX];
+  dvbstp_seen_t seen[LISTEN_SEEN_MAX];
   int seen_count = 0;
-  unsigned segments = 0, captures = 0;
+  unsigned segments = 0;
+  unsigned captures = 0;
   double deadline;
   bcg_doc_t doc;
   int have_doc = 0;
@@ -69,8 +70,10 @@ int listen_run(const config_t *cfg) {
     dvbstp_header_t hdr;
     const unsigned char *data;
     size_t len;
-    const unsigned char *au, *sr_bytes;
-    size_t au_len, sr_len;
+    const unsigned char *au;
+    const unsigned char *sr_bytes;
+    size_t au_len;
+    size_t sr_len;
     unsigned char *unwrapped;
     size_t unwrapped_len;
     bitreader_t br;
@@ -80,7 +83,7 @@ int listen_run(const config_t *cfg) {
     if (n <= 0) continue;
     if (!dvbstp_reasm_feed(r, buf, (size_t)n, &hdr, &data, &len)) continue;
     if (hdr.payload_id != DVBSTP_PAYLOAD_BCG_DATA_CONTAINER) continue;
-    if (already_seen(seen, &seen_count, &hdr)) continue;
+    if (dvbstp_already_seen(seen, &seen_count, &hdr)) continue;
     segments++;
 
     if (wrapper_parse(data, len, &unwrapped, &unwrapped_len)) continue;

@@ -15,7 +15,7 @@ typedef struct cissa_key cissa_key_t;
 cissa_key_t *cissa_key_new(const unsigned char cw[CISSA_CW_LEN]);
 void cissa_key_free(cissa_key_t *k);
 
-/* AES-128-CBC per ETSI TS 103 127 $6.3: fixed IV, CBC state resets every call (each TS packet scrambled independently, for random access).
+/* AES-128-CBC per ETSI TS 103 127 §6.3: fixed IV, CBC state resets every call (each TS packet scrambled independently, for random access).
    len must be a nonzero multiple of 16. 0 on success, -1 on error. */
 int cissa_encrypt_block(cissa_key_t *k, unsigned char *data, size_t len);
 

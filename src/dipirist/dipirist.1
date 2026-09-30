@@ -10,10 +10,13 @@ dipirist \- bridge a DVB-IPI stream between RTP/UDP/file and a RIST link, sender
 .RI [ options ]
 .SH DESCRIPTION
 .B dipirist
-bridges a DVB-IPI stream between a plain RTP/UDP/file endpoint and a RIST
-link (VSF TR-06), in either direction, using librist. RIST is not part of
-DVB-IPI; this tool exists to carry DVB-IPI streams over unmanaged or lossy
-networks with RIST's retransmission-based recovery.
+bridges a DVB-IPI stream between a plain RTP/UDP/file endpoint and a RIST link (VSF TR-06), in either direction.
+The direction is detected, depending on
+.B -i/-o
+being a
+.B rist://
+URI.
+
 .PP
 Exactly one of
 .B \-i
@@ -21,59 +24,10 @@ Exactly one of
 .B \-o
 (output) must be a
 .B rist://
-URI, the other is a regular
-.BR dipirec (1)-style
-endpoint: RTP or plain UDP multicast, an HTTP(S) TS stream (source side
-only), stdin/stdout, or a file. Whether
-.B dipirist
-runs as a RIST sender or receiver follows from which side the
-.B rist://
-URI is on: a
-.B rist://
-output calls out to a receiver, a
-.B rist://
-input listens for a sender. Only one direction is served per process.
-.PP
-A
-.B rist://
-endpoint address is either
-.IB host : port
-(calls out) or
-.BI @ host : port
-(listens); the leading
-.B @
-mirrors this toolkit's own
-.BR rtp://@ / udp://@
-convention, though for those the
-.B @
-is purely decorative, group and port are parsed the same with or
-without it. Repeating
-.B \-i
-or
-.B \-o
-with further
-.B rist://
-URIs bonds several links carrying the same stream, up to 8 peers per
-endpoint. RIST query parameters such as \fBbuffer\fR, \fBsecret\fR,
-\fBcname\fR, and \fBweight\fR are accepted directly in the URI; the
-equivalent command-line options below override whatever the URI
-specifies.
-.PP
-.B rtp://
-and
-.B udp://
-multicast groups accept IPv6 literals in brackets, e.g.
-.BR rtp://@[ff3e::1]:8700 .
-.PP
-RIST-specific concepts exposed on the command line: the
-.B profile
-(simple or main, main adds encryption), a pre-shared key
-.RB ( secret ,
-requires profile main), an RTCP
-.B cname
-identifying the stream, and the recovery
-.B buffer
-size in milliseconds.
+URI.
+Whether that peer listens or calls out is controlled the same way as this toolkit's own rtp://@/udp://@ addresses:
+add an @ right after rist:// to listen, leave it off to call out.
+
 .SH OPTIONS
 .TP
 .BR \-i ", " \-\-in " " \fIuri\fR
@@ -199,10 +153,6 @@ multicast.
 .TP
 .B dipirist \-i rtp://@239.1.1.1:5000 \-o rist://1.2.3.4:6000 \-o rist://5.6.7.8:6000
 Bonded sender: the same stream carried over two independent RIST links.
-.SH EXIT STATUS
-.B 0
-on success.
-Non-zero on argument errors or I/O/network failure.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipirist.yaml

@@ -23,7 +23,9 @@ int cas_super_id_parse(const char *s, unsigned *out) {
 }
 
 int cas_endpoint_parse(const char *s, char *host_out, size_t host_out_sz, unsigned *port_out) {
-  const char *p = s, *host, *colon;
+  const char *p = s;
+  const char *host;
+  const char *colon;
   size_t hostlen;
   char *end;
   unsigned long port;
@@ -233,50 +235,48 @@ static void args_err(const char *tool, const char *fmt, ...) {
   va_end(ap);
 }
 
-int cas_args_validate(const char *tool_name, cas_algo_t cas_algo, const cas_vendor_t *vendors, unsigned n_vendors,
-    int biss2_enabled, int biss1_enabled, int biss2_ca_enabled, int biss2_emit_esw,
-    int biss2_ca_session_id_given, unsigned cas_cp_duration_ms) {
-  if (biss2_enabled && (cas_algo != CAS_ALGO_NONE || n_vendors > 0)) {
+int cas_args_validate(const char *tool_name, const cas_args_t *a) {
+  if (a->biss2_enabled && (a->cas_algo != CAS_ALGO_NONE || a->n_vendors > 0)) {
     args_err(tool_name, "--biss2-sw is mutually exclusive with --cas-algo/--cas-ecmg");
     return -1;
   }
-  if (biss1_enabled && (cas_algo != CAS_ALGO_NONE || n_vendors > 0)) {
+  if (a->biss1_enabled && (a->cas_algo != CAS_ALGO_NONE || a->n_vendors > 0)) {
     args_err(tool_name, "--biss1-sw is mutually exclusive with --cas-algo/--cas-ecmg");
     return -1;
   }
-  if (biss2_ca_enabled && (cas_algo != CAS_ALGO_NONE || n_vendors > 0)) {
+  if (a->biss2_ca_enabled && (a->cas_algo != CAS_ALGO_NONE || a->n_vendors > 0)) {
     args_err(tool_name, "--biss2-ca-receivers is mutually exclusive with --cas-algo/--cas-ecmg");
     return -1;
   }
-  if (biss2_enabled && biss1_enabled) {
+  if (a->biss2_enabled && a->biss1_enabled) {
     args_err(tool_name, "--biss2-sw and --biss1-sw are mutually exclusive");
     return -1;
   }
-  if (biss2_ca_enabled && (biss2_enabled || biss1_enabled)) {
+  if (a->biss2_ca_enabled && (a->biss2_enabled || a->biss1_enabled)) {
     args_err(tool_name, "--biss2-ca-receivers is mutually exclusive with --biss2-sw/--biss1-sw");
     return -1;
   }
-  if (biss2_emit_esw && !biss2_enabled) {
+  if (a->biss2_emit_esw && !a->biss2_enabled) {
     args_err(tool_name, "--biss2-emit-esw requires --biss2-sw");
     return -1;
   }
-  if (biss2_ca_session_id_given && !biss2_ca_enabled) {
+  if (a->biss2_ca_session_id_given && !a->biss2_ca_enabled) {
     args_err(tool_name, "--biss2-ca-session-id requires --biss2-ca-receivers");
     return -1;
   }
-  if (biss2_ca_enabled && cas_cp_duration_ms < 1000) {
+  if (a->biss2_ca_enabled && a->cas_cp_duration_ms < 1000) {
     args_err(tool_name, "--biss2-ca-receivers needs --cas-cp-duration >= 1000 (Tech 3292-s1 T_ECM_change_min)");
     return -1;
   }
-  if (cas_algo == CAS_ALGO_NONE)
+  if (a->cas_algo == CAS_ALGO_NONE)
     return 0;
-  if (n_vendors == 0) {
+  if (a->n_vendors == 0) {
     args_err(tool_name, "--cas-algo requires --cas-ecmg");
     return -1;
   }
-  size_t cwenc_cw_len = scrambler_cw_len(cas_algo == CAS_ALGO_CISSA ? SCRAMBLE_ALGO_CISSA : SCRAMBLE_ALGO_CSA2);
-  for (unsigned vi = 0; vi < n_vendors; vi++) {
-    const cas_vendor_t *v = &vendors[vi];
+  size_t cwenc_cw_len = scrambler_cw_len(a->cas_algo == CAS_ALGO_CISSA ? SCRAMBLE_ALGO_CISSA : SCRAMBLE_ALGO_CSA2);
+  for (unsigned vi = 0; vi < a->n_vendors; vi++) {
+    const cas_vendor_t *v = &a->vendors[vi];
     if (!v->super_cas_id) {
       args_err(tool_name, "--cas-ecmg %s:%u requires --cas-super-id", v->ecmg_host, v->ecmg_port);
       return -1;
@@ -305,8 +305,8 @@ int cas_args_validate(const char *tool_name, cas_algo_t cas_algo, const cas_vend
         return -1;
       }
     }
-    for (unsigned vj = vi + 1; vj < n_vendors; vj++) {
-      const cas_vendor_t *o = &vendors[vj];
+    for (unsigned vj = vi + 1; vj < a->n_vendors; vj++) {
+      const cas_vendor_t *o = &a->vendors[vj];
       if (v->ecm_pid == o->ecm_pid || v->ecm_pid == o->emm_pid || v->emm_pid == o->ecm_pid || v->emm_pid == o->emm_pid) {
         args_err(tool_name, "--cas-ecm-pid/--cas-emm-pid collide across --cas-ecmg vendors");
         return -1;

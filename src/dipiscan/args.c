@@ -17,6 +17,10 @@
 #include "config.h"
 #include "version.h"
 
+#define OPT_COLOR 1001
+#define OPT_CONFIG_STRICT 1003
+#define OPT_CONFIGTEST 1002
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* full multicast address, family from ':' presence */
@@ -61,6 +65,7 @@ static void addr_decr1(unsigned char *a, int alen) {
 static int addr_diff_capped(const unsigned char *start, const unsigned char *end, int alen, unsigned cap, unsigned *out) {
   unsigned char diff[16] = {0};
   int borrow = 0;
+  unsigned val;
   for (int i = alen - 1; i >= 0; i--) {
     int d = (int)end[i] - (int)start[i] - borrow;
     if (d < 0) {
@@ -73,12 +78,10 @@ static int addr_diff_capped(const unsigned char *start, const unsigned char *end
   }
   if (borrow) return -1;
   for (int i = 0; i < alen - 4; i++) if (diff[i]) return -1;
-  {
-    unsigned val = 0;
-    for (int i = alen >= 4 ? alen - 4 : 0; i < alen; i++) val = (val << 8) | diff[i];
-    if (val > cap) return -1;
-    *out = val;
-  }
+  val = 0;
+  for (int i = alen >= 4 ? alen - 4 : 0; i < alen; i++) val = (val << 8) | diff[i];
+  if (val > cap) return -1;
+  *out = val;
   return 0;
 }
 
@@ -148,6 +151,7 @@ static void plain_parse(const unsigned char *addr, int family, unsigned char *st
 static int mcast_range_parse(const char *s, int *family, unsigned char *start, unsigned char *end, unsigned *total) {
   const char *slash = strchr(s, '/');
   const char *dash = strchr(s, '-');
+  unsigned char addr[16];
   if (slash) {
     char addrbuf[64];
     size_t len = (size_t)(slash - s);
@@ -164,30 +168,26 @@ static int mcast_range_parse(const char *s, int *family, unsigned char *start, u
     lobuf[len] = '\0';
     return range_parse(lobuf, dash + 1, family, start, end, total);
   }
-  {
-    unsigned char addr[16];
-    if (base_parse(s, family, addr)) return -1;
-    plain_parse(addr, *family, start, end, total);
-    return 0;
-  }
+  if (base_parse(s, family, addr)) return -1;
+  plain_parse(addr, *family, start, end, total);
+  return 0;
 }
 
 /* port or port-port, inclusive range */
 static int port_range_parse(const char *s, unsigned *lo, unsigned *hi) {
   const char *dash = strchr(s, '-');
+  char buf[16];
+  size_t len;
   if (!dash) {
     if (argutil_port_parse(s, lo)) return -1;
     *hi = *lo;
     return 0;
   }
-  {
-    char buf[16];
-    size_t len = (size_t)(dash - s);
-    if (len == 0 || len >= sizeof buf) return -1;
-    memcpy(buf, s, len);
-    buf[len] = '\0';
-    if (argutil_port_parse(buf, lo)) return -1;
-  }
+  len = (size_t)(dash - s);
+  if (len == 0 || len >= sizeof buf) return -1;
+  memcpy(buf, s, len);
+  buf[len] = '\0';
+  if (argutil_port_parse(buf, lo)) return -1;
   if (argutil_port_parse(dash + 1, hi)) return -1;
   if (*lo > *hi) return -1;
   return 0;
@@ -268,8 +268,8 @@ int scan_cfg_http_path(const char *s) {
 static void print_help(void) {
   printf(
       "usage: %s [options] 1>playlist 2>log\n\n"
-      "sweep a multicast /24 (or the analogous IPv6 range) for DVB-IPI\n"
-      "services and write a playlist of what answered\n\n"
+      "sweep a multicast range for transport streams\n"
+      "and write a playlist of what's discovered\n\n"
       "options:\n"
       "  -m, --mcast <addr>       base multicast group, v4 or v6; the last\n"
       "                           byte is swept 1..254                  [239.19.75.0]\n"
@@ -320,10 +320,10 @@ static const struct option longopts[] = {
     {"http-path", required_argument, 0, 'x'},
     {"iface", required_argument, 0, 'I'},
     {"verbose", no_argument, 0, 'v'},
-    {"color", required_argument, 0, 1001},
+    {"color", required_argument, 0, OPT_COLOR},
     {"config", required_argument, 0, 'c'},
-    {"config-strict", no_argument, 0, 1003},
-    {"configtest", no_argument, 0, 1002},
+    {"config-strict", no_argument, 0, OPT_CONFIG_STRICT},
+    {"configtest", no_argument, 0, OPT_CONFIGTEST},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}};
 
@@ -428,7 +428,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'v':
         cfg->verbose = 1;
         break;
-      case 1001: {
+      case OPT_COLOR: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
           argerr("invalid --color: %s (auto|always|never)", optarg);
@@ -438,8 +438,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 'c':
-      case 1003:
-      case 1002:
+      case OPT_CONFIG_STRICT:
+      case OPT_CONFIGTEST:
         break;
       case 'h':
         print_help();

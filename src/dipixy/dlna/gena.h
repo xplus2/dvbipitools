@@ -6,13 +6,11 @@
 
 #include <stddef.h>
 
-#include "../args.h"
-
-void gena_subscribe_new(const config_t *cfg, const char *service, const char *callback_hdr, char *out_sid, size_t out_sidsz);
+void gena_subscribe_new(char *out_sid);
 
 void gena_renew(const char *sid_hdr, char *out_sid, size_t out_sidsz);
 
-void gena_unsubscribe(const char *sid_hdr);
+void gena_unsubscribe(void);
 
 void gena_notify_system_update(void);
 

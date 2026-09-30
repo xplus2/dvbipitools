@@ -47,7 +47,8 @@ static int apply_listen(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_iface(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->iface, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->iface, v, e, n);
 }
 
 static int apply_max_channels(void *c, const char *v, char *e, size_t n) {
@@ -70,7 +71,8 @@ static int apply_workers(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_user(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->user, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->user, v, e, n);
 }
 
 static int apply_verbose(void *c, const char *v, char *e, size_t n) {
@@ -184,11 +186,13 @@ static int apply_fcc_client_range(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_metrics_sock(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_sock, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_sock, v, e, n);
 }
 
 static int apply_metrics_id(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_id, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_id, v, e, n);
 }
 
 static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {

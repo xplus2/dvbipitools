@@ -7,12 +7,20 @@
 #include "../http3_int.h"
 #include "../http3_steer.h"
 
+#include "lib/helper/log.h"
+
 #include <openssl/rand.h>
 #include <string.h>
 
 void cb_rand(uint8_t *dest, size_t destlen, const ngtcp2_rand_ctx *ctx) {
+  static int logged;
   (void)ctx;
-  RAND_bytes(dest, (int)destlen);
+  if (RAND_bytes(dest, (int)destlen) == 1) return;
+  memset(dest, 0, destlen);
+  if (!logged) {
+    log_line("http3: RAND_bytes failed");
+    logged = 1;
+  }
 }
 
 int cb_get_new_connection_id2(ngtcp2_conn *qconn, ngtcp2_cid *cid, ngtcp2_stateless_reset_token *token, size_t cidlen, void *ud) {

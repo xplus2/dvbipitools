@@ -8,6 +8,7 @@
 
 #include "lib/bim/fragment.h"
 #include "lib/tva/tva_xml.h"
+#include "lib/helper/ioutil.h"
 
 START_TEST(fragment_program_information_round_trips) {
   bcg_programme_t pr, out;
@@ -20,11 +21,11 @@ START_TEST(fragment_program_information_round_trips) {
   char crid_out[BCG_ID_LEN * 3 + 64], expected_crid[BCG_ID_LEN * 3 + 64];
 
   memset(&pr, 0, sizeof pr);
-  snprintf(pr.channel_id, sizeof pr.channel_id, "channel1");
-  snprintf(pr.start, sizeof pr.start, "2020-12-15T12:30:45Z");
-  snprintf(pr.title, sizeof pr.title, "News");
-  snprintf(pr.desc, sizeof pr.desc, "Evening news");
-  snprintf(pr.category, sizeof pr.category, "Current affairs");
+  bufcpy(pr.channel_id, sizeof pr.channel_id, "channel1");
+  bufcpy(pr.start, sizeof pr.start, "2020-12-15T12:30:45Z");
+  bufcpy(pr.title, sizeof pr.title, "News");
+  bufcpy(pr.desc, sizeof pr.desc, "Evening news");
+  bufcpy(pr.category, sizeof pr.category, "Current affairs");
 
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
@@ -58,8 +59,8 @@ START_TEST(fragment_program_information_round_trips_empty_fields) {
   char crid_out[BCG_ID_LEN * 3 + 64];
 
   memset(&pr, 0, sizeof pr);
-  snprintf(pr.channel_id, sizeof pr.channel_id, "channel1");
-  snprintf(pr.start, sizeof pr.start, "2020-12-15T12:30:45Z");
+  bufcpy(pr.channel_id, sizeof pr.channel_id, "channel1");
+  bufcpy(pr.start, sizeof pr.start, "2020-12-15T12:30:45Z");
   /* title/desc/category all left empty */
 
   bitwriter_init(&bw);
@@ -92,13 +93,13 @@ START_TEST(fragment_schedule_round_trips_and_filters_by_channel) {
   bcg_doc_t doc;
 
   memset(all, 0, sizeof all);
-  snprintf(all[0].channel_id, sizeof all[0].channel_id, "channel1");
-  snprintf(all[0].start, sizeof all[0].start, "2020-12-15T12:00:00Z");
-  snprintf(all[0].stop, sizeof all[0].stop, "2020-12-15T12:30:00Z");
-  snprintf(all[1].channel_id, sizeof all[1].channel_id, "channel2"); /* different channel, must be filtered out */
-  snprintf(all[1].start, sizeof all[1].start, "2020-12-15T12:00:00Z");
-  snprintf(all[2].channel_id, sizeof all[2].channel_id, "channel1");
-  snprintf(all[2].start, sizeof all[2].start, "2020-12-15T13:00:00Z");
+  bufcpy(all[0].channel_id, sizeof all[0].channel_id, "channel1");
+  bufcpy(all[0].start, sizeof all[0].start, "2020-12-15T12:00:00Z");
+  bufcpy(all[0].stop, sizeof all[0].stop, "2020-12-15T12:30:00Z");
+  bufcpy(all[1].channel_id, sizeof all[1].channel_id, "channel2"); /* different channel, must be filtered out */
+  bufcpy(all[1].start, sizeof all[1].start, "2020-12-15T12:00:00Z");
+  bufcpy(all[2].channel_id, sizeof all[2].channel_id, "channel1");
+  bufcpy(all[2].start, sizeof all[2].start, "2020-12-15T13:00:00Z");
   /* all[2].stop left empty: exercises the "no stop time" branch */
 
   bitwriter_init(&bw);
@@ -128,7 +129,7 @@ END_TEST
 static int fill_lookup(void *ctx, const char *crid, bcg_programme_t *pr) {
   (void)ctx;
   (void)crid;
-  snprintf(pr->title, sizeof pr->title, "looked up title");
+  bufcpy(pr->title, sizeof pr->title, "looked up title");
   return 0;
 }
 
@@ -143,8 +144,8 @@ START_TEST(fragment_schedule_decode_invokes_lookup) {
   bcg_doc_t doc;
 
   memset(&pr, 0, sizeof pr);
-  snprintf(pr.channel_id, sizeof pr.channel_id, "channel1");
-  snprintf(pr.start, sizeof pr.start, "2020-12-15T12:00:00Z");
+  bufcpy(pr.channel_id, sizeof pr.channel_id, "channel1");
+  bufcpy(pr.start, sizeof pr.start, "2020-12-15T12:00:00Z");
 
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
@@ -176,8 +177,8 @@ START_TEST(fragment_service_information_round_trips) {
   size_t bwlen, swlen;
 
   memset(&c, 0, sizeof c);
-  snprintf(c.id, sizeof c.id, "channel1");
-  snprintf(c.uri, sizeof c.uri, "rtp://239.1.1.1:5000");
+  bufcpy(c.id, sizeof c.id, "channel1");
+  bufcpy(c.uri, sizeof c.uri, "rtp://239.1.1.1:5000");
   c.onid = 2;
   c.tsid = 1;
   c.sid = 101;

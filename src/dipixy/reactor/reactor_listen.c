@@ -29,7 +29,8 @@
 
 /* SO_REUSEPORT: every worker thread binds its own socket to shared port, kernel load-balances accept() */
 static int create_listen_sock(int family, const char *addr, listen_scope_t scope, unsigned port) {
-  int fd, yes = 1;
+  int fd;
+  int yes = 1;
   fd = socket(family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
   if (fd < 0) return -1;
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
@@ -74,14 +75,13 @@ static int create_listen_sock_for_spec(const listen_spec_t *spec) {
 
 void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
   struct epoll_event ev;
+  int fd;
   rl->nL = 0;
 
-  {
-    int fd = create_listen_sock_for_spec(&reactor_cfg()->listen);
-    if (fd >= 0) rl->L[rl->nL++] = (reactor_listener){fd, 0, RL_ACCEPT};
-  }
+  fd = create_listen_sock_for_spec(&reactor_cfg()->listen);
+  if (fd >= 0) rl->L[rl->nL++] = (reactor_listener){fd, 0, RL_ACCEPT};
   if (tls_is_running()) {
-    int fd = create_listen_sock_for_spec(&reactor_cfg()->listen_tls);
+    fd = create_listen_sock_for_spec(&reactor_cfg()->listen_tls);
     if (fd >= 0) rl->L[rl->nL++] = (reactor_listener){fd, 1, RL_ACCEPT};
   }
 

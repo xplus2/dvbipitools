@@ -225,31 +225,35 @@ static void parse_rams_i(const unsigned char *p, size_t len, uint32_t sender_ssr
   cb(&info, user);
 }
 
-static void parse_rams(const unsigned char *p, size_t len, rtcp_rams_r_cb rams_r_cb, rtcp_rams_i_cb rams_i_cb, rtcp_rams_t_cb rams_t_cb, rtcp_malformed_cb malformed_cb, void *user) {
+static void parse_rams(const unsigned char *p, size_t len, const rtcp_cbs_t *cbs) {
   uint32_t sender_ssrc, media_ssrc;
   unsigned sfmt;
 
-  if (len < 16) /* SSRC pair (8) + SFMT/reserved (4), at minimum */
-    return;
-
+  if (len < 16) return; /* SSRC pair (8) + SFMT/reserved (4), at minimum */
   sender_ssrc = be32_get(p + 4);
   media_ssrc = be32_get(p + 8);
   sfmt = p[12];
 
-  if (sfmt == RTCP_SFMT_RAMS_R)
-    parse_rams_r(p + 16, len - 16, sender_ssrc, media_ssrc, rams_r_cb, user);
-  else if (sfmt == RTCP_SFMT_RAMS_I)
-    parse_rams_i(p + 12, len - 12, sender_ssrc, media_ssrc, rams_i_cb, user);
-  else if (sfmt == RTCP_SFMT_RAMS_T)
-    parse_rams_t(p + 16, len - 16, sender_ssrc, media_ssrc, rams_t_cb, malformed_cb, user);
+  switch (sfmt) {
+    case RTCP_SFMT_RAMS_R:
+      parse_rams_r(p + 16, len - 16, sender_ssrc, media_ssrc, cbs->rams_r_cb, cbs->user);
+      break;
+    case RTCP_SFMT_RAMS_I:
+      parse_rams_i(p + 12, len - 12, sender_ssrc, media_ssrc, cbs->rams_i_cb, cbs->user);
+      break;
+    case RTCP_SFMT_RAMS_T:
+      parse_rams_t(p + 16, len - 16, sender_ssrc, media_ssrc, cbs->rams_t_cb, cbs->malformed_cb, cbs->user);
+      break;
+    default: break;
+  }
 }
 
-static void parse_rtpfb(const unsigned char *p, size_t len, unsigned fmt, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_i_cb rams_i_cb, rtcp_rams_t_cb rams_t_cb, rtcp_malformed_cb malformed_cb, void *user) {
-  if (fmt == RTCP_FMT_NACK)
-    parse_nack(p, len, nack_cb, user);
-  else if (fmt == RTCP_FMT_RAMS)
-    parse_rams(p, len, rams_r_cb, rams_i_cb, rams_t_cb, malformed_cb, user);
-  /* other FMT values: valid, intentionally skipped */
+static void parse_rtpfb(const unsigned char *p, size_t len, unsigned fmt, const rtcp_cbs_t *cbs) {
+  switch (fmt) {
+    case RTCP_FMT_NACK: parse_nack(p, len, cbs->nack_cb, cbs->user); break;
+    case RTCP_FMT_RAMS: parse_rams(p, len, cbs); break;
+    default: break; /* other FMT values: valid, intentionally skipped */
+  }
 }
 
 /* one SDES chunk: SSRC(4) + items (type(8)+len(8)+text) terminated by a type-0 byte, whole
@@ -258,24 +262,19 @@ static void parse_sdes(const unsigned char *p, size_t len, unsigned sc, rtcp_sde
   size_t off = 4; /* skip RTCP header (V/P/SC, PT, length) */
   unsigned chunk = 0;
 
-  if (!cb)
-    return;
-
+  if (!cb) return;
   while (chunk < sc && off + 4 <= len) {
     uint32_t ssrc = be32_get(p + off);
     size_t item_off = off + 4;
     rtcp_sdes_t sdes;
     int found_cname = 0;
     size_t chunk_len;
-
     while (item_off < len && p[item_off] != RTCP_SDES_ITEM_END) {
       unsigned type = p[item_off];
       unsigned ilen;
-      if (item_off + 2 > len)
-        break; /* malformed, stop this chunk */
+      if (item_off + 2 > len) break; /* malformed, stop this chunk */
       ilen = p[item_off + 1];
-      if (item_off + 2 + ilen > len)
-        break; /* malformed, stop this chunk */
+      if (item_off + 2 + ilen > len) break; /* malformed, stop this chunk */
       if (type == RTCP_SDES_ITEM_CNAME && !found_cname) {
         size_t n = ilen < RTCP_CNAME_MAX - 1 ? ilen : RTCP_CNAME_MAX - 1;
         memcpy(sdes.cname, p + item_off + 2, n);
@@ -285,12 +284,9 @@ static void parse_sdes(const unsigned char *p, size_t len, unsigned sc, rtcp_sde
       }
       item_off += 2 + ilen;
     }
-    if (item_off < len)
-      item_off++; /* consume terminating type-0 byte, if present */
-
+    if (item_off < len) item_off++; /* consume terminating type-0 byte, if present */
     chunk_len = ((item_off - off) + 3) & ~(size_t)3; /* pad whole chunk to 32-bit */
-    if (chunk_len == 0)
-      break; /* can't happen, min chunk is 4 bytes. defensive against infinite loop */
+    if (chunk_len == 0) break; /* can't happen, min chunk is 4 bytes. defensive against infinite loop */
 
     if (found_cname) {
       sdes.ssrc = ssrc;
@@ -301,7 +297,7 @@ static void parse_sdes(const unsigned char *p, size_t len, unsigned sc, rtcp_sde
   }
 }
 
-void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_i_cb rams_i_cb, rtcp_rams_t_cb rams_t_cb, rtcp_sdes_cb sdes_cb, rtcp_malformed_cb malformed_cb, void *user) {
+void rtcp_parse(const unsigned char *p, size_t len, const rtcp_cbs_t *cbs) {
   size_t off = 0;
 
   while (off + 4 <= len) {
@@ -310,14 +306,12 @@ void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_r
     unsigned fmt = p[off] & 0x1F; /* FMT (RTPFB/PSFB), RC (SR/RR) or SC (SDES), same bit field */
     size_t pkt_len = ((size_t)be16_get(p + off + 2) + 1) * 4; /* RFC 3550 6.4.1 */
 
-    if (version != 2 || off + pkt_len > len)
-      break; /* stop before misparsing rest */
-
-    if (pt == RTCP_PT_RTPFB)
-      parse_rtpfb(p + off, pkt_len, fmt, nack_cb, rams_r_cb, rams_i_cb, rams_t_cb, malformed_cb, user);
-    else if (pt == RTCP_PT_SDES)
-      parse_sdes(p + off, pkt_len, fmt, sdes_cb, user);
-    /* other types (SR/RR/BYE/PSFB): valid, intentionally skipped */
+    if (version != 2 || off + pkt_len > len) break; /* stop before misparsing rest */
+    switch (pt) {
+      case RTCP_PT_RTPFB: parse_rtpfb(p + off, pkt_len, fmt, cbs); break;
+      case RTCP_PT_SDES:  parse_sdes(p + off, pkt_len, fmt, cbs->sdes_cb, cbs->user); break;
+      default: break; /* other types (SR/RR/BYE/PSFB): valid, skipped */
+    }
 
     off += pkt_len;
   }

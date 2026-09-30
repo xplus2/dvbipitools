@@ -12,26 +12,30 @@
    as it goes. 1: found UDP (next_header==17). 0: unsupported header or truncated packet */
 static int walk_ipv6_ext_headers(const unsigned char *pkt, size_t len, size_t *hdr_off, unsigned *next_header) {
   for (;;) {
-    if (*next_header == 17) /* UDP */
-      return 1;
-    if (*next_header == 0 || *next_header == 60 || *next_header == 43) {
-      /* Hop-by-Hop / Destination Options / Routing: next-header(1) + len-in-8-octet-units-minus-1(1) + data */
-      unsigned ext_len;
-      if (len < *hdr_off + 2)
-        return 0;
-      ext_len = pkt[*hdr_off + 1];
-      *next_header = pkt[*hdr_off];
-      *hdr_off += ((size_t)ext_len + 1) * 8;
-      continue;
+    switch (*next_header) {
+      case 17: /* UDP */
+        return 1;
+      case 0:
+      case 60:
+      case 43: {
+        /* Hop-by-Hop / Destination Options / Routing: next-header(1) + len-in-8-octet-units-minus-1(1) + data */
+        unsigned ext_len;
+        if (len < *hdr_off + 2)
+          return 0;
+        ext_len = pkt[*hdr_off + 1];
+        *next_header = pkt[*hdr_off];
+        *hdr_off += ((size_t)ext_len + 1) * 8;
+        continue;
+      }
+      case 44: /* Fragment header: fixed 8 bytes */
+        if (len < *hdr_off + 8)
+          return 0;
+        *next_header = pkt[*hdr_off];
+        *hdr_off += 8;
+        continue;
+      default:
+        return 0; /* AH/ESP or anything else unsupported */
     }
-    if (*next_header == 44) { /* Fragment header: fixed 8 bytes */
-      if (len < *hdr_off + 8)
-        return 0;
-      *next_header = pkt[*hdr_off];
-      *hdr_off += 8;
-      continue;
-    }
-    return 0; /* AH/ESP or anything else unsupported: documented scope limit */
   }
 }
 
@@ -56,47 +60,52 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
     off += 4;
   }
 
-  if (ethertype == 0x0800) {
-    unsigned ihl, proto;
+  switch (ethertype) {
+    case 0x0800: {
+      unsigned ihl, proto;
 
-    ip_off = off;
-    if (len < ip_off + 20 || (pkt[ip_off] >> 4) != 4)
-      return;
-    ihl = (unsigned)(pkt[ip_off] & 0x0F) * 4;
-    if (ihl < 20) /* RFC 791 min IHL is 5 (20 bytes) */
-      return;
-    dscp = pkt[ip_off + 1] & 0xFC; /* TOS byte, top 6 bits (DSCP), ECN masked off */
-    proto = pkt[ip_off + 9];
-    if (proto != 17 || len < ip_off + ihl + 8) /* UDP only */
-      return;
-    memcpy(&dst4, pkt + ip_off + 16, 4);
-    family = AF_INET;
-    dst_bytes = &dst4;
-    addr_len = sizeof dst4;
-    udp_off = ip_off + ihl;
-  } else if (ethertype == 0x86DD) {
-    unsigned next_header;
-    size_t hdr_off;
+      ip_off = off;
+      if (len < ip_off + 20 || (pkt[ip_off] >> 4) != 4)
+        return;
+      ihl = (unsigned)(pkt[ip_off] & 0x0F) * 4;
+      if (ihl < 20) /* RFC 791 min IHL is 5 (20 bytes) */
+        return;
+      dscp = pkt[ip_off + 1] & 0xFC; /* TOS byte, top 6 bits (DSCP), ECN masked off */
+      proto = pkt[ip_off + 9];
+      if (proto != 17 || len < ip_off + ihl + 8) /* UDP only */
+        return;
+      memcpy(&dst4, pkt + ip_off + 16, 4);
+      family = AF_INET;
+      dst_bytes = &dst4;
+      addr_len = sizeof dst4;
+      udp_off = ip_off + ihl;
+      break;
+    }
+    case 0x86DD: {
+      unsigned next_header;
+      size_t hdr_off;
 
-    ip_off = off;
-    if (len < ip_off + 40 || (pkt[ip_off] >> 4) != 6)
-      return;
-    dscp = (unsigned char)(((pkt[ip_off] & 0x0F) << 4) | (pkt[ip_off + 1] >> 4)); /* Traffic Class split across both bytes */
-    dscp &= 0xFC; /* top 6 bits (DSCP), ECN masked off */
-    next_header = pkt[ip_off + 6];
-    memcpy(&dst6, pkt + ip_off + 24, 16);
-    hdr_off = ip_off + 40;
+      ip_off = off;
+      if (len < ip_off + 40 || (pkt[ip_off] >> 4) != 6)
+        return;
+      dscp = (unsigned char)(((pkt[ip_off] & 0x0F) << 4) | (pkt[ip_off + 1] >> 4)); /* Traffic Class split across both bytes */
+      dscp &= 0xFC; /* top 6 bits (DSCP), ECN masked off */
+      next_header = pkt[ip_off + 6];
+      memcpy(&dst6, pkt + ip_off + 24, 16);
+      hdr_off = ip_off + 40;
 
-    if (!walk_ipv6_ext_headers(pkt, len, &hdr_off, &next_header))
-      return;
-    if (len < hdr_off + 8)
-      return;
-    family = AF_INET6;
-    dst_bytes = &dst6;
-    addr_len = sizeof dst6;
-    udp_off = hdr_off;
-  } else {
-    return; /* not IPv4 or IPv6 */
+      if (!walk_ipv6_ext_headers(pkt, len, &hdr_off, &next_header))
+        return;
+      if (len < hdr_off + 8)
+        return;
+      family = AF_INET6;
+      dst_bytes = &dst6;
+      addr_len = sizeof dst6;
+      udp_off = hdr_off;
+      break;
+    }
+    default:
+      return; /* not IPv4 or IPv6 */
   }
 
   if (!in_ranges(family, dst_bytes, ranges, range_count)) /* userspace whitelist, authoritative regardless of installed kernel filter */

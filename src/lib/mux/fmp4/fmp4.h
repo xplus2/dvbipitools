@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DVBIPITOOLS_LIB_MUX_FMP4_FMP4_H
-#define DVBIPITOOLS_LIB_MUX_FMP4_FMP4_H
+#ifndef DVBIPITOOLS_LIB_MUX_FMP4_H
+#define DVBIPITOOLS_LIB_MUX_FMP4_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -16,11 +16,16 @@ typedef struct {
   codec_t codec; /* CODEC_H264/HEVC/LCEVC (video) or audio codecs */
   unsigned track_id;
   unsigned timescale;
-  unsigned width, height;   /* video only */
-  unsigned rate, channels;  /* audio only */
+  unsigned width;  /* video only */
+  unsigned height; /* video only */
+  unsigned rate;     /* audio only */
+  unsigned channels; /* audio only */
   const unsigned char *cpriv; /* video: avcC/hvcC/lvcC. AAC: AudioSpecificConfig */
   size_t cpriv_len;
-  unsigned char ac3_bsid, ac3_bsmod, ac3_acmod, ac3_lfeon; /* AC3/EAC3 dac3/dec3 fields */
+  unsigned char ac3_bsid;  /* AC3/EAC3 dac3/dec3 fields */
+  unsigned char ac3_bsmod;
+  unsigned char ac3_acmod;
+  unsigned char ac3_lfeon;
   unsigned ac3_bitrate_code; /* AC3: 5-bit frmsizecod. EAC3: 13-bit data_rate estimate, kbps */
   unsigned truehd_format_info; /* dmlp fields */
   unsigned truehd_peak_data_rate; /* dmlp fields */

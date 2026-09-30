@@ -109,9 +109,15 @@ static int slot_result_fd(const void *r) { return source_fd((const source_t *)r)
 static void slot_result_close(void *r) { source_close((source_t *)r); }
 
 static const retryset_ops_t slot_ops = {
-  slot_open_start,  slot_open_poll_fd, slot_open_poll_events,
-  slot_open_step,   slot_open_take,    slot_open_free,
-  slot_result_fd,   slot_result_close};
+  .open_start = slot_open_start,
+  .open_poll_fd = slot_open_poll_fd,
+  .open_poll_events = slot_open_poll_events,
+  .open_step = slot_open_step,
+  .open_take = slot_open_take,
+  .open_free = slot_open_free,
+  .result_fd = slot_result_fd,
+  .result_close = slot_result_close,
+};
 
 inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ctxs, input_metrics_t *input_stats, const source_insp_t *insps) {
   inputset_t *is = calloc(1, sizeof *is);

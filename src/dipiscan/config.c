@@ -49,11 +49,13 @@ static int apply_format(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_provider(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->provider, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->provider, v, e, n);
 }
 
 static int apply_out(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->out_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->out_path, v, e, n);
 }
 
 static int apply_timeout(void *c, const char *v, char *e, size_t n) {
@@ -80,15 +82,17 @@ static int apply_http_proxy(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_http_path(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
   if (scan_cfg_http_path(v)) {
     snprintf(e, n, "invalid '%s' (%%g, %%p, %%%% only)", v);
     return -1;
   }
-  return yamlcfg_set_str(&((config_t *)c)->http_path_tmpl, v, e, n);
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->http_path_tmpl, v, e, n);
 }
 
 static int apply_iface(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->iface, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->iface, v, e, n);
 }
 
 static int apply_verbose(void *c, const char *v, char *e, size_t n) {

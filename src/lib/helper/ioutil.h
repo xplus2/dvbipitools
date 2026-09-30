@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef LIB_IOUTIL_H
-#define LIB_IOUTIL_H
+#ifndef DVBIPITOOLS_LIB_HELPER_IOUTIL_H
+#define DVBIPITOOLS_LIB_HELPER_IOUTIL_H
 
 #include <stdatomic.h>
 #include <stddef.h>
@@ -10,8 +10,12 @@
 #include <stdio.h>
 #include <time.h>
 
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+
 /* null-terminated, malloc'd. 0 ok, -1 error */
 int read_all(FILE *f, char **out, size_t *out_len);
+
+uint32_t rand_seed32(void);
 
 /* bounded strcpy: copies at most dstsz-1 bytes of src, always NUL-terminates dst.
    returns strlen(src). truncated if >= dstsz, matches BSD strlcpy */

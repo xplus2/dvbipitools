@@ -2,9 +2,8 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdlib.h>
-#include <time.h>
-#include <unistd.h>
 
+#include "../helper/ioutil.h"
 #include "rtpheader.h"
 
 struct rtpheader {
@@ -16,9 +15,8 @@ rtpheader_t *rtpheader_new(void) {
   rtpheader_t *r = calloc(1, sizeof *r);
   if (!r)
     return NULL;
-  srand((unsigned)(time(NULL) ^ getpid()));
-  r->seq = (uint16_t)rand();
-  r->ssrc = ((uint32_t)rand() << 16) ^ (uint32_t)rand();
+  r->seq = (uint16_t)rand_seed32();
+  r->ssrc = rand_seed32();
   return r;
 }
 

@@ -63,7 +63,8 @@ size_t psi_build_pat(unsigned tsid, unsigned version, unsigned program_number, u
 }
 
 size_t psi_build_pat_multi(unsigned tsid, unsigned version, const psi_pat_entry_t *programs, size_t n_programs, unsigned char *out, size_t cap) {
-  size_t n = 0, i;
+  size_t n = 0;
+  size_t i;
   if (cap < 12 + n_programs * 4) return 0;
   out[n++] = 0x00;
   n += 2;
@@ -101,8 +102,15 @@ size_t psi_build_cat(unsigned version, const unsigned char *desc, size_t desc_le
 }
 
 static size_t psi_put_sdt_entry(unsigned char *out, size_t n, size_t cap, const psi_sdt_entry_t *e) {
-  size_t f16_pos, desc_start, dlen_pos, plen_pos, slen_pos, plen, slen;
-  unsigned dll, field16;
+  size_t f16_pos;
+  size_t desc_start;
+  size_t dlen_pos;
+  size_t plen_pos;
+  size_t slen_pos;
+  size_t plen;
+  size_t slen;
+  unsigned dll;
+  unsigned field16;
 
   if (n + 9 > cap) return 0;
   psi_put16(out + n, e->service_id);
@@ -161,7 +169,8 @@ size_t psi_build_sdt(unsigned version, unsigned tsid, unsigned onid, unsigned se
 }
 
 size_t psi_build_sdt_multi(unsigned version, unsigned tsid, unsigned onid, const psi_sdt_entry_t *services, size_t n_services, unsigned char *out, size_t cap) {
-  size_t n, i;
+  size_t n;
+  size_t i;
   if (cap < 12 || n_services == 0) return 0;
   n = psi_put_sdt_header(out, version, tsid, onid);
   for (i = 0; i < n_services; i++) {
@@ -172,8 +181,15 @@ size_t psi_build_sdt_multi(unsigned version, unsigned tsid, unsigned onid, const
 }
 
 size_t psi_build_nit(unsigned version, unsigned onid, unsigned tsid, const char *network_name, unsigned char *out, size_t cap) {
-  size_t n = 0, ndl_pos, nd_start, dlen_pos, nlen, tsl_pos, ts_start;
-  unsigned ndl, tsl;
+  size_t n = 0;
+  size_t ndl_pos;
+  size_t nd_start;
+  size_t dlen_pos;
+  size_t nlen;
+  size_t tsl_pos;
+  size_t ts_start;
+  unsigned ndl;
+  unsigned tsl;
   if (cap < 32) return 0;
   out[n++] = 0x40;
   n += 2;

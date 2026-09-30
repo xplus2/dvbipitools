@@ -40,10 +40,12 @@ typedef struct {
 typedef struct {
   esc_track_t es;              /* SPS/PPS scratch, also feeds cpriv for fmp4's avcC/hvcC */
   unsigned char *nal_scratch;  /* esc_handle_*_nal's AU buffer, discarded each AU */
-  size_t nal_scratch_len, nal_scratch_cap;
+  size_t nal_scratch_len;
+  size_t nal_scratch_cap;
   unsigned char *av1_rb;
   size_t av1_rbcap;
-  pts_unwrap_t ptswrap, dtswrap;
+  pts_unwrap_t ptswrap;
+  pts_unwrap_t dtswrap;
 
   int seg_open;          /* 1 once first keyframe seen */
   int64_t first_ts_ms;   /* decode-order ms (dts, or pts if no dts) at segment start, -1 if unknown */
@@ -54,31 +56,36 @@ typedef struct {
 
 /* fmp4 only, ts already carries audio raw. picked at video pid lock-on. audio.c owns this */
 typedef struct {
-  int audio_present;   /* 1: locked program has a supported audio ES */
-  esc_track_t es_audio; /* AAC ASC / LATM state, next_frame()'s scratch */
-  unsigned char *audio_rem;
-  size_t audio_remlen, audio_remcap;
-  int audio_ready; /* 1 once first audio frame parsed: rate/channels/etc below are valid */
-  unsigned audio_rate, audio_channels;
-  unsigned audio_bsid, audio_bsmod, audio_acmod, audio_lfeon; /* AC3/EAC3 only */
-  unsigned audio_bitrate_code; /* AC3: frmsizecod. EAC3: estimated data_rate kbps */
-  unsigned audio_truehd_format_info; /* TrueHD only */
-  unsigned audio_truehd_peak_data_rate; /* TrueHD only */
-  int audio_dts_has_core; /* DTS/DTS-HD/DTS-HD-MA only */
-  unsigned audio_ac4_bitstream_version;
-  unsigned audio_ac4_presentation_version;
-  unsigned audio_ac4_mdcompat;
-  int audio_ac4_last_iframe;
-  int64_t audio_ac4_frame_count;
+  int present;   /* 1: locked program has a supported audio ES */
+  esc_track_t es; /* AAC ASC / LATM state, next_frame()'s scratch */
+  unsigned char *rem;
+  size_t remlen;
+  size_t remcap;
+  int ready; /* 1 once first audio frame parsed: rate/channels/etc below are valid */
+  unsigned rate;
+  unsigned channels;
+  unsigned bsid; /* AC3/EAC3 only */
+  unsigned bsmod;
+  unsigned acmod;
+  unsigned lfeon;
+  unsigned bitrate_code; /* AC3: frmsizecod. EAC3: estimated data_rate kbps */
+  unsigned truehd_format_info; /* TrueHD only */
+  unsigned truehd_peak_data_rate; /* TrueHD only */
+  int dts_has_core; /* DTS/DTS-HD/DTS-HD-MA only */
+  unsigned ac4_bitstream_version;
+  unsigned ac4_presentation_version;
+  unsigned ac4_mdcompat;
+  int ac4_last_iframe;
+  int64_t ac4_frame_count;
 
   /* nominal audio duration drifts unbounded off encoder clock, pes pts corrects. nominal kept in exact native samples,
      never ms: ms accumulation truncates frames */
-  pts_unwrap_t audio_ptswrap;
-  int audio_pts_anchored;
-  int64_t audio_anchor_pts_ms;
-  int64_t audio_anchor_nominal_samples;
-  int64_t audio_nominal_samples;
-  int64_t audio_pending_drift_samples;
+  pts_unwrap_t ptswrap;
+  int pts_anchored;
+  int64_t anchor_pts_ms;
+  int64_t anchor_nominal_samples;
+  int64_t nominal_samples;
+  int64_t pending_drift_samples;
   int fmp4_audio_seeded;
 } seg_audio_t;
 
@@ -105,14 +112,15 @@ typedef struct {
   int fmp4_lcevc_track_idx; /* -1 until fmux created with an lcevc track */
 
   /* fmp4 duration: next au's dts minus this one's. delayed one au past pending_pes_off below */
-  unsigned char *fmp4_pend_data;
-  size_t fmp4_pend_len, fmp4_pend_cap;
-  int fmp4_pend_key;
-  int64_t fmp4_pend_ts_ms;
-  int32_t fmp4_pend_cts;    /* (pts - dts) in track ticks, 0 if no dts */
-  int fmp4_pend_starts_frag;
-  int fmp4_pend_ends_seg;   /* set alongside starts_frag: this boundary also closes the enclosing segment */
-  double fmp4_pend_elapsed; /* set alongside starts_frag, used if this pend later closes a segment */
+  unsigned char *pend_data;
+  size_t pend_len;
+  size_t pend_cap;
+  int pend_key;
+  int64_t pend_ts_ms;
+  int32_t pend_cts;    /* (pts - dts) in track ticks, 0 if no dts */
+  int pend_starts_frag;
+  int pend_ends_seg;   /* set alongside starts_frag: this boundary also closes the enclosing segment */
+  double pend_elapsed; /* set alongside starts_frag, used if this pend later closes a segment */
   int fmp4_have_pend;
 
   int fmp4_ac4_defer;
@@ -159,7 +167,8 @@ typedef struct hls_seg_ctx {
 
   /* accumulates every incoming packet (all PIDs) since last cut */
   unsigned char *buf;
-  size_t len, cap;
+  size_t len;
+  size_t cap;
 
   /* offset in buf marking start of PES currently being reassembled by pes.c.
      pes.c's callback fires for PES only once its successor's PUSI arrives, one AU late -> "pending" */

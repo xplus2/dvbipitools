@@ -10,9 +10,10 @@
 void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len) {
   ret_ring_entry_t *slot;
   unsigned g;
+  size_t nwords = (payload_len + 7) / 8;
   uint64_t words[RET_PAYLOAD_WORDS];
 
-  memset(words, 0, sizeof words);
+  memset(words, 0, nwords * sizeof *words);
   memcpy(words, payload, payload_len);
 
   slot = &((ret_ring_entry_t *)c->ring)[seq % c->ring_size];
@@ -20,7 +21,7 @@ void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, unsigned cha
   atomic_store_explicit(&slot->seq, seq, memory_order_relaxed);
   atomic_store_explicit(&slot->timestamp, timestamp, memory_order_relaxed);
   atomic_store_explicit(&slot->dscp, dscp, memory_order_relaxed);
-  for (size_t i = 0; i < RET_PAYLOAD_WORDS; i++)
+  for (size_t i = 0; i < nwords; i++)
     atomic_store_explicit(&slot->payload[i], words[i], memory_order_relaxed);
   atomic_store_explicit(&slot->payload_len, payload_len, memory_order_relaxed);
   atomic_store_explicit(&slot->valid, 1, memory_order_relaxed);
@@ -30,10 +31,8 @@ void ret_ring_store(channel_t *c, uint16_t seq, uint32_t timestamp, unsigned cha
 /* random_access_indicator: adaptation field byte0 bit6 (Annex I p.26 RAP def) */
 static int ts_has_rai(const unsigned char *ts) {
   unsigned afc = (ts[3] >> 4) & 0x3;
-  if (afc != 2 && afc != 3) /* no adaptation field */
-    return 0;
-  if (ts[4] == 0) /* adaptation_field_length 0, no flags byte */
-    return 0;
+  if (afc != 2 && afc != 3) return 0; /* no adaptation field */
+  if (ts[4] == 0) return 0; /* adaptation_field_length 0, no flags byte */
   return (ts[5] >> 6) & 0x1;
 }
 
@@ -43,12 +42,10 @@ int scan_ts_packets(psi_t *psi, const unsigned char *payload, size_t payload_len
   for (size_t off = 0; off + 188 <= payload_len; off += 188) {
     const unsigned char *ts = payload + off;
     unsigned pid;
-    if (ts[0] != 0x47)
-      continue;
+    if (ts[0] != 0x47) continue;
     psi_feed(psi, ts);
     pid = tspack_pid(ts);
-    if (psi_classify(psi, pid) == PID_VIDEO && ts_has_rai(ts))
-      is_rap = 1;
+    if (psi_classify(psi, pid) == PID_VIDEO && ts_has_rai(ts)) is_rap = 1;
   }
   return is_rap;
 }
@@ -67,8 +64,7 @@ void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, unsigne
     atomic_store_explicit(&rc->rap_write_count, wc, memory_order_relaxed);
     atomic_store_explicit(&rc->have_rap, 1, memory_order_release);
   }
-  if (!atomic_load_explicit(&rc->have_rap, memory_order_relaxed))
-    return; /* nothing cached until first RAP arrives */
+  if (!atomic_load_explicit(&rc->have_rap, memory_order_relaxed)) return; /* nothing cached until first RAP arrives */
 
   e = &ring[wc % rc->cap];
   g = seqlock_begin_write(&e->gen);
@@ -77,8 +73,7 @@ void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, unsigne
   atomic_store_explicit(&e->dscp, dscp, memory_order_relaxed);
   memset(words, 0, sizeof words);
   memcpy(words, payload, payload_len);
-  for (size_t i = 0; i < FCC_PAYLOAD_WORDS; i++)
-    atomic_store_explicit(&e->payload[i], words[i], memory_order_relaxed);
+  for (size_t i = 0; i < FCC_PAYLOAD_WORDS; i++) atomic_store_explicit(&e->payload[i], words[i], memory_order_relaxed);
   atomic_store_explicit(&e->payload_len, payload_len, memory_order_relaxed);
   seqlock_commit_write(&e->gen, g);
 
@@ -88,12 +83,11 @@ void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, unsigne
 int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out) {
   const ret_ring_entry_t *slot;
   uint64_t words[RET_PAYLOAD_WORDS] = {0};
+  unsigned g;
 
-  if (c->ring_size == 0)
-    return 0;
+  if (c->ring_size == 0) return 0;
   slot = &((const ret_ring_entry_t *)c->ring)[seq % c->ring_size];
 
-  unsigned g;
   SEQLOCK_READ_LOOP(&slot->gen, g) {
     out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
     out->timestamp = atomic_load_explicit(&slot->timestamp, memory_order_relaxed);
@@ -114,27 +108,23 @@ int channel_cache_peek_meta(const channel_t *c, size_t index, rap_cache_meta_t *
   const fcc_ring_entry_t *ring = (const fcc_ring_entry_t *)c->cache.entries;
   uint64_t wc, rwc, avail, start, abs_pos;
   const fcc_ring_entry_t *slot;
+  unsigned g;
 
-  if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire))
-    return 0;
+  if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire)) return 0;
   wc = atomic_load_explicit(&c->cache.write_count, memory_order_acquire);
   rwc = atomic_load_explicit(&c->cache.rap_write_count, memory_order_relaxed);
   avail = wc - rwc;
-  if (avail > c->cache.cap)
-    avail = c->cache.cap;
-  if (index >= avail)
-    return 0;
+  if (avail > c->cache.cap) avail = c->cache.cap;
+  if (index >= avail) return 0;
 
   start = wc - avail;
   abs_pos = start + index;
   slot = &ring[abs_pos % c->cache.cap];
 
-  unsigned g;
   SEQLOCK_READ_LOOP(&slot->gen, g) {
     out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
     out->timestamp = atomic_load_explicit(&slot->timestamp, memory_order_relaxed);
-    if (SEQLOCK_READ_OK(&slot->gen, g))
-      return 1;
+    if (SEQLOCK_READ_OK(&slot->gen, g)) return 1;
   }
   return 0; /* repeated race treated as not-found */
 }
@@ -146,8 +136,7 @@ int channel_has_rap(const channel_t *c) {
 size_t channel_cache_count(const channel_t *c) {
   uint64_t wc, rwc, avail;
 
-  if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire))
-    return 0;
+  if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire)) return 0;
   wc = atomic_load_explicit(&c->cache.write_count, memory_order_acquire);
   rwc = atomic_load_explicit(&c->cache.rap_write_count, memory_order_relaxed);
   avail = wc - rwc;
@@ -161,28 +150,24 @@ int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out) 
   uint64_t wc, rwc, avail, start, abs_pos;
   const fcc_ring_entry_t *slot;
   uint64_t words[FCC_PAYLOAD_WORDS] = {0};
+  unsigned g;
 
-  if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire))
-    return 0;
+  if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire)) return 0;
   wc = atomic_load_explicit(&c->cache.write_count, memory_order_acquire);
   rwc = atomic_load_explicit(&c->cache.rap_write_count, memory_order_relaxed);
   avail = wc - rwc;
-  if (avail > c->cache.cap)
-    avail = c->cache.cap;
-  if (index >= avail)
-    return 0;
+  if (avail > c->cache.cap) avail = c->cache.cap;
+  if (index >= avail) return 0;
 
   start = wc - avail;
   abs_pos = start + index;
   slot = &ring[abs_pos % c->cache.cap];
 
-  unsigned g;
   SEQLOCK_READ_LOOP(&slot->gen, g) {
     out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
     out->timestamp = atomic_load_explicit(&slot->timestamp, memory_order_relaxed);
     out->dscp = atomic_load_explicit(&slot->dscp, memory_order_relaxed);
-    for (size_t i = 0; i < FCC_PAYLOAD_WORDS; i++)
-      words[i] = atomic_load_explicit(&slot->payload[i], memory_order_relaxed);
+    for (size_t i = 0; i < FCC_PAYLOAD_WORDS; i++) words[i] = atomic_load_explicit(&slot->payload[i], memory_order_relaxed);
     out->payload_len = atomic_load_explicit(&slot->payload_len, memory_order_relaxed);
     if (SEQLOCK_READ_OK(&slot->gen, g)) {
       memcpy(out->payload, words, sizeof out->payload);

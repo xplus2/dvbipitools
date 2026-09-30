@@ -41,22 +41,25 @@ int main(int argc, char **argv) {
   char src[1024];
   dstrbuf_t sb_out;
   dstrbuf_t sb_line;
+  metrics_exporter_t mx;
+  int rc;
 
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
   dstrbuf_init(&sb_out);
   for (int i = 0; i < cfg.n_out; i++) {
     char one[600];
     out_describe(&cfg.out[i], one, sizeof one);
-    dstrbuf_appendf(&sb_out, "%s%s", i ? "," : "", one);
+    if (i) dstrbuf_add(&sb_out, ",");
+    dstrbuf_add(&sb_out, one);
   }
   source_describe(&cfg.source, src, sizeof src);
   dstrbuf_init(&sb_line);
   dstrbuf_appendf(&sb_line, "\e[1mi:\e[0m\e[0;37m%s\e[0m \e[1mo:\e[0m\e[0;37m%s\e[0m \e[1mf:\e[0m\e[0;37m%s\e[0m", src, sb_out.buf ? sb_out.buf : "", fmt_name(cfg.format));
-  if (cfg.audio_all) dstrbuf_appendf(&sb_line, " \e[1ma:\e[0m\e[0;37mall\e[0m");
+  if (cfg.audio_all) dstrbuf_add(&sb_line, " \e[1ma:\e[0m\e[0;37mall\e[0m");
   else dstrbuf_appendf(&sb_line, " \e[1ma:\e[0m\e[0;37m%u\e[0m", cfg.audio_track);
   dstrbuf_appendf(&sb_line, " \e[1ms:\e[0m\e[0;37m%s\e[0m", sub_name(cfg.subs));
   if (cfg.duration_s) dstrbuf_appendf(&sb_line, " \e[1md:\e[0m\e[0;37m%ld\e[0m s", cfg.duration_s);
-  else dstrbuf_appendf(&sb_line, " \e[1md:\e[0m\e[0;37mforever\e[0m");
+  else dstrbuf_add(&sb_line, " \e[1md:\e[0m\e[0;37mforever\e[0m");
   if (cfg.iface_in) dstrbuf_appendf(&sb_line, " \e[1mif:\e[0m\e[0;37m%s\e[0m", cfg.iface_in);
   if (cfg.iface_out) dstrbuf_appendf(&sb_line, " \e[1mof:\e[0m\e[0;37m%s\e[0m", cfg.iface_out);
   if (cfg.ret.enabled) dstrbuf_appendf(&sb_line, " \e[1mret:\e[0m\e[0;37m%s:%u%s\e[0m", cfg.ret.addr, cfg.ret.port, cfg.ret.mc_enabled ? "+mc" : "");
@@ -64,12 +67,8 @@ int main(int argc, char **argv) {
   free(sb_out.buf);
   free(sb_line.buf);
   signals_install();
-  {
-    metrics_exporter_t mx;
-    int rc;
-    metrics_exporter_init(&mx, METRICS_COMPONENT_REC, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
-    rc = record_run(&cfg, &mx);
-    metrics_exporter_close(&mx);
-    return rc;
-  }
+  metrics_exporter_init(&mx, METRICS_COMPONENT_REC, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
+  rc = record_run(&cfg, &mx);
+  metrics_exporter_close(&mx);
+  return rc;
 }

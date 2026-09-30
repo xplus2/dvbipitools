@@ -25,6 +25,7 @@ void dixy_cfg_defaults(config_t *cfg) {
   cfg->max_clients = 256;
   cfg->max_channels = 32;
   cfg->capture_ring_kib = 4096;
+  cfg->ts_startup_timeout_s = 5.0;
   cfg->sds_timeout_s = 3.0;
   cfg->sds_refresh_interval_s = 30.0;
   cfg->segment_size = 3.0;
@@ -55,40 +56,43 @@ static int item_hook(void *c, const char *list, int begin, char *e, size_t n) {
   }
   item.active = 0;
   if (!item.have) {
-    snprintf(e, n, "missing input");
+    bufcpy(e, n, "missing input");
     return -1;
   }
   return 0;
 }
 
 static int apply_input(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
   const char *val;
-  if (yamlcfg_set_str(&val, v, e, n)) return -1;
-  if (dixy_cfg_add_input(c, val, e, n)) return -1;
+  if (yamlcfg_set_str(&cfg->str_pool, &val, v, e, n)) return -1;
+  if (dixy_cfg_add_input(cfg, val, e, n)) return -1;
   if (item.active) item.have = 1;
   return 0;
 }
 
 static int apply_input_name(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
   const char *val;
   if (!item.active) {
-    snprintf(e, n, "only valid inside an input list item");
+    bufcpy(e, n, "only valid inside an input list item");
     return -1;
   }
-  if (yamlcfg_set_str(&val, v, e, n)) return -1;
-  return dixy_cfg_set_name(c, val, e, n);
+  if (yamlcfg_set_str(&cfg->str_pool, &val, v, e, n)) return -1;
+  return dixy_cfg_set_name(cfg, val, e, n);
 }
 
 static int apply_input_media_type(void *c, const char *v, char *e, size_t n) {
   if (!item.active) {
-    snprintf(e, n, "only valid inside an input list item");
+    bufcpy(e, n, "only valid inside an input list item");
     return -1;
   }
   return dixy_cfg_set_media_type(c, v, e, n);
 }
 
 static int apply_iface(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->iface, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->iface, v, e, n);
 }
 
 static int apply_listen(void *c, const char *v, char *e, size_t n) {
@@ -108,11 +112,13 @@ static int apply_listen_tls(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_tls_cert(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->tls_cert, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->tls_cert, v, e, n);
 }
 
 static int apply_tls_key(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->tls_key, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->tls_key, v, e, n);
 }
 
 static int apply_workers(void *c, const char *v, char *e, size_t n) {
@@ -137,6 +143,10 @@ static int apply_idle_timeout(void *c, const char *v, char *e, size_t n) {
 
 static int apply_capture_ring_size(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->capture_ring_kib, v, 1, UINT_MAX, e, n);
+}
+
+static int apply_ts_startup_timeout(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_double(&((config_t *)c)->ts_startup_timeout_s, v, 0.0, 1e9, 1, e, n);
 }
 
 static int apply_join_all(void *c, const char *v, char *e, size_t n) {
@@ -172,11 +182,12 @@ static int apply_dash_part_size(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_dash_utc_url(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
   if (strlen(v) > 256) {
-    snprintf(e, n, "too long (max 256)");
+    bufcpy(e, n, "too long (max 256)");
     return -1;
   }
-  return yamlcfg_set_str(&((config_t *)c)->dash_utc_url, v, e, n);
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->dash_utc_url, v, e, n);
 }
 
 static int apply_hls_seg_pool(void *c, const char *v, char *e, size_t n) {
@@ -184,11 +195,13 @@ static int apply_hls_seg_pool(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_metrics_sock(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_sock, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_sock, v, e, n);
 }
 
 static int apply_metrics_id(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_id, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_id, v, e, n);
 }
 
 static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {
@@ -306,7 +319,8 @@ static int apply_no_status(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_status_tpl(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->status_template, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->status_template, v, e, n);
 }
 
 static int apply_auth(void *c, const char *v, char *e, size_t n) {
@@ -315,7 +329,8 @@ static int apply_auth(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_cors_origin(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->cors_origins, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->cors_origins, v, e, n);
 }
 
 static int apply_ssdp_ttl(void *c, const char *v, char *e, size_t n) {
@@ -323,7 +338,8 @@ static int apply_ssdp_ttl(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_ssdp_iface(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->ssdp_iface, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->ssdp_iface, v, e, n);
 }
 
 static int apply_ssdp_interval(void *c, const char *v, char *e, size_t n) {
@@ -339,11 +355,13 @@ static int apply_enable_dlna(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_dlna_host(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->dlna_host_opt, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->dlna_host_opt, v, e, n);
 }
 
 static int apply_dlna_name(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->dlna_name, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->dlna_name, v, e, n);
 }
 
 static int apply_dlna_keep_multicast(void *c, const char *v, char *e, size_t n) {
@@ -373,6 +391,7 @@ static const yamlcfg_key_t keys[] = {
   {"max-channels", apply_max_channels, 0, 0},
   {"idle-timeout", apply_idle_timeout, 0, 0},
   {"capture-ring-size", apply_capture_ring_size, 0, 0},
+  {"ts.startup-timeout", apply_ts_startup_timeout, 0, 0},
   {"input", apply_input, 0, YAMLCFG_LIST_KEYED},
   {"input.name", apply_input_name, 0, 0},
   {"input.media-type", apply_input_media_type, 0, 0},

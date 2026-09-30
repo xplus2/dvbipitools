@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DVBIPITOOLS_LIB_SEQLOCK_H
-#define DVBIPITOOLS_LIB_SEQLOCK_H
+#ifndef DVBIPITOOLS_LIB_HELPER_SEQLOCK_H
+#define DVBIPITOOLS_LIB_HELPER_SEQLOCK_H
 
 #include <stdatomic.h>
 

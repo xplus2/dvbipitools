@@ -69,13 +69,11 @@ void reactor_teardown_common(int epfd, conn_t *c) {
 void reactor_close(int epfd, conn_t *c) {
   llhls_waiter_conn_closing(c);
   hls_cold_waiter_conn_closing(c);
+  ts_cold_waiter_conn_closing(c);
   reactor_teardown_common(epfd, c);
 }
 
-typedef enum { RF_TSPUSH, RF_DASHCHUNK, RF_MP4PUSH, RF_WS, RF_KEEPALIVE, RF_CLOSE } reactor_finish_next_t;
-
 void reactor_finish(int epfd, conn_t *c) {
-  reactor_finish_next_t next;
   int rc = conn_flush(c, epfd);
   if (rc == CONN_FLUSH_MORE) {
     c->state = CONN_WRITING;
@@ -85,20 +83,12 @@ void reactor_finish(int epfd, conn_t *c) {
     reactor_close(epfd, c);
     return;
   }
-  if (c->become_tspush)             next = RF_TSPUSH;
-  else if (c->become_dashchunk)     next = RF_DASHCHUNK;
-  else if (c->become_mp4push)       next = RF_MP4PUSH;
-  else if (c->become_ws)            next = RF_WS;
-  else if (c->keep_alive)           next = RF_KEEPALIVE;
-  else                              next = RF_CLOSE;
-
-  switch (next) {
-    case RF_TSPUSH:    reactor_tspush_begin(epfd, c); break;
-    case RF_DASHCHUNK: reactor_dashchunk_begin(epfd, c); break;
-    case RF_MP4PUSH:   reactor_mp4push_begin(epfd, c); break;
-    case RF_WS:        reactor_ws_begin(epfd, c); break;
-    case RF_KEEPALIVE: reactor_keepalive(epfd, c); break;
-    case RF_CLOSE:     reactor_close(epfd, c); break;
+  switch ((conn_next_t)c->next_state) {
+    case CONN_NEXT_TSPUSH:    reactor_tspush_begin(epfd, c); break;
+    case CONN_NEXT_DASHCHUNK: reactor_dashchunk_begin(epfd, c); break;
+    case CONN_NEXT_MP4PUSH:   reactor_mp4push_begin(epfd, c); break;
+    case CONN_NEXT_WS:        reactor_ws_begin(epfd, c); break;
+    case CONN_NEXT_NONE:      if (c->keep_alive) reactor_keepalive(epfd, c); else reactor_close(epfd, c); break;
   }
 }
 
@@ -137,9 +127,11 @@ static void *on_listening_thread(void *arg) {
 
 static void reactor_log_status_url(const char *scheme, const listen_spec_t *ls) {
   char host[80];
-  if       (ls->scope == LISTEN_ANY) bufcpy(host, sizeof host, "0.0.0.0");
-  else if  (ls->scope == LISTEN_V6) snprintf(host, sizeof host, "[%s]", ls->addr);
-  else     bufcpy(host, sizeof host, ls->addr);
+  switch (ls->scope) {
+    case LISTEN_ANY: bufcpy(host, sizeof host, "0.0.0.0"); break;
+    case LISTEN_V6:   snprintf(host, sizeof host, "[%s]", ls->addr); break;
+    case LISTEN_V4:   bufcpy(host, sizeof host, ls->addr); break;
+  }
   log_line_ansi(TOOL_NAME ": status \e[0;34m%s://%s:%u/\e[0m", scheme, host, ls->port);
 }
 
@@ -155,13 +147,15 @@ void reactor_notify_listening(void) {
   }
 }
 
-/* threads[] sized to this in reactor_run, -j past it fails at startup */
-#define REACTOR_MAX_WORKERS 256
-
 int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporter_t *mx, void (*on_listening)(const config_t *cfg)) {
-  int workers, n_pump, i, conn_cap;
+  int workers;
+  int n_pump;
+  int i;
+  int conn_cap;
   pthread_t threads[REACTOR_MAX_WORKERS];
   pthread_t pumps[CAPTURE_PUMP_MAX_THREADS];
+  const char *cert_path;
+  const char *key_path;
 
   g_cfg = cfg;
   g_channels = channels;
@@ -192,24 +186,21 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   h3_set_max_conns_per_thread(cfg->max_clients / workers);
 #endif
 
-  {
-    const char *cert_path, *key_path;
-    tls_set_http2_enabled(!cfg->no_http2);
-    if (tlscert_find(cfg->tls_cert, cfg->tls_key, &cert_path, &key_path)) {
-      if (tls_init(cert_path, key_path, conn_cap)) log_line(TOOL_NAME ": TLS init failed, --listen-tls not bound");
+  tls_set_http2_enabled(!cfg->no_http2);
+  if (tlscert_find(cfg->tls_cert, cfg->tls_key, &cert_path, &key_path)) {
+    if (tls_init(cert_path, key_path, conn_cap)) log_line(TOOL_NAME ": TLS init failed, --listen-tls not bound");
 
 #ifdef HAVE_HTTP3
-      if (!cfg->no_http3) {
-        h3_retry_mode_t retry = H3_RETRY_AUTO;
-        if (cfg->h3_retry == H3_RETRY_CFG_OFF) retry = H3_RETRY_OFF;
-        else if (cfg->h3_retry == H3_RETRY_CFG_ALWAYS) retry = H3_RETRY_ALWAYS;
-        h3_stateless_set_retry(retry);
-        h3_init(cert_path, key_path);
-        if (h3_ready()) altsvc_set(cfg->h3_altsvc_port ? cfg->h3_altsvc_port : cfg->listen_tls.port);
-      }
+    if (!cfg->no_http3) {
+      h3_retry_mode_t retry = H3_RETRY_AUTO;
+      if (cfg->h3_retry == H3_RETRY_CFG_OFF) retry = H3_RETRY_OFF;
+      else if (cfg->h3_retry == H3_RETRY_CFG_ALWAYS) retry = H3_RETRY_ALWAYS;
+      h3_stateless_set_retry(retry);
+      h3_init(cert_path, key_path);
+      if (h3_ready()) altsvc_set(cfg->h3_altsvc_port ? cfg->h3_altsvc_port : cfg->listen_tls.port);
+    }
 #endif
-    } else log_line(TOOL_NAME ": no usable TLS certificate found, --listen-tls not bound");
-  }
+  } else log_line(TOOL_NAME ": no usable TLS certificate found, --listen-tls not bound");
 
   __atomic_store_n(&g_workers, workers, __ATOMIC_RELAXED);
   tls_gc_init(workers);

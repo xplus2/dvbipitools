@@ -149,18 +149,18 @@ static burst_slot_t *claim_locked(burst_table_t *t, burst_stripe_t *st, const st
   burst_slot_t *s;
   uint64_t words[BURST_ADDR_WORDS];
   unsigned g;
+  size_t want;
+  size_t cur;
 
   if (st->free_count == 0)
     return NULL;
   idx = st->free_list[--st->free_count];
   s = &t->slots[idx];
 
-  {
-    size_t want = idx + 1;
-    size_t cur = atomic_load_explicit(&t->high_water_mark, memory_order_relaxed);
-    while (want > cur && !atomic_compare_exchange_weak_explicit(&t->high_water_mark, &cur, want, memory_order_relaxed, memory_order_relaxed))
-      ; /* concurrent claim in another stripe raced ahead: retry with its value */
-  }
+  want = idx + 1;
+  cur = atomic_load_explicit(&t->high_water_mark, memory_order_relaxed);
+  while (want > cur && !atomic_compare_exchange_weak_explicit(&t->high_water_mark, &cur, want, memory_order_relaxed, memory_order_relaxed))
+    ; /* concurrent claim in another stripe raced ahead: retry with its value */
 
   g = seqlock_begin_write(&s->gen);
   memset(words, 0, sizeof words);
@@ -241,6 +241,9 @@ int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t a
 int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, unsigned threshold, burst_table_nack_result_t *out) {
   burst_stripe_t *st = pick_stripe(t, addr, addrlen);
   size_t idx;
+  burst_slot_t *slot;
+  burst_t *b;
+  unsigned adapt_at;
 
   memset(out, 0, sizeof *out);
   pthread_mutex_lock(&st->lock);
@@ -250,30 +253,27 @@ int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen
     return 0;
   }
 
-  {
-    burst_slot_t *slot = &t->slots[idx];
-    burst_t *b = atomic_load_explicit(&slot->b, memory_order_relaxed);
-    unsigned adapt_at;
+  slot = &t->slots[idx];
+  b = atomic_load_explicit(&slot->b, memory_order_relaxed);
 
-    slot->nack_count++;
-    atomic_fetch_add_explicit(&t->nacks_total, 1, memory_order_relaxed);
-    if (threshold == 0) {
-      pthread_mutex_unlock(&st->lock);
-      return 1;
-    }
+  slot->nack_count++;
+  atomic_fetch_add_explicit(&t->nacks_total, 1, memory_order_relaxed);
+  if (threshold == 0) {
+    pthread_mutex_unlock(&st->lock);
+    return 1;
+  }
 
-    adapt_at = threshold / 2;
-    if (slot->nack_count >= threshold) {
-      burst_terminate(b, 0, 0);
-      out->action = BURST_TABLE_NACK_TERMINATED;
-    } else if (!slot->congestion_adapted && adapt_at > 0 && slot->nack_count >= adapt_at) {
-      out->new_bps = atomic_load_explicit(&b->target_bps, memory_order_relaxed) * 0.5;
-      atomic_store_explicit(&b->target_bps, out->new_bps, memory_order_relaxed);
-      slot->congestion_adapted = 1;
-      atomic_fetch_add_explicit(&t->congestion_adaptations_total, 1, memory_order_relaxed);
-      out->action = BURST_TABLE_NACK_ADAPTED;
-      out->msn = ++slot->msn;
-    }
+  adapt_at = threshold / 2;
+  if (slot->nack_count >= threshold) {
+    burst_terminate(b, 0, 0);
+    out->action = BURST_TABLE_NACK_TERMINATED;
+  } else if (!slot->congestion_adapted && adapt_at > 0 && slot->nack_count >= adapt_at) {
+    out->new_bps = atomic_load_explicit(&b->target_bps, memory_order_relaxed) * 0.5;
+    atomic_store_explicit(&b->target_bps, out->new_bps, memory_order_relaxed);
+    slot->congestion_adapted = 1;
+    atomic_fetch_add_explicit(&t->congestion_adaptations_total, 1, memory_order_relaxed);
+    out->action = BURST_TABLE_NACK_ADAPTED;
+    out->msn = ++slot->msn;
   }
   pthread_mutex_unlock(&st->lock);
   return 1;

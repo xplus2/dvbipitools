@@ -141,45 +141,11 @@ static void trak_meta_from_track(trak_meta_t *tm, const track_t *t) {
   tm->dts_has_core = t->dts_has_core;
 }
 
-static void build_stts(mp4buf_t *out, const track_t *t) {
+static void build_run_length_box(mp4buf_t *out, const track_t *t, const char *box_tag, int is_ctts) {
   mp4buf_t b;
   size_t cnt_pos;
   uint32_t entries = 0;
-  uint32_t run_dur = 0;
-  uint32_t run_cnt = 0;
-  memset(&b, 0, sizeof b);
-  mb_u8(&b, 0);
-  mb_u24(&b, 0);
-  cnt_pos = b.len;
-  mb_u32(&b, 0);
-  for (int i = 0; i < t->nsamp; i++) {
-    uint32_t d = t->samp[i].duration;
-    if (run_cnt && d == run_dur) {
-      run_cnt++;
-      continue;
-    }
-    if (run_cnt) {
-      mb_u32(&b, run_cnt);
-      mb_u32(&b, run_dur);
-      entries++;
-    }
-    run_dur = d;
-    run_cnt = 1;
-  }
-  if (run_cnt) {
-    mb_u32(&b, run_cnt);
-    mb_u32(&b, run_dur);
-    entries++;
-  }
-  mb_patch_u32(&b, cnt_pos, entries);
-  mb_box(out, "stts", &b);
-}
-
-static void build_ctts(mp4buf_t *out, const track_t *t) {
-  mp4buf_t b;
-  size_t cnt_pos;
-  uint32_t entries = 0;
-  uint32_t run_off = 0;
+  uint32_t run_val = 0;
   uint32_t run_cnt = 0;
   int any = 0;
   memset(&b, 0, sizeof b);
@@ -188,32 +154,36 @@ static void build_ctts(mp4buf_t *out, const track_t *t) {
   cnt_pos = b.len;
   mb_u32(&b, 0);
   for (int i = 0; i < t->nsamp; i++) {
-    uint32_t o = (uint32_t)t->samp[i].cts_offset;
-    if (o) any = 1;
-    if (run_cnt && o == run_off) {
+    uint32_t v = is_ctts ? (uint32_t)t->samp[i].cts_offset : t->samp[i].duration;
+    if (v) any = 1;
+    if (run_cnt && v == run_val) {
       run_cnt++;
       continue;
     }
     if (run_cnt) {
       mb_u32(&b, run_cnt);
-      mb_u32(&b, run_off);
+      mb_u32(&b, run_val);
       entries++;
     }
-    run_off = o;
+    run_val = v;
     run_cnt = 1;
   }
   if (run_cnt) {
     mb_u32(&b, run_cnt);
-    mb_u32(&b, run_off);
+    mb_u32(&b, run_val);
     entries++;
   }
-  if (!any) {
+  if (is_ctts && !any) {
     mp4buf_free(&b);
     return;
   }
   mb_patch_u32(&b, cnt_pos, entries);
-  mb_box(out, "ctts", &b);
+  mb_box(out, box_tag, &b);
 }
+
+static void build_stts(mp4buf_t *out, const track_t *t) { build_run_length_box(out, t, "stts", 0); }
+
+static void build_ctts(mp4buf_t *out, const track_t *t) { build_run_length_box(out, t, "ctts", 1); }
 
 static void build_stsz(mp4buf_t *out, const track_t *t) {
   mp4buf_t b;

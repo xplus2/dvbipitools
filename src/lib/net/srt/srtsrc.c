@@ -44,6 +44,10 @@ static void *reader_main(void *arg) {
 srtsrc_t *srtsrc_open(const srtsrc_cfg_t *cfg) {
   srtsrc_t *r;
   if (!cfg->host || !cfg->port) return NULL;
+  if (bufcpy(NULL, 0, cfg->host) >= sizeof ((srtsrc_t *)0)->host) return NULL;
+  if (cfg->passphrase && strlen(cfg->passphrase) >= sizeof ((srtsrc_t *)0)->passphrase) return NULL;
+  if (cfg->streamid && strlen(cfg->streamid) >= sizeof ((srtsrc_t *)0)->streamid) return NULL;
+  if (cfg->packetfilter && strlen(cfg->packetfilter) >= sizeof ((srtsrc_t *)0)->packetfilter) return NULL;
   r = calloc(1, sizeof *r);
   if (!r) return NULL;
   bufcpy(r->host, sizeof r->host, cfg->host);

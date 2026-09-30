@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef LIB_PLAYLIST_IN_H
-#define LIB_PLAYLIST_IN_H
+#ifndef DVBIPITOOLS_LIB_HELPER_PLAYLIST_IN_H
+#define DVBIPITOOLS_LIB_HELPER_PLAYLIST_IN_H
 
 typedef struct {
   char *name; /* malloc'd, "" if absent */

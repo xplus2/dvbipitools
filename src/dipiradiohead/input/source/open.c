@@ -29,6 +29,8 @@ static ssize_t sniff_fill(http_t *h, unsigned char *buf, size_t cap, net_err_rea
 
 source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigned char *sniff, size_t got, source_meta_cb cb, void *ctx) {
   source_t *s = calloc(1, sizeof *s);
+  const char *metaint_hdr;
+  size_t metaint;
   if (!s) {
     http_close(h);
     return NULL;
@@ -42,17 +44,15 @@ source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigne
     free(s);
     return NULL;
   }
-  {
-    const char *metaint_hdr = http_header(h, "icy-metaint");
-    size_t metaint = metaint_hdr ? strtoul(metaint_hdr, NULL, 10) : 0;
-    if (metaint) {
-      s->icy = icy_new(metaint, cb, ctx);
-      if (!s->icy) {
-        id3_free(s->id3);
-        http_close(h);
-        free(s);
-        return NULL;
-      }
+  metaint_hdr = http_header(h, "icy-metaint");
+  metaint = metaint_hdr ? strtoul(metaint_hdr, NULL, 10) : 0;
+  if (metaint) {
+    s->icy = icy_new(metaint, cb, ctx);
+    if (!s->icy) {
+      id3_free(s->id3);
+      http_close(h);
+      free(s);
+      return NULL;
     }
   }
 
@@ -65,6 +65,23 @@ source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigne
   return s;
 }
 
+static void hls_audio_emit(void *ctx, const unsigned char *data, size_t len) {
+  source_t *s = ctx;
+  hls_live_emit(s->hls, data, len);
+}
+
+static int hls_on_ts_packet(void *ctx, const unsigned char *pkt) {
+  rawaudio_demux_feed(((source_t *)ctx)->hls_demux, pkt);
+  return 0;
+}
+
+static void hls_segment_feed(void *ctx, hls_live_t *h, const unsigned char *data, size_t len) {
+  source_t *s = ctx;
+  (void)h;
+  s->hls_tspack.acclen = 0;
+  tspack_feed(&s->hls_tspack, data, len, hls_on_ts_packet, s);
+}
+
 source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, const source_insp_t *si) {
   source_t *s = calloc(1, sizeof *s);
   if (!s) return NULL;
@@ -75,8 +92,15 @@ source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const c
     free(s);
     return NULL;
   }
-  s->hls = hls_live_new(playlist_url, TOOL_NAME "/" TOOL_VERSION, insecure, idx, label, si);
+  s->hls_demux = rawaudio_demux_new(0, NULL, NULL, hls_audio_emit, s);
+  if (!s->hls_demux) {
+    id3_free(s->id3);
+    free(s);
+    return NULL;
+  }
+  s->hls = hls_live_new(playlist_url, TOOL_NAME "/" TOOL_VERSION, insecure, idx, label, si, hls_segment_feed, s);
   if (!s->hls) {
+    rawaudio_demux_free(s->hls_demux);
     id3_free(s->id3);
     free(s);
     return NULL;

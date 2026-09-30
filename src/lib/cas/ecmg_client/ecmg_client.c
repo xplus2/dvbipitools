@@ -5,13 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/cas/cas_dial.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
 
 #include "priv.h"
 
 int ecmg_stopping(const ecmg_client_t *c) {
-  return atomic_load_explicit(&c->stop, memory_order_relaxed) || signal_stop_requested();
+  return cas_dial_stopping(&c->stop);
 }
 
 int ecmg_ecm_available_calc(ecmg_outage_mode_t outage_mode, int connected) {

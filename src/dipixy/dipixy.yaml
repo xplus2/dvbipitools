@@ -38,6 +38,9 @@ h3:
 #idle-timeout: 0
 # --capture-ring-size 4096 # KiB
 #capture-ring-size: 4096
+ts:
+  # --ts-startup-timeout 5 # seconds, 0 = off
+  startup-timeout: 5
 # -J|--join-all off
 #join-all: off
 # -k|--insecure off

@@ -18,6 +18,30 @@
 #include "config.h"
 #include "version.h"
 
+#define OPT_CHANNEL_IDLE_TIMEOUT 1005
+#define OPT_COLOR 1002
+#define OPT_NO_RET 1003
+#define OPT_NO_MC_RET 1001
+#define OPT_MAX_RET_CLIENTS 1020
+#define OPT_RET_CLIENT_IDLE_TIMEOUT 1021
+#define OPT_NO_RSI 1006
+#define OPT_RSI_INTERVAL 1007
+#define OPT_RSI_MC_RET 1008
+#define OPT_RSI_HOSTNAME 1013
+#define OPT_NO_FCC 1004
+#define OPT_MAX_BUFFER_FILL_BOUND 1014
+#define OPT_FCC_RESOLVE_BY_PORT 1015
+#define OPT_FCC_RESOLVE_BASE_PORT 1016
+#define OPT_CONGESTION_NACK_THRESHOLD 1017
+#define OPT_FCC_RANGE 1018
+#define OPT_FCC_CLIENT_RANGE 1019
+#define OPT_METRICS 1022
+#define OPT_METRICS_ID 1023
+#define OPT_METRICS_INTERVAL 1024
+#define OPT_METRICS_INSPECT_TS 1027
+#define OPT_CONFIG_STRICT 1026
+#define OPT_CONFIGTEST 1025
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* comma-separated CIDR list (IPv4 or IPv6), light validation here, capture.c re-validates at BPF-build time */
@@ -35,6 +59,7 @@ static int ranges_parse(const char *s, config_t *cfg) {
     struct in6_addr a6;
     long prefix;
     char *end;
+    size_t tlen;
     if (cfg->range_count >= ARGS_MAX_RANGES) return -1;
     if (!slash) return -1;
     *slash = '\0';
@@ -42,11 +67,9 @@ static int ranges_parse(const char *s, config_t *cfg) {
     prefix = strtol(slash + 1, &end, 10);
     if (*end != '\0' || prefix < 0 || prefix > (is_v6 ? 128 : 32)) return -1;
     *slash = '/';
-    {
-      size_t tlen = strlen(tok);
-      if (tlen >= sizeof cfg->ranges[0]) return -1;
-      memcpy(cfg->ranges[cfg->range_count], tok, tlen + 1);
-    }
+    tlen = strlen(tok);
+    if (tlen >= sizeof cfg->ranges[0]) return -1;
+    memcpy(cfg->ranges[cfg->range_count], tok, tlen + 1);
     cfg->range_ptrs[cfg->range_count] = cfg->ranges[cfg->range_count];
     cfg->range_count++;
   }
@@ -147,41 +170,41 @@ static const struct option longopts[] = {
   {"listen", required_argument, 0, 'l'},
   {"iface", required_argument, 0, 'I'},
   {"max-channels", required_argument, 0, 'M'},
-  {"channel-idle-timeout", required_argument, 0, 1005},
+  {"channel-idle-timeout", required_argument, 0, OPT_CHANNEL_IDLE_TIMEOUT},
   {"rtx-pt", required_argument, 0, 'R'},
   {"workers", required_argument, 0, 'w'},
   {"user", required_argument, 0, 'u'},
   {"verbose", no_argument, 0, 'v'},
-  {"color", required_argument, 0, 1002},
-  {"no-ret", no_argument, 0, 1003},
+  {"color", required_argument, 0, OPT_COLOR},
+  {"no-ret", no_argument, 0, OPT_NO_RET},
   {"buffer", required_argument, 0, 'B'},
   {"ff-port", required_argument, 0, 'F'},
-  {"no-mc-ret", no_argument, 0, 1001},
-  {"max-ret-clients", required_argument, 0, 1020},
-  {"ret-client-idle-timeout", required_argument, 0, 1021},
-  {"no-rsi", no_argument, 0, 1006},
-  {"rsi-interval", required_argument, 0, 1007},
-  {"rsi-mc-ret", no_argument, 0, 1008},
-  {"rsi-hostname", required_argument, 0, 1013},
-  {"no-fcc", no_argument, 0, 1004},
+  {"no-mc-ret", no_argument, 0, OPT_NO_MC_RET},
+  {"max-ret-clients", required_argument, 0, OPT_MAX_RET_CLIENTS},
+  {"ret-client-idle-timeout", required_argument, 0, OPT_RET_CLIENT_IDLE_TIMEOUT},
+  {"no-rsi", no_argument, 0, OPT_NO_RSI},
+  {"rsi-interval", required_argument, 0, OPT_RSI_INTERVAL},
+  {"rsi-mc-ret", no_argument, 0, OPT_RSI_MC_RET},
+  {"rsi-hostname", required_argument, 0, OPT_RSI_HOSTNAME},
+  {"no-fcc", no_argument, 0, OPT_NO_FCC},
   {"gop-cap", required_argument, 0, 'G'},
   {"max-bursts", required_argument, 0, 'C'},
   {"burst-multiplier", required_argument, 0, 'X'},
   {"burst-duration-cap", required_argument, 0, 'D'},
-  {"max-buffer-fill-bound", required_argument, 0, 1014},
-  {"fcc-resolve-by-port", no_argument, 0, 1015},
-  {"fcc-resolve-base-port", required_argument, 0, 1016},
-  {"congestion-nack-threshold", required_argument, 0, 1017},
-  {"fcc-range", required_argument, 0, 1018},
-  {"fcc-client-range", required_argument, 0, 1019},
-  {"metrics", required_argument, 0, 1022},
-  {"metrics-id", required_argument, 0, 1023},
-  {"metrics-interval", required_argument, 0, 1024},
-  {"metrics-inspect-ts", required_argument, 0, 1027},
+  {"max-buffer-fill-bound", required_argument, 0, OPT_MAX_BUFFER_FILL_BOUND},
+  {"fcc-resolve-by-port", no_argument, 0, OPT_FCC_RESOLVE_BY_PORT},
+  {"fcc-resolve-base-port", required_argument, 0, OPT_FCC_RESOLVE_BASE_PORT},
+  {"congestion-nack-threshold", required_argument, 0, OPT_CONGESTION_NACK_THRESHOLD},
+  {"fcc-range", required_argument, 0, OPT_FCC_RANGE},
+  {"fcc-client-range", required_argument, 0, OPT_FCC_CLIENT_RANGE},
+  {"metrics", required_argument, 0, OPT_METRICS},
+  {"metrics-id", required_argument, 0, OPT_METRICS_ID},
+  {"metrics-interval", required_argument, 0, OPT_METRICS_INTERVAL},
+  {"metrics-inspect-ts", required_argument, 0, OPT_METRICS_INSPECT_TS},
   {"daemonize", no_argument, 0, 'd'},
   {"config", required_argument, 0, 'c'},
-  {"config-strict", no_argument, 0, 1026},
-  {"configtest", no_argument, 0, 1025},
+  {"config-strict", no_argument, 0, OPT_CONFIG_STRICT},
+  {"configtest", no_argument, 0, OPT_CONFIGTEST},
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
@@ -244,7 +267,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->max_channels = (size_t)v;
         break;
       }
-      case 1005:
+      case OPT_CHANNEL_IDLE_TIMEOUT:
         if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->channel_idle_timeout_s)) {
           argerr("invalid --channel-idle-timeout: %s (s)", optarg);
           return ARGS_ERR;
@@ -274,7 +297,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'd':
         cfg->daemonize = 1;
         break;
-      case 1002: {
+      case OPT_COLOR: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
           argerr("invalid --color: %s (auto|always|never)", optarg);
@@ -283,7 +306,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->color_mode = v;
         break;
       }
-      case 1003:
+      case OPT_NO_RET:
         cfg->no_ret = 1;
         break;
       case 'B':
@@ -298,10 +321,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
-      case 1001:
+      case OPT_NO_MC_RET:
         cfg->no_mc_ret = 1;
         break;
-      case 1020: {
+      case OPT_MAX_RET_CLIENTS: {
         unsigned v;
         if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
           argerr("invalid --max-ret-clients: %s", optarg);
@@ -310,32 +333,32 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->max_ret_clients = (size_t)v;
         break;
       }
-      case 1021:
+      case OPT_RET_CLIENT_IDLE_TIMEOUT:
         if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->ret_client_idle_timeout_s)) {
           argerr("invalid --ret-client-idle-timeout: %s (s)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1006:
+      case OPT_NO_RSI:
         cfg->no_rsi = 1;
         break;
-      case 1007:
+      case OPT_RSI_INTERVAL:
         if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->rsi_interval_s)) {
           argerr("invalid --rsi-interval: %s (s)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1008:
+      case OPT_RSI_MC_RET:
         cfg->rsi_mc_ret = 1;
         break;
-      case 1013:
+      case OPT_RSI_HOSTNAME:
         if (strlen(optarg) >= sizeof cfg->rsi_hostname) {
           argerr("--rsi-hostname too long: %s", optarg);
           return ARGS_ERR;
         }
         bufcpy(cfg->rsi_hostname, sizeof cfg->rsi_hostname, optarg);
         break;
-      case 1004:
+      case OPT_NO_FCC:
         cfg->no_fcc = 1;
         break;
       case 'G':
@@ -369,54 +392,54 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
-      case 1014:
+      case OPT_MAX_BUFFER_FILL_BOUND:
         if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->max_buffer_fill_bound_ms)) {
           argerr("invalid --max-buffer-fill-bound: %s (ms, 0 = no bound)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1015:
+      case OPT_FCC_RESOLVE_BY_PORT:
         cfg->fcc_resolve_by_port = 1;
         break;
-      case 1016:
+      case OPT_FCC_RESOLVE_BASE_PORT:
         if (argutil_uint_range(optarg, 0, 65535, &cfg->fcc_resolve_base_port)) {
           argerr("invalid --fcc-resolve-base-port: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1017:
+      case OPT_CONGESTION_NACK_THRESHOLD:
         if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->congestion_nack_threshold)) {
           argerr("invalid --congestion-nack-threshold: %s (0 = disabled)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1018:
+      case OPT_FCC_RANGE:
         if (fccret_cfg_fcc_range(cfg, optarg)) {
           argerr("invalid --fcc-range: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1019:
+      case OPT_FCC_CLIENT_RANGE:
         if (fccret_cfg_fcc_client_range(cfg, optarg)) {
           argerr("invalid --fcc-client-range: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1022:
+      case OPT_METRICS:
         cfg->metrics_sock = optarg;
         break;
-      case 1023:
+      case OPT_METRICS_ID:
         cfg->metrics_id = optarg;
         break;
-      case 1024:
+      case OPT_METRICS_INTERVAL:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
-      case 1027:
+      case OPT_METRICS_INSPECT_TS:
         if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
         break;
       case 'c':
-      case 1026:
-      case 1025:
+      case OPT_CONFIG_STRICT:
+      case OPT_CONFIGTEST:
         break;
       case 'h':
         print_help();

@@ -116,54 +116,57 @@ channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size
   for (size_t i = 0; !result && i < t->max_channels; i++) {
     channel_t *c = &t->chan[i];
     int expected = 0;
+    void *saved_ring;
+    size_t saved_ring_size;
+    void *saved_cache_entries;
+    size_t saved_cache_cap;
+    unsigned saved_generation;
+    size_t rb;
+    size_t cur;
     if (!atomic_compare_exchange_strong_explicit(&c->in_use, &expected, 2, memory_order_acq_rel, memory_order_relaxed))
       continue;
 
-    {
-      void *saved_ring = c->ring;
-      size_t saved_ring_size = c->ring_size;
-      void *saved_cache_entries = c->cache.entries;
-      size_t saved_cache_cap = c->cache.cap;
-      unsigned saved_generation = atomic_load_explicit(&c->generation, memory_order_relaxed);
+    saved_ring = c->ring;
+    saved_ring_size = c->ring_size;
+    saved_cache_entries = c->cache.entries;
+    saved_cache_cap = c->cache.cap;
+    saved_generation = atomic_load_explicit(&c->generation, memory_order_relaxed);
 
-      if (c->psi) psi_free(c->psi);
-      if (c->insp) tsinspect_agg_remove(t->agg, c->insp);
-      memset(c, 0, sizeof *c);
-      c->ring = saved_ring;
-      c->ring_size = saved_ring_size;
-      c->cache.entries = saved_cache_entries;
-      c->cache.cap = saved_cache_cap;
-      atomic_store_explicit(&c->generation, saved_generation + 1, memory_order_relaxed);
-      pthread_mutex_init(&c->hned_lock, NULL); /* hned_lock zeroed by memset above, reinit before use */
+    if (c->psi) psi_free(c->psi);
+    if (c->insp) tsinspect_agg_remove(t->agg, c->insp);
+    memset(c, 0, sizeof *c);
+    c->ring = saved_ring;
+    c->ring_size = saved_ring_size;
+    c->cache.entries = saved_cache_entries;
+    c->cache.cap = saved_cache_cap;
+    atomic_store_explicit(&c->generation, saved_generation + 1, memory_order_relaxed);
+    pthread_mutex_init(&c->hned_lock, NULL); /* hned_lock zeroed by memset above, reinit before use */
 
-      if (saved_ring) {
-        ret_ring_entry_t *ring = (ret_ring_entry_t *)saved_ring;
-        for (size_t j = 0; j < saved_ring_size; j++) {
-          atomic_store_explicit(&ring[j].valid, 0, memory_order_relaxed);
-          atomic_store_explicit(&ring[j].gen, 0, memory_order_relaxed);
-        }
+    if (saved_ring) {
+      ret_ring_entry_t *ring = (ret_ring_entry_t *)saved_ring;
+      for (size_t j = 0; j < saved_ring_size; j++) {
+        atomic_store_explicit(&ring[j].valid, 0, memory_order_relaxed);
+        atomic_store_explicit(&ring[j].gen, 0, memory_order_relaxed);
       }
-      /* FCC cache needs no explicit reset: have_rap/write_count zeroed by memset above */
-
-      c->family = family;
-      c->addr_len = addr_len;
-      memcpy(c->addr, addr, addr_len);
-      if (!inet_ntop(family, addr, c->group, sizeof c->group)) c->group[0] = '\0';
-      c->port = port;
-      c->resolve_slot = chan_key_hash(family, addr, addr_len, port) % t->max_channels;
-      {
-        size_t rb = c->resolve_slot;
-        size_t cur = atomic_load_explicit(&t->resolve_hash[rb], memory_order_relaxed);
-        if (cur == 0 || atomic_load_explicit(&t->chan[cur - 1].in_use, memory_order_relaxed) != 1)
-          atomic_store_explicit(&t->resolve_hash[rb], i + 1, memory_order_release); /* published to resolve-by-port readers */
-      }
-      atomic_store_explicit(&c->last_seen, time(NULL), memory_order_relaxed);
-      atomic_store_explicit(&c->in_use, 1, memory_order_release);
-
-      chan_hash_publish_claim(t, claimed_h, was_tombstone, i);
-      result = c;
-      have_claim = 0;
     }
+    /* FCC cache needs no explicit reset: have_rap/write_count zeroed by memset above */
+
+    c->family = family;
+    c->addr_len = addr_len;
+    memcpy(c->addr, addr, addr_len);
+    if (!inet_ntop(family, addr, c->group, sizeof c->group)) c->group[0] = '\0';
+    c->port = port;
+    c->resolve_slot = chan_key_hash(family, addr, addr_len, port) % t->max_channels;
+    rb = c->resolve_slot;
+    cur = atomic_load_explicit(&t->resolve_hash[rb], memory_order_relaxed);
+    if (cur == 0 || atomic_load_explicit(&t->chan[cur - 1].in_use, memory_order_relaxed) != 1)
+      atomic_store_explicit(&t->resolve_hash[rb], i + 1, memory_order_release); /* published to resolve-by-port readers */
+    atomic_store_explicit(&c->last_seen, time(NULL), memory_order_relaxed);
+    atomic_store_explicit(&c->in_use, 1, memory_order_release);
+
+    chan_hash_publish_claim(t, claimed_h, was_tombstone, i);
+    result = c;
+    have_claim = 0;
   }
 
   if (have_claim) { /* no free channel_t slot, revert claim */
@@ -368,22 +371,21 @@ size_t channel_hned_collisions(channel_t *c, uint32_t *out, size_t cap, time_t m
 static void reap_slot(channel_table_t *t, size_t i, time_t now, time_t max_age_s) {
   channel_t *c = &t->chan[i];
   time_t last;
+  size_t h;
 
   if (atomic_load_explicit(&c->in_use, memory_order_acquire) != 1) return;
   last = atomic_load_explicit(&c->last_seen, memory_order_relaxed);
   if (now - last <= max_age_s) return;
   hash_writer_enter(t);
-  {
-    size_t h = chan_key_hash(c->family, c->addr, c->addr_len, c->port) & t->hash_mask;
-    for (;;) {
-      size_t v = atomic_load_explicit(&t->hash[h], memory_order_acquire);
-      if (v == 0) break; /* shouldn't happen: an in-use channel always has a hash entry */
-      if (v == i + 1) {
-        atomic_store_explicit(&t->hash[h], CHANNEL_HASH_TOMBSTONE, memory_order_release);
-        break;
-      }
-      h = (h + 1) & t->hash_mask;
+  h = chan_key_hash(c->family, c->addr, c->addr_len, c->port) & t->hash_mask;
+  for (;;) {
+    size_t v = atomic_load_explicit(&t->hash[h], memory_order_acquire);
+    if (v == 0) break; /* shouldn't happen: an in-use channel always has a hash entry */
+    if (v == i + 1) {
+      atomic_store_explicit(&t->hash[h], CHANNEL_HASH_TOMBSTONE, memory_order_release);
+      break;
     }
+    h = (h + 1) & t->hash_mask;
   }
   hash_writer_exit(t);
   if (atomic_load_explicit(&c->ssrc_known, memory_order_relaxed)) {

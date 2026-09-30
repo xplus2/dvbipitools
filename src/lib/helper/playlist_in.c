@@ -67,8 +67,12 @@ static void extinf_parse(const char *body, playlist_item_t *it) {
   char attrs[1024];
   char icon[512];
   size_t alen;
-  unsigned t = 0, o = 0, s = 0;
-  int has_t = 0, has_o = 0, has_s = 0;
+  unsigned t = 0;
+  unsigned o = 0;
+  unsigned s = 0;
+  int has_t = 0;
+  int has_o = 0;
+  int has_s = 0;
 
   it->icon_uri = NULL;
   if (comma) {
@@ -110,6 +114,7 @@ playlist_list_t *playlist_in_parse_m3u(const char *path) {
   }
 
   for (char *line = strtok_r(buf, "\n", &saveptr); line; line = strtok_r(NULL, "\n", &saveptr)) {
+    playlist_item_t *slot;
     chomp(line);
     if (*line == '\0')
       continue;
@@ -124,27 +129,27 @@ playlist_list_t *playlist_in_parse_m3u(const char *path) {
     }
     if (*line == '#')
       continue; /* header/footer/comment */
-    {
-      playlist_item_t *slot = list_append(pl);
-      if (!slot) {
-        if (have_pending) {
-          free(pending.name);
-          free(pending.icon_uri);
-          have_pending = 0;
-        }
-        break;
-      }
+    slot = list_append(pl);
+    if (!slot) {
       if (have_pending) {
-        *slot = pending;
-      } else {
-        slot->name = strdup("");
-        slot->icon_uri = NULL;
-        slot->tsid = slot->onid = slot->sid = 0;
-        slot->has_triplet = 0;
+        free(pending.name);
+        free(pending.icon_uri);
+        have_pending = 0;
       }
-      slot->uri = strdup(line);
-      have_pending = 0;
+      break;
     }
+    if (have_pending) {
+      *slot = pending;
+    } else {
+      slot->name = strdup("");
+      slot->icon_uri = NULL;
+      slot->tsid = 0;
+      slot->onid = 0;
+      slot->sid = 0;
+      slot->has_triplet = 0;
+    }
+    slot->uri = strdup(line);
+    have_pending = 0;
   }
   if (have_pending) {
     free(pending.name);
@@ -196,8 +201,13 @@ playlist_list_t *playlist_in_parse_csv(const char *path) {
 
 static int track_cb(const char *tag, const char *blk_end, void *ctx) {
   playlist_list_t *pl = ctx;
-  char uri[512], name[256], icon[512], tmp[32];
-  int has_t, has_o, has_s;
+  char uri[512];
+  char name[256];
+  char icon[512];
+  char tmp[32];
+  int has_t;
+  int has_o;
+  int has_s;
   playlist_item_t *slot;
 
   if (xml_elem_text(tag, blk_end, "location", uri, sizeof uri))
@@ -211,7 +221,9 @@ static int track_cb(const char *tag, const char *blk_end, void *ctx) {
   slot->uri = strdup(uri);
   slot->name = strdup(name);
   slot->icon_uri = xml_elem_text(tag, blk_end, "image", icon, sizeof icon) == 0 ? strdup(icon) : NULL;
-  slot->tsid = slot->onid = slot->sid = 0;
+  slot->tsid = 0;
+  slot->onid = 0;
+  slot->sid = 0;
 
   has_t = xml_attr(tag, blk_end, "tsid", tmp, sizeof tmp) == 0;
   if (has_t)

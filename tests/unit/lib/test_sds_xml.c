@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 
 #include "lib/helper/sds_xml.h"
+#include "lib/helper/ioutil.h"
 
 START_TEST(sds_broadcast_round_trips_multiple_services) {
   sds_service_t svcs[2], out[8];
@@ -15,16 +16,16 @@ START_TEST(sds_broadcast_round_trips_multiple_services) {
   int n;
 
   memset(svcs, 0, sizeof svcs);
-  snprintf(svcs[0].name, sizeof svcs[0].name, "Channel One");
-  snprintf(svcs[0].address, sizeof svcs[0].address, "239.1.1.1");
+  bufcpy(svcs[0].name, sizeof svcs[0].name, "Channel One");
+  bufcpy(svcs[0].address, sizeof svcs[0].address, "239.1.1.1");
   svcs[0].port = 5000;
   svcs[0].rtp = 1;
   svcs[0].tsid = 1;
   svcs[0].onid = 2;
   svcs[0].sid = 101;
 
-  snprintf(svcs[1].name, sizeof svcs[1].name, "Channel 2 Regional");
-  snprintf(svcs[1].address, sizeof svcs[1].address, "ff15::1");
+  bufcpy(svcs[1].name, sizeof svcs[1].name, "Channel 2 Regional");
+  bufcpy(svcs[1].address, sizeof svcs[1].address, "ff15::1");
   svcs[1].port = 5001;
   svcs[1].rtp = 0;
   svcs[1].tsid = 1;
@@ -61,19 +62,19 @@ START_TEST(sds_broadcast_includes_ret_and_fcc_elements_when_present) {
   size_t len;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.name, sizeof svc.name, "Test");
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.name, sizeof svc.name, "Test");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
   svc.rtp = 1;
 
   memset(&ret, 0, sizeof ret);
-  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  bufcpy(ret.addr, sizeof ret.addr, "10.0.0.1");
   ret.port = 6000;
   ret.rtx_time_ms = 2000;
   ret.rtx_pt = 99;
 
   memset(&fcc, 0, sizeof fcc);
-  snprintf(fcc.addr, sizeof fcc.addr, "10.0.0.2");
+  bufcpy(fcc.addr, sizeof fcc.addr, "10.0.0.2");
   fcc.port = 6001;
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
@@ -95,11 +96,11 @@ START_TEST(sds_broadcast_includes_fec_element_when_present) {
   size_t len;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&fec, 0, sizeof fec);
-  snprintf(fec.addr, sizeof fec.addr, "10.0.0.3");
+  bufcpy(fec.addr, sizeof fec.addr, "10.0.0.3");
   fec.port = 6002;
   fec.pt = 96;
 
@@ -118,11 +119,11 @@ START_TEST(sds_broadcast_includes_fec_pt_when_not_96) {
   size_t len;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&fec, 0, sizeof fec);
-  snprintf(fec.addr, sizeof fec.addr, "10.0.0.3");
+  bufcpy(fec.addr, sizeof fec.addr, "10.0.0.3");
   fec.port = 6002;
   fec.pt = 100;
 
@@ -142,11 +143,11 @@ START_TEST(sds_parse_broadcast_round_trips_fec) {
   int n;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&fec, 0, sizeof fec);
-  snprintf(fec.addr, sizeof fec.addr, "10.0.0.3");
+  bufcpy(fec.addr, sizeof fec.addr, "10.0.0.3");
   fec.port = 6002;
   fec.pt = 100;
 
@@ -171,11 +172,11 @@ START_TEST(sds_parse_broadcast_round_trips_fec_default_pt) {
   int n;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&fec, 0, sizeof fec);
-  snprintf(fec.addr, sizeof fec.addr, "10.0.0.3");
+  bufcpy(fec.addr, sizeof fec.addr, "10.0.0.3");
   fec.port = 6002;
   fec.pt = 96;
 
@@ -196,11 +197,11 @@ START_TEST(sds_broadcast_omits_dvb_rsi_mc_ret_by_default) {
   size_t len;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&ret, 0, sizeof ret);
-  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  bufcpy(ret.addr, sizeof ret.addr, "10.0.0.1");
   ret.port = 6000;
 
   len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, buf, sizeof buf);
@@ -216,11 +217,11 @@ START_TEST(sds_broadcast_includes_dvb_rsi_mc_ret_when_set) {
   size_t len;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&ret, 0, sizeof ret);
-  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  bufcpy(ret.addr, sizeof ret.addr, "10.0.0.1");
   ret.port = 6000;
   ret.mc = 1;
   ret.rsi_mc_ret = 1;
@@ -241,7 +242,7 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_stays_in_range) {
 
   memset(&svc, 0, sizeof svc);
   svc.family = AF_INET;
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&fcc, 0, sizeof fcc);
@@ -274,7 +275,7 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_is_deterministic) {
 
   memset(&svc, 0, sizeof svc);
   svc.family = AF_INET;
-  snprintf(svc.address, sizeof svc.address, "239.5.6.7");
+  bufcpy(svc.address, sizeof svc.address, "239.5.6.7");
   svc.port = 5001;
 
   memset(&fcc, 0, sizeof fcc);
@@ -297,7 +298,7 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_ignores_literal_port) {
 
   memset(&svc, 0, sizeof svc);
   svc.family = AF_INET;
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&fcc, 0, sizeof fcc);
@@ -318,8 +319,8 @@ START_TEST(sds_broadcast_omits_ret_fcc_elements_when_absent) {
   size_t len;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.name, sizeof svc.name, "Test");
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.name, sizeof svc.name, "Test");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, buf, sizeof buf);
@@ -334,7 +335,7 @@ START_TEST(sds_build_broadcast_rejects_small_cap) {
   sds_service_t svc;
   unsigned char buf[8];
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   ck_assert_uint_eq(sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, buf, sizeof buf), 0u);
 }
 END_TEST
@@ -457,11 +458,11 @@ START_TEST(sds_parse_broadcast_round_trips_fcc) {
   int n;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&fcc, 0, sizeof fcc);
-  snprintf(fcc.addr, sizeof fcc.addr, "10.0.0.2");
+  bufcpy(fcc.addr, sizeof fcc.addr, "10.0.0.2");
   fcc.port = 7000;
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
@@ -490,11 +491,11 @@ START_TEST(sds_parse_broadcast_round_trips_fcc_resolve_by_port) {
 
   memset(&svc, 0, sizeof svc);
   svc.family = AF_INET;
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&fcc, 0, sizeof fcc);
-  snprintf(fcc.addr, sizeof fcc.addr, "10.0.0.2");
+  bufcpy(fcc.addr, sizeof fcc.addr, "10.0.0.2");
   fcc.resolve_by_port = 1;
   fcc.resolve_base_port = 7000;
   fcc.resolve_max_channels = 16;
@@ -520,11 +521,11 @@ START_TEST(sds_parse_broadcast_round_trips_unicast_ret) {
   int n;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&ret, 0, sizeof ret);
-  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  bufcpy(ret.addr, sizeof ret.addr, "10.0.0.1");
   ret.port = 6000;
   ret.rtx_time_ms = 2000;
   ret.rtx_pt = 99;
@@ -552,11 +553,11 @@ START_TEST(sds_parse_broadcast_round_trips_multicast_ret) {
   int n;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&ret, 0, sizeof ret);
-  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  bufcpy(ret.addr, sizeof ret.addr, "10.0.0.1");
   ret.port = 6000;
   ret.rtx_time_ms = 2000;
   ret.rtx_pt = 99;
@@ -583,11 +584,11 @@ START_TEST(sds_parse_broadcast_round_trips_multicast_ret_override_port) {
   int n;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&ret, 0, sizeof ret);
-  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  bufcpy(ret.addr, sizeof ret.addr, "10.0.0.1");
   ret.port = 6000;
   ret.mc = 1;
   ret.mc_port = 5555;
@@ -609,18 +610,18 @@ START_TEST(sds_build_package_resolves_dvb_triplet_by_name) {
   size_t len;
 
   memset(svcs, 0, sizeof svcs);
-  snprintf(svcs[0].name, sizeof svcs[0].name, "Channel One");
+  bufcpy(svcs[0].name, sizeof svcs[0].name, "Channel One");
   svcs[0].tsid = 1;
   svcs[0].onid = 2;
   svcs[0].sid = 101;
 
   memset(&pkg, 0, sizeof pkg);
   pkg.id = 7;
-  snprintf(pkg.name, sizeof pkg.name, "Bundle");
+  bufcpy(pkg.name, sizeof pkg.name, "Bundle");
   memcpy(pkg.lang, "eng", 3);
   pkg.visible = 1;
-  snprintf(pkg.service_names[0], sizeof pkg.service_names[0], "Channel One");
-  snprintf(pkg.service_names[1], sizeof pkg.service_names[1], "Unknown Channel");
+  bufcpy(pkg.service_names[0], sizeof pkg.service_names[0], "Channel One");
+  bufcpy(pkg.service_names[1], sizeof pkg.service_names[1], "Unknown Channel");
   pkg.service_count = 2;
 
   len = sds_build_package("example.invalid", 1, &pkg, 1, svcs, 1, buf, sizeof buf);
@@ -637,12 +638,12 @@ START_TEST(sds_build_regionalisation_nests_ca_chain) {
   size_t len;
 
   memset(&cell, 0, sizeof cell);
-  snprintf(cell.id, sizeof cell.id, "Paris East");
+  bufcpy(cell.id, sizeof cell.id, "Paris East");
   memcpy(cell.country, "FR", 2);
   cell.ca[0].type = 1;
-  snprintf(cell.ca[0].value, sizeof cell.ca[0].value, "IDF");
+  bufcpy(cell.ca[0].value, sizeof cell.ca[0].value, "IDF");
   cell.ca[1].type = 3;
-  snprintf(cell.ca[1].value, sizeof cell.ca[1].value, "Paris");
+  bufcpy(cell.ca[1].value, sizeof cell.ca[1].value, "Paris");
   cell.ca_depth = 2;
 
   len = sds_build_regionalisation("example.invalid", 1, &cell, 1, buf, sizeof buf);
@@ -658,7 +659,7 @@ START_TEST(sds_build_rms_fus_emits_rms_provider) {
   size_t len;
 
   memset(&rms, 0, sizeof rms);
-  snprintf(rms.name, sizeof rms.name, "RMS One");
+  bufcpy(rms.name, sizeof rms.name, "RMS One");
   memcpy(rms.lang, "eng", 3);
   rms.location = "https://rms.example/";
 
@@ -675,7 +676,7 @@ START_TEST(sds_build_rms_fus_emits_fus_provider) {
   size_t len;
 
   memset(&fus, 0, sizeof fus);
-  snprintf(fus.name, sizeof fus.name, "FUS One");
+  bufcpy(fus.name, sizeof fus.name, "FUS One");
   memcpy(fus.lang, "eng", 3);
   fus.fus_id = 42;
   fus.announce_addr = "239.1.1.1";

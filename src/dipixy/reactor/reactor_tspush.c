@@ -11,21 +11,19 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 
-/* CONN_WRITING (headers flushed) -> CONN_TSPUSH, called from reactor_finish()
-   when become_tspush set. c->slot already holds ts_sub_t index */
+/* CONN_WRITING (headers flushed) -> CONN_TSPUSH, called from reactor_finish().
+   c->slot already holds ts_sub_t index */
 void reactor_tspush_begin(int epfd, conn_t *c) {
+  int ka = 1;
   c->in.len = c->in.off = 0;
-  c->become_tspush = 0;
+  c->next_state = CONN_NEXT_NONE;
   c->close_after_flush = 0;
   c->state = CONN_TSPUSH;
   c->epfd = epfd;
   c->reactor_tid = t_reactor_tid;
   ts_push_set_reactor_tid(c->slot, t_reactor_tid);
   g_ts_subs[c->slot].fd = c->fd;
-  {
-    int ka = 1;
-    setsockopt(c->fd, SOL_SOCKET, SO_KEEPALIVE, &ka, sizeof ka);
-  }
+  setsockopt(c->fd, SOL_SOCKET, SO_KEEPALIVE, &ka, sizeof ka);
   reactor_arm(epfd, c, 0); /* EPOLLIN for FIN detection, EPOLLOUT on demand */
   conn_publish(c);
   atomic_store_explicit(&g_ts_subs[c->slot].ready, 1, memory_order_release);

@@ -49,15 +49,19 @@ int ecm_profile_layout(const ecm_profile_t *p, int cw_len, ecm_layout_t *out) {
     out->gcm_tag_len = CRYPTO_GCM_TAG_LEN;
   } else {
     out->iv_len = (is_cbc && p->iv_source == ECM_IV_RANDOM) ? block : 0;
-    if (p->padding == ECM_PAD_NONE) {
-      if (block == 0 || plaintext_len % block != 0)
-        return -1;
-      out->ciphertext_len = plaintext_len;
-    } else if (p->padding == ECM_PAD_ZERO) {
-      out->ciphertext_len = block ? ((plaintext_len + block - 1) / block) * block : plaintext_len;
-      if (out->ciphertext_len == 0) out->ciphertext_len = block;
-    } else {
-      out->ciphertext_len = block ? (plaintext_len / block + 1) * block : plaintext_len;
+    switch (p->padding) {
+      case ECM_PAD_NONE:
+        if (block == 0 || plaintext_len % block != 0)
+          return -1;
+        out->ciphertext_len = plaintext_len;
+        break;
+      case ECM_PAD_ZERO:
+        out->ciphertext_len = block ? ((plaintext_len + block - 1) / block) * block : plaintext_len;
+        if (out->ciphertext_len == 0) out->ciphertext_len = block;
+        break;
+      case ECM_PAD_PKCS7:
+        out->ciphertext_len = block ? (plaintext_len / block + 1) * block : plaintext_len;
+        break;
     }
   }
   out->integrity_tag_len = (p->integrity.order == ECM_INTEGRITY_AFTER_ENCRYPT) ? itag_len : 0;

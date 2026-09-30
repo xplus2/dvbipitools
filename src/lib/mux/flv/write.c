@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "../amf.h"
-#include "../ebml.h" /* ebuf_t/eb_bytes: growable buffer, reused for tag-body assembly */
+#include "../ebml.h"
 #include "priv.h"
 
 #define FLV_FRAME_KEY 1
@@ -38,18 +38,8 @@ static const unsigned char FOURCC_AC3[4] = {'a', 'c', '-', '3'};
 static const unsigned char FOURCC_EAC3[4] = {'e', 'c', '-', '3'};
 
 void flv_send_tag(flv_t *f, flv_tag_type_t type, uint32_t ts, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
-  ebuf_t *b = &f->tagbuf;
-
-  b->len = 0; /* keep f->tagbuf's allocation, this tag reuses it */
-  b->err = 0;
-  eb_bytes(b, hdr, hn);
-  if (pn) eb_bytes(b, payload, pn);
-  if (b->err) {
-    f->err = 1;
-  } else {
-    if (f->bytes) *f->bytes += b->len;
-    if (f->cb) f->cb(f->cb_ctx, type, ts, b->p, b->len);
-  }
+  if (f->bytes) *f->bytes += hn + pn;
+  if (f->cb) f->cb(f->cb_ctx, type, ts, hdr, hn, payload, pn);
 }
 
 /* only known facts: duration=0, videocodecid=0 iff no video track */
@@ -77,7 +67,7 @@ void flv_emit_metadata(flv_t *f) {
     f->err = 1;
   } else {
     if (f->bytes) *f->bytes += b.len;
-    if (f->cb) f->cb(f->cb_ctx, FLV_TAG_SCRIPT, 0, b.p, b.len);
+    if (f->cb) f->cb(f->cb_ctx, FLV_TAG_SCRIPT, 0, NULL, 0, b.p, b.len);
   }
   ebuf_free(&b);
 }

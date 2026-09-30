@@ -70,60 +70,56 @@ static uint64_t status_rss_bytes(void) {
   return (uint64_t)rss_pages * (uint64_t)sysconf(_SC_PAGESIZE);
 }
 
-#define JBOOL(name, cond) do { jbuf_key(&j, name); jbuf_str(&j, (cond) ? "true" : "false"); } while (0)
+#ifdef HAVE_TLS
+#define STATUS_HAVE_TLS 1
+#else
+#define STATUS_HAVE_TLS 0
+#endif
+#ifdef HAVE_HTTP2
+#define STATUS_HAVE_HTTP2 1
+#else
+#define STATUS_HAVE_HTTP2 0
+#endif
+#ifdef HAVE_HTTP3
+#define STATUS_HAVE_HTTP3 1
+#else
+#define STATUS_HAVE_HTTP3 0
+#endif
+
+#define JFIELD(setter, name, val, sep) do { jbuf_key(&j, name); setter(&j, val); jbuf_str(&j, sep); } while (0)
+#define JOBJ(name) JFIELD(jbuf_str, name, "{", "")
+#define JBOOL(name, cond, sep) JFIELD(jbuf_str, name, (cond) ? "true" : "false", sep)
+#define JSTR_OR_NULL(name, cond, val, sep) do { jbuf_key(&j, name); if (cond) jbuf_json_string(&j, val); else jbuf_str(&j, "null"); jbuf_str(&j, sep); } while (0)
 
 int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) {
   static _Thread_local jbuf_t j;
   struct tm tmv;
-  jbuf_reset(&j);
   char start_str[32];
   double in_mbps, out_mbps;
   int i;
 
+  jbuf_reset(&j);
   jbuf_str(&j, "{");
 
-  jbuf_key(&j, "tool");       jbuf_json_string(&j, TOOL_NAME);     jbuf_str(&j, ",");
-  jbuf_key(&j, "version");    jbuf_json_string(&j, TOOL_VERSION);  jbuf_str(&j, ",");
-  jbuf_key(&j, "build");      jbuf_str(&j, "{");
-    jbuf_key(&j, "type");     jbuf_json_string(&j, BUILD_TYPE);    jbuf_str(&j, ",");
-    jbuf_key(&j, "arch");     jbuf_json_string(&j, BUILD_ARCH);    jbuf_str(&j, ",");
-    jbuf_key(&j, "link");     jbuf_json_string(&j, BUILD_LINK);    jbuf_str(&j, ",");
-    jbuf_key(&j, "features");jbuf_str(&j, "{");
-      jbuf_key(&j, "tls");
-#ifdef HAVE_TLS
-  jbuf_str(&j, "true");
-#else
-  jbuf_str(&j, "false");
-#endif
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "http2");
-#ifdef HAVE_HTTP2
-  jbuf_str(&j, "true");
-#else
-  jbuf_str(&j, "false");
-#endif
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "http3");
-#ifdef HAVE_HTTP3
-  jbuf_str(&j, "true");
-#else
-  jbuf_str(&j, "false");
-#endif
+  JFIELD(jbuf_json_string, "tool", TOOL_NAME, ",");
+  JFIELD(jbuf_json_string, "version", TOOL_VERSION, ",");
+  JOBJ("build");
+  JFIELD(jbuf_json_string, "type", BUILD_TYPE, ",");
+  JFIELD(jbuf_json_string, "arch", BUILD_ARCH, ",");
+  JFIELD(jbuf_json_string, "link", BUILD_LINK, ",");
+  JOBJ("features");
+  JBOOL("tls", STATUS_HAVE_TLS, ",");
+  JBOOL("http2", STATUS_HAVE_HTTP2, ",");
+  JBOOL("http3", STATUS_HAVE_HTTP3, "");
   jbuf_str(&j, "}"); /* features */
   jbuf_str(&j, "}"); /* build */
   jbuf_str(&j, ",");
 
   gmtime_r(&g_start_unix, &tmv);
   strftime(start_str, sizeof start_str, "%Y-%m-%dT%H:%M:%SZ", &tmv);
-  jbuf_key(&j, "start_time");
-  jbuf_json_string(&j, start_str);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "start_time_unix");
-  jbuf_i64(&j, (long long)g_start_unix);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "uptime_seconds");
-  jbuf_i64(&j, (long long)(time(NULL) - g_start_unix));
-  jbuf_str(&j, ",");
+  JFIELD(jbuf_json_string, "start_time", start_str, ",");
+  JFIELD(jbuf_i64, "start_time_unix", (long long)g_start_unix, ",");
+  JFIELD(jbuf_i64, "uptime_seconds", (long long)(time(NULL) - g_start_unix), ",");
 
   jbuf_key(&j, "exec_args");
   jbuf_str(&j, "[");
@@ -133,124 +129,59 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   }
   jbuf_str(&j, "],");
 
-  jbuf_key(&j, "threads");
-  jbuf_str(&j, "{");
-  jbuf_key(&j, "workers");
-  jbuf_i64(&j, reactor_worker_count());
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "pump");
-  jbuf_str(&j, "1,");
-  jbuf_key(&j, "channels_refresh");
-  jbuf_i64(&j, channels_refresh_active());
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "total");
-  jbuf_i64(&j, reactor_worker_count() + 1 + channels_refresh_active());
-  jbuf_str(&j, "},");
+  JOBJ("threads");
+  JFIELD(jbuf_i64, "workers", reactor_worker_count(), ",");
+  JFIELD(jbuf_str, "pump", "1", ",");
+  JFIELD(jbuf_i64, "channels_refresh", channels_refresh_active(), ",");
+  JFIELD(jbuf_i64, "total", reactor_worker_count() + 1 + channels_refresh_active(), "},");
 
-  jbuf_key(&j, "memory");
-  jbuf_str(&j, "{");
-  jbuf_key(&j, "rss_bytes");
-  jbuf_u64(&j, (unsigned long long)status_rss_bytes());
-  jbuf_str(&j, "},");
+  JOBJ("memory");
+  JFIELD(jbuf_u64, "rss_bytes", (unsigned long long)status_rss_bytes(), "},");
 
   status_bitrate(&in_mbps, &out_mbps);
-  jbuf_key(&j, "bitrate");
-  jbuf_str(&j, "{");
-  jbuf_key(&j, "in_mbps");
-  jbuf_fixed3(&j, in_mbps);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "out_mbps");
-  jbuf_fixed3(&j, out_mbps);
-  jbuf_str(&j, "},");
+  JOBJ("bitrate");
+  JFIELD(jbuf_fixed3, "in_mbps", in_mbps, ",");
+  JFIELD(jbuf_fixed3, "out_mbps", out_mbps, "},");
 
-  jbuf_key(&j, "listen");
-  jbuf_str(&j, "{");
-  jbuf_key(&j, "addr");
-  jbuf_json_string(&j, cfg->listen.scope == LISTEN_ANY ? "all" : cfg->listen.addr);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "port");
-  jbuf_u64(&j, cfg->listen.port);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "tls_addr");
-  jbuf_json_string(&j, cfg->listen_tls.scope == LISTEN_ANY ? "all" : cfg->listen_tls.addr);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "tls_port");
-  jbuf_u64(&j, cfg->listen_tls.port);
-  jbuf_str(&j, "},");
+  JOBJ("listen");
+  JFIELD(jbuf_json_string, "addr", cfg->listen.scope == LISTEN_ANY ? "all" : cfg->listen.addr, ",");
+  JFIELD(jbuf_u64, "port", cfg->listen.port, ",");
+  JFIELD(jbuf_json_string, "tls_addr", cfg->listen_tls.scope == LISTEN_ANY ? "all" : cfg->listen_tls.addr, ",");
+  JFIELD(jbuf_u64, "tls_port", cfg->listen_tls.port, "},");
 
-  jbuf_key(&j, "server");
-  jbuf_str(&j, "{");
-  jbuf_key(&j, "workers_spec");
-  jbuf_i64(&j, cfg->workers_spec);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "max_clients");
-  jbuf_i64(&j, cfg->max_clients);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "max_channels");
-  jbuf_i64(&j, cfg->max_channels);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "capture_ring_kib");
-  jbuf_u64(&j, cfg->capture_ring_kib);
-  jbuf_str(&j, "},");
+  JOBJ("server");
+  JFIELD(jbuf_i64, "workers_spec", cfg->workers_spec, ",");
+  JFIELD(jbuf_i64, "max_clients", cfg->max_clients, ",");
+  JFIELD(jbuf_i64, "max_channels", cfg->max_channels, ",");
+  JFIELD(jbuf_u64, "capture_ring_kib", cfg->capture_ring_kib, "},");
 
-  jbuf_key(&j, "segment");
-  jbuf_str(&j, "{");
-  jbuf_key(&j, "size_s");
-  jbuf_fixed3(&j, cfg->segment_size);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "count");
-  jbuf_i64(&j, cfg->segment_count);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "hls_part_size_s");
-  jbuf_fixed3(&j, cfg->hls_part_size);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "dash_part_size_s");
-  jbuf_fixed3(&j, cfg->dash_part_size);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "hls_seg_pool");
-  jbuf_i64(&j, cfg->hls_seg_pool);
-  jbuf_str(&j, "},");
+  JOBJ("segment");
+  JFIELD(jbuf_fixed3, "size_s", cfg->segment_size, ",");
+  JFIELD(jbuf_i64, "count", cfg->segment_count, ",");
+  JFIELD(jbuf_fixed3, "hls_part_size_s", cfg->hls_part_size, ",");
+  JFIELD(jbuf_fixed3, "dash_part_size_s", cfg->dash_part_size, ",");
+  JFIELD(jbuf_i64, "hls_seg_pool", cfg->hls_seg_pool, "},");
 
-  jbuf_key(&j, "sds");
-  jbuf_str(&j, "{");
-  jbuf_key(&j, "timeout_s");
-  jbuf_fixed3(&j, cfg->sds_timeout_s);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "refresh_interval_s");
-  jbuf_fixed3(&j, cfg->sds_refresh_interval_s);
-  jbuf_str(&j, "},");
+  JOBJ("sds");
+  JFIELD(jbuf_fixed3, "timeout_s", cfg->sds_timeout_s, ",");
+  JFIELD(jbuf_fixed3, "refresh_interval_s", cfg->sds_refresh_interval_s, "},");
 
-  jbuf_key(&j, "metrics");
-  jbuf_str(&j, "{");
-  JBOOL("enabled", cfg->metrics_id);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "id");
-  if (cfg->metrics_id) jbuf_json_string(&j, cfg->metrics_id);
-  else                 jbuf_str(&j, "null");
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "interval_s");
-  jbuf_u64(&j, cfg->metrics_interval_s);
-  jbuf_str(&j, ",");
-  JBOOL("http", cfg->metrics_http);
-  jbuf_str(&j, "},");
+  JOBJ("metrics");
+  JBOOL("enabled", cfg->metrics_id, ",");
+  JSTR_OR_NULL("id", cfg->metrics_id, cfg->metrics_id, ",");
+  JFIELD(jbuf_u64, "interval_s", cfg->metrics_interval_s, ",");
+  JBOOL("http", cfg->metrics_http, "},");
 
-  jbuf_key(&j, "cors_origins");
-  jbuf_json_string(&j, cfg->cors_origins ? cfg->cors_origins : "*");
-  jbuf_str(&j, ",");
+  JFIELD(jbuf_json_string, "cors_origins", cfg->cors_origins ? cfg->cors_origins : "*", ",");
 
-  JBOOL("auth_enabled", cfg->http_auth[0]);
-  jbuf_str(&j, ",");
+  JBOOL("auth_enabled", cfg->http_auth[0], ",");
 
-  jbuf_key(&j, "tls");
-  jbuf_str(&j, "{");
+  JOBJ("tls");
   if (tls_is_running()) {
     tls_cert_detail_t d;
     tls_cert_detail(NULL, 0, &d);
-    jbuf_key(&j, "enabled");
-    jbuf_str(&j, "true,");
-    jbuf_key(&j, "cn");
-    jbuf_json_string(&j, d.cn);
-    jbuf_str(&j, ",");
+    JFIELD(jbuf_str, "enabled", "true", ",");
+    JFIELD(jbuf_json_string, "cn", d.cn, ",");
     jbuf_key(&j, "aliases");
     jbuf_str(&j, "[");
     for (i = 0; i < d.alias_count; i++) {
@@ -258,69 +189,42 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
       jbuf_json_string(&j, d.aliases[i]);
     }
     jbuf_str(&j, "],");
-    jbuf_key(&j, "expiry");
-    jbuf_json_string(&j, d.valid_to);
+    JFIELD(jbuf_json_string, "expiry", d.valid_to, "");
   } else {
-    jbuf_key(&j, "enabled");
-    jbuf_str(&j, "false");
+    JFIELD(jbuf_str, "enabled", "false", "");
   }
   jbuf_str(&j, "}"); /* tls */
   jbuf_str(&j, ",");
 
-  jbuf_key(&j, "dlna");
-  jbuf_str(&j, "{");
-  JBOOL("enabled", cfg->enable_dlna);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "ssdp_ttl");
-  jbuf_i64(&j, cfg->ssdp_ttl);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "ssdp_iface");
-  if (cfg->ssdp_iface)
-    jbuf_json_string(&j, cfg->ssdp_iface);
-  else
-    jbuf_str(&j, "null");
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "dlna_host");
-  if (cfg->enable_dlna)
-    jbuf_json_string(&j, cfg->dlna_host);
-  else
-    jbuf_str(&j, "null");
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "dlna_name");
-  if (cfg->enable_dlna && cfg->dlna_name)
-    jbuf_json_string(&j, cfg->dlna_name);
-  else
-    jbuf_str(&j, "null");
+  JOBJ("dlna");
+  JBOOL("enabled", cfg->enable_dlna, ",");
+  JFIELD(jbuf_i64, "ssdp_ttl", cfg->ssdp_ttl, ",");
+  JSTR_OR_NULL("ssdp_iface", cfg->ssdp_iface, cfg->ssdp_iface, ",");
+  JSTR_OR_NULL("dlna_host", cfg->enable_dlna, cfg->dlna_host, ",");
+  JSTR_OR_NULL("dlna_name", cfg->enable_dlna && cfg->dlna_name, cfg->dlna_name, ",");
+  JBOOL("keep_multicast", cfg->dlna_keep_multicast, ",");
+  JFIELD(jbuf_fixed3, "ssdp_interval_s", cfg->ssdp_interval_s, ",");
+  JFIELD(jbuf_u64, "ssdp_max_age_s", cfg->ssdp_max_age_s, "},");
 
-  jbuf_str(&j, ",");
-  JBOOL("keep_multicast", cfg->dlna_keep_multicast);     jbuf_str(&j, ",");
-  jbuf_key(&j, "ssdp_interval_s");
-  jbuf_fixed3(&j, cfg->ssdp_interval_s);
-  jbuf_str(&j, ",");
-  jbuf_key(&j, "ssdp_max_age_s");
-  jbuf_u64(&j, cfg->ssdp_max_age_s);
-  jbuf_str(&j, "},");
-
-  jbuf_key(&j, "flags");
-  jbuf_str(&j, "{");
-  JBOOL("no_hls", cfg->no_hls);                         jbuf_str(&j, ",");
-  JBOOL("no_llhls", cfg->no_llhls);                     jbuf_str(&j, ",");
-  JBOOL("no_dash", cfg->no_dash);                       jbuf_str(&j, ",");
-  JBOOL("no_lldash", cfg->no_lldash);                   jbuf_str(&j, ",");
-  JBOOL("no_ts", cfg->no_ts);                           jbuf_str(&j, ",");
-  JBOOL("no_spts", cfg->no_spts);                       jbuf_str(&j, ",");
-  JBOOL("no_rawaudio", cfg->no_rawaudio);               jbuf_str(&j, ",");
-  JBOOL("no_mp4", cfg->no_mp4);                         jbuf_str(&j, ",");
-  JBOOL("no_url_rtp", cfg->no_url_rtp);                 jbuf_str(&j, ",");
-  JBOOL("no_url_udp", cfg->no_url_udp);                 jbuf_str(&j, ",");
-  JBOOL("no_url_srt", cfg->no_url_srt);                 jbuf_str(&j, ",");
-  JBOOL("no_pid_filters", cfg->no_pid_filters);         jbuf_str(&j, ",");
-  JBOOL("no_lcevc", cfg->no_lcevc);                     jbuf_str(&j, ",");
-  JBOOL("no_http2", cfg->no_http2);                     jbuf_str(&j, ",");
-  JBOOL("no_http3", cfg->no_http3);                     jbuf_str(&j, ",");
-  JBOOL("no_fcc", cfg->no_fcc);                         jbuf_str(&j, ",");
-  JBOOL("no_ret", cfg->no_ret);                         jbuf_str(&j, ",");
-  JBOOL("join_all", cfg->join_all);                     jbuf_str(&j, "}");
+  JOBJ("flags");
+  JBOOL("no_hls", cfg->no_hls, ",");
+  JBOOL("no_llhls", cfg->no_llhls, ",");
+  JBOOL("no_dash", cfg->no_dash, ",");
+  JBOOL("no_lldash", cfg->no_lldash, ",");
+  JBOOL("no_ts", cfg->no_ts, ",");
+  JBOOL("no_spts", cfg->no_spts, ",");
+  JBOOL("no_rawaudio", cfg->no_rawaudio, ",");
+  JBOOL("no_mp4", cfg->no_mp4, ",");
+  JBOOL("no_url_rtp", cfg->no_url_rtp, ",");
+  JBOOL("no_url_udp", cfg->no_url_udp, ",");
+  JBOOL("no_url_srt", cfg->no_url_srt, ",");
+  JBOOL("no_pid_filters", cfg->no_pid_filters, ",");
+  JBOOL("no_lcevc", cfg->no_lcevc, ",");
+  JBOOL("no_http2", cfg->no_http2, ",");
+  JBOOL("no_http3", cfg->no_http3, ",");
+  JBOOL("no_fcc", cfg->no_fcc, ",");
+  JBOOL("no_ret", cfg->no_ret, ",");
+  JBOOL("join_all", cfg->join_all, "}");
   jbuf_str(&j, "}"); /* root */
 
   if (j.failed) return -1;

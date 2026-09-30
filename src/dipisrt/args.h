@@ -47,6 +47,7 @@ typedef struct {
   const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
   unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
   metrics_inspect_ts_t metrics_inspect_ts;
+  void *str_pool;
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

@@ -17,6 +17,14 @@
 #include "config.h"
 #include "version.h"
 
+#define OPT_COLOR 1000
+#define OPT_METRICS 1001
+#define OPT_METRICS_ID 1002
+#define OPT_METRICS_INTERVAL 1003
+#define OPT_DSCP 1004
+#define OPT_CONFIG_STRICT 1006
+#define OPT_CONFIGTEST 1005
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 static int mcast_parse(const char *s, config_t *cfg) {
@@ -36,28 +44,30 @@ static void print_help(void) {
       "options:\n"
       "  -a, --announce         headend mode: read -i, transmit on -m\n"
       "  -l, --listen           client mode: receive on -m, write -o\n"
-      "  -i, --input <path>     announce: xmltv source (required)\n"
-      "  -M, --map <path>       announce: xmltv id -> uri,tsid,onid,sid csv (required)\n"
-      "  -w, --window <hours>   announce: only events starting within this (default 24)\n"
       "  -m, --mcast <g>:<p>    multicast group:port ([addr6]:port for v6)\n"
       "  -I, --iface <iface>    multicast interface\n"
-      "      --dscp <v>         announce: output DSCP marking: video-high|video-low|voice|\n"
-      "                         signalling|best-effort|0..63 (default: signalling)\n"
-      "  -t, --interval <s>     announce: repeat interval (default 5)\n"
-      "  -t, --timeout <s>      listen: stop after N seconds (default 35)\n"
-      "  -o, --output <path>    listen: xmltv output path, - for stdout (default)\n"
-      "  -C, --csv-map <path>   listen: also write a mapping csv (feeds back into -M)\n"
-      "  -Z, --compress         announce: zlib-compress BCG containers (RFC 1950)\n"
       "  -v, --verbose          periodic stats on stderr\n"
       "      --color <when>     auto|always|never (default auto)\n"
-      "      --metrics <path>   announce: Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
-      "      --metrics-id <name> announce: stable instance id; metrics disabled unless set\n"
-      "      --metrics-interval <s> announce: snapshot interval in seconds (default: 5)\n"
       "  -d, --daemonize        fork to background after startup, detach from terminal\n"
       "  -c, --config <path>    YAML config file (default: %s, if present)\n"
       "      --config-strict    fail on config file issues instead of warnings\n"
       "      --configtest       check the config file, then exit\n"
+      "      --metrics <path>   socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+      "      --metrics-id <id>  stable instance id; metrics disabled unless set\n"
+      "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
       "  -h, --help             this help\n\n"
+      "listen mode options:\n"
+      "  -t, --timeout <s>      stop after N seconds (default 35)\n"
+      "  -o, --output <path>    xmltv output path, - for stdout (default)\n"
+      "  -C, --csv-map <path>   also write a mapping csv (feeds back into -M)\n\n"
+      "announce mode options:\n"
+      "  -i, --input <path>     xmltv source (required)\n"
+      "  -M, --map <path>       xmltv id -> uri,tsid,onid,sid csv (required)\n"
+      "  -w, --window <hours>   only events starting within this (default 24)\n"
+      "      --dscp <v>         output DSCP marking: video-high|video-low|voice|\n"
+      "                         signalling|best-effort|0..63 (default: signalling)\n"
+      "  -t, --interval <s>     repeat interval (default 5)\n"
+      "  -Z, --compress         zlib-compress BCG containers (RFC 1950)\n\n"
       "examples:\n"
       "  %s -a -i guide.xml -M mapping.csv -m 239.255.0.2:3938\n"
       "  %s -l -m 239.255.0.2:3938 -o guide.xml -C mapping.csv\n",
@@ -80,15 +90,15 @@ static const struct option longopts[] = {
     {"csv-map", required_argument, 0, 'C'},
     {"compress", no_argument, 0, 'Z'},
     {"verbose", no_argument, 0, 'v'},
-    {"color", required_argument, 0, 1000},
-    {"metrics", required_argument, 0, 1001},
-    {"metrics-id", required_argument, 0, 1002},
-    {"metrics-interval", required_argument, 0, 1003},
-    {"dscp", required_argument, 0, 1004},
+    {"color", required_argument, 0, OPT_COLOR},
+    {"metrics", required_argument, 0, OPT_METRICS},
+    {"metrics-id", required_argument, 0, OPT_METRICS_ID},
+    {"metrics-interval", required_argument, 0, OPT_METRICS_INTERVAL},
+    {"dscp", required_argument, 0, OPT_DSCP},
     {"daemonize", no_argument, 0, 'd'},
     {"config", required_argument, 0, 'c'},
-    {"config-strict", no_argument, 0, 1006},
-    {"configtest", no_argument, 0, 1005},
+    {"config-strict", no_argument, 0, OPT_CONFIG_STRICT},
+    {"configtest", no_argument, 0, OPT_CONFIGTEST},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}};
 
@@ -137,8 +147,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       if (c == 'a') cfg->fl.have_a = 1;
       else          cfg->fl.have_l = 1;
       break;
-    case 1006:
-    case 1005:
+    case OPT_CONFIG_STRICT:
+    case OPT_CONFIGTEST:
     case 'c':
       break;
     case 'i':
@@ -191,7 +201,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     case 'd':
       cfg->daemonize = 1;
       break;
-    case 1000: {
+    case OPT_COLOR: {
       log_color_t v;
       if (log_color_from_string(optarg, &v)) {
         argerr("invalid --color: %s (auto|always|never)", optarg);
@@ -200,16 +210,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       cfg->color_mode = v;
       break;
     }
-    case 1001:
+    case OPT_METRICS:
       cfg->metrics_sock = optarg;
       break;
-    case 1002:
+    case OPT_METRICS_ID:
       cfg->metrics_id = optarg;
       break;
-    case 1003:
+    case OPT_METRICS_INTERVAL:
       if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
       break;
-    case 1004:
+    case OPT_DSCP:
       if (net_dscp_parse(optarg, &cfg->dscp)) {
         argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
         return ARGS_ERR;

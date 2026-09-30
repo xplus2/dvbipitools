@@ -29,7 +29,7 @@ int cas_parse_pcr(const unsigned char pkt188[188], uint64_t *pcr27) {
   uint64_t base;
   unsigned ext;
   if (afc != 0x2 && afc != 0x3) return 0;
-  if (pkt188[4] < 1 || !(pkt188[5] & 0x10) || pkt188[4] < 7) return 0;
+  if (pkt188[4] < 7 || !(pkt188[5] & 0x10)) return 0;
   base = ((uint64_t)pkt188[6] << 25) | ((uint64_t)pkt188[7] << 17) | ((uint64_t)pkt188[8] << 9) | ((uint64_t)pkt188[9] << 1) | (pkt188[10] >> 7);
   ext = ((unsigned)(pkt188[10] & 0x01) << 8) | pkt188[11];
   *pcr27 = base * 300 + ext;
@@ -85,9 +85,12 @@ static void add_pid(unsigned *pids, size_t *count, size_t cap, unsigned pid) {
 
 static void add_program_cas_pids(const config_t *cfg, const out_es_t *es, int es_count, unsigned *out, size_t *count, size_t cap) {
   for (int i = 0; i < es_count; i++) {
-    if (cfg->cas_pids_video && es[i].src->cls == PID_VIDEO) add_pid(out, count, cap, es[i].out_pid);
-    if (cfg->cas_pids_audio && es[i].src->cls == PID_AUDIO) add_pid(out, count, cap, es[i].out_pid);
-    if (cfg->cas_pids_lcevc && es[i].src->cls == PID_LCEVC) add_pid(out, count, cap, es[i].out_pid);
+    switch (es[i].src->cls) {
+      case PID_VIDEO: if (cfg->cas_pids_video) add_pid(out, count, cap, es[i].out_pid); break;
+      case PID_AUDIO: if (cfg->cas_pids_audio) add_pid(out, count, cap, es[i].out_pid); break;
+      case PID_LCEVC: if (cfg->cas_pids_lcevc) add_pid(out, count, cap, es[i].out_pid); break;
+      default: break;
+    }
   }
 }
 

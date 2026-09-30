@@ -90,6 +90,40 @@ static size_t drain_body(http_t *h, char *buf, size_t cap, size_t want) {
   return got;
 }
 
+START_TEST(http_url_parse_accepts_ipv6_literal) {
+  http_url_t u;
+  ck_assert_int_eq(http_url_parse("http://[::1]:8080/path", &u), 0);
+  ck_assert_str_eq(u.host, "::1");
+  ck_assert_uint_eq(u.port, 8080u);
+  ck_assert_str_eq(u.path, "/path");
+  ck_assert_int_eq(u.tls, 0);
+}
+END_TEST
+
+START_TEST(http_url_parse_accepts_ipv6_literal_without_port) {
+  http_url_t u;
+  ck_assert_int_eq(http_url_parse("https://[2001:db8::1]/", &u), 0);
+  ck_assert_str_eq(u.host, "2001:db8::1");
+  ck_assert_uint_eq(u.port, 443u);
+}
+END_TEST
+
+START_TEST(http_url_parse_rejects_unterminated_ipv6_literal) {
+  http_url_t u;
+  ck_assert_int_ne(http_url_parse("http://[::1/path", &u), 0);
+}
+END_TEST
+
+START_TEST(http_url_parse_failure_does_not_clobber_existing_url) {
+  http_url_t u;
+  memset(&u, 0, sizeof u);
+  ck_assert_int_eq(http_url_parse("http://good.example/x", &u), 0);
+  ck_assert_int_ne(http_url_parse("ftp://bad.example/y", &u), 0);
+  ck_assert_str_eq(u.host, "good.example");
+  ck_assert_str_eq(u.path, "/x");
+}
+END_TEST
+
 START_TEST(http_async_completes_against_local_server) {
   unsigned port;
   int listen_fd = make_listener(&port);
@@ -288,6 +322,10 @@ END_TEST
 static Suite *httpclient_async_suite(void) {
   Suite *s = suite_create("httpclient_async");
   TCase *tc = tcase_create("core");
+  tcase_add_test(tc, http_url_parse_accepts_ipv6_literal);
+  tcase_add_test(tc, http_url_parse_accepts_ipv6_literal_without_port);
+  tcase_add_test(tc, http_url_parse_rejects_unterminated_ipv6_literal);
+  tcase_add_test(tc, http_url_parse_failure_does_not_clobber_existing_url);
   tcase_add_test(tc, http_async_completes_against_local_server);
   tcase_add_test(tc, http_async_follows_redirect);
   tcase_add_test(tc, http_async_reports_error_on_refused_connection);

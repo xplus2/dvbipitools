@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DVBIPITOOLS_LIB_BEUTIL_H
-#define DVBIPITOOLS_LIB_BEUTIL_H
+#ifndef DVBIPITOOLS_LIB_HELPER_BEUTIL_H
+#define DVBIPITOOLS_LIB_HELPER_BEUTIL_H
 
 #include <stdint.h>
 

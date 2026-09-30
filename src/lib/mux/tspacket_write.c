@@ -15,29 +15,40 @@ static void put_pcr(unsigned char *p, uint64_t base33, unsigned ext9) {
   p[5] = (unsigned char)ext9;
 }
 
-static void write_packet(unsigned pid, unsigned char *cc, int pusi, const unsigned char *pointer_byte, const unsigned char *payload, size_t payload_len, int with_pcr, uint64_t pcr_90k, size_t pad, ts_packet_cb cb, void *ctx) {
+typedef struct {
+  unsigned pid;
+  int pusi;
+  const unsigned char *pointer_byte;
+  const unsigned char *payload;
+  size_t payload_len;
+  int with_pcr;
+  uint64_t pcr_90k;
+  size_t pad;
+} ts_packet_desc_t;
+
+static void write_packet(const ts_packet_desc_t *d, unsigned char *cc, ts_packet_cb cb, void *ctx) {
   unsigned char pkt[188];
   size_t pos;
 
   pkt[0] = 0x47;
-  pkt[1] = (unsigned char)((pusi ? 0x40 : 0x00) | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
+  pkt[1] = (unsigned char)((d->pusi ? 0x40 : 0x00) | ((d->pid >> 8) & 0x1F));
+  pkt[2] = (unsigned char)d->pid;
   *cc = (unsigned char)((*cc + 1) & 0x0F);
-  if (with_pcr) {
-    unsigned af_len = (unsigned)(7 + pad);
+  if (d->with_pcr) {
+    unsigned af_len = (unsigned)(7 + d->pad);
     pkt[3] = (unsigned char)(0x30 | *cc);
     pkt[4] = (unsigned char)af_len;
     pkt[5] = 0x10; /* PCR_flag only */
-    put_pcr(pkt + 6, pcr_90k, 0);
+    put_pcr(pkt + 6, d->pcr_90k, 0);
     pos = 12;
-    memset(pkt + pos, 0xFF, pad);
-    pos += pad;
-  } else if (pad == 1) {
+    memset(pkt + pos, 0xFF, d->pad);
+    pos += d->pad;
+  } else if (d->pad == 1) {
     pkt[3] = (unsigned char)(0x30 | *cc);
     pkt[4] = 0x00;
     pos = 5;
-  } else if (pad > 1) {
-    unsigned af_len = (unsigned)(pad - 1);
+  } else if (d->pad > 1) {
+    unsigned af_len = (unsigned)(d->pad - 1);
     pkt[3] = (unsigned char)(0x30 | *cc);
     pkt[4] = (unsigned char)af_len;
     pkt[5] = 0x00;
@@ -48,9 +59,9 @@ static void write_packet(unsigned pid, unsigned char *cc, int pusi, const unsign
     pos = 4;
   }
 
-  if (pointer_byte)
-    pkt[pos++] = *pointer_byte;
-  memcpy(pkt + pos, payload, payload_len);
+  if (d->pointer_byte)
+    pkt[pos++] = *d->pointer_byte;
+  memcpy(pkt + pos, d->payload, d->payload_len);
   cb(ctx, pkt);
 }
 
@@ -65,7 +76,7 @@ size_t ts_packet_emit(unsigned pid, unsigned char *cc, const unsigned char *poin
     size_t space = 184 - ptr_overhead - af_fixed;
     size_t take = remaining < space ? remaining : space;
     size_t pad = space - take;
-    write_packet(pid, cc, first, first ? pointer_byte : NULL, data + sent, take, with_pcr, pcr_90k, pad, cb, ctx);
+    write_packet(&(ts_packet_desc_t){pid, first, first ? pointer_byte : NULL, data + sent, take, with_pcr, pcr_90k, pad}, cc, cb, ctx);
     sent += take;
     first = 0;
     count++;
@@ -82,7 +93,7 @@ size_t ts_packet_emit_partial(unsigned pid, unsigned char *cc, const unsigned ch
     size_t space = 184 - ptr_overhead;
     size_t take = remaining < space ? remaining : space;
     size_t pad = space - take;
-    write_packet(pid, cc, first, first ? pointer_byte : NULL, data + sent, take, 0, 0, pad, cb, ctx);
+    write_packet(&(ts_packet_desc_t){pid, first, first ? pointer_byte : NULL, data + sent, take, 0, 0, pad}, cc, cb, ctx);
     sent += take;
     first = 0;
     count++;

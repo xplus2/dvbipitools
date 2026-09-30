@@ -1,6 +1,6 @@
 .TH DIPIREC 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
-dipirec \- record or replay a DVB-IPI stream to a file, multicast, or an RTMP(S) server
+dipirec \- record or replay an IPTV/radio stream to a file, multicast, or an RTMP(S) server
 .SH SYNOPSIS
 .B dipirec
 .B \-i
@@ -10,7 +10,7 @@ dipirec \- record or replay a DVB-IPI stream to a file, multicast, or an RTMP(S)
 [\fIoptions\fR]
 .SH DESCRIPTION
 .B dipirec
-records a DVB-IPI transport stream to a file, stdout, multicast, a RIST
+records a transport stream to a file, or passes it on to stdout, multicast, a RIST
 or SRT peer, or an RTMP(S) ingest server. Output
 .RB ( \-o )
 is repeatable, up to 8 targets, so several destinations can be fed from
@@ -33,8 +33,8 @@ are:
 .B http://<host>:<port>/<path>
 or
 .B https://<host>:<port>/<path>
-\- an HTTP(S) TS stream (\fB\-\-insecure\fR skips TLS verification on
-\fBhttps://\fR)
+\- TS, HLS, LL-HLS, DASH or LL-DASH, auto-detected from the response body
+(\fB\-\-insecure\fR skips TLS verification on \fBhttps://\fR)
 .IP \(bu 2
 .B \-
 \- stdin, plain TS or RTP-wrapped TS, auto-detected
@@ -92,9 +92,13 @@ option selects the recording format: \fBraw\fR (RTP unwrapped only,
 transport stream otherwise untouched), \fBts\fR (single program transport
 stream, drops stuffing/NIT/EIT/AIT/CA-EMM, keeps SDT, rewrites PAT/PMT),
 .B mkv
-(Matroska with H.264/HEVC video and AC3/EAC3/MP2/MP3/AAC/AAC-LATM audio) or
+(Matroska with H.264/HEVC video and AC3/EAC3/MP2/MP3/AAC/AAC-LATM audio),
 .B mka
-(Matroska, audio only). Without \fB\-f\fR the format is taken from the
+(Matroska, audio only),
+.B MP4
+or
+.B M4A.
+Without \fB\-f\fR the format is taken from the
 .B \-o
 file suffix, defaulting to \fBts\fR.
 .PP
@@ -413,13 +417,6 @@ edge server.
 .TP
 .B dipirec \-i rtp://@239.1.1.3:5000 \-p all \-o all_channels.mka
 MPTS source: every program's audio into one MKA file.
-.SH EXIT STATUS
-.TP
-.B 0
-Success.
-.TP
-.B nonzero
-Argument error, or I/O failure.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipirec.yaml

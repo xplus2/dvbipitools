@@ -8,12 +8,13 @@
 #include <string.h>
 
 #include "dipisds/format_out.h"
+#include "lib/helper/ioutil.h"
 
 static sds_service_t make_service(const char *name, const char *addr, int family, unsigned port, int rtp) {
   sds_service_t s;
   memset(&s, 0, sizeof s);
-  snprintf(s.name, sizeof s.name, "%s", name);
-  snprintf(s.address, sizeof s.address, "%s", addr);
+  bufcpy(s.name, sizeof s.name, name);
+  bufcpy(s.address, sizeof s.address, addr);
   s.family = family;
   s.port = port;
   s.rtp = rtp;

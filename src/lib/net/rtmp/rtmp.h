@@ -36,8 +36,8 @@ void rtmp_start(rtmp_t *r); /* emits C0+C1 */
 int rtmp_feed(rtmp_t *r, const unsigned char *data, size_t len);
 
 /* only after ready_cb */
-int rtmp_send_video(rtmp_t *r, uint32_t timestamp_ms, const unsigned char *data, size_t len);
-int rtmp_send_audio(rtmp_t *r, uint32_t timestamp_ms, const unsigned char *data, size_t len);
-int rtmp_send_data(rtmp_t *r, const unsigned char *data, size_t len); /* onMetaData, timestamp always 0 */
+int rtmp_send_video(rtmp_t *r, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn);
+int rtmp_send_audio(rtmp_t *r, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn);
+int rtmp_send_data(rtmp_t *r, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn); /* onMetaData, timestamp always 0 */
 
 #endif

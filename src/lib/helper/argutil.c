@@ -143,6 +143,7 @@ int map_lookup(const enum_map_t *m, size_t n, const char *s, int *out) {
 
 int argutil_addrport_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
   char addr[64];
+  size_t alen;
   if (*s == '[') {
     const char *close = strchr(s, ']');
     size_t len;
@@ -171,11 +172,8 @@ int argutil_addrport_parse(const char *s, int *family, char *addr_out, size_t ad
     struct in6_addr a6;
     if (inet_pton(AF_INET6, addr, &a6) != 1) return -1;
   }
-
-  {
-    size_t alen = strlen(addr);
-    if (alen >= addr_out_sz) return -1;
-    memcpy(addr_out, addr, alen + 1);
-  }
+  alen = strlen(addr);
+  if (alen >= addr_out_sz) return -1;
+  memcpy(addr_out, addr, alen + 1);
   return 0;
 }

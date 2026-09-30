@@ -45,8 +45,8 @@ void ret_send_mc_impl(const channel_t *c, const unsigned char *pkt, size_t len, 
 }
 
 void ret_send_unicast_impl(int fd, const struct sockaddr *to, socklen_t tolen, const unsigned char *pkt, size_t len, int dscp, void *user) {
-  (void)user;
-  send_unicast(fd, to, tolen, pkt, len, dscp, NULL);
+  ret_send_ctx_t *ctx = (ret_send_ctx_t *)user;
+  send_unicast(fd, to, tolen, pkt, len, dscp, &ctx->last_dscp);
 }
 
 void burst_send_cb(const unsigned char *pkt, size_t len, int dscp, void *user) {
@@ -170,6 +170,11 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
   channel_t *c;
   burst_response_t resp;
   rtcp_rams_i_tlvs_t tlvs;
+  burst_t *b;
+  rap_cache_meta_t first;
+  uint8_t msn;
+  uint16_t response;
+  int start_result;
   dst.fd = rc->fd;
   dst.to = rc->from;
   dst.tolen = rc->fromlen;
@@ -206,39 +211,32 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
     return;
   }
 
-  {
-    burst_t *b = burst_new(c, rc->ctx->burst_multiplier, req->has_max_bitrate ? (double)req->max_bitrate_bps : 0.0, rc->ctx->rtx_pt);
-    rap_cache_meta_t first;
-    uint8_t msn;
-    uint16_t response;
-    int start_result;
-
-    if (!b) {
-      send_rams_i(&dst, req->media_ssrc, req->media_ssrc, (uint16_t)BURST_INTERNAL_ERROR, NULL);
-      return;
-    }
-
-    start_result = burst_table_start(rc->ctx->bursts, rc->from, rc->fromlen, rc->fd, b, &msn);
-    if (start_result < 0) {
-      burst_free(b);
-      send_rams_i(&dst, req->media_ssrc, req->media_ssrc, (uint16_t)BURST_TABLE_FULL, NULL);
-      return;
-    }
-    response = start_result ? (uint16_t)BURST_UPDATE : (uint16_t)BURST_ACCEPT;
-
-    if (channel_cache_peek_meta(c, 0, &first)) {
-      tlvs.has_first_packet_seqnum = 1;
-      tlvs.first_packet_seqnum = first.seq;
-    }
-    tlvs.has_earliest_join_time = 1;
-    tlvs.earliest_join_time_ms = 0; /* join immediately, RFC 6285 7.3 TLV 33 zero value */
-    tlvs.has_burst_duration = 1;
-    tlvs.burst_duration_ms = rc->ctx->duration_cap_ms;
-    tlvs.has_max_transmit_bitrate = 1;
-    tlvs.max_transmit_bitrate_bps = (uint64_t)atomic_load_explicit(&b->target_bps, memory_order_relaxed);
-
-    send_rams_i_msn(&dst, req->media_ssrc, req->media_ssrc, msn, response, &tlvs);
+  b = burst_new(c, rc->ctx->burst_multiplier, req->has_max_bitrate ? (double)req->max_bitrate_bps : 0.0, rc->ctx->rtx_pt);
+  if (!b) {
+    send_rams_i(&dst, req->media_ssrc, req->media_ssrc, (uint16_t)BURST_INTERNAL_ERROR, NULL);
+    return;
   }
+
+  start_result = burst_table_start(rc->ctx->bursts, rc->from, rc->fromlen, rc->fd, b, &msn);
+  if (start_result < 0) {
+    burst_free(b);
+    send_rams_i(&dst, req->media_ssrc, req->media_ssrc, (uint16_t)BURST_TABLE_FULL, NULL);
+    return;
+  }
+  response = start_result ? (uint16_t)BURST_UPDATE : (uint16_t)BURST_ACCEPT;
+
+  if (channel_cache_peek_meta(c, 0, &first)) {
+    tlvs.has_first_packet_seqnum = 1;
+    tlvs.first_packet_seqnum = first.seq;
+  }
+  tlvs.has_earliest_join_time = 1;
+  tlvs.earliest_join_time_ms = 0; /* join immediately, RFC 6285 7.3 TLV 33 zero value */
+  tlvs.has_burst_duration = 1;
+  tlvs.burst_duration_ms = rc->ctx->duration_cap_ms;
+  tlvs.has_max_transmit_bitrate = 1;
+  tlvs.max_transmit_bitrate_bps = (uint64_t)atomic_load_explicit(&b->target_bps, memory_order_relaxed);
+
+  send_rams_i_msn(&dst, req->media_ssrc, req->media_ssrc, msn, response, &tlvs);
 }
 
 static void rams_t_cb(const rtcp_rams_t_t *term, void *user) {
@@ -288,8 +286,9 @@ static void dispatch_datagram(dispatch_ctx_t *ctx, channel_t *resolved, const un
   rc.has_sdes = 0;
   rc.resolved = resolved;
   if (ctx->rsi_active)
-    rtcp_parse(pkt, len, NULL, NULL, NULL, NULL, sdes_cb, NULL, &rc);
-  rtcp_parse(pkt, len, ctx->ret ? &nack_cb : NULL, rams_r_cb, NULL, ctx->bursts ? &rams_t_cb : NULL, NULL, ctx->bursts ? &malformed_cb : NULL, &rc);
+    rtcp_parse(pkt, len, &(rtcp_cbs_t){.sdes_cb = sdes_cb, .user = &rc});
+  rtcp_parse(pkt, len, &(rtcp_cbs_t){.nack_cb = ctx->ret ? &nack_cb : NULL, .rams_r_cb = rams_r_cb,
+                                     .rams_t_cb = ctx->bursts ? &rams_t_cb : NULL, .malformed_cb = ctx->bursts ? &malformed_cb : NULL, .user = &rc});
 }
 
 void listen_cb(const unsigned char *pkt, size_t len, int fd, const struct sockaddr *from, socklen_t fromlen, void *user) {

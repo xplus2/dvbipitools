@@ -46,12 +46,32 @@ static void consume(ws_parser_t *p, size_t n) {
   p->len -= n;
 }
 
+static void ws_unmask(uint8_t *dst, const uint8_t *body, const uint8_t *mask, size_t n) {
+  uint32_t m32;
+  uint64_t mword;
+  size_t i = 0;
+  memcpy(&m32, mask, 4);
+  mword = (uint64_t)m32 | ((uint64_t)m32 << 32);
+  for (; i + 8 <= n; i += 8) {
+    uint64_t chunk;
+    memcpy(&chunk, body + i, 8);
+    chunk ^= mword;
+    memcpy(dst + i, &chunk, 8);
+  }
+  for (; i < n; i++) dst[i] = body[i] ^ mask[i % 4];
+}
+
 int ws_parser_next(ws_parser_t *p, int *opcode, const uint8_t **payload, size_t *payload_len) {
   for (;;) {
-    size_t need, hdr, i;
-    int fin, op, masked;
+    size_t need;
+    size_t hdr;
+    size_t i;
+    int fin;
+    int op;
+    int masked;
     uint64_t plen64;
-    const uint8_t *mask, *body;
+    const uint8_t *mask;
+    const uint8_t *body;
     if (p->len < 2) return 0;
     fin = (p->buf[0] & 0x80) != 0;
     op = p->buf[0] & 0x0f;
@@ -77,7 +97,7 @@ int ws_parser_next(ws_parser_t *p, int *opcode, const uint8_t **payload, size_t 
     mask = p->buf + hdr;
     body = p->buf + hdr + 4;
     if (op == WS_OP_CLOSE || op == WS_OP_PING || op == WS_OP_PONG) {
-      for (i = 0; i < (size_t)plen64; i++) p->ctrl_payload[i] = body[i] ^ mask[i % 4];
+      ws_unmask(p->ctrl_payload, body, mask, (size_t)plen64);
       p->ctrl_payload_len = (size_t)plen64;
       *opcode = op;
       *payload = p->ctrl_payload;
@@ -98,7 +118,7 @@ int ws_parser_next(ws_parser_t *p, int *opcode, const uint8_t **payload, size_t 
 
     if (p->msg_len + (size_t)plen64 > WS_MAX_MESSAGE_LEN) return -1;
     if (buf_reserve(&p->msg, &p->msg_cap, p->msg_len + (size_t)plen64)) return -1;
-    for (i = 0; i < (size_t)plen64; i++) p->msg[p->msg_len + i] = body[i] ^ mask[i % 4];
+    ws_unmask(p->msg + p->msg_len, body, mask, (size_t)plen64);
     p->msg_len += (size_t)plen64;
     consume(p, need);
     if (fin) {

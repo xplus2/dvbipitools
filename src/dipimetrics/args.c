@@ -30,9 +30,8 @@ static int basic_auth_parse(const char *val, char *out, size_t outsz) {
 static void print_help(void) {
   printf(
       "usage: %s [options]\n\n"
-      "DVB-IPI headend metrics collector: receives snapshots from dipitvhead,\n"
-      "dipiradiohead, dipisds and dipibcg over a Unix datagram socket, serves\n"
-      "them as Prometheus/OpenMetrics text at GET /metrics\n\n"
+      "DVB-IPI headend metrics collector: receives snapshots from dvbipitools\n"
+      "over a Unix datagram socket and serves them as OpenMetrics at GET /metrics\n\n"
       "options:\n"
       "  -S, --sock <path>        socket for snapshots on (default: %s)\n"
       "  -l, --listen <a>:<p>     HTTP listen address:port (default: %s:%u)\n"

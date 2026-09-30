@@ -16,7 +16,8 @@
 
 struct bitrate_pacer {
   double target_bps;
-  int stuff, burst_limit;
+  int stuff;
+  int burst_limit;
   double start;
   unsigned long long bits_sent;
   double last_overage_log; /* < 0 = never logged */
@@ -36,12 +37,12 @@ bitrate_pacer_t *bitrate_pacer_new(double target_bps, int stuff, int burst_limit
 void bitrate_pacer_free(bitrate_pacer_t *p) { free(p); }
 
 void bitrate_pace(bitrate_pacer_t *p) {
-  double ahead_s;
+  double target_s;
   if (!p || !p->burst_limit || p->target_bps <= 0.0) return;
-  ahead_s = ((double)p->bits_sent - (mono_seconds() - p->start) * p->target_bps) / p->target_bps;
-  if (ahead_s > 0.0) {
-    struct timespec ts = {(time_t)ahead_s, (long)((ahead_s - (time_t)ahead_s) * 1e9)};
-    nanosleep(&ts, NULL);
+  target_s = p->start + (double)p->bits_sent / p->target_bps;
+  if (target_s > mono_seconds()) {
+    struct timespec ts = {(time_t)target_s, (long)((target_s - (time_t)target_s) * 1e9)};
+    clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, NULL);
   }
 }
 

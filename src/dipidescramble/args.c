@@ -19,6 +19,36 @@
 #include "config.h"
 #include "version.h"
 
+#define OPT_INSECURE 1003
+#define OPT_TOKEN_HEADER 1010
+#define OPT_COLOR 1000
+#define OPT_BISS2_SW 1004
+#define OPT_BISS2_ESW 1005
+#define OPT_BISS2_ID 1006
+#define OPT_BISS1_SW 1007
+#define OPT_BISS2_CA_KEY 1008
+#define OPT_ECM_PROFILE 1009
+#define OPT_METRICS 1011
+#define OPT_METRICS_ID 1012
+#define OPT_METRICS_INTERVAL 1013
+#define OPT_METRICS_INSPECT_TS 1029
+#define OPT_METRICS_INSPECT_TS_PIDS 1030
+#define OPT_MAX_SERVICES 1014
+#define OPT_PROFILE 1015
+#define OPT_SRT_PASSPHRASE_IN 1016
+#define OPT_SRT_PBKEYLEN_IN 1017
+#define OPT_SRT_STREAMID_IN 1018
+#define OPT_SRT_PACKETFILTER_IN 1019
+#define OPT_SRT_LATENCY_IN 1020
+#define OPT_SRT_PASSPHRASE 1021
+#define OPT_SRT_PBKEYLEN 1022
+#define OPT_SRT_STREAMID 1023
+#define OPT_SRT_PACKETFILTER 1024
+#define OPT_SRT_LATENCY 1025
+#define OPT_STRIP_LCEVC 1026
+#define OPT_CONFIG_STRICT 1028
+#define OPT_CONFIGTEST 1027
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* [@]<addr>:<port> or [@][<addr6>]:<port>, multicast literal required */
@@ -242,42 +272,42 @@ static const struct option longopts[] = {
   {"serial", required_argument, 0, 's'},
   {"emm-file", required_argument, 0, 'e'},
   {"unicast-emm", required_argument, 0, 'u'},
-  {"insecure", no_argument, 0, 1003},
-  {"token-header", required_argument, 0, 1010},
+  {"insecure", no_argument, 0, OPT_INSECURE},
+  {"token-header", required_argument, 0, OPT_TOKEN_HEADER},
   {"output", required_argument, 0, 'o'},
   {"format", required_argument, 0, 'f'},
   {"pmt-pid", required_argument, 0, 'p'},
   {"iface", required_argument, 0, 'I'},
   {"verbose", no_argument, 0, 'v'},
-  {"color", required_argument, 0, 1000},
-  {"biss2-sw", required_argument, 0, 1004},
-  {"biss2-esw", required_argument, 0, 1005},
-  {"biss2-id", required_argument, 0, 1006},
-  {"biss1-sw", required_argument, 0, 1007},
-  {"biss2-ca-key", required_argument, 0, 1008},
-  {"ecm-profile", required_argument, 0, 1009},
-  {"metrics", required_argument, 0, 1011},
-  {"metrics-id", required_argument, 0, 1012},
-  {"metrics-interval", required_argument, 0, 1013},
-  {"metrics-inspect-ts", required_argument, 0, 1029},
-  {"metrics-inspect-ts-pids", required_argument, 0, 1030},
-  {"max-services", required_argument, 0, 1014},
-  {"profile", required_argument, 0, 1015},
-  {"srt-passphrase-in", required_argument, 0, 1016},
-  {"srt-pbkeylen-in", required_argument, 0, 1017},
-  {"srt-streamid-in", required_argument, 0, 1018},
-  {"srt-packetfilter-in", required_argument, 0, 1019},
-  {"srt-latency-in", required_argument, 0, 1020},
-  {"srt-passphrase", required_argument, 0, 1021},
-  {"srt-pbkeylen", required_argument, 0, 1022},
-  {"srt-streamid", required_argument, 0, 1023},
-  {"srt-packetfilter", required_argument, 0, 1024},
-  {"srt-latency", required_argument, 0, 1025},
-  {"strip-lcevc", no_argument, 0, 1026},
+  {"color", required_argument, 0, OPT_COLOR},
+  {"biss2-sw", required_argument, 0, OPT_BISS2_SW},
+  {"biss2-esw", required_argument, 0, OPT_BISS2_ESW},
+  {"biss2-id", required_argument, 0, OPT_BISS2_ID},
+  {"biss1-sw", required_argument, 0, OPT_BISS1_SW},
+  {"biss2-ca-key", required_argument, 0, OPT_BISS2_CA_KEY},
+  {"ecm-profile", required_argument, 0, OPT_ECM_PROFILE},
+  {"metrics", required_argument, 0, OPT_METRICS},
+  {"metrics-id", required_argument, 0, OPT_METRICS_ID},
+  {"metrics-interval", required_argument, 0, OPT_METRICS_INTERVAL},
+  {"metrics-inspect-ts", required_argument, 0, OPT_METRICS_INSPECT_TS},
+  {"metrics-inspect-ts-pids", required_argument, 0, OPT_METRICS_INSPECT_TS_PIDS},
+  {"max-services", required_argument, 0, OPT_MAX_SERVICES},
+  {"profile", required_argument, 0, OPT_PROFILE},
+  {"srt-passphrase-in", required_argument, 0, OPT_SRT_PASSPHRASE_IN},
+  {"srt-pbkeylen-in", required_argument, 0, OPT_SRT_PBKEYLEN_IN},
+  {"srt-streamid-in", required_argument, 0, OPT_SRT_STREAMID_IN},
+  {"srt-packetfilter-in", required_argument, 0, OPT_SRT_PACKETFILTER_IN},
+  {"srt-latency-in", required_argument, 0, OPT_SRT_LATENCY_IN},
+  {"srt-passphrase", required_argument, 0, OPT_SRT_PASSPHRASE},
+  {"srt-pbkeylen", required_argument, 0, OPT_SRT_PBKEYLEN},
+  {"srt-streamid", required_argument, 0, OPT_SRT_STREAMID},
+  {"srt-packetfilter", required_argument, 0, OPT_SRT_PACKETFILTER},
+  {"srt-latency", required_argument, 0, OPT_SRT_LATENCY},
+  {"strip-lcevc", no_argument, 0, OPT_STRIP_LCEVC},
   {"daemonize", no_argument, 0, 'd'},
   {"config", required_argument, 0, 'c'},
-  {"config-strict", no_argument, 0, 1028},
-  {"configtest", no_argument, 0, 1027},
+  {"config-strict", no_argument, 0, OPT_CONFIG_STRICT},
+  {"configtest", no_argument, 0, OPT_CONFIGTEST},
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
@@ -306,6 +336,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int cli_out = 0;
   args_status_t pst;
   int c;
+  int has_rtmps;
+  int has_rtmp;
+  int n_file;
+  int has_srt_out;
 
   pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
   if (pst != ARGS_OK) return pst;
@@ -335,13 +369,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'u':
         cfg->unicast_emm_uri = optarg;
         break;
-      case 1003:
+      case OPT_INSECURE:
         cfg->insecure_tls = 1;
         break;
-      case 1026:
+      case OPT_STRIP_LCEVC:
         cfg->strip_lcevc = 1;
         break;
-      case 1010:
+      case OPT_TOKEN_HEADER:
         if (dscr_cfg_token_header(cfg, optarg)) {
           argerr("invalid --token-header: %s", optarg);
           return ARGS_ERR;
@@ -382,7 +416,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'd':
         cfg->daemonize = 1;
         break;
-      case 1000:
+      case OPT_COLOR:
         {
           log_color_t v;
           if (log_color_from_string(optarg, &v)) {
@@ -392,59 +426,59 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           cfg->color_mode = v;
         }
         break;
-      case 1004:
+      case OPT_BISS2_SW:
         if (biss_parse_hex16(optarg, cfg->biss2_sw)) {
           argerr("invalid --biss2-sw: %s (32 hex chars)", optarg);
           return ARGS_ERR;
         }
         cfg->biss2_sw_given = 1;
         break;
-      case 1005:
+      case OPT_BISS2_ESW:
         if (biss_parse_hex16(optarg, cfg->biss2_esw)) {
           argerr("invalid --biss2-esw: %s (32 hex chars)", optarg);
           return ARGS_ERR;
         }
         cfg->biss2_esw_given = 1;
         break;
-      case 1006:
+      case OPT_BISS2_ID:
         if (biss_parse_hex16(optarg, cfg->biss2_id)) {
           argerr("invalid --biss2-id: %s (32 hex chars)", optarg);
           return ARGS_ERR;
         }
         cfg->biss2_id_given = 1;
         break;
-      case 1007:
+      case OPT_BISS1_SW:
         if (biss1_parse_sw(optarg, cfg->biss1_sw)) {
           argerr("invalid --biss1-sw: %s (12 hex chars)", optarg);
           return ARGS_ERR;
         }
         cfg->biss1_sw_given = 1;
         break;
-      case 1008:
+      case OPT_BISS2_CA_KEY:
         cfg->biss2_ca_key_path = optarg;
         break;
-      case 1009:
+      case OPT_ECM_PROFILE:
         if (ecm_profile_parse(optarg, &cfg->ecm_profile) != 0 || ecm_profile_validate(&cfg->ecm_profile) != 0) {
           argerr("invalid --ecm-profile: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1011:
+      case OPT_METRICS:
         cfg->metrics_sock = optarg;
         break;
-      case 1012:
+      case OPT_METRICS_ID:
         cfg->metrics_id = optarg;
         break;
-      case 1013:
+      case OPT_METRICS_INTERVAL:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
-      case 1029:
+      case OPT_METRICS_INSPECT_TS:
         if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
         break;
-      case 1030:
+      case OPT_METRICS_INSPECT_TS_PIDS:
         if (argutil_metrics_known_pids_opt(TOOL_NAME, optarg, cfg->metrics_known_pids, &cfg->metrics_n_known_pids)) return ARGS_ERR;
         break;
-      case 1014: {
+      case OPT_MAX_SERVICES: {
         unsigned v;
         if (argutil_uint_range(optarg, 1, DEVICE_MAX_SERVICES_CEILING, &v)) {
           argerr("invalid --max-services: %s (1..%u)", optarg, DEVICE_MAX_SERVICES_CEILING);
@@ -453,17 +487,17 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->max_services = v;
         break;
       }
-      case 1015:
+      case OPT_PROFILE:
         if (dscr_cfg_profile(cfg, optarg)) {
           argerr("invalid --profile: %s (simple|main)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1016:
+      case OPT_SRT_PASSPHRASE_IN:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, optarg, "--srt-passphrase-in"))
           return ARGS_ERR;
         break;
-      case 1017: {
+      case OPT_SRT_PBKEYLEN_IN: {
         char *end;
         unsigned long v = strtoul(optarg, &end, 10);
         if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
@@ -473,15 +507,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->srt_pbkeylen_in = (int)v;
         break;
       }
-      case 1018:
+      case OPT_SRT_STREAMID_IN:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, optarg, "--srt-streamid-in"))
           return ARGS_ERR;
         break;
-      case 1019:
+      case OPT_SRT_PACKETFILTER_IN:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, optarg, "--srt-packetfilter-in"))
           return ARGS_ERR;
         break;
-      case 1020: {
+      case OPT_SRT_LATENCY_IN: {
         unsigned v;
         if (argutil_uint_range(optarg, 1, 60000, &v)) {
           argerr("invalid --srt-latency-in: %s (1..60000 ms)", optarg);
@@ -490,11 +524,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->srt_latency_in_ms = v;
         break;
       }
-      case 1021:
+      case OPT_SRT_PASSPHRASE:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg, "--srt-passphrase"))
           return ARGS_ERR;
         break;
-      case 1022: {
+      case OPT_SRT_PBKEYLEN: {
         char *end;
         unsigned long v = strtoul(optarg, &end, 10);
         if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
@@ -504,15 +538,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->srt_pbkeylen = (int)v;
         break;
       }
-      case 1023:
+      case OPT_SRT_STREAMID:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid, sizeof cfg->srt_streamid, optarg, "--srt-streamid"))
           return ARGS_ERR;
         break;
-      case 1024:
+      case OPT_SRT_PACKETFILTER:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg, "--srt-packetfilter"))
           return ARGS_ERR;
         break;
-      case 1025: {
+      case OPT_SRT_LATENCY: {
         unsigned v;
         if (argutil_uint_range(optarg, 1, 60000, &v)) {
           argerr("invalid --srt-latency: %s (1..60000 ms)", optarg);
@@ -522,8 +556,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case 'c':
-      case 1028:
-      case 1027:
+      case OPT_CONFIG_STRICT:
+      case OPT_CONFIGTEST:
         break;
       case 'h':
         print_help();
@@ -544,32 +578,29 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -o output");
     return ARGS_ERR;
   }
-  {
-    int has_rtmps = 0;
-    int has_rtmp = 0;
-    int n_file = 0;
-    for (int i = 0; i < cfg->n_out; i++) {
-      if (cfg->out[i].kind == OUT_FILE) n_file++;
-      if (cfg->out[i].kind == OUT_RTMPS) has_rtmps = 1;
-      if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS) has_rtmp = 1;
+  has_rtmps = 0;
+  has_rtmp = 0;
+  n_file = 0;
+  for (int i = 0; i < cfg->n_out; i++) {
+    switch (cfg->out[i].kind) {
+      case OUT_FILE: n_file++; break;
+      case OUT_RTMPS: has_rtmps = 1; has_rtmp = 1; break;
+      case OUT_RTMP: has_rtmp = 1; break;
+      case OUT_SRT: break;
     }
-    if ((cfg->format == FMT_MKV || cfg->format == FMT_MKA) && n_file != 1) {
-      argerr("-f mkv/mka requires exactly one -o file target (plus optional rtmp(s) targets)");
-      return ARGS_ERR;
-    }
-    if (cfg->insecure_tls && !has_rtmps && !cfg->unicast_emm_uri) log_line(TOOL_NAME ": --insecure needs -u or -o rtmps://");
-    if (cfg->strip_lcevc && cfg->format == FMT_TS && !has_rtmp) log_line(TOOL_NAME ": --strip-lcevc has no effect, no -f mkv/mka or -o rtmp(s):// target");
   }
+  if ((cfg->format == FMT_MKV || cfg->format == FMT_MKA) && n_file != 1) {
+    argerr("-f mkv/mka requires exactly one -o file target (plus optional rtmp(s) targets)");
+    return ARGS_ERR;
+  }
+  if (cfg->insecure_tls && !has_rtmps && !cfg->unicast_emm_uri) log_line(TOOL_NAME ": --insecure needs -u or -o rtmps://");
+  if (cfg->strip_lcevc && cfg->format == FMT_TS && !has_rtmp) log_line(TOOL_NAME ": --strip-lcevc has no effect, no -f mkv/mka or -o rtmp(s):// target");
   if (cfg->biss2_sw_given && cfg->biss2_esw_given) {
     argerr("--biss2-sw and --biss2-esw are mutually exclusive");
     return ARGS_ERR;
   }
-  if (cfg->biss2_esw_given && !cfg->biss2_id_given) {
-    argerr("--biss2-esw requires --biss2-id");
-    return ARGS_ERR;
-  }
-  if (cfg->biss2_id_given && !cfg->biss2_esw_given) {
-    argerr("--biss2-id requires --biss2-esw");
+  if (cfg->biss2_esw_given != cfg->biss2_id_given) {
+    argerr("--biss2-esw and --biss2-id must be given together");
     return ARGS_ERR;
   }
   if (cfg->biss1_sw_given && (cfg->biss2_sw_given || cfg->biss2_esw_given)) {
@@ -596,11 +627,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("--srt-pbkeylen requires --srt-passphrase");
     return ARGS_ERR;
   }
-  {
-    int has_srt_out = 0;
-    for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_SRT) has_srt_out = 1;
-    if (!has_srt_out && (cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
-      log_line(TOOL_NAME ": --srt-* needs -o srt://");
-  }
+  has_srt_out = 0;
+  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_SRT) has_srt_out = 1;
+  if (!has_srt_out && (cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
+    log_line(TOOL_NAME ": --srt-* needs -o srt://");
   return ARGS_OK;
 }

@@ -8,6 +8,7 @@
 
 /* channels.c */
 void wait_readers_quiescent(void);
+void channel_list_build_index(channel_list_t *l);
 
 /* build.c */
 void build_from_m3u(channel_list_t *l, const char *path, int insecure_tls);
@@ -15,6 +16,7 @@ void build_from_xspf(channel_list_t *l, const char *path, int insecure_tls);
 void build_from_csv(channel_list_t *l, const char *path, int insecure_tls);
 void build_from_xml(channel_list_t *l, const char *path);
 void build_from_http(channel_list_t *l, const char *url, int insecure_tls);
+void build_from_mcast(channel_list_t *l, const char *uri);
 void build_from_sds(channel_list_t *l, const char *addrport, const char *iface, double timeout_s);
 void channels_join_all(channel_list_t *l, const config_t *cfg);
 

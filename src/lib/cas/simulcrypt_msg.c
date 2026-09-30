@@ -131,15 +131,26 @@ void simulcrypt_reader_init(simulcrypt_reader_t *r) {
 }
 
 int simulcrypt_reader_poll(simulcrypt_reader_t *r, int fd, int timeout_ms, simulcrypt_hdr_t *hdr, const unsigned char **payload) {
-  struct pollfd pfd;
-  int pret;
+  struct pollfd pfds[2];
+  int pret, npfd, wake_fd;
 
-  pfd.fd = fd;
-  pfd.events = POLLIN;
-  pret = poll(&pfd, 1, timeout_ms);
+  pfds[0].fd = fd;
+  pfds[0].events = POLLIN;
+  pfds[0].revents = 0;
+  npfd = 1;
+  wake_fd = signal_wake_fd();
+  if (wake_fd >= 0) {
+    pfds[1].fd = wake_fd;
+    pfds[1].events = POLLIN;
+    pfds[1].revents = 0;
+    npfd = 2;
+  }
+  pret = poll(pfds, (nfds_t)npfd, timeout_ms);
   if (pret < 0)
     return (errno == EINTR) ? 0 : -1;
   if (pret == 0)
+    return 0;
+  if (!(pfds[0].revents & POLLIN))
     return 0;
 
   for (;;) {

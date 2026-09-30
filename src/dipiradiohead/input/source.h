@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/hls/live.h"
 #include "lib/net/netconnect.h"
 #include "lib/tsinspect/inspect.h"
 
@@ -24,12 +25,7 @@ typedef struct {
 
 typedef struct source source_t;
 
-typedef struct {
-  tsinspect_t **slot;
-  metrics_inspect_ts_t level;
-  const unsigned *known_pids;
-  unsigned n_known_pids;
-} source_insp_t;
+typedef hls_insp_t source_insp_t;
 
 typedef void (*source_meta_cb)(void *ctx, const char *artist, const char *title);
 

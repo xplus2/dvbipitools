@@ -14,7 +14,7 @@ void snapshot_ll_playlist(const hls_snapshot_t *s, ll_playlist_snap_t *snap) {
   snap->hb_ms = (int)(s->part_target * 3000.0);
   snap->seg_count = s->count;
   for (i = 0; i < s->count; i++) {
-    const hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
+    const hls_seg_t *seg = &s->ring->segs[(s->head + i) % HLS_MAX_SEGS];
     ll_seg_snap_t *ss = &snap->segs[i];
     ss->seq = seg->seq;
     ss->duration = seg->duration;
@@ -99,7 +99,7 @@ int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsi
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
   if (!hls_resolve_ll(ctx, filter, pmt_pid, lcevc, filename, if_none_match, &r)) return 0;
   if (r.status == 404) {
-    queue_status(c, "404 Not Found", keep_alive);
+    respond_status(c, "404 Not Found", keep_alive);
     return 1;
   }
   if (r.status == 304) {
@@ -107,7 +107,7 @@ int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsi
     return 1;
   }
   if (r.kind == HLS_RESOLVE_PLAYLIST) {
-    queue_m3u8(c, (const char *)r.body, r.body_len, is_head, keep_alive, cors_hdr);
+    queue_text_resp(c, "application/vnd.apple.mpegurl", (const char *)r.body, r.body_len, is_head, keep_alive, cors_hdr);
   } else {
     queue_segment(c, r.body, r.body_len, r.content_type, r.etag, is_head, keep_alive, cors_hdr);
   }

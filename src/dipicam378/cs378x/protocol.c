@@ -61,8 +61,9 @@ static int send_all(int fd, const unsigned char *buf, size_t n, atomic_int *stop
 /* patches CRC over body[20:20+crc_len) into body[4:8), AES-encrypts body[0:total),
    frames as conn_ucrc+body, sends. what_for names it in error logs */
 static void finalize_and_send(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4],
-                               unsigned char *body, size_t total, size_t crc_len, const char *what_for) {
+  unsigned char *body, size_t total, size_t crc_len, const char *what_for) {
   uint32_t crc = cs378x_crc32(body + 20, crc_len);
+  unsigned char frame[4 + CS378X_BUF_CAP];
   body[4] = (unsigned char)(crc >> 24);
   body[5] = (unsigned char)(crc >> 16);
   body[6] = (unsigned char)(crc >> 8);
@@ -72,13 +73,10 @@ static void finalize_and_send(cs378x_server_t *s, int fd, const unsigned char co
     log_line(TOOL_NAME ": encrypt failed building %s", what_for);
     return;
   }
-  {
-    unsigned char frame[4 + CS378X_BUF_CAP];
-    memcpy(frame, conn_ucrc, 4);
-    memcpy(frame + 4, body, total);
-    if (send_all(fd, frame, 4 + total, &s->stop) < 0)
-      log_line(TOOL_NAME ": send %s failed: %s", what_for, strerror(errno));
-  }
+  memcpy(frame, conn_ucrc, 4);
+  memcpy(frame + 4, body, total);
+  if (send_all(fd, frame, 4 + total, &s->stop) < 0)
+    log_line(TOOL_NAME ": send %s failed: %s", what_for, strerror(errno));
 }
 
 /* body decrypted in place, mutated into CMD01 answer. conn_ucrc echoed verbatim */

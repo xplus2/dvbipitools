@@ -21,6 +21,7 @@ is one executable containing every tool in this project
 \fBdipifccret\fR, \fBdipimetrics\fR, \fBdipiradiohead\fR, \fBdipirec\fR,
 \fBdipirist\fR, \fBdipiscan\fR, \fBdipisds\fR, \fBdipisrt\fR,
 \fBdipitvhead\fR, \fBdipixmltv\fR, \fBdipixy\fR), reached one of three ways:
+
 .TP
 .B by full tool name
 \fBdvbipitools\fR \fItool\fR [\fIargs\fR ...], e.g. \fBdvbipitools dipiscan \-h\fR.
@@ -46,7 +47,7 @@ see that tool's own manual page.
 .B dvbipitools
 itself only adds the options described below.
 .PP
-Not all 15 tools are necessarily present: \fBdipicam378\fR and
+Not all tools are necessarily present: \fBdipicam378\fR and
 \fBdipidescramble\fR require OpenSSL, \fBdipirist\fR requires librist,
 \fBdipisrt\fR requires libsrt, each built in only if that dependency was
 found (matching the standalone build).
@@ -112,19 +113,6 @@ Symlink every applet at \fI/usr/local/bin\fR.
 .TP
 .B dvbipitools \-\-install \-h /opt/dipi
 (hardlinks)
-.SH EXIT STATUS
-.TP
-.B 0
-Success, or bare invocation with no arguments (applet list printed).
-.TP
-.B 1
-\fB\-\-install\fR failed (bad \fIDIR\fR, or a link could not be created).
-.TP
-.B 2
-Unrecognized applet name or subcommand, or bad \fB\-\-list\fR/\fB\-\-install\fR usage.
-.TP
-.B other
-Whatever the dispatched tool itself returns.
 .SH SEE ALSO
 .BR dipibcg (1),
 .BR dipibim (1),

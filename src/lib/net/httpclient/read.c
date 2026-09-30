@@ -6,17 +6,18 @@
 #include <unistd.h>
 
 #include "../../helper/log.h"
+#include "../../helper/signal.h"
 #include "priv.h"
 
 static ssize_t body_read_raw(struct http *h, void *buf, size_t cap, net_err_reason_t *reason_out) {
+  ssize_t n;
   if (!h->chunked && h->has_content_length) {
     size_t remaining = h->content_length - h->body_consumed;
     if (remaining == 0) {
       if (reason_out) *reason_out = NET_ERR_EOF;
       return -1;
     }
-    if (cap > remaining)
-      cap = remaining;
+    if (cap > remaining) cap = remaining;
   }
   if (h->hpos < h->hlen) {
     size_t k = h->hlen - h->hpos;
@@ -38,11 +39,9 @@ static ssize_t body_read_raw(struct http *h, void *buf, size_t cap, net_err_reas
     h->body_consumed += k;
     return (ssize_t)k;
   }
-  {
-    ssize_t n = raw_recv(h, buf, cap, reason_out);
-    if (n > 0) h->body_consumed += (size_t)n;
-    return n;
-  }
+  n = raw_recv(h, buf, cap, reason_out);
+  if (n > 0) h->body_consumed += (size_t)n;
+  return n;
 }
 
 static ssize_t http_read_chunked(struct http *h, void *buf, size_t cap, net_err_reason_t *reason_out) {
@@ -81,4 +80,15 @@ void http_close(http_t *h) {
   if (h->tls) tls_close(h->tls);
   else if (h->fd >= 0) close(h->fd);
   free(h);
+}
+
+http_t *http_take_reuse(http_t **reuse, double *established_at, double max_age_s) {
+  http_t *h = *reuse;
+  *reuse = NULL;
+  if (h && mono_seconds() - *established_at >= max_age_s) {
+    http_close(h);
+    h = NULL;
+  }
+  if (!h) *established_at = mono_seconds();
+  return h;
 }

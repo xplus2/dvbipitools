@@ -1,54 +1,20 @@
 .TH DIPIXY 1 "2026-08-28" "dvbipitools" "dvbipitools Manual"
 .SH NAME
-dipixy \- serve DVB-IPI multicast streams over HTTP
+dipixy \- serve IPTV/radio streams over HTTP(S)
 .SH SYNOPSIS
 .B dipixy
 [\fB\-l\fR \fIaddr\fR:\fIport\fR] [\fB\-i\fR \fIsource\fR ...] [\fIoptions\fR]
 .SH DESCRIPTION
+When parts of
+.B ETSI TS 102 905 (DVB-HN)
+meet udpxy and lean towards DVB-I,
 .B dipixy
-is an amped up version of
-.BR udpxy .
-Not a fork, more like a tribute. On steroids. It can also act as a
-bridge between DVB-IPI and the more modern DVB-I-ish world.
+is the result.
 .PP
-While
-.B http://\fIaddress\fR:\fIport\fR/\fIcmd\fR/[\fIsrc_address\fR@]\fImgroup_address\fR<sep>\fImgroup_port\fR/
-still works like at
-.BR udpxy ,
-a few things were added:
-.RS
-.IP \(bu 2
-Protocols: IPv6, HTTP/2, HTTP/3, HTTPS
-.IP \(bu 2
-Ingress: MPTS demux, RIST, SRT, stdin
-.IP \(bu 2
-Egress: HLS (TS and fMP4), Low-Latency HLS, MPEG-DASH (regular and CMAF Low-Latency), audio raw demux
-.IP \(bu 2
-Operational: OpenMetrics
-.IP \(bu 2
-Convenience: a "URL Builder", PID filters, and playlists (M3U, XSPF,
-CSV, TVA XML, SD&S client \- see
-.BR dipiscan (1)
-and
-.BR dipisds (1))
-.RE
+It takes various input streams and playlists, allows playback using HLS (ts and fMP4), LL-HLS,
+MPEG-DASH (regular and CMAF Low-Latency), progressive HTTP/TS and progressive MP4 over HTTP/1.1, HTTP/2 and HTTP/3.
 .PP
-What behaves differently:
-.B rtp
-vs
-.B udp
-as
-.I cmd
-is strict and not just about probe skipping.
-.PP
-What's lost, compared to
-.BR udpxy :
-udpxrec (
-.BR dipirec (1)
-can serve a similar purpose); it's not lightweight; no other
-character than
-.B :
-separates \fImcast_group\fR:\fIport\fR; and its environment variables.
+Optionally, it's also a DLNA MediaServer for your home network to consume streams without an additional Set-Top-Box.
 .SH INPUT
 .B \-i
 is repeatable and dipixy dispatches each occurrence by the form of its
@@ -68,8 +34,14 @@ At most one.
 .RI sds:// addr : port
 \- live SD&S/DVBSTP discovery.
 .IP \(bu 2
+.RI rtp:// addr : port
+\- direct multicast, RTP-wrapped.
+.IP \(bu 2
+.RI udp:// addr : port
+\- direct multicast, plain TS.
+.IP \(bu 2
 .RI http[s]:// url
-\- single TS push URI.
+\- TS, HLS, LL-HLS, DASH or LL-DASH, auto-detected.
 .IP \(bu 2
 .BI *. m3u\fR/\fB.m3u8
 \- M3U playlist.
@@ -84,15 +56,19 @@ At most one.
 \- SD&S BroadcastDiscovery TVA XML.
 .RE
 .PP
+.BR rtp:// " or " udp://
+need a multicast group address.
+.PP
 M3U, XSPF, and CSV are not strictly limited to the output of
 .BR dipiscan (1).
 .PP
 Every
 .BR sds:// ,
+.BR rtp:// " and " udp:// ,
 playlist, and
 .B http[s]://
 source shares one index space, numbered in the order it was given on
-the command line, so the first of these three kinds is list 1, the
+the command line, so the first of these kinds is list 1, the
 2nd is list 2, and so on.
 .PP
 .BR rist://@ ,
@@ -152,6 +128,11 @@ Close a connection idle this long, in seconds. Default: 0 (off).
 .TP
 .B \-\-capture\-ring\-size \fIKiB\fR
 Per\-source ingress ring buffer. Default: 4096.
+.TP
+.B \-\-ts\-startup\-timeout \fIseconds\fR
+.BR ts ", " spts ", or " rawaudio
+request whose source hasn't produced a packet yet: wait this long for
+one before returning an error (0=off).
 .TP
 .BR \-i ", " \-\-input " \fIsource\fR"
 Add an input, repeatable, dispatched by form; see INPUT above. List
@@ -610,7 +591,7 @@ ordinals. Default: all.
 .br
 .B ?keep_multicast
 \- an
-.BR rtp:// / udp://
+.BR rtp:// " or " udp://
 channel is listed by its raw multicast URI instead of a play\-path.
 .br
 .B ?plain
@@ -748,38 +729,6 @@ serving its last-known-good list rather than going empty.
 .TP
 .B SIGUSR1
 Reload the TLS certificate.
-.SH BUGS
-.RS
-.IP \(bu 2
-Opening any form of HLS or DASH streams on a "cold" ingress stream
-means that there are no pre-produced segments available. This means
-that playback cannot start immediately.
-.IP \(bu 2
-RIST and SRT don't support bonding in this tool. You can use
-.BR dipirist (1)
-or
-.BR dipisrt (1)
-with
-.B \-i \-
-as a work-around.
-.IP \(bu 2
-The multicast client does not support FEC.
-.IP \(bu 2
-Radio. DVB-IPI installations wildly differ on how they implemented
-this. Some deliver an SPTS with one Audio PES. Others go full OTT,
-deliver raw streams or pack them into an MPTS until it's the size of
-their smallest TV profile. Similar for client support. VLC or Kodi
-will happily play a DLNA radio playlist, Samsung or LG most probably
-won't \- or maybe they do.
-.IP \(bu 2
-No transcoding here. While bursts won't be a problem, your DVB-IPI
-provider dislikes them as much as you do, heavy use of B-frames or a
-long GoP will collide with short segment sizes in HLS or DASH.
-.IP \(bu 2
-M3U and XSPF input playlists can contain
-.BR rtp:// ", " udp:// ", " srt://
-or HTTP(S) TS Push, not RIST, HLS or DASH.
-.RE
 .SH EXAMPLES
 .TP
 .B dipixy \-l 0.0.0.0:9080
@@ -803,6 +752,12 @@ Direct routes, no channel list needed:
 .TP
 .B dipixy \-i sds://239.19.75.1:3937
 Live SD&S discovery as list 1.
+.TP
+.B dipixy \-i rtp://239.2.24.1:8208 \-n news
+Direct multicast as a named list, no SD&S/playlist involved:
+.RS
+.B vlc http://localhost:9080/news/item/1/hls
+.RE
 .TP
 .B dipixy \-l 0.0.0.0:9080 \-i channels.m3u
 A static M3U channel list, custom port.
@@ -844,13 +799,6 @@ Named inputs, addressed by name instead of index:
 .TP
 .B dipixy \-l 0.0.0.0:9080 \-i channels.m3u \-\-enable\-dlna \-\-dlna\-host 192.0.2.10:9080
 DLNA MediaServer, browsable by any UPnP renderer on the LAN.
-.SH EXIT STATUS
-.TP
-.B 0
-Success.
-.TP
-.B nonzero
-Argument error, or listen-socket setup failure.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipixy.yaml

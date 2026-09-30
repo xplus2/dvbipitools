@@ -23,6 +23,42 @@
 #include "filter/ts.h"
 #include "version.h"
 
+#define OPT_SUB_LEAD 1000
+#define OPT_COLOR 1001
+#define OPT_RET 1002
+#define OPT_NO_RET_MC 1003
+#define OPT_RET_MC_PORT 1004
+#define OPT_RET_PT 1005
+#define OPT_RET_WAIT 1006
+#define OPT_STRIP 1007
+#define OPT_PACE 1008
+#define OPT_TTL 1010
+#define OPT_AL_FEC 1030
+#define OPT_AL_FEC_PORT 1031
+#define OPT_PROFILE 1011
+#define OPT_SECRET 1012
+#define OPT_CNAME 1013
+#define OPT_BUFFER 1014
+#define OPT_INSECURE 1015
+#define OPT_METRICS 1016
+#define OPT_METRICS_ID 1017
+#define OPT_METRICS_INTERVAL 1018
+#define OPT_METRICS_INSPECT_TS 1034
+#define OPT_METRICS_INSPECT_TS_PIDS 1035
+#define OPT_PROFILE_IN 1019
+#define OPT_SRT_PASSPHRASE_IN 1020
+#define OPT_SRT_PBKEYLEN_IN 1021
+#define OPT_SRT_STREAMID_IN 1022
+#define OPT_SRT_PACKETFILTER_IN 1023
+#define OPT_SRT_LATENCY_IN 1024
+#define OPT_SRT_PASSPHRASE 1025
+#define OPT_SRT_PBKEYLEN 1026
+#define OPT_SRT_STREAMID 1027
+#define OPT_SRT_PACKETFILTER 1028
+#define OPT_SRT_LATENCY 1029
+#define OPT_CONFIG_STRICT 1033
+#define OPT_CONFIGTEST 1032
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* rest: [@]addr:port, multicast literal required */
@@ -101,6 +137,7 @@ void source_describe(const source_t *s, char *buf, size_t n) {
 }
 
 static int parse_out_uri(const char *uri, out_target_t *o) {
+  int r;
   memset(o, 0, sizeof *o);
   if (strncmp(uri, "rtp://", 6) == 0) {
     o->kind = OUT_RTP;
@@ -122,12 +159,10 @@ static int parse_out_uri(const char *uri, out_target_t *o) {
     o->kind = OUT_SRT;
     return 0;
   }
-  {
-    int r = uriparse_rtmp_or_file(uri, o->rtmp_url, sizeof o->rtmp_url, o->file_path, sizeof o->file_path);
-    if (r < 0) return -1;
-    o->kind = r == 2 ? OUT_RTMPS : r == 1 ? OUT_RTMP : OUT_FILE;
-    return 0;
-  }
+  r = uriparse_rtmp_or_file(uri, o->rtmp_url, sizeof o->rtmp_url, o->file_path, sizeof o->file_path);
+  if (r < 0) return -1;
+  o->kind = r == 2 ? OUT_RTMPS : r == 1 ? OUT_RTMP : OUT_FILE;
+  return 0;
 }
 
 void out_describe(const out_target_t *o, char *buf, size_t n) {
@@ -390,7 +425,7 @@ int rec_cfg_profile(config_t *cfg, const char *s, int is_in) {
 static void print_help(void) {
   printf(
     "usage: %s -i <uri> -o <target> [options]\n\n"
-    "record a DVB-IPI stream to a file or stdout\n\n"
+    "record or replay a transport stream from/to a file, SRT, RIST or stdin/out\n\n"
     "sources (-i):\n"
     "  rtp://@<group>:<port>        RTP wrapped TS multicast (@ optional)\n"
     "  udp://@<group>:<port>        raw TS multicast (@ optional)\n"
@@ -407,33 +442,33 @@ static void print_help(void) {
     "  udp://@<group>:<port>        raw multicast (-f raw|ts only)\n"
     "  rist://<host>:<port>[?q]     RIST sender, single peer (-f raw|ts only)\n"
     "  srt://<host>:<port>          SRT sender, single peer (-f raw|ts only)\n"
-    "  rtmp(s)://<host>[:port]/<app>/<key>  RTMP(S) publish, H.264/HEVC+(E-)AC-3/AAC\n\n"
+    "  rtmp(s)://<host>[:port]/<app>/<key>  RTMP(S) publish\n\n"
     "options:\n"
-    "  -o, --out <target>           output, repeatable: file, \"-\" for stdout, or\n"
-    "                               rtp://udp://rist://srt://rtmp://rtmps://\n"
-    "  -i, --in <uri>               input source\n"
-    "  -a, --audio <track>          audio track from 1, or \"all\" (default: all)\n"
-    "  -f, --format <format>        raw|ts|mkv|mka|mp4|m4a (default: from -o suffix,\n"
-    "                               else ts; mkv/mka/mp4/m4a rejected with a network\n"
-    "                               -o, raw rejected on -o rtmp://rtmps://\n"
-    "  -p, --pmt-pid <pid|all>      MPTS source only: pin one PMT pid, or record\n"
-    "                               every program (\"all\"; rejected with -f mkv/mp4).\n"
-    "                               fails on SPTS.\n"
-    "  -s, --subtitles <mode>       strip|keep|srt. srt on mkv/mka/mp4/m4a only\n"
-    "                               (default: keep) - this \"srt\" means SubRip\n"
-    "  -t, --time <duration>        e.g. 90, 5m, 5m30s, 1h3m20s, 01:20:03, 10:20\n"
-    "  -I, --iface <iface>          interface name for -i's multicast join\n"
-    "  -O, --out-iface <iface>      interface for -o rtp://udp://'s multicast send\n"
-    "      --ttl <n>                multicast TTL for -o rtp://udp:// (default: kernel, 1)\n"
-    "      --al-fec <L>:<D>         Annex E Layer 1 FEC (SMPTE 2022-1), -i/-o rtp:// only,\n"
-    "                               L*D<=400, L<=40\n"
-    "      --al-fec-port <port>     AL-FEC stream UDP port, requires --al-fec\n"
-    "      --profile <p>            simple|main. -o rist:// only (default: simple)\n"
-    "      --secret <psk>           -o rist:// pre-shared key. requires --profile main\n"
-    "      --cname <name>           -o rist:// cname (default: library default)\n"
-    "      --buffer <ms>            -o rist:// recovery buffer (default: library default)\n"
-    "      --profile-in <p>         simple|main; -i rist:// only (default: simple)\n"
-    "      --srt-passphrase-in <pw> passphrase for -i srt://, 10..79 chars\n"
+    "  -o, --out <target>             output, repeatable: file, \"-\" for stdout, or\n"
+    "                                 rtp://udp://rist://srt://rtmp://rtmps://\n"
+    "  -i, --in <uri>                 input source\n"
+    "  -a, --audio <track>            audio track from 1, or \"all\" (default: all)\n"
+    "  -f, --format <format>          raw|ts|mkv|mka|mp4|m4a (default: from -o suffix,\n"
+    "                                 else ts; mkv/mka/mp4/m4a rejected with a network\n"
+    "                                 -o, raw rejected on -o rtmp://rtmps://\n"
+    "  -p, --pmt-pid <pid|all>        MPTS source only: pin one PMT pid, or record\n"
+    "                                 every program (\"all\"; rejected with -f mkv/mp4).\n"
+    "                                 fails on SPTS.\n"
+    "  -s, --subtitles <mode>         strip|keep|srt. srt on mkv/mka/mp4/m4a only\n"
+    "                                 (default: keep) - this \"srt\" means SubRip\n"
+    "  -t, --time <duration>          e.g. 90, 5m, 5m30s, 1h3m20s, 01:20:03, 10:20\n"
+    "  -I, --iface <iface>            interface name for -i's multicast join\n"
+    "  -O, --out-iface <iface>        interface for -o rtp://udp://'s multicast send\n"
+    "      --ttl <n>                  multicast TTL for -o rtp://udp:// (default: kernel, 1)\n"
+    "      --al-fec <L>:<D>           Annex E Layer 1 FEC (SMPTE 2022-1), -i/-o rtp:// only,\n"
+    "                                 L*D<=400, L<=40\n"
+    "      --al-fec-port <port>       AL-FEC stream UDP port, requires --al-fec\n"
+    "      --profile <p>              simple|main. -o rist:// only (default: simple)\n"
+    "      --secret <psk>             -o rist:// pre-shared key. requires --profile main\n"
+    "      --cname <name>             -o rist:// cname (default: library default)\n"
+    "      --buffer <ms>              -o rist:// recovery buffer (default: library default)\n"
+    "      --profile-in <p>           simple|main; -i rist:// only (default: simple)\n"
+    "      --srt-passphrase-in <pw>   passphrase for -i srt://, 10..79 chars\n"
     "      --srt-pbkeylen-in <n>      AES key length for --srt-passphrase-in: 16|24|32\n"
     "      --srt-streamid-in <id>     SRTO_STREAMID for -i srt://\n"
     "      --srt-packetfilter-in <c>  SRTO_PACKETFILTER for -i srt://\n"
@@ -470,9 +505,12 @@ static void print_help(void) {
     "  raw   unwrap RTP only, transport stream otherwise untouched\n"
     "  ts    single program transport stream; drops stuffing, NIT, EIT,\n"
     "        AIT and CA/EMM, keeps SDT, rewrites PAT/PMT\n"
-    "  mkv   video: H.264/HEVC\n"
+    "  mkv   video: H.264(AVC)/H.265(HEVC)/H.266(VVC)\n"
     "        audio: MP2/MP3/AC-3/E-AC-3/AAC/AAC-LATM/Opus/DTS/DTS-HD/DTS-HD-MA/TrueHD/AC-4\n"
-    "  mka   same, audio only\n\n"
+    "  mka   same, audio only\n"
+    "  mp4   video: H.264(AVC)/H.265(HEVC)/H.266(VVC)\n"
+    "        audio: MP2/MP3/AC-3/E-AC-3/AAC/AAC-LATM/Opus/DTS/DTS-HD/DTS-HD-MA/TrueHD/AC-4\n\n"
+    "  m4a   same, audio only\n\n"
     "examples:\n"
     "  %s -i rtp://@239.19.75.1:8700 -o show.ts\n"
     "  %s -i rtp://@239.19.75.1:8700 -o show.mkv -s srt -t 1h30m -v\n"
@@ -495,43 +533,43 @@ static const struct option longopts[] = {
     {"time", required_argument, 0, 't'},
     {"iface", required_argument, 0, 'I'},
     {"verbose", no_argument, 0, 'v'},
-    {"sub-lead", required_argument, 0, 1000},
-    {"color", required_argument, 0, 1001},
-    {"ret", required_argument, 0, 1002},
-    {"no-ret-mc", no_argument, 0, 1003},
-    {"ret-mc-port", required_argument, 0, 1004},
-    {"ret-pt", required_argument, 0, 1005},
-    {"ret-wait", required_argument, 0, 1006},
-    {"strip", required_argument, 0, 1007},
-    {"pace", no_argument, 0, 1008},
+    {"sub-lead", required_argument, 0, OPT_SUB_LEAD},
+    {"color", required_argument, 0, OPT_COLOR},
+    {"ret", required_argument, 0, OPT_RET},
+    {"no-ret-mc", no_argument, 0, OPT_NO_RET_MC},
+    {"ret-mc-port", required_argument, 0, OPT_RET_MC_PORT},
+    {"ret-pt", required_argument, 0, OPT_RET_PT},
+    {"ret-wait", required_argument, 0, OPT_RET_WAIT},
+    {"strip", required_argument, 0, OPT_STRIP},
+    {"pace", no_argument, 0, OPT_PACE},
     {"out-iface", required_argument, 0, 'O'},
-    {"ttl", required_argument, 0, 1010},
-    {"al-fec", required_argument, 0, 1030},
-    {"al-fec-port", required_argument, 0, 1031},
-    {"profile", required_argument, 0, 1011},
-    {"secret", required_argument, 0, 1012},
-    {"cname", required_argument, 0, 1013},
-    {"buffer", required_argument, 0, 1014},
-    {"insecure", no_argument, 0, 1015},
-    {"metrics", required_argument, 0, 1016},
-    {"metrics-id", required_argument, 0, 1017},
-    {"metrics-interval", required_argument, 0, 1018},
-    {"metrics-inspect-ts", required_argument, 0, 1034},
-    {"metrics-inspect-ts-pids", required_argument, 0, 1035},
-    {"profile-in", required_argument, 0, 1019},
-    {"srt-passphrase-in", required_argument, 0, 1020},
-    {"srt-pbkeylen-in", required_argument, 0, 1021},
-    {"srt-streamid-in", required_argument, 0, 1022},
-    {"srt-packetfilter-in", required_argument, 0, 1023},
-    {"srt-latency-in", required_argument, 0, 1024},
-    {"srt-passphrase", required_argument, 0, 1025},
-    {"srt-pbkeylen", required_argument, 0, 1026},
-    {"srt-streamid", required_argument, 0, 1027},
-    {"srt-packetfilter", required_argument, 0, 1028},
-    {"srt-latency", required_argument, 0, 1029},
+    {"ttl", required_argument, 0, OPT_TTL},
+    {"al-fec", required_argument, 0, OPT_AL_FEC},
+    {"al-fec-port", required_argument, 0, OPT_AL_FEC_PORT},
+    {"profile", required_argument, 0, OPT_PROFILE},
+    {"secret", required_argument, 0, OPT_SECRET},
+    {"cname", required_argument, 0, OPT_CNAME},
+    {"buffer", required_argument, 0, OPT_BUFFER},
+    {"insecure", no_argument, 0, OPT_INSECURE},
+    {"metrics", required_argument, 0, OPT_METRICS},
+    {"metrics-id", required_argument, 0, OPT_METRICS_ID},
+    {"metrics-interval", required_argument, 0, OPT_METRICS_INTERVAL},
+    {"metrics-inspect-ts", required_argument, 0, OPT_METRICS_INSPECT_TS},
+    {"metrics-inspect-ts-pids", required_argument, 0, OPT_METRICS_INSPECT_TS_PIDS},
+    {"profile-in", required_argument, 0, OPT_PROFILE_IN},
+    {"srt-passphrase-in", required_argument, 0, OPT_SRT_PASSPHRASE_IN},
+    {"srt-pbkeylen-in", required_argument, 0, OPT_SRT_PBKEYLEN_IN},
+    {"srt-streamid-in", required_argument, 0, OPT_SRT_STREAMID_IN},
+    {"srt-packetfilter-in", required_argument, 0, OPT_SRT_PACKETFILTER_IN},
+    {"srt-latency-in", required_argument, 0, OPT_SRT_LATENCY_IN},
+    {"srt-passphrase", required_argument, 0, OPT_SRT_PASSPHRASE},
+    {"srt-pbkeylen", required_argument, 0, OPT_SRT_PBKEYLEN},
+    {"srt-streamid", required_argument, 0, OPT_SRT_STREAMID},
+    {"srt-packetfilter", required_argument, 0, OPT_SRT_PACKETFILTER},
+    {"srt-latency", required_argument, 0, OPT_SRT_LATENCY},
     {"config", required_argument, 0, 'c'},
-    {"config-strict", no_argument, 0, 1033},
-    {"configtest", no_argument, 0, 1032},
+    {"config-strict", no_argument, 0, OPT_CONFIG_STRICT},
+    {"configtest", no_argument, 0, OPT_CONFIGTEST},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}};
 
@@ -560,6 +598,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   args_status_t pst;
   int cli_out = 0;
   int c;
+  int n_rist_out;
+  int has_rtp_udp;
+  int has_rtp;
+  int has_rtmp;
+  int has_rtmps;
+  int has_non_file;
+  int n_non_rtmp;
+  int has_rist;
+  int has_srt_out;
 
   pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
   if (pst != ARGS_OK) return pst;
@@ -624,7 +671,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'I':
         cfg->iface_in = optarg;
         break;
-      case 1001: {
+      case OPT_COLOR: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
           argerr("invalid --color: %s (auto|always|never)", optarg);
@@ -633,7 +680,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->color_mode = v;
         break;
       }
-      case 1000: {
+      case OPT_SUB_LEAD: {
         unsigned v;
         if (argutil_uint_range(optarg, 0, 10000, &v)) {
           argerr("invalid --sub-lead: %s (0..10000 ms)", optarg);
@@ -645,23 +692,23 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'v':
         cfg->verbose = 1;
         break;
-      case 1002:
+      case OPT_RET:
         if (argutil_addrport_parse(optarg, &cfg->ret.family, cfg->ret.addr, sizeof cfg->ret.addr, &cfg->ret.port)) {
           argerr("invalid --ret addr:port: %s", optarg);
           return ARGS_ERR;
         }
         cfg->ret.enabled = 1;
         break;
-      case 1003:
+      case OPT_NO_RET_MC:
         cfg->ret.mc_enabled = 0;
         break;
-      case 1004:
+      case OPT_RET_MC_PORT:
         if (argutil_uint_range(optarg, 1, 65535, &cfg->ret.mc_port)) {
           argerr("invalid --ret-mc-port: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1005: {
+      case OPT_RET_PT: {
         unsigned v;
         if (argutil_uint_range(optarg, 0, 127, &v)) {
           argerr("invalid --ret-pt: %s (0..127)", optarg);
@@ -670,25 +717,25 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->ret.rtx_pt = (unsigned char)v;
         break;
       }
-      case 1006:
+      case OPT_RET_WAIT:
         if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->ret.wait_ms)) {
           argerr("invalid --ret-wait: %s (ms)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1007:
+      case OPT_STRIP:
         if (rec_cfg_strip(cfg, optarg)) {
           argerr("invalid --strip: %s (comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT,LCEVC, or \"none\")", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1008:
+      case OPT_PACE:
         cfg->pace = 1;
         break;
       case 'O':
         cfg->iface_out = optarg;
         break;
-      case 1010: {
+      case OPT_TTL: {
         unsigned v;
         if (argutil_uint_range(optarg, 0, 255, &v)) {
           argerr("invalid --ttl: %s (0..255)", optarg);
@@ -697,112 +744,112 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->out_ttl = (int)v;
         break;
       }
-      case 1030:
+      case OPT_AL_FEC:
         if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
           argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1031:
+      case OPT_AL_FEC_PORT:
         if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
           argerr("invalid --al-fec-port: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1011:
+      case OPT_PROFILE:
         if (rec_cfg_profile(cfg, optarg, 0)) {
           argerr("invalid --profile: %s (simple|main)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1012:
+      case OPT_SECRET:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_secret, sizeof cfg->rist_secret, optarg, "--secret"))
           return ARGS_ERR;
         cfg->fl.have_secret = 1;
         break;
-      case 1013:
+      case OPT_CNAME:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_cname, sizeof cfg->rist_cname, optarg, "--cname"))
           return ARGS_ERR;
         cfg->fl.have_cname = 1;
         break;
-      case 1014:
+      case OPT_BUFFER:
         if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->rist_buffer_ms)) {
           argerr("invalid --buffer: %s (ms)", optarg);
           return ARGS_ERR;
         }
         cfg->fl.have_buffer = 1;
         break;
-      case 1015:
+      case OPT_INSECURE:
         cfg->insecure_tls = 1;
         break;
-      case 1016:
+      case OPT_METRICS:
         cfg->metrics_sock = optarg;
         break;
-      case 1017:
+      case OPT_METRICS_ID:
         cfg->metrics_id = optarg;
         break;
-      case 1018:
+      case OPT_METRICS_INTERVAL:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
-      case 1034:
+      case OPT_METRICS_INSPECT_TS:
         if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
         break;
-      case 1035:
+      case OPT_METRICS_INSPECT_TS_PIDS:
         if (argutil_metrics_known_pids_opt(TOOL_NAME, optarg, cfg->metrics_known_pids, &cfg->metrics_n_known_pids)) return ARGS_ERR;
         break;
-      case 1019:
+      case OPT_PROFILE_IN:
         if (rec_cfg_profile(cfg, optarg, 1)) {
           argerr("invalid --profile-in: %s (simple|main)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1020:
+      case OPT_SRT_PASSPHRASE_IN:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, optarg, "--srt-passphrase-in"))
           return ARGS_ERR;
         break;
-      case 1021:
+      case OPT_SRT_PBKEYLEN_IN:
         if (parse_pbkeylen_opt(optarg, &cfg->srt_pbkeylen_in, "--srt-pbkeylen-in"))
           return ARGS_ERR;
         break;
-      case 1022:
+      case OPT_SRT_STREAMID_IN:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, optarg, "--srt-streamid-in"))
           return ARGS_ERR;
         break;
-      case 1023:
+      case OPT_SRT_PACKETFILTER_IN:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, optarg, "--srt-packetfilter-in"))
           return ARGS_ERR;
         break;
-      case 1024:
+      case OPT_SRT_LATENCY_IN:
         if (argutil_uint_range(optarg, 1, 60000, &cfg->srt_latency_in_ms)) {
           argerr("invalid --srt-latency-in: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1025:
+      case OPT_SRT_PASSPHRASE:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg, "--srt-passphrase"))
           return ARGS_ERR;
         break;
-      case 1026:
+      case OPT_SRT_PBKEYLEN:
         if (parse_pbkeylen_opt(optarg, &cfg->srt_pbkeylen, "--srt-pbkeylen"))
           return ARGS_ERR;
         break;
-      case 1027:
+      case OPT_SRT_STREAMID:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid, sizeof cfg->srt_streamid, optarg, "--srt-streamid"))
           return ARGS_ERR;
         break;
-      case 1028:
+      case OPT_SRT_PACKETFILTER:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg, "--srt-packetfilter"))
           return ARGS_ERR;
         break;
-      case 1029:
+      case OPT_SRT_LATENCY:
         if (argutil_uint_range(optarg, 1, 60000, &cfg->srt_latency_ms)) {
           argerr("invalid --srt-latency: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
         break;
       case 'c':
-      case 1033:
-      case 1032:
+      case OPT_CONFIG_STRICT:
+      case OPT_CONFIGTEST:
         break;
       case 'h':
         print_help();
@@ -823,17 +870,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("missing -i input");
     return ARGS_ERR;
   }
-  {
-    int n_rist_out = 0;
-    for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RIST) n_rist_out++;
-    if (n_rist_out > 1) {
-      argerr("at most one -o rist:// target: librist isn't safe with more than one context per process");
-      return ARGS_ERR;
-    }
-    if (cfg->source.kind == URI_RIST && n_rist_out) {
-      argerr("-i rist:// and -o rist:// cannot combine: librist isn't safe with more than one context per process");
-      return ARGS_ERR;
-    }
+  n_rist_out = 0;
+  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RIST) n_rist_out++;
+  if (n_rist_out > 1) {
+    argerr("at most one -o rist:// target: librist isn't safe with more than one context per process");
+    return ARGS_ERR;
+  }
+  if (cfg->source.kind == URI_RIST && n_rist_out) {
+    argerr("-i rist:// and -o rist:// cannot combine: librist isn't safe with more than one context per process");
+    return ARGS_ERR;
   }
   if (cfg->ret.enabled && cfg->source.kind != URI_RTP) {
     argerr("--ret requires -i rtp://, no RTP sequence numbers otherwise");
@@ -854,57 +899,53 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       break;
     }
   }
-  {
-    int has_rtp_udp = 0;
-    int has_rtp = 0;
-    int has_rtmp = 0;
-    int has_rtmps = 0;
-    int has_non_file = 0;
-    int n_non_rtmp = 0;
-    for (int i = 0; i < cfg->n_out; i++) {
-      out_kind_t k = cfg->out[i].kind;
-      if (k == OUT_RTP || k == OUT_UDP) has_rtp_udp = 1;
-      if (k == OUT_RTP) has_rtp = 1;
-      if (k == OUT_RTMP || k == OUT_RTMPS) {
-        has_rtmp = 1;
-      } else {
-        n_non_rtmp++;
-        if (k != OUT_FILE) has_non_file = 1;
-      }
-      if (k == OUT_RTMPS) has_rtmps = 1;
+  has_rtp_udp = 0;
+  has_rtp = 0;
+  has_rtmp = 0;
+  has_rtmps = 0;
+  has_non_file = 0;
+  n_non_rtmp = 0;
+  for (int i = 0; i < cfg->n_out; i++) {
+    out_kind_t k = cfg->out[i].kind;
+    if (k == OUT_RTP || k == OUT_UDP) has_rtp_udp = 1;
+    if (k == OUT_RTP) has_rtp = 1;
+    if (k == OUT_RTMP || k == OUT_RTMPS) {
+      has_rtmp = 1;
+    } else {
+      n_non_rtmp++;
+      if (k != OUT_FILE) has_non_file = 1;
     }
-    if ((cfg->format == FMT_MKV || cfg->format == FMT_MKA || cfg->format == FMT_MP4 || cfg->format == FMT_M4A) && (has_non_file || n_non_rtmp != 1)) {
-      argerr("-f mkv/mka/mp4/m4a requires exactly one -o file target (plus optional rtmp(s) targets)");
-      return ARGS_ERR;
-    }
-    if (cfg->format == FMT_RAW && has_rtmp) {
-      argerr("-f raw is incompatible with an -o rtmp://rtmps:// target");
-      return ARGS_ERR;
-    }
-    if (cfg->iface_out && !has_rtp_udp) log_line(TOOL_NAME ": --out-iface needs -o rtp:// or udp:// target");
-    if (cfg->out_ttl && !has_rtp_udp) log_line(TOOL_NAME ": --ttl needs -o rtp:// or udp:// target");
-    if (cfg->al_fec_l && !cfg->al_fec_port) {
-      argerr("--al-fec requires --al-fec-port");
-      return ARGS_ERR;
-    }
-    if (!cfg->al_fec_l && cfg->al_fec_port) log_line(TOOL_NAME ": --al-fec-port needs --al-fec");
-    if (cfg->al_fec_l && !has_rtp && cfg->source.kind != URI_RTP) log_line(TOOL_NAME ": --al-fec needs -i rtp:// or -o rtp:// target");
-    if (cfg->insecure_tls && !has_rtmps && !(cfg->source.kind == URI_HTTP && cfg->source.http.tls)) log_line(TOOL_NAME ": --insecure needs -o rtmps:// target or -i https:// source");
+    if (k == OUT_RTMPS) has_rtmps = 1;
   }
+  if ((cfg->format == FMT_MKV || cfg->format == FMT_MKA || cfg->format == FMT_MP4 || cfg->format == FMT_M4A) && (has_non_file || n_non_rtmp != 1)) {
+    argerr("-f mkv/mka/mp4/m4a requires exactly one -o file target (plus optional rtmp(s) targets)");
+    return ARGS_ERR;
+  }
+  if (cfg->format == FMT_RAW && has_rtmp) {
+    argerr("-f raw is incompatible with an -o rtmp://rtmps:// target");
+    return ARGS_ERR;
+  }
+  if (cfg->iface_out && !has_rtp_udp) log_line(TOOL_NAME ": --out-iface needs -o rtp:// or udp:// target");
+  if (cfg->out_ttl && !has_rtp_udp) log_line(TOOL_NAME ": --ttl needs -o rtp:// or udp:// target");
+  if (cfg->al_fec_l && !cfg->al_fec_port) {
+    argerr("--al-fec requires --al-fec-port");
+    return ARGS_ERR;
+  }
+  if (!cfg->al_fec_l && cfg->al_fec_port) log_line(TOOL_NAME ": --al-fec-port needs --al-fec");
+  if (cfg->al_fec_l && !has_rtp && cfg->source.kind != URI_RTP) log_line(TOOL_NAME ": --al-fec needs -i rtp:// or -o rtp:// target");
+  if (cfg->insecure_tls && !has_rtmps && !(cfg->source.kind == URI_HTTP && cfg->source.http.tls)) log_line(TOOL_NAME ": --insecure needs -o rtmps:// target or -i https:// source");
   /* LCEVC also strips mp4/mkv/rtmp inline data, unlike others */
   if (cfg->fl.have_strip && cfg->format != FMT_TS && (cfg->strip_mask & ~STRIP_LCEVC)) log_line(TOOL_NAME ": --strip has no effect outside -f ts");
   if (cfg->subs == SUB_SRT && cfg->format != FMT_MKV && cfg->format != FMT_MKA && cfg->format != FMT_MP4 && cfg->format != FMT_M4A) {
     argerr("-s srt requires -f mkv, mka, mp4 or m4a");
     return ARGS_ERR;
   }
-  {
-    int has_rist = 0;
-    for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RIST) has_rist = 1;
-    if (!has_rist && (cfg->fl.have_profile || cfg->fl.have_secret || cfg->fl.have_cname || cfg->fl.have_buffer)) log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer need -o rist:// target");
-    if (has_rist && cfg->fl.have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
-      argerr("--secret requires --profile main");
-      return ARGS_ERR;
-    }
+  has_rist = 0;
+  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RIST) has_rist = 1;
+  if (!has_rist && (cfg->fl.have_profile || cfg->fl.have_secret || cfg->fl.have_cname || cfg->fl.have_buffer)) log_line(TOOL_NAME ": --profile/--secret/--cname/--buffer need -o rist:// target");
+  if (has_rist && cfg->fl.have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
+    argerr("--secret requires --profile main");
+    return ARGS_ERR;
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
   if (argutil_metrics_inspect_ts_validate(TOOL_NAME, cfg->metrics_id, cfg->metrics_inspect_ts)) return ARGS_ERR;
@@ -918,11 +959,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     log_line(TOOL_NAME ": --srt-*-in needs -i srt:// source");
   if (validate_srt_passphrase(cfg->srt_passphrase, cfg->srt_pbkeylen, "")) return ARGS_ERR;
 
-  {
-    int has_srt_out = 0;
-    for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_SRT) has_srt_out = 1;
-    if (!has_srt_out && (cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
-      log_line(TOOL_NAME ": --srt-* needs -o srt:// target");
-  }
+  has_srt_out = 0;
+  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_SRT) has_srt_out = 1;
+  if (!has_srt_out && (cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
+    log_line(TOOL_NAME ": --srt-* needs -o srt:// target");
   return ARGS_OK;
 }

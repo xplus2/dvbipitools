@@ -5,6 +5,7 @@
 #include <check.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,12 +23,14 @@
 #define RTMP_TYPE_INVOKE 20
 #define SRV_QUIET_MS 300
 
-static int make_listener(unsigned *port_out) {
+static int make_listener(unsigned *port_out, int rcvbuf) {
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in addr;
   socklen_t alen = sizeof addr;
 
   ck_assert_int_ge(fd, 0);
+  if (rcvbuf)
+    ck_assert_int_eq(setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf), 0);
   memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -97,16 +100,14 @@ typedef struct {
   size_t captured_len;
 } fake_server_t;
 
-static void *fake_server_thread(void *arg) {
-  fake_server_t *s = arg;
-  int cfd = accept(s->listen_fd, NULL, NULL);
+static int accept_until_ready(int listen_fd) {
+  int cfd = accept(listen_fd, NULL, NULL);
   unsigned char s0s1s2[1 + 2 * RTMP_HANDSHAKE_SIZE];
   unsigned char msg[512];
   size_t n;
-  struct timeval tv = {1, 0};
 
   if (cfd < 0)
-    return NULL;
+    return -1;
 
   recv_until_quiet(cfd); /* C0+C1 */
   s0s1s2[0] = RTMP_VERSION;
@@ -120,6 +121,16 @@ static void *fake_server_thread(void *arg) {
   recv_until_quiet(cfd); /* releaseStream + FCPublish + createStream */
   n = build_result_create_stream(msg, 9.0);
   send(cfd, msg, n, 0);
+  return cfd;
+}
+
+static void *fake_server_thread(void *arg) {
+  fake_server_t *s = arg;
+  int cfd = accept_until_ready(s->listen_fd);
+  struct timeval tv = {1, 0};
+
+  if (cfd < 0)
+    return NULL;
 
   /* no drain here: publish + first tag can arrive too close to split cleanly */
   setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
@@ -132,6 +143,44 @@ static void *fake_server_thread(void *arg) {
       break;
   }
 
+  close(cfd);
+  return NULL;
+}
+
+typedef struct {
+  int listen_fd;
+  atomic_int drain;
+  atomic_int found_end;
+} stall_server_t;
+
+static void *stall_server_thread(void *arg) {
+  stall_server_t *s = arg;
+  int cfd = accept_until_ready(s->listen_fd);
+  struct timeval tv = {1, 0};
+  unsigned char buf[65536 + 2];
+  size_t keep = 0;
+
+  if (cfd < 0)
+    return NULL;
+
+  while (!atomic_load(&s->drain)) {
+    struct timespec ts = {0, 5000000L};
+    nanosleep(&ts, NULL);
+  }
+  setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+  for (;;) {
+    ssize_t r = recv(cfd, buf + keep, sizeof buf - keep, 0);
+    size_t have;
+    if (r <= 0)
+      break;
+    have = keep + (size_t)r;
+    if (memmem(buf, have, "END", 3)) {
+      atomic_store(&s->found_end, 1);
+      break;
+    }
+    keep = have < 2 ? have : 2;
+    memmove(buf, buf + have - keep, keep);
+  }
   close(cfd);
   return NULL;
 }
@@ -167,7 +216,7 @@ static void *capture_connect_thread(void *arg) {
 
 static int drive_until_sent(rtmpout_t *o, flv_tag_type_t type, const unsigned char *data, size_t len, int max_iters) {
   for (int i = 0; i < max_iters; i++) {
-    if (0 == rtmpout_write(o, type, 0, data, len))
+    if (0 == rtmpout_write(o, type, 0, data, len, NULL, 0))
       return 1;
     struct timespec ts = {0, 5000000L};
     nanosleep(&ts, NULL);
@@ -192,7 +241,7 @@ END_TEST
 
 START_TEST(rtmpout_delivers_keyframe_end_to_end) {
   unsigned port;
-  int listen_fd = make_listener(&port);
+  int listen_fd = make_listener(&port, 0);
   pthread_t th;
   fake_server_t srv;
   char url[64];
@@ -222,7 +271,7 @@ END_TEST
 
 START_TEST(rtmpout_holds_back_interframe_until_keyframe) {
   unsigned port;
-  int listen_fd = make_listener(&port);
+  int listen_fd = make_listener(&port, 0);
   pthread_t th;
   fake_server_t srv;
   char url[64];
@@ -243,7 +292,7 @@ START_TEST(rtmpout_holds_back_interframe_until_keyframe) {
 
   /* held-back frames also return 0, not -1: drive_until_sent's success check doesn't apply here */
   for (int i = 0; i < 50; i++) {
-    rtmpout_write(o, FLV_TAG_VIDEO, 0, interframe, sizeof interframe);
+    rtmpout_write(o, FLV_TAG_VIDEO, 0, interframe, sizeof interframe, NULL, 0);
     struct timespec ts = {0, 5000000L};
     nanosleep(&ts, NULL);
   }
@@ -258,9 +307,55 @@ START_TEST(rtmpout_holds_back_interframe_until_keyframe) {
 }
 END_TEST
 
+START_TEST(rtmpout_survives_stalled_peer) {
+  unsigned port;
+  int listen_fd = make_listener(&port, 16384);
+  pthread_t th;
+  stall_server_t srv;
+  char url[64];
+  rtmpout_cfg_t cfg;
+  rtmpout_t *o;
+  unsigned char keyframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'K', 'E', 'Y'};
+  unsigned char endframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'E', 'N', 'D'};
+  size_t big_len = 512 * 1024;
+  unsigned char *big = calloc(1, big_len);
+
+  ck_assert_ptr_nonnull(big);
+  big[0] = 0x17;
+  big[1] = 0x01;
+  memset(&srv, 0, sizeof srv);
+  srv.listen_fd = listen_fd;
+  ck_assert_int_eq(pthread_create(&th, NULL, stall_server_thread, &srv), 0);
+
+  snprintf(url, sizeof url, "rtmp://127.0.0.1:%u/live/key123", port);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.url = url;
+  o = rtmpout_open(&cfg);
+  ck_assert_ptr_nonnull(o);
+  ck_assert_int_eq(drive_until_sent(o, FLV_TAG_VIDEO, keyframe, sizeof keyframe, 400), 1);
+
+  for (int i = 0; i < 20; i++)
+    ck_assert_int_eq(rtmpout_write(o, FLV_TAG_VIDEO, (uint32_t)i * 40, big, big_len, NULL, 0), 0);
+
+  atomic_store(&srv.drain, 1);
+  for (int i = 0; i < 400 && !atomic_load(&srv.found_end); i++) {
+    struct timespec ts = {0, 5000000L};
+    ck_assert_int_eq(rtmpout_write(o, FLV_TAG_VIDEO, 1000 + (uint32_t)i * 40, endframe, sizeof endframe, NULL, 0), 0);
+    nanosleep(&ts, NULL);
+  }
+
+  pthread_join(th, NULL);
+  close(listen_fd);
+  ck_assert_int_eq(atomic_load(&srv.found_end), 1);
+
+  rtmpout_close(o);
+  free(big);
+}
+END_TEST
+
 START_TEST(rtmpout_sends_adobe_authmod_for_userinfo_uri) {
   unsigned port;
-  int listen_fd = make_listener(&port);
+  int listen_fd = make_listener(&port, 0);
   pthread_t th;
   fake_server_t srv;
   char url[96];
@@ -279,7 +374,7 @@ START_TEST(rtmpout_sends_adobe_authmod_for_userinfo_uri) {
   ck_assert_ptr_nonnull(o);
 
   for (int i = 0; i < 200; i++) {
-    rtmpout_write(o, FLV_TAG_VIDEO, 0, keyframe, sizeof keyframe);
+    rtmpout_write(o, FLV_TAG_VIDEO, 0, keyframe, sizeof keyframe, NULL, 0);
     struct timespec ts = {0, 5000000L};
     nanosleep(&ts, NULL);
   }
@@ -298,6 +393,7 @@ static Suite *rtmpout_suite(void) {
   tcase_add_test(tc, rtmpout_open_rejects_malformed_urls);
   tcase_add_test(tc, rtmpout_delivers_keyframe_end_to_end);
   tcase_add_test(tc, rtmpout_holds_back_interframe_until_keyframe);
+  tcase_add_test(tc, rtmpout_survives_stalled_peer);
   tcase_add_test(tc, rtmpout_sends_adobe_authmod_for_userinfo_uri);
   suite_add_tcase(s, tc);
   return s;

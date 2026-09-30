@@ -7,12 +7,21 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/random.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "ioutil.h"
 
+uint32_t rand_seed32(void) {
+  uint32_t v;
+  if (getrandom(&v, sizeof v, 0) == (ssize_t)sizeof v) return v;
+  return (uint32_t)(time(NULL) ^ getpid());
+}
+
 int read_all(FILE *f, char **out, size_t *out_len) {
-  size_t cap = 65536, len = 0;
+  size_t cap = 65536;
+  size_t len = 0;
   char *buf = malloc(cap);
   if (!buf) return -1;
   for (;;) {
@@ -214,7 +223,7 @@ void sbuf_add_n(sbuf_t *b, const char *s, size_t maxn) {
   b->buf[b->len] = '\0';
 }
 
-void sbuf_add(sbuf_t *b, const char *s) { sbuf_add_n(b, s, strlen(s)); }
+void sbuf_add(sbuf_t *b, const char *s) { sbuf_add_n(b, s, (size_t)-1); }
 
 void sbuf_add_u64(sbuf_t *b, uint64_t v) {
   char tmp[21];

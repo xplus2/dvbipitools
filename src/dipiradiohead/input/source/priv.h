@@ -6,8 +6,11 @@
 
 #include "lib/net/httpclient/httpclient.h"
 
+#include "lib/demux/rawaudio.h"
+#include "lib/demux/tspack.h"
+#include "lib/hls/live.h"
+
 #include "../../framer/aac_latm.h"
-#include "../hls/live.h"
 #include "../icy.h"
 #include "../id3.h"
 #include "../source.h"
@@ -21,6 +24,8 @@ struct source {
   const char *label;
   http_t *http;    /* NULL: HLS-backed */
   hls_live_t *hls; /* NULL: plain stream via http */
+  tspack_t hls_tspack;
+  rawaudio_demux_t *hls_demux;
   icy_t *icy; /* NULL: no icy-metaint, ID3-only metadata */
   id3_t *id3;
 

@@ -162,17 +162,30 @@ START_TEST(tssrc_open_async_completes_for_http_and_reads_body) {
   int listen_fd = make_listener(&port);
   pthread_t th;
   server_arg_t sarg;
-  const char *resp = "HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\nConnection: close\r\n\r\nTSBYTES";
+  unsigned char ts_payload[3 * 188];
+  char head[128];
+  char resp[sizeof head + sizeof ts_payload];
+  size_t head_len, resp_len;
   tssrc_cfg_t cfg;
   tssrc_open_t *o;
   tssrc_t *s;
-  char buf[64], uri[64];
+  unsigned char buf[1024];
+  char uri[64];
   size_t got = 0;
   int tries = 0;
 
+  memset(ts_payload, 0xFF, sizeof ts_payload);
+  ts_payload[0] = 0x47;
+  ts_payload[188] = 0x47;
+  ts_payload[376] = 0x47;
+  head_len = (size_t)snprintf(head, sizeof head, "HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\nConnection: close\r\nContent-Length: %zu\r\n\r\n", sizeof ts_payload);
+  memcpy(resp, head, head_len);
+  memcpy(resp + head_len, ts_payload, sizeof ts_payload);
+  resp_len = head_len + sizeof ts_payload;
+
   sarg.listen_fd = listen_fd;
   sarg.response = resp;
-  sarg.response_len = strlen(resp);
+  sarg.response_len = resp_len;
   ck_assert_int_eq(pthread_create(&th, NULL, serve_once, &sarg), 0);
 
   memset(&cfg, 0, sizeof cfg);
@@ -188,8 +201,8 @@ START_TEST(tssrc_open_async_completes_for_http_and_reads_body) {
   ck_assert_ptr_nonnull(s);
   ck_assert_int_ge(tssrc_fd(s), 0);
 
-  while (got < strlen("TSBYTES") && tries++ < 100) {
-    ssize_t n = tssrc_read(s, (unsigned char *)buf + got, sizeof buf - 1 - got, NULL);
+  while (got < sizeof ts_payload && tries++ < 200) {
+    ssize_t n = tssrc_read(s, buf + got, sizeof buf - got, NULL);
     if (n > 0)
       got += (size_t)n;
     else if (n < 0)
@@ -197,8 +210,8 @@ START_TEST(tssrc_open_async_completes_for_http_and_reads_body) {
     else
       usleep(5000);
   }
-  buf[got] = '\0';
-  ck_assert_str_eq(buf, "TSBYTES");
+  ck_assert_uint_eq(got, sizeof ts_payload);
+  ck_assert_int_eq(memcmp(buf, ts_payload, sizeof ts_payload), 0);
 
   tssrc_close(s);
   pthread_join(th, NULL);

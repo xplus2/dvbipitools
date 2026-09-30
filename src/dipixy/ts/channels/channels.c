@@ -66,8 +66,12 @@ channels_t *channels_build(const config_t *cfg) {
       case SRC_HTTP:
         build_from_http(l, cfg->sources[i].value, cfg->insecure_tls);
         break;
+      case SRC_MCAST:
+        build_from_mcast(l, cfg->sources[i].value);
+        break;
     }
     channels_join_all(l, cfg);
+    channel_list_build_index(l);
   }
   return ch;
 }
@@ -84,8 +88,35 @@ static const channel_item_t *channel_list_get_item(const channel_list_t *l, unsi
 
 static const channel_item_t *channel_list_find_name(const channel_list_t *l, const char *name) {
   if (!l) return NULL;
+  if (l->name_order) {
+    int lo = 0, hi = l->count - 1;
+    while (lo <= hi) {
+      int mid = (lo + hi) / 2;
+      int c = strcmp(l->name_order[mid].name, name);
+      if (c == 0) return &l->items[l->name_order[mid].idx];
+      if (c < 0) lo = mid + 1; else hi = mid - 1;
+    }
+    return NULL;
+  }
   for (int i = 0; i < l->count; i++) if (strcmp(l->items[i].name, name) == 0) return &l->items[i];
   return NULL;
+}
+
+static int channel_name_slot_cmp(const void *a, const void *b) {
+  return strcmp(((const channel_name_slot_t *)a)->name, ((const channel_name_slot_t *)b)->name);
+}
+
+void channel_list_build_index(channel_list_t *l) {
+  free(l->name_order);
+  l->name_order = NULL;
+  if (l->count <= 0) return;
+  l->name_order = malloc(sizeof(channel_name_slot_t) * (size_t)l->count);
+  if (!l->name_order) return;
+  for (int i = 0; i < l->count; i++) {
+    l->name_order[i].name = l->items[i].name;
+    l->name_order[i].idx = i;
+  }
+  qsort(l->name_order, (size_t)l->count, sizeof(channel_name_slot_t), channel_name_slot_cmp);
 }
 
 int channels_resolve(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, int *family, char *addr, size_t addrsz, unsigned *port, int *rtp, channel_ret_fcc_t *rf) {
@@ -126,44 +157,40 @@ int channels_list_for_each(const channels_t *ch, unsigned list_num, void (*emit)
   return l->count;
 }
 
-int channels_item_lookup(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, unsigned *out_item_num, char *out_name, size_t out_namesz,
-                         char *out_proto, size_t out_protosz, char *out_addr, size_t out_addrsz) {
+int channels_item_lookup(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, unsigned *out_item_num,
+  char *out_name, size_t out_namesz, char *out_proto, size_t out_protosz, char *out_addr, size_t out_addrsz) {
   const channel_list_t *l;
   const channel_item_t *it;
+  const char *scheme_end;
   l = channels_get(ch, list_num);
   if (!l) return -1;
   if (item_name) {
     it = channel_list_find_name(l, item_name);
-    if (it) for (int i = 0; i < l->count; i++) if (&l->items[i] == it) {
-      *out_item_num = (unsigned)(i + 1);
-      break;
-    }
+    if (it) *out_item_num = (unsigned)(it - l->items) + 1;
   } else {
     it = channel_list_get_item(l, item_num);
     if (it) *out_item_num = item_num;
   }
   if (!it) return -1;
   bufcpy(out_name, out_namesz, it->name);
-  {
-    const char *scheme_end = it->uri ? strstr(it->uri, "://") : NULL;
-    if (out_proto && out_protosz) {
-      size_t len = scheme_end ? (size_t)(scheme_end - it->uri) : 0;
-      if (len >= out_protosz) len = out_protosz - 1;
-      if (len) memcpy(out_proto, it->uri, len);
-      out_proto[len] = '\0';
+  scheme_end = it->uri ? strstr(it->uri, "://") : NULL;
+  if (out_proto && out_protosz) {
+    size_t len = scheme_end ? (size_t)(scheme_end - it->uri) : 0;
+    if (len >= out_protosz) len = out_protosz - 1;
+    if (len) memcpy(out_proto, it->uri, len);
+    out_proto[len] = '\0';
+  }
+  if (out_addr && out_addrsz) {
+    const char *rest = scheme_end ? scheme_end + 3 : NULL;
+    size_t len = 0;
+    if (rest && *rest == '@') rest++;
+    if (rest) {
+      const char *slash = strchr(rest, '/');
+      len = slash ? (size_t)(slash - rest) : strlen(rest);
     }
-    if (out_addr && out_addrsz) {
-      const char *rest = scheme_end ? scheme_end + 3 : NULL;
-      size_t len = 0;
-      if (rest && *rest == '@') rest++;
-      if (rest) {
-        const char *slash = strchr(rest, '/');
-        len = slash ? (size_t)(slash - rest) : strlen(rest);
-      }
-      if (len >= out_addrsz) len = out_addrsz - 1;
-      if (rest) memcpy(out_addr, rest, len);
-      out_addr[len] = '\0';
-    }
+    if (len >= out_addrsz) len = out_addrsz - 1;
+    if (rest) memcpy(out_addr, rest, len);
+    out_addr[len] = '\0';
   }
   return 0;
 }

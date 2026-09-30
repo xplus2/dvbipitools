@@ -14,8 +14,6 @@
 
 #include <stdint.h>
 
-typedef enum { DASH_PROTO_H1 = 1, DASH_PROTO_H2 = 2, DASH_PROTO_H3 = 3 } dash_proto_t;
-
 /* call once at startup, before any traffic */
 void dash_lldash_init(int max_clients);
 
@@ -23,7 +21,7 @@ void dash_lldash_init(int max_clients);
 int dash_lldash_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int keep_alive, const char *origin_hdr, int ws_handle);
 
 /* protocol-agnostic. -1: not applicable/full, caller falls to normal render path */
-int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, dash_proto_t proto);
+int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, conn_proto_t proto);
 
 void dash_lldash_h2_bind(int slot, void *h2c, void *h2_slot, int reactor_tid, int ws_handle);
 

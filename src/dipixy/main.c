@@ -27,6 +27,7 @@ static const char *source_kind_name(source_kind_t k) {
     case SRC_CSV:  return "csv";
     case SRC_XML:  return "xml";
     case SRC_HTTP: return "http";
+    case SRC_MCAST: return "mcast";
   }
   return "?";
 }
@@ -40,6 +41,9 @@ int main(int argc, char **argv) {
   int queue_level = 0;
   int workers;
   int rc;
+  int max_ord;
+  int i;
+  int j;
 
   dipixy_status_init(argc, argv);
   log_set_color(log_color_prescan(argc, argv));
@@ -70,32 +74,28 @@ int main(int argc, char **argv) {
     args_free(&cfg);
     return 1;
   }
-  {
-    int max_ord = 0;
-    int i;
-    int j;
-    for (i = 0; i < cfg.n_sources; i++) if (cfg.sources[i].ordinal > max_ord) max_ord = cfg.sources[i].ordinal;
-    if (cfg.stdin_ordinal > max_ord) max_ord = cfg.stdin_ordinal;
-    if (cfg.rist_ordinal > max_ord) max_ord = cfg.rist_ordinal;
-    for (i = 1; i <= max_ord; i++) {
-      const source_def_t *src = NULL;
-      for (j = 0; j < cfg.n_sources; j++) if (cfg.sources[j].ordinal == i) {
-        src = &cfg.sources[j];
-        break;
-      }
-      if (src) {
-        channel_list_t *l = atomic_load_explicit(&channels->lists[i - 1], memory_order_relaxed);
-        int count = l ? l->count : 0;
-        const char *kind = source_kind_name(src->kind);
-        if (src->name) log_line(TOOL_NAME ": input #%d: %d channel%s [%s] \"%s\"", i, count, count == 1 ? "" : "s", kind, src->name);
-        else           log_line(TOOL_NAME ": input #%d: %d channel%s [%s]", i, count, count == 1 ? "" : "s", kind);
-      } else if (i == cfg.stdin_ordinal) {
-        if (cfg.stdin_name) log_line(TOOL_NAME ": input #%d: 1 channel [stdin] \"%s\"", i, cfg.stdin_name);
-        else                log_line(TOOL_NAME ": input #%d: 1 channel [stdin]", i);
-      } else if (i == cfg.rist_ordinal) {
-        if (cfg.rist_name) log_line(TOOL_NAME ": input #%d: 1 channel [rist] \"%s\"", i, cfg.rist_name);
-        else               log_line(TOOL_NAME ": input #%d: 1 channel [rist]", i);
-      }
+  max_ord = 0;
+  for (i = 0; i < cfg.n_sources; i++) if (cfg.sources[i].ordinal > max_ord) max_ord = cfg.sources[i].ordinal;
+  if (cfg.stdin_ordinal > max_ord) max_ord = cfg.stdin_ordinal;
+  if (cfg.rist_ordinal > max_ord) max_ord = cfg.rist_ordinal;
+  for (i = 1; i <= max_ord; i++) {
+    const source_def_t *src = NULL;
+    for (j = 0; j < cfg.n_sources; j++) if (cfg.sources[j].ordinal == i) {
+      src = &cfg.sources[j];
+      break;
+    }
+    if (src) {
+      channel_list_t *l = atomic_load_explicit(&channels->lists[i - 1], memory_order_relaxed);
+      int count = l ? l->count : 0;
+      const char *kind = source_kind_name(src->kind);
+      if (src->name) log_line(TOOL_NAME ": input #%d: %d channel%s [%s] \"%s\"", i, count, count == 1 ? "" : "s", kind, src->name);
+      else           log_line(TOOL_NAME ": input #%d: %d channel%s [%s]", i, count, count == 1 ? "" : "s", kind);
+    } else if (i == cfg.stdin_ordinal) {
+      if (cfg.stdin_name) log_line(TOOL_NAME ": input #%d: 1 channel [stdin] \"%s\"", i, cfg.stdin_name);
+      else                log_line(TOOL_NAME ": input #%d: 1 channel [stdin]", i);
+    } else if (i == cfg.rist_ordinal) {
+      if (cfg.rist_name) log_line(TOOL_NAME ": input #%d: 1 channel [rist] \"%s\"", i, cfg.rist_name);
+      else               log_line(TOOL_NAME ": input #%d: 1 channel [rist]", i);
     }
   }
   capture_rist_init(cfg.rist_uri);

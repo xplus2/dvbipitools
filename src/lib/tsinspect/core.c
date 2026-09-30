@@ -105,3 +105,17 @@ void tsinspect_set_known_pids(tsinspect_t *t, const unsigned *pids, unsigned n) 
   t->x->known_set = n > 0;
   if (n > 0 && !t->x->d) t->x->d = calloc(1, sizeof *t->x->d);
 }
+
+void tsinspect_grid_lazy(tsinspect_t **slot, metrics_inspect_ts_t level, const unsigned *known_pids, unsigned n_known_pids, const unsigned char *buf, size_t len) {
+  if (!*slot) {
+    tsinspect_t *t = tsinspect_new(level);
+    if (!t) return;
+    if (tsinspect_enable_own_psi(t, 0)) {
+      tsinspect_free(t);
+      return;
+    }
+    tsinspect_set_known_pids(t, known_pids, n_known_pids);
+    *slot = t;
+  }
+  tsinspect_grid(*slot, buf, len);
+}

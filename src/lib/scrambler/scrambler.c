@@ -9,9 +9,7 @@
 
 #include "scrambler.h"
 
-#define SCRAMBLER_QUEUE_MODE_NONE 0
-#define SCRAMBLER_QUEUE_MODE_ENCRYPT 1
-#define SCRAMBLER_QUEUE_MODE_DECRYPT 2
+typedef enum { SCRAMBLER_QUEUE_MODE_NONE, SCRAMBLER_QUEUE_MODE_ENCRYPT, SCRAMBLER_QUEUE_MODE_DECRYPT } scrambler_queue_mode_t;
 
 /* total queued entries (crypto + passthrough) can outrun crypto batch size during long unscrambled/no-key.
    multiplier keeps cap above queue_batch_size, avoid overflow on passthrough-heavy streams.
@@ -37,7 +35,7 @@ struct scrambler {
   unsigned queue_len;
   unsigned queue_scrambled_count;
   int queue_parity;
-  int queue_mode;
+  scrambler_queue_mode_t queue_mode;
 };
 
 static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *ctx);
@@ -131,20 +129,23 @@ int scrambler_encrypt_packet(scrambler_t *s, unsigned char pkt[188], int parity)
     return 0; /* AF fills packet, control bits stay 00 */
   payload_size = 188 - payload_off;
 
-  if (s->algo == SCRAMBLE_ALGO_CSA2) {
-    /* classic DVB-CSA: libdvbcsa's single-packet API runs its residue termination
-       stage for any length, no block alignment needed (unlike its bitslice batch API) */
-    pkt[3] = (unsigned char)((pkt[3] & 0x3F) | (parity == SCRAMBLE_PARITY_ODD ? 0xC0 : 0x80));
-    csa2_encrypt_block(s->csa2_key[parity], pkt + payload_off, payload_size);
-    return 0;
-  } else {
-    /* CISSA: TS 103 127 clause 6.3.2, AES-CBC without stealing, needs whole 16-byte blocks. trailing residual bytes stay clear. */
-    size_t enc_size = payload_size - (payload_size % 16u);
-    if (enc_size == 0)
-      return 0; /* payload under one cipher block, control bits stay 00 */
-    pkt[3] = (unsigned char)((pkt[3] & 0x3F) | (parity == SCRAMBLE_PARITY_ODD ? 0xC0 : 0x80));
-    return cissa_encrypt_block(s->cissa_key[parity], pkt + payload_off, enc_size);
+  switch (s->algo) {
+    case SCRAMBLE_ALGO_CSA2:
+      /* classic DVB-CSA: libdvbcsa's single-packet API runs its residue termination
+         stage for any length, no block alignment needed (unlike its bitslice batch API) */
+      pkt[3] = (unsigned char)((pkt[3] & 0x3F) | (parity == SCRAMBLE_PARITY_ODD ? 0xC0 : 0x80));
+      csa2_encrypt_block(s->csa2_key[parity], pkt + payload_off, payload_size);
+      return 0;
+    case SCRAMBLE_ALGO_CISSA: {
+      /* CISSA: TS 103 127 clause 6.3.2, AES-CBC without stealing, needs whole 16-byte blocks. trailing residual bytes stay clear. */
+      size_t enc_size = payload_size - (payload_size % 16u);
+      if (enc_size == 0)
+        return 0; /* payload under one cipher block, control bits stay 00 */
+      pkt[3] = (unsigned char)((pkt[3] & 0x3F) | (parity == SCRAMBLE_PARITY_ODD ? 0xC0 : 0x80));
+      return cissa_encrypt_block(s->cissa_key[parity], pkt + payload_off, enc_size);
+    }
   }
+  return -1;
 }
 
 int scrambler_decrypt_packet(scrambler_t *s, unsigned char pkt[188]) {
@@ -168,22 +169,25 @@ int scrambler_decrypt_packet(scrambler_t *s, unsigned char pkt[188]) {
   }
   payload_size = 188 - payload_off;
 
-  if (s->algo == SCRAMBLE_ALGO_CSA2) {
-    /* mirrors scrambler_encrypt_packet: libdvbcsa's residue termination covers any length, no block alignment needed */
-    csa2_decrypt_block(s->csa2_key[parity], pkt + payload_off, payload_size);
-    pkt[3] &= 0x3F;
-    return 0;
-  } else {
-    size_t dec_size = payload_size - (payload_size % 16u);
-    if (dec_size == 0) {
-      pkt[3] &= 0x3F; /* payload smaller than one cipher block: never scrambled */
+  switch (s->algo) {
+    case SCRAMBLE_ALGO_CSA2:
+      /* mirrors scrambler_encrypt_packet: libdvbcsa's residue termination covers any length, no block alignment needed */
+      csa2_decrypt_block(s->csa2_key[parity], pkt + payload_off, payload_size);
+      pkt[3] &= 0x3F;
+      return 0;
+    case SCRAMBLE_ALGO_CISSA: {
+      size_t dec_size = payload_size - (payload_size % 16u);
+      if (dec_size == 0) {
+        pkt[3] &= 0x3F; /* payload smaller than one cipher block: never scrambled */
+        return 0;
+      }
+      if (cissa_decrypt_block(s->cissa_key[parity], pkt + payload_off, dec_size) != 0)
+        return -1;
+      pkt[3] &= 0x3F;
       return 0;
     }
-    if (cissa_decrypt_block(s->cissa_key[parity], pkt + payload_off, dec_size) != 0)
-      return -1;
-    pkt[3] &= 0x3F;
-    return 0;
   }
+  return -1;
 }
 
 static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *ctx) {
@@ -212,7 +216,7 @@ static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *
 
 /* flush first if crypto batch is already accumulating under different mode/parity.
    keep every batch's entries under shared key */
-static void scrambler_queue_ensure_batch(scrambler_t *s, int mode, int parity, scrambler_emit_cb emit, void *ctx) {
+static void scrambler_queue_ensure_batch(scrambler_t *s, scrambler_queue_mode_t mode, int parity, scrambler_emit_cb emit, void *ctx) {
   if (s->queue_scrambled_count > 0 && (s->queue_mode != mode || s->queue_parity != parity))
     scrambler_queue_flush(s, emit, ctx);
 
@@ -229,7 +233,7 @@ static void scrambler_queue_push(scrambler_t *s, const unsigned char pkt[188], i
     return;
   }
   if (s->queue_len == s->queue_cap) {
-    int mode = s->queue_mode;
+    scrambler_queue_mode_t mode = s->queue_mode;
     int parity = s->queue_parity;
     scrambler_queue_flush(s, emit, ctx);
     if (needs_crypto)

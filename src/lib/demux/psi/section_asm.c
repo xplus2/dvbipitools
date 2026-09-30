@@ -25,6 +25,9 @@ int psi_section_asm_feed(psi_section_asm_t *a, const unsigned char *pl, size_t p
     return 0;
   }
   while (i < plen) {
+    size_t need;
+    size_t avail;
+    size_t take;
     if (a->expect == 0) {
       if (a->len < sizeof a->buf) a->buf[a->len++] = pl[i];
       i++;
@@ -37,14 +40,12 @@ int psi_section_asm_feed(psi_section_asm_t *a, const unsigned char *pl, size_t p
       }
       continue;
     }
-    {
-      size_t need = a->expect - a->len;
-      size_t avail = plen - i;
-      size_t take = need < avail ? need : avail;
-      memcpy(a->buf + a->len, pl + i, take);
-      a->len += take;
-      i += take;
-    }
+    need = a->expect - a->len;
+    avail = plen - i;
+    take = need < avail ? need : avail;
+    memcpy(a->buf + a->len, pl + i, take);
+    a->len += take;
+    i += take;
     if (a->len >= a->expect) {
       a->active = 0;
       return 1;

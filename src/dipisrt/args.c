@@ -19,6 +19,25 @@
 #include "config.h"
 #include "version.h"
 
+#define OPT_GROUP_MODE 1000
+#define OPT_RENDEZVOUS 1001
+#define OPT_LOCAL 1002
+#define OPT_PASSPHRASE 1003
+#define OPT_PBKEYLEN 1004
+#define OPT_STREAMID 1005
+#define OPT_PACKETFILTER 1006
+#define OPT_LATENCY 1007
+#define OPT_SEND_BUFFER_MULT 1012
+#define OPT_AL_FEC 1013
+#define OPT_AL_FEC_PORT 1014
+#define OPT_COLOR 1008
+#define OPT_METRICS 1009
+#define OPT_METRICS_ID 1010
+#define OPT_METRICS_INTERVAL 1011
+#define OPT_METRICS_INSPECT_TS 1017
+#define OPT_CONFIG_STRICT 1016
+#define OPT_CONFIGTEST 1015
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* count: prior calls for this -i/-o (caller's n_in/n_out). first call: decides is_srt.
@@ -157,27 +176,27 @@ static const struct option longopts[] = {
     {"out", required_argument, 0, 'o'},
     {"iface", required_argument, 0, 'I'},
     {"insecure", no_argument, 0, 'k'},
-    {"group-mode", required_argument, 0, 1000},
-    {"rendezvous", no_argument, 0, 1001},
-    {"local", required_argument, 0, 1002},
-    {"passphrase", required_argument, 0, 1003},
-    {"pbkeylen", required_argument, 0, 1004},
-    {"streamid", required_argument, 0, 1005},
-    {"packetfilter", required_argument, 0, 1006},
-    {"latency", required_argument, 0, 1007},
-    {"send-buffer-mult", required_argument, 0, 1012},
-    {"al-fec", required_argument, 0, 1013},
-    {"al-fec-port", required_argument, 0, 1014},
-    {"color", required_argument, 0, 1008},
-    {"metrics", required_argument, 0, 1009},
-    {"metrics-id", required_argument, 0, 1010},
-    {"metrics-interval", required_argument, 0, 1011},
-    {"metrics-inspect-ts", required_argument, 0, 1017},
+    {"group-mode", required_argument, 0, OPT_GROUP_MODE},
+    {"rendezvous", no_argument, 0, OPT_RENDEZVOUS},
+    {"local", required_argument, 0, OPT_LOCAL},
+    {"passphrase", required_argument, 0, OPT_PASSPHRASE},
+    {"pbkeylen", required_argument, 0, OPT_PBKEYLEN},
+    {"streamid", required_argument, 0, OPT_STREAMID},
+    {"packetfilter", required_argument, 0, OPT_PACKETFILTER},
+    {"latency", required_argument, 0, OPT_LATENCY},
+    {"send-buffer-mult", required_argument, 0, OPT_SEND_BUFFER_MULT},
+    {"al-fec", required_argument, 0, OPT_AL_FEC},
+    {"al-fec-port", required_argument, 0, OPT_AL_FEC_PORT},
+    {"color", required_argument, 0, OPT_COLOR},
+    {"metrics", required_argument, 0, OPT_METRICS},
+    {"metrics-id", required_argument, 0, OPT_METRICS_ID},
+    {"metrics-interval", required_argument, 0, OPT_METRICS_INTERVAL},
+    {"metrics-inspect-ts", required_argument, 0, OPT_METRICS_INSPECT_TS},
     {"verbose", no_argument, 0, 'v'},
     {"daemonize", no_argument, 0, 'd'},
     {"config", required_argument, 0, 'c'},
-    {"config-strict", no_argument, 0, 1016},
-    {"configtest", no_argument, 0, 1015},
+    {"config-strict", no_argument, 0, OPT_CONFIG_STRICT},
+    {"configtest", no_argument, 0, OPT_CONFIGTEST},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}};
 
@@ -207,6 +226,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int cli_in = 0;
   int cli_out = 0;
   int c;
+  const endpoint_t *srt_ep;
+  plain_endpoint_t *ne;
 
   pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
   if (pst != ARGS_OK) return pst;
@@ -246,7 +267,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'k':
         cfg->insecure_tls = 1;
         break;
-      case 1000: {
+      case OPT_GROUP_MODE: {
 #ifndef DIPISRT_HAVE_BONDING
         argerr("--group-mode needs a libsrt built with bonding support (ENABLE_BONDING=ON)");
         return ARGS_ERR;
@@ -261,10 +282,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
 #endif
       }
-      case 1001:
+      case OPT_RENDEZVOUS:
         cfg->rendezvous = 1;
         break;
-      case 1002: {
+      case OPT_LOCAL: {
         int family_unused;
         if (argutil_addrport_parse(optarg, &family_unused, cfg->local_host, sizeof cfg->local_host, &cfg->local_port)) {
           argerr("invalid --local: %s", optarg);
@@ -272,11 +293,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       }
-      case 1003:
+      case OPT_PASSPHRASE:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->passphrase, sizeof cfg->passphrase, optarg, "--passphrase"))
           return ARGS_ERR;
         break;
-      case 1004: {
+      case OPT_PBKEYLEN: {
         char *end;
         unsigned long v = strtoul(optarg, &end, 10);
         if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
@@ -286,39 +307,39 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->pbkeylen = (int)v;
         break;
       }
-      case 1005:
+      case OPT_STREAMID:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->streamid, sizeof cfg->streamid, optarg, "--streamid"))
           return ARGS_ERR;
         break;
-      case 1006:
+      case OPT_PACKETFILTER:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->packetfilter, sizeof cfg->packetfilter, optarg, "--packetfilter"))
           return ARGS_ERR;
         break;
-      case 1007:
+      case OPT_LATENCY:
         if (argutil_uint_range(optarg, 1, 60000, &cfg->latency_ms)) {
           argerr("invalid --latency: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1012:
+      case OPT_SEND_BUFFER_MULT:
         if (argutil_uint_range(optarg, 1, 32, &cfg->send_buffer_mult)) {
           argerr("invalid --send-buffer-mult: %s (1..32)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1013:
+      case OPT_AL_FEC:
         if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
           argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1014:
+      case OPT_AL_FEC_PORT:
         if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
           argerr("invalid --al-fec-port: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1008: {
+      case OPT_COLOR: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
           argerr("invalid --color: %s (auto|always|never)", optarg);
@@ -327,16 +348,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->color_mode = v;
         break;
       }
-      case 1009:
+      case OPT_METRICS:
         cfg->metrics_sock = optarg;
         break;
-      case 1010:
+      case OPT_METRICS_ID:
         cfg->metrics_id = optarg;
         break;
-      case 1011:
+      case OPT_METRICS_INTERVAL:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
-      case 1017:
+      case OPT_METRICS_INSPECT_TS:
         if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
         break;
       case 'v':
@@ -346,8 +367,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->daemonize = 1;
         break;
       case 'c':
-      case 1016:
-      case 1015:
+      case OPT_CONFIG_STRICT:
+      case OPT_CONFIGTEST:
         break;
       case 'h':
         print_help();
@@ -372,29 +393,27 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("exactly one of -i/-o must be srt://, the other a plain endpoint");
     return ARGS_ERR;
   }
-  {
-    const endpoint_t *srt_ep = cfg->in.is_srt ? &cfg->in : &cfg->out;
-    if (srt_ep->n_srt > 1 && cfg->group_mode == SRTGROUP_NONE) {
-      argerr("bonding several srt:// peers requires --group-mode");
+  srt_ep = cfg->in.is_srt ? &cfg->in : &cfg->out;
+  if (srt_ep->n_srt > 1 && cfg->group_mode == SRTGROUP_NONE) {
+    argerr("bonding several srt:// peers requires --group-mode");
+    return ARGS_ERR;
+  }
+  if (srt_ep->n_srt == 1 && cfg->group_mode != SRTGROUP_NONE) {
+    argerr("--group-mode has no effect with a single srt:// peer");
+    return ARGS_ERR;
+  }
+  if (cfg->rendezvous) {
+    if (srt_ep->listen) {
+      argerr("--rendezvous is not combinable with srt://@ (listener)");
       return ARGS_ERR;
     }
-    if (srt_ep->n_srt == 1 && cfg->group_mode != SRTGROUP_NONE) {
-      argerr("--group-mode has no effect with a single srt:// peer");
+    if (cfg->group_mode != SRTGROUP_NONE) {
+      argerr("--rendezvous is not combinable with --group-mode");
       return ARGS_ERR;
     }
-    if (cfg->rendezvous) {
-      if (srt_ep->listen) {
-        argerr("--rendezvous is not combinable with srt://@ (listener)");
-        return ARGS_ERR;
-      }
-      if (cfg->group_mode != SRTGROUP_NONE) {
-        argerr("--rendezvous is not combinable with --group-mode");
-        return ARGS_ERR;
-      }
-      if (!cfg->local_host[0] || !cfg->local_port) {
-        argerr("--rendezvous requires --local <host:port>");
-        return ARGS_ERR;
-      }
+    if (!cfg->local_host[0] || !cfg->local_port) {
+      argerr("--rendezvous requires --local <host:port>");
+      return ARGS_ERR;
     }
   }
   if (cfg->passphrase[0] && (strlen(cfg->passphrase) < 10 || strlen(cfg->passphrase) > 79)) {
@@ -413,13 +432,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (!cfg->al_fec_l && cfg->al_fec_port) log_line(TOOL_NAME ": --al-fec-port has no effect without --al-fec");
 
-  {
-    plain_endpoint_t *ne = cfg->in.is_srt ? &cfg->out.nonsrt : &cfg->in.nonsrt;
-    if (cfg->al_fec_l && ne->kind != PLAIN_EP_RTP) log_line(TOOL_NAME ": --al-fec has no effect, the non-srt:// side isn't rtp://");
-    ne->al_fec_l = cfg->al_fec_l;
-    ne->al_fec_d = cfg->al_fec_d;
-    ne->al_fec_port = cfg->al_fec_port;
-  }
+  ne = cfg->in.is_srt ? &cfg->out.nonsrt : &cfg->in.nonsrt;
+  if (cfg->al_fec_l && ne->kind != PLAIN_EP_RTP) log_line(TOOL_NAME ": --al-fec has no effect, the non-srt:// side isn't rtp://");
+  ne->al_fec_l = cfg->al_fec_l;
+  ne->al_fec_d = cfg->al_fec_d;
+  ne->al_fec_port = cfg->al_fec_port;
   if (cfg->insecure_tls && !(cfg->in.nonsrt.kind == PLAIN_EP_HTTP && cfg->in.nonsrt.http.tls))
     log_line(TOOL_NAME ": --insecure needs -i https://");
   if (cfg->send_buffer_mult && !config_is_sender(cfg))

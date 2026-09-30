@@ -13,6 +13,15 @@
 #include "config.h"
 #include "version.h"
 
+#define OPT_CAID 1002
+#define OPT_ALGO 1001
+#define OPT_COLOR 1000
+#define OPT_METRICS 1003
+#define OPT_METRICS_ID 1004
+#define OPT_METRICS_INTERVAL 1005
+#define OPT_CONFIG_STRICT 1007
+#define OPT_CONFIGTEST 1006
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 static void print_help(void) {
@@ -31,7 +40,7 @@ static void print_help(void) {
       "      --algo <a>             cissa|csa2 (default: cissa)\n"
       "  -v, --verbose              protocol/decode detail on stderr\n"
       "      --color <when>         auto|always|never (default auto)\n"
-      "      --metrics <path>       Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+      "      --metrics <path>       socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
       "      --metrics-id <name>    stable instance id; metrics disabled unless set\n"
       "      --metrics-interval <s> snapshot interval in seconds (default: 5)\n"
       "  -d, --daemonize            fork to background after startup, detach from terminal\n"
@@ -51,17 +60,17 @@ static const struct option longopts[] = {
     {"serial", required_argument, 0, 's'},
     {"port", required_argument, 0, 'p'},
     {"auth", required_argument, 0, 'a'},
-    {"caid", required_argument, 0, 1002},
-    {"algo", required_argument, 0, 1001},
+    {"caid", required_argument, 0, OPT_CAID},
+    {"algo", required_argument, 0, OPT_ALGO},
     {"verbose", no_argument, 0, 'v'},
-    {"color", required_argument, 0, 1000},
-    {"metrics", required_argument, 0, 1003},
-    {"metrics-id", required_argument, 0, 1004},
-    {"metrics-interval", required_argument, 0, 1005},
+    {"color", required_argument, 0, OPT_COLOR},
+    {"metrics", required_argument, 0, OPT_METRICS},
+    {"metrics-id", required_argument, 0, OPT_METRICS_ID},
+    {"metrics-interval", required_argument, 0, OPT_METRICS_INTERVAL},
     {"daemonize", no_argument, 0, 'd'},
     {"config", required_argument, 0, 'c'},
-    {"config-strict", no_argument, 0, 1007},
-    {"configtest", no_argument, 0, 1006},
+    {"config-strict", no_argument, 0, OPT_CONFIG_STRICT},
+    {"configtest", no_argument, 0, OPT_CONFIGTEST},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}};
 
@@ -123,13 +132,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         break;
       }
-      case 1002:
+      case OPT_CAID:
         if (cam378_cfg_caid(optarg, &cfg->caid)) {
           argerr("invalid --caid: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1001:
+      case OPT_ALGO:
         if (!strcmp(optarg, "csa2"))
           cfg->cw_len = 8;
         else if (!strcmp(optarg, "cissa"))
@@ -145,7 +154,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'd':
         cfg->daemonize = 1;
         break;
-      case 1000:
+      case OPT_COLOR:
         {
           log_color_t v;
           if (log_color_from_string(optarg, &v)) {
@@ -155,18 +164,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           cfg->color_mode = v;
         }
         break;
-      case 1003:
+      case OPT_METRICS:
         cfg->metrics_sock = optarg;
         break;
-      case 1004:
+      case OPT_METRICS_ID:
         cfg->metrics_id = optarg;
         break;
-      case 1005:
+      case OPT_METRICS_INTERVAL:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
       case 'c':
-      case 1007:
-      case 1006:
+      case OPT_CONFIG_STRICT:
+      case OPT_CONFIGTEST:
         break;
       case 'h':
         print_help();

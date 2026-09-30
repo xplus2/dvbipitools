@@ -30,6 +30,7 @@
 #define SRTOUT_INITIAL_BITRATE_BPS (100000000 / 8) /* generous startup guess, resize_pending_if_needed() settles it */
 #define SRTOUT_RAM_FRACTION_DIVISOR 50         /* ceiling: 1/50 = 2% of MemAvailable */
 #define SRTOUT_RESIZE_INTERVAL_S 1.0
+#define SRTOUT_RAM_CHECK_INTERVAL_S 5.0 /* feeds a soft ceiling only, doesn't need 1Hz freshness */
 #define SRTOUT_BITRATE_EMA_ALPHA 0.3           /* new-sample weight per resize tick */
 
 struct srtout {
@@ -48,7 +49,7 @@ struct srtout {
   int pending_cap;
   int pending_head;  /* index of oldest queued chunk */
   int pending_count;
-  int queue_metrics;
+  srt_queue_metrics_t queue_metrics;
   void (*note_enqueue)(srtout_t *);
   int pending_hwm;
   uint64_t queue_dropped;
@@ -57,6 +58,9 @@ struct srtout {
   size_t bytes_since_check; /* fed to bitrate EMA at each resize tick */
   double last_check_at;     /* mono_seconds(); 0 = not yet sampled */
   double bitrate_ema_bps;   /* 0 until first real sample */
+
+  long ram_cached_bytes;    /* -1 = unreadable */
+  double ram_checked_at;    /* mono_seconds(); 0 = not yet sampled */
 };
 
 /* RCVSYN/SNDSYN off: connect/rendezvous returns immediately, EASYNCSND means in progress */
@@ -209,7 +213,7 @@ static void flush_pending(srtout_t *r) {
 }
 
 /* MemAvailable: safe estimate, skips reclaimable cache. -1: /proc/meminfo unreadable */
-static long available_ram_bytes(void) {
+static long read_ram_bytes(void) {
   FILE *f = fopen("/proc/meminfo", "r");
   unsigned long kb = 0;
   char line[128];
@@ -224,12 +228,21 @@ static long available_ram_bytes(void) {
   return kb ? (long)kb * 1024 : -1;
 }
 
-static int pending_target_chunks(const srtout_t *r) {
+/* only feeds a soft ceiling, cached SRTOUT_RAM_CHECK_INTERVAL_S */
+static long available_ram_bytes(srtout_t *r, double now) {
+  if (r->ram_checked_at == 0.0 || now - r->ram_checked_at >= SRTOUT_RAM_CHECK_INTERVAL_S) {
+    r->ram_cached_bytes = read_ram_bytes();
+    r->ram_checked_at = now;
+  }
+  return r->ram_cached_bytes;
+}
+
+static int pending_target_chunks(srtout_t *r, double now) {
   double bps = r->bitrate_ema_bps > 0 ? r->bitrate_ema_bps : (double)SRTOUT_INITIAL_BITRATE_BPS;
   unsigned latency_ms = r->cfg.opts.latency_ms ? r->cfg.opts.latency_ms : SRTOUT_DEFAULT_LATENCY_MS;
   double floor_bytes = (double)SRTOUT_PENDING_FLOOR_CHUNKS * SRTOUT_PLSIZE;
   double target_bytes = bps * (latency_ms / 1000.0) * r->safety_mult;
-  long ram = available_ram_bytes();
+  long ram = available_ram_bytes(r, now);
   long ceiling_bytes = ram > 0 ? ram / SRTOUT_RAM_FRACTION_DIVISOR : -1;
 
   if (target_bytes < floor_bytes)
@@ -287,7 +300,7 @@ static void resize_pending_if_needed(srtout_t *r) {
   }
   r->bytes_since_check = 0;
   r->last_check_at = now;
-  resize_pending(r, pending_target_chunks(r));
+  resize_pending(r, pending_target_chunks(r, now));
 }
 
 srtout_t *srtout_open(const srtout_cfg_t *cfg) {
@@ -331,7 +344,7 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
   r->cfg = *cfg;
   r->safety_mult = cfg->safety_mult ? cfg->safety_mult : SRTOUT_SAFETY_MULT_DEFAULT;
   r->queue_metrics = cfg->queue_metrics;
-  r->note_enqueue = cfg->queue_metrics > 1 ? note_enqueue_hwm : note_enqueue_off;
+  r->note_enqueue = cfg->queue_metrics == SRT_QUEUE_METRICS_FULL ? note_enqueue_hwm : note_enqueue_off;
   if (r->safety_mult > SRTOUT_SAFETY_MULT_MAX)
     r->safety_mult = SRTOUT_SAFETY_MULT_MAX;
   sbuf_init(&pl, r->peer_label, sizeof r->peer_label);
@@ -365,32 +378,29 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
 /* stats push covers whole connection/group, not per bonded member */
 static void push_stats(srtout_t *r) {
   SRT_TRACEBSTATS st;
-  if (!r->mx || r->sock == SRT_INVALID_SOCK || !metrics_exporter_due(r->mx, mono_seconds()) || srt_bstats(r->sock, &st, 0) != 0)
-    return;
-  {
-    metrics_entry_t e[] = {
-  {METRICS_ID_SRT_SENDER_SENT_TOTAL, r->peer_label, (uint64_t)st.pktSentTotal},
-  {METRICS_ID_SRT_SENDER_RETRANSMITTED_TOTAL, r->peer_label, (uint64_t)st.pktRetransTotal},
-  {METRICS_ID_SRT_SENDER_RTT_MILLISECONDS, r->peer_label, (uint64_t)st.msRTT},
-  {METRICS_ID_SRT_SENDER_LOST_TOTAL, r->peer_label, (uint64_t)st.pktSndLossTotal},
-  {METRICS_ID_SRT_SENDER_DROPPED_TOTAL, r->peer_label, (uint64_t)st.pktSndDropTotal},
-    };
-    metrics_entry_t q[] = {
-  {METRICS_ID_SRT_SENDER_QUEUE_CHUNKS, r->peer_label, (uint64_t)r->pending_count},
-  {METRICS_ID_SRT_SENDER_QUEUE_CAPACITY_CHUNKS, r->peer_label, (uint64_t)r->pending_cap},
-  {METRICS_ID_SRT_SENDER_QUEUE_HIGH_WATERMARK_CHUNKS, r->peer_label, (uint64_t)r->pending_hwm},
-  {METRICS_ID_SRT_SENDER_QUEUE_DROPPED_CHUNKS_TOTAL, r->peer_label, r->queue_dropped},
-    };
-    metrics_entry_t all[sizeof e / sizeof e[0] + sizeof q / sizeof q[0]];
-    size_t n = sizeof e / sizeof e[0];
-    memcpy(all, e, sizeof e);
-    if (r->queue_metrics) {
-      size_t nq = r->queue_metrics > 1 ? 4 : 2;
-      memcpy(all + n, q, nq * sizeof q[0]);
-      n += nq;
-    }
-    metrics_push_entries(r->mx, r->tool_version, all, n);
+  if (!r->mx || r->sock == SRT_INVALID_SOCK || !metrics_exporter_due(r->mx, mono_seconds()) || srt_bstats(r->sock, &st, 0) != 0) return;
+  metrics_entry_t e[] = {
+{METRICS_ID_SRT_SENDER_SENT_TOTAL, r->peer_label, (uint64_t)st.pktSentTotal},
+{METRICS_ID_SRT_SENDER_RETRANSMITTED_TOTAL, r->peer_label, (uint64_t)st.pktRetransTotal},
+{METRICS_ID_SRT_SENDER_RTT_MILLISECONDS, r->peer_label, (uint64_t)st.msRTT},
+{METRICS_ID_SRT_SENDER_LOST_TOTAL, r->peer_label, (uint64_t)st.pktSndLossTotal},
+{METRICS_ID_SRT_SENDER_DROPPED_TOTAL, r->peer_label, (uint64_t)st.pktSndDropTotal},
+  };
+  metrics_entry_t q[] = {
+{METRICS_ID_SRT_SENDER_QUEUE_CHUNKS, r->peer_label, (uint64_t)r->pending_count},
+{METRICS_ID_SRT_SENDER_QUEUE_CAPACITY_CHUNKS, r->peer_label, (uint64_t)r->pending_cap},
+{METRICS_ID_SRT_SENDER_QUEUE_HIGH_WATERMARK_CHUNKS, r->peer_label, (uint64_t)r->pending_hwm},
+{METRICS_ID_SRT_SENDER_QUEUE_DROPPED_CHUNKS_TOTAL, r->peer_label, r->queue_dropped},
+  };
+  metrics_entry_t all[sizeof e / sizeof e[0] + sizeof q / sizeof q[0]];
+  size_t n = sizeof e / sizeof e[0];
+  memcpy(all, e, sizeof e);
+  if (r->queue_metrics != SRT_QUEUE_METRICS_OFF) {
+    size_t nq = r->queue_metrics == SRT_QUEUE_METRICS_FULL ? 4 : 2;
+    memcpy(all + n, q, nq * sizeof q[0]);
+    n += nq;
   }
+  metrics_push_entries(r->mx, r->tool_version, all, n);
 }
 
 static void service_step(srtout_t *r) {

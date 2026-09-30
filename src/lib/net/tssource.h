@@ -77,10 +77,13 @@ uint32_t tssrc_last_rtp_ts(const tssrc_t *s);
 
 /* underlying multicast handle, for a caller layering its own repair logic (e.g. dipirec's RET NACK client)
    on top of the joined group. NULL unless the kind is TSSRC_RTP/TSSRC_UDP. */
-mcast_t *tssrc_mcast(tssrc_t *s);
+mcast_t *tssrc_mcast(const tssrc_t *s);
 
 /* underlying fd, for caller's own poll(). valid for life of s. */
 int tssrc_fd(const tssrc_t *s);
+
+int tssrc_fec_fd(const tssrc_t *s);
+void tssrc_fec_poll(tssrc_t *s);
 
 /* TSSRC_FILE/TSSRC_STDIN, seekable underlying fd only (best-effort, silent no-op otherwise):
    rewinds to byte 0, keeps already-decided raw/RTP framing.

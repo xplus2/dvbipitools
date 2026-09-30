@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -23,14 +24,18 @@ static void ecm_unload_legacy_provider(void) {
 #endif
 
 /* DES-EDE/EDE3 live in OpenSSL 3's "legacy" provider, not loaded by default */
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+static pthread_once_t ecm_legacy_provider_once = PTHREAD_ONCE_INIT;
+
+static void ecm_load_legacy_provider(void) {
+  ecm_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
+  atexit(ecm_unload_legacy_provider);
+}
+#endif
+
 static void ecm_ensure_legacy_provider(void) {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-  static int done = 0;
-  if (!done) {
-    ecm_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
-    atexit(ecm_unload_legacy_provider);
-    done = 1;
-  }
+  pthread_once(&ecm_legacy_provider_once, ecm_load_legacy_provider);
 #endif
 }
 

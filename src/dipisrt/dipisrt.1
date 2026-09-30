@@ -8,73 +8,31 @@ dipisrt \- bridge a DVB-IPI stream between RTP/UDP/file and an SRT link, sender 
 .B \-o
 .I uri
 .RI [ options ]
+
 .SH DESCRIPTION
 .B dipisrt
-bridges a DVB-IPI stream between a plain RTP/UDP/file endpoint and an SRT
-link, in either direction, using libsrt. SRT is not part of DVB-IPI; this
-tool exists to carry DVB-IPI streams over unmanaged or lossy networks with
-SRT's ARQ-based recovery.
-.PP
+bridges a DVB-IPI stream between a plain RTP/UDP/file endpoint and an SRT link, in either direction.
+The direction is detected, depending on -i/-o being an
+.B srt://
+URI.
+
 Exactly one of
-.B \-i
-(input) or
-.B \-o
-(output) must be an
+.B -i/-o
+must be an
 .B srt://
-URI, the other is a regular
-.BR dipirec (1)-style
-endpoint: RTP or plain UDP multicast, an HTTP(S) TS stream (source side
-only), stdin/stdout, or a file. Only one direction is served per process.
-.PP
-An
-.B srt://
-endpoint address is either
-.IB host : port
-(calls out, caller) or
-.BI @ host : port
-(binds/listens/accepts, listener); the leading
-.B @
-mirrors this toolkit's own
-.BR rtp://@ / udp://@
-convention. Unlike RIST's fixed sender-calls-out/receiver-listens rule,
-SRT's caller/listener role is independent of which side produces the
-media; either
-.B \-i
-or
-.B \-o
-may carry the
-.BR @ .
-.IR host
-is a numeric IP, not a hostname. IPv6 addresses and multicast groups
-are bracketed, e.g.
-.B srt://@[::1]:9000
-or
-.BR rtp://@[ff3e::1]:8700 .
-.PP
-Repeating
-.B \-i
-or
-.B \-o
-with further
-.B srt://
-URIs bonds several links carrying the same stream, selected with
-.B \-\-group\-mode
-.RB ( broadcast
-or
-.BR backup ).
-Every bonded peer of one endpoint must agree on caller vs. listener.
-.PP
-.B \-\-rendezvous
-swaps the srt:// side's connection setup for SRT's rendezvous mode: both
-ends actively dial each other, neither is a listener, which lets two hosts
-behind separate NATs punch a direct hole to one another. It requires
-.B \-\-local
-and cannot combine with
-.B srt://@
-or
-.BR \-\-group\-mode .
-SRT's rendezvous only does the NAT hole\-punching itself; each side
-still needs to learn the other's public address some other way first.
+URI.
+.B <host>
+is a numeric IP, not a hostname. SRT's caller/listener role is independent of which side produces the media:
+add an @ right after srt:// to listen, leave it off to call out, regardless of whether that side is -i or -o.
+
+Repeating -i/-o with further srt:// URIs bonds several links (
+.B --group-mode broadcast|backup
+). Every bonded peer of one endpoint must agree on caller vs. listener.
+
+.B --rendezvous
+lets both ends actively dial each other without a listener (NAT-to-NAT links). It needs --local and cannot be combined with srt://@ or
+.B --group-mode.
+
 .SH OPTIONS
 .TP
 .BR \-i ", " \-\-in " " \fIuri\fR
@@ -105,9 +63,6 @@ Required when bonding (repeated
 peers on one endpoint), rejected otherwise. Needs a
 .B libsrt
 built with bonding support
-.RB ( ENABLE_BONDING=ON ,
-off by default upstream and in most distro packages); this build rejects the flag outright
-if its own linked libsrt lacks it.
 .TP
 .B \-\-rendezvous
 Use SRT rendezvous instead of connect/listen. Requires
@@ -143,7 +98,7 @@ SRT latency in milliseconds, 1 to 60000. Default is the library default.
 .B \-\-send\-buffer\-mult \fIn\fR
 Sender-side queue depth, in latency windows, 1 to 32. Only applies to the
 .B \-o srt://
-sender side; the queue is sized automatically from the observed input
+sender side. The queue is sized automatically from the observed input
 bitrate and current latency, bounded by available memory. Default
 .BR 4 .
 .TP
@@ -236,10 +191,6 @@ Bonded sender: the same stream carried over two independent SRT links.
 .TP
 .B dipisrt \-i rtp://@239.1.1.1:5000 \-o srt://1.2.3.4:9000 \-\-passphrase correcthorsebatterystaple
 Sender with encryption.
-.SH EXIT STATUS
-.B 0
-on success.
-Non-zero on argument errors or I/O/network failure.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipisrt.yaml

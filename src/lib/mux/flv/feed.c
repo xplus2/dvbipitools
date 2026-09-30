@@ -19,7 +19,8 @@ void flv_all_ready(flv_t *f) {
 }
 
 static void try_parse_h264_hdr(flv_t *f, flv_track_t *t) {
-  unsigned w, h;
+  unsigned w;
+  unsigned h;
   if (h264_dims(t->es.sps, t->es.spslen, &w, &h) != 0) return;
   t->es.cpriv_len = build_avcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
   if (t->es.cpriv_len) {
@@ -29,7 +30,8 @@ static void try_parse_h264_hdr(flv_t *f, flv_track_t *t) {
 }
 
 static void try_parse_hevc_hdr(flv_t *f, flv_track_t *t) {
-  unsigned w, h;
+  unsigned w;
+  unsigned h;
   if (hevc_info(t->es.sps, t->es.spslen, t->es.ptl, &t->es.chroma, &w, &h) != 0) return;
   t->es.cpriv_len = build_hvcc(&t->es, t->es.cpriv, sizeof t->es.cpriv);
   if (t->es.cpriv_len) {
@@ -72,10 +74,14 @@ static void handle_video(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, co
   strip.rbcap = &t->lcevc_rbcap;
   strip.esc = &t->lcevc_esc;
   strip.esccap = &t->lcevc_esccap;
-  if (t->es.codec == CODEC_AV1)
-    esc_split_obus(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, &t->av1_rb, &t->av1_rbcap);
-  else
-    esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, f->opts->strip_lcevc ? &strip : NULL);
+  switch (t->es.codec) {
+    case CODEC_AV1:
+      esc_split_obus(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, &t->av1_rb, &t->av1_rbcap);
+      break;
+    default:
+      esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, f->opts->strip_lcevc ? &strip : NULL);
+      break;
+  }
   if (key) t->got_key = 1; /* try_parse's flv_all_ready() reads got_key */
   if (!t->hdr_parsed) {
     if (t->es.codec == CODEC_H264 && t->es.spslen && t->es.ppslen)
@@ -143,7 +149,8 @@ static int audio_supported(codec_t c) { return c == CODEC_AC3 || c == CODEC_EAC3
 
 void flv_setup(flv_t *f) {
   const psi_es_t *es;
-  int c, k;
+  int c;
+  int k;
 
   es = psi_es(f->psi, &c);
   for (k = 0; k < c && !f->have_v; k++) {

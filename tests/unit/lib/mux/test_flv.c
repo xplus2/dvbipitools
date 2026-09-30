@@ -232,14 +232,19 @@ typedef struct {
   int n;
 } tag_capture_t;
 
-static void capture_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len) {
+static void capture_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
   tag_capture_t *c = ctx;
+  size_t len = hn + pn;
+  size_t take_h, take_p;
   if (c->n >= (int)(sizeof c->tags / sizeof c->tags[0]))
     return;
   c->tags[c->n].type = type;
   c->tags[c->n].timestamp_ms = timestamp_ms;
   c->tags[c->n].len = len < sizeof c->tags[0].data ? len : sizeof c->tags[0].data;
-  memcpy(c->tags[c->n].data, data, c->tags[c->n].len);
+  take_h = hn < c->tags[c->n].len ? hn : c->tags[c->n].len;
+  take_p = c->tags[c->n].len - take_h;
+  if (take_h) memcpy(c->tags[c->n].data, hdr, take_h);
+  if (take_p) memcpy(c->tags[c->n].data + take_h, payload, take_p);
   c->n++;
 }
 

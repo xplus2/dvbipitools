@@ -13,13 +13,11 @@
 
 #define H3_HLS_COLD_WAITERS_MAX 64
 
-static _Thread_local llhls_waiter_t t_h3_hls_cold_waiters[H3_HLS_COLD_WAITERS_MAX];
+static _Thread_local hls_waiter_t t_h3_hls_cold_waiters[H3_HLS_COLD_WAITERS_MAX];
 static _Thread_local int t_h3_hls_cold_waiters_active;
 
-int h3_hls_cold_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, hls_cold_kind_t kind,
-                         seg_container_t container, int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle) {
-  return hls_cold_waiter_pool_try_park(t_h3_hls_cold_waiters, H3_HLS_COLD_WAITERS_MAX, &t_h3_hls_cold_waiters_active, conn, stream_id, ctx, filter, pmt_pid, lcevc, filename,
-                                       kind, container, want_ll, is_head, 0, origin_hdr, timeout_ms, ws_handle);
+int h3_hls_cold_try_park(h3_conn_t *conn, int64_t stream_id, const hls_cold_park_req_t *req) {
+  return hls_cold_waiter_pool_try_park(t_h3_hls_cold_waiters, H3_HLS_COLD_WAITERS_MAX, &t_h3_hls_cold_waiters_active, conn, stream_id, req);
 }
 
 void h3_hls_cold_on_stream_close(const h3_conn_t *c, int64_t stream_id) {
@@ -30,7 +28,7 @@ void h3_hls_cold_on_conn_close(const h3_conn_t *c) {
   llhls_waiter_pool_close_owner(t_h3_hls_cold_waiters, H3_HLS_COLD_WAITERS_MAX, &t_h3_hls_cold_waiters_active, c, -1);
 }
 
-static void h3_hls_cold_finish(llhls_waiter_t *w) {
+static void h3_hls_cold_finish(hls_waiter_t *w) {
   h3_conn_t *conn = w->owner;
   h3_req_t *r;
   int handled;
@@ -40,7 +38,7 @@ static void h3_hls_cold_finish(llhls_waiter_t *w) {
   r = find_req(conn, w->stream_id);
   if (!r) return;
   if (w->kind == HLS_COLD_MP4) {
-    int sub = mp4push_subscribe(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, 3);
+    int sub = mp4push_subscribe(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, CONN_PROTO_H3);
     if (sub < 0 || !h3_mp4push_dispatch(conn, r, sub, w->ws_handle)) {
       if (sub >= 0) mp4push_sub_close(sub);
       h3_respond_status(conn, w->stream_id, "501");

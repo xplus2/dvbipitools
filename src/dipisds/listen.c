@@ -24,7 +24,7 @@ int listen_run(const config_t *cfg) {
   FILE *f;
   mcast_t *m;
   dvbstp_reasm_t *r;
-  seen_t seen[LISTEN_SEEN_MAX];
+  dvbstp_seen_t seen[LISTEN_SEEN_MAX];
   int seen_count = 0;
   unsigned segments = 0, total_services = 0;
   double deadline;
@@ -62,22 +62,17 @@ int listen_run(const config_t *cfg) {
     if (n <= 0) continue;
     if (!dvbstp_reasm_feed(r, buf, (size_t)n, &hdr, &data, &len)) continue;
     if (hdr.payload_id != DVBSTP_PAYLOAD_BROADCAST_DISCOVERY) continue;
-    if (already_seen(seen, &seen_count, &hdr)) continue;
+    if (dvbstp_already_seen(seen, &seen_count, &hdr)) continue;
     segments++;
 
     if (cfg->format == OUT_XML) {
       format_out_raw(f, cfg->format, data, len);
     } else {
-      char *xml = malloc(len + 1);
       sds_service_t entries[SDS_MAX_SERVICES];
       int count, truncated;
-      if (!xml) continue;
-      memcpy(xml, data, len);
-      xml[len] = '\0';
-      count = sds_parse_broadcast(xml, entries, SDS_MAX_SERVICES, &truncated);
+      count = sds_parse_broadcast((const char *)data, entries, SDS_MAX_SERVICES, &truncated);
       for (int i = 0; i < count; i++) format_out_item(f, cfg->format, &entries[i]);
       total_services += (unsigned)count;
-      free(xml);
       if (truncated)
         log_line("segment %u: %d services, more present beyond the %d cap", segments, count, SDS_MAX_SERVICES);
       else if (cfg->verbose)

@@ -41,9 +41,15 @@ typedef struct {
 } channel_ret_fcc_t;
 
 typedef struct {
+  const char *name;
+  int idx;
+} channel_name_slot_t;
+
+typedef struct {
   channel_item_t *items;
   int count;
   int cap;
+  channel_name_slot_t *name_order;
 } channel_list_t;
 
 typedef struct {

@@ -216,18 +216,19 @@ http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out
 
     case HA_TLS_HANDSHAKE: {
       tls_handshake_status_t st = tls_handshake_step(h->tls);
-      if (st == TLS_HANDSHAKE_WANT_READ) {
-        a->want_events = POLLIN;
-        return HTTP_ASYNC_PENDING;
-      }
-      if (st == TLS_HANDSHAKE_WANT_WRITE) {
-        a->want_events = POLLOUT;
-        return HTTP_ASYNC_PENDING;
-      }
-      if (st == TLS_HANDSHAKE_ERROR) {
-        if (reason_out)
-          *reason_out = NET_ERR_TLS;
-        return HTTP_ASYNC_ERROR;
+      switch (st) {
+        case TLS_HANDSHAKE_WANT_READ:
+          a->want_events = POLLIN;
+          return HTTP_ASYNC_PENDING;
+        case TLS_HANDSHAKE_WANT_WRITE:
+          a->want_events = POLLOUT;
+          return HTTP_ASYNC_PENDING;
+        case TLS_HANDSHAKE_ERROR:
+          if (reason_out)
+            *reason_out = NET_ERR_TLS;
+          return HTTP_ASYNC_ERROR;
+        case TLS_HANDSHAKE_DONE:
+          break;
       }
       if (async_build_request(a) != 0) {
         if (reason_out) *reason_out = NET_ERR_FORMAT;

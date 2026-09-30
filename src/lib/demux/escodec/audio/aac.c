@@ -53,14 +53,12 @@ static int latm_cfg(br_t *b, esc_track_t *t) {
   unsigned aot;
   size_t asc_start;
   size_t asc_end;
+  unsigned n;
   amv = br_u(b, 1);
   if (amv) {
     if (br_u(b, 1)) return -1;
-
-    {
-      unsigned n = br_u(b, 2);
-      for (unsigned i = 0; i <= n; i++) br_u(b, 8);
-    }
+    n = br_u(b, 2);
+    for (unsigned i = 0; i <= n; i++) br_u(b, 8);
   }
   if (!br_u(b, 1)) return -1;
   if (br_u(b, 6) || br_u(b, 4) || br_u(b, 3)) return -1;

@@ -2,9 +2,9 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <limits.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
-
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
@@ -23,34 +23,64 @@ void tls_log_ssl_error(const char *what) {
   }
 }
 
+static SSL_CTX *build_client_ctx(int insecure) {
+  SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+  if (!ctx) {
+    tls_log_ssl_error("SSL_CTX_new");
+    return NULL;
+  }
+  if (SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION) != 1) {
+    tls_log_ssl_error("SSL_CTX_set_min_proto_version");
+    SSL_CTX_free(ctx);
+    return NULL;
+  }
+  if (insecure) {
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+  } else {
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    if (SSL_CTX_set_default_verify_paths(ctx) != 1) {
+      tls_log_ssl_error("SSL_CTX_set_default_verify_paths");
+      SSL_CTX_free(ctx);
+      return NULL;
+    }
+  }
+  return ctx;
+}
+
+static pthread_once_t g_secure_ctx_once = PTHREAD_ONCE_INIT;
+static pthread_once_t g_insecure_ctx_once = PTHREAD_ONCE_INIT;
+static SSL_CTX *g_secure_ctx;
+static SSL_CTX *g_insecure_ctx;
+
+static void init_secure_ctx(void) { g_secure_ctx = build_client_ctx(0); }
+static void init_insecure_ctx(void) { g_insecure_ctx = build_client_ctx(1); }
+
+static SSL_CTX *client_ctx(int insecure) {
+  if (insecure) {
+    pthread_once(&g_insecure_ctx_once, init_insecure_ctx);
+    return g_insecure_ctx;
+  }
+  pthread_once(&g_secure_ctx_once, init_secure_ctx);
+  return g_secure_ctx;
+}
+
 /* shared by tls_connect() and tls_connect_start(): everything up to (not incl.) SSL_connect() */
 static tls_t *tls_setup(int fd, const char *host, int insecure) {
   tls_t *t = calloc(1, sizeof *t);
   if (!t) return NULL;
   t->fd = fd;
-  t->ctx = SSL_CTX_new(TLS_client_method());
+  t->ctx = client_ctx(insecure);
   if (!t->ctx) {
-    tls_log_ssl_error("SSL_CTX_new");
-    goto fail;
-  }
-  if (SSL_CTX_set_min_proto_version(t->ctx, TLS1_2_VERSION) != 1) {
-    tls_log_ssl_error("SSL_CTX_set_min_proto_version");
-    goto fail;
-  }
-  if (insecure) {
-    SSL_CTX_set_verify(t->ctx, SSL_VERIFY_NONE, NULL);
-  } else {
-    SSL_CTX_set_verify(t->ctx, SSL_VERIFY_PEER, NULL);
-    if (SSL_CTX_set_default_verify_paths(t->ctx) != 1) {
-      tls_log_ssl_error("SSL_CTX_set_default_verify_paths");
-      goto fail;
-    }
+    free(t);
+    return NULL;
   }
   t->ssl = SSL_new(t->ctx);
+  t->ctx = NULL;
   if (!t->ssl) {
     tls_log_ssl_error("SSL_new");
     goto fail;
   }
+  SSL_set_mode(t->ssl, SSL_MODE_ENABLE_PARTIAL_WRITE | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
   if (SSL_set_tlsext_host_name(t->ssl, host) != 1) {
     tls_log_ssl_error("SSL SNI setup");
     goto fail;
@@ -67,7 +97,6 @@ static tls_t *tls_setup(int fd, const char *host, int insecure) {
 
 fail:
   if (t->ssl) SSL_free(t->ssl);
-  if (t->ctx) SSL_CTX_free(t->ctx);
   free(t);
   return NULL;
 }
@@ -79,7 +108,6 @@ tls_t *tls_connect(int fd, const char *host, int insecure) {
     log_line("tls handshake with %s failed", host);
     tls_log_ssl_error("SSL_connect");
     SSL_free(t->ssl);
-    SSL_CTX_free(t->ctx);
     free(t);
     return NULL;
   }
@@ -95,8 +123,11 @@ tls_handshake_status_t tls_handshake_step(tls_t *t) {
   int err;
   if (r == 1) return TLS_HANDSHAKE_DONE;
   err = SSL_get_error(t->ssl, r);
-  if (err == SSL_ERROR_WANT_READ) return TLS_HANDSHAKE_WANT_READ;
-  if (err == SSL_ERROR_WANT_WRITE) return TLS_HANDSHAKE_WANT_WRITE;
+  switch (err) {
+    case SSL_ERROR_WANT_READ: return TLS_HANDSHAKE_WANT_READ;
+    case SSL_ERROR_WANT_WRITE: return TLS_HANDSHAKE_WANT_WRITE;
+    default: break;
+  }
   log_line("tls handshake failed");
   tls_log_ssl_error("SSL_connect");
   return TLS_HANDSHAKE_ERROR;
@@ -108,7 +139,12 @@ ssize_t tls_read(tls_t *t, void *buf, size_t cap) {
   n = SSL_read(t->ssl, buf, (int)cap);
   if (n > 0) return n;
   err = SSL_get_error(t->ssl, n);
-  if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) return 0;
+  switch (err) {
+    case SSL_ERROR_WANT_READ:
+    case SSL_ERROR_WANT_WRITE:
+      return 0;
+    default: break;
+  }
   if (err != SSL_ERROR_ZERO_RETURN) tls_log_ssl_error("SSL_read");
   return -1;
 }
@@ -121,7 +157,12 @@ ssize_t tls_write(tls_t *t, const void *buf, size_t len) {
   n = SSL_write(t->ssl, buf, (int)len);
   if (n > 0) return n;
   err = SSL_get_error(t->ssl, n);
-  if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) return 0;
+  switch (err) {
+    case SSL_ERROR_WANT_READ:
+    case SSL_ERROR_WANT_WRITE:
+      return 0;
+    default: break;
+  }
   tls_log_ssl_error("SSL_write");
   return -1;
 }

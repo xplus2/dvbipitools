@@ -63,6 +63,10 @@ assert_contains "$WORK/dipidescramble.log" "scrambling_mode=0x01" "dipidescrambl
 
 [ -s "$out" ] || fail "dipidescramble: no output file produced"
 
+mode=$(stat -c %a "$out")
+other=$(printf '%s' "$mode" | tail -c 1)
+[ "$other" = "0" ] || fail "dipidescramble: -o output $out world-accessible (mode $mode)"
+
 echo "OK"
 
 #EOF

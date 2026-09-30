@@ -8,15 +8,6 @@
 
 #include "../config.h"
 
-typedef struct {
-  int input;
-  int have_input;
-  int vendor;
-  int have_vendor;
-} item_state_t;
-
-extern item_state_t rdh_item;
-
 int rdh_set_buf(char *dst, size_t sz, const char *v, char *e, size_t n);
 int rdh_set_pbkeylen(int *dst, const char *v, char *e, size_t n);
 int rdh_add_input(config_t *cfg, const char *uri, char *e, size_t n);

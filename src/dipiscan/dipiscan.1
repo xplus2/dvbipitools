@@ -1,14 +1,14 @@
 .TH DIPISCAN 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
 .SH NAME
-dipiscan \- scan and report on DVB-IPI multicast streams
+dipiscan \- scan and report on multicast streams
 .SH SYNOPSIS
 .B dipiscan
 [\fIoptions\fR] 1>\fIplaylist\fR 2>\fIlog\fR
 .SH DESCRIPTION
 .B dipiscan
-sweeps a multicast /24 (or the analogous IPv6 range) for DVB-IPI services
+sweeps a multicast (or analogous IPv6) range for IPTV services
 and writes a playlist of what answered. Every address/port combination in
-the configured range is probed once; each probe joins the multicast group
+the configured range is probed, each probe joins the multicast group
 (directly via IGMP/MLD, or through an HTTP TS proxy) and waits for a PAT
 and SDT service name within the configured time budget.
 .PP
@@ -16,12 +16,11 @@ This tool exists because deployments do not always use DVBSTP/SD&S
 service discovery as implemented by
 .BR dipisds (1).
 Where SD&S is available, scanning a live multicast range for services is
-unnecessary; \fBdipiscan\fR fills the gap when it is not.
+unnecessary. \fBdipiscan\fR fills the gap when it is not.
 .PP
 Output can be written as an M3U playlist, XSPF playlist, a local CSV
-format, SD&S Broadcast Discovery XML (ETSI TS 102 034), or discarded
-entirely (only the stderr log remains). The M3U, XSPF, and CSV formats
-are convenience additions and are not part of the DVB-IPI specification.
+format, SD&S Broadcast Discovery XML (ETSI TS 102 034), or just
+reported on stderr.
 Every format also carries the DVB triplet (transport_stream_id,
 original_network_id, service_id) read from PAT/SDT: CSV as three extra
 columns, M3U as \fItsid\fR/\fIonid\fR/\fIsid\fR attributes on the
@@ -157,15 +156,6 @@ Sweep a wider CIDR block.
 .TP
 .B dipiscan \-m 239.19.75.10\-239.19.75.20 >hd.m3u
 Sweep an explicit address range.
-.SH EXIT STATUS
-.TP
-.B 0
-Success (including no options given: usage hint printed, nothing else
-done).
-.TP
-.B nonzero
-Argument error, output file could not be opened, or the scan was
-interrupted by a signal.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipiscan.yaml

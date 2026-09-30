@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DVBIPITOOLS_LIB_NET_RTMPOUT_H
-#define DVBIPITOOLS_LIB_NET_RTMPOUT_H
+#ifndef DVBIPITOOLS_LIB_NET_RTMP_RTMPOUT_H
+#define DVBIPITOOLS_LIB_NET_RTMP_RTMPOUT_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -20,7 +20,7 @@ typedef struct rtmpout rtmpout_t;
 rtmpout_t *rtmpout_open(const rtmpout_cfg_t *cfg);
 
 /* one target per rtmpout_t, fan out yourself for several. 0 sent or held back for keyframe/reconn, -1 no conn, non-fatal */
-int rtmpout_write(rtmpout_t *o, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len);
+int rtmpout_write(rtmpout_t *o, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn);
 
 void rtmpout_close(rtmpout_t *o);
 

@@ -15,6 +15,7 @@
 #include "dipixy/ts/capture/capture.h"
 #include "dipixy/ts/channels/channels.h"
 #include "lib/helper/sds_xml.h"
+#include "lib/helper/ioutil.h"
 
 static void write_temp_file(char *path, const char *content) {
   char tmpl[] = "/tmp/dvbipitools_test_channels_XXXXXX.m3u";
@@ -278,12 +279,12 @@ START_TEST(list_for_each_passes_fcc_through) {
   memset(&collected, 0, sizeof collected);
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.name, sizeof svc.name, "FCC Channel");
-  snprintf(svc.address, sizeof svc.address, "239.1.1.1");
+  bufcpy(svc.name, sizeof svc.name, "FCC Channel");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
   memset(&fcc, 0, sizeof fcc);
-  snprintf(fcc.addr, sizeof fcc.addr, "10.0.0.2");
+  bufcpy(fcc.addr, sizeof fcc.addr, "10.0.0.2");
   fcc.port = 7000;
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
@@ -342,18 +343,18 @@ START_TEST(channels_resolve_passes_ret_and_fcc_through) {
   unsigned port;
 
   memset(&svc, 0, sizeof svc);
-  snprintf(svc.name, sizeof svc.name, "Both Channel");
-  snprintf(svc.address, sizeof svc.address, "239.1.1.2");
+  bufcpy(svc.name, sizeof svc.name, "Both Channel");
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.2");
   svc.port = 5001;
 
   memset(&ret, 0, sizeof ret);
-  snprintf(ret.addr, sizeof ret.addr, "10.0.0.1");
+  bufcpy(ret.addr, sizeof ret.addr, "10.0.0.1");
   ret.port = 6000;
   ret.rtx_time_ms = 2000;
   ret.rtx_pt = 99;
 
   memset(&fcc, 0, sizeof fcc);
-  snprintf(fcc.addr, sizeof fcc.addr, "10.0.0.2");
+  bufcpy(fcc.addr, sizeof fcc.addr, "10.0.0.2");
   fcc.port = 7000;
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
@@ -396,6 +397,196 @@ START_TEST(channels_resolve_passes_ret_and_fcc_through) {
 }
 END_TEST
 
+START_TEST(resolve_by_name_finds_correct_entry_regardless_of_input_order) {
+  char path[160];
+  char content[2048] = "";
+  channels_t *ch;
+  int family, rtp;
+  char addr[64];
+  unsigned port;
+
+  strcat(content, "#EXTINF:-1,Zulu\nrtp://@239.1.1.26:5000\n");
+  strcat(content, "#EXTINF:-1,Alpha\nrtp://@239.1.1.1:5001\n");
+  strcat(content, "#EXTINF:-1,Mike\nrtp://@239.1.1.13:5002\n");
+  strcat(content, "#EXTINF:-1,Kilo\nrtp://@239.1.1.11:5003\n");
+  write_temp_file(path, content);
+
+  ch = build_single_m3u_list(path);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Alpha", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_str_eq(addr, "239.1.1.1");
+  ck_assert_uint_eq(port, 5001u);
+
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Zulu", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_str_eq(addr, "239.1.1.26");
+  ck_assert_uint_eq(port, 5000u);
+
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Kilo", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_uint_eq(port, 5003u);
+
+  ck_assert_int_ne(channels_resolve(ch, 1, 0, "NoSuchName", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(item_lookup_by_name_reports_correct_original_ordinal) {
+  char path[160];
+  char content[2048] = "";
+  channels_t *ch;
+  unsigned out_item_num = 999;
+  char out_name[64], out_proto[16], out_addr[64];
+
+  strcat(content, "#EXTINF:-1,Zulu\nrtp://@239.1.1.26:5000\n");
+  strcat(content, "#EXTINF:-1,Alpha\nrtp://@239.1.1.1:5001\n");
+  strcat(content, "#EXTINF:-1,Mike\nrtp://@239.1.1.13:5002\n");
+  write_temp_file(path, content);
+
+  ch = build_single_m3u_list(path);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+
+  ck_assert_int_eq(channels_item_lookup(ch, 1, 0, "Mike", &out_item_num, out_name, sizeof out_name,
+    out_proto, sizeof out_proto, out_addr, sizeof out_addr), 0);
+  ck_assert_uint_eq(out_item_num, 3);
+  ck_assert_str_eq(out_name, "Mike");
+  ck_assert_str_eq(out_addr, "239.1.1.13:5002");
+  ck_assert_int_eq(channels_item_lookup(ch, 1, 0, "Alpha", &out_item_num, out_name, sizeof out_name,
+    out_proto, sizeof out_proto, out_addr, sizeof out_addr), 0);
+  ck_assert_uint_eq(out_item_num, 2);
+  ck_assert_int_ne(channels_item_lookup(ch, 1, 0, "Missing", &out_item_num, out_name, sizeof out_name,
+    out_proto, sizeof out_proto, out_addr, sizeof out_addr), 0);
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(resolve_by_name_works_across_a_larger_list) {
+  char path[160];
+  char content[8192] = "";
+  char line[128];
+  channels_t *ch;
+  int family, rtp;
+  char addr[64];
+  unsigned port;
+  int i;
+
+  for (i = 0; i < 64; i++) {
+    snprintf(line, sizeof line, "#EXTINF:-1,Chan%02d\nrtp://@239.2.0.%d:6000\n", i, i + 1);
+    strcat(content, line);
+  }
+  write_temp_file(path, content);
+
+  ch = build_single_m3u_list(path);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+
+  for (i = 0; i < 64; i++) {
+    char name[16];
+    snprintf(name, sizeof name, "Chan%02d", i);
+    ck_assert_int_eq(channels_resolve(ch, 1, 0, name, &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+    ck_assert_uint_eq(port, 6000u);
+  }
+  ck_assert_int_ne(channels_resolve(ch, 1, 0, "Chan99", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(resolve_by_name_after_reload_uses_fresh_index) {
+  char path[160];
+  channels_t *ch;
+  config_t cfg;
+  source_def_t src;
+  int family, rtp;
+  char addr[64];
+  unsigned port;
+
+  write_temp_file(path, "#EXTINF:-1,First\nrtp://@239.3.0.1:7000\n");
+  ch = build_single_m3u_list(path);
+  ck_assert_ptr_nonnull(ch);
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "First", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+
+  write_temp_file(path, "#EXTINF:-1,Second\nrtp://@239.3.0.2:7001\n#EXTINF:-1,First\nrtp://@239.3.0.3:7002\n");
+  memset(&cfg, 0, sizeof cfg);
+  memset(&src, 0, sizeof src);
+  src.kind = SRC_M3U;
+  src.value = path;
+  src.ordinal = 1;
+  cfg.sources = &src;
+  cfg.n_sources = 1;
+  channels_reload_all(ch, &cfg);
+  unlink(path);
+
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Second", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_uint_eq(port, 7001u);
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "First", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_uint_eq(port, 7002u);
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(direct_mcast_source_builds_single_item_list) {
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+  int family, rtp;
+  char addr[64];
+  unsigned port;
+
+  memset(&cfg, 0, sizeof cfg);
+  memset(&src, 0, sizeof src);
+  src.kind = SRC_MCAST;
+  src.value = "rtp://239.2.24.1:8208";
+  src.ordinal = 1;
+  cfg.sources = &src;
+  cfg.n_sources = 1;
+  ch = channels_build(&cfg);
+  ck_assert_ptr_nonnull(ch);
+
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 1);
+  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_eq(family, AF_INET);
+  ck_assert_str_eq(addr, "239.2.24.1");
+  ck_assert_uint_eq(port, 8208u);
+  ck_assert_int_eq(rtp, 1);
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(direct_mcast_source_survives_sighup_reload) {
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+  int family, rtp;
+  char addr[64];
+  unsigned port;
+
+  memset(&cfg, 0, sizeof cfg);
+  memset(&src, 0, sizeof src);
+  src.kind = SRC_MCAST;
+  src.value = "udp://239.2.24.1:8208";
+  src.ordinal = 1;
+  cfg.sources = &src;
+  cfg.n_sources = 1;
+  ch = channels_build(&cfg);
+  ck_assert_ptr_nonnull(ch);
+
+  channels_reload_all(ch, &cfg);
+
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 1);
+  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_uint_eq(port, 8208u);
+  ck_assert_int_eq(rtp, 0);
+
+  channels_free(ch);
+}
+END_TEST
+
 static Suite *channels_suite(void) {
   Suite *s = suite_create("dipixy_channels");
   TCase *tc = tcase_create("core");
@@ -405,6 +596,12 @@ static Suite *channels_suite(void) {
   tcase_add_test(tc, list_for_each_passes_dvb_triplet_through);
   tcase_add_test(tc, list_for_each_passes_fcc_through);
   tcase_add_test(tc, channels_resolve_passes_ret_and_fcc_through);
+  tcase_add_test(tc, resolve_by_name_finds_correct_entry_regardless_of_input_order);
+  tcase_add_test(tc, item_lookup_by_name_reports_correct_original_ordinal);
+  tcase_add_test(tc, resolve_by_name_works_across_a_larger_list);
+  tcase_add_test(tc, resolve_by_name_after_reload_uses_fresh_index);
+  tcase_add_test(tc, direct_mcast_source_builds_single_item_list);
+  tcase_add_test(tc, direct_mcast_source_survives_sighup_reload);
   suite_add_tcase(s, tc);
   return s;
 }

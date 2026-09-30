@@ -103,7 +103,7 @@ void tsinspect_put_metrics(tsinspect_t *t, metrics_writer_t *w, const char *stre
   metrics_writer_put(w, METRICS_ID_TS_PTS_ERRORS_TOTAL, stream, c->pts_errors);
   metrics_writer_put(w, METRICS_ID_TS_PID_ADDED_TOTAL, stream, c->pid_added);
   metrics_writer_put(w, METRICS_ID_TS_PID_REMOVED_TOTAL, stream, c->pid_removed);
-  for (int i = 0; i < 5; i++) {
+  for (size_t i = 0; i < ARRAY_SIZE(TABLE_NAMES); i++) {
     const psi_obs_stat_t *s = &p.psi[i];
     put_labeled(w, METRICS_ID_TS_TABLE_CRC_ERRORS_TOTAL, stream, TABLE_NAMES[i], s->crc_errors);
     put_labeled(w, METRICS_ID_TS_TABLE_VERSION_CHANGES_TOTAL, stream, TABLE_NAMES[i], s->changes);

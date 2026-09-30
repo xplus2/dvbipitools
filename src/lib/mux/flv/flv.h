@@ -13,7 +13,7 @@ typedef enum { FLV_TAG_AUDIO = 8, FLV_TAG_VIDEO = 9, FLV_TAG_SCRIPT = 18 } flv_t
 
 /* tag body only, TagType/DataSize/Timestamp/StreamID stripped. data valid
    for call duration only. */
-typedef void (*flv_tag_cb)(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len);
+typedef void (*flv_tag_cb)(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn);
 
 typedef struct {
   unsigned audio_track; /* 1-based audio_index, 0 = first available */

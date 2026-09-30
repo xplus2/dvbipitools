@@ -26,8 +26,8 @@
 typedef struct {
   int outfd[DIPIDESCRAMBLE_MAX_OUT]; /* plain file targets, unused (mkv_t owns fd) under -f mkv/mka */
   int n_outfd;
-  unsigned char outbuf[DIPIDESCRAMBLE_MAX_OUT][PIPELINE_OUT_BATCH_PKTS * 188];
-  size_t outbuf_len[DIPIDESCRAMBLE_MAX_OUT];
+  unsigned char outbuf[PIPELINE_OUT_BATCH_PKTS * 188];
+  size_t outbuf_len;
   mkv_t *mkv; /* NULL unless -f mkv|mka */
   unsigned long long mkv_bytes;
   flv_t *flv; /* NULL: no rtmp(s) target */
@@ -41,7 +41,8 @@ typedef struct {
   psi_t *psi;
   tsinspect_t *insp_in;
   tsinspect_t *insp_out;
-  unsigned ecm_pid, emm_pid; /* 0 = not yet resolved */
+  unsigned ecm_pid; /* 0 = not yet resolved */
+  unsigned emm_pid;
   int cas_logged;
   const char *cas_mode; /* NULL until cas_logged: "classic"/"biss1e"/"biss-ca" */
   uint64_t ecm_total;
@@ -59,7 +60,8 @@ typedef struct {
   ipiclient_t *ipi; /* NULL unless -u given and classic CAS resolved */
   ipiclient_poll_t *ipi_pending;
   const config_t *cfg;
-  psi_section_asm_t ecm_asm, emm_asm;
+  psi_section_asm_t ecm_asm;
+  psi_section_asm_t emm_asm;
   scrambler_t *scr; /* NULL until scrambling_mode resolved */
   int cw_len;
   int have_cw[2]; /* indexed by SCRAMBLE_PARITY_EVEN/_ODD */
@@ -82,7 +84,7 @@ int pkt_cb_inspect(void *v, const unsigned char *pkt);
 void pipeline_flush(loop_ctx_t *lc);
 
 /* flv_tag_cb, fans out to lc->rtmp[0..n_rtmp), registered on lc->flv by main() */
-void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len);
+void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn);
 
 /* advances every -o srt:// target's connect state, flushes queued data.
    call every main-loop iteration, even when input is quiet. */

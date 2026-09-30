@@ -19,43 +19,50 @@ int src_open(const config_t *cfg, src_t *s) {
   s->kind = cfg->source.kind;
   memset(&tc, 0, sizeof tc);
   tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
-  if (s->kind == URI_HTTP) {
-    tc.kind = TSSRC_HTTP;
-    tc.http = cfg->source.http;
-    tc.insecure_tls = cfg->insecure_tls;
-  } else if (s->kind == URI_FILE) {
-    if (cfg->source.file_path[0]) {
-      tc.kind = TSSRC_FILE;
-      tc.file_path = cfg->source.file_path;
-    } else {
-      tc.kind = TSSRC_STDIN;
-    }
-  } else if (s->kind == URI_RIST) {
-    tc.kind = TSSRC_RIST;
-    tc.rist_uri = cfg->source.rist_uri;
-    tc.rist_profile_main = cfg->rist_profile_in == RIST_PROF_MAIN;
-  } else if (s->kind == URI_SRT) {
-    tc.kind = TSSRC_SRT;
-    tc.srt_host = cfg->source.srt_host;
-    tc.srt_port = cfg->source.srt_port;
-    tc.srt_listen = cfg->source.srt_listen;
-    tc.srt_passphrase = cfg->srt_passphrase_in;
-    tc.srt_pbkeylen = cfg->srt_pbkeylen_in;
-    tc.srt_streamid = cfg->srt_streamid_in;
-    tc.srt_packetfilter = cfg->srt_packetfilter_in;
-    tc.srt_latency_ms = cfg->srt_latency_in_ms;
-    tc.srt_verbose = cfg->verbose;
-  } else {
-    tc.kind = (s->kind == URI_RTP) ? TSSRC_RTP : TSSRC_UDP;
-    tc.family = cfg->source.family;
-    tc.group = cfg->source.group;
-    tc.port = cfg->source.port;
-    tc.iface = cfg->iface_in;
-    if (s->kind == URI_RTP) {
-      tc.al_fec_l = cfg->al_fec_l;
-      tc.al_fec_d = cfg->al_fec_d;
-      tc.al_fec_port = cfg->al_fec_port;
-    }
+  switch (s->kind) {
+    case URI_HTTP:
+      tc.kind = TSSRC_HTTP;
+      tc.http = cfg->source.http;
+      tc.insecure_tls = cfg->insecure_tls;
+      break;
+    case URI_FILE:
+      if (cfg->source.file_path[0]) {
+        tc.kind = TSSRC_FILE;
+        tc.file_path = cfg->source.file_path;
+      } else {
+        tc.kind = TSSRC_STDIN;
+      }
+      break;
+    case URI_RIST:
+      tc.kind = TSSRC_RIST;
+      tc.rist_uri = cfg->source.rist_uri;
+      tc.rist_profile_main = cfg->rist_profile_in == RIST_PROF_MAIN;
+      break;
+    case URI_SRT:
+      tc.kind = TSSRC_SRT;
+      tc.srt_host = cfg->source.srt_host;
+      tc.srt_port = cfg->source.srt_port;
+      tc.srt_listen = cfg->source.srt_listen;
+      tc.srt_passphrase = cfg->srt_passphrase_in;
+      tc.srt_pbkeylen = cfg->srt_pbkeylen_in;
+      tc.srt_streamid = cfg->srt_streamid_in;
+      tc.srt_packetfilter = cfg->srt_packetfilter_in;
+      tc.srt_latency_ms = cfg->srt_latency_in_ms;
+      tc.srt_verbose = cfg->verbose;
+      break;
+    case URI_RTP:
+    case URI_UDP:
+      tc.kind = (s->kind == URI_RTP) ? TSSRC_RTP : TSSRC_UDP;
+      tc.family = cfg->source.family;
+      tc.group = cfg->source.group;
+      tc.port = cfg->source.port;
+      tc.iface = cfg->iface_in;
+      if (s->kind == URI_RTP) {
+        tc.al_fec_l = cfg->al_fec_l;
+        tc.al_fec_d = cfg->al_fec_d;
+        tc.al_fec_port = cfg->al_fec_port;
+      }
+      break;
   }
 
   s->t = tssrc_open(&tc, NULL);
@@ -127,6 +134,7 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
 }
 
 int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
+  tssink_cfg_t tc;
   o->kind = t->kind;
   o->net = NULL;
   o->rist = NULL;
@@ -169,22 +177,19 @@ int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
     o->srt = srtsink_open(&sc);
     return o->srt ? 0 : -1;
   }
-  {
-    tssink_cfg_t tc;
-    memset(&tc, 0, sizeof tc);
-    tc.kind = (t->kind == OUT_RTP) ? TSSINK_RTP : TSSINK_UDP;
-    tc.family = t->family;
-    tc.group = t->group;
-    tc.port = t->port;
-    tc.iface = cfg->iface_out;
-    tc.ttl = cfg->out_ttl;
-    if (t->kind == OUT_RTP) {
-      tc.al_fec_l = cfg->al_fec_l;
-      tc.al_fec_d = cfg->al_fec_d;
-      tc.al_fec_port = cfg->al_fec_port;
-    }
-    o->net = tssink_open(&tc);
+  memset(&tc, 0, sizeof tc);
+  tc.kind = (t->kind == OUT_RTP) ? TSSINK_RTP : TSSINK_UDP;
+  tc.family = t->family;
+  tc.group = t->group;
+  tc.port = t->port;
+  tc.iface = cfg->iface_out;
+  tc.ttl = cfg->out_ttl;
+  if (t->kind == OUT_RTP) {
+    tc.al_fec_l = cfg->al_fec_l;
+    tc.al_fec_d = cfg->al_fec_d;
+    tc.al_fec_port = cfg->al_fec_port;
   }
+  o->net = tssink_open(&tc);
   return o->net ? 0 : -1;
 }
 

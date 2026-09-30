@@ -19,7 +19,8 @@ int tvh_apply_mcast(void *c, const char *v, char *e, size_t n) {
 }
 
 int tvh_apply_out_iface(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->iface_out, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->iface_out, v, e, n);
 }
 
 int tvh_apply_udp(void *c, const char *v, char *e, size_t n) {

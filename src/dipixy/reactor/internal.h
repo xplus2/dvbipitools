@@ -28,6 +28,9 @@
 
 #include <errno.h>
 
+/* threads[] sized to this in reactor_run, -j past it fails at startup */
+#define REACTOR_MAX_WORKERS 256
+
 extern long g_connections_total;
 extern _Thread_local int t_reactor_tid;
 extern _Thread_local int t_reactor_epfd;
@@ -164,72 +167,100 @@ typedef struct {
   int64_t deadline_ms;
   int active;
   int ws_handle;
-} llhls_waiter_t;
+} hls_waiter_t;
 
-typedef int (*llhls_waiter_ready_fn)(llhls_waiter_t *w);
-typedef void (*llhls_waiter_finish_fn)(llhls_waiter_t *w);
+typedef int (*hls_waiter_ready_fn)(hls_waiter_t *w);
+typedef void (*hls_waiter_finish_fn)(hls_waiter_t *w);
 
-static inline int llhls_ready_part(llhls_waiter_t *w) {
+typedef struct {
+  capture_ctx_t *cap_ctx;
+  const pid_filter_t *filter;
+  unsigned pmt_pid;
+  const lcevc_select_t *lcevc;
+  const char *filename;
+  int is_head;
+  int keep_alive;
+  const char *inm;
+  const char *origin_hdr;
+  uint32_t want_seg;
+  int want_part;
+  int timeout_ms;
+  int ws_handle;
+} llhls_park_req_t;
+
+typedef struct {
+  capture_ctx_t *cap_ctx;
+  const pid_filter_t *filter;
+  unsigned pmt_pid;
+  const lcevc_select_t *lcevc;
+  const char *filename;
+  hls_cold_kind_t kind;
+  seg_container_t container;
+  int want_ll;
+  int is_head;
+  int keep_alive;
+  const char *origin_hdr;
+  int timeout_ms;
+  int ws_handle;
+} hls_cold_park_req_t;
+
+static inline int llhls_ready_part(hls_waiter_t *w) {
   return hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, SEG_CONTAINER_TS, w->want_seg, w->want_part);
 }
 
-static inline int hls_cold_ready(llhls_waiter_t *w) {
+static inline int hls_cold_ready(hls_waiter_t *w) {
   return w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container) : hls_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container);
 }
 
 /* 1 parked (caller stops touching conn/stream), 0 table full */
-static inline int llhls_waiter_pool_try_park(llhls_waiter_t *slots, int cap, int *active_count, void *owner,  int64_t stream_id, capture_ctx_t *cap_ctx, const pid_filter_t *filter,
-                                             unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, int keep_alive, const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part,
-                                             int timeout_ms, int ws_handle) {
+static inline int llhls_waiter_pool_try_park(hls_waiter_t *slots, int cap, int *active_count, void *owner, int64_t stream_id, const llhls_park_req_t *req) {
   for (int i = 0; i < cap; i++) {
-    llhls_waiter_t *w = &slots[i];
+    hls_waiter_t *w = &slots[i];
     if (w->active) continue;
     w->owner = owner;
     w->stream_id = stream_id;
-    w->cap_ctx = cap_ctx;
-    w->filter = *filter;
-    w->pmt_pid = pmt_pid;
-    w->lcevc = *lcevc;
-    bufcpy(w->filename, sizeof w->filename, filename);
-    w->is_head = is_head;
-    w->keep_alive = keep_alive;
-    bufcpy(w->inm, sizeof w->inm, inm ? inm : "");
-    bufcpy(w->origin, sizeof w->origin, origin_hdr ? origin_hdr : "");
-    w->want_seg = want_seg;
-    w->want_part = want_part;
-    w->deadline_ms = now_ms() + timeout_ms;
+    w->cap_ctx = req->cap_ctx;
+    w->filter = *req->filter;
+    w->pmt_pid = req->pmt_pid;
+    w->lcevc = *req->lcevc;
+    bufcpy(w->filename, sizeof w->filename, req->filename);
+    w->is_head = req->is_head;
+    w->keep_alive = req->keep_alive;
+    bufcpy(w->inm, sizeof w->inm, req->inm ? req->inm : "");
+    bufcpy(w->origin, sizeof w->origin, req->origin_hdr ? req->origin_hdr : "");
+    w->want_seg = req->want_seg;
+    w->want_part = req->want_part;
+    w->deadline_ms = now_ms() + req->timeout_ms;
     w->active = 1;
-    w->ws_handle = ws_handle;
+    w->ws_handle = req->ws_handle;
     (*active_count)++;
     return 1;
   }
   return 0;
 }
 
-/* 1 parked (caller stops touching conn/stream), 0 table full. keep_alive: h1 only, pass 0 for h2/h3 */
-static inline int hls_cold_waiter_pool_try_park(llhls_waiter_t *slots, int cap, int *active_count, void *owner, int64_t stream_id, capture_ctx_t *cap_ctx, const pid_filter_t *filter,
-                                                unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head, int keep_alive,
-                                                const char *origin_hdr, int timeout_ms, int ws_handle) {
+/* 1 parked (caller stops touching conn/stream), 0 table full */
+static inline int hls_cold_waiter_pool_try_park(hls_waiter_t *slots, int cap, int *active_count, void *owner, int64_t stream_id, const hls_cold_park_req_t *req) {
   for (int i = 0; i < cap; i++) {
-    llhls_waiter_t *w = &slots[i];
+    hls_waiter_t *w = &slots[i];
     if (w->active) continue;
     w->owner = owner;
     w->stream_id = stream_id;
-    w->cap_ctx = cap_ctx;
-    w->filter = *filter;
-    w->pmt_pid = pmt_pid;
-    w->lcevc = *lcevc;
-    bufcpy(w->filename, sizeof w->filename, filename);
-    w->kind = kind;
-    w->container = container;
-    w->want_ll = want_ll;
-    w->is_head = is_head;
-    w->keep_alive = keep_alive;
+    w->cap_ctx = req->cap_ctx;
+    w->filter = *req->filter;
+    w->pmt_pid = req->pmt_pid;
+    w->lcevc = *req->lcevc;
+    bufcpy(w->filename, sizeof w->filename, req->filename);
+    w->kind = req->kind;
+    w->container = req->container;
+    w->want_ll = req->want_ll;
+    w->is_head = req->is_head;
+    w->keep_alive = req->keep_alive;
     w->inm[0] = '\0';
-    bufcpy(w->origin, sizeof w->origin, origin_hdr ? origin_hdr : "");
-    w->deadline_ms = now_ms() + timeout_ms;
+    bufcpy(w->origin, sizeof w->origin, req->origin_hdr ? req->origin_hdr : "");
+    w->deadline_ms = now_ms() + req->timeout_ms;
     w->active = 1;
-    w->ws_handle = ws_handle;
+    w->ws_handle = req->ws_handle;
     (*active_count)++;
     return 1;
   }
@@ -237,19 +268,19 @@ static inline int hls_cold_waiter_pool_try_park(llhls_waiter_t *slots, int cap, 
 }
 
 /* stream_id < 0: match owner only (conn closing). else: match owner + exact stream (stream closing) */
-static inline void llhls_waiter_pool_close_owner(llhls_waiter_t *slots, int cap, int *active_count, const void *owner, int64_t stream_id) {
+static inline void llhls_waiter_pool_close_owner(hls_waiter_t *slots, int cap, int *active_count, const void *owner, int64_t stream_id) {
   for (int i = 0; i < cap; i++) if (slots[i].active && slots[i].owner == owner && (stream_id < 0 || slots[i].stream_id == stream_id)) {
     slots[i].active = 0;
     (*active_count)--;
   }
 }
 
-static inline void llhls_waiter_pool_flush(llhls_waiter_t *slots, int cap, int *active_count, llhls_waiter_ready_fn ready, llhls_waiter_finish_fn finish) {
+static inline void llhls_waiter_pool_flush(hls_waiter_t *slots, int cap, int *active_count, hls_waiter_ready_fn ready, hls_waiter_finish_fn finish) {
   int64_t now;
   if (*active_count <= 0) return;
   now = now_ms();
   for (int i = 0; i < cap; i++) {
-    llhls_waiter_t *w = &slots[i];
+    hls_waiter_t *w = &slots[i];
     if (!w->active) continue;
     if (now < w->deadline_ms && !ready(w)) continue;
     w->active = 0;
@@ -263,6 +294,41 @@ void hls_cold_flush_waiters(void);
 
 /* dispatch.c. purges c's waiter slot, call before reactor_close() frees it */
 void hls_cold_waiter_conn_closing(const conn_t *c);
+
+/* ts/spts/rawaudio cold start. no packet yet. h1 only, no h2/h3 push */
+typedef struct {
+  void *owner;
+  int active;
+  int64_t deadline_ms;
+  capture_ctx_t *cap_ctx;
+  route_t rt;
+  unsigned list_num;
+  pid_filter_t filter;
+  unsigned tp_pmt_pid;
+  lcevc_select_t lcevc;
+  int spts;
+  int rawaudio;
+  int keep_alive;
+} ts_cold_waiter_t;
+
+typedef struct {
+  capture_ctx_t *cap_ctx;
+  const route_t *rt;
+  unsigned list_num;
+  const pid_filter_t *filter;
+  unsigned tp_pmt_pid;
+  const lcevc_select_t *lcevc;
+  int spts;
+  int rawaudio;
+  int keep_alive;
+  int timeout_ms;
+} ts_cold_park_req_t;
+
+/* dispatch.c. runs on worker loop iteration, resume ts/spts/rawaudio cold start waits */
+void ts_cold_flush_waiters(void);
+
+/* dispatch.c. purges c's waiter slot, call before reactor_close() frees */
+void ts_cold_waiter_conn_closing(const conn_t *c);
 
 /* handshake.c: TLS handshake + accept */
 void reactor_handshake(int epfd, conn_t *c);
@@ -311,13 +377,13 @@ void reactor_mp4push_readable(int epfd, conn_t *c);
 void reactor_mp4push_flush(int epfd, conn_t *c);
 void reactor_mp4push_close(int epfd, conn_t *c);
 
-/* CONN_WS lifecycle. dispatch.c queues 101, sets become_ws */
+/* CONN_WS lifecycle */
 void reactor_ws_begin(int epfd, conn_t *c);
 void reactor_ws_readable(int epfd, conn_t *c);
 void reactor_ws_close(int epfd, conn_t *c);
 void reactor_ws_flush(int epfd, conn_t *c);
 
 /* 1: handled (upgraded or rejected), 0: not WS */
-int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers, size_t num_headers, int keep_alive);
+int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers, size_t num_headers);
 
 #endif

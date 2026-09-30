@@ -22,7 +22,7 @@ clause 5. It runs in one of two mutually exclusive modes, selected by
 .B \-a
 (announce, headend/injector role) or
 .B \-l
-(listen, client/receiver role); exactly one of the two is required.
+(listen, client/receiver role). Eexactly one of the two is required.
 .PP
 In announce mode
 .B dipisds
@@ -34,8 +34,9 @@ group:port given by
 at the interval set by
 .B \-t
 (default 5 seconds; ETSI TS 102 034 caps the full announce cycle at 30
-seconds, so keep the interval comfortably under that). The input format is
-inferred from the
+seconds).
+.PP
+The input format is inferred from the
 .B \-i
 suffix:
 .B .csv
@@ -52,8 +53,8 @@ is a hand-authored or dipiscan-generated raw SD&S document that is sent
 through unparsed. For the structured formats, each entry's URI is
 .BR rtp:// [ @ ] addr : port
 or
-.BR udp:// [ @ ] addr : port ,
-the same convention dipirec/dipiscan use; a missing TSId/OrigNetId
+.BR udp:// [ @ ] addr : port.
+A missing TSId/OrigNetId
 defaults to 1, a missing ServiceId auto-increments from 1. For the
 structured (non-.xml) inputs,
 .B \-p
@@ -79,7 +80,7 @@ input, which bypasses this processing entirely.
 .PP
 SIGHUP re-reads
 .B \-i
-without restarting the process; on a parse error the previous input keeps
+without restarting the process. On a parse error the previous input keeps
 being announced and the error is logged. No effect in listen mode.
 .PP
 In listen mode
@@ -96,14 +97,7 @@ records it saw as a playlist to
 .B \-f
 or inferred from the
 .B \-o
-suffix:
-.BR m3u ,
-.BR csv ,
-and
-.B xspf
-mirror
-.BR dipiscan (1)'s
-own shapes;
+suffix.
 .B xml
 dumps the reassembled SD&S document as received, for debugging; and
 .B null
@@ -417,13 +411,6 @@ Announce a CSV playlist as an SD&S service list.
 .TP
 .B dipisds \-l \-m 239.255.0.1:3937 \-o discovered.m3u
 Listen for the announcement and write the discovered services as an m3u playlist.
-.SH EXIT STATUS
-.TP
-.B 0
-Success.
-.TP
-.B non-zero
-Argument error, or I/O or network failure.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipisds.yaml

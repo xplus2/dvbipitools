@@ -6,20 +6,23 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "lib/config/yamlcfg.h"
+
 #include "dipicam378/args.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
 START_TEST(key_is_required) {
   char *argv[] = {"dipicam378", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(key_alone_applies_defaults) {
   char *argv[] = {"dipicam378", "-k", "device.key", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.key_path, "device.key");
   ck_assert_uint_eq(cfg.port, 27500u);
@@ -27,130 +30,147 @@ START_TEST(key_alone_applies_defaults) {
   ck_assert_ptr_null(cfg.username);
   ck_assert_int_eq(cfg.cw_len, 16);
   ck_assert_uint_eq(cfg.caid, 0u);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(port_is_overridable) {
   char *argv[] = {"dipicam378", "-k", "device.key", "-p", "9999", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.port, 9999u);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(invalid_port_is_rejected) {
   char *argv[] = {"dipicam378", "-k", "device.key", "-p", "not-a-port", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(auth_without_colon_sets_password_only) {
   char *argv[] = {"dipicam378", "-k", "device.key", "-a", "secret", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_ptr_null(cfg.username);
   ck_assert_str_eq(cfg.password, "secret");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(auth_with_colon_splits_user_and_password) {
   char auth[] = "alice:secret"; /* args_parse writes a NUL into this in place, needs to be writable */
   char *argv[] = {"dipicam378", "-k", "device.key", "-a", auth, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.username, "alice");
   ck_assert_str_eq(cfg.password, "secret");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(caid_parses_hex) {
   char *argv[] = {"dipicam378", "-k", "device.key", "--caid", "2602", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.caid, 0x2602u);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(caid_rejects_zero) {
   char *argv[] = {"dipicam378", "-k", "device.key", "--caid", "0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(caid_rejects_out_of_range) {
   char *argv[] = {"dipicam378", "-k", "device.key", "--caid", "10000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(algo_csa2_sets_8_byte_cw) {
   char *argv[] = {"dipicam378", "-k", "device.key", "--algo", "csa2", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.cw_len, 8);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(algo_cissa_sets_16_byte_cw) {
   char *argv[] = {"dipicam378", "-k", "device.key", "--algo", "cissa", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.cw_len, 16);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(algo_rejects_unknown_value) {
   char *argv[] = {"dipicam378", "-k", "device.key", "--algo", "aes", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(invalid_color_mode_is_rejected) {
   char *argv[] = {"dipicam378", "-k", "device.key", "--color", "sometimes", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(unexpected_positional_argument_is_rejected) {
   char *argv[] = {"dipicam378", "-k", "device.key", "extra", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(help_returns_help_status) {
   char *argv[] = {"dipicam378", "-h", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(serial_and_verbose_are_recorded) {
   char *argv[] = {"dipicam378", "-k", "device.key", "-s", "e2e-01", "-v", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.serial, "e2e-01");
   ck_assert_int_eq(cfg.verbose, 1);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_options_require_metrics_id) {
   char *argv[] = {"dipicam378", "-k", "device.key", "--metrics", "/tmp/x.sock", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_id_alone_is_accepted) {
   char *argv[] = {"dipicam378", "-k", "device.key", "--metrics-id", "inst1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.metrics_id, "inst1");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -164,7 +184,7 @@ static void write_cfg(char *path, const char *text) {
 START_TEST(config_file_provides_settings) {
   char path[] = "/tmp/dipicam378_cfg_XXXXXX";
   char *argv[] = {"dipicam378", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "key: /tmp/k.pem\nport: 1234\nauth: 'bob:secret'\nalgo: csa2\ncaid: 0B00\nmetrics:\n  id: cam\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
@@ -175,35 +195,39 @@ START_TEST(config_file_provides_settings) {
   ck_assert_int_eq(cfg.cw_len, 8);
   ck_assert_uint_eq(cfg.caid, 0x0B00u);
   ck_assert_str_eq(cfg.metrics_id, "cam");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(cmdline_wins_over_config) {
   char path[] = "/tmp/dipicam378_cfg_XXXXXX";
   char *argv[] = {"dipicam378", "-c", path, "-p", "999", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "key: /tmp/k.pem\nport: 1234\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
   ck_assert_uint_eq(cfg.port, 999u);
   ck_assert_str_eq(cfg.key_path, "/tmp/k.pem");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_missing_file_is_error) {
   char *argv[] = {"dipicam378", "-c", "/nonexistent/dipicam378.yaml", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_invalid_value_is_error) {
   char path[] = "/tmp/dipicam378_cfg_XXXXXX";
   char *argv[] = {"dipicam378", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "key: /tmp/k.pem\nport: 0\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -211,11 +235,12 @@ START_TEST(configtest_reports_by_exit_status) {
   char path[] = "/tmp/dipicam378_cfg_XXXXXX";
   char *argv[] = {"dipicam378", "--configtest", "-c", path, NULL};
   char *argv2[] = {"dipicam378", "--configtest", "-c", "/nonexistent/dipicam378.yaml", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "bogus: 1\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
   ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 

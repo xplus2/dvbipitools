@@ -1,6 +1,7 @@
 # -i|--input [not set]
 #input:
   #- rtp://@239.19.75.1:8700
+  #- https://example.com/live/master.m3u8
   #- https://example.com/live/x/y.ts:
     # -p|--pmt-pid [not set] # dec or 0x-hex
     #pmt-pid: 0x0100

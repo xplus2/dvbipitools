@@ -34,12 +34,11 @@ struct mcast {
   } dest; /* send-side only */
   int ts_on;
   uint64_t last_rx_ns;
+  log_throttle_t send_fail_throttle;
 };
 
-/* socket+SO_REUSEADDR+SO_RCVBUF+iface resolve+bind, shared ASM/SSM open.
-   binds group not INADDR_ANY: same-port same-process inputs else all
-   eligible for each other's traffic (IP_MULTICAST_ALL), kernel picks one
-   winner per packet not per destination.
+/* socket+SO_REUSEADDR+SO_RCVBUF+iface resolve+bind, shared ASM/SSM open. binds group: same port same process inputs else all
+   eligible for each other's traffic (IP_MULTICAST_ALL), kernel picks winner per packet not per destination.
    -1 fail, *ifidx_out from iface (0 if NULL) */
 static int open_bound_recv_socket(int family, const char *group, unsigned port, const char *iface, unsigned *ifidx_out) {
   int fd;
@@ -54,7 +53,14 @@ static int open_bound_recv_socket(int family, const char *group, unsigned port, 
     return -1;
   }
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
-  setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf);
+  if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf) < 0) {
+    log_line("setsockopt SO_RCVBUF: %s", strerror(errno));
+  } else {
+    int actual = 0;
+    socklen_t actual_len = sizeof actual;
+    if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &actual, &actual_len) == 0 && actual < rcvbuf)
+      log_line("SO_RCVBUF capped to %d bytes (wanted %d; raise net.core.rmem_max)", actual, rcvbuf);
+  }
   if (iface) {
     *ifidx_out = if_nametoindex(iface);
     if (!*ifidx_out) {
@@ -147,6 +153,7 @@ mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char
   unsigned ifidx;
   int level = (family == AF_INET) ? IPPROTO_IP : IPPROTO_IPV6;
   struct timeval tv;
+  socklen_t sslen;
 
   tv.tv_sec = recv_timeout_ms / 1000;
   tv.tv_usec = (recv_timeout_ms % 1000) * 1000;
@@ -163,16 +170,13 @@ mcast_t *mcast_open_ssm(int family, const char *group, unsigned port, const char
 
   memset(&m->gsr, 0, sizeof m->gsr);
   m->gsr.gsr_interface = ifidx;
-  {
-    socklen_t sslen;
-    if (netaddr_fill(family, group, port, &m->gsr.gsr_group, &sslen)) {
-      log_line("bad group address: %s", group);
-      goto fail;
-    }
-    if (netaddr_fill(family, source_addr, 0, &m->gsr.gsr_source, &sslen)) {
-      log_line("bad source address: %s", source_addr);
-      goto fail;
-    }
+  if (netaddr_fill(family, group, port, &m->gsr.gsr_group, &sslen)) {
+    log_line("bad group address: %s", group);
+    goto fail;
+  }
+  if (netaddr_fill(family, source_addr, 0, &m->gsr.gsr_source, &sslen)) {
+    log_line("bad source address: %s", source_addr);
+    goto fail;
   }
   if (setsockopt(m->fd, level, MCAST_JOIN_SOURCE_GROUP, &m->gsr, sizeof m->gsr) < 0) {
     log_line("join %s from %s: %s", group, source_addr, strerror(errno));
@@ -325,7 +329,38 @@ ssize_t mcast_send(mcast_t *m, const void *buf, size_t len) {
   }
   n = sendto(m->fd, buf, len, 0, sa, salen);
   if (n < 0) {
-    log_line("sendto: %s", strerror(errno));
+    log_throttled(&m->send_fail_throttle, LOG_THROTTLE_WINDOW_S, "sendto: %s", strerror(errno));
+    return -1;
+  }
+  return n;
+}
+
+ssize_t mcast_sendv(mcast_t *m, const void *hdr, size_t hdr_len, const void *payload, size_t payload_len) {
+  const struct sockaddr *sa;
+  socklen_t salen;
+  struct iovec iov[2];
+  struct msghdr msg;
+  ssize_t n;
+
+  if (m->family == AF_INET) {
+    sa = (const struct sockaddr *)&m->dest.v4;
+    salen = sizeof m->dest.v4;
+  } else {
+    sa = (const struct sockaddr *)&m->dest.v6;
+    salen = sizeof m->dest.v6;
+  }
+  iov[0].iov_base = (void *)hdr;
+  iov[0].iov_len = hdr_len;
+  iov[1].iov_base = (void *)payload;
+  iov[1].iov_len = payload_len;
+  memset(&msg, 0, sizeof msg);
+  msg.msg_name = (void *)sa;
+  msg.msg_namelen = salen;
+  msg.msg_iov = iov;
+  msg.msg_iovlen = 2;
+  n = sendmsg(m->fd, &msg, 0);
+  if (n < 0) {
+    log_throttled(&m->send_fail_throttle, LOG_THROTTLE_WINDOW_S, "sendmsg: %s", strerror(errno));
     return -1;
   }
   return n;

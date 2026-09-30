@@ -12,7 +12,8 @@
 
 struct ts_filter {
   psi_t *psi;
-  unsigned char cc_pat, cc_pmt;
+  unsigned char cc_pat;
+  unsigned char cc_pmt;
   int audio_all;
   unsigned audio_track; /* 1-based, if !audio_all */
   int strip_subs;       /* -s strip */

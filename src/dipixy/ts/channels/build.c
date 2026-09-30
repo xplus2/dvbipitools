@@ -90,15 +90,15 @@ void build_from_csv(channel_list_t *l, const char *path, int insecure_tls) {
 /* shared by build_from_sds()/build_from_xml(): sds_parse_broadcast() output to channel_item_t */
 static void append_sds_entries(channel_list_t *l, const sds_service_t *entries, int count) {
   for (int i = 0; i < count; i++) {
-    char addrbuf[80], uribuf[96];
+    char addrbuf[80];
+    char uribuf[96];
     channel_item_t *it = list_append(l);
+    size_t off;
     if (!it) break;
     uriparse_mcast_describe(entries[i].family, entries[i].address, entries[i].port, addrbuf, sizeof addrbuf);
-    {
-      size_t off = bufcpy(uribuf, sizeof uribuf, entries[i].rtp ? "rtp" : "udp");
-      off += bufcpy(uribuf + off, sizeof uribuf - off, "://@");
-      bufcpy(uribuf + off, sizeof uribuf - off, addrbuf);
-    }
+    off = bufcpy(uribuf, sizeof uribuf, entries[i].rtp ? "rtp" : "udp");
+    off += bufcpy(uribuf + off, sizeof uribuf - off, "://@");
+    bufcpy(uribuf + off, sizeof uribuf - off, addrbuf);
     it->name = strdup(entries[i].name);
     it->uri = strdup(uribuf);
     it->tsid = entries[i].tsid;
@@ -154,6 +154,14 @@ void build_from_http(channel_list_t *l, const char *url, int insecure_tls) {
   it->static_ctx = ctx;
 }
 
+/* -i rtp://addr:port, -i udp://addr:port:, lazy join */
+void build_from_mcast(channel_list_t *l, const char *uri) {
+  channel_item_t *it = list_append(l);
+  if (!it) return;
+  it->name = strdup(uri);
+  it->uri = strdup(uri);
+}
+
 void channels_join_all(channel_list_t *l, const config_t *cfg) {
   if (!cfg->join_all) return;
   for (int i = 0; i < l->count; i++) {
@@ -165,8 +173,7 @@ void channels_join_all(channel_list_t *l, const config_t *cfg) {
     if (it->static_ctx) continue;
     if (route_resolve_channel_uri(it->uri, &family, addr, sizeof addr, &port, &rtp)) continue;
     it->static_ctx = capture_open(family, addr, port, cfg->iface, rtp, it->has_ret && !cfg->no_ret ? &it->ret : NULL,
-                                  it->has_fcc && !cfg->no_fcc ? &it->fcc : NULL, it->has_fec && !cfg->no_al_fec ? &it->fec : NULL,
-                                  cfg->al_fec_l, cfg->al_fec_d);
+      it->has_fcc && !cfg->no_fcc ? &it->fcc : NULL, it->has_fec && !cfg->no_al_fec ? &it->fec : NULL, cfg->al_fec_l, cfg->al_fec_d);
     if (!it->static_ctx) log_line(TOOL_NAME ": --join-all: %s unreachable, left unjoined", it->uri);
   }
 }
@@ -178,7 +185,7 @@ void build_from_sds(channel_list_t *l, const char *addrport, const char *iface, 
   unsigned port;
   mcast_t *m;
   dvbstp_reasm_t *r;
-  seen_t seen[LISTEN_SEEN_MAX];
+  dvbstp_seen_t seen[LISTEN_SEEN_MAX];
   int seen_count = 0;
   double deadline;
   int total = 0;
@@ -203,23 +210,15 @@ void build_from_sds(channel_list_t *l, const char *addrport, const char *iface, 
     const unsigned char *data;
     size_t len;
     ssize_t n = mcast_recv(m, buf, sizeof buf, NULL);
+    sds_service_t entries[SDS_MAX_SERVICES];
+    int count;
     if (n <= 0) continue;
     if (!dvbstp_reasm_feed(r, buf, (size_t)n, &hdr, &data, &len)) continue;
     if (hdr.payload_id != DVBSTP_PAYLOAD_BROADCAST_DISCOVERY) continue;
-    if (already_seen(seen, &seen_count, &hdr)) continue;
-
-    {
-      char *xml = malloc(len + 1);
-      sds_service_t entries[SDS_MAX_SERVICES];
-      int count;
-      if (!xml) continue;
-      memcpy(xml, data, len);
-      xml[len] = '\0';
-      count = sds_parse_broadcast(xml, entries, SDS_MAX_SERVICES, NULL);
-      append_sds_entries(l, entries, count);
-      total += count;
-      free(xml);
-    }
+    if (dvbstp_already_seen(seen, &seen_count, &hdr)) continue;
+    count = sds_parse_broadcast((const char *)data, entries, SDS_MAX_SERVICES, NULL);
+    append_sds_entries(l, entries, count);
+    total += count;
   }
   dvbstp_reasm_free(r);
   mcast_close(m);

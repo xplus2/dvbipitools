@@ -16,6 +16,7 @@ const char RESP_404[] = "404 Not Found";
 const char RESP_405[] = "405 Method Not Allowed";
 const char RESP_431[] = "431 Request Header Fields Too Large";
 const char RESP_501[] = "501 Not Implemented";
+const char RESP_504[] = "504 Gateway Timeout";
 
 void respond_status(conn_t *c, const char *status, int keep_alive) {
   char hdr[192];

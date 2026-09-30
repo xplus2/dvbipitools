@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <poll.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -257,18 +258,15 @@ srtin_t *srtin_open(const srtin_cfg_t *cfg) {
 static void push_stats(srtin_t *r) {
   SRT_TRACEBSTATS st;
 
-  if (!r->mx || !metrics_exporter_due(r->mx, mono_seconds()) || srt_bstats(r->sock, &st, 0) != 0)
-    return;
-  {
-    metrics_entry_t e[] = {
-        {METRICS_ID_SRT_RECEIVER_RECEIVED_TOTAL, NULL, (uint64_t)st.pktRecvTotal},
-        {METRICS_ID_SRT_RECEIVER_LOST_TOTAL, NULL, (uint64_t)st.pktRcvLossTotal},
-        {METRICS_ID_SRT_RECEIVER_DROPPED_TOTAL, NULL, (uint64_t)st.pktRcvDropTotal},
-        {METRICS_ID_SRT_RECEIVER_RTT_MILLISECONDS, NULL, (uint64_t)st.msRTT},
-        {METRICS_ID_SRT_RECEIVER_BUFFER_MILLISECONDS, NULL, (uint64_t)st.msRcvTsbPdDelay},
-    };
-    metrics_push_entries(r->mx, r->tool_version, e, sizeof e / sizeof e[0]);
-  }
+  if (!r->mx || !metrics_exporter_due(r->mx, mono_seconds()) || srt_bstats(r->sock, &st, 0) != 0) return;
+  metrics_entry_t e[] = {
+  {METRICS_ID_SRT_RECEIVER_RECEIVED_TOTAL, NULL, (uint64_t)st.pktRecvTotal},
+  {METRICS_ID_SRT_RECEIVER_LOST_TOTAL, NULL, (uint64_t)st.pktRcvLossTotal},
+  {METRICS_ID_SRT_RECEIVER_DROPPED_TOTAL, NULL, (uint64_t)st.pktRcvDropTotal},
+  {METRICS_ID_SRT_RECEIVER_RTT_MILLISECONDS, NULL, (uint64_t)st.msRTT},
+  {METRICS_ID_SRT_RECEIVER_BUFFER_MILLISECONDS, NULL, (uint64_t)st.msRcvTsbPdDelay},
+  };
+  metrics_push_entries(r->mx, r->tool_version, e, sizeof e / sizeof e[0]);
 }
 
 int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out) {
@@ -276,8 +274,7 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
 
   *reconnected_out = 0;
 
-  /* mid-reconnect: one attempt per call, returns like a timeout.
-     caller's loop drives retry cadence, !internal */
+  /* mid-reconnect: one attempt per call, returns like a timeout. caller's loop drives retry cadence, !internal */
   if (r->sock == SRT_INVALID_SOCK) {
     if (signal_stop_requested()) return 0;
     r->sock = srt_accept_bond(r->listeners, r->n_listeners, SRT_RCVTIMEO_MS);
@@ -295,7 +292,13 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
     if (err == SRT_ETIMEOUT) return 0;
     if (err == SRT_EASYNCRCV) {
       /* group with every member link down right now, not a dead group: retry */
-      usleep(SRT_RCVTIMEO_MS * 1000);
+      int wfd = signal_wake_fd();
+      if (wfd >= 0) {
+        struct pollfd pfd = {wfd, POLLIN, 0};
+        poll(&pfd, 1, SRT_RCVTIMEO_MS);
+      } else {
+        usleep(SRT_RCVTIMEO_MS * 1000);
+      }
       return 0;
     }
     if (r->group_mode != SRTGROUP_NONE && r->n_listeners > 0) {

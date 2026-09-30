@@ -12,6 +12,7 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 void tls_set_http2_enabled(int enabled) { (void)enabled; }
 
@@ -50,7 +51,9 @@ int tls_handshake(int fd) {
   return -1;
 }
 
-void tls_close_fd(int fd) { (void)fd; }
+void tls_close_fd(int fd) {
+  if (fd >= 0) close(fd);
+}
 
 void tls_gc_sweep(void) {}
 

@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "lib/tva/bcg_doc.h"
+#include "lib/helper/ioutil.h"
 
 START_TEST(bcg_add_channel_grows_past_initial_capacity) {
   bcg_doc_t d;
@@ -34,9 +35,9 @@ START_TEST(bcg_find_channel_by_id) {
   bcg_channel_t *c;
   bcg_doc_init(&d);
   c = bcg_add_channel(&d);
-  snprintf(c->id, sizeof c->id, "bbc1");
+  bufcpy(c->id, sizeof c->id, "bbc1");
   c = bcg_add_channel(&d);
-  snprintf(c->id, sizeof c->id, "bbc2");
+  bufcpy(c->id, sizeof c->id, "bbc2");
 
   ck_assert_ptr_nonnull(bcg_find_channel(&d, "bbc1"));
   ck_assert_str_eq(bcg_find_channel(&d, "bbc2")->id, "bbc2");

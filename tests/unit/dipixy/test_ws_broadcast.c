@@ -2,11 +2,18 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "dipixy/ws/ws_broadcast.h"
+
+/* ws_broadcast_publish's per-thread frame buffer: reactor workers don't quit (but test threads do, freeing their TLS, leaking the still-cached buffer to LSan */
+#if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))
+const char *__lsan_default_options(void) { return "detect_leaks=0"; }
+#endif
 
 static int g_calls;
 static char g_last_payload[256];
@@ -114,9 +121,55 @@ START_TEST(registration_past_capacity_is_dropped) {
 }
 END_TEST
 
+#define RACE_REG_ITERS 2000
+#define RACE_PUB_ITERS 4000
+#define RACE_REG_THREADS 4
+#define RACE_PUB_THREADS 4
+
+static void noop_sink(void *ctx, const uint8_t *frame, size_t flen) {
+  (void)ctx;
+  (void)frame;
+  (void)flen;
+}
+
+static void *race_reg_thread(void *arg) {
+  int slot = (int)(intptr_t)arg;
+  for (int i = 0; i < RACE_REG_ITERS; i++) {
+    ws_broadcast_register(noop_sink, (void *)(intptr_t)slot);
+    ws_broadcast_unregister(noop_sink, (void *)(intptr_t)slot);
+  }
+  return NULL;
+}
+
+static void *race_pub_thread(void *arg) {
+  (void)arg;
+  for (int i = 0; i < RACE_PUB_ITERS; i++)
+    ws_broadcast_publish("race");
+  return NULL;
+}
+
+START_TEST(concurrent_register_unregister_and_publish_survive) {
+  pthread_t reg_threads[RACE_REG_THREADS];
+  pthread_t pub_threads[RACE_PUB_THREADS];
+
+  for (int i = 0; i < RACE_REG_THREADS; i++)
+    pthread_create(&reg_threads[i], NULL, race_reg_thread, (void *)(intptr_t)i);
+  for (int i = 0; i < RACE_PUB_THREADS; i++)
+    pthread_create(&pub_threads[i], NULL, race_pub_thread, NULL);
+
+  for (int i = 0; i < RACE_REG_THREADS; i++)
+    pthread_join(reg_threads[i], NULL);
+  for (int i = 0; i < RACE_PUB_THREADS; i++)
+    pthread_join(pub_threads[i], NULL);
+
+  ck_assert_int_eq(ws_broadcast_has_sinks(), 0);
+}
+END_TEST
+
 static Suite *ws_broadcast_suite(void) {
   Suite *s = suite_create("dipixy_ws_broadcast");
   TCase *tc = tcase_create("core");
+  tcase_set_timeout(tc, 20);
   tcase_add_test(tc, no_sinks_initially);
   tcase_add_test(tc, publish_with_no_sinks_is_a_noop);
   tcase_add_test(tc, registered_sink_receives_publish);
@@ -125,6 +178,7 @@ static Suite *ws_broadcast_suite(void) {
   tcase_add_test(tc, unregister_nonmatching_pair_is_noop);
   tcase_add_test(tc, publish_builds_the_frame_once_shared_across_sinks);
   tcase_add_test(tc, registration_past_capacity_is_dropped);
+  tcase_add_test(tc, concurrent_register_unregister_and_publish_survive);
   suite_add_tcase(s, tc);
   return s;
 }

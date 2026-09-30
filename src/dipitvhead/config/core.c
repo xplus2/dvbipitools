@@ -10,11 +10,8 @@
 #include "../config.h"
 #include "priv.h"
 
-item_state_t tvh_item;
-
 void tvh_cfg_defaults(config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
-  memset(&tvh_item, 0, sizeof tvh_item);
   cfg->rtp = 1;
   cfg->dscp = NET_DSCP_VIDEO_HIGH;
   cfg->tsid = 1;
@@ -52,21 +49,21 @@ int tvh_set_table(table_mode_t *mode, char *text, size_t sz, const char *v, char
 }
 
 int tvh_item_hook(void *c, const char *list, int begin, char *e, size_t n) {
-  (void)c;
+  config_t *cfg = c;
   if (!strcmp(list, "input")) {
-    tvh_item.input = begin;
+    cfg->parse_item.input = begin;
     if (begin) {
-      tvh_item.have_input = 0;
-    } else if (!tvh_item.have_input) {
-      snprintf(e, n, "missing input");
+      cfg->parse_item.have_input = 0;
+    } else if (!cfg->parse_item.have_input) {
+      bufcpy(e, n, "missing input");
       return -1;
     }
   } else if (!strcmp(list, "cas.ecmg")) {
-    tvh_item.vendor = begin;
+    cfg->parse_item.vendor = begin;
     if (begin) {
-      tvh_item.have_vendor = 0;
-    } else if (!tvh_item.have_vendor) {
-      snprintf(e, n, "missing ecmg");
+      cfg->parse_item.have_vendor = 0;
+    } else if (!cfg->parse_item.have_vendor) {
+      bufcpy(e, n, "missing ecmg");
       return -1;
     }
   }
@@ -74,16 +71,16 @@ int tvh_item_hook(void *c, const char *list, int begin, char *e, size_t n) {
 }
 
 dipitvhead_input_t *tvh_cur_input(config_t *cfg, char *e, size_t n) {
-  if (!tvh_item.input) {
-    snprintf(e, n, "only valid inside an input list tvh_item");
+  if (!cfg->parse_item.input) {
+    bufcpy(e, n, "only valid inside an input list");
     return NULL;
   }
   return &cfg->inputs[cfg->n_inputs - 1];
 }
 
 cas_vendor_t *tvh_cur_vendor(config_t *cfg, char *e, size_t n) {
-  if (!tvh_item.vendor) {
-    snprintf(e, n, "only valid inside a cas.ecmg list tvh_item");
+  if (!cfg->parse_item.vendor) {
+    bufcpy(e, n, "only valid inside a cas.ecmg list");
     return NULL;
   }
   return &cfg->cas_vendors[cfg->n_cas_vendors - 1];

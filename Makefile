@@ -348,6 +348,24 @@ dipirec_SRCS := \
 	src/lib/tsinspect/agg.c \
 	src/dipirec/record.c \
 	src/dipirec/record/sink.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/helper/xml_util.c \
 	src/dipirec/record/rtmp_fanout.c \
 	src/dipirec/record/stats.c \
 	src/dipirec/record/run.c \
@@ -544,8 +562,9 @@ dipiradiohead_SRCS := \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/rawaudio.c \
 	src/dipiradiohead/input/playlist.c \
-	src/dipiradiohead/input/hls/playlist.c \
-	src/dipiradiohead/input/hls/live.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
 	src/dipiradiohead/input/icy.c \
 	src/dipiradiohead/input/id3.c \
 	src/dipiradiohead/input/source/open.c \
@@ -568,11 +587,13 @@ dipiradiohead_SRCS := \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
 	$(dipiradiohead_CWENC_SRC) \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/emmg_server/dial.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/cas/cas_core.c \
@@ -691,6 +712,22 @@ dipitvhead_SRCS := \
 	src/dipitvhead/tvhead/mpts/discover_feed.c \
 	src/dipitvhead/tvhead/mpts/cas_adapter.c \
 	src/dipitvhead/input/source.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/helper/xml_util.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
 	src/dipitvhead/mux/remux/lifecycle.c \
@@ -707,11 +744,13 @@ dipitvhead_SRCS := \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
 	$(dipitvhead_CWENC_SRC) \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/emmg_server/dial.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/cas/cas_core.c \
@@ -941,6 +980,25 @@ dipidescramble_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/helper/xml_util.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/crc32.c \
+	src/lib/net/httpclient/fetch.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/tls.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -1080,6 +1138,25 @@ dipirist_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/helper/xml_util.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/crc32.c \
+	src/lib/net/httpclient/fetch.c \
 	src/lib/net/tssink.c \
 	src/lib/mux/fec2022.c \
 	src/lib/demux/fec2022.c \
@@ -1179,6 +1256,25 @@ dipisrt_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/helper/xml_util.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/crc32.c \
+	src/lib/net/httpclient/fetch.c \
 	src/lib/net/tssink.c \
 	src/lib/mux/fec2022.c \
 	src/lib/demux/fec2022.c \
@@ -1319,6 +1415,7 @@ dipixy_SRCS := \
 	src/lib/config/yamlcfg.c \
 	src/dipixy/core/route.c \
 	src/dipixy/core/playlist.c \
+	src/dipixy/core/input_walk.c \
 	src/dipixy/htdocs_index.gen.c \
 	src/dipixy/core/htdocs.c \
 	src/dipixy/reactor/reactor.c \
@@ -1332,6 +1429,22 @@ dipixy_SRCS := \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/tspacket_write.c \
 	src/lib/net/tssource.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -1561,11 +1674,11 @@ build/dvbipitools/src/%.o: src/%.c config.mk
 dvbipitools: $(DVBIPITOOLS_OBJS)
 	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) -o $@
 
-UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
+UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_helper_signal lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_rtp lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
-	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mp4 lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild \
-	lib_net_netconnect lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_httpclient_fetch lib_net_tssource_async lib_net_tssource_file lib_net_retryset lib_net_dvbstp \
+	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mp4 lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild lib_demux_fmp4_box lib_demux_fmp4_track lib_demux_fmp4_sample lib_mux_esbuild lib_mux_esbuild_pes lib_mux_esbuild_pmtbuild lib_mux_esbuild_remux \
+	lib_net_netconnect lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_httpclient_fetch lib_net_httpclient_headers lib_net_tssource_async lib_net_tssource_http_dispatch lib_net_tssource_dash_fmp4 lib_net_tssource_file lib_net_retryset lib_net_dvbstp \
 	lib_mux_mpts \
 	lib_cas_cas_group \
 	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec \
@@ -1573,12 +1686,12 @@ UNIT_TESTS := lib_demux_crc32 lib_demux_rtcp lib_demux_psi lib_demux_psi_section
 	lib_bim_fragment lib_bim_accessunit \
 	lib_sds_xml lib_fccret_fcc_client dipibim_args dipiscan_format dipiscan_scan dipixmltv_args dipixmltv_revmap dipixmltv_suggest \
 	dipiradiohead_mpegaudio dipiradiohead_aac_adts dipiradiohead_aac_latm \
-	dipiradiohead_psi dipiradiohead_id3 dipiradiohead_pes dipiradiohead_tspacketizer dipiradiohead_radiohead dipiradiohead_cas dipiradiohead_args \
-	dipiradiohead_source_async dipiradiohead_inputset dipiradiohead_playlist dipiradiohead_hls_playlist dipiradiohead_hls_live \
+	dipiradiohead_psi dipiradiohead_id3 dipiradiohead_icy dipiradiohead_pes dipiradiohead_tspacketizer dipiradiohead_radiohead dipiradiohead_cas dipiradiohead_args \
+	dipiradiohead_source_async dipiradiohead_source_hls dipiradiohead_inputset dipiradiohead_playlist lib_hls_playlist lib_hls_live lib_hls_tspassthrough lib_dash_mpd lib_dash_live \
 	dipitvhead_source dipitvhead_args dipitvhead_discover dipitvhead_output dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_bitrate dipitvhead_remux \
 	dipitvhead_simulcrypt_msg dipitvhead_ecmg_client dipitvhead_emmg_server dipitvhead_cas \
 	dipirec_ts_filter dipirec_pace dipirec_ret_client dipirec_record dipirec_args \
-	dipifccret_args dipifccret_listen dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_burst_table dipifccret_ret dipifccret_rtx_session_table dipifccret_capture \
+	dipifccret_args dipifccret_listen dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_burst_table dipifccret_pacer dipifccret_ret dipifccret_rtx_session_table dipifccret_capture \
 	lib_metrics_protocol lib_metrics_export \
 	dipimetrics_args dipimetrics_store dipimetrics_render dipimetrics_httpserver \
 	dipibcg_container dipibcg_args dipibcg_announce dipibcg_listen \
@@ -1629,7 +1742,8 @@ lib_cas_biss_ca_engine_SRCS := \
 	src/lib/mux/cadescbuild.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c \
-	src/lib/helper/log.c
+	src/lib/helper/log.c \
+	src/lib/helper/ioutil.c
 lib_cas_biss_ca_engine_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_cas_biss_ca_engine_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
@@ -1638,6 +1752,7 @@ lib_cas_cw_encryption_BIN := tests/unit/lib/cas/test_cw_encryption
 lib_cas_cw_encryption_SRCS := \
 	tests/unit/lib/cas/test_cw_encryption.c \
 	src/lib/cas/ecmg_client/cw_encryption.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/helper/log.c
 lib_cas_cw_encryption_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
@@ -2064,6 +2179,24 @@ dipirist_bridge_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/xml_util.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
 	src/lib/net/tssink.c \
 	src/lib/mux/fec2022.c \
 	src/lib/demux/fec2022.c \
@@ -2180,6 +2313,24 @@ dipisrt_bridge_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/xml_util.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/mux/psi_build.c \
 	src/lib/net/tssink.c \
 	src/lib/mux/fec2022.c \
 	src/lib/demux/fec2022.c \
@@ -2216,7 +2367,8 @@ dipisds_input_SRCS := \
 	tests/unit/dipisds/test_input.c \
 	src/dipisds/input.c \
 	src/lib/helper/ioutil.c \
-	src/lib/helper/xml_util.c
+	src/lib/helper/xml_util.c \
+	src/lib/helper/log.c
 
 dipisds_format_out_BIN := tests/unit/dipisds/test_format_out
 dipisds_format_out_SRCS := \
@@ -2390,6 +2542,25 @@ lib_demux_crc32_SRCS := \
 	tests/unit/lib/demux/test_crc32.c \
 	src/lib/demux/crc32.c
 
+lib_mux_amf_BIN := tests/unit/lib/mux/test_amf
+lib_mux_amf_SRCS := \
+	tests/unit/lib/mux/test_amf.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
+	src/lib/helper/ioutil.c
+
+lib_helper_describe_BIN := tests/unit/lib/helper/test_describe
+lib_helper_describe_SRCS := \
+	tests/unit/lib/helper/test_describe.c \
+	src/lib/helper/describe.c \
+	src/lib/helper/ioutil.c
+
+lib_helper_signal_BIN := tests/unit/lib/helper/test_signal
+lib_helper_signal_SRCS := \
+	tests/unit/lib/helper/test_signal.c \
+	src/lib/helper/signal.c
+
 lib_demux_rtcp_BIN := tests/unit/lib/demux/test_rtcp
 lib_demux_rtcp_SRCS := \
 	tests/unit/lib/demux/test_rtcp.c \
@@ -2427,6 +2598,26 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/mux/psi_build.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/xml_util.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/rist/ristin_stub.c \
 	src/lib/net/rist/ristlog_stub.c \
@@ -2541,7 +2732,8 @@ lib_mux_rtpheader_BIN := tests/unit/lib/mux/test_rtpheader
 lib_mux_rtpheader_SRCS := \
 	tests/unit/lib/mux/test_rtpheader.c \
 	src/lib/mux/rtpheader.c \
-	src/lib/demux/rtp.c
+	src/lib/demux/rtp.c \
+	src/lib/helper/ioutil.c
 
 lib_mux_fec2022_BIN := tests/unit/lib/mux/test_fec2022
 lib_mux_fec2022_SRCS := \
@@ -2549,7 +2741,8 @@ lib_mux_fec2022_SRCS := \
 	src/lib/mux/fec2022.c \
 	src/lib/mux/rtpheader.c \
 	src/lib/demux/fec2022.c \
-	src/lib/demux/rtp.c
+	src/lib/demux/rtp.c \
+	src/lib/helper/ioutil.c
 
 lib_mux_rtx_BIN := tests/unit/lib/mux/test_rtx
 lib_mux_rtx_SRCS := \
@@ -2659,6 +2852,78 @@ lib_mux_fmp4_SRCS := \
 	src/lib/mux/fmp4/fmp4_frag.c \
 	src/lib/helper/ioutil.c
 
+lib_demux_fmp4_box_BIN := tests/unit/lib/demux/fmp4/test_box
+lib_demux_fmp4_box_SRCS := \
+	tests/unit/lib/demux/fmp4/test_box.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/mux/fmp4/box.c \
+	src/lib/mux/growbuf.c \
+	src/lib/mux/fmp4/fmp4.c \
+	src/lib/mux/fmp4/fmp4_moov.c \
+	src/lib/mux/fmp4/fmp4_frag.c \
+	src/lib/helper/ioutil.c
+
+lib_demux_fmp4_track_BIN := tests/unit/lib/demux/fmp4/test_track
+lib_demux_fmp4_track_SRCS := \
+	tests/unit/lib/demux/fmp4/test_track.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/mux/fmp4/box.c \
+	src/lib/mux/growbuf.c \
+	src/lib/helper/ioutil.c
+
+lib_demux_fmp4_sample_BIN := tests/unit/lib/demux/fmp4/test_sample
+lib_demux_fmp4_sample_SRCS := \
+	tests/unit/lib/demux/fmp4/test_sample.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/fmp4/box.c \
+	src/lib/mux/growbuf.c \
+	src/lib/mux/fmp4/fmp4.c \
+	src/lib/mux/fmp4/fmp4_moov.c \
+	src/lib/mux/fmp4/fmp4_frag.c \
+	src/lib/helper/ioutil.c
+
+lib_mux_esbuild_BIN := tests/unit/lib/mux/esbuild/test_esbuild
+lib_mux_esbuild_SRCS := \
+	tests/unit/lib/mux/esbuild/test_esbuild.c \
+	src/lib/mux/esbuild/esbuild.c
+
+lib_mux_esbuild_pes_BIN := tests/unit/lib/mux/esbuild/test_pes
+lib_mux_esbuild_pes_SRCS := \
+	tests/unit/lib/mux/esbuild/test_pes.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/tspacket_write.c
+
+lib_mux_esbuild_pmtbuild_BIN := tests/unit/lib/mux/esbuild/test_pmtbuild
+lib_mux_esbuild_pmtbuild_SRCS := \
+	tests/unit/lib/mux/esbuild/test_pmtbuild.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/crc32.c
+
+lib_mux_esbuild_remux_BIN := tests/unit/lib/mux/esbuild/test_remux
+lib_mux_esbuild_remux_SRCS := \
+	tests/unit/lib/mux/esbuild/test_remux.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/fmp4/box.c \
+	src/lib/mux/fmp4/fmp4.c \
+	src/lib/mux/fmp4/fmp4_moov.c \
+	src/lib/mux/fmp4/fmp4_frag.c \
+	src/lib/mux/growbuf.c \
+	src/lib/helper/ioutil.c
+
 lib_mux_flv_BIN := tests/unit/lib/mux/test_flv
 lib_mux_flv_SRCS := \
 	tests/unit/lib/mux/test_flv.c \
@@ -2736,7 +3001,8 @@ lib_sds_xml_BIN := tests/unit/lib/test_sds_xml
 lib_sds_xml_SRCS := \
 	tests/unit/lib/test_sds_xml.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c
+	src/lib/helper/xml_util.c \
+	src/lib/helper/ioutil.c
 
 lib_tva_timefmt_BIN := tests/unit/lib/tva/test_timefmt
 lib_tva_timefmt_SRCS := \
@@ -2755,7 +3021,9 @@ lib_tva_mapping_BIN := tests/unit/lib/tva/test_mapping
 lib_tva_mapping_SRCS := \
 	tests/unit/lib/tva/test_mapping.c \
 	src/lib/tva/mapping.c \
-	src/lib/helper/ioutil.c
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c \
+	src/lib/helper/argutil.c
 
 lib_tva_xmltv_BIN := tests/unit/lib/tva/test_xmltv
 lib_tva_xmltv_SRCS := \
@@ -2916,6 +3184,12 @@ dipiradiohead_id3_SRCS := \
 	src/dipiradiohead/input/id3.c \
 	src/lib/helper/ioutil.c
 
+dipiradiohead_icy_BIN := tests/unit/dipiradiohead/test_icy
+dipiradiohead_icy_SRCS := \
+	tests/unit/dipiradiohead/test_icy.c \
+	src/dipiradiohead/input/icy.c \
+	src/lib/helper/ioutil.c
+
 dipiradiohead_pes_BIN := tests/unit/dipiradiohead/test_pes
 dipiradiohead_pes_SRCS := \
 	tests/unit/dipiradiohead/test_pes.c \
@@ -2939,11 +3213,13 @@ dipiradiohead_tspacketizer_SRCS := \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/emmg_server/dial.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -2994,11 +3270,13 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/emmg_server/dial.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -3022,8 +3300,9 @@ dipiradiohead_radiohead_SRCS := \
 	src/dipiradiohead/input/source/frame.c \
 	src/dipiradiohead/input/inputset.c \
 	src/dipiradiohead/input/playlist.c \
-	src/dipiradiohead/input/hls/playlist.c \
-	src/dipiradiohead/input/hls/live.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
 	src/dipiradiohead/input/icy.c \
 	src/dipiradiohead/input/id3.c \
 	src/dipiradiohead/framer/mpegaudio.c \
@@ -3063,11 +3342,13 @@ dipiradiohead_cas_SRCS := \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/emmg_server/dial.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -3117,6 +3398,7 @@ dipiradiohead_args_SRCS := \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
@@ -3129,8 +3411,9 @@ dipiradiohead_source_async_SRCS := \
 	src/dipiradiohead/input/source/open_async.c \
 	src/dipiradiohead/input/source/frame.c \
 	src/dipiradiohead/input/playlist.c \
-	src/dipiradiohead/input/hls/playlist.c \
-	src/dipiradiohead/input/hls/live.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -3168,36 +3451,35 @@ dipiradiohead_playlist_BIN := tests/unit/dipiradiohead/input/test_playlist
 dipiradiohead_playlist_SRCS := \
 	tests/unit/dipiradiohead/input/test_playlist.c \
 	src/dipiradiohead/input/playlist.c \
+	src/lib/hls/m3u_lines.c \
 	src/lib/helper/ioutil.c
 
-dipiradiohead_hls_playlist_BIN := tests/unit/dipiradiohead/input/hls/test_playlist
-dipiradiohead_hls_playlist_SRCS := \
-	tests/unit/dipiradiohead/input/hls/test_playlist.c \
-	src/dipiradiohead/input/hls/playlist.c \
-	src/dipiradiohead/input/playlist.c \
+lib_hls_playlist_BIN := tests/unit/lib/hls/test_playlist
+lib_hls_playlist_SRCS := \
+	tests/unit/lib/hls/test_playlist.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/m3u_lines.c \
 	src/lib/helper/ioutil.c
 
-dipiradiohead_hls_live_BIN := tests/unit/dipiradiohead/input/hls/test_live
-dipiradiohead_hls_live_SRCS := \
-	tests/unit/dipiradiohead/input/hls/test_live.c \
-	src/dipiradiohead/input/hls/live.c \
+lib_hls_live_BIN := tests/unit/lib/hls/test_live
+lib_hls_live_SRCS := \
+	tests/unit/lib/hls/test_live.c \
+	src/lib/hls/live.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
 	src/lib/tsinspect/metrics.c \
 	src/lib/tsinspect/agg.c \
 	src/lib/metrics/protocol.c \
-	src/dipiradiohead/input/hls/playlist.c \
-	src/dipiradiohead/input/playlist.c \
-	src/lib/demux/rawaudio.c \
-	src/lib/demux/pes.c \
-	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/psi/section_asm.c \
-	src/lib/demux/bitreader.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/httpclient/read.c \
@@ -3211,6 +3493,123 @@ dipiradiohead_hls_live_SRCS := \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
 
+lib_hls_tspassthrough_BIN := tests/unit/lib/hls/test_tspassthrough
+lib_hls_tspassthrough_SRCS := \
+	tests/unit/lib/hls/test_tspassthrough.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/hls/live.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tls_stub.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/signal.c \
+	src/lib/helper/log.c
+
+lib_dash_mpd_BIN := tests/unit/lib/dash/test_mpd
+lib_dash_mpd_SRCS := \
+	tests/unit/lib/dash/test_mpd.c \
+	src/lib/dash/mpd.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/helper/xml_util.c \
+	src/lib/helper/ioutil.c
+
+lib_dash_live_BIN := tests/unit/lib/dash/test_live
+lib_dash_live_SRCS := \
+	tests/unit/lib/dash/test_live.c \
+	src/lib/dash/live.c \
+	src/lib/dash/mpd.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/helper/xml_util.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tls_stub.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/signal.c \
+	src/lib/helper/log.c
+
+dipiradiohead_source_hls_BIN := tests/unit/dipiradiohead/input/test_source_hls
+dipiradiohead_source_hls_SRCS := \
+	tests/unit/dipiradiohead/input/test_source_hls.c \
+	src/dipiradiohead/input/source/open.c \
+	src/dipiradiohead/input/source/open_async.c \
+	src/dipiradiohead/input/source/frame.c \
+	src/dipiradiohead/input/playlist.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/dipiradiohead/input/icy.c \
+	src/dipiradiohead/input/id3.c \
+	src/dipiradiohead/framer/mpegaudio.c \
+	src/dipiradiohead/framer/aac_adts.c \
+	src/dipiradiohead/framer/aac_latm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/pes.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/rawaudio.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/tls_stub.c \
+	src/lib/helper/signal.c \
+	src/lib/helper/log.c
+
 dipiradiohead_inputset_BIN := tests/unit/dipiradiohead/input/test_inputset
 dipiradiohead_inputset_SRCS := \
 	tests/unit/dipiradiohead/input/test_inputset.c \
@@ -3220,8 +3619,9 @@ dipiradiohead_inputset_SRCS := \
 	src/dipiradiohead/input/source/open_async.c \
 	src/dipiradiohead/input/source/frame.c \
 	src/dipiradiohead/input/playlist.c \
-	src/dipiradiohead/input/hls/playlist.c \
-	src/dipiradiohead/input/hls/live.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -3275,6 +3675,37 @@ dipitvhead_source_SRCS := \
 	tests/unit/dipitvhead/input/test_source.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/xml_util.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/demux/tspack.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/metrics/protocol.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/rist/ristin_stub.c \
 	src/lib/net/rist/ristlog_stub.c \
@@ -3317,6 +3748,7 @@ dipitvhead_args_SRCS := \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca_stub.c \
@@ -3342,6 +3774,23 @@ dipitvhead_discover_SRCS := \
 	src/lib/tsinspect/agg.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/xml_util.c \
+	src/lib/mux/tspacket_write.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/rist/ristin_stub.c \
 	src/lib/net/rist/ristlog_stub.c \
@@ -3382,6 +3831,7 @@ dipitvhead_pmtbuild_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
+	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
 dipitvhead_aitbuild_BIN := tests/unit/dipitvhead/test_aitbuild
@@ -3415,11 +3865,13 @@ dipitvhead_remux_SRCS := \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/emmg_server/dial.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -3470,11 +3922,13 @@ dipitvhead_output_SRCS := \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/emmg_server/dial.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -3505,6 +3959,22 @@ dipitvhead_output_SRCS := \
 	src/lib/net/srt/srtsink_stub.c \
 	src/dipitvhead/input/source.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/xml_util.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -3527,7 +3997,9 @@ dipitvhead_ecmg_client_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/ecmg_client/cw_encryption.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
@@ -3553,6 +4025,7 @@ dipitvhead_emmg_server_SRCS := \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/emmg_server/dial.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/psi/psi.c \
@@ -3591,11 +4064,13 @@ dipitvhead_cas_SRCS := \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/emmg_server/dial.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_group.c \
 	src/lib/cas/cas_scramble_engine.c \
@@ -3686,6 +4161,21 @@ lib_net_httpclient_async_SRCS := \
 	src/lib/helper/signal.c \
 	src/lib/helper/log.c
 
+lib_net_httpclient_headers_BIN := tests/unit/lib/net/test_httpclient_headers
+lib_net_httpclient_headers_SRCS := \
+	tests/unit/lib/net/test_httpclient_headers.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/helper/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/tls_stub.c \
+	src/lib/helper/signal.c \
+	src/lib/helper/log.c
+
 lib_net_httpclient_fetch_BIN := tests/unit/lib/net/test_httpclient_fetch
 lib_net_httpclient_fetch_SRCS := \
 	tests/unit/lib/net/test_httpclient_fetch.c \
@@ -3715,6 +4205,7 @@ lib_net_tssource_async_SRCS := \
 	src/lib/net/httpclient/read.c \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
+	src/lib/net/httpclient/fetch.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -3722,7 +4213,148 @@ lib_net_tssource_async_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/demux/rtp.c \
 	src/lib/helper/signal.c \
-	src/lib/helper/log.c
+	src/lib/helper/log.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/demux/crc32.c \
+	src/lib/helper/xml_util.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c
+
+lib_net_tssource_http_dispatch_BIN := tests/unit/lib/net/test_tssource_http_dispatch
+lib_net_tssource_http_dispatch_SRCS := \
+	tests/unit/lib/net/test_tssource_http_dispatch.c \
+	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
+	src/lib/net/srt/srtsrc_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/multicast.c \
+	src/lib/demux/rtp.c \
+	src/lib/helper/signal.c \
+	src/lib/helper/log.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/demux/crc32.c \
+	src/lib/helper/xml_util.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c
+
+lib_net_tssource_dash_fmp4_BIN := tests/unit/lib/net/test_tssource_dash_fmp4
+lib_net_tssource_dash_fmp4_SRCS := \
+	tests/unit/lib/net/test_tssource_dash_fmp4.c \
+	src/lib/net/tssource.c \
+	src/lib/demux/fec2022.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
+	src/lib/net/srt/srtsrc_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/multicast.c \
+	src/lib/demux/rtp.c \
+	src/lib/helper/signal.c \
+	src/lib/helper/log.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/demux/crc32.c \
+	src/lib/helper/xml_util.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/mux/fmp4/box.c \
+	src/lib/mux/fmp4/fmp4.c \
+	src/lib/mux/fmp4/fmp4_moov.c \
+	src/lib/mux/fmp4/fmp4_frag.c \
+	src/lib/mux/growbuf.c
 
 lib_net_tssource_file_BIN := tests/unit/lib/net/test_tssource_file
 lib_net_tssource_file_SRCS := \
@@ -3737,6 +4369,7 @@ lib_net_tssource_file_SRCS := \
 	src/lib/net/httpclient/read.c \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
+	src/lib/net/httpclient/fetch.c \
 	src/lib/helper/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -3744,7 +4377,37 @@ lib_net_tssource_file_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/demux/rtp.c \
 	src/lib/helper/signal.c \
-	src/lib/helper/log.c
+	src/lib/helper/log.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/demux/crc32.c \
+	src/lib/helper/xml_util.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c
 
 lib_net_retryset_BIN := tests/unit/lib/net/test_retryset
 lib_net_retryset_SRCS := \
@@ -3774,11 +4437,13 @@ lib_cas_cas_group_SRCS := \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/emmg_server/dial.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/cas/cas_scramble_engine.c \
 	src/lib/mux/cadescbuild.c \
@@ -3852,6 +4517,24 @@ dipirec_record_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/xml_util.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/tssink.c \
 	src/lib/mux/fec2022.c \
@@ -4053,6 +4736,47 @@ dipifccret_burst_table_SRCS := \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/log.c
 
+dipifccret_pacer_BIN := tests/unit/dipifccret/test_pacer
+dipifccret_pacer_SRCS := \
+	tests/unit/dipifccret/test_pacer.c \
+	src/dipifccret/run/pacer.c \
+	src/dipifccret/run/dispatch.c \
+	src/dipifccret/capture/ranges.c \
+	src/dipifccret/ret/ret.c \
+	src/dipifccret/ret/rtx_session_table.c \
+	src/dipifccret/ret/mcsend.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/demux/rtcp.c \
+	src/lib/mux/rtcp_build.c \
+	src/dipifccret/fcc/burst_table.c \
+	src/lib/net/sockaddr_index.c \
+	src/dipifccret/fcc/burst.c \
+	src/dipifccret/channel/channel.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/helper/signal.c \
+	src/dipifccret/channel/hash.c \
+	src/dipifccret/channel/ring.c \
+	src/lib/mux/rtx.c \
+	src/lib/demux/rtx.c \
+	src/lib/demux/rtp.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/crc32.c \
+	src/lib/helper/ioutil.c \
+	src/lib/helper/log.c
+
 dipifccret_burst_BIN := tests/unit/dipifccret/test_burst
 dipifccret_burst_SRCS := \
 	tests/unit/dipifccret/test_burst.c \
@@ -4130,7 +4854,7 @@ dipifccret_capture_SRCS := \
 	src/lib/helper/ioutil.c \
 	src/lib/helper/signal.c
 
-UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_ts_push_queue dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_conn dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
+UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_ts_push_queue dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_conn dipixy_conn_concurrency dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
@@ -4163,6 +4887,7 @@ dipixy_playlist_SRCS := \
 	tests/unit/dipixy/test_playlist.c \
 	src/dipixy/reactor/reactor_threadlocal_stub.c \
 	src/dipixy/core/playlist.c \
+	src/dipixy/core/input_walk.c \
 	src/dipixy/core/route.c \
 	src/dipixy/ts/pidfilter.c \
 	src/dipixy/ts/lcevcselect.c \
@@ -4212,6 +4937,23 @@ dipixy_playlist_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/demux/rtp.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/mux/psi_build.c \
+	src/lib/net/httpclient/fetch.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -4259,6 +5001,24 @@ dipixy_capture_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/demux/rtp.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/xml_util.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -4308,6 +5068,7 @@ dipixy_channels_SRCS := \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
+	src/dipixy/core/input_walk.c \
 	src/dipixy/core/route.c \
 	src/dipixy/ws/ws_broadcast.c \
 	src/dipixy/ws/ws_frame.c \
@@ -4327,6 +5088,23 @@ dipixy_channels_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/demux/rtp.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/mux/psi_build.c \
+	src/lib/net/httpclient/fetch.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -4355,6 +5133,7 @@ dipixy_ts_push_queue_BIN := tests/unit/dipixy/test_ts_push_queue
 dipixy_ts_push_queue_SRCS := \
 	tests/unit/dipixy/test_ts_push_queue.c \
 	src/dipixy/ts/ts_push.c \
+	src/dipixy/ts/ts_push_feed.c \
 	src/dipixy/ts/pidfilter.c \
 	src/lib/helper/byte_ring.c \
 	src/lib/helper/ioutil.c \
@@ -4442,7 +5221,8 @@ dipixy_dispatch_SRCS := \
 	src/dipixy/reactor/dispatch/route.c \
 	src/dipixy/reactor/dispatch/route_common.c \
 	src/dipixy/reactor/dispatch/waiters.c \
-	src/lib/helper/secure_zero.c
+	src/lib/helper/secure_zero.c \
+	src/lib/helper/ioutil.c
 dipixy_dispatch_EXTRA_CFLAGS := -ffunction-sections -fdata-sections
 dipixy_dispatch_EXTRA_LDFLAGS := -Wl,--gc-sections
 
@@ -4497,7 +5277,7 @@ dipixy_altsvc_SRCS := \
 	src/dipixy/altsvc.c
 
 ifeq ($(HAVE_HTTP3),yes)
-UNIT_TESTS += dipixy_h3_stateless dipixy_h3_steer dipixy_h3_udp
+UNIT_TESTS += dipixy_h3_stateless dipixy_h3_steer dipixy_h3_udp dipixy_h3_quic_tls
 endif
 dipixy_h3_steer_BIN := tests/unit/dipixy/test_h3_steer
 dipixy_h3_steer_SRCS := \
@@ -4509,6 +5289,19 @@ dipixy_h3_udp_SRCS := \
 	tests/unit/dipixy/test_h3_udp.c \
 	src/dipixy/http3/http3_udp.c
 dipixy_h3_udp_EXTRA_CFLAGS := -DHAVE_HTTP3
+dipixy_h3_quic_tls_BIN := tests/unit/dipixy/test_h3_quic_tls
+dipixy_h3_quic_tls_SRCS := \
+	tests/unit/dipixy/test_h3_quic_tls.c \
+	src/dipixy/http3/quic/tls.c \
+	src/dipixy/http3/http3_udp.c \
+	src/dipixy/http3/http3_stateless.c \
+	src/lib/helper/log.c
+dipixy_h3_quic_tls_EXTRA_CFLAGS := -DHAVE_HTTP3 $(shell pkg-config --cflags libngtcp2 libngtcp2_crypto_ossl openssl)
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipixy_h3_quic_tls_EXTRA_LDFLAGS := $(shell pkg-config --static --libs libngtcp2 libngtcp2_crypto_ossl openssl)
+else
+dipixy_h3_quic_tls_EXTRA_LDFLAGS := $(shell pkg-config --libs libngtcp2 libngtcp2_crypto_ossl openssl)
+endif
 dipixy_h3_stateless_BIN := tests/unit/dipixy/test_h3_stateless
 dipixy_h3_stateless_SRCS := \
 	tests/unit/dipixy/test_h3_stateless.c \
@@ -4548,6 +5341,14 @@ dipixy_conn_SRCS := \
 	src/dipixy/reactor/qsbr.c \
 	src/lib/helper/log.c
 
+dipixy_conn_concurrency_BIN := tests/unit/dipixy/test_conn_concurrency
+dipixy_conn_concurrency_SRCS := \
+	tests/unit/dipixy/test_conn_concurrency.c \
+	src/dipixy/reactor/conn.c \
+	src/dipixy/reactor/reactor_tls_stub.c \
+	src/dipixy/reactor/qsbr.c \
+	src/lib/helper/log.c
+
 dipixy_ws_sources_BIN := tests/unit/dipixy/test_ws_sources
 dipixy_ws_sources_SRCS := \
 	tests/unit/dipixy/test_ws_sources.c \
@@ -4580,6 +5381,7 @@ dipixy_ws_sources_SRCS := \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
+	src/dipixy/core/input_walk.c \
 	src/dipixy/core/route.c \
 	src/dipixy/ws/ws_broadcast.c \
 	src/dipixy/ws/ws_frame.c \
@@ -4598,6 +5400,23 @@ dipixy_ws_sources_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/demux/rtp.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/mux/psi_build.c \
+	src/lib/net/httpclient/fetch.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -4647,6 +5466,7 @@ dipixy_gena_SRCS := \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
+	src/dipixy/core/input_walk.c \
 	src/dipixy/core/route.c \
 	src/dipixy/ws/ws_broadcast.c \
 	src/dipixy/ws/ws_frame.c \
@@ -4666,6 +5486,23 @@ dipixy_gena_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/demux/rtp.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/mux/psi_build.c \
+	src/lib/net/httpclient/fetch.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -4715,6 +5552,7 @@ dipixy_dlna_SRCS := \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
+	src/dipixy/core/input_walk.c \
 	src/dipixy/core/route.c \
 	src/dipixy/ws/ws_broadcast.c \
 	src/dipixy/ws/ws_frame.c \
@@ -4734,6 +5572,23 @@ dipixy_dlna_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/demux/rtp.c \
 	src/lib/net/tssource.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/mux/psi_build.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -4894,7 +5749,9 @@ fuzz_ecmg_channel_status_SRCS := \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
 	src/lib/cas/ecmg_client/run.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
@@ -4913,6 +5770,7 @@ fuzz_emmg_datagrams_SRCS := \
 	src/lib/cas/emmg_server/protocol.c \
 	src/lib/cas/emmg_server/worker.c \
 	src/lib/cas/emmg_server/dial.c \
+	src/lib/cas/cas_dial.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c \

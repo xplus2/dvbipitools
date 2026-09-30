@@ -95,17 +95,17 @@ END_TEST
 
 static bcg_channel_t *add_channel(bcg_doc_t *d, const char *id) {
   bcg_channel_t *c = bcg_add_channel(d);
-  snprintf(c->id, sizeof c->id, "%s", id);
+  bufcpy(c->id, sizeof c->id, id);
   return c;
 }
 
 static bcg_programme_t *add_programme(bcg_doc_t *d, const char *chan, const char *start, const char *stop) {
   bcg_programme_t *pr = bcg_add_programme(d);
-  snprintf(pr->channel_id, sizeof pr->channel_id, "%s", chan);
-  snprintf(pr->start, sizeof pr->start, "%s", start);
+  bufcpy(pr->channel_id, sizeof pr->channel_id, chan);
+  bufcpy(pr->start, sizeof pr->start, start);
   pr->stop[0] = '\0';
   if (stop)
-    snprintf(pr->stop, sizeof pr->stop, "%s", stop);
+    bufcpy(pr->stop, sizeof pr->stop, stop);
   return pr;
 }
 
@@ -152,11 +152,11 @@ START_TEST(build_windowed_doc_includes_in_range_and_no_stop_programmes) {
   bcg_doc_init(&src);
   add_channel(&src, "ch1");
   /* within window, has a stop time */
-  snprintf(start_a, sizeof start_a, "2020-01-01T00:10:00Z");
-  snprintf(stop_a, sizeof stop_a, "2020-01-01T01:10:00Z");
+  bufcpy(start_a, sizeof start_a, "2020-01-01T00:10:00Z");
+  bufcpy(stop_a, sizeof stop_a, "2020-01-01T01:10:00Z");
   add_programme(&src, "ch1", start_a, stop_a);
   /* within window, no stop: end defaults to start */
-  snprintf(start_b, sizeof start_b, "2020-01-01T00:05:00Z");
+  bufcpy(start_b, sizeof start_b, "2020-01-01T00:05:00Z");
   add_programme(&src, "ch1", start_b, NULL);
 
   ck_assert_int_eq(build_windowed_doc(&src, &dst, now, 60, NULL, NULL, NULL), 0);

@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "lib/config/yamlcfg.h"
+#include "lib/helper/ioutil.h"
 
 #define TOOL "testtool"
 #define NKEYS(k) (sizeof(k) / sizeof((k)[0]))
@@ -23,10 +24,12 @@ typedef struct {
   int begins;
   int ends;
   int item_fail;
+  void *str_pool;
 } tcfg_t;
 
 static int ap_str(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((tcfg_t *)c)->str, v, e, n);
+  tcfg_t *t = c;
+  return yamlcfg_set_str(&t->str_pool, &t->str, v, e, n);
 }
 
 static int ap_bool(void *c, const char *v, char *e, size_t n) {
@@ -45,10 +48,10 @@ static int ap_port(void *c, const char *v, char *e, size_t n) {
 static int ap_list(void *c, const char *v, char *e, size_t n) {
   tcfg_t *t = c;
   if (t->nlist >= sizeof t->list / sizeof t->list[0]) {
-    snprintf(e, n, "too many");
+    bufcpy(e, n, "too many");
     return -1;
   }
-  return yamlcfg_set_str(&t->list[t->nlist++], v, e, n);
+  return yamlcfg_set_str(&t->str_pool, &t->list[t->nlist++], v, e, n);
 }
 
 static int item_cb(void *c, const char *list, int begin, char *e, size_t n) {
@@ -57,7 +60,7 @@ static int item_cb(void *c, const char *list, int begin, char *e, size_t n) {
   if (begin) t->begins++;
   else t->ends++;
   if (t->item_fail) {
-    snprintf(e, n, "item rejected");
+    bufcpy(e, n, "item rejected");
     return -1;
   }
   return 0;
@@ -84,6 +87,7 @@ static void write_cfg(char *path, const char *text) {
 static int load_text(yamlcfg_t *y, tcfg_t *t, int mode, const char *text, yamlcfg_item_fn item) {
   char path[] = "/tmp/yamlcfg_test_XXXXXX";
   int rc;
+  yamlcfg_strpool_free(t->str_pool);
   memset(t, 0, sizeof *t);
   write_cfg(path, text);
   rc = yamlcfg_load_items(y, TOOL, mode, path, NULL, KEYS, NKEYS(KEYS), t, item);
@@ -128,19 +132,22 @@ START_TEST(set_bool_reports_invalid_value) {
 END_TEST
 
 START_TEST(set_str_copies_value) {
+  void *pool = NULL;
   const char *s = NULL;
   char buf[] = "hello";
   char err[64] = "";
-  ck_assert_int_eq(yamlcfg_set_str(&s, buf, err, sizeof err), 0);
+  ck_assert_int_eq(yamlcfg_set_str(&pool, &s, buf, err, sizeof err), 0);
   buf[0] = 'X';
   ck_assert_str_eq(s, "hello");
+  yamlcfg_strpool_free(pool);
 }
 END_TEST
 
 START_TEST(set_str_rejects_empty) {
+  void *pool = NULL;
   const char *s = NULL;
   char err[64] = "";
-  ck_assert_int_ne(yamlcfg_set_str(&s, "", err, sizeof err), 0);
+  ck_assert_int_ne(yamlcfg_set_str(&pool, &s, "", err, sizeof err), 0);
   ck_assert_ptr_null(s);
   ck_assert_str_eq(err, "empty value");
 }
@@ -302,42 +309,47 @@ END_TEST
 
 START_TEST(load_without_any_path_is_absent) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(yamlcfg_load(&y, TOOL, 0, NULL, NULL, KEYS, NKEYS(KEYS), &t), YAMLCFG_ABSENT);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_missing_default_is_absent) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(yamlcfg_load(&y, TOOL, 0, NULL, "/nonexistent/dir/cfg.yaml", KEYS, NKEYS(KEYS), &t), YAMLCFG_ABSENT);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_missing_default_is_error_in_check_mode) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(yamlcfg_load(&y, TOOL, YAMLCFG_CHECK, NULL, "/nonexistent/dir/cfg.yaml", KEYS, NKEYS(KEYS), &t), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_missing_explicit_path_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(yamlcfg_load(&y, TOOL, 0, "/nonexistent/dir/cfg.yaml", NULL, KEYS, NKEYS(KEYS), &t), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_directory_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(yamlcfg_load(&y, TOOL, 0, "/tmp", NULL, KEYS, NKEYS(KEYS), &t), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_explicit_path_wins_over_default) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   char path[] = "/tmp/yamlcfg_test_XXXXXX";
   memset(&t, 0, sizeof t);
   write_cfg(path, "count: 7\n");
@@ -346,121 +358,134 @@ START_TEST(load_explicit_path_wins_over_default) {
   ck_assert_uint_eq(t.num, 7u);
   ck_assert_str_eq(y.path, path);
   ck_assert_str_eq(y.tool, TOOL);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_applies_scalars) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "name: hello\non: yes\ncount: 42\n", NULL), YAMLCFG_LOADED);
   ck_assert_str_eq(t.str, "hello");
   ck_assert_int_eq(t.flag, 1);
   ck_assert_uint_eq(t.num, 42u);
   ck_assert_uint_eq(y.warnings, 0u);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_accepts_quoted_and_empty_document) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "name: \"a b: c\"\n", NULL), YAMLCFG_LOADED);
   ck_assert_str_eq(t.str, "a b: c");
   ck_assert_int_eq(load_text(&y, &t, 0, "", NULL), YAMLCFG_LOADED);
   ck_assert_int_eq(load_text(&y, &t, 0, "# only a comment\n", NULL), YAMLCFG_LOADED);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_resolves_nested_key_paths) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "net:\n  port: 8080\nname: after\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(t.port, 8080u);
   ck_assert_str_eq(t.str, "after");
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_skips_null_values) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "name:\ncount: ~\non: null\n", NULL), YAMLCFG_LOADED);
   ck_assert_ptr_null(t.str);
   ck_assert_uint_eq(t.num, 0u);
   ck_assert_int_eq(t.flag, 0);
   ck_assert_uint_eq(y.warnings, 0u);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_quoted_null_is_a_value) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "name: \"null\"\n", NULL), YAMLCFG_LOADED);
   ck_assert_str_eq(t.str, "null");
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_unknown_key_warns_by_default) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "bogus: 1\nname: ok\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(y.warnings, 1u);
   ck_assert_str_eq(t.str, "ok");
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_unknown_key_fails_in_strict_mode) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, YAMLCFG_STRICT, "bogus: 1\n", NULL), YAMLCFG_ERROR);
   ck_assert_uint_eq(y.warnings, 1u);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_unknown_key_in_check_mode_is_loaded) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, YAMLCFG_CHECK | YAMLCFG_STRICT, "bogus: 1\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(y.warnings, 1u);
   ck_assert_int_ne(yamlcfg_report(&y), 0);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_invalid_value_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "count: 999\n", NULL), YAMLCFG_ERROR);
   ck_assert_int_eq(load_text(&y, &t, 0, "on: maybe\n", NULL), YAMLCFG_ERROR);
   ck_assert_int_eq(load_text(&y, &t, 0, "name: \"\"\n", NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_invalid_value_is_warning_in_check_mode) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, YAMLCFG_CHECK, "count: 999\non: maybe\nname: ok\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(y.warnings, 2u);
   ck_assert_str_eq(t.str, "ok");
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_duplicate_key_warns_and_last_wins) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "count: 1\ncount: 2\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(t.num, 2u);
   ck_assert_uint_eq(y.warnings, 1u);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_strict_duplicate_key_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, YAMLCFG_STRICT, "count: 1\ncount: 2\n", NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_collects_list_values) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "list:\n  - a\n  - b\n  - c\nname: x\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(t.nlist, 3u);
   ck_assert_str_eq(t.list[0], "a");
@@ -468,73 +493,81 @@ START_TEST(load_collects_list_values) {
   ck_assert_str_eq(t.list[2], "c");
   ck_assert_str_eq(t.str, "x");
   ck_assert_uint_eq(y.warnings, 0u);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_accepts_flow_list_and_scalar_for_list_key) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "list: [a, b]\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(t.nlist, 2u);
   ck_assert_int_eq(load_text(&y, &t, 0, "list: solo\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(t.nlist, 1u);
   ck_assert_str_eq(t.list[0], "solo");
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_skips_null_list_items) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "list:\n  - a\n  -\n  - b\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(t.nlist, 2u);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_list_for_scalar_key_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "name:\n  - a\n", NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_list_for_scalar_key_is_warning_in_check_mode) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, YAMLCFG_CHECK, "name:\n  - a\ncount: 3\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_ge(y.warnings, 1u);
   ck_assert_uint_eq(t.num, 3u);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_nested_lists_are_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "list:\n  - [a, b]\n", NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_mapping_in_plain_list_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "list:\n  - k: v\n", NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_keyed_items_call_back_in_pairs) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "items:\n  - first:\n      opt: 5\n  - second\n  - third:\n      opt: 9\n", item_cb), YAMLCFG_LOADED);
   ck_assert_int_eq(t.begins, t.ends);
   ck_assert_int_ge(t.begins, 2);
   ck_assert_uint_ge(t.nlist, 3u);
   ck_assert_str_eq(t.list[0], "first");
   ck_assert_uint_eq(t.num, 9u);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_keyed_item_callback_failure_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   char path[] = "/tmp/yamlcfg_test_XXXXXX";
   int rc;
   memset(&t, 0, sizeof t);
@@ -543,48 +576,54 @@ START_TEST(load_keyed_item_callback_failure_is_error) {
   rc = yamlcfg_load_items(&y, TOOL, 0, path, NULL, KEYS, NKEYS(KEYS), &t, item_cb);
   unlink(path);
   ck_assert_int_eq(rc, YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_top_level_list_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "- a\n- b\n", NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_top_level_scalar_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "just a string\n", NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_multiple_documents_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "count: 1\n---\ncount: 2\n", NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_aliases_are_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "name: &a hello\nfile: *a\n", NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_syntax_error_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "name: [unclosed\n", NULL), YAMLCFG_ERROR);
   ck_assert_int_eq(load_text(&y, &t, 0, "name: a\n\tcount: 1\n", NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_deep_nesting_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   char text[512] = "";
   for (int i = 0; i < 20; i++) {
     size_t n = strlen(text);
@@ -592,51 +631,56 @@ START_TEST(load_deep_nesting_is_error) {
     snprintf(text + n + (size_t)i * 2, sizeof text - n - (size_t)i * 2, "k%d:\n", i);
   }
   ck_assert_int_eq(load_text(&y, &t, 0, text, NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_overlong_key_path_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   char text[600];
   memset(text, 'k', 400);
   strcpy(text + 400, ": 1\n");
   ck_assert_int_eq(load_text(&y, &t, 0, text, NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_must_exist_checked_only_in_check_mode) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "file: /nonexistent/dir/file\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(y.warnings, 0u);
   ck_assert_int_eq(load_text(&y, &t, YAMLCFG_CHECK, "file: /nonexistent/dir/file\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(y.warnings, 1u);
   ck_assert_int_eq(load_text(&y, &t, YAMLCFG_CHECK, "file: /dev/null\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(y.warnings, 0u);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_strict_with_must_exist_failure_is_error) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, YAMLCFG_STRICT, "file: /nonexistent/dir/file\n", NULL), YAMLCFG_ERROR);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_resets_state_between_calls) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "bogus: 1\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(y.warnings, 1u);
   ck_assert_int_eq(load_text(&y, &t, 0, "count: 1\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(y.warnings, 0u);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(load_with_zero_keys_warns_on_everything) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   char path[] = "/tmp/yamlcfg_test_XXXXXX";
   int rc;
   write_cfg(path, "a: 1\nb: 2\n");
@@ -644,12 +688,13 @@ START_TEST(load_with_zero_keys_warns_on_everything) {
   unlink(path);
   ck_assert_int_eq(rc, YAMLCFG_LOADED);
   ck_assert_uint_eq(y.warnings, 2u);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
 START_TEST(warn_counts_and_report_reflects_mode) {
   yamlcfg_t y;
-  tcfg_t t;
+  tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "count: 1\n", NULL), YAMLCFG_LOADED);
   ck_assert_int_eq(yamlcfg_report(&y), 0);
   yamlcfg_warn(&y, "custom %d", 1);
@@ -660,6 +705,7 @@ START_TEST(warn_counts_and_report_reflects_mode) {
   ck_assert_int_ne(yamlcfg_report(&y), 0);
   y.warnings = 0;
   ck_assert_int_eq(yamlcfg_report(&y), 0);
+  yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 

@@ -37,9 +37,10 @@ void pidlock_apply_lcevc(const lcevc_select_t *lcevc, pid_filter_t *filter, cons
 }
 
 const unsigned char *pidlock_rewrite_pmt(const psi_t *tp, const pid_filter_t *filter, unsigned char *cc_pmt,
-                                         const unsigned char *pkt, unsigned pid, unsigned char *rw, unsigned char *out188) {
+  const unsigned char *pkt, unsigned pid, unsigned char *rw, unsigned char *out188) {
+
   const unsigned char *sec;
-  unsigned drop_pids[PID_FILTER_MAX] = {0};
+  unsigned drop_pids[PID_FILTER_MAX];
   size_t sl;
   size_t rl;
 
@@ -47,6 +48,7 @@ const unsigned char *pidlock_rewrite_pmt(const psi_t *tp, const pid_filter_t *fi
   sec = psi_pmt_section(tp, &sl);
   if (!sec) return pkt;
   for (int k = 0; k < filter->count; k++) drop_pids[k] = filter->pids[k];
+  /* cppcheck-suppress uninitvar -- drop_pids[k] for k<filter->count always written above */
   rl = pmt_filter_rewrite(sec, sl, drop_pids, (size_t)filter->count, rw, PSI_SECTION_ASM_BUF_LEN);
   if (!rl) return pkt;
   *cc_pmt = (*cc_pmt + 1) & 0x0F;

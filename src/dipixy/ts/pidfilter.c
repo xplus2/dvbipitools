@@ -9,7 +9,8 @@
 #include "lib/helper/ioutil.h"
 
 static int cmp_u16(const void *a, const void *b) {
-  uint16_t x = *(const uint16_t *)a, y = *(const uint16_t *)b;
+  uint16_t x = *(const uint16_t *)a;
+  uint16_t y = *(const uint16_t *)b;
   return x < y ? -1 : (x > y ? 1 : 0);
 }
 
@@ -22,6 +23,7 @@ int pid_token_parse(const char *s, char **end, unsigned long *out) {
 
 void pid_filter_parse(const char *value, pid_filter_t *out) {
   const char *p = value;
+  int w;
   out->count = 0;
   if (!p) return;
   while (*p && out->count < PID_FILTER_MAX) {
@@ -38,11 +40,9 @@ void pid_filter_parse(const char *value, pid_filter_t *out) {
   }
   if (out->count > 1) qsort(out->pids, (size_t)out->count, sizeof out->pids[0], cmp_u16);
 
-  {
-    int w = 0;
-    for (int i = 0; i < out->count; i++) if (i == 0 || out->pids[i] != out->pids[w - 1]) out->pids[w++] = out->pids[i];
-    out->count = w;
-  }
+  w = 0;
+  for (int i = 0; i < out->count; i++) if (i == 0 || out->pids[i] != out->pids[w - 1]) out->pids[w++] = out->pids[i];
+  out->count = w;
 }
 
 int pid_filter_excludes(const pid_filter_t *f, unsigned pid) {
@@ -61,9 +61,19 @@ int pid_filter_equal(const pid_filter_t *a, const pid_filter_t *b) {
 }
 
 void pid_filter_add(pid_filter_t *f, unsigned pid) {
-  if (pid_filter_excludes(f, pid) || f->count >= PID_FILTER_MAX) return;
-  f->pids[f->count++] = (uint16_t)pid;
-  qsort(f->pids, (size_t)f->count, sizeof f->pids[0], cmp_u16);
+  int lo = 0, hi = f->count - 1;
+  int pos;
+  if (f->count >= PID_FILTER_MAX) return;
+  while (lo <= hi) {
+    int mid = (lo + hi) / 2;
+    if (f->pids[mid] == pid) return;
+    if (f->pids[mid] < pid) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  pos = lo;
+  memmove(&f->pids[pos + 1], &f->pids[pos], (size_t)(f->count - pos) * sizeof f->pids[0]);
+  f->pids[pos] = (uint16_t)pid;
+  f->count++;
 }
 
 void pid_filter_format(const pid_filter_t *f, char *buf, size_t bufsz) {
@@ -81,10 +91,16 @@ void pid_filter_format(const pid_filter_t *f, char *buf, size_t bufsz) {
 
 int query_param_extract(const char *query, const char *key, char *buf, size_t bufsz) {
   size_t keylen = strlen(key);
-  const char *f = query ? strstr(query, key) : NULL;
+  const char *f = query;
   size_t i = 0;
   const char *p;
-  if (!f || !bufsz) return 0;
+  if (!query || !bufsz) return 0;
+  for (;;) {
+    f = strstr(f, key);
+    if (!f) return 0;
+    if (f == query || f[-1] == '&') break;
+    f += keylen;
+  }
   p = f + keylen;
   while (*p && *p != '&' && i + 1 < bufsz) buf[i++] = *p++;
   buf[i] = '\0';

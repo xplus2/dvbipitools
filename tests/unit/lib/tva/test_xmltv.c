@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "lib/tva/xmltv.h"
+#include "lib/helper/ioutil.h"
 
 START_TEST(xmltv_write_read_round_trips) {
   bcg_doc_t doc, doc2;
@@ -16,17 +17,17 @@ START_TEST(xmltv_write_read_round_trips) {
 
   bcg_doc_init(&doc);
   c = bcg_add_channel(&doc);
-  snprintf(c->id, sizeof c->id, "channel1");
+  bufcpy(c->id, sizeof c->id, "channel1");
   bcg_channel_add_name(c, "Channel One");
   bcg_channel_add_name(c, "Channel 1 HD");
 
   pr = bcg_add_programme(&doc);
-  snprintf(pr->channel_id, sizeof pr->channel_id, "channel1");
-  snprintf(pr->start, sizeof pr->start, "2020-12-15T12:30:45Z");
-  snprintf(pr->stop, sizeof pr->stop, "2020-12-15T13:00:00Z");
-  snprintf(pr->title, sizeof pr->title, "News & <Weather>");
+  bufcpy(pr->channel_id, sizeof pr->channel_id, "channel1");
+  bufcpy(pr->start, sizeof pr->start, "2020-12-15T12:30:45Z");
+  bufcpy(pr->stop, sizeof pr->stop, "2020-12-15T13:00:00Z");
+  bufcpy(pr->title, sizeof pr->title, "News & <Weather>");
   snprintf(pr->desc, sizeof pr->desc, "Today's \"top\" stories");
-  snprintf(pr->category, sizeof pr->category, "News");
+  bufcpy(pr->category, sizeof pr->category, "News");
 
   f = tmpfile();
   ck_assert_ptr_nonnull(f);
@@ -63,7 +64,7 @@ START_TEST(xmltv_write_falls_back_to_id_when_no_names) {
 
   bcg_doc_init(&doc);
   c = bcg_add_channel(&doc);
-  snprintf(c->id, sizeof c->id, "channel1");
+  bufcpy(c->id, sizeof c->id, "channel1");
 
   f = tmpfile();
   ck_assert_ptr_nonnull(f);
@@ -90,10 +91,10 @@ START_TEST(xmltv_write_untitled_fallback_for_empty_title) {
 
   bcg_doc_init(&doc);
   c = bcg_add_channel(&doc);
-  snprintf(c->id, sizeof c->id, "channel1");
+  bufcpy(c->id, sizeof c->id, "channel1");
   pr = bcg_add_programme(&doc);
-  snprintf(pr->channel_id, sizeof pr->channel_id, "channel1");
-  snprintf(pr->start, sizeof pr->start, "2020-12-15T12:30:45Z");
+  bufcpy(pr->channel_id, sizeof pr->channel_id, "channel1");
+  bufcpy(pr->start, sizeof pr->start, "2020-12-15T12:30:45Z");
 
   f = tmpfile();
   ck_assert_ptr_nonnull(f);

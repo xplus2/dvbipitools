@@ -2,9 +2,9 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 
+#include "lib/cas/cas_dial.h"
 #include "lib/helper/log.h"
 
 #include "priv.h"
@@ -35,7 +35,6 @@ static void publish_ecm(ecmg_client_t *c, int slot, const unsigned char *dg, siz
   atomic_store_explicit(&c->last_parity, slot, memory_order_relaxed);
 }
 
-/* run CW_provision cadence until disconnect/error. returns -1 to trigger reconn */
 static void log_ecm_wait_failed(ecmg_client_t *c, unsigned short cp_number) {
   if (!ecmg_stopping(c))
     log_line("ecmg: no ECM_response for CP %u", cp_number);
@@ -128,17 +127,6 @@ static int run_steady_state(ecmg_client_t *c, int fd, unsigned char version, uns
   return 0;
 }
 
-/* backoff in small steps so a 30s cap doesn't delay shutdown by 30s */
-static void interruptible_backoff(ecmg_client_t *c, unsigned ms) {
-  unsigned waited = 0;
-  while (waited < ms && !ecmg_stopping(c)) {
-    unsigned step = (ms - waited < ECMG_POLL_INTERVAL_MS) ? ms - waited : ECMG_POLL_INTERVAL_MS;
-    struct timespec ts = {step / 1000, (long)(step % 1000) * 1000000L};
-    nanosleep(&ts, NULL);
-    waited += step;
-  }
-}
-
 void *ecmg_client_main(void *arg) {
   ecmg_client_t *c = arg;
   unsigned backoff_ms = ECMG_RECONNECT_BACKOFF_MIN_MS;
@@ -149,7 +137,7 @@ void *ecmg_client_main(void *arg) {
     unsigned lead_cw, cw_per_msg, max_comp_time_ms;
 
     if (connect_and_setup(c, &fd, &version, &lead_cw, &cw_per_msg, &max_comp_time_ms) < 0) {
-      interruptible_backoff(c, backoff_ms);
+      cas_interruptible_backoff(&c->stop, backoff_ms, ECMG_POLL_INTERVAL_MS);
       if (backoff_ms < ECMG_RECONNECT_BACKOFF_MAX_MS)
         backoff_ms *= 2;
       continue;

@@ -18,6 +18,12 @@ static void h3_pool_release(const h3_conn_t *c) {
   t_h3_pool_free[t_h3_pool_free_n++] = c->pool_slot;
 }
 
+static void release_ssl_and_pool(h3_conn_t *c) {
+  SSL_set_app_data(c->ssl, NULL);
+  SSL_free(c->ssl);
+  h3_pool_release(c);
+}
+
 h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr *local, socklen_t locallen, const h3_admit_t *ai) {
   ngtcp2_pkt_hd hd;
   if (ngtcp2_accept(&hd, pkt, pktlen) != 0) return NULL;
@@ -35,7 +41,10 @@ h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *
     return NULL;
   }
 
-  RAND_bytes(c->scid_data, H3_SCID_LEN);
+  if (RAND_bytes(c->scid_data, H3_SCID_LEN) != 1) {
+    h3_pool_release(c);
+    return NULL;
+  }
   h3_steer_tag_cid(c->scid_data);
   ngtcp2_cid_init(&c->scid, c->scid_data, H3_SCID_LEN);
   memcpy(c->odcid_data, hd.dcid.data, hd.dcid.datalen);
@@ -111,9 +120,7 @@ h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *
     tp.original_dcid = hd.dcid;
   }
   if (h3_reset_token(tp.stateless_reset_token, &c->scid) != 0) {
-    SSL_set_app_data(c->ssl, NULL);
-    SSL_free(c->ssl);
-    h3_pool_release(c);
+    release_ssl_and_pool(c);
     return NULL;
   }
   tp.stateless_reset_token_present = 1;
@@ -124,17 +131,13 @@ h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *
   ngtcp2_addr_init(&ps.path.remote, peer, peerlen);
 
   if (ngtcp2_conn_server_new_versioned(&c->qconn, &hd.scid, &c->scid, &ps.path, hd.version, NGTCP2_CALLBACKS_VERSION, &qcbs, NGTCP2_SETTINGS_VERSION, &settings, NGTCP2_TRANSPORT_PARAMS_VERSION, &tp, NULL, c) != 0) {
-    SSL_set_app_data(c->ssl, NULL);
-    SSL_free(c->ssl);
-    h3_pool_release(c);
+    release_ssl_and_pool(c);
     return NULL;
   }
 
   if (ngtcp2_crypto_ossl_ctx_new(&c->ossl_ctx, c->ssl) != 0) {
     ngtcp2_conn_del(c->qconn);
-    SSL_set_app_data(c->ssl, NULL);
-    SSL_free(c->ssl);
-    h3_pool_release(c);
+    release_ssl_and_pool(c);
     return NULL;
   }
   ngtcp2_conn_set_tls_native_handle(c->qconn, c->ossl_ctx);
@@ -159,16 +162,8 @@ void h3conn_del(h3_conn_t *c) {
     c->h3conn = NULL;
   }
   for (int i = 0; i < c->max_reqs; i++) {
-    h3_req_t *r = &c->reqs[i];
-    if (!r->active) continue;
-    hls_resp_body_release(r->resp_data, r->resp_zc);
-    r->resp_data = NULL;
-    if (r->tspush_sub_idx >= 0) ts_push_unsubscribe_by_idx(r->tspush_sub_idx);
-    if (r->dashchunk_sub_idx >= 0) dash_lldash_sub_close(r->dashchunk_sub_idx);
-    if (r->mp4push_sub_idx >= 0) mp4push_sub_close(r->mp4push_sub_idx);
-    free(r->path);
-    r->path = NULL;
-    r->active = 0;
+    if (!c->reqs[i].active) continue;
+    release_req(&c->reqs[i]);
   }
   if (c->ossl_ctx) {
     ngtcp2_crypto_ossl_ctx_del(c->ossl_ctx);

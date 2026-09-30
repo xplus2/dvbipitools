@@ -26,11 +26,13 @@ static rtmp_out_chan_t *out_chan_alloc(struct rtmp *r, uint32_t cid) {
   return NULL;
 }
 
-int rtmp_session_write_message(struct rtmp *r, uint32_t cid, unsigned char type, uint32_t stream_id, uint32_t timestamp, const unsigned char *payload, size_t len) {
+int rtmp_session_write_message(struct rtmp *r, uint32_t cid, unsigned char type, uint32_t stream_id, uint32_t timestamp, const unsigned char *msg_hdr, size_t msg_hn, const unsigned char *payload, size_t pn) {
   rtmp_out_chan_t *chan;
   rtmp_chunk_header_t h;
   unsigned char hdr[RTMP_MAX_HEADER];
-  size_t hn, sent;
+  size_t hn;
+  size_t sent;
+  size_t len = msg_hn + pn;
 
   if (len >= 0xFFFFFF)
     return -1;
@@ -71,7 +73,15 @@ int rtmp_session_write_message(struct rtmp *r, uint32_t cid, unsigned char type,
   sent = 0;
   while (sent < len) {
     size_t chunk = len - sent < r->out_chunk_size ? len - sent : r->out_chunk_size;
-    r->write_cb(r->cb_ctx, payload + sent, chunk);
+    size_t remain = chunk;
+    size_t pos = sent;
+    if (pos < msg_hn) {
+      size_t take = msg_hn - pos < remain ? msg_hn - pos : remain;
+      r->write_cb(r->cb_ctx, msg_hdr + pos, take);
+      pos += take;
+      remain -= take;
+    }
+    if (remain) r->write_cb(r->cb_ctx, payload + (pos - msg_hn), remain);
     sent += chunk;
     if (sent < len) {
       hn = rtmp_chunk_basic_header_write(hdr, RTMP_CHUNK_FMT_3, cid);
@@ -146,16 +156,13 @@ static int step_message_header(struct rtmp *r, rtmp_parser_t *p, size_t need) {
 static int step_extended_timestamp(rtmp_parser_t *p, size_t need, int has_ext) {
   uint32_t ts;
 
-  if (p->bytes < need)
-    return 0;
+  if (p->bytes < need) return 0;
   ts = has_ext ? rtmp_chunk_extended_timestamp_read(p->buffer + msg_hdr_size[p->pkt->header.fmt] + p->basic_bytes) : p->pkt->header.timestamp;
-  if (0 == p->pkt->bytes) {
-    if (RTMP_CHUNK_FMT_0 == p->pkt->header.fmt)
-      p->pkt->clock = ts;
-    else
-      p->pkt->clock += ts;
-    if (in_chan_alloc_payload(p->pkt) != 0)
-      return -1;
+  if (p->pkt->bytes == 0) {
+    if (p->pkt->header.fmt == RTMP_CHUNK_FMT_0) p->pkt->clock = ts;
+    else p->pkt->clock += ts;
+
+    if (in_chan_alloc_payload(p->pkt) != 0) return -1;
   }
   return 1;
 }
@@ -169,7 +176,7 @@ int rtmp_session_feed(struct rtmp *r, const unsigned char *data, size_t bytes) {
       case RTMP_PARSE_INIT:
         p->buffer[0] = data[offset++];
         p->bytes = 1;
-        p->basic_bytes = (0 == (p->buffer[0] & 0x3F)) ? 2 : (1 == (p->buffer[0] & 0x3F)) ? 3 : 1;
+        p->basic_bytes = ((p->buffer[0] & 0x3F) == 0) ? 2 : ((p->buffer[0] & 0x3F) == 1) ? 3 : 1;
         p->pkt = NULL;
         p->state = RTMP_PARSE_BASIC_HEADER;
         break;
@@ -200,13 +207,10 @@ int rtmp_session_feed(struct rtmp *r, const unsigned char *data, size_t bytes) {
         int has_ext = (p->pkt->header.timestamp == 0xFFFFFF);
         size_t need = msg_hdr_size[p->pkt->header.fmt] + p->basic_bytes + (has_ext ? 4 : 0);
         int r2;
-        while (p->bytes < need && offset < bytes)
-          p->buffer[p->bytes++] = data[offset++];
+        while (p->bytes < need && offset < bytes) p->buffer[p->bytes++] = data[offset++];
         r2 = step_extended_timestamp(p, need, has_ext);
-        if (r2 < 0)
-          return -1;
-        if (r2 == 1)
-          p->state = RTMP_PARSE_PAYLOAD;
+        if (r2 < 0) return -1;
+        if (r2 == 1) p->state = RTMP_PARSE_PAYLOAD;
         break;
       }
 
@@ -214,8 +218,7 @@ int rtmp_session_feed(struct rtmp *r, const unsigned char *data, size_t bytes) {
         size_t room = r->in_chunk_size - (p->pkt->bytes % r->in_chunk_size);
         size_t need = p->pkt->header.length - p->pkt->bytes;
         size_t chunk = room < need ? room : need;
-        if (chunk > bytes - offset)
-          chunk = bytes - offset;
+        if (chunk > bytes - offset) chunk = bytes - offset;
         if (chunk) {
           memcpy(p->pkt->payload + p->pkt->bytes, data + offset, chunk);
           p->pkt->bytes += chunk;
@@ -228,7 +231,7 @@ int rtmp_session_feed(struct rtmp *r, const unsigned char *data, size_t bytes) {
           p->pkt->bytes = 0;
           p->state = RTMP_PARSE_INIT;
           rtmp_on_message(r, type, clock, p->pkt->payload, len);
-        } else if (0 == p->pkt->bytes % r->in_chunk_size) {
+        } else if (p->pkt->bytes % r->in_chunk_size == 0) {
           p->state = RTMP_PARSE_INIT;
         }
         break;

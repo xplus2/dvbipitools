@@ -40,7 +40,7 @@ int tvh_apply_cas_ecmg(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   cfg->any_cas_flag = 1;
   if (cas_vendor_add(cfg->cas_vendors, &cfg->n_cas_vendors, v, e, n)) return -1;
-  if (tvh_item.vendor) tvh_item.have_vendor = 1;
+  if (cfg->parse_item.vendor) cfg->parse_item.have_vendor = 1;
   return 0;
 }
 
@@ -92,7 +92,7 @@ int tvh_apply_biss2_emit_esw(void *c, const char *v, char *e, size_t n) {
 
 int tvh_apply_biss2_ca_receivers(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (yamlcfg_set_str(&cfg->biss2_ca_receivers_dir, v, e, n)) return -1;
+  if (yamlcfg_set_str(&cfg->str_pool, &cfg->biss2_ca_receivers_dir, v, e, n)) return -1;
   cfg->biss2_ca_enabled = 1;
   return 0;
 }

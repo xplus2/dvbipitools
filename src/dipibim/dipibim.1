@@ -12,16 +12,15 @@ dipibim \- convert between the plain TVA XML shape and its BiM binary encoding
 .I bim
 [\fB\-i\fR \fI<path>\fR] [\fB\-o\fR \fI<path>\fR] [\fIoptions\fR]
 .SH DESCRIPTION
+
 .B dipibim
 converts between plain DVB-IPI EPG (TVA) XML, as produced by
 .BR dipixmltv (1),
 and its BiM binary encoding (ETSI TS 102 323, subclause 9.4). \fB\-f\fR
-names the input format; the output is the other one. No mapping table:
+names the input format.
+The output is the other one. No mapping table:
 .B dipibim
-does not touch xmltv ids or URIs, it is a wire-format conversion only.
-See
-.BR dipibcg (1)
-for distribution.
+does not touch xmltv ids or URIs.
 .PP
 Each ProgramInformation, Schedule (with its own ScheduleEvents) and
 ServiceInformation element is its own separately BiM-encoded fragment
@@ -40,9 +39,9 @@ Supported codecs (TS 102 323, subclause 9.4.3.3ff) are dvbStringCodec,
 dvbLocatorCodec (string fallback only, optimized-branch locators
 unsupported), dvbDateTimeCodec (full-precision 8-byte MJD+ms mode, always
 UTC) and dvbControlledTermCodec (compact scheme+term branch only on an
-exact table 69 match with an integer term). dvbDurationCodec is unused.
-CRIDs are derived from start time at write time rather than stored; a
-non-UTC source time round-trips to a different-looking CRID for the same
+exact table 69 match with an integer term).
+dvbDurationCodec is unused. CRIDs are derived from start time at write time rather than stored.
+A non-UTC source time round-trips to a different-looking CRID for the same
 instant.
 .SH OPTIONS
 .TP
@@ -73,10 +72,6 @@ Encode a plain TVA XML guide to its BiM binary form.
 .TP
 .B dipibim \-f bim \-i guide.bim \-o guide.tva.xml
 Decode a BiM-encoded guide back to plain TVA XML.
-.SH EXIT STATUS
-.B 0
-on success.
-A non-zero status is returned on argument errors or I/O failure.
 .SH SEE ALSO
 .BR dipixmltv (1),
 .BR dipibcg (1)

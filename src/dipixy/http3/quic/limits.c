@@ -38,8 +38,11 @@ void h3_set_transport(unsigned max_udp, unsigned window_kib, int cc) {
   if (max_udp > NGTCP2_MAX_UDP_PAYLOAD_SIZE) g_h3_probes[g_h3_nprobes++] = (uint16_t)max_udp;
   g_h3_window = (window_kib ? window_kib : H3_DEFAULT_WINDOW_KIB) * 1024ULL;
   g_h3_cc = NGTCP2_CC_ALGO_CUBIC;
-  if (cc == 1) g_h3_cc = NGTCP2_CC_ALGO_BBR;
-  else if (cc == 2) g_h3_cc = NGTCP2_CC_ALGO_RENO;
+  switch (cc) {
+    case H3_CC_CFG_BBR:  g_h3_cc = NGTCP2_CC_ALGO_BBR; break;
+    case H3_CC_CFG_RENO: g_h3_cc = NGTCP2_CC_ALGO_RENO; break;
+    default: break;
+  }
 }
 
 void h3_set_max_conns_per_thread(int n) {

@@ -10,6 +10,7 @@
 #include "lib/helper/ioutil.h"
 #include "lib/helper/playlist_out.h"
 #include "lib/helper/uriparse.h"
+#include "input_walk.h"
 #include "../version.h"
 
 int playlist_path_parse(const char *path, route_fmt_t *fmt, playlist_type_t *ptype) {
@@ -115,6 +116,7 @@ static void resolve_hostport(const config_t *cfg, int is_tls, const char *host_h
   char qhost[128];
   char hostname[128];
   unsigned port = is_tls ? cfg->listen_tls.port : cfg->listen.port;
+  size_t len;
 
   if (query_param_extract(query, "host=", qhost, sizeof qhost)) {
     if (has_port_suffix(qhost)) {
@@ -128,11 +130,9 @@ static void resolve_hostport(const config_t *cfg, int is_tls, const char *host_h
   } else {
     bufcpy(hostname, sizeof hostname, "127.0.0.1");
   }
-  {
-    size_t len = sb_add(out, outsz, 0, hostname);
-    len = sb_add(out, outsz, len, ":");
-    sb_add_uint(out, outsz, len, port);
-  }
+  len = sb_add(out, outsz, 0, hostname);
+  len = sb_add(out, outsz, len, ":");
+  sb_add_uint(out, outsz, len, port);
 }
 
 static int ordinal_included(const char *csv, unsigned ord) {
@@ -248,6 +248,41 @@ static void emit_item(void *vctx, const channel_item_t *item) {
   emit_out(rc->f, rc->ptype, item->name, target, item->icon_uri, item->tsid, item->onid, item->sid);
 }
 
+typedef struct {
+  FILE *f;
+  playlist_type_t ptype;
+  route_fmt_t fmt;
+  const char *scheme;
+  const char *hostport;
+  const pid_filter_t *filter;
+  const lcevc_select_t *lcevc;
+  int keep_multicast;
+  const channels_t *ch;
+  const char *input_filter;
+} render_walk_t;
+
+static void render_visit_input(void *vctx, const config_input_t *in) {
+  render_walk_t *rw = vctx;
+  if (!ordinal_included(rw->input_filter, in->ordinal)) return;
+  if (in->src) {
+    emit_ctx_t rc = {0};
+    rc.f = rw->f;
+    rc.ptype = rw->ptype;
+    rc.fmt = rw->fmt;
+    rc.scheme = rw->scheme;
+    rc.hostport = rw->hostport;
+    rc.filter = rw->filter;
+    rc.lcevc = rw->lcevc;
+    rc.keep_multicast = rw->keep_multicast;
+    rc.ordinal = in->ordinal;
+    rc.src_name = in->name;
+    channels_list_for_each(rw->ch, in->ordinal, emit_item, &rc);
+  } else {
+    emit_singleton(rw->f, rw->ptype, rw->fmt, rw->scheme, rw->hostport, rw->filter, rw->lcevc,
+                   in->is_stdin ? "stdin" : "rist", in->name);
+  }
+}
+
 int playlist_render(const config_t *cfg, const channels_t *ch, int is_tls, const char *host_hdr, const char *query, const pid_filter_t *filter,
                     const lcevc_select_t *lcevc, route_fmt_t fmt, playlist_type_t ptype, char **out, size_t *out_len) {
   FILE *f;
@@ -256,41 +291,24 @@ int playlist_render(const config_t *cfg, const channels_t *ch, int is_tls, const
   const char *scheme = is_tls ? "https" : "http";
   const char *input_filter;
   int keep_multicast = playlist_query_has_flag(query, "keep_multicast");
-  int max_ord;
-  int si;
+  render_walk_t rw;
 
   resolve_hostport(cfg, is_tls, host_hdr, query, hostport, sizeof hostport);
   input_filter = query_param_extract(query, "input=", input_csv, sizeof input_csv) ? input_csv : NULL;
   f = open_memstream(out, out_len);
   if (!f) return -1;
   playlist_out_init(f, ptype == PLAYLIST_M3U ? PLAYLIST_OUT_M3U : PLAYLIST_OUT_XSPF, TOOL_NAME " " TOOL_VERSION, "dipixy ");
-  max_ord = cfg->stdin_ordinal;
-  if (cfg->rist_ordinal > max_ord) max_ord = cfg->rist_ordinal;
-  if (cfg->n_sources > 0 && cfg->sources[cfg->n_sources - 1].ordinal > max_ord) max_ord = cfg->sources[cfg->n_sources - 1].ordinal;
-  si = 0;
-  for (int ord = 1; ord <= max_ord; ord++) {
-    if (ord == cfg->stdin_ordinal) {
-      if (ordinal_included(input_filter, (unsigned)ord)) emit_singleton(f, ptype, fmt, scheme, hostport, filter, lcevc, "stdin", cfg->stdin_name);
-    } else if (ord == cfg->rist_ordinal) {
-      if (ordinal_included(input_filter, (unsigned)ord)) emit_singleton(f, ptype, fmt, scheme, hostport, filter, lcevc, "rist", cfg->rist_name);
-    } else if (si < cfg->n_sources && cfg->sources[si].ordinal == ord) {
-      if (ordinal_included(input_filter, (unsigned)ord)) {
-        emit_ctx_t rc = {0};
-        rc.f = f;
-        rc.ptype = ptype;
-        rc.fmt = fmt;
-        rc.scheme = scheme;
-        rc.hostport = hostport;
-        rc.filter = filter;
-        rc.lcevc = lcevc;
-        rc.keep_multicast = keep_multicast;
-        rc.ordinal = (unsigned)ord;
-        rc.src_name = cfg->sources[si].name;
-        channels_list_for_each(ch, (unsigned)ord, emit_item, &rc);
-      }
-      si++;
-    }
-  }
+  rw.f = f;
+  rw.ptype = ptype;
+  rw.fmt = fmt;
+  rw.scheme = scheme;
+  rw.hostport = hostport;
+  rw.filter = filter;
+  rw.lcevc = lcevc;
+  rw.keep_multicast = keep_multicast;
+  rw.ch = ch;
+  rw.input_filter = input_filter;
+  config_inputs_walk(cfg, render_visit_input, &rw);
   playlist_out_close(f, ptype == PLAYLIST_M3U ? PLAYLIST_OUT_M3U : PLAYLIST_OUT_XSPF);
   fclose(f);
   return 0;

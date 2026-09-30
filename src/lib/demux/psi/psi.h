@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIREC_DEMUX_PSI_H
-#define DIPIREC_DEMUX_PSI_H
+#ifndef DVBIPITOOLS_LIB_DEMUX_PSI_H
+#define DVBIPITOOLS_LIB_DEMUX_PSI_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -11,18 +11,23 @@
 #define PSI_NAME 64
 #define PSI_ES_DESC_MAX 255 /* raw ES descriptor loop bytes kept for opaque passthrough */
 #define PSI_LCEVC_MAX_LINKS 4
+#define PSI_OBS_OTHER_MAX 128
 
 typedef enum {
   PID_UNKNOWN = 0,
   PID_PAT,
   PID_CAT,
   PID_PMT,
-  PID_NIT, PID_SDT,
+  PID_NIT,
+  PID_SDT,
   PID_EIT,
   PID_OTHER_SI,
   PID_NULL,
   PID_PCR,
-  PID_VIDEO, PID_AUDIO, PID_TELETEXT, PID_SUBTITLE,
+  PID_VIDEO,
+  PID_AUDIO,
+  PID_TELETEXT,
+  PID_SUBTITLE,
   PID_AIT,
   PID_ECM,
   PID_DATA,
@@ -82,7 +87,8 @@ typedef struct {
   unsigned program_number; /* == service_id */
   unsigned pmt_pid;
   int resolved; /* own PMT parsed ok */
-  char service_name[PSI_NAME], provider_name[PSI_NAME]; /* "" until own SDT entry seen */
+  char service_name[PSI_NAME]; /* "" until SDT seen */
+  char provider_name[PSI_NAME];
 } psi_multi_program_t;
 
 typedef struct psi psi_t;
@@ -104,7 +110,7 @@ typedef struct {
   struct {
     uint32_t key;
     double last;
-  } other[2][128];
+  } other[2][PSI_OBS_OTHER_MAX];
   unsigned other_n[2];
   int crc_bat;
 } psi_obs_t;

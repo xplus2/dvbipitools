@@ -16,6 +16,39 @@
 #include "config.h"
 #include "version.h"
 
+#define OPT_COLOR 1000
+#define OPT_RET_ADDR 1001
+#define OPT_RET_RTX_TIME 1002
+#define OPT_RET_RTX_PT 1003
+#define OPT_RET_MC 1004
+#define OPT_RET_MC_PORT 1005
+#define OPT_RET_RSI_MC_RET 1012
+#define OPT_FCC_ADDR 1006
+#define OPT_FCC_RTX_TIME 1007
+#define OPT_FCC_RTX_PT 1008
+#define OPT_FCC_RESOLVE_BY_PORT 1013
+#define OPT_FCC_RESOLVE_BASE_PORT 1014
+#define OPT_FCC_RESOLVE_MAX_CHANNELS 1015
+#define OPT_AL_FEC_ADDR 1028
+#define OPT_AL_FEC_PT 1029
+#define OPT_METRICS 1009
+#define OPT_METRICS_ID 1010
+#define OPT_METRICS_INTERVAL 1011
+#define OPT_PACKAGES 1016
+#define OPT_CELLS 1017
+#define OPT_RMS_NAME 1018
+#define OPT_RMS_LANG 1019
+#define OPT_RMS_LOCATION 1020
+#define OPT_RMS_LOGO 1021
+#define OPT_FUS_NAME 1022
+#define OPT_FUS_LANG 1023
+#define OPT_FUS_ID 1024
+#define OPT_FUS_ANNOUNCE 1025
+#define OPT_FUS_LOGO 1026
+#define OPT_DSCP 1027
+#define OPT_CONFIG_STRICT 1031
+#define OPT_CONFIGTEST 1030
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 static int mcast_parse(const char *s, config_t *cfg) {
@@ -45,58 +78,58 @@ static void print_help(void) {
       "options:\n"
       "  -a, --announce          headend mode: read -i, transmit on -m\n"
       "  -l, --listen            client mode: receive on -m, write -o\n"
-      "  -i, --input <path>      a: .csv/.m3u/.xspf playlist or raw SD&S .xml\n"
-      "  -p, --provider <name>   a: DomainName (required unless -i is .xml)\n"
-      "  -O, --offering <name>   a: display name (required unless -i is .xml)\n"
-      "  -L, --lang <code>       a: ISO 639-2 for the display name (default deu)\n"
       "  -m, --mcast <g>:<p>     multicast group:port ([addr6]:port for v6)\n"
       "  -I, --iface <iface>     multicast interface\n"
-      "      --dscp <v>          announce: output DSCP marking: video-high|video-low|voice|\n"
-      "                          signalling|best-effort|0..63 (default: signalling)\n"
-      "  -t, --interval <s>      a: repeat interval (default 5)\n"
-      "  -t, --timeout <s>       l: stop after N seconds (default 35)\n"
-      "  -o, --output <path>     l: output path, - for stdout (default)\n"
-      "  -f, --format <fmt>      l: m3u|csv|xspf|xml|null (default from -o suffix)\n"
       "  -v, --verbose           periodic stats on stderr\n"
       "      --color <when>      auto|always|never (default auto)\n"
-      "      --ret-addr <a>:<p>  a: advertise a dipifccret RET server (its -l value);\n"
-      "                          opt-in, adds RTPRetransmission to every announced service\n"
-      "      --ret-rtx-time <ms> a: RET rtx-time, matches dipifccret -B (default 2000)\n"
-      "      --ret-rtx-pt <n>    a: RET RTP payload type, matches dipifccret -R (default 99)\n"
-      "      --ret-mc            a: also advertise multicast RET (dipifccret without --no-mc-ret)\n"
-      "      --ret-mc-port <p>   a: multicast RET port, matches dipifccret -F (default: each\n"
-      "                          service's own port)\n"
-      "      --ret-rsi-mc-ret    a: RSI (F.5.3) rides the MC RET session, not the default\n"
-      "                          session; requires --ret-mc, matches dipifccret --rsi-mc-ret\n"
-      "      --fcc-addr <a>:<p>  a: advertise a dipifccret FCC server (its -l value);\n"
-      "                          opt-in, adds ServerBasedEnhancementServiceInfo to every service\n"
-      "      --fcc-rtx-time <ms> a: FCC Retransmission_session rtx-time (default 2000)\n"
-      "      --fcc-rtx-pt <n>    a: FCC RTP payload type, matches dipifccret -R (default 99)\n"
-      "      --fcc-resolve-by-port     a: per-service FCC port instead of --fcc-addr's port,\n"
-      "                          matches dipifccret --fcc-resolve-by-port\n"
-      "      --fcc-resolve-base-port <p> a: matches dipifccret --fcc-resolve-base-port\n"
-      "      --fcc-resolve-max-channels <n> a: port hash modulus for resolve-by-port (default 300)\n"
-      "      --al-fec-addr <a>:<p> a: advertise an Annex E Layer 1 FEC repair stream\n"
-      "      --al-fec-pt <n>     a: FEC repair stream RTP payload type (default 96)\n"
-      "      --metrics <path>    a: Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
-      "      --metrics-id <name> a: stable instance id; metrics disabled unless set\n"
-      "      --metrics-interval <s> a: snapshot interval in seconds (default: 5)\n"
-      "      --packages <path>   a: Package Discovery from id,name,lang,visible,svc1|svc2|... lines\n"
-      "      --cells <path>      a: Regionalisation Discovery from id,country,type:value,... lines\n"
-      "      --rms-name <name>   a: RMS Discovery display name; requires --rms-location\n"
-      "      --rms-lang <code>   a: ISO 639-2 for --rms-name (default deu)\n"
-      "      --rms-location <uri> a: RMSType RMSLocation\n"
-      "      --rms-logo <uri>    a: RMSType LogoURI\n"
-      "      --fus-name <name>   a: FUS Discovery display name; requires --fus-id\n"
-      "      --fus-lang <code>   a: ISO 639-2 for --fus-name (default deu)\n"
-      "      --fus-id <n>        a: FUSID (decimal)\n"
-      "      --fus-announce <a>:<p> a: FUS MulticastAnnouncementAddress\n"
-      "      --fus-logo <uri>    a: FUSType LogoURI\n"
       "  -d, --daemonize         fork to background after startup, detach from terminal\n"
       "  -c, --config <path>     YAML config file (default: %s, if present)\n"
       "      --config-strict     fail on config file issues instead of warnings\n"
       "      --configtest        check the config file, then exit\n"
       "  -h, --help              this help\n\n"
+      "listen mode options:\n"
+      "  -t, --timeout <s>       stop after N seconds (default 35)\n"
+      "  -o, --output <path>     output path, - for stdout (default)\n"
+      "  -f, --format <fmt>      m3u|csv|xspf|xml|null (default from -o suffix)\n\n"
+      "announce mode options:\n"
+      "  -i, --input <path>      .csv/.m3u/.xspf playlist or raw SD&S .xml\n"
+      "  -p, --provider <name>   DomainName (required unless -i is .xml)\n"
+      "  -O, --offering <name>   display name (required unless -i is .xml)\n"
+      "  -L, --lang <code>       ISO 639-2 for the display name (default deu)\n"
+      "      --dscp <v>          output DSCP marking: video-high|video-low|voice|\n"
+      "                          signalling|best-effort|0..63 (default: signalling)\n"
+      "  -t, --interval <s>      repeat interval (default 5)\n"
+      "      --ret-addr <a>:<p>  advertise a dipifccret RET server (its -l value);\n"
+      "                          opt-in, adds RTPRetransmission to every announced service\n"
+      "      --ret-rtx-time <ms> RET rtx-time, matches dipifccret -B (default 2000)\n"
+      "      --ret-rtx-pt <n>    RET RTP payload type, matches dipifccret -R (default 99)\n"
+      "      --ret-mc            also advertise multicast RET (dipifccret without --no-mc-ret)\n"
+      "      --ret-mc-port <p>   multicast RET port, matches dipifccret -F (default: service port)\n"
+      "      --ret-rsi-mc-ret    RSI (F.5.3) rides the MC RET session, not the default\n"
+      "                          session; requires --ret-mc, matches dipifccret --rsi-mc-ret\n"
+      "      --fcc-addr <a>:<p>  advertise a dipifccret FCC server (its -l value);\n"
+      "                          opt-in, adds ServerBasedEnhancementServiceInfo to every service\n"
+      "      --fcc-rtx-time <ms> FCC Retransmission_session rtx-time (default 2000)\n"
+      "      --fcc-rtx-pt <n>    FCC RTP payload type, matches dipifccret -R (default 99)\n"
+      "      --fcc-resolve-by-port          per-service FCC port instead of --fcc-addr's port\n"
+      "      --fcc-resolve-base-port <p>    matches dipifccret --fcc-resolve-base-port\n"
+      "      --fcc-resolve-max-channels <n> port hash modulus for resolve-by-port (default 300)\n"
+      "      --al-fec-addr <a>:<p>          advertise an Annex E Layer 1 FEC repair stream\n"
+      "      --al-fec-pt <n>     FEC repair stream RTP payload type (default 96)\n"
+      "      --metrics <path>    Unix datagram socket for metrics (default: /run/dvbipitools/metrics.sock)\n"
+      "      --metrics-id <name> stable instance id; metrics disabled unless set\n"
+      "      --metrics-interval <s> a: snapshot interval in seconds (default: 5)\n"
+      "      --packages <path>   Package Discovery from id,name,lang,visible,svc1|svc2|... lines\n"
+      "      --cells <path>      Regionalisation Discovery from id,country,type:value,... lines\n"
+      "      --rms-name <name>   RMS Discovery display name; requires --rms-location\n"
+      "      --rms-lang <code>   ISO 639-2 for --rms-name (default deu)\n"
+      "      --rms-location <uri>          RMSType RMSLocation\n"
+      "      --rms-logo <uri>    RMSType LogoURI\n"
+      "      --fus-name <name>   FUS Discovery display name; requires --fus-id\n"
+      "      --fus-lang <code>   ISO 639-2 for --fus-name (default deu)\n"
+      "      --fus-id <n>        FUSID (decimal)\n"
+      "      --fus-announce <a>:<p>        FUS MulticastAnnouncementAddress\n"
+      "      --fus-logo <uri>    FUSType LogoURI\n\n"
       "examples:\n"
       "  %s -a -i channels.csv -p example.org -O \"My Headend\" -m 239.255.0.1:3937\n"
       "  %s -l -m 239.255.0.1:3937 -o discovered.m3u\n",
@@ -264,40 +297,40 @@ static const struct option longopts[] = {
     {"output", required_argument, 0, 'o'},
     {"format", required_argument, 0, 'f'},
     {"verbose", no_argument, 0, 'v'},
-    {"color", required_argument, 0, 1000},
-    {"ret-addr", required_argument, 0, 1001},
-    {"ret-rtx-time", required_argument, 0, 1002},
-    {"ret-rtx-pt", required_argument, 0, 1003},
-    {"ret-mc", no_argument, 0, 1004},
-    {"ret-mc-port", required_argument, 0, 1005},
-    {"ret-rsi-mc-ret", no_argument, 0, 1012},
-    {"fcc-addr", required_argument, 0, 1006},
-    {"fcc-rtx-time", required_argument, 0, 1007},
-    {"fcc-rtx-pt", required_argument, 0, 1008},
-    {"fcc-resolve-by-port", no_argument, 0, 1013},
-    {"fcc-resolve-base-port", required_argument, 0, 1014},
-    {"fcc-resolve-max-channels", required_argument, 0, 1015},
-    {"al-fec-addr", required_argument, 0, 1028},
-    {"al-fec-pt", required_argument, 0, 1029},
-    {"metrics", required_argument, 0, 1009},
-    {"metrics-id", required_argument, 0, 1010},
-    {"metrics-interval", required_argument, 0, 1011},
-    {"packages", required_argument, 0, 1016},
-    {"cells", required_argument, 0, 1017},
-    {"rms-name", required_argument, 0, 1018},
-    {"rms-lang", required_argument, 0, 1019},
-    {"rms-location", required_argument, 0, 1020},
-    {"rms-logo", required_argument, 0, 1021},
-    {"fus-name", required_argument, 0, 1022},
-    {"fus-lang", required_argument, 0, 1023},
-    {"fus-id", required_argument, 0, 1024},
-    {"fus-announce", required_argument, 0, 1025},
-    {"fus-logo", required_argument, 0, 1026},
-    {"dscp", required_argument, 0, 1027},
+    {"color", required_argument, 0, OPT_COLOR},
+    {"ret-addr", required_argument, 0, OPT_RET_ADDR},
+    {"ret-rtx-time", required_argument, 0, OPT_RET_RTX_TIME},
+    {"ret-rtx-pt", required_argument, 0, OPT_RET_RTX_PT},
+    {"ret-mc", no_argument, 0, OPT_RET_MC},
+    {"ret-mc-port", required_argument, 0, OPT_RET_MC_PORT},
+    {"ret-rsi-mc-ret", no_argument, 0, OPT_RET_RSI_MC_RET},
+    {"fcc-addr", required_argument, 0, OPT_FCC_ADDR},
+    {"fcc-rtx-time", required_argument, 0, OPT_FCC_RTX_TIME},
+    {"fcc-rtx-pt", required_argument, 0, OPT_FCC_RTX_PT},
+    {"fcc-resolve-by-port", no_argument, 0, OPT_FCC_RESOLVE_BY_PORT},
+    {"fcc-resolve-base-port", required_argument, 0, OPT_FCC_RESOLVE_BASE_PORT},
+    {"fcc-resolve-max-channels", required_argument, 0, OPT_FCC_RESOLVE_MAX_CHANNELS},
+    {"al-fec-addr", required_argument, 0, OPT_AL_FEC_ADDR},
+    {"al-fec-pt", required_argument, 0, OPT_AL_FEC_PT},
+    {"metrics", required_argument, 0, OPT_METRICS},
+    {"metrics-id", required_argument, 0, OPT_METRICS_ID},
+    {"metrics-interval", required_argument, 0, OPT_METRICS_INTERVAL},
+    {"packages", required_argument, 0, OPT_PACKAGES},
+    {"cells", required_argument, 0, OPT_CELLS},
+    {"rms-name", required_argument, 0, OPT_RMS_NAME},
+    {"rms-lang", required_argument, 0, OPT_RMS_LANG},
+    {"rms-location", required_argument, 0, OPT_RMS_LOCATION},
+    {"rms-logo", required_argument, 0, OPT_RMS_LOGO},
+    {"fus-name", required_argument, 0, OPT_FUS_NAME},
+    {"fus-lang", required_argument, 0, OPT_FUS_LANG},
+    {"fus-id", required_argument, 0, OPT_FUS_ID},
+    {"fus-announce", required_argument, 0, OPT_FUS_ANNOUNCE},
+    {"fus-logo", required_argument, 0, OPT_FUS_LOGO},
+    {"dscp", required_argument, 0, OPT_DSCP},
     {"daemonize", no_argument, 0, 'd'},
     {"config", required_argument, 0, 'c'},
-    {"config-strict", no_argument, 0, 1031},
-    {"configtest", no_argument, 0, 1030},
+    {"config-strict", no_argument, 0, OPT_CONFIG_STRICT},
+    {"configtest", no_argument, 0, OPT_CONFIGTEST},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}};
 
@@ -326,6 +359,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   args_status_t pst;
   int cli_mode = 0;
   int c;
+  args_status_t st;
 
   pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
   if (pst != ARGS_OK) return pst;
@@ -349,8 +383,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         else
           cfg->fl.have_l = 1;
         break;
-      case 1031:
-      case 1030:
+      case OPT_CONFIG_STRICT:
+      case OPT_CONFIGTEST:
       case 'c':
         break;
       case 'i':
@@ -379,7 +413,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'I':
         cfg->iface = optarg;
         break;
-      case 1027:
+      case OPT_DSCP:
         if (net_dscp_parse(optarg, &cfg->dscp)) {
           argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
           return ARGS_ERR;
@@ -415,7 +449,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'd':
         cfg->daemonize = 1;
         break;
-      case 1000: {
+      case OPT_COLOR: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
           argerr("invalid --color: %s (auto|always|never)", optarg);
@@ -424,14 +458,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->color_mode = v;
         break;
       }
-      case 1001:
+      case OPT_RET_ADDR:
         if (ret_addr_parse(optarg, cfg->ret_addr, sizeof cfg->ret_addr, &cfg->ret_port)) {
           argerr("invalid --ret-addr: %s", optarg);
           return ARGS_ERR;
         }
         cfg->ret_enabled = 1;
         break;
-      case 1002: {
+      case OPT_RET_RTX_TIME: {
         unsigned v;
         if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
           argerr("invalid --ret-rtx-time: %s", optarg);
@@ -441,7 +475,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->fl.have_ret_rtx_time = 1;
         break;
       }
-      case 1003: {
+      case OPT_RET_RTX_PT: {
         unsigned v;
         if (argutil_uint_range(optarg, 0, 127, &v)) {
           argerr("invalid --ret-rtx-pt: %s (0..127)", optarg);
@@ -451,10 +485,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->fl.have_ret_rtx_pt = 1;
         break;
       }
-      case 1004:
+      case OPT_RET_MC:
         cfg->ret_mc = 1;
         break;
-      case 1005: {
+      case OPT_RET_MC_PORT: {
         unsigned v;
         if (argutil_port_parse(optarg, &v)) {
           argerr("invalid --ret-mc-port: %s", optarg);
@@ -464,24 +498,24 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->fl.have_ret_mc_port = 1;
         break;
       }
-      case 1012:
+      case OPT_RET_RSI_MC_RET:
         cfg->ret_rsi_mc_ret = 1;
         break;
-      case 1006:
+      case OPT_FCC_ADDR:
         if (ret_addr_parse(optarg, cfg->fcc_addr, sizeof cfg->fcc_addr, &cfg->fcc_port)) {
           argerr("invalid --fcc-addr: %s", optarg);
           return ARGS_ERR;
         }
         cfg->fcc_enabled = 1;
         break;
-      case 1028:
+      case OPT_AL_FEC_ADDR:
         if (ret_addr_parse(optarg, cfg->al_fec_addr, sizeof cfg->al_fec_addr, &cfg->al_fec_port)) {
           argerr("invalid --al-fec-addr: %s", optarg);
           return ARGS_ERR;
         }
         cfg->al_fec_enabled = 1;
         break;
-      case 1029: {
+      case OPT_AL_FEC_PT: {
         unsigned v;
         if (argutil_uint_range(optarg, 0, 127, &v)) {
           argerr("invalid --al-fec-pt: %s (0..127)", optarg);
@@ -491,7 +525,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->fl.have_al_fec_pt = 1;
         break;
       }
-      case 1007: {
+      case OPT_FCC_RTX_TIME: {
         unsigned v;
         if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
           argerr("invalid --fcc-rtx-time: %s", optarg);
@@ -501,7 +535,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->fl.have_fcc_rtx_time = 1;
         break;
       }
-      case 1008: {
+      case OPT_FCC_RTX_PT: {
         unsigned v;
         if (argutil_uint_range(optarg, 0, 127, &v)) {
           argerr("invalid --fcc-rtx-pt: %s (0..127)", optarg);
@@ -511,10 +545,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->fl.have_fcc_rtx_pt = 1;
         break;
       }
-      case 1013:
+      case OPT_FCC_RESOLVE_BY_PORT:
         cfg->fcc_resolve_by_port = 1;
         break;
-      case 1014: {
+      case OPT_FCC_RESOLVE_BASE_PORT: {
         unsigned v;
         if (argutil_port_parse(optarg, &v)) {
           argerr("invalid --fcc-resolve-base-port: %s", optarg);
@@ -523,7 +557,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->fcc_resolve_base_port = v;
         break;
       }
-      case 1015: {
+      case OPT_FCC_RESOLVE_MAX_CHANNELS: {
         unsigned v;
         if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
           argerr("invalid --fcc-resolve-max-channels: %s", optarg);
@@ -533,26 +567,26 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->fl.have_fcc_resolve_max_channels = 1;
         break;
       }
-      case 1009:
+      case OPT_METRICS:
         cfg->metrics_sock = optarg;
         break;
-      case 1010:
+      case OPT_METRICS_ID:
         cfg->metrics_id = optarg;
         break;
-      case 1011:
+      case OPT_METRICS_INTERVAL:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
-      case 1016:
+      case OPT_PACKAGES:
         cfg->packages_path = optarg;
         break;
-      case 1017:
+      case OPT_CELLS:
         cfg->cells_path = optarg;
         break;
-      case 1018:
+      case OPT_RMS_NAME:
         cfg->rms_name = optarg;
         cfg->rms_enabled = 1;
         break;
-      case 1019:
+      case OPT_RMS_LANG:
         if (strlen(optarg) != 3) {
           argerr("invalid --rms-lang: %s (3-letter ISO 639-2 code)", optarg);
           return ARGS_ERR;
@@ -560,17 +594,17 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         memcpy(cfg->rms_lang, optarg, 3);
         cfg->fl.have_rms_lang = 1;
         break;
-      case 1020:
+      case OPT_RMS_LOCATION:
         cfg->rms_location = optarg;
         break;
-      case 1021:
+      case OPT_RMS_LOGO:
         cfg->rms_logo = optarg;
         break;
-      case 1022:
+      case OPT_FUS_NAME:
         cfg->fus_name = optarg;
         cfg->fus_enabled = 1;
         break;
-      case 1023:
+      case OPT_FUS_LANG:
         if (strlen(optarg) != 3) {
           argerr("invalid --fus-lang: %s (3-letter ISO 639-2 code)", optarg);
           return ARGS_ERR;
@@ -578,7 +612,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         memcpy(cfg->fus_lang, optarg, 3);
         cfg->fl.have_fus_lang = 1;
         break;
-      case 1024: {
+      case OPT_FUS_ID: {
         char *end;
         unsigned long v = strtoul(optarg, &end, 10);
         if (*end != '\0') {
@@ -589,13 +623,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->fl.have_fus_id = 1;
         break;
       }
-      case 1025:
+      case OPT_FUS_ANNOUNCE:
         if (ret_addr_parse(optarg, cfg->fus_announce_addr, sizeof cfg->fus_announce_addr, &cfg->fus_announce_port)) {
           argerr("invalid --fus-announce: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1026:
+      case OPT_FUS_LOGO:
         cfg->fus_logo = optarg;
         break;
       case 'h':
@@ -609,19 +643,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  {
-    args_status_t st;
-    cfg->mode = cfg->fl.have_l ? MODE_LISTEN : MODE_ANNOUNCE;
-    if ((st = validate_mode_mcast(cfg, &cfg->fl)) != ARGS_OK) return st;
-    if (cfg->mode == MODE_ANNOUNCE) {
-      if ((st = validate_announce_input(cfg, &cfg->fl)) != ARGS_OK) return st;
-      if ((st = validate_announce_ret(cfg, &cfg->fl)) != ARGS_OK) return st;
-      if ((st = validate_announce_fcc(cfg, &cfg->fl)) != ARGS_OK) return st;
-      if ((st = validate_announce_al_fec(cfg, &cfg->fl)) != ARGS_OK) return st;
-      if ((st = validate_announce_rms_fus(cfg, &cfg->fl)) != ARGS_OK) return st;
-    } else {
-      if ((st = validate_listen(cfg, &cfg->fl)) != ARGS_OK) return st;
-    }
+  cfg->mode = cfg->fl.have_l ? MODE_LISTEN : MODE_ANNOUNCE;
+  if ((st = validate_mode_mcast(cfg, &cfg->fl)) != ARGS_OK) return st;
+  if (cfg->mode == MODE_ANNOUNCE) {
+    if ((st = validate_announce_input(cfg, &cfg->fl)) != ARGS_OK) return st;
+    if ((st = validate_announce_ret(cfg, &cfg->fl)) != ARGS_OK) return st;
+    if ((st = validate_announce_fcc(cfg, &cfg->fl)) != ARGS_OK) return st;
+    if ((st = validate_announce_al_fec(cfg, &cfg->fl)) != ARGS_OK) return st;
+    if ((st = validate_announce_rms_fus(cfg, &cfg->fl)) != ARGS_OK) return st;
+  } else {
+    if ((st = validate_listen(cfg, &cfg->fl)) != ARGS_OK) return st;
   }
   return ARGS_OK;
 }

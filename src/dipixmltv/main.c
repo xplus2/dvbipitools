@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "args.h"
@@ -33,17 +34,52 @@ static void write_tva_xml(FILE *out, bcg_doc_t *doc, const mapping_t *map, int v
   if (verbose) log_line("%d channels, %d programmes read", doc->channel_count, doc->programme_count);
 }
 
+typedef struct {
+  char old_id[BCG_ID_LEN];
+  const char *preferred;
+  int channel_idx;
+} revmap_rename_t;
+
+static int revmap_rename_cmp(const void *a, const void *b) {
+  return strcmp(((const revmap_rename_t *)a)->old_id, ((const revmap_rename_t *)b)->old_id);
+}
+
 static void apply_revmap(bcg_doc_t *doc, const revmap_t *rev) {
-  for (int i = 0; i < doc->channel_count; i++) {
+  revmap_rename_t *renames;
+  int n = 0;
+  int i, j;
+
+  if (doc->channel_count == 0) return;
+  renames = malloc(sizeof *renames * (size_t)doc->channel_count);
+  if (!renames) return;
+
+  for (i = 0; i < doc->channel_count; i++) {
     bcg_channel_t *c = &doc->channels[i];
     const char *preferred = revmap_lookup(rev, c->uri);
-    char old_id[BCG_ID_LEN];
     if (!preferred) continue;
-    bufcpy(old_id, sizeof old_id, c->id);
-    bufcpy(c->id, sizeof c->id, preferred);
-    for (int j = 0; j < doc->programme_count; j++) if (!strcmp(doc->programmes[j].channel_id, old_id))
-      bufcpy(doc->programmes[j].channel_id, sizeof doc->programmes[j].channel_id, preferred);
+    bufcpy(renames[n].old_id, sizeof renames[n].old_id, c->id);
+    renames[n].preferred = preferred;
+    renames[n].channel_idx = i;
+    n++;
   }
+  if (n > 0) {
+    qsort(renames, (size_t)n, sizeof *renames, revmap_rename_cmp);
+    for (j = 0; j < doc->programme_count; j++) {
+      int lo = 0, hi = n - 1;
+      while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        int c2 = strcmp(doc->programmes[j].channel_id, renames[mid].old_id);
+        if (c2 == 0) {
+          bufcpy(doc->programmes[j].channel_id, sizeof doc->programmes[j].channel_id, renames[mid].preferred);
+          break;
+        }
+        if (c2 < 0) hi = mid - 1; else lo = mid + 1;
+      }
+    }
+    for (i = 0; i < n; i++)
+      bufcpy(doc->channels[renames[i].channel_idx].id, sizeof doc->channels[renames[i].channel_idx].id, renames[i].preferred);
+  }
+  free(renames);
 }
 
 static void write_xmltv(FILE *out, bcg_doc_t *doc, int have_rev, const revmap_t *rev, int verbose) {

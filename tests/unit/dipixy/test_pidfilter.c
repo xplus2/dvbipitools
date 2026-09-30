@@ -121,6 +121,21 @@ START_TEST(null_query_leaves_empty) {
 }
 END_TEST
 
+START_TEST(query_ignores_key_matching_inside_longer_key) {
+  pid_filter_t f;
+  pid_filter_parse_query("xfilter=999", &f);
+  ck_assert_int_eq(f.count, 0);
+}
+END_TEST
+
+START_TEST(query_matches_key_at_param_boundary_after_similar_prefix) {
+  pid_filter_t f;
+  pid_filter_parse_query("xfilter=999&filter=101", &f);
+  ck_assert_int_eq(f.count, 1);
+  ck_assert_uint_eq(f.pids[0], 101u);
+}
+END_TEST
+
 START_TEST(add_inserts_sorted) {
   pid_filter_t f;
   pid_filter_parse("101", &f);
@@ -136,6 +151,30 @@ START_TEST(add_ignores_duplicate) {
   pid_filter_parse("101", &f);
   pid_filter_add(&f, 101);
   ck_assert_int_eq(f.count, 1);
+}
+END_TEST
+
+START_TEST(add_inserts_into_middle_without_disturbing_neighbors) {
+  pid_filter_t f;
+  pid_filter_parse("10,30,50", &f);
+  pid_filter_add(&f, 20);
+  ck_assert_int_eq(f.count, 4);
+  ck_assert_uint_eq(f.pids[0], 10u);
+  ck_assert_uint_eq(f.pids[1], 20u);
+  ck_assert_uint_eq(f.pids[2], 30u);
+  ck_assert_uint_eq(f.pids[3], 50u);
+
+  pid_filter_add(&f, 40);
+  ck_assert_int_eq(f.count, 5);
+  ck_assert_uint_eq(f.pids[0], 10u);
+  ck_assert_uint_eq(f.pids[1], 20u);
+  ck_assert_uint_eq(f.pids[2], 30u);
+  ck_assert_uint_eq(f.pids[3], 40u);
+  ck_assert_uint_eq(f.pids[4], 50u);
+
+  pid_filter_add(&f, 60);
+  ck_assert_int_eq(f.count, 6);
+  ck_assert_uint_eq(f.pids[5], 60u);
 }
 END_TEST
 
@@ -167,8 +206,11 @@ static Suite *pidfilter_suite(void) {
   tcase_add_test(tc, query_stops_at_next_param);
   tcase_add_test(tc, query_without_filter_param_leaves_empty);
   tcase_add_test(tc, null_query_leaves_empty);
+  tcase_add_test(tc, query_ignores_key_matching_inside_longer_key);
+  tcase_add_test(tc, query_matches_key_at_param_boundary_after_similar_prefix);
   tcase_add_test(tc, add_inserts_sorted);
   tcase_add_test(tc, add_ignores_duplicate);
+  tcase_add_test(tc, add_inserts_into_middle_without_disturbing_neighbors);
   tcase_add_test(tc, add_ignores_when_full);
   suite_add_tcase(s, tc);
   return s;

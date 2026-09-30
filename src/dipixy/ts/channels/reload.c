@@ -3,6 +3,7 @@
 
 #include "priv.h"
 
+#include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -26,13 +27,16 @@ static void free_list_items(channel_list_t l) {
     if (l.items[j].static_ctx) capture_close(l.items[j].static_ctx);
   }
   free(l.items);
+  free(l.name_order);
 }
 
 /* rebuilds src fresh, swaps atomically into ch->lists[idx] on non-empty result.
    failure or empty result keeps prior list, never blanks. shared by periodic --sds refresh and SIGHUP's full reload */
 static void reload_one_list(channels_t *ch, int idx, const source_def_t *src, const config_t *cfg) {
   channel_list_t fresh;
-  channel_list_t *newl, *old;
+  channel_list_t *newl;
+  channel_list_t *old;
+  char *msg;
   memset(&fresh, 0, sizeof fresh);
   switch (src->kind) {
     case SRC_SDS:
@@ -52,12 +56,15 @@ static void reload_one_list(channels_t *ch, int idx, const source_def_t *src, co
       break;
     case SRC_HTTP:
       break; /* live connection: nothing to reparse */
+    case SRC_MCAST:
+      break; /* addr given on the command line: no reparse */
   }
   channels_join_all(&fresh, cfg);
   if (fresh.count == 0) {
     free_list_items(fresh);
     return;
   }
+  channel_list_build_index(&fresh);
   newl = malloc(sizeof *newl);
   if (!newl) {
     free_list_items(fresh);
@@ -74,10 +81,7 @@ static void reload_one_list(channels_t *ch, int idx, const source_def_t *src, co
     free(old);
   }
   log_line(TOOL_NAME ": list %d reloaded, now %d channel%s", idx + 1, fresh.count, fresh.count == 1 ? "" : "s");
-  {
-    char *msg;
-    if (!ws_sources_build_update(ch, src, (unsigned)(idx + 1), &msg)) ws_broadcast_publish(msg);
-  }
+  if (!ws_sources_build_update(ch, src, (unsigned)(idx + 1), &msg)) ws_broadcast_publish(msg);
 }
 
 typedef struct {
@@ -95,13 +99,19 @@ static pthread_t g_refresh_thread;
 static void *refresh_thread_fn(void *arg) {
   refresh_arg_t *a = arg;
   double next = mono_seconds() + a->cfg->sds_refresh_interval_s;
+  int wfd = signal_wake_fd();
   while (g_refresh_running && !signal_stop_requested()) {
     if (signal_reload_requested()) channels_reload_all(a->ch, a->cfg);
     if (mono_seconds() >= next) {
       for (int i = 0; i < a->cfg->n_sources; i++) if (a->cfg->sources[i].kind == SRC_SDS) reload_one_list(a->ch, a->cfg->sources[i].ordinal - 1, &a->cfg->sources[i], a->cfg);
       next = mono_seconds() + a->cfg->sds_refresh_interval_s;
     }
-    usleep(200000);
+    if (wfd >= 0) {
+      struct pollfd pfd = {wfd, POLLIN, 0};
+      poll(&pfd, 1, 200);
+    } else {
+      usleep(200000);
+    }
   }
   free(a);
   return NULL;

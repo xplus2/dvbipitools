@@ -28,13 +28,19 @@ int poll_fd_for_input(const retryset_t *rs, unsigned i, short *events_out) {
   return fd;
 }
 
-int input_poll_ready(unsigned i, const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd) {
-  for (unsigned pfd_i = 0; pfd_i < npfd; pfd_i++) if (pfd_slot[pfd_i] == i && (pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP))) return 1;
-  return 0;
+uint32_t input_poll_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd) {
+  uint32_t mask = 0;
+  for (unsigned pfd_i = 0; pfd_i < npfd; pfd_i++) if (pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP)) mask |= 1u << pfd_slot[pfd_i];
+  return mask;
+}
+
+int input_poll_ready(unsigned i, uint32_t ready_mask) {
+  return (int)((ready_mask >> i) & 1u);
 }
 
 void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   int r;
+  out_program_pids_t pids;
   if (!tk->progs[i].psi) {
     tk->progs[i].psi = psi_new();
     if (!tk->progs[i].psi) {
@@ -56,13 +62,10 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
     return;
   }
 
-  {
-    out_program_pids_t pids;
-    out_program_pids(i, &pids);
-    log_line_ansi("input \e[1;30m%u\e[0m:", i);
-    print_discovered(tk->progs[i].psi);
-    tk->progs[i].rx = remux_new(tk->cfg, &tk->cfg->inputs[i], tk->progs[i].psi, &pids, 0);
-  }
+  out_program_pids(i, &pids);
+  log_line_ansi("input \e[1;30m%u\e[0m:", i);
+  print_discovered(tk->progs[i].psi);
+  tk->progs[i].rx = remux_new(tk->cfg, &tk->cfg->inputs[i], tk->progs[i].psi, &pids, 0);
   if (!tk->progs[i].rx) {
     log_line_ansi("input \e[1;30m%u\e[0m: \e[0;31mremux setup failed\e[0m", i);
     psi_free(tk->progs[i].psi);

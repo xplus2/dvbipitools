@@ -11,11 +11,8 @@
 #include "../config.h"
 #include "priv.h"
 
-item_state_t rdh_item;
-
 void rdh_cfg_defaults(config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
-  memset(&rdh_item, 0, sizeof rdh_item);
   cfg->tsid = 1;
   cfg->onid = 1;
   cfg->dscp = NET_DSCP_VIDEO_HIGH;
@@ -55,7 +52,7 @@ int rdh_add_input(config_t *cfg, const char *uri, char *e, size_t n) {
 int rdh_add_peer(config_t *cfg, const char *uri, char *e, size_t n) {
   if (strncmp(uri, "rist://", 7) == 0) {
     if (cfg->n_srt > 0) {
-      snprintf(e, n, "rist:// and srt:// peers cannot mix in one run");
+      bufcpy(e, n, "rist:// and srt:// peers cannot mix in one run");
       return -1;
     }
     if (cfg->n_rist >= ARGS_MAX_RIST_PEERS) {
@@ -68,7 +65,7 @@ int rdh_add_peer(config_t *cfg, const char *uri, char *e, size_t n) {
   }
   if (strncmp(uri, "srt://", 6) == 0) {
     if (cfg->n_rist > 0) {
-      snprintf(e, n, "rist:// and srt:// peers cannot mix in one run");
+      bufcpy(e, n, "rist:// and srt:// peers cannot mix in one run");
       return -1;
     }
     if (cfg->n_srt >= ARGS_MAX_SRT_PEERS) {
@@ -76,7 +73,7 @@ int rdh_add_peer(config_t *cfg, const char *uri, char *e, size_t n) {
       return -1;
     }
     if (uri[6] == '@') {
-      snprintf(e, n, "srt:// output always calls out, no listener mode");
+      bufcpy(e, n, "srt:// output always calls out, no listener mode");
       return -1;
     }
     if (argutil_addrport_parse(uri + 6, &cfg->srt_family[cfg->n_srt], cfg->srt_host[cfg->n_srt], sizeof cfg->srt_host[0], &cfg->srt_port[cfg->n_srt])) {
@@ -91,21 +88,21 @@ int rdh_add_peer(config_t *cfg, const char *uri, char *e, size_t n) {
 }
 
 int rdh_item_hook(void *c, const char *list, int begin, char *e, size_t n) {
-  (void)c;
+  config_t *cfg = c;
   if (!strcmp(list, "input")) {
-    rdh_item.input = begin;
+    cfg->parse_item.input = begin;
     if (begin) {
-      rdh_item.have_input = 0;
-    } else if (!rdh_item.have_input) {
-      snprintf(e, n, "missing input");
+      cfg->parse_item.have_input = 0;
+    } else if (!cfg->parse_item.have_input) {
+      bufcpy(e, n, "missing input");
       return -1;
     }
   } else if (!strcmp(list, "cas.ecmg")) {
-    rdh_item.vendor = begin;
+    cfg->parse_item.vendor = begin;
     if (begin) {
-      rdh_item.have_vendor = 0;
-    } else if (!rdh_item.have_vendor) {
-      snprintf(e, n, "missing ecmg");
+      cfg->parse_item.have_vendor = 0;
+    } else if (!cfg->parse_item.have_vendor) {
+      bufcpy(e, n, "missing ecmg");
       return -1;
     }
   }
@@ -113,16 +110,16 @@ int rdh_item_hook(void *c, const char *list, int begin, char *e, size_t n) {
 }
 
 radio_input_t *rdh_cur_input(config_t *cfg, char *e, size_t n) {
-  if (!rdh_item.input) {
-    snprintf(e, n, "only valid inside an input list rdh_item");
+  if (!cfg->parse_item.input) {
+    bufcpy(e, n, "only valid inside an input list");
     return NULL;
   }
   return &cfg->inputs[cfg->n_inputs - 1];
 }
 
 cas_vendor_t *rdh_cur_vendor(config_t *cfg, char *e, size_t n) {
-  if (!rdh_item.vendor) {
-    snprintf(e, n, "only valid inside a cas.ecmg list rdh_item");
+  if (!cfg->parse_item.vendor) {
+    bufcpy(e, n, "only valid inside a cas.ecmg list");
     return NULL;
   }
   return &cfg->cas_vendors[cfg->n_cas_vendors - 1];

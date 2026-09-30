@@ -102,6 +102,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   tsinspect_set_t set = {&insp, 1, NULL, 0};
   unsigned char buf[65536];
   int rc = 0;
+  int rist_had_error = 0;
 
   plain_endpoint_to_tssrc_cfg(&cfg->in.nonrist, cfg->iface, TOOL_NAME "/" TOOL_VERSION, cfg->insecure_tls, &tc);
   src = tssrc_open(&tc, NULL);
@@ -132,33 +133,28 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     return 1;
   }
 
-  {
-    int rist_had_error = 0;
+  while (!signal_stop_requested()) {
+    net_err_reason_t reason = NET_ERR_OTHER;
+    ssize_t n = tssrc_read(src, buf, sizeof buf, &reason);
 
-    while (!signal_stop_requested()) {
-      net_err_reason_t reason = NET_ERR_OTHER;
-      ssize_t n = tssrc_read(src, buf, sizeof buf, &reason);
-
-      if (insp) tsinspect_tick(insp, mono_seconds());
-      if (n < 0) {
-        rc = 1;
-        break;
+    if (insp) tsinspect_tick(insp, mono_seconds());
+    if (n < 0) {
+      rc = 1;
+      break;
+    }
+    if (n == 0) continue;
+    if (insp) {
+      tsinspect_set_rx_ns(insp, tssrc_last_rx_ns(src));
+      tsinspect_grid(insp, buf, (size_t)n);
+    }
+    if (ristout_write(rist, buf, (size_t)n) < 0) {
+      if (!rist_had_error) {
+        log_line("rist output: write failed, will keep retrying");
+        rist_had_error = 1;
       }
-      if (n == 0)
-        continue;
-      if (insp) {
-        tsinspect_set_rx_ns(insp, tssrc_last_rx_ns(src));
-        tsinspect_grid(insp, buf, (size_t)n);
-      }
-      if (ristout_write(rist, buf, (size_t)n) < 0) {
-        if (!rist_had_error) {
-          log_line("rist output: write failed, will keep retrying");
-          rist_had_error = 1;
-        }
-      } else if (rist_had_error) {
-        log_line("rist output: recovered");
-        rist_had_error = 0;
-      }
+    } else if (rist_had_error) {
+      log_line("rist output: recovered");
+      rist_had_error = 0;
     }
   }
   if (rc) {

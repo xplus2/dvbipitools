@@ -33,11 +33,13 @@ int cam378_cfg_caid(const char *p, unsigned *out) {
 }
 
 static int apply_key(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->key_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->key_path, v, e, n);
 }
 
 static int apply_serial(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->serial, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->serial, v, e, n);
 }
 
 static int apply_port(void *c, const char *v, char *e, size_t n) {
@@ -48,7 +50,7 @@ static int apply_auth(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   char *colon;
   if (!*v || strlen(v) >= sizeof auth_buf) {
-    snprintf(e, n, "empty or too long");
+    bufcpy(e, n, "empty or too long");
     return -1;
   }
   bufcpy(auth_buf, sizeof auth_buf, v);
@@ -95,11 +97,13 @@ static int apply_daemonize(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_metrics_sock(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_sock, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_sock, v, e, n);
 }
 
 static int apply_metrics_id(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_id, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_id, v, e, n);
 }
 
 static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {

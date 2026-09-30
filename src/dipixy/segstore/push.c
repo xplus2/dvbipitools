@@ -12,6 +12,7 @@ static hls_init_codecs_fn g_init_codecs_cb;
 int hls_set_init_segment_at(hls_store_t *s, codec_t video_codec, const uint8_t *data, size_t size) {
   hls_snapshot_t *old;
   hls_snapshot_t *ns;
+  uint8_t *nd;
   if (size > HLS_INIT_SEG_MAX) {
     log_line("hls_set_init_segment: %zu exceeds HLS_INIT_SEG_MAX %d", size, HLS_INIT_SEG_MAX);
     return -1;
@@ -23,17 +24,15 @@ int hls_set_init_segment_at(hls_store_t *s, codec_t video_codec, const uint8_t *
     pthread_mutex_unlock(store_lock(s));
     return -1;
   }
-  {
-    uint8_t *nd = seg_buf_alloc(size);
-    if (!nd) {
-      snap_free(ns);
-      pthread_mutex_unlock(store_lock(s));
-      return -1;
-    }
-    memcpy(nd, data, size);
-    seg_buf_unref(ns->init_data);
-    ns->init_data = nd;
+  nd = seg_buf_alloc(size);
+  if (!nd) {
+    snap_free(ns);
+    pthread_mutex_unlock(store_lock(s));
+    return -1;
   }
+  memcpy(nd, data, size);
+  seg_buf_unref(ns->init_data);
+  ns->init_data = nd;
   ns->init_size = size;
   ns->init_gen++;
   ns->video_codec = video_codec;
@@ -95,20 +94,26 @@ int hls_push_segment_at(hls_store_t *s, const uint8_t *data, size_t size, double
     seg_buf_unref(copy);
     return -1;
   }
+  if (!ring_cow(ns)) {
+    snap_free(ns);
+    pthread_mutex_unlock(store_lock(s));
+    seg_buf_unref(copy);
+    return -1;
+  }
   if (ns->count >= s->max_segs) {
-    seg_buf_unref(ns->segs[ns->head].data); /* not carried forward, cancel clone's ref */
-    ns->segs[ns->head].data = NULL;
+    seg_buf_unref(ns->ring->segs[ns->head].data);
+    ns->ring->segs[ns->head].data = NULL;
     ns->head = (ns->head + 1) % HLS_MAX_SEGS;
     ns->count--;
     ns->oldest_seq++;
   }
   idx = (ns->head + ns->count) % HLS_MAX_SEGS;
-  ns->segs[idx].data = copy;
-  ns->segs[idx].size = size;
-  ns->segs[idx].duration = duration;
-  ns->segs[idx].seq = ns->next_seq;
-  ns->segs[idx].start_ms = ns->cum_ms;
-  ns->segs[idx].parts.count = 0;
+  ns->ring->segs[idx].data = copy;
+  ns->ring->segs[idx].size = size;
+  ns->ring->segs[idx].duration = duration;
+  ns->ring->segs[idx].seq = ns->next_seq;
+  ns->ring->segs[idx].start_ms = ns->cum_ms;
+  ns->ring->segs[idx].parts.count = 0;
   ns->next_seq++;
   ns->cum_ms += (uint64_t)(duration * 1000.0 + 0.5);
   ns->count++;
@@ -207,7 +212,6 @@ int hls_push_segment_ll_at(hls_store_t *s, double duration) {
   hls_snapshot_t *ns;
   int idx;
   uint32_t seq;
-  uint8_t *copy = NULL;
 
   pthread_mutex_lock(store_lock(s));
   old = atomic_load_explicit(&s->snap, memory_order_acquire);
@@ -216,35 +220,30 @@ int hls_push_segment_ll_at(hls_store_t *s, double duration) {
     pthread_mutex_unlock(store_lock(s));
     return -1;
   }
-  if (ns->live_len) {
-    copy = seg_buf_alloc(ns->live_len);
-    if (!copy) {
-      snap_free(ns);
-      pthread_mutex_unlock(store_lock(s));
-      return -1;
-    }
-    memcpy(copy, ns->live_data, ns->live_len);
+  if (!ring_cow(ns)) {
+    snap_free(ns);
+    pthread_mutex_unlock(store_lock(s));
+    return -1;
   }
   if (ns->count >= s->max_segs) {
-    seg_buf_unref(ns->segs[ns->head].data);
-    ns->segs[ns->head].data = NULL;
+    seg_buf_unref(ns->ring->segs[ns->head].data);
+    ns->ring->segs[ns->head].data = NULL;
     ns->head = (ns->head + 1) % HLS_MAX_SEGS;
     ns->count--;
     ns->oldest_seq++;
   }
   seq = ns->next_seq;
   idx = (ns->head + ns->count) % HLS_MAX_SEGS;
-  ns->segs[idx].data = copy;
-  ns->segs[idx].size = ns->live_len;
-  ns->segs[idx].duration = duration;
-  ns->segs[idx].seq = seq;
-  ns->segs[idx].start_ms = ns->cum_ms;
+  ns->ring->segs[idx].data = ns->live_data;
+  ns->ring->segs[idx].size = ns->live_len;
+  ns->ring->segs[idx].duration = duration;
+  ns->ring->segs[idx].seq = seq;
+  ns->ring->segs[idx].start_ms = ns->cum_ms;
   ns->cum_ms += (uint64_t)(duration * 1000.0 + 0.5);
-  ns->segs[idx].parts = ns->live_parts;
+  ns->ring->segs[idx].parts = ns->live_parts;
   ns->next_seq++;
   ns->count++;
   if (duration > ns->td_hw) ns->td_hw = duration;
-  seg_buf_unref(ns->live_data); /* next cycle allocates fresh, older snapshots keep their own ref */
   ns->live_data = NULL;
   ns->live_cap = 0;
   ns->live_len = 0;
@@ -292,7 +291,7 @@ int hls_part_available(const capture_ctx_t *ctx, const pid_filter_t *filter, uns
     uint32_t oldest = snap->oldest_seq;
     uint32_t last = oldest + (uint32_t)snap->count - 1u;
     if (want_seg >= oldest && want_seg <= last) {
-      const hls_seg_t *seg = &snap->segs[(snap->head + (int)(want_seg - oldest)) % HLS_MAX_SEGS];
+      const hls_seg_t *seg = &snap->ring->segs[(snap->head + (int)(want_seg - oldest)) % HLS_MAX_SEGS];
       return seg->parts.count > want_part || (want_part == 0 && seg->parts.count == 0);
     }
   }

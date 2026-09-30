@@ -177,8 +177,10 @@ void *worker_thread(void *arg) {
     }
     for (int i = 0; i < nev; i++) reactor_handle_event(epfd, &rl, tid, &events[i]);
     if (tid == 0) conn_sweep_idle(reactor_cfg()->idle_timeout_s);
+    capture_flush_deferred_quiescent();
     llhls_flush_waiters();
     hls_cold_flush_waiters();
+    ts_cold_flush_waiters();
     htdocs_template_reload_check();
 #ifdef HAVE_HTTP2
     h2_llhls_flush_waiters();
@@ -205,9 +207,14 @@ static void capture_pump_feed(capture_ctx_t *ctx, void *user, const unsigned cha
   hls_seg_feed_all(ctx, pkt);
 }
 
+#define PUMP_MAINT_INTERVAL_S 1.0
+#define PUMP_IDLE_BACKOFF_MIN_US 200
+#define PUMP_IDLE_BACKOFF_MAX_US 2000
+
 void *pump_thread(void *arg) {
   int pid = (int)(intptr_t)arg;
-  int sweep_counter = 0;
+  double last_maint = mono_seconds();
+  useconds_t idle_backoff_us = PUMP_IDLE_BACKOFF_MIN_US;
   t_pump_tid = pid;
   while (!signal_stop_requested()) {
     int drained;
@@ -215,7 +222,8 @@ void *pump_thread(void *arg) {
     drained = capture_pump_tick(pid, capture_pump_feed, NULL);
     ts_push_wake_batch_end();
     if (pid == 0) { /* periodic maintenance: one pump thread only, not per-shard */
-      if (++sweep_counter >= 500) {
+      double now = mono_seconds();
+      if (now - last_maint >= PUMP_MAINT_INTERVAL_S) {
         hls_seg_sweep_idle();
         hls_seg_pool_trim_idle();
         hls_store_slot_reclaim_sweep();
@@ -223,12 +231,18 @@ void *pump_thread(void *arg) {
         ws_clients_tick();
         tls_gc_sweep();
         tls_ctx_gc_sweep();
-        sweep_counter = 0;
+        last_maint = now;
       }
       if (signal_tls_reload_requested()) log_line(TOOL_NAME ": SIGUSR1: TLS cert reload %s", reload_tls() == 0 ? "ok" : "failed");
       dipixy_metrics_push(reactor_metrics());
     }
-    if (!drained) usleep(2000); /* idle: back off, busy: loop into next tick */
+    if (!drained) {
+      usleep(idle_backoff_us);
+      if (idle_backoff_us < PUMP_IDLE_BACKOFF_MAX_US) idle_backoff_us *= 2;
+      if (idle_backoff_us > PUMP_IDLE_BACKOFF_MAX_US) idle_backoff_us = PUMP_IDLE_BACKOFF_MAX_US;
+    } else {
+      idle_backoff_us = PUMP_IDLE_BACKOFF_MIN_US;
+    }
   }
   return NULL;
 }

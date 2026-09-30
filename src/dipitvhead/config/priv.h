@@ -8,15 +8,6 @@
 
 #include "../config.h"
 
-typedef struct {
-  int input;
-  int have_input;
-  int vendor;
-  int have_vendor;
-} item_state_t;
-
-extern item_state_t tvh_item;
-
 int tvh_set_buf(char *dst, size_t sz, const char *v, char *e, size_t n);
 int tvh_set_pbkeylen(int *dst, const char *v, char *e, size_t n);
 int tvh_set_table(table_mode_t *mode, char *text, size_t sz, const char *v, char *e, size_t n);

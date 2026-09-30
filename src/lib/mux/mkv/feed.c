@@ -42,16 +42,18 @@ static int all_psi_named(const mkv_t *m) {
    brief SDT wait -> service name for Title/tags. multi-program: longer grace, per-program cycles skew */
 void all_ready(mkv_t *m) {
   int64_t grace_ms = (m->npsi > 1) ? 3000 : 2000;
+  int64_t now;
   for (int i = 0; i < m->ntrk; i++) {
     const track_t *t = &m->trk[i];
     if (!t->hdr_parsed) return;
     if (t->cls == PID_VIDEO && !t->got_key) return;
   }
+  now = now_ms();
   if (!m->ready_seen) {
     m->ready_seen = 1;
-    m->ready_ms = now_ms();
+    m->ready_ms = now;
   }
-  if (!all_psi_named(m) && now_ms() - m->ready_ms < grace_ms) return;
+  if (!all_psi_named(m) && now - m->ready_ms < grace_ms) return;
   start(m);
 }
 
@@ -108,10 +110,14 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   strip.rbcap = &t->lcevc_rbcap;
   strip.esc = &t->lcevc_esc;
   strip.esccap = &t->lcevc_esccap;
-  if (t->es.codec == CODEC_AV1)
-    esc_split_obus(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, &t->av1_rb, &t->av1_rbcap);
-  else
-    esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, m->opts->strip_lcevc ? &strip : NULL);
+  switch (t->es.codec) {
+    case CODEC_AV1:
+      esc_split_obus(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, &t->av1_rb, &t->av1_rbcap);
+      break;
+    default:
+      esc_split_nals(&t->es, &t->vbuf, &t->vbuflen, &t->vbufcap, d, len, &key, m->opts->strip_lcevc ? &strip : NULL);
+      break;
+  }
   if (!t->hdr_parsed) {
     if (t->es.codec == CODEC_H264 && t->es.spslen && t->es.ppslen)
       try_parse_h264_hdr(m, t);

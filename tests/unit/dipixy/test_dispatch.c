@@ -5,8 +5,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dipixy/altsvc.h"
 #include "dipixy/args.h"
+#include "dipixy/dlna/dlna.h"
 #include "dipixy/reactor/internal.h"
+
+void dipixy_metrics_note_http_error(void) {}
+const char *altsvc_h1_line(int is_tls) { (void)is_tls; return ""; }
+int conn_queue(conn_t *c, const void *data, size_t len) { (void)c; (void)data; (void)len; return 0; }
+void set_persistence(conn_t *c, int keep_alive) { (void)c; (void)keep_alive; }
+const config_t *reactor_cfg(void) { return NULL; }
+int dlna_device_desc_xml(const config_t *cfg, char **out, size_t *out_len) { (void)cfg; (void)out; (void)out_len; return -1; }
+void dlna_cd_scpd_xml(const char **out, size_t *out_len) { *out = ""; *out_len = 0; }
+void dlna_cm_scpd_xml(const char **out, size_t *out_len) { *out = ""; *out_len = 0; }
 
 static struct phr_header make_header(const char *name, const char *value) {
   struct phr_header h;

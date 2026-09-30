@@ -12,10 +12,15 @@
 
 typedef struct {
   unsigned pid;
-  int used, started, has_pts, has_dts;
-  uint64_t pts, dts;
+  int used;
+  int started;
+  int has_pts;
+  int has_dts;
+  uint64_t pts;
+  uint64_t dts;
   unsigned char *buf;
-  size_t len, cap;
+  size_t len;
+  size_t cap;
   log_throttle_t drop_throttle;
 } stream_t;
 

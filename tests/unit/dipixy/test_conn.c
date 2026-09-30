@@ -3,6 +3,7 @@
 
 #include <check.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
@@ -47,6 +48,23 @@ END_TEST
 
 START_TEST(conn_free_null_is_a_noop) {
   conn_free(NULL);
+}
+END_TEST
+
+START_TEST(pooled_conn_reuse_keeps_out_lock_usable) {
+  conn_t *first, *second;
+
+  first = conn_new(5, NULL);
+  ck_assert_ptr_nonnull(first);
+  conn_free(first); /* qsbr stub: reclaimed immediately, first returns to the pool */
+
+  second = conn_new(6, NULL); /* pulled back out of the pool: exercises the out_lock-preserving reset */
+  ck_assert_ptr_nonnull(second);
+  ck_assert_int_eq(pthread_mutex_lock(&second->out_lock), 0);
+  ck_assert_int_eq(pthread_mutex_unlock(&second->out_lock), 0);
+  ck_assert_int_eq(conn_queue(second, "ok", 2), 0);
+  ck_assert_uint_eq(second->out.len, 2);
+  conn_free(second);
 }
 END_TEST
 
@@ -393,6 +411,7 @@ static Suite *conn_suite(void) {
   tcase_add_test(tc, new_plain_conn_has_reading_state);
   tcase_add_test(tc, new_tls_conn_has_handshake_state);
   tcase_add_test(tc, conn_free_null_is_a_noop);
+  tcase_add_test(tc, pooled_conn_reuse_keeps_out_lock_usable);
   tcase_add_test(tc, queue_appends_to_out_buffer);
   tcase_add_test(tc, queue_zero_length_is_a_noop);
   tcase_add_test(tc, queue_zc_falls_back_to_copy_when_tls);

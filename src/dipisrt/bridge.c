@@ -3,10 +3,12 @@
 
 #include <errno.h>
 #include <poll.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
+#include "lib/demux/crc32.h"
 #include "lib/helper/log.h"
 #include "lib/net/srt/srtin.h"
 #include "lib/net/srt/srtout.h"
@@ -79,6 +81,8 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   while (!signal_stop_requested()) {
     srtout_status_t st;
     int pr;
+    net_err_reason_t reason = NET_ERR_OTHER;
+    ssize_t n;
 
     srtout_service(srt, &st);
     if (insp) tsinspect_tick(insp, mono_seconds());
@@ -96,20 +100,17 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     }
     if (pr == 0 || !(pfd.revents & (POLLIN | POLLERR | POLLHUP))) continue;
 
-    {
-      net_err_reason_t reason = NET_ERR_OTHER;
-      ssize_t n = tssrc_read(src, buf, sizeof buf, &reason);
-      if (n < 0) {
-        rc = 1;
-        break;
+    n = tssrc_read(src, buf, sizeof buf, &reason);
+    if (n < 0) {
+      rc = 1;
+      break;
+    }
+    if (n > 0) {
+      if (insp) {
+        tsinspect_set_rx_ns(insp, tssrc_last_rx_ns(src));
+        tsinspect_grid(insp, buf, (size_t)n);
       }
-      if (n > 0) {
-        if (insp) {
-          tsinspect_set_rx_ns(insp, tssrc_last_rx_ns(src));
-          tsinspect_grid(insp, buf, (size_t)n);
-        }
-        srtout_write(srt, buf, (size_t)n);
-      }
+      srtout_write(srt, buf, (size_t)n);
     }
   }
   if (rc) {
@@ -127,6 +128,17 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
 
 #define RECV_DEDUP_HISTORY 6 /* reconnect can redeliver several already-written chunks */
 
+int dedup_is_duplicate(const dedup_entry_t *hist, int hist_n, uint32_t hash, int len) {
+  for (int hi = 0; hi < hist_n; hi++) if (hist[hi].len == len && hist[hi].hash == hash) return 1;
+  return 0;
+}
+
+void dedup_record(dedup_entry_t *hist, int hist_n, int *next, uint32_t hash, int len) {
+  hist[*next].hash = hash;
+  hist[*next].len = len;
+  *next = (*next + 1) % hist_n;
+}
+
 static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   tssink_cfg_t tk;
   tssink_t *sink;
@@ -135,17 +147,14 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   tsinspect_t *insp_in, *insp_out;
   tsinspect_set_t set = {&insp_in, 1, &insp_out, 1};
   unsigned char buf[65536];
-  unsigned char (*dedup_hist)[65536] = malloc(sizeof(unsigned char[RECV_DEDUP_HISTORY][65536]));
-  int dedup_hist_len[RECV_DEDUP_HISTORY] = {0};
+  dedup_entry_t dedup_hist[RECV_DEDUP_HISTORY] = {{0, 0}};
   int dedup_hist_next = 0;
   int dedup_active = 0; /* set on reconnect, cleared at first non-duplicate chunk */
   int rc = 0;
 
-  if (!dedup_hist) return 1;
   plain_endpoint_to_tssink_cfg(&cfg->out.nonsrt, cfg->iface, &tk);
   sink = tssink_open(&tk);
   if (!sink) {
-    free(dedup_hist);
     return 1;
   }
 
@@ -168,7 +177,6 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   srt = srtin_open(&rcfg);
   if (!srt) {
     tssink_close(sink);
-    free(dedup_hist);
     return signal_stop_requested() ? 0 : 1;
   }
 
@@ -179,7 +187,7 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   while (!signal_stop_requested()) {
     int reconnected = 0;
     int n = srtin_read(srt, buf, sizeof buf, &reconnected);
-
+    uint32_t h;
     if (insp_in) {
       double now = mono_seconds();
       tsinspect_tick(insp_in, now);
@@ -193,15 +201,9 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
     if (reconnected) dedup_active = 1;
     if (n == 0) continue;
     if (insp_in) tsinspect_grid(insp_in, buf, (size_t)n);
+    h = crc32_mpeg(buf, (size_t)n);
     if (dedup_active) {
-      int is_dup = 0;
-      for (int h = 0; h < RECV_DEDUP_HISTORY; h++) {
-        if (dedup_hist_len[h] == n && memcmp(buf, dedup_hist[h], (size_t)n) == 0) {
-          is_dup = 1;
-          break;
-        }
-      }
-      if (is_dup) continue;
+      if (dedup_is_duplicate(dedup_hist, RECV_DEDUP_HISTORY, h, n)) continue;
       dedup_active = 0;
     }
     if (tssink_write(sink, buf, (size_t)n) < 0) {
@@ -209,9 +211,7 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
       break;
     }
     if (insp_out) tsinspect_grid(insp_out, buf, (size_t)n);
-    memcpy(dedup_hist[dedup_hist_next], buf, (size_t)n);
-    dedup_hist_len[dedup_hist_next] = n;
-    dedup_hist_next = (dedup_hist_next + 1) % RECV_DEDUP_HISTORY;
+    dedup_record(dedup_hist, RECV_DEDUP_HISTORY, &dedup_hist_next, h, n);
   }
 
   if (insp_in) metrics_exporter_set_extra(mx, NULL, NULL);
@@ -219,7 +219,6 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   tsinspect_free(insp_out);
   srtin_close(srt);
   tssink_close(sink);
-  free(dedup_hist);
   return rc;
 }
 

@@ -36,7 +36,7 @@
 static int open_output(const char *path) {
   int fd;
   if (strcmp(path, "-") == 0) return STDOUT_FILENO;
-  fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0640);
   if (fd < 0) log_line(TOOL_NAME ": cannot open -o %s: %s", path, strerror(errno));
   return fd;
 }
@@ -106,45 +106,50 @@ static int open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
   *mkv_fd = -1;
   for (int i = 0; i < cfg->n_out; i++) {
     const out_target_t *o = &cfg->out[i];
-    if (o->kind == OUT_RTMP || o->kind == OUT_RTMPS) {
-      rtmpout_cfg_t rc;
-      memset(&rc, 0, sizeof rc);
-      rc.url = o->rtmp_url;
-      rc.insecure = cfg->insecure_tls;
-      lc->rtmp[lc->n_rtmp] = rtmpout_open(&rc);
-      if (!lc->rtmp[lc->n_rtmp]) return -1;
-      lc->rtmp_had_error[lc->n_rtmp] = 0;
-      lc->n_rtmp++;
-      continue;
+    switch (o->kind) {
+      case OUT_RTMP:
+      case OUT_RTMPS: {
+        rtmpout_cfg_t rc;
+        memset(&rc, 0, sizeof rc);
+        rc.url = o->rtmp_url;
+        rc.insecure = cfg->insecure_tls;
+        lc->rtmp[lc->n_rtmp] = rtmpout_open(&rc);
+        if (!lc->rtmp[lc->n_rtmp]) return -1;
+        lc->rtmp_had_error[lc->n_rtmp] = 0;
+        lc->n_rtmp++;
+        break;
+      }
+      case OUT_SRT: {
+        srtsink_cfg_t sc;
+        memset(&sc, 0, sizeof sc);
+        sc.peers[0].host = o->srt_host;
+        sc.peers[0].port = o->srt_port;
+        sc.npeers = 1;
+        sc.group_mode = SRTSINK_GROUP_NONE;
+        sc.passphrase = cfg->srt_passphrase;
+        sc.pbkeylen = cfg->srt_pbkeylen;
+        sc.streamid = cfg->srt_streamid;
+        sc.packetfilter = cfg->srt_packetfilter;
+        sc.latency_ms = cfg->srt_latency_ms;
+        sc.verbose = cfg->verbose;
+        sc.queue_metrics = metrics_queue_level(cfg->metrics_inspect_ts);
+        lc->srt[lc->n_srt] = srtsink_open(&sc);
+        if (!lc->srt[lc->n_srt]) return -1;
+        lc->srt_connected[lc->n_srt] = 0;
+        lc->n_srt++;
+        break;
+      }
+      case OUT_FILE:
+        if (is_mkv_fmt) {
+          *mkv_fd = open_output(o->file_path);
+          if (*mkv_fd < 0) return -1;
+          break;
+        }
+        lc->outfd[lc->n_outfd] = open_output(o->file_path);
+        if (lc->outfd[lc->n_outfd] < 0) return -1;
+        lc->n_outfd++;
+        break;
     }
-    if (o->kind == OUT_SRT) {
-      srtsink_cfg_t sc;
-      memset(&sc, 0, sizeof sc);
-      sc.peers[0].host = o->srt_host;
-      sc.peers[0].port = o->srt_port;
-      sc.npeers = 1;
-      sc.group_mode = SRTSINK_GROUP_NONE;
-      sc.passphrase = cfg->srt_passphrase;
-      sc.pbkeylen = cfg->srt_pbkeylen;
-      sc.streamid = cfg->srt_streamid;
-      sc.packetfilter = cfg->srt_packetfilter;
-      sc.latency_ms = cfg->srt_latency_ms;
-      sc.verbose = cfg->verbose;
-      sc.queue_metrics = metrics_queue_level(cfg->metrics_inspect_ts);
-      lc->srt[lc->n_srt] = srtsink_open(&sc);
-      if (!lc->srt[lc->n_srt]) return -1;
-      lc->srt_connected[lc->n_srt] = 0;
-      lc->n_srt++;
-      continue;
-    }
-    if (is_mkv_fmt) {
-      *mkv_fd = open_output(o->file_path);
-      if (*mkv_fd < 0) return -1;
-      continue;
-    }
-    lc->outfd[lc->n_outfd] = open_output(o->file_path);
-    if (lc->outfd[lc->n_outfd] < 0) return -1;
-    lc->n_outfd++;
   }
   return 0;
 }
@@ -189,27 +194,28 @@ int main(int argc, char **argv) {
   char mkv_app_name[64];
   mkv_opts_t mkv_opts;
   flv_opts_t flv_opts;
-  double start, last_stat;
-  char in_desc[128], outdesc[2048];
-  unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
+  double start;
+  double last_stat;
+  char in_desc[128];
+  char outdesc[2048];
+  unsigned pmt_pid;
+  unsigned all_pids[PSI_MAX_PROGRAMS];
   int n_all_pids;
   int mkv_fd = -1;
   int rc = 1;
+  int on = 0;
 
   memset(&lc, 0, sizeof lc);
   antidebug_install();
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
   if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
 
-  {
-    int on = 0;
-    for (int i = 0; i < cfg.n_out; i++) {
-      char one[600];
-      int r;
-      out_describe(&cfg.out[i], one, sizeof one);
-      r = snprintf(outdesc + on, sizeof outdesc - (size_t)on, "%s%s", i ? "," : "", one);
-      if (r > 0 && (size_t)on + (size_t)r < sizeof outdesc) on += r;
-    }
+  for (int i = 0; i < cfg.n_out; i++) {
+    char one[600];
+    int r;
+    out_describe(&cfg.out[i], one, sizeof one);
+    r = snprintf(outdesc + on, sizeof outdesc - (size_t)on, "%s%s", i ? "," : "", one);
+    if (r > 0 && (size_t)on + (size_t)r < sizeof outdesc) on += r;
   }
   input_describe(&cfg.input, in_desc, sizeof in_desc);
   log_line(TOOL_NAME ": i:%s k:%s s:%s e:%s o:%s%s", in_desc, cfg.key_path ? cfg.key_path : "(none)", cfg.serial ? cfg.serial : "(none)", cfg.emm_file ? cfg.emm_file : "(none)", outdesc, cfg.unicast_emm_uri ? " unicast-emm:yes" : "");
@@ -297,8 +303,10 @@ int main(int argc, char **argv) {
   metrics_exporter_init(&mx, METRICS_COMPONENT_DESCRAMBLE, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
   lc.insp_in = tsinspect_new(cfg.metrics_inspect_ts);
   lc.insp_out = tsinspect_new(cfg.metrics_inspect_ts);
-  if (lc.insp_in) tsinspect_bind_psi(lc.insp_in, lc.psi);
-  if (lc.insp_in) tsinspect_set_known_pids(lc.insp_in, cfg.metrics_known_pids, cfg.metrics_n_known_pids);
+  if (lc.insp_in) {
+    tsinspect_bind_psi(lc.insp_in, lc.psi);
+    tsinspect_set_known_pids(lc.insp_in, cfg.metrics_known_pids, cfg.metrics_n_known_pids);
+  }
   if (lc.insp_out) tsinspect_set_known_pids(lc.insp_out, cfg.metrics_known_pids, cfg.metrics_n_known_pids);
   if (tsinspect_wants_rx_ns(lc.insp_in)) tssrc_enable_rx_timestamps(src);
   if (lc.insp_out && tsinspect_enable_own_psi(lc.insp_out, 0)) {

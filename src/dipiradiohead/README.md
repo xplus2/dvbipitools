@@ -1,8 +1,14 @@
 # dipiradiohead
 
-Fetches one or more Icecast/Shoutcast streams and re-muxes them as one DVB-IPI multicast. No
-transcoding. A single `-i` gives a normal SPTS; more than one gives an MPTS, one program per input.
+This tool fetches one or more Icecast/Shoutcast/HLS/raw audio streams and re-muxes them as one transport stream.
+Output can be a DVB-IPI multicast, SRT or RIST.
 
+No transcoding. A single `-i` gives a normal SPTS, more than one gives an MPTS, one program per input.
+
+Optionally, it scrambles selected PES using DVB Simulcrypt or BISS 1/2/CA (see below) or adds Annex E Layer 1 FEC.
+SDT can be set, passed or overwritten.
+
+## Usage
 ```
 dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]
 ```

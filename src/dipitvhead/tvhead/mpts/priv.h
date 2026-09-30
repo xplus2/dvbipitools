@@ -5,6 +5,7 @@
 #define DIPITVHEAD_TVHEAD_MPTS_PRIV_H
 
 #include <poll.h>
+#include <stdint.h>
 
 #include "lib/demux/tspack.h"
 #include "lib/mux/mpts.h"
@@ -65,7 +66,9 @@ typedef struct {
 /* resolves the fd/events to poll for this input: its retry-connect fd, or once connected,
    its live source fd (POLLIN only) */
 int poll_fd_for_input(const retryset_t *rs, unsigned i, short *events_out);
-int input_poll_ready(unsigned i, const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd);
+
+uint32_t input_poll_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd);
+int input_poll_ready(unsigned i, uint32_t ready_mask);
 
 /* runs (or continues) PSI discovery for input i until a remux_t can be built. always
    settles this visit (never falls through to feed_input() in the same tick) */

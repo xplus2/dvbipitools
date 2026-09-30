@@ -23,6 +23,70 @@
 #include "mux/pmtbuild.h"
 #include "version.h"
 
+#define OPT_STRIP_EIT 1000
+#define OPT_HBBTV 1001
+#define OPT_HBBTV_ORG_ID 1002
+#define OPT_HBBTV_APP_ID 1003
+#define OPT_TSID 1004
+#define OPT_ONID 1005
+#define OPT_SID 1006
+#define OPT_COLOR 1007
+#define OPT_CAS_ALGO 1008
+#define OPT_CAS_ECMG 1009
+#define OPT_CAS_ECMG_VERSION 1010
+#define OPT_CAS_SUPER_ID 1011
+#define OPT_CAS_ECM_ID 1012
+#define OPT_CAS_ECM_PID 1013
+#define OPT_CAS_EMMG_PORT 1014
+#define OPT_CAS_EMMG_VERSION 1015
+#define OPT_CAS_EMMG_MAX_CONNS 1035
+#define OPT_CAS_EMMG_REVERSE 1057
+#define OPT_CAS_EMM_PID 1016
+#define OPT_CAS_PIDS 1017
+#define OPT_CAS_CP_DURATION 1018
+#define OPT_CAS_RESILIENCE 1019
+#define OPT_METRICS 1020
+#define OPT_METRICS_ID 1021
+#define OPT_METRICS_INTERVAL 1022
+#define OPT_METRICS_INSPECT_TS 1061
+#define OPT_METRICS_INSPECT_TS_PIDS 1062
+#define OPT_CAS_REQUIRED 1023
+#define OPT_CAS_CWENC_ALGO 1048
+#define OPT_CAS_CWENC_AES_MODE 1049
+#define OPT_CAS_CWENC_FIXED_KEY 1050
+#define OPT_CAS_CWENC_KEY_LIST_A 1051
+#define OPT_CAS_CWENC_KEY_LIST_B 1052
+#define OPT_CAS_FALLBACK_CLEAR 1024
+#define OPT_BISS2_SW 1025
+#define OPT_BISS2_EMIT_ESW 1026
+#define OPT_BISS1_SW 1027
+#define OPT_BISS2_CA_RECEIVERS 1028
+#define OPT_BISS2_CA_SESSION_ID 1029
+#define OPT_RIST_PROFILE 1030
+#define OPT_RIST_SECRET 1031
+#define OPT_RIST_CNAME 1032
+#define OPT_RIST_BUFFER 1033
+#define OPT_STRIP 1034
+#define OPT_RIST_PROFILE_IN 1036
+#define OPT_DSCP 1053
+#define OPT_AL_FEC 1054
+#define OPT_AL_FEC_PORT 1055
+#define OPT_SRT_PASSPHRASE_IN 1037
+#define OPT_SRT_PBKEYLEN_IN 1038
+#define OPT_SRT_STREAMID_IN 1039
+#define OPT_SRT_PACKETFILTER_IN 1040
+#define OPT_SRT_LATENCY_IN 1041
+#define OPT_SRT_GROUP_MODE 1042
+#define OPT_SRT_PASSPHRASE 1043
+#define OPT_SRT_PBKEYLEN 1044
+#define OPT_SRT_STREAMID 1045
+#define OPT_SRT_PACKETFILTER 1046
+#define OPT_SRT_LATENCY 1047
+#define OPT_PROVIDER 1056
+#define OPT_DEFAULT_PROVIDER 1058
+#define OPT_CONFIG_STRICT 1060
+#define OPT_CONFIGTEST 1059
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 /* [@]<addr>:<port> or [@][<addr6>]:<port>, multicast literal required */
@@ -124,7 +188,7 @@ int tvh_cfg_add_input(config_t *cfg, const char *uri, char *err, size_t errsz) {
 int tvh_cfg_add_peer(config_t *cfg, const char *uri, char *err, size_t errsz) {
   if (strncmp(uri, "rist://", 7) == 0) {
     if (cfg->n_srt > 0) {
-      snprintf(err, errsz, "rist:// and srt:// peers cannot mix in one run");
+      bufcpy(err, errsz, "rist:// and srt:// peers cannot mix in one run");
       return -1;
     }
     if (cfg->n_rist >= ARGS_MAX_RIST_PEERS) {
@@ -132,7 +196,7 @@ int tvh_cfg_add_peer(config_t *cfg, const char *uri, char *err, size_t errsz) {
       return -1;
     }
     if (strlen(uri) >= sizeof cfg->rist_uri[0]) {
-      snprintf(err, errsz, "uri too long");
+      bufcpy(err, errsz, "uri too long");
       return -1;
     }
     memcpy(cfg->rist_uri[cfg->n_rist], uri, strlen(uri) + 1);
@@ -141,7 +205,7 @@ int tvh_cfg_add_peer(config_t *cfg, const char *uri, char *err, size_t errsz) {
   }
   if (strncmp(uri, "srt://", 6) == 0) {
     if (cfg->n_rist > 0) {
-      snprintf(err, errsz, "rist:// and srt:// peers cannot mix in one run");
+      bufcpy(err, errsz, "rist:// and srt:// peers cannot mix in one run");
       return -1;
     }
     if (cfg->n_srt >= ARGS_MAX_SRT_PEERS) {
@@ -149,7 +213,7 @@ int tvh_cfg_add_peer(config_t *cfg, const char *uri, char *err, size_t errsz) {
       return -1;
     }
     if (uri[6] == '@') {
-      snprintf(err, errsz, "srt:// output always calls out, no listener mode");
+      bufcpy(err, errsz, "srt:// output always calls out, no listener mode");
       return -1;
     }
     if (argutil_addrport_parse(uri + 6, &cfg->srt_family[cfg->n_srt], cfg->srt_host[cfg->n_srt], sizeof cfg->srt_host[0], &cfg->srt_port[cfg->n_srt])) {
@@ -264,7 +328,9 @@ int tvh_cfg_strip(unsigned *mask, const char *s) {
 static void print_help(void) {
   printf(
     "usage: %s -i <uri> [per-input options] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]\n\n"
-    "re-package one or more transport streams (already-muxed, not raw ES) as one multicast.\n"
+    "a micromuxer and scrambler.\n"
+    "It takes one or more TS (multicast, http(s)+ts/hls+ts/hls+fmp4/llhls/dash/lldash, SRT, RIST or stdin)\n"
+    "and re-packages them as one transport stream under a new PAT/NIT with a merged EIT and rewritten PMT.\n\n"
     "A single -i: normal SPTS. Multiple -i: MPTS, one program per input.\n\n"
     "options:\n"
     "  -i, --input <uri>              udp://, rtp://, http(s)://, rist://@host:port[?query]\n"
@@ -440,8 +506,8 @@ int tvh_cfg_check(const config_t *cfg, int partial, tvh_report_fn rep, void *ud)
   }
   if (cfg->any_cas_flag && cfg->cas_algo == CAS_ALGO_NONE && !cfg->biss2_enabled && !cfg->biss1_enabled && !cfg->biss2_ca_enabled)
     FATAL("--cas-* options require --cas-algo (or --cas-pids alone under --biss2-sw/--biss1-sw/--biss2-ca-receivers)");
-  if (cas_args_validate(TOOL_NAME, cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
-                        cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms) != 0)
+  if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
+    cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms}) != 0)
     fatal++;
   if (has_duplicate_sid(cfg)) FATAL("duplicate --sid");
 #undef FATAL
@@ -497,75 +563,75 @@ static const struct option longopts[] = {
   {"bitrate", required_argument, 0, 'b'},
   {"stuff", no_argument, 0, 'S'},
   {"burst-limit", no_argument, 0, 'B'},
-  {"strip-eit", no_argument, 0, 1000},
-  {"hbbtv", required_argument, 0, 1001},
-  {"hbbtv-org-id", required_argument, 0, 1002},
-  {"hbbtv-app-id", required_argument, 0, 1003},
+  {"strip-eit", no_argument, 0, OPT_STRIP_EIT},
+  {"hbbtv", required_argument, 0, OPT_HBBTV},
+  {"hbbtv-org-id", required_argument, 0, OPT_HBBTV_ORG_ID},
+  {"hbbtv-app-id", required_argument, 0, OPT_HBBTV_APP_ID},
   {"error", required_argument, 0, 'e'},
   {"insecure", no_argument, 0, 'k'},
-  {"tsid", required_argument, 0, 1004},
-  {"onid", required_argument, 0, 1005},
-  {"sid", required_argument, 0, 1006},
+  {"tsid", required_argument, 0, OPT_TSID},
+  {"onid", required_argument, 0, OPT_ONID},
+  {"sid", required_argument, 0, OPT_SID},
   {"verbose", no_argument, 0, 'v'},
-  {"color", required_argument, 0, 1007},
-  {"cas-algo", required_argument, 0, 1008},
-  {"cas-ecmg", required_argument, 0, 1009},
-  {"cas-ecmg-version", required_argument, 0, 1010},
-  {"cas-super-id", required_argument, 0, 1011},
-  {"cas-ecm-id", required_argument, 0, 1012},
-  {"cas-ecm-pid", required_argument, 0, 1013},
-  {"cas-emmg-port", required_argument, 0, 1014},
-  {"cas-emmg-version", required_argument, 0, 1015},
-  {"cas-emmg-max-conns", required_argument, 0, 1035},
-  {"cas-emmg-reverse", required_argument, 0, 1057},
-  {"cas-emm-pid", required_argument, 0, 1016},
-  {"cas-pids", required_argument, 0, 1017},
-  {"cas-cp-duration", required_argument, 0, 1018},
-  {"cas-resilience", required_argument, 0, 1019},
-  {"metrics", required_argument, 0, 1020},
-  {"metrics-id", required_argument, 0, 1021},
-  {"metrics-interval", required_argument, 0, 1022},
-  {"metrics-inspect-ts", required_argument, 0, 1061},
-  {"metrics-inspect-ts-pids", required_argument, 0, 1062},
-  {"cas-required", no_argument, 0, 1023},
-  {"cas-cwenc-algo", required_argument, 0, 1048},
-  {"cas-cwenc-aes-mode", required_argument, 0, 1049},
-  {"cas-cwenc-fixed-key", required_argument, 0, 1050},
-  {"cas-cwenc-key-list-a", required_argument, 0, 1051},
-  {"cas-cwenc-key-list-b", required_argument, 0, 1052},
-  {"cas-fallback-clear", no_argument, 0, 1024},
-  {"biss2-sw", required_argument, 0, 1025},
-  {"biss2-emit-esw", required_argument, 0, 1026},
-  {"biss1-sw", required_argument, 0, 1027},
-  {"biss2-ca-receivers", required_argument, 0, 1028},
-  {"biss2-ca-session-id", required_argument, 0, 1029},
+  {"color", required_argument, 0, OPT_COLOR},
+  {"cas-algo", required_argument, 0, OPT_CAS_ALGO},
+  {"cas-ecmg", required_argument, 0, OPT_CAS_ECMG},
+  {"cas-ecmg-version", required_argument, 0, OPT_CAS_ECMG_VERSION},
+  {"cas-super-id", required_argument, 0, OPT_CAS_SUPER_ID},
+  {"cas-ecm-id", required_argument, 0, OPT_CAS_ECM_ID},
+  {"cas-ecm-pid", required_argument, 0, OPT_CAS_ECM_PID},
+  {"cas-emmg-port", required_argument, 0, OPT_CAS_EMMG_PORT},
+  {"cas-emmg-version", required_argument, 0, OPT_CAS_EMMG_VERSION},
+  {"cas-emmg-max-conns", required_argument, 0, OPT_CAS_EMMG_MAX_CONNS},
+  {"cas-emmg-reverse", required_argument, 0, OPT_CAS_EMMG_REVERSE},
+  {"cas-emm-pid", required_argument, 0, OPT_CAS_EMM_PID},
+  {"cas-pids", required_argument, 0, OPT_CAS_PIDS},
+  {"cas-cp-duration", required_argument, 0, OPT_CAS_CP_DURATION},
+  {"cas-resilience", required_argument, 0, OPT_CAS_RESILIENCE},
+  {"metrics", required_argument, 0, OPT_METRICS},
+  {"metrics-id", required_argument, 0, OPT_METRICS_ID},
+  {"metrics-interval", required_argument, 0, OPT_METRICS_INTERVAL},
+  {"metrics-inspect-ts", required_argument, 0, OPT_METRICS_INSPECT_TS},
+  {"metrics-inspect-ts-pids", required_argument, 0, OPT_METRICS_INSPECT_TS_PIDS},
+  {"cas-required", no_argument, 0, OPT_CAS_REQUIRED},
+  {"cas-cwenc-algo", required_argument, 0, OPT_CAS_CWENC_ALGO},
+  {"cas-cwenc-aes-mode", required_argument, 0, OPT_CAS_CWENC_AES_MODE},
+  {"cas-cwenc-fixed-key", required_argument, 0, OPT_CAS_CWENC_FIXED_KEY},
+  {"cas-cwenc-key-list-a", required_argument, 0, OPT_CAS_CWENC_KEY_LIST_A},
+  {"cas-cwenc-key-list-b", required_argument, 0, OPT_CAS_CWENC_KEY_LIST_B},
+  {"cas-fallback-clear", no_argument, 0, OPT_CAS_FALLBACK_CLEAR},
+  {"biss2-sw", required_argument, 0, OPT_BISS2_SW},
+  {"biss2-emit-esw", required_argument, 0, OPT_BISS2_EMIT_ESW},
+  {"biss1-sw", required_argument, 0, OPT_BISS1_SW},
+  {"biss2-ca-receivers", required_argument, 0, OPT_BISS2_CA_RECEIVERS},
+  {"biss2-ca-session-id", required_argument, 0, OPT_BISS2_CA_SESSION_ID},
   {"remote", required_argument, 0, 'R'},
-  {"rist-profile", required_argument, 0, 1030},
-  {"rist-secret", required_argument, 0, 1031},
-  {"rist-cname", required_argument, 0, 1032},
-  {"rist-buffer", required_argument, 0, 1033},
+  {"rist-profile", required_argument, 0, OPT_RIST_PROFILE},
+  {"rist-secret", required_argument, 0, OPT_RIST_SECRET},
+  {"rist-cname", required_argument, 0, OPT_RIST_CNAME},
+  {"rist-buffer", required_argument, 0, OPT_RIST_BUFFER},
   {"daemonize", no_argument, 0, 'd'},
-  {"strip", required_argument, 0, 1034},
-  {"rist-profile-in", required_argument, 0, 1036},
-  {"dscp", required_argument, 0, 1053},
-  {"al-fec", required_argument, 0, 1054},
-  {"al-fec-port", required_argument, 0, 1055},
-  {"srt-passphrase-in", required_argument, 0, 1037},
-  {"srt-pbkeylen-in", required_argument, 0, 1038},
-  {"srt-streamid-in", required_argument, 0, 1039},
-  {"srt-packetfilter-in", required_argument, 0, 1040},
-  {"srt-latency-in", required_argument, 0, 1041},
-  {"srt-group-mode", required_argument, 0, 1042},
-  {"srt-passphrase", required_argument, 0, 1043},
-  {"srt-pbkeylen", required_argument, 0, 1044},
-  {"srt-streamid", required_argument, 0, 1045},
-  {"srt-packetfilter", required_argument, 0, 1046},
-  {"srt-latency", required_argument, 0, 1047},
-  {"provider", required_argument, 0, 1056},
-  {"default-provider", required_argument, 0, 1058},
+  {"strip", required_argument, 0, OPT_STRIP},
+  {"rist-profile-in", required_argument, 0, OPT_RIST_PROFILE_IN},
+  {"dscp", required_argument, 0, OPT_DSCP},
+  {"al-fec", required_argument, 0, OPT_AL_FEC},
+  {"al-fec-port", required_argument, 0, OPT_AL_FEC_PORT},
+  {"srt-passphrase-in", required_argument, 0, OPT_SRT_PASSPHRASE_IN},
+  {"srt-pbkeylen-in", required_argument, 0, OPT_SRT_PBKEYLEN_IN},
+  {"srt-streamid-in", required_argument, 0, OPT_SRT_STREAMID_IN},
+  {"srt-packetfilter-in", required_argument, 0, OPT_SRT_PACKETFILTER_IN},
+  {"srt-latency-in", required_argument, 0, OPT_SRT_LATENCY_IN},
+  {"srt-group-mode", required_argument, 0, OPT_SRT_GROUP_MODE},
+  {"srt-passphrase", required_argument, 0, OPT_SRT_PASSPHRASE},
+  {"srt-pbkeylen", required_argument, 0, OPT_SRT_PBKEYLEN},
+  {"srt-streamid", required_argument, 0, OPT_SRT_STREAMID},
+  {"srt-packetfilter", required_argument, 0, OPT_SRT_PACKETFILTER},
+  {"srt-latency", required_argument, 0, OPT_SRT_LATENCY},
+  {"provider", required_argument, 0, OPT_PROVIDER},
+  {"default-provider", required_argument, 0, OPT_DEFAULT_PROVIDER},
   {"config", required_argument, 0, 'c'},
-  {"config-strict", no_argument, 0, 1060},
-  {"configtest", no_argument, 0, 1059},
+  {"config-strict", no_argument, 0, OPT_CONFIG_STRICT},
+  {"configtest", no_argument, 0, OPT_CONFIGTEST},
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
@@ -695,12 +761,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
             return ARGS_ERR;
         }
         break;
-      case 1056:
+      case OPT_PROVIDER:
         REQUIRE_INPUT("--provider");
         if (argutil_bufcpy_opt(TOOL_NAME, in->provider_text, sizeof in->provider_text, optarg, "--provider text"))
           return ARGS_ERR;
         break;
-      case 1058:
+      case OPT_DEFAULT_PROVIDER:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->default_provider_text, sizeof cfg->default_provider_text, optarg, "--default-provider text"))
           return ARGS_ERR;
         break;
@@ -716,29 +782,29 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'B':
         cfg->burst_limit = 1;
         break;
-      case 1000:
+      case OPT_STRIP_EIT:
         REQUIRE_INPUT("--strip-eit");
         in->strip_eit = 1;
         break;
-      case 1034:
+      case OPT_STRIP:
         REQUIRE_INPUT("--strip");
         if (tvh_cfg_strip(&in->strip_mask, optarg)) {
           argerr("invalid --strip: %s (comma list of DATA,ECM, or \"none\")", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1001:
+      case OPT_HBBTV:
         REQUIRE_INPUT("--hbbtv");
         in->hbbtv_url = optarg;
         break;
-      case 1002:
+      case OPT_HBBTV_ORG_ID:
         REQUIRE_INPUT("--hbbtv-org-id");
         if (org_id_parse(optarg, &in->hbbtv_org_id)) {
           argerr("invalid --hbbtv-org-id: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1003:
+      case OPT_HBBTV_APP_ID:
         REQUIRE_INPUT("--hbbtv-app-id");
         if (id_parse(optarg, &in->hbbtv_app_id)) {
           argerr("invalid --hbbtv-app-id: %s", optarg);
@@ -757,26 +823,26 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'k':
         cfg->insecure_tls = 1;
         break;
-      case 1004:
+      case OPT_TSID:
         if (id_parse(optarg, &cfg->tsid)) {
           argerr("invalid --tsid: %s (1..65535)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1005:
+      case OPT_ONID:
         if (id_parse(optarg, &cfg->onid)) {
           argerr("invalid --onid: %s (1..65535)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1006:
+      case OPT_SID:
         REQUIRE_INPUT("--sid");
         if (id_parse(optarg, &in->sid)) {
           argerr("invalid --sid: %s (1..65535)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1007: {
+      case OPT_COLOR: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
           argerr("invalid --color: %s (auto|always|never)", optarg);
@@ -785,11 +851,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->color_mode = v;
         break;
       }
-      case 1008:
+      case OPT_CAS_ALGO:
         cfg->any_cas_flag = 1;
         CHECK(cas_set_algo(&cfg->cas_algo, optarg, err, sizeof err), "--cas-algo");
         break;
-      case 1009:
+      case OPT_CAS_ECMG:
         if (!cli_vendors) {
           cfg->n_cas_vendors = 0;
           cli_vendors = 1;
@@ -797,148 +863,148 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_add(cfg->cas_vendors, &cfg->n_cas_vendors, optarg, err, sizeof err), "--cas-ecmg");
         break;
-      case 1010:
+      case OPT_CAS_ECMG_VERSION:
         CAS_VENDOR("--cas-ecmg-version");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_ecmg_version(vd, optarg, err, sizeof err), "--cas-ecmg-version");
         break;
-      case 1011:
+      case OPT_CAS_SUPER_ID:
         CAS_VENDOR("--cas-super-id");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_super_id(vd, optarg, err, sizeof err), "--cas-super-id");
         break;
-      case 1012:
+      case OPT_CAS_ECM_ID:
         CAS_VENDOR("--cas-ecm-id");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_ecm_id(vd, optarg, err, sizeof err), "--cas-ecm-id");
         break;
-      case 1013:
+      case OPT_CAS_ECM_PID:
         CAS_VENDOR("--cas-ecm-pid");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_ecm_pid(vd, optarg, err, sizeof err), "--cas-ecm-pid");
         break;
-      case 1014:
+      case OPT_CAS_EMMG_PORT:
         CAS_VENDOR("--cas-emmg-port");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_emmg_port(vd, optarg, err, sizeof err), "--cas-emmg-port");
         break;
-      case 1057:
+      case OPT_CAS_EMMG_REVERSE:
         CAS_VENDOR("--cas-emmg-reverse");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_emmg_reverse(vd, optarg, err, sizeof err), "--cas-emmg-reverse");
         break;
-      case 1015:
+      case OPT_CAS_EMMG_VERSION:
         CAS_VENDOR("--cas-emmg-version");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_emmg_version(vd, optarg, err, sizeof err), "--cas-emmg-version");
         break;
-      case 1035:
+      case OPT_CAS_EMMG_MAX_CONNS:
         CAS_VENDOR("--cas-emmg-max-conns");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_emmg_max_conns(vd, optarg, err, sizeof err), "--cas-emmg-max-conns");
         break;
-      case 1016:
+      case OPT_CAS_EMM_PID:
         CAS_VENDOR("--cas-emm-pid");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_emm_pid(vd, optarg, err, sizeof err), "--cas-emm-pid");
         break;
-      case 1017:
+      case OPT_CAS_PIDS:
         cfg->any_cas_flag = 1;
         if (tvh_cfg_cas_pids(cfg, optarg)) {
           argerr("invalid --cas-pids: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1018:
+      case OPT_CAS_CP_DURATION:
         cfg->any_cas_flag = 1;
         CHECK(cas_set_cp_duration(&cfg->cas_cp_duration_ms, optarg, err, sizeof err), "--cas-cp-duration");
         break;
-      case 1019:
+      case OPT_CAS_RESILIENCE:
         CAS_VENDOR("--cas-resilience");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_resilience(vd, optarg, err, sizeof err), "--cas-resilience");
         break;
-      case 1020:
+      case OPT_METRICS:
         cfg->metrics_sock = optarg;
         break;
-      case 1021:
+      case OPT_METRICS_ID:
         cfg->metrics_id = optarg;
         break;
-      case 1022:
+      case OPT_METRICS_INTERVAL:
         if (argutil_metrics_interval_opt(TOOL_NAME, optarg, &cfg->metrics_interval_s)) return ARGS_ERR;
         break;
-      case 1061:
+      case OPT_METRICS_INSPECT_TS:
         if (argutil_metrics_inspect_ts_opt(TOOL_NAME, optarg, &cfg->metrics_inspect_ts)) return ARGS_ERR;
         break;
-      case 1062:
+      case OPT_METRICS_INSPECT_TS_PIDS:
         if (argutil_metrics_known_pids_opt(TOOL_NAME, optarg, cfg->metrics_known_pids, &cfg->metrics_n_known_pids)) return ARGS_ERR;
         break;
-      case 1023:
+      case OPT_CAS_REQUIRED:
         CAS_VENDOR("--cas-required");
         cfg->any_cas_flag = 1;
         vd->required = 1;
         break;
-      case 1048:
+      case OPT_CAS_CWENC_ALGO:
         CAS_VENDOR("--cas-cwenc-algo");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_cwenc_algo(vd, optarg, err, sizeof err), "--cas-cwenc-algo");
         break;
-      case 1049:
+      case OPT_CAS_CWENC_AES_MODE:
         CAS_VENDOR("--cas-cwenc-aes-mode");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_cwenc_aes_mode(vd, optarg, err, sizeof err), "--cas-cwenc-aes-mode");
         break;
-      case 1050:
+      case OPT_CAS_CWENC_FIXED_KEY:
         CAS_VENDOR("--cas-cwenc-fixed-key");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_cwenc_fixed_key(vd, optarg, err, sizeof err), "--cas-cwenc-fixed-key");
         break;
-      case 1051:
+      case OPT_CAS_CWENC_KEY_LIST_A:
         CAS_VENDOR("--cas-cwenc-key-list-a");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_cwenc_key_list_a(vd, optarg, err, sizeof err), "--cas-cwenc-key-list-a");
         break;
-      case 1052:
+      case OPT_CAS_CWENC_KEY_LIST_B:
         CAS_VENDOR("--cas-cwenc-key-list-b");
         cfg->any_cas_flag = 1;
         CHECK(cas_vendor_set_cwenc_key_list_b(vd, optarg, err, sizeof err), "--cas-cwenc-key-list-b");
         break;
-      case 1024:
+      case OPT_CAS_FALLBACK_CLEAR:
         cfg->any_cas_flag = 1;
         cfg->cas_fallback_clear = 1;
         break;
-      case 1053:
+      case OPT_DSCP:
         if (net_dscp_parse(optarg, &cfg->dscp)) {
           argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1054:
+      case OPT_AL_FEC:
         if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
           argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1055:
+      case OPT_AL_FEC_PORT:
         if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
           argerr("invalid --al-fec-port: %s", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1025:
+      case OPT_BISS2_SW:
         CHECK(cas_set_biss2_sw(&cfg->biss2_enabled, cfg->biss2_sw, optarg, err, sizeof err), "--biss2-sw");
         break;
-      case 1026:
+      case OPT_BISS2_EMIT_ESW:
         CHECK(cas_set_biss2_emit_esw(&cfg->biss2_emit_esw, cfg->biss2_esw_id, optarg, err, sizeof err), "--biss2-emit-esw");
         break;
-      case 1027:
+      case OPT_BISS1_SW:
         CHECK(cas_set_biss1_sw(&cfg->biss1_enabled, cfg->biss1_cw, optarg, err, sizeof err), "--biss1-sw");
         break;
-      case 1028:
+      case OPT_BISS2_CA_RECEIVERS:
         cfg->biss2_ca_receivers_dir = optarg;
         cfg->biss2_ca_enabled = 1;
         break;
-      case 1029:
+      case OPT_BISS2_CA_SESSION_ID:
         CHECK(cas_set_biss2_ca_session_id(&cfg->biss2_ca_session_id, &cfg->biss2_ca_session_id_given, optarg, err, sizeof err), "--biss2-ca-session-id");
         break;
       case 'v':
@@ -955,24 +1021,24 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         CHECK(tvh_cfg_add_peer(cfg, optarg, err, sizeof err), "-R");
         break;
-      case 1030:
+      case OPT_RIST_PROFILE:
         CHECK(tvh_cfg_profile(cfg, optarg, err, sizeof err), "--rist-profile");
         break;
-      case 1031:
+      case OPT_RIST_SECRET:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_secret, sizeof cfg->rist_secret, optarg, "--rist-secret"))
           return ARGS_ERR;
         break;
-      case 1032:
+      case OPT_RIST_CNAME:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_cname, sizeof cfg->rist_cname, optarg, "--rist-cname"))
           return ARGS_ERR;
         break;
-      case 1033:
+      case OPT_RIST_BUFFER:
         if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->rist_buffer_ms)) {
           argerr("invalid --rist-buffer: %s (ms)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1036: {
+      case OPT_RIST_PROFILE_IN: {
         static const enum_map_t map[] = {{"simple", 0}, {"main", 1}};
         int v;
         REQUIRE_INPUT("--rist-profile-in");
@@ -983,12 +1049,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         in->rist_profile_main = v;
         break;
       }
-      case 1037:
+      case OPT_SRT_PASSPHRASE_IN:
         REQUIRE_INPUT("--srt-passphrase-in");
         if (argutil_bufcpy_opt(TOOL_NAME, in->srt_passphrase_in, sizeof in->srt_passphrase_in, optarg, "--srt-passphrase-in"))
           return ARGS_ERR;
         break;
-      case 1038: {
+      case OPT_SRT_PBKEYLEN_IN: {
         char *end;
         unsigned long v;
         REQUIRE_INPUT("--srt-pbkeylen-in");
@@ -1000,31 +1066,31 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         in->srt_pbkeylen_in = (int)v;
         break;
       }
-      case 1039:
+      case OPT_SRT_STREAMID_IN:
         REQUIRE_INPUT("--srt-streamid-in");
         if (argutil_bufcpy_opt(TOOL_NAME, in->srt_streamid_in, sizeof in->srt_streamid_in, optarg, "--srt-streamid-in"))
           return ARGS_ERR;
         break;
-      case 1040:
+      case OPT_SRT_PACKETFILTER_IN:
         REQUIRE_INPUT("--srt-packetfilter-in");
         if (argutil_bufcpy_opt(TOOL_NAME, in->srt_packetfilter_in, sizeof in->srt_packetfilter_in, optarg, "--srt-packetfilter-in"))
           return ARGS_ERR;
         break;
-      case 1041:
+      case OPT_SRT_LATENCY_IN:
         REQUIRE_INPUT("--srt-latency-in");
         if (argutil_uint_range(optarg, 1, 60000, &in->srt_latency_in_ms)) {
           argerr("invalid --srt-latency-in: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
         break;
-      case 1042:
+      case OPT_SRT_GROUP_MODE:
         CHECK(tvh_cfg_group_mode(cfg, optarg, err, sizeof err), "--srt-group-mode");
         break;
-      case 1043:
+      case OPT_SRT_PASSPHRASE:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg, "--srt-passphrase"))
           return ARGS_ERR;
         break;
-      case 1044: {
+      case OPT_SRT_PBKEYLEN: {
         char *end;
         unsigned long v = strtoul(optarg, &end, 10);
         if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
@@ -1034,23 +1100,23 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->srt_pbkeylen = (int)v;
         break;
       }
-      case 1045:
+      case OPT_SRT_STREAMID:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid, sizeof cfg->srt_streamid, optarg, "--srt-streamid"))
           return ARGS_ERR;
         break;
-      case 1046:
+      case OPT_SRT_PACKETFILTER:
         if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg, "--srt-packetfilter"))
           return ARGS_ERR;
         break;
-      case 1047:
+      case OPT_SRT_LATENCY:
         if (argutil_uint_range(optarg, 1, 60000, &cfg->srt_latency_ms)) {
           argerr("invalid --srt-latency: %s (1..60000 ms)", optarg);
           return ARGS_ERR;
         }
         break;
       case 'c':
-      case 1060:
-      case 1059:
+      case OPT_CONFIG_STRICT:
+      case OPT_CONFIGTEST:
         break;
       case 'h':
         print_help();

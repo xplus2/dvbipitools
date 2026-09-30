@@ -3,12 +3,11 @@
 When parts of ETSI TS 102 905 (DVB-HN) meet udpxy and lean towards DVB-I, `dipixy` is the result.
 
 It takes various input streams and playlists, allows playback using HLS (ts and fMP4), LL-HLS,
-MPEG-DASH (regular and CMAF Low-Latency), progressive HTTP/TS and progressive MP4.
+MPEG-DASH (regular and CMAF Low-Latency), progressive HTTP/TS and progressive MP4 over HTTP/1.1, HTTP/2 and HTTP/3.
 
 Optionally, it's also a DLNA MediaServer for your home network to consume streams without an additional Set-Top-Box.
 
-
-Usage:
+## Usage
 ```sh
 dipixy [-l addr:port] [-i source ...] [options]
 ```
@@ -27,6 +26,7 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--max-channels`         | `<n>`                       | `32`, concurrency (source,filter,pmt,container)   |       |
 |      | `--idle-timeout`         | `<seconds>`                 | `0` (off), close a connection idle this long      |       |
 |      | `--capture-ring-size`    | `<KiB>`                     | `4096`, per-source ingress ring buffer            |       |
+|      | `--ts-startup-timeout`   | `<seconds>`                 | `5`, wait for a source's 1st packet, `0` = off    |       |
 | `-i` | `--input`                | `<source>`                  | none, repeatable                                  |       |
 | `-n` | `--name`                 | `<name>`                    | none, names the input                             | input |
 |      | `--media-type`           | `radio\|tv`                 | `tv` only needed for DLNA                         | input |
@@ -115,7 +115,9 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 | `-`                          | stdin, served at `/stdin/<fmt>`. At most one.     |
 | `rist://@host:port`          | RIST input, served at `/rist/<fmt>`. At most one. |
 | `sds://addr:port`            | live SD&S/DVBSTP discovery                        |
-| `http://url`, `https://url`  | single progressive TS URI                         |
+| `rtp://addr:port`            | multicast, RTP-wrapped                            |
+| `udp://addr:port`            | multicast, plain TS                               |
+| `http://url`, `https://url`  | TS, HLS, LL-HLS, DASH or LL-DASH                  |
 | `*.m3u`/`*.m3u8`             | M3U playlist                                      |
 | `*.xspf`                     | XSPF playlist                                     |
 | `*.csv`                      | CSV playlist                                      |
@@ -123,8 +125,9 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 
 M3U, XSPF, and CSV are not strictly limited to the output of `dipiscan`.
 
-Every `sds://`, playlist, and `http(s)://` source shares one index space, numbered in the order
-it was given on the command line, so the first of these three kinds is list 1, the 2nd is list 2, ...
+Every `sds://`, `rtp://`/`udp://`, playlist, and `http(s)://` source shares one index space,
+numbered in the order it was given on the command line, so the first of these kinds is list 1,
+the 2nd is list 2, ...
 
 `rist://@`, `-` (stdin), or `http(s)://` each define just a single stream, not a playlist. 
 
@@ -372,6 +375,10 @@ vlc http://localhost:9080/srt/1.2.3.4:9000/llhls     # Low-Latency HLS
 
 # live SD&S discovery as list 1
 dipixy -i sds://239.19.75.1:3937
+
+# single multicast as a named entry
+dipixy -i rtp://239.2.24.1:8208 -n thisonestation
+vlc http://localhost:9080/news/item/1/hls
 
 # a static M3U channel list, custom port
 dipixy -l 0.0.0.0:9080 -i channels.m3u

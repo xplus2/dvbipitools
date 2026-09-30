@@ -9,8 +9,9 @@
 #include "priv.h"
 
 int tvh_apply_input(void *c, const char *v, char *e, size_t n) {
-  if (tvh_cfg_add_input(c, v, e, n)) return -1;
-  if (tvh_item.input) tvh_item.have_input = 1;
+  config_t *cfg = c;
+  if (tvh_cfg_add_input(cfg, v, e, n)) return -1;
+  if (cfg->parse_item.input) cfg->parse_item.have_input = 1;
   return 0;
 }
 
@@ -40,8 +41,9 @@ int tvh_apply_input_provider(void *c, const char *v, char *e, size_t n) {
 }
 
 int tvh_apply_input_iface(void *c, const char *v, char *e, size_t n) {
-  dipitvhead_input_t *in = tvh_cur_input(c, e, n);
-  return in ? yamlcfg_set_str(&in->iface_in, v, e, n) : -1;
+  config_t *cfg = c;
+  dipitvhead_input_t *in = tvh_cur_input(cfg, e, n);
+  return in ? yamlcfg_set_str(&cfg->str_pool, &in->iface_in, v, e, n) : -1;
 }
 
 int tvh_apply_input_strip_eit(void *c, const char *v, char *e, size_t n) {
@@ -60,8 +62,9 @@ int tvh_apply_input_strip(void *c, const char *v, char *e, size_t n) {
 }
 
 int tvh_apply_input_hbbtv(void *c, const char *v, char *e, size_t n) {
-  dipitvhead_input_t *in = tvh_cur_input(c, e, n);
-  return in ? yamlcfg_set_str(&in->hbbtv_url, v, e, n) : -1;
+  config_t *cfg = c;
+  dipitvhead_input_t *in = tvh_cur_input(cfg, e, n);
+  return in ? yamlcfg_set_str(&cfg->str_pool, &in->hbbtv_url, v, e, n) : -1;
 }
 
 int tvh_apply_input_hbbtv_org_id(void *c, const char *v, char *e, size_t n) {

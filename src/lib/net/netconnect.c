@@ -61,9 +61,13 @@ static int wait_connect(int fd, int timeout_ms) {
 }
 
 int netconnect_tcp(const char *host, unsigned port, int timeout_ms, net_err_reason_t *reason_out) {
-  struct addrinfo hints, *res, *ai;
+  struct addrinfo hints;
+  struct addrinfo *res;
+  struct addrinfo *ai;
   char portstr[6];
-  int fd = -1, e, save_errno = 0;
+  int fd = -1;
+  int e;
+  int save_errno = 0;
 
   uint_to_str(portstr, port);
   memset(&hints, 0, sizeof hints);
@@ -76,7 +80,8 @@ int netconnect_tcp(const char *host, unsigned port, int timeout_ms, net_err_reas
     return -1;
   }
   for (ai = res; ai; ai = ai->ai_next) {
-    int flags, cr;
+    int flags;
+    int cr;
     fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
     if (fd < 0) continue;
     flags = fcntl(fd, F_GETFL, 0);
@@ -113,7 +118,8 @@ int netconnect_tcp(const char *host, unsigned port, int timeout_ms, net_err_reas
 }
 
 struct netconnect_pending {
-  struct addrinfo *res, *ai; /* res: full list, for freeaddrinfo(). ai: candidate fd is connecting on */
+  struct addrinfo *res; /* full list, for freeaddrinfo() */
+  struct addrinfo *ai;  /* candidate fd is connecting on */
   char host[256];
   unsigned port;
 };
@@ -121,7 +127,8 @@ struct netconnect_pending {
 /* tries ai onward, first usable candidate wins. -1 if none work (save_errno set) */
 static int try_addrs(struct addrinfo *ai, struct addrinfo **used, int *save_errno) {
   for (; ai; ai = ai->ai_next) {
-    int fd, flags;
+    int fd;
+    int flags;
     fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
     if (fd < 0) continue;
     flags = fcntl(fd, F_GETFL, 0);
@@ -145,9 +152,13 @@ static int try_addrs(struct addrinfo *ai, struct addrinfo **used, int *save_errn
 }
 
 int netconnect_tcp_start(const char *host, unsigned port, netconnect_pending_t **pending_out, net_err_reason_t *reason_out) {
-  struct addrinfo hints, *res, *used;
+  struct addrinfo hints;
+  struct addrinfo *res;
+  struct addrinfo *used;
   char portstr[6];
-  int fd, e, save_errno = 0;
+  int fd;
+  int e;
+  int save_errno = 0;
   netconnect_pending_t *p;
 
   uint_to_str(portstr, port);
@@ -184,7 +195,8 @@ int netconnect_tcp_start(const char *host, unsigned port, netconnect_pending_t *
 
 int netconnect_tcp_finish(netconnect_pending_t **pending, int *fd, net_err_reason_t *reason_out) {
   netconnect_pending_t *p = *pending;
-  int soerr = 0, save_errno;
+  int soerr = 0;
+  int save_errno;
   socklen_t sl = sizeof soerr;
   struct addrinfo *used;
   int nfd;

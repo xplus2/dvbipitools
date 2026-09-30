@@ -52,14 +52,18 @@ void esc_ps_store(unsigned char *dst, size_t *dlen, const unsigned char *s, size
   }
 }
 
+static void vbuf_add_logged(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *nal, size_t n, const char *what) {
+  if (esc_vbuf_add(vbuf, vbuflen, vbufcap, nal, n) < 0)
+    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, what);
+}
+
 /* 1: handled (kept/dropped). 0: not sei or off */
 static int emit_sei_maybe_stripped(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap,
                                    const unsigned char *p, size_t n, unsigned hdrlen, const lcevc_strip_t *strip) {
   size_t outlen;
   if (!strip) return 0;
   if (!esc_strip_lcevc_sei(p, n, hdrlen, strip->rb, strip->rbcap, strip->esc, strip->esccap, &outlen)) return 0;
-  if (outlen && esc_vbuf_add(vbuf, vbuflen, vbufcap, *strip->esc, outlen) < 0)
-    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, sei nal dropped");
+  if (outlen) vbuf_add_logged(es, vbuf, vbuflen, vbufcap, *strip->esc, outlen, "escodec: esc_vbuf_add failed, sei nal dropped");
   return 1;
 }
 
@@ -72,15 +76,15 @@ void esc_handle_h264_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen,
     case H264_NAL_LCEVC_NON_IDR:
     case H264_NAL_LCEVC_IDR:
       if (strip) break;
-      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0) log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, h264 nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, h264 nal dropped");
       break;
     case H264_NAL_SEI:
       if (emit_sei_maybe_stripped(es, vbuf, vbuflen, vbufcap, p, n, 1, strip)) break;
-      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0) log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, h264 nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, h264 nal dropped");
       break;
     default:
       if (type == H264_NAL_IDR) *key = 1;
-      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0) log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, h264 nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, h264 nal dropped");
   }
 }
 
@@ -94,15 +98,15 @@ void esc_handle_hevc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen,
     case HEVC_NAL_LCEVC_NON_IDR:
     case HEVC_NAL_LCEVC_IDR:
       if (strip) break;
-      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0) log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, hevc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, hevc nal dropped");
       break;
     case HEVC_NAL_SEI_PREFIX:
       if (emit_sei_maybe_stripped(es, vbuf, vbuflen, vbufcap, p, n, 2, strip)) break;
-      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0) log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, hevc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, hevc nal dropped");
       break;
     default:
       if (type >= HEVC_NAL_IRAP_FIRST && type <= HEVC_NAL_IRAP_LAST) *key = 1;
-      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0) log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, hevc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, hevc nal dropped");
   }
 }
 
@@ -175,15 +179,15 @@ void esc_handle_vvc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, 
     case VVC_NAL_FILLER:                                                  break;
     case VVC_NAL_LCEVC:
       if (strip) break;
-      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0) log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, vvc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, vvc nal dropped");
       break;
     case VVC_NAL_SEI_PREFIX:
       if (emit_sei_maybe_stripped(es, vbuf, vbuflen, vbufcap, p, n, 2, strip)) break;
-      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0) log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, vvc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, vvc nal dropped");
       break;
     default:
       if (type >= VVC_NAL_IRAP_FIRST && type <= VVC_NAL_IRAP_LAST) *key = 1;
-      if (esc_vbuf_add(vbuf, vbuflen, vbufcap, p, n) < 0) log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, vvc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, vvc nal dropped");
   }
 }
 
@@ -201,7 +205,7 @@ static unsigned av1_reduced_still_picture_flag(const unsigned char *obu, size_t 
   has_size = br_u(&b, 1);
   br_u(&b, 1);
   if (ext) br_u(&b, 8);
-  if (has_size) for (int i = 0; i < 8 && (br_u(&b, 8) & 0x80); i++) ;
+  if (has_size) for (int i = 0; i < 8 && (br_u(&b, 8) & 0x80); i++) { }
   br_u(&b, 3);
   br_u(&b, 1);
   return br_u(&b, 1);
@@ -307,15 +311,19 @@ void esc_split_nals(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size
     size_t n = q - ns;
     unsigned type;
     if (n) {
-      if (es->codec == CODEC_H264) {
-        type = d[ns] & 0x1F;
-        esc_handle_h264_nal(es, vbuf, vbuflen, vbufcap, type, d + ns, n, key, strip);
-      } else if (es->codec == CODEC_HEVC) {
-        type = (d[ns] >> 1) & 0x3F;
-        esc_handle_hevc_nal(es, vbuf, vbuflen, vbufcap, type, d + ns, n, key, strip);
-      } else {
-        type = n > 1 ? (d[ns + 1] >> 3) & 0x1F : 0;
-        esc_handle_vvc_nal(es, vbuf, vbuflen, vbufcap, type, d + ns, n, key, strip);
+      switch (es->codec) {
+        case CODEC_H264:
+          type = d[ns] & 0x1F;
+          esc_handle_h264_nal(es, vbuf, vbuflen, vbufcap, type, d + ns, n, key, strip);
+          break;
+        case CODEC_HEVC:
+          type = (d[ns] >> 1) & 0x3F;
+          esc_handle_hevc_nal(es, vbuf, vbuflen, vbufcap, type, d + ns, n, key, strip);
+          break;
+        default:
+          type = n > 1 ? (d[ns + 1] >> 3) & 0x1F : 0;
+          esc_handle_vvc_nal(es, vbuf, vbuflen, vbufcap, type, d + ns, n, key, strip);
+          break;
       }
     }
     p = q;

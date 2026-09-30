@@ -261,6 +261,46 @@ START_TEST(get_metrics_returns_200_and_openmetrics_body) {
 }
 END_TEST
 
+START_TEST(fragmented_request_across_multiple_writes_still_returns_200) {
+  store_t st;
+  int lfd;
+  int cfd;
+  http_server_t *hs;
+  char buf[8192];
+  const char req_part1[] = "GET /met";
+  const char req_part2[] = "rics HTTP/1.1\r\nHost: x\r\n\r\n";
+
+  store_init(&st);
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+  ck_assert_int_ge(lfd, 0);
+  hs = http_server_new(lfd, NULL, "");
+  ck_assert_ptr_nonnull(hs);
+
+  cfd = connect_to(lfd);
+  ck_assert_int_eq((int)send(cfd, req_part1, sizeof req_part1 - 1, 0), (int)sizeof req_part1 - 1);
+
+  /* ticks on partial buffer: last_len parse skip path */
+  for (int i = 0; i < 3; i++) {
+    struct pollfd pfds[1 + HTTP_MAX_CONNS];
+    int n = 0;
+    http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
+    poll(pfds, (nfds_t)n, 20);
+    http_server_service(hs, pfds, n, &st, mono(), 0);
+  }
+
+  ck_assert_int_eq((int)send(cfd, req_part2, sizeof req_part2 - 1, 0), (int)sizeof req_part2 - 1);
+
+  drive_until_closed(hs, &st, cfd);
+  recv_all(cfd, buf, sizeof buf);
+  ck_assert(strstr(buf, "HTTP/1.1 200 OK") == buf);
+  ck_assert(strstr(buf, "Content-Type: application/openmetrics-text") != NULL);
+
+  close(cfd);
+  http_server_free(hs);
+  close(lfd);
+}
+END_TEST
+
 START_TEST(unknown_path_returns_404) {
   store_t st;
   int lfd;
@@ -525,6 +565,7 @@ static Suite *httpserver_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_set_timeout(tc, 15);
   tcase_add_test(tc, get_metrics_returns_200_and_openmetrics_body);
+  tcase_add_test(tc, fragmented_request_across_multiple_writes_still_returns_200);
   tcase_add_test(tc, unknown_path_returns_404);
   tcase_add_test(tc, post_to_metrics_also_returns_404);
   tcase_add_test(tc, query_string_is_stripped_before_matching);

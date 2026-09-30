@@ -207,9 +207,9 @@ START_TEST(rtmp_send_before_ready_fails) {
   unsigned char payload[4] = {1, 2, 3, 4};
 
   ck_assert_ptr_nonnull(r);
-  ck_assert_int_eq(rtmp_send_video(r, 0, payload, sizeof payload), -1);
-  ck_assert_int_eq(rtmp_send_audio(r, 0, payload, sizeof payload), -1);
-  ck_assert_int_eq(rtmp_send_data(r, payload, sizeof payload), -1);
+  ck_assert_int_eq(rtmp_send_video(r, 0, payload, sizeof payload, NULL, 0), -1);
+  ck_assert_int_eq(rtmp_send_audio(r, 0, payload, sizeof payload, NULL, 0), -1);
+  ck_assert_int_eq(rtmp_send_data(r, payload, sizeof payload, NULL, 0), -1);
 
   rtmp_free(r);
 }
@@ -231,7 +231,7 @@ START_TEST(rtmp_send_after_ready_uses_created_stream_id) {
   ck_assert_int_eq(cap.ready, 1);
 
   cap.len = 0;
-  ck_assert_int_eq(rtmp_send_video(r, 1234, video, sizeof video), 0);
+  ck_assert_int_eq(rtmp_send_video(r, 1234, video, sizeof video, NULL, 0), 0);
   ck_assert(cap.len >= 3);
   /* fmt 0: 1B basic header (cid 5) + 3B timestamp + 3B length + 1B type + 4B stream_id LE */
   ck_assert_uint_eq(cap.buf[0], (0 << 6) | 5);

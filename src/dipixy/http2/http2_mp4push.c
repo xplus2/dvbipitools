@@ -13,7 +13,7 @@ static ssize_t mp4push_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *
   (void)ng;
   (void)stream_id;
   (void)ud;
-  h2_mp4push_stream_t *tcs = source->ptr;
+  h2_push_slot_t *tcs = source->ptr;
   size_t n;
   if (mp4push_ring_errored(tcs->sub_idx)) return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
   n = mp4push_ring_read(tcs->sub_idx, buf, length);
@@ -24,7 +24,7 @@ static ssize_t mp4push_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *
   return (ssize_t)n;
 }
 
-static void h2_submit_mp4push_response(h2_conn_t *conn, int32_t stream_id, h2_mp4push_stream_t *tcs) {
+static void h2_submit_mp4push_response(h2_conn_t *conn, int32_t stream_id, h2_push_slot_t *tcs) {
   nghttp2_nv nva[3] = {
       {(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP2_NV_FLAG_NONE},
       {(uint8_t *)"content-type", (uint8_t *)"video/mp4", 12, 9, NGHTTP2_NV_FLAG_NONE},
@@ -38,18 +38,14 @@ static void h2_submit_mp4push_response(h2_conn_t *conn, int32_t stream_id, h2_mp
 
 void h2_mp4push_wake(int sub_idx) {
   conn_t *c = mp4push_sub_h2c(sub_idx);
-  const h2_mp4push_stream_t *tcs = mp4push_sub_h2_slot(sub_idx);
+  const h2_push_slot_t *tcs = mp4push_sub_h2_slot(sub_idx);
   h2_wake_stream(c, tcs ? tcs->sid : 0);
 }
 
 int h2_mp4push_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int sub_idx, int ws_handle) {
-  int ci = -1;
-  for (int i = 0; i < H2_MP4PUSH_MAX; i++) if (!conn->mp4push[i].sid) {
-    ci = i;
-    break;
-  }
+  int ci = h2_push_slot_find_free(conn->mp4push, H2_MP4PUSH_MAX);
   if (ci < 0) return 0;
-  h2_mp4push_stream_t *tcs = &conn->mp4push[ci];
+  h2_push_slot_t *tcs = &conn->mp4push[ci];
   tcs->sub_idx = sub_idx;
   tcs->sid = stream_id;
   h2_submit_mp4push_response(conn, stream_id, tcs);
@@ -58,15 +54,8 @@ int h2_mp4push_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int sub_i
 }
 
 void h2_mp4push_on_stream_close(h2_conn_t *conn, int32_t stream_id) {
-  for (int i = 0; i < H2_MP4PUSH_MAX; i++) {
-    h2_mp4push_stream_t *tcs = &conn->mp4push[i];
-    if (tcs->sid != stream_id) continue;
-    int sub = tcs->sub_idx;
-    tcs->sid = 0;
-    tcs->sub_idx = -1;
-    mp4push_sub_close(sub);
-    return;
-  }
+  int sub = h2_push_slot_clear_by_sid(conn->mp4push, H2_MP4PUSH_MAX, stream_id);
+  if (sub >= 0) mp4push_sub_close(sub);
 }
 
 #endif /* HAVE_HTTP2 */

@@ -48,15 +48,18 @@ static int apply_listen(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_input(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->input_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->input_path, v, e, n);
 }
 
 static int apply_provider(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->provider, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->provider, v, e, n);
 }
 
 static int apply_offering(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->offering, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->offering, v, e, n);
 }
 
 static int apply_lang(void *c, const char *v, char *e, size_t n) {
@@ -74,7 +77,8 @@ static int apply_mcast(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_iface(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->iface, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->iface, v, e, n);
 }
 
 static int apply_dscp(void *c, const char *v, char *e, size_t n) {
@@ -94,7 +98,8 @@ static int apply_timeout(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_output(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->output_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->output_path, v, e, n);
 }
 
 static int apply_format(void *c, const char *v, char *e, size_t n) {
@@ -210,11 +215,13 @@ static int apply_al_fec_pt(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_metrics_sock(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_sock, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_sock, v, e, n);
 }
 
 static int apply_metrics_id(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_id, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_id, v, e, n);
 }
 
 static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {
@@ -222,16 +229,18 @@ static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_packages(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->packages_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->packages_path, v, e, n);
 }
 
 static int apply_cells(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->cells_path, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->cells_path, v, e, n);
 }
 
 static int apply_rms_name(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (yamlcfg_set_str(&cfg->rms_name, v, e, n)) return -1;
+  if (yamlcfg_set_str(&cfg->str_pool, &cfg->rms_name, v, e, n)) return -1;
   cfg->rms_enabled = 1;
   return 0;
 }
@@ -244,16 +253,18 @@ static int apply_rms_lang(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_rms_location(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->rms_location, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->rms_location, v, e, n);
 }
 
 static int apply_rms_logo(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->rms_logo, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->rms_logo, v, e, n);
 }
 
 static int apply_fus_name(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (yamlcfg_set_str(&cfg->fus_name, v, e, n)) return -1;
+  if (yamlcfg_set_str(&cfg->str_pool, &cfg->fus_name, v, e, n)) return -1;
   cfg->fus_enabled = 1;
   return 0;
 }
@@ -286,7 +297,8 @@ static int apply_fus_announce(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_fus_logo(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->fus_logo, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->fus_logo, v, e, n);
 }
 
 static const yamlcfg_key_t keys[] = {

@@ -25,12 +25,18 @@ const char *httpng_status_str(int status);
    NULL/empty, else nv value length (elen+2 quotes) */
 size_t httpng_format_etag(char *etag_buf, size_t etag_buf_sz, const char *etag);
 
+typedef struct {
+  char *method; size_t method_sz;
+  char *path; size_t path_sz;
+  char *inm; size_t inm_sz;
+  char *origin; size_t origin_sz;
+  char *authz; size_t authz_sz;
+  char *protocol; size_t protocol_sz;
+} httpng_hdr_out_t;
+
 /* cb_on_header (h2) / cb_h3_recv_header (h3): both feed same six pseudo/regular
    headers into per-request fields, only struct layout differs */
-void httpng_parse_known_header(const char *name, size_t namelen, const char *value, size_t valuelen,
-                               char *method, size_t method_sz, char *path, size_t path_sz,
-                               char *inm, size_t inm_sz, char *origin, size_t origin_sz,
-                               char *authz, size_t authz_sz, char *protocol, size_t protocol_sz);
+void httpng_parse_known_header(const char *name, size_t namelen, const char *value, size_t valuelen, const httpng_hdr_out_t *out);
 
 /* h2_ws_flush/h3_ws_flush shared buffer handoff: swaps locked pend buf -> empty.
    1: out_data/out_len now caller's (send, then resume stream, protocol-specific).
@@ -52,10 +58,8 @@ typedef struct {
   int (*tspush_dispatch)(void *conn, void *req, int sub);
   int (*dashchunk_dispatch)(void *conn, void *req, int sub, int ws_handle);
   int (*mp4push_dispatch)(void *conn, void *req, int sub, int ws_handle);
-  int (*hls_cold_try_park)(void *conn, void *req, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, hls_cold_kind_t kind,
-                           seg_container_t container, int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle);
-  int (*llhls_try_park)(void *conn, void *req, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, const char *inm,
-                        const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle);
+  int (*hls_cold_try_park)(void *conn, void *req, const hls_cold_park_req_t *pr);
+  int (*llhls_try_park)(void *conn, void *req, const llhls_park_req_t *pr);
 } httpng_ops_t;
 
 /* method/path/protocol: request-line/pseudo-headers, never NULL.

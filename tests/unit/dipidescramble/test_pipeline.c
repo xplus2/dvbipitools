@@ -166,14 +166,51 @@ static void teardown(void) {
   biss_ca_state_free(g_lc.biss_ca);
 }
 
-/* regression test for a real crash: a PMT signaling BISS Mode 1/E (ca_system_id 0x2602)
-   with a real (non-null) pid on its program_info CA_descriptor gets that pid classified
-   PID_ECM same as any other CAS scheme's ECM pid (see psi's add_ecm()). BISS 1/E never
-   sets lc->dev (only the classic ECM/EMM branch does) or lc->biss_ca (that's BISS Mode
-   CA). Before the fix, pkt_cb's ECM dispatch checked only lc->biss_ca before falling
-   through to handle_ecm_section(), which immediately dereferences lc->dev in
-   device_resolve_cw() -> device.c's service_slot() -> SIGSEGV on real traffic (a false-
-   positive section-shaped match on live ES bytes, see biss_tvhead_plumbing_validation.sh). */
+START_TEST(emit_downstream_writes_identical_bytes_to_every_outfd) {
+  loop_ctx_t lc;
+  config_t cfg;
+  char path0[] = "/tmp/dipidescramble_test_outA_XXXXXX";
+  char path1[] = "/tmp/dipidescramble_test_outB_XXXXXX";
+  int fd0 = mkstemp(path0);
+  int fd1 = mkstemp(path1);
+  unsigned char pkt[188];
+  unsigned char rd0[188 * 3], rd1[188 * 3];
+  ssize_t n0, n1;
+
+  ck_assert_int_ge(fd0, 0);
+  ck_assert_int_ge(fd1, 0);
+  memset(&lc, 0, sizeof lc);
+  memset(&cfg, 0, sizeof cfg);
+  lc.cfg = &cfg;
+  lc.psi = psi_new();
+  ck_assert_ptr_nonnull(lc.psi);
+  lc.outfd[0] = fd0;
+  lc.outfd[1] = fd1;
+  lc.n_outfd = 2;
+
+  for (int i = 0; i < 3; i++) {
+    memset(pkt, (unsigned char)(0x10 + i), sizeof pkt);
+    pkt[0] = 0x47;
+    pkt[1] = 0x1F;
+    pkt[2] = 0xFF;
+    ck_assert_int_eq(pkt_cb(&lc, pkt), 0);
+  }
+  pipeline_flush(&lc);
+
+  n0 = pread(fd0, rd0, sizeof rd0, 0);
+  n1 = pread(fd1, rd1, sizeof rd1, 0);
+  ck_assert_int_eq((int)n0, 188 * 3);
+  ck_assert_int_eq((int)n1, 188 * 3);
+  ck_assert_mem_eq(rd0, rd1, sizeof rd0);
+
+  close(fd0);
+  close(fd1);
+  unlink(path0);
+  unlink(path1);
+  psi_free(lc.psi);
+}
+END_TEST
+
 START_TEST(biss1e_ecm_on_null_dev_does_not_crash) {
   unsigned char pkt[188], sec[64];
   size_t slen;
@@ -192,9 +229,6 @@ START_TEST(biss1e_ecm_on_null_dev_does_not_crash) {
   ck_assert_ptr_null(g_lc.biss_ca);
   ck_assert_ptr_null(g_lc.dev); /* never set on this path - the crash's precondition */
 
-  /* even-parity ECM-shaped section landing on the now-classified ECM pid. payload
-     must clear device_resolve_cw()'s own length floor (5 + CRYPTO_CW_ENC_LEN) or it
-     returns early on that check alone, never reaching the lc->dev dereference */
   slen = build_bare_section(sec, 0x80, 24);
   wrap_section_packet(pkt, ECM_PID, sec, slen);
   ck_assert_int_eq(pkt_cb(&g_lc, pkt), 0);
@@ -206,15 +240,10 @@ START_TEST(biss1e_ecm_on_null_dev_does_not_crash) {
 }
 END_TEST
 
-/* same bug, EMM side: emmcache_feed(lc->cache, lc->dev, ...) was called unconditionally
-   too, dereferencing lc->dev==NULL in device_on_emm(). emm_pid comes from any CAT, entirely
-   independent of which CAS branch resolved lc->scr. */
 START_TEST(biss1e_emm_on_null_dev_does_not_crash) {
   unsigned char pkt[188], sec[64];
   size_t slen;
-
   setup_biss1e();
-
   slen = build_pat(sec, 1, PMT_PID);
   wrap_section_packet(pkt, 0x0000, sec, slen);
   ck_assert_int_eq(pkt_cb(&g_lc, pkt), 0);
@@ -244,6 +273,7 @@ END_TEST
 static Suite *pipeline_suite(void) {
   Suite *s = suite_create("pipeline");
   TCase *tc = tcase_create("core");
+  tcase_add_test(tc, emit_downstream_writes_identical_bytes_to_every_outfd);
   tcase_add_test(tc, biss1e_ecm_on_null_dev_does_not_crash);
   tcase_add_test(tc, biss1e_emm_on_null_dev_does_not_crash);
   suite_add_tcase(s, tc);

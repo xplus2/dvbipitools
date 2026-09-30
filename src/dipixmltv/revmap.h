@@ -12,8 +12,14 @@ typedef struct {
 } revmap_entry_t;
 
 typedef struct {
+  const char *uri;
+  int idx;
+} revmap_idx_t;
+
+typedef struct {
   revmap_entry_t *entries;
   int count, cap;
+  revmap_idx_t *idx;
 } revmap_t;
 
 /* csv: uri,id */

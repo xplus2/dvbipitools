@@ -73,11 +73,15 @@ typedef enum {
 
 struct rtmp {
   rtmp_client_state_t state;
-  uint32_t in_chunk_size, out_chunk_size;
+  uint32_t in_chunk_size;
+  uint32_t out_chunk_size;
   uint32_t stream_id;
 
-  char app[128], tcurl[512], stream_name[256];
-  char user[128], password[128];
+  char app[128];
+  char tcurl[512];
+  char stream_name[256];
+  char user[128];
+  char password[128];
   char auth_query[400]; /* appended to connect app once auth needed */
   int auth_tried;       /* credentialed retry sent, no more retries */
 
@@ -96,7 +100,7 @@ struct rtmp {
   int err;
 };
 
-int rtmp_session_write_message(struct rtmp *r, uint32_t cid, unsigned char type, uint32_t stream_id, uint32_t timestamp, const unsigned char *payload, size_t len);
+int rtmp_session_write_message(struct rtmp *r, uint32_t cid, unsigned char type, uint32_t stream_id, uint32_t timestamp, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn);
 int rtmp_session_feed(struct rtmp *r, const unsigned char *data, size_t bytes);
 
 int rtmp_command_connect(struct rtmp *r);

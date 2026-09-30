@@ -11,8 +11,7 @@
 
 rtmp_t *rtmp_new(const rtmp_cfg_t *cfg) {
   struct rtmp *r = calloc(1, sizeof *r);
-  if (!r)
-    return NULL;
+  if (!r) return NULL;
   bufcpy(r->app, sizeof r->app, cfg->app ? cfg->app : "");
   bufcpy(r->tcurl, sizeof r->tcurl, cfg->tcurl ? cfg->tcurl : "");
   bufcpy(r->stream_name, sizeof r->stream_name, cfg->stream_name ? cfg->stream_name : "");
@@ -32,10 +31,8 @@ rtmp_t *rtmp_new(const rtmp_cfg_t *cfg) {
 }
 
 void rtmp_free(rtmp_t *r) {
-  if (!r)
-    return;
-  for (unsigned i = 0; i < RTMP_N_CHAN; i++)
-    free(r->in_chan[i].payload);
+  if (!r) return;
+  for (unsigned i = 0; i < RTMP_N_CHAN; i++) free(r->in_chan[i].payload);
   free(r);
 }
 
@@ -98,8 +95,7 @@ void rtmp_on_message(struct rtmp *r, unsigned char type, uint32_t timestamp, con
   (void)timestamp;
   switch (type) {
     case RTMP_TYPE_SET_CHUNK_SIZE:
-      if (len >= 4)
-        r->in_chunk_size = (((uint32_t)payload[0] << 24) | ((uint32_t)payload[1] << 16) | ((uint32_t)payload[2] << 8) | payload[3]) & 0x7FFFFFFF;
+      if (len >= 4) r->in_chunk_size = (((uint32_t)payload[0] << 24) | ((uint32_t)payload[1] << 16) | ((uint32_t)payload[2] << 8) | payload[3]) & 0x7FFFFFFF;
       break;
     case RTMP_TYPE_INVOKE:
       rtmp_command_on_invoke(r, payload, len);
@@ -109,20 +105,17 @@ void rtmp_on_message(struct rtmp *r, unsigned char type, uint32_t timestamp, con
   }
 }
 
-int rtmp_send_video(rtmp_t *r, uint32_t timestamp_ms, const unsigned char *data, size_t len) {
-  if (RTMP_ST_READY != r->state)
-    return -1;
-  return rtmp_session_write_message(r, RTMP_CID_VIDEO, RTMP_TYPE_VIDEO, r->stream_id, timestamp_ms, data, len);
+int rtmp_send_video(rtmp_t *r, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
+  if (r->state != RTMP_ST_READY) return -1;
+  return rtmp_session_write_message(r, RTMP_CID_VIDEO, RTMP_TYPE_VIDEO, r->stream_id, timestamp_ms, hdr, hn, payload, pn);
 }
 
-int rtmp_send_audio(rtmp_t *r, uint32_t timestamp_ms, const unsigned char *data, size_t len) {
-  if (RTMP_ST_READY != r->state)
-    return -1;
-  return rtmp_session_write_message(r, RTMP_CID_AUDIO, RTMP_TYPE_AUDIO, r->stream_id, timestamp_ms, data, len);
+int rtmp_send_audio(rtmp_t *r, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
+  if (r->state != RTMP_ST_READY) return -1;
+  return rtmp_session_write_message(r, RTMP_CID_AUDIO, RTMP_TYPE_AUDIO, r->stream_id, timestamp_ms, hdr, hn, payload, pn);
 }
 
-int rtmp_send_data(rtmp_t *r, const unsigned char *data, size_t len) {
-  if (RTMP_ST_READY != r->state)
-    return -1;
-  return rtmp_session_write_message(r, RTMP_CID_INVOKE, RTMP_TYPE_DATA, r->stream_id, 0, data, len);
+int rtmp_send_data(rtmp_t *r, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
+  if (r->state != RTMP_ST_READY) return -1;
+  return rtmp_session_write_message(r, RTMP_CID_INVOKE, RTMP_TYPE_DATA, r->stream_id, 0, hdr, hn, payload, pn);
 }

@@ -165,6 +165,44 @@ START_TEST(srtout_queue_stats_count_chunks_watermark_and_drops) {
 }
 END_TEST
 
+START_TEST(dedup_is_duplicate_false_on_empty_history) {
+  dedup_entry_t hist[6] = {{0, 0}};
+  ck_assert_int_eq(dedup_is_duplicate(hist, 6, 0x12345678u, 100), 0);
+}
+END_TEST
+
+START_TEST(dedup_record_then_is_duplicate_matches_same_hash_and_len) {
+  dedup_entry_t hist[6] = {{0, 0}};
+  int next = 0;
+  dedup_record(hist, 6, &next, 0xAABBCCDDu, 188);
+  ck_assert_int_eq(next, 1);
+  ck_assert_int_eq(dedup_is_duplicate(hist, 6, 0xAABBCCDDu, 188), 1);
+}
+END_TEST
+
+START_TEST(dedup_is_duplicate_requires_len_match_too) {
+  dedup_entry_t hist[6] = {{0, 0}};
+  int next = 0;
+  dedup_record(hist, 6, &next, 0xAABBCCDDu, 188);
+  ck_assert_int_eq(dedup_is_duplicate(hist, 6, 0xAABBCCDDu, 189), 0);
+}
+END_TEST
+
+START_TEST(dedup_record_wraps_ring_and_overwrites_oldest) {
+  dedup_entry_t hist[3] = {{0, 0}};
+  int next = 0;
+  dedup_record(hist, 3, &next, 1, 10);
+  dedup_record(hist, 3, &next, 2, 10);
+  dedup_record(hist, 3, &next, 3, 10);
+  ck_assert_int_eq(next, 0);
+  ck_assert_int_eq(dedup_is_duplicate(hist, 3, 1, 10), 1);
+  dedup_record(hist, 3, &next, 4, 10);
+  ck_assert_int_eq(next, 1);
+  ck_assert_int_eq(dedup_is_duplicate(hist, 3, 1, 10), 0);
+  ck_assert_int_eq(dedup_is_duplicate(hist, 3, 4, 10), 1);
+}
+END_TEST
+
 START_TEST(srtout_queue_watermark_stays_zero_below_level_two) {
   srtout_t *r = open_unconnected(1);
   srtout_queue_stats_t st;
@@ -195,6 +233,10 @@ static Suite *bridge_suite(void) {
   tcase_add_test(tc, tssink_cfg_udp_kind);
   tcase_add_test(tc, srtout_queue_stats_count_chunks_watermark_and_drops);
   tcase_add_test(tc, srtout_queue_watermark_stays_zero_below_level_two);
+  tcase_add_test(tc, dedup_is_duplicate_false_on_empty_history);
+  tcase_add_test(tc, dedup_record_then_is_duplicate_matches_same_hash_and_len);
+  tcase_add_test(tc, dedup_is_duplicate_requires_len_match_too);
+  tcase_add_test(tc, dedup_record_wraps_ring_and_overwrites_oldest);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -28,18 +28,20 @@ static uint32_t fnv1a_mix(uint32_t h, const void *data, size_t len) {
   return h;
 }
 
-static uint32_t client_hash(const char *ip, route_fmt_t fmt, unsigned pmt_pid, const char *filt, const char *src_proto, const char *src_addr,
-                            int src_ordinal, const char *src_name, unsigned item_num, const char *item_name) {
+static const char *nz(const char *s) { return s ? s : ""; }
+
+static uint32_t client_hash(const client_info_t *info, const char *filt) {
+  const char *ip = nz(info->ip), *src_proto = nz(info->src_proto), *src_addr = nz(info->src_addr), *src_name = nz(info->src_name), *item_name = nz(info->item_name);
   uint32_t h = 2166136261u;
   h = fnv1a_mix(h, ip, strlen(ip));
-  h = fnv1a_mix(h, &fmt, sizeof fmt);
-  h = fnv1a_mix(h, &pmt_pid, sizeof pmt_pid);
+  h = fnv1a_mix(h, &info->fmt, sizeof info->fmt);
+  h = fnv1a_mix(h, &info->pmt_pid, sizeof info->pmt_pid);
   h = fnv1a_mix(h, filt, strlen(filt));
   h = fnv1a_mix(h, src_proto, strlen(src_proto));
   h = fnv1a_mix(h, src_addr, strlen(src_addr));
-  h = fnv1a_mix(h, &src_ordinal, sizeof src_ordinal);
+  h = fnv1a_mix(h, &info->src_ordinal, sizeof info->src_ordinal);
   h = fnv1a_mix(h, src_name, strlen(src_name));
-  h = fnv1a_mix(h, &item_num, sizeof item_num);
+  h = fnv1a_mix(h, &info->item_num, sizeof info->item_num);
   h = fnv1a_mix(h, item_name, strlen(item_name));
   return h;
 }
@@ -172,6 +174,7 @@ int ws_clients_add_persistent(const client_info_t *info) {
   char filt[128];
   int i;
   unsigned gen;
+  ws_client_snapshot_t snap;
   if (info->filter)
     pid_filter_format(info->filter, filt, sizeof filt);
   else
@@ -187,12 +190,9 @@ int ws_clients_add_persistent(const client_info_t *info) {
   g_clients[i].persistent = 1;
   g_clients[i].connect_time = time(NULL);
   g_clients[i].used = 1;
-  {
-    ws_client_snapshot_t snap;
-    snapshot_client(&snap, &g_clients[i]);
-    pthread_mutex_unlock(&g_clients_mtx);
-    publish_client_event_snap("clients.add", i, &snap);
-  }
+  snapshot_client(&snap, &g_clients[i]);
+  pthread_mutex_unlock(&g_clients_mtx);
+  publish_client_event_snap("clients.add", i, &snap);
   return pack_handle(i, gen);
 }
 
@@ -217,8 +217,7 @@ void ws_clients_remove(int handle) {
   if (removed) publish_client_event("clients.remove", idx);
 }
 
-static int try_match(const ws_stripe_t *stripe, uint32_t h, const client_info_t *info, const char *filt, const char *ip, const char *src_proto,
-                     const char *src_addr, const char *src_name, const char *item_name, time_t now) {
+static int try_match(const ws_stripe_t *stripe, uint32_t h, const client_info_t *info, const char *filt, time_t now) {
   uint32_t i = h & stripe->hash_mask;
   for (uint32_t n = 0; n < stripe->hash_cap; n++, i = (i + 1) & stripe->hash_mask) {
     ws_client_t *e;
@@ -227,12 +226,12 @@ static int try_match(const ws_stripe_t *stripe, uint32_t h, const client_info_t 
     if (idx == WS_HASH_TOMB) continue;
     e = &g_clients[idx];
     if (!e->used || e->persistent) continue;
-    if (strcmp(e->ip, ip) || e->fmt != info->fmt || e->pmt_pid != info->pmt_pid) continue;
+    if (strcmp(e->ip, nz(info->ip)) || e->fmt != info->fmt || e->pmt_pid != info->pmt_pid) continue;
     if (strcmp(e->filter, filt)) continue;
-    if (strcmp(e->src_proto, src_proto) || e->src_ordinal != info->src_ordinal) continue;
-    if (strcmp(e->src_addr, src_addr)) continue;
-    if (strcmp(e->src_name, src_name) || e->item_num != info->item_num) continue;
-    if (strcmp(e->item_name, item_name)) continue;
+    if (strcmp(e->src_proto, nz(info->src_proto)) || e->src_ordinal != info->src_ordinal) continue;
+    if (strcmp(e->src_addr, nz(info->src_addr))) continue;
+    if (strcmp(e->src_name, nz(info->src_name)) || e->item_num != info->item_num) continue;
+    if (strcmp(e->item_name, nz(info->item_name))) continue;
     e->last_seen = now;
     return idx;
   }
@@ -241,31 +240,22 @@ static int try_match(const ws_stripe_t *stripe, uint32_t h, const client_info_t 
 
 int ws_clients_touch(const client_info_t *info) {
   char filt[128];
-  const char *ip;
-  const char *src_proto;
-  const char *src_addr;
-  const char *src_name;
-  const char *item_name;
   int idx;
   int free_slot;
   time_t now = time(NULL);
   uint32_t h;
   ws_stripe_t *stripe;
+  ws_client_snapshot_t snap;
   if (info->filter)
     pid_filter_format(info->filter, filt, sizeof filt);
   else
     filt[0] = '\0';
 
-  ip = info->ip ? info->ip : "";
-  src_proto = info->src_proto ? info->src_proto : "";
-  src_addr = info->src_addr ? info->src_addr : "";
-  src_name = info->src_name ? info->src_name : "";
-  item_name = info->item_name ? info->item_name : "";
-  h = client_hash(ip, info->fmt, info->pmt_pid, filt, src_proto, src_addr, info->src_ordinal, src_name, info->item_num, item_name);
+  h = client_hash(info, filt);
   stripe = &g_stripes[h % (uint32_t)g_stripe_count];
 
   pthread_mutex_lock(&stripe->lock);
-  idx = try_match(stripe, h, info, filt, ip, src_proto, src_addr, src_name, item_name, now);
+  idx = try_match(stripe, h, info, filt, now);
   if (idx >= 0) {
     unsigned gen = atomic_load_explicit(&g_clients[idx].gen, memory_order_relaxed);
     pthread_mutex_unlock(&stripe->lock);
@@ -275,7 +265,7 @@ int ws_clients_touch(const client_info_t *info) {
 
   pthread_mutex_lock(&g_clients_mtx);
   pthread_mutex_lock(&stripe->lock);
-  idx = try_match(stripe, h, info, filt, ip, src_proto, src_addr, src_name, item_name, now);
+  idx = try_match(stripe, h, info, filt, now);
   if (idx >= 0) {
     unsigned gen = atomic_load_explicit(&g_clients[idx].gen, memory_order_relaxed);
     pthread_mutex_unlock(&stripe->lock);
@@ -288,20 +278,18 @@ int ws_clients_touch(const client_info_t *info) {
     return -1;
   }
   free_slot = g_free_slots[--g_free_slots_n];
-  {
-    unsigned gen = claim_slot(free_slot);
-    ws_client_snapshot_t snap;
-    fill_entry(&g_clients[free_slot], info, filt);
-    g_clients[free_slot].hash = h;
-    g_clients[free_slot].connect_time = g_clients[free_slot].last_seen = now;
-    g_clients[free_slot].used = 1;
-    hash_insert(stripe, h, free_slot);
-    snapshot_client(&snap, &g_clients[free_slot]);
-    pthread_mutex_unlock(&stripe->lock);
-    pthread_mutex_unlock(&g_clients_mtx);
-    publish_client_event_snap("clients.add", free_slot, &snap);
-    return pack_handle(free_slot, gen);
-  }
+  unsigned gen = claim_slot(free_slot);
+  fill_entry(&g_clients[free_slot], info, filt);
+  g_clients[free_slot].hash = h;
+  g_clients[free_slot].connect_time = now;
+  g_clients[free_slot].last_seen = now;
+  g_clients[free_slot].used = 1;
+  hash_insert(stripe, h, free_slot);
+  snapshot_client(&snap, &g_clients[free_slot]);
+  pthread_mutex_unlock(&stripe->lock);
+  pthread_mutex_unlock(&g_clients_mtx);
+  publish_client_event_snap("clients.add", free_slot, &snap);
+  return pack_handle(free_slot, gen);
 }
 
 void ws_clients_add_bytes(int handle, size_t n) {

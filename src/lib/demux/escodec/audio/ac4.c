@@ -39,6 +39,9 @@ static int ac4_channel_count(br_t *b) {
 static void ac4_skip_emdf_info(br_t *b) {
   unsigned emdf_version = br_u(b, 2);
   unsigned key_id;
+  unsigned lp;
+  unsigned ls;
+  unsigned n_skip;
   if (emdf_version == 3) br_variable_bits(b, 2);
   key_id = br_u(b, 3);
   if (key_id == 7) br_variable_bits(b, 3);
@@ -46,14 +49,12 @@ static void ac4_skip_emdf_info(br_t *b) {
     unsigned substream_index = br_u(b, 2);
     if (substream_index == 3) br_variable_bits(b, 2);
   }
-  {
-    unsigned lp = br_u(b, 2);
-    unsigned ls = br_u(b, 2);
-    unsigned n_skip = 0;
-    if (lp) n_skip += 1u << (2 * (lp - 1));
-    if (ls) n_skip += 1u << (2 * (ls - 1));
-    while (n_skip-- && !b->err) br_u(b, 8);
-  }
+  lp = br_u(b, 2);
+  ls = br_u(b, 2);
+  n_skip = 0;
+  if (lp) n_skip += 1u << (2 * (lp - 1));
+  if (ls) n_skip += 1u << (2 * (ls - 1));
+  while (n_skip-- && !b->err) br_u(b, 8);
 }
 
 static void ac4_skip_frame_rate_multiply_info(br_t *b, unsigned frame_rate_index) {
@@ -141,6 +142,8 @@ int next_ac4(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f)
   unsigned fs_index;
   unsigned frame_rate_index;
   int crc;
+  unsigned b_single_presentation;
+  unsigned n_presentations;
 
   if (len < 4) return 1;
   if (d[0] != 0xAC || (d[1] != 0x40 && d[1] != 0x41)) return -1;
@@ -181,18 +184,14 @@ int next_ac4(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f)
   f->ac4_bitstream_version = bitstream_version;
   f->ac4_iframe = (int)br_u(&b, 1);
   if (!t->cpriv_len) ac4_build_dsi(t, bitstream_version, fs_index, frame_rate_index);
-
-  {
-    unsigned b_single_presentation = br_u(&b, 1);
-    unsigned n_presentations;
-    if (b_single_presentation) n_presentations = 1;
-    else if (br_u(&b, 1)) n_presentations = br_variable_bits(&b, 2) + 2;
-    else n_presentations = 0;
-    if (br_u(&b, 1)) {
-      unsigned payload_base = br_u(&b, 5) + 1;
-      if (payload_base == 0x20) br_variable_bits(&b, 3);
-    }
-    if (!b.err && n_presentations) ac4_parse_presentation0(&b, frame_rate_index, f);
+  b_single_presentation = br_u(&b, 1);
+  if (b_single_presentation) n_presentations = 1;
+  else if (br_u(&b, 1)) n_presentations = br_variable_bits(&b, 2) + 2;
+  else n_presentations = 0;
+  if (br_u(&b, 1)) {
+    unsigned payload_base = br_u(&b, 5) + 1;
+    if (payload_base == 0x20) br_variable_bits(&b, 3);
   }
+  if (!b.err && n_presentations) ac4_parse_presentation0(&b, frame_rate_index, f);
   return 0;
 }

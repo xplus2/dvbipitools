@@ -5,23 +5,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dipixy/args.h"
 #include "dipixy/dlna/gena.h"
 
 START_TEST(subscribe_new_returns_a_sid) {
-  config_t cfg;
   char sid[64];
-  memset(&cfg, 0, sizeof cfg);
-  gena_subscribe_new(&cfg, "cd", "<http://127.0.0.1:1/notify>", sid, sizeof sid);
-  ck_assert_int_eq(strncmp(sid, "uuid:", 5), 0);
-}
-END_TEST
-
-START_TEST(subscribe_new_ignores_missing_callback) {
-  config_t cfg;
-  char sid[64];
-  memset(&cfg, 0, sizeof cfg);
-  gena_subscribe_new(&cfg, "cd", NULL, sid, sizeof sid);
+  gena_subscribe_new(sid);
   ck_assert_int_eq(strncmp(sid, "uuid:", 5), 0);
 }
 END_TEST
@@ -41,8 +29,7 @@ START_TEST(renew_without_sid_returns_a_fresh_one) {
 END_TEST
 
 START_TEST(unsubscribe_is_a_noop) {
-  gena_unsubscribe("uuid:whatever");
-  gena_unsubscribe(NULL);
+  gena_unsubscribe();
 }
 END_TEST
 
@@ -57,7 +44,6 @@ static Suite *gena_suite(void) {
   Suite *s = suite_create("dipixy_gena");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, subscribe_new_returns_a_sid);
-  tcase_add_test(tc, subscribe_new_ignores_missing_callback);
   tcase_add_test(tc, renew_echoes_given_sid);
   tcase_add_test(tc, renew_without_sid_returns_a_fresh_one);
   tcase_add_test(tc, unsubscribe_is_a_noop);

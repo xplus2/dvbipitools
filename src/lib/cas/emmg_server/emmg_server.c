@@ -15,6 +15,7 @@
 
 void publish_datagram_cb(const unsigned char *data, unsigned short len, void *user) {
   emmg_server_t *s = user;
+  size_t idx;
   if (len > EMMG_MAX_DATAGRAM_LEN) {
     log_throttled(&s->oversized_throttle, LOG_THROTTLE_WINDOW_S, "emmg: dropping oversized EMM datagram");
     atomic_fetch_add_explicit(&s->emm_dropped, 1, memory_order_relaxed);
@@ -27,12 +28,10 @@ void publish_datagram_cb(const unsigned char *data, unsigned short len, void *us
     log_throttled(&s->queue_full_throttle, LOG_THROTTLE_WINDOW_S, "emmg: EMM queue full, dropping oldest datagram");
     atomic_fetch_add_explicit(&s->emm_dropped, 1, memory_order_relaxed);
   }
-  {
-    size_t idx = (s->queue_head + atomic_load_explicit(&s->queue_len, memory_order_relaxed)) % EMMG_QUEUE_CAP;
-    memcpy(s->queue[idx].data, data, len);
-    s->queue[idx].len = len;
-    atomic_fetch_add_explicit(&s->queue_len, 1, memory_order_relaxed);
-  }
+  idx = (s->queue_head + atomic_load_explicit(&s->queue_len, memory_order_relaxed)) % EMMG_QUEUE_CAP;
+  memcpy(s->queue[idx].data, data, len);
+  s->queue[idx].len = len;
+  atomic_fetch_add_explicit(&s->queue_len, 1, memory_order_relaxed);
   pthread_mutex_unlock(&s->queue_lock);
   atomic_fetch_add_explicit(&s->emm_total, 1, memory_order_relaxed);
 }
@@ -63,7 +62,8 @@ int emmg_server_dequeue_emm(emmg_server_t *s, unsigned char *out, size_t cap, si
 unsigned long emmg_server_emm_dropped_total(emmg_server_t *s) { return atomic_load_explicit(&s->emm_dropped, memory_order_relaxed); }
 
 unsigned emmg_server_client_count(emmg_server_t *s) {
-  unsigned i, n = 0;
+  unsigned i;
+  unsigned n = 0;
   if (s->dial_mode) return atomic_load_explicit(&s->dial_connected, memory_order_relaxed) ? 1 : 0;
   for (i = 0; i < s->max_conns; i++) if (atomic_load_explicit(&s->worker_active[i], memory_order_relaxed)) n++;
   return n;
@@ -73,7 +73,10 @@ unsigned long emmg_server_emm_total(emmg_server_t *s) { return atomic_load_expli
 
 static int tcp_listen_dualstack(unsigned port) {
   struct sockaddr_in6 addr;
-  int fd, on = 1, off = 0, flags;
+  int fd;
+  int on = 1;
+  int off = 0;
+  int flags;
   fd = socket(AF_INET6, SOCK_STREAM, 0);
   if (fd < 0) {
     log_line("emmg: socket: %s", strerror(errno));

@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -16,33 +17,43 @@
 /* G0 national subsets, Latin region 0 (EN 300 706 table 36). 13 differing code
  * points, UTF-8 escaped, sucks on purpose */
 static const char *const g0_nat[8][13] = {
-    /* 0x23 0x24 0x40 0x5B 0x5C 0x5D 0x5E 0x5F 0x60 0x7B 0x7C 0x7D 0x7E */
-    {"#", "$", "\xC2\xA7", "\xC3\x84", "\xC3\x96", "\xC3\x9C", "^", "_", "\xC2\xB0", "\xC3\xA4", "\xC3\xB6", "\xC3\xBC", "\xC3\x9F"}, /* ger */
-    {"\xC3\xA9", "\xC3\xAF", "\xC3\xA0", "\xC3\xAB", "\xC3\xAA", "\xC3\xB9", "\xC3\xAE", "#", "\xC3\xA8", "\xC3\xA2", "\xC3\xB4", "\xC3\xBB", "\xC3\xA7"}, /* fre */
-  {"\xC2\xA3", "$", "\xC3\xA9", "\xC2\xB0", "\xC3\xA7", "\xE2\x86\x92", "\xE2\x86\x91", "#", "\xC3\xB9", "\xC3\xA0", "\xC3\xB2", "\xC3\xA8", "\xC3\xAC"}, /* ita */
-    {"\xC2\xA3", "$", "@", "\xE2\x86\x90", "\xC2\xBD", "\xE2\x86\x92", "\xE2\x86\x91", "#", "\xE2\x80\x95", "\xC2\xBC", "\xE2\x80\x96", "\xC2\xBE", "\xC3\xB7"}, /* eng */
-    {"#", "\xC2\xA4", "\xC3\x89", "\xC3\x84", "\xC3\x96", "\xC3\x85", "\xC3\x9C", "_", "\xC3\xA9", "\xC3\xA4", "\xC3\xB6", "\xC3\xA5", "\xC3\xBC"}, /* swe */
-    {"\xC3\xA7", "$", "\xC2\xA1", "\xC3\xA1", "\xC3\xA9", "\xC3\xAD", "\xC3\xB3", "\xC3\xBA", "\xC2\xBF", "\xC3\xBC", "\xC3\xB1", "\xC3\xA8", "\xC3\xA0"}, /* pte/esp */
-    {"#", "u", "\xC4\x8D", "\xC5\xA5", "\xC5\xBE", "\xC3\xBD", "\xC3\xAD", "\xC5\x99", "\xC3\xA9", "\xC3\xA1", "\xC4\x9B", "\xC3\xBA", "\xC5\xA1"}, /* cze */
-    {"\xC2\xA3", "$", "@", "\xE2\x86\x90", "\xC2\xBD", "\xE2\x86\x92", "\xE2\x86\x91", "#", "\xE2\x80\x95", "\xC2\xBC", "\xE2\x80\x96", "\xC2\xBE", "\xC3\xB7"} /* dunno */
+  /* 0x23 0x24 0x40 0x5B 0x5C 0x5D 0x5E 0x5F 0x60 0x7B 0x7C 0x7D 0x7E */
+  {"#", "$", "\xC2\xA7", "\xC3\x84", "\xC3\x96", "\xC3\x9C", "^", "_", "\xC2\xB0", "\xC3\xA4", "\xC3\xB6", "\xC3\xBC", "\xC3\x9F"}, /* ger */
+  {"\xC3\xA9", "\xC3\xAF", "\xC3\xA0", "\xC3\xAB", "\xC3\xAA", "\xC3\xB9", "\xC3\xAE", "#", "\xC3\xA8", "\xC3\xA2", "\xC3\xB4", "\xC3\xBB", "\xC3\xA7"}, /* fre */
+{"\xC2\xA3", "$", "\xC3\xA9", "\xC2\xB0", "\xC3\xA7", "\xE2\x86\x92", "\xE2\x86\x91", "#", "\xC3\xB9", "\xC3\xA0", "\xC3\xB2", "\xC3\xA8", "\xC3\xAC"}, /* ita */
+  {"\xC2\xA3", "$", "@", "\xE2\x86\x90", "\xC2\xBD", "\xE2\x86\x92", "\xE2\x86\x91", "#", "\xE2\x80\x95", "\xC2\xBC", "\xE2\x80\x96", "\xC2\xBE", "\xC3\xB7"}, /* eng */
+  {"#", "\xC2\xA4", "\xC3\x89", "\xC3\x84", "\xC3\x96", "\xC3\x85", "\xC3\x9C", "_", "\xC3\xA9", "\xC3\xA4", "\xC3\xB6", "\xC3\xA5", "\xC3\xBC"}, /* swe */
+  {"\xC3\xA7", "$", "\xC2\xA1", "\xC3\xA1", "\xC3\xA9", "\xC3\xAD", "\xC3\xB3", "\xC3\xBA", "\xC2\xBF", "\xC3\xBC", "\xC3\xB1", "\xC3\xA8", "\xC3\xA0"}, /* pte/esp */
+  {"#", "u", "\xC4\x8D", "\xC5\xA5", "\xC5\xBE", "\xC3\xBD", "\xC3\xAD", "\xC5\x99", "\xC3\xA9", "\xC3\xA1", "\xC4\x9B", "\xC3\xBA", "\xC5\xA1"}, /* cze */
+  {"\xC2\xA3", "$", "@", "\xE2\x86\x90", "\xC2\xBD", "\xE2\x86\x92", "\xE2\x86\x91", "#", "\xE2\x80\x95", "\xC2\xBC", "\xE2\x80\x96", "\xC2\xBE", "\xC3\xB7"} /* dunno */
 };
 static const unsigned char g0_nat_pos[13] = {0x23, 0x24, 0x40, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x7B, 0x7C, 0x7D, 0x7E};
+
+/* g0_nat_pos[c] -> g0_nat column index, -1 if not a national-remap point */
+static signed char g0_nat_idx[128];
+static pthread_once_t g0_nat_idx_once = PTHREAD_ONCE_INIT;
+
+static void g0_nat_idx_init(void) {
+  for (int i = 0; i < 128; i++) g0_nat_idx[i] = -1;
+  for (int k = 0; k < 13; k++) g0_nat_idx[g0_nat_pos[k]] = (signed char)k;
+}
 
 /* g0_nat row order, NOT the EN 300 706 subset numbers */
 enum { G0_GER, G0_FRE, G0_ITA, G0_ENG, G0_SWE, G0_ESP, G0_CZE, G0_OTHER };
 
 struct ttx {
-  unsigned page;     /* target page, e.g. 777 */
-  unsigned magazine; /* derived from page */
+  unsigned page;                        /* target page, e.g. 777 */
+  unsigned magazine;                    /* derived from page */
   ttx_cb cb;
   void *ctx;
   int nat;                              /* g0_nat row */
   int64_t lead;                         /* shift cues earlier, ms */
   char row[TTX_ROWS][TTX_COLS * 4 + 1]; /* arrival order */
   int nrows;
-  int64_t group_start, group_last;      /* current row group */
+  int64_t group_start;                  /* current row group */
+  int64_t group_last;
   int64_t last_ms;
-  char cur[TTX_TEXT_MAX]; /* on screen now */
+  char cur[TTX_TEXT_MAX];               /* on screen now */
   int64_t cur_start;
   int have_cur;
   pts_unwrap_t pts;
@@ -58,27 +69,33 @@ static unsigned char rev8(unsigned char b) {
 
 /* hamming 8/4, reversed orientation. 1-bit correcting, -1 otherwise */
 static signed char unham[256];
-static int unham_ready;
+static pthread_once_t unham_once = PTHREAD_ONCE_INIT;
 
 static void unham_init(void) {
   unsigned char code[16];
 
   for (int d = 0; d < 16; d++) {
-    unsigned D1 = d & 1, D2 = (d >> 1) & 1, D3 = (d >> 2) & 1, D4 = (d >> 3) & 1;
-    unsigned P1 = D1 ^ D2 ^ D4, P2 = D1 ^ D3 ^ D4, P3 = D2 ^ D3 ^ D4;
+    unsigned D1 = d & 1;
+    unsigned D2 = (d >> 1) & 1;
+    unsigned D3 = (d >> 2) & 1;
+    unsigned D4 = (d >> 3) & 1;
+    unsigned P1 = D1 ^ D2 ^ D4;
+    unsigned P2 = D1 ^ D3 ^ D4;
+    unsigned P3 = D2 ^ D3 ^ D4;
     unsigned c = P1 | (P2 << 1) | (D1 << 2) | (P3 << 3) | (D2 << 4) | (D3 << 5) | (D4 << 6);
     unsigned ones = 0;
-    for (int k = 0; k < 8; k++)
-      ones += (c >> k) & 1;
+    for (int k = 0; k < 8; k++) ones += (c >> k) & 1;
     c |= (ones & 1) << 7; /* P4: even parity */
     code[d] = rev8((unsigned char)c);
   }
   for (int i = 0; i < 256; i++) {
-    int best = -1, bestd = 9, d2;
+    int best = -1;
+    int bestd = 9;
+    int d2;
     for (d2 = 0; d2 < 16; d2++) {
-      int diff = i ^ code[d2], n = 0;
-      for (int k = 0; k < 8; k++)
-        n += (diff >> k) & 1;
+      int diff = i ^ code[d2];
+      int n = 0;
+      for (int k = 0; k < 8; k++) n += (diff >> k) & 1;
       if (n < bestd) {
         bestd = n;
         best = d2;
@@ -86,7 +103,6 @@ static void unham_init(void) {
     }
     unham[i] = (bestd <= 1) ? (signed char)best : (signed char)-1;
   }
-  unham_ready = 1;
 }
 
 static void append_utf8(char *dst, size_t cap, size_t *o, const char *s) {
@@ -103,23 +119,18 @@ static void row_text(const unsigned char *d, int cols, int nat, char *out, size_
   for (int i = 0; i < cols; i++) {
     unsigned char c = d[i] & 0x7F;
     const char *rep = NULL;
+    signed char k;
     if (c < 0x20) { /* spacing attribute */
-      if (o + 2 < cap)
-        out[o++] = ' ';
+      if (o + 2 < cap) out[o++] = ' ';
       continue;
     }
-    for (int k = 0; k < 13; k++)
-      if (g0_nat_pos[k] == c) {
-        rep = g0_nat[nat & 7][k];
-        break;
-      }
-    if (rep)
-      append_utf8(out, cap, &o, rep);
+    k = g0_nat_idx[c];
+    if (k >= 0) rep = g0_nat[nat & 7][(unsigned)k];
+    if (rep) append_utf8(out, cap, &o, rep);
     else if (o + 2 < cap)
       out[o++] = (char)c;
   }
-  while (o && out[o - 1] == ' ') /* trim trailing */
-    o--;
+  while (o && out[o - 1] == ' ') o--; /* trim trailing */
   out[o] = '\0';
 }
 
@@ -129,13 +140,10 @@ static void build_text(ttx_t *t, char *out, size_t cap) {
   for (int r = 0; r < t->nrows; r++) {
     const char *s = t->row[r];
     size_t n;
-    while (*s == ' ') /* trim leading */
-      s++;
+    while (*s == ' ') s++; /* trim leading */
     n = strlen(s);
-    if (!n)
-      continue;
-    if (o && o + 1 < cap)
-      out[o++] = '\n';
+    if (!n) continue;
+    if (o && o + 1 < cap) out[o++] = '\n';
     if (o + n + 1 < cap) {
       memcpy(out + o, s, n);
       o += n;
@@ -147,16 +155,12 @@ static void build_text(ttx_t *t, char *out, size_t cap) {
 static void emit_cue(ttx_t *t, int64_t end) {
   ttx_cue_t cue;
 
-  if (!t->have_cur || !t->cur[0])
-    return;
-  if (end > t->cur_start + TTX_MAX_MS) /* no clear signal, do not linger */
-    end = t->cur_start + TTX_MAX_MS;
-  if (end <= t->cur_start)
-    return;
+  if (!t->have_cur || !t->cur[0]) return;
+  if (end > t->cur_start + TTX_MAX_MS) end = t->cur_start + TTX_MAX_MS; /* no clear signal, do not linger */
+  if (end <= t->cur_start) return;
   cue.start_ms = t->cur_start - t->lead;
   cue.end_ms = end - t->lead;
-  if (cue.start_ms < 0)
-    cue.start_ms = 0;
+  if (cue.start_ms < 0) cue.start_ms = 0;
   memcpy(cue.text, t->cur, strlen(t->cur) + 1); /* same-size buffers, sizeof cue.text == sizeof t->cur */
   t->cb(t->ctx, &cue);
 }
@@ -167,10 +171,8 @@ static void group_done(ttx_t *t) {
 
   build_text(t, text, sizeof text);
   t->nrows = 0;
-  if (!text[0])
-    return;
-  if (t->have_cur && strcmp(text, t->cur) == 0)
-    return;                  /* carousel repeat */
+  if (!text[0]) return;
+  if (t->have_cur && strcmp(text, t->cur) == 0) return; /* carousel repeat */
   emit_cue(t, t->group_start); /* previous ends where this begins */
   memcpy(t->cur, text, strlen(text) + 1); /* same-size buffers */
   t->cur_start = t->group_start;
@@ -192,11 +194,9 @@ static int is_ident_row(const ttx_t *t, const char *text) {
   int n = digit_count(t->page);
   unsigned v = 0;
 
-  while (*text == ' ')
-    text++;
+  while (*text == ' ') text++;
   for (int i = 0; i < n; i++) {
-    if (text[i] < '0' || text[i] > '9')
-      return 0;
+    if (text[i] < '0' || text[i] > '9') return 0;
     v = v * 10 + (unsigned)(text[i] - '0');
   }
   return v == t->page;
@@ -207,59 +207,43 @@ static void add_row(ttx_t *t, const unsigned char *d, int64_t ts) {
   char text[TTX_COLS * 4 + 1];
 
   row_text(d, TTX_COLS, t->nat, text, sizeof text);
-  if (!text[0])
-    return;
-  if (t->nrows && ts - t->group_last > TTX_GAP_MS)
-    group_done(t);
-  if (!t->nrows)
-    t->group_start = ts;
+  if (!text[0]) return;
+  if (t->nrows && ts - t->group_last > TTX_GAP_MS) group_done(t);
+  if (!t->nrows) t->group_start = ts;
   t->group_last = ts;
-  for (int r = 0; r < t->nrows; r++)
-    if (strcmp(t->row[r], text) == 0)
-      return; /* already in this group */
-  if (t->nrows >= TTX_ROWS)
-    return;
+  for (int r = 0; r < t->nrows; r++) if (strcmp(t->row[r], text) == 0) return; /* already in this group */
+  if (t->nrows >= TTX_ROWS) return;
   memcpy(t->row[t->nrows], text, strlen(text) + 1); /* same-size buffers */
   t->nrows++;
 }
 
-static void handle_packet(ttx_t *t, unsigned mag, unsigned pkt, const unsigned char *d, int64_t ts) {
+static void handle_packet(ttx_t *t, const unsigned char *d, int64_t ts) {
   char text[TTX_COLS * 4 + 1];
 
-  (void)mag;
-  (void)pkt;
   /* ident row: cols 0-7 coded, read from 8 */
   row_text(d + 8, TTX_COLS - 8, t->nat, text, sizeof text);
-  if (is_ident_row(t, text))
-    return;
+  if (is_ident_row(t, text)) return;
   add_row(t, d, ts);
 }
 
 /* teletext language -> g0_nat row */
 static int nat_from_lang(const char *lang) {
-  if (!lang || !*lang)
-    return G0_ENG;
-  if (!strncmp(lang, "deu", 3) || !strncmp(lang, "ger", 3))
-    return G0_GER;
-  if (!strncmp(lang, "fra", 3) || !strncmp(lang, "fre", 3))
-    return G0_FRE;
-  if (!strncmp(lang, "ita", 3))
-    return G0_ITA;
-  if (!strncmp(lang, "swe", 3) || !strncmp(lang, "fin", 3) || !strncmp(lang, "hun", 3))
-    return G0_SWE;
-  if (!strncmp(lang, "por", 3) || !strncmp(lang, "spa", 3))
-    return G0_ESP;
-  if (!strncmp(lang, "ces", 3) || !strncmp(lang, "cze", 3) || !strncmp(lang, "slk", 3) || !strncmp(lang, "slo", 3))
-    return G0_CZE;
+  static const struct { const char *code; int nat; } map[] = {
+    {"deu", G0_GER}, {"ger", G0_GER}, {"fra", G0_FRE}, {"fre", G0_FRE}, {"ita", G0_ITA},
+    {"swe", G0_SWE}, {"fin", G0_SWE}, {"hun", G0_SWE}, {"por", G0_ESP}, {"spa", G0_ESP},
+    {"ces", G0_CZE}, {"cze", G0_CZE}, {"slk", G0_CZE}, {"slo", G0_CZE},
+  };
+  size_t i;
+  if (!lang || !*lang) return G0_ENG;
+  for (i = 0; i < sizeof map / sizeof map[0]; i++) if (!strncmp(lang, map[i].code, 3)) return map[i].nat;
   return G0_ENG;
 }
 
 ttx_t *ttx_new(unsigned page, const char *lang, long lead_ms, ttx_cb cb, void *ctx) {
   ttx_t *t = calloc(1, sizeof *t);
-  if (!t)
-    return NULL;
-  if (!unham_ready)
-    unham_init();
+  if (!t) return NULL;
+  pthread_once(&unham_once, unham_init);
+  pthread_once(&g0_nat_idx_once, g0_nat_idx_init);
   t->page = page;
   t->magazine = (page / 100) & 0x07; /* 800 -> magazine 0 */
   t->cb = cb;
@@ -274,36 +258,28 @@ void ttx_free(ttx_t *t) { free(t); }
 /* handles one EBU teletext subtitle packet (id==0x03) starting at u, if its magazine matches */
 static void handle_ebu_subtitle_packet(ttx_t *t, const unsigned char *u) {
   unsigned char b[42];
-  int h0, h1;
-  unsigned mag, pkt;
-  for (int k = 0; k < 42; k++) /* mpag(2) + data(40) */
-    b[k] = rev8(u[2 + k]);
+  int h0;
+  int h1;
+  unsigned mag;
+  for (int k = 0; k < 42; k++) b[k] = rev8(u[2 + k]); /* mpag(2) + data(40) */
   h0 = unham[b[0]];
   h1 = unham[b[1]];
-  if (h0 < 0 || h1 < 0)
-    return;
+  if (h0 < 0 || h1 < 0) return;
   mag = (unsigned)h0 & 0x07;
-  pkt = ((unsigned)h1 << 1) | (((unsigned)h0 >> 3) & 1);
-  if (mag == t->magazine)
-    handle_packet(t, mag, pkt, b + 2, t->last_ms);
+  if (mag == t->magazine) handle_packet(t, b + 2, t->last_ms);
 }
 
 void ttx_pes(ttx_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   size_t i = 1; /* skip data_identifier */
 
-  if (len < 1 || d[0] < 0x10 || d[0] > 0x1F)
-    return;
-  if (has_pts)
-    t->last_ms = pts_unwrap(&t->pts, pts);
-
+  if (len < 1 || d[0] < 0x10 || d[0] > 0x1F) return;
+  if (has_pts) t->last_ms = pts_unwrap(&t->pts, pts);
   while (i + 2 <= len) {
-    unsigned id = d[i], ul = d[i + 1];
+    unsigned id = d[i];
+    unsigned ul = d[i + 1];
     const unsigned char *u = d + i + 2;
-
-    if (i + 2 + ul > len)
-      break;
-    if (id == 0x03 && ul >= 44 - 2) /* EBU teletext subtitle */
-      handle_ebu_subtitle_packet(t, u);
+    if (i + 2 + ul > len) break;
+    if (id == 0x03 && ul >= 44 - 2) handle_ebu_subtitle_packet(t, u); /* EBU teletext subtitle */
     i += 2 + ul;
   }
 }
@@ -311,11 +287,9 @@ void ttx_pes(ttx_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t
 void ttx_flush(ttx_t *t) {
   int64_t end;
 
-  if (t->nrows)
-    group_done(t);
+  if (t->nrows) group_done(t);
   end = t->last_ms; /* nothing follows: hold for the minimum */
-  if (end < t->cur_start + TTX_MIN_MS)
-    end = t->cur_start + TTX_MIN_MS;
+  if (end < t->cur_start + TTX_MIN_MS) end = t->cur_start + TTX_MIN_MS;
   emit_cue(t, end);
   t->have_cur = 0;
 }

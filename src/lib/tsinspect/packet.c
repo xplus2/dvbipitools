@@ -100,16 +100,31 @@ static void eit_section(tsinspect_t *t, const unsigned char *b, eit_slot_t *slot
 static void si_section(tsinspect_t *t, unsigned pid, const unsigned char *b, size_t n) {
   unsigned tid = b[0];
 
-  if (pid == PID_EIT) {
-    if (t->x->obs.crc_bat && tid >= 0x4E && tid <= 0x6F && n >= 12 && crc32_mpeg(b, n) != 0) t->counters.si_crc_errors++;
-    if (tid == 0x4E && n >= 14) eit_section(t, b, t->x->eit, &t->eit_n);
-    else if (tid == 0x4F && n >= 14) eit_section(t, b, t->x->eit_other, &t->eit_other_n);
-  } else if (pid == PID_EIT + 1) {
-    if (tid != 0x71) t->counters.rst_errors++;
-  } else if (tid == 0x70 || tid == 0x73) {
-    t->tdt_last = t->now;
-    if (tid == 0x73 && t->x->obs.crc_bat && n >= 12 && crc32_mpeg(b, n) != 0) t->counters.si_crc_errors++;
-  } else t->counters.tdt_errors++;
+  switch (pid) {
+    case PID_EIT:
+      if (t->x->obs.crc_bat && tid >= 0x4E && tid <= 0x6F && n >= 12 && crc32_mpeg(b, n) != 0) t->counters.si_crc_errors++;
+      switch (tid) {
+        case 0x4E:
+          if (n >= 14) eit_section(t, b, t->x->eit, &t->eit_n);
+          break;
+        case 0x4F:
+          if (n >= 14) eit_section(t, b, t->x->eit_other, &t->eit_other_n);
+          break;
+        default: break;
+      }
+      break;
+    case PID_EIT + 1:
+      if (tid != 0x71) t->counters.rst_errors++;
+      break;
+    default:
+      if (tid == 0x70 || tid == 0x73) {
+        t->tdt_last = t->now;
+        if (tid == 0x73 && t->x->obs.crc_bat && n >= 12 && crc32_mpeg(b, n) != 0) t->counters.si_crc_errors++;
+      } else {
+        t->counters.tdt_errors++;
+      }
+      break;
+  }
 }
 
 static void si_packet(tsinspect_t *t, unsigned pid, const unsigned char *pkt, unsigned afc) {

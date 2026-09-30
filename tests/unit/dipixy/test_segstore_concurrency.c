@@ -74,7 +74,7 @@ static void *reader_thread(void *arg) {
         if (snap->init_size && !uniform(snap->init_data, snap->init_size))
           atomic_store_explicit(&g_bad, 1, memory_order_relaxed);
         for (int i = 0; i < snap->count; i++) {
-          const hls_seg_t *seg = &snap->segs[(snap->head + i) % HLS_MAX_SEGS];
+          const hls_seg_t *seg = &snap->ring->segs[(snap->head + i) % HLS_MAX_SEGS];
           if (seg->data && !uniform(seg->data, seg->size))
             atomic_store_explicit(&g_bad, 1, memory_order_relaxed);
         }

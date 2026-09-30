@@ -16,7 +16,7 @@ typedef struct {
   unsigned port;
 } listen_spec_t;
 
-typedef enum { SRC_SDS, SRC_M3U, SRC_XSPF, SRC_CSV, SRC_XML, SRC_HTTP } source_kind_t;
+typedef enum { SRC_SDS, SRC_M3U, SRC_XSPF, SRC_CSV, SRC_XML, SRC_HTTP, SRC_MCAST } source_kind_t;
 const char *source_kind_str(source_kind_t k);
 
 typedef enum { MEDIA_TV, MEDIA_RADIO } media_type_t; /* MEDIA_TV = 0, default */
@@ -25,7 +25,7 @@ typedef enum { LAST_NONE, LAST_STDIN, LAST_RIST, LAST_SOURCE } last_input_t;
 
 typedef struct {
   source_kind_t kind;
-  const char *value;        /* addr:port for SDS, path for M3U/XSPF/CSV/XML, URL for HTTP. points into argv */
+  const char *value;        /* addr:port for SDS, path for M3U/XSPF/CSV/XML, URL for HTTP/MCAST. points into argv */
   int ordinal;              /* 1-based -i position, = list index. gaps at -/rist:// slots */
   const char *name;         /* -n/--name right after this -i. NULL = unnamed, addressable by ordinal only */
   media_type_t media_type;  /* --media-type right after this -i. default tv */
@@ -42,11 +42,12 @@ typedef struct {
   int max_clients;
   int max_channels;
   unsigned idle_timeout_s;
+  double ts_startup_timeout_s;
   unsigned capture_ring_kib;
   double sds_timeout_s;
   double sds_refresh_interval_s;
   int join_all;
-  source_def_t *sources;    /* -i sources: sds://, playlist path, or http(s):// */
+  source_def_t *sources;    /* -i sources: sds://, playlist path, http(s)://, rtp/udp:// */
   int n_sources;
   int sources_cap;
   const char *stdin_path;
@@ -116,6 +117,7 @@ typedef struct {
   int daemonize;
   int verbose;
   int color_mode;
+  void *str_pool;
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_NOARGS, ARGS_ERR } args_status_t;

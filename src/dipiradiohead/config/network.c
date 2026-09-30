@@ -21,7 +21,8 @@ int rdh_apply_mcast(void *c, const char *v, char *e, size_t n) {
 }
 
 int rdh_apply_out_iface(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->iface, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->iface, v, e, n);
 }
 
 int rdh_apply_rtp(void *c, const char *v, char *e, size_t n) {

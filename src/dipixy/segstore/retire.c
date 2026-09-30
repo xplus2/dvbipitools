@@ -7,23 +7,19 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
-/* pump-thread only: worker self-block risks deadlock */
 void snap_retire(hls_store_t *s, hls_snapshot_t *old) {
   if (!old) return;
-  for (;;) {
-    for (int i = 0; i < s->retiring_n; ) {
-      if (qsbr_mark_passed(g_segstore_qsbr, s->retiring_mark[i])) {
-        snap_free(s->retiring[i]);
-        s->retiring[i] = s->retiring[--s->retiring_n];
-        memcpy(s->retiring_mark[i], s->retiring_mark[s->retiring_n], sizeof s->retiring_mark[i]);
-      } else i++;
-    }
-    if (s->retiring_n < HLS_SNAP_RETIRE_DEPTH) break;
-    pthread_mutex_unlock(store_lock(s));
-    { struct timespec ts = {0, 1000000}; nanosleep(&ts, NULL); }
-    pthread_mutex_lock(store_lock(s));
+  for (int i = 0; i < s->retiring_n; ) {
+    if (qsbr_mark_passed(g_segstore_qsbr, s->retiring_mark[i])) {
+      snap_free(s->retiring[i]);
+      s->retiring[i] = s->retiring[--s->retiring_n];
+      memcpy(s->retiring_mark[i], s->retiring_mark[s->retiring_n], sizeof s->retiring_mark[i]);
+    } else i++;
+  }
+  if (s->retiring_n >= HLS_SNAP_RETIRE_DEPTH) {
+    snap_retire_async(old);
+    return;
   }
 
   qsbr_mark(g_segstore_qsbr, s->retiring_mark[s->retiring_n]);

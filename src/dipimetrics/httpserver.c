@@ -90,6 +90,7 @@ typedef struct {
   double deadline;
   char reqbuf[REQ_BUF_CAP];
   size_t reqlen;
+  size_t parsed_len; /* last phr_parse_request last_len arg */
   char *resp;
   size_t resplen, respoff;
 } http_conn_t;
@@ -305,24 +306,20 @@ static int authz_matches(const struct phr_header *headers, size_t num_headers, c
   return 0;
 }
 
-static int request_headers_complete(const char *buf, size_t len) {
-  const char *method, *path;
-  size_t method_len, path_len;
-  int minor_version;
-  struct phr_header headers[32];
-  size_t num_headers = 32;
-  return phr_parse_request(buf, len, &method, &method_len, &path, &path_len, &minor_version, headers, &num_headers, 0) != -2;
-}
-
-static void conn_build_response(http_conn_t *c, store_t *st, double now_mono, int verbose, const char *http_auth) {
+static void conn_try_parse_and_respond(http_conn_t *c, store_t *st, double now_mono, int verbose, const char *http_auth) {
   const char *pmethod, *ppath;
   size_t method_len = 0, path_len = 0;
   int minor_version;
   struct phr_header headers[32];
   size_t num_headers = 32;
   char method[16] = "", path[256] = "";
+  int pret;
 
-  if (phr_parse_request(c->reqbuf, c->reqlen, &pmethod, &method_len, &ppath, &path_len, &minor_version, headers, &num_headers, 0) > 0) {
+  if (c->reqlen == c->parsed_len) return; /* nothing new */
+  pret = phr_parse_request(c->reqbuf, c->reqlen, &pmethod, &method_len, &ppath, &path_len, &minor_version, headers, &num_headers, c->parsed_len);
+  c->parsed_len = c->reqlen;
+  if (pret == -2) return; /* still partial */
+  if (pret > 0) {
     if (method_len >= sizeof method) method_len = sizeof method - 1;
     memcpy(method, pmethod, method_len);
     method[method_len] = '\0';
@@ -391,7 +388,7 @@ void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, st
       if (rev & (POLLIN | POLLOUT | POLLHUP | POLLERR)) conn_handshake_step(c);
     } else if (c->reading) {
       if (rev & (POLLIN | POLLHUP | POLLERR)) conn_read_step(c);
-      if (c->used && c->reading && request_headers_complete(c->reqbuf, c->reqlen)) conn_build_response(c, st, now_mono, verbose, hs->http_auth);
+      if (c->used && c->reading) conn_try_parse_and_respond(c, st, now_mono, verbose, hs->http_auth);
     } else if (rev & (POLLOUT | POLLERR)) {
       conn_write_step(c);
     }

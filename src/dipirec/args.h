@@ -132,6 +132,7 @@ typedef struct {
   char srt_streamid[128];        /* --srt-streamid, applies to every -o srt:// target. "" = none */
   char srt_packetfilter[256];    /* --srt-packetfilter, applies to every -o srt:// target. "" = none */
   unsigned srt_latency_ms;       /* --srt-latency, applies to every -o srt:// target. 0 = library default */
+  void *str_pool;
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

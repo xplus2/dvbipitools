@@ -67,7 +67,7 @@ START_TEST(open_sends_rams_r_with_ignore_media_ssrc_on_the_wire) {
   ck_assert_int_gt(n, 0);
 
   g_rams_r_calls = 0;
-  rtcp_parse(rbuf, (size_t)n, NULL, rams_r_cb, NULL, NULL, NULL, NULL, NULL);
+  rtcp_parse(rbuf, (size_t)n, &(rtcp_cbs_t){.rams_r_cb = rams_r_cb});
   ck_assert_int_eq(g_rams_r_calls, 1);
   ck_assert_int_eq(g_rams_r.ignore_media_ssrc, 1);
 
@@ -139,7 +139,7 @@ START_TEST(first_multicast_packet_triggers_rams_t_and_cutover) {
   n = recv(listener, rbuf, sizeof rbuf, 0);
   ck_assert_int_gt(n, 0);
   g_rams_t_calls = 0;
-  rtcp_parse(rbuf, (size_t)n, NULL, NULL, NULL, rams_t_cb, NULL, NULL, NULL);
+  rtcp_parse(rbuf, (size_t)n, &(rtcp_cbs_t){.rams_t_cb = rams_t_cb});
   ck_assert_int_eq(g_rams_t_calls, 1);
   ck_assert_int_eq(g_rams_t.has_first_mc_seqnum, 1);
   ck_assert_uint_eq(g_rams_t.first_mc_seqnum, 42u);

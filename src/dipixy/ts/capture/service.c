@@ -10,7 +10,8 @@
 #include <string.h>
 
 static void ring_write(capture_ctx_t *c, const unsigned char *data, size_t len) {
-  size_t pos, first;
+  size_t pos;
+  size_t first;
   uint64_t wt = atomic_load_explicit(&c->write_total, memory_order_relaxed);
 
   if (len > g_capture_ring_cap) {
@@ -24,23 +25,31 @@ static void ring_write(capture_ctx_t *c, const unsigned char *data, size_t len) 
   atomic_store_explicit(&c->write_total, wt + len, memory_order_release);
 }
 
+typedef enum { CAP_RD_FCC, CAP_RD_RET, CAP_RD_FEC, CAP_RD_PLAIN } cap_read_backend_t;
+
 ssize_t capture_read_dispatch(capture_ctx_t *ctx, unsigned char *buf, size_t bufcap, int *unwrapped) {
   ssize_t n;
+  cap_read_backend_t backend = ctx->fcc ? CAP_RD_FCC : ctx->ret ? CAP_RD_RET : ctx->fec_dec ? CAP_RD_FEC : CAP_RD_PLAIN;
   *unwrapped = 0;
-  if (ctx->fcc) {
-    *unwrapped = 1;
-    n = fcc_client_read(ctx->fcc, ctx->m, buf, bufcap);
-    if (fcc_client_done(ctx->fcc)) {
-      fcc_client_close(ctx->fcc);
-      ctx->fcc = NULL;
-    }
-  } else if (ctx->ret) {
-    *unwrapped = 1;
-    n = ret_client_read(ctx->ret, ctx->m, buf, bufcap);
-  } else if (ctx->fec_dec) {
-    n = capture_fec_read(ctx, buf, bufcap);
-  } else {
-    n = mcast_recv(ctx->m, buf, bufcap, NULL);
+  switch (backend) {
+    case CAP_RD_FCC:
+      *unwrapped = 1;
+      n = fcc_client_read(ctx->fcc, ctx->m, buf, bufcap);
+      if (fcc_client_done(ctx->fcc)) {
+        fcc_client_close(ctx->fcc);
+        ctx->fcc = NULL;
+      }
+      break;
+    case CAP_RD_RET:
+      *unwrapped = 1;
+      n = ret_client_read(ctx->ret, ctx->m, buf, bufcap);
+      break;
+    case CAP_RD_FEC:
+      n = capture_fec_read(ctx, buf, bufcap);
+      break;
+    case CAP_RD_PLAIN:
+      n = mcast_recv(ctx->m, buf, bufcap, NULL);
+      break;
   }
   return n;
 }
@@ -79,7 +88,9 @@ size_t capture_reader_read(capture_reader_t *r, unsigned char *buf, size_t cap) 
   const capture_ctx_t *c = r->ctx;
   uint64_t wt = atomic_load_explicit(&c->write_total, memory_order_acquire);
   uint64_t available;
-  size_t n, pos, first;
+  size_t n;
+  size_t pos;
+  size_t first;
   if (wt - r->read_total > g_capture_ring_cap) {
     uint64_t just_dropped = wt - r->read_total - g_capture_ring_cap;
     r->dropped += just_dropped;

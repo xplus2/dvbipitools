@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef LIB_CAS_DEVICE_STATE_CORE_H
-#define LIB_CAS_DEVICE_STATE_CORE_H
+#ifndef DVBIPITOOLS_LIB_CAS_DEVICE_STATE_CORE_H
+#define DVBIPITOOLS_LIB_CAS_DEVICE_STATE_CORE_H
 
 #include <pthread.h>
 #include <stddef.h>

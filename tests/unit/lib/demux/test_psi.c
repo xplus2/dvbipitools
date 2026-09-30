@@ -322,7 +322,7 @@ static size_t build_pmt_es(unsigned char *out, unsigned prog_num, unsigned pcr_p
     body[n++] = (unsigned char)es[i].pid;
     body[n++] = (unsigned char)(0xF0 | ((es[i].desc_len >> 8) & 0x0F));
     body[n++] = (unsigned char)es[i].desc_len;
-    memcpy(body + n, es[i].desc, es[i].desc_len);
+    if (es[i].desc_len) memcpy(body + n, es[i].desc, es[i].desc_len);
     n += es[i].desc_len;
   }
 
@@ -367,7 +367,7 @@ static size_t build_pmt_es_with_proginfo(unsigned char *out, unsigned prog_num, 
     body[n++] = (unsigned char)es[i].pid;
     body[n++] = (unsigned char)(0xF0 | ((es[i].desc_len >> 8) & 0x0F));
     body[n++] = (unsigned char)es[i].desc_len;
-    memcpy(body + n, es[i].desc, es[i].desc_len);
+    if (es[i].desc_len) memcpy(body + n, es[i].desc, es[i].desc_len);
     n += es[i].desc_len;
   }
 

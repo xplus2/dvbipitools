@@ -6,10 +6,11 @@
 #include "priv.h"
 
 int rdh_apply_input(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
   const char *uri;
-  if (yamlcfg_set_str(&uri, v, e, n)) return -1;
-  if (rdh_add_input(c, uri, e, n)) return -1;
-  if (rdh_item.input) rdh_item.have_input = 1;
+  if (yamlcfg_set_str(&cfg->str_pool, &uri, v, e, n)) return -1;
+  if (rdh_add_input(cfg, uri, e, n)) return -1;
+  if (cfg->parse_item.input) cfg->parse_item.have_input = 1;
   return 0;
 }
 

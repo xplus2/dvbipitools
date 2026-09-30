@@ -15,13 +15,11 @@ static void *tv_open_start(void *ctx) {
   tv_slot_ctx_t *sc = ctx;
   net_err_reason_t reason = NET_ERR_OTHER;
   tv_opening_t *w = calloc(1, sizeof *w);
-  if (!w)
-    return NULL;
+  if (!w) return NULL;
   w->im = sc->im;
   w->o = tvsrc_open_async_start(sc->cfg, sc->input, &reason);
   if (!w->o) {
-    if (sc->im)
-      sc->im->errors_total[reason]++;
+    if (sc->im) sc->im->errors_total[reason]++;
     free(w);
     return NULL;
   }
@@ -35,15 +33,13 @@ static retryset_open_state_t tv_open_step(void *o) {
   switch (tvsrc_open_async_step(w->o, &reason)) {
   case TVSRC_OPEN_DONE:
     if (w->im) {
-      if (w->im->seen_open)
-        w->im->reconnects_total++;
+      if (w->im->seen_open) w->im->reconnects_total++;
       w->im->seen_open = 1;
       w->im->up = 1;
     }
     return RETRYSET_OPEN_DONE;
   case TVSRC_OPEN_ERROR:
-    if (w->im)
-      w->im->errors_total[reason]++;
+    if (w->im) w->im->errors_total[reason]++;
     return RETRYSET_OPEN_ERROR;
   default:
     return RETRYSET_OPEN_PENDING;
@@ -64,5 +60,13 @@ static void tv_open_free(void *o) {
 }
 static int tv_result_fd(const void *r) { return tvsrc_fd(r); }
 static void tv_result_close(void *r) { tvsrc_close((tvsrc_t *)r); }
-const retryset_ops_t tv_retry_ops = {tv_open_start, tv_open_poll_fd, tv_open_poll_events, tv_open_step,
-                                     tv_open_take, tv_open_free,tv_result_fd, tv_result_close};
+const retryset_ops_t tv_retry_ops = {
+  .open_start = tv_open_start,
+  .open_poll_fd = tv_open_poll_fd,
+  .open_poll_events = tv_open_poll_events,
+  .open_step = tv_open_step,
+  .open_take = tv_open_take,
+  .open_free = tv_open_free,
+  .result_fd = tv_result_fd,
+  .result_close = tv_result_close,
+};

@@ -5,19 +5,20 @@ DVB-IPI Annex F (ETSI TS 102 034) and Annex I, built on IETF RFC 6285 (RAMS - Ra
 Acquisition of Multicast RTP Sessions).
 
 Passively watches a mirrored/SPAN-ported multicast segment via a raw AF_PACKET capture, then keeps two
-kinds of per-channel state from the same captured packets: a short seq-keyed ring for RET loss repair, 
-and a Random Access Point (RAP)-anchored cache for FCC bursts. One capture thread and one `-l` listen socket 
-serve both protocols. A client NACK always gets a direct unicast reply *and*, when the multicast RET session 
-is enabled, is additionally repaired over that session (F.5.2); a RAMS-R request just before a channel join 
-gets a burst of cached data at a faster rate so the client can start decoding immediately.
+kinds of per-channel state from the same captured packets: 
+* A short seq-keyed ring for RET loss repair, 
+* A Random Access Point (RAP)-anchored cache for FCC bursts. 
+
+One capture thread and one `-l` listen socket serve both protocols.
+A client NACK always gets a direct unicast reply *and*, when the multicast RET session 
+is enabled, is additionally repaired over that session (F.5.2).
+A RAMS-R request just before a channel join gets a burst of cached data at a faster rate so the client can start decoding immediately (FCC).
 
 RET and FCC can each be run alone or together: `--no-ret` disables RET, `--no-fcc` disables FCC.
 
-Small deployments may run `dipifccret` just once as a headend companion, larger ones might
-want distributed deployments.
+Small deployments may run `dipifccret` just once as a headend companion, larger ones might want them distributed.
 
 ## Usage
-
 ```
 dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 ```

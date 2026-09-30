@@ -57,8 +57,7 @@ static int decode_numeric_ref(const char *src, size_t n, size_t *ip, char *out, 
   if (endp != src + j && *endp == ';' && (size_t)(endp - src) < n) {
     char utf8[4];
     int len = utf8_encode(cp, utf8);
-    if (oi + (size_t)len + 1 > outcap)
-      return -1;
+    if (oi + (size_t)len + 1 > outcap) return -1;
     memcpy(out + oi, utf8, (size_t)len);
     oi += (size_t)len;
     i = (size_t)(endp - src) + 1;
@@ -74,50 +73,53 @@ static int decode_numeric_ref(const char *src, size_t n, size_t *ip, char *out, 
 static void decode_copy(const char *src, size_t n, char *out, size_t outcap) {
   size_t oi = 0;
   for (size_t i = 0; i < n && oi + 1 < outcap;) {
+    if (src[i] != '&') { out[oi++] = src[i]; i++; continue; }
     if (!strncmp(src + i, "&amp;", 5)) { out[oi++] = '&'; i += 5; }
     else if (!strncmp(src + i, "&lt;", 4)) { out[oi++] = '<'; i += 4; }
     else if (!strncmp(src + i, "&gt;", 4)) { out[oi++] = '>'; i += 4; }
     else if (!strncmp(src + i, "&quot;", 6)) { out[oi++] = '"'; i += 6; }
     else if (!strncmp(src + i, "&apos;", 6)) { out[oi++] = '\''; i += 6; }
-    else if (src[i] == '&' && i + 2 < n && src[i + 1] == '#') {
-      if (decode_numeric_ref(src, n, &i, out, outcap, &oi) != 0)
-        break;
+    else if (i + 2 < n && src[i + 1] == '#') {
+      if (decode_numeric_ref(src, n, &i, out, outcap, &oi) != 0) break;
     }
     else { out[oi++] = src[i]; i++; }
   }
   out[oi] = '\0';
 }
 
+static const char *xml_find(const char *p, const char *end, const char *needle) {
+  size_t nlen = strlen(needle);
+  if (p >= end || (size_t)(end - p) < nlen) return NULL;
+  return memmem(p, (size_t)(end - p), needle, nlen);
+}
+
 int xml_elem_text(const char *s, const char *end, const char *tag, char *out, size_t outcap) {
   size_t taglen = strlen(tag);
   const char *p = s, *gt, *close;
   char closetag[64];
+  size_t tl;
 
   for (;;) {
-    const char *hit = strstr(p, tag);
-    if (!hit || hit >= end)
-      return -1;
+    const char *hit = xml_find(p, end, tag);
+    if (!hit) return -1;
     if (hit > s && hit[-1] == '<' && (hit[taglen] == '>' || hit[taglen] == ' ' || hit[taglen] == '\t' || hit[taglen] == '/')) {
       p = hit;
       break;
     }
     p = hit + 1;
   }
-  gt = strchr(p, '>');
-  if (!gt || gt >= end)
-    return -1;
+  gt = memchr(p, '>', (size_t)(end - p));
+  if (!gt) return -1;
   if (gt[-1] == '/')
     return -1; /* self-closing, no text */
-  {
-    size_t tl = taglen < sizeof closetag - 4 ? taglen : sizeof closetag - 4;
-    closetag[0] = '<';
-    closetag[1] = '/';
-    memcpy(closetag + 2, tag, tl);
-    closetag[2 + tl] = '>';
-    closetag[3 + tl] = '\0';
-  }
-  close = strstr(gt + 1, closetag);
-  if (!close || close > end) return -1;
+  tl = taglen < sizeof closetag - 4 ? taglen : sizeof closetag - 4;
+  closetag[0] = '<';
+  closetag[1] = '/';
+  memcpy(closetag + 2, tag, tl);
+  closetag[2 + tl] = '>';
+  closetag[3 + tl] = '\0';
+  close = xml_find(gt + 1, end, closetag);
+  if (!close) return -1;
   decode_copy(gt + 1, (size_t)(close - (gt + 1)), out, outcap);
   return 0;
 }
@@ -125,11 +127,11 @@ int xml_elem_text(const char *s, const char *end, const char *tag, char *out, si
 int for_each_xml_block(const char *buf, const char *end, const char *open_tag, const char *close_tag, xml_block_cb cb, void *ctx) {
   const char *p = buf;
   for (;;) {
-    const char *tag = strstr(p, open_tag);
+    const char *tag = xml_find(p, end, open_tag);
     const char *blk_end;
-    if (!tag || tag >= end) return 0;
-    blk_end = strstr(tag, close_tag);
-    if (!blk_end || blk_end >= end) return 0;
+    if (!tag) return 0;
+    blk_end = xml_find(tag, end, close_tag);
+    if (!blk_end) return 0;
     if (cb(tag, blk_end, ctx)) return -1;
     p = blk_end + 1;
   }
@@ -139,17 +141,18 @@ int xml_attr(const char *s, const char *end, const char *name, char *out, size_t
   size_t namelen = strlen(name);
   const char *p = s;
   while (p < end) {
-    const char *hit = strstr(p, name);
+    const char *hit = xml_find(p, end, name);
     const char *v, *q;
-    if (!hit || hit >= end) return -1;
+    if (!hit) return -1;
     /* reject a hit inside a longer name, e.g. "sid" inside "tsid=" */
     if ((hit > s && (isalnum((unsigned char)hit[-1]) || hit[-1] == '_')) || hit[namelen] != '=' || hit[namelen + 1] != '"') {
       p = hit + 1;
       continue;
     }
     v = hit + namelen + 2;
-    q = strchr(v, '"');
-    if (!q || q > end) return -1;
+    if (v >= end) return -1;
+    q = memchr(v, '"', (size_t)(end - v));
+    if (!q) return -1;
     decode_copy(v, (size_t)(q - v), out, outcap);
     return 0;
   }

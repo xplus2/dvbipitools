@@ -9,24 +9,31 @@
 static void skip_scaling_list(br_t *b, int sz) {
   int last = 8, next = 8;
   for (int j = 0; j < sz; j++) {
-    if (next)
-      next = (last + br_se(b) + 256) % 256;
+    if (next) next = (last + br_se(b) + 256) % 256;
     last = next ? next : last;
   }
 }
 
 static void skip_scaling_matrices(br_t *b, int n) {
-  for (int k = 0; k < n; k++)
-    if (br_u(b, 1))
-      skip_scaling_list(b, (k < 6) ? 16 : 64);
+  for (int k = 0; k < n; k++) if (br_u(b, 1)) skip_scaling_list(b, (k < 6) ? 16 : 64);
 }
 
 /* H.264 SPS -> dimensions */
 int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
   unsigned char rb[ESCODEC_PS_MAX];
   br_t b;
-  unsigned profile, chroma = 1, wmbs, hmus, fmo, poc;
-  unsigned cl = 0, cr = 0, ct = 0, cb = 0, subw, subh;
+  unsigned profile;
+  unsigned chroma = 1;
+  unsigned wmbs;
+  unsigned hmus;
+  unsigned fmo;
+  unsigned poc;
+  unsigned cl = 0;
+  unsigned cr = 0;
+  unsigned ct = 0;
+  unsigned cb = 0;
+  unsigned subw;
+  unsigned subh;
   int high_profile;
   b.len = rbsp_unescape(nal, len, rb, sizeof rb);
   b.d = rb;
@@ -47,13 +54,11 @@ int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
   }
   if (high_profile) {
     chroma = br_ue(&b);
-    if (chroma == 3)
-      br_u(&b, 1);
+    if (chroma == 3) br_u(&b, 1);
     br_ue(&b);
     br_ue(&b);
     br_u(&b, 1);
-    if (br_u(&b, 1)) /* scaling matrices */
-      skip_scaling_matrices(&b, (chroma != 3) ? 8 : 12);
+    if (br_u(&b, 1)) skip_scaling_matrices(&b, (chroma != 3) ? 8 : 12); /* scaling matrices */
   }
   br_ue(&b); /* log2_max_frame_num_minus4 */
   poc = br_ue(&b);
@@ -65,16 +70,14 @@ int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
     br_se(&b);
     br_se(&b);
     n = br_ue(&b);
-    for (unsigned k = 0; k < n && !b.err; k++)
-      br_se(&b);
+    for (unsigned k = 0; k < n && !b.err; k++) br_se(&b);
   }
   br_ue(&b); /* max_num_ref_frames */
   br_u(&b, 1);
   wmbs = br_ue(&b);
   hmus = br_ue(&b);
   fmo = br_u(&b, 1);
-  if (!fmo)
-    br_u(&b, 1);
+  if (!fmo) br_u(&b, 1);
   br_u(&b, 1);
   if (br_u(&b, 1)) {
     cl = br_ue(&b);
@@ -82,12 +85,10 @@ int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
     ct = br_ue(&b);
     cb = br_ue(&b);
   }
-  if (b.err)
-    return -1;
+  if (b.err) return -1;
   subw = (chroma == 1 || chroma == 2) ? 2 : 1;
   subh = (chroma == 1) ? 2 : 1;
-  if (chroma == 0)
-    subw = subh = 1;
+  if (chroma == 0) subw = subh = 1;
   *w = (wmbs + 1) * 16 - (cl + cr) * subw;
   *h = (2 - fmo) * (hmus + 1) * 16 - (ct + cb) * subh * (2 - fmo);
   return (*w && *h) ? 0 : -1;
@@ -106,43 +107,41 @@ int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned
   br_u(&b, 4);  /* sps_video_parameter_set_id */
   maxsub = br_u(&b, 3);
   br_u(&b, 1);
-  for (unsigned i = 0; i < 12; i++)
-    ptl[i] = (unsigned char)br_u(&b, 8);
+  for (unsigned i = 0; i < 12; i++) ptl[i] = (unsigned char)br_u(&b, 8);
   if (maxsub > 0) {
-    if (maxsub > 7)
-      return -1;
-    unsigned sp[8], sl[8];
+    unsigned sp[8];
+    unsigned sl[8];
+    if (maxsub > 7) return -1;
     for (unsigned i = 0; i < maxsub; i++) {
       sp[i] = br_u(&b, 1);
       sl[i] = br_u(&b, 1);
     }
-    for (unsigned i = maxsub; i < 8; i++)
-      br_u(&b, 2);
+    for (unsigned i = maxsub; i < 8; i++) br_u(&b, 2);
     for (unsigned i = 0; i < maxsub; i++) {
       if (sp[i]) {
         br_u(&b, 32);
         br_u(&b, 32);
         br_u(&b, 24);
       }
-      if (sl[i])
-        br_u(&b, 8);
+      if (sl[i]) br_u(&b, 8);
     }
   }
   br_ue(&b); /* sps_seq_parameter_set_id */
   *chroma = br_ue(&b);
-  if (*chroma == 3)
-    br_u(&b, 1);
+  if (*chroma == 3) br_u(&b, 1);
   *w = br_ue(&b);
   *h = br_ue(&b);
   if (br_u(&b, 1)) { /* conformance window */
-    unsigned l = br_ue(&b), r = br_ue(&b), t = br_ue(&b), bo = br_ue(&b);
+    unsigned l = br_ue(&b);
+    unsigned r = br_ue(&b);
+    unsigned t = br_ue(&b);
+    unsigned bo = br_ue(&b);
     unsigned subw = (*chroma == 1 || *chroma == 2) ? 2 : 1;
     unsigned subh = (*chroma == 1) ? 2 : 1;
     *w -= (l + r) * subw;
     *h -= (t + bo) * subh;
   }
-  if (b.err || !*w || !*h)
-    return -1;
+  if (b.err || !*w || !*h) return -1;
   return 0;
 }
 
@@ -201,8 +200,7 @@ int vvc_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
 size_t build_avcc(const esc_track_t *t, unsigned char *o, size_t cap) {
   size_t n = 0;
 
-  if (t->spslen < 4 || 11 + t->spslen + t->ppslen > cap)
-    return 0;
+  if (t->spslen < 4 || 11 + t->spslen + t->ppslen > cap) return 0;
   o[n++] = 1;
   o[n++] = t->sps[1]; /* profile */
   o[n++] = t->sps[2]; /* compat */
@@ -251,7 +249,8 @@ size_t build_vvcc(const esc_track_t *t, unsigned char *o, size_t cap) {
 size_t build_hvcc(const esc_track_t *t, unsigned char *o, size_t cap) {
   static const unsigned char types[3] = {32, 33, 34};
   const unsigned char *ps[3];
-  size_t pl[3], n = 0;
+  size_t pl[3];
+  size_t n = 0;
 
   ps[0] = t->vps;
   pl[0] = t->vpslen;

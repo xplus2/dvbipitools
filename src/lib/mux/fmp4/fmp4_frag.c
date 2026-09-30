@@ -11,11 +11,15 @@ static uint32_t sample_flags(int keyframe) {
 }
 
 size_t fmp4_segment_end(fmp4_mux_t *m, unsigned char **out) {
-  mp4buf_t styp, moof;
+  mp4buf_t styp;
+  mp4buf_t moof;
   size_t patch_pos[FMP4_MAX_TRACKS];
   size_t track_mdat_off[FMP4_MAX_TRACKS];
-  size_t out_moof_start, mdat_payload_start, running;
+  size_t out_moof_start;
+  size_t mdat_payload_start;
+  size_t running;
   int i;
+  mp4buf_t mfhd;
 
   mp4buf_free(&m->out);
   memset(&styp, 0, sizeof styp);
@@ -26,19 +30,19 @@ size_t fmp4_segment_end(fmp4_mux_t *m, unsigned char **out) {
   mb_box(&m->out, "styp", &styp);
   out_moof_start = m->out.len;
   memset(&moof, 0, sizeof moof);
-  {
-    mp4buf_t mfhd;
-    memset(&mfhd, 0, sizeof mfhd);
-    mb_u8(&mfhd, 0);
-    mb_u24(&mfhd, 0);
-    mb_u32(&mfhd, m->seq);
-    mb_box(&moof, "mfhd", &mfhd);
-  }
-
+  memset(&mfhd, 0, sizeof mfhd);
+  mb_u8(&mfhd, 0);
+  mb_u24(&mfhd, 0);
+  mb_u32(&mfhd, m->seq);
+  mb_box(&moof, "mfhd", &mfhd);
   for (i = 0; i < m->ntrk; i++) {
     const frag_track_t *f = &m->frag[i];
-    mp4buf_t traf, tfhd, tfdt, trun;
-    size_t traf_trun_start, moof_traf_start;
+    mp4buf_t traf;
+    mp4buf_t tfhd;
+    mp4buf_t tfdt;
+    mp4buf_t trun;
+    size_t traf_trun_start;
+    size_t moof_traf_start;
 
     memset(&tfhd, 0, sizeof tfhd);
     mb_u8(&tfhd, 0);

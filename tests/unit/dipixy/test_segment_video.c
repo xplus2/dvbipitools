@@ -69,6 +69,7 @@ static hls_seg_ctx_t *new_ctx(codec_t codec) {
   hls_seg_ctx_t *s = calloc(1, sizeof *s);
   ck_assert_ptr_nonnull(s);
   s->demux.video_codec = codec;
+  s->video.es.codec = codec;
   return s;
 }
 

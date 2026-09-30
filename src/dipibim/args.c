@@ -12,6 +12,8 @@
 #include "args.h"
 #include "version.h"
 
+#define OPT_COLOR 1000
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 static void print_help(void) {
@@ -38,7 +40,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"output", required_argument, 0, 'o'},
       {"format", required_argument, 0, 'f'},
       {"verbose", no_argument, 0, 'v'},
-      {"color", required_argument, 0, 1000},
+      {"color", required_argument, 0, OPT_COLOR},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_format = 0;
@@ -68,7 +70,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     case 'v':
       cfg->verbose = 1;
       break;
-    case 1000: {
+    case OPT_COLOR: {
       log_color_t v;
       if (log_color_from_string(optarg, &v)) {
         argerr("invalid --color: %s (auto|always|never)", optarg);

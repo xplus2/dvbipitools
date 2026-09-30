@@ -9,17 +9,15 @@
 #include <sys/socket.h>
 
 void reactor_mp4push_begin(int epfd, conn_t *c) {
+  int ka = 1;
   c->in.off = 0;
   c->in.len = 0;
-  c->become_mp4push = 0;
+  c->next_state = CONN_NEXT_NONE;
   c->close_after_flush = 0;
   c->state = CONN_MP4PUSH;
   c->epfd = epfd;
   c->reactor_tid = t_reactor_tid;
-  {
-    int ka = 1;
-    setsockopt(c->fd, SOL_SOCKET, SO_KEEPALIVE, &ka, sizeof ka);
-  }
+  setsockopt(c->fd, SOL_SOCKET, SO_KEEPALIVE, &ka, sizeof ka);
   reactor_arm(epfd, c, 0);
   conn_publish(c);
 }

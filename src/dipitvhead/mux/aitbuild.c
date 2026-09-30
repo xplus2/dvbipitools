@@ -14,11 +14,9 @@ static void put32(unsigned char *p, unsigned v) {
   p[3] = (unsigned char)v;
 }
 
-size_t aitbuild_pmt_entry(unsigned version, unsigned ait_pid, unsigned char *out, size_t cap) {
+size_t aitbuild_pmt_entry(unsigned ait_pid, unsigned char *out, size_t cap) {
   size_t n = 0;
-  (void)version;
-  if (cap < 9)
-    return 0;
+  if (cap < 9) return 0;
   out[n++] = 0x05; /* stream_type: private sections */
   psi_put16(out + n, 0xE000 | (ait_pid & 0x1FFF));
   n += 2;
@@ -38,8 +36,7 @@ size_t aitbuild_ait(unsigned version, unsigned org_id, unsigned app_id, const ch
   size_t url_len = strlen(url);
   unsigned adl, all;
 
-  if (url_len > 200 || cap < 60 + url_len)
-    return 0;
+  if (url_len > 200 || cap < 60 + url_len) return 0;
 
   out[n++] = 0x74;  /* table_id: AIT */
   n += 2;           /* section_syntax_indicator/reserved/section_length, patched below */

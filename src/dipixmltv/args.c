@@ -12,6 +12,8 @@
 #include "args.h"
 #include "version.h"
 
+#define OPT_COLOR 1000
+
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 static void print_help(void) {
@@ -24,9 +26,9 @@ static void print_help(void) {
       "  -i, --input <path>       input path, - for stdin (default)\n"
       "  -o, --output <path>      output path, - for stdout (default)\n"
       "  -f, --format <fmt>       xmltv|tva - names the INPUT format\n"
-      "  -M, --map <path>         xmltv id -> uri,tsid,onid,sid (required for -f xmltv)\n"
-      "  -R, --reverse-map <path> uri -> preferred xmltv id (optional, -f tva only)\n"
-      "  -S, --suggest-map <path> dipiscan csv - write a suggested -M mapping to -o,\n"
+      "  -M, --map <path>         xmltvid->uri,tsid,onid,sid (required for -f xmltv)\n"
+      "  -R, --reverse-map <path> uri->preferred xmltv id (optional, -f tva only)\n"
+      "  -S, --suggest-map <path> dipiscan csv. write a suggested -M mapping to -o,\n"
       "                           matched by channel name (review before use)\n"
       "  -v, --verbose            progress on stderr\n"
       "      --color <when>       auto|always|never (default auto)\n"
@@ -47,7 +49,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       {"reverse-map", required_argument, 0, 'R'},
       {"suggest-map", required_argument, 0, 'S'},
       {"verbose", no_argument, 0, 'v'},
-      {"color", required_argument, 0, 1000},
+      {"color", required_argument, 0, OPT_COLOR},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
   int have_format = 0;
@@ -86,7 +88,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     case 'v':
       cfg->verbose = 1;
       break;
-    case 1000: {
+    case OPT_COLOR: {
       log_color_t v;
       if (log_color_from_string(optarg, &v)) {
         argerr("invalid --color: %s (auto|always|never)", optarg);

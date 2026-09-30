@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIREC_XML_UTIL_H
-#define DIPIREC_XML_UTIL_H
+#ifndef DVBIPITOOLS_LIB_HELPER_XML_UTIL_H
+#define DVBIPITOOLS_LIB_HELPER_XML_UTIL_H
 
 #include <stddef.h>
 #include <stdio.h>

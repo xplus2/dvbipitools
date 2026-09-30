@@ -6,22 +6,10 @@ dipimetrics \- collect and serve dvbipitools metrics as Prometheus/OpenMetrics
 [\fIoptions\fR]
 .SH DESCRIPTION
 .B dipimetrics
-is a host-level metrics collector for
-.BR dipitvhead (1),
-.BR dipiradiohead (1),
-.BR dipisds (1),
-.BR dipibcg (1),
-.BR dipirist (1),
-.BR dipirec (1),
-.BR dipidescramble (1),
-.BR dipicam378 (1),
-.BR dipifccret (1),
-.BR dipisrt (1)
-and
-.BR dipixy (1).
-Each of these, if started with its own
+is a host-level metrics collector for services in the dvbipitools suite.
+If started with its own
 .B \-\-metrics-id
-option, periodically sends a snapshot of its own counters.
+option, they periodically send a snapshot of their own counters.
 A snapshot replaces the previous one only once it has arrived completely.
 Upgrade
 .B dipimetrics
@@ -283,11 +271,6 @@ Serve over HTTPS.
 .TP
 .B dipimetrics \-l 0.0.0.0:9109 \-\-auth scraper:hunter2
 Require HTTP Basic Auth for the scrape.
-.SH EXIT STATUS
-.B 0
-on success.
-A non-zero status is returned on argument errors, configuration file errors
-or socket/bind failure.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipimetrics.yaml

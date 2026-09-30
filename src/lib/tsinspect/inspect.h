@@ -77,6 +77,8 @@ void tsinspect_packet(tsinspect_t *t, const unsigned char *pkt);
 
 void tsinspect_grid(tsinspect_t *t, const unsigned char *buf, size_t len);
 
+void tsinspect_grid_lazy(tsinspect_t **slot, metrics_inspect_ts_t level, const unsigned *known_pids, unsigned n_known_pids, const unsigned char *buf, size_t len);
+
 typedef struct {
   tsinspect_t **in;
   unsigned n_in;

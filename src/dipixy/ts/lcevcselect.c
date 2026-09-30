@@ -39,23 +39,27 @@ void lcevc_select_parse_query(const char *query, lcevc_select_t *out) {
 lcevc_resolved_t lcevc_select_resolve(const lcevc_select_t *sel, const unsigned *lcevc_pid, int lcevc_pid_count) {
   lcevc_resolved_t r = {0};
 
-  if (sel->mode == LCEVC_SEL_BASE) {
-    r.kind = LCEVC_RESOLVE_NONE;
-    return r;
-  }
-  if (sel->mode == LCEVC_SEL_N) {
-    if (sel->n_is_pid) {
-      for (int i = 0; i < lcevc_pid_count; i++)
-        if (lcevc_pid[i] == sel->n) {
-          r.kind = LCEVC_RESOLVE_ONE;
-          r.pid = sel->n;
-          return r;
-        }
-    } else if ((int)sel->n < lcevc_pid_count) {
-      r.kind = LCEVC_RESOLVE_ONE;
-      r.pid = lcevc_pid[sel->n];
+  switch (sel->mode) {
+    case LCEVC_SEL_BASE:
+      r.kind = LCEVC_RESOLVE_NONE;
       return r;
-    }
+    case LCEVC_SEL_N:
+      if (sel->n_is_pid) {
+        for (int i = 0; i < lcevc_pid_count; i++)
+          if (lcevc_pid[i] == sel->n) {
+            r.kind = LCEVC_RESOLVE_ONE;
+            r.pid = sel->n;
+            return r;
+          }
+      } else if ((int)sel->n < lcevc_pid_count) {
+        r.kind = LCEVC_RESOLVE_ONE;
+        r.pid = lcevc_pid[sel->n];
+        return r;
+      }
+      break;
+    case LCEVC_SEL_FULL:
+    case LCEVC_SEL_ALL:
+      break;
   }
   r.kind = LCEVC_RESOLVE_ALL;
   return r;

@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <poll.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -46,7 +47,14 @@ typedef struct {
   const unsigned *pfd_slot;
   const struct pollfd *pfds;
   nfds_t npfd;
+  uint32_t ready_mask;
 } mpts_tick_t;
+
+static uint32_t compute_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd) {
+  uint32_t mask = 0;
+  for (unsigned pfd_i = 0; pfd_i < npfd; pfd_i++) if (pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP)) mask |= 1u << pfd_slot[pfd_i];
+  return mask;
+}
 
 /* processes one input slot for this poll tick: reads up to RADIOHEAD_MAX_FRAMES_PER_TICK frames,
    feeds the packetizer, updates metrics. -1: fatal (tspacketizer_new() OOM), caller must abort */
@@ -64,10 +72,7 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
   }
   tk->was_connected[i] = connected_now;
   if (!src) return 0;
-  for (unsigned pfd_i = 0; pfd_i < tk->npfd; pfd_i++) if (tk->pfd_slot[pfd_i] == i && (tk->pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP))) {
-    ready = 1;
-    break;
-  }
+  ready = (int)((tk->ready_mask >> i) & 1u);
   if (!ready) ready = source_has_buffered(src);
   if (!ready) return 0;
 
@@ -214,18 +219,29 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     struct pollfd pfds[RADIOHEAD_MAX_INPUTS];
     unsigned pfd_slot[RADIOHEAD_MAX_INPUTS];
     nfds_t npfd = 0;
-    double now;
+    double now, now_pre;
     time_t now_t, deadline;
     int timeout_ms = RADIOHEAD_POLL_MAX_MS;
+    mpts_tick_t tk;
+    unsigned active;
     deadline = inputset_next_deadline(is);
     if (deadline != INPUTSET_NEVER) {
       long remain_s = (long)(deadline - time(NULL));
       int remain_ms = remain_s <= 0 ? 0 : (int)(remain_s * 1000);
       if (remain_ms < timeout_ms) timeout_ms = remain_ms;
     }
+    now_pre = mono_seconds();
     for (unsigned i = 0; i < n; i++) {
       int fd = inputset_poll_fd(is, i);
       if (fd < 0) continue;
+      /* sock readable, skip&sleep. avoid poll() spin. */
+      if (inputset_source(is, i) && pace_deadline[i] > now_pre + RADIOHEAD_PACE_TOLERANCE_S) {
+        /* ceil, not trunc */
+        int wait_ms = 1 + (int)((pace_deadline[i] - now_pre - RADIOHEAD_PACE_TOLERANCE_S) * 1000.0);
+        if (wait_ms < 1) wait_ms = 1;
+        if (wait_ms < timeout_ms) timeout_ms = wait_ms;
+        continue;
+      }
       pfds[npfd].fd = fd;
       pfds[npfd].events = inputset_poll_events(is, i);
       pfds[npfd].revents = 0;
@@ -239,38 +255,34 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     now_t = time(NULL);
     for (unsigned i = 0; i < n; i++) inputset_service(is, i, now_t);
 
-    {
-      mpts_tick_t tk;
-      tk.is = is;
-      tk.mpts = mpts;
-      tk.cas = cas;
-      tk.cfg = cfg;
-      tk.tsps = tsps;
-      tk.metas = metas;
-      tk.samples_total = samples_total;
-      tk.pace_deadline = pace_deadline;
-      tk.was_connected = was_connected;
-      tk.input_stats = input_stats;
-      tk.last_synced_bytes = last_synced_bytes;
-      tk.rm = &rm;
-      tk.out = &out;
-      tk.metrics_on = metrics_on;
-      tk.now = now;
-      tk.now_t = now_t;
-      tk.pfd_slot = pfd_slot;
-      tk.pfds = pfds;
-      tk.npfd = npfd;
-
-      for (unsigned k = 0; k < n; k++) {
-        unsigned i = (rr_start + k) % n;
-        if (process_input_slot(&tk, i) != 0) {
-          rc = 1;
-          goto done;
-        }
+    tk.is = is;
+    tk.mpts = mpts;
+    tk.cas = cas;
+    tk.cfg = cfg;
+    tk.tsps = tsps;
+    tk.metas = metas;
+    tk.samples_total = samples_total;
+    tk.pace_deadline = pace_deadline;
+    tk.was_connected = was_connected;
+    tk.input_stats = input_stats;
+    tk.last_synced_bytes = last_synced_bytes;
+    tk.rm = &rm;
+    tk.out = &out;
+    tk.metrics_on = metrics_on;
+    tk.now = now;
+    tk.now_t = now_t;
+    tk.pfd_slot = pfd_slot;
+    tk.pfds = pfds;
+    tk.npfd = npfd;
+    tk.ready_mask = compute_ready_mask(pfd_slot, pfds, npfd);
+    for (unsigned k = 0; k < n; k++) {
+      unsigned i = (rr_start + k) % n;
+      if (process_input_slot(&tk, i) != 0) {
+        rc = 1;
+        goto done;
       }
     }
-    if (n)
-      rr_start = (rr_start + 1) % n;
+    if (n) rr_start = (rr_start + 1) % n;
 
     if (out.insp) tsinspect_tick(out.insp, now);
     mpts_tick(mpts, now, out.insp ? packet_cb_inspect : packet_cb, &out);
@@ -288,11 +300,9 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       fflush(stderr);
       last_stat = now;
     }
-    {
-      unsigned active = 0;
-      for (unsigned i = 0; i < n; i++) if (tsps[i]) active++;
-      emit_metrics(mx, now, &out, n, active, input_stats, n, &rm, cas);
-    }
+    active = 0;
+    for (unsigned i = 0; i < n; i++) if (tsps[i]) active++;
+    emit_metrics(mx, now, &out, n, active, input_stats, n, &rm, cas);
   }
 
 done:

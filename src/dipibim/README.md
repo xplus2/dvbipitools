@@ -4,10 +4,23 @@ A BiM (de-)compressor of plain TVA XML data ([dipixmltv](../dipixmltv/README.md)
 
 Take it with a grain of salt, as ISO/IEC 15938-1:2002 is still paywalled.
 
+## Usage
 ```sh
 dipibim -f xml [-i <path>] [-o <path>] [options]
 dipibim -f bim [-i <path>] [-o <path>] [options]
 ```
+
+## Options
+
+| flag | long form   | argument              | default   |
+|------|-------------|-----------------------|-----------|
+| `-i` | `--input`   | `<path>`              | stdin     |
+| `-o` | `--output`  | `<path>`              | stdout    |
+| `-f` | `--format`  | `xml\|bim`            |           |
+| `-v` | `--verbose` |                       | off       |
+|      | `--color`   | `auto\|always\|never` |           |
+| `-h` | `--help`    |                       | show help |
+
 
 ## Input/output (`-i`, `-o`, `-f`)
 

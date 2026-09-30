@@ -112,11 +112,12 @@ void flush_batch(out_ctx_t *o) {
   bitrate_pace(o->pacer);
   if (o->mc) {
     if (o->rtp) {
-      rtpheader_build(o->rtph, (uint32_t)(mono_seconds() * 90000.0), o->batch, 12);
+      uint32_t ts90k = (uint32_t)(mono_seconds() * 90000.0);
+      rtpheader_build(o->rtph, ts90k, o->batch, 12);
       note_send_result(mcast_send(o->mc, o->batch, 12 + n) >= 0, &o->mc_had_error, &o->errors, "mcast");
       if (o->fec_enc) {
         unsigned char repair[FEC2022_MAX_REPAIR];
-        size_t rlen = fec2022_enc_feed(o->fec_enc, o->batch, 12 + n, (uint32_t)(mono_seconds() * 90000.0), repair, sizeof repair);
+        size_t rlen = fec2022_enc_feed(o->fec_enc, o->batch, 12 + n, ts90k, repair, sizeof repair);
         if (rlen) mcast_send(o->fec_mc, repair, rlen);
       }
     } else {
@@ -190,11 +191,9 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
     metrics_writer_put(&w, METRICS_ID_TS_DISCONTINUITIES_TOTAL, NULL, tsm->ts_discontinuities);
     metrics_writer_put(&w, METRICS_ID_PCR_DISCONTINUITIES_TOTAL, NULL, tsm->pcr_discontinuities);
   }
-  {
-    for (psi_table_t t = 0; t < PSI_TABLE_COUNT; t++) {
-      metrics_writer_put(&w, METRICS_ID_PSI_SECTIONS_TOTAL, psi_table_name(t), tsm->psi_sections_total[t]);
-      metrics_writer_put(&w, METRICS_ID_PSI_ERRORS_TOTAL, psi_table_name(t), tsm->psi_errors_total[t]);
-    }
+  for (psi_table_t t = 0; t < PSI_TABLE_COUNT; t++) {
+    metrics_writer_put(&w, METRICS_ID_PSI_SECTIONS_TOTAL, psi_table_name(t), tsm->psi_sections_total[t]);
+    metrics_writer_put(&w, METRICS_ID_PSI_ERRORS_TOTAL, psi_table_name(t), tsm->psi_errors_total[t]);
   }
   metrics_writer_put(&w, METRICS_ID_TV_SOURCE_PMT_UPDATES_TOTAL, NULL, tsm->pmt_updates_total);
   metrics_writer_put(&w, METRICS_ID_TV_REMUX_PACKETS_TOTAL, NULL, tsm->remux_packets_total);

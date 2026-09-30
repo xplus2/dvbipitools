@@ -137,9 +137,7 @@ int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long wind
     long start_min, end_min;
     if (iso8601_to_minutes(pr->start, &start_min)) continue;
     end_min = start_min;
-    if (pr->stop[0] && !iso8601_to_minutes(pr->stop, &end_min)) {
-      /* end_min set */
-    }
+    if (pr->stop[0]) (void)iso8601_to_minutes(pr->stop, &end_min);
     if (end_min < now) continue;
     if (start_min > now + window_min) continue;
     out = bcg_add_programme(dst);
@@ -219,7 +217,7 @@ static void publish_document(mcast_t *m, bitwriter_t *bw, const strrepo_writer_t
     return;
   }
   if (wrapper_build(cont, cont_len, compress, &wrapped, &wrapped_len) == 0) {
-    ok = dvbstp_send_segment(m, DVBSTP_PAYLOAD_BCG_DATA_CONTAINER, 1, cycles % 256, 1, 0, 0, 1, wrapped, wrapped_len) == 0;
+    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_BCG_DATA_CONTAINER, .segment_id = 1, .segment_version = cycles % 256, .compr = 1, .want_crc = 1}, wrapped, wrapped_len) == 0;
     free(wrapped);
   }
   free(cont);
@@ -310,16 +308,18 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
   }
   if (ctx.metrics_on) ctx.bm.sources_up = 1;
 
-  d.ctx = &ctx;
-  d.on_ready = bcg_announce_ready;
-  d.reload = bcg_announce_reload;
-  d.run_cycle = bcg_announce_cycle;
-  d.cleanup = bcg_announce_cleanup;
-  d.family = cfg->family;
-  d.mcast_group = cfg->mcast_group;
-  d.mcast_port = cfg->mcast_port;
-  d.iface = cfg->iface;
-  d.dscp = cfg->dscp;
-  d.interval_s = cfg->interval_s;
+  d = (announce_driver_t){
+    .ctx = &ctx,
+    .on_ready = bcg_announce_ready,
+    .reload = bcg_announce_reload,
+    .run_cycle = bcg_announce_cycle,
+    .cleanup = bcg_announce_cleanup,
+    .family = cfg->family,
+    .mcast_group = cfg->mcast_group,
+    .mcast_port = cfg->mcast_port,
+    .iface = cfg->iface,
+    .dscp = cfg->dscp,
+    .interval_s = cfg->interval_s,
+  };
   return announce_driver_run(&d);
 }

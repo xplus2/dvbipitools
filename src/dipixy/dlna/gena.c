@@ -39,24 +39,16 @@ static void make_sid(char out[64]) {
   bufcpy(out + off, 64 - off, "-4a11-8a11-000000000000");
 }
 
-void gena_subscribe_new(const config_t *cfg, const char *service, const char *callback_hdr, char *out_sid,
-                         size_t out_sidsz) {
-  (void)cfg;
-  (void)service;
-  (void)callback_hdr;
-  (void)out_sidsz;
+void gena_subscribe_new(char *out_sid) {
   make_sid(out_sid);
 }
 
 void gena_renew(const char *sid_hdr, char *out_sid, size_t out_sidsz) {
-  if (sid_hdr)
-    bufcpy(out_sid, out_sidsz, sid_hdr);
-  else
-    make_sid(out_sid);
+  if (sid_hdr) bufcpy(out_sid, out_sidsz, sid_hdr);
+  else         make_sid(out_sid);
 }
 
-void gena_unsubscribe(const char *sid_hdr) {
-  (void)sid_hdr;
+void gena_unsubscribe(void) {
 }
 
 void gena_notify_system_update(void) {

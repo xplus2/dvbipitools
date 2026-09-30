@@ -98,6 +98,9 @@ int tls_handshake(int fd) {
 }
 
 void tls_close_fd(int fd) {
+  tls_gc_shard_t *shard;
+  tls_gc_node_t *node;
+  tls_gc_node_t *old_head;
   /* reactor: defers close -> buffered output flushes first (see tls.h). t_reactor_fd = -1 on blocking path: no-op there */
   if (t_reactor_fd >= 0 && fd == t_reactor_fd) {
     t_close_deferred = 1;
@@ -122,34 +125,31 @@ void tls_close_fd(int fd) {
   shutdown(fd, SHUT_RDWR);
 
   /* Schedule deferred SSL_free + close after g_tls_socket_gc_ms. */
-  {
-    tls_gc_shard_t *shard = tls_gc_shard_for_tid();
-    tls_gc_node_t *node, *old_head;
-    if (!shard || atomic_fetch_add_explicit(&shard->count, 1, memory_order_relaxed) >= TLS_GC_MAX) {
-      if (shard) atomic_fetch_sub_explicit(&shard->count, 1, memory_order_relaxed);
-      /* no shard, or GC queue full: free immediately, shouldn't happen in practice */
-      if (SSL_is_init_finished(ssl))
-        SSL_shutdown(ssl);
-      SSL_free(ssl);
-      close(fd);
-      return;
-    }
-    node = malloc(sizeof *node);
-    if (!node) {
-      atomic_fetch_sub_explicit(&shard->count, 1, memory_order_relaxed);
-      if (SSL_is_init_finished(ssl)) SSL_shutdown(ssl);
-      SSL_free(ssl);
-      close(fd);
-      return;
-    }
-    node->ssl = ssl;
-    node->fd = fd;
-    node->ts_ms = tls_now_ms();
-    old_head = atomic_load_explicit(&shard->head, memory_order_relaxed);
-    for (;;) {
-      atomic_store_explicit(&node->next, old_head, memory_order_relaxed);
-      if (atomic_compare_exchange_weak_explicit(&shard->head, &old_head, node, memory_order_release, memory_order_relaxed)) break;
-    }
+  shard = tls_gc_shard_for_tid();
+  if (!shard || atomic_fetch_add_explicit(&shard->count, 1, memory_order_relaxed) >= TLS_GC_MAX) {
+    if (shard) atomic_fetch_sub_explicit(&shard->count, 1, memory_order_relaxed);
+    /* no shard, or GC queue full: free immediately, shouldn't happen in practice */
+    if (SSL_is_init_finished(ssl))
+      SSL_shutdown(ssl);
+    SSL_free(ssl);
+    close(fd);
+    return;
+  }
+  node = malloc(sizeof *node);
+  if (!node) {
+    atomic_fetch_sub_explicit(&shard->count, 1, memory_order_relaxed);
+    if (SSL_is_init_finished(ssl)) SSL_shutdown(ssl);
+    SSL_free(ssl);
+    close(fd);
+    return;
+  }
+  node->ssl = ssl;
+  node->fd = fd;
+  node->ts_ms = tls_now_ms();
+  old_head = atomic_load_explicit(&shard->head, memory_order_relaxed);
+  for (;;) {
+    atomic_store_explicit(&node->next, old_head, memory_order_relaxed);
+    if (atomic_compare_exchange_weak_explicit(&shard->head, &old_head, node, memory_order_release, memory_order_relaxed)) break;
   }
 }
 

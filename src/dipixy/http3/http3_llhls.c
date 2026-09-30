@@ -9,13 +9,11 @@
 
 #define H3_LLHLS_WAITERS_MAX 8
 
-static _Thread_local llhls_waiter_t t_h3_llhls_waiters[H3_LLHLS_WAITERS_MAX];
+static _Thread_local hls_waiter_t t_h3_llhls_waiters[H3_LLHLS_WAITERS_MAX];
 static _Thread_local int t_h3_llhls_waiters_active;
 
-int h3_llhls_try_park(h3_conn_t *conn, int64_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, const char *inm, const char *origin_hdr,
-                      uint32_t want_seg, int want_part, int timeout_ms, int ws_handle) {
-  return llhls_waiter_pool_try_park(t_h3_llhls_waiters, H3_LLHLS_WAITERS_MAX, &t_h3_llhls_waiters_active, conn,
-                                    stream_id, ctx, filter, pmt_pid, lcevc, filename, is_head, 0, inm, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
+int h3_llhls_try_park(h3_conn_t *conn, int64_t stream_id, const llhls_park_req_t *req) {
+  return llhls_waiter_pool_try_park(t_h3_llhls_waiters, H3_LLHLS_WAITERS_MAX, &t_h3_llhls_waiters_active, conn, stream_id, req);
 }
 
 void h3_llhls_on_stream_close(const h3_conn_t *c, int64_t stream_id) {
@@ -27,7 +25,7 @@ void h3_llhls_on_conn_close(const h3_conn_t *c) {
 }
 
 /* h3_req_t may already be gone (freed on stream close): re-look-up, no-op if so */
-static void h3_llhls_finish(llhls_waiter_t *w) {
+static void h3_llhls_finish(hls_waiter_t *w) {
   h3_conn_t *conn = w->owner;
   hls_resp_t resp;
   h3_req_t *r = find_req(conn, w->stream_id);

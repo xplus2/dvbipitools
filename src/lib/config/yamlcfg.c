@@ -376,25 +376,33 @@ typedef struct strnode {
   char s[];
 } strnode_t;
 
-static strnode_t *strs;
-
-int yamlcfg_set_str(const char **dst, const char *val, char *err, size_t errsz) {
+int yamlcfg_set_str(void **pool, const char **dst, const char *val, char *err, size_t errsz) {
   size_t n = strlen(val);
   strnode_t *node;
+  strnode_t **head = (strnode_t **)pool;
   if (!n) {
-    snprintf(err, errsz, "empty value");
+    bufcpy(err, errsz, "empty value");
     return -1;
   }
   node = malloc(sizeof *node + n + 1);
   if (!node) {
-    snprintf(err, errsz, "out of memory");
+    bufcpy(err, errsz, "out of memory");
     return -1;
   }
   memcpy(node->s, val, n + 1);
-  node->next = strs;
-  strs = node;
+  node->next = *head;
+  *head = node;
   *dst = node->s;
   return 0;
+}
+
+void yamlcfg_strpool_free(void *pool) {
+  strnode_t *n = pool;
+  while (n) {
+    strnode_t *next = n->next;
+    free(n);
+    n = next;
+  }
 }
 
 int yamlcfg_set_bool(int *dst, const char *val, char *err, size_t errsz) {

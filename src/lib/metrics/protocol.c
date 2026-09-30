@@ -101,7 +101,9 @@ static int writer_flush_part(metrics_writer_t *w) {
 }
 
 int metrics_writer_put(metrics_writer_t *w, metrics_id_t id, const char *label, uint64_t value) {
-  size_t label_len, vlen, need;
+  size_t label_len;
+  size_t vlen;
+  size_t need;
   int same;
   if (w->len == 0) return -1;
   label_len = label ? strlen(label) : 0;

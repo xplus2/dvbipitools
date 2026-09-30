@@ -132,6 +132,10 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
     double now;
     time_t now_t, deadline;
     int timeout_ms = MPTS_POLL_MAX_MS;
+    mpts_tick_t tk;
+    uint32_t ready_mask;
+    int stuff_n;
+    unsigned active;
 
     deadline = retryset_next_deadline(c->rs);
     if (deadline != RETRYSET_NEVER) {
@@ -157,30 +161,28 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
     if (c->out.insp) tsinspect_tick(c->out.insp, now);
     for (unsigned i = 0; i < n; i++) retryset_service(c->rs, i, now_t);
 
-    {
-      mpts_tick_t tk;
-      tk.rs = c->rs;
-      tk.cfg = cfg;
-      tk.progs = c->progs;
-      tk.mpts = c->mpts;
-      tk.cas = c->cas;
-      tk.input_stats = c->input_stats;
-      tk.metrics_on = c->metrics_on;
-      tk.out = &c->out;
-      tk.tsm = c->tsm_p;
-      tk.insp = c->insp_on ? c->insp_in : NULL;
-      tk.now = now;
-      tk.now_t = now_t;
+    ready_mask = input_poll_ready_mask(pfd_slot, pfds, npfd);
+    tk.rs = c->rs;
+    tk.cfg = cfg;
+    tk.progs = c->progs;
+    tk.mpts = c->mpts;
+    tk.cas = c->cas;
+    tk.input_stats = c->input_stats;
+    tk.metrics_on = c->metrics_on;
+    tk.out = &c->out;
+    tk.tsm = c->tsm_p;
+    tk.insp = c->insp_on ? c->insp_in : NULL;
+    tk.now = now;
+    tk.now_t = now_t;
 
-      for (unsigned k = 0; k < n; k++) {
-        tvsrc_t *src;
-        unsigned i = (c->rr_start + k) % n;
-        src = retryset_result(c->rs, i);
-        if (!src) continue;
-        if (!input_poll_ready(i, pfd_slot, pfds, npfd)) continue;
-        if (!c->progs[i].rx) discover_input(&tk, i, src);
-        else feed_input(&tk, i, src);
-      }
+    for (unsigned k = 0; k < n; k++) {
+      tvsrc_t *src;
+      unsigned i = (c->rr_start + k) % n;
+      src = retryset_result(c->rs, i);
+      if (!src) continue;
+      if (!input_poll_ready(i, ready_mask)) continue;
+      if (!c->progs[i].rx) discover_input(&tk, i, src);
+      else feed_input(&tk, i, src);
     }
     c->rr_start = n ? (c->rr_start + 1) % n : 0;
 
@@ -219,20 +221,16 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
       }
       if (signal_reload_requested()) cas_reload_receivers(c->cas);
     }
-    {
-      int stuff_n = bitrate_stuff_due(c->out.pacer);
-      for (unsigned k = 0; k < (unsigned)stuff_n; k++) send_null_packet(&c->out);
-    }
+    stuff_n = bitrate_stuff_due(c->out.pacer);
+    for (unsigned k = 0; k < (unsigned)stuff_n; k++) send_null_packet(&c->out);
     if (cfg->verbose && now - c->last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - c->run_start, c->out.packets);
       fflush(stderr);
       c->last_stat = now;
     }
-    {
-      unsigned active = 0;
-      for (unsigned i = 0; i < n; i++) if (c->progs[i].rx) active++;
-      emit_metrics(mx, now, &c->out, n, active, c->input_stats, n, c->tsm_p, c->cas);
-    }
+    active = 0;
+    for (unsigned i = 0; i < n; i++) if (c->progs[i].rx) active++;
+    emit_metrics(mx, now, &c->out, n, active, c->input_stats, n, c->tsm_p, c->cas);
   }
 }
 

@@ -33,8 +33,7 @@ int rist_add_peer(struct rist_ctx *ctx, const char *peer_uri, const char *secret
   return 0;
 }
 
-int rist_push_stats_if_due(metrics_exporter_t *mx, const char *tool_version, const metrics_entry_t *entries, size_t n, const struct rist_stats *stats) {
+void rist_push_stats_if_due(metrics_exporter_t *mx, const char *tool_version, const metrics_entry_t *entries, size_t n, const struct rist_stats *stats) {
   if (metrics_exporter_due(mx, mono_seconds())) metrics_push_entries(mx, tool_version, entries, n);
   rist_stats_free(stats);
-  return 0;
 }

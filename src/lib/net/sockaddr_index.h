@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef LIB_NET_SOCKADDR_INDEX_H
-#define LIB_NET_SOCKADDR_INDEX_H
+#ifndef DVBIPITOOLS_LIB_NET_SOCKADDR_INDEX_H
+#define DVBIPITOOLS_LIB_NET_SOCKADDR_INDEX_H
 
 #include <stddef.h>
 #include <sys/socket.h>

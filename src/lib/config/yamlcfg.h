@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef LIB_YAMLCFG_H
-#define LIB_YAMLCFG_H
+#ifndef DVBIPITOOLS_LIB_CONFIG_YAMLCFG_H
+#define DVBIPITOOLS_LIB_CONFIG_YAMLCFG_H
 
 #include <stddef.h>
 
@@ -42,7 +42,8 @@ int yamlcfg_report(const yamlcfg_t *y);
 
 int yamlcfg_parse_bool(const char *val, int *out);
 
-int yamlcfg_set_str(const char **dst, const char *val, char *err, size_t errsz);
+int yamlcfg_set_str(void **pool, const char **dst, const char *val, char *err, size_t errsz);
+void yamlcfg_strpool_free(void *pool);
 int yamlcfg_set_bool(int *dst, const char *val, char *err, size_t errsz);
 int yamlcfg_set_uint(unsigned *dst, const char *val, unsigned min, unsigned max, char *err, size_t errsz);
 int yamlcfg_set_double(double *dst, const char *val, double min, double max, int min_excl, char *err, size_t errsz);

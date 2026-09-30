@@ -175,7 +175,7 @@ static char *write_ll_resync(char *mp, const char *avail, const char *utc_url, d
 
 static char *write_segment_timeline(char *mp, const char *mpd_start, size_t cap, const hls_snapshot_t *snap) {
   for (int i = 0; i < snap->count; i++) {
-    const hls_seg_t *seg = &snap->segs[(snap->head + i) % HLS_MAX_SEGS];
+    const hls_seg_t *seg = &snap->ring->segs[(snap->head + i) % HLS_MAX_SEGS];
     if ((size_t)(mp - mpd_start) + 64 > cap) break;
     if (i == 0) {
       mp = WRITE_LIT(mp, "            <S t=\"");
@@ -205,7 +205,7 @@ static uint64_t mpd_bandwidth(const hls_snapshot_t *snap) {
   uint64_t bw_bits = 0;
   double bw_secs = 0;
   for (int i = 0; i < snap->count; i++) {
-    const hls_seg_t *seg = &snap->segs[(snap->head + i) % HLS_MAX_SEGS];
+    const hls_seg_t *seg = &snap->ring->segs[(snap->head + i) % HLS_MAX_SEGS];
     bw_bits += (uint64_t)seg->size * 8;
     bw_secs += seg->duration;
   }
@@ -397,10 +397,10 @@ int dash_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsign
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
   dash_resolve_mpd(ctx, filter, pmt_pid, lcevc, want_ll, utc_url, &r);
   if (r.status == 404) {
-    queue_status(c, "404 Not Found", keep_alive);
+    respond_status(c, "404 Not Found", keep_alive);
     return 1;
   }
-  queue_mpd(c, (const char *)r.body, r.body_len, is_head, keep_alive, cors_hdr);
+  queue_text_resp(c, "application/dash+xml", (const char *)r.body, r.body_len, is_head, keep_alive, cors_hdr);
   if (out_bytes) *out_bytes = r.body_len;
   return 1;
 }
@@ -419,7 +419,7 @@ int parse_dash_seg_filename(const char *fn, uint64_t *t) {
 /* NULL if no segment starts exactly at t_ms */
 static const hls_seg_t *find_seg_by_time(const hls_snapshot_t *snap, uint64_t t_ms) {
   for (int i = 0; i < snap->count; i++) {
-    const hls_seg_t *seg = &snap->segs[(snap->head + i) % HLS_MAX_SEGS];
+    const hls_seg_t *seg = &snap->ring->segs[(snap->head + i) % HLS_MAX_SEGS];
     if (seg->start_ms == t_ms) return seg;
   }
   return NULL;
@@ -453,7 +453,7 @@ int dash_serve_seg(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, un
   if (!dash_resolve_seg(ctx, filter, pmt_pid, lcevc, filename, &r)) return 0;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
   if (r.status == 404) {
-    queue_status(c, "404 Not Found", keep_alive);
+    respond_status(c, "404 Not Found", keep_alive);
     return 1;
   }
   if (hls_zc_eligible(c, r.body_len, is_head)) {
@@ -474,7 +474,7 @@ int dash_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid
     resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
     return 1;
   }
-  resp_set(out, 200, "application/dash+xml", NULL, r.body, r.body_len, is_head);
+  resp_set_zc_cached(out, 200, "application/dash+xml", NULL, r.body, r.body_len, is_head);
   return 1;
 }
 

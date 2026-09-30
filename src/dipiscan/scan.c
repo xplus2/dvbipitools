@@ -111,8 +111,7 @@ void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_
     r->kind = r->program_count ? PROBE_NAMED : PROBE_UNNAMED;
   } else if (psi_have_pat(pc.psi) && psi_service_name(pc.psi)[0]) {
     r->kind = PROBE_NAMED;
-    strncpy(r->name, psi_service_name(pc.psi), sizeof r->name - 1);
-    r->name[sizeof r->name - 1] = '\0';
+    bufcpy(r->name, sizeof r->name, psi_service_name(pc.psi));
     r->tsid = psi_transport_stream_id(pc.psi);
     r->onid = psi_original_network_id(pc.psi);
     r->sid = psi_program_number(pc.psi);
@@ -218,6 +217,7 @@ static void *scan_worker(void *arg) {
 
   for (;;) {
     unsigned i = atomic_fetch_add_explicit(&job->next_claim, 1u, memory_order_relaxed) + 1u;
+    char group[64];
     if (i > cfg->total) break;
     if (signal_stop_requested()) {
       pthread_mutex_lock(&job->mtx);
@@ -228,38 +228,35 @@ static void *scan_worker(void *arg) {
       break;
     }
 
-    {
-      char group[64];
-      addr_at(cfg, i, group, sizeof group);
-      for (unsigned port = cfg->port_lo; port <= cfg->port_hi; port++) {
-        probe_result_t r;
-        const char *proto;
-        char uri[96];
-        int last;
+    addr_at(cfg, i, group, sizeof group);
+    for (unsigned port = cfg->port_lo; port <= cfg->port_hi; port++) {
+      probe_result_t r;
+      const char *proto;
+      char uri[96];
+      int last;
 
-        probe_address(cfg, group, port, &r);
-        proto = (r.rtp_wrapped == 1) ? "rtp" : "udp";
-        describe_mcast_uri(uri, sizeof uri, proto, cfg->family, group, port);
+      probe_address(cfg, group, port, &r);
+      proto = (r.rtp_wrapped == 1) ? "rtp" : "udp";
+      describe_mcast_uri(uri, sizeof uri, proto, cfg->family, group, port);
 
-        pthread_mutex_lock(&job->mtx);
-        while (job->next_commit != i) pthread_cond_wait(&job->cv, &job->mtx);
+      pthread_mutex_lock(&job->mtx);
+      while (job->next_commit != i) pthread_cond_wait(&job->cv, &job->mtx);
 
-        pthread_mutex_unlock(&job->mtx);
-        job->total++;
-        if (r.kind == PROBE_NONE)
-          log_line_ansi("%u/%u %-28s \e[0;31mno stream\e[0m", i, cfg->total, uri);
-        else if (cfg->mpts)
-          report_mpts_programs(cfg, job->out, &r, i, uri, group, port, &job->found);
-        else
-          report_single_program(cfg, job->out, &r, i, uri, group, port, &job->found);
+      pthread_mutex_unlock(&job->mtx);
+      job->total++;
+      if (r.kind == PROBE_NONE)
+        log_line_ansi("%u/%u %-28s \e[0;31mno stream\e[0m", i, cfg->total, uri);
+      else if (cfg->mpts)
+        report_mpts_programs(cfg, job->out, &r, i, uri, group, port, &job->found);
+      else
+        report_single_program(cfg, job->out, &r, i, uri, group, port, &job->found);
 
-        last = (port == cfg->port_hi) || signal_stop_requested();
-        pthread_mutex_lock(&job->mtx);
-        if (last) job->next_commit = i + 1;
-        pthread_cond_broadcast(&job->cv);
-        pthread_mutex_unlock(&job->mtx);
-        if (last) break;
-      }
+      last = (port == cfg->port_hi) || signal_stop_requested();
+      pthread_mutex_lock(&job->mtx);
+      if (last) job->next_commit = i + 1;
+      pthread_cond_broadcast(&job->cv);
+      pthread_mutex_unlock(&job->mtx);
+      if (last) break;
     }
   }
   return NULL;
@@ -272,7 +269,7 @@ int scan_run(const config_t *cfg, FILE *out) {
   int af = cfg->family == AF_INET6 ? AF_INET6 : AF_INET;
   unsigned jets = cfg->jets ? cfg->jets : 1;
   pthread_t threads[DIPISCAN_MAX_JETS];
-  scan_job_t job;
+  scan_job_t job = {.cfg = cfg, .out = out, .next_commit = 1, .total = 0, .found = 0};
   args_range_describe(cfg, basestr, sizeof basestr);
   inet_ntop(af, cfg->start, lo, sizeof lo);
   inet_ntop(af, cfg->end, hi, sizeof hi);
@@ -283,14 +280,9 @@ int scan_run(const config_t *cfg, FILE *out) {
     snprintf(invocation, sizeof invocation, "%s --mcast %s --port %u-%u --timeout %d", TOOL_NAME, basestr, cfg->port_lo, cfg->port_hi, cfg->timeout_ms / 1000);
 
   format_init(out, cfg->format, invocation, cfg->provider);
-  job.cfg = cfg;
-  job.out = out;
   atomic_init(&job.next_claim, 0u);
   pthread_mutex_init(&job.mtx, NULL);
   pthread_cond_init(&job.cv, NULL);
-  job.next_commit = 1;
-  job.total = 0;
-  job.found = 0;
   for (unsigned t = 1; t < jets; t++) if (pthread_create(&threads[t], NULL, scan_worker, &job)) threads[t] = 0;
   scan_worker(&job);
   for (unsigned t = 1; t < jets; t++) if (threads[t]) pthread_join(threads[t], NULL);

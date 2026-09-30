@@ -10,6 +10,7 @@
 #include "dipitvhead/mux/remux.h"
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
+#include "lib/helper/ioutil.h"
 
 #define MAX_SEEN 64
 
@@ -547,9 +548,9 @@ START_TEST(remux_sdt_nit_ait_sent_when_configured) {
   base_input(&input);
   out_program_pids(0, &pids);
   input.sdt_mode = TABLE_OVERRIDE;
-  snprintf(input.sdt_text, sizeof input.sdt_text, "Test Service");
+  bufcpy(input.sdt_text, sizeof input.sdt_text, "Test Service");
   cfg.nit_mode = TABLE_OVERRIDE;
-  snprintf(cfg.nit_text, sizeof cfg.nit_text, "Test Network");
+  bufcpy(cfg.nit_text, sizeof cfg.nit_text, "Test Network");
   input.hbbtv_url = "http://example.invalid/app.html";
   input.hbbtv_org_id = 1;
   input.hbbtv_app_id = 2;
@@ -589,9 +590,9 @@ START_TEST(remux_non_standalone_only_sends_pmt_and_ait_directly) {
   base_input(&input);
   out_program_pids(0, &pids);
   input.sdt_mode = TABLE_OVERRIDE;
-  snprintf(input.sdt_text, sizeof input.sdt_text, "Test Service");
+  bufcpy(input.sdt_text, sizeof input.sdt_text, "Test Service");
   cfg.nit_mode = TABLE_OVERRIDE;
-  snprintf(cfg.nit_text, sizeof cfg.nit_text, "Test Network");
+  bufcpy(cfg.nit_text, sizeof cfg.nit_text, "Test Network");
   input.hbbtv_url = "http://example.invalid/app.html";
   input.hbbtv_org_id = 1;
   input.hbbtv_app_id = 2;
@@ -631,7 +632,7 @@ START_TEST(remux_get_sdt_info_returns_service_regardless_of_mode) {
   base_input(&input);
   out_program_pids(0, &pids);
   input.sdt_mode = TABLE_OVERRIDE;
-  snprintf(input.sdt_text, sizeof input.sdt_text, "Test Service");
+  bufcpy(input.sdt_text, sizeof input.sdt_text, "Test Service");
 
   r = remux_new(&cfg, &input, psi, &pids, 0);
   ck_assert_ptr_nonnull(r);

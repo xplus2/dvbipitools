@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIREC_DEMUX_PES_H
-#define DIPIREC_DEMUX_PES_H
+#ifndef DVBIPITOOLS_LIB_DEMUX_PES_H
+#define DVBIPITOOLS_LIB_DEMUX_PES_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -19,7 +19,8 @@ void pes_feed(pes_t *p, const unsigned char *pkt);    /* 188 B */
 void pes_flush(pes_t *p);                             /* pending PES */
 
 typedef struct {
-  uint64_t pts_ext, last_raw; /* 33-bit PTS unwrap state */
+  uint64_t pts_ext;  /* 33-bit PTS unwrap state */
+  uint64_t last_raw;
   int pts_seen;
 } pts_unwrap_t;
 

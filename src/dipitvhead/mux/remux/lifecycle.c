@@ -14,8 +14,8 @@ static void resolve_sdt(remux_t *r, const psi_t *psi) {
   if (r->input.sdt_mode == TABLE_DROP) {
     r->send_sdt = 0;
   } else if (r->input.sdt_mode == TABLE_OVERRIDE) {
-    bufcpy(r->service_name, sizeof r->service_name, r->input.sdt_text);
     const char *prov = r->input.provider_text;
+    bufcpy(r->service_name, sizeof r->service_name, r->input.sdt_text);
     if (!prov[0]) prov = r->cfg.default_provider_text;
     if (!prov[0]) prov = TOOL_NAME;
     bufcpy(r->provider_name, sizeof r->provider_name, prov);
@@ -50,6 +50,12 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
   int count;
   int dropped;
   const psi_es_t *in_es;
+  /* exclusive with own CAS/BISS: both would want OUT_PID_CAT */
+  int own_cas;
+  unsigned ecm_pid;
+  unsigned ecm_sysid;
+  unsigned emm_pid;
+  unsigned emm_sysid;
 
   if (!r) return NULL;
   r->cfg = *cfg;
@@ -65,38 +71,35 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
     return NULL;
   }
 
-  {
-    /* exclusive with own CAS/BISS: both would want OUT_PID_CAT */
-    int own_cas = cfg->cas_algo != CAS_ALGO_NONE || cfg->biss1_enabled || cfg->biss2_enabled || cfg->biss2_ca_enabled;
-    unsigned ecm_pid = 0;
-    unsigned ecm_sysid = 0;
-    unsigned emm_pid = 0;
-    unsigned emm_sysid = 0;
-    if (!own_cas && !(input->strip_mask & TVSTRIP_ECM)) {
-      if (psi_pmt_ca_pid(psi)) {
-        ecm_pid = psi_pmt_ca_pid(psi);
-        ecm_sysid = psi_pmt_ca_system_id(psi);
-      } else {
-        const psi_es_t *ca_es = find_first_ca_es(in_es, count);
-        if (ca_es) {
-          ecm_pid = ca_es->ca_pid;
-          ecm_sysid = ca_es->ca_system_id;
-        }
-      }
-      if (psi_emm_pid(psi)) {
-        emm_pid = psi_emm_pid(psi);
-        emm_sysid = psi_ca_system_id(psi);
+  own_cas = cfg->cas_algo != CAS_ALGO_NONE || cfg->biss1_enabled || cfg->biss2_enabled || cfg->biss2_ca_enabled;
+  ecm_pid = 0;
+  ecm_sysid = 0;
+  emm_pid = 0;
+  emm_sysid = 0;
+  if (!own_cas && !(input->strip_mask & TVSTRIP_ECM)) {
+    if (psi_pmt_ca_pid(psi)) {
+      ecm_pid = psi_pmt_ca_pid(psi);
+      ecm_sysid = psi_pmt_ca_system_id(psi);
+    } else {
+      const psi_es_t *ca_es = find_first_ca_es(in_es, count);
+      if (ca_es) {
+        ecm_pid = ca_es->ca_pid;
+        ecm_sysid = ca_es->ca_system_id;
       }
     }
-    pmtbuild_add_ca_passthrough(ecm_pid, ecm_sysid, emm_pid, emm_sysid, r->pids.es_pid_base, r->pids.video_pid, r->es, &n, OUT_PROGRAM_ES_CAP, &dropped);
+    if (psi_emm_pid(psi)) {
+      emm_pid = psi_emm_pid(psi);
+      emm_sysid = psi_ca_system_id(psi);
+    }
   }
+  pmtbuild_add_ca_passthrough(ecm_pid, ecm_sysid, emm_pid, emm_sysid, r->pids.es_pid_base, r->pids.video_pid, r->es, &n, OUT_PROGRAM_ES_CAP, &dropped);
   r->es_count = n;
   if (dropped) log_line("program %u: ES cap (%d) reached, dropping %d stream%s", r->src_service_id, OUT_PROGRAM_ES_CAP, dropped, dropped == 1 ? "" : "s");
   resolve_sdt(r, psi);
   resolve_nit(r, psi);
   r->send_ait = r->input.hbbtv_url != NULL;
   if (r->send_ait) {
-    r->ait_pmt_entry_len = aitbuild_pmt_entry(0, r->pids.ait_pid, r->ait_pmt_entry, sizeof r->ait_pmt_entry);
+    r->ait_pmt_entry_len = aitbuild_pmt_entry(r->pids.ait_pid, r->ait_pmt_entry, sizeof r->ait_pmt_entry);
     r->ait_section_len = aitbuild_ait(0, r->input.hbbtv_org_id, r->input.hbbtv_app_id, r->input.hbbtv_url, r->ait_section, sizeof r->ait_section);
     r->send_ait = r->ait_pmt_entry_len && r->ait_section_len;
     if (!r->send_ait) log_line("--hbbtv: AIT build failed (url too long?)");

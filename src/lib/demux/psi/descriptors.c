@@ -11,7 +11,8 @@ typedef const unsigned char *(*desc_match_fn)(unsigned tag, const unsigned char 
 static const unsigned char *desc_scan(const unsigned char *d, size_t len, desc_match_fn match, void *ctx, size_t *dlen) {
   size_t i = 0;
   while (i + 2 <= len) {
-    unsigned t = d[i], l = d[i + 1];
+    unsigned t = d[i];
+    unsigned l = d[i + 1];
     const unsigned char *r;
     if (i + 2 + l > len) break;
     r = match(t, d + i + 2, l, ctx, dlen);
@@ -107,7 +108,8 @@ static int dts_hd_has_ma_asset(const unsigned char *d, size_t len) {
 
 /* DVB text: skip charset prefix, controls -> space. not ISO 6937 */
 void copy_name(char *dst, size_t dstsz, const unsigned char *src, size_t len) {
-  size_t i = 0, o = 0;
+  size_t i = 0;
+  size_t o = 0;
   if (len && src[0] < 0x20) {
     if (src[0] == 0x10 && len >= 3) i = 3;
     else if (src[0] == 0x1F && len >= 2) i = 2;

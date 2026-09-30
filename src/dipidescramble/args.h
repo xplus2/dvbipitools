@@ -90,6 +90,7 @@ typedef struct {
   char srt_streamid[128];                /* --srt-streamid, -o srt:// only. "" = none */
   char srt_packetfilter[256];            /* --srt-packetfilter, -o srt:// only. "" = none */
   unsigned srt_latency_ms;               /* --srt-latency, -o srt:// only. 0 = library default */
+  void *str_pool;
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

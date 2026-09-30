@@ -22,16 +22,18 @@
 #define SC_SECTION_TID_ECM_ODD 0x81
 
 static int algo_from_mode(unsigned char mode, scramble_algo_t *out) {
-  if (mode == 0x01 || mode == 0x02) {
-    /* 0x01 DVB-CSA1, 0x02 DVB-CSA2: same cipher (libdvbcsa), differ only in CW convention */
-    *out = SCRAMBLE_ALGO_CSA2;
-    return 1;
+  switch (mode) {
+    case 0x01:
+    case 0x02:
+      /* 0x01 DVB-CSA1, 0x02 DVB-CSA2: same cipher (libdvbcsa), differ only in CW convention */
+      *out = SCRAMBLE_ALGO_CSA2;
+      return 1;
+    case 0x10:
+      *out = SCRAMBLE_ALGO_CISSA;
+      return 1;
+    default:
+      return 0;
   }
-  if (mode == 0x10) {
-    *out = SCRAMBLE_ALGO_CISSA;
-    return 1;
-  }
-  return 0;
 }
 
 static void emit_downstream(void *ctx, const unsigned char pkt[188]);
@@ -52,9 +54,9 @@ static void rtmp_note_result(int ok, int *had_error, int idx) {
   }
 }
 
-void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len) {
+void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
   loop_ctx_t *lc = ctx;
-  for (int i = 0; i < lc->n_rtmp; i++) rtmp_note_result(rtmpout_write(lc->rtmp[i], type, timestamp_ms, data, len) >= 0, &lc->rtmp_had_error[i], i);
+  for (int i = 0; i < lc->n_rtmp; i++) rtmp_note_result(rtmpout_write(lc->rtmp[i], type, timestamp_ms, hdr, hn, payload, pn) >= 0, &lc->rtmp_had_error[i], i);
 }
 
 void srt_service_all(loop_ctx_t *lc) {
@@ -112,19 +114,26 @@ static void handle_biss_ca_ecm_section(loop_ctx_t *lc) {
   update_biss_ca_cw(lc, SCRAMBLE_PARITY_ODD, sw[SCRAMBLE_PARITY_ODD]);
 }
 
-/* full or partial write-retry, EINTR aside. 0 ok, -1 error (lc->outbuf_len[i] left at 0 either way) */
+/* full or partial write-retry, EINTR aside. 0 ok, -1 error */
 static int flush_outfd(loop_ctx_t *lc, int i) {
   size_t off = 0;
-  while (off < lc->outbuf_len[i]) {
-    ssize_t n = write(lc->outfd[i], lc->outbuf[i] + off, lc->outbuf_len[i] - off);
+  while (off < lc->outbuf_len) {
+    ssize_t n = write(lc->outfd[i], lc->outbuf + off, lc->outbuf_len - off);
     if (n < 0) {
       if (errno == EINTR) continue;
-      lc->outbuf_len[i] = 0;
       return -1;
     }
     off += (size_t)n;
   }
-  lc->outbuf_len[i] = 0;
+  return 0;
+}
+
+static int flush_all_outfd(loop_ctx_t *lc) {
+  for (int i = 0; i < lc->n_outfd; i++) if (flush_outfd(lc, i) < 0) {
+    lc->outbuf_len = 0;
+    return -1;
+  }
+  lc->outbuf_len = 0;
   return 0;
 }
 
@@ -139,16 +148,14 @@ static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
       lc->output_errors_total++;
       return;
     }
-  } else {
-    for (int i = 0; i < lc->n_outfd; i++) {
-      if (lc->outbuf_len[i] + 188 > sizeof lc->outbuf[i] && flush_outfd(lc, i) < 0) {
-        lc->emit_failed = 1;
-        lc->output_errors_total++;
-        return;
-      }
-      memcpy(lc->outbuf[i] + lc->outbuf_len[i], pkt, 188);
-      lc->outbuf_len[i] += 188;
+  } else if (lc->n_outfd > 0) {
+    if (lc->outbuf_len + 188 > sizeof lc->outbuf && flush_all_outfd(lc) < 0) {
+      lc->emit_failed = 1;
+      lc->output_errors_total++;
+      return;
     }
+    memcpy(lc->outbuf + lc->outbuf_len, pkt, 188);
+    lc->outbuf_len += 188;
   }
   if (lc->flv) {
     flv_feed(lc->flv, pkt);
@@ -372,5 +379,5 @@ int pkt_cb(void *v, const unsigned char *pkt) {
    then flushes any bytes still sitting in raw-fd output batch buffers */
 void pipeline_flush(loop_ctx_t *lc) {
   scrambler_flush(lc->scr, EMIT(lc), lc);
-  if (!lc->mkv) for (int i = 0; i < lc->n_outfd; i++) flush_outfd(lc, i);
+  if (!lc->mkv) flush_all_outfd(lc);
 }

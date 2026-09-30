@@ -2,11 +2,25 @@
 
 Converts between [xmltv](https://github.com/XMLTV/xmltv) and the DVB-IPI EPG XML shape (TVA metadata, ETSI TS 102 822-3-1/-3-2), plain, not BiM encoded
 
+## Usage
 ```sh
 dipixmltv -f xmltv -M <map> [-i <path>] [-o <path>] [options]
 dipixmltv -f tva [-R <revmap>] [-i <path>] [-o <path>] [options]
 dipixmltv -S <scan.csv> [-i <guide.xml>] [-o <path>] [options]
 ```
+
+## Options
+| flag  | long form       | argument              | default                                               |
+|-------|-----------------|-----------------------|-------------------------------------------------------|
+| `-i`  | `--input`       | `<path>`              | xmltv or tva file, `-` for stdin. required            |
+| `-o`  | `--output`      | `<path>`              | xmltv or tva file, `-` for stdout. required           |
+| `-f`  | `--format`      | `<format>`            | input is xmltv or tva (required for stdin)            |
+| `-M`  | `--map`         | `<path>`              | xmltv id -> uri,tsid,onid,sid (required for -f xmltv) |
+| `-R`  | `--reverse-map` | `<path>`              | uri -> preferred xmltv id (optional, -f tva only)     |
+| `-S`  | `--suggest-map` | `<path>`              | dipiscan csv - write a suggested -M mapping to -o     |
+| `-v`  | `--verbose`     |                       | progress on stderr                                    |
+|       | `--color`       | `auto\|always\|never` | auto                                                  |
+| `-h`  | `--help`        |                       |                                                       |
 
 ## Input/output (`-i`, `-o`, `-f`)
 
@@ -40,7 +54,7 @@ Matches xmltv channels (by every `<display-name>`, not just the first) against a
 
 Review the output before using it as `-M` - this is a starting point, not a guarantee.
 
-## xmltv conformance
+## XMLTV conformance
 
 This tool's output aims to be DTD-valid XMLTV (`display-name`/`title` are required non-empty elements in the real `xmltv.dtd`; 
 falls back to the channel id / "(untitled)" if the source data doesn't have one). 
@@ -60,12 +74,12 @@ The XMLTV ID is guaranteed unique within its own source:
 crid://dipixmltv.invalid/<percent-encoded-channel-id>/<programme-start-timestamp>
 ```
 
-> The problem:
-> Having `programme-start-timestamp` as a part of the ID means that further down the chain, if you base recordings (days in advance) 
-> on this ID, but the programme gets rescheduled, you're lost.
-> 
-> Conclusion:
-> Don't use this ID as a hard reference if you're implementing a PVR.
+### The problem
+Having `programme-start-timestamp` as a part of the ID means that further down the chain, if you base recordings (days in advance) 
+on this ID, but the programme gets rescheduled, you're lost.
+
+Conclusion:
+Don't use this ID as a hard reference if you're implementing a PVR.
 
 ## Live stats (`-v`)
 

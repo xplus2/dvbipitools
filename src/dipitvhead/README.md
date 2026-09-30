@@ -1,15 +1,19 @@
 # dipitvhead
 
-Takes one or more transport streams (multicast, http(s), or stdin ("-") and re-packages them as
-one DVB-IPI multicast under our own PAT/NIT (shared, whole mux) and one PMT/SDT per program (its
-own service_name, not shared with the others). 
+In short, it is a micromuxer and SCS/scrambler.
 
-A single `-i`: normal Single Program Transport Stream (SPTS). 
+It takes one or more transport streams (multicast, http(s)+ts/hls+ts/hls+fmp4/llhls/dash/lldash, SRT, RIST or stdin) 
+and re-packages them as one transport stream under a new PAT/NIT with a merged EIT and rewritten PMT.
+Individual SDTs can be passed, removed or overwritten.
 
-Multiple `-i`: Multi Program Transport Stream (MPTS), one program per input, each independently connected and retried.
-One input being down never stops output for the others. No transcoding.
+Its output can be a DVB-IPI multicast, SRT or RIST.
+It is always one transport stream, either SPTS when only one source is given, or MPTS on more.
+For more output streams, run multiple instances if it.
 
-## General Usage
+Optionally, it scrambles selected PES using DVB SimulCrypt (multi CAS, CSA1/CSA2/CISSA, both EMMG directions) or BISS 1/2/CA (see below).
+If enabled, it also adds Annex E Layer 1 FEC or CBR stuffing.
+
+## Usage
 ```
 dipitvhead -i <uri> [per-input options] [-i <uri> ...] {-m <mcast>:<port>|-R <uri>} [options]
 ```
@@ -174,7 +178,7 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 |---------------------------------|---------------------------------------------|
 | `rtp://@<group>:<port>`         | RTP wrapped SPTS or MPTS multicast          |
 | `udp://@<group>:<port>`         | plain SPTS or MPTS multicast                |
-| `http://<host>:<port>/<path>`   | HTTP TS stream                              |
+| `http://<host>:<port>/<path>`   | TS, HLS, LL-HLS, DASH or LL-DASH            |
 | `https://<host>:<port>/<path>`  | same, TLS (`-k` skips verification)         |
 | `-`                             | stdin                                       |
 | `rist://@<host>:<port>[?query]` | single-peer RIST receiver, requires librist |

@@ -17,8 +17,7 @@
 #include "priv.h"
 
 static void reap_worker_slot(cs378x_server_t *s, int slot) {
-  if (!s->worker_thread_joinable[slot])
-    return;
+  if (!s->worker_thread_joinable[slot]) return;
   pthread_join(s->worker_thread[slot], NULL);
   s->worker_thread_joinable[slot] = 0;
 }
@@ -39,19 +38,28 @@ static void log_unknown_command(const unsigned char *body, size_t buflen, int sl
 /* read n bytes, honoring stop flag between recv() timeouts. 1 ok, 0 stopped, -1 closed/error */
 static int read_exact(int fd, unsigned char *buf, size_t n, atomic_int *stop) {
   size_t got = 0;
+  int wfd = signal_wake_fd();
   while (got < n) {
     ssize_t r;
-    if (atomic_load_explicit(stop, memory_order_relaxed) || signal_stop_requested())
-      return 0;
+    if (atomic_load_explicit(stop, memory_order_relaxed) || signal_stop_requested()) return 0;
+    if (wfd >= 0) {
+      struct pollfd pfds[2];
+      pfds[0].fd = fd;
+      pfds[0].events = POLLIN;
+      pfds[0].revents = 0;
+      pfds[1].fd = wfd;
+      pfds[1].events = POLLIN;
+      pfds[1].revents = 0;
+      poll(pfds, 2, -1);
+      if (!(pfds[0].revents & POLLIN)) continue;
+    }
     r = recv(fd, buf + got, n - got, 0);
     if (r > 0) {
       got += (size_t)r;
       continue;
     }
-    if (r == 0)
-      return -1;
-    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-      continue;
+    if (r == 0) return -1;
+    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) continue;
     return -1;
   }
   return 1;
@@ -62,15 +70,14 @@ typedef enum { FRAME_OK, FRAME_STOP, FRAME_AUTH_FAIL } frame_status_t;
 /* read+decrypt+validate one frame. auth/size/crc failures logged+counted here.
    FRAME_OK: body_out/buflen_out set. FRAME_STOP: read/decrypt failed, no log.
    FRAME_AUTH_FAIL: already logged */
-static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned char *buf, unsigned char **body_out,
-                                  size_t *buflen_out, unsigned char conn_ucrc[4], int *have_ucrc) {
+static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned char *buf,
+  unsigned char **body_out, size_t *buflen_out, unsigned char conn_ucrc[4], int *have_ucrc) {
   unsigned char *body = buf + 4;
   size_t buflen, total;
   int rc;
 
   rc = read_exact(fd, buf, CS378X_MIN_FRAME, &s->stop);
-  if (rc <= 0)
-    return FRAME_STOP;
+  if (rc <= 0) return FRAME_STOP;
 
   if (!*have_ucrc) {
     if (s->check_ucrc && memcmp(buf, s->expected_ucrc, 4) != 0) {
@@ -86,9 +93,7 @@ static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned 
     return FRAME_AUTH_FAIL;
   }
 
-  if (cs378x_aes128_ecb(s->aes_key, body, 32, 0) != 0)
-    return FRAME_STOP;
-
+  if (cs378x_aes128_ecb(s->aes_key, body, 32, 0) != 0) return FRAME_STOP;
   if (body[0] == CMD_ECM_REQUEST)
     buflen = (size_t)(3 + ((body[21] & 0x0F) << 8) + body[22]);
   else
@@ -103,10 +108,8 @@ static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned 
 
   if (total > 32) {
     rc = read_exact(fd, body + 32, total - 32, &s->stop);
-    if (rc <= 0)
-      return FRAME_STOP;
-    if (cs378x_aes128_ecb(s->aes_key, body + 32, total - 32, 0) != 0)
-      return FRAME_STOP;
+    if (rc <= 0) return FRAME_STOP;
+    if (cs378x_aes128_ecb(s->aes_key, body + 32, total - 32, 0) != 0) return FRAME_STOP;
   }
 
   if (cs378x_crc32(body + 20, buflen) != (((uint32_t)body[4] << 24) | ((uint32_t)body[5] << 16) | ((uint32_t)body[6] << 8) | body[7])) {
@@ -140,9 +143,7 @@ static void *worker_main(void *arg) {
     unsigned char *body;
     size_t buflen;
 
-    if (read_frame(s, fd, slot, buf, &body, &buflen, conn_ucrc, &have_ucrc) != FRAME_OK)
-      break;
-
+    if (read_frame(s, fd, slot, buf, &body, &buflen, conn_ucrc, &have_ucrc) != FRAME_OK) break;
     switch (body[0]) {
       case CMD_ECM_REQUEST:
         handle_ecm(s, fd, conn_ucrc, body, buflen);
@@ -205,21 +206,30 @@ int tcp_listen_dualstack(unsigned port) {
 
 void *accept_main(void *arg) {
   cs378x_server_t *s = arg;
+  int wfd = signal_wake_fd();
 
   while (!atomic_load_explicit(&s->stop, memory_order_relaxed) && !signal_stop_requested()) {
-    struct pollfd pfd;
-    int pret, fd, slot;
+    struct pollfd pfds[2];
+    int pret, fd, slot, npfd;
+    worker_arg_t *wa;
+    pthread_t th;
 
-    pfd.fd = s->listen_fd;
-    pfd.events = POLLIN;
-    pret = poll(&pfd, 1, CS378X_POLL_INTERVAL_MS);
-    if (pret <= 0)
-      continue;
-
+    pfds[0].fd = s->listen_fd;
+    pfds[0].events = POLLIN;
+    pfds[0].revents = 0;
+    npfd = 1;
+    if (wfd >= 0) {
+      pfds[1].fd = wfd;
+      pfds[1].events = POLLIN;
+      pfds[1].revents = 0;
+      npfd = 2;
+    }
+    pret = poll(pfds, (nfds_t)npfd, npfd == 2 ? -1 : CS378X_POLL_INTERVAL_MS);
+    if (pret <= 0) continue;
+    if (!(pfds[0].revents & POLLIN)) continue;
     fd = accept(s->listen_fd, NULL, NULL);
     if (fd < 0) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-        continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) continue;
       log_line(TOOL_NAME ": accept: %s", strerror(errno));
       continue;
     }
@@ -238,23 +248,20 @@ void *accept_main(void *arg) {
       continue;
     }
 
-    {
-      worker_arg_t *wa = &s->worker_args[slot];
-      pthread_t th;
-      reap_worker_slot(s, slot);
-      wa->s = s;
-      wa->fd = fd;
-      wa->slot = slot;
-      atomic_store_explicit(&s->worker_fd[slot], fd, memory_order_release);
-      if (pthread_create(&th, NULL, worker_main, wa) != 0) {
-        log_line(TOOL_NAME ": pthread_create: %s", strerror(errno));
-        close(fd);
-        atomic_store_explicit(&s->worker_fd[slot], -1, memory_order_release);
-        atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
-      } else {
-        s->worker_thread[slot] = th;
-        s->worker_thread_joinable[slot] = 1;
-      }
+    wa = &s->worker_args[slot];
+    reap_worker_slot(s, slot);
+    wa->s = s;
+    wa->fd = fd;
+    wa->slot = slot;
+    atomic_store_explicit(&s->worker_fd[slot], fd, memory_order_release);
+    if (pthread_create(&th, NULL, worker_main, wa) != 0) {
+      log_line(TOOL_NAME ": pthread_create: %s", strerror(errno));
+      close(fd);
+      atomic_store_explicit(&s->worker_fd[slot], -1, memory_order_release);
+      atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
+    } else {
+      s->worker_thread[slot] = th;
+      s->worker_thread_joinable[slot] = 1;
     }
   }
   return NULL;

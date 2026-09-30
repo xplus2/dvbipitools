@@ -29,11 +29,16 @@ static log_color_t color_mode = LOG_COLOR_AUTO;
 void log_set_color(log_color_t mode) { color_mode = mode; }
 
 int log_color_from_string(const char *s, log_color_t *out) {
-  if (!strcmp(s, "auto"))         *out = LOG_COLOR_AUTO;
-  else if (!strcmp(s, "always"))  *out = LOG_COLOR_ALWAYS;
-  else if (!strcmp(s, "never"))   *out = LOG_COLOR_NEVER;
-  else return -1;
-  return 0;
+  static const struct { const char *name; log_color_t val; } map[] = {
+    {"auto", LOG_COLOR_AUTO}, {"always", LOG_COLOR_ALWAYS}, {"never", LOG_COLOR_NEVER},
+  };
+  size_t i;
+  for (i = 0; i < sizeof map / sizeof map[0]; i++)
+    if (!strcmp(s, map[i].name)) {
+      *out = map[i].val;
+      return 0;
+    }
+  return -1;
 }
 
 log_color_t log_color_prescan(int argc, char **argv) {
@@ -70,7 +75,8 @@ static void skip_csi_params(char **rp) {
 
 /* strip ANSI escapes in place: CSI and two-byte */
 static void strip_ansi(char *s) {
-  char *r = s, *w = s;
+  char *r = s;
+  char *w = s;
   while (*r) {
     if (*r == 0x1B) {
       r++;
@@ -100,9 +106,12 @@ void log_line(const char *fmt, ...) {
 
 void log_throttled(log_throttle_t *t, int window_s, const char *fmt, ...) {
   struct timespec now;
-  long long now_ms, next, new_next;
+  long long now_ms;
+  long long next;
+  long long new_next;
   va_list ap;
   char msg[512];
+  unsigned long suppressed;
   clock_gettime(CLOCK_MONOTONIC, &now);
   now_ms = (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
   next = atomic_load_explicit(&t->next_log_ms, memory_order_relaxed);
@@ -118,17 +127,14 @@ void log_throttled(log_throttle_t *t, int window_s, const char *fmt, ...) {
   va_start(ap, fmt);
   vsnprintf(msg, sizeof msg, fmt, ap);
   va_end(ap);
-  {
-    unsigned long suppressed = atomic_exchange_explicit(&t->suppressed, 0, memory_order_relaxed);
-    if (suppressed)
-      log_line("%s (%lu more in %ds)", msg, suppressed, window_s);
-    else
-      log_line("%s", msg);
-  }
+  suppressed = atomic_exchange_explicit(&t->suppressed, 0, memory_order_relaxed);
+  if (suppressed) log_line("%s (%lu more in %ds)", msg, suppressed, window_s);
+  else            log_line("%s", msg);
 }
 
 void log_line_ansi(const char *fmt, ...) {
-  char ts[20], msg[4096];
+  char ts[20];
+  char msg[4096];
   va_list ap;
   va_start(ap, fmt);
   vsnprintf(msg, sizeof msg, fmt, ap);

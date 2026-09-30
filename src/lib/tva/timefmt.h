@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIXMLTV_TIMEFMT_H
-#define DIPIXMLTV_TIMEFMT_H
+#ifndef DVBIPITOOLS_LIB_TVA_TIMEFMT_H
+#define DVBIPITOOLS_LIB_TVA_TIMEFMT_H
 
 #include <stddef.h>
 

@@ -50,6 +50,8 @@ int http_can_reuse(const http_t *h);
 
 void http_close(http_t *h);
 
+http_t *http_take_reuse(http_t **reuse, double *established_at, double max_age_s);
+
 typedef struct http_async http_async_t;
 
 typedef enum { HTTP_ASYNC_PENDING, HTTP_ASYNC_DONE, HTTP_ASYNC_ERROR } http_async_state_t;

@@ -56,7 +56,8 @@ static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *
   if (pid_filter_excludes(&s->filter, pid)) return;
   if (psi_wants_pid(s->demux.psi, pid)) psi_feed(s->demux.psi, pkt);
   if (!s->demux.video_pid_known && psi_ready(s->demux.psi)) {
-    int n, i;
+    int n;
+    int i;
     const psi_es_t *es = psi_es(s->demux.psi, &n);
     for (i = 0; i < n; i++) if (es[i].cls == PID_VIDEO) {
       s->demux.video_pid = es[i].pid;
@@ -70,10 +71,10 @@ static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *
       if (es[i].cls == PID_AUDIO && audio_codec_supported(es[i].codec)) {
         s->demux.audio_pid = es[i].pid;
         s->demux.audio_codec = es[i].codec;
-        s->audio.es_audio.codec = es[i].codec;
+        s->audio.es.codec = es[i].codec;
         pes_track(s->demux.pes, s->demux.audio_pid);
         s->demux.audio_pid_known = 1;
-        s->audio.audio_present = 1;
+        s->audio.present = 1;
         break;
       }
     }

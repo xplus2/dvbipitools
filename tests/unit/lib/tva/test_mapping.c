@@ -74,6 +74,15 @@ START_TEST(mapping_load_rejects_malformed_line) {
 }
 END_TEST
 
+START_TEST(mapping_load_rejects_bad_tsid) {
+  char path[] = "/tmp/dvbipitools_test_mapping_XXXXXX";
+  mapping_t m;
+  write_temp_csv(path, "channel1,rtp://239.1.1.1:5000,abc,2,101\n");
+  ck_assert_int_eq(mapping_load(path, &m), -1);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(mapping_load_rejects_missing_file) {
   mapping_t m;
   ck_assert_int_eq(mapping_load("/nonexistent/dvbipitools_test_mapping.csv", &m), -1);
@@ -86,6 +95,7 @@ static Suite *mapping_suite(void) {
   tcase_add_test(tc, mapping_load_and_lookup_round_trips);
   tcase_add_test(tc, mapping_load_id_may_contain_commas);
   tcase_add_test(tc, mapping_load_rejects_malformed_line);
+  tcase_add_test(tc, mapping_load_rejects_bad_tsid);
   tcase_add_test(tc, mapping_load_rejects_missing_file);
   suite_add_tcase(s, tc);
   return s;

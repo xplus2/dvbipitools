@@ -55,6 +55,8 @@ struct emmg_server {
 
   log_throttle_t oversized_throttle;
   log_throttle_t queue_full_throttle;
+  log_throttle_t rx_msg_throttle;
+  log_throttle_t data_provision_throttle;
 
   atomic_ulong emm_total;
   atomic_ulong emm_dropped;

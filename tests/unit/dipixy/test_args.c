@@ -6,13 +6,15 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "lib/config/yamlcfg.h"
+
 #include "dipixy/args.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
 START_TEST(no_args_applies_all_defaults) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.listen.scope, LISTEN_ANY);
   ck_assert_uint_eq(cfg.listen.port, 9080u);
@@ -26,181 +28,221 @@ START_TEST(no_args_applies_all_defaults) {
   ck_assert_int_eq(cfg.segment_count, 4);
   ck_assert_double_eq_tol(cfg.hls_part_size, 0.35, 1e-9);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(segment_size_is_overridable) {
   char *argv[] = {"dipixy", "--segment-size", "6", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_double_eq_tol(cfg.segment_size, 6.0, 1e-9);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(segment_size_rejects_below_minimum) {
   char *argv[] = {"dipixy", "--segment-size", "1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(segment_count_is_overridable) {
   char *argv[] = {"dipixy", "--segment-count", "6", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.segment_count, 6);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(segment_count_rejects_below_minimum) {
   char *argv[] = {"dipixy", "--segment-count", "2", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(bad_metrics_inspect_ts_frees_cfg_before_returning_err) {
+  char *argv[] = {"dipixy", "-I", "eth0", "-i", "channels.m3u", "--metrics-inspect-ts", "bogus", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  args_free(&cfg); /* must be safe: args_parse already freed cfg->sources internally */
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(bad_al_fec_frees_cfg_before_returning_err) {
+  char *argv[] = {"dipixy", "-I", "eth0", "-i", "channels.m3u", "--al-fec", "bogus", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(hls_part_size_is_overridable) {
   char *argv[] = {"dipixy", "--hls-part-size", "0.5", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_double_eq_tol(cfg.hls_part_size, 0.5, 1e-9);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(hls_part_size_rejects_out_of_range) {
   char *argv[] = {"dipixy", "--hls-part-size", "0.01", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(hls_part_size_rejects_not_smaller_than_segment_size) {
   char *argv[] = {"dipixy", "--segment-size", "2", "--hls-part-size", "2", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(dash_part_size_defaults_to_333ms) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_double_eq_tol(cfg.dash_part_size, 0.333, 1e-9);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(dash_part_size_is_overridable) {
   char *argv[] = {"dipixy", "--dash-part-size", "0.5", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_double_eq_tol(cfg.dash_part_size, 0.5, 1e-9);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(dash_part_size_rejects_out_of_range) {
   char *argv[] = {"dipixy", "--dash-part-size", "0.01", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(dash_part_size_rejects_zero) {
   char *argv[] = {"dipixy", "--dash-part-size", "0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(dash_part_size_rejects_not_smaller_than_segment_size) {
   char *argv[] = {"dipixy", "--segment-size", "2", "--dash-part-size", "2", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(listen_v4_is_overridable) {
   char *argv[] = {"dipixy", "-l", "0.0.0.0:8080", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.listen.scope, LISTEN_V4);
   ck_assert_str_eq(cfg.listen.addr, "0.0.0.0");
   ck_assert_uint_eq(cfg.listen.port, 8080u);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(listen_v6_bracket_form_parses) {
   char *argv[] = {"dipixy", "--listen", "[::1]:8080", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.listen.scope, LISTEN_V6);
   ck_assert_str_eq(cfg.listen.addr, "::1");
   ck_assert_uint_eq(cfg.listen.port, 8080u);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(listen_tls_is_overridable) {
   char *argv[] = {"dipixy", "-L", "0.0.0.0:9444", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.listen_tls.scope, LISTEN_V4);
   ck_assert_uint_eq(cfg.listen_tls.port, 9444u);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(listen_rejects_malformed_addr) {
   char *argv[] = {"dipixy", "-l", "not-an-addr", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(tls_cert_without_key_rejected) {
   char *argv[] = {"dipixy", "--tls-cert", "server.crt", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(tls_key_without_cert_rejected) {
   char *argv[] = {"dipixy", "--tls-key", "server.key", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(tls_cert_and_key_together_accepted) {
   char *argv[] = {"dipixy", "--tls-cert", "server.crt", "--tls-key", "server.key", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.tls_cert, "server.crt");
   ck_assert_str_eq(cfg.tls_key, "server.key");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(workers_relative_values_accepted) {
   char *argv[] = {"dipixy", "-j", "-2", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.workers_spec, -2);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(workers_absolute_value_accepted) {
   char *argv[] = {"dipixy", "--workers", "8", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.workers_spec, 8);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -208,19 +250,21 @@ START_TEST(workers_rejects_zero_and_out_of_range) {
   char *argv1[] = {"dipixy", "-j", "0", NULL};
   char *argv2[] = {"dipixy", "-j", "-4", NULL};
   char *argv3[] = {"dipixy", "-j", "abc", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv1), argv1, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(argv3), argv3, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(max_clients_is_overridable) {
   char *argv[] = {"dipixy", "--max-clients", "64", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.max_clients, 64);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -228,16 +272,17 @@ START_TEST(max_clients_rejects_zero_and_out_of_range) {
   char *argv1[] = {"dipixy", "--max-clients", "0", NULL};
   char *argv2[] = {"dipixy", "--max-clients", "65537", NULL};
   char *argv3[] = {"dipixy", "--max-clients", "abc", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv1), argv1, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(argv3), argv3, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(sources_recorded_in_definition_order) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "-i", "sds://239.1.1.1:3937", "-i", "b.csv", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.n_sources, 3);
   ck_assert_int_eq(cfg.sources[0].kind, SRC_M3U);
@@ -247,128 +292,184 @@ START_TEST(sources_recorded_in_definition_order) {
   ck_assert_int_eq(cfg.sources[2].kind, SRC_CSV);
   ck_assert_str_eq(cfg.sources[2].value, "b.csv");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(sds_rejects_malformed_addr) {
   char *argv[] = {"dipixy", "-i", "sds://not-an-addr", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(xspf_source_recorded) {
   char *argv[] = {"dipixy", "-i", "ch.xspf", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.n_sources, 1);
   ck_assert_int_eq(cfg.sources[0].kind, SRC_XSPF);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(xml_source_recorded) {
   char *argv[] = {"dipixy", "-i", "scan.xml", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.n_sources, 1);
   ck_assert_int_eq(cfg.sources[0].kind, SRC_XML);
   ck_assert_str_eq(cfg.sources[0].value, "scan.xml");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(m3u8_extension_recorded_as_m3u) {
   char *argv[] = {"dipixy", "-i", "chan.m3u8", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.n_sources, 1);
   ck_assert_int_eq(cfg.sources[0].kind, SRC_M3U);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(extension_match_is_case_insensitive) {
   char *argv[] = {"dipixy", "-i", "chan.XSPF", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.n_sources, 1);
   ck_assert_int_eq(cfg.sources[0].kind, SRC_XSPF);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(https_source_recorded_as_http) {
   char *argv[] = {"dipixy", "-i", "https://example.invalid/stream.ts", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.n_sources, 1);
   ck_assert_int_eq(cfg.sources[0].kind, SRC_HTTP);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(rtp_mcast_source_recorded) {
+  char *argv[] = {"dipixy", "-i", "rtp://239.2.24.1:8208", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.n_sources, 1);
+  ck_assert_int_eq(cfg.sources[0].kind, SRC_MCAST);
+  ck_assert_str_eq(cfg.sources[0].value, "rtp://239.2.24.1:8208");
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(udp_mcast_source_recorded) {
+  char *argv[] = {"dipixy", "-i", "udp://239.2.24.1:8208", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.n_sources, 1);
+  ck_assert_int_eq(cfg.sources[0].kind, SRC_MCAST);
+  ck_assert_str_eq(cfg.sources[0].value, "udp://239.2.24.1:8208");
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(mcast_rejects_unicast_addr) {
+  char *argv1[] = {"dipixy", "-i", "rtp://10.0.0.1:8208", NULL};
+  char *argv2[] = {"dipixy", "-i", "udp://10.0.0.1:8208", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv1), argv1, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(mcast_rejects_malformed_addr) {
+  char *argv[] = {"dipixy", "-i", "rtp://not-an-addr", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(unrecognized_source_form_is_rejected) {
   char *argv[] = {"dipixy", "-i", "not-a-recognizable-source", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_disabled_by_default) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_ptr_eq(cfg.metrics_id, NULL);
   ck_assert_int_eq(cfg.metrics_http, 0);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_id_enables_metrics) {
   char *argv[] = {"dipixy", "--metrics-id", "xy1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.metrics_id, "xy1");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_sock_without_id_rejected) {
   char *argv[] = {"dipixy", "--metrics", "/tmp/x.sock", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_interval_rejects_out_of_range) {
   char *argv[] = {"dipixy", "--metrics-id", "xy1", "--metrics-interval", "0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_http_flag_recorded) {
   char *argv[] = {"dipixy", "--metrics-http", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.metrics_http, 1);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(daemonize_flag_recorded) {
   char *argv[] = {"dipixy", "-d", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.daemonize, 1);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(feature_toggle_flags_default_off) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.no_hls, 0);
   ck_assert_int_eq(cfg.no_llhls, 0);
@@ -384,13 +485,14 @@ START_TEST(feature_toggle_flags_default_off) {
   ck_assert_int_eq(cfg.no_pid_filters, 0);
   ck_assert_int_eq(cfg.no_status, 0);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(feature_toggle_flags_recorded) {
   char *argv[] = {"dipixy", "--no-url-rtp", "--no-url-udp",
                    "--no-url-srt", "--no-pid-filters", "--no-status", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.no_url_rtp, 1);
   ck_assert_int_eq(cfg.no_url_udp, 1);
@@ -398,12 +500,13 @@ START_TEST(feature_toggle_flags_recorded) {
   ck_assert_int_eq(cfg.no_pid_filters, 1);
   ck_assert_int_eq(cfg.no_status, 1);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(format_whitelist_enables_only_listed) {
   char *argv[] = {"dipixy", "-f", "spts,dash", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.no_ts, 1);
   ck_assert_int_eq(cfg.no_spts, 0);
@@ -414,153 +517,172 @@ START_TEST(format_whitelist_enables_only_listed) {
   ck_assert_int_eq(cfg.no_dash, 0);
   ck_assert_int_eq(cfg.no_lldash, 1);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(format_whitelist_lldash_enables_it) {
   char *argv[] = {"dipixy", "-f", "lldash", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.no_lldash, 0);
   ck_assert_int_eq(cfg.no_dash, 1);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(format_whitelist_mp4_enables_it) {
   char *argv[] = {"dipixy", "-f", "mp4", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.no_mp4, 0);
   ck_assert_int_eq(cfg.no_ts, 1);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(format_whitelist_unknown_token_rejected) {
   char *argv[] = {"dipixy", "-f", "bogus", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(format_whitelist_empty_rejected) {
   char *argv[] = {"dipixy", "-f", "", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(stdin_flag_accepts_dash) {
   char *argv[] = {"dipixy", "-i", "-", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.stdin_path, "-");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(stdin_flag_rejects_non_dash) {
   char *argv[] = {"dipixy", "-i", "somefile", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(rist_flag_records_uri) {
   char *argv[] = {"dipixy", "-i", "rist://@239.0.0.1:9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.rist_uri, "rist://@239.0.0.1:9000");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(rist_flag_given_twice_rejected) {
   char *argv[] = {"dipixy", "-i", "rist://@a:1", "-i", "rist://@b:2", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(rist_flag_without_listen_marker_rejected) {
   char *argv[] = {"dipixy", "-i", "rist://239.0.0.1:9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(http_in_flag_appends_source) {
   char *argv[] = {"dipixy", "-i", "http://example.invalid/stream.ts", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.n_sources, 1);
   ck_assert_int_eq(cfg.sources[0].kind, SRC_HTTP);
   ck_assert_str_eq(cfg.sources[0].value, "http://example.invalid/stream.ts");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(name_attaches_to_preceding_source) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "-n", "mylist", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.n_sources, 1);
   ck_assert_str_eq(cfg.sources[0].name, "mylist");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(name_attaches_to_preceding_stdin) {
   char *argv[] = {"dipixy", "-i", "-", "-n", "mystdin", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.stdin_name, "mystdin");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(name_attaches_to_preceding_rist) {
   char *argv[] = {"dipixy", "-i", "rist://@239.0.0.1:9000", "-n", "myrist", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.rist_name, "myrist");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(name_without_preceding_input_rejected) {
   char *argv[] = {"dipixy", "-n", "orphan", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(name_given_twice_for_same_input_rejected) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "-n", "one", "-n", "two", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(duplicate_name_across_inputs_rejected) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "-n", "same", "-i", "b.csv", "-n", "same", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(name_containing_slash_rejected) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "-n", "foo/bar", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(name_starting_with_dot_rejected) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "-n", ".hidden", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -569,188 +691,209 @@ START_TEST(name_matching_reserved_word_rejected) {
   size_t i;
   for (i = 0; i < sizeof reserved / sizeof reserved[0]; i++) {
     char *argv[] = {"dipixy", "-i", "a.m3u", "-n", (char *)reserved[i], NULL};
-    config_t cfg;
+    config_t cfg = {0};
     ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+    yamlcfg_strpool_free(cfg.str_pool);
   }
 }
 END_TEST
 
 START_TEST(name_empty_rejected) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "-n", "", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(media_type_defaults_to_tv) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "-i", "-", "-i", "rist://@239.0.0.1:9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.sources[0].media_type, MEDIA_TV);
   ck_assert_int_eq(cfg.stdin_media_type, MEDIA_TV);
   ck_assert_int_eq(cfg.rist_media_type, MEDIA_TV);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(media_type_attaches_to_preceding_source) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "--media-type", "radio", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.sources[0].media_type, MEDIA_RADIO);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(media_type_attaches_to_preceding_stdin) {
   char *argv[] = {"dipixy", "-i", "-", "--media-type", "radio", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.stdin_media_type, MEDIA_RADIO);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(media_type_attaches_to_preceding_rist) {
   char *argv[] = {"dipixy", "-i", "rist://@239.0.0.1:9000", "--media-type", "radio", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.rist_media_type, MEDIA_RADIO);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(media_type_explicit_tv_accepted) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "--media-type", "tv", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.sources[0].media_type, MEDIA_TV);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(media_type_without_preceding_input_rejected) {
   char *argv[] = {"dipixy", "--media-type", "radio", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(media_type_given_twice_for_same_input_rejected) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "--media-type", "radio", "--media-type", "tv", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(media_type_rejects_unknown_value) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "--media-type", "music", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(media_type_independent_per_source) {
   char *argv[] = {"dipixy", "-i", "a.m3u", "--media-type", "radio", "-i", "b.csv", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.sources[0].media_type, MEDIA_RADIO);
   ck_assert_int_eq(cfg.sources[1].media_type, MEDIA_TV);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(dlna_disabled_by_default) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.enable_dlna, 0);
   ck_assert_int_eq(cfg.ssdp_ttl, 3);
   ck_assert_ptr_eq(cfg.ssdp_iface, NULL);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(ssdp_ttl_is_overridable) {
   char *argv[] = {"dipixy", "--ssdp-ttl", "8", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.ssdp_ttl, 8);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(h3_altsvc_port_defaults_to_zero) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.h3_altsvc_port, 0);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(h3_altsvc_port_is_overridable) {
   char *argv[] = {"dipixy", "--h3-altsvc-port", "8443", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.h3_altsvc_port, 8443);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(h3_altsvc_port_rejects_out_of_range) {
   char *argv[] = {"dipixy", "--h3-altsvc-port", "70000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(h3_limits_default_to_builtin) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.h3_max_streams, 0);
   ck_assert_uint_eq(cfg.h3_max_conns, 0);
   ck_assert_uint_eq(cfg.h3_idle_s, 0);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(h3_limits_are_overridable) {
   char *argv[] = {"dipixy", "--h3-max-streams", "250", "--h3-max-conns", "64", "--h3-idle-timeout", "120", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.h3_max_streams, 250);
   ck_assert_uint_eq(cfg.h3_max_conns, 64);
   ck_assert_uint_eq(cfg.h3_idle_s, 120);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(h3_max_streams_rejects_out_of_range) {
   char *lo[] = {"dipixy", "--h3-max-streams", "3", NULL};
   char *hi[] = {"dipixy", "--h3-max-streams", "1001", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(lo), lo, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(hi), hi, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(h3_max_conns_and_idle_reject_zero) {
   char *conns[] = {"dipixy", "--h3-max-conns", "0", NULL};
   char *idle[] = {"dipixy", "--h3-idle-timeout", "0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(conns), conns, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(idle), idle, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(h3_retry_defaults_to_auto) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.h3_retry, H3_RETRY_CFG_AUTO);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -758,7 +901,7 @@ START_TEST(h3_retry_accepts_each_mode) {
   char *off[] = {"dipixy", "--h3-retry", "off", NULL};
   char *always[] = {"dipixy", "--h3-retry", "always", NULL};
   char *autom[] = {"dipixy", "--h3-retry", "auto", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(off), off, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.h3_retry, H3_RETRY_CFG_OFF);
   args_free(&cfg);
@@ -768,35 +911,39 @@ START_TEST(h3_retry_accepts_each_mode) {
   ck_assert_int_eq(args_parse(ARGC(autom), autom, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.h3_retry, H3_RETRY_CFG_AUTO);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(h3_retry_rejects_unknown_mode) {
   char *argv[] = {"dipixy", "--h3-retry", "sometimes", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(h3_transport_defaults) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.h3_max_udp, 0);
   ck_assert_uint_eq(cfg.h3_window_kib, 0);
   ck_assert_int_eq(cfg.h3_cc, H3_CC_CFG_CUBIC);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(h3_transport_options_are_read) {
   char *argv[] = {"dipixy", "--h3-max-udp-payload", "9000", "--h3-window", "1024", "--h3-cc", "bbr", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.h3_max_udp, 9000);
   ck_assert_uint_eq(cfg.h3_window_kib, 1024);
   ck_assert_int_eq(cfg.h3_cc, H3_CC_CFG_BBR);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -805,236 +952,264 @@ START_TEST(h3_transport_options_reject_bad_values) {
   char *udp_hi[] = {"dipixy", "--h3-max-udp-payload", "65508", NULL};
   char *win[] = {"dipixy", "--h3-window", "8", NULL};
   char *cc[] = {"dipixy", "--h3-cc", "vegas", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(udp_lo), udp_lo, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(udp_hi), udp_hi, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(win), win, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(cc), cc, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(ssdp_ttl_rejects_out_of_range) {
   char *argv[] = {"dipixy", "--ssdp-ttl", "0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(ssdp_iface_is_recorded) {
   char *argv[] = {"dipixy", "--ssdp-iface", "eth1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.ssdp_iface, "eth1");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(cors_origin_defaults_to_null) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_ptr_eq(cfg.cors_origins, NULL);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(cors_origin_is_recorded) {
   char *argv[] = {"dipixy", "--cors-origin", "https://a.example,https://b.example", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.cors_origins, "https://a.example,https://b.example");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(auth_defaults_to_off) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.http_auth[0], '\0');
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(auth_encodes_user_password) {
   char *argv[] = {"dipixy", "--auth", "user:pass", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.http_auth, "Basic dXNlcjpwYXNz");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(auth_rejects_missing_colon) {
   char *argv[] = {"dipixy", "--auth", "userpass", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_auth_defaults_to_off) {
   char *argv[] = {"dipixy", "-I", "eth0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.http_metrics_auth[0], '\0');
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_auth_encodes_user_password) {
   char *argv[] = {"dipixy", "--metrics-auth", "user:pass", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.http_metrics_auth, "Basic dXNlcjpwYXNz");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_auth_rejects_missing_colon) {
   char *argv[] = {"dipixy", "--metrics-auth", "userpass", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_auth_is_independent_of_auth) {
   char *argv[] = {"dipixy", "--auth", "user:pass", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.http_auth, "Basic dXNlcjpwYXNz");
   ck_assert_int_eq(cfg.http_metrics_auth[0], '\0');
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(enable_dlna_falls_back_to_concrete_listen) {
   char *argv[] = {"dipixy", "-l", "192.0.2.1:9080", "--enable-dlna", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.enable_dlna, 1);
   ck_assert_str_eq(cfg.dlna_host, "192.0.2.1:9080");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(enable_dlna_without_host_or_concrete_listen_rejected) {
   char *argv[] = {"dipixy", "--enable-dlna", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(enable_dlna_records_explicit_host) {
   char *argv[] = {"dipixy", "--enable-dlna", "--dlna-host", "dvb.example:9080", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.dlna_host, "dvb.example:9080");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(enable_dlna_with_no_spts_rejected) {
   char *argv[] = {"dipixy", "--enable-dlna", "--dlna-host", "dvb.example:9080", "-f", "rawaudio", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(enable_dlna_with_no_rawaudio_rejected) {
   char *argv[] = {"dipixy", "--enable-dlna", "--dlna-host", "dvb.example:9080", "-f", "spts", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(enable_dlna_records_explicit_name) {
   char *argv[] = {"dipixy", "--enable-dlna", "--dlna-host", "dvb.example:9080", "--dlna-name", "Living Room", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.dlna_name, "Living Room");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(dlna_name_defaults_to_null) {
   char *argv[] = {"dipixy", "--enable-dlna", "--dlna-host", "dvb.example:9080", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_ptr_null(cfg.dlna_name);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(dlna_keep_multicast_defaults_to_off) {
   char *argv[] = {"dipixy", "--enable-dlna", "--dlna-host", "dvb.example:9080", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.dlna_keep_multicast, 0);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(dlna_keep_multicast_is_recorded) {
   char *argv[] = {"dipixy", "--enable-dlna", "--dlna-host", "dvb.example:9080", "--dlna-keep-multicast", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.dlna_keep_multicast, 1);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(join_all_defaults_to_off) {
   char *argv[] = {"dipixy", "-i", "channels.m3u", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.join_all, 0);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(join_all_short_flag_is_recorded) {
   char *argv[] = {"dipixy", "-i", "channels.m3u", "-J", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.join_all, 1);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(join_all_long_flag_is_recorded) {
   char *argv[] = {"dipixy", "-i", "channels.m3u", "--join-all", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.join_all, 1);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(invalid_color_mode_is_rejected) {
   char *argv[] = {"dipixy", "--color", "sometimes", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(unexpected_positional_argument_is_rejected) {
   char *argv[] = {"dipixy", "extra", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(help_returns_help_status) {
   char *argv[] = {"dipixy", "-h", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(no_argv_at_all_returns_noargs) {
   char *argv[] = {"dipixy", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_NOARGS);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -1048,7 +1223,7 @@ static void write_cfg(char *path, const char *text) {
 START_TEST(config_file_provides_settings) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "iface: eth0\nlisten: 127.0.0.1:8080\nmax-clients: 64\nsegment-size: 4\nformat: ts,hls\nhls:\n  part-size: 0.5\nssdp:\n  ttl: 5\nmetrics:\n  id: xy\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
@@ -1063,13 +1238,14 @@ START_TEST(config_file_provides_settings) {
   ck_assert_int_eq(cfg.ssdp_ttl, 5);
   ck_assert_str_eq(cfg.metrics_id, "xy");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_inputs_take_scalars) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "input:\n  - sds://239.1.1.1:3937\n  - radio.m3u\n  - tv.xspf\n  - '-'\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
@@ -1079,13 +1255,14 @@ START_TEST(config_inputs_take_scalars) {
   ck_assert_int_eq(cfg.sources[1].ordinal, 2);
   ck_assert_int_eq(cfg.stdin_ordinal, 4);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_inputs_take_items) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "input:\n  - sds://239.1.1.1:3937:\n      name: Sds\n  - radio.m3u:\n      name: Radio\n      media-type: radio\n  - tv.xspf:\n      name: TV\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
@@ -1095,6 +1272,7 @@ START_TEST(config_inputs_take_items) {
   ck_assert_int_eq(cfg.sources[1].media_type, MEDIA_RADIO);
   ck_assert_str_eq(cfg.sources[2].name, "TV");
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -1104,19 +1282,20 @@ START_TEST(non_finite_and_oversized_numbers_are_rejected) {
   char *a3[] = {"dipixy", "--hls-part-size", "nan", NULL};
   char *a4[] = {"dipixy", "--ssdp-interval", "inf", NULL};
   char *a5[] = {"dipixy", "--hls-seg-pool", "4294967295", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(a1), a1, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(a2), a2, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(a3), a3, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(a4), a4, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(a5), a5, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_no_group_disables_features) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "no:\n  url-rtp: on\n  url-udp: on\n  url-srt: on\n  pid-filters: on\n  lcevc: on\n  http2: on\n  http3: on\n  fcc: on\n  ret: on\n  al-fec: on\n  status: on\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
@@ -1132,36 +1311,39 @@ START_TEST(config_no_group_disables_features) {
   ck_assert_int_eq(cfg.no_al_fec, 1);
   ck_assert_int_eq(cfg.no_status, 1);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_flat_no_keys_have_no_effect) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "no-fcc: on\nno-ret: on\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
   ck_assert_int_eq(cfg.no_fcc, 0);
   ck_assert_int_eq(cfg.no_ret, 0);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_input_item_without_source_is_error) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "input:\n  - name: Radio\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(cmdline_input_replaces_config_inputs) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, "-i", "b.csv", "-n", "B", "--max-clients", "8", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "input:\n  - a.m3u\n  - c.xspf\nmax-clients: 64\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
@@ -1171,40 +1353,44 @@ START_TEST(cmdline_input_replaces_config_inputs) {
   ck_assert_str_eq(cfg.sources[0].name, "B");
   ck_assert_int_eq(cfg.max_clients, 8);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(cmdline_name_needs_its_own_input) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, "-n", "X", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "input:\n  - a.m3u\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_missing_file_is_error) {
   char *argv[] = {"dipixy", "-c", "/nonexistent/dipixy.yaml", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_invalid_value_is_error) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "max-clients: 0\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_h3_section_provides_settings) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "h3:\n  altsvc-port: 8443\n  max-streams: 200\n  max-conns: 32\n  idle-timeout: 90\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
@@ -1213,35 +1399,38 @@ START_TEST(config_h3_section_provides_settings) {
   ck_assert_uint_eq(cfg.h3_max_conns, 32);
   ck_assert_uint_eq(cfg.h3_idle_s, 90);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_h3_retry_mode_is_read) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "h3:\n  retry: always\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
   ck_assert_int_eq(cfg.h3_retry, H3_RETRY_CFG_ALWAYS);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_h3_retry_invalid_is_error) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "h3:\n  retry: maybe\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_h3_transport_keys_are_read) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "h3:\n  max-udp-payload: 1300\n  window: 512\n  cc: reno\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
@@ -1249,26 +1438,29 @@ START_TEST(config_h3_transport_keys_are_read) {
   ck_assert_uint_eq(cfg.h3_window_kib, 512);
   ck_assert_int_eq(cfg.h3_cc, H3_CC_CFG_RENO);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_h3_max_streams_out_of_range_is_error) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "h3:\n  max-streams: 3\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_conflict_is_rejected) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "tls:\n  cert: /nonexistent/server.crt\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -1276,55 +1468,61 @@ START_TEST(configtest_reports_by_exit_status) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "--configtest", "-c", path, NULL};
   char *argv2[] = {"dipixy", "--configtest", "-c", "/nonexistent/dipixy.yaml", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "bogus: 1\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
   ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_level_is_recorded) {
   char *argv[] = {"dipixy", "--metrics-id", "inst1", "--metrics-inspect-ts", "medium", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_MEDIUM);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_defaults_to_off) {
   char *argv[] = {"dipixy", "--metrics-id", "inst1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_OFF);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_requires_metrics_id) {
   char *argv[] = {"dipixy", "--metrics-inspect-ts", "basic", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_rejects_unknown_level) {
   char *argv[] = {"dipixy", "--metrics-id", "inst1", "--metrics-inspect-ts", "bogus", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_from_yaml) {
   char path[] = "/tmp/dipixy_inspect_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "metrics:\n  id: a\n  inspect-ts: full\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
   ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_FULL);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -1336,6 +1534,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, segment_size_rejects_below_minimum);
   tcase_add_test(tc, segment_count_is_overridable);
   tcase_add_test(tc, segment_count_rejects_below_minimum);
+  tcase_add_test(tc, bad_metrics_inspect_ts_frees_cfg_before_returning_err);
+  tcase_add_test(tc, bad_al_fec_frees_cfg_before_returning_err);
   tcase_add_test(tc, hls_part_size_is_overridable);
   tcase_add_test(tc, hls_part_size_rejects_out_of_range);
   tcase_add_test(tc, hls_part_size_rejects_not_smaller_than_segment_size);
@@ -1363,6 +1563,10 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, m3u8_extension_recorded_as_m3u);
   tcase_add_test(tc, extension_match_is_case_insensitive);
   tcase_add_test(tc, https_source_recorded_as_http);
+  tcase_add_test(tc, rtp_mcast_source_recorded);
+  tcase_add_test(tc, udp_mcast_source_recorded);
+  tcase_add_test(tc, mcast_rejects_unicast_addr);
+  tcase_add_test(tc, mcast_rejects_malformed_addr);
   tcase_add_test(tc, unrecognized_source_form_is_rejected);
   tcase_add_test(tc, metrics_disabled_by_default);
   tcase_add_test(tc, metrics_id_enables_metrics);

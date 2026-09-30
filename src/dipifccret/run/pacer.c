@@ -43,7 +43,7 @@ static int burst_slot_read(const burst_slot_t *slot, int *in_use, uint64_t *word
    repeated overlap (next tick picks it up). done-cleanup below takes table lock */
 void *pacer_main(void *arg) {
   pacer_ctx_t *pc = (pacer_ctx_t *)arg;
-  struct timespec tick = {0, 20 * 1000 * 1000}; /* 20ms */
+  struct timespec deadline;
   pacer_snap_t *snap = calloc(pc->bursts->cap, sizeof *snap);
 
   if (!snap) {
@@ -51,11 +51,18 @@ void *pacer_main(void *arg) {
     return NULL;
   }
 
+  clock_gettime(CLOCK_MONOTONIC, &deadline);
+
   while (!signal_stop_requested()) {
     size_t n = 0;
     size_t scan_upto = atomic_load_explicit(&pc->bursts->high_water_mark, memory_order_relaxed);
 
-    nanosleep(&tick, NULL);
+    deadline.tv_nsec += 20 * 1000 * 1000;
+    if (deadline.tv_nsec >= 1000000000L) {
+      deadline.tv_nsec -= 1000000000L;
+      deadline.tv_sec += 1;
+    }
+    clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &deadline, NULL);
 
     for (size_t i = 0; i < scan_upto; i++) {
       const burst_slot_t *slot = &pc->bursts->slots[i];

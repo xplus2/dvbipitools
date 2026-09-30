@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIBIM_FRAGMENT_H
-#define DIPIBIM_FRAGMENT_H
+#ifndef DVBIPITOOLS_LIB_BIM_FRAGMENT_H
+#define DVBIPITOOLS_LIB_BIM_FRAGMENT_H
 
 #include "bimreader.h"
 #include "bitwriter.h"

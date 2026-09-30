@@ -9,16 +9,46 @@ struct tsinspect_agg {
   metrics_inspect_ts_t level;
   pthread_mutex_t lock;
   tsinspect_t **list;
-  unsigned n, cap;
+  unsigned n;
+  unsigned cap;
   tsinspect_counters_t retired;
   tspack_sync_t retired_sync;
   int sync_used;
 };
 
 static void add_counters(tsinspect_counters_t *dst, const tsinspect_counters_t *src) {
-  uint64_t *d = (uint64_t *)dst;
-  const uint64_t *s = (const uint64_t *)src;
-  for (size_t i = 0; i < sizeof *dst / sizeof *d; i++) d[i] += s[i];
+  dst->packets += src->packets;
+  dst->null_packets += src->null_packets;
+  dst->scrambled_packets += src->scrambled_packets;
+  dst->clear_packets += src->clear_packets;
+  dst->transport_errors += src->transport_errors;
+  dst->continuity_errors += src->continuity_errors;
+  dst->duplicate_packets += src->duplicate_packets;
+  dst->discontinuity_indicators += src->discontinuity_indicators;
+  dst->pat_errors += src->pat_errors;
+  dst->pmt_errors += src->pmt_errors;
+  dst->referenced_pid_missing += src->referenced_pid_missing;
+  dst->cat_errors += src->cat_errors;
+  dst->sdt_errors += src->sdt_errors;
+  dst->nit_errors += src->nit_errors;
+  dst->sdt_other_errors += src->sdt_other_errors;
+  dst->nit_other_errors += src->nit_other_errors;
+  dst->pcr_repetition_errors += src->pcr_repetition_errors;
+  dst->pcr_discontinuity_errors += src->pcr_discontinuity_errors;
+  dst->pts_errors += src->pts_errors;
+  dst->pcr_accuracy_errors += src->pcr_accuracy_errors;
+  dst->eit_errors += src->eit_errors;
+  dst->eit_other_errors += src->eit_other_errors;
+  dst->rst_errors += src->rst_errors;
+  dst->tdt_errors += src->tdt_errors;
+  dst->si_crc_errors += src->si_crc_errors;
+  dst->unreferenced_pids += src->unreferenced_pids;
+  dst->unreferenced_packets += src->unreferenced_packets;
+  dst->unreferenced_unlisted_pids += src->unreferenced_unlisted_pids;
+  dst->pid_added += src->pid_added;
+  dst->pid_removed += src->pid_removed;
+  dst->stalls += src->stalls;
+  dst->stall_ms += src->stall_ms;
 }
 
 tsinspect_agg_t *tsinspect_agg_new(metrics_inspect_ts_t level) {

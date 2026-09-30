@@ -11,8 +11,9 @@
 
 /* finished subtitle; UTF-8, LF joined */
 typedef struct {
-    int64_t start_ms, end_ms;
-    char text[TTX_TEXT_MAX];
+  int64_t start_ms;
+  int64_t end_ms;
+  char text[TTX_TEXT_MAX];
 } ttx_cue_t;
 
 typedef void (*ttx_cb)(void *ctx, const ttx_cue_t *cue);

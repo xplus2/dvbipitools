@@ -14,43 +14,15 @@
 #define MAX_SEGS 8
 
 int fmt_parse(const char *s, route_fmt_t *out) {
-  if (!strcmp(s, "ts")) {
-    *out = ROUTE_FMT_TS;
-    return 0;
-  }
-  if (!strcmp(s, "spts")) {
-    *out = ROUTE_FMT_SPTS;
-    return 0;
-  }
-  if (!strcmp(s, "hls")) {
-    *out = ROUTE_FMT_HLS;
-    return 0;
-  }
-  if (!strcmp(s, "hls-fmp4")) {
-    *out = ROUTE_FMT_HLS_FMP4;
-    return 0;
-  }
-  if (!strcmp(s, "llhls")) {
-    *out = ROUTE_FMT_LLHLS;
-    return 0;
-  }
-  if (!strcmp(s, "dash")) {
-    *out = ROUTE_FMT_DASH;
-    return 0;
-  }
-  if (!strcmp(s, "lldash")) {
-    *out = ROUTE_FMT_LLDASH;
-    return 0;
-  }
-  if (!strcmp(s, "rawaudio")) {
-    *out = ROUTE_FMT_RAWAUDIO;
-    return 0;
-  }
-  if (!strcmp(s, "mp4")) {
-    *out = ROUTE_FMT_MP4;
-    return 0;
-  }
-  return -1;
+  static const enum_map_t map[] = {
+{"ts", ROUTE_FMT_TS}, {"spts", ROUTE_FMT_SPTS}, {"hls", ROUTE_FMT_HLS}, {"hls-fmp4", ROUTE_FMT_HLS_FMP4},
+{"llhls", ROUTE_FMT_LLHLS}, {"dash", ROUTE_FMT_DASH}, {"lldash", ROUTE_FMT_LLDASH},
+{"rawaudio", ROUTE_FMT_RAWAUDIO}, {"mp4", ROUTE_FMT_MP4},
+  };
+  int v;
+  if (map_lookup(map, sizeof map / sizeof map[0], s, &v)) return -1;
+  *out = (route_fmt_t)v;
+  return 0;
 }
 
 static int hexval(int c) {
@@ -234,6 +206,8 @@ int route_parse(const char *path, route_t *out) {
   char *seg[MAX_SEGS];
   int nseg = 0;
   char *save;
+  static const enum_map_t kind_map[] = {{"rtp", ROUTE_RTP}, {"udp", ROUTE_UDP}, {"srt", ROUTE_SRT}};
+  int kind;
 
   if (!path || path[0] != '/') return -1;
   if (strlen(path + 1) >= sizeof buf) return -1;
@@ -243,17 +217,12 @@ int route_parse(const char *path, route_t *out) {
 
   if (nseg > 0 && pct_decode(seg[0])) return -1;
   memset(out, 0, sizeof *out);
-  if ((nseg == 3 || nseg == 2) && (!strcmp(seg[0], "rtp") || !strcmp(seg[0], "udp") || !strcmp(seg[0], "srt"))) {
+  if ((nseg == 3 || nseg == 2) && !map_lookup(kind_map, sizeof kind_map / sizeof kind_map[0], seg[0], &kind)) {
     int family;
     unsigned port;
     if (argutil_addrport_parse(seg[1], &family, out->addr, sizeof out->addr, &port)) return -1;
     if (parse_trailing_fmt(nseg == 3 ? seg[2] : NULL, out)) return -1;
-    if (!strcmp(seg[0], "rtp"))
-      out->kind = ROUTE_RTP;
-    else if (!strcmp(seg[0], "udp"))
-      out->kind = ROUTE_UDP;
-    else
-      out->kind = ROUTE_SRT;
+    out->kind = (route_kind_t)kind;
     out->family = family;
     out->port = port;
     return 0;

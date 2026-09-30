@@ -73,31 +73,23 @@ mpts_probe_result_t mpts_probe_run(tssrc_t *src, int name_wait_ms) {
 
   for (;;) {
     ssize_t n = tssrc_read(src, buf, sizeof buf, NULL);
+    int count;
+    int named;
     if (n < 0 || signal_stop_requested()) {
       r.kind = MPTS_PROBE_FAIL;
       psi_free(ctx.psi);
       return r;
     }
-    if (n > 0)
-      tspack_feed(&pz, buf, (size_t)n, probe_cb, &ctx);
-
-    if (!psi_have_pat(ctx.psi))
-      continue;
-
-    {
-      int count;
-      int named = all_named(ctx.psi, &count);
-      if (count <= 1)
-        break; /* spts: name not needed */
-      if (!have_deadline) {
-        have_deadline = 1;
-        name_deadline = mono() + (double)name_wait_ms / 1000.0;
-      }
-      if (named || mono() >= name_deadline)
-        break;
+    if (n > 0) tspack_feed(&pz, buf, (size_t)n, probe_cb, &ctx);
+    if (!psi_have_pat(ctx.psi)) continue;
+    named = all_named(ctx.psi, &count);
+    if (count <= 1) break; /* spts: name not needed */
+    if (!have_deadline) {
+      have_deadline = 1;
+      name_deadline = mono() + (double)name_wait_ms / 1000.0;
     }
+    if (named || mono() >= name_deadline) break;
   }
-
   fill_result(ctx.psi, &r);
   psi_free(ctx.psi);
   return r;

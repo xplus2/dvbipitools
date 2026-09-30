@@ -47,8 +47,9 @@ static int cb_h3_recv_header(nghttp3_conn *h3, int64_t sid, int32_t token, nghtt
   nghttp3_vec n = nghttp3_rcbuf_get_buf(name);
   nghttp3_vec v = nghttp3_rcbuf_get_buf(value);
 
-  httpng_parse_known_header((const char *)n.base, n.len, (const char *)v.base, v.len, r->method, sizeof r->method, r->path, H3_PATH_MAX,
-    r->inm, sizeof r->inm, r->origin, sizeof r->origin, r->authz, sizeof r->authz, r->protocol, sizeof r->protocol);
+  httpng_parse_known_header((const char *)n.base, n.len, (const char *)v.base, v.len,
+    &(httpng_hdr_out_t){r->method, sizeof r->method, r->path, H3_PATH_MAX,
+    r->inm, sizeof r->inm, r->origin, sizeof r->origin, r->authz, sizeof r->authz, r->protocol, sizeof r->protocol});
   return 0;
 }
 
@@ -144,14 +145,12 @@ static int h3ops_dashchunk_dispatch(void *connv, void *reqv, int sub, int ws_han
 
 static int h3ops_mp4push_dispatch(void *connv, void *reqv, int sub, int ws_handle) { return h3_mp4push_dispatch(connv, reqv, sub, ws_handle); }
 
-static int h3ops_hls_cold_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
-  const char *filename, hls_cold_kind_t kind, seg_container_t container, int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle) {
-  return h3_hls_cold_try_park(connv, ((h3_req_t *)reqv)->stream_id, ctx, filter, pmt_pid, lcevc, filename, kind, container, want_ll, is_head, origin_hdr, timeout_ms, ws_handle);
+static int h3ops_hls_cold_try_park(void *connv, void *reqv, const hls_cold_park_req_t *req) {
+  return h3_hls_cold_try_park(connv, ((h3_req_t *)reqv)->stream_id, req);
 }
 
-static int h3ops_llhls_try_park(void *connv, void *reqv, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename,
-  int is_head, const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle) {
-  return h3_llhls_try_park(connv, ((h3_req_t *)reqv)->stream_id, ctx, filter, pmt_pid, lcevc, filename, is_head, inm, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
+static int h3ops_llhls_try_park(void *connv, void *reqv, const llhls_park_req_t *req) {
+  return h3_llhls_try_park(connv, ((h3_req_t *)reqv)->stream_id, req);
 }
 
 static const httpng_ops_t h3_httpng_ops = {

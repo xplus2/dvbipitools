@@ -72,15 +72,21 @@ void *retryset_result(const retryset_t *rs, unsigned idx) {
 
 int retryset_poll_fd(const retryset_t *rs, unsigned idx) {
   const retryset_slot_t *sl = &rs->slots[idx];
-  if (sl->state == RETRYSET_CONNECTING) return rs->ops->open_poll_fd(sl->opening);
-  if (sl->state == RETRYSET_CONNECTED) return rs->ops->result_fd(sl->result);
+  switch (sl->state) {
+    case RETRYSET_CONNECTING: return rs->ops->open_poll_fd(sl->opening);
+    case RETRYSET_CONNECTED:  return rs->ops->result_fd(sl->result);
+    case RETRYSET_DOWN:       return -1;
+  }
   return -1;
 }
 
 short retryset_poll_events(const retryset_t *rs, unsigned idx) {
   const retryset_slot_t *sl = &rs->slots[idx];
-  if (sl->state == RETRYSET_CONNECTING) return rs->ops->open_poll_events(sl->opening);
-  if (sl->state == RETRYSET_CONNECTED) return POLLIN;
+  switch (sl->state) {
+    case RETRYSET_CONNECTING: return rs->ops->open_poll_events(sl->opening);
+    case RETRYSET_CONNECTED:  return POLLIN;
+    case RETRYSET_DOWN:       return 0;
+  }
   return 0;
 }
 
@@ -110,29 +116,36 @@ static void log_slot(unsigned idx, const char *label, const char *fmt, ...) {
 
 void retryset_service(retryset_t *rs, unsigned idx, time_t now) {
   retryset_slot_t *sl = &rs->slots[idx];
-  if (sl->state == RETRYSET_CONNECTING) {
-    retryset_open_state_t st = rs->ops->open_step(sl->opening);
-    if (st == RETRYSET_OPEN_PENDING) return;
-    if (st == RETRYSET_OPEN_DONE) {
-      sl->result = rs->ops->open_take(sl->opening);
+  switch (sl->state) {
+    case RETRYSET_CONNECTING: {
+      retryset_open_state_t st = rs->ops->open_step(sl->opening);
+      switch (st) {
+        case RETRYSET_OPEN_PENDING:
+          return;
+        case RETRYSET_OPEN_DONE:
+          sl->result = rs->ops->open_take(sl->opening);
+          sl->opening = NULL;
+          sl->state = RETRYSET_CONNECTED;
+          log_slot(idx, sl->label, "connected");
+          return;
+        case RETRYSET_OPEN_ERROR:
+          break;
+      }
+      rs->ops->open_free(sl->opening);
       sl->opening = NULL;
-      sl->state = RETRYSET_CONNECTED;
-      log_slot(idx, sl->label, "connected");
+      sl->state = RETRYSET_DOWN;
+      sl->retry_deadline = next_retry_deadline(rs, now);
+      if (sl->retry_deadline != RETRYSET_NEVER)
+        log_slot(idx, sl->label, "connect failed, retrying in %lds", rs->retry_interval_s);
+      else
+        log_slot(idx, sl->label, "connect failed, not retrying");
       return;
     }
-    rs->ops->open_free(sl->opening);
-    sl->opening = NULL;
-    sl->state = RETRYSET_DOWN;
-    sl->retry_deadline = next_retry_deadline(rs, now);
-    if (sl->retry_deadline != RETRYSET_NEVER)
-      log_slot(idx, sl->label, "connect failed, retrying in %lds", rs->retry_interval_s);
-    else
-      log_slot(idx, sl->label, "connect failed, not retrying");
-    return;
+    case RETRYSET_CONNECTED:
+      return;
+    case RETRYSET_DOWN:
+      break;
   }
-
-  if (sl->state == RETRYSET_CONNECTED)
-    return; /* caller drives its own reads directly, see retryset_mark_down() on error */
 
   if (sl->retry_deadline == RETRYSET_NEVER || now < sl->retry_deadline) return;
   sl->opening = rs->ops->open_start(sl->slot_ctx);

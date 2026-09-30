@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef LIB_BCG_DOC_H
-#define LIB_BCG_DOC_H
+#ifndef DVBIPITOOLS_LIB_TVA_BCG_DOC_H
+#define DVBIPITOOLS_LIB_TVA_BCG_DOC_H
 
 #include <stddef.h>
 
@@ -16,7 +16,9 @@ typedef struct {
   char names[BCG_MAX_NAMES][BCG_ID_LEN];
   int name_count;
   char uri[BCG_ID_LEN];
-  unsigned tsid, onid, sid; /* best-effort, never a key */
+  unsigned tsid; /* best-effort, never a key */
+  unsigned onid;
+  unsigned sid;
 } bcg_channel_t;
 
 typedef struct {
@@ -39,9 +41,11 @@ typedef struct {
 
 typedef struct {
   bcg_channel_t *channels;
-  int channel_count, channel_cap;
+  int channel_count;
+  int channel_cap;
   bcg_programme_t *programmes;
-  int programme_count, programme_cap;
+  int programme_count;
+  int programme_cap;
 } bcg_doc_t;
 
 void bcg_doc_init(bcg_doc_t *d);

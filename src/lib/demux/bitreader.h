@@ -8,7 +8,8 @@
 
 typedef struct {
   const unsigned char *d;
-  size_t len, bit; /* len, bit: bytes, bits */
+  size_t len; /* bytes */
+  size_t bit; /* bits */
   int err;
 } br_t;
 

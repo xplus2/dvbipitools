@@ -7,185 +7,209 @@
 #include <unistd.h>
 #include <sys/socket.h>
 
+#include "lib/config/yamlcfg.h"
+
 #include "dipibcg/args.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
 START_TEST(announce_requires_input_and_map) {
   char *argv[] = {"dipibcg", "-a", "-m", "239.1.2.3:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(announce_with_required_options_applies_defaults) {
   char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.mode, MODE_ANNOUNCE);
   ck_assert_str_eq(cfg.input_path, "guide.xml");
   ck_assert_str_eq(cfg.map_path, "map.csv");
   ck_assert_int_eq(cfg.window_hours, 24);
   ck_assert_int_eq(cfg.interval_s, 5);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(announce_window_and_interval_are_overridable) {
   char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000",
                   "-w", "48", "-t", "10", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.window_hours, 48);
   ck_assert_int_eq(cfg.interval_s, 10);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(announce_rejects_zero_window) {
   char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000",
                   "-w", "0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(listen_defaults_output_to_stdout_marker) {
   char *argv[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.mode, MODE_LISTEN);
   ck_assert_str_eq(cfg.output_path, "-");
   ck_assert_int_eq(cfg.timeout_s, 35);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(listen_timeout_is_overridable) {
   char *argv[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", "-t", "60", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.timeout_s, 60);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(listen_rejects_negative_timeout) {
   char *argv[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", "-t", "-1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(mode_is_required) {
   char *argv[] = {"dipibcg", "-m", "239.1.2.3:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(mode_is_exclusive) {
   char *argv[] = {"dipibcg", "-a", "-l", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(mcast_is_required) {
   char *argv[] = {"dipibcg", "-l", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(mcast_rejects_non_multicast_ipv4) {
   char *argv[] = {"dipibcg", "-l", "-m", "10.0.0.1:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(mcast_accepts_multicast_ipv6) {
   char *argv[] = {"dipibcg", "-l", "-m", "[ff15::1]:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(mcast_rejects_non_multicast_ipv6) {
   char *argv[] = {"dipibcg", "-l", "-m", "[::1]:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(unexpected_positional_argument_is_rejected) {
   char *argv[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", "extra", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(help_returns_help_status) {
   char *argv[] = {"dipibcg", "-h", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_options_require_metrics_id) {
   char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000",
                   "--metrics", "/tmp/x.sock", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_id_is_announce_only) {
   char *argv[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", "--metrics-id", "inst1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_id_enables_metrics_in_announce_mode) {
   char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000",
                   "--metrics-id", "inst1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.metrics_id, "inst1");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_interval_out_of_range_is_rejected) {
   char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000",
                   "--metrics-id", "inst1", "--metrics-interval", "0", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(invalid_color_mode_is_rejected) {
   char *argv[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", "--color", "sometimes", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(compress_flag_enables_in_announce_mode) {
   char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000",
                   "-Z", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.compress, 1);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(compress_flag_is_announce_only) {
   char *argv[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", "--compress", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(mcast_describe_formats_ipv4) {
-  config_t cfg;
+  config_t cfg = {0};
   char buf[64];
   memset(&cfg, 0, sizeof cfg);
   cfg.family = AF_INET;
@@ -193,11 +217,12 @@ START_TEST(mcast_describe_formats_ipv4) {
   cfg.mcast_port = 5000;
   mcast_describe(&cfg, buf, sizeof buf);
   ck_assert_str_eq(buf, "239.1.2.3:5000");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(mcast_describe_formats_ipv6) {
-  config_t cfg;
+  config_t cfg = {0};
   char buf[64];
   memset(&cfg, 0, sizeof cfg);
   cfg.family = AF_INET6;
@@ -205,6 +230,7 @@ START_TEST(mcast_describe_formats_ipv6) {
   cfg.mcast_port = 5000;
   mcast_describe(&cfg, buf, sizeof buf);
   ck_assert_str_eq(buf, "[ff15::1]:5000");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -218,7 +244,7 @@ static void write_cfg(char *path, const char *text) {
 START_TEST(config_file_provides_settings) {
   char path[] = "/tmp/dipibcg_cfg_XXXXXX";
   char *argv[] = {"dipibcg", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "announce: on\nmcast: 239.1.2.3:5000\ninput: g.xml\nmap: m.csv\nwindow: 12\ncompress: on\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
@@ -226,45 +252,50 @@ START_TEST(config_file_provides_settings) {
   ck_assert_str_eq(cfg.mcast_group, "239.1.2.3");
   ck_assert_int_eq(cfg.window_hours, 12);
   ck_assert_int_eq(cfg.compress, 1);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(cmdline_wins_over_config) {
   char path[] = "/tmp/dipibcg_cfg_XXXXXX";
   char *argv[] = {"dipibcg", "-c", path, "-l", "-t", "3", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "announce: on\nmcast: 239.1.2.3:5000\ninterval: 9\ntimeout: 50\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
   ck_assert_int_eq(cfg.mode, MODE_LISTEN);
   ck_assert_int_eq(cfg.timeout_s, 3);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_missing_file_is_error) {
   char *argv[] = {"dipibcg", "-c", "/nonexistent/dipibcg.yaml", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_invalid_value_is_error) {
   char path[] = "/tmp/dipibcg_cfg_XXXXXX";
   char *argv[] = {"dipibcg", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "listen: on\nmcast: 239.1.2.3:5000\nwindow: 0\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_both_modes_is_error) {
   char path[] = "/tmp/dipibcg_cfg_XXXXXX";
   char *argv[] = {"dipibcg", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "announce: on\nlisten: on\nmcast: 239.1.2.3:5000\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -272,11 +303,12 @@ START_TEST(configtest_reports_by_exit_status) {
   char path[] = "/tmp/dipibcg_cfg_XXXXXX";
   char *argv[] = {"dipibcg", "--configtest", "-c", path, NULL};
   char *argv2[] = {"dipibcg", "--configtest", "-c", "/nonexistent/dipibcg.yaml", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "bogus: 1\nannounce: on\nlisten: on\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
   ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 

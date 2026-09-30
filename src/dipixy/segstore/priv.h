@@ -25,6 +25,10 @@ size_t seg_pool_class_cap(int cls);
 hls_snapshot_t *snap_clone(const hls_snapshot_t *base);
 void snap_free(hls_snapshot_t *ns);
 
+void ring_ref(hls_seg_ring_t *r);
+void ring_unref(hls_seg_ring_t *r);
+hls_seg_ring_t *ring_cow(hls_snapshot_t *ns);
+
 void snap_retire(hls_store_t *s, hls_snapshot_t *old);
 void snap_retire_async(hls_snapshot_t *snap);
 void snap_drain_all_async(hls_store_t *s);

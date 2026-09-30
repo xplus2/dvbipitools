@@ -61,6 +61,10 @@ static int decode_bim_to_xml(FILE *in, FILE *out, int verbose) {
   char *buf = NULL;
   size_t len;
   int rc = 0, nfuu = 0;
+  const unsigned char *ubuf;
+  size_t bits_len;
+  bitreader_t br;
+  strrepo_reader_t sr;
 
   bcg_doc_init(&doc);
   accessunit_scratch_init(&sc);
@@ -68,27 +72,23 @@ static int decode_bim_to_xml(FILE *in, FILE *out, int verbose) {
     rc = -1;
     goto done;
   }
-  {
-    const unsigned char *ubuf = (const unsigned char *)buf;
-    size_t bits_len = ((size_t)ubuf[0] << 24) | ((size_t)ubuf[1] << 16) | ((size_t)ubuf[2] << 8) | (size_t)ubuf[3];
-    bitreader_t br;
-    strrepo_reader_t sr;
-    if (bits_len > len - 4) {
-      rc = -1;
-      goto done;
-    }
-    bitreader_init(&br, ubuf + 4, bits_len);
-    if (strrepo_reader_init(&sr, ubuf + 4 + bits_len, len - 4 - bits_len)) {
-      rc = -1;
-      goto done;
-    }
-    if (accessunit_decode(&sc, &br, &sr, &doc, &nfuu)) {
-      rc = -1;
-      goto done;
-    }
-    tva_xml_write(out, &doc);
-    if (verbose) log_line("%d channels, %d programmes, %d fragments read", doc.channel_count, doc.programme_count, nfuu);
+  ubuf = (const unsigned char *)buf;
+  bits_len = ((size_t)ubuf[0] << 24) | ((size_t)ubuf[1] << 16) | ((size_t)ubuf[2] << 8) | (size_t)ubuf[3];
+  if (bits_len > len - 4) {
+    rc = -1;
+    goto done;
   }
+  bitreader_init(&br, ubuf + 4, bits_len);
+  if (strrepo_reader_init(&sr, ubuf + 4 + bits_len, len - 4 - bits_len)) {
+    rc = -1;
+    goto done;
+  }
+  if (accessunit_decode(&sc, &br, &sr, &doc, &nfuu)) {
+    rc = -1;
+    goto done;
+  }
+  tva_xml_write(out, &doc);
+  if (verbose) log_line("%d channels, %d programmes, %d fragments read", doc.channel_count, doc.programme_count, nfuu);
 
 done:
   accessunit_scratch_free(&sc);

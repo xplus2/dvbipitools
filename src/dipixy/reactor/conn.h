@@ -59,6 +59,10 @@ typedef struct {
 /* hard ceiling, see conn_table_capacity() */
 #define CONN_TABLE_MAX (1 << 20)
 
+typedef enum { CONN_NEXT_NONE, CONN_NEXT_TSPUSH, CONN_NEXT_DASHCHUNK, CONN_NEXT_MP4PUSH, CONN_NEXT_WS } conn_next_t;
+
+typedef enum { CONN_PROTO_H1 = 1, CONN_PROTO_H2, CONN_PROTO_H3 } conn_proto_t;
+
 typedef struct conn_t {
   int fd;
   conn_state state;
@@ -68,10 +72,7 @@ typedef struct conn_t {
   /* owner-thread bits: only owning reactor touches, never under out_lock.
      must not share a word with want_write/dead below */
   unsigned close_after_flush : 1; /* handler "closed": reactor closes on drain */
-  unsigned become_ws : 1;         /* WS upgrade: after 101 drains, switch conn to CONN_WS frame reading */
-  unsigned become_tspush : 1;     /* MPEG-TS push: after headers drain, keep as output only CONN_TSPUSH */
-  unsigned become_dashchunk : 1;  /* LL-DASH stream: after headers drain, keep output only CONN_DASHCHUNK */
-  unsigned become_mp4push : 1;    /* MP4: after headers drain, keep output only CONN_MP4PUSH */
+  unsigned next_state : 3;
   unsigned requested_close : 1;   /* other thread asked owner to close: flush, then quiet teardown (no slot/room cleanup, requester already did it) */
   unsigned keep_alive : 1;        /* after flush: recycle for next HTTP/1.1 request */
   int slot;                       /* owning user[] slot, or 0 if none */

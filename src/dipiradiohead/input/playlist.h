@@ -14,11 +14,4 @@ int playlist_extract(const unsigned char *body, size_t len, const http_url_t *ba
 /* 1: HLS media playlist (EXTM3U+EXTINF), else 0 */
 int playlist_is_hls_media(const unsigned char *body, size_t len);
 
-char *playlist_skip_blank(char *p);
-
-/* splits *cursor in place on '\n', NUL-terminated, NULL at end */
-char *playlist_next_line(char **cursor);
-
-int playlist_resolve_relative(const http_url_t *base, const char *ref, char *out, size_t n);
-
 #endif

@@ -40,8 +40,13 @@ typedef struct {
 /* ftyp+moov worst case: FMP4_MAX_TRACKS(4) x FMP4_CPRIV_MAX(512) plus box overhead */
 #define HLS_INIT_SEG_MAX 8192
 
-typedef struct hls_snapshot {
+typedef struct hls_seg_ring {
   hls_seg_t segs[HLS_MAX_SEGS];
+  _Atomic int refcount;
+} hls_seg_ring_t;
+
+typedef struct hls_snapshot {
+  hls_seg_ring_t *ring;
   int head; /* index of oldest segment in ring */
   int count;
   uint32_t oldest_seq;
@@ -98,15 +103,17 @@ uint8_t *seg_buf_alloc(size_t size);
 void seg_buf_ref(uint8_t *data);
 void seg_buf_unref(uint8_t *data);
 void seg_buf_release_cb(void *arg);
+void cached_text_ref(const char *text);
+void cached_text_unref(const char *text);
 
 typedef size_t (*text_fmt_fn)(void *ctx, char *buf, size_t cap);
 const cached_text_t *snapshot_cache_text(_Atomic(cached_text_t *) *slot, text_fmt_fn fmt, void *ctx, size_t buf_cap);
 
-void queue_status(conn_t *c, const char *status, int keep_alive);
+void respond_status(conn_t *c, const char *status, int keep_alive);
 void queue_not_modified(conn_t *c, const char *etag, int keep_alive);
 void cors_prepare(const char *origin_hdr, char *out, size_t outsz);
 void set_persistence(conn_t *c, int keep_alive);
-void queue_m3u8(conn_t *c, const char *body, size_t body_len, int is_head, int keep_alive, const char *cors_hdr);
+void queue_text_resp(conn_t *c, const char *content_type, const char *body, size_t body_len, int is_head, int keep_alive, const char *cors_hdr);
 void queue_segment(conn_t *c, const uint8_t *body, size_t body_len, const char *content_type, const char *etag, int is_head, int keep_alive, const char *cors_hdr);
 #define HLS_ZC_MIN_LEN (32u * 1024u)
 int hls_zc_eligible(const conn_t *c, size_t body_len, int is_head);
@@ -115,7 +122,6 @@ void seg_etag(uint32_t seq, size_t size, char *out, size_t outsz);
 void part_etag(uint32_t seq, int part, size_t size, char *out, size_t outsz);
 void init_etag(int gen, size_t size, char *out, size_t outsz);
 const char *hls_filename_ext(const char *fn);
-void queue_mpd(conn_t *c, const char *body, size_t body_len, int is_head, int keep_alive, const char *cors_hdr);
 
 char *write_lit(char *dst, const char *lit, size_t len);
 #define WRITE_LIT(dst, lit) write_lit((dst), (lit), sizeof(lit) - 1)
@@ -126,5 +132,6 @@ char *write_fixed3(char *dst, double v);
 
 void resp_set(hls_resp_t *out, int status, const char *content_type, const char *etag, const uint8_t *body, size_t body_len, int is_head);
 void resp_set_zc(hls_resp_t *out, int status, const char *content_type, const char *etag, uint8_t *body, size_t body_len, int is_head);
+void resp_set_zc_cached(hls_resp_t *out, int status, const char *content_type, const char *etag, const uint8_t *body, size_t body_len, int is_head);
 
 #endif

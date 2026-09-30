@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPISDS_NET_DVBSTP_H
-#define DIPISDS_NET_DVBSTP_H
+#ifndef DVBIPITOOLS_LIB_NET_DVBSTP_H
+#define DVBIPITOOLS_LIB_NET_DVBSTP_H
 
 #include <stddef.h>
 
@@ -38,14 +38,23 @@ typedef struct {
   unsigned provider_id;
 } dvbstp_header_t;
 
-/* one packet's header. returns header len, 0 if malformed. rejects nonzero compression
-   for payload ids 0x01/0x02 only (table 12). payload-specific compression semantics
-   (e.g. TS 102 539 table 3 for BCG ids) are caller's job */
+/* one packet's header. ret hdr len, 0 malformed. reject !0 payload ids 0x01/0x02 only (table 12).
+ * payload-specific compression semantics (e.g. TS 102 539 table 3 for BCG ids) are caller's job */
 size_t dvbstp_parse_header(const unsigned char *buf, size_t len, dvbstp_header_t *h);
+
+typedef struct {
+  unsigned payload_id;
+  unsigned segment_id;
+  unsigned segment_version;
+  unsigned compr;
+  int has_provider_id;
+  unsigned provider_id;
+  int want_crc;
+} dvbstp_send_t;
 
 /* splits data into sections, sends each. compr written into header as-is,
    caller must pass value legal for payload_id. crc on last section if want_crc */
-int dvbstp_send_segment(mcast_t *m, unsigned payload_id, unsigned segment_id, unsigned segment_version, unsigned compr, int has_provider_id, unsigned provider_id, int want_crc, const unsigned char *data, size_t len);
+int dvbstp_send_segment(mcast_t *m, const dvbstp_send_t *seg, const unsigned char *data, size_t len);
 
 typedef struct dvbstp_reasm dvbstp_reasm_t;
 

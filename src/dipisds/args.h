@@ -91,6 +91,7 @@ typedef struct {
   char fus_announce_addr[64]; /* --fus-announce host part, empty = omit MulticastAnnouncementAddress */
   unsigned fus_announce_port; /* --fus-announce port part */
   const char *fus_logo;       /* --fus-logo */
+  void *str_pool;
 } config_t;
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;

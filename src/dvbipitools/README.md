@@ -9,6 +9,7 @@ I hear you. A static version of OpenSSL per tool is heavy.
 
 This is the solution. 
 
+## Usage
 ```sh
 dvbipitools <tool> [args...]
 dipi <short-name> [args...]    # this tool, renamed to "dipi"
@@ -23,34 +24,35 @@ Don't worry, the separate tools will continue to exist in their form for a coupl
 * If only their functionality is needed, they are still smaller.
 * Minimize blast radius. Using the multicall binary for specific exposed tasks carries a lot of dead code.
 * On new versions, you might not want to roll out an update of every tool of the toolkit at the same time.
+  + This is especially true for `dipimetrics`.
 
 
 ## 4 ways to approach this
 
 The following options are not mutually exclusive.
 
-### 1. ignore it
+### 1. Ignore it
 It's redundant if you are using the standalone tools.
 
-### 2. use it as a dispatcher
+### 2. Use it as a dispatcher
 Only keep/use this one, no "setup", always call it like this:
 ```sh
 dvbipitools dipirec -i udp://239.1.1.1:5000 -o out.ts
 ```
 
-### 3. rename or link it to "dipi" and add a space to your existing scripts or Systemd units
+### 3. Rename or link it to "dipi" and add a space to your existing scripts or Systemd units
 ```sh
 ln -s dvbipitools dipi
 ./dipi rec -i udp://239.1.1.1:5000 -o out.ts
 ```
 
-### 4. only copy/keep this one and symlink or hardlink all tools
+### 4. Only copy/keep this one and symlink or hardlink all tools
 Let the binary create the links for you:
 ```sh
 dvbipitools --install /usr/local/bin      # symlinks
 dvbipitools --install -h /usr/local/bin   # hardlinks
 ```
-Copy&paste variant, by hand:
+Or create them by hand if you only need a few:
 ```sh
 ln -s dvbipitools dipitvhead
 ln -s dvbipitools dipirec

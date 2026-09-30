@@ -10,13 +10,14 @@
 #include <sys/socket.h>
 
 #include "dipifccret/ret/mcsend.h"
+#include "lib/helper/ioutil.h"
 
 START_TEST(mcsend_ensure_then_get_returns_socket) {
   mcsend_table_t *t = mcsend_table_new(4, NULL, 1);
   channel_t c;
   memset(&c, 0, sizeof c);
   c.family = AF_INET;
-  snprintf(c.group, sizeof c.group, "239.1.1.1");
+  bufcpy(c.group, sizeof c.group, "239.1.1.1");
   c.port = 5000;
 
   ck_assert_ptr_null(mcsend_get(t, &c));
@@ -33,7 +34,7 @@ START_TEST(mcsend_ensure_is_idempotent) {
   mcast_t *m1, *m2;
   memset(&c, 0, sizeof c);
   c.family = AF_INET;
-  snprintf(c.group, sizeof c.group, "239.1.1.2");
+  bufcpy(c.group, sizeof c.group, "239.1.1.2");
   c.port = 5001;
 
   mcsend_ensure(t, &c, 0);
@@ -51,11 +52,11 @@ START_TEST(mcsend_ensure_different_channels_get_different_sockets) {
   channel_t a, b;
   memset(&a, 0, sizeof a);
   a.family = AF_INET;
-  snprintf(a.group, sizeof a.group, "239.1.1.3");
+  bufcpy(a.group, sizeof a.group, "239.1.1.3");
   a.port = 5002;
   memset(&b, 0, sizeof b);
   b.family = AF_INET;
-  snprintf(b.group, sizeof b.group, "239.1.1.4");
+  bufcpy(b.group, sizeof b.group, "239.1.1.4");
   b.port = 5003;
 
   mcsend_ensure(t, &a, 0);
@@ -97,7 +98,7 @@ START_TEST(mcsend_stale_generation_reopens_socket) {
   mcast_t *m1, *m2;
   memset(&c, 0, sizeof c);
   c.family = AF_INET;
-  snprintf(c.group, sizeof c.group, "239.1.1.5");
+  bufcpy(c.group, sizeof c.group, "239.1.1.5");
   c.port = 5005;
 
   mcsend_ensure(t, &c, 0);
@@ -149,7 +150,7 @@ START_TEST(mcsend_publish_race_no_torn_pointer) {
   g_mc_race_table = mcsend_table_new(4, NULL, 1);
   memset(&g_mc_race_chan, 0, sizeof g_mc_race_chan);
   g_mc_race_chan.family = AF_INET;
-  snprintf(g_mc_race_chan.group, sizeof g_mc_race_chan.group, "239.1.1.9");
+  bufcpy(g_mc_race_chan.group, sizeof g_mc_race_chan.group, "239.1.1.9");
   g_mc_race_chan.port = 5009;
   atomic_store_explicit(&g_mc_race_bad, 0, memory_order_relaxed);
 

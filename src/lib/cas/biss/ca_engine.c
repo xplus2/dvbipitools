@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../../helper/ioutil.h"
 #include "../../helper/log.h"
 #include "../../mux/cadescbuild.h"
 #include "../../mux/psi_build.h"
@@ -27,8 +28,10 @@ typedef struct {
 
 struct biss_ca_engine {
   cas_scramble_engine_t *scr;
-  unsigned ecm_pid, emm_pid;
-  unsigned esid, onid;
+  unsigned ecm_pid;
+  unsigned emm_pid;
+  unsigned esid;
+  unsigned onid;
 
   char receivers_dir[512];
   biss_ca_receiver_t receivers[BISS_CA_ENGINE_MAX_RECEIVERS];
@@ -57,15 +60,15 @@ struct biss_ca_engine {
 };
 
 static void free_receivers(biss_ca_receiver_t *r, size_t n) {
-  for (size_t i = 0; i < n; i++)
-    biss_ca_key_free(r[i].pub);
+  for (size_t i = 0; i < n; i++) biss_ca_key_free(r[i].pub);
 }
 
 static size_t load_receivers(const char *dir, biss_ca_receiver_t *out, size_t cap) {
   DIR *d;
   struct dirent *ent;
   size_t n = 0;
-  int skipped_full = 0, skipped_bad = 0;
+  int skipped_full = 0;
+  int skipped_bad = 0;
 
   d = opendir(dir);
   if (!d) {
@@ -75,8 +78,7 @@ static size_t load_receivers(const char *dir, biss_ca_receiver_t *out, size_t ca
   while ((ent = readdir(d)) != NULL) {
     char path[768];
     biss_ca_key_t *pub;
-    if (ent->d_name[0] == '.')
-      continue;
+    if (ent->d_name[0] == '.') continue;
     if (n >= cap) {
       skipped_full++;
       continue;
@@ -98,10 +100,8 @@ static size_t load_receivers(const char *dir, biss_ca_receiver_t *out, size_t ca
     n++;
   }
   closedir(d);
-  if (skipped_full)
-    log_line("biss-ca: %d receiver(s) in %s dropped, past the %zu-receiver cap", skipped_full, dir, cap);
-  if (skipped_bad)
-    log_line("biss-ca: %d file(s) in %s not usable as receiver keys", skipped_bad, dir);
+  if (skipped_full) log_line("biss-ca: %d receiver(s) in %s dropped, past the %zu-receiver cap", skipped_full, dir, cap);
+  if (skipped_bad)  log_line("biss-ca: %d file(s) in %s not usable as receiver keys", skipped_bad, dir);
   log_line("biss-ca: loaded %zu entitled receiver(s) from %s", n, dir);
   return n;
 }
@@ -109,14 +109,12 @@ static size_t load_receivers(const char *dir, biss_ca_receiver_t *out, size_t ca
 biss_ca_engine_t *biss_ca_engine_start(const biss_ca_engine_cfg_t *cfg) {
   biss_ca_engine_t *e;
 
-  if (!cfg || !cfg->receivers_dir || cfg->sw_period_ms < 1000)
-    return NULL;
+  if (!cfg || !cfg->receivers_dir || cfg->sw_period_ms < 1000) return NULL;
 
   e = calloc(1, sizeof *e);
-  if (!e)
-    return NULL;
+  if (!e) return NULL;
 
-  strncpy(e->receivers_dir, cfg->receivers_dir, sizeof e->receivers_dir - 1);
+  bufcpy(e->receivers_dir, sizeof e->receivers_dir, cfg->receivers_dir);
   e->esid = cfg->esid;
   e->onid = cfg->onid;
   e->ecm_pid = cfg->ecm_pid;
@@ -158,8 +156,7 @@ biss_ca_engine_t *biss_ca_engine_start(const biss_ca_engine_cfg_t *cfg) {
 }
 
 void biss_ca_engine_stop(biss_ca_engine_t *e) {
-  if (!e)
-    return;
+  if (!e) return;
   cas_scramble_engine_stop(e->scr);
   free_receivers(e->receivers, e->n_receivers);
   free(e);
@@ -236,33 +233,30 @@ size_t biss_ca_engine_receiver_count(const biss_ca_engine_t *e) { return e->n_re
 
 size_t biss_ca_engine_prog_desc(const biss_ca_engine_t *e, unsigned char *out, size_t cap) {
   unsigned char priv[8];
-  size_t priv_len, n;
+  size_t priv_len;
+  size_t n;
+  size_t n2;
 
   priv_len = biss_ca_build_entitlement_session_id_desc(e->esid, e->onid, priv, sizeof priv);
-  if (!priv_len)
-    return 0;
+  if (!priv_len) return 0;
   n = cadescbuild_ca_descriptor_priv(BISS_CA_MODE_CA_SYSTEM_ID, e->ecm_pid, priv, priv_len, out, cap);
-  if (!n)
-    return 0;
-  {
-    size_t n2 = cadescbuild_scrambling_descriptor(CADESC_SCRAMBLING_MODE_CISSA, out + n, cap - n);
-    if (!n2)
-      return 0;
-    n += n2;
-  }
+  if (!n) return 0;
+  n2 = cadescbuild_scrambling_descriptor(CADESC_SCRAMBLING_MODE_CISSA, out + n, cap - n);
+  if (!n2) return 0;
+  n += n2;
   return n;
 }
 
 size_t biss_ca_engine_build_cat(const biss_ca_engine_t *e, unsigned char *out, size_t cap) {
-  unsigned char priv[8], desc[16];
-  size_t priv_len, desc_len;
+  unsigned char priv[8];
+  unsigned char desc[16];
+  size_t priv_len;
+  size_t desc_len;
 
   priv_len = biss_ca_build_entitlement_session_id_desc(e->esid, e->onid, priv, sizeof priv);
-  if (!priv_len)
-    return 0;
+  if (!priv_len) return 0;
   desc_len = cadescbuild_ca_descriptor_priv(BISS_CA_MODE_CA_SYSTEM_ID, e->emm_pid, priv, priv_len, desc, sizeof desc);
-  if (!desc_len)
-    return 0;
+  if (!desc_len) return 0;
   return psi_build_cat(0, desc, desc_len, out, cap);
 }
 
@@ -270,15 +264,15 @@ size_t biss_ca_engine_build_cat(const biss_ca_engine_t *e, unsigned char *out, s
    "IV regenerated only when the ECM payload is updated" (Tech 3292-s1 SS4.2.2.5.5) */
 static void rebuild_ecm(biss_ca_engine_t *e) {
   unsigned char iv[BISS_CA_IV_LEN];
-  unsigned char esw_even[BISS_CA_SW_LEN], esw_odd[BISS_CA_SW_LEN];
+  unsigned char esw_even[BISS_CA_SW_LEN];
+  unsigned char esw_odd[BISS_CA_SW_LEN];
   size_t len;
 
   if (biss_ca_random(iv, BISS_CA_IV_LEN) != 0) {
     log_line("biss-ca: ECM rebuild failed (RNG unavailable)");
     return;
   }
-  if (biss_ca_aes_cbc_encrypt(e->sk, iv, e->sw[SCRAMBLE_PARITY_EVEN], esw_even) != 0 ||
-      biss_ca_aes_cbc_encrypt(e->sk, iv, e->sw[SCRAMBLE_PARITY_ODD], esw_odd) != 0) {
+  if (biss_ca_aes_cbc_encrypt(e->sk, iv, e->sw[SCRAMBLE_PARITY_EVEN], esw_even) != 0 || biss_ca_aes_cbc_encrypt(e->sk, iv, e->sw[SCRAMBLE_PARITY_ODD], esw_odd) != 0) {
     log_line("biss-ca: ECM rebuild failed (AES-CBC)");
     return;
   }
@@ -294,7 +288,8 @@ static void rebuild_ecm(biss_ca_engine_t *e) {
 static void rebuild_emm(biss_ca_engine_t *e) {
   biss_ca_emm_entry_t entries[BISS_CA_ENGINE_MAX_RECEIVERS] = {0};
   unsigned char session_data[BISS_CA_SESSION_DATA_LEN];
-  size_t n = 0, len;
+  size_t n = 0;
+  size_t len;
 
   if (!biss_ca_build_session_data(e->sk, e->sk_parity, session_data, sizeof session_data)) {
     log_line("biss-ca: EMM rebuild failed (session_data build)");
@@ -318,12 +313,9 @@ static void rebuild_emm(biss_ca_engine_t *e) {
 }
 
 int biss_ca_engine_ecm_due(biss_ca_engine_t *e, double now, unsigned char *out, size_t cap, size_t *out_len) {
-  if (e->ecm_dirty)
-    rebuild_ecm(e);
-  if (e->ecm_cache_len == 0 || e->ecm_cache_len > cap)
-    return -1;
-  if (e->last_ecm_send >= 0.0 && now - e->last_ecm_send < BISS_CA_T_ECM_MIN_S)
-    return -1;
+  if (e->ecm_dirty) rebuild_ecm(e);
+  if (e->ecm_cache_len == 0 || e->ecm_cache_len > cap) return -1;
+  if (e->last_ecm_send >= 0.0 && now - e->last_ecm_send < BISS_CA_T_ECM_MIN_S) return -1;
   memcpy(out, e->ecm_cache, e->ecm_cache_len);
   *out_len = e->ecm_cache_len;
   e->last_ecm_send = now;
@@ -331,12 +323,9 @@ int biss_ca_engine_ecm_due(biss_ca_engine_t *e, double now, unsigned char *out, 
 }
 
 int biss_ca_engine_emm_due(biss_ca_engine_t *e, double now, unsigned char *out, size_t cap, size_t *out_len) {
-  if (e->emm_dirty)
-    rebuild_emm(e);
-  if (e->emm_cache_len == 0 || e->emm_cache_len > cap)
-    return -1;
-  if (e->last_emm_send >= 0.0 && now - e->last_emm_send < BISS_CA_T_EMM_MIN_S)
-    return -1;
+  if (e->emm_dirty) rebuild_emm(e);
+  if (e->emm_cache_len == 0 || e->emm_cache_len > cap) return -1;
+  if (e->last_emm_send >= 0.0 && now - e->last_emm_send < BISS_CA_T_EMM_MIN_S) return -1;
   memcpy(out, e->emm_cache, e->emm_cache_len);
   *out_len = e->emm_cache_len;
   e->last_emm_send = now;
@@ -344,9 +333,7 @@ int biss_ca_engine_emm_due(biss_ca_engine_t *e, double now, unsigned char *out, 
 }
 
 static int ekid_in_set(const biss_ca_receiver_t *set, size_t n, const unsigned char ekid[BISS_CA_EKID_LEN]) {
-  for (size_t i = 0; i < n; i++)
-    if (memcmp(set[i].ekid, ekid, BISS_CA_EKID_LEN) == 0)
-      return 1;
+  for (size_t i = 0; i < n; i++) if (memcmp(set[i].ekid, ekid, BISS_CA_EKID_LEN) == 0) return 1;
   return 0;
 }
 

@@ -2,10 +2,11 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "priv.h"
-
 #include "lib/helper/ioutil.h"
 #include "lib/helper/secure_zero.h"
 
+#include <pthread.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
@@ -24,10 +25,28 @@ int find_header(const struct phr_header *headers, size_t num_headers, const char
   return 0;
 }
 
-const char *cors_match(const config_t *cfg, const char *origin_hdr, int *vary) {
-  const char *p = cfg->cors_origins;
-  *vary = 0;
-  if (!p) return "*";
+typedef struct { const char *s; size_t len; } cors_span_t;
+
+static pthread_once_t g_cors_once = PTHREAD_ONCE_INIT;
+static const config_t *g_cors_cfg;
+static cors_span_t *g_cors_list;
+static int g_cors_n;
+static int g_cors_all;
+
+static void cors_parse_once(void) {
+  const char *p = g_cors_cfg->cors_origins;
+  int cap;
+  if (!p) {
+    g_cors_all = 1;
+    return;
+  }
+  cap = 1;
+  for (const char *q = p; *q; q++) if (*q == ',') cap++;
+  g_cors_list = malloc((size_t)cap * sizeof *g_cors_list);
+  if (!g_cors_list) {
+    g_cors_all = 1;
+    return;
+  }
   while (*p) {
     const char *comma = strchr(p, ',');
     const char *start = p;
@@ -37,12 +56,35 @@ const char *cors_match(const config_t *cfg, const char *origin_hdr, int *vary) {
       len--;
     }
     while (len && start[len - 1] == ' ') len--;
-    if (len == 1 && start[0] == '*') return "*";
-    if (len && origin_hdr && strlen(origin_hdr) == len && !memcmp(origin_hdr, start, len)) {
+    if (len == 1 && start[0] == '*') {
+      g_cors_all = 1;
+      free(g_cors_list);
+      g_cors_list = NULL;
+      g_cors_n = 0;
+      return;
+    }
+    if (len) {
+      g_cors_list[g_cors_n].s = start;
+      g_cors_list[g_cors_n].len = len;
+      g_cors_n++;
+    }
+    p = comma ? comma + 1 : p + strlen(p);
+  }
+}
+
+const char *cors_match(const config_t *cfg, const char *origin_hdr, int *vary) {
+  size_t olen;
+  *vary = 0;
+  g_cors_cfg = cfg;
+  pthread_once(&g_cors_once, cors_parse_once);
+  if (g_cors_all) return "*";
+  if (!origin_hdr) return NULL;
+  olen = strlen(origin_hdr);
+  for (int i = 0; i < g_cors_n; i++) {
+    if (g_cors_list[i].len == olen && !memcmp(g_cors_list[i].s, origin_hdr, olen)) {
       *vary = 1;
       return origin_hdr;
     }
-    p = comma ? comma + 1 : p + strlen(p);
   }
   return NULL;
 }
@@ -69,14 +111,21 @@ int http_auth_ok(const char *expected, const char *auth_hdr) {
 
 int route_disabled(const route_t *rt) {
   const config_t *cfg = reactor_cfg();
-  return (rt->kind == ROUTE_RTP && cfg->no_url_rtp) || (rt->kind == ROUTE_UDP && cfg->no_url_udp) ||
-         (rt->kind == ROUTE_SRT && cfg->no_url_srt) || (rt->fmt == ROUTE_FMT_TS && cfg->no_ts) ||
-         (rt->fmt == ROUTE_FMT_SPTS && cfg->no_spts) ||
-         ((rt->fmt == ROUTE_FMT_HLS || rt->fmt == ROUTE_FMT_HLS_FMP4) && cfg->no_hls) ||
-         (rt->fmt == ROUTE_FMT_LLHLS && cfg->no_llhls) || (rt->fmt == ROUTE_FMT_DASH && cfg->no_dash) ||
-         (rt->fmt == ROUTE_FMT_LLDASH && cfg->no_lldash) ||
-         (rt->fmt == ROUTE_FMT_RAWAUDIO && cfg->no_rawaudio) ||
-         (rt->fmt == ROUTE_FMT_MP4 && cfg->no_mp4);
+  const struct { route_kind_t kind; const int *flag; } kind_checks[] = {
+{ROUTE_RTP, &cfg->no_url_rtp}, {ROUTE_UDP, &cfg->no_url_udp}, {ROUTE_SRT, &cfg->no_url_srt},
+  };
+  const struct { route_fmt_t fmt; const int *flag; } fmt_checks[] = {
+{ROUTE_FMT_TS, &cfg->no_ts}, {ROUTE_FMT_SPTS, &cfg->no_spts},
+{ROUTE_FMT_HLS, &cfg->no_hls}, {ROUTE_FMT_HLS_FMP4, &cfg->no_hls},
+{ROUTE_FMT_LLHLS, &cfg->no_llhls}, {ROUTE_FMT_DASH, &cfg->no_dash}, {ROUTE_FMT_LLDASH, &cfg->no_lldash},
+{ROUTE_FMT_RAWAUDIO, &cfg->no_rawaudio}, {ROUTE_FMT_MP4, &cfg->no_mp4},
+  };
+  size_t i;
+  for (i = 0; i < sizeof kind_checks / sizeof kind_checks[0]; i++)
+    if (rt->kind == kind_checks[i].kind && *kind_checks[i].flag) return 1;
+  for (i = 0; i < sizeof fmt_checks / sizeof fmt_checks[0]; i++)
+    if (rt->fmt == fmt_checks[i].fmt && *fmt_checks[i].flag) return 1;
+  return 0;
 }
 
 /* -n-named source: ordinal of its -i, 0 if unmatched */
@@ -101,31 +150,25 @@ capture_ctx_t *open_source(const route_t *rt, unsigned *out_list_num) {
     case ROUTE_STDIN:
       return capture_stdin_get();
     case ROUTE_NAMED_BARE:
-      if (cfg->rist_name && !strcmp(cfg->rist_name, rt->src_name))
-        return capture_rist_get();
-      if (cfg->stdin_name && !strcmp(cfg->stdin_name, rt->src_name))
-        return capture_stdin_get();
+      if (cfg->rist_name && !strcmp(cfg->rist_name, rt->src_name)) return capture_rist_get();
+      if (cfg->stdin_name && !strcmp(cfg->stdin_name, rt->src_name)) return capture_stdin_get();
       return NULL;
     case ROUTE_LIST_ITEM:
     case ROUTE_LIST_NAME: {
       capture_ctx_t *ctx;
       unsigned list_num = rt->list_num;
+      channel_ret_fcc_t rf;
       if (rt->src_name[0]) {
         list_num = source_ordinal_by_name(cfg, rt->src_name);
-        if (!list_num)
-          return NULL;
+        if (!list_num) return NULL;
       }
       if (out_list_num) *out_list_num = list_num;
       ctx = channels_resolve_static(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL);
       if (ctx) return ctx;
-      {
-        channel_ret_fcc_t rf;
-        memset(&rf, 0, sizeof rf);
-        if (channels_resolve(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL, &family, addr, sizeof addr, &port, &rtp, &rf))
-          return NULL;
-        return capture_open(family, addr, port, cfg->iface, rtp, rf.has_ret && !cfg->no_ret ? &rf.ret : NULL, rf.has_fcc && !cfg->no_fcc ? &rf.fcc : NULL,
-                             rf.has_fec && !cfg->no_al_fec ? &rf.fec : NULL, cfg->al_fec_l, cfg->al_fec_d);
-      }
+      memset(&rf, 0, sizeof rf);
+      if (channels_resolve(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL, &family, addr, sizeof addr, &port, &rtp, &rf)) return NULL;
+      return capture_open(family, addr, port, cfg->iface, rtp, rf.has_ret && !cfg->no_ret ? &rf.ret : NULL, rf.has_fcc && !cfg->no_fcc ? &rf.fcc : NULL,
+        rf.has_fec && !cfg->no_al_fec ? &rf.fec : NULL, cfg->al_fec_l, cfg->al_fec_d);
     }
   }
   return NULL;
@@ -133,6 +176,8 @@ capture_ctx_t *open_source(const route_t *rt, unsigned *out_list_num) {
 
 void route_client_info(const route_t *rt, unsigned list_num, const pid_filter_t *filter, unsigned pmt_pid, const char *client_ip, int http_ver, route_item_bufs_t *bufs, client_info_t *out) {
   const config_t *cfg = reactor_cfg();
+  char portbuf[12];
+  size_t off;
   memset(out, 0, sizeof *out);
   out->ip = client_ip;
   out->http_ver = http_ver;
@@ -144,13 +189,10 @@ void route_client_info(const route_t *rt, unsigned list_num, const pid_filter_t 
     case ROUTE_UDP:
     case ROUTE_SRT:
       out->src_proto = rt->kind == ROUTE_RTP ? "rtp" : rt->kind == ROUTE_UDP ? "udp" : "srt";
-      {
-        char portbuf[12];
-        size_t off = bufcpy(bufs->addr, sizeof bufs->addr, rt->addr);
-        off += bufcpy(bufs->addr + off, sizeof bufs->addr - off, ":");
-        uint_to_str(portbuf, rt->port);
-        bufcpy(bufs->addr + off, sizeof bufs->addr - off, portbuf);
-      }
+      off = bufcpy(bufs->addr, sizeof bufs->addr, rt->addr);
+      off += bufcpy(bufs->addr + off, sizeof bufs->addr - off, ":");
+      uint_to_str(portbuf, rt->port);
+      bufcpy(bufs->addr + off, sizeof bufs->addr - off, portbuf);
       out->src_addr = bufs->addr;
       return;
     case ROUTE_RIST:

@@ -74,21 +74,19 @@ void ws_clients_tick(void) {
     if (!j->failed) ws_broadcast_publish(j->buf);
   }
 
-  {
-    jbuf_t *j = &g_tick_msg_jbuf;
-    jbuf_reset(j);
-    jbuf_str(j, "{\"type\":\"clients.tick\",\"clients\":[");
-    for (i = 0; i < n_rate; i++) {
-      if (i) jbuf_str(j, ",");
-      jbuf_str(j, "{\"id\":");
-      jbuf_i64(j, rates[i].id);
-      jbuf_str(j, ",\"mbps\":");
-      jbuf_fixed3(j, rates[i].mbps);
-      jbuf_str(j, "}");
-    }
-    jbuf_str(j, "]}");
-    if (!j->failed) ws_broadcast_publish(j->buf);
+  jbuf_t *j = &g_tick_msg_jbuf;
+  jbuf_reset(j);
+  jbuf_str(j, "{\"type\":\"clients.tick\",\"clients\":[");
+  for (i = 0; i < n_rate; i++) {
+    if (i) jbuf_str(j, ",");
+    jbuf_str(j, "{\"id\":");
+    jbuf_i64(j, rates[i].id);
+    jbuf_str(j, ",\"mbps\":");
+    jbuf_fixed3(j, rates[i].mbps);
+    jbuf_str(j, "}");
   }
+  jbuf_str(j, "]}");
+  if (!j->failed) ws_broadcast_publish(j->buf);
 }
 
 int ws_clients_build_snapshot(char **out) {

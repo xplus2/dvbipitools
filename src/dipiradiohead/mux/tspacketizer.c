@@ -27,13 +27,30 @@
 
 struct tspacketizer {
   tspacketizer_cfg_t cfg;
-  unsigned pmt_pid, audio_pid;
-  unsigned char cc_pat, cc_pmt, cc_sdt, cc_nit, cc_eit, cc_audio, cc_cat;
-  unsigned char cc_ecm[ARGS_MAX_CAS_VENDORS], cc_emm[ARGS_MAX_CAS_VENDORS];
-  unsigned ver_pat, ver_pmt, ver_sdt, ver_nit, ver_eit;
-  char artist[256], title[256];
+  unsigned pmt_pid;
+  unsigned audio_pid;
+  unsigned char cc_pat;
+  unsigned char cc_pmt;
+  unsigned char cc_sdt;
+  unsigned char cc_nit;
+  unsigned char cc_eit;
+  unsigned char cc_audio;
+  unsigned char cc_cat;
+  unsigned char cc_ecm[ARGS_MAX_CAS_VENDORS];
+  unsigned char cc_emm[ARGS_MAX_CAS_VENDORS];
+  unsigned ver_pat;
+  unsigned ver_pmt;
+  unsigned ver_sdt;
+  unsigned ver_nit;
+  unsigned ver_eit;
+  char artist[256];
+  char title[256];
   int meta_changed;
-  uint64_t last_pat, last_sdt, last_nit, last_eit, last_cat;
+  uint64_t last_pat;
+  uint64_t last_sdt;
+  uint64_t last_nit;
+  uint64_t last_eit;
+  uint64_t last_cat;
   cas_t *cas;
 };
 
@@ -111,6 +128,9 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, double now, const 
     if (n) count += ts_packet_emit(t->pmt_pid, &t->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
   }
   if (t->cfg.standalone) {
+    int timer_due;
+    int meta_due;
+
     if (t->cas && due(pts_90k, &t->last_cat, INTERVAL_PAT_PMT)) {
       n = cas_build_cat(t->cas, sec, sizeof sec);
       if (n) count += ts_packet_emit(PID_CAT, &t->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);
@@ -124,8 +144,8 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, double now, const 
       if (n) count += ts_packet_emit(PID_NIT, &t->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
     }
 
-    int timer_due = due(pts_90k, &t->last_eit, INTERVAL_EIT);
-    int meta_due = t->meta_changed || timer_due;
+    timer_due = due(pts_90k, &t->last_eit, INTERVAL_EIT);
+    meta_due = t->meta_changed || timer_due;
     if (meta_due) {
       n = tspacketizer_build_eit(t, sec, sizeof sec);
       if (n) count += ts_packet_emit(PID_EIT, &t->cc_eit, &ptr0, sec, n, 0, 0, cb, ctx);

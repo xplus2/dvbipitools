@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 
+#include "lib/helper/argutil.h"
 #include "lib/metrics/export.h"
 
 #include "srtcommon.h"
@@ -22,7 +23,7 @@ typedef struct {
   metrics_exporter_t *mx;      /* NULL = no stats push */
   const char *tool_version;    /* required if mx set */
   unsigned safety_mult;        /* 0 = default 4; clamped to 32. pending-queue latency-window multiplier */
-  int queue_metrics;
+  srt_queue_metrics_t queue_metrics;
 } srtout_cfg_t;
 
 typedef struct srtout srtout_t;

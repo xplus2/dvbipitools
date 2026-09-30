@@ -39,11 +39,11 @@ void reactor_handshake(int epfd, conn_t *c) {
   if (r == 0) {
     reactor_arm(epfd, c, t_tls_want_write);
     return;
-  } /* need more I/O */
+  }
   if (r < 0) {
     reactor_close(epfd, c);
     return;
-  } /* failed */
+  }
   reactor_after_handshake(epfd, c);
 }
 

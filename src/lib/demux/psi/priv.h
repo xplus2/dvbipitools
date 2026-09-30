@@ -14,27 +14,48 @@
 #define TS_PID_SDT 0x0011
 
 typedef struct {
-  unsigned program_number, pmt_pid;
+  unsigned program_number;
+  unsigned pmt_pid;
   psi_section_asm_t asm_;
   double obs_last;
   int obs_ver;
+  unsigned last_pcr_pid;
+  int last_es_count;
+  uint16_t last_es_pid[PSI_MAX_ES];
+  int last_ecm_count;
+  uint16_t last_ecm_pid[PSI_MAX_ES];
 } pmt_cand_t;
 
 struct psi {
   psi_obs_t *obs;
-  psi_section_asm_t pat, sdt, nit, cat;
-  int have_pat, have_pmt, have_sdt, have_nit, have_cat;
-  unsigned program_number, pmt_pid, pcr_pid, nit_pid;
-  unsigned emm_pid, ca_system_id; /* from CAT's first CA_descriptor, 0 if none */
+  psi_section_asm_t pat;
+  psi_section_asm_t sdt;
+  psi_section_asm_t nit;
+  psi_section_asm_t cat;
+  int have_pat;
+  int have_pmt;
+  int have_sdt;
+  int have_nit;
+  int have_cat;
+  unsigned program_number;
+  unsigned pmt_pid;
+  unsigned pcr_pid;
+  unsigned nit_pid;
+  unsigned emm_pid;
+  unsigned ca_system_id; /* from CAT's first CA_descriptor, 0 if none */
   unsigned char scrambling_mode; /* from PMT program_info's scrambling_descriptor, 0 if none */
   unsigned pmt_ca_system_id; /* PMT program_info's own first CA_descriptor, 0 if none */
   unsigned pmt_ca_pid; /* PMT program_info CA_descriptor's PID, 0 if none */
-  unsigned tsid, onid;
+  unsigned tsid;
+  unsigned onid;
   psi_es_t es[PSI_MAX_ES];
-  int es_count, audio_count;
+  int es_count;
+  int audio_count;
   unsigned ecm[PSI_MAX_ES];
   int ecm_count;
-  char service_name[PSI_NAME], provider_name[PSI_NAME], network_name[PSI_NAME];
+  char service_name[PSI_NAME];
+  char provider_name[PSI_NAME];
+  char network_name[PSI_NAME];
   psi_program_t pat_programs[PSI_MAX_PROGRAMS];
   int pat_program_count;
   pmt_cand_t pmt_cand[PSI_MAX_PROGRAMS];

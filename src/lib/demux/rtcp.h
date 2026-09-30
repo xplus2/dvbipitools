@@ -92,7 +92,17 @@ typedef void (*rtcp_sdes_cb)(const rtcp_sdes_t *sdes, void *user);
    suppress it. malformed TLV region still yields whatever parsed before corruption hit */
 typedef void (*rtcp_malformed_cb)(unsigned sfmt, uint32_t sender_ssrc, uint32_t media_ssrc, void *user);
 
+typedef struct {
+  rtcp_nack_cb nack_cb;
+  rtcp_rams_r_cb rams_r_cb;
+  rtcp_rams_i_cb rams_i_cb;
+  rtcp_rams_t_cb rams_t_cb;
+  rtcp_sdes_cb sdes_cb;
+  rtcp_malformed_cb malformed_cb;
+  void *user;
+} rtcp_cbs_t;
+
 /* skips SR/RR/BYE; parses SDES CNAME items if sdes_cb given. stops on malformed length, no misparse. any cb may be NULL to ignore that mtype. */
-void rtcp_parse(const unsigned char *p, size_t len, rtcp_nack_cb nack_cb, rtcp_rams_r_cb rams_r_cb, rtcp_rams_i_cb rams_i_cb, rtcp_rams_t_cb rams_t_cb, rtcp_sdes_cb sdes_cb, rtcp_malformed_cb malformed_cb, void *user);
+void rtcp_parse(const unsigned char *p, size_t len, const rtcp_cbs_t *cbs);
 
 #endif

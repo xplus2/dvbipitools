@@ -107,14 +107,12 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
 
 #define H2_LLHLS_WAITERS_MAX 8
 
-static _Thread_local llhls_waiter_t t_h2_llhls_waiters[H2_LLHLS_WAITERS_MAX];
+static _Thread_local hls_waiter_t t_h2_llhls_waiters[H2_LLHLS_WAITERS_MAX];
 static _Thread_local int t_h2_llhls_waiters_active;
 
-int h2_llhls_try_park(h2_conn_t *conn, const conn_t *c, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename,
-                      int is_head, const char *inm, const char *origin_hdr, uint32_t want_seg, int want_part, int timeout_ms, int ws_handle) {
+int h2_llhls_try_park(h2_conn_t *conn, const conn_t *c, int32_t stream_id, const llhls_park_req_t *req) {
   (void)c; /* recovered from conn->c in h2_llhls_finish() */
-  return llhls_waiter_pool_try_park(t_h2_llhls_waiters, H2_LLHLS_WAITERS_MAX, &t_h2_llhls_waiters_active, conn, stream_id, ctx, filter, pmt_pid, lcevc, filename,
-                                    is_head, 0, inm, origin_hdr, want_seg, want_part, timeout_ms, ws_handle);
+  return llhls_waiter_pool_try_park(t_h2_llhls_waiters, H2_LLHLS_WAITERS_MAX, &t_h2_llhls_waiters_active, conn, stream_id, req);
 }
 
 void h2_llhls_on_stream_close(const h2_conn_t *conn, int32_t stream_id) {
@@ -125,7 +123,7 @@ void h2_llhls_on_conn_close(const h2_conn_t *conn) {
   llhls_waiter_pool_close_owner(t_h2_llhls_waiters, H2_LLHLS_WAITERS_MAX, &t_h2_llhls_waiters_active, conn, -1);
 }
 
-static void h2_llhls_finish(llhls_waiter_t *w) {
+static void h2_llhls_finish(hls_waiter_t *w) {
   h2_conn_t *conn = w->owner;
   hls_resp_t resp;
   if (!hls_render_ll(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, w->inm[0] ? w->inm : NULL, &resp)) {
@@ -143,15 +141,13 @@ void h2_llhls_flush_waiters(void) {
 
 #define H2_HLS_COLD_WAITERS_MAX 64
 
-static _Thread_local llhls_waiter_t t_h2_hls_cold_waiters[H2_HLS_COLD_WAITERS_MAX];
+static _Thread_local hls_waiter_t t_h2_hls_cold_waiters[H2_HLS_COLD_WAITERS_MAX];
 static _Thread_local int t_h2_hls_cold_waiters_active;
 
 /* 1 parked: manifest/playlist requested before capture's first segment/part.
    0 table full: caller serves now */
-int h2_hls_cold_try_park(h2_conn_t *conn, int32_t stream_id, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, hls_cold_kind_t kind, seg_container_t container,
-                         int want_ll, int is_head, const char *origin_hdr, int timeout_ms, int ws_handle) {
-  return hls_cold_waiter_pool_try_park(t_h2_hls_cold_waiters, H2_HLS_COLD_WAITERS_MAX, &t_h2_hls_cold_waiters_active, conn, stream_id, ctx, filter, pmt_pid, lcevc, filename,
-                                       kind, container, want_ll, is_head, 0, origin_hdr, timeout_ms, ws_handle);
+int h2_hls_cold_try_park(h2_conn_t *conn, int32_t stream_id, const hls_cold_park_req_t *req) {
+  return hls_cold_waiter_pool_try_park(t_h2_hls_cold_waiters, H2_HLS_COLD_WAITERS_MAX, &t_h2_hls_cold_waiters_active, conn, stream_id, req);
 }
 
 void h2_hls_cold_on_stream_close(const h2_conn_t *conn, int32_t stream_id) {
@@ -162,12 +158,12 @@ void h2_hls_cold_on_conn_close(const h2_conn_t *conn) {
   llhls_waiter_pool_close_owner(t_h2_hls_cold_waiters, H2_HLS_COLD_WAITERS_MAX, &t_h2_hls_cold_waiters_active, conn, -1);
 }
 
-static void h2_hls_cold_finish(llhls_waiter_t *w) {
+static void h2_hls_cold_finish(hls_waiter_t *w) {
   h2_conn_t *conn = w->owner;
   int handled;
   hls_resp_t resp;
   if (w->kind == HLS_COLD_MP4) {
-    int sub = mp4push_subscribe(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, 2);
+    int sub = mp4push_subscribe(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, CONN_PROTO_H2);
     if (sub < 0 || !h2_mp4push_dispatch(conn, conn->c, (int32_t)w->stream_id, sub, w->ws_handle)) {
       if (sub >= 0) mp4push_sub_close(sub);
       h2_submit_resp(conn, (int32_t)w->stream_id, 501, NULL, NULL, 0, NULL, 0, w->origin[0] ? w->origin : NULL);

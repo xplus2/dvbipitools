@@ -87,6 +87,23 @@ START_TEST(pmt_filter_rewrite_drops_multiple_es) {
 }
 END_TEST
 
+START_TEST(pmt_filter_rewrite_drops_multiple_es_out_of_order_drop_list) {
+  unsigned char in[64], out[64];
+  pmt_es_spec_t es[] = {{0x0100, 0x1B}, {0x0101, 0x0F}, {0x0102, 0x06}};
+  unsigned drop[] = {0x0102, 0x0100};
+  unsigned pids[4];
+  size_t inlen, outlen;
+
+  inlen = build_pmt(in, 0x0100, NULL, 0, es, 3);
+  outlen = pmt_filter_rewrite(in, inlen, drop, 2, out, sizeof out);
+
+  ck_assert_uint_ne(outlen, 0u);
+  ck_assert_uint_eq(crc32_mpeg(out, outlen), 0u);
+  ck_assert_uint_eq(es_loop(out, outlen, pids, 4), 1u);
+  ck_assert_uint_eq(pids[0], 0x0101u);
+}
+END_TEST
+
 START_TEST(pmt_filter_rewrite_pid_not_present_leaves_es_loop_unchanged) {
   unsigned char in[64], out[64];
   pmt_es_spec_t es[] = {{0x0100, 0x1B}, {0x0101, 0x0F}};
@@ -187,6 +204,7 @@ static Suite *pmt_filter_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, pmt_filter_rewrite_drops_one_es);
   tcase_add_test(tc, pmt_filter_rewrite_drops_multiple_es);
+  tcase_add_test(tc, pmt_filter_rewrite_drops_multiple_es_out_of_order_drop_list);
   tcase_add_test(tc, pmt_filter_rewrite_pid_not_present_leaves_es_loop_unchanged);
   tcase_add_test(tc, pmt_filter_rewrite_preserves_program_info);
   tcase_add_test(tc, pmt_filter_rewrite_rejects_short_section);

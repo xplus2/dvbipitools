@@ -248,7 +248,8 @@ size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *
 }
 
 typedef struct {
-  const char *tag, *end;
+  const char *tag;
+  const char *end;
 } xml_span_t;
 
 static int capture_first_span(const char *tag, const char *blk_end, void *ctx) {
@@ -261,27 +262,21 @@ static int capture_first_span(const char *tag, const char *blk_end, void *ctx) {
 static void parse_ret(const char *tag, const char *end, sds_service_t *s) {
   xml_span_t ret = {0};
   char tmp[32];
+  xml_span_t mc = {0};
 
-  if (for_each_xml_block(tag, end, "<RTPRetransmission", "</RTPRetransmission>", capture_first_span, &ret) != -1)
-    return;
+  if (for_each_xml_block(tag, end, "<RTPRetransmission", "</RTPRetransmission>", capture_first_span, &ret) != -1) return;
   s->has_ret = 1;
   xml_attr(ret.tag, ret.end, "DestinationAddress", s->ret.addr, sizeof s->ret.addr);
-  if (xml_attr(ret.tag, ret.end, "DestinationPort", tmp, sizeof tmp) == 0)
-    s->ret.port = (unsigned)strtoul(tmp, NULL, 10);
-  if (xml_attr(ret.tag, ret.end, "rtx-time", tmp, sizeof tmp) == 0)
-    s->ret.rtx_time_ms = (unsigned)strtoul(tmp, NULL, 10);
-  if (xml_attr(ret.tag, ret.end, "RTPPayloadTypeNumber", tmp, sizeof tmp) == 0)
-    s->ret.rtx_pt = (unsigned char)strtoul(tmp, NULL, 10);
+  if (xml_attr(ret.tag, ret.end, "DestinationPort", tmp, sizeof tmp) == 0) s->ret.port = (unsigned)strtoul(tmp, NULL, 10);
+  if (xml_attr(ret.tag, ret.end, "rtx-time", tmp, sizeof tmp) == 0) s->ret.rtx_time_ms = (unsigned)strtoul(tmp, NULL, 10);
+  if (xml_attr(ret.tag, ret.end, "RTPPayloadTypeNumber", tmp, sizeof tmp) == 0) s->ret.rtx_pt = (unsigned char)strtoul(tmp, NULL, 10);
   s->ret.rsi_mc_ret = xml_attr(ret.tag, ret.end, "dvb-rsi-mc-ret", tmp, sizeof tmp) == 0 && !strcmp(tmp, "true");
-  {
-    xml_span_t mc = {0};
-    if (for_each_xml_block(ret.tag, ret.end, "<MulticastRET", "/>", capture_first_span, &mc) == -1) {
-      s->ret.mc = 1;
-      if (xml_attr(mc.tag, mc.end, "DestinationPort", tmp, sizeof tmp) == 0) {
-        unsigned mc_port = (unsigned)strtoul(tmp, NULL, 10);
-        if (mc_port != s->port)
-          s->ret.mc_port = mc_port;
-      }
+
+  if (for_each_xml_block(ret.tag, ret.end, "<MulticastRET", "/>", capture_first_span, &mc) == -1) {
+    s->ret.mc = 1;
+    if (xml_attr(mc.tag, mc.end, "DestinationPort", tmp, sizeof tmp) == 0) {
+      unsigned mc_port = (unsigned)strtoul(tmp, NULL, 10);
+      if (mc_port != s->port) s->ret.mc_port = mc_port;
     }
   }
 }
@@ -300,25 +295,18 @@ static void parse_fec(const char *tag, const char *end, sds_service_t *s) {
 static void parse_fcc(const char *tag, const char *end, sds_service_t *s) {
   xml_span_t fcc = {0};
   char tmp[32];
+  xml_span_t rep = {0};
+  xml_span_t rtx = {0};
   if (for_each_xml_block(tag, end, "<ServerBasedEnhancementServiceInfo", "</ServerBasedEnhancementServiceInfo>", capture_first_span, &fcc) != -1) return;
   s->has_fcc = 1;
 
-  {
-    xml_span_t rep = {0};
-    if (for_each_xml_block(fcc.tag, fcc.end, "<RTCPReporting", "/>", capture_first_span, &rep) == -1) {
-      xml_attr(rep.tag, rep.end, "DestinationAddress", s->fcc.addr, sizeof s->fcc.addr);
-      if (xml_attr(rep.tag, rep.end, "DestinationPort", tmp, sizeof tmp) == 0)
-        s->fcc.port = (unsigned)strtoul(tmp, NULL, 10);
-    }
+  if (for_each_xml_block(fcc.tag, fcc.end, "<RTCPReporting", "/>", capture_first_span, &rep) == -1) {
+    xml_attr(rep.tag, rep.end, "DestinationAddress", s->fcc.addr, sizeof s->fcc.addr);
+    if (xml_attr(rep.tag, rep.end, "DestinationPort", tmp, sizeof tmp) == 0) s->fcc.port = (unsigned)strtoul(tmp, NULL, 10);
   }
-  {
-    xml_span_t rtx = {0};
-    if (for_each_xml_block(fcc.tag, fcc.end, "<Retransmission_session", "/>", capture_first_span, &rtx) == -1) {
-      if (xml_attr(rtx.tag, rtx.end, "rtx-time", tmp, sizeof tmp) == 0)
-        s->fcc.rtx_time_ms = (unsigned)strtoul(tmp, NULL, 10);
-      if (xml_attr(rtx.tag, rtx.end, "RTPPayloadTypeNumber", tmp, sizeof tmp) == 0)
-        s->fcc.rtx_pt = (unsigned char)strtoul(tmp, NULL, 10);
-    }
+  if (for_each_xml_block(fcc.tag, fcc.end, "<Retransmission_session", "/>", capture_first_span, &rtx) == -1) {
+    if (xml_attr(rtx.tag, rtx.end, "rtx-time", tmp, sizeof tmp) == 0) s->fcc.rtx_time_ms = (unsigned)strtoul(tmp, NULL, 10);
+    if (xml_attr(rtx.tag, rtx.end, "RTPPayloadTypeNumber", tmp, sizeof tmp) == 0) s->fcc.rtx_pt = (unsigned char)strtoul(tmp, NULL, 10);
   }
 }
 
@@ -332,8 +320,8 @@ int sds_parse_broadcast(const char *xml, sds_service_t *out, int max, int *trunc
     const char *end;
     char tmp[32];
     sds_service_t *s;
-    if (!tag)
-      break;
+    xml_span_t si = {0};
+    if (!tag) break;
     end = strstr(tag, "</SingleService>");
     if (!end)
       break;
@@ -352,13 +340,10 @@ int sds_parse_broadcast(const char *xml, sds_service_t *out, int max, int *trunc
         s->has_bitrate = 1;
       }
 
-      {
-        xml_span_t si = {0};
-        if (for_each_xml_block(tag, end, "<SI", "</SI>", capture_first_span, &si) == -1 &&
-            xml_elem_text(si.tag, si.end, "ContentGenre", tmp, sizeof tmp) == 0) {
-          s->content_nibble = (unsigned)strtoul(tmp, NULL, 10);
-          s->has_content_nibble = 1;
-        }
+      if (for_each_xml_block(tag, end, "<SI", "</SI>", capture_first_span, &si) == -1 &&
+          xml_elem_text(si.tag, si.end, "ContentGenre", tmp, sizeof tmp) == 0) {
+        s->content_nibble = (unsigned)strtoul(tmp, NULL, 10);
+        s->has_content_nibble = 1;
       }
       parse_ret(tag, end, s);
       parse_fcc(tag, end, s);

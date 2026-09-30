@@ -112,7 +112,8 @@ static void build_usn(const char *uuid, const char *nt /* NULL = bare device uui
 }
 
 static void send_notify_one(const config_t *cfg, const char *uuid, const char *nt, int alive) {
-  char usn[192], pkt[768];
+  char usn[192];
+  char pkt[768];
   sbuf_t b;
 
   build_usn(uuid, nt, usn, sizeof usn);
@@ -174,7 +175,8 @@ int ssdp_msearch_header(const char *headers, const char *name, char *out, size_t
 
 static void send_msearch_reply_one(int fd, const struct sockaddr *peer, socklen_t peerlen, const config_t *cfg,
                                    const char *uuid, const char *nt /* NULL = bare device uuid */) {
-  char usn[192], pkt[768];
+  char usn[192];
+  char pkt[768];
   sbuf_t b;
 
   build_usn(uuid, nt, usn, sizeof usn);
@@ -193,11 +195,11 @@ static void send_msearch_reply_one(int fd, const struct sockaddr *peer, socklen_
   if (!b.truncated) sendto(fd, pkt, b.len, 0, peer, peerlen);
 }
 
-static void handle_msearch(int fd, const char *buf, const struct sockaddr *peer, socklen_t peerlen,
-                           const config_t *cfg, const char *uuid) {
+static void handle_msearch(int fd, const char *buf, const struct sockaddr *peer, socklen_t peerlen, const config_t *cfg, const char *uuid) {
   const char *line_end;
   char st[192];
   size_t i;
+  char want_uuid[192];
 
   if (strncmp(buf, "M-SEARCH", 8) != 0) return;
   line_end = strstr(buf, "\r\n");
@@ -208,13 +210,10 @@ static void handle_msearch(int fd, const char *buf, const struct sockaddr *peer,
     for (i = 0; i < SSDP_NTYPES; i++) send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, ssdp_types[i]);
     return;
   }
-  {
-    char want_uuid[192];
-    build_usn(uuid, NULL, want_uuid, sizeof want_uuid);
-    if (!strcmp(st, want_uuid)) {
-      send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, NULL);
-      return;
-    }
+  build_usn(uuid, NULL, want_uuid, sizeof want_uuid);
+  if (!strcmp(st, want_uuid)) {
+    send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, NULL);
+    return;
   }
   for (i = 0; i < SSDP_NTYPES; i++)
     if (!strcmp(st, ssdp_types[i])) {

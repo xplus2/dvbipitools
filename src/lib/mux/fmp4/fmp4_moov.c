@@ -105,12 +105,10 @@ static void build_empty_table(mp4buf_t *out, const char fourcc[4]) {
   mb_box(out, fourcc, &b);
 }
 
-static void build_stbl(mp4buf_t *out, const fmp4_trk_t *t) {
+static void build_stbl(mp4buf_t *out, const trak_meta_t *tm) {
   mp4buf_t stsz, stbl;
-  trak_meta_t tm;
-  trak_meta_from_trk(&tm, t);
   memset(&stbl, 0, sizeof stbl);
-  trak_build_stsd(&stbl, &tm);
+  trak_build_stsd(&stbl, tm);
   build_empty_table(&stbl, "stts");
   build_empty_table(&stbl, "stsc");
   memset(&stsz, 0, sizeof stsz);
@@ -123,13 +121,13 @@ static void build_stbl(mp4buf_t *out, const fmp4_trk_t *t) {
   mb_box(out, "stbl", &stbl);
 }
 
-static void build_minf(mp4buf_t *out, const fmp4_trk_t *t) {
+static void build_minf(mp4buf_t *out, const trak_meta_t *tm) {
   mp4buf_t minf;
   memset(&minf, 0, sizeof minf);
-  if (codec_is_audio(t->cfg.codec))   trak_build_smhd(&minf);
-  else                                trak_build_vmhd(&minf);
+  if (tm->cls == PID_AUDIO) trak_build_smhd(&minf);
+  else                      trak_build_vmhd(&minf);
   trak_build_dinf(&minf);
-  build_stbl(&minf, t);
+  build_stbl(&minf, tm);
   mb_box(out, "minf", &minf);
 }
 
@@ -140,7 +138,7 @@ static void build_mdia(mp4buf_t *out, const fmp4_trk_t *t) {
   memset(&mdia, 0, sizeof mdia);
   build_mdhd(&mdia, t);
   trak_build_hdlr(&mdia, tm.cls);
-  build_minf(&mdia, t);
+  build_minf(&mdia, &tm);
   mb_box(out, "mdia", &mdia);
 }
 

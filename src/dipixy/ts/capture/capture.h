@@ -60,11 +60,20 @@ int capture_pump_tick(int pid, void (*sink)(capture_ctx_t *ctx, void *user, cons
    safe to free memread unlocked mid-feed */
 void capture_wait_pumps_quiescent(void);
 
+typedef void (*qsbr_deferred_fn)(void *arg);
+
+int capture_defer_after_quiescent(qsbr_deferred_fn fn, void *arg);
+
+void capture_flush_deferred_quiescent(void);
+
 /* count of distinct (family, group, port, iface) joins currently open */
 int capture_active_count(void);
 
 /* sum of bytes ever written across every currently open source */
 uint64_t capture_bytes_total(void);
+
+/* B written. 0: igmp ok, but nothing arrives */
+uint64_t capture_ctx_bytes(capture_ctx_t *ctx);
 
 /* librist: one ctx per process, ever. NULL uri = off. 0/-1 ok/failed, logged */
 int capture_rist_init(const char *rist_uri);

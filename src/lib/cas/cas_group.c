@@ -82,20 +82,14 @@ static int group_cw_for_epoch(cas_group_t *g, unsigned long epoch, unsigned char
 
   pthread_mutex_lock(&g->cw_lock);
   need_gen = !(g->hist[idx].valid && g->hist[idx].epoch == epoch);
-  if (!need_gen)
-    memcpy(out, g->hist[idx].cw, cw_len);
+  if (!need_gen) memcpy(out, g->hist[idx].cw, cw_len);
   pthread_mutex_unlock(&g->cw_lock);
-
-  if (!need_gen)
-    return 0;
+  if (!need_gen) return 0;
 
   /* cw_lock shared cross-vendor: keep getrandom off it */
   unsigned char generated[ECMG_MAX_CW_LEN];
-  if (cw_gen(generated, cw_len, "cas_group") < 0)
-    return -1;
-  if (g->cfg.legacy_csa1 && cw_len == 8)
-    csa1_apply_cw_checksum(generated);
-
+  if (cw_gen(generated, cw_len, "cas_group") < 0) return -1;
+  if (g->cfg.legacy_csa1 && cw_len == 8) csa1_apply_cw_checksum(generated);
   pthread_mutex_lock(&g->cw_lock);
   if (!(g->hist[idx].valid && g->hist[idx].epoch == epoch)) {
     memcpy(g->hist[idx].cw, generated, cw_len);
@@ -128,28 +122,10 @@ static int vendor_alive(cas_group_vendor_t *v) {
 int cas_group_fallback_active_calc(size_t vendor_count, const int *required, const int *alive) {
   int any_alive = 0;
   for (size_t i = 0; i < vendor_count; i++) {
-    if (required[i] && !alive[i])
-      return 1;
-    if (alive[i])
-      any_alive = 1;
+    if (required[i] && !alive[i]) return 1;
+    if (alive[i]) any_alive = 1;
   }
   return !any_alive;
-}
-
-static int cas_group_any_alive(cas_group_t *g) {
-  for (size_t i = 0; i < g->cfg.vendor_count; i++)
-    if (vendor_alive(&g->vendors[i]))
-      return 1;
-  return 0;
-}
-
-static int cas_group_fallback_active(cas_group_t *g) {
-  int required[CAS_GROUP_MAX_VENDORS] = {0}, alive[CAS_GROUP_MAX_VENDORS] = {0};
-  for (size_t i = 0; i < g->cfg.vendor_count; i++) {
-    required[i] = g->vendors[i].required;
-    alive[i] = vendor_alive(&g->vendors[i]);
-  }
-  return cas_group_fallback_active_calc(g->cfg.vendor_count, required, alive);
 }
 
 static void cas_lazy_start(cas_group_t *g) {
@@ -267,11 +243,11 @@ void cas_group_clock_tick(cas_group_t *g, unsigned long delta_ms) {
 
 /* stops minting CWs once nobody delivers ECMs: engine freezes last published CW
    instead of rolling forward into keys no recv can ever get */
-static void refresh_group_cw(cas_group_t *g, scrambler_emit_cb emit, void *ctx) {
+static void refresh_group_cw(cas_group_t *g, int any_alive, scrambler_emit_cb emit, void *ctx) {
   unsigned long epoch;
   unsigned char cw[ECMG_MAX_CW_LEN];
   size_t cw_len;
-  if (!cas_group_any_alive(g)) return;
+  if (!any_alive) return;
   epoch = group_current_epoch(g);
   if (epoch == g->cw_epoch_published) return;
   cw_len = scrambler_cw_len(g->cfg.algo);
@@ -282,19 +258,25 @@ static void refresh_group_cw(cas_group_t *g, scrambler_emit_cb emit, void *ctx) 
 
 void cas_group_scramble_packet(cas_group_t *g, unsigned out_pid, double now, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx) {
   int have_target = 0;
+  int any_alive = 0;
   int target_parity;
   int cw_valid;
+  int alive[CAS_GROUP_MAX_VENDORS];
+  int required[CAS_GROUP_MAX_VENDORS];
 
-  if (g->have_clock) refresh_group_cw(g, emit, ctx);
   for (size_t i = 0; i < g->cfg.vendor_count; i++) {
     cas_group_vendor_t *v = &g->vendors[i];
-    if (vendor_alive(v) && ecmg_client_ecm_epoch(v->ecmg) != 0) {
-      have_target = 1;
-      break;
+    alive[i] = vendor_alive(v);
+    required[i] = v->required;
+    if (alive[i]) {
+      any_alive = 1;
+      if (ecmg_client_ecm_epoch(v->ecmg) != 0) have_target = 1;
     }
   }
+  if (g->have_clock) refresh_group_cw(g, any_alive, emit, ctx);
   target_parity = (int)(g->cw_epoch_published & 1);
-  cw_valid = !(g->cfg.fallback_clear && cas_group_fallback_active(g));
+  /* cppcheck-suppress uninitvar -- required[i]/alive[i] for i<vendor_count always written above */
+  cw_valid = !(g->cfg.fallback_clear && cas_group_fallback_active_calc(g->cfg.vendor_count, required, alive));
   cas_scramble_engine_scramble_packet(g->engine, out_pid, g->have_clock, have_target, target_parity, cw_valid, now, pkt188, emit, ctx);
 }
 
@@ -304,16 +286,15 @@ void cas_group_flush(cas_group_t *g, scrambler_emit_cb emit, void *ctx) {
 
 size_t cas_group_prog_desc(cas_group_t *g, unsigned char *out, size_t cap) {
   size_t total = 0;
+  size_t n;
   for (size_t i = 0; i < g->cfg.vendor_count; i++) {
-    size_t n = cadescbuild_ca_descriptor(g->vendors[i].ca_system_id, g->vendors[i].ecm_pid, out + total, cap - total);
+    n = cadescbuild_ca_descriptor(g->vendors[i].ca_system_id, g->vendors[i].ecm_pid, out + total, cap - total);
     if (!n) return 0;
     total += n;
   }
-  {
-    size_t n = cadescbuild_scrambling_descriptor(g->scrambling_mode, out + total, cap - total);
-    if (!n) return 0;
-    total += n;
-  }
+  n = cadescbuild_scrambling_descriptor(g->scrambling_mode, out + total, cap - total);
+  if (!n) return 0;
+  total += n;
   return total;
 }
 

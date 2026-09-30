@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,7 +75,14 @@ static int raw_send_all(struct http *h, const char *buf, size_t n) {
       log_line("send: %s", h->tls ? "tls write failed" : strerror(errno));
       return -1;
     }
-    if (w == 0) continue; /* transient, retry */
+    if (w == 0) {
+      struct pollfd pfd = {.fd = h->fd, .events = POLLIN | POLLOUT, .revents = 0};
+      if (poll(&pfd, 1, HTTP_HEADER_TIMEOUT_MS) <= 0) {
+        log_line("send: timed out waiting for socket readiness");
+        return -1;
+      }
+      continue;
+    }
     buf += w;
     n -= (size_t)w;
   }
@@ -88,10 +96,12 @@ static void hdr_lower(char *s) {
 int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out) {
   const char *msg;
   size_t msg_len;
-  int minor_version, status;
+  int minor_version;
+  int status;
   struct phr_header headers[HTTP_PARSE_MAX_HEADERS];
   size_t num_headers = HTTP_PARSE_MAX_HEADERS;
   int pret;
+  const char *cl;
 
   pret = phr_parse_response((const char *)h->hold, got, &minor_version, &status, &msg, &msg_len, headers, &num_headers, 0);
   (void)msg;
@@ -122,12 +132,24 @@ int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out)
   }
   h->hdr_count = (int)num_headers;
 
-  {
-    const char *cl = http_header(h, "content-length");
-    h->has_content_length = cl != NULL;
-    h->content_length = cl ? strtoul(cl, NULL, 10) : 0;
-    h->body_consumed = 0;
+  cl = http_header(h, "content-length");
+  h->has_content_length = 0;
+  h->content_length = 0;
+  if (cl) {
+    char *end;
+    unsigned long v;
+    errno = 0;
+    v = strtoul(cl, &end, 10);
+    if (*cl && !*end && errno != ERANGE) {
+      h->has_content_length = 1;
+      h->content_length = v;
+    } else {
+      log_line("http: malformed content-length '%s'", cl);
+      if (reason_out) *reason_out = NET_ERR_FORMAT;
+      return -1;
+    }
   }
+  h->body_consumed = 0;
 
   h->hlen = got - (size_t)pret;
   memmove(h->hold, h->hold + pret, h->hlen);
@@ -191,21 +213,17 @@ int http_is_redirect_status(int status) {
 }
 
 const char *http_header(const http_t *h, const char *name) {
-  char key[64];
-
-  bufcpy(key, sizeof key, name);
-  hdr_lower(key);
-  for (int i = 0; i < h->hdr_count; i++) if (!strcmp(h->hdr[i].name, key)) return h->hdr[i].value;
+  for (int i = 0; i < h->hdr_count; i++) if (!strcasecmp(h->hdr[i].name, name)) return h->hdr[i].value;
   return NULL;
 }
 
 const http_url_t *http_final_url(const http_t *h) { return &h->url; }
 
 static int has_close_token(const char *v) {
-  char buf[256];
-  bufcpy(buf, sizeof buf, v);
-  hdr_lower(buf);
-  return strstr(buf, "close") != NULL;
+  size_t vlen = strlen(v);
+  size_t i;
+  for (i = 0; i + 5 <= vlen; i++) if (!strncasecmp(v + i, "close", 5)) return 1;
+  return 0;
 }
 
 int http_can_reuse(const http_t *h) {
@@ -237,6 +255,9 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
   struct http *h = calloc(1, sizeof *h);
   char req[2048];
   int rl;
+  size_t got;
+  int have;
+  double deadline;
 
   if (!h) return NULL;
   h->url = *url;
@@ -265,44 +286,42 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
     if (reason_out) *reason_out = NET_ERR_READ;
     goto fail;
   }
-  {
-    size_t got = 0;
-    int have = 0;
-    double deadline = mono_seconds() + (double)HTTP_HEADER_TIMEOUT_MS / 1000.0;
-    while (got < sizeof h->hold) {
-      double remain = deadline - mono_seconds();
-      ssize_t n;
-      int pr;
-      if (remain <= 0) {
-        log_line("http: timed out waiting for response headers");
-        if (reason_out) *reason_out = NET_ERR_TIMEOUT;
-        goto fail;
-      }
-      set_rcvtimeo(h->fd, remain);
-      n = raw_recv(h, h->hold + got, sizeof h->hold - got, reason_out);
-      if (n < 0) {
-        log_line("http: connection closed while reading headers");
-        goto fail;
-      }
-      if (n == 0) {
-        log_line("http: timed out waiting for response headers");
-        if (reason_out) *reason_out = NET_ERR_TIMEOUT;
-        goto fail;
-      }
-      got += (size_t)n;
-      pr = try_parse_response(h, got, reason_out);
-      if (pr < 0) goto fail;
-      if (pr > 0) {
-        have = 1;
-        break;
-      }
-    }
-    set_rcvtimeo(h->fd, (double)HTTP_HEADER_TIMEOUT_MS / 1000.0);
-    if (!have) {
-      log_line("http: response headers too large");
-      if (reason_out) *reason_out = NET_ERR_FORMAT;
+  got = 0;
+  have = 0;
+  deadline = mono_seconds() + (double)HTTP_HEADER_TIMEOUT_MS / 1000.0;
+  while (got < sizeof h->hold) {
+    double remain = deadline - mono_seconds();
+    ssize_t n;
+    int pr;
+    if (remain <= 0) {
+      log_line("http: timed out waiting for response headers");
+      if (reason_out) *reason_out = NET_ERR_TIMEOUT;
       goto fail;
     }
+    set_rcvtimeo(h->fd, remain);
+    n = raw_recv(h, h->hold + got, sizeof h->hold - got, reason_out);
+    if (n < 0) {
+      log_line("http: connection closed while reading headers");
+      goto fail;
+    }
+    if (n == 0) {
+      log_line("http: timed out waiting for response headers");
+      if (reason_out) *reason_out = NET_ERR_TIMEOUT;
+      goto fail;
+    }
+    got += (size_t)n;
+    pr = try_parse_response(h, got, reason_out);
+    if (pr < 0) goto fail;
+    if (pr > 0) {
+      have = 1;
+      break;
+    }
+  }
+  set_rcvtimeo(h->fd, (double)HTTP_HEADER_TIMEOUT_MS / 1000.0);
+  if (!have) {
+    log_line("http: response headers too large");
+    if (reason_out) *reason_out = NET_ERR_FORMAT;
+    goto fail;
   }
   if (setup_transfer_encoding(h, reason_out) != 0) goto fail;
   return h;

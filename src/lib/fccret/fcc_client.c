@@ -12,6 +12,7 @@
 
 #include "lib/demux/rtp.h"
 #include "lib/demux/rtx.h"
+#include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/signal.h"
 #include "lib/mux/rtcp_build.h"
@@ -44,46 +45,37 @@ static void rams_i_cb(const rtcp_rams_i_t *info, void *user) {
 }
 
 void fcc_on_uni(fcc_client_t *r, const unsigned char *pkt, size_t len, double now) {
+  rtx_pkt_t rx;
   (void)now;
-  if (len < 2)
-    return;
+  if (len < 2) return;
   if (pkt[1] >= FCC_RTCP_PT_MIN && pkt[1] <= FCC_RTCP_PT_MAX) {
-    rtcp_parse(pkt, len, NULL, NULL, rams_i_cb, NULL, NULL, NULL, r);
+    rtcp_parse(pkt, len, &(rtcp_cbs_t){.rams_i_cb = rams_i_cb, .user = r});
     return;
   }
-  if (r->done)
-    return;
-  {
-    rtx_pkt_t rx;
-    if (!rtx_parse(pkt, len, r->rtx_pt, &rx))
-      return;
-    if (rx.payload_len > sizeof r->pending)
-      return;
-    memcpy(r->pending, rx.payload, rx.payload_len);
-    r->pending_len = rx.payload_len;
-  }
+  if (r->done) return;
+
+  if (!rtx_parse(pkt, len, r->rtx_pt, &rx)) return;
+  if (rx.payload_len > sizeof r->pending) return;
+  memcpy(r->pending, rx.payload, rx.payload_len);
+  r->pending_len = rx.payload_len;
 }
 
 void fcc_on_multicast(fcc_client_t *r, const rtp_hdr_t *hdr, const unsigned char *payload, size_t len, double now) {
+  rtcp_rams_t_t term;
+  unsigned char pkt[32];
+  size_t n;
   (void)now;
-  if (r->done)
-    return;
-  {
-    rtcp_rams_t_t term;
-    unsigned char pkt[32];
-    size_t n;
-    memset(&term, 0, sizeof term);
-    term.sender_ssrc = r->sender_ssrc;
-    term.media_ssrc = hdr->ssrc;
-    term.has_first_mc_seqnum = 1;
-    term.first_mc_seqnum = hdr->seq;
-    n = rtcp_build_rams_t(&term, pkt, sizeof pkt);
-    if (n)
-      send(r->uni_fd, pkt, n, 0);
-  }
+  if (r->done) return;
+
+  memset(&term, 0, sizeof term);
+  term.sender_ssrc = r->sender_ssrc;
+  term.media_ssrc = hdr->ssrc;
+  term.has_first_mc_seqnum = 1;
+  term.first_mc_seqnum = hdr->seq;
+  n = rtcp_build_rams_t(&term, pkt, sizeof pkt);
+  if (n) send(r->uni_fd, pkt, n, 0);
   r->done = 1;
-  if (len > sizeof r->pending)
-    len = sizeof r->pending;
+  if (len > sizeof r->pending) len = sizeof r->pending;
   memcpy(r->pending, payload, len);
   r->pending_len = len;
 }
@@ -137,8 +129,7 @@ static void send_rams_r(const fcc_client_t *r, const fcc_client_cfg_t *cfg) {
 
 fcc_client_t *fcc_client_open(const fcc_client_cfg_t *cfg) {
   fcc_client_t *r = calloc(1, sizeof *r);
-  if (!r)
-    return NULL;
+  if (!r) return NULL;
 
   r->uni_fd = uni_socket_open(cfg);
   if (r->uni_fd < 0) {
@@ -146,16 +137,16 @@ fcc_client_t *fcc_client_open(const fcc_client_cfg_t *cfg) {
     return NULL;
   }
   r->rtx_pt = cfg->rtx_pt;
-  srand((unsigned)(time(NULL) ^ getpid()));
-  r->sender_ssrc = ((uint32_t)rand() << 16) ^ (uint32_t)rand();
-
+  r->sender_ssrc = rand_seed32();
   send_rams_r(r, cfg);
   return r;
 }
 
 ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size_t cap) {
   struct pollfd pfd[2];
-  int nfds = 0, mi, ui;
+  int nfds = 0;
+  int mi;
+  int ui;
   double now;
   size_t n;
 
@@ -166,23 +157,26 @@ ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size
     return (ssize_t)n;
   }
 
-  mi = nfds; pfd[nfds].fd = mcast_fd(main); pfd[nfds].events = POLLIN; nfds++;
-  ui = nfds; pfd[nfds].fd = r->uni_fd; pfd[nfds].events = POLLIN; nfds++;
+  mi = nfds;
+  pfd[nfds].fd = mcast_fd(main);
+  pfd[nfds].events = POLLIN;
+  nfds++;
+  ui = nfds;
+  pfd[nfds].fd = r->uni_fd;
+  pfd[nfds].events = POLLIN;
+  nfds++;
 
   if (poll(pfd, (nfds_t)nfds, 1000) < 0) {
-    if (errno == EINTR)
-      return 0;
+    if (errno == EINTR) return 0;
     log_line("fcc: poll: %s", strerror(errno));
     return -1;
   }
 
   now = mono_seconds();
-
   if (pfd[mi].revents & POLLIN) {
     unsigned char raw[65536];
     ssize_t rn = mcast_recv(main, raw, sizeof raw, NULL);
-    if (rn < 0)
-      return -1;
+    if (rn < 0) return -1;
     if (rn > 0) {
       rtp_hdr_t hdr;
       if (rtp_parse_header(raw, (size_t)rn, &hdr) && (size_t)rn > hdr.payload_off)
@@ -193,8 +187,7 @@ ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size
   if (pfd[ui].revents & POLLIN) {
     unsigned char raw[65536];
     ssize_t rn = recv(r->uni_fd, raw, sizeof raw, 0);
-    if (rn > 0)
-      fcc_on_uni(r, raw, (size_t)rn, now);
+    if (rn > 0) fcc_on_uni(r, raw, (size_t)rn, now);
   }
 
   if (r->pending_len) {
@@ -207,8 +200,7 @@ ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size
 }
 
 void fcc_client_close(fcc_client_t *r) {
-  if (!r)
-    return;
+  if (!r) return;
   close(r->uni_fd);
   free(r);
 }

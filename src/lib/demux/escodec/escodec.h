@@ -19,14 +19,20 @@ typedef struct {
   codec_t codec;
   unsigned char cpriv[ESCODEC_CPRIV_MAX]; /* codecpriv: ASC/avcC/hvcC */
   size_t cpriv_len;
-  unsigned rate, channels;
-  unsigned char vps[ESCODEC_PS_MAX], sps[ESCODEC_PS_MAX], pps[ESCODEC_PS_MAX];
-  size_t vpslen, spslen, ppslen;
+  unsigned rate;
+  unsigned channels;
+  unsigned char vps[ESCODEC_PS_MAX];
+  unsigned char sps[ESCODEC_PS_MAX];
+  unsigned char pps[ESCODEC_PS_MAX];
+  size_t vpslen;
+  size_t spslen;
+  size_t ppslen;
   unsigned char ptl[12]; /* HEVC profile_tier_level */
   unsigned chroma;
   unsigned av1_reduced_still_picture_header;
   unsigned char au[ESCODEC_AU_MAX];
-  int latm_cfg_ok, latm_flt;
+  int latm_cfg_ok;
+  int latm_flt;
   unsigned truehd_samples;
   log_throttle_t vbuf_drop_throttle;
 } esc_track_t;
@@ -35,9 +41,14 @@ typedef struct {
   size_t consumed;
   const unsigned char *out;
   size_t outlen;
-  unsigned rate, ch, samples;
+  unsigned rate;
+  unsigned ch;
+  unsigned samples;
   int layer;
-  unsigned bsid, bsmod, acmod, lfeon; /* AC3/EAC3 dac3/dec3 fields, unset otherwise */
+  unsigned bsid;  /* AC3/EAC3 dac3/dec3 fields, unset otherwise */
+  unsigned bsmod;
+  unsigned acmod;
+  unsigned lfeon;
   unsigned bitrate_code;              /* AC3 only: 5-bit frmsizecod, dac3's bit_rate_code */
   int atmos;
   unsigned truehd_format_info;

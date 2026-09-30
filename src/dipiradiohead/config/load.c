@@ -108,7 +108,7 @@ int rdh_cfg_test(const char *path, int strict) {
   warn_if(&y, pwlen && (pwlen < 10 || pwlen > 79), "srt.passphrase must be 10..79 characters");
   warn_if(&y, cfg.srt_pbkeylen && !pwlen, "srt.pbkeylen requires srt.passphrase");
   warn_if(&y, cfg.any_cas_flag && cfg.cas_algo == CAS_ALGO_NONE, "cas.* options require cas.algo");
-  if (cas_args_validate(TOOL_NAME, cfg.cas_algo, cfg.cas_vendors, cfg.n_cas_vendors, cfg.biss2_enabled, cfg.biss1_enabled, cfg.biss2_ca_enabled, cfg.biss2_emit_esw, cfg.biss2_ca_session_id_given, cfg.cas_cp_duration_ms) != 0)
+  if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg.cas_algo, cfg.cas_vendors, cfg.n_cas_vendors, cfg.biss2_enabled, cfg.biss1_enabled, cfg.biss2_ca_enabled, cfg.biss2_emit_esw, cfg.biss2_ca_session_id_given, cfg.cas_cp_duration_ms}) != 0)
     y.warnings++;
   return yamlcfg_report(&y);
 }

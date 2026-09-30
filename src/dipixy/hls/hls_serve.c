@@ -14,7 +14,7 @@ void snapshot_plain_playlist(const hls_snapshot_t *s, seg_container_t container,
   snap->oldest_seq = s->oldest_seq;
   snap->seg_count = s->count;
   for (int i = 0; i < s->count; i++) {
-    const hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
+    const hls_seg_t *seg = &s->ring->segs[(s->head + i) % HLS_MAX_SEGS];
     snap->segs[i].seq = seg->seq;
     snap->segs[i].duration = seg->duration;
   }
@@ -51,7 +51,7 @@ void snapshot_lcevc_master(const hls_snapshot_t *s, lcevc_master_snap_t *snap) {
   snap->alt_pid[0] = 0;
   for (int i = 0; i < s->lcevc_pid_count; i++) snap->alt_pid[i + 1] = s->lcevc_pid[i];
   for (int i = 0; i < s->count; i++) {
-    const hls_seg_t *seg = &s->segs[(s->head + i) % HLS_MAX_SEGS];
+    const hls_seg_t *seg = &s->ring->segs[(s->head + i) % HLS_MAX_SEGS];
     bw_bits += (uint64_t)seg->size * 8;
     bw_secs += seg->duration;
   }
@@ -91,7 +91,7 @@ int hls_serve(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, u
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
   if (!hls_resolve(ctx, filter, pmt_pid, lcevc, container, filename, if_none_match, &r)) return 0;
   if (r.status == 404) {
-    queue_status(c, "404 Not Found", keep_alive);
+    respond_status(c, "404 Not Found", keep_alive);
     return 1;
   }
   if (r.status == 304) {
@@ -99,7 +99,7 @@ int hls_serve(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, u
     return 1;
   }
   if (r.kind == HLS_RESOLVE_PLAYLIST) {
-    queue_m3u8(c, (const char *)r.body, r.body_len, is_head, keep_alive, cors_hdr);
+    queue_text_resp(c, "application/vnd.apple.mpegurl", (const char *)r.body, r.body_len, is_head, keep_alive, cors_hdr);
   } else if (r.kind == HLS_RESOLVE_SEGMENT && hls_zc_eligible(c, r.body_len, is_head)) {
     seg_buf_ref(r.body);
     queue_segment_zc(c, r.body, r.body_len, r.content_type, r.etag, keep_alive, cors_hdr);

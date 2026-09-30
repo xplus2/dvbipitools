@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef LIB_ARGUTIL_H
-#define LIB_ARGUTIL_H
+#ifndef DVBIPITOOLS_LIB_HELPER_ARGUTIL_H
+#define DVBIPITOOLS_LIB_HELPER_ARGUTIL_H
 
 #include <stdarg.h>
 #include <stddef.h>
@@ -36,8 +36,17 @@ typedef enum {
 /* comma separated pids, decimal or 0x hex, each 0..8191. 0 ok, -1 bad or too many */
 int metrics_known_pids_parse(const char *s, unsigned *out, unsigned *n);
 int argutil_metrics_known_pids_opt(const char *tool, const char *val, unsigned *out, unsigned *n);
-static inline int metrics_queue_level(metrics_inspect_ts_t l) {
-  return l == METRICS_INSPECT_TS_OFF ? 0 : l == METRICS_INSPECT_TS_BASIC ? 1 : 2;
+
+typedef enum { SRT_QUEUE_METRICS_OFF = 0, SRT_QUEUE_METRICS_BASIC = 1, SRT_QUEUE_METRICS_FULL = 2 } srt_queue_metrics_t;
+
+static inline srt_queue_metrics_t metrics_queue_level(metrics_inspect_ts_t l) {
+  switch (l) {
+    case METRICS_INSPECT_TS_OFF: return SRT_QUEUE_METRICS_OFF;
+    case METRICS_INSPECT_TS_BASIC: return SRT_QUEUE_METRICS_BASIC;
+    case METRICS_INSPECT_TS_MEDIUM:
+    case METRICS_INSPECT_TS_FULL:
+    default: return SRT_QUEUE_METRICS_FULL;
+  }
 }
 
 int metrics_inspect_ts_parse(const char *s, metrics_inspect_ts_t *out);

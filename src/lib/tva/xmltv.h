@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef LIB_TVA_XMLTV_H
-#define LIB_TVA_XMLTV_H
+#ifndef DVBIPITOOLS_LIB_TVA_XMLTV_H
+#define DVBIPITOOLS_LIB_TVA_XMLTV_H
 
 #include <stdio.h>
 

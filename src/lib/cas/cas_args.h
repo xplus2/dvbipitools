@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef LIB_CAS_CAS_ARGS_H
-#define LIB_CAS_CAS_ARGS_H
+#ifndef DVBIPITOOLS_LIB_CAS_CAS_ARGS_H
+#define DVBIPITOOLS_LIB_CAS_CAS_ARGS_H
 
 #include <stddef.h>
 
@@ -73,9 +73,19 @@ int cas_set_biss2_emit_esw(int *enabled, unsigned char *id, const char *val, cha
 int cas_set_biss1_sw(int *enabled, unsigned char *cw, const char *val, char *err, size_t errsz);
 int cas_set_biss2_ca_session_id(unsigned *dst, int *given, const char *val, char *err, size_t errsz);
 
+typedef struct {
+  cas_algo_t cas_algo;
+  const cas_vendor_t *vendors;
+  unsigned n_vendors;
+  int biss2_enabled;
+  int biss1_enabled;
+  int biss2_ca_enabled;
+  int biss2_emit_esw;
+  int biss2_ca_session_id_given;
+  unsigned cas_cp_duration_ms;
+} cas_args_t;
+
 /* biss2/biss1/biss2-ca/simulcrypt are mutually exclusive, 0 ok, -1 err (message already printed) */
-int cas_args_validate(const char *tool_name, cas_algo_t cas_algo, const cas_vendor_t *vendors, unsigned n_vendors,
-    int biss2_enabled, int biss1_enabled, int biss2_ca_enabled, int biss2_emit_esw,
-    int biss2_ca_session_id_given, unsigned cas_cp_duration_ms);
+int cas_args_validate(const char *tool_name, const cas_args_t *a);
 
 #endif

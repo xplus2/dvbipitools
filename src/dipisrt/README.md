@@ -3,10 +3,16 @@
 `dipisrt` bridges a DVB-IPI stream between a plain RTP/UDP/file endpoint and an SRT link, in
 either direction. The direction is detected, depending on `-i`/`-o` being an `srt://` URI.
 
-Dependencies:
+Why use this tool over built-in `srt://` capabilities in the other tools here?
+* Bonding support
+* Process separation / running as a standalone bridge / architectural and topological boundaries
+* You might just want it separated
+* Debugging and testing of the SRT integration in isolation
+
+## Dependencies
 * `libsrt`
 
-Usage:
+## Usage
 ```
 dipisrt -i <uri> -o <uri> [options]
 ```
@@ -68,7 +74,7 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 | `-`                            | stdin (`-i`) or stdout (`-o`)                              |
 | `<path>`                       | a file                                                     |
 
-Exactly one of `-i`/`-o` must be `srt://`. `<host>` is a numeric IP, not a hostname. 
+Exactly one of `-i`/`-o` must be an `srt://` URI. `<host>` is a numeric IP, not a hostname. 
 SRT's caller/listener role is independent of which side produces the media: 
 add an `@` right after `srt://` to listen, leave it off to call out,
 regardless of whether that side is `-i` or `-o`.
@@ -109,8 +115,9 @@ dipisrt -i rtp://@239.1.1.1:5000 -o srt://1.2.3.4:9000 --passphrase correcthorse
     `dipisrt` detects this at runtime and enables the feature only if the linked library supports it.
     You are encouraged to carry out your own testing before using it for anything that matters.
   + If you wondered why the automated bonding tests (GitHub Actions, latest tests, bonding-tests) don't test
-    recovery after a 100% link loss (but 95% instead): libsrt doesn't do that. Ever.
-* FEC (`--packetfilter`) is off by default, matching libsrt's own default. This is SRT's own native FEC, unrelated to `--al-fec` (ETSI TS 102 034 Annex E),
+    recovery after a 100% link loss (but 95% instead): Current libsrt doesn't do that. Ever.
+* FEC (`--packetfilter`) is off by default, matching libsrt's own default. 
+  This is SRT's own native FEC, unrelated to `--al-fec` (ETSI TS 102 034 Annex E),
   which protects `rtp://`. The two can both be on at once, independently.
 * The sender's outgoing queue is sized automatically from the observed input bitrate,
   `--latency`, and `--send-buffer-mult`, so it can absorb a struggling link without

@@ -144,10 +144,20 @@ void trak_build_hdlr(mp4buf_t *out, pid_class_t cls) {
   const char *hty;
   const char *name;
   size_t namelen;
-  if (cls == PID_VIDEO) { hty = "vide"; name = vname; namelen = sizeof vname; }
-  else if (cls == PID_AUDIO) { hty = "soun"; name = aname; namelen = sizeof aname; }
-  else { hty = "text"; name = tname; namelen = sizeof tname; }
   mp4buf_t b;
+  if (cls == PID_VIDEO) {
+    hty = "vide";
+    name = vname;
+    namelen = sizeof vname;
+  } else if (cls == PID_AUDIO) {
+    hty = "soun";
+    name = aname;
+    namelen = sizeof aname;
+  } else {
+    hty = "text";
+    name = tname;
+    namelen = sizeof tname;
+  }
   memset(&b, 0, sizeof b);
   mb_u8(&b, 0);
   mb_u24(&b, 0);
@@ -234,10 +244,12 @@ static void trak_build_esds(mp4buf_t *out, const trak_meta_t *t) {
 }
 
 static unsigned trak_ac3_fscod(unsigned rate) {
-  if (rate == 48000) return 0;
-  if (rate == 44100) return 1;
-  if (rate == 32000) return 2;
-  return 3;
+  switch (rate) {
+    case 48000: return 0;
+    case 44100: return 1;
+    case 32000: return 2;
+    default: return 3;
+  }
 }
 
 static void trak_build_dac3(mp4buf_t *out, const trak_meta_t *t) {
@@ -317,14 +329,19 @@ static void trak_build_audio_entry(mp4buf_t *stsd, const trak_meta_t *t) {
   mb_u16(&entry, 0);
   mb_u16(&entry, 0);
   mb_u32(&entry, (uint32_t)t->rate << 16);
-  if (t->codec == CODEC_AC3)         trak_build_dac3(&entry, t);
-  else if (t->codec == CODEC_EAC3)   trak_build_dec3(&entry, t);
-  else if (t->codec == CODEC_OPUS)   trak_build_dops(&entry, t);
-  else if (t->codec == CODEC_DTS || t->codec == CODEC_DTS_HD || t->codec == CODEC_DTS_HD_MA)
-                                     trak_build_ddts(&entry, t);
-  else if (t->codec == CODEC_TRUEHD) trak_build_dmlp(&entry, t);
-  else if (t->codec == CODEC_AC4)    trak_build_dac4(&entry, t);
-  else                               trak_build_esds(&entry, t);
+  switch (t->codec) {
+    case CODEC_AC3:  trak_build_dac3(&entry, t); break;
+    case CODEC_EAC3: trak_build_dec3(&entry, t); break;
+    case CODEC_OPUS: trak_build_dops(&entry, t); break;
+    case CODEC_DTS:
+    case CODEC_DTS_HD:
+    case CODEC_DTS_HD_MA:
+      trak_build_ddts(&entry, t);
+      break;
+    case CODEC_TRUEHD: trak_build_dmlp(&entry, t); break;
+    case CODEC_AC4:    trak_build_dac4(&entry, t); break;
+    default:           trak_build_esds(&entry, t); break;
+  }
   mb_box(stsd, trak_entry_fourcc_for(t), &entry);
 }
 
@@ -332,12 +349,12 @@ static void trak_build_video_entry(mp4buf_t *stsd, const trak_meta_t *t) {
   mp4buf_t entry;
   mp4buf_t cfgbox;
   const char *cfg_fourcc;
+  int i;
   if (t->codec == CODEC_HEVC) cfg_fourcc = "hvcC";
   else if (t->codec == CODEC_VVC) cfg_fourcc = "vvcC";
   else if (t->codec == CODEC_AV1) cfg_fourcc = "av1C";
   else if (t->codec == CODEC_LCEVC) cfg_fourcc = "lvcC";
   else cfg_fourcc = "avcC";
-  int i;
   memset(&entry, 0, sizeof entry);
   for (i = 0; i < 6; i++) mb_u8(&entry, 0);
   mb_u16(&entry, 1);
@@ -395,8 +412,10 @@ void trak_build_stsd(mp4buf_t *out, const trak_meta_t *t) {
   mb_u8(&stsd, 0);
   mb_u24(&stsd, 0);
   mb_u32(&stsd, 1);
-  if (t->cls == PID_VIDEO)      trak_build_video_entry(&stsd, t);
-  else if (t->cls == PID_AUDIO) trak_build_audio_entry(&stsd, t);
-  else                          trak_build_text_entry(&stsd);
+  switch (t->cls) {
+    case PID_VIDEO: trak_build_video_entry(&stsd, t); break;
+    case PID_AUDIO: trak_build_audio_entry(&stsd, t); break;
+    default:        trak_build_text_entry(&stsd); break;
+  }
   mb_box(out, "stsd", &stsd);
 }

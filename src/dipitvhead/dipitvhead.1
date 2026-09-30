@@ -17,10 +17,22 @@ dipitvhead \- re-package transport streams as a DVB-IPI multicast, with bitrate 
 .IR uri }
 .RI [ options ]
 .SH DESCRIPTION
+In short,
 .B dipitvhead
-re-packages one or more already-muxed transport streams (not raw
-elementary streams) as one DVB-IPI multicast, under its own PAT/NIT
-(mux-wide) and one PMT/SDT per program. A single
+it is a micromuxer and SCS/scrambler.
+.PP
+It takes one or more transport streams (multicast, http(s)+ts/hls+ts/hls+fmp4/llhls/dash/lldash, SRT, RIST or stdin)
+and re-packages them as one transport stream under a new PAT/NIT with a merged EIT and rewritten PMT.
+Individual SDTs can be passed, removed or overwritten.
+
+Its output can be a DVB-IPI multicast, SRT or RIST.
+It is always one transport stream, either SPTS when only one source is given, or MPTS on more.
+For more output streams, run multiple instances if it.
+
+Optionally, it scrambles selected PES using DVB SimulCrypt (multi CAS, CSA1/CSA2/CISSA, both EMMG directions) or BISS 1/2/CA (see below).
+If enabled, it also adds Annex E Layer 1 FEC or CBR stuffing.
+
+A single
 .B \-i
 produces a normal Single Program Transport Stream (SPTS); multiple
 .B \-i
@@ -46,12 +58,11 @@ Output goes to a multicast group/port
 .RB ( \-m ,
 RTP-wrapped by default) and/or one or more bonded RIST or SRT peers
 .RB ( \-R ,
-requires librist or libsrt, one scheme at a time); at least one of
+requires librist or libsrt, one scheme at a time). At least one of
 .B \-m
 or
 .B \-R
-is required. Target output
-bitrate can be shaped with
+is required. Target output bitrate can be shaped with
 .BR \-b ,
 combined with null-packet stuffing
 .RB ( \-S )
@@ -64,8 +75,8 @@ injects an AIT (ETSI TS 102 809) advertising one AUTOSTART hybrid
 broadcast/broadband application per input; this is a separate
 specification from DVB-IPI itself, not a passthrough of any source AIT.
 .PP
-CAS scrambling is optional and mutually exclusive between families:
-Simulcrypt
+Scrambling is optional and mutually exclusive between families:
+DVB SimulCrypt
 .RB ( \-\-cas\-algo / \-\-cas\-ecmg\-* ,
 acting as SCS and EMMG-side MUX against one or more ECMG vendors) or
 BISS
@@ -73,7 +84,7 @@ BISS
 EBU Tech 3292): BISS1 Mode 1 (CSA1), BISS2 Mode 1/E (CISSA, static
 Session Word), or BISS2 Mode CA (RSA-OAEP per-receiver entitlement).
 Supported ciphers are CISSA, CSA1, and CSA2; see
-.B BUGS
+.B KNOWN GAPS
 below for what is not implemented.
 .PP
 Video: MPEG-2, H.264, HEVC. Audio: MPEG-1/2 (layers 1-3), AC-3,
@@ -772,14 +783,18 @@ Stop.
 Re-read the BISS2 Mode CA receivers directory
 .RB ( \-\-biss2\-ca\-receivers )
 and apply any added, removed, or changed keys.
-.SH BUGS
-CISSA, CSA1, CSA2, BISS1 Mode 1, BISS2 Mode 1/E, and BISS2 Mode CA
-only; no CSA3, no BISS1 Mode E (DES). BISS2 Mode CA: one keypair per
-file in the receivers directory, no group key pairs; no
-entitlement_priv_data_loop vendor extensions;
+.SH KNOWN LIMITATIONS
+* CISSA, CSA1, CSA2, BISS1 Mode 1, BISS2 Mode 1/E, and BISS2 Mode CA
+only.
+
+* No CSA3, no BISS1 Mode E (DES). BISS2 Mode CA: one keypair per
+file in the receivers directory, no group key pairs
+
+* No entitlement_priv_data_loop vendor extensions:
 prevent_descrambled_forward/prevent_decoded_forward/insert_watermark
-entitlement flags are always 0 (unenforced). Single-pass scrambler
-only, no re-scrambling of already-scrambled input.
+entitlement flags are always 0 (unenforced).
+
+* It is a single-pass scrambler, there is no re-scrambling of already-scrambled input.
 .SH EXAMPLES
 .TP
 .B dipitvhead \-i rtp://@239.19.75.1:8700 \-m 239.1.1.1:5000 \-s "My Channel"
@@ -814,10 +829,6 @@ RIST output bonded to two peers, PSK-encrypted.
 .TP
 .B dipitvhead \-i rtp://@239.19.75.1:8700 \-R srt://recv.example:9000 \-\-srt\-passphrase s3cr3t12345
 SRT output to a single peer, encrypted.
-.SH EXIT STATUS
-.B 0
-on success.
-Non-zero on argument errors or I/O/network failure.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipitvhead.yaml

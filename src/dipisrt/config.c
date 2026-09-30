@@ -18,7 +18,8 @@ void srt_cfg_defaults(config_t *cfg) {
 }
 
 static int apply_iface(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->iface, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->iface, v, e, n);
 }
 
 static int apply_insecure(void *c, const char *v, char *e, size_t n) {
@@ -51,11 +52,13 @@ static int apply_daemonize(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_metrics_sock(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_sock, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_sock, v, e, n);
 }
 
 static int apply_metrics_id(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_str(&((config_t *)c)->metrics_id, v, e, n);
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_id, v, e, n);
 }
 
 static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {
@@ -99,7 +102,7 @@ static int apply_group_mode(void *c, const char *v, char *e, size_t n) {
 #ifndef DIPISRT_HAVE_BONDING
   (void)c;
   (void)v;
-  snprintf(e, n, "needs a libsrt built with bonding support (ENABLE_BONDING=ON)");
+  bufcpy(e, n, "needs a libsrt built with bonding support (ENABLE_BONDING=ON)");
   return -1;
 #else
   static const enum_map_t map[] = {{"broadcast", SRTGROUP_BROADCAST}, {"backup", SRTGROUP_BACKUP}};

@@ -21,9 +21,11 @@ typedef enum {
    frames only, reassembles fragments */
 typedef struct {
   uint8_t *buf;
-  size_t len, cap;
+  size_t len;
+  size_t cap;
   uint8_t *msg;
-  size_t msg_len, msg_cap;
+  size_t msg_len;
+  size_t msg_cap;
   int msg_opcode;
   int have_msg_opcode;
   uint8_t ctrl_payload[125]; /* close/ping/pong: never fragmented, RFC6455 SS5.5 caps at 125 */

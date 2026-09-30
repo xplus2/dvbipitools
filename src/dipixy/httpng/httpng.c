@@ -55,22 +55,21 @@ size_t httpng_format_etag(char *etag_buf, size_t etag_buf_sz, const char *etag) 
   return elen + 2;
 }
 
-void httpng_parse_known_header(const char *name, size_t namelen, const char *value, size_t valuelen, char *method, size_t method_sz, char *path, size_t path_sz,
-                               char *inm, size_t inm_sz, char *origin, size_t origin_sz, char *authz, size_t authz_sz, char *protocol, size_t protocol_sz) {
+void httpng_parse_known_header(const char *name, size_t namelen, const char *value, size_t valuelen, const httpng_hdr_out_t *out) {
   const uint8_t *v = (const uint8_t *)value;
   if (namelen == 7 && memcmp(name, ":method", 7) == 0) {
-    hdr_value_copy(method, method_sz, v, valuelen);
+    hdr_value_copy(out->method, out->method_sz, v, valuelen);
   } else if (namelen == 5 && memcmp(name, ":path", 5) == 0) {
-    hdr_value_copy(path, path_sz, v, valuelen);
+    hdr_value_copy(out->path, out->path_sz, v, valuelen);
   } else if (namelen == 13 && memcmp(name, "if-none-match", 13) == 0) {
-    hdr_value_copy(inm, inm_sz, v, valuelen);
-    strip_etag_quotes(inm);
+    hdr_value_copy(out->inm, out->inm_sz, v, valuelen);
+    strip_etag_quotes(out->inm);
   } else if (namelen == 6 && memcmp(name, "origin", 6) == 0) {
-    hdr_value_copy(origin, origin_sz, v, valuelen);
+    hdr_value_copy(out->origin, out->origin_sz, v, valuelen);
   } else if (namelen == 13 && memcmp(name, "authorization", 13) == 0) {
-    hdr_value_copy(authz, authz_sz, v, valuelen);
+    hdr_value_copy(out->authz, out->authz_sz, v, valuelen);
   } else if (namelen == 9 && memcmp(name, ":protocol", 9) == 0) {
-    hdr_value_copy(protocol, protocol_sz, v, valuelen);
+    hdr_value_copy(out->protocol, out->protocol_sz, v, valuelen);
   }
 }
 
@@ -171,7 +170,7 @@ static void dispatch_hls_route(httpng_req_t *rq) {
   }
   ctx = rs.ctx;
   if (!strcmp(rq->rt->hls_file, "index.m3u8") && !hls_store_ready(ctx, rq->filter, rq->pmt_pid, rq->lcevc, container) &&
-      rq->ops->hls_cold_try_park(rq->conn, rq->req, ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, HLS_COLD_HLS, container, 0, rq->is_head, rq->origin, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
+      rq->ops->hls_cold_try_park(rq->conn, rq->req, &(hls_cold_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, HLS_COLD_HLS, container, 0, rq->is_head, 0, rq->origin, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle}))
     return;
   handled = hls_render(ctx, rq->filter, rq->pmt_pid, rq->lcevc, container, rq->rt->hls_file, rq->is_head, rq->inm, &resp);
   rq->ops->respond_hls(rq->conn, rq->req, handled, &resp, rq->origin);
@@ -187,8 +186,9 @@ static void dispatch_llhls_route(httpng_req_t *rq) {
   unsigned list_num;
   capture_ctx_t *ctx;
   int handled;
+  int is_index_ll;
   st = route_setup(rq->rt, &list_num, rq->filter, rq->pmt_pid, rq->lcevc, rq->client_ip, rq->ops->proto, rq->item_bufs, rq->cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_TS,
-                   reactor_cfg()->hls_part_size, &rs);
+    reactor_cfg()->hls_part_size, &rs);
   if (st == ROUTE_SETUP_404) {
     rq->ops->respond_status(rq->conn, rq->req, "404");
     return;
@@ -198,12 +198,13 @@ static void dispatch_llhls_route(httpng_req_t *rq) {
     return;
   }
   ctx = rs.ctx;
-  if (!strcmp(rq->rt->hls_file, "index_ll.m3u8") && !hls_ll_store_ready(ctx, rq->filter, rq->pmt_pid, rq->lcevc, SEG_CONTAINER_TS) &&
-      rq->ops->hls_cold_try_park(rq->conn, rq->req, ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, HLS_COLD_LLHLS, SEG_CONTAINER_TS, 0, rq->is_head, rq->origin, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
+  is_index_ll = !strcmp(rq->rt->hls_file, "index_ll.m3u8");
+  if (is_index_ll && !hls_ll_store_ready(ctx, rq->filter, rq->pmt_pid, rq->lcevc, SEG_CONTAINER_TS) &&
+      rq->ops->hls_cold_try_park(rq->conn, rq->req, &(hls_cold_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, HLS_COLD_LLHLS, SEG_CONTAINER_TS, 0, rq->is_head, 0, rq->origin, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle}))
     return;
-  if (!strcmp(rq->rt->hls_file, "index_ll.m3u8") && parse_blocking_reload(rq->query, &want_seg, &want_part) &&
+  if (is_index_ll && parse_blocking_reload(rq->query, &want_seg, &want_part) &&
       !hls_part_available(ctx, rq->filter, rq->pmt_pid, rq->lcevc, SEG_CONTAINER_TS, want_seg, want_part) &&
-      rq->ops->llhls_try_park(rq->conn, rq->req, ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->is_head, rq->inm, rq->origin, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), rs.ws_handle))
+      rq->ops->llhls_try_park(rq->conn, rq->req, &(llhls_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->is_head, 0, rq->inm, rq->origin, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), rs.ws_handle}))
     return;
   handled = hls_render_ll(ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->is_head, rq->inm, &resp);
   rq->ops->respond_hls(rq->conn, rq->req, handled, &resp, rq->origin);
@@ -231,7 +232,7 @@ static void dispatch_dash_route(httpng_req_t *rq) {
   ctx = rs.ctx;
   if (strcmp(rq->rt->hls_file, "manifest.mpd") != 0) {
     if (!reactor_cfg()->no_lldash && !rq->is_head) {
-      int sub = dash_lldash_subscribe(ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->ops->proto == 3 ? DASH_PROTO_H3 : DASH_PROTO_H2);
+      int sub = dash_lldash_subscribe(ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->ops->proto == 3 ? CONN_PROTO_H3 : CONN_PROTO_H2);
       if (sub >= 0) {
         if (rq->ops->dashchunk_dispatch(rq->conn, rq->req, sub, rs.ws_handle)) return;
         dash_lldash_sub_close(sub);
@@ -240,7 +241,7 @@ static void dispatch_dash_route(httpng_req_t *rq) {
     handled = dash_render_seg(ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->is_head, &resp);
   } else {
     if (!hls_store_ready(ctx, rq->filter, rq->pmt_pid, rq->lcevc, SEG_CONTAINER_FMP4) &&
-        rq->ops->hls_cold_try_park(rq->conn, rq->req, ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, HLS_COLD_DASH, SEG_CONTAINER_FMP4, want_ll, rq->is_head, rq->origin, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
+        rq->ops->hls_cold_try_park(rq->conn, rq->req, &(hls_cold_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, HLS_COLD_DASH, SEG_CONTAINER_FMP4, want_ll, rq->is_head, 0, rq->origin, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle}))
       return;
     handled = dash_render(ctx, rq->filter, rq->pmt_pid, rq->lcevc, want_ll, reactor_cfg()->dash_utc_url, rq->is_head, &resp);
   }
@@ -253,6 +254,7 @@ static void dispatch_mp4_route(httpng_req_t *rq) {
   route_setup_status_t st;
   unsigned list_num;
   capture_ctx_t *ctx;
+  int sub;
   st = route_setup(rq->rt, &list_num, rq->filter, rq->pmt_pid, rq->lcevc, rq->client_ip, rq->ops->proto, rq->item_bufs, rq->cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_FMP4, 0.0, &rs);
   if (st == ROUTE_SETUP_404) {
     rq->ops->respond_status(rq->conn, rq->req, "404");
@@ -264,13 +266,11 @@ static void dispatch_mp4_route(httpng_req_t *rq) {
   }
   ctx = rs.ctx;
   if (!hls_store_ready(ctx, rq->filter, rq->pmt_pid, rq->lcevc, SEG_CONTAINER_FMP4) &&
-      rq->ops->hls_cold_try_park(rq->conn, rq->req, ctx, rq->filter, rq->pmt_pid, rq->lcevc, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, rq->is_head, rq->origin, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle))
+      rq->ops->hls_cold_try_park(rq->conn, rq->req, &(hls_cold_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, rq->is_head, 0, rq->origin, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle}))
     return;
-  {
-    int sub = mp4push_subscribe(ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->ops->proto);
-    if (sub >= 0 && rq->ops->mp4push_dispatch(rq->conn, rq->req, sub, rs.ws_handle)) return;
-    if (sub >= 0) mp4push_sub_close(sub);
-  }
+  sub = mp4push_subscribe(ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->ops->proto);
+  if (sub >= 0 && rq->ops->mp4push_dispatch(rq->conn, rq->req, sub, rs.ws_handle)) return;
+  if (sub >= 0) mp4push_sub_close(sub);
   rq->ops->respond_status(rq->conn, rq->req, "501");
 }
 

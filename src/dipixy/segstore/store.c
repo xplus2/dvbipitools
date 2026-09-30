@@ -43,12 +43,24 @@ void hls_store_init(int max_channels) {
 pthread_mutex_t *store_lock(const hls_store_t *s) { return &g_store_locks[s - g_stores]; }
 static _Atomic int *slot_state(const hls_store_t *s) { return &g_slot_state[s - g_stores]; }
 
+static _Thread_local hls_store_t *t_find_hint;
+
 hls_store_t *hls_store_find(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
+  hls_store_t *hint = t_find_hint;
+  if (hint) {
+    int idx = (int)(hint - g_stores);
+    if (idx >= 0 && idx < g_stores_n && atomic_load_explicit(&g_slot_state[idx], memory_order_acquire) == STORE_OPEN &&
+        hint->cap_ctx == ctx && hint->pmt_pid == pmt_pid && hint->container == container &&
+        pid_filter_equal(&hint->filter, filter) && lcevc_select_equal(&hint->lcevc, lcevc))
+      return hint;
+  }
   for (int i = 0; i < g_stores_n; i++) {
     if (atomic_load_explicit(&g_slot_state[i], memory_order_acquire) != STORE_OPEN) continue;
     if (g_stores[i].cap_ctx == ctx && g_stores[i].pmt_pid == pmt_pid && g_stores[i].container == container &&
-        pid_filter_equal(&g_stores[i].filter, filter) && lcevc_select_equal(&g_stores[i].lcevc, lcevc))
+        pid_filter_equal(&g_stores[i].filter, filter) && lcevc_select_equal(&g_stores[i].lcevc, lcevc)) {
+      t_find_hint = &g_stores[i];
       return &g_stores[i];
+    }
   }
   return NULL;
 }
@@ -98,6 +110,7 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
   int expected = STORE_OPEN;
   slot_retire_node_t *node;
   int nw;
+  hls_snapshot_t *cur;
   if (!s) return;
   if (!atomic_compare_exchange_strong_explicit(slot_state(s), &expected, STORE_CLOSING, memory_order_acq_rel, memory_order_relaxed)) return;
   node = malloc(sizeof *node);
@@ -110,12 +123,10 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
   node->nsnaps = 0;
 
   pthread_mutex_lock(store_lock(s));
-  {
-    hls_snapshot_t *cur = atomic_exchange_explicit(&s->snap, NULL, memory_order_acq_rel);
-    if (cur) node->snaps[node->nsnaps++] = cur;
-    for (int i = 0; i < s->retiring_n; i++) node->snaps[node->nsnaps++] = s->retiring[i];
-    s->retiring_n = 0;
-  }
+  cur = atomic_exchange_explicit(&s->snap, NULL, memory_order_acq_rel);
+  if (cur) node->snaps[node->nsnaps++] = cur;
+  for (int i = 0; i < s->retiring_n; i++) node->snaps[node->nsnaps++] = s->retiring[i];
+  s->retiring_n = 0;
   pthread_mutex_unlock(store_lock(s));
 
   nw = qsbr_worker_count(g_segstore_qsbr);

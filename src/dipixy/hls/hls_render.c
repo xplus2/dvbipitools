@@ -29,7 +29,9 @@ int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
   hls_snapshot_t *snap;
   const char *ext;
   unsigned long seq_ul;
-  uint32_t req_seq, oldest, last;
+  uint32_t req_seq;
+  uint32_t oldest;
+  uint32_t last;
   memset(r, 0, sizeof *r);
   ext = hls_filename_ext(filename);
   if (!ext) return 0;
@@ -79,7 +81,7 @@ int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
       oldest = snap->oldest_seq;
       last = oldest + (uint32_t)snap->count - 1u;
       if (req_seq >= oldest && req_seq <= last) {
-        const hls_seg_t *seg = &snap->segs[(snap->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
+        const hls_seg_t *seg = &snap->ring->segs[(snap->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
         r->body = seg->data;
         r->body_len = seg->size;
         r->content_type = !strcmp(ext, "m4s") ? "video/mp4" : "video/mp2t";
@@ -105,8 +107,10 @@ int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
     resp_set(out, 304, NULL, r.etag, NULL, 0, is_head);
   } else if (r.kind == HLS_RESOLVE_SEGMENT) {
     resp_set_zc(out, 200, r.content_type, r.etag, r.body, r.body_len, is_head);
+  } else if (r.kind == HLS_RESOLVE_PLAYLIST) {
+    resp_set_zc_cached(out, 200, r.content_type, NULL, r.body, r.body_len, is_head);
   } else {
-    resp_set(out, 200, r.content_type, r.kind == HLS_RESOLVE_INIT ? r.etag : NULL, r.body, r.body_len, is_head);
+    resp_set(out, 200, r.content_type, r.etag, r.body, r.body_len, is_head);
   }
   return 1;
 }
@@ -160,7 +164,7 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     uint32_t oldest = snap->oldest_seq;
     uint32_t last = oldest + (uint32_t)snap->count - 1u;
     if (req_seq >= oldest && req_seq <= last) {
-      const hls_seg_t *seg = &snap->segs[(snap->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
+      const hls_seg_t *seg = &snap->ring->segs[(snap->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
       if (req_part < seg->parts.count) {
         r->body = seg->data + seg->parts.offset[req_part];
         r->body_len = seg->parts.size[req_part];
@@ -185,8 +189,10 @@ int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
     resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
   } else if (r.status == 304) {
     resp_set(out, 304, NULL, r.etag, NULL, 0, is_head);
+  } else if (r.kind == HLS_RESOLVE_PLAYLIST) {
+    resp_set_zc_cached(out, 200, r.content_type, NULL, r.body, r.body_len, is_head);
   } else {
-    resp_set(out, 200, r.content_type, r.kind == HLS_RESOLVE_PLAYLIST ? NULL : r.etag, r.body, r.body_len, is_head);
+    resp_set(out, 200, r.content_type, r.etag, r.body, r.body_len, is_head);
   }
   return 1;
 }

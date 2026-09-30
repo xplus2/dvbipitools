@@ -23,6 +23,8 @@ static void emit_item_json(void *vctx, const channel_item_t *item) {
 }
 
 static void emit_source_json(jbuf_t *j, const channels_t *channels, const char *kind, const char *name, unsigned ordinal, int has_items) {
+  char numbuf[11];
+  size_t numlen;
   jbuf_str(j, "{");
   jbuf_key(j, "kind");
   jbuf_json_string(j, kind);
@@ -32,11 +34,8 @@ static void emit_source_json(jbuf_t *j, const channels_t *channels, const char *
   else      jbuf_str(j, "null");
   jbuf_str(j, ",");
   jbuf_key(j, "list_num");
-  {
-    char numbuf[11];
-    size_t numlen = uint_to_str(numbuf, ordinal);
-    jbuf_raw(j, numbuf, numlen);
-  }
+  numlen = uint_to_str(numbuf, ordinal);
+  jbuf_raw(j, numbuf, numlen);
   if (has_items) {
     item_emit_ctx_t ictx = {j, 0};
     jbuf_str(j, ",");
@@ -50,7 +49,8 @@ static void emit_source_json(jbuf_t *j, const channels_t *channels, const char *
 
 int ws_sources_build_snapshot(const config_t *cfg, const channels_t *channels, char **out) {
   static _Thread_local jbuf_t j;
-  int si, max_ord;
+  int si;
+  int max_ord;
 
   jbuf_reset(&j);
   max_ord = cfg->stdin_ordinal;

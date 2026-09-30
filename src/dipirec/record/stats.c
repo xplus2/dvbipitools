@@ -17,8 +17,7 @@ void fmt_dur(double secs, char *buf, size_t n) {
   long h;
   long m;
   s = (secs > 0.0) ? (long)secs : 0;
-  if (s < 0)
-    s = 0;
+  if (s < 0) s = 0;
   if (s > 359999) /* cap 99:59:59 */
     s = 359999;
   h = s / 3600;

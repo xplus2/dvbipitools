@@ -4,6 +4,7 @@ DVB-IPI EPG/BCG (ETSI TS 102 539). Announce an xmltv guide on multicast as BiM-e
 fragments ([dipixmltv](../dipixmltv/README.md) + [dipibim](../dipibim/README.md) under the hood),
 or listen for one and write xmltv back.
 
+## Usage
 ```sh
 dipibcg -a -i <xmltv> -M <map.csv> -m <mcast>:<port> [options]
 dipibcg -l -m <mcast>:<port> [options]
@@ -97,7 +98,7 @@ like `dipimetrics` listens on (default `/run/dvbipitools/metrics.sock`), and `--
 
 * `^C`, SIGINT or SIGTERM: stop the process
 * SIGHUP: re-read `-i` and `-M` from disk. On error, the previous guide keeps being announced and
-the error is logged. (No effect in `-l` mode).
+the error is logged. It has no effect in `-l` mode.
 
 
 ## Running under systemd

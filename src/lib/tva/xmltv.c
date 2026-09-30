@@ -7,6 +7,7 @@
 
 #include "lib/helper/xml_util.h"
 #include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 #include "timefmt.h"
 #include "xmltv.h"
 
@@ -15,10 +16,8 @@ static void scan_display_names(const char *s, const char *end, bcg_channel_t *c)
   for (;;) {
     char name[BCG_ID_LEN];
     const char *hit = strstr(p, "<display-name");
-    if (!hit || hit >= end)
-      break;
-    if (xml_elem_text(hit, end, "display-name", name, sizeof name))
-      break;
+    if (!hit || hit >= end) break;
+    if (xml_elem_text(hit, end, "display-name", name, sizeof name)) break;
     bcg_channel_add_name(c, name);
     p = hit + 1;
   }
@@ -44,8 +43,7 @@ static int channel_cb(const char *tag, const char *blk_end, void *ctx) {
   char id[BCG_ID_LEN];
   if (xml_attr(tag, blk_end, "id", id, sizeof id) == 0) {
     c = bcg_add_channel(doc);
-    if (!c)
-      return -1;
+    if (!c) return -1;
     bufcpy(c->id, sizeof c->id, id);
     scan_display_names(tag, blk_end, c);
   }
@@ -55,19 +53,20 @@ static int channel_cb(const char *tag, const char *blk_end, void *ctx) {
 static int programme_cb(const char *tag, const char *blk_end, void *ctx) {
   bcg_doc_t *doc = ctx;
   bcg_programme_t *pr;
-  char start[BCG_TIME_LEN], channel[BCG_ID_LEN];
-  if (xml_attr(tag, blk_end, "start", start, sizeof start) == 0 && xml_attr(tag, blk_end, "channel", channel, sizeof channel) == 0) {
-    pr = bcg_add_programme(doc);
-    if (!pr)
-      return -1;
-    bufcpy(pr->channel_id, sizeof pr->channel_id, channel);
-    if (xmltv_time_to_iso8601(start, pr->start, sizeof pr->start)) {
-      fprintf(stderr, "xmltv: skipping programme, bad start time: %s\n", start);
-      doc->programme_count--;
-    } else {
-      fill_programme_details(pr, tag, blk_end);
-    }
+  char start[BCG_TIME_LEN];
+  char channel[BCG_ID_LEN];
+  char start_iso[BCG_TIME_LEN];
+  if (xml_attr(tag, blk_end, "start", start, sizeof start) != 0 || xml_attr(tag, blk_end, "channel", channel, sizeof channel) != 0)
+    return 0;
+  if (xmltv_time_to_iso8601(start, start_iso, sizeof start_iso)) {
+    log_line("xmltv: skipping programme, bad start time: %s", start);
+    return 0;
   }
+  pr = bcg_add_programme(doc);
+  if (!pr) return -1;
+  bufcpy(pr->channel_id, sizeof pr->channel_id, channel);
+  bufcpy(pr->start, sizeof pr->start, start_iso);
+  fill_programme_details(pr, tag, blk_end);
   return 0;
 }
 
@@ -78,15 +77,12 @@ int xmltv_read(FILE *f, bcg_doc_t *doc) {
   int rc;
 
   if (read_all(f, &buf, &len)) {
-    fprintf(stderr, "xmltv: out of memory reading xmltv\n");
+    log_line("xmltv: out of memory reading xmltv");
     return -1;
   }
   end = buf + len;
-
   rc = for_each_xml_block(buf, end, "<channel", "</channel>", channel_cb, doc);
-  if (rc == 0)
-    rc = for_each_xml_block(buf, end, "<programme", "</programme>", programme_cb, doc);
-
+  if (rc == 0) rc = for_each_xml_block(buf, end, "<programme", "</programme>", programme_cb, doc);
   free(buf);
   return rc;
 }
@@ -114,12 +110,11 @@ void xmltv_write(FILE *f, const bcg_doc_t *doc, const char *generator_name) {
   }
   for (int i = 0; i < doc->programme_count; i++) {
     const bcg_programme_t *pr = &doc->programmes[i];
-    char start[BCG_TIME_LEN], stop[BCG_TIME_LEN];
-    if (iso8601_to_xmltv_time(pr->start, start, sizeof start))
-      continue;
+    char start[BCG_TIME_LEN];
+    char stop[BCG_TIME_LEN];
+    if (iso8601_to_xmltv_time(pr->start, start, sizeof start)) continue;
     fprintf(f, "  <programme start=\"%s\"", start);
-    if (pr->stop[0] && iso8601_to_xmltv_time(pr->stop, stop, sizeof stop) == 0)
-      fprintf(f, " stop=\"%s\"", stop);
+    if (pr->stop[0] && iso8601_to_xmltv_time(pr->stop, stop, sizeof stop) == 0) fprintf(f, " stop=\"%s\"", stop);
     fputs(" channel=\"", f);
     xml_escape(f, pr->channel_id);
     fputs("\">\n", f);

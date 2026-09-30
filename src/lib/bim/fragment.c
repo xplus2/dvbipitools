@@ -111,7 +111,9 @@ int fragment_encode_service_information(const bcg_channel_t *c, bitwriter_t *bw,
 
 int fragment_decode_service_information(bitreader_t *br, strrepo_reader_t *sr, bcg_channel_t *c_out) {
   char dtt[64];
-  unsigned onid, tsid, sid;
+  unsigned onid;
+  unsigned tsid;
+  unsigned sid;
   memset(c_out, 0, sizeof *c_out);
   if (dvb_string_decode(sr, c_out->id, sizeof c_out->id)) return -1;
   for (;;) {

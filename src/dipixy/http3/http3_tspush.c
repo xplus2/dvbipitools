@@ -55,15 +55,11 @@ int h3_tspush_dispatch(h3_conn_t *c, h3_req_t *r, int sub) {
 void h3_tspush_wake(int sub_idx) {
   ts_sub_t *sub;
   h3_conn_t *c;
-  int fd;
   if (sub_idx < 0 || sub_idx >= g_ts_subs_n) return;
   sub = &g_ts_subs[sub_idx];
   c = sub->h3c;
   if (!c || c->done) return;
-  fd = c->local_addr.ss_family == AF_INET6 ? t_h3_udp6 : t_h3_udp4;
-  if (fd < 0) return;
-  nghttp3_conn_resume_stream(c->h3conn, sub->h3_sid);
-  flush_tx(c, fd);
+  h3_push_resume(c, sub->h3_sid);
 }
 
 #endif /* HAVE_HTTP3 */

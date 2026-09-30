@@ -57,6 +57,7 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
 
   if (due(now, &r->last_pat, INTERVAL_PAT_PMT_S)) {
     unsigned char prog_desc[32];
+    int desc_truncated;
     size_t prog_desc_len = r->cas ? cas_prog_desc(r->cas, prog_desc, sizeof prog_desc) : remux_source_ca_descriptor(r, prog_desc, sizeof prog_desc);
     if (r->standalone) {
       n = psi_build_pat(r->cfg.tsid, 0, r->input.sid, r->pids.pmt_pid, sec, sizeof sec);
@@ -64,7 +65,6 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
       if (n)
         ts_packet_emit(OUT_PID_PAT, &r->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
-    int desc_truncated;
     n = pmtbuild_pmt(0, r->input.sid, r->pcr_pid_out, prog_desc_len ? prog_desc : NULL, prog_desc_len, r->es, r->es_count, r->send_ait ? r->ait_pmt_entry : NULL, r->send_ait ? r->ait_pmt_entry_len : 0, sec, sizeof sec, &desc_truncated);
     psi_note(tsm, PSI_TABLE_PMT, n);
     if (n && desc_truncated)

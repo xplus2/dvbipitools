@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIREC_LOG_H
-#define DIPIREC_LOG_H
+#ifndef DVBIPITOOLS_LIB_HELPER_LOG_H
+#define DVBIPITOOLS_LIB_HELPER_LOG_H
 
 #include <stdatomic.h>
 

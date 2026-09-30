@@ -18,6 +18,7 @@ static int ts_push_pid_excluded(const void *ctx, unsigned pid) { return pid_filt
 
 ts_sub_t *g_ts_subs;
 int g_ts_subs_n;
+_Atomic int g_ts_active_count;
 
 static int g_ts_push_reactor_efds[TS_PUSH_MAX_REACTOR_THREADS];
 
@@ -102,7 +103,7 @@ void ts_push_queue_stats(ts_push_queue_stats_t *out) {
     const byte_ring_t *r;
     uint64_t used;
     if (atomic_load_explicit(&s->alive, memory_order_relaxed) != TS_SUB_ALIVE) continue;
-    r = s->proto == 2 ? &s->h2_ring : s->proto == 3 ? &s->h3_ring : &s->pkt_ring;
+    r = s->proto == CONN_PROTO_H2 ? &s->h2_ring : s->proto == CONN_PROTO_H3 ? &s->h3_ring : &s->pkt_ring;
     used = (uint32_t)(atomic_load_explicit(&r->wpos, memory_order_relaxed) - atomic_load_explicit(&r->rpos, memory_order_relaxed));
     out->bytes += used;
     if (used > out->max_bytes) out->max_bytes = used;
@@ -128,7 +129,8 @@ void ts_push_ring_enqueue(ts_sub_t *s, const uint8_t *data, size_t len) {
 #define TS_PUSH_SUBS_FLOOR 32
 
 void ts_push_init(int prealloc, int max_clients) {
-  int i, n;
+  int i;
+  int n;
   n = (max_clients > 0 ? max_clients : 0) + TS_PUSH_SUBS_HEADROOM;
   if (n < TS_PUSH_SUBS_FLOOR) n = TS_PUSH_SUBS_FLOOR;
   if (n > TS_PUSH_MAX_SUBS) n = TS_PUSH_MAX_SUBS;
@@ -161,13 +163,18 @@ void ts_push_register_reactor_efd(int tid, int efd) {
   if (tid >= 0 && tid < TS_PUSH_MAX_REACTOR_THREADS) g_ts_push_reactor_efds[tid] = efd;
 }
 
-int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto, int fd, unsigned pmt_pid, int spts,
-                       int rawaudio, const client_info_t *info, const lcevc_select_t *lcevc) {
+int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto_t proto, int fd,
+  unsigned pmt_pid, int spts, int rawaudio, const client_info_t *info, const lcevc_select_t *lcevc) {
   psi_t *spts_psi = NULL;
   psi_t *filter_psi = NULL;
   rawaudio_demux_t *rawaudio_demux = NULL;
-  int i, ws_handle;
+  ts_sub_t *s;
+  int i;
+  int ws_handle;
+  int expected;
   int lcevc_may_exclude = lcevc->mode == LCEVC_SEL_BASE || lcevc->mode == LCEVC_SEL_N;
+  _Atomic int *head;
+  int old_head;
   if (spts) {
     spts_psi = psi_new();
     if (!spts_psi) return -1;
@@ -176,95 +183,69 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto,
     filter_psi = psi_new();
     if (!filter_psi) return -1;
   }
-  for (;;) {
-    ts_sub_t *s;
-    int expected;
-    for (i = 0; i < g_ts_subs_n; i++) {
-      if (atomic_load_explicit(&g_ts_subs[i].alive, memory_order_relaxed) != TS_SUB_FREE) continue;
-      expected = TS_SUB_FREE;
-      if (atomic_compare_exchange_strong_explicit(&g_ts_subs[i].alive, &expected, TS_SUB_ALIVE, memory_order_acquire, memory_order_relaxed))
-        break;
-    }
-    if (i == g_ts_subs_n) break; /* table full */
-    s = &g_ts_subs[i];
 
-    /* rings never freed: pump reads s->*_ring unlocked off alive,
-       free-on-unsubscribe race (UAF). reuse prior occupant's ring if sized for proto, else allocate */
-    if (proto == 3) {
-      byte_ring_reset(&s->h3_ring, TS_RING_H3_BYTES);
-      if (!s->h3_ring.buf) {
-        atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
-        psi_free(spts_psi);
-        psi_free(filter_psi);
-        return -1;
-      }
-    } else if (proto == 2) {
-      byte_ring_reset(&s->h2_ring, TS_RING_H2_BYTES);
-      if (!s->h2_ring.buf) {
-        atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
-        psi_free(spts_psi);
-        psi_free(filter_psi);
-        return -1;
-      }
-    } else {
-      byte_ring_reset(&s->pkt_ring, TS_RING_PUSH_BYTES);
-      if (!s->pkt_ring.buf) {
-        atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
-        psi_free(spts_psi);
-        psi_free(filter_psi);
-        return -1;
-      }
-    }
-
-    if (rawaudio) {
-      rawaudio_demux = rawaudio_demux_new(pmt_pid, ts_push_pid_excluded, filter, ts_push_rawaudio_emit, s);
-      if (!rawaudio_demux) {
-        atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
-        psi_free(spts_psi);
-        psi_free(filter_psi);
-        return -1;
-      }
-    }
-    ws_handle = ws_clients_add_persistent(info);
-    if (ws_handle < 0) {
-      atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
-      psi_free(spts_psi);
-      psi_free(filter_psi);
-      rawaudio_demux_free(rawaudio_demux);
-      return -1;
-    }
-    s->ws_handle = ws_handle;
-    atomic_store_explicit(&s->ctx, ctx, memory_order_relaxed);
-    s->filter = *filter;
-    s->proto = proto;
-    s->fd = fd;
-    atomic_store_explicit(&s->ready, 0, memory_order_relaxed);
-    s->h2c = NULL;
-    s->h2_slot = NULL;
-    s->reactor_tid = -1;
-    s->tid_next = -1;
-    s->h3c = NULL;
-    s->h3_sid = -1;
-    atomic_store_explicit(&s->pkt_overrun, 0, memory_order_relaxed);
-    s->spts = spts;
-    s->spts_pmt_pid = pmt_pid;
-    s->spts_psi = spts_psi;
-    s->spts_locked = 0;
-    s->spts_n_allowed = 0;
-    s->filter_psi = filter_psi;
-    s->cc_pmt = 0;
-    s->lcevc = *lcevc;
-    s->lcevc_locked = 0;
-    s->rawaudio = rawaudio_demux;
-    {
-      _Atomic int *head = capture_ts_push_head_ptr(ctx);
-      int old_head = atomic_load_explicit(head, memory_order_relaxed);
-      atomic_store_explicit(&s->ctx_next, old_head, memory_order_relaxed);
-      while (!atomic_compare_exchange_weak_explicit(head, &old_head, i, memory_order_release, memory_order_relaxed))
-        atomic_store_explicit(&s->ctx_next, old_head, memory_order_relaxed);
-    }
-    return i;
+  for (i = 0; i < g_ts_subs_n; i++) {
+    if (atomic_load_explicit(&g_ts_subs[i].alive, memory_order_relaxed) != TS_SUB_FREE) continue;
+    expected = TS_SUB_FREE;
+    if (atomic_compare_exchange_strong_explicit(&g_ts_subs[i].alive, &expected, TS_SUB_ALIVE, memory_order_acquire, memory_order_relaxed))
+      break;
   }
+  if (i == g_ts_subs_n) goto fail; /* table full */
+  s = &g_ts_subs[i];
+
+  /* rings never freed: pump reads s->*_ring unlocked off alive,
+     free-on-unsubscribe race (UAF). reuse prior occupant's ring if sized for proto, else allocate */
+  if (proto == CONN_PROTO_H3) {
+    byte_ring_reset(&s->h3_ring, TS_RING_H3_BYTES);
+    if (!s->h3_ring.buf) goto fail_slot;
+  } else if (proto == CONN_PROTO_H2) {
+    byte_ring_reset(&s->h2_ring, TS_RING_H2_BYTES);
+    if (!s->h2_ring.buf) goto fail_slot;
+  } else {
+    byte_ring_reset(&s->pkt_ring, TS_RING_PUSH_BYTES);
+    if (!s->pkt_ring.buf) goto fail_slot;
+  }
+
+  if (rawaudio) {
+    rawaudio_demux = rawaudio_demux_new(pmt_pid, ts_push_pid_excluded, filter, ts_push_rawaudio_emit, s);
+    if (!rawaudio_demux) goto fail_slot;
+  }
+  ws_handle = ws_clients_add_persistent(info);
+  if (ws_handle < 0) goto fail_slot;
+  s->ws_handle = ws_handle;
+  atomic_store_explicit(&s->ctx, ctx, memory_order_relaxed);
+  s->filter = *filter;
+  s->proto = proto;
+  s->fd = fd;
+  atomic_store_explicit(&s->ready, 0, memory_order_relaxed);
+  s->h2c = NULL;
+  s->h2_slot = NULL;
+  s->reactor_tid = -1;
+  s->tid_next = -1;
+  s->h3c = NULL;
+  s->h3_sid = -1;
+  atomic_store_explicit(&s->pkt_overrun, 0, memory_order_relaxed);
+  s->spts = spts;
+  s->spts_pmt_pid = pmt_pid;
+  s->spts_psi = spts_psi;
+  s->spts_locked = 0;
+  s->spts_n_allowed = 0;
+  s->filter_psi = filter_psi;
+  s->cc_pmt = 0;
+  s->lcevc = *lcevc;
+  s->lcevc_locked = 0;
+  s->rawaudio = rawaudio_demux;
+  head = capture_ts_push_head_ptr(ctx);
+  old_head = atomic_load_explicit(head, memory_order_relaxed);
+  atomic_store_explicit(&s->ctx_next, old_head, memory_order_relaxed);
+  while (!atomic_compare_exchange_weak_explicit(head, &old_head, i, memory_order_release, memory_order_relaxed))
+    atomic_store_explicit(&s->ctx_next, old_head, memory_order_relaxed);
+  atomic_fetch_add_explicit(&g_ts_active_count, 1, memory_order_relaxed);
+  return i;
+
+fail_slot:
+  atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
+fail:
   psi_free(spts_psi);
   psi_free(filter_psi);
   rawaudio_demux_free(rawaudio_demux);
@@ -315,16 +296,10 @@ static void ts_push_unlink_ctx(capture_ctx_t *ctx, int idx) {
   }
 }
 
-void ts_push_unsubscribe_by_idx(int idx) {
-  ts_sub_t *s;
+static void ts_push_finish_unsub(void *arg) {
+  int idx = (int)(intptr_t)arg;
+  ts_sub_t *s = &g_ts_subs[idx];
   capture_ctx_t *ctx;
-  int expected;
-  if (idx < 0 || idx >= g_ts_subs_n) return;
-  s = &g_ts_subs[idx];
-  expected = TS_SUB_ALIVE;
-  if (!atomic_compare_exchange_strong_explicit(&s->alive, &expected, TS_SUB_CLOSING, memory_order_acquire, memory_order_relaxed))
-    return; /* already closing or already closed */
-  capture_wait_pumps_quiescent();
   ts_push_unlink_tid(idx);
   ws_clients_remove(s->ws_handle);
   ctx = atomic_load_explicit(&s->ctx, memory_order_relaxed);
@@ -339,4 +314,19 @@ void ts_push_unsubscribe_by_idx(int idx) {
   rawaudio_demux_free(s->rawaudio);
   s->rawaudio = NULL;
   atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
+}
+
+void ts_push_unsubscribe_by_idx(int idx) {
+  ts_sub_t *s;
+  int expected;
+  if (idx < 0 || idx >= g_ts_subs_n) return;
+  s = &g_ts_subs[idx];
+  expected = TS_SUB_ALIVE;
+  if (!atomic_compare_exchange_strong_explicit(&s->alive, &expected, TS_SUB_CLOSING, memory_order_acquire, memory_order_relaxed))
+    return; /* already closing or already closed */
+  atomic_fetch_sub_explicit(&g_ts_active_count, 1, memory_order_relaxed);
+  if (!capture_defer_after_quiescent(ts_push_finish_unsub, (void *)(intptr_t)idx)) {
+    capture_wait_pumps_quiescent();
+    ts_push_finish_unsub((void *)(intptr_t)idx);
+  }
 }

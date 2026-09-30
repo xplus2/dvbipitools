@@ -3,6 +3,7 @@
 Smartcard simulator for integration tests. It uses the `cs378x` protocol, holds a device's RSA private key and 
 answers ECM/EMM requests with a CW. Nothing more.
 
+## Usage
 ```
 dipicam378 -k <keyfile> [options]
 ```

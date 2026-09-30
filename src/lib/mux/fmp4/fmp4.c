@@ -21,18 +21,15 @@ static int frag_reserve_data(frag_track_t *f, size_t need) {
 
 fmp4_mux_t *fmp4_mux_new(const fmp4_track_cfg_t *tracks, int ntracks) {
   fmp4_mux_t *m;
-  if (ntracks < 1 || ntracks > FMP4_MAX_TRACKS)
-    return NULL;
+  if (ntracks < 1 || ntracks > FMP4_MAX_TRACKS) return NULL;
   m = calloc(1, sizeof *m);
-  if (!m)
-    return NULL;
+  if (!m) return NULL;
   m->ntrk = ntracks;
   for (int i = 0; i < ntracks; i++) {
     size_t cl = tracks[i].cpriv_len;
-    if (cl > FMP4_CPRIV_MAX)
-      cl = FMP4_CPRIV_MAX;
+    if (cl > FMP4_CPRIV_MAX) cl = FMP4_CPRIV_MAX;
     m->trk[i].cfg = tracks[i];
-    memcpy(m->trk[i].cpriv, tracks[i].cpriv, cl);
+    if (cl) memcpy(m->trk[i].cpriv, tracks[i].cpriv, cl);
     m->trk[i].cfg.cpriv = m->trk[i].cpriv;
     m->trk[i].cfg.cpriv_len = cl;
   }
@@ -40,8 +37,7 @@ fmp4_mux_t *fmp4_mux_new(const fmp4_track_cfg_t *tracks, int ntracks) {
 }
 
 void fmp4_mux_free(fmp4_mux_t *m) {
-  if (!m)
-    return;
+  if (!m) return;
   mp4buf_free(&m->out);
   for (int i = 0; i < m->ntrk; i++) {
     free(m->frag[i].samples);
@@ -52,9 +48,7 @@ void fmp4_mux_free(fmp4_mux_t *m) {
 
 size_t fmp4_init_segment(fmp4_mux_t *m, unsigned char **out) {
   mp4buf_t ftyp, moov;
-
   mp4buf_free(&m->out);
-
   memset(&ftyp, 0, sizeof ftyp);
   mb_fourcc(&ftyp, "iso5"); /* major_brand */
   mb_u32(&ftyp, 0);        /* minor_version */
@@ -65,11 +59,9 @@ size_t fmp4_init_segment(fmp4_mux_t *m, unsigned char **out) {
 
   memset(&moov, 0, sizeof moov);
   build_mvhd(&moov, m->ntrk);
-  for (int i = 0; i < m->ntrk; i++)
-    build_trak(&moov, &m->trk[i]);
+  for (int i = 0; i < m->ntrk; i++) build_trak(&moov, &m->trk[i]);
   build_mvex(&moov, m);
   mb_box(&m->out, "moov", &moov);
-
   *out = m->out.p;
   return m->out.err ? 0 : m->out.len;
 }
@@ -86,13 +78,10 @@ void fmp4_segment_begin(fmp4_mux_t *m, uint32_t sequence_number) {
 void fmp4_segment_add_sample(fmp4_mux_t *m, const fmp4_sample_t *s) {
   frag_track_t *f;
   frag_sample_t *fs;
-  if (s->track_idx < 0 || s->track_idx >= m->ntrk)
-    return;
+  if (s->track_idx < 0 || s->track_idx >= m->ntrk) return;
   f = &m->frag[s->track_idx];
-  if (frag_reserve_samples(f, f->nsamples + 1) < 0)
-    return;
-  if (frag_reserve_data(f, f->data_len + s->size) < 0)
-    return;
+  if (frag_reserve_samples(f, f->nsamples + 1) < 0) return;
+  if (frag_reserve_data(f, f->data_len + s->size) < 0) return;
   fs = &f->samples[f->nsamples++];
   fs->duration = s->duration;
   fs->size = (uint32_t)s->size;
@@ -104,10 +93,8 @@ void fmp4_segment_add_sample(fmp4_mux_t *m, const fmp4_sample_t *s) {
 }
 
 void fmp4_track_seed_dts(fmp4_mux_t *m, int track_idx, uint64_t dts) {
-  if (track_idx < 0 || track_idx >= m->ntrk)
-    return;
+  if (track_idx < 0 || track_idx >= m->ntrk) return;
   m->trk[track_idx].next_dts = dts;
   /* first sample only: frag_base_dts stale from segment_begin, patch too */
-  if (m->frag[track_idx].nsamples == 0)
-    m->trk[track_idx].frag_base_dts = dts;
+  if (m->frag[track_idx].nsamples == 0) m->trk[track_idx].frag_base_dts = dts;
 }

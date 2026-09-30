@@ -5,34 +5,30 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/helper/argutil.h"
 #include "lib/helper/ioutil.h"
+#include "lib/helper/log.h"
 
 #include "mapping.h"
 
 static int split_last4(char *line, char **id, char **uri, char **a, char **b, char **c) {
-  char *p4 = strrchr(line, ',');
-  char *p3, *p2, *p1;
-  if (!p4)
-    return -1;
-  *p4 = '\0';
-  p3 = strrchr(line, ',');
-  if (!p3)
-    return -1;
-  *p3 = '\0';
-  p2 = strrchr(line, ',');
-  if (!p2)
-    return -1;
-  *p2 = '\0';
-  p1 = strrchr(line, ',');
-  if (!p1)
-    return -1;
-  *p1 = '\0';
+  char *parts[4];
+  for (int i = 0; i < 4; i++) {
+    char *comma = strrchr(line, ',');
+    if (!comma) return -1;
+    *comma = '\0';
+    parts[i] = comma + 1;
+  }
   *id = line;
-  *uri = p1 + 1;
-  *a = p2 + 1;
-  *b = p3 + 1;
-  *c = p4 + 1;
+  *uri = parts[3];
+  *a = parts[2];
+  *b = parts[1];
+  *c = parts[0];
   return 0;
+}
+
+static int mapping_idx_cmp(const void *a, const void *b) {
+  return strcmp(((const mapping_idx_t *)a)->id, ((const mapping_idx_t *)b)->id);
 }
 
 int mapping_load(const char *path, mapping_t *m) {
@@ -42,18 +38,27 @@ int mapping_load(const char *path, mapping_t *m) {
 
   memset(m, 0, sizeof *m);
   if (!f) {
-    fprintf(stderr, "mapping: cannot open %s\n", path);
+    log_line("mapping: cannot open %s", path);
     return -1;
   }
   while (fgets(line, sizeof line, f)) {
     char *id, *uri, *tsid_s, *onid_s, *sid_s;
     mapping_entry_t *e;
+    unsigned tsid;
+    unsigned onid;
+    unsigned sid;
     lineno++;
     chomp(line);
     if (!line[0] || line[0] == '#')
       continue;
     if (split_last4(line, &id, &uri, &tsid_s, &onid_s, &sid_s)) {
-      fprintf(stderr, "mapping: line %d: expected id,uri,tsid,onid,sid\n", lineno);
+      log_line("mapping: line %d: expected id,uri,tsid,onid,sid", lineno);
+      fclose(f);
+      mapping_free(m);
+      return -1;
+    }
+    if (argutil_uint_range(tsid_s, 0, 0xFFFF, &tsid) || argutil_uint_range(onid_s, 0, 0xFFFF, &onid) || argutil_uint_range(sid_s, 0, 0xFFFF, &sid)) {
+      log_line("mapping: line %d: bad tsid/onid/sid", lineno);
       fclose(f);
       mapping_free(m);
       return -1;
@@ -70,27 +75,52 @@ int mapping_load(const char *path, mapping_t *m) {
     e = &m->entries[m->count++];
     bufcpy(e->id, sizeof e->id, id);
     bufcpy(e->uri, sizeof e->uri, uri);
-    e->tsid = (unsigned)strtoul(tsid_s, NULL, 10);
-    e->onid = (unsigned)strtoul(onid_s, NULL, 10);
-    e->sid = (unsigned)strtoul(sid_s, NULL, 10);
+    e->tsid = tsid;
+    e->onid = onid;
+    e->sid = sid;
   }
   fclose(f);
+  if (m->count > 0) {
+    m->idx = malloc(sizeof *m->idx * (size_t)m->count);
+    if (m->idx) {
+      for (int i = 0; i < m->count; i++) {
+        m->idx[i].id = m->entries[i].id;
+        m->idx[i].idx = i;
+      }
+      qsort(m->idx, (size_t)m->count, sizeof *m->idx, mapping_idx_cmp);
+    }
+  }
   return 0;
 }
 
 void mapping_free(mapping_t *m) {
   free(m->entries);
+  free(m->idx);
   memset(m, 0, sizeof *m);
 }
 
-int mapping_lookup(const mapping_t *m, const char *id, char *uri, size_t uri_cap, unsigned *tsid, unsigned *onid, unsigned *sid) {
-  for (int i = 0; i < m->count; i++)
-    if (!strcmp(m->entries[i].id, id)) {
-      bufcpy(uri, uri_cap, m->entries[i].uri);
-      *tsid = m->entries[i].tsid;
-      *onid = m->entries[i].onid;
-      *sid = m->entries[i].sid;
-      return 0;
-    }
+static int mapping_idx_find(const mapping_t *m, const char *id) {
+  int lo = 0, hi = m->count - 1;
+  while (lo <= hi) {
+    int mid = (lo + hi) / 2;
+    int c = strcmp(id, m->idx[mid].id);
+    if (c == 0) return m->idx[mid].idx;
+    if (c < 0) hi = mid - 1; else lo = mid + 1;
+  }
   return -1;
+}
+
+int mapping_lookup(const mapping_t *m, const char *id, char *uri, size_t uri_cap, unsigned *tsid, unsigned *onid, unsigned *sid) {
+  int i = -1;
+  if (m->idx) {
+    i = mapping_idx_find(m, id);
+  } else {
+    for (int k = 0; k < m->count; k++) if (!strcmp(m->entries[k].id, id)) { i = k; break; }
+  }
+  if (i < 0) return -1;
+  bufcpy(uri, uri_cap, m->entries[i].uri);
+  *tsid = m->entries[i].tsid;
+  *onid = m->entries[i].onid;
+  *sid = m->entries[i].sid;
+  return 0;
 }

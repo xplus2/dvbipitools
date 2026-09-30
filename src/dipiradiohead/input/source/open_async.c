@@ -74,6 +74,8 @@ short source_open_async_poll_events(const source_open_t *o) {
 }
 
 source_open_state_t source_open_async_step(source_open_t *o, net_err_reason_t *reason_out) {
+  char next[2048];
+  http_t *h;
   if (o->phase == SO_FETCHING) {
     http_async_state_t st = http_async_step(o->ha, reason_out);
     if (st == HTTP_ASYNC_PENDING) return SOURCE_OPEN_PENDING;
@@ -115,28 +117,23 @@ source_open_state_t source_open_async_step(source_open_t *o, net_err_reason_t *r
     return SOURCE_OPEN_DONE;
   }
 
-  {
-    char next[2048];
-    if (playlist_extract(o->sniff, o->sniff_got, http_final_url(o->h), next, sizeof next)) {
-      http_close(o->h);
-      o->h = NULL;
-      o->hops++;
-      if (o->hops >= SRC_MAX_HOPS) {
-        log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mtoo many playlist redirects\e[0m", o->idx, o->label ? o->label : "?");
-        if (reason_out) *reason_out = NET_ERR_FORMAT;
-        return SOURCE_OPEN_ERROR;
-      }
-      bufcpy(o->cur_uri, sizeof o->cur_uri, next);
-      if (so_start_fetch(o, reason_out) != 0) return SOURCE_OPEN_ERROR;
-      return SOURCE_OPEN_PENDING;
+  if (playlist_extract(o->sniff, o->sniff_got, http_final_url(o->h), next, sizeof next)) {
+    http_close(o->h);
+    o->h = NULL;
+    o->hops++;
+    if (o->hops >= SRC_MAX_HOPS) {
+      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mtoo many playlist redirects\e[0m", o->idx, o->label ? o->label : "?");
+      if (reason_out) *reason_out = NET_ERR_FORMAT;
+      return SOURCE_OPEN_ERROR;
     }
+    bufcpy(o->cur_uri, sizeof o->cur_uri, next);
+    if (so_start_fetch(o, reason_out) != 0) return SOURCE_OPEN_ERROR;
+    return SOURCE_OPEN_PENDING;
   }
 
-  {
-    http_t *h = o->h;
-    o->h = NULL; /* build_source() absorbs h either way: owns it on success, closes it on failure */
-    o->result = build_source(h, o->idx, o->label, o->sniff, o->sniff_got, o->cb, o->ctx);
-  }
+  h = o->h;
+  o->h = NULL; /* build_source() absorbs h either way: owns it on success, closes it on failure */
+  o->result = build_source(h, o->idx, o->label, o->sniff, o->sniff_got, o->cb, o->ctx);
   if (!o->result) {
     if (reason_out) *reason_out = NET_ERR_OTHER; /* build_source() only fails on allocation */
     return SOURCE_OPEN_ERROR;

@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "../demux/crc32.h"
+#include "../helper/beutil.h"
 #include "../helper/log.h"
 
 #include "mpts.h"
@@ -16,7 +17,8 @@
 #define MPTS_INTERVAL_EIT 1.0
 
 struct mpts {
-  unsigned tsid, onid;
+  unsigned tsid;
+  unsigned onid;
   const char *network_name;
   psi_pat_entry_t entries[MPTS_MAX_PROGRAMS];
   void *program_ctx[MPTS_MAX_PROGRAMS];
@@ -24,12 +26,22 @@ struct mpts {
   unsigned n_programs;
   const mpts_program_ops_t *program_ops;
 
-  unsigned char cc_pat, cc_cat, cc_nit, cc_sdt, cc_eit;
-  unsigned char cc_ecm[MPTS_MAX_CAS_VENDORS], cc_emm[MPTS_MAX_CAS_VENDORS];
-  unsigned ver_pat, ver_nit, ver_sdt;
+  unsigned char cc_pat;
+  unsigned char cc_cat;
+  unsigned char cc_nit;
+  unsigned char cc_sdt;
+  unsigned char cc_eit;
+  unsigned char cc_ecm[MPTS_MAX_CAS_VENDORS];
+  unsigned char cc_emm[MPTS_MAX_CAS_VENDORS];
+  unsigned ver_pat;
+  unsigned ver_nit;
+  unsigned ver_sdt;
   uint32_t sdt_sig;  /* crc of composed service list - version bumps only on real change, EN 300 468 5.2.3 */
   int sdt_primed;    /* 0 until the first composite SDT has actually gone out */
-  double last_pat, last_cat, last_nit, last_sdt;
+  double last_pat;
+  double last_cat;
+  double last_nit;
+  double last_sdt;
 
   void *cas_ctx;
   const mpts_cas_ops_t *cas_ops;
@@ -53,8 +65,7 @@ mpts_t *mpts_new(unsigned tsid, unsigned onid, const char *network_name, const p
     return NULL;
   }
   m = calloc(1, sizeof *m);
-  if (!m)
-    return NULL;
+  if (!m) return NULL;
   m->tsid = tsid;
   m->onid = onid;
   m->network_name = network_name;
@@ -64,15 +75,17 @@ mpts_t *mpts_new(unsigned tsid, unsigned onid, const char *network_name, const p
     m->entries[i] = entries[i];
     m->last_eit[i] = -1.0;
   }
-  m->last_pat = m->last_cat = m->last_nit = m->last_sdt = -1.0;
+  m->last_pat = -1.0;
+  m->last_cat = -1.0;
+  m->last_nit = -1.0;
+  m->last_sdt = -1.0;
   return m;
 }
 
 void mpts_free(mpts_t *m) { free(m); }
 
 void mpts_set_program(mpts_t *m, unsigned idx, void *program_ctx) {
-  if (idx >= m->n_programs)
-    return;
+  if (idx >= m->n_programs) return;
   m->program_ctx[idx] = program_ctx;
   m->last_sdt = -1.0; /* active set changed: force immediate composite-SDT resend */
   if (!program_ctx)
@@ -83,8 +96,7 @@ void mpts_set_cas(mpts_t *m, void *cas_ctx, const mpts_cas_ops_t *cas_ops, const
   m->cas_ctx = cas_ctx;
   m->cas_ops = cas_ops;
   m->n_cas_vendors = n_vendors < MPTS_MAX_CAS_VENDORS ? n_vendors : MPTS_MAX_CAS_VENDORS;
-  for (size_t i = 0; i < m->n_cas_vendors; i++)
-    m->cas_vendors[i] = vendors[i];
+  for (size_t i = 0; i < m->n_cas_vendors; i++) m->cas_vendors[i] = vendors[i];
   m->last_cat = -1.0;
 }
 
@@ -92,7 +104,8 @@ size_t mpts_tick(mpts_t *m, double now_s, ts_packet_cb cb, void *ctx) {
   unsigned char sec[4096];
   unsigned char ptr0 = 0x00;
   psi_sdt_entry_t sdt_entries[MPTS_MAX_PROGRAMS];
-  size_t n, count = 0;
+  size_t n;
+  size_t count = 0;
 
   if (due_s(now_s, &m->last_pat, MPTS_INTERVAL_PAT_CAT)) {
     n = psi_build_pat_multi(m->tsid, m->ver_pat, m->entries, m->n_programs, sec, sizeof sec);
@@ -106,30 +119,28 @@ size_t mpts_tick(mpts_t *m, double now_s, ts_packet_cb cb, void *ctx) {
   }
   if (m->network_name && m->network_name[0] && due_s(now_s, &m->last_nit, MPTS_INTERVAL_NIT)) {
     n = psi_build_nit(m->ver_nit, m->onid, m->tsid, m->network_name, sec, sizeof sec);
-    if (n)
-      count += ts_packet_emit(0x0010, &m->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
+    if (n) count += ts_packet_emit(0x0010, &m->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
   }
 
   if (due_s(now_s, &m->last_sdt, MPTS_INTERVAL_SDT)) {
     unsigned n_sdt = 0;
     for (unsigned i = 0; i < m->n_programs; i++) {
       void *pctx = m->program_ctx[i];
-      if (pctx && m->program_ops->get_sdt_info(pctx, &sdt_entries[n_sdt]) == 0)
-        n_sdt++;
+      if (pctx && m->program_ops->get_sdt_info(pctx, &sdt_entries[n_sdt]) == 0) n_sdt++;
     }
     if (n_sdt) {
       uint32_t sig;
-
       n = psi_build_sdt_multi(0, m->tsid, m->onid, sdt_entries, n_sdt, sec, sizeof sec);
       /* exclude trailing CRC32 itself. crc32_mpeg is self-verifying, hashing it in always gives 0 */
       sig = n > 4 ? crc32_mpeg(sec, n - 4) : 0;
-      if (m->sdt_primed && sig != m->sdt_sig)
-        m->ver_sdt = (m->ver_sdt + 1) & 0x1F;
+      if (m->sdt_primed && sig != m->sdt_sig) m->ver_sdt = (m->ver_sdt + 1) & 0x1F;
       m->sdt_sig = sig;
       m->sdt_primed = 1;
-      n = psi_build_sdt_multi(m->ver_sdt, m->tsid, m->onid, sdt_entries, n_sdt, sec, sizeof sec);
-      if (n)
-        count += ts_packet_emit(0x0011, &m->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
+      if (n > 4) {
+        sec[5] = (unsigned char)(0xC0 | ((m->ver_sdt & 0x1F) << 1) | 0x01);
+        be32_put(sec + n - 4, crc32_mpeg(sec, n - 4));
+      }
+      if (n) count += ts_packet_emit(0x0011, &m->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
     }
   }
 
@@ -137,19 +148,18 @@ size_t mpts_tick(mpts_t *m, double now_s, ts_packet_cb cb, void *ctx) {
     void *pctx = m->program_ctx[i];
     int eit_due;
 
-    if (!pctx)
-      continue;
+    if (!pctx) continue;
     eit_due = due_s(now_s, &m->last_eit[i], MPTS_INTERVAL_EIT);
     if (m->program_ops->eit_pending(pctx) || eit_due) {
       n = m->program_ops->build_eit(pctx, sec, sizeof sec);
-      if (n)
-        count += ts_packet_emit(0x0012, &m->cc_eit, &ptr0, sec, n, 0, 0, cb, ctx);
+      if (n) count += ts_packet_emit(0x0012, &m->cc_eit, &ptr0, sec, n, 0, 0, cb, ctx);
       m->last_eit[i] = now_s;
     }
   }
 
   if (m->cas_ops) {
-    size_t vi, len;
+    size_t vi;
+    size_t len;
     for (vi = 0; vi < m->n_cas_vendors; vi++) {
       if (m->cas_ops->ecm_due(m->cas_ctx, vi, now_s, sec, sizeof sec, &len) == 0)
         count += ts_packet_emit(m->cas_vendors[vi].ecm_pid, &m->cc_ecm[vi], &ptr0, sec, len, 0, 0, cb, ctx);
@@ -157,6 +167,5 @@ size_t mpts_tick(mpts_t *m, double now_s, ts_packet_cb cb, void *ctx) {
         count += ts_packet_emit(m->cas_vendors[vi].emm_pid, &m->cc_emm[vi], &ptr0, sec, len, 0, 0, cb, ctx);
     }
   }
-
   return count;
 }

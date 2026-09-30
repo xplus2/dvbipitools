@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <pthread.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "priv.h"
@@ -35,45 +36,71 @@ static const table_limit_t LIMITS[] = {
 };
 #define N_LIMITS (sizeof LIMITS / sizeof LIMITS[0])
 
+static void edge_latch(int *flag, int active, uint64_t *counter) {
+  if (active) {
+    if (!*flag) { *flag = 1; (*counter)++; }
+  } else {
+    *flag = 0;
+  }
+}
+
 static uint64_t *table_errors(tsinspect_counters_t *c, psi_obs_id_t id) {
   switch (id) {
     case PSI_OBS_PAT:       return &c->pat_errors;
     case PSI_OBS_PMT:       return &c->pmt_errors;
     case PSI_OBS_SDT:       return &c->sdt_errors;
+    case PSI_OBS_NIT:       return &c->nit_errors;
     case PSI_OBS_SDT_OTHER: return &c->sdt_other_errors;
     case PSI_OBS_NIT_OTHER: return &c->nit_other_errors;
-    default:                return &c->nit_errors;
+    case PSI_OBS_CAT:
+    case PSI_OBS_BAT:
+    case PSI_OBS_COUNT:     break;
   }
+  abort();
 }
 
 static void check_tables(tsinspect_t *t) {
   for (size_t i = 0; i < N_LIMITS; i++) {
     psi_obs_id_t id = LIMITS[i].id;
     double last;
-    if (id == PSI_OBS_PMT) last = psi_pmt_oldest_seen(t->psi);
-    else if (id == PSI_OBS_SDT_OTHER || id == PSI_OBS_NIT_OTHER) last = psi_obs_oldest_other(&t->x->obs, id);
-    else if (id == PSI_OBS_SDT || id == PSI_OBS_NIT) last = t->x->obs.t[id].last_seen ? psi_obs_oldest_section(&t->x->obs, id) : 0.0;
-    else last = t->x->obs.t[id].last_seen;
-    double ref = last > 0.0 ? last : t->start;
+    double ref;
+    switch (id) {
+      case PSI_OBS_PMT:
+        last = psi_pmt_oldest_seen(t->psi);
+        break;
+      case PSI_OBS_SDT_OTHER:
+      case PSI_OBS_NIT_OTHER:
+        last = psi_obs_oldest_other(&t->x->obs, id);
+        break;
+      case PSI_OBS_SDT:
+      case PSI_OBS_NIT:
+        last = t->x->obs.t[id].last_seen ? psi_obs_oldest_section(&t->x->obs, id) : 0.0;
+        break;
+      case PSI_OBS_PAT:
+      case PSI_OBS_CAT:
+      case PSI_OBS_BAT:
+      case PSI_OBS_COUNT:
+      default:
+        last = t->x->obs.t[id].last_seen;
+        break;
+    }
+    ref = last > 0.0 ? last : t->start;
     if (LIMITS[i].only_if_seen && last == 0.0) continue;
-    if (t->now - ref > LIMITS[i].limit_s) {
-      if (!t->table_flag[id]) {
-        t->table_flag[id] = 1;
-        (*table_errors(&t->counters, id))++;
-      }
-    } else t->table_flag[id] = 0;
+    edge_latch(&t->table_flag[id], t->now - ref > LIMITS[i].limit_s, table_errors(&t->counters, id));
   }
 }
 
 static void check_cat(tsinspect_t *t) {
+  int active;
   if (!t->x) return;
   if (t->counters.scrambled_packets && t->scrambled_since == 0.0) t->scrambled_since = t->now;
-  if (t->scrambled_since != 0.0 && t->x->obs.t[PSI_OBS_CAT].last_seen == 0.0 && t->now - t->scrambled_since > CAT_GRACE_S) {
-    if (!t->cat_flag) {
-      t->cat_flag = 1;
-      t->counters.cat_errors++;
-    }
-  } else t->cat_flag = 0;
+  active = t->scrambled_since != 0.0 && t->x->obs.t[PSI_OBS_CAT].last_seen == 0.0 && t->now - t->scrambled_since > CAT_GRACE_S;
+  edge_latch(&t->cat_flag, active, &t->counters.cat_errors);
+}
+
+static int u16_contains(const unsigned short *list, int n, unsigned short v) {
+  for (int i = 0; i < n; i++) if (list[i] == v) return 1;
+  return 0;
 }
 
 static void note_ref_pids(tsinspect_t *t, const psi_es_t *es, int n, unsigned pcr) {
@@ -81,22 +108,12 @@ static void note_ref_pids(tsinspect_t *t, const psi_es_t *es, int n, unsigned pc
   int cn = 0;
   for (int i = 0; i <= n && cn <= PSI_MAX_ES; i++) {
     unsigned pid = i < n ? es[i].pid : pcr;
-    int dup = 0;
     if (pid == 0 || pid >= 8192) continue;
-    for (int k = 0; k < cn; k++) dup |= cur[k] == pid;
-    if (!dup) cur[cn++] = (unsigned short)pid;
+    if (!u16_contains(cur, cn, (unsigned short)pid)) cur[cn++] = (unsigned short)pid;
   }
   if (t->ref_valid) {
-    for (int i = 0; i < cn; i++) {
-      int found = 0;
-      for (int k = 0; k < t->ref_n; k++) found |= t->ref[k] == cur[i];
-      t->counters.pid_added += !found;
-    }
-    for (int k = 0; k < t->ref_n; k++) {
-      int found = 0;
-      for (int i = 0; i < cn; i++) found |= t->ref[k] == cur[i];
-      t->counters.pid_removed += !found;
-    }
+    for (int i = 0; i < cn; i++) t->counters.pid_added += !u16_contains(t->ref, t->ref_n, cur[i]);
+    for (int k = 0; k < t->ref_n; k++) t->counters.pid_removed += !u16_contains(cur, cn, t->ref[k]);
   }
   memcpy(t->ref, cur, (size_t)cn * sizeof cur[0]);
   t->ref_n = cn;
@@ -128,7 +145,7 @@ static void check_referenced_pids(tsinspect_t *t) {
     unsigned pid = i < n ? es[i].pid : pcr;
     int dup = 0;
     if (pid == 0 || pid >= 8192) continue;
-    for (int k = 0; k < i && k < n; k++) dup |= es[k].pid == pid;
+    for (int k = 0; k < i && k < n; k++) if (es[k].pid == pid) { dup = 1; break; }
     if (dup) continue;
     if (t->cc[pid] & CC_WIN) t->x->miss_run[pid] = 0;
     else if (t->x->miss_run[pid] < 255 && ++t->x->miss_run[pid] == PID_MISSING_WINDOWS) t->counters.referenced_pid_missing++;
@@ -157,52 +174,25 @@ static void rebuild_pts_slots(tsinspect_t *t) {
 
 static void check_pts_gaps(tsinspect_t *t) {
   if (!t->pts_built || t->x->obs.t[PSI_OBS_PMT].changes != t->last_pts_changes) rebuild_pts_slots(t);
-  for (int i = 0; i < t->pts_n; i++) {
-    if (t->now - t->x->pts[i].last > PTS_MAX_GAP_S) {
-      if (!t->x->pts[i].flag) {
-        t->x->pts[i].flag = 1;
-        t->counters.pts_errors++;
-      }
-    } else {
-      t->x->pts[i].flag = 0;
-    }
-  }
+  for (int i = 0; i < t->pts_n; i++)
+    edge_latch(&t->x->pts[i].flag, t->now - t->x->pts[i].last > PTS_MAX_GAP_S, &t->counters.pts_errors);
 }
 
 static void check_eit(tsinspect_t *t) {
-  for (int i = 0; i < t->eit_n; i++) {
-    for (int s = 0; s < 2; s++) {
-      if (t->now - t->x->eit[i].last[s] > EIT_PF_MAX_S) {
-        if (!t->x->eit[i].flag[s]) {
-          t->x->eit[i].flag[s] = 1;
-          t->counters.eit_errors++;
-        }
-      } else t->x->eit[i].flag[s] = 0;
-    }
-  }
+  for (int i = 0; i < t->eit_n; i++)
+    for (int s = 0; s < 2; s++)
+      edge_latch(&t->x->eit[i].flag[s], t->now - t->x->eit[i].last[s] > EIT_PF_MAX_S, &t->counters.eit_errors);
 }
 
 static void check_eit_other(tsinspect_t *t) {
-  for (int i = 0; i < t->eit_other_n; i++) {
-    for (int s = 0; s < 2; s++) {
-      if (t->now - t->x->eit_other[i].last[s] > EIT_OTHER_MAX_S) {
-        if (!t->x->eit_other[i].flag[s]) {
-          t->x->eit_other[i].flag[s] = 1;
-          t->counters.eit_other_errors++;
-        }
-      } else t->x->eit_other[i].flag[s] = 0;
-    }
-  }
+  for (int i = 0; i < t->eit_other_n; i++)
+    for (int s = 0; s < 2; s++)
+      edge_latch(&t->x->eit_other[i].flag[s], t->now - t->x->eit_other[i].last[s] > EIT_OTHER_MAX_S, &t->counters.eit_other_errors);
 }
 
 static void check_tdt(tsinspect_t *t) {
   double ref = t->tdt_last > 0.0 ? t->tdt_last : t->start;
-  if (t->now - ref > TDT_MAX_S) {
-    if (!t->tdt_flag) {
-      t->tdt_flag = 1;
-      t->counters.tdt_errors++;
-    }
-  } else t->tdt_flag = 0;
+  edge_latch(&t->tdt_flag, t->now - ref > TDT_MAX_S, &t->counters.tdt_errors);
 }
 
 static void update_mgb(tsinspect_t *t) {
@@ -278,7 +268,7 @@ void publish(tsinspect_t *t) {
   p.mgb2_bps = t->mgb2_bps;
   p.mgb2_valid = t->mgb2_valid;
   p.known_set = t->x && t->x->known_set;
-  if (t->x && t->x->d) {
+  if (t->level >= METRICS_INSPECT_TS_FULL && t->x && t->x->d) {
     const detail_t *d = t->x->d;
     p.n_pid = d->n_pid;
     p.n_svc = d->n_svc;

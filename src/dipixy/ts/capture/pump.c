@@ -63,10 +63,49 @@ void capture_wait_pumps_quiescent(void) {
   }
 }
 
+#define QSBR_DEFERRED_MAX 64
+
+typedef struct {
+  uint64_t mark[CAPTURE_PUMP_MAX_THREADS];
+  qsbr_deferred_fn fn;
+  void *arg;
+  int active;
+} qsbr_deferred_t;
+
+static _Thread_local qsbr_deferred_t t_qsbr_deferred[QSBR_DEFERRED_MAX];
+static _Thread_local int t_qsbr_deferred_active;
+
+int capture_defer_after_quiescent(qsbr_deferred_fn fn, void *arg) {
+  for (int i = 0; i < QSBR_DEFERRED_MAX; i++) {
+    qsbr_deferred_t *d = &t_qsbr_deferred[i];
+    if (d->active) continue;
+    qsbr_mark(g_pump_qsbr, d->mark);
+    d->fn = fn;
+    d->arg = arg;
+    d->active = 1;
+    t_qsbr_deferred_active++;
+    return 1;
+  }
+  return 0;
+}
+
+void capture_flush_deferred_quiescent(void) {
+  if (t_qsbr_deferred_active <= 0) return;
+  for (int i = 0; i < QSBR_DEFERRED_MAX; i++) {
+    qsbr_deferred_t *d = &t_qsbr_deferred[i];
+    if (!d->active) continue;
+    if (!qsbr_mark_passed_excl(g_pump_qsbr, d->mark, t_pump_tid)) continue;
+    d->active = 0;
+    t_qsbr_deferred_active--;
+    d->fn(d->arg);
+  }
+}
+
 /* stdin/http aren't packet-aligned: reassembles 188B packets across calls */
 static int tssrc_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned char *pkt), void *user) {
   int64_t deadline = monotonic_ms() + CAPTURE_TSSRC_DRAIN_BUDGET_MS;
   int fd = tssrc_fd(ctx->ts);
+  int fec_fd = tssrc_fec_fd(ctx->ts);
   /* caps g_lock hold per tick: continuous source never returns 0 on its own */
   for (;;) {
     unsigned char buf[CAPTURE_RECV_BUF];
@@ -75,8 +114,20 @@ static int tssrc_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsign
     if (monotonic_ms() >= deadline) return 0;
     if (fd >= 0) {
       /* underlying fd (stdin above all) may be blocking with nothing to read: poll first, never call tssrc_read() blind */
-      struct pollfd pfd = {fd, POLLIN, 0};
-      if (poll(&pfd, 1, 0) <= 0) return 0;
+      struct pollfd pfd[2];
+      nfds_t nfds = 1;
+      pfd[0].fd = fd;
+      pfd[0].events = POLLIN;
+      pfd[0].revents = 0;
+      if (fec_fd >= 0) {
+        pfd[1].fd = fec_fd;
+        pfd[1].events = POLLIN;
+        pfd[1].revents = 0;
+        nfds = 2;
+      }
+      if (poll(pfd, nfds, 0) <= 0) return 0;
+      if (nfds == 2 && pfd[1].revents) tssrc_fec_poll(ctx->ts);
+      if (!pfd[0].revents) continue;
     }
     n = tssrc_read(ctx->ts, buf, sizeof buf, NULL);
     if (n < 0) return -1;
@@ -161,7 +212,11 @@ static void pump_release_pin(capture_ctx_t *c) {
 
 int capture_pump_tick(int pid, void (*sink)(capture_ctx_t *ctx, void *user, const unsigned char *pkt), void *user) {
   capture_ctx_t *snap_pin[CAPTURE_PUMP_SNAPSHOT_MAX];
-  int n = 0, i, total = 0, idx, start;
+  int n = 0;
+  int i;
+  int total = 0;
+  int idx;
+  int start;
   int shard_off;
   int shard_cnt;
   const capture_snapshot_t *snap;

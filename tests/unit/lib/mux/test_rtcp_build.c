@@ -25,7 +25,7 @@ START_TEST(rtcp_build_ff_round_trips_through_rtcp_parse) {
   ck_assert_uint_eq(n, 12u + 2u * 4u);
 
   g_nack_calls = 0;
-  rtcp_parse(buf, n, nack_cb, NULL, NULL, NULL, NULL, NULL, NULL);
+  rtcp_parse(buf, n, &(rtcp_cbs_t){.nack_cb = nack_cb});
 
   ck_assert_int_eq(g_nack_calls, 1);
   ck_assert_uint_eq(g_nack.sender_ssrc, 0x11111111u);
@@ -204,7 +204,7 @@ START_TEST(rtcp_build_rams_r_round_trips_through_rtcp_parse) {
   ck_assert_uint_gt(n, 0u);
 
   g_rams_r_calls = 0;
-  rtcp_parse(buf, n, NULL, rams_r_cb, NULL, NULL, NULL, NULL, NULL);
+  rtcp_parse(buf, n, &(rtcp_cbs_t){.rams_r_cb = rams_r_cb});
 
   ck_assert_int_eq(g_rams_r_calls, 1);
   ck_assert_uint_eq(g_rams_r.sender_ssrc, 0x11111111u);
@@ -251,7 +251,7 @@ START_TEST(rtcp_build_rams_t_round_trips_through_rtcp_parse) {
   ck_assert_uint_gt(n, 0u);
 
   g_rams_t_calls = 0;
-  rtcp_parse(buf, n, NULL, NULL, NULL, rams_t_cb, NULL, NULL, NULL);
+  rtcp_parse(buf, n, &(rtcp_cbs_t){.rams_t_cb = rams_t_cb});
 
   ck_assert_int_eq(g_rams_t_calls, 1);
   ck_assert_uint_eq(g_rams_t.sender_ssrc, 0x33333333u);
@@ -294,7 +294,7 @@ START_TEST(rtcp_build_rams_i_round_trips_through_rtcp_parse) {
   ck_assert_uint_gt(n, 0u);
 
   g_rams_i_calls = 0;
-  rtcp_parse(buf, n, NULL, NULL, rams_i_cb, NULL, NULL, NULL, NULL);
+  rtcp_parse(buf, n, &(rtcp_cbs_t){.rams_i_cb = rams_i_cb});
 
   ck_assert_int_eq(g_rams_i_calls, 1);
   ck_assert_uint_eq(g_rams_i.sender_ssrc, 0x55555555u);

@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef LIB_CAS_DEVICE_CRYPTO_H
-#define LIB_CAS_DEVICE_CRYPTO_H
+#ifndef DVBIPITOOLS_LIB_CAS_DEVICE_CRYPTO_H
+#define DVBIPITOOLS_LIB_CAS_DEVICE_CRYPTO_H
 
 #include <stddef.h>
 

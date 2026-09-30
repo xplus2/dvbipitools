@@ -21,13 +21,14 @@
 #include "lib/demux/rawaudio.h"
 #include "lib/helper/byte_ring.h"
 #include "lib/helper/log.h"
+#include "../reactor/conn.h"
 #include "../ws/ws_clients.h"
 
 #define TS_PUSH_MAX_SUBS 4096
 #define TS_PUSH_MAX_REACTOR_THREADS 32
 /* byte rings, not packet-count. ts/spts always push 188B/call.
    rawaudio push variable length. capacity stays ^2, wrap bitmask */
-#define TS_RING_H3_BYTES (1u << 16) /* 64 KiB, was 256 * 188 B (~48.1 KiB) */
+#define TS_RING_H3_BYTES (1u << 16) /* 64 KiB */
 #define TS_RING_H2_BYTES (1u << 16) /* 64 KiB, per-stream ring like h3_ring */
 #define TS_RING_PUSH_BYTES (1u << 20) /* 1 MiB */
 
@@ -39,7 +40,7 @@ typedef struct {
   _Atomic(capture_ctx_t *) ctx; /* pump reads unlocked past alive gate: must be atomic */
   _Atomic int ctx_next; /* feed_pkt's per-ctx chain (capture_ts_push_head_ptr) */
   pid_filter_t filter;
-  int proto; /* 1=H1, 2=H2, 3=H3 */
+  conn_proto_t proto;
   _Atomic int alive;
   _Atomic int ready;
   int fd;
@@ -80,6 +81,7 @@ uint64_t ts_push_queue_dropped(void);
 
 extern ts_sub_t *g_ts_subs; /* calloc by ts_push_init, g_ts_subs_n entries */
 extern int g_ts_subs_n;
+extern _Atomic int g_ts_active_count;
 
 /* prealloc: 0 skips the 32-slot ring prealloc (~36MiB), for when ts/spts/rawaudio are all disabled */
 void ts_push_init(int prealloc, int max_clients);
@@ -100,7 +102,7 @@ void ts_push_set_reactor_tid(int idx, int tid);
    rawaudio 1: /rawaudio demux. spts/rawaudio exclusive.
    lcevc: known after PMT
    -1: room full/OOM */
-int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, int proto, int fd, unsigned pmt_pid, int spts, int rawaudio, const client_info_t *info, const lcevc_select_t *lcevc);
+int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto_t proto, int fd, unsigned pmt_pid, int spts, int rawaudio, const client_info_t *info, const lcevc_select_t *lcevc);
 
 void ts_push_unsubscribe_by_idx(int idx);
 

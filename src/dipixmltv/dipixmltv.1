@@ -13,8 +13,7 @@ dipixmltv \- convert between XMLTV and the DVB-IPI EPG (TVA) XML shape
 .SH DESCRIPTION
 .B dipixmltv
 converts between xmltv guide data and the plain (non-BiM) DVB-IPI EPG XML
-shape (TVA metadata, ETSI TS 102 822-3-1/-3-2). XMLTV itself is not part
-of DVB-IPI; TVA XML is. \fB\-f\fR names the \fIinput\fR format, the other
+shape (TVA metadata, ETSI TS 102 822-3-1/-3-2). \fB\-f\fR names the \fIinput\fR format, the other
 direction is always produced: \fB\-f xmltv\fR reads xmltv and writes
 TVA-shaped XML, \fB\-f tva\fR reads TVA-shaped XML and writes xmltv.
 .PP
@@ -23,18 +22,21 @@ from a dipiscan scan is commonly degenerate across services on the same
 headend (every service reporting tsid=1 onid=0 sid=1 is normal).
 Conversion is therefore keyed on the multicast URI, the one part
 guaranteed unique per service. \fB\-M\fR supplies the id-to-URI/triplet
-mapping required for \fB\-f xmltv\fR; an xmltv channel with no entry in
-the map is silently dropped, along with its programmes. \fB\-R\fR
+mapping required for \fB\-f xmltv\fR.
+An xmltv channel with no entry in the map is silently dropped,
+along with its programmes. \fB\-R\fR
 optionally renames an incoming TVA serviceId back to a preferred local
-xmltv id when converting the other way; without it the incoming
+xmltv id when converting the other way. Without it the incoming
 serviceId is kept as-is.
 .PP
 With \fB\-S\fR, instead of converting, \fBdipixmltv\fR reads a dipiscan
 CSV capture and an xmltv guide, and writes a suggested \fB\-M\fR mapping
 to \fB\-o\fR. Channels are matched by every \fB<display\-name>\fR, not
 just the first: an exact case-insensitive match becomes a live mapping
-line; a substring match becomes a \fB#\fR-commented line with the
-closest guess, for you to confirm or fix; no match at all becomes
+line.
+A substring match becomes a \fB#\fR-commented line with the
+closest guess, for you to confirm or fix.
+No match at all becomes
 \fB# UNMATCHED: \fIid\fR (\fIname\fR)\fR. Review the result before use
 as \fB\-M\fR.
 .SH OPTIONS
@@ -111,13 +113,6 @@ Convert TVA-shaped XML back to xmltv.
 .B dipixmltv \-S scan.csv \-i guide.xml \-o mapping.csv
 Build a suggested \fB\-M\fR mapping from a dipiscan CSV capture and an
 xmltv guide, matched by display name.
-.SH EXIT STATUS
-.TP
-.B 0
-Success.
-.TP
-.B nonzero
-Argument error, or I/O failure.
 .SH SEE ALSO
 .BR dipibcg (1),
 .BR dipibim (1),

@@ -3,10 +3,23 @@
 `dipirist` bridges a DVB-IPI stream between a plain RTP/UDP/file endpoint and a RIST link
 (VSF TR-06), in either direction. The direction is detected, depending on `-i`/`-o` being a `rist://` URI.
 
-Dependencies:
+RIST itself is not just about the transmission of transport streams.
+However, for the scope of dvbipitools and this tool in particular, it pretty much is (see `-i`|`-o` below).
+If you are looking for a generic implementation, librist's own
+[ristsender](https://code.videolan.org/rist/librist/-/wikis/2.-ristsender-Syntax-and-Examples) and
+[ristreceiver](https://code.videolan.org/rist/librist/-/wikis/4.-ristreceiver-Syntax-and-Examples) have you covered.
+
+Why use this tool over built-in `rist://` capabilities in the other tools here?
+* Bonding support
+* Process separation / running as a standalone bridge / architectural and topological boundaries
+* Overcome librist's limitation of one RIST link per process
+* You might just want it separated
+* Debugging and testing of the RIST integration in isolation
+
+## Dependencies
 * `librist`
 
-Usage:
+## Usage
 ```
 dipirist -i <uri> -o <uri> [options]
 ```
@@ -63,7 +76,7 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 | `-`                                          | stdin (`-i`) or stdout (`-o`)                   |
 | `<path>`                                     | a file                                          |
 
-Exactly one of `-i`/`-o` must be `rist://`. Whether that peer listens or calls out is controlled the same way as 
+Exactly one of `-i`/`-o` must be a `rist://` URI. Whether that peer listens or calls out is controlled the same way as 
 this toolkit's own `rtp://@`/`udp://@` addresses: add an `@` right after `rist://` to listen, 
 leave it off to call out.
 

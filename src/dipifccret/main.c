@@ -92,9 +92,7 @@ int main(int argc, char **argv) {
   if (!cfg.no_ret && !cfg.no_rsi) {
     if (cfg.listen_family == AF_INET6) {
       log_line(TOOL_NAME ": RSI self-announcement needs an IPv4 -l address (F.5.3 IPv6 unicast feedback is not supported in DVB), disabling it");
-    } else if (cfg.rsi_mc_ret) {
-      /* dvb-rsi-mc-ret: RSI rides mt itself (F.6.2.2 same group:port), no separate socket */
-    } else {
+    } else if (!cfg.rsi_mc_ret) {
       rsi_mt = mcsend_table_new(max_channels, cfg.iface, MC_SEND_TTL);
       if (!rsi_mt) {
         fprintf(stderr, "%s: out of memory allocating RSI announcement table\n", TOOL_NAME);
@@ -139,26 +137,28 @@ int main(int argc, char **argv) {
     channel_table_set_inspect(channels, agg);
     metrics_exporter_set_extra(&mx, tsinspect_agg_put_cb, agg);
   }
-  dispatch_ctx.channels = channels;
-  dispatch_ctx.agg = agg;
-  dispatch_ctx.mt = mt;
-  dispatch_ctx.ff_port = cfg.ff_port;
-  dispatch_ctx.rsi_mt = rsi_mt;
-  dispatch_ctx.rsi_active = rsi_mt != NULL || (cfg.rsi_mc_ret && mt != NULL);
-  dispatch_ctx.ret = ret;
-  dispatch_ctx.bursts = bursts;
-  dispatch_ctx.burst_multiplier = cfg.burst_multiplier;
-  dispatch_ctx.duration_cap_ms = cfg.duration_cap_ms;
-  dispatch_ctx.max_buffer_fill_bound_ms = cfg.max_buffer_fill_bound_ms;
-  dispatch_ctx.congestion_nack_threshold = cfg.congestion_nack_threshold;
-  dispatch_ctx.fcc_ranges = cfg.fcc_ranges;
-  dispatch_ctx.fcc_range_count = cfg.fcc_range_count;
-  dispatch_ctx.fcc_client_ranges = cfg.fcc_client_ranges;
-  dispatch_ctx.fcc_client_range_count = cfg.fcc_client_range_count;
-  dispatch_ctx.rtx_pt = cfg.rtx_pt;
-  dispatch_ctx.idle_timeout_s = cfg.channel_idle_timeout_s;
-  dispatch_ctx.ret_client_idle_timeout_s = cfg.ret_client_idle_timeout_s;
-  dispatch_ctx.nack_truncated_logged = 0;
+  dispatch_ctx = (dispatch_ctx_t){
+    .channels = channels,
+    .agg = agg,
+    .mt = mt,
+    .ff_port = cfg.ff_port,
+    .rsi_mt = rsi_mt,
+    .rsi_active = rsi_mt != NULL || (cfg.rsi_mc_ret && mt != NULL),
+    .ret = ret,
+    .bursts = bursts,
+    .burst_multiplier = cfg.burst_multiplier,
+    .duration_cap_ms = cfg.duration_cap_ms,
+    .max_buffer_fill_bound_ms = cfg.max_buffer_fill_bound_ms,
+    .congestion_nack_threshold = cfg.congestion_nack_threshold,
+    .fcc_ranges = cfg.fcc_ranges,
+    .fcc_range_count = cfg.fcc_range_count,
+    .fcc_client_ranges = cfg.fcc_client_ranges,
+    .fcc_client_range_count = cfg.fcc_client_range_count,
+    .rtx_pt = cfg.rtx_pt,
+    .idle_timeout_s = cfg.channel_idle_timeout_s,
+    .ret_client_idle_timeout_s = cfg.ret_client_idle_timeout_s,
+    .nack_truncated_logged = 0,
+  };
 
   pool = listen_pool_start(cfg.listen_family, cfg.listen_addr, cfg.listen_port, cfg.workers, listen_cb, &dispatch_ctx);
   if (!pool) {
@@ -178,8 +178,7 @@ int main(int argc, char **argv) {
   }
 
   if (bursts) {
-    pacer_ctx.bursts = bursts;
-    pacer_ctx.duration_cap_ms = cfg.duration_cap_ms;
+    pacer_ctx = (pacer_ctx_t){.bursts = bursts, .duration_cap_ms = cfg.duration_cap_ms};
     if (pthread_create(&pacer_thread, NULL, pacer_main, &pacer_ctx) != 0) {
       fprintf(stderr, "%s: failed to start burst pacing thread\n", TOOL_NAME);
       rc = 1;
@@ -189,19 +188,17 @@ int main(int argc, char **argv) {
   }
 
   if (rsi_mt || (cfg.rsi_mc_ret && mt)) {
-    if (cfg.rsi_mc_ret) {
-      rsi_ctx.send_ctx = &ret_send_ctx; /* dvb-rsi-mc-ret: rides mt, F.6.2.2 same group:port */
-    } else {
-      rsi_send_ctx.mt = rsi_mt;
-      rsi_ctx.send_ctx = &rsi_send_ctx;
-    }
-    rsi_ctx.channels = channels;
-    rsi_ctx.interval_s = cfg.rsi_interval_s;
-    rsi_ctx.port = (uint16_t)cfg.listen_port;
-    rsi_ctx.resolve_by_port = cfg.fcc_resolve_by_port;
-    rsi_ctx.resolve_base_port = resolve_base_port;
-    rsi_ctx.hostname = cfg.rsi_hostname[0] ? cfg.rsi_hostname : NULL;
-    rsi_ctx.hostname_len = strlen(cfg.rsi_hostname);
+    if (!cfg.rsi_mc_ret) rsi_send_ctx.mt = rsi_mt;
+    rsi_ctx = (rsi_pacer_ctx_t){
+      .channels = channels,
+      .send_ctx = cfg.rsi_mc_ret ? &ret_send_ctx : &rsi_send_ctx, /* dvb-rsi-mc-ret: rides mt, F.6.2.2 same group:port */
+      .interval_s = cfg.rsi_interval_s,
+      .port = (uint16_t)cfg.listen_port,
+      .hostname = cfg.rsi_hostname[0] ? cfg.rsi_hostname : NULL,
+      .hostname_len = strlen(cfg.rsi_hostname),
+      .resolve_by_port = cfg.fcc_resolve_by_port,
+      .resolve_base_port = resolve_base_port,
+    };
     if (inet_pton(AF_INET, cfg.listen_addr, rsi_ctx.addr) != 1) {
       fprintf(stderr, "%s: failed to parse -l address for RSI announcement\n", TOOL_NAME);
       rc = 1;
@@ -216,10 +213,7 @@ int main(int argc, char **argv) {
   }
 
   if (metrics_exporter_enabled(&mx)) {
-    metrics_ctx.mx = &mx;
-    metrics_ctx.channels = channels;
-    metrics_ctx.ret = ret;
-    metrics_ctx.bursts = bursts;
+    metrics_ctx = (metrics_ctx_t){.mx = &mx, .channels = channels, .ret = ret, .bursts = bursts};
     if (pthread_create(&metrics_thread, NULL, metrics_thread_main, &metrics_ctx) != 0) {
       fprintf(stderr, "%s: failed to start metrics thread\n", TOOL_NAME);
       rc = 1;

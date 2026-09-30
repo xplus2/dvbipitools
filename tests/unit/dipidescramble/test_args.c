@@ -6,181 +6,204 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "lib/config/yamlcfg.h"
+
 #include "dipidescramble/args.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
 START_TEST(missing_input_is_rejected) {
   char *argv[] = {"dipidescramble", "-o", "out.ts", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(missing_output_is_rejected) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(minimal_valid_args_ok) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.input.kind, INPUT_UDP);
   ck_assert_int_eq(cfg.n_out, 1);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(strip_lcevc_flag_is_parsed) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.mka", "-f", "mka", "--strip-lcevc", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.strip_lcevc, 1);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(strip_lcevc_defaults_off) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.strip_lcevc, 0);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_options_require_metrics_id) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts",
                   "--metrics", "/tmp/x.sock", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_id_alone_is_accepted) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts",
                   "--metrics-id", "inst1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.metrics_id, "inst1");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(rist_input_with_at_is_accepted) {
   char *argv[] = {"dipidescramble", "-i", "rist://@127.0.0.1:6000", "-o", "out.ts", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.input.kind, INPUT_RIST);
   ck_assert_str_eq(cfg.input.rist_uri, "rist://@127.0.0.1:6000");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(rist_input_without_at_is_rejected) {
   char *argv[] = {"dipidescramble", "-i", "rist://127.0.0.1:6000", "-o", "out.ts", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(rist_profile_main_is_parsed) {
   char *argv[] = {"dipidescramble", "-i", "rist://@127.0.0.1:6000", "-o", "out.ts",
                   "--profile", "main", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.rist_profile_main, 1);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(invalid_rist_profile_is_rejected) {
   char *argv[] = {"dipidescramble", "-i", "rist://@127.0.0.1:6000", "-o", "out.ts",
                   "--profile", "bogus", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(srt_input_listen_is_accepted) {
   char *argv[] = {"dipidescramble", "-i", "srt://@127.0.0.1:6000", "-o", "out.ts", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.input.kind, INPUT_SRT);
   ck_assert_int_eq(cfg.input.srt_listen, 1);
   ck_assert_str_eq(cfg.input.srt_host, "127.0.0.1");
   ck_assert_uint_eq(cfg.input.srt_port, 6000);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(srt_input_caller_is_accepted) {
   char *argv[] = {"dipidescramble", "-i", "srt://127.0.0.1:6000", "-o", "out.ts", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.input.kind, INPUT_SRT);
   ck_assert_int_eq(cfg.input.srt_listen, 0);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(srt_passphrase_in_length_is_validated) {
   char *argv[] = {"dipidescramble", "-i", "srt://@127.0.0.1:6000", "-o", "out.ts", "--srt-passphrase-in", "short", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(srt_pbkeylen_in_requires_passphrase_in) {
   char *argv[] = {"dipidescramble", "-i", "srt://@127.0.0.1:6000", "-o", "out.ts", "--srt-pbkeylen-in", "16", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(srt_pbkeylen_in_bad_value_is_rejected) {
   char *argv[] = {"dipidescramble", "-i", "srt://@127.0.0.1:6000", "-o", "out.ts", "--srt-passphrase-in", "0123456789", "--srt-pbkeylen-in", "20", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(srt_output_caller_is_accepted) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "srt://127.0.0.1:7000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.n_out, 1);
   ck_assert_int_eq(cfg.out[0].kind, OUT_SRT);
   ck_assert_str_eq(cfg.out[0].srt_host, "127.0.0.1");
   ck_assert_uint_eq(cfg.out[0].srt_port, 7000);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(srt_output_listen_is_rejected) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "srt://@127.0.0.1:7000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(srt_output_repeatable_independent_targets) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "srt://127.0.0.1:7000", "-o", "srt://127.0.0.1:7001", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.n_out, 2);
   ck_assert_int_eq(cfg.out[0].kind, OUT_SRT);
   ck_assert_int_eq(cfg.out[1].kind, OUT_SRT);
   ck_assert_uint_eq(cfg.out[0].srt_port, 7000);
   ck_assert_uint_eq(cfg.out[1].srt_port, 7001);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(srt_passphrase_length_is_validated) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "srt://127.0.0.1:7000", "--srt-passphrase", "short", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(srt_pbkeylen_requires_passphrase) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "srt://127.0.0.1:7000", "--srt-pbkeylen", "16", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -194,7 +217,7 @@ static void write_cfg(char *path, const char *text) {
 START_TEST(config_file_provides_settings) {
   char path[] = "/tmp/dipidescramble_cfg_XXXXXX";
   char *argv[] = {"dipidescramble", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "input: udp://@239.1.1.1:5000\noutput:\n  - a.ts\n  - b.ts\nformat: ts\nserial: e2e-01\nmax-services: 64\nbiss2:\n  sw: 00112233445566778899aabbccddeeff\nsrt:\n  latency-in: 100\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
@@ -204,46 +227,51 @@ START_TEST(config_file_provides_settings) {
   ck_assert_uint_eq(cfg.max_services, 64u);
   ck_assert_int_eq(cfg.biss2_sw_given, 1);
   ck_assert_uint_eq(cfg.srt_latency_in_ms, 100u);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(cmdline_wins_over_config) {
   char path[] = "/tmp/dipidescramble_cfg_XXXXXX";
   char *argv[] = {"dipidescramble", "-c", path, "-o", "c.ts", "-s", "cli", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "input: udp://@239.1.1.1:5000\noutput:\n  - a.ts\n  - b.ts\nserial: cfg\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
   ck_assert_int_eq(cfg.n_out, 1);
   ck_assert_str_eq(cfg.out[0].file_path, "c.ts");
   ck_assert_str_eq(cfg.serial, "cli");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_missing_file_is_error) {
   char *argv[] = {"dipidescramble", "-c", "/nonexistent/dipidescramble.yaml", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_invalid_value_is_error) {
   char path[] = "/tmp/dipidescramble_cfg_XXXXXX";
   char *argv[] = {"dipidescramble", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "input: udp://@239.1.1.1:5000\noutput: a.ts\nmax-services: 300\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_biss_conflict_is_rejected) {
   char path[] = "/tmp/dipidescramble_cfg_XXXXXX";
   char *argv[] = {"dipidescramble", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "input: udp://@239.1.1.1:5000\noutput: a.ts\nbiss2:\n  sw: 00112233445566778899aabbccddeeff\n  esw: 00112233445566778899aabbccddeeff\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -251,76 +279,85 @@ START_TEST(configtest_reports_by_exit_status) {
   char path[] = "/tmp/dipidescramble_cfg_XXXXXX";
   char *argv[] = {"dipidescramble", "--configtest", "-c", path, NULL};
   char *argv2[] = {"dipidescramble", "--configtest", "-c", "/nonexistent/dipidescramble.yaml", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "bogus: 1\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
   ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_level_is_recorded) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", "--metrics-id", "inst1", "--metrics-inspect-ts", "medium", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_MEDIUM);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_defaults_to_off) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", "--metrics-id", "inst1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_OFF);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_requires_metrics_id) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", "--metrics-inspect-ts", "basic", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_rejects_unknown_level) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", "--metrics-id", "inst1", "--metrics-inspect-ts", "bogus", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_from_yaml) {
   char path[] = "/tmp/dipidescramble_inspect_XXXXXX";
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "metrics:\n  id: a\n  inspect-ts: full\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
   ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_FULL);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_pids_parsed) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", "--metrics-id", "inst1", "--metrics-inspect-ts", "full", "--metrics-inspect-ts-pids", "0x100,300", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.metrics_n_known_pids, 2u);
   ck_assert_uint_eq(cfg.metrics_known_pids[0], 256u);
   ck_assert_uint_eq(cfg.metrics_known_pids[1], 300u);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_pids_need_full_level) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", "--metrics-id", "inst1", "--metrics-inspect-ts", "basic", "--metrics-inspect-ts-pids", "0x100", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_pids_reject_bad_list) {
   char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", "--metrics-id", "inst1", "--metrics-inspect-ts", "full", "--metrics-inspect-ts-pids", "0x100,9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 

@@ -283,6 +283,7 @@ void source_close(source_t *s) {
   if (s->icy) icy_free(s->icy);
   if (s->id3) id3_free(s->id3);
   if (s->hls) hls_live_free(s->hls);
+  if (s->hls_demux) rawaudio_demux_free(s->hls_demux);
   if (s->http) http_close(s->http);
   free(s);
 }

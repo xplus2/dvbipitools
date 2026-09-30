@@ -1,10 +1,14 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <poll.h>
 #include <signal.h>
 #include <stdatomic.h>
+#include <stdint.h>
 #include <string.h>
+#include <sys/eventfd.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "signal.h"
 
@@ -15,9 +19,16 @@ static atomic_int g_reload = 0;
 static atomic_int g_tpl_reload = 0;
 static atomic_int g_tls_reload = 0;
 
+static int g_wake_fd = -1;
+
 static void on_stop(int sig) {
   (void)sig;
   atomic_store_explicit(&g_stop, 1, memory_order_relaxed);
+  if (g_wake_fd >= 0) {
+    uint64_t one = 1;
+    ssize_t r = write(g_wake_fd, &one, sizeof one);
+    (void)r;
+  }
 }
 
 static void on_reload(int sig) {
@@ -33,6 +44,7 @@ static void on_tls_reload(int sig) {
 
 void signals_install(void) {
   struct sigaction sa;
+  g_wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
   memset(&sa, 0, sizeof sa);
   sa.sa_handler = on_stop;
   sigaction(SIGINT, &sa, NULL);
@@ -58,10 +70,21 @@ double mono_seconds(void) {
   return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
 }
 
+int signal_wake_fd(void) { return g_wake_fd; }
+
 void sleep_interruptible(double secs) {
   double deadline = mono_seconds() + secs;
-  while (mono_seconds() < deadline && !signal_stop_requested()) {
-    struct timespec req = {0, 100000000L};
-    nanosleep(&req, NULL);
+  int wfd = g_wake_fd;
+  while (!signal_stop_requested()) {
+    double remain = deadline - mono_seconds();
+    if (remain <= 0.0) return;
+    if (remain > 3600.0) remain = 3600.0;
+    if (wfd >= 0) {
+      struct pollfd pfd = {wfd, POLLIN, 0};
+      poll(&pfd, 1, (int)(remain * 1000.0) + 1);
+    } else {
+      struct timespec req = {0, 100000000L};
+      nanosleep(&req, NULL);
+    }
   }
 }

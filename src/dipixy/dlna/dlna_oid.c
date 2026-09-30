@@ -65,6 +65,7 @@ const char *source_kind_str(source_kind_t k) {
     case SRC_CSV:  return "csv";
     case SRC_XML:  return "xml";
     case SRC_HTTP: return "http";
+    case SRC_MCAST: return "mcast";
   }
   return "?";
 }
@@ -104,6 +105,33 @@ static void pct_encode_seg(const char *s, char *out, size_t outcap) {
   out[oi] = '\0';
 }
 
+static void build_simple_path(sbuf_t *b, const char *name, const char *fallback, char *name_enc, size_t name_enc_sz, const char *fmt) {
+  if (name) {
+    pct_encode_seg(name, name_enc, name_enc_sz);
+    sbuf_add(b, "/");
+    sbuf_add(b, name_enc);
+  } else {
+    sbuf_add(b, fallback);
+  }
+  sbuf_add(b, "/");
+  sbuf_add(b, fmt);
+}
+
+static void build_item_path(sbuf_t *b, const source_def_t *src, unsigned ord, unsigned item_num, char *name_enc, size_t name_enc_sz, const char *fmt) {
+  if (src && src->name) {
+    pct_encode_seg(src->name, name_enc, name_enc_sz);
+    sbuf_add(b, "/");
+    sbuf_add(b, name_enc);
+  } else {
+    sbuf_add(b, "/list/");
+    sbuf_add_u64(b, ord);
+  }
+  sbuf_add(b, "/item/");
+  sbuf_add_u64(b, item_num);
+  sbuf_add(b, "/");
+  sbuf_add(b, fmt);
+}
+
 void build_play_path(const config_t *cfg, oid_kind_t kind, unsigned ord, unsigned item_num, media_type_t media_type, char *out, size_t outsz) {
   char name_enc[192];
   const char *fmt = media_type == MEDIA_RADIO ? "rawaudio" : "spts";
@@ -111,65 +139,17 @@ void build_play_path(const config_t *cfg, oid_kind_t kind, unsigned ord, unsigne
   sbuf_init(&b, out, outsz);
   switch (kind) {
     case OID_STDIN:
-      if (cfg->stdin_name) {
-        pct_encode_seg(cfg->stdin_name, name_enc, sizeof name_enc);
-        sbuf_add(&b, "/");
-        sbuf_add(&b, name_enc);
-        sbuf_add(&b, "/");
-        sbuf_add(&b, fmt);
-      } else {
-        sbuf_add(&b, "/stdin/");
-        sbuf_add(&b, fmt);
-      }
+      build_simple_path(&b, cfg->stdin_name, "/stdin", name_enc, sizeof name_enc, fmt);
       break;
     case OID_RIST:
-      if (cfg->rist_name) {
-        pct_encode_seg(cfg->rist_name, name_enc, sizeof name_enc);
-        sbuf_add(&b, "/");
-        sbuf_add(&b, name_enc);
-        sbuf_add(&b, "/");
-        sbuf_add(&b, fmt);
-      } else {
-        sbuf_add(&b, "/rist/");
-        sbuf_add(&b, fmt);
-      }
+      build_simple_path(&b, cfg->rist_name, "/rist", name_enc, sizeof name_enc, fmt);
       break;
-    case OID_HTTP: {
-      const source_def_t *src = find_source(cfg, ord);
-      if (src && src->name) {
-        pct_encode_seg(src->name, name_enc, sizeof name_enc);
-        sbuf_add(&b, "/");
-        sbuf_add(&b, name_enc);
-        sbuf_add(&b, "/item/1/");
-        sbuf_add(&b, fmt);
-      } else {
-        sbuf_add(&b, "/list/");
-        sbuf_add_u64(&b, ord);
-        sbuf_add(&b, "/item/1/");
-        sbuf_add(&b, fmt);
-      }
+    case OID_HTTP:
+      build_item_path(&b, find_source(cfg, ord), ord, 1, name_enc, sizeof name_enc, fmt);
       break;
-    }
-    case OID_ITEM: {
-      const source_def_t *src = find_source(cfg, ord);
-      if (src && src->name) {
-        pct_encode_seg(src->name, name_enc, sizeof name_enc);
-        sbuf_add(&b, "/");
-        sbuf_add(&b, name_enc);
-        sbuf_add(&b, "/item/");
-        sbuf_add_u64(&b, item_num);
-        sbuf_add(&b, "/");
-        sbuf_add(&b, fmt);
-      } else {
-        sbuf_add(&b, "/list/");
-        sbuf_add_u64(&b, ord);
-        sbuf_add(&b, "/item/");
-        sbuf_add_u64(&b, item_num);
-        sbuf_add(&b, "/");
-        sbuf_add(&b, fmt);
-      }
+    case OID_ITEM:
+      build_item_path(&b, find_source(cfg, ord), ord, item_num, name_enc, sizeof name_enc, fmt);
       break;
-    }
     default:
       out[0] = '\0';
   }

@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "dipiradiohead/input/id3.h"
+#include "lib/helper/ioutil.h"
 
 typedef struct {
   char artist[256];
@@ -16,8 +17,8 @@ typedef struct {
 
 static void on_meta(void *ctx, const char *artist, const char *title) {
   capture_t *c = ctx;
-  snprintf(c->artist, sizeof c->artist, "%s", artist);
-  snprintf(c->title, sizeof c->title, "%s", title);
+  bufcpy(c->artist, sizeof c->artist, artist);
+  bufcpy(c->title, sizeof c->title, title);
   c->calls++;
 }
 

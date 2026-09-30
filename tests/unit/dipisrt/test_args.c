@@ -6,73 +6,82 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "lib/config/yamlcfg.h"
+
 #include "dipisrt/args.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
 START_TEST(sender_ok_with_nonsrt_in_and_srt_out) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(config_is_sender(&cfg), 1);
   ck_assert_int_eq(cfg.out.n_srt, 1);
   ck_assert_int_eq(cfg.out.listen, 0);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(receiver_ok_with_srt_in_and_nonsrt_out) {
   char *argv[] = {"dipisrt", "-i", "srt://@0.0.0.0:9000", "-o", "rtp://@239.1.1.1:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(config_is_sender(&cfg), 0);
   ck_assert_int_eq(cfg.in.n_srt, 1);
   ck_assert_int_eq(cfg.in.listen, 1);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(both_srt_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "srt://@0.0.0.0:9000", "-o", "srt://1.2.3.4:9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(neither_srt_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "udp://@239.1.1.2:5001", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(sink_srt_with_at_is_ok) {
   /* unlike RIST, caller/listener is independent of which side is -i/-o */
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://@1.2.3.4:9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.out.listen, 1);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(source_srt_without_at_is_ok) {
   char *argv[] = {"dipisrt", "-i", "srt://1.2.3.4:9000", "-o", "rtp://@239.1.1.1:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.in.listen, 0);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(repeated_srt_out_needs_group_mode) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "-o", "srt://5.6.7.8:9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(repeated_srt_out_with_group_mode_bonds_peers) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "-o", "srt://5.6.7.8:9000", "--group-mode", "broadcast", NULL};
-  config_t cfg;
+  config_t cfg = {0};
 #ifdef DIPISRT_HAVE_BONDING
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.out.n_srt, 2);
@@ -82,114 +91,129 @@ START_TEST(repeated_srt_out_with_group_mode_bonds_peers) {
 #else
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
 #endif
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(group_mode_without_bonding_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "--group-mode", "backup", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(unknown_group_mode_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "-o", "srt://5.6.7.8:9000", "--group-mode", "loadbalance", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(mixed_listen_peers_on_same_flag_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "-o", "srt://@5.6.7.8:9000", "--group-mode", "broadcast", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(repeated_nonsrt_out_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "udp://@239.1.1.2:5001",
                   "-o", "udp://@239.1.1.3:5001", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(mixed_srt_and_nonsrt_on_same_flag_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "-o", "udp://@239.1.1.2:5001", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(missing_in_is_rejected) {
   char *argv[] = {"dipisrt", "-o", "srt://1.2.3.4:9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(missing_out_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(http_source_ok) {
   char *argv[] = {"dipisrt", "-i", "http://10.0.0.1:4022/rtp/239.19.75.1:8700", "-o", "srt://1.2.3.4:9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(http_sink_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "srt://@0.0.0.0:9000", "-o", "http://10.0.0.1:4022/rtp/239.19.75.1:8700", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(non_multicast_direct_address_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@10.0.0.1:5000", "-o", "srt://1.2.3.4:9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(non_numeric_srt_host_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://example.com:9000", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(rendezvous_requires_local) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000", "--rendezvous", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(rendezvous_with_local_is_accepted) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "--rendezvous", "--local", "0.0.0.0:9001", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.rendezvous, 1);
   ck_assert_str_eq(cfg.local_host, "0.0.0.0");
   ck_assert_uint_eq(cfg.local_port, 9001u);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(rendezvous_with_listen_peer_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://@1.2.3.4:9000",
                   "--rendezvous", "--local", "0.0.0.0:9001", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -197,90 +221,101 @@ START_TEST(rendezvous_with_group_mode_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "-o", "srt://5.6.7.8:9000", "--group-mode", "broadcast",
                   "--rendezvous", "--local", "0.0.0.0:9001", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(passphrase_too_short_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000", "--passphrase", "short", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(passphrase_valid_length_is_accepted) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "--passphrase", "correcthorsebattery", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.passphrase, "correcthorsebattery");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(pbkeylen_without_passphrase_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000", "--pbkeylen", "24", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(pbkeylen_invalid_value_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "--passphrase", "correcthorsebattery", "--pbkeylen", "20", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(pbkeylen_valid_value_is_accepted) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "--passphrase", "correcthorsebattery", "--pbkeylen", "32", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.pbkeylen, 32);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(streamid_and_packetfilter_and_latency_are_applied) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "--streamid", "chan1", "--packetfilter", "fec,cols:10,rows:5", "--latency", "250", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.streamid, "chan1");
   ck_assert_str_eq(cfg.packetfilter, "fec,cols:10,rows:5");
   ck_assert_uint_eq(cfg.latency_ms, 250u);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_options_require_metrics_id) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "--metrics", "/tmp/x.sock", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(metrics_id_alone_is_accepted) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000",
                   "--metrics-id", "inst1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.metrics_id, "inst1");
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(help_returns_help_status) {
   char *argv[] = {"dipisrt", "-h", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(unexpected_positional_argument_is_rejected) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000", "extra", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -294,7 +329,7 @@ static void write_cfg(char *path, const char *text) {
 START_TEST(config_file_provides_settings) {
   char path[] = "/tmp/dipisrt_cfg_XXXXXX";
   char *argv[] = {"dipisrt", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "in:\n  - srt://@0.0.0.0:9000\nout: rtp://@239.1.1.1:5000\nlatency: 300\npassphrase: 0123456789ab\npbkeylen: 24\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
@@ -302,35 +337,39 @@ START_TEST(config_file_provides_settings) {
   ck_assert_int_eq(cfg.in.n_srt, 1);
   ck_assert_uint_eq(cfg.latency_ms, 300u);
   ck_assert_int_eq(cfg.pbkeylen, 24);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(cmdline_wins_over_config) {
   char path[] = "/tmp/dipisrt_cfg_XXXXXX";
   char *argv[] = {"dipisrt", "-c", path, "-i", "srt://@0.0.0.0:9100", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "in: srt://@0.0.0.0:9000\nout: rtp://@239.1.1.1:5000\nlatency: 300\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
   ck_assert_uint_eq(cfg.in.srt_port[0], 9100u);
   ck_assert_uint_eq(cfg.latency_ms, 300u);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_missing_file_is_error) {
   char *argv[] = {"dipisrt", "-c", "/nonexistent/dipisrt.yaml", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(config_invalid_value_is_error) {
   char path[] = "/tmp/dipisrt_cfg_XXXXXX";
   char *argv[] = {"dipisrt", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "in: srt://@0.0.0.0:9000\nout: rtp://@239.1.1.1:5000\npbkeylen: 20\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
@@ -338,52 +377,58 @@ START_TEST(configtest_reports_by_exit_status) {
   char path[] = "/tmp/dipisrt_cfg_XXXXXX";
   char *argv[] = {"dipisrt", "--configtest", "-c", path, NULL};
   char *argv2[] = {"dipisrt", "--configtest", "-c", "/nonexistent/dipisrt.yaml", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "bogus: 1\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
   ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
   unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_level_is_recorded) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000", "--metrics-id", "inst1", "--metrics-inspect-ts", "medium", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_MEDIUM);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_defaults_to_off) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000", "--metrics-id", "inst1", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_OFF);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_requires_metrics_id) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000", "--metrics-inspect-ts", "basic", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_rejects_unknown_level) {
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000", "--metrics-id", "inst1", "--metrics-inspect-ts", "bogus", NULL};
-  config_t cfg;
+  config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 START_TEST(inspect_ts_from_yaml) {
   char path[] = "/tmp/dipisrt_inspect_XXXXXX";
   char *argv[] = {"dipisrt", "-i", "rtp://@239.1.1.1:5000", "-o", "srt://1.2.3.4:9000", "-c", path, NULL};
-  config_t cfg;
+  config_t cfg = {0};
   write_cfg(path, "metrics:\n  id: a\n  inspect-ts: full\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
   ck_assert_int_eq(cfg.metrics_inspect_ts, METRICS_INSPECT_TS_FULL);
+  yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 

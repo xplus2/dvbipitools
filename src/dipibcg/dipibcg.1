@@ -68,16 +68,14 @@ into a later
 (\fB\-\-compress\fR) zlib-compresses (RFC 1950) the container inside
 the wrapper; announce-only, rejected in
 .BR \-l .
-zlib support depends on the build; listen mode decompresses
-transparently and requires no flag.
+zlib support depends on the build. Listen mode decompresses transparently and requires no flag.
 .PP
-SIGINT/SIGTERM stop the process. SIGHUP re-reads
+SIGHUP re-reads
 .B \-i
 and
 .B \-M
-in announce mode; on error the previous guide keeps being announced
-and the error is logged. No effect in
-.BR \-l .
+in announce mode. On error the previous guide keeps being announced
+and the error is logged.
 .SH OPTIONS
 .TP
 .BR \-a ", " \-\-announce
@@ -178,13 +176,6 @@ Announce guide.xml on the given multicast group using mapping.csv.
 .B dipibcg \-l \-m 239.255.0.2:3938 \-o guide.xml \-C mapping.csv
 Listen on the group, write the received guide to guide.xml and a
 service mapping to mapping.csv.
-.SH EXIT STATUS
-.TP
-.B 0
-Success.
-.TP
-.B nonzero
-Argument error, or I/O/network failure.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipibcg.yaml

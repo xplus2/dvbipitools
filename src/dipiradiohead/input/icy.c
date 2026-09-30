@@ -43,60 +43,66 @@ static void handle_meta_block(icy_t *c) {
   const char *tag = "StreamTitle='";
   char *start, *end;
   size_t len;
+  char artist[sizeof c->last_title];
+  char title[sizeof c->last_title];
+  const char *sep;
 
   c->meta_buf[c->meta_have] = '\0';
   start = strstr((char *)c->meta_buf, tag);
-  if (!start)
-    return;
+  if (!start) return;
   start += strlen(tag);
   end = strstr(start, "';");
-  if (!end)
-    return;
+  if (!end) return;
   len = (size_t)(end - start);
-  if (len >= sizeof c->last_title)
-    len = sizeof c->last_title - 1;
+  if (len >= sizeof c->last_title) len = sizeof c->last_title - 1;
 
   if (len == strlen(c->last_title) && !memcmp(start, c->last_title, len))
     return; /* unchanged */
   memcpy(c->last_title, start, len);
   c->last_title[len] = '\0';
 
-  if (!c->cb)
-    return;
-  {
-    char artist[sizeof c->last_title] = "", title[sizeof c->last_title];
-    const char *sep = strstr(c->last_title, " - ");
-    if (sep) {
-      size_t alen = (size_t)(sep - c->last_title);
-      if (alen >= sizeof artist)
-        alen = sizeof artist - 1;
-      memcpy(artist, c->last_title, alen);
-      artist[alen] = '\0';
-      bufcpy(title, sizeof title, sep + 3);
-    } else {
-      bufcpy(title, sizeof title, c->last_title);
-    }
-    c->cb(c->ctx, artist, title);
+  if (!c->cb) return;
+
+  artist[0] = '\0';
+  sep = strstr(c->last_title, " - ");
+  if (sep) {
+    size_t alen = (size_t)(sep - c->last_title);
+    if (alen >= sizeof artist) alen = sizeof artist - 1;
+    memcpy(artist, c->last_title, alen);
+    artist[alen] = '\0';
+    bufcpy(title, sizeof title, sep + 3);
+  } else {
+    bufcpy(title, sizeof title, c->last_title);
   }
+  c->cb(c->ctx, artist, title);
 }
 
 size_t icy_feed(icy_t *c, const unsigned char *in, size_t inlen, unsigned char *out, size_t cap) {
-  size_t w = 0;
-
+  size_t r = 0, w = 0;
   if (c->metaint == 0) {
     size_t n = inlen < cap ? inlen : cap;
     memcpy(out, in, n);
     return n;
   }
-  for (size_t i = 0; i < inlen; i++) {
-    unsigned char b = in[i];
+  while (r < inlen) {
+    unsigned char b;
+    if (c->state == ST_AUDIO) {
+      size_t remain_audio = c->metaint - c->audio_count;
+      size_t avail_in = inlen - r;
+      size_t n = remain_audio < avail_in ? remain_audio : avail_in;
+      size_t to_write = cap > w ? cap - w : 0;
+      if (to_write > n) to_write = n;
+      if (to_write > 0) {
+        memcpy(out + w, in + r, to_write);
+        w += to_write;
+      }
+      r += n;
+      c->audio_count += n;
+      if (c->audio_count == c->metaint) c->state = ST_LEN;
+      continue;
+    }
+    b = in[r++];
     switch (c->state) {
-      case ST_AUDIO:
-        if (w < cap)
-          out[w++] = b;
-        if (++c->audio_count == c->metaint)
-          c->state = ST_LEN;
-        break;
       case ST_LEN:
         c->meta_need = (size_t)b * 16;
         c->meta_have = 0;
@@ -104,12 +110,13 @@ size_t icy_feed(icy_t *c, const unsigned char *in, size_t inlen, unsigned char *
         c->state = (c->meta_need == 0) ? ST_AUDIO : ST_META;
         break;
       case ST_META:
-        if (c->meta_have < ICY_META_CAP)
-          c->meta_buf[c->meta_have++] = b;
+        if (c->meta_have < ICY_META_CAP) c->meta_buf[c->meta_have++] = b;
         if (c->meta_have >= c->meta_need) {
           handle_meta_block(c);
           c->state = ST_AUDIO;
         }
+        break;
+      default:
         break;
     }
   }

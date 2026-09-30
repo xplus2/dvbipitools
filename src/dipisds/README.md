@@ -3,6 +3,7 @@
 DVBSTP / SD&S (ETSI TS 102 034 clause 5, Service Discovery and Selection). Announce a service
 list on multicast, or listen for one and write a playlist.
 
+## Usage
 ```
 dipisds -a -i <path> -m <mcast>:<port> [options]
 dipisds -l -m <mcast>:<port> [options]
@@ -55,7 +56,7 @@ dipisds -l -m <mcast>:<port> [options]
 | `-c` | `--config`        | `<path>`                    | `/etc/dvbipitools/dipisds.yaml`              |
 |      | `--config-strict` |                             | config file issues are errors                |
 |      | `--configtest`    |                             | check the config file, then exit             |
-| `-h` | `--help`          |                             |                                              |
+| `-h` | `--help`          |                             | show help                                    |
 
 ## Configuration file
 

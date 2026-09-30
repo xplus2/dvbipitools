@@ -34,8 +34,7 @@ int main(int argc, char **argv) {
     return 1;
   }
   f = fopen(argv[1], "rb");
-  if (!f)
-    return 1;
+  if (!f) return 1;
   if (fseek(f, 0, SEEK_END)) {
     fclose(f);
     return 1;
@@ -52,9 +51,7 @@ int main(int argc, char **argv) {
   }
   n = fread(buf, 1, (size_t)len, f);
   fclose(f);
-
-  rtcp_parse(buf, n, on_nack, on_rams_r, NULL, on_rams_t, NULL, NULL, NULL);
-
+  rtcp_parse(buf, n, &(rtcp_cbs_t){.nack_cb = on_nack, .rams_r_cb = on_rams_r, .rams_t_cb = on_rams_t});
   free(buf);
   return 0;
 }

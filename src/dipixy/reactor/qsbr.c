@@ -55,12 +55,12 @@ int qsbr_mark_passed_excl(const qsbr_domain_t *d, const uint64_t *mark, int excl
 }
 
 void qsbr_backoff(int spins) {
+  struct timespec ts;
   if (spins < 100) {
     sched_yield();
     return;
   }
-  {
-    struct timespec ts = {0, spins < 1000 ? 50000 : 1000000};
-    nanosleep(&ts, NULL);
-  }
+  ts.tv_sec = 0;
+  ts.tv_nsec = spins < 1000 ? 50000 : 1000000;
+  nanosleep(&ts, NULL);
 }

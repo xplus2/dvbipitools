@@ -21,8 +21,7 @@ static void asn1time_to_str(const ASN1_TIME *t, char *buf, size_t sz) {
   ASN1_TIME_print(bio, t);
   char tmp[64] = "";
   int n = BIO_read(bio, tmp, (int)(sizeof(tmp) - 1));
-  if (n > 0)
-    tmp[n] = '\0';
+  if (n > 0) tmp[n] = '\0';
   BIO_free(bio);
   bufcpy(buf, sz, tmp);
 }
@@ -31,18 +30,18 @@ static void x509_to_info(const X509 *cert, char *buf, size_t sz) {
   char cn[256] = "(unknown)";
   const X509_NAME *subj = X509_get_subject_name(cert);
   if (subj) X509_NAME_get_text_by_NID(subj, NID_commonName, cn, (int)sizeof(cn));
-  char nb[64], na[64];
+  char nb[64];
+  char na[64];
+  size_t off;
   asn1time_to_str(X509_get0_notBefore(cert), nb, sizeof(nb));
   asn1time_to_str(X509_get0_notAfter(cert), na, sizeof(na));
 
-  {
-    size_t off = bufcpy(buf, sz, "CN=");
-    off += bufcpy(buf + off, sz - off, cn);
-    off += bufcpy(buf + off, sz - off, "  valid ");
-    off += bufcpy(buf + off, sz - off, nb);
-    off += bufcpy(buf + off, sz - off, " - ");
-    bufcpy(buf + off, sz - off, na);
-  }
+  off = bufcpy(buf, sz, "CN=");
+  off += bufcpy(buf + off, sz - off, cn);
+  off += bufcpy(buf + off, sz - off, "  valid ");
+  off += bufcpy(buf + off, sz - off, nb);
+  off += bufcpy(buf + off, sz - off, " - ");
+  bufcpy(buf + off, sz - off, na);
 }
 
 void tls_cert_info(char *buf, size_t sz, const char *path, int from_file) {
@@ -102,7 +101,7 @@ static void x509_to_detail(const X509 *cert, tls_cert_detail_t *out) {
       if (gn->type == GEN_DNS) {
         const char *dns = (const char *)ASN1_STRING_get0_data(gn->d.ia5);
         if (dns) {
-          strncpy(out->aliases[out->alias_count], dns,sizeof(out->aliases[0]) - 1);
+          bufcpy(out->aliases[out->alias_count], sizeof(out->aliases[0]), dns);
           out->alias_count++;
         }
       }

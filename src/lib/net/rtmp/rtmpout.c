@@ -8,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "lib/helper/argutil.h"
 #include "lib/helper/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/netconnect.h"
@@ -19,6 +20,9 @@
 #define RTMPOUT_RETRY_S 3
 #define RTMPOUT_READBUF 4096
 #define RTMPOUT_SEQHDR_MAX 2048
+#define RTMPOUT_OUTQ_INIT 65536
+#define RTMPOUT_OUTQ_HWM (1u << 20)
+#define RTMPOUT_OUTQ_MAX (8u << 20)
 
 typedef enum { RTMPOUT_DOWN, RTMPOUT_TCP_CONNECTING, RTMPOUT_TLS_HANDSHAKING, RTMPOUT_PROTOCOL } rtmpout_phase_t;
 
@@ -49,35 +53,86 @@ struct rtmpout {
   unsigned char aseq[RTMPOUT_SEQHDR_MAX];
   size_t vseq_len;
   size_t aseq_len;
+
+  unsigned char *outq;
+  size_t outq_cap;
+  size_t outq_off;
+  size_t outq_len;
 };
+
+static ssize_t raw_send(const rtmpout_t *o, const unsigned char *p, size_t n) {
+  for (;;) {
+    ssize_t w = o->tls ? tls_write(o->tls, p, n) : write(o->fd, p, n);
+    if (w >= 0) return w;
+    if (o->tls) return -1;
+    if (EINTR == errno) continue;
+    if (EAGAIN == errno || EWOULDBLOCK == errno) return 0;
+    return -1;
+  }
+}
+
+static size_t outq_pending(const rtmpout_t *o) {
+  return o->outq_len - o->outq_off;
+}
+
+static void outq_flush(rtmpout_t *o) {
+  while (outq_pending(o)) {
+    ssize_t n = raw_send(o, o->outq + o->outq_off, outq_pending(o));
+    if (n < 0) {
+      o->failed = 1;
+      return;
+    }
+    if (0 == n) return;
+    o->outq_off += (size_t)n;
+  }
+  o->outq_off = 0;
+  o->outq_len = 0;
+}
+
+static void outq_append(rtmpout_t *o, const unsigned char *data, size_t len) {
+  if (outq_pending(o) + len > RTMPOUT_OUTQ_MAX) {
+    log_line("rtmpout: %s: send queue over %u bytes, reconnecting", o->host, RTMPOUT_OUTQ_MAX);
+    o->failed = 1;
+    return;
+  }
+  if (o->outq_off && o->outq_len + len > o->outq_cap) {
+    memmove(o->outq, o->outq + o->outq_off, outq_pending(o));
+    o->outq_len -= o->outq_off;
+    o->outq_off = 0;
+  }
+  if (growbuf_reserve((void **)&o->outq, &o->outq_cap, 1, o->outq_len + len, RTMPOUT_OUTQ_INIT)) {
+    o->failed = 1;
+    return;
+  }
+  memcpy(o->outq + o->outq_len, data, len);
+  o->outq_len += len;
+}
 
 static void rtmp_transport_write(void *ctx, const unsigned char *data, size_t len) {
   rtmpout_t *o = ctx;
   size_t sent = 0;
 
-  while (sent < len) {
-    ssize_t n = o->tls ? tls_write(o->tls, data + sent, len - sent) : write(o->fd, data + sent, len - sent);
-    if (n > 0) {
-      sent += (size_t)n;
-      continue;
-    }
-    if (n < 0 && errno == EINTR)
-      continue;
-    o->failed = 1; /* real error, or would-block on a message this small: treat both as connection-dead */
+  if (o->failed)
     return;
+  while (!outq_pending(o) && sent < len) {
+    ssize_t n = raw_send(o, data + sent, len - sent);
+    if (n < 0) {
+      o->failed = 1;
+      return;
+    }
+    if (0 == n) break;
+    sent += (size_t)n;
   }
+  if (sent < len) outq_append(o, data + sent, len - sent);
 }
 
 static void on_ready(void *ctx) {
   rtmpout_t *o = ctx;
   o->ready = 1;
   o->need_keyframe = 1;
-  if (o->meta_len)
-    rtmp_send_data(o->rtmp, o->meta, o->meta_len);
-  if (o->vseq_len)
-    rtmp_send_video(o->rtmp, 0, o->vseq, o->vseq_len);
-  if (o->aseq_len)
-    rtmp_send_audio(o->rtmp, 0, o->aseq, o->aseq_len);
+  if (o->meta_len) rtmp_send_data(o->rtmp, NULL, 0, o->meta, o->meta_len);
+  if (o->vseq_len) rtmp_send_video(o->rtmp, 0, NULL, 0, o->vseq, o->vseq_len);
+  if (o->aseq_len) rtmp_send_audio(o->rtmp, 0, NULL, 0, o->aseq, o->aseq_len);
 }
 
 static void on_error(void *ctx, const char *msg) {
@@ -98,6 +153,11 @@ static void teardown(rtmpout_t *o) {
     close(o->fd);
     o->fd = -1;
   }
+  free(o->outq);
+  o->outq = NULL;
+  o->outq_cap = 0;
+  o->outq_off = 0;
+  o->outq_len = 0;
   o->phase = RTMPOUT_DOWN;
   o->ready = 0;
   o->failed = 0;
@@ -141,26 +201,36 @@ static void start_rtmp(rtmpout_t *o) {
 static int protocol_read_step(rtmpout_t *o) {
   unsigned char buf[RTMPOUT_READBUF];
   ssize_t n;
-
   if (o->tls) {
     n = tls_read(o->tls, buf, sizeof buf);
-    if (n < 0)
-      return -1;
-    if (0 == n)
-      return 0; /* transient */
+    if (n < 0) return -1;
+    if (0 == n) return 0; /* transient */
   } else {
     n = read(o->fd, buf, sizeof buf);
-    if (0 == n)
-      return -1; /* peer closed */
+    if (0 == n) return -1; /* peer closed */
     if (n < 0) {
-      if (EAGAIN == errno || EWOULDBLOCK == errno)
-        return 0;
+      if (EAGAIN == errno || EWOULDBLOCK == errno) return 0;
       return -1;
     }
   }
   if (rtmp_feed(o->rtmp, buf, (size_t)n) != 0)
     return -1;
   return (size_t)n < sizeof buf ? 0 : 1;
+}
+
+static void protocol_poll_read(rtmpout_t *o) {
+  struct pollfd pfd;
+  pfd.fd = o->fd;
+  pfd.events = POLLIN;
+  if (poll(&pfd, 1, 0) <= 0) return;
+  for (;;) {
+    int r = protocol_read_step(o);
+    if (r < 0) {
+      o->failed = 1;
+      return;
+    }
+    if (r == 0) return;
+  }
 }
 
 static void service(rtmpout_t *o) {
@@ -174,8 +244,7 @@ static void service(rtmpout_t *o) {
 
   switch (o->phase) {
     case RTMPOUT_DOWN:
-      if (now >= o->next_retry)
-        try_connect(o);
+      if (now >= o->next_retry) try_connect(o);
       return;
 
     case RTMPOUT_TCP_CONNECTING: {
@@ -212,79 +281,91 @@ static void service(rtmpout_t *o) {
 
     case RTMPOUT_TLS_HANDSHAKING: {
       tls_handshake_status_t st = tls_handshake_step(o->tls);
-      if (TLS_HANDSHAKE_DONE == st)
-        start_rtmp(o);
-      else if (TLS_HANDSHAKE_ERROR == st) {
-        tls_close(o->tls);
-        o->tls = NULL;
-        close(o->fd);
-        o->fd = -1;
-        o->phase = RTMPOUT_DOWN;
-        o->next_retry = now + RTMPOUT_RETRY_S;
+      switch (st) {
+        case TLS_HANDSHAKE_DONE:
+          start_rtmp(o);
+          break;
+        case TLS_HANDSHAKE_ERROR:
+          tls_close(o->tls);
+          o->tls = NULL;
+          close(o->fd);
+          o->fd = -1;
+          o->phase = RTMPOUT_DOWN;
+          o->next_retry = now + RTMPOUT_RETRY_S;
+          break;
+        case TLS_HANDSHAKE_WANT_READ:
+        case TLS_HANDSHAKE_WANT_WRITE:
+          break;
       }
       return;
     }
 
-    case RTMPOUT_PROTOCOL: {
-      pfd.fd = o->fd;
-      pfd.events = POLLIN;
-      if (poll(&pfd, 1, 0) <= 0)
-        return;
-      for (;;) {
-        int r = protocol_read_step(o);
-        if (r < 0) {
-          o->failed = 1;
-          break;
-        }
-        if (r == 0)
-          break;
-      }
+    case RTMPOUT_PROTOCOL:
+      outq_flush(o);
+      if (!o->failed)
+        protocol_poll_read(o);
       if (o->failed)
         teardown(o);
       return;
-    }
   }
 }
 
-static int is_video_key(const unsigned char *d, size_t n) {
-  return n >= 1 && ((d[0] >> 4) & 0x07) == 1;
+static int is_video_key(const unsigned char *hdr, size_t hn) {
+  return hn >= 1 && ((hdr[0] >> 4) & 0x07) == 1;
 }
 
-static void cache_tag(unsigned char *dst, size_t *dst_len, size_t cap, const unsigned char *data, size_t len) {
-  if (len > cap)
-    return;
-  memcpy(dst, data, len);
-  *dst_len = len;
+static void cache_tag(unsigned char *dst, size_t *dst_len, size_t cap, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
+  if (hn + pn > cap) return;
+  if (hn) memcpy(dst, hdr, hn);
+  if (pn) memcpy(dst + hn, payload, pn);
+  *dst_len = hn + pn;
 }
 
-int rtmpout_write(rtmpout_t *o, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *data, size_t len) {
-  if (FLV_TAG_SCRIPT == type) {
-    cache_tag(o->meta, &o->meta_len, sizeof o->meta, data, len);
-  } else if (FLV_TAG_VIDEO == type && len >= 2) {
-    int is_seqhdr = (data[0] & 0x80) ? (data[0] & 0x0F) == 0 : data[1] == 0;
-    if (is_seqhdr)
-      cache_tag(o->vseq, &o->vseq_len, sizeof o->vseq, data, len);
-  } else if (FLV_TAG_AUDIO == type && len >= 2) {
-    int is_seqhdr = ((data[0] >> 4) == 9) ? (data[0] & 0x0F) == 0 : data[1] == 0;
-    if (is_seqhdr)
-      cache_tag(o->aseq, &o->aseq_len, sizeof o->aseq, data, len);
+int rtmpout_write(rtmpout_t *o, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
+  int is_cfg = 0;
+
+  switch (type) {
+    case FLV_TAG_SCRIPT:
+      is_cfg = 1;
+      cache_tag(o->meta, &o->meta_len, sizeof o->meta, hdr, hn, payload, pn);
+      break;
+    case FLV_TAG_VIDEO:
+      if (hn >= 2) {
+        is_cfg = (hdr[0] & 0x80) ? (hdr[0] & 0x0F) == 0 : hdr[1] == 0;
+        if (is_cfg)
+          cache_tag(o->vseq, &o->vseq_len, sizeof o->vseq, hdr, hn, payload, pn);
+      }
+      break;
+    case FLV_TAG_AUDIO:
+      if (hn >= 2) {
+        is_cfg = ((hdr[0] >> 4) == 9) ? (hdr[0] & 0x0F) == 0 : hdr[1] == 0;
+        if (is_cfg)
+          cache_tag(o->aseq, &o->aseq_len, sizeof o->aseq, hdr, hn, payload, pn);
+      }
+      break;
   }
 
   service(o);
-  if (RTMPOUT_PROTOCOL != o->phase || !o->ready)
-    return -1;
+  if (RTMPOUT_PROTOCOL != o->phase || !o->ready) return -1;
 
-  if (FLV_TAG_VIDEO == type) {
-    if (o->need_keyframe) {
-      if (!is_video_key(data, len))
-        return 0;
-      o->need_keyframe = 0;
-    }
-    return rtmp_send_video(o->rtmp, timestamp_ms, data, len);
+  if (!is_cfg && outq_pending(o) > RTMPOUT_OUTQ_HWM) {
+    o->need_keyframe = 1;
+    return 0;
   }
-  if (FLV_TAG_AUDIO == type)
-    return rtmp_send_audio(o->rtmp, timestamp_ms, data, len);
-  return rtmp_send_data(o->rtmp, data, len);
+
+  switch (type) {
+    case FLV_TAG_VIDEO:
+      if (o->need_keyframe && !is_cfg) {
+        if (!is_video_key(hdr, hn)) return 0;
+        o->need_keyframe = 0;
+      }
+      return rtmp_send_video(o->rtmp, timestamp_ms, hdr, hn, payload, pn);
+    case FLV_TAG_AUDIO:
+      return rtmp_send_audio(o->rtmp, timestamp_ms, hdr, hn, payload, pn);
+    case FLV_TAG_SCRIPT:
+      return rtmp_send_data(o->rtmp, hdr, hn, payload, pn);
+  }
+  return rtmp_send_data(o->rtmp, hdr, hn, payload, pn);
 }
 
 /* rtmp(s)://[user[:pass]@]host[:port]/app/key, key = final path segment */
@@ -349,7 +430,8 @@ static int parse_url(const char *url, rtmpout_t *o) {
       return -1;
     memcpy(portbuf, colon + 1, n);
     portbuf[n] = '\0';
-    o->port = (unsigned)strtoul(portbuf, NULL, 10);
+    if (argutil_port_parse(portbuf, &o->port))
+      return -1;
   }
 
   p = host_end + 1;
@@ -410,5 +492,6 @@ void rtmpout_close(rtmpout_t *o) {
     netconnect_tcp_abort(o->connect_pending);
   if (o->fd >= 0)
     close(o->fd);
+  free(o->outq);
   free(o);
 }

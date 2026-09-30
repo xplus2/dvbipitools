@@ -10,7 +10,8 @@
 #include "priv.h"
 
 void obs_version(psi_t *c, psi_obs_id_t id, const unsigned char *b, pmt_cand_t *cand) {
-  int *ver, v;
+  int *ver;
+  int v;
   if (!c->obs || !(b[5] & 1)) return;
   ver = cand ? &cand->obs_ver : &c->obs->t[id].version;
   v = (b[5] >> 1) & 0x1F;
@@ -50,7 +51,8 @@ static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
 
 void parse_pat(psi_t *c) {
   const unsigned char *b = c->pat.buf;
-  size_t n = c->pat.expect, end;
+  size_t n = c->pat.expect;
+  size_t end;
   if (n < 12 || b[0] != 0x00 || section_bad(c, PSI_OBS_PAT, b, n)) {
     log_throttled(&c->pat_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed PAT section dropped");
     return;
@@ -90,7 +92,11 @@ void parse_pat(psi_t *c) {
 /* 1 if this candidate's section parsed into a valid, complete PMT */
 int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   const unsigned char *b = cand->asm_.buf;
-  size_t n = cand->asm_.expect, i, end, pil, l;
+  size_t n = cand->asm_.expect;
+  size_t i;
+  size_t end;
+  size_t pil;
+  size_t l;
   unsigned prog;
   int hdmv = 0;
   const unsigned char *ca;
@@ -159,11 +165,18 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   }
   for (int k = 0; k < c->es_count; k++) if (c->es[k].cls == PID_AUDIO) c->es[k].audio_index = ++c->audio_count;
   link_lcevc(c->es, c->es_count);
-  for (unsigned k = 0; k < 8192; k++) if (c->service_by_pid[k] == prog) c->service_by_pid[k] = 0;
+  if (cand->last_pcr_pid) c->service_by_pid[cand->last_pcr_pid] = 0;
+  for (int k = 0; k < cand->last_es_count; k++) c->service_by_pid[cand->last_es_pid[k]] = 0;
+  for (int k = 0; k < cand->last_ecm_count; k++) c->service_by_pid[cand->last_ecm_pid[k]] = 0;
   c->service_by_pid[cand->pmt_pid] = (uint16_t)prog;
   c->service_by_pid[c->pcr_pid] = (uint16_t)prog;
   for (int k = 0; k < c->es_count; k++) c->service_by_pid[c->es[k].pid] = (uint16_t)prog;
   for (int k = 0; k < c->ecm_count; k++) c->service_by_pid[c->ecm[k]] = (uint16_t)prog;
+  cand->last_pcr_pid = c->pcr_pid;
+  cand->last_es_count = c->es_count;
+  for (int k = 0; k < c->es_count; k++) cand->last_es_pid[k] = c->es[k].pid;
+  cand->last_ecm_count = c->ecm_count;
+  for (int k = 0; k < c->ecm_count; k++) cand->last_ecm_pid[k] = (uint16_t)c->ecm[k];
   c->have_pmt = 1;
   rebuild_class_table(c);
   return 1;
@@ -177,7 +190,9 @@ static int find_multi_index(const psi_t *c, unsigned program_number) {
 
 void parse_sdt(psi_t *c) {
   const unsigned char *b = c->sdt.buf;
-  size_t n = c->sdt.expect, i, end;
+  size_t n = c->sdt.expect;
+  size_t i;
+  size_t end;
 
   if (n < 12 || b[0] != 0x42 || section_bad(c, PSI_OBS_SDT, b, n)) {
     log_throttled(&c->sdt_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed SDT section dropped");
@@ -204,7 +219,9 @@ void parse_sdt(psi_t *c) {
 
 void parse_nit(psi_t *c) {
   const unsigned char *b = c->nit.buf;
-  size_t n = c->nit.expect, ndl, l;
+  size_t n = c->nit.expect;
+  size_t ndl;
+  size_t l;
   const unsigned char *nn;
 
   if (n < 12 || b[0] != 0x40 || section_bad(c, PSI_OBS_NIT, b, n)) {
@@ -226,7 +243,8 @@ void parse_nit(psi_t *c) {
    plain descriptor loop up to CRC. takes first CA_descriptor found (tag 0x09), single-CAS assumption */
 void parse_cat(psi_t *c) {
   const unsigned char *b = c->cat.buf;
-  size_t n = c->cat.expect, l;
+  size_t n = c->cat.expect;
+  size_t l;
   const unsigned char *ca;
   if (n < 12 || b[0] != 0x01 || section_bad(c, PSI_OBS_CAT, b, n)) {
     log_throttled(&c->cat_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed CAT section dropped");

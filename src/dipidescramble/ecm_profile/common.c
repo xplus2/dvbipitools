@@ -4,10 +4,9 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/helper/ioutil.h"
 
 #include "priv.h"
-
-#define N(a) (sizeof(a) / sizeof(a)[0])
 
 static const enum_map_t fixed_token_names[] = {
     {"ecm_id", ECM_TOK_ECM_ID}, {"cp_number", ECM_TOK_CP_NUMBER}, {"cw", ECM_TOK_CW}, {"cw_group", ECM_TOK_CW_GROUP},
@@ -15,7 +14,7 @@ static const enum_map_t fixed_token_names[] = {
 
 int lookup_fixed_token(const char *name, ecm_token_kind_t *out) {
   int v;
-  if (map_lookup(fixed_token_names, N(fixed_token_names), name, &v) != 0)
+  if (map_lookup(fixed_token_names, ARRAY_SIZE(fixed_token_names), name, &v) != 0)
     return -1;
   *out = (ecm_token_kind_t)v;
   return 0;
@@ -60,16 +59,12 @@ crypto_ecm_cipher_t cipher_to_crypto(ecm_cipher_t c) {
 }
 
 const ecm_header_t *find_header(const ecm_format_t *fmt, const char *id) {
-  for (int i = 0; i < fmt->header_count; i++)
-    if (strcmp(fmt->headers[i].id, id) == 0)
-      return &fmt->headers[i];
+  for (int i = 0; i < fmt->header_count; i++) if (strcmp(fmt->headers[i].id, id) == 0) return &fmt->headers[i];
   return NULL;
 }
 
 size_t integrity_tag_wire_len(const ecm_profile_t *p) {
-  if (p->integrity.type == ECM_INTEGRITY_NONE)
-    return 0;
-  if (p->integrity.type == ECM_INTEGRITY_CRC32)
-    return 4;
+  if (p->integrity.type == ECM_INTEGRITY_NONE) return 0;
+  if (p->integrity.type == ECM_INTEGRITY_CRC32) return 4;
   return p->integrity.truncate_tag ? (size_t)p->integrity.truncate_tag : CRYPTO_HMAC_SHA256_LEN;
 }

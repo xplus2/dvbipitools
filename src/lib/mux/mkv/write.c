@@ -109,6 +109,8 @@ static void write_head(mkv_t *m) {
   ebuf_t b, e;
   time_t now = time(NULL);
   struct tm tm;
+  ebuf_t tag;
+  ebuf_t tgt;
 
   gmtime_r(&now, &tm);
   strftime(date, sizeof date, "%Y-%m-%d %H:%M:%S", &tm);
@@ -177,19 +179,16 @@ static void write_head(mkv_t *m) {
   ebuf_free(&b);
   memset(&b, 0, sizeof b);
   memset(&e, 0, sizeof e);
-  {
-    ebuf_t tag, tgt;
-    memset(&tag, 0, sizeof tag);
-    memset(&tgt, 0, sizeof tgt);
-    eb_uint(&tgt, 0x68CA, 50);
-    eb_master(&tag, 0x63C0, &tgt);
-    simpletag(&tag, "TITLE", psi_service_name(m->psi[0]));
-    simpletag(&tag, "NETWORK", psi_network_name(m->psi[0]));
-    simpletag(&tag, "PROVIDER", psi_provider_name(m->psi[0]));
-    simpletag(&tag, "SOURCE", srcuri);
-    simpletag(&tag, "DATE_RECORDED", date);
-    eb_master(&e, 0x7373, &tag);
-  }
+  memset(&tag, 0, sizeof tag);
+  memset(&tgt, 0, sizeof tgt);
+  eb_uint(&tgt, 0x68CA, 50);
+  eb_master(&tag, 0x63C0, &tgt);
+  simpletag(&tag, "TITLE", psi_service_name(m->psi[0]));
+  simpletag(&tag, "NETWORK", psi_network_name(m->psi[0]));
+  simpletag(&tag, "PROVIDER", psi_provider_name(m->psi[0]));
+  simpletag(&tag, "SOURCE", srcuri);
+  simpletag(&tag, "DATE_RECORDED", date);
+  eb_master(&e, 0x7373, &tag);
   eb_master(&b, 0x1254C367, &e);
   wfd(m, b.p, b.len);
   ebuf_free(&b);

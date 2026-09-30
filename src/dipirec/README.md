@@ -1,7 +1,13 @@
 # dipirec
 
-Records or replays a DVB-IPI stream to a file, stdout, multicast, or an RTMP(S) ingest server.
+Records or replays a transport stream from an IPTV/radio multicast, SRT or RIST to a file, stdout, multicast, SRT, RIST
+or an RTMP(S) ingest server.
 
+Supported containers: raw, ts, mkv, mka, mp4, m4a
+
+Optionally, it supports AL-FEC, RAMS-based RET, paced output.
+
+## Usage
 ```
 dipirec -i <uri> -o <target> [options]
 ```
@@ -88,7 +94,7 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 |--------------------------------|-----------------------------------------------------------------|
 | `rtp://@<group>:<port>`        | RTP wrapped SPTS or MPTS                                        |
 | `udp://@<group>:<port>`        | plain SPTS or MPTS                                              |
-| `http://<host>:<port>/<path>`  | HTTP TS stream                                                  |
+| `http://<host>:<port>/<path>`  | TS, HLS, LL-HLS, DASH or LL-DASH                                |
 | `https://<host>:<port>/<path>` | same, TLS (`--insecure` skips verification)                     |
 | `-`                            | stdin, TS or RTP wrapped TS                                     |
 | `<path>`                       | a file, TS or RTP wrapped TS                                    |
@@ -159,7 +165,7 @@ Repeatable: a file plus one or more RTMP(S) pushes, or several RTMP(S) targets a
 
 | schema                              | what's this?                                                             |
 |-------------------------------------|--------------------------------------------------------------------------|
-| `<path>`                            | a file, format detected from the suffix or `-f (raw\|ts\|mkv\|mka)`      |
+| `<path>`                            | a file, format detected from the suffix or `-f (raw\|ts\|mkv\|mka\|mp4)` |
 | `-`                                 | stdout, also pipeable into [dipidescramble](../dipidescramble/README.md) |
 | `rtp://@<group>:<port>`             | RTP-wrapped multicast, `-f raw`/`ts` only                                |
 | `udp://@<group>:<port>`             | plain multicast, no RTP header, `-f raw`/`ts` only                       |
@@ -196,14 +202,16 @@ A push target reconnects on its own on a drop, other `-o` targets keep going reg
 
 ## Formats (`-f`)
 
-If `-f` is omitted the format is taken from the `-o` suffix (`.ts`, `.mkv`, `.mka`) and otherwise defaults to `ts`.
+If `-f` is omitted the format is taken from the `-o` suffix (`.ts`, `.mkv`, `.mka`, `.mp4`, `.m4a`) and otherwise defaults to `ts`.
 
-| format   | description                                        |
-|----------|----------------------------------------------------|
-| `raw`    | RTP unwrapped, SPTS (stuffing and all tables kept) |
-| `ts`     | SPTS, cleaned up (see below)                       |
-| `mkv`    | Matroska video, audio and optional subtitles       |
-| `mka`    | Matroska audio                                     | 
+| format | description                                        |
+|--------|----------------------------------------------------|
+| `raw`  | RTP unwrapped, SPTS (stuffing and all tables kept) |
+| `ts`   | SPTS, cleaned up (see below)                       |
+| `mkv`  | Matroska video, audio and optional subtitles       |
+| `mka`  | Matroska audio                                     |
+| `mp4`  | MP4 video                                          |
+| `m4a`  | MP4 audio                                          |
 
 ### TS Stripper (`--strip`)
 
