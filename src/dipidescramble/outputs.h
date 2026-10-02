@@ -10,6 +10,6 @@
 /* opens every -o target: plain files into lc->outfd[], rtmp(s) targets into lc->rtmp[]. 0 ok, -1 fail */
 int dscr_open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd);
 
-void dscr_close_outputs(loop_ctx_t *lc, int mkv_fd);
+void dscr_close_outputs(const loop_ctx_t *lc, int mkv_fd);
 
 #endif

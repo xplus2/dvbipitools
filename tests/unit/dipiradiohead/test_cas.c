@@ -243,7 +243,7 @@ START_TEST(metrics_are_zero_for_missing_or_unstarted_instances) {
   ck_assert_uint_eq(m.ecm_errors_total, 0u);
   memset(&m, 0xAA, sizeof m);
   cas_get_metrics(c, &m);
-  ck_assert_uint_eq(m.scrambled_packets_total, 0ull);
+  ck_assert_uint_eq(m.scrambled_packets_total, 0ULL);
   cas_stop(c);
 }
 END_TEST

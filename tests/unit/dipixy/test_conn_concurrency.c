@@ -190,7 +190,7 @@ static void *sink_thread(void *arg) {
   return NULL;
 }
 
-static void flush_until(conn_t *c, int epfd, _Atomic size_t *total, size_t want) {
+static void flush_until(conn_t *c, int epfd, const _Atomic size_t *total, size_t want) {
   struct timespec t0;
   struct timespec t1;
 
@@ -358,7 +358,7 @@ typedef struct {
 } peer_arg_t;
 
 static void *resetting_peer(void *arg) {
-  peer_arg_t *p = arg;
+  const peer_arg_t *p = arg;
   unsigned char buf[256];
   struct linger lg = {1, 0};
 

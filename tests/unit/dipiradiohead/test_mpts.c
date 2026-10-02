@@ -121,7 +121,7 @@ static void rig_free(rig_t *r) {
   }
 }
 
-static void wait_readable(rig_t *r) {
+static void wait_readable(const rig_t *r) {
   struct pollfd pfd;
 
   pfd.fd = inputset_poll_fd(r->is, 0);

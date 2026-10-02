@@ -521,7 +521,7 @@ START_TEST(rams_i_all_tlvs_are_parsed) {
   ck_assert_int_eq(g_rams_i.has_burst_duration, 1);
   ck_assert_uint_eq(g_rams_i.burst_duration_ms, 2500u);
   ck_assert_int_eq(g_rams_i.has_max_transmit_bitrate, 1);
-  ck_assert_uint_eq(g_rams_i.max_transmit_bitrate_bps, 0x100000002ull);
+  ck_assert_uint_eq(g_rams_i.max_transmit_bitrate_bps, 0x100000002ULL);
 }
 END_TEST
 
@@ -583,7 +583,7 @@ START_TEST(rams_r_all_tlvs_and_unknown_type_are_parsed) {
   ck_assert_int_eq(g_rams_r.has_max_buffer_fill, 1);
   ck_assert_uint_eq(g_rams_r.max_buffer_fill_ms, 222u);
   ck_assert_int_eq(g_rams_r.has_max_bitrate, 1);
-  ck_assert_uint_eq(g_rams_r.max_bitrate_bps, 0x100000003ull);
+  ck_assert_uint_eq(g_rams_r.max_bitrate_bps, 0x100000003ULL);
   ck_assert_int_eq(g_rams_r.ignore_media_ssrc, 0);
 }
 END_TEST

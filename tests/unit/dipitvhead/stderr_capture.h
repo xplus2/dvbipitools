@@ -28,7 +28,7 @@ static inline void capture_begin(capture_t *c) {
   close(fd);
 }
 
-static inline size_t capture_end(capture_t *c, char *out, size_t cap) {
+static inline size_t capture_end(const capture_t *c, char *out, size_t cap) {
   FILE *f;
   size_t n;
 

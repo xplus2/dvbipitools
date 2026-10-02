@@ -354,10 +354,10 @@ static const park_case_t park_cases[] = {
 };
 
 static void (*route_fn_for(const char *path))(httpng_req_t *) {
-  if (strstr(path, "mp4") && !strstr(path, "fmp4")) return dispatch_mp4_route;
-  if (strstr(path, "dash")) return dispatch_dash_route;
-  if (strstr(path, "llhls")) return dispatch_llhls_route;
-  return dispatch_hls_route;
+  if (strstr(path, "mp4") && !strstr(path, "fmp4")) return &dispatch_mp4_route;
+  if (strstr(path, "dash")) return &dispatch_dash_route;
+  if (strstr(path, "llhls")) return &dispatch_llhls_route;
+  return &dispatch_hls_route;
 }
 
 START_TEST(cold_index_is_parked_with_its_request) {

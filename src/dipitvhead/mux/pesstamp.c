@@ -11,9 +11,9 @@
 #define ESCR_MODULUS (PTS_MODULUS * 300ULL)
 
 typedef struct {
-  unsigned char *pts;
-  unsigned char *dts;
-  unsigned char *escr;
+  int pts;
+  int dts;
+  int escr;
   unsigned flags;
 } fields_t;
 
@@ -33,10 +33,10 @@ static int stream_has_header(unsigned stream_id) {
   }
 }
 
-static int locate(unsigned char *pkt188, fields_t *f) {
+static int locate(const unsigned char *pkt188, fields_t *f) {
   unsigned afc = (pkt188[3] >> 4) & 0x3;
   unsigned start = 4;
-  unsigned char *pes;
+  const unsigned char *pes;
   unsigned hdr_len;
   unsigned pts_dts;
   if (!(afc & 0x1) || !(pkt188[1] & 0x40)) return PESSTAMP_NONE;
@@ -53,9 +53,11 @@ static int locate(unsigned char *pkt188, fields_t *f) {
   if (pts_dts == 0x1) return PESSTAMP_NONE;
   if (!pts_dts && !(f->flags & 0x20)) return PESSTAMP_NONE;
   if (start + PES_FIXED_HEADER + hdr_len > TS_PAYLOAD_END) return PESSTAMP_SPLIT;
-  f->pts = f->dts = f->escr = NULL;
+  f->pts = -1;
+  f->dts = -1;
+  f->escr = -1;
   {
-    unsigned char *p = pes + PES_FIXED_HEADER;
+    int p = (int)(start + PES_FIXED_HEADER);
     unsigned used = 0;
     if (pts_dts >= 0x2) {
       f->pts = p;
@@ -110,19 +112,19 @@ int pesstamp_read(const unsigned char pkt188[188], pes_stamp_t *st) {
   fields_t f;
   int r;
   memset(st, 0, sizeof *st);
-  r = locate((unsigned char *)pkt188, &f);
+  r = locate(pkt188, &f);
   if (r != PESSTAMP_FOUND) return r;
-  if (f.pts) {
+  if (f.pts >= 0) {
     st->has_pts = 1;
-    st->pts = read_ts(f.pts);
+    st->pts = read_ts(pkt188 + f.pts);
   }
-  if (f.dts) {
+  if (f.dts >= 0) {
     st->has_dts = 1;
-    st->dts = read_ts(f.dts);
+    st->dts = read_ts(pkt188 + f.dts);
   }
-  if (f.escr) {
+  if (f.escr >= 0) {
     st->has_escr = 1;
-    st->escr27 = read_escr(f.escr);
+    st->escr27 = read_escr(pkt188 + f.escr);
   }
   return PESSTAMP_FOUND;
 }
@@ -133,9 +135,9 @@ int pesstamp_shift(unsigned char pkt188[188], int64_t delta90k) {
   int r = locate(pkt188, &f);
   if (r != PESSTAMP_FOUND) return r;
   d = (uint64_t)(((delta90k % (int64_t)PTS_MODULUS) + (int64_t)PTS_MODULUS) % (int64_t)PTS_MODULUS);
-  if (f.pts) write_ts(f.pts, (read_ts(f.pts) + d) % PTS_MODULUS);
-  if (f.dts) write_ts(f.dts, (read_ts(f.dts) + d) % PTS_MODULUS);
-  if (f.escr) write_escr(f.escr, (read_escr(f.escr) + d * 300ULL) % ESCR_MODULUS);
+  if (f.pts >= 0) write_ts(pkt188 + f.pts, (read_ts(pkt188 + f.pts) + d) % PTS_MODULUS);
+  if (f.dts >= 0) write_ts(pkt188 + f.dts, (read_ts(pkt188 + f.dts) + d) % PTS_MODULUS);
+  if (f.escr >= 0) write_escr(pkt188 + f.escr, (read_escr(pkt188 + f.escr) + d * 300ULL) % ESCR_MODULUS);
   return PESSTAMP_FOUND;
 }
 

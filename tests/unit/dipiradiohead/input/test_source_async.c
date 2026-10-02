@@ -70,7 +70,8 @@ START_TEST(source_open_async_follows_playlist_redirect) {
   int listen_a = fixture_listener(&port_a);
   int listen_b = fixture_listener(&port_b);
   pthread_t th_a, th_b;
-  http_fixture_t fx_a, fx_b;
+  http_fixture_t fx_a;
+  http_fixture_t fx_b;
   char resp_a[256];
   const char *resp_b = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nsecond-server-body";
   char uri[64];
@@ -115,7 +116,7 @@ typedef struct {
 } staged_arg_t;
 
 static void *serve_staged_mp3(void *arg) {
-  staged_arg_t *a = arg;
+  const staged_arg_t *a = arg;
   int cfd = accept(a->listen_fd, NULL, NULL);
   static unsigned char body[20 * MP3_FRAME_LEN];
   const char *hdr = "HTTP/1.1 200 OK\r\nContent-Type: audio/mpeg\r\nConnection: close\r\n\r\n";

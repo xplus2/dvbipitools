@@ -174,7 +174,7 @@ static void collector_open(collector_t *c) {
   ck_assert_int_eq(bind(c->fd, (struct sockaddr *)&addr, sizeof addr), 0);
 }
 
-static void collector_close(collector_t *c) {
+static void collector_close(const collector_t *c) {
   close(c->fd);
   unlink(c->path);
   rmdir(c->dir);

@@ -36,7 +36,7 @@ static inline void tls_fixture_write_cert(const char *cert_path, const char *key
   name = X509_get_subject_name(x);
   ck_assert_int_eq(X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (const unsigned char *)"localhost", -1, -1, 0), 1);
   ck_assert_int_eq(X509_set_issuer_name(x, name), 1);
-  X509V3_set_ctx_nodb(&v3);
+  v3.db = NULL;
   X509V3_set_ctx(&v3, x, x, NULL, NULL, 0);
   ext = X509V3_EXT_conf_nid(NULL, &v3, NID_subject_alt_name, "DNS:localhost,IP:127.0.0.1");
   ck_assert_ptr_nonnull(ext);

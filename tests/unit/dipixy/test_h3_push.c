@@ -46,7 +46,7 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
   flush_last = c;
 }
 
-static const uint8_t *fake_peek(fake_sub_t *f, size_t *len) {
+static const uint8_t *fake_peek(const fake_sub_t *f, size_t *len) {
   if (f->off >= f->len) return NULL;
   *len = f->len - f->off;
   return f->data + f->off;

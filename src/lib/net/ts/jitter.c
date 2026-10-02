@@ -86,7 +86,7 @@ static void jitter_fill(tssrc_t *s) {
   }
 }
 
-static void jitter_rearm(tssrc_t *s, uint64_t now) {
+static void jitter_rearm(const tssrc_t *s, uint64_t now) {
   struct itimerspec its;
   int64_t ns = jitbuf_next_ns(s->jb, now);
 

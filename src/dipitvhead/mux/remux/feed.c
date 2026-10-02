@@ -132,7 +132,7 @@ static void regen_stage(remux_t *r, const out_es_t *es, unsigned char *out, doub
   count_shift(r, pesstamp_shift(out, (int64_t)timemap_k90(r->tm)));
 }
 
-static void finish_stamps(remux_t *r, unsigned char *out) {
+static void finish_stamps(const remux_t *r, unsigned char *out) {
   if (!r->tm || r->cfg.pcr_mode == PCR_MODE_PRESERVE) return;
   afstamp_clear_discontinuity(out);
   afstamp_shift(out, (int64_t)timemap_k90(r->tm));
@@ -177,7 +177,7 @@ static void forward_packet(remux_t *r, const out_es_t *es, unsigned out_pid, uns
 void remux_release(remux_t *r, double now_s, remux_packet_cb cb, void *ctx, int all, ts_metrics_t *tsm) {
   r->tsm_cur = tsm;
   for (int idx = 0; idx < r->es_count; idx++) {
-    releaseq_t *q = r->hold[idx];
+    const releaseq_t *q = r->hold[idx];
     while (q && releaseq_len(q)) {
       int has;
       uint64_t tag;

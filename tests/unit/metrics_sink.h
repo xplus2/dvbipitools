@@ -52,7 +52,7 @@ static inline void sink_close(sink_t *s) {
   rmdir(s->dir);
 }
 
-static inline int sink_read(sink_t *s, seen_t *seen) {
+static inline int sink_read(const sink_t *s, seen_t *seen) {
   unsigned char buf[METRICS_MAX_SNAPSHOT_BYTES];
   metrics_reader_t r;
   metrics_hdr_t hdr;
@@ -78,9 +78,8 @@ static inline int sink_read(sink_t *s, seen_t *seen) {
 }
 
 static inline int seen_has(const seen_t *s, metrics_id_t id, uint64_t *value) {
-  unsigned i;
 
-  for (i = 0; i < s->n; i++) {
+  for (unsigned i = 0; i < s->n; i++) {
     if (s->id[i] == id) {
       if (value)
         *value = s->value[i];

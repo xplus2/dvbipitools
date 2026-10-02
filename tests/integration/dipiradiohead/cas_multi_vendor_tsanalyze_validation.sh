@@ -87,6 +87,7 @@ run_phase() {
 
     [ -s "$cap" ] || fail "$name: no packets captured (see $WORK/dipiradiohead$n.log)"
     tsanalyze --json "$cap" >"$report" 2>"$WORK/tsanalyze$n.log" || fail "$name: tsanalyze failed, see $WORK/tsanalyze$n.log"
+    return $?
 }
 
 run_phase 1 17762 "Multi CAS Steady" 1 1 &

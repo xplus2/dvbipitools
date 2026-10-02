@@ -107,7 +107,7 @@ static rate_mark_t g_rate_marks[TS_PUSH_MAX_SUBS];
 
 static int64_t queue_ms(rate_mark_t *m, uint32_t wpos, uint64_t used, double now) {
   int64_t ms = -1;
-  if (m->at > 0.0 && now > m->at && (uint32_t)(wpos - m->wpos) > 0) ms = (int64_t)((double)used * (now - m->at) * 1000.0 / (double)(uint32_t)(wpos - m->wpos));
+  if (m->at > 0.0 && now > m->at && (wpos - m->wpos) > 0) ms = (int64_t)((double)used * (now - m->at) * 1000.0 / (double)(wpos - m->wpos));
   m->wpos = wpos;
   m->at = now;
   return ms;
@@ -131,8 +131,8 @@ void ts_push_queue_stats(ts_push_queue_stats_t *out, double now) {
     r = &s->pkt_ring;
     if (s->proto == CONN_PROTO_H2) r = &s->h2_ring;
     else if (s->proto == CONN_PROTO_H3) r = &s->h3_ring;
-    wpos = (uint32_t)atomic_load_explicit(&r->wpos, memory_order_relaxed);
-    used = (uint32_t)(wpos - atomic_load_explicit(&r->rpos, memory_order_relaxed));
+    wpos = atomic_load_explicit(&r->wpos, memory_order_relaxed);
+    used = wpos - atomic_load_explicit(&r->rpos, memory_order_relaxed);
     out->bytes += used;
     if (used > out->max_bytes) out->max_bytes = used;
     ms = queue_ms(&g_rate_marks[i], wpos, used, now);

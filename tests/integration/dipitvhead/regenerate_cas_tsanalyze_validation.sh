@@ -5,27 +5,37 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze tsecmg jq; do
+for t in ffmpeg tsp tsanalyze tsecmg jq nc; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 tsp -P pcredit --help >/dev/null 2>&1 || skip "tsp pcredit plugin not available"
 
 MCAST=239.255.43.30
-PORT=43730
+PORT=20730
 RAW=239.255.43.31
-RAW_PORT=43731
+RAW_PORT=20731
 BAD=239.255.43.32
-BAD_PORT=43732
-ECMG_PORT=43733
-EMMG_PORT=43734
+BAD_PORT=20732
+ECMG_PORT=20733
+EMMG_PORT=20734
 KBPS=3000
+
+wait_port() {
+    i=0
+    while [ $i -lt 100 ]; do
+        nc -z 127.0.0.1 "$1" >/dev/null 2>&1 && return 0
+        i=$((i + 1))
+        sleep 0.1
+    done
+    return 1
+}
 
 cap="$WORK/regenerate_cas.ts"
 report="$WORK/regenerate_cas.json"
 
 tsecmg -p $ECMG_PORT -s --log-protocol=info >"$WORK/tsecmg.log" 2>&1 &
 ECMGPID=$!
-sleep 0.3
+wait_port $ECMG_PORT || fail "regenerate cas: tsecmg never listened on $ECMG_PORT (see $WORK/tsecmg.log)"
 
 tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 5000 \
     -O file "$cap" >"$WORK/tsp_capture.log" 2>&1 &

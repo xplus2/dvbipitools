@@ -209,15 +209,16 @@ static unsigned pkt_pid(const unsigned char *pkt) { return (((unsigned)pkt[1] & 
 
 static int count_pid(unsigned pid) {
   int n = 0;
-
-  for (int i = 0; i < g_npkts && i < CAP_MAX; i++)
-    if (pkt_pid(g_pkts[i]) == pid) n++;
+  for (int i = 0; i < g_npkts && i < CAP_MAX; i++) if (pkt_pid(g_pkts[i]) == pid) n++;
   return n;
 }
 
 static const unsigned char *nth_pid(unsigned pid, int nth) {
-  for (int i = 0; i < g_npkts && i < CAP_MAX; i++)
-    if (pkt_pid(g_pkts[i]) == pid && nth-- == 0) return g_pkts[i];
+  for (int i = 0; i < g_npkts && i < CAP_MAX; i++) {
+    if (pkt_pid(g_pkts[i]) != pid) continue;
+    if (nth == 0) return g_pkts[i];
+    nth--;
+  }
   return NULL;
 }
 

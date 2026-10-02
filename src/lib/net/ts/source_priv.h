@@ -87,7 +87,7 @@ void tssrc_jitter_free(tssrc_t *s);
 http_content_kind_t tssrc_http_classify(const unsigned char *b, size_t n);
 ssize_t tssrc_http_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out);
 int tssrc_http_fd(const tssrc_t *s);
-void tssrc_http_free_media(tssrc_t *s);
+void tssrc_http_free_media(const tssrc_t *s);
 void tssrc_hls_fmp4_segment_feed(void *ctx, hls_live_t *h, const unsigned char *data, size_t len);
 void tssrc_dash_fmp4_segment_feed(void *ctx, dash_live_t *h, const unsigned char *data, size_t len);
 

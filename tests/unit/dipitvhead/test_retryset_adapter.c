@@ -151,7 +151,7 @@ START_TEST(step_error_counts_the_reason_and_releases_the_handle) {
   retryset_service(g.rs, 0, T0);
   retryset_service(g.rs, 0, T0);
   ck_assert_ptr_null(retryset_result(g.rs, 0));
-  ck_assert_uint_eq(g.im.errors_total[reason], 1ull);
+  ck_assert_uint_eq(g.im.errors_total[reason], 1ULL);
   ck_assert_int_eq(g.im.up, 0);
   ck_assert_int_eq(g.im.seen_open, 0);
   rig_free(&g);
@@ -166,12 +166,12 @@ START_TEST(start_failure_counts_the_reason_and_retries_later) {
   fake.start_fails = 1;
   fake.start_reason = reason;
   retryset_service(g.rs, 0, T0);
-  ck_assert_uint_eq(g.im.errors_total[reason], 1ull);
+  ck_assert_uint_eq(g.im.errors_total[reason], 1ULL);
   retryset_service(g.rs, 0, T0);
   ck_assert_int_eq(fake.starts, 1);
   retryset_service(g.rs, 0, T0 + RETRY_S);
   ck_assert_int_eq(fake.starts, 2);
-  ck_assert_uint_eq(g.im.errors_total[reason], 2ull);
+  ck_assert_uint_eq(g.im.errors_total[reason], 2ULL);
   rig_free(&g);
 }
 END_TEST
@@ -189,7 +189,7 @@ START_TEST(reconnect_after_read_failure_counts_a_reconnect) {
   retryset_service(g.rs, 0, T0 + RETRY_S);
   retryset_service(g.rs, 0, T0 + RETRY_S);
   ck_assert_ptr_nonnull(retryset_result(g.rs, 0));
-  ck_assert_uint_eq(g.im.reconnects_total, 1ull);
+  ck_assert_uint_eq(g.im.reconnects_total, 1ULL);
   ck_assert_int_eq(g.im.up, 1);
   rig_free(&g);
 }

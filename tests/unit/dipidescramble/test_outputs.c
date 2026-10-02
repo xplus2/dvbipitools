@@ -36,7 +36,7 @@ static void fx_add_file(fx_t *fx, const char *path) {
   snprintf(o->file_path, sizeof o->file_path, "%s", path);
 }
 
-static void fx_close(fx_t *fx) {
+static void fx_close(const fx_t *fx) {
   unlink(fx->a);
   unlink(fx->b);
   rmdir(fx->dir);

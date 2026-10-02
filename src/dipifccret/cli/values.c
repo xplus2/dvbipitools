@@ -14,12 +14,12 @@
 /* comma-separated CIDR list (IPv4 or IPv6), light validation here, capture.c re-validates at BPF-build time */
 static int ranges_parse(const char *s, config_t *cfg) {
   char buf[ARGS_MAX_RANGES * 64];
-  char *tok, *save = NULL;
+  char *save = NULL;
   size_t slen = strlen(s);
   if (slen >= sizeof buf) return -1;
   memcpy(buf, s, slen + 1);
   cfg->range_count = 0;
-  for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+  for (const char *tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
     char *slash = strchr(tok, '/');
     int is_v6 = strchr(tok, ':') != NULL;
     struct in_addr a4;
@@ -45,12 +45,12 @@ static int ranges_parse(const char *s, config_t *cfg) {
 
 static int cidr_list_parse(const char *s, cidr_t *out, size_t *count, size_t max) {
   char buf[ARGS_MAX_RANGES * 64];
-  char *tok, *save = NULL;
+  char *save = NULL;
   size_t slen = strlen(s);
   if (slen >= sizeof buf) return -1;
   memcpy(buf, s, slen + 1);
   *count = 0;
-  for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+  for (const char *tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
     if (*count >= max || cidr_parse(tok, &out[*count]) != 0) return -1;
     (*count)++;
   }

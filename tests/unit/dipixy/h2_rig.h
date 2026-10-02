@@ -53,7 +53,7 @@ static inline void rig_close(rig_t *r) {
   close(r->epfd);
 }
 
-static inline void rig_client_send_raw(rig_t *r, const uint8_t *data, size_t len) {
+static inline void rig_client_send_raw(const rig_t *r, const uint8_t *data, size_t len) {
   ck_assert_int_eq((int)write(r->sv[1], data, len), (int)len);
 }
 

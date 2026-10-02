@@ -77,9 +77,9 @@ START_TEST(context_carries_the_hardening_options) {
   ck_assert_ptr_nonnull(ctx);
   ck_assert_int_eq((int)SSL_CTX_get_min_proto_version(ctx), TLS1_2_VERSION);
   opts = SSL_CTX_get_options(ctx);
-  ck_assert_int_ne((int)((opts & SSL_OP_NO_COMPRESSION) != 0), 0);
-  ck_assert_int_ne((int)((opts & SSL_OP_NO_RENEGOTIATION) != 0), 0);
-  ck_assert_int_ne((int)((opts & SSL_OP_CIPHER_SERVER_PREFERENCE) != 0), 0);
+  ck_assert_int_ne((opts & SSL_OP_NO_COMPRESSION) != 0, 0);
+  ck_assert_int_ne((opts & SSL_OP_NO_RENEGOTIATION) != 0, 0);
+  ck_assert_int_ne((opts & SSL_OP_CIPHER_SERVER_PREFERENCE) != 0, 0);
   ck_assert_int_ne((int)(SSL_CTX_get_session_cache_mode(ctx) & SSL_SESS_CACHE_SERVER), 0);
   SSL_CTX_free(ctx);
   creds_drop(&c);

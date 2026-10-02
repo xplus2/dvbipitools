@@ -16,7 +16,7 @@ int main(int argc, char **argv) {
   FILE *f;
   unsigned char *buf;
   long len;
-  size_t n, off;
+  size_t n;
   int64_t delta = 90000;
 
   if (argc != 2) {
@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
   n = fread(buf, 1, (size_t)len, f);
   fclose(f);
 
-  for (off = 0; off + TS_PACKET_LEN <= n; off += TS_PACKET_LEN) {
+  for (size_t off = 0; off + TS_PACKET_LEN <= n; off += TS_PACKET_LEN) {
     unsigned char pkt[TS_PACKET_LEN];
     pes_stamp_t st;
     memcpy(pkt, buf + off, sizeof pkt);

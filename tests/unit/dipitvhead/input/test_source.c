@@ -23,7 +23,7 @@ static void wait_ms(int ms) {
   nanosleep(&ts, NULL);
 }
 
-static ssize_t pump_datagram(tvsrc_t *s, const char *group, unsigned port, unsigned char *pkt, size_t pkt_len, unsigned char *rbuf, size_t rcap) {
+static ssize_t pump_datagram(tvsrc_t *s, const char *group, unsigned port, const unsigned char *pkt, size_t pkt_len, unsigned char *rbuf, size_t rcap) {
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
   struct sockaddr_in dst;
   net_err_reason_t reason = NET_ERR_OTHER;
@@ -202,7 +202,7 @@ typedef struct {
 } http_server_t;
 
 static void *http_server_main(void *arg) {
-  http_server_t *h = arg;
+  const http_server_t *h = arg;
   struct pollfd pfd = {h->listen_fd, POLLIN, 0};
   int cfd;
   char buf[2048];

@@ -102,7 +102,7 @@ static void write_stream(int wfd, const unsigned char (*head)[188], unsigned n_h
   free(buf);
 }
 
-static tvsrc_t *open_stdin_source(rig_t *g) {
+static tvsrc_t *open_stdin_source(const rig_t *g) {
   net_err_reason_t reason = NET_ERR_COUNT;
   tvsrc_t *src = tvsrc_open(&g->cfg, &g->cfg.inputs[0], &reason);
 
@@ -561,8 +561,8 @@ START_TEST(cat_passthrough_merges_descriptors_of_programs_that_have_one) {
 
   emit_source_cat_passthrough(g.progs, 3, &cc, &g.tsm, collect_cb, &col);
   ck_assert_int_eq(col.count, 1);
-  ck_assert_uint_eq(g.tsm.psi_sections_total[PSI_TABLE_CAT], 1ull);
-  ck_assert_uint_eq(g.tsm.psi_errors_total[PSI_TABLE_CAT], 0ull);
+  ck_assert_uint_eq(g.tsm.psi_sections_total[PSI_TABLE_CAT], 1ULL);
+  ck_assert_uint_eq(g.tsm.psi_errors_total[PSI_TABLE_CAT], 0ULL);
   got_len = cat_descriptors(&col, got, sizeof got);
   ck_assert_uint_eq(got_len, want_len);
   ck_assert_mem_eq(got, want, want_len);
@@ -585,7 +585,7 @@ START_TEST(cat_passthrough_skips_when_no_program_carries_emm) {
   memset(&col, 0, sizeof col);
   emit_source_cat_passthrough(g.progs, 2, &cc, &g.tsm, collect_cb, &col);
   ck_assert_int_eq(col.count, 0);
-  ck_assert_uint_eq(g.tsm.psi_sections_total[PSI_TABLE_CAT], 0ull);
+  ck_assert_uint_eq(g.tsm.psi_sections_total[PSI_TABLE_CAT], 0ULL);
   rig_free(&g);
 }
 END_TEST

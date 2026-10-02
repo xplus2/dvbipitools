@@ -92,13 +92,13 @@ static void recv_multi_cb(const unsigned char *pkt, size_t len, size_t slot, int
 }
 
 static int ports_free(unsigned base, unsigned count) {
-  unsigned i;
 
-  for (i = 0; i < count; i++) {
+  for (unsigned i = 0; i < count; i++) {
     struct sockaddr_in a;
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     int ok;
 
+    ck_assert_int_ge(fd, 0);
     memset(&a, 0, sizeof a);
     a.sin_family = AF_INET;
     a.sin_port = htons((unsigned short)(base + i));
@@ -112,10 +112,9 @@ static int ports_free(unsigned base, unsigned count) {
 }
 
 static void reserve_ports(void) {
-  unsigned attempt;
 
   srand((unsigned)getpid() ^ (unsigned)time(NULL));
-  for (attempt = 0; attempt < 200; attempt++) {
+  for (unsigned attempt = 0; attempt < 200; attempt++) {
     unsigned base = 20000u + (unsigned)rand() % 30000u;
 
     if (ports_free(base, PORT_BLOCK)) {

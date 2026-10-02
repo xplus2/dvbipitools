@@ -75,7 +75,8 @@ START_TEST(parse_full_range) {
 END_TEST
 
 START_TEST(pin_off_is_noop) {
-  cpu_set_t before, after;
+  cpu_set_t before;
+  cpu_set_t after;
   cpuaff_t a;
   memset(&a, 0, sizeof a);
   ck_assert_int_eq(sched_getaffinity(0, sizeof before, &before), 0);
@@ -98,7 +99,8 @@ START_TEST(pin_auto_single_cpu) {
 END_TEST
 
 START_TEST(pin_auto_wraps_modulo) {
-  cpu_set_t allowed, now;
+  cpu_set_t allowed;
+  cpu_set_t now;
   cpuaff_t a;
   unsigned n;
   int first;
@@ -129,7 +131,8 @@ START_TEST(pin_list_entry) {
 END_TEST
 
 START_TEST(pin_list_short_floats) {
-  cpu_set_t before, after;
+  cpu_set_t before;
+  cpu_set_t after;
   cpuaff_t a;
   char spec[16];
   snprintf(spec, sizeof spec, "%d", first_allowed());
@@ -142,7 +145,8 @@ START_TEST(pin_list_short_floats) {
 END_TEST
 
 START_TEST(pin_list_disallowed_cpu_fails) {
-  cpu_set_t before, after;
+  cpu_set_t before;
+  cpu_set_t after;
   cpuaff_t a;
   char spec[16];
   int bad = unallowed_cpu();

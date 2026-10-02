@@ -48,7 +48,7 @@ static inline EVP_PKEY *make_rsa_key(void) {
   return pkey;
 }
 
-static inline void write_key_pem(EVP_PKEY *pkey, char *path_template) {
+static inline void write_key_pem(const EVP_PKEY *pkey, char *path_template) {
   int fd = mkstemp(path_template);
   FILE *f;
 
@@ -114,7 +114,9 @@ static inline size_t build_emm_u(EVP_PKEY *pub, const unsigned char bk[CRYPTO_KE
 /* builds a real EMM-G section: header + [2B service_id][2B sk_version][AES-256-GCM(sk under bk)] */
 static inline size_t build_emm_g(const unsigned char bk[CRYPTO_KEY_LEN], const unsigned char sk[CRYPTO_KEY_LEN], unsigned service_id, unsigned char *out, size_t cap) {
   unsigned char *blob;
-  unsigned char *nonce, *ct, *tag;
+  unsigned char *nonce;
+  unsigned char *ct;
+  unsigned char *tag;
   EVP_CIPHER_CTX *ctx;
   int len = 0;
   size_t payload_len = 4 + CRYPTO_EMM_G_LEN;

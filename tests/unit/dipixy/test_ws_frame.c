@@ -415,7 +415,8 @@ END_TEST
 
 START_TEST(reserved_bit_on_continuation_is_protocol_error) {
   ws_parser_t p;
-  size_t f1len, f2len;
+  size_t f1len;
+  size_t f2len;
   uint8_t *f1 = build_client_frame(0, WS_OP_TEXT, "ab", 2, 0x1, &f1len);
   uint8_t *f2 = build_client_frame(1, WS_OP_CONTINUATION, "cd", 2, 0x2, &f2len);
   int opcode;
@@ -464,7 +465,9 @@ START_TEST(frame_split_at_every_header_boundary_waits) {
   int opcode;
   const uint8_t *payload;
   size_t payload_len;
-  size_t hdr = plen <= 125 ? 2 : plen <= 0xffff ? 4 : 10;
+  size_t hdr = 10;
+  if (plen <= 125) hdr = 2;
+  else if (plen <= 0xffff) hdr = 4;
 
   ck_assert_ptr_nonnull(in);
   memset(in, 'm', plen);
@@ -506,7 +509,7 @@ START_TEST(single_frame_at_the_size_cap_is_accepted) {
 END_TEST
 
 START_TEST(declared_length_over_the_cap_is_rejected_from_the_header) {
-  static const uint64_t lens[] = {WS_CAP + 1u, 0xffffffffull, 0x100000000ull, 0x7fffffffffffffffull, 0x8000000000000000ull, 0xffffffffffffffffull};
+  static const uint64_t lens[] = {WS_CAP + 1u, 0xffffffffULL, 0x100000000ULL, 0x7fffffffffffffffULL, 0x8000000000000000ULL, 0xffffffffffffffffULL};
   ws_parser_t p;
   uint8_t hdr[14] = {0x82, 0xff};
   int opcode;
@@ -525,7 +528,8 @@ START_TEST(fragments_summing_over_the_cap_are_rejected) {
   ws_parser_t p;
   size_t half = WS_CAP / 2 + 1;
   uint8_t *in = calloc(1, half);
-  size_t f1len, f2len;
+  size_t f1len;
+  size_t f2len;
   uint8_t *f1;
   uint8_t *f2;
   int opcode;
@@ -550,7 +554,8 @@ END_TEST
 START_TEST(new_data_frame_inside_unfinished_message_is_protocol_error) {
   static const int ops[] = {WS_OP_TEXT, WS_OP_BINARY};
   ws_parser_t p;
-  size_t f1len, f2len;
+  size_t f1len;
+  size_t f2len;
   uint8_t *f1 = build_client_frame(0, WS_OP_TEXT, "ab", 2, 0x1, &f1len);
   uint8_t *f2 = build_client_frame(1, ops[_i], "cd", 2, 0x2, &f2len);
   int opcode;
@@ -608,7 +613,8 @@ END_TEST
 
 START_TEST(parser_recovers_message_state_after_a_completed_message) {
   ws_parser_t p;
-  size_t f1len, f2len;
+  size_t f1len;
+  size_t f2len;
   uint8_t *f1 = build_client_frame(1, WS_OP_TEXT, "abc", 3, 0x1, &f1len);
   uint8_t *f2 = build_client_frame(1, WS_OP_BINARY, "de", 2, 0x2, &f2len);
   int opcode;

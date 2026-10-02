@@ -69,7 +69,7 @@ void bitrate_account_n(bitrate_pacer_t *p, unsigned n) {
 
 void bitrate_account(bitrate_pacer_t *p) { bitrate_account_n(p, 1); }
 
-int bitrate_stuff_due(bitrate_pacer_t *p, unsigned pending) {
+int bitrate_stuff_due(const bitrate_pacer_t *p, unsigned pending) {
   double behind_bits;
   double n;
   double cap;

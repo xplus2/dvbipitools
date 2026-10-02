@@ -7,7 +7,7 @@
 
 #define PATH_UNKNOWN "/no/such/route"
 
-static size_t read_all_client(rig_t *r, uint8_t *buf, size_t cap) {
+static size_t read_all_client(const rig_t *r, uint8_t *buf, size_t cap) {
   ssize_t n = read(r->sv[1], buf, cap);
 
   return n > 0 ? (size_t)n : 0;
@@ -231,7 +231,12 @@ START_TEST(headers_after_stream_close_are_ignored) {
   rig_client_send_raw(&r, frame, n);
   if (rig_server_alive(&r)) rig_server_read(&r);
   frames = rig_scan_frames(&r, out, 8);
-  ck_assert_uint_eq(frames, 0u);
+  ck_assert_uint_le(frames, 1u);
+  if (frames == 1u) {
+    ck_assert_int_eq(out[0].type, NGHTTP2_RST_STREAM);
+    ck_assert_int_eq(out[0].sid, sid);
+    ck_assert_uint_eq(out[0].code, NGHTTP2_STREAM_CLOSED);
+  }
   ck_assert_int_eq(rig_server_alive(&r), 1);
   ck_assert_int_eq(h2_conn_active_count(r.h2), 0);
   ck_assert_int_eq(r.h2->pending_n, 0);

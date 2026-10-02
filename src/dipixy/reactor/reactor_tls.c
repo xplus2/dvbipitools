@@ -34,13 +34,18 @@ void tls_set_http2_enabled(int enabled) { g_http2_enabled = enabled; }
 
 #ifdef HAVE_HTTP2
 int alpn_select_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *arg) {
+  static const unsigned char http11[] = "\x08http/1.1";
+  unsigned char *sel = NULL;
   (void)ssl;
   (void)arg;
-  if (g_http2_enabled && nghttp2_select_next_protocol((unsigned char **)out, outlen, in, inlen) == 1)
+  if (g_http2_enabled && nghttp2_select_next_protocol(&sel, outlen, in, inlen) == 1) {
+    *out = sel;
     return SSL_TLSEXT_ERR_OK;
-  static const unsigned char http11[] = "\x08http/1.1";
-  if (SSL_select_next_proto((unsigned char **)out, outlen, http11, sizeof http11 - 1, in, inlen) == OPENSSL_NPN_NEGOTIATED)
+  }
+  if (SSL_select_next_proto(&sel, outlen, http11, sizeof http11 - 1, in, inlen) == OPENSSL_NPN_NEGOTIATED) {
+    *out = sel;
     return SSL_TLSEXT_ERR_OK;
+  }
   return SSL_TLSEXT_ERR_NOACK;
 }
 #endif

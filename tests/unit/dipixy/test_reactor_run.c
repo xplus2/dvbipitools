@@ -41,6 +41,7 @@ typedef struct {
   char key[96];
   char listen_arg[40];
   char tls_arg[40];
+  char extra_arg[64];
   unsigned port;
   unsigned tls_port;
 } run_t;
@@ -106,7 +107,10 @@ static void run_start(run_t *r, int with_tls, const char *extra) {
     argv[argc++] = "--tls-key";
     argv[argc++] = r->key;
   }
-  if (extra) argv[argc++] = (char *)extra;
+  if (extra) {
+    snprintf(r->extra_arg, sizeof r->extra_arg, "%s", extra);
+    argv[argc++] = r->extra_arg;
+  }
   argv[argc] = NULL;
   ck_assert_int_eq(args_parse(argc, argv, &r->cfg), ARGS_OK);
   signals_install();

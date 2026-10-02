@@ -23,6 +23,6 @@ void bitrate_account_n(bitrate_pacer_t *p, unsigned n);
 
 /* whole null packets to send now to catch up to target, if stuffing enabled.
    pending: packets queued but not yet accounted (unflushed batch). p NULL: 0 */
-int bitrate_stuff_due(bitrate_pacer_t *p, unsigned pending);
+int bitrate_stuff_due(const bitrate_pacer_t *p, unsigned pending);
 
 #endif

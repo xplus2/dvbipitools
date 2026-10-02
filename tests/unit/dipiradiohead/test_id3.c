@@ -60,7 +60,8 @@ static size_t build_tag_opts(unsigned char *out, const tag_opts_t *o,
   out[n++] = (unsigned char)o->flags;
   n += 4; /* tag size, patched below */
 
-  memcpy(out + n, o->ext, o->ext_len); n += o->ext_len;
+  if (o->ext_len) memcpy(out + n, o->ext, o->ext_len);
+  n += o->ext_len;
 
   memcpy(out + n, "TIT2", 4); n += 4;
   put_frame_size(out + n, o->version, (unsigned)title_len); n += 4;

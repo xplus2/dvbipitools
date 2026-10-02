@@ -95,9 +95,7 @@ static size_t build_emm_g(unsigned char *out, unsigned service_id, const unsigne
 }
 
 static void fill(unsigned char *p, unsigned char base) {
-  int i;
-
-  for (i = 0; i < CRYPTO_KEY_LEN; i++)
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++)
     p[i] = (unsigned char)(base + i);
 }
 

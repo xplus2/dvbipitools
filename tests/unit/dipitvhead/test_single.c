@@ -85,7 +85,7 @@ typedef struct {
 } stopper_t;
 
 static void *stop_after_delay(void *arg) {
-  stopper_t *s = arg;
+  const stopper_t *s = arg;
   struct timespec ts = {(time_t)s->delay_s, (long)((s->delay_s - (double)(time_t)s->delay_s) * 1e9)};
 
   nanosleep(&ts, NULL);
@@ -128,7 +128,7 @@ typedef struct {
 } announcer_t;
 
 static void *announce_pat_pmt(void *arg) {
-  announcer_t *a = arg;
+  const announcer_t *a = arg;
   mcast_t *m = mcast_open_send(AF_INET, a->group, a->port, NULL, 1);
 
   if (!m) return NULL;

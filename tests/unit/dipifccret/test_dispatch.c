@@ -118,13 +118,11 @@ static void fx_close(fx_t *fx) {
 
 static void fx_fill_channel(fx_t *fx, size_t n, int rap) {
   unsigned char payload[PKT_LEN];
-  size_t i;
 
   fx->chan = chan_at(fx->ch, "239.1.1.1", 5000);
   ck_assert_ptr_nonnull(fx->chan);
-  if (rap)
-    atomic_store(&fx->chan->cache.have_rap, 1);
-  for (i = 0; i < n; i++) {
+  if (rap) atomic_store(&fx->chan->cache.have_rap, 1);
+  for (size_t i = 0; i < n; i++) {
     memset(payload, (int)(0x10 + i), sizeof payload);
     payload[0] = 0x47;
     channel_store(fx->ch, fx->chan, MEDIA_SSRC, (uint16_t)(BASE_SEQ + i), (uint32_t)(i * 45000u), 0x28, payload, sizeof payload);
@@ -142,13 +140,12 @@ static void fx_send(fx_t *fx, const unsigned char *pkt, size_t len) {
 
 static void rams_i_collect(const rtcp_rams_i_t *info, void *user) {
   replies_t *r = user;
-
   if (r->n_rams_i < MAX_CAP)
     r->rams_i[r->n_rams_i] = *info;
   r->n_rams_i++;
 }
 
-static void fx_drain_as(fx_t *fx, int who, replies_t *r) {
+static void fx_drain_as(const fx_t *fx, int who, replies_t *r) {
   unsigned char buf[2048];
   ssize_t n;
 
@@ -679,7 +676,6 @@ END_TEST
 static void start_burst_and_nack(fx_t *fx, unsigned threshold, int nacks, replies_t *last) {
   unsigned char pkt[128];
   rtcp_rams_r_t req = rams_r_for(HNED_SSRC, MEDIA_SSRC);
-  int i;
 
   fx_open(fx, 1, 1);
   fx_fill_channel(fx, 6, 1);
@@ -688,7 +684,7 @@ static void start_burst_and_nack(fx_t *fx, unsigned threshold, int nacks, replie
   fx_send(fx, pkt, plen);
   fx_drain(fx, last);
   ck_assert_uint_eq(last->rams_i[0].response, (unsigned)BURST_ACCEPT);
-  for (i = 0; i < nacks; i++) {
+  for (int i = 0; i < nacks; i++) {
     plen = build_nack(pkt, HNED_SSRC, MEDIA_SSRC, 100, 0);
     fx_send(fx, pkt, plen);
   }

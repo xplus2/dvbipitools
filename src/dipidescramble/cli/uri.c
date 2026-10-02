@@ -83,7 +83,9 @@ static int parse_out_uri(const char *uri, out_target_t *o) {
   }
   r = uriparse_rtmp_or_file(uri, o->rtmp_url, sizeof o->rtmp_url, o->file_path, sizeof o->file_path);
   if (r < 0) return -1;
-  o->kind = r == 2 ? OUT_RTMPS : r == 1 ? OUT_RTMP : OUT_FILE;
+  if (r == 2) o->kind = OUT_RTMPS;
+  else if (r == 1) o->kind = OUT_RTMP;
+  else o->kind = OUT_FILE;
   return 0;
 }
 

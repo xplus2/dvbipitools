@@ -403,8 +403,10 @@ START_TEST(reap_step_is_bounded_per_call) {
   ck_assert_uint_eq(ret_ctx_active_clients(r), 40u);
   ret_ctx_reap_step(r, -1, 1);
   ck_assert_uint_gt(ret_ctx_active_clients(r), 0u);
-  while (ret_ctx_active_clients(r) > 0 && calls++ < 200)
+  while (ret_ctx_active_clients(r) > 0 && calls < 200) {
+    calls++;
     ret_ctx_reap_step(r, -1, 1);
+  }
   ck_assert_uint_eq(ret_ctx_active_clients(r), 0u);
   ret_ctx_free(r);
   channel_table_free(t);

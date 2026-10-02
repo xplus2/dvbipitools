@@ -385,7 +385,8 @@ int conn_flush(conn_t *c, int epfd) {
     pthread_mutex_lock(&c->out_lock);
     pending = c->out.len - c->out.off;
     if (pending == 0) {
-      c->out.off = c->out.len = 0; /* reset under the lock that saw it empty: concurrent queuers must not be wiped */
+      c->out.off = 0;
+      c->out.len = 0; /* reset under the lock that saw it empty: concurrent queuers must not be wiped */
       pthread_mutex_unlock(&c->out_lock);
       break;
     }

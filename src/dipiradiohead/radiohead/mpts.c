@@ -35,7 +35,7 @@ uint32_t compute_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds,
 
 /* processes one input slot for this poll tick: reads up to RADIOHEAD_MAX_FRAMES_PER_TICK frames,
    feeds the packetizer, updates metrics. -1: fatal (tspacketizer_new() OOM), caller must abort */
-static void sync_input_bytes(mpts_tick_t *tk, source_t *src, unsigned i) {
+static void sync_input_bytes(mpts_tick_t *tk, const source_t *src, unsigned i) {
   unsigned long long sb;
 
   if (!tk->metrics_on) return;

@@ -178,7 +178,9 @@ END_TEST
 
 START_TEST(fifo_for_non_rtp_keeps_arrival_order) {
   jitbuf_t *j = jitbuf_new(20, JITBUF_AUTO);
-  unsigned char a[188], b[188], out[JITBUF_MAX_DGRAM];
+  unsigned char a[188];
+  unsigned char b[188];
+  unsigned char out[JITBUF_MAX_DGRAM];
   memset(a, 0x47, sizeof a);
   memset(b, 0x47, sizeof b);
   a[1] = 1;

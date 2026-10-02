@@ -336,13 +336,10 @@ static const EVP_CIPHER *ref_cipher(ecm_cipher_t c) {
 static uint32_t ref_crc(int castagnoli, const unsigned char *data, size_t len) {
   uint32_t poly = castagnoli ? 0x82F63B78u : 0xEDB88320u;
   uint32_t crc = 0xFFFFFFFFu;
-  size_t i;
-  int b;
 
-  for (i = 0; i < len; i++) {
+  for (size_t i = 0; i < len; i++) {
     crc ^= data[i];
-    for (b = 0; b < 8; b++)
-      crc = (crc >> 1) ^ (poly & (uint32_t)(-(int32_t)(crc & 1u)));
+    for (int b = 0; b < 8; b++) crc = (crc >> 1) ^ (poly & (uint32_t)(-(int32_t)(crc & 1u)));
   }
   return crc ^ 0xFFFFFFFFu;
 }
@@ -381,9 +378,8 @@ static size_t ref_tag(const ecm_profile_t *p, const unsigned char mac_key[32], c
 }
 
 static const ecm_header_t *ref_header(const ecm_profile_t *p, const char *id) {
-  int i;
 
-  for (i = 0; i < p->format.header_count; i++)
+  for (int i = 0; i < p->format.header_count; i++)
     if (strcmp(p->format.headers[i].id, id) == 0)
       return &p->format.headers[i];
   ck_abort_msg("reference encoder: unknown header");
@@ -413,8 +409,6 @@ static size_t ref_encode(const ecm_profile_t *p, int cw_len, const unsigned char
   int len = 0;
   int fin = 0;
   int i;
-  int c;
-  int t;
   EVP_CIPHER_CTX *ctx;
 
   if (p->key_derivation.hkdf) {
@@ -465,8 +459,8 @@ static size_t ref_encode(const ecm_profile_t *p, int cw_len, const unsigned char
         n += (size_t)cw_len;
         break;
       case ECM_TOK_CW_GROUP:
-        for (c = 0; c < p->cw_count; c++) {
-          for (t = 0; t < p->format.cw_group.count; t++) {
+        for (int c = 0; c < p->cw_count; c++) {
+          for (int t = 0; t < p->format.cw_group.count; t++) {
             if (p->format.cw_group.tok[t].kind == ECM_TOK_CP_NUMBER) {
               pt[n++] = (unsigned char)(combos[c].cp >> 8);
               pt[n++] = (unsigned char)combos[c].cp;
@@ -571,18 +565,12 @@ static size_t ref_encode(const ecm_profile_t *p, int cw_len, const unsigned char
 }
 
 static void ref_sk(unsigned char sk[32]) {
-  int i;
-
-  for (i = 0; i < 32; i++)
-    sk[i] = (unsigned char)(0x40 + i * 5);
+  for (int i = 0; i < 32; i++) sk[i] = (unsigned char)(0x40 + i * 5);
 }
 
 static void ref_cw(ref_combo_t *c, unsigned cp, unsigned char base) {
-  int i;
-
   c->cp = cp;
-  for (i = 0; i < 16; i++)
-    c->cw[i] = (unsigned char)(base + i);
+  for (int i = 0; i < 16; i++) c->cw[i] = (unsigned char)(base + i);
 }
 
 typedef struct {

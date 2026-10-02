@@ -843,12 +843,12 @@ START_TEST(pcr_lead_ms_is_recorded_with_regenerate) {
 END_TEST
 
 START_TEST(pcr_lead_ms_range_is_enforced) {
-  static const struct { const char *val; args_status_t want; } cases[] = {
+  static struct { char val[8]; args_status_t want; } cases[] = {
     {"0", ARGS_ERR}, {"1", ARGS_OK}, {"1000", ARGS_OK}, {"1001", ARGS_ERR}, {"x", ARGS_ERR},
   };
   for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
     char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000", "--pcr-mode", "regenerate", "-b", "8000", "-S",
-                    "--pcr-lead-ms", (char *)cases[i].val, NULL};
+                    "--pcr-lead-ms", cases[i].val, NULL};
     config_t cfg = {0};
     ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), cases[i].want);
     yamlcfg_strpool_free(cfg.str_pool);

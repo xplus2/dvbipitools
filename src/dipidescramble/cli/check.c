@@ -8,7 +8,7 @@
 
 #include "priv.h"
 
-args_status_t dscr_cli_check(config_t *cfg) {
+args_status_t dscr_cli_check(const config_t *cfg) {
   int has_rtmps;
   int has_rtmp;
   int n_file;

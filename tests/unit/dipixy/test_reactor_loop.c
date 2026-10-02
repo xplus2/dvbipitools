@@ -42,7 +42,7 @@ static void loop_open(loop_t *l) {
   reactor_set_context(&l->cfg, NULL, NULL);
 }
 
-static void loop_close(loop_t *l) {
+static void loop_close(const loop_t *l) {
   close(l->epfd);
 }
 
@@ -65,7 +65,7 @@ static void add_listener(loop_t *l, int fd, reactor_listener_kind kind) {
   ck_assert_int_eq(epoll_ctl(l->epfd, EPOLL_CTL_ADD, fd, &ev), 0);
 }
 
-static conn_t *add_conn(loop_t *l, int fd, conn_state state, int publish) {
+static conn_t *add_conn(const loop_t *l, int fd, conn_state state, int publish) {
   conn_t *c = conn_new(fd, NULL);
   struct epoll_event ev = {.events = EPOLLIN, .data.ptr = c};
 

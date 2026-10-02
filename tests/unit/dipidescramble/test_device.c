@@ -285,9 +285,7 @@ static size_t profile_ecm(unsigned char *out, unsigned cp, const unsigned char *
 }
 
 static void test_keys(unsigned char bk[CRYPTO_KEY_LEN], unsigned char sk[CRYPTO_KEY_LEN]) {
-  int i;
-
-  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
     bk[i] = (unsigned char)(i + 33);
     sk[i] = (unsigned char)(250 - i * 3);
   }

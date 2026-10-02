@@ -90,7 +90,7 @@ int tssrc_http_fd(const tssrc_t *s) {
   return -1;
 }
 
-void tssrc_http_free_media(tssrc_t *s) {
+void tssrc_http_free_media(const tssrc_t *s) {
   for (unsigned i = 0; i < s->n_media; i++) {
     if (s->hls[i]) hls_live_free(s->hls[i]);
     if (s->dash[i]) dash_live_free(s->dash[i]);

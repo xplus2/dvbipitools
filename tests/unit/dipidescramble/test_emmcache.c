@@ -21,9 +21,7 @@ typedef struct {
 } fx_t;
 
 static void fill(unsigned char *p, unsigned char base) {
-  int i;
-
-  for (i = 0; i < CRYPTO_KEY_LEN; i++)
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++)
     p[i] = (unsigned char)(base + i);
 }
 

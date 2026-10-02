@@ -19,8 +19,10 @@ log="$WORK/dipitvhead.log"
 mkdir "$keys"
 
 new_key() {
-    openssl genrsa 2048 2>/dev/null | openssl rsa -pubout -out "$keys/$1.pem" 2>/dev/null \
-        || fail "could not generate receiver key $1"
+    key_name=$1
+    openssl genrsa 2048 2>/dev/null | openssl rsa -pubout -out "$keys/$key_name.pem" 2>/dev/null \
+        || fail "could not generate receiver key $key_name"
+    return $?
 }
 
 new_key r1

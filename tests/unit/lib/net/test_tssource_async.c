@@ -114,7 +114,8 @@ START_TEST(tssrc_jitter_reorders_rtp_and_delays_release) {
   static const unsigned char order[3] = {1, 3, 2};
   unsigned char got[3];
   unsigned ngot = 0;
-  struct timespec t0, t1;
+  struct timespec t0;
+  struct timespec t1;
   long first_ms = -1;
 
   memset(&cfg, 0, sizeof cfg);

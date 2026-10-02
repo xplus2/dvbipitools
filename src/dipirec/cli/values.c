@@ -20,7 +20,9 @@ long duration_parse(const char *s) {
     long parts[3];
     int n = 0;
     const char *p = s;
-    long h = 0, m = 0, sec;
+    long h = 0;
+    long m = 0;
+    long sec;
     for (;;) {
       char *end;
       long v;

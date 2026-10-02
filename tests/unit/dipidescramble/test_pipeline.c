@@ -401,10 +401,7 @@ static int prime_cas(loop_ctx_t *lc, unsigned ca_system_id, unsigned scrambling_
 }
 
 static void fill_bytes(unsigned char *p, size_t n, unsigned char base) {
-  size_t i;
-
-  for (i = 0; i < n; i++)
-    p[i] = (unsigned char)(base + i);
+  for (size_t i = 0; i < n; i++) p[i] = (unsigned char)(base + i);
 }
 
 static void make_ts(unsigned char pkt[188], unsigned pid, unsigned char fill) {
@@ -423,7 +420,7 @@ static size_t out_size(cls_t *c) {
   return (size_t)sb.st_size;
 }
 
-static void out_read(cls_t *c, size_t off, unsigned char *dst, size_t n) {
+static void out_read(const cls_t *c, size_t off, unsigned char *dst, size_t n) {
   ck_assert_int_eq(pread(c->outfd, dst, n, (off_t)off), (ssize_t)n);
 }
 
@@ -799,9 +796,8 @@ START_TEST(unicast_emm_with_an_invalid_uri_is_ignored) {
 END_TEST
 
 static void drive_unicast(loop_ctx_t *lc, int max_iters) {
-  int i;
 
-  for (i = 0; i < max_iters && lc->ipi_pending; i++) {
+  for (int i = 0; i < max_iters && lc->ipi_pending; i++) {
     struct pollfd pfd;
 
     pfd.fd = ipiclient_poll_fd(lc->ipi_pending);

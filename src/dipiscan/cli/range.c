@@ -31,7 +31,8 @@ static int base_parse(const char *s, int *family, unsigned char *base) {
 }
 
 void args_range_describe(const config_t *cfg, char *buf, size_t n) {
-  char lo[64], hi[64];
+  char lo[64];
+  char hi[64];
   int af = cfg->family == AF_INET6 ? AF_INET6 : AF_INET;
   inet_ntop(af, cfg->start, lo, sizeof lo);
   inet_ntop(af, cfg->end, hi, sizeof hi);
@@ -76,8 +77,15 @@ static int addr_diff_capped(const unsigned char *start, const unsigned char *end
 
 /* addr/prefixlen. host range is net+1 .. broadcast-1 */
 static int cidr_parse(const char *addrs, const char *prefixs, int *family, unsigned char *start, unsigned char *end, unsigned *total) {
-  unsigned char addr[16], net[16], top[16];
-  int fam, alen, maxprefix, hostbits, bit;
+  unsigned char addr[16];
+  unsigned char net[16];
+  unsigned char top[16];
+  int fam;
+  int alen;
+  int maxprefix;
+  int hostbits;
+  int bit;
+  int i;
   char *pend;
   long prefix;
   if (base_parse(addrs, &fam, addr)) return -1;
@@ -92,12 +100,14 @@ static int cidr_parse(const char *addrs, const char *prefixs, int *family, unsig
   memcpy(net, addr, (size_t)alen);
   memcpy(top, addr, (size_t)alen);
   bit = 0;
-  for (int i = alen - 1; i >= 0 && bit < hostbits; i--) {
+  i = alen - 1;
+  while (bit < hostbits) {
     int bits_here = hostbits - bit < 8 ? hostbits - bit : 8;
     unsigned char mask = (unsigned char)((1u << bits_here) - 1);
     net[i] &= (unsigned char)~mask;
     top[i] |= mask;
     bit += bits_here;
+    i--;
   }
 
   memcpy(start, net, (size_t)alen);
@@ -111,8 +121,11 @@ static int cidr_parse(const char *addrs, const char *prefixs, int *family, unsig
 
 /* startaddr-stopaddr (incl.) */
 static int range_parse(const char *los, const char *his, int *family, unsigned char *start, unsigned char *end, unsigned *total) {
-  int fam_lo, fam_hi, alen;
-  unsigned char lo[16], hi[16];
+  int fam_lo;
+  int fam_hi;
+  int alen;
+  unsigned char lo[16];
+  unsigned char hi[16];
   unsigned diff;
   if (base_parse(los, &fam_lo, lo) || base_parse(his, &fam_hi, hi)) return -1;
   if (fam_lo != fam_hi) return -1;

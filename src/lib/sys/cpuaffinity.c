@@ -44,7 +44,8 @@ int cpuaff_parse(cpuaff_t *out, const char *s) {
   memset(seen, 0, sizeof seen);
   tmp.mode = CPUAFF_LIST;
   for (;;) {
-    unsigned lo, hi;
+    unsigned lo;
+    unsigned hi;
     if (parse_cpu(&p, &lo)) return -1;
     hi = lo;
     if (*p == '-') {
@@ -65,7 +66,8 @@ int cpuaff_parse(cpuaff_t *out, const char *s) {
 
 #ifdef __linux__
 int cpuaff_pin(const cpuaff_t *a, unsigned idx, const char *what) {
-  cpu_set_t allowed, one;
+  cpu_set_t allowed;
+  cpu_set_t one;
   unsigned cpu = 0;
 
   if (!a || a->mode == CPUAFF_OFF) return 0;
@@ -85,7 +87,11 @@ int cpuaff_pin(const cpuaff_t *a, unsigned idx, const char *what) {
     unsigned want;
     if (count < 1) return -1;
     want = idx % (unsigned)count;
-    for (cpu = 0; cpu < CPU_SETSIZE; cpu++) if (CPU_ISSET(cpu, &allowed) && want-- == 0) break;
+    for (cpu = 0; cpu < CPU_SETSIZE; cpu++) {
+      if (!CPU_ISSET(cpu, &allowed)) continue;
+      if (want == 0) break;
+      want--;
+    }
   }
   CPU_ZERO(&one);
   CPU_SET(cpu, &one);

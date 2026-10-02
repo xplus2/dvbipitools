@@ -14,7 +14,9 @@ ffmpeg -hide_banner -loglevel error -f lavfi -i "testsrc=size=320x240:rate=25" -
     -c:v libx264 -preset ultrafast -g 10 -c:a aac -f mpegts "$clip" || fail "cannot build the test clip"
 
 types() {
-    ffprobe -v error -show_entries stream=codec_type -of csv=p=0 "$1" | sort -u | tr '\n' ' '
+    types_file=$1
+    ffprobe -v error -show_entries stream=codec_type -of csv=p=0 "$types_file" | sort -u | tr '\n' ' '
+    return $?
 }
 
 "$BIN" -i - -f mkv -o "$WORK/out.mkv" <"$clip" >"$WORK/mkv.log" 2>&1 || fail "-f mkv failed (see $WORK/mkv.log)"

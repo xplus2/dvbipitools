@@ -10,13 +10,13 @@ for t in ffmpeg tsp tsanalyze tsecmg jq nc; do
 done
 
 MCAST=239.255.41.50
-PORT=41710
+PORT=20710
 SRC1=239.255.41.51
-SRC1_PORT=41711
+SRC1_PORT=20711
 SRC2=239.255.41.52
-SRC2_PORT=41712
-ECMG_PORT=41713
-EMMG_PORT=41714
+SRC2_PORT=20712
+ECMG_PORT=20713
+EMMG_PORT=20714
 WAIT_TICKS=600
 
 cap="$WORK/mpts_cas_capture.ts"
@@ -24,9 +24,10 @@ snap="$WORK/mpts_cas_snapshot.ts"
 report="$WORK/mpts_cas_report.json"
 
 wait_port() {
+    wp_port=$1
     i=0
     while [ $i -lt $WAIT_TICKS ]; do
-        nc -z 127.0.0.1 "$1" >/dev/null 2>&1 && return 0
+        nc -z 127.0.0.1 "$wp_port" >/dev/null 2>&1 && return 0
         i=$((i + 1))
         sleep 0.1
     done

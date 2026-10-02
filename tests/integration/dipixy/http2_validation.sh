@@ -45,10 +45,12 @@ stop_bg() {
     wait $FFPID 2>/dev/null
     kill $DPID 2>/dev/null
     wait $DPID 2>/dev/null
+    return $?
 }
 
 h2curl() {
     timeout 10 curl -sk --http2 "$@"
+    return $?
 }
 
 status_line=$(h2curl -o /dev/null -w '%{http_code} %{http_version}' "https://127.0.0.1:$TLSPORT/nonexistent")

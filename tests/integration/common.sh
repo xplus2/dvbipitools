@@ -54,9 +54,13 @@ assert_not_contains() {
 }
 
 gen_test_clip() {
+    gen_out=$1
+    gen_freq=$2
+    gen_secs=$3
     ffmpeg -hide_banner -loglevel error -f lavfi -i "testsrc=size=320x240:rate=25" \
-        -f lavfi -i "sine=frequency=$2" -t "$3" \
-        -c:v libx264 -preset ultrafast -c:a aac -f mpegts "$1"
+        -f lavfi -i "sine=frequency=$gen_freq" -t "$gen_secs" \
+        -c:v libx264 -preset ultrafast -c:a aac -f mpegts "$gen_out"
+    return $?
 }
 
 run_tvhead_link_validation() {
@@ -108,6 +112,7 @@ run_tvhead_link_validation() {
     [ "$service_name" = "$label Channel" ] || fail "$label: expected service name '$label Channel', got '$service_name'"
 
     echo "OK"
+    return $?
 }
 
 run_radiohead_link_validation() {
@@ -182,6 +187,7 @@ run_radiohead_link_validation() {
     [ "${audio_pes:-0}" -ge 20 ] || fail "$label: only $audio_pes audio PES packets arrived, expected a 3s station"
 
     echo "OK"
+    return $?
 }
 
 #EOF

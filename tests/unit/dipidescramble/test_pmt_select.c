@@ -41,7 +41,6 @@ static void fx_open(fx_t *fx, int programs) {
   tssrc_cfg_t tc;
   psi_pat_entry_t progs[2];
   esbuild_es_t es = {0x0101, CODEC_H264};
-  int rep;
 
   snprintf(fx->path, sizeof fx->path, "/tmp/dscr_pmtsel_XXXXXX");
   fd = mkstemp(fx->path);
@@ -52,7 +51,7 @@ static void fx_open(fx_t *fx, int programs) {
   progs[0].pmt_pid = PMT_A;
   progs[1].program_number = 102;
   progs[1].pmt_pid = PMT_B;
-  for (rep = 0; rep < 4 && programs > 0; rep++) {
+  for (int rep = 0; rep < 4 && programs > 0; rep++) {
     n = programs == 1 ? psi_build_pat(0x1234, 0, 101, PMT_A, sec, sizeof sec) : psi_build_pat_multi(0x1234, 0, progs, 2, sec, sizeof sec);
     put_section_packet(f, 0x0000, sec, n);
     if (programs > 1) {

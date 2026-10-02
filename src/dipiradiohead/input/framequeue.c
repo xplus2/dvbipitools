@@ -14,7 +14,8 @@ typedef struct node {
 } node_t;
 
 struct framequeue {
-  node_t *head, *tail;
+  node_t *head;
+  node_t *tail;
   node_t *popped; /* backs last out->data */
   size_t count;
   uint64_t us;

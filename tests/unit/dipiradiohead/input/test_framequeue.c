@@ -7,7 +7,7 @@
 
 #include "dipiradiohead/input/framequeue.h"
 
-static source_frame_t frame_of(unsigned char *data, size_t len) {
+static source_frame_t frame_of(const unsigned char *data, size_t len) {
   source_frame_t f;
   memset(&f, 0, sizeof f);
   f.sample_rate = 48000;
@@ -42,7 +42,8 @@ END_TEST
 START_TEST(push_copies_data) {
   framequeue_t *q = framequeue_new();
   unsigned char d[3] = {5, 6, 7};
-  source_frame_t a = frame_of(d, sizeof d), out;
+  source_frame_t a = frame_of(d, sizeof d);
+  source_frame_t out;
 
   framequeue_push(q, &a);
   memset(d, 0, sizeof d);
@@ -55,8 +56,12 @@ END_TEST
 
 START_TEST(popped_data_valid_until_next_pop) {
   framequeue_t *q = framequeue_new();
-  unsigned char d1[2] = {1, 1}, d2[2] = {2, 2};
-  source_frame_t a = frame_of(d1, 2), b = frame_of(d2, 2), o1, o2;
+  unsigned char d1[2] = {1, 1};
+  unsigned char d2[2] = {2, 2};
+  source_frame_t a = frame_of(d1, 2);
+  source_frame_t b = frame_of(d2, 2);
+  source_frame_t o1;
+  source_frame_t o2;
 
   framequeue_push(q, &a);
   framequeue_push(q, &b);

@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
   FILE *f;
   unsigned char *buf;
   long len;
-  size_t n, off;
+  size_t n;
   unsigned long fed = 0;
   scte35stamp_t *st;
 
@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
   fclose(f);
 
   scte35stamp_init(st);
-  for (off = 0; off + TS_PACKET_LEN <= n; off += TS_PACKET_LEN) {
+  for (size_t off = 0; off + TS_PACKET_LEN <= n; off += TS_PACKET_LEN) {
     unsigned char pkt[TS_PACKET_LEN];
     memcpy(pkt, buf + off, sizeof pkt);
     scte35stamp_feed(st, pkt, (int64_t)(off + 1) * 977, count_emit, NULL);

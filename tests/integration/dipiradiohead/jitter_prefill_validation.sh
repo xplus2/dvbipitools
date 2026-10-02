@@ -77,6 +77,7 @@ run_phase() {
     wait "$py_pid" || fail "$name: helper failed"
     kill -INT "$tool_pid" 2>/dev/null
     wait "$tool_pid" 2>/dev/null
+    return $?
 }
 
 run_phase control 17811 17812 &

@@ -333,13 +333,12 @@ static struct tpacket_block_desc *ring_block(unsigned char *ring, unsigned idx) 
 static void ring_fill_block(unsigned char *ring, unsigned idx, const char *const *dst_ips, const unsigned *ports, unsigned count) {
   struct tpacket_block_desc *bd = ring_block(ring, idx);
   unsigned char *at;
-  unsigned i;
 
   memset(bd, 0, RING_BLOCK_SIZE);
   bd->hdr.bh1.offset_to_first_pkt = TPACKET_ALIGN(sizeof(struct tpacket_block_desc));
   bd->hdr.bh1.num_pkts = count;
   at = (unsigned char *)bd + bd->hdr.bh1.offset_to_first_pkt;
-  for (i = 0; i < count; i++) {
+  for (unsigned i = 0; i < count; i++) {
     struct tpacket3_hdr *ppd = (struct tpacket3_hdr *)at;
     unsigned char frame[512];
     size_t len = build_ipv4_frame(frame, 0, dst_ips[i], ports[i], 0, 1);

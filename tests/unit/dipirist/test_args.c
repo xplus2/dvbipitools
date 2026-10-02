@@ -204,9 +204,9 @@ START_TEST(encryption_type_without_profile_main_is_rejected) {
 END_TEST
 
 START_TEST(encryption_type_invalid_is_rejected) {
-  static const char *const bad[] = {"0", "192", "abc", ""};
+  static char bad[][4] = {"0", "192", "abc", ""};
   for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
-    char *argv[] = {"dipirist", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--profile", "main", "--encryption-type", (char *)bad[i], NULL};
+    char *argv[] = {"dipirist", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--profile", "main", "--encryption-type", bad[i], NULL};
     config_t cfg = {0};
     ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
     yamlcfg_strpool_free(cfg.str_pool);

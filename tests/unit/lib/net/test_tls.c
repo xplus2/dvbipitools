@@ -83,7 +83,7 @@ static int is_terminal(tls_handshake_status_t st) {
   return st == TLS_HANDSHAKE_DONE || st == TLS_HANDSHAKE_ERROR;
 }
 
-static void drive_handshake(tls_t *client, tls_t *server, tls_handshake_status_t *cst, tls_handshake_status_t *sst) {
+static void drive_handshake(tls_t *client, const tls_t *server, tls_handshake_status_t *cst, tls_handshake_status_t *sst) {
   *cst = TLS_HANDSHAKE_WANT_WRITE;
   *sst = TLS_HANDSHAKE_WANT_READ;
   for (int i = 0; i < DRIVE_ROUNDS && !(is_terminal(*cst) && is_terminal(*sst)); i++) {
@@ -111,7 +111,7 @@ static void open_link(link_t *l, const tls_server_ctx_t *sc, const char *host, i
   drive_handshake(l->client, l->server, cst, sst);
 }
 
-static void wait_readable(tls_t *t, int fd) {
+static void wait_readable(const tls_t *t, int fd) {
   struct pollfd pfd = {fd, POLLIN, 0};
 
   if (tls_pending(t) == 0) poll(&pfd, 1, 50);

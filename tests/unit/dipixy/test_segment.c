@@ -33,7 +33,7 @@ static capture_ctx_t *open_ctx(void) {
   return ctx;
 }
 
-static hls_seg_ctx_t *make_seg(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt, const lcevc_select_t *lcevc, seg_container_t container, double part) {
+static hls_seg_ctx_t *make_seg(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt, const lcevc_select_t *lcevc, seg_container_t container, double part) {
   hls_seg_ctx_t *s;
 
   ck_assert_int_eq(hls_seg_touch(capture_open(AF_INET, GROUP, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), filter, pmt, lcevc, SEG_TARGET, MAX_SEGS, container, part), 1);
@@ -50,8 +50,8 @@ static void release_all(hls_seg_ctx_t **segs, int n) {
 }
 
 static int chain_length(capture_ctx_t *ctx) {
-  _Atomic(void *) *head = capture_hls_seg_head_ptr(ctx);
-  hls_seg_ctx_t *cur = atomic_load(head);
+  const _Atomic(void *) *head = capture_hls_seg_head_ptr(ctx);
+  const hls_seg_ctx_t *cur = atomic_load(head);
   int n = 0;
 
   while (cur && n < 100) {
@@ -62,8 +62,8 @@ static int chain_length(capture_ctx_t *ctx) {
 }
 
 static int chain_contains(capture_ctx_t *ctx, const hls_seg_ctx_t *s) {
-  _Atomic(void *) *head = capture_hls_seg_head_ptr(ctx);
-  hls_seg_ctx_t *cur = atomic_load(head);
+  const _Atomic(void *) *head = capture_hls_seg_head_ptr(ctx);
+  const hls_seg_ctx_t *cur = atomic_load(head);
 
   while (cur) {
     if (cur == s) return 1;

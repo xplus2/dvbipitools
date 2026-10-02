@@ -56,6 +56,6 @@ args_status_t dscr_opt_biss(dscr_opt_t *p, int c);
 args_status_t dscr_opt_net(dscr_opt_t *p, int c);
 
 void dscr_print_help(void);
-args_status_t dscr_cli_check(config_t *cfg);
+args_status_t dscr_cli_check(const config_t *cfg);
 
 #endif
