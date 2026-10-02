@@ -64,9 +64,7 @@ static inline int sink_read(const sink_t *s, seen_t *seen) {
   memset(seen, 0, sizeof *seen);
   for (;;) {
     ssize_t n = recv(s->rx, buf, sizeof buf, 0);
-
-    if (n <= 0)
-      return got;
+    if (n <= 0) return got;
     got = 1;
     ck_assert_int_eq(metrics_reader_init(&r, buf, (size_t)n, &hdr), 0);
     while (metrics_reader_next(&r, &id, label, sizeof label, &v) == 1 && seen->n < MAX_VALUES) {
@@ -78,11 +76,9 @@ static inline int sink_read(const sink_t *s, seen_t *seen) {
 }
 
 static inline int seen_has(const seen_t *s, metrics_id_t id, uint64_t *value) {
-
   for (unsigned i = 0; i < s->n; i++) {
     if (s->id[i] == id) {
-      if (value)
-        *value = s->value[i];
+      if (value) *value = s->value[i];
       return 1;
     }
   }

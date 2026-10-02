@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake pkg-config libssl-dev check ffmpeg librist-dev libsrt-openssl-dev \
-            libnghttp2-dev libngtcp2-dev libnghttp3-dev
+            libnghttp2-dev libngtcp2-dev libnghttp3-dev libdvbcsa1
       - name: install tsduck
         run: |
           curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu24_amd64.deb
