@@ -58,7 +58,7 @@ static inline void write_key_pem(const EVP_PKEY *pkey, char *path_template) {
   fclose(f);
 }
 
-static inline device_state_t *make_device_for_key(EVP_PKEY *pkey, const char *serial, size_t max_services) {
+static inline device_state_t *make_device_for_key(const EVP_PKEY *pkey, const char *serial, size_t max_services) {
   device_state_t *d;
 
   strcpy(g_key_path, "/tmp/dipidescramble_test_device_key_XXXXXX");

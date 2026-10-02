@@ -17,30 +17,20 @@ SRC2=239.255.41.52
 SRC2_PORT=20712
 ECMG_PORT=20713
 EMMG_PORT=20714
-WAIT_TICKS=600
+ECMG_UP_S=30
+CAS_UP_S=60
+SCRAMBLE_WINDOW_S=9
 
 cap="$WORK/mpts_cas_capture.ts"
-snap="$WORK/mpts_cas_snapshot.ts"
 report="$WORK/mpts_cas_report.json"
+tvlog="$WORK/dipitvhead.log"
 
-wait_port() {
-    wp_port=$1
-    i=0
-    while [ $i -lt $WAIT_TICKS ]; do
-        nc -z 127.0.0.1 "$wp_port" >/dev/null 2>&1 && return 0
-        i=$((i + 1))
-        sleep 0.1
-    done
-    return 1
+dump_logs() {
+    tail -n 30 "$tvlog" "$WORK/tsecmg.log" "$WORK/tsp.log" "$WORK/ffmpeg1.log" "$WORK/ffmpeg2.log" >&2
 }
 
-both_scrambled() {
-    for name in "Channel One" "Channel Two"; do
-        s=$(jq -r --arg n "$name" '[.services[] | select(.name == $n)][0]["is-scrambled"]' "$1" 2>/dev/null)
-        c=$(jq -r --arg n "$name" '[.services[] | select(.name == $n)][0].components.scrambled' "$1" 2>/dev/null)
-        [ "$s" = "true" ] && [ "${c:-0}" -ge 2 ] 2>/dev/null || return 1
-    done
-    return 0
+cas_settled() {
+    log_has "$tvlog" "channel+stream established" || ! kill -0 $TVPID 2>/dev/null
 }
 
 ECMGPID=
@@ -55,7 +45,7 @@ gen_test_clip "$WORK/clip2.ts" 2000 3
 
 tsecmg -p $ECMG_PORT -s --log-protocol=info >"$WORK/tsecmg.log" 2>&1 &
 ECMGPID=$!
-wait_port $ECMG_PORT || fail "mpts cas: tsecmg never listened on $ECMG_PORT (see $WORK/tsecmg.log)"
+wait_until $ECMG_UP_S port_open $ECMG_PORT || fail "mpts cas: tsecmg never listened on $ECMG_PORT (see $WORK/tsecmg.log)"
 
 tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 -O file "$cap" >"$WORK/tsp.log" 2>&1 &
 TSPID=$!
@@ -66,7 +56,7 @@ TSPID=$!
     --cas-algo csa2 --cas-ecmg "tcp://127.0.0.1:$ECMG_PORT" --cas-ecmg-version 2 \
     --cas-emmg-port $EMMG_PORT --cas-super-id 0x4A750003 --cas-ecm-id 1 --cas-pids video,audio \
     --cas-cp-duration 3000 \
-    >"$WORK/dipitvhead.log" 2>&1 &
+    >"$tvlog" 2>&1 &
 TVPID=$!
 
 ffmpeg -hide_banner -loglevel error -re -stream_loop -1 -i "$WORK/clip1.ts" -c copy -f mpegts \
@@ -76,16 +66,9 @@ ffmpeg -hide_banner -loglevel error -re -stream_loop -1 -i "$WORK/clip2.ts" -c c
     "udp://$SRC2:$SRC2_PORT?localaddr=127.0.0.1&ttl=1" 2>"$WORK/ffmpeg2.log" &
 FF2PID=$!
 
-i=0
-while [ $i -lt $WAIT_TICKS ]; do
-    kill -0 $TVPID 2>/dev/null || fail "mpts cas: dipitvhead exited early (see $WORK/dipitvhead.log)"
-    if [ -s "$cap" ]; then
-        cp "$cap" "$snap"
-        tsanalyze --json "$snap" >"$report" 2>/dev/null && both_scrambled "$report" && break
-    fi
-    i=$((i + 1))
-    sleep 0.5
-done
+wait_until $CAS_UP_S cas_settled
+log_has "$tvlog" "channel+stream established" || { dump_logs; fail "mpts cas: ECMG channel not established"; }
+sleep $SCRAMBLE_WINDOW_S
 
 kill $FF1PID $FF2PID 2>/dev/null
 wait $FF1PID $FF2PID 2>/dev/null || true
@@ -94,9 +77,9 @@ wait $TVPID 2>/dev/null || true
 kill $TSPID 2>/dev/null
 wait $TSPID 2>/dev/null || true
 
-[ -s "$cap" ] || fail "mpts cas: no packets captured (see $WORK/dipitvhead.log)"
+[ -s "$cap" ] || { dump_logs; fail "mpts cas: no packets captured"; }
 
-tsanalyze --json "$cap" > "$report" 2>"$WORK/tsanalyze.log" \
+tsanalyze --json "$cap" >"$report" 2>"$WORK/tsanalyze.log" \
     || fail "mpts cas: tsanalyze failed, see $WORK/tsanalyze.log"
 
 services=$(jq '.services | length' "$report")
@@ -104,7 +87,7 @@ services=$(jq '.services | length' "$report")
 
 for name in "Channel One" "Channel Two"; do
     scrambled=$(jq -r --arg n "$name" '[.services[] | select(.name == $n)][0]["is-scrambled"]' "$report")
-    [ "$scrambled" = "true" ] || fail "mpts cas: '$name' not scrambled, is-scrambled=$scrambled"
+    [ "$scrambled" = "true" ] || { dump_logs; fail "mpts cas: '$name' not scrambled, is-scrambled=$scrambled"; }
     comps=$(jq -r --arg n "$name" '[.services[] | select(.name == $n)][0].components.scrambled' "$report")
     [ "${comps:-0}" -ge 2 ] || fail "mpts cas: '$name' expected >=2 scrambled components, got $comps"
 done

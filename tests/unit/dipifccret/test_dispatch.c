@@ -166,7 +166,7 @@ static void fx_drain_as(const fx_t *fx, int who, replies_t *r) {
   }
 }
 
-static void fx_drain(fx_t *fx, replies_t *r) {
+static void fx_drain(const fx_t *fx, replies_t *r) {
   fx_drain_as(fx, 0, r);
 }
 

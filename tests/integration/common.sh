@@ -35,6 +35,24 @@ run_expect_rc() {
     fi
 }
 
+wait_until() {
+    wu_deadline=$(( $(date +%s) + $1 ))
+    shift
+    while ! "$@"; do
+        [ "$(date +%s)" -lt "$wu_deadline" ] || return 1
+        sleep 0.1
+    done
+    return 0
+}
+
+port_open() {
+    nc -z 127.0.0.1 "$1" >/dev/null 2>&1
+}
+
+log_has() {
+    grep -qF -- "$2" "$1" 2>/dev/null
+}
+
 assert_contains() {
     file=$1
     pattern=$2
