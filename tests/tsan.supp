@@ -1,2 +1,5 @@
 race:srt::CUDT::~CUDT
 race:srt::CUDTUnited::startup
+deadlock:srt::CUDTUnited::locateSocket
+deadlock:srt::CRcvQueue::setListener
+deadlock:srt::CUDT::closeInternal
