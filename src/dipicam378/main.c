@@ -5,14 +5,14 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "lib/helper/antidebug.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/antidebug.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
 #include "lib/metrics/export.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
-#include "args.h"
+#include "cli/args.h"
 #include "cs378x/cs378x.h"
 #include "device.h"
 #include "version.h"

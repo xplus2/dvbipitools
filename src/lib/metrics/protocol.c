@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 
 #include "protocol.h"
@@ -131,6 +131,10 @@ int metrics_writer_put(metrics_writer_t *w, metrics_id_t id, const char *label, 
   w->grp_count++;
   w->buf[w->grp + 1 + label_len] = (unsigned char)w->grp_count;
   return 0;
+}
+
+int metrics_writer_put_signed(metrics_writer_t *w, metrics_id_t id, const char *label, int64_t value) {
+  return metrics_writer_put(w, id, label, metrics_zigzag(value));
 }
 
 size_t metrics_writer_finish(metrics_writer_t *w) {

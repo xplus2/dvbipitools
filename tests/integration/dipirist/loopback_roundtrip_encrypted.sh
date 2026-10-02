@@ -20,11 +20,11 @@ while [ "$i" -lt "$N_PKTS" ]; do
     i=$((i + 1))
 done
 
-"$BIN" -i "rist://@0.0.0.0:$PORT" -o "$out" --buffer 200 --profile main --secret "$SECRET" >"$WORK/recv.log" 2>&1 &
+"$BIN" -i "rist://@0.0.0.0:$PORT" -o "$out" --buffer 200 --profile main --secret "$SECRET" --encryption-type 256 >"$WORK/recv.log" 2>&1 &
 RECPID=$!
 sleep 0.5
 
-"$BIN" -i "$fixture" -o "rist://127.0.0.1:$PORT" --buffer 200 --profile main --secret "$SECRET" >"$WORK/send.log" 2>&1
+"$BIN" -i "$fixture" -o "rist://127.0.0.1:$PORT" --buffer 200 --profile main --secret "$SECRET" --encryption-type 256 >"$WORK/send.log" 2>&1
 
 sleep 1
 kill -INT $RECPID 2>/dev/null

@@ -168,6 +168,13 @@ For the
 .B \-i
 right before this: incoming multicast interface.
 .TP
+.BR \-\-jitter\-ms " " \fIms\fR
+For the
+.B \-i
+right before this: de-jitter buffer of 1..2000 ms for rtp://, udp://,
+rist:// and srt:// inputs. RTP input is reordered by sequence number and
+released after the delay. Other input is delayed in arrival order. Default: off.
+.TP
 .B \-\-strip\-eit
 For the
 .B \-i
@@ -224,6 +231,12 @@ only. Default:
 enables PSK encryption via a
 .B ?secret=
 query parameter on that input's URI.
+.TP
+.B \-\-rist\-encryption\-type\-in \fIbits\fR
+For the
+.B \-i
+right before this: AES key size, 128 or 256. Requires
+.BR \-\-rist\-profile\-in\ main .
 .SS SRT input (per-input)
 .TP
 .B \-\-srt\-passphrase\-in \fIpw\fR
@@ -328,6 +341,11 @@ peers only. Default
 pre-shared key. Requires
 .BR \-\-rist\-profile\ main .
 .TP
+.B \-\-rist\-encryption\-type \fIbits\fR
+.B \-R rist://
+AES key size, 128 or 256. Default: library default. Requires
+.BR \-\-rist\-profile\ main .
+.TP
 .B \-\-rist\-cname \fIname\fR
 .B \-R rist://
 RTCP cname. Default: library default.
@@ -384,22 +402,116 @@ latency. Default: library default.
 .SS Bitrate control
 .TP
 .BR \-b ", " \-\-bitrate " " \fIkbps\fR
-Target output bitrate, shared across all inputs. Default: no shaping,
-source rate passes straight through.
+One budget for the whole output. It counts every 188-byte packet, not the
+RTP/UDP overhead. This setting alone only logs a warning when content runs
+more than 2 s ahead of target. Default: no shaping, source rate passes
+straight through.
 .TP
 .BR \-S ", " \-\-stuff
-Null-packet stuffing when output falls behind
+Add CBR stuffing when behind
 .BR \-b 's
-target. Needs
+target, inserted ahead of the next packet and once per poll tick (<=100 ms)
+while idle, at most one tick's worth each. Needs
 .BR \-b .
 .TP
 .BR \-B ", " \-\-burst\-limit
-Paces sending so output never runs ahead of
+Sleeps per datagram (7 packets) when ahead of
 .BR \-b 's
-target. Needs
+target. In MPTS this stalls the shared loop, so all inputs. Needs
 .BR \-b .
 Combinable with
 .BR \-S .
+.PP
+The rate holds to the packet position, but departure is datagram-granular:
+output leaves in 7-packet bursts.
+.SS PCR and timestamps
+.TP
+.BR \-\-pcr\-mode " " \fImode\fR
+.BR preserve | rebase | regenerate .
+Default:
+.BR preserve .
+.RS
+.TP
+.B preserve
+PCR, PTS and DTS pass through untouched.
+.TP
+.B rebase
+Source PCR plus one offset per program, the same offset on PTS and DTS.
+Starts at offset 0 (output epoch = source epoch) and re-latches the offset
+whenever the source PCR jumps, using the same plausibility fence as
+.IR dvbipi_pcr_discontinuities_total .
+Output PCR, PTS, DTS, ESCR and DTS_next_AU stay continuous across failover,
+splices and reconnects.
+.TP
+.B regenerate
+For sources whose PCR is wrong or missing. The source PCR is never copied.
+PCR is computed from the output position and inserted if missing; PTS and DTS
+are retimed onto the output clock. Needs
+.B \-b
+and
+.BR \-S .
+.B \-B
+is recommended, without it packets can leave ahead of the PCR timeline.
+.IP \(bu 2
+PCR is base + (packet_index * 188 + 10) * 8 * 27 MHz / bitrate, exact integer
+arithmetic, byte 10 being the one holding the last bit of the PCR base
+(TR 101 290 5.3.2.1). PCR_accuracy against a CBR model is zero by construction.
+.IP \(bu 2
+A PCR-only packet is inserted whenever a PCR PID would go 40 ms without a PCR
+(limit is 100 ms, ISO/IEC 13818-1 2.7.2). A program whose source PMT declares
+no usable PCR_PID gets its video PID, else its first stream.
+.IP \(bu 2
+The mux clock is latched on the first PES with a PTS or DTS: first PCR = that
+stamp minus the lead. The lead is
+.BR \-\-pcr\-lead\-ms ,
+raised to the source's own DTS-PCR distance when that is plausible (0..1 s).
+1000 ms is the T-STD residency limit.
+.IP \(bu 2
+One time offset per program is applied to all its streams. Later programs get
+the offset that puts their lead on the running clock.
+.IP \(bu 2
+Each stream has a hold-back queue: a packet leaves when its DTS (PTS if none)
+is at most the lead ahead of the output PCR. Burst-delivering sources (HLS
+segments) rely on that. A full queue (32768 packets) releases its oldest packet
+early and counts it, nothing is dropped. At end of input the queues are flushed
+at once.
+.IP \(bu 2
+The offset follows the clock difference between source and output slowly (at
+most 100 ppm), from the smallest arrival lead per second of the video stream,
+or the first PES stream. A backward or >2 s stamp jump, including after a
+reconnect, re-latches it once.
+.IP \(bu 2
+Source arrival jitter shows up as lead variation at the decoder.
+.B \-\-jitter\-ms
+is the remedy.
+.IP \(bu 2
+OPCR is left alone (ISO/IEC 13818-1 2.4.3.5 forbids multiplexers to modify
+it). ESCR and DTS_next_AU are shifted; the source discontinuity_indicator is
+cleared, since output PCR and continuity counters are continuous. SCTE-35
+pts_adjustment is shifted and CRC_32 recomputed, also for encrypted sections.
+A PES header split across TS packets, or scrambled at the source, cannot be
+retimed.
+.IP \(bu 2
+With CAS, crypto-period cadence runs off the wall clock in SPTS too, and the
+scrambler is flushed after every release round, so batching never delays a
+packet against its PCR position.
+.RE
+.TP
+.BR \-\-pcr\-lead\-ms " " \fIms\fR
+.B regenerate
+only: minimum lead of DTS over PCR, 1..1000. Raised to the source's own
+DTS-PCR distance when that is plausible (0..1 s). Default: 700.
+.PP
+On the metrics side, both
+.B rebase
+and
+.B regenerate
+export dvbipi_tv_pcr_rewritten_total, dvbipi_tv_pes_retimed_total,
+dvbipi_tv_pes_retime_skipped_total, dvbipi_tv_retime_relatches_total and
+dvbipi_tv_scte35_adjusted_total.
+.B regenerate
+adds dvbipi_tv_pcr_injected_total, dvbipi_tv_hold_forced_releases_total and
+dvbipi_tv_release_lead_min_microseconds / _max_microseconds.
 .SS Reliability and TLS
 .TP
 .BR \-e ", " \-\-error " " \fIseconds\fR
@@ -741,12 +853,20 @@ More than one
 produces an MPTS. Servicing is one poll loop, not one thread per
 input, taken in round-robin order so no input is always serviced
 last; each input is capped at 32 TS packets read per tick so one busy
-source can't starve the others that tick. There is no de-jitter
-buffering beyond that.
+source can't starve the others that tick. De-jitter buffering is off
+unless
+.B \-\-jitter\-ms
+is given for an input.
 .PP
-Each program keeps forwarding its own source's PCR untouched. There
-is no synthesized mux-wide clock, so a program's timing stays
+With
+.B \-\-pcr\-mode preserve
+(default) each program keeps forwarding its own source's PCR untouched.
+There is no synthesized mux-wide clock, so a program's timing stays
 accurate to its own source regardless of what the others are doing.
+.B rebase
+keeps that per-program timing and shifts it by a per-program offset.
+.B regenerate
+puts every program on one shared mux clock.
 .PP
 The per-program elementary-stream cap is 31 real streams, one slot
 always reserved for AIT whether
@@ -799,6 +919,9 @@ entitlement flags are always 0 (unenforced).
 .TP
 .B dipitvhead \-i rtp://@239.19.75.1:8700 \-m 239.1.1.1:5000 \-s "My Channel"
 Basic SPTS: one RTP source re-streamed with its own SDT service name.
+.TP
+.B dipitvhead \-i udp://@239.0.0.1:5000 \-m 239.5.5.5:6000 \-b 3000 \-S \-B \-\-pcr\-mode regenerate
+Source with wrong or missing PCR: rebuild PCR and timestamps on a 3 Mbit/s CBR timeline.
 .TP
 .B dipitvhead \-i https://host/live/x/y.ts \-k \-m 239.1.1.2:5000 \-b 8000 \-S \-B
 HTTPS source with a self-signed certificate, bitrate-shaped to

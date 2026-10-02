@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "pace.h"
 

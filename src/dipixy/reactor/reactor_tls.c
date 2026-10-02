@@ -16,7 +16,7 @@
 #include <nghttp2/nghttp2.h>
 #endif
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 
 #include "internal.h"
@@ -33,15 +33,15 @@ static int g_http2_enabled = 1;
 void tls_set_http2_enabled(int enabled) { g_http2_enabled = enabled; }
 
 #ifdef HAVE_HTTP2
-static int alpn_select_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *arg) {
+int alpn_select_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *arg) {
   (void)ssl;
   (void)arg;
   if (g_http2_enabled && nghttp2_select_next_protocol((unsigned char **)out, outlen, in, inlen) == 1)
     return SSL_TLSEXT_ERR_OK;
   static const unsigned char http11[] = "\x08http/1.1";
-  *out = http11 + 1;
-  *outlen = 8;
-  return SSL_TLSEXT_ERR_OK;
+  if (SSL_select_next_proto((unsigned char **)out, outlen, http11, sizeof http11 - 1, in, inlen) == OPENSSL_NPN_NEGOTIATED)
+    return SSL_TLSEXT_ERR_OK;
+  return SSL_TLSEXT_ERR_NOACK;
 }
 #endif
 
@@ -50,7 +50,7 @@ static char g_tls_key[512];
 
 /* fresh SSL_CTX, cert/key loaded, NULL on any failure. same options set as
    tls_init(), reused by reload_tls() so a reload gets identical ctx config */
-static SSL_CTX *build_ssl_ctx(const char *cert_path, const char *key_path) {
+SSL_CTX *build_ssl_ctx(const char *cert_path, const char *key_path) {
   SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
   if (!ctx) return NULL;
 

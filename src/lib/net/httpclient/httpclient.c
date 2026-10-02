@@ -13,9 +13,9 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "../../helper/ioutil.h"
+#include "../../sys/ioutil.h"
 #include "../../helper/log.h"
-#include "../../helper/signal.h"
+#include "../../sys/signal.h"
 #include "../netconnect.h"
 #include "priv.h"
 

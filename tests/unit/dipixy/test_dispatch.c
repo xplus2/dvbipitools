@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "dipixy/altsvc.h"
-#include "dipixy/args.h"
+#include "dipixy/cli/args.h"
 #include "dipixy/dlna/dlna.h"
 #include "dipixy/reactor/internal.h"
 

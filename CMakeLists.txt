@@ -159,7 +159,7 @@ add_compile_definitions(
 
 include_directories("${CMAKE_SOURCE_DIR}/src")
 
-include(${CMAKE_SOURCE_DIR}/cmake/tool_sources.cmake)
+include(${CMAKE_SOURCE_DIR}/toolchain/tool_sources.cmake)
 
 if (CMAKE_CROSSCOMPILING)
     if (DEFINED ENV{CC_FOR_BUILD} AND NOT "$ENV{CC_FOR_BUILD}" STREQUAL "")

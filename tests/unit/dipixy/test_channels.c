@@ -11,11 +11,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "dipixy/args.h"
+#include "dipixy/cli/args.h"
 #include "dipixy/ts/capture/capture.h"
 #include "dipixy/ts/channels/channels.h"
 #include "lib/helper/sds_xml.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 static void write_temp_file(char *path, const char *content) {
   char tmpl[] = "/tmp/dvbipitools_test_channels_XXXXXX.m3u";

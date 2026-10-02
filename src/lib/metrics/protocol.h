@@ -11,6 +11,7 @@
    label_len(1) label count(1) then count x (metric_id(2 BE) value(varint)).
    v2 header byte 2 = part index, byte 3 = flags. one snapshot = parts sharing a sequence, streamed in order.
    v1 (receive only) body = entries of metric_id(2 BE) label_len(1) label value(8 BE).
+   signed ids (render table): zigzag varint.
    unknown ids skip by length, appends stay wire-compatible */
 
 #define METRICS_PROTO_V1 1
@@ -91,6 +92,8 @@ typedef enum {
   METRICS_ID_TV_AIT_SECTIONS_TOTAL = 75,
   METRICS_ID_TV_AIT_ERRORS_TOTAL = 76,
   METRICS_ID_TV_EIT_QUEUE_DROPS_TOTAL = 77,
+  METRICS_ID_TV_PCR_REWRITTEN_TOTAL = 78,
+  METRICS_ID_TV_PCR_INJECTED_TOTAL = 79,
 
   METRICS_ID_SDS_SERVICE_PROVIDERS = 80,
   METRICS_ID_SDS_SERVICES = 81,
@@ -216,7 +219,22 @@ typedef enum {
   METRICS_ID_TS_PID_PACKETS_TOTAL = 248,
   METRICS_ID_TS_PID_SCRAMBLED_PACKETS_TOTAL = 249,
   METRICS_ID_TS_SERVICE_PACKETS_TOTAL = 250,
-  METRICS_ID_TS_SERVICE_SCRAMBLED_PACKETS_TOTAL = 251
+  METRICS_ID_TS_SERVICE_SCRAMBLED_PACKETS_TOTAL = 251,
+  METRICS_ID_TS_PCR_FREQ_OFFSET_PPB = 252,
+  METRICS_ID_TS_PCR_DRIFT_RATE_PPB_PER_SECOND = 253,
+  METRICS_ID_TS_PCR_FREQ_OFFSET_ERRORS_TOTAL = 254,
+  METRICS_ID_TS_DTS_PCR_LEAD_MICROSECONDS = 255,
+  METRICS_ID_TS_DTS_PCR_LEAD_UNDERRUNS_TOTAL = 256,
+  METRICS_ID_SRT_SENDER_QUEUE_MILLISECONDS = 257,
+  METRICS_ID_XY_TSPUSH_QUEUE_MILLISECONDS = 258,
+  METRICS_ID_TS_INPUT_BUFFER_MILLISECONDS = 259,
+  METRICS_ID_TV_PES_RETIMED_TOTAL = 260,
+  METRICS_ID_TV_PES_RETIME_SKIPPED_TOTAL = 261,
+  METRICS_ID_TV_RETIME_RELATCHES_TOTAL = 262,
+  METRICS_ID_TV_HOLD_FORCED_RELEASES_TOTAL = 263,
+  METRICS_ID_TV_SCTE35_ADJUSTED_TOTAL = 264,
+  METRICS_ID_TV_RELEASE_LEAD_MIN_MICROSECONDS = 265,
+  METRICS_ID_TV_RELEASE_LEAD_MAX_MICROSECONDS = 266
 } metrics_id_t;
 
 /* joins input+reason into METRICS_ID_INPUT_ERRORS_TOTAL's one label field */
@@ -251,6 +269,10 @@ int metrics_writer_begin(metrics_writer_t *w, const metrics_hdr_t *hdr);
    one label share a group. full buffer: sent as non-last part through flush. -1 without flush,
    on flush failure or past METRICS_MAX_PARTS, writer becomes unusable (finish returns 0) */
 int metrics_writer_put(metrics_writer_t *w, metrics_id_t id, const char *label, uint64_t value);
+static inline uint64_t metrics_zigzag(int64_t v) { return v < 0 ? (((uint64_t)~v) << 1) | 1 : (uint64_t)v << 1; }
+static inline int64_t metrics_unzigzag(uint64_t v) { return (int64_t)(v >> 1) ^ -(int64_t)(v & 1); }
+/* signed ids only */
+int metrics_writer_put_signed(metrics_writer_t *w, metrics_id_t id, const char *label, int64_t value);
 /* bytes of the last part in buf, ready to send. 0 if begin/put/flush ever failed */
 size_t metrics_writer_finish(metrics_writer_t *w);
 

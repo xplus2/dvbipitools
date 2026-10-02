@@ -5,12 +5,22 @@
 #include <string.h>
 
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "priv.h"
+
+cas_t *tvhead_single_cas_start(const config_t *cfg, const psi_t *psi, const remux_t *rx) {
+  int es_count;
+  const out_es_t *es = remux_es(rx, &es_count);
+  if (cfg->pcr_mode == PCR_MODE_REGENERATE) {
+    const out_es_t *lists[1] = {es};
+    return cas_start_multi(cfg, lists, &es_count, 1);
+  }
+  return cas_start(cfg, psi, es, es_count, remux_pcr_pid_out(rx));
+}
 
 /* rx is already built (discovery succeeded): sets up pacing/cas and runs until this
    connection ends, then tears rx back down */
-static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi, out_ctx_t *out, remux_t *rx, metrics_exporter_t *mx, input_metrics_t *im_p, ts_metrics_t *tsm_p, tsinspect_t *insp) {
+static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi, out_ctx_t *out, remux_t *rx, timemap_t *tm, metrics_exporter_t *mx, input_metrics_t *im_p, ts_metrics_t *tsm_p, tsinspect_t *insp) {
   cas_t *cas = NULL;
   int cas_wanted;
 
@@ -22,17 +32,21 @@ static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi
   }
   cas_wanted = cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled;
   if (cas_wanted) {
-    int es_count;
-    const out_es_t *es = remux_es(rx, &es_count);
-    cas = cas_start(cfg, psi, es, es_count, remux_pcr_pid_out(rx));
+    cas = tvhead_single_cas_start(cfg, psi, rx);
     if (cas) remux_set_cas(rx, cas);
     else log_line("cas setup failed");
   }
   if (!cas_wanted || cas) {
     print_discovered(psi);
+    remux_set_timemap(rx, tm);
+    if (cfg->pcr_mode == PCR_MODE_REGENERATE && remux_set_hold(rx, out_pcr_clock, out_pcr_latch, out, cfg->pcr_lead_ms)) log_line("hold-back queue setup failed");
+    out_pcr_pid_set(out, 0, remux_pcr_pid_out(rx));
     run_output(src, rx, out, cfg, cas, mx, im_p, tsm_p, insp);
+    remux_release(rx, mono_seconds(), packet_cb, out, 1, tsm_p);
+    if (cas) cas_flush(cas, packet_cb, out);
     if (cas) cas_stop(cas);
   }
+  out_pcr_pid_set(out, 0, 0);
   bitrate_pacer_free(out->pacer);
   out->pacer = NULL;
   remux_free(rx);
@@ -43,6 +57,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   out_ctx_t out;
   input_metrics_t im;
   ts_metrics_t tsm;
+  timemap_t tm;
   int metrics_on = metrics_exporter_enabled(mx);
   input_metrics_t *im_p = metrics_on ? &im : NULL;
   ts_metrics_t *tsm_p = metrics_on ? &tsm : NULL;
@@ -53,6 +68,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   memset(&out, 0, sizeof out);
   memset(&im, 0, sizeof im);
   memset(&tsm, 0, sizeof tsm);
+  timemap_init(&tm);
   if (tvhead_output_open(cfg, &out)) {
     tvhead_output_close(&out);
     return 1;
@@ -106,7 +122,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
       out_program_pids(0, &pids);
       rx = remux_new(cfg, &cfg->inputs[0], psi, &pids, 1);
       if (!rx) log_line("remux setup failed");
-      else run_single_input(cfg, src, psi, &out, rx, mx, im_p, tsm_p, insp_in);
+      else run_single_input(cfg, src, psi, &out, rx, &tm, mx, im_p, tsm_p, insp_in);
     } else if (r == 0) {
       log_line("no live PMT found within %.0fs (use -p to select one, or check the source)", DISCOVERY_TIMEOUT_S);
     }

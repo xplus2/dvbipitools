@@ -11,7 +11,7 @@
 #include <srt/srt.h>
 
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "srtcommon.h"
 #include "srtin.h"
@@ -26,6 +26,10 @@ struct srtin {
   metrics_exporter_t *mx;
   const char *tool_version;
 };
+
+static int stop_wanted(const srtin_cfg_t *cfg) {
+  return signal_stop_requested() || (cfg->stop && atomic_load_explicit(cfg->stop, memory_order_relaxed));
+}
 
 static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
   SRTSOCKET s;
@@ -70,6 +74,39 @@ static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
   return s;
 }
 
+static SRTSOCKET accept_single(const srtin_cfg_t *cfg, SRTSOCKET lsn) {
+  SRTSOCKET s = SRT_INVALID_SOCK;
+  int events = SRT_EPOLL_IN | SRT_EPOLL_ERR;
+  int eid = srt_epoll_create();
+
+  if (eid < 0) {
+    log_line("srt: epoll create failed: %s", srt_getlasterror_str());
+    return SRT_INVALID_SOCK;
+  }
+  if (srt_epoll_add_usock(eid, lsn, &events) != 0) {
+    log_line("srt: epoll add failed: %s", srt_getlasterror_str());
+    srt_epoll_release(eid);
+    return SRT_INVALID_SOCK;
+  }
+  while (!stop_wanted(cfg)) {
+    SRTSOCKET ready[1];
+    int nready = 1;
+
+    if (srt_epoll_wait(eid, ready, &nready, NULL, NULL, SRT_RCVTIMEO_MS, NULL, NULL, NULL, NULL) == SRT_ERROR) {
+      if (srt_getlasterror(NULL) == SRT_ETIMEOUT)
+        continue;
+      log_line("srt: accept wait failed: %s", srt_getlasterror_str());
+      break;
+    }
+    s = srt_accept(lsn, NULL, NULL);
+    if (s == SRT_INVALID_SOCK)
+      log_line("srt: accept failed: %s", srt_getlasterror_str());
+    break;
+  }
+  srt_epoll_release(eid);
+  return s;
+}
+
 /* accepted socket shares listener's UDP multiplexer. early close: kills connection too.
    keep listener open until final teardown. lsn_out: carries it out */
 static SRTSOCKET open_single_listener(const srtin_cfg_t *cfg, SRTSOCKET *lsn_out) {
@@ -95,16 +132,7 @@ static SRTSOCKET open_single_listener(const srtin_cfg_t *cfg, SRTSOCKET *lsn_out
     srt_close(lsn);
     return SRT_INVALID_SOCK;
   }
-  while (!signal_stop_requested()) {
-    s = srt_accept(lsn, NULL, NULL);
-    if (s != SRT_INVALID_SOCK)
-      break;
-    if (srt_getlasterror(NULL) != SRT_ETIMEOUT) {
-      log_line("srt: accept failed: %s", srt_getlasterror_str());
-      s = SRT_INVALID_SOCK;
-      break;
-    }
-  }
+  s = accept_single(cfg, lsn);
   if (s == SRT_INVALID_SOCK)
     srt_close(lsn); /* no connection ever came in: nothing depends on this multiplexer */
   else
@@ -168,7 +196,7 @@ static SRTSOCKET open_group_listener(const srtin_cfg_t *cfg, SRTSOCKET *listener
       goto fail;
     }
   }
-  while (!signal_stop_requested()) {
+  while (!stop_wanted(cfg)) {
     s = srt_accept_bond(listeners, cfg->npeers, SRT_RCVTIMEO_MS);
     if (s != SRT_INVALID_SOCK)
       break;

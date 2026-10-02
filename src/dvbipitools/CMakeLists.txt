@@ -34,7 +34,7 @@ list(APPEND DIPIXY_SRCS ${DVBIPITOOLS_DIPIXY_HTDOCS_GEN})
 function(dvbipitools_rename_main_args tool)
     set_source_files_properties(${CMAKE_SOURCE_DIR}/src/${tool}/main.c PROPERTIES
         COMPILE_DEFINITIONS "main=${tool}_main;args_parse=${tool}_args_parse")
-    set_source_files_properties(${CMAKE_SOURCE_DIR}/src/${tool}/args.c PROPERTIES
+    set_source_files_properties(${CMAKE_SOURCE_DIR}/src/${tool}/cli/args.c PROPERTIES
         COMPILE_DEFINITIONS "args_parse=${tool}_args_parse")
 endfunction()
 

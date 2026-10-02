@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../helper/ioutil.h"
+#include "../sys/ioutil.h"
 
 typedef enum { SOCKADDR_INDEX_EMPTY, SOCKADDR_INDEX_OCCUPIED, SOCKADDR_INDEX_TOMBSTONE } sockaddr_index_state_t;
 

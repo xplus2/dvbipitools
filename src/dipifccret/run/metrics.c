@@ -5,11 +5,11 @@
 #include <time.h>
 
 #include "lib/metrics/export.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "../version.h"
 #include "run.h"
 
-static void push_metrics(metrics_ctx_t *mc) {
+void fccret_push_metrics(metrics_ctx_t *mc) {
   metrics_writer_t w;
   size_t cap;
   size_t active_channels = 0;
@@ -37,7 +37,7 @@ void *metrics_thread_main(void *arg) {
   int wfd = signal_wake_fd();
 
   while (!signal_stop_requested()) {
-    push_metrics(mc);
+    fccret_push_metrics(mc);
     if (wfd >= 0) {
       struct pollfd pfd = {wfd, POLLIN, 0};
       poll(&pfd, 1, 200);

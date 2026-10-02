@@ -8,7 +8,7 @@
 
 #include "lib/config/yamlcfg.h"
 
-#include "dipirec/args.h"
+#include "dipirec/cli/args.h"
 #include "dipirec/filter/ts.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
@@ -76,7 +76,7 @@ START_TEST(default_profile_is_simple) {
 END_TEST
 
 START_TEST(profile_main_is_accepted) {
-  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--profile", "main", NULL};
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--rist-profile", "main", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.rist_profile, RIST_PROF_MAIN);
@@ -85,7 +85,7 @@ START_TEST(profile_main_is_accepted) {
 END_TEST
 
 START_TEST(unknown_profile_is_rejected) {
-  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--profile", "advanced", NULL};
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--rist-profile", "advanced", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   yamlcfg_strpool_free(cfg.str_pool);
@@ -93,7 +93,7 @@ START_TEST(unknown_profile_is_rejected) {
 END_TEST
 
 START_TEST(secret_without_profile_main_is_rejected) {
-  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--secret", "hunter2", NULL};
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--rist-secret", "hunter2", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   yamlcfg_strpool_free(cfg.str_pool);
@@ -101,8 +101,7 @@ START_TEST(secret_without_profile_main_is_rejected) {
 END_TEST
 
 START_TEST(secret_with_profile_main_is_accepted) {
-  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000",
-                  "--profile", "main", "--secret", "hunter2", NULL};
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--rist-profile", "main", "--rist-secret", "hunter2", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.rist_secret, "hunter2");
@@ -110,9 +109,71 @@ START_TEST(secret_with_profile_main_is_accepted) {
 }
 END_TEST
 
+START_TEST(encryption_type_with_profile_main_is_accepted) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--rist-profile", "main", "--rist-encryption-type", "256", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.rist_key_size, 256);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(encryption_type_without_profile_main_is_rejected) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--rist-encryption-type", "128", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(encryption_type_invalid_is_rejected) {
+  static const char *const bad[] = {"0", "192", "abc", ""};
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+    char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--rist-profile", "main", "--rist-encryption-type", (char *)bad[i], NULL};
+    config_t cfg = {0};
+    ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+    yamlcfg_strpool_free(cfg.str_pool);
+  }
+}
+END_TEST
+
+START_TEST(encryption_type_in_with_profile_in_main_is_accepted) {
+  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", "--rist-profile-in", "main", "--rist-encryption-type-in", "256", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.rist_key_size_in, 256);
+  ck_assert_int_eq(cfg.rist_key_size, 0);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(encryption_type_in_without_profile_in_main_is_rejected) {
+  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", "--rist-encryption-type-in", "128", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(encryption_type_in_invalid_is_rejected) {
+  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", "--rist-profile-in", "main", "--rist-encryption-type-in", "512", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(encryption_type_in_without_rist_in_is_harmless) {
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "-", "--rist-encryption-type-in", "128", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(cname_and_buffer_are_applied) {
   char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000",
-                  "--cname", "encoder1", "--buffer", "1000", NULL};
+                  "--rist-cname", "encoder1", "--rist-buffer", "1000", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.rist_cname, "encoder1");
@@ -122,7 +183,7 @@ START_TEST(cname_and_buffer_are_applied) {
 END_TEST
 
 START_TEST(buffer_zero_is_rejected) {
-  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--buffer", "0", NULL};
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--rist-buffer", "0", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   yamlcfg_strpool_free(cfg.str_pool);
@@ -130,8 +191,8 @@ START_TEST(buffer_zero_is_rejected) {
 END_TEST
 
 START_TEST(rist_options_without_rist_out_are_harmless) {
-  /* --profile/--secret/--cname/--buffer with a non-rist -o: no-op, just a logged warning */
-  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts", "--cname", "x", NULL};
+  /* --rist-profile/--rist-secret/--rist-cname/--rist-buffer with a non-rist -o: no-op, just a logged warning */
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts", "--rist-cname", "x", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.out[0].kind, OUT_FILE);
@@ -218,7 +279,7 @@ START_TEST(rist_in_uri_without_at_is_rejected) {
 END_TEST
 
 START_TEST(profile_in_main_is_accepted) {
-  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", "--profile-in", "main", NULL};
+  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", "--rist-profile-in", "main", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.rist_profile_in, RIST_PROF_MAIN);
@@ -227,7 +288,7 @@ START_TEST(profile_in_main_is_accepted) {
 END_TEST
 
 START_TEST(unknown_profile_in_is_rejected) {
-  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", "--profile-in", "advanced", NULL};
+  char *argv[] = {"dipirec", "-i", "rist://@127.0.0.1:6000", "-o", "-", "--rist-profile-in", "advanced", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   yamlcfg_strpool_free(cfg.str_pool);
@@ -235,7 +296,7 @@ START_TEST(unknown_profile_in_is_rejected) {
 END_TEST
 
 START_TEST(profile_in_without_rist_in_is_harmless) {
-  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "-", "--profile-in", "main", NULL};
+  char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "-", "--rist-profile-in", "main", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   yamlcfg_strpool_free(cfg.str_pool);
@@ -389,6 +450,18 @@ START_TEST(inspect_ts_pids_require_full) {
 }
 END_TEST
 
+START_TEST(encryption_types_from_yaml) {
+  char path[] = "/tmp/dipirec_enc_XXXXXX";
+  char *argv[] = {"dipirec", "-c", path, NULL};
+  config_t cfg = {0};
+  write_cfg(path, "in: rist://@127.0.0.1:6000\nout: a.ts\nrist:\n  profile-in: main\n  encryption-type-in: 128\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_int_eq(cfg.rist_key_size_in, 128);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(inspect_ts_from_yaml) {
   char path[] = "/tmp/dipirec_inspect_XXXXXX";
   char *argv[] = {"dipirec", "-c", path, NULL};
@@ -479,6 +552,14 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, unknown_profile_is_rejected);
   tcase_add_test(tc, secret_without_profile_main_is_rejected);
   tcase_add_test(tc, secret_with_profile_main_is_accepted);
+  tcase_add_test(tc, encryption_type_with_profile_main_is_accepted);
+  tcase_add_test(tc, encryption_type_without_profile_main_is_rejected);
+  tcase_add_test(tc, encryption_type_invalid_is_rejected);
+  tcase_add_test(tc, encryption_type_in_with_profile_in_main_is_accepted);
+  tcase_add_test(tc, encryption_type_in_without_profile_in_main_is_rejected);
+  tcase_add_test(tc, encryption_type_in_invalid_is_rejected);
+  tcase_add_test(tc, encryption_type_in_without_rist_in_is_harmless);
+  tcase_add_test(tc, encryption_types_from_yaml);
   tcase_add_test(tc, cname_and_buffer_are_applied);
   tcase_add_test(tc, buffer_zero_is_rejected);
   tcase_add_test(tc, rist_options_without_rist_out_are_harmless);

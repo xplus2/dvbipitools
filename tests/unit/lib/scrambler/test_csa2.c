@@ -499,6 +499,110 @@ START_TEST(scrambler_passthrough_queued_preserves_order) {
 }
 END_TEST
 
+static void make_pkt(unsigned char pkt[188], unsigned ctrl, unsigned afc, unsigned af_len) {
+  memset(pkt, 0xAA, 188);
+  pkt[0] = 0x47;
+  pkt[1] = 0x01;
+  pkt[2] = 0x00;
+  pkt[3] = (unsigned char)((ctrl << 6) | (afc << 4));
+  pkt[4] = (unsigned char)af_len;
+}
+
+static scrambler_t *keyed_csa2(void) {
+  scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CSA2);
+
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, NULL, NULL), 0);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_ODD, cw, sizeof cw, NULL, NULL), 0);
+  return s;
+}
+
+START_TEST(csa2_af_only_packet_is_never_scrambled_and_is_cleared_on_decrypt) {
+  unsigned char pkt[188];
+  unsigned char orig[188];
+  scrambler_t *s = keyed_csa2();
+
+  make_pkt(pkt, 0, 2, 183);
+  memcpy(orig, pkt, 188);
+  ck_assert_int_eq(scrambler_encrypt_packet(s, pkt, SCRAMBLE_PARITY_EVEN), 0);
+  ck_assert_mem_eq(pkt, orig, 188);
+  make_pkt(pkt, 2, 2, 183);
+  ck_assert_int_eq(scrambler_decrypt_packet(s, pkt), 0);
+  ck_assert_uint_eq((pkt[3] >> 6) & 3u, 0u);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(csa2_decrypt_rejects_reserved_control_and_null_scrambler) {
+  unsigned char pkt[188];
+  scrambler_t *s = keyed_csa2();
+
+  make_pkt(pkt, 1, 1, 0);
+  ck_assert_int_eq(scrambler_decrypt_packet(s, pkt), -1);
+  make_pkt(pkt, 2, 1, 0);
+  ck_assert_int_eq(scrambler_decrypt_packet(NULL, pkt), -1);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(csa2_queued_af_only_packets_keep_their_position_in_the_batch) {
+  unsigned char pkt[188];
+  unsigned char af[188];
+  scrambler_t *s = keyed_csa2();
+
+  captured_n = 0;
+  make_pkt(pkt, 0, 1, 0);
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(s, pkt, SCRAMBLE_PARITY_EVEN, capture_emit, NULL), 0);
+  make_pkt(af, 0, 2, 183);
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(s, af, SCRAMBLE_PARITY_EVEN, capture_emit, NULL), 0);
+  ck_assert_uint_eq(captured_n, 0u);
+  scrambler_flush(s, capture_emit, NULL);
+  ck_assert_uint_eq(captured_n, 2u);
+  ck_assert_uint_eq((captured[0][3] >> 6) & 3u, 2u);
+  ck_assert_uint_eq((captured[1][3] >> 6) & 3u, 0u);
+  ck_assert_mem_eq(captured[1] + 4, af + 4, 184);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(csa2_queued_decrypt_af_only_with_scrambling_bits_and_unscrambled_packets) {
+  unsigned char pkt[188];
+  scrambler_t *s = keyed_csa2();
+
+  captured_n = 0;
+  make_pkt(pkt, 3, 2, 183);
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(s, pkt, capture_emit, NULL), 0);
+  make_pkt(pkt, 0, 1, 0);
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(s, pkt, capture_emit, NULL), 0);
+  ck_assert_uint_eq(captured_n, 0u);
+  scrambler_flush(s, capture_emit, NULL);
+  ck_assert_uint_eq(captured_n, 2u);
+  ck_assert_uint_eq((captured[0][3] >> 6) & 3u, 0u);
+  ck_assert_uint_eq(captured[1][5], 0xAAu);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(csa2_queued_calls_reject_reserved_control_missing_key_and_null) {
+  unsigned char pkt[188];
+  scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CSA2);
+
+  captured_n = 0;
+  make_pkt(pkt, 1, 1, 0);
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(s, pkt, capture_emit, NULL), -1);
+  make_pkt(pkt, 2, 1, 0);
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(s, pkt, capture_emit, NULL), -1);
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(NULL, pkt, capture_emit, NULL), -1);
+  make_pkt(pkt, 0, 1, 0);
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(s, pkt, SCRAMBLE_PARITY_EVEN, capture_emit, NULL), -1);
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(NULL, pkt, SCRAMBLE_PARITY_EVEN, capture_emit, NULL), -1);
+  scrambler_passthrough_queued(NULL, pkt, capture_emit, NULL);
+  ck_assert_uint_eq(captured_n, 1u);
+  scrambler_flush(NULL, capture_emit, NULL);
+  scrambler_free(s);
+}
+END_TEST
+
 static Suite *csa2_suite(void) {
   Suite *s = suite_create("csa2");
   TCase *tc = tcase_create("core");
@@ -517,6 +621,11 @@ static Suite *csa2_suite(void) {
   tcase_add_test(tc, scrambler_set_key_flushes_pending_batch_under_old_key);
   tcase_add_test(tc, scrambler_encrypt_queued_survives_flush_at_queue_capacity);
   tcase_add_test(tc, scrambler_passthrough_queued_preserves_order);
+  tcase_add_test(tc, csa2_af_only_packet_is_never_scrambled_and_is_cleared_on_decrypt);
+  tcase_add_test(tc, csa2_decrypt_rejects_reserved_control_and_null_scrambler);
+  tcase_add_test(tc, csa2_queued_af_only_packets_keep_their_position_in_the_batch);
+  tcase_add_test(tc, csa2_queued_decrypt_af_only_with_scrambling_bits_and_unscrambled_packets);
+  tcase_add_test(tc, csa2_queued_calls_reject_reserved_control_missing_key_and_null);
   suite_add_tcase(s, tc);
   return s;
 }

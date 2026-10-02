@@ -3,18 +3,23 @@
 
 #include <arpa/inet.h>
 #include <check.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <sys/resource.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "dipifccret/listen.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
-#define TEST_PORT 19245
+#define TEST_PORT g_base
+#define PORT_BLOCK 32
+
+static unsigned g_base;
 
 typedef struct {
   pthread_mutex_t mu;
@@ -84,6 +89,57 @@ static void recv_multi_cb(const unsigned char *pkt, size_t len, size_t slot, int
   r->last_fromlen = fromlen;
   r->last_slot = slot;
   pthread_mutex_unlock(&r->mu);
+}
+
+static int ports_free(unsigned base, unsigned count) {
+  unsigned i;
+
+  for (i = 0; i < count; i++) {
+    struct sockaddr_in a;
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int ok;
+
+    memset(&a, 0, sizeof a);
+    a.sin_family = AF_INET;
+    a.sin_port = htons((unsigned short)(base + i));
+    inet_pton(AF_INET, "127.0.0.1", &a.sin_addr);
+    ok = bind(fd, (struct sockaddr *)&a, sizeof a) == 0;
+    close(fd);
+    if (!ok)
+      return 0;
+  }
+  return 1;
+}
+
+static void reserve_ports(void) {
+  unsigned attempt;
+
+  srand((unsigned)getpid() ^ (unsigned)time(NULL));
+  for (attempt = 0; attempt < 200; attempt++) {
+    unsigned base = 20000u + (unsigned)rand() % 30000u;
+
+    if (ports_free(base, PORT_BLOCK)) {
+      g_base = base;
+      return;
+    }
+  }
+  ck_abort_msg("no free port block");
+}
+
+static int lowest_free_fd(void) {
+  int fd = open("/dev/null", O_RDONLY);
+
+  ck_assert_int_ge(fd, 0);
+  close(fd);
+  return fd;
+}
+
+static void limit_fds_to(int next_free, int extra) {
+  struct rlimit rl;
+
+  ck_assert_int_eq(getrlimit(RLIMIT_NOFILE, &rl), 0);
+  rl.rlim_cur = (rlim_t)(next_free + extra);
+  ck_assert_int_eq(setrlimit(RLIMIT_NOFILE, &rl), 0);
 }
 
 static int send_udp(unsigned port, const unsigned char *data, size_t len) {
@@ -207,10 +263,129 @@ START_TEST(listen_multi_start_fails_on_zero_count) {
 }
 END_TEST
 
+START_TEST(listen_pool_start_fails_cleanly_when_the_first_socket_cannot_be_created) {
+  int n = lowest_free_fd();
+  listen_pool_t *p;
+
+  limit_fds_to(n, 0);
+  p = listen_pool_start(AF_INET, "127.0.0.1", TEST_PORT + 4, 2, NULL, NULL);
+  ck_assert_ptr_null(p);
+  limit_fds_to(n, 64);
+}
+END_TEST
+
+START_TEST(listen_pool_start_fails_cleanly_when_epoll_cannot_be_created) {
+  int n = lowest_free_fd();
+  listen_pool_t *p;
+
+  limit_fds_to(n, 1);
+  p = listen_pool_start(AF_INET, "127.0.0.1", TEST_PORT + 5, 2, NULL, NULL);
+  ck_assert_ptr_null(p);
+  limit_fds_to(n, 64);
+  ck_assert_int_eq(lowest_free_fd(), n);
+}
+END_TEST
+
+START_TEST(listen_pool_start_unwinds_already_started_workers_on_late_failure) {
+  int n = lowest_free_fd();
+  listen_pool_t *p;
+
+  limit_fds_to(n, 2);
+  p = listen_pool_start(AF_INET, "127.0.0.1", TEST_PORT + 6, 3, NULL, NULL);
+  ck_assert_ptr_null(p);
+  limit_fds_to(n, 64);
+  ck_assert_int_eq(lowest_free_fd(), n);
+}
+END_TEST
+
+START_TEST(listen_pool_without_callback_swallows_datagrams) {
+  listen_pool_t *p = listen_pool_start(AF_INET, "127.0.0.1", TEST_PORT + 7, 1, NULL, NULL);
+  const unsigned char msg[] = "x";
+
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(send_udp(TEST_PORT + 7, msg, sizeof msg - 1), 1);
+  usleep(50000);
+  signals_install();
+  raise(SIGTERM);
+  listen_pool_stop(p);
+  listen_pool_stop(NULL);
+}
+END_TEST
+
+START_TEST(listen_multi_start_fails_cleanly_when_epoll_cannot_be_created) {
+  int n = lowest_free_fd();
+  listen_multi_t *p;
+
+  limit_fds_to(n, 0);
+  p = listen_multi_start(AF_INET, "127.0.0.1", TEST_PORT + 8, 2, NULL, NULL);
+  ck_assert_ptr_null(p);
+  limit_fds_to(n, 64);
+}
+END_TEST
+
+START_TEST(listen_multi_start_closes_opened_sockets_on_late_failure) {
+  int n = lowest_free_fd();
+  listen_multi_t *p;
+
+  limit_fds_to(n, 3);
+  p = listen_multi_start(AF_INET, "127.0.0.1", TEST_PORT + 9, 4, NULL, NULL);
+  ck_assert_ptr_null(p);
+  limit_fds_to(n, 64);
+  ck_assert_int_eq(lowest_free_fd(), n);
+}
+END_TEST
+
+START_TEST(listen_multi_without_callback_swallows_datagrams) {
+  listen_multi_t *p = listen_multi_start(AF_INET, "127.0.0.1", TEST_PORT + 12, 2, NULL, NULL);
+  const unsigned char msg[] = "x";
+
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(send_udp(TEST_PORT + 12 + 1, msg, sizeof msg - 1), 1);
+  usleep(50000);
+  signals_install();
+  raise(SIGTERM);
+  listen_multi_stop(p);
+  listen_multi_stop(NULL);
+}
+END_TEST
+
+START_TEST(listen_pool_with_wake_fd_stops_promptly_on_signal) {
+  recorder_t rec;
+  listen_pool_t *p;
+  const unsigned char msg[] = "wake";
+
+  recorder_init(&rec);
+  signals_install();
+  p = listen_pool_start(AF_INET, "127.0.0.1", TEST_PORT + 13, 2, recv_cb, &rec);
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(send_udp(TEST_PORT + 13, msg, sizeof msg - 1), 1);
+  ck_assert_int_eq(recorder_wait_count(&rec, 1, 2.0), 1);
+  raise(SIGTERM);
+  listen_pool_stop(p);
+}
+END_TEST
+
+START_TEST(listen_multi_with_wake_fd_stops_promptly_on_signal) {
+  recorder_t rec;
+  listen_multi_t *p;
+  const unsigned char msg[] = "wake";
+
+  recorder_init(&rec);
+  signals_install();
+  p = listen_multi_start(AF_INET, "127.0.0.1", TEST_PORT + 16, 2, recv_multi_cb, &rec);
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(send_udp(TEST_PORT + 16, msg, sizeof msg - 1), 1);
+  ck_assert_int_eq(recorder_wait_count(&rec, 1, 2.0), 1);
+  raise(SIGTERM);
+  listen_multi_stop(p);
+}
+END_TEST
+
 static Suite *listen_suite(void) {
   Suite *s = suite_create("dipifccret_listen");
   TCase *tc = tcase_create("core");
   tcase_set_timeout(tc, 10);
+  tcase_add_checked_fixture(tc, reserve_ports, NULL);
   tcase_add_test(tc, listen_pool_delivers_datagram_to_callback);
   tcase_add_test(tc, listen_pool_delivers_multiple_datagrams);
   tcase_add_test(tc, listen_pool_start_fails_on_bad_address);
@@ -218,6 +393,15 @@ static Suite *listen_suite(void) {
   tcase_add_test(tc, listen_multi_distinguishes_slots);
   tcase_add_test(tc, listen_multi_start_fails_on_bad_address);
   tcase_add_test(tc, listen_multi_start_fails_on_zero_count);
+  tcase_add_test(tc, listen_pool_start_fails_cleanly_when_the_first_socket_cannot_be_created);
+  tcase_add_test(tc, listen_pool_start_fails_cleanly_when_epoll_cannot_be_created);
+  tcase_add_test(tc, listen_pool_start_unwinds_already_started_workers_on_late_failure);
+  tcase_add_test(tc, listen_pool_without_callback_swallows_datagrams);
+  tcase_add_test(tc, listen_multi_start_fails_cleanly_when_epoll_cannot_be_created);
+  tcase_add_test(tc, listen_multi_start_closes_opened_sockets_on_late_failure);
+  tcase_add_test(tc, listen_multi_without_callback_swallows_datagrams);
+  tcase_add_test(tc, listen_pool_with_wake_fd_stops_promptly_on_signal);
+  tcase_add_test(tc, listen_multi_with_wake_fd_stops_promptly_on_signal);
   suite_add_tcase(s, tc);
   return s;
 }

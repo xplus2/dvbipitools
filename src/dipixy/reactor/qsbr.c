@@ -26,6 +26,12 @@ qsbr_domain_t *qsbr_domain_create(int nworkers) {
   return d;
 }
 
+void qsbr_domain_destroy(qsbr_domain_t *d) {
+  if (!d) return;
+  free((void *)d->epoch);
+  free(d);
+}
+
 void qsbr_worker_quiescent(qsbr_domain_t *d, int tid) {
   if (!d || tid < 0 || tid >= d->nworkers) return;
   atomic_fetch_add_explicit(&d->epoch[tid], 1, memory_order_release);

@@ -6,10 +6,10 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/send_result.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "../input/source.h"
 #include "../mux/tspacketizer.h"
@@ -41,6 +41,7 @@ ristout_t *radiohead_rist_open(const config_t *cfg) {
   rc.npeers = (int)cfg->n_rist;
   rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
   rc.secret = cfg->rist_secret;
+  rc.key_size = cfg->rist_key_size;
   rc.cname = cfg->rist_cname;
   rc.buffer_ms = cfg->rist_buffer_ms;
   rc.verbose = cfg->verbose;
@@ -156,28 +157,11 @@ const char *source_codec_name(source_codec_t c) {
   return "?";
 }
 
-typedef struct {
-  tspacketizer_t **tsp;
-  cas_t *cas;
-  const config_t *cfg;
-  meta_state_t *meta;
-  out_ctx_t *out;
-  input_metrics_t *im;
-  radio_metrics_t *rm;
-  int metrics_on;
-  metrics_exporter_t *mx;
-  uint64_t *samples_total;
-  double *pace_deadline;
-  double start;
-  double *last_stat;
-  unsigned long long *last_synced_bytes;
-} single_tick_t;
-
 /* drains up to RADIOHEAD_MAX_FRAMES_PER_TICK frames from src, paced to
    real time via pace_deadline (same scheme as mpts.c's process_input_slot).
    0: ok, keep looping. -1: r<0 (source error), caller should reconnect.
    -2: fatal (tspacketizer_new() OOM or cas_failed()), caller must abort */
-static int process_single_frame(single_tick_t *tk, source_t *src) {
+int process_single_frame(single_tick_t *tk, source_t *src) {
   unsigned frames_this_visit = 0;
   double now = mono_seconds();
 
@@ -194,6 +178,7 @@ static int process_single_frame(single_tick_t *tk, source_t *src) {
       return -1;
     }
     frames_this_visit++;
+    if (source_take_resumed(src) && *tk->pace_deadline < now) *tk->pace_deadline = now;
     if (tk->metrics_on) {
       tk->im->last_data_time = (double)time(NULL);
       tk->rm->frames_total[f.codec]++;
@@ -317,6 +302,11 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     samples_total = 0;
     pace_deadline = mono_seconds();
 
+    if (src && source_set_prefill_ms(src, cfg->inputs[0].jitter_ms) < 0) {
+      source_close(src);
+      src = NULL;
+      reason = NET_ERR_OTHER;
+    }
     if (!src) {
       if (metrics_on) {
         im.up = 0;

@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "lib/config/yamlcfg.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/mux/fec2022.h"
 #include "config.h"
 #include "version.h"
@@ -124,6 +124,14 @@ static int apply_tls_key(void *c, const char *v, char *e, size_t n) {
 static int apply_workers(void *c, const char *v, char *e, size_t n) {
   if (dixy_cfg_workers(&((config_t *)c)->workers_spec, v)) {
     snprintf(e, n, "invalid '%s' (-1/-2/-3, or a positive count)", v);
+    return -1;
+  }
+  return 0;
+}
+
+static int apply_cpu_affinity(void *c, const char *v, char *e, size_t n) {
+  if (cpuaff_parse(&((config_t *)c)->cpu_affinity, v)) {
+    snprintf(e, n, "invalid '%s' (off, auto, or list like 2-5,8)", v);
     return -1;
   }
   return 0;
@@ -387,6 +395,7 @@ static const yamlcfg_key_t keys[] = {
   {"tls.cert", apply_tls_cert, 1, 0},
   {"tls.key", apply_tls_key, 1, 0},
   {"workers", apply_workers, 0, 0},
+  {"cpu-affinity", apply_cpu_affinity, 0, 0},
   {"max-clients", apply_max_clients, 0, 0},
   {"max-channels", apply_max_channels, 0, 0},
   {"idle-timeout", apply_idle_timeout, 0, 0},

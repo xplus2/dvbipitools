@@ -5,9 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "args.h"
+#include "cli/args.h"
 #include "lib/helper/fileutil.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
 #include "lib/tva/bcg_doc.h"

@@ -22,6 +22,7 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--tls-cert`             | `<path>`                    | search default paths, see below                   |       |
 |      | `--tls-key`              | `<path>`                    | search default paths, see below                   |       |
 | `-j` | `--workers`              | `-[123]` or `<n>`           | `-1` ("-" cpu core multiplier) or thread count    |       |
+|      | `--cpu-affinity`         | `off`\|`auto`\|`<list>`     | `off`, pin workers, list e.g. `2-4,6,8`           |       |
 |      | `--max-clients`          | `<n>`                       | `256`, cap on concurrent streams                  |       |
 |      | `--max-channels`         | `<n>`                       | `32`, concurrency (source,filter,pmt,container)   |       |
 |      | `--idle-timeout`         | `<seconds>`                 | `0` (off), close a connection idle this long      |       |
@@ -280,6 +281,19 @@ RIST and SRT input need `librist`/`libsrt` the same as every other tool here.
 `-j`|`--workers` worker threads (default: one per CPU core. Negative 2 or 3 are multiple of SMT cores, positive numbers are the exact amount).
 Each worker owns an `SO_REUSEPORT` socket + epoll() loop, so incoming client requests are handled in parallel without a shared lock.
 As long as a client uses the same channel+filter/pmt combination, segments and buffers in memory get re-used (lock-free).
+
+### CPU/core affinity
+
+`--cpu-affinity` pins the epoll/qsbr workers to CPU cores (default `off`: the kernel default).
+`auto` puts worker *i* on the *i*-th CPU the process may use (honors `taskset` and cgroup cpusets) and wraps around when
+there are more workers than CPUs.
+A list like `2-4,6,8` assigns workers to exactly those CPUs in order, workers beyond the list float.
+A listed CPU outside the allowed set is skipped with a log line. Capture pump threads are never pinned.
+
+It pays off with many workers, busy links and NIC IRQs steered to the same cores.
+On a box shared with other services (lab setup, if you're not benchmarking), better leave it off.
+
+### Sizing
 
 For sizing, the following factors should be considered (spoiler: basically just memory-related):
   * Available memory

@@ -17,6 +17,9 @@ int argutil_port_parse(const char *p, unsigned *out);
 /* dec only, [min, max] incl. 0 ok, -1 bad format or oor */
 int argutil_uint_range(const char *s, unsigned min, unsigned max, unsigned *out);
 
+/* RIST AES key size: 128|256. 0 ok, -1 invalid */
+int argutil_rist_key_size(const char *s, int *out);
+
 int argutil_bufcpy_opt(const char *tool, char *dst, size_t dstsz, const char *val, const char *optname);
 
 int argutil_srt_passphrase_opt(const char *tool, const char *passphrase, const char *optname);

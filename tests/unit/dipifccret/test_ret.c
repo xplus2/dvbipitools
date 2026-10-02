@@ -340,6 +340,77 @@ START_TEST(mc_and_unicast_rtx_seq_are_independent) {
 }
 END_TEST
 
+static void nack_from(ret_ctx_t *r, uint32_t media_ssrc, unsigned short port) {
+  struct sockaddr_in a = make_client_addr("10.0.0.7", port);
+  rtcp_nack_t nack;
+
+  memset(&nack, 0, sizeof nack);
+  nack.sender_ssrc = 1;
+  nack.media_ssrc = media_ssrc;
+  nack.entry_count = 1;
+  nack.entry[0].pid = 100;
+  ret_handle_nack(r, &nack, 3, (const struct sockaddr *)&a, sizeof a);
+}
+
+START_TEST(active_clients_counts_distinct_client_addresses) {
+  channel_table_t *t;
+  channel_t *c = make_channel(&t, 0xAAAA, 100, 3);
+  ret_ctx_t *r = ret_ctx_new(t, 99, 32, send_mc, send_unicast, NULL);
+
+  (void)c;
+  ck_assert_uint_eq(ret_ctx_active_clients(r), 0u);
+  nack_from(r, 0xAAAA, 6000);
+  ck_assert_uint_eq(ret_ctx_active_clients(r), 1u);
+  nack_from(r, 0xAAAA, 6000);
+  ck_assert_uint_eq(ret_ctx_active_clients(r), 1u);
+  nack_from(r, 0xAAAA, 6001);
+  ck_assert_uint_eq(ret_ctx_active_clients(r), 2u);
+  ret_ctx_free(r);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(reap_step_drops_idle_client_sessions_and_keeps_fresh_ones) {
+  channel_table_t *t;
+  channel_t *c = make_channel(&t, 0xAAAA, 100, 3);
+  ret_ctx_t *r = ret_ctx_new(t, 99, 32, send_mc, send_unicast, NULL);
+
+  (void)c;
+  nack_from(r, 0xAAAA, 6000);
+  nack_from(r, 0xAAAA, 6001);
+  ck_assert_uint_eq(ret_ctx_active_clients(r), 2u);
+  ret_ctx_reap_step(r, 3600, 1000);
+  ck_assert_uint_eq(ret_ctx_active_clients(r), 2u);
+  ret_ctx_reap_step(r, -1, 1000);
+  ck_assert_uint_eq(ret_ctx_active_clients(r), 0u);
+  nack_from(r, 0xAAAA, 6000);
+  ck_assert_uint_eq(ret_ctx_active_clients(r), 1u);
+  ret_ctx_free(r);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(reap_step_is_bounded_per_call) {
+  channel_table_t *t;
+  channel_t *c = make_channel(&t, 0xAAAA, 100, 3);
+  ret_ctx_t *r = ret_ctx_new(t, 99, 64, send_mc, send_unicast, NULL);
+  unsigned short port;
+  int calls = 0;
+
+  (void)c;
+  for (port = 6000; port < 6040; port++)
+    nack_from(r, 0xAAAA, port);
+  ck_assert_uint_eq(ret_ctx_active_clients(r), 40u);
+  ret_ctx_reap_step(r, -1, 1);
+  ck_assert_uint_gt(ret_ctx_active_clients(r), 0u);
+  while (ret_ctx_active_clients(r) > 0 && calls++ < 200)
+    ret_ctx_reap_step(r, -1, 1);
+  ck_assert_uint_eq(ret_ctx_active_clients(r), 0u);
+  ret_ctx_free(r);
+  channel_table_free(t);
+}
+END_TEST
+
 static Suite *ret_suite(void) {
   Suite *s = suite_create("ret");
   TCase *tc = tcase_create("core");
@@ -351,6 +422,9 @@ static Suite *ret_suite(void) {
   tcase_add_test(tc, ret_on_self_detected_gap_ignores_unknown_ssrc);
   tcase_add_test(tc, unicast_rtx_seq_is_independent_per_client);
   tcase_add_test(tc, mc_and_unicast_rtx_seq_are_independent);
+  tcase_add_test(tc, active_clients_counts_distinct_client_addresses);
+  tcase_add_test(tc, reap_step_drops_idle_client_sessions_and_keeps_fresh_ones);
+  tcase_add_test(tc, reap_step_is_bounded_per_call);
   suite_add_tcase(s, tc);
   return s;
 }

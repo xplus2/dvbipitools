@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "lib/dash/mpd.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 static http_url_t make_base(const char *host, unsigned port, const char *path) {
   http_url_t u;

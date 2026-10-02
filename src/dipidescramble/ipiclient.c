@@ -6,9 +6,9 @@
 #include <string.h>
 
 #include "lib/demux/psi/section_asm.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "lib/net/httpclient/httpclient.h"
 
 #include "ipiclient.h"

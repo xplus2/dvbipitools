@@ -39,7 +39,8 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 |      | `--metrics-inspect-ts`      | `off\|basic\|medium\|full` | `off`                                        |
 |      | `--metrics-inspect-ts-pids` | `<pid,pid,...>`            | none                                         |
 |      | `--max-services`            | `<n>`                      | `32` (max `256`)                             |
-|      | `--profile`                 | `simple\|main`             | `simple`, `-i rist://` only                  |
+|      | `--rist-profile`            | `simple\|main`             | `simple`, `-i rist://` only                  |
+|      | `--rist-encryption-type`    | `128\|256`                 | library default                              |
 | `-d` | `--daemonize`               |                            | off (foreground)                             |
 | `-c` | `--config`                  | `<path>`                   | `/etc/dvbipitools/dipidescramble.yaml`       |
 |      | `--config-strict`           |                            | config file issues are errors                |
@@ -101,7 +102,9 @@ Can be a single-program stream (SPTS) or a multi-program mux (MPTS), see `-p` be
 
 `rist://@host:port[?query]` is also accepted. It requires librist and only supports a single peer per input (no bonding).
 If you need bonded RIST input, you can run `dipirist` in front of this tool as a bridge instead.
-Encrypted input needs `--profile main` and a `?secret=` query parameter in the URI.
+
+Encrypted input needs `--rist-profile main` and a `?secret=` query parameter in the URI.
+`--rist-encryption-type` sets the AES key size (128 or 256).
 
 `srt://host:port` (caller) or `srt://@host:port` (listener) is also accepted. It requires libsrt
 and only supports a single peer (no bonding, no rendezvous). You can use `dipisrt` as a bridge for those.

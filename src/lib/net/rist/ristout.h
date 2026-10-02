@@ -17,6 +17,7 @@ typedef struct {
   int npeers;
   ristout_profile_t profile;
   const char *secret;      /* NULL/"" = none; profile main only */
+  int key_size;            /* 0 = default, else 128/256; needs secret */
   const char *cname;       /* NULL/"" = library default */
   unsigned buffer_ms;      /* recovery_length_min/max on every peer; 0 = library default */
   int verbose;             /* gates librist's own INFO/DEBUG logging */

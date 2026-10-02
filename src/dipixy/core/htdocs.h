@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "../args.h"
+#include "../cli/args.h"
 
 /* generated at build time from htdocs/index.html by gen_htdocs */
 extern const char g_htdocs_index_html[];

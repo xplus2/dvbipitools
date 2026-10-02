@@ -76,6 +76,17 @@ RTP payload type for retransmitted/burst packets. Default: 99.
 .B \-l
 socket worker threads. Default: 0 (= online CPU cores).
 .TP
+.B \-\-cpu\-affinity \fI<spec>\fR
+Pin the burst pacing thread and the RSI announcement thread to CPU cores, in that order.
+.B off
+disables pinning,
+.B auto
+uses the CPU cores the process may use in order, a list like
+.B 2\-4,6,8
+picks explicit CPUs and leaves surplus threads unpinned.
+.B \-w
+socket workers are never pinned. Default: off.
+.TP
 .BR \-u ", " \-\-user\ \fI<user>\fR
 Drop privileges to this user after opening the capture handle.
 .TP

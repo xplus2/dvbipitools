@@ -50,6 +50,12 @@ qsbr_domain_t *reactor_qsbr(void) { return g_reactor_qsbr; }
 const channels_t *reactor_channels(void) { return g_channels; }
 metrics_exporter_t *reactor_metrics(void) { return g_metrics; }
 
+void reactor_set_context(const config_t *cfg, const channels_t *channels, metrics_exporter_t *mx) {
+  g_cfg = cfg;
+  g_channels = channels;
+  g_metrics = mx;
+}
+
 void reactor_reload_channels(void) { channels_reload_all((channels_t *)g_channels, reactor_cfg()); }
 
 long reactor_connections_total(void) { return __atomic_load_n(&g_connections_total, __ATOMIC_RELAXED); }
@@ -157,9 +163,7 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   const char *cert_path;
   const char *key_path;
 
-  g_cfg = cfg;
-  g_channels = channels;
-  g_metrics = mx;
+  reactor_set_context(cfg, channels, mx);
   g_on_listening = on_listening;
 
   reactor_raise_nofile_limit();
@@ -180,6 +184,8 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
     log_line(TOOL_NAME ": -j resolves to %d workers, exceeds max supported %d", workers, REACTOR_MAX_WORKERS);
     return -1;
   }
+  if (cfg->cpu_affinity.mode == CPUAFF_LIST && cfg->cpu_affinity.n < (unsigned)workers)
+    log_line(TOOL_NAME ": --cpu-affinity lists %u cpus for %d workers, rest float", cfg->cpu_affinity.n, workers);
 #ifdef HAVE_HTTP3
   h3_set_limits(cfg->h3_max_streams, cfg->h3_max_conns, cfg->h3_idle_s);
   h3_set_transport(cfg->h3_max_udp, cfg->h3_window_kib, cfg->h3_cc);
@@ -206,6 +212,7 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   tls_gc_init(workers);
   g_reactor_qsbr = qsbr_domain_create(workers);
   hls_store_set_qsbr(g_reactor_qsbr);
+  hls_seg_set_qsbr(g_reactor_qsbr);
   channels_set_qsbr(g_reactor_qsbr);
   n_pump = workers > CAPTURE_PUMP_MAX_THREADS ? CAPTURE_PUMP_MAX_THREADS : workers;
   capture_pump_set_thread_count(n_pump);
@@ -216,6 +223,7 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   if (g_on_listening_thread_started) pthread_join(g_on_listening_thread, NULL);
   for (i = 1; i < workers; i++) if (threads[i]) pthread_join(threads[i], NULL);
   for (i = 0; i < n_pump; i++) if (pumps[i]) pthread_join(pumps[i], NULL);
+  conn_graveyard_free();
 
 #ifdef HAVE_HTTP3
   h3_cleanup();

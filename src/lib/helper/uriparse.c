@@ -8,7 +8,7 @@
 #include <string.h>
 
 #include "argutil.h"
-#include "ioutil.h"
+#include "../sys/ioutil.h"
 
 int uriparse_mcast_addrport(const char *rest, int *family, char *group, size_t groupsz, unsigned *port) {
   if (argutil_addrport_parse(rest, family, group, groupsz, port)) return -1;

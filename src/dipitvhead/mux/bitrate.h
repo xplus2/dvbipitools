@@ -9,6 +9,7 @@ typedef struct bitrate_pacer bitrate_pacer_t;
 /* target_bps 0 disables both pacing and stuffing. NULL on failure */
 bitrate_pacer_t *bitrate_pacer_new(double target_bps, int stuff, int burst_limit);
 void bitrate_pacer_free(bitrate_pacer_t *p);
+void bitrate_pacer_start(bitrate_pacer_t *p);
 
 /* call once per outgoing datagram, not per packet. burst_limit sleep here is
    scheduler-jitter prone: pack into one call per send. p NULL: no-op (post-free trailing flush). */
@@ -20,7 +21,8 @@ void bitrate_account(bitrate_pacer_t *p);
 /* bitrate_account() x n. batch calls, not per packet. p NULL: no-op. */
 void bitrate_account_n(bitrate_pacer_t *p, unsigned n);
 
-/* whole null packets to send now to catch up to target, if stuffing enabled */
-int bitrate_stuff_due(bitrate_pacer_t *p);
+/* whole null packets to send now to catch up to target, if stuffing enabled.
+   pending: packets queued but not yet accounted (unflushed batch). p NULL: 0 */
+int bitrate_stuff_due(bitrate_pacer_t *p, unsigned pending);
 
 #endif

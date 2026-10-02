@@ -5,8 +5,8 @@
 #define DVBIPITOOLS_LIB_NET_PLAIN_ENDPOINT_H
 
 #include "httpclient/httpclient.h"
-#include "tssink.h"
-#include "tssource.h"
+#include "ts/sink.h"
+#include "ts/source.h"
 
 typedef enum {
   PLAIN_EP_RTP,  /* multicast, RTP wrapped */

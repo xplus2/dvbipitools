@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 
 #include "lib/helper/sds_xml.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 START_TEST(sds_broadcast_round_trips_multiple_services) {
   sds_service_t svcs[2], out[8];

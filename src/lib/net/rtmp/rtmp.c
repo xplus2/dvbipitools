@@ -6,7 +6,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "priv.h"
 
 rtmp_t *rtmp_new(const rtmp_cfg_t *cfg) {
@@ -95,7 +95,15 @@ void rtmp_on_message(struct rtmp *r, unsigned char type, uint32_t timestamp, con
   (void)timestamp;
   switch (type) {
     case RTMP_TYPE_SET_CHUNK_SIZE:
-      if (len >= 4) r->in_chunk_size = (((uint32_t)payload[0] << 24) | ((uint32_t)payload[1] << 16) | ((uint32_t)payload[2] << 8) | payload[3]) & 0x7FFFFFFF;
+      if (len >= 4) {
+        uint32_t size = (((uint32_t)payload[0] << 24) | ((uint32_t)payload[1] << 16) | ((uint32_t)payload[2] << 8) | payload[3]) & 0x7FFFFFFF;
+        if (size) {
+          r->in_chunk_size = size;
+        } else {
+          r->state = RTMP_ST_FAILED;
+          if (r->error_cb) r->error_cb(r->cb_ctx, "invalid chunk size");
+        }
+      }
       break;
     case RTMP_TYPE_INVOKE:
       rtmp_command_on_invoke(r, payload, len);

@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 #include "../../helper/log.h"
-#include "../../helper/signal.h"
+#include "../../sys/signal.h"
 #include "priv.h"
 
 static ssize_t body_read_raw(struct http *h, void *buf, size_t cap, net_err_reason_t *reason_out) {

@@ -6,9 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "playlist.h"
 
 #define HLS_ETAG_MAX 128

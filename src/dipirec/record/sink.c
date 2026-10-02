@@ -8,7 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "../version.h"
 #include "priv.h"
@@ -37,6 +37,7 @@ int src_open(const config_t *cfg, src_t *s) {
       tc.kind = TSSRC_RIST;
       tc.rist_uri = cfg->source.rist_uri;
       tc.rist_profile_main = cfg->rist_profile_in == RIST_PROF_MAIN;
+      tc.rist_key_size = cfg->rist_key_size_in;
       break;
     case URI_SRT:
       tc.kind = TSSRC_SRT;
@@ -155,6 +156,7 @@ int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
     rc.npeers = 1;
     rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
     rc.secret = cfg->rist_secret;
+    rc.key_size = cfg->rist_key_size;
     rc.cname = cfg->rist_cname;
     rc.buffer_ms = cfg->rist_buffer_ms;
     rc.verbose = cfg->verbose;

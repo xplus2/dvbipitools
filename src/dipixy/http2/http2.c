@@ -32,12 +32,12 @@
 #define H2_READ_BUF 65536
 #define H2_READ_MAX_ITER 16
 
-static h2_stream_t *h2_find_stream(h2_conn_t *conn, int32_t id) {
+h2_stream_t *h2_find_stream(h2_conn_t *conn, int32_t id) {
   for (int i = 0; i < H2_MAX_STREAMS; i++) if (conn->streams[i].id == id) return &conn->streams[i];
   return NULL;
 }
 
-static h2_stream_t *h2_alloc_stream(h2_conn_t *conn, int32_t id) {
+h2_stream_t *h2_alloc_stream(h2_conn_t *conn, int32_t id) {
   for (int i = 0; i < H2_MAX_STREAMS; i++) if (!conn->streams[i].id) {
     memset(&conn->streams[i], 0, sizeof(h2_stream_t));
     conn->streams[i].id = id;
@@ -46,11 +46,11 @@ static h2_stream_t *h2_alloc_stream(h2_conn_t *conn, int32_t id) {
   return NULL;
 }
 
-static void h2_free_stream(h2_conn_t *conn, int32_t id) {
+void h2_free_stream(h2_conn_t *conn, int32_t id) {
   for (int i = 0; i < H2_MAX_STREAMS; i++) if (conn->streams[i].id == id) conn->streams[i].id = 0;
 }
 
-static int h2_conn_active_count(const h2_conn_t *conn) {
+int h2_conn_active_count(const h2_conn_t *conn) {
   int n = 0;
   for (int i = 0; i < H2_MAX_STREAMS; i++) if (conn->streams[i].id) n++;
   return n;
@@ -223,7 +223,7 @@ static const httpng_ops_t h2_httpng_ops = {
     .llhls_try_park = h2ops_llhls_try_park,
 };
 
-static void h2_dispatch_stream(h2_conn_t *conn, conn_t *c, h2_stream_t *stream) {
+void h2_dispatch_stream(h2_conn_t *conn, conn_t *c, h2_stream_t *stream) {
   h2_req_ctx_t rq = {c, stream};
   httpng_req_hdrs_t hdrs = {stream->method, stream->path, stream->inm, stream->origin, stream->authz, stream->protocol};
   httpng_dispatch(&h2_httpng_ops, conn, &rq, &hdrs, c->client_ip, c->fd);

@@ -1256,6 +1256,186 @@ START_TEST(mgb1_and_mgb2_bitrates_follow_the_packet_rate) {
 }
 END_TEST
 
+static void ts33(unsigned char *b, unsigned marker, uint64_t v) {
+  b[0] = (unsigned char)((marker << 4) | (((v >> 30) & 7) << 1) | 1);
+  b[1] = (unsigned char)(v >> 22);
+  b[2] = (unsigned char)(((v >> 15) << 1) | 1);
+  b[3] = (unsigned char)(v >> 7);
+  b[4] = (unsigned char)((v << 1) | 1);
+}
+
+static void pes_pkt(unsigned char *pkt, unsigned pid, uint64_t pts, uint64_t dts, int with_dts) {
+  memset(pkt, 0xFF, 188);
+  pkt[0] = 0x47;
+  pkt[1] = (unsigned char)(0x40 | (pid >> 8));
+  pkt[2] = (unsigned char)pid;
+  pkt[3] = 0x10;
+  pkt[4] = 0;
+  pkt[5] = 0;
+  pkt[6] = 1;
+  pkt[7] = 0xE0;
+  pkt[8] = 0;
+  pkt[9] = 0;
+  pkt[10] = 0x80;
+  pkt[11] = with_dts ? 0xC0 : 0x80;
+  pkt[12] = with_dts ? 10 : 5;
+  ts33(pkt + 13, with_dts ? 3 : 2, pts);
+  if (with_dts) ts33(pkt + 18, 1, dts);
+}
+
+static int find_signed(tsinspect_t *t, metrics_id_t want, int64_t *out) {
+  metrics_writer_t w;
+  metrics_hdr_t hdr;
+  metrics_reader_t r;
+  metrics_id_t id;
+  char label[METRICS_LABEL_MAX + 1];
+  uint64_t v;
+  int found = 0;
+
+  memset(&hdr, 0, sizeof hdr);
+  hdr.proto_version = METRICS_PROTO_VERSION;
+  hdr.component = METRICS_COMPONENT_TVHEAD;
+  hdr.metrics_id[0] = 'x';
+  ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
+  tsinspect_put_metrics(t, &w, "input0", 100.0, 1000.0);
+  ck_assert_int_eq(metrics_reader_init(&r, w.buf, w.len, &hdr), 0);
+  while (metrics_reader_next(&r, &id, label, sizeof label, &v) == 1) {
+    if (id != want) continue;
+    *out = metrics_unzigzag(v);
+    found = 1;
+  }
+  return found;
+}
+
+START_TEST(dts_pcr_lead_signed_and_underruns_counted_from_full) {
+  tsinspect_t *full = tsinspect_new(METRICS_INSPECT_TS_FULL);
+  tsinspect_t *med = tsinspect_new(METRICS_INSPECT_TS_MEDIUM);
+  tsinspect_t *both[2] = {full, med};
+  psi_t *psi[2] = {psi_new(), psi_new()};
+  unsigned char sec[128], pkt[188];
+  int64_t lead = 0;
+  size_t len;
+
+  for (int i = 0; i < 2; i++) {
+    tsinspect_bind_psi(both[i], psi[i]);
+    tsinspect_tick(both[i], 1.0);
+    len = build_pat(sec, 0, 1, 0x100);
+    section_pkt(pkt, 0, sec, len);
+    feed_psi(both[i], psi[i], pkt);
+    len = build_pmt(sec, 0, 1, 0x101, 0x101);
+    section_pkt(pkt, 0x100, sec, len);
+    feed_psi(both[i], psi[i], pkt);
+    tsinspect_tick(both[i], 1.05);
+    pcr_pkt(pkt, 0x101, 0, 10ULL * 27000000ULL, 0);
+    tsinspect_packet(both[i], pkt);
+    make_pkt(pkt, 0x1FFF, 1, 0);
+    for (int k = 0; k < 99; k++) tsinspect_packet(both[i], pkt);
+    pcr_pkt(pkt, 0x101, 1, 10ULL * 27000000ULL + 1080000ULL, 0);
+    tsinspect_packet(both[i], pkt);
+    pes_pkt(pkt, 0x101, 10 * 90000ULL + 3600 + 45000, 10 * 90000ULL + 3600 + 45000, 1);
+    tsinspect_packet(both[i], pkt);
+    tsinspect_tick(both[i], 1.4);
+  }
+  ck_assert(find_signed(full, METRICS_ID_TS_DTS_PCR_LEAD_MICROSECONDS, &lead));
+  ck_assert_int_ge(lead, 498000);
+  ck_assert_int_le(lead, 500000);
+  ck_assert(!find_signed(med, METRICS_ID_TS_DTS_PCR_LEAD_MICROSECONDS, &lead));
+
+  pes_pkt(pkt, 0x101, 10 * 90000ULL, 10 * 90000ULL, 1);
+  tsinspect_packet(full, pkt);
+  tsinspect_tick(full, 1.7);
+  ck_assert(find_signed(full, METRICS_ID_TS_DTS_PCR_LEAD_MICROSECONDS, &lead));
+  ck_assert_int_ge(lead, -42000);
+  ck_assert_int_le(lead, -40000);
+
+  pes_pkt(pkt, 0x101, 10 * 90000ULL + 3600 + 9000, 0, 0);
+  tsinspect_packet(full, pkt);
+  tsinspect_tick(full, 2.0);
+  ck_assert(find_signed(full, METRICS_ID_TS_DTS_PCR_LEAD_MICROSECONDS, &lead));
+  ck_assert_int_ge(lead, 98000);
+  ck_assert_int_le(lead, 100000);
+  for (int i = 0; i < 2; i++) {
+    psi_free(psi[i]);
+    tsinspect_free(both[i]);
+  }
+}
+END_TEST
+
+START_TEST(pcr_freq_offset_and_rate_from_arrival_windows) {
+  tsinspect_t *med = tsinspect_new_relay(METRICS_INSPECT_TS_MEDIUM);
+  tsinspect_t *basic = tsinspect_new_relay(METRICS_INSPECT_TS_BASIC);
+  unsigned char pkt[188];
+  int64_t v = 0;
+  double rx = 1000000000.0;
+
+  tsinspect_tick(med, 1.0);
+  for (unsigned i = 0; i < 1800; i++) {
+    tsinspect_set_rx_ns(med, (uint64_t)rx);
+    pcr_pkt(pkt, 0x101, i & 15, 27000000ULL + i * 1080000ULL, 0);
+    tsinspect_grid(med, pkt, 188);
+    rx += 40000000.0 / 1.0001;
+    if (i == 800) {
+      tsinspect_tick(med, 30.0);
+      ck_assert(!find_signed(med, METRICS_ID_TS_PCR_DRIFT_RATE_PPB_PER_SECOND, &v));
+      ck_assert(find_signed(med, METRICS_ID_TS_PCR_FREQ_OFFSET_PPB, &v));
+      ck_assert_int_ge(v, 99000);
+      ck_assert_int_le(v, 101000);
+    }
+  }
+  tsinspect_tick(med, 70.0);
+  ck_assert(find_signed(med, METRICS_ID_TS_PCR_FREQ_OFFSET_PPB, &v));
+  ck_assert_int_ge(v, 99000);
+  ck_assert_int_le(v, 101000);
+  ck_assert(find_signed(med, METRICS_ID_TS_PCR_DRIFT_RATE_PPB_PER_SECOND, &v));
+  ck_assert_int_ge(v, -200);
+  ck_assert_int_le(v, 200);
+  ck_assert_uint_ge(tsinspect_counters(med)->pcr_freq_offset_errors, 2u);
+  ck_assert(!find_signed(basic, METRICS_ID_TS_PCR_FREQ_OFFSET_PPB, &v));
+  tsinspect_free(med);
+  tsinspect_free(basic);
+}
+END_TEST
+
+START_TEST(input_buffer_series_only_when_a_source_reports_depth) {
+  tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+
+  tsinspect_tick(t, 1.0);
+  ck_assert_uint_eq(count_series(t, METRICS_ID_TS_INPUT_BUFFER_MILLISECONDS, NULL), 0u);
+  tsinspect_set_buffer_ms(t, -1);
+  tsinspect_tick(t, 2.0);
+  ck_assert_uint_eq(count_series(t, METRICS_ID_TS_INPUT_BUFFER_MILLISECONDS, NULL), 0u);
+  tsinspect_set_buffer_ms(t, 0);
+  tsinspect_tick(t, 3.0);
+  ck_assert_uint_eq(count_series(t, METRICS_ID_TS_INPUT_BUFFER_MILLISECONDS, NULL), 1u);
+  tsinspect_set_buffer_ms(t, 85);
+  tsinspect_tick(t, 4.0);
+  ck_assert_uint_eq(count_series(t, METRICS_ID_TS_INPUT_BUFFER_MILLISECONDS, NULL), 1u);
+  tsinspect_free(t);
+}
+END_TEST
+
+START_TEST(pcr_freq_offset_negative_when_pcr_runs_slow) {
+  tsinspect_t *t = tsinspect_new_relay(METRICS_INSPECT_TS_MEDIUM);
+  unsigned char pkt[188];
+  int64_t v = 0;
+  double rx = 1000000000.0;
+
+  tsinspect_tick(t, 1.0);
+  for (unsigned i = 0; i < 800; i++) {
+    tsinspect_set_rx_ns(t, (uint64_t)rx);
+    pcr_pkt(pkt, 0x101, i & 15, 27000000ULL + i * 1080000ULL, 0);
+    tsinspect_grid(t, pkt, 188);
+    rx += 40000000.0 * 1.00002;
+  }
+  tsinspect_tick(t, 40.0);
+  ck_assert(find_signed(t, METRICS_ID_TS_PCR_FREQ_OFFSET_PPB, &v));
+  ck_assert_int_ge(v, -21000);
+  ck_assert_int_le(v, -19000);
+  ck_assert_uint_eq(tsinspect_counters(t)->pcr_freq_offset_errors, 0u);
+  tsinspect_free(t);
+}
+END_TEST
+
 static Suite *inspect_suite(void) {
   Suite *s = suite_create("tsinspect");
   TCase *tc = tcase_create("core");
@@ -1301,6 +1481,10 @@ static Suite *inspect_suite(void) {
   tcase_add_test(tc, pid_and_service_detail_absent_below_full_level);
   tcase_add_test(tc, exported_series_cover_tables_gap_stalls_and_bat_crc_by_level);
   tcase_add_test(tc, mgb1_and_mgb2_bitrates_follow_the_packet_rate);
+  tcase_add_test(tc, dts_pcr_lead_signed_and_underruns_counted_from_full);
+  tcase_add_test(tc, pcr_freq_offset_and_rate_from_arrival_windows);
+  tcase_add_test(tc, pcr_freq_offset_negative_when_pcr_runs_slow);
+  tcase_add_test(tc, input_buffer_series_only_when_a_source_reports_depth);
   suite_add_tcase(s, tc);
   return s;
 }

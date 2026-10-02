@@ -4,7 +4,7 @@
 #include "priv.h"
 #include "../../reactor/qsbr.h"
 #include "lib/demux/rtp.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include <poll.h>
 #include <string.h>

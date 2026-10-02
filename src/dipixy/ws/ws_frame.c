@@ -72,6 +72,7 @@ int ws_parser_next(ws_parser_t *p, int *opcode, const uint8_t **payload, size_t 
     const uint8_t *mask;
     const uint8_t *body;
     if (p->len < 2) return 0;
+    if (p->buf[0] & 0x70) return -1; /* RSV1-3: no extension negotiated, RFC6455 SS5.2 */
     fin = (p->buf[0] & 0x80) != 0;
     op = p->buf[0] & 0x0f;
     masked = (p->buf[1] & 0x80) != 0;
@@ -106,6 +107,7 @@ int ws_parser_next(ws_parser_t *p, int *opcode, const uint8_t **payload, size_t 
     }
 
     if (op == WS_OP_TEXT || op == WS_OP_BINARY) {
+      if (p->have_msg_opcode) return -1; /* new data frame inside unfinished message */
       p->msg_len = 0;
       p->msg_opcode = op;
       p->have_msg_opcode = 1;

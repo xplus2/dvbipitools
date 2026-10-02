@@ -183,6 +183,173 @@ START_TEST(esbuild_ac3_passes_through_unchanged) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  codec_t codec;
+  unsigned char data[24];
+  size_t len;
+  size_t outcap;
+  size_t expect;
+} video_case_t;
+
+static const video_case_t video_cases[] = {
+    {"empty sample", CODEC_H264, {0}, 0, 64, 0},
+    {"length prefix cut", CODEC_H264, {0x00, 0x00, 0x00}, 3, 64, 0},
+    {"nal length past end", CODEC_H264, {0x00, 0x00, 0x00, 0x09, 0x65, 0x88}, 6, 64, 0},
+    {"zero length nal", CODEC_H264, {0x00, 0x00, 0x00, 0x00}, 4, 64, 0},
+    {"good nal then truncated nal", CODEC_H264, {0x00, 0x00, 0x00, 0x02, 0x41, 0x9A, 0x00, 0x00, 0x00, 0x09, 0x41}, 11, 64, 6},
+    {"output too small", CODEC_H264, {0x00, 0x00, 0x00, 0x02, 0x41, 0x9A}, 6, 5, 0},
+    {"output exactly fits", CODEC_H264, {0x00, 0x00, 0x00, 0x02, 0x41, 0x9A}, 6, 6, 6},
+    {"hevc nal shorter than its header", CODEC_HEVC, {0x00, 0x00, 0x00, 0x01, 0x26}, 5, 64, 0},
+    {"vvc nal shorter than its header", CODEC_VVC, {0x00, 0x00, 0x00, 0x01, 0x00}, 5, 64, 0},
+};
+
+START_TEST(esbuild_video_conversion_stops_at_malformed_nal_sizes) {
+  const video_case_t *c = &video_cases[_i];
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+  fmp4_dec_sample_t sample;
+  unsigned char out[64];
+  size_t n;
+
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = c->codec;
+  esbuild_track_init(&t, &stsd);
+  memset(&sample, 0, sizeof sample);
+  sample.data = c->data;
+  sample.size = c->len;
+  n = esbuild_convert_sample(&t, &sample, out, c->outcap);
+  ck_assert_msg(n == c->expect, "%s: %zu bytes, want %zu", c->name, n, c->expect);
+}
+END_TEST
+
+START_TEST(esbuild_vvc_idr_gets_parameter_sets_reinjected) {
+  static const unsigned char vps[] = {0x00, 0x71, 0xAA};
+  static const unsigned char sps[] = {0x00, 0x79, 0x11};
+  static const unsigned char idr[] = {0x00, 0x39, 0xEE};
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+  unsigned char vvc[32];
+  size_t vpos = 0;
+  fmp4_dec_sample_t sample;
+  unsigned char out[64];
+  size_t n;
+
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = CODEC_VVC;
+  stsd.vps[0].data = vps;
+  stsd.vps[0].len = sizeof vps;
+  stsd.n_vps = 1;
+  stsd.sps[0].data = sps;
+  stsd.sps[0].len = sizeof sps;
+  stsd.n_sps = 1;
+  esbuild_track_init(&t, &stsd);
+
+  avcc_append(vvc, &vpos, idr, sizeof idr);
+  memset(&sample, 0, sizeof sample);
+  sample.data = vvc;
+  sample.size = vpos;
+  n = esbuild_convert_sample(&t, &sample, out, sizeof out);
+  ck_assert_uint_eq(n, (4 + sizeof vps) + (4 + sizeof sps) + (4 + sizeof idr));
+  ck_assert_int_eq(memcmp(out + 4, vps, sizeof vps), 0);
+}
+END_TEST
+
+START_TEST(esbuild_parameter_set_injection_fails_cleanly_when_output_is_too_small) {
+  static const unsigned char sps[] = {0x67, 0x64, 0x00, 0x1F};
+  static const unsigned char idr[] = {0x65, 0x88};
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+  unsigned char avcc[16];
+  size_t apos = 0;
+  fmp4_dec_sample_t sample;
+  unsigned char out[64];
+
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = CODEC_H264;
+  stsd.sps[0].data = sps;
+  stsd.sps[0].len = sizeof sps;
+  stsd.n_sps = 1;
+  esbuild_track_init(&t, &stsd);
+  avcc_append(avcc, &apos, idr, sizeof idr);
+  memset(&sample, 0, sizeof sample);
+  sample.data = avcc;
+  sample.size = apos;
+  ck_assert_uint_eq(esbuild_convert_sample(&t, &sample, out, 4 + sizeof sps + 3), 0u);
+  ck_assert_uint_eq(esbuild_convert_sample(&t, &sample, out, (4 + sizeof sps) + (4 + sizeof idr)), (4 + sizeof sps) + (4 + sizeof idr));
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  size_t sample_size;
+  unsigned sr_index;
+  size_t outcap;
+  size_t expect;
+} aac_case_t;
+
+static const aac_case_t aac_cases[] = {
+    {"zero length sample is a bare header", 0, 3, 64, 7},
+    {"largest frame the header can describe", 8184, 3, 8200, 8191},
+    {"frame one byte too long for the header", 8185, 3, 8200, 0},
+    {"output one byte short", 10, 3, 16, 0},
+    {"output exactly fits", 10, 3, 17, 17},
+    {"sample rate index out of range", 10, 13, 64, 0},
+};
+
+START_TEST(esbuild_aac_adts_bounds) {
+  const aac_case_t *c = &aac_cases[_i];
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+  static const unsigned char asc[] = {0x11, 0x90};
+  fmp4_dec_sample_t sample;
+  unsigned char *payload = calloc(c->sample_size ? c->sample_size : 1, 1);
+  unsigned char *out = malloc(c->outcap);
+  size_t n;
+
+  ck_assert_ptr_nonnull(payload);
+  ck_assert_ptr_nonnull(out);
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = CODEC_AAC;
+  stsd.cpriv = asc;
+  stsd.cpriv_len = sizeof asc;
+  esbuild_track_init(&t, &stsd);
+  t.aac_sr_index = c->sr_index;
+  memset(&sample, 0, sizeof sample);
+  sample.data = payload;
+  sample.size = c->sample_size;
+  n = esbuild_convert_sample(&t, &sample, out, c->outcap);
+  ck_assert_msg(n == c->expect, "%s: %zu bytes, want %zu", c->name, n, c->expect);
+  if (n) {
+    size_t framelen = ((size_t)(out[3] & 3) << 11) | ((size_t)out[4] << 3) | (out[5] >> 5);
+
+    ck_assert_msg(framelen == n, "%s: header says %zu", c->name, framelen);
+  }
+  free(payload);
+  free(out);
+}
+END_TEST
+
+START_TEST(esbuild_passthrough_respects_empty_samples_and_output_size) {
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+  static const unsigned char raw[] = {0x0B, 0x77, 0xAA};
+  fmp4_dec_sample_t sample;
+  unsigned char out[8];
+
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = CODEC_AC3;
+  esbuild_track_init(&t, &stsd);
+  memset(&sample, 0, sizeof sample);
+  sample.data = raw;
+  sample.size = 0;
+  ck_assert_uint_eq(esbuild_convert_sample(&t, &sample, out, sizeof out), 0u);
+  sample.size = sizeof raw;
+  ck_assert_uint_eq(esbuild_convert_sample(&t, &sample, out, sizeof raw - 1), 0u);
+  ck_assert_uint_eq(esbuild_convert_sample(&t, &sample, out, sizeof raw), sizeof raw);
+}
+END_TEST
+
 static Suite *esbuild_suite(void) {
   Suite *s = suite_create("esbuild");
   TCase *tc = tcase_create("core");
@@ -191,6 +358,11 @@ static Suite *esbuild_suite(void) {
   tcase_add_test(tc, esbuild_hevc_idr_type19_triggers_reinjection);
   tcase_add_test(tc, esbuild_aac_synthesizes_adts_header);
   tcase_add_test(tc, esbuild_ac3_passes_through_unchanged);
+  tcase_add_loop_test(tc, esbuild_video_conversion_stops_at_malformed_nal_sizes, 0, (int)(sizeof video_cases / sizeof video_cases[0]));
+  tcase_add_test(tc, esbuild_vvc_idr_gets_parameter_sets_reinjected);
+  tcase_add_test(tc, esbuild_parameter_set_injection_fails_cleanly_when_output_is_too_small);
+  tcase_add_loop_test(tc, esbuild_aac_adts_bounds, 0, (int)(sizeof aac_cases / sizeof aac_cases[0]));
+  tcase_add_test(tc, esbuild_passthrough_respects_empty_samples_and_output_size);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -23,6 +23,23 @@ static void on_rams_t(const rtcp_rams_t_t *term, void *user) {
   (void)user;
 }
 
+static void on_rams_i(const rtcp_rams_i_t *info, void *user) {
+  (void)info;
+  (void)user;
+}
+
+static void on_sdes(const rtcp_sdes_t *sdes, void *user) {
+  (void)sdes;
+  (void)user;
+}
+
+static void on_malformed(unsigned sfmt, uint32_t sender_ssrc, uint32_t media_ssrc, void *user) {
+  (void)sfmt;
+  (void)sender_ssrc;
+  (void)media_ssrc;
+  (void)user;
+}
+
 int main(int argc, char **argv) {
   FILE *f;
   unsigned char *buf;
@@ -51,7 +68,7 @@ int main(int argc, char **argv) {
   }
   n = fread(buf, 1, (size_t)len, f);
   fclose(f);
-  rtcp_parse(buf, n, &(rtcp_cbs_t){.nack_cb = on_nack, .rams_r_cb = on_rams_r, .rams_t_cb = on_rams_t});
+  rtcp_parse(buf, n, &(rtcp_cbs_t){.nack_cb = on_nack, .rams_r_cb = on_rams_r, .rams_i_cb = on_rams_i, .rams_t_cb = on_rams_t, .sdes_cb = on_sdes, .malformed_cb = on_malformed});
   free(buf);
   return 0;
 }

@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 char *playlist_skip_blank(char *p) {
   while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;

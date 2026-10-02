@@ -10,7 +10,7 @@
 #include "../httpng/httpng.h"
 #include "http2.h"
 #include "http2_int.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -81,7 +81,7 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
   if (etag_n)
     nva[nvlen++] = (nghttp2_nv){(uint8_t *)"etag", (uint8_t *)etag_buf, 4, etag_n, NGHTTP2_NV_FLAG_NONE};
   if (cors_val) {
-    nva[nvlen++] = (nghttp2_nv){(uint8_t *)"access-control-allow-origin", (uint8_t *)cors_val, 28, strlen(cors_val),NGHTTP2_NV_FLAG_NONE};
+    nva[nvlen++] = (nghttp2_nv){(uint8_t *)"access-control-allow-origin", (uint8_t *)cors_val, 27, strlen(cors_val),NGHTTP2_NV_FLAG_NONE};
     if (cors_vary) nva[nvlen++] = (nghttp2_nv){(uint8_t *)"vary", (uint8_t *)"Origin", 4, 6, NGHTTP2_NV_FLAG_NONE};
   }
   nvlen = h2_nv_altsvc(nva, nvlen);

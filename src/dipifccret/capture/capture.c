@@ -20,8 +20,8 @@
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 
-#include "lib/helper/ioutil.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/ioutil.h"
+#include "lib/sys/signal.h"
 #include "capture.h"
 
 #define CAPTURE_TP_BLOCK_SIZE (1u << 20) /* 1 MiB, page-multiple */
@@ -33,6 +33,7 @@
 struct capture {
   int fd;
   unsigned char *ring;
+  int ring_borrowed;
   size_t ring_size;
   size_t block_size;
   size_t block_nr;
@@ -180,9 +181,29 @@ fail:
   return NULL;
 }
 
+capture_t *capture_from_ring(unsigned char *ring, size_t block_size, size_t block_nr, const cidr_t *ranges, size_t range_count) {
+  capture_t *cap = calloc(1, sizeof *cap);
+
+  if (!cap) return NULL;
+  cap->fd = -1;
+  cap->ring = ring;
+  cap->ring_borrowed = 1;
+  cap->block_size = block_size;
+  cap->block_nr = block_nr;
+  cap->ring_size = block_size * block_nr;
+  cap->parsed_ranges = calloc(range_count ? range_count : 1, sizeof *cap->parsed_ranges);
+  if (!cap->parsed_ranges) {
+    free(cap);
+    return NULL;
+  }
+  if (range_count) memcpy(cap->parsed_ranges, ranges, range_count * sizeof *ranges);
+  cap->range_count = range_count;
+  return cap;
+}
+
 void capture_close(capture_t *cap) {
   if (!cap) return;
-  if (cap->ring) munmap(cap->ring, cap->ring_size);
+  if (cap->ring && !cap->ring_borrowed) munmap(cap->ring, cap->ring_size);
   if (cap->fd >= 0) close(cap->fd);
   free(cap->parsed_ranges);
   free(cap);
@@ -219,7 +240,7 @@ int capture_drop_privileges(const char *user) {
   return 0;
 }
 
-static void capture_drain_ring(capture_t *cap, capture_frame_cb cb, void *user) {
+void capture_drain_ring(capture_t *cap, capture_frame_cb cb, void *user) {
   for (;;) {
     struct tpacket_block_desc *bd = (struct tpacket_block_desc *)(cap->ring + cap->block_idx * cap->block_size);
     struct tpacket3_hdr *ppd;

@@ -10,7 +10,7 @@
 #include <unistd.h>
 
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "../simulcrypt_msg.h"
 #include "priv.h"

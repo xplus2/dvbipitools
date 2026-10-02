@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "dipimetrics/store.h"
 
 static void make_hdr(metrics_hdr_t *hdr, metrics_component_t component, const char *id, uint64_t process_start, uint64_t sequence) {
@@ -311,6 +311,26 @@ START_TEST(reap_expired_frees_silent_slot) {
 }
 END_TEST
 
+START_TEST(signed_values_are_stored_unchanged) {
+  store_t st;
+  metrics_writer_t w;
+  metrics_hdr_t hdr;
+  store_slot_t *slot;
+
+  make_hdr(&hdr, METRICS_COMPONENT_TVHEAD, "inst1", 100, 1);
+  ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
+  ck_assert_int_eq(metrics_writer_put_signed(&w, METRICS_ID_TS_PCR_FREQ_OFFSET_PPB, "input0", -42), 0);
+  ck_assert_uint_gt(metrics_writer_finish(&w), 0u);
+
+  store_init(&st);
+  store_ingest(&st, w.buf, w.len, 10.0, 0);
+  slot = only_valid_slot(&st);
+  ck_assert_ptr_nonnull(slot);
+  ck_assert_int_eq(metrics_unzigzag(first_value(slot)), -42);
+  store_free(&st);
+}
+END_TEST
+
 START_TEST(v1_snapshot_is_accepted) {
   store_t st;
   unsigned char buf[METRICS_MAX_SNAPSHOT_BYTES];
@@ -495,6 +515,7 @@ static Suite *store_suite(void) {
   tcase_add_test(tc, distinct_component_same_id_are_separate_instances);
   tcase_add_test(tc, store_full_drops_new_instance);
   tcase_add_test(tc, reap_expired_frees_silent_slot);
+  tcase_add_test(tc, signed_values_are_stored_unchanged);
   tcase_add_test(tc, v1_snapshot_is_accepted);
   tcase_add_test(tc, malformed_v2_body_is_rejected);
   tcase_add_test(tc, multipart_commits_only_when_last_part_arrives);

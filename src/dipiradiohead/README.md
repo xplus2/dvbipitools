@@ -1,7 +1,7 @@
 # dipiradiohead
 
 This tool fetches one or more Icecast/Shoutcast/HLS/raw audio streams and re-muxes them as one transport stream.
-Output can be a DVB-IPI multicast, SRT or RIST.
+Output can be a multicast, SRT or RIST.
 
 No transcoding. A single `-i` gives a normal SPTS, more than one gives an MPTS, one program per input.
 
@@ -19,6 +19,7 @@ dipiradiohead -i <uri> [--sid <n>] [--sdt <name>] [-i <uri> ...] {-m <mcast>:<po
 |------|------------------------------|----------------------------------------|---------------------------------------|-----------|
 | `-i` | `--input`                    | `<uri>`                                | required, repeatable                  |           |
 |      | `--sid`                      | `<n>`                                  | auto (see below)                      | per-input |
+|      | `--jitter-ms`                | `<ms>`                                 | off (1..10000)                        | per-input |
 | `-s` | `--sdt`                      | `<name>`                               | auto (see below)                      | per-input |
 |      | `--provider`                 | `<name>`                               | `--default-provider`                  | per-input |
 |      | `--default-provider`         | `<provider>`                           | `dipiradiohead`                       |           |
@@ -54,10 +55,11 @@ not global flags. Order matters: `--sid`/`-s` before the first `-i` is an error.
 | flag | long form        | argument           | default                                         | scope |
 |------|------------------|--------------------|-------------------------------------------------|-------|
 | `-R` | `--remote`       | `rist://host:port` | none, repeatable (bonded, one scheme at a time) |       |
-|      | `--rist-profile` | `simple\|main`     | `simple` (`-R rist://` peers only)              |       |
-|      | `--rist-secret`  | `<psk>`            | none (`-R rist://` peers only)                  |       |
-|      | `--rist-cname`   | `<name>`           | library default (`-R rist://` peers only)       |       |
-|      | `--rist-buffer`  | `<ms>`             | library default (`-R rist://` peers only)       |       |
+|      | `--rist-profile` | `simple\|main`     | `simple`                                        |       |
+|      | `--rist-secret`  | `<psk>`            | none                                            |       |
+|      | `--rist-encryption-type` | `128\|256` | library default (needs `--rist-profile main`)   |       |
+|      | `--rist-cname`   | `<name>`           | library default                                 |       |
+|      | `--rist-buffer`  | `<ms>`             | library default                                 |       |
 
 ### Related to SRT Output
 | flag | long form            | argument            | default                                         | scope |
@@ -174,20 +176,26 @@ route). `-r` wraps output in RTP, matching `dipirec -i rtp://`; without it, plai
 `-i udp://`. 7 TS packets (1316 B) per datagram either way. `-T` sets the multicast TTL / hop
 limit (default 1, i.e. link-local only - raise it to route beyond the first hop).
 
+### RIST/SRT output (`-R`)
+
 `-R rist://host:port[?query]` sends the same TS to one or more RIST peers, alongside `-m` if
 given, or standalone without it. One of `-m`/`-R` is required, not both (requires librist). 
 Repeatable, every peer bonds onto a single RIST sender context, 
-same bonding model as [dipirist](../dipirist/README.md). `-r` only affects the
-`-m` output.
+same bonding model as [dipirist](../dipirist/README.md). `-r` only affects the `-m` output.
 RIST is never RTP-wrapped. 
-`--rist-profile`/`--rist-secret`/`--rist-cname`/`--rist-buffer` configure the RIST peers.
-`--rist-secret` requires `--rist-profile main`.
+`--rist-profile`/`--rist-secret`/`--rist-encryption-type`/`--rist-cname`/`--rist-buffer` configure the RIST peers.
+`--rist-secret` and `--rist-encryption-type` require `--rist-profile main`.
 
 `-R srt://host:port` (requires libsrt) works the same way but bonds SRT peers instead: a single
 peer needs no extra flags, more than one needs `--srt-group-mode broadcast|backup`. `-R` is one
 scheme at a time, so `rist://` and `srt://` peers can't mix in the same run.
 Encryption/streamid/latency/packet filtering apply to every `-R srt://` peer via `--srt-passphrase`/`--srt-pbkeylen`/
 `--srt-streamid`/`--srt-packetfilter`/`--srt-latency`.
+
+> For local inspection of an otherwise RIST- or SRT-only output, it can be useful during setup or debugging to add
+> a loopback multicast destination and attach your usual transport-stream analyzer there.
+
+### Annex E Layer 1 FEC (`--al-fec`)
 
 `--al-fec <L>:<D>` sends a parallel SMPTE 2022-1 (ETSI TS 102 034 Annex E) repair stream alongside
 `-m`, on the same multicast group at `--al-fec-port`. Columns * rows <= 400, columns <= 40. 
@@ -196,7 +204,7 @@ lost packet per column. Requires `-r` (RTP output).
 
 ## Now-playing metadata
 
-EIT present event (table 0x4E, no following), text = `[artist] [title]` / `[artist]` / `[title]`.
+dipiradiohead sets the EIT present event (table 0x4E, no following), text = `[artist] [title]` / `[artist]` / `[title]`.
 
 Source, auto-detected per stream:
 * `icy-metaint` header present -> ICY: `StreamTitle='...'` blocks parsed + stripped at that byte
@@ -207,8 +215,12 @@ Source, auto-detected per stream:
 Repetition: PAT/PMT 100ms, SDT 2s, NIT 10s (only if `-n` set), EIT 1s or immediately on change -
 per program with more than one `-i`, all sharing one PAT/NIT and one continuity counter per
 table type (SDT/EIT sections cycle across programs on those shared PIDs, not duplicated per
-program). Fixed PIDs (single `-i`): PAT 0x0000, NIT 0x0010, SDT 0x0011, EIT 0x0012, PMT 0x0100,
-audio 0x0101. Per-program PIDs (multiple `-i`): see "Multiple inputs" above.
+program).
+
+Fixed PIDs (single `-i`): PAT 0x0000, NIT 0x0010, SDT 0x0011, EIT 0x0012, PMT 0x0100,
+audio 0x0101.
+
+Per-program PIDs (multiple `-i`): see "Multiple inputs" above.
 
 ## Service info (`-n`, `-s`, `--provider`)
 

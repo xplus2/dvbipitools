@@ -4,7 +4,7 @@
 #include "lib/helper/log.h"
 #include "lib/mux/psi_build.h"
 #include "lib/mux/tspacket_write.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "priv.h"
 

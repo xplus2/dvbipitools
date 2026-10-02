@@ -9,7 +9,7 @@
 
 #include "lib/helper/log.h"
 #include "lib/net/retryset.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "mpts/priv.h"
 
@@ -45,6 +45,7 @@ typedef struct {
   int insp_on;
   tsinspect_set_t insp_set;
   srtsink_queue_ctx_t qctx;
+  timemap_t tm[ARGS_MAX_INPUTS];
 } mpts_run_ctx_t;
 
 static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_run_ctx_t *c) {
@@ -122,6 +123,37 @@ static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_ru
   return 0;
 }
 
+unsigned mpts_service_index(unsigned rr_start, unsigned k, unsigned n) {
+  return n ? (rr_start + k) % n : 0;
+}
+
+unsigned mpts_advance_rr(unsigned rr_start, unsigned n) {
+  return n ? (rr_start + 1) % n : 0;
+}
+
+int mpts_cat_due(int have_cas, double now, double *last_cat) {
+  if (have_cas || now - *last_cat < INTERVAL_CAT_S) return 0;
+  *last_cat = now;
+  return 1;
+}
+
+void mpts_emit_eit(mpts_program_t *progs, unsigned n, int *eit_busy, unsigned char *eit_cc, remux_packet_cb cb, void *ctx) {
+  if (*eit_busy >= 0 && progs[*eit_busy].rx && remux_eit_pending(progs[*eit_busy].rx)) {
+    remux_emit_eit(progs[*eit_busy].rx, OUT_PID_EIT, eit_cc, 1, cb, ctx);
+    if (!remux_eit_mid_section(progs[*eit_busy].rx)) *eit_busy = -1;
+    return;
+  }
+  *eit_busy = -1;
+  for (unsigned i = 0; i < n; i++) {
+    if (!progs[i].rx || !remux_eit_pending(progs[i].rx)) continue;
+    remux_emit_eit(progs[i].rx, OUT_PID_EIT, eit_cc, 1, cb, ctx);
+    if (remux_eit_mid_section(progs[i].rx)) {
+      *eit_busy = (int)i;
+      break;
+    }
+  }
+}
+
 static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_ctx_t *c) {
   unsigned n = c->n;
 
@@ -151,6 +183,10 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
       pfd_slot[npfd] = i;
       npfd++;
     }
+    for (unsigned i = 0; i < n; i++) {
+      int due = c->progs[i].rx ? remux_hold_due_ms(c->progs[i].rx) : -1;
+      if (due >= 0 && due < timeout_ms) timeout_ms = due;
+    }
     poll(npfd ? pfds : NULL, npfd, timeout_ms);
     if (signal_stop_requested()) break;
     tvhead_srt_service(&c->out);
@@ -171,40 +207,25 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
     tk.metrics_on = c->metrics_on;
     tk.out = &c->out;
     tk.tsm = c->tsm_p;
+    tk.tm = c->tm;
     tk.insp = c->insp_on ? c->insp_in : NULL;
     tk.now = now;
     tk.now_t = now_t;
 
     for (unsigned k = 0; k < n; k++) {
       tvsrc_t *src;
-      unsigned i = (c->rr_start + k) % n;
+      unsigned i = mpts_service_index(c->rr_start, k, n);
       src = retryset_result(c->rs, i);
       if (!src) continue;
       if (!input_poll_ready(i, ready_mask)) continue;
       if (!c->progs[i].rx) discover_input(&tk, i, src);
       else feed_input(&tk, i, src);
     }
-    c->rr_start = n ? (c->rr_start + 1) % n : 0;
+    c->rr_start = mpts_advance_rr(c->rr_start, n);
 
-    if (c->eit_busy >= 0 && c->progs[c->eit_busy].rx && remux_eit_pending(c->progs[c->eit_busy].rx)) {
-      remux_emit_eit(c->progs[c->eit_busy].rx, OUT_PID_EIT, &c->eit_cc, 1, packet_cb, &c->out);
-      if (!remux_eit_mid_section(c->progs[c->eit_busy].rx)) c->eit_busy = -1;
-    } else {
-      c->eit_busy = -1;
-      for (unsigned i = 0; i < n; i++) {
-        if (!c->progs[i].rx || !remux_eit_pending(c->progs[i].rx)) continue;
-        remux_emit_eit(c->progs[i].rx, OUT_PID_EIT, &c->eit_cc, 1, packet_cb, &c->out);
-        if (remux_eit_mid_section(c->progs[i].rx)) {
-          c->eit_busy = (int)i;
-          break;
-        }
-      }
-    }
+    mpts_emit_eit(c->progs, n, &c->eit_busy, &c->eit_cc, packet_cb, &c->out);
 
-    if (!c->cas && now - c->last_cat >= INTERVAL_CAT_S) {
-      c->last_cat = now;
-      emit_source_cat_passthrough(c->progs, n, &c->cat_cc, c->tsm_p, packet_cb, &c->out);
-    }
+    if (mpts_cat_due(c->cas != NULL, now, &c->last_cat)) emit_source_cat_passthrough(c->progs, n, &c->cat_cc, c->tsm_p, packet_cb, &c->out);
 
     if (c->cas_needs_discovery && !c->cas && check_cas_discovery_gate(cfg, c->progs, n, c->mpts, c->cas_gate_deadline, &c->cas) != 0) {
       c->rc = 1;
@@ -221,8 +242,11 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
       }
       if (signal_reload_requested()) cas_reload_receivers(c->cas);
     }
-    stuff_n = bitrate_stuff_due(c->out.pacer);
+    stuff_n = bitrate_stuff_due(c->out.pacer, (unsigned)c->out.batch_count);
     for (unsigned k = 0; k < (unsigned)stuff_n; k++) send_null_packet(&c->out);
+    for (unsigned i = 0; i < n; i++)
+      if (c->progs[i].rx) remux_release(c->progs[i].rx, now, packet_cb, &c->out, 0, c->tsm_p);
+    if (c->cas && cfg->pcr_mode == PCR_MODE_REGENERATE) cas_flush(c->cas, packet_cb, &c->out);
     if (cfg->verbose && now - c->last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - c->run_start, c->out.packets);
       fflush(stderr);
@@ -235,6 +259,8 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
 }
 
 static void mpts_teardown(const config_t *cfg, mpts_run_ctx_t *c) {
+  for (unsigned i = 0; c->progs && i < c->n; i++)
+    if (c->progs[i].rx) remux_release(c->progs[i].rx, mono_seconds(), packet_cb, &c->out, 1, c->tsm_p);
   if (c->cas) cas_flush(c->cas, packet_cb, &c->out);
   flush_batch(&c->out);
   for (unsigned i = 0; c->progs && i < c->n; i++) program_reset(&c->progs[i]);

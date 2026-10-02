@@ -4,7 +4,7 @@
 #ifndef DIPIXY_CONFIG_H
 #define DIPIXY_CONFIG_H
 
-#include "args.h"
+#include "cli/args.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipixy.yaml"
 

@@ -6,7 +6,7 @@
 
 #include "lib/metrics/export.h"
 
-#include "args.h"
+#include "cli/args.h"
 #include "input.h"
 
 int announce_run(const config_t *cfg, metrics_exporter_t *mx);

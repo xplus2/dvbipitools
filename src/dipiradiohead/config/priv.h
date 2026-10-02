@@ -18,6 +18,7 @@ cas_vendor_t *rdh_cur_vendor(config_t *cfg, char *e, size_t n);
 
 int rdh_apply_input(void *c, const char *v, char *e, size_t n);
 int rdh_apply_input_sid(void *c, const char *v, char *e, size_t n);
+int rdh_apply_input_jitter_ms(void *c, const char *v, char *e, size_t n);
 int rdh_apply_input_sdt(void *c, const char *v, char *e, size_t n);
 int rdh_apply_input_provider(void *c, const char *v, char *e, size_t n);
 
@@ -33,6 +34,7 @@ int rdh_apply_default_provider(void *c, const char *v, char *e, size_t n);
 int rdh_apply_rist(void *c, const char *v, char *e, size_t n);
 int rdh_apply_profile(void *c, const char *v, char *e, size_t n);
 int rdh_apply_secret(void *c, const char *v, char *e, size_t n);
+int rdh_apply_encryption_type(void *c, const char *v, char *e, size_t n);
 int rdh_apply_cname(void *c, const char *v, char *e, size_t n);
 int rdh_apply_buffer(void *c, const char *v, char *e, size_t n);
 int rdh_apply_srt_group_mode(void *c, const char *v, char *e, size_t n);

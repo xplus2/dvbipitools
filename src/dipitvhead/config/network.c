@@ -68,6 +68,10 @@ int tvh_apply_secret(void *c, const char *v, char *e, size_t n) {
   return tvh_set_buf(cfg->rist_secret, sizeof cfg->rist_secret, v, e, n);
 }
 
+int tvh_apply_encryption_type(void *c, const char *v, char *e, size_t n) {
+  return tvh_set_key_size(&((config_t *)c)->rist_key_size, v, e, n);
+}
+
 int tvh_apply_cname(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   return tvh_set_buf(cfg->rist_cname, sizeof cfg->rist_cname, v, e, n);

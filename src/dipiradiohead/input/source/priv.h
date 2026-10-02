@@ -11,6 +11,7 @@
 #include "lib/hls/live.h"
 
 #include "../../framer/aac_latm.h"
+#include "../framequeue.h"
 #include "../icy.h"
 #include "../id3.h"
 #include "../source.h"
@@ -36,6 +37,12 @@ struct source {
   size_t buf_len;
   size_t pending_consume; /* last returned frame's byte count, dropped next call */
   unsigned long long bytes_total;
+
+  framequeue_t *fq; /* NULL: no de-jitter, frames go straight out */
+  unsigned prefill_ms;
+  int fq_running;   /* 0: filling to prefill_ms before release */
+  int fq_resumed;   /* set on release (re)start */
+  tsinspect_t **insp_slot;
 };
 
 /* h absorbed either way: closed on failure, owned by returned source_t on success */

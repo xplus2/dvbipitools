@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "../args.h"
+#include "../cli/args.h"
 
 /* captures argv and start time. call once, as early in main() as possible */
 void dipixy_status_init(int argc, char **argv);

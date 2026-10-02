@@ -19,6 +19,11 @@ int rdh_apply_input_sid(void *c, const char *v, char *e, size_t n) {
   return in ? yamlcfg_set_uint(&in->sid, v, 1, 0xFFFF, e, n) : -1;
 }
 
+int rdh_apply_input_jitter_ms(void *c, const char *v, char *e, size_t n) {
+  radio_input_t *in = rdh_cur_input(c, e, n);
+  return in ? yamlcfg_set_uint(&in->jitter_ms, v, 1, RADIOHEAD_MAX_JITTER_MS, e, n) : -1;
+}
+
 int rdh_apply_input_sdt(void *c, const char *v, char *e, size_t n) {
   radio_input_t *in = rdh_cur_input(c, e, n);
   return in ? rdh_set_buf(in->sdt_text, sizeof in->sdt_text, v, e, n) : -1;

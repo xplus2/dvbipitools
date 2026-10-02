@@ -4,7 +4,9 @@
 #ifndef DIPIRADIOHEAD_RADIOHEAD_PRIV_H
 #define DIPIRADIOHEAD_RADIOHEAD_PRIV_H
 
+#include <poll.h>
 #include <stdint.h>
+#include <time.h>
 
 #include "lib/mux/fec2022.h"
 #include "lib/mux/mpts.h"
@@ -15,7 +17,9 @@
 #include "lib/tsinspect/inspect.h"
 
 #include "../cas/cas.h"
+#include "../input/inputset.h"
 #include "../input/source.h"
+#include "../mux/tspacketizer.h"
 #include "radiohead.h"
 
 #define TS_PER_DGRAM 7
@@ -71,12 +75,58 @@ void packet_cb(void *ctx, const unsigned char *pkt188);
 void packet_cb_inspect(void *ctx, const unsigned char *pkt188);
 const char *source_codec_name(source_codec_t c);
 
+typedef struct {
+  tspacketizer_t **tsp;
+  cas_t *cas;
+  const config_t *cfg;
+  meta_state_t *meta;
+  out_ctx_t *out;
+  input_metrics_t *im;
+  radio_metrics_t *rm;
+  int metrics_on;
+  metrics_exporter_t *mx;
+  uint64_t *samples_total;
+  double *pace_deadline;
+  double start;
+  double *last_stat;
+  unsigned long long *last_synced_bytes;
+} single_tick_t;
+int process_single_frame(single_tick_t *tk, source_t *src);
+
 /* metrics.c */
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
   const input_metrics_t *inputs, unsigned n_inputs, const radio_metrics_t *rm, cas_t *cas);
 void radiohead_mpts_set_cas(mpts_t *mpts, cas_t *cas);
+size_t mpts_cas_build_cat(void *ctx, unsigned char *out, size_t cap);
+int mpts_cas_ecm_due(void *ctx, size_t vendor_idx, double now_s, unsigned char *out, size_t cap, size_t *out_len);
+int mpts_cas_next_emm(void *ctx, size_t vendor_idx, unsigned char *out, size_t cap, size_t *out_len);
 
 /* mpts.c */
+typedef struct {
+  inputset_t *is;
+  mpts_t *mpts;
+  cas_t *cas;
+  const config_t *cfg;
+  tspacketizer_t **tsps;
+  meta_state_t *metas;
+  uint64_t *samples_total;
+  double *pace_deadline;
+  int *was_connected;
+  input_metrics_t *input_stats;
+  unsigned long long *last_synced_bytes;
+  radio_metrics_t *rm;
+  out_ctx_t *out;
+  int metrics_on;
+  double now;
+  time_t now_t;
+  const unsigned *pfd_slot;
+  const struct pollfd *pfds;
+  nfds_t npfd;
+  uint32_t ready_mask;
+} mpts_tick_t;
+
+uint32_t compute_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd);
+int process_input_slot(mpts_tick_t *tk, unsigned i);
 int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx);
 
 #endif

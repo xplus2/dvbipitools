@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 
-#include "args.h"
+#include "cli/args.h"
 #include "lib/helper/sds_xml.h"
 
 void format_out_init(FILE *f, out_fmt_t fmt, const char *invocation);

@@ -8,7 +8,7 @@ Individual SDTs can be passed, removed or overwritten.
 
 Its output can be a DVB-IPI multicast, SRT or RIST.
 It is always one transport stream, either SPTS when only one source is given, or MPTS on more.
-For more output streams, run multiple instances if it.
+For more output streams, run multiple instances.
 
 Optionally, it scrambles selected PES using DVB SimulCrypt (multi CAS, CSA1/CSA2/CISSA, both EMMG directions) or BISS 1/2/CA (see below).
 If enabled, it also adds Annex E Layer 1 FEC or CBR stuffing.
@@ -24,47 +24,50 @@ dipitvhead -i <uri> [per-input options] [-i <uri> ...] {-m <mcast>:<port>|-R <ur
 (ffmpeg-style) - using one before any `-i` is an error. Everything else is mux-wide, shared
 across every input.
 
-| flag | long form                    | argument                   | default                              | scope     |
-|------|------------------------------|----------------------------|--------------------------------------|-----------|
-| `-i` | `--input`                    | `<uri>` / `-`              | required                             |           |
-| `-p` | `--pmt-pid`                  | `<pid>`                    | auto: first PAT program with a PMT   | per-input |
-|      | `--sid`                      | `<n>`                      | auto-assigned (lowest free integer)  | per-input |
-| `-s` | `--sdt`                      | `<text>` / `-`             | set SDT, see below                   | per-input |
-|      | `--provider`                 | `<text>`                   | passthrough                          | per-input |
-| `-I` | `--iface`                    | `<iface>`                  | kernel route (incoming)              | per-input |
-|      | `--strip-eit`                |                            | off (source EIT passed through)      | per-input |
-|      | `--strip`                    | `<list>` / `none`          | `none` (no strip)                    | per-input |
-|      | `--hbbtv`                    | `<url>`                    | none (no AIT sent)                   | per-input |
-|      | `--hbbtv-org-id`             | `<n>`                      | required with `--hbbtv`              | per-input |
-|      | `--hbbtv-app-id`             | `<n>`                      | required with `--hbbtv`              | per-input |
-| `-m` | `--mcast`                    | `<group(6)>:<port>`        | required unless `-R` given           |           |
-| `-O` | `--out-iface`                | `<iface>`                  | kernel route (outgoing)              |           |
-| `-u` | `--udp`                      |                            | off (RTP)                            |           |
-| `-T` | `--ttl`                      | `<n>`                      | 1                                    |           |
-|      | `--dscp`                     | `<v>`                      | `video-high`                         |           |
-|      | `--al-fec`                   | `<L>:<D>`                  | off (Annex E Layer 1 FEC, needs RTP) |           |
-|      | `--al-fec-port`              | `<port>`                   | required with `--al-fec`             |           |
-| `-n` | `--nit`                      | `<text>` / `-`             | set NIT, see below                   |           |
-|      | `--default-provider`         | `<provider>`               | `dipitvhead`                         |           |
-| `-b` | `--bitrate`                  | `<kbps>`                   | none (no shaping)                    |           |
-| `-S` | `--stuff`                    |                            | off (needs `-b`)                     |           |
-| `-B` | `--burst-limit`              |                            | off (needs `-b`)                     |           |
-| `-e` | `--error`                    | `<seconds>`                | fail once (always retries on MPTS)   |           |
-| `-k` | `--insecure`                 |                            | off (TLS verified)                   |           |
-|      | `--tsid`                     | `<n>`                      | 1                                    |           |
-|      | `--onid`                     | `<n>`                      | 1                                    |           |
-| `-v` | `--verbose`                  |                            | off                                  |           |
-|      | `--color`                    | `auto\|always\|never`      | `auto`                               |           |
-|      | `--metrics`                  | `<path>`                   | `/run/dvbipitools/metrics.sock`      |           |
-|      | `--metrics-id`               | `<name>`                   | none (metrics disabled unless set)   |           |
-|      | `--metrics-interval`         | `<s>`                      | `5`                                  |           |
-|      | `--metrics-inspect-ts`       | `off\|basic\|medium\|full` | `off`                                |           |
-|      | `--metrics-inspect-ts-pids`  | `<pid,pid,...>`            | none                                 |           |
-| `-d` | `--daemonize`                |                            | off (foreground)                     |           |
-| `-c` | `--config`                   | `<path>`                   | `/etc/dvbipitools/dipitvhead.yaml`   |           |
-|      | `--config-strict`            |                            | config file issues are errors        |           |
-|      | `--configtest`               |                            | check the config file, then exit     |           |
-| `-h` | `--help`                     |                            |                                      |           |
+| flag | long form                    | argument                       | default                              | scope     |
+|------|------------------------------|--------------------------------|--------------------------------------|-----------|
+| `-i` | `--input`                    | `<uri>` / `-`                  | required                             |           |
+| `-p` | `--pmt-pid`                  | `<pid>`                        | auto: first PAT program with a PMT   | per-input |
+|      | `--sid`                      | `<n>`                          | auto-assigned (lowest free integer)  | per-input |
+| `-s` | `--sdt`                      | `<text>` / `-`                 | set SDT, see below                   | per-input |
+|      | `--provider`                 | `<text>`                       | passthrough                          | per-input |
+| `-I` | `--iface`                    | `<iface>`                      | kernel route (incoming)              | per-input |
+|      | `--jitter-ms`                | `<ms>`                         | off (rtp/udp/rist/srt, 1..2000)      | per-input |
+|      | `--strip-eit`                |                                | off (source EIT passed through)      | per-input |
+|      | `--strip`                    | `<list>` / `none`              | `none` (no strip)                    | per-input |
+|      | `--hbbtv`                    | `<url>`                        | none (no AIT sent)                   | per-input |
+|      | `--hbbtv-org-id`             | `<n>`                          | required with `--hbbtv`              | per-input |
+|      | `--hbbtv-app-id`             | `<n>`                          | required with `--hbbtv`              | per-input |
+| `-m` | `--mcast`                    | `<group(6)>:<port>`            | required unless `-R` given           |           |
+| `-O` | `--out-iface`                | `<iface>`                      | kernel route (outgoing)              |           |
+| `-u` | `--udp`                      |                                | off (RTP)                            |           |
+| `-T` | `--ttl`                      | `<n>`                          | 1                                    |           |
+|      | `--dscp`                     | `<v>`                          | `video-high`                         |           |
+|      | `--al-fec`                   | `<L>:<D>`                      | off (Annex E Layer 1 FEC, needs RTP) |           |
+|      | `--al-fec-port`              | `<port>`                       | required with `--al-fec`             |           |
+| `-n` | `--nit`                      | `<text>` / `-`                 | set NIT, see below                   |           |
+|      | `--default-provider`         | `<provider>`                   | `dipitvhead`                         |           |
+| `-b` | `--bitrate`                  | `<kbps>`                       | none (no shaping)                    |           |
+| `-S` | `--stuff`                    |                                | off (needs `-b`)                     |           |
+| `-B` | `--burst-limit`              |                                | off (needs `-b`)                     |           |
+|      | `--pcr-mode`                 | `preserve\|rebase\|regenerate` | `preserve`                           |           |
+|      | `--pcr-lead-ms`              | `<ms>`                         | `700` (`regenerate` only, 1..1000)   |           |
+| `-e` | `--error`                    | `<seconds>`                    | fail once (always retries on MPTS)   |           |
+| `-k` | `--insecure`                 |                                | off (TLS verified)                   |           |
+|      | `--tsid`                     | `<n>`                          | 1                                    |           |
+|      | `--onid`                     | `<n>`                          | 1                                    |           |
+| `-v` | `--verbose`                  |                                | off                                  |           |
+|      | `--color`                    | `auto\|always\|never`          | `auto`                               |           |
+|      | `--metrics`                  | `<path>`                       | `/run/dvbipitools/metrics.sock`      |           |
+|      | `--metrics-id`               | `<name>`                       | none (metrics disabled unless set)   |           |
+|      | `--metrics-interval`         | `<s>`                          | `5`                                  |           |
+|      | `--metrics-inspect-ts`       | `off\|basic\|medium\|full`     | `off`                                |           |
+|      | `--metrics-inspect-ts-pids`  | `<pid,pid,...>`                | none                                 |           |
+| `-d` | `--daemonize`                |                                | off (foreground)                     |           |
+| `-c` | `--config`                   | `<path>`                       | `/etc/dvbipitools/dipitvhead.yaml`   |           |
+|      | `--config-strict`            |                                | config file issues are errors        |           |
+|      | `--configtest`               |                                | check the config file, then exit     |           |
+| `-h` | `--help`                     |                                |                                      |           |
 
 > Note that the default output changed from _plain UDP_ to _RTP_, since neither FCC nor RET would work
 > on plain streams. You can restore the old behavior by setting `-u`|`--udp`.
@@ -113,20 +116,22 @@ BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each o
 
 
 ### Related to RIST Input/Output
-| flag | long form            | argument            | default                                   | scope     |
-|------|----------------------|---------------------|-------------------------------------------|-----------|
-|      | `--rist-profile-in`  | `simple\|main`      | `simple` (`-i rist://` only)              | per-input |
-| `-R` | `--remote`           | `rist://host:port`  | none, repeatable (bonded, one at a time)  |           |
-|      | `--rist-profile`     | `simple\|main`      | `simple` (`-R rist://` peers only)        |           |
-|      | `--rist-secret`      | `<psk>`             | none (`-R rist://` peers only)            |           |
-|      | `--rist-cname`       | `<name>`            | library default (`-R rist://` peers only) |           |
-|      | `--rist-buffer`      | `<ms>`              | library default (`-R rist://` peers only) |           |
+| flag | long form                   | argument           | default                                                           | scope     |
+|------|-----------------------------|--------------------|-------------------------------------------------------------------|-----------|
+|      | `--rist-profile-in`         | `simple\|main`     | `simple` (`-i rist://` only)                                      | per-input |
+|      | `--rist-encryption-type-in` | `128\|256`         | library default (`-i` only, `--rist-profile-in main`)             | per-input |
+| `-R` | `--remote`                  | `rist://host:port` | none, repeatable (bonded, one at a time)                          |           |
+|      | `--rist-profile`            | `simple\|main`     | `simple` (`-R rist://` peers only)                                |           |
+|      | `--rist-secret`             | `<psk>`            | none (`-R rist://` peers only)                                    |           |
+|      | `--rist-encryption-type`    | `128\|256`         | library default (`-R rist://` peers only, `--rist-profile main`)  |           |
+|      | `--rist-cname`              | `<name>`           | library default (`-R rist://` peers only)                         |           |
+|      | `--rist-buffer`             | `<ms>`             | library default (`-R rist://` peers only)                         |           |
 
 `rist://@host:port[?query]` is also accepted, requires librist.
 `@` is required, since an input peer always listens.
 If you need bonded RIST input for a single program, run `dipirist` in front of this tool as a bridge instead.
 Encrypted input needs `--rist-profile-in main` (paired with the `-i` it follows) and a `?secret=` query parameter
-on the URI.
+(`--rist-encryption-type-in` sets the AES key size, 128 or 256) on the URI.
 
 > librist uses one context per process. This means that only _one_ input _or_ output can use RIST.
 > You can _not_ define multiple RIST inputs - and if you do, no RIST output.
@@ -201,22 +206,24 @@ No `-p`: The first PAT-listed program whose PMT actually arrives wins (MPTS sour
 * Subtitles: EBU teletext, DVB bitmap.
 
 Output PIDs: PAT `0x0000`, NIT `0x0010`, SDT `0x0011`, EIT `0x0012`, CAT `0x0001` are fixed and mux-wide, 
-shared by every program (real DVB-SI reserved PIDs, per ETSI EN 300 468).
+shared by every program (DVB-SI reserved PIDs, per ETSI EN 300 468).
 
 Every other table is per-program, in a fixed 32-PID block per input's position among the `-i` flags 
 (0-based index `i`): PMT `0x1000 + i`, video `0x0100 + i*32`, other ES `0x0101 + i*32 ..` in discovery
-order, AIT `0x011F + i*32`.
+order, AIT `0x011F + i*32`. Sounds familiar? Yes, it's ffmpeg-style.
 
 ### Multiple inputs (MPTS)
 
 If you apply more than one `-i` input definition, the output will be a Multi Program Transport Stream (MPTS).
 
 Servicing is one poll loop, not one thread per input, taken in round-robin order so no input is
-always serviced last. each is capped at 32 TS packets read per tick so one busy source can't
-starve the others that tick. There's no de-jitter buffering beyond that. 
+always serviced last. Each is capped at 32 TS packets read per tick so one busy source can't
+starve the others. De-jitter buffering is off unless `--jitter-ms` is given for an input.
 
-Each program keeps forwarding its own source's PCR untouched. There is no synthesized mux-wide
-clock, so a program's timing stays accurate to its own source regardless of what the others are doing.
+With `--pcr-mode preserve` (default) each program keeps forwarding its own source's PCR untouched. There is
+no synthesized mux-wide clock, so a program's timing stays accurate to its own source regardless of what the
+others are doing. `rebase` keeps that per-program timing and shifts it by a per-program offset. `regenerate`
+puts every program on one shared mux clock, see [PCR and timestamps](#pcr-and-timestamps---pcr-mode).
 
 The per-program ES cap is fixed at 31 real streams, one slot always reserved for AIT whether `--hbbtv` is used on that input or not.
 Extras beyond that are dropped in discovery order, logged once per program setup as "ES cap (31) reached, dropping N stream(s)".
@@ -281,8 +288,57 @@ Both would need the same CAT pid, and re-scrambling is not supported.
 
 ### Target bitrate (`-b`, `-S`, `-B`)
 
-No `-b`: source rate passes straight through. `-S`: null-packet padding when output falls behind
-target. `-B`: paces sending so output never runs ahead of target. Combinable.
+* `-b`|`--bitrate` is one budget for the whole output. It counts every 188-byte packet, not the RTP/UDP overhead. 
+  This setting alone only logs a warning when content runs more than 2 s ahead of target.
+* `-S`|`--stuff`: add CBR stuffing when behind target, inserted ahead of the next packet and once per poll tick
+  (<=100 ms) while idle, at most one tick's worth each.
+* `-B`|`--burst-limit`: sleeps per datagram (7 packets) when ahead of target. In MPTS this stalls the shared loop, so all inputs.
+
+The rate holds to the packet position, but departure is datagram-granular: output leaves in 7-packet bursts.
+
+### PCR and timestamps (`--pcr-mode`)
+
+| value        | PCR                                       | PTS / DTS                     |
+|--------------|-------------------------------------------|-------------------------------|
+| `preserve`   | source value, untouched (default)         | untouched                     |
+| `rebase`     | source PCR plus one offset per program    | same offset                   |
+| `regenerate` | from output position, inserted if missing | retimed onto the output clock |
+
+`rebase` starts at offset 0 (output epoch = source epoch) and re-latches the offset whenever the source
+PCR jumps, using the same plausibility fence as `dvbipi_pcr_discontinuities_total`. Output PCR, PTS, DTS,
+ESCR and DTS_next_AU stay continuous across failover, splices and reconnects.
+
+`regenerate` is for sources whose PCR is wrong or missing. The source PCR is never copied. Needs `-b` and
+`-S`. `-B` is recommended, without it packets can leave ahead of the PCR timeline.
+
+* PCR is `base + (packet_index * 188 + 10) * 8 * 27 MHz / bitrate`, exact integer arithmetic, byte 10 being
+  the one holding the last bit of the PCR base (TR 101 290 5.3.2.1). PCR_accuracy against a CBR model is zero
+  by construction.
+* A PCR-only packet is inserted whenever a PCR PID would go 40 ms without a PCR (limit is 100 ms, ISO/IEC 13818-1
+  2.7.2). A program whose source PMT declares no usable PCR_PID gets its video PID, else its first stream.
+* The mux clock is latched on the first PES with a PTS or DTS: first PCR = that stamp minus the lead.
+  The lead is `--pcr-lead-ms`, raised to the source's own DTS-PCR distance when that is plausible (0..1 s).
+  1000 ms is the T-STD residency limit.
+* One time offset per program is applied to all its streams. Later programs get the offset that puts their
+  lead on the running clock.
+* Each stream has a hold-back queue: a packet leaves when its DTS (PTS if none) is at most the lead ahead of the
+  output PCR. Burst-delivering sources (HLS segments) rely on that. A full queue (32768 packets) releases its oldest
+  packet early and counts it, nothing is dropped. At end of input the queues are flushed at once.
+* The offset follows the clock difference between source and output slowly (at most 100 ppm), from the
+  smallest arrival lead per second of the video stream, or the first PES stream. A backward or >2 s stamp jump,
+  including after a reconnect, re-latches it once.
+* Source arrival jitter shows up as lead variation at the decoder. `--jitter-ms` is the remedy.
+* OPCR is left alone (ISO/IEC 13818-1 2.4.3.5 forbids multiplexers to modify it). ESCR and DTS_next_AU are
+  shifted; the source `discontinuity_indicator` is cleared, since output PCR and continuity counters are
+  continuous. SCTE-35 `pts_adjustment` is shifted and CRC_32 recomputed, also for encrypted sections. A PES header
+  split across TS packets, or scrambled at the source, cannot be retimed.
+* With CAS, crypto-period cadence runs off the wall clock in SPTS too (see below), and the scrambler is flushed
+  after every release round, so batching never delays a packet against its PCR position.
+
+On the metrics side, both `rebase` and `regenerate` export `dvbipi_tv_pcr_rewritten_total`, `dvbipi_tv_pes_retimed_total`,
+`dvbipi_tv_pes_retime_skipped_total`, `dvbipi_tv_retime_relatches_total` and `dvbipi_tv_scte35_adjusted_total`.
+`regenerate` adds `dvbipi_tv_pcr_injected_total`, `dvbipi_tv_hold_forced_releases_total` and
+`dvbipi_tv_release_lead_min_microseconds` / `_max_`.
 
 ### RIST/SRT output (`-R`)
 
@@ -293,8 +349,9 @@ without it. One of `-m`/`-R` is required (requires librist or libsrt).
 output. Neither RIST nor SRT is ever RTP-wrapped.
 
 `rist://host:port` peers bond the same way as [dipirist](../dipirist/README.md).
-`--rist-profile`/`--rist-secret`/`--rist-cname`/`--rist-buffer` configure them (profile, pre-shared key, cname,
-recovery buffer); `--rist-secret` requires `--rist-profile main`.
+`--rist-profile`/`--rist-secret`/`--rist-encryption-type`/`--rist-cname`/`--rist-buffer` configure them (profile,
+pre-shared key, AES key size, cname, recovery buffer); `--rist-secret` and `--rist-encryption-type` require
+`--rist-profile main`.
 
 `srt://host:port` peers (requires libsrt) bond the same way as
 [dipisrt](../dipisrt/README.md): a single peer needs no extra flags, more than one requires
@@ -302,13 +359,16 @@ recovery buffer); `--rist-secret` requires `--rist-profile main`.
 `--srt-packetfilter`/`--srt-latency` apply to every `-R srt://` peer; `--srt-pbkeylen` requires
 `--srt-passphrase`.
 
+> For local inspection of an otherwise RIST- or SRT-only output, it can be useful during setup or debugging to add
+> a loopback multicast destination and attach your usual transport-stream analyzer there.
+
 ### Annex E Layer 1 FEC (`--al-fec`)
 
 Sends a parallel SMPTE 2022-1 (ETSI TS 102 034 Annex E) repair stream alongside the `-m` RTP output, 
 on the same multicast group at `--al-fec-port`. 
 `<L>:<D>` sets the column/row size of the parity matrix (columns * rows <= 400, columns <= 40). 
 A receiver needs the same `<L>:<D>` and the repair port to recover from loss. 
-Single-parity-stream FEC recovers at most one lost packet per column
+Single-parity-stream FEC recovers at most one lost packet per column.
 Requires RTP output.
 
 ### HbbTV signalling (`--hbbtv`)
@@ -325,8 +385,8 @@ integer not already used explicitly by another `-i`; explicit duplicates are a s
 
 ### Reconnecting (`-e`)
 
-SPTS: no `-e` means any input error stops the tool; `-e <seconds>` reopens after the
-delay, you handle restarts yourself.
+SPTS: no `-e` means any input error stops the tool. `-e <seconds>` reopens after the
+delay.
 
 MPTS: every input always retries independently. Default: 5 seconds.
 One input being down never stops output for the others. Output socket and
@@ -374,10 +434,12 @@ scrambling with an incomplete pid list or block forever. Numeric PIDs sidestep t
 ### Crypto-period timing: PCR or wall-clock
 
 SPTS: crypto-period cadence is driven by the source's own PCR, not wall-clock or a
-configured bitrate (VBR support). DVB time is king. `dipitvhead` fails fast if no PCR is
-observed on the PCR_PID within a few seconds of startup. PCR discontinuities (splice, failover)
-are handled gracefully at runtime, using the wall-clock only as a plausibility fence to reject
+configured bitrate (VBR support). DVB time is king ... as long as it is not a mad king, see `--pcr-mode` settings other
+than `preserve`. In `preserve` mode, `dipitvhead` fails fast if no PCR is observed on the PCR_PID within a few seconds of startup. 
+PCR discontinuities (splice, failover) are handled gracefully at runtime, using the wall-clock only as a plausibility fence to reject
 bogus jumps.
+
+`--pcr-mode regenerate` does not trust the source PCR and uses the wall clock like MPTS, so none of the PCR checks below apply to it.
 
 MPTS: No single program's PCR is trustworthy as the whole mux's clock, so crypto-period cadence
 is wall-clock driven instead. It keeps advancing through the all-down steady state, 
@@ -401,10 +463,10 @@ However, it allows extensions, so we used it _as generic as possible_ for some m
 
 * `des56`: the spec-literal single-DES scheme. Included for interop, not as a recommendation.
 * `aes128`/`aes256`: generic extension of the same Annex D parameter framing.
-  `--cas-cwenc-aes-mode stream` (default) works for either an 8 or 16 byte control word;
+  `--cas-cwenc-aes-mode stream` (default) works for either an 8 or 16 byte control word.
   `ecb` needs a 16 byte one (AES has no 8-byte block mode) and is rejected at startup otherwise.
 * `--cas-cwenc-fixed-key`: sized to the algorithm (14/32/64 hex chars). Left unset, `des56` falls
-  back to Annex D's own published ROM key; `aes128`/`aes256` have no such default and fail at
+  back to Annex D's own published ROM key. `aes128`/`aes256` have no such default and fail at
   startup if neither this nor a key list is configured.
 * `--cas-cwenc-key-list-a`/`-b`: optional 2048-byte Annex D key list files. When at least one is
   loaded, `CW_provision` messages rotate through it instead of using the fixed key.
@@ -413,10 +475,12 @@ However, it allows extensions, so we used it _as generic as possible_ for some m
 
 dipitvhead is the EMMG-side MUX: it listens (`--cas-emmg-port`, default 8002) and the EMMG
 client connects to it, once per `--cas-ecmg` vendor (each with its own `--cas-emmg-port`).
-For now, the only topology, not the reversed one where the MUX dials out to the EMMG.
 `--cas-emmg-max-conns` caps concurrent client connections per vendor (default 8, max 64).
 Accepts whichever protocol version the client proposes unless `--cas-emmg-version` is set. EMM
 datagrams are queued and drained onto that vendor's own `--cas-emm-pid` on arrival.
+
+`--cas-emmg-reverse <host>:<port>` switches client/server roles. While this is not conformant to the
+specification, it's increasingly popular in the wild.
 
 ### Multi-CAS (`--cas-required`, `--cas-fallback-clear`)
 
@@ -528,6 +592,9 @@ dipitvhead -i http://receiver:8001/1:0:10:10:3EF:1:C00000:0:0:0: -m 239.5.5.5:60
 # enigma2 + oscam relay: MPTS, live program picked automatically
 dipitvhead -i http://receiver:17555/1:0:CA:CA:C:85:C00000:0:0:0: -m 239.5.5.6:6000
 
+# source with wrong or missing PCR: rebuild PCR and timestamps on a 3 Mbit/s CBR timeline
+dipitvhead -i udp://@239.0.0.1:5000 -m 239.5.5.5:6000 -b 3000 -S -B --pcr-mode regenerate
+
 # scramble an SPTS and re-stream it
 dipitvhead -i rtp://@239.19.75.1:8700 -m 239.1.1.1:5000 \
   --cas-algo cissa --cas-ecmg tcp://ecmg.example:2222 --cas-super-id 0x4A750002 --cas-ecm-id 1 --cas-pids 0x0100,0x0101
@@ -569,7 +636,7 @@ ffmpeg -i <source> -c:v libx264 -c:a aac -f mpegts - | dipitvhead -i - -m 239.5.
 ./dipitvhead -m 239.1.1.1:5000 -O enx00deadbeef01 -n "LookMomICanDoBroadcasting" --default-provider "FrankenMux" \
   -i rtp://239.2.3.1:5001 -I enx00deadbeef00 --sdt 'MC TV 1' \
   -i rtp://239.2.3.2:5001 -I enx00deadbeef00 --sdt 'MC TV 2' \
-  -i http://ird001.headend.internal:8001/1:0:19:0:0:0:C00000:0:0:0: -I enx00deadbeef03 --sdt 'Sat TV 3' --provider "Sat" \
+  -i http://ird001.headend.internal:8001/1:0:19:0:0:0:C00000:0:0:0: -I enx00deadbeef03 --sdt 'Sat TV 3' --provider "Sat" --jitter-ms 1000 \
   -i udp://239.3.4.1:4500 -I enx00deadbeef00 --sdt 'MC Radio 1' \
   -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1000 --sdt 'radiohead 1' \
   -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1001 --sdt 'radiohead 2' \

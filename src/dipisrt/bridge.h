@@ -7,12 +7,12 @@
 #include "lib/metrics/export.h"
 #include "lib/net/srt/srtin.h"
 #include "lib/net/srt/srtout.h"
-#include "lib/net/tssink.h"
-#include "lib/net/tssource.h"
+#include "lib/net/ts/sink.h"
+#include "lib/net/ts/source.h"
 
 #include <stdint.h>
 
-#include "args.h"
+#include "cli/args.h"
 
 /* runs until stop sig or error. 0 clean stop, 1 error */
 int bridge_run(const config_t *cfg, metrics_exporter_t *mx);

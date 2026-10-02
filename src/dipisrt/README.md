@@ -85,6 +85,9 @@ broadcast|backup`). Every bonded peer of one endpoint must agree on caller vs. l
 `--rendezvous` lets both ends actively dial each other without a listener (NAT-to-NAT links).
 It needs `--local` and cannot be combined with `srt://@` or `--group-mode`. 
 
+`--metrics-inspect-ts` covers packet-level and PCR checks only, no PSI/SI checks at any level.
+`medium` adds PCR jitter, accuracy and frequency offset for UDP and RTP inputs.
+
 ## Running under systemd
 
 See [dipisrt.service](dipisrt.service) for a reasonable starting point.
@@ -108,8 +111,6 @@ dipisrt -i rtp://@239.1.1.1:5000 -o srt://1.2.3.4:9000 --passphrase correcthorse
 ## Notes
 
 * `dipisrt` only works in one direction per process.
-* `--metrics-inspect-ts` covers packet-level and PCR checks only, no PSI/SI checks at any level.
-  `medium` adds PCR jitter and accuracy for UDP and RTP inputs.
 * Bonding (`--group-mode`): 
   + Most shipped binaries of libsrt have this disabled.
     `dipisrt` detects this at runtime and enables the feature only if the linked library supports it.

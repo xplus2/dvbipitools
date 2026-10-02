@@ -7,9 +7,9 @@
 #include "../reactor/internal.h"
 #include "../reactor/qsbr.h"
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include <stdatomic.h>
 #include <stdlib.h>

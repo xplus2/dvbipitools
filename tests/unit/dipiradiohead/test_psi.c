@@ -6,6 +6,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "dipiradiohead/mux/psi.h"
 #include "lib/demux/crc32.h"
@@ -133,6 +134,78 @@ START_TEST(psi_build_eit_bounds_descriptor_length_for_long_metadata) {
 }
 END_TEST
 
+typedef struct {
+  int year;
+  int month;
+  int day;
+  unsigned mjd;
+} mjd_case_t;
+
+static const mjd_case_t mjd_cases[] = {
+    {1993, 10, 13, 49273},
+    {1900, 2, 28, 15078},
+    {1900, 3, 1, 15079},
+    {1999, 12, 31, 51543},
+    {2000, 1, 1, 51544},
+    {2000, 2, 28, 51602},
+    {2000, 2, 29, 51603},
+    {2000, 3, 1, 51604},
+    {2000, 12, 31, 51909},
+    {2001, 1, 1, 51910},
+    {2023, 12, 31, 60309},
+    {2024, 1, 1, 60310},
+    {2024, 2, 28, 60368},
+    {2024, 2, 29, 60369},
+    {2024, 3, 1, 60370},
+    {2024, 12, 31, 60675},
+    {2025, 1, 1, 60676},
+    {2099, 12, 31, 88068},
+};
+
+START_TEST(mjd_from_tm_matches_reference_dates_across_rollovers_and_leap_years) {
+  const mjd_case_t *c = &mjd_cases[_i];
+  struct tm t;
+
+  memset(&t, 0, sizeof t);
+  t.tm_year = c->year - 1900;
+  t.tm_mon = c->month - 1;
+  t.tm_mday = c->day;
+  ck_assert_msg(mjd_from_tm(&t) == c->mjd, "%04d-%02d-%02d: mjd %u, want %u", c->year, c->month, c->day, mjd_from_tm(&t), c->mjd);
+}
+END_TEST
+
+START_TEST(mjd_advances_by_one_per_day_over_a_leap_cycle) {
+  struct tm t;
+  unsigned prev = 0;
+
+  for (int d = 0; d < 366 * 4 + 1; d++) {
+    time_t secs = (time_t)(946684800 + d * 86400);
+    unsigned mjd;
+
+    gmtime_r(&secs, &t);
+    mjd = mjd_from_tm(&t);
+    if (d) ck_assert_msg(mjd == prev + 1, "day %d: mjd %u after %u", d, mjd, prev);
+    prev = mjd;
+  }
+}
+END_TEST
+
+typedef struct {
+  unsigned value;
+  unsigned char want;
+} bcd_case_t;
+
+static const bcd_case_t bcd_cases[] = {
+    {0, 0x00}, {5, 0x05}, {9, 0x09}, {10, 0x10}, {19, 0x19}, {23, 0x23}, {59, 0x59}, {60, 0x60}, {99, 0x99}, {100, 0x00}, {123, 0x23},
+};
+
+START_TEST(bcd_packs_two_decimal_digits) {
+  const bcd_case_t *c = &bcd_cases[_i];
+
+  ck_assert_msg(bcd(c->value) == c->want, "bcd(%u) = 0x%02x, want 0x%02x", c->value, bcd(c->value), c->want);
+}
+END_TEST
+
 static Suite *psi_suite(void) {
   Suite *s = suite_create("dipiradiohead_psi");
   TCase *tc = tcase_create("core");
@@ -143,6 +216,9 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_build_eit_uses_title_only_when_no_artist);
   tcase_add_test(tc, psi_build_eit_rejects_small_cap);
   tcase_add_test(tc, psi_build_eit_bounds_descriptor_length_for_long_metadata);
+  tcase_add_loop_test(tc, mjd_from_tm_matches_reference_dates_across_rollovers_and_leap_years, 0, (int)(sizeof mjd_cases / sizeof mjd_cases[0]));
+  tcase_add_test(tc, mjd_advances_by_one_per_day_over_a_leap_cycle);
+  tcase_add_loop_test(tc, bcd_packs_two_decimal_digits, 0, (int)(sizeof bcd_cases / sizeof bcd_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }

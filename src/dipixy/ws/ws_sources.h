@@ -4,7 +4,7 @@
 #ifndef DIPIXY_WS_SOURCES_H
 #define DIPIXY_WS_SOURCES_H
 
-#include "../args.h"
+#include "../cli/args.h"
 #include "../ts/channels/channels.h"
 
 /* sources.snapshot json, every configured -i in command-line order. thread-local, valid until next call, no free. 0 ok, -1 OOM */

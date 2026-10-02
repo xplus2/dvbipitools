@@ -10,7 +10,7 @@
 #include "lib/cas/cas_core.h"
 #include "lib/helper/log.h"
 #include "lib/net/send_result.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "../version.h"
 #include "priv.h"
@@ -23,6 +23,7 @@ ristout_t *tvhead_rist_open(const config_t *cfg) {
   rc.npeers = (int)cfg->n_rist;
   rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
   rc.secret = cfg->rist_secret;
+  rc.key_size = cfg->rist_key_size;
   rc.cname = cfg->rist_cname;
   rc.buffer_ms = cfg->rist_buffer_ms;
   rc.verbose = cfg->verbose;
@@ -86,6 +87,11 @@ int tvhead_output_open(const config_t *cfg, out_ctx_t *o) {
     o->srt = tvhead_srt_open(cfg);
     if (!o->srt) return -1;
   }
+  o->pcr_mode = cfg->pcr_mode;
+  if (cfg->pcr_mode == PCR_MODE_REGENERATE) {
+    pcrclock_init(&o->pcr_clock, (uint64_t)cfg->bitrate_kbps * 1000ULL, 0);
+    o->pcr_pkt_ticks = pcrclock_at(&o->pcr_clock, 1) - pcrclock_at(&o->pcr_clock, 0);
+  }
   o->insp = tsinspect_new(cfg->metrics_inspect_ts);
   if (o->insp && tsinspect_enable_own_psi(o->insp, cfg->n_inputs > 1)) {
     tsinspect_free(o->insp);
@@ -130,14 +136,104 @@ void flush_batch(out_ctx_t *o) {
   o->batch_count = 0;
 }
 
-void packet_cb(void *ctx, const unsigned char *pkt188) {
+#define PCR_INTERVAL_MAX_TICKS (40ULL * PCR_CLOCK_HZ / 1000ULL)
+
+void out_pcr_pid_set(out_ctx_t *o, unsigned slot, unsigned pid) {
+  out_pcr_pid_t *pp;
+  if (slot >= ARGS_MAX_INPUTS) return;
+  pp = &o->pcr_pids[slot];
+  memset(pp, 0, sizeof *pp);
+  pp->pid = pid;
+  pp->active = pid != 0;
+}
+
+static unsigned pcr_slot_of(const out_ctx_t *o, unsigned pid) {
+  for (unsigned i = 0; i < ARGS_MAX_INPUTS; i++)
+    if (o->pcr_pids[i].active && o->pcr_pids[i].pid == pid) return i;
+  return ARGS_MAX_INPUTS;
+}
+
+static uint64_t pcr_now(const out_ctx_t *o) { return pcrclock_at(&o->pcr_clock, o->packets - o->pcr_start_index); }
+
+int out_pcr_clock(void *ctx, uint64_t *pcr27) {
   out_ctx_t *o = ctx;
-  if (o->insp) tsinspect_packet(o->insp, pkt188);
+  int due;
+  if (!o->pcr_latched) return 0;
+  due = bitrate_stuff_due(o->pacer, (unsigned)o->batch_count);
+  while (due-- > 0) send_null_packet(o);
+  *pcr27 = pcr_now(o);
+  return 1;
+}
+
+void out_pcr_latch(void *ctx, uint64_t pcr27) {
+  out_ctx_t *o = ctx;
+  pcrclock_t zero = o->pcr_clock;
+  if (o->pcr_latched) return;
+  zero.base27 = 0;
+  o->pcr_start_index = o->packets;
+  o->pcr_clock.base27 = pcr_sub(pcr27, pcrclock_at(&zero, 0));
+  o->pcr_latched = 1;
+}
+
+static void pcr_stage(out_ctx_t *o, unsigned char *pkt188) {
+  unsigned pid = (unsigned)((pkt188[1] & 0x1F) << 8) | pkt188[2];
+  unsigned i = pcr_slot_of(o, pid);
+  out_pcr_pid_t *pp;
+  uint64_t src;
+  uint64_t out;
+  if (i == ARGS_MAX_INPUTS) return;
+  pp = &o->pcr_pids[i];
+  pp->cc = pkt188[3] & 0x0F;
+  if (!o->pcr_latched || !pcr_packet_read(pkt188, &src)) return;
+  out = pcr_now(o);
+  pcr_packet_write(pkt188, out);
+  pp->last_pcr = out;
+  pp->have_last = 1;
+  o->pcr_rewritten++;
+}
+
+static void put_packet(out_ctx_t *o, const unsigned char *pkt188, int own) {
+  unsigned char *slot = o->batch + 12 + (size_t)o->batch_count * 188;
   if (o->batch_count == 0) o->batch_open_time = mono_seconds();
-  memcpy(o->batch + 12 + (size_t)o->batch_count * 188, pkt188, 188);
+  memcpy(slot, pkt188, 188);
+  if (!own && o->pcr_mode == PCR_MODE_REGENERATE) pcr_stage(o, slot);
+  if (o->insp) tsinspect_packet(o->insp, slot);
   o->batch_count++;
   o->packets++;
   if (o->batch_count == TS_PER_DGRAM) flush_batch(o);
+}
+
+static void pcr_inject(out_ctx_t *o) {
+  unsigned char pkt[188];
+  uint64_t now;
+  if (o->pcr_mode != PCR_MODE_REGENERATE || !o->pcr_latched) return;
+  for (unsigned i = 0; i < ARGS_MAX_INPUTS; i++) {
+    out_pcr_pid_t *pp = &o->pcr_pids[i];
+    if (!pp->active) continue;
+    now = pcr_now(o);
+    if (!pp->have_last) {
+      pp->last_pcr = now;
+      pp->have_last = 1;
+      continue;
+    }
+    if (pcr_sub(now, pp->last_pcr) + o->pcr_pkt_ticks <= PCR_INTERVAL_MAX_TICKS) continue;
+    pcr_packet_build(pkt, pp->pid, pp->cc, now);
+    pp->last_pcr = now;
+    put_packet(o, pkt, 1);
+    o->pcr_injected++;
+  }
+}
+
+static void emit_packet(out_ctx_t *o, const unsigned char *pkt188) {
+  pcr_inject(o);
+  put_packet(o, pkt188, 0);
+}
+
+void packet_cb(void *ctx, const unsigned char *pkt188) {
+  out_ctx_t *o = ctx;
+  int due = bitrate_stuff_due(o->pacer, (unsigned)o->batch_count);
+  while (due-- > 0) send_null_packet(o);
+  emit_packet(o, pkt188);
 }
 
 #define TVHEAD_BATCH_IDLE_MS 100.0
@@ -154,7 +250,7 @@ void send_null_packet(out_ctx_t *o) {
   pkt[1] = 0x1F;
   pkt[2] = 0xFF;
   pkt[3] = 0x10;
-  packet_cb(o, pkt);
+  emit_packet(o, pkt);
 }
 
 int remux_cb(void *v, const unsigned char *pkt) {
@@ -200,6 +296,21 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
   metrics_writer_put(&w, METRICS_ID_TV_REMUX_DROPPED_PACKETS_TOTAL, NULL, tsm->remux_dropped_packets_total);
   metrics_writer_put(&w, METRICS_ID_TV_AIT_SECTIONS_TOTAL, NULL, tsm->ait_sections_total);
   metrics_writer_put(&w, METRICS_ID_TV_EIT_QUEUE_DROPS_TOTAL, NULL, tsm->eit_queue_drops_total);
+  if (out->pcr_mode != PCR_MODE_PRESERVE) {
+    metrics_writer_put(&w, METRICS_ID_TV_PCR_REWRITTEN_TOTAL, NULL, tsm->pcr_rewritten_total + out->pcr_rewritten);
+    metrics_writer_put(&w, METRICS_ID_TV_PES_RETIMED_TOTAL, NULL, tsm->pes_retimed_total);
+    metrics_writer_put(&w, METRICS_ID_TV_PES_RETIME_SKIPPED_TOTAL, NULL, tsm->pes_retime_skipped_total);
+    metrics_writer_put(&w, METRICS_ID_TV_RETIME_RELATCHES_TOTAL, NULL, tsm->retime_relatches_total);
+    metrics_writer_put(&w, METRICS_ID_TV_SCTE35_ADJUSTED_TOTAL, NULL, tsm->scte35_adjusted_total);
+  }
+  if (out->pcr_mode == PCR_MODE_REGENERATE) {
+    metrics_writer_put(&w, METRICS_ID_TV_PCR_INJECTED_TOTAL, NULL, out->pcr_injected);
+    metrics_writer_put(&w, METRICS_ID_TV_HOLD_FORCED_RELEASES_TOTAL, NULL, tsm->hold_forced_total);
+    if (tsm->release_lead_seen) {
+      metrics_writer_put_signed(&w, METRICS_ID_TV_RELEASE_LEAD_MIN_MICROSECONDS, NULL, tsm->release_lead_min_us);
+      metrics_writer_put_signed(&w, METRICS_ID_TV_RELEASE_LEAD_MAX_MICROSECONDS, NULL, tsm->release_lead_max_us);
+    }
+  }
   if (cas) {
     cas_metrics_t cm;
     size_t n = cas_vendor_count(cas);
@@ -223,6 +334,11 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
   metrics_exporter_send(mx, &w);
 }
 
+static int poll_timeout_ms(const remux_t *rx) {
+  int due = remux_hold_due_ms(rx);
+  return due >= 0 && due < 100 ? due : 100;
+}
+
 /* steady-state: read, remux, send, until stop/hard error. returns 0 clean stop, -1 error */
 int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, cas_t *cas, metrics_exporter_t *mx, input_metrics_t *im,
                ts_metrics_t *tsm, tsinspect_t *insp) {
@@ -233,6 +349,7 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
   net_err_reason_t reason;
 
   memset(&pz, 0, sizeof pz);
+  bitrate_pacer_start(out->pacer);
   fc.rx = rx;
   fc.out = out;
   fc.tsm = tsm;
@@ -247,13 +364,14 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
     tvhead_srt_service(out);
     pfd.fd = tvsrc_fd(src);
     pfd.events = POLLIN;
-    pr = poll(&pfd, 1, 100); /* bounded: keeps srt service + stuffing/stats below ticking on quiet input too */
+    pr = poll(&pfd, 1, poll_timeout_ms(rx)); /* bounded: keeps srt service + stuffing/stats below ticking on quiet input too */
     flush_batch_if_stale(out);
     if (pr < 0 && errno != EINTR) {
       cas_flush(cas, packet_cb, out);
       return -1;
     }
     now = mono_seconds();
+    if (cas && cfg->pcr_mode == PCR_MODE_REGENERATE) cas_wall_tick(cas, now);
     if (insp) tsinspect_tick(insp, now);
     if (out->insp) tsinspect_tick(out->insp, now);
     if (pr > 0) {
@@ -264,7 +382,10 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
         cas_flush(cas, packet_cb, out);
         return -1;
       }
-      if (insp) tsinspect_set_rx_ns(insp, tvsrc_last_rx_ns(src));
+      if (insp) {
+        tsinspect_set_rx_ns(insp, tvsrc_last_rx_ns(src));
+        tsinspect_set_buffer_ms(insp, tvsrc_buffer_ms(src));
+      }
       if (n > 0) {
         fc.now = now;
         if (insp) tspack_feed_sync(&pz, buf, (size_t)n, remux_cb_inspect, &fc, tsinspect_sync(insp));
@@ -278,8 +399,10 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
       if (cas && signal_reload_requested()) cas_reload_receivers(cas);
     }
     /* every tick, not just at data inputs: keep CBR stuffing paced off the clock  */
-    stuff_n = bitrate_stuff_due(out->pacer);
+    stuff_n = bitrate_stuff_due(out->pacer, (unsigned)out->batch_count);
     for (int k = 0; k < stuff_n; k++) send_null_packet(out);
+    remux_release(rx, now, packet_cb, out, 0, tsm);
+    if (cas && cfg->pcr_mode == PCR_MODE_REGENERATE) cas_flush(cas, packet_cb, out);
     if (cfg->verbose && now - last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - start, out->packets);
       fflush(stderr);

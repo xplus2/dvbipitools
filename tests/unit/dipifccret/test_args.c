@@ -8,7 +8,7 @@
 
 #include "lib/config/yamlcfg.h"
 
-#include "dipifccret/args.h"
+#include "dipifccret/cli/args.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
@@ -141,6 +141,38 @@ START_TEST(burst_multiplier_is_overridable) {
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_double_eq_tol(cfg.burst_multiplier, 2.5, 1e-9);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(cpu_affinity_defaults_off) {
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.cpu_affinity.mode, CPUAFF_OFF);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(cpu_affinity_accepts_auto_and_list) {
+  char *argv1[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "--cpu-affinity", "auto", NULL};
+  char *argv2[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "--cpu-affinity", "2-4,6,8", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv1), argv1, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.cpu_affinity.mode, CPUAFF_AUTO);
+  yamlcfg_strpool_free(cfg.str_pool);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.cpu_affinity.mode, CPUAFF_LIST);
+  ck_assert_uint_eq(cfg.cpu_affinity.n, 5);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(cpu_affinity_rejects_junk) {
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "--cpu-affinity", "5-2", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -597,6 +629,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, burst_multiplier_must_exceed_one);
   tcase_add_test(tc, burst_multiplier_is_overridable);
   tcase_add_test(tc, workers_is_overridable);
+  tcase_add_test(tc, cpu_affinity_defaults_off);
+  tcase_add_test(tc, cpu_affinity_accepts_auto_and_list);
+  tcase_add_test(tc, cpu_affinity_rejects_junk);
   tcase_add_test(tc, invalid_color_mode_is_rejected);
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
   tcase_add_test(tc, rsi_interval_defaults_to_five);

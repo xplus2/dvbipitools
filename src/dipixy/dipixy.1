@@ -117,6 +117,16 @@ that many times the cpu core count, or
 .RI < N >:
 an absolute thread count. Default: \-1.
 .TP
+.B \-\-cpu\-affinity \fIspec\fR
+Pin event worker threads to CPU cores.
+.B off
+= kernel default,
+.B auto
+puts worker i on the i-th CPU core the process may use (wraps), a list like
+.B 2\-4,6,8
+assigns workers to those CPUs in order and leaves surplus workers unpinned.
+Capture pump threads are always floating. Default: off.
+.TP
 .B \-\-max\-clients \fIn\fR
 Cap on concurrent streams. Default: 256.
 .TP

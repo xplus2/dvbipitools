@@ -1,0 +1,175 @@
+/* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
+ * See NOTICE and LICENSE for details and authorship information. */
+
+#ifndef DIPITVHEAD_ARGS_H
+#define DIPITVHEAD_ARGS_H
+
+#include <stddef.h>
+
+#include "lib/helper/argutil.h"
+#include "lib/cas/biss/biss.h"
+#include "lib/cas/cas_args.h"
+#include "lib/net/httpclient/httpclient.h"
+
+typedef enum {
+  SRC_RTP,  /* multicast, RTP wrapped */
+  SRC_UDP,  /* multicast, plain ts */
+  SRC_HTTP, /* http:// or https://, http_url_t.tls tells which */
+  SRC_STDIN, /* -i - */
+  SRC_RIST, /* single peer, @ required (listen) */
+  SRC_SRT   /* single peer, no bonding/rendezvous (see dipisrt) */
+} src_kind_t;
+
+typedef struct {
+  src_kind_t kind;
+  /* SRC_RTP / SRC_UDP */
+  int family; /* AF_INET or AF_INET6 */
+  char group[64];
+  unsigned port;
+  /* SRC_HTTP */
+  http_url_t http;
+  /* SRC_RIST, stored raw for librist's own parser */
+  char rist_uri[256];
+  /* SRC_SRT */
+  int srt_family; /* AF_INET or AF_INET6, display only */
+  char srt_host[64];
+  unsigned srt_port;
+  int srt_listen; /* 1 = @, bind/listen/accept. 0 = call out (connect) */
+} source_t;
+
+/* -n/-s: no flag = passthrough source table if present; "-" = drop; text = override with our own */
+typedef enum { TABLE_PASSTHROUGH, TABLE_DROP, TABLE_OVERRIDE } table_mode_t;
+
+#define ARGS_MAX_CAS_PIDS 16
+#define ARGS_MAX_INPUTS 32 /* matches MPTS_MAX_PROGRAMS: one input becomes one mux program */
+#define ARGS_MAX_RIST_PEERS 8 /* matches RISTOUT_MAX_PEERS */
+#define ARGS_MAX_SRT_PEERS 8  /* matches SRTSINK_MAX_PEERS */
+
+typedef enum { RIST_PROF_SIMPLE, RIST_PROF_MAIN } rist_profile_sel_t;
+typedef enum { SRT_BOND_NONE, SRT_BOND_BROADCAST, SRT_BOND_BACKUP } srt_bond_mode_t;
+typedef enum { PCR_MODE_PRESERVE, PCR_MODE_REBASE, PCR_MODE_REGENERATE } pcr_mode_t;
+
+#define PCR_LEAD_MS_DEFAULT 700
+#define PCR_LEAD_MS_MAX 1000
+
+typedef struct {
+  int input;
+  int have_input;
+  int vendor;
+  int have_vendor;
+} item_state_t;
+
+typedef struct {
+  source_t input;          /* -i */
+  unsigned pmt_pid;        /* -p right after this -i; 0 = auto (first PAT program whose PMT arrives) */
+  unsigned sid;            /* --sid right after this -i; 0 here = auto-assign post-parse */
+  table_mode_t sdt_mode;   /* -s right after this -i */
+  char sdt_text[256];      /* -s <text> right after this -i */
+  char provider_text[256]; /* --provider (-i scoped); empty=TOOL_NAME or source */
+  const char *iface_in;    /* -I right after this -i; NULL = kernel default route */
+  int strip_eit;           /* --strip-eit right after this -i */
+  unsigned strip_mask;     /* --strip right after this -i, TVSTRIP_* bits (mux/pmtbuild.h). default 0: nothing stripped */
+  const char *hbbtv_url;   /* --hbbtv right after this -i; NULL = no AIT for this program */
+  unsigned hbbtv_org_id;   /* --hbbtv-org-id right after this -i; required with --hbbtv */
+  unsigned hbbtv_app_id;   /* --hbbtv-app-id right after this -i; required with --hbbtv */
+  int rist_profile_main;  /* --rist-profile-in right after this -i; SRC_RIST only */
+  int rist_key_size_in;   /* --rist-encryption-type-in right after this -i; SRC_RIST + main only, 0 = default */
+  char srt_passphrase_in[128];   /* --srt-passphrase-in right after this -i; SRC_SRT only, "" = no encryption */
+  int srt_pbkeylen_in;           /* --srt-pbkeylen-in right after this -i; requires --srt-passphrase-in */
+  char srt_streamid_in[128];     /* --srt-streamid-in right after this -i; SRC_SRT only, "" = none */
+  char srt_packetfilter_in[256]; /* --srt-packetfilter-in right after this -i; SRC_SRT only, "" = none */
+  unsigned srt_latency_in_ms;    /* --srt-latency-in right after this -i; SRC_SRT only, 0 = library default */
+  unsigned jitter_ms;            /* --jitter-ms right after this -i; rtp/udp/rist/srt only, 0 = off */
+} dipitvhead_input_t;
+
+typedef struct {
+  dipitvhead_input_t inputs[ARGS_MAX_INPUTS]; /* -i, repeatable; per-input options pair with -i right before them */
+  unsigned n_inputs;
+  int family;                /* AF_INET or AF_INET6, from -m group */
+  char mcast_group[64];      /* -m group */
+  unsigned mcast_port;       /* -m port */
+  const char *iface_out;     /* -O; NULL = kernel default route */
+  int rtp;                   /* default on; -u/--udp forces plain UDP output */
+  unsigned ttl;              /* -T; 0 = kernel default (1) */
+  int dscp;                  /* --dscp, default NET_DSCP_VIDEO_HIGH */
+  unsigned al_fec_l;
+  unsigned al_fec_d;
+  unsigned al_fec_port;
+  table_mode_t nit_mode;     /* -n; one NIT for whole output */
+  char nit_text[256];        /* -n <text> */
+  char default_provider_text[256];
+  unsigned bitrate_kbps;     /* -b; 0 = no shaping, passthrough rate; one shared budget for whole output */
+  int stuff;                 /* -S; needs -b */
+  int burst_limit;           /* -B; needs -b */
+  pcr_mode_t pcr_mode;       /* --pcr-mode; default preserve */
+  unsigned pcr_lead_ms;      /* --pcr-lead-ms; regenerate only, 1..PCR_LEAD_MS_MAX */
+  int pcr_lead_ms_given;
+  long error_retry_s;        /* -e; 0 = no retry, fail on first input error (single input only) */
+  int insecure_tls;          /* -k; skip TLS verification */
+  unsigned tsid;             /* --tsid, default 1 */
+  unsigned onid;             /* --onid, default 1 */
+  int verbose;               /* -v */
+  int daemonize;             /* -d, --daemonize: fork to background after startup */
+  int color_mode;            /* --color; log_color_t */
+  cas_algo_t cas_algo;       /* --cas-algo; NONE = CAS disabled */
+  cas_vendor_t cas_vendors[ARGS_MAX_CAS_VENDORS]; /* --cas-ecmg, repeatable; per-vendor options pair with --cas-ecmg right before them */
+  unsigned n_cas_vendors;
+  int any_cas_flag;
+  int cas_fallback_clear; /* --cas-fallback-clear: clear instead of frozen on total outage / a required vendor down */
+  unsigned cas_pids[ARGS_MAX_CAS_PIDS]; /* --cas-pids explicit numeric PIDs (output-side) */
+  size_t cas_pid_count;
+  int cas_pids_video; /* --cas-pids "video" token, or default when --cas-pids omitted */
+  int cas_pids_audio; /* --cas-pids "audio" token, or default when --cas-pids omitted */
+  int cas_pids_lcevc; /* --cas-pids "lcevc" token */
+  unsigned cas_cp_duration_ms;     /* --cas-cp-duration; default 10000 */
+  int biss2_enabled;                /* --biss2-sw given; mutually exclusive with --cas-algo/--cas-ecmg */
+  unsigned char biss2_sw[BISS_KEY_LEN]; /* --biss2-sw, parsed */
+  int biss2_emit_esw;               /* --biss2-emit-esw given; requires --biss2-sw */
+  unsigned char biss2_esw_id[BISS_KEY_LEN]; /* --biss2-emit-esw <id>, parsed */
+  int biss1_enabled;                /* --biss1-sw given; mutually exclusive with --biss2-sw/--cas-algo/--cas-ecmg */
+  unsigned char biss1_cw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into full checksummed CSA1 CW */
+  int biss2_ca_enabled;              /* --biss2-ca-receivers given; mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo/--cas-ecmg */
+  const char *biss2_ca_receivers_dir; /* --biss2-ca-receivers <dir>: PEM public keys, one per receiver/group */
+  unsigned biss2_ca_session_id;      /* --biss2-ca-session-id <hex16>; random at startup if not given */
+  int biss2_ca_session_id_given;     /* --biss2-ca-session-id given */
+  const char *metrics_sock;        /* --metrics; NULL = default socket path */
+  const char *metrics_id;          /* --metrics-id; NULL = metrics disabled */
+  unsigned metrics_interval_s;     /* --metrics-interval; 0 = default */
+  metrics_inspect_ts_t metrics_inspect_ts;
+  unsigned metrics_known_pids[METRICS_KNOWN_PIDS_MAX];
+  unsigned metrics_n_known_pids;
+  char rist_uri[ARGS_MAX_RIST_PEERS][256]; /* -R/--remote, repeatable; bonded onto one sender, simultaneous with -m */
+  unsigned n_rist;
+  rist_profile_sel_t rist_profile; /* --rist-profile; n_rist>0 only */
+  int rist_profile_given;
+  char rist_secret[128];  /* --rist-secret; n_rist>0 + --rist-profile main only, "" = none */
+  int rist_key_size;      /* --rist-encryption-type; n_rist>0 + --rist-profile main only, 0 = default */
+  char rist_cname[128];   /* --rist-cname; n_rist>0 only, "" = library default */
+  unsigned rist_buffer_ms; /* --rist-buffer; n_rist>0 only, 0 = library default */
+  /* -R srt://, repeatable, bonded onto one group when >1 (--srt-group-mode).
+     one scheme at a time: rist:// and srt:// peers can't mix in one -R set */
+  int srt_family[ARGS_MAX_SRT_PEERS]; /* AF_INET or AF_INET6, display only */
+  char srt_host[ARGS_MAX_SRT_PEERS][64];
+  unsigned srt_port[ARGS_MAX_SRT_PEERS];
+  unsigned n_srt;
+  srt_bond_mode_t srt_group_mode; /* --srt-group-mode; n_srt>1 only, required then */
+  char srt_passphrase[128];   /* --srt-passphrase; n_srt>0 only, "" = no encryption */
+  int srt_pbkeylen;           /* --srt-pbkeylen, requires --srt-passphrase. 0 = library default (16) */
+  char srt_streamid[128];     /* --srt-streamid; n_srt>0 only, "" = none */
+  char srt_packetfilter[256]; /* --srt-packetfilter; n_srt>0 only, "" = none */
+  unsigned srt_latency_ms;    /* --srt-latency; n_srt>0 only, 0 = library default */
+  item_state_t parse_item;
+  void *str_pool;
+} config_t;
+
+typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;
+
+args_status_t args_parse(int argc, char **argv, config_t *cfg);
+
+/* input source as text */
+void source_describe(const source_t *s, char *buf, size_t n);
+
+/* mcast output as text, e.g. "239.1.2.3:5000" or "[ff15::1]:5000" */
+void mcast_describe(const config_t *cfg, char *buf, size_t n);
+
+#endif

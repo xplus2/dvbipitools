@@ -2,8 +2,11 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "lib/cas/biss/ca.h"
 
@@ -177,6 +180,154 @@ START_TEST(random_fills_requested_length) {
 }
 END_TEST
 
+static char g_dir[64];
+static char g_path[128];
+
+static void tmp_file_begin(const char *content, size_t len) {
+  FILE *f;
+
+  snprintf(g_dir, sizeof g_dir, "/tmp/biss_ca_XXXXXX");
+  ck_assert_ptr_nonnull(mkdtemp(g_dir));
+  snprintf(g_path, sizeof g_path, "%s/key.pem", g_dir);
+  f = fopen(g_path, "w");
+  ck_assert_ptr_nonnull(f);
+  ck_assert_uint_eq(fwrite(content, 1, len, f), len);
+  fclose(f);
+}
+
+static void tmp_file_end(void) {
+  unlink(g_path);
+  rmdir(g_dir);
+}
+
+START_TEST(file_loaders_read_public_and_private_pem) {
+  biss_ca_key_t *k;
+  unsigned char ekid[BISS_CA_EKID_LEN];
+
+  tmp_file_begin(annex_c_pub_pem, sizeof annex_c_pub_pem - 1);
+  k = biss_ca_key_load_public_file(g_path);
+  ck_assert_ptr_nonnull(k);
+  ck_assert_int_eq(biss_ca_entitlement_key_id(k, ekid), 0);
+  ck_assert_mem_eq(ekid, annex_c_ekid, BISS_CA_EKID_LEN);
+  biss_ca_key_free(k);
+  tmp_file_end();
+
+  tmp_file_begin(annex_c_priv_pem, sizeof annex_c_priv_pem - 1);
+  k = biss_ca_key_load_private_file(g_path);
+  ck_assert_ptr_nonnull(k);
+  ck_assert_int_eq(biss_ca_entitlement_key_id(k, ekid), 0);
+  ck_assert_mem_eq(ekid, annex_c_ekid, BISS_CA_EKID_LEN);
+  biss_ca_key_free(k);
+  tmp_file_end();
+}
+END_TEST
+
+START_TEST(file_loaders_reject_null_missing_and_unparsable) {
+  static const char garbage[] = "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----\n";
+
+  ck_assert_ptr_null(biss_ca_key_load_public_file(NULL));
+  ck_assert_ptr_null(biss_ca_key_load_private_file(NULL));
+  ck_assert_ptr_null(biss_ca_key_load_public_file("/nonexistent-dir-biss/none.pem"));
+  ck_assert_ptr_null(biss_ca_key_load_private_file("/nonexistent-dir-biss/none.pem"));
+  tmp_file_begin(garbage, sizeof garbage - 1);
+  ck_assert_ptr_null(biss_ca_key_load_public_file(g_path));
+  ck_assert_ptr_null(biss_ca_key_load_private_file(g_path));
+  tmp_file_end();
+}
+END_TEST
+
+START_TEST(mem_loaders_reject_null_zero_and_oversized_length) {
+  ck_assert_ptr_null(biss_ca_key_load_public_mem(NULL, 10));
+  ck_assert_ptr_null(biss_ca_key_load_private_mem(NULL, 10));
+  ck_assert_ptr_null(biss_ca_key_load_public_mem(annex_c_pub_pem, 0));
+  ck_assert_ptr_null(biss_ca_key_load_private_mem(annex_c_priv_pem, 0));
+  ck_assert_ptr_null(biss_ca_key_load_public_mem(annex_c_pub_pem, (size_t)INT_MAX + 1));
+  ck_assert_ptr_null(biss_ca_key_load_private_mem(annex_c_priv_pem, (size_t)INT_MAX + 1));
+}
+END_TEST
+
+START_TEST(key_free_null_is_safe) {
+  biss_ca_key_free(NULL);
+}
+END_TEST
+
+START_TEST(ekid_rejects_null_arguments) {
+  biss_ca_key_t *pub = biss_ca_key_load_public_mem(annex_c_pub_pem, sizeof annex_c_pub_pem - 1);
+  unsigned char ekid[BISS_CA_EKID_LEN];
+
+  ck_assert_ptr_nonnull(pub);
+  ck_assert_int_eq(biss_ca_entitlement_key_id(NULL, ekid), -1);
+  ck_assert_int_eq(biss_ca_entitlement_key_id(pub, NULL), -1);
+  biss_ca_key_free(pub);
+}
+END_TEST
+
+START_TEST(rsa_encrypt_rejects_bad_arguments) {
+  biss_ca_key_t *pub = biss_ca_key_load_public_mem(annex_c_pub_pem, sizeof annex_c_pub_pem - 1);
+  unsigned char cipher[BISS_CA_RSA_BYTES];
+  unsigned char in[BISS_CA_SESSION_DATA_MAX] = {1, 2, 3, 4};
+
+  ck_assert_ptr_nonnull(pub);
+  ck_assert_int_eq(biss_ca_rsa_encrypt(NULL, in, sizeof in, cipher), -1);
+  ck_assert_int_eq(biss_ca_rsa_encrypt(pub, NULL, sizeof in, cipher), -1);
+  ck_assert_int_eq(biss_ca_rsa_encrypt(pub, in, sizeof in, NULL), -1);
+  ck_assert_int_eq(biss_ca_rsa_encrypt(pub, in, 0, cipher), -1);
+  ck_assert_int_eq(biss_ca_rsa_encrypt(pub, in, BISS_CA_SESSION_DATA_MAX, cipher), 0);
+  biss_ca_key_free(pub);
+}
+END_TEST
+
+START_TEST(rsa_decrypt_rejects_bad_arguments_and_small_output) {
+  biss_ca_key_t *priv = biss_ca_key_load_private_mem(annex_c_priv_pem, sizeof annex_c_priv_pem - 1);
+  unsigned char out[BISS_CA_SESSION_DATA_MAX];
+  size_t out_len = 99;
+
+  ck_assert_ptr_nonnull(priv);
+  ck_assert_int_eq(biss_ca_rsa_decrypt(NULL, annex_c_encrypted_session_data, out, sizeof out, &out_len), -1);
+  ck_assert_int_eq(biss_ca_rsa_decrypt(priv, NULL, out, sizeof out, &out_len), -1);
+  ck_assert_int_eq(biss_ca_rsa_decrypt(priv, annex_c_encrypted_session_data, NULL, sizeof out, &out_len), -1);
+  ck_assert_int_eq(biss_ca_rsa_decrypt(priv, annex_c_encrypted_session_data, out, sizeof out, NULL), -1);
+  ck_assert_int_eq(biss_ca_rsa_decrypt(priv, annex_c_encrypted_session_data, out, sizeof annex_c_session_data - 1, &out_len), -1);
+  ck_assert_uint_eq(out_len, 99u);
+  ck_assert_int_eq(biss_ca_rsa_decrypt(priv, annex_c_encrypted_session_data, out, sizeof annex_c_session_data, &out_len), 0);
+  biss_ca_key_free(priv);
+}
+END_TEST
+
+START_TEST(rsa_decrypt_fails_on_garbage_ciphertext_and_public_key) {
+  biss_ca_key_t *priv = biss_ca_key_load_private_mem(annex_c_priv_pem, sizeof annex_c_priv_pem - 1);
+  biss_ca_key_t *pub = biss_ca_key_load_public_mem(annex_c_pub_pem, sizeof annex_c_pub_pem - 1);
+  unsigned char zeros[BISS_CA_RSA_BYTES] = {0};
+  unsigned char out[BISS_CA_SESSION_DATA_MAX];
+  size_t out_len = 0;
+
+  ck_assert_ptr_nonnull(priv);
+  ck_assert_ptr_nonnull(pub);
+  ck_assert_int_eq(biss_ca_rsa_decrypt(priv, zeros, out, sizeof out, &out_len), -1);
+  ck_assert_int_eq(biss_ca_rsa_decrypt(pub, annex_c_encrypted_session_data, out, sizeof out, &out_len), -1);
+  biss_ca_key_free(priv);
+  biss_ca_key_free(pub);
+}
+END_TEST
+
+START_TEST(aes_and_random_reject_null_and_empty_arguments) {
+  unsigned char b[BISS_CA_SW_LEN] = {0};
+  unsigned char out[BISS_CA_SW_LEN];
+
+  ck_assert_int_eq(biss_ca_aes_cbc_encrypt(NULL, b, b, out), -1);
+  ck_assert_int_eq(biss_ca_aes_cbc_encrypt(b, NULL, b, out), -1);
+  ck_assert_int_eq(biss_ca_aes_cbc_encrypt(b, b, NULL, out), -1);
+  ck_assert_int_eq(biss_ca_aes_cbc_encrypt(b, b, b, NULL), -1);
+  ck_assert_int_eq(biss_ca_aes_cbc_decrypt(NULL, b, b, out), -1);
+  ck_assert_int_eq(biss_ca_aes_cbc_decrypt(b, NULL, b, out), -1);
+  ck_assert_int_eq(biss_ca_aes_cbc_decrypt(b, b, NULL, out), -1);
+  ck_assert_int_eq(biss_ca_aes_cbc_decrypt(b, b, b, NULL), -1);
+  ck_assert_int_eq(biss_ca_random(NULL, 4), -1);
+  ck_assert_int_eq(biss_ca_random(out, 0), -1);
+  ck_assert_int_eq(biss_ca_random(out, (size_t)INT_MAX + 1), -1);
+}
+END_TEST
+
 static Suite *biss_ca_suite(void) {
   Suite *s = suite_create("biss_ca");
   TCase *tc = tcase_create("core");
@@ -189,6 +340,15 @@ static Suite *biss_ca_suite(void) {
   tcase_add_test(tc, aes_cbc_encrypt_matches_annex_c_vector);
   tcase_add_test(tc, aes_cbc_decrypt_matches_annex_c_vector);
   tcase_add_test(tc, random_fills_requested_length);
+  tcase_add_test(tc, file_loaders_read_public_and_private_pem);
+  tcase_add_test(tc, file_loaders_reject_null_missing_and_unparsable);
+  tcase_add_test(tc, mem_loaders_reject_null_zero_and_oversized_length);
+  tcase_add_test(tc, key_free_null_is_safe);
+  tcase_add_test(tc, ekid_rejects_null_arguments);
+  tcase_add_test(tc, rsa_encrypt_rejects_bad_arguments);
+  tcase_add_test(tc, rsa_decrypt_rejects_bad_arguments_and_small_output);
+  tcase_add_test(tc, rsa_decrypt_fails_on_garbage_ciphertext_and_public_key);
+  tcase_add_test(tc, aes_and_random_reject_null_and_empty_arguments);
   suite_add_tcase(s, tc);
   return s;
 }

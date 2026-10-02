@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "args.h"
+#include "cli/args.h"
 
 #define DEFAULT_LISTEN_ADDR "127.0.0.1"
 #define DEFAULT_LISTEN_PORT 9109

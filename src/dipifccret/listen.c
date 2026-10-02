@@ -14,7 +14,7 @@
 
 #include "lib/helper/log.h"
 #include "lib/net/netconnect.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "listen.h"
 #include "version.h"

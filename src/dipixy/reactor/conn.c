@@ -115,6 +115,56 @@ static void conn_pool_reclaim(void) {
   }
 }
 
+typedef struct {
+  conn_t *c;
+  int has_bufs;
+} conn_grave_t;
+
+static conn_grave_t *g_grave;
+static size_t g_grave_n;
+static size_t g_grave_cap;
+static pthread_mutex_t g_grave_mtx = PTHREAD_MUTEX_INITIALIZER;
+
+static void conn_grave_add(conn_t *c, int has_bufs) {
+  if (g_grave_n == g_grave_cap) {
+    size_t ncap = g_grave_cap ? g_grave_cap * 2 : 64;
+    conn_grave_t *p = realloc(g_grave, ncap * sizeof *p);
+    if (!p) return;
+    g_grave = p;
+    g_grave_cap = ncap;
+  }
+  g_grave[g_grave_n].c = c;
+  g_grave[g_grave_n].has_bufs = has_bufs;
+  g_grave_n++;
+}
+
+void conn_retire_handoff(void) {
+  pthread_mutex_lock(&g_grave_mtx);
+  for (int i = 0; i < t_conn_pool_n; i++) conn_grave_add(t_conn_pool[i], 0);
+  for (int i = 0; i < t_conn_retiring_n; i++) conn_grave_add(t_conn_retiring[i].c, 1);
+  pthread_mutex_unlock(&g_grave_mtx);
+  t_conn_pool_n = 0;
+  t_conn_retiring_n = 0;
+}
+
+void conn_graveyard_free(void) {
+  pthread_mutex_lock(&g_grave_mtx);
+  for (size_t i = 0; i < g_grave_n; i++) {
+    conn_t *c = g_grave[i].c;
+    if (g_grave[i].has_bufs) {
+      free(c->in.buf);
+      free(c->out.buf);
+    }
+    pthread_mutex_destroy(&c->out_lock);
+    free(c);
+  }
+  free(g_grave);
+  g_grave = NULL;
+  g_grave_n = 0;
+  g_grave_cap = 0;
+  pthread_mutex_unlock(&g_grave_mtx);
+}
+
 conn_t *conn_new(int fd, void *ssl) {
   conn_t *c;
   conn_pool_reclaim();
@@ -335,6 +385,7 @@ int conn_flush(conn_t *c, int epfd) {
     pthread_mutex_lock(&c->out_lock);
     pending = c->out.len - c->out.off;
     if (pending == 0) {
+      c->out.off = c->out.len = 0; /* reset under the lock that saw it empty: concurrent queuers must not be wiped */
       pthread_mutex_unlock(&c->out_lock);
       break;
     }
@@ -404,10 +455,7 @@ int conn_flush(conn_t *c, int epfd) {
     return CONN_FLUSH_ERROR;
   }
 
-  /* drained: reset, disarm EPOLLOUT if armed */
-  pthread_mutex_lock(&c->out_lock);
-  c->out.off = c->out.len = 0;
-  pthread_mutex_unlock(&c->out_lock);
+  /* drained: disarm EPOLLOUT if armed */
   c->last_active = time(NULL);
   unsigned char want_expected = 1;
   if (atomic_compare_exchange_strong_explicit(&c->want_write, &want_expected, 0, memory_order_relaxed, memory_order_relaxed)) {

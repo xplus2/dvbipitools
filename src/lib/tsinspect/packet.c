@@ -3,7 +3,7 @@
 
 #include "lib/demux/crc32.h"
 #include "lib/demux/psi/section_asm.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "priv.h"
 
@@ -12,6 +12,9 @@
 #define PCR_MODULUS (((uint64_t)1 << 33) * 300ULL)
 #define PCR_MAX_TICKS 2700000ULL
 #define PCR_ACCURACY_US 0.5
+#define DRIFT_WINDOW_NS 30000000000ULL
+#define DRIFT_FO_PPB 30000.0
+#define TS33_MASK ((1ULL << 33) - 1)
 #define PID_NULL 0x1FFF
 #define PID_EIT 0x12
 
@@ -40,6 +43,35 @@ static void check_cc(tsinspect_t *t, unsigned pid, unsigned afc, unsigned cc, in
   *s = (unsigned char)(win | CC_SEEN | cc);
 }
 
+static void drift_reset(tsinspect_t *t) {
+  t->drift_rx0 = 0;
+  t->drift_prev_valid = 0;
+}
+
+static void drift_pair(tsinspect_t *t, uint64_t ticks) {
+  double elapsed;
+  double off;
+  if (!t->drift_rx0) {
+    t->drift_rx0 = t->rx_ns;
+    t->drift_ticks = 0;
+    return;
+  }
+  t->drift_ticks += ticks;
+  if (t->rx_ns < t->drift_rx0 + DRIFT_WINDOW_NS) return;
+  elapsed = (double)(t->rx_ns - t->drift_rx0);
+  off = ((double)t->drift_ticks * (1000.0 / 27.0) / elapsed - 1.0) * 1e9;
+  if (t->drift_prev_valid) {
+    t->drift_rate = (off - t->drift_ppb) / (elapsed / 1e9);
+    t->drift_rate_have = 1;
+  }
+  t->drift_prev_valid = 1;
+  t->drift_ppb = off;
+  t->drift_valid = 1;
+  if (off > DRIFT_FO_PPB || off < -DRIFT_FO_PPB) t->counters.pcr_freq_offset_errors++;
+  t->drift_rx0 = t->rx_ns;
+  t->drift_ticks = 0;
+}
+
 static void check_pcr(tsinspect_t *t, const unsigned char *pkt, int disc) {
   uint64_t pcr;
   if (pkt[4] < 7 || !(pkt[5] & 0x10)) return;
@@ -48,6 +80,7 @@ static void check_pcr(tsinspect_t *t, const unsigned char *pkt, int disc) {
     uint64_t ticks = (pcr + PCR_MODULUS - t->pcr_last) % PCR_MODULUS;
     if (ticks > PCR_MODULUS / 2) {
       t->counters.pcr_discontinuity_errors++;
+      drift_reset(t);
     } else {
       double interval = (double)ticks / 27000000.0;
       if (t->rx_ns) {
@@ -59,7 +92,10 @@ static void check_pcr(tsinspect_t *t, const unsigned char *pkt, int disc) {
         }
         t->pcr_rx_last = t->rx_ns;
         t->rx_used = 1;
+        drift_pair(t, ticks);
       }
+      t->pcr_span_ticks = ticks;
+      t->pcr_span_pkts = t->counters.packets - t->pcr_pkt_last;
       if (ticks > PCR_MAX_TICKS) {
         t->counters.pcr_repetition_errors++;
         t->counters.pcr_discontinuity_errors++;
@@ -67,9 +103,28 @@ static void check_pcr(tsinspect_t *t, const unsigned char *pkt, int disc) {
       if (interval > t->pcr_max_cur) t->pcr_max_cur = interval;
     }
   }
+  if (!t->pcr_have || disc) drift_reset(t);
   t->pcr_last = pcr;
+  t->pcr_pkt_last = t->counters.packets;
   if (t->rx_ns) t->pcr_rx_last = t->rx_ns;
   t->pcr_have = 1;
+}
+
+static uint64_t pes_ts(const unsigned char *b) {
+  return ((uint64_t)((b[0] >> 1) & 7) << 30) | ((uint64_t)b[1] << 22) | ((uint64_t)(b[2] >> 1) << 15) | ((uint64_t)b[3] << 7) | (b[4] >> 1);
+}
+
+static void lead_update(const tsinspect_t *t, pts_slot_t *s, const unsigned char *pl, size_t off) {
+  uint64_t stc = t->pcr_last;
+  uint64_t ts = pes_ts(pl + 9);
+  int64_t diff;
+  if ((pl[7] & 0xC0) == 0xC0 && off + 19 <= 188) ts = pes_ts(pl + 14);
+  if (t->pcr_span_pkts) stc += (t->counters.packets - t->pcr_pkt_last) * t->pcr_span_ticks / t->pcr_span_pkts;
+  diff = (int64_t)((ts - stc / 300) & TS33_MASK);
+  if (diff >= (int64_t)(1ULL << 32)) diff -= (int64_t)(1ULL << 33);
+  s->lead_us = diff * 100 / 9;
+  s->lead_have = 1;
+  if (diff < 0) s->underruns++;
 }
 
 static void check_pts(tsinspect_t *t, const unsigned char *pkt, unsigned afc, unsigned slot) {
@@ -79,6 +134,7 @@ static void check_pts(tsinspect_t *t, const unsigned char *pkt, unsigned afc, un
   pl = pkt + off;
   if (pl[0] || pl[1] || pl[2] != 1 || !(pl[7] & 0x80)) return;
   t->x->pts[slot].last = t->now;
+  if (t->lead_on && t->pcr_have) lead_update(t, &t->x->pts[slot], pl, off);
 }
 
 static void eit_section(const tsinspect_t *t, const unsigned char *b, eit_slot_t *slots, int *n) {

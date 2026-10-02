@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "lib/tva/bcg_doc.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 START_TEST(bcg_add_channel_grows_past_initial_capacity) {
   bcg_doc_t d;

@@ -4,13 +4,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "args.h"
+#include "cli/args.h"
 #include "lib/bim/accessunit.h"
 #include "lib/bim/bimreader.h"
 #include "lib/bim/bitwriter.h"
 #include "lib/bim/strrepo.h"
 #include "lib/helper/fileutil.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
 #include "lib/tva/bcg_doc.h"

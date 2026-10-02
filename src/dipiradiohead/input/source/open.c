@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "../../version.h"
 #include "../playlist.h"
@@ -87,6 +87,7 @@ source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const c
   if (!s) return NULL;
   s->idx = idx;
   s->label = label;
+  s->insp_slot = si ? si->slot : NULL;
   s->id3 = id3_new(cb, ctx);
   if (!s->id3) {
     free(s);

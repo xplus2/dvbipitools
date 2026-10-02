@@ -8,13 +8,13 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/dvbstp_seen.h"
 #include "lib/net/multicast.h"
 #include "lib/helper/playlist_in.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "lib/helper/uriparse.h"
 
 #include "../../core/route.h"

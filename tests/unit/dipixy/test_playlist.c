@@ -6,7 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "dipixy/args.h"
+#include "dipixy/cli/args.h"
 #include "dipixy/core/playlist.h"
 #include "dipixy/ts/channels/channels.h"
 #include "dipixy/ts/pidfilter.h"

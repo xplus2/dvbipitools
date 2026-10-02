@@ -9,7 +9,7 @@
 #include "http3.h"
 #include "http3_int.h"
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 #define H3_HLS_COLD_WAITERS_MAX 64
 

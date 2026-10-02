@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "../args.h"
+#include "../cli/args.h"
 
 /* stable, deterministic from cfg->dlna_host. out[37]: 36 hex/dash chars + NUL, no "uuid:" prefix */
 void ssdp_device_uuid(const config_t *cfg, char out[37]);

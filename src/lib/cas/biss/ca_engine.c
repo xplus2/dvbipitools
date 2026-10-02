@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../helper/ioutil.h"
+#include "../../sys/ioutil.h"
 #include "../../helper/log.h"
 #include "../../mux/cadescbuild.h"
 #include "../../mux/psi_build.h"
@@ -349,12 +349,10 @@ int biss_ca_engine_reload_receivers(biss_ca_engine_t *e) {
   }
 
   changed = (n_fresh != e->n_receivers);
-  if (!changed)
-    for (size_t i = 0; i < n_fresh; i++)
-      if (!ekid_in_set(e->receivers, e->n_receivers, fresh[i].ekid)) {
-        changed = 1;
-        break;
-      }
+  for (size_t i = 0; !changed && i < n_fresh; i++)
+    changed = !ekid_in_set(e->receivers, e->n_receivers, fresh[i].ekid);
+  for (size_t i = 0; !changed && i < e->n_receivers; i++)
+    changed = !ekid_in_set(fresh, n_fresh, e->receivers[i].ekid);
 
   free_receivers(e->receivers, e->n_receivers);
   memcpy(e->receivers, fresh, n_fresh * sizeof fresh[0]);

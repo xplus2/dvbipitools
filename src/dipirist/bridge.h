@@ -7,10 +7,10 @@
 #include <librist/librist.h>
 
 #include "lib/metrics/export.h"
-#include "lib/net/tssink.h"
-#include "lib/net/tssource.h"
+#include "lib/net/ts/sink.h"
+#include "lib/net/ts/source.h"
 
-#include "args.h"
+#include "cli/args.h"
 
 /* exposed for unit testing, not CLI-facing */
 enum rist_profile profile_of(rist_profile_sel_t p);

@@ -7,7 +7,7 @@
 
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/mux/fec2022.h"
 #include "config.h"
 #include "version.h"
@@ -114,6 +114,14 @@ static int apply_secret(void *c, const char *v, char *e, size_t n) {
   return set_buf(cfg->secret, sizeof cfg->secret, v, e, n);
 }
 
+static int apply_encryption_type(void *c, const char *v, char *e, size_t n) {
+  if (argutil_rist_key_size(v, &((config_t *)c)->key_size)) {
+    bufcpy(e, n, "must be 128|256");
+    return -1;
+  }
+  return 0;
+}
+
 static int apply_cname(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   return set_buf(cfg->cname, sizeof cfg->cname, v, e, n);
@@ -130,6 +138,7 @@ static const yamlcfg_key_t keys[] = {
     {"insecure", apply_insecure, 0, 0},
     {"profile", apply_profile, 0, 0},
     {"secret", apply_secret, 0, 0},
+    {"encryption-type", apply_encryption_type, 0, 0},
     {"cname", apply_cname, 0, 0},
     {"buffer", apply_buffer, 0, 0},
     {"al-fec", apply_al_fec, 0, 0},
@@ -164,6 +173,7 @@ int rist_cfg_test(const char *path, int strict) {
   warn_if(&y, !cfg.n_out, "out not set (required unless given on the command line)");
   warn_if(&y, cfg.n_in && cfg.n_out && cfg.in.is_rist == cfg.out.is_rist, "exactly one of in/out must be rist://, the other a plain endpoint");
   warn_if(&y, cfg.secret[0] && cfg.profile != RIST_PROF_MAIN, "secret requires profile main");
+  warn_if(&y, cfg.key_size && cfg.profile != RIST_PROF_MAIN, "encryption-type requires profile main");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
   warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
   warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "al-fec requires al-fec-port");

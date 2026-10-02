@@ -17,7 +17,7 @@
 #include "lib/net/dvbstp.h"
 #include "lib/helper/sds_xml.h"
 #include "lib/tva/bcg_doc.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 static int write_file(const char *dir, const char *name, const unsigned char *data, size_t len) {
   char path[512];
@@ -144,6 +144,35 @@ static void gen_rtcp(const char *dir) {
   if (n) write_file(dir, "rtcp_nack.bin", buf, n);
 }
 
+static void gen_rtcp_sdes(const char *dir) {
+  static const unsigned char sdes[] = {
+    0x81, 202, 0x00, 0x03,
+    0x11, 0x22, 0x33, 0x44,
+    0x01, 0x04, 'h', 'o', 's', 't', 0x00, 0x00
+  };
+
+  write_file(dir, "rtcp_sdes.bin", sdes, sizeof sdes);
+}
+
+static void gen_rtcp_rams_i(const char *dir) {
+  rtcp_rams_i_tlvs_t tlvs;
+  unsigned char buf[96];
+  size_t n;
+
+  memset(&tlvs, 0, sizeof tlvs);
+  tlvs.has_media_ssrc_tlv = 1;
+  tlvs.media_ssrc_tlv = 0x33333333u;
+  tlvs.has_first_packet_seqnum = 1;
+  tlvs.first_packet_seqnum = 1000;
+  tlvs.has_earliest_join_time = 1;
+  tlvs.has_burst_duration = 1;
+  tlvs.burst_duration_ms = 8000;
+  tlvs.has_max_transmit_bitrate = 1;
+  tlvs.max_transmit_bitrate_bps = 20000000;
+  n = rtcp_build_rams_i(0x11111111u, 0x22222222u, 1, 200, &tlvs, buf, sizeof buf);
+  if (n) write_file(dir, "rtcp_rams_i.bin", buf, n);
+}
+
 static void gen_simulcrypt_msg(const char *dir) {
   unsigned char buf[32];
   simulcrypt_writer_t w;
@@ -227,6 +256,8 @@ int main(int argc, char **argv) {
   gen_bim(argv[1]);
   gen_sds(argv[1]);
   gen_rtcp(argv[1]);
+  gen_rtcp_sdes(argv[1]);
+  gen_rtcp_rams_i(argv[1]);
   gen_simulcrypt_msg(argv[1]);
   gen_ecmg_channel_status(argv[1]);
   gen_emmg_datagrams(argv[1]);

@@ -6,13 +6,13 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/export.h"
 #include "lib/net/announce_driver.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "announce.h"
 #include "input.h"
 #include "lib/helper/sds_xml.h"

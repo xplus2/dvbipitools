@@ -6,7 +6,7 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
-#include "../helper/ioutil.h"
+#include "../sys/ioutil.h"
 #include "../helper/log.h"
 #include "tls_priv.h"
 #include "tls_server.h"
@@ -52,7 +52,9 @@ tls_server_ctx_t *tls_server_ctx_new(const char *cert_path, const char *key_path
 }
 
 int tls_server_ctx_reload(tls_server_ctx_t *sc) {
-  SSL_CTX *fresh = build_ctx(sc->cert_path, sc->key_path);
+  SSL_CTX *fresh;
+  if (!sc) return -1;
+  fresh = build_ctx(sc->cert_path, sc->key_path);
   if (!fresh) return -1;
   SSL_CTX_free(sc->ctx);
   sc->ctx = fresh;
@@ -86,8 +88,10 @@ tls_t *tls_server_accept_start(const tls_server_ctx_t *sc, int fd) {
 }
 
 tls_handshake_status_t tls_server_handshake_step(const tls_t *t) {
-  int r = SSL_accept(t->ssl);
+  int r;
   int err;
+  if (!t) return TLS_HANDSHAKE_ERROR;
+  r = SSL_accept(t->ssl);
   if (r == 1) return TLS_HANDSHAKE_DONE;
   err = SSL_get_error(t->ssl, r);
   if (err == SSL_ERROR_WANT_READ) return TLS_HANDSHAKE_WANT_READ;

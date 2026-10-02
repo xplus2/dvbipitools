@@ -10,7 +10,7 @@
 #include "lib/cas/biss/ca.h"
 #include "lib/demux/tspack.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "pipeline.h"
 #include "version.h"
@@ -42,7 +42,7 @@ static void emit_downstream_inspect(void *ctx, const unsigned char pkt[188]);
 #define EMIT(lc) ((lc)->insp_out ? emit_downstream_inspect : emit_downstream)
 
 /* edge-log gate, one rtmp target down never affects others */
-static void rtmp_note_result(int ok, int *had_error, int idx) {
+void descramble_rtmp_note_result(int ok, int *had_error, int idx) {
   if (!ok) {
     if (!*had_error) {
       log_line(TOOL_NAME ": rtmp[%d] output: write failed, will keep retrying", idx);
@@ -56,7 +56,7 @@ static void rtmp_note_result(int ok, int *had_error, int idx) {
 
 void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
   loop_ctx_t *lc = ctx;
-  for (int i = 0; i < lc->n_rtmp; i++) rtmp_note_result(rtmpout_write(lc->rtmp[i], type, timestamp_ms, hdr, hn, payload, pn) >= 0, &lc->rtmp_had_error[i], i);
+  for (int i = 0; i < lc->n_rtmp; i++) descramble_rtmp_note_result(rtmpout_write(lc->rtmp[i], type, timestamp_ms, hdr, hn, payload, pn) >= 0, &lc->rtmp_had_error[i], i);
 }
 
 void srt_service_all(loop_ctx_t *lc) {
@@ -380,4 +380,24 @@ int pkt_cb(void *v, const unsigned char *pkt) {
 void pipeline_flush(loop_ctx_t *lc) {
   scrambler_flush(lc->scr, EMIT(lc), lc);
   if (!lc->mkv) flush_all_outfd(lc);
+}
+
+void pipeline_push_metrics(metrics_exporter_t *mx, const loop_ctx_t *lc) {
+  metrics_writer_t w;
+
+  if (!metrics_exporter_due(mx, mono_seconds()) || metrics_exporter_begin(mx, &w, TOOL_VERSION))
+    return;
+  if (lc->cas_mode) {
+    metrics_writer_put(&w, METRICS_ID_DESCRAMBLE_MODE, lc->cas_mode, 1);
+    metrics_writer_put(&w, METRICS_ID_CAS_CRYPTOPERIOD_TRANSITIONS_TOTAL, lc->cas_mode, lc->cryptoperiod_transitions_total);
+    metrics_writer_put(&w, METRICS_ID_CAS_ECM_TOTAL, lc->cas_mode, lc->ecm_total);
+    metrics_writer_put(&w, METRICS_ID_CAS_ECM_ERRORS_TOTAL, lc->cas_mode, lc->ecm_errors_total);
+    metrics_writer_put(&w, METRICS_ID_CAS_EMM_TOTAL, lc->cas_mode, lc->emm_total);
+    metrics_writer_put(&w, METRICS_ID_CAS_EMM_DROPPED_TOTAL, lc->cas_mode, lc->dev ? emmcache_dropped_total(lc->cache) : 0);
+  }
+  metrics_writer_put(&w, METRICS_ID_CAS_SCRAMBLED_PACKETS_TOTAL, NULL, lc->scrambled_packets_total);
+  metrics_writer_put(&w, METRICS_ID_CAS_UNEXPECTED_CLEAR_PACKETS_TOTAL, NULL, lc->unexpected_clear_packets_total);
+  metrics_writer_put(&w, METRICS_ID_DESCRAMBLE_KEY_LOAD_ERRORS_TOTAL, NULL, lc->key_load_errors_total);
+  metrics_writer_put(&w, METRICS_ID_DESCRAMBLE_OUTPUT_ERRORS_TOTAL, NULL, lc->output_errors_total);
+  metrics_exporter_send(mx, &w);
 }

@@ -18,7 +18,8 @@
 
 static int find_tlv(const unsigned char *payload, size_t payload_len, unsigned short want_tag, const unsigned char **val_out, unsigned short *len_out) {
   simulcrypt_tlv_reader_t r;
-  unsigned short tag, vlen;
+  unsigned short tag;
+  unsigned short vlen;
   const unsigned char *val;
   simulcrypt_tlv_reader_init(&r, payload, payload_len);
   while (simulcrypt_tlv_reader_next(&r, &tag, &val, &vlen) == 1) {
@@ -92,7 +93,8 @@ START_TEST(cw_provision_lead0_permsg1_sends_one_combo_at_cp) {
   cw_hist_entry_t hist[ECMG_CW_HIST];
   simulcrypt_hdr_t hdr;
   simulcrypt_tlv_reader_t r;
-  unsigned short tag, vlen;
+  unsigned short tag;
+  unsigned short vlen;
   const unsigned char *val;
   int combos = 0;
   cwenc_ctx_t off_ctx = {0};
@@ -120,7 +122,8 @@ START_TEST(cw_provision_lead1_permsg2_sends_current_and_next) {
   cw_hist_entry_t hist[ECMG_CW_HIST];
   simulcrypt_hdr_t hdr;
   simulcrypt_tlv_reader_t r;
-  unsigned short tag, vlen;
+  unsigned short tag;
+  unsigned short vlen;
   const unsigned char *val;
   unsigned short seen_cp[4];
   int combos = 0;
@@ -146,11 +149,13 @@ START_TEST(cw_provision_lead1_permsg2_sends_current_and_next) {
 END_TEST
 
 START_TEST(cw_provision_reuses_history_for_overlapping_cp) {
-  unsigned char buf1[128], buf2[128];
+  unsigned char buf1[128];
+  unsigned char buf2[128];
   cw_hist_entry_t hist[ECMG_CW_HIST];
   simulcrypt_hdr_t hdr;
   simulcrypt_tlv_reader_t r;
-  unsigned short tag, vlen;
+  unsigned short tag;
+  unsigned short vlen;
   const unsigned char *val;
   unsigned char cw_cp501_first[16];
   int found;
@@ -266,7 +271,11 @@ END_TEST
 START_TEST(parse_channel_status_full_message) {
   unsigned char buf[64];
   simulcrypt_writer_t w;
-  unsigned lead_cw, cw_per_msg, max_comp_time_ms, min_cp_100ms, ecm_rep_period_ms;
+  unsigned lead_cw;
+  unsigned cw_per_msg;
+  unsigned max_comp_time_ms;
+  unsigned min_cp_100ms;
+  unsigned ecm_rep_period_ms;
 
   simulcrypt_writer_begin(&w, buf, sizeof buf, 3, ECMG_MSG_CHANNEL_STATUS);
   simulcrypt_writer_put_tlv(&w, ECMG_P_ECM_CHANNEL_ID, (unsigned char[]){0, 1}, 2);
@@ -289,7 +298,11 @@ END_TEST
 START_TEST(parse_channel_status_missing_cw_per_msg_fails) {
   unsigned char buf[64];
   simulcrypt_writer_t w;
-  unsigned lead_cw, cw_per_msg, max_comp_time_ms, min_cp_100ms, ecm_rep_period_ms;
+  unsigned lead_cw;
+  unsigned cw_per_msg;
+  unsigned max_comp_time_ms;
+  unsigned min_cp_100ms;
+  unsigned ecm_rep_period_ms;
 
   simulcrypt_writer_begin(&w, buf, sizeof buf, 3, ECMG_MSG_CHANNEL_STATUS);
   simulcrypt_writer_put_tlv(&w, ECMG_P_ECM_CHANNEL_ID, (unsigned char[]){0, 1}, 2);
@@ -303,13 +316,135 @@ END_TEST
 START_TEST(parse_channel_status_rejects_out_of_range_cw_per_msg) {
   unsigned char buf[64];
   simulcrypt_writer_t w;
-  unsigned lead_cw, cw_per_msg, max_comp_time_ms, min_cp_100ms, ecm_rep_period_ms;
+  unsigned lead_cw;
+  unsigned cw_per_msg;
+  unsigned max_comp_time_ms;
+  unsigned min_cp_100ms;
+  unsigned ecm_rep_period_ms;
 
   simulcrypt_writer_begin(&w, buf, sizeof buf, 3, ECMG_MSG_CHANNEL_STATUS);
   simulcrypt_writer_put_tlv(&w, ECMG_P_CW_PER_MSG, (unsigned char[]){(unsigned char)(ECMG_MAX_CW_PER_MSG + 1)}, 1);
   size_t n = simulcrypt_writer_finish(&w);
 
   ck_assert_int_eq(ecmg_parse_channel_status(buf + SIMULCRYPT_HDR_LEN, n - SIMULCRYPT_HDR_LEN, &lead_cw, &cw_per_msg, &max_comp_time_ms, &min_cp_100ms, &ecm_rep_period_ms), -1);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  unsigned char body[24];
+  size_t len;
+  int rc;
+  unsigned lead_cw;
+  unsigned cw_per_msg;
+} status_case_t;
+
+static const status_case_t status_cases[] = {
+    {"empty body", {0}, 0, -1, 0, 0},
+    {"truncated tag header", {0x00, 0x0B, 0x00}, 3, -1, 0, 0},
+    {"truncated value", {0x00, 0x0B, 0x00, 0x05, 0x01}, 5, -1, 0, 0},
+    {"cw_per_msg zero", {0x00, 0x0B, 0x00, 0x01, 0x00}, 5, -1, 0, 0},
+    {"cw_per_msg at max", {0x00, 0x0B, 0x00, 0x01, ECMG_MAX_CW_PER_MSG}, 5, 0, 0, ECMG_MAX_CW_PER_MSG},
+    {"cw_per_msg wrong width", {0x00, 0x0B, 0x00, 0x02, 0x00, 0x02}, 6, -1, 0, 0},
+    {"valid then truncated tail", {0x00, 0x0B, 0x00, 0x01, 0x02, 0x00, 0x0A, 0x00}, 8, -1, 0, 0},
+    {"wrong width and unknown tag ignored", {0x00, 0x0B, 0x00, 0x01, 0x02, 0x00, 0x0A, 0x00, 0x02, 0x00, 0x05, 0x7F, 0x7F, 0x00, 0x01, 0xFF}, 16, 0, 0, 2},
+};
+
+START_TEST(parse_channel_status_table) {
+  const status_case_t *c = &status_cases[_i];
+  unsigned lead_cw = 0;
+  unsigned cw_per_msg = 0;
+  unsigned max_comp_time_ms = 0;
+  unsigned min_cp_100ms = 0;
+  unsigned ecm_rep_period_ms = 0;
+  int rc = ecmg_parse_channel_status(c->body, c->len, &lead_cw, &cw_per_msg, &max_comp_time_ms, &min_cp_100ms, &ecm_rep_period_ms);
+
+  ck_assert_msg(rc == c->rc, "%s: rc %d, want %d", c->name, rc, c->rc);
+  ck_assert_msg(lead_cw == c->lead_cw, "%s: lead_cw %u", c->name, lead_cw);
+  ck_assert_msg(cw_per_msg == c->cw_per_msg, "%s: cw_per_msg %u", c->name, cw_per_msg);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  unsigned char body[8];
+  size_t len;
+} error_case_t;
+
+static const error_case_t error_cases[] = {
+    {"empty body", {0}, 0},
+    {"wrong width", {0x70, 0x00, 0x00, 0x01, 0x02}, 5},
+    {"truncated value", {0x70, 0x00, 0x00, 0x02, 0x00}, 5},
+    {"truncated tag header", {0x70, 0x00, 0x00}, 3},
+};
+
+START_TEST(find_error_status_rejects_malformed) {
+  const error_case_t *c = &error_cases[_i];
+  unsigned short err = 0;
+
+  ck_assert_msg(ecmg_find_error_status(c->body, c->len, &err) == -1, "%s", c->name);
+  ck_assert_uint_eq(err, 0);
+}
+END_TEST
+
+typedef size_t (*build_fn_t)(unsigned char *out, size_t cap);
+
+static size_t build_channel_setup_fn(unsigned char *out, size_t cap) {
+  return ecmg_build_channel_setup(out, cap, 3, 0x4A750002);
+}
+
+static size_t build_stream_setup_fn(unsigned char *out, size_t cap) {
+  return ecmg_build_stream_setup(out, cap, 3, 7, 100);
+}
+
+static size_t build_cw_provision_fn(unsigned char *out, size_t cap) {
+  cw_hist_entry_t hist[ECMG_CW_HIST];
+  cwenc_ctx_t off_ctx = {0};
+
+  memset(hist, 0, sizeof hist);
+  return ecmg_build_cw_provision(out, cap, 3, 500, hist, 8, 1, 2, &off_ctx);
+}
+
+static const build_fn_t build_fns[] = {build_channel_setup_fn, build_stream_setup_fn, build_cw_provision_fn};
+
+START_TEST(builders_reject_every_short_cap) {
+  unsigned char buf[256];
+  size_t full = build_fns[_i](buf, sizeof buf);
+
+  ck_assert_uint_gt(full, 0u);
+  for (size_t cap = 0; cap < full; cap++) ck_assert_uint_eq(build_fns[_i](buf, cap), 0u);
+  ck_assert_uint_eq(build_fns[_i](buf, full), full);
+}
+END_TEST
+
+START_TEST(cw_provision_wraps_cp_number_past_65535) {
+  unsigned char buf[128];
+  cw_hist_entry_t hist[ECMG_CW_HIST];
+  simulcrypt_hdr_t hdr;
+  simulcrypt_tlv_reader_t r;
+  unsigned short tag;
+  unsigned short vlen;
+  const unsigned char *val;
+  unsigned short seen_cp[4];
+  int combos = 0;
+  cwenc_ctx_t off_ctx = {0};
+  size_t n;
+
+  memset(hist, 0, sizeof hist);
+  n = ecmg_build_cw_provision(buf, sizeof buf, 3, 0xFFFF, hist, 8, 1, 2, &off_ctx);
+  ck_assert_uint_gt(n, 0u);
+  ck_assert_int_eq(simulcrypt_hdr_parse(buf, n, &hdr), 0);
+
+  simulcrypt_tlv_reader_init(&r, buf + SIMULCRYPT_HDR_LEN, hdr.payload_len);
+  while (simulcrypt_tlv_reader_next(&r, &tag, &val, &vlen) == 1) {
+    if (tag != ECMG_P_CP_CW_COMBINATION) continue;
+    ck_assert_int_lt(combos, 4);
+    seen_cp[combos] = (unsigned short)(((unsigned)val[0] << 8) | val[1]);
+    combos++;
+  }
+  ck_assert_int_eq(combos, 2);
+  ck_assert_uint_eq(seen_cp[0], 0xFFFF);
+  ck_assert_uint_eq(seen_cp[1], 0x0000);
 }
 END_TEST
 
@@ -417,7 +552,8 @@ static void *fake_ecmg_thread(void *arg) {
 
   while (!atomic_load_explicit(&fe->stop, memory_order_relaxed)) {
     struct pollfd pfd;
-    int pr, fd;
+    int pr;
+    int fd;
     simulcrypt_reader_t rd;
     simulcrypt_hdr_t hdr;
     const unsigned char *payload;
@@ -468,7 +604,8 @@ static void *fake_ecmg_thread(void *arg) {
         continue;
       {
         const unsigned char *cpv;
-        unsigned short cpvlen, cp_number = 0;
+        unsigned short cpvlen;
+        unsigned short cp_number = 0;
         if (find_tlv(payload, hdr.payload_len, ECMG_P_CP_NUMBER, &cpv, &cpvlen) && cpvlen == 2)
           cp_number = (unsigned short)(((unsigned)cpv[0] << 8) | cpv[1]);
         len = fake_build_ecm_response(msg, sizeof msg, version, cp_number);
@@ -718,6 +855,10 @@ static Suite *ecmg_client_suite(void) {
   tcase_add_test(tc, parse_channel_status_full_message);
   tcase_add_test(tc, parse_channel_status_missing_cw_per_msg_fails);
   tcase_add_test(tc, parse_channel_status_rejects_out_of_range_cw_per_msg);
+  tcase_add_loop_test(tc, parse_channel_status_table, 0, (int)(sizeof status_cases / sizeof status_cases[0]));
+  tcase_add_loop_test(tc, find_error_status_rejects_malformed, 0, (int)(sizeof error_cases / sizeof error_cases[0]));
+  tcase_add_loop_test(tc, builders_reject_every_short_cap, 0, (int)(sizeof build_fns / sizeof build_fns[0]));
+  tcase_add_test(tc, cw_provision_wraps_cp_number_past_65535);
   tcase_add_test(tc, ecm_available_frozen_always_available);
   tcase_add_test(tc, ecm_available_cycling_always_available);
   tcase_add_test(tc, ecm_available_silent_connected_is_available);

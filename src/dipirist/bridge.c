@@ -6,15 +6,15 @@
 
 #include <librist/librist.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/rist/ristout.h"
-#include "lib/net/tssink.h"
-#include "lib/net/tssource.h"
+#include "lib/net/ts/sink.h"
+#include "lib/net/ts/source.h"
 #include "lib/tsinspect/inspect.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
-#include "args.h"
+#include "cli/args.h"
 #include "bridge.h"
 #include "version.h"
 
@@ -64,8 +64,8 @@ static int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
   return 0;
 }
 
-/* one rist_peer_create() per e bonded URI, receiver side (always listens). --secret --cname
-   --buffer override URI's own query params. 0 ok, -1 error */
+/* one rist_peer_create() per e bonded URI, receiver side (always listens). --secret --encryption-type
+   --cname --buffer override URI's own query params. 0 ok, -1 error */
 static int add_peers(struct rist_ctx *ctx, const endpoint_t *e, const config_t *cfg) {
   for (int i = 0; i < e->n_rist; i++) {
     struct rist_peer_config *pc = NULL;
@@ -75,10 +75,9 @@ static int add_peers(struct rist_ctx *ctx, const endpoint_t *e, const config_t *
       return -1;
     }
     pc->initiate_conn = 0;
-    if (cfg->secret[0])
-      bufcpy(pc->secret, sizeof pc->secret, cfg->secret);
-    if (cfg->cname[0])
-      bufcpy(pc->cname, sizeof pc->cname, cfg->cname);
+    if (cfg->secret[0]) bufcpy(pc->secret, sizeof pc->secret, cfg->secret);
+    if (cfg->key_size) pc->key_size = cfg->key_size;
+    if (cfg->cname[0]) bufcpy(pc->cname, sizeof pc->cname, cfg->cname);
     if (cfg->buffer_ms) {
       pc->recovery_length_min = cfg->buffer_ms;
       pc->recovery_length_max = cfg->buffer_ms;
@@ -119,6 +118,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   rcfg.npeers = cfg->out.n_rist;
   rcfg.profile = cfg->profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
   rcfg.secret = cfg->secret;
+  rcfg.key_size = cfg->key_size;
   rcfg.cname = cfg->cname;
   rcfg.buffer_ms = cfg->buffer_ms;
   rcfg.verbose = cfg->verbose;

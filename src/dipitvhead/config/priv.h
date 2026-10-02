@@ -10,6 +10,7 @@
 
 int tvh_set_buf(char *dst, size_t sz, const char *v, char *e, size_t n);
 int tvh_set_pbkeylen(int *dst, const char *v, char *e, size_t n);
+int tvh_set_key_size(int *dst, const char *v, char *e, size_t n);
 int tvh_set_table(table_mode_t *mode, char *text, size_t sz, const char *v, char *e, size_t n);
 int tvh_item_hook(void *c, const char *list, int begin, char *e, size_t n);
 dipitvhead_input_t *tvh_cur_input(config_t *cfg, char *e, size_t n);
@@ -27,11 +28,13 @@ int tvh_apply_input_hbbtv(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_hbbtv_org_id(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_hbbtv_app_id(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_rist_profile(void *c, const char *v, char *e, size_t n);
+int tvh_apply_input_rist_encryption_type(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_srt_passphrase(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_srt_pbkeylen(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_srt_streamid(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_srt_packetfilter(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_srt_latency(void *c, const char *v, char *e, size_t n);
+int tvh_apply_input_jitter_ms(void *c, const char *v, char *e, size_t n);
 
 int tvh_apply_mcast(void *c, const char *v, char *e, size_t n);
 int tvh_apply_out_iface(void *c, const char *v, char *e, size_t n);
@@ -43,6 +46,7 @@ int tvh_apply_al_fec_port(void *c, const char *v, char *e, size_t n);
 int tvh_apply_rist(void *c, const char *v, char *e, size_t n);
 int tvh_apply_profile(void *c, const char *v, char *e, size_t n);
 int tvh_apply_secret(void *c, const char *v, char *e, size_t n);
+int tvh_apply_encryption_type(void *c, const char *v, char *e, size_t n);
 int tvh_apply_cname(void *c, const char *v, char *e, size_t n);
 int tvh_apply_buffer(void *c, const char *v, char *e, size_t n);
 int tvh_apply_srt_group_mode(void *c, const char *v, char *e, size_t n);
@@ -84,6 +88,8 @@ int tvh_apply_default_provider(void *c, const char *v, char *e, size_t n);
 int tvh_apply_bitrate(void *c, const char *v, char *e, size_t n);
 int tvh_apply_stuff(void *c, const char *v, char *e, size_t n);
 int tvh_apply_burst_limit(void *c, const char *v, char *e, size_t n);
+int tvh_apply_pcr_mode(void *c, const char *v, char *e, size_t n);
+int tvh_apply_pcr_lead_ms(void *c, const char *v, char *e, size_t n);
 int tvh_apply_error(void *c, const char *v, char *e, size_t n);
 int tvh_apply_insecure(void *c, const char *v, char *e, size_t n);
 int tvh_apply_tsid(void *c, const char *v, char *e, size_t n);

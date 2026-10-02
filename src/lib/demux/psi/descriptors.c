@@ -6,9 +6,7 @@
 #include "lib/demux/bitreader.h"
 #include "priv.h"
 
-typedef const unsigned char *(*desc_match_fn)(unsigned tag, const unsigned char *payload, size_t plen, void *ctx, size_t *out_len);
-
-static const unsigned char *desc_scan(const unsigned char *d, size_t len, desc_match_fn match, void *ctx, size_t *dlen) {
+const unsigned char *desc_scan(const unsigned char *d, size_t len, desc_match_fn match, void *ctx, size_t *dlen) {
   size_t i = 0;
   while (i + 2 <= len) {
     unsigned t = d[i];
@@ -39,7 +37,7 @@ static const unsigned char *match_ext_tag(unsigned t, const unsigned char *paylo
 }
 
 /* like find_desc, matches ext_desc sub-tag, scans every 0x3f */
-static const unsigned char *find_ext_desc(const unsigned char *d, size_t len, unsigned ext_tag, size_t *dlen) {
+const unsigned char *find_ext_desc(const unsigned char *d, size_t len, unsigned ext_tag, size_t *dlen) {
   return desc_scan(d, len, match_ext_tag, &ext_tag, dlen);
 }
 
@@ -50,7 +48,7 @@ static const unsigned char *match_dvb_ext_tag(unsigned t, const unsigned char *p
 }
 
 /* DVB SI extension_descriptor, EN 300 468 clause 6.2.16, tag 0x7F */
-static const unsigned char *find_dvb_ext_desc(const unsigned char *d, size_t len, unsigned ext_tag, size_t *dlen) {
+const unsigned char *find_dvb_ext_desc(const unsigned char *d, size_t len, unsigned ext_tag, size_t *dlen) {
   return desc_scan(d, len, match_dvb_ext_tag, &ext_tag, dlen);
 }
 
@@ -60,7 +58,7 @@ static int dts_asset_construction_is_ma(unsigned ac) {
 }
 
 /* scan DTS-HD_descriptor (annex G tab G.6f/G.9) for asset_info().asset_construction for XLL */
-static int dts_hd_has_ma_asset(const unsigned char *d, size_t len) {
+int dts_hd_has_ma_asset(const unsigned char *d, size_t len) {
   br_t b;
   unsigned flags;
   if (len < 1) return 0;
@@ -126,7 +124,7 @@ void add_ecm(psi_t *c, unsigned pid) {
 }
 
 /* parses a teletext descriptor (tag 0x56): 5-byte entries, prefers subtitle types (2/5) */
-static void parse_teletext_desc(psi_es_t *e, const unsigned char *ld, size_t l) {
+void parse_teletext_desc(psi_es_t *e, const unsigned char *ld, size_t l) {
   e->cls = PID_TELETEXT;
   for (size_t x = 0; x + 5 <= l; x += 5) {
     int ty = ld[x + 3] >> 3;
@@ -144,7 +142,7 @@ static void parse_teletext_desc(psi_es_t *e, const unsigned char *ld, size_t l) 
 }
 
 /* parses a DVB subtitling descriptor (tag 0x59) */
-static void parse_subtitle_desc(psi_es_t *e, const unsigned char *ld, size_t l) {
+void parse_subtitle_desc(psi_es_t *e, const unsigned char *ld, size_t l) {
   e->cls = PID_SUBTITLE;
   if (l < 8) return;
   e->sub_type = ld[3];

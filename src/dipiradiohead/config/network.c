@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "lib/config/yamlcfg.h"
+#include "lib/helper/argutil.h"
 #include "lib/helper/uriparse.h"
 #include "lib/mux/fec2022.h"
 #include "lib/net/netconnect.h"
@@ -84,6 +85,14 @@ int rdh_apply_profile(void *c, const char *v, char *e, size_t n) {
 int rdh_apply_secret(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   return rdh_set_buf(cfg->rist_secret, sizeof cfg->rist_secret, v, e, n);
+}
+
+int rdh_apply_encryption_type(void *c, const char *v, char *e, size_t n) {
+  if (argutil_rist_key_size(v, &((config_t *)c)->rist_key_size)) {
+    snprintf(e, n, "invalid '%s' (128|256)", v);
+    return -1;
+  }
+  return 0;
 }
 
 int rdh_apply_cname(void *c, const char *v, char *e, size_t n) {

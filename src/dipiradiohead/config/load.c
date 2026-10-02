@@ -11,6 +11,7 @@
 static const yamlcfg_key_t keys[] = {
 {"input", rdh_apply_input, 0, YAMLCFG_LIST_KEYED},
 {"input.sid", rdh_apply_input_sid, 0, 0},
+{"input.jitter-ms", rdh_apply_input_jitter_ms, 0, 0},
 {"input.sdt", rdh_apply_input_sdt, 0, 0},
 {"input.provider", rdh_apply_input_provider, 0, 0},
 {"mcast", rdh_apply_mcast, 0, 0},
@@ -25,6 +26,7 @@ static const yamlcfg_key_t keys[] = {
 {"remote", rdh_apply_rist, 0, 1},
 {"rist.profile", rdh_apply_profile, 0, 0},
 {"rist.secret", rdh_apply_secret, 0, 0},
+{"rist.encryption-type", rdh_apply_encryption_type, 0, 0},
 {"rist.cname", rdh_apply_cname, 0, 0},
 {"rist.buffer", rdh_apply_buffer, 0, 0},
 {"srt.group-mode", rdh_apply_srt_group_mode, 0, 0},
@@ -87,9 +89,13 @@ int rdh_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   config_t cfg;
   size_t pwlen;
+  int rc;
 
   rdh_cfg_defaults(&cfg);
-  if (yamlcfg_load_items(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg, rdh_item_hook) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load_items(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg, rdh_item_hook) != YAMLCFG_LOADED) {
+    yamlcfg_strpool_free(cfg.str_pool);
+    return -1;
+  }
   pwlen = strlen(cfg.srt_passphrase);
 
   warn_if(&y, cfg.n_inputs == 0, "input not set (required unless given on the command line)");
@@ -100,8 +106,9 @@ int rdh_cfg_test(const char *path, int strict) {
   warn_if(&y, !cfg.al_fec_l && cfg.al_fec_port, "al-fec-port has no effect without al-fec");
   warn_if(&y, cfg.al_fec_l && !cfg.rtp, "al-fec requires rtp");
   warn_if(&y, cfg.al_fec_l && !cfg.mcast_port, "al-fec has no effect without mcast");
-  warn_if(&y, cfg.n_rist == 0 && (cfg.rist_profile_given || cfg.rist_secret[0] || cfg.rist_cname[0] || cfg.rist_buffer_ms), "profile/secret/cname/buffer have no effect without rist");
+  warn_if(&y, cfg.n_rist == 0 && (cfg.rist_profile_given || cfg.rist_secret[0] || cfg.rist_key_size || cfg.rist_cname[0] || cfg.rist_buffer_ms), "profile/secret/encryption-type/cname/buffer have no effect without rist");
   warn_if(&y, cfg.n_rist > 0 && cfg.rist_secret[0] && cfg.rist_profile != RIST_PROF_MAIN, "rist-secret requires rist-profile main");
+  warn_if(&y, cfg.n_rist > 0 && cfg.rist_key_size && cfg.rist_profile != RIST_PROF_MAIN, "rist-encryption-type requires rist-profile main");
   warn_if(&y, cfg.n_srt > 1 && cfg.srt_group_mode == SRT_BOND_NONE, "bonding several srt:// peers requires srt.group-mode");
   warn_if(&y, cfg.n_srt == 1 && cfg.srt_group_mode != SRT_BOND_NONE, "srt.group-mode has no effect with a single srt:// peer");
   warn_if(&y, cfg.n_srt == 0 && (cfg.srt_group_mode != SRT_BOND_NONE || cfg.srt_passphrase[0] || cfg.srt_pbkeylen || cfg.srt_streamid[0] || cfg.srt_packetfilter[0] || cfg.srt_latency_ms), "srt.* settings need an srt:// peer");
@@ -110,5 +117,7 @@ int rdh_cfg_test(const char *path, int strict) {
   warn_if(&y, cfg.any_cas_flag && cfg.cas_algo == CAS_ALGO_NONE, "cas.* options require cas.algo");
   if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg.cas_algo, cfg.cas_vendors, cfg.n_cas_vendors, cfg.biss2_enabled, cfg.biss1_enabled, cfg.biss2_ca_enabled, cfg.biss2_emit_esw, cfg.biss2_ca_session_id_given, cfg.cas_cp_duration_ms}) != 0)
     y.warnings++;
-  return yamlcfg_report(&y);
+  rc = yamlcfg_report(&y);
+  yamlcfg_strpool_free(cfg.str_pool);
+  return rc;
 }

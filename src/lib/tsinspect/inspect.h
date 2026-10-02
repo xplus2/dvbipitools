@@ -33,6 +33,7 @@ typedef struct {
   uint64_t pcr_discontinuity_errors; /* TR 101 290 2.3b */
   uint64_t pts_errors;               /* TR 101 290 2.5 */
   uint64_t pcr_accuracy_errors;      /* TR 101 290 2.4 */
+  uint64_t pcr_freq_offset_errors;
   uint64_t eit_errors;               /* TR 101 290 3.6 */
   uint64_t eit_other_errors;         /* TR 101 290 3.6b */
   uint64_t rst_errors;               /* TR 101 290 3.7 */
@@ -69,6 +70,7 @@ double tsinspect_last_packet(const tsinspect_t *t);
 void tsinspect_set_known_pids(tsinspect_t *t, const unsigned *pids, unsigned n);
 int tsinspect_wants_rx_ns(const tsinspect_t *t);
 void tsinspect_set_rx_ns(tsinspect_t *t, uint64_t ns);
+void tsinspect_set_buffer_ms(tsinspect_t *t, int64_t ms);
 void tsinspect_bind_psi(tsinspect_t *t, psi_t *psi);
 
 void tsinspect_tick(tsinspect_t *t, double now);

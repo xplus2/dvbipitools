@@ -11,7 +11,7 @@
 #include "dipitvhead/mux/pmtbuild.h"
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
   pkt[0] = 0x47;
@@ -29,7 +29,8 @@ START_TEST(pmtbuild_map_es_picks_video_first_and_drops_unsupported) {
   out_es_t out_es[8];
   out_program_pids_t pids;
   unsigned pcr_pid;
-  int n, dropped;
+  int n;
+  int dropped;
 
   out_program_pids(0, &pids);
   memset(es, 0, sizeof es);
@@ -73,7 +74,8 @@ START_TEST(pmtbuild_map_es_defaults_pcr_to_first_es_when_no_match) {
   out_es_t out_es[4];
   out_program_pids_t pids;
   unsigned pcr_pid;
-  int n, dropped;
+  int n;
+  int dropped;
 
   out_program_pids(0, &pids);
   memset(es, 0, sizeof es);
@@ -88,12 +90,61 @@ START_TEST(pmtbuild_map_es_defaults_pcr_to_first_es_when_no_match) {
 }
 END_TEST
 
+START_TEST(pmtbuild_map_es_picks_video_when_the_source_declares_no_pcr_pid) {
+  psi_es_t es[2];
+  out_es_t out_es[4];
+  out_program_pids_t pids;
+  unsigned pcr_pid;
+  int n;
+  int dropped;
+
+  out_program_pids(0, &pids);
+  memset(es, 0, sizeof es);
+  es[0].pid = 0x0102;
+  es[0].cls = PID_AUDIO;
+  es[0].codec = CODEC_AAC_LATM;
+  es[1].pid = 0x0101;
+  es[1].cls = PID_VIDEO;
+  es[1].codec = CODEC_H264;
+
+  n = pmtbuild_map_es(es, 2, 0, 0x1FFF, pids.video_pid, pids.es_pid_base, out_es, 4, &pcr_pid, &dropped);
+  ck_assert_int_eq(n, 2);
+  ck_assert_uint_eq(pcr_pid, pids.video_pid);
+}
+END_TEST
+
+START_TEST(pmtbuild_map_es_picks_the_first_es_for_audio_only_without_a_pcr_pid) {
+  psi_es_t es[2];
+  out_es_t out_es[4];
+  out_program_pids_t pids;
+  unsigned pcr_pid;
+  int n;
+  int dropped;
+
+  out_program_pids(0, &pids);
+  memset(es, 0, sizeof es);
+  es[0].pid = 0x0102;
+  es[0].cls = PID_AUDIO;
+  es[0].codec = CODEC_AAC_LATM;
+  es[1].pid = 0x0103;
+  es[1].cls = PID_AUDIO;
+  es[1].codec = CODEC_AAC_LATM;
+
+  n = pmtbuild_map_es(es, 2, 0, 0x1FFF, pids.video_pid, pids.es_pid_base, out_es, 4, &pcr_pid, &dropped);
+  ck_assert_int_eq(n, 2);
+  ck_assert_uint_eq(pcr_pid, pids.es_pid_base);
+  ck_assert_uint_eq(out_es[0].in_pid, 0x0102u);
+}
+END_TEST
+
 START_TEST(pmtbuild_map_es_reports_dropped_beyond_cap) {
   psi_es_t es[4];
   out_es_t out_es[2];
   out_program_pids_t pids;
   unsigned pcr_pid;
-  int n, dropped, i;
+  int n;
+  int dropped;
+  int i;
 
   out_program_pids(0, &pids);
   memset(es, 0, sizeof es);
@@ -124,8 +175,11 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
   int n;
   int dropped;
   int desc_truncated;
-  unsigned char section[512], pkt[188], pat_section[32];
-  size_t slen, pat_len;
+  unsigned char section[512];
+  unsigned char pkt[188];
+  unsigned char pat_section[32];
+  size_t slen;
+  size_t pat_len;
   psi_t *p;
   const psi_es_t *dec;
   int count;
@@ -319,17 +373,144 @@ START_TEST(pmtbuild_pmt_round_trips_av1_registration_descriptor) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  unsigned ecm_pid;
+  unsigned emm_pid;
+  int pre;
+  int cap;
+  int expect_n;
+  int expect_dropped;
+  unsigned expect_ecm_out;
+  unsigned expect_emm_out;
+} ca_pass_case_t;
+
+#define CA_BASE 0x0101
+#define CA_VIDEO 0x0100
+
+static const ca_pass_case_t ca_pass_cases[] = {
+    {"ecm and emm after video and audio", 0x1FF0, 0x1FF1, 2, 8, 4, 0, CA_BASE + 1, CA_BASE + 2},
+    {"ecm only", 0x1FF0, 0, 2, 8, 3, 0, CA_BASE + 1, 0},
+    {"emm only", 0, 0x1FF1, 2, 8, 3, 0, 0, CA_BASE + 1},
+    {"neither", 0, 0, 2, 8, 2, 0, 0, 0},
+    {"cap leaves room for one", 0x1FF0, 0x1FF1, 2, 3, 3, 1, CA_BASE + 1, 0},
+    {"cap already full", 0x1FF0, 0x1FF1, 2, 2, 2, 2, 0, 0},
+    {"emm dropped alone when full", 0, 0x1FF1, 2, 2, 2, 1, 0, 0},
+    {"program without any es", 0x1FF0, 0x1FF1, 0, 8, 2, 0, CA_BASE, CA_BASE + 1},
+    {"video only program", 0x1FF0, 0x1FF1, 1, 8, 3, 0, CA_BASE, CA_BASE + 1},
+};
+
+static void fill_pre_existing(out_es_t *es, int pre) {
+  memset(es, 0, 8 * sizeof *es);
+  for (int i = 0; i < pre; i++) {
+    es[i].in_pid = 0x0200 + (unsigned)i;
+    es[i].out_pid = i == 0 ? CA_VIDEO : CA_BASE + (unsigned)(i - 1);
+    es[i].stream_type = i == 0 ? 0x1B : 0x0F;
+  }
+}
+
+START_TEST(pmtbuild_add_ca_passthrough_assigns_pids_and_honours_the_cap) {
+  const ca_pass_case_t *c = &ca_pass_cases[_i];
+  out_es_t es[8];
+  int n = c->pre;
+  int dropped = 0;
+  int ecm_idx = -1;
+  int emm_idx = -1;
+
+  fill_pre_existing(es, c->pre);
+  pmtbuild_add_ca_passthrough(c->ecm_pid, 0x4A75, c->emm_pid, 0x0963, CA_BASE, CA_VIDEO, es, &n, c->cap, &dropped);
+  ck_assert_msg(n == c->expect_n, "%s: %d entries, want %d", c->name, n, c->expect_n);
+  ck_assert_msg(dropped == c->expect_dropped, "%s: dropped %d, want %d", c->name, dropped, c->expect_dropped);
+
+  for (int i = c->pre; i < n; i++) {
+    ck_assert_msg(es[i].src == NULL && es[i].stream_type == 0, "%s: entry %d not synthetic", c->name, i);
+    if (es[i].is_ca == CA_PASS_ECM) ecm_idx = i;
+    if (es[i].is_ca == CA_PASS_EMM) emm_idx = i;
+  }
+  if (c->expect_ecm_out) {
+    ck_assert_msg(ecm_idx >= 0, "%s: no ecm entry", c->name);
+    ck_assert_msg(es[ecm_idx].out_pid == c->expect_ecm_out, "%s: ecm out pid 0x%X", c->name, es[ecm_idx].out_pid);
+    ck_assert_msg(es[ecm_idx].in_pid == c->ecm_pid, "%s: ecm in pid", c->name);
+    ck_assert_msg(es[ecm_idx].ca_system_id == 0x4A75, "%s: ecm ca system id", c->name);
+  } else {
+    ck_assert_msg(ecm_idx < 0, "%s: unexpected ecm entry", c->name);
+  }
+  if (c->expect_emm_out) {
+    ck_assert_msg(emm_idx >= 0, "%s: no emm entry", c->name);
+    ck_assert_msg(es[emm_idx].out_pid == c->expect_emm_out, "%s: emm out pid 0x%X", c->name, es[emm_idx].out_pid);
+    ck_assert_msg(es[emm_idx].in_pid == c->emm_pid, "%s: emm in pid", c->name);
+    ck_assert_msg(es[emm_idx].ca_system_id == 0x0963, "%s: emm ca system id", c->name);
+  } else {
+    ck_assert_msg(emm_idx < 0, "%s: unexpected emm entry", c->name);
+  }
+}
+END_TEST
+
+START_TEST(pmtbuild_pmt_keeps_ca_passthrough_out_of_the_es_loop_and_in_program_info) {
+  static const unsigned char ca_desc[] = {0x09, 4, 0x4A, 0x75, 0xE1, 0xF0};
+  static const unsigned char extra_entry[] = {0x05, 0xE0, 0x1F, 0xF0, 0x00};
+  psi_es_t video_src;
+  psi_es_t audio_src;
+  out_es_t es[8];
+  unsigned char section[256];
+  int n = 2;
+  int dropped = 0;
+  int desc_truncated;
+  size_t slen;
+  size_t pos;
+  size_t prog_info_len;
+  unsigned loop_pids[8];
+  int loop_count = 0;
+
+  memset(&video_src, 0, sizeof video_src);
+  memset(&audio_src, 0, sizeof audio_src);
+  video_src.cls = PID_VIDEO;
+  audio_src.cls = PID_AUDIO;
+  fill_pre_existing(es, 2);
+  es[0].src = &video_src;
+  es[1].src = &audio_src;
+  pmtbuild_add_ca_passthrough(0x1FF0, 0x4A75, 0x1FF1, 0x4A75, CA_BASE, CA_VIDEO, es, &n, 8, &dropped);
+  ck_assert_int_eq(n, 4);
+
+  slen = pmtbuild_pmt(3, 77, CA_VIDEO, ca_desc, sizeof ca_desc, es, n, extra_entry, sizeof extra_entry, section, sizeof section, &desc_truncated);
+  ck_assert_uint_ne(slen, 0u);
+
+  prog_info_len = ((size_t)(section[10] & 0x0F) << 8) | section[11];
+  ck_assert_uint_eq(prog_info_len, sizeof ca_desc);
+  ck_assert_mem_eq(section + 12, ca_desc, sizeof ca_desc);
+
+  pos = 12 + prog_info_len;
+  while (pos + 5 <= slen - 4) {
+    size_t info = ((size_t)(section[pos + 3] & 0x0F) << 8) | section[pos + 4];
+
+    ck_assert_int_lt(loop_count, 8);
+    loop_pids[loop_count++] = (((unsigned)section[pos + 1] & 0x1F) << 8) | section[pos + 2];
+    pos += 5 + info;
+  }
+  ck_assert_uint_eq(pos, slen - 4);
+  ck_assert_int_eq(loop_count, 3);
+  ck_assert_uint_eq(loop_pids[0], CA_VIDEO);
+  ck_assert_uint_eq(loop_pids[1], CA_BASE);
+  ck_assert_uint_eq(loop_pids[2], 0x1F);
+  ck_assert_mem_eq(section + slen - 4 - sizeof extra_entry, extra_entry, sizeof extra_entry);
+}
+END_TEST
+
 static Suite *pmtbuild_suite(void) {
   Suite *s = suite_create("pmtbuild");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, pmtbuild_map_es_picks_video_first_and_drops_unsupported);
   tcase_add_test(tc, pmtbuild_map_es_defaults_pcr_to_first_es_when_no_match);
+  tcase_add_test(tc, pmtbuild_map_es_picks_video_when_the_source_declares_no_pcr_pid);
+  tcase_add_test(tc, pmtbuild_map_es_picks_the_first_es_for_audio_only_without_a_pcr_pid);
   tcase_add_test(tc, pmtbuild_map_es_reports_dropped_beyond_cap);
   tcase_add_test(tc, pmtbuild_pmt_round_trips_video_audio_subtitle_teletext);
   tcase_add_test(tc, pmtbuild_pmt_truncates_es_descriptors_gracefully);
   tcase_add_test(tc, pmtbuild_pmt_rejects_small_cap);
   tcase_add_test(tc, pmtbuild_pmt_places_prog_desc_in_program_info);
   tcase_add_test(tc, pmtbuild_pmt_round_trips_av1_registration_descriptor);
+  tcase_add_loop_test(tc, pmtbuild_add_ca_passthrough_assigns_pids_and_honours_the_cap, 0, (int)(sizeof ca_pass_cases / sizeof ca_pass_cases[0]));
+  tcase_add_test(tc, pmtbuild_pmt_keeps_ca_passthrough_out_of_the_es_loop_and_in_program_info);
   suite_add_tcase(s, tc);
   return s;
 }

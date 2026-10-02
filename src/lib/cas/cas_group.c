@@ -184,6 +184,10 @@ cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
   cas_group_t *g;
   unsigned lm;
 
+  if (!cfg || cfg->vendor_count > CAS_GROUP_MAX_VENDORS || cfg->pid_count > CAS_CORE_MAX_PIDS || !cfg->cp_duration_ms) {
+    log_line("cas_group: invalid configuration");
+    return NULL;
+  }
   g = calloc(1, sizeof *g);
   if (!g) return NULL;
   g->cfg = *cfg;

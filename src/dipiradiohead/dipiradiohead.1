@@ -63,6 +63,13 @@ service_id / program_number for the
 immediately before this option. Default: auto-assigned, lowest unused
 number.
 .TP
+.BR \-\-jitter\-ms " " \fIms\fR
+For the
+.B \-i
+immediately before this option: queue 1..10000 ms of input before releasing
+any of it, so a later stall of the stream is absorbed. The queue refills up to twice that far ahead.
+If it runs dry, release pauses until it is full again. Default: off.
+.TP
 .BR \-s ", " \-\-sdt " " \fIname\fR
 SDT service_name for the
 .B \-i
@@ -144,6 +151,10 @@ peers. Default:
 RIST pre-shared key. Applies only to
 .B \-R rist://
 peers. Requires
+.BR \-\-rist\-profile\ main .
+.TP
+.B \-\-rist\-encryption\-type \fIbits\fR
+RIST AES key size, 128 or 256. Requires
 .BR \-\-rist\-profile\ main .
 .TP
 .B \-\-rist\-cname \fIname\fR

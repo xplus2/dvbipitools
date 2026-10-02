@@ -10,7 +10,7 @@
 #include "lib/helper/log.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "format_out.h"
 #include "input.h"
 #include "listen.h"

@@ -14,7 +14,7 @@
 #include <unistd.h>
 
 #include "lib/mux/fmp4/fmp4.h"
-#include "lib/net/tssource.h"
+#include "lib/net/ts/source.h"
 
 typedef struct {
   int listen_fd;

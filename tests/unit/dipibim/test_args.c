@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dipibim/args.h"
+#include "dipibim/cli/args.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 

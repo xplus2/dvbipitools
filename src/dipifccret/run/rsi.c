@@ -6,7 +6,7 @@
 #include <time.h>
 
 #include "lib/mux/rtcp_build.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "run.h"
 
@@ -17,8 +17,41 @@ static void ntp_now(uint32_t *sec, uint32_t *frac) {
   *frac = (uint32_t)((double)ts.tv_nsec / 1e9 * 4294967296.0);
 }
 
-#define RSI_PKT_MAX 320 /* header(20) + dns(256 worst case) + bandwidth(8) + collision(4+4*CHANNEL_HNED_COLLISION_MAX) */
 #define RSI_BANDWIDTH_FRACTION 0.05 /* F.4.3 rtcp-bandwidth default: 5% of stream bandwidth */
+
+size_t rsi_build_report(const rsi_pacer_ctx_t *pc, channel_t *c, uint32_t ntp_sec, uint32_t ntp_frac, time_t collision_max_age, unsigned char *pkt, size_t cap) {
+  uint32_t collisions[CHANNEL_HNED_COLLISION_MAX];
+  size_t off = 20;
+  size_t sub_len;
+  size_t collision_n;
+  uint32_t ssrc;
+  double nominal_bps;
+  uint16_t port;
+
+  if (!atomic_load_explicit(&c->ssrc_known, memory_order_acquire)) return 0;
+  ssrc = atomic_load_explicit(&c->ssrc, memory_order_acquire);
+  port = pc->resolve_by_port ? (uint16_t)(pc->resolve_base_port + c->resolve_slot) : pc->port;
+  if (pc->hostname_len > 0)
+    sub_len = rtcp_build_rsi_srbt_dns(pc->hostname, pc->hostname_len, port, pkt + off, cap - off);
+  else
+    sub_len = rtcp_build_rsi_srbt_addr(pc->addr, sizeof pc->addr, port, pkt + off, cap - off);
+  if (sub_len == 0) return 0;
+  off += sub_len;
+
+  nominal_bps = atomic_load_explicit(&c->nominal_bps, memory_order_relaxed);
+  if (nominal_bps > 0.0) {
+    sub_len = rtcp_build_rsi_srbt_bandwidth(nominal_bps * RSI_BANDWIDTH_FRACTION / 1000.0, pkt + off, cap - off);
+    off += sub_len; /* 0 on out-of-range kbps: sub-report just omitted, off unchanged */
+  }
+
+  collision_n = channel_hned_collisions(c, collisions, CHANNEL_HNED_COLLISION_MAX, collision_max_age);
+  if (collision_n > 0) {
+    sub_len = rtcp_build_rsi_srbt_collision(collisions, collision_n, pkt + off, cap - off);
+    off += sub_len;
+  }
+  if (rtcp_build_rsi_header(ssrc, ssrc, ntp_sec, ntp_frac, off, pkt, cap) == 0) return 0;
+  return off;
+}
 
 /* F.5.3: ssrc/summarized-ssrc = channel's own media ssrc, not a separate identity.
    sent on original session (own group:port), not MC RET, per F.5.3 default. */
@@ -29,6 +62,7 @@ void *rsi_pacer_main(void *arg) {
   time_t collision_max_age = (time_t)pc->interval_s * 3; /* report collision ~3 cycles after last seen */
   int wfd = signal_wake_fd();
 
+  cpuaff_pin(pc->cpuaff, pc->cpu_idx, "rsi pacer");
   if (!chunks_per_cycle) chunks_per_cycle = 1;
   while (!signal_stop_requested()) {
     size_t cap;
@@ -50,37 +84,10 @@ void *rsi_pacer_main(void *arg) {
     for (size_t idx = 0; idx < cap; idx++) {
       channel_t *c = channel_table_at(pc->channels, idx);
       unsigned char pkt[RSI_PKT_MAX];
-      uint32_t collisions[CHANNEL_HNED_COLLISION_MAX];
-      size_t off;
-      size_t sub_len;
-      size_t collision_n;
-      uint32_t ssrc;
-      double nominal_bps;
-      uint16_t port;
-      if (!c || !atomic_load_explicit(&c->ssrc_known, memory_order_acquire)) continue;
-      ssrc = atomic_load_explicit(&c->ssrc, memory_order_acquire);
-      port = pc->resolve_by_port ? (uint16_t)(pc->resolve_base_port + c->resolve_slot) : pc->port;
-      off = 20;
-      if (pc->hostname_len > 0)
-        sub_len = rtcp_build_rsi_srbt_dns(pc->hostname, pc->hostname_len, port, pkt + off, sizeof(pkt) - off);
-      else
-        sub_len = rtcp_build_rsi_srbt_addr(pc->addr, sizeof pc->addr, port, pkt + off, sizeof(pkt) - off);
-      if (sub_len == 0) continue;
-      off += sub_len;
-
-      nominal_bps = atomic_load_explicit(&c->nominal_bps, memory_order_relaxed);
-      if (nominal_bps > 0.0) {
-        sub_len = rtcp_build_rsi_srbt_bandwidth(nominal_bps * RSI_BANDWIDTH_FRACTION / 1000.0, pkt + off, sizeof(pkt) - off);
-        off += sub_len; /* 0 on out-of-range kbps: sub-report just omitted, off unchanged */
-      }
-
-      collision_n = channel_hned_collisions(c, collisions, CHANNEL_HNED_COLLISION_MAX, collision_max_age);
-      if (collision_n > 0) {
-        sub_len = rtcp_build_rsi_srbt_collision(collisions, collision_n, pkt + off, sizeof(pkt) - off);
-        off += sub_len;
-      }
-      if (rtcp_build_rsi_header(ssrc, ssrc, ntp_sec, ntp_frac, off, pkt, sizeof pkt) == 0) continue;
-      ret_send_mc_impl(c, pkt, off, NET_DSCP_SIGNALLING, pc->send_ctx);
+      size_t n;
+      if (!c) continue;
+      n = rsi_build_report(pc, c, ntp_sec, ntp_frac, collision_max_age, pkt, sizeof pkt);
+      if (n > 0) ret_send_mc_impl(c, pkt, n, NET_DSCP_SIGNALLING, pc->send_ctx);
     }
   }
   return NULL;

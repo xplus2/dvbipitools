@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "../args.h"
+#include "../cli/args.h"
 #include "../ts/channels/channels.h"
 #include "../ts/lcevcselect.h"
 #include "../ts/pidfilter.h"

@@ -8,7 +8,7 @@
 
 #include "lib/bim/fragment.h"
 #include "lib/tva/tva_xml.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 START_TEST(fragment_program_information_round_trips) {
   bcg_programme_t pr, out;

@@ -10,8 +10,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 
+#include "../log_capture.h"
 #include "dipifccret/channel/channel.h"
+#include "dipifccret/channel/priv.h"
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
 
@@ -742,6 +745,271 @@ START_TEST(channel_hned_collisions_are_per_channel) {
 }
 END_TEST
 
+START_TEST(bitrate_window_closes_after_two_seconds_into_nominal_bps) {
+  channel_table_t *t = channel_table_new(1, 0, 0);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
+
+  ck_assert_double_eq(atomic_load(&c->nominal_bps), 0.0);
+  channel_bitrate_note(c, 1000, 1000);
+  channel_bitrate_note(c, 1001, 1000);
+  ck_assert_double_eq(atomic_load(&c->nominal_bps), 0.0);
+  channel_bitrate_note(c, 1002, 1000);
+  ck_assert_double_eq(atomic_load(&c->nominal_bps), 12000.0);
+  ck_assert_uint_eq(c->bitrate_window_bytes, 0u);
+  ck_assert_int_eq(c->bitrate_window_start, 1002);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(bitrate_window_after_a_long_gap_averages_over_the_real_elapsed_time) {
+  channel_table_t *t = channel_table_new(1, 0, 0);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
+
+  channel_bitrate_note(c, 500, 1000);
+  channel_bitrate_note(c, 510, 1000);
+  ck_assert_double_eq(atomic_load(&c->nominal_bps), 2000.0 * 8.0 / 10.0);
+  channel_bitrate_note(c, 511, 500);
+  channel_bitrate_note(c, 514, 500);
+  ck_assert_double_eq(atomic_load(&c->nominal_bps), 1000.0 * 8.0 / 4.0);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(oversized_payload_is_dropped_logged_once_and_rearmed) {
+  channel_table_t *t = channel_table_new(1, 8, 0);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
+  static unsigned char big[CHANNEL_MAX_PAYLOAD + 1];
+  unsigned char ok[188] = {0x47};
+  channel_slot_t slot;
+  char log[LOG_CAPTURE_BUF];
+
+  log_capture_begin();
+  channel_store(t, c, 7, 1, 0, 0, big, sizeof big);
+  channel_store(t, c, 7, 2, 0, 0, big, sizeof big);
+  ck_assert_int_eq(channel_find(c, 1, &slot), 0);
+  ck_assert_int_eq(channel_find(c, 2, &slot), 0);
+  channel_store(t, c, 7, 3, 0, 0, ok, sizeof ok);
+  channel_store(t, c, 7, 4, 0, 0, big, sizeof big);
+  log_capture_end(log, sizeof log);
+  ck_assert_int_eq(log_count_of(log, "exceeds cap"), 2);
+  ck_assert_int_eq(channel_find(c, 3, &slot), 1);
+  ck_assert_int_eq(channel_find(c, 4, &slot), 0);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(hned_collision_table_evicts_the_longest_untouched_entry_when_full) {
+  channel_table_t *t = channel_table_new(1, 0, 0);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
+  struct sockaddr_in a;
+  struct sockaddr_in b;
+  uint32_t out[CHANNEL_HNED_COLLISION_MAX];
+  size_t n;
+  size_t i;
+  int found_new = 0;
+  int found_old = 0;
+
+  mk_addr(&a, 6001);
+  mk_addr(&b, 6002);
+  for (i = 0; i < CHANNEL_HNED_COLLISION_MAX; i++) {
+    channel_hned_seen(c, 0x1000u + (uint32_t)i, (const struct sockaddr *)&a, sizeof a, NULL, 0);
+    channel_hned_seen(c, 0x1000u + (uint32_t)i, (const struct sockaddr *)&b, sizeof b, NULL, 0);
+  }
+  ck_assert_uint_eq(channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 100), (size_t)CHANNEL_HNED_COLLISION_MAX);
+  c->hned_collisions[3].last_detected = time(NULL) - 50;
+  channel_hned_seen(c, 0x2000u, (const struct sockaddr *)&a, sizeof a, NULL, 0);
+  channel_hned_seen(c, 0x2000u, (const struct sockaddr *)&b, sizeof b, NULL, 0);
+  n = channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 100);
+  ck_assert_uint_eq(n, (size_t)CHANNEL_HNED_COLLISION_MAX);
+  for (i = 0; i < n; i++) {
+    if (out[i] == 0x2000u)
+      found_new = 1;
+    if (out[i] == 0x1003u)
+      found_old = 1;
+  }
+  ck_assert_int_eq(found_new, 1);
+  ck_assert_int_eq(found_old, 0);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(hned_collision_repeat_refreshes_instead_of_adding) {
+  channel_table_t *t = channel_table_new(1, 0, 0);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
+  struct sockaddr_in a;
+  struct sockaddr_in b;
+  uint32_t out[CHANNEL_HNED_COLLISION_MAX];
+
+  mk_addr(&a, 6001);
+  mk_addr(&b, 6002);
+  channel_hned_seen(c, 0x77u, (const struct sockaddr *)&a, sizeof a, NULL, 0);
+  channel_hned_seen(c, 0x77u, (const struct sockaddr *)&b, sizeof b, NULL, 0);
+  c->hned_collisions[0].last_detected = time(NULL) - 40;
+  channel_hned_seen(c, 0x77u, (const struct sockaddr *)&a, sizeof a, NULL, 0);
+  ck_assert_uint_eq(channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 10), 1u);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(hned_track_table_evicts_the_oldest_entry_when_full) {
+  channel_table_t *t = channel_table_new(1, 0, 0);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
+  struct sockaddr_in a;
+  struct sockaddr_in b;
+  uint32_t out[CHANNEL_HNED_COLLISION_MAX];
+  size_t i;
+
+  mk_addr(&a, 6001);
+  mk_addr(&b, 6002);
+  for (i = 0; i < CHANNEL_HNED_TRACK_MAX; i++)
+    channel_hned_seen(c, 0x3000u + (uint32_t)i, (const struct sockaddr *)&a, sizeof a, NULL, 0);
+  c->hned[5].last_seen = time(NULL) - 100;
+  channel_hned_seen(c, 0x4000u, (const struct sockaddr *)&a, sizeof a, NULL, 0);
+
+  channel_hned_seen(c, 0x3005u, (const struct sockaddr *)&b, sizeof b, NULL, 0);
+  ck_assert_uint_eq(channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 100), 0u);
+  channel_hned_seen(c, 0x3006u, (const struct sockaddr *)&b, sizeof b, NULL, 0);
+  ck_assert_uint_eq(channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 100), 1u);
+  ck_assert_uint_eq(out[0], 0x3006u);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(hned_long_cname_is_clipped_and_compared_clipped) {
+  channel_table_t *t = channel_table_new(1, 0, 0);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
+  struct sockaddr_in a;
+  char name[RTCP_CNAME_MAX + 40];
+  uint32_t out[CHANNEL_HNED_COLLISION_MAX];
+
+  mk_addr(&a, 6001);
+  memset(name, 'n', sizeof name);
+  channel_hned_seen(c, 0x55u, (const struct sockaddr *)&a, sizeof a, name, sizeof name);
+  channel_hned_seen(c, 0x55u, (const struct sockaddr *)&a, sizeof a, name, sizeof name);
+  ck_assert_uint_eq(channel_hned_collisions(c, out, CHANNEL_HNED_COLLISION_MAX, 100), 0u);
+  ck_assert_uint_eq(c->hned[0].cname_len, (size_t)(RTCP_CNAME_MAX - 1));
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(reap_walks_past_tombstones_and_the_table_stays_usable) {
+  channel_table_t *t = channel_table_new(6, 0, 0);
+  unsigned char addr[4] = {239, 9, 9, 0};
+  unsigned i;
+  unsigned round;
+
+  for (round = 0; round < 3; round++) {
+    for (i = 0; i < 6; i++) {
+      addr[3] = (unsigned char)(i + 1);
+      ck_assert_ptr_nonnull(channel_lookup(t, AF_INET, addr, sizeof addr, 5000 + round));
+    }
+    channel_table_reap(t, -1);
+    for (i = 0; i < channel_table_capacity(t); i++)
+      ck_assert_ptr_null(channel_table_at(t, i));
+  }
+  addr[3] = 3;
+  ck_assert_ptr_nonnull(channel_lookup(t, AF_INET, addr, sizeof addr, 9999));
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(reap_leaves_fresh_channels_and_removes_only_stale_ones) {
+  channel_table_t *t = channel_table_new(4, 0, 0);
+  channel_t *fresh = lookup_ip(t, "239.1.1.1", 5000);
+  channel_t *stale = lookup_ip(t, "239.1.1.2", 5000);
+  unsigned char payload[188] = {0x47};
+
+  channel_store(t, fresh, 0xA1, 1, 0, 0, payload, sizeof payload);
+  channel_store(t, stale, 0xA2, 1, 0, 0, payload, sizeof payload);
+  atomic_store(&stale->last_seen, time(NULL) - 500);
+  channel_table_reap(t, 100);
+  ck_assert_ptr_nonnull(channel_find_by_ssrc(t, 0xA1));
+  ck_assert_ptr_null(channel_find_by_ssrc(t, 0xA2));
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(reap_of_a_channel_whose_home_bucket_is_taken_probes_to_its_own_entry) {
+  channel_table_t *t = channel_table_new(4, 0, 0);
+  unsigned char first[4] = {239, 7, 7, 1};
+  unsigned char second[4] = {239, 7, 7, 2};
+  size_t want = chan_key_hash(AF_INET, first, sizeof first, 5000) & t->hash_mask;
+  channel_t *a;
+  channel_t *b;
+
+  while ((chan_key_hash(AF_INET, second, sizeof second, 5000) & t->hash_mask) != want)
+    second[3]++;
+  a = channel_lookup(t, AF_INET, first, sizeof first, 5000);
+  b = channel_lookup(t, AF_INET, second, sizeof second, 5000);
+  ck_assert_ptr_nonnull(a);
+  ck_assert_ptr_nonnull(b);
+  atomic_store(&b->last_seen, time(NULL) - 500);
+  channel_table_reap(t, 100);
+  ck_assert_ptr_eq(channel_lookup(t, AF_INET, first, sizeof first, 5000), a);
+  ck_assert_ptr_ne(channel_lookup(t, AF_INET, second, sizeof second, 5000), NULL);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(cache_peek_meta_reports_seq_and_timestamp_from_the_rap_onward) {
+  channel_table_t *t = channel_table_new(1, 0, 8);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
+  unsigned char payload[188] = {0x47};
+  rap_cache_meta_t m;
+  size_t i;
+
+  ck_assert_int_eq(channel_cache_peek_meta(c, 0, &m), 0);
+  atomic_store(&c->cache.have_rap, 1);
+  for (i = 0; i < 3; i++)
+    channel_store(t, c, 0xA1, (uint16_t)(50 + i), (uint32_t)(1000 * (i + 1)), 0, payload, sizeof payload);
+  ck_assert_int_eq(channel_cache_peek_meta(c, 0, &m), 1);
+  ck_assert_uint_eq(m.seq, 50u);
+  ck_assert_uint_eq(m.timestamp, 1000u);
+  ck_assert_int_eq(channel_cache_peek_meta(c, 2, &m), 1);
+  ck_assert_uint_eq(m.seq, 52u);
+  ck_assert_uint_eq(m.timestamp, 3000u);
+  ck_assert_int_eq(channel_cache_peek_meta(c, 3, &m), 0);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(cache_peek_meta_follows_the_wrapped_window_when_the_cache_is_full) {
+  channel_table_t *t = channel_table_new(1, 0, 4);
+  channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
+  unsigned char payload[188] = {0x47};
+  rap_cache_meta_t m;
+  size_t i;
+
+  atomic_store(&c->cache.have_rap, 1);
+  for (i = 0; i < 6; i++)
+    channel_store(t, c, 0xA1, (uint16_t)(10 + i), (uint32_t)i, 0, payload, sizeof payload);
+  ck_assert_int_eq(channel_cache_peek_meta(c, 0, &m), 1);
+  ck_assert_uint_eq(m.seq, 12u);
+  ck_assert_int_eq(channel_cache_peek_meta(c, 3, &m), 1);
+  ck_assert_uint_eq(m.seq, 15u);
+  ck_assert_int_eq(channel_cache_peek_meta(c, 4, &m), 0);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(set_inspect_registers_the_aggregate_and_reclaim_detaches_the_channel_inspector) {
+  channel_table_t *t = channel_table_new(1, 0, 0);
+  tsinspect_agg_t *agg = tsinspect_agg_new(METRICS_INSPECT_TS_BASIC);
+  channel_t *c;
+
+  channel_table_set_inspect(t, agg);
+  c = lookup_ip(t, "239.1.1.1", 5000);
+  c->insp = tsinspect_agg_add(agg);
+  ck_assert_ptr_nonnull(c->insp);
+  channel_table_reap(t, -1);
+  c = lookup_ip(t, "239.1.1.2", 5000);
+  ck_assert_ptr_nonnull(c);
+  ck_assert_ptr_null(c->insp);
+  channel_table_free(t);
+  tsinspect_agg_free(agg);
+}
+END_TEST
+
 static Suite *channel_suite(void) {
   Suite *s = suite_create("channel");
   TCase *tc = tcase_create("core");
@@ -773,6 +1041,19 @@ static Suite *channel_suite(void) {
   tcase_add_test(tc, channel_fcc_cache_race_no_torn_reads);
   tcase_add_test(tc, channel_find_by_ssrc_race_no_corruption);
   tcase_add_test(tc, channel_lookup_race_single_winner);
+  tcase_add_test(tc, bitrate_window_closes_after_two_seconds_into_nominal_bps);
+  tcase_add_test(tc, bitrate_window_after_a_long_gap_averages_over_the_real_elapsed_time);
+  tcase_add_test(tc, oversized_payload_is_dropped_logged_once_and_rearmed);
+  tcase_add_test(tc, hned_collision_table_evicts_the_longest_untouched_entry_when_full);
+  tcase_add_test(tc, hned_collision_repeat_refreshes_instead_of_adding);
+  tcase_add_test(tc, hned_track_table_evicts_the_oldest_entry_when_full);
+  tcase_add_test(tc, hned_long_cname_is_clipped_and_compared_clipped);
+  tcase_add_test(tc, reap_walks_past_tombstones_and_the_table_stays_usable);
+  tcase_add_test(tc, reap_leaves_fresh_channels_and_removes_only_stale_ones);
+  tcase_add_test(tc, reap_of_a_channel_whose_home_bucket_is_taken_probes_to_its_own_entry);
+  tcase_add_test(tc, cache_peek_meta_reports_seq_and_timestamp_from_the_rap_onward);
+  tcase_add_test(tc, cache_peek_meta_follows_the_wrapped_window_when_the_cache_is_full);
+  tcase_add_test(tc, set_inspect_registers_the_aggregate_and_reclaim_detaches_the_channel_inspector);
   suite_add_tcase(s, tc);
   return s;
 }

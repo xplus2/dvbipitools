@@ -23,6 +23,8 @@ static tsinspect_t *new_inspector(metrics_inspect_ts_t level, int light, int rel
   }
   t->level = level;
   t->relay = relay;
+  t->buffer_ms = -1;
+  t->lead_on = !light && level >= METRICS_INSPECT_TS_FULL;
   t->pcr_pid = PID_NONE;
   pthread_mutex_init(&t->pub_lock, NULL);
   return t;
@@ -91,6 +93,10 @@ int tsinspect_wants_rx_ns(const tsinspect_t *t) {
 
 void tsinspect_set_rx_ns(tsinspect_t *t, uint64_t ns) {
   t->rx_ns = ns;
+}
+
+void tsinspect_set_buffer_ms(tsinspect_t *t, int64_t ms) {
+  t->buffer_ms = ms;
 }
 
 void tsinspect_bind_psi(tsinspect_t *t, psi_t *psi) {

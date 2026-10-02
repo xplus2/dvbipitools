@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 ws_client_t *g_clients;
 int g_clients_cap;
@@ -250,10 +250,12 @@ int ws_clients_touch(const client_info_t *info) {
   uint32_t h;
   ws_stripe_t *stripe;
   ws_client_snapshot_t snap;
-  if (info->filter)
+  if (g_stripe_count == 0) return -1;
+  if (info->filter) {
     pid_filter_format(info->filter, filt, sizeof filt);
-  else
+  } else {
     filt[0] = '\0';
+  }
 
   h = client_hash(info, filt);
   stripe = &g_stripes[h % (uint32_t)g_stripe_count];

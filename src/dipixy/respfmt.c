@@ -7,7 +7,7 @@
 #include "reactor/internal.h"
 #include "version.h"
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 #include <stdlib.h>
 #include <string.h>

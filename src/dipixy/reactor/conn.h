@@ -106,6 +106,9 @@ conn_t *conn_new(int fd, void *ssl);
 /* does not close fd or free ssl, caller's job */
 void conn_free(conn_t *c);
 
+void conn_retire_handoff(void);
+void conn_graveyard_free(void);
+
 /* never touches socket, never blocks */
 int conn_queue(conn_t *c, const void *data, size_t len);
 

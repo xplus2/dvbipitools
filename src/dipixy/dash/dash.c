@@ -4,7 +4,7 @@
 #include "dash.h"
 #include "dash_int.h"
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 #include <pthread.h>
 #include <stdio.h>

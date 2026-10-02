@@ -217,6 +217,40 @@ START_TEST(aac_latm_probe_needs_more_bytes) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  unsigned ext_aot;
+  unsigned sr_idx;
+  unsigned chcfg;
+  unsigned channels;
+  unsigned profile_level;
+} profile_case_t;
+
+static const profile_case_t profile_cases[] = {
+    {"three channels", 2, 4, 3, 3, 0x52},
+    {"five point one", 2, 4, 6, 6, 0},
+    {"seven point one", 2, 4, 7, 8, 0},
+    {"channel config zero", 2, 4, 0, 0, 0},
+    {"reserved channel config", 2, 4, 9, 0, 0},
+    {"sbr beyond 48 kHz", 5, 0, 2, 2, 0},
+    {"sbr three channels at 48 kHz", 5, 3, 3, 3, 0x5B},
+    {"sbr six channels", 5, 6, 6, 6, 0},
+};
+
+START_TEST(aac_latm_probe_maps_channels_and_profile_level) {
+  const profile_case_t *pc = &profile_cases[_i];
+  aac_latm_t *c = aac_latm_new();
+  unsigned char frame[32];
+  size_t len = build_hierarchical_config_frame(frame, sizeof frame, pc->ext_aot, pc->sr_idx, pc->chcfg);
+  aac_latm_info_t info;
+
+  ck_assert_int_eq(aac_latm_probe(c, frame, len, &info), 1);
+  ck_assert_msg(info.channels == pc->channels, "%s: %u channels", pc->name, info.channels);
+  ck_assert_msg(info.aac_profile_level == pc->profile_level, "%s: profile level 0x%x", pc->name, info.aac_profile_level);
+  aac_latm_free(c);
+}
+END_TEST
+
 static Suite *aac_latm_suite(void) {
   Suite *s = suite_create("aac_latm");
   TCase *tc = tcase_create("core");
@@ -228,6 +262,7 @@ static Suite *aac_latm_suite(void) {
   tcase_add_test(tc, aac_latm_probe_rejects_reuse_before_any_config_seen);
   tcase_add_test(tc, aac_latm_is_sync_checks_header_bits);
   tcase_add_test(tc, aac_latm_probe_needs_more_bytes);
+  tcase_add_loop_test(tc, aac_latm_probe_maps_channels_and_profile_level, 0, (int)(sizeof profile_cases / sizeof profile_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }

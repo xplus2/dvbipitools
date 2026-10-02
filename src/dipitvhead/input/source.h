@@ -9,7 +9,7 @@
 
 #include "lib/net/netconnect.h"
 
-#include "../args.h"
+#include "../cli/args.h"
 
 typedef struct tvsrc tvsrc_t;
 
@@ -25,6 +25,7 @@ ssize_t tvsrc_read(tvsrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t 
 int tvsrc_fd(const tvsrc_t *s);
 int tvsrc_enable_rx_timestamps(tvsrc_t *s);
 uint64_t tvsrc_last_rx_ns(const tvsrc_t *s);
+int64_t tvsrc_buffer_ms(const tvsrc_t *s);
 
 void tvsrc_close(tvsrc_t *s);
 

@@ -7,7 +7,7 @@
 #include "lib/net/dvbstp_seen.h"
 #include "lib/tva/bcg_doc.h"
 
-#include "args.h"
+#include "cli/args.h"
 
 int listen_run(const config_t *cfg);
 

@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ioutil.h"
+#include "../sys/ioutil.h"
 
 #define JBUF_SHRINK_RATIO 2
 

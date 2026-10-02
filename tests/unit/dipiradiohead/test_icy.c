@@ -188,6 +188,83 @@ START_TEST(output_capped_below_inlen_drops_excess_audio_without_desync) {
   icy_free(c);
 }
 
+static size_t feed_one_block(icy_t *c, const char *tag, unsigned char *out, size_t cap) {
+  unsigned char in[2 + 1 + 255 * 16 + 2];
+  size_t n = 2;
+
+  memcpy(in, "\xAA\xAA", 2);
+  n += build_meta_block(in + n, tag);
+  memcpy(in + n, "\xBB\xBB", 2);
+  n += 2;
+  return icy_feed(c, in, n, out, cap);
+}
+
+START_TEST(oversized_title_is_truncated_to_the_title_buffer) {
+  static const char head[] = "StreamTitle='";
+  static const char tail[] = "';";
+  char tag[255 * 16 + 1];
+  unsigned char out[16];
+  meta_capture_t m;
+  icy_t *c;
+  size_t fill = 255 * 16 - (sizeof head - 1) - (sizeof tail - 1);
+  size_t w;
+
+  memset(&m, 0, sizeof m);
+  memcpy(tag, head, sizeof head - 1);
+  memset(tag + sizeof head - 1, 'T', fill);
+  memcpy(tag + sizeof head - 1 + fill, tail, sizeof tail);
+  c = icy_new(2, meta_cb, &m);
+  w = feed_one_block(c, tag, out, sizeof out);
+  ck_assert_uint_eq(w, 4);
+  ck_assert_int_eq(m.calls, 1);
+  ck_assert_str_eq(m.artist, "");
+  ck_assert_uint_eq(strlen(m.title), 511u);
+  ck_assert_int_eq(m.title[510], 'T');
+  icy_free(c);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  const char *tag;
+} no_title_case_t;
+
+static const no_title_case_t no_title_cases[] = {
+    {"missing StreamTitle tag", "StreamUrl='http://x';"},
+    {"missing closing quote and semicolon", "StreamTitle='Artist - Song"},
+    {"missing semicolon", "StreamTitle='Artist - Song'"},
+};
+
+START_TEST(unusable_metadata_fires_no_callback_and_keeps_audio) {
+  const no_title_case_t *tc = &no_title_cases[_i];
+  unsigned char out[16];
+  meta_capture_t m;
+  icy_t *c;
+  size_t w;
+
+  memset(&m, 0, sizeof m);
+  c = icy_new(2, meta_cb, &m);
+  w = feed_one_block(c, tc->tag, out, sizeof out);
+  ck_assert_msg(m.calls == 0, "%s: callback fired", tc->name);
+  ck_assert_msg(w == 4, "%s: wrote %zu", tc->name, w);
+  ck_assert_mem_eq(out, "\xAA\xAA\xBB\xBB", 4);
+  icy_free(c);
+}
+END_TEST
+
+START_TEST(null_callback_still_strips_metadata) {
+  unsigned char out[16];
+  icy_t *c = icy_new(2, NULL, NULL);
+  size_t w;
+
+  ck_assert_ptr_nonnull(c);
+  w = feed_one_block(c, "StreamTitle='Artist - Song';", out, sizeof out);
+  ck_assert_uint_eq(w, 4);
+  ck_assert_mem_eq(out, "\xAA\xAA\xBB\xBB", 4);
+  icy_free(c);
+}
+END_TEST
+
 static Suite *icy_suite(void) {
   Suite *s = suite_create("dipiradiohead_icy");
   TCase *tc = tcase_create("core");
@@ -199,6 +276,9 @@ static Suite *icy_suite(void) {
   tcase_add_test(tc, repeated_identical_title_only_fires_callback_once);
   tcase_add_test(tc, state_carries_across_calls_when_boundary_splits_mid_call);
   tcase_add_test(tc, output_capped_below_inlen_drops_excess_audio_without_desync);
+  tcase_add_test(tc, oversized_title_is_truncated_to_the_title_buffer);
+  tcase_add_loop_test(tc, unusable_metadata_fires_no_callback_and_keeps_audio, 0, (int)(sizeof no_title_cases / sizeof no_title_cases[0]));
+  tcase_add_test(tc, null_callback_still_strips_metadata);
   suite_add_tcase(s, tc);
   return s;
 }

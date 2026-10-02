@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 
-#include "args.h"
+#include "cli/args.h"
 
 /* playlist header. invocation: argv[0]-ish string for m3u comment. provider: DomainName, OUT_XML only */
 void format_init(FILE *f, out_fmt_t fmt, const char *invocation, const char *provider);

@@ -188,6 +188,11 @@ int buf_reserve(unsigned char **buf, size_t *cap, size_t need);
 void hls_seg_registry_lock(void);
 void hls_seg_registry_unlock(void);
 hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container);
+int seg_try_pin(hls_seg_ctx_t *s);
+void seg_unpin(hls_seg_ctx_t *s);
+hls_seg_ctx_t *find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container);
+int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_on);
+void unlink_from_ctx_chain(hls_seg_ctx_t *victim);
 
 /* mp4push.c */
 void mp4push_deliver(const hls_seg_ctx_t *s, const unsigned char *data, size_t len);

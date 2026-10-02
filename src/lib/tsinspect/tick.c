@@ -160,7 +160,10 @@ static void check_referenced_pids(tsinspect_t *t) {
 
 static void rebuild_pts_slots(tsinspect_t *t) {
   const psi_es_t *es;
+  pts_slot_t old[PSI_MAX_ES];
+  int old_n = t->pts_n;
   int n = 0;
+  memcpy(old, t->x->pts, sizeof old);
   memset(t->x->pts_idx, 0, sizeof t->x->pts_idx);
   t->pts_n = 0;
   es = psi_es(t->psi, &n);
@@ -169,6 +172,9 @@ static void rebuild_pts_slots(tsinspect_t *t) {
     t->x->pts[t->pts_n].pid = es[i].pid;
     t->x->pts[t->pts_n].last = t->now;
     t->x->pts[t->pts_n].flag = 0;
+    t->x->pts[t->pts_n].lead_have = 0;
+    t->x->pts[t->pts_n].underruns = 0;
+    for (int k = 0; k < old_n; k++) if (old[k].pid == es[i].pid) t->x->pts[t->pts_n].underruns = old[k].underruns;
     t->pts_n++;
     t->x->pts_idx[es[i].pid] = (unsigned char)t->pts_n;
   }
@@ -271,6 +277,21 @@ void publish(tsinspect_t *t) {
   p.mgb1_valid = t->mgb1_valid;
   p.mgb2_bps = t->mgb2_bps;
   p.mgb2_valid = t->mgb2_valid;
+  p.buffer_ms = t->buffer_ms;
+  p.drift_valid = t->drift_valid;
+  p.rate_valid = t->drift_rate_have;
+  p.drift_ppb = (int64_t)t->drift_ppb;
+  p.drift_rate = (int64_t)t->drift_rate;
+  p.n_lead = 0;
+  if (t->lead_on && t->x) {
+    for (int i = 0; i < t->pts_n; i++) {
+      if (!t->x->pts[i].lead_have) continue;
+      p.lead_pid[p.n_lead] = t->x->pts[i].pid;
+      p.lead_us[p.n_lead] = t->x->pts[i].lead_us;
+      p.lead_underruns[p.n_lead] = t->x->pts[i].underruns;
+      p.n_lead++;
+    }
+  }
   p.known_set = t->x && t->x->known_set;
   if (t->level >= METRICS_INSPECT_TS_FULL && t->x && t->x->d) {
     const detail_t *d = t->x->d;

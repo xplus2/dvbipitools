@@ -11,12 +11,11 @@
 #include "dipixy/ws/ws_broadcast.h"
 
 /* ws_broadcast_publish's per-thread frame buffer: reactor workers don't quit (but test threads do, freeing their TLS, leaking the still-cached buffer to LSan */
-#if defined(__SANITIZE_ADDRESS__)
-#define WSB_ASAN 1
-#elif defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#define WSB_ASAN 1
+#ifndef __has_feature
+#define __has_feature(x) 0
 #endif
+#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer)
+#define WSB_ASAN 1
 #endif
 #ifdef WSB_ASAN
 const char *__lsan_default_options(void) { return "detect_leaks=0"; }

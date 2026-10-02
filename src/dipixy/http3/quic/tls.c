@@ -25,7 +25,7 @@ static int h3_alpn_select_cb(SSL *ssl, const unsigned char **out, unsigned char 
   static const unsigned char alpn[] = "\x02h3";
   if (SSL_select_next_proto((unsigned char **)out, outlen, alpn, sizeof alpn - 1, in, inlen) == OPENSSL_NPN_NEGOTIATED)
     return SSL_TLSEXT_ERR_OK;
-  return SSL_TLSEXT_ERR_NOACK;
+  return SSL_TLSEXT_ERR_ALERT_FATAL;
 }
 
 void h3_init(const char *cert_path, const char *key_path) {

@@ -5,10 +5,10 @@
 #include <unistd.h>
 
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "lib/helper/toolmain.h"
 
-#include "args.h"
+#include "cli/args.h"
 #include "core/htdocs.h"
 #include "core/metrics.h"
 #include "core/status.h"

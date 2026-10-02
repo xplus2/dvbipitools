@@ -89,7 +89,14 @@ pmt_cand_t *find_cand(psi_t *c, unsigned pmt_pid);
 void rebuild_class_table(psi_t *c);
 
 /* descriptors.c */
+typedef const unsigned char *(*desc_match_fn)(unsigned tag, const unsigned char *payload, size_t plen, void *ctx, size_t *out_len);
+const unsigned char *desc_scan(const unsigned char *d, size_t len, desc_match_fn match, void *ctx, size_t *dlen);
 const unsigned char *find_desc(const unsigned char *d, size_t len, unsigned tag, size_t *dlen);
+const unsigned char *find_ext_desc(const unsigned char *d, size_t len, unsigned ext_tag, size_t *dlen);
+const unsigned char *find_dvb_ext_desc(const unsigned char *d, size_t len, unsigned ext_tag, size_t *dlen);
+int dts_hd_has_ma_asset(const unsigned char *d, size_t len);
+void parse_teletext_desc(psi_es_t *e, const unsigned char *ld, size_t l);
+void parse_subtitle_desc(psi_es_t *e, const unsigned char *ld, size_t l);
 void copy_name(char *dst, size_t dstsz, const unsigned char *src, size_t len);
 void add_ecm(psi_t *c, unsigned pid);
 void classify(psi_es_t *e, const unsigned char *desc, size_t dlen, int hdmv);

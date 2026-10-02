@@ -13,11 +13,11 @@
 
 #include "lib/demux/rtp.h"
 #include "lib/demux/rtx.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/mux/rtcp_build.h"
 #include "lib/net/netconnect.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "ret_client.h"
 
 #define RET_GAP_MAX 32       /* missing seqs tracked per gap; a bigger one just resyncs, matching no-RET behavior */
@@ -319,7 +319,7 @@ ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size
   if (r->gap_pending) {
     double remain_ms = (r->gap_deadline - now) * 1000.0;
     if (remain_ms < 0) remain_ms = 0;
-    if (remain_ms < timeout_ms) timeout_ms = (int)remain_ms;
+    if (remain_ms < timeout_ms) timeout_ms = remain_ms > 0 ? (int)remain_ms + 1 : 0;
   }
 
   mi = nfds;
@@ -356,9 +356,9 @@ ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size
     }
   }
 
-  if (pfd[ui].revents & POLLIN) {
+  if (pfd[ui].revents & (POLLIN | POLLERR)) {
     unsigned char raw[65536];
-    ssize_t rn = recv(r->uni_fd, raw, sizeof raw, 0);
+    ssize_t rn = recv(r->uni_fd, raw, sizeof raw, MSG_DONTWAIT);
     if (rn > 0) ret_client_on_repair(r, raw, (size_t)rn, now);
   }
 

@@ -12,12 +12,12 @@
 #include "lib/helper/log.h"
 #include "lib/net/srt/srtin.h"
 #include "lib/net/srt/srtout.h"
-#include "lib/net/tssink.h"
-#include "lib/net/tssource.h"
+#include "lib/net/ts/sink.h"
+#include "lib/net/ts/source.h"
 #include "lib/tsinspect/inspect.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
-#include "args.h"
+#include "cli/args.h"
 #include "bridge.h"
 #include "version.h"
 

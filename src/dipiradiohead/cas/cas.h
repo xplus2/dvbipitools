@@ -10,7 +10,7 @@
 #include "lib/cas/cas_group.h"
 #include "lib/scrambler/scrambler.h"
 
-#include "../args.h"
+#include "../cli/args.h"
 
 typedef struct cas cas_t;
 

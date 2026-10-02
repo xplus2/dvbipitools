@@ -98,20 +98,47 @@ uint64_t ts_push_queue_dropped(void) {
   return atomic_load_explicit(&g_queue_dropped, memory_order_relaxed);
 }
 
-void ts_push_queue_stats(ts_push_queue_stats_t *out) {
+typedef struct {
+  uint32_t wpos;
+  double at;
+} rate_mark_t;
+
+static rate_mark_t g_rate_marks[TS_PUSH_MAX_SUBS];
+
+static int64_t queue_ms(rate_mark_t *m, uint32_t wpos, uint64_t used, double now) {
+  int64_t ms = -1;
+  if (m->at > 0.0 && now > m->at && (uint32_t)(wpos - m->wpos) > 0) ms = (int64_t)((double)used * (now - m->at) * 1000.0 / (double)(uint32_t)(wpos - m->wpos));
+  m->wpos = wpos;
+  m->at = now;
+  return ms;
+}
+
+void ts_push_queue_stats(ts_push_queue_stats_t *out, double now) {
   out->bytes = 0;
   out->max_bytes = 0;
+  out->max_ms = 0;
+  out->ms_known = 0;
   for (int i = 0; i < g_ts_subs_n; i++) {
     const ts_sub_t *s = &g_ts_subs[i];
     const byte_ring_t *r;
     uint64_t used;
-    if (atomic_load_explicit(&s->alive, memory_order_relaxed) != TS_SUB_ALIVE) continue;
+    uint32_t wpos;
+    int64_t ms;
+    if (atomic_load_explicit(&s->alive, memory_order_relaxed) != TS_SUB_ALIVE) {
+      g_rate_marks[i].at = 0.0;
+      continue;
+    }
     r = &s->pkt_ring;
     if (s->proto == CONN_PROTO_H2) r = &s->h2_ring;
     else if (s->proto == CONN_PROTO_H3) r = &s->h3_ring;
-    used = (uint32_t)(atomic_load_explicit(&r->wpos, memory_order_relaxed) - atomic_load_explicit(&r->rpos, memory_order_relaxed));
+    wpos = (uint32_t)atomic_load_explicit(&r->wpos, memory_order_relaxed);
+    used = (uint32_t)(wpos - atomic_load_explicit(&r->rpos, memory_order_relaxed));
     out->bytes += used;
     if (used > out->max_bytes) out->max_bytes = used;
+    ms = queue_ms(&g_rate_marks[i], wpos, used, now);
+    if (ms < 0) continue;
+    out->ms_known = 1;
+    if ((uint64_t)ms > out->max_ms) out->max_ms = (uint64_t)ms;
   }
 }
 
@@ -159,6 +186,7 @@ void ts_push_init(int prealloc, int max_clients) {
 
 void ts_push_set_reactor_tid(int idx, int tid) {
   ts_sub_t *s = &g_ts_subs[idx];
+  if (tid < 0 || tid >= TS_PUSH_MAX_REACTOR_THREADS) return;
   s->reactor_tid = tid;
   s->tid_next = g_tid_head[tid];
   g_tid_head[tid] = idx;

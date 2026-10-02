@@ -5,7 +5,7 @@
 
 #include "dlna_int.h"
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/xml_util.h"
 
 #include <stdio.h>

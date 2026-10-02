@@ -6,7 +6,7 @@
 #include "../http3.h"
 #include "../http3_int.h"
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 int g_h3_max_reqs = H3_DEFAULT_MAX_REQS;
 uint64_t g_h3_idle_ns = H3_DEFAULT_IDLE_S * 1000000000ULL;

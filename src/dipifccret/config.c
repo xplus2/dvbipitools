@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "lib/config/yamlcfg.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "config.h"
 #include "version.h"
 
@@ -68,6 +68,14 @@ static int apply_rtx_pt(void *c, const char *v, char *e, size_t n) {
 
 static int apply_workers(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->workers, v, 0, UINT_MAX, e, n);
+}
+
+static int apply_cpu_affinity(void *c, const char *v, char *e, size_t n) {
+  if (cpuaff_parse(&((config_t *)c)->cpu_affinity, v)) {
+    snprintf(e, n, "invalid '%s' (off, auto, or list like 2-5,8)", v);
+    return -1;
+  }
+  return 0;
 }
 
 static int apply_user(void *c, const char *v, char *e, size_t n) {
@@ -215,6 +223,7 @@ static const yamlcfg_key_t keys[] = {
   {"channel-idle-timeout", apply_channel_idle_timeout, 0, 0},
   {"rtx-pt", apply_rtx_pt, 0, 0},
   {"workers", apply_workers, 0, 0},
+  {"cpu-affinity", apply_cpu_affinity, 0, 0},
   {"user", apply_user, 0, 0},
   {"verbose", apply_verbose, 0, 0},
   {"color", apply_color, 0, 0},
@@ -262,7 +271,10 @@ int fccret_cfg_test(const char *path, int strict) {
   config_t cfg;
 
   fccret_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+    yamlcfg_strpool_free(cfg.str_pool);
+    return -1;
+  }
 
   warn_if(&y, !cfg.range_count, "range not set (required unless given on the command line)");
   warn_if(&y, !cfg.listen_port, "listen not set (required unless given on the command line)");
@@ -271,5 +283,6 @@ int fccret_cfg_test(const char *path, int strict) {
   warn_if(&y, cfg.rsi_mc_ret && (cfg.no_mc_ret || cfg.no_ret), "rsi.mc-ret requires RET and MC RET (no-ret/no-mc-ret not set)");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
   warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
+  yamlcfg_strpool_free(cfg.str_pool);
   return yamlcfg_report(&y);
 }

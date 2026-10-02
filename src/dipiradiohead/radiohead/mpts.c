@@ -8,7 +8,7 @@
 #include <time.h>
 
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "../input/inputset.h"
 #include "../input/source.h"
@@ -27,30 +27,7 @@ static int mpts_program_eit_pending(const void *ctx) {
 }
 static const mpts_program_ops_t mpts_program_ops = {mpts_program_get_sdt_info, mpts_program_build_eit, mpts_program_eit_pending};
 
-typedef struct {
-  inputset_t *is;
-  mpts_t *mpts;
-  cas_t *cas;
-  const config_t *cfg;
-  tspacketizer_t **tsps;
-  meta_state_t *metas;
-  uint64_t *samples_total;
-  double *pace_deadline;
-  int *was_connected;
-  input_metrics_t *input_stats;
-  unsigned long long *last_synced_bytes;
-  radio_metrics_t *rm;
-  out_ctx_t *out;
-  int metrics_on;
-  double now;
-  time_t now_t;
-  const unsigned *pfd_slot;
-  const struct pollfd *pfds;
-  nfds_t npfd;
-  uint32_t ready_mask;
-} mpts_tick_t;
-
-static uint32_t compute_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd) {
+uint32_t compute_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd) {
   uint32_t mask = 0;
   for (unsigned pfd_i = 0; pfd_i < npfd; pfd_i++) if (pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP)) mask |= 1u << pfd_slot[pfd_i];
   return mask;
@@ -58,7 +35,18 @@ static uint32_t compute_ready_mask(const unsigned *pfd_slot, const struct pollfd
 
 /* processes one input slot for this poll tick: reads up to RADIOHEAD_MAX_FRAMES_PER_TICK frames,
    feeds the packetizer, updates metrics. -1: fatal (tspacketizer_new() OOM), caller must abort */
-static int process_input_slot(mpts_tick_t *tk, unsigned i) {
+static void sync_input_bytes(mpts_tick_t *tk, source_t *src, unsigned i) {
+  unsigned long long sb;
+
+  if (!tk->metrics_on) return;
+  sb = source_bytes_total(src);
+  if (sb > tk->last_synced_bytes[i]) {
+    tk->input_stats[i].bytes_total += sb - tk->last_synced_bytes[i];
+    tk->last_synced_bytes[i] = sb;
+  }
+}
+
+int process_input_slot(mpts_tick_t *tk, unsigned i) {
   source_t *src;
   int connected_now;
   int ready = 0;
@@ -87,11 +75,13 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
       input_metrics_note_read(tk->metrics_on ? &tk->input_stats[i] : NULL, -1, reason);
       if (tk->metrics_on && reason == NET_ERR_FORMAT) tk->rm->framing_errors_total++;
       if (tk->metrics_on) tk->input_stats[i].up = 0;
+      sync_input_bytes(tk, src, i);
       inputset_mark_down(tk->is, i, tk->now_t);
       mpts_set_program(tk->mpts, i, NULL);
-      break;
+      return 0;
     }
     frames_this_visit++;
+    if (source_take_resumed(src) && tk->pace_deadline[i] < tk->now) tk->pace_deadline[i] = tk->now;
     if (tk->metrics_on) {
       tk->input_stats[i].last_data_time = (double)time(NULL);
       tk->rm->frames_total[f.codec]++;
@@ -127,13 +117,7 @@ static int process_input_slot(mpts_tick_t *tk, unsigned i) {
     tk->out->cur_pts = pts;
     tspacketizer_feed(tk->tsps[i], pts, tk->now, f.data, f.len, tk->out->insp ? &packet_cb_inspect : &packet_cb, tk->out);
   }
-  if (tk->metrics_on) {
-    unsigned long long sb = source_bytes_total(src);
-    if (sb > tk->last_synced_bytes[i]) {
-      tk->input_stats[i].bytes_total += sb - tk->last_synced_bytes[i];
-      tk->last_synced_bytes[i] = sb;
-    }
-  }
+  sync_input_bytes(tk, src, i);
   return 0;
 }
 

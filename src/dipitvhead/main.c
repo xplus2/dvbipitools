@@ -3,12 +3,12 @@
 
 #include <stdio.h>
 
-#include "args.h"
-#include "lib/helper/antidebug.h"
-#include "lib/helper/ioutil.h"
+#include "cli/args.h"
+#include "lib/sys/antidebug.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/export.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "lib/helper/toolmain.h"
 #include "tvhead/tvhead.h"
 #include "version.h"

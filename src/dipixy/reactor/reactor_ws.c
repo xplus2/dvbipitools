@@ -9,7 +9,7 @@
 #include "../ws/ws_frame.h"
 #include "../ws/ws_sources.h"
 #include "lib/helper/base64.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/sha1.h"
 
 #include <errno.h>
@@ -59,6 +59,10 @@ static void send_frame(int epfd, conn_t *c, int opcode, const void *payload, siz
 
 static _Thread_local ws_conn_state_t *t_ws_pool[WS_CONN_POOL_MAX];
 static _Thread_local int t_ws_pool_n;
+
+void reactor_ws_pool_release(void) {
+  while (t_ws_pool_n > 0) free(t_ws_pool[--t_ws_pool_n]);
+}
 
 void reactor_ws_begin(int epfd, conn_t *c) {
   ws_conn_state_t *ws;
@@ -156,6 +160,12 @@ static int ci_contains(const char *hay, const char *needle) {
   return 0;
 }
 
+static int ws_reject(conn_t *c) {
+  static const char resp[] = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+  conn_queue(c, resp, sizeof resp - 1);
+  return 1;
+}
+
 int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers, size_t num_headers) {
   char conn_val[64];
   char upg_val[32];
@@ -168,9 +178,9 @@ int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers
   size_t off;
 
   if (strcmp(path, "/ui/ws/") && strcmp(path, "/ui/ws")) return 0;
-  if (!find_header(headers, num_headers, "Connection", conn_val, sizeof conn_val) || !ci_contains(conn_val, "upgrade")) return 1;
-  if (!find_header(headers, num_headers, "Upgrade", upg_val, sizeof upg_val) || strcasecmp(upg_val, "websocket")) return 1;
-  if (!find_header(headers, num_headers, "Sec-WebSocket-Key", key, sizeof key)) return 1;
+  if (!find_header(headers, num_headers, "Connection", conn_val, sizeof conn_val) || !ci_contains(conn_val, "upgrade")) return ws_reject(c);
+  if (!find_header(headers, num_headers, "Upgrade", upg_val, sizeof upg_val) || strcasecmp(upg_val, "websocket")) return ws_reject(c);
+  if (!find_header(headers, num_headers, "Sec-WebSocket-Key", key, sizeof key)) return ws_reject(c);
 
   klen = bufcpy(input, sizeof input, key);
   bufcpy(input + klen, sizeof input - klen, WS_GUID);

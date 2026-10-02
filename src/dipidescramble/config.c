@@ -8,7 +8,7 @@
 #include "lib/cas/device_state_core.h"
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "config.h"
 #include "version.h"
 
@@ -225,6 +225,14 @@ static int apply_profile(void *c, const char *v, char *e, size_t n) {
   return 0;
 }
 
+static int apply_encryption_type(void *c, const char *v, char *e, size_t n) {
+  if (argutil_rist_key_size(v, &((config_t *)c)->rist_key_size)) {
+    snprintf(e, n, "invalid '%s' (128|256)", v);
+    return -1;
+  }
+  return 0;
+}
+
 static int apply_srt_passphrase_in(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   return set_buf(cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, v, e, n);
@@ -289,7 +297,8 @@ static const yamlcfg_key_t keys[] = {
   {"daemonize", apply_daemonize, 0, 0},
   {"ecm-profile", apply_ecm_profile, 0, 0},
   {"max-services", apply_max_services, 0, 0},
-  {"profile", apply_profile, 0, 0},
+  {"rist.profile", apply_profile, 0, 0},
+  {"rist.encryption-type", apply_encryption_type, 0, 0},
   {"biss1.sw", apply_biss1_sw, 0, 0},
   {"biss2.sw", apply_biss2_sw, 0, 0},
   {"biss2.esw", apply_biss2_esw, 0, 0},
@@ -338,7 +347,10 @@ int dscr_cfg_test(const char *path, int strict) {
   int n_srt;
 
   dscr_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+    yamlcfg_strpool_free(cfg.str_pool);
+    return -1;
+  }
   n_file = count_kind(&cfg, OUT_FILE);
   n_rtmps = count_kind(&cfg, OUT_RTMPS);
   n_rtmp = count_kind(&cfg, OUT_RTMP) + n_rtmps;
@@ -354,12 +366,15 @@ int dscr_cfg_test(const char *path, int strict) {
   warn_if(&y, cfg.biss1_sw_given && (cfg.biss2_sw_given || cfg.biss2_esw_given), "biss1.sw is mutually exclusive with biss2.sw/biss2.esw");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
   warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
-  warn_if(&y, cfg.profile_given && cfg.have_input && cfg.input.kind != INPUT_RIST, "profile needs input rist://");
+  warn_if(&y, cfg.profile_given && cfg.have_input && cfg.input.kind != INPUT_RIST, "rist.profile needs input rist://");
+  warn_if(&y, cfg.rist_key_size && cfg.have_input && cfg.input.kind != INPUT_RIST, "rist.encryption-type needs input rist://");
+  warn_if(&y, cfg.rist_key_size && cfg.have_input && cfg.input.kind == INPUT_RIST && !cfg.rist_profile_main, "rist.encryption-type requires rist.profile main");
   warn_if(&y, cfg.srt_passphrase_in[0] && (strlen(cfg.srt_passphrase_in) < 10 || strlen(cfg.srt_passphrase_in) > 79), "srt.passphrase-in must be 10..79 characters");
   warn_if(&y, cfg.srt_pbkeylen_in && !cfg.srt_passphrase_in[0], "srt.pbkeylen-in requires srt.passphrase-in");
   warn_if(&y, cfg.have_input && cfg.input.kind != INPUT_SRT && (cfg.srt_passphrase_in[0] || cfg.srt_pbkeylen_in || cfg.srt_streamid_in[0] || cfg.srt_packetfilter_in[0] || cfg.srt_latency_in_ms), "srt.*-in settings need input srt://");
   warn_if(&y, cfg.srt_passphrase[0] && (strlen(cfg.srt_passphrase) < 10 || strlen(cfg.srt_passphrase) > 79), "srt.passphrase must be 10..79 characters");
   warn_if(&y, cfg.srt_pbkeylen && !cfg.srt_passphrase[0], "srt.pbkeylen requires srt.passphrase");
   warn_if(&y, cfg.n_out && !n_srt && (cfg.srt_passphrase[0] || cfg.srt_pbkeylen || cfg.srt_streamid[0] || cfg.srt_packetfilter[0] || cfg.srt_latency_ms), "srt.* settings need an srt:// output target");
+  yamlcfg_strpool_free(cfg.str_pool);
   return yamlcfg_report(&y);
 }

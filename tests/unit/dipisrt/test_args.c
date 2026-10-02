@@ -8,7 +8,7 @@
 
 #include "lib/config/yamlcfg.h"
 
-#include "dipisrt/args.h"
+#include "dipisrt/cli/args.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 

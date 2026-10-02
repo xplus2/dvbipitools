@@ -1,11 +1,12 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <limits.h>
 #include <stdlib.h>
 #include <time.h>
 
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "bitrate.h"
 
@@ -36,6 +37,13 @@ bitrate_pacer_t *bitrate_pacer_new(double target_bps, int stuff, int burst_limit
 
 void bitrate_pacer_free(bitrate_pacer_t *p) { free(p); }
 
+void bitrate_pacer_start(bitrate_pacer_t *p) {
+  if (!p) return;
+  p->start = mono_seconds();
+  p->bits_sent = 0;
+  p->last_overage_log = -1.0;
+}
+
 void bitrate_pace(bitrate_pacer_t *p) {
   double target_s;
   if (!p || !p->burst_limit || p->target_bps <= 0.0) return;
@@ -61,16 +69,16 @@ void bitrate_account_n(bitrate_pacer_t *p, unsigned n) {
 
 void bitrate_account(bitrate_pacer_t *p) { bitrate_account_n(p, 1); }
 
-int bitrate_stuff_due(bitrate_pacer_t *p) {
+int bitrate_stuff_due(bitrate_pacer_t *p, unsigned pending) {
   double behind_bits;
-  double cap_bits;
-  int n;
-  int cap;
-  if (!p->stuff || p->target_bps <= 0.0) return 0;
-  behind_bits = (mono_seconds() - p->start) * p->target_bps - (double)p->bits_sent;
-  if (behind_bits <= 0.0) return 0;
-  n = (int)(behind_bits / PACKET_BITS);
-  cap_bits = p->target_bps * STUFF_TICK_S;
-  cap = (int)(cap_bits / PACKET_BITS) + 1;
-  return n < cap ? n : cap;
+  double n;
+  double cap;
+  if (!p || !p->stuff || p->target_bps <= 0.0) return 0;
+  behind_bits = (mono_seconds() - p->start) * p->target_bps - (double)p->bits_sent - (double)pending * PACKET_BITS;
+  if (!(behind_bits > 0.0)) return 0;
+  n = behind_bits / PACKET_BITS;
+  cap = p->target_bps * STUFF_TICK_S / PACKET_BITS + 1.0;
+  if (n > cap) n = cap;
+  if (n > (double)INT_MAX) n = (double)INT_MAX;
+  return (int)n;
 }

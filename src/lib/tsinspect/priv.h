@@ -33,6 +33,9 @@ typedef struct {
   unsigned pid;
   double last;
   int flag;
+  int64_t lead_us;
+  int lead_have;
+  uint64_t underruns;
 } pts_slot_t;
 
 typedef struct {
@@ -68,6 +71,15 @@ typedef struct {
   double pcr_max_s;
   double gap_max_ms;
   double last_packet;
+  int64_t buffer_ms;
+  int drift_valid;
+  int rate_valid;
+  int64_t drift_ppb;
+  int64_t drift_rate;
+  unsigned n_lead;
+  unsigned lead_pid[PSI_MAX_ES];
+  int64_t lead_us[PSI_MAX_ES];
+  uint64_t lead_underruns[PSI_MAX_ES];
 } pub_t;
 
 typedef struct {
@@ -108,10 +120,22 @@ struct tsinspect {
   double pcr_max_prev;
   double pcr_win_start;
   uint64_t rx_ns;
+  int64_t buffer_ms;
   uint64_t pcr_rx_last;
   double pcr_jit_cur;
   double pcr_jit_prev;
   int rx_used;
+  uint64_t pcr_pkt_last;
+  uint64_t pcr_span_ticks;
+  uint64_t pcr_span_pkts;
+  int lead_on;
+  uint64_t drift_rx0;
+  uint64_t drift_ticks;
+  int drift_valid;
+  int drift_prev_valid;
+  int drift_rate_have;
+  double drift_ppb;
+  double drift_rate;
   int eit_n;
   double tdt_last;
   int eit_other_n;

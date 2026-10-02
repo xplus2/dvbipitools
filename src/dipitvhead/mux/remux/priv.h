@@ -11,6 +11,8 @@
 
 #include "../../cas/cas.h"
 #include "../aitbuild.h"
+#include "../releaseq.h"
+#include "../scte35stamp.h"
 #include "../remux.h"
 
 #define EIT_QUEUE_CAP 16 /* distinct (table_id, section_number) sections held at once */
@@ -33,6 +35,19 @@ struct remux {
   int es_count;
   unsigned pcr_pid_out;
   cas_t *cas;
+  timemap_t *tm;
+  remux_clock_fn hold_clock;
+  remux_latch_fn hold_latch;
+  void *hold_clock_ctx;
+  uint64_t hold_lead90;
+  uint64_t hold_lead_cfg90;
+  int hold_ref;
+  releaseq_t *hold[OUT_PROGRAM_ES_CAP];
+  scte35stamp_t *scte[OUT_PROGRAM_ES_CAP];
+  uint64_t hold_tag[OUT_PROGRAM_ES_CAP];
+  unsigned char hold_has_tag[OUT_PROGRAM_ES_CAP];
+  unsigned long long hold_forced;
+  ts_metrics_t *tsm_cur;
 
   int send_sdt;
   int send_nit;

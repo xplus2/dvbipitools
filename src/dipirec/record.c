@@ -7,7 +7,7 @@
 
 #include "lib/demux/psi/psi.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "record/priv.h"
 

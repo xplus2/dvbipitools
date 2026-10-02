@@ -11,9 +11,9 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/jsonbuf.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "../ts/capture/capture.h"
 #include "../ts/channels/channels.h"

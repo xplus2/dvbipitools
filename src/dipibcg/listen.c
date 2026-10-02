@@ -13,7 +13,7 @@
 #include "lib/helper/log.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "lib/tva/bcg_doc.h"
 #include "lib/tva/xmltv.h"
 #include "listen.h"

@@ -52,6 +52,8 @@ typedef struct {
   int capacity;
   int high_watermark;
   uint64_t dropped;
+  uint64_t ms;
+  int ms_known;
 } srtout_queue_stats_t;
 
 void srtout_queue_stats(const srtout_t *r, srtout_queue_stats_t *out);

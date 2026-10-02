@@ -5,11 +5,11 @@
 #include <unistd.h>
 
 #include "announce.h"
-#include "args.h"
+#include "cli/args.h"
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
 #include "lib/metrics/export.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "listen.h"
 #include "version.h"
 

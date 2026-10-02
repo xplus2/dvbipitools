@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "../args.h"
+#include "../cli/args.h"
 #include "../ts/channels/channels.h"
 
 /* out/out_len point into static thread-local buf, until this thread's next call, caller must not free. 0 ok, -1 on error */

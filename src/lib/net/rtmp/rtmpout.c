@@ -9,12 +9,12 @@
 #include <unistd.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/netconnect.h"
 #include "lib/net/rtmp/rtmp.h"
 #include "lib/net/tls.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "rtmpout.h"
 
 #define RTMPOUT_RETRY_S 3

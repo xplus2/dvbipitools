@@ -9,7 +9,7 @@
 
 #include "lib/config/yamlcfg.h"
 
-#include "dipibcg/args.h"
+#include "dipibcg/cli/args.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 

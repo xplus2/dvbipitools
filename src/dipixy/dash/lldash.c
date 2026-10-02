@@ -9,7 +9,7 @@
 #include "../ws/ws_clients.h"
 
 #include "lib/helper/byte_ring.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 
 #include <pthread.h>
@@ -116,14 +116,14 @@ static void ring_enqueue(dashchunk_sub_t *s, const uint8_t *data, size_t len) {
   ws_clients_add_bytes(s->ws_handle, len);
 }
 
-static void link_store_chain(hls_store_t *store, int idx) {
+void link_store_chain(hls_store_t *store, int idx) {
   int old_head = atomic_load_explicit(&store->lldash_sub_head, memory_order_relaxed);
   atomic_store_explicit(&g_subs[idx].store_next, old_head, memory_order_relaxed);
   while (!atomic_compare_exchange_weak_explicit(&store->lldash_sub_head, &old_head, idx, memory_order_release, memory_order_relaxed))
     atomic_store_explicit(&g_subs[idx].store_next, old_head, memory_order_relaxed);
 }
 
-static void unlink_store_chain(hls_store_t *store, int idx) {
+void unlink_store_chain(hls_store_t *store, int idx) {
   const dashchunk_sub_t *s = &g_subs[idx];
   int next = atomic_load_explicit(&s->store_next, memory_order_relaxed);
   int cur = atomic_load_explicit(&store->lldash_sub_head, memory_order_relaxed);
@@ -142,13 +142,13 @@ static void unlink_store_chain(hls_store_t *store, int idx) {
   }
 }
 
-static void link_tid_chain(int idx, int tid) {
+void link_tid_chain(int idx, int tid) {
   if (tid < 0 || tid >= DASHCHUNK_MAX_REACTOR_THREADS) return;
   g_subs[idx].tid_next = g_tid_head[tid];
   g_tid_head[tid] = idx;
 }
 
-static void unlink_tid_chain(int idx) {
+void unlink_tid_chain(int idx) {
   const dashchunk_sub_t *s = &g_subs[idx];
   int tid = s->reactor_tid;
   int cur;
@@ -168,7 +168,7 @@ static void unlink_tid_chain(int idx) {
   }
 }
 
-static void on_part_pushed(const hls_store_t *store, uint32_t seq, const uint8_t *data, size_t len) {
+void on_part_pushed(const hls_store_t *store, uint32_t seq, const uint8_t *data, size_t len) {
   int i;
   if (store->container != SEG_CONTAINER_FMP4) return;
   i = atomic_load_explicit(&store->lldash_sub_head, memory_order_acquire);
@@ -187,7 +187,7 @@ static void on_part_pushed(const hls_store_t *store, uint32_t seq, const uint8_t
   }
 }
 
-static void on_segment_done(const hls_store_t *store, uint32_t seq) {
+void on_segment_done(const hls_store_t *store, uint32_t seq) {
   int i;
   if (store->container != SEG_CONTAINER_FMP4) return;
   i = atomic_load_explicit(&store->lldash_sub_head, memory_order_acquire);
@@ -207,7 +207,7 @@ static void on_segment_done(const hls_store_t *store, uint32_t seq) {
   }
 }
 
-static void on_store_closing(const hls_store_t *store) {
+void on_store_closing(const hls_store_t *store) {
   int i = atomic_load_explicit(&store->lldash_sub_head, memory_order_acquire);
   while (i != -1) {
     dashchunk_sub_t *s = &g_subs[i];

@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "lib/demux/tspack.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "../version.h"
 #include "priv.h"
@@ -230,9 +230,23 @@ channel_t *channel_find_by_ssrc(channel_table_t *t, uint32_t ssrc) {
   return NULL; /* repeated race treated as not-found */
 }
 
+void channel_bitrate_note(channel_t *c, time_t now, size_t payload_len) {
+  time_t elapsed;
+
+  if (c->bitrate_window_start == 0) c->bitrate_window_start = now;
+  c->bitrate_window_bytes += payload_len;
+
+  elapsed = now - c->bitrate_window_start;
+  if (elapsed >= CHANNEL_BITRATE_WINDOW_S) {
+    double bps = (double)c->bitrate_window_bytes * 8.0 / (double)elapsed;
+    atomic_store_explicit(&c->nominal_bps, bps, memory_order_relaxed);
+    c->bitrate_window_bytes = 0;
+    c->bitrate_window_start = now;
+  }
+}
+
 void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len) {
   time_t now = time(NULL);
-  time_t elapsed;
   uint32_t old_ssrc = atomic_load_explicit(&c->ssrc, memory_order_relaxed);
   int had_ssrc = atomic_load_explicit(&c->ssrc_known, memory_order_relaxed);
 
@@ -257,16 +271,7 @@ void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq
   atomic_store_explicit(&c->ssrc_known, 1, memory_order_release);
   atomic_store_explicit(&c->last_seen, now, memory_order_relaxed);
 
-  if (c->bitrate_window_start == 0) c->bitrate_window_start = now;
-  c->bitrate_window_bytes += payload_len;
-
-  elapsed = now - c->bitrate_window_start;
-  if (elapsed >= CHANNEL_BITRATE_WINDOW_S) {
-    double bps = (double)c->bitrate_window_bytes * 8.0 / (double)elapsed;
-    atomic_store_explicit(&c->nominal_bps, bps, memory_order_relaxed);
-    c->bitrate_window_bytes = 0;
-    c->bitrate_window_start = now;
-  }
+  channel_bitrate_note(c, now, payload_len);
 
   if (c->ring_size > 0) ret_ring_store(c, seq, timestamp, dscp, payload, payload_len);
   if (c->cache.cap > 0) {

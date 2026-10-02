@@ -4,7 +4,7 @@
 #ifndef DIPICAM378_CONFIG_H
 #define DIPICAM378_CONFIG_H
 
-#include "args.h"
+#include "cli/args.h"
 
 #define ARGS_DEFAULT_PORT 27500u
 #define ARGS_DEFAULT_PASSWORD TOOL_NAME

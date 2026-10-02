@@ -43,7 +43,7 @@ START_TEST(resolve_bad_host_fails) {
   struct sockaddr_storage ss;
   int len;
 
-  ck_assert_int_ne(srtcommon_resolve("this.is.not.a.valid.host.example.invalid", 9000, &ss, &len), 0);
+  ck_assert_int_ne(srtcommon_resolve("this.is.not.a.valid.host.example.invalid.", 9000, &ss, &len), 0);
 }
 END_TEST
 

@@ -72,10 +72,13 @@ typedef struct {
 typedef struct {
   uint64_t bytes;
   uint64_t max_bytes;
+  uint64_t max_ms;
+  int ms_known;
 } ts_push_queue_stats_t;
 
 void ts_push_set_queue_metrics(int level);
-void ts_push_queue_stats(ts_push_queue_stats_t *out);
+/* now: mono seconds. rate from delta between calls */
+void ts_push_queue_stats(ts_push_queue_stats_t *out, double now);
 uint64_t ts_push_queue_high_watermark(void);
 uint64_t ts_push_queue_dropped(void);
 

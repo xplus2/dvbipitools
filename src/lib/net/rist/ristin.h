@@ -12,6 +12,7 @@ typedef struct {
   const char *peer_uri;    /* rist://@host:port[?query], single peer, @ required (listen) */
   ristin_profile_t profile;
   const char *secret;      /* NULL/"" = none; profile main only */
+  int key_size;            /* 0 = default, else 128/256 */
   const char *cname;       /* NULL/"" = library default */
   unsigned buffer_ms;      /* recovery_length_min/max; 0 = library default */
   int verbose;             /* gates librist's own INFO/DEBUG logging */

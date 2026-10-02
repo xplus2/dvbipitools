@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "lib/tva/tva_xml.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 START_TEST(tva_xml_write_read_round_trips) {
   bcg_doc_t doc, doc2;

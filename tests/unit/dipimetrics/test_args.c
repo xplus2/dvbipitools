@@ -10,7 +10,7 @@
 #include "lib/helper/log.h"
 #include "lib/metrics/protocol.h"
 
-#include "dipimetrics/args.h"
+#include "dipimetrics/cli/args.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 

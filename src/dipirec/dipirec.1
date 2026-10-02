@@ -179,34 +179,44 @@ Repair stream UDP port, same multicast group as
 Requires
 .BR \-\-al\-fec .
 .TP
-.B \-\-profile \fI<p>\fR
+.B \-\-rist\-profile \fI<p>\fR
 .IR simple | main .
 .B \-o
 .B rist://
 only. Default: \fBsimple\fR.
 .TP
-.B \-\-secret \fI<psk>\fR
+.B \-\-rist\-secret \fI<psk>\fR
 .B \-o
 .B rist://
-pre-shared key; requires \fB\-\-profile main\fR.
+pre-shared key; requires \fB\-\-rist\-profile main\fR.
 .TP
-.B \-\-cname \fI<name>\fR
+.B \-\-rist\-encryption\-type \fI<bits>\fR
+.B \-o
+.B rist://
+AES key size, 128 or 256. Requires \fB\-\-rist\-profile main\fR.
+.TP
+.B \-\-rist\-cname \fI<name>\fR
 .B \-o
 .B rist://
 cname. Default: library default.
 .TP
-.B \-\-buffer \fI<ms>\fR
+.B \-\-rist\-buffer \fI<ms>\fR
 .B \-o
 .B rist://
 recovery buffer. Default: library default.
 .TP
-.B \-\-profile\-in \fI<p>\fR
+.B \-\-rist\-profile\-in \fI<p>\fR
 .IR simple | main .
 .B \-i
 .B rist://
 only. Default: \fBsimple\fR. \fBmain\fR enables PSK encryption via a
 .B ?secret=
 query parameter on the input URI.
+.TP
+.B \-\-rist\-encryption\-type\-in \fI<bits>\fR
+.B \-i
+.B rist://
+AES key size, 128 or 256. Requires \fB\-\-rist\-profile\-in main\fR.
 .TP
 .B \-\-srt\-passphrase\-in \fI<pw>\fR
 Passphrase for

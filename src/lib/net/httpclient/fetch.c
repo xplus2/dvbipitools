@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <strings.h>
 
-#include "../../helper/ioutil.h"
+#include "../../sys/ioutil.h"
 #include "httpclient.h"
 
 #define HTTP_FETCH_ETAG_MAX 128

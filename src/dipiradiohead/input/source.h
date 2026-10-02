@@ -42,6 +42,12 @@ int source_fd(const source_t *s);
 
 int source_has_buffered(const source_t *s);
 
+/* de-jitter: hold frames until ms of audio queued. refills to 2*ms. 0 = off. -1 OOM */
+int source_set_prefill_ms(source_t *s, unsigned ms);
+
+/* 1 once per release (re)start. caller resets pacing clock: no backlog burst */
+int source_take_resumed(source_t *s);
+
 /* cumulative bytes read off wire for this source_t's lifetime. resets on reconnect:
    caller folds into its own persistent total before discarding s */
 unsigned long long source_bytes_total(const source_t *s);

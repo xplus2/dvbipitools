@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "../args.h"
+#include "../cli/args.h"
 #include "lib/metrics/export.h"
 
 /* stays disabled unless cfg->metrics_id is set, matching every other tool */

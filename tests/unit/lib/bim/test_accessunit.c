@@ -9,7 +9,7 @@
 
 #include "lib/bim/accessunit.h"
 #include "lib/bim/fragment.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 static bcg_doc_t *build_doc(void) {
   static bcg_doc_t doc;

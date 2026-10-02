@@ -5,16 +5,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "render.h"
 
-typedef enum { M_GAUGE, M_COUNTER, M_INFO } metric_kind_t;
+typedef enum { M_GAUGE, M_COUNTER, M_INFO, M_GAUGE_SIGNED } metric_kind_t;
 
 static const char *metric_kind_name(metric_kind_t k) {
   switch (k) {
     case M_COUNTER: return "counter";
     case M_INFO:    return "info";
-    case M_GAUGE:   return "gauge";
+    case M_GAUGE:
+    case M_GAUGE_SIGNED: return "gauge";
   }
   return "gauge";
 }
@@ -75,6 +76,8 @@ static const metric_def_t DEFS[] = {
     {.id = METRICS_ID_TV_AIT_SECTIONS_TOTAL, .name = "dvbipi_tv_ait_sections_total", .kind = M_COUNTER, .help = "AIT sections sent", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_TV_AIT_ERRORS_TOTAL, .name = "dvbipi_tv_ait_errors_total", .kind = M_COUNTER, .help = "AIT build errors", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_TV_EIT_QUEUE_DROPS_TOTAL, .name = "dvbipi_tv_eit_queue_drops_total", .kind = M_COUNTER, .help = "EIT sections discarded, reassembly queue full", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_TV_PCR_REWRITTEN_TOTAL, .name = "dvbipi_tv_pcr_rewritten_total", .kind = M_COUNTER, .help = "PCR fields rewritten (--pcr-mode rebase or regenerate)", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_TV_PCR_INJECTED_TOTAL, .name = "dvbipi_tv_pcr_injected_total", .kind = M_COUNTER, .help = "PCR-only packets inserted (--pcr-mode regenerate)", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_SDS_SERVICE_PROVIDERS, .name = "dvbipi_sds_service_providers", .kind = M_GAUGE, .help = "service providers announced", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_SDS_SERVICES, .name = "dvbipi_sds_services", .kind = M_GAUGE, .help = "services announced", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_SDS_DOCUMENTS_GENERATED_TOTAL, .name = "dvbipi_sds_documents_generated_total", .kind = M_COUNTER, .help = "SD&S documents (re)generated", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
@@ -190,6 +193,21 @@ static const metric_def_t DEFS[] = {
     {.id = METRICS_ID_XY_TSPUSH_QUEUE_MAX_BYTES, .name = "dvbipi_xy_tspush_queue_max_bytes", .kind = M_GAUGE, .help = "bytes waiting in the fullest raw TS push client queue", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_XY_TSPUSH_QUEUE_HIGH_WATERMARK_BYTES, .name = "dvbipi_xy_tspush_queue_high_watermark_bytes", .kind = M_GAUGE, .help = "most bytes ever waiting in one raw TS push client queue", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_XY_TSPUSH_QUEUE_DROPPED_TOTAL, .name = "dvbipi_xy_tspush_queue_dropped_total", .kind = M_COUNTER, .help = "writes dropped, raw TS push client queue full", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_TS_PCR_FREQ_OFFSET_PPB, .name = "dvbipi_ts_pcr_freq_offset_ppb", .kind = M_GAUGE_SIGNED, .help = "PCR clock frequency offset against local arrival clock in parts per billion, 30 s window", .label_name = NULL, .composite_input_reason = 0, .ts_label = 1},
+    {.id = METRICS_ID_TS_PCR_DRIFT_RATE_PPB_PER_SECOND, .name = "dvbipi_ts_pcr_drift_rate_ppb_per_second", .kind = M_GAUGE_SIGNED, .help = "change of the PCR frequency offset per second, 30 s window", .label_name = NULL, .composite_input_reason = 0, .ts_label = 1},
+    {.id = METRICS_ID_TS_PCR_FREQ_OFFSET_ERRORS_TOTAL, .name = "dvbipi_ts_pcr_freq_offset_errors_total", .kind = M_COUNTER, .help = "30 s windows with PCR frequency offset beyond 30 ppm", .label_name = NULL, .composite_input_reason = 0, .ts_label = 1},
+    {.id = METRICS_ID_TS_DTS_PCR_LEAD_MICROSECONDS, .name = "dvbipi_ts_dts_pcr_lead_microseconds", .kind = M_GAUGE_SIGNED, .help = "last DTS (PTS if none) minus extrapolated PCR clock at PES start, per elementary stream", .label_name = NULL, .composite_input_reason = 0, .ts_label = 3},
+    {.id = METRICS_ID_TS_DTS_PCR_LEAD_UNDERRUNS_TOTAL, .name = "dvbipi_ts_dts_pcr_lead_underruns_total", .kind = M_COUNTER, .help = "PES whose DTS (PTS if none) was already behind the extrapolated PCR clock at arrival", .label_name = NULL, .composite_input_reason = 0, .ts_label = 3},
+    {.id = METRICS_ID_TS_INPUT_BUFFER_MILLISECONDS, .name = "dvbipi_ts_input_buffer_milliseconds", .kind = M_GAUGE, .help = "age of the oldest datagram held in the input de-jitter buffer", .label_name = NULL, .composite_input_reason = 0, .ts_label = 1},
+    {.id = METRICS_ID_TV_PES_RETIMED_TOTAL, .name = "dvbipi_tv_pes_retimed_total", .kind = M_COUNTER, .help = "PES headers whose PTS/DTS were shifted", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_TV_PES_RETIME_SKIPPED_TOTAL, .name = "dvbipi_tv_pes_retime_skipped_total", .kind = M_COUNTER, .help = "PES headers left unshifted, split across packets or scrambled at the source", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_TV_RETIME_RELATCHES_TOTAL, .name = "dvbipi_tv_retime_relatches_total", .kind = M_COUNTER, .help = "time offset re-latches after a source timestamp or PCR jump", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_TV_HOLD_FORCED_RELEASES_TOTAL, .name = "dvbipi_tv_hold_forced_releases_total", .kind = M_COUNTER, .help = "packets released early because a hold-back queue was full", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_TV_SCTE35_ADJUSTED_TOTAL, .name = "dvbipi_tv_scte35_adjusted_total", .kind = M_COUNTER, .help = "SCTE-35 sections whose pts_adjustment was shifted", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_TV_RELEASE_LEAD_MIN_MICROSECONDS, .name = "dvbipi_tv_release_lead_min_microseconds", .kind = M_GAUGE_SIGNED, .help = "smallest DTS (PTS if none) minus output PCR when a packet was released", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_TV_RELEASE_LEAD_MAX_MICROSECONDS, .name = "dvbipi_tv_release_lead_max_microseconds", .kind = M_GAUGE_SIGNED, .help = "largest DTS (PTS if none) minus output PCR when a packet was released", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_SRT_SENDER_QUEUE_MILLISECONDS, .name = "dvbipi_srt_sender_queue_milliseconds", .kind = M_GAUGE, .help = "send queue fill as time at the measured stream bitrate", .label_name = "peer", .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_XY_TSPUSH_QUEUE_MILLISECONDS, .name = "dvbipi_xy_tspush_queue_milliseconds", .kind = M_GAUGE, .help = "fullest raw TS push client queue as time at the measured stream bitrate", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_TS_UNREFERENCED_PACKETS_TOTAL, .name = "dvbipi_ts_unreferenced_packets_total", .kind = M_COUNTER, .help = "packets on pids the PMT does not reference", .label_name = NULL, .composite_input_reason = 0, .ts_label = 1},
 };
 #define N_DEFS (sizeof DEFS / sizeof DEFS[0])
@@ -392,7 +410,8 @@ static void render_grouped(dstrbuf_t *sb, const store_t *st) {
         dstrbuf_add(sb, "\"");
       }
       dstrbuf_add(sb, "} ");
-      dstrbuf_add_u64(sb, e->value);
+      if (def->kind == M_GAUGE_SIGNED) dstrbuf_add_i64(sb, metrics_unzigzag(e->value));
+      else dstrbuf_add_u64(sb, e->value);
       dstrbuf_add(sb, "\n");
     }
   }

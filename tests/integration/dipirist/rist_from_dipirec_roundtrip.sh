@@ -32,7 +32,7 @@ done
 RECPID=$!
 sleep 0.5
 
-"$REC_BIN" -i "$fixture" -f raw -o "rist://127.0.0.1:$PORT" --buffer 200 >"$WORK/send.log" 2>&1
+"$REC_BIN" -i "$fixture" -f raw -o "rist://127.0.0.1:$PORT" --rist-buffer 200 >"$WORK/send.log" 2>&1
 # file source hits EOF -> nonzero rc by this toolkit's convention, not a failure here
 
 sleep 1

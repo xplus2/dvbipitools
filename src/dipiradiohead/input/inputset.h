@@ -9,7 +9,7 @@
 #include "lib/metrics/export.h"
 #include "lib/net/retryset.h"
 
-#include "../args.h"
+#include "../cli/args.h"
 #include "source.h"
 
 /* sentinel retry_deadline meaning "don't retry this slot". reproduces single-input

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "dipimetrics/render.h"
 #include "dipimetrics/store.h"
 
@@ -263,6 +263,32 @@ START_TEST(ts_series_carry_direction_and_stream_when_labeled) {
 }
 END_TEST
 
+START_TEST(signed_series_render_negative_and_positive) {
+  store_t st;
+  store_slot_t *s;
+  metrics_writer_t w;
+  char *out;
+  size_t len;
+  memset(&st, 0, sizeof st);
+
+  s = add_slot(&st, METRICS_COMPONENT_TVHEAD, "inst1", 5.0);
+  begin_body(&w);
+  ck_assert_int_eq(metrics_writer_put_signed(&w, METRICS_ID_TS_PCR_FREQ_OFFSET_PPB, "input0", -1500), 0);
+  ck_assert_int_eq(metrics_writer_put_signed(&w, METRICS_ID_TS_PCR_DRIFT_RATE_PPB_PER_SECOND, "input0", 42), 0);
+  ck_assert_int_eq(metrics_writer_put_signed(&w, METRICS_ID_TS_PCR_FREQ_OFFSET_PPB, "input1", INT64_MIN), 0);
+  append_body(s, &w);
+
+  render_openmetrics(&st, 10.0, &out, &len);
+  ck_assert(strstr(out, "# TYPE dvbipi_ts_pcr_freq_offset_ppb gauge") != NULL);
+  ck_assert(strstr(out, "stream=\"input0\"} -1500") != NULL);
+  ck_assert(strstr(out, "dvbipi_ts_pcr_drift_rate_ppb_per_second{") != NULL);
+  ck_assert(strstr(out, "stream=\"input0\"} 42") != NULL);
+  ck_assert(strstr(out, "stream=\"input1\"} -9223372036854775808") != NULL);
+  free(out);
+  store_free(&st);
+}
+END_TEST
+
 static Suite *render_suite(void) {
   Suite *s = suite_create("dipimetrics_render");
   TCase *tc = tcase_create("core");
@@ -276,6 +302,7 @@ static Suite *render_suite(void) {
   tcase_add_test(tc, self_metrics_reflect_stats_and_instance_count);
   tcase_add_test(tc, grouped_entries_share_label_and_render_each_value);
   tcase_add_test(tc, ts_series_carry_direction_and_stream_when_labeled);
+  tcase_add_test(tc, signed_series_render_negative_and_positive);
   suite_add_tcase(s, tc);
   return s;
 }

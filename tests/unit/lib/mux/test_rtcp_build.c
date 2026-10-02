@@ -308,6 +308,97 @@ START_TEST(rtcp_build_rams_i_round_trips_through_rtcp_parse) {
 }
 END_TEST
 
+START_TEST(rtcp_build_every_builder_returns_zero_one_byte_below_exact_size) {
+  unsigned char buf[128];
+  static const unsigned char addr4[4] = {10, 0, 0, 1};
+  static const unsigned char addr16[16] = {0x20, 0x01};
+  static const uint32_t ssrcs[2] = {1, 2};
+  rtcp_nack_entry_t entry = {1, 1};
+  rtcp_rams_i_tlvs_t tlvs;
+  rtcp_rams_r_t req;
+  rtcp_rams_t_t term;
+  size_t exact;
+
+  memset(&tlvs, 0, sizeof tlvs);
+  tlvs.has_media_ssrc_tlv = 1;
+  tlvs.has_first_packet_seqnum = 1;
+  tlvs.has_earliest_join_time = 1;
+  tlvs.has_burst_duration = 1;
+  tlvs.has_max_transmit_bitrate = 1;
+  memset(&req, 0, sizeof req);
+  req.ignore_media_ssrc = 1;
+  req.has_min_buffer_fill = 1;
+  req.has_max_buffer_fill = 1;
+  req.has_max_bitrate = 1;
+  memset(&term, 0, sizeof term);
+  term.has_first_mc_seqnum = 1;
+
+  exact = rtcp_build_ff(1, 2, &entry, 1, buf, sizeof buf);
+  ck_assert_uint_gt(exact, 0u);
+  ck_assert_uint_eq(rtcp_build_ff(1, 2, &entry, 1, buf, exact - 1), 0u);
+  ck_assert_uint_eq(rtcp_build_ff(1, 2, &entry, 1, buf, exact), exact);
+
+  exact = rtcp_build_rsi_header(1, 2, 3, 4, 20, buf, sizeof buf);
+  ck_assert_uint_eq(rtcp_build_rsi_header(1, 2, 3, 4, 20, buf, exact - 1), 0u);
+
+  exact = rtcp_build_rsi_srbt_addr(addr4, 4, 1, buf, sizeof buf);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_addr(addr4, 4, 1, buf, exact - 1), 0u);
+  exact = rtcp_build_rsi_srbt_addr(addr16, 16, 1, buf, sizeof buf);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_addr(addr16, 16, 1, buf, exact - 1), 0u);
+
+  exact = rtcp_build_rsi_srbt_dns("h.example", 9, 1, buf, sizeof buf);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_dns("h.example", 9, 1, buf, exact - 1), 0u);
+
+  exact = rtcp_build_rsi_srbt_bandwidth(100.0, buf, sizeof buf);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_bandwidth(100.0, buf, exact - 1), 0u);
+
+  exact = rtcp_build_rsi_srbt_collision(ssrcs, 2, buf, sizeof buf);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_collision(ssrcs, 2, buf, exact - 1), 0u);
+
+  exact = rtcp_build_rams_r(&req, buf, sizeof buf);
+  ck_assert_uint_eq(exact, 16u + 4u + 8u + 8u + 12u);
+  ck_assert_uint_eq(rtcp_build_rams_r(&req, buf, exact - 1), 0u);
+
+  exact = rtcp_build_rams_t(&term, buf, sizeof buf);
+  ck_assert_uint_eq(exact, 24u);
+  ck_assert_uint_eq(rtcp_build_rams_t(&term, buf, exact - 1), 0u);
+
+  exact = rtcp_build_rams_i(1, 2, 0, 0, &tlvs, buf, sizeof buf);
+  ck_assert_uint_eq(exact, 16u + 8u + 8u + 8u + 8u + 12u);
+  ck_assert_uint_eq(rtcp_build_rams_i(1, 2, 0, 0, &tlvs, buf, exact - 1), 0u);
+  ck_assert_uint_eq(rtcp_build_rams_i(1, 2, 0, 0, NULL, buf, 15), 0u);
+}
+END_TEST
+
+START_TEST(rtcp_build_rsi_srbt_addr_ipv6_uses_srbt_1) {
+  unsigned char buf[32];
+  unsigned char addr[16];
+  size_t n;
+
+  memset(addr, 0xAB, sizeof addr);
+  n = rtcp_build_rsi_srbt_addr(addr, 16, 7000, buf, sizeof buf);
+  ck_assert_uint_eq(n, 20u);
+  ck_assert_uint_eq(buf[0], 1u);
+  ck_assert_uint_eq(buf[1], 5u);
+  ck_assert_uint_eq(((unsigned)buf[2] << 8) | buf[3], 7000u);
+  ck_assert_mem_eq(buf + 4, addr, sizeof addr);
+}
+END_TEST
+
+START_TEST(rtcp_build_rsi_srbt_dns_and_collision_reject_limits) {
+  unsigned char buf[2048];
+  char name[300];
+  uint32_t ssrcs[256];
+
+  memset(name, 'a', sizeof name);
+  memset(ssrcs, 0, sizeof ssrcs);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_dns(name, 250, 1, buf, sizeof buf), 4u + 252u);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_dns(name, 251, 1, buf, sizeof buf), 0u);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_collision(ssrcs, 255, buf, sizeof buf), 4u + 255u * 4u);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_collision(ssrcs, 256, buf, sizeof buf), 0u);
+}
+END_TEST
+
 static Suite *rtcp_build_suite(void) {
   Suite *s = suite_create("rtcp_build");
   TCase *tc = tcase_create("core");
@@ -329,6 +420,9 @@ static Suite *rtcp_build_suite(void) {
   tcase_add_test(tc, rtcp_build_rams_t_round_trips_through_rtcp_parse);
   tcase_add_test(tc, rtcp_build_rams_t_rejects_small_cap);
   tcase_add_test(tc, rtcp_build_rams_i_round_trips_through_rtcp_parse);
+  tcase_add_test(tc, rtcp_build_every_builder_returns_zero_one_byte_below_exact_size);
+  tcase_add_test(tc, rtcp_build_rsi_srbt_addr_ipv6_uses_srbt_1);
+  tcase_add_test(tc, rtcp_build_rsi_srbt_dns_and_collision_reject_limits);
   suite_add_tcase(s, tc);
   return s;
 }

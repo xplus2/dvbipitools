@@ -8,7 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "lib/net/tssource.h"
+#include "lib/net/ts/source.h"
 
 static char *write_temp(const unsigned char *data, size_t len) {
   static char path[] = "/tmp/dvbipitools_tssrc_test_XXXXXX";

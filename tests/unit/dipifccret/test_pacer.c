@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 #include "dipifccret/run/run.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #define TEST_PORT 19345
 #define RTX_HDR_LEN 14
@@ -93,8 +93,7 @@ START_TEST(pacer_delivers_cached_packet_to_client) {
   addr_of(&sin, TEST_PORT);
   ck_assert_ptr_nonnull(burst_table_claim(t, (const struct sockaddr *)&sin, sizeof sin, send_fd, b));
 
-  pc.bursts = t;
-  pc.duration_cap_ms = 5000;
+  pc = (pacer_ctx_t){.bursts = t, .duration_cap_ms = 5000};
   ck_assert_int_eq(pthread_create(&th, NULL, pacer_main, &pc), 0);
 
   n = recv_wait(recv_fd, buf, sizeof buf, 2.0);
@@ -122,8 +121,7 @@ START_TEST(pacer_exits_promptly_on_stop_with_no_active_bursts) {
   struct timespec t1;
   double elapsed_s;
 
-  pc.bursts = t;
-  pc.duration_cap_ms = 1000;
+  pc = (pacer_ctx_t){.bursts = t, .duration_cap_ms = 1000};
   ck_assert_int_eq(pthread_create(&th, NULL, pacer_main, &pc), 0);
 
   usleep(50000);

@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/net/netconnect.h"
 #include "../config.h"
 #include "priv.h"
@@ -17,6 +17,7 @@ void tvh_cfg_defaults(config_t *cfg) {
   cfg->tsid = 1;
   cfg->onid = 1;
   cfg->cas_cp_duration_ms = 10000;
+  cfg->pcr_lead_ms = PCR_LEAD_MS_DEFAULT;
 }
 
 int tvh_set_buf(char *dst, size_t sz, const char *v, char *e, size_t n) {
@@ -25,6 +26,14 @@ int tvh_set_buf(char *dst, size_t sz, const char *v, char *e, size_t n) {
     return -1;
   }
   bufcpy(dst, sz, v);
+  return 0;
+}
+
+int tvh_set_key_size(int *dst, const char *v, char *e, size_t n) {
+  if (argutil_rist_key_size(v, dst)) {
+    snprintf(e, n, "invalid '%s' (128|256)", v);
+    return -1;
+  }
   return 0;
 }
 
@@ -75,12 +84,20 @@ dipitvhead_input_t *tvh_cur_input(config_t *cfg, char *e, size_t n) {
     bufcpy(e, n, "only valid inside an input list");
     return NULL;
   }
+  if (!cfg->n_inputs) {
+    bufcpy(e, n, "input must come first in a list item");
+    return NULL;
+  }
   return &cfg->inputs[cfg->n_inputs - 1];
 }
 
 cas_vendor_t *tvh_cur_vendor(config_t *cfg, char *e, size_t n) {
   if (!cfg->parse_item.vendor) {
     bufcpy(e, n, "only valid inside a cas.ecmg list");
+    return NULL;
+  }
+  if (!cfg->n_cas_vendors) {
+    bufcpy(e, n, "ecmg must come first in a list item");
     return NULL;
   }
   return &cfg->cas_vendors[cfg->n_cas_vendors - 1];

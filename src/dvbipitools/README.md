@@ -21,7 +21,7 @@ dvbipitools --install [-h] DIR # create symlinks (-h for hardlinks) in DIR
 > Fairness note: as of now, it's as static as glibc can be.
 
 Don't worry, the separate tools will continue to exist in their form for a couple of reasons:
-* If only their functionality is needed, they are still smaller.
+* If only their functionality is needed, they are still smaller (in size and attack surface).
 * Minimize blast radius. Using the multicall binary for specific exposed tasks carries a lot of dead code.
 * On new versions, you might not want to roll out an update of every tool of the toolkit at the same time.
   + This is especially true for `dipimetrics`.
@@ -44,6 +44,8 @@ dvbipitools dipirec -i udp://239.1.1.1:5000 -o out.ts
 ```sh
 ln -s dvbipitools dipi
 ./dipi rec -i udp://239.1.1.1:5000 -o out.ts
+# instead of
+./dipirec -i udp://239.1.1.1:5000 -o out.ts
 ```
 
 ### 4. Only copy/keep this one and symlink or hardlink all tools
@@ -58,12 +60,10 @@ ln -s dvbipitools dipitvhead
 ln -s dvbipitools dipirec
 # ... one per tool, see "Applets" below
 ```
-Then your scripts and your units stay unchanged:
+Your scripts and your units stay unchanged:
 ```sh
-./dipirec -i udp://239.1.1.1:5000 -o out.ts
+dipirec -i udp://239.1.1.1:5000 -o out.ts
 ```
-Renaming would work too, but who wants to do that?
-
 
 ## Installing links
 
@@ -94,7 +94,7 @@ dvbipitools --install [-h] DIR
 | `dipisds`        | `sds`        |
 | `dipitvhead`     | `tvhead`     |
 | `dipixmltv`      | `xmltv`      |
-| `dipixmltv`      | `xy`         |
+| `dipixy`         | `xy`         |
 
 `dipicam378`/`dipidescramble` need OpenSSL, `dipirist` needs librist, `dipisrt` needs libsrt, same as the
 standalone builds. Each is only in the table above if their dependencies were found.
@@ -104,7 +104,7 @@ Run `dvbipitools` or `dipi` with no arguments for the full applet list.
 ## Once dispatched
 
 A tool's own options, exit status, and behavior are unchanged from running it standalone.
-See that tool's own README/`-h`. 
+See that tool's own README/`-h`/man page. 
 
 ## Exit status
 

@@ -4,6 +4,7 @@
 #ifndef DVBIPITOOLS_LIB_NET_SRT_SRTIN_H
 #define DVBIPITOOLS_LIB_NET_SRT_SRTIN_H
 
+#include <stdatomic.h>
 #include <stddef.h>
 
 #include "lib/metrics/export.h"
@@ -22,6 +23,7 @@ typedef struct {
   int verbose;                  /* gates libsrt's own NOTICE/DEBUG logging */
   metrics_exporter_t *mx;       /* NULL = no stats push */
   const char *tool_version;     /* required if mx set */
+  const atomic_int *stop;
 } srtin_cfg_t;
 
 typedef struct srtin srtin_t;

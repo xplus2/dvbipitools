@@ -40,6 +40,7 @@ const char *httpng_status_str(int status) {
     case 200: return "200";
     case 304: return "304";
     case 404: return "404";
+    case 501: return "501";
     default: return "500";
   }
 }
@@ -106,25 +107,7 @@ int httpng_hls_cold_render(hls_cold_kind_t kind, seg_container_t container, int 
   }
 }
 
-typedef struct {
-  const httpng_ops_t *ops;
-  void *conn;
-  void *req;
-  route_t *rt;
-  pid_filter_t *filter;
-  unsigned pmt_pid;
-  lcevc_select_t *lcevc;
-  route_item_bufs_t *item_bufs;
-  client_info_t *cinfo;
-  const char *client_ip;
-  int fd;
-  int is_head;
-  const char *origin;
-  const char *inm;
-  const char *query;
-} httpng_req_t;
-
-static void dispatch_ts_route(httpng_req_t *rq) {
+void dispatch_ts_route(httpng_req_t *rq) {
   unsigned list_num;
   capture_ctx_t *ctx;
   int sub;
@@ -150,7 +133,7 @@ static void dispatch_ts_route(httpng_req_t *rq) {
   }
 }
 
-static void dispatch_hls_route(httpng_req_t *rq) {
+void dispatch_hls_route(httpng_req_t *rq) {
   seg_container_t container = rq->rt->fmt == ROUTE_FMT_HLS_FMP4 ? SEG_CONTAINER_FMP4 : SEG_CONTAINER_TS;
   hls_resp_t resp;
   route_setup_t rs;
@@ -177,7 +160,7 @@ static void dispatch_hls_route(httpng_req_t *rq) {
   if (handled && resp.status == 200) ws_clients_add_bytes(rs.ws_handle, resp.body_len);
 }
 
-static void dispatch_llhls_route(httpng_req_t *rq) {
+void dispatch_llhls_route(httpng_req_t *rq) {
   uint32_t want_seg;
   int want_part;
   hls_resp_t resp;
@@ -211,7 +194,7 @@ static void dispatch_llhls_route(httpng_req_t *rq) {
   if (handled && resp.status == 200) ws_clients_add_bytes(rs.ws_handle, resp.body_len);
 }
 
-static void dispatch_dash_route(httpng_req_t *rq) {
+void dispatch_dash_route(httpng_req_t *rq) {
   int want_ll = rq->rt->fmt == ROUTE_FMT_LLDASH;
   hls_resp_t resp;
   route_setup_t rs;
@@ -249,7 +232,7 @@ static void dispatch_dash_route(httpng_req_t *rq) {
   if (handled && resp.status == 200) ws_clients_add_bytes(rs.ws_handle, resp.body_len);
 }
 
-static void dispatch_mp4_route(httpng_req_t *rq) {
+void dispatch_mp4_route(httpng_req_t *rq) {
   route_setup_t rs;
   route_setup_status_t st;
   unsigned list_num;

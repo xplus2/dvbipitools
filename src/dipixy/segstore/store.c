@@ -70,6 +70,7 @@ void hls_set_store_closing_cb(hls_store_closing_cb cb) { g_store_closing_cb = cb
 void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, double seg_target, int max_segs, seg_container_t container) {
   hls_store_t *s;
   int expected;
+  int fresh = 0;
   if (max_segs < 2) max_segs = 2;
   if (max_segs > HLS_MAX_SEGS) max_segs = HLS_MAX_SEGS;
 
@@ -84,6 +85,7 @@ void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
       expected = STORE_FREE;
       if (atomic_compare_exchange_strong_explicit(&g_slot_state[i], &expected, STORE_OPENING, memory_order_acq_rel, memory_order_relaxed)) {
         s = &g_stores[i];
+        fresh = 1;
         break;
       }
     }
@@ -92,13 +94,15 @@ void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   if (!s) return;
   pthread_mutex_lock(store_lock(s));
   snap_drain_all_async(s);
-  s->cap_ctx = ctx;
-  s->filter = *filter;
-  s->pmt_pid = pmt_pid;
-  s->lcevc = *lcevc;
+  if (fresh) {
+    s->cap_ctx = ctx;
+    s->filter = *filter;
+    s->pmt_pid = pmt_pid;
+    s->lcevc = *lcevc;
+    s->container = container;
+  }
   s->seg_target = seg_target;
   s->max_segs = max_segs;
-  s->container = container;
   s->opened_at = time(NULL);
   atomic_init(&s->lldash_sub_head, -1);
   atomic_store_explicit(slot_state(s), STORE_OPEN, memory_order_release);

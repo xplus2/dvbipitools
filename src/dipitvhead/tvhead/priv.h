@@ -19,6 +19,7 @@
 #include "../cas/cas.h"
 #include "../input/source.h"
 #include "../mux/bitrate.h"
+#include "../mux/pcrclock.h"
 #include "../mux/remux.h"
 #include "tvhead.h"
 
@@ -31,6 +32,14 @@ typedef struct {
   int listed, checked_pmt_pid;
   tsinspect_t *insp;
 } discover_state_t;
+
+typedef struct {
+  unsigned pid;
+  unsigned char cc;
+  int active;
+  int have_last;
+  uint64_t last_pcr;
+} out_pcr_pid_t;
 
 typedef struct {
   mcast_t *mc; /* NULL unless -m given */
@@ -50,6 +59,14 @@ typedef struct {
   unsigned long long packets;
   unsigned long long errors;
   tsinspect_t *insp;
+  pcr_mode_t pcr_mode;
+  pcrclock_t pcr_clock;
+  uint64_t pcr_pkt_ticks;
+  uint64_t pcr_start_index;
+  int pcr_latched;
+  out_pcr_pid_t pcr_pids[ARGS_MAX_INPUTS];
+  unsigned long long pcr_rewritten;
+  unsigned long long pcr_injected;
 } out_ctx_t;
 
 typedef struct {
@@ -79,6 +96,9 @@ void flush_batch(out_ctx_t *o);
 void flush_batch_if_stale(out_ctx_t *o);
 void packet_cb(void *ctx, const unsigned char *pkt188);
 void send_null_packet(out_ctx_t *o);
+void out_pcr_pid_set(out_ctx_t *o, unsigned slot, unsigned pid);
+int out_pcr_clock(void *ctx, uint64_t *pcr27);
+void out_pcr_latch(void *ctx, uint64_t pcr27);
 int remux_cb(void *v, const unsigned char *pkt);
 int remux_cb_inspect(void *v, const unsigned char *pkt);
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,
@@ -87,6 +107,7 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
 
 /* single.c */
 int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx);
+cas_t *tvhead_single_cas_start(const config_t *cfg, const psi_t *psi, const remux_t *rx);
 
 /* mpts.c */
 int tvhead_run_mpts(const config_t *cfg, metrics_exporter_t *mx);

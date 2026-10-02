@@ -42,4 +42,16 @@ typedef struct {
 
 int fmp4_parse_stsd_entry(const fmp4_box_t *entry_box, fmp4_stsd_entry_t *out);
 
+void fmp4_parse_avcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out);
+void fmp4_parse_hvcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out);
+void fmp4_parse_vvcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out);
+void fmp4_parse_esds_desc(const unsigned char **pp, const unsigned char *end, unsigned *tag_out, const unsigned char **body_out, size_t *size_out);
+void fmp4_parse_esds(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out);
+void fmp4_parse_dac3(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out);
+void fmp4_parse_dec3(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out);
+void fmp4_parse_dops(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out);
+void fmp4_parse_ddts(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out);
+void fmp4_parse_dmlp(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out);
+void fmp4_parse_dac4(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out);
+
 #endif

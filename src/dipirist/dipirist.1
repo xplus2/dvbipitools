@@ -63,6 +63,10 @@ adds encryption.
 Pre-shared key for encryption. Requires
 .BR \-\-profile\ main .
 .TP
+.B \-\-encryption\-type \fIbits\fR
+AES key size, 128 or 256. Requires
+.BR \-\-profile\ main .
+.TP
 .B \-\-cname \fIname\fR
 RTCP cname. Default is library-generated.
 .TP
@@ -116,7 +120,7 @@ Requires
 .BR \-\-metrics\-id .
 Packet-level and PCR checks only, no PSI/SI checks at any level.
 .B medium
-adds PCR jitter and accuracy for UDP and RTP inputs.
+adds PCR jitter, accuracy and frequency offset for UDP and RTP inputs.
 .TP
 .BR \-v ", " \-\-verbose
 Raise librist's own log verbosity to DEBUG. Default is WARN and above

@@ -9,7 +9,7 @@
 #include <unistd.h>
 
 #include "lib/config/yamlcfg.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 #define TOOL "testtool"
 #define NKEYS(k) (sizeof(k) / sizeof((k)[0]))

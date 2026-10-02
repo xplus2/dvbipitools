@@ -24,16 +24,6 @@ subtitles: keep
 #al-fec: <L>:<D>
 # --al-fec-port [not set]
 #al-fec-port: <port>
-# --profile simple # simple|main
-#profile: simple
-# --secret [not set]
-#secret: <psk>
-# --cname [not set]
-#cname: <name>
-# --buffer [not set] # ms
-#buffer: <ms>
-# --profile-in simple # simple|main
-#profile-in: simple
 # --insecure off
 insecure: off
 # -v|--verbose off
@@ -70,6 +60,22 @@ ret:
   #pt: 99
   # --ret-wait 200 # ms
   #wait: 200
+
+rist:
+  # --rist-profile simple # simple|main
+  #profile: simple
+  # --rist-secret [not set]
+  #secret: <psk>
+  # --rist-encryption-type [not set] # 128|256
+  #encryption-type: 256
+  # --rist-cname [not set]
+  #cname: <name>
+  # --rist-buffer [not set] # ms
+  #buffer: <ms>
+  # --rist-profile-in simple # simple|main
+  #profile-in: simple
+  # --rist-encryption-type-in [not set] # 128|256
+  #encryption-type-in: 256
 
 srt:
   # --srt-passphrase-in [not set]

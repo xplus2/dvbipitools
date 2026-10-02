@@ -4,7 +4,7 @@
 #ifndef DIPIXY_CORE_INPUT_WALK_H
 #define DIPIXY_CORE_INPUT_WALK_H
 
-#include "../args.h"
+#include "../cli/args.h"
 
 typedef struct {
   unsigned ordinal;

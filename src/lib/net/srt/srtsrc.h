@@ -8,7 +8,7 @@
 
 #include "lib/metrics/export.h"
 
-/* tssource.c-facing wrapper on srtin_t, single peer, no bonding/rendezvous
+/* ts/source.c-facing wrapper on srtin_t, single peer, no bonding/rendezvous
    (use dipisrt). thread-wraps blocking srtin_open() into ristin_t's shape. */
 typedef struct {
   const char *host;

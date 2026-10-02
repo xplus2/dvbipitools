@@ -10,9 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
-#include "lib/net/tssource.h"
+#include "lib/net/ts/source.h"
 
 static tssrc_open_state_t drive(tssrc_open_t *o, int max_iters) {
   tssrc_open_state_t st = TSSRC_OPEN_PENDING;
@@ -99,6 +100,72 @@ START_TEST(tssrc_rx_timestamps_only_after_enable_and_advance) {
   usleep(20000);
   second = read_one_rx_ns(s, sock, &dst);
   ck_assert_uint_ge(second - first, 15000000u);
+
+  close(sock);
+  tssrc_close(s);
+}
+END_TEST
+
+START_TEST(tssrc_jitter_reorders_rtp_and_delays_release) {
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+  struct sockaddr_in dst;
+  int sock = socket(AF_INET, SOCK_DGRAM, 0);
+  static const unsigned char order[3] = {1, 3, 2};
+  unsigned char got[3];
+  unsigned ngot = 0;
+  struct timespec t0, t1;
+  long first_ms = -1;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_RTP;
+  cfg.family = AF_INET;
+  cfg.group = "239.1.5.7";
+  cfg.port = 15007;
+  cfg.jitter_ms = 60;
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_ge(sock, 0);
+  memset(&dst, 0, sizeof dst);
+  dst.sin_family = AF_INET;
+  dst.sin_port = htons(15007);
+  inet_pton(AF_INET, "239.1.5.7", &dst.sin_addr);
+
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  for (unsigned i = 0; i < 3; i++) {
+    unsigned char pkt[12 + 188];
+    memset(pkt, 0xFF, sizeof pkt);
+    pkt[0] = 0x80;
+    pkt[1] = 33;
+    pkt[3] = order[i];
+    pkt[8] = 0;
+    pkt[11] = 9;
+    pkt[12] = 0x47;
+    pkt[13] = order[i];
+    ck_assert_int_eq((int)sendto(sock, pkt, sizeof pkt, 0, (const struct sockaddr *)&dst, sizeof dst), (int)sizeof pkt);
+  }
+  while (ngot < 3) {
+    unsigned char buf[2048];
+    struct pollfd pfd;
+    ssize_t n;
+    pfd.fd = tssrc_fd(s);
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    ck_assert_int_ge(poll(&pfd, 1, 1000), 1);
+    n = tssrc_read(s, buf, sizeof buf, NULL);
+    ck_assert_int_ge((int)n, 0);
+    if (n == 0) continue;
+    ck_assert_int_eq((int)n, 188);
+    if (first_ms < 0) {
+      clock_gettime(CLOCK_MONOTONIC, &t1);
+      first_ms = (t1.tv_sec - t0.tv_sec) * 1000 + (t1.tv_nsec - t0.tv_nsec) / 1000000;
+    }
+    got[ngot++] = buf[1];
+  }
+  ck_assert_uint_eq(got[0], 1);
+  ck_assert_uint_eq(got[1], 2);
+  ck_assert_uint_eq(got[2], 3);
+  ck_assert_int_ge((int)first_ms, 55);
 
   close(sock);
   tssrc_close(s);
@@ -240,6 +307,7 @@ static Suite *tssource_async_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, tssrc_open_async_completes_immediately_for_udp);
   tcase_add_test(tc, tssrc_rx_timestamps_only_after_enable_and_advance);
+  tcase_add_test(tc, tssrc_jitter_reorders_rtp_and_delays_release);
   tcase_add_test(tc, tssrc_open_async_completes_immediately_for_stdin);
   tcase_add_test(tc, tssrc_open_async_completes_for_http_and_reads_body);
   tcase_add_test(tc, tssrc_open_async_reports_error_on_refused_connection);

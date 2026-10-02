@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/metrics/export.h"
 #include "lib/net/retryset.h"
 
@@ -17,6 +17,7 @@ typedef struct {
   unsigned idx;
   const char *label;
   int insecure;
+  unsigned jitter_ms;
   source_meta_cb cb;
   void *meta_ctx;
   input_metrics_t *im;
@@ -95,6 +96,10 @@ static retryset_open_state_t slot_open_step(void *o) {
 static void *slot_open_take(void *o) {
   slot_opening_t *w = o;
   source_t *s = source_open_async_take(w->o);
+  if (s && source_set_prefill_ms(s, w->ctx->jitter_ms) < 0) {
+    source_close(s);
+    s = NULL;
+  }
   free(w);
   return s;
 }
@@ -129,6 +134,7 @@ inputset_t *inputset_new(const config_t *cfg, source_meta_cb cb, void *const *ct
     is->ctxs[i].idx = i;
     is->ctxs[i].label = cfg->inputs[i].sdt_text;
     is->ctxs[i].insecure = cfg->insecure_tls;
+    is->ctxs[i].jitter_ms = cfg->inputs[i].jitter_ms;
     is->ctxs[i].cb = cb;
     is->ctxs[i].meta_ctx = ctxs ? ctxs[i] : NULL;
     is->ctxs[i].im = input_stats ? &input_stats[i] : NULL;

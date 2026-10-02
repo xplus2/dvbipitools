@@ -82,7 +82,8 @@ END_TEST
 
 START_TEST(tlv_reader_clean_end_on_empty_payload) {
   simulcrypt_tlv_reader_t r;
-  unsigned short tag, vlen;
+  unsigned short tag;
+  unsigned short vlen;
   const unsigned char *value;
   simulcrypt_tlv_reader_init(&r, NULL, 0);
   ck_assert_int_eq(simulcrypt_tlv_reader_next(&r, &tag, &value, &vlen), 0);
@@ -92,7 +93,8 @@ END_TEST
 START_TEST(tlv_reader_rejects_truncated_tlv_header) {
   static const unsigned char buf[] = {0x00, 0x01, 0x00}; /* 3 bytes, need 4 for tag+length */
   simulcrypt_tlv_reader_t r;
-  unsigned short tag, vlen;
+  unsigned short tag;
+  unsigned short vlen;
   const unsigned char *value;
   simulcrypt_tlv_reader_init(&r, buf, sizeof buf);
   ck_assert_int_eq(simulcrypt_tlv_reader_next(&r, &tag, &value, &vlen), -1);
@@ -103,7 +105,8 @@ START_TEST(tlv_reader_rejects_truncated_value) {
   /* tag 0x0001, declared length 10, but only 2 bytes of value follow */
   static const unsigned char buf[] = {0x00, 0x01, 0x00, 0x0A, 0xAA, 0xBB};
   simulcrypt_tlv_reader_t r;
-  unsigned short tag, vlen;
+  unsigned short tag;
+  unsigned short vlen;
   const unsigned char *value;
   simulcrypt_tlv_reader_init(&r, buf, sizeof buf);
   ck_assert_int_eq(simulcrypt_tlv_reader_next(&r, &tag, &value, &vlen), -1);
@@ -242,6 +245,206 @@ START_TEST(reader_poll_returns_error_on_peer_close) {
 }
 END_TEST
 
+START_TEST(find_matches_tag_and_exact_width) {
+  unsigned char frame[64];
+  simulcrypt_writer_t w;
+  static const unsigned char v8[] = {0x7F};
+  static const unsigned char v16[] = {0x12, 0x34};
+  static const unsigned char v32[] = {0xDE, 0xAD, 0xBE, 0xEF};
+  const unsigned char *payload = frame + SIMULCRYPT_HDR_LEN;
+  size_t plen;
+  unsigned out = 0;
+
+  ck_assert_int_eq(simulcrypt_writer_begin(&w, frame, sizeof frame, 2, 1), 0);
+  ck_assert_int_eq(simulcrypt_writer_put_tlv(&w, 0x0001, v8, sizeof v8), 0);
+  ck_assert_int_eq(simulcrypt_writer_put_tlv(&w, 0x0002, v16, sizeof v16), 0);
+  ck_assert_int_eq(simulcrypt_writer_put_tlv(&w, 0x0003, v32, sizeof v32), 0);
+  plen = simulcrypt_writer_finish(&w) - SIMULCRYPT_HDR_LEN;
+
+  ck_assert_int_eq(simulcrypt_find_u8(payload, plen, 0x0001, &out), 1);
+  ck_assert_uint_eq(out, 0x7F);
+  ck_assert_int_eq(simulcrypt_find_u16(payload, plen, 0x0002, &out), 1);
+  ck_assert_uint_eq(out, 0x1234);
+  ck_assert_int_eq(simulcrypt_find_u32(payload, plen, 0x0003, &out), 1);
+  ck_assert_uint_eq(out, 0xDEADBEEFu);
+
+  ck_assert_int_eq(simulcrypt_find_u16(payload, plen, 0x0001, &out), 0);
+  ck_assert_int_eq(simulcrypt_find_u32(payload, plen, 0x0002, &out), 0);
+  ck_assert_int_eq(simulcrypt_find_u8(payload, plen, 0x0003, &out), 0);
+
+  ck_assert_int_eq(simulcrypt_find_u8(payload, plen, 0x0009, &out), 0);
+  ck_assert_int_eq(simulcrypt_find_u16(payload, plen, 0x0009, &out), 0);
+  ck_assert_int_eq(simulcrypt_find_u32(payload, plen, 0x0009, &out), 0);
+}
+END_TEST
+
+START_TEST(find_stops_at_truncated_element) {
+  static const unsigned char payload[] = {0x00, 0x01, 0x00, 0x01, 0x42, 0x00, 0x02, 0x00, 0x08, 0x11};
+  unsigned out = 0;
+
+  ck_assert_int_eq(simulcrypt_find_u8(payload, sizeof payload, 0x0001, &out), 1);
+  ck_assert_uint_eq(out, 0x42);
+  ck_assert_int_eq(simulcrypt_find_u8(payload, sizeof payload, 0x0002, &out), 0);
+}
+END_TEST
+
+static unsigned char big_frame[SIMULCRYPT_MAX_FRAME];
+static unsigned char big_value[SIMULCRYPT_MAX_PAYLOAD];
+
+START_TEST(writer_put_tlv_fits_max_payload) {
+  simulcrypt_writer_t w;
+
+  ck_assert_int_eq(simulcrypt_writer_begin(&w, big_frame, sizeof big_frame, 2, 1), 0);
+  ck_assert_int_eq(simulcrypt_writer_put_tlv(&w, 0x0001, big_value, SIMULCRYPT_MAX_PAYLOAD - 4), 0);
+  ck_assert_uint_eq(simulcrypt_writer_finish(&w), SIMULCRYPT_MAX_FRAME);
+}
+END_TEST
+
+START_TEST(writer_put_tlv_rejects_element_over_max_payload) {
+  simulcrypt_writer_t w;
+
+  ck_assert_int_eq(simulcrypt_writer_begin(&w, big_frame, sizeof big_frame, 2, 1), 0);
+  ck_assert_int_eq(simulcrypt_writer_put_tlv(&w, 0x0001, big_value, SIMULCRYPT_MAX_PAYLOAD - 3), -1);
+  ck_assert_uint_eq(simulcrypt_writer_finish(&w), 0u);
+}
+END_TEST
+
+START_TEST(writer_put_tlv_rejects_second_element_over_max_payload) {
+  simulcrypt_writer_t w;
+
+  ck_assert_int_eq(simulcrypt_writer_begin(&w, big_frame, sizeof big_frame, 2, 1), 0);
+  ck_assert_int_eq(simulcrypt_writer_put_tlv(&w, 0x0001, big_value, SIMULCRYPT_MAX_PAYLOAD - 4), 0);
+  ck_assert_int_eq(simulcrypt_writer_put_tlv(&w, 0x0002, NULL, 0), -1);
+  ck_assert_uint_eq(simulcrypt_writer_finish(&w), 0u);
+}
+END_TEST
+
+static void open_pair(int fds[2]) {
+  ck_assert_int_eq(socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+  set_nonblocking(fds[0]);
+}
+
+static size_t build_frame(unsigned char *frame, size_t cap, unsigned short type, const unsigned char *val, unsigned short vlen) {
+  simulcrypt_writer_t w;
+
+  ck_assert_int_eq(simulcrypt_writer_begin(&w, frame, cap, 2, type), 0);
+  ck_assert_int_eq(simulcrypt_writer_put_tlv(&w, 0x0001, val, vlen), 0);
+  return simulcrypt_writer_finish(&w);
+}
+
+static const size_t eof_cut_lens[] = {3, SIMULCRYPT_HDR_LEN, SIMULCRYPT_HDR_LEN + 2};
+
+START_TEST(reader_poll_returns_error_on_eof_mid_frame) {
+  static const unsigned char v[] = {1, 2, 3};
+  unsigned char frame[32];
+  int fds[2];
+  simulcrypt_reader_t r;
+  simulcrypt_hdr_t hdr;
+  const unsigned char *payload;
+  size_t total = build_frame(frame, sizeof frame, 0x0101, v, sizeof v);
+
+  ck_assert_uint_gt(total, eof_cut_lens[2]);
+  open_pair(fds);
+  ck_assert_int_eq((int)write(fds[1], frame, eof_cut_lens[_i]), (int)eof_cut_lens[_i]);
+  close(fds[1]);
+  simulcrypt_reader_init(&r);
+  ck_assert_int_eq(simulcrypt_reader_poll(&r, fds[0], 1000, &hdr, &payload), -1);
+  close(fds[0]);
+}
+END_TEST
+
+START_TEST(reader_poll_returns_back_to_back_frames) {
+  static const unsigned char va[] = {1};
+  static const unsigned char vb[] = {2, 3};
+  unsigned char both[64];
+  int fds[2];
+  simulcrypt_reader_t r;
+  simulcrypt_hdr_t hdr;
+  const unsigned char *payload;
+  size_t la = build_frame(both, sizeof both, 0x0101, va, sizeof va);
+  size_t lb = build_frame(both + la, sizeof both - la, 0x0202, vb, sizeof vb);
+
+  open_pair(fds);
+  ck_assert_int_eq((int)write(fds[1], both, la + lb), (int)(la + lb));
+  simulcrypt_reader_init(&r);
+
+  ck_assert_int_eq(simulcrypt_reader_poll(&r, fds[0], 1000, &hdr, &payload), 1);
+  ck_assert_uint_eq(hdr.type, 0x0101);
+  ck_assert_uint_eq(hdr.payload_len, la - SIMULCRYPT_HDR_LEN);
+  ck_assert_mem_eq(payload, both + SIMULCRYPT_HDR_LEN, hdr.payload_len);
+
+  ck_assert_int_eq(simulcrypt_reader_poll(&r, fds[0], 1000, &hdr, &payload), 1);
+  ck_assert_uint_eq(hdr.type, 0x0202);
+  ck_assert_uint_eq(hdr.payload_len, lb - SIMULCRYPT_HDR_LEN);
+  ck_assert_mem_eq(payload, both + la + SIMULCRYPT_HDR_LEN, hdr.payload_len);
+
+  close(fds[0]);
+  close(fds[1]);
+}
+END_TEST
+
+START_TEST(reader_poll_accepts_empty_payload) {
+  unsigned char frame[SIMULCRYPT_HDR_LEN];
+  int fds[2];
+  simulcrypt_reader_t r;
+  simulcrypt_hdr_t hdr;
+  const unsigned char *payload;
+
+  ck_assert_uint_eq(simulcrypt_hdr_write(2, 0x0303, 0, frame, sizeof frame), SIMULCRYPT_HDR_LEN);
+  open_pair(fds);
+  ck_assert_int_eq((int)write(fds[1], frame, sizeof frame), (int)sizeof frame);
+  simulcrypt_reader_init(&r);
+  ck_assert_int_eq(simulcrypt_reader_poll(&r, fds[0], 1000, &hdr, &payload), 1);
+  ck_assert_uint_eq(hdr.type, 0x0303);
+  ck_assert_uint_eq(hdr.payload_len, 0);
+  close(fds[0]);
+  close(fds[1]);
+}
+END_TEST
+
+START_TEST(send_all_delivers_every_byte) {
+  unsigned char out[4096];
+  unsigned char in[4096];
+  size_t got = 0;
+  int fds[2];
+
+  for (size_t i = 0; i < sizeof out; i++) out[i] = (unsigned char)(i * 7);
+  open_pair(fds);
+  ck_assert_int_eq(simulcrypt_send_all(fds[1], out, sizeof out, 1000), 0);
+  while (got < sizeof in) {
+    ssize_t n = read(fds[0], in + got, sizeof in - got);
+    ck_assert_int_gt((int)n, 0);
+    got += (size_t)n;
+  }
+  ck_assert_mem_eq(in, out, sizeof out);
+  close(fds[0]);
+  close(fds[1]);
+}
+END_TEST
+
+START_TEST(send_all_times_out_when_peer_does_not_read) {
+  static unsigned char huge[4 * 1024 * 1024];
+  int fds[2];
+
+  open_pair(fds);
+  set_nonblocking(fds[1]);
+  ck_assert_int_eq(simulcrypt_send_all(fds[1], huge, sizeof huge, 50), -1);
+  close(fds[0]);
+  close(fds[1]);
+}
+END_TEST
+
+START_TEST(send_all_fails_when_peer_closed) {
+  unsigned char out[16] = {0};
+  int fds[2];
+
+  open_pair(fds);
+  close(fds[0]);
+  ck_assert_int_eq(simulcrypt_send_all(fds[1], out, sizeof out, 1000), -1);
+  close(fds[1]);
+}
+END_TEST
+
 static Suite *simulcrypt_msg_suite(void) {
   Suite *s = suite_create("simulcrypt_msg");
   TCase *tc = tcase_create("core");
@@ -259,6 +462,17 @@ static Suite *simulcrypt_msg_suite(void) {
   tcase_add_test(tc, reader_poll_frame_split_across_writes);
   tcase_add_test(tc, reader_poll_returns_zero_on_timeout);
   tcase_add_test(tc, reader_poll_returns_error_on_peer_close);
+  tcase_add_test(tc, find_matches_tag_and_exact_width);
+  tcase_add_test(tc, find_stops_at_truncated_element);
+  tcase_add_test(tc, writer_put_tlv_fits_max_payload);
+  tcase_add_test(tc, writer_put_tlv_rejects_element_over_max_payload);
+  tcase_add_test(tc, writer_put_tlv_rejects_second_element_over_max_payload);
+  tcase_add_loop_test(tc, reader_poll_returns_error_on_eof_mid_frame, 0, (int)(sizeof eof_cut_lens / sizeof eof_cut_lens[0]));
+  tcase_add_test(tc, reader_poll_returns_back_to_back_frames);
+  tcase_add_test(tc, reader_poll_accepts_empty_payload);
+  tcase_add_test(tc, send_all_delivers_every_byte);
+  tcase_add_test(tc, send_all_times_out_when_peer_does_not_read);
+  tcase_add_test(tc, send_all_fails_when_peer_closed);
   suite_add_tcase(s, tc);
   return s;
 }

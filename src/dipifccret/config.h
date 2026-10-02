@@ -4,7 +4,7 @@
 #ifndef DIPIFCCRET_CONFIG_H
 #define DIPIFCCRET_CONFIG_H
 
-#include "args.h"
+#include "cli/args.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipifccret.yaml"
 

@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ioutil.h"
+#include "../sys/ioutil.h"
 #include "playlist_in.h"
 #include "xml_util.h"
 

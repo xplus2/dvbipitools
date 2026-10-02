@@ -73,6 +73,30 @@ typedef struct {
   const char *protocol;
 } httpng_req_hdrs_t;
 
+typedef struct {
+  const httpng_ops_t *ops;
+  void *conn;
+  void *req;
+  route_t *rt;
+  pid_filter_t *filter;
+  unsigned pmt_pid;
+  lcevc_select_t *lcevc;
+  route_item_bufs_t *item_bufs;
+  client_info_t *cinfo;
+  const char *client_ip;
+  int fd;
+  int is_head;
+  const char *origin;
+  const char *inm;
+  const char *query;
+} httpng_req_t;
+
+void dispatch_ts_route(httpng_req_t *rq);
+void dispatch_hls_route(httpng_req_t *rq);
+void dispatch_llhls_route(httpng_req_t *rq);
+void dispatch_dash_route(httpng_req_t *rq);
+void dispatch_mp4_route(httpng_req_t *rq);
+
 /* fd: h2 ts_push_subscribe() needs conn fd for ring wake lookups.
    h3: subscriber to conn/stream_id after subscribe (-1) */
 void httpng_dispatch(const httpng_ops_t *ops, void *conn, void *req, const httpng_req_hdrs_t *hdrs, const char *client_ip, int fd);

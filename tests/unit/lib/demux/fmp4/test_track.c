@@ -386,6 +386,257 @@ START_TEST(fmp4_parse_stsd_entry_mp2a_disambiguated_via_esds_oti) {
 }
 END_TEST
 
+typedef void (*cfg_parser_t)(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out);
+typedef unsigned (*probe_fn_t)(const fmp4_stsd_entry_t *e);
+
+static unsigned char *make_filled(size_t len, unsigned char fill) {
+  unsigned char *p = malloc(len ? len : 1);
+
+  ck_assert_ptr_nonnull(p);
+  memset(p, fill, len);
+  return p;
+}
+
+static unsigned char *make_body(size_t prefix, const unsigned char *tail, size_t tail_len, size_t *total) {
+  unsigned char *p = make_filled(prefix + tail_len, 0);
+
+  if (tail_len) memcpy(p + prefix, tail, tail_len);
+  *total = prefix + tail_len;
+  return p;
+}
+
+static unsigned probe_bsid(const fmp4_stsd_entry_t *e) {
+  return e->ac3_bsid;
+}
+
+static unsigned probe_channels(const fmp4_stsd_entry_t *e) {
+  return e->channels;
+}
+
+static unsigned probe_dts_rate(const fmp4_stsd_entry_t *e) {
+  return e->dts_rate;
+}
+
+static unsigned probe_truehd_format(const fmp4_stsd_entry_t *e) {
+  return e->truehd_format_info;
+}
+
+typedef struct {
+  const char *name;
+  cfg_parser_t fn;
+  size_t min_len;
+  probe_fn_t probe;
+  unsigned expect;
+} fixed_case_t;
+
+static const fixed_case_t fixed_cases[] = {
+    {"avcC", fmp4_parse_avcc, 6, NULL, 0},
+    {"hvcC", fmp4_parse_hvcc, 23, NULL, 0},
+    {"vvcC", fmp4_parse_vvcc, 2, NULL, 0},
+    {"esds", fmp4_parse_esds, 4, NULL, 0},
+    {"dac3", fmp4_parse_dac3, 3, probe_bsid, 0x1F},
+    {"dec3", fmp4_parse_dec3, 4, probe_bsid, 0x1F},
+    {"dOps", fmp4_parse_dops, 2, probe_channels, 0xFF},
+    {"ddts", fmp4_parse_ddts, 4, probe_dts_rate, 0xFFFFFFFFu},
+    {"dmlp", fmp4_parse_dmlp, 6, probe_truehd_format, 0xFFFFFFFFu},
+};
+
+START_TEST(config_parsers_ignore_bodies_shorter_than_fixed_fields) {
+  const fixed_case_t *c = &fixed_cases[_i];
+  fmp4_stsd_entry_t zero;
+  fmp4_stsd_entry_t out;
+
+  memset(&zero, 0, sizeof zero);
+  for (size_t len = 0; len < c->min_len; len++) {
+    unsigned char *p = make_filled(len, 0xFF);
+
+    memset(&out, 0, sizeof out);
+    c->fn(p, p + len, &out);
+    ck_assert_msg(memcmp(&out, &zero, sizeof out) == 0, "%s: body of %zu bytes modified the entry", c->name, len);
+    free(p);
+  }
+}
+END_TEST
+
+START_TEST(config_parsers_read_body_of_exactly_fixed_length) {
+  const fixed_case_t *c = &fixed_cases[_i];
+  unsigned char *p;
+  fmp4_stsd_entry_t out;
+
+  if (!c->probe) return;
+  p = make_filled(c->min_len, 0xFF);
+  memset(&out, 0, sizeof out);
+  c->fn(p, p + c->min_len, &out);
+  ck_assert_msg(c->probe(&out) == c->expect, "%s: field %u, want %u", c->name, c->probe(&out), c->expect);
+  free(p);
+}
+END_TEST
+
+START_TEST(dac4_takes_whole_body_even_when_empty) {
+  static const size_t lens[] = {0, 1, 7};
+
+  for (size_t i = 0; i < sizeof lens / sizeof lens[0]; i++) {
+    unsigned char *p = make_filled(lens[i], 0xAB);
+    fmp4_stsd_entry_t out;
+
+    memset(&out, 0, sizeof out);
+    fmp4_parse_dac4(p, p + lens[i], &out);
+    ck_assert_ptr_eq(out.cpriv, p);
+    ck_assert_uint_eq(out.cpriv_len, lens[i]);
+    free(p);
+  }
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  cfg_parser_t fn;
+  size_t zero_prefix;
+  unsigned char tail[40];
+  size_t tail_len;
+  unsigned n_vps;
+  unsigned n_sps;
+  unsigned n_pps;
+} ps_case_t;
+
+static const ps_case_t ps_cases[] = {
+    {"avcC sps length past end", fmp4_parse_avcc, 5, {0xE1, 0x00, 0x10, 0xAA, 0xBB}, 5, 0, 0, 0},
+    {"avcC no pps count", fmp4_parse_avcc, 5, {0xE1, 0x00, 0x02, 0xAA, 0xBB}, 5, 0, 1, 0},
+    {"avcC pps length past end", fmp4_parse_avcc, 5, {0xE1, 0x00, 0x02, 0xAA, 0xBB, 0x01, 0x00, 0x09, 0xCC}, 9, 0, 1, 0},
+    {"avcC sps count past data", fmp4_parse_avcc, 5, {0xE3, 0x00, 0x01, 0xAA}, 4, 0, 1, 0},
+    {"avcC more sps than slots", fmp4_parse_avcc, 5,
+     {0xE8, 0x00, 0x01, 0x01, 0x00, 0x01, 0x02, 0x00, 0x01, 0x03, 0x00, 0x01, 0x04, 0x00, 0x01, 0x05, 0x00, 0x01, 0x06, 0x00, 0x01, 0x07, 0x00, 0x01, 0x08, 0x00}, 26, 0, FMP4_PS_MAX, 0},
+    {"avcC valid", fmp4_parse_avcc, 5, {0xE1, 0x00, 0x02, 0xAA, 0xBB, 0x01, 0x00, 0x01, 0xCC}, 9, 0, 1, 1},
+    {"hvcC no arrays present", fmp4_parse_hvcc, 22, {0x02}, 1, 0, 0, 0},
+    {"hvcC nal length past end", fmp4_parse_hvcc, 22, {0x01, 0x20, 0x00, 0x01, 0x00, 0x09, 0xAA}, 7, 0, 0, 0},
+    {"hvcC vps only", fmp4_parse_hvcc, 22, {0x01, 0x20, 0x00, 0x01, 0x00, 0x02, 0xAA, 0xBB}, 8, 1, 0, 0},
+    {"hvcC vps sps pps", fmp4_parse_hvcc, 22,
+     {0x03, 0x20, 0x00, 0x01, 0x00, 0x01, 0xAA, 0x21, 0x00, 0x01, 0x00, 0x01, 0xBB, 0x22, 0x00, 0x01, 0x00, 0x01, 0xCC}, 19, 1, 1, 1},
+    {"hvcC unknown nal type skipped", fmp4_parse_hvcc, 22, {0x01, 0x27, 0x00, 0x01, 0x00, 0x01, 0xAA}, 7, 0, 0, 0},
+    {"hvcC count larger than data", fmp4_parse_hvcc, 22, {0x01, 0x21, 0xFF, 0xFF, 0x00, 0x01, 0xAA}, 7, 0, 1, 0},
+    {"hvcC more pps than slots", fmp4_parse_hvcc, 22,
+     {0x01, 0x22, 0x00, 0x05, 0x00, 0x01, 0x01, 0x00, 0x01, 0x02, 0x00, 0x01, 0x03, 0x00, 0x01, 0x04, 0x00, 0x01, 0x05}, 19, 0, 0, FMP4_PS_MAX},
+    {"vvcC arrays claimed without data", fmp4_parse_vvcc, 0, {0x00, 0x02}, 2, 0, 0, 0},
+    {"vvcC nal length past end", fmp4_parse_vvcc, 0, {0x00, 0x01, 0x0E, 0x00, 0x01, 0x00, 0x09, 0xAA}, 8, 0, 0, 0},
+    {"vvcC array header cut", fmp4_parse_vvcc, 0, {0x00, 0x01, 0x0E, 0x00, 0x01, 0x00}, 6, 0, 0, 0},
+    {"vvcC vps sps pps", fmp4_parse_vvcc, 0,
+     {0x00, 0x03, 0x0E, 0x00, 0x01, 0x00, 0x01, 0xAA, 0x0F, 0x00, 0x01, 0x00, 0x01, 0xBB, 0x10, 0x00, 0x01, 0x00, 0x01, 0xCC}, 20, 1, 1, 1},
+    {"vvcC unknown nal type skipped", fmp4_parse_vvcc, 0, {0x00, 0x01, 0x01, 0x00, 0x01, 0x00, 0x01, 0xAA}, 8, 0, 0, 0},
+};
+
+START_TEST(parameter_set_parsers_stop_at_truncated_data) {
+  const ps_case_t *c = &ps_cases[_i];
+  fmp4_stsd_entry_t out;
+  size_t total;
+  unsigned char *p = make_body(c->zero_prefix, c->tail, c->tail_len, &total);
+
+  memset(&out, 0, sizeof out);
+  c->fn(p, p + total, &out);
+  ck_assert_msg(out.n_vps == c->n_vps, "%s: n_vps %u, want %u", c->name, out.n_vps, c->n_vps);
+  ck_assert_msg(out.n_sps == c->n_sps, "%s: n_sps %u, want %u", c->name, out.n_sps, c->n_sps);
+  ck_assert_msg(out.n_pps == c->n_pps, "%s: n_pps %u, want %u", c->name, out.n_pps, c->n_pps);
+  free(p);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  unsigned char tail[40];
+  size_t tail_len;
+  codec_t codec;
+  size_t cpriv_len;
+  size_t cpriv_off;
+} esds_case_t;
+
+static const esds_case_t esds_cases[] = {
+    {"not an ES_Descriptor", {0x04, 0x01, 0x00}, 3, CODEC_NONE, 0, 0},
+    {"ES_Descriptor too small", {0x03, 0x02, 0x00, 0x00}, 4, CODEC_NONE, 0, 0},
+    {"truncated multibyte length", {0x03, 0x80}, 2, CODEC_NONE, 0, 0},
+    {"empty DecoderConfig", {0x03, 0x05, 0x00, 0x00, 0x00, 0x04, 0x00}, 7, CODEC_NONE, 0, 0},
+    {"mpeg audio oti with short config", {0x03, 0x0A, 0x00, 0x00, 0x00, 0x04, 0x05, 0x6B, 0x00, 0x00, 0x00, 0x00}, 12, CODEC_MP2A, 0, 0},
+    {"DecSpecificInfo past end",
+     {0x03, 0x15, 0x00, 0x00, 0x00, 0x04, 0x10, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x09, 0xAA}, 23, CODEC_NONE, 0, 0},
+    {"valid DecSpecificInfo",
+     {0x03, 0x16, 0x00, 0x00, 0x00, 0x04, 0x11, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x02, 0x12, 0x10}, 24, CODEC_NONE, 2, 26},
+};
+
+START_TEST(esds_parser_rejects_malformed_descriptors) {
+  const esds_case_t *c = &esds_cases[_i];
+  fmp4_stsd_entry_t out;
+  size_t total;
+  unsigned char *p = make_body(4, c->tail, c->tail_len, &total);
+
+  memset(&out, 0, sizeof out);
+  fmp4_parse_esds(p, p + total, &out);
+  ck_assert_msg(out.codec == c->codec, "%s: codec %d", c->name, (int)out.codec);
+  ck_assert_msg(out.cpriv_len == c->cpriv_len, "%s: cpriv_len %zu", c->name, out.cpriv_len);
+  if (c->cpriv_len) ck_assert_msg(out.cpriv == p + c->cpriv_off, "%s: cpriv offset", c->name);
+  else ck_assert_msg(out.cpriv == NULL, "%s: cpriv set", c->name);
+  free(p);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  unsigned char data[8];
+  size_t len;
+  unsigned tag;
+  size_t size;
+  size_t body_off;
+} esds_desc_case_t;
+
+static const esds_desc_case_t esds_desc_cases[] = {
+    {"empty", {0}, 0, 0, 0, 0},
+    {"tag without length", {0x05}, 1, 0, 0, 0},
+    {"unterminated multibyte length", {0x05, 0x81}, 2, 0, 0, 0},
+    {"length past end", {0x05, 0x03, 0xAA}, 3, 0, 0, 0},
+    {"runaway length", {0x05, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F}, 6, 0, 0, 0},
+    {"zero length", {0x04, 0x00}, 2, 4, 0, 2},
+    {"valid", {0x03, 0x02, 0xAA, 0xBB}, 4, 3, 2, 2},
+};
+
+START_TEST(esds_descriptor_reader_bounds_checks) {
+  const esds_desc_case_t *c = &esds_desc_cases[_i];
+  unsigned char *p = make_filled(c->len, 0);
+  const unsigned char *cur;
+  const unsigned char *body = NULL;
+  unsigned tag = 99;
+  size_t size = 0;
+
+  if (c->len) memcpy(p, c->data, c->len);
+  cur = p;
+  fmp4_parse_esds_desc(&cur, p + c->len, &tag, &body, &size);
+  ck_assert_msg(tag == c->tag, "%s: tag %u, want %u", c->name, tag, c->tag);
+  if (c->tag) {
+    ck_assert_msg(size == c->size, "%s: size %zu", c->name, size);
+    ck_assert_msg(body == p + c->body_off, "%s: body offset", c->name);
+    ck_assert_msg(cur == p + c->body_off + c->size, "%s: cursor", c->name);
+  } else {
+    ck_assert_msg(cur == p, "%s: cursor moved on failure", c->name);
+  }
+  free(p);
+}
+END_TEST
+
+START_TEST(esds_descriptor_reader_decodes_multibyte_length) {
+  unsigned char p[3 + 128];
+  const unsigned char *cur = p;
+  const unsigned char *body = NULL;
+  unsigned tag = 0;
+  size_t size = 0;
+
+  memset(p, 0x5A, sizeof p);
+  p[0] = 0x05;
+  p[1] = 0x81;
+  p[2] = 0x00;
+  fmp4_parse_esds_desc(&cur, p + sizeof p, &tag, &body, &size);
+  ck_assert_uint_eq(tag, 5u);
+  ck_assert_uint_eq(size, 128u);
+  ck_assert_ptr_eq(body, p + 3);
+  ck_assert_ptr_eq(cur, p + sizeof p);
+}
+END_TEST
+
 static Suite *fmp4_track_suite(void) {
   Suite *s = suite_create("fmp4_track");
   TCase *tc = tcase_create("core");
@@ -400,6 +651,13 @@ static Suite *fmp4_track_suite(void) {
   tcase_add_test(tc, fmp4_parse_stsd_entry_ac4_extracts_opaque_cpriv);
   tcase_add_test(tc, fmp4_parse_stsd_entry_aac_extracts_asc_via_esds);
   tcase_add_test(tc, fmp4_parse_stsd_entry_mp2a_disambiguated_via_esds_oti);
+  tcase_add_loop_test(tc, config_parsers_ignore_bodies_shorter_than_fixed_fields, 0, (int)(sizeof fixed_cases / sizeof fixed_cases[0]));
+  tcase_add_loop_test(tc, config_parsers_read_body_of_exactly_fixed_length, 0,(int)(sizeof fixed_cases / sizeof fixed_cases[0]));
+  tcase_add_test(tc, dac4_takes_whole_body_even_when_empty);
+  tcase_add_loop_test(tc, parameter_set_parsers_stop_at_truncated_data, 0, (int)(sizeof ps_cases / sizeof ps_cases[0]));
+  tcase_add_loop_test(tc, esds_parser_rejects_malformed_descriptors, 0, (int)(sizeof esds_cases / sizeof esds_cases[0]));
+  tcase_add_loop_test(tc, esds_descriptor_reader_bounds_checks, 0, (int)(sizeof esds_desc_cases / sizeof esds_desc_cases[0]));
+  tcase_add_test(tc, esds_descriptor_reader_decodes_multibyte_length);
   suite_add_tcase(s, tc);
   return s;
 }

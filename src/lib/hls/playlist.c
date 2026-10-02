@@ -7,7 +7,7 @@
 #include <string.h>
 #include <strings.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "m3u_lines.h"
 
 static int attr_find(const char *line, const char *name, char *out, size_t outcap) {

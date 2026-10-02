@@ -14,53 +14,11 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "dipiradiohead/args.h"
+#include "dipiradiohead/cli/args.h"
 #include "dipiradiohead/input/inputset.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
-typedef struct {
-  int listen_fd;
-  const char *response;
-  size_t response_len;
-} server_arg_t;
-
-static void *serve_once(void *arg) {
-  server_arg_t *a = arg;
-  int cfd = accept(a->listen_fd, NULL, NULL);
-  struct timeval tv = {2, 0};
-  char buf[4096];
-  size_t got = 0;
-
-  if (cfd < 0)
-    return NULL;
-  setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
-  for (;;) {
-    ssize_t n = recv(cfd, buf + got, sizeof buf - got, 0);
-    if (n <= 0)
-      break;
-    got += (size_t)n;
-    if (got >= 4 && memcmp(buf + got - 4, "\r\n\r\n", 4) == 0)
-      break;
-  }
-  send(cfd, a->response, a->response_len, 0);
-  close(cfd);
-  return NULL;
-}
-
-static int make_listener(unsigned *port_out) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(listen(fd, 1), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  *port_out = ntohs(addr.sin_port);
-  return fd;
-}
+#include "http_fixture.h"
 
 static void noop_meta_cb(void *ctx, const char *artist, const char *title) {
   (void)ctx;
@@ -130,18 +88,16 @@ END_TEST
 
 START_TEST(inputset_connects_and_reports_source) {
   unsigned port;
-  int listen_fd = make_listener(&port);
+  int listen_fd = fixture_listener(&port);
   pthread_t th;
-  server_arg_t sarg;
+  http_fixture_t fx;
   const char *resp = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nbody-bytes";
   char uri[64];
   config_t cfg;
   inputset_t *is;
 
-  sarg.listen_fd = listen_fd;
-  sarg.response = resp;
-  sarg.response_len = strlen(resp);
-  ck_assert_int_eq(pthread_create(&th, NULL, serve_once, &sarg), 0);
+  fixture_single(&fx, listen_fd, resp, strlen(resp));
+  ck_assert_int_eq(pthread_create(&th, NULL, fixture_serve, &fx), 0);
 
   snprintf(uri, sizeof uri, "http://127.0.0.1:%u/stream", port);
   memset(&cfg, 0, sizeof cfg);
@@ -168,19 +124,17 @@ END_TEST
 
 START_TEST(inputset_retries_independently_per_slot) {
   unsigned port;
-  int listen_fd = make_listener(&port);
+  int listen_fd = fixture_listener(&port);
   pthread_t th;
-  server_arg_t sarg;
+  http_fixture_t fx;
   const char *resp = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nbody-bytes";
   char uri_ok[64];
   config_t cfg;
   inputset_t *is;
   time_t now;
 
-  sarg.listen_fd = listen_fd;
-  sarg.response = resp;
-  sarg.response_len = strlen(resp);
-  ck_assert_int_eq(pthread_create(&th, NULL, serve_once, &sarg), 0);
+  fixture_single(&fx, listen_fd, resp, strlen(resp));
+  ck_assert_int_eq(pthread_create(&th, NULL, fixture_serve, &fx), 0);
 
   snprintf(uri_ok, sizeof uri_ok, "http://127.0.0.1:%u/stream", port);
   memset(&cfg, 0, sizeof cfg);
@@ -232,11 +186,93 @@ START_TEST(inputset_single_input_no_retry_when_error_retry_s_is_zero) {
 }
 END_TEST
 
+START_TEST(inputset_accessors_report_the_configured_slots) {
+  config_t cfg;
+  inputset_t *is;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.n_inputs = 3;
+  cfg.error_retry_s = 7;
+  bufcpy(cfg.default_provider_text, sizeof cfg.default_provider_text, "Default Prov");
+  for (unsigned i = 0; i < 3; i++) {
+    cfg.inputs[i].uri = "http://127.0.0.1:1/x";
+    cfg.inputs[i].sid = 100 + i;
+  }
+  bufcpy(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "Alpha");
+  bufcpy(cfg.inputs[1].sdt_text, sizeof cfg.inputs[1].sdt_text, "Beta");
+  bufcpy(cfg.inputs[2].sdt_text, sizeof cfg.inputs[2].sdt_text, "Gamma");
+  bufcpy(cfg.inputs[0].provider_text, sizeof cfg.inputs[0].provider_text, "Own Prov 0");
+  bufcpy(cfg.inputs[2].provider_text, sizeof cfg.inputs[2].provider_text, "Own Prov 2");
+
+  is = inputset_new(&cfg, noop_meta_cb, NULL, NULL, NULL);
+  ck_assert_ptr_nonnull(is);
+  ck_assert_uint_eq(inputset_count(is), 3u);
+  for (unsigned i = 0; i < 3; i++) {
+    ck_assert_uint_eq(inputset_sid(is, i), 100 + i);
+    ck_assert_uint_eq(inputset_pmt_pid(is, i), 0x1000u + i);
+    ck_assert_uint_eq(inputset_audio_pid(is, i), 0x0100u + i);
+    ck_assert_int_eq(inputset_poll_fd(is, i), -1);
+    ck_assert_int_eq(inputset_poll_events(is, i), 0);
+  }
+  ck_assert_str_eq(inputset_service_name(is, 0), "Alpha");
+  ck_assert_str_eq(inputset_service_name(is, 1), "Beta");
+  ck_assert_str_eq(inputset_service_name(is, 2), "Gamma");
+  ck_assert_str_eq(inputset_provider_name(is, 0), "Own Prov 0");
+  ck_assert_str_eq(inputset_provider_name(is, 1), "Default Prov");
+  ck_assert_str_eq(inputset_provider_name(is, 2), "Own Prov 2");
+  ck_assert_int_eq((int)inputset_next_deadline(is), 0);
+  inputset_free(is);
+}
+END_TEST
+
+START_TEST(inputset_poll_accessors_follow_the_slot_state) {
+  unsigned port;
+  int listen_fd = fixture_listener(&port);
+  pthread_t th;
+  http_fixture_t fx;
+  const char *resp = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nbody-bytes";
+  char uri[64];
+  config_t cfg;
+  inputset_t *is;
+
+  fixture_single(&fx, listen_fd, resp, strlen(resp));
+  ck_assert_int_eq(pthread_create(&th, NULL, fixture_serve, &fx), 0);
+
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/stream", port);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.n_inputs = 1;
+  cfg.inputs[0].uri = uri;
+  cfg.inputs[0].sid = 1;
+  bufcpy(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "Test");
+  cfg.error_retry_s = 30;
+
+  is = inputset_new(&cfg, noop_meta_cb, NULL, NULL, NULL);
+  ck_assert_ptr_nonnull(is);
+  ck_assert_int_eq(inputset_poll_fd(is, 0), -1);
+
+  drive_all(is, 300);
+  ck_assert_ptr_nonnull(inputset_source(is, 0));
+  ck_assert_int_ge(inputset_poll_fd(is, 0), 0);
+  ck_assert_int_eq(inputset_poll_events(is, 0), POLLIN);
+
+  inputset_mark_down(is, 0, 1000);
+  ck_assert_int_eq(inputset_poll_fd(is, 0), -1);
+  ck_assert_int_eq(inputset_poll_events(is, 0), 0);
+  ck_assert_int_eq((int)inputset_next_deadline(is), 1030);
+
+  inputset_free(is);
+  pthread_join(th, NULL);
+  close(listen_fd);
+}
+END_TEST
+
 static Suite *inputset_suite(void) {
   Suite *s = suite_create("inputset");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, inputset_pid_allocation_is_index_based);
+  tcase_add_test(tc, inputset_accessors_report_the_configured_slots);
   tcase_add_test(tc, inputset_connects_and_reports_source);
+  tcase_add_test(tc, inputset_poll_accessors_follow_the_slot_state);
   tcase_add_test(tc, inputset_retries_independently_per_slot);
   tcase_add_test(tc, inputset_single_input_no_retry_when_error_retry_s_is_zero);
   suite_add_tcase(s, tc);

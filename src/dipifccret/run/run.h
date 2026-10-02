@@ -11,8 +11,9 @@
 
 #include "lib/metrics/export.h"
 #include "lib/mux/rtcp_build.h"
+#include "lib/sys/cpuaffinity.h"
 
-#include "../args.h"
+#include "../cli/args.h"
 #include "../capture/capture.h"
 #include "../channel/channel.h"
 #include "../fcc/burst_table.h"
@@ -75,6 +76,8 @@ void listen_resolve_cb(const unsigned char *pkt, size_t len, size_t slot, int fd
 typedef struct {
   burst_table_t *bursts;
   unsigned duration_cap_ms;
+  const cpuaff_t *cpuaff; /* NULL: no pinning */
+  unsigned cpu_idx;
 } pacer_ctx_t;
 
 void *pacer_main(void *arg);
@@ -89,7 +92,12 @@ typedef struct {
   size_t hostname_len;
   int resolve_by_port; /* announce each channel's own resolve_slot port instead of port above */
   unsigned resolve_base_port;
+  const cpuaff_t *cpuaff; /* NULL: no pinning */
+  unsigned cpu_idx;
 } rsi_pacer_ctx_t;
+
+#define RSI_PKT_MAX 320
+size_t rsi_build_report(const rsi_pacer_ctx_t *pc, channel_t *c, uint32_t ntp_sec, uint32_t ntp_frac, time_t collision_max_age, unsigned char *pkt, size_t cap);
 
 void *rsi_pacer_main(void *arg);
 
@@ -100,6 +108,7 @@ typedef struct {
   burst_table_t *bursts; /* NULL: FCC disabled */
 } metrics_ctx_t;
 
+void fccret_push_metrics(metrics_ctx_t *mc);
 void *metrics_thread_main(void *arg);
 
 #endif

@@ -2,7 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "argutil.h"
-#include "ioutil.h"
+#include "../sys/ioutil.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -130,6 +130,13 @@ int argutil_uint_range(const char *s, unsigned min, unsigned max, unsigned *out)
   v = strtoul(s, &end, 10);
   if (errno || *end != '\0' || v < min || v > max) return -1;
   *out = (unsigned)v;
+  return 0;
+}
+
+int argutil_rist_key_size(const char *s, int *out) {
+  unsigned v;
+  if (argutil_uint_range(s, 128, 256, &v) || (v != 128 && v != 256)) return -1;
+  *out = (int)v;
   return 0;
 }
 

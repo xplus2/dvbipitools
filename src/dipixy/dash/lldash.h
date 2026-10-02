@@ -66,4 +66,12 @@ void h2_dashchunk_wake(int sub_idx);
 /* http3_dashchunk.c: resumes a deferred H3 DATA read for sub_idx, must run on its owning reactor thread */
 void h3_dashchunk_wake(int sub_idx);
 
+void link_store_chain(hls_store_t *store, int idx);
+void unlink_store_chain(hls_store_t *store, int idx);
+void link_tid_chain(int idx, int tid);
+void unlink_tid_chain(int idx);
+void on_part_pushed(const hls_store_t *store, uint32_t seq, const uint8_t *data, size_t len);
+void on_segment_done(const hls_store_t *store, uint32_t seq);
+void on_store_closing(const hls_store_t *store);
+
 #endif

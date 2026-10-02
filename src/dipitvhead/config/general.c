@@ -5,7 +5,7 @@
 
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "../config.h"
 #include "priv.h"
 
@@ -29,6 +29,14 @@ int tvh_apply_stuff(void *c, const char *v, char *e, size_t n) {
 
 int tvh_apply_burst_limit(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_bool(&((config_t *)c)->burst_limit, v, e, n);
+}
+
+int tvh_apply_pcr_mode(void *c, const char *v, char *e, size_t n) {
+  return tvh_cfg_pcr_mode(c, v, e, n);
+}
+
+int tvh_apply_pcr_lead_ms(void *c, const char *v, char *e, size_t n) {
+  return tvh_cfg_pcr_lead_ms(c, v, e, n);
 }
 
 int tvh_apply_error(void *c, const char *v, char *e, size_t n) {

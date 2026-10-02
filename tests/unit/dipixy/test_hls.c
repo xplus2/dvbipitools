@@ -10,7 +10,7 @@
 #include "dipixy/hls/hls.h"
 #include "dipixy/dash/dash.h"
 #include "dipixy/ts/pidfilter.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 /* ctx: opaque key only (pointer identity) */
 static int g_ctx_a, g_ctx_b;

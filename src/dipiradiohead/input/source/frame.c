@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <poll.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -12,11 +13,25 @@
 
 unsigned long long source_bytes_total(const source_t *s) { return s->bytes_total; }
 
+/* queue fill must not block on wire */
+static int would_block(const source_t *s) {
+  struct pollfd p;
+  int buffered = s->hls ? hls_live_has_buffered(s->hls) : http_has_buffered(s->http);
+  p.fd = source_fd(s);
+  p.events = s->hls ? hls_live_poll_events(s->hls) : POLLIN;
+  p.revents = 0;
+  if (!s->fq || buffered || p.fd < 0) return 0;
+  return poll(&p, 1, 0) <= 0;
+}
+
 static int refill(source_t *s, net_err_reason_t *reason_out) {
   unsigned char tmp[4096];
-  ssize_t n = s->hls ? hls_live_read(s->hls, tmp, sizeof tmp, reason_out) : http_read(s->http, tmp, sizeof tmp, reason_out);
+  ssize_t n;
   size_t clean_cap;
   size_t produced;
+
+  if (would_block(s)) return 0;
+  n = s->hls ? hls_live_read(s->hls, tmp, sizeof tmp, reason_out) : http_read(s->http, tmp, sizeof tmp, reason_out);
 
   if (n < 0) return -1;
   if (n == 0) return 0;
@@ -161,12 +176,6 @@ static int handle_probe_result(source_t *s, net_err_reason_t *reason_out, int r,
     return PROBE_STEP_CONTINUE;
   }
   if (frame_len > s->buf_len) {
-    if (frame_len > SRC_BUF_CAP) {
-      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mframe too large\e[0m (%zu B)", s->idx, s->label ? s->label : "?", frame_len);
-      if (reason_out) *reason_out = NET_ERR_FORMAT;
-      *ret = -1;
-      return PROBE_STEP_RETURN;
-    }
     int rf = refill(s, reason_out);
     if (rf <= 0) {
       *ret = rf;
@@ -185,7 +194,7 @@ static int handle_probe_result(source_t *s, net_err_reason_t *reason_out, int r,
   return PROBE_STEP_PROCEED;
 }
 
-int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason_out) {
+static int pull_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason_out) {
   if (s->pending_consume) {
     memmove(s->buf, s->buf + s->pending_consume, s->buf_len - s->pending_consume);
     s->buf_len -= s->pending_consume;
@@ -273,12 +282,57 @@ int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
   }
 }
 
+#define FQ_MAX_FRAMES 4096
+
+int source_set_prefill_ms(source_t *s, unsigned ms) {
+  if (!ms) return 0;
+  s->fq = framequeue_new();
+  if (!s->fq) return -1;
+  s->prefill_ms = ms;
+  return 0;
+}
+
+int source_take_resumed(source_t *s) {
+  int r = s->fq_resumed;
+  s->fq_resumed = 0;
+  return r;
+}
+
+int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason_out) {
+  if (!s->fq) return pull_frame(s, out, reason_out);
+  while (framequeue_ms(s->fq) < 2 * s->prefill_ms && framequeue_count(s->fq) < FQ_MAX_FRAMES) {
+    source_frame_t f;
+    int r = pull_frame(s, &f, reason_out);
+    if (r < 0) return -1;
+    if (r == 0) break;
+    if (framequeue_push(s->fq, &f) < 0) {
+      if (reason_out) *reason_out = NET_ERR_OTHER;
+      return -1;
+    }
+  }
+  if (s->insp_slot && *s->insp_slot) tsinspect_set_buffer_ms(*s->insp_slot, framequeue_ms(s->fq));
+  if (!s->fq_running) {
+    if (framequeue_ms(s->fq) < s->prefill_ms) return 0;
+    s->fq_running = 1;
+    s->fq_resumed = 1;
+  }
+  if (!framequeue_pop(s->fq, out)) {
+    s->fq_running = 0;
+    return 0;
+  }
+  return 1;
+}
+
 int source_fd(const source_t *s) { return s->hls ? hls_live_poll_fd(s->hls) : http_fd(s->http); }
 
-int source_has_buffered(const source_t *s) { return s->hls ? hls_live_has_buffered(s->hls) : http_has_buffered(s->http); }
+int source_has_buffered(const source_t *s) {
+  if (s->fq && framequeue_count(s->fq)) return 1;
+  return s->hls ? hls_live_has_buffered(s->hls) : http_has_buffered(s->http);
+}
 
 void source_close(source_t *s) {
   if (!s) return;
+  if (s->fq) framequeue_free(s->fq);
   if (s->latm) aac_latm_free(s->latm);
   if (s->icy) icy_free(s->icy);
   if (s->id3) id3_free(s->id3);

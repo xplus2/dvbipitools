@@ -207,14 +207,14 @@ runs and exports nothing.
 Sync loss and sync byte errors, transport error packets, continuity errors, PAT, PMT, CAT,
 SDT, NIT, EIT present/following, RST and TDT/TOT presence and repetition, PMT-referenced pids
 missing, PCR repetition and discontinuities, PTS gaps, packet, null and scrambled counters, stalls,
-table versions and last-seen timestamps.
+table versions and last-seen timestamps, send queue and de-jitter fill in ms.
 .TP
 .B medium
-Adds CRC checks of EIT, TOT and BAT, and PCR arrival jitter from kernel receive timestamps on
+Adds CRC checks of EIT, TOT and BAT, and PCR arrival jitter and frequency offset from kernel receive timestamps on
 UDP/RTP inputs.
 .TP
 .B full
-Adds packets and pids the PMT does not reference, and per pid and per service packet and scrambled packet counters
+Adds packets and pids the PMT does not reference, DTS to PCR lead per elementary stream, and per pid and per service packet and scrambled packet counters
 for the pids the PMT references when
 .BR \-\-metrics\-inspect\-ts\-pids
 is set.

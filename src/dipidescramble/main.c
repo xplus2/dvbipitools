@@ -12,34 +12,27 @@
 #include "lib/demux/mpts_probe.h"
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/tspack.h"
-#include "lib/helper/antidebug.h"
+#include "lib/sys/antidebug.h"
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
 #include "lib/metrics/export.h"
 #include "lib/tsinspect/inspect.h"
 #include "lib/mux/flv/flv.h"
 #include "lib/net/rtmp/rtmpout.h"
-#include "lib/net/tssource.h"
-#include "lib/helper/signal.h"
+#include "lib/net/ts/source.h"
+#include "lib/sys/signal.h"
 
-#include "args.h"
+#include "cli/args.h"
 #include "biss_ca_state.h"
 #include "device.h"
 #include "emmcache.h"
 #include "ipiclient.h"
+#include "outputs.h"
 #include "pipeline.h"
+#include "pmt_select.h"
 #include "version.h"
 
-#define MPTS_NAME_WAIT_MS 3000
 #define DIPIDESCRAMBLE_SRT_DRAIN_MS_DEFAULT 1000 /* srt's own default latency buffer */
-
-static int open_output(const char *path) {
-  int fd;
-  if (strcmp(path, "-") == 0) return STDOUT_FILENO;
-  fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0640);
-  if (fd < 0) log_line(TOOL_NAME ": cannot open -o %s: %s", path, strerror(errno));
-  return fd;
-}
 
 static tssrc_kind_t tssrc_kind_of(input_kind_t k) {
   switch (k) {
@@ -50,135 +43,6 @@ static tssrc_kind_t tssrc_kind_of(input_kind_t k) {
     case INPUT_SRT:       return TSSRC_SRT;
   }
   return TSSRC_STDIN;
-}
-
-static int cfg_has_rtmp(const config_t *cfg) {
-  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS) return 1;
-  return 0;
-}
-
-/* mpts discovery + -p decision. 0: proceed (pmt_pid/all_pids/n_all_pids filled in). 1: abort, message already printed. */
-static int resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pmt_pid, unsigned *all_pids, int *n_all_pids) {
-  mpts_probe_result_t probe;
-  *pmt_pid = 0;
-  *n_all_pids = 0;
-
-  probe = mpts_probe_run(src, MPTS_NAME_WAIT_MS);
-  if (probe.kind == MPTS_PROBE_FAIL) {
-    log_line(TOOL_NAME ": no PAT received, giving up");
-    return 1;
-  }
-  if (probe.kind == MPTS_PROBE_SPTS) {
-    if (cfg->pmt_sel != PMT_SEL_AUTO) log_line(TOOL_NAME ": -p ignored, single-program source");
-    return 0;
-  }
-
-  if (cfg->pmt_sel == PMT_SEL_AUTO) {
-    mpts_probe_print_programs(TOOL_NAME, &probe);
-    log_line(TOOL_NAME ": MPTS source, pick one with -p <pid>, or -p all");
-    return 1;
-  }
-  if (cfg->pmt_sel == PMT_SEL_ALL) {
-    if (cfg->format == FMT_MKV || cfg_has_rtmp(cfg)) {
-      log_line(TOOL_NAME ": -f mkv/-o rtmp:// can't hold multiple programs, pick one with -p <pid>");
-      mpts_probe_print_programs(TOOL_NAME, &probe);
-      return 1;
-    }
-    for (int k = 0; k < probe.program_count; k++) all_pids[(*n_all_pids)++] = probe.programs[k].pmt_pid;
-    return 0;
-  }
-  for (int k = 0; k < probe.program_count; k++)
-    if (probe.programs[k].pmt_pid == cfg->pmt_pid) {
-      *pmt_pid = cfg->pmt_pid;
-      return 0;
-    }
-  log_line(TOOL_NAME ": -p 0x%04x not found in this MPTS", cfg->pmt_pid);
-  mpts_probe_print_programs(TOOL_NAME, &probe);
-  return 1;
-}
-
-/* opens every -o target: plain files into lc->outfd[], rtmp(s) targets into lc->rtmp[]. 0 ok, -1 fail */
-static int open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
-  int is_mkv_fmt = (cfg->format == FMT_MKV || cfg->format == FMT_MKA);
-  lc->n_outfd = 0;
-  lc->n_rtmp = 0;
-  lc->n_srt = 0;
-  *mkv_fd = -1;
-  for (int i = 0; i < cfg->n_out; i++) {
-    const out_target_t *o = &cfg->out[i];
-    switch (o->kind) {
-      case OUT_RTMP:
-      case OUT_RTMPS: {
-        rtmpout_cfg_t rc;
-        memset(&rc, 0, sizeof rc);
-        rc.url = o->rtmp_url;
-        rc.insecure = cfg->insecure_tls;
-        lc->rtmp[lc->n_rtmp] = rtmpout_open(&rc);
-        if (!lc->rtmp[lc->n_rtmp]) return -1;
-        lc->rtmp_had_error[lc->n_rtmp] = 0;
-        lc->n_rtmp++;
-        break;
-      }
-      case OUT_SRT: {
-        srtsink_cfg_t sc;
-        memset(&sc, 0, sizeof sc);
-        sc.peers[0].host = o->srt_host;
-        sc.peers[0].port = o->srt_port;
-        sc.npeers = 1;
-        sc.group_mode = SRTSINK_GROUP_NONE;
-        sc.passphrase = cfg->srt_passphrase;
-        sc.pbkeylen = cfg->srt_pbkeylen;
-        sc.streamid = cfg->srt_streamid;
-        sc.packetfilter = cfg->srt_packetfilter;
-        sc.latency_ms = cfg->srt_latency_ms;
-        sc.verbose = cfg->verbose;
-        sc.queue_metrics = metrics_queue_level(cfg->metrics_inspect_ts);
-        lc->srt[lc->n_srt] = srtsink_open(&sc);
-        if (!lc->srt[lc->n_srt]) return -1;
-        lc->srt_connected[lc->n_srt] = 0;
-        lc->n_srt++;
-        break;
-      }
-      case OUT_FILE:
-        if (is_mkv_fmt) {
-          *mkv_fd = open_output(o->file_path);
-          if (*mkv_fd < 0) return -1;
-          break;
-        }
-        lc->outfd[lc->n_outfd] = open_output(o->file_path);
-        if (lc->outfd[lc->n_outfd] < 0) return -1;
-        lc->n_outfd++;
-        break;
-    }
-  }
-  return 0;
-}
-
-static void push_metrics(metrics_exporter_t *mx, const loop_ctx_t *lc) {
-  metrics_writer_t w;
-
-  if (!metrics_exporter_due(mx, mono_seconds()) || metrics_exporter_begin(mx, &w, TOOL_VERSION))
-    return;
-  if (lc->cas_mode) {
-    metrics_writer_put(&w, METRICS_ID_DESCRAMBLE_MODE, lc->cas_mode, 1);
-    metrics_writer_put(&w, METRICS_ID_CAS_CRYPTOPERIOD_TRANSITIONS_TOTAL, lc->cas_mode, lc->cryptoperiod_transitions_total);
-    metrics_writer_put(&w, METRICS_ID_CAS_ECM_TOTAL, lc->cas_mode, lc->ecm_total);
-    metrics_writer_put(&w, METRICS_ID_CAS_ECM_ERRORS_TOTAL, lc->cas_mode, lc->ecm_errors_total);
-    metrics_writer_put(&w, METRICS_ID_CAS_EMM_TOTAL, lc->cas_mode, lc->emm_total);
-    metrics_writer_put(&w, METRICS_ID_CAS_EMM_DROPPED_TOTAL, lc->cas_mode, lc->dev ? emmcache_dropped_total(lc->cache) : 0);
-  }
-  metrics_writer_put(&w, METRICS_ID_CAS_SCRAMBLED_PACKETS_TOTAL, NULL, lc->scrambled_packets_total);
-  metrics_writer_put(&w, METRICS_ID_CAS_UNEXPECTED_CLEAR_PACKETS_TOTAL, NULL, lc->unexpected_clear_packets_total);
-  metrics_writer_put(&w, METRICS_ID_DESCRAMBLE_KEY_LOAD_ERRORS_TOTAL, NULL, lc->key_load_errors_total);
-  metrics_writer_put(&w, METRICS_ID_DESCRAMBLE_OUTPUT_ERRORS_TOTAL, NULL, lc->output_errors_total);
-  metrics_exporter_send(mx, &w);
-}
-
-static void close_outputs(loop_ctx_t *lc, int mkv_fd) {
-  for (int i = 0; i < lc->n_rtmp; i++) rtmpout_close(lc->rtmp[i]);
-  for (int i = 0; i < lc->n_srt; i++) srtsink_close(lc->srt[i]);
-  for (int i = 0; i < lc->n_outfd; i++) if (lc->outfd[i] != STDOUT_FILENO) close(lc->outfd[i]);
-  if (mkv_fd >= 0 && mkv_fd != STDOUT_FILENO) close(mkv_fd);
 }
 
 int main(int argc, char **argv) {
@@ -230,6 +94,7 @@ int main(int argc, char **argv) {
     case INPUT_RIST:
       tc.rist_uri = cfg.input.rist_uri;
       tc.rist_profile_main = cfg.rist_profile_main;
+      tc.rist_key_size = cfg.rist_key_size;
       break;
     case INPUT_SRT:
       tc.srt_host = cfg.input.srt_host;
@@ -258,10 +123,10 @@ int main(int argc, char **argv) {
     goto cleanup;
   }
 
-  if (resolve_pmt_selection(&cfg, src, &pmt_pid, all_pids, &n_all_pids))
+  if (dscr_resolve_pmt_selection(&cfg, src, &pmt_pid, all_pids, &n_all_pids))
     goto cleanup;
 
-  if (open_outputs(&cfg, &lc, &mkv_fd))
+  if (dscr_open_outputs(&cfg, &lc, &mkv_fd))
     goto cleanup;
   if (cfg.format == FMT_MKV || cfg.format == FMT_MKA) {
     snprintf(mkv_app_name, sizeof mkv_app_name, "%s %s", TOOL_NAME, TOOL_VERSION);
@@ -354,7 +219,7 @@ int main(int argc, char **argv) {
       log_line(TOOL_NAME ": %llu packets, %.0fs elapsed", lc.packets, mono_seconds() - start);
       last_stat = mono_seconds();
     }
-    if (metrics_exporter_enabled(&mx)) push_metrics(&mx, &lc);
+    if (metrics_exporter_enabled(&mx)) pipeline_push_metrics(&mx, &lc);
   }
 
   metrics_exporter_clear_extras(&mx);
@@ -378,7 +243,7 @@ cleanup:
   psi_free(lc.psi);
   flv_close(lc.flv);
   mkv_close(lc.mkv);
-  close_outputs(&lc, mkv_fd);
+  dscr_close_outputs(&lc, mkv_fd);
   tssrc_close(src);
   emmcache_free(lc.cache);
   device_state_free(lc.dev);

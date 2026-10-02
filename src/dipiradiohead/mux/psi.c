@@ -50,13 +50,13 @@ size_t psi_build_pmt(unsigned version, unsigned program_number, unsigned pcr_pid
   return psi_finish_section(out, n, cap, 0xB0);
 }
 
-static unsigned mjd_from_tm(const struct tm *t) {
+unsigned mjd_from_tm(const struct tm *t) {
   int year = t->tm_year, month = t->tm_mon + 1, day = t->tm_mday;
   int l = (month <= 2) ? 1 : 0;
   return (unsigned)(14956 + day + (int)((year - l) * 365.25) + (int)((month + 1 + l * 12) * 30.6001));
 }
 
-static unsigned char bcd(unsigned v) { return (unsigned char)((((v / 10) % 10) << 4) | (v % 10)); }
+unsigned char bcd(unsigned v) { return (unsigned char)((((v / 10) % 10) << 4) | (v % 10)); }
 
 /* short_event_descriptor's own descriptor_length is one byte (<=255): lang(3) +
    event_name_length(1) + event_name + text_length(1) + text(0, none here) = 5

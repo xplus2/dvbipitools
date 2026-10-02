@@ -4,11 +4,11 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "args.h"
+#include "cli/args.h"
 #include "bridge.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/export.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "lib/helper/toolmain.h"
 #include "version.h"
 

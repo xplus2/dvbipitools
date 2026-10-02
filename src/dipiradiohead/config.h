@@ -4,7 +4,7 @@
 #ifndef DIPIRADIOHEAD_CONFIG_H
 #define DIPIRADIOHEAD_CONFIG_H
 
-#include "args.h"
+#include "cli/args.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipiradiohead.yaml"
 

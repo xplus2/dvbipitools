@@ -9,7 +9,7 @@
 
 #include "lib/demux/psi/psi.h"
 
-#include "args.h"
+#include "cli/args.h"
 
 /* 0 = done, 1 = stopped early by SIGINT/SIGTERM */
 int scan_run(const config_t *cfg, FILE *out);

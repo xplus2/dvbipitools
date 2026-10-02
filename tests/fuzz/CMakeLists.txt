@@ -25,7 +25,7 @@ set(FUZZ_BIM_DEPS
     ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_fuzz_harness(bim_accessunit
@@ -47,11 +47,11 @@ dvbipitools_add_fuzz_harness(simulcrypt_msg
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
 
 dvbipitools_add_fuzz_harness(ecmg_channel_status
     fuzz_ecmg_channel_status.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/connect.c
@@ -66,7 +66,7 @@ dvbipitools_add_fuzz_harness(ecmg_channel_status
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
 
 dvbipitools_add_fuzz_harness(emmg_datagrams
     fuzz_emmg_datagrams.c
@@ -79,8 +79,8 @@ dvbipitools_add_fuzz_harness(emmg_datagrams
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
 
 dvbipitools_add_fuzz_harness(dvbstp
     fuzz_dvbstp.c
@@ -88,9 +88,9 @@ dvbipitools_add_fuzz_harness(dvbstp
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_fuzz_harness(ws_frame
@@ -101,7 +101,7 @@ dvbipitools_add_fuzz_harness(route
     fuzz_route.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c)
 
 dvbipitools_add_fuzz_harness(ssdp
@@ -110,8 +110,8 @@ dvbipitools_add_fuzz_harness(ssdp
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_fuzz_harness(yamlcfg
@@ -122,7 +122,7 @@ dvbipitools_add_fuzz_harness(yamlcfg
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 # ecmg_client.c/emmg_server.c/ssdp.c pull in real pthread usage even though fuzzed
@@ -146,5 +146,14 @@ add_executable(fuzz_gen_seeds
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/ioutil.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/signal.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
+
+dvbipitools_add_fuzz_harness(pesstamp
+    fuzz_pesstamp.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/pesstamp.c)
+
+dvbipitools_add_fuzz_harness(scte35stamp
+    fuzz_scte35stamp.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/scte35stamp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)

@@ -5,16 +5,6 @@ dvbipitools (2.5.0-1) unstable; urgency=low
     + --configtest to check config
     + --config-strict to fail on warnings
     + affected tools: all except for dipixmltv and dipibim
-  * multicall binary: --install sym/hardlink creation
-  * dipixy
-    + HTTP/3
-      - proper alt-svc
-      - configurable "streaming friendly" concurrency+timeouts
-      - retry, version negotiation, stateless reset
-      - connection migration
-      - congestion control
-    + also accept direct rtp|udp:// -i without a playlist
-    + --ts-startup-timeout: handle valid addr+igmp but no multicast case
   * TS inspection / health indicators, in and out to be exposed in metrics
     + dipimetrics is down compatible, deploy it first
     + available in all TS-handling tools
@@ -27,7 +17,35 @@ dvbipitools (2.5.0-1) unstable; urgency=low
   * extended http(s):// inputs auto-detection and support on dipitvhead, dipixy and dipirec
     + ladders take best quality
     + detected/supported: HLS/LL-HLS/HLS+fMP4/LL-DASH/DASH/TSpush
-  * OpenSSL 4
+  * openssl 4
+  * rist: set AES key size
+  * dipixy
+    + http/3
+      - proper alt-svc
+      - configurable "streaming friendly" concurrency+timeouts
+      - retry, version negotiation, stateless reset
+      - connection migration
+      - congestion control
+    + also accept direct rtp|udp:// -i without a playlist
+    + --ts-startup-timeout: handle valid addr+igmp but no multicast case
+    + --cpu-affinity to pin epoll/qsbr workers to cores (off by default)
+      - "auto" or (smt) core numbers
+      - pumps still float freely
+  * dipitvhead
+    + --pcr-mode preserve|rebase|regenerate and --pcr-lead-ms
+    + --jitter-ms buffer (default: off)
+      - absorbs stalls, RTP also reorders on error
+  * dipiradiohead
+    + --jitter-ms buffer (default: off)
+      - absorbs stalls
+  * dvbipitools multicall binary
+    + --install sym/hardlink creation
+  * dipirec
+    + renamed rist parameters to --rist-*
+  * dipifccret
+    + --cpu-affinity to pin pacer and psi pacer threads (off by default)
+      - "auto" or (smt) core numbers
+      - not a throughput thing (as for dipixy), but jitter avoidance
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.4.2-1) unstable; urgency=low

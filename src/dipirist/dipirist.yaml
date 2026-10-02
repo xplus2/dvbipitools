@@ -12,6 +12,8 @@ insecure: off
 profile: simple
 # --secret [not set]
 #secret: <psk>
+# --encryption-type [not set] # 128|256
+#encryption-type: 256
 # --cname [not set]
 #cname: <name>
 # --buffer [not set] # ms

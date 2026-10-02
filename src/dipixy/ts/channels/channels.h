@@ -9,7 +9,7 @@
 
 #include "lib/helper/sds_xml.h"
 
-#include "../../args.h"
+#include "../../cli/args.h"
 #include "../../reactor/qsbr.h"
 #include "../capture/capture.h"
 

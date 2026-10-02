@@ -3,13 +3,13 @@
 
 #include <librist/librist.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "ristpeer.h"
 
-int rist_add_peer(struct rist_ctx *ctx, const char *peer_uri, const char *secret, const char *cname, unsigned buffer_ms, int initiate_conn) {
+int rist_add_peer(struct rist_ctx *ctx, const char *peer_uri, const char *secret, int key_size, const char *cname, unsigned buffer_ms, int initiate_conn) {
   struct rist_peer_config *pc = NULL;
   struct rist_peer *peer;
 
@@ -19,6 +19,7 @@ int rist_add_peer(struct rist_ctx *ctx, const char *peer_uri, const char *secret
   }
   pc->initiate_conn = initiate_conn;
   if (secret && secret[0]) bufcpy(pc->secret, sizeof pc->secret, secret);
+  if (key_size) pc->key_size = key_size;
   if (cname && cname[0]) bufcpy(pc->cname, sizeof pc->cname, cname);
   if (buffer_ms) {
     pc->recovery_length_min = buffer_ms;

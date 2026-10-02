@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "priv.h"
 
 typedef struct {
@@ -57,6 +57,7 @@ int discover_step(discover_state_t *ds, tvsrc_t *src, const dipitvhead_input_t *
     discover_feed_t df = {psi, ds->insp};
     tsinspect_tick(ds->insp, mono_seconds());
     tsinspect_set_rx_ns(ds->insp, tvsrc_last_rx_ns(src));
+    tsinspect_set_buffer_ms(ds->insp, tvsrc_buffer_ms(src));
     tspack_feed_sync(&ds->pz, buf, (size_t)n, psi_cb_inspect, &df, tsinspect_sync(ds->insp));
   } else if (n > 0) tspack_feed(&ds->pz, buf, (size_t)n, psi_cb, psi);
   if (psi_have_pat(psi) && !ds->listed) {

@@ -8,7 +8,7 @@
 
 #include "lib/config/yamlcfg.h"
 
-#include "dipixy/args.h"
+#include "dipixy/cli/args.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
@@ -254,6 +254,43 @@ START_TEST(workers_rejects_zero_and_out_of_range) {
   ck_assert_int_eq(args_parse(ARGC(argv1), argv1, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
   ck_assert_int_eq(args_parse(ARGC(argv3), argv3, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(cpu_affinity_defaults_off) {
+  char *argv[] = {"dipixy", "-I", "eth0", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.cpu_affinity.mode, CPUAFF_OFF);
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(cpu_affinity_accepts_auto_and_list) {
+  char *argv1[] = {"dipixy", "-I", "eth0", "--cpu-affinity", "auto", NULL};
+  char *argv2[] = {"dipixy", "-I", "eth0", "--cpu-affinity", "2-4,8,10", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv1), argv1, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.cpu_affinity.mode, CPUAFF_AUTO);
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.cpu_affinity.mode, CPUAFF_LIST);
+  ck_assert_uint_eq(cfg.cpu_affinity.n, 5);
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(cpu_affinity_rejects_junk) {
+  char *argv1[] = {"dipixy", "-I", "eth0", "--cpu-affinity", "5-2", NULL};
+  char *argv2[] = {"dipixy", "-I", "eth0", "--cpu-affinity", "abc", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv1), argv1, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(argv2), argv2, &cfg), ARGS_ERR);
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -1554,6 +1591,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, workers_relative_values_accepted);
   tcase_add_test(tc, workers_absolute_value_accepted);
   tcase_add_test(tc, workers_rejects_zero_and_out_of_range);
+  tcase_add_test(tc, cpu_affinity_defaults_off);
+  tcase_add_test(tc, cpu_affinity_accepts_auto_and_list);
+  tcase_add_test(tc, cpu_affinity_rejects_junk);
   tcase_add_test(tc, max_clients_is_overridable);
   tcase_add_test(tc, max_clients_rejects_zero_and_out_of_range);
   tcase_add_test(tc, sources_recorded_in_definition_order);

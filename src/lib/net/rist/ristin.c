@@ -7,10 +7,10 @@
 
 #include <librist/librist.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/pipereader.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "ristin.h"
 #include "ristlog.h"
 #include "ristpeer.h"
@@ -79,7 +79,7 @@ ristin_t *ristin_open(const ristin_cfg_t *cfg) {
     free(r);
     return NULL;
   }
-  if (rist_add_peer(r->ctx, cfg->peer_uri, cfg->secret, cfg->cname, cfg->buffer_ms, 0) || rist_start(r->ctx) != 0) {
+  if (rist_add_peer(r->ctx, cfg->peer_uri, cfg->secret, cfg->key_size, cfg->cname, cfg->buffer_ms, 0) || rist_start(r->ctx) != 0) {
     rist_destroy(r->ctx);
     free(r);
     return NULL;

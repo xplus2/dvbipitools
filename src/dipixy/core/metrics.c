@@ -5,8 +5,8 @@
 
 #include <stdatomic.h>
 
-#include "lib/helper/ioutil.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/ioutil.h"
+#include "lib/sys/signal.h"
 #include "../ts/capture/capture.h"
 #include "../reactor/reactor.h"
 #include "../ts/ts_push.h"
@@ -28,9 +28,10 @@ void dipixy_metrics_note_http_error(void) { atomic_fetch_add_explicit(&g_http_er
 void dipixy_put_queue_metrics(metrics_writer_t *w, void *ctx) {
   ts_push_queue_stats_t st;
   int level = *(const int *)ctx;
-  ts_push_queue_stats(&st);
+  ts_push_queue_stats(&st, mono_seconds());
   metrics_writer_put(w, METRICS_ID_XY_TSPUSH_QUEUE_BYTES, NULL, st.bytes);
   metrics_writer_put(w, METRICS_ID_XY_TSPUSH_QUEUE_MAX_BYTES, NULL, st.max_bytes);
+  if (st.ms_known) metrics_writer_put(w, METRICS_ID_XY_TSPUSH_QUEUE_MILLISECONDS, NULL, st.max_ms);
   if (level > 1) {
     metrics_writer_put(w, METRICS_ID_XY_TSPUSH_QUEUE_HIGH_WATERMARK_BYTES, NULL, ts_push_queue_high_watermark());
     metrics_writer_put(w, METRICS_ID_XY_TSPUSH_QUEUE_DROPPED_TOTAL, NULL, ts_push_queue_dropped());

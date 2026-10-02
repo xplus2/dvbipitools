@@ -58,6 +58,7 @@ typedef struct {
   int metrics_on;
   out_ctx_t *out;
   ts_metrics_t *tsm;
+  timemap_t *tm;
   tsinspect_t **insp;
   double now;
   time_t now_t;
@@ -78,6 +79,11 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src);
 void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src);
 
 extern const mpts_program_ops_t mpts_program_ops;
+
+unsigned mpts_service_index(unsigned rr_start, unsigned k, unsigned n);
+unsigned mpts_advance_rr(unsigned rr_start, unsigned n);
+int mpts_cat_due(int have_cas, double now, double *last_cat);
+void mpts_emit_eit(mpts_program_t *progs, unsigned n, int *eit_busy, unsigned char *eit_cc, remux_packet_cb cb, void *ctx);
 
 void tvhead_mpts_set_cas(mpts_t *mpts, cas_t *cas);
 

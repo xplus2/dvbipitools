@@ -281,6 +281,69 @@ START_TEST(ac4_frame_rejects_bad_sync) {
 }
 END_TEST
 
+#define FRAME_BUF_MAX 512
+#define FRAME_HDR_MAX 8
+
+typedef struct {
+  const char *name;
+  codec_t codec;
+  unsigned char hdr[FRAME_HDR_MAX];
+  size_t len;
+  int expect;
+} frame_case_t;
+
+static const frame_case_t frame_cases[] = {
+    {"ac3 valid", CODEC_AC3, {0x0B, 0x77, 0x00, 0x00, 0x00, 0x00, 0x00}, 128, 0},
+    {"ac3 bad sync first byte", CODEC_AC3, {0x00, 0x77, 0x00, 0x00, 0x00, 0x00, 0x00}, 128, -1},
+    {"ac3 bad sync second byte", CODEC_AC3, {0x0B, 0x78, 0x00, 0x00, 0x00, 0x00, 0x00}, 128, -1},
+    {"ac3 reserved fscod", CODEC_AC3, {0x0B, 0x77, 0x00, 0x00, 0xC0, 0x00, 0x00}, 128, -1},
+    {"ac3 frmsizecod out of range", CODEC_AC3, {0x0B, 0x77, 0x00, 0x00, 0x26, 0x00, 0x00}, 128, -1},
+    {"ac3 header truncated", CODEC_AC3, {0x0B, 0x77, 0x00, 0x00, 0x00, 0x00, 0x00}, 6, 1},
+    {"ac3 frame truncated", CODEC_AC3, {0x0B, 0x77, 0x00, 0x00, 0x00, 0x00, 0x00}, 100, 1},
+    {"eac3 valid", CODEC_EAC3, {0x0B, 0x77, 0x00, 0x3F, 0x00, 0x00}, 128, 0},
+    {"eac3 bad sync", CODEC_EAC3, {0x0B, 0x00, 0x00, 0x3F, 0x00, 0x00}, 128, -1},
+    {"eac3 frame size too small", CODEC_EAC3, {0x0B, 0x77, 0x00, 0x00, 0x00, 0x00}, 128, -1},
+    {"eac3 reserved numblkscod", CODEC_EAC3, {0x0B, 0x77, 0x00, 0x3F, 0xF0, 0x00}, 128, -1},
+    {"eac3 header truncated", CODEC_EAC3, {0x0B, 0x77, 0x00, 0x3F, 0x00, 0x00}, 5, 1},
+    {"eac3 frame truncated", CODEC_EAC3, {0x0B, 0x77, 0x00, 0x3F, 0x00, 0x00}, 64, 1},
+    {"mpeg audio valid", CODEC_MP2A, {0xFF, 0xFB, 0x90, 0x00}, 417, 0},
+    {"mpeg audio bad sync first byte", CODEC_MP2A, {0x00, 0xFB, 0x90, 0x00}, 417, -1},
+    {"mpeg audio bad sync second byte", CODEC_MP2A, {0xFF, 0x1B, 0x90, 0x00}, 417, -1},
+    {"mpeg audio reserved version", CODEC_MP2A, {0xFF, 0xEB, 0x90, 0x00}, 417, -1},
+    {"mpeg audio free bitrate", CODEC_MP2A, {0xFF, 0xFB, 0x00, 0x00}, 417, -1},
+    {"mpeg audio bad bitrate", CODEC_MP2A, {0xFF, 0xFB, 0xF0, 0x00}, 417, -1},
+    {"mpeg audio reserved rate", CODEC_MP2A, {0xFF, 0xFB, 0x9C, 0x00}, 417, -1},
+    {"mpeg audio header truncated", CODEC_MP2A, {0xFF, 0xFB, 0x90, 0x00}, 3, 1},
+    {"mpeg audio frame truncated", CODEC_MP2A, {0xFF, 0xFB, 0x90, 0x00}, 100, 1},
+    {"aac adts valid", CODEC_AAC, {0xFF, 0xF1, 0x50, 0x80, 0x10, 0x00, 0x00}, 128, 0},
+    {"aac adts bad sync first byte", CODEC_AAC, {0x00, 0xF1, 0x50, 0x80, 0x10, 0x00, 0x00}, 128, -1},
+    {"aac adts bad sync second byte", CODEC_AAC, {0xFF, 0xF2, 0x50, 0x80, 0x10, 0x00, 0x00}, 128, -1},
+    {"aac adts bad sample rate index", CODEC_AAC, {0xFF, 0xF1, 0x34, 0x80, 0x10, 0x00, 0x00}, 128, -1},
+    {"aac adts frame shorter than header", CODEC_AAC, {0xFF, 0xF1, 0x50, 0x80, 0x00, 0x00, 0x00}, 128, -1},
+    {"aac adts header truncated", CODEC_AAC, {0xFF, 0xF1, 0x50, 0x80, 0x10, 0x00, 0x00}, 6, 1},
+    {"aac adts frame truncated", CODEC_AAC, {0xFF, 0xF1, 0x50, 0x80, 0x10, 0x00, 0x00}, 100, 1},
+    {"truehd header truncated", CODEC_TRUEHD, {0x00, 0x10, 0x00, 0x00, 0xF8, 0x72, 0x6F, 0xBA}, 7, 1},
+    {"truehd frame truncated", CODEC_TRUEHD, {0x00, 0x10, 0x00, 0x00, 0xF8, 0x72, 0x6F, 0xBA}, 16, 1},
+    {"truehd au size below minimum", CODEC_TRUEHD, {0x00, 0x03, 0x00, 0x00, 0xF8, 0x72, 0x6F, 0xBA}, 32, -1},
+    {"truehd zero au size", CODEC_TRUEHD, {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 32, -1},
+};
+
+START_TEST(audio_frame_edge_cases) {
+  const frame_case_t *c = &frame_cases[_i];
+  unsigned char buf[FRAME_BUF_MAX];
+  esc_track_t t;
+  esc_frame_t f;
+  int r;
+
+  memset(buf, 0, sizeof buf);
+  memcpy(buf, c->hdr, sizeof c->hdr);
+  memset(&t, 0, sizeof t);
+  t.codec = c->codec;
+  r = next_frame(&t, buf, c->len, &f);
+  ck_assert_msg(r == c->expect, "%s: got %d, want %d", c->name, r, c->expect);
+}
+END_TEST
+
 static Suite *audio_suite(void) {
   Suite *s = suite_create("escodec_audio");
   TCase *tc = tcase_create("core");
@@ -297,6 +360,7 @@ static Suite *audio_suite(void) {
   tcase_add_test(tc, ac4_5_1_reports_six_channels);
   tcase_add_test(tc, ac4_frame_needs_more_data_when_truncated);
   tcase_add_test(tc, ac4_frame_rejects_bad_sync);
+  tcase_add_loop_test(tc, audio_frame_edge_cases, 0, (int)(sizeof frame_cases / sizeof frame_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }

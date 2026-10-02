@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "lib/config/yamlcfg.h"
+#include "lib/net/jitbuf.h"
 #include "../config.h"
 #include "priv.h"
 
@@ -88,6 +89,11 @@ int tvh_apply_input_rist_profile(void *c, const char *v, char *e, size_t n) {
   return 0;
 }
 
+int tvh_apply_input_rist_encryption_type(void *c, const char *v, char *e, size_t n) {
+  dipitvhead_input_t *in = tvh_cur_input(c, e, n);
+  return in ? tvh_set_key_size(&in->rist_key_size_in, v, e, n) : -1;
+}
+
 int tvh_apply_input_srt_passphrase(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
   return in ? tvh_set_buf(in->srt_passphrase_in, sizeof in->srt_passphrase_in, v, e, n) : -1;
@@ -106,6 +112,11 @@ int tvh_apply_input_srt_streamid(void *c, const char *v, char *e, size_t n) {
 int tvh_apply_input_srt_packetfilter(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
   return in ? tvh_set_buf(in->srt_packetfilter_in, sizeof in->srt_packetfilter_in, v, e, n) : -1;
+}
+
+int tvh_apply_input_jitter_ms(void *c, const char *v, char *e, size_t n) {
+  dipitvhead_input_t *in = tvh_cur_input(c, e, n);
+  return in ? yamlcfg_set_uint(&in->jitter_ms, v, 1, JITBUF_MAX_DELAY_MS, e, n) : -1;
 }
 
 int tvh_apply_input_srt_latency(void *c, const char *v, char *e, size_t n) {

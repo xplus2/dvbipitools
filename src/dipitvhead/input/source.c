@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/net/tssource.h"
+#include "lib/net/ts/source.h"
 
 #include "../version.h"
 #include "source.h"
@@ -40,6 +40,7 @@ tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_er
   tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
   tc.rist_uri = input->input.rist_uri;
   tc.rist_profile_main = input->rist_profile_main;
+  tc.rist_key_size = input->rist_key_size_in;
   tc.srt_host = input->input.srt_host;
   tc.srt_port = input->input.srt_port;
   tc.srt_listen = input->input.srt_listen;
@@ -48,6 +49,7 @@ tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_er
   tc.srt_streamid = input->srt_streamid_in;
   tc.srt_packetfilter = input->srt_packetfilter_in;
   tc.srt_latency_ms = input->srt_latency_in_ms;
+  tc.jitter_ms = input->jitter_ms;
   tc.srt_verbose = cfg->verbose;
 
   s->t = tssrc_open(&tc, reason_out);
@@ -65,6 +67,8 @@ int tvsrc_fd(const tvsrc_t *s) { return tssrc_fd(s->t); }
 int tvsrc_enable_rx_timestamps(tvsrc_t *s) { return tssrc_enable_rx_timestamps(s->t); }
 
 uint64_t tvsrc_last_rx_ns(const tvsrc_t *s) { return tssrc_last_rx_ns(s->t); }
+
+int64_t tvsrc_buffer_ms(const tvsrc_t *s) { return tssrc_buffer_ms(s->t); }
 
 void tvsrc_close(tvsrc_t *s) {
   if (!s) return;
@@ -92,6 +96,7 @@ tvsrc_open_t *tvsrc_open_async_start(const config_t *cfg, const dipitvhead_input
   tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
   tc.rist_uri = input->input.rist_uri;
   tc.rist_profile_main = input->rist_profile_main;
+  tc.rist_key_size = input->rist_key_size_in;
   tc.srt_host = input->input.srt_host;
   tc.srt_port = input->input.srt_port;
   tc.srt_listen = input->input.srt_listen;
@@ -100,6 +105,7 @@ tvsrc_open_t *tvsrc_open_async_start(const config_t *cfg, const dipitvhead_input
   tc.srt_streamid = input->srt_streamid_in;
   tc.srt_packetfilter = input->srt_packetfilter_in;
   tc.srt_latency_ms = input->srt_latency_in_ms;
+  tc.jitter_ms = input->jitter_ms;
   tc.srt_verbose = cfg->verbose;
 
   o->o = tssrc_open_async_start(&tc, reason_out);

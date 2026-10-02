@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 
-#include "args.h"
+#include "cli/args.h"
 #include "biss_ca_state.h"
 #include "device.h"
 #include "emmcache.h"
@@ -14,6 +14,7 @@
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/psi/section_asm.h"
 #include "lib/mux/flv/flv.h"
+#include "lib/metrics/export.h"
 #include "lib/mux/mkv/mkv.h"
 #include "lib/net/rtmp/rtmpout.h"
 #include "lib/net/srt/srtsink.h"
@@ -86,11 +87,15 @@ void pipeline_flush(loop_ctx_t *lc);
 /* flv_tag_cb, fans out to lc->rtmp[0..n_rtmp), registered on lc->flv by main() */
 void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn);
 
+void descramble_rtmp_note_result(int ok, int *had_error, int idx);
+
 /* advances every -o srt:// target's connect state, flushes queued data.
    call every main-loop iteration, even when input is quiet. */
 void srt_service_all(loop_ctx_t *lc);
 
 void pipeline_service_unicast_emm(loop_ctx_t *lc);
+
+void pipeline_push_metrics(metrics_exporter_t *mx, const loop_ctx_t *lc);
 
 void pipeline_service_emmcache(loop_ctx_t *lc);
 void pipeline_flush_emmcache(loop_ctx_t *lc);

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/metrics/protocol.h"
 
 static void make_hdr(metrics_hdr_t *hdr, const char *id) {
@@ -393,6 +393,30 @@ START_TEST(reader_rejects_malformed_v2_groups) {
 }
 END_TEST
 
+START_TEST(signed_values_roundtrip_zigzag) {
+  static const int64_t vals[] = {0, -1, 1, -5, 7, -123456789, INT64_MAX, INT64_MIN};
+  metrics_writer_t w;
+  metrics_reader_t r;
+  metrics_hdr_t hdr;
+  metrics_hdr_t out;
+  metrics_id_t id;
+  char label[METRICS_LABEL_MAX + 1];
+  uint64_t value;
+
+  make_hdr(&hdr, "x");
+  ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
+  for (size_t i = 0; i < sizeof vals / sizeof vals[0]; i++)
+    ck_assert_int_eq(metrics_writer_put_signed(&w, METRICS_ID_TS_PCR_FREQ_OFFSET_PPB, "s", vals[i]), 0);
+  ck_assert_uint_gt(metrics_writer_finish(&w), 0u);
+  ck_assert_int_eq(metrics_reader_init(&r, w.buf, w.len, &out), 0);
+  for (size_t i = 0; i < sizeof vals / sizeof vals[0]; i++) {
+    ck_assert_int_eq(metrics_reader_next(&r, &id, label, sizeof label, &value), 1);
+    ck_assert_int_eq(metrics_unzigzag(value), vals[i]);
+  }
+  ck_assert_int_eq(metrics_reader_next(&r, &id, label, sizeof label, &value), 0);
+}
+END_TEST
+
 static Suite *protocol_suite(void) {
   Suite *s = suite_create("metrics_protocol");
   TCase *tc = tcase_create("core");
@@ -413,6 +437,7 @@ static Suite *protocol_suite(void) {
   tcase_add_test(tc, parts_are_capped);
   tcase_add_test(tc, reader_accepts_v1_entries);
   tcase_add_test(tc, reader_rejects_malformed_v2_groups);
+  tcase_add_test(tc, signed_values_roundtrip_zigzag);
   suite_add_tcase(s, tc);
   return s;
 }

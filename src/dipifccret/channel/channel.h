@@ -124,6 +124,8 @@ size_t channel_table_capacity(const channel_table_t *t);
 /* i must be < channel_table_capacity(t). NULL if slot isn't in use. */
 channel_t *channel_table_at(channel_table_t *t, size_t i);
 
+void channel_bitrate_note(channel_t *c, time_t now, size_t payload_len);
+
 /* single write path for both RET ring and FCC cache, one call per captured packet.
    also maintains t's ssrc->channel index (channel_find_by_ssrc), seqlock-wrapped, ssrc-change-only per call */
 void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq, uint32_t timestamp, unsigned char dscp, const unsigned char *payload, size_t payload_len);

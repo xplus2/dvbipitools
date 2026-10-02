@@ -107,6 +107,11 @@ static inline size_t h2_nv_altsvc(nghttp2_nv *nva, size_t n) {
 /* from http2.c */
 void h2_flush_tx(h2_conn_t *conn, conn_t *c);
 void h2_wake_stream(conn_t *c, int32_t sid);
+h2_stream_t *h2_find_stream(h2_conn_t *conn, int32_t id);
+h2_stream_t *h2_alloc_stream(h2_conn_t *conn, int32_t id);
+void h2_free_stream(h2_conn_t *conn, int32_t id);
+int h2_conn_active_count(const h2_conn_t *conn);
+void h2_dispatch_stream(h2_conn_t *conn, conn_t *c, h2_stream_t *stream);
 
 /* from http2_tspush.c */
 void h2_tspush_on_stream_close(h2_conn_t *conn, int32_t stream_id);

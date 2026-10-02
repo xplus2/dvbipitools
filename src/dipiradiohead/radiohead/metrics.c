@@ -48,13 +48,13 @@ void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsi
 }
 
 /* lib/mux/mpts.c is tool-agnostic. this adapts concrete types to its void*-based cas ops vtable. */
-static size_t mpts_cas_build_cat(void *ctx, unsigned char *out, size_t cap) {
+size_t mpts_cas_build_cat(void *ctx, unsigned char *out, size_t cap) {
   return cas_build_cat((cas_t *)ctx, out, cap);
 }
-static int mpts_cas_ecm_due(void *ctx, size_t vendor_idx, double now_s, unsigned char *out, size_t cap, size_t *out_len) {
+int mpts_cas_ecm_due(void *ctx, size_t vendor_idx, double now_s, unsigned char *out, size_t cap, size_t *out_len) {
   return cas_vendor_ecm_due((cas_t *)ctx, vendor_idx, now_s, out, cap, out_len);
 }
-static int mpts_cas_next_emm(void *ctx, size_t vendor_idx, unsigned char *out, size_t cap, size_t *out_len) {
+int mpts_cas_next_emm(void *ctx, size_t vendor_idx, unsigned char *out, size_t cap, size_t *out_len) {
   return cas_vendor_next_emm((cas_t *)ctx, vendor_idx, out, cap, out_len);
 }
 static const mpts_cas_ops_t mpts_cas_ops = {mpts_cas_build_cat, mpts_cas_ecm_due, mpts_cas_next_emm};

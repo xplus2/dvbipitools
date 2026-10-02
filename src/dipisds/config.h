@@ -4,7 +4,7 @@
 #ifndef DIPISDS_CONFIG_H
 #define DIPISDS_CONFIG_H
 
-#include "args.h"
+#include "cli/args.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipisds.yaml"
 

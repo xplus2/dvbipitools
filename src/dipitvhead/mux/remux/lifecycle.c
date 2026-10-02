@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/mux/cadescbuild.h"
 
@@ -94,6 +94,13 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
   }
   pmtbuild_add_ca_passthrough(ecm_pid, ecm_sysid, emm_pid, emm_sysid, r->pids.es_pid_base, r->pids.video_pid, r->es, &n, OUT_PROGRAM_ES_CAP, &dropped);
   r->es_count = n;
+  if (cfg->pcr_mode != PCR_MODE_PRESERVE) {
+    for (int i = 0; i < n; i++) {
+      if (r->es[i].stream_type != 0x86 || r->es[i].is_ca != CA_PASS_NONE) continue;
+      r->scte[i] = malloc(sizeof *r->scte[i]);
+      if (r->scte[i]) scte35stamp_init(r->scte[i]);
+    }
+  }
   if (dropped) log_line("program %u: ES cap (%d) reached, dropping %d stream%s", r->src_service_id, OUT_PROGRAM_ES_CAP, dropped, dropped == 1 ? "" : "s");
   resolve_sdt(r, psi);
   resolve_nit(r, psi);
@@ -112,8 +119,37 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
   return r;
 }
 
-void remux_free(remux_t *r) { free(r); }
+#define HOLD_MAX_PACKETS 32768
 
+void remux_free(remux_t *r) {
+  if (!r) return;
+  for (int i = 0; i < OUT_PROGRAM_ES_CAP; i++) {
+    releaseq_free(r->hold[i]);
+    free(r->scte[i]);
+  }
+  free(r);
+}
+
+int remux_set_hold(remux_t *r, remux_clock_fn clock, remux_latch_fn latch, void *clock_ctx, unsigned lead_ms) {
+  r->hold_ref = -1;
+  for (int i = 0; i < r->es_count; i++) {
+    if (r->hold[i]) continue;
+    r->hold[i] = releaseq_new(HOLD_MAX_PACKETS);
+    if (!r->hold[i]) return -1;
+  }
+  for (int i = 0; i < r->es_count; i++) {
+    if (r->es[i].out_pid == r->pids.video_pid) r->hold_ref = i;
+  }
+  for (int i = 0; i < r->es_count && r->hold_ref < 0; i++) {
+    if (r->es[i].is_ca == CA_PASS_NONE) r->hold_ref = i;
+  }
+  r->hold_clock = clock;
+  r->hold_latch = latch;
+  r->hold_clock_ctx = clock_ctx;
+  r->hold_lead_cfg90 = (uint64_t)lead_ms * 90;
+  r->hold_lead90 = r->hold_lead_cfg90;
+  return 0;
+}
 unsigned remux_pcr_pid_out(const remux_t *r) { return r->pcr_pid_out; }
 
 const out_es_t *remux_es(const remux_t *r, int *count) {
@@ -139,6 +175,8 @@ size_t remux_source_emm_descriptor(const remux_t *r, unsigned char *out, size_t 
 }
 
 void remux_set_cas(remux_t *r, cas_t *cas) { r->cas = cas; }
+
+void remux_set_timemap(remux_t *r, timemap_t *tm) { r->tm = tm; }
 
 int remux_get_sdt_info(const remux_t *r, psi_sdt_entry_t *out) {
   if (!r->send_sdt) return -1;

@@ -8,13 +8,14 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <sys/epoll.h>
 #include <string.h>
 #include <time.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/metrics/export.h"
 
-#include "../args.h"
+#include "../cli/args.h"
 #include "../ts/capture/capture.h"
 #include "../ts/channels/channels.h"
 #include "../ts/lcevcselect.h"
@@ -41,6 +42,7 @@ void reactor_conn_flush(int epfd, conn_t *c);
 const config_t *reactor_cfg(void);
 const channels_t *reactor_channels(void);
 qsbr_domain_t *reactor_qsbr(void);
+void reactor_set_context(const config_t *cfg, const channels_t *channels, metrics_exporter_t *mx);
 
 /* re-reads every source right now, same as channels_reload_all() from a SIGHUP */
 void reactor_reload_channels(void);
@@ -89,6 +91,7 @@ void reactor_raise_nofile_limit(void);
 /* reactor_loop.c: worker/pump thread entry points, spawned via pthread_create() from reactor_run() */
 void *worker_thread(void *arg);
 void *pump_thread(void *arg);
+void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, struct epoll_event *evp);
 
 /* dispatch.c: HTTP/1.1 request read + dispatch */
 void reactor_read(int epfd, conn_t *c);
@@ -129,7 +132,7 @@ void llhls_flush_waiters(void);
 /* dispatch.c. purges c's waiter slot, call before reactor_close() frees it */
 void llhls_waiter_conn_closing(const conn_t *c);
 
-/* now_ms(): lib/helper/ioutil.h */
+/* now_ms(): lib/sys/ioutil.h */
 
 /* parses _HLS_msn=<N>&_HLS_part=<P> from a query string. 1 if both present */
 static inline int parse_blocking_reload(const char *query, uint32_t *want_seg, int *want_part) {
@@ -379,6 +382,7 @@ void reactor_mp4push_close(int epfd, conn_t *c);
 
 /* CONN_WS lifecycle */
 void reactor_ws_begin(int epfd, conn_t *c);
+void reactor_ws_pool_release(void);
 void reactor_ws_readable(int epfd, conn_t *c);
 void reactor_ws_close(int epfd, conn_t *c);
 void reactor_ws_flush(int epfd, conn_t *c);

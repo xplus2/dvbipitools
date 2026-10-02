@@ -70,7 +70,7 @@ static size_t convert_video(const esbuild_track_t *t, const fmp4_dec_sample_t *s
 static size_t convert_aac_adts(const esbuild_track_t *t, const fmp4_dec_sample_t *sample, unsigned char *out, size_t outcap) {
   size_t framelen = 7 + sample->size;
   unsigned profile = t->aac_object_type ? t->aac_object_type - 1 : 1;
-  if (framelen > outcap || t->aac_sr_index > 12) return 0;
+  if (framelen > outcap || framelen > 0x1FFF || t->aac_sr_index > 12) return 0;
   out[0] = 0xFF;
   out[1] = 0xF1;
   out[2] = (unsigned char)(((profile & 3) << 6) | ((t->aac_sr_index & 0xF) << 2) | ((t->aac_channels >> 2) & 1));

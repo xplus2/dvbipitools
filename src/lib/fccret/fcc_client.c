@@ -12,9 +12,9 @@
 
 #include "lib/demux/rtp.h"
 #include "lib/demux/rtx.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "lib/mux/rtcp_build.h"
 #include "lib/net/netconnect.h"
 #include "fcc_client.h"
@@ -107,7 +107,7 @@ static int uni_socket_open(const fcc_client_cfg_t *cfg) {
 
 static void send_rams_r(const fcc_client_t *r, const fcc_client_cfg_t *cfg) {
   rtcp_rams_r_t req;
-  unsigned char pkt[32];
+  unsigned char pkt[48];
   size_t n;
 
   memset(&req, 0, sizeof req);
@@ -184,9 +184,9 @@ ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size
     }
   }
 
-  if (pfd[ui].revents & POLLIN) {
+  if (pfd[ui].revents & (POLLIN | POLLERR)) {
     unsigned char raw[65536];
-    ssize_t rn = recv(r->uni_fd, raw, sizeof raw, 0);
+    ssize_t rn = recv(r->uni_fd, raw, sizeof raw, MSG_DONTWAIT);
     if (rn > 0) fcc_on_uni(r, raw, (size_t)rn, now);
   }
 

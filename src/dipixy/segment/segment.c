@@ -4,7 +4,7 @@
 #include "priv.h"
 #include "../version.h"
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 #include <sched.h>
 #include <stdlib.h>
@@ -12,6 +12,18 @@
 static _Atomic(hls_seg_ctx_t *) *g_stores;
 static int g_stores_n;
 static pthread_mutex_t g_mtx = PTHREAD_MUTEX_INITIALIZER;
+static qsbr_domain_t *g_seg_qsbr;
+
+typedef struct seg_retiree {
+  struct seg_retiree *next;
+  hls_seg_ctx_t *s;
+  uint64_t *mark;
+} seg_retiree_t;
+
+static seg_retiree_t *g_retired;
+static pthread_mutex_t g_retire_mtx = PTHREAD_MUTEX_INITIALIZER;
+
+void hls_seg_set_qsbr(qsbr_domain_t *d) { g_seg_qsbr = d; }
 
 void hls_seg_init(int max_channels) {
   int n = max_channels > 0 ? max_channels : 1;
@@ -24,7 +36,7 @@ void hls_seg_init(int max_channels) {
   g_stores_n = n;
 }
 
-static int seg_try_pin(hls_seg_ctx_t *s) {
+int seg_try_pin(hls_seg_ctx_t *s) {
   int cur = atomic_load_explicit(&s->refcount, memory_order_relaxed);
   for (;;) {
     if (cur <= 0) return 0;
@@ -32,7 +44,7 @@ static int seg_try_pin(hls_seg_ctx_t *s) {
   }
 }
 
-static void seg_unpin(hls_seg_ctx_t *s) {
+void seg_unpin(hls_seg_ctx_t *s) {
   atomic_fetch_sub_explicit(&s->refcount, 1, memory_order_release);
 }
 
@@ -48,7 +60,7 @@ int buf_reserve(unsigned char **buf, size_t *cap, size_t need) {
 #define HLS_SEG_BUF_ASSUMED_BPS (20 * 1000 * 1000 / 8)
 
 /* caller must hold g_mtx. container in key: ts, fmp4 segmenters coexist per channel */
-static hls_seg_ctx_t *find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
+hls_seg_ctx_t *find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
   for (int i = 0; i < g_stores_n; i++) {
     hls_seg_ctx_t *s = atomic_load_explicit(&g_stores[i], memory_order_relaxed);
     if (s && seg_key_equal(s, ctx, filter, pmt_pid, lcevc, container)) return s;
@@ -64,7 +76,7 @@ hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t 
 }
 
 /* lock free touch, somewhat. fails if s mid removal by sweep_idle, caller retries under g_mtx */
-static int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_on) {
+int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_on) {
   if (!seg_try_pin(s)) return 0;
   atomic_store_explicit(&s->last_request_ms, now_ms(), memory_order_relaxed);
   *llhls_newly_on = part_target > 0.0 && atomic_load_explicit(&s->part.part_target, memory_order_relaxed) <= 0.0;
@@ -73,7 +85,7 @@ static int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_o
   return 1;
 }
 
-static _Thread_local hls_seg_ctx_t *t_touch_hint;
+static _Thread_local int t_touch_hint = -1;
 
 int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, double seg_target, int max_segs, seg_container_t container, double part_target) {
   hls_seg_ctx_t *s;
@@ -81,7 +93,7 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   int llhls_newly_on = 0;
   _Atomic(void *) *head;
   void *old_head;
-  s = t_touch_hint;
+  s = t_touch_hint >= 0 && t_touch_hint < g_stores_n ? atomic_load_explicit(&g_stores[t_touch_hint], memory_order_acquire) : NULL;
   if (s && seg_key_equal(s, ctx, filter, pmt_pid, lcevc, container) && touch_pinned(s, part_target, &llhls_newly_on)) {
     capture_close(ctx);
     if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
@@ -90,7 +102,7 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   for (i = 0; i < g_stores_n; i++) {
     s = atomic_load_explicit(&g_stores[i], memory_order_acquire);
     if (s && seg_key_equal(s, ctx, filter, pmt_pid, lcevc, container) && touch_pinned(s, part_target, &llhls_newly_on)) {
-      t_touch_hint = s;
+      t_touch_hint = i;
       capture_close(ctx); /* redundant ref: existing segmenter already holds its own */
       if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
       return 1;
@@ -156,7 +168,7 @@ fail:
   return 0;
 }
 
-static void unlink_from_ctx_chain(hls_seg_ctx_t *victim) {
+void unlink_from_ctx_chain(hls_seg_ctx_t *victim) {
   _Atomic(void *) *head = capture_hls_seg_head_ptr(victim->cap_ctx);
   hls_seg_ctx_t *cur = atomic_load_explicit(head, memory_order_relaxed);
   hls_seg_ctx_t *next = atomic_load_explicit(&victim->chain_next, memory_order_relaxed);
@@ -172,6 +184,54 @@ static void unlink_from_ctx_chain(hls_seg_ctx_t *victim) {
     }
     cur = cur_next;
   }
+}
+
+static void seg_reclaim_retired(void) {
+  seg_retiree_t *keep = NULL;
+  seg_retiree_t *list;
+  pthread_mutex_lock(&g_retire_mtx);
+  list = g_retired;
+  g_retired = NULL;
+  pthread_mutex_unlock(&g_retire_mtx);
+  while (list) {
+    seg_retiree_t *n = list;
+    list = n->next;
+    if (qsbr_mark_passed(g_seg_qsbr, n->mark)) {
+      free(n->s);
+      free(n->mark);
+      free(n);
+    } else {
+      n->next = keep;
+      keep = n;
+    }
+  }
+  if (!keep) return;
+  pthread_mutex_lock(&g_retire_mtx);
+  while (keep) {
+    seg_retiree_t *n = keep;
+    keep = n->next;
+    n->next = g_retired;
+    g_retired = n;
+  }
+  pthread_mutex_unlock(&g_retire_mtx);
+}
+
+static void seg_retire(hls_seg_ctx_t *s) {
+  int nw = qsbr_worker_count(g_seg_qsbr);
+  seg_retiree_t *n = malloc(sizeof *n);
+  if (n) n->mark = calloc((size_t)(nw > 0 ? nw : 1), sizeof *n->mark);
+  if (!n || !n->mark) {
+    free(n);
+    log_line(TOOL_NAME ": segmenter retire alloc failed, freeing w/o QSBR wait");
+    free(s);
+    return;
+  }
+  qsbr_mark(g_seg_qsbr, n->mark);
+  n->s = s;
+  pthread_mutex_lock(&g_retire_mtx);
+  n->next = g_retired;
+  g_retired = n;
+  pthread_mutex_unlock(&g_retire_mtx);
 }
 
 void hls_seg_sweep_idle(void) {
@@ -211,6 +271,7 @@ void hls_seg_sweep_idle(void) {
     free(s->fmp4.pend_data);
     free(s->audio.rem);
     free(s->lcevc_track.pend_data);
-    free(s);
+    seg_retire(s);
   }
+  seg_reclaim_retired();
 }

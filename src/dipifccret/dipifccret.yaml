@@ -12,6 +12,8 @@
 #rtx-pt: 99
 # -w|--workers 0 # 0 = online CPU cores
 #workers: 0
+# --cpu-affinity off # off|auto|list
+#cpu-affinity: off
 # -u|--user [not set]
 #user: <user>
 

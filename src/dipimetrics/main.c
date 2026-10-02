@@ -9,14 +9,14 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/protocol.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "lib/helper/toolmain.h"
 #include "lib/net/tls_server.h"
 
-#include "args.h"
+#include "cli/args.h"
 #include "httpserver.h"
 #include "store.h"
 #include "version.h"

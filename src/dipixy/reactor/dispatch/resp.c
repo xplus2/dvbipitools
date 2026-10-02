@@ -5,7 +5,7 @@
 #include "../../altsvc.h"
 #include "../../core/metrics.h"
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 #include <string.h>
 #include <strings.h>

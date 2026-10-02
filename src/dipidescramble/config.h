@@ -4,7 +4,7 @@
 #ifndef DIPIDESCRAMBLE_CONFIG_H
 #define DIPIDESCRAMBLE_CONFIG_H
 
-#include "args.h"
+#include "cli/args.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipidescramble.yaml"
 

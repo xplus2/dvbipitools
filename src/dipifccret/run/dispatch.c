@@ -10,7 +10,7 @@
 
 #include "lib/demux/rtcp.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "lib/mux/rtcp_build.h"
 
 #include "../fcc/burst.h"

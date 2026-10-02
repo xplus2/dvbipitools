@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "describe.h"
-#include "ioutil.h"
+#include "../sys/ioutil.h"
 
 static void add_host_port(sbuf_t *b, int family, const char *host, unsigned port) {
   if (family == AF_INET6) sbuf_add(b, "[");

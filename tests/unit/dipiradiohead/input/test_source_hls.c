@@ -18,48 +18,7 @@
 #include "dipiradiohead/input/source.h"
 #include "lib/demux/crc32.h"
 
-typedef struct {
-  int listen_fd;
-  const char *const *responses;
-  const size_t *response_lens;
-  int n_responses;
-} scripted_server_t;
-
-static void *serve_scripted(void *arg) {
-  const scripted_server_t *a = arg;
-  for (int i = 0; i < a->n_responses; i++) {
-    int cfd = accept(a->listen_fd, NULL, NULL);
-    struct timeval tv = {2, 0};
-    char buf[4096];
-    size_t got = 0;
-    if (cfd < 0) return NULL;
-    setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
-    for (;;) {
-      ssize_t n = recv(cfd, buf + got, sizeof buf - got, 0);
-      if (n <= 0) break;
-      got += (size_t)n;
-      if (got >= 4 && memcmp(buf + got - 4, "\r\n\r\n", 4) == 0) break;
-    }
-    send(cfd, a->responses[i], a->response_lens[i], 0);
-    close(cfd);
-  }
-  return NULL;
-}
-
-static int make_listener(unsigned *port_out) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(listen(fd, 4), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  *port_out = ntohs(addr.sin_port);
-  return fd;
-}
+#include "http_fixture.h"
 
 static size_t build_pat(unsigned char *out, unsigned pmt_pid) {
   unsigned char body[16];
@@ -178,6 +137,8 @@ static void wrap_pes_packet(unsigned char pkt[188], unsigned pid, const unsigned
   for (size_t i = 4 + sizeof hdr + plen; i < 188; i++) pkt[i] = 0xFF;
 }
 
+#define BUILT_SEG_CAP (188 * 10)
+
 static size_t build_hls_audio_segment(unsigned char *out) {
   unsigned char section[32];
   unsigned char es[417 * 2];
@@ -203,30 +164,32 @@ static size_t build_hls_audio_segment(unsigned char *out) {
   return off;
 }
 
-START_TEST(source_open_decodes_audio_from_hls_media_playlist) {
+typedef struct {
+  int got_frame;
+  int hard_error;
+  source_frame_t frame;
+} hls_run_t;
+
+static void run_hls_source(const unsigned char *seg_raw, size_t seg_len, const source_insp_t *si, unsigned prefill_ms, int max_iters, hls_run_t *run) {
   unsigned pl_port;
   unsigned seg_port;
-  int pl_fd = make_listener(&pl_port);
-  int seg_fd = make_listener(&seg_port);
+  int pl_fd = fixture_listener(&pl_port);
+  int seg_fd = fixture_listener(&seg_port);
   pthread_t pl_th;
   pthread_t seg_th;
   char pl_body[512];
   char pl_uri[64];
-  unsigned char seg_raw[188 * 10];
-  size_t seg_len;
-  unsigned char seg_resp[188 * 10 + 256];
+  unsigned char seg_resp[BUILT_SEG_CAP + 256];
   size_t seg_resp_len;
   const char *pl_responses[2];
   size_t pl_lens[2];
   const char *seg_responses[1];
   size_t seg_lens[1];
-  scripted_server_t pl_srv;
-  scripted_server_t seg_srv;
+  http_fixture_t pl_srv;
+  http_fixture_t seg_srv;
   source_t *s;
-  source_frame_t frame;
-  int got_frame = 0;
 
-  seg_len = build_hls_audio_segment(seg_raw);
+  memset(run, 0, sizeof *run);
   seg_resp_len =
       (size_t)snprintf((char *)seg_resp, sizeof seg_resp, "HTTP/1.1 200 OK\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n", seg_len);
   memcpy(seg_resp + seg_resp_len, seg_raw, seg_len);
@@ -247,7 +210,7 @@ START_TEST(source_open_decodes_audio_from_hls_media_playlist) {
   pl_srv.responses = pl_responses;
   pl_srv.response_lens = pl_lens;
   pl_srv.n_responses = 2;
-  ck_assert_int_eq(pthread_create(&pl_th, NULL, serve_scripted, &pl_srv), 0);
+  ck_assert_int_eq(pthread_create(&pl_th, NULL, fixture_serve, &pl_srv), 0);
 
   seg_responses[0] = (const char *)seg_resp;
   seg_lens[0] = seg_resp_len;
@@ -255,13 +218,14 @@ START_TEST(source_open_decodes_audio_from_hls_media_playlist) {
   seg_srv.responses = seg_responses;
   seg_srv.response_lens = seg_lens;
   seg_srv.n_responses = 1;
-  ck_assert_int_eq(pthread_create(&seg_th, NULL, serve_scripted, &seg_srv), 0);
+  ck_assert_int_eq(pthread_create(&seg_th, NULL, fixture_serve, &seg_srv), 0);
 
   snprintf(pl_uri, sizeof pl_uri, "http://127.0.0.1:%u/live.m3u8", pl_port);
-  s = source_open(pl_uri, 0, "test", 0, NULL, NULL, NULL, NULL);
+  s = source_open(pl_uri, 0, "test", 0, NULL, NULL, si, NULL);
   ck_assert_ptr_nonnull(s);
+  if (prefill_ms) ck_assert_int_eq(source_set_prefill_ms(s, prefill_ms), 0);
 
-  for (int i = 0; i < 200 && !got_frame; i++) {
+  for (int i = 0; i < max_iters && !run->got_frame; i++) {
     struct pollfd pfd;
     int fd = source_fd(s);
     int r;
@@ -274,23 +238,118 @@ START_TEST(source_open_decodes_audio_from_hls_media_playlist) {
       struct timespec ts = {0, 20000000};
       nanosleep(&ts, NULL);
     }
-    r = source_next_frame(s, &frame, NULL);
-    if (r < 0) break;
-    if (r == 1) got_frame = 1;
+    r = source_next_frame(s, &run->frame, NULL);
+    if (r < 0) {
+      run->hard_error = 1;
+      break;
+    }
+    if (r == 1) run->got_frame = 1;
   }
-
-  ck_assert_int_eq(got_frame, 1);
-  ck_assert_int_eq(frame.codec, SRC_MPEG_AUDIO);
-  ck_assert_uint_eq(frame.stream_type, 0x03);
-  ck_assert_uint_eq(frame.sample_rate, 44100u);
-  ck_assert_uint_eq(frame.samples, 1152u);
-  ck_assert_uint_eq(frame.len, 417u);
 
   source_close(s);
   pthread_join(pl_th, NULL);
   pthread_join(seg_th, NULL);
   close(pl_fd);
   close(seg_fd);
+}
+
+static void decode_hls_audio(const source_insp_t *si, unsigned prefill_ms) {
+  unsigned char seg_raw[BUILT_SEG_CAP];
+  size_t seg_len = build_hls_audio_segment(seg_raw);
+  hls_run_t run;
+
+  run_hls_source(seg_raw, seg_len, si, prefill_ms, 200, &run);
+  ck_assert_int_eq(run.got_frame, 1);
+  ck_assert_int_eq(run.frame.codec, SRC_MPEG_AUDIO);
+  ck_assert_uint_eq(run.frame.stream_type, 0x03);
+  ck_assert_uint_eq(run.frame.sample_rate, 44100u);
+  ck_assert_uint_eq(run.frame.samples, 1152u);
+  ck_assert_uint_eq(run.frame.len, 417u);
+}
+
+START_TEST(source_open_decodes_audio_from_hls_media_playlist) {
+  decode_hls_audio(NULL, 0);
+}
+END_TEST
+
+START_TEST(hls_source_reports_dejitter_depth_to_the_inspector) {
+  tsinspect_t *insp = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  source_insp_t si = {&insp, METRICS_INSPECT_TS_BASIC, NULL, 0};
+  metrics_writer_t w;
+  metrics_hdr_t hdr;
+  metrics_reader_t r;
+  metrics_id_t id;
+  char label[METRICS_LABEL_MAX + 1];
+  uint64_t v = 0;
+  int found = 0;
+
+  decode_hls_audio(&si, 10);
+  tsinspect_tick(insp, 1.0e9);
+  memset(&hdr, 0, sizeof hdr);
+  hdr.proto_version = METRICS_PROTO_VERSION;
+  hdr.component = METRICS_COMPONENT_RADIOHEAD;
+  hdr.metrics_id[0] = 'x';
+  ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
+  tsinspect_put_metrics(insp, &w, "input0", 1.0, 1000.0);
+  ck_assert_int_eq(metrics_reader_init(&r, w.buf, w.len, &hdr), 0);
+  while (metrics_reader_next(&r, &id, label, sizeof label, &v) == 1)
+    if (id == METRICS_ID_TS_INPUT_BUFFER_MILLISECONDS) found = 1;
+  ck_assert_int_eq(found, 1);
+  ck_assert_uint_le(v, 60u);
+  tsinspect_free(insp);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  size_t (*damage)(unsigned char *seg, size_t len);
+  int want_frame;
+} damaged_segment_case_t;
+
+static size_t damage_leading_garbage(unsigned char *seg, size_t len) {
+  memmove(seg + 100, seg, len);
+  memset(seg, 0x00, 100);
+  return len + 100;
+}
+
+static size_t damage_truncated_tail(unsigned char *seg, size_t len) {
+  (void)seg;
+  return len - 188 + 50;
+}
+
+static size_t damage_lost_sync_byte(unsigned char *seg, size_t len) {
+  seg[188 * 3] = 0x00;
+  return len;
+}
+
+static size_t damage_without_psi(unsigned char *seg, size_t len) {
+  memmove(seg, seg + 188 * 2, len - 188 * 2);
+  return len - 188 * 2;
+}
+
+static size_t damage_all_garbage(unsigned char *seg, size_t len) {
+  memset(seg, 0xA5, len);
+  return len;
+}
+
+static const damaged_segment_case_t damaged_segment_cases[] = {
+    {"garbage before the first packet", damage_leading_garbage, 1},
+    {"segment cut inside the packet that completes the last frame", damage_truncated_tail, 0},
+    {"one packet loses its sync byte", damage_lost_sync_byte, 0},
+    {"segment without PAT and PMT", damage_without_psi, 0},
+    {"segment of pure garbage", damage_all_garbage, 0},
+};
+
+START_TEST(damaged_hls_segment_is_survived_without_hard_error) {
+  const damaged_segment_case_t *c = &damaged_segment_cases[_i];
+  unsigned char seg[BUILT_SEG_CAP + 128];
+  size_t len = build_hls_audio_segment(seg);
+  hls_run_t run;
+
+  len = c->damage(seg, len);
+  run_hls_source(seg, len, NULL, 0, c->want_frame ? 200 : 8, &run);
+  ck_assert_msg(run.hard_error == 0, "%s: hard error", c->name);
+  ck_assert_msg(run.got_frame == c->want_frame, "%s: got_frame %d", c->name, run.got_frame);
 }
 END_TEST
 
@@ -299,6 +358,8 @@ static Suite *source_hls_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_set_timeout(tc, 30);
   tcase_add_test(tc, source_open_decodes_audio_from_hls_media_playlist);
+  tcase_add_test(tc, hls_source_reports_dejitter_depth_to_the_inspector);
+  tcase_add_loop_test(tc, damaged_hls_segment_is_survived_without_hard_error, 0, (int)(sizeof damaged_segment_cases / sizeof damaged_segment_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }

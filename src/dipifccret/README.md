@@ -33,6 +33,7 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 |      | --channel-idle-timeout  | s           | 120                                | free channel slot after silent seconds (0 = never)  |
 | -R   | --rtx-pt                | n           | 99                                 | RTP payload type for retransmitted/burst packets    |
 | -w   | --workers               | n           | <CPU cores>                        | -l socket worker threads                            |
+|      | --cpu-affinity          | spec        | off                                | pin pacer threads: off\|auto\|list e.g. 2-4,6,8     |
 | -u   | --user                  | user        | off                                | drop privileges to this user                        |
 | -v   | --verbose               |             | off                                | periodic stats on stderr                            |
 |      | --color                 | when        | auto                               | auto\|always\|never                                 |
@@ -146,6 +147,13 @@ hitting one channel's ring from many directions simultaneously.
 A separate pacing thread (FCC only) ticks every active burst session on a fixed interval. The
 burst-session table is guarded by a plain mutex rather than a lock-free design - claim/terminate/reap
 are far less frequent than the per-tick send path, which never touches that lock.
+
+### CPU/core affinity
+`--cpu-affinity` (default `off`) pins the burst pacing thread and the RSI announcement thread, in that order, so the
+timing-sensitive pacing is not preempted by other work.
+`auto` takes the CPUs the process may use (honors `taskset` and cgroup cpusets) in order.
+A list like `2-4,6,8` picks explicit cores, threads beyond the list float.
+The `-w` socket workers are never pinned (and usually I/O bound).
 
 ## Privileges
 

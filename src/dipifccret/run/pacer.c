@@ -7,7 +7,7 @@
 #include <time.h>
 
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "../fcc/burst.h"
 #include "../version.h"
@@ -44,8 +44,10 @@ static int burst_slot_read(const burst_slot_t *slot, int *in_use, uint64_t *word
 void *pacer_main(void *arg) {
   pacer_ctx_t *pc = (pacer_ctx_t *)arg;
   struct timespec deadline;
-  pacer_snap_t *snap = calloc(pc->bursts->cap, sizeof *snap);
+  pacer_snap_t *snap;
 
+  cpuaff_pin(pc->cpuaff, pc->cpu_idx, "burst pacer");
+  snap = calloc(pc->bursts->cap, sizeof *snap);
   if (!snap) {
     log_line(TOOL_NAME ": pacer: out of memory, burst pacing disabled");
     return NULL;
@@ -63,7 +65,6 @@ void *pacer_main(void *arg) {
       deadline.tv_sec += 1;
     }
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &deadline, NULL);
-
     for (size_t i = 0; i < scan_upto; i++) {
       const burst_slot_t *slot = &pc->bursts->slots[i];
       int in_use = 0;
@@ -71,9 +72,7 @@ void *pacer_main(void *arg) {
       int fd = 0;
       burst_t *b = NULL;
       socklen_t addrlen = 0;
-
-      if (!burst_slot_read(slot, &in_use, words, &addrlen, &fd, &b) || !in_use)
-        continue;
+      if (!burst_slot_read(slot, &in_use, words, &addrlen, &fd, &b) || !in_use) continue;
       burst_acquire(b);
       snap[n].idx = i;
       snap[n].fd = fd;

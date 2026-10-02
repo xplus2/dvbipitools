@@ -9,9 +9,9 @@
 #include <unistd.h>
 
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "lib/helper/toolmain.h"
-#include "args.h"
+#include "cli/args.h"
 #include "channel/channel.h"
 #include "listen.h"
 #include "run/run.h"
@@ -40,13 +40,14 @@ int main(int argc, char **argv) {
   burst_table_t *bursts = NULL;
   capture_t *cap = NULL;
   char errbuf[256];
-  ret_send_ctx_t ret_send_ctx;
-  ret_send_ctx_t rsi_send_ctx;
+  ret_send_ctx_t ret_send_ctx = {NULL, -1};
+  ret_send_ctx_t rsi_send_ctx = {NULL, -1};
   dispatch_ctx_t dispatch_ctx;
   listen_pool_t *pool = NULL;
   listen_multi_t *resolve_pool = NULL;
   unsigned resolve_base_port;
   int rc = 0;
+  unsigned cpu_next = 0;
   pacer_ctx_t pacer_ctx;
   pthread_t pacer_thread;
   int pacer_started = 0;
@@ -178,7 +179,7 @@ int main(int argc, char **argv) {
   }
 
   if (bursts) {
-    pacer_ctx = (pacer_ctx_t){.bursts = bursts, .duration_cap_ms = cfg.duration_cap_ms};
+    pacer_ctx = (pacer_ctx_t){.bursts = bursts, .duration_cap_ms = cfg.duration_cap_ms, .cpuaff = &cfg.cpu_affinity, .cpu_idx = cpu_next++};
     if (pthread_create(&pacer_thread, NULL, pacer_main, &pacer_ctx) != 0) {
       fprintf(stderr, "%s: failed to start burst pacing thread\n", TOOL_NAME);
       rc = 1;
@@ -198,6 +199,8 @@ int main(int argc, char **argv) {
       .hostname_len = strlen(cfg.rsi_hostname),
       .resolve_by_port = cfg.fcc_resolve_by_port,
       .resolve_base_port = resolve_base_port,
+      .cpuaff = &cfg.cpu_affinity,
+      .cpu_idx = cpu_next++,
     };
     if (inet_pton(AF_INET, cfg.listen_addr, rsi_ctx.addr) != 1) {
       fprintf(stderr, "%s: failed to parse -l address for RSI announcement\n", TOOL_NAME);

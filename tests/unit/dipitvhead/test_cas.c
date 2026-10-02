@@ -1,12 +1,18 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <arpa/inet.h>
 #include <check.h>
+#include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include "dipitvhead/cas/cas.h"
+
+#include "psi_fixture.h"
 
 static void build_pcr_packet(unsigned char pkt[188], int with_pcr, uint64_t base, unsigned ext) {
   memset(pkt, 0xFF, 188);
@@ -265,8 +271,10 @@ END_TEST
 
 START_TEST(resolve_pids_multi_across_programs) {
   config_t cfg;
-  psi_es_t pe0[2], pe1[2];
-  out_es_t es0[2], es1[2];
+  psi_es_t pe0[2];
+  psi_es_t pe1[2];
+  out_es_t es0[2];
+  out_es_t es1[2];
   const out_es_t *es_lists[2];
   int es_counts[2];
   unsigned out[16];
@@ -293,8 +301,10 @@ END_TEST
 
 START_TEST(resolve_pids_multi_dedupes_across_programs) {
   config_t cfg;
-  psi_es_t pe0[1], pe1[1];
-  out_es_t es0[1], es1[1];
+  psi_es_t pe0[1];
+  psi_es_t pe1[1];
+  out_es_t es0[1];
+  out_es_t es1[1];
   const out_es_t *es_lists[2];
   int es_counts[2];
   unsigned out[16];
@@ -318,8 +328,10 @@ END_TEST
 
 START_TEST(resolve_pids_multi_caps_across_programs) {
   config_t cfg;
-  psi_es_t pe0[3], pe1[3];
-  out_es_t es0[3], es1[3];
+  psi_es_t pe0[3];
+  psi_es_t pe1[3];
+  out_es_t es0[3];
+  out_es_t es1[3];
   const out_es_t *es_lists[2];
   int es_counts[2];
   unsigned out[4];
@@ -336,6 +348,281 @@ START_TEST(resolve_pids_multi_caps_across_programs) {
   es_counts[1] = 3;
 
   ck_assert_uint_eq(cas_resolve_pids_multi(&cfg, es_lists, es_counts, 2, out, 4), 4);
+}
+END_TEST
+
+static void init_cas_cfg(config_t *cfg, unsigned n_vendors) {
+  memset(cfg, 0, sizeof *cfg);
+  cfg->cas_algo = CAS_ALGO_CSA2;
+  cfg->cas_cp_duration_ms = 10000;
+  cfg->cas_pid_count = 1;
+  cfg->cas_pids[0] = 0x0100;
+  cfg->n_cas_vendors = n_vendors;
+  for (unsigned i = 0; i < n_vendors && i < ARGS_MAX_CAS_VENDORS; i++) {
+    cas_vendor_t *v = &cfg->cas_vendors[i];
+
+    strcpy(v->ecmg_host, "127.0.0.1");
+    v->ecmg_port = 1;
+    v->super_cas_id = ((0x4A75u + i) << 16) | 0x0001u;
+    v->ecm_id = 1;
+    v->ecm_pid = 0x1FF0 + 2 * i;
+    v->emm_pid = 0x1FF1 + 2 * i;
+  }
+}
+
+typedef struct {
+  const char *name;
+  unsigned cp_duration_ms;
+  size_t pid_count;
+} bad_group_case_t;
+
+static const bad_group_case_t bad_group_cases[] = {
+    {"zero crypto period", 0, 1},
+    {"no pids to scramble", 10000, 0},
+};
+
+START_TEST(start_multi_rejects_unusable_group_configuration) {
+  const bad_group_case_t *c = &bad_group_cases[_i];
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+
+  init_cas_cfg(&cfg, 2);
+  cfg.cas_cp_duration_ms = c->cp_duration_ms;
+  cfg.cas_pid_count = c->pid_count;
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  lists[0] = &es;
+  ck_assert_msg(cas_start_multi(&cfg, lists, counts, 1) == NULL, "%s: accepted", c->name);
+}
+END_TEST
+
+START_TEST(start_multi_limits_started_vendors_to_the_group_maximum) {
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+  cas_t *c;
+
+  init_cas_cfg(&cfg, ARGS_MAX_CAS_VENDORS + 1);
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  lists[0] = &es;
+  c = cas_start_multi(&cfg, lists, counts, 1);
+  ck_assert_ptr_nonnull(c);
+  ck_assert_uint_eq(cas_vendor_count(c), (size_t)ARGS_MAX_CAS_VENDORS);
+  cas_stop(c);
+}
+END_TEST
+
+START_TEST(start_single_requires_a_pcr_and_resolvable_pids) {
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  psi_t *no_pcr = build_psi_with_pcr(0x1FFF);
+  psi_t *with_pcr = build_psi_with_pcr(0x0100);
+  cas_t *c;
+
+  init_cas_cfg(&cfg, 1);
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  ck_assert_ptr_null(cas_start(&cfg, no_pcr, &es, 1, 0x0100));
+
+  cfg.cas_pid_count = 0;
+  ck_assert_ptr_null(cas_start(&cfg, with_pcr, &es, 1, 0x0100));
+
+  cfg.cas_pid_count = 1;
+  c = cas_start(&cfg, with_pcr, &es, 1, 0x0100);
+  ck_assert_ptr_nonnull(c);
+  ck_assert_uint_eq(cas_pcr_pid(c), 0x0100u);
+  ck_assert_int_eq(cas_failed(c), 0);
+  cas_stop(c);
+  psi_free(no_pcr);
+  psi_free(with_pcr);
+}
+END_TEST
+
+static int bind_listener(unsigned *port_out) {
+  struct sockaddr_in addr;
+  socklen_t alen = sizeof addr;
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+
+  ck_assert_int_ge(fd, 0);
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
+  ck_assert_int_eq(listen(fd, 1), 0);
+  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
+  *port_out = ntohs(addr.sin_port);
+  return fd;
+}
+
+START_TEST(cas_reports_failure_when_the_emmg_port_is_taken) {
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+  unsigned port;
+  int blocker = bind_listener(&port);
+  cas_t *c;
+
+  init_cas_cfg(&cfg, 1);
+  cfg.cas_vendors[0].emmg_port = port;
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  lists[0] = &es;
+  c = cas_start_multi(&cfg, lists, counts, 1);
+  ck_assert_ptr_nonnull(c);
+  ck_assert_int_eq(cas_failed(c), 0);
+  cas_wall_tick(c, 1.0);
+  ck_assert_int_eq(cas_failed(c), 1);
+  cas_stop(c);
+  close(blocker);
+}
+END_TEST
+
+typedef struct {
+  unsigned count;
+} emit_count_t;
+
+static void count_emit(void *ctx, const unsigned char pkt[188]) {
+  (void)pkt;
+  ((emit_count_t *)ctx)->count++;
+}
+
+START_TEST(flush_and_stop_are_safe_in_every_order) {
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+  unsigned char pkt[188];
+  emit_count_t emitted = {0};
+  cas_t *c;
+
+  init_cas_cfg(&cfg, 1);
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  lists[0] = &es;
+  cas_flush(NULL, count_emit, &emitted);
+  cas_stop(NULL);
+  ck_assert_uint_eq(emitted.count, 0u);
+
+  c = cas_start_multi(&cfg, lists, counts, 1);
+  ck_assert_ptr_nonnull(c);
+  cas_flush(c, count_emit, &emitted);
+  cas_flush(c, count_emit, &emitted);
+  ck_assert_uint_eq(emitted.count, 0u);
+
+  memset(pkt, 0xFF, sizeof pkt);
+  pkt[0] = 0x47;
+  pkt[1] = 0x01;
+  pkt[2] = 0x00;
+  pkt[3] = 0x10;
+  for (int i = 0; i < 3; i++) cas_scramble_packet(c, 0x0100, 1.0 + i, pkt, count_emit, &emitted);
+  cas_flush(c, count_emit, &emitted);
+  cas_flush(c, count_emit, &emitted);
+  ck_assert_uint_eq(emitted.count, 3u);
+  cas_stop(c);
+}
+END_TEST
+
+START_TEST(metrics_are_zero_for_missing_or_unstarted_instances) {
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+  cas_metrics_t m;
+  cas_t *c;
+
+  memset(&m, 0xAA, sizeof m);
+  cas_get_metrics(NULL, &m);
+  ck_assert_uint_eq(m.ecm_total, 0u);
+  ck_assert_int_eq(m.ecmg_connected, 0);
+
+  init_cas_cfg(&cfg, 2);
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  lists[0] = &es;
+  c = cas_start_multi(&cfg, lists, counts, 1);
+  ck_assert_ptr_nonnull(c);
+  memset(&m, 0xAA, sizeof m);
+  cas_vendor_metrics(c, 1, &m);
+  ck_assert_int_eq(m.ecmg_connected, 0);
+  ck_assert_uint_eq(m.emm_total, 0u);
+  ck_assert_uint_eq(m.ecm_errors_total, 0u);
+  memset(&m, 0xAA, sizeof m);
+  cas_get_metrics(c, &m);
+  ck_assert_uint_eq(m.scrambled_packets_total, 0ull);
+  cas_stop(c);
+}
+END_TEST
+
+START_TEST(vendor_accessors_and_descriptors_describe_each_vendor) {
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+  unsigned char out[128];
+  unsigned char ecm[64];
+  size_t ecm_len = 0;
+  size_t prog_len;
+  size_t cat_len;
+  cas_t *c;
+
+  init_cas_cfg(&cfg, 2);
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  lists[0] = &es;
+  c = cas_start_multi(&cfg, lists, counts, 1);
+  ck_assert_ptr_nonnull(c);
+  ck_assert_uint_eq(cas_vendor_count(c), 2u);
+  for (size_t i = 0; i < 2; i++) {
+    ck_assert_uint_eq(cas_vendor_ecm_pid(c, i), cfg.cas_vendors[i].ecm_pid);
+    ck_assert_uint_eq(cas_vendor_emm_pid(c, i), cfg.cas_vendors[i].emm_pid);
+    ck_assert_uint_eq(cas_vendor_super_cas_id(c, i), cfg.cas_vendors[i].super_cas_id);
+    ck_assert_int_eq(cas_vendor_ecm_due(c, i, 1.0, ecm, sizeof ecm, &ecm_len), -1);
+    ck_assert_int_eq(cas_vendor_next_emm(c, i, ecm, sizeof ecm, &ecm_len), -1);
+  }
+
+  prog_len = cas_prog_desc(c, out, sizeof out);
+  ck_assert_uint_gt(prog_len, 12u);
+  for (size_t i = 0; i < 2; i++) {
+    const unsigned char *d = out + i * 6;
+
+    ck_assert_uint_eq(d[0], 0x09);
+    ck_assert_uint_eq(d[1], 4u);
+    ck_assert_uint_eq(((unsigned)d[2] << 8) | d[3], cfg.cas_vendors[i].super_cas_id >> 16);
+    ck_assert_uint_eq((((unsigned)d[4] & 0x1F) << 8) | d[5], cfg.cas_vendors[i].ecm_pid);
+  }
+  ck_assert_uint_eq(out[12], 0x65);
+  for (size_t cap = 0; cap < prog_len; cap++) ck_assert_uint_eq(cas_prog_desc(c, out, cap), 0u);
+
+  cat_len = cas_build_cat(c, out, sizeof out);
+  ck_assert_uint_gt(cat_len, 0u);
+  ck_assert_uint_eq(out[0], 0x01);
+  for (size_t cap = 0; cap < cat_len; cap++) ck_assert_uint_eq(cas_build_cat(c, out, cap), 0u);
+  cas_stop(c);
+}
+END_TEST
+
+START_TEST(reload_receivers_is_a_noop_outside_biss_ca_mode) {
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+  cas_t *c;
+
+  cas_reload_receivers(NULL);
+  init_cas_cfg(&cfg, 1);
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  lists[0] = &es;
+  c = cas_start_multi(&cfg, lists, counts, 1);
+  ck_assert_ptr_nonnull(c);
+  cas_reload_receivers(c);
+  ck_assert_int_eq(cas_failed(c), 0);
+  cas_stop(c);
 }
 END_TEST
 
@@ -365,6 +652,14 @@ static Suite *cas_suite(void) {
   tcase_add_test(tc, resolve_pids_multi_across_programs);
   tcase_add_test(tc, resolve_pids_multi_dedupes_across_programs);
   tcase_add_test(tc, resolve_pids_multi_caps_across_programs);
+  tcase_add_loop_test(tc, start_multi_rejects_unusable_group_configuration, 0, (int)(sizeof bad_group_cases / sizeof bad_group_cases[0]));
+  tcase_add_test(tc, start_multi_limits_started_vendors_to_the_group_maximum);
+  tcase_add_test(tc, start_single_requires_a_pcr_and_resolvable_pids);
+  tcase_add_test(tc, cas_reports_failure_when_the_emmg_port_is_taken);
+  tcase_add_test(tc, flush_and_stop_are_safe_in_every_order);
+  tcase_add_test(tc, metrics_are_zero_for_missing_or_unstarted_instances);
+  tcase_add_test(tc, vendor_accessors_and_descriptors_describe_each_vendor);
+  tcase_add_test(tc, reload_receivers_is_a_noop_outside_biss_ca_mode);
   suite_add_tcase(s, tc);
   return s;
 }

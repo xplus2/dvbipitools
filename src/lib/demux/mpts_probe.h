@@ -4,7 +4,7 @@
 #ifndef DVBIPITOOLS_LIB_DEMUX_MPTS_PROBE_H
 #define DVBIPITOOLS_LIB_DEMUX_MPTS_PROBE_H
 
-#include "lib/net/tssource.h"
+#include "lib/net/ts/source.h"
 #include "psi/psi.h"
 
 typedef struct {

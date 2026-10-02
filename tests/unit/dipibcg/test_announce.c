@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 #include "dipibcg/announce.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 static void write_temp_file(char *path, const char *content) {
   int fd = mkstemp(path);

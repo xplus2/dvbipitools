@@ -4,7 +4,7 @@
 #ifndef DIPISRT_CONFIG_H
 #define DIPISRT_CONFIG_H
 
-#include "args.h"
+#include "cli/args.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipisrt.yaml"
 

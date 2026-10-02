@@ -13,9 +13,9 @@
 #include <unistd.h>
 
 #include "../helper/argutil.h"
-#include "../helper/ioutil.h"
+#include "../sys/ioutil.h"
 #include "../helper/log.h"
-#include "../helper/signal.h"
+#include "../sys/signal.h"
 
 #include "netconnect.h"
 
@@ -266,11 +266,11 @@ int net_set_dscp(int fd, int family, int tos) {
 
 int net_dscp_parse(const char *s, int *tos_out) {
   static const enum_map_t map[] = {
-      {"video-high", NET_DSCP_VIDEO_HIGH},
-      {"video-low", NET_DSCP_VIDEO_LOW},
-      {"voice", NET_DSCP_VOICE_BEARER},
-      {"signalling", NET_DSCP_SIGNALLING},
-      {"best-effort", NET_DSCP_BEST_EFFORT},
+    {"video-high", NET_DSCP_VIDEO_HIGH},
+    {"video-low", NET_DSCP_VIDEO_LOW},
+    {"voice", NET_DSCP_VOICE_BEARER},
+    {"signalling", NET_DSCP_SIGNALLING},
+    {"best-effort", NET_DSCP_BEST_EFFORT},
   };
   unsigned v;
   if (map_lookup(map, sizeof map / sizeof map[0], s, tos_out) == 0) return 0;

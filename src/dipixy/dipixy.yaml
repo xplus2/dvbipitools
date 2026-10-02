@@ -30,6 +30,8 @@ h3:
 
 # -j|--workers -1 # -1|-2|-3 x cpu cores, or an absolute count
 #workers: -1
+# --cpu-affinity off # off|auto|list
+#cpu-affinity: off
 # --max-clients 256
 #max-clients: 256
 # --max-channels 32

@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 static int cmp_u16(const void *a, const void *b) {
   uint16_t x = *(const uint16_t *)a;

@@ -6,7 +6,7 @@
 
 #include <stdlib.h>
 
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #define WS_CLIENTS_PULL_IDLE_SEC 20
 

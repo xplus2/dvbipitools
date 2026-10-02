@@ -4,14 +4,13 @@
 #include <string.h>
 
 #include "format.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/playlist_out.h"
 #include "lib/helper/sds_xml.h"
 
 void format_init(FILE *f, out_fmt_t fmt, const char *invocation, const char *provider) {
   playlist_out_init(f, (playlist_out_fmt_t)fmt, invocation, "dipiscan ");
-  if (fmt == OUT_XML)
-    sds_broadcast_open(f, provider, 1);
+  if (fmt == OUT_XML) sds_broadcast_open(f, provider, 1);
 }
 
 void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri, int family, const char *group, unsigned port, int rtp, unsigned tsid, unsigned onid, unsigned sid) {
@@ -46,6 +45,5 @@ void format_item(FILE *f, out_fmt_t fmt, const char *name, const char *uri, int 
 
 void format_close(FILE *f, out_fmt_t fmt) {
   playlist_out_close(f, (playlist_out_fmt_t)fmt);
-  if (fmt == OUT_XML)
-    sds_broadcast_close(f);
+  if (fmt == OUT_XML) sds_broadcast_close(f);
 }

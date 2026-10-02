@@ -4,7 +4,7 @@
 #ifndef DIPIXY_REACTOR_H
 #define DIPIXY_REACTOR_H
 
-#include "../args.h"
+#include "../cli/args.h"
 #include "../ts/channels/channels.h"
 #include "lib/metrics/export.h"
 

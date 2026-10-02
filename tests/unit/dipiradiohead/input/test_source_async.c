@@ -15,49 +15,7 @@
 
 #include "dipiradiohead/input/source.h"
 
-typedef struct {
-  int listen_fd;
-  const char *response;
-  size_t response_len;
-} server_arg_t;
-
-static void *serve_once(void *arg) {
-  server_arg_t *a = arg;
-  int cfd = accept(a->listen_fd, NULL, NULL);
-  struct timeval tv = {2, 0};
-  char buf[4096];
-  size_t got = 0;
-
-  if (cfd < 0)
-    return NULL;
-  setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
-  for (;;) {
-    ssize_t n = recv(cfd, buf + got, sizeof buf - got, 0);
-    if (n <= 0)
-      break;
-    got += (size_t)n;
-    if (got >= 4 && memcmp(buf + got - 4, "\r\n\r\n", 4) == 0)
-      break;
-  }
-  send(cfd, a->response, a->response_len, 0);
-  close(cfd);
-  return NULL;
-}
-
-static int make_listener(unsigned *port_out) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(listen(fd, 1), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  *port_out = ntohs(addr.sin_port);
-  return fd;
-}
+#include "http_fixture.h"
 
 static source_open_state_t drive(source_open_t *o, int max_iters) {
   source_open_state_t st = SOURCE_OPEN_PENDING;
@@ -82,18 +40,16 @@ static void noop_meta_cb(void *ctx, const char *artist, const char *title) {
 
 START_TEST(source_open_async_completes_for_plain_body) {
   unsigned port;
-  int listen_fd = make_listener(&port);
+  int listen_fd = fixture_listener(&port);
   pthread_t th;
-  server_arg_t sarg;
+  http_fixture_t fx;
   const char *resp = "HTTP/1.1 200 OK\r\nContent-Type: audio/mpeg\r\nConnection: close\r\n\r\nnot-really-audio-but-thats-ok-here";
   char uri[64];
   source_open_t *o;
   source_t *s;
 
-  sarg.listen_fd = listen_fd;
-  sarg.response = resp;
-  sarg.response_len = strlen(resp);
-  ck_assert_int_eq(pthread_create(&th, NULL, serve_once, &sarg), 0);
+  fixture_single(&fx, listen_fd, resp, strlen(resp));
+  ck_assert_int_eq(pthread_create(&th, NULL, fixture_serve, &fx), 0);
 
   snprintf(uri, sizeof uri, "http://127.0.0.1:%u/stream", port);
   o = source_open_async_start(uri, 0, "test", 0, noop_meta_cb, NULL, NULL, NULL);
@@ -111,10 +67,10 @@ END_TEST
 
 START_TEST(source_open_async_follows_playlist_redirect) {
   unsigned port_a, port_b;
-  int listen_a = make_listener(&port_a);
-  int listen_b = make_listener(&port_b);
+  int listen_a = fixture_listener(&port_a);
+  int listen_b = fixture_listener(&port_b);
   pthread_t th_a, th_b;
-  server_arg_t sarg_a, sarg_b;
+  http_fixture_t fx_a, fx_b;
   char resp_a[256];
   const char *resp_b = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nsecond-server-body";
   char uri[64];
@@ -123,14 +79,10 @@ START_TEST(source_open_async_follows_playlist_redirect) {
 
   /* m3u playlist body: any non-'#' line starting with http:// is followed, no header needed */
   snprintf(resp_a, sizeof resp_a, "HTTP/1.1 200 OK\r\nContent-Type: audio/x-mpegurl\r\nConnection: close\r\n\r\nhttp://127.0.0.1:%u/next\n", port_b);
-  sarg_a.listen_fd = listen_a;
-  sarg_a.response = resp_a;
-  sarg_a.response_len = strlen(resp_a);
-  sarg_b.listen_fd = listen_b;
-  sarg_b.response = resp_b;
-  sarg_b.response_len = strlen(resp_b);
-  ck_assert_int_eq(pthread_create(&th_a, NULL, serve_once, &sarg_a), 0);
-  ck_assert_int_eq(pthread_create(&th_b, NULL, serve_once, &sarg_b), 0);
+  fixture_single(&fx_a, listen_a, resp_a, strlen(resp_a));
+  fixture_single(&fx_b, listen_b, resp_b, strlen(resp_b));
+  ck_assert_int_eq(pthread_create(&th_a, NULL, fixture_serve, &fx_a), 0);
+  ck_assert_int_eq(pthread_create(&th_b, NULL, fixture_serve, &fx_b), 0);
 
   snprintf(uri, sizeof uri, "http://127.0.0.1:%u/playlist.m3u", port_a);
   o = source_open_async_start(uri, 0, "test", 0, noop_meta_cb, NULL, NULL, NULL);
@@ -156,12 +108,186 @@ START_TEST(source_open_async_reports_error_on_refused_connection) {
 }
 END_TEST
 
+#define MP3_FRAME_LEN FIXTURE_MP3_FRAME_LEN
+
+typedef struct {
+  int listen_fd;
+} staged_arg_t;
+
+static void *serve_staged_mp3(void *arg) {
+  staged_arg_t *a = arg;
+  int cfd = accept(a->listen_fd, NULL, NULL);
+  static unsigned char body[20 * MP3_FRAME_LEN];
+  const char *hdr = "HTTP/1.1 200 OK\r\nContent-Type: audio/mpeg\r\nConnection: close\r\n\r\n";
+
+  if (cfd < 0) return NULL;
+  fixture_read_request(cfd);
+  fixture_mp3_frames(body, 20);
+  fixture_send_all(cfd, hdr, strlen(hdr));
+  fixture_send_all(cfd, body, 6 * MP3_FRAME_LEN);
+  usleep(300000);
+  fixture_send_all(cfd, body + 6 * MP3_FRAME_LEN, 14 * MP3_FRAME_LEN);
+  usleep(300000);
+  close(cfd);
+  return NULL;
+}
+
+START_TEST(source_prefill_holds_frames_until_queued_then_flags_resume) {
+  unsigned port;
+  int listen_fd = fixture_listener(&port);
+  pthread_t th;
+  staged_arg_t sarg;
+  char uri[64];
+  source_open_t *o;
+  source_t *s;
+  source_frame_t f;
+  int got = 0;
+
+  sarg.listen_fd = listen_fd;
+  ck_assert_int_eq(pthread_create(&th, NULL, serve_staged_mp3, &sarg), 0);
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/stream", port);
+  o = source_open_async_start(uri, 0, "test", 0, noop_meta_cb, NULL, NULL, NULL);
+  ck_assert_ptr_nonnull(o);
+  ck_assert_int_eq(drive(o, 200), SOURCE_OPEN_DONE);
+  s = source_open_async_take(o);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(source_set_prefill_ms(s, 400), 0);
+
+  usleep(100000);
+  for (int i = 0; i < 5; i++) ck_assert_int_eq(source_next_frame(s, &f, NULL), 0);
+  ck_assert_int_eq(source_take_resumed(s), 0);
+
+  for (int i = 0; i < 40 && !got; i++) {
+    struct pollfd pfd;
+    pfd.fd = source_fd(s);
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    poll(&pfd, 1, 100);
+    got = source_next_frame(s, &f, NULL);
+  }
+  ck_assert_int_eq(got, 1);
+  ck_assert_uint_eq(f.len, MP3_FRAME_LEN);
+  ck_assert_int_eq(source_take_resumed(s), 1);
+  ck_assert_int_eq(source_take_resumed(s), 0);
+  ck_assert_int_eq(source_next_frame(s, &f, NULL), 1);
+  ck_assert_int_eq(source_take_resumed(s), 0);
+
+  source_close(s);
+  pthread_join(th, NULL);
+  close(listen_fd);
+}
+END_TEST
+
+START_TEST(source_open_async_poll_accessors_name_a_live_fd_while_pending) {
+  unsigned port;
+  int listen_fd = fixture_listener(&port);
+  pthread_t th;
+  http_fixture_t fx;
+  const char *resp = "HTTP/1.1 200 OK\r\nContent-Type: audio/mpeg\r\nConnection: close\r\n\r\nbody-bytes";
+  char uri[64];
+  source_open_t *o;
+  source_open_state_t st = SOURCE_OPEN_PENDING;
+  source_t *s;
+
+  fixture_single(&fx, listen_fd, resp, strlen(resp));
+  ck_assert_int_eq(pthread_create(&th, NULL, fixture_serve, &fx), 0);
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/stream", port);
+  o = source_open_async_start(uri, 0, "test", 0, noop_meta_cb, NULL, NULL, NULL);
+  ck_assert_ptr_nonnull(o);
+  for (int i = 0; i < 200 && st == SOURCE_OPEN_PENDING; i++) {
+    struct pollfd pfd;
+
+    ck_assert_int_ge(source_open_async_poll_fd(o), 0);
+    ck_assert_int_ne(source_open_async_poll_events(o) & (POLLIN | POLLOUT), 0);
+    pfd.fd = source_open_async_poll_fd(o);
+    pfd.events = source_open_async_poll_events(o);
+    pfd.revents = 0;
+    poll(&pfd, 1, 100);
+    st = source_open_async_step(o, NULL);
+  }
+  ck_assert_int_eq(st, SOURCE_OPEN_DONE);
+  s = source_open_async_take(o);
+  ck_assert_ptr_nonnull(s);
+  source_close(s);
+  pthread_join(th, NULL);
+  close(listen_fd);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  int playlists;
+  int final_body;
+  source_open_state_t want;
+} hop_case_t;
+
+static const hop_case_t hop_cases[] = {
+    {"last allowed redirect still reaches the audio", 4, 1, SOURCE_OPEN_DONE},
+    {"redirect chain at the hop limit is rejected", 5, 0, SOURCE_OPEN_ERROR},
+};
+
+START_TEST(source_open_async_enforces_the_playlist_hop_limit) {
+  const hop_case_t *c = &hop_cases[_i];
+  unsigned port;
+  int listen_fd = fixture_listener(&port);
+  pthread_t th;
+  http_fixture_t fx;
+  char playlist[256];
+  const char *responses[8];
+  size_t lens[8];
+  char uri[64];
+  source_open_t *o;
+  net_err_reason_t reason = NET_ERR_OTHER;
+  source_open_state_t st;
+  int n = 0;
+
+  snprintf(playlist, sizeof playlist, "HTTP/1.1 200 OK\r\nContent-Type: audio/x-mpegurl\r\nConnection: close\r\n\r\nhttp://127.0.0.1:%u/next\n", port);
+  for (; n < c->playlists; n++) {
+    responses[n] = playlist;
+    lens[n] = strlen(playlist);
+  }
+  if (c->final_body) {
+    responses[n] = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nfinal-body";
+    lens[n] = strlen(responses[n]);
+    n++;
+  }
+  fx.listen_fd = listen_fd;
+  fx.responses = responses;
+  fx.response_lens = lens;
+  fx.n_responses = n;
+  ck_assert_int_eq(pthread_create(&th, NULL, fixture_serve, &fx), 0);
+
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/first", port);
+  o = source_open_async_start(uri, 0, "test", 0, noop_meta_cb, NULL, NULL, NULL);
+  ck_assert_ptr_nonnull(o);
+  st = SOURCE_OPEN_PENDING;
+  for (int i = 0; i < 400 && st == SOURCE_OPEN_PENDING; i++) {
+    struct pollfd pfd;
+
+    pfd.fd = source_open_async_poll_fd(o);
+    pfd.events = source_open_async_poll_events(o);
+    pfd.revents = 0;
+    poll(&pfd, 1, 100);
+    st = source_open_async_step(o, &reason);
+  }
+  ck_assert_msg(st == c->want, "%s: state %d", c->name, st);
+  if (st == SOURCE_OPEN_ERROR) ck_assert_msg(reason == NET_ERR_FORMAT, "%s: reason %d", c->name, reason);
+  if (st == SOURCE_OPEN_DONE) source_close(source_open_async_take(o));
+  else source_open_async_free(o);
+  pthread_join(th, NULL);
+  close(listen_fd);
+}
+END_TEST
+
 static Suite *source_async_suite(void) {
   Suite *s = suite_create("source_async");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, source_open_async_completes_for_plain_body);
+  tcase_add_test(tc, source_prefill_holds_frames_until_queued_then_flags_resume);
   tcase_add_test(tc, source_open_async_follows_playlist_redirect);
   tcase_add_test(tc, source_open_async_reports_error_on_refused_connection);
+  tcase_add_test(tc, source_open_async_poll_accessors_name_a_live_fd_while_pending);
+  tcase_add_loop_test(tc, source_open_async_enforces_the_playlist_hop_limit, 0, (int)(sizeof hop_cases / sizeof hop_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }

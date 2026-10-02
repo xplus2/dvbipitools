@@ -10,7 +10,7 @@
 #include "lib/helper/log.h"
 #include "lib/mux/mkv/mkv.h"
 #include "lib/mux/mp4/mp4.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "../filter/ts.h"
 #include "../version.h"

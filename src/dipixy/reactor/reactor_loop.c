@@ -18,7 +18,8 @@
 #include "../version.h"
 #include "lib/demux/tspack.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/cpuaffinity.h"
+#include "lib/sys/signal.h"
 #ifdef HAVE_HTTP2
 #include "../http2/http2.h"
 #endif
@@ -28,6 +29,7 @@
 
 #include <errno.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <sys/epoll.h>
 #include <unistd.h>
 
@@ -39,7 +41,7 @@ static int socket_has_error(int fd) {
   return err != 0;
 }
 
-static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, struct epoll_event *evp) {
+void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, struct epoll_event *evp) {
   void *ptr = evp->data.ptr;
   uint32_t e;
   conn_t *c;
@@ -148,10 +150,16 @@ static void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, str
 
 void *worker_thread(void *arg) {
   int tid = (int)(intptr_t)arg;
+  const config_t *cfg = reactor_cfg();
   reactor_listeners_t rl;
   int epfd;
 
   t_reactor_tid = tid;
+  if (cfg) {
+    char what[32];
+    snprintf(what, sizeof what, "reactor worker %d", tid);
+    cpuaff_pin(&cfg->cpu_affinity, (unsigned)tid, what);
+  }
   epfd = epoll_create1(EPOLL_CLOEXEC);
   if (epfd < 0) return NULL;
   t_reactor_epfd = epfd;
@@ -197,6 +205,8 @@ void *worker_thread(void *arg) {
 
   reactor_teardown_listeners(&rl, tid);
   close(epfd);
+  reactor_ws_pool_release();
+  conn_retire_handoff();
   return NULL;
 }
 

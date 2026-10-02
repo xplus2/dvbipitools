@@ -8,7 +8,7 @@
 
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/mux/fec2022.h"
 #include "config.h"
 #include "filter/ts.h"
@@ -144,6 +144,22 @@ static int apply_secret(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   if (set_buf(cfg->rist_secret, sizeof cfg->rist_secret, v, e, n)) return -1;
   cfg->fl.have_secret = 1;
+  return 0;
+}
+
+static int apply_encryption_type(void *c, const char *v, char *e, size_t n) {
+  if (argutil_rist_key_size(v, &((config_t *)c)->rist_key_size)) {
+    bufcpy(e, n, "must be 128|256");
+    return -1;
+  }
+  return 0;
+}
+
+static int apply_encryption_type_in(void *c, const char *v, char *e, size_t n) {
+  if (argutil_rist_key_size(v, &((config_t *)c)->rist_key_size_in)) {
+    bufcpy(e, n, "must be 128|256");
+    return -1;
+  }
   return 0;
 }
 
@@ -335,11 +351,13 @@ static const yamlcfg_key_t keys[] = {
   {"ttl", apply_ttl, 0, 0},
   {"al-fec", apply_al_fec, 0, 0},
   {"al-fec-port", apply_al_fec_port, 0, 0},
-  {"profile", apply_profile, 0, 0},
-  {"secret", apply_secret, 0, 0},
-  {"cname", apply_cname, 0, 0},
-  {"buffer", apply_buffer, 0, 0},
-  {"profile-in", apply_profile_in, 0, 0},
+  {"rist.profile", apply_profile, 0, 0},
+  {"rist.secret", apply_secret, 0, 0},
+  {"rist.encryption-type", apply_encryption_type, 0, 0},
+  {"rist.cname", apply_cname, 0, 0},
+  {"rist.buffer", apply_buffer, 0, 0},
+  {"rist.profile-in", apply_profile_in, 0, 0},
+  {"rist.encryption-type-in", apply_encryption_type_in, 0, 0},
   {"insecure", apply_insecure, 0, 0},
   {"verbose", apply_verbose, 0, 0},
   {"sub-lead", apply_sub_lead, 0, 0},
@@ -413,7 +431,9 @@ int rec_cfg_test(const char *path, int strict) {
   warn_if(&y, container && cfg.n_out && (n_file != 1 || cfg.n_out - n_rtmp != 1), "format mkv/mka/mp4/m4a requires exactly one file out target (plus optional rtmp(s) targets)");
   warn_if(&y, fl->have_format && cfg.format == FMT_RAW && n_rtmp, "format raw is incompatible with rtmp(s) out targets");
   warn_if(&y, cfg.subs == SUB_SRT && fl->have_format && !container, "subtitles srt requires format mkv, mka, mp4 or m4a");
-  warn_if(&y, fl->have_secret && n_rist && cfg.rist_profile != RIST_PROF_MAIN, "secret requires profile main");
+  warn_if(&y, fl->have_secret && n_rist && cfg.rist_profile != RIST_PROF_MAIN, "rist.secret requires rist.profile main");
+  warn_if(&y, cfg.rist_key_size && n_rist && cfg.rist_profile != RIST_PROF_MAIN, "rist.encryption-type requires rist.profile main");
+  warn_if(&y, cfg.rist_key_size_in && fl->have_in && cfg.source.kind == URI_RIST && cfg.rist_profile_in != RIST_PROF_MAIN, "rist.encryption-type-in requires rist.profile-in main");
   warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "al-fec requires al-fec-port");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
   warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");

@@ -2,7 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "priv.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/secure_zero.h"
 
 #include <pthread.h>

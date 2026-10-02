@@ -281,7 +281,7 @@ Decimal or 0x hex, 0 to 8191. Requires
 .B \-\-max\-services \fIn\fR
 Max EMM-G service_ids tracked in the EMM cache, 1..256. Default 32.
 .TP
-.B \-\-profile \fIsimple\fR|\fImain\fR
+.B \-\-rist\-profile \fIsimple\fR|\fImain\fR
 RIST profile for
 .B \-i rist://
 only. Default
@@ -290,6 +290,12 @@ only. Default
 enables PSK encryption via a
 .B ?secret=
 query parameter on the input URI.
+.TP
+.B \-\-rist\-encryption\-type \fIbits\fR
+AES key size, 128 or 256, for
+.B \-i rist://
+only. Requires
+.BR \-\-rist\-profile\ main .
 .TP
 .B \-\-srt\-passphrase\-in \fIpw\fR
 Passphrase for

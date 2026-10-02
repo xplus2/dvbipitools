@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "lib/tva/xmltv.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 START_TEST(xmltv_write_read_round_trips) {
   bcg_doc_t doc, doc2;

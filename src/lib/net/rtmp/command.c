@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "auth.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/mux/amf.h"
 #include "priv.h"
 
@@ -173,7 +173,12 @@ void rtmp_command_on_invoke(struct rtmp *r, const unsigned char *payload, size_t
   } else if (r->state == RTMP_ST_WAIT_CREATE_STREAM_RESULT && (int)transaction == RTMP_TRANSACTION_CREATE_STREAM) {
     double stream_id = 0;
     p = amf_skip_value(p, end); /* command object: always Null here */
-    if (p) amf_read_number(p, end, &stream_id);
+    if (p) p = amf_read_number(p, end, &stream_id);
+    if (!p || !(stream_id >= 1.0 && stream_id < 4294967296.0)) {
+      r->state = RTMP_ST_FAILED;
+      if (r->error_cb) r->error_cb(r->cb_ctx, "invalid stream id");
+      return;
+    }
     r->stream_id = (uint32_t)stream_id;
     r->state = RTMP_ST_READY;
     send_set_chunk_size(r, RTMP_OUT_CHUNK_SIZE);

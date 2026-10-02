@@ -50,13 +50,15 @@ dipirec -i <uri> -o <target> [options]
 | `-h` | `--help`                    |                             |                                             |
 
 ### Related to RIST Input/Output
-| flag | long form               | argument              | default                                       |
-|------|-------------------------|-----------------------|-----------------------------------------------|
-|      | `--profile`             | `simple\|main`        | `simple` (`-o rist://` only)                  |
-|      | `--secret`              | `<psk>`               | none (`-o rist://` only)                      |
-|      | `--cname`               | `<name>`              | library default (`-o rist://` only)           |
-|      | `--buffer`              | `<ms>`                | library default (`-o rist://` only)           |
-|      | `--profile-in`          | `simple\|main`        | `simple` (`-i rist://` only)                  |
+| flag | long form                   | argument       | default                                               |
+|------|-----------------------------|----------------|-------------------------------------------------------|
+|      | `--rist-profile`            | `simple\|main` | `simple` (`-o` only)                                  |
+|      | `--rist-secret`             | `<psk>`        | none (`-o` only)                                      |
+|      | `--rist-encryption-type`    | `128\|256`     | library default (`-o` only, `--rist-profile main`)    |
+|      | `--rist-cname`              | `<name>`       | library default (`-o` only)                           |
+|      | `--rist-buffer`             | `<ms>`         | library default (`-o` only)                           |
+|      | `--rist-profile-in`         | `simple\|main` | `simple` (`-i` only)                                  |
+|      | `--rist-encryption-type-in` | `128\|256`     | library default (`-i` only, `--rist-profile-in main`) |
 
 ### Related to SRT Inputs/Outputs
 
@@ -107,7 +109,9 @@ role a receiver needs). `<group>` can be an IPv4 or IPv6 multicast address.
 `rist://@host:port[?query]` is also accepted. 
 It requires librist and only supports a single peer per input (no bonding).
 If you need bonded RIST input, you can run `dipirist` in front of this tool as a bridge instead.
-Encrypted input needs `--profile-in main` and a `?secret=` query parameter in the URI.
+
+Encrypted input needs `--rist-profile-in main` and a `?secret=` query parameter in the URI.
+`--rist-encryption-type-in` sets the AES key size (128 or 256).
 
 `srt://[@]host:port` is also accepted, requiring libsrt. `@` binds/listens/accepts; without it, the
 tool calls out to a remote SRT sender instead. Single peer only - no bonding or rendezvous here, use
@@ -175,11 +179,13 @@ Repeatable: a file plus one or more RTMP(S) pushes, or several RTMP(S) targets a
 | `rtmps://<host>[:port]/<app>/<key>` | RTMP over TLS, default port `443`                                        |
 
 `rtp://`/`udp://` join nothing, they just send: 7-packet (1316-byte) datagrams, RTP-wrapped with
-a fresh SSRC/sequence/timestamp for `rtp://`, plain for `udp://`. `rist://` sends the same
-1316-byte chunks through librist (own framing, no RTP), one peer, not bonded. See
-[dipirist](../dipirist/README.md) for bonding. `--profile`/`--secret`/`--cname`/`--buffer`
-configure it (`--secret` requires `--profile main`). Combined with
-[`--pace`](#real-time-pacing---pace): replay a file back onto multicast at its original speed.
+a fresh SSRC/sequence/timestamp for `rtp://`, plain for `udp://`.
+
+`rist://` sends the same 1316-byte chunks through librist (own framing, no RTP), one peer, not bonded.  See
+[dipirist](../dipirist/README.md) for bonding. `--rist-profile`/`--rist-secret`/`--rist-cname`/`--rist-buffer`
+configure it (`--rist-secret` and `--rist-encryption-type` require `--rist-profile main`).
+
+Combined with [`--pace`](#real-time-pacing---pace): replay a file back onto multicast at its original speed.
 
 `srt://host:port` always calls out, since `srtout` has no listener mode. Each target is
 independent and not bonded. Repeat `-o` for more, or use [dipisrt](../dipisrt/README.md) if you

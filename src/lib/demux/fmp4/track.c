@@ -30,7 +30,7 @@ static void add_ps(fmp4_nal_t *arr, unsigned *n, const unsigned char *data, size
   (*n)++;
 }
 
-static void parse_avcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
+void fmp4_parse_avcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   unsigned n_sps;
   unsigned n_pps;
   unsigned i;
@@ -55,7 +55,7 @@ static void parse_avcc(const unsigned char *p, const unsigned char *end, fmp4_st
   }
 }
 
-static void parse_hvcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
+void fmp4_parse_hvcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   unsigned num_arrays;
   if (end - p < 23) return;
   p += 22; /* configurationVersion(1)+ptl(12)+min_spatial_seg(2)+parallelism(1)+chroma(1)+
@@ -79,7 +79,7 @@ static void parse_hvcc(const unsigned char *p, const unsigned char *end, fmp4_st
   }
 }
 
-static void parse_esds_desc(const unsigned char **pp, const unsigned char *end, unsigned *tag_out, const unsigned char **body_out, size_t *size_out) {
+void fmp4_parse_esds_desc(const unsigned char **pp, const unsigned char *end, unsigned *tag_out, const unsigned char **body_out, size_t *size_out) {
   const unsigned char *p = *pp;
   unsigned tag;
   size_t size = 0;
@@ -107,7 +107,7 @@ static void parse_esds_desc(const unsigned char **pp, const unsigned char *end, 
   *pp = p + size;
 }
 
-static void parse_esds(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
+void fmp4_parse_esds(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   unsigned tag;
   const unsigned char *body;
   size_t size;
@@ -115,7 +115,7 @@ static void parse_esds(const unsigned char *p, const unsigned char *end, fmp4_st
   const unsigned char *q;
   if (end - p < 4) return;
   p += 4;
-  parse_esds_desc(&p, end, &tag, &body, &size);
+  fmp4_parse_esds_desc(&p, end, &tag, &body, &size);
   if (tag != 0x03 || size < 3) return;
   es_end = body + size;
   q = body + 3; /* ES_ID(2)+flags(1) */
@@ -125,7 +125,7 @@ static void parse_esds(const unsigned char *p, const unsigned char *end, fmp4_st
     size_t dsize;
     const unsigned char *dc_end;
     const unsigned char *r;
-    parse_esds_desc(&q, es_end, &dtag, &dbody, &dsize);
+    fmp4_parse_esds_desc(&q, es_end, &dtag, &dbody, &dsize);
     if (!dtag) break;
     if (dtag != 0x04 || dsize < 1) continue;
     if (dbody[0] == 0x6B) out->codec = CODEC_MP2A;
@@ -135,7 +135,7 @@ static void parse_esds(const unsigned char *p, const unsigned char *end, fmp4_st
       unsigned itag;
       const unsigned char *ibody;
       size_t isize;
-      parse_esds_desc(&r, dc_end, &itag, &ibody, &isize);
+      fmp4_parse_esds_desc(&r, dc_end, &itag, &ibody, &isize);
       if (!itag) break;
       if (itag != 0x05) continue;
       out->cpriv = ibody;
@@ -144,7 +144,7 @@ static void parse_esds(const unsigned char *p, const unsigned char *end, fmp4_st
   }
 }
 
-static void parse_dac3(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
+void fmp4_parse_dac3(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   if (end - p < 3) return;
   out->ac3_bsid = (unsigned char)((p[0] >> 1) & 0x1F);
   out->ac3_bsmod = (unsigned char)(((p[0] & 0x1) << 2) | ((p[1] >> 6) & 0x3));
@@ -153,7 +153,7 @@ static void parse_dac3(const unsigned char *p, const unsigned char *end, fmp4_st
   out->ac3_bitrate_code = ((unsigned)(p[1] & 0x3) << 3) | ((p[2] >> 5) & 0x7);
 }
 
-static void parse_dec3(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
+void fmp4_parse_dec3(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   if (end - p < 4) return;
   out->ac3_bitrate_code = (fmp4_rb_u16(p) >> 3) & 0x1FFF;
   out->ac3_bsid = (unsigned char)((p[2] >> 1) & 0x1F);
@@ -162,28 +162,28 @@ static void parse_dec3(const unsigned char *p, const unsigned char *end, fmp4_st
   out->ac3_lfeon = (unsigned char)((p[3] >> 1) & 0x1);
 }
 
-static void parse_dops(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
+void fmp4_parse_dops(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   if (end - p < 2) return;
   out->channels = p[1];
 }
 
-static void parse_ddts(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
+void fmp4_parse_ddts(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   if (end - p < 4) return;
   out->dts_rate = fmp4_rb_u32(p);
 }
 
-static void parse_dmlp(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
+void fmp4_parse_dmlp(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   if (end - p < 6) return;
   out->truehd_format_info = fmp4_rb_u32(p);
   out->truehd_peak_data_rate = fmp4_rb_u16(p + 4) >> 1;
 }
 
-static void parse_dac4(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
+void fmp4_parse_dac4(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   out->cpriv = p;
   out->cpriv_len = (size_t)(end - p);
 }
 
-static void parse_vvcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
+void fmp4_parse_vvcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   unsigned num_arrays;
   if (end - p < 2) return;
   num_arrays = p[1];
@@ -209,9 +209,9 @@ static void parse_vvcc(const unsigned char *p, const unsigned char *end, fmp4_st
 static void parse_video_config(const fmp4_box_t *cfg, fmp4_stsd_entry_t *out) {
   const unsigned char *p = cfg->body;
   const unsigned char *end = p + cfg->body_len;
-  if (!memcmp(cfg->fourcc, "avcC", 4)) parse_avcc(p, end, out);
-  else if (!memcmp(cfg->fourcc, "hvcC", 4)) parse_hvcc(p, end, out);
-  else if (!memcmp(cfg->fourcc, "vvcC", 4)) parse_vvcc(p, end, out);
+  if (!memcmp(cfg->fourcc, "avcC", 4)) fmp4_parse_avcc(p, end, out);
+  else if (!memcmp(cfg->fourcc, "hvcC", 4)) fmp4_parse_hvcc(p, end, out);
+  else if (!memcmp(cfg->fourcc, "vvcC", 4)) fmp4_parse_vvcc(p, end, out);
 }
 
 int fmp4_parse_stsd_entry(const fmp4_box_t *entry_box, fmp4_stsd_entry_t *out) {
@@ -237,12 +237,12 @@ int fmp4_parse_stsd_entry(const fmp4_box_t *entry_box, fmp4_stsd_entry_t *out) {
   out->channels = fmp4_rb_u16(body + 16);
   out->rate = fmp4_rb_u32(body + 24) >> 16;
 
-  if (fmp4_box_find(body + 28, len - 28, "dac3", &cfg)) parse_dac3(cfg.body, cfg.body + cfg.body_len, out);
-  else if (fmp4_box_find(body + 28, len - 28, "dec3", &cfg)) parse_dec3(cfg.body, cfg.body + cfg.body_len, out);
-  else if (fmp4_box_find(body + 28, len - 28, "dOps", &cfg)) parse_dops(cfg.body, cfg.body + cfg.body_len, out);
-  else if (fmp4_box_find(body + 28, len - 28, "ddts", &cfg)) parse_ddts(cfg.body, cfg.body + cfg.body_len, out);
-  else if (fmp4_box_find(body + 28, len - 28, "dmlp", &cfg)) parse_dmlp(cfg.body, cfg.body + cfg.body_len, out);
-  else if (fmp4_box_find(body + 28, len - 28, "dac4", &cfg)) parse_dac4(cfg.body, cfg.body + cfg.body_len, out);
-  else if (fmp4_box_find(body + 28, len - 28, "esds", &cfg)) parse_esds(cfg.body, cfg.body + cfg.body_len, out);
+  if (fmp4_box_find(body + 28, len - 28, "dac3", &cfg)) fmp4_parse_dac3(cfg.body, cfg.body + cfg.body_len, out);
+  else if (fmp4_box_find(body + 28, len - 28, "dec3", &cfg)) fmp4_parse_dec3(cfg.body, cfg.body + cfg.body_len, out);
+  else if (fmp4_box_find(body + 28, len - 28, "dOps", &cfg)) fmp4_parse_dops(cfg.body, cfg.body + cfg.body_len, out);
+  else if (fmp4_box_find(body + 28, len - 28, "ddts", &cfg)) fmp4_parse_ddts(cfg.body, cfg.body + cfg.body_len, out);
+  else if (fmp4_box_find(body + 28, len - 28, "dmlp", &cfg)) fmp4_parse_dmlp(cfg.body, cfg.body + cfg.body_len, out);
+  else if (fmp4_box_find(body + 28, len - 28, "dac4", &cfg)) fmp4_parse_dac4(cfg.body, cfg.body + cfg.body_len, out);
+  else if (fmp4_box_find(body + 28, len - 28, "esds", &cfg)) fmp4_parse_esds(cfg.body, cfg.body + cfg.body_len, out);
   return 1;
 }

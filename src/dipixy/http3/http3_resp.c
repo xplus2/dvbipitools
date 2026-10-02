@@ -60,7 +60,7 @@ void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_t
   if (etag_n)
     nva[nvlen++] = (nghttp3_nv){(uint8_t *)"etag", (uint8_t *)etag_buf, 4, etag_n, NGHTTP3_NV_FLAG_NONE};
   if (cors_val) {
-    nva[nvlen++] = (nghttp3_nv){(uint8_t *)"access-control-allow-origin", (uint8_t *)cors_val, 28, strlen(cors_val),NGHTTP3_NV_FLAG_NONE};
+    nva[nvlen++] = (nghttp3_nv){(uint8_t *)"access-control-allow-origin", (uint8_t *)cors_val, 27, strlen(cors_val),NGHTTP3_NV_FLAG_NONE};
     if (cors_vary) nva[nvlen++] = (nghttp3_nv){(uint8_t *)"vary", (uint8_t *)"Origin", 4, 6, NGHTTP3_NV_FLAG_NONE};
   }
   if (!body) {

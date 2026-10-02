@@ -3,6 +3,7 @@
 
 #include <check.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "lib/cas/cas_group.h"
 
@@ -84,6 +85,115 @@ START_TEST(csa1_checksum_wraps_modulo_256) {
 }
 END_TEST
 
+static cas_group_cfg_t valid_cfg(void) {
+  cas_group_cfg_t cfg;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.algo = SCRAMBLE_ALGO_CSA2;
+  cfg.cp_duration_ms = 10000;
+  cfg.pids[0] = 0x100;
+  cfg.pids[1] = 0x101;
+  cfg.pid_count = 2;
+  cfg.vendor_count = 2;
+  cfg.vendors[0].super_cas_id = 0x4A750001;
+  cfg.vendors[0].ecm_pid = 0x1FF0;
+  cfg.vendors[0].emm_pid = 0x1FF1;
+  cfg.vendors[1].super_cas_id = 0x09630002;
+  cfg.vendors[1].ecm_pid = 0x1FF2;
+  cfg.vendors[1].emm_pid = 0x1FF3;
+  return cfg;
+}
+
+typedef struct {
+  const char *name;
+  size_t vendor_count;
+  size_t pid_count;
+  unsigned cp_duration_ms;
+} bad_cfg_case_t;
+
+static const bad_cfg_case_t bad_cfg_cases[] = {
+    {"one vendor more than slots", CAS_GROUP_MAX_VENDORS + 1, 2, 10000},
+    {"huge vendor count", (size_t)-1, 2, 10000},
+    {"one pid more than slots", 2, CAS_CORE_MAX_PIDS + 1, 10000},
+    {"huge pid count", 2, (size_t)-1, 10000},
+    {"zero crypto period", 2, 2, 0},
+};
+
+START_TEST(start_rejects_out_of_range_configuration) {
+  const bad_cfg_case_t *c = &bad_cfg_cases[_i];
+  cas_group_cfg_t cfg = valid_cfg();
+  cas_group_t *g;
+
+  cfg.vendor_count = c->vendor_count;
+  cfg.pid_count = c->pid_count;
+  cfg.cp_duration_ms = c->cp_duration_ms;
+  g = cas_group_start(&cfg, 0x100);
+  ck_assert_msg(g == NULL, "%s: accepted", c->name);
+}
+END_TEST
+
+START_TEST(start_rejects_null_configuration) {
+  ck_assert_ptr_null(cas_group_start(NULL, 0x100));
+}
+END_TEST
+
+START_TEST(start_accepts_boundary_configuration) {
+  cas_group_cfg_t cfg = valid_cfg();
+  cas_group_t *g;
+
+  cfg.vendor_count = CAS_GROUP_MAX_VENDORS;
+  cfg.pid_count = CAS_CORE_MAX_PIDS;
+  cfg.cp_duration_ms = 1;
+  g = cas_group_start(&cfg, 0x100);
+  ck_assert_ptr_nonnull(g);
+  ck_assert_uint_eq(cas_group_vendor_count(g), (size_t)CAS_GROUP_MAX_VENDORS);
+  cas_group_stop(g);
+}
+END_TEST
+
+START_TEST(descriptor_builders_reject_every_short_buffer) {
+  cas_group_cfg_t cfg = valid_cfg();
+  cas_group_t *g = cas_group_start(&cfg, 0x100);
+  unsigned char out[256];
+  size_t prog_len;
+  size_t cat_len;
+
+  ck_assert_ptr_nonnull(g);
+  ck_assert_int_eq(cas_group_failed(g), 0);
+  ck_assert_uint_eq(cas_group_vendor_ecm_pid(g, 1), 0x1FF2u);
+  ck_assert_uint_eq(cas_group_vendor_emm_pid(g, 1), 0x1FF3u);
+  ck_assert_uint_eq(cas_group_vendor_super_cas_id(g, 0), 0x4A750001u);
+
+  prog_len = cas_group_prog_desc(g, out, sizeof out);
+  ck_assert_uint_gt(prog_len, 0u);
+  for (size_t cap = 0; cap < prog_len; cap++) ck_assert_uint_eq(cas_group_prog_desc(g, out, cap), 0u);
+  ck_assert_uint_eq(cas_group_prog_desc(g, out, prog_len), prog_len);
+
+  cat_len = cas_group_build_cat(g, out, sizeof out);
+  ck_assert_uint_gt(cat_len, 0u);
+  ck_assert_uint_eq(out[0], 0x01);
+  for (size_t cap = 0; cap < cat_len; cap++) ck_assert_uint_eq(cas_group_build_cat(g, out, cap), 0u);
+  ck_assert_uint_eq(cas_group_build_cat(g, out, cat_len), cat_len);
+  cas_group_stop(g);
+}
+END_TEST
+
+START_TEST(no_vendor_group_builds_only_the_scrambling_descriptor) {
+  cas_group_cfg_t cfg = valid_cfg();
+  cas_group_t *g;
+  unsigned char out[64];
+  size_t n;
+
+  cfg.vendor_count = 0;
+  g = cas_group_start(&cfg, 0x100);
+  ck_assert_ptr_nonnull(g);
+  n = cas_group_prog_desc(g, out, sizeof out);
+  ck_assert_uint_gt(n, 0u);
+  ck_assert_uint_ne(out[0], 0x09);
+  cas_group_stop(g);
+}
+END_TEST
+
 static Suite *cas_group_suite(void) {
   Suite *s = suite_create("cas_group");
   TCase *tc = tcase_create("core");
@@ -97,6 +207,11 @@ static Suite *cas_group_suite(void) {
   tcase_add_test(tc, fallback_one_of_two_required_down_is_active);
   tcase_add_test(tc, csa1_checksum_matches_known_values);
   tcase_add_test(tc, csa1_checksum_wraps_modulo_256);
+  tcase_add_loop_test(tc, start_rejects_out_of_range_configuration, 0, (int)(sizeof bad_cfg_cases / sizeof bad_cfg_cases[0]));
+  tcase_add_test(tc, start_rejects_null_configuration);
+  tcase_add_test(tc, start_accepts_boundary_configuration);
+  tcase_add_test(tc, descriptor_builders_reject_every_short_buffer);
+  tcase_add_test(tc, no_vendor_group_builds_only_the_scrambling_descriptor);
   suite_add_tcase(s, tc);
   return s;
 }

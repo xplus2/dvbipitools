@@ -25,6 +25,8 @@
     #hbbtv-app-id: <n>
     # --rist-profile-in simple # simple|main, rist:// only
     #rist-profile-in: simple
+    # --rist-encryption-type-in [not set] # 128|256
+    #rist-encryption-type-in: 256
     # --srt-passphrase-in [not set] # srt:// only
     #srt-passphrase-in: <pw>
     # --srt-pbkeylen-in [not set] # 16|24|32
@@ -35,6 +37,8 @@
     #srt-packetfilter-in: <cfg>
     # --srt-latency-in [not set] # ms
     #srt-latency-in: <ms>
+    # --jitter-ms [off] # 1..2000
+    #jitter-ms: <ms>
 
 # -m|--mcast [not set]
 #mcast: 239.1.1.1:5000
@@ -60,6 +64,10 @@ default-provider: dipitvhead
 stuff: off
 # -B|--burst-limit off
 burst-limit: off
+# --pcr-mode preserve # preserve|rebase|regenerate, regenerate needs bitrate and stuff
+pcr-mode: preserve
+# --pcr-lead-ms 700 # regenerate only, 1..1000
+#pcr-lead-ms: 700
 # -e|--error 0 # seconds, 0 = fail once
 error: 0
 # -k|--insecure off
@@ -77,6 +85,8 @@ rist:
   #profile: simple
   # --rist-secret [not set]
   #secret: <psk>
+  # --rist-encryption-type [not set] # 128|256
+  #encryption-type: 256
   # --rist-cname [not set]
   #cname: <name>
   # --rist-buffer [not set] # ms

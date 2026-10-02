@@ -3,6 +3,8 @@
   #- https://example.com/radio.m3u
     # --sid [auto]
     #sid: 2
+    # --jitter-ms [off] # 1..10000
+    #jitter-ms: 2000
     # -s|--sdt [auto]
     #sdt: Some Channel
     # --provider [not set]
@@ -53,6 +55,8 @@ rist:
   #profile: simple
   # --rist-secret [not set]
   #secret: <psk>
+  # --rist-encryption-type [not set] # 128|256
+  #encryption-type: 256
   # --rist-cname [not set]
   #cname: <name>
   # --rist-buffer [not set] # ms

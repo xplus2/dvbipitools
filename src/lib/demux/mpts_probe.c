@@ -4,9 +4,9 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "mpts_probe.h"
 #include "tspack.h"
 

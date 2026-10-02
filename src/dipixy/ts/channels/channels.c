@@ -6,8 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/ioutil.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/ioutil.h"
+#include "lib/sys/signal.h"
 
 #include "../../core/route.h"
 

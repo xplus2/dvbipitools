@@ -73,6 +73,11 @@ typedef struct {
 } av1_seq_hdr_t;
 
 /* video.c */
+void skip_scaling_list(br_t *b, int sz);
+void skip_scaling_matrices(br_t *b, int n);
+void br_align(br_t *b);
+void skip_vvc_gci(br_t *b);
+void skip_vvc_ptl(br_t *b, unsigned max_sublayers_minus1);
 int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h);
 int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned *chroma, unsigned *w, unsigned *h);
 int vvc_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h);

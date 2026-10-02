@@ -304,6 +304,160 @@ START_TEST(cissa_decrypt_packet_queued_emits_immediately) {
 }
 END_TEST
 
+static void make_pkt(unsigned char pkt[188], unsigned ctrl, unsigned afc, unsigned af_len) {
+  memset(pkt, 0xAA, 188);
+  pkt[0] = 0x47;
+  pkt[1] = 0x01;
+  pkt[2] = 0x00;
+  pkt[3] = (unsigned char)((ctrl << 6) | (afc << 4));
+  pkt[4] = (unsigned char)af_len;
+}
+
+static scrambler_t *keyed_cissa(void) {
+  scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CISSA);
+
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, NULL, NULL), 0);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_ODD, cw, sizeof cw, NULL, NULL), 0);
+  return s;
+}
+
+START_TEST(af_only_packet_is_never_scrambled) {
+  unsigned char pkt[188];
+  unsigned char orig[188];
+  scrambler_t *s = keyed_cissa();
+
+  make_pkt(pkt, 0, 2, 183);
+  memcpy(orig, pkt, 188);
+  ck_assert_int_eq(scrambler_encrypt_packet(s, pkt, SCRAMBLE_PARITY_EVEN), 0);
+  ck_assert_mem_eq(pkt, orig, 188);
+  ck_assert_int_eq(scrambler_encrypt_packet(s, pkt, SCRAMBLE_PARITY_ODD), 0);
+  ck_assert_mem_eq(pkt, orig, 188);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(af_only_packet_with_scrambling_bits_is_cleared_on_decrypt) {
+  unsigned char pkt[188];
+  unsigned char orig[188];
+  scrambler_t *s = keyed_cissa();
+
+  make_pkt(pkt, 2, 2, 183);
+  memcpy(orig, pkt, 188);
+  ck_assert_int_eq(scrambler_decrypt_packet(s, pkt), 0);
+  ck_assert_uint_eq((pkt[3] >> 6) & 3u, 0u);
+  ck_assert_mem_eq(pkt + 4, orig + 4, 184);
+  make_pkt(pkt, 3, 2, 183);
+  ck_assert_int_eq(scrambler_decrypt_packet(s, pkt), 0);
+  ck_assert_uint_eq((pkt[3] >> 6) & 3u, 0u);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(payload_under_one_block_with_scrambling_bits_is_cleared_on_decrypt) {
+  unsigned char pkt[188];
+  unsigned char orig[188];
+  scrambler_t *s = keyed_cissa();
+
+  make_pkt(pkt, 3, 3, 172);
+  memcpy(orig, pkt, 188);
+  ck_assert_int_eq(scrambler_decrypt_packet(s, pkt), 0);
+  ck_assert_uint_eq((pkt[3] >> 6) & 3u, 0u);
+  ck_assert_mem_eq(pkt + 4, orig + 4, 184);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(encrypt_and_decrypt_reject_null_scrambler_and_bad_parity) {
+  unsigned char pkt[188];
+  scrambler_t *s = keyed_cissa();
+
+  make_pkt(pkt, 2, 1, 0);
+  ck_assert_int_eq(scrambler_encrypt_packet(NULL, pkt, SCRAMBLE_PARITY_EVEN), -1);
+  ck_assert_int_eq(scrambler_encrypt_packet(s, pkt, 5), -1);
+  ck_assert_int_eq(scrambler_decrypt_packet(NULL, pkt), -1);
+  ck_assert_int_eq(scrambler_set_key(NULL, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, NULL, NULL), -1);
+  ck_assert_int_eq(scrambler_set_key(s, 7, cw, sizeof cw, NULL, NULL), -1);
+  ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, 8, NULL, NULL), -1);
+  ck_assert_uint_eq(scrambler_cw_len(SCRAMBLE_ALGO_CISSA), 16u);
+  scrambler_free(s);
+  scrambler_free(NULL);
+}
+END_TEST
+
+START_TEST(queued_calls_reject_reserved_control_missing_key_and_null) {
+  unsigned char pkt[188];
+  scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CISSA);
+
+  captured_n = 0;
+  make_pkt(pkt, 1, 1, 0);
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(s, pkt, capture_emit, NULL), -1);
+  make_pkt(pkt, 2, 1, 0);
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(s, pkt, capture_emit, NULL), -1);
+  make_pkt(pkt, 3, 1, 0);
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(s, pkt, capture_emit, NULL), -1);
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(NULL, pkt, capture_emit, NULL), -1);
+  make_pkt(pkt, 0, 1, 0);
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(s, pkt, SCRAMBLE_PARITY_EVEN, capture_emit, NULL), -1);
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(NULL, pkt, SCRAMBLE_PARITY_EVEN, capture_emit, NULL), -1);
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(s, pkt, 9, capture_emit, NULL), -1);
+  ck_assert_uint_eq(captured_n, 0u);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(queued_unscrambled_and_af_only_packets_are_emitted_in_order) {
+  unsigned char pkt[188];
+  unsigned char orig[188];
+  scrambler_t *s = keyed_cissa();
+
+  captured_n = 0;
+  make_pkt(pkt, 0, 1, 0);
+  memcpy(orig, pkt, 188);
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(s, pkt, capture_emit, NULL), 0);
+  ck_assert_uint_eq(captured_n, 1u);
+  ck_assert_mem_eq(captured, orig, 188);
+
+  make_pkt(pkt, 0, 2, 183);
+  memcpy(orig, pkt, 188);
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(s, pkt, SCRAMBLE_PARITY_ODD, capture_emit, NULL), 0);
+  ck_assert_uint_eq(captured_n, 2u);
+  ck_assert_mem_eq(captured, orig, 188);
+
+  make_pkt(pkt, 2, 2, 183);
+  ck_assert_int_eq(scrambler_decrypt_packet_queued(s, pkt, capture_emit, NULL), 0);
+  ck_assert_uint_eq(captured_n, 3u);
+  ck_assert_uint_eq((captured[3] >> 6) & 3u, 0u);
+
+  make_pkt(pkt, 0, 1, 0);
+  memcpy(orig, pkt, 188);
+  scrambler_passthrough_queued(s, pkt, capture_emit, NULL);
+  ck_assert_uint_eq(captured_n, 4u);
+  ck_assert_mem_eq(captured, orig, 188);
+  scrambler_passthrough_queued(NULL, pkt, capture_emit, NULL);
+  ck_assert_uint_eq(captured_n, 5u);
+  scrambler_flush(s, capture_emit, NULL);
+  scrambler_flush(NULL, capture_emit, NULL);
+  ck_assert_uint_eq(captured_n, 5u);
+  scrambler_free(s);
+}
+END_TEST
+
+START_TEST(queued_encrypt_of_small_payload_is_emitted_clear) {
+  unsigned char pkt[188];
+  unsigned char orig[188];
+  scrambler_t *s = keyed_cissa();
+
+  captured_n = 0;
+  make_pkt(pkt, 0, 3, 172);
+  memcpy(orig, pkt, 188);
+  ck_assert_int_eq(scrambler_encrypt_packet_queued(s, pkt, SCRAMBLE_PARITY_EVEN, capture_emit, NULL), 0);
+  ck_assert_uint_eq(captured_n, 1u);
+  ck_assert_mem_eq(captured, orig, 188);
+  scrambler_free(s);
+}
+END_TEST
+
 static Suite *cissa_suite(void) {
   Suite *s = suite_create("cissa");
   TCase *tc = tcase_create("core");
@@ -320,6 +474,13 @@ static Suite *cissa_suite(void) {
   tcase_add_test(tc, scrambler_decrypt_packet_rejects_reserved_control_value);
   tcase_add_test(tc, cissa_encrypt_packet_queued_emits_immediately);
   tcase_add_test(tc, cissa_decrypt_packet_queued_emits_immediately);
+  tcase_add_test(tc, af_only_packet_is_never_scrambled);
+  tcase_add_test(tc, af_only_packet_with_scrambling_bits_is_cleared_on_decrypt);
+  tcase_add_test(tc, payload_under_one_block_with_scrambling_bits_is_cleared_on_decrypt);
+  tcase_add_test(tc, encrypt_and_decrypt_reject_null_scrambler_and_bad_parity);
+  tcase_add_test(tc, queued_calls_reject_reserved_control_missing_key_and_null);
+  tcase_add_test(tc, queued_unscrambled_and_af_only_packets_are_emitted_in_order);
+  tcase_add_test(tc, queued_encrypt_of_small_payload_is_emitted_clear);
   suite_add_tcase(s, tc);
   return s;
 }

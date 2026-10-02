@@ -13,6 +13,8 @@
 
 void hls_seg_init(int max_channels);
 
+void hls_seg_set_qsbr(qsbr_domain_t *d);
+
 /* take ownership of ctx capture_open() ref: existing segmenter for (ctx, filter, pmt_pid) gets+drops, new one keeps it.
    caller never calls ref's capture_close(). pmt_pid: 0 = auto (first PMT that resolves), else forces one program's PMT PID.
    1 ok, ctx still valid for caller's own use. 0 failed (OOM or registry full), ctx may be pre-freed, caller must not touch it */

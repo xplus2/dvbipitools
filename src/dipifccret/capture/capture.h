@@ -41,6 +41,10 @@ capture_t *capture_open(const char *iface, const char *const *ranges, size_t ran
 
 void capture_close(capture_t *cap);
 
+capture_t *capture_from_ring(unsigned char *ring, size_t block_size, size_t block_nr, const cidr_t *ranges, size_t range_count);
+
+void capture_drain_ring(capture_t *cap, capture_frame_cb cb, void *user);
+
 /* setuid/setgid after capture_open; 0 on success */
 int capture_drop_privileges(const char *user);
 

@@ -3,6 +3,8 @@
 
 #include <arpa/inet.h>
 #include <check.h>
+#include <net/if.h>
+#include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,6 +59,11 @@ static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned 
 
 static int open_sender(const char *group, unsigned port, struct sockaddr_in *dst) {
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
+  struct ip_mreqn mif;
+
+  memset(&mif, 0, sizeof mif);
+  mif.imr_ifindex = (int)if_nametoindex("lo");
+  setsockopt(sock, IPPROTO_IP, IP_MULTICAST_IF, &mif, sizeof mif);
   memset(dst, 0, sizeof *dst);
   dst->sin_family = AF_INET;
   dst->sin_port = htons((unsigned short)port);
@@ -74,6 +81,7 @@ static tvsrc_t *open_recv(const char *group, unsigned port) {
   in.input.family = AF_INET;
   strncpy(in.input.group, group, sizeof in.input.group - 1);
   in.input.port = port;
+  in.iface_in = "lo";
   return tvsrc_open(&cfg, &in, &reason);
 }
 

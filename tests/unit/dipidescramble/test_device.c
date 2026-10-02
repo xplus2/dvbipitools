@@ -1,149 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <check.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-#include <openssl/evp.h>
-#include <openssl/pem.h>
-#include <openssl/rsa.h>
-
-#include "dipidescramble/crypto.h"
-#include "dipidescramble/device.h"
-
-#define SC_SECTION_TID_EMM 0x82
-#define SC_SECTION_TID_ECM_EVEN 0x80
-#define TEST_SERIAL "test-serial-01"
-#define TEST_ECM_PID 0x0020
-
-static char g_key_path[] = "/tmp/dipidescramble_test_device_key_XXXXXX";
-static const ecm_profile_t no_profile; /* zero-initialized: profile.set == 0, legacy path */
-
-static void section_header(unsigned char table_id, size_t payload_len, unsigned char out[3]) {
-  out[0] = table_id;
-  out[1] = (unsigned char)(0x70 | ((payload_len >> 8) & 0x0F));
-  out[2] = (unsigned char)(payload_len & 0xFF);
-}
-
-static device_state_t *make_device_serial(EVP_PKEY **pub_out, const char *serial, size_t max_services) {
-  EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
-  EVP_PKEY *pkey = NULL;
-  int fd;
-  FILE *f;
-  device_state_t *d;
-
-  ck_assert_int_gt(EVP_PKEY_keygen_init(ctx), 0);
-  ck_assert_int_gt(EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048), 0);
-  ck_assert_int_gt(EVP_PKEY_keygen(ctx, &pkey), 0);
-  EVP_PKEY_CTX_free(ctx);
-
-  strcpy(g_key_path, "/tmp/dipidescramble_test_device_key_XXXXXX");
-  fd = mkstemp(g_key_path);
-  ck_assert_int_ge(fd, 0);
-  f = fdopen(fd, "w");
-  ck_assert_int_eq(PEM_write_PrivateKey(f, pkey, NULL, NULL, 0, NULL, NULL), 1);
-  fclose(f);
-
-  d = device_state_new(g_key_path, serial, &no_profile, max_services);
-  ck_assert_ptr_nonnull(d);
-  remove(g_key_path);
-
-  *pub_out = pkey;
-  return d;
-}
-
-static device_state_t *make_device(EVP_PKEY **pub_out) {
-  return make_device_serial(pub_out, TEST_SERIAL, 0);
-}
-
-/* builds a real EMM-U section: header + [1B addr_len][serial][2B bk_version][RSA-OAEP(bk)] */
-static size_t build_emm_u_for(EVP_PKEY *pub, const unsigned char bk[CRYPTO_KEY_LEN], const char *serial, unsigned char *out, size_t cap) {
-  size_t addr_len = strlen(serial);
-  unsigned char ct[512];
-  size_t ctlen = sizeof ct;
-  EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pub, NULL);
-  size_t payload_len;
-
-  ck_assert_int_gt(EVP_PKEY_encrypt_init(ctx), 0);
-  ck_assert_int_gt(EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING), 0);
-  ck_assert_int_gt(EVP_PKEY_encrypt(ctx, ct, &ctlen, bk, CRYPTO_KEY_LEN), 0);
-  EVP_PKEY_CTX_free(ctx);
-
-  payload_len = 1 + addr_len + 2 + ctlen;
-  ck_assert_uint_le(3 + payload_len, cap);
-
-  section_header(SC_SECTION_TID_EMM, payload_len, out);
-  out[3] = (unsigned char)addr_len;
-  memcpy(out + 4, serial, addr_len);
-  out[4 + addr_len] = 0;
-  out[5 + addr_len] = 1; /* bk_version, arbitrary */
-  memcpy(out + 6 + addr_len, ct, ctlen);
-  return 3 + payload_len;
-}
-
-static size_t build_emm_u(EVP_PKEY *pub, const unsigned char bk[CRYPTO_KEY_LEN], unsigned char *out, size_t cap) {
-  return build_emm_u_for(pub, bk, TEST_SERIAL, out, cap);
-}
-
-/* builds a real EMM-G section: header + [2B service_id][2B sk_version][AES-256-GCM(sk under bk)] */
-static size_t build_emm_g(const unsigned char bk[CRYPTO_KEY_LEN], const unsigned char sk[CRYPTO_KEY_LEN], unsigned service_id, unsigned char *out, size_t cap) {
-  unsigned char *blob;
-  unsigned char *nonce, *ct, *tag;
-  EVP_CIPHER_CTX *ctx;
-  int len = 0;
-  size_t payload_len = 4 + CRYPTO_EMM_G_LEN;
-
-  ck_assert_uint_le(3 + payload_len, cap);
-  section_header(SC_SECTION_TID_EMM, payload_len, out);
-  out[3] = (unsigned char)(service_id >> 8);
-  out[4] = (unsigned char)service_id;
-  out[5] = 0;
-  out[6] = 1; /* sk_version, arbitrary */
-
-  blob = out + 7;
-  nonce = blob;
-  ct = blob + CRYPTO_GCM_NONCE_LEN;
-  tag = blob + CRYPTO_GCM_NONCE_LEN + CRYPTO_KEY_LEN;
-  memset(nonce, 0x24, CRYPTO_GCM_NONCE_LEN);
-
-  ctx = EVP_CIPHER_CTX_new();
-  ck_assert_int_eq(EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL), 1);
-  ck_assert_int_eq(EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, CRYPTO_GCM_NONCE_LEN, NULL), 1);
-  ck_assert_int_eq(EVP_EncryptInit_ex(ctx, NULL, NULL, bk, nonce), 1);
-  ck_assert_int_eq(EVP_EncryptUpdate(ctx, ct, &len, sk, CRYPTO_KEY_LEN), 1);
-  ck_assert_int_eq(EVP_EncryptFinal_ex(ctx, ct + len, &len), 1);
-  ck_assert_int_eq(EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, CRYPTO_GCM_TAG_LEN, tag), 1);
-  EVP_CIPHER_CTX_free(ctx);
-
-  return 3 + payload_len;
-}
-
-/* builds a real ECM section: header + CP_CW_COMBINATION's cp_number(2) +
-   AES-256-ECB(cw zero-padded to 16 bytes, under sk) - matches the real
-   Simulcrypt ECMG's ECM payload layout */
-static size_t build_ecm(const unsigned char sk[CRYPTO_KEY_LEN], const unsigned char *cw, int cw_len, unsigned char *out, size_t cap) {
-  unsigned char block[CRYPTO_CW_ENC_LEN];
-  EVP_CIPHER_CTX *ctx;
-  int len = 0;
-
-  ck_assert_uint_le(5 + CRYPTO_CW_ENC_LEN, cap);
-  memset(block, 0, sizeof block);
-  memcpy(block, cw, (size_t)cw_len);
-
-  section_header(SC_SECTION_TID_ECM_EVEN, 2 + CRYPTO_CW_ENC_LEN, out);
-  out[3] = 0;
-  out[4] = 1; /* cp_number, arbitrary */
-  ctx = EVP_CIPHER_CTX_new();
-  ck_assert_int_eq(EVP_EncryptInit_ex(ctx, EVP_aes_256_ecb(), NULL, sk, NULL), 1);
-  ck_assert_int_eq(EVP_CIPHER_CTX_set_padding(ctx, 0), 1);
-  ck_assert_int_eq(EVP_EncryptUpdate(ctx, out + 5, &len, block, CRYPTO_CW_ENC_LEN), 1);
-  EVP_CIPHER_CTX_free(ctx);
-
-  return 5 + CRYPTO_CW_ENC_LEN;
-}
+#include "cas_fixture.h"
 
 START_TEST(full_chain_csa2_recovers_cw) {
   EVP_PKEY *pub;
@@ -385,6 +243,241 @@ START_TEST(device_state_new_rejects_empty_serial) {
 }
 END_TEST
 
+static device_state_t *make_profile_device(EVP_PKEY **key_out, const char *spec, const unsigned char bk[CRYPTO_KEY_LEN], const unsigned char sk[CRYPTO_KEY_LEN], unsigned service_id) {
+  EVP_PKEY *key = make_rsa_key();
+  ecm_profile_t profile;
+  device_state_t *d;
+  unsigned char emm[1024];
+  size_t n;
+
+  ck_assert_int_eq(ecm_profile_parse(spec, &profile), 0);
+  ck_assert_int_eq(ecm_profile_validate(&profile), 0);
+  strcpy(g_key_path, "/tmp/dipidescramble_test_device_key_XXXXXX");
+  write_key_pem(key, g_key_path);
+  d = device_state_new(g_key_path, TEST_SERIAL, &profile, 0);
+  ck_assert_ptr_nonnull(d);
+  remove(g_key_path);
+  n = build_emm_u(key, bk, emm, sizeof emm);
+  ck_assert_int_eq(device_on_emm(d, emm, n), 1);
+  n = build_emm_g(bk, sk, service_id, emm, sizeof emm);
+  ck_assert_int_eq(device_on_emm(d, emm, n), 1);
+  *key_out = key;
+  return d;
+}
+
+static size_t ecb256_encrypt(const unsigned char key[32], const unsigned char *in, size_t n, unsigned char *out) {
+  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+  int len = 0;
+
+  ck_assert_int_eq(EVP_EncryptInit_ex(ctx, EVP_aes_256_ecb(), NULL, key, NULL), 1);
+  ck_assert_int_eq(EVP_CIPHER_CTX_set_padding(ctx, 0), 1);
+  ck_assert_int_eq(EVP_EncryptUpdate(ctx, out, &len, in, (int)n), 1);
+  EVP_CIPHER_CTX_free(ctx);
+  return (size_t)len;
+}
+
+static size_t profile_ecm(unsigned char *out, unsigned cp, const unsigned char *wire, size_t wire_len) {
+  section_header(SC_SECTION_TID_ECM_EVEN, 2 + wire_len, out);
+  out[3] = (unsigned char)(cp >> 8);
+  out[4] = (unsigned char)cp;
+  memcpy(out + 5, wire, wire_len);
+  return 5 + wire_len;
+}
+
+static void test_keys(unsigned char bk[CRYPTO_KEY_LEN], unsigned char sk[CRYPTO_KEY_LEN]) {
+  int i;
+
+  for (i = 0; i < CRYPTO_KEY_LEN; i++) {
+    bk[i] = (unsigned char)(i + 33);
+    sk[i] = (unsigned char)(250 - i * 3);
+  }
+}
+
+START_TEST(profile_branch_decrypts_a_cissa_cw_through_hkdf_derived_key) {
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char enc[32];
+  unsigned char cw[16];
+  unsigned char wire[16];
+  unsigned char ecm[64];
+  unsigned char out[16];
+  EVP_PKEY *key;
+  device_state_t *d;
+  size_t n;
+  int i;
+
+  test_keys(bk, sk);
+  for (i = 0; i < 16; i++)
+    cw[i] = (unsigned char)(0x80 + i);
+  d = make_profile_device(&key, "cipher=aes256-ecb", bk, sk, 0x0064);
+  ref_hkdf(sk, "dipidescramble-ecm-enc", enc);
+  ck_assert_uint_eq(ecb256_encrypt(enc, cw, 16, wire), 16u);
+  n = profile_ecm(ecm, 0x0007, wire, 16);
+  ck_assert_int_eq(device_resolve_cw(d, ecm, n, 0x0064, 16, TEST_ECM_PID, out), 0);
+  ck_assert_mem_eq(out, cw, 16);
+  EVP_PKEY_free(key);
+  device_state_free(d);
+}
+END_TEST
+
+START_TEST(profile_branch_duplicates_a_csa2_cw_into_both_halves) {
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char enc[32];
+  unsigned char plain[16] = {1, 2, 3, 4, 5, 6, 7, 8};
+  unsigned char wire[16];
+  unsigned char ecm[64];
+  unsigned char out[16];
+  EVP_PKEY *key;
+  device_state_t *d;
+  size_t n;
+
+  test_keys(bk, sk);
+  d = make_profile_device(&key, "cipher=aes256-ecb,padding=zero", bk, sk, 0x0064);
+  ref_hkdf(sk, "dipidescramble-ecm-enc", enc);
+  ck_assert_uint_eq(ecb256_encrypt(enc, plain, 16, wire), 16u);
+  n = profile_ecm(ecm, 0x0007, wire, 16);
+  ck_assert_int_eq(device_resolve_cw(d, ecm, n, 0x0064, 8, TEST_ECM_PID, out), 0);
+  ck_assert_mem_eq(out, plain, 8);
+  ck_assert_mem_eq(out + 8, plain, 8);
+  EVP_PKEY_free(key);
+  device_state_free(d);
+}
+END_TEST
+
+START_TEST(profile_branch_applies_only_the_first_combo_of_a_cw_group) {
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char enc[32];
+  unsigned char plain[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+  unsigned char wire[16];
+  unsigned char ecm[64];
+  unsigned char out[16];
+  EVP_PKEY *key;
+  device_state_t *d;
+  size_t n;
+
+  test_keys(bk, sk);
+  d = make_profile_device(&key, "cipher=aes256-ecb,cw_count=2,cw_group=cw,field_order=cw_group", bk, sk, 0x0064);
+  ref_hkdf(sk, "dipidescramble-ecm-enc", enc);
+  ck_assert_uint_eq(ecb256_encrypt(enc, plain, 16, wire), 16u);
+  n = profile_ecm(ecm, 0x0007, wire, 16);
+  ck_assert_int_eq(device_resolve_cw(d, ecm, n, 0x0064, 8, TEST_ECM_PID, out), 0);
+  ck_assert_mem_eq(out, plain, 8);
+  ck_assert_mem_eq(out + 8, plain, 8);
+  EVP_PKEY_free(key);
+  device_state_free(d);
+}
+END_TEST
+
+START_TEST(profile_branch_uses_the_ecm_pid_as_the_ecm_id_fallback_for_binding) {
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char enc[32];
+  unsigned char mac[32];
+  unsigned char cw[16] = {9, 9, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8};
+  unsigned char macbuf[16 + 4];
+  unsigned char wire[16 + 32];
+  unsigned char ecm[128];
+  unsigned char out[16];
+  unsigned int hl;
+  EVP_PKEY *key;
+  device_state_t *d;
+  size_t n;
+
+  test_keys(bk, sk);
+  d = make_profile_device(&key, "cipher=aes256-ecb,integrity=hmac-sha256", bk, sk, 0x0064);
+  ref_hkdf(sk, "dipidescramble-ecm-enc", enc);
+  ref_hkdf(sk, "dipidescramble-ecm-mac", mac);
+  ck_assert_uint_eq(ecb256_encrypt(enc, cw, 16, wire), 16u);
+  memcpy(macbuf, wire, 16);
+  macbuf[16] = (unsigned char)(TEST_ECM_PID >> 8);
+  macbuf[17] = (unsigned char)TEST_ECM_PID;
+  macbuf[18] = 0x00;
+  macbuf[19] = 0x07;
+  ck_assert_ptr_nonnull(HMAC(EVP_sha256(), mac, 32, macbuf, sizeof macbuf, wire + 16, &hl));
+  n = profile_ecm(ecm, 0x0007, wire, sizeof wire);
+  ck_assert_int_eq(device_resolve_cw(d, ecm, n, 0x0064, 16, TEST_ECM_PID, out), 0);
+  ck_assert_mem_eq(out, cw, 16);
+  memset(out, 0xEE, sizeof out);
+  ck_assert_int_eq(device_resolve_cw(d, ecm, n, 0x0064, 16, TEST_ECM_PID + 1, out), -1);
+  ck_assert_uint_eq(out[0], 0xEEu);
+  ck_assert_uint_eq(out[15], 0xEEu);
+  EVP_PKEY_free(key);
+  device_state_free(d);
+}
+END_TEST
+
+START_TEST(profile_branch_failure_leaves_the_output_untouched) {
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char enc[32];
+  unsigned char cw[16] = {1};
+  unsigned char wire[16 + 4];
+  unsigned char ecm[64];
+  unsigned char out[16];
+  EVP_PKEY *key;
+  device_state_t *d;
+  size_t n;
+  uint32_t crc = 0;
+
+  test_keys(bk, sk);
+  d = make_profile_device(&key, "cipher=aes256-ecb,integrity=crc32,bind_ecm_id=0,bind_cp_number=0", bk, sk, 0x0064);
+  ref_hkdf(sk, "dipidescramble-ecm-enc", enc);
+  ck_assert_uint_eq(ecb256_encrypt(enc, cw, 16, wire), 16u);
+  {
+    uint32_t c = 0xFFFFFFFFu;
+    int i;
+    int b;
+
+    for (i = 0; i < 16; i++) {
+      c ^= wire[i];
+      for (b = 0; b < 8; b++)
+        c = (c >> 1) ^ (0xEDB88320u & (uint32_t)(-(int32_t)(c & 1u)));
+    }
+    crc = c ^ 0xFFFFFFFFu;
+  }
+  wire[16] = (unsigned char)(crc >> 24);
+  wire[17] = (unsigned char)(crc >> 16);
+  wire[18] = (unsigned char)(crc >> 8);
+  wire[19] = (unsigned char)crc;
+  n = profile_ecm(ecm, 0x0007, wire, sizeof wire);
+  memset(out, 0xAA, sizeof out);
+  ck_assert_int_eq(device_resolve_cw(d, ecm, n, 0x0064, 16, TEST_ECM_PID, out), 0);
+  ck_assert_mem_eq(out, cw, 16);
+
+  ecm[5] ^= 0x01;
+  memset(out, 0xAA, sizeof out);
+  ck_assert_int_eq(device_resolve_cw(d, ecm, n, 0x0064, 16, TEST_ECM_PID, out), -1);
+  ck_assert_uint_eq(out[0], 0xAAu);
+  ck_assert_int_eq(device_resolve_cw(d, ecm, n - 1, 0x0064, 16, TEST_ECM_PID, out), -1);
+  ck_assert_int_eq(device_resolve_cw(d, ecm, 4, 0x0064, 16, TEST_ECM_PID, out), -1);
+  EVP_PKEY_free(key);
+  device_state_free(d);
+}
+END_TEST
+
+START_TEST(legacy_branch_rejects_a_too_short_ecm_payload) {
+  EVP_PKEY *pub;
+  device_state_t *d = make_device(&pub);
+  unsigned char bk[CRYPTO_KEY_LEN] = {1};
+  unsigned char sk[CRYPTO_KEY_LEN] = {2};
+  unsigned char buf[1024];
+  unsigned char out[16] = {0};
+  size_t n;
+
+  n = build_emm_u(pub, bk, buf, sizeof buf);
+  ck_assert_int_eq(device_on_emm(d, buf, n), 1);
+  n = build_emm_g(bk, sk, 0x0064, buf, sizeof buf);
+  ck_assert_int_eq(device_on_emm(d, buf, n), 1);
+  n = build_ecm(sk, out, 8, buf, sizeof buf);
+  ck_assert_int_eq(device_resolve_cw(d, buf, 5 + CRYPTO_CW_ENC_LEN - 1, 0x0064, 8, TEST_ECM_PID, out), -1);
+  ck_assert_int_eq(device_resolve_cw(d, buf, 4, 0x0064, 8, TEST_ECM_PID, out), -1);
+  EVP_PKEY_free(pub);
+  device_state_free(d);
+}
+END_TEST
+
 static Suite *device_suite(void) {
   Suite *s = suite_create("device");
   TCase *tc = tcase_create("core");
@@ -398,6 +491,12 @@ static Suite *device_suite(void) {
   tcase_add_test(tc, emm_g_ignored_before_emm_u_sets_bk);
   tcase_add_test(tc, emm_u_for_another_serial_is_ignored);
   tcase_add_test(tc, device_state_new_rejects_empty_serial);
+  tcase_add_test(tc, profile_branch_decrypts_a_cissa_cw_through_hkdf_derived_key);
+  tcase_add_test(tc, profile_branch_duplicates_a_csa2_cw_into_both_halves);
+  tcase_add_test(tc, profile_branch_applies_only_the_first_combo_of_a_cw_group);
+  tcase_add_test(tc, profile_branch_uses_the_ecm_pid_as_the_ecm_id_fallback_for_binding);
+  tcase_add_test(tc, profile_branch_failure_leaves_the_output_untouched);
+  tcase_add_test(tc, legacy_branch_rejects_a_too_short_ecm_payload);
   suite_add_tcase(s, tc);
   return s;
 }

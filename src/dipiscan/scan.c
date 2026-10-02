@@ -12,11 +12,11 @@
 #include "lib/demux/rtp.h"
 #include "lib/demux/tspack.h"
 #include "lib/helper/describe.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/httpclient/httpclient.h"
 #include "lib/net/multicast.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "scan.h"
 #include "version.h"
 

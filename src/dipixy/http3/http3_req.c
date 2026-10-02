@@ -84,6 +84,10 @@ static int cb_h3_deferred_consume(nghttp3_conn *h3, int64_t sid, size_t consumed
 /* ngtcp2 handshake_completed cb: creates H3 session */
 int cb_handshake_completed(ngtcp2_conn *qconn, void *ud) {
   h3_conn_t *c = ud;
+  const unsigned char *alpn = NULL;
+  unsigned alpn_len = 0;
+  SSL_get0_alpn_selected(c->ssl, &alpn, &alpn_len);
+  if (alpn_len != 2 || memcmp(alpn, "h3", 2) != 0) return NGTCP2_ERR_CALLBACK_FAILURE;
   c->handshake_done = 1;
   h3_stateless_offer_token(qconn, (struct sockaddr *)&c->peer_addr, c->peer_addrlen);
   if (ngtcp2_conn_open_uni_stream(qconn, &c->h3_ctrl, NULL) != 0 || ngtcp2_conn_open_uni_stream(qconn, &c->h3_qenc, NULL) != 0 || ngtcp2_conn_open_uni_stream(qconn, &c->h3_qdec, NULL) != 0)

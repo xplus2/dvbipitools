@@ -6,7 +6,7 @@
 #include "escodec.h"
 
 /* skips one scaling list (H.264 SPS scaling_list()): sz entries, delta-coded, wraps mod 256 */
-static void skip_scaling_list(br_t *b, int sz) {
+void skip_scaling_list(br_t *b, int sz) {
   int last = 8, next = 8;
   for (int j = 0; j < sz; j++) {
     if (next) next = (last + br_se(b) + 256) % 256;
@@ -14,7 +14,7 @@ static void skip_scaling_list(br_t *b, int sz) {
   }
 }
 
-static void skip_scaling_matrices(br_t *b, int n) {
+void skip_scaling_matrices(br_t *b, int n) {
   for (int k = 0; k < n; k++) if (br_u(b, 1)) skip_scaling_list(b, (k < 6) ? 16 : 64);
 }
 
@@ -148,11 +148,11 @@ int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned
   return 0;
 }
 
-static void br_align(br_t *b) {
+void br_align(br_t *b) {
   b->bit = (b->bit + 7) & ~(size_t)7;
 }
 
-static void skip_vvc_gci(br_t *b) {
+void skip_vvc_gci(br_t *b) {
   unsigned gci_present = br_u(b, 1);
   if (gci_present) {
     unsigned num_additional_bits;
@@ -163,7 +163,7 @@ static void skip_vvc_gci(br_t *b) {
   br_align(b);
 }
 
-static void skip_vvc_ptl(br_t *b, unsigned max_sublayers_minus1) {
+void skip_vvc_ptl(br_t *b, unsigned max_sublayers_minus1) {
   unsigned char sublayer_level_present[8];
   unsigned i;
   unsigned num_sub_profiles;

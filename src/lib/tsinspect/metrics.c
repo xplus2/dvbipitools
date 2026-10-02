@@ -4,21 +4,31 @@
 #include <pthread.h>
 #include <time.h>
 
-#include "lib/helper/ioutil.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/ioutil.h"
+#include "lib/sys/signal.h"
 #include "priv.h"
 
 static const char *const TABLE_NAMES[] = {"pat", "pmt", "cat", "sdt", "nit"};
 
-static void put_labeled(metrics_writer_t *w, metrics_id_t id, const char *stream, const char *name, uint64_t v) {
-  char label[METRICS_LABEL_MAX + 1];
+static void join_label(char *label, size_t cap, const char *stream, const char *name) {
   const char sep[2] = {METRICS_LABEL_SEP, '\0'};
   sbuf_t b;
-  sbuf_init(&b, label, sizeof label);
+  sbuf_init(&b, label, cap);
   sbuf_add(&b, stream);
   sbuf_add(&b, sep);
   sbuf_add(&b, name);
+}
+
+static void put_labeled(metrics_writer_t *w, metrics_id_t id, const char *stream, const char *name, uint64_t v) {
+  char label[METRICS_LABEL_MAX + 1];
+  join_label(label, sizeof label, stream, name);
   metrics_writer_put(w, id, label, v);
+}
+
+static void put_labeled_signed(metrics_writer_t *w, metrics_id_t id, const char *stream, const char *name, int64_t v) {
+  char label[METRICS_LABEL_MAX + 1];
+  join_label(label, sizeof label, stream, name);
+  metrics_writer_put_signed(w, id, label, v);
 }
 
 void put_header_series(metrics_writer_t *w, const char *stream, const tsinspect_counters_t *c, const tspack_sync_t *sync, int sync_used) {
@@ -49,6 +59,7 @@ void tsinspect_put_metrics(tsinspect_t *t, metrics_writer_t *w, const char *stre
   metrics_writer_put(w, METRICS_ID_TS_INPUT_STALLS_TOTAL, stream, c->stalls);
   metrics_writer_put(w, METRICS_ID_TS_INPUT_STALL_MILLISECONDS_TOTAL, stream, c->stall_ms);
   metrics_writer_put(w, METRICS_ID_TS_MAX_INTERPACKET_GAP_MILLISECONDS, stream, (uint64_t)p.gap_max_ms);
+  if (p.buffer_ms >= 0) metrics_writer_put(w, METRICS_ID_TS_INPUT_BUFFER_MILLISECONDS, stream, (uint64_t)p.buffer_ms);
   if (p.last_packet > 0.0) metrics_writer_put(w, METRICS_ID_TS_LAST_PACKET_TIMESTAMP_SECONDS, stream, (uint64_t)(p.last_packet + skew));
   if (p.mgb1_valid) metrics_writer_put(w, METRICS_ID_TS_BITRATE_MGB1_BITS_PER_SECOND, stream, (uint64_t)p.mgb1_bps);
   if (p.mgb2_valid) metrics_writer_put(w, METRICS_ID_TS_BITRATE_MGB2_BITS_PER_SECOND, stream, (uint64_t)p.mgb2_bps);
@@ -56,6 +67,19 @@ void tsinspect_put_metrics(tsinspect_t *t, metrics_writer_t *w, const char *stre
   if (t->level >= METRICS_INSPECT_TS_MEDIUM && p.rx_used) {
     metrics_writer_put(w, METRICS_ID_TS_PCR_JITTER_MAX_MICROSECONDS, stream, (uint64_t)p.pcr_jitter_us);
     metrics_writer_put(w, METRICS_ID_TS_PCR_ACCURACY_ERRORS_TOTAL, stream, c->pcr_accuracy_errors);
+  }
+  if (t->level >= METRICS_INSPECT_TS_MEDIUM && p.rx_used) {
+    metrics_writer_put(w, METRICS_ID_TS_PCR_FREQ_OFFSET_ERRORS_TOTAL, stream, c->pcr_freq_offset_errors);
+    if (p.drift_valid) metrics_writer_put_signed(w, METRICS_ID_TS_PCR_FREQ_OFFSET_PPB, stream, p.drift_ppb);
+    if (p.rate_valid) metrics_writer_put_signed(w, METRICS_ID_TS_PCR_DRIFT_RATE_PPB_PER_SECOND, stream, p.drift_rate);
+  }
+  for (unsigned i = 0; i < p.n_lead; i++) {
+    char pid[8];
+    sbuf_t pb;
+    sbuf_init(&pb, pid, sizeof pid);
+    sbuf_add_uint(&pb, p.lead_pid[i]);
+    put_labeled_signed(w, METRICS_ID_TS_DTS_PCR_LEAD_MICROSECONDS, stream, pid, p.lead_us[i]);
+    put_labeled(w, METRICS_ID_TS_DTS_PCR_LEAD_UNDERRUNS_TOTAL, stream, pid, p.lead_underruns[i]);
   }
   if (t->level >= METRICS_INSPECT_TS_FULL && p.psi_bound) {
     metrics_writer_put(w, METRICS_ID_TS_UNREFERENCED_PIDS_TOTAL, stream, c->unreferenced_pids);

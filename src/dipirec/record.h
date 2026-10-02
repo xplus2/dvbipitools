@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "args.h"
+#include "cli/args.h"
 #include "lib/metrics/export.h"
 
 /* run recording; 0 on success */

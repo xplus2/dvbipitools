@@ -9,9 +9,10 @@
 #include "lib/demux/psi/psi.h"
 #include "lib/mux/psi_build.h"
 
-#include "../args.h"
+#include "../cli/args.h"
 
 #include "pmtbuild.h"
+#include "timemap.h"
 
 typedef struct remux remux_t;
 typedef void (*remux_packet_cb)(void *ctx, const unsigned char *pkt188);
@@ -38,6 +39,15 @@ typedef struct {
   unsigned long long ait_sections_total;
   unsigned long long pmt_updates_total;
   unsigned long long eit_queue_drops_total; /* eit_queue_put: EIT_QUEUE_CAP reached, section discarded */
+  unsigned long long pcr_rewritten_total;
+  unsigned long long pes_retimed_total;
+  unsigned long long pes_retime_skipped_total;
+  unsigned long long retime_relatches_total;
+  unsigned long long hold_forced_total;
+  unsigned long long scte35_adjusted_total;
+  int release_lead_seen;
+  long long release_lead_min_us;
+  long long release_lead_max_us;
 } ts_metrics_t;
 
 /* pids: borrowed. standalone: SPTS, +PAT/CAT/SDT/NIT/AIT/ECM/EMM. non-standalone (MPTS): only
@@ -61,6 +71,15 @@ size_t remux_source_emm_descriptor(const remux_t *r, unsigned char *out, size_t 
 struct cas;
 /* NULL detaches */
 void remux_set_cas(remux_t *r, struct cas *cas);
+
+void remux_set_timemap(remux_t *r, timemap_t *tm);
+
+typedef int (*remux_clock_fn)(void *ctx, uint64_t *pcr27);
+typedef void (*remux_latch_fn)(void *ctx, uint64_t pcr27);
+int remux_set_hold(remux_t *r, remux_clock_fn clock, remux_latch_fn latch, void *clock_ctx, unsigned lead_ms);
+void remux_release(remux_t *r, double now_s, remux_packet_cb cb, void *ctx, int all, ts_metrics_t *tsm);
+int remux_hold_due_ms(const remux_t *r);
+unsigned long long remux_hold_forced(const remux_t *r);
 
 /* now_s: caller's clock, not read internally (testability, avoids clock read per packet, see mpts_tick()).
    also drives PMT/AIT (standalone: +PAT/CAT/SDT/NIT) resend. tsm: accumulates call's TS-integrity counters (nullable) */

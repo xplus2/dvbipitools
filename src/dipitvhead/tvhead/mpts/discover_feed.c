@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 #include "priv.h"
 
 #define MPTS_READ_CHUNK_BYTES (32 * 188) /* caps backlog delay, per input per tick */
@@ -76,6 +76,10 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   }
   /* cas already running (non-keyword mode, or reconnect): attach too, else this program's packets never scramble */
   if (tk->cas) remux_set_cas(tk->progs[i].rx, tk->cas);
+  remux_set_timemap(tk->progs[i].rx, &tk->tm[i]);
+  if (tk->cfg->pcr_mode == PCR_MODE_REGENERATE && remux_set_hold(tk->progs[i].rx, out_pcr_clock, out_pcr_latch, tk->out, tk->cfg->pcr_lead_ms))
+    log_line_ansi("input \e[1;30m%u\e[0m: hold-back queue setup failed", i);
+  out_pcr_pid_set(tk->out, i, remux_pcr_pid_out(tk->progs[i].rx));
   /* psi outlives rx: es[].src points into it, both freed together in program_reset() */
   mpts_set_program(tk->mpts, i, tk->progs[i].rx);
 }
@@ -95,13 +99,18 @@ void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
     input_metrics_note_read(tk->metrics_on ? &tk->input_stats[i] : NULL, rn, reason);
     if (rn < 0) {
       mpts_set_program(tk->mpts, i, NULL);
+      remux_release(tk->progs[i].rx, tk->now, packet_cb, tk->out, 1, tk->tsm);
+      out_pcr_pid_set(tk->out, i, 0);
       program_reset(&tk->progs[i]);
       retryset_mark_down(tk->rs, i, tk->now_t);
       if (tk->metrics_on) tk->input_stats[i].up = 0;
       return;
     }
     if (rn == 0) return;
-    if (fc_insp_ready(tk, i)) tsinspect_set_rx_ns(tk->insp[i], tvsrc_last_rx_ns(src));
+    if (fc_insp_ready(tk, i)) {
+      tsinspect_set_rx_ns(tk->insp[i], tvsrc_last_rx_ns(src));
+      tsinspect_set_buffer_ms(tk->insp[i], tvsrc_buffer_ms(src));
+    }
     bl->len = (size_t)rn;
     bl->off = 0;
     remaining = bl->len;

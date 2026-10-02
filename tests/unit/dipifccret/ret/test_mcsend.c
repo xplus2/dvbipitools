@@ -10,7 +10,7 @@
 #include <sys/socket.h>
 
 #include "dipifccret/ret/mcsend.h"
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 START_TEST(mcsend_ensure_then_get_returns_socket) {
   mcsend_table_t *t = mcsend_table_new(4, NULL, 1);

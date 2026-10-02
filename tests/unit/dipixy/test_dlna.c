@@ -7,7 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "dipixy/args.h"
+#include "dipixy/cli/args.h"
 #include "dipixy/dlna/dlna.h"
 #include "dipixy/ts/channels/channels.h"
 

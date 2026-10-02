@@ -10,9 +10,9 @@
 
 #include <srt/srt.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "srtcommon.h"
 #include "srtout.h"
@@ -374,6 +374,13 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
   return r;
 }
 
+static uint64_t queue_ms(const srtout_t *r) {
+  uint64_t bytes = 0;
+  if (r->bitrate_ema_bps <= 0) return 0;
+  for (int i = 0; i < r->pending_count; i++) bytes += (uint64_t)r->pending_len[(r->pending_head + i) % r->pending_cap];
+  return (uint64_t)((double)bytes * 1000.0 / r->bitrate_ema_bps);
+}
+
 /* stats push covers whole connection/group, not per bonded member */
 static void push_stats(srtout_t *r) {
   SRT_TRACEBSTATS st;
@@ -390,6 +397,7 @@ static void push_stats(srtout_t *r) {
 {METRICS_ID_SRT_SENDER_QUEUE_CAPACITY_CHUNKS, r->peer_label, (uint64_t)r->pending_cap},
 {METRICS_ID_SRT_SENDER_QUEUE_HIGH_WATERMARK_CHUNKS, r->peer_label, (uint64_t)r->pending_hwm},
 {METRICS_ID_SRT_SENDER_QUEUE_DROPPED_CHUNKS_TOTAL, r->peer_label, r->queue_dropped},
+{METRICS_ID_SRT_SENDER_QUEUE_MILLISECONDS, r->peer_label, queue_ms(r)},
   };
   metrics_entry_t all[sizeof e / sizeof e[0] + sizeof q / sizeof q[0]];
   size_t n = sizeof e / sizeof e[0];
@@ -398,6 +406,7 @@ static void push_stats(srtout_t *r) {
     size_t nq = r->queue_metrics == SRT_QUEUE_METRICS_FULL ? 4 : 2;
     memcpy(all + n, q, nq * sizeof q[0]);
     n += nq;
+    if (r->bitrate_ema_bps > 0) all[n++] = q[4];
   }
   metrics_push_entries(r->mx, r->tool_version, all, n);
 }
@@ -487,6 +496,8 @@ void srtout_queue_stats(const srtout_t *r, srtout_queue_stats_t *out) {
   out->capacity = r->pending_cap;
   out->high_watermark = r->pending_hwm;
   out->dropped = r->queue_dropped;
+  out->ms = queue_ms(r);
+  out->ms_known = r->bitrate_ema_bps > 0;
 }
 
 void srtout_close(srtout_t *r) {

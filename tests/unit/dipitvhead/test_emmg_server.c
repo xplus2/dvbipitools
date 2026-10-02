@@ -17,7 +17,8 @@
 
 static int find_tlv(const unsigned char *payload, size_t payload_len, unsigned short want_tag, const unsigned char **val_out, unsigned short *len_out) {
   simulcrypt_tlv_reader_t r;
-  unsigned short tag, vlen;
+  unsigned short tag;
+  unsigned short vlen;
   const unsigned char *val;
   simulcrypt_tlv_reader_init(&r, payload, payload_len);
   while (simulcrypt_tlv_reader_next(&r, &tag, &val, &vlen) == 1) {
@@ -343,7 +344,8 @@ START_TEST(emmg_server_accepts_up_to_new_conn_cap) {
   emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
   unsigned port;
-  int fd[8], extra;
+  int fd[8];
+  int extra;
   int i;
   unsigned char msg[512];
   unsigned char payload[512];
@@ -642,7 +644,8 @@ static int test_accept_with_timeout(int listen_fd, int timeout_ms) {
 START_TEST(emmg_server_dial_mode_completes_handshake_and_queues_datagram) {
   emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
-  int listen_fd, fd;
+  int listen_fd;
+  int fd;
   unsigned port;
   unsigned char msg[512];
   unsigned char payload[512];
@@ -791,6 +794,213 @@ START_TEST(emmg_server_stop_reaps_all_max_conns_in_mixed_states) {
 }
 END_TEST
 
+#define TAG(t) (unsigned char)((t) >> 8), (unsigned char)(t)
+
+typedef struct {
+  const char *name;
+  unsigned char body[24];
+  size_t len;
+  int rc;
+  int count;
+} extract_case_t;
+
+static const extract_case_t extract_cases[] = {
+    {"empty body", {0}, 0, 0, 0},
+    {"no datagram tags", {TAG(EMMG_P_CLIENT_ID), 0x00, 0x04, 0x00, 0x00, 0x00, 0x01}, 8, 0, 0},
+    {"zero length datagram", {TAG(EMMG_P_DATAGRAM), 0x00, 0x00}, 4, 1, 1},
+    {"datagrams around unknown tag", {TAG(EMMG_P_DATAGRAM), 0x00, 0x01, 0xAA, TAG(EMMG_P_DATA_ID), 0x00, 0x02, 0x00, 0x01, TAG(EMMG_P_DATAGRAM), 0x00, 0x02, 0x01, 0x02}, 17, 2, 2},
+    {"valid then truncated tail", {TAG(EMMG_P_DATAGRAM), 0x00, 0x01, 0xAA, TAG(EMMG_P_DATAGRAM), 0x00, 0x09, 0x01}, 9, -1, 1},
+    {"truncated value", {TAG(EMMG_P_DATAGRAM), 0x00, 0x09, 0x01}, 5, -1, 0},
+    {"truncated tag header", {TAG(EMMG_P_DATAGRAM), 0x00}, 3, -1, 0},
+};
+
+START_TEST(extract_datagrams_table) {
+  const extract_case_t *c = &extract_cases[_i];
+  collected_t got;
+  int rc;
+
+  memset(&got, 0, sizeof got);
+  rc = emmg_extract_datagrams(c->body, c->len, collect_cb, &got);
+  ck_assert_msg(rc == c->rc, "%s: rc %d, want %d", c->name, rc, c->rc);
+  ck_assert_msg(got.count == c->count, "%s: delivered %d, want %d", c->name, got.count, c->count);
+}
+END_TEST
+
+typedef size_t (*build_fn_t)(unsigned char *out, size_t cap);
+
+static size_t build_channel_status_fn(unsigned char *out, size_t cap) {
+  return emmg_build_channel_status(out, cap, 3, 0x4A750001, 1);
+}
+
+static size_t build_channel_error_fn(unsigned char *out, size_t cap) {
+  return emmg_build_channel_error(out, cap, 3, 0x4A750001, EMMG_ERR_UNSUPPORTED_PROTOCOL_VERSION);
+}
+
+static size_t build_stream_status_fn(unsigned char *out, size_t cap) {
+  return emmg_build_stream_status(out, cap, 3, 0x4A750001, 1, 2, 3, 0);
+}
+
+static size_t build_stream_close_response_fn(unsigned char *out, size_t cap) {
+  return emmg_build_stream_close_response(out, cap, 3, 0x4A750001, 1, 2);
+}
+
+static size_t build_bw_allocation_fn(unsigned char *out, size_t cap) {
+  return emmg_build_stream_bw_allocation(out, cap, 3, 0x4A750001, 1, 2, 1, 512);
+}
+
+static size_t build_bw_allocation_without_bandwidth_fn(unsigned char *out, size_t cap) {
+  return emmg_build_stream_bw_allocation(out, cap, 3, 0x4A750001, 1, 2, 0, 0);
+}
+
+static const build_fn_t build_fns[] = {
+    build_channel_status_fn,
+    build_channel_error_fn,
+    build_stream_status_fn,
+    build_stream_close_response_fn,
+    build_bw_allocation_fn,
+    build_bw_allocation_without_bandwidth_fn,
+};
+
+START_TEST(builders_reject_every_short_cap) {
+  unsigned char buf[256];
+  size_t full = build_fns[_i](buf, sizeof buf);
+
+  ck_assert_uint_gt(full, 0u);
+  for (size_t cap = 0; cap < full; cap++) ck_assert_uint_eq(build_fns[_i](buf, cap), 0u);
+  ck_assert_uint_eq(build_fns[_i](buf, full), full);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  int level;
+  unsigned short type;
+  unsigned char payload[24];
+  size_t len;
+  int expect_close;
+} malformed_case_t;
+
+static const malformed_case_t malformed_cases[] = {
+    {"channel_setup without client id", 0, EMMG_MSG_CHANNEL_SETUP, {TAG(EMMG_P_DATA_CHANNEL_ID), 0x00, 0x02, 0x00, 0x01}, 6, 1},
+    {"channel_setup client id wrong width", 0, EMMG_MSG_CHANNEL_SETUP, {TAG(EMMG_P_CLIENT_ID), 0x00, 0x02, 0x00, 0x01, TAG(EMMG_P_DATA_CHANNEL_ID), 0x00, 0x02, 0x00, 0x01}, 12, 1},
+    {"channel_setup truncated tlv", 0, EMMG_MSG_CHANNEL_SETUP, {TAG(EMMG_P_CLIENT_ID), 0x00, 0x04, 0x00}, 5, 1},
+    {"channel_test before channel_setup", 0, EMMG_MSG_CHANNEL_TEST, {0}, 0, 1},
+    {"stream_setup without data type", 1, EMMG_MSG_STREAM_SETUP, {TAG(EMMG_P_DATA_STREAM_ID), 0x00, 0x02, 0x00, 0x01, TAG(EMMG_P_DATA_ID), 0x00, 0x02, 0x00, 0x01}, 12, 1},
+    {"stream_test before stream_setup", 1, EMMG_MSG_STREAM_TEST, {0}, 0, 1},
+    {"bw_request before stream_setup", 1, EMMG_MSG_STREAM_BW_REQUEST, {0}, 0, 1},
+    {"stream_close before stream_setup", 1, EMMG_MSG_STREAM_CLOSE_REQUEST, {0}, 0, 1},
+    {"data_provision before stream_setup", 1, EMMG_MSG_DATA_PROVISION, {TAG(EMMG_P_DATAGRAM), 0x00, 0x01, 0xAA}, 5, 1},
+    {"data_provision truncated tlv", 2, EMMG_MSG_DATA_PROVISION, {TAG(EMMG_P_DATAGRAM), 0x00, 0x09, 0xAA}, 5, 1},
+    {"unknown message type ignored", 2, 0x7EEE, {0}, 0, 0},
+    {"data_provision without datagrams", 2, EMMG_MSG_DATA_PROVISION, {0}, 0, 0},
+    {"data_provision zero length datagram", 2, EMMG_MSG_DATA_PROVISION, {TAG(EMMG_P_DATAGRAM), 0x00, 0x00}, 4, 0},
+};
+
+static size_t build_raw(unsigned char *out, size_t cap, unsigned short type, const unsigned char *payload, size_t len) {
+  size_t hl = simulcrypt_hdr_write(3, type, (unsigned short)len, out, cap);
+
+  ck_assert_uint_ne(hl, 0u);
+  ck_assert_uint_ge(cap - hl, len);
+  if (len) memcpy(out + hl, payload, len);
+  return hl + len;
+}
+
+static void expect_reply_type(int fd, unsigned short type) {
+  unsigned char payload[512];
+  simulcrypt_hdr_t hdr;
+
+  ck_assert_int_eq(fake_read_reply(fd, &hdr, payload, sizeof payload), 0);
+  ck_assert_uint_eq(hdr.type, type);
+}
+
+static void send_prelude(int fd, int level) {
+  unsigned char msg[512];
+  size_t n;
+
+  if (level >= 1) {
+    n = fake_build_channel_setup(msg, sizeof msg, 3, 0x4A750001, 1);
+    ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+    expect_reply_type(fd, EMMG_MSG_CHANNEL_STATUS);
+  }
+  if (level >= 2) {
+    n = fake_build_stream_setup(msg, sizeof msg, 3, 1, 1, 0);
+    ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+    expect_reply_type(fd, EMMG_MSG_STREAM_STATUS);
+  }
+}
+
+START_TEST(emmg_server_handles_malformed_messages) {
+  const malformed_case_t *c = &malformed_cases[_i];
+  emmg_server_cfg_t cfg = {0};
+  emmg_server_t *s;
+  unsigned char msg[512];
+  size_t n;
+  int fd;
+
+  cfg.port = 0;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+  fd = fake_connect(emmg_server_port(s));
+  ck_assert_int_ge(fd, 0);
+
+  send_prelude(fd, c->level);
+  n = build_raw(msg, sizeof msg, c->type, c->payload, c->len);
+  ck_assert_msg(simulcrypt_send_all(fd, msg, n, 3000) == 0, "%s: send", c->name);
+  if (c->expect_close) {
+    assert_closed_by_server(fd);
+  } else {
+    n = build_raw(msg, sizeof msg, EMMG_MSG_CHANNEL_TEST, NULL, 0);
+    ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+    expect_reply_type(fd, EMMG_MSG_CHANNEL_STATUS);
+  }
+
+  close(fd);
+  emmg_server_stop(s);
+}
+END_TEST
+
+START_TEST(emmg_server_drops_oversized_datagram_and_keeps_session) {
+  static const unsigned char dg[] = {0x11, 0x22, 0x33};
+  static const unsigned char big[EMMG_MAX_DATAGRAM_LEN + 1];
+  emmg_server_cfg_t cfg = {0};
+  emmg_server_t *s;
+  unsigned char msg[EMMG_MAX_DATAGRAM_LEN + 64];
+  unsigned char got[64];
+  size_t got_len = 0;
+  size_t n;
+  int fd;
+  int waited = 0;
+  simulcrypt_writer_t w;
+
+  cfg.port = 0;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+  fd = fake_connect(emmg_server_port(s));
+  ck_assert_int_ge(fd, 0);
+  send_prelude(fd, 2);
+
+  ck_assert_int_eq(simulcrypt_writer_begin(&w, msg, sizeof msg, 3, EMMG_MSG_DATA_PROVISION), 0);
+  ck_assert_int_eq(simulcrypt_writer_put_tlv(&w, EMMG_P_DATAGRAM, big, sizeof big), 0);
+  n = simulcrypt_writer_finish(&w);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+
+  n = fake_build_data_provision(msg, sizeof msg, 3, dg, sizeof dg);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+
+  while (emmg_server_dequeue_emm(s, got, sizeof got, &got_len) != 0 && waited < 3000) {
+    struct timespec ts = {0, 20L * 1000000L};
+    nanosleep(&ts, NULL);
+    waited += 20;
+  }
+  ck_assert_uint_eq(got_len, sizeof dg);
+  ck_assert_mem_eq(got, dg, sizeof dg);
+  ck_assert_int_ne(emmg_server_dequeue_emm(s, got, sizeof got, &got_len), 0);
+
+  close(fd);
+  emmg_server_stop(s);
+}
+END_TEST
+
 static Suite *emmg_server_suite(void) {
   Suite *s = suite_create("emmg_server");
   TCase *tc = tcase_create("core");
@@ -805,6 +1015,8 @@ static Suite *emmg_server_suite(void) {
   tcase_add_test(tc, extract_datagrams_single);
   tcase_add_test(tc, extract_datagrams_multiple_in_order);
   tcase_add_test(tc, extract_datagrams_rejects_malformed);
+  tcase_add_loop_test(tc, extract_datagrams_table, 0, (int)(sizeof extract_cases / sizeof extract_cases[0]));
+  tcase_add_loop_test(tc, builders_reject_every_short_cap, 0, (int)(sizeof build_fns / sizeof build_fns[0]));
   suite_add_tcase(s, tc);
 
   {
@@ -822,6 +1034,8 @@ static Suite *emmg_server_suite(void) {
     tcase_add_test(tc_integ, emmg_server_queue_holds_more_than_old_64_cap);
     tcase_add_test(tc_integ, emmg_server_queue_holds_more_than_old_256_cap);
     tcase_add_test(tc_integ, emmg_server_stop_reaps_all_max_conns_in_mixed_states);
+    tcase_add_loop_test(tc_integ, emmg_server_handles_malformed_messages, 0, (int)(sizeof malformed_cases / sizeof malformed_cases[0]));
+    tcase_add_test(tc_integ, emmg_server_drops_oversized_datagram_and_keeps_session);
     suite_add_tcase(s, tc_integ);
   }
 

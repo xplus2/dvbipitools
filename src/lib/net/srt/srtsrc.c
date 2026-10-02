@@ -4,9 +4,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "lib/helper/ioutil.h"
+#include "lib/sys/ioutil.h"
 #include "lib/helper/pipereader.h"
-#include "lib/helper/signal.h"
+#include "lib/sys/signal.h"
 
 #include "srtin.h"
 #include "srtsrc.h"
@@ -67,6 +67,7 @@ srtsrc_t *srtsrc_open(const srtsrc_cfg_t *cfg) {
   r->cfg.verbose = cfg->verbose;
   r->cfg.mx = cfg->mx;
   r->cfg.tool_version = cfg->tool_version;
+  r->cfg.stop = &r->io.stop;
 
   if (pipereader_start(&r->io, reader_main, r) != 0) {
     free(r);

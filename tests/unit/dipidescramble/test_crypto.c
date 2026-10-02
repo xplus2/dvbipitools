@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <openssl/evp.h>
 #include <openssl/pem.h>
@@ -187,11 +188,50 @@ START_TEST(ecm_decrypt_recovers_cissa_cw) {
 }
 END_TEST
 
+START_TEST(device_key_load_rejects_unparsable_pem) {
+  EVP_PKEY *out = NULL;
+  char path[] = "/tmp/dipidescramble_test_badkey_XXXXXX";
+  int fd = mkstemp(path);
+  static const char junk[] = "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n";
+
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq(write(fd, junk, sizeof junk - 1), (int)(sizeof junk - 1));
+  close(fd);
+  ck_assert_int_eq(device_key_load(path, &out), -1);
+  ck_assert_ptr_null(out);
+  remove(path);
+}
+END_TEST
+
+START_TEST(emm_u_decrypt_rejects_plaintext_of_wrong_length) {
+  EVP_PKEY *pkey = make_rsa_key();
+  EVP_PKEY_CTX *ctx;
+  unsigned char shortpt[CRYPTO_KEY_LEN - 1] = {0};
+  unsigned char longpt[CRYPTO_KEY_LEN + 1] = {0};
+  unsigned char recovered[CRYPTO_KEY_LEN];
+  unsigned char ct[512];
+  size_t ctlen = sizeof ct;
+
+  ctx = EVP_PKEY_CTX_new(pkey, NULL);
+  ck_assert_int_gt(EVP_PKEY_encrypt_init(ctx), 0);
+  ck_assert_int_gt(EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING), 0);
+  ck_assert_int_gt(EVP_PKEY_encrypt(ctx, ct, &ctlen, shortpt, sizeof shortpt), 0);
+  ck_assert_int_eq(device_emm_u_decrypt(pkey, ct, ctlen, recovered), -1);
+  ctlen = sizeof ct;
+  ck_assert_int_gt(EVP_PKEY_encrypt(ctx, ct, &ctlen, longpt, sizeof longpt), 0);
+  ck_assert_int_eq(device_emm_u_decrypt(pkey, ct, ctlen, recovered), -1);
+  EVP_PKEY_CTX_free(ctx);
+  EVP_PKEY_free(pkey);
+}
+END_TEST
+
 static Suite *crypto_suite(void) {
   Suite *s = suite_create("crypto");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, device_key_load_roundtrip);
   tcase_add_test(tc, device_key_load_rejects_missing_file);
+  tcase_add_test(tc, device_key_load_rejects_unparsable_pem);
+  tcase_add_test(tc, emm_u_decrypt_rejects_plaintext_of_wrong_length);
   tcase_add_test(tc, emm_u_decrypt_recovers_bk);
   tcase_add_test(tc, emm_u_decrypt_rejects_wrong_key);
   tcase_add_test(tc, emm_g_decrypt_recovers_sk);
