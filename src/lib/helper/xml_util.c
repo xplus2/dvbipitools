@@ -1,6 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#define _GNU_SOURCE
+
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>

@@ -13,9 +13,12 @@ void pcrclock_init(pcrclock_t *c, uint64_t bps, uint64_t base27) {
 }
 
 uint64_t pcrclock_at(const pcrclock_t *c, uint64_t packet_index) {
-  unsigned __int128 bits = ((unsigned __int128)packet_index * 188 + PCR_BYTE_INDEX) * 8;
-  unsigned __int128 ticks = (bits * PCR_CLOCK_HZ + c->bps / 2) / c->bps;
-  return pcr_add(c->base27, (uint64_t)(ticks % PCR_MODULUS));
+  uint64_t bits = (packet_index * 188 + PCR_BYTE_INDEX) * 8;
+  uint64_t q = bits / c->bps;
+  uint64_t r = bits % c->bps;
+  uint64_t ticks = (q % ((uint64_t)1 << 33)) * (PCR_CLOCK_HZ / 300) % ((uint64_t)1 << 33) * 300;
+  ticks = (ticks + (r * PCR_CLOCK_HZ + c->bps / 2) / c->bps) % PCR_MODULUS;
+  return pcr_add(c->base27, ticks);
 }
 
 uint64_t pcr_add(uint64_t a, uint64_t b) { return (a + b) % PCR_MODULUS; }

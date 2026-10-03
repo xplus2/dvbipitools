@@ -108,7 +108,9 @@ jobs:
         apt-get install -y build-essential cmake curl git meson ninja-build ${{ matrix.crosspkg }} libmbedtls-dev
         dpkg --add-architecture ${{ matrix.dpkgarch }}
         apt-get update
-        apt-get install -y libssl-dev:${{ matrix.dpkgarch }} libmbedtls-dev:${{ matrix.dpkgarch }}
+        mkdir /tmp/foreign-debs
+        (cd /tmp/foreign-debs && apt-get download libssl3:${{ matrix.dpkgarch }} libssl-dev:${{ matrix.dpkgarch }} libmbedcrypto7:${{ matrix.dpkgarch }} libmbedx509-1:${{ matrix.dpkgarch }} libmbedtls14:${{ matrix.dpkgarch }} libmbedtls-dev:${{ matrix.dpkgarch }})
+        for deb in /tmp/foreign-debs/*.deb; do dpkg-deb -x "$deb" /; done
         git clone --depth 1 --branch v0.2.20 https://code.videolan.org/rist/librist.git /tmp/librist-v0.2.20
         cat > /tmp/librist-cross.ini <<EOF
         [binaries]
