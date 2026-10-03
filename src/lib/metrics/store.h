@@ -58,7 +58,7 @@ typedef struct {
 void store_init(store_t *st);
 void store_free(store_t *st);
 
-/* validate a datagram and stage/commit it to a slot(component, metrics_id) .
+/* validate a datagram and stage/commit it to a slot(component, metrics_id).
    v2 parts commit atomically at last part. rejects + logs (if -v) and counts into st->stats.
    changed process_start_time is treated as an exporter restart */
 void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_mono, int verbose);

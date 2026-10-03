@@ -16,7 +16,7 @@
 #include "lib/net/tls_server.h"
 
 #include "dipimetrics/httpserver.h"
-#include "dipimetrics/store.h"
+#include "lib/metrics/store.h"
 
 static const char TEST_CERT_PEM[] =
     "-----BEGIN CERTIFICATE-----\n"

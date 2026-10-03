@@ -43,8 +43,8 @@ dipimetrics_SRCS := \
 	src/dipimetrics/cli/args.c \
 	src/dipimetrics/cli/help.c \
 	src/dipimetrics/config.c \
-	src/dipimetrics/store.c \
-	src/dipimetrics/render.c \
+	src/lib/metrics/store.c \
+	src/lib/metrics/render.c \
 	src/dipimetrics/httpserver.c \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/vendor/libyaml/api.c \
@@ -1626,6 +1626,8 @@ dipixy_SRCS := \
 	src/lib/mux/fmp4/fmp4_frag.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
+	src/lib/metrics/render.c \
+	src/lib/metrics/store.c \
 	src/lib/helper/log.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/helper/argutil.c \
@@ -2546,7 +2548,7 @@ dipimetrics_args_SRCS := \
 dipimetrics_store_BIN := tests/unit/dipimetrics/test_store
 dipimetrics_store_SRCS := \
 	tests/unit/dipimetrics/test_store.c \
-	src/dipimetrics/store.c \
+	src/lib/metrics/store.c \
 	src/lib/metrics/protocol.c \
 	src/lib/helper/log.c \
 	src/lib/sys/ioutil.c
@@ -2554,8 +2556,8 @@ dipimetrics_store_SRCS := \
 dipimetrics_render_BIN := tests/unit/dipimetrics/test_render
 dipimetrics_render_SRCS := \
 	tests/unit/dipimetrics/test_render.c \
-	src/dipimetrics/render.c \
-	src/dipimetrics/store.c \
+	src/lib/metrics/render.c \
+	src/lib/metrics/store.c \
 	src/lib/metrics/protocol.c \
 	src/lib/helper/log.c \
 	src/lib/sys/ioutil.c
@@ -2944,8 +2946,8 @@ dipimetrics_httpserver_SRCS := \
 	tests/unit/dipimetrics/test_httpserver.c \
 	src/dipimetrics/httpserver.c \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
-	src/dipimetrics/render.c \
-	src/dipimetrics/store.c \
+	src/lib/metrics/render.c \
+	src/lib/metrics/store.c \
 	src/lib/metrics/protocol.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c \

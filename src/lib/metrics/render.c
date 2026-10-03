@@ -346,8 +346,27 @@ static void fill_entry_refs(const store_t *st, const int *def_idx, entry_ref_t *
   }
 }
 
+/* closes a label set opened at mark (just after '{'). without base labels the set can be empty or lead with ',' */
+static void close_labels(dstrbuf_t *sb, size_t mark, int instance_labels) {
+  if (!sb->buf) return;
+  if (instance_labels) {
+    dstrbuf_add(sb, "}");
+    return;
+  }
+  if (sb->len == mark) {
+    sb->len = mark - 1;
+  } else {
+    if (sb->buf[mark] == ',') {
+      memmove(sb->buf + mark, sb->buf + mark + 1, sb->len - mark - 1);
+      sb->len--;
+    }
+    dstrbuf_add(sb, "}");
+  }
+  sb->buf[sb->len] = '\0';
+}
+
 /* one pass over every stored entry, bucketed by def instead of one scan per def */
-static void render_grouped(dstrbuf_t *sb, const store_t *st) {
+void render_series(dstrbuf_t *sb, const store_t *st, int instance_labels) {
   int def_idx[DEF_ID_MAX]; /* metrics_id_t -> DEFS[] index, -1 if unused */
   size_t count[N_DEFS];
   size_t start[N_DEFS];
@@ -391,11 +410,13 @@ static void render_grouped(dstrbuf_t *sb, const store_t *st) {
     for (size_t k = start[i]; k < start[i] + count[i]; k++) {
       const entry_ref_t *e = &refs[k];
       char label[METRICS_LABEL_MAX + 1];
+      size_t mark;
       memcpy(label, e->label, e->label_len);
       label[e->label_len] = '\0';
       dstrbuf_add(sb, def->name);
       dstrbuf_add(sb, "{");
-      append_base_labels(sb, e->slot);
+      mark = sb->len;
+      if (instance_labels) append_base_labels(sb, e->slot);
       if (def->ts_label) {
         append_ts_labels(sb, label, def->ts_label);
       } else if (def->composite_input_reason) {
@@ -409,7 +430,8 @@ static void render_grouped(dstrbuf_t *sb, const store_t *st) {
         dstrbuf_add(sb, esc);
         dstrbuf_add(sb, "\"");
       }
-      dstrbuf_add(sb, "} ");
+      close_labels(sb, mark, instance_labels);
+      dstrbuf_add(sb, " ");
       if (def->kind == M_GAUGE_SIGNED) dstrbuf_add_i64(sb, metrics_unzigzag(e->value));
       else dstrbuf_add_u64(sb, e->value);
       dstrbuf_add(sb, "\n");
@@ -483,10 +505,48 @@ static void render_self_metrics(dstrbuf_t *sb, const store_t *st) {
 void render_openmetrics(const store_t *st, double now_mono, char **out, size_t *out_len) {
   dstrbuf_t sb;
   dstrbuf_init(&sb);
-  render_grouped(&sb, st);
+  render_series(&sb, st, 1);
   render_snapshot_age(&sb, st, now_mono);
   render_self_metrics(&sb, st);
   dstrbuf_add(&sb, "# EOF\n");
   *out = sb.buf;
   *out_len = sb.len;
+}
+
+static int local_flush(void *ctx, const unsigned char *buf, size_t len) {
+  store_ingest(ctx, buf, len, 0.0, 0);
+  return 0;
+}
+
+int render_local(metrics_component_t component, metrics_extra_fn fill, void *ctx, char **out, size_t *out_len) {
+  store_t st;
+  metrics_writer_t w;
+  metrics_hdr_t hdr;
+  dstrbuf_t sb;
+  size_t len;
+
+  memset(&hdr, 0, sizeof hdr);
+  hdr.proto_version = METRICS_PROTO_VERSION;
+  hdr.component = component;
+  bufcpy(hdr.metrics_id, sizeof hdr.metrics_id, "local");
+  hdr.process_start_time = 1;
+  hdr.sequence = 1;
+  if (metrics_writer_begin(&w, &hdr)) return -1;
+  store_init(&st);
+  w.flush = local_flush;
+  w.flush_ctx = &st;
+  fill(&w, ctx);
+  len = metrics_writer_finish(&w);
+  if (!len) {
+    store_free(&st);
+    return -1;
+  }
+  store_ingest(&st, w.buf, len, 0.0, 0);
+  dstrbuf_init(&sb);
+  render_series(&sb, &st, 0);
+  store_free(&st);
+  if (!sb.buf) return -1;
+  *out = sb.buf;
+  *out_len = sb.len;
+  return 0;
 }

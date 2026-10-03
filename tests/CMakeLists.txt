@@ -3307,15 +3307,15 @@ dvbipitools_add_unit_test(dipimetrics_args
 
 dvbipitools_add_unit_test(dipimetrics_store
     unit/dipimetrics/test_store.c
-    ${CMAKE_SOURCE_DIR}/src/dipimetrics/store.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/store.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
 
 dvbipitools_add_unit_test(dipimetrics_render
     unit/dipimetrics/test_render.c
-    ${CMAKE_SOURCE_DIR}/src/dipimetrics/render.c
-    ${CMAKE_SOURCE_DIR}/src/dipimetrics/store.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/render.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/store.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
@@ -3816,8 +3816,8 @@ dvbipitools_add_unit_test(dipimetrics_httpserver
     unit/dipimetrics/test_httpserver.c
     ${CMAKE_SOURCE_DIR}/src/dipimetrics/httpserver.c
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
-    ${CMAKE_SOURCE_DIR}/src/dipimetrics/render.c
-    ${CMAKE_SOURCE_DIR}/src/dipimetrics/store.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/render.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/store.c
     ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c

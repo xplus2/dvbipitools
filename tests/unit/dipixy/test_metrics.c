@@ -38,6 +38,9 @@ static const family_t families[] = {
 static char g_dir[64];
 static char g_path[108];
 static int g_rfd = -1;
+static metrics_exporter_t g_none;
+
+static int render(char **out, size_t *len) { return dipixy_metrics_render_prometheus(&g_none, out, len); }
 
 static unsigned long long prom_value(const char *name) {
   char *out;
@@ -45,11 +48,15 @@ static unsigned long long prom_value(const char *name) {
   char key[96];
   const char *p;
 
-  ck_assert_int_eq(dipixy_metrics_render_prometheus(&out, &len), 0);
+  unsigned long long v;
+
+  ck_assert_int_eq(render(&out, &len), 0);
   snprintf(key, sizeof key, "\n%s ", name);
   p = strstr(out, key);
   ck_assert_ptr_nonnull(p);
-  return strtoull(p + strlen(key), NULL, 10);
+  v = strtoull(p + strlen(key), NULL, 10);
+  free(out);
+  return v;
 }
 
 START_TEST(prometheus_text_declares_every_family_once) {
@@ -59,7 +66,7 @@ START_TEST(prometheus_text_declares_every_family_once) {
   const family_t *f = &families[_i];
   const char *p;
 
-  ck_assert_int_eq(dipixy_metrics_render_prometheus(&out, &len), 0);
+  ck_assert_int_eq(render(&out, &len), 0);
   snprintf(pat, sizeof pat, "# TYPE %s %s\n", f->name, f->type);
   p = strstr(out, pat);
   ck_assert_ptr_nonnull(p);
@@ -68,6 +75,7 @@ START_TEST(prometheus_text_declares_every_family_once) {
   ck_assert_ptr_nonnull(strstr(out, pat));
   snprintf(pat, sizeof pat, "\n%s ", f->name);
   ck_assert_ptr_nonnull(strstr(out, pat));
+  free(out);
 }
 END_TEST
 
@@ -75,11 +83,11 @@ START_TEST(prometheus_text_is_complete_and_newline_terminated) {
   char *out;
   size_t len;
 
-  ck_assert_int_eq(dipixy_metrics_render_prometheus(&out, &len), 0);
+  ck_assert_int_eq(render(&out, &len), 0);
   ck_assert_uint_eq(len, strlen(out));
   ck_assert_uint_gt(len, 0);
-  ck_assert_uint_lt(len, 2048);
   ck_assert_int_eq(out[len - 1], '\n');
+  free(out);
 }
 END_TEST
 
@@ -90,8 +98,9 @@ START_TEST(prometheus_sample_lines_are_name_and_integer) {
   char *save = NULL;
   char *copy;
 
-  ck_assert_int_eq(dipixy_metrics_render_prometheus(&out, &len), 0);
+  ck_assert_int_eq(render(&out, &len), 0);
   copy = strdup(out);
+  free(out);
   ck_assert_ptr_nonnull(copy);
   for (char *line = strtok_r(copy, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
     char *sp;
@@ -153,37 +162,62 @@ START_TEST(concurrent_notes_are_not_lost) {
 }
 END_TEST
 
-typedef struct {
-  char *out;
-  size_t len;
-  char copy[2048];
-} render_t;
-
 static void *render_once(void *arg) {
-  render_t *r = arg;
+  char **out = arg;
+  size_t len;
 
   dipixy_metrics_note_request();
-  if (dipixy_metrics_render_prometheus(&r->out, &r->len)) return NULL;
-  memcpy(r->copy, r->out, r->len + 1);
-  return r;
+  if (render(out, &len)) *out = NULL;
+  return NULL;
 }
 
-START_TEST(prometheus_buffer_is_per_thread) {
-  render_t other;
+START_TEST(prometheus_render_is_reentrant) {
+  char *other = NULL;
   char *mine;
   size_t mine_len;
-  char before[2048];
+  char *before;
   pthread_t t;
 
-  ck_assert_int_eq(dipixy_metrics_render_prometheus(&mine, &mine_len), 0);
-  memcpy(before, mine, mine_len + 1);
-  memset(&other, 0, sizeof other);
+  ck_assert_int_eq(render(&mine, &mine_len), 0);
+  before = strdup(mine);
+  ck_assert_ptr_nonnull(before);
   pthread_create(&t, NULL, render_once, &other);
   pthread_join(t, NULL);
-  ck_assert_ptr_nonnull(other.out);
-  ck_assert_ptr_ne(other.out, mine);
+  ck_assert_ptr_nonnull(other);
+  ck_assert_ptr_ne(other, mine);
   ck_assert_str_eq(mine, before);
-  ck_assert_str_ne(other.copy, before);
+  ck_assert_str_ne(other, before);
+  free(before);
+  free(mine);
+  free(other);
+}
+END_TEST
+
+static void put_stream(metrics_writer_t *w, void *ctx) {
+  (void)ctx;
+  metrics_writer_put(w, METRICS_ID_TS_PACKETS_TOTAL, NULL, 42);
+  metrics_writer_put(w, METRICS_ID_TS_BYTES_TOTAL, "input0", 7896);
+}
+
+START_TEST(prometheus_text_includes_extras) {
+  metrics_exporter_t mx;
+  int level = 2;
+  char *out;
+  size_t len;
+
+  memset(&mx, 0, sizeof mx);
+  ck_assert_int_eq(metrics_exporter_add_extra(&mx, put_stream, NULL), 0);
+  ck_assert_int_eq(metrics_exporter_add_extra(&mx, dipixy_put_queue_metrics, &level), 0);
+  ck_assert_int_eq(dipixy_metrics_render_prometheus(&mx, &out, &len), 0);
+  ck_assert_ptr_nonnull(strstr(out, "# TYPE dvbipi_ts_packets_total counter\n"));
+  ck_assert_ptr_nonnull(strstr(out, "\ndvbipi_ts_packets_total 42\n"));
+  ck_assert_ptr_nonnull(strstr(out, "\ndvbipi_ts_bytes_total{direction=\"input\",stream=\"input0\"} 7896\n"));
+  ck_assert_ptr_nonnull(strstr(out, "\ndvbipi_xy_tspush_queue_bytes "));
+  ck_assert_ptr_nonnull(strstr(out, "\ndvbipi_xy_tspush_queue_dropped_total "));
+  ck_assert_ptr_nonnull(strstr(out, "\ndvbipi_xy_requests_total "));
+  ck_assert_ptr_null(strstr(out, "headend_id"));
+  ck_assert_ptr_null(strstr(out, "# EOF"));
+  free(out);
 }
 END_TEST
 
@@ -358,7 +392,8 @@ static Suite *metrics_suite(void) {
   tcase_add_test(tc, counters_start_at_zero);
   tcase_add_test(tc, notes_bump_their_own_counter_only);
   tcase_add_test(tc, concurrent_notes_are_not_lost);
-  tcase_add_test(tc, prometheus_buffer_is_per_thread);
+  tcase_add_test(tc, prometheus_render_is_reentrant);
+  tcase_add_test(tc, prometheus_text_includes_extras);
   tcase_add_test(tc, push_sends_one_snapshot_with_the_counters);
   tcase_add_test(tc, push_is_gated_by_the_interval);
   tcase_add_test(tc, push_without_metrics_id_stays_silent);

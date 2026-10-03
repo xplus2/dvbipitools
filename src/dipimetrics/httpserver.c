@@ -18,9 +18,8 @@
 #include "lib/net/tls.h"
 #include "lib/net/tls_server.h"
 #include "lib/vendor/picohttpparser/picohttpparser.h"
-
 #include "httpserver.h"
-#include "render.h"
+#include "lib/metrics/render.h"
 
 #define HTTP_IDLE_TIMEOUT_S 5 /* reaps stuck/idle peer */
 #define REQ_BUF_CAP 8192

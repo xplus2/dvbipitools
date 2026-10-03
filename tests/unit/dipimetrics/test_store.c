@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "lib/sys/ioutil.h"
-#include "dipimetrics/store.h"
+#include "lib/metrics/store.h"
 
 static void make_hdr(metrics_hdr_t *hdr, metrics_component_t component, const char *id, uint64_t process_start, uint64_t sequence) {
   memset(hdr, 0, sizeof *hdr);

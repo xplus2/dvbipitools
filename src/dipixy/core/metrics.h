@@ -22,8 +22,8 @@ void dipixy_metrics_push(metrics_exporter_t *exp);
 void dipixy_metrics_note_request(void);
 void dipixy_metrics_note_http_error(void);
 
-/* --metrics-http only. *out: thread-local buffer, valid until this thread's
-   next call, caller must not free. Prometheus text exposition format. 0 ok, -1 OOM */
-int dipixy_metrics_render_prometheus(char **out, size_t *out_len);
+/* --metrics-http only. same series as the push incl. exp's extras (inspect-ts, queue).
+   *out mallocated, caller free()s. Prometheus text exposition format. 0 ok, -1 OOM */
+int dipixy_metrics_render_prometheus(const metrics_exporter_t *exp, char **out, size_t *out_len);
 
 #endif

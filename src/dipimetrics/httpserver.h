@@ -5,10 +5,8 @@
 #define DIPIMETRICS_HTTPSERVER_H
 
 #include <poll.h>
-
 #include "lib/net/tls_server.h"
-
-#include "store.h"
+#include "lib/metrics/store.h"
 
 #define HTTP_MAX_CONNS 8 /* concurrent in-flight connections, sized for occasional scrapes not real load */
 

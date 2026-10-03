@@ -5,6 +5,7 @@
 
 #include <stdatomic.h>
 
+#include "lib/metrics/render.h"
 #include "lib/sys/ioutil.h"
 #include "lib/sys/signal.h"
 #include "../ts/capture/capture.h"
@@ -38,57 +39,29 @@ void dipixy_put_queue_metrics(metrics_writer_t *w, void *ctx) {
   }
 }
 
+static void put_base(metrics_writer_t *w) {
+  metrics_writer_put(w, METRICS_ID_XY_CONNECTIONS_TOTAL, NULL, (uint64_t)reactor_connections_total());
+  metrics_writer_put(w, METRICS_ID_XY_CONNECTIONS_ACTIVE, NULL, (uint64_t)reactor_connections_active());
+  metrics_writer_put(w, METRICS_ID_XY_REQUESTS_TOTAL, NULL, atomic_load_explicit(&g_requests_total, memory_order_relaxed));
+  metrics_writer_put(w, METRICS_ID_XY_HTTP_ERRORS_TOTAL, NULL, atomic_load_explicit(&g_http_errors_total, memory_order_relaxed));
+  metrics_writer_put(w, METRICS_ID_XY_BYTES_SERVED_TOTAL, NULL, reactor_bytes_served_total());
+  metrics_writer_put(w, METRICS_ID_XY_SOURCES_ACTIVE, NULL, (uint64_t)capture_active_count());
+  metrics_writer_put(w, METRICS_ID_XY_TSPUSH_SUBS_ACTIVE, NULL, (uint64_t)ts_push_active_count());
+}
+
 void dipixy_metrics_push(metrics_exporter_t *exp) {
   metrics_writer_t w;
   if (!metrics_exporter_due(exp, mono_seconds()) || metrics_exporter_begin(exp, &w, TOOL_VERSION)) return;
-  metrics_writer_put(&w, METRICS_ID_XY_CONNECTIONS_TOTAL, NULL, (uint64_t)reactor_connections_total());
-  metrics_writer_put(&w, METRICS_ID_XY_CONNECTIONS_ACTIVE, NULL, (uint64_t)reactor_connections_active());
-  metrics_writer_put(&w, METRICS_ID_XY_REQUESTS_TOTAL, NULL, atomic_load_explicit(&g_requests_total, memory_order_relaxed));
-  metrics_writer_put(&w, METRICS_ID_XY_HTTP_ERRORS_TOTAL, NULL, atomic_load_explicit(&g_http_errors_total, memory_order_relaxed));
-  metrics_writer_put(&w, METRICS_ID_XY_BYTES_SERVED_TOTAL, NULL, reactor_bytes_served_total());
-  metrics_writer_put(&w, METRICS_ID_XY_SOURCES_ACTIVE, NULL, (uint64_t)capture_active_count());
-  metrics_writer_put(&w, METRICS_ID_XY_TSPUSH_SUBS_ACTIVE, NULL, (uint64_t)ts_push_active_count());
+  put_base(&w);
   metrics_exporter_send(exp, &w);
 }
 
-int dipixy_metrics_render_prometheus(char **out, size_t *out_len) {
-  static _Thread_local char buf[2048];
-  sbuf_t b;
+static void put_all(metrics_writer_t *w, void *ctx) {
+  const metrics_exporter_t *exp = ctx;
+  put_base(w);
+  for (int i = 0; i < METRICS_EXTRA_MAX; i++) if (exp->extra[i]) exp->extra[i](w, exp->extra_ctx[i]);
+}
 
-  sbuf_init(&b, buf, sizeof buf);
-  sbuf_add(&b, "# HELP dvbipi_xy_connections_total connections accepted, every protocol\n"
-             "# TYPE dvbipi_xy_connections_total counter\n"
-             "dvbipi_xy_connections_total ");
-  sbuf_add_u64(&b, (uint64_t)reactor_connections_total());
-  sbuf_add(&b, "\n# HELP dvbipi_xy_connections_active connections currently open\n"
-             "# TYPE dvbipi_xy_connections_active gauge\n"
-             "dvbipi_xy_connections_active ");
-  sbuf_add_u64(&b, (uint64_t)reactor_connections_active());
-  sbuf_add(&b, "\n# HELP dvbipi_xy_requests_total HTTP requests dispatched\n"
-             "# TYPE dvbipi_xy_requests_total counter\n"
-             "dvbipi_xy_requests_total ");
-  sbuf_add_u64(&b, atomic_load_explicit(&g_requests_total, memory_order_relaxed));
-  sbuf_add(&b, "\n# HELP dvbipi_xy_http_errors_total HTTP responses with a 4xx/5xx status\n"
-             "# TYPE dvbipi_xy_http_errors_total counter\n"
-             "dvbipi_xy_http_errors_total ");
-  sbuf_add_u64(&b, atomic_load_explicit(&g_http_errors_total, memory_order_relaxed));
-  sbuf_add(&b, "\n# HELP dvbipi_xy_bytes_served_total wire bytes queued to clients, headers and body\n"
-             "# TYPE dvbipi_xy_bytes_served_total counter\n"
-             "dvbipi_xy_bytes_served_total ");
-  sbuf_add_u64(&b, reactor_bytes_served_total());
-  sbuf_add(&b, "\n# HELP dvbipi_xy_sources_active distinct multicast joins currently open\n"
-             "# TYPE dvbipi_xy_sources_active gauge\n"
-             "dvbipi_xy_sources_active ");
-  sbuf_add_u64(&b, (uint64_t)capture_active_count());
-  sbuf_add(&b, "\n# HELP dvbipi_xy_tspush_subscribers_active raw TS push clients currently attached\n"
-             "# TYPE dvbipi_xy_tspush_subscribers_active gauge\n"
-             "dvbipi_xy_tspush_subscribers_active ");
-  sbuf_add_u64(&b, (uint64_t)ts_push_active_count());
-  sbuf_add(&b, "\n");
-
-  if (b.truncated) return -1; /* fixed template, should never truncate */
-
-  *out = buf;
-  *out_len = b.len;
-  return 0;
+int dipixy_metrics_render_prometheus(const metrics_exporter_t *exp, char **out, size_t *out_len) {
+  return render_local(METRICS_COMPONENT_XY, put_all, (void *)exp, out, out_len);
 }

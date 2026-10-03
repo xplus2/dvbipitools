@@ -6,8 +6,8 @@
 #include <string.h>
 
 #include "lib/sys/ioutil.h"
-#include "dipimetrics/render.h"
-#include "dipimetrics/store.h"
+#include "lib/metrics/render.h"
+#include "lib/metrics/store.h"
 
 static store_slot_t *add_slot(store_t *st, metrics_component_t component, const char *id, double received_mono) {
   store_slot_t *s = &st->slots[0];

@@ -15,10 +15,9 @@
 #include "lib/sys/signal.h"
 #include "lib/helper/toolmain.h"
 #include "lib/net/tls_server.h"
-
 #include "cli/args.h"
 #include "httpserver.h"
-#include "store.h"
+#include "lib/metrics/store.h"
 #include "version.h"
 
 #define POLL_TIMEOUT_MS 1000

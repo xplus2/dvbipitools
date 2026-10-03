@@ -25,11 +25,12 @@ void serve_body(conn_t *c, const char *content_type, const char *body, size_t le
 void serve_metrics(conn_t *c, int is_head, int keep_alive) {
   char *body;
   size_t len;
-  if (dipixy_metrics_render_prometheus(&body, &len)) {
+  if (dipixy_metrics_render_prometheus(reactor_metrics(), &body, &len)) {
     respond_status(c, RESP_501, keep_alive);
     return;
   }
   serve_body(c, "text/plain; version=0.0.4", body, len, is_head, keep_alive);
+  free(body);
 }
 
 void serve_status(conn_t *c, int is_head, int keep_alive) {

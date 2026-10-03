@@ -403,8 +403,8 @@ function(dipimetrics_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/cli/args.c
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/cli/help.c
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/config.c
-            ${CMAKE_SOURCE_DIR}/src/dipimetrics/store.c
-            ${CMAKE_SOURCE_DIR}/src/dipimetrics/render.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/store.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render.c
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/httpserver.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
@@ -1393,6 +1393,8 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/fmp4_frag.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/store.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
