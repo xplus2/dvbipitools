@@ -484,10 +484,11 @@ and
 .BR \-\-cas\-algo .
 .TP
 .B \-\-biss2\-ca\-receivers \fIdir\fR
-Enable BISS2 Mode CA: a directory of PEM public keys, one per entitled
-receiver or group. Rescanned on
-.BR SIGHUP ;
-removing a receiver from the directory revokes it and forces a Session Key
+Enable BISS2 Mode CA: a directory of PEM public key files (any number of keys each),
+one key per entitled receiver or group of receivers sharing a key pair.
+Entries over 15 are split across EMM sections. Rescan by
+.BR SIGHUP .
+Removing a receiver from the directory revokes it and forces a Session Key
 change. Mutually exclusive with
 .BR \-\-biss1\-sw ,
 .BR \-\-biss2\-sw ,

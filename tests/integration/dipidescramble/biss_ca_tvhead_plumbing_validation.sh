@@ -18,13 +18,22 @@ PORT=17755
 
 RECEIVERS="$WORK/receivers"
 mkdir -p "$RECEIVERS"
-PRIVKEY="$WORK/receiver1.key"
+PRIVKEY="$WORK/device.key"
+KEYDIR="$WORK/groupkeys"
+mkdir -p "$KEYDIR"
 openssl genrsa -out "$PRIVKEY" 2048 >"$WORK/openssl-genrsa.log" 2>&1 || fail "openssl genrsa failed"
-openssl rsa -in "$PRIVKEY" -pubout -out "$RECEIVERS/receiver1.pem" >"$WORK/openssl-pubout.log" 2>&1 || fail "openssl rsa -pubout failed"
+openssl genrsa -out "$KEYDIR/group.key" 2048 >>"$WORK/openssl-genrsa.log" 2>&1 || fail "openssl genrsa failed"
+openssl genrsa -out "$KEYDIR/unrelated.key" 2048 >>"$WORK/openssl-genrsa.log" 2>&1 || fail "openssl genrsa failed"
+openssl rsa -in "$KEYDIR/group.key" -pubout -out "$RECEIVERS/group.pem" >"$WORK/openssl-pubout.log" 2>&1 || fail "openssl rsa -pubout failed"
+i=0
+while [ $i -lt 16 ]; do
+    openssl genrsa 2048 2>/dev/null | openssl rsa -pubout -out "$RECEIVERS/filler$i.pem" >>"$WORK/openssl-pubout.log" 2>&1 || fail "openssl filler key failed"
+    i=$((i + 1))
+done
 
 out="$WORK/descrambled.ts"
 
-"$BIN" -i "udp://@$MCAST:$PORT" -I lo --biss2-ca-key "$PRIVKEY" \
+"$BIN" -i "udp://@$MCAST:$PORT" -I lo --biss2-ca-key "$PRIVKEY" --biss2-ca-key "$KEYDIR" \
     -o "$out" -f ts >"$WORK/dipidescramble.log" 2>&1 &
 DESCPID=$!
 sleep 0.3
@@ -40,12 +49,14 @@ sleep 1
 kill $DESCPID 2>/dev/null
 wait $DESCPID 2>/dev/null
 
-assert_not_contains "$WORK/dipidescramble.log" "cannot load RSA private key" "dipidescramble --biss2-ca-key load"
+assert_not_contains "$WORK/dipidescramble.log" "no usable RSA private key" "dipidescramble --biss2-ca-key load"
+assert_contains "$WORK/dipidescramble.log" "3 private key(s) loaded" "dipidescramble loaded device key plus directory keys"
 assert_contains "$WORK/dipidescramble.log" "BISS Mode CA detected" "dipidescramble BISS-CA detection"
 assert_contains "$WORK/dipidescramble.log" "CW updated (parity=even)" "dipidescramble resolved the even-parity SW from an ECM"
 assert_contains "$WORK/dipidescramble.log" "CW updated (parity=odd)" "dipidescramble resolved the odd-parity SW from an ECM"
 
 assert_not_contains "$WORK/dipitvhead.log" "biss-ca: loaded 0 entitled receiver" "dipitvhead receiver load"
+assert_contains "$WORK/dipitvhead.log" "loaded 17 entitled receiver" "dipitvhead loaded group key plus fillers (two EMM sections)"
 
 [ -s "$out" ] || fail "dipidescramble: no output file produced"
 

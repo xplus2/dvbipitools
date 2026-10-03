@@ -246,6 +246,70 @@ START_TEST(mem_loaders_reject_null_zero_and_oversized_length) {
 }
 END_TEST
 
+typedef struct {
+  int seen;
+  int stop_at;
+  unsigned char first_ekid[BISS_CA_EKID_LEN];
+} visit_ctx_t;
+
+static int visit_count(biss_ca_key_t *k, void *ctx) {
+  visit_ctx_t *v = ctx;
+  if (v->seen == 0)
+    biss_ca_entitlement_key_id(k, v->first_ekid);
+  v->seen++;
+  biss_ca_key_free(k);
+  return v->stop_at && v->seen >= v->stop_at;
+}
+
+START_TEST(foreach_mem_visits_every_key_of_the_wanted_kind) {
+  char buf[4608];
+  visit_ctx_t v = {0};
+  int len = snprintf(buf, sizeof buf, "%s%s%s%s", annex_c_pub_pem, annex_c_priv_pem, annex_c_pub_pem, annex_c_priv_pem);
+
+  ck_assert_int_eq(biss_ca_key_foreach_mem(buf, (size_t)len, 0, visit_count, &v), 2);
+  ck_assert_int_eq(v.seen, 2);
+  ck_assert_mem_eq(v.first_ekid, annex_c_ekid, BISS_CA_EKID_LEN);
+
+  memset(&v, 0, sizeof v);
+  ck_assert_int_eq(biss_ca_key_foreach_mem(buf, (size_t)len, 1, visit_count, &v), 2);
+  ck_assert_mem_eq(v.first_ekid, annex_c_ekid, BISS_CA_EKID_LEN);
+}
+END_TEST
+
+START_TEST(foreach_mem_stops_when_callback_says_so) {
+  char buf[1024];
+  visit_ctx_t v = {0};
+  int len = snprintf(buf, sizeof buf, "%s%s", annex_c_pub_pem, annex_c_pub_pem);
+
+  v.stop_at = 1;
+  ck_assert_int_eq(biss_ca_key_foreach_mem(buf, (size_t)len, 0, visit_count, &v), 1);
+}
+END_TEST
+
+START_TEST(foreach_rejects_bad_arguments_and_finds_nothing_in_garbage) {
+  static const char garbage[] = "not a pem file at all";
+  visit_ctx_t v = {0};
+
+  ck_assert_int_eq(biss_ca_key_foreach_mem(NULL, 10, 0, visit_count, &v), -1);
+  ck_assert_int_eq(biss_ca_key_foreach_mem(annex_c_pub_pem, 0, 0, visit_count, &v), -1);
+  ck_assert_int_eq(biss_ca_key_foreach_mem(annex_c_pub_pem, sizeof annex_c_pub_pem - 1, 0, NULL, &v), -1);
+  ck_assert_int_eq(biss_ca_key_foreach_mem(garbage, sizeof garbage - 1, 0, visit_count, &v), 0);
+  ck_assert_int_eq(biss_ca_key_foreach_file(NULL, 0, visit_count, &v), -1);
+  ck_assert_int_eq(biss_ca_key_foreach_file("/nonexistent-dir-biss/none.pem", 0, visit_count, &v), -1);
+  ck_assert_int_eq(v.seen, 0);
+}
+END_TEST
+
+START_TEST(foreach_file_reads_multi_key_pem) {
+  char buf[1024];
+  visit_ctx_t v = {0};
+  int len = snprintf(buf, sizeof buf, "%s%s", annex_c_pub_pem, annex_c_pub_pem);
+  tmp_file_begin(buf, (size_t)len);
+  ck_assert_int_eq(biss_ca_key_foreach_file(g_path, 0, visit_count, &v), 2);
+  tmp_file_end();
+}
+END_TEST
+
 START_TEST(key_free_null_is_safe) {
   biss_ca_key_free(NULL);
 }
@@ -343,6 +407,10 @@ static Suite *biss_ca_suite(void) {
   tcase_add_test(tc, file_loaders_read_public_and_private_pem);
   tcase_add_test(tc, file_loaders_reject_null_missing_and_unparsable);
   tcase_add_test(tc, mem_loaders_reject_null_zero_and_oversized_length);
+  tcase_add_test(tc, foreach_mem_visits_every_key_of_the_wanted_kind);
+  tcase_add_test(tc, foreach_mem_stops_when_callback_says_so);
+  tcase_add_test(tc, foreach_rejects_bad_arguments_and_finds_nothing_in_garbage);
+  tcase_add_test(tc, foreach_file_reads_multi_key_pem);
   tcase_add_test(tc, key_free_null_is_safe);
   tcase_add_test(tc, ekid_rejects_null_arguments);
   tcase_add_test(tc, rsa_encrypt_rejects_bad_arguments);

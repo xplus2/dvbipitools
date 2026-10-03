@@ -447,7 +447,7 @@ static const opt_case_t good_opts[] = {
   OC(K_INT, biss2_esw_given, 1, NULL, "--biss2-esw", HEX32, "--biss2-id", HEX32),
   OC(K_INT, biss2_id_given, 1, NULL, "--biss2-esw", HEX32, "--biss2-id", HEX32),
   OC(K_INT, biss1_sw_given, 1, NULL, "--biss1-sw", "0123456789ab"),
-  OC(K_STR, biss2_ca_key_path, 0, "/etc/ca.pem", "--biss2-ca-key", "/etc/ca.pem"),
+  OC(K_STR, biss2_ca_key[0], 0, "/etc/ca.pem", "--biss2-ca-key", "/etc/ca.pem"),
   OC(K_INT, ecm_profile.set, 1, NULL, "--ecm-profile", "cipher=aes256-ecb"),
   OC(K_STR, metrics_sock, 0, "/tmp/m.sock", "--metrics-id", "i1", "--metrics", "/tmp/m.sock"),
   OC(K_UINT, metrics_interval_s, 7, NULL, "--metrics-id", "i1", "--metrics-interval", "7"),
@@ -616,6 +616,39 @@ START_TEST(repeated_output_option_collects_every_target) {
 }
 END_TEST
 
+START_TEST(repeated_ca_key_option_collects_every_path) {
+  char *argv[] = {"dipidescramble", "-i", "udp://@239.1.1.1:5000", "-o", "out.ts", "--biss2-ca-key", "/etc/a.pem", "--biss2-ca-key", "/etc/keys", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.n_biss2_ca_key, 2);
+  ck_assert_str_eq(cfg.biss2_ca_key[0], "/etc/a.pem");
+  ck_assert_str_eq(cfg.biss2_ca_key[1], "/etc/keys");
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(too_many_ca_keys_are_rejected) {
+  char *argv[8 + 2 * DIPIDESCRAMBLE_MAX_CA_KEYS + 2];
+  int n = 0;
+  int i;
+  config_t cfg = {0};
+
+  argv[n++] = "dipidescramble";
+  argv[n++] = "-i";
+  argv[n++] = "udp://@239.1.1.1:5000";
+  argv[n++] = "-o";
+  argv[n++] = "out.ts";
+  for (i = 0; i < DIPIDESCRAMBLE_MAX_CA_KEYS + 1; i++) {
+    argv[n++] = "--biss2-ca-key";
+    argv[n++] = "/etc/ca.pem";
+  }
+  argv[n] = NULL;
+  ck_assert_int_eq(args_parse(n, argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(describe_helpers_render_inputs_and_outputs) {
   config_t cfg = {0};
   char buf[128];
@@ -698,6 +731,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, too_many_output_targets_are_rejected);
   tcase_add_test(tc, help_option_returns_help_status);
   tcase_add_test(tc, repeated_output_option_collects_every_target);
+  tcase_add_test(tc, repeated_ca_key_option_collects_every_path);
+  tcase_add_test(tc, too_many_ca_keys_are_rejected);
   tcase_add_test(tc, describe_helpers_render_inputs_and_outputs);
   suite_add_tcase(s, tc);
   return s;

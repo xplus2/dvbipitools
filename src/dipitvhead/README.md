@@ -517,9 +517,11 @@ receiver ID once at startup, for operators distributing the SW to receivers out 
 RSA-2048-OAEP + AES-128-CBC key exchange with per-receiver entitlement, in place of a single static SW.
 Mutually exclusive with `--cas-algo`/`--cas-ecmg`/`--biss1-sw`/`--biss2-sw`.
 
-`<dir>` holds one PKCS#8 PEM public key per entitled receiver/group. Rescanned on `SIGHUP`; removing a
-key revokes that receiver (forces an immediate Session Key change). `--cas-cp-duration` sets the Session
-Word rotation period (minimum 1000ms here); the Session Key rotates every 6th SW period.
+`<dir>` holds PKCS#8 PEM public key files, any number of keys per file, one key per entitled receiver or
+per group sharing a key pair. Duplicate keys are ignored. Entries are split over as many EMM sections
+as needed, 15 per section, up to 3840. `SIGHUP` triggers a rescan. Removing a
+key revokes that receiver or group (forces an immediate Session Key change). `--cas-cp-duration` sets the Session
+Word rotation period (minimum 1000ms here). This Session Key rotates every 6th SW period.
 
 `--biss2-ca-session-id <n>` sets the administrative `entitlement_session_id` (dec or 0x-hex, 16 bit);
 random at startup if omitted.
@@ -534,8 +536,7 @@ CISSA, CSA1, CSA2, BISS1 Mode 1, BISS2 Mode 1/E, BISS2 Mode CA only.
 
 * No CSA3
 * No BISS1 Mode E (DES)
-* BISS2 Mode CA: no group key pairs, but one keypair per file in receivers-dir.
-  No `entitlement_priv_data_loop` vendor extensions, `prevent_descrambled_forward`/
+* No `entitlement_priv_data_loop` vendor extensions, `prevent_descrambled_forward`/
   `prevent_decoded_forward`/`insert_watermark` entitlement flags always 0 (unenforced)
 * This is a single-pass scrambler
 

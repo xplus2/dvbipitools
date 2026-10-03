@@ -45,8 +45,9 @@ biss2:
   #esw: <hex32>
   # --biss2-id [not set] # 32 hex chars
   #id: <hex32>
-  # --biss2-ca-key [not set]
-  #ca-key: <path>
+  # --biss2-ca-key [not set] # PEM file or directory
+  #ca-key:
+  #  - <path>
 
 metrics:
   # --metrics /run/dvbipitools/metrics.sock

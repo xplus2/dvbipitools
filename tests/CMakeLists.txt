@@ -1143,6 +1143,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
     target_link_libraries(test_dipidescramble_biss_ca_state PRIVATE OpenSSL::Crypto)
 

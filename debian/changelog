@@ -19,6 +19,7 @@ dvbipitools (2.5.0-1) unstable; urgency=low
     + detected/supported: HLS/LL-HLS/HLS+fMP4/LL-DASH/DASH/TSpush
   * openssl 4
   * rist: set AES key size
+  * biss2-ca: group key support
   * dipixy
     + http/3
       - proper alt-svc
@@ -46,7 +47,7 @@ dvbipitools (2.5.0-1) unstable; urgency=low
     + --cpu-affinity to pin pacer and psi pacer threads (off by default)
       - "auto" or (smt) core numbers
       - not a throughput thing (as for dipixy), but jitter avoidance
- -- dvbipitools authors <unspecified@example.com>  tbd
+ -- dvbipitools authors <unspecified@example.com>  Sat, 04 Oct 2026 00:00:00 +0200
 
 dvbipitools (2.4.2-1) unstable; urgency=low
   * dipixy

@@ -233,14 +233,14 @@ static int detect_cas_scheme(loop_ctx_t *lc) {
     case BISS_CA_SYSTEM_ID_CA: {
       lc->cas_logged = 1;
       log_line(TOOL_NAME ": BISS Mode CA detected (ca_system_id=0x%04x)", BISS_CA_SYSTEM_ID_CA);
-      if (!lc->cfg->biss2_ca_key_path) {
+      if (lc->cfg->n_biss2_ca_key == 0) {
         log_line(TOOL_NAME ": BISS Mode CA stream detected, no --biss2-ca-key given");
         lc->fatal = 1;
         return 1;
       }
-      lc->biss_ca = biss_ca_state_new(lc->cfg->biss2_ca_key_path);
+      lc->biss_ca = biss_ca_state_new(lc->cfg->biss2_ca_key, (size_t)lc->cfg->n_biss2_ca_key);
       if (!lc->biss_ca) {
-        log_line(TOOL_NAME ": cannot load RSA private key from --biss2-ca-key %s", lc->cfg->biss2_ca_key_path);
+        log_line(TOOL_NAME ": no usable RSA private key in --biss2-ca-key");
         lc->key_load_errors_total++;
         lc->fatal = 1;
         return 1;

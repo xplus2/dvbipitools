@@ -61,7 +61,20 @@ until grep -q "loaded 3 entitled receiver" "$log"; do
     sleep 0.1
 done
 
-rm -f "$keys/r1.pem" "$keys/r2.pem" "$keys/r3.pem"
+new_key p1
+new_key p2
+cat "$keys/p1.pem" "$keys/p2.pem" >"$keys/pair.pem"
+rm -f "$keys/p1.pem" "$keys/p2.pem"
+kill -HUP "$TVPID"
+
+tries=0
+until grep -q "loaded 5 entitled receiver" "$log"; do
+    tries=$((tries + 1))
+    [ "$tries" -le 50 ] || fail "biss-ca: multi-key PEM file was not fully loaded on reload (see $log)"
+    sleep 0.1
+done
+
+rm -f "$keys/r1.pem" "$keys/r2.pem" "$keys/r3.pem" "$keys/pair.pem"
 kill -HUP "$TVPID"
 tries=0
 until grep -q "reload of .* produced zero usable receivers" "$log"; do

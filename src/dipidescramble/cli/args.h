@@ -16,6 +16,7 @@ typedef enum { PMT_SEL_AUTO, PMT_SEL_PID, PMT_SEL_ALL } pmt_sel_t;
 typedef enum { OUT_FILE, OUT_RTMP, OUT_RTMPS, OUT_SRT } out_kind_t;
 
 #define DIPIDESCRAMBLE_MAX_OUT 8
+#define DIPIDESCRAMBLE_MAX_CA_KEYS 32
 
 typedef struct {
   input_kind_t kind;
@@ -68,7 +69,8 @@ typedef struct {
   int biss2_id_given;                    /* --biss2-id */
   int biss1_sw_given;                    /* --biss1-sw, mutually exclusive with --biss2-sw/--biss2-esw */
   unsigned char biss1_sw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into full checksummed CSA1 CW */
-  const char *biss2_ca_key_path;         /* --biss2-ca-key, receiver RSA private key PEM, required only if stream turns out to be BISS Mode CA */
+  const char *biss2_ca_key[DIPIDESCRAMBLE_MAX_CA_KEYS]; /* --biss2-ca-key, file or dir */
+  int n_biss2_ca_key;
   ecm_profile_t ecm_profile;             /* --ecm-profile, ecm_profile.set == 0 = AES-256-ECB/CBCnoIV, unchanged */
   const char *metrics_sock;              /* --metrics. NULL = default socket path */
   const char *metrics_id;                /* --metrics-id. NULL = metrics disabled */

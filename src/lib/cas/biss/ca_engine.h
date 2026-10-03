@@ -11,8 +11,8 @@
 typedef struct biss_ca_engine biss_ca_engine_t;
 
 typedef struct {
-  const char *receivers_dir; /* PEM pubkey directory, one file per receiver/group */
-  unsigned esid;              /* entitlement_session_id */
+  const char *receivers_dir;   /* PEM pubkey directory, any # of keys per file */
+  unsigned esid;               /* entitlement_session_id */
   unsigned onid;               /* original_network_id, mirrors PSI/SI */
   unsigned long sw_period_ms;  /* SW rotation period ms, >= 1000 (spec T_ECM_change_min) */
   unsigned ecm_pid;            /* caller-allocated, collision-checked */
@@ -41,6 +41,7 @@ size_t biss_ca_engine_build_cat(const biss_ca_engine_t *e, unsigned char *out, s
 
 /* -1 not due/no data, 0 ok, section in out */
 int biss_ca_engine_ecm_due(biss_ca_engine_t *e, double now, unsigned char *out, size_t cap, size_t *out_len);
+/* one EMM section per call, call until -1 to drain all due sections */
 int biss_ca_engine_emm_due(biss_ca_engine_t *e, double now, unsigned char *out, size_t cap, size_t *out_len);
 
 /* SIGHUP: rescan receivers_dir. 1 set changed (caller: force_sk_rotation for revocation),

@@ -49,7 +49,15 @@ args_status_t dscr_opt_biss(dscr_opt_t *p, int c) {
       cfg->biss1_sw_given = 1;
       break;
     case OPT_BISS2_CA_KEY:
-      cfg->biss2_ca_key_path = optarg;
+      if (!p->cli_ca_key) {
+        cfg->n_biss2_ca_key = 0;
+        p->cli_ca_key = 1;
+      }
+      if (cfg->n_biss2_ca_key >= DIPIDESCRAMBLE_MAX_CA_KEYS) {
+        argerr("too many --biss2-ca-key (max %d)", DIPIDESCRAMBLE_MAX_CA_KEYS);
+        return ARGS_ERR;
+      }
+      cfg->biss2_ca_key[cfg->n_biss2_ca_key++] = optarg;
       break;
     default:
       return OPT_UNHANDLED;

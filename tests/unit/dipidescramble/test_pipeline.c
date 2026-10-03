@@ -47,7 +47,7 @@ static size_t build_pat(unsigned char *out, unsigned prog_num, unsigned pmt_pid)
 
   hdr = n + 4;
   out[0] = 0x00;
-  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[1] = 0xB0;
   out[2] = (unsigned char)hdr;
   memcpy(out + 3, body, n);
 
@@ -122,7 +122,7 @@ static size_t build_cat(unsigned char *out, unsigned ca_system_id, unsigned emm_
 
   hdr = n + 4;
   out[0] = 0x01;
-  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[1] = 0xB0;
   out[2] = (unsigned char)hdr;
   memcpy(out + 3, body, n);
 
@@ -635,7 +635,7 @@ START_TEST(classic_cas_with_unrecognized_scrambling_mode_is_fatal) {
 END_TEST
 
 START_TEST(classic_cas_accepts_csa_scrambling_modes) {
-  unsigned modes[2] = {0x01, 0x02};
+  const unsigned modes[2] = {0x01, 0x02};
   unsigned i;
 
   for (i = 0; i < 2; i++) {
@@ -705,7 +705,7 @@ START_TEST(biss_ca_with_an_unreadable_private_key_is_fatal_and_counted) {
   cls_t c;
 
   cls_open(&c);
-  c.cfg.biss2_ca_key_path = "/nonexistent-dir-dipidescramble/ca.pem";
+  c.cfg.biss2_ca_key[c.cfg.n_biss2_ca_key++] = "/nonexistent-dir-dipidescramble/ca.pem";
   ck_assert_int_eq(prime_cas(&c.lc, 0x2610, 0), 1);
   ck_assert_int_eq(c.lc.fatal, 1);
   ck_assert_uint_eq(c.lc.key_load_errors_total, 1u);
@@ -717,7 +717,7 @@ START_TEST(biss_ca_with_a_private_key_resolves_a_cissa_descrambler) {
   cls_t c;
 
   cls_open(&c);
-  c.cfg.biss2_ca_key_path = c.keypath;
+  c.cfg.biss2_ca_key[c.cfg.n_biss2_ca_key++] = c.keypath;
   ck_assert_int_eq(prime_cas(&c.lc, 0x2610, 0), 0);
   ck_assert_ptr_nonnull(c.lc.biss_ca);
   ck_assert_ptr_nonnull(c.lc.scr);
@@ -733,7 +733,7 @@ START_TEST(biss_ca_ecm_that_does_not_parse_counts_an_error) {
   size_t n;
 
   cls_open(&c);
-  c.cfg.biss2_ca_key_path = c.keypath;
+  c.cfg.biss2_ca_key[c.cfg.n_biss2_ca_key++] = c.keypath;
   ck_assert_int_eq(prime_cas(&c.lc, 0x2610, 0), 0);
   n = build_bare_section(ecm, 0x80, 40);
   feed_section(&c.lc, ECM_PID, ecm, n);

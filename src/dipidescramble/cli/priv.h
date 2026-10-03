@@ -48,6 +48,7 @@
 typedef struct {
   config_t *cfg;
   int cli_out;
+  int cli_ca_key;
 } dscr_opt_t;
 
 /* ARGS_OK: handled. OPT_UNHANDLED: not this group */

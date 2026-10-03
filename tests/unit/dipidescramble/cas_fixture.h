@@ -176,6 +176,7 @@ typedef struct {
   size_t response_len;
 } server_arg_t;
 
+/* cppcheck-suppress constParameterCallback */
 static inline void *serve_once(void *arg) {
   const server_arg_t *a = arg;
   int cfd = accept(a->listen_fd, NULL, NULL);
@@ -187,11 +188,9 @@ static inline void *serve_once(void *arg) {
   setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
   for (;;) {
     ssize_t n = recv(cfd, buf + got, sizeof buf - got, 0);
-    if (n <= 0)
-      break;
+    if (n <= 0) break;
     got += (size_t)n;
-    if (got >= 4 && memcmp(buf + got - 4, "\r\n\r\n", 4) == 0)
-      break;
+    if (got >= 4 && memcmp(buf + got - 4, "\r\n\r\n", 4) == 0) break;
   }
   send(cfd, a->response, a->response_len, 0);
   close(cfd);

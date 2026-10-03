@@ -68,7 +68,7 @@ static biss_ca_engine_cfg_t base_cfg(const unsigned *pids, size_t pid_count) {
 }
 
 START_TEST(start_loads_receivers_and_stops_cleanly) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
   ck_assert_ptr_nonnull(e);
@@ -81,7 +81,7 @@ END_TEST
 
 START_TEST(start_rejects_empty_receivers_dir) {
   char empty_dir[] = "/tmp/biss_ca_engine_empty_XXXXXX";
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg;
   biss_ca_engine_t *e;
   ck_assert_ptr_nonnull(mkdtemp(empty_dir));
@@ -94,7 +94,7 @@ START_TEST(start_rejects_empty_receivers_dir) {
 END_TEST
 
 START_TEST(start_rejects_short_sw_period) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   cfg.sw_period_ms = 999;
   ck_assert_ptr_null(biss_ca_engine_start(&cfg));
@@ -102,7 +102,7 @@ START_TEST(start_rejects_short_sw_period) {
 END_TEST
 
 START_TEST(ecm_and_emm_become_due_and_repeat_rate_limited) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
   unsigned char buf[4096];
@@ -124,7 +124,7 @@ START_TEST(ecm_and_emm_become_due_and_repeat_rate_limited) {
 END_TEST
 
 START_TEST(sw_rotation_changes_ecm_content) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
   unsigned char pkt[188];
@@ -154,7 +154,7 @@ START_TEST(sw_rotation_changes_ecm_content) {
 END_TEST
 
 START_TEST(prog_desc_and_cat_build_nonempty) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
   unsigned char buf[64];
@@ -173,7 +173,7 @@ START_TEST(prog_desc_and_cat_build_nonempty) {
 END_TEST
 
 START_TEST(reload_detects_added_and_removed_receiver) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
   char path[512];
@@ -195,7 +195,7 @@ START_TEST(reload_detects_added_and_removed_receiver) {
 END_TEST
 
 START_TEST(force_sk_rotation_makes_next_scramble_rotate) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
   unsigned char pkt[188];
@@ -305,7 +305,7 @@ static void make_subdir(const char *name, char *out, size_t cap) {
 }
 
 START_TEST(start_and_reload_skip_unusable_entries) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e;
 
@@ -320,7 +320,7 @@ START_TEST(start_and_reload_skip_unusable_entries) {
 END_TEST
 
 START_TEST(start_rejects_dir_with_only_unusable_entries) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   char sub[512];
 
@@ -332,7 +332,7 @@ START_TEST(start_rejects_dir_with_only_unusable_entries) {
 END_TEST
 
 START_TEST(start_rejects_missing_receivers_dir) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   char missing[512];
 
@@ -342,8 +342,8 @@ START_TEST(start_rejects_missing_receivers_dir) {
 }
 END_TEST
 
-START_TEST(start_caps_receivers_and_emm_carries_them_all) {
-  unsigned pids[] = {0x0100};
+START_TEST(start_splits_receivers_over_emm_sections) {
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e;
   biss_ca_emm_parsed_t emm;
@@ -353,23 +353,89 @@ START_TEST(start_caps_receivers_and_emm_carries_them_all) {
   char name[32];
 
   make_subdir("many", sub, sizeof sub);
-  for (int i = 0; i < MAX_RECEIVERS + 1; i++) {
+  for (int i = 0; i < MAX_RECEIVERS + 5; i++) {
     snprintf(name, sizeof name, "k%02d.pem", i);
-    copy_named(g_dir, "r1.pem", sub, name);
+    write_receiver_key(sub, name);
   }
   cfg.receivers_dir = sub;
   e = biss_ca_engine_start(&cfg);
   ck_assert_ptr_nonnull(e);
-  ck_assert_uint_eq(biss_ca_engine_receiver_count(e), (size_t)MAX_RECEIVERS);
+  ck_assert_uint_eq(biss_ca_engine_receiver_count(e), (size_t)MAX_RECEIVERS + 5);
+
   ck_assert_int_eq(biss_ca_engine_emm_due(e, 1.0, sec, sizeof sec, &len), 0);
   ck_assert_int_eq(biss_ca_parse_emm_section(sec, len, &emm), 0);
   ck_assert_uint_eq(emm.n_entries, (size_t)MAX_RECEIVERS);
+  ck_assert_uint_eq(sec[6], 0u);
+  ck_assert_uint_eq(sec[7], 1u);
+
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 1.0, sec, sizeof sec, &len), 0);
+  ck_assert_int_eq(biss_ca_parse_emm_section(sec, len, &emm), 0);
+  ck_assert_uint_eq(emm.n_entries, 5u);
+  ck_assert_uint_eq(sec[6], 1u);
+  ck_assert_uint_eq(sec[7], 1u);
+
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 1.0, sec, sizeof sec, &len), -1);
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 1.5, sec, sizeof sec, &len), 0);
+  ck_assert_uint_eq(sec[6], 0u);
+  biss_ca_engine_stop(e);
+}
+END_TEST
+
+START_TEST(reload_shrinking_receiver_set_shrinks_emm_sections) {
+  const unsigned pids[] = {0x0100};
+  biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
+  biss_ca_engine_t *e;
+  unsigned char sec[4096];
+  size_t len = 0;
+  char sub[512];
+  char name[32];
+  char path[600];
+
+  make_subdir("shrink", sub, sizeof sub);
+  for (int i = 0; i < MAX_RECEIVERS + 5; i++) {
+    snprintf(name, sizeof name, "k%02d.pem", i);
+    write_receiver_key(sub, name);
+  }
+  cfg.receivers_dir = sub;
+  e = biss_ca_engine_start(&cfg);
+  ck_assert_ptr_nonnull(e);
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 1.0, sec, sizeof sec, &len), 0);
+  ck_assert_uint_eq(sec[7], 1u);
+
+  for (int i = 0; i < 10; i++) {
+    snprintf(path, sizeof path, "%s/k%02d.pem", sub, i);
+    ck_assert_int_eq(unlink(path), 0);
+  }
+  ck_assert_int_eq(biss_ca_engine_reload_receivers(e), 1);
+  ck_assert_uint_eq(biss_ca_engine_receiver_count(e), 10u);
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 2.0, sec, sizeof sec, &len), 0);
+  ck_assert_uint_eq(sec[6], 0u);
+  ck_assert_uint_eq(sec[7], 0u);
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 2.0, sec, sizeof sec, &len), -1);
+  biss_ca_engine_stop(e);
+}
+END_TEST
+
+START_TEST(multi_key_pem_file_yields_every_receiver) {
+  const unsigned pids[] = {0x0100};
+  biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
+  biss_ca_engine_t *e;
+  char sub[512];
+  char cmd[1200];
+
+  make_subdir("multi", sub, sizeof sub);
+  snprintf(cmd, sizeof cmd, "cat %s/r1.pem %s/r2.pem > %s/both.pem", g_dir, g_dir, sub);
+  ck_assert_int_eq(system(cmd), 0);
+  cfg.receivers_dir = sub;
+  e = biss_ca_engine_start(&cfg);
+  ck_assert_ptr_nonnull(e);
+  ck_assert_uint_eq(biss_ca_engine_receiver_count(e), 2u);
   biss_ca_engine_stop(e);
 }
 END_TEST
 
 START_TEST(reload_keeps_previous_list_when_no_usable_key_remains) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
 
@@ -386,8 +452,8 @@ START_TEST(reload_keeps_previous_list_when_no_usable_key_remains) {
 }
 END_TEST
 
-START_TEST(reload_reports_change_when_receiver_replaced_by_duplicate) {
-  unsigned pids[] = {0x0100};
+START_TEST(reload_dedupes_receiver_replaced_by_duplicate) {
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
   biss_ca_emm_parsed_t emm;
@@ -397,10 +463,10 @@ START_TEST(reload_reports_change_when_receiver_replaced_by_duplicate) {
   ck_assert_ptr_nonnull(e);
   copy_named(g_dir, "r1.pem", g_dir, "r2.pem");
   ck_assert_int_eq(biss_ca_engine_reload_receivers(e), 1);
-  ck_assert_uint_eq(biss_ca_engine_receiver_count(e), 2u);
+  ck_assert_uint_eq(biss_ca_engine_receiver_count(e), 1u);
   ck_assert_int_eq(biss_ca_engine_emm_due(e, 1.0, sec, sizeof sec, &len), 0);
   ck_assert_int_eq(biss_ca_parse_emm_section(sec, len, &emm), 0);
-  ck_assert_uint_eq(emm.n_entries, 2u);
+  ck_assert_uint_eq(emm.n_entries, 1u);
   biss_ca_engine_stop(e);
 }
 END_TEST
@@ -463,7 +529,7 @@ static void scramble_one(biss_ca_engine_t *e, double now) {
 }
 
 START_TEST(ecm_and_emm_decrypt_consistently) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
   engine_state_t st;
@@ -476,7 +542,7 @@ START_TEST(ecm_and_emm_decrypt_consistently) {
 END_TEST
 
 START_TEST(sk_rotation_changes_sk_and_keeps_session_words) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
   engine_state_t before;
@@ -497,7 +563,7 @@ START_TEST(sk_rotation_changes_sk_and_keeps_session_words) {
 END_TEST
 
 START_TEST(repeated_rotations_keep_ecm_consistent_and_bump_version) {
-  unsigned pids[] = {0x0100};
+  const unsigned pids[] = {0x0100};
   biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
   biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
   engine_state_t prev;
@@ -549,9 +615,11 @@ static Suite *biss_ca_engine_suite(void) {
   tcase_add_loop_test(tc, start_and_reload_skip_unusable_entries, 0, JUNK_KIND_COUNT);
   tcase_add_loop_test(tc, start_rejects_dir_with_only_unusable_entries, 0, JUNK_KIND_COUNT);
   tcase_add_test(tc, start_rejects_missing_receivers_dir);
-  tcase_add_test(tc, start_caps_receivers_and_emm_carries_them_all);
+  tcase_add_test(tc, start_splits_receivers_over_emm_sections);
+  tcase_add_test(tc, reload_shrinking_receiver_set_shrinks_emm_sections);
+  tcase_add_test(tc, multi_key_pem_file_yields_every_receiver);
   tcase_add_test(tc, reload_keeps_previous_list_when_no_usable_key_remains);
-  tcase_add_test(tc, reload_reports_change_when_receiver_replaced_by_duplicate);
+  tcase_add_test(tc, reload_dedupes_receiver_replaced_by_duplicate);
   tcase_add_test(tc, ecm_and_emm_decrypt_consistently);
   tcase_add_test(tc, sk_rotation_changes_sk_and_keeps_session_words);
   tcase_add_test(tc, repeated_rotations_keep_ecm_consistent_and_bump_version);

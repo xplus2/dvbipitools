@@ -793,12 +793,14 @@ ID, for out-of-band distribution.
 .TP
 .B \-\-biss2\-ca\-receivers \fIdir\fR
 Enable BISS2 Mode CA (EBU Tech 3292-s1): directory of PKCS#8 PEM
-public keys, one per entitled receiver/group. Rescanned on
-.BR SIGHUP ;
-a receiver removed from the directory is revoked, forcing an
+public key files (any number of keys each), one key per entitled receiver
+or group of receivers sharing a key pair. Entries over 15 are split across
+EMM sections. Rescan by
+.BR SIGHUP .
+A receiver removed from the directory is revoked, forcing an
 immediate Session Key change. Requires
 .B \-\-cas\-cp\-duration
-of at least 1000 (T_ECM_change_min); the Session Key rotates every
+of at least 1000 (T_ECM_change_min). The Session Key rotates every
 6th Session Word period. Mutually exclusive with
 .BR \-\-biss1\-sw / \-\-biss2\-sw / \-\-cas\-algo .
 .TP
@@ -907,8 +909,8 @@ and apply any added, removed, or changed keys.
 * CISSA, CSA1, CSA2, BISS1 Mode 1, BISS2 Mode 1/E, and BISS2 Mode CA
 only.
 
-* No CSA3, no BISS1 Mode E (DES). BISS2 Mode CA: one keypair per
-file in the receivers directory, no group key pairs
+* No CSA3, no BISS1 Mode E (DES). BISS2 Mode CA: at most 3840
+receiver or group keys.
 
 * No entitlement_priv_data_loop vendor extensions:
 prevent_descrambled_forward/prevent_decoded_forward/insert_watermark

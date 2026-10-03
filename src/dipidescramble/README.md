@@ -54,7 +54,7 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 |       | `--biss2-sw`            | `<hex32>`             | BISS2 Mode 1, mutually exclusive with `--biss2-esw` |
 |       | `--biss2-esw`           | `<hex32>`             | BISS2 Mode E                                        |
 |       | `--biss2-id`            | `<hex32>`             | required with `--biss2-esw`                         |
-|       | `--biss2-ca-key`        | `<path>`              | BISS2 Mode CA: receiver RSA private key, PEM        |
+|       | `--biss2-ca-key`        | `<path>`              | BISS2 Mode CA: privkey PEM or directory, repeatable |
 
 ### Related to SRT Inputs/Outputs
 | flag  | long form               | argument              | default                                             |
@@ -214,10 +214,15 @@ The *value length* the operator supplies picks the cipher, since both share the 
 
 BISS2 Mode CA (EBU Tech 3292-s1, `ca_system_id 0x2610`), detected from the PMT's `CA_descriptor`.
 
-`--biss2-ca-key <path>`: this receiver's RSA private key, PEM. The `entitlement_key_id` is derived from
-it and matched against the stream's EMM; the Session Key it decrypts then decrypts the ECM's Session
+`--biss2-ca-key <path>`: RSA private key, PEM. Repeatable. `<path>` may be a directory (every regular,
+non-dot file in it is read, not recursive). A PEM file may hold several keys. Give every key pair this
+receiver holds: its device key, injected keys, and group keys.
+
+The `entitlement_key_id` of each key is derived from it and matched against the stream's EMM entries;
+the first key with a matching entry decrypts the Session Key, which then decrypts the ECM's Session
 Word(s), same as `-k` does for the generic ECM/EMM CAS path but with BISS-CA's own RSA-OAEP/AES-CBC/CISSA
-key hierarchy, not that CAS's.
+key hierarchy, not that CAS's. Duplicated keys (same `entitlement_key_id`) are used once.
+A path that does not load is logged and skipped, startup fails only if no usable key remains.
 
 ### ECM profile (`--ecm-profile`)
 
@@ -280,6 +285,9 @@ dipidescramble -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccdde
 
 # BISS2 Mode CA: this receiver's own RSA private key
 dipidescramble -i rtp://@239.0.0.1:1975 --biss2-ca-key receiver1.key -o out.ts -v
+
+# BISS2 Mode CA: device key plus every group key in a directory
+dipidescramble -i rtp://@239.0.0.1:1975 --biss2-ca-key receiver1.key --biss2-ca-key /etc/biss-ca/groups -o out.ts -v
 
 # descramble and push live, keeping a local copy too
 dipidescramble -i rtp://@239.0.0.1:1975 --biss1-sw 0123456789ab -o out.ts -o rtmp://live.example.com/app/key

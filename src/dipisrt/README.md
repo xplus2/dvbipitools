@@ -5,7 +5,8 @@ either direction. The direction is detected, depending on `-i`/`-o` being an `sr
 
 Why use this tool over built-in `srt://` capabilities in the other tools here?
 * Bonding support
-* Process separation / running as a standalone bridge / architectural and topological boundaries
+* Process separation / running as a standalone bridge / architectural / security / trust and topological boundaries
+* Minimized attack surface and blast radius
 * You might just want it separated
 * Debugging and testing of the SRT integration in isolation
 

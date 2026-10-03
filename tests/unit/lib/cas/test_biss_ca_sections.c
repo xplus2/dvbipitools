@@ -113,6 +113,24 @@ START_TEST(emm_section_round_trips_multiple_entries) {
 }
 END_TEST
 
+START_TEST(emm_section_carries_section_numbers_and_fits_15_entries) {
+  unsigned char sec[4096];
+  biss_ca_emm_entry_t entries[16];
+  size_t len;
+  biss_ca_emm_parsed_t parsed;
+
+  memset(entries, 0x5A, sizeof entries);
+  len = biss_ca_build_emm_section(0x81, 1, 2, 7, 9, 1, 0x81, entries, 15, sec, sizeof sec);
+  ck_assert_uint_gt(len, 0);
+  ck_assert_uint_le(len, 4096);
+  ck_assert_uint_eq(sec[6], 7u);
+  ck_assert_uint_eq(sec[7], 9u);
+  ck_assert_int_eq(biss_ca_parse_emm_section(sec, len, &parsed), 0);
+  ck_assert_uint_eq(parsed.n_entries, 15u);
+  ck_assert_uint_eq(biss_ca_build_emm_section(0x81, 1, 2, 0, 0, 1, 0x81, entries, 16, sec, sizeof sec), 0);
+}
+END_TEST
+
 START_TEST(emm_find_entry_returns_null_for_unknown_ekid) {
   unsigned char sec[4096];
   biss_ca_emm_entry_t entry;
@@ -218,6 +236,7 @@ static Suite *biss_ca_sections_suite(void) {
   tcase_add_test(tc, emm_section_round_trips_single_entry);
   tcase_add_test(tc, emm_section_round_trips_multiple_entries);
   tcase_add_test(tc, emm_find_entry_returns_null_for_unknown_ekid);
+  tcase_add_test(tc, emm_section_carries_section_numbers_and_fits_15_entries);
   tcase_add_test(tc, emm_section_rejects_corrupted_crc);
   tcase_add_test(tc, emm_section_rejects_bad_table_id);
   tcase_add_test(tc, emm_section_build_rejects_overflow);

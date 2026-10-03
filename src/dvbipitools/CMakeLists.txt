@@ -128,6 +128,15 @@ dvbipitools_apply_tool_defs(dipixy DIPIXY_SRCS
     "capture_open=dipixy_capture_open"
     "capture_close=dipixy_capture_close"
     "find_header=dipixy_find_header")
+if (DIPIXY_HAVE_TLS)
+    dvbipitools_apply_tool_defs(dipixy DIPIXY_SRCS "HAVE_TLS")
+endif ()
+if (DIPIXY_HAVE_HTTP2)
+    dvbipitools_apply_tool_defs(dipixy DIPIXY_SRCS "HAVE_HTTP2")
+endif ()
+if (DIPIXY_HAVE_HTTP3)
+    dvbipitools_apply_tool_defs(dipixy DIPIXY_SRCS "HAVE_HTTP3")
+endif ()
 
 set(DVBIPITOOLS_ALL_SRCS
     main.c
@@ -255,8 +264,16 @@ if (DVBIPITOOLS_HAVE_RIST)
     target_link_libraries(dvbipitools PRIVATE PkgConfig::RIST)
 endif ()
 
-if (DIPISRT_FOUND)
+if (DVBIPITOOLS_HAVE_SRT)
     target_link_libraries(dvbipitools PRIVATE PkgConfig::SRT)
+endif ()
+
+if (DIPIXY_HAVE_HTTP2)
+    target_link_libraries(dvbipitools PRIVATE PkgConfig::NGHTTP2)
+endif ()
+
+if (DIPIXY_HAVE_HTTP3)
+    target_link_libraries(dvbipitools PRIVATE PkgConfig::NGTCP2 PkgConfig::NGTCP2_CRYPTO_OSSL PkgConfig::NGHTTP3)
 endif ()
 
 if (DIPIBCG_HAVE_ZLIB)

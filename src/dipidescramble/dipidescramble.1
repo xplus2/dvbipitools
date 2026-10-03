@@ -72,8 +72,7 @@ treat it as an opaque blob.
 .PP
 Known gaps shared with
 .BR dipitvhead / dipiradiohead :
-no ETSI TS 103 197 CSA3 or non-standard CSA2 modes, no BISS1 Mode E, no
-BISS-CA group keys (device keys only), no eECMs.
+no ETSI TS 103 197 CSA3 or non-standard CSA2 modes, no BISS1 Mode E, no eECMs.
 .SH OPTIONS
 .TP
 .BR \-i ", " \-\-input " " \fIuri\fR
@@ -149,7 +148,10 @@ Legacy BISS1 Mode 1: 12 hex char Session Word. Mutually exclusive with
 .BR \-\-biss2\-sw / \-\-biss2\-esw .
 .TP
 .B \-\-biss2\-ca\-key \fIpath\fR
-BISS Mode CA: receiver RSA private key, PEM.
+BISS Mode CA: RSA private key PEM file (may hold several keys) or a directory of such files.
+Repeatable. Load every key this receiver holds:
+device, injected and group keys (a key pair shared by a group of receivers).
+First matching key wins.
 .TP
 .B \-\-ecm\-profile \fIspec\fR
 ecm_profile template, comma-separated key=value (see
@@ -384,6 +386,9 @@ BISS2 Mode 1: descramble with a known Session Word, no device key needed.
 .TP
 .B dipidescramble \-i rtp://@239.0.0.1:1975 \-\-biss2\-ca\-key receiver1.key \-o out.ts
 BISS2 Mode CA: descramble using this receiver's own RSA private key.
+.TP
+.B dipidescramble \-i rtp://@239.0.0.1:1975 \-\-biss2\-ca\-key device.key \-\-biss2\-ca\-key /etc/biss\-ca/groups \-o out.ts
+BISS2 Mode CA: device key plus all group keys in a directory.
 .TP
 .B dipidescramble \-i rtp://@239.0.0.1:1975 \-\-biss2\-sw 00112233445566778899aabbccddeeff \-o out.ts \-o rtmp://live.example.com/app/key
 BISS2 Mode 1, writing a local file and pushing live to an RTMP ingest

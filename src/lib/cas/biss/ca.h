@@ -22,6 +22,12 @@ biss_ca_key_t *biss_ca_key_load_public_mem(const char *pem, size_t len);
 biss_ca_key_t *biss_ca_key_load_private_mem(const char *pem, size_t len);
 void biss_ca_key_free(biss_ca_key_t *k);
 
+/* fn owns k */
+typedef int (*biss_ca_key_visit_fn)(biss_ca_key_t *k, void *ctx);
+
+int biss_ca_key_foreach_file(const char *pem_path, int want_private, biss_ca_key_visit_fn fn, void *ctx);
+int biss_ca_key_foreach_mem(const char *pem, size_t len, int want_private, biss_ca_key_visit_fn fn, void *ctx);
+
 /* leftmost 64 bits of SHA-256(DER SubjectPublicKeyInfo), Tech 3292-s1 SS4.2.1.1. 0 ok, -1 bad args */
 int biss_ca_entitlement_key_id(const biss_ca_key_t *k, unsigned char out[BISS_CA_EKID_LEN]);
 

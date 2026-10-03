@@ -11,7 +11,8 @@ If you are looking for a generic implementation, librist's own
 
 Why use this tool over built-in `rist://` capabilities in the other tools here?
 * Bonding support
-* Process separation / running as a standalone bridge / architectural and topological boundaries
+* Process separation / running as a standalone bridge / architectural / security / trust and topological boundaries
+* Minimized attack surface and blast radius
 * Overcome librist's limitation of one RIST link per process
 * You might just want it separated
 * Debugging and testing of the RIST integration in isolation

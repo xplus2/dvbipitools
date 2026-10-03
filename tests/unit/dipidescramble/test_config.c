@@ -127,7 +127,32 @@ START_TEST(key_and_ca_key_paths_are_stored) {
   ck_assert_int_eq(dscr_cfg_load(&cfg, g_path, 0), 0);
   remove_cfg();
   ck_assert_str_eq(cfg.key_path, "/etc/dev.pem");
-  ck_assert_str_eq(cfg.biss2_ca_key_path, "/etc/ca.pem");
+  ck_assert_int_eq(cfg.n_biss2_ca_key, 1);
+  ck_assert_str_eq(cfg.biss2_ca_key[0], "/etc/ca.pem");
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(ca_key_accepts_a_list) {
+  config_t cfg;
+
+  write_cfg("biss2:\n  ca-key:\n    - /etc/a.pem\n    - /etc/b.pem\n");
+  dscr_cfg_defaults(&cfg);
+  ck_assert_int_eq(dscr_cfg_load(&cfg, g_path, 0), 0);
+  remove_cfg();
+  ck_assert_int_eq(cfg.n_biss2_ca_key, 2);
+  ck_assert_str_eq(cfg.biss2_ca_key[0], "/etc/a.pem");
+  ck_assert_str_eq(cfg.biss2_ca_key[1], "/etc/b.pem");
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(too_many_ca_keys_are_rejected) {
+  config_t cfg;
+  char text[1536] = "biss2:\n  ca-key:\n";
+  int i;
+  for (i = 0; i < DIPIDESCRAMBLE_MAX_CA_KEYS + 1; i++) strcat(text, "    - /etc/ca.pem\n");
+  ck_assert_int_eq(load(text, &cfg), -1);
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -260,6 +285,8 @@ static Suite *config_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_loop_test(tc, each_key_sets_its_config_field, 0, sizeof field_cases / sizeof field_cases[0]);
   tcase_add_test(tc, key_and_ca_key_paths_are_stored);
+  tcase_add_test(tc, ca_key_accepts_a_list);
+  tcase_add_test(tc, too_many_ca_keys_are_rejected);
   tcase_add_loop_test(tc, invalid_values_are_rejected, 0, sizeof bad_yaml / sizeof bad_yaml[0]);
   tcase_add_test(tc, too_many_outputs_are_rejected);
   tcase_add_test(tc, unknown_key_is_rejected_in_strict_mode_only);

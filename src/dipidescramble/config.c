@@ -170,7 +170,11 @@ static int apply_biss1_sw(void *c, const char *v, char *e, size_t n) {
 
 static int apply_biss2_ca_key(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return yamlcfg_set_str(&cfg->str_pool, &cfg->biss2_ca_key_path, v, e, n);
+  if (cfg->n_biss2_ca_key >= DIPIDESCRAMBLE_MAX_CA_KEYS) {
+    snprintf(e, n, "too many ca-key entries (max %d)", DIPIDESCRAMBLE_MAX_CA_KEYS);
+    return -1;
+  }
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->biss2_ca_key[cfg->n_biss2_ca_key++], v, e, n);
 }
 
 static int apply_ecm_profile(void *c, const char *v, char *e, size_t n) {
@@ -303,7 +307,7 @@ static const yamlcfg_key_t keys[] = {
   {"biss2.sw", apply_biss2_sw, 0, 0},
   {"biss2.esw", apply_biss2_esw, 0, 0},
   {"biss2.id", apply_biss2_id, 0, 0},
-  {"biss2.ca-key", apply_biss2_ca_key, 1, 0},
+  {"biss2.ca-key", apply_biss2_ca_key, 1, 1},
   {"metrics.sock", apply_metrics_sock, 0, 0},
   {"metrics.id", apply_metrics_id, 0, 0},
   {"metrics.interval", apply_metrics_interval, 0, 0},

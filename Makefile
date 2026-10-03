@@ -2317,6 +2317,7 @@ dipidescramble_biss_ca_state_SRCS := \
 	src/lib/cas/biss/ca.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/mux/psi_build.c \
+	src/lib/helper/log.c \
 	src/lib/demux/crc32.c
 dipidescramble_biss_ca_state_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_biss_ca_state_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)

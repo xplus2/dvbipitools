@@ -10,13 +10,12 @@
 
 typedef struct biss_ca_state biss_ca_state_t;
 
-/* NULL: privkey_path unreadable, or not an RSA key */
-biss_ca_state_t *biss_ca_state_new(const char *privkey_path);
+biss_ca_state_t *biss_ca_state_new(const char *const *paths, size_t n_paths);
 void biss_ca_state_free(biss_ca_state_t *s);
 
-/* entitlement_session_id is learned from first EMM/ECM section seen, not pre-declared.
-   this decodes 1 program at a time, so the CA_descriptor-resolved ECM/EMM pids already pin down which session.
-   1: matched our entitlement_key_id, SK cache updated. 0: parse fail/esid mismatch/not ours/unchanged */
+/* entitlement_session_id is learned from first EMM/ECM section seen.
+   decode 1 program at a time, CA_descriptor-resolved ECM/EMM pids already pin down which session.
+   1: matched entitlement_key_id, SK cache updated. 0: parse fail/esid mismatch/not ours/unchanged */
 int biss_ca_state_on_emm(biss_ca_state_t *s, const unsigned char *emm, size_t emm_len);
 
 /* 0 ok, sw_even_out/sw_odd_out filled. -1: parse fail/esid mismatch/SK for that parity not cached yet */

@@ -150,7 +150,6 @@ Indirectly related:
 * `dipitvhead`, `dipiradiohead` and `dipidescramble`:
   - no support for ETSI TS 103 197 CSA3 or non-standard CSA2 modes
   - no BISS1 Mode E
-  - no BISS-CA group keys, only device keys
   - no eECMs
 
 ## Licence
