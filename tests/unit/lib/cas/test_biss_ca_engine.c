@@ -257,6 +257,39 @@ static void copy_named(const char *src_dir, const char *src, const char *dst_dir
   write_named(dst_dir, dst, buf, n);
 }
 
+#define POOL_KEYS (MAX_RECEIVERS + 5)
+
+static char g_pool[] = "/tmp/biss_ca_engine_pool_XXXXXX";
+
+static void pool_setup(void) {
+  char cmd[1024];
+
+  if (!mkdtemp(g_pool))
+    exit(EXIT_FAILURE);
+  for (int i = 0; i < POOL_KEYS; i++) {
+    snprintf(cmd, sizeof cmd, "openssl genrsa 2048 2>/dev/null | openssl rsa -pubout -out %s/k%02d.pem 2>/dev/null", g_pool, i);
+    if (system(cmd) != 0)
+      exit(EXIT_FAILURE);
+  }
+}
+
+static void pool_teardown(void) {
+  char cmd[600];
+
+  snprintf(cmd, sizeof cmd, "rm -rf %s", g_pool);
+  if (system(cmd) != 0)
+    exit(EXIT_FAILURE);
+}
+
+static void fill_from_pool(const char *dst_dir) {
+  char name[32];
+
+  for (int i = 0; i < POOL_KEYS; i++) {
+    snprintf(name, sizeof name, "k%02d.pem", i);
+    copy_named(g_pool, name, dst_dir, name);
+  }
+}
+
 enum {
   JUNK_TEXT,
   JUNK_EMPTY,
@@ -350,13 +383,9 @@ START_TEST(start_splits_receivers_over_emm_sections) {
   unsigned char sec[4096];
   size_t len = 0;
   char sub[512];
-  char name[32];
 
   make_subdir("many", sub, sizeof sub);
-  for (int i = 0; i < MAX_RECEIVERS + 5; i++) {
-    snprintf(name, sizeof name, "k%02d.pem", i);
-    write_receiver_key(sub, name);
-  }
+  fill_from_pool(sub);
   cfg.receivers_dir = sub;
   e = biss_ca_engine_start(&cfg);
   ck_assert_ptr_nonnull(e);
@@ -388,14 +417,10 @@ START_TEST(reload_shrinking_receiver_set_shrinks_emm_sections) {
   unsigned char sec[4096];
   size_t len = 0;
   char sub[512];
-  char name[32];
   char path[600];
 
   make_subdir("shrink", sub, sizeof sub);
-  for (int i = 0; i < MAX_RECEIVERS + 5; i++) {
-    snprintf(name, sizeof name, "k%02d.pem", i);
-    write_receiver_key(sub, name);
-  }
+  fill_from_pool(sub);
   cfg.receivers_dir = sub;
   e = biss_ca_engine_start(&cfg);
   ck_assert_ptr_nonnull(e);
@@ -603,6 +628,7 @@ END_TEST
 static Suite *biss_ca_engine_suite(void) {
   Suite *s = suite_create("biss_ca_engine");
   TCase *tc = tcase_create("core");
+  tcase_add_unchecked_fixture(tc, pool_setup, pool_teardown);
   tcase_add_checked_fixture(tc, setup, teardown);
   tcase_add_test(tc, start_loads_receivers_and_stops_cleanly);
   tcase_add_test(tc, start_rejects_empty_receivers_dir);

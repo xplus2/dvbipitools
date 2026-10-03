@@ -230,7 +230,8 @@ END_TEST
 
 START_TEST(repeated_paths_load_every_key) {
   biss_ca_state_t *s;
-  char k1[600], k2[600];
+  char k1[600];
+  char k2[600];
   const char *paths[2];
 
   gen_two_keys();
@@ -248,7 +249,8 @@ END_TEST
 
 START_TEST(multi_key_pem_file_loads_every_key) {
   biss_ca_state_t *s;
-  char cmd[1500], both[600];
+  char cmd[1500];
+  char both[600];
 
   gen_two_keys();
   snprintf(both, sizeof both, "%s.both", g_dir);
