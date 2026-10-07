@@ -56,7 +56,7 @@ jobs:
           curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu24_amd64.deb
           sudo apt-get install -y ./tsduck.deb
       - name: configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DCMAKE_C_FLAGS="--coverage -O0" -DCMAKE_EXE_LINKER_FLAGS=--coverage
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic -O0" -DCMAKE_EXE_LINKER_FLAGS=--coverage
       - name: build
         run: cmake --build build -j"$(nproc)"
       - name: test
@@ -64,7 +64,7 @@ jobs:
       - name: coverage report
         if: always()
         run: |
-          COMMON=(--root . --object-directory build --filter src/ --exclude-directories '.*/CMakeFiles/[0-9.]+' --exclude-throw-branches --exclude-unreachable-branches)
+          COMMON=(--root . --object-directory build --filter src/ --exclude-directories '.*/CMakeFiles/[0-9.]+' --exclude-throw-branches --exclude-unreachable-branches --gcov-ignore-parse-errors=negative_hits.warn_once_per_file)
           mkdir -p coverage
           gcovr "${COMMON[@]}" --json-summary coverage/src.json --txt coverage/src.txt
           gcovr "${COMMON[@]}" --exclude 'src/lib/vendor/' --json-summary coverage/src-novendor.json --txt coverage/src-novendor.txt
