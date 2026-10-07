@@ -64,10 +64,10 @@ jobs:
       - name: coverage report
         if: always()
         run: |
-          COMMON="--root . --object-directory build --filter src/ --exclude-throw-branches --exclude-unreachable-branches"
+          COMMON=(--root . --object-directory build --filter src/ --exclude-directories '.*/CMakeFiles/[0-9.]+' --exclude-throw-branches --exclude-unreachable-branches)
           mkdir -p coverage
-          gcovr $COMMON --json-summary coverage/src.json --txt coverage/src.txt
-          gcovr $COMMON --exclude 'src/lib/vendor/' --json-summary coverage/src-novendor.json --txt coverage/src-novendor.txt
+          gcovr "${COMMON[@]}" --json-summary coverage/src.json --txt coverage/src.txt
+          gcovr "${COMMON[@]}" --exclude 'src/lib/vendor/' --json-summary coverage/src-novendor.json --txt coverage/src-novendor.txt
           summarize() {
             echo "## $1"
             echo ""
