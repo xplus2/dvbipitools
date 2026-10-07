@@ -5,8 +5,9 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-PORTA=18030
-PORTB=18031
+FPB=$(free_port_block 2)
+PORTA=$((FPB + 0))
+PORTB=$((FPB + 1))
 N_PKTS=200
 
 # bonding needs libsrt -DENABLE_BONDING=ON, off by default upstream/most distro packages.

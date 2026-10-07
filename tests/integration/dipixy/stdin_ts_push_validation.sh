@@ -9,7 +9,8 @@ for t in ffmpeg curl tsanalyze jq; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-HTTPPORT=19202
+FPB=$(free_port_block 1)
+HTTPPORT=$((FPB + 0))
 
 ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=25" \
     -f lavfi -i "sine=frequency=1000" -t 15 \

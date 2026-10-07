@@ -154,10 +154,14 @@ static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
 
 int bcg_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
+  int rc;
   config_t cfg;
   const args_flags_t *fl = &cfg.fl;
   bcg_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+    yamlcfg_strpool_free(cfg.str_pool);
+    return -1;
+  }
   warn_if(&y, !fl->have_a && !fl->have_l, "neither announce nor listen set (required unless given on the command line)");
   warn_if(&y, !fl->have_mcast, "mcast not set (required unless given on the command line)");
   warn_if(&y, fl->have_a && !fl->have_l && !cfg.input_path, "input not set (required for announce unless given on the command line)");
@@ -165,5 +169,7 @@ int bcg_cfg_test(const char *path, int strict) {
   warn_if(&y, fl->have_a && fl->have_l, "announce and listen are mutually exclusive");
   warn_if(&y, fl->have_l && !fl->have_a && (cfg.metrics_id || cfg.compress), "metrics.id and compress are announce-only");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
-  return yamlcfg_report(&y);
+  rc = yamlcfg_report(&y);
+  yamlcfg_strpool_free(cfg.str_pool);
+  return rc;
 }

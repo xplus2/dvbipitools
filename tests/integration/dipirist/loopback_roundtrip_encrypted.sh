@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-PORT=17964
+PORT=$(free_udp_port_pair)
 N_PKTS=200
 SECRET=integration-test-secret
 

@@ -297,7 +297,6 @@ static http_open_step_t step_hls_variant_fetch(tssrc_open_t *o, net_err_reason_t
     return HOPEN_STEP_ERROR;
   }
   http_fetch_take(o->hf, &len, NULL, NULL, 0, NULL, &reuse);
-  http_fetch_free(o->hf);
   o->hf = NULL;
   if (reuse) http_close(reuse);
   o->fetch_buf[len] = '\0';
@@ -337,7 +336,6 @@ static http_open_step_t step_hls_init_fetch(tssrc_open_t *o, net_err_reason_t *r
     return HOPEN_STEP_ERROR;
   }
   http_fetch_take(o->hf, &len, NULL, NULL, 0, NULL, &reuse);
-  http_fetch_free(o->hf);
   o->hf = NULL;
   if (reuse) http_close(reuse);
 

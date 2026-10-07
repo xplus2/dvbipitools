@@ -3,6 +3,7 @@
 
 #include <arpa/inet.h>
 #include <check.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <pthread.h>
@@ -13,6 +14,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "lib/mux/fec2022.h"
+#include "lib/net/multicast.h"
 #include "lib/net/ts/source.h"
 
 static tssrc_open_state_t drive(tssrc_open_t *o, int max_iters) {
@@ -34,16 +37,63 @@ static tssrc_open_state_t drive(tssrc_open_t *o, int max_iters) {
   return st;
 }
 
+static unsigned free_udp_port(void) {
+  struct sockaddr_in a;
+  socklen_t len = sizeof a;
+  int fd = socket(AF_INET, SOCK_DGRAM, 0);
+  unsigned port;
+
+  ck_assert_int_ge(fd, 0);
+  memset(&a, 0, sizeof a);
+  a.sin_family = AF_INET;
+  a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ck_assert_int_eq(bind(fd, (struct sockaddr *)&a, sizeof a), 0);
+  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&a, &len), 0);
+  port = ntohs(a.sin_port);
+  close(fd);
+  return port;
+}
+
+static void unique_group(char *out, size_t cap) {
+  pid_t pid = getpid();
+
+  snprintf(out, cap, "239.77.%u.%u", ((unsigned)pid >> 8) & 0xFF, 1 + ((unsigned)pid & 0xFF) % 250);
+}
+
+static int open_sender(const char *group, unsigned port, struct sockaddr_in *dst) {
+  int sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+  ck_assert_int_ge(sock, 0);
+  memset(dst, 0, sizeof *dst);
+  dst->sin_family = AF_INET;
+  dst->sin_port = htons((unsigned short)port);
+  ck_assert_int_eq(inet_pton(AF_INET, group, &dst->sin_addr), 1);
+  return sock;
+}
+
+static void build_rtp_ts(unsigned char *out, uint16_t seq, unsigned char id) {
+  memset(out, 0xFF, 12 + 188);
+  out[0] = 0x80;
+  out[1] = 33;
+  out[2] = (unsigned char)(seq >> 8);
+  out[3] = (unsigned char)seq;
+  out[11] = 9;
+  out[12] = 0x47;
+  out[13] = id;
+}
+
 START_TEST(tssrc_open_async_completes_immediately_for_udp) {
   tssrc_cfg_t cfg;
   tssrc_open_t *o;
   tssrc_t *s;
+  char group[32];
 
+  unique_group(group, sizeof group);
   memset(&cfg, 0, sizeof cfg);
   cfg.kind = TSSRC_UDP;
   cfg.family = AF_INET;
-  cfg.group = "239.1.5.5";
-  cfg.port = 15005;
+  cfg.group = group;
+  cfg.port = free_udp_port();
 
   o = tssrc_open_async_start(&cfg, NULL);
   ck_assert_ptr_nonnull(o);
@@ -79,19 +129,22 @@ START_TEST(tssrc_rx_timestamps_only_after_enable_and_advance) {
   struct sockaddr_in dst;
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
   uint64_t first, second;
+  char group[32];
+  unsigned port = free_udp_port();
 
+  unique_group(group, sizeof group);
   memset(&cfg, 0, sizeof cfg);
   cfg.kind = TSSRC_UDP;
   cfg.family = AF_INET;
-  cfg.group = "239.1.5.6";
-  cfg.port = 15006;
+  cfg.group = group;
+  cfg.port = port;
   s = tssrc_open(&cfg, NULL);
   ck_assert_ptr_nonnull(s);
   ck_assert_int_ge(sock, 0);
   memset(&dst, 0, sizeof dst);
   dst.sin_family = AF_INET;
-  dst.sin_port = htons(15006);
-  inet_pton(AF_INET, "239.1.5.6", &dst.sin_addr);
+  dst.sin_port = htons((unsigned short)port);
+  inet_pton(AF_INET, group, &dst.sin_addr);
 
   ck_assert_uint_eq(read_one_rx_ns(s, sock, &dst), 0u);
   ck_assert_int_eq(tssrc_enable_rx_timestamps(s), 0);
@@ -117,20 +170,23 @@ START_TEST(tssrc_jitter_reorders_rtp_and_delays_release) {
   struct timespec t0;
   struct timespec t1;
   long first_ms = -1;
+  char group[32];
+  unsigned port = free_udp_port();
 
+  unique_group(group, sizeof group);
   memset(&cfg, 0, sizeof cfg);
   cfg.kind = TSSRC_RTP;
   cfg.family = AF_INET;
-  cfg.group = "239.1.5.7";
-  cfg.port = 15007;
+  cfg.group = group;
+  cfg.port = port;
   cfg.jitter_ms = 60;
   s = tssrc_open(&cfg, NULL);
   ck_assert_ptr_nonnull(s);
   ck_assert_int_ge(sock, 0);
   memset(&dst, 0, sizeof dst);
   dst.sin_family = AF_INET;
-  dst.sin_port = htons(15007);
-  inet_pton(AF_INET, "239.1.5.7", &dst.sin_addr);
+  dst.sin_port = htons((unsigned short)port);
+  inet_pton(AF_INET, group, &dst.sin_addr);
 
   clock_gettime(CLOCK_MONOTONIC, &t0);
   for (unsigned i = 0; i < 3; i++) {
@@ -303,6 +359,199 @@ START_TEST(tssrc_open_async_reports_error_on_refused_connection) {
 }
 END_TEST
 
+START_TEST(tssrc_mcast_returns_the_joined_socket_for_udp_only) {
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+  char group[32];
+
+  unique_group(group, sizeof group);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_UDP;
+  cfg.family = AF_INET;
+  cfg.group = group;
+  cfg.port = free_udp_port();
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_ptr_nonnull(tssrc_mcast(s));
+  ck_assert_int_eq(mcast_fd(tssrc_mcast(s)), tssrc_fd(s));
+  ck_assert_int_eq(tssrc_fec_fd(s), -1);
+  tssrc_fec_poll(s);
+  tssrc_close(s);
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_FILE;
+  cfg.file_path = "/dev/null";
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_ptr_null(tssrc_mcast(s));
+  tssrc_close(s);
+}
+END_TEST
+
+START_TEST(tssrc_fec_poll_feeds_repair_and_recovers_lost_packet) {
+  enum { SRC_PKTS = 4, SRC_LEN = 12 + 188 };
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+  fec2022_enc_t *enc = fec2022_enc_new(2, 2, 96);
+  struct sockaddr_in src_dst;
+  struct sockaddr_in fec_dst;
+  unsigned char pkt[SRC_PKTS][SRC_LEN];
+  unsigned char repair[FEC2022_MAX_REPAIR];
+  size_t rlen = 0;
+  char group[32];
+  unsigned port = free_udp_port();
+  unsigned fec_port = free_udp_port();
+  int src_sock;
+  int fec_sock;
+  unsigned char next[SRC_LEN];
+  unsigned char buf[2048];
+
+  ck_assert_ptr_nonnull(enc);
+  ck_assert_uint_ne(port, fec_port);
+  unique_group(group, sizeof group);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_RTP;
+  cfg.family = AF_INET;
+  cfg.group = group;
+  cfg.port = port;
+  cfg.al_fec_l = 2;
+  cfg.al_fec_d = 2;
+  cfg.al_fec_port = fec_port;
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_ge(tssrc_fec_fd(s), 0);
+  src_sock = open_sender(group, port, &src_dst);
+  fec_sock = open_sender(group, fec_port, &fec_dst);
+
+  for (unsigned i = 0; i < SRC_PKTS; i++) {
+    build_rtp_ts(pkt[i], (uint16_t)(0x2000 + i), (unsigned char)i);
+    rlen = fec2022_enc_feed(enc, pkt[i], SRC_LEN, 1000 + i, repair, sizeof repair);
+  }
+  ck_assert_uint_gt(rlen, 0u);
+  for (unsigned i = 0; i < SRC_PKTS - 1; i++)
+    ck_assert_int_eq((int)sendto(src_sock, pkt[i], SRC_LEN, 0, (struct sockaddr *)&src_dst, sizeof src_dst), SRC_LEN);
+  for (unsigned i = 0; i < SRC_PKTS - 1; i++) {
+    struct pollfd pfd = {tssrc_fd(s), POLLIN, 0};
+
+    ck_assert_int_eq(poll(&pfd, 1, 1000), 1);
+    ck_assert_int_ge((int)tssrc_read(s, buf, sizeof buf, NULL), 0);
+  }
+  ck_assert_int_eq((int)sendto(fec_sock, repair, rlen, 0, (struct sockaddr *)&fec_dst, sizeof fec_dst), (int)rlen);
+  {
+    struct pollfd fpfd = {tssrc_fec_fd(s), POLLIN, 0};
+
+    ck_assert_int_eq(poll(&fpfd, 1, 1000), 1);
+    tssrc_fec_poll(s);
+  }
+  for (unsigned i = 0; i < 3; i++) {
+    build_rtp_ts(next, (uint16_t)(0x2000 + SRC_PKTS + i), (unsigned char)(SRC_PKTS + i));
+    ck_assert_int_eq((int)sendto(src_sock, next, SRC_LEN, 0, (struct sockaddr *)&src_dst, sizeof src_dst), SRC_LEN);
+  }
+  for (unsigned i = 1; i <= 3; i++) {
+    struct pollfd pfd = {tssrc_fd(s), POLLIN, 0};
+
+    ck_assert_int_eq(poll(&pfd, 1, 1000), 1);
+    ck_assert_int_eq((int)tssrc_read(s, buf, sizeof buf, NULL), 188);
+    ck_assert_uint_eq(buf[0], 0x47);
+    ck_assert_uint_eq(buf[1], i);
+  }
+
+  fec2022_enc_free(enc);
+  close(src_sock);
+  close(fec_sock);
+  tssrc_close(s);
+}
+END_TEST
+
+START_TEST(tssrc_buffer_ms_is_minus_one_without_jitter_buffer) {
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+  char group[32];
+
+  unique_group(group, sizeof group);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_UDP;
+  cfg.family = AF_INET;
+  cfg.group = group;
+  cfg.port = free_udp_port();
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq((int)tssrc_buffer_ms(s), -1);
+  tssrc_close(s);
+}
+END_TEST
+
+START_TEST(tssrc_buffer_ms_reports_depth_with_jitter_buffer) {
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+  struct sockaddr_in dst;
+  unsigned char pkt[12 + 188];
+  unsigned char buf[2048];
+  char group[32];
+  unsigned port = free_udp_port();
+  int sock;
+  int64_t depth;
+
+  unique_group(group, sizeof group);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_RTP;
+  cfg.family = AF_INET;
+  cfg.group = group;
+  cfg.port = port;
+  cfg.jitter_ms = 500;
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_ge((int)tssrc_buffer_ms(s), 0);
+  sock = open_sender(group, port, &dst);
+  build_rtp_ts(pkt, 1, 1);
+  ck_assert_int_eq((int)sendto(sock, pkt, sizeof pkt, 0, (struct sockaddr *)&dst, sizeof dst), (int)sizeof pkt);
+  for (int i = 0; i < 20; i++) {
+    struct pollfd pfd = {tssrc_fd(s), POLLIN, 0};
+
+    poll(&pfd, 1, 50);
+    ck_assert_int_eq((int)tssrc_read(s, buf, sizeof buf, NULL), 0);
+    if (tssrc_buffer_ms(s) > 0) break;
+  }
+  depth = tssrc_buffer_ms(s);
+  ck_assert_int_gt((int)depth, 0);
+  ck_assert_int_le((int)depth, 500);
+  close(sock);
+  tssrc_close(s);
+}
+END_TEST
+
+START_TEST(tssrc_jitter_source_failure_drains_then_reports_error) {
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+  unsigned char buf[2048];
+  char group[32];
+  net_err_reason_t reason = NET_ERR_COUNT;
+  int null_fd = open("/dev/null", O_RDONLY);
+  int src_fd;
+
+  ck_assert_int_ge(null_fd, 0);
+  unique_group(group, sizeof group);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_UDP;
+  cfg.family = AF_INET;
+  cfg.group = group;
+  cfg.port = free_udp_port();
+  cfg.jitter_ms = 50;
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+  src_fd = mcast_fd(tssrc_mcast(s));
+  ck_assert_int_ge(dup2(null_fd, src_fd), 0);
+  close(null_fd);
+
+  ck_assert_int_eq((int)tssrc_read(s, buf, sizeof buf, &reason), -1);
+  ck_assert_int_eq(reason, NET_ERR_READ);
+  reason = NET_ERR_COUNT;
+  ck_assert_int_eq((int)tssrc_read(s, buf, sizeof buf, &reason), -1);
+  ck_assert_int_eq(reason, NET_ERR_READ);
+  tssrc_close(s);
+}
+END_TEST
+
 static Suite *tssource_async_suite(void) {
   Suite *s = suite_create("tssource_async");
   TCase *tc = tcase_create("core");
@@ -312,6 +561,11 @@ static Suite *tssource_async_suite(void) {
   tcase_add_test(tc, tssrc_open_async_completes_immediately_for_stdin);
   tcase_add_test(tc, tssrc_open_async_completes_for_http_and_reads_body);
   tcase_add_test(tc, tssrc_open_async_reports_error_on_refused_connection);
+  tcase_add_test(tc, tssrc_mcast_returns_the_joined_socket_for_udp_only);
+  tcase_add_test(tc, tssrc_fec_poll_feeds_repair_and_recovers_lost_packet);
+  tcase_add_test(tc, tssrc_buffer_ms_is_minus_one_without_jitter_buffer);
+  tcase_add_test(tc, tssrc_buffer_ms_reports_depth_with_jitter_buffer);
+  tcase_add_test(tc, tssrc_jitter_source_failure_drains_then_reports_error);
   suite_add_tcase(s, tc);
   return s;
 }

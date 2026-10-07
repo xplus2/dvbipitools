@@ -10,8 +10,17 @@ for t in ffmpeg tsp tsanalyze jq; do
 done
 tsp -P pcredit --help >/dev/null 2>&1 || skip "tsp pcredit plugin not available"
 
-MCAST=239.255.43.20
-PORT=43720
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 5)
+PORT=$((FPB + 0))
+RAW1=$(unique_mcast 63)
+BAD1=$(unique_mcast 64)
+RAW2=$(unique_mcast 65)
+BAD2=$(unique_mcast 66)
+RAW1_PORT=$((FPB + 1))
+BAD1_PORT=$((FPB + 2))
+RAW2_PORT=$((FPB + 3))
+BAD2_PORT=$((FPB + 4))
 KBPS=6000
 
 cap="$WORK/regenerate_mpts.ts"
@@ -22,26 +31,26 @@ tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 5000 \
 TSPID=$!
 
 timeout 10 "$BIN" -O lo -u -m $MCAST:$PORT \
-    -i "udp://@239.255.43.22:43722" -I lo --sid 101 -s "Channel One" \
-    -i "udp://@239.255.43.24:43724" -I lo --sid 102 -s "Channel Two" \
+    -i "udp://@$BAD1:$BAD1_PORT" -I lo --sid 101 -s "Channel One" \
+    -i "udp://@$BAD2:$BAD2_PORT" -I lo --sid 102 -s "Channel Two" \
     -b $KBPS -S -B --pcr-mode regenerate >"$WORK/dipitvhead.log" 2>&1 &
 TVPID=$!
 sleep 0.8
 
 for n in 1 2; do
-    raw=239.255.43.2$((n * 2 - 1))
-    bad=239.255.43.2$((n * 2))
-    tsp -I ip $raw:4372$((n * 2 - 1)) --local-address 127.0.0.1 --receive-timeout 4000 \
+    eval "raw=\$RAW$n bad=\$BAD$n raw_port=\$RAW${n}_PORT bad_port=\$BAD${n}_PORT"
+    tsp -I ip $raw:$raw_port --local-address 127.0.0.1 --receive-timeout 4000 \
         -P pcredit --add-pcr 100000000 --random \
-        -O ip $bad:4372$((n * 2)) --local-address 127.0.0.1 --ttl 1 >"$WORK/tsp_relay$n.log" 2>&1 &
+        -O ip $bad:$bad_port --local-address 127.0.0.1 --ttl 1 >"$WORK/tsp_relay$n.log" 2>&1 &
 done
 sleep 0.3
 
 for n in 1 2; do
+    eval "raw=\$RAW$n raw_port=\$RAW${n}_PORT"
     ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=25" \
         -f lavfi -i "sine=frequency=$((n * 1000))" -t 5 \
         -c:v libx264 -preset ultrafast -c:a aac -f mpegts \
-        "udp://239.255.43.2$((n * 2 - 1)):4372$((n * 2 - 1))?localaddr=127.0.0.1&ttl=1" 2>"$WORK/ffmpeg$n.log" &
+        "udp://$raw:$raw_port?localaddr=127.0.0.1&ttl=1" 2>"$WORK/ffmpeg$n.log" &
 done
 wait
 

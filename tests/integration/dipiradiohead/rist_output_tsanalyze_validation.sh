@@ -6,6 +6,7 @@ BIN=$1
 RX_BIN=$2
 . "$(dirname "$0")/../common.sh"
 
-run_radiohead_link_validation "Rist" "rist://127.0.0.1:41050" "rist://@127.0.0.1:41050" 239.255.41.50 41051 41052 "no librist support" "$RX_BIN"
+FPB=$(free_port_block 6)
+run_radiohead_link_validation "Rist" "rist://127.0.0.1:$FPB" "rist://@127.0.0.1:$FPB" "$(unique_mcast 43)" $((FPB + 2)) $((FPB + 3)) "no librist support" "$RX_BIN"
 
 #EOF

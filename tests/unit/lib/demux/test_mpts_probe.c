@@ -14,6 +14,7 @@
 #include "lib/demux/crc32.h"
 #include "lib/demux/mpts_probe.h"
 #include "lib/mux/psi_build.h"
+#include "../../run_helper.h"
 
 /* zero-ES PMT section (table_id 0x02), CRC included */
 static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid) {
@@ -84,9 +85,9 @@ static int open_sender(const char *group, unsigned port, struct sockaddr_in *dst
 }
 
 START_TEST(mpts_probe_classifies_spts) {
-  tssrc_t *src = open_recv("239.7.9.1", 15201);
+  tssrc_t *src = open_recv(run_helper_group_n(1), run_helper_port(1));
   struct sockaddr_in dst;
-  int sock = open_sender("239.7.9.1", 15201, &dst);
+  int sock = open_sender(run_helper_group_n(1), run_helper_port(1), &dst);
   unsigned char sec[256];
   size_t slen;
   mpts_probe_result_t r;
@@ -107,9 +108,9 @@ START_TEST(mpts_probe_classifies_spts) {
 END_TEST
 
 START_TEST(mpts_probe_classifies_mpts_with_names) {
-  tssrc_t *src = open_recv("239.7.9.2", 15202);
+  tssrc_t *src = open_recv(run_helper_group_n(2), run_helper_port(2));
   struct sockaddr_in dst;
-  int sock = open_sender("239.7.9.2", 15202, &dst);
+  int sock = open_sender(run_helper_group_n(2), run_helper_port(2), &dst);
   unsigned char sec[256];
   size_t slen;
   psi_pat_entry_t progs[2];
@@ -156,9 +157,9 @@ START_TEST(mpts_probe_classifies_mpts_with_names) {
 END_TEST
 
 START_TEST(mpts_probe_straggler_falls_back_to_empty_name) {
-  tssrc_t *src = open_recv("239.7.9.3", 15203);
+  tssrc_t *src = open_recv(run_helper_group_n(3), run_helper_port(3));
   struct sockaddr_in dst;
-  int sock = open_sender("239.7.9.3", 15203, &dst);
+  int sock = open_sender(run_helper_group_n(3), run_helper_port(3), &dst);
   unsigned char sec[256];
   size_t slen;
   psi_pat_entry_t progs[2];

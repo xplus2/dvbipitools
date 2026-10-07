@@ -123,6 +123,7 @@ function(dipicam378_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/protocol.c
             ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/worker.c
             ${CMAKE_SOURCE_DIR}/src/dipicam378/device.c
+            ${CMAKE_SOURCE_DIR}/src/dipicam378/hooks.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/device_state_core.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c

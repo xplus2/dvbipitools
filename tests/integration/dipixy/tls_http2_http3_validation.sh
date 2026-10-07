@@ -16,10 +16,11 @@ curl -V | grep -q "HTTP3" && curl_has_http3=1
 [ -f /etc/ssl/openssl.cnf ] && OPENSSL_CONF=/etc/ssl/openssl.cnf
 export OPENSSL_CONF
 
-MCAST=239.255.9.25
-MPORT=18105
-TLSPORT=19206
-HTTPPORT=19207
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 3)
+MPORT=$((FPB + 0))
+TLSPORT=$((FPB + 1))
+HTTPPORT=$((FPB + 2))
 
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/key.pem" -out "$WORK/cert.pem" -days 1 \
     -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \

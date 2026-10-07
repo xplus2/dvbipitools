@@ -3,6 +3,7 @@
 
 #include <check.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -183,7 +184,8 @@ START_TEST(put_inputs_labels_and_skips_zero_error_reasons) {
 END_TEST
 
 START_TEST(large_snapshot_is_sent_as_ordered_parts) {
-  static const char path[] = "/tmp/dvbipitools-test-export-parts.sock";
+  char dir[] = "/tmp/dvbipitools_export_XXXXXX";
+  char path[64];
   struct sockaddr_un addr;
   metrics_exporter_t mx;
   metrics_writer_t w;
@@ -197,9 +199,10 @@ START_TEST(large_snapshot_is_sent_as_ordered_parts) {
   unsigned entries = 0;
   int rfd;
 
+  ck_assert_ptr_nonnull(mkdtemp(dir));
+  snprintf(path, sizeof path, "%s/parts.sock", dir);
   rfd = socket(AF_UNIX, SOCK_DGRAM | SOCK_NONBLOCK, 0);
   ck_assert_int_ge(rfd, 0);
-  unlink(path);
   memset(&addr, 0, sizeof addr);
   addr.sun_family = AF_UNIX;
   bufcpy(addr.sun_path, sizeof addr.sun_path, path);
@@ -234,6 +237,7 @@ START_TEST(large_snapshot_is_sent_as_ordered_parts) {
   metrics_exporter_close(&mx);
   close(rfd);
   unlink(path);
+  rmdir(dir);
 }
 END_TEST
 

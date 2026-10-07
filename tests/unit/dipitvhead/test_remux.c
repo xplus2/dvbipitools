@@ -13,6 +13,7 @@
 #include "dipitvhead/mux/remux/priv.h"
 #include "psi_fixture.h"
 #include "lib/demux/crc32.h"
+#include "lib/helper/beutil.h"
 #include "lib/mux/psi_build.h"
 #include "lib/sys/ioutil.h"
 
@@ -1624,6 +1625,17 @@ static size_t build_fake_eit_section(unsigned char *section_out, unsigned servic
   return slen;
 }
 
+/* expected output form: sid/tsid/onid rewritten to output values, CRC recomputed */
+static void rewrite_eit_expected(unsigned char *sec, size_t slen, const config_t *cfg, const dipitvhead_input_t *input) {
+  sec[3] = (unsigned char)(input->sid >> 8);
+  sec[4] = (unsigned char)input->sid;
+  sec[8] = (unsigned char)(cfg->tsid >> 8);
+  sec[9] = (unsigned char)cfg->tsid;
+  sec[10] = (unsigned char)(cfg->onid >> 8);
+  sec[11] = (unsigned char)cfg->onid;
+  be32_put(sec + slen - 4, crc32_mpeg(sec, slen - 4));
+}
+
 /* one TS packet, pusi=1, pointer_field=0 */
 static void wrap_eit_packet(unsigned char pkt[188], const unsigned char *section, size_t slen) {
   memset(pkt, 0xFF, 188);
@@ -1678,6 +1690,7 @@ START_TEST(remux_non_standalone_emits_reassembled_eit) {
   afc = (g_eit_pkts[0][3] >> 4) & 0x3;
   off = (afc == 3) ? 5 + (size_t)g_eit_pkts[0][4] : 4;
   ck_assert_uint_eq(g_eit_pkts[0][off], 0x00); /* pointer_field */
+  rewrite_eit_expected(section, slen, &cfg, &input);
   ck_assert_mem_eq(g_eit_pkts[0] + off + 1, section, slen);
 
   ck_assert_uint_eq(remux_emit_eit(r, 0x0012, &cc, 1, eit_capture_cb, NULL), 0u);
@@ -1826,12 +1839,14 @@ START_TEST(remux_non_standalone_eit_queues_distinct_sections) {
   ck_assert_uint_eq(remux_emit_eit(r, 0x0012, &cc, 1, eit_capture_cb, NULL), 1u);
   afc = (g_eit_pkts[0][3] >> 4) & 0x3;
   off = (afc == 3) ? 5 + (size_t)g_eit_pkts[0][4] : 4;
+  rewrite_eit_expected(section_a, slen_a, &cfg, &input);
   ck_assert_mem_eq(g_eit_pkts[0] + off + 1, section_a, slen_a);
   ck_assert_int_eq(remux_eit_pending(r), 1); /* section_b still queued */
 
   g_eit_count = 0;
   ck_assert_uint_eq(remux_emit_eit(r, 0x0012, &cc, 1, eit_capture_cb, NULL), 1u);
   off = ((g_eit_pkts[0][3] >> 4) & 0x3) == 3 ? 5 + (size_t)g_eit_pkts[0][4] : 4;
+  rewrite_eit_expected(section_b, slen_b, &cfg, &input);
   ck_assert_mem_eq(g_eit_pkts[0] + off + 1, section_b, slen_b);
   ck_assert_int_eq(remux_eit_pending(r), 0);
 
@@ -2025,6 +2040,7 @@ START_TEST(remux_eit_section_content_survives_every_path) {
   ck_assert_int_eq(g_eit_only_count, (int)n_pkts);
   have = reassemble_emitted_section(g_eit_only, g_eit_only_count, got, sizeof got);
   ck_assert_uint_ge(have, slen);
+  rewrite_eit_expected(section, slen, &cfg, &input);
   ck_assert_mem_eq(got, section, slen);
   remux_free(r);
 

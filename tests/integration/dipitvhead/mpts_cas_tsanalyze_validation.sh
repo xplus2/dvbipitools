@@ -9,14 +9,15 @@ for t in ffmpeg tsp tsanalyze tsecmg jq nc; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-MCAST=239.255.41.50
-PORT=20710
-SRC1=239.255.41.51
-SRC1_PORT=20711
-SRC2=239.255.41.52
-SRC2_PORT=20712
-ECMG_PORT=20713
-EMMG_PORT=20714
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 5)
+PORT=$((FPB + 0))
+SRC1=$(unique_mcast 63)
+SRC1_PORT=$((FPB + 1))
+SRC2=$(unique_mcast 64)
+SRC2_PORT=$((FPB + 2))
+ECMG_PORT=$((FPB + 3))
+EMMG_PORT=$((FPB + 4))
 ECMG_UP_S=30
 CAS_UP_S=60
 SCRAMBLE_WINDOW_S=9

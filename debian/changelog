@@ -1,3 +1,19 @@
+dvbipitools (2.5.1-1) unstable; urgency=medium
+  * libs
+    + UAF/DF in net/ts/open_async (asan)
+    + librist crashes if the RTCP sibling port (++data) is taken (but data isn't)
+      - added a pre-check to avoid this (but leaves an inevitable race window)
+    + cfg.str_pool leak in *_cfg_test()
+  * dipitvhead
+    + EIT same but different fix
+  * dipiscan
+    + write error handling
+  * dipirec
+    + fixed stack-use-after-scope on mkv/mp4/flv muxers (asan)
+  * dipirist
+    + free config on error
+ -- dvbipitools authors <unspecified@example.com>  tbd
+
 dvbipitools (2.5.0-1) unstable; urgency=low
   * example systemd units
   * yaml config file alternative to cmdline args (-c|--config)

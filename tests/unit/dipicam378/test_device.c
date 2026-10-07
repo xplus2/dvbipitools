@@ -10,8 +10,11 @@
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 
+#include "../metrics_sink.h"
 #include "dipicam378/crypto.h"
+#include "dipicam378/cs378x/priv.h"
 #include "dipicam378/device.h"
+#include "dipicam378/hooks.h"
 
 #define SC_SECTION_TID_EMM 0x82
 #define SC_SECTION_TID_ECM_EVEN 0x80
@@ -433,6 +436,154 @@ START_TEST(resolve_cw_no_sk_yet_stays_transient_even_with_caid_configured) {
 }
 END_TEST
 
+START_TEST(services_active_counts_services_with_a_session_key) {
+  EVP_PKEY *pub;
+  device_state_t *d = make_device(&pub, 8);
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char buf[1024];
+  size_t n;
+
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
+    bk[i] = (unsigned char)(i + 3);
+    sk[i] = (unsigned char)(90 - i);
+  }
+  ck_assert_uint_eq(device_state_services_active(d), 0u);
+
+  n = build_emm_g(bk, sk, 0x0064, buf, sizeof buf);
+  device_on_emm(d, buf, n);
+  ck_assert_uint_eq(device_state_services_active(d), 0u);
+
+  n = build_emm_u(pub, bk, buf, sizeof buf);
+  device_on_emm(d, buf, n);
+  n = build_emm_g(bk, sk, 0x0064, buf, sizeof buf);
+  device_on_emm(d, buf, n);
+  ck_assert_uint_eq(device_state_services_active(d), 1u);
+
+  n = build_emm_g(bk, sk, 0x0064, buf, sizeof buf);
+  device_on_emm(d, buf, n);
+  ck_assert_uint_eq(device_state_services_active(d), 1u);
+
+  n = build_emm_g(bk, sk, 0x0065, buf, sizeof buf);
+  device_on_emm(d, buf, n);
+  ck_assert_uint_eq(device_state_services_active(d), 2u);
+
+  EVP_PKEY_free(pub);
+  device_state_free(d);
+}
+END_TEST
+
+START_TEST(ecm_cb_forwards_to_the_device_and_passes_its_result_through) {
+  EVP_PKEY *pub;
+  EVP_PKEY *pub_caid;
+  device_state_t *d = make_device(&pub, 8);
+  device_state_t *d_caid = make_device_full(&pub_caid, 8, TEST_SERIAL, 0x1234);
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char cw[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+  unsigned char buf[1024];
+  unsigned char cw_out[16];
+  size_t n;
+
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
+    bk[i] = (unsigned char)(i + 10);
+    sk[i] = (unsigned char)(200 - i);
+  }
+  n = build_ecm(sk, cw, 8, buf, sizeof buf);
+  ck_assert_int_eq(cam378_ecm_cb(buf, n, 0x0064, 0, 0xFFFF, cw_out, d), -1);
+  ck_assert_int_eq(cam378_ecm_cb(buf, n, 0x0064, 0x4321, 0, cw_out, d_caid), -2);
+  n = build_emm_u(pub, bk, buf, sizeof buf);
+  device_on_emm(d, buf, n);
+  n = build_emm_g(bk, sk, 0x0064, buf, sizeof buf);
+  device_on_emm(d, buf, n);
+  n = build_ecm(sk, cw, 8, buf, sizeof buf);
+  ck_assert_int_eq(cam378_ecm_cb(buf, n, 0x0064, 0, 0xFFFF, cw_out, d), 0);
+  ck_assert_mem_eq(cw_out + 8, cw, 8);
+  EVP_PKEY_free(pub);
+  EVP_PKEY_free(pub_caid);
+  device_state_free(d);
+  device_state_free(d_caid);
+}
+END_TEST
+
+START_TEST(emm_cb_forwards_sections_to_the_device_ignoring_caid_and_provider) {
+  EVP_PKEY *pub;
+  device_state_t *d = make_device(&pub, 8);
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char buf[1024];
+  size_t n;
+
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
+    bk[i] = (unsigned char)(i + 3);
+    sk[i] = (unsigned char)(90 - i);
+  }
+  n = build_emm_u(pub, bk, buf, sizeof buf);
+  cam378_emm_cb(buf, n, 0xABCD, 0x99, d);
+  n = build_emm_g(bk, sk, 0x0064, buf, sizeof buf);
+  cam378_emm_cb(buf, n, 0, 0, d);
+  ck_assert_uint_eq(device_state_services_active(d), 1u);
+  EVP_PKEY_free(pub);
+  device_state_free(d);
+}
+END_TEST
+
+START_TEST(push_metrics_reports_server_and_device_counters_once_per_interval) {
+  EVP_PKEY *pub;
+  device_state_t *d = make_device(&pub, 8);
+  cs378x_server_t srv;
+  sink_t ms;
+  seen_t seen;
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char buf[1024];
+  uint64_t v = 0;
+  unsigned auth_entries = 0;
+  size_t n;
+
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
+    bk[i] = (unsigned char)(i + 3);
+    sk[i] = (unsigned char)(90 - i);
+  }
+  n = build_emm_u(pub, bk, buf, sizeof buf);
+  device_on_emm(d, buf, n);
+  n = build_emm_g(bk, sk, 0x0064, buf, sizeof buf);
+  device_on_emm(d, buf, n);
+  memset(&srv, 0, sizeof srv);
+  atomic_store(&srv.worker_active[0], 1);
+  atomic_store(&srv.worker_active[2], 1);
+  atomic_store(&srv.connections_total, 7ull);
+  atomic_store(&srv.auth_errors_total[CAM_AUTH_USER], 2ull);
+  atomic_store(&srv.auth_errors_total[CAM_AUTH_CHECKSUM], 1ull);
+  atomic_store(&srv.ecm_total, 50ull);
+  atomic_store(&srv.ecm_errors_total, 4ull);
+  atomic_store(&srv.emm_total, 9ull);
+  sink_open(&ms, METRICS_COMPONENT_CAM378, "cam1", 5.0);
+  cam378_push_metrics(&ms.mx, &srv, d, "csa2");
+  ck_assert_int_eq(sink_read(&ms, &seen), 1);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAM_CONNECTIONS_ACTIVE, &v), 1);
+  ck_assert_uint_eq(v, 2u);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAM_CONNECTIONS_TOTAL, &v), 1);
+  ck_assert_uint_eq(v, 7u);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAM_SERVICES_ACTIVE, &v), 1);
+  ck_assert_uint_eq(v, 1u);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAS_ECM_TOTAL, &v), 1);
+  ck_assert_uint_eq(v, 50u);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAS_ECM_ERRORS_TOTAL, &v), 1);
+  ck_assert_uint_eq(v, 4u);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAS_EMM_TOTAL, &v), 1);
+  ck_assert_uint_eq(v, 9u);
+  for (unsigned i = 0; i < seen.n; i++)
+    if (seen.id[i] == METRICS_ID_CAM_AUTH_ERRORS_TOTAL) auth_entries++;
+  ck_assert_uint_eq(auth_entries, 2u);
+  cam378_push_metrics(&ms.mx, &srv, d, "csa2");
+  ck_assert_int_eq(sink_read(&ms, &seen), 0);
+  sink_close(&ms);
+  EVP_PKEY_free(pub);
+  device_state_free(d);
+}
+END_TEST
+
 static Suite *device_suite(void) {
   Suite *s = suite_create("device");
   TCase *tc = tcase_create("core");
@@ -446,7 +597,11 @@ static Suite *device_suite(void) {
   tcase_add_test(tc, no_serial_configured_accepts_any_emm_u);
   tcase_add_test(tc, resolve_cw_rejects_wrong_caid);
   tcase_add_test(tc, resolve_cw_accepts_matching_caid);
+  tcase_add_test(tc, services_active_counts_services_with_a_session_key);
   tcase_add_test(tc, resolve_cw_no_sk_yet_stays_transient_even_with_caid_configured);
+  tcase_add_test(tc, ecm_cb_forwards_to_the_device_and_passes_its_result_through);
+  tcase_add_test(tc, emm_cb_forwards_sections_to_the_device_ignoring_caid_and_provider);
+  tcase_add_test(tc, push_metrics_reports_server_and_device_counters_once_per_interval);
   suite_add_tcase(s, tc);
   return s;
 }

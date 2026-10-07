@@ -64,15 +64,18 @@ gap = max((b - a for a, b in zip(win, win[1:])), default=999.0)
 open(out, "w").write("%d %.3f\n" % (len(win), gap))
 EOF
 
+FPB=$(free_port_block 7)
+GROUP=$(unique_mcast 61)
+
 run_phase() {
     name=$1
     http_port=$2
     mport=$3
     shift 3
-    python3 "$WORK/run.py" "$http_port" 239.255.7.11 "$mport" "$WORK/$name.res" &
+    python3 "$WORK/run.py" "$http_port" "$GROUP" "$mport" "$WORK/$name.res" &
     py_pid=$!
     sleep 0.5
-    "$BIN" -i "http://127.0.0.1:$http_port/stream" -O lo -m "239.255.7.11:$mport" "$@" >"$WORK/$name.log" 2>&1 &
+    "$BIN" -i "http://127.0.0.1:$http_port/stream" -O lo -m "$GROUP:$mport" "$@" >"$WORK/$name.log" 2>&1 &
     tool_pid=$!
     wait "$py_pid" || fail "$name: helper failed"
     kill -INT "$tool_pid" 2>/dev/null
@@ -80,9 +83,9 @@ run_phase() {
     return $?
 }
 
-run_phase control 17811 17812 &
+run_phase control $((FPB + 0)) $((FPB + 1)) &
 ctl=$!
-run_phase jitter 17813 17814 --jitter-ms 3000 &
+run_phase jitter $((FPB + 2)) $((FPB + 3)) --jitter-ms 3000 &
 jit=$!
 wait "$ctl"
 wait "$jit"
@@ -131,10 +134,10 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
 EOF
 
-python3 "$WORK/hls.py" "$WORK" 17815 2>"$WORK/hls_server.log" &
+python3 "$WORK/hls.py" "$WORK" $((FPB + 4)) 2>"$WORK/hls_server.log" &
 hls_pid=$!
 sleep 0.5
-"$BIN" -i "http://127.0.0.1:17815/live.m3u8" -m 239.255.7.11:17816 --jitter-ms 1000 >"$WORK/hls.log" 2>&1 &
+"$BIN" -i "http://127.0.0.1:$((FPB + 4))/live.m3u8" -m $GROUP:$((FPB + 5)) --jitter-ms 1000 >"$WORK/hls.log" 2>&1 &
 tool_pid=$!
 sleep 5
 kill -INT "$tool_pid" 2>/dev/null

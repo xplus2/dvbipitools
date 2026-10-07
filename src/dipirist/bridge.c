@@ -9,6 +9,7 @@
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/rist/ristout.h"
+#include "lib/net/rist/ristpeer.h"
 #include "lib/net/ts/sink.h"
 #include "lib/net/ts/source.h"
 #include "lib/tsinspect/inspect.h"
@@ -44,7 +45,7 @@ static struct rist_logging_settings *open_logging(int verbose) {
 
 #define RIST_STATS_INTERVAL_MS 1000 /* metrics_exporter_due() gates actual push cadence */
 
-static int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
+int bridge_receiver_stats_cb(void *arg, const struct rist_stats *stats) {
   metrics_exporter_t *mx = arg;
   const struct rist_stats_receiver_flow *f = &stats->stats.receiver_flow;
   metrics_writer_t w;
@@ -72,9 +73,14 @@ static int add_peers(struct rist_ctx *ctx, const endpoint_t *e, const config_t *
     struct rist_peer *peer;
     if (rist_parse_address2(e->rist_uri[i], &pc) != 0 || !pc) {
       log_line("rist: invalid peer url: %s", e->rist_uri[i]);
+      if (pc) rist_peer_config_free2(&pc);
       return -1;
     }
     pc->initiate_conn = 0;
+    if (!rist_listen_ports_usable(e->rist_uri[i], cfg->profile == RIST_PROF_SIMPLE)) {
+      rist_peer_config_free2(&pc);
+      return -1;
+    }
     if (cfg->secret[0]) bufcpy(pc->secret, sizeof pc->secret, cfg->secret);
     if (cfg->key_size) pc->key_size = cfg->key_size;
     if (cfg->cname[0]) bufcpy(pc->cname, sizeof pc->cname, cfg->cname);
@@ -201,7 +207,7 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
     return 1;
   }
   if (insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
-  rist_stats_callback_set(ctx, RIST_STATS_INTERVAL_MS, receiver_stats_cb, mx);
+  rist_stats_callback_set(ctx, RIST_STATS_INTERVAL_MS, bridge_receiver_stats_cb, mx);
 
   while (!signal_stop_requested()) {
     struct rist_data_block *db = NULL;

@@ -12,20 +12,14 @@
 #include "lib/helper/pipereader.h"
 #include "lib/sys/signal.h"
 #include "ristin.h"
+#include "ristin_priv.h"
 #include "ristlog.h"
 #include "ristpeer.h"
 
 #define RISTIN_READ_TIMEOUT_MS 200
 #define RIST_STATS_INTERVAL_MS 1000 /* metrics_exporter_due() gates actual push cadence */
 
-struct ristin {
-  struct rist_ctx *ctx;
-  pipereader_t io;
-  metrics_exporter_t *mx;
-  const char *tool_version;
-};
-
-static int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
+int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
   ristin_t *r = arg;
   const struct rist_stats_receiver_flow *f = &stats->stats.receiver_flow;
   if (stats->stats_type != RIST_STATS_RECEIVER_FLOW) {
@@ -79,7 +73,7 @@ ristin_t *ristin_open(const ristin_cfg_t *cfg) {
     free(r);
     return NULL;
   }
-  if (rist_add_peer(r->ctx, cfg->peer_uri, cfg->secret, cfg->key_size, cfg->cname, cfg->buffer_ms, 0) || rist_start(r->ctx) != 0) {
+  if (rist_add_peer(r->ctx, cfg->peer_uri, cfg->secret, cfg->key_size, cfg->cname, cfg->buffer_ms, 0, profile == RIST_PROFILE_SIMPLE) || rist_start(r->ctx) != 0) {
     rist_destroy(r->ctx);
     free(r);
     return NULL;

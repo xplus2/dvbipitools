@@ -14,8 +14,9 @@
 
 #include "dipifccret/run/run.h"
 #include "lib/sys/signal.h"
+#include "../run_helper.h"
 
-#define TEST_PORT 19345
+#define TEST_PORT run_helper_port(7)
 #define RTX_HDR_LEN 14
 
 static channel_table_t *g_table;

@@ -18,6 +18,7 @@
 
 #include "dipiradiohead/radiohead/priv.h"
 #include "input/http_fixture.h"
+#include "../run_helper.h"
 
 static void make_packet(unsigned char pkt[188], unsigned char marker) {
   memset(pkt, 0xAB, 188);
@@ -59,8 +60,8 @@ START_TEST(source_codec_name_maps_every_known_codec) {
 END_TEST
 
 START_TEST(packet_cb_batches_until_ts_per_dgram_then_flushes) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.7.9.61", 15361, NULL, 1);
-  mcast_t *recv = mcast_open(AF_INET, "239.7.9.61", 15361, NULL, 500);
+  mcast_t *send = mcast_open_send(AF_INET, run_helper_group_n(61), run_helper_port(61), NULL, 1);
+  mcast_t *recv = mcast_open(AF_INET, run_helper_group_n(61), run_helper_port(61), NULL, 500);
   out_ctx_t o;
   unsigned char pkt[188];
   unsigned char rbuf[4096];
@@ -93,7 +94,7 @@ START_TEST(packet_cb_batches_until_ts_per_dgram_then_flushes) {
 END_TEST
 
 START_TEST(flush_batch_is_a_no_op_when_empty) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.7.9.62", 15362, NULL, 1);
+  mcast_t *send = mcast_open_send(AF_INET, run_helper_group_n(62), run_helper_port(62), NULL, 1);
   out_ctx_t o;
   ck_assert_ptr_nonnull(send);
   memset(&o, 0, sizeof o);
@@ -108,8 +109,8 @@ START_TEST(flush_batch_is_a_no_op_when_empty) {
 END_TEST
 
 START_TEST(flush_batch_prefixes_rtp_header_when_rtp_enabled) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.7.9.63", 15363, NULL, 1);
-  mcast_t *recv = mcast_open(AF_INET, "239.7.9.63", 15363, NULL, 500);
+  mcast_t *send = mcast_open_send(AF_INET, run_helper_group_n(63), run_helper_port(63), NULL, 1);
+  mcast_t *recv = mcast_open(AF_INET, run_helper_group_n(63), run_helper_port(63), NULL, 500);
   rtpheader_t *rtph = rtpheader_new();
   out_ctx_t o;
   unsigned char pkt[188];

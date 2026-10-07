@@ -9,9 +9,10 @@ for t in ffmpeg curl ffprobe jq; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-MCAST=239.255.9.25
-MPORT=18110
-HTTPPORT=19210
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 2)
+MPORT=$((FPB + 0))
+HTTPPORT=$((FPB + 1))
 BASE="http://127.0.0.1:$HTTPPORT/udp/$MCAST:$MPORT"
 
 ffmpeg -hide_banner -loglevel error -re -stream_loop -1 -f lavfi -i "testsrc=size=320x240:rate=25" \

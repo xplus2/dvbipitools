@@ -19,15 +19,16 @@ wait_port() {
     return 1
 }
 
-MCAST=239.255.7.44
-ECMG_A_PORT=12244
-ECMG_B_PORT=12245
-EMMG_A_PORT=18002
-EMMG_B_PORT=18003
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 9)
+ECMG_A_PORT=$((FPB + 0))
+ECMG_B_PORT=$((FPB + 1))
+EMMG_A_PORT=$((FPB + 2))
+EMMG_B_PORT=$((FPB + 3))
 
 # phase 1: both vendors up - content scrambled, both CA_descriptors present with the right
 # CA_system_id on the right pid (super_cas_id >> 16: 0x4A750002 -> 19061, 0x0D960001 -> 3478)
-PORT1=17744
+PORT1=$((FPB + 4))
 cap1="$WORK/cas_multi_steady.ts"
 report1="$WORK/cas_multi_steady.json"
 
@@ -76,7 +77,7 @@ ecm_b_cas=$(jq -r '.pids[] | select(.id==34) | .cas' "$report1")
 [ "$ecm_b_cas" = "3478" ] || fail "multi-cas steady: expected vendor B's CA_descriptor (cas=3478) on pid 0x0022, got '$ecm_b_cas'"
 
 # phase 2: non-required vendor B's ECMG is unreachable throughout - content must stay scrambled
-PORT2=17745
+PORT2=$((FPB + 5))
 cap2="$WORK/cas_multi_nonrequired_down.ts"
 report2="$WORK/cas_multi_nonrequired_down.json"
 
@@ -94,7 +95,7 @@ timeout 12 "$BIN" -O lo -u -m $MCAST:$PORT2 -i - -s "Multi CAS Nonrequired Down"
     --cas-algo cissa \
     --cas-ecmg "tcp://127.0.0.1:$ECMG_A_PORT" --cas-ecmg-version 2 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
                --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port $EMMG_A_PORT --cas-required \
-    --cas-ecmg "tcp://127.0.0.1:19999" --cas-ecmg-version 2 --cas-super-id 0x0D960001 --cas-ecm-id 1 \
+    --cas-ecmg "tcp://127.0.0.1:$((FPB + 7))" --cas-ecmg-version 2 --cas-super-id 0x0D960001 --cas-ecm-id 1 \
                --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-port $EMMG_B_PORT \
     --cas-pids video,audio --cas-cp-duration 3000 --cas-fallback-clear \
     >"$WORK/dipitvhead2.log" 2>&1
@@ -113,7 +114,7 @@ is_scrambled=$(jq -r '.services[0]["is-scrambled"]' "$report2")
 
 # phase 3: required vendor A's ECMG is unreachable throughout, --cas-fallback-clear set -
 # content must go clear even though non-required vendor B is healthy
-PORT3=17746
+PORT3=$((FPB + 6))
 cap3="$WORK/cas_multi_required_down.ts"
 report3="$WORK/cas_multi_required_down.json"
 
@@ -129,7 +130,7 @@ ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=2
     -c:v libx264 -preset ultrafast -c:a aac -f mpegts - 2>"$WORK/ffmpeg3.log" | \
 timeout 12 "$BIN" -O lo -u -m $MCAST:$PORT3 -i - -s "Multi CAS Required Down" \
     --cas-algo cissa \
-    --cas-ecmg "tcp://127.0.0.1:19998" --cas-ecmg-version 2 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
+    --cas-ecmg "tcp://127.0.0.1:$((FPB + 8))" --cas-ecmg-version 2 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
                --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port $EMMG_A_PORT --cas-required \
     --cas-ecmg "tcp://127.0.0.1:$ECMG_B_PORT" --cas-ecmg-version 2 --cas-super-id 0x0D960001 --cas-ecm-id 1 \
                --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-port $EMMG_B_PORT \

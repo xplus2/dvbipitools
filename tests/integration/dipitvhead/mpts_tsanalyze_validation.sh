@@ -9,8 +9,9 @@ for t in ffmpeg tsp tsanalyze jq; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-MCAST=239.255.7.7
-PORT=17700
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 1)
+PORT=$((FPB + 0))
 
 gen_clip() {
     ffmpeg -hide_banner -loglevel error -f lavfi -i "testsrc=size=320x240:rate=25" \

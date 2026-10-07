@@ -2,11 +2,11 @@
 
 In short, it is a micromuxer and SCS/scrambler.
 
-It takes one or more transport streams (multicast, http(s)+ts/hls+ts/hls+fmp4/llhls/dash/lldash, SRT, RIST or stdin) 
+It takes one or more audio/video streams (multicast, http(s)+ts/hls+ts/hls+fmp4/llhls/dash/lldash, SRT, RIST or stdin) 
 and re-packages them as one transport stream under a new PAT/NIT with a merged EIT and rewritten PMT.
 Individual SDTs can be passed, removed or overwritten.
 
-Its output can be a DVB-IPI multicast, SRT or RIST.
+Its output can be a multicast, SRT or RIST.
 It is always one transport stream, either SPTS when only one source is given, or MPTS on more.
 For more output streams, run multiple instances.
 
@@ -134,7 +134,7 @@ Encrypted input needs `--rist-profile-in main` (paired with the `-i` it follows)
 (`--rist-encryption-type-in` sets the AES key size, 128 or 256) on the URI.
 
 > librist uses one context per process. This means that only _one_ input _or_ output can use RIST.
-> You can _not_ define multiple RIST inputs - and if you do, no RIST output.
+> You can _not_ define multiple RIST inputs - and if you use one, no RIST output.
 > As a work-around, you can let multiple instances of `dipirist` produce multicasts for `-i` here.
 
 
@@ -155,7 +155,7 @@ Encrypted input needs `--rist-profile-in main` (paired with the `-i` it follows)
 |      | `--srt-latency`         | `<ms>`              | library default (`-R srt://` peers only)    |           |
 
 `srt://@host:port` is also accepted, requires libsrt. `@` is required, same reason as RIST above.
-Single peer only, with no bonding or rendezvous. You can [dipisrt](../dipisrt/README.md) in front of
+Single peer only, with no bonding or rendezvous. You can put [dipisrt](../dipisrt/README.md) in front of
 this tool for that. `--srt-passphrase-in`/`--srt-pbkeylen-in`/`--srt-streamid-in`/`--srt-packetfilter-in`/
 `--srt-latency-in` (paired with the `-i` it follows) configure the peer; `--srt-pbkeylen-in` requires
 `--srt-passphrase-in`.

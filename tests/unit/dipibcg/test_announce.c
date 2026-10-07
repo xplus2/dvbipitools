@@ -2,13 +2,19 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
+#include "../log_capture.h"
+#include "../metrics_sink.h"
+#include "../run_helper.h"
 #include "dipibcg/announce.h"
 #include "lib/sys/ioutil.h"
+#include "lib/sys/signal.h"
 
 static void write_temp_file(char *path, const char *content) {
   int fd = mkstemp(path);
@@ -231,6 +237,169 @@ START_TEST(load_doc_rejects_missing_map) {
 }
 END_TEST
 
+#define GUIDE_BUF 8192
+#define GUIDE_MAX_CHANNELS 4
+#define PROG_MAX 8
+
+typedef struct {
+  const char *channels[GUIDE_MAX_CHANNELS];
+  unsigned nchannels;
+  const char *programmes[PROG_MAX];
+  unsigned nprogrammes;
+} guide_t;
+
+static void xmltv_stamp(char *out, size_t cap, long offset_s) {
+  time_t t = time(NULL) + offset_s;
+  struct tm tm;
+
+  gmtime_r(&t, &tm);
+  strftime(out, cap, "%Y%m%d%H%M%S +0000", &tm);
+}
+
+static void guide_text(const guide_t *g, char *buf, size_t cap) {
+  char start[32];
+  char stop[32];
+  size_t n = 0;
+
+  xmltv_stamp(start, sizeof start, -600);
+  xmltv_stamp(stop, sizeof stop, 3600);
+  n += (size_t)snprintf(buf + n, cap - n, "<?xml version=\"1.0\"?>\n<tv>\n");
+  for (unsigned i = 0; i < g->nchannels; i++)
+    n += (size_t)snprintf(buf + n, cap - n, "<channel id=\"%s\"><display-name>Name %s</display-name></channel>\n", g->channels[i], g->channels[i]);
+  for (unsigned i = 0; i < g->nprogrammes; i++)
+    n += (size_t)snprintf(buf + n, cap - n, "<programme start=\"%s\" stop=\"%s\" channel=\"%s\"><title>Show %u</title></programme>\n", start, stop, g->programmes[i], i);
+  snprintf(buf + n, cap - n, "</tv>\n");
+}
+
+static void map_text(const guide_t *g, char *buf, size_t cap) {
+  size_t n = 0;
+
+  for (unsigned i = 0; i < g->nchannels; i++)
+    n += (size_t)snprintf(buf + n, cap - n, "%s,rtp://239.1.1.%u:5000,1,2,%u\n", g->channels[i], i + 1, 101 + i);
+}
+
+static const guide_t guide_one = {{"ch1"}, 1, {"ch1"}, 1};
+static const guide_t guide_two = {{"ch1", "ch2"}, 2, {"ch1", "ch2"}, 2};
+static const guide_t guide_unsorted = {{"zz", "aa", "mm"}, 3, {"aa", "aa", "zz", "ghost"}, 4};
+
+typedef struct {
+  const guide_t *initial;
+  const guide_t *reloaded;
+  const char *bad_map;
+  const char *reload_msg;
+  unsigned sources_up;
+  unsigned services;
+} reload_case_t;
+
+static const reload_case_t reload_cases[] = {
+  {&guide_one, &guide_two, NULL, "reloaded 2 channels, 2 programmes from", 1, 2},
+  {&guide_one, NULL, "not,enough\n", "reload failed, keeping previous guide", 0, 1},
+};
+
+static void run_announce(config_t *cfg, run_helper_t *h, sink_t *ms, int *rc, char *msg, size_t msg_cap) {
+  pthread_t th;
+
+  signals_install();
+  log_capture_begin();
+  ck_assert_int_eq(pthread_create(&th, NULL, run_helper_thread, h), 0);
+  *rc = announce_run(cfg, &ms->mx);
+  pthread_join(th, NULL);
+  log_capture_end(msg, msg_cap);
+}
+
+START_TEST(announce_run_reloads_the_guide_on_sighup_or_keeps_the_previous_one) {
+  const reload_case_t *c = &reload_cases[_i];
+  char xmltv_path[] = "/tmp/dvbipitools_test_bcg_xmltv_XXXXXX";
+  char map_path[] = "/tmp/dvbipitools_test_bcg_map_XXXXXX";
+  char text[GUIDE_BUF];
+  char reloaded[GUIDE_BUF];
+  char msg[16384];
+  run_helper_t h;
+  config_t cfg;
+  sink_t ms;
+  seen_t seen;
+  uint64_t v = 0;
+  int rc;
+
+  guide_text(c->initial, text, sizeof text);
+  write_temp_file(xmltv_path, text);
+  map_text(&guide_two, text, sizeof text);
+  write_temp_file(map_path, text);
+  if (c->reloaded) guide_text(c->reloaded, reloaded, sizeof reloaded);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.input_path = xmltv_path;
+  cfg.map_path = map_path;
+  cfg.window_hours = 2;
+  cfg.family = AF_INET;
+  cfg.mcast_port = 3938;
+  run_helper_group(cfg.mcast_group, sizeof cfg.mcast_group, 81);
+  cfg.interval_s = 1;
+  h.path = c->reloaded ? xmltv_path : map_path;
+  h.rewrite = c->reloaded ? reloaded : c->bad_map;
+  h.rewrite_ms = 200;
+  h.stop_ms = 1250;
+  sink_open(&ms, METRICS_COMPONENT_BCG, "bcg1", 0.1);
+  run_announce(&cfg, &h, &ms, &rc, msg, sizeof msg);
+  ck_assert_int_eq(rc, 0);
+  ck_assert_ptr_nonnull(strstr(msg, c->reload_msg));
+  ck_assert_ptr_nonnull(strstr(msg, "stopped after 2 cycles"));
+  ck_assert_int_eq(sink_read(&ms, &seen), 1);
+  ck_assert_int_eq(seen_last(&seen, METRICS_ID_BCG_SOURCES_UP, &v), 1);
+  ck_assert_uint_eq(v, c->sources_up);
+  ck_assert_int_eq(seen_last(&seen, METRICS_ID_BCG_SERVICES, &v), 1);
+  ck_assert_uint_eq(v, c->services);
+  sink_close(&ms);
+  unlink(xmltv_path);
+  unlink(map_path);
+}
+END_TEST
+
+START_TEST(announce_run_counts_services_with_events_across_unsorted_channels) {
+  char xmltv_path[] = "/tmp/dvbipitools_test_bcg_xmltv_XXXXXX";
+  char map_path[] = "/tmp/dvbipitools_test_bcg_map_XXXXXX";
+  char text[GUIDE_BUF];
+  char msg[16384];
+  run_helper_t h;
+  config_t cfg;
+  sink_t ms;
+  seen_t seen;
+  uint64_t v = 0;
+  int rc;
+
+  guide_text(&guide_unsorted, text, sizeof text);
+  write_temp_file(xmltv_path, text);
+  map_text(&guide_unsorted, text, sizeof text);
+  write_temp_file(map_path, text);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.input_path = xmltv_path;
+  cfg.map_path = map_path;
+  cfg.window_hours = 2;
+  cfg.family = AF_INET;
+  cfg.mcast_port = 3938;
+  run_helper_group(cfg.mcast_group, sizeof cfg.mcast_group, 82);
+  cfg.interval_s = 1;
+  h.path = xmltv_path;
+  h.rewrite = NULL;
+  h.rewrite_ms = 0;
+  h.stop_ms = 300;
+  sink_open(&ms, METRICS_COMPONENT_BCG, "bcg1", 0.1);
+  run_announce(&cfg, &h, &ms, &rc, msg, sizeof msg);
+  ck_assert_int_eq(rc, 0);
+  ck_assert_int_eq(sink_read(&ms, &seen), 1);
+  ck_assert_int_eq(seen_last(&seen, METRICS_ID_BCG_SERVICES, &v), 1);
+  ck_assert_uint_eq(v, 3u);
+  ck_assert_int_eq(seen_last(&seen, METRICS_ID_BCG_SERVICES_WITH_EVENTS, &v), 1);
+  ck_assert_uint_eq(v, 2u);
+  ck_assert_int_eq(seen_last(&seen, METRICS_ID_BCG_EVENTS, &v), 1);
+  ck_assert_uint_eq(v, 4u);
+  ck_assert_int_eq(seen_last(&seen, METRICS_ID_BCG_PUBLICATIONS_TOTAL, &v), 1);
+  ck_assert_uint_eq(v, 1u);
+  sink_close(&ms);
+  unlink(xmltv_path);
+  unlink(map_path);
+}
+END_TEST
+
 static Suite *announce_suite(void) {
   Suite *s = suite_create("dipibcg_announce");
   TCase *tc = tcase_create("core");
@@ -252,6 +421,8 @@ static Suite *announce_suite(void) {
   tcase_add_test(tc, load_doc_applies_mapping_to_matching_channel);
   tcase_add_test(tc, load_doc_rejects_missing_input);
   tcase_add_test(tc, load_doc_rejects_missing_map);
+  tcase_add_loop_test(tc, announce_run_reloads_the_guide_on_sighup_or_keeps_the_previous_one, 0, (int)(sizeof reload_cases / sizeof reload_cases[0]));
+  tcase_add_test(tc, announce_run_counts_services_with_events_across_unsorted_channels);
   suite_add_tcase(s, tc);
   return s;
 }

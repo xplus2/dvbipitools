@@ -171,6 +171,11 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
   double last_stat = 0;
   int is_container = mkv_fd >= 0;
   int is_mp4_fmt = (cfg->format == FMT_MP4 || cfg->format == FMT_M4A);
+  mkv_opts_t mkv_opts; /* muxers keep pointers to these */
+  mp4_opts_t mp4_opts;
+  flv_opts_t flv_opts;
+  char app_name[64];
+  char srcuri[1024];
   int rc = 0;
 
   memset(&ctx, 0, sizeof ctx);
@@ -186,49 +191,44 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
     if (!ctx.f) return 1;
   }
   if (is_container && !is_mp4_fmt) {
-    mkv_opts_t opts;
-    char app_name[64];
-    char srcuri[1024];
     snprintf(app_name, sizeof app_name, "%s %s", TOOL_NAME, TOOL_VERSION);
     source_describe(&cfg->source, srcuri, sizeof srcuri);
-    memset(&opts, 0, sizeof opts);
-    opts.audio_all = n_all_pids > 0 ? 1 : cfg->audio_all; /* -p all: no single "-a N" across programs */
-    opts.audio_track = cfg->audio_track;
-    opts.subs_srt = (cfg->subs == SUB_SRT);
-    opts.sub_lead_ms = cfg->sub_lead_ms;
-    opts.app_name = app_name;
-    opts.source_desc = srcuri;
-    opts.strip_lcevc = (cfg->strip_mask & STRIP_LCEVC) != 0;
-    if (n_all_pids > 0) ctx.m = mkv_new(mkv_fd, &opts, video_ok, bytes, all_pids, n_all_pids);
-    else if (pmt_pid)   ctx.m = mkv_new(mkv_fd, &opts, video_ok, bytes, &pmt_pid, 1);
-    else                ctx.m = mkv_new(mkv_fd, &opts, video_ok, bytes, NULL, 0);
+    memset(&mkv_opts, 0, sizeof mkv_opts);
+    mkv_opts.audio_all = n_all_pids > 0 ? 1 : cfg->audio_all; /* -p all: no single "-a N" across programs */
+    mkv_opts.audio_track = cfg->audio_track;
+    mkv_opts.subs_srt = (cfg->subs == SUB_SRT);
+    mkv_opts.sub_lead_ms = cfg->sub_lead_ms;
+    mkv_opts.app_name = app_name;
+    mkv_opts.source_desc = srcuri;
+    mkv_opts.strip_lcevc = (cfg->strip_mask & STRIP_LCEVC) != 0;
+    if (n_all_pids > 0) ctx.m = mkv_new(mkv_fd, &mkv_opts, video_ok, bytes, all_pids, n_all_pids);
+    else if (pmt_pid)   ctx.m = mkv_new(mkv_fd, &mkv_opts, video_ok, bytes, &pmt_pid, 1);
+    else                ctx.m = mkv_new(mkv_fd, &mkv_opts, video_ok, bytes, NULL, 0);
     if (!ctx.m) {
       ts_filter_free(ctx.f);
       return 1;
     }
   }
   if (is_container && is_mp4_fmt) {
-    mp4_opts_t opts;
-    memset(&opts, 0, sizeof opts);
-    opts.audio_all = n_all_pids > 0 ? 1 : cfg->audio_all;
-    opts.audio_track = cfg->audio_track;
-    opts.subs_srt = (cfg->subs == SUB_SRT);
-    opts.sub_lead_ms = cfg->sub_lead_ms;
-    opts.strip_lcevc = (cfg->strip_mask & STRIP_LCEVC) != 0;
-    if (n_all_pids > 0) ctx.p4 = mp4_new(mkv_fd, &opts, video_ok, bytes, all_pids, n_all_pids);
-    else if (pmt_pid)   ctx.p4 = mp4_new(mkv_fd, &opts, video_ok, bytes, &pmt_pid, 1);
-    else                ctx.p4 = mp4_new(mkv_fd, &opts, video_ok, bytes, NULL, 0);
+    memset(&mp4_opts, 0, sizeof mp4_opts);
+    mp4_opts.audio_all = n_all_pids > 0 ? 1 : cfg->audio_all;
+    mp4_opts.audio_track = cfg->audio_track;
+    mp4_opts.subs_srt = (cfg->subs == SUB_SRT);
+    mp4_opts.sub_lead_ms = cfg->sub_lead_ms;
+    mp4_opts.strip_lcevc = (cfg->strip_mask & STRIP_LCEVC) != 0;
+    if (n_all_pids > 0) ctx.p4 = mp4_new(mkv_fd, &mp4_opts, video_ok, bytes, all_pids, n_all_pids);
+    else if (pmt_pid)   ctx.p4 = mp4_new(mkv_fd, &mp4_opts, video_ok, bytes, &pmt_pid, 1);
+    else                ctx.p4 = mp4_new(mkv_fd, &mp4_opts, video_ok, bytes, NULL, 0);
     if (!ctx.p4) {
       ts_filter_free(ctx.f);
       return 1;
     }
   }
   if (rf->n > 0) {
-    flv_opts_t fo;
-    memset(&fo, 0, sizeof fo);
-    fo.audio_track = cfg->audio_all ? 0 : cfg->audio_track;
-    fo.strip_lcevc = (cfg->strip_mask & STRIP_LCEVC) != 0;
-    ctx.flv = flv_new(&fo, pmt_pid, rtmp_fanout_cb, rf, bytes);
+    memset(&flv_opts, 0, sizeof flv_opts);
+    flv_opts.audio_track = cfg->audio_all ? 0 : cfg->audio_track;
+    flv_opts.strip_lcevc = (cfg->strip_mask & STRIP_LCEVC) != 0;
+    ctx.flv = flv_new(&flv_opts, pmt_pid, rtmp_fanout_cb, rf, bytes);
     if (!ctx.flv) {
       mkv_close(ctx.m);
       mp4_close(ctx.p4);

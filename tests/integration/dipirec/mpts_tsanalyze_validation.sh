@@ -9,8 +9,8 @@ for t in ffmpeg tsp tsanalyze jq; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-MCAST=239.255.7.9
-PORT=17900
+MCAST=$(unique_mcast 77)
+PORT=$(free_udp_port)
 
 rec="$WORK/rec.ts"
 report="$WORK/report.json"

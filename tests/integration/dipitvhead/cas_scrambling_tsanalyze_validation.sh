@@ -9,10 +9,11 @@ for t in ffmpeg tsp tsanalyze tsecmg jq; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-MCAST=239.255.7.40
-PORT=17740
-ECMG_PORT=12240
-EMMG_PORT=18010
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 3)
+PORT=$((FPB + 0))
+ECMG_PORT=$((FPB + 1))
+EMMG_PORT=$((FPB + 2))
 
 cap="$WORK/cas_capture.ts"
 report="$WORK/cas_report.json"

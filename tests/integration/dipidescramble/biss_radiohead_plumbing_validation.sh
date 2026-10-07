@@ -13,9 +13,10 @@ DIPIRADIOHEAD=$(echo "$BIN" | sed 's#/dipidescramble\([^/]*\)$#/../dipiradiohead
 [ -x "$DIPIRADIOHEAD" ] || DIPIRADIOHEAD="./dipiradiohead"
 [ -x "$DIPIRADIOHEAD" ] || fail "cannot locate dipiradiohead binary (tried $DIPIRADIOHEAD)"
 
-MCAST=239.255.7.56
-PORT=17756
-HTTP_PORT=18084
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 2)
+PORT=$((FPB + 0))
+HTTP_PORT=$((FPB + 1))
 SW=00112233445566778899aabbccddeeff
 
 ffmpeg -hide_banner -loglevel error -f lavfi -i "sine=frequency=1000:duration=8" \

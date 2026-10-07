@@ -6,12 +6,14 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 
+#include "../log_capture.h"
 #include "lib/net/tls.h"
 #include "lib/net/tls_server.h"
 
@@ -442,51 +444,6 @@ START_TEST(request_counters_reflect_status_and_include_current_request) {
 }
 END_TEST
 
-START_TEST(idle_connection_past_deadline_is_reaped) {
-  store_t st;
-  int lfd;
-  int cfd;
-  http_server_t *hs;
-  char buf[8];
-
-  store_init(&st);
-  lfd = http_listen(AF_INET, "127.0.0.1", 0);
-  hs = http_server_new(lfd, NULL, "");
-
-  cfd = connect_to(lfd);
-  ck_assert_int_gt((int)send(cfd, "GET ", 4, 0), 0); /* never completes request line */
-
-  {
-    double deadline = mono() + 8.0; /* HTTP_IDLE_TIMEOUT_S (5s) plus slack */
-    int closed = 0;
-    while (mono() < deadline) {
-      struct pollfd pfds[1 + HTTP_MAX_CONNS];
-      struct pollfd cpfd;
-      int n = 0;
-
-      http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
-      poll(pfds, (nfds_t)n, 200);
-      http_server_service(hs, pfds, n, &st, mono(), 0);
-
-      cpfd.fd = cfd;
-      cpfd.events = POLLIN;
-      cpfd.revents = 0;
-      poll(&cpfd, 1, 0);
-      if (cpfd.revents & (POLLIN | POLLHUP)) {
-        closed = 1;
-        break;
-      }
-    }
-    ck_assert_msg(closed, "idle connection was never reaped");
-  }
-  ck_assert_int_eq((int)recv(cfd, buf, sizeof buf, 0), 0); /* server closed, nothing sent */
-
-  close(cfd);
-  http_server_free(hs);
-  close(lfd);
-}
-END_TEST
-
 START_TEST(metrics_requires_auth_when_configured) {
   store_t st;
   int lfd;
@@ -560,6 +517,231 @@ START_TEST(metrics_with_wrong_auth_returns_401) {
 }
 END_TEST
 
+#define BASIC_AUTH "Basic dXNlcjpwYXNz"
+#define LONG_FIELD 300
+#define OVERSIZE_LEN 9000
+
+static size_t serve_one(const char *auth, const char *req, size_t req_len, int verbose, store_t *st, char *buf, size_t cap) {
+  int lfd;
+  int cfd;
+  http_server_t *hs;
+  double deadline = mono() + 2.0;
+  size_t got;
+
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+  ck_assert_int_ge(lfd, 0);
+  hs = http_server_new(lfd, NULL, auth);
+  ck_assert_ptr_nonnull(hs);
+  cfd = connect_to(lfd);
+  ck_assert_int_eq((int)send(cfd, req, req_len, 0), (int)req_len);
+  while (mono() < deadline) {
+    struct pollfd pfds[1 + HTTP_MAX_CONNS];
+    struct pollfd cpfd;
+    int n = 0;
+
+    http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
+    poll(pfds, (nfds_t)n, 20);
+    http_server_service(hs, pfds, n, st, mono(), verbose);
+    cpfd.fd = cfd;
+    cpfd.events = POLLIN;
+    cpfd.revents = 0;
+    poll(&cpfd, 1, 0);
+    if (cpfd.revents & (POLLIN | POLLHUP | POLLERR)) break;
+  }
+  got = recv_all(cfd, buf, cap);
+  close(cfd);
+  http_server_free(hs);
+  close(lfd);
+  return got;
+}
+
+typedef struct {
+  const char *header;
+  const char *status;
+} auth_case_t;
+
+static const auth_case_t auth_cases[] = {
+  {"", "401 Unauthorized"},
+  {"Authorization: Basic dXNlcjpwYXNx\r\n", "401 Unauthorized"},
+  {"Authorization: Basic dXNlcjpw\r\n", "401 Unauthorized"},
+  {"Authorization: Basic dXNlcjpwYXNzeA==\r\n", "401 Unauthorized"},
+  {"Authorization: Bearer dXNlcjpwYXNz\r\n", "401 Unauthorized"},
+  {"Authorization:\r\n", "401 Unauthorized"},
+  {"X-Authorization: Basic dXNlcjpwYXNz\r\n", "401 Unauthorized"},
+  {"authorization: Basic dXNlcjpwYXNz\r\n", "200 OK"},
+  {"AUTHORIZATION: Basic dXNlcjpwYXNz\r\n", "200 OK"},
+};
+
+START_TEST(metrics_auth_rejects_every_kind_of_bad_credential) {
+  const auth_case_t *c = &auth_cases[_i];
+  store_t st;
+  char req[512];
+  char buf[8192];
+  int n;
+  int ok = strcmp(c->status, "200 OK") == 0;
+
+  store_init(&st);
+  n = snprintf(req, sizeof req, "GET /metrics HTTP/1.1\r\nHost: x\r\n%s\r\n", c->header);
+  serve_one(BASIC_AUTH, req, (size_t)n, 0, &st, buf, sizeof buf);
+  ck_assert_ptr_nonnull(strstr(buf, c->status));
+  ck_assert_uint_eq(st.stats.http_requests_200, ok ? 1u : 0u);
+  ck_assert_uint_eq(st.stats.http_requests_404, 0u);
+}
+END_TEST
+
+START_TEST(unknown_paths_need_no_credentials_even_when_auth_is_configured) {
+  store_t st;
+  char buf[8192];
+  const char req[] = "GET /elsewhere HTTP/1.1\r\nHost: x\r\n\r\n";
+
+  store_init(&st);
+  serve_one(BASIC_AUTH, req, sizeof req - 1, 0, &st, buf, sizeof buf);
+  ck_assert_ptr_nonnull(strstr(buf, "404 Not Found"));
+  ck_assert_uint_eq(st.stats.http_requests_404, 1u);
+}
+END_TEST
+
+START_TEST(oversized_request_is_dropped_without_a_response) {
+  store_t st;
+  char buf[8192];
+  char *req = malloc(OVERSIZE_LEN);
+  size_t got;
+  int n;
+
+  ck_assert_ptr_nonnull(req);
+  store_init(&st);
+  n = snprintf(req, OVERSIZE_LEN, "GET /metrics HTTP/1.1\r\nX-Pad: ");
+  memset(req + n, 'a', (size_t)(OVERSIZE_LEN - n));
+  got = serve_one("", req, OVERSIZE_LEN, 0, &st, buf, sizeof buf);
+  ck_assert_uint_eq(got, 0u);
+  ck_assert_uint_eq(st.stats.http_requests_200, 0u);
+  ck_assert_uint_eq(st.stats.http_requests_404, 0u);
+  free(req);
+}
+END_TEST
+
+START_TEST(idle_connection_is_dropped_once_its_deadline_passes) {
+  store_t st;
+  int lfd;
+  int cfd;
+  http_server_t *hs;
+  struct pollfd pfds[1 + HTTP_MAX_CONNS];
+  double t0 = mono();
+  char buf[8];
+  int n = 0;
+
+  store_init(&st);
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+  hs = http_server_new(lfd, NULL, "");
+  cfd = connect_to(lfd);
+  ck_assert_int_eq((int)send(cfd, "GET ", 4, 0), 4);
+  http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
+  poll(pfds, (nfds_t)n, 200);
+  http_server_service(hs, pfds, n, &st, t0, 0);
+  n = 0;
+  http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
+  ck_assert_int_eq(n, 2);
+  http_server_service(hs, pfds, n, &st, t0 + 1.0, 0);
+  n = 0;
+  http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
+  ck_assert_int_eq(n, 2);
+  http_server_service(hs, pfds, n, &st, t0 + 6.0, 0);
+  n = 0;
+  http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_le((int)recv(cfd, buf, sizeof buf, 0), 0);
+  close(cfd);
+  http_server_free(hs);
+  close(lfd);
+}
+END_TEST
+
+START_TEST(connections_beyond_the_pool_are_dropped_and_the_pool_keeps_serving) {
+  store_t st;
+  int lfd;
+  int clients[HTTP_MAX_CONNS + 1];
+  http_server_t *hs;
+  struct pollfd pfds[1 + HTTP_MAX_CONNS];
+  char buf[8192];
+  char extra[8];
+  int n = 0;
+  const char req[] = "GET /metrics HTTP/1.1\r\nHost: x\r\n\r\n";
+
+  store_init(&st);
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+  hs = http_server_new(lfd, NULL, "");
+  for (int i = 0; i < HTTP_MAX_CONNS + 1; i++) clients[i] = connect_to(lfd);
+  http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
+  poll(pfds, (nfds_t)n, 200);
+  http_server_service(hs, pfds, n, &st, mono(), 0);
+  n = 0;
+  http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
+  ck_assert_int_eq(n, 1 + HTTP_MAX_CONNS);
+  ck_assert_int_le((int)recv(clients[HTTP_MAX_CONNS], extra, sizeof extra, 0), 0);
+  ck_assert_int_eq((int)send(clients[0], req, sizeof req - 1, 0), (int)sizeof req - 1);
+  drive_until_closed(hs, &st, clients[0]);
+  recv_all(clients[0], buf, sizeof buf);
+  ck_assert_ptr_nonnull(strstr(buf, "200 OK"));
+  for (int i = 0; i < HTTP_MAX_CONNS + 1; i++) close(clients[i]);
+  http_server_free(hs);
+  close(lfd);
+}
+END_TEST
+
+typedef struct {
+  const char *request;
+  const char *log_has;
+} method_case_t;
+
+static const method_case_t method_cases[] = {
+  {"HEAD /metrics HTTP/1.1\r\nHost: x\r\n\r\n", "404 HEAD /metrics"},
+  {"PUT /metrics HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n", "404 PUT /metrics"},
+  {"DELETE / HTTP/1.1\r\nHost: x\r\n\r\n", "404 DELETE /"},
+  {"GET /metrics/ HTTP/1.1\r\nHost: x\r\n\r\n", "404 GET /metrics/"},
+  {"GET /METRICS HTTP/1.1\r\nHost: x\r\n\r\n", "404 GET /METRICS"},
+  {"ABCDEFGHIJKLMNOPQRST /metrics HTTP/1.1\r\nHost: x\r\n\r\n", "404 ABCDEFGHIJKLMNO /metrics"},
+  {"\x01\x02garbage\r\n\r\n", NULL},
+};
+
+START_TEST(other_methods_and_malformed_requests_get_404) {
+  const method_case_t *c = &method_cases[_i];
+  store_t st;
+  char buf[8192];
+  char msg[4096];
+
+  store_init(&st);
+  log_capture_begin();
+  serve_one("", c->request, strlen(c->request), 1, &st, buf, sizeof buf);
+  log_capture_end(msg, sizeof msg);
+  ck_assert_ptr_nonnull(strstr(buf, "HTTP/1.1 404 Not Found"));
+  ck_assert_uint_eq(st.stats.http_requests_404, 1u);
+  if (c->log_has) ck_assert_ptr_nonnull(strstr(msg, c->log_has));
+  else ck_assert_ptr_null(strstr(msg, "404 "));
+}
+END_TEST
+
+START_TEST(overlong_path_is_truncated_in_the_log_and_still_gets_404) {
+  store_t st;
+  char buf[8192];
+  char msg[4096];
+  char req[LONG_FIELD + 64];
+  char path[LONG_FIELD + 1];
+  int n;
+
+  memset(path, 'p', LONG_FIELD);
+  path[0] = '/';
+  path[LONG_FIELD] = '\0';
+  n = snprintf(req, sizeof req, "GET %s HTTP/1.1\r\nHost: x\r\n\r\n", path);
+  store_init(&st);
+  log_capture_begin();
+  serve_one("", req, (size_t)n, 1, &st, buf, sizeof buf);
+  log_capture_end(msg, sizeof msg);
+  ck_assert_ptr_nonnull(strstr(buf, "HTTP/1.1 404 Not Found"));
+  ck_assert_ptr_nonnull(strstr(msg, "404 GET /ppp"));
+  ck_assert_uint_lt(strlen(msg), (size_t)LONG_FIELD);
+}
+END_TEST
+
 static Suite *httpserver_suite(void) {
   Suite *s = suite_create("dipimetrics_httpserver");
   TCase *tc = tcase_create("core");
@@ -571,11 +753,17 @@ static Suite *httpserver_suite(void) {
   tcase_add_test(tc, query_string_is_stripped_before_matching);
   tcase_add_test(tc, sequential_scrapes_each_get_a_correct_independent_response);
   tcase_add_test(tc, request_counters_reflect_status_and_include_current_request);
-  tcase_add_test(tc, idle_connection_past_deadline_is_reaped);
   tcase_add_test(tc, tls_get_metrics_returns_200_over_https);
   tcase_add_test(tc, metrics_requires_auth_when_configured);
   tcase_add_test(tc, metrics_with_correct_auth_returns_200);
   tcase_add_test(tc, metrics_with_wrong_auth_returns_401);
+  tcase_add_loop_test(tc, metrics_auth_rejects_every_kind_of_bad_credential, 0, (int)(sizeof auth_cases / sizeof auth_cases[0]));
+  tcase_add_test(tc, unknown_paths_need_no_credentials_even_when_auth_is_configured);
+  tcase_add_test(tc, oversized_request_is_dropped_without_a_response);
+  tcase_add_test(tc, idle_connection_is_dropped_once_its_deadline_passes);
+  tcase_add_test(tc, connections_beyond_the_pool_are_dropped_and_the_pool_keeps_serving);
+  tcase_add_loop_test(tc, other_methods_and_malformed_requests_get_404, 0, (int)(sizeof method_cases / sizeof method_cases[0]));
+  tcase_add_test(tc, overlong_path_is_truncated_in_the_log_and_still_gets_404);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -12,7 +12,7 @@ done
 [ -f /etc/ssl/openssl.cnf ] && OPENSSL_CONF=/etc/ssl/openssl.cnf
 export OPENSSL_CONF
 
-HTTPPORT=19309
+HTTPPORT=$(free_tcp_port)
 SOCK="$WORK/metrics.sock"
 
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/key.pem" -out "$WORK/cert.pem" -days 1 -subj "/CN=host-a" >"$WORK/openssl_a.log" 2>&1 || fail "cert a generation failed, see $WORK/openssl_a.log"

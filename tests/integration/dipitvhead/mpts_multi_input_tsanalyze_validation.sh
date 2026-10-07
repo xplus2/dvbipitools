@@ -9,12 +9,13 @@ for t in ffmpeg tsp tsanalyze jq; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-MCAST=239.255.7.10
-PORT=17701
-SRC1=239.255.7.20
-SRC1_PORT=17702
-SRC2=239.255.7.21
-SRC2_PORT=17703
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 3)
+PORT=$((FPB + 0))
+SRC1=$(unique_mcast 63)
+SRC1_PORT=$((FPB + 1))
+SRC2=$(unique_mcast 64)
+SRC2_PORT=$((FPB + 2))
 
 cap="$WORK/mpts_capture.ts"
 report="$WORK/mpts_report.json"

@@ -3,9 +3,11 @@
 
 #include <check.h>
 #include <netinet/in.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "../log_capture.h"
 #include "dipisrt/bridge.h"
 #include "dipisrt/version.h"
 
@@ -218,6 +220,87 @@ START_TEST(srtout_queue_watermark_stays_zero_below_level_two) {
 }
 END_TEST
 
+typedef enum {
+  SB_SEND_SOURCE_FAILS,
+  SB_SEND_PEER_COUNT,
+  SB_RECV_SINK_FAILS,
+  SB_RECV_PEER_COUNT,
+  SB_RECV_BAD_PASSPHRASE
+} srt_bridge_fail_t;
+
+typedef struct {
+  srt_bridge_fail_t kind;
+  const char *msg;
+} srt_bridge_fail_case_t;
+
+static const srt_bridge_fail_case_t srt_bridge_fail_cases[] = {
+  {SB_SEND_SOURCE_FAILS, NULL},
+  {SB_SEND_PEER_COUNT, "plain connection needs exactly one peer"},
+  {SB_RECV_SINK_FAILS, NULL},
+  {SB_RECV_PEER_COUNT, "plain connection needs exactly one peer"},
+  {SB_RECV_BAD_PASSPHRASE, NULL},
+};
+
+static void srt_file_endpoint(endpoint_t *e, const char *path) {
+  memset(e, 0, sizeof *e);
+  e->nonsrt.kind = PLAIN_EP_FILE;
+  snprintf(e->nonsrt.file_path, sizeof e->nonsrt.file_path, "%s", path);
+}
+
+static void srt_peer_endpoint(endpoint_t *e, int peers, int listen) {
+  memset(e, 0, sizeof *e);
+  e->is_srt = 1;
+  e->listen = listen;
+  e->n_srt = peers;
+  for (int i = 0; i < peers; i++) {
+    snprintf(e->srt_host[i], sizeof e->srt_host[i], "127.0.0.1");
+    e->srt_port[i] = (unsigned)(9 + i);
+    e->family[i] = AF_INET;
+  }
+}
+
+START_TEST(bridge_run_fails_cleanly_when_setup_cannot_complete) {
+  const srt_bridge_fail_case_t *c = &srt_bridge_fail_cases[_i];
+  config_t cfg;
+  metrics_exporter_t mx;
+  char msg[4096];
+  int rc;
+
+  memset(&cfg, 0, sizeof cfg);
+  memset(&mx, 0, sizeof mx);
+  switch (c->kind) {
+    case SB_SEND_SOURCE_FAILS:
+      srt_file_endpoint(&cfg.in, "/nonexistent-dir/in.ts");
+      srt_peer_endpoint(&cfg.out, 1, 0);
+      break;
+    case SB_SEND_PEER_COUNT:
+      srt_file_endpoint(&cfg.in, "/dev/null");
+      srt_peer_endpoint(&cfg.out, 2, 0);
+      break;
+    case SB_RECV_SINK_FAILS:
+      srt_peer_endpoint(&cfg.in, 1, 1);
+      srt_file_endpoint(&cfg.out, "/nonexistent-dir/out.ts");
+      break;
+    case SB_RECV_PEER_COUNT:
+      srt_peer_endpoint(&cfg.in, 2, 1);
+      srt_file_endpoint(&cfg.out, "/dev/null");
+      break;
+    case SB_RECV_BAD_PASSPHRASE:
+      srt_peer_endpoint(&cfg.in, 1, 1);
+      srt_file_endpoint(&cfg.out, "/dev/null");
+      snprintf(cfg.passphrase, sizeof cfg.passphrase, "short");
+      break;
+  }
+  cfg.n_in = 1;
+  cfg.n_out = 1;
+  log_capture_begin();
+  rc = bridge_run(&cfg, &mx);
+  log_capture_end(msg, sizeof msg);
+  ck_assert_int_eq(rc, 1);
+  if (c->msg) ck_assert_msg(strstr(msg, c->msg) != NULL, "log=[%s]", msg);
+}
+END_TEST
+
 static Suite *bridge_suite(void) {
   Suite *s = suite_create("dipisrt_bridge");
   TCase *tc = tcase_create("core");
@@ -233,6 +316,7 @@ static Suite *bridge_suite(void) {
   tcase_add_test(tc, tssink_cfg_udp_kind);
   tcase_add_test(tc, srtout_queue_stats_count_chunks_watermark_and_drops);
   tcase_add_test(tc, srtout_queue_watermark_stays_zero_below_level_two);
+  tcase_add_loop_test(tc, bridge_run_fails_cleanly_when_setup_cannot_complete, 0, (int)(sizeof srt_bridge_fail_cases / sizeof srt_bridge_fail_cases[0]));
   tcase_add_test(tc, dedup_is_duplicate_false_on_empty_history);
   tcase_add_test(tc, dedup_record_then_is_duplicate_matches_same_hash_and_len);
   tcase_add_test(tc, dedup_is_duplicate_requires_len_match_too);

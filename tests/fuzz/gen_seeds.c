@@ -4,6 +4,8 @@
 /* write starter seed per fuzz target into directory argv[1].
    not part of any normal build. run manually before afl-fuzz. */
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +20,10 @@
 #include "lib/helper/sds_xml.h"
 #include "lib/tva/bcg_doc.h"
 #include "lib/sys/ioutil.h"
+#include "lib/metrics/protocol.h"
+#include "lib/tva/tva_xml.h"
+#include "dipibcg/container.h"
+#include "dipibcg/wrapper.h"
 
 static int write_file(const char *dir, const char *name, const unsigned char *data, size_t len) {
   char path[512];
@@ -247,6 +253,109 @@ static void gen_yamlcfg(const char *dir) {
   write_file(dir, "yamlcfg_flow.yaml", (const unsigned char *)flow, sizeof flow - 1);
 }
 
+static void gen_tva_xml(const char *dir) {
+  bcg_doc_t doc;
+  bcg_channel_t *c;
+  bcg_programme_t *pr;
+  char *text = NULL;
+  size_t len = 0;
+  FILE *f;
+
+  bcg_doc_init(&doc);
+  c = bcg_add_channel(&doc);
+  bufcpy(c->id, sizeof c->id, "ch1");
+  bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
+  bufcpy(c->names[0], sizeof c->names[0], "Channel One");
+  c->name_count = 1;
+  c->tsid = 1;
+  c->onid = 2;
+  c->sid = 101;
+  pr = bcg_add_programme(&doc);
+  bufcpy(pr->channel_id, sizeof pr->channel_id, "ch1");
+  bufcpy(pr->start, sizeof pr->start, "2030-01-01T12:00:00Z");
+  bufcpy(pr->stop, sizeof pr->stop, "2030-01-01T13:00:00Z");
+  bufcpy(pr->title, sizeof pr->title, "News");
+  f = open_memstream(&text, &len);
+  if (f) {
+    tva_xml_write(f, &doc);
+    fclose(f);
+    if (len) write_file(dir, "tva_min.xml", (const unsigned char *)text, len);
+    free(text);
+  }
+  bcg_doc_free(&doc);
+}
+
+static void gen_xmltv_and_mapping(const char *dir) {
+  static const char xmltv[] =
+    "\0<?xml version=\"1.0\"?>\n<tv><channel id=\"c1\"><display-name>One</display-name></channel>"
+    "<programme start=\"20300101120000 +0000\" stop=\"20300101130000 +0000\" channel=\"c1\"><title>News</title>"
+    "<desc>d</desc><category>x</category></programme></tv>\n";
+  static const char mapping[] = "\1c1,rtp://239.1.1.1:5000,1,2,101\n# comment\nc2,udp://239.1.1.2:5000,3,4,5\n";
+
+  write_file(dir, "xmltv_min.bin", (const unsigned char *)xmltv, sizeof xmltv - 1);
+  write_file(dir, "mapping_min.bin", (const unsigned char *)mapping, sizeof mapping - 1);
+}
+
+static void gen_bcg_container(const char *dir) {
+  static const unsigned char au[] = {1, 2, 3, 4};
+  static const unsigned char sr[] = {0, 0};
+  unsigned char *cont = NULL;
+  size_t cont_len = 0;
+  unsigned char *wrapped = NULL;
+  size_t wrapped_len = 0;
+  unsigned char *seed;
+
+  if (container_build(au, sizeof au, sr, sizeof sr, &cont, &cont_len)) return;
+  seed = malloc(cont_len + 1);
+  if (seed) {
+    seed[0] = 0;
+    memcpy(seed + 1, cont, cont_len);
+    write_file(dir, "bcg_container_min.bin", seed, cont_len + 1);
+    free(seed);
+  }
+  if (wrapper_build(cont, cont_len, 0, &wrapped, &wrapped_len) == 0) {
+    seed = malloc(wrapped_len + 1);
+    if (seed) {
+      seed[0] = 1;
+      memcpy(seed + 1, wrapped, wrapped_len);
+      write_file(dir, "bcg_wrapper_min.bin", seed, wrapped_len + 1);
+      free(seed);
+    }
+    free(wrapped);
+  }
+  free(cont);
+}
+
+static void gen_metrics_store(const char *dir) {
+  static metrics_writer_t w;
+  metrics_hdr_t hdr;
+  size_t n;
+
+  memset(&hdr, 0, sizeof hdr);
+  hdr.proto_version = METRICS_PROTO_VERSION;
+  hdr.component = METRICS_COMPONENT_SDS;
+  bufcpy(hdr.metrics_id, sizeof hdr.metrics_id, "sds1");
+  hdr.process_start_time = 1000;
+  hdr.sequence = 1;
+  hdr.snapshot_time = 2000;
+  if (metrics_writer_begin(&w, &hdr)) return;
+  metrics_writer_put(&w, METRICS_ID_HEADEND_INFO, "1.0", 1);
+  metrics_writer_put(&w, METRICS_ID_SDS_SERVICES, NULL, 3);
+  metrics_writer_put(&w, METRICS_ID_SDS_ANNOUNCEMENTS_TOTAL, "multicast", 7);
+  n = metrics_writer_finish(&w);
+  if (n) write_file(dir, "metrics_snapshot_min.bin", w.buf, n);
+}
+
+static void gen_rtmp(const char *dir) {
+  static const unsigned char amf[] = {0x00, 0x03, 0x00, 0x04, 'c', 'o', 'd', 'e', 0x02, 0x00, 0x04, 't', 'e', 's', 't', 0x00, 0x00, 0x09};
+  static const unsigned char chunk[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x14, 0x14, 0x00, 0x00, 0x00, 0x00,
+                                         0x02, 0x00, 0x07, '_', 'r', 'e', 's', 'u', 'l', 't',
+                                         0x00, 0x3F, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05};
+
+  write_file(dir, "amf_object_min.bin", amf, sizeof amf);
+  write_file(dir, "rtmp_result_min.bin", chunk, sizeof chunk);
+}
+
 int main(int argc, char **argv) {
   if (argc != 2) {
     fprintf(stderr, "usage: %s <output-dir>\n", argv[0]);
@@ -264,5 +373,10 @@ int main(int argc, char **argv) {
   gen_dvbstp(argv[1]);
   gen_dvbstp_bcg_compressed(argv[1]);
   gen_yamlcfg(argv[1]);
+  gen_tva_xml(argv[1]);
+  gen_xmltv_and_mapping(argv[1]);
+  gen_bcg_container(argv[1]);
+  gen_metrics_store(argv[1]);
+  gen_rtmp(argv[1]);
   return 0;
 }

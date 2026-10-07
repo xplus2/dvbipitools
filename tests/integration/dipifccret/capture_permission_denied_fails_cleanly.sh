@@ -18,7 +18,7 @@ out="$WORK/dipifccret.out"
 # -M 4: CAP_NET_RAW check ignores channel capacity
 # small table, same alloc path per slot
 # -k: unexpected success blocks capture_run() until SIGTERM, SIGKILL after 3s bounds worst case
-timeout -k 3 10 "$BIN" -g 239.0.0.0/8 -l 127.0.0.1:16000 -I lo -M 4 >"$out" 2>&1
+timeout -k 3 10 "$BIN" -g 239.0.0.0/8 -l 127.0.0.1:$(free_udp_port) -I lo -M 4 >"$out" 2>&1
 rc=$?
 
 if grep -q "capture needs CAP_NET_RAW" "$out"; then

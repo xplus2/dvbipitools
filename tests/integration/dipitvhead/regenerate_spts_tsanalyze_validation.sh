@@ -10,12 +10,13 @@ for t in ffmpeg tsp tsanalyze jq; do
 done
 tsp -P pcredit --help >/dev/null 2>&1 || skip "tsp pcredit plugin not available"
 
-MCAST=239.255.43.10
-PORT=43710
-RAW=239.255.43.11
-RAW_PORT=43711
-BAD=239.255.43.12
-BAD_PORT=43712
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 3)
+PORT=$((FPB + 0))
+RAW=$(unique_mcast 63)
+RAW_PORT=$((FPB + 1))
+BAD=$(unique_mcast 64)
+BAD_PORT=$((FPB + 2))
 KBPS=3000
 
 cap="$WORK/regenerate_spts.ts"

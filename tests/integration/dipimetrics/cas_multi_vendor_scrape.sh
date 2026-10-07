@@ -27,13 +27,14 @@ metric_value() {
     grep -F "$2" "$1" | tail -1 | awk '{print $NF}'
 }
 
-MCAST=239.255.7.46
-PORT=17748
-ECMG_A_PORT=12248
-ECMG_B_PORT=12249
-EMMG_A_PORT=18006
-EMMG_B_PORT=18007
-HTTPPORT=19195
+MCAST=$(unique_mcast 96)
+PORT=$(free_udp_port)
+TCP_BASE=$(free_tcp_port_block 5)
+ECMG_A_PORT=$TCP_BASE
+ECMG_B_PORT=$((TCP_BASE + 1))
+EMMG_A_PORT=$((TCP_BASE + 2))
+EMMG_B_PORT=$((TCP_BASE + 3))
+HTTPPORT=$((TCP_BASE + 4))
 SOCK="$WORK/metrics.sock"
 
 # two CAS vendors, distinct super_cas_id (same values as

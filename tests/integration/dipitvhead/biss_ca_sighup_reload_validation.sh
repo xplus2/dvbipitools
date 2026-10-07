@@ -9,8 +9,9 @@ for t in ffmpeg tsp tsanalyze openssl jq; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-MCAST=239.255.41.40
-PORT=41041
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 1)
+PORT=$((FPB + 0))
 
 keys="$WORK/receivers"
 cap="$WORK/capture.ts"

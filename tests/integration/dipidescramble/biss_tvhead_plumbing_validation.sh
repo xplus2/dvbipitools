@@ -11,8 +11,9 @@ DIPITVHEAD=$(echo "$BIN" | sed 's#/dipidescramble\([^/]*\)$#/../dipitvhead/dipit
 [ -x "$DIPITVHEAD" ] || DIPITVHEAD="./dipitvhead"
 [ -x "$DIPITVHEAD" ] || fail "cannot locate dipitvhead binary (tried $DIPITVHEAD)"
 
-MCAST=239.255.7.54
-PORT=17754
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 1)
+PORT=$((FPB + 0))
 SW=00112233445566778899aabbccddeeff
 
 out="$WORK/descrambled.ts"

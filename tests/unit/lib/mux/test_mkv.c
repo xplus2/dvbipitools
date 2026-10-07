@@ -330,111 +330,6 @@ static size_t build_pmt_aac(unsigned char *out, unsigned prog_num, unsigned pmt_
   return crc_at + 4;
 }
 
-static size_t build_pmt_video(unsigned char *out, unsigned prog_num, unsigned pmt_pid, unsigned char stream_type) {
-  unsigned char body[16];
-  size_t n = 0;
-  size_t hdr;
-  size_t crc_at;
-  uint32_t crc;
-  unsigned es_pid = pmt_pid + 1;
-
-  body[n++] = (unsigned char)(prog_num >> 8);
-  body[n++] = (unsigned char)prog_num;
-  body[n++] = 0xC1;
-  body[n++] = 0x00;
-  body[n++] = 0x00;
-  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
-  body[n++] = (unsigned char)es_pid;
-  body[n++] = 0xF0;
-  body[n++] = 0x00;
-  body[n++] = stream_type;
-  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
-  body[n++] = (unsigned char)es_pid;
-  body[n++] = 0xF0;
-  body[n++] = 0x00;
-  hdr = n + 4;
-  out[0] = 0x02;
-  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
-  out[2] = (unsigned char)hdr;
-  memcpy(out + 3, body, n);
-  crc_at = 3 + n;
-  crc = crc32_mpeg(out, crc_at);
-  out[crc_at + 0] = (unsigned char)(crc >> 24);
-  out[crc_at + 1] = (unsigned char)(crc >> 16);
-  out[crc_at + 2] = (unsigned char)(crc >> 8);
-  out[crc_at + 3] = (unsigned char)crc;
-  return crc_at + 4;
-}
-
-/* AV1 video ES PMT: stream_type 0x06 + a tag-0x05 AV01 */
-static size_t build_pmt_av1_video(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
-  unsigned char body[20];
-  size_t n = 0;
-  size_t hdr;
-  size_t crc_at;
-  uint32_t crc;
-  unsigned es_pid = pmt_pid + 1;
-
-  body[n++] = (unsigned char)(prog_num >> 8);
-  body[n++] = (unsigned char)prog_num;
-  body[n++] = 0xC1;
-  body[n++] = 0x00;
-  body[n++] = 0x00;
-  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
-  body[n++] = (unsigned char)es_pid;
-  body[n++] = 0xF0;
-  body[n++] = 0x00;
-  body[n++] = 0x06;
-  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
-  body[n++] = (unsigned char)es_pid;
-  body[n++] = 0xF0;
-  body[n++] = 0x06;
-  body[n++] = 0x05;
-  body[n++] = 0x04;
-  memcpy(body + n, "AV01", 4);
-  n += 4;
-  hdr = n + 4;
-  out[0] = 0x02;
-  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
-  out[2] = (unsigned char)hdr;
-  memcpy(out + 3, body, n);
-  crc_at = 3 + n;
-  crc = crc32_mpeg(out, crc_at);
-  out[crc_at + 0] = (unsigned char)(crc >> 24);
-  out[crc_at + 1] = (unsigned char)(crc >> 16);
-  out[crc_at + 2] = (unsigned char)(crc >> 8);
-  out[crc_at + 3] = (unsigned char)crc;
-  return crc_at + 4;
-}
-
-static size_t build_vvc_au(unsigned char *out) {
-  static const unsigned char vps[] = {0x00, 0x71, 0xAA, 0xBB};
-  static const unsigned char sps[] = {0x00, 0x79, 0x11, 0x0B, 0xFF, 0xFF, 0xDF, 0x00, 0x12};
-  static const unsigned char pps[] = {0x00, 0x81, 0xCC, 0xDD};
-  static const unsigned char idr[] = {0x00, 0x39, 0xEE};
-  static const unsigned char sc[] = {0x00, 0x00, 0x01};
-  size_t n = 0;
-#define APPEND(a) memcpy(out + n, a, sizeof a); n += sizeof a
-  APPEND(sc); APPEND(vps);
-  APPEND(sc); APPEND(sps);
-  APPEND(sc); APPEND(pps);
-  APPEND(sc); APPEND(idr);
-#undef APPEND
-  return n;
-}
-
-static size_t build_av1_au(unsigned char *out) {
-  static const unsigned char seqhdr[] = {0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x01};
-  static const unsigned char frame[] = {0x30, 0x00, 0xAB, 0xCD};
-  static const unsigned char sc[] = {0x00, 0x00, 0x01};
-  size_t n = 0;
-#define APPEND(a) memcpy(out + n, a, sizeof a); n += sizeof a
-  APPEND(sc); APPEND(seqhdr);
-  APPEND(sc); APPEND(frame);
-#undef APPEND
-  return n;
-}
-
 START_TEST(mkv_multi_program_labels_tracks_with_program_names) {
   char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
   int fd = mkstemp(path);
@@ -722,6 +617,69 @@ START_TEST(mkv_edge_case_streams_never_error_and_drop_unusable_frames) {
 }
 END_TEST
 
+#define VIDEO_AUS 4
+
+typedef struct {
+  const char *name;
+  unsigned char stream_type;
+  size_t (*build_au)(unsigned char *out, int idr);
+  const char *codec_id;
+  unsigned markers;
+} mkv_video_case_t;
+
+static size_t mpeg2_au_any(unsigned char *out, int idr) {
+  return build_mpeg2_au(out, idr);
+}
+
+static const mkv_video_case_t mkv_video_cases[] = {
+    {"hevc", 0x24, build_hevc_au, "V_MPEGH/ISO/HEVC", VIDEO_AUS - 1},
+    {"mpeg2", 0x02, mpeg2_au_any, "V_MPEG2", VIDEO_AUS - 1},
+};
+
+START_TEST(mkv_video_codec_header_and_dimensions) {
+  const mkv_video_case_t *c = &mkv_video_cases[_i];
+  static const unsigned char width_1920[] = {0xB0, 0x82, 0x07, 0x80};
+  static const unsigned char height_1080[] = {0xBA, 0x82, 0x04, 0x38};
+  char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mkv_opts_t cfg = base_cfg();
+  mkv_t *m;
+  unsigned char pkts[DISCOVERY_PACKETS][188];
+  unsigned char au[128];
+  unsigned char pes[188];
+  unsigned char pkt[188];
+  unsigned char *buf;
+  size_t len = 0;
+
+  ck_assert_int_ge(fd, 0);
+  m = mkv_new(fd, &cfg, 1, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  build_video_discovery(pkts, 0, c->stream_type);
+  for (size_t i = 0; i < DISCOVERY_PACKETS; i++) mkv_feed(m, pkts[i]);
+  for (unsigned i = 0; i < VIDEO_AUS; i++) {
+    size_t alen = c->build_au(au, i == 0);
+    size_t plen = build_pes_with_pts_dts(pes, 90000 + i * 3000, 90000 + i * 3000, au, alen);
+
+    wrap_ts_packet_exact(pkt, 0x0101, 1, pes, plen);
+    mkv_feed(m, pkt);
+  }
+  ck_assert_int_eq(mkv_error(m), 0);
+  mkv_close(m);
+  close(fd);
+
+  buf = slurp_file(path, &len);
+  ck_assert_ptr_nonnull(buf);
+  ck_assert_ptr_nonnull(memmem(buf, len, c->codec_id, strlen(c->codec_id)));
+  ck_assert_ptr_nonnull(memmem(buf, len, width_1920, sizeof width_1920));
+  ck_assert_ptr_nonnull(memmem(buf, len, height_1080, sizeof height_1080));
+  ck_assert_uint_eq(count_frame_markers(buf, len), c->markers);
+  if (c->stream_type == 0x24) ck_assert_ptr_nonnull(memmem(buf, len, hevc_sps_1080p, sizeof hevc_sps_1080p));
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
 static Suite *mkv_suite(void) {
   Suite *s = suite_create("mkv");
   TCase *tc = tcase_create("core");
@@ -732,6 +690,7 @@ static Suite *mkv_suite(void) {
   tcase_add_test(tc, mkv_pts_wraparound_is_rebased_not_dropped);
   tcase_add_test(tc, mkv_writes_vvc_codecid_and_vvcc_cpriv);
   tcase_add_test(tc, mkv_writes_av1_codecid_and_av1c_cpriv);
+  tcase_add_loop_test(tc, mkv_video_codec_header_and_dimensions, 0, (int)(sizeof mkv_video_cases / sizeof mkv_video_cases[0]));
   tcase_add_loop_test(tc, mkv_edge_case_streams_never_error_and_drop_unusable_frames, 0, EDGE_COUNT);
   suite_add_tcase(s, tc);
   return s;

@@ -9,10 +9,11 @@ for t in ffmpeg tsp tsanalyze jq python3; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-IN_GROUP=239.255.7.8
-IN_PORT=17701
-OUT_GROUP=239.255.7.9
-OUT_PORT=17702
+IN_GROUP=$(unique_mcast 61)
+FPB=$(free_port_block 2)
+IN_PORT=$((FPB + 0))
+OUT_GROUP=$(unique_mcast 62)
+OUT_PORT=$((FPB + 1))
 
 clip="$WORK/clip.ts"
 cap="$WORK/capture.ts"

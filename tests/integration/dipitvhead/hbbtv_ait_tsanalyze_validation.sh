@@ -9,8 +9,9 @@ for t in ffmpeg tsp tsanalyze tstables jq; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-MCAST=239.255.41.30
-PORT=41031
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 1)
+PORT=$((FPB + 0))
 
 clip="$WORK/clip.ts"
 cap="$WORK/ait_capture.ts"

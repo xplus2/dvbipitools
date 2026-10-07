@@ -301,6 +301,126 @@ START_TEST(mp4_edge_case_streams_never_error_and_drop_unusable_frames) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  unsigned char stream_type;
+  int av1;
+  size_t (*build_au)(unsigned char *out, int idr);
+  const char *sample_entry;
+  const char *config_box;
+  unsigned markers;
+} video_case_t;
+
+static size_t vvc_au_any(unsigned char *out, int idr) {
+  (void)idr;
+  return build_vvc_au(out);
+}
+
+static size_t av1_au_any(unsigned char *out, int idr) {
+  (void)idr;
+  return build_av1_au(out);
+}
+
+#define VIDEO_AUS 4
+
+static const video_case_t video_cases[] = {
+  {"h264", 0x1B, 0, build_h264_au, "avc1", "avcC", VIDEO_AUS - 1},
+  {"hevc", 0x24, 0, build_hevc_au, "hvc1", "hvcC", VIDEO_AUS - 1},
+  {"vvc", 0x33, 0, vvc_au_any, "vvc1", "vvcC", 0},
+  {"av1", 0, 1, av1_au_any, "av01", "av1C", 0},
+};
+
+START_TEST(mp4_video_header_parse_writes_sample_entry_and_samples) {
+  const video_case_t *c = &video_cases[_i];
+  char path[] = "/tmp/dvbipitools_test_mp4_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mp4_opts_t cfg = base_cfg();
+  mp4_t *m;
+  unsigned char pkts[DISCOVERY_PACKETS][188];
+  unsigned char au[128];
+  unsigned char pes[188];
+  unsigned char pkt[188];
+  unsigned char *buf;
+  size_t len = 0;
+  ck_assert_int_ge(fd, 0);
+  m = mp4_new(fd, &cfg, 1, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  build_video_discovery(pkts, c->av1, c->stream_type);
+  for (size_t i = 0; i < DISCOVERY_PACKETS; i++) mp4_feed(m, pkts[i]);
+  for (unsigned i = 0; i < VIDEO_AUS; i++) {
+    size_t alen = c->build_au(au, i == 0);
+    size_t plen = build_pes_with_pts_dts(pes, 90000 + i * 3000, 90000 + i * 3000, au, alen);
+
+    wrap_ts_packet_exact(pkt, 0x0101, 1, pes, plen);
+    mp4_feed(m, pkt);
+  }
+  ck_assert_int_eq(mp4_error(m), 0);
+  mp4_close(m);
+  close(fd);
+  buf = slurp_file(path, &len);
+  ck_assert_ptr_nonnull(buf);
+  ck_assert_int_eq(memcmp(buf + 4, "ftyp", 4), 0);
+  ck_assert_ptr_nonnull(memmem(buf, len, "moov", 4));
+  ck_assert_ptr_nonnull(memmem(buf, len, c->sample_entry, 4));
+  ck_assert_ptr_nonnull(memmem(buf, len, c->config_box, 4));
+  ck_assert_ptr_nonnull(memmem(buf, len, "stts", 4));
+  ck_assert_uint_eq(count_frame_markers(buf, len), c->markers);
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
+static unsigned char *write_h264_stream(const unsigned pts_lead_90k[VIDEO_AUS], size_t *len_out) {
+  char path[] = "/tmp/dvbipitools_test_mp4_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mp4_opts_t cfg = base_cfg();
+  mp4_t *m;
+  unsigned char pkts[DISCOVERY_PACKETS][188];
+  unsigned char au[128];
+  unsigned char pes[188];
+  unsigned char pkt[188];
+  unsigned char *buf;
+  ck_assert_int_ge(fd, 0);
+  m = mp4_new(fd, &cfg, 1, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  build_video_discovery(pkts, 0, 0x1B);
+  for (size_t i = 0; i < DISCOVERY_PACKETS; i++) mp4_feed(m, pkts[i]);
+  for (unsigned i = 0; i < VIDEO_AUS; i++) {
+    size_t alen = build_h264_au(au, i == 0);
+    size_t plen = build_pes_with_pts_dts(pes, 90000 + i * 3000 + pts_lead_90k[i], 90000 + i * 3000, au, alen);
+    wrap_ts_packet_exact(pkt, 0x0101, 1, pes, plen);
+    mp4_feed(m, pkt);
+  }
+  mp4_close(m);
+  close(fd);
+  buf = slurp_file(path, len_out);
+  ck_assert_ptr_nonnull(buf);
+  unlink(path);
+  return buf;
+}
+
+START_TEST(mp4_video_with_reordering_writes_ctts_with_runs) {
+  static const unsigned lead[VIDEO_AUS] = {0, 6000, 6000, 0};
+  size_t len = 0;
+  unsigned char *buf = write_h264_stream(lead, &len);
+  unsigned char *ctts = memmem(buf, len, "ctts", 4);
+  ck_assert_ptr_nonnull(ctts);
+  ck_assert_uint_eq(((unsigned)ctts[8] << 24) | ((unsigned)ctts[9] << 16) | ((unsigned)ctts[10] << 8) | ctts[11], 2u);
+  free(buf);
+}
+END_TEST
+
+START_TEST(mp4_video_without_reordering_omits_ctts) {
+  static const unsigned lead[VIDEO_AUS] = {0, 0, 0, 0};
+  size_t len = 0;
+  unsigned char *buf = write_h264_stream(lead, &len);
+  ck_assert_ptr_null(memmem(buf, len, "ctts", 4));
+  free(buf);
+}
+END_TEST
+
 static Suite *mp4_suite(void) {
   Suite *s = suite_create("mp4");
   TCase *tc = tcase_create("core");
@@ -308,6 +428,9 @@ static Suite *mp4_suite(void) {
   tcase_add_test(tc, mp4_no_supported_tracks_writes_nothing_and_no_error);
   tcase_add_test(tc, mp4_multi_program_writes_two_audio_tracks);
   tcase_add_loop_test(tc, mp4_edge_case_streams_never_error_and_drop_unusable_frames, 0, EDGE_COUNT);
+  tcase_add_loop_test(tc, mp4_video_header_parse_writes_sample_entry_and_samples, 0, (int)(sizeof video_cases / sizeof video_cases[0]));
+  tcase_add_test(tc, mp4_video_with_reordering_writes_ctts_with_runs);
+  tcase_add_test(tc, mp4_video_without_reordering_omits_ctts);
   suite_add_tcase(s, tc);
   return s;
 }

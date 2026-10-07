@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-PORT=18033
+PORT=$(free_udp_port)
 N_PKTS=200
 
 fixture="$WORK/fixture.ts"

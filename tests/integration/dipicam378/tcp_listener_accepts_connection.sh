@@ -9,7 +9,7 @@ for t in openssl nc; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-PORT=27599
+PORT=$(free_tcp_port)
 KEY="$WORK/device.key"
 
 openssl genrsa -out "$KEY" 1024 >"$WORK/openssl.log" 2>&1 || fail "openssl genrsa failed, see $WORK/openssl.log"

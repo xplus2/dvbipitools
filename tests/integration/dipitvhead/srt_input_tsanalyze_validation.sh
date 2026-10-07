@@ -5,6 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-run_tvhead_link_validation "Srt" "srt://127.0.0.1:41020" "srt://@127.0.0.1:41020" 239.255.41.20 41021 "no libsrt support"
+FPB=$(free_port_block 2)
+run_tvhead_link_validation "Srt" "srt://127.0.0.1:$FPB" "srt://@127.0.0.1:$FPB" "$(unique_mcast 41)" $((FPB + 1)) "no libsrt support"
 
 #EOF

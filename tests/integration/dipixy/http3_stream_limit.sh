@@ -14,8 +14,9 @@ curl -V | grep -q "HTTP3" || skip "curl was not built with HTTP/3 support"
 [ -f /etc/ssl/openssl.cnf ] && OPENSSL_CONF=/etc/ssl/openssl.cnf
 export OPENSSL_CONF
 
-TLSPORT=19216
-HTTPPORT=19217
+FPB=$(free_port_block 2)
+TLSPORT=$((FPB + 0))
+HTTPPORT=$((FPB + 1))
 REQUESTS=40
 
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/key.pem" -out "$WORK/cert.pem" -days 1 \

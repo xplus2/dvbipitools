@@ -165,10 +165,14 @@ static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
 
 int rist_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
+  int rc;
   config_t cfg;
 
   rist_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+    yamlcfg_strpool_free(cfg.str_pool);
+    return -1;
+  }
   warn_if(&y, !cfg.n_in, "in not set (required unless given on the command line)");
   warn_if(&y, !cfg.n_out, "out not set (required unless given on the command line)");
   warn_if(&y, cfg.n_in && cfg.n_out && cfg.in.is_rist == cfg.out.is_rist, "exactly one of in/out must be rist://, the other a plain endpoint");
@@ -178,5 +182,7 @@ int rist_cfg_test(const char *path, int strict) {
   warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
   warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "al-fec requires al-fec-port");
   warn_if(&y, !cfg.al_fec_l && cfg.al_fec_port, "al-fec-port has no effect without al-fec");
-  return yamlcfg_report(&y);
+  rc = yamlcfg_report(&y);
+  yamlcfg_strpool_free(cfg.str_pool);
+  return rc;
 }

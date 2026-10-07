@@ -14,10 +14,11 @@ curl -V | grep -q "HTTP2" || fail "curl was not built with HTTP/2 support"
 [ -f /etc/ssl/openssl.cnf ] && OPENSSL_CONF=/etc/ssl/openssl.cnf
 export OPENSSL_CONF
 
-MCAST=239.255.41.60
-MPORT=41760
-TLSPORT=41761
-HTTPPORT=41762
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 3)
+MPORT=$((FPB + 0))
+TLSPORT=$((FPB + 1))
+HTTPPORT=$((FPB + 2))
 CORS_ORIGIN=https://player.example.test
 
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/key.pem" -out "$WORK/cert.pem" -days 1 \

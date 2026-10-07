@@ -7,9 +7,10 @@ BIN=$1
 
 command -v curl >/dev/null 2>&1 || fail "required tool 'curl' not found on PATH"
 
-HTTPPORT=19208
-MCAST=239.255.9.30
-MPORT=18200
+FPB=$(free_port_block 2)
+HTTPPORT=$((FPB + 0))
+MCAST=$(unique_mcast 61)
+MPORT=$((FPB + 1))
 
 # nothing ever sends to MCAST:MPORT: the join succeeds, no packet ever arrives.
 timeout 15 "$BIN" -l "127.0.0.1:$HTTPPORT" --ts-startup-timeout 1 >"$WORK/dipixy.log" 2>&1 &

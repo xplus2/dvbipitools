@@ -503,6 +503,40 @@ START_TEST(chunk_parser_applies_extended_timestamp) {
 }
 END_TEST
 
+START_TEST(chunk_extended_timestamp_write_is_big_endian) {
+  unsigned char o[4] = {0};
+
+  rtmp_chunk_extended_timestamp_write(o, 0x01020304u);
+  ck_assert_uint_eq(o[0], 0x01);
+  ck_assert_uint_eq(o[1], 0x02);
+  ck_assert_uint_eq(o[2], 0x03);
+  ck_assert_uint_eq(o[3], 0x04);
+}
+END_TEST
+
+static const uint32_t ext_ts_values[] = {0u, 1u, 0xFFFFFFu, 0x1000000u, 0x7FFFFFFFu, 0xFFFFFFFFu};
+
+START_TEST(chunk_extended_timestamp_roundtrip) {
+  unsigned char o[4];
+
+  rtmp_chunk_extended_timestamp_write(o, ext_ts_values[_i]);
+  ck_assert_uint_eq(rtmp_chunk_extended_timestamp_read(o), ext_ts_values[_i]);
+}
+END_TEST
+
+START_TEST(chunk_message_header_write_clamps_large_timestamp) {
+  rtmp_chunk_header_t h = {0};
+  unsigned char o[16];
+
+  h.fmt = RTMP_CHUNK_FMT_0;
+  h.timestamp = 0x1000000u;
+  ck_assert_uint_eq(rtmp_chunk_message_header_write(o, &h), 11u);
+  ck_assert_uint_eq(o[0], 0xFF);
+  ck_assert_uint_eq(o[1], 0xFF);
+  ck_assert_uint_eq(o[2], 0xFF);
+}
+END_TEST
+
 typedef struct {
   uint32_t value;
   int valid;
@@ -698,6 +732,9 @@ static Suite *rtmp_suite(void) {
   tcase_add_test(tc, chunk_parser_rejects_ninth_chunk_stream);
   tcase_add_loop_test(tc, chunk_parser_decodes_extended_chunk_stream_ids, 0, (int)(sizeof cid_cases / sizeof cid_cases[0]));
   tcase_add_test(tc, chunk_parser_applies_extended_timestamp);
+  tcase_add_test(tc, chunk_extended_timestamp_write_is_big_endian);
+  tcase_add_loop_test(tc, chunk_extended_timestamp_roundtrip, 0, (int)(sizeof ext_ts_values / sizeof ext_ts_values[0]));
+  tcase_add_test(tc, chunk_message_header_write_clamps_large_timestamp);
   tcase_add_loop_test(tc, set_chunk_size_rejects_zero_and_survives_following_data, 0, (int)(sizeof chunk_size_cases / sizeof chunk_size_cases[0]));
   tcase_add_loop_test(tc, invoke_handler_ignores_malformed_commands, 0, (int)(sizeof invoke_cases / sizeof invoke_cases[0]));
   tcase_add_test(tc, invoke_handler_ignores_command_name_longer_than_buffer);

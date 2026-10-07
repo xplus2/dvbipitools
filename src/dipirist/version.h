@@ -5,6 +5,6 @@
 #define DIPIRIST_VERSION_H
 
 #define TOOL_NAME    "dipirist"
-#define TOOL_VERSION "0.3.2"
+#define TOOL_VERSION "0.3.3"
 
 #endif

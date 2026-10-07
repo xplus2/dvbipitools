@@ -13,7 +13,7 @@ if [ -z "${REC_BIN:-}" ] || [ ! -x "$REC_BIN" ]; then
     exit 1
 fi
 
-PORT=17966
+PORT=$(free_udp_port_pair)
 N_PKTS=200
 
 fixture="$WORK/fixture.ts"

@@ -11,9 +11,9 @@ DIPISDS=$(echo "$BIN" | sed 's#/dipimetrics\([^/]*\)$#/../dipisds/dipisds\1#')
 [ -x "$DIPISDS" ] || DIPISDS="./dipisds"
 [ -x "$DIPISDS" ] || fail "cannot locate dipisds binary (tried $DIPISDS)"
 
-MCAST=239.255.9.14
-PORT=17914
-HTTPPORT=19194
+MCAST=$(unique_mcast 95)
+PORT=$(free_udp_port)
+HTTPPORT=$(free_tcp_port)
 SOCK="$WORK/metrics.sock"
 
 metric_value() {

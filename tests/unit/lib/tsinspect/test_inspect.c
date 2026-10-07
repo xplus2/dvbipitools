@@ -1436,6 +1436,151 @@ START_TEST(pcr_freq_offset_negative_when_pcr_runs_slow) {
 }
 END_TEST
 
+static void begin_test_writer(metrics_writer_t *w, metrics_hdr_t *hdr) {
+  memset(hdr, 0, sizeof *hdr);
+  hdr->proto_version = METRICS_PROTO_VERSION;
+  hdr->component = METRICS_COMPONENT_TVHEAD;
+  hdr->metrics_id[0] = 'x';
+  ck_assert_int_eq(metrics_writer_begin(w, hdr), 0);
+}
+
+typedef struct {
+  int input0;
+  int input1;
+  int output0;
+  uint64_t packets_input1;
+  uint64_t packets_output0;
+} stream_seen_t;
+
+static void scan_packet_labels(metrics_writer_t *w, metrics_hdr_t *hdr, stream_seen_t *seen) {
+  metrics_reader_t r;
+  metrics_id_t id;
+  char label[METRICS_LABEL_MAX + 1];
+  uint64_t value;
+
+  memset(seen, 0, sizeof *seen);
+  ck_assert_int_eq(metrics_reader_init(&r, w->buf, w->len, hdr), 0);
+  while (metrics_reader_next(&r, &id, label, sizeof label, &value) == 1) {
+    if (id != METRICS_ID_TS_PACKETS_TOTAL) continue;
+    if (!strcmp(label, "input0")) seen->input0 = 1;
+    if (!strcmp(label, "input1")) {
+      seen->input1 = 1;
+      seen->packets_input1 = value;
+    }
+    if (!strcmp(label, "output0")) {
+      seen->output0 = 1;
+      seen->packets_output0 = value;
+    }
+  }
+}
+
+typedef struct {
+  int output;
+  unsigned index;
+  const char *want;
+} label_case_t;
+
+static const label_case_t label_cases[] = {
+    {0, 0, "input0"},
+    {1, 0, "output0"},
+    {0, 7, "input7"},
+    {1, 12, "output12"},
+};
+
+START_TEST(stream_label_formats_direction_and_index) {
+  const label_case_t *c = &label_cases[_i];
+  char out[16];
+
+  tsinspect_stream_label(out, sizeof out, c->output, c->index);
+  ck_assert_str_eq(out, c->want);
+}
+END_TEST
+
+START_TEST(stream_label_truncates_to_capacity) {
+  char out[6];
+
+  tsinspect_stream_label(out, sizeof out, 1, 3);
+  ck_assert_uint_lt(strlen(out), sizeof out);
+  ck_assert_int_eq(strncmp(out, "outpu", strlen(out)), 0);
+}
+END_TEST
+
+START_TEST(set_put_labels_inputs_and_outputs_and_skips_null_slots) {
+  tsinspect_t *in[2] = {NULL, tsinspect_new(METRICS_INSPECT_TS_BASIC)};
+  tsinspect_t *out[1] = {tsinspect_new(METRICS_INSPECT_TS_BASIC)};
+  tsinspect_set_t set = {in, 2, out, 1};
+  unsigned char p[188];
+  metrics_writer_t w;
+  metrics_hdr_t hdr;
+  stream_seen_t seen;
+
+  make_pkt(p, 0x100, 1, 0);
+  tsinspect_tick(in[1], 1.0);
+  tsinspect_packet(in[1], p);
+  tsinspect_tick(out[0], 1.0);
+  tsinspect_packet(out[0], p);
+  make_pkt(p, 0x100, 1, 1);
+  tsinspect_packet(out[0], p);
+  tsinspect_tick(in[1], 1.5);
+  tsinspect_tick(out[0], 1.5);
+  begin_test_writer(&w, &hdr);
+  tsinspect_set_put(&w, &set);
+  scan_packet_labels(&w, &hdr, &seen);
+  ck_assert_int_eq(seen.input0, 0);
+  ck_assert_int_eq(seen.input1, 1);
+  ck_assert_uint_eq(seen.packets_input1, 1u);
+  ck_assert_int_eq(seen.output0, 1);
+  ck_assert_uint_eq(seen.packets_output0, 2u);
+  tsinspect_free(in[1]);
+  tsinspect_free(out[0]);
+}
+END_TEST
+
+START_TEST(set_put_with_empty_set_writes_no_stream_series) {
+  tsinspect_set_t set = {NULL, 0, NULL, 0};
+  metrics_writer_t w;
+  metrics_hdr_t hdr;
+  stream_seen_t seen;
+
+  begin_test_writer(&w, &hdr);
+  tsinspect_set_put(&w, &set);
+  scan_packet_labels(&w, &hdr, &seen);
+  ck_assert_int_eq(seen.input0 | seen.input1 | seen.output0, 0);
+}
+END_TEST
+
+START_TEST(agg_put_cb_writes_aggregate_as_input0) {
+  tsinspect_agg_t *a = tsinspect_agg_new(METRICS_INSPECT_TS_BASIC);
+  tsinspect_t *t = tsinspect_agg_add(a);
+  unsigned char p[188];
+  metrics_writer_t w;
+  metrics_hdr_t hdr;
+  stream_seen_t seen;
+
+  ck_assert_ptr_nonnull(t);
+  make_pkt(p, 0x100, 1, 0);
+  tsinspect_tick(t, 1.0);
+  tsinspect_packet(t, p);
+  begin_test_writer(&w, &hdr);
+  tsinspect_agg_put_cb(&w, a);
+  scan_packet_labels(&w, &hdr, &seen);
+  ck_assert_int_eq(seen.input0, 1);
+  tsinspect_agg_free(a);
+}
+END_TEST
+
+START_TEST(agg_put_cb_with_null_aggregate_writes_nothing) {
+  metrics_writer_t w;
+  metrics_hdr_t hdr;
+  stream_seen_t seen;
+
+  begin_test_writer(&w, &hdr);
+  tsinspect_agg_put_cb(&w, NULL);
+  scan_packet_labels(&w, &hdr, &seen);
+  ck_assert_int_eq(seen.input0, 0);
+}
+END_TEST
+
 static Suite *inspect_suite(void) {
   Suite *s = suite_create("tsinspect");
   TCase *tc = tcase_create("core");
@@ -1485,6 +1630,12 @@ static Suite *inspect_suite(void) {
   tcase_add_test(tc, pcr_freq_offset_and_rate_from_arrival_windows);
   tcase_add_test(tc, pcr_freq_offset_negative_when_pcr_runs_slow);
   tcase_add_test(tc, input_buffer_series_only_when_a_source_reports_depth);
+  tcase_add_loop_test(tc, stream_label_formats_direction_and_index, 0, (int)(sizeof label_cases / sizeof label_cases[0]));
+  tcase_add_test(tc, stream_label_truncates_to_capacity);
+  tcase_add_test(tc, set_put_labels_inputs_and_outputs_and_skips_null_slots);
+  tcase_add_test(tc, set_put_with_empty_set_writes_no_stream_series);
+  tcase_add_test(tc, agg_put_cb_writes_aggregate_as_input0);
+  tcase_add_test(tc, agg_put_cb_with_null_aggregate_writes_nothing);
   suite_add_tcase(s, tc);
   return s;
 }

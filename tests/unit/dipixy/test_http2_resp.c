@@ -7,11 +7,12 @@
 #include "dipixy/ws/ws_broadcast.h"
 #include "dipixy/ws/ws_clients.h"
 #include "dipixy/ws/ws_frame.h"
+#include "../run_helper.h"
 
 #define PATH_PLAIN "/plain"
 #define WS_PATH "/ui/ws/"
-#define COLD_GROUP "239.255.42.20"
-#define COLD_PORT 42120
+#define COLD_GROUP run_helper_group_n(20)
+#define COLD_PORT run_helper_port(20)
 #define COLD_WAITERS_MAX 64
 #define LLHLS_WAITERS_MAX 8
 

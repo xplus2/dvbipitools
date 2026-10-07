@@ -14,10 +14,11 @@ curl -V | grep -q "HTTP3" || skip "curl was not built with HTTP/3 support"
 [ -f /etc/ssl/openssl.cnf ] && OPENSSL_CONF=/etc/ssl/openssl.cnf
 export OPENSSL_CONF
 
-MCAST=239.255.9.26
-MPORT=18106
-TLSPORT=19246
-HTTPPORT=19247
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 3)
+MPORT=$((FPB + 0))
+TLSPORT=$((FPB + 1))
+HTTPPORT=$((FPB + 2))
 
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/key.pem" -out "$WORK/cert.pem" -days 1 \
     -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \

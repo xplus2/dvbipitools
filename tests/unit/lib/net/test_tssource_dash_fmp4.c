@@ -15,6 +15,7 @@
 
 #include "lib/mux/fmp4/fmp4.h"
 #include "lib/net/ts/source.h"
+#include "lib/net/ts/source_priv.h"
 
 typedef struct {
   int listen_fd;
@@ -237,11 +238,173 @@ START_TEST(tssrc_http_dispatches_dash_fmp4_and_remuxes_to_ts) {
 }
 END_TEST
 
+#define SCRIPT_MAX 4
+#define SCRIPT_RESP_CAP 4096
+
+typedef struct {
+  char resp[SCRIPT_MAX][SCRIPT_RESP_CAP];
+  const char *ptr[SCRIPT_MAX];
+  size_t len[SCRIPT_MAX];
+  scripted_server_t srv;
+  pthread_t th;
+  int fd;
+  unsigned port;
+  int n;
+} script_t;
+
+static void script_add(script_t *sc, const void *body, size_t body_len) {
+  int i = sc->n++;
+  size_t head;
+
+  ck_assert_int_lt(i, SCRIPT_MAX);
+  head = (size_t)snprintf(sc->resp[i], SCRIPT_RESP_CAP, "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: %zu\r\n\r\n", body_len);
+  ck_assert_uint_le(head + body_len, SCRIPT_RESP_CAP);
+  memcpy(sc->resp[i] + head, body, body_len);
+  sc->ptr[i] = sc->resp[i];
+  sc->len[i] = head + body_len;
+}
+
+static void script_start(script_t *sc) {
+  sc->fd = make_listener(&sc->port);
+  sc->srv.listen_fd = sc->fd;
+  sc->srv.responses = sc->ptr;
+  sc->srv.response_lens = sc->len;
+  sc->srv.n_responses = sc->n;
+  ck_assert_int_eq(pthread_create(&sc->th, NULL, serve_scripted, &sc->srv), 0);
+}
+
+static void script_stop(script_t *sc) {
+  pthread_join(sc->th, NULL);
+  close(sc->fd);
+}
+
+static tssrc_t *open_hls(const script_t *sc, const char *path) {
+  tssrc_cfg_t cfg;
+  tssrc_open_t *o;
+  char uri[96];
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_HTTP;
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u%s", sc->port, path);
+  ck_assert_int_eq(http_url_parse(uri, &cfg.http), 0);
+  o = tssrc_open_async_start(&cfg, NULL);
+  ck_assert_ptr_nonnull(o);
+  ck_assert_int_eq(drive_open(o, 300), TSSRC_OPEN_DONE);
+  return tssrc_open_async_take(o);
+}
+
+static size_t build_avc_init(unsigned char *out, size_t cap) {
+  static const unsigned char avcc[] = {0x01, 0x64, 0x00, 0x1F, 0xFF, 0xE1, 0x00, 0x00, 0x01, 0x00, 0x00};
+  fmp4_track_cfg_t tcfg;
+  fmp4_mux_t *m;
+  unsigned char *buf;
+  size_t len;
+
+  memset(&tcfg, 0, sizeof tcfg);
+  tcfg.codec = CODEC_H264;
+  tcfg.track_id = 1;
+  tcfg.timescale = 90000;
+  tcfg.width = 1280;
+  tcfg.height = 720;
+  tcfg.cpriv = avcc;
+  tcfg.cpriv_len = sizeof avcc;
+  m = fmp4_mux_new(&tcfg, 1);
+  ck_assert_ptr_nonnull(m);
+  len = fmp4_init_segment(m, &buf);
+  ck_assert_uint_le(len, cap);
+  memcpy(out, buf, len);
+  fmp4_mux_free(m);
+  return len;
+}
+
+static const char hls_ts_media[] = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4.0,\nseg1.ts\n";
+static const char hls_fmp4_media[] = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:4.0,\nseg1.m4s\n";
+
+START_TEST(hls_media_playlist_without_map_opens_as_ts_passthrough) {
+  script_t sc = {0};
+  tssrc_t *s;
+
+  script_add(&sc, hls_ts_media, strlen(hls_ts_media));
+  script_start(&sc);
+  s = open_hls(&sc, "/live.m3u8");
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(s->http_sub, HTTP_SUB_HLS);
+  ck_assert_uint_eq(s->n_media, 1u);
+  ck_assert_ptr_nonnull(s->hls[0]);
+  ck_assert_uint_eq(s->remux.n_tracks, 0u);
+  tssrc_close(s);
+  script_stop(&sc);
+}
+END_TEST
+
+START_TEST(hls_master_picks_variant_without_map_as_ts_passthrough) {
+  static const char master[] = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=3000000\nhigh.m3u8\n";
+  script_t sc = {0};
+  tssrc_t *s;
+
+  script_add(&sc, master, strlen(master));
+  script_add(&sc, hls_ts_media, strlen(hls_ts_media));
+  script_start(&sc);
+  s = open_hls(&sc, "/master.m3u8");
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(s->http_sub, HTTP_SUB_HLS);
+  ck_assert_uint_eq(s->n_media, 1u);
+  ck_assert_uint_eq(s->remux.n_tracks, 0u);
+  tssrc_close(s);
+  script_stop(&sc);
+}
+END_TEST
+
+START_TEST(hls_master_with_audio_rendition_lacking_map_drops_audio) {
+  static const char master[] = "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aud\",URI=\"audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=3000000,AUDIO=\"aud\"\nvideo.m3u8\n";
+  unsigned char init[2048];
+  size_t init_len = build_avc_init(init, sizeof init);
+  script_t sc = {0};
+  tssrc_t *s;
+
+  script_add(&sc, master, strlen(master));
+  script_add(&sc, hls_fmp4_media, strlen(hls_fmp4_media));
+  script_add(&sc, hls_ts_media, strlen(hls_ts_media));
+  script_add(&sc, init, init_len);
+  script_start(&sc);
+  s = open_hls(&sc, "/master.m3u8");
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(s->http_sub, HTTP_SUB_HLS);
+  ck_assert_uint_eq(s->n_media, 1u);
+  ck_assert_uint_eq(s->remux.n_tracks, 1u);
+  tssrc_close(s);
+  script_stop(&sc);
+}
+END_TEST
+
+START_TEST(hls_media_playlist_with_map_fetches_init_and_remuxes) {
+  unsigned char init[2048];
+  size_t init_len = build_avc_init(init, sizeof init);
+  script_t sc = {0};
+  tssrc_t *s;
+
+  script_add(&sc, hls_fmp4_media, strlen(hls_fmp4_media));
+  script_add(&sc, init, init_len);
+  script_start(&sc);
+  s = open_hls(&sc, "/live.m3u8");
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(s->http_sub, HTTP_SUB_HLS);
+  ck_assert_uint_eq(s->n_media, 1u);
+  ck_assert_uint_eq(s->remux.n_tracks, 1u);
+  tssrc_close(s);
+  script_stop(&sc);
+}
+END_TEST
+
 static Suite *tssource_dash_fmp4_suite(void) {
   Suite *s = suite_create("tssource_dash_fmp4");
   TCase *tc = tcase_create("core");
   tcase_set_timeout(tc, 30);
   tcase_add_test(tc, tssrc_http_dispatches_dash_fmp4_and_remuxes_to_ts);
+  tcase_add_test(tc, hls_media_playlist_without_map_opens_as_ts_passthrough);
+  tcase_add_test(tc, hls_master_picks_variant_without_map_as_ts_passthrough);
+  tcase_add_test(tc, hls_master_with_audio_rendition_lacking_map_drops_audio);
+  tcase_add_test(tc, hls_media_playlist_with_map_fetches_init_and_remuxes);
   suite_add_tcase(s, tc);
   return s;
 }

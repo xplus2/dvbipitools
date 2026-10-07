@@ -69,6 +69,25 @@ START_TEST(aes128_ecb_rejects_non_block_length) {
 }
 END_TEST
 
+typedef struct {
+  cam_auth_reason_t reason;
+  const char *name;
+} auth_reason_case_t;
+
+static const auth_reason_case_t auth_reason_cases[] = {
+  {CAM_AUTH_USER, "user"},
+  {CAM_AUTH_CONNID, "connid"},
+  {CAM_AUTH_CHECKSUM, "checksum"},
+  {CAM_AUTH_OVERSIZED, "oversized"},
+  {CAM_AUTH_REASON_COUNT, "unknown"},
+  {(cam_auth_reason_t)99, "unknown"},
+};
+
+START_TEST(auth_reason_names_cover_every_enumerator) {
+  ck_assert_str_eq(cs378x_auth_reason_name(auth_reason_cases[_i].reason), auth_reason_cases[_i].name);
+}
+END_TEST
+
 START_TEST(frame_boundary_rounds_up_to_16) {
   ck_assert_uint_eq(cs378x_frame_boundary(1), 16);
   ck_assert_uint_eq(cs378x_frame_boundary(16), 16);
@@ -308,6 +327,7 @@ static Suite *cs378x_suite(void) {
   tcase_add_test(tc, aes128_ecb_roundtrip);
   tcase_add_test(tc, aes128_ecb_rejects_non_block_length);
   tcase_add_test(tc, frame_boundary_rounds_up_to_16);
+  tcase_add_loop_test(tc, auth_reason_names_cover_every_enumerator, 0, (int)(sizeof auth_reason_cases / sizeof auth_reason_cases[0]));
   tcase_add_test(tc, server_stop_unblocks_slow_reader_worker);
   tcase_add_test(tc, server_stop_reaps_all_max_conns_in_mixed_states);
   tcase_set_timeout(tc, 10);

@@ -9,10 +9,11 @@ for t in ffmpeg tsp tsanalyze jq python3; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-MCAST=239.255.7.11
-PORT=17801
-HTTP_PORT1=18081
-HTTP_PORT2=18082
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 3)
+PORT=$((FPB + 0))
+HTTP_PORT1=$((FPB + 1))
+HTTP_PORT2=$((FPB + 2))
 
 ffmpeg -hide_banner -loglevel error -f lavfi -i "sine=frequency=1000:duration=3" \
     -c:a libmp3lame -f mp3 "$WORK/stream1.mp3"

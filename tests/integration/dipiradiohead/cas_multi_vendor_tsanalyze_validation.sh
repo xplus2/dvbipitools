@@ -9,8 +9,8 @@ for t in ffmpeg tsp tsanalyze tsecmg jq ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-MCAST=239.255.7.45
-PORT_BASE=12300
+MCAST=$(unique_mcast 61)
+PORT_BASE=$(free_port_block 44)
 
 ffmpeg -hide_banner -loglevel error -f lavfi -i "sine=frequency=1000:duration=4" \
     -c:a libmp3lame -f mp3 "$WORK/stream.mp3"
@@ -90,11 +90,11 @@ run_phase() {
     return $?
 }
 
-run_phase 1 17762 "Multi CAS Steady" 1 1 &
+run_phase 1 $((PORT_BASE + 40 + 1)) "Multi CAS Steady" 1 1 &
 PHASE1_PID=$!
-run_phase 2 17763 "Multi CAS Nonrequired Down" 1 0 &
+run_phase 2 $((PORT_BASE + 40 + 2)) "Multi CAS Nonrequired Down" 1 0 &
 PHASE2_PID=$!
-run_phase 3 17764 "Multi CAS Required Down" 0 1 &
+run_phase 3 $((PORT_BASE + 40 + 3)) "Multi CAS Required Down" 0 1 &
 PHASE3_PID=$!
 wait $PHASE1_PID || fail "multi-cas steady: phase failed"
 wait $PHASE2_PID || fail "multi-cas nonrequired-down: phase failed"

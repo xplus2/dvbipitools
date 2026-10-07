@@ -5,12 +5,17 @@
 #include <check.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 
+#include <srt/srt.h>
+
+#include "lib/net/srt/srtin.h"
 #include "lib/net/srt/srtsink.h"
 #include "lib/net/srt/srtsrc.h"
 
@@ -121,6 +126,100 @@ START_TEST(loopback_link_delivers_payload_in_order) {
   srtsink_close(sink);
   free(payload);
   free(rx);
+}
+END_TEST
+
+typedef struct {
+  SRTSOCKET lsn;
+  const unsigned char *payload;
+  size_t len;
+  atomic_int go;
+} listener_arg_t;
+
+static void *listener_thread(void *arg) {
+  listener_arg_t *a = arg;
+  struct sockaddr_storage peer;
+  int plen = sizeof peer;
+  SRTSOCKET c = srt_accept(a->lsn, (struct sockaddr *)&peer, &plen);
+
+  if (c == SRT_INVALID_SOCK) return NULL;
+  while (!atomic_load(&a->go)) usleep(1000);
+  for (size_t off = 0; off < a->len; off += PAYLOAD_CHUNK_BYTES) srt_sendmsg2(c, (const char *)a->payload + off, PAYLOAD_CHUNK_BYTES, NULL);
+  for (int i = 0; i < 500 && srt_getsockstate(c) == SRTS_CONNECTED; i++) usleep(10000);
+  srt_close(c);
+  return NULL;
+}
+
+START_TEST(srtin_single_caller_receives_from_listener) {
+  const size_t total = (size_t)PAYLOAD_CHUNKS * PAYLOAD_CHUNK_BYTES;
+  unsigned port = free_udp_port();
+  unsigned char *payload = malloc(total);
+  unsigned char rx[2048];
+  unsigned char *got_buf = malloc(total);
+  struct sockaddr_in addr;
+  listener_arg_t la;
+  pthread_t th;
+  srtin_cfg_t cfg;
+  srtin_t *in;
+  size_t got = 0;
+  double deadline = now_seconds() + LINK_DEADLINE_S;
+
+  ck_assert_ptr_nonnull(payload);
+  ck_assert_ptr_nonnull(got_buf);
+  for (size_t i = 0; i < total; i++) payload[i] = (unsigned char)(i * 11 + 5);
+  ck_assert_int_ne(srt_startup(), SRT_ERROR);
+  la.lsn = srt_create_socket();
+  ck_assert_int_ne(la.lsn, SRT_INVALID_SOCK);
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons((unsigned short)port);
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ck_assert_int_ne(srt_bind(la.lsn, (struct sockaddr *)&addr, sizeof addr), SRT_ERROR);
+  ck_assert_int_ne(srt_listen(la.lsn, 1), SRT_ERROR);
+  la.payload = payload;
+  la.len = total;
+  atomic_init(&la.go, 0);
+  ck_assert_int_eq(pthread_create(&th, NULL, listener_thread, &la), 0);
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.peers[0].host = "127.0.0.1";
+  cfg.peers[0].port = port;
+  cfg.npeers = 1;
+  in = srtin_open(&cfg);
+  atomic_store(&la.go, 1);
+  ck_assert_ptr_nonnull(in);
+  while (got < total && now_seconds() < deadline) {
+    int reconnected = 0;
+    int n = srtin_read(in, rx, sizeof rx, &reconnected);
+
+    ck_assert_int_ge(n, 0);
+    ck_assert_int_eq(reconnected, 0);
+    if (n > 0) {
+      ck_assert_uint_le(got + (size_t)n, total);
+      memcpy(got_buf + got, rx, (size_t)n);
+      got += (size_t)n;
+    }
+  }
+  ck_assert_uint_eq(got, total);
+  ck_assert_mem_eq(got_buf, payload, total);
+  srtin_close(in);
+  pthread_join(th, NULL);
+  srt_close(la.lsn);
+  srt_cleanup();
+  free(payload);
+  free(got_buf);
+}
+END_TEST
+
+START_TEST(srtin_rendezvous_without_local_address_fails) {
+  srtin_cfg_t cfg;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.peers[0].host = "127.0.0.1";
+  cfg.peers[0].port = free_udp_port();
+  cfg.npeers = 1;
+  cfg.rendezvous = 1;
+  ck_assert_ptr_null(srtin_open(&cfg));
 }
 END_TEST
 
@@ -309,6 +408,10 @@ static Suite *srtsrc_sink_suite(void) {
   tcase_add_loop_test(tc, srtsink_open_rejects_bad_peer_counts, 0, 3);
   tcase_add_test(tc, queue_ms_needs_bitrate_then_follows_queued_bytes);
   tcase_add_test(tc, queue_ms_with_connected_peer_stays_small_while_streaming);
+  suite_add_tcase(s, tc);
+  tc = tcase_create("srtin");
+  tcase_add_test(tc, srtin_single_caller_receives_from_listener);
+  tcase_add_test(tc, srtin_rendezvous_without_local_address_fails);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -3,7 +3,9 @@
 
 #include <string.h>
 
+#include "lib/demux/crc32.h"
 #include "lib/demux/tspack.h"
+#include "lib/helper/beutil.h"
 #include "lib/mux/tspacket_write.h"
 
 #include "priv.h"
@@ -35,18 +37,27 @@ void capture_eit_section(remux_t *r, const unsigned char *pkt188, ts_metrics_t *
   int pusi;
   const unsigned char *sec;
   unsigned service_id;
+  unsigned char out[sizeof r->eit_queue[0].data];
 
   if (!tspack_payload(pkt188, &pl, &plen, &pusi))
     return;
   if (!psi_section_asm_feed(&r->eit_asm, pl, plen, pusi))
     return;
   sec = r->eit_asm.buf;
-  if (r->eit_asm.len < 8 || r->eit_asm.len > sizeof r->eit_queue[0].data)
+  if (r->eit_asm.len < 16 || r->eit_asm.len > sizeof r->eit_queue[0].data)
     return;
   service_id = ((unsigned)sec[3] << 8) | sec[4];
   if (service_id != r->src_service_id)
     return;
-  eit_queue_put(r, sec[0], sec[6], sec, r->eit_asm.len, tsm);
+  memcpy(out, sec, r->eit_asm.len);
+  out[3] = (unsigned char)(r->input.sid >> 8);
+  out[4] = (unsigned char)r->input.sid;
+  out[8] = (unsigned char)(r->cfg.tsid >> 8);
+  out[9] = (unsigned char)r->cfg.tsid;
+  out[10] = (unsigned char)(r->cfg.onid >> 8);
+  out[11] = (unsigned char)r->cfg.onid;
+  be32_put(out + r->eit_asm.len - 4, crc32_mpeg(out, r->eit_asm.len - 4));
+  eit_queue_put(r, out[0], out[6], out, r->eit_asm.len, tsm);
 }
 
 size_t remux_emit_eit(remux_t *r, unsigned pid, unsigned char *cc, size_t max_packets, remux_packet_cb cb, void *ctx) {

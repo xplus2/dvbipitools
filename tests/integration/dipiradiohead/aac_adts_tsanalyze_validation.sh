@@ -9,9 +9,10 @@ for t in ffmpeg tsp tsanalyze jq python3; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
-MCAST=239.255.7.46
-PORT=12321
-HTTP_PORT=12320
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 2)
+PORT=$((FPB + 1))
+HTTP_PORT=$((FPB + 0))
 
 mkdir -p "$WORK/httproot"
 ffmpeg -hide_banner -loglevel error -f lavfi -i "sine=frequency=1000:duration=3" \

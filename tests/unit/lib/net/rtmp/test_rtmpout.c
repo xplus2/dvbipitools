@@ -387,6 +387,91 @@ START_TEST(rtmpout_sends_adobe_authmod_for_userinfo_uri) {
 }
 END_TEST
 
+START_TEST(rtmpout_queue_overflow_drops_the_connection) {
+  unsigned port;
+  int listen_fd = make_listener(&port, 16384);
+  pthread_t th;
+  stall_server_t srv;
+  char url[64];
+  rtmpout_cfg_t cfg;
+  rtmpout_t *o;
+  unsigned char keyframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'K', 'E', 'Y'};
+  size_t big_len = 512 * 1024;
+  unsigned char *big = calloc(1, big_len);
+  int failed_at = -1;
+
+  ck_assert_ptr_nonnull(big);
+  big[0] = 0x17;
+  big[1] = 0x00;
+  memset(&srv, 0, sizeof srv);
+  srv.listen_fd = listen_fd;
+  ck_assert_int_eq(pthread_create(&th, NULL, stall_server_thread, &srv), 0);
+
+  snprintf(url, sizeof url, "rtmp://127.0.0.1:%u/live/key123", port);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.url = url;
+  o = rtmpout_open(&cfg);
+  ck_assert_ptr_nonnull(o);
+  ck_assert_int_eq(drive_until_sent(o, FLV_TAG_VIDEO, keyframe, sizeof keyframe, 400), 1);
+
+  for (int i = 0; i < 48 && failed_at < 0; i++)
+    if (rtmpout_write(o, FLV_TAG_VIDEO, (uint32_t)i, big, big_len, NULL, 0) < 0)
+      failed_at = i;
+  ck_assert_int_gt(failed_at, 0);
+  ck_assert_int_eq(rtmpout_write(o, FLV_TAG_VIDEO, 0, keyframe, sizeof keyframe, NULL, 0), -1);
+
+  atomic_store(&srv.drain, 1);
+  rtmpout_close(o);
+  pthread_join(th, NULL);
+  close(listen_fd);
+  free(big);
+}
+END_TEST
+
+START_TEST(rtmpout_partial_write_keeps_remainder_queued) {
+  unsigned port;
+  int listen_fd = make_listener(&port, 16384);
+  pthread_t th;
+  stall_server_t srv;
+  char url[64];
+  rtmpout_cfg_t cfg;
+  rtmpout_t *o;
+  unsigned char keyframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'K', 'E', 'Y'};
+  unsigned char audio[2] = {0xAF, 0x01};
+  size_t big_len = 7u << 20;
+  unsigned char *big = calloc(1, big_len);
+
+  ck_assert_ptr_nonnull(big);
+  big[0] = 0x17;
+  big[1] = 0x01;
+  memcpy(big + big_len - 3, "END", 3);
+  memset(&srv, 0, sizeof srv);
+  srv.listen_fd = listen_fd;
+  ck_assert_int_eq(pthread_create(&th, NULL, stall_server_thread, &srv), 0);
+
+  snprintf(url, sizeof url, "rtmp://127.0.0.1:%u/live/key123", port);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.url = url;
+  o = rtmpout_open(&cfg);
+  ck_assert_ptr_nonnull(o);
+  ck_assert_int_eq(drive_until_sent(o, FLV_TAG_VIDEO, keyframe, sizeof keyframe, 400), 1);
+  ck_assert_int_eq(rtmpout_write(o, FLV_TAG_VIDEO, 40, big, big_len, NULL, 0), 0);
+  ck_assert_int_eq(atomic_load(&srv.found_end), 0);
+
+  atomic_store(&srv.drain, 1);
+  for (int i = 0; i < 2000 && !atomic_load(&srv.found_end); i++) {
+    struct timespec ts = {0, 5000000L};
+    rtmpout_write(o, FLV_TAG_AUDIO, 80 + (uint32_t)i, audio, sizeof audio, NULL, 0);
+    nanosleep(&ts, NULL);
+  }
+  pthread_join(th, NULL);
+  close(listen_fd);
+  ck_assert_int_eq(atomic_load(&srv.found_end), 1);
+  rtmpout_close(o);
+  free(big);
+}
+END_TEST
+
 static Suite *rtmpout_suite(void) {
   Suite *s = suite_create("rtmpout");
   TCase *tc = tcase_create("core");
@@ -395,6 +480,8 @@ static Suite *rtmpout_suite(void) {
   tcase_add_test(tc, rtmpout_holds_back_interframe_until_keyframe);
   tcase_add_test(tc, rtmpout_survives_stalled_peer);
   tcase_add_test(tc, rtmpout_sends_adobe_authmod_for_userinfo_uri);
+  tcase_add_test(tc, rtmpout_queue_overflow_drops_the_connection);
+  tcase_add_test(tc, rtmpout_partial_write_keeps_remainder_queued);
   suite_add_tcase(s, tc);
   return s;
 }

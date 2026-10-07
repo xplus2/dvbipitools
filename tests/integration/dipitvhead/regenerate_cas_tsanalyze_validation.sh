@@ -10,14 +10,15 @@ for t in ffmpeg tsp tsanalyze tsecmg jq nc; do
 done
 tsp -P pcredit --help >/dev/null 2>&1 || skip "tsp pcredit plugin not available"
 
-MCAST=239.255.43.30
-PORT=20730
-RAW=239.255.43.31
-RAW_PORT=20731
-BAD=239.255.43.32
-BAD_PORT=20732
-ECMG_PORT=20733
-EMMG_PORT=20734
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 5)
+PORT=$((FPB + 0))
+RAW=$(unique_mcast 63)
+RAW_PORT=$((FPB + 1))
+BAD=$(unique_mcast 64)
+BAD_PORT=$((FPB + 2))
+ECMG_PORT=$((FPB + 3))
+EMMG_PORT=$((FPB + 4))
 KBPS=3000
 ECMG_UP_S=30
 CAS_UP_S=60

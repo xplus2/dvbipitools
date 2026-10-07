@@ -9,108 +9,64 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../cfg_fixture.h"
 #include "dipifccret/config.h"
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/log.h"
 
-typedef enum { K_UINT, K_SIZE, K_UCHAR, K_INT, K_DOUBLE, K_STRPTR, K_CHARARR } kind_t;
-
-typedef struct {
-  const char *yaml;
-  kind_t kind;
-  size_t off;
-  double num;
-  const char *str;
-} field_case_t;
-
-#define F(y, k, field, n, s) {y, k, offsetof(config_t, field), n, s}
-
-static const field_case_t field_cases[] = {
-  F("iface: veth7\n", K_STRPTR, iface, 0, "veth7"),
-  F("max-channels: 77\n", K_SIZE, max_channels, 77, NULL),
-  F("channel-idle-timeout: 33\n", K_UINT, channel_idle_timeout_s, 33, NULL),
-  F("rtx-pt: 97\n", K_UCHAR, rtx_pt, 97, NULL),
-  F("workers: 5\n", K_UINT, workers, 5, NULL),
-  F("user: nobody\n", K_STRPTR, user, 0, "nobody"),
-  F("verbose: true\n", K_INT, verbose, 1, NULL),
-  F("daemonize: yes\n", K_INT, daemonize, 1, NULL),
-  F("no-ret: on\n", K_INT, no_ret, 1, NULL),
-  F("buffer: 4321\n", K_UINT, buffer_ms, 4321, NULL),
-  F("ff-port: 40001\n", K_UINT, ff_port, 40001, NULL),
-  F("no-mc-ret: 1\n", K_INT, no_mc_ret, 1, NULL),
-  F("max-ret-clients: 99\n", K_SIZE, max_ret_clients, 99, NULL),
-  F("ret:\n  client-idle-timeout: 61\n", K_UINT, ret_client_idle_timeout_s, 61, NULL),
-  F("no-rsi: true\n", K_INT, no_rsi, 1, NULL),
-  F("rsi:\n  interval: 17\n", K_UINT, rsi_interval_s, 17, NULL),
-  F("rsi:\n  mc-ret: true\n", K_INT, rsi_mc_ret, 1, NULL),
-  F("rsi:\n  hostname: fcc.example.net\n", K_CHARARR, rsi_hostname, 0, "fcc.example.net"),
-  F("no-fcc: true\n", K_INT, no_fcc, 1, NULL),
-  F("gop-cap: 1234\n", K_UINT, gop_cap_ms, 1234, NULL),
-  F("max-bursts: 321\n", K_SIZE, max_bursts, 321, NULL),
-  F("burst-multiplier: 2.5\n", K_DOUBLE, burst_multiplier, 2.5, NULL),
-  F("burst-duration-cap: 4567\n", K_UINT, duration_cap_ms, 4567, NULL),
-  F("max-buffer-fill-bound: 0\n", K_UINT, max_buffer_fill_bound_ms, 0, NULL),
-  F("congestion-nack-threshold: 9\n", K_UINT, congestion_nack_threshold, 9, NULL),
-  F("fcc:\n  resolve-by-port: true\n", K_INT, fcc_resolve_by_port, 1, NULL),
-  F("fcc:\n  resolve-base-port: 30000\n", K_UINT, fcc_resolve_base_port, 30000, NULL),
-  F("metrics:\n  sock: /tmp/m.sock\n", K_STRPTR, metrics_sock, 0, "/tmp/m.sock"),
-  F("metrics:\n  id: inst9\n", K_STRPTR, metrics_id, 0, "inst9"),
-  F("metrics:\n  interval: 42\n", K_UINT, metrics_interval_s, 42, NULL),
-  F("metrics:\n  inspect-ts: full\n", K_INT, metrics_inspect_ts, METRICS_INSPECT_TS_FULL, NULL),
-  F("color: never\n", K_INT, color_mode, LOG_COLOR_NEVER, NULL),
+static const cfg_field_case_t field_cases[] = {
+  CFG_FIELD(config_t, "iface: veth7\n", CFG_STRPTR, iface, 0, "veth7"),
+  CFG_FIELD(config_t, "max-channels: 77\n", CFG_SIZE, max_channels, 77, NULL),
+  CFG_FIELD(config_t, "channel-idle-timeout: 33\n", CFG_UINT, channel_idle_timeout_s, 33, NULL),
+  CFG_FIELD(config_t, "rtx-pt: 97\n", CFG_UCHAR, rtx_pt, 97, NULL),
+  CFG_FIELD(config_t, "workers: 5\n", CFG_UINT, workers, 5, NULL),
+  CFG_FIELD(config_t, "user: nobody\n", CFG_STRPTR, user, 0, "nobody"),
+  CFG_FIELD(config_t, "verbose: true\n", CFG_INT, verbose, 1, NULL),
+  CFG_FIELD(config_t, "daemonize: yes\n", CFG_INT, daemonize, 1, NULL),
+  CFG_FIELD(config_t, "no-ret: on\n", CFG_INT, no_ret, 1, NULL),
+  CFG_FIELD(config_t, "buffer: 4321\n", CFG_UINT, buffer_ms, 4321, NULL),
+  CFG_FIELD(config_t, "ff-port: 40001\n", CFG_UINT, ff_port, 40001, NULL),
+  CFG_FIELD(config_t, "no-mc-ret: 1\n", CFG_INT, no_mc_ret, 1, NULL),
+  CFG_FIELD(config_t, "max-ret-clients: 99\n", CFG_SIZE, max_ret_clients, 99, NULL),
+  CFG_FIELD(config_t, "ret:\n  client-idle-timeout: 61\n", CFG_UINT, ret_client_idle_timeout_s, 61, NULL),
+  CFG_FIELD(config_t, "no-rsi: true\n", CFG_INT, no_rsi, 1, NULL),
+  CFG_FIELD(config_t, "rsi:\n  interval: 17\n", CFG_UINT, rsi_interval_s, 17, NULL),
+  CFG_FIELD(config_t, "rsi:\n  mc-ret: true\n", CFG_INT, rsi_mc_ret, 1, NULL),
+  CFG_FIELD(config_t, "rsi:\n  hostname: fcc.example.net\n", CFG_CHARARR, rsi_hostname, 0, "fcc.example.net"),
+  CFG_FIELD(config_t, "no-fcc: true\n", CFG_INT, no_fcc, 1, NULL),
+  CFG_FIELD(config_t, "gop-cap: 1234\n", CFG_UINT, gop_cap_ms, 1234, NULL),
+  CFG_FIELD(config_t, "max-bursts: 321\n", CFG_SIZE, max_bursts, 321, NULL),
+  CFG_FIELD(config_t, "burst-multiplier: 2.5\n", CFG_DOUBLE, burst_multiplier, 2.5, NULL),
+  CFG_FIELD(config_t, "burst-duration-cap: 4567\n", CFG_UINT, duration_cap_ms, 4567, NULL),
+  CFG_FIELD(config_t, "max-buffer-fill-bound: 0\n", CFG_UINT, max_buffer_fill_bound_ms, 0, NULL),
+  CFG_FIELD(config_t, "congestion-nack-threshold: 9\n", CFG_UINT, congestion_nack_threshold, 9, NULL),
+  CFG_FIELD(config_t, "fcc:\n  resolve-by-port: true\n", CFG_INT, fcc_resolve_by_port, 1, NULL),
+  CFG_FIELD(config_t, "fcc:\n  resolve-base-port: 30000\n", CFG_UINT, fcc_resolve_base_port, 30000, NULL),
+  CFG_FIELD(config_t, "metrics:\n  sock: /tmp/m.sock\n", CFG_STRPTR, metrics_sock, 0, "/tmp/m.sock"),
+  CFG_FIELD(config_t, "metrics:\n  id: inst9\n", CFG_STRPTR, metrics_id, 0, "inst9"),
+  CFG_FIELD(config_t, "metrics:\n  interval: 42\n", CFG_UINT, metrics_interval_s, 42, NULL),
+  CFG_FIELD(config_t, "metrics:\n  inspect-ts: full\n", CFG_INT, metrics_inspect_ts, METRICS_INSPECT_TS_FULL, NULL),
+  CFG_FIELD(config_t, "color: never\n", CFG_INT, color_mode, LOG_COLOR_NEVER, NULL),
 };
 
-static char g_dir[64];
-static char g_path[128];
-
-static void write_cfg(const char *text) {
-  FILE *f;
-
-  snprintf(g_dir, sizeof g_dir, "/tmp/fccret_cfg_XXXXXX");
-  ck_assert_ptr_nonnull(mkdtemp(g_dir));
-  snprintf(g_path, sizeof g_path, "%s/c.yaml", g_dir);
-  f = fopen(g_path, "w");
-  ck_assert_ptr_nonnull(f);
-  ck_assert_uint_eq(fwrite(text, 1, strlen(text), f), strlen(text));
-  fclose(f);
-}
-
-static void remove_cfg(void) {
-  unlink(g_path);
-  rmdir(g_dir);
-}
+static cfg_fixture_t g_fx;
 
 static int load(const char *text, config_t *cfg) {
   int rc;
 
-  write_cfg(text);
+  cfg_fixture_write(&g_fx, text);
   fccret_cfg_defaults(cfg);
-  rc = fccret_cfg_load(cfg, g_path, 1);
-  remove_cfg();
+  rc = fccret_cfg_load(cfg, g_fx.path, 1);
+  cfg_fixture_remove(&g_fx);
   return rc;
 }
 
 START_TEST(each_key_sets_its_config_field) {
-  const field_case_t *c = &field_cases[_i];
+  const cfg_field_case_t *c = &field_cases[_i];
   config_t cfg;
-  const unsigned char *base;
 
   ck_assert_int_eq(load(c->yaml, &cfg), 0);
-  base = (const unsigned char *)&cfg + c->off;
-  switch (c->kind) {
-    case K_UINT: ck_assert_uint_eq(*(const unsigned *)base, (unsigned)c->num); break;
-    case K_SIZE: ck_assert_uint_eq(*(const size_t *)base, (size_t)c->num); break;
-    case K_UCHAR: ck_assert_uint_eq(*base, (unsigned)c->num); break;
-    case K_INT: ck_assert_int_eq(*(const int *)base, (int)c->num); break;
-    case K_DOUBLE: {
-      double v;
-      memcpy(&v, base, sizeof v);
-      ck_assert_double_eq(v, c->num);
-      break;
-    }
-    case K_STRPTR: ck_assert_str_eq(*(const char *const *)base, c->str); break;
-    case K_CHARARR: ck_assert_str_eq((const char *)base, c->str); break;
-  }
+  cfg_field_check(&cfg, c);
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -187,12 +143,12 @@ END_TEST
 START_TEST(unknown_key_is_rejected_in_strict_mode_only) {
   config_t cfg;
 
-  write_cfg("bogus-key: 1\n");
+  cfg_fixture_write(&g_fx, "bogus-key: 1\n");
   fccret_cfg_defaults(&cfg);
-  ck_assert_int_eq(fccret_cfg_load(&cfg, g_path, 1), -1);
+  ck_assert_int_eq(fccret_cfg_load(&cfg, g_fx.path, 1), -1);
   fccret_cfg_defaults(&cfg);
-  ck_assert_int_eq(fccret_cfg_load(&cfg, g_path, 0), 0);
-  remove_cfg();
+  ck_assert_int_eq(fccret_cfg_load(&cfg, g_fx.path, 0), 0);
+  cfg_fixture_remove(&g_fx);
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -219,18 +175,18 @@ START_TEST(defaults_are_the_documented_values) {
 END_TEST
 
 START_TEST(config_test_reports_warnings_and_fails_only_in_strict_mode) {
-  write_cfg("no-ret: true\nno-fcc: true\n");
-  ck_assert_int_eq(fccret_cfg_test(g_path, 0), 0);
-  ck_assert_int_eq(fccret_cfg_test(g_path, 1), -1);
-  remove_cfg();
+  cfg_fixture_write(&g_fx, "no-ret: true\nno-fcc: true\n");
+  ck_assert_int_eq(fccret_cfg_test(g_fx.path, 0), 0);
+  ck_assert_int_eq(fccret_cfg_test(g_fx.path, 1), -1);
+  cfg_fixture_remove(&g_fx);
 
-  write_cfg("rsi:\n  mc-ret: true\nno-mc-ret: true\nmetrics:\n  sock: /tmp/x.sock\n  inspect-ts: basic\n");
-  ck_assert_int_eq(fccret_cfg_test(g_path, 1), -1);
-  remove_cfg();
+  cfg_fixture_write(&g_fx, "rsi:\n  mc-ret: true\nno-mc-ret: true\nmetrics:\n  sock: /tmp/x.sock\n  inspect-ts: basic\n");
+  ck_assert_int_eq(fccret_cfg_test(g_fx.path, 1), -1);
+  cfg_fixture_remove(&g_fx);
 
-  write_cfg("range: 239.0.0.0/8\nlisten: 10.0.0.1:6000\niface: eth0\nmetrics:\n  id: m1\n");
-  ck_assert_int_eq(fccret_cfg_test(g_path, 1), 0);
-  remove_cfg();
+  cfg_fixture_write(&g_fx, "range: 239.0.0.0/8\nlisten: 10.0.0.1:6000\niface: eth0\nmetrics:\n  id: m1\n");
+  ck_assert_int_eq(fccret_cfg_test(g_fx.path, 1), 0);
+  cfg_fixture_remove(&g_fx);
 
   ck_assert_int_eq(fccret_cfg_test("/nonexistent/fccret.yaml", 0), -1);
 }

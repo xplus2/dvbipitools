@@ -11,9 +11,9 @@ DIPIBCG=$(echo "$BIN" | sed 's#/dipimetrics\([^/]*\)$#/../dipibcg/dipibcg\1#')
 [ -x "$DIPIBCG" ] || DIPIBCG="./dipibcg"
 [ -x "$DIPIBCG" ] || fail "cannot locate dipibcg binary (tried $DIPIBCG)"
 
-MCAST=239.255.9.11
-PORT=17911
-HTTPPORT=19192
+MCAST=$(unique_mcast 92)
+PORT=$(free_udp_port)
+HTTPPORT=$(free_tcp_port)
 SOCK="$WORK/metrics.sock"
 
 metric_value() {

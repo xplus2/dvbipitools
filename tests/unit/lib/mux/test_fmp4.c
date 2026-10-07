@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/mux/fmp4/box.h"
 #include "lib/mux/fmp4/fmp4.h"
 
 static unsigned rd16(const unsigned char *p) {
@@ -662,6 +663,34 @@ START_TEST(truehd_stsd_has_mlpa_dmlp_entry) {
 }
 END_TEST
 
+static const pid_class_t text_classes[] = {PID_TELETEXT, PID_SUBTITLE, PID_DATA};
+
+START_TEST(non_av_stsd_has_tx3g_entry_with_ftab) {
+  trak_meta_t meta;
+  mp4buf_t out;
+  const unsigned char *stsd;
+  const unsigned char *entry;
+  size_t stsd_len;
+  size_t entry_len;
+
+  memset(&meta, 0, sizeof meta);
+  memset(&out, 0, sizeof out);
+  meta.cls = text_classes[_i];
+  trak_build_stsd(&out, &meta);
+  ck_assert(find_box(out.p, out.len, "stsd", &stsd, &stsd_len));
+  ck_assert_uint_eq(rd32(stsd + 4), 1u);
+  ck_assert(find_box(stsd + 8, stsd_len - 8, "tx3g", &entry, &entry_len));
+  ck_assert_uint_eq(rd16(entry + 6), 1u);
+  ck_assert_uint_eq(entry[12], 1u);
+  ck_assert_uint_eq(entry[13], 0xFFu);
+  ck_assert_uint_eq(entry[33], 18u);
+  ck_assert_uint_eq(rd32(entry + 34), 0xFFFFFFFFu);
+  ck_assert_int_eq(memcmp(entry + 38 + 4, "ftab", 4), 0);
+  ck_assert_uint_eq(entry_len, 38u + 8u + 5u);
+  mp4buf_free(&out);
+}
+END_TEST
+
 Suite *fmp4_suite(void) {
   Suite *s = suite_create("fmp4");
   TCase *tc = tcase_create("core");
@@ -684,6 +713,7 @@ Suite *fmp4_suite(void) {
   tcase_add_test(tc, dts_hd_without_core_stsd_has_dtse_entry);
   tcase_add_test(tc, truehd_stsd_has_mlpa_dmlp_entry);
   tcase_add_test(tc, ac4_stsd_has_ac4_dac4_entry);
+  tcase_add_loop_test(tc, non_av_stsd_has_tx3g_entry_with_ftab, 0, (int)(sizeof text_classes / sizeof text_classes[0]));
   suite_add_tcase(s, tc);
   return s;
 }

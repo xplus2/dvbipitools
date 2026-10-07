@@ -14,6 +14,7 @@
 #include "lib/metrics/protocol.h"
 
 #include "dipitvhead/tvhead/priv.h"
+#include "../run_helper.h"
 
 static void make_packet(unsigned char pkt[188], unsigned char marker) {
   memset(pkt, 0xAB, 188);
@@ -32,8 +33,8 @@ static void init_out_ctx(out_ctx_t *o, mcast_t *mc, int rtp, rtpheader_t *rtph, 
 }
 
 START_TEST(packet_cb_batches_until_ts_per_dgram_then_flushes) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.7.9.51", 15351, "lo", 1);
-  mcast_t *recv = mcast_open(AF_INET, "239.7.9.51", 15351, "lo", 500);
+  mcast_t *send = mcast_open_send(AF_INET, run_helper_group_n(51), run_helper_port(51), "lo", 1);
+  mcast_t *recv = mcast_open(AF_INET, run_helper_group_n(51), run_helper_port(51), "lo", 500);
   bitrate_pacer_t *pacer = bitrate_pacer_new(0, 0, 0);
   out_ctx_t o;
   unsigned char pkt[188];
@@ -70,8 +71,8 @@ START_TEST(packet_cb_batches_until_ts_per_dgram_then_flushes) {
 END_TEST
 
 START_TEST(packet_cb_puts_catch_up_nulls_ahead_of_the_real_packet) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.7.9.90", 15490, "lo", 1);
-  mcast_t *recv = mcast_open(AF_INET, "239.7.9.90", 15490, "lo", 500);
+  mcast_t *send = mcast_open_send(AF_INET, run_helper_group_n(90), run_helper_port(90), "lo", 1);
+  mcast_t *recv = mcast_open(AF_INET, run_helper_group_n(90), run_helper_port(90), "lo", 500);
   bitrate_pacer_t *pacer = bitrate_pacer_new(10000000.0, 1, 0);
   struct timespec ts = {0, 30000000};
   static unsigned char rbuf[262144];
@@ -235,8 +236,8 @@ START_TEST(pcr_interval_never_exceeds_forty_ms_when_the_source_sends_none) {
 END_TEST
 
 START_TEST(injected_pcr_packets_are_adaptation_only_with_the_pid_cc_and_position_pcr) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.7.9.91", 15491, "lo", 1);
-  mcast_t *recv = mcast_open(AF_INET, "239.7.9.91", 15491, "lo", 500);
+  mcast_t *send = mcast_open_send(AF_INET, run_helper_group_n(91), run_helper_port(91), "lo", 1);
+  mcast_t *recv = mcast_open(AF_INET, run_helper_group_n(91), run_helper_port(91), "lo", 500);
   bitrate_pacer_t *pacer = bitrate_pacer_new(0, 0, 0);
   static unsigned char rbuf[131072];
   out_ctx_t o;
@@ -467,7 +468,7 @@ START_TEST(preserve_metrics_omit_every_retime_series) {
 END_TEST
 
 START_TEST(flush_batch_is_a_no_op_when_empty) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.7.9.52", 15352, "lo", 1);
+  mcast_t *send = mcast_open_send(AF_INET, run_helper_group_n(52), run_helper_port(52), "lo", 1);
   bitrate_pacer_t *pacer = bitrate_pacer_new(0, 0, 0);
   out_ctx_t o;
   ck_assert_ptr_nonnull(send);
@@ -484,8 +485,8 @@ START_TEST(flush_batch_is_a_no_op_when_empty) {
 END_TEST
 
 START_TEST(flush_batch_prefixes_rtp_header_when_rtp_enabled) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.7.9.53", 15353, "lo", 1);
-  mcast_t *recv = mcast_open(AF_INET, "239.7.9.53", 15353, "lo", 500);
+  mcast_t *send = mcast_open_send(AF_INET, run_helper_group_n(53), run_helper_port(53), "lo", 1);
+  mcast_t *recv = mcast_open(AF_INET, run_helper_group_n(53), run_helper_port(53), "lo", 500);
   bitrate_pacer_t *pacer = bitrate_pacer_new(0, 0, 0);
   rtpheader_t *rtph = rtpheader_new();
   out_ctx_t o;
@@ -518,8 +519,8 @@ START_TEST(flush_batch_prefixes_rtp_header_when_rtp_enabled) {
 END_TEST
 
 START_TEST(send_null_packet_emits_a_valid_null_pid_packet) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.7.9.54", 15354, "lo", 1);
-  mcast_t *recv = mcast_open(AF_INET, "239.7.9.54", 15354, "lo", 500);
+  mcast_t *send = mcast_open_send(AF_INET, run_helper_group_n(54), run_helper_port(54), "lo", 1);
+  mcast_t *recv = mcast_open(AF_INET, run_helper_group_n(54), run_helper_port(54), "lo", 500);
   bitrate_pacer_t *pacer = bitrate_pacer_new(0, 0, 0);
   out_ctx_t o;
   unsigned char rbuf[4096];
@@ -596,7 +597,7 @@ START_TEST(output_open_builds_the_configured_sinks) {
   config_t cfg;
   out_ctx_t o;
 
-  init_mcast_cfg(&cfg, "239.7.9.91", 15491, c->rtp);
+  init_mcast_cfg(&cfg, run_helper_group_n(91), run_helper_port(91), c->rtp);
   cfg.al_fec_l = c->al_fec_l;
   cfg.al_fec_d = c->al_fec_l;
   cfg.al_fec_port = 15462;
@@ -634,8 +635,7 @@ END_TEST
 START_TEST(relay_sinks_fail_without_their_backends_and_leave_no_leaks) {
   config_t cfg;
   out_ctx_t o;
-
-  init_mcast_cfg(&cfg, "239.7.9.91", 15491, 0);
+  init_mcast_cfg(&cfg, run_helper_group_n(91), run_helper_port(91), 0);
   strcpy(cfg.rist_uri[0], "rist://127.0.0.1:19100");
   cfg.n_rist = 1;
   ck_assert_ptr_null(tvhead_rist_open(&cfg));
@@ -644,7 +644,6 @@ START_TEST(relay_sinks_fail_without_their_backends_and_leave_no_leaks) {
   ck_assert_ptr_nonnull(o.mc);
   ck_assert_ptr_null(o.rist);
   tvhead_output_close(&o);
-
   cfg.n_rist = 0;
   strcpy(cfg.srt_host[0], "127.0.0.1");
   cfg.srt_port[0] = 19101;

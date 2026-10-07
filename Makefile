@@ -938,6 +938,7 @@ dipicam378_SRCS := \
 	src/dipicam378/cs378x/protocol.c \
 	src/dipicam378/cs378x/worker.c \
 	src/dipicam378/device.c \
+	src/dipicam378/hooks.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/cas/device_state_core.c \
 	src/lib/metrics/protocol.c \
@@ -1788,7 +1789,7 @@ UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_sys_signal lib
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mp4 lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild lib_demux_fmp4_box lib_demux_fmp4_track lib_demux_fmp4_sample lib_mux_esbuild lib_mux_esbuild_pes lib_mux_esbuild_pmtbuild lib_mux_esbuild_remux \
-	lib_net_netconnect lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_httpclient_fetch lib_net_httpclient_headers lib_net_httpclient_redirect lib_net_tssource_async lib_net_tssource_http_dispatch lib_net_tssource_dash_fmp4 lib_net_tssource_file lib_net_retryset lib_net_tls_server_stub dipitvhead_mpts dipitvhead_retryset_adapter dipitvhead_single lib_net_dvbstp \
+	lib_net_netconnect lib_net_tssink lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_httpclient_fetch lib_net_httpclient_headers lib_net_httpclient_redirect lib_net_tssource_async lib_net_tssource_http_dispatch lib_net_tssource_dash_fmp4 lib_net_tssource_file lib_net_retryset lib_net_tls_server_stub dipitvhead_mpts dipitvhead_retryset_adapter dipitvhead_single lib_net_dvbstp \
 	lib_mux_mpts \
 	lib_cas_cas_group \
 	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec \
@@ -1889,8 +1890,35 @@ lib_net_tls_SRCS := \
 	src/lib/helper/log.c
 lib_net_tls_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_net_tls_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += lib_net_rtmp_auth
+lib_net_rtmp_auth_BIN := tests/unit/lib/net/rtmp/test_auth
+lib_net_rtmp_auth_SRCS := \
+	tests/unit/lib/net/rtmp/test_auth.c \
+	src/lib/net/rtmp/auth.c
+lib_net_rtmp_auth_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+lib_net_rtmp_auth_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+
+UNIT_TESTS += lib_net_httpclient_async_tls
+lib_net_httpclient_async_tls_BIN := tests/unit/lib/net/test_httpclient_async_tls
+lib_net_httpclient_async_tls_SRCS := \
+	tests/unit/lib/net/test_httpclient_async_tls.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/sys/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/tls.c \
+	src/lib/net/tls_server.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/log.c
+lib_net_httpclient_async_tls_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
+lib_net_httpclient_async_tls_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 else
-$(warning tests: OpenSSL not found via pkg-config, skipping lib_scrambler_cissa/lib_cas_biss/lib_cas_biss_ca/lib_cas_biss_ca_engine/lib_cas_cw_encryption/lib_net_tls unit tests)
+$(warning tests: OpenSSL not found via pkg-config, skipping lib_scrambler_cissa/lib_cas_biss/lib_cas_biss_ca/lib_cas_biss_ca_engine/lib_cas_cw_encryption/lib_net_tls/lib_net_rtmp_auth/lib_net_httpclient_async_tls unit tests)
 endif
 
 UNIT_TESTS += lib_cas_biss_ca_sections
@@ -2201,6 +2229,22 @@ dipicam378_args_SRCS := \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
+UNIT_TESTS += dipicam378_config
+dipicam378_config_BIN := tests/unit/dipicam378/test_config
+dipicam378_config_SRCS := \
+	tests/unit/dipicam378/test_config.c \
+	src/dipicam378/cli/args.c \
+	src/dipicam378/cli/help.c \
+	src/dipicam378/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/argutil.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
 ifeq ($(HAVE_OPENSSL),yes)
 UNIT_TESTS += dipicam378_crypto
 dipicam378_crypto_BIN := tests/unit/dipicam378/test_crypto
@@ -2216,12 +2260,24 @@ dipicam378_device_BIN := tests/unit/dipicam378/test_device
 dipicam378_device_SRCS := \
 	tests/unit/dipicam378/test_device.c \
 	src/dipicam378/device.c \
+	src/dipicam378/hooks.c \
+	src/dipicam378/cs378x/cs378x.c \
+	src/dipicam378/cs378x/crypto.c \
+	src/dipicam378/cs378x/protocol.c \
+	src/dipicam378/cs378x/worker.c \
+	src/lib/demux/crc32.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/cas/device_state_core.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/sys/ioutil.c \
+	src/lib/sys/signal.c \
 	src/lib/helper/log.c \
 	src/lib/helper/secure_zero.c
 dipicam378_device_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
-dipicam378_device_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+dipicam378_device_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl) -pthread
 
 UNIT_TESTS += dipicam378_cs378x
 dipicam378_cs378x_BIN := tests/unit/dipicam378/test_cs378x
@@ -2585,9 +2641,58 @@ dipisds_args_SRCS := \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
+UNIT_TESTS += dipisds_config
+dipisds_config_BIN := tests/unit/dipisds/test_config
+dipisds_config_SRCS := \
+	tests/unit/dipisds/test_config.c \
+	src/dipisds/cli/args.c \
+	src/dipisds/cli/check.c \
+	src/dipisds/cli/help.c \
+	src/dipisds/cli/opt_general.c \
+	src/dipisds/cli/opt_ret.c \
+	src/dipisds/cli/opt_rms.c \
+	src/dipisds/cli/values.c \
+	src/dipisds/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/uriparse.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
 dipirist_args_BIN := tests/unit/dipirist/test_args
 dipirist_args_SRCS := \
 	tests/unit/dipirist/test_args.c \
+	src/dipirist/cli/args.c \
+	src/dipirist/cli/check.c \
+	src/dipirist/cli/help.c \
+	src/dipirist/cli/opt_general.c \
+	src/dipirist/cli/opt_rist.c \
+	src/dipirist/cli/uri.c \
+	src/lib/helper/describe.c \
+	src/dipirist/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/plain_endpoint.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
+UNIT_TESTS += dipirist_config
+dipirist_config_BIN := tests/unit/dipirist/test_config
+dipirist_config_SRCS := \
+	tests/unit/dipirist/test_config.c \
 	src/dipirist/cli/args.c \
 	src/dipirist/cli/check.c \
 	src/dipirist/cli/help.c \
@@ -2613,6 +2718,9 @@ ifeq ($(HAVE_RIST),yes)
 UNIT_TESTS += dipirist_bridge
 dipirist_bridge_BIN := tests/unit/dipirist/test_bridge
 dipirist_bridge_EXTRA_CFLAGS := $(shell pkg-config --cflags librist)
+ifeq ($(HAVE_AVG_BUFFER_TIME),yes)
+dipirist_bridge_EXTRA_CFLAGS += -DDIPIRIST_HAVE_AVG_BUFFER_TIME
+endif
 dipirist_bridge_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
 dipirist_bridge_SRCS := \
 	tests/unit/dipirist/test_bridge.c \
@@ -2737,6 +2845,31 @@ endif
 dipisrt_args_BIN := tests/unit/dipisrt/test_args
 dipisrt_args_SRCS := \
 	tests/unit/dipisrt/test_args.c \
+	src/dipisrt/cli/args.c \
+	src/dipisrt/cli/check.c \
+	src/dipisrt/cli/help.c \
+	src/dipisrt/cli/opt_general.c \
+	src/dipisrt/cli/opt_srt.c \
+	src/dipisrt/cli/uri.c \
+	src/lib/helper/describe.c \
+	src/dipisrt/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/plain_endpoint.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
+UNIT_TESTS += dipisrt_config
+dipisrt_config_BIN := tests/unit/dipisrt/test_config
+dipisrt_config_SRCS := \
+	tests/unit/dipisrt/test_config.c \
 	src/dipisrt/cli/args.c \
 	src/dipisrt/cli/check.c \
 	src/dipisrt/cli/help.c \
@@ -2921,6 +3054,7 @@ dipisds_listen_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
+dipisds_listen_EXTRA_LDFLAGS := -pthread
 
 dipisds_announce_BIN := tests/unit/dipisds/test_announce
 dipisds_announce_SRCS := \
@@ -2940,6 +3074,7 @@ dipisds_announce_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
+dipisds_announce_EXTRA_LDFLAGS := -pthread
 
 dipimetrics_httpserver_BIN := tests/unit/dipimetrics/test_httpserver
 dipimetrics_httpserver_SRCS := \
@@ -2966,6 +3101,25 @@ dipibcg_container_SRCS := \
 dipibcg_args_BIN := tests/unit/dipibcg/test_args
 dipibcg_args_SRCS := \
 	tests/unit/dipibcg/test_args.c \
+	src/dipibcg/cli/args.c \
+	src/dipibcg/cli/help.c \
+	src/dipibcg/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/uriparse.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
+UNIT_TESTS += dipibcg_config
+dipibcg_config_BIN := tests/unit/dipibcg/test_config
+dipibcg_config_SRCS := \
+	tests/unit/dipibcg/test_config.c \
 	src/dipibcg/cli/args.c \
 	src/dipibcg/cli/help.c \
 	src/dipibcg/config.c \
@@ -3019,6 +3173,7 @@ dipibcg_announce_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
+dipibcg_announce_EXTRA_LDFLAGS := -pthread
 
 dipibcg_listen_BIN := tests/unit/dipibcg/test_listen
 dipibcg_listen_SRCS := \
@@ -3036,7 +3191,7 @@ dipibcg_listen_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/dipibcg/container.c \
-	src/dipibcg/wrapper_stub.c \
+	$(dipibcg_ZLIB_SRC) \
 	src/lib/tva/bcg_doc.c \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
@@ -3055,6 +3210,12 @@ dipibcg_listen_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
+ifeq ($(HAVE_ZLIB),yes)
+dipibcg_listen_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib) -DDIPIBCG_TEST_ZLIB
+dipibcg_listen_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib) -pthread
+else
+dipibcg_listen_EXTRA_LDFLAGS := -pthread
+endif
 
 lib_demux_crc32_BIN := tests/unit/lib/demux/test_crc32
 lib_demux_crc32_SRCS := \
@@ -3667,6 +3828,42 @@ dipiscan_format_SRCS := \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/sds_xml.c \
 	src/lib/helper/xml_util.c \
+	src/lib/sys/ioutil.c
+
+UNIT_TESTS += dipiscan_config
+dipiscan_config_BIN := tests/unit/dipiscan/test_config
+dipiscan_config_SRCS := \
+	tests/unit/dipiscan/test_config.c \
+	src/dipiscan/cli/args.c \
+	src/dipiscan/cli/help.c \
+	src/dipiscan/cli/range.c \
+	src/dipiscan/cli/values.c \
+	src/dipiscan/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/log.c \
+	src/lib/sys/ioutil.c
+
+UNIT_TESTS += dipiscan_args
+dipiscan_args_BIN := tests/unit/dipiscan/test_args
+dipiscan_args_SRCS := \
+	tests/unit/dipiscan/test_args.c \
+	src/dipiscan/cli/args.c \
+	src/dipiscan/cli/help.c \
+	src/dipiscan/cli/range.c \
+	src/dipiscan/cli/values.c \
+	src/dipiscan/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/log.c \
 	src/lib/sys/ioutil.c
 
 dipiscan_scan_BIN := tests/unit/dipiscan/test_scan
@@ -5001,6 +5198,19 @@ lib_net_netconnect_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c
 
+lib_net_tssink_BIN := tests/unit/lib/net/test_tssink
+lib_net_tssink_SRCS := \
+	tests/unit/lib/net/test_tssink.c \
+	src/lib/net/ts/sink.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/mux/rtpheader.c \
+	src/lib/mux/fec2022.c \
+	src/lib/sys/ioutil.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/log.c
+
 lib_net_rtmp_BIN := tests/unit/lib/net/test_rtmp
 lib_net_rtmp_SRCS := \
 	tests/unit/lib/net/test_rtmp.c \
@@ -5106,6 +5316,7 @@ lib_net_tssource_async_SRCS := \
 	src/lib/net/ts/http.c \
 	src/lib/net/ts/open_async.c \
 	src/lib/net/jitbuf.c \
+	src/lib/mux/fec2022.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/rist/ristin_stub.c \
 	src/lib/net/rist/ristlog_stub.c \
@@ -5547,6 +5758,150 @@ dipirec_record_SRCS := \
 	src/dipirec/filter/ts.c \
 	src/dipirec/filter/pace.c
 
+ifeq ($(HAVE_RIST),yes)
+ifeq ($(HAVE_SRT),yes)
+UNIT_TESTS += dipirec_record_net
+dipirec_record_net_BIN := tests/unit/dipirec/test_record_net
+dipirec_record_net_SRCS := \
+	tests/unit/dipirec/test_record_net.c \
+	src/dipirec/record.c \
+	src/dipirec/record/sink.c \
+	src/dipirec/record/rtmp_fanout.c \
+	src/dipirec/record/stats.c \
+	src/dipirec/record/run.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/fccret/ret_client.c \
+	src/lib/mux/mp4/mp4.c \
+	src/lib/mux/mp4/write.c \
+	src/lib/mux/mp4/feed.c \
+	src/lib/mux/mp4/moov.c \
+	src/lib/mux/fmp4/box.c \
+	src/lib/mux/growbuf.c \
+	src/dipirec/cli/args.c \
+	src/dipirec/cli/check.c \
+	src/dipirec/cli/help.c \
+	src/dipirec/cli/opt_general.c \
+	src/dipirec/cli/opt_rist.c \
+	src/dipirec/cli/opt_srt.c \
+	src/dipirec/cli/opt_stream.c \
+	src/dipirec/cli/srt.c \
+	src/dipirec/cli/uri.c \
+	src/dipirec/cli/values.c \
+	src/dipirec/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/describe.c \
+	src/lib/metrics/protocol.c \
+	src/lib/metrics/export.c \
+	src/lib/helper/log.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/sys/signal.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/ts/source.c \
+	src/lib/net/ts/deframe.c \
+	src/lib/net/ts/jitter.c \
+	src/lib/net/ts/http.c \
+	src/lib/net/ts/open_async.c \
+	src/lib/net/jitbuf.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/helper/xml_util.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/demux/fec2022.c \
+	src/lib/net/ts/sink.c \
+	src/lib/mux/fec2022.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/rtmp/auth_stub.c \
+	src/lib/net/rist/ristout.c \
+	src/lib/net/rist/ristpeer.c \
+	src/lib/helper/pipereader.c \
+	src/lib/net/rist/ristin.c \
+	src/lib/net/rist/ristlog.c \
+	src/lib/net/srt/srtsrc.c \
+	src/lib/net/srt/srtsink.c \
+	src/lib/net/srt/srtin.c \
+	src/lib/net/srt/srtout.c \
+	src/lib/net/srt/srtcommon.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/sys/ioutil.c \
+	src/lib/demux/rtp.c \
+	src/lib/demux/rtx.c \
+	src/lib/demux/rtcp.c \
+	src/lib/demux/crc32.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/pes.c \
+	src/lib/demux/mpts_probe.c \
+	src/lib/mux/rtx.c \
+	src/lib/mux/rtcp_build.c \
+	src/lib/mux/rtpheader.c \
+	src/lib/mux/ebml.c \
+	src/lib/mux/mkv/mkv.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/escodec/aubuild.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
+	src/lib/demux/escodec/video.c \
+	src/lib/mux/mkv/video.c \
+	src/lib/mux/mkv/write.c \
+	src/lib/mux/mkv/feed.c \
+	src/lib/mux/teletext.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/flv/flv.c \
+	src/lib/mux/flv/feed.c \
+	src/lib/mux/flv/write.c \
+	src/lib/net/rtmp/handshake.c \
+	src/lib/net/rtmp/chunk.c \
+	src/lib/net/rtmp/session.c \
+	src/lib/net/rtmp/command.c \
+	src/lib/net/rtmp/rtmp.c \
+	src/lib/net/rtmp/rtmpout.c \
+	src/dipirec/filter/ts.c \
+	src/dipirec/filter/pace.c
+dipirec_record_net_EXTRA_CFLAGS := $(shell pkg-config --cflags librist srt)
+ifeq ($(TSAN),yes)
+dipirec_record_net_EXTRA_CFLAGS += -DDVBIPITOOLS_TSAN_BUILD
+endif
+dipirec_record_net_EXTRA_LDFLAGS := $(shell pkg-config --libs librist srt)
+endif
+endif
+
 dipirec_ret_client_BIN := tests/unit/dipirec/test_ret_client
 dipirec_ret_client_SRCS := \
 	tests/unit/dipirec/test_ret_client.c \
@@ -5582,6 +5937,34 @@ lib_fccret_fcc_client_SRCS := \
 dipirec_args_BIN := tests/unit/dipirec/test_args
 dipirec_args_SRCS := \
 	tests/unit/dipirec/test_args.c \
+	src/dipirec/cli/args.c \
+	src/dipirec/cli/check.c \
+	src/dipirec/cli/help.c \
+	src/dipirec/cli/opt_general.c \
+	src/dipirec/cli/opt_rist.c \
+	src/dipirec/cli/opt_srt.c \
+	src/dipirec/cli/opt_stream.c \
+	src/dipirec/cli/srt.c \
+	src/dipirec/cli/uri.c \
+	src/dipirec/cli/values.c \
+	src/dipirec/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/describe.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
+UNIT_TESTS += dipirec_config
+dipirec_config_BIN := tests/unit/dipirec/test_config
+dipirec_config_SRCS := \
+	tests/unit/dipirec/test_config.c \
 	src/dipirec/cli/args.c \
 	src/dipirec/cli/check.c \
 	src/dipirec/cli/help.c \
@@ -6746,6 +7129,7 @@ test:
 endif
 
 INTEGRATION_DIPIBIM_SCRIPTS := $(wildcard tests/integration/dipibim/*.sh)
+INTEGRATION_DIPISCAN_SCRIPTS := $(wildcard tests/integration/dipiscan/*.sh)
 INTEGRATION_DIPIXMLTV_SCRIPTS := $(wildcard tests/integration/dipixmltv/*.sh)
 INTEGRATION_DIPITVHEAD_SCRIPTS := $(wildcard tests/integration/dipitvhead/*.sh)
 INTEGRATION_DIPIRADIOHEAD_SCRIPTS := $(wildcard tests/integration/dipiradiohead/*.sh)
@@ -6758,7 +7142,7 @@ INTEGRATION_DIPIRIST_SCRIPTS := $(filter-out tests/integration/dipirist/bonding_
 INTEGRATION_DIPISRT_SCRIPTS := $(filter-out tests/integration/dipisrt/bonding_common.sh,$(wildcard tests/integration/dipisrt/*.sh))
 INTEGRATION_DIPIXY_SCRIPTS := $(wildcard tests/integration/dipixy/*.sh)
 
-INTEGRATION_TEST_DEPS := dipibim dipixmltv dipitvhead dipiradiohead dipirec dipidescramble dipisds dipibcg dipimetrics dipifccret dipixy
+INTEGRATION_TEST_DEPS := dipibim dipiscan dipixmltv dipitvhead dipiradiohead dipirec dipidescramble dipisds dipibcg dipimetrics dipifccret dipixy
 ifeq ($(HAVE_OPENSSL),yes)
 INTEGRATION_TEST_DEPS += dipicam378
 endif
@@ -6773,6 +7157,7 @@ endif
 integration-test: $(INTEGRATION_TEST_DEPS)
 	@set -e; \
 	for s in $(INTEGRATION_DIPIBIM_SCRIPTS); do echo "running $$s"; sh $$s ./dipibim; done; \
+	for s in $(INTEGRATION_DIPISCAN_SCRIPTS); do echo "running $$s"; sh $$s ./dipiscan; done; \
 	for s in $(INTEGRATION_DIPIXMLTV_SCRIPTS); do echo "running $$s"; sh $$s ./dipixmltv; done; \
 	for s in $(INTEGRATION_DIPITVHEAD_SCRIPTS); do echo "running $$s"; sh $$s ./dipitvhead; done; \
 	for s in $(INTEGRATION_DIPIRADIOHEAD_SCRIPTS); do echo "running $$s"; sh $$s ./dipiradiohead ./dipitvhead; done; \
@@ -6811,7 +7196,7 @@ FUZZ_BIM_DEPS := \
 	src/lib/helper/log.c
 
 # _BIN/_SRCS and FUZZ_BINS stay unconditional.
-FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_dvbstp fuzz_ws_frame fuzz_route fuzz_ssdp fuzz_yamlcfg fuzz_pesstamp fuzz_scte35stamp
+FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_dvbstp fuzz_ws_frame fuzz_route fuzz_ssdp fuzz_yamlcfg fuzz_pesstamp fuzz_scte35stamp fuzz_tva_xml fuzz_xmltv fuzz_bcg_container fuzz_metrics_store fuzz_rtmp
 
 fuzz_psi_BIN := tests/fuzz/fuzz_psi
 fuzz_psi_SRCS := \
@@ -6948,6 +7333,61 @@ fuzz_scte35stamp_SRCS := \
 	src/dipitvhead/mux/scte35stamp.c \
 	src/lib/demux/crc32.c
 
+fuzz_tva_xml_BIN := tests/fuzz/fuzz_tva_xml
+fuzz_tva_xml_SRCS := \
+	tests/fuzz/fuzz_tva_xml.c \
+	src/lib/tva/tva_xml.c \
+	src/lib/tva/bcg_doc.c \
+	src/lib/helper/xml_util.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
+fuzz_xmltv_BIN := tests/fuzz/fuzz_xmltv
+fuzz_xmltv_SRCS := \
+	tests/fuzz/fuzz_xmltv.c \
+	src/lib/tva/xmltv.c \
+	src/lib/tva/mapping.c \
+	src/lib/tva/bcg_doc.c \
+	src/lib/tva/timefmt.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/xml_util.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
+fuzz_bcg_container_BIN := tests/fuzz/fuzz_bcg_container
+fuzz_bcg_container_SRCS := \
+	tests/fuzz/fuzz_bcg_container.c \
+	src/dipibcg/container.c \
+	$(dipibcg_ZLIB_SRC) \
+	src/lib/helper/log.c
+ifeq ($(HAVE_ZLIB),yes)
+fuzz_bcg_container_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib)
+fuzz_bcg_container_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib)
+endif
+
+fuzz_metrics_store_BIN := tests/fuzz/fuzz_metrics_store
+fuzz_metrics_store_SRCS := \
+	tests/fuzz/fuzz_metrics_store.c \
+	src/lib/metrics/store.c \
+	src/lib/metrics/protocol.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
+fuzz_rtmp_BIN := tests/fuzz/fuzz_rtmp
+fuzz_rtmp_SRCS := \
+	tests/fuzz/fuzz_rtmp.c \
+	src/lib/net/rtmp/rtmp.c \
+	src/lib/net/rtmp/session.c \
+	src/lib/net/rtmp/command.c \
+	src/lib/net/rtmp/chunk.c \
+	src/lib/net/rtmp/handshake.c \
+	src/lib/net/rtmp/auth_stub.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
 fuzz_gen_seeds_BIN := tests/fuzz/gen_seeds
 fuzz_gen_seeds_SRCS := \
 	tests/fuzz/gen_seeds.c \
@@ -6963,7 +7403,10 @@ fuzz_gen_seeds_SRCS := \
 	src/lib/sys/ioutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/metrics/protocol.c \
+	src/dipibcg/container.c \
+	src/dipibcg/wrapper_stub.c
 
 define FUZZ_TARGET_template
 $(1)_OBJS := $$($(1)_SRCS:.c=.o)

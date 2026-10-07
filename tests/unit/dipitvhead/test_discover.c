@@ -14,6 +14,7 @@
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
 #include "dipitvhead/tvhead/priv.h"
+#include "../run_helper.h"
 
 /* zero-ES PMT section (table_id 0x02), CRC included */
 static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid) {
@@ -86,7 +87,7 @@ static tvsrc_t *open_recv(const char *group, unsigned port) {
 }
 
 START_TEST(discover_step_returns_zero_with_no_data_yet) {
-  tvsrc_t *src = open_recv("239.7.9.41", 15341);
+  tvsrc_t *src = open_recv(run_helper_group_n(41), run_helper_port(41));
   dipitvhead_input_t in;
   discover_state_t ds;
   psi_t *psi = psi_new();
@@ -105,9 +106,9 @@ START_TEST(discover_step_returns_zero_with_no_data_yet) {
 END_TEST
 
 START_TEST(discover_completes_once_pat_pmt_sdt_arrive) {
-  tvsrc_t *src = open_recv("239.7.9.42", 15342);
+  tvsrc_t *src = open_recv(run_helper_group_n(42), run_helper_port(42));
   struct sockaddr_in dst;
-  int sock = open_sender("239.7.9.42", 15342, &dst);
+  int sock = open_sender(run_helper_group_n(42), run_helper_port(42), &dst);
   dipitvhead_input_t in;
   psi_t *psi = psi_new();
   input_metrics_t im;
@@ -143,9 +144,9 @@ START_TEST(discover_completes_once_pat_pmt_sdt_arrive) {
 END_TEST
 
 START_TEST(discover_fails_when_requested_pmt_pid_absent_from_pat) {
-  tvsrc_t *src = open_recv("239.7.9.43", 15343);
+  tvsrc_t *src = open_recv(run_helper_group_n(43), run_helper_port(43));
   struct sockaddr_in dst;
-  int sock = open_sender("239.7.9.43", 15343, &dst);
+  int sock = open_sender(run_helper_group_n(43), run_helper_port(43), &dst);
   dipitvhead_input_t in;
   psi_t *psi = psi_new();
   input_metrics_t im;

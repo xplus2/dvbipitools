@@ -132,11 +132,17 @@ static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
 
 int scan_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
+  int rc;
   config_t cfg;
 
   scan_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+    yamlcfg_strpool_free(cfg.str_pool);
+    return -1;
+  }
   warn_if(&y, cfg.format == OUT_XML && !cfg.provider, "format xml requires provider (unless given on the command line)");
   warn_if(&y, cfg.http_path_tmpl && !cfg.http_proxy, "http-path needs http-proxy");
-  return yamlcfg_report(&y);
+  rc = yamlcfg_report(&y);
+  yamlcfg_strpool_free(cfg.str_pool);
+  return rc;
 }

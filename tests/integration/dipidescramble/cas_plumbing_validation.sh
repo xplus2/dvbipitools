@@ -23,10 +23,11 @@ DIPITVHEAD=$(echo "$BIN" | sed 's#/dipidescramble\([^/]*\)$#/../dipitvhead/dipit
 [ -x "$DIPITVHEAD" ] || DIPITVHEAD="./dipitvhead"
 [ -x "$DIPITVHEAD" ] || fail "cannot locate dipitvhead binary (tried $DIPITVHEAD)"
 
-MCAST=239.255.7.43
-PORT=17743
-ECMG_PORT=12243
-EMMG_PORT=18008
+MCAST=$(unique_mcast 61)
+FPB=$(free_port_block 3)
+PORT=$((FPB + 0))
+ECMG_PORT=$((FPB + 1))
+EMMG_PORT=$((FPB + 2))
 
 key="$WORK/testkey.pem"
 emm="$WORK/emm_cache.bin"

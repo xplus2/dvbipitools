@@ -8,10 +8,18 @@
 #include "dipixy/ws/ws_broadcast.h"
 #include "dipixy/ws/ws_clients.h"
 #include "dipixy/ws/ws_frame.h"
+#include "../run_helper.h"
 
-#define PARK_GROUP "239.255.42.30"
-#define PARK_PORT 42130
-#define PARK_PATH "/udp/" PARK_GROUP ":42130/hls"
+#define PARK_GROUP run_helper_group_n(30)
+#define PARK_PORT run_helper_port(30)
+#define PARK_PATH park_path()
+
+static const char *park_path(void) {
+  static char path[96];
+
+  snprintf(path, sizeof path, "/udp/%s:%u/hls", PARK_GROUP, PARK_PORT);
+  return path;
+}
 #define WS_PATH "/ui/ws/"
 #define SETTLE_MS 100
 #define COLD_WAITERS_MAX 64
@@ -170,7 +178,7 @@ START_TEST(cold_waiter_is_answered_when_its_deadline_passes) {
   char path[96];
 
   h3r_open(&h);
-  snprintf(path, sizeof path, "/udp/%s:%d/%s", PARK_GROUP, PARK_PORT, cc->route);
+  snprintf(path, sizeof path, "/udp/%s:%u/%s", PARK_GROUP, PARK_PORT, cc->route);
   sid = parked_request(&h, path);
   ck_assert_int_eq(h3r_resp_for(&h, sid)->status, 0);
   h3_hls_cold_flush_waiters();

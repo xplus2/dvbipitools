@@ -101,12 +101,72 @@ START_TEST(tva_build_crid_percent_encodes_and_compacts_time) {
 }
 END_TEST
 
+typedef struct {
+  const char *channel;
+  const char *title;
+  int expect_kept;
+} prog_case_t;
+
+static const char *const unsorted_channels[] = {"zeta", "mid", "alpha"};
+
+static const prog_case_t multi_channel_programmes[] = {
+    {"zeta", "Z first", 1},
+    {"mid", "M first", 1},
+    {"alpha", "A only", 1},
+    {"zeta", "Z second", 1},
+    {"ghost", "No such channel", 0},
+    {"mid", "M second", 1},
+};
+
+START_TEST(tva_xml_write_groups_programmes_for_unsorted_channels) {
+  bcg_doc_t doc, doc2;
+  FILE *f;
+  int kept = 0;
+
+  bcg_doc_init(&doc);
+  for (size_t i = 0; i < sizeof unsorted_channels / sizeof unsorted_channels[0]; i++) {
+    bcg_channel_t *c = bcg_add_channel(&doc);
+
+    bufcpy(c->id, sizeof c->id, unsorted_channels[i]);
+    bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
+  }
+  for (size_t i = 0; i < sizeof multi_channel_programmes / sizeof multi_channel_programmes[0]; i++) {
+    bcg_programme_t *pr = bcg_add_programme(&doc);
+
+    bufcpy(pr->channel_id, sizeof pr->channel_id, multi_channel_programmes[i].channel);
+    snprintf(pr->start, sizeof pr->start, "2024-03-15T12:%02zu:00Z", i);
+    bufcpy(pr->title, sizeof pr->title, multi_channel_programmes[i].title);
+    kept += multi_channel_programmes[i].expect_kept;
+  }
+  f = tmpfile();
+  ck_assert_ptr_nonnull(f);
+  tva_xml_write(f, &doc);
+  rewind(f);
+  bcg_doc_init(&doc2);
+  ck_assert_int_eq(tva_xml_read(f, &doc2), 0);
+  fclose(f);
+
+  ck_assert_int_eq(doc2.channel_count, 3);
+  for (int i = 0; i < 3; i++) ck_assert_str_eq(doc2.channels[i].id, unsorted_channels[i]);
+  ck_assert_int_eq(doc2.programme_count, kept);
+  for (size_t i = 0; i < sizeof multi_channel_programmes / sizeof multi_channel_programmes[0]; i++) {
+    int found = 0;
+    for (int j = 0; j < doc2.programme_count; j++)
+      if (!strcmp(doc2.programmes[j].title, multi_channel_programmes[i].title) && !strcmp(doc2.programmes[j].channel_id, multi_channel_programmes[i].channel)) found = 1;
+    ck_assert_msg(found == multi_channel_programmes[i].expect_kept, "%s: found %d", multi_channel_programmes[i].title, found);
+  }
+  bcg_doc_free(&doc);
+  bcg_doc_free(&doc2);
+}
+END_TEST
+
 static Suite *tva_xml_suite(void) {
   Suite *s = suite_create("tva_xml");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, tva_xml_write_read_round_trips);
   tcase_add_test(tc, tva_xml_write_drops_channels_without_uri);
   tcase_add_test(tc, tva_build_crid_percent_encodes_and_compacts_time);
+  tcase_add_test(tc, tva_xml_write_groups_programmes_for_unsorted_channels);
   suite_add_tcase(s, tc);
   return s;
 }

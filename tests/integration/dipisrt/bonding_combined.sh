@@ -8,8 +8,9 @@ BIN=$1
 
 skip_unless_bonding_testable
 
-PORTA=18000
-PORTB=18001
+FPB=$(free_port_block 2)
+PORTA=$((FPB + 0))
+PORTB=$((FPB + 1))
 N_PKTS=6000
 PASSPHRASE="torturecombinedscenario1"
 FEC="fec,cols:10,rows:5"

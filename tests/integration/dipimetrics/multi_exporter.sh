@@ -15,11 +15,11 @@ DIPIBCG=$(echo "$BIN" | sed 's#/dipimetrics\([^/]*\)$#/../dipibcg/dipibcg\1#')
 [ -x "$DIPIBCG" ] || DIPIBCG="./dipibcg"
 [ -x "$DIPIBCG" ] || fail "cannot locate dipibcg binary (tried $DIPIBCG)"
 
-SDS_MCAST=239.255.9.12
-SDS_PORT=17912
-BCG_MCAST=239.255.9.13
-BCG_PORT=17913
-HTTPPORT=19193
+SDS_MCAST=$(unique_mcast 93)
+BCG_MCAST=$(unique_mcast 94)
+SDS_PORT=$(free_udp_port_pair)
+BCG_PORT=$((SDS_PORT + 1))
+HTTPPORT=$(free_tcp_port)
 SOCK="$WORK/metrics.sock"
 
 now_epoch=$(date -u +%s)

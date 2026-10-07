@@ -15,7 +15,7 @@
 #include "lib/metrics/export.h"
 #include "lib/sys/ioutil.h"
 
-#define MAX_VALUES 32
+#define MAX_VALUES 256
 
 typedef struct {
   metrics_id_t id[MAX_VALUES];
@@ -79,6 +79,16 @@ static inline int seen_has(const seen_t *s, metrics_id_t id, uint64_t *value) {
   for (unsigned i = 0; i < s->n; i++) {
     if (s->id[i] == id) {
       if (value) *value = s->value[i];
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static inline int seen_last(const seen_t *s, metrics_id_t id, uint64_t *value) {
+  for (unsigned i = s->n; i > 0; i--) {
+    if (s->id[i - 1] == id) {
+      *value = s->value[i - 1];
       return 1;
     }
   }

@@ -231,8 +231,8 @@ START_TEST(eit_drain_finishes_a_program_before_starting_the_next) {
   ck_assert_int_eq(starts_section(&col, 0), 1);
   ck_assert_int_eq(starts_section(&col, 1), 0);
   ck_assert_int_eq(starts_section(&col, 2), 1);
-  ck_assert_uint_eq(emitted_service(&col, 0), 101u);
-  ck_assert_uint_eq(emitted_service(&col, 2), 102u);
+  ck_assert_uint_eq(emitted_service(&col, 0), 1u);
+  ck_assert_uint_eq(emitted_service(&col, 2), 2u);
   mpts_emit_eit(g.progs, 2, &busy, &cc, collect_cb, &col);
   ck_assert_int_eq(col.count, 3);
   ck_assert_int_eq(busy, -1);
@@ -259,7 +259,7 @@ START_TEST(eit_drain_abandons_a_program_that_disappeared_mid_section) {
   mpts_emit_eit(g.progs, 2, &busy, &cc, collect_cb, &col);
   ck_assert_int_eq(col.count, 2);
   ck_assert_int_eq(busy, -1);
-  ck_assert_uint_eq(emitted_service(&col, 1), 102u);
+  ck_assert_uint_eq(emitted_service(&col, 1), 2u);
   rig_free(&g);
 }
 END_TEST

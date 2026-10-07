@@ -8,8 +8,9 @@ BIN=$1
 
 skip_unless_bonding_testable
 
-PORTA=17970
-PORTB=17972
+FPB=$(free_port_block 3)
+PORTA=$((FPB + 0))
+PORTB=$((FPB + 2))
 N_PKTS=200
 
 fixture="$WORK/fixture.ts"

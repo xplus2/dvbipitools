@@ -43,7 +43,7 @@ START_TEST(resolve_bad_host_fails) {
   struct sockaddr_storage ss;
   int len;
 
-  ck_assert_int_ne(srtcommon_resolve("this.is.not.a.valid.host.example.invalid.", 9000, &ss, &len), 0);
+  ck_assert_int_ne(srtcommon_resolve("", 9000, &ss, &len), 0);
 }
 END_TEST
 
@@ -58,17 +58,14 @@ START_TEST(apply_opts_sets_latency_and_streamid) {
   ck_assert_int_eq(srt_startup(), 0);
   s = srt_create_socket();
   ck_assert_int_ne(s, SRT_INVALID_SOCK);
-
   memset(&o, 0, sizeof o);
   o.streamid = "test-stream";
   o.latency_ms = 250;
-
   ck_assert_int_eq(srtcommon_apply_opts(s, &o, 0, SRTO_RCVTIMEO, 200), 0);
   ck_assert_int_eq(srt_getsockopt(s, 0, SRTO_LATENCY, &lat, &optlen), 0);
   ck_assert_int_eq(lat, 250);
   ck_assert_int_eq(srt_getsockopt(s, 0, SRTO_STREAMID, sid, &sidlen), 0);
   ck_assert_str_eq(sid, "test-stream");
-
   srt_close(s);
   srt_cleanup();
 }
@@ -77,7 +74,6 @@ END_TEST
 START_TEST(apply_opts_group_skips_transtype) {
   SRTSOCKET g;
   srtcommon_opts_t o;
-
   ck_assert_int_eq(srt_startup(), 0);
   g = srt_create_group(SRT_GTYPE_BROADCAST);
   if (g == SRT_INVALID_SOCK) {
@@ -85,10 +81,8 @@ START_TEST(apply_opts_group_skips_transtype) {
     srt_cleanup();
     return;
   }
-
   memset(&o, 0, sizeof o);
   ck_assert_int_eq(srtcommon_apply_opts(g, &o, 1, SRTO_SNDTIMEO, 1000), 0);
-
   srt_close(g);
   srt_cleanup();
 }

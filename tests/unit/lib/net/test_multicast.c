@@ -4,9 +4,11 @@
 #include <arpa/inet.h>
 #include <check.h>
 #include <netinet/in.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "lib/net/multicast.h"
@@ -176,6 +178,114 @@ START_TEST(close_null_is_safe) {
 }
 END_TEST
 
+static unsigned free_udp_port(void) {
+  struct sockaddr_in a;
+  socklen_t len = sizeof a;
+  int fd = socket(AF_INET, SOCK_DGRAM, 0);
+  unsigned port;
+
+  ck_assert_int_ge(fd, 0);
+  memset(&a, 0, sizeof a);
+  a.sin_family = AF_INET;
+  a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ck_assert_int_eq(bind(fd, (struct sockaddr *)&a, sizeof a), 0);
+  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&a, &len), 0);
+  port = ntohs(a.sin_port);
+  close(fd);
+  return port;
+}
+
+static void unique_group(char *out, size_t cap) {
+  pid_t pid = getpid();
+
+  snprintf(out, cap, "239.78.%u.%u", ((unsigned)pid >> 8) & 0xFF, 1 + ((unsigned)pid & 0xFF) % 250);
+}
+
+START_TEST(open_rejects_unknown_interface) {
+  char group[32];
+
+  unique_group(group, sizeof group);
+  ck_assert_ptr_null(mcast_open(AF_INET, group, free_udp_port(), "nonexistent-if0", 100));
+  ck_assert_ptr_null(mcast_open(AF_INET6, "ff02::1234", free_udp_port(), "nonexistent-if0", 100));
+}
+END_TEST
+
+START_TEST(open_rejects_bad_and_non_multicast_groups) {
+  ck_assert_ptr_null(mcast_open(AF_INET, "not-an-address", free_udp_port(), NULL, 100));
+  ck_assert_ptr_null(mcast_open(AF_INET6, "not-an-address", free_udp_port(), NULL, 100));
+  ck_assert_ptr_null(mcast_open(AF_INET, "127.0.0.1", free_udp_port(), NULL, 100));
+}
+END_TEST
+
+START_TEST(open_fails_when_group_port_is_taken_exclusively) {
+  struct sockaddr_in a;
+  char group[32];
+  unsigned port = free_udp_port();
+  int fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+  ck_assert_int_ge(fd, 0);
+  unique_group(group, sizeof group);
+  memset(&a, 0, sizeof a);
+  a.sin_family = AF_INET;
+  a.sin_port = htons((unsigned short)port);
+  ck_assert_int_eq(inet_pton(AF_INET, group, &a.sin_addr), 1);
+  ck_assert_int_eq(bind(fd, (struct sockaddr *)&a, sizeof a), 0);
+  ck_assert_ptr_null(mcast_open(AF_INET, group, port, NULL, 100));
+  ck_assert_ptr_null(mcast_open_ssm(AF_INET, group, port, "192.0.2.1", NULL, 100));
+  close(fd);
+}
+END_TEST
+
+START_TEST(open_ssm_rejects_bad_arguments_and_failed_join) {
+  char group[32];
+
+  unique_group(group, sizeof group);
+  ck_assert_ptr_null(mcast_open_ssm(AF_INET, group, free_udp_port(), "192.0.2.1", "nonexistent-if0", 100));
+  ck_assert_ptr_null(mcast_open_ssm(AF_INET, "not-an-address", free_udp_port(), "192.0.2.1", NULL, 100));
+  ck_assert_ptr_null(mcast_open_ssm(AF_INET, group, free_udp_port(), "not-an-address", NULL, 100));
+  ck_assert_ptr_null(mcast_open_ssm(AF_INET, "127.0.0.1", free_udp_port(), "192.0.2.1", NULL, 100));
+  ck_assert_ptr_null(mcast_open_ssm(AF_INET6, "ff02::1234", free_udp_port(), "192.0.2.1", NULL, 100));
+}
+END_TEST
+
+START_TEST(rx_timestamps_are_zero_until_enabled_then_wall_clock) {
+  struct sockaddr_in dst;
+  struct timespec now;
+  unsigned char buf[16];
+  char group[32];
+  unsigned port = free_udp_port();
+  mcast_t *m;
+  int tx = socket(AF_INET, SOCK_DGRAM, 0);
+  uint64_t now_ns;
+  uint64_t rx_ns;
+
+  ck_assert_int_ge(tx, 0);
+  unique_group(group, sizeof group);
+  m = mcast_open(AF_INET, group, port, NULL, 1000);
+  ck_assert_ptr_nonnull(m);
+  memset(&dst, 0, sizeof dst);
+  dst.sin_family = AF_INET;
+  dst.sin_port = htons((unsigned short)port);
+  ck_assert_int_eq(inet_pton(AF_INET, group, &dst.sin_addr), 1);
+
+  ck_assert_int_eq((int)sendto(tx, "x", 1, 0, (struct sockaddr *)&dst, sizeof dst), 1);
+  ck_assert_int_eq((int)mcast_recv(m, buf, sizeof buf, NULL), 1);
+  ck_assert_uint_eq(mcast_last_rx_ns(m), 0u);
+
+  ck_assert_int_eq(mcast_enable_rx_timestamps(m), 0);
+  ck_assert_int_eq((int)sendto(tx, "y", 1, 0, (struct sockaddr *)&dst, sizeof dst), 1);
+  ck_assert_int_eq((int)mcast_recv(m, buf, sizeof buf, NULL), 1);
+  rx_ns = mcast_last_rx_ns(m);
+  clock_gettime(CLOCK_REALTIME, &now);
+  now_ns = (uint64_t)now.tv_sec * 1000000000ULL + (uint64_t)now.tv_nsec;
+  ck_assert_uint_gt(rx_ns, 0u);
+  ck_assert_uint_le(rx_ns, now_ns);
+  ck_assert_uint_lt(now_ns - rx_ns, 5000000000ULL);
+  close(tx);
+  mcast_close(m);
+}
+END_TEST
+
 static Suite *multicast_suite(void) {
   Suite *s = suite_create("multicast");
   TCase *tc = tcase_create("core");
@@ -188,6 +298,11 @@ static Suite *multicast_suite(void) {
   tcase_add_test(tc, open_send_v6_applies_hop_limit);
   tcase_add_test(tc, open_send_rejects_bad_interface_and_group);
   tcase_add_test(tc, open_send_on_loopback_interface_sets_multicast_if);
+  tcase_add_test(tc, open_rejects_unknown_interface);
+  tcase_add_test(tc, open_rejects_bad_and_non_multicast_groups);
+  tcase_add_test(tc, open_fails_when_group_port_is_taken_exclusively);
+  tcase_add_test(tc, open_ssm_rejects_bad_arguments_and_failed_join);
+  tcase_add_test(tc, rx_timestamps_are_zero_until_enabled_then_wall_clock);
   tcase_add_test(tc, close_null_is_safe);
   suite_add_tcase(s, tc);
   return s;

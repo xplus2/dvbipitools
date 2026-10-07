@@ -1355,6 +1355,121 @@ START_TEST(psi_classifies_dts_hd_ma_via_hdmv_stream_type) {
 }
 END_TEST
 
+START_TEST(psi_obs_oldest_section_picks_minimum_non_zero) {
+  psi_obs_t o;
+  double now = 0.0;
+
+  psi_obs_init(&o, &now);
+  o.sec_count[0] = 3;
+  o.sec_last[0][0] = 5.0;
+  o.sec_last[0][1] = 2.0;
+  o.sec_last[0][2] = 9.0;
+  ck_assert_double_eq(psi_obs_oldest_section(&o, PSI_OBS_SDT), 2.0);
+}
+END_TEST
+
+START_TEST(psi_obs_oldest_section_missing_section_returns_zero) {
+  psi_obs_t o;
+  double now = 0.0;
+
+  psi_obs_init(&o, &now);
+  o.sec_count[0] = 3;
+  o.sec_last[0][0] = 5.0;
+  o.sec_last[0][1] = 0.0;
+  o.sec_last[0][2] = 9.0;
+  ck_assert_double_eq(psi_obs_oldest_section(&o, PSI_OBS_SDT), 0.0);
+}
+END_TEST
+
+START_TEST(psi_obs_oldest_section_nit_uses_own_table) {
+  psi_obs_t o;
+  double now = 0.0;
+
+  psi_obs_init(&o, &now);
+  o.sec_count[0] = 1;
+  o.sec_last[0][0] = 1.0;
+  o.sec_count[1] = 2;
+  o.sec_last[1][0] = 7.0;
+  o.sec_last[1][1] = 4.0;
+  ck_assert_double_eq(psi_obs_oldest_section(&o, PSI_OBS_NIT), 4.0);
+  ck_assert_double_eq(psi_obs_oldest_section(&o, PSI_OBS_SDT), 1.0);
+}
+END_TEST
+
+START_TEST(psi_obs_oldest_section_empty_returns_zero) {
+  psi_obs_t o;
+  double now = 0.0;
+
+  psi_obs_init(&o, &now);
+  ck_assert_double_eq(psi_obs_oldest_section(&o, PSI_OBS_SDT), 0.0);
+  ck_assert_double_eq(psi_obs_oldest_section(&o, PSI_OBS_NIT), 0.0);
+}
+END_TEST
+
+static const pid_class_t all_pid_classes[] = {PID_UNKNOWN, PID_PAT, PID_CAT, PID_PMT, PID_NIT, PID_SDT, PID_EIT, PID_OTHER_SI, PID_NULL, PID_PCR, PID_VIDEO, PID_AUDIO, PID_TELETEXT, PID_SUBTITLE, PID_AIT, PID_ECM, PID_DATA, PID_LCEVC};
+static const char *const all_pid_class_names[] = {"unknown", "PAT", "CAT", "PMT", "NIT", "SDT", "EIT", "SI", "null", "PCR", "video", "audio", "teletext", "subtitle", "AIT", "ECM", "data", "LCEVC"};
+
+START_TEST(psi_pid_class_name_covers_every_class) {
+  ck_assert_str_eq(pid_class_name(all_pid_classes[_i]), all_pid_class_names[_i]);
+}
+END_TEST
+
+START_TEST(psi_pid_class_name_out_of_range_is_unknown) {
+  ck_assert_str_eq(pid_class_name((pid_class_t)999), "unknown");
+}
+END_TEST
+
+static const codec_t all_codecs[] = {CODEC_NONE, CODEC_MPEG2V, CODEC_H264, CODEC_HEVC, CODEC_VVC, CODEC_AV1, CODEC_MP2A, CODEC_AAC, CODEC_AAC_LATM, CODEC_AC3, CODEC_EAC3, CODEC_OPUS, CODEC_LCEVC, CODEC_DTS, CODEC_DTS_HD, CODEC_DTS_HD_MA, CODEC_TRUEHD, CODEC_AC4};
+static const char *const all_codec_names[] = {"none", "mpeg2video", "h264", "hevc", "vvc", "av1", "mp2", "aac", "aac_latm", "ac3", "eac3", "opus", "lcevc", "dts", "dts_hd", "dts_hd_ma", "truehd", "ac4"};
+
+START_TEST(psi_codec_name_covers_every_codec) {
+  ck_assert_str_eq(codec_name(all_codecs[_i]), all_codec_names[_i]);
+}
+END_TEST
+
+START_TEST(psi_codec_name_out_of_range_is_none) {
+  ck_assert_str_eq(codec_name((codec_t)999), "none");
+}
+END_TEST
+
+START_TEST(psi_pat_and_pmt_section_are_null_before_seen) {
+  psi_t *p = psi_new();
+  size_t len = 123;
+
+  ck_assert_ptr_null(psi_pat_section(p, &len));
+  ck_assert_ptr_null(psi_pmt_section(p, &len));
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_pat_and_pmt_section_return_the_stored_section) {
+  psi_t *p = psi_new();
+  unsigned char pat[64];
+  unsigned char pmt[128];
+  unsigned char pkt[188];
+  size_t pat_len = build_pat(pat, 0x1234, 1, 0x0100);
+  size_t pmt_len;
+  size_t len = 0;
+  const unsigned char *sec;
+
+  wrap_ts_packet(pkt, 0x0000, 0, pat, pat_len);
+  psi_feed(p, pkt);
+  pmt_len = build_pmt(pmt, 1, 0x0101, 0x0101, 0x1B, 0x0102, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 0, pmt, pmt_len);
+  psi_feed(p, pkt);
+
+  sec = psi_pat_section(p, &len);
+  ck_assert_ptr_nonnull(sec);
+  ck_assert_uint_eq(len, pat_len);
+  ck_assert_int_eq(memcmp(sec, pat, len), 0);
+  sec = psi_pmt_section(p, &len);
+  ck_assert_ptr_nonnull(sec);
+  ck_assert_uint_eq(len, pmt_len);
+  ck_assert_int_eq(memcmp(sec, pmt, len), 0);
+  psi_free(p);
+}
+END_TEST
+
 static Suite *psi_suite(void) {
   Suite *s = suite_create("psi");
   TCase *tc = tcase_create("core");
@@ -1391,6 +1506,16 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_classifies_truehd_stream_type_under_hdmv_program);
   tcase_add_test(tc, psi_ignores_truehd_stream_type_without_hdmv_program);
   tcase_add_test(tc, psi_classifies_dts_hd_ma_via_hdmv_stream_type);
+  tcase_add_test(tc, psi_obs_oldest_section_picks_minimum_non_zero);
+  tcase_add_test(tc, psi_obs_oldest_section_missing_section_returns_zero);
+  tcase_add_test(tc, psi_obs_oldest_section_nit_uses_own_table);
+  tcase_add_test(tc, psi_obs_oldest_section_empty_returns_zero);
+  tcase_add_loop_test(tc, psi_pid_class_name_covers_every_class, 0, (int)(sizeof all_pid_classes / sizeof all_pid_classes[0]));
+  tcase_add_test(tc, psi_pid_class_name_out_of_range_is_unknown);
+  tcase_add_loop_test(tc, psi_codec_name_covers_every_codec, 0, (int)(sizeof all_codecs / sizeof all_codecs[0]));
+  tcase_add_test(tc, psi_codec_name_out_of_range_is_none);
+  tcase_add_test(tc, psi_pat_and_pmt_section_are_null_before_seen);
+  tcase_add_test(tc, psi_pat_and_pmt_section_return_the_stored_section);
   suite_add_tcase(s, tc);
   return s;
 }

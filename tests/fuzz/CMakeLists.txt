@@ -125,6 +125,61 @@ dvbipitools_add_fuzz_harness(yamlcfg
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
+dvbipitools_add_fuzz_harness(tva_xml
+    fuzz_tva_xml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
+dvbipitools_add_fuzz_harness(xmltv
+    fuzz_xmltv.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/xmltv.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/mapping.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
+find_package(ZLIB)
+if (ZLIB_FOUND)
+    set(FUZZ_BCG_WRAPPER wrapper.c)
+else ()
+    set(FUZZ_BCG_WRAPPER wrapper_stub.c)
+endif ()
+dvbipitools_add_fuzz_harness(bcg_container
+    fuzz_bcg_container.c
+    ${CMAKE_SOURCE_DIR}/src/dipibcg/container.c
+    ${CMAKE_SOURCE_DIR}/src/dipibcg/${FUZZ_BCG_WRAPPER}
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+if (ZLIB_FOUND)
+    target_link_libraries(fuzz_bcg_container PRIVATE ZLIB::ZLIB)
+endif ()
+
+dvbipitools_add_fuzz_harness(metrics_store
+    fuzz_metrics_store.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/store.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
+dvbipitools_add_fuzz_harness(rtmp
+    fuzz_rtmp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/session.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/chunk.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/handshake.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
 # ecmg_client.c/emmg_server.c/ssdp.c pull in real pthread usage even though fuzzed
 # functions themselves are pure. link Threads on all like dipitvhead itself does
 find_package(Threads REQUIRED)
@@ -147,7 +202,10 @@ add_executable(fuzz_gen_seeds
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
-    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+    ${CMAKE_SOURCE_DIR}/src/dipibcg/container.c
+    ${CMAKE_SOURCE_DIR}/src/dipibcg/wrapper_stub.c)
 
 dvbipitools_add_fuzz_harness(pesstamp
     fuzz_pesstamp.c
