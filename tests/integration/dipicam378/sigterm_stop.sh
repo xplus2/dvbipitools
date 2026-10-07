@@ -25,6 +25,7 @@ stop_cleanly() {
     rc=$?
     [ "$rc" = "0" ] || fail "$label: expected exit 0 after SIGTERM, got $rc (see $WORK/$label.log)"
     port_open "$port" && fail "$label: port $port still open after exit"
+    return 0
 }
 
 stop_cleanly plain

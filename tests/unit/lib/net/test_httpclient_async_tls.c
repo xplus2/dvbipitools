@@ -98,7 +98,7 @@ static void server_serve_request(tls_t *t, int fd, const char *response) {
 }
 
 static void *tls_serve_once(void *arg) {
-  tls_server_arg_t *a = arg;
+  const tls_server_arg_t *a = arg;
   int cfd = accept(a->listen_fd, NULL, NULL);
   tls_t *t;
 

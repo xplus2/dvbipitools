@@ -273,7 +273,7 @@ static void script_start(script_t *sc) {
   ck_assert_int_eq(pthread_create(&sc->th, NULL, serve_scripted, &sc->srv), 0);
 }
 
-static void script_stop(script_t *sc) {
+static void script_stop(const script_t *sc) {
   pthread_join(sc->th, NULL);
   close(sc->fd);
 }

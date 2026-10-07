@@ -14,6 +14,7 @@ expect_key_failure() {
     rc=$?
     [ "$rc" = "1" ] || fail "$label: expected exit 1, got $rc (see $WORK/$label.log)"
     log_has "$WORK/$label.log" "cannot load RSA private key from -k $key" || fail "$label: no key load message (see $WORK/$label.log)"
+    return 0
 }
 
 expect_key_failure missing "$WORK/no-such.key"

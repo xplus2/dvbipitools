@@ -249,7 +249,7 @@ typedef struct {
 } rec_http_srv_t;
 
 static void *rec_http_thread(void *arg) {
-  rec_http_srv_t *srv = arg;
+  const rec_http_srv_t *srv = arg;
   int cfd = accept(srv->listen_fd, NULL, NULL);
   char req[1024];
   char head[128];

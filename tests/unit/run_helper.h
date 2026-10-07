@@ -97,7 +97,7 @@ typedef struct {
 } dvbstp_sender_t;
 
 static inline void *dvbstp_sender_thread(void *arg) {
-  dvbstp_sender_t *sd = arg;
+  const dvbstp_sender_t *sd = arg;
   mcast_t *m;
 
   sleep_ms(DVBSTP_SENDER_START_MS);

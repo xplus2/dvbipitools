@@ -19,7 +19,7 @@
 #define HOST_LEN 300
 
 typedef struct {
-  const char *argv[ARGV_MAX];
+  char *argv[ARGV_MAX];
   int argc;
   cfg_kind_t kind;
   size_t off;
@@ -70,15 +70,17 @@ START_TEST(every_option_sets_its_field) {
   const option_case_t *c = &option_cases[_i];
   cfg_field_case_t fc = {NULL, c->kind, c->off, c->num, c->str};
   config_t cfg;
+  char *av[ARGV_MAX];
 
-  ck_assert_int_eq(args_parse(c->argc, (char **)c->argv, &cfg), ARGS_OK);
+  memcpy(av, c->argv, sizeof av);
+  ck_assert_int_eq(args_parse(c->argc, av, &cfg), ARGS_OK);
   cfg_field_check(&cfg, &fc);
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
 
 typedef struct {
-  const char *argv[ARGV_MAX];
+  char *argv[ARGV_MAX];
   int argc;
   args_status_t status;
   const char *message;
@@ -111,10 +113,12 @@ START_TEST(error_messages_and_status) {
   const error_case_t *c = &error_cases[_i];
   char msg[MSG_MAX];
   config_t cfg;
+  char *av[ARGV_MAX];
   args_status_t st;
 
+  memcpy(av, c->argv, sizeof av);
   log_capture_begin();
-  st = args_parse(c->argc, (char **)c->argv, &cfg);
+  st = args_parse(c->argc, av, &cfg);
   log_capture_end(msg, sizeof msg);
   ck_assert_int_eq(st, c->status);
   ck_assert_msg(strstr(msg, c->message) != NULL, "want '%s' in '%s'", c->message, msg);
@@ -123,13 +127,13 @@ START_TEST(error_messages_and_status) {
 END_TEST
 
 START_TEST(help_option_returns_help_status) {
-  const char *argv[] = {"dipiscan", "-v", "--help"};
+  char *argv[] = {"dipiscan", "-v", "--help"};
   char msg[MSG_MAX];
   config_t cfg;
   args_status_t st;
 
   log_capture_begin();
-  st = args_parse(3, (char **)argv, &cfg);
+  st = args_parse(3, argv, &cfg);
   log_capture_end(msg, sizeof msg);
   ck_assert_int_eq(st, ARGS_HELP);
 }

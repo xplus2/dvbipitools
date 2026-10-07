@@ -296,7 +296,7 @@ static const reload_case_t reload_cases[] = {
   {&guide_one, NULL, "not,enough\n", "reload failed, keeping previous guide", 0, 1},
 };
 
-static void run_announce(config_t *cfg, run_helper_t *h, sink_t *ms, int *rc, char *msg, size_t msg_cap) {
+static void run_announce(const config_t *cfg, run_helper_t *h, sink_t *ms, int *rc, char *msg, size_t msg_cap) {
   pthread_t th;
 
   signals_install();

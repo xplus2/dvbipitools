@@ -630,16 +630,14 @@ static size_t respond_mpts(const char *path, unsigned char *out, size_t cap, int
 
 static size_t respond_not_found(const char *path, unsigned char *out, size_t cap, int *status) {
   (void)path;
-  (void)out;
-  (void)cap;
+  memset(out, 0, cap);
   *status = 404;
   return 0;
 }
 
 static size_t respond_empty_ok(const char *path, unsigned char *out, size_t cap, int *status) {
   (void)path;
-  (void)out;
-  (void)cap;
+  memset(out, 0, cap);
   *status = 200;
   return 0;
 }
@@ -671,7 +669,7 @@ static void scan_http_start(scan_http_fixture_t *fx, int conns, size_t (*respond
   ck_assert_int_eq(pthread_create(&fx->th, NULL, scan_http_server_thread, &fx->srv), 0);
 }
 
-static void scan_http_stop(scan_http_fixture_t *fx) {
+static void scan_http_stop(const scan_http_fixture_t *fx) {
   pthread_join(fx->th, NULL);
   close(fx->srv.listen_fd);
 }

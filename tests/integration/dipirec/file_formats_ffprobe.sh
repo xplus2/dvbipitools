@@ -26,6 +26,7 @@ check_format() {
     for type in $want; do
         grep -qx "$type" "$WORK/probe_$fmt.txt" || fail "$fmt: no $type stream"
     done
+    return 0
 }
 
 check_format ts "video audio"

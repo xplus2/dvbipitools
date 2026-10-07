@@ -73,7 +73,7 @@ static inline void cfg_fixture_write_with_file(cfg_fixture_t *fx, const char *te
   cfg_fixture_store(fx, expanded);
 }
 
-static inline void cfg_fixture_remove(cfg_fixture_t *fx) {
+static inline void cfg_fixture_remove(const cfg_fixture_t *fx) {
   if (fx->extra[0]) unlink(fx->extra);
   unlink(fx->path);
   rmdir(fx->dir);

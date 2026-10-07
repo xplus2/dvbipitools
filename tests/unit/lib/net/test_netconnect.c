@@ -130,7 +130,6 @@ static int wait_writable(int fd) {
 static int first_candidate_is_ipv6(const char *host, unsigned port, int *count) {
   struct addrinfo hints;
   struct addrinfo *res;
-  struct addrinfo *ai;
   char portstr[8];
   int v6;
 
@@ -140,7 +139,7 @@ static int first_candidate_is_ipv6(const char *host, unsigned port, int *count) 
   hints.ai_socktype = SOCK_STREAM;
   ck_assert_int_eq(getaddrinfo(host, portstr, &hints, &res), 0);
   *count = 0;
-  for (ai = res; ai; ai = ai->ai_next) (*count)++;
+  for (const struct addrinfo *ai = res; ai; ai = ai->ai_next) (*count)++;
   v6 = res->ai_family == AF_INET6;
   freeaddrinfo(res);
   return v6;

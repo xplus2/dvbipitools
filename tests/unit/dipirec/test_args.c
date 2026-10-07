@@ -547,7 +547,7 @@ END_TEST
 #define A256 A128 A128
 
 typedef struct {
-  const char *argv[ARGV_MAX];
+  char *argv[ARGV_MAX];
   int argc;
   cfg_kind_t kind;
   size_t off;
@@ -599,8 +599,10 @@ static const option_case_t srt_option_cases[] = {
 static void run_option_case(const option_case_t *c) {
   cfg_field_case_t fc = {NULL, c->kind, c->off, c->num, c->str};
   config_t cfg = {0};
+  char *av[ARGV_MAX];
 
-  ck_assert_int_eq(args_parse(c->argc, (char **)c->argv, &cfg), ARGS_OK);
+  memcpy(av, c->argv, sizeof av);
+  ck_assert_int_eq(args_parse(c->argc, av, &cfg), ARGS_OK);
   cfg_field_check(&cfg, &fc);
   yamlcfg_strpool_free(cfg.str_pool);
 }
@@ -616,7 +618,7 @@ START_TEST(srt_options_set_their_fields) {
 END_TEST
 
 typedef struct {
-  const char *argv[ARGV_MAX];
+  char *argv[ARGV_MAX];
   int argc;
   args_status_t status;
   const char *message;
@@ -706,10 +708,12 @@ static const message_case_t check_cases[] = {
 static void run_message_case(const message_case_t *c) {
   char msg[MSG_MAX];
   config_t cfg = {0};
+  char *av[ARGV_MAX];
   args_status_t st;
 
+  memcpy(av, c->argv, sizeof av);
   log_capture_begin();
-  st = args_parse(c->argc, (char **)c->argv, &cfg);
+  st = args_parse(c->argc, av, &cfg);
   log_capture_end(msg, sizeof msg);
   ck_assert_int_eq(st, c->status);
   ck_assert_msg(strstr(msg, c->message) != NULL, "want '%s' in '%s'", c->message, msg);

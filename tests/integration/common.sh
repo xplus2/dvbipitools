@@ -56,15 +56,17 @@ free_tcp_port() {
         ftp_port=$((ftp_port + 1))
     done
     echo "$ftp_port"
+    return 0
 }
 
 # free_tcp_port_block <n>: first of n consecutive ports nothing listens on
 free_tcp_port_block() {
+    ftb_n=$1
     ftb_port=$((20000 + ($$ * 211) % 30000))
     while :; do
         ftb_ok=1
         ftb_i=0
-        while [ "$ftb_i" -lt "$1" ]; do
+        while [ "$ftb_i" -lt "$ftb_n" ]; do
             if port_open $((ftb_port + ftb_i)); then
                 ftb_ok=0
                 break
@@ -75,10 +77,13 @@ free_tcp_port_block() {
         ftb_port=$((ftb_port + ftb_i + 1))
     done
     echo "$ftb_port"
+    return 0
 }
 
 udp_port_busy() {
-    command -v ss >/dev/null 2>&1 && ss -H -uln "sport = :$1" 2>/dev/null | grep -q .
+    upb_port=$1
+    command -v ss >/dev/null 2>&1 && ss -H -uln "sport = :$upb_port" 2>/dev/null | grep -q .
+    return $?
 }
 
 # free_udp_port: first port from a pid-derived start that no UDP socket is bound to
@@ -88,6 +93,7 @@ free_udp_port() {
         fup_port=$((fup_port + 1))
     done
     echo "$fup_port"
+    return 0
 }
 
 # free_udp_port_pair: even port whose successor is free too (RIST data and RTCP)
@@ -98,11 +104,13 @@ free_udp_port_pair() {
         fupp_port=$((fupp_port + 2))
     done
     echo "$fupp_port"
+    return 0
 }
 
 # unique_mcast <n>: 239.<n>.x.y with x.y derived from the pid
 unique_mcast() {
     echo "239.$1.$(($$ % 250 + 1)).$((($$ / 250) % 250 + 1))"
+    return 0
 }
 
 log_has() {
@@ -266,12 +274,13 @@ run_radiohead_link_validation() {
 
 # test concurrency helper
 free_port_block() {
+    fpb_n=$1
     fpb_port=$((20000 + ($$ * 211) % 30000))
     fpb_port=$((fpb_port - fpb_port % 2))
     while :; do
         fpb_ok=1
         fpb_i=0
-        while [ "$fpb_i" -lt "$1" ] && [ "$fpb_ok" = "1" ]; do
+        while [ "$fpb_i" -lt "$fpb_n" ] && [ "$fpb_ok" = "1" ]; do
             if port_open $((fpb_port + fpb_i)) || udp_port_busy $((fpb_port + fpb_i)); then
                 fpb_ok=0
             fi
@@ -281,6 +290,7 @@ free_port_block() {
         fpb_port=$((fpb_port + 2))
     done
     echo "$fpb_port"
+    return 0
 }
 
 #EOF

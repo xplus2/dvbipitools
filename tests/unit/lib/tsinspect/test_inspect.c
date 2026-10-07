@@ -1452,7 +1452,7 @@ typedef struct {
   uint64_t packets_output0;
 } stream_seen_t;
 
-static void scan_packet_labels(metrics_writer_t *w, metrics_hdr_t *hdr, stream_seen_t *seen) {
+static void scan_packet_labels(const metrics_writer_t *w, metrics_hdr_t *hdr, stream_seen_t *seen) {
   metrics_reader_t r;
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
