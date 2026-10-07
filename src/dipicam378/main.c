@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
 
   metrics_exporter_init(&mx, METRICS_COMPONENT_CAM378, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
   if (!metrics_exporter_enabled(&mx)) {
-    while (!signal_stop_requested()) pause();
+    while (!signal_stop_requested()) sleep_interruptible(3600.0);
   } else {
     const char *algo_name = cfg.cw_len == 8 ? "csa2" : "cissa";
     struct timespec tick = {0, CAM378_METRICS_POLL_MS * 1000000L};
