@@ -41,6 +41,66 @@ jobs:
       - name: test
         run: ctest --test-dir build --output-on-failure -j"$(nproc)"
 
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config libssl-dev check ffmpeg librist-dev libsrt-openssl-dev \
+            libnghttp2-dev libngtcp2-dev libnghttp3-dev libdvbcsa1 jq pipx
+          pipx install gcovr
+      - name: install tsduck
+        run: |
+          curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu24_amd64.deb
+          sudo apt-get install -y ./tsduck.deb
+      - name: configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DCMAKE_C_FLAGS="--coverage -O0" -DCMAKE_EXE_LINKER_FLAGS=--coverage
+      - name: build
+        run: cmake --build build -j"$(nproc)"
+      - name: test
+        run: ctest --test-dir build --output-on-failure -j"$(nproc)"
+      - name: coverage report
+        if: always()
+        run: |
+          COMMON="--root . --object-directory build --filter src/ --exclude-throw-branches --exclude-unreachable-branches"
+          mkdir -p coverage
+          gcovr $COMMON --json-summary coverage/src.json --txt coverage/src.txt
+          gcovr $COMMON --exclude 'src/lib/vendor/' --json-summary coverage/src-novendor.json --txt coverage/src-novendor.txt
+          summarize() {
+            echo "## $1"
+            echo ""
+            jq -r '
+              def pct(c; t): if t == 0 then "-" else "\(((c * 1000 / t) | round) / 10)%" end;
+              def row(n; fs):
+                (fs | map(.line_covered) | add) as $lc | (fs | map(.line_total) | add) as $lt |
+                (fs | map(.function_covered) | add) as $fc | (fs | map(.function_total) | add) as $ft |
+                (fs | map(.branch_covered) | add) as $bc | (fs | map(.branch_total) | add) as $bt |
+                "| \(n) | \($lc)/\($lt) | \(pct($lc; $lt)) | \($fc)/\($ft) | \(pct($fc; $ft)) | \($bc)/\($bt) | \(pct($bc; $bt)) |";
+              "| module | lines | % | functions | % | branches | % |",
+              "|---|---|---|---|---|---|---|",
+              (.files
+                | map(. + {mod: (.filename | split("/") | if .[1] == "lib" then .[0:3] else .[0:2] end | join("/"))})
+                | group_by(.mod) | .[] | row(.[0].mod; .)),
+              row("**total**"; .files)
+            ' "$2"
+            echo ""
+          }
+          {
+            summarize "Coverage: src/" coverage/src.json
+            summarize "Coverage: src/ excl. src/lib/vendor/" coverage/src-novendor.json
+          } >> "$GITHUB_STEP_SUMMARY"
+          tail -n 4 coverage/src.txt
+          tail -n 4 coverage/src-novendor.txt
+      - name: upload coverage
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-report
+          path: coverage
+          if-no-files-found: ignore
+
   bonding-tests:
     runs-on: ubuntu-latest
     steps:
