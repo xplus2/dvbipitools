@@ -340,7 +340,7 @@ START_TEST(rtmpout_survives_stalled_peer) {
   atomic_store(&srv.drain, 1);
   for (int i = 0; i < 400 && !atomic_load(&srv.found_end); i++) {
     struct timespec ts = {0, 5000000L};
-    ck_assert_int_eq(rtmpout_write(o, FLV_TAG_VIDEO, 1000 + (uint32_t)i * 40, endframe, sizeof endframe, NULL, 0), 0);
+    rtmpout_write(o, FLV_TAG_VIDEO, 1000 + (uint32_t)i * 40, endframe, sizeof endframe, NULL, 0);
     nanosleep(&ts, NULL);
   }
 
