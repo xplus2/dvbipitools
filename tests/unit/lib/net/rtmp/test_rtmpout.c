@@ -551,7 +551,7 @@ typedef struct {
 } closer_t;
 
 static void *closing_server_thread(void *arg) {
-  closer_t *c = arg;
+  const closer_t *c = arg;
   for (int i = 0; i < 3; i++) {
     int cfd = accept(c->listen_fd, NULL, NULL);
     if (cfd < 0) break;

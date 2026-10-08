@@ -78,7 +78,9 @@ static void set_free(receiver_set_t *s) {
 }
 
 static int set_has(const receiver_set_t *s, const unsigned char ekid[BISS_CA_EKID_LEN]) {
-  for (size_t i = 0; i < s->n; i++) if (memcmp(s->v[i].ekid, ekid, BISS_CA_EKID_LEN) == 0) return 1;
+  for (size_t i = 0; i < s->n; i++) {
+    if (memcmp(s->v[i].ekid, ekid, BISS_CA_EKID_LEN) == 0) return 1;
+  }
   return 0;
 }
 

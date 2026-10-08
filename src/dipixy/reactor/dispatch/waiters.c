@@ -112,10 +112,12 @@ int ts_cold_try_park(conn_t *c, const ts_cold_park_req_t *req) {
 
 /* keeps owning cap_ctx ref. client gone before ready/timeout: release */
 void ts_cold_waiter_conn_closing(const conn_t *c) {
-  for (int i = 0; i < TS_COLD_WAITERS_MAX; i++) if (t_ts_cold_waiters[i].active && t_ts_cold_waiters[i].owner == c) {
-    capture_close(t_ts_cold_waiters[i].cap_ctx);
-    t_ts_cold_waiters[i].active = 0;
-    t_ts_cold_waiters_active--;
+  for (int i = 0; i < TS_COLD_WAITERS_MAX; i++) {
+    if (t_ts_cold_waiters[i].active && t_ts_cold_waiters[i].owner == c) {
+      capture_close(t_ts_cold_waiters[i].cap_ctx);
+      t_ts_cold_waiters[i].active = 0;
+      t_ts_cold_waiters_active--;
+    }
   }
 }
 

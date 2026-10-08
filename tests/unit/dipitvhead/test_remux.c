@@ -1622,6 +1622,7 @@ static size_t build_fake_eit_section(unsigned char *section_out, unsigned servic
   section_out[3] = (unsigned char)(service_id >> 8);
   section_out[4] = (unsigned char)service_id;
   section_out[6] = section_number;
+  be32_put(section_out + slen - 4, crc32_mpeg(section_out, slen - 4));
   return slen;
 }
 
@@ -1728,7 +1729,7 @@ START_TEST(remux_non_standalone_eit_spans_ticks_when_bounded) {
   pkt[1][0] = 0x47;
   pkt[1][1] = 0x00;
   pkt[1][2] = 0x12;
-  pkt[1][3] = 0x10;
+  pkt[1][3] = 0x11;
   memcpy(pkt[1] + 4, section + 183, slen - 183);
 
   for (size_t i = 0; i < 2; i++)
@@ -1992,7 +1993,7 @@ static size_t split_section_into_packets(const unsigned char *section, size_t sl
     pkt[0] = 0x47;
     pkt[1] = (unsigned char)((n == 0 ? 0x40 : 0x00) | 0x00);
     pkt[2] = 0x12;
-    pkt[3] = 0x10;
+    pkt[3] = (unsigned char)(0x10 | (n & 0x0F));
     if (n == 0) pkt[4] = 0x00;
     memcpy(pkt + (n == 0 ? 5 : 4), section + used, take);
     used += take;

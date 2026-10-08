@@ -114,10 +114,12 @@ http_server_t *http_server_new(int listen_fd, tls_server_ctx_t *tls_ctx, const c
 
 void http_server_free(http_server_t *hs) {
   if (!hs) return;
-  for (int i = 0; i < HTTP_MAX_CONNS; i++) if (hs->conns[i].used) {
-    if (hs->conns[i].tls) tls_close(hs->conns[i].tls);
-    else close(hs->conns[i].fd);
-    free(hs->conns[i].resp);
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) {
+    if (hs->conns[i].used) {
+      if (hs->conns[i].tls) tls_close(hs->conns[i].tls);
+      else close(hs->conns[i].fd);
+      free(hs->conns[i].resp);
+    }
   }
   free(hs);
 }
@@ -160,9 +162,11 @@ static void conn_close(http_conn_t *c) {
 static void conn_accept(http_server_t *hs, int fd, double now_mono) {
   int flags;
   http_conn_t *c = NULL;
-  for (int i = 0; i < HTTP_MAX_CONNS; i++) if (!hs->conns[i].used) {
-    c = &hs->conns[i];
-    break;
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) {
+    if (!hs->conns[i].used) {
+      c = &hs->conns[i];
+      break;
+    }
   }
   if (!c) {
     close(fd); /* pool full, drop rather than let it queue up unbounded */

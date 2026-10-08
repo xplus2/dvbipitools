@@ -71,7 +71,9 @@ const char *source_kind_str(source_kind_t k) {
 }
 
 const source_def_t *find_source(const config_t *cfg, unsigned ord) {
-  for (int i = 0; i < cfg->n_sources; i++) if ((unsigned)cfg->sources[i].ordinal == ord) return &cfg->sources[i];
+  for (int i = 0; i < cfg->n_sources; i++) {
+    if ((unsigned)cfg->sources[i].ordinal == ord) return &cfg->sources[i];
+  }
   return NULL;
 }
 

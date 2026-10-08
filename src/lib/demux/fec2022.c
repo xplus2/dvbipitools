@@ -8,8 +8,12 @@
 #include "fec2022.h"
 #include "rtp.h"
 
+#define EXT_BASE ((int64_t)1 << 40)
+
 typedef struct {
-  unsigned gen;
+  int64_t start;
+  int start_valid;
+  int64_t gen;
   int gen_ever;
   int gen_open;
   unsigned real_count;
@@ -39,7 +43,11 @@ struct fec2022_dec {
   uint32_t src_ssrc;
   int have_ssrc;
   int have_cursor;
-  uint16_t next_release_seq;
+  int have_hi;
+  int64_t hi_ext;
+  int64_t origin_ext;
+  int64_t next_release_ext;
+  size_t ring_n;
   fec2022_col_t col[FEC2022_MAX_L];
   int *slot_seen;
   size_t *slot_len;
@@ -64,7 +72,8 @@ fec2022_dec_t *fec2022_dec_new(unsigned l, unsigned d) {
   dec->slot_seen = calloc(ld, sizeof *dec->slot_seen);
   dec->slot_len = calloc(ld, sizeof *dec->slot_len);
   dec->slot_pkt = calloc(ld, FEC2022_MAX_PKT);
-  dec->ring = calloc(ld, sizeof *dec->ring);
+  dec->ring_n = ld * 4;
+  dec->ring = calloc(dec->ring_n, sizeof *dec->ring);
   dec->ready = calloc(ld, FEC2022_MAX_PKT);
   dec->ready_len = calloc(ld, sizeof *dec->ready_len);
   if (!dec->slot_seen || !dec->slot_len || !dec->slot_pkt || !dec->ring || !dec->ready || !dec->ready_len) {
@@ -85,8 +94,29 @@ void fec2022_dec_free(fec2022_dec_t *dec) {
   free(dec);
 }
 
-static void ring_put(fec2022_dec_t *dec, uint16_t seq, ring_state_t state, const unsigned char *pkt, size_t len) {
-  ring_slot_t *r = &dec->ring[seq % (dec->l * dec->d)];
+static int64_t floordiv(int64_t a, int64_t b) {
+  int64_t q = a / b;
+  if (a % b < 0) q--;
+  return q;
+}
+
+/* unwrap 16 bit sequence against highest */
+static int64_t ext_seq(fec2022_dec_t *dec, uint16_t seq, int advance) {
+  int64_t ext;
+  if (!dec->have_hi) {
+    dec->hi_ext = EXT_BASE + seq;
+    dec->have_hi = 1;
+  }
+  ext = dec->hi_ext + (int16_t)(uint16_t)(seq - (uint16_t)dec->hi_ext);
+  if (advance && ext > dec->hi_ext) dec->hi_ext = ext;
+  return ext;
+}
+
+static void ring_put(fec2022_dec_t *dec, int64_t ext, ring_state_t state, const unsigned char *pkt, size_t len) {
+  ring_slot_t *r;
+
+  if (!dec->have_cursor || ext < dec->next_release_ext) return;
+  r = &dec->ring[(uint64_t)ext % dec->ring_n];
   r->state = state;
   if (state == RING_READY) {
     memcpy(r->pkt, pkt, len);
@@ -99,8 +129,8 @@ static void release_pending(fec2022_dec_t *dec) {
 
   if (!dec->have_cursor) return;
   for (;;) {
-    ring_slot_t *r = &dec->ring[dec->next_release_seq % ld];
-    if (r->state == RING_EMPTY)
+    ring_slot_t *r = &dec->ring[(uint64_t)dec->next_release_ext % dec->ring_n];
+    if (r->state == RING_EMPTY && dec->hi_ext - dec->next_release_ext < (int64_t)(2 * ld))
       break;
     if (r->state == RING_READY && dec->ready_count < ld) {
       unsigned tail = (dec->ready_head + dec->ready_count) % ld;
@@ -109,7 +139,7 @@ static void release_pending(fec2022_dec_t *dec) {
       dec->ready_count++;
     }
     r->state = RING_EMPTY;
-    dec->next_release_seq++;
+    dec->next_release_ext++;
   }
 }
 
@@ -117,18 +147,22 @@ static void resolve_column(fec2022_dec_t *dec, unsigned c) {
   fec2022_col_t *cs = &dec->col[c];
   unsigned missing = dec->d;
 
-  if (cs->real_count == dec->d - 1 && cs->repair_seen) for (unsigned i = 0; i < dec->d; i++) if (!dec->slot_seen[(size_t)c * dec->d + i]) {
-    missing = i;
-    break;
+  if (cs->real_count == dec->d - 1 && cs->repair_seen) {
+    for (unsigned i = 0; i < dec->d; i++) {
+      if (!dec->slot_seen[(size_t)c * dec->d + i]) {
+        missing = i;
+        break;
+      }
+    }
   }
   for (unsigned i = 0; i < dec->d; i++) {
     size_t si = (size_t)c * dec->d + i;
-    uint32_t pos = (uint32_t)cs->gen * dec->d + i;
-    uint16_t seq = (uint16_t)(c + pos * dec->l);
+    int64_t ext = cs->start + (cs->gen * dec->d + i) * (int64_t)dec->l;
+    uint16_t seq = (uint16_t)ext;
 
     if (dec->slot_seen[si]) {
-      ring_put(dec, seq, RING_READY, dec->slot_pkt + si * FEC2022_MAX_PKT, dec->slot_len[si]);
-    } else if (i == missing) {
+      ring_put(dec, ext, RING_READY, dec->slot_pkt + si * FEC2022_MAX_PKT, dec->slot_len[si]);
+    } else if (i == missing && cs->rlen_xor <= sizeof cs->repair_payload) {
       unsigned char p = cs->rp;
       unsigned char x = cs->rx;
       unsigned char cc = cs->rcc;
@@ -163,16 +197,16 @@ static void resolve_column(fec2022_dec_t *dec, unsigned c) {
       be32_put(rec + 4, ts_xor);
       be32_put(rec + 8, dec->src_ssrc);
       memcpy(rec + 12, payload, len_xor);
-      ring_put(dec, seq, RING_READY, rec, (size_t)12 + len_xor);
+      ring_put(dec, ext, RING_READY, rec, (size_t)12 + len_xor);
     } else {
-      ring_put(dec, seq, RING_DROPPED, NULL, 0);
+      ring_put(dec, ext, RING_DROPPED, NULL, 0);
     }
   }
   cs->gen_open = 0;
   release_pending(dec);
 }
 
-static void enter_generation(fec2022_dec_t *dec, unsigned c, unsigned gen) {
+static void enter_generation(fec2022_dec_t *dec, unsigned c, int64_t gen) {
   fec2022_col_t *cs = &dec->col[c];
 
   if (cs->gen_ever && cs->gen_open) resolve_column(dec, c);
@@ -185,29 +219,36 @@ static void enter_generation(fec2022_dec_t *dec, unsigned c, unsigned gen) {
 }
 
 int fec2022_dec_source(fec2022_dec_t *dec, const unsigned char *pkt, size_t len) {
-  uint16_t seq;
+  int64_t ext;
+  int64_t row;
+  int64_t gen;
   unsigned c;
-  unsigned pos;
-  unsigned gen;
   unsigned idx;
   fec2022_col_t *cs;
   size_t si;
 
   if (len < 12 || len > FEC2022_MAX_PKT) return -1;
-  seq = be16_get(pkt + 2);
+  ext = ext_seq(dec, be16_get(pkt + 2), 1);
   if (!dec->have_ssrc) {
     dec->src_ssrc = be32_get(pkt + 8);
     dec->have_ssrc = 1;
   }
   if (!dec->have_cursor) {
-    dec->next_release_seq = seq;
+    dec->next_release_ext = ext;
+    dec->origin_ext = ext;
     dec->have_cursor = 1;
   }
-  c = seq % dec->l;
-  pos = (unsigned)(uint16_t)(seq - c) / dec->l;
-  gen = pos / dec->d;
-  idx = pos % dec->d;
+  c = (unsigned)((uint64_t)ext % dec->l);
   cs = &dec->col[c];
+  if (!cs->start_valid) {
+    /* 1st group of col starts at 1st pos or after 1st pkg */
+    cs->start = dec->origin_ext + (int64_t)((c + dec->l - (uint64_t)dec->origin_ext % dec->l) % dec->l);
+    cs->start_valid = 1;
+  }
+  row = (ext - cs->start) / (int64_t)dec->l;
+  gen = floordiv(row, dec->d);
+  idx = (unsigned)(row - gen * dec->d);
+  if (cs->gen_ever && gen < cs->gen) return 0;
   if (!cs->gen_ever || gen != cs->gen) enter_generation(dec, c, gen);
   else if (!cs->gen_open) return 0;
 
@@ -228,23 +269,32 @@ int fec2022_dec_source(fec2022_dec_t *dec, const unsigned char *pkt, size_t len)
 void fec2022_dec_repair(fec2022_dec_t *dec, const unsigned char *pkt, size_t len) {
   rtp_hdr_t h;
   const unsigned char *fh;
-  uint16_t snb;
+  int64_t snb;
+  int64_t gen;
+  size_t ld = (size_t)dec->l * dec->d;
   unsigned c;
-  unsigned pos;
-  unsigned gen;
   fec2022_col_t *cs;
   size_t payload_off;
   size_t payload_len;
 
   if (!rtp_parse_header(pkt, len, &h) || h.payload_off + 16 > len) return;
   fh = pkt + h.payload_off;
-  snb = be16_get(fh); /* RFC6015 SN base low */
+  snb = ext_seq(dec, be16_get(fh), 0); /* RFC6015 SN base low */
   if (fh[13] != dec->l || fh[14] != dec->d) return; /* RFC6015 Offset, NA */
 
-  c = snb % dec->l;
-  pos = (unsigned)(uint16_t)(snb - c) / dec->l;
-  gen = pos / dec->d;
+  c = (unsigned)((uint64_t)snb % dec->l);
   cs = &dec->col[c];
+  if (cs->start_valid && (snb - cs->start) % (int64_t)ld != 0) {
+    if (cs->gen_ever && cs->gen_open) resolve_column(dec, c);
+    cs->gen_ever = 0;
+    cs->start_valid = 0;
+  }
+  if (!cs->start_valid) {
+    cs->start = snb;
+    cs->start_valid = 1;
+  }
+  gen = floordiv((snb - cs->start) / (int64_t)dec->l, dec->d);
+  if (cs->gen_ever && gen < cs->gen) return;
   if (!cs->gen_ever || gen != cs->gen)
     enter_generation(dec, c, gen);
   else if (!cs->gen_open)

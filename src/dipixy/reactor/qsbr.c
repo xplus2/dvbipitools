@@ -8,45 +8,72 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define QSBR_CACHELINE 64
+#define QSBR_ONLINE 1u
+
+typedef struct {
+  _Alignas(QSBR_CACHELINE) _Atomic uint64_t v; /* odd: online, even: offline; quiescent adds 2 */
+} qsbr_slot_t;
+
 struct qsbr_domain {
-  _Atomic uint64_t *epoch;
+  qsbr_slot_t *slot;
   int nworkers;
 };
+
+static int slot_passed(const qsbr_slot_t *s, uint64_t mark) {
+  return !(mark & QSBR_ONLINE) || atomic_load_explicit(&s->v, memory_order_acquire) != mark;
+}
 
 qsbr_domain_t *qsbr_domain_create(int nworkers) {
   qsbr_domain_t *d = calloc(1, sizeof *d);
   if (!d) return NULL;
   if (nworkers < 1) nworkers = 1;
-  d->epoch = calloc((size_t)nworkers, sizeof *d->epoch);
-  if (!d->epoch) {
+  d->slot = aligned_alloc(QSBR_CACHELINE, (size_t)nworkers * sizeof *d->slot);
+  if (!d->slot) {
     free(d);
     return NULL;
   }
+  for (int i = 0; i < nworkers; i++) atomic_init(&d->slot[i].v, QSBR_ONLINE);
   d->nworkers = nworkers;
   return d;
 }
 
 void qsbr_domain_destroy(qsbr_domain_t *d) {
   if (!d) return;
-  free((void *)d->epoch);
+  free(d->slot);
   free(d);
 }
 
 void qsbr_worker_quiescent(qsbr_domain_t *d, int tid) {
   if (!d || tid < 0 || tid >= d->nworkers) return;
-  atomic_fetch_add_explicit(&d->epoch[tid], 1, memory_order_release);
+  atomic_fetch_add_explicit(&d->slot[tid].v, 2, memory_order_release);
+}
+
+void qsbr_worker_offline(qsbr_domain_t *d, int tid) {
+  if (!d || tid < 0 || tid >= d->nworkers) return;
+  uint64_t v = atomic_load_explicit(&d->slot[tid].v, memory_order_relaxed);
+  if (v & QSBR_ONLINE) atomic_store_explicit(&d->slot[tid].v, v + 1, memory_order_release);
+}
+
+void qsbr_worker_online(qsbr_domain_t *d, int tid) {
+  if (!d || tid < 0 || tid >= d->nworkers) return;
+  uint64_t v = atomic_load_explicit(&d->slot[tid].v, memory_order_relaxed);
+  if (!(v & QSBR_ONLINE)) atomic_store_explicit(&d->slot[tid].v, v + 1, memory_order_seq_cst);
 }
 
 int qsbr_worker_count(const qsbr_domain_t *d) { return d ? d->nworkers : 0; }
 
 void qsbr_mark(const qsbr_domain_t *d, uint64_t *out) {
   if (!d) return;
-  for (int i = 0; i < d->nworkers; i++) out[i] = atomic_load_explicit(&d->epoch[i], memory_order_acquire);
+  atomic_thread_fence(memory_order_seq_cst);
+  for (int i = 0; i < d->nworkers; i++) out[i] = atomic_load_explicit(&d->slot[i].v, memory_order_acquire);
 }
 
 int qsbr_mark_passed(const qsbr_domain_t *d, const uint64_t *mark) {
   if (!d) return 1;
-  for (int i = 0; i < d->nworkers; i++) if (atomic_load_explicit(&d->epoch[i], memory_order_acquire) == mark[i]) return 0;
+  for (int i = 0; i < d->nworkers; i++) {
+    if (!slot_passed(&d->slot[i], mark[i])) return 0;
+  }
   return 1;
 }
 
@@ -55,7 +82,7 @@ int qsbr_mark_passed_excl(const qsbr_domain_t *d, const uint64_t *mark, int excl
   if (!d) return 1;
   for (int i = 0; i < d->nworkers; i++) {
     if (i == excl) continue;
-    if (atomic_load_explicit(&d->epoch[i], memory_order_acquire) == mark[i]) return 0;
+    if (!slot_passed(&d->slot[i], mark[i])) return 0;
   }
   return 1;
 }

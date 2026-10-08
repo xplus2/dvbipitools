@@ -22,10 +22,12 @@ static void lcevc_lock(ts_sub_t *s, const psi_t *tp) {
 
   if (s->lcevc_locked) return;
   es = psi_es(tp, &n);
-  for (int i = 0; i < n; i++) if (es[i].cls == PID_VIDEO) {
-    pids = es[i].lcevc_pid;
-    count = (unsigned)es[i].lcevc_pid_count;
-    break;
+  for (int i = 0; i < n; i++) {
+    if (es[i].cls == PID_VIDEO) {
+      pids = es[i].lcevc_pid;
+      count = (unsigned)es[i].lcevc_pid_count;
+      break;
+    }
   }
   pidlock_apply_lcevc(&s->lcevc, &s->filter, pids, (int)count);
   s->lcevc_locked = 1;

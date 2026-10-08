@@ -213,7 +213,9 @@ int http_is_redirect_status(int status) {
 }
 
 const char *http_header(const http_t *h, const char *name) {
-  for (int i = 0; i < h->hdr_count; i++) if (!strcasecmp(h->hdr[i].name, name)) return h->hdr[i].value;
+  for (int i = 0; i < h->hdr_count; i++) {
+    if (!strcasecmp(h->hdr[i].name, name)) return h->hdr[i].value;
+  }
   return NULL;
 }
 
@@ -221,7 +223,9 @@ const http_url_t *http_final_url(const http_t *h) { return &h->url; }
 
 static int has_close_token(const char *v) {
   size_t vlen = strlen(v);
-  for (size_t i = 0; i + 5 <= vlen; i++) if (!strncasecmp(v + i, "close", 5)) return 1;
+  for (size_t i = 0; i + 5 <= vlen; i++) {
+    if (!strncasecmp(v + i, "close", 5)) return 1;
+  }
   return 0;
 }
 

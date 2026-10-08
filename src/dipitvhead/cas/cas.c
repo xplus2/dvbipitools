@@ -79,7 +79,9 @@ static void add_pid(unsigned *pids, size_t *count, size_t cap, unsigned pid) {
     log_line(TOOL_NAME ": cas: pid 0x%x dropped, already at the %zu pid cap", pid, cap);
     return;
   }
-  for (size_t i = 0; i < *count; i++) if (pids[i] == pid) return;
+  for (size_t i = 0; i < *count; i++) {
+    if (pids[i] == pid) return;
+  }
   pids[(*count)++] = pid;
 }
 
@@ -97,8 +99,10 @@ static void add_program_cas_pids(const config_t *cfg, const out_es_t *es, int es
 size_t cas_resolve_pids_multi(const config_t *cfg, const out_es_t *const *es_lists, const int *es_counts, unsigned n_programs, unsigned *out, size_t cap) {
   size_t count = 0;
   for (size_t k = 0; k < cfg->cas_pid_count; k++) add_pid(out, &count, cap, cfg->cas_pids[k]);
-  if (cfg->cas_pids_video || cfg->cas_pids_audio || cfg->cas_pids_lcevc) for (unsigned p = 0; p < n_programs; p++)
-    add_program_cas_pids(cfg, es_lists[p], es_counts[p], out, &count, cap);
+  if (cfg->cas_pids_video || cfg->cas_pids_audio || cfg->cas_pids_lcevc) {
+    for (unsigned p = 0; p < n_programs; p++)
+      add_program_cas_pids(cfg, es_lists[p], es_counts[p], out, &count, cap);
+  }
   return count;
 }
 

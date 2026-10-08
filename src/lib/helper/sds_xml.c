@@ -118,7 +118,9 @@ void sds_package_open(FILE *f, const char *domain, unsigned version) {
 }
 
 static const sds_service_t *sds_find_service(const char *name, const sds_service_t *svcs, int svc_count) {
-  for (int i = 0; i < svc_count; i++) if (!strcmp(svcs[i].name, name)) return &svcs[i];
+  for (int i = 0; i < svc_count; i++) {
+    if (!strcmp(svcs[i].name, name)) return &svcs[i];
+  }
   return NULL;
 }
 

@@ -10,7 +10,9 @@
 #define MPTS_NAME_WAIT_MS 3000
 
 static int cfg_has_rtmp(const config_t *cfg) {
-  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS) return 1;
+  for (int i = 0; i < cfg->n_out; i++) {
+    if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS) return 1;
+  }
   return 0;
 }
 

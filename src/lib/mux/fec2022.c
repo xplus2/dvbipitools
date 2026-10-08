@@ -27,6 +27,7 @@ struct fec2022_enc {
   unsigned d;
   unsigned char pt;
   uint16_t seq;
+  unsigned next_col;
   fec2022_col_t cols[FEC2022_MAX_L];
 };
 
@@ -67,7 +68,8 @@ size_t fec2022_enc_feed(fec2022_enc_t *e, const unsigned char *pkt, size_t len, 
 
   if (len < 12 || len > FEC2022_MAX_PKT || cap < FEC2022_MAX_REPAIR) return 0;
   seq = be16_get(pkt + 2);
-  c = &e->cols[seq % e->l];
+  c = &e->cols[e->next_col];
+  e->next_col = (e->next_col + 1) % e->l;
   plen = len - 12;
 
   if (c->count == 0) c->snb = seq;

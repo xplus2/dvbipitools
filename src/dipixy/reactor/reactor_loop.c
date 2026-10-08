@@ -178,7 +178,9 @@ void *worker_thread(void *arg) {
       if (h3ms >= 0 && h3ms < timeout_ms) timeout_ms = h3ms;
     }
 #endif
+    qsbr_worker_offline(reactor_qsbr(), tid); /* no refs held while blocked */
     nev = epoll_wait(epfd, events, 256, timeout_ms);
+    qsbr_worker_online(reactor_qsbr(), tid);
     if (nev < 0) {
       if (errno == EINTR) continue;
       break;

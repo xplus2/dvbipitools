@@ -163,7 +163,9 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   } else {
     c->es_overflow_logged = 0;
   }
-  for (int k = 0; k < c->es_count; k++) if (c->es[k].cls == PID_AUDIO) c->es[k].audio_index = ++c->audio_count;
+  for (int k = 0; k < c->es_count; k++) {
+    if (c->es[k].cls == PID_AUDIO) c->es[k].audio_index = ++c->audio_count;
+  }
   link_lcevc(c->es, c->es_count);
   if (cand->last_pcr_pid) c->service_by_pid[cand->last_pcr_pid] = 0;
   for (int k = 0; k < cand->last_es_count; k++) c->service_by_pid[cand->last_es_pid[k]] = 0;
@@ -184,7 +186,9 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
 
 /* index into pmt_cand[]/multi[] for program_number, -1 if unknown */
 static int find_multi_index(const psi_t *c, unsigned program_number) {
-  for (int k = 0; k < c->pmt_cand_count; k++) if (c->pmt_cand[k].program_number == program_number) return k;
+  for (int k = 0; k < c->pmt_cand_count; k++) {
+    if (c->pmt_cand[k].program_number == program_number) return k;
+  }
   return -1;
 }
 

@@ -4,14 +4,20 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + librist crashes if the RTCP sibling port (++data) is taken (but data isn't)
       - added a pre-check to avoid this (but leaves an inevitable race window)
     + cfg.str_pool leak in *_cfg_test()
+    + fixed fec2022 16-bit sequence wrap misalign
+    + psi assembler: handle more than one section per ts packet
+    + psi assembler: continuity counter check + handling
   * dipitvhead
-    + EIT same but different fix
+    + eit input crc32 verification
   * dipiscan
     + write error handling
   * dipirec
     + fixed stack-use-after-scope on mkv/mp4/flv muxers (asan)
   * dipirist
     + free config on error
+  * dipixy
+    + UAF on snap/segmenter retire under OOM
+    + qsbr: pad per-worker epochs to cache lines
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.5.0-1) unstable; urgency=low

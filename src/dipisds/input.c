@@ -261,9 +261,11 @@ int input_load(const char *path, input_t *in) {
       log_line("cannot read %s", path);
       return -1;
     }
-    for (i = 0; i < sizeof root_tags / sizeof root_tags[0]; i++) if (strstr((char *)buf, root_tags[i].tag)) {
-      in->raw_payload_id = root_tags[i].payload_id;
-      break;
+    for (i = 0; i < sizeof root_tags / sizeof root_tags[0]; i++) {
+      if (strstr((char *)buf, root_tags[i].tag)) {
+        in->raw_payload_id = root_tags[i].payload_id;
+        break;
+      }
     }
     if (i == sizeof root_tags / sizeof root_tags[0]) {
       log_line("%s: no recognized SD&S root element", path);

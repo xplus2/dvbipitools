@@ -92,6 +92,8 @@ const char *revmap_lookup(const revmap_t *m, const char *uri) {
     }
     return NULL;
   }
-  for (int i = 0; i < m->count; i++) if (!strcmp(m->entries[i].uri, uri)) return m->entries[i].id;
+  for (int i = 0; i < m->count; i++) {
+    if (!strcmp(m->entries[i].uri, uri)) return m->entries[i].id;
+  }
   return NULL;
 }

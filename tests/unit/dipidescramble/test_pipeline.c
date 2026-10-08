@@ -349,6 +349,7 @@ static int feed_psi(loop_ctx_t *lc, unsigned pid, const unsigned char *sec, size
 }
 
 static int feed_section(loop_ctx_t *lc, unsigned pid, const unsigned char *sec, size_t len) {
+  static unsigned char cc[0x2000];
   unsigned char pkt[188];
   size_t off = 0;
   int first = 1;
@@ -362,7 +363,7 @@ static int feed_section(loop_ctx_t *lc, unsigned pid, const unsigned char *sec, 
     pkt[0] = 0x47;
     pkt[1] = (unsigned char)((first ? 0x40 : 0x00) | ((pid >> 8) & 0x1F));
     pkt[2] = (unsigned char)pid;
-    pkt[3] = 0x10;
+    pkt[3] = (unsigned char)(0x10 | (cc[pid & 0x1FFF]++ & 0x0F));
     if (first)
       pkt[at++] = 0;
     memcpy(pkt + at, sec + off, n);

@@ -119,7 +119,9 @@ void copy_name(char *dst, size_t dstsz, const unsigned char *src, size_t len) {
 
 void add_ecm(psi_t *c, unsigned pid) {
   if (pid == 0 || pid == 0x1FFF) return;
-  for (int k = 0; k < c->ecm_count; k++) if (c->ecm[k] == pid) return;
+  for (int k = 0; k < c->ecm_count; k++) {
+    if (c->ecm[k] == pid) return;
+  }
   if (c->ecm_count < PSI_MAX_ES) c->ecm[c->ecm_count++] = pid;
 }
 

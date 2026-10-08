@@ -76,7 +76,9 @@ args_status_t dscr_cli_check(const config_t *cfg) {
     return ARGS_ERR;
   }
   has_srt_out = 0;
-  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_SRT) has_srt_out = 1;
+  for (int i = 0; i < cfg->n_out; i++) {
+    if (cfg->out[i].kind == OUT_SRT) has_srt_out = 1;
+  }
   if (!has_srt_out && (cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
     log_line(TOOL_NAME ": --srt-* needs -o srt://");
   return ARGS_OK;

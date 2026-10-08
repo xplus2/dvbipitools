@@ -147,7 +147,9 @@ void ws_clients_init(int max_clients) {
     s->hash_cap = hash_cap;
     s->hash_mask = s->hash_cap - 1;
     s->hash = malloc(s->hash_cap * sizeof *s->hash);
-    if (s->hash) for (uint32_t i = 0; i < s->hash_cap; i++) s->hash[i] = WS_HASH_EMPTY;
+    if (s->hash) {
+      for (uint32_t i = 0; i < s->hash_cap; i++) s->hash[i] = WS_HASH_EMPTY;
+    }
     pthread_mutex_init(&s->lock, NULL);
   }
   g_stripe_count = n;

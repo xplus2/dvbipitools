@@ -12,7 +12,7 @@ typedef struct slot_retire_node {
   int idx;
   hls_snapshot_t *snaps[HLS_SNAP_RETIRE_DEPTH + 1];
   int nsnaps;
-  uint64_t *mark;
+  uint64_t mark[QSBR_MAX_WORKERS];
   _Atomic(struct slot_retire_node *) next;
 } slot_retire_node_t;
 

@@ -53,7 +53,7 @@ static void rig_open(rig_t *r) {
   r->client = loopback_socket(&r->client_addr);
 }
 
-static void rig_close(rig_t *r) {
+static void rig_close(const rig_t *r) {
   close(r->server);
   close(r->client);
 }
@@ -67,7 +67,7 @@ static void rig_search(rig_t *r, const config_t *cfg, const char *st_line) {
   ssdp_handle_msearch(r->server, req, (struct sockaddr *)&r->client_addr, sizeof r->client_addr, cfg, uuid);
 }
 
-static int rig_recv(rig_t *r, char *buf, size_t sz) {
+static int rig_recv(const rig_t *r, char *buf, size_t sz) {
   ssize_t n = recv(r->client, buf, sz - 1, 0);
 
   if (n < 0) return 0;

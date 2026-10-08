@@ -141,9 +141,11 @@ int argutil_rist_key_size(const char *s, int *out) {
 }
 
 int map_lookup(const enum_map_t *m, size_t n, const char *s, int *out) {
-  for (size_t i = 0; i < n; i++) if (strcmp(s, m[i].name) == 0) {
-    *out = m[i].value;
-    return 0;
+  for (size_t i = 0; i < n; i++) {
+    if (strcmp(s, m[i].name) == 0) {
+      *out = m[i].value;
+      return 0;
+    }
   }
   return -1;
 }

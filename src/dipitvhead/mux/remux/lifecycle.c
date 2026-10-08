@@ -40,7 +40,9 @@ static void resolve_nit(remux_t *r, const psi_t *psi) {
 }
 
 static const psi_es_t *find_first_ca_es(const psi_es_t *es, int count) {
-  for (int k = 0; k < count; k++) if (es[k].ca_pid) return &es[k];
+  for (int k = 0; k < count; k++) {
+    if (es[k].ca_pid) return &es[k];
+  }
   return NULL;
 }
 
@@ -158,7 +160,9 @@ const out_es_t *remux_es(const remux_t *r, int *count) {
 }
 
 const out_es_t *find_ca_passthrough(const remux_t *r, ca_pass_t is_ca) {
-  for (int i = 0; i < r->es_count; i++) if (r->es[i].is_ca == is_ca) return &r->es[i];
+  for (int i = 0; i < r->es_count; i++) {
+    if (r->es[i].is_ca == is_ca) return &r->es[i];
+  }
   return NULL;
 }
 

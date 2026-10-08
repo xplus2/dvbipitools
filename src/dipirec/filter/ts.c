@@ -30,7 +30,9 @@ static void rebuild_audio_drop(ts_filter_t *f) {
   memset(f->audio_drop, 0, sizeof f->audio_drop);
   if (f->audio_all) return;
   es = psi_es(f->psi, &count);
-  for (int k = 0; k < count; k++) if (es[k].cls == PID_AUDIO) f->audio_drop[es[k].pid] = es[k].audio_index != (int)f->audio_track;
+  for (int k = 0; k < count; k++) {
+    if (es[k].cls == PID_AUDIO) f->audio_drop[es[k].pid] = es[k].audio_index != (int)f->audio_track;
+  }
 }
 
 static int audio_dropped(const ts_filter_t *f, unsigned pid) { return f->audio_drop[pid]; }

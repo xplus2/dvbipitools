@@ -11,7 +11,9 @@
 
 /* existing candidate for this pmt_pid, or NULL */
 pmt_cand_t *find_cand(psi_t *c, unsigned pmt_pid) {
-  for (int k = 0; k < c->pmt_cand_count; k++) if (c->pmt_cand[k].pmt_pid == pmt_pid) return &c->pmt_cand[k];
+  for (int k = 0; k < c->pmt_cand_count; k++) {
+    if (c->pmt_cand[k].pmt_pid == pmt_pid) return &c->pmt_cand[k];
+  }
   return NULL;
 }
 
@@ -130,20 +132,23 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
   if (!tspack_payload(pkt, &pl, &plen, &pusi)) return;
   switch (pid) {
     case TS_PID_PAT:
-      if (psi_section_asm_feed(&c->pat, pl, plen, pusi)) {
+      if (!psi_section_asm_cc(&c->pat, pkt[3] & 0x0F)) return;
+      for (int got = psi_section_asm_feed(&c->pat, pl, plen, pusi); got; got = psi_section_asm_next(&c->pat, pl, plen)) {
         obs_note(c, PSI_OBS_PAT, c->pat.buf, c->pat.expect, 0x00, NULL);
         parse_pat(c);
       }
       return;
     case TS_PID_NIT:
-      if (psi_section_asm_feed(&c->nit, pl, plen, pusi)) {
+      if (!psi_section_asm_cc(&c->nit, pkt[3] & 0x0F)) return;
+      for (int got = psi_section_asm_feed(&c->nit, pl, plen, pusi); got; got = psi_section_asm_next(&c->nit, pl, plen)) {
         obs_note(c, PSI_OBS_NIT, c->nit.buf, c->nit.expect, 0x40, NULL);
         obs_note(c, PSI_OBS_NIT_OTHER, c->nit.buf, c->nit.expect, 0x41, NULL);
         parse_nit(c);
       }
       return;
     case TS_PID_SDT:
-      if (psi_section_asm_feed(&c->sdt, pl, plen, pusi)) {
+      if (!psi_section_asm_cc(&c->sdt, pkt[3] & 0x0F)) return;
+      for (int got = psi_section_asm_feed(&c->sdt, pl, plen, pusi); got; got = psi_section_asm_next(&c->sdt, pl, plen)) {
         obs_note(c, PSI_OBS_SDT, c->sdt.buf, c->sdt.expect, 0x42, NULL);
         obs_note(c, PSI_OBS_SDT_OTHER, c->sdt.buf, c->sdt.expect, 0x46, NULL);
         obs_note(c, PSI_OBS_BAT, c->sdt.buf, c->sdt.expect, 0x4A, NULL);
@@ -151,7 +156,8 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
       }
       return;
     case TS_PID_CAT:
-      if (psi_section_asm_feed(&c->cat, pl, plen, pusi)) {
+      if (!psi_section_asm_cc(&c->cat, pkt[3] & 0x0F)) return;
+      for (int got = psi_section_asm_feed(&c->cat, pl, plen, pusi); got; got = psi_section_asm_next(&c->cat, pl, plen)) {
         obs_note(c, PSI_OBS_CAT, c->cat.buf, c->cat.expect, 0x01, NULL);
         parse_cat(c);
       }
@@ -161,16 +167,20 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
   }
 
   if (c->pmt_locked && !c->multi_mode) {
-    if (pid == c->pmt_pid && psi_section_asm_feed(&c->pmt_cand[c->pmt_lock_idx].asm_, pl, plen, pusi)) {
+    if (pid == c->pmt_pid) {
       pmt_cand_t *cand = &c->pmt_cand[c->pmt_lock_idx];
-      obs_note(c, PSI_OBS_PMT, cand->asm_.buf, cand->asm_.expect, 0x02, cand);
-      parse_pmt(c, cand);
+      if (!psi_section_asm_cc(&cand->asm_, pkt[3] & 0x0F)) return;
+      for (int got = psi_section_asm_feed(&cand->asm_, pl, plen, pusi); got; got = psi_section_asm_next(&cand->asm_, pl, plen)) {
+        obs_note(c, PSI_OBS_PMT, cand->asm_.buf, cand->asm_.expect, 0x02, cand);
+        parse_pmt(c, cand);
+      }
     }
   } else if (c->have_pat) {
     for (int k = 0; k < c->pmt_cand_count; k++) {
       pmt_cand_t *cand = &c->pmt_cand[k];
       if (cand->pmt_pid != pid) continue;
-      if (psi_section_asm_feed(&cand->asm_, pl, plen, pusi)) {
+      if (!psi_section_asm_cc(&cand->asm_, pkt[3] & 0x0F)) return;
+      for (int got = psi_section_asm_feed(&cand->asm_, pl, plen, pusi); got; got = psi_section_asm_next(&cand->asm_, pl, plen)) {
         obs_note(c, PSI_OBS_PMT, cand->asm_.buf, cand->asm_.expect, 0x02, cand);
         if (parse_pmt(c, cand)) note_pmt_resolved(c, k);
       }

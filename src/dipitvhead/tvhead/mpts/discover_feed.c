@@ -30,7 +30,9 @@ int poll_fd_for_input(const retryset_t *rs, unsigned i, short *events_out) {
 
 uint32_t input_poll_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd) {
   uint32_t mask = 0;
-  for (unsigned pfd_i = 0; pfd_i < npfd; pfd_i++) if (pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP)) mask |= 1u << pfd_slot[pfd_i];
+  for (unsigned pfd_i = 0; pfd_i < npfd; pfd_i++) {
+    if (pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP)) mask |= 1u << pfd_slot[pfd_i];
+  }
   return mask;
 }
 

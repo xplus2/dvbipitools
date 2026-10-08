@@ -42,7 +42,9 @@ int multi_all_named(const psi_t *psi) {
   if (!psi_have_pat(psi)) return 0;
   m = psi_multi_programs(psi, &count);
   if (count == 0) return 0;
-  for (int i = 0; i < count; i++) if (!m[i].resolved || !m[i].service_name[0]) return 0;
+  for (int i = 0; i < count; i++) {
+    if (!m[i].resolved || !m[i].service_name[0]) return 0;
+  }
   return 1;
 }
 
@@ -283,9 +285,13 @@ int scan_run(const config_t *cfg, FILE *out) {
   atomic_init(&job.next_claim, 0u);
   pthread_mutex_init(&job.mtx, NULL);
   pthread_cond_init(&job.cv, NULL);
-  for (unsigned t = 1; t < jets; t++) if (pthread_create(&threads[t], NULL, scan_worker, &job)) threads[t] = 0;
+  for (unsigned t = 1; t < jets; t++) {
+    if (pthread_create(&threads[t], NULL, scan_worker, &job)) threads[t] = 0;
+  }
   scan_worker(&job);
-  for (unsigned t = 1; t < jets; t++) if (threads[t]) pthread_join(threads[t], NULL);
+  for (unsigned t = 1; t < jets; t++) {
+    if (threads[t]) pthread_join(threads[t], NULL);
+  }
   pthread_cond_destroy(&job.cv);
   pthread_mutex_destroy(&job.mtx);
   format_close(out, cfg->format);

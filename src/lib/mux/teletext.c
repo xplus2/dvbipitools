@@ -211,7 +211,9 @@ static void add_row(ttx_t *t, const unsigned char *d, int64_t ts) {
   if (t->nrows && ts - t->group_last > TTX_GAP_MS) group_done(t);
   if (!t->nrows) t->group_start = ts;
   t->group_last = ts;
-  for (int r = 0; r < t->nrows; r++) if (strcmp(t->row[r], text) == 0) return; /* already in this group */
+  for (int r = 0; r < t->nrows; r++) {
+    if (strcmp(t->row[r], text) == 0) return; /* already in this group */
+  }
   if (t->nrows >= TTX_ROWS) return;
   memcpy(t->row[t->nrows], text, strlen(text) + 1); /* same-size buffers */
   t->nrows++;
@@ -234,7 +236,9 @@ static int nat_from_lang(const char *lang) {
     {"ces", G0_CZE}, {"cze", G0_CZE}, {"slk", G0_CZE}, {"slo", G0_CZE},
   };
   if (!lang || !*lang) return G0_ENG;
-  for (size_t i = 0; i < sizeof map / sizeof map[0]; i++) if (!strncmp(lang, map[i].code, 3)) return map[i].nat;
+  for (size_t i = 0; i < sizeof map / sizeof map[0]; i++) {
+    if (!strncmp(lang, map[i].code, 3)) return map[i].nat;
+  }
   return G0_ENG;
 }
 

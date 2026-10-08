@@ -99,7 +99,9 @@ static const channel_item_t *channel_list_find_name(const channel_list_t *l, con
     }
     return NULL;
   }
-  for (int i = 0; i < l->count; i++) if (strcmp(l->items[i].name, name) == 0) return &l->items[i];
+  for (int i = 0; i < l->count; i++) {
+    if (strcmp(l->items[i].name, name) == 0) return &l->items[i];
+  }
   return NULL;
 }
 
@@ -154,7 +156,9 @@ int channels_list_for_each(const channels_t *ch, unsigned list_num, void (*emit)
   const channel_list_t *l;
   l = channels_get(ch, list_num);
   if (!l) return 0;
-  if (emit) for (int i = 0; i < l->count; i++) emit(ctx, &l->items[i]);
+  if (emit) {
+    for (int i = 0; i < l->count; i++) emit(ctx, &l->items[i]);
+  }
   return l->count;
 }
 

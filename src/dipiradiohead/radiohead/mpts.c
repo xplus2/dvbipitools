@@ -29,7 +29,9 @@ static const mpts_program_ops_t mpts_program_ops = {mpts_program_get_sdt_info, m
 
 uint32_t compute_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd) {
   uint32_t mask = 0;
-  for (unsigned pfd_i = 0; pfd_i < npfd; pfd_i++) if (pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP)) mask |= 1u << pfd_slot[pfd_i];
+  for (unsigned pfd_i = 0; pfd_i < npfd; pfd_i++) {
+    if (pfds[pfd_i].revents & (POLLIN | POLLERR | POLLHUP)) mask |= 1u << pfd_slot[pfd_i];
+  }
   return mask;
 }
 
@@ -286,14 +288,18 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       last_stat = now;
     }
     active = 0;
-    for (unsigned i = 0; i < n; i++) if (tsps[i]) active++;
+    for (unsigned i = 0; i < n; i++) {
+      if (tsps[i]) active++;
+    }
     emit_metrics(mx, now, &out, n, active, input_stats, n, &rm, cas);
   }
 
 done:
   if (cas) cas_flush(cas, out.insp ? &packet_cb_inspect : &packet_cb, &out);
   flush_batch(&out);
-  for (unsigned i = 0; i < n; i++) if (tsps[i]) tspacketizer_free(tsps[i]);
+  for (unsigned i = 0; i < n; i++) {
+    if (tsps[i]) tspacketizer_free(tsps[i]);
+  }
   if (mpts) mpts_free(mpts);
   if (is) inputset_free(is);
   if (cas) cas_stop(cas);

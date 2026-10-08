@@ -12,6 +12,8 @@ typedef struct qsbr_domain qsbr_domain_t;
 qsbr_domain_t *qsbr_domain_create(int nworkers);
 void qsbr_domain_destroy(qsbr_domain_t *d);
 void qsbr_worker_quiescent(qsbr_domain_t *d, int tid);
+void qsbr_worker_offline(qsbr_domain_t *d, int tid);
+void qsbr_worker_online(qsbr_domain_t *d, int tid);
 int qsbr_worker_count(const qsbr_domain_t *d);
 void qsbr_mark(const qsbr_domain_t *d, uint64_t *out);
 int qsbr_mark_passed(const qsbr_domain_t *d, const uint64_t *mark);

@@ -80,6 +80,8 @@ int dscr_open_outputs(const config_t *cfg, loop_ctx_t *lc, int *mkv_fd) {
 void dscr_close_outputs(const loop_ctx_t *lc, int mkv_fd) {
   for (int i = 0; i < lc->n_rtmp; i++) rtmpout_close(lc->rtmp[i]);
   for (int i = 0; i < lc->n_srt; i++) srtsink_close(lc->srt[i]);
-  for (int i = 0; i < lc->n_outfd; i++) if (lc->outfd[i] != STDOUT_FILENO) close(lc->outfd[i]);
+  for (int i = 0; i < lc->n_outfd; i++) {
+    if (lc->outfd[i] != STDOUT_FILENO) close(lc->outfd[i]);
+  }
   if (mkv_fd >= 0 && mkv_fd != STDOUT_FILENO) close(mkv_fd);
 }

@@ -116,7 +116,12 @@ int mapping_lookup(const mapping_t *m, const char *id, char *uri, size_t uri_cap
   if (m->idx) {
     i = mapping_idx_find(m, id);
   } else {
-    for (int k = 0; k < m->count; k++) if (!strcmp(m->entries[k].id, id)) { i = k; break; }
+    for (int k = 0; k < m->count; k++) {
+      if (!strcmp(m->entries[k].id, id)) {
+        i = k;
+        break;
+      }
+    }
   }
   if (i < 0) return -1;
   bufcpy(uri, uri_cap, m->entries[i].uri);

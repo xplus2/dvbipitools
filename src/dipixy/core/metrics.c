@@ -59,7 +59,9 @@ void dipixy_metrics_push(metrics_exporter_t *exp) {
 static void put_all(metrics_writer_t *w, void *ctx) {
   const metrics_exporter_t *exp = ctx;
   put_base(w);
-  for (int i = 0; i < METRICS_EXTRA_MAX; i++) if (exp->extra[i]) exp->extra[i](w, exp->extra_ctx[i]);
+  for (int i = 0; i < METRICS_EXTRA_MAX; i++) {
+    if (exp->extra[i]) exp->extra[i](w, exp->extra_ctx[i]);
+  }
 }
 
 int dipixy_metrics_render_prometheus(const metrics_exporter_t *exp, char **out, size_t *out_len) {

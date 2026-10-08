@@ -28,7 +28,9 @@ struct biss_ca_state {
 };
 
 static int holds(const biss_ca_state_t *s, const unsigned char ekid[BISS_CA_EKID_LEN]) {
-  for (size_t i = 0; i < s->n_keys; i++) if (memcmp(s->keys[i].ekid, ekid, BISS_CA_EKID_LEN) == 0) return 1;
+  for (size_t i = 0; i < s->n_keys; i++) {
+    if (memcmp(s->keys[i].ekid, ekid, BISS_CA_EKID_LEN) == 0) return 1;
+  }
   return 0;
 }
 

@@ -13,7 +13,9 @@
 
 static int count_kind(const ecm_token_list_t *l, ecm_token_kind_t k) {
   int n = 0;
-  for (int i = 0; i < l->count; i++) if (l->tok[i].kind == k) n++;
+  for (int i = 0; i < l->count; i++) {
+    if (l->tok[i].kind == k) n++;
+  }
   return n;
 }
 

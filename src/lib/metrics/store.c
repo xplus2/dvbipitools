@@ -61,7 +61,9 @@ static store_slot_t *find_slot(store_t *st, metrics_component_t component, const
 }
 
 static store_slot_t *find_free_slot(store_t *st) {
-  for (int i = 0; i < STORE_MAX_INSTANCES; i++) if (!st->slots[i].used) return &st->slots[i];
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++) {
+    if (!st->slots[i].used) return &st->slots[i];
+  }
   return NULL;
 }
 

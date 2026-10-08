@@ -129,9 +129,11 @@ static int flush_outfd(const loop_ctx_t *lc, int i) {
 }
 
 static int flush_all_outfd(loop_ctx_t *lc) {
-  for (int i = 0; i < lc->n_outfd; i++) if (flush_outfd(lc, i) < 0) {
-    lc->outbuf_len = 0;
-    return -1;
+  for (int i = 0; i < lc->n_outfd; i++) {
+    if (flush_outfd(lc, i) < 0) {
+      lc->outbuf_len = 0;
+      return -1;
+    }
   }
   lc->outbuf_len = 0;
   return 0;
@@ -345,18 +347,23 @@ int pkt_cb(void *v, const unsigned char *pkt) {
   if (!lc->cas_logged && psi_ready(lc->psi) && detect_cas_scheme(lc)) return 1;
 
   /* BISS 1/E signaling pid also classifies PID_ECM. guard lc->dev, not just lc->biss_ca */
-  if (lc->ecm_pid && pid == lc->ecm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_feed(&lc->ecm_asm, pl, plen, pusi) && lc->scr) {
-    lc->ecm_total++;
-    if (lc->biss_ca)  handle_biss_ca_ecm_section(lc);
-    else if (lc->dev) handle_ecm_section(lc);
+  if (lc->ecm_pid && pid == lc->ecm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_cc(&lc->ecm_asm, pkt[3] & 0x0F)) {
+    for (int got = psi_section_asm_feed(&lc->ecm_asm, pl, plen, pusi); got; got = psi_section_asm_next(&lc->ecm_asm, pl, plen)) {
+      if (!lc->scr) continue;
+      lc->ecm_total++;
+      if (lc->biss_ca)  handle_biss_ca_ecm_section(lc);
+      else if (lc->dev) handle_ecm_section(lc);
+    }
   }
 
-  if (lc->emm_pid && pid == lc->emm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_feed(&lc->emm_asm, pl, plen, pusi)) {
-    lc->emm_total++;
-    if (lc->biss_ca) {
-      biss_ca_state_on_emm(lc->biss_ca, lc->emm_asm.buf, lc->emm_asm.expect);
-    } else if (lc->dev && emmcache_feed(lc->cache, lc->dev, lc->emm_asm.buf, lc->emm_asm.expect)) {
-      lc->emmcache_dirty = 1;
+  if (lc->emm_pid && pid == lc->emm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_cc(&lc->emm_asm, pkt[3] & 0x0F)) {
+    for (int got = psi_section_asm_feed(&lc->emm_asm, pl, plen, pusi); got; got = psi_section_asm_next(&lc->emm_asm, pl, plen)) {
+      lc->emm_total++;
+      if (lc->biss_ca) {
+        biss_ca_state_on_emm(lc->biss_ca, lc->emm_asm.buf, lc->emm_asm.expect);
+      } else if (lc->dev && emmcache_feed(lc->cache, lc->dev, lc->emm_asm.buf, lc->emm_asm.expect)) {
+        lc->emmcache_dirty = 1;
+      }
     }
   }
 

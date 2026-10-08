@@ -156,7 +156,9 @@ void reactor_ws_readable(int epfd, conn_t *c) {
 
 static int ci_contains(const char *hay, const char *needle) {
   size_t nlen = strlen(needle);
-  for (; *hay; hay++) if (!strncasecmp(hay, needle, nlen)) return 1;
+  for (; *hay; hay++) {
+    if (!strncasecmp(hay, needle, nlen)) return 1;
+  }
   return 0;
 }
 

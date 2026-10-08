@@ -91,9 +91,11 @@ void reclaim_retired_snapshots(void) {
 
 void unlink_ctx(capture_ctx_t *ctx) {
   pthread_mutex_lock(&g_lock);
-  for (capture_ctx_t **pp = &g_open; *pp; pp = &(*pp)->next) if (*pp == ctx) {
-    *pp = ctx->next;
-    break;
+  for (capture_ctx_t **pp = &g_open; *pp; pp = &(*pp)->next) {
+    if (*pp == ctx) {
+      *pp = ctx->next;
+      break;
+    }
   }
   rebuild_snapshot();
   pthread_mutex_unlock(&g_lock);

@@ -69,7 +69,9 @@ static int ci_contains(const char *hay, const char *needle) {
   size_t hn = strlen(hay), nn = strlen(needle);
   if (nn == 0) return 1;
   if (nn > hn) return 0;
-  for (size_t i = 0; i + nn <= hn; i++) if (!strncasecmp(hay + i, needle, nn)) return 1;
+  for (size_t i = 0; i + nn <= hn; i++) {
+    if (!strncasecmp(hay + i, needle, nn)) return 1;
+  }
   return 0;
 }
 

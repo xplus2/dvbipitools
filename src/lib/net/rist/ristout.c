@@ -21,8 +21,10 @@ struct ristout {
 };
 
 static int add_peers(struct rist_ctx *ctx, const ristout_cfg_t *cfg) {
-  for (int i = 0; i < cfg->npeers; i++) if (rist_add_peer(ctx, cfg->peer_uri[i], cfg->secret, cfg->key_size, cfg->cname, cfg->buffer_ms, 1, 0))
-    return -1;
+  for (int i = 0; i < cfg->npeers; i++) {
+    if (rist_add_peer(ctx, cfg->peer_uri[i], cfg->secret, cfg->key_size, cfg->cname, cfg->buffer_ms, 1, 0))
+      return -1;
+  }
   return 0;
 }
 

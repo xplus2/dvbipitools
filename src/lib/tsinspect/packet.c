@@ -143,7 +143,9 @@ static void eit_section(const tsinspect_t *t, const unsigned char *b, eit_slot_t
   eit_slot_t *e = NULL;
 
   if (sec > 1) return;
-  for (int i = 0; i < *n; i++) if (slots[i].sid == sid) e = &slots[i];
+  for (int i = 0; i < *n; i++) {
+    if (slots[i].sid == sid) e = &slots[i];
+  }
   if (!e) {
     if (*n == PSI_MAX_PROGRAMS) return;
     e = &slots[(*n)++];
@@ -187,8 +189,9 @@ static void si_section(tsinspect_t *t, unsigned pid, const unsigned char *b, siz
 static void si_packet(tsinspect_t *t, unsigned pid, const unsigned char *pkt, unsigned afc) {
   size_t off = afc == 3 ? 5 + (size_t)pkt[4] : 4;
   psi_section_asm_t *a = &t->x->si_asm[pid - PID_EIT];
-  if (off >= 188) return;
-  if (psi_section_asm_feed(a, pkt + off, 188 - off, (pkt[1] & 0x40) != 0) && a->expect >= 8) si_section(t, pid, a->buf, a->expect);
+  if (off >= 188 || !psi_section_asm_cc(a, pkt[3] & 0x0F)) return;
+  for (int got = psi_section_asm_feed(a, pkt + off, 188 - off, (pkt[1] & 0x40) != 0); got; got = psi_section_asm_next(a, pkt + off, 188 - off))
+    if (a->expect >= 8) si_section(t, pid, a->buf, a->expect);
 }
 
 static void count_detail(detail_t *d, unsigned svc, unsigned pid, int scrambled) {

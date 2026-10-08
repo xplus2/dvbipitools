@@ -67,10 +67,12 @@ int dixy_cfg_format(config_t *cfg, const char *s) {
     size_t len = comma ? (size_t)(comma - p) : strlen(p);
     int matched = 0;
     if (!len) return -1;
-    for (i = 0; i < n_items; i++) if (strlen(items[i].name) == len && !strncmp(items[i].name, p, len)) {
-      *items[i].flag = 0;
-      matched = 1;
-      break;
+    for (i = 0; i < n_items; i++) {
+      if (strlen(items[i].name) == len && !strncmp(items[i].name, p, len)) {
+        *items[i].flag = 0;
+        matched = 1;
+        break;
+      }
     }
     if (!matched) return -1;
     p = comma ? comma + 1 : p + len;

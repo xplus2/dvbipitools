@@ -147,6 +147,55 @@ START_TEST(second_section_after_first_resets_state) {
 }
 END_TEST
 
+START_TEST(packed_sections_all_surface_via_next) {
+  psi_section_asm_t a;
+  unsigned char sec_a[16];
+  unsigned char sec_b[16];
+  unsigned char pl[187];
+  unsigned char pa[4] = {1, 2, 3, 4};
+  unsigned char pb[6] = {9, 8, 7, 6, 5, 4};
+  size_t len_a = build_section(0x4A, pa, sizeof pa, sec_a);
+  size_t len_b = build_section(0x42, pb, sizeof pb, sec_b);
+  size_t plen = 1 + len_a + len_b;
+
+  memset(&a, 0, sizeof a);
+  memset(pl, 0xFF, sizeof pl);
+  pl[0] = 0x00;
+  memcpy(pl + 1, sec_a, len_a);
+  memcpy(pl + 1 + len_a, sec_b, len_b);
+
+  ck_assert_int_eq(psi_section_asm_feed(&a, pl, sizeof pl, 1), 1);
+  ck_assert_mem_eq(a.buf, sec_a, len_a);
+  ck_assert_int_eq(psi_section_asm_next(&a, pl, sizeof pl), 1);
+  ck_assert_uint_eq(a.expect, len_b);
+  ck_assert_mem_eq(a.buf, sec_b, len_b);
+  ck_assert_int_eq(psi_section_asm_next(&a, pl, sizeof pl), 0);
+  ck_assert_uint_gt(sizeof pl, plen);
+}
+END_TEST
+
+START_TEST(continuity_gap_drops_section_and_duplicate_is_skipped) {
+  psi_section_asm_t a;
+  unsigned char payload[300];
+  unsigned char sec[310];
+  unsigned char pl[187];
+  size_t seclen;
+
+  memset(&a, 0, sizeof a);
+  memset(payload, 0x5A, sizeof payload);
+  seclen = build_section(0x82, payload, sizeof payload, sec);
+
+  pl[0] = 0x00;
+  memcpy(pl + 1, sec, 186);
+  ck_assert_int_eq(psi_section_asm_cc(&a, 0), 1);
+  ck_assert_int_eq(psi_section_asm_feed(&a, pl, sizeof pl, 1), 0);
+  ck_assert_int_eq(psi_section_asm_cc(&a, 0), 0);
+  ck_assert_int_eq(psi_section_asm_cc(&a, 2), 1);
+  ck_assert_int_eq(a.active, 0);
+  ck_assert_int_eq(psi_section_asm_feed(&a, sec + 186, seclen - 186, 0), 0);
+}
+END_TEST
+
 static Suite *psi_section_asm_suite(void) {
   Suite *s = suite_create("psi_section_asm");
   TCase *tc = tcase_create("core");
@@ -156,6 +205,8 @@ static Suite *psi_section_asm_suite(void) {
   tcase_add_test(tc, feed_without_prior_pusi_is_ignored);
   tcase_add_test(tc, oversized_section_length_resets_without_crash);
   tcase_add_test(tc, second_section_after_first_resets_state);
+  tcase_add_test(tc, packed_sections_all_surface_via_next);
+  tcase_add_test(tc, continuity_gap_drops_section_and_duplicate_is_skipped);
   suite_add_tcase(s, tc);
   return s;
 }

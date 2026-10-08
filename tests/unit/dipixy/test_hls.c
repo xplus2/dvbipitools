@@ -9,6 +9,7 @@
 
 #include "dipixy/hls/hls.h"
 #include "dipixy/dash/dash.h"
+#include "dipixy/segstore/priv.h"
 #include "dipixy/ts/pidfilter.h"
 #include "lib/sys/ioutil.h"
 
@@ -20,6 +21,17 @@ static int g_ctx_a, g_ctx_b;
 static void no_filter(pid_filter_t *f) { memset(f, 0, sizeof *f); }
 
 static const lcevc_select_t full = {LCEVC_SEL_FULL, 0, 0};
+
+void *__real_malloc(size_t size);
+static size_t g_fail_size;
+
+void *__wrap_malloc(size_t size) {
+  if (g_fail_size && size == g_fail_size) {
+    g_fail_size = 0;
+    return NULL;
+  }
+  return __real_malloc(size);
+}
 
 START_TEST(render_before_store_open_is_404) {
   pid_filter_t f;
@@ -332,6 +344,49 @@ START_TEST(dash_compute_codecs_av01_string) {
 }
 END_TEST
 
+START_TEST(async_retire_oom_keeps_the_snapshot_alive) {
+  hls_snapshot_t *snap = snap_clone(NULL);
+
+  ck_assert_ptr_nonnull(snap);
+  snap->next_seq = 42;
+  g_fail_size = sizeof(slot_retire_node_t);
+  snap_retire_async(snap);
+  ck_assert_uint_eq(g_fail_size, 0);
+  hls_store_slot_reclaim_sweep();
+  ck_assert_uint_eq(snap->next_seq, 42);
+  snap_free(snap);
+}
+END_TEST
+
+START_TEST(async_retire_defers_free_to_the_sweep) {
+  hls_snapshot_t *snap = snap_clone(NULL);
+
+  ck_assert_ptr_nonnull(snap);
+  snap_retire_async(snap);
+  hls_store_slot_reclaim_sweep();
+}
+END_TEST
+
+START_TEST(store_close_oom_leaves_the_store_open) {
+  pid_filter_t f;
+  hls_resp_t r;
+  const uint8_t data[188] = {0x47};
+  no_filter(&f);
+  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
+  hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0);
+  g_fail_size = sizeof(slot_retire_node_t);
+  hls_store_close(CTX_A, &f, 0, &full, SEG_CONTAINER_TS);
+  ck_assert_uint_eq(g_fail_size, 0);
+  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(r.status, 200);
+  hls_resp_body_release(r.body, r.zc);
+  hls_store_close(CTX_A, &f, 0, &full, SEG_CONTAINER_TS);
+  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(r.status, 404);
+  hls_store_slot_reclaim_sweep();
+}
+END_TEST
+
 static Suite *hls_suite(void) {
   Suite *s = suite_create("dipixy_hls");
   TCase *tc = tcase_create("core");
@@ -354,6 +409,9 @@ static Suite *hls_suite(void) {
   tcase_add_test(tc, seg_pool_cap_and_trim_idle_do_not_crash);
   tcase_add_test(tc, av1_ts_container_playlist_uses_version_7);
   tcase_add_test(tc, dash_compute_codecs_av01_string);
+  tcase_add_test(tc, async_retire_oom_keeps_the_snapshot_alive);
+  tcase_add_test(tc, async_retire_defers_free_to_the_sweep);
+  tcase_add_test(tc, store_close_oom_leaves_the_store_open);
   suite_add_tcase(s, tc);
   return s;
 }

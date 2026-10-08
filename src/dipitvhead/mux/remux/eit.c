@@ -20,8 +20,7 @@ static void eit_queue_put(remux_t *r, unsigned char table_id, unsigned char sect
     }
   }
   if (r->eit_queue_count >= EIT_QUEUE_CAP) {
-    if (tsm)
-      tsm->eit_queue_drops_total++;
+    if (tsm) tsm->eit_queue_drops_total++;
     return;
   }
   r->eit_queue[r->eit_queue_count].table_id = table_id;
@@ -31,24 +30,15 @@ static void eit_queue_put(remux_t *r, unsigned char table_id, unsigned char sect
   r->eit_queue_count++;
 }
 
-void capture_eit_section(remux_t *r, const unsigned char *pkt188, ts_metrics_t *tsm) {
-  const unsigned char *pl;
-  size_t plen;
-  int pusi;
-  const unsigned char *sec;
+static void eit_section_done(remux_t *r, ts_metrics_t *tsm) {
+  const unsigned char *sec = r->eit_asm.buf;
   unsigned service_id;
   unsigned char out[sizeof r->eit_queue[0].data];
 
-  if (!tspack_payload(pkt188, &pl, &plen, &pusi))
-    return;
-  if (!psi_section_asm_feed(&r->eit_asm, pl, plen, pusi))
-    return;
-  sec = r->eit_asm.buf;
-  if (r->eit_asm.len < 16 || r->eit_asm.len > sizeof r->eit_queue[0].data)
-    return;
+  if (r->eit_asm.len < 16 || r->eit_asm.len > sizeof r->eit_queue[0].data) return;
+  if (crc32_mpeg(sec, r->eit_asm.len) != 0) return;
   service_id = ((unsigned)sec[3] << 8) | sec[4];
-  if (service_id != r->src_service_id)
-    return;
+  if (service_id != r->src_service_id) return;
   memcpy(out, sec, r->eit_asm.len);
   out[3] = (unsigned char)(r->input.sid >> 8);
   out[4] = (unsigned char)r->input.sid;
@@ -60,12 +50,23 @@ void capture_eit_section(remux_t *r, const unsigned char *pkt188, ts_metrics_t *
   eit_queue_put(r, out[0], out[6], out, r->eit_asm.len, tsm);
 }
 
+void capture_eit_section(remux_t *r, const unsigned char *pkt188, ts_metrics_t *tsm) {
+  const unsigned char *pl;
+  size_t plen;
+  int pusi;
+  int got;
+
+  if (!tspack_payload(pkt188, &pl, &plen, &pusi)) return;
+  if (!psi_section_asm_cc(&r->eit_asm, pkt188[3] & 0x0F)) return;
+  for (got = psi_section_asm_feed(&r->eit_asm, pl, plen, pusi); got; got = psi_section_asm_next(&r->eit_asm, pl, plen))
+    eit_section_done(r, tsm);
+}
+
 size_t remux_emit_eit(remux_t *r, unsigned pid, unsigned char *cc, size_t max_packets, remux_packet_cb cb, void *ctx) {
   unsigned char ptr0 = 0x00;
   size_t n;
 
-  if (r->eit_queue_count == 0)
-    return 0;
+  if (r->eit_queue_count == 0) return 0;
   n = ts_packet_emit_partial(pid, cc, &ptr0, r->eit_queue[0].data, r->eit_queue[0].len, &r->eit_drain_off, max_packets, cb, ctx);
   if (r->eit_drain_off >= r->eit_queue[0].len) {
     r->eit_queue_count--;

@@ -165,7 +165,9 @@ int hls_master_parse(char *body, const http_url_t *base, hls_master_t *out) {
 
 const hls_audio_rendition_t *hls_master_find_audio(const hls_master_t *m, const char *group_id) {
   if (!group_id || !group_id[0]) return NULL;
-  for (unsigned i = 0; i < m->n_audio_renditions; i++) if (!strcmp(m->audio_renditions[i].group_id, group_id)) return &m->audio_renditions[i];
+  for (unsigned i = 0; i < m->n_audio_renditions; i++) {
+    if (!strcmp(m->audio_renditions[i].group_id, group_id)) return &m->audio_renditions[i];
+  }
   return NULL;
 }
 

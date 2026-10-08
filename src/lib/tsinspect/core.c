@@ -107,7 +107,9 @@ void tsinspect_bind_psi(tsinspect_t *t, psi_t *psi) {
 
 void tsinspect_set_known_pids(tsinspect_t *t, const unsigned *pids, unsigned n) {
   if (!t->x) return;
-  for (unsigned i = 0; i < n; i++) if (pids[i] < 8192) t->x->known[pids[i] >> 3] |= (unsigned char)(1u << (pids[i] & 7));
+  for (unsigned i = 0; i < n; i++) {
+    if (pids[i] < 8192) t->x->known[pids[i] >> 3] |= (unsigned char)(1u << (pids[i] & 7));
+  }
   t->x->known_set = n > 0;
   if (n > 0 && !t->x->d) t->x->d = calloc(1, sizeof *t->x->d);
 }

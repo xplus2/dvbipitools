@@ -10,14 +10,25 @@
 
 typedef struct {
   int active;
+  int cc_seen;
+  unsigned cc;
   size_t len;
   size_t expect; /* total section length, 0 until known */
+  size_t next;   /* payload offset past last completed section, 0 if none */
   unsigned char buf[PSI_SECTION_ASM_BUF_LEN];
 } psi_section_asm_t;
+
+/* call per payload packet b4 feed with 4B continuity counter.
+   0: duplicate packet inside a section in progress, skip. drops in progress section */
+int psi_section_asm_cc(psi_section_asm_t *a, unsigned cc);
 
 /* accumulates one section from a pid's TS-packet payloads. pl/plen: payload past  adaptation field (caller strips it).
    pusi: packet had payload_unit_start_indicator set (payload starts with a pointer_field).
    1 when a->buf[0..len) holds one complete section, 0 while still accumulating or resynced past an oversized section. */
 int psi_section_asm_feed(psi_section_asm_t *a, const unsigned char *pl, size_t plen, int pusi);
+
+/* after feed/next returned 1 with same pl/plen: assemble next section pkg
+   1 a->buf has 2nd complete section, 0 = stuffing, partial, empty */
+int psi_section_asm_next(psi_section_asm_t *a, const unsigned char *pl, size_t plen);
 
 #endif

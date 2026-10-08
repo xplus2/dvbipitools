@@ -414,6 +414,7 @@ jobs:
         [ -f build/src/dipicam378/dipicam378 ] && install -m 0755 build/src/dipicam378/dipicam378 "${PKGDIR}/"
         [ -f build/src/dipirist/dipirist ] && install -m 0755 build/src/dipirist/dipirist "${PKGDIR}/"
         [ -f build/src/dipisrt/dipisrt ] && install -m 0755 build/src/dipisrt/dipisrt "${PKGDIR}/"
+        (cd "${PKGDIR}" && sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
     - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
       with:
@@ -458,6 +459,10 @@ jobs:
           tar xzf "$f" -C "$d"
           emit "$f" "$d" >> "$GITHUB_STEP_SUMMARY"
         done
+    - name: sha256sums
+      run: |
+        cd dist
+        sha256sum -- *.tar.gz *.deb *.ipk > SHA256SUMS
     - name: assets
       if: github.ref_type == 'tag'
       uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
@@ -466,3 +471,4 @@ jobs:
           dist/*.deb
           dist/*.ipk
           dist/*.tar.gz
+          dist/SHA256SUMS

@@ -24,7 +24,9 @@ void pidlock_snapshot(const psi_t *psi, unsigned *allowed, int *n_allowed, int c
 }
 
 int pidlock_allowed(const unsigned *allowed, int n_allowed, unsigned pid) {
-  for (int i = 0; i < n_allowed; i++) if (allowed[i] == pid) return 1;
+  for (int i = 0; i < n_allowed; i++) {
+    if (allowed[i] == pid) return 1;
+  }
   return 0;
 }
 

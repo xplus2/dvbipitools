@@ -129,7 +129,9 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
 #define RECV_DEDUP_HISTORY 6 /* reconnect can redeliver several already-written chunks */
 
 int dedup_is_duplicate(const dedup_entry_t *hist, int hist_n, uint32_t hash, int len) {
-  for (int hi = 0; hi < hist_n; hi++) if (hist[hi].len == len && hist[hi].hash == hash) return 1;
+  for (int hi = 0; hi < hist_n; hi++) {
+    if (hist[hi].len == len && hist[hi].hash == hash) return 1;
+  }
   return 0;
 }
 

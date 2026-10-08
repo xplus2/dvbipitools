@@ -5339,7 +5339,7 @@ dvbipitools_add_unit_test(dipixy_hls
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 target_link_libraries(test_dipixy_hls PRIVATE m)
 target_compile_options(test_dipixy_hls PRIVATE -ffunction-sections -fdata-sections)
-target_link_options(test_dipixy_hls PRIVATE -Wl,--gc-sections)
+target_link_options(test_dipixy_hls PRIVATE -Wl,--gc-sections -Wl,--wrap=malloc)
 
 dvbipitools_add_unit_test(dipixy_segstore_concurrency
     unit/dipixy/test_segstore_concurrency.c
@@ -5403,6 +5403,7 @@ endfunction()
 
 if (TARGET dipixy)
     dipixy_add_full_unit_test(dipixy_segment unit/dipixy/test_segment.c)
+    target_link_options(test_dipixy_segment PRIVATE -Wl,--wrap=malloc)
     dipixy_add_full_unit_test(dipixy_segment_concurrency unit/dipixy/test_segment_concurrency.c)
     dipixy_add_full_unit_test(dipixy_segment_demux unit/dipixy/test_segment_demux.c)
     dipixy_add_full_unit_test(dipixy_lldash unit/dipixy/test_lldash.c)

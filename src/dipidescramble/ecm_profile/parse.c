@@ -247,10 +247,12 @@ int ecm_profile_parse(const char *spec, ecm_profile_t *out) {
     key = pair;
     val = eq + 1;
 
-    for (size_t fi = 0; fi < ARRAY_SIZE(field_setters); fi++) if (strcmp(key, field_setters[fi].key) == 0) {
+    for (size_t fi = 0; fi < ARRAY_SIZE(field_setters); fi++) {
+      if (strcmp(key, field_setters[fi].key) == 0) {
         found = &field_setters[fi];
         break;
       }
+    }
     if (!found) {
       log_line(TOOL_NAME ": --ecm-profile: unknown field %s", key);
       return -1;

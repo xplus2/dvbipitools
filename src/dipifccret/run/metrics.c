@@ -16,7 +16,9 @@ void fccret_push_metrics(metrics_ctx_t *mc) {
 
   if (!metrics_exporter_due(mc->mx, mono_seconds()) || metrics_exporter_begin(mc->mx, &w, TOOL_VERSION)) return;
   cap = channel_table_capacity(mc->channels);
-  for (size_t i = 0; i < cap; i++) if (channel_table_at(mc->channels, i)) active_channels++;
+  for (size_t i = 0; i < cap; i++) {
+    if (channel_table_at(mc->channels, i)) active_channels++;
+  }
   metrics_writer_put(&w, METRICS_ID_FCC_CHANNELS_ACTIVE, NULL, active_channels);
 
   if (mc->ret) metrics_writer_put(&w, METRICS_ID_FCC_RET_CLIENTS_ACTIVE, NULL, ret_ctx_active_clients(mc->ret));

@@ -8,7 +8,9 @@ static const unsigned char thd_chancount[13] = {2, 1, 1, 2, 2, 2, 2, 1, 1, 2, 2,
 
 static int truehd_ch(unsigned chanmap) {
   int ch = 0;
-  for (int i = 0; i < 13; i++) if ((chanmap >> i) & 1) ch += thd_chancount[i];
+  for (int i = 0; i < 13; i++) {
+    if ((chanmap >> i) & 1) ch += thd_chancount[i];
+  }
   return ch;
 }
 

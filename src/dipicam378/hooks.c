@@ -15,8 +15,10 @@ void cam378_push_metrics(metrics_exporter_t *mx, const cs378x_server_t *srv, dev
   cs378x_server_get_metrics(srv, &m);
   metrics_writer_put(&w, METRICS_ID_CAM_CONNECTIONS_ACTIVE, NULL, m.connections_active);
   metrics_writer_put(&w, METRICS_ID_CAM_CONNECTIONS_TOTAL, NULL, m.connections_total);
-  for (int i = 0; i < CAM_AUTH_REASON_COUNT; i++) if (m.auth_errors_total[i])
-    metrics_writer_put(&w, METRICS_ID_CAM_AUTH_ERRORS_TOTAL, cs378x_auth_reason_name((cam_auth_reason_t)i), m.auth_errors_total[i]);
+  for (int i = 0; i < CAM_AUTH_REASON_COUNT; i++) {
+    if (m.auth_errors_total[i])
+      metrics_writer_put(&w, METRICS_ID_CAM_AUTH_ERRORS_TOTAL, cs378x_auth_reason_name((cam_auth_reason_t)i), m.auth_errors_total[i]);
+  }
   metrics_writer_put(&w, METRICS_ID_CAM_SERVICES_ACTIVE, NULL, device_state_services_active(dev));
   metrics_writer_put(&w, METRICS_ID_CAS_ECM_TOTAL, algo_name, m.ecm_total);
   metrics_writer_put(&w, METRICS_ID_CAS_ECM_ERRORS_TOTAL, algo_name, m.ecm_errors_total);

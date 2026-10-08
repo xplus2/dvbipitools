@@ -196,10 +196,12 @@ static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *
   if (s->queue_scrambled_count > 0) {
     csa2_batch_entry_t *entries = s->batch_entries;
     unsigned ei = 0;
-    for (unsigned i = 0; i < s->queue_len; i++) if (s->queue[i].needs_crypto) {
-      entries[ei].data = s->queue[i].pkt + s->queue[i].payload_off;
-      entries[ei].len = s->queue[i].payload_size;
-      ei++;
+    for (unsigned i = 0; i < s->queue_len; i++) {
+      if (s->queue[i].needs_crypto) {
+        entries[ei].data = s->queue[i].pkt + s->queue[i].payload_off;
+        entries[ei].len = s->queue[i].payload_size;
+        ei++;
+      }
     }
     if (s->queue_mode == SCRAMBLER_QUEUE_MODE_ENCRYPT)
       csa2_encrypt_batch(s->csa2_key[s->queue_parity], entries, s->queue_scrambled_count);

@@ -98,9 +98,11 @@ int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned strip_mask, un
 
   if (n > 0) {
     *pcr_pid = out_es[0].out_pid;
-    for (int i = 0; i < n; i++) if (out_es[i].in_pid == src_pcr_pid) {
-      *pcr_pid = out_es[i].out_pid;
-      break;
+    for (int i = 0; i < n; i++) {
+      if (out_es[i].in_pid == src_pcr_pid) {
+        *pcr_pid = out_es[i].out_pid;
+        break;
+      }
     }
   }
   return n;
@@ -110,7 +112,9 @@ void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, un
   int non_video = 0;
   unsigned next_pid;
 
-  for (int i = 0; i < *n; i++) if (out_es[i].out_pid != video_pid) non_video++;
+  for (int i = 0; i < *n; i++) {
+    if (out_es[i].out_pid != video_pid) non_video++;
+  }
   next_pid = es_pid_base + (unsigned)non_video;
   if (ecm_pid) {
     if (*n >= cap) {

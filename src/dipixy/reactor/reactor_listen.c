@@ -141,7 +141,9 @@ void reactor_teardown_listeners(const reactor_listeners_t *rl, int tid) {
     mp4push_register_reactor_efd(tid, -1);
     close(rl->mp4push_efd);
   }
-  for (int i = 0; i < rl->nL; i++) if (rl->L[i].kind == RL_ACCEPT || rl->L[i].kind == RL_H3_UDP) close(rl->L[i].fd);
+  for (int i = 0; i < rl->nL; i++) {
+    if (rl->L[i].kind == RL_ACCEPT || rl->L[i].kind == RL_H3_UDP) close(rl->L[i].fd);
+  }
 #ifdef HAVE_HTTP3
   h3_thread_cleanup();
 #endif

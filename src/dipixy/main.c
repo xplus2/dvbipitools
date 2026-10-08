@@ -75,14 +75,18 @@ int main(int argc, char **argv) {
     return 1;
   }
   max_ord = 0;
-  for (i = 0; i < cfg.n_sources; i++) if (cfg.sources[i].ordinal > max_ord) max_ord = cfg.sources[i].ordinal;
+  for (i = 0; i < cfg.n_sources; i++) {
+    if (cfg.sources[i].ordinal > max_ord) max_ord = cfg.sources[i].ordinal;
+  }
   if (cfg.stdin_ordinal > max_ord) max_ord = cfg.stdin_ordinal;
   if (cfg.rist_ordinal > max_ord) max_ord = cfg.rist_ordinal;
   for (i = 1; i <= max_ord; i++) {
     const source_def_t *src = NULL;
-    for (j = 0; j < cfg.n_sources; j++) if (cfg.sources[j].ordinal == i) {
-      src = &cfg.sources[j];
-      break;
+    for (j = 0; j < cfg.n_sources; j++) {
+      if (cfg.sources[j].ordinal == i) {
+        src = &cfg.sources[j];
+        break;
+      }
     }
     if (src) {
       channel_list_t *l = atomic_load_explicit(&channels->lists[i - 1], memory_order_relaxed);

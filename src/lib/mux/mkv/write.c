@@ -31,9 +31,11 @@ void wfd(mkv_t *m, const void *p, size_t n) {
 track_t *find_track(mkv_t *m, unsigned pid) {
   if (m->last_trk_idx >= 0 && m->last_trk_idx < m->ntrk && m->trk[m->last_trk_idx].pid == pid)
     return &m->trk[m->last_trk_idx];
-  for (int i = 0; i < m->ntrk; i++) if (m->trk[i].pid == pid) {
-    m->last_trk_idx = i;
-    return &m->trk[i];
+  for (int i = 0; i < m->ntrk; i++) {
+    if (m->trk[i].pid == pid) {
+      m->last_trk_idx = i;
+      return &m->trk[i];
+    }
   }
   return NULL;
 }

@@ -15,7 +15,9 @@ void skip_scaling_list(br_t *b, int sz) {
 }
 
 void skip_scaling_matrices(br_t *b, int n) {
-  for (int k = 0; k < n; k++) if (br_u(b, 1)) skip_scaling_list(b, (k < 6) ? 16 : 64);
+  for (int k = 0; k < n; k++) {
+    if (br_u(b, 1)) skip_scaling_list(b, (k < 6) ? 16 : 64);
+  }
 }
 
 /* H.264 SPS -> dimensions */
@@ -172,7 +174,9 @@ void skip_vvc_ptl(br_t *b, unsigned max_sublayers_minus1) {
   if (max_sublayers_minus1 > 7) max_sublayers_minus1 = 7;
   for (i = 0; i < max_sublayers_minus1; i++) sublayer_level_present[i] = (unsigned char)br_u(b, 1);
   br_align(b);
-  for (i = 0; i < max_sublayers_minus1; i++) if (sublayer_level_present[i]) br_u(b, 8);
+  for (i = 0; i < max_sublayers_minus1; i++) {
+    if (sublayer_level_present[i]) br_u(b, 8);
+  }
   num_sub_profiles = br_u(b, 8);
   for (i = 0; i < num_sub_profiles; i++) br_u(b, 32);
 }
@@ -327,7 +331,9 @@ int av1_seq_hdr_info(const unsigned char *obu, size_t len, av1_seq_hdr_t *info, 
   has_size = br_u(&b, 1);
   br_u(&b, 1);
   if (ext) br_u(&b, 8);
-  if (has_size) for (int i = 0; i < 8 && (br_u(&b, 8) & 0x80); i++) ;
+  if (has_size) {
+    for (int i = 0; i < 8 && (br_u(&b, 8) & 0x80); i++) ;
+  }
   seq_profile = br_u(&b, 3);
   br_u(&b, 1);
   reduced = br_u(&b, 1);

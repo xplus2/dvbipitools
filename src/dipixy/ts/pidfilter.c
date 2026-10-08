@@ -41,7 +41,9 @@ void pid_filter_parse(const char *value, pid_filter_t *out) {
   if (out->count > 1) qsort(out->pids, (size_t)out->count, sizeof out->pids[0], cmp_u16);
 
   w = 0;
-  for (int i = 0; i < out->count; i++) if (i == 0 || out->pids[i] != out->pids[w - 1]) out->pids[w++] = out->pids[i];
+  for (int i = 0; i < out->count; i++) {
+    if (i == 0 || out->pids[i] != out->pids[w - 1]) out->pids[w++] = out->pids[i];
+  }
   out->count = w;
 }
 

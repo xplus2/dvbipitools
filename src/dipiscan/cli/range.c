@@ -44,11 +44,15 @@ void args_range_describe(const config_t *cfg, char *buf, size_t n) {
 #define MAX_SWEEP_ADDRS ((1u << MAX_SWEEP_HOSTBITS) - 2u)
 
 static void addr_incr1(unsigned char *a, int alen) {
-  for (int i = alen - 1; i >= 0; i--) if (++a[i]) break;
+  for (int i = alen - 1; i >= 0; i--) {
+    if (++a[i]) break;
+  }
 }
 
 static void addr_decr1(unsigned char *a, int alen) {
-  for (int i = alen - 1; i >= 0; i--) if (a[i]--) break;
+  for (int i = alen - 1; i >= 0; i--) {
+    if (a[i]--) break;
+  }
 }
 
 /* end-start, capped. -1 if end<start or range exceeds cap */
@@ -67,7 +71,9 @@ static int addr_diff_capped(const unsigned char *start, const unsigned char *end
     diff[i] = (unsigned char)d;
   }
   if (borrow) return -1;
-  for (int i = 0; i < alen - 4; i++) if (diff[i]) return -1;
+  for (int i = 0; i < alen - 4; i++) {
+    if (diff[i]) return -1;
+  }
   val = 0;
   for (int i = alen >= 4 ? alen - 4 : 0; i < alen; i++) val = (val << 8) | diff[i];
   if (val > cap) return -1;

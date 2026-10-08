@@ -114,7 +114,9 @@ typedef struct {
 } stream_ctx_t;
 
 static int write_to_sinks(out_sink_t *sinks, int n_sinks, const unsigned char *buf, size_t len) {
-  for (int i = 0; i < n_sinks; i++) if (sink_write(&sinks[i], buf, len)) return 1;
+  for (int i = 0; i < n_sinks; i++) {
+    if (sink_write(&sinks[i], buf, len)) return 1;
+  }
   return 0;
 }
 
@@ -284,7 +286,9 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
 }
 
 static int cfg_has_rtmp(const config_t *cfg) {
-  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS) return 1;
+  for (int i = 0; i < cfg->n_out; i++) {
+    if (cfg->out[i].kind == OUT_RTMP || cfg->out[i].kind == OUT_RTMPS) return 1;
+  }
   return 0;
 }
 

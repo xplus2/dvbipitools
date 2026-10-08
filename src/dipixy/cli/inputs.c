@@ -43,7 +43,9 @@ static int sources_append(config_t *cfg, source_kind_t kind, const char *value, 
 static int name_in_use(const config_t *cfg, const char *name) {
   if (cfg->stdin_name && !strcmp(cfg->stdin_name, name)) return 1;
   if (cfg->rist_name && !strcmp(cfg->rist_name, name))   return 1;
-  for (int i = 0; i < cfg->n_sources; i++) if (cfg->sources[i].name && !strcmp(cfg->sources[i].name, name)) return 1;
+  for (int i = 0; i < cfg->n_sources; i++) {
+    if (cfg->sources[i].name && !strcmp(cfg->sources[i].name, name)) return 1;
+  }
   return 0;
 }
 

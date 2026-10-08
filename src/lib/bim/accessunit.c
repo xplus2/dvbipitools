@@ -71,9 +71,15 @@ int accessunit_encode(accessunit_scratch_t *sc, const bcg_doc_t *doc, bitwriter_
     }
   }
 
-  for (i = 0; i < doc->programme_count; i++) if (prog_channel[i] >= 0 && doc->channels[prog_channel[i]].uri[0]) nfuu++;
-  for (i = 0; i < doc->channel_count; i++) if (doc->channels[i].uri[0] && channel_has_prog[i]) nfuu++;
-  for (i = 0; i < doc->channel_count; i++) if (doc->channels[i].uri[0]) nfuu++;
+  for (i = 0; i < doc->programme_count; i++) {
+    if (prog_channel[i] >= 0 && doc->channels[prog_channel[i]].uri[0]) nfuu++;
+  }
+  for (i = 0; i < doc->channel_count; i++) {
+    if (doc->channels[i].uri[0] && channel_has_prog[i]) nfuu++;
+  }
+  for (i = 0; i < doc->channel_count; i++) {
+    if (doc->channels[i].uri[0]) nfuu++;
+  }
 
   if (bitwriter_put_vluimsbf8(bw, (uint64_t)nfuu)) goto done;
   for (i = 0; i < doc->programme_count; i++) {
@@ -119,7 +125,12 @@ static int ptext_lookup(void *vctx, const char *crid, bcg_programme_t *pr) {
   if (ctx->idx) {
     i = channel_idx_find(ctx->idx, ctx->n, crid);
   } else {
-    for (int k = 0; k < ctx->n; k++) if (!strcmp(ctx->arr[k].crid, crid)) { i = k; break; }
+    for (int k = 0; k < ctx->n; k++) {
+      if (!strcmp(ctx->arr[k].crid, crid)) {
+        i = k;
+        break;
+      }
+    }
   }
   if (i < 0) return -1;
   bufcpy(pr->title, sizeof pr->title, ctx->arr[i].title);

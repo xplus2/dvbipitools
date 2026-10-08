@@ -37,7 +37,9 @@ static void on_cue(void *ctx, const ttx_cue_t *cue) {
 }
 
 static int all_psi_named(const mp4_t *m) {
-  for (int i = 0; i < m->npsi; i++) if (!psi_service_name(m->psi[i])[0]) return 0;
+  for (int i = 0; i < m->npsi; i++) {
+    if (!psi_service_name(m->psi[i])[0]) return 0;
+  }
   return 1;
 }
 

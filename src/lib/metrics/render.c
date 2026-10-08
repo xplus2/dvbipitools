@@ -461,7 +461,9 @@ static void add_sample(dstrbuf_t *sb, const char *series, uint64_t value) {
 
 static void render_snapshot_age(dstrbuf_t *sb, const store_t *st, double now_mono) {
   int any = 0;
-  for (int i = 0; i < STORE_MAX_INSTANCES; i++) if (st->slots[i].valid) any = 1;
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++) {
+    if (st->slots[i].valid) any = 1;
+  }
   if (!any) return;
 
   add_head(sb, "dvbipi_metrics_snapshot_age_seconds", "gauge", "seconds since this instance's last snapshot was received");
@@ -476,7 +478,9 @@ static void render_snapshot_age(dstrbuf_t *sb, const store_t *st, double now_mon
 
 static void render_self_metrics(dstrbuf_t *sb, const store_t *st) {
   uint64_t active = 0;
-  for (int i = 0; i < STORE_MAX_INSTANCES; i++) if (st->slots[i].valid) active++;
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++) {
+    if (st->slots[i].valid) active++;
+  }
 
   add_head(sb, "dvbipi_metrics_instances", "gauge", "exporter instances currently tracked");
   add_sample(sb, "dvbipi_metrics_instances", active);

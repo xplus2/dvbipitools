@@ -9,6 +9,7 @@
 
 #include "lib/demux/crc32.h"
 #include "lib/demux/psi/psi.h"
+#include "lib/helper/beutil.h"
 #include "lib/mux/psi_build.h"
 
 static inline void fixture_wrap_section(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
@@ -104,6 +105,7 @@ static inline size_t fixture_eit_packets(unsigned service_id, unsigned char sect
   section_out[3] = (unsigned char)(service_id >> 8);
   section_out[4] = (unsigned char)service_id;
   section_out[6] = section_number;
+  be32_put(section_out + slen - 4, crc32_mpeg(section_out, slen - 4));
   while (used < slen) {
     size_t room = n == 0 ? 183 : 184;
     size_t take = slen - used < room ? slen - used : room;
@@ -113,7 +115,7 @@ static inline size_t fixture_eit_packets(unsigned service_id, unsigned char sect
     pkt[0] = 0x47;
     pkt[1] = (unsigned char)(n == 0 ? 0x40 : 0x00);
     pkt[2] = 0x12;
-    pkt[3] = 0x10;
+    pkt[3] = (unsigned char)(0x10 | (n & 0x0F));
     if (n == 0) pkt[4] = 0x00;
     memcpy(pkt + (n == 0 ? 5 : 4), section_out + used, take);
     used += take;

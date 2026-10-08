@@ -59,7 +59,9 @@ crypto_ecm_cipher_t cipher_to_crypto(ecm_cipher_t c) {
 }
 
 const ecm_header_t *find_header(const ecm_format_t *fmt, const char *id) {
-  for (int i = 0; i < fmt->header_count; i++) if (strcmp(fmt->headers[i].id, id) == 0) return &fmt->headers[i];
+  for (int i = 0; i < fmt->header_count; i++) {
+    if (strcmp(fmt->headers[i].id, id) == 0) return &fmt->headers[i];
+  }
   return NULL;
 }
 

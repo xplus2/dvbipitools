@@ -33,26 +33,34 @@
 #define H2_READ_MAX_ITER 16
 
 h2_stream_t *h2_find_stream(h2_conn_t *conn, int32_t id) {
-  for (int i = 0; i < H2_MAX_STREAMS; i++) if (conn->streams[i].id == id) return &conn->streams[i];
+  for (int i = 0; i < H2_MAX_STREAMS; i++) {
+    if (conn->streams[i].id == id) return &conn->streams[i];
+  }
   return NULL;
 }
 
 h2_stream_t *h2_alloc_stream(h2_conn_t *conn, int32_t id) {
-  for (int i = 0; i < H2_MAX_STREAMS; i++) if (!conn->streams[i].id) {
-    memset(&conn->streams[i], 0, sizeof(h2_stream_t));
-    conn->streams[i].id = id;
-    return &conn->streams[i];
+  for (int i = 0; i < H2_MAX_STREAMS; i++) {
+    if (!conn->streams[i].id) {
+      memset(&conn->streams[i], 0, sizeof(h2_stream_t));
+      conn->streams[i].id = id;
+      return &conn->streams[i];
+    }
   }
   return NULL;
 }
 
 void h2_free_stream(h2_conn_t *conn, int32_t id) {
-  for (int i = 0; i < H2_MAX_STREAMS; i++) if (conn->streams[i].id == id) conn->streams[i].id = 0;
+  for (int i = 0; i < H2_MAX_STREAMS; i++) {
+    if (conn->streams[i].id == id) conn->streams[i].id = 0;
+  }
 }
 
 int h2_conn_active_count(const h2_conn_t *conn) {
   int n = 0;
-  for (int i = 0; i < H2_MAX_STREAMS; i++) if (conn->streams[i].id) n++;
+  for (int i = 0; i < H2_MAX_STREAMS; i++) {
+    if (conn->streams[i].id) n++;
+  }
   return n;
 }
 
@@ -325,9 +333,15 @@ void h2_handle_writable(int epfd, conn_t *c) {
 
 void h2_conn_close(int epfd, conn_t *c) {
   h2_conn_t *conn = (h2_conn_t *)c->h2;
-  for (int i = 0; i < H2_TSPUSH_MAX; i++) if (conn->tspush[i].sid) h2_tspush_on_stream_close(conn, conn->tspush[i].sid);
-  for (int i = 0; i < H2_DASHCHUNK_MAX; i++) if (conn->dashchunk[i].sid) h2_dashchunk_on_stream_close(conn, conn->dashchunk[i].sid);
-  for (int i = 0; i < H2_MP4PUSH_MAX; i++) if (conn->mp4push[i].sid) h2_mp4push_on_stream_close(conn, conn->mp4push[i].sid);
+  for (int i = 0; i < H2_TSPUSH_MAX; i++) {
+    if (conn->tspush[i].sid) h2_tspush_on_stream_close(conn, conn->tspush[i].sid);
+  }
+  for (int i = 0; i < H2_DASHCHUNK_MAX; i++) {
+    if (conn->dashchunk[i].sid) h2_dashchunk_on_stream_close(conn, conn->dashchunk[i].sid);
+  }
+  for (int i = 0; i < H2_MP4PUSH_MAX; i++) {
+    if (conn->mp4push[i].sid) h2_mp4push_on_stream_close(conn, conn->mp4push[i].sid);
+  }
   h2_llhls_on_conn_close(conn);
   h2_hls_cold_on_conn_close(conn);
   h2_ws_on_conn_close(conn);

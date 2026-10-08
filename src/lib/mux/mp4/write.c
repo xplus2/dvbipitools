@@ -29,9 +29,11 @@ void p4_wfd(mp4_t *m, const void *p, size_t n) {
 track_t *p4_find_track(mp4_t *m, unsigned pid) {
   if (m->last_trk_idx >= 0 && m->last_trk_idx < m->ntrk && m->trk[m->last_trk_idx].pid == pid)
     return &m->trk[m->last_trk_idx];
-  for (int i = 0; i < m->ntrk; i++) if (m->trk[i].pid == pid) {
-    m->last_trk_idx = i;
-    return &m->trk[i];
+  for (int i = 0; i < m->ntrk; i++) {
+    if (m->trk[i].pid == pid) {
+      m->last_trk_idx = i;
+      return &m->trk[i];
+    }
   }
   return NULL;
 }
@@ -102,23 +104,31 @@ void p4_start(mp4_t *m) {
     int vtrk = -1;
     int found = 0;
     int64_t vt = 0;
-    for (int i = 0; i < m->ntrk; i++) if (m->trk[i].cls == PID_VIDEO) {
-      vtrk = i;
-      break;
+    for (int i = 0; i < m->ntrk; i++) {
+      if (m->trk[i].cls == PID_VIDEO) {
+        vtrk = i;
+        break;
+      }
     }
     m->t0 = m->pend[0].ts_ms;
-    for (int i = 1; i < m->npend; i++) if (m->pend[i].ts_ms < m->t0) m->t0 = m->pend[i].ts_ms;
-    for (int i = 0; vtrk >= 0 && i < m->npend; i++) if (m->pend[i].trk == vtrk && (!found || m->pend[i].ts_ms < vt)) {
-      vt = m->pend[i].ts_ms;
-      found = 1;
+    for (int i = 1; i < m->npend; i++) {
+      if (m->pend[i].ts_ms < m->t0) m->t0 = m->pend[i].ts_ms;
+    }
+    for (int i = 0; vtrk >= 0 && i < m->npend; i++) {
+      if (m->pend[i].trk == vtrk && (!found || m->pend[i].ts_ms < vt)) {
+        vt = m->pend[i].ts_ms;
+        found = 1;
+      }
     }
     if (found) m->t0 = vt;
   }
   p4_write_ftyp_mdat_head(m);
   m->started = 1;
-  for (int i = 0; i < m->npend; i++) if (m->pend[i].ts_ms >= m->t0) {
-    track_t *t = &m->trk[m->pend[i].trk];
-    p4_write_sample(m, t, m->pend[i].cts_offset, m->pend[i].data, m->pend[i].len, m->pend[i].key, m->pend[i].dur);
+  for (int i = 0; i < m->npend; i++) {
+    if (m->pend[i].ts_ms >= m->t0) {
+      track_t *t = &m->trk[m->pend[i].trk];
+      p4_write_sample(m, t, m->pend[i].cts_offset, m->pend[i].data, m->pend[i].len, m->pend[i].key, m->pend[i].dur);
+    }
   }
   m->npend = 0;
   m->pend_bytes = 0;

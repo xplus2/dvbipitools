@@ -113,14 +113,13 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
   hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   int expected = STORE_OPEN;
   slot_retire_node_t *node;
-  int nw;
   hls_snapshot_t *cur;
   if (!s) return;
   if (!atomic_compare_exchange_strong_explicit(slot_state(s), &expected, STORE_CLOSING, memory_order_acq_rel, memory_order_relaxed)) return;
   node = malloc(sizeof *node);
   if (!node) {
-    log_line(TOOL_NAME ": hls: close retire alloc failed, freeing slot without a QSBR wait");
-    atomic_store_explicit(slot_state(s), STORE_FREE, memory_order_release);
+    log_line(TOOL_NAME ": hls: close retire alloc failed, store stays open");
+    atomic_store_explicit(slot_state(s), STORE_OPEN, memory_order_release);
     return;
   }
   node->idx = (int)(s - g_stores);
@@ -133,10 +132,7 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
   s->retiring_n = 0;
   pthread_mutex_unlock(store_lock(s));
 
-  nw = qsbr_worker_count(g_segstore_qsbr);
-  nw = nw > 0 ? nw : 1;
-  node->mark = calloc((size_t)nw, sizeof *node->mark);
-  if (node->mark) qsbr_mark(g_segstore_qsbr, node->mark);
+  qsbr_mark(g_segstore_qsbr, node->mark);
   slot_retire_push(node);
 
   if (g_store_closing_cb) g_store_closing_cb(s);

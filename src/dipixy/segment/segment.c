@@ -17,7 +17,7 @@ static qsbr_domain_t *g_seg_qsbr;
 typedef struct seg_retiree {
   struct seg_retiree *next;
   hls_seg_ctx_t *s;
-  uint64_t *mark;
+  uint64_t mark[QSBR_MAX_WORKERS];
 } seg_retiree_t;
 
 static seg_retiree_t *g_retired;
@@ -145,7 +145,9 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   s->demux.pes = s->demux.psi ? pes_new(hls_seg_on_pes, s) : NULL;
   if (!s->demux.psi || !s->demux.pes) goto fail;
 
-  for (i = 0; i < g_stores_n; i++) if (!atomic_load_explicit(&g_stores[i], memory_order_relaxed)) break;
+  for (i = 0; i < g_stores_n; i++) {
+    if (!atomic_load_explicit(&g_stores[i], memory_order_relaxed)) break;
+  }
   if (i == g_stores_n) goto fail; /* registry full */
   head = capture_hls_seg_head_ptr(ctx);
   old_head = atomic_load_explicit(head, memory_order_acquire);
@@ -198,7 +200,6 @@ static void seg_reclaim_retired(void) {
     list = n->next;
     if (qsbr_mark_passed(g_seg_qsbr, n->mark)) {
       free(n->s);
-      free(n->mark);
       free(n);
     } else {
       n->next = keep;
@@ -217,13 +218,9 @@ static void seg_reclaim_retired(void) {
 }
 
 static void seg_retire(hls_seg_ctx_t *s) {
-  int nw = qsbr_worker_count(g_seg_qsbr);
   seg_retiree_t *n = malloc(sizeof *n);
-  if (n) n->mark = calloc((size_t)(nw > 0 ? nw : 1), sizeof *n->mark);
-  if (!n || !n->mark) {
-    free(n);
-    log_line(TOOL_NAME ": segmenter retire alloc failed, freeing w/o QSBR wait");
-    free(s);
+  if (!n) {
+    log_line(TOOL_NAME ": segmenter retire alloc failed, leaking segmenter");
     return;
   }
   qsbr_mark(g_seg_qsbr, n->mark);

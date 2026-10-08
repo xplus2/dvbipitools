@@ -16,7 +16,9 @@ void cwenc_des56_expand(const unsigned char in7[7], unsigned char out8[CWENC_DES
     int shift = 56 - 7 * (g + 1);
     unsigned char byte = (unsigned char)(((bits >> shift) & 0x7F) << 1);
     int ones = 0;
-    for (int b = 0; b < 8; b++) if (byte & (1 << b)) ones++;
+    for (int b = 0; b < 8; b++) {
+      if (byte & (1 << b)) ones++;
+    }
     out8[g] = (ones % 2 == 0) ? (byte | 1) : byte;
   }
 }
@@ -70,7 +72,9 @@ int cwenc_config_init(cwenc_config_t *cfg, const char *algorithm, const char *ae
     return 0;
   }
 
-  for (i = 0; i < sizeof algo_map / sizeof algo_map[0]; i++) if (!strcmp(algorithm, algo_map[i].name)) break;
+  for (i = 0; i < sizeof algo_map / sizeof algo_map[0]; i++) {
+    if (!strcmp(algorithm, algo_map[i].name)) break;
+  }
   if (i == sizeof algo_map / sizeof algo_map[0]) {
     log_line("cw_encryption: invalid algorithm '%s' (des56|aes128|aes256)", algorithm);
     return -1;
@@ -84,7 +88,9 @@ int cwenc_config_init(cwenc_config_t *cfg, const char *algorithm, const char *ae
     static const struct { const char *name; cwenc_aes_mode_t mode; } mode_map[] = {
       {"stream", CWENC_AES_MODE_STREAM}, {"ecb", CWENC_AES_MODE_ECB},
     };
-    for (i = 0; i < sizeof mode_map / sizeof mode_map[0]; i++) if (!strcmp(aes_mode, mode_map[i].name)) break;
+    for (i = 0; i < sizeof mode_map / sizeof mode_map[0]; i++) {
+      if (!strcmp(aes_mode, mode_map[i].name)) break;
+    }
     if (i == sizeof mode_map / sizeof mode_map[0]) {
       log_line("cw_encryption: invalid aes_mode '%s' (stream|ecb)", aes_mode);
       return -1;

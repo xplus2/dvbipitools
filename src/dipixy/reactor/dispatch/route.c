@@ -41,7 +41,9 @@ static void cors_parse_once(void) {
     return;
   }
   cap = 1;
-  for (const char *q = p; *q; q++) if (*q == ',') cap++;
+  for (const char *q = p; *q; q++) {
+    if (*q == ',') cap++;
+  }
   g_cors_list = malloc((size_t)cap * sizeof *g_cors_list);
   if (!g_cors_list) {
     g_cors_all = 1;
@@ -130,7 +132,9 @@ int route_disabled(const route_t *rt) {
 
 /* -n-named source: ordinal of its -i, 0 if unmatched */
 static unsigned source_ordinal_by_name(const config_t *cfg, const char *name) {
-  for (int i = 0; i < cfg->n_sources; i++) if (cfg->sources[i].name && !strcmp(cfg->sources[i].name, name)) return (unsigned)cfg->sources[i].ordinal;
+  for (int i = 0; i < cfg->n_sources; i++) {
+    if (cfg->sources[i].name && !strcmp(cfg->sources[i].name, name)) return (unsigned)cfg->sources[i].ordinal;
+  }
   return 0;
 }
 
@@ -218,10 +222,12 @@ void route_client_info(const route_t *rt, unsigned list_num, const pid_filter_t 
       return;
     case ROUTE_LIST_ITEM:
     case ROUTE_LIST_NAME:
-      for (int i = 0; i < cfg->n_sources; i++) if ((unsigned)cfg->sources[i].ordinal == list_num) {
-        out->src_ordinal = list_num;
-        out->src_name = cfg->sources[i].name;
-        break;
+      for (int i = 0; i < cfg->n_sources; i++) {
+        if ((unsigned)cfg->sources[i].ordinal == list_num) {
+          out->src_ordinal = list_num;
+          out->src_name = cfg->sources[i].name;
+          break;
+        }
       }
       if (channels_item_lookup(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL, &out->item_num, bufs->name,
          sizeof bufs->name, bufs->proto, sizeof bufs->proto, bufs->addr, sizeof bufs->addr) == 0) {

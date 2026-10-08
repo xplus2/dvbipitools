@@ -172,6 +172,55 @@ START_TEST(fec2022_drops_double_loss_in_one_column) {
 }
 END_TEST
 
+#define WRAP_N 600u
+
+static void wrap_run(unsigned l, unsigned d, int drop, unsigned skew) {
+  static unsigned char src[WRAP_N][200];
+  static unsigned char repair[WRAP_N][FEC2022_MAX_REPAIR];
+  static unsigned char out[WRAP_N * FEC2022_MAX_PKT];
+  size_t repair_len[WRAP_N];
+  fec2022_enc_t *e = fec2022_enc_new(l, d, 96);
+  fec2022_dec_t *dc = fec2022_dec_new(l, d);
+  unsigned ld = l * d;
+  unsigned start = (65536u - WRAP_N / 2) / ld * ld + skew;
+  unsigned drop_i = drop ? WRAP_N / 2 - 3 : WRAP_N;
+  size_t got = 0;
+
+  ck_assert_ptr_nonnull(e);
+  ck_assert_ptr_nonnull(dc);
+  for (unsigned i = 0; i < WRAP_N; i++) {
+    build_source(src[i], (uint16_t)(start + i), i, (unsigned char)i);
+    repair_len[i] = fec2022_enc_feed(e, src[i], 200, i, repair[i], sizeof repair[i]);
+  }
+  for (unsigned i = 0; i < WRAP_N; i++) {
+    if (i != drop_i) fec2022_dec_source(dc, src[i], 200);
+    if (repair_len[i] > 0) fec2022_dec_repair(dc, repair[i], repair_len[i]);
+    got += drain_all(dc, out + got, sizeof out - got);
+  }
+  ck_assert_uint_ge(got / 200, WRAP_N - ld);
+  for (size_t i = 0; i < got / 200; i++) ck_assert_mem_eq(out + i * 200, src[i], 200);
+  fec2022_enc_free(e);
+  fec2022_dec_free(dc);
+}
+
+START_TEST(fec2022_seq_wrap_l4d3) { wrap_run(4, 3, 0, 0); }
+END_TEST
+
+START_TEST(fec2022_seq_wrap_l4d3_loss) { wrap_run(4, 3, 1, 0); }
+END_TEST
+
+START_TEST(fec2022_seq_wrap_l10d10) { wrap_run(10, 10, 0, 0); }
+END_TEST
+
+START_TEST(fec2022_seq_wrap_l10d10_loss) { wrap_run(10, 10, 1, 0); }
+END_TEST
+
+START_TEST(fec2022_seq_wrap_unaligned_loss) { wrap_run(10, 10, 1, 7); }
+END_TEST
+
+START_TEST(fec2022_seq_wrap_unaligned_l4d3_loss) { wrap_run(4, 3, 1, 5); }
+END_TEST
+
 static Suite *fec2022_suite(void) {
   Suite *s = suite_create("fec2022");
   TCase *tc = tcase_create("core");
@@ -180,6 +229,12 @@ static Suite *fec2022_suite(void) {
   tcase_add_test(tc, fec2022_round_trip_no_loss);
   tcase_add_test(tc, fec2022_recovers_single_loss_per_column);
   tcase_add_test(tc, fec2022_drops_double_loss_in_one_column);
+  tcase_add_test(tc, fec2022_seq_wrap_l4d3);
+  tcase_add_test(tc, fec2022_seq_wrap_l4d3_loss);
+  tcase_add_test(tc, fec2022_seq_wrap_l10d10);
+  tcase_add_test(tc, fec2022_seq_wrap_l10d10_loss);
+  tcase_add_test(tc, fec2022_seq_wrap_unaligned_loss);
+  tcase_add_test(tc, fec2022_seq_wrap_unaligned_l4d3_loss);
   suite_add_tcase(s, tc);
   return s;
 }

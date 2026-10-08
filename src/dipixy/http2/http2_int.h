@@ -51,7 +51,9 @@ typedef struct {
 } h2_push_slot_t;
 
 static inline int h2_push_slot_find_free(const h2_push_slot_t *slots, int max) {
-  for (int i = 0; i < max; i++) if (!slots[i].sid) return i;
+  for (int i = 0; i < max; i++) {
+    if (!slots[i].sid) return i;
+  }
   return -1;
 }
 

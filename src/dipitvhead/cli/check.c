@@ -11,7 +11,9 @@
 #include "../mux/pmtbuild.h"
 
 static int sid_used(const unsigned *used, unsigned n_used, unsigned sid) {
-  for (unsigned j = 0; j < n_used; j++) if (used[j] == sid) return 1;
+  for (unsigned j = 0; j < n_used; j++) {
+    if (used[j] == sid) return 1;
+  }
   return 0;
 }
 
@@ -35,7 +37,9 @@ int tvh_cfg_check(const config_t *cfg, int partial, tvh_report_fn rep, void *ud)
 #define NOTE(...) do { snprintf(msg, sizeof msg, __VA_ARGS__); rep(ud, 0, msg); } while (0)
 
   if (!partial && cfg->n_inputs == 0) FATAL("missing -i input");
-  for (unsigned i = 0; i < cfg->n_inputs; i++) if (cfg->inputs[i].input.kind == SRC_RIST) n_rist_in++;
+  for (unsigned i = 0; i < cfg->n_inputs; i++) {
+    if (cfg->inputs[i].input.kind == SRC_RIST) n_rist_in++;
+  }
   if (n_rist_in > 1) FATAL("at most one -i rist:// input: librist isn't safe with more than one context per process");
   if (n_rist_in && cfg->n_rist) FATAL("-i rist:// and -R rist:// cannot combine: librist isn't safe with more than one context per process");
   if (!partial && !cfg->mcast_port && cfg->n_rist == 0 && cfg->n_srt == 0) FATAL("need -m output multicast or at least one -R peer");
@@ -99,12 +103,16 @@ void tvh_finalize(config_t *cfg) {
     cfg->cas_pids_audio = 1;
   }
   if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss1_enabled || cfg->biss2_enabled || cfg->biss2_ca_enabled) {
-    for (unsigned i = 0; i < cfg->n_inputs; i++) if (!(cfg->inputs[i].strip_mask & TVSTRIP_ECM)) {
-      log_line(TOOL_NAME ": source CA/ECM passthrough disabled: --cas-algo/--biss* already scrambling this mux");
-      break;
+    for (unsigned i = 0; i < cfg->n_inputs; i++) {
+      if (!(cfg->inputs[i].strip_mask & TVSTRIP_ECM)) {
+        log_line(TOOL_NAME ": source CA/ECM passthrough disabled: --cas-algo/--biss* already scrambling this mux");
+        break;
+      }
     }
   }
-  for (unsigned i = 0; i < cfg->n_inputs; i++) if (cfg->inputs[i].sid) used[n_used++] = cfg->inputs[i].sid;
+  for (unsigned i = 0; i < cfg->n_inputs; i++) {
+    if (cfg->inputs[i].sid) used[n_used++] = cfg->inputs[i].sid;
+  }
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
     if (cfg->inputs[i].sid != 0) continue;
     while (sid_used(used, n_used, next)) next++;

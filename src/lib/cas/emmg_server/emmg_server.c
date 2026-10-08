@@ -65,7 +65,9 @@ unsigned emmg_server_client_count(emmg_server_t *s) {
   unsigned i;
   unsigned n = 0;
   if (s->dial_mode) return atomic_load_explicit(&s->dial_connected, memory_order_relaxed) ? 1 : 0;
-  for (i = 0; i < s->max_conns; i++) if (atomic_load_explicit(&s->worker_active[i], memory_order_relaxed)) n++;
+  for (i = 0; i < s->max_conns; i++) {
+    if (atomic_load_explicit(&s->worker_active[i], memory_order_relaxed)) n++;
+  }
   return n;
 }
 
@@ -155,9 +157,11 @@ void emmg_server_stop(emmg_server_t *s) {
   atomic_store_explicit(&s->stop, 1, memory_order_relaxed);
   pthread_join(s->accept_thread, NULL);
   if (s->listen_fd >= 0) close(s->listen_fd);
-  for (unsigned i = 0; i < s->max_conns; i++) if (s->worker_thread_joinable[i]) {
-    pthread_join(s->worker_thread[i], NULL);
-    s->worker_thread_joinable[i] = 0;
+  for (unsigned i = 0; i < s->max_conns; i++) {
+    if (s->worker_thread_joinable[i]) {
+      pthread_join(s->worker_thread[i], NULL);
+      s->worker_thread_joinable[i] = 0;
+    }
   }
   pthread_mutex_destroy(&s->queue_lock);
   free(s);

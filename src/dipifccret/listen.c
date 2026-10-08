@@ -70,7 +70,9 @@ static void *worker_main(void *arg) {
   while (!signal_stop_requested() && !atomic_load_explicit(w->stop, memory_order_relaxed)) {
     struct epoll_event evs[2];
     int n = epoll_wait(w->epfd, evs, 2, w->has_wake ? -1 : 100);
-    for (int i = 0; i < n; i++) if (evs[i].data.fd == w->fd) drain_socket(w->fd, buf, sizeof buf, "recv", worker_recv_cb, w);
+    for (int i = 0; i < n; i++) {
+      if (evs[i].data.fd == w->fd) drain_socket(w->fd, buf, sizeof buf, "recv", worker_recv_cb, w);
+    }
   }
   return NULL;
 }

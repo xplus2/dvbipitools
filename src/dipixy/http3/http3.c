@@ -39,10 +39,12 @@ static void handle_dgram(int udp_fd, const h3_rx_t *rx, const struct sockaddr_st
   ngtcp2_addr_init(&ps.path.remote, peer, rx->peerlen);
   ngtcp2_pkt_info pi = {0};
   if (ngtcp2_conn_read_pkt_versioned(c->qconn, &ps.path, NGTCP2_PKT_INFO_VERSION, &pi, rx->data, rx->len, ts) < 0) c->done = 1;
-  if (!c->done && c->h3conn) for (int i = 0; i < c->max_reqs; i++) {
-    if (c->reqs[i].active && c->reqs[i].dispatch_pending) {
-      c->reqs[i].dispatch_pending = 0;
-      dispatch_req(c, &c->reqs[i]);
+  if (!c->done && c->h3conn) {
+    for (int i = 0; i < c->max_reqs; i++) {
+      if (c->reqs[i].active && c->reqs[i].dispatch_pending) {
+        c->reqs[i].dispatch_pending = 0;
+        dispatch_req(c, &c->reqs[i]);
+      }
     }
   }
   if (!c->done && !c->tx_dirty) {

@@ -3,6 +3,8 @@
 
 #include "priv.h"
 #include "../reactor/qsbr.h"
+#include "../version.h"
+#include "lib/helper/log.h"
 
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -43,10 +45,9 @@ void hls_store_slot_reclaim_sweep(void) {
   slot_retire_node_t *keep_tail = NULL;
   while (chain) {
     slot_retire_node_t *next = atomic_load_explicit(&chain->next, memory_order_relaxed);
-    if (!chain->mark || qsbr_mark_passed(g_segstore_qsbr, chain->mark)) {
+    if (qsbr_mark_passed(g_segstore_qsbr, chain->mark)) {
       for (int i = 0; i < chain->nsnaps; i++) snap_free(chain->snaps[i]);
       if (chain->idx >= 0) atomic_store_explicit(&g_slot_state[chain->idx], STORE_FREE, memory_order_release);
-      free(chain->mark);
       free(chain);
     } else {
       atomic_store_explicit(&chain->next, keep_head, memory_order_relaxed);
@@ -67,20 +68,16 @@ void hls_store_slot_reclaim_sweep(void) {
 /* non-blocking, safe for a reactor worker thread to call */
 void snap_retire_async(hls_snapshot_t *snap) {
   slot_retire_node_t *node;
-  int nw;
   if (!snap) return;
   node = malloc(sizeof *node);
   if (!node) {
-    snap_free(snap);
+    log_line(TOOL_NAME ": hls: snapshot retire alloc failed, leaking snapshot");
     return;
   }
   node->idx = -1;
   node->nsnaps = 1;
   node->snaps[0] = snap;
-  nw = qsbr_worker_count(g_segstore_qsbr);
-  nw = nw > 0 ? nw : 1;
-  node->mark = calloc((size_t)nw, sizeof *node->mark);
-  if (node->mark) qsbr_mark(g_segstore_qsbr, node->mark);
+  qsbr_mark(g_segstore_qsbr, node->mark);
   slot_retire_push(node);
 }
 

@@ -43,32 +43,36 @@ static void dash_codecs(const uint8_t *init, size_t initsz, codec_t vcodec, char
     return;
   }
   if (vcodec == CODEC_AV1) {
-    for (size_t i = 0; i + 7 <= initsz; i++) if (init[i] == 'a' && init[i + 1] == 'v' && init[i + 2] == '1' && init[i + 3] == 'C') {
-      unsigned pl = init[i + 5];
-      unsigned th = init[i + 6];
-      unsigned profile = (pl >> 5) & 0x07;
-      unsigned level = pl & 0x1F;
-      unsigned tier = (th >> 7) & 1;
-      unsigned hbd = (th >> 6) & 1;
-      unsigned twelve = (th >> 5) & 1;
-      unsigned bitdepth;
-      if (twelve) bitdepth = 12;
-      else if (hbd) bitdepth = 10;
-      else bitdepth = 8;
-      snprintf(out, outsz, "av01.%u.%02u%c.%02u", profile, level, tier ? 'H' : 'M', bitdepth);
-      return;
+    for (size_t i = 0; i + 7 <= initsz; i++) {
+      if (init[i] == 'a' && init[i + 1] == 'v' && init[i + 2] == '1' && init[i + 3] == 'C') {
+        unsigned pl = init[i + 5];
+        unsigned th = init[i + 6];
+        unsigned profile = (pl >> 5) & 0x07;
+        unsigned level = pl & 0x1F;
+        unsigned tier = (th >> 7) & 1;
+        unsigned hbd = (th >> 6) & 1;
+        unsigned twelve = (th >> 5) & 1;
+        unsigned bitdepth;
+        if (twelve) bitdepth = 12;
+        else if (hbd) bitdepth = 10;
+        else bitdepth = 8;
+        snprintf(out, outsz, "av01.%u.%02u%c.%02u", profile, level, tier ? 'H' : 'M', bitdepth);
+        return;
+      }
     }
     bufcpy(out, outsz, "av01.0.04M.08");
     return;
   }
-  for (size_t i = 0; i + 8 <= initsz; i++) if (init[i] == 'a' && init[i + 1] == 'v' && init[i + 2] == 'c' && init[i + 3] == 'C') {
-    sbuf_t b;
-    sbuf_init(&b, out, outsz);
-    sbuf_add(&b, "avc1.");
-    sbuf_add_hex2(&b, init[i + 5]);
-    sbuf_add_hex2(&b, init[i + 6]);
-    sbuf_add_hex2(&b, init[i + 7]);
-    return;
+  for (size_t i = 0; i + 8 <= initsz; i++) {
+    if (init[i] == 'a' && init[i + 1] == 'v' && init[i + 2] == 'c' && init[i + 3] == 'C') {
+      sbuf_t b;
+      sbuf_init(&b, out, outsz);
+      sbuf_add(&b, "avc1.");
+      sbuf_add_hex2(&b, init[i + 5]);
+      sbuf_add_hex2(&b, init[i + 6]);
+      sbuf_add_hex2(&b, init[i + 7]);
+      return;
+    }
   }
   bufcpy(out, outsz, "avc1.640028");
 }

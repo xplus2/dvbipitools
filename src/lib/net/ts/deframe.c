@@ -26,7 +26,9 @@ ssize_t tssrc_raw_fd_read(int fd, unsigned char *buf, size_t cap, net_err_reason
 }
 
 static int rtp_stride_candidate_ok(const unsigned char *b, int nn) {
-  for (size_t k = 0; k < (size_t)nn; k++) if (b[12 + 188 * k] != 0x47) return 0;
+  for (size_t k = 0; k < (size_t)nn; k++) {
+    if (b[12 + 188 * k] != 0x47) return 0;
+  }
   return 1;
 }
 

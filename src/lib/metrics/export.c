@@ -104,9 +104,13 @@ int metrics_exporter_begin(metrics_exporter_t *exp, metrics_writer_t *w, const c
   if (metrics_writer_put(w, METRICS_ID_HEADEND_INFO, version, 1)) return -1;
   if (metrics_writer_put(w, METRICS_ID_METRICS_SNAPSHOTS_DROPPED_TOTAL, NULL, exp->snapshots_dropped)) return -1;
   if (metrics_writer_put(w, METRICS_ID_METRICS_PARTS_DROPPED_TOTAL, NULL, exp->parts_dropped)) return -1;
-  for (unsigned i = 0; i < NET_ERR_COUNT; i++) if (metrics_writer_put(w, METRICS_ID_ERRORS_TOTAL, net_err_reason_name((net_err_reason_t)i), exp->errors_total[i]))
-    return -1;
-  for (int i = 0; i < METRICS_EXTRA_MAX; i++) if (exp->extra[i]) exp->extra[i](w, exp->extra_ctx[i]);
+  for (unsigned i = 0; i < NET_ERR_COUNT; i++) {
+    if (metrics_writer_put(w, METRICS_ID_ERRORS_TOTAL, net_err_reason_name((net_err_reason_t)i), exp->errors_total[i]))
+      return -1;
+  }
+  for (int i = 0; i < METRICS_EXTRA_MAX; i++) {
+    if (exp->extra[i]) exp->extra[i](w, exp->extra_ctx[i]);
+  }
 
   return 0;
 }
@@ -147,15 +151,17 @@ void metrics_writer_put_inputs(metrics_writer_t *w, const input_metrics_t *input
     metrics_writer_put(w, METRICS_ID_INPUT_BYTES_TOTAL, label, im->bytes_total);
     metrics_writer_put(w, METRICS_ID_INPUT_RECONNECTS_TOTAL, label, im->reconnects_total);
     metrics_writer_put(w, METRICS_ID_INPUT_LAST_DATA_TIME_SECONDS, label, (uint64_t)im->last_data_time);
-    for (unsigned r = 0; r < NET_ERR_COUNT; r++) if (im->errors_total[r]) {
-      char combined[16 + 1 + 8];
-      const char sep[2] = {METRICS_LABEL_SEP, '\0'};
-      sbuf_t cb;
-      sbuf_init(&cb, combined, sizeof combined);
-      sbuf_add(&cb, label);
-      sbuf_add(&cb, sep);
-      sbuf_add(&cb, net_err_reason_name((net_err_reason_t)r));
-      metrics_writer_put(w, METRICS_ID_INPUT_ERRORS_TOTAL, combined, im->errors_total[r]);
+    for (unsigned r = 0; r < NET_ERR_COUNT; r++) {
+      if (im->errors_total[r]) {
+        char combined[16 + 1 + 8];
+        const char sep[2] = {METRICS_LABEL_SEP, '\0'};
+        sbuf_t cb;
+        sbuf_init(&cb, combined, sizeof combined);
+        sbuf_add(&cb, label);
+        sbuf_add(&cb, sep);
+        sbuf_add(&cb, net_err_reason_name((net_err_reason_t)r));
+        metrics_writer_put(w, METRICS_ID_INPUT_ERRORS_TOTAL, combined, im->errors_total[r]);
+      }
     }
   }
 }

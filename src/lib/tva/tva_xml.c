@@ -32,7 +32,9 @@ static void percent_encode(const char *s, char *out, size_t outcap) {
 /* "YYYY-MM-DDTHH:MM:SS..." -> "YYYYMMDDHHMMSS", truncates rest */
 static void iso8601_compact_prefix(const char *iso, char *out, size_t outcap) {
   size_t oi = 0;
-  for (size_t i = 0; iso[i] && oi + 1 < outcap; i++) if (iso[i] != '-' && iso[i] != ':' && iso[i] != 'T') out[oi++] = iso[i];
+  for (size_t i = 0; iso[i] && oi + 1 < outcap; i++) {
+    if (iso[i] != '-' && iso[i] != ':' && iso[i] != 'T') out[oi++] = iso[i];
+  }
   out[oi] = '\0';
 }
 

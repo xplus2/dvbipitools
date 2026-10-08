@@ -50,12 +50,14 @@ uint8_t *seg_buf_alloc(size_t size) {
   seg_pool_class_t *c = &seg_pool[cls];
   seg_buf_hdr_t *h = NULL;
 
-  if (c->slots) for (int i = 0; i < g_seg_pool_cap; i++) {
-    seg_buf_hdr_t *expected = atomic_load_explicit(&c->slots[i], memory_order_relaxed);
-    if (!expected) continue;
-    if (atomic_compare_exchange_strong_explicit(&c->slots[i], &expected, NULL, memory_order_acquire, memory_order_relaxed)) {
-      h = expected;
-      break;
+  if (c->slots) {
+    for (int i = 0; i < g_seg_pool_cap; i++) {
+      seg_buf_hdr_t *expected = atomic_load_explicit(&c->slots[i], memory_order_relaxed);
+      if (!expected) continue;
+      if (atomic_compare_exchange_strong_explicit(&c->slots[i], &expected, NULL, memory_order_acquire, memory_order_relaxed)) {
+        h = expected;
+        break;
+      }
     }
   }
   if (h)
@@ -83,11 +85,13 @@ void seg_buf_unref(uint8_t *data) {
   h = (seg_buf_hdr_t *)data - 1;
   if (atomic_fetch_sub_explicit(&h->refcnt, 1, memory_order_acq_rel) != 1) return;
   c = &seg_pool[h->pool_class];
-  if (c->slots) for (int i = 0; i < g_seg_pool_cap; i++) {
-    seg_buf_hdr_t *expected = NULL;
-    if (atomic_compare_exchange_strong_explicit(&c->slots[i], &expected, h, memory_order_release, memory_order_relaxed)) {
-      atomic_store_explicit(&c->last_used_ms, now_ms(), memory_order_relaxed);
-      return;
+  if (c->slots) {
+    for (int i = 0; i < g_seg_pool_cap; i++) {
+      seg_buf_hdr_t *expected = NULL;
+      if (atomic_compare_exchange_strong_explicit(&c->slots[i], &expected, h, memory_order_release, memory_order_relaxed)) {
+        atomic_store_explicit(&c->last_used_ms, now_ms(), memory_order_relaxed);
+        return;
+      }
     }
   }
   free(h);

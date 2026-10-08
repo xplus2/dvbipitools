@@ -150,9 +150,11 @@ int cas_core_start_biss_dispatch(const cas_biss_cfg_t *cfg, const unsigned *pids
 static unsigned pick_free_pid(unsigned start, const unsigned *avoid, size_t avoid_count) {
   for (unsigned pid = start; pid < 0x1FFF; pid++) {
     int collide = 0;
-    for (size_t i = 0; i < avoid_count; i++) if (avoid[i] == pid) {
-      collide = 1;
-      break;
+    for (size_t i = 0; i < avoid_count; i++) {
+      if (avoid[i] == pid) {
+        collide = 1;
+        break;
+      }
     }
     if (!collide) return pid;
   }

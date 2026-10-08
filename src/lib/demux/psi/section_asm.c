@@ -6,24 +6,7 @@
 
 #include <string.h>
 
-int psi_section_asm_feed(psi_section_asm_t *a, const unsigned char *pl, size_t plen, int pusi) {
-  size_t i = 0;
-
-  if (pusi) {
-    unsigned ptr;
-    if (plen < 1) return 0;
-    ptr = pl[0];
-    i = 1 + (size_t)ptr;
-    if (i > plen) {
-      a->active = 0;
-      return 0;
-    }
-    a->len = 0;
-    a->expect = 0;
-    a->active = 1;
-  } else if (!a->active) {
-    return 0;
-  }
+static int consume(psi_section_asm_t *a, const unsigned char *pl, size_t plen, size_t i) {
   while (i < plen) {
     size_t need;
     size_t avail;
@@ -48,8 +31,52 @@ int psi_section_asm_feed(psi_section_asm_t *a, const unsigned char *pl, size_t p
     i += take;
     if (a->len >= a->expect) {
       a->active = 0;
+      a->next = i;
       return 1;
     }
   }
   return 0;
+}
+
+int psi_section_asm_cc(psi_section_asm_t *a, unsigned cc) {
+  if (a->cc_seen) {
+    if (cc == a->cc && a->active) return 0;
+    if (cc != ((a->cc + 1) & 0x0F)) a->active = 0;
+  }
+  a->cc_seen = 1;
+  a->cc = cc;
+  return 1;
+}
+
+int psi_section_asm_feed(psi_section_asm_t *a, const unsigned char *pl, size_t plen, int pusi) {
+  size_t i = 0;
+
+  a->next = 0;
+  if (pusi) {
+    unsigned ptr;
+    if (plen < 1) return 0;
+    ptr = pl[0];
+    i = 1 + (size_t)ptr;
+    if (i > plen) {
+      a->active = 0;
+      return 0;
+    }
+    a->len = 0;
+    a->expect = 0;
+    a->active = 1;
+  } else if (!a->active) {
+    return 0;
+  }
+  return consume(a, pl, plen, i);
+}
+
+int psi_section_asm_next(psi_section_asm_t *a, const unsigned char *pl, size_t plen) {
+  size_t i = a->next;
+
+  a->next = 0;
+  if (i == 0 || i >= plen || pl[i] == 0xFF) return 0;
+  a->len = 0;
+  a->expect = 0;
+  a->active = 1;
+  return consume(a, pl, plen, i);
 }

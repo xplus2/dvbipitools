@@ -11,7 +11,9 @@
 #include "priv.h"
 
 static int is_sid_used(const unsigned *used, unsigned n_used, unsigned sid) {
-  for (unsigned j = 0; j < n_used; j++) if (used[j] == sid) return 1;
+  for (unsigned j = 0; j < n_used; j++) {
+    if (used[j] == sid) return 1;
+  }
   return 0;
 }
 

@@ -114,6 +114,52 @@ START_TEST(single_worker_domain_passes_after_one_tick) {
 }
 END_TEST
 
+START_TEST(offline_worker_does_not_hold_up_a_grace_period) {
+  qsbr_domain_t *d = qsbr_domain_create(2);
+  uint64_t mark[2];
+
+  qsbr_worker_offline(d, 1);
+  qsbr_mark(d, mark);
+  ck_assert_int_eq(qsbr_mark_passed(d, mark), 0);
+  qsbr_worker_quiescent(d, 0);
+  ck_assert_int_eq(qsbr_mark_passed(d, mark), 1);
+  qsbr_domain_destroy(d);
+}
+END_TEST
+
+START_TEST(worker_going_online_again_blocks_later_marks) {
+  qsbr_domain_t *d = qsbr_domain_create(1);
+  uint64_t mark[1];
+
+  qsbr_worker_offline(d, 0);
+  qsbr_worker_offline(d, 0);
+  qsbr_worker_online(d, 0);
+  qsbr_worker_online(d, 0);
+  qsbr_mark(d, mark);
+  ck_assert_int_eq(qsbr_mark_passed(d, mark), 0);
+  qsbr_worker_quiescent(d, 0);
+  ck_assert_int_eq(qsbr_mark_passed(d, mark), 1);
+  qsbr_domain_destroy(d);
+}
+END_TEST
+
+START_TEST(offline_transition_after_mark_counts_as_passed) {
+  qsbr_domain_t *d = qsbr_domain_create(1);
+  uint64_t mark[1];
+
+  qsbr_mark(d, mark);
+  qsbr_worker_offline(d, 0);
+  ck_assert_int_eq(qsbr_mark_passed(d, mark), 1);
+  qsbr_worker_online(d, 0);
+  ck_assert_int_eq(qsbr_mark_passed(d, mark), 1);
+  qsbr_worker_offline(NULL, 0);
+  qsbr_worker_online(NULL, 0);
+  qsbr_worker_offline(d, 5);
+  qsbr_worker_online(d, -1);
+  qsbr_domain_destroy(d);
+}
+END_TEST
+
 START_TEST(backoff_returns_at_every_spin_level) {
   struct timespec a;
   struct timespec b;
@@ -174,6 +220,9 @@ static Suite *qsbr_suite(void) {
   tcase_add_test(tc, exclusion_skips_the_calling_worker_only);
   tcase_add_test(tc, out_of_range_workers_are_ignored);
   tcase_add_test(tc, single_worker_domain_passes_after_one_tick);
+  tcase_add_test(tc, offline_worker_does_not_hold_up_a_grace_period);
+  tcase_add_test(tc, worker_going_online_again_blocks_later_marks);
+  tcase_add_test(tc, offline_transition_after_mark_counts_as_passed);
   tcase_add_test(tc, backoff_returns_at_every_spin_level);
   tcase_add_test(tc, concurrent_workers_eventually_satisfy_a_pending_mark);
   suite_add_tcase(s, tc);

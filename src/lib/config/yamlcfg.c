@@ -125,7 +125,9 @@ static int apply_value(walk_t *w, const char *val, int line, int in_seq, unsigne
   yamlcfg_t *y = w->y;
   char err[192] = "";
   size_t i;
-  for (i = 0; i < w->nkeys; i++) if (!strcmp(w->keys[i].key, w->path)) break;
+  for (i = 0; i < w->nkeys; i++) {
+    if (!strcmp(w->keys[i].key, w->path)) break;
+  }
   if (i == w->nkeys) {
     warn_at(y, line, "unknown key '%s'", w->path);
     return 0;
@@ -147,7 +149,9 @@ static int apply_value(walk_t *w, const char *val, int line, int in_seq, unsigne
 }
 
 static int list_kind(const walk_t *w) {
-  for (size_t i = 0; i < w->nkeys; i++) if (!strcmp(w->keys[i].key, w->path)) return w->keys[i].list;
+  for (size_t i = 0; i < w->nkeys; i++) {
+    if (!strcmp(w->keys[i].key, w->path)) return w->keys[i].list;
+  }
   return 0;
 }
 
@@ -161,7 +165,9 @@ static int item_event(walk_t *w, int begin, int line) {
 
 static void item_reset_seen(walk_t *w) {
   size_t plen = strlen(w->path);
-  for (size_t i = 0; i < w->nkeys; i++) if (!strncmp(w->keys[i].key, w->path, plen) && w->keys[i].key[plen] == '.') w->seen[i] = 0;
+  for (size_t i = 0; i < w->nkeys; i++) {
+    if (!strncmp(w->keys[i].key, w->path, plen) && w->keys[i].key[plen] == '.') w->seen[i] = 0;
+  }
 }
 
 static int on_map_start(walk_t *w, int line) {

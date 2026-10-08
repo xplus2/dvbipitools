@@ -35,7 +35,9 @@ bcg_programme_t *bcg_add_programme(bcg_doc_t *d) {
 }
 
 const bcg_channel_t *bcg_find_channel(const bcg_doc_t *d, const char *id) {
-  for (int i = 0; i < d->channel_count; i++) if (!strcmp(d->channels[i].id, id)) return &d->channels[i];
+  for (int i = 0; i < d->channel_count; i++) {
+    if (!strcmp(d->channels[i].id, id)) return &d->channels[i];
+  }
   return NULL;
 }
 

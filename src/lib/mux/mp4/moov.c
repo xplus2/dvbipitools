@@ -215,16 +215,20 @@ static void build_stss(mp4buf_t *out, const track_t *t) {
   size_t cnt_pos;
   uint32_t entries = 0;
   int any_nonkey = 0;
-  for (int i = 0; i < t->nsamp; i++) if (!t->samp[i].keyframe) any_nonkey = 1;
+  for (int i = 0; i < t->nsamp; i++) {
+    if (!t->samp[i].keyframe) any_nonkey = 1;
+  }
   if (!any_nonkey) return;
   memset(&b, 0, sizeof b);
   mb_u8(&b, 0);
   mb_u24(&b, 0);
   cnt_pos = b.len;
   mb_u32(&b, 0);
-  for (int i = 0; i < t->nsamp; i++) if (t->samp[i].keyframe) {
-    mb_u32(&b, (uint32_t)(i + 1));
-    entries++;
+  for (int i = 0; i < t->nsamp; i++) {
+    if (t->samp[i].keyframe) {
+      mb_u32(&b, (uint32_t)(i + 1));
+      entries++;
+    }
   }
   mb_patch_u32(&b, cnt_pos, entries);
   mb_box(out, "stss", &b);

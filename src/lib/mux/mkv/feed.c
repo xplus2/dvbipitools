@@ -34,7 +34,9 @@ static void on_cue(void *ctx, const ttx_cue_t *cue) {
 
 /* psi_have_sdt(): "arrived", not "ours". programs cycle independently, check name itself */
 static int all_psi_named(const mkv_t *m) {
-  for (int i = 0; i < m->npsi; i++) if (!psi_service_name(m->psi[i])[0]) return 0;
+  for (int i = 0; i < m->npsi; i++) {
+    if (!psi_service_name(m->psi[i])[0]) return 0;
+  }
   return 1;
 }
 

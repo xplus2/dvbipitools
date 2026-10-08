@@ -32,10 +32,12 @@ static void lock_program_pids(hls_seg_ctx_t *s) {
 static void lcevc_lock(hls_seg_ctx_t *s, int n, const psi_es_t *es) {
   unsigned count = 0;
   const unsigned *pids = NULL;
-  for (int i = 0; i < n; i++) if (es[i].pid == s->demux.video_pid) {
-    pids = es[i].lcevc_pid;
-    count = (unsigned)es[i].lcevc_pid_count;
-    break;
+  for (int i = 0; i < n; i++) {
+    if (es[i].pid == s->demux.video_pid) {
+      pids = es[i].lcevc_pid;
+      count = (unsigned)es[i].lcevc_pid_count;
+      break;
+    }
   }
   hls_set_lcevc_pids(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, s->container, pids, (int)count);
   pidlock_apply_lcevc(&s->lcevc, &s->filter, pids, (int)count);
@@ -59,23 +61,27 @@ static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *
     int n;
     int i;
     const psi_es_t *es = psi_es(s->demux.psi, &n);
-    for (i = 0; i < n; i++) if (es[i].cls == PID_VIDEO) {
-      s->demux.video_pid = es[i].pid;
-      s->demux.video_codec = es[i].codec;
-      s->video.es.codec = es[i].codec;
-      pes_track(s->demux.pes, s->demux.video_pid);
-      s->demux.video_pid_known = 1;
-      break;
-    }
-    if (s->demux.video_pid_known && s->container == SEG_CONTAINER_FMP4) for (i = 0; i < n; i++) {
-      if (es[i].cls == PID_AUDIO && audio_codec_supported(es[i].codec)) {
-        s->demux.audio_pid = es[i].pid;
-        s->demux.audio_codec = es[i].codec;
-        s->audio.es.codec = es[i].codec;
-        pes_track(s->demux.pes, s->demux.audio_pid);
-        s->demux.audio_pid_known = 1;
-        s->audio.present = 1;
+    for (i = 0; i < n; i++) {
+      if (es[i].cls == PID_VIDEO) {
+        s->demux.video_pid = es[i].pid;
+        s->demux.video_codec = es[i].codec;
+        s->video.es.codec = es[i].codec;
+        pes_track(s->demux.pes, s->demux.video_pid);
+        s->demux.video_pid_known = 1;
         break;
+      }
+    }
+    if (s->demux.video_pid_known && s->container == SEG_CONTAINER_FMP4) {
+      for (i = 0; i < n; i++) {
+        if (es[i].cls == PID_AUDIO && audio_codec_supported(es[i].codec)) {
+          s->demux.audio_pid = es[i].pid;
+          s->demux.audio_codec = es[i].codec;
+          s->audio.es.codec = es[i].codec;
+          pes_track(s->demux.pes, s->demux.audio_pid);
+          s->demux.audio_pid_known = 1;
+          s->audio.present = 1;
+          break;
+        }
       }
     }
     if (s->demux.video_pid_known) {

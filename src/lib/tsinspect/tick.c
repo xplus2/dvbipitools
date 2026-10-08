@@ -100,7 +100,9 @@ static void check_cat(tsinspect_t *t) {
 }
 
 static int u16_contains(const unsigned short *list, int n, unsigned short v) {
-  for (int i = 0; i < n; i++) if (list[i] == v) return 1;
+  for (int i = 0; i < n; i++) {
+    if (list[i] == v) return 1;
+  }
   return 0;
 }
 
@@ -146,7 +148,12 @@ static void check_referenced_pids(tsinspect_t *t) {
     unsigned pid = i < n ? es[i].pid : pcr;
     int dup = 0;
     if (pid == 0 || pid >= 8192) continue;
-    for (int k = 0; k < i && k < n; k++) if (es[k].pid == pid) { dup = 1; break; }
+    for (int k = 0; k < i && k < n; k++) {
+      if (es[k].pid == pid) {
+        dup = 1;
+        break;
+      }
+    }
     if (dup) continue;
     if (t->cc[pid] & CC_WIN) t->x->miss_run[pid] = 0;
     else if (t->x->miss_run[pid] < 255) {
@@ -174,7 +181,9 @@ static void rebuild_pts_slots(tsinspect_t *t) {
     t->x->pts[t->pts_n].flag = 0;
     t->x->pts[t->pts_n].lead_have = 0;
     t->x->pts[t->pts_n].underruns = 0;
-    for (int k = 0; k < old_n; k++) if (old[k].pid == es[i].pid) t->x->pts[t->pts_n].underruns = old[k].underruns;
+    for (int k = 0; k < old_n; k++) {
+      if (old[k].pid == es[i].pid) t->x->pts[t->pts_n].underruns = old[k].underruns;
+    }
     t->pts_n++;
     t->x->pts_idx[es[i].pid] = (unsigned char)t->pts_n;
   }

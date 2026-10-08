@@ -29,7 +29,9 @@ args_status_t rec_cli_check(config_t *cfg) {
     return ARGS_ERR;
   }
   n_rist_out = 0;
-  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RIST) n_rist_out++;
+  for (int i = 0; i < cfg->n_out; i++) {
+    if (cfg->out[i].kind == OUT_RIST) n_rist_out++;
+  }
   if (n_rist_out > 1) {
     argerr("at most one -o rist:// target: librist isn't safe with more than one context per process");
     return ARGS_ERR;
@@ -52,9 +54,11 @@ args_status_t rec_cli_check(config_t *cfg) {
   }
   if (!cfg->fl.have_format) {
     cfg->format = FMT_TS;
-    for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_FILE && strcmp(cfg->out[i].file_path, "-") != 0) {
-      rec_fmt_from_suffix(cfg->out[i].file_path, &cfg->format);
-      break;
+    for (int i = 0; i < cfg->n_out; i++) {
+      if (cfg->out[i].kind == OUT_FILE && strcmp(cfg->out[i].file_path, "-") != 0) {
+        rec_fmt_from_suffix(cfg->out[i].file_path, &cfg->format);
+        break;
+      }
     }
   }
   has_rtp_udp = 0;
@@ -99,7 +103,9 @@ args_status_t rec_cli_check(config_t *cfg) {
     return ARGS_ERR;
   }
   has_rist = 0;
-  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_RIST) has_rist = 1;
+  for (int i = 0; i < cfg->n_out; i++) {
+    if (cfg->out[i].kind == OUT_RIST) has_rist = 1;
+  }
   if (!has_rist && (cfg->fl.have_profile || cfg->fl.have_secret || cfg->fl.have_cname || cfg->fl.have_buffer || cfg->rist_key_size)) log_line(TOOL_NAME ": --rist-profile/--rist-secret/--rist-encryption-type/--rist-cname/--rist-buffer need -o rist:// target");
   if (has_rist && cfg->fl.have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
     argerr("--rist-secret requires --rist-profile main");
@@ -126,7 +132,9 @@ args_status_t rec_cli_check(config_t *cfg) {
   if (rec_validate_srt_passphrase(cfg->srt_passphrase, cfg->srt_pbkeylen, "")) return ARGS_ERR;
 
   has_srt_out = 0;
-  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == OUT_SRT) has_srt_out = 1;
+  for (int i = 0; i < cfg->n_out; i++) {
+    if (cfg->out[i].kind == OUT_SRT) has_srt_out = 1;
+  }
   if (!has_srt_out && (cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
     log_line(TOOL_NAME ": --srt-* needs -o srt:// target");
   return ARGS_OK;

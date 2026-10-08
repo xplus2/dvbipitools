@@ -193,7 +193,11 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
     flush_batch_if_stale(&c->out);
     now = mono_seconds();
     now_t = time(NULL);
-    if (c->insp_on) for (unsigned i = 0; i < n; i++) if (c->insp_in[i]) tsinspect_tick(c->insp_in[i], now);
+    if (c->insp_on) {
+      for (unsigned i = 0; i < n; i++) {
+        if (c->insp_in[i]) tsinspect_tick(c->insp_in[i], now);
+      }
+    }
     if (c->out.insp) tsinspect_tick(c->out.insp, now);
     for (unsigned i = 0; i < n; i++) retryset_service(c->rs, i, now_t);
 
@@ -253,7 +257,9 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
       c->last_stat = now;
     }
     active = 0;
-    for (unsigned i = 0; i < n; i++) if (c->progs[i].rx) active++;
+    for (unsigned i = 0; i < n; i++) {
+      if (c->progs[i].rx) active++;
+    }
     emit_metrics(mx, now, &c->out, n, active, c->input_stats, n, c->tsm_p, c->cas);
   }
 }

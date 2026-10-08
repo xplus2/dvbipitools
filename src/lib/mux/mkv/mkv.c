@@ -38,7 +38,9 @@ mkv_t *mkv_new(int fd, const mkv_opts_t *opts, int video_ok, unsigned long long 
 }
 
 static int all_psi_ready(const mkv_t *m) {
-  for (int i = 0; i < m->npsi; i++) if (!psi_ready(m->psi[i])) return 0;
+  for (int i = 0; i < m->npsi; i++) {
+    if (!psi_ready(m->psi[i])) return 0;
+  }
   return 1;
 }
 
@@ -46,7 +48,9 @@ void mkv_feed(mkv_t *m, const unsigned char *pkt) {
   unsigned pid;
   if (m->err) return;
   pid = tspack_pid(pkt);
-  for (int i = 0; i < m->npsi; i++) if (psi_wants_pid(m->psi[i], pid)) psi_feed(m->psi[i], pkt);
+  for (int i = 0; i < m->npsi; i++) {
+    if (psi_wants_pid(m->psi[i], pid)) psi_feed(m->psi[i], pkt);
+  }
   if (!m->setup && all_psi_ready(m)) setup(m);
   if (m->setup) pes_feed(m->pes, pkt);
   if (m->setup && !m->started && m->ntrk) all_ready(m); /* re-check: SDT may arrive later */
@@ -60,7 +64,9 @@ void mkv_close(mkv_t *m) {
   if (!m) return;
   m->flushing = 1;
   if (m->pes) pes_flush(m->pes);
-  for (int i = 0; i < m->ntrk; i++) if (m->trk[i].ttx) ttx_flush(m->trk[i].ttx);
+  for (int i = 0; i < m->ntrk; i++) {
+    if (m->trk[i].ttx) ttx_flush(m->trk[i].ttx);
+  }
   if (!m->started && m->ntrk) start(m);
   cluster_flush(m);
   for (int i = 0; i < m->ntrk; i++) {

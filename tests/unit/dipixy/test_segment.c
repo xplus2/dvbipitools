@@ -19,6 +19,17 @@
 #define CHAIN 3
 
 static const lcevc_select_t full = {LCEVC_SEL_FULL, 0, 0};
+void *__real_malloc(size_t size);
+static int g_fail_retire_alloc;
+
+void *__wrap_malloc(size_t size) {
+  if (g_fail_retire_alloc && size >= QSBR_MAX_WORKERS * sizeof(uint64_t) && size < QSBR_MAX_WORKERS * sizeof(uint64_t) + 64) {
+    g_fail_retire_alloc = 0;
+    return NULL;
+  }
+  return __real_malloc(size);
+}
+
 static const lcevc_select_t base = {LCEVC_SEL_BASE, 0, 0};
 
 static void world_open(void) {
@@ -238,6 +249,24 @@ START_TEST(sweep_leaves_active_and_subscribed_segmenters_alone) {
 }
 END_TEST
 
+START_TEST(sweep_retire_oom_keeps_the_segmenter_alive) {
+  capture_ctx_t *ctx;
+  hls_seg_ctx_t *segs[1];
+  pid_filter_t none = {0};
+
+  world_open();
+  ctx = open_ctx();
+  segs[0] = make_seg(ctx, &none, 0x100, &full, SEG_CONTAINER_TS, 0.0);
+  atomic_store(&segs[0]->last_request_ms, 0);
+  g_fail_retire_alloc = 1;
+  hls_seg_sweep_idle();
+  ck_assert_int_eq(g_fail_retire_alloc, 0);
+  ck_assert_uint_eq(segs[0]->pmt_pid, 0x100);
+  free(segs[0]);
+  capture_close(ctx);
+}
+END_TEST
+
 START_TEST(touch_with_an_existing_key_reuses_the_segmenter) {
   capture_ctx_t *ctx;
   hls_seg_ctx_t *a;
@@ -266,6 +295,7 @@ static Suite *segment_suite(void) {
   tcase_add_test(tc, touch_fails_on_a_segmenter_being_retired);
   tcase_add_loop_test(tc, unlinking_keeps_the_rest_of_the_chain_intact, 0, CHAIN);
   tcase_add_test(tc, sweep_leaves_active_and_subscribed_segmenters_alone);
+  tcase_add_test(tc, sweep_retire_oom_keeps_the_segmenter_alive);
   tcase_add_test(tc, touch_with_an_existing_key_reuses_the_segmenter);
   suite_add_tcase(s, tc);
   return s;

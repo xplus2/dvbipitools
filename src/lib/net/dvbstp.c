@@ -211,7 +211,9 @@ int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, d
   s->have[h.section_number] = 1;
   r->malformed_logged = 0;
 
-  for (i = 0; i <= (int)s->last_section_number; i++) if (!s->have[i]) return 0;
+  for (i = 0; i <= (int)s->last_section_number; i++) {
+    if (!s->have[i]) return 0;
+  }
 
   o = 0;
   for (i = 0; i <= (int)s->last_section_number; i++) {

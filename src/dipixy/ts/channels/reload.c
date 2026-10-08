@@ -103,7 +103,9 @@ static void *refresh_thread_fn(void *arg) {
   while (g_refresh_running && !signal_stop_requested()) {
     if (signal_reload_requested()) channels_reload_all(a->ch, a->cfg);
     if (mono_seconds() >= next) {
-      for (int i = 0; i < a->cfg->n_sources; i++) if (a->cfg->sources[i].kind == SRC_SDS) reload_one_list(a->ch, a->cfg->sources[i].ordinal - 1, &a->cfg->sources[i], a->cfg);
+      for (int i = 0; i < a->cfg->n_sources; i++) {
+        if (a->cfg->sources[i].kind == SRC_SDS) reload_one_list(a->ch, a->cfg->sources[i].ordinal - 1, &a->cfg->sources[i], a->cfg);
+      }
       next = mono_seconds() + a->cfg->sds_refresh_interval_s;
     }
     if (wfd >= 0) {

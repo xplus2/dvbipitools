@@ -121,7 +121,9 @@ int growbuf_reserve(void **buf, size_t *cap, size_t elem_size, size_t need_elems
 }
 
 int all_digits(const char *s, int n) {
-  for (int i = 0; i < n; i++) if (!isdigit((unsigned char)s[i])) return 0;
+  for (int i = 0; i < n; i++) {
+    if (!isdigit((unsigned char)s[i])) return 0;
+  }
   return 1;
 }
 

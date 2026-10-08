@@ -76,7 +76,9 @@ static const char *basename_of(const char *path) {
 }
 
 static const applet_t *find_by_full_name(const char *name) {
-  for (size_t i = 0; i < N_APPLETS; i++) if (strcmp(APPLETS[i].full_name, name) == 0) return &APPLETS[i];
+  for (size_t i = 0; i < N_APPLETS; i++) {
+    if (strcmp(APPLETS[i].full_name, name) == 0) return &APPLETS[i];
+  }
   return NULL;
 }
 

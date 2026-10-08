@@ -331,7 +331,7 @@ typedef struct {
 } cb_state_t;
 
 static int scripted_ecm(const unsigned char *ecm, size_t ecm_len, unsigned srvid, unsigned caid, unsigned prid, unsigned char cw_out[16], void *user) {
-  cb_state_t *st = user;
+  const cb_state_t *st = user;
 
   (void)ecm;
   (void)ecm_len;

@@ -153,7 +153,9 @@ unsigned csa2_batch_size(void) {
    in one call, verified against the single-packet API on mixed non-8-aligned lengths (real TS payloads vary with adaptation field size) */
 static unsigned int csa2_batch_maxlen(const csa2_batch_entry_t *entries, unsigned n) {
   unsigned int maxlen = 0;
-  for (unsigned i = 0; i < n; i++) if ((unsigned int)entries[i].len > maxlen) maxlen = (unsigned int)entries[i].len;
+  for (unsigned i = 0; i < n; i++) {
+    if ((unsigned int)entries[i].len > maxlen) maxlen = (unsigned int)entries[i].len;
+  }
   return (maxlen + 7u) & ~7u;
 }
 

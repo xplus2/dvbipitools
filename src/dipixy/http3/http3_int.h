@@ -143,23 +143,27 @@ extern _Thread_local int t_h3_pool_free_n;
 extern _Thread_local uint32_t t_h3_hash_cap;
 
 static inline h3_req_t *find_req(h3_conn_t *c, int64_t sid) {
-  for (int i = 0; i < c->max_reqs; i++) if (c->reqs[i].active && c->reqs[i].stream_id == sid) return &c->reqs[i];
+  for (int i = 0; i < c->max_reqs; i++) {
+    if (c->reqs[i].active && c->reqs[i].stream_id == sid) return &c->reqs[i];
+  }
   return NULL;
 }
 
 static inline h3_req_t *alloc_req(h3_conn_t *c, int64_t sid) {
-  for (int i = 0; i < c->max_reqs; i++) if (!c->reqs[i].active) {
-    char *path = malloc(H3_PATH_MAX);
-    if (!path) return NULL;
-    path[0] = '\0';
-    memset(&c->reqs[i], 0, sizeof(h3_req_t));
-    c->reqs[i].path = path;
-    c->reqs[i].active = 1;
-    c->reqs[i].stream_id = sid;
-    c->reqs[i].tspush_sub_idx = -1;
-    c->reqs[i].dashchunk_sub_idx = -1;
-    c->reqs[i].mp4push_sub_idx = -1;
-    return &c->reqs[i];
+  for (int i = 0; i < c->max_reqs; i++) {
+    if (!c->reqs[i].active) {
+      char *path = malloc(H3_PATH_MAX);
+      if (!path) return NULL;
+      path[0] = '\0';
+      memset(&c->reqs[i], 0, sizeof(h3_req_t));
+      c->reqs[i].path = path;
+      c->reqs[i].active = 1;
+      c->reqs[i].stream_id = sid;
+      c->reqs[i].tspush_sub_idx = -1;
+      c->reqs[i].dashchunk_sub_idx = -1;
+      c->reqs[i].mp4push_sub_idx = -1;
+      return &c->reqs[i];
+    }
   }
   return NULL;
 }

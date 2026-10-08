@@ -338,7 +338,9 @@ static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
 
 static int count_kind(const config_t *cfg, out_kind_t k) {
   int n = 0;
-  for (int i = 0; i < cfg->n_out; i++) if (cfg->out[i].kind == k) n++;
+  for (int i = 0; i < cfg->n_out; i++) {
+    if (cfg->out[i].kind == k) n++;
+  }
   return n;
 }
 

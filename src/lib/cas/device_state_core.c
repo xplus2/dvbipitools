@@ -46,7 +46,9 @@ void device_core_lock(device_core_t *core) { pthread_mutex_lock(&core->lock); }
 void device_core_unlock(device_core_t *core) { pthread_mutex_unlock(&core->lock); }
 
 service_key_t *device_core_service_slot_locked(device_core_t *core, unsigned service_id, int create) {
-  for (size_t i = 0; i < core->service_count; i++) if (core->services[i].service_id == service_id) return &core->services[i];
+  for (size_t i = 0; i < core->service_count; i++) {
+    if (core->services[i].service_id == service_id) return &core->services[i];
+  }
   if (!create || core->service_count >= core->max_services) return NULL;
   core->services[core->service_count].service_id = service_id;
   core->services[core->service_count].have = 0;
@@ -56,7 +58,9 @@ service_key_t *device_core_service_slot_locked(device_core_t *core, unsigned ser
 unsigned device_core_services_active(device_core_t *core) {
   unsigned n = 0;
   device_core_lock(core);
-  for (size_t i = 0; i < core->service_count; i++) if (core->services[i].have) n++;
+  for (size_t i = 0; i < core->service_count; i++) {
+    if (core->services[i].have) n++;
+  }
   device_core_unlock(core);
   return n;
 }

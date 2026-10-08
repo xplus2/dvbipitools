@@ -99,9 +99,11 @@ void ret_handle_nack(ret_ctx_t *r, const rtcp_nack_t *nack, int fd, const struct
 
     /* F.3.1/Figure F.2: always reply directly to requester */
     repair_seq(r, c, pid, fd, from, fromlen);
-    for (unsigned bit = 0; bit < 16; bit++) if (blp & (1u << bit)) {
-      uint16_t seq = (uint16_t)(pid + bit + 1);
-      repair_seq(r, c, seq, fd, from, fromlen);
+    for (unsigned bit = 0; bit < 16; bit++) {
+      if (blp & (1u << bit)) {
+        uint16_t seq = (uint16_t)(pid + bit + 1);
+        repair_seq(r, c, seq, fd, from, fromlen);
+      }
     }
   }
 }
