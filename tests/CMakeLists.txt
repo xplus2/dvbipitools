@@ -1687,6 +1687,117 @@ dvbipitools_add_unit_test(dipiradiohead_args
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
+dvbipitools_add_unit_test(dipiradiohead_args_cas
+    unit/dipiradiohead/test_args_cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/check.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/help.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/opt_cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/opt_general.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/opt_net.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/values.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/core.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/input.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/network.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/general.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/load.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
+dvbipitools_add_unit_test(dipiradiohead_args_general
+    unit/dipiradiohead/test_args_general.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/check.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/help.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/opt_cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/opt_general.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/opt_net.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/values.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/core.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/input.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/network.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/general.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/load.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
+dvbipitools_add_unit_test(dipiradiohead_args_net
+    unit/dipiradiohead/test_args_net.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/check.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/help.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/opt_cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/opt_general.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/opt_net.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/cli/values.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/core.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/input.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/network.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/general.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/config/load.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
 dvbipitools_add_unit_test(dipiradiohead_source_async
     unit/dipiradiohead/input/test_source_async.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
@@ -2180,6 +2291,190 @@ dvbipitools_add_unit_test(dipitvhead_source
 
 dvbipitools_add_unit_test(dipitvhead_args
     unit/dipitvhead/test_args.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/check.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/help.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_general.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_input.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_net.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/uri.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/values.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/core.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/input.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/network.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/general.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/load.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
+
+dvbipitools_add_unit_test(dipitvhead_args_cas
+    unit/dipitvhead/test_args_cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/check.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/help.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_general.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_input.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_net.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/uri.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/values.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/core.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/input.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/network.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/general.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/load.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
+
+dvbipitools_add_unit_test(dipitvhead_args_input
+    unit/dipitvhead/test_args_input.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/check.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/help.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_general.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_input.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_net.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/uri.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/values.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/core.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/input.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/network.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/general.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/load.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
+
+dvbipitools_add_unit_test(dipitvhead_args_net
+    unit/dipitvhead/test_args_net.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/check.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/help.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_general.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_input.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/opt_net.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/uri.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/values.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/core.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/input.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/network.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/general.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/config/load.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_args.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
+
+dvbipitools_add_unit_test(dipitvhead_args_general
+    unit/dipitvhead/test_args_general.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/args.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/check.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/cli/help.c
@@ -3493,6 +3788,13 @@ foreach(script ${DIPIXY_INTEGRATION_SCRIPTS})
     dvbipitools_add_integration_test(dipixy ${script})
 endforeach()
 
+if (TARGET dvbipitools)
+    file(GLOB DVBIPITOOLS_INTEGRATION_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/dvbipitools/*.sh")
+    foreach(script ${DVBIPITOOLS_INTEGRATION_SCRIPTS})
+        dvbipitools_add_integration_test(dvbipitools ${script})
+    endforeach()
+endif()
+
 if (TARGET dipirist)
     file(GLOB DIPIRIST_INTEGRATION_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/dipirist/*.sh")
     list(REMOVE_ITEM DIPIRIST_INTEGRATION_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/dipirist/bonding_common.sh")
@@ -4118,6 +4420,19 @@ if (TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c)
     target_link_libraries(test_lib_net_srt_srtsrc_sink PRIVATE PkgConfig::SRT)
+    dvbipitools_add_unit_test(lib_net_srt_srtin_out
+        unit/lib/net/srt/test_srtin_out.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
+        ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
+        ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c)
+    target_link_libraries(test_lib_net_srt_srtin_out PRIVATE PkgConfig::SRT)
 else ()
     message(WARNING "tests: dipisrt not built (libsrt missing), skipping its bridge and srtcommon unit tests")
 endif ()
@@ -4204,6 +4519,34 @@ target_link_libraries(test_dipimetrics_httpserver PRIVATE OpenSSL::SSL OpenSSL::
 
 dvbipitools_add_unit_test(dipixy_args
     unit/dipixy/test_args.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/cli/args.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/cli/auth.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/cli/check.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/cli/help.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/cli/inputs.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/cli/opt_dlna.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/cli/opt_general.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/cli/opt_http.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/cli/opt_server.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/cli/opt_stream.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/cli/values.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/config.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+    ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+    ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/core/route.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/base64.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/cpuaffinity.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c)
+
+dvbipitools_add_unit_test(dipixy_config
+    unit/dipixy/test_config.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/cli/args.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/cli/auth.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/cli/check.c
@@ -4635,6 +4978,16 @@ dvbipitools_add_unit_test(dipixy_gena
     ${CMAKE_SOURCE_DIR}/src/lib/fccret/ret_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/fccret/fcc_client.c)
 
+dvbipitools_add_unit_test(dipixy_ssdp
+    unit/dipixy/test_ssdp.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
 dvbipitools_add_unit_test(dipixy_dlna
     unit/dipixy/test_dlna.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/core/input_walk.c
@@ -5056,8 +5409,11 @@ if (TARGET dipixy)
     dipixy_add_full_unit_test(dipixy_metrics unit/dipixy/test_metrics.c)
     dipixy_add_full_unit_test(dipixy_reactor_loop unit/dipixy/test_reactor_loop.c)
     dipixy_add_full_unit_test(dipixy_reactor_run unit/dipixy/test_reactor_run.c)
+    dipixy_add_full_unit_test(dipixy_reactor_routes unit/dipixy/test_reactor_routes.c)
     if ("HAVE_TLS" IN_LIST DIPIXY_FULL_DEFS)
         dipixy_add_full_unit_test(dipixy_reactor_tls unit/dipixy/test_reactor_tls.c)
+        dipixy_add_full_unit_test(dipixy_reactor_tls_cert unit/dipixy/test_reactor_tls_cert.c)
+        dipixy_add_full_unit_test(dipixy_reactor_tls_lifecycle unit/dipixy/test_reactor_tls_lifecycle.c)
     endif ()
 endif ()
 

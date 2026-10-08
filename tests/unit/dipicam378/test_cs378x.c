@@ -6,6 +6,8 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <stdatomic.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -318,6 +320,363 @@ START_TEST(server_stop_reaps_all_max_conns_in_mixed_states) {
 }
 END_TEST
 
+#define TEST_PASSWORD "secret"
+#define TEST_BUF 8192
+
+typedef struct {
+  atomic_int ecm_result;
+  atomic_int emm_seen;
+  atomic_uint emm_caid;
+  atomic_uint emm_provid;
+} cb_state_t;
+
+static int scripted_ecm(const unsigned char *ecm, size_t ecm_len, unsigned srvid, unsigned caid, unsigned prid, unsigned char cw_out[16], void *user) {
+  cb_state_t *st = user;
+
+  (void)ecm;
+  (void)ecm_len;
+  (void)srvid;
+  (void)caid;
+  (void)prid;
+  for (int i = 0; i < 16; i++) cw_out[i] = (unsigned char)(0xA0 + i);
+  return atomic_load(&st->ecm_result);
+}
+
+static void recording_emm(const unsigned char *emm, size_t emm_len, unsigned caid, unsigned provid, void *user) {
+  cb_state_t *st = user;
+
+  (void)emm;
+  (void)emm_len;
+  atomic_store(&st->emm_caid, caid);
+  atomic_store(&st->emm_provid, provid);
+  atomic_store(&st->emm_seen, 1);
+}
+
+static size_t build_frame(unsigned char *frame, const unsigned char ucrc[4], const char *password, unsigned cmd, const unsigned char *payload, size_t plen, unsigned len_byte) {
+  unsigned char key[16];
+  unsigned char body[TEST_BUF];
+  size_t buflen = cmd == 0 ? 3 + (((size_t)(payload[1] & 0x0F) << 8) | payload[2]) : plen;
+  size_t total = cs378x_frame_boundary(20 + buflen);
+  uint32_t crc;
+
+  if (total < 32) total = 32;
+  memset(body, 0, sizeof body);
+  body[0] = (unsigned char)cmd;
+  body[1] = (unsigned char)len_byte;
+  body[8] = 0x12;
+  body[9] = 0x34;
+  body[10] = 0x4A;
+  body[11] = 0x75;
+  body[15] = 0x01;
+  memcpy(body + 20, payload, plen);
+  crc = cs378x_crc32(body + 20, buflen);
+  body[4] = (unsigned char)(crc >> 24);
+  body[5] = (unsigned char)(crc >> 16);
+  body[6] = (unsigned char)(crc >> 8);
+  body[7] = (unsigned char)crc;
+  ck_assert_int_eq(cs378x_md5((const unsigned char *)password, strlen(password), key), 0);
+  ck_assert_int_eq(cs378x_aes128_ecb(key, body, total, 1), 0);
+  memcpy(frame, ucrc, 4);
+  memcpy(frame + 4, body, total);
+  return 4 + total;
+}
+
+static size_t build_ecm(unsigned char *frame, const unsigned char ucrc[4], const char *password) {
+  static const unsigned char section[] = {0x80, 0x00, 0x00};
+
+  return build_frame(frame, ucrc, password, 0, section, sizeof section, 0);
+}
+
+static size_t build_simple(unsigned char *frame, const unsigned char ucrc[4], unsigned cmd, const unsigned char *payload, size_t plen) {
+  return build_frame(frame, ucrc, TEST_PASSWORD, cmd, payload, plen, (unsigned)plen);
+}
+
+static void send_frame(int fd, const unsigned char *frame, size_t n) {
+  ck_assert_int_eq((int)send(fd, frame, n, MSG_NOSIGNAL), (int)n);
+}
+
+static void send_ecm(int fd, const unsigned char ucrc[4], const char *password) {
+  unsigned char frame[4 + TEST_BUF];
+  size_t n = build_ecm(frame, ucrc, password);
+
+  send_frame(fd, frame, n);
+}
+
+static void send_simple(int fd, const unsigned char ucrc[4], unsigned cmd, const unsigned char *payload, size_t plen) {
+  unsigned char frame[4 + TEST_BUF];
+  size_t n = build_simple(frame, ucrc, cmd, payload, plen);
+
+  send_frame(fd, frame, n);
+}
+
+static int read_all_timed(int fd, unsigned char *buf, size_t n, int timeout_ms) {
+  size_t got = 0;
+
+  while (got < n) {
+    struct pollfd pfd = {fd, POLLIN, 0};
+    ssize_t r;
+
+    if (poll(&pfd, 1, timeout_ms) <= 0) return -1;
+    r = recv(fd, buf + got, n - got, 0);
+    if (r <= 0) return -1;
+    got += (size_t)r;
+  }
+  return 0;
+}
+
+static int read_reply(int fd, unsigned char *body, size_t body_len, int timeout_ms) {
+  unsigned char key[16];
+  unsigned char frame[4 + TEST_BUF];
+
+  if (read_all_timed(fd, frame, 4 + body_len, timeout_ms) != 0) return -1;
+  ck_assert_int_eq(cs378x_md5((const unsigned char *)TEST_PASSWORD, strlen(TEST_PASSWORD), key), 0);
+  memcpy(body, frame + 4, body_len);
+  ck_assert_int_eq(cs378x_aes128_ecb(key, body, body_len, 0), 0);
+  return 0;
+}
+
+static int peer_closed(int fd) {
+  unsigned char b[64];
+
+  for (int i = 0; i < 30; i++) {
+    struct pollfd pfd = {fd, POLLIN, 0};
+    ssize_t r;
+
+    if (poll(&pfd, 1, 100) <= 0) continue;
+    r = recv(fd, b, sizeof b, 0);
+    if (r == 0 || (r < 0 && errno == ECONNRESET)) return 1;
+  }
+  return 0;
+}
+
+static cs378x_server_t *start_server(const char *username, int verbose, cb_state_t *st, unsigned *port_out) {
+  cs378x_cfg_t cfg;
+  cs378x_server_t *srv;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.port = test_free_port();
+  cfg.password = TEST_PASSWORD;
+  cfg.username = username;
+  cfg.verbose = verbose;
+  *port_out = cfg.port;
+  srv = cs378x_server_start(&cfg, scripted_ecm, recording_emm, st);
+  ck_assert_ptr_nonnull(srv);
+  return srv;
+}
+
+static const unsigned char UCRC[4] = {1, 2, 3, 4};
+
+START_TEST(ecm_request_gets_a_control_word) {
+  cb_state_t st = {0};
+  unsigned port;
+  cs378x_server_t *srv = start_server(NULL, 1, &st, &port);
+  unsigned char body[48];
+  cs378x_metrics_t m;
+  int fd = connect_loopback(port);
+
+  send_ecm(fd, UCRC, TEST_PASSWORD);
+  ck_assert_int_eq(read_reply(fd, body, sizeof body, 1500), 0);
+  ck_assert_int_eq(body[0], 1);
+  ck_assert_int_eq(body[1], 16);
+  for (int i = 0; i < 16; i++) ck_assert_int_eq(body[20 + i], 0xA0 + i);
+  cs378x_server_get_metrics(srv, &m);
+  ck_assert_uint_eq(m.ecm_total, 1u);
+  ck_assert_uint_eq(m.ecm_errors_total, 0u);
+  close(fd);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
+START_TEST(unsupported_caid_gets_the_stop_asking_answer) {
+  cb_state_t st = {0};
+  unsigned port;
+  cs378x_server_t *srv;
+  unsigned char body[32];
+  cs378x_metrics_t m;
+  int fd;
+
+  atomic_store(&st.ecm_result, -2);
+  srv = start_server(NULL, 0, &st, &port);
+  fd = connect_loopback(port);
+  send_ecm(fd, UCRC, TEST_PASSWORD);
+  ck_assert_int_eq(read_reply(fd, body, sizeof body, 1500), 0);
+  ck_assert_int_eq(body[0], 8);
+  ck_assert_int_eq(body[1], 2);
+  cs378x_server_get_metrics(srv, &m);
+  ck_assert_uint_eq(m.ecm_errors_total, 1u);
+  close(fd);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
+START_TEST(transient_ecm_failure_gets_no_answer_but_keeps_the_connection) {
+  cb_state_t st = {0};
+  unsigned port;
+  cs378x_server_t *srv;
+  unsigned char body[32];
+  int fd;
+
+  atomic_store(&st.ecm_result, -1);
+  srv = start_server(NULL, 1, &st, &port);
+  fd = connect_loopback(port);
+  send_ecm(fd, UCRC, TEST_PASSWORD);
+  ck_assert_int_ne(read_reply(fd, body, sizeof body, 400), 0);
+  send_simple(fd, UCRC, 55, (const unsigned char *)"\0", 1);
+  ck_assert_int_eq(read_reply(fd, body, sizeof body, 1500), 0);
+  ck_assert_int_eq(body[0], 55);
+  close(fd);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
+START_TEST(emm_commands_reach_the_callback_without_a_reply) {
+  static const unsigned cmds[] = {6, 19};
+  cb_state_t st = {0};
+  unsigned port;
+  cs378x_server_t *srv = start_server(NULL, 1, &st, &port);
+  unsigned char body[32];
+  unsigned char payload[10] = {0x82, 0x70, 0x08, 1, 2, 3, 4, 5, 6, 7};
+  cs378x_metrics_t m;
+  int fd = connect_loopback(port);
+
+  send_simple(fd, UCRC, cmds[_i], payload, sizeof payload);
+  for (int i = 0; i < 100 && !atomic_load(&st.emm_seen); i++) usleep(10000);
+  ck_assert_int_eq(atomic_load(&st.emm_seen), 1);
+  ck_assert_uint_eq(atomic_load(&st.emm_caid), 0x4A75u);
+  ck_assert_uint_eq(atomic_load(&st.emm_provid), 1u);
+  ck_assert_int_ne(read_reply(fd, body, sizeof body, 300), 0);
+  cs378x_server_get_metrics(srv, &m);
+  ck_assert_uint_eq(m.emm_total, 1u);
+  close(fd);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
+START_TEST(unknown_commands_are_ignored_and_the_connection_survives) {
+  cb_state_t st = {0};
+  unsigned port;
+  cs378x_server_t *srv = start_server(NULL, 1, &st, &port);
+  unsigned char body[32];
+  unsigned char payload[40];
+  int fd = connect_loopback(port);
+  memset(payload, 0x5A, sizeof payload);
+  send_simple(fd, UCRC, 99, payload, 4);
+  send_simple(fd, UCRC, 99, payload, sizeof payload);
+  send_simple(fd, UCRC, 55, payload, 1);
+  ck_assert_int_eq(read_reply(fd, body, sizeof body, 1500), 0);
+  ck_assert_int_eq(body[0], 55);
+  close(fd);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
+START_TEST(username_is_checked_when_configured) {
+  cb_state_t st = {0};
+  unsigned port;
+  cs378x_server_t *srv = start_server("alice", 0, &st, &port);
+  unsigned char md5[16];
+  unsigned char good[4];
+  unsigned char body[48];
+  uint32_t crc;
+  cs378x_metrics_t m;
+  int fd = connect_loopback(port);
+
+  send_ecm(fd, UCRC, TEST_PASSWORD);
+  ck_assert_int_eq(peer_closed(fd), 1);
+  close(fd);
+  ck_assert_int_eq(cs378x_md5((const unsigned char *)"alice", 5, md5), 0);
+  crc = cs378x_crc32(md5, sizeof md5);
+  good[0] = (unsigned char)(crc >> 24);
+  good[1] = (unsigned char)(crc >> 16);
+  good[2] = (unsigned char)(crc >> 8);
+  good[3] = (unsigned char)crc;
+  fd = connect_loopback(port);
+  send_ecm(fd, good, TEST_PASSWORD);
+  ck_assert_int_eq(read_reply(fd, body, sizeof body, 1500), 0);
+  cs378x_server_get_metrics(srv, &m);
+  ck_assert_uint_eq(m.auth_errors_total[CAM_AUTH_USER], 1u);
+  close(fd);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
+START_TEST(changing_the_connection_id_closes_the_connection) {
+  cb_state_t st = {0};
+  unsigned port;
+  cs378x_server_t *srv = start_server(NULL, 0, &st, &port);
+  unsigned char other[4] = {9, 9, 9, 9};
+  unsigned char body[48];
+  cs378x_metrics_t m;
+  int fd = connect_loopback(port);
+
+  send_ecm(fd, UCRC, TEST_PASSWORD);
+  ck_assert_int_eq(read_reply(fd, body, sizeof body, 1500), 0);
+  send_ecm(fd, other, TEST_PASSWORD);
+  ck_assert_int_eq(peer_closed(fd), 1);
+  cs378x_server_get_metrics(srv, &m);
+  ck_assert_uint_eq(m.auth_errors_total[CAM_AUTH_CONNID], 1u);
+  close(fd);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
+START_TEST(a_wrong_password_is_refused) {
+  cb_state_t st = {0};
+  unsigned port;
+  cs378x_server_t *srv = start_server(NULL, 0, &st, &port);
+  unsigned char frame[4 + TEST_BUF];
+  size_t n = build_ecm(frame, UCRC, "other-password");
+  cs378x_metrics_t m;
+  int fd = connect_loopback(port);
+
+  memset(frame + n, 0, 2200);
+  send_frame(fd, frame, n + 2200);
+  ck_assert_int_eq(peer_closed(fd), 1);
+  cs378x_server_get_metrics(srv, &m);
+  ck_assert_uint_eq(m.auth_errors_total[CAM_AUTH_CHECKSUM] + m.auth_errors_total[CAM_AUTH_OVERSIZED], 1u);
+  close(fd);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
+START_TEST(an_oversized_request_is_refused) {
+  static const unsigned char section[] = {0x80, 0x0F, 0xFF};
+  cb_state_t st = {0};
+  unsigned port;
+  cs378x_server_t *srv = start_server(NULL, 0, &st, &port);
+  unsigned char frame[4 + TEST_BUF];
+  cs378x_metrics_t m;
+  int fd = connect_loopback(port);
+
+  build_frame(frame, UCRC, TEST_PASSWORD, 0, section, sizeof section, 0);
+  send_frame(fd, frame, 36);
+  ck_assert_int_eq(peer_closed(fd), 1);
+  cs378x_server_get_metrics(srv, &m);
+  ck_assert_uint_eq(m.auth_errors_total[CAM_AUTH_OVERSIZED], 1u);
+  close(fd);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
+START_TEST(connections_beyond_the_limit_are_rejected) {
+  cb_state_t st = {0};
+  unsigned port;
+  cs378x_server_t *srv = start_server(NULL, 0, &st, &port);
+  unsigned char body[32];
+  int fds[5];
+
+  for (int i = 0; i < 4; i++) {
+    fds[i] = connect_loopback(port);
+    send_simple(fds[i], UCRC, 55, (const unsigned char *)"\0", 1);
+    ck_assert_int_eq(read_reply(fds[i], body, sizeof body, 1500), 0);
+  }
+  fds[4] = connect_loopback(port);
+  ck_assert_int_eq(peer_closed(fds[4]), 1);
+  for (int i = 0; i < 5; i++) close(fds[i]);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
 static Suite *cs378x_suite(void) {
   Suite *s = suite_create("cs378x");
   TCase *tc = tcase_create("core");
@@ -330,6 +689,16 @@ static Suite *cs378x_suite(void) {
   tcase_add_loop_test(tc, auth_reason_names_cover_every_enumerator, 0, (int)(sizeof auth_reason_cases / sizeof auth_reason_cases[0]));
   tcase_add_test(tc, server_stop_unblocks_slow_reader_worker);
   tcase_add_test(tc, server_stop_reaps_all_max_conns_in_mixed_states);
+  tcase_add_test(tc, ecm_request_gets_a_control_word);
+  tcase_add_test(tc, unsupported_caid_gets_the_stop_asking_answer);
+  tcase_add_test(tc, transient_ecm_failure_gets_no_answer_but_keeps_the_connection);
+  tcase_add_loop_test(tc, emm_commands_reach_the_callback_without_a_reply, 0, 2);
+  tcase_add_test(tc, unknown_commands_are_ignored_and_the_connection_survives);
+  tcase_add_test(tc, username_is_checked_when_configured);
+  tcase_add_test(tc, changing_the_connection_id_closes_the_connection);
+  tcase_add_test(tc, a_wrong_password_is_refused);
+  tcase_add_test(tc, an_oversized_request_is_refused);
+  tcase_add_test(tc, connections_beyond_the_limit_are_rejected);
   tcase_set_timeout(tc, 10);
   suite_add_tcase(s, tc);
   return s;

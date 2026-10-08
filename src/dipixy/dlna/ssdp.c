@@ -195,7 +195,7 @@ static void send_msearch_reply_one(int fd, const struct sockaddr *peer, socklen_
   if (!b.truncated) sendto(fd, pkt, b.len, 0, peer, peerlen);
 }
 
-static void handle_msearch(int fd, const char *buf, const struct sockaddr *peer, socklen_t peerlen, const config_t *cfg, const char *uuid) {
+void ssdp_handle_msearch(int fd, const char *buf, const struct sockaddr *peer, socklen_t peerlen, const config_t *cfg, const char *uuid) {
   const char *line_end;
   char st[192];
   size_t i;
@@ -204,7 +204,6 @@ static void handle_msearch(int fd, const char *buf, const struct sockaddr *peer,
   if (strncmp(buf, "M-SEARCH", 8) != 0) return;
   line_end = strstr(buf, "\r\n");
   if (!line_end || !ssdp_msearch_header(line_end + 2, "ST", st, sizeof st)) return;
-
   if (!strcmp(st, "ssdp:all")) {
     send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, NULL);
     for (i = 0; i < SSDP_NTYPES; i++) send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, ssdp_types[i]);
@@ -252,7 +251,7 @@ static void *ssdp_thread_fn(void *arg) {
     n = recvfrom(fd, buf, sizeof buf - 1, 0, (struct sockaddr *)&peer, &peerlen);
     if (n > 0) {
       buf[n] = '\0';
-      handle_msearch(fd, buf, (struct sockaddr *)&peer, peerlen, a->cfg, a->uuid);
+      ssdp_handle_msearch(fd, buf, (struct sockaddr *)&peer, peerlen, a->cfg, a->uuid);
     } else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
       log_line(TOOL_NAME ": ssdp: recv error: %s", strerror(errno));
       break;

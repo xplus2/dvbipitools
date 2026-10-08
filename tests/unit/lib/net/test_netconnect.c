@@ -153,6 +153,33 @@ START_TEST(netconnect_tcp_refused_reports_connect_error) {
 }
 END_TEST
 
+START_TEST(netaddr_fill_builds_v4_and_v6_addresses) {
+  struct sockaddr_storage ss;
+  socklen_t len = 0;
+  ck_assert_int_eq(netaddr_fill(AF_INET, "192.0.2.7", 5004, &ss, &len), 0);
+  ck_assert_uint_eq(len, sizeof(struct sockaddr_in));
+  ck_assert_int_eq(((struct sockaddr_in *)&ss)->sin_port, htons(5004));
+  ck_assert_int_eq(netaddr_fill(AF_INET6, "2001:db8::7", 5004, &ss, &len), 0);
+  ck_assert_uint_eq(len, sizeof(struct sockaddr_in6));
+  ck_assert_int_eq(((struct sockaddr_in6 *)&ss)->sin6_port, htons(5004));
+  ck_assert_int_eq(netaddr_fill(AF_INET, "not-an-address", 1, &ss, &len), -1);
+  ck_assert_int_eq(netaddr_fill(AF_INET6, "192.0.2.7", 1, &ss, &len), -1);
+}
+END_TEST
+
+START_TEST(dscp_is_applied_to_v4_and_v6_sockets) {
+  int fd4 = socket(AF_INET, SOCK_DGRAM, 0);
+  int fd6 = socket(AF_INET6, SOCK_DGRAM, 0);
+  ck_assert_int_ge(fd4, 0);
+  ck_assert_int_eq(net_set_dscp(fd4, AF_INET, NET_DSCP_VIDEO_HIGH), 0);
+  close(fd4);
+  if (fd6 >= 0) {
+    ck_assert_int_eq(net_set_dscp(fd6, AF_INET6, NET_DSCP_VIDEO_HIGH), 0);
+    close(fd6);
+  }
+}
+END_TEST
+
 START_TEST(netconnect_tcp_start_finish_refused_single_candidate) {
   netconnect_pending_t *pending = NULL;
   net_err_reason_t reason = NET_ERR_COUNT;
@@ -249,6 +276,8 @@ static Suite *netconnect_suite(void) {
   tcase_add_test(tc, netconnect_tcp_succeeds_against_local_listener);
   tcase_add_test(tc, netconnect_tcp_bounded_time_on_unreachable);
   tcase_add_test(tc, netconnect_tcp_refused_reports_connect_error);
+  tcase_add_test(tc, netaddr_fill_builds_v4_and_v6_addresses);
+  tcase_add_test(tc, dscp_is_applied_to_v4_and_v6_sockets);
   tcase_add_test(tc, netconnect_tcp_start_finish_refused_single_candidate);
   tcase_add_test(tc, netconnect_tcp_times_out_against_full_backlog);
   tcase_add_test(tc, netconnect_tcp_finish_falls_through_to_next_candidate);

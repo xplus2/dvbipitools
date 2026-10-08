@@ -1797,9 +1797,9 @@ UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_sys_signal lib
 	lib_bim_fragment lib_bim_accessunit \
 	lib_sds_xml lib_fccret_fcc_client dipibim_args dipiscan_format dipiscan_scan dipixmltv_args dipixmltv_revmap dipixmltv_suggest \
 	dipiradiohead_mpegaudio dipiradiohead_aac_adts dipiradiohead_aac_latm \
-	dipiradiohead_psi dipiradiohead_id3 dipiradiohead_icy dipiradiohead_pes dipiradiohead_tspacketizer dipiradiohead_radiohead dipiradiohead_mpts dipiradiohead_cas dipiradiohead_args \
+	dipiradiohead_psi dipiradiohead_id3 dipiradiohead_icy dipiradiohead_pes dipiradiohead_tspacketizer dipiradiohead_radiohead dipiradiohead_mpts dipiradiohead_cas dipiradiohead_args dipiradiohead_args_cas dipiradiohead_args_general dipiradiohead_args_net \
 	dipiradiohead_framequeue dipiradiohead_source_async dipiradiohead_source_frame dipiradiohead_source_hls dipiradiohead_inputset dipiradiohead_playlist lib_hls_playlist lib_hls_live lib_hls_tspassthrough lib_dash_mpd lib_dash_live \
-	dipitvhead_source dipitvhead_args dipitvhead_discover dipitvhead_output dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_bitrate dipitvhead_pcrclock dipitvhead_pesstamp dipitvhead_timemap dipitvhead_releaseq dipitvhead_scte35stamp dipitvhead_remux \
+	dipitvhead_source dipitvhead_args dipitvhead_args_cas dipitvhead_args_input dipitvhead_args_net dipitvhead_args_general dipitvhead_discover dipitvhead_output dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_bitrate dipitvhead_pcrclock dipitvhead_pesstamp dipitvhead_timemap dipitvhead_releaseq dipitvhead_scte35stamp dipitvhead_remux \
 	dipitvhead_simulcrypt_msg dipitvhead_ecmg_client dipitvhead_emmg_server dipitvhead_cas \
 	dipirec_ts_filter dipirec_pace dipirec_ret_client dipirec_record dipirec_args \
 	dipifccret_args dipifccret_listen dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_burst_table dipifccret_pacer dipifccret_ret dipifccret_rtx_session_table dipifccret_capture \
@@ -2892,7 +2892,7 @@ dipisrt_config_SRCS := \
 	src/lib/helper/log.c
 
 ifeq ($(HAVE_SRT),yes)
-UNIT_TESTS += dipisrt_bridge lib_net_srt_srtcommon lib_net_srt_srtsrc_sink
+UNIT_TESTS += dipisrt_bridge lib_net_srt_srtcommon lib_net_srt_srtsrc_sink lib_net_srt_srtin_out
 dipisrt_bridge_BIN := tests/unit/dipisrt/test_bridge
 dipisrt_bridge_EXTRA_CFLAGS := $(shell pkg-config --cflags srt)
 dipisrt_bridge_EXTRA_LDFLAGS := $(shell pkg-config --libs srt)
@@ -2996,6 +2996,22 @@ lib_net_srt_srtsrc_sink_SRCS := \
 	src/lib/net/srt/srtout.c \
 	src/lib/net/srt/srtcommon.c \
 	src/lib/helper/pipereader.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c \
+	src/lib/sys/signal.c \
+	src/lib/metrics/export.c \
+	src/lib/metrics/protocol.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c
+
+lib_net_srt_srtin_out_BIN := tests/unit/lib/net/srt/test_srtin_out
+lib_net_srt_srtin_out_EXTRA_CFLAGS := $(shell pkg-config --cflags srt)
+lib_net_srt_srtin_out_EXTRA_LDFLAGS := $(shell pkg-config --libs srt)
+lib_net_srt_srtin_out_SRCS := \
+	tests/unit/lib/net/srt/test_srtin_out.c \
+	src/lib/net/srt/srtin.c \
+	src/lib/net/srt/srtout.c \
+	src/lib/net/srt/srtcommon.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
@@ -4166,6 +4182,120 @@ dipiradiohead_args_SRCS := \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/helper/log.c
 
+dipiradiohead_args_cas_BIN := tests/unit/dipiradiohead/test_args_cas
+dipiradiohead_args_cas_SRCS := \
+	tests/unit/dipiradiohead/test_args_cas.c \
+	src/dipiradiohead/cli/args.c \
+	src/dipiradiohead/cli/check.c \
+	src/dipiradiohead/cli/help.c \
+	src/dipiradiohead/cli/opt_cas.c \
+	src/dipiradiohead/cli/opt_general.c \
+	src/dipiradiohead/cli/opt_net.c \
+	src/dipiradiohead/cli/values.c \
+	src/dipiradiohead/config/core.c \
+	src/dipiradiohead/config/input.c \
+	src/dipiradiohead/config/network.c \
+	src/dipiradiohead/config/cas.c \
+	src/dipiradiohead/config/general.c \
+	src/dipiradiohead/config/load.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/uriparse.c \
+	src/lib/sys/ioutil.c \
+	src/lib/cas/cas_args.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/helper/log.c
+
+dipiradiohead_args_general_BIN := tests/unit/dipiradiohead/test_args_general
+dipiradiohead_args_general_SRCS := \
+	tests/unit/dipiradiohead/test_args_general.c \
+	src/dipiradiohead/cli/args.c \
+	src/dipiradiohead/cli/check.c \
+	src/dipiradiohead/cli/help.c \
+	src/dipiradiohead/cli/opt_cas.c \
+	src/dipiradiohead/cli/opt_general.c \
+	src/dipiradiohead/cli/opt_net.c \
+	src/dipiradiohead/cli/values.c \
+	src/dipiradiohead/config/core.c \
+	src/dipiradiohead/config/input.c \
+	src/dipiradiohead/config/network.c \
+	src/dipiradiohead/config/cas.c \
+	src/dipiradiohead/config/general.c \
+	src/dipiradiohead/config/load.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/uriparse.c \
+	src/lib/sys/ioutil.c \
+	src/lib/cas/cas_args.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/helper/log.c
+
+dipiradiohead_args_net_BIN := tests/unit/dipiradiohead/test_args_net
+dipiradiohead_args_net_SRCS := \
+	tests/unit/dipiradiohead/test_args_net.c \
+	src/dipiradiohead/cli/args.c \
+	src/dipiradiohead/cli/check.c \
+	src/dipiradiohead/cli/help.c \
+	src/dipiradiohead/cli/opt_cas.c \
+	src/dipiradiohead/cli/opt_general.c \
+	src/dipiradiohead/cli/opt_net.c \
+	src/dipiradiohead/cli/values.c \
+	src/dipiradiohead/config/core.c \
+	src/dipiradiohead/config/input.c \
+	src/dipiradiohead/config/network.c \
+	src/dipiradiohead/config/cas.c \
+	src/dipiradiohead/config/general.c \
+	src/dipiradiohead/config/load.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/uriparse.c \
+	src/lib/sys/ioutil.c \
+	src/lib/cas/cas_args.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/helper/log.c
+
 dipiradiohead_framequeue_BIN := tests/unit/dipiradiohead/input/test_framequeue
 dipiradiohead_framequeue_SRCS := \
 	tests/unit/dipiradiohead/input/test_framequeue.c \
@@ -4544,6 +4674,194 @@ dipitvhead_source_SRCS := \
 dipitvhead_args_BIN := tests/unit/dipitvhead/test_args
 dipitvhead_args_SRCS := \
 	tests/unit/dipitvhead/test_args.c \
+	src/dipitvhead/cli/args.c \
+	src/dipitvhead/cli/check.c \
+	src/dipitvhead/cli/help.c \
+	src/dipitvhead/cli/opt_cas.c \
+	src/dipitvhead/cli/opt_general.c \
+	src/dipitvhead/cli/opt_input.c \
+	src/dipitvhead/cli/opt_net.c \
+	src/dipitvhead/cli/uri.c \
+	src/dipitvhead/cli/values.c \
+	src/dipitvhead/config/core.c \
+	src/dipitvhead/config/input.c \
+	src/dipitvhead/config/network.c \
+	src/dipitvhead/config/cas.c \
+	src/dipitvhead/config/general.c \
+	src/dipitvhead/config/load.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/describe.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/cas/cas_args.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/sys/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tls_stub.c \
+	src/lib/helper/log.c \
+	src/lib/sys/signal.c
+
+dipitvhead_args_cas_BIN := tests/unit/dipitvhead/test_args_cas
+dipitvhead_args_cas_SRCS := \
+	tests/unit/dipitvhead/test_args_cas.c \
+	src/dipitvhead/cli/args.c \
+	src/dipitvhead/cli/check.c \
+	src/dipitvhead/cli/help.c \
+	src/dipitvhead/cli/opt_cas.c \
+	src/dipitvhead/cli/opt_general.c \
+	src/dipitvhead/cli/opt_input.c \
+	src/dipitvhead/cli/opt_net.c \
+	src/dipitvhead/cli/uri.c \
+	src/dipitvhead/cli/values.c \
+	src/dipitvhead/config/core.c \
+	src/dipitvhead/config/input.c \
+	src/dipitvhead/config/network.c \
+	src/dipitvhead/config/cas.c \
+	src/dipitvhead/config/general.c \
+	src/dipitvhead/config/load.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/describe.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/cas/cas_args.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/sys/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tls_stub.c \
+	src/lib/helper/log.c \
+	src/lib/sys/signal.c
+
+dipitvhead_args_input_BIN := tests/unit/dipitvhead/test_args_input
+dipitvhead_args_input_SRCS := \
+	tests/unit/dipitvhead/test_args_input.c \
+	src/dipitvhead/cli/args.c \
+	src/dipitvhead/cli/check.c \
+	src/dipitvhead/cli/help.c \
+	src/dipitvhead/cli/opt_cas.c \
+	src/dipitvhead/cli/opt_general.c \
+	src/dipitvhead/cli/opt_input.c \
+	src/dipitvhead/cli/opt_net.c \
+	src/dipitvhead/cli/uri.c \
+	src/dipitvhead/cli/values.c \
+	src/dipitvhead/config/core.c \
+	src/dipitvhead/config/input.c \
+	src/dipitvhead/config/network.c \
+	src/dipitvhead/config/cas.c \
+	src/dipitvhead/config/general.c \
+	src/dipitvhead/config/load.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/describe.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/cas/cas_args.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/sys/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tls_stub.c \
+	src/lib/helper/log.c \
+	src/lib/sys/signal.c
+
+dipitvhead_args_net_BIN := tests/unit/dipitvhead/test_args_net
+dipitvhead_args_net_SRCS := \
+	tests/unit/dipitvhead/test_args_net.c \
+	src/dipitvhead/cli/args.c \
+	src/dipitvhead/cli/check.c \
+	src/dipitvhead/cli/help.c \
+	src/dipitvhead/cli/opt_cas.c \
+	src/dipitvhead/cli/opt_general.c \
+	src/dipitvhead/cli/opt_input.c \
+	src/dipitvhead/cli/opt_net.c \
+	src/dipitvhead/cli/uri.c \
+	src/dipitvhead/cli/values.c \
+	src/dipitvhead/config/core.c \
+	src/dipitvhead/config/input.c \
+	src/dipitvhead/config/network.c \
+	src/dipitvhead/config/cas.c \
+	src/dipitvhead/config/general.c \
+	src/dipitvhead/config/load.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/describe.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/cas/cas_args.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/sys/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/net/tls_stub.c \
+	src/lib/helper/log.c \
+	src/lib/sys/signal.c
+
+dipitvhead_args_general_BIN := tests/unit/dipitvhead/test_args_general
+dipitvhead_args_general_SRCS := \
+	tests/unit/dipitvhead/test_args_general.c \
 	src/dipitvhead/cli/args.c \
 	src/dipitvhead/cli/check.c \
 	src/dipitvhead/cli/help.c \
@@ -6205,11 +6523,40 @@ dipifccret_capture_SRCS := \
 	src/lib/sys/ioutil.c \
 	src/lib/sys/signal.c
 
-UNIT_TESTS += dipixy_args dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_ts_push_queue dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_status dipixy_htdocs dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_conn dipixy_conn_concurrency dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_segstore_reclaim dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
+UNIT_TESTS += dipixy_args dipixy_config dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_ts_push_queue dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_status dipixy_htdocs dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_ssdp dipixy_conn dipixy_conn_concurrency dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_segstore_reclaim dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
 	tests/unit/dipixy/test_args.c \
+	src/dipixy/cli/args.c \
+	src/dipixy/cli/auth.c \
+	src/dipixy/cli/check.c \
+	src/dipixy/cli/help.c \
+	src/dipixy/cli/inputs.c \
+	src/dipixy/cli/opt_dlna.c \
+	src/dipixy/cli/opt_general.c \
+	src/dipixy/cli/opt_http.c \
+	src/dipixy/cli/opt_server.c \
+	src/dipixy/cli/opt_stream.c \
+	src/dipixy/cli/values.c \
+	src/dipixy/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/dipixy/core/route.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/base64.c \
+	src/lib/sys/ioutil.c \
+	src/lib/sys/cpuaffinity.c \
+	src/lib/helper/log.c \
+	src/lib/helper/uriparse.c
+
+dipixy_config_BIN := tests/unit/dipixy/test_config
+dipixy_config_SRCS := \
+	tests/unit/dipixy/test_config.c \
 	src/dipixy/cli/args.c \
 	src/dipixy/cli/auth.c \
 	src/dipixy/cli/check.c \
@@ -6699,9 +7046,9 @@ $(1)_EXTRA_CFLAGS := $$(dipixy_EXTRA_CFLAGS)
 $(1)_EXTRA_LDFLAGS := $$(dipixy_EXTRA_LDFLAGS)
 endef
 
-UNIT_TESTS += dipixy_qsbr dipixy_segment dipixy_segment_concurrency dipixy_segment_demux dipixy_lldash dipixy_metrics dipixy_reactor_loop dipixy_reactor_run
+UNIT_TESTS += dipixy_qsbr dipixy_segment dipixy_segment_concurrency dipixy_segment_demux dipixy_lldash dipixy_metrics dipixy_reactor_loop dipixy_reactor_run dipixy_reactor_routes
 ifeq ($(HAVE_TLS),yes)
-UNIT_TESTS += dipixy_reactor_tls
+UNIT_TESTS += dipixy_reactor_tls dipixy_reactor_tls_cert dipixy_reactor_tls_lifecycle
 endif
 $(eval $(call DIPIXY_FULL_TEST,dipixy_segment,segment))
 $(eval $(call DIPIXY_FULL_TEST,dipixy_segment_concurrency,segment_concurrency))
@@ -6710,7 +7057,10 @@ $(eval $(call DIPIXY_FULL_TEST,dipixy_lldash,lldash))
 $(eval $(call DIPIXY_FULL_TEST,dipixy_metrics,metrics))
 $(eval $(call DIPIXY_FULL_TEST,dipixy_reactor_loop,reactor_loop))
 $(eval $(call DIPIXY_FULL_TEST,dipixy_reactor_run,reactor_run))
+$(eval $(call DIPIXY_FULL_TEST,dipixy_reactor_routes,reactor_routes))
 $(eval $(call DIPIXY_FULL_TEST,dipixy_reactor_tls,reactor_tls))
+$(eval $(call DIPIXY_FULL_TEST,dipixy_reactor_tls_cert,reactor_tls_cert))
+$(eval $(call DIPIXY_FULL_TEST,dipixy_reactor_tls_lifecycle,reactor_tls_lifecycle))
 
 ifeq ($(HAVE_HTTP2),yes)
 UNIT_TESTS += dipixy_http2 dipixy_http2_resp dipixy_http2_push
@@ -7008,6 +7358,17 @@ dipixy_gena_SRCS := \
 	src/lib/fccret/ret_client.c \
 	src/lib/fccret/fcc_client.c
 
+dipixy_ssdp_BIN := tests/unit/dipixy/test_ssdp
+dipixy_ssdp_SRCS := \
+	tests/unit/dipixy/test_ssdp.c \
+	src/dipixy/dlna/ssdp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/sys/ioutil.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/log.c
+
 dipixy_dlna_BIN := tests/unit/dipixy/test_dlna
 dipixy_dlna_SRCS := \
 	tests/unit/dipixy/test_dlna.c \
@@ -7141,8 +7502,9 @@ INTEGRATION_DIPIFCCRET_SCRIPTS := $(wildcard tests/integration/dipifccret/*.sh)
 INTEGRATION_DIPIRIST_SCRIPTS := $(filter-out tests/integration/dipirist/bonding_common.sh,$(wildcard tests/integration/dipirist/*.sh))
 INTEGRATION_DIPISRT_SCRIPTS := $(filter-out tests/integration/dipisrt/bonding_common.sh,$(wildcard tests/integration/dipisrt/*.sh))
 INTEGRATION_DIPIXY_SCRIPTS := $(wildcard tests/integration/dipixy/*.sh)
+INTEGRATION_DVBIPITOOLS_SCRIPTS := $(wildcard tests/integration/dvbipitools/*.sh)
 
-INTEGRATION_TEST_DEPS := dipibim dipiscan dipixmltv dipitvhead dipiradiohead dipirec dipidescramble dipisds dipibcg dipimetrics dipifccret dipixy
+INTEGRATION_TEST_DEPS := dipibim dipiscan dipixmltv dipitvhead dipiradiohead dipirec dipidescramble dipisds dipibcg dipimetrics dipifccret dipixy dvbipitools
 ifeq ($(HAVE_OPENSSL),yes)
 INTEGRATION_TEST_DEPS += dipicam378
 endif
@@ -7165,7 +7527,8 @@ integration-test: $(INTEGRATION_TEST_DEPS)
 	for s in $(INTEGRATION_DIPIDESCRAMBLE_SCRIPTS); do echo "running $$s"; sh $$s ./dipidescramble; done; \
 	for s in $(INTEGRATION_DIPIMETRICS_SCRIPTS); do echo "running $$s"; sh $$s ./dipimetrics; done; \
 	for s in $(INTEGRATION_DIPIFCCRET_SCRIPTS); do echo "running $$s"; sh $$s ./dipifccret; done; \
-	for s in $(INTEGRATION_DIPIXY_SCRIPTS); do echo "running $$s"; sh $$s ./dipixy; done
+	for s in $(INTEGRATION_DIPIXY_SCRIPTS); do echo "running $$s"; sh $$s ./dipixy; done; \
+	for s in $(INTEGRATION_DVBIPITOOLS_SCRIPTS); do echo "running $$s"; sh $$s ./dvbipitools; done
 ifeq ($(HAVE_OPENSSL),yes)
 	@set -e; for s in $(INTEGRATION_DIPICAM378_SCRIPTS); do echo "running $$s"; sh $$s ./dipicam378; done
 else

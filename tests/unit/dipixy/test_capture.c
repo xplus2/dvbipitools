@@ -310,6 +310,44 @@ START_TEST(fcc_wired_capture_delivers_plain_multicast_after_cutover) {
 }
 END_TEST
 
+START_TEST(http_static_rejects_an_invalid_url_and_an_unreachable_server) {
+  ck_assert_ptr_null(capture_open_http_static("not a url", 0));
+  ck_assert_ptr_null(capture_open_http_static("http://127.0.0.1:1/stream", 0));
+}
+END_TEST
+
+START_TEST(srt_open_to_a_closed_port_fails) {
+  ck_assert_ptr_null(capture_open_srt("127.0.0.1", 1));
+}
+END_TEST
+
+START_TEST(rist_source_is_optional) {
+  ck_assert_int_eq(capture_rist_init(NULL), 0);
+  ck_assert_ptr_null(capture_rist_get());
+  if (capture_rist_init("rist://@127.0.0.1:0") == 0) {
+    capture_ctx_t *c = capture_rist_get();
+
+    ck_assert_ptr_nonnull(c);
+    capture_close(c);
+  }
+}
+END_TEST
+
+START_TEST(stdin_source_is_shared_once_initialised) {
+  int pipefd[2];
+  capture_ctx_t *c;
+
+  ck_assert_ptr_null(capture_stdin_get());
+  ck_assert_int_eq(pipe(pipefd), 0);
+  ck_assert_int_ge(dup2(pipefd[0], STDIN_FILENO), 0);
+  ck_assert_int_eq(capture_stdin_init(), 0);
+  c = capture_stdin_get();
+  ck_assert_ptr_nonnull(c);
+  capture_close(c);
+  close(pipefd[1]);
+}
+END_TEST
+
 static Suite *capture_suite(void) {
   Suite *s = suite_create("dipixy_capture");
   TCase *tc = tcase_create("core");
@@ -321,6 +359,10 @@ static Suite *capture_suite(void) {
   tcase_add_test(tc, http_static_dedup_shares_context_for_same_url);
   tcase_add_test(tc, ret_wired_capture_delivers_plain_packet);
   tcase_add_test(tc, fcc_wired_capture_delivers_plain_multicast_after_cutover);
+  tcase_add_test(tc, http_static_rejects_an_invalid_url_and_an_unreachable_server);
+  tcase_add_test(tc, srt_open_to_a_closed_port_fails);
+  tcase_add_test(tc, rist_source_is_optional);
+  tcase_add_test(tc, stdin_source_is_shared_once_initialised);
   suite_add_tcase(s, tc);
   return s;
 }

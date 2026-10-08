@@ -38,6 +38,7 @@ void build_play_path(const config_t *cfg, oid_kind_t kind, unsigned ord, unsigne
 
 /* dlna_soap.c */
 FILE *gbuf_open(gbuf_t *g);
+FILE *gbuf_open_thread(gbuf_t *g);
 typedef struct {
   const char *name, *value;
 } soap_field_t;

@@ -472,6 +472,124 @@ START_TEST(rtmpout_partial_write_keeps_remainder_queued) {
 }
 END_TEST
 
+START_TEST(rtmpout_url_forms_are_parsed) {
+  static const char *const good[] = {
+    "rtmp://host/app",
+    "rtmp://host:1936/app/key",
+    "rtmp://host/a/b/key",
+    "rtmp://user@host/app/key",
+    "rtmp://user:pass@host/app/key",
+    "rtmp://user:p@ss@host:1936/app/key",
+    "rtmps://host/app/key",
+  };
+  rtmpout_cfg_t cfg;
+
+  memset(&cfg, 0, sizeof cfg);
+  for (size_t i = 0; i < sizeof good / sizeof good[0]; i++) {
+    cfg.url = good[i];
+    rtmpout_t *o = rtmpout_open(&cfg);
+    ck_assert_msg(o != NULL, "%s", good[i]);
+    rtmpout_close(o);
+  }
+}
+END_TEST
+
+START_TEST(rtmpout_oversized_and_bad_url_parts_are_rejected) {
+  static const char *const bad[] = {
+    "rtmp://host/",
+    "rtmp://host:/app/key",
+    "rtmp://host:70000/app/key",
+    "rtmp://host:12345678/app/key",
+    "rtmp://:pass@host/app/key",
+    "rtmp://@host/app/key",
+    "rtmp:///app/key",
+  };
+  char big[1200];
+  char url[1500];
+  rtmpout_cfg_t cfg;
+  memset(&cfg, 0, sizeof cfg);
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+    cfg.url = bad[i];
+    ck_assert_msg(rtmpout_open(&cfg) == NULL, "%s", bad[i]);
+  }
+  memset(big, 'a', sizeof big - 1);
+  big[sizeof big - 1] = '\0';
+  cfg.url = url;
+  snprintf(url, sizeof url, "rtmp://%s@host/app/key", big);
+  ck_assert_ptr_null(rtmpout_open(&cfg));
+  snprintf(url, sizeof url, "rtmp://user:%s@host/app/key", big);
+  ck_assert_ptr_null(rtmpout_open(&cfg));
+  snprintf(url, sizeof url, "rtmp://%s/app/key", big);
+  ck_assert_ptr_null(rtmpout_open(&cfg));
+  snprintf(url, sizeof url, "rtmp://host/%s/key", big);
+  ck_assert_ptr_null(rtmpout_open(&cfg));
+}
+END_TEST
+
+START_TEST(rtmpout_unreachable_peers_stay_non_fatal) {
+  static const char *const urls[] = {"rtmp://127.0.0.1:1/live/key", "rtmps://127.0.0.1:1/live/key"};
+  rtmpout_cfg_t cfg;
+  rtmpout_t *o;
+  unsigned char keyframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'K', 'E', 'Y'};
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.url = urls[_i];
+  cfg.insecure = 1;
+  o = rtmpout_open(&cfg);
+  ck_assert_ptr_nonnull(o);
+  for (int i = 0; i < 40; i++) {
+    struct timespec ts = {0, 10000000L};
+    ck_assert_int_eq(rtmpout_write(o, FLV_TAG_VIDEO, 0, keyframe, sizeof keyframe, NULL, 0), -1);
+    nanosleep(&ts, NULL);
+  }
+  rtmpout_close(o);
+}
+END_TEST
+
+typedef struct {
+  int listen_fd;
+} closer_t;
+
+static void *closing_server_thread(void *arg) {
+  closer_t *c = arg;
+  for (int i = 0; i < 3; i++) {
+    int cfd = accept(c->listen_fd, NULL, NULL);
+    if (cfd < 0) break;
+    close(cfd);
+  }
+  return NULL;
+}
+
+START_TEST(rtmpout_peer_that_hangs_up_is_retried) {
+  static const char *const schemes[] = {"rtmp", "rtmps"};
+  unsigned port;
+  int listen_fd = make_listener(&port, 0);
+  pthread_t th;
+  closer_t srv = {listen_fd};
+  char url[64];
+  rtmpout_cfg_t cfg;
+  rtmpout_t *o;
+  unsigned char keyframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'K', 'E', 'Y'};
+
+  ck_assert_int_eq(pthread_create(&th, NULL, closing_server_thread, &srv), 0);
+  snprintf(url, sizeof url, "%s://127.0.0.1:%u/live/key", schemes[_i], port);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.url = url;
+  cfg.insecure = 1;
+  o = rtmpout_open(&cfg);
+  ck_assert_ptr_nonnull(o);
+  for (int i = 0; i < 300; i++) {
+    struct timespec ts = {0, 10000000L};
+    rtmpout_write(o, FLV_TAG_VIDEO, 0, keyframe, sizeof keyframe, NULL, 0);
+    nanosleep(&ts, NULL);
+  }
+  shutdown(listen_fd, SHUT_RDWR);
+  pthread_join(th, NULL);
+  close(listen_fd);
+  rtmpout_close(o);
+}
+END_TEST
+
 static Suite *rtmpout_suite(void) {
   Suite *s = suite_create("rtmpout");
   TCase *tc = tcase_create("core");
@@ -482,6 +600,10 @@ static Suite *rtmpout_suite(void) {
   tcase_add_test(tc, rtmpout_sends_adobe_authmod_for_userinfo_uri);
   tcase_add_test(tc, rtmpout_queue_overflow_drops_the_connection);
   tcase_add_test(tc, rtmpout_partial_write_keeps_remainder_queued);
+  tcase_add_test(tc, rtmpout_url_forms_are_parsed);
+  tcase_add_test(tc, rtmpout_oversized_and_bad_url_parts_are_rejected);
+  tcase_add_loop_test(tc, rtmpout_unreachable_peers_stay_non_fatal, 0, 2);
+  tcase_add_loop_test(tc, rtmpout_peer_that_hangs_up_is_retried, 0, 2);
   suite_add_tcase(s, tc);
   return s;
 }

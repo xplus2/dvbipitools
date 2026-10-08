@@ -171,11 +171,67 @@ START_TEST(tssrc_http_dispatches_hls_ts_segmented_media_playlist) {
 }
 END_TEST
 
+static const char *const unusable_bodies[] = {
+  "just some plain text that is neither a transport stream nor a manifest\n",
+  "<?xml version=\"1.0\"?><MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" type=\"dynamic\"></MPD>\n",
+  "<?xml version=\"1.0\"?><MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" type=\"dynamic\"><Period id=\"1\">"
+    "<AdaptationSet mimeType=\"application/ttml+xml\"><Representation id=\"t\" bandwidth=\"1000\"/></AdaptationSet></Period></MPD>\n",
+  "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\n",
+};
+
+START_TEST(tssrc_http_rejects_bodies_it_cannot_use) {
+  unsigned port;
+  int fd = make_listener(&port);
+  pthread_t th;
+  char resp[2048];
+  const char *responses[1];
+  size_t lens[1];
+  scripted_server_t srv;
+  tssrc_cfg_t cfg;
+  tssrc_open_t *o;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  tssrc_open_state_t st = TSSRC_OPEN_PENDING;
+  char uri[64];
+
+  lens[0] = (size_t)snprintf(resp, sizeof resp, "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: %zu\r\n\r\n%s", strlen(unusable_bodies[_i]), unusable_bodies[_i]);
+  responses[0] = resp;
+  srv.listen_fd = fd;
+  srv.responses = responses;
+  srv.response_lens = lens;
+  srv.n_responses = 1;
+  ck_assert_int_eq(pthread_create(&th, NULL, serve_scripted, &srv), 0);
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_HTTP;
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/stream", port);
+  ck_assert_int_eq(http_url_parse(uri, &cfg.http), 0);
+  o = tssrc_open_async_start(&cfg, NULL);
+  ck_assert_ptr_nonnull(o);
+  for (int i = 0; i < 300 && st == TSSRC_OPEN_PENDING; i++) {
+    struct pollfd pfd;
+    int pfdn = tssrc_open_async_poll_fd(o);
+    if (pfdn >= 0) {
+      pfd.fd = pfdn;
+      pfd.events = tssrc_open_async_poll_events(o);
+      pfd.revents = 0;
+      poll(&pfd, 1, 100);
+    }
+    st = tssrc_open_async_step(o, &reason);
+  }
+  ck_assert_int_eq(st, TSSRC_OPEN_ERROR);
+  ck_assert_int_eq(reason, NET_ERR_FORMAT);
+  tssrc_open_async_free(o);
+  pthread_join(th, NULL);
+  close(fd);
+}
+END_TEST
+
 static Suite *tssource_http_dispatch_suite(void) {
   Suite *s = suite_create("tssource_http_dispatch");
   TCase *tc = tcase_create("core");
   tcase_set_timeout(tc, 30);
   tcase_add_test(tc, tssrc_http_dispatches_hls_ts_segmented_media_playlist);
+  tcase_add_loop_test(tc, tssrc_http_rejects_bodies_it_cannot_use, 0, 4);
   suite_add_tcase(s, tc);
   return s;
 }

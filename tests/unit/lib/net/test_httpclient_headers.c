@@ -58,7 +58,7 @@ static int make_listener(unsigned *port_out) {
   return fd;
 }
 
-static http_t *get_response(const char *resp, unsigned *port_out) {
+static http_t *get_response_any(const char *resp, unsigned *port_out, net_err_reason_t *reason) {
   int listen_fd = make_listener(port_out);
   pthread_t th;
   static server_arg_t sarg;
@@ -73,18 +73,73 @@ static http_t *get_response(const char *resp, unsigned *port_out) {
 
   snprintf(uri, sizeof uri, "http://127.0.0.1:%u/x", *port_out);
   ck_assert_int_eq(http_url_parse(uri, &url), 0);
-  h = http_get(&url, "test-agent", 0, NULL, NULL);
-  ck_assert_ptr_nonnull(h);
+  h = http_get(&url, "test-agent", 0, NULL, reason);
 
   pthread_join(th, NULL);
   close(listen_fd);
   return h;
 }
 
+static http_t *get_response(const char *resp, unsigned *port_out) {
+  http_t *h = get_response_any(resp, port_out, NULL);
+  ck_assert_ptr_nonnull(h);
+  return h;
+}
+
+START_TEST(http_get_rejects_a_malformed_response) {
+  unsigned port;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  ck_assert_ptr_null(get_response_any("this is not http\r\n\r\n", &port, &reason));
+  ck_assert_int_eq(reason, NET_ERR_FORMAT);
+}
+END_TEST
+
+START_TEST(http_get_reports_a_connection_closed_before_the_headers) {
+  unsigned port;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  ck_assert_ptr_null(get_response_any("", &port, &reason));
+  ck_assert_int_ne(reason, NET_ERR_COUNT);
+}
+END_TEST
+
+START_TEST(http_get_keeps_only_the_headers_that_fit) {
+  char resp[8192];
+  size_t n = (size_t)snprintf(resp, sizeof resp, "HTTP/1.1 200 OK\r\n");
+  unsigned port;
+  http_t *h;
+  for (int i = 0; i < 40; i++) n += (size_t)snprintf(resp + n, sizeof resp - n, "X-Header-%d: v%d\r\n", i, i);
+  snprintf(resp + n, sizeof resp - n, "Connection: close\r\n\r\n");
+  h = get_response(resp, &port);
+  ck_assert_int_eq(http_status(h), 200);
+  ck_assert_str_eq(http_header(h, "x-header-0"), "v0");
+  ck_assert_ptr_null(http_header(h, "x-header-39"));
+  http_close(h);
+}
+END_TEST
+
+START_TEST(http_read_reports_the_end_of_the_body) {
+  unsigned port;
+  http_t *h = get_response("HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\nBODY", &port);
+  char buf[16];
+  net_err_reason_t reason = NET_ERR_COUNT;
+  ssize_t n;
+  size_t got = 0;
+  for (int i = 0; i < 20; i++) {
+    n = http_read(h, buf + got, sizeof buf - got, &reason);
+    if (n < 0) break;
+    got += (size_t)n;
+  }
+  ck_assert_uint_eq(got, 4u);
+  ck_assert_mem_eq(buf, "BODY", 4);
+  ck_assert_int_eq(n, -1);
+  ck_assert_int_eq(reason, NET_ERR_EOF);
+  http_close(h);
+}
+END_TEST
+
 START_TEST(http_header_looks_up_case_insensitively) {
   unsigned port;
   http_t *h = get_response("HTTP/1.1 200 OK\r\nETag: \"abc123\"\r\nX-Custom: value\r\nContent-Length: 4\r\nConnection: close\r\n\r\nBODY", &port);
-
   ck_assert_str_eq(http_header(h, "etag"), "\"abc123\"");
   ck_assert_str_eq(http_header(h, "x-custom"), "value");
   ck_assert_str_eq(http_header(h, "content-length"), "4");
@@ -148,6 +203,10 @@ END_TEST
 static Suite *httpclient_headers_suite(void) {
   Suite *s = suite_create("httpclient_headers");
   TCase *tc = tcase_create("core");
+  tcase_add_test(tc, http_get_rejects_a_malformed_response);
+  tcase_add_test(tc, http_get_reports_a_connection_closed_before_the_headers);
+  tcase_add_test(tc, http_get_keeps_only_the_headers_that_fit);
+  tcase_add_test(tc, http_read_reports_the_end_of_the_body);
   tcase_add_test(tc, http_header_looks_up_case_insensitively);
   tcase_add_test(tc, http_can_reuse_true_for_304_keep_alive);
   tcase_add_test(tc, http_can_reuse_true_for_304_no_connection_header);

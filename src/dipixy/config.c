@@ -484,6 +484,7 @@ int dixy_cfg_test(const char *path, int strict) {
   rc = load(&y, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, &cfg, path);
   if (rc != YAMLCFG_LOADED) {
     args_free(&cfg);
+    yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }
   warn_if(&y, cfg.tls_cert && !cfg.tls_key, "tls.cert given without tls.key");
@@ -498,5 +499,6 @@ int dixy_cfg_test(const char *path, int strict) {
   warn_if(&y, cfg.enable_dlna && !cfg.dlna_host_opt && cfg.listen.scope == LISTEN_ANY, "enable-dlna needs dlna.host or a concrete listen address, not 'all'");
   rc = yamlcfg_report(&y);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
   return rc;
 }

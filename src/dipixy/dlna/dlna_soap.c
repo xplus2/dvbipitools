@@ -8,6 +8,7 @@
 #include "lib/sys/ioutil.h"
 #include "lib/helper/xml_util.h"
 
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,8 +59,41 @@ FILE *gbuf_open(gbuf_t *g) {
 
 static _Thread_local gbuf_t t_soap_gbuf;
 
+#define GBUF_THREAD_MAX 4
+
+static _Thread_local gbuf_t *t_gbuf_owned[GBUF_THREAD_MAX];
+static _Thread_local int t_gbuf_owned_n;
+static pthread_key_t g_gbuf_key;
+static pthread_once_t g_gbuf_once = PTHREAD_ONCE_INIT;
+
+static void gbuf_release_owned(void *unused) {
+  (void)unused;
+  for (int i = 0; i < t_gbuf_owned_n; i++) {
+    free(t_gbuf_owned[i]->buf);
+    t_gbuf_owned[i]->buf = NULL;
+    t_gbuf_owned[i]->len = 0;
+    t_gbuf_owned[i]->cap = 0;
+  }
+  t_gbuf_owned_n = 0;
+}
+
+static void gbuf_key_init(void) {
+  pthread_key_create(&g_gbuf_key, gbuf_release_owned);
+}
+
+FILE *gbuf_open_thread(gbuf_t *g) {
+  int known = 0;
+  pthread_once(&g_gbuf_once, gbuf_key_init);
+  for (int i = 0; i < t_gbuf_owned_n; i++) known |= t_gbuf_owned[i] == g;
+  if (!known && t_gbuf_owned_n < GBUF_THREAD_MAX) {
+    t_gbuf_owned[t_gbuf_owned_n++] = g;
+    pthread_setspecific(g_gbuf_key, g);
+  }
+  return gbuf_open(g);
+}
+
 int soap_action_response(char **out, size_t *out_len, const char *service_urn, const char *action_response_tag, const soap_field_t *fields, int nfields) {
-  FILE *f = gbuf_open(&t_soap_gbuf);
+  FILE *f = gbuf_open_thread(&t_soap_gbuf);
   if (!f) return 500;
   fprintf(f,
           "<?xml version=\"1.0\"?>\r\n"
@@ -80,7 +114,7 @@ int soap_action_response(char **out, size_t *out_len, const char *service_urn, c
 }
 
 int soap_fault(char **out, size_t *out_len, int upnp_error_code, const char *desc) {
-  FILE *f = gbuf_open(&t_soap_gbuf);
+  FILE *f = gbuf_open_thread(&t_soap_gbuf);
   if (!f) return 500;
   fprintf(f,
           "<?xml version=\"1.0\"?>\r\n"

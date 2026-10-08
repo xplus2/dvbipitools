@@ -64,9 +64,8 @@ jobs:
       - name: coverage report
         if: always()
         run: |
-          COMMON=(--root . --object-directory build --filter src/ --exclude-directories '.*/CMakeFiles/[0-9.]+' --exclude-throw-branches --exclude-unreachable-branches --gcov-ignore-parse-errors=negative_hits.warn_once_per_file)
+          COMMON=(--root . --object-directory build --filter src/ --exclude-directories '.*/CMakeFiles/[0-9.]+' --exclude-throw-branches --exclude-unreachable-branches --merge-lines --gcov-ignore-parse-errors=negative_hits.warn_once_per_file)
           mkdir -p coverage
-          gcovr "${COMMON[@]}" --json-summary coverage/src.json --txt coverage/src.txt
           gcovr "${COMMON[@]}" --exclude 'src/lib/vendor/' --json-summary coverage/src-novendor.json --txt coverage/src-novendor.txt
           summarize() {
             echo "## $1"
@@ -87,11 +86,7 @@ jobs:
             ' "$2"
             echo ""
           }
-          {
-            summarize "Coverage: src/" coverage/src.json
-            summarize "Coverage: src/ excl. src/lib/vendor/" coverage/src-novendor.json
-          } >> "$GITHUB_STEP_SUMMARY"
-          tail -n 4 coverage/src.txt
+          summarize "Coverage: src/ excl. src/lib/vendor/" coverage/src-novendor.json >> "$GITHUB_STEP_SUMMARY"
           tail -n 4 coverage/src-novendor.txt
       - name: upload coverage
         if: always()

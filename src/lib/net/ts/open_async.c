@@ -221,7 +221,9 @@ static http_open_step_t step_sniff_manifest(tssrc_open_t *o, net_err_reason_t *r
 
   if (o->content == HTTP_CONTENT_DASH) {
     dash_mpd_t mpd;
-    int ok = dash_mpd_parse((char *)o->buf, &base, &mpd) && mpd.n_periods > 0 && build_dash_result(o, &mpd, &base, reason_out);
+    int ok = dash_mpd_parse((char *)o->buf, &base, &mpd) && mpd.n_periods > 0;
+    if (!ok && reason_out) *reason_out = NET_ERR_FORMAT;
+    if (ok) ok = build_dash_result(o, &mpd, &base, reason_out);
     http_close(o->h);
     o->h = NULL;
     if (!ok) {

@@ -5,6 +5,7 @@
 #define DIPIXY_DLNA_SSDP_H
 
 #include <stddef.h>
+#include <sys/socket.h>
 
 #include "../cli/args.h"
 
@@ -13,6 +14,8 @@ void ssdp_device_uuid(const config_t *cfg, char out[37]);
 
 /* M-SEARCH header field lookup. headers starts past request line. 1 found, 0 not */
 int ssdp_msearch_header(const char *headers, const char *name, char *out, size_t outsz);
+
+void ssdp_handle_msearch(int fd, const char *buf, const struct sockaddr *peer, socklen_t peerlen, const config_t *cfg, const char *uuid);
 
 /* spawns background thread: periodic ssdp:alive NOTIFY, answers M-SEARCH, ssdp:byebye on ssdp_stop().
    noop if cfg->enable_dlna false. IPv4 only, no IPv6 SSDP */

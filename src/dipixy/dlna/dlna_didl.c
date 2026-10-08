@@ -397,7 +397,7 @@ static int didl_item_kind(FILE *f, const config_t *cfg, const channels_t *channe
 }
 
 int build_didl(const config_t *cfg, const channels_t *channels, const oid_t *oid, int metadata, unsigned starting_index, unsigned requested_count, char **out_didl, unsigned *number_returned, unsigned *total_matches) {
-  FILE *f = gbuf_open(&t_didl_gbuf);
+  FILE *f = gbuf_open_thread(&t_didl_gbuf);
   if (!f) return -1;
 
   fputs("<DIDL-Lite xmlns=\"urn:schemas-upnp-org:didl-lite\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\">", f);

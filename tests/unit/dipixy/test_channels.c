@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "dipixy/cli/args.h"
@@ -594,6 +595,184 @@ START_TEST(direct_mcast_source_survives_sighup_reload) {
 }
 END_TEST
 
+static channels_t *build_one_source(source_kind_t kind, const char *value, int join_all, double sds_timeout_s, config_t *cfg, source_def_t *src) {
+  memset(cfg, 0, sizeof *cfg);
+  memset(src, 0, sizeof *src);
+  src->kind = kind;
+  src->value = value;
+  src->ordinal = 1;
+  cfg->sources = src;
+  cfg->n_sources = 1;
+  cfg->join_all = join_all;
+  cfg->sds_timeout_s = sds_timeout_s;
+  return channels_build(cfg);
+}
+
+static const struct {
+  source_kind_t kind;
+  const char *content;
+} file_lists[] = {
+  {SRC_XSPF, "<playlist version=\"1\" xmlns=\"http://xspf.org/ns/0/\"><trackList><track><title>Alpha</title><location>rtp://@239.1.0.1:5000</location></track></trackList></playlist>\n"},
+  {SRC_CSV, "Alpha,rtp://@239.1.0.1:5000,1,2,3\n"},
+};
+
+START_TEST(file_lists_build_one_item_each) {
+  char path[160];
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+  int family;
+  int rtp;
+  char addr[64];
+  unsigned port;
+
+  write_temp_file(path, file_lists[_i].content);
+  ch = build_one_source(file_lists[_i].kind, path, 0, 0.0, &cfg, &src);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 1);
+  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_str_eq(addr, "239.1.0.1");
+  ck_assert_uint_eq(port, 5000u);
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(sds_xml_file_builds_one_item_per_service) {
+  char path[160];
+  sds_service_t svcs[2];
+  unsigned char buf[4096];
+  size_t len;
+  FILE *f;
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+
+  memset(svcs, 0, sizeof svcs);
+  bufcpy(svcs[0].name, sizeof svcs[0].name, "One");
+  bufcpy(svcs[0].address, sizeof svcs[0].address, "239.1.1.1");
+  svcs[0].port = 5000;
+  svcs[0].rtp = 1;
+  bufcpy(svcs[1].name, sizeof svcs[1].name, "Two");
+  bufcpy(svcs[1].address, sizeof svcs[1].address, "239.1.1.2");
+  svcs[1].port = 5001;
+  len = sds_build_broadcast("example.invalid", 1, svcs, 2, NULL, NULL, NULL, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  write_temp_file(path, "");
+  f = fopen(path, "wb");
+  ck_assert_ptr_nonnull(f);
+  ck_assert_uint_eq(fwrite(buf, 1, len, f), len);
+  fclose(f);
+  ch = build_one_source(SRC_XML, path, 0, 0.0, &cfg, &src);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 2);
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(unreadable_or_empty_sources_give_empty_lists) {
+  static const source_kind_t kinds[] = {SRC_M3U, SRC_XSPF, SRC_CSV, SRC_XML};
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch = build_one_source(kinds[_i], "/nonexistent/list", 0, 0.0, &cfg, &src);
+
+  ck_assert_ptr_nonnull(ch);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 0);
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(xml_without_services_gives_an_empty_list) {
+  char path[160];
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+
+  write_temp_file(path, "<BroadcastDiscovery/>\n");
+  ch = build_one_source(SRC_XML, path, 0, 0.0, &cfg, &src);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 0);
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(sds_sources_that_cannot_be_listened_to_give_empty_lists) {
+  static const char *const addrs[] = {"nonsense", "127.0.0.1:5000", "239.255.77.1:5004"};
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch = build_one_source(SRC_SDS, addrs[_i], 0, 0.2, &cfg, &src);
+
+  ck_assert_ptr_nonnull(ch);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 0);
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(join_all_keeps_every_item_whether_or_not_it_can_be_joined) {
+  char path[160];
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+
+  write_temp_file(path, "#EXTINF:-1,One\nudp://@239.255.78.1:5004\n#EXTINF:-1,Two\nrtp://@239.255.78.2:5006\n#EXTINF:-1,Three\nbogus://x\n");
+  ch = build_one_source(SRC_M3U, path, 1, 0.0, &cfg, &src);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 3);
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(reload_replaces_the_list_only_with_a_non_empty_result) {
+  char path[160];
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+
+  write_temp_file(path, file_lists[_i].content);
+  ch = build_one_source(file_lists[_i].kind, path, 0, 0.0, &cfg, &src);
+  ck_assert_ptr_nonnull(ch);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 1);
+
+  write_temp_file(path, _i == 0 ? "<playlist version=\"1\" xmlns=\"http://xspf.org/ns/0/\"><trackList>"
+    "<track><title>A</title><location>rtp://@239.1.0.1:5000</location></track>"
+    "<track><title>B</title><location>rtp://@239.1.0.2:5002</location></track></trackList></playlist>\n"
+    : "A,rtp://@239.1.0.1:5000\nB,rtp://@239.1.0.2:5002\n");
+  channels_reload_all(ch, &cfg);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 2);
+
+  unlink(path);
+  channels_reload_all(ch, &cfg);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 2);
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(refresh_thread_starts_only_with_sources_and_stops_cleanly) {
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch = build_one_source(SRC_MCAST, "rtp://239.2.24.1:8208", 0, 0.0, &cfg, &src);
+  struct timespec ts = {0, 300000000};
+
+  ck_assert_ptr_nonnull(ch);
+  cfg.sds_refresh_interval_s = 3600.0;
+  channels_stop_refresh();
+  ck_assert_int_eq(channels_refresh_active(), 0);
+  cfg.n_sources = 0;
+  channels_start_refresh(ch, &cfg);
+  ck_assert_int_eq(channels_refresh_active(), 0);
+  cfg.n_sources = 1;
+  channels_start_refresh(ch, &cfg);
+  ck_assert_int_eq(channels_refresh_active(), 1);
+  nanosleep(&ts, NULL);
+  channels_stop_refresh();
+  ck_assert_int_eq(channels_refresh_active(), 0);
+  channels_free(ch);
+}
+END_TEST
+
 static Suite *channels_suite(void) {
   Suite *s = suite_create("dipixy_channels");
   TCase *tc = tcase_create("core");
@@ -609,6 +788,14 @@ static Suite *channels_suite(void) {
   tcase_add_test(tc, resolve_by_name_after_reload_uses_fresh_index);
   tcase_add_test(tc, direct_mcast_source_builds_single_item_list);
   tcase_add_test(tc, direct_mcast_source_survives_sighup_reload);
+  tcase_add_loop_test(tc, file_lists_build_one_item_each, 0, 2);
+  tcase_add_test(tc, sds_xml_file_builds_one_item_per_service);
+  tcase_add_loop_test(tc, unreadable_or_empty_sources_give_empty_lists, 0, 4);
+  tcase_add_test(tc, xml_without_services_gives_an_empty_list);
+  tcase_add_loop_test(tc, sds_sources_that_cannot_be_listened_to_give_empty_lists, 0, 3);
+  tcase_add_test(tc, join_all_keeps_every_item_whether_or_not_it_can_be_joined);
+  tcase_add_loop_test(tc, reload_replaces_the_list_only_with_a_non_empty_result, 0, 2);
+  tcase_add_test(tc, refresh_thread_starts_only_with_sources_and_stops_cleanly);
   suite_add_tcase(s, tc);
   return s;
 }

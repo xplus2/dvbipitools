@@ -6,7 +6,9 @@
 #include <stdarg.h>
 #include <stdatomic.h>
 #include <stdint.h>
+#include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -91,6 +93,21 @@ static uint64_t status_rss_bytes(void) {
 #define JBOOL(name, cond, sep) JFIELD(jbuf_str, name, (cond) ? "true" : "false", sep)
 #define JSTR_OR_NULL(name, cond, val, sep) do { jbuf_key(&j, name); if (cond) jbuf_json_string(&j, val); else jbuf_str(&j, "null"); jbuf_str(&j, sep); } while (0)
 
+static pthread_key_t g_json_key;
+static pthread_once_t g_json_once = PTHREAD_ONCE_INIT;
+
+static void json_buf_release(void *p) {
+  jbuf_t *j = p;
+  free(j->buf);
+  j->buf = NULL;
+  j->len = 0;
+  j->cap = 0;
+}
+
+static void json_key_init(void) {
+  pthread_key_create(&g_json_key, json_buf_release);
+}
+
 int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) {
   static _Thread_local jbuf_t j;
   struct tm tmv;
@@ -98,6 +115,8 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   double in_mbps, out_mbps;
   int i;
 
+  pthread_once(&g_json_once, json_key_init);
+  pthread_setspecific(g_json_key, &j);
   jbuf_reset(&j);
   jbuf_str(&j, "{");
 

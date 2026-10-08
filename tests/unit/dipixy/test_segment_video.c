@@ -7,53 +7,103 @@
 
 #include "dipixy/segment/priv.h"
 
+static int g_mux_enabled;
+static char g_mux_dummy;
+static char g_store_dummy;
+static int g_ntracks;
+static fmp4_track_cfg_t g_tracks[FMP4_MAX_TRACKS];
+static int g_init_result;
+static int g_push_result;
+static int g_segment_count;
+static int g_part_count;
+static int g_segment_ll_count;
+static int g_begin_count;
+static int g_sample_count;
+static int g_seed_count;
+static int g_end_count;
+static int g_deliver_count;
+static unsigned char g_out[8] = "fmp4out";
+
+static void stubs_reset(void) {
+  g_mux_enabled = 1;
+  g_ntracks = 0;
+  g_init_result = 0;
+  g_push_result = 0;
+  g_segment_count = 0;
+  g_part_count = 0;
+  g_segment_ll_count = 0;
+  g_begin_count = 0;
+  g_sample_count = 0;
+  g_seed_count = 0;
+  g_end_count = 0;
+  g_deliver_count = 0;
+}
+
 int hls_push_segment_at(hls_store_t *s, const uint8_t *data, size_t size, double duration) {
   (void)s; (void)data; (void)size; (void)duration;
-  return 0;
+  g_segment_count++;
+  return g_push_result;
 }
 int hls_push_part_at(hls_store_t *s, const uint8_t *data, size_t size, double duration, int independent) {
   (void)s; (void)data; (void)size; (void)duration; (void)independent;
-  return 0;
+  g_part_count++;
+  return g_push_result;
 }
 int hls_push_segment_ll_at(hls_store_t *s, double duration) {
   (void)s; (void)duration;
-  return 0;
+  g_segment_ll_count++;
+  return g_push_result;
 }
 void mp4push_deliver(const hls_seg_ctx_t *s, const unsigned char *data, size_t len) {
   (void)s; (void)data; (void)len;
+  g_deliver_count++;
 }
 int hls_set_init_segment_at(hls_store_t *s, codec_t video_codec, const uint8_t *data, size_t size) {
   (void)s; (void)video_codec; (void)data; (void)size;
-  return 0;
+  return g_init_result;
 }
 int64_t pts_unwrap(pts_unwrap_t *st, uint64_t raw) {
   (void)st; (void)raw;
   return 0;
 }
 int buf_reserve(unsigned char **buf, size_t *cap, size_t need) {
-  (void)buf; (void)cap; (void)need;
-  return -1;
+  unsigned char *grown;
+
+  if (need <= *cap) return 0;
+  grown = realloc(*buf, need);
+  if (!grown) return -1;
+  *buf = grown;
+  *cap = need;
+  return 0;
 }
 fmp4_mux_t *fmp4_mux_new(const fmp4_track_cfg_t *tracks, int ntracks) {
-  (void)tracks; (void)ntracks;
-  return NULL;
+  if (!g_mux_enabled) return NULL;
+  g_ntracks = ntracks;
+  memcpy(g_tracks, tracks, (size_t)ntracks * sizeof tracks[0]);
+  return (fmp4_mux_t *)&g_mux_dummy;
 }
 size_t fmp4_init_segment(fmp4_mux_t *m, unsigned char **out) {
-  (void)m; (void)out;
-  return 0;
+  (void)m;
+  *out = g_out;
+  return sizeof g_out;
 }
 void fmp4_segment_begin(fmp4_mux_t *m, uint32_t sequence_number) {
   (void)m; (void)sequence_number;
+  g_begin_count++;
 }
 void fmp4_segment_add_sample(fmp4_mux_t *m, const fmp4_sample_t *s) {
   (void)m; (void)s;
+  g_sample_count++;
 }
 void fmp4_track_seed_dts(fmp4_mux_t *m, int track_idx, uint64_t dts) {
   (void)m; (void)track_idx; (void)dts;
+  g_seed_count++;
 }
 size_t fmp4_segment_end(fmp4_mux_t *m, unsigned char **out) {
-  (void)m; (void)out;
-  return 0;
+  (void)m;
+  *out = g_out;
+  g_end_count++;
+  return sizeof g_out;
 }
 
 static void wrap_unit(unsigned char *out, size_t *n, const unsigned char *unit, size_t ulen) {
@@ -255,6 +305,240 @@ START_TEST(build_video_track_cfg_av1) {
 }
 END_TEST
 
+static hls_seg_ctx_t *ready_ctx(void) {
+  static const unsigned char sps[] = {0x67, 0x42, 0x00, 0x00, 0xFB, 0x80};
+  static const unsigned char pps[] = {0x68, 0xAA};
+  hls_seg_ctx_t *s = new_ctx(CODEC_H264);
+
+  memcpy(s->video.es.sps, sps, sizeof sps);
+  s->video.es.spslen = sizeof sps;
+  memcpy(s->video.es.pps, pps, sizeof pps);
+  s->video.es.ppslen = sizeof pps;
+  s->store = (hls_store_t *)&g_store_dummy;
+  stubs_reset();
+  return s;
+}
+
+static void free_ctx(hls_seg_ctx_t *s) {
+  free(s->fmp4.pend_data);
+  free(s->lcevc_track.pend_data);
+  free(s->video.nal_scratch);
+  free(s);
+}
+
+static void set_au(hls_seg_ctx_t *s, size_t len) {
+  ck_assert_int_eq(buf_reserve(&s->video.nal_scratch, &s->video.nal_scratch_cap, len), 0);
+  memset(s->video.nal_scratch, 0xAB, len);
+  s->video.nal_scratch_len = len;
+}
+
+START_TEST(fmux_waits_for_video_parameters_and_audio) {
+  hls_seg_ctx_t *s = ready_ctx();
+
+  s->video.es.spslen = 0;
+  try_create_fmux(s);
+  ck_assert_ptr_null(s->fmp4.fmux);
+  s->video.es.spslen = 6;
+  s->audio.present = 1;
+  s->audio.ready = 0;
+  try_create_fmux(s);
+  ck_assert_ptr_null(s->fmp4.fmux);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(fmux_is_created_once_with_the_audio_codec_parameters) {
+  static const struct {
+    codec_t codec;
+  } codecs[] = {{CODEC_AAC}, {CODEC_AAC_LATM}, {CODEC_AC4}, {CODEC_AC3}, {CODEC_EAC3}, {CODEC_TRUEHD}, {CODEC_DTS}, {CODEC_DTS_HD}, {CODEC_DTS_HD_MA}, {CODEC_OPUS}};
+  hls_seg_ctx_t *s = ready_ctx();
+
+  s->audio.present = 1;
+  s->audio.ready = 1;
+  s->audio.rate = 48000;
+  s->audio.channels = 2;
+  s->audio.bsid = 6;
+  s->audio.bsmod = 1;
+  s->audio.acmod = 7;
+  s->audio.lfeon = 1;
+  s->audio.bitrate_code = 12;
+  s->audio.truehd_format_info = 0x1234;
+  s->audio.truehd_peak_data_rate = 0x2345;
+  s->audio.dts_has_core = 1;
+  s->demux.audio_codec = codecs[_i].codec;
+  try_create_fmux(s);
+  ck_assert_ptr_nonnull(s->fmp4.fmux);
+  ck_assert_int_eq(g_ntracks, 2);
+  ck_assert_int_eq(g_tracks[1].codec, codecs[_i].codec);
+  ck_assert_uint_eq(g_tracks[1].rate, 48000u);
+  ck_assert_int_eq(s->fmp4.fmp4_audio_track_idx, 1);
+  ck_assert_int_eq(s->fmp4.fmp4_lcevc_track_idx, -1);
+  if (codecs[_i].codec == CODEC_AC3 || codecs[_i].codec == CODEC_EAC3) ck_assert_uint_eq(g_tracks[1].ac3_acmod, 7u);
+  if (codecs[_i].codec == CODEC_TRUEHD) ck_assert_uint_eq(g_tracks[1].truehd_format_info, 0x1234u);
+  if (codecs[_i].codec == CODEC_DTS) ck_assert_int_eq(g_tracks[1].dts_has_core, 1);
+  g_ntracks = 0;
+  try_create_fmux(s);
+  ck_assert_int_eq(g_ntracks, 0);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(fmux_gains_an_lcevc_track_when_one_is_known) {
+  hls_seg_ctx_t *s = ready_ctx();
+
+  s->demux.lcevc_pid_known = 1;
+  try_create_fmux(s);
+  ck_assert_ptr_nonnull(s->fmp4.fmux);
+  ck_assert_int_eq(g_ntracks, 2);
+  ck_assert_int_eq(g_tracks[1].codec, CODEC_LCEVC);
+  ck_assert_int_eq(s->fmp4.fmp4_lcevc_track_idx, 1);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(fmux_creation_failures_are_tolerated) {
+  hls_seg_ctx_t *s = ready_ctx();
+
+  g_mux_enabled = 0;
+  try_create_fmux(s);
+  ck_assert_ptr_null(s->fmp4.fmux);
+  g_mux_enabled = 1;
+  g_init_result = -1;
+  try_create_fmux(s);
+  ck_assert_ptr_nonnull(s->fmp4.fmux);
+  s->fmp4.fmux = NULL;
+  s->store = NULL;
+  try_create_fmux(s);
+  ck_assert_ptr_nonnull(s->fmp4.fmux);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(access_units_open_fragments_and_close_segments) {
+  hls_seg_ctx_t *s = ready_ctx();
+
+  set_au(s, 32);
+  fmp4_feed_au(s, 1, 0, 0, 1, 0, 0.0);
+  ck_assert_int_eq(g_begin_count, 0);
+  fmp4_feed_au(s, 0, 40, 0, 0, 0, 0.0);
+  ck_assert_int_eq(g_begin_count, 1);
+  ck_assert_int_eq(g_sample_count, 1);
+  fmp4_feed_au(s, 0, 80, 0, 0, 0, 0.0);
+  ck_assert_int_eq(g_sample_count, 2);
+  fmp4_feed_au(s, 1, 120, 0, 1, 1, 0.12);
+  fmp4_feed_au(s, 0, 160, 0, 0, 0, 0.0);
+  ck_assert_int_eq(g_end_count, 1);
+  ck_assert_int_eq(g_deliver_count, 1);
+  ck_assert_int_eq(g_segment_count, 1);
+  ck_assert_int_eq(g_part_count, 0);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(failed_pushes_do_not_stop_the_mux) {
+  hls_seg_ctx_t *s = ready_ctx();
+
+  g_push_result = -1;
+  set_au(s, 32);
+  fmp4_feed_au(s, 1, 0, 0, 1, 0, 0.0);
+  fmp4_feed_au(s, 0, 40, 0, 0, 0, 0.0);
+  fmp4_feed_au(s, 1, 80, 0, 1, 1, 0.08);
+  fmp4_feed_au(s, 0, 120, 0, 0, 0, 0.0);
+  ck_assert_int_eq(g_end_count, 1);
+  s->store = NULL;
+  fmp4_feed_au(s, 1, 160, 0, 1, 1, 0.16);
+  fmp4_feed_au(s, 0, 200, 0, 0, 0, 0.0);
+  ck_assert_int_eq(g_end_count, 2);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(low_latency_chunks_close_on_the_part_target) {
+  hls_seg_ctx_t *s = ready_ctx();
+
+  atomic_store(&s->part.part_target, 0.1);
+  set_au(s, 32);
+  fmp4_feed_au(s, 1, 0, 0, 1, 0, 0.0);
+  fmp4_feed_au(s, 0, 40, 0, 0, 0, 0.0);
+  fmp4_feed_au(s, 0, 80, 0, 0, 0, 0.0);
+  fmp4_feed_au(s, 0, 120, 0, 0, 0, 0.0);
+  fmp4_feed_au(s, 0, 160, 0, 0, 0, 0.0);
+  ck_assert_int_ge(g_part_count, 1);
+  fmp4_feed_au(s, 1, 200, 0, 1, 1, 0.2);
+  fmp4_feed_au(s, 0, 240, 0, 0, 0, 0.0);
+  ck_assert_int_ge(g_segment_ll_count, 1);
+  g_push_result = -1;
+  fmp4_feed_au(s, 1, 280, 0, 1, 1, 0.28);
+  fmp4_feed_au(s, 0, 320, 0, 0, 0, 0.0);
+  s->store = NULL;
+  fmp4_feed_au(s, 1, 360, 0, 1, 1, 0.36);
+  fmp4_feed_au(s, 0, 400, 0, 0, 0, 0.0);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(an_unavailable_mux_drops_access_units) {
+  hls_seg_ctx_t *s = ready_ctx();
+
+  g_mux_enabled = 0;
+  set_au(s, 16);
+  fmp4_feed_au(s, 1, 0, 0, 1, 0, 0.0);
+  ck_assert_int_eq(s->fmp4.fmp4_have_pend, 0);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(ac4_segment_cuts_wait_for_an_independent_frame) {
+  hls_seg_ctx_t *s = ready_ctx();
+
+  s->audio.present = 1;
+  s->audio.ready = 1;
+  s->audio.rate = 48000;
+  s->audio.channels = 2;
+  s->demux.audio_codec = CODEC_AC4;
+  set_au(s, 32);
+  fmp4_feed_au(s, 1, 0, 0, 1, 0, 0.0);
+  fmp4_feed_au(s, 0, 40, 0, 0, 0, 0.0);
+  fmp4_feed_au(s, 0, 80, 0, 1, 1, 0.08);
+  ck_assert_int_eq(s->fmp4.fmp4_ac4_defer, 1);
+  s->audio.ac4_frame_count = 1;
+  fmp4_feed_au(s, 0, 120, 0, 0, 0, 0.0);
+  ck_assert_int_eq(s->fmp4.fmp4_ac4_defer, 1);
+  s->audio.ac4_last_iframe = 1;
+  fmp4_feed_au(s, 0, 160, 0, 0, 0, 0.0);
+  ck_assert_int_eq(s->fmp4.fmp4_ac4_defer, 0);
+  s->audio.ac4_last_iframe = 0;
+  fmp4_feed_au(s, 0, 200, 0, 1, 0, 0.2);
+  ck_assert_int_eq(s->fmp4.fmp4_ac4_defer, 1);
+  s->audio.ac4_frame_count = 10;
+  fmp4_feed_au(s, 0, 240, 0, 0, 0, 0.0);
+  ck_assert_int_eq(s->fmp4.fmp4_ac4_defer, 0);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(lcevc_units_are_seeded_and_paired_with_the_next_timestamp) {
+  hls_seg_ctx_t *s = ready_ctx();
+  static const unsigned char au[] = {1, 2, 3, 4};
+
+  s->demux.lcevc_pid_known = 1;
+  set_au(s, 32);
+  fmp4_feed_lcevc_au(s, 0, au, sizeof au);
+  ck_assert_int_eq(g_seed_count, 0);
+  fmp4_feed_au(s, 1, 100, 0, 1, 0, 0.0);
+  fmp4_feed_au(s, 0, 140, 0, 0, 0, 0.0);
+  ck_assert_int_eq(s->fmp4.fmp4_frag_open, 1);
+  fmp4_feed_lcevc_au(s, 20, au, sizeof au);
+  ck_assert_int_eq(g_seed_count, 0);
+  fmp4_feed_lcevc_au(s, 120, au, sizeof au);
+  ck_assert_int_eq(g_seed_count, 1);
+  ck_assert_int_eq(s->lcevc_track.have_pend, 1);
+  fmp4_feed_lcevc_au(s, 160, au, sizeof au);
+  ck_assert_int_ge(g_sample_count, 2);
+  free_ctx(s);
+}
+END_TEST
+
 static Suite *segment_video_suite(void) {
   Suite *s = suite_create("dipixy_segment_video");
   TCase *tc = tcase_create("core");
@@ -270,6 +554,16 @@ static Suite *segment_video_suite(void) {
   tcase_add_test(tc, build_video_track_cfg_hevc);
   tcase_add_test(tc, build_video_track_cfg_vvc);
   tcase_add_test(tc, build_video_track_cfg_av1);
+  tcase_add_test(tc, fmux_waits_for_video_parameters_and_audio);
+  tcase_add_loop_test(tc, fmux_is_created_once_with_the_audio_codec_parameters, 0, 10);
+  tcase_add_test(tc, fmux_gains_an_lcevc_track_when_one_is_known);
+  tcase_add_test(tc, fmux_creation_failures_are_tolerated);
+  tcase_add_test(tc, access_units_open_fragments_and_close_segments);
+  tcase_add_test(tc, failed_pushes_do_not_stop_the_mux);
+  tcase_add_test(tc, low_latency_chunks_close_on_the_part_target);
+  tcase_add_test(tc, an_unavailable_mux_drops_access_units);
+  tcase_add_test(tc, ac4_segment_cuts_wait_for_an_independent_frame);
+  tcase_add_test(tc, lcevc_units_are_seeded_and_paired_with_the_next_timestamp);
   suite_add_tcase(s, tc);
   return s;
 }
