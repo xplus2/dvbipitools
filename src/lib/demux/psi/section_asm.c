@@ -38,10 +38,12 @@ static int consume(psi_section_asm_t *a, const unsigned char *pl, size_t plen, s
   return 0;
 }
 
-int psi_section_asm_cc(psi_section_asm_t *a, unsigned cc) {
+int psi_section_asm_cc(psi_section_asm_t *a, const unsigned char *pkt) {
+  unsigned cc = pkt[3] & 0x0F;
+  int disc = (pkt[3] & 0x20) && pkt[4] > 0 && (pkt[5] & 0x80);
   if (a->cc_seen) {
     if (cc == a->cc && a->active) return 0;
-    if (cc != ((a->cc + 1) & 0x0F)) a->active = 0;
+    if (cc != ((a->cc + 1) & 0x0F) && !disc) a->active = 0;
   }
   a->cc_seen = 1;
   a->cc = cc;
@@ -60,6 +62,10 @@ int psi_section_asm_feed(psi_section_asm_t *a, const unsigned char *pl, size_t p
     if (i > plen) {
       a->active = 0;
       return 0;
+    }
+    if (a->active && ptr && consume(a, pl, i, 1)) {
+      a->next = i;
+      return 1;
     }
     a->len = 0;
     a->expect = 0;

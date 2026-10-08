@@ -18,9 +18,10 @@ typedef struct {
   unsigned char buf[PSI_SECTION_ASM_BUF_LEN];
 } psi_section_asm_t;
 
-/* call per payload packet b4 feed with 4B continuity counter.
-   0: duplicate packet inside a section in progress, skip. drops in progress section */
-int psi_section_asm_cc(psi_section_asm_t *a, unsigned cc);
+/* call per payload packet b4 feed with a 188 B TS pkg.
+   0: duplicate packet inside a section in progress, skip.
+   cc gap drops in progress section unless adaptation field sets discontinuity indicator */
+int psi_section_asm_cc(psi_section_asm_t *a, const unsigned char *pkt);
 
 /* accumulates one section from a pid's TS-packet payloads. pl/plen: payload past  adaptation field (caller strips it).
    pusi: packet had payload_unit_start_indicator set (payload starts with a pointer_field).

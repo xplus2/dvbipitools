@@ -57,7 +57,7 @@ void capture_eit_section(remux_t *r, const unsigned char *pkt188, ts_metrics_t *
   int got;
 
   if (!tspack_payload(pkt188, &pl, &plen, &pusi)) return;
-  if (!psi_section_asm_cc(&r->eit_asm, pkt188[3] & 0x0F)) return;
+  if (!psi_section_asm_cc(&r->eit_asm, pkt188)) return;
   for (got = psi_section_asm_feed(&r->eit_asm, pl, plen, pusi); got; got = psi_section_asm_next(&r->eit_asm, pl, plen))
     eit_section_done(r, tsm);
 }

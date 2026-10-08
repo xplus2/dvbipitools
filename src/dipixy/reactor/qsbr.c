@@ -58,7 +58,10 @@ void qsbr_worker_offline(qsbr_domain_t *d, int tid) {
 void qsbr_worker_online(qsbr_domain_t *d, int tid) {
   if (!d || tid < 0 || tid >= d->nworkers) return;
   uint64_t v = atomic_load_explicit(&d->slot[tid].v, memory_order_relaxed);
-  if (!(v & QSBR_ONLINE)) atomic_store_explicit(&d->slot[tid].v, v + 1, memory_order_seq_cst);
+  if (v & QSBR_ONLINE) return;
+  atomic_store_explicit(&d->slot[tid].v, v + 1, memory_order_relaxed);
+  /* order store before later shared loads (ldapr, arm64) */
+  atomic_thread_fence(memory_order_seq_cst);
 }
 
 int qsbr_worker_count(const qsbr_domain_t *d) { return d ? d->nworkers : 0; }

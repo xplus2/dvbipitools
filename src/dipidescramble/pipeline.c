@@ -347,7 +347,7 @@ int pkt_cb(void *v, const unsigned char *pkt) {
   if (!lc->cas_logged && psi_ready(lc->psi) && detect_cas_scheme(lc)) return 1;
 
   /* BISS 1/E signaling pid also classifies PID_ECM. guard lc->dev, not just lc->biss_ca */
-  if (lc->ecm_pid && pid == lc->ecm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_cc(&lc->ecm_asm, pkt[3] & 0x0F)) {
+  if (lc->ecm_pid && pid == lc->ecm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_cc(&lc->ecm_asm, pkt)) {
     for (int got = psi_section_asm_feed(&lc->ecm_asm, pl, plen, pusi); got; got = psi_section_asm_next(&lc->ecm_asm, pl, plen)) {
       if (!lc->scr) continue;
       lc->ecm_total++;
@@ -356,7 +356,7 @@ int pkt_cb(void *v, const unsigned char *pkt) {
     }
   }
 
-  if (lc->emm_pid && pid == lc->emm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_cc(&lc->emm_asm, pkt[3] & 0x0F)) {
+  if (lc->emm_pid && pid == lc->emm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_cc(&lc->emm_asm, pkt)) {
     for (int got = psi_section_asm_feed(&lc->emm_asm, pl, plen, pusi); got; got = psi_section_asm_next(&lc->emm_asm, pl, plen)) {
       lc->emm_total++;
       if (lc->biss_ca) {
