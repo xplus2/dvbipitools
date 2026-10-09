@@ -45,13 +45,18 @@ static cas_pid_state_t *find_pid_state(cas_scramble_engine_t *e, unsigned pid) {
   return NULL;
 }
 
+static void queue_clear(cas_scramble_engine_t *e, unsigned out_pid, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx) {
+  scrambler_passthrough_queued(e->scr, pkt188, emit, ctx);
+  if (out_pid == e->flush_pid)
+    scrambler_flush(e->scr, emit, ctx);
+}
+
 cas_scramble_engine_t *cas_scramble_engine_start(scramble_algo_t algo, const unsigned *pids, size_t pid_count, unsigned flush_pid) {
   cas_scramble_engine_t *e;
   size_t n;
 
   e = calloc(1, sizeof *e);
-  if (!e)
-    return NULL;
+  if (!e) return NULL;
   e->scr = scrambler_new(algo);
   if (!e->scr) {
     free(e);
@@ -65,16 +70,22 @@ cas_scramble_engine_t *cas_scramble_engine_start(scramble_algo_t algo, const uns
   return e;
 }
 
+int cas_scramble_engine_add_pid(cas_scramble_engine_t *e, unsigned pid) {
+  if (find_pid_state(e, pid)) return 0;
+  if (e->pid_count >= CAS_SCRAMBLE_ENGINE_MAX_PIDS) return -1;
+  memset(&e->pid[e->pid_count], 0, sizeof e->pid[0]);
+  e->pid[e->pid_count++].pid = pid;
+  return 0;
+}
+
 void cas_scramble_engine_stop(cas_scramble_engine_t *e) {
-  if (!e)
-    return;
+  if (!e) return;
   scrambler_free(e->scr);
   free(e);
 }
 
 void cas_scramble_engine_set_cw(cas_scramble_engine_t *e, int parity, const unsigned char *cw, size_t len, scrambler_emit_cb emit, void *ctx) {
-  if (parity != SCRAMBLE_PARITY_EVEN && parity != SCRAMBLE_PARITY_ODD)
-    return;
+  if (parity != SCRAMBLE_PARITY_EVEN && parity != SCRAMBLE_PARITY_ODD) return;
   e->cw_cache_len[parity] = len;
   if (len)
     scrambler_set_key(e->scr, parity, cw, len, emit, ctx);
@@ -83,35 +94,30 @@ void cas_scramble_engine_set_cw(cas_scramble_engine_t *e, int parity, const unsi
 void cas_scramble_engine_scramble_packet(cas_scramble_engine_t *e, unsigned out_pid, int have_source, int have_target, int target_parity, int cw_valid, double now, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx) {
   cas_pid_state_t *ps = find_pid_state(e, out_pid);
   int pusi;
-
   if (!ps) {
-    emit(ctx, pkt188); /* not a managed pid - expected clear */
+    queue_clear(e, out_pid, pkt188, emit, ctx);
     return;
   }
   if (!have_source) {
     e->unexpected_clear_packets_total++; /* managed pid, source not up */
-    emit(ctx, pkt188);
+    queue_clear(e, out_pid, pkt188, emit, ctx);
     return;
   }
   pusi = (pkt188[1] & 0x40) != 0;
   cas_pid_apply(ps, have_target, target_parity, pusi, now, CAS_FORCE_FLIP_S);
 
   if (!e->cw_cache_len[ps->current_parity] || !cw_valid) {
-    /* same pid may already be mid-batch (key was valid moments ago): keep this passthrough packet in its correct position rather than letting
-       it jump ahead of still-queued earlier ones */
     e->unexpected_clear_packets_total++;
-    scrambler_passthrough_queued(e->scr, pkt188, emit, ctx);
+    queue_clear(e, out_pid, pkt188, emit, ctx);
     return;
   }
   e->scrambled_packets_total++;
   scrambler_encrypt_packet_queued(e->scr, pkt188, ps->current_parity, emit, ctx);
-  if (out_pid == e->flush_pid)
-    scrambler_flush(e->scr, emit, ctx); /* never let batching delay the caller's clock pid */
+  if (out_pid == e->flush_pid) scrambler_flush(e->scr, emit, ctx); /* never let batching delay the caller's clock pid */
 }
 
 void cas_scramble_engine_flush(cas_scramble_engine_t *e, scrambler_emit_cb emit, void *ctx) {
-  if (e)
-    scrambler_flush(e->scr, emit, ctx);
+  if (e) scrambler_flush(e->scr, emit, ctx);
 }
 
 void cas_scramble_engine_get_metrics(cas_scramble_engine_t *e, unsigned long long *scrambled_packets_total, unsigned long long *unexpected_clear_packets_total) {

@@ -125,6 +125,8 @@ double psi_pmt_oldest_seen(const psi_t *c);
 
 psi_t *psi_new(void);
 void psi_free(psi_t *c);
+/* log: owner. NULL/empty resets */
+void psi_set_label(psi_t *c, const char *label);
 void psi_feed(psi_t *c, const unsigned char *pkt); /* one 188-byte packet */
 
 /* call b4 PMT locks in: forces PMT PID */
@@ -141,6 +143,8 @@ const psi_multi_program_t *psi_multi_programs(const psi_t *c, int *count);
 
 int psi_have_pat(const psi_t *c);
 int psi_have_pmt(const psi_t *c);
+/* PMT sections parsed ok so far (incl repeats) */
+unsigned long psi_pmt_parsed(const psi_t *c);
 int psi_have_sdt(const psi_t *c);
 int psi_have_cat(const psi_t *c);
 int psi_ready(const psi_t *c); /* pat + pmt seen */

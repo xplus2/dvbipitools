@@ -14,6 +14,7 @@
 #include "lib/demux/tspack.h"
 #include "lib/sys/antidebug.h"
 #include "lib/helper/log.h"
+#include "lib/helper/secure_zero.h"
 #include "lib/helper/toolmain.h"
 #include "lib/metrics/export.h"
 #include "lib/tsinspect/inspect.h"
@@ -248,5 +249,6 @@ cleanup:
   emmcache_free(lc.cache);
   device_state_free(lc.dev);
   biss_ca_state_free(lc.biss_ca);
+  secure_zero(lc.last_cw, sizeof lc.last_cw);
   return rc;
 }

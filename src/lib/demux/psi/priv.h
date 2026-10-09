@@ -16,9 +16,10 @@
 typedef struct {
   unsigned program_number;
   unsigned pmt_pid;
-  psi_section_asm_t asm_;
+  psi_section_asm_t asm_; /* only 1st on a PID assembles, others share */
   double obs_last;
   int obs_ver;
+  int foreign_logged;
   unsigned last_pcr_pid;
   int last_es_count;
   uint16_t last_es_pid[PSI_MAX_ES];
@@ -34,6 +35,7 @@ struct psi {
   psi_section_asm_t cat;
   int have_pat;
   int have_pmt;
+  unsigned long pmt_parsed;
   int have_sdt;
   int have_nit;
   int have_cat;
@@ -63,6 +65,8 @@ struct psi {
   unsigned preferred_pmt_pid; /* 0 = none, auto-select whichever candidate resolves first */
   int pmt_locked;             /* program_number/pmt_pid finalized: pmt_cand[pmt_lock_idx] wins */
   int pmt_lock_idx;
+  unsigned char pmt_sec[PSI_SECTION_ASM_BUF_LEN]; /* last valid pmt of locked prog */
+  size_t pmt_sec_len;
 
   int multi_mode; /* every candidate resolves independently, see psi_enable_multi_program() */
   psi_multi_program_t multi[PSI_MAX_PROGRAMS];
@@ -77,6 +81,7 @@ struct psi {
   int pmt_cand_overflow_logged;
   int es_overflow_logged;
 
+  char tag[32]; /* log prefix, empty = "psi" */
   log_throttle_t pat_drop_throttle;
   log_throttle_t pmt_drop_throttle;
   log_throttle_t sdt_drop_throttle;
@@ -85,7 +90,7 @@ struct psi {
 };
 
 /* psi.c */
-pmt_cand_t *find_cand(psi_t *c, unsigned pmt_pid);
+pmt_cand_t *find_cand(psi_t *c, unsigned prog, unsigned pmt_pid);
 void rebuild_class_table(psi_t *c);
 
 /* descriptors.c */
@@ -106,7 +111,8 @@ void decode_service_desc(const unsigned char *d, size_t dll, char *provider_dst,
 /* parse.c */
 void obs_version(psi_t *c, psi_obs_id_t id, const unsigned char *b, pmt_cand_t *cand);
 void parse_pat(psi_t *c);
-int parse_pmt(psi_t *c, pmt_cand_t *cand);
+int parse_pmt(psi_t *c, pmt_cand_t *cand, const unsigned char *b, size_t n);
+const char *psi_tag(const psi_t *c);
 void parse_sdt(psi_t *c);
 void parse_nit(psi_t *c);
 void parse_cat(psi_t *c);

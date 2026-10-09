@@ -206,6 +206,7 @@ dvbipitools_add_unit_test(lib_demux_mpts_probe
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -576,6 +577,7 @@ dvbipitools_add_unit_test(lib_net_tssource_async
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -626,6 +628,7 @@ dvbipitools_add_unit_test(lib_net_tssource_async
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -665,6 +668,7 @@ dvbipitools_add_unit_test(lib_net_tssource_http_dispatch
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -714,6 +718,7 @@ dvbipitools_add_unit_test(lib_net_tssource_http_dispatch
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -753,6 +758,7 @@ dvbipitools_add_unit_test(lib_net_tssource_dash_fmp4
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -802,6 +808,7 @@ dvbipitools_add_unit_test(lib_net_tssource_dash_fmp4
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -846,6 +853,7 @@ dvbipitools_add_unit_test(lib_net_tssource_file
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -895,6 +903,7 @@ dvbipitools_add_unit_test(lib_net_tssource_file
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -969,6 +978,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
     target_link_libraries(test_lib_scrambler_cissa PRIVATE OpenSSL::Crypto)
 
@@ -1004,6 +1014,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
         ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
     target_link_libraries(test_lib_cas_biss_ca_engine PRIVATE OpenSSL::Crypto)
 
@@ -1644,7 +1655,8 @@ dvbipitools_add_unit_test(dipiradiohead_tspacketizer
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/mux/pes.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
-    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_unit_test(dipiradiohead_framequeue
     unit/dipiradiohead/input/test_framequeue.c
@@ -1808,6 +1820,7 @@ dvbipitools_add_unit_test(dipiradiohead_source_async
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
@@ -1850,6 +1863,7 @@ dvbipitools_add_unit_test(dipiradiohead_source_frame
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
@@ -1941,6 +1955,7 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/icy.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/id3.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/framer/mpegaudio.c
@@ -1990,6 +2005,7 @@ dvbipitools_add_unit_test(lib_hls_playlist
 dvbipitools_add_unit_test(lib_hls_live
     unit/lib/hls/test_live.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -2022,6 +2038,7 @@ dvbipitools_add_unit_test(lib_hls_tspassthrough
     unit/lib/hls/test_tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -2099,6 +2116,7 @@ dvbipitools_add_unit_test(dipiradiohead_source_hls
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
@@ -2144,6 +2162,7 @@ dvbipitools_add_unit_test(dipiradiohead_inputset
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
@@ -2243,6 +2262,7 @@ dvbipitools_add_unit_test(dipitvhead_source
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -2537,6 +2557,7 @@ dvbipitools_add_unit_test(dipitvhead_discover
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -2768,6 +2789,7 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -2892,6 +2914,7 @@ dvbipitools_add_unit_test(dipitvhead_mpts
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -2996,6 +3019,7 @@ dvbipitools_add_unit_test(dipitvhead_single
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -3227,6 +3251,7 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -3369,6 +3394,7 @@ if (TARGET dipirist AND TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
         ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
         ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+        ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
         ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
         ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
         ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -4164,6 +4190,7 @@ if (TARGET dipirist)
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -4347,6 +4374,7 @@ if (TARGET dipisrt)
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -4616,6 +4644,7 @@ dvbipitools_add_unit_test(dipixy_capture
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -4720,6 +4749,7 @@ dvbipitools_add_unit_test(dipixy_channels
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -4828,6 +4858,7 @@ dvbipitools_add_unit_test(dipixy_playlist
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -4932,6 +4963,7 @@ dvbipitools_add_unit_test(dipixy_gena
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -5046,6 +5078,7 @@ dvbipitools_add_unit_test(dipixy_dlna
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -5273,6 +5306,7 @@ dvbipitools_add_unit_test(dipixy_ws_sources
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -5704,6 +5738,7 @@ dvbipitools_add_unit_test(dipidescramble_pmt_select
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+    ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c

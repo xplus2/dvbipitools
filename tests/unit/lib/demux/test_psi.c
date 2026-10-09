@@ -549,6 +549,32 @@ START_TEST(psi_parses_pat_and_pmt) {
 }
 END_TEST
 
+START_TEST(psi_pmt_parsed_counts_each_good_pmt_section) {
+  psi_t *p = psi_new();
+  unsigned char section[64], pkt[188];
+  size_t slen;
+
+  ck_assert_uint_eq((unsigned)psi_pmt_parsed(p), 0u);
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq((unsigned)psi_pmt_parsed(p), 0u);
+
+  slen = build_pmt(section, 1, 0x0101, 0x0101, 0x1B, 0x0102, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq((unsigned)psi_pmt_parsed(p), 1u);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq((unsigned)psi_pmt_parsed(p), 2u);
+
+  section[slen - 1] ^= 0xFF;
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq((unsigned)psi_pmt_parsed(p), 2u);
+  psi_free(p);
+}
+END_TEST
+
 START_TEST(psi_rejects_pat_with_bad_crc) {
   psi_t *p = psi_new();
   unsigned char section[64], pkt[188];
@@ -759,6 +785,63 @@ START_TEST(psi_without_multi_mode_locks_first_pmt_only) {
 
   ck_assert_uint_eq(psi_program_number(p), 1u);
   ck_assert_uint_eq(psi_pmt_pid(p), 0x0100u);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_multi_mode_resolves_programs_sharing_one_pmt_pid) {
+  psi_t *p = psi_new();
+  unsigned char section[128], pkt[188];
+  size_t slen;
+  int count;
+  const psi_multi_program_t *m;
+
+  psi_enable_multi_program(p);
+  slen = build_pat2(section, 0x1234, 1, 0x0100, 2, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt(section, 1, 0x0101, 0x0101, 0x1B, 0x0102, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt(section, 2, 0x0201, 0x0201, 0x1B, 0x0202, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 1, section, slen);
+  psi_feed(p, pkt);
+  m = psi_multi_programs(p, &count);
+  ck_assert_int_eq(count, 2);
+  ck_assert_int_eq(m[0].resolved, 1);
+  ck_assert_int_eq(m[1].resolved, 1);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0101), 1u);
+  ck_assert_uint_eq(psi_service_of_pid(p, 0x0201), 2u);
+  ck_assert_uint_eq(psi_pmt_parsed(p), 2ul);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_single_mode_ignores_other_program_on_locked_pmt_pid) {
+  psi_t *p = psi_new();
+  unsigned char section[128], pkt[188];
+  const unsigned char *sec;
+  size_t slen, len;
+
+  slen = build_pat2(section, 0x1234, 1, 0x0100, 2, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pmt(section, 2, 0x0201, 0x0201, 0x1B, 0x0202, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq(psi_program_number(p), 2u);
+
+  slen = build_pmt(section, 1, 0x0101, 0x0101, 0x1B, 0x0102, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 1, section, slen);
+  psi_feed(p, pkt);
+
+  ck_assert_uint_eq(psi_program_number(p), 2u);
+  ck_assert_uint_eq(psi_pcr_pid(p), 0x0201u);
+  sec = psi_pmt_section(p, &len);
+  ck_assert_ptr_nonnull(sec);
+  ck_assert_uint_eq(((unsigned)sec[3] << 8) | sec[4], 2u);
 
   psi_free(p);
 }
@@ -1474,6 +1557,7 @@ static Suite *psi_suite(void) {
   Suite *s = suite_create("psi");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, psi_parses_pat_and_pmt);
+  tcase_add_test(tc, psi_pmt_parsed_counts_each_good_pmt_section);
   tcase_add_test(tc, psi_rejects_pat_with_bad_crc);
   tcase_add_test(tc, psi_ignores_pointer_field_beyond_payload);
   tcase_add_test(tc, psi_parses_cat_ca_descriptor);
@@ -1485,6 +1569,8 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_pmt_with_no_ca_descriptor_leaves_pmt_ca_system_id_zero);
   tcase_add_test(tc, psi_without_multi_mode_locks_first_pmt_only);
   tcase_add_test(tc, psi_multi_mode_resolves_every_pmt_and_sdt_name);
+  tcase_add_test(tc, psi_multi_mode_resolves_programs_sharing_one_pmt_pid);
+  tcase_add_test(tc, psi_single_mode_ignores_other_program_on_locked_pmt_pid);
   tcase_add_test(tc, psi_service_of_pid_maps_every_parsed_pmt);
   tcase_add_test(tc, psi_observer_records_last_seen_and_crc_errors);
   tcase_add_test(tc, psi_wants_pid_picks_up_program_added_before_lock);

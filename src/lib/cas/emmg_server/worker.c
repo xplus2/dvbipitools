@@ -84,6 +84,7 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
         return;
       }
       have_bw = simulcrypt_find_u16(body, body_len, EMMG_P_BANDWIDTH, &bw);
+      atomic_store_explicit(&s->granted_kbps[cs->slot], have_bw ? bw : 0, memory_order_relaxed);
       *reply_len = emmg_build_stream_bw_allocation(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id, cs->data_stream_id, have_bw, bw);
       break;
     }
@@ -133,6 +134,7 @@ void emmg_run_session(emmg_server_t *s, int fd, int slot) {
   int wfd = signal_wake_fd();
 
   memset(&cs, 0, sizeof cs);
+  cs.slot = slot;
   simulcrypt_reader_init(&rd);
   flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
@@ -179,6 +181,7 @@ void emmg_run_session(emmg_server_t *s, int fd, int slot) {
     }
     if (should_close) break;
   }
+  atomic_store_explicit(&s->granted_kbps[slot], 0, memory_order_relaxed);
 }
 
 static void *worker_main(void *arg) {

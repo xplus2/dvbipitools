@@ -25,7 +25,15 @@ static int section_bad(psi_t *c, psi_obs_id_t id, const unsigned char *b, size_t
   return 1;
 }
 
-/* registers pid as a new PMT candidate for program prog (assumes pid isn't already a
+/* NULL on section ok, else short reason. count crc errs */
+static const char *section_fault(psi_t *c, psi_obs_id_t id, const unsigned char *b, size_t n, size_t min_len, unsigned char tid) {
+  if (n < min_len) return "too short";
+  if (b[0] != tid) return "wrong table_id";
+  if (section_bad(c, id, b, n)) return "crc";
+  return NULL;
+}
+
+/* registers pid as a new PMT candidate for program prog (assumes prog/pid pair isn't already a
    candidate). also mirrors into c->multi[] when multi-program mode is on */
 static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
   if (c->pmt_cand_count < PSI_MAX_PROGRAMS) {
@@ -44,7 +52,7 @@ static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
       c->multi_count++;
     }
   } else if (!c->pmt_cand_overflow_logged) {
-    log_line("psi: more than %d PMT candidates, dropping the rest", PSI_MAX_PROGRAMS);
+    log_line("%s: more than %d PMT candidates, dropping the rest", psi_tag(c), PSI_MAX_PROGRAMS);
     c->pmt_cand_overflow_logged = 1;
   }
 }
@@ -53,8 +61,9 @@ void parse_pat(psi_t *c) {
   const unsigned char *b = c->pat.buf;
   size_t n = c->pat.expect;
   size_t end;
-  if (n < 12 || b[0] != 0x00 || section_bad(c, PSI_OBS_PAT, b, n)) {
-    log_throttled(&c->pat_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed PAT section dropped");
+  const char *fault = section_fault(c, PSI_OBS_PAT, b, n, 12, 0x00);
+  if (fault) {
+    log_throttled(&c->pat_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: PAT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
   obs_version(c, PSI_OBS_PAT, b, NULL);
@@ -76,12 +85,12 @@ void parse_pat(psi_t *c) {
       c->pat_programs[c->pat_program_count].pmt_pid = pid;
       c->pat_program_count++;
     } else if (!c->pat_program_overflow_logged) {
-      log_line("psi: PAT has more than %d programs, dropping the rest", PSI_MAX_PROGRAMS);
+      log_line("%s: PAT has more than %d programs, dropping the rest", psi_tag(c), PSI_MAX_PROGRAMS);
       c->pat_program_overflow_logged = 1;
     }
     if (c->pmt_locked && !c->multi_mode) continue;
     if (c->preferred_pmt_pid && pid != c->preferred_pmt_pid) continue;
-    if (!find_cand(c, pid)) add_pmt_candidate(c, prog, pid);
+    if (!find_cand(c, prog, pid)) add_pmt_candidate(c, prog, pid);
   }
   if (c->pat_program_count < PSI_MAX_PROGRAMS) c->pat_program_overflow_logged = 0;
   if (c->pmt_cand_count < PSI_MAX_PROGRAMS) c->pmt_cand_overflow_logged = 0;
@@ -90,9 +99,7 @@ void parse_pat(psi_t *c) {
 }
 
 /* 1 if this candidate's section parsed into a valid, complete PMT */
-int parse_pmt(psi_t *c, pmt_cand_t *cand) {
-  const unsigned char *b = cand->asm_.buf;
-  size_t n = cand->asm_.expect;
+int parse_pmt(psi_t *c, pmt_cand_t *cand, const unsigned char *b, size_t n) {
   size_t i;
   size_t end;
   size_t pil;
@@ -100,12 +107,17 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   unsigned prog;
   int hdmv = 0;
   const unsigned char *ca;
-  if (n < 16 || b[0] != 0x02 || section_bad(c, PSI_OBS_PMT, b, n)) {
-    log_throttled(&c->pmt_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed PMT section dropped");
+  const char *fault = section_fault(c, PSI_OBS_PMT, b, n, 16, 0x02);
+  if (fault) {
+    log_throttled(&c->pmt_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: PMT section dropped: %s (pid 0x%04x, program %u, table_id 0x%02x, len %zu)", psi_tag(c), fault, cand->pmt_pid, cand->program_number, b[0], n);
     return 0;
   }
   prog = ((unsigned)b[3] << 8) | b[4];
   if (prog != cand->program_number) return 0;
+  if (!c->pmt_locked || cand == &c->pmt_cand[c->pmt_lock_idx]) {
+    memcpy(c->pmt_sec, b, n);
+    c->pmt_sec_len = n;
+  }
   obs_version(c, PSI_OBS_PMT, b, cand);
   c->program_number = prog;
   c->pmt_pid = cand->pmt_pid;
@@ -157,7 +169,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   }
   if (c->es_count >= PSI_MAX_ES && i + 5 <= end) {
     if (!c->es_overflow_logged) {
-      log_line("psi: PMT for program %u has more than %d ES entries, dropping the rest", prog, PSI_MAX_ES);
+      log_line("%s: PMT for program %u has more than %d ES entries, dropping the rest", psi_tag(c), prog, PSI_MAX_ES);
       c->es_overflow_logged = 1;
     }
   } else {
@@ -180,6 +192,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand) {
   cand->last_ecm_count = c->ecm_count;
   for (int k = 0; k < c->ecm_count; k++) cand->last_ecm_pid[k] = (uint16_t)c->ecm[k];
   c->have_pmt = 1;
+  c->pmt_parsed++;
   rebuild_class_table(c);
   return 1;
 }
@@ -197,9 +210,9 @@ void parse_sdt(psi_t *c) {
   size_t n = c->sdt.expect;
   size_t i;
   size_t end;
-
-  if (n < 12 || b[0] != 0x42 || section_bad(c, PSI_OBS_SDT, b, n)) {
-    log_throttled(&c->sdt_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed SDT section dropped");
+  const char *fault = section_fault(c, PSI_OBS_SDT, b, n, 12, 0x42);
+  if (fault) {
+    log_throttled(&c->sdt_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: SDT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
   obs_version(c, PSI_OBS_SDT, b, NULL);
@@ -227,15 +240,15 @@ void parse_nit(psi_t *c) {
   size_t ndl;
   size_t l;
   const unsigned char *nn;
-
-  if (n < 12 || b[0] != 0x40 || section_bad(c, PSI_OBS_NIT, b, n)) {
-    log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed NIT section dropped");
+  const char *fault = section_fault(c, PSI_OBS_NIT, b, n, 12, 0x40);
+  if (fault) {
+    log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: NIT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
   obs_version(c, PSI_OBS_NIT, b, NULL);
   ndl = tspack_length12(b + 8);
   if (10 + ndl > n) {
-    log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: NIT network descriptor loop overruns section, dropped");
+    log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: NIT network descriptor loop overruns section, dropped", psi_tag(c));
     return;
   }
   nn = find_desc(b + 10, ndl, 0x40, &l);
@@ -250,8 +263,9 @@ void parse_cat(psi_t *c) {
   size_t n = c->cat.expect;
   size_t l;
   const unsigned char *ca;
-  if (n < 12 || b[0] != 0x01 || section_bad(c, PSI_OBS_CAT, b, n)) {
-    log_throttled(&c->cat_drop_throttle, LOG_THROTTLE_WINDOW_S, "psi: malformed or crc-failed CAT section dropped");
+  const char *fault = section_fault(c, PSI_OBS_CAT, b, n, 12, 0x01);
+  if (fault) {
+    log_throttled(&c->cat_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: CAT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
   obs_version(c, PSI_OBS_CAT, b, NULL);

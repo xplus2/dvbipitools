@@ -511,6 +511,9 @@ typedef struct {
   atomic_int reject_first_version; /* channel_error once, then accept the retry */
   atomic_int close_after_first_ecm; /* drop the connection right after one ECM_response */
   atomic_int connections_seen;
+  atomic_int send_tests_before_ecm; /* channel_test + stream_test ahead of each ECM_response */
+  atomic_int channel_status_seen;
+  atomic_int stream_status_seen;
 } fake_ecmg_t;
 
 static size_t fake_build_channel_status(unsigned char *out, size_t cap, unsigned char version) {
@@ -600,8 +603,25 @@ static void *fake_ecmg_thread(void *arg) {
         break;
       if (rc == 0)
         continue;
+      if (hdr.type == ECMG_MSG_CHANNEL_STATUS)
+        atomic_fetch_add_explicit(&fe->channel_status_seen, 1, memory_order_relaxed);
+      if (hdr.type == ECMG_MSG_STREAM_STATUS)
+        atomic_fetch_add_explicit(&fe->stream_status_seen, 1, memory_order_relaxed);
+      if (hdr.type == ECMG_MSG_CHANNEL_TEST) {
+        len = ecmg_build_channel_status(msg, sizeof msg, version, 0, 1, 1000, 0);
+        simulcrypt_send_all(fd, msg, len, 3000);
+      }
       if (hdr.type != ECMG_MSG_CW_PROVISION)
         continue;
+      if (atomic_load_explicit(&fe->send_tests_before_ecm, memory_order_relaxed)) {
+        simulcrypt_writer_t tw;
+        simulcrypt_writer_begin(&tw, msg, sizeof msg, version, ECMG_MSG_CHANNEL_TEST);
+        len = simulcrypt_writer_finish(&tw);
+        simulcrypt_send_all(fd, msg, len, 3000);
+        simulcrypt_writer_begin(&tw, msg, sizeof msg, version, ECMG_MSG_STREAM_TEST);
+        len = simulcrypt_writer_finish(&tw);
+        simulcrypt_send_all(fd, msg, len, 3000);
+      }
       {
         const unsigned char *cpv;
         unsigned short cpvlen;
@@ -838,6 +858,126 @@ START_TEST(ecmg_client_cycling_alternates_last_two_ecms) {
 }
 END_TEST
 
+static unsigned short parity_test_start;
+static atomic_uint parity_test_last_cp;
+
+static int parity_test_get_cw(void *ctx, unsigned short cp_number, unsigned char *cw_out, size_t cw_len) {
+  (void)ctx;
+  memset(cw_out, 0x5A, cw_len);
+  atomic_store(&parity_test_last_cp, cp_number);
+  return 0;
+}
+
+static unsigned short parity_test_connected(void *ctx) {
+  (void)ctx;
+  return parity_test_start;
+}
+
+START_TEST(cw_source_start_sets_wire_cp_number) {
+  fake_ecmg_t fe;
+  ecmg_client_cfg_t cfg;
+  ecmg_client_t *c;
+  atomic_ulong counter;
+  unsigned char ecm[SIMULCRYPT_MAX_PAYLOAD];
+  size_t ecm_len;
+
+  fake_ecmg_start(&fe);
+  atomic_init(&counter, 100);
+  atomic_init(&parity_test_last_cp, 0);
+  parity_test_start = 0x1235;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.host = "127.0.0.1";
+  cfg.port = fe.port;
+  cfg.version_min = cfg.version_max = 3;
+  cfg.super_cas_id = 0x4A750001;
+  cfg.ecm_id = 1;
+  cfg.cp_duration_ms = 1000;
+  cfg.algo = SCRAMBLE_ALGO_CSA2;
+  cfg.outage_mode = ECMG_OUTAGE_FROZEN;
+  cfg.cw_source.get_cw = parity_test_get_cw;
+  cfg.cw_source.on_connected = parity_test_connected;
+
+  c = ecmg_client_start(&cfg, &counter, 5, 1);
+  ck_assert_ptr_nonnull(c);
+  ck_assert_int_eq(wait_for_connected_state(c, 1, 10000), 1);
+  atomic_fetch_add_explicit(&counter, 5, memory_order_relaxed);
+  ck_assert_int_eq(wait_for_epoch_above(c, 0, 10000), 1);
+  ck_assert_int_eq(ecmg_client_get_ecm(c, ecm, sizeof ecm, &ecm_len), 0);
+  ck_assert_uint_eq(((unsigned)ecm[3] << 8) | ecm[4], 0x1236u);
+  ck_assert_uint_eq(atomic_load(&parity_test_last_cp), 0x1236u);
+
+  ecmg_client_stop(c);
+  fake_ecmg_stop(&fe);
+}
+END_TEST
+
+START_TEST(ecmg_client_answers_tests_while_awaiting_ecm) {
+  fake_ecmg_t fe;
+  ecmg_client_cfg_t cfg;
+  ecmg_client_t *c;
+  atomic_ulong counter;
+  int waited = 0;
+
+  fake_ecmg_start(&fe);
+  atomic_store_explicit(&fe.send_tests_before_ecm, 1, memory_order_relaxed);
+  atomic_init(&counter, 100);
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.host = "127.0.0.1";
+  cfg.port = fe.port;
+  cfg.version_min = cfg.version_max = 3;
+  cfg.super_cas_id = 0x4A750001;
+  cfg.ecm_id = 1;
+  cfg.cp_duration_ms = 1000;
+  cfg.algo = SCRAMBLE_ALGO_CSA2;
+  cfg.outage_mode = ECMG_OUTAGE_FROZEN;
+
+  c = ecmg_client_start(&cfg, &counter, 5, 1);
+  ck_assert_ptr_nonnull(c);
+  ck_assert_int_eq(wait_for_connected_state(c, 1, 10000), 1);
+  atomic_fetch_add_explicit(&counter, 5, memory_order_relaxed);
+  ck_assert_int_eq(wait_for_epoch_above(c, 0, 10000), 1);
+  while ((!atomic_load_explicit(&fe.channel_status_seen, memory_order_relaxed) || !atomic_load_explicit(&fe.stream_status_seen, memory_order_relaxed)) && waited < 5000) {
+    struct timespec ts = {0, 10L * 1000000L};
+    nanosleep(&ts, NULL);
+    waited += 10;
+  }
+  ck_assert_int_ge(atomic_load_explicit(&fe.channel_status_seen, memory_order_relaxed), 1);
+  ck_assert_int_ge(atomic_load_explicit(&fe.stream_status_seen, memory_order_relaxed), 1);
+  ck_assert_uint_eq(ecmg_client_ecm_errors(c), 0u);
+
+  ecmg_client_stop(c);
+  fake_ecmg_stop(&fe);
+  ck_assert_int_eq(atomic_load_explicit(&fe.connections_seen, memory_order_relaxed), 1);
+}
+END_TEST
+
+START_TEST(channel_test_and_status_builders) {
+  unsigned char buf[64];
+  simulcrypt_hdr_t hdr;
+  size_t n = ecmg_build_channel_test(buf, sizeof buf, 3);
+  ck_assert_uint_gt(n, 0);
+  ck_assert_int_eq(simulcrypt_hdr_parse(buf, n, &hdr), 0);
+  ck_assert_uint_eq(hdr.type, ECMG_MSG_CHANNEL_TEST);
+  n = ecmg_build_channel_status(buf, sizeof buf, 3, 1, 2, 500, 100);
+  ck_assert_int_eq(simulcrypt_hdr_parse(buf, n, &hdr), 0);
+  ck_assert_uint_eq(hdr.type, ECMG_MSG_CHANNEL_STATUS);
+  {
+    unsigned lead, per, comp, minc, rep;
+    ck_assert_int_eq(ecmg_parse_channel_status(buf + SIMULCRYPT_HDR_LEN, hdr.payload_len, &lead, &per, &comp, &minc, &rep), 0);
+    ck_assert_uint_eq(lead, 1);
+    ck_assert_uint_eq(per, 2);
+    ck_assert_uint_eq(comp, 500);
+    ck_assert_uint_eq(rep, 100);
+  }
+  n = ecmg_build_stream_status(buf, sizeof buf, 3, 7);
+  ck_assert_int_eq(simulcrypt_hdr_parse(buf, n, &hdr), 0);
+  ck_assert_uint_eq(hdr.type, ECMG_MSG_STREAM_STATUS);
+  ck_assert_uint_eq(ecmg_build_channel_test(buf, 3, 3), 0);
+}
+END_TEST
+
 static Suite *ecmg_client_suite(void) {
   Suite *s = suite_create("ecmg_client");
   TCase *tc = tcase_create("core");
@@ -858,7 +998,9 @@ static Suite *ecmg_client_suite(void) {
   tcase_add_loop_test(tc, parse_channel_status_table, 0, (int)(sizeof status_cases / sizeof status_cases[0]));
   tcase_add_loop_test(tc, find_error_status_rejects_malformed, 0, (int)(sizeof error_cases / sizeof error_cases[0]));
   tcase_add_loop_test(tc, builders_reject_every_short_cap, 0, (int)(sizeof build_fns / sizeof build_fns[0]));
+  tcase_add_test(tc, channel_test_and_status_builders);
   tcase_add_test(tc, cw_provision_wraps_cp_number_past_65535);
+  tcase_add_test(tc, cw_source_start_sets_wire_cp_number);
   tcase_add_test(tc, ecm_available_frozen_always_available);
   tcase_add_test(tc, ecm_available_cycling_always_available);
   tcase_add_test(tc, ecm_available_silent_connected_is_available);
@@ -878,6 +1020,7 @@ static Suite *ecmg_client_suite(void) {
     tcase_add_test(tc_integ, ecmg_client_falls_back_to_version_min_on_rejection);
     tcase_add_test(tc_integ, ecmg_client_reconnects_after_dropped_connection);
     tcase_add_test(tc_integ, ecmg_client_cycling_alternates_last_two_ecms);
+    tcase_add_test(tc_integ, ecmg_client_answers_tests_while_awaiting_ecm);
     suite_add_tcase(s, tc_integ);
   }
 

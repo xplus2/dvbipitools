@@ -236,6 +236,7 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -558,6 +559,7 @@ function(dipiradiohead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/icy.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/id3.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
@@ -682,6 +684,7 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
@@ -865,6 +868,7 @@ function(dipirist_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -1004,6 +1008,7 @@ function(dipisrt_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
@@ -1303,6 +1308,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
@@ -1611,6 +1617,7 @@ function(dipitvhead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c

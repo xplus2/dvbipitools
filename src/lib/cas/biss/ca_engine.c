@@ -211,6 +211,8 @@ void biss_ca_engine_stop(biss_ca_engine_t *e) {
   free(e);
 }
 
+int biss_ca_engine_add_pid(biss_ca_engine_t *e, unsigned pid) { return cas_scramble_engine_add_pid(e->scr, pid); }
+
 void biss_ca_engine_clock_tick(biss_ca_engine_t *e, unsigned long delta_ms) {
   e->since_sw_change_ms += delta_ms;
   e->since_sk_change_ms += delta_ms;

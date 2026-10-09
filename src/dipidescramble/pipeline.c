@@ -10,6 +10,7 @@
 #include "lib/cas/biss/ca.h"
 #include "lib/demux/tspack.h"
 #include "lib/helper/log.h"
+#include "lib/helper/secure_zero.h"
 #include "lib/sys/signal.h"
 
 #include "pipeline.h"
@@ -85,12 +86,16 @@ static void handle_ecm_section(loop_ctx_t *lc) {
     lc->ecm_errors_total++;
     return;
   }
-  if (lc->have_cw[parity] && memcmp(lc->last_cw[parity], cw, sizeof cw) == 0) return; /* unchanged, same crypto period repeat */
+  if (lc->have_cw[parity] && memcmp(lc->last_cw[parity], cw, sizeof cw) == 0) { /* unchanged, same crypto period repeat */
+    secure_zero(cw, sizeof cw);
+    return;
+  }
 
   memcpy(lc->last_cw[parity], cw, sizeof cw);
   lc->have_cw[parity] = 1;
   lc->cryptoperiod_transitions_total++;
   scrambler_set_key(lc->scr, parity, cw, (size_t)lc->cw_len, EMIT(lc), lc);
+  secure_zero(cw, sizeof cw);
   log_line(TOOL_NAME ": CW updated (parity=%s)", parity == SCRAMBLE_PARITY_EVEN ? "even" : "odd");
 }
 
@@ -112,6 +117,7 @@ static void handle_biss_ca_ecm_section(loop_ctx_t *lc) {
   }
   update_biss_ca_cw(lc, SCRAMBLE_PARITY_EVEN, sw[SCRAMBLE_PARITY_EVEN]);
   update_biss_ca_cw(lc, SCRAMBLE_PARITY_ODD, sw[SCRAMBLE_PARITY_ODD]);
+  secure_zero(sw, sizeof sw);
 }
 
 /* full or partial write-retry, EINTR aside. 0 ok, -1 error */

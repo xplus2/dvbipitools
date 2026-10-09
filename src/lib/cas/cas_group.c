@@ -8,6 +8,7 @@
 #include <time.h>
 
 #include "lib/helper/log.h"
+#include "lib/helper/secure_zero.h"
 #include "lib/mux/cadescbuild.h"
 #include "lib/mux/psi_build.h"
 
@@ -38,7 +39,7 @@ typedef struct {
   ecmg_client_t *ecmg;
   emmg_server_t *emmg;
   double last_ecm_send;
-  unsigned long epoch_base; /* this session's local cp_number 0 == group epoch epoch_base */
+  unsigned long epoch_base; /* group epoch at connect: wire CP_number start */
   vendor_cw_ctx_t cw_ctx;
 } cas_group_vendor_t;
 
@@ -88,7 +89,10 @@ static int group_cw_for_epoch(cas_group_t *g, unsigned long epoch, unsigned char
 
   /* cw_lock shared cross-vendor: keep getrandom off it */
   unsigned char generated[ECMG_MAX_CW_LEN];
-  if (cw_gen(generated, cw_len, "cas_group") < 0) return -1;
+  if (cw_gen(generated, cw_len, "cas_group") < 0) {
+    secure_zero(generated, sizeof generated);
+    return -1;
+  }
   if (g->cfg.legacy_csa1 && cw_len == 8) csa1_apply_cw_checksum(generated);
   pthread_mutex_lock(&g->cw_lock);
   if (!(g->hist[idx].valid && g->hist[idx].epoch == epoch)) {
@@ -98,21 +102,24 @@ static int group_cw_for_epoch(cas_group_t *g, unsigned long epoch, unsigned char
   }
   memcpy(out, g->hist[idx].cw, cw_len);
   pthread_mutex_unlock(&g->cw_lock);
+  secure_zero(generated, sizeof generated);
   return 0;
 }
 
-/* cp_number connection-local: resets on reconnect. epoch_base anchors shared epoch at connect time. */
+/* wire CP_number = epoch mod 65536: even modulus keeps CP parity == CW parity */
 static int vendor_cw_get(void *ctx, unsigned short cp_number, unsigned char *cw_out, size_t cw_len) {
   vendor_cw_ctx_t *cc = ctx;
   cas_group_t *g = cc->g;
-  unsigned long epoch = g->vendors[cc->idx].epoch_base + cp_number;
-  return group_cw_for_epoch(g, epoch, cw_out, cw_len);
+  cas_group_vendor_t *v = &g->vendors[cc->idx];
+  short delta = (short)(unsigned short)(cp_number - (unsigned short)v->epoch_base);
+  return group_cw_for_epoch(g, v->epoch_base + (unsigned long)(long)delta, cw_out, cw_len);
 }
 
-static void vendor_cw_connected(void *ctx) {
+static unsigned short vendor_cw_connected(void *ctx) {
   vendor_cw_ctx_t *cc = ctx;
   cas_group_t *g = cc->g;
   g->vendors[cc->idx].epoch_base = group_current_epoch(g);
+  return (unsigned short)g->vendors[cc->idx].epoch_base;
 }
 
 static int vendor_alive(cas_group_vendor_t *v) {
@@ -224,6 +231,7 @@ void cas_group_stop(cas_group_t *g) {
   }
   cas_scramble_engine_stop(g->engine);
   pthread_mutex_destroy(&g->cw_lock);
+  secure_zero(g->hist, sizeof g->hist);
   free(g);
 }
 
@@ -283,6 +291,8 @@ void cas_group_scramble_packet(cas_group_t *g, unsigned out_pid, double now, uns
   cw_valid = !(g->cfg.fallback_clear && cas_group_fallback_active_calc(g->cfg.vendor_count, required, alive));
   cas_scramble_engine_scramble_packet(g->engine, out_pid, g->have_clock, have_target, target_parity, cw_valid, now, pkt188, emit, ctx);
 }
+
+int cas_group_add_pid(cas_group_t *g, unsigned pid) { return cas_scramble_engine_add_pid(g->engine, pid); }
 
 void cas_group_flush(cas_group_t *g, scrambler_emit_cb emit, void *ctx) {
   if (g) cas_scramble_engine_flush(g->engine, emit, ctx);

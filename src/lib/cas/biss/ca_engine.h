@@ -28,6 +28,7 @@ void biss_ca_engine_stop(biss_ca_engine_t *e);
 
 void biss_ca_engine_clock_tick(biss_ca_engine_t *e, unsigned long delta_ms);
 void biss_ca_engine_scramble_packet(biss_ca_engine_t *e, unsigned out_pid, double now, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx);
+int biss_ca_engine_add_pid(biss_ca_engine_t *e, unsigned pid);
 void biss_ca_engine_flush(biss_ca_engine_t *e, scrambler_emit_cb emit, void *ctx);
 void biss_ca_engine_get_metrics(biss_ca_engine_t *e, unsigned long long *scrambled_packets_total, unsigned long long *unexpected_clear_packets_total);
 

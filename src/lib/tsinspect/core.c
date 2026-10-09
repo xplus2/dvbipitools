@@ -42,6 +42,10 @@ tsinspect_t *tsinspect_new_relay(metrics_inspect_ts_t level) {
   return new_inspector(level, 1, 1);
 }
 
+void tsinspect_set_label(tsinspect_t *t, const char *label) {
+  if (t->psi) psi_set_label(t->psi, label);
+}
+
 int tsinspect_enable_own_psi(tsinspect_t *t, int multi) {
   psi_t *psi;
   if (!t->x || t->psi) return -1;

@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "aes128cbc.h"
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/sys/signal.h"
@@ -19,8 +20,9 @@
 #define HLS_DEFAULT_TARGET_DURATION 6
 #define HLS_MAX_REUSE_AGE_S 15
 #define HLS_JOIN_BACK_SEGMENTS 3
+#define HLS_KEY_LEN 16
 
-typedef enum { HLS_LIVE_IDLE, HLS_LIVE_FETCHING_PLAYLIST, HLS_LIVE_FETCHING_SEGMENT } hls_live_phase_t;
+typedef enum { HLS_LIVE_IDLE, HLS_LIVE_FETCHING_PLAYLIST, HLS_LIVE_FETCHING_SEGMENT, HLS_LIVE_FETCHING_KEY } hls_live_phase_t;
 
 struct hls_live {
   http_url_t playlist_url;
@@ -44,6 +46,11 @@ struct hls_live {
   hls_playlist_t pl;
   hls_playlist_t *parse_scratch;
   unsigned pending_idx;
+
+  int have_key;
+  char key_url[2048];
+  unsigned char key[HLS_KEY_LEN];
+  unsigned char key_buf[HLS_KEY_LEN + 1];
 
   unsigned char playlist_buf[HLS_PLAYLIST_BUF_CAP + 1];
   unsigned char segment_buf[HLS_SEGMENT_BUF_CAP];
@@ -121,6 +128,19 @@ static int start_segment_fetch(hls_live_t *h, const char *url) {
   return h->fetch != NULL;
 }
 
+static int start_key_fetch(hls_live_t *h, const char *url) {
+  http_url_t u;
+  http_t *reuse = http_take_reuse(&h->reuse, &h->reuse_established_at, HLS_MAX_REUSE_AGE_S);
+  if (http_url_parse(url, &u)) {
+    if (reuse) http_close(reuse);
+    return 0;
+  }
+  h->have_key = 0;
+  h->fetch = http_fetch_start(&u, h->user_agent, h->insecure, NULL, NULL, h->key_buf, sizeof h->key_buf, reuse, NULL);
+  h->phase = HLS_LIVE_FETCHING_KEY;
+  return h->fetch != NULL;
+}
+
 static double poll_interval(const hls_live_t *h) {
   double d = h->pl.target_duration ? h->pl.target_duration : HLS_DEFAULT_TARGET_DURATION;
   return d / 2;
@@ -165,12 +185,51 @@ static int handle_playlist_done(hls_live_t *h, net_err_reason_t *reason_out) {
   return 1;
 }
 
+static int handle_key_done(hls_live_t *h, net_err_reason_t *reason_out) {
+  size_t len;
+  const hls_key_t *k = &h->pl.keys[h->pl.segments[h->pending_idx].key - 1];
+
+  http_fetch_take(h->fetch, &len, NULL, NULL, 0, NULL, &h->reuse);
+  h->fetch = NULL;
+  h->phase = HLS_LIVE_IDLE;
+  if (len != HLS_KEY_LEN) {
+    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS key fetch returned %zu bytes, expected %d\e[0m", h->idx, h->label ? h->label : "?", len, HLS_KEY_LEN);
+    if (reason_out) *reason_out = NET_ERR_FORMAT;
+    return -1;
+  }
+  memcpy(h->key, h->key_buf, HLS_KEY_LEN);
+  bufcpy(h->key_url, sizeof h->key_url, k->url);
+  h->have_key = 1;
+  return 1;
+}
+
+static int segment_decrypt(hls_live_t *h, size_t *len) {
+  const hls_segment_t *seg = &h->pl.segments[h->pending_idx];
+  const hls_key_t *k = &h->pl.keys[seg->key - 1];
+  unsigned char iv[16];
+
+  if (k->has_iv) {
+    memcpy(iv, k->iv, sizeof iv);
+  } else {
+    unsigned long long seq = h->next_seq;
+    memset(iv, 0, 8);
+    for (int i = 0; i < 8; i++) iv[15 - i] = (unsigned char)(seq >> (8 * i));
+  }
+  return aes128cbc_decrypt_pkcs7(h->key, iv, h->segment_buf, len);
+}
+
 static int handle_segment_done(hls_live_t *h) {
   size_t len;
 
   http_fetch_take(h->fetch, &len, NULL, NULL, 0, NULL, &h->reuse);
   h->fetch = NULL;
   h->phase = HLS_LIVE_IDLE;
+  if (h->pl.segments[h->pending_idx].key && segment_decrypt(h, &len)) {
+    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS segment decrypt failed, skipped\e[0m", h->idx, h->label ? h->label : "?");
+    h->pending_idx++;
+    h->next_seq++;
+    return 1;
+  }
   if (h->si.slot && h->si.level != METRICS_INSPECT_TS_OFF && !hls_live_uses_fmp4(h))
     tsinspect_grid_lazy(h->si.slot, h->si.level, h->si.known_pids, h->si.n_known_pids, h->segment_buf, len);
   if (h->cb) h->cb(h->cb_ctx, h, h->segment_buf, len);
@@ -182,9 +241,14 @@ static int handle_segment_done(hls_live_t *h) {
 ssize_t hls_live_read(hls_live_t *h, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
   if (h->si.slot && *h->si.slot) tsinspect_tick(*h->si.slot, mono_seconds());
   if (h->phase == HLS_LIVE_IDLE && h->pending_idx < h->pl.n_segments) {
-    if (sizeof h->out_buf - h->out_len >= HLS_OUT_BUF_PREFETCH_HEADROOM && !start_segment_fetch(h, h->pl.segments[h->pending_idx].url)) {
-      if (reason_out) *reason_out = NET_ERR_OTHER;
-      return -1;
+    if (sizeof h->out_buf - h->out_len >= HLS_OUT_BUF_PREFETCH_HEADROOM) {
+      const hls_segment_t *seg = &h->pl.segments[h->pending_idx];
+      const hls_key_t *k = seg->key ? &h->pl.keys[seg->key - 1] : NULL;
+      int ok = k && !(h->have_key && !strcmp(h->key_url, k->url)) ? start_key_fetch(h, k->url) : start_segment_fetch(h, seg->url);
+      if (!ok) {
+        if (reason_out) *reason_out = NET_ERR_OTHER;
+        return -1;
+      }
     }
   } else if (h->phase == HLS_LIVE_IDLE && mono_seconds() >= h->next_poll_at && !start_playlist_fetch(h)) {
     if (reason_out) *reason_out = NET_ERR_OTHER;
@@ -201,6 +265,8 @@ ssize_t hls_live_read(hls_live_t *h, unsigned char *buf, size_t cap, net_err_rea
     if (st == HTTP_FETCH_DONE) {
       if (h->phase == HLS_LIVE_FETCHING_PLAYLIST) {
         if (handle_playlist_done(h, reason_out) < 0) return -1;
+      } else if (h->phase == HLS_LIVE_FETCHING_KEY) {
+        if (handle_key_done(h, reason_out) < 0) return -1;
       } else {
         handle_segment_done(h);
       }

@@ -10,8 +10,32 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
       - continuity counter check + handling
       - fixed lost section when the following one starts in its last packet
       - adaptation field discontinuity indicator handling
+    + cas_group: ECM CP_number parity mismatched cryptoword parity on odd epoch base
+    + ecmg client: periodically send channel_test
+    + emmg listener
+      - enforce well-formed sections
+      - properly adhere to rate limit
+    + cas scramble engine: clear pids were faster than batched scrambled ones
+    + cas: add pids at runtime
+    + psi: PMT parse counter
+    + control words were not properly wiped
+      - cissa key struct, cas_group and ecmg client cw history, ecmg cw_provision scratch
+    + hls
+      - #EXT-X-KEY AES128 segment decryption, SAMPLE-AES, foreign KEYFORMAT and encrypted init segments are rejected
+      - protocol-relative //host/path URIs resolver fixed (on DASH too)
   * dipitvhead
-    + eit input crc32 verification
+    + eit+scte35 input crc32 verification
+    + checking scte35 continuation packet adaptation length
+    + EIT sanitizing on SPTS
+    + PMT lost CA descriptors with 5+ CAS vendors
+    + continuity counters were renumbered, hiding upstream duplicates and losses
+    + PSI table versions get bumped on content change and kept
+    + detect tracks added to the source PMT mid-stream
+    + teletext+subs descriptors passthrough fixed
+  * dipiradiohead
+    + PMT lost CA descriptors with 5+ CAS vendors
+  * dipidescramble
+    + last cw and ecm/biss-ca keys were not properly wiped
   * dipiscan
     + write error handling
   * dipirec

@@ -6,6 +6,7 @@
 #ifndef DIPIXY_INTERNAL_H
 #define DIPIXY_INTERNAL_H
 
+#include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
@@ -138,9 +139,12 @@ void llhls_waiter_conn_closing(const conn_t *c);
 static inline int parse_blocking_reload(const char *query, uint32_t *want_seg, int *want_part) {
   const char *msn = query ? strstr(query, "_HLS_msn=") : NULL;
   const char *part = query ? strstr(query, "_HLS_part=") : NULL;
+  long p;
   if (!msn || !part) return 0;
+  p = strtol(part + 10, NULL, 10);
+  if (p < 0 || p > INT_MAX) return 0;
   *want_seg = (uint32_t)strtoul(msn + 9, NULL, 10);
-  *want_part = (int)strtol(part + 10, NULL, 10);
+  *want_part = (int)p;
   return 1;
 }
 

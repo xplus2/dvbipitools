@@ -144,27 +144,6 @@ void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, un
   }
 }
 
-static size_t put_teletext(unsigned char *out, const psi_es_t *e) {
-  unsigned mag = (e->ttx_page / 100 == 8) ? 0 : (e->ttx_page / 100);
-  unsigned page = e->ttx_page % 100;
-  out[0] = 0x56;
-  out[1] = 5;
-  memcpy(out + 2, e->ttx_lang[0] ? e->ttx_lang : "und", 3);
-  out[5] = (unsigned char)((e->ttx_type << 3) | (mag & 0x07));
-  out[6] = (unsigned char)(((page / 10) << 4) | (page % 10));
-  return 7;
-}
-
-static size_t put_subtitling(unsigned char *out, const psi_es_t *e) {
-  out[0] = 0x59;
-  out[1] = 8;
-  memcpy(out + 2, e->lang[0] ? e->lang : "und", 3);
-  out[5] = (unsigned char)e->sub_type;
-  psi_put16(out + 6, e->sub_composition_page);
-  psi_put16(out + 8, e->sub_ancillary_page);
-  return 10;
-}
-
 /* copies source ES descriptor loop, minus CA_descriptor (tag 0x09):
    CA_PID would point at stale ECM pid once remapped (ETSI EN 300 468/ISO 13818-1).
    possible overflow: won't copy ES's remaining descriptors, set *truncated. returns new n. */
@@ -219,15 +198,7 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
     es_info_pos = n;
     n += 2;
 
-    if (e->src->cls == PID_TELETEXT) {
-      if (n + 7 > cap) return 0;
-      n += put_teletext(out + n, e->src);
-    } else if (e->src->cls == PID_SUBTITLE) {
-      if (n + 10 > cap) return 0;
-      n += put_subtitling(out + n, e->src);
-    } else {
-      n = put_opaque_descriptors(out, n, cap - 4, e->src, desc_truncated); /* -4: leave room for psi_finish_section's CRC */
-    }
+    n = put_opaque_descriptors(out, n, cap - 4, e->src, desc_truncated); /* -4: leave room for psi_finish_section's CRC */
     esinfo = (unsigned)(n - (es_info_pos + 2));
     out[es_info_pos] = (unsigned char)(0xF0 | ((esinfo >> 8) & 0x0F));
     out[es_info_pos + 1] = (unsigned char)esinfo;

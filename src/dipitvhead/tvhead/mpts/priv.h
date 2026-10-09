@@ -59,6 +59,7 @@ typedef struct {
   out_ctx_t *out;
   ts_metrics_t *tsm;
   timemap_t *tm;
+  psi_versions_t *psiv;
   tsinspect_t **insp;
   double now;
   time_t now_t;

@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "lib/demux/crc32.h"
+#include "lib/hls/aes128cbc.h"
 #include "lib/hls/live.h"
 
 typedef struct {
@@ -481,6 +482,29 @@ START_TEST(hls_live_uses_fmp4_false_before_first_playlist_fetch) {
 }
 END_TEST
 
+START_TEST(hls_aes128cbc_matches_nist_vector) {
+  static const unsigned char key[16] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
+  static const unsigned char iv[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+  unsigned char data[32] = {0x76, 0x49, 0xab, 0xac, 0x81, 0x19, 0xb2, 0x46, 0xce, 0xe9, 0x8e, 0x9b, 0x12, 0xe9, 0x19, 0x7d,
+    0x50, 0x86, 0xcb, 0x9b, 0x50, 0x72, 0x19, 0xee, 0x95, 0xdb, 0x11, 0x3a, 0x91, 0x76, 0x78, 0xb2};
+  static const unsigned char want[32] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+    0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51};
+
+  ck_assert_int_eq(aes128cbc_decrypt(key, iv, data, sizeof data), 0);
+  ck_assert_mem_eq(data, want, sizeof want);
+}
+END_TEST
+
+START_TEST(hls_aes128cbc_rejects_bad_length) {
+  unsigned char key[16] = {0};
+  unsigned char iv[16] = {0};
+  unsigned char data[20] = {0};
+
+  ck_assert_int_eq(aes128cbc_decrypt(key, iv, data, 20), -1);
+  ck_assert_int_eq(aes128cbc_decrypt(key, iv, data, 0), -1);
+}
+END_TEST
+
 static Suite *hls_live_suite(void) {
   Suite *s = suite_create("hls_live");
   TCase *tc = tcase_create("core");
@@ -491,6 +515,8 @@ static Suite *hls_live_suite(void) {
   tcase_add_test(tc, hls_live_inspects_segments_when_on);
   tcase_add_test(tc, hls_live_creates_no_inspector_when_off);
   tcase_add_test(tc, hls_live_uses_fmp4_false_before_first_playlist_fetch);
+  tcase_add_test(tc, hls_aes128cbc_matches_nist_vector);
+  tcase_add_test(tc, hls_aes128cbc_rejects_bad_length);
   suite_add_tcase(s, tc);
   return s;
 }

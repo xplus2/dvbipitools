@@ -7,17 +7,33 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "lib/helper/log.h"
 
 #include "priv.h"
 
+static int is_one_section(const unsigned char *data, unsigned short len) {
+  return len >= EMMG_SECTION_HDR_LEN && len == EMMG_SECTION_HDR_LEN + (((data[1] & 0x0F) << 8) | data[2]);
+}
+
+static double mono_s(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
+}
+
 void publish_datagram_cb(const unsigned char *data, unsigned short len, void *user) {
   emmg_server_t *s = user;
   size_t idx;
   if (len > EMMG_MAX_DATAGRAM_LEN) {
     log_throttled(&s->oversized_throttle, LOG_THROTTLE_WINDOW_S, "emmg: dropping oversized EMM datagram");
+    atomic_fetch_add_explicit(&s->emm_dropped, 1, memory_order_relaxed);
+    return;
+  }
+  if (!is_one_section(data, len)) {
+    log_throttled(&s->malformed_throttle, LOG_THROTTLE_WINDOW_S, "emmg: dropping datagram that is not a well-formed section");
     atomic_fetch_add_explicit(&s->emm_dropped, 1, memory_order_relaxed);
     return;
   }
@@ -36,20 +52,39 @@ void publish_datagram_cb(const unsigned char *data, unsigned short len, void *us
   atomic_fetch_add_explicit(&s->emm_total, 1, memory_order_relaxed);
 }
 
+static void refill_tokens(emmg_server_t *s, double rate) {
+  double now = mono_s();
+  double burst = rate / 4;
+  if (burst < EMMG_MAX_DATAGRAM_LEN) burst = EMMG_MAX_DATAGRAM_LEN;
+  s->tokens = s->tokens_ts > 0.0 ? s->tokens + (now - s->tokens_ts) * rate : burst;
+  if (s->tokens > burst) s->tokens = burst;
+  s->tokens_ts = now;
+}
+
 int emmg_server_dequeue_emm(emmg_server_t *s, unsigned char *out, size_t cap, size_t *len_out) {
   int have;
+  unsigned kbps = 0;
 
   /* called every packet, almost always empty: skip lock on miss. */
   if (!atomic_load_explicit(&s->queue_len, memory_order_relaxed)) return -1;
 
+  for (unsigned i = 0; i < EMMG_MAX_CONNS_CEILING; i++) kbps += atomic_load_explicit(&s->granted_kbps[i], memory_order_relaxed);
+
   pthread_mutex_lock(&s->queue_lock);
   have = atomic_load_explicit(&s->queue_len, memory_order_relaxed) > 0;
+  if (have && kbps) {
+    refill_tokens(s, (double)kbps * EMMG_BYTES_PER_KBPS_S);
+    if (s->tokens <= 0.0) have = 0;
+  } else {
+    s->tokens_ts = 0.0;
+  }
   if (have) {
     size_t len = s->queue[s->queue_head].len;
     if (cap < len) {
       pthread_mutex_unlock(&s->queue_lock);
       return -1;
     }
+    if (kbps) s->tokens -= (double)len;
     memcpy(out, s->queue[s->queue_head].data, len);
     *len_out = len;
     s->queue_head = (s->queue_head + 1) % EMMG_QUEUE_CAP;

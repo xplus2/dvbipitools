@@ -3,6 +3,8 @@
 
 #include <string.h>
 
+#include "lib/demux/crc32.h"
+#include "lib/helper/beutil.h"
 #include "lib/mux/psi_build.h"
 #include "lib/mux/tspacket_write.h"
 
@@ -15,8 +17,7 @@
 
 const char *psi_table_name(psi_table_t table) {
   static const char *const names[PSI_TABLE_COUNT] = {"PAT", "PMT", "CAT", "SDT", "NIT"};
-  if ((unsigned)table >= PSI_TABLE_COUNT)
-    return "PAT";
+  if ((unsigned)table >= PSI_TABLE_COUNT) return "PAT";
   return names[table];
 }
 
@@ -29,20 +30,31 @@ static int due(double now, double *last, double interval) {
 }
 
 static void psi_note(ts_metrics_t *tsm, psi_table_t table, size_t n) {
-  if (!tsm)
-    return;
+  if (!tsm) return;
   if (n)
     tsm->psi_sections_total[table]++;
   else
     tsm->psi_errors_total[table]++;
 }
 
+/* sec built at v0. bump version on content change, stamps, reCRC. sig w/o trailing CRC */
+static void stamp_version(psi_versions_t *pv, psi_table_t table, unsigned char *sec, size_t n) {
+  uint32_t sig;
+  if (!pv || n <= 4) return;
+  sig = crc32_mpeg(sec, n - 4);
+  if (pv->primed[table] && sig != pv->sig[table])
+    pv->ver[table] = (unsigned char)((pv->ver[table] + 1) & 0x1F);
+  pv->sig[table] = sig;
+  pv->primed[table] = 1;
+  sec[5] = (unsigned char)((sec[5] & 0xC1) | (pv->ver[table] << 1));
+  be32_put(sec + n - 4, crc32_mpeg(sec, n - 4));
+}
+
 /* tracks PMT change metrics and caches sec[0..n) as the last-seen PMT for next diff.
    have_last_pmt false (fresh remux_t, nothing to compare against) -> never "changed" */
 static void track_pmt_metrics(remux_t *r, ts_metrics_t *tsm, const unsigned char *sec, size_t n) {
   int changed = r->have_last_pmt && (n != r->last_pmt_len || memcmp(sec, r->last_pmt, n) != 0);
-  if (changed)
-    tsm->pmt_updates_total++;
+  if (changed) tsm->pmt_updates_total++;
   if (n <= sizeof r->last_pmt) {
     memcpy(r->last_pmt, sec, n);
     r->last_pmt_len = n;
@@ -56,16 +68,23 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
   size_t n;
 
   if (due(now, &r->last_pat, INTERVAL_PAT_PMT_S)) {
-    unsigned char prog_desc[32];
+    unsigned char prog_desc[64];
     int desc_truncated;
     size_t prog_desc_len = r->cas ? cas_prog_desc(r->cas, prog_desc, sizeof prog_desc) : remux_source_ca_descriptor(r, prog_desc, sizeof prog_desc);
     if (r->standalone) {
       n = psi_build_pat(r->cfg.tsid, 0, r->input.sid, r->pids.pmt_pid, sec, sizeof sec);
       psi_note(tsm, PSI_TABLE_PAT, n);
+      stamp_version(r->pv, PSI_TABLE_PAT, sec, n);
       if (n)
         ts_packet_emit(OUT_PID_PAT, &r->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
-    n = pmtbuild_pmt(0, r->input.sid, r->pcr_pid_out, prog_desc_len ? prog_desc : NULL, prog_desc_len, r->es, r->es_count, r->send_ait ? r->ait_pmt_entry : NULL, r->send_ait ? r->ait_pmt_entry_len : 0, sec, sizeof sec, &desc_truncated);
+    if (r->cas && !prog_desc_len) {
+      log_throttled(&r->cas_desc_throttle, LOG_THROTTLE_WINDOW_S, "program %u: CA descriptor build failed, PMT not sent", r->src_service_id);
+      n = 0;
+      desc_truncated = 0;
+    } else {
+      n = pmtbuild_pmt(0, r->input.sid, r->pcr_pid_out, prog_desc_len ? prog_desc : NULL, prog_desc_len, r->es, r->es_count, r->send_ait ? r->ait_pmt_entry : NULL, r->send_ait ? r->ait_pmt_entry_len : 0, sec, sizeof sec, &desc_truncated);
+    }
     psi_note(tsm, PSI_TABLE_PMT, n);
     if (n && desc_truncated)
       log_throttled(&r->pmt_desc_truncated_throttle, LOG_THROTTLE_WINDOW_S, "program %u: PMT section too small, some ES descriptors dropped", r->src_service_id);
@@ -75,6 +94,7 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
          no prior PMT, first build here never counts */
       if (tsm)
         track_pmt_metrics(r, tsm, sec, n);
+      stamp_version(r->pv, PSI_TABLE_PMT, sec, n);
       ts_packet_emit(r->pids.pmt_pid, &r->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     /* r->cas, source EMM passthrough: mutually exclusive (remux_new()) */
@@ -87,6 +107,7 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
         n = emm_desc_len ? psi_build_cat(0, emm_desc, emm_desc_len, sec, sizeof sec) : 0;
       }
       psi_note(tsm, PSI_TABLE_CAT, n);
+      stamp_version(r->pv, PSI_TABLE_CAT, sec, n);
       if (n) ts_packet_emit(OUT_PID_CAT, &r->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
   }
@@ -94,11 +115,13 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
     if (r->send_sdt && due(now, &r->last_sdt, INTERVAL_SDT_S)) {
       n = psi_build_sdt(0, r->cfg.tsid, r->cfg.onid, r->input.sid, 0x01, r->provider_name, r->service_name, sec, sizeof sec);
       psi_note(tsm, PSI_TABLE_SDT, n);
+      stamp_version(r->pv, PSI_TABLE_SDT, sec, n);
       if (n) ts_packet_emit(OUT_PID_SDT, &r->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     if (r->send_nit && due(now, &r->last_nit, INTERVAL_NIT_S)) {
       n = psi_build_nit(0, r->cfg.onid, r->cfg.tsid, r->network_name, sec, sizeof sec);
       psi_note(tsm, PSI_TABLE_NIT, n);
+      stamp_version(r->pv, PSI_TABLE_NIT, sec, n);
       if (n) ts_packet_emit(OUT_PID_NIT, &r->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
     }
   }

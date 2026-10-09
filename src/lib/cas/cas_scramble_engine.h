@@ -31,6 +31,9 @@ typedef struct cas_scramble_engine cas_scramble_engine_t;
 cas_scramble_engine_t *cas_scramble_engine_start(scramble_algo_t algo, const unsigned *pids, size_t pid_count, unsigned flush_pid);
 void cas_scramble_engine_stop(cas_scramble_engine_t *e);
 
+/* adds pid to managed set, already managed: 0. -1: full */
+int cas_scramble_engine_add_pid(cas_scramble_engine_t *e, unsigned pid);
+
 /* parity: SCRAMBLE_PARITY_EVEN/ODD. len 0: mark that slot unusable (no key material yet). */
 void cas_scramble_engine_set_cw(cas_scramble_engine_t *e, int parity, const unsigned char *cw, size_t len, scrambler_emit_cb emit, void *ctx);
 

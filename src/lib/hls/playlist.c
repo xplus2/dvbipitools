@@ -37,6 +37,57 @@ static int attr_find(const char *line, const char *name, char *out, size_t outca
   return 0;
 }
 
+static int hex_iv(const char *s, unsigned char out[16]) {
+  if (s[0] != '0' || (s[1] != 'x' && s[1] != 'X')) return 0;
+  s += 2;
+  for (int i = 0; i < 32; i++) {
+    int c = s[i];
+    int v;
+    if (c >= '0' && c <= '9') v = c - '0';
+    else if (c >= 'a' && c <= 'f') v = c - 'a' + 10;
+    else if (c >= 'A' && c <= 'F') v = c - 'A' + 10;
+    else return 0;
+    if (i & 1) out[i / 2] |= (unsigned char)v;
+    else out[i / 2] = (unsigned char)(v << 4);
+  }
+  return s[32] == '\0';
+}
+
+/* cur: key now in effect, 0 clear. -1 unsupported/bogus */
+static int key_parse(const char *attrs, const http_url_t *base, hls_playlist_t *out, unsigned *cur) {
+  char method[16];
+  char uri[2048];
+  char fmt[32];
+  char ivs[48];
+  hls_key_t k;
+
+  if (!attr_find(attrs, "METHOD", method, sizeof method)) return -1;
+  if (!strcmp(method, "NONE")) {
+    *cur = 0;
+    return 0;
+  }
+  if (strcmp(method, "AES-128")) return -1;
+  if (attr_find(attrs, "KEYFORMAT", fmt, sizeof fmt) && strcmp(fmt, "identity")) return -1;
+  if (!attr_find(attrs, "URI", uri, sizeof uri)) return -1;
+  memset(&k, 0, sizeof k);
+  playlist_resolve_uri(base, uri, k.url, sizeof k.url);
+  if (!k.url[0]) return -1;
+  if (attr_find(attrs, "IV", ivs, sizeof ivs)) {
+    if (!hex_iv(ivs, k.iv)) return -1;
+    k.has_iv = 1;
+  }
+  for (unsigned i = 0; i < out->n_keys; i++) {
+    if (!strcmp(out->keys[i].url, k.url) && out->keys[i].has_iv == k.has_iv && !memcmp(out->keys[i].iv, k.iv, sizeof k.iv)) {
+      *cur = i + 1;
+      return 0;
+    }
+  }
+  if (out->n_keys >= HLS_MAX_KEYS) return -1;
+  out->keys[out->n_keys++] = k;
+  *cur = out->n_keys;
+  return 0;
+}
+
 #define TAG_MATCH(line, tag) (!strncmp((line), (tag), sizeof(tag) - 1))
 #define TAG_VALUE(line, tag) ((line) + sizeof(tag) - 1)
 
@@ -44,6 +95,7 @@ int hls_playlist_parse(char *body, const http_url_t *base, hls_playlist_t *out) 
   char *cur = playlist_skip_blank(body);
   const char *line;
   int have_extinf = 0;
+  unsigned cur_key = 0;
 
   memset(out, 0, sizeof *out);
   if (strncmp(cur, "#EXTM3U", 7)) return 0;
@@ -71,8 +123,13 @@ int hls_playlist_parse(char *body, const http_url_t *base, hls_playlist_t *out) 
       if (attr_find(TAG_VALUE(line, "#EXT-X-SERVER-CONTROL:"), "CAN-BLOCK-RELOAD", v, sizeof v) && !strcasecmp(v, "YES")) out->low_latency = 1;
       continue;
     }
+    if (TAG_MATCH(line, "#EXT-X-KEY:")) {
+      if (key_parse(TAG_VALUE(line, "#EXT-X-KEY:"), base, out, &cur_key) < 0) return 0;
+      continue;
+    }
     if (TAG_MATCH(line, "#EXT-X-MAP:")) {
       char uri[sizeof out->map_uri];
+      if (cur_key) return 0;
       if (attr_find(TAG_VALUE(line, "#EXT-X-MAP:"), "URI", uri, sizeof uri)) playlist_resolve_uri(base, uri, out->map_uri, sizeof out->map_uri);
       continue;
     }
@@ -86,6 +143,7 @@ int hls_playlist_parse(char *body, const http_url_t *base, hls_playlist_t *out) 
     if (out->n_segments >= HLS_MAX_SEGMENTS) continue;
     seg = &out->segments[out->n_segments];
     playlist_resolve_uri(base, line, seg->url, sizeof seg->url);
+    seg->key = cur_key;
     if (seg->url[0]) out->n_segments++;
   }
   return 1;

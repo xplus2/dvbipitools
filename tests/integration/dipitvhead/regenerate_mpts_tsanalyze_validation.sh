@@ -40,7 +40,7 @@ sleep 0.8
 for n in 1 2; do
     eval "raw=\$RAW$n bad=\$BAD$n raw_port=\$RAW${n}_PORT bad_port=\$BAD${n}_PORT"
     tsp -I ip $raw:$raw_port --local-address 127.0.0.1 --receive-timeout 4000 \
-        -P pcredit --add-pcr 100000000 --random \
+        -P pcredit --add-pcr 100000000 --random -P continuity --fix \
         -O ip $bad:$bad_port --local-address 127.0.0.1 --ttl 1 >"$WORK/tsp_relay$n.log" 2>&1 &
 done
 sleep 0.3

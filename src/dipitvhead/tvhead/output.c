@@ -97,6 +97,7 @@ int tvhead_output_open(const config_t *cfg, out_ctx_t *o) {
     tsinspect_free(o->insp);
     o->insp = NULL;
   }
+  if (o->insp) tsinspect_set_label(o->insp, "output");
   if (o->insp) tsinspect_set_known_pids(o->insp, cfg->metrics_known_pids, cfg->metrics_n_known_pids);
   return 0;
 }
@@ -390,6 +391,11 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
         fc.now = now;
         if (insp) tspack_feed_sync(&pz, buf, (size_t)n, remux_cb_inspect, &fc, tsinspect_sync(insp));
         else tspack_feed(&pz, buf, (size_t)n, remux_cb, &fc);
+      }
+      if (remux_reconnect_wanted(rx)) {
+        log_line("source PMT changed incompatibly, reconnecting");
+        cas_flush(cas, packet_cb, out);
+        return -1;
       }
       if (cas && cas_failed(cas)) {
         log_line("cas: fatal error, stopping");

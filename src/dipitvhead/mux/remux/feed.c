@@ -151,18 +151,22 @@ static void scte_emit(void *c, unsigned char *pkt) {
   emit_out(e->r, e->pid, pkt, e->now, e->cb, e->ctx);
 }
 
-static void forward_packet(remux_t *r, const out_es_t *es, unsigned out_pid, unsigned char *cc, const unsigned char *pkt188, double now, remux_packet_cb cb, void *ctx) {
+/* source cc kept (pids map 1:1) -> downstream sees upstream dups/gaps. after reconnect, flag first pkg */
+static void mark_discontinuity(unsigned char *pending, unsigned char out[188]) {
+  if (!*pending || !(out[3] & 0x20) || out[4] < 1) return;
+  out[5] |= 0x80;
+  *pending = 0;
+}
+
+static void forward_packet(remux_t *r, const out_es_t *es, unsigned out_pid, unsigned char *disc_pending, const unsigned char *pkt188, double now, remux_packet_cb cb, void *ctx) {
   unsigned char out[188];
-  /* ISO 13818-1 2.4.3.3: AFC '10' (no payload) never bumps cc. PCR pid paces off these, bumping fakes a discontinuity. */
-  int has_payload = (pkt188[3] & 0x10) != 0;
   memcpy(out, pkt188, 188);
   out[1] = (unsigned char)((out[1] & 0xE0) | ((out_pid >> 8) & 0x1F));
   out[2] = (unsigned char)out_pid;
-  if (has_payload) *cc = (unsigned char)((*cc + 1) & 0x0F);
-  out[3] = (unsigned char)((out[3] & 0xF0) | *cc);
   if (r->tm && r->cfg.pcr_mode == PCR_MODE_REBASE) rebase_packet(r, es, out_pid, out, now);
   if (r->cfg.pcr_mode == PCR_MODE_REGENERATE) regen_stage(r, es, out, now);
   finish_stamps(r, out);
+  mark_discontinuity(disc_pending, out);
   if (es && r->scte[es - r->es] && r->tm) {
     scte_emit_t e = {r, out_pid, now, cb, ctx};
     unsigned long long before = r->scte[es - r->es]->patched;
@@ -259,12 +263,14 @@ void remux_feed(remux_t *r, double now_s, const unsigned char *pkt188, remux_pac
 
   r->tsm_cur = tsm;
   send_psi_tables(r, now_s, cb, ctx, tsm);
+  if (r->standalone) remux_emit_eit(r, OUT_PID_EIT, &r->cc_eit, 1, cb, ctx);
 
   if (pkt188[0] != 0x47) {
     if (tsm && !tsm->ts_checks_off) tsm->ts_sync_errors++;
     return;
   }
   in_pid = tspack_pid(pkt188);
+  if (r->watch && (in_pid == OUT_PID_PAT || in_pid == r->watch_pmt_pid)) watch_source_pmt(r, now_s, pkt188, cb, ctx, tsm);
   if (tsm && !tsm->ts_checks_off) {
     tsm->ts_packets++;
     track_continuity(r, in_pid, pkt188, tsm);
@@ -273,10 +279,7 @@ void remux_feed(remux_t *r, double now_s, const unsigned char *pkt188, remux_pac
 
   if (in_pid == OUT_PID_EIT) {
     if (!r->input.strip_eit) {
-      if (r->standalone)
-        forward_packet(r, NULL, OUT_PID_EIT, &r->cc_eit, pkt188, now_s, cb, ctx);
-      else
-        capture_eit_section(r, pkt188, tsm);
+      capture_eit_section(r, pkt188, tsm);
       if (tsm) tsm->remux_packets_total++;
     } else if (tsm) tsm->remux_dropped_packets_total++;
     return;
@@ -287,6 +290,6 @@ void remux_feed(remux_t *r, double now_s, const unsigned char *pkt188, remux_pac
     if (tsm) tsm->remux_dropped_packets_total++;
     return; /* PAT/PMT/SDT/NIT/unrecognized: not carried, we build our own or drop */
   }
-  forward_packet(r, &r->es[idx], r->es[idx].out_pid, &r->cc_es[idx], pkt188, now_s, cb, ctx);
+  forward_packet(r, &r->es[idx], r->es[idx].out_pid, &r->disc_es[idx], pkt188, now_s, cb, ctx);
   if (tsm) tsm->remux_packets_total++;
 }

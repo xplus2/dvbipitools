@@ -168,6 +168,8 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
   /* CA_descriptor(0x09) & stream_identifier_descriptor(0x52, EN 300 468 6.2.39) */
   static const unsigned char video_desc[] = {0x09, 4, 0x4A, 0x75, 0xE0, 0x20, 0x52, 1, 7};
   static const unsigned char audio_desc[] = {0x0A, 4, 'd', 'e', 'u', 0x00};
+  static const unsigned char sub_desc[] = {0x59, 16, 'd', 'e', 'u', 1, 0, 100, 0, 200, 'e', 'n', 'g', 2, 0, 101, 0, 201};
+  static const unsigned char ttx_desc[] = {0x56, 10, 'e', 'n', 'g', 0x09, 0x00, 'd', 'e', 'u', 0x17, 0x77};
   psi_es_t es[4];
   out_es_t out_es[8];
   out_program_pids_t pids;
@@ -198,14 +200,12 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
   es[1].desc_len = sizeof audio_desc;
   es[2].pid = 0x0103;
   es[2].cls = PID_SUBTITLE;
-  es[2].sub_type = 1;
-  es[2].sub_composition_page = 100;
-  es[2].sub_ancillary_page = 200;
+  memcpy(es[2].desc, sub_desc, sizeof sub_desc);
+  es[2].desc_len = sizeof sub_desc;
   es[3].pid = 0x0104;
   es[3].cls = PID_TELETEXT;
-  es[3].ttx_page = 777;
-  es[3].ttx_type = 2;
-  bufcpy(es[3].ttx_lang, sizeof es[3].ttx_lang, "deu");
+  memcpy(es[3].desc, ttx_desc, sizeof ttx_desc);
+  es[3].desc_len = sizeof ttx_desc;
 
   n = pmtbuild_map_es(es, 4, 0, 0x0101, pids.video_pid, pids.es_pid_base, out_es, 8, &pcr_pid, &dropped);
   ck_assert_int_eq(n, 4);
@@ -242,11 +242,15 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
   ck_assert_uint_eq(dec[2].sub_type, 1u);
   ck_assert_uint_eq(dec[2].sub_composition_page, 100u);
   ck_assert_uint_eq(dec[2].sub_ancillary_page, 200u);
+  ck_assert_uint_eq(dec[2].desc_len, sizeof sub_desc);
+  ck_assert_mem_eq(dec[2].desc, sub_desc, sizeof sub_desc);
 
   ck_assert_int_eq(dec[3].cls, PID_TELETEXT);
   ck_assert_uint_eq(dec[3].ttx_page, 777u);
   ck_assert_int_eq(dec[3].ttx_type, 2);
   ck_assert_str_eq(dec[3].ttx_lang, "deu");
+  ck_assert_uint_eq(dec[3].desc_len, sizeof ttx_desc);
+  ck_assert_mem_eq(dec[3].desc, ttx_desc, sizeof ttx_desc);
 
   psi_free(p);
 }

@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -9,12 +10,29 @@
 
 #include "priv.h"
 
-/* existing candidate for this pmt_pid, or NULL */
-pmt_cand_t *find_cand(psi_t *c, unsigned pmt_pid) {
+/* existing candidate for this program on this pmt_pid, or NULL.
+   programs may share a PMT PID (ISO/IEC 13818-1 2.4.4.3) */
+pmt_cand_t *find_cand(psi_t *c, unsigned prog, unsigned pmt_pid) {
   for (int k = 0; k < c->pmt_cand_count; k++) {
-    if (c->pmt_cand[k].pmt_pid == pmt_pid) return &c->pmt_cand[k];
+    if (c->pmt_cand[k].pmt_pid == pmt_pid && c->pmt_cand[k].program_number == prog) return &c->pmt_cand[k];
   }
   return NULL;
+}
+
+/* first candidate on pid: owns the section assembler for all programs on it */
+static pmt_cand_t *pmt_leader(psi_t *c, unsigned pid) {
+  for (int k = 0; k < c->pmt_cand_count; k++) {
+    if (c->pmt_cand[k].pmt_pid == pid) return &c->pmt_cand[k];
+  }
+  return NULL;
+}
+
+/* assembled section's andidate, NULL: not ours. bogus sections go to a candidate logging the drop */
+static pmt_cand_t *pmt_target(psi_t *c, pmt_cand_t *leader, const unsigned char *b, size_t n) {
+  unsigned prog;
+  if (n < 5 || b[0] != 0x02) return c->pmt_locked && !c->multi_mode ? &c->pmt_cand[c->pmt_lock_idx] : leader;
+  prog = ((unsigned)b[3] << 8) | b[4];
+  return find_cand(c, prog, leader->pmt_pid);
 }
 
 /* precedence: fixed pids (PAT/CAT/NIT/SDT/EIT/OTHER_SI/NULL) > nit > pmt > es > ecm > pcr,
@@ -49,6 +67,14 @@ psi_t *psi_new(void) {
 }
 
 void psi_free(psi_t *c) { free(c); }
+
+void psi_set_label(psi_t *c, const char *label) {
+  if (!c) return;
+  if (label && *label) snprintf(c->tag, sizeof c->tag, "psi %s", label);
+  else c->tag[0] = 0;
+}
+
+const char *psi_tag(const psi_t *c) { return c->tag[0] ? c->tag : "psi"; }
 
 /* records that pmt_cand[k] just resolved: locks onto it (single-mode, first resolution only),
    marks it resolved in multi-mode */
@@ -121,6 +147,28 @@ static void obs_note(psi_t *c, psi_obs_id_t id, const unsigned char *b, size_t n
   }
 }
 
+static void feed_pmt_pid(psi_t *c, unsigned pid, const unsigned char *pkt, const unsigned char *pl, size_t plen, int pusi) {
+  pmt_cand_t *lead = pmt_leader(c, pid);
+  psi_section_asm_t *a;
+  if (!lead || !psi_section_asm_cc(&lead->asm_, pkt)) return;
+  a = &lead->asm_;
+  for (int got = psi_section_asm_feed(a, pl, plen, pusi); got; got = psi_section_asm_next(a, pl, plen)) {
+    pmt_cand_t *cand;
+    if (a->expect && a->buf[0] != 0x02) { /* ECM etc sharing the PMT pid */
+      if (!lead->foreign_logged) {
+        log_line("%s: non-PMT sections on PMT pid 0x%04x (table_id 0x%02x), ignoring", psi_tag(c), pid, a->buf[0]);
+        lead->foreign_logged = 1;
+      }
+      continue;
+    }
+    cand = pmt_target(c, lead, a->buf, a->expect);
+    if (!cand) continue;
+    if (c->pmt_locked && !c->multi_mode && cand != &c->pmt_cand[c->pmt_lock_idx]) continue;
+    obs_note(c, PSI_OBS_PMT, a->buf, a->expect, 0x02, cand);
+    if (parse_pmt(c, cand, a->buf, a->expect)) note_pmt_resolved(c, (int)(cand - c->pmt_cand));
+  }
+}
+
 void psi_feed(psi_t *c, const unsigned char *pkt) {
   unsigned pid;
   int pusi;
@@ -167,25 +215,9 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
   }
 
   if (c->pmt_locked && !c->multi_mode) {
-    if (pid == c->pmt_pid) {
-      pmt_cand_t *cand = &c->pmt_cand[c->pmt_lock_idx];
-      if (!psi_section_asm_cc(&cand->asm_, pkt)) return;
-      for (int got = psi_section_asm_feed(&cand->asm_, pl, plen, pusi); got; got = psi_section_asm_next(&cand->asm_, pl, plen)) {
-        obs_note(c, PSI_OBS_PMT, cand->asm_.buf, cand->asm_.expect, 0x02, cand);
-        parse_pmt(c, cand);
-      }
-    }
+    if (pid == c->pmt_pid) feed_pmt_pid(c, pid, pkt, pl, plen, pusi);
   } else if (c->have_pat) {
-    for (int k = 0; k < c->pmt_cand_count; k++) {
-      pmt_cand_t *cand = &c->pmt_cand[k];
-      if (cand->pmt_pid != pid) continue;
-      if (!psi_section_asm_cc(&cand->asm_, pkt)) return;
-      for (int got = psi_section_asm_feed(&cand->asm_, pl, plen, pusi); got; got = psi_section_asm_next(&cand->asm_, pl, plen)) {
-        obs_note(c, PSI_OBS_PMT, cand->asm_.buf, cand->asm_.expect, 0x02, cand);
-        if (parse_pmt(c, cand)) note_pmt_resolved(c, k);
-      }
-      break;
-    }
+    feed_pmt_pid(c, pid, pkt, pl, plen, pusi);
   }
 }
 
@@ -219,6 +251,7 @@ const psi_program_t *psi_pat_programs(const psi_t *c, int *count) {
 
 int psi_have_pat(const psi_t *c) { return c->have_pat; }
 int psi_have_pmt(const psi_t *c) { return c->have_pmt; }
+unsigned long psi_pmt_parsed(const psi_t *c) { return c->pmt_parsed; }
 int psi_have_sdt(const psi_t *c) { return c->have_sdt; }
 int psi_have_cat(const psi_t *c) { return c->have_cat; }
 int psi_ready(const psi_t *c) { return c->have_pat && c->have_pmt; }
@@ -264,8 +297,8 @@ const unsigned char *psi_pmt_section(const psi_t *c, size_t *len) {
     if (len) *len = 0;
     return NULL;
   }
-  if (len) *len = c->pmt_cand[c->pmt_lock_idx].asm_.expect;
-  return c->pmt_cand[c->pmt_lock_idx].asm_.buf;
+  if (len) *len = c->pmt_sec_len;
+  return c->pmt_sec;
 }
 
 const char *pid_class_name(pid_class_t k) {

@@ -15,6 +15,8 @@
 #define EMMG_QUEUE_CAP 1024
 #define EMMG_QUEUE_HIGH_WATERMARK ((EMMG_QUEUE_CAP * 9) / 10)
 #define EMMG_QUEUE_LOW_WATERMARK ((EMMG_QUEUE_CAP * 3) / 4)
+#define EMMG_SECTION_HDR_LEN 3
+#define EMMG_BYTES_PER_KBPS_S 125
 #define EMMG_POLL_INTERVAL_MS 150
 #define EMMG_SEND_TIMEOUT_MS 3000
 #define EMMG_CONNECT_TIMEOUT_MS 3000
@@ -52,8 +54,12 @@ struct emmg_server {
   emmg_queued_datagram_t queue[EMMG_QUEUE_CAP];
   size_t queue_head;
   atomic_size_t queue_len; /* mutex-protected writes, lock-free read: dequeue pre-check, backpressure watermark */
+  atomic_uint granted_kbps[EMMG_MAX_CONNS_CEILING]; /* per slot, 0 = none, sum 0 = unthrottled */
+  double tokens;
+  double tokens_ts; /* monotonic S last refill, 0 = unset. queue_lock */
 
   log_throttle_t oversized_throttle;
+  log_throttle_t malformed_throttle;
   log_throttle_t queue_full_throttle;
   log_throttle_t rx_msg_throttle;
   log_throttle_t data_provision_throttle;
@@ -63,6 +69,7 @@ struct emmg_server {
 };
 
 typedef struct {
+  int slot;
   int have_channel;
   unsigned client_id;
   unsigned data_channel_id;

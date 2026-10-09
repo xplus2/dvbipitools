@@ -373,6 +373,7 @@ dipirec_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/dash/mpd.c \
@@ -598,6 +599,7 @@ dipiradiohead_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/dipiradiohead/input/icy.c \
 	src/dipiradiohead/input/id3.c \
 	src/dipiradiohead/input/source/open.c \
@@ -757,6 +759,7 @@ dipitvhead_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/dash/mpd.c \
@@ -1057,6 +1060,7 @@ dipidescramble_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -1225,6 +1229,7 @@ dipirist_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -1353,6 +1358,7 @@ dipisrt_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -1536,6 +1542,7 @@ dipixy_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/dash/mpd.c \
@@ -1818,6 +1825,7 @@ lib_scrambler_cissa_SRCS := \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa.c \
 	src/lib/scrambler/csa2_stub.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/helper/log.c
 lib_scrambler_cissa_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_scrambler_cissa_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -1865,6 +1873,7 @@ lib_cas_biss_ca_engine_SRCS := \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/sys/ioutil.c
 lib_cas_biss_ca_engine_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_cas_biss_ca_engine_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -2138,6 +2147,7 @@ dipidescramble_pmt_select_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -2766,6 +2776,7 @@ dipirist_bridge_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -2940,6 +2951,7 @@ dipisrt_bridge_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -3349,6 +3361,7 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -4010,7 +4023,8 @@ dipiradiohead_tspacketizer_SRCS := \
 	src/dipiradiohead/mux/pes.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
-	src/lib/demux/crc32.c
+	src/lib/demux/crc32.c \
+	src/lib/helper/log.c
 
 dipiradiohead_radiohead_BIN := tests/unit/dipiradiohead/test_radiohead
 dipiradiohead_radiohead_SRCS := \
@@ -4072,6 +4086,7 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/dipiradiohead/input/icy.c \
 	src/dipiradiohead/input/id3.c \
 	src/dipiradiohead/framer/mpegaudio.c \
@@ -4312,6 +4327,7 @@ dipiradiohead_source_async_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -4355,6 +4371,7 @@ dipiradiohead_source_frame_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -4405,6 +4422,7 @@ lib_hls_live_BIN := tests/unit/lib/hls/test_live
 lib_hls_live_SRCS := \
 	tests/unit/lib/hls/test_live.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/tsinspect/core.c \
@@ -4438,6 +4456,7 @@ lib_hls_tspassthrough_SRCS := \
 	tests/unit/lib/hls/test_tspassthrough.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/tsinspect/core.c \
@@ -4518,6 +4537,7 @@ dipiradiohead_source_hls_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -4564,6 +4584,7 @@ dipiradiohead_inputset_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -4625,6 +4646,7 @@ dipitvhead_source_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -4925,6 +4947,7 @@ dipitvhead_discover_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -5152,6 +5175,7 @@ dipitvhead_output_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -5262,6 +5286,7 @@ dipitvhead_mpts_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -5367,6 +5392,7 @@ dipitvhead_single_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -5656,6 +5682,7 @@ lib_net_tssource_async_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -5714,6 +5741,7 @@ lib_net_tssource_http_dispatch_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -5772,6 +5800,7 @@ lib_net_tssource_dash_fmp4_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -5835,6 +5864,7 @@ lib_net_tssource_file_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -6001,6 +6031,7 @@ dipirec_record_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -6133,6 +6164,7 @@ dipirec_record_net_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -6654,6 +6686,7 @@ dipixy_playlist_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -6723,6 +6756,7 @@ dipixy_capture_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -6815,6 +6849,7 @@ dipixy_channels_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -7235,6 +7270,7 @@ dipixy_ws_sources_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -7326,6 +7362,7 @@ dipixy_gena_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \
@@ -7428,6 +7465,7 @@ dipixy_dlna_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
 	src/lib/dash/live.c \

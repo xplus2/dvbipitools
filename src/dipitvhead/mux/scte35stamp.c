@@ -42,6 +42,10 @@ static void patch_and_emit(scte35stamp_t *s, int64_t delta90k, scte35_emit_fn em
     memcpy(sec + pos, s->pk[i] + st, take);
     pos += take;
   }
+  if (crc32_mpeg(sec, s->total) != 0) {
+    scte35stamp_flush(s, emit, ctx);
+    return;
+  }
   adj = ((uint64_t)(sec[PTS_ADJ_OFFSET] & 1) << 32) | ((uint64_t)sec[PTS_ADJ_OFFSET + 1] << 24) | ((uint64_t)sec[PTS_ADJ_OFFSET + 2] << 16) |
         ((uint64_t)sec[PTS_ADJ_OFFSET + 3] << 8) | sec[PTS_ADJ_OFFSET + 4];
   d = (uint64_t)(((delta90k % (int64_t)PTS_MODULUS) + (int64_t)PTS_MODULUS) % (int64_t)PTS_MODULUS);
@@ -95,6 +99,10 @@ void scte35stamp_feed(scte35stamp_t *s, unsigned char *pkt188, int64_t delta90k,
     s->total = total;
     s->got = 0;
   } else if (!s->n) {
+    emit(ctx, pkt188);
+    return;
+  } else if (payload_start(pkt188) >= 188) {
+    scte35stamp_flush(s, emit, ctx);
     emit(ctx, pkt188);
     return;
   }

@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stdio.h>
 #include <string.h>
 
 #include "lib/helper/log.h"
@@ -49,6 +50,11 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
       log_line_ansi("input \e[1;30m%u\e[0m: \e[0;31mout of memory allocating psi state, retrying next poll\e[0m", i);
       return;
     }
+    {
+      char label[24];
+      snprintf(label, sizeof label, "input %u discovery", i);
+      psi_set_label(tk->progs[i].psi, label);
+    }
     tk->progs[i].discover_start = mono_seconds();
     if (tk->insp && tsinspect_wants_rx_ns(tk->insp[i])) tvsrc_enable_rx_timestamps(src);
     if (tk->cfg->inputs[i].pmt_pid) psi_select_pmt_pid(tk->progs[i].psi, tk->cfg->inputs[i].pmt_pid);
@@ -79,6 +85,7 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   /* cas already running (non-keyword mode, or reconnect): attach too, else this program's packets never scramble */
   if (tk->cas) remux_set_cas(tk->progs[i].rx, tk->cas);
   remux_set_timemap(tk->progs[i].rx, &tk->tm[i]);
+  remux_set_psi_versions(tk->progs[i].rx, &tk->psiv[i]);
   if (tk->cfg->pcr_mode == PCR_MODE_REGENERATE && remux_set_hold(tk->progs[i].rx, out_pcr_clock, out_pcr_latch, tk->out, tk->cfg->pcr_lead_ms))
     log_line_ansi("input \e[1;30m%u\e[0m: hold-back queue setup failed", i);
   out_pcr_pid_set(tk->out, i, remux_pcr_pid_out(tk->progs[i].rx));
@@ -126,6 +133,16 @@ void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   if (fc.insp) tspack_feed_sync(&tk->progs[i].pz, bl->buf + bl->off, chunk, remux_cb_inspect, &fc, tsinspect_sync(fc.insp));
   else tspack_feed(&tk->progs[i].pz, bl->buf + bl->off, chunk, remux_cb, &fc);
   bl->off += chunk;
+  if (remux_reconnect_wanted(tk->progs[i].rx)) {
+    log_line_ansi("input \e[1;30m%u\e[0m: source PMT changed incompatibly, reconnecting", i);
+    mpts_set_program(tk->mpts, i, NULL);
+    remux_release(tk->progs[i].rx, tk->now, packet_cb, tk->out, 1, tk->tsm);
+    out_pcr_pid_set(tk->out, i, 0);
+    program_reset(&tk->progs[i]);
+    retryset_mark_down(tk->rs, i, tk->now_t);
+    if (tk->metrics_on) tk->input_stats[i].up = 0;
+    return;
+  }
   if (bl->off >= bl->len) {
     bl->off = 0;
     bl->len = 0;

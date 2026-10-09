@@ -72,6 +72,8 @@ int tsinspect_wants_rx_ns(const tsinspect_t *t);
 void tsinspect_set_rx_ns(tsinspect_t *t, uint64_t ns);
 void tsinspect_set_buffer_ms(tsinspect_t *t, int64_t ms);
 void tsinspect_bind_psi(tsinspect_t *t, psi_t *psi);
+/* psi in log lines, psi_set_label() */
+void tsinspect_set_label(tsinspect_t *t, const char *label);
 
 void tsinspect_tick(tsinspect_t *t, double now);
 

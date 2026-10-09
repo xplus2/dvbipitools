@@ -156,6 +156,10 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
   }
   if (!parse_part_filename(filename, &req_seq, &req_part)) return 0;
   r->kind = HLS_RESOLVE_SEGMENT;
+  if (req_part < 0) {
+    r->status = 404;
+    return 1;
+  }
   if (snap && snap->live_msn == req_seq && req_part < snap->live_parts.count) {
     r->body = snap->live_data + snap->live_parts.offset[req_part];
     r->body_len = snap->live_parts.size[req_part];

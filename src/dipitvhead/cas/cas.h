@@ -43,6 +43,8 @@ unsigned cas_pcr_pid(cas_t *c);
 void cas_pcr_tick(cas_t *c, unsigned out_pid, const unsigned char pkt188[188]);
 void cas_scramble_packet(cas_t *c, unsigned out_pid, double now, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx);
 
+size_t cas_add_pids(cas_t *c, const unsigned *pids, size_t n);
+
 /* flushes any packets held for batching, in order. call at stream end. */
 void cas_flush(cas_t *c, scrambler_emit_cb emit, void *ctx);
 

@@ -46,6 +46,7 @@ typedef struct {
   tsinspect_set_t insp_set;
   srtsink_queue_ctx_t qctx;
   timemap_t tm[ARGS_MAX_INPUTS];
+  psi_versions_t psiv[ARGS_MAX_INPUTS]; /* outlives mpts_program_t, like tm */
 } mpts_run_ctx_t;
 
 static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_run_ctx_t *c) {
@@ -89,6 +90,11 @@ static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_ru
     if (c->insp_in[i] && tsinspect_enable_own_psi(c->insp_in[i], 0)) {
       tsinspect_free(c->insp_in[i]);
       c->insp_in[i] = NULL;
+    }
+    if (c->insp_in[i]) {
+      char label[16];
+      snprintf(label, sizeof label, "input %u", i);
+      tsinspect_set_label(c->insp_in[i], label);
     }
     if (c->insp_in[i]) tsinspect_set_known_pids(c->insp_in[i], cfg->metrics_known_pids, cfg->metrics_n_known_pids);
     c->insp_on |= c->insp_in[i] != NULL;
@@ -212,6 +218,7 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
     tk.out = &c->out;
     tk.tsm = c->tsm_p;
     tk.tm = c->tm;
+    tk.psiv = c->psiv;
     tk.insp = c->insp_on ? c->insp_in : NULL;
     tk.now = now;
     tk.now_t = now_t;

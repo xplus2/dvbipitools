@@ -347,6 +347,47 @@ START_TEST(continuation_without_a_started_section_passes_through) {
 }
 END_TEST
 
+START_TEST(bad_crc_section_passes_through_unpatched) {
+  unsigned char sec[4096];
+  unsigned char pk[30][188];
+  unsigned char orig[30][188];
+  scte35stamp_t st;
+  sink_t sink = {.n = 0};
+  unsigned total = build_section(sec, 10, 0, 0, 400);
+  int n;
+  sec[total - 1] ^= 0xFF;
+  n = packetize(pk, sec, total, 0, 0);
+  memcpy(orig, pk, sizeof orig);
+  scte35stamp_init(&st);
+  feed_all(&st, &sink, pk, n, 90);
+  ck_assert_int_eq(sink.n, n);
+  for (int i = 0; i < n; i++) ck_assert_mem_eq(sink.pk[i], orig[i], 188);
+  ck_assert_uint_eq((unsigned)st.patched, 0u);
+}
+END_TEST
+
+START_TEST(continuation_with_oversized_adaptation_length_flushes_unpatched) {
+  unsigned char sec[4096];
+  unsigned char pk[30][188];
+  unsigned char orig[30][188];
+  scte35stamp_t st;
+  sink_t sink = {.n = 0};
+  unsigned total = build_section(sec, 10, 0, 0, 400);
+  int n = packetize(pk, sec, total, 0, 0);
+  ck_assert_int_eq(n, 3);
+  pk[1][3] |= 0x20;
+  pk[1][4] = 184;
+  memcpy(orig, pk, sizeof orig);
+  scte35stamp_init(&st);
+  scte35stamp_feed(&st, pk[0], 5, emit, &sink);
+  scte35stamp_feed(&st, pk[1], 5, emit, &sink);
+  ck_assert_int_eq(sink.n, 2);
+  ck_assert_mem_eq(sink.pk[0], orig[0], 188);
+  ck_assert_mem_eq(sink.pk[1], orig[1], 188);
+  ck_assert_uint_eq((unsigned)st.patched, 0u);
+}
+END_TEST
+
 START_TEST(flush_emits_a_partial_section_unpatched) {
   unsigned char sec[4096];
   unsigned char pk[30][188];
@@ -404,6 +445,8 @@ static Suite *scte35stamp_suite(void) {
   tcase_add_test(tc, oversized_section_length_passes_through);
   tcase_add_test(tc, a_new_section_start_flushes_an_incomplete_one_unpatched);
   tcase_add_test(tc, continuation_without_a_started_section_passes_through);
+  tcase_add_test(tc, bad_crc_section_passes_through_unpatched);
+  tcase_add_test(tc, continuation_with_oversized_adaptation_length_flushes_unpatched);
   tcase_add_test(tc, flush_emits_a_partial_section_unpatched);
   tcase_add_test(tc, consecutive_sections_are_each_patched);
   suite_add_tcase(s, tc);

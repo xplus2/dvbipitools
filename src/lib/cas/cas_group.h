@@ -70,6 +70,7 @@ void cas_group_tick_alive(cas_group_t *g);
 void cas_group_clock_tick(cas_group_t *g, unsigned long delta_ms);
 
 void cas_group_scramble_packet(cas_group_t *g, unsigned out_pid, double now, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx);
+int cas_group_add_pid(cas_group_t *g, unsigned pid);
 void cas_group_flush(cas_group_t *g, scrambler_emit_cb emit, void *ctx);
 
 /* N CA_descriptor(ecm)s (one per vendor) + one scrambling_descriptor. 0 on overflow. */

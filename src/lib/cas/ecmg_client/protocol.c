@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "lib/helper/log.h"
+#include "lib/helper/secure_zero.h"
 #include "lib/mux/psi_build.h"
 
 #include "../cw_gen.h"
@@ -89,6 +90,38 @@ size_t ecmg_build_stream_setup(unsigned char *out, size_t cap, unsigned char ver
   return simulcrypt_writer_finish(&w);
 }
 
+static int put_u16(simulcrypt_writer_t *w, unsigned short tag, unsigned v) {
+  return simulcrypt_writer_put_tlv(w, tag, (unsigned char[]){(unsigned char)(v >> 8), (unsigned char)v}, 2);
+}
+
+size_t ecmg_build_channel_test(unsigned char *out, size_t cap, unsigned char version) {
+  simulcrypt_writer_t w;
+  if (simulcrypt_writer_begin(&w, out, cap, version, ECMG_MSG_CHANNEL_TEST) < 0) return 0;
+  if (put_u16(&w, ECMG_P_ECM_CHANNEL_ID, ECMG_CHANNEL_ID) < 0) return 0;
+  return simulcrypt_writer_finish(&w);
+}
+
+size_t ecmg_build_channel_status(unsigned char *out, size_t cap, unsigned char version, unsigned lead_cw, unsigned cw_per_msg, unsigned max_comp_time_ms, unsigned ecm_rep_period_ms) {
+  simulcrypt_writer_t w;
+  if (simulcrypt_writer_begin(&w, out, cap, version, ECMG_MSG_CHANNEL_STATUS) < 0) return 0;
+  if (put_u16(&w, ECMG_P_ECM_CHANNEL_ID, ECMG_CHANNEL_ID) < 0) return 0;
+  if (put_u16(&w, ECMG_P_ECM_REP_PERIOD, ecm_rep_period_ms) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, ECMG_P_LEAD_CW, (unsigned char[]){(unsigned char)lead_cw}, 1) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, ECMG_P_CW_PER_MSG, (unsigned char[]){(unsigned char)cw_per_msg}, 1) < 0) return 0;
+  if (put_u16(&w, ECMG_P_MAX_COMP_TIME, max_comp_time_ms) < 0) return 0;
+  return simulcrypt_writer_finish(&w);
+}
+
+size_t ecmg_build_stream_status(unsigned char *out, size_t cap, unsigned char version, unsigned ecm_id) {
+  simulcrypt_writer_t w;
+  if (simulcrypt_writer_begin(&w, out, cap, version, ECMG_MSG_STREAM_STATUS) < 0) return 0;
+  if (put_u16(&w, ECMG_P_ECM_CHANNEL_ID, ECMG_CHANNEL_ID) < 0) return 0;
+  if (put_u16(&w, ECMG_P_ECM_STREAM_ID, ECMG_STREAM_ID) < 0) return 0;
+  if (put_u16(&w, ECMG_P_ECM_ID, ecm_id) < 0) return 0;
+  if (simulcrypt_writer_put_tlv(&w, ECMG_P_ACCESS_CRITERIA_TRANSFER_MODE, (unsigned char[]){0}, 1) < 0) return 0;
+  return simulcrypt_writer_finish(&w);
+}
+
 size_t ecmg_build_cw_provision(unsigned char *out, size_t cap, unsigned char version, unsigned short cp_number,
   cw_hist_entry_t *hist, size_t cw_len, unsigned lead_cw, unsigned cw_per_msg, cwenc_ctx_t *cwenc_ctx) {
   simulcrypt_writer_t w;
@@ -108,11 +141,14 @@ size_t ecmg_build_cw_provision(unsigned char *out, size_t cap, unsigned char ver
     unsigned char combo[2 + ECMG_MAX_CW_LEN];
     unsigned short cp = (unsigned short)(first_cp + i);
     const unsigned char *cw = hist_get_or_gen(hist, cp, cw_len);
+    int rc;
     if (!cw) return 0;
     psi_put16(combo, cp);
     memcpy(combo + 2, cw, cw_len);
-    if (cwenc_active && cwenc_encrypt_cw(&cwenc_ctx->cfg, &sel, (int)cw_len, ECMG_CHANNEL_ID, ECMG_STREAM_ID, cp, combo + 2) != 0) return 0;
-    if (simulcrypt_writer_put_tlv(&w, ECMG_P_CP_CW_COMBINATION, combo, (unsigned short)(2 + cw_len)) < 0) return 0;
+    rc = cwenc_active ? cwenc_encrypt_cw(&cwenc_ctx->cfg, &sel, (int)cw_len, ECMG_CHANNEL_ID, ECMG_STREAM_ID, cp, combo + 2) : 0;
+    if (rc == 0 && simulcrypt_writer_put_tlv(&w, ECMG_P_CP_CW_COMBINATION, combo, (unsigned short)(2 + cw_len)) < 0) rc = -1;
+    secure_zero(combo, sizeof combo);
+    if (rc != 0) return 0;
   }
   return simulcrypt_writer_finish(&w);
 }

@@ -6,6 +6,8 @@
 
 #include <openssl/evp.h>
 
+#include "lib/helper/secure_zero.h"
+
 #include "cissa.h"
 
 /* ETSI TS 103 127 clause 6.3.1.2, fixed IV for all CISSA v1 traffic */
@@ -37,6 +39,7 @@ void cissa_key_free(cissa_key_t *k) {
   if (!k)
     return;
   EVP_CIPHER_CTX_free(k->ctx);
+  secure_zero(k, sizeof *k);
   free(k);
 }
 
@@ -45,8 +48,7 @@ void cissa_key_free(cissa_key_t *k) {
 int cissa_encrypt_block(cissa_key_t *k, unsigned char *data, size_t len) {
   int outlen, totlen;
 
-  if (!k || len == 0 || len % 16 != 0)
-    return -1;
+  if (!k || len == 0 || len % 16 != 0) return -1;
 
   if (k->dir == CISSA_DIR_ENCRYPT) {
     if (EVP_EncryptInit_ex(k->ctx, NULL, NULL, NULL, cissa_iv) != 1)
@@ -60,30 +62,23 @@ int cissa_encrypt_block(cissa_key_t *k, unsigned char *data, size_t len) {
   if (EVP_EncryptUpdate(k->ctx, data, &outlen, data, (int)len) != 1 || (size_t)outlen != len)
     return -1;
   totlen = outlen;
-  if (EVP_EncryptFinal_ex(k->ctx, data + totlen, &outlen) != 1)
-    return -1;
+  if (EVP_EncryptFinal_ex(k->ctx, data + totlen, &outlen) != 1) return -1;
   return 0;
 }
 
 int cissa_decrypt_block(cissa_key_t *k, unsigned char *data, size_t len) {
   int outlen, totlen;
-
-  if (!k || len == 0 || len % 16 != 0)
-    return -1;
+  if (!k || len == 0 || len % 16 != 0) return -1;
 
   if (k->dir == CISSA_DIR_DECRYPT) {
-    if (EVP_DecryptInit_ex(k->ctx, NULL, NULL, NULL, cissa_iv) != 1)
-      return -1;
+    if (EVP_DecryptInit_ex(k->ctx, NULL, NULL, NULL, cissa_iv) != 1) return -1;
   } else {
-    if (EVP_DecryptInit_ex(k->ctx, EVP_aes_128_cbc(), NULL, k->cw, cissa_iv) != 1)
-      return -1;
+    if (EVP_DecryptInit_ex(k->ctx, EVP_aes_128_cbc(), NULL, k->cw, cissa_iv) != 1) return -1;
     EVP_CIPHER_CTX_set_padding(k->ctx, 0);
     k->dir = CISSA_DIR_DECRYPT;
   }
-  if (EVP_DecryptUpdate(k->ctx, data, &outlen, data, (int)len) != 1 || (size_t)outlen != len)
-    return -1;
+  if (EVP_DecryptUpdate(k->ctx, data, &outlen, data, (int)len) != 1 || (size_t)outlen != len) return -1;
   totlen = outlen;
-  if (EVP_DecryptFinal_ex(k->ctx, data + totlen, &outlen) != 1)
-    return -1;
+  if (EVP_DecryptFinal_ex(k->ctx, data + totlen, &outlen) != 1) return -1;
   return 0;
 }

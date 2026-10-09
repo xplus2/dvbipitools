@@ -66,6 +66,7 @@ dvbipitools_add_fuzz_harness(ecmg_channel_status
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
 
 dvbipitools_add_fuzz_harness(emmg_datagrams

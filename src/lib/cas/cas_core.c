@@ -50,6 +50,14 @@ void cas_core_scramble_packet(cas_core_t *core, unsigned out_pid, double now, un
   cas_group_scramble_packet(core->group, out_pid, now, pkt188, emit, ctx);
 }
 
+int cas_core_add_pid(cas_core_t *core, unsigned pid) {
+  if (core->biss_engine)
+    return cas_scramble_engine_add_pid(core->biss_engine, pid);
+  if (core->biss_ca)
+    return biss_ca_engine_add_pid(core->biss_ca, pid);
+  return cas_group_add_pid(core->group, pid);
+}
+
 void cas_core_flush(cas_core_t *core, scrambler_emit_cb emit, void *ctx) {
   if (core->biss_engine) {
     cas_scramble_engine_flush(core->biss_engine, emit, ctx);

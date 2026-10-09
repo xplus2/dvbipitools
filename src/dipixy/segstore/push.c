@@ -285,7 +285,7 @@ int hls_part_available(const capture_ctx_t *ctx, const pid_filter_t *filter, uns
   const hls_snapshot_t *snap;
   if (!s) return 0;
   snap = atomic_load_explicit(&s->snap, memory_order_acquire);
-  if (!snap) return 0;
+  if (!snap || want_part < 0) return 0;
   if (snap->live_msn == want_seg && snap->live_parts.count > want_part) return 1;
   if (snap->count > 0) {
     uint32_t oldest = snap->oldest_seq;

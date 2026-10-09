@@ -289,6 +289,13 @@ void cas_scramble_packet(cas_t *c, unsigned out_pid, double now, unsigned char p
   cas_core_scramble_packet(&c->core, out_pid, now, pkt188, emit, ctx);
 }
 
+size_t cas_add_pids(cas_t *c, const unsigned *pids, size_t n) {
+  size_t failed = 0;
+  for (size_t i = 0; i < n; i++)
+    if (cas_core_add_pid(&c->core, pids[i]) != 0) failed++;
+  return failed;
+}
+
 void cas_flush(cas_t *c, scrambler_emit_cb emit, void *ctx) {
   if (!c) return;
   cas_core_flush(&c->core, emit, ctx);

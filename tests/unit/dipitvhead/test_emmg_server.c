@@ -294,7 +294,7 @@ START_TEST(emmg_server_completes_real_handshake_and_queues_datagram) {
   unsigned char payload[512];
   simulcrypt_hdr_t hdr;
   size_t n;
-  static const unsigned char dg[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x01};
+  static const unsigned char dg[] = {0xDE, 0x70, 0x02, 0xBE, 0xEF};
   unsigned char got[64];
   size_t got_len;
   int waited;
@@ -451,7 +451,7 @@ START_TEST(emmg_server_queue_holds_more_than_old_64_cap) {
 
   /* old cap was 64 - push 65 without draining, first one must survive */
   for (int i = 0; i < 65; i++) {
-    unsigned char dg[1];
+    unsigned char dg[3] = {0, 0x70, 0x00};
     dg[0] = (unsigned char)i;
     n = fake_build_data_provision(msg, sizeof msg, 3, dg, sizeof dg);
     ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
@@ -466,7 +466,7 @@ START_TEST(emmg_server_queue_holds_more_than_old_64_cap) {
       waited += 5;
     }
   }
-  ck_assert_uint_eq(got_len, 1u);
+  ck_assert_uint_eq(got_len, 3u);
   ck_assert_uint_eq(got[0], 0u);
 
   close(fd);
@@ -504,7 +504,7 @@ START_TEST(emmg_server_queue_holds_more_than_old_256_cap) {
   /* old cap was 256, well under backpressure's high watermark (~921): push 300 without
      draining, first one must survive */
   for (int i = 0; i < 300; i++) {
-    unsigned char dg[1];
+    unsigned char dg[3] = {0, 0x70, 0x00};
     dg[0] = (unsigned char)i;
     n = fake_build_data_provision(msg, sizeof msg, 3, dg, sizeof dg);
     ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
@@ -519,7 +519,7 @@ START_TEST(emmg_server_queue_holds_more_than_old_256_cap) {
       waited += 5;
     }
   }
-  ck_assert_uint_eq(got_len, 1u);
+  ck_assert_uint_eq(got_len, 3u);
   ck_assert_uint_eq(got[0], 0u);
 
   close(fd);
@@ -651,7 +651,7 @@ START_TEST(emmg_server_dial_mode_completes_handshake_and_queues_datagram) {
   unsigned char payload[512];
   simulcrypt_hdr_t hdr;
   size_t n;
-  static const unsigned char dg[] = {0xAA, 0xBB, 0xCC};
+  static const unsigned char dg[] = {0xAA, 0x70, 0x00};
   unsigned char got[64];
   size_t got_len;
   int waited;
@@ -959,8 +959,93 @@ START_TEST(emmg_server_handles_malformed_messages) {
 }
 END_TEST
 
+START_TEST(emmg_server_drops_datagram_that_is_not_a_section) {
+  static const unsigned char bad[] = {0x11, 0x70, 0x05, 0x00};
+  static const unsigned char dg[] = {0x22, 0x70, 0x00};
+  emmg_server_cfg_t cfg = {0};
+  emmg_server_t *s;
+  unsigned char msg[512];
+  unsigned char got[64];
+  size_t got_len = 0;
+  size_t n;
+  int fd;
+  int waited = 0;
+
+  cfg.port = 0;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+  fd = fake_connect(emmg_server_port(s));
+  ck_assert_int_ge(fd, 0);
+  send_prelude(fd, 2);
+
+  n = fake_build_data_provision(msg, sizeof msg, 3, bad, sizeof bad);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+  n = fake_build_data_provision(msg, sizeof msg, 3, dg, sizeof dg);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+
+  while (emmg_server_dequeue_emm(s, got, sizeof got, &got_len) != 0 && waited < 3000) {
+    struct timespec ts = {0, 20L * 1000000L};
+    nanosleep(&ts, NULL);
+    waited += 20;
+  }
+  ck_assert_uint_eq(got_len, sizeof dg);
+  ck_assert_mem_eq(got, dg, sizeof dg);
+  ck_assert_int_ne(emmg_server_dequeue_emm(s, got, sizeof got, &got_len), 0);
+  ck_assert_uint_eq(emmg_server_emm_dropped_total(s), 1u);
+
+  close(fd);
+  emmg_server_stop(s);
+}
+END_TEST
+
+START_TEST(emmg_server_dequeue_honors_granted_bandwidth) {
+  emmg_server_cfg_t cfg = {0};
+  emmg_server_t *s;
+  unsigned char msg[2048];
+  unsigned char payload[512];
+  unsigned char dg[1000] = {0x33, 0x73, 0xE5};
+  unsigned char got[2048];
+  simulcrypt_hdr_t hdr;
+  size_t got_len = 0;
+  size_t n;
+  int fd;
+  int waited = 0;
+  int drained = 0;
+
+  cfg.port = 0;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+  fd = fake_connect(emmg_server_port(s));
+  ck_assert_int_ge(fd, 0);
+  send_prelude(fd, 2);
+
+  n = fake_build_stream_bw_request(msg, sizeof msg, 3, 1);
+  ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+  ck_assert_int_eq(fake_read_reply(fd, &hdr, payload, sizeof payload), 0);
+  ck_assert_uint_eq(hdr.type, EMMG_MSG_STREAM_BW_ALLOCATION);
+
+  for (int i = 0; i < 8; i++) {
+    n = fake_build_data_provision(msg, sizeof msg, 3, dg, sizeof dg);
+    ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+  }
+  while (emmg_server_emm_total(s) < 8 && waited < 3000) {
+    struct timespec ts = {0, 20L * 1000000L};
+    nanosleep(&ts, NULL);
+    waited += 20;
+  }
+  ck_assert_uint_eq(emmg_server_emm_total(s), 8u);
+
+  while (emmg_server_dequeue_emm(s, got, sizeof got, &got_len) == 0) drained++;
+  ck_assert_int_ge(drained, 4);
+  ck_assert_int_lt(drained, 8);
+
+  close(fd);
+  emmg_server_stop(s);
+}
+END_TEST
+
 START_TEST(emmg_server_drops_oversized_datagram_and_keeps_session) {
-  static const unsigned char dg[] = {0x11, 0x22, 0x33};
+  static const unsigned char dg[] = {0x11, 0x70, 0x00};
   static const unsigned char big[EMMG_MAX_DATAGRAM_LEN + 1];
   emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
@@ -1036,6 +1121,8 @@ static Suite *emmg_server_suite(void) {
     tcase_add_test(tc_integ, emmg_server_stop_reaps_all_max_conns_in_mixed_states);
     tcase_add_loop_test(tc_integ, emmg_server_handles_malformed_messages, 0, (int)(sizeof malformed_cases / sizeof malformed_cases[0]));
     tcase_add_test(tc_integ, emmg_server_drops_oversized_datagram_and_keeps_session);
+    tcase_add_test(tc_integ, emmg_server_drops_datagram_that_is_not_a_section);
+    tcase_add_test(tc_integ, emmg_server_dequeue_honors_granted_bandwidth);
     suite_add_tcase(s, tc_integ);
   }
 

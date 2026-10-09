@@ -10,9 +10,17 @@
 
 #define HLS_MAX_SEGMENTS 64
 #define HLS_MAX_VARIANTS 32
+#define HLS_MAX_KEYS 4
 
 typedef struct {
   char url[2048];
+  unsigned char iv[16];
+  int has_iv;
+} hls_key_t;
+
+typedef struct {
+  char url[2048];
+  unsigned key; /* 0 clear, else 1-based index into keys */
 } hls_segment_t;
 
 typedef struct {
@@ -23,8 +31,11 @@ typedef struct {
   int endlist;
   int low_latency;
   char map_uri[2048];
+  hls_key_t keys[HLS_MAX_KEYS];
+  unsigned n_keys;
 } hls_playlist_t;
 
+/* 0 on bogus, or unsupported encryption: SAMPLE-AES, key on init segment, ... */
 int hls_playlist_parse(char *body, const http_url_t *base, hls_playlist_t *out);
 
 typedef struct {

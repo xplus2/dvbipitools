@@ -3,6 +3,7 @@
 
 #include "hls_int.h"
 
+#include <limits.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -124,7 +125,7 @@ int parse_part_filename(const char *fn, uint32_t *seq, int *part) {
   p = end + 1;
   if (*p < '0' || *p > '9') return 0;
   v = strtoul(p, &end, 10);
-  if (strcmp(end, ".ts") != 0) return 0;
+  if (strcmp(end, ".ts") != 0 || v > INT_MAX) return 0;
   *part = (int)v;
   return 1;
 }

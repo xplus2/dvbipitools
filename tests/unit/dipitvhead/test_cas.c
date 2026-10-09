@@ -527,6 +527,65 @@ START_TEST(flush_and_stop_are_safe_in_every_order) {
 }
 END_TEST
 
+START_TEST(add_pids_extends_the_scrambled_set_at_runtime) {
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+  unsigned extra[2] = {0x0200, 0x0100};
+  unsigned char pkt[188];
+  emit_count_t emitted = {0};
+  cas_metrics_t before;
+  cas_metrics_t mid;
+  cas_metrics_t after;
+  cas_t *c;
+
+  init_cas_cfg(&cfg, 1);
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  lists[0] = &es;
+  c = cas_start_multi(&cfg, lists, counts, 1);
+  ck_assert_ptr_nonnull(c);
+
+  memset(pkt, 0xFF, sizeof pkt);
+  pkt[0] = 0x47;
+  pkt[1] = 0x02;
+  pkt[2] = 0x00;
+  pkt[3] = 0x10;
+  cas_get_metrics(c, &before);
+  cas_scramble_packet(c, 0x0200, 1.0, pkt, count_emit, &emitted);
+  cas_get_metrics(c, &mid);
+  ck_assert_uint_eq(mid.unexpected_clear_packets_total, before.unexpected_clear_packets_total);
+
+  ck_assert_uint_eq(cas_add_pids(c, extra, 2), 0u);
+  cas_scramble_packet(c, 0x0200, 2.0, pkt, count_emit, &emitted);
+  cas_get_metrics(c, &after);
+  ck_assert_uint_gt(after.unexpected_clear_packets_total, mid.unexpected_clear_packets_total);
+  cas_flush(c, count_emit, &emitted);
+  cas_stop(c);
+}
+END_TEST
+
+START_TEST(add_pids_reports_pids_that_do_not_fit) {
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+  unsigned pids[CAS_CORE_MAX_PIDS + 2];
+  cas_t *c;
+
+  init_cas_cfg(&cfg, 1);
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  lists[0] = &es;
+  c = cas_start_multi(&cfg, lists, counts, 1);
+  ck_assert_ptr_nonnull(c);
+  for (unsigned i = 0; i < CAS_CORE_MAX_PIDS + 2; i++) pids[i] = 0x0300 + i;
+  ck_assert_uint_eq(cas_add_pids(c, pids, CAS_CORE_MAX_PIDS + 2), 3u);
+  cas_stop(c);
+}
+END_TEST
+
 START_TEST(metrics_are_zero_for_missing_or_unstarted_instances) {
   config_t cfg;
   psi_es_t pe;
@@ -657,6 +716,8 @@ static Suite *cas_suite(void) {
   tcase_add_test(tc, start_single_requires_a_pcr_and_resolvable_pids);
   tcase_add_test(tc, cas_reports_failure_when_the_emmg_port_is_taken);
   tcase_add_test(tc, flush_and_stop_are_safe_in_every_order);
+  tcase_add_test(tc, add_pids_extends_the_scrambled_set_at_runtime);
+  tcase_add_test(tc, add_pids_reports_pids_that_do_not_fit);
   tcase_add_test(tc, metrics_are_zero_for_missing_or_unstarted_instances);
   tcase_add_test(tc, vendor_accessors_and_descriptors_describe_each_vendor);
   tcase_add_test(tc, reload_receivers_is_a_noop_outside_biss_ca_mode);

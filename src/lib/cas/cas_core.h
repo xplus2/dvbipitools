@@ -37,6 +37,7 @@ void cas_core_format_super_cas_id(unsigned id, char *out);
 void cas_core_stop(cas_core_t *core);
 int cas_core_failed(const cas_core_t *core);
 void cas_core_scramble_packet(cas_core_t *core, unsigned out_pid, double now, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx);
+int cas_core_add_pid(cas_core_t *core, unsigned pid);
 void cas_core_flush(cas_core_t *core, scrambler_emit_cb emit, void *ctx);
 void cas_core_get_metrics(cas_core_t *core, cas_metrics_t *out);
 void cas_core_vendor_metrics(cas_core_t *core, size_t idx, cas_metrics_t *out);

@@ -13,9 +13,9 @@
 typedef enum { ECMG_OUTAGE_FROZEN, ECMG_OUTAGE_CYCLING, ECMG_OUTAGE_SILENT } ecmg_outage_mode_t;
 
 /* multi-CAS CW source (cas_group.h). get_cw NULL (zero-init): self-generate, unchanged.
-   on_connected: per (re)connect, for cp_number epoch re-anchoring. */
+   on_connected: per (re)connect, returns CP_number counter start. */
 typedef int (*ecmg_cw_source_fn)(void *ctx, unsigned short cp_number, unsigned char *cw_out, size_t cw_len);
-typedef void (*ecmg_cw_source_connected_fn)(void *ctx);
+typedef unsigned short (*ecmg_cw_source_connected_fn)(void *ctx);
 
 typedef struct {
   ecmg_cw_source_fn get_cw;
@@ -77,10 +77,12 @@ int ecmg_ecm_available_calc(ecmg_outage_mode_t outage_mode, int connected);
 
 /* TS 103 197 clause 5 message/parameter values */
 #define ECMG_MSG_CHANNEL_SETUP 0x0001
+#define ECMG_MSG_CHANNEL_TEST 0x0002
 #define ECMG_MSG_CHANNEL_STATUS 0x0003
 #define ECMG_MSG_CHANNEL_CLOSE 0x0004
 #define ECMG_MSG_CHANNEL_ERROR 0x0005
 #define ECMG_MSG_STREAM_SETUP 0x0101
+#define ECMG_MSG_STREAM_TEST 0x0102
 #define ECMG_MSG_STREAM_STATUS 0x0103
 #define ECMG_MSG_STREAM_ERROR 0x0106
 #define ECMG_MSG_CW_PROVISION 0x0201
@@ -95,6 +97,7 @@ int ecmg_ecm_available_calc(ecmg_outage_mode_t outage_mode, int connected);
 #define ECMG_P_ECM_CHANNEL_ID 0x000E
 #define ECMG_P_ECM_STREAM_ID 0x000F
 #define ECMG_P_NOMINAL_CP_DURATION 0x0010
+#define ECMG_P_ACCESS_CRITERIA_TRANSFER_MODE 0x0011
 #define ECMG_P_CP_NUMBER 0x0012
 #define ECMG_P_CP_CW_COMBINATION 0x0014
 #define ECMG_P_ECM_DATAGRAM 0x0015
@@ -119,6 +122,9 @@ typedef struct {
 
 size_t ecmg_build_channel_setup(unsigned char *out, size_t cap, unsigned char version, unsigned super_cas_id);
 size_t ecmg_build_stream_setup(unsigned char *out, size_t cap, unsigned char version, unsigned ecm_id, unsigned nominal_cp_100ms);
+size_t ecmg_build_channel_test(unsigned char *out, size_t cap, unsigned char version);
+size_t ecmg_build_channel_status(unsigned char *out, size_t cap, unsigned char version, unsigned lead_cw, unsigned cw_per_msg, unsigned max_comp_time_ms, unsigned ecm_rep_period_ms);
+size_t ecmg_build_stream_status(unsigned char *out, size_t cap, unsigned char version, unsigned ecm_id);
 size_t ecmg_build_cw_provision(unsigned char *out, size_t cap, unsigned char version, unsigned short cp_number, cw_hist_entry_t *hist, size_t cw_len, unsigned lead_cw, unsigned cw_per_msg, cwenc_ctx_t *cwenc_ctx);
 
 int ecmg_find_error_status(const unsigned char *body, size_t body_len, unsigned short *out);

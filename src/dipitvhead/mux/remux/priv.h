@@ -60,21 +60,32 @@ struct remux {
   unsigned char ait_section[300];
   size_t ait_section_len;
 
+  psi_versions_t *pv;
+  psi_t *watch;                 /* owned, tracks source PMT after discovery. NULL: no live tracking */
+  unsigned watch_pmt_pid;
+  unsigned long watch_parsed;
+  unsigned char src_pmt[1024];  /* source of PMT es[] */
+  size_t src_pmt_len;
+  unsigned emm_pid_in;          /* from discovery CAT, no re-read */
+  unsigned emm_sysid_in;
+  int reconnect_wanted;
+
   unsigned char last_pmt[4096];
   size_t last_pmt_len;
   int have_last_pmt;
   log_throttle_t pmt_desc_truncated_throttle;
+  log_throttle_t cas_desc_throttle;
 
   unsigned char cc_pat;
   unsigned char cc_pmt;
   unsigned char cc_sdt;
   unsigned char cc_nit;
-  unsigned char cc_eit;
   unsigned char cc_ait;
   unsigned char cc_cat;
+  unsigned char cc_eit;
   unsigned char cc_ecm[ARGS_MAX_CAS_VENDORS];
   unsigned char cc_emm[ARGS_MAX_CAS_VENDORS];
-  unsigned char cc_es[OUT_PROGRAM_ES_CAP];
+  unsigned char disc_es[OUT_PROGRAM_ES_CAP]; /* 1: flag next AF packet, set at remux_new */
   int last_es_idx; /* MRU 1-entry cache: consecutive packets usually share a pid */
 
   double last_pat;
@@ -90,7 +101,7 @@ struct remux {
   uint64_t last_pcr27;
   double last_pcr_wall;
 
-  /* non-standalone: source EIT reassembled into drainable queue (remux_emit_eit()). eit_drain_off: offset into eit_queue[0] mid-emit */
+  /* source EIT reassembled into drainable queue (remux_emit_eit()). eit_drain_off: offset into eit_queue[0] mid-emit */
   psi_section_asm_t eit_asm;
   eit_section_t eit_queue[EIT_QUEUE_CAP];
   int eit_queue_count;
@@ -100,8 +111,11 @@ struct remux {
 /* NULL if this program carries no entry of that kind */
 const out_es_t *find_ca_passthrough(const remux_t *r, ca_pass_t is_ca);
 
-/* non-standalone: reassemble source EIT, filter to own service_id, enqueue */
+/* reassemble source EIT, filter to own service_id, enqueue */
 void capture_eit_section(remux_t *r, const unsigned char *pkt188, ts_metrics_t *tsm);
+
+/* source PAT/PMT packets to watch psi, remaps es[] at src PMT change */
+void watch_source_pmt(remux_t *r, double now, const unsigned char *pkt188, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm);
 
 void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm);
 

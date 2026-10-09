@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/helper/log.h"
 #include "lib/sys/ioutil.h"
 #include "lib/mux/psi_build.h"
 
@@ -38,6 +39,7 @@ struct tspacketizer {
   unsigned char cc_cat;
   unsigned char cc_ecm[ARGS_MAX_CAS_VENDORS];
   unsigned char cc_emm[ARGS_MAX_CAS_VENDORS];
+  log_throttle_t cas_desc_throttle;
   unsigned ver_pat;
   unsigned ver_pmt;
   unsigned ver_sdt;
@@ -114,17 +116,20 @@ static size_t emit_cas_ecm_emm(tspacketizer_t *t, size_t vi, double now, unsigne
 size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, double now, const unsigned char *frame, size_t frame_len, ts_packet_cb cb, void *ctx) {
   unsigned char sec[4096];
   unsigned char pesbuf[8192];
-  unsigned char prog_desc[32] = {0};
+  unsigned char prog_desc[64] = {0};
   unsigned char ptr0 = 0x00;
   size_t n, count = 0, prog_desc_len = 0;
 
   if (due(pts_90k, &t->last_pat, INTERVAL_PAT_PMT)) {
-    if (t->cas) prog_desc_len = cas_prog_desc(t->cas, prog_desc, sizeof prog_desc);
+    if (t->cas) {
+      prog_desc_len = cas_prog_desc(t->cas, prog_desc, sizeof prog_desc);
+      if (!prog_desc_len) log_throttled(&t->cas_desc_throttle, LOG_THROTTLE_WINDOW_S, "PMT: CA descriptor build failed, PMT not sent");
+    }
     if (t->cfg.standalone) {
       n = psi_build_pat(t->cfg.tsid, t->ver_pat, t->cfg.sid, t->pmt_pid, sec, sizeof sec);
       if (n) count += ts_packet_emit(PID_PAT, &t->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
-    n = psi_build_pmt(t->ver_pmt, t->cfg.sid, t->pmt_pid, t->cfg.stream_type, t->audio_pid, t->cfg.aac_profile_level, prog_desc, prog_desc_len, sec, sizeof sec);
+    n = (t->cas && !prog_desc_len) ? 0 : psi_build_pmt(t->ver_pmt, t->cfg.sid, t->pmt_pid, t->cfg.stream_type, t->audio_pid, t->cfg.aac_profile_level, prog_desc, prog_desc_len, sec, sizeof sec);
     if (n) count += ts_packet_emit(t->pmt_pid, &t->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
   }
   if (t->cfg.standalone) {

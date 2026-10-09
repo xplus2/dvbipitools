@@ -59,7 +59,7 @@ TSPID=$!
 TVPID=$!
 
 tsp -I ip $RAW:$RAW_PORT --local-address 127.0.0.1 --receive-timeout 4000 \
-    -P pcredit --add-pcr 100000000 --random \
+    -P pcredit --add-pcr 100000000 --random -P continuity --fix \
     -O ip $BAD:$BAD_PORT --local-address 127.0.0.1 --ttl 1 >"$WORK/tsp_relay.log" 2>&1 &
 RELAYPID=$!
 

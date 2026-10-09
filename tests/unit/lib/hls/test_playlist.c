@@ -217,6 +217,82 @@ START_TEST(hls_master_parse_no_audio_attr_means_self_contained) {
 }
 END_TEST
 
+START_TEST(hls_playlist_parse_key_aes128_tags_segments) {
+  char body[] =
+    "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4.0,\nclear.ts\n"
+    "#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\",IV=0x000102030405060708090A0B0C0D0E0F\n"
+    "#EXTINF:4.0,\nenc1.ts\n#EXTINF:4.0,\nenc2.ts\n#EXT-X-KEY:METHOD=NONE\n#EXTINF:4.0,\nclear2.ts\n";
+  http_url_t base = make_base("example.com", 80, "/live/index.m3u8");
+  hls_playlist_t pl;
+
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 1);
+  ck_assert_uint_eq(pl.n_segments, 4);
+  ck_assert_uint_eq(pl.n_keys, 1);
+  ck_assert_str_eq(pl.keys[0].url, "http://example.com/live/key.bin");
+  ck_assert_int_eq(pl.keys[0].has_iv, 1);
+  ck_assert_uint_eq(pl.keys[0].iv[0], 0x00);
+  ck_assert_uint_eq(pl.keys[0].iv[15], 0x0f);
+  ck_assert_uint_eq(pl.segments[0].key, 0);
+  ck_assert_uint_eq(pl.segments[1].key, 1);
+  ck_assert_uint_eq(pl.segments[2].key, 1);
+  ck_assert_uint_eq(pl.segments[3].key, 0);
+}
+END_TEST
+
+START_TEST(hls_playlist_parse_key_without_iv) {
+  char body[] = "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\"\n#EXTINF:4.0,\ns.ts\n";
+  http_url_t base = make_base("example.com", 80, "/index.m3u8");
+  hls_playlist_t pl;
+
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 1);
+  ck_assert_int_eq(pl.keys[0].has_iv, 0);
+}
+END_TEST
+
+START_TEST(hls_playlist_parse_rejects_sample_aes) {
+  char body[] = "#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"k\"\n#EXTINF:4.0,\ns.ts\n";
+  http_url_t base = make_base("example.com", 80, "/index.m3u8");
+  hls_playlist_t pl;
+
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 0);
+}
+END_TEST
+
+START_TEST(hls_playlist_parse_rejects_foreign_keyformat) {
+  char body[] = "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\",KEYFORMAT=\"com.example.drm\"\n#EXTINF:4.0,\ns.ts\n";
+  http_url_t base = make_base("example.com", 80, "/index.m3u8");
+  hls_playlist_t pl;
+
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 0);
+}
+END_TEST
+
+START_TEST(hls_playlist_parse_rejects_encrypted_map) {
+  char body[] = "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\"\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:4.0,\ns.m4s\n";
+  http_url_t base = make_base("example.com", 80, "/index.m3u8");
+  hls_playlist_t pl;
+
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 0);
+}
+END_TEST
+
+START_TEST(hls_playlist_parse_protocol_relative_segment) {
+  static const char src[] = "#EXTM3U\n#EXTINF:4.0,\n//cdn.example.com/a/seg1.ts\n";
+  char body[sizeof src];
+  http_url_t base = make_base("example.com", 80, "/live/index.m3u8");
+  hls_playlist_t pl;
+
+  memcpy(body, src, sizeof src);
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 1);
+  ck_assert_str_eq(pl.segments[0].url, "http://cdn.example.com/a/seg1.ts");
+  memcpy(body, src, sizeof src);
+  base.tls = 1;
+  base.port = 443;
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 1);
+  ck_assert_str_eq(pl.segments[0].url, "https://cdn.example.com/a/seg1.ts");
+}
+END_TEST
+
 static Suite *hls_playlist_suite(void) {
   Suite *s = suite_create("hls_playlist");
   TCase *tc = tcase_create("core");
@@ -237,6 +313,12 @@ static Suite *hls_playlist_suite(void) {
   tcase_add_test(tc, hls_master_pick_highest_empty_returns_negative);
   tcase_add_test(tc, hls_master_parse_links_variant_to_audio_group);
   tcase_add_test(tc, hls_master_parse_no_audio_attr_means_self_contained);
+  tcase_add_test(tc, hls_playlist_parse_key_aes128_tags_segments);
+  tcase_add_test(tc, hls_playlist_parse_key_without_iv);
+  tcase_add_test(tc, hls_playlist_parse_rejects_sample_aes);
+  tcase_add_test(tc, hls_playlist_parse_rejects_foreign_keyformat);
+  tcase_add_test(tc, hls_playlist_parse_rejects_encrypted_map);
+  tcase_add_test(tc, hls_playlist_parse_protocol_relative_segment);
   suite_add_tcase(s, tc);
   return s;
 }

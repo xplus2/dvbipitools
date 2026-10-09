@@ -57,6 +57,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   out_ctx_t out;
   input_metrics_t im;
   ts_metrics_t tsm;
+  psi_versions_t psiv;
   timemap_t tm;
   int metrics_on = metrics_exporter_enabled(mx);
   input_metrics_t *im_p = metrics_on ? &im : NULL;
@@ -68,6 +69,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   memset(&out, 0, sizeof out);
   memset(&im, 0, sizeof im);
   memset(&tsm, 0, sizeof tsm);
+  memset(&psiv, 0, sizeof psiv);
   timemap_init(&tm);
   if (tvhead_output_open(cfg, &out)) {
     tvhead_output_close(&out);
@@ -78,6 +80,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     tsinspect_free(insp_in);
     insp_in = NULL;
   }
+  if (insp_in) tsinspect_set_label(insp_in, "input");
   if (insp_in) tsinspect_set_known_pids(insp_in, cfg->metrics_known_pids, cfg->metrics_n_known_pids);
   tsm.ts_checks_off = insp_in != NULL;
   if (insp_in || out.insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
@@ -114,6 +117,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
       rc = 1;
       break;
     }
+    psi_set_label(psi, "input discovery");
 
     r = discover_insp(src, &cfg->inputs[0], psi, im_p, insp_in);
     if (r == 1) {
@@ -121,8 +125,12 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
       remux_t *rx;
       out_program_pids(0, &pids);
       rx = remux_new(cfg, &cfg->inputs[0], psi, &pids, 1);
-      if (!rx) log_line("remux setup failed");
-      else run_single_input(cfg, src, psi, &out, rx, &tm, mx, im_p, tsm_p, insp_in);
+      if (!rx) {
+        log_line("remux setup failed");
+      } else {
+        remux_set_psi_versions(rx, &psiv);
+        run_single_input(cfg, src, psi, &out, rx, &tm, mx, im_p, tsm_p, insp_in);
+      }
     } else if (r == 0) {
       log_line("no live PMT found within %.0fs (use -p to select one, or check the source)", DISCOVERY_TIMEOUT_S);
     }
