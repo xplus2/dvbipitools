@@ -18,7 +18,8 @@ static unsigned char rotl8(unsigned char v, int s) { return (unsigned char)((v <
 
 /* GF(2^8) walk over generator 3, avoids typing tables */
 static void tables_build(aes_tables_t *t) {
-  unsigned char p = 1, q = 1;
+  unsigned char p = 1;
+  unsigned char q = 1;
   do {
     p = (unsigned char)(p ^ xtime(p));
     q ^= (unsigned char)(q << 1);
@@ -63,7 +64,10 @@ static void inv_shift_sub(const aes_tables_t *t, unsigned char *s) {
 static void inv_mix_columns(unsigned char *s) {
   for (int c = 0; c < 4; c++) {
     unsigned char *col = s + c * 4;
-    unsigned char m2[4], m4[4], m8[4], a[4];
+    unsigned char m2[4];
+    unsigned char m4[4];
+    unsigned char m8[4];
+    unsigned char a[4];
     for (int i = 0; i < 4; i++) {
       a[i] = col[i];
       m2[i] = xtime(a[i]);
@@ -71,7 +75,9 @@ static void inv_mix_columns(unsigned char *s) {
       m8[i] = xtime(m4[i]);
     }
     for (int i = 0; i < 4; i++) {
-      int i1 = (i + 1) % 4, i2 = (i + 2) % 4, i3 = (i + 3) % 4;
+      int i1 = (i + 1) % 4;
+      int i2 = (i + 2) % 4;
+      int i3 = (i + 3) % 4;
       unsigned char x14 = (unsigned char)(m8[i] ^ m4[i] ^ m2[i]);
       unsigned char x11 = (unsigned char)(m8[i1] ^ m2[i1] ^ a[i1]);
       unsigned char x13 = (unsigned char)(m8[i2] ^ m4[i2] ^ a[i2]);
@@ -95,7 +101,8 @@ static void block_decrypt(const aes_tables_t *t, const unsigned char *rk, unsign
 int aes128cbc_decrypt(const unsigned char key[16], const unsigned char iv[16], unsigned char *data, size_t len) {
   aes_tables_t t;
   unsigned char rk[(AES_ROUNDS + 1) * 16];
-  unsigned char prev[16], cur[16];
+  unsigned char prev[16];
+  unsigned char cur[16];
 
   if (!key || !iv || !data || len == 0 || len % 16) return -1;
   tables_build(&t);

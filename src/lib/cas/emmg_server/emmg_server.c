@@ -70,9 +70,11 @@ int emmg_server_dequeue_emm(emmg_server_t *s, unsigned char *out, size_t cap, si
 
   for (unsigned i = 0; i < EMMG_MAX_CONNS_CEILING; i++) kbps += atomic_load_explicit(&s->granted_kbps[i], memory_order_relaxed);
 
+  if (!kbps) kbps = EMMG_DEFAULT_KBPS;
+
   pthread_mutex_lock(&s->queue_lock);
   have = atomic_load_explicit(&s->queue_len, memory_order_relaxed) > 0;
-  if (have && kbps) {
+  if (have) {
     refill_tokens(s, (double)kbps * EMMG_BYTES_PER_KBPS_S);
     if (s->tokens <= 0.0) have = 0;
   } else {
@@ -84,7 +86,7 @@ int emmg_server_dequeue_emm(emmg_server_t *s, unsigned char *out, size_t cap, si
       pthread_mutex_unlock(&s->queue_lock);
       return -1;
     }
-    if (kbps) s->tokens -= (double)len;
+    s->tokens -= (double)len;
     memcpy(out, s->queue[s->queue_head].data, len);
     *len_out = len;
     s->queue_head = (s->queue_head + 1) % EMMG_QUEUE_CAP;

@@ -110,7 +110,7 @@ static int group_cw_for_epoch(cas_group_t *g, unsigned long epoch, unsigned char
 static int vendor_cw_get(void *ctx, unsigned short cp_number, unsigned char *cw_out, size_t cw_len) {
   vendor_cw_ctx_t *cc = ctx;
   cas_group_t *g = cc->g;
-  cas_group_vendor_t *v = &g->vendors[cc->idx];
+  const cas_group_vendor_t *v = &g->vendors[cc->idx];
   short delta = (short)(unsigned short)(cp_number - (unsigned short)v->epoch_base);
   return group_cw_for_epoch(g, v->epoch_base + (unsigned long)(long)delta, cw_out, cw_len);
 }
@@ -253,6 +253,17 @@ void cas_group_clock_tick(cas_group_t *g, unsigned long delta_ms) {
   atomic_fetch_add_explicit(&g->cp_clock_ms, delta_ms, memory_order_relaxed);
 }
 
+/* every live vendor delivered an ECM (wire CP_number = epoch mod 65536) */
+static int group_ecm_ready(cas_group_t *g, unsigned long epoch) {
+  for (size_t i = 0; i < g->cfg.vendor_count; i++) {
+    unsigned short cp;
+    if (!vendor_alive(&g->vendors[i])) continue;
+    if (!ecmg_client_last_ecm_cp(g->vendors[i].ecmg, &cp)) return 0;
+    if ((short)(unsigned short)(cp - (unsigned short)epoch) < 0) return 0;
+  }
+  return 1;
+}
+
 /* stops minting CWs once nobody delivers ECMs: engine freezes last published CW
    instead of rolling forward into keys no recv can ever get */
 static void refresh_group_cw(cas_group_t *g, int any_alive, scrambler_emit_cb emit, void *ctx) {
@@ -262,6 +273,7 @@ static void refresh_group_cw(cas_group_t *g, int any_alive, scrambler_emit_cb em
   if (!any_alive) return;
   epoch = group_current_epoch(g);
   if (epoch == g->cw_epoch_published) return;
+  if (!group_ecm_ready(g, epoch)) return;
   cw_len = scrambler_cw_len(g->cfg.algo);
   if (group_cw_for_epoch(g, epoch, cw, cw_len) < 0) return;
   g->cw_epoch_published = epoch;

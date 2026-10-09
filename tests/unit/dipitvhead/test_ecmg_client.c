@@ -711,7 +711,8 @@ START_TEST(ecmg_client_completes_real_handshake_and_gets_ecm) {
   memset(&cfg, 0, sizeof cfg);
   cfg.host = "127.0.0.1";
   cfg.port = fe.port;
-  cfg.version_min = cfg.version_max = 3;
+  cfg.version_min = 3;
+  cfg.version_max = 3;
   cfg.super_cas_id = 0x4A750001;
   cfg.ecm_id = 1;
   cfg.cp_duration_ms = 1000;
@@ -721,10 +722,14 @@ START_TEST(ecmg_client_completes_real_handshake_and_gets_ecm) {
   c = ecmg_client_start(&cfg, &counter, 5, 1);
   ck_assert_ptr_nonnull(c);
   ck_assert_int_eq(wait_for_connected_state(c, 1, 10000), 1);
-  atomic_fetch_add_explicit(&counter, 5, memory_order_relaxed);
   ck_assert_int_eq(wait_for_epoch_above(c, 0, 10000), 1);
   ck_assert_int_eq(ecmg_client_get_ecm(c, ecm, sizeof ecm, &ecm_len), 0);
   ck_assert_uint_eq(ecm_len, 8u);
+  ck_assert_uint_eq(((unsigned)ecm[3] << 8) | ecm[4], 0u); /* CP in force, sent right after handshake */
+
+  atomic_fetch_add_explicit(&counter, 5, memory_order_relaxed);
+  ck_assert_int_eq(wait_for_epoch_above(c, 1, 10000), 1);
+  ck_assert_int_eq(ecmg_client_get_ecm(c, ecm, sizeof ecm, &ecm_len), 0);
   ck_assert_uint_eq(((unsigned)ecm[3] << 8) | ecm[4], 1u);
 
   ecmg_client_stop(c);
@@ -772,7 +777,6 @@ START_TEST(ecmg_client_reconnects_after_dropped_connection) {
   ecmg_client_cfg_t cfg;
   ecmg_client_t *c;
   atomic_ulong counter;
-  unsigned long first_epoch;
   unsigned char ecm[SIMULCRYPT_MAX_PAYLOAD];
   size_t ecm_len;
 
@@ -783,7 +787,8 @@ START_TEST(ecmg_client_reconnects_after_dropped_connection) {
   memset(&cfg, 0, sizeof cfg);
   cfg.host = "127.0.0.1";
   cfg.port = fe.port;
-  cfg.version_min = cfg.version_max = 3;
+  cfg.version_min = 3;
+  cfg.version_max = 3;
   cfg.super_cas_id = 0x4A750001;
   cfg.ecm_id = 1;
   cfg.cp_duration_ms = 1000;
@@ -793,17 +798,14 @@ START_TEST(ecmg_client_reconnects_after_dropped_connection) {
   c = ecmg_client_start(&cfg, &counter, 5, 1);
   ck_assert_ptr_nonnull(c);
   ck_assert_int_eq(wait_for_connected_state(c, 1, 10000), 1);
-  atomic_fetch_add_explicit(&counter, 5, memory_order_relaxed);
   ck_assert_int_eq(wait_for_epoch_above(c, 0, 10000), 1);
-  first_epoch = ecmg_client_ecm_epoch(c);
 
   ck_assert_int_eq(wait_for_connections_seen(&fe, 2, 10000), 1);
   ck_assert_int_eq(wait_for_connected_state(c, 1, 10000), 1);
-  atomic_fetch_add_explicit(&counter, 5, memory_order_relaxed);
-  ck_assert_int_eq(wait_for_epoch_above(c, first_epoch, 10000), 1);
+  ck_assert_int_eq(wait_for_epoch_above(c, 1, 10000), 1);
 
   ck_assert_int_eq(ecmg_client_get_ecm(c, ecm, sizeof ecm, &ecm_len), 0);
-  ck_assert_uint_eq(((unsigned)ecm[3] << 8) | ecm[4], 1u); /* fresh cp_number sequence again */
+  ck_assert_uint_eq(((unsigned)ecm[3] << 8) | ecm[4], 0u); /* fresh cp_number sequence again */
 
   ecmg_client_stop(c);
   fake_ecmg_stop(&fe);
@@ -825,7 +827,8 @@ START_TEST(ecmg_client_cycling_alternates_last_two_ecms) {
   memset(&cfg, 0, sizeof cfg);
   cfg.host = "127.0.0.1";
   cfg.port = fe.port;
-  cfg.version_min = cfg.version_max = 3;
+  cfg.version_min = 3;
+  cfg.version_max = 3;
   cfg.super_cas_id = 0x4A750001;
   cfg.ecm_id = 1;
   cfg.cp_duration_ms = 1000;
@@ -889,7 +892,8 @@ START_TEST(cw_source_start_sets_wire_cp_number) {
   memset(&cfg, 0, sizeof cfg);
   cfg.host = "127.0.0.1";
   cfg.port = fe.port;
-  cfg.version_min = cfg.version_max = 3;
+  cfg.version_min = 3;
+  cfg.version_max = 3;
   cfg.super_cas_id = 0x4A750001;
   cfg.ecm_id = 1;
   cfg.cp_duration_ms = 1000;
@@ -901,11 +905,10 @@ START_TEST(cw_source_start_sets_wire_cp_number) {
   c = ecmg_client_start(&cfg, &counter, 5, 1);
   ck_assert_ptr_nonnull(c);
   ck_assert_int_eq(wait_for_connected_state(c, 1, 10000), 1);
-  atomic_fetch_add_explicit(&counter, 5, memory_order_relaxed);
   ck_assert_int_eq(wait_for_epoch_above(c, 0, 10000), 1);
   ck_assert_int_eq(ecmg_client_get_ecm(c, ecm, sizeof ecm, &ecm_len), 0);
-  ck_assert_uint_eq(((unsigned)ecm[3] << 8) | ecm[4], 0x1236u);
-  ck_assert_uint_eq(atomic_load(&parity_test_last_cp), 0x1236u);
+  ck_assert_uint_eq(((unsigned)ecm[3] << 8) | ecm[4], 0x1235u);
+  ck_assert_uint_eq(atomic_load(&parity_test_last_cp), 0x1235u);
 
   ecmg_client_stop(c);
   fake_ecmg_stop(&fe);
@@ -926,7 +929,8 @@ START_TEST(ecmg_client_answers_tests_while_awaiting_ecm) {
   memset(&cfg, 0, sizeof cfg);
   cfg.host = "127.0.0.1";
   cfg.port = fe.port;
-  cfg.version_min = cfg.version_max = 3;
+  cfg.version_min = 3;
+  cfg.version_max = 3;
   cfg.super_cas_id = 0x4A750001;
   cfg.ecm_id = 1;
   cfg.cp_duration_ms = 1000;
@@ -964,7 +968,11 @@ START_TEST(channel_test_and_status_builders) {
   ck_assert_int_eq(simulcrypt_hdr_parse(buf, n, &hdr), 0);
   ck_assert_uint_eq(hdr.type, ECMG_MSG_CHANNEL_STATUS);
   {
-    unsigned lead, per, comp, minc, rep;
+    unsigned lead;
+    unsigned per;
+    unsigned comp;
+    unsigned minc;
+    unsigned rep;
     ck_assert_int_eq(ecmg_parse_channel_status(buf + SIMULCRYPT_HDR_LEN, hdr.payload_len, &lead, &per, &comp, &minc, &rep), 0);
     ck_assert_uint_eq(lead, 1);
     ck_assert_uint_eq(per, 2);

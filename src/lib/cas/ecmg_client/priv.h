@@ -36,6 +36,8 @@ struct ecmg_client {
   unsigned char ecm_slot[2][SIMULCRYPT_MAX_PAYLOAD]; /* indexed by parity, ETR 289 */
   size_t ecm_slot_len[2];
   atomic_ulong ecm_epoch; /* monotonic, never reset: freshness signal only, not a parity source */
+  atomic_uint ecm_cp_valid; /* 1 once an ECM arrived on this connection */
+  atomic_uint ecm_cp; /* CP_number of latest ECM */
   atomic_int last_parity; /* latest publish's parity, direct snapshot, reconnect-safe */
 
   atomic_uint ecm_rep_period_ms;

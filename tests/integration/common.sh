@@ -49,10 +49,21 @@ port_open() {
     nc -z 127.0.0.1 "$1" >/dev/null 2>&1
 }
 
+PORT_CLAIM_DIR=${TMPDIR:-/tmp}/dvbipitools-ports-$(id -u)
+
+port_claim() {
+    mkdir -p "$PORT_CLAIM_DIR"
+    ln -s "$$" "$PORT_CLAIM_DIR/$1" 2>/dev/null && return 0
+    pc_owner=$(readlink "$PORT_CLAIM_DIR/$1" 2>/dev/null)
+    [ -n "$pc_owner" ] && kill -0 "$pc_owner" 2>/dev/null && return 1
+    rm -f "$PORT_CLAIM_DIR/$1"
+    ln -s "$$" "$PORT_CLAIM_DIR/$1" 2>/dev/null
+}
+
 # free_tcp_port: first port from a pid-derived start that nothing listens on
 free_tcp_port() {
     ftp_port=$((20000 + ($$ * 211) % 30000))
-    while port_open "$ftp_port"; do
+    while port_open "$ftp_port" || ! port_claim "$ftp_port"; do
         ftp_port=$((ftp_port + 1))
     done
     echo "$ftp_port"
@@ -67,13 +78,18 @@ free_tcp_port_block() {
         ftb_ok=1
         ftb_i=0
         while [ "$ftb_i" -lt "$ftb_n" ]; do
-            if port_open $((ftb_port + ftb_i)); then
+            if port_open $((ftb_port + ftb_i)) || ! port_claim $((ftb_port + ftb_i)); then
                 ftb_ok=0
                 break
             fi
             ftb_i=$((ftb_i + 1))
         done
         [ "$ftb_ok" = "1" ] && break
+        ftb_j=0
+        while [ "$ftb_j" -lt "$ftb_i" ]; do
+            rm -f "$PORT_CLAIM_DIR/$((ftb_port + ftb_j))"
+            ftb_j=$((ftb_j + 1))
+        done
         ftb_port=$((ftb_port + ftb_i + 1))
     done
     echo "$ftb_port"

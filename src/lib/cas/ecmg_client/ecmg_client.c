@@ -41,6 +41,12 @@ unsigned long ecmg_client_ecm_epoch(ecmg_client_t *c) {
   return atomic_load_explicit(&c->ecm_epoch, memory_order_relaxed);
 }
 
+int ecmg_client_last_ecm_cp(ecmg_client_t *c, unsigned short *cp) {
+  if (!atomic_load_explicit(&c->ecm_cp_valid, memory_order_acquire)) return 0;
+  *cp = (unsigned short)atomic_load_explicit(&c->ecm_cp, memory_order_relaxed);
+  return 1;
+}
+
 unsigned ecmg_client_ecm_rep_period_ms(ecmg_client_t *c) {
   return atomic_load_explicit(&c->ecm_rep_period_ms, memory_order_relaxed);
 }

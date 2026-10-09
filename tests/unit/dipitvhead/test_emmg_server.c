@@ -1044,6 +1044,45 @@ START_TEST(emmg_server_dequeue_honors_granted_bandwidth) {
 }
 END_TEST
 
+START_TEST(emmg_server_dequeue_throttles_without_granted_bandwidth) {
+  emmg_server_cfg_t cfg = {0};
+  emmg_server_t *s;
+  unsigned char msg[2048];
+  unsigned char dg[1000] = {0x33, 0x73, 0xE5};
+  unsigned char got[2048];
+  size_t got_len = 0;
+  size_t n;
+  int fd;
+  int waited = 0;
+  int drained = 0;
+
+  cfg.port = 0;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+  fd = fake_connect(emmg_server_port(s));
+  ck_assert_int_ge(fd, 0);
+  send_prelude(fd, 2);
+
+  for (int i = 0; i < 8; i++) {
+    n = fake_build_data_provision(msg, sizeof msg, 3, dg, sizeof dg);
+    ck_assert_int_eq(simulcrypt_send_all(fd, msg, n, 3000), 0);
+  }
+  while (emmg_server_emm_total(s) < 8 && waited < 3000) {
+    struct timespec ts = {0, 20L * 1000000L};
+    nanosleep(&ts, NULL);
+    waited += 20;
+  }
+  ck_assert_uint_eq(emmg_server_emm_total(s), 8u);
+
+  while (emmg_server_dequeue_emm(s, got, sizeof got, &got_len) == 0) drained++;
+  ck_assert_int_ge(drained, 1);
+  ck_assert_int_lt(drained, 8);
+
+  close(fd);
+  emmg_server_stop(s);
+}
+END_TEST
+
 START_TEST(emmg_server_drops_oversized_datagram_and_keeps_session) {
   static const unsigned char dg[] = {0x11, 0x70, 0x00};
   static const unsigned char big[EMMG_MAX_DATAGRAM_LEN + 1];
@@ -1123,6 +1162,7 @@ static Suite *emmg_server_suite(void) {
     tcase_add_test(tc_integ, emmg_server_drops_oversized_datagram_and_keeps_session);
     tcase_add_test(tc_integ, emmg_server_drops_datagram_that_is_not_a_section);
     tcase_add_test(tc_integ, emmg_server_dequeue_honors_granted_bandwidth);
+    tcase_add_test(tc_integ, emmg_server_dequeue_throttles_without_granted_bandwidth);
     suite_add_tcase(s, tc_integ);
   }
 

@@ -47,6 +47,7 @@ typedef struct {
   srtsink_queue_ctx_t qctx;
   timemap_t tm[ARGS_MAX_INPUTS];
   psi_versions_t psiv[ARGS_MAX_INPUTS]; /* outlives mpts_program_t, like tm */
+  cc_offsets_t ccm[ARGS_MAX_INPUTS];
 } mpts_run_ctx_t;
 
 static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_run_ctx_t *c) {
@@ -92,7 +93,7 @@ static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_ru
       c->insp_in[i] = NULL;
     }
     if (c->insp_in[i]) {
-      char label[16];
+      char label[24];
       snprintf(label, sizeof label, "input %u", i);
       tsinspect_set_label(c->insp_in[i], label);
     }
@@ -219,6 +220,7 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
     tk.tsm = c->tsm_p;
     tk.tm = c->tm;
     tk.psiv = c->psiv;
+    tk.ccm = c->ccm;
     tk.insp = c->insp_on ? c->insp_in : NULL;
     tk.now = now;
     tk.now_t = now_t;

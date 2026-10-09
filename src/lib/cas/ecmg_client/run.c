@@ -50,6 +50,8 @@ static void publish_ecm_response(ecmg_client_t *c, unsigned short cp_number, con
   while (simulcrypt_tlv_reader_next(&it, &tag, &val, &vlen) == 1) {
     if (tag == ECMG_P_ECM_DATAGRAM) {
       publish_ecm(c, cp_number & 1, val, vlen); /* TS 103 197 clause 5.3: CP_number parity == CW parity */
+      atomic_store_explicit(&c->ecm_cp, cp_number, memory_order_relaxed);
+      atomic_store_explicit(&c->ecm_cp_valid, 1, memory_order_release);
       atomic_fetch_add_explicit(&c->ecm_total, 1, memory_order_relaxed);
       break;
     }
@@ -60,12 +62,14 @@ typedef struct {
   ecmg_client_t *c;
   int fd;
   unsigned char version;
-  unsigned lead_cw, cw_per_msg, max_comp_time_ms;
+  unsigned lead_cw;
+  unsigned cw_per_msg;
+  unsigned max_comp_time_ms;
   int64_t next_test_at;
   int64_t test_deadline; /* 0 = no channel_test outstanding */
 } ecmg_session_t;
 
-static int session_send(ecmg_session_t *s, const unsigned char *msg, size_t len) {
+static int session_send(const ecmg_session_t *s, const unsigned char *msg, size_t len) {
   if (!len || simulcrypt_send_all(s->fd, msg, len, ECMG_HANDSHAKE_TIMEOUT_MS) < 0) {
     log_line("ecmg: reply send failed");
     return -1;
@@ -132,16 +136,19 @@ static int run_cp_loop(ecmg_client_t *c, int fd, unsigned char version, unsigned
   simulcrypt_reader_t rd;
   unsigned short cp_number = 0;
   unsigned long next_boundary;
+  int first = 1;
 
   simulcrypt_reader_init(&rd);
   next_boundary = atomic_load_explicit(c->packet_counter, memory_order_relaxed) + c->packets_per_cp;
+  atomic_store_explicit(&c->ecm_cp_valid, 0, memory_order_relaxed);
   atomic_store_explicit(&c->connected, 1, memory_order_relaxed);
   if (c->cfg.cw_source.on_connected) cp_number = c->cfg.cw_source.on_connected(c->cfg.cw_source.ctx);
+  cp_number--; /* first provision is for the CP in force */
 
   while (!ecmg_stopping(c)) {
     unsigned long cur = atomic_load_explicit(c->packet_counter, memory_order_relaxed);
     if (session_tick(&sess) < 0) return -1;
-    if (c->packets_per_cp == 0 || cur + c->lookahead_margin_packets >= next_boundary) {
+    if (first || c->packets_per_cp == 0 || cur + c->lookahead_margin_packets >= next_boundary) {
       unsigned char msg[SIMULCRYPT_MAX_FRAME];
       simulcrypt_hdr_t hdr;
       const unsigned char *payload;
@@ -179,7 +186,8 @@ static int run_cp_loop(ecmg_client_t *c, int fd, unsigned char version, unsigned
         atomic_fetch_add_explicit(&c->ecm_errors_total, 1, memory_order_relaxed);
         return -1;
       }
-      next_boundary += c->packets_per_cp;
+      if (!first) next_boundary += c->packets_per_cp;
+      first = 0;
     } else {
       simulcrypt_hdr_t hdr;
       const unsigned char *payload;
@@ -211,7 +219,9 @@ void *ecmg_client_main(void *arg) {
   while (!ecmg_stopping(c)) {
     int fd;
     unsigned char version;
-    unsigned lead_cw, cw_per_msg, max_comp_time_ms;
+    unsigned lead_cw;
+    unsigned cw_per_msg;
+    unsigned max_comp_time_ms;
 
     if (connect_and_setup(c, &fd, &version, &lead_cw, &cw_per_msg, &max_comp_time_ms) < 0) {
       cas_interruptible_backoff(&c->stop, backoff_ms, ECMG_POLL_INTERVAL_MS);

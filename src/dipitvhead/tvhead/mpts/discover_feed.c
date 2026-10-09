@@ -86,6 +86,7 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   if (tk->cas) remux_set_cas(tk->progs[i].rx, tk->cas);
   remux_set_timemap(tk->progs[i].rx, &tk->tm[i]);
   remux_set_psi_versions(tk->progs[i].rx, &tk->psiv[i]);
+  remux_set_cc_offsets(tk->progs[i].rx, &tk->ccm[i]);
   if (tk->cfg->pcr_mode == PCR_MODE_REGENERATE && remux_set_hold(tk->progs[i].rx, out_pcr_clock, out_pcr_latch, tk->out, tk->cfg->pcr_lead_ms))
     log_line_ansi("input \e[1;30m%u\e[0m: hold-back queue setup failed", i);
   out_pcr_pid_set(tk->out, i, remux_pcr_pid_out(tk->progs[i].rx));

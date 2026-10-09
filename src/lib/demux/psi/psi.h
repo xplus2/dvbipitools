@@ -65,7 +65,7 @@ typedef struct {
   unsigned ca_pid; /* ECM pid from ES CA descriptor, 0 if none */
   unsigned ca_system_id; /* ES CA descriptor's CA_system_id, 0 if none */
   unsigned char desc[PSI_ES_DESC_MAX]; /* raw ES descriptor loop, for opaque passthrough */
-  size_t desc_len; /* 0 if none captured (incl. too long for desc[]) */
+  size_t desc_len;
   unsigned lcevc_pid[PSI_LCEVC_MAX_LINKS]; /* enhancement PID(s) on video ES, base PID(s) on LCEVC ES */
   int lcevc_pid_count; /* 0 if unpaired */
   unsigned ttx_page;   /* teletext page (e.g. 777), 0 if none */

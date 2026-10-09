@@ -300,7 +300,7 @@ typedef struct {
 
 /* build 1-prog PMT (table_id 0x02) from a list of ES, each with its raw descriptor loop B, CRC included */
 static size_t build_pmt_es(unsigned char *out, unsigned prog_num, unsigned pcr_pid, const es_spec_t *es, size_t es_count) {
-  unsigned char body[256];
+  unsigned char body[1024];
   size_t n = 0;
   size_t hdr;
   size_t crc_at;
@@ -504,7 +504,8 @@ static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, unsigned char c
 
 START_TEST(psi_parses_pat_and_pmt) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
   int count;
   const psi_program_t *progs;
@@ -551,7 +552,8 @@ END_TEST
 
 START_TEST(psi_pmt_parsed_counts_each_good_pmt_section) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
 
   ck_assert_uint_eq((unsigned)psi_pmt_parsed(p), 0u);
@@ -577,7 +579,8 @@ END_TEST
 
 START_TEST(psi_rejects_pat_with_bad_crc) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen = build_pat(section, 0x1234, 1, 0x0100);
   section[slen - 1] ^= 0xFF; /* corrupt CRC */
   wrap_ts_packet(pkt, 0x0000, 0, section, slen);
@@ -638,7 +641,8 @@ END_TEST
 
 START_TEST(psi_parses_cat_ca_descriptor) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
 
   slen = build_cat(section, 0x0B75, 0x0021);
@@ -656,7 +660,8 @@ END_TEST
 
 START_TEST(psi_cat_with_no_ca_descriptor_leaves_emm_pid_zero) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen = build_cat_empty(section);
 
   wrap_ts_packet(pkt, 0x0001, 0, section, slen);
@@ -672,7 +677,8 @@ END_TEST
 
 START_TEST(psi_rejects_cat_with_bad_crc) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen = build_cat(section, 0x0B75, 0x0021);
   section[slen - 1] ^= 0xFF; /* corrupt CRC */
   wrap_ts_packet(pkt, 0x0001, 0, section, slen);
@@ -687,7 +693,8 @@ END_TEST
 
 START_TEST(psi_parses_pmt_scrambling_descriptor) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
 
   slen = build_pat(section, 0x1234, 1, 0x0100);
@@ -707,7 +714,8 @@ END_TEST
 
 START_TEST(psi_parses_pmt_ca_descriptor_system_id) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
 
   slen = build_pat(section, 0x1234, 1, 0x0100);
@@ -728,7 +736,8 @@ END_TEST
 
 START_TEST(psi_pmt_with_no_ca_descriptor_leaves_pmt_ca_system_id_zero) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
 
   slen = build_pat(section, 0x1234, 1, 0x0100);
@@ -748,7 +757,8 @@ END_TEST
 
 START_TEST(psi_pmt_with_no_scrambling_descriptor_leaves_mode_zero) {
   psi_t *p = psi_new();
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
 
   slen = build_pat(section, 0x1234, 1, 0x0100);
@@ -768,7 +778,8 @@ END_TEST
 
 START_TEST(psi_without_multi_mode_locks_first_pmt_only) {
   psi_t *p = psi_new();
-  unsigned char section[128], pkt[188];
+  unsigned char section[128];
+  unsigned char pkt[188];
   size_t slen;
 
   slen = build_pat2(section, 0x1234, 1, 0x0100, 2, 0x0200);
@@ -792,7 +803,8 @@ END_TEST
 
 START_TEST(psi_multi_mode_resolves_programs_sharing_one_pmt_pid) {
   psi_t *p = psi_new();
-  unsigned char section[128], pkt[188];
+  unsigned char section[128];
+  unsigned char pkt[188];
   size_t slen;
   int count;
   const psi_multi_program_t *m;
@@ -813,16 +825,18 @@ START_TEST(psi_multi_mode_resolves_programs_sharing_one_pmt_pid) {
   ck_assert_int_eq(m[1].resolved, 1);
   ck_assert_uint_eq(psi_service_of_pid(p, 0x0101), 1u);
   ck_assert_uint_eq(psi_service_of_pid(p, 0x0201), 2u);
-  ck_assert_uint_eq(psi_pmt_parsed(p), 2ul);
+  ck_assert_uint_eq(psi_pmt_parsed(p), 2UL);
   psi_free(p);
 }
 END_TEST
 
 START_TEST(psi_single_mode_ignores_other_program_on_locked_pmt_pid) {
   psi_t *p = psi_new();
-  unsigned char section[128], pkt[188];
+  unsigned char section[128];
+  unsigned char pkt[188];
   const unsigned char *sec;
-  size_t slen, len;
+  size_t slen;
+  size_t len;
 
   slen = build_pat2(section, 0x1234, 1, 0x0100, 2, 0x0100);
   wrap_ts_packet(pkt, 0x0000, 0, section, slen);
@@ -849,7 +863,8 @@ END_TEST
 
 START_TEST(psi_multi_mode_resolves_every_pmt_and_sdt_name) {
   psi_t *p = psi_new();
-  unsigned char section[128], pkt[188];
+  unsigned char section[128];
+  unsigned char pkt[188];
   size_t slen;
   int count;
   const psi_multi_program_t *m;
@@ -933,7 +948,8 @@ END_TEST
    or a program's pmt_pid changed, mid-stream surfaces through psi_wants_pid() */
 START_TEST(psi_wants_pid_picks_up_program_added_before_lock) {
   psi_t *p = psi_new();
-  unsigned char section[128], pkt[188];
+  unsigned char section[128];
+  unsigned char pkt[188];
   size_t slen;
 
   slen = build_pat(section, 0x1234, 1, 0x0100);
@@ -952,7 +968,8 @@ END_TEST
 
 START_TEST(psi_wants_pid_picks_up_program_added_in_multi_mode) {
   psi_t *p = psi_new();
-  unsigned char section[128], pkt[188];
+  unsigned char section[128];
+  unsigned char pkt[188];
   size_t slen;
 
   psi_enable_multi_program(p);
@@ -977,7 +994,8 @@ END_TEST
 
 START_TEST(psi_wants_pid_tracks_new_pid_when_program_moves) {
   psi_t *p = psi_new();
-  unsigned char section[128], pkt[188];
+  unsigned char section[128];
+  unsigned char pkt[188];
   size_t slen;
 
   slen = build_pat(section, 0x1234, 1, 0x0100);
@@ -1365,6 +1383,62 @@ START_TEST(psi_classifies_dts_hd_ma_via_extension_descriptor) {
 }
 END_TEST
 
+START_TEST(psi_keeps_whole_priority_descriptors_when_es_loop_exceeds_limit) {
+  psi_t *p = psi_new();
+  unsigned char desc[400];
+  unsigned char section[512];
+  unsigned char pkt[188];
+  size_t dlen = 0;
+  size_t slen;
+  size_t first;
+  int count;
+  int found = 0;
+  const psi_es_t *es;
+  es_spec_t spec[1];
+
+  for (int i = 0; i < 30; i++) {
+    desc[dlen++] = 0xEE;
+    desc[dlen++] = 8;
+    memset(desc + dlen, i, 8);
+    dlen += 8;
+  }
+  desc[dlen++] = 0x56;
+  desc[dlen++] = 5;
+  memcpy(desc + dlen, "\x65\x6E\x67\x10\x01", 5);
+  dlen += 5;
+  spec[0].stream_type = 0x06;
+  spec[0].pid = 0x0101;
+  spec[0].desc = desc;
+  spec[0].desc_len = dlen;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt_es(section, 1, 0x0101, spec, 1);
+  first = slen < 183 ? slen : 183;
+  wrap_ts_packet(pkt, 0x0100, 0, section, first);
+  psi_feed(p, pkt);
+  memset(pkt, 0xFF, sizeof pkt);
+  pkt[0] = 0x47;
+  pkt[1] = 0x01;
+  pkt[2] = 0x00;
+  pkt[3] = 0x11;
+  memcpy(pkt + 4, section + first, slen - first);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_uint_gt(es[0].desc_len, 0u);
+  ck_assert_uint_le(es[0].desc_len, 255u);
+  for (size_t i = 0; i + 2 <= es[0].desc_len; i += 2 + es[0].desc[i + 1]) {
+    ck_assert_uint_le(i + 2 + es[0].desc[i + 1], es[0].desc_len);
+    if (es[0].desc[i] == 0x56) found = 1;
+  }
+  ck_assert_int_eq(found, 1);
+  psi_free(p);
+}
+END_TEST
+
 START_TEST(psi_classifies_truehd_stream_type_under_hdmv_program) {
   psi_t *p = psi_new();
   unsigned char section[64];
@@ -1589,6 +1663,7 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_classifies_ac4_via_extension_descriptor);
   tcase_add_test(tc, psi_classifies_dts_hd_plain_via_extension_descriptor);
   tcase_add_test(tc, psi_classifies_dts_hd_ma_via_extension_descriptor);
+  tcase_add_test(tc, psi_keeps_whole_priority_descriptors_when_es_loop_exceeds_limit);
   tcase_add_test(tc, psi_classifies_truehd_stream_type_under_hdmv_program);
   tcase_add_test(tc, psi_ignores_truehd_stream_type_without_hdmv_program);
   tcase_add_test(tc, psi_classifies_dts_hd_ma_via_hdmv_stream_type);

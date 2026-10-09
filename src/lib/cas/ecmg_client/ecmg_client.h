@@ -12,8 +12,6 @@
 
 typedef enum { ECMG_OUTAGE_FROZEN, ECMG_OUTAGE_CYCLING, ECMG_OUTAGE_SILENT } ecmg_outage_mode_t;
 
-/* multi-CAS CW source (cas_group.h). get_cw NULL (zero-init): self-generate, unchanged.
-   on_connected: per (re)connect, returns CP_number counter start. */
 typedef int (*ecmg_cw_source_fn)(void *ctx, unsigned short cp_number, unsigned char *cw_out, size_t cw_len);
 typedef unsigned short (*ecmg_cw_source_connected_fn)(void *ctx);
 
@@ -53,6 +51,8 @@ void ecmg_client_stop(ecmg_client_t *c);
    or silent+disconnected (ecmg_ecm_available_calc()) */
 int ecmg_client_get_ecm(ecmg_client_t *c, unsigned char *out, size_t cap, size_t *len_out);
 unsigned long ecmg_client_ecm_epoch(ecmg_client_t *c);
+/* 1 and CP_number of latest ECM of current connection, 0 if none yet */
+int ecmg_client_last_ecm_cp(ecmg_client_t *c, unsigned short *cp);
 
 /* ECM_rep_period from channel_status: how often ECMG wants current ECM section
    repeated on output. 0 = channel not established yet. */

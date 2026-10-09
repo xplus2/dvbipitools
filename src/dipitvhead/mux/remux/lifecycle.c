@@ -98,7 +98,6 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
     return NULL;
   }
   r->es_count = n;
-  memset(r->disc_es, 1, sizeof r->disc_es);
   if (cfg->pcr_mode != PCR_MODE_PRESERVE) {
     for (int i = 0; i < n; i++) {
       if (r->es[i].stream_type != 0x86 || r->es[i].is_ca != CA_PASS_NONE) continue;
@@ -196,6 +195,7 @@ static void keep_out_pids(const remux_t *r, out_es_t *neu, int n) {
     int j = find_old_es(r, &neu[i]);
     if (j < 0) continue;
     neu[i].out_pid = r->es[j].out_pid;
+    if (neu[i].out_pid < r->pids.video_pid || neu[i].out_pid - r->pids.video_pid >= OUT_PROGRAM_ES_CAP) continue;
     used[neu[i].out_pid - r->pids.video_pid] = 1;
     kept[i] = 1;
   }
@@ -207,7 +207,7 @@ static void keep_out_pids(const remux_t *r, out_es_t *neu, int n) {
       }
       neu[i].out_pid = r->pids.video_pid + off;
     }
-    used[off] = 1;
+    if (off < OUT_PROGRAM_ES_CAP) used[off] = 1;
   }
 }
 
@@ -220,7 +220,6 @@ static void migrate_slots(remux_t *r, const out_es_t *neu, int n) {
   scte35stamp_t *scte[OUT_PROGRAM_ES_CAP] = {0};
   uint64_t tag[OUT_PROGRAM_ES_CAP] = {0};
   unsigned char has_tag[OUT_PROGRAM_ES_CAP] = {0};
-  unsigned char disc[OUT_PROGRAM_ES_CAP] = {0};
   unsigned char moved[OUT_PROGRAM_ES_CAP] = {0};
 
   for (int i = 0; i < n; i++) {
@@ -230,10 +229,7 @@ static void migrate_slots(remux_t *r, const out_es_t *neu, int n) {
       scte[i] = r->scte[j];
       tag[i] = r->hold_tag[j];
       has_tag[i] = r->hold_has_tag[j];
-      disc[i] = r->disc_es[j];
       moved[j] = 1;
-    } else {
-      disc[i] = 1;
     }
     if (!hold[i] && r->hold_clock) hold[i] = releaseq_new(HOLD_MAX_PACKETS);
     if (!want_scte(r, &neu[i])) {
@@ -253,7 +249,6 @@ static void migrate_slots(remux_t *r, const out_es_t *neu, int n) {
   memcpy(r->scte, scte, sizeof scte);
   memcpy(r->hold_tag, tag, sizeof tag);
   memcpy(r->hold_has_tag, has_tag, sizeof has_tag);
-  memcpy(r->disc_es, disc, sizeof disc);
 }
 
 static void cas_add_new_streams(remux_t *r, const out_es_t *neu, int n) {
@@ -285,7 +280,12 @@ static void remap_es(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
     return;
   }
   if (dropped) log_line("program %u: ES cap (%d) reached, dropping %d stream%s", r->src_service_id, OUT_PROGRAM_ES_CAP, dropped, dropped == 1 ? "" : "s");
-  remux_release(r, now, cb, ctx, 1, tsm);
+  remux_release(r, now, cb, ctx, 0, tsm);
+  for (int j = 0; j < r->es_count; j++) {
+    int kept = 0;
+    for (int i = 0; i < n && !kept; i++) kept = find_old_es(r, &neu[i]) == j;
+    if (!kept) flush_hold_slot(r, j, now, cb, ctx);
+  }
   cas_add_new_streams(r, neu, n);
   migrate_slots(r, neu, n);
   memcpy(r->es, neu, sizeof neu[0] * (size_t)n);
@@ -295,11 +295,38 @@ static void remap_es(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
   if (r->hold_clock) pick_hold_ref(r);
 }
 
+static int follow_pmt_pid(remux_t *r) {
+  int n;
+  const psi_program_t *p = psi_pat_programs(r->watch, &n);
+  psi_t *w;
+  unsigned pid;
+  char label[32];
+
+  for (int i = 0; i < n; i++) {
+    if (p[i].program_number != r->src_service_id) continue;
+    pid = p[i].pmt_pid;
+    if (pid == r->watch_pmt_pid) return 0;
+    w = psi_new();
+    if (!w) return 0;
+    log_line("program %u: PMT pid 0x%x -> 0x%x", r->src_service_id, r->watch_pmt_pid, pid);
+    snprintf(label, sizeof label, "program %u watch", r->src_service_id);
+    psi_set_label(w, label);
+    psi_free(r->watch);
+    r->watch = w;
+    r->watch_pmt_pid = pid;
+    r->watch_parsed = 0;
+    psi_select_pmt_pid(w, r->watch_pmt_pid);
+    return 1;
+  }
+  return 0;
+}
+
 void watch_source_pmt(remux_t *r, double now, const unsigned char *pkt188, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm) {
   const unsigned char *sec;
   size_t len;
 
   psi_feed(r->watch, pkt188);
+  if (follow_pmt_pid(r)) return;
   if (psi_pmt_parsed(r->watch) == r->watch_parsed) return;
   r->watch_parsed = psi_pmt_parsed(r->watch);
   sec = psi_pmt_section(r->watch, &len);
@@ -314,6 +341,13 @@ unsigned remux_pcr_pid_out(const remux_t *r) { return r->pcr_pid_out; }
 int remux_reconnect_wanted(const remux_t *r) { return r->reconnect_wanted; }
 
 void remux_set_psi_versions(remux_t *r, psi_versions_t *pv) { r->pv = pv; }
+
+void remux_set_cc_offsets(remux_t *r, cc_offsets_t *m) {
+  r->ccm = m;
+  if (!m) return;
+  for (int i = 0; i < OUT_PROGRAM_ES_CAP; i++)
+    if (m->last[i] & 0x10) m->last[i] |= 0x20;
+}
 
 const out_es_t *remux_es(const remux_t *r, int *count) {
   *count = r->es_count;

@@ -17,6 +17,7 @@
 #define EMMG_QUEUE_LOW_WATERMARK ((EMMG_QUEUE_CAP * 3) / 4)
 #define EMMG_SECTION_HDR_LEN 3
 #define EMMG_BYTES_PER_KBPS_S 125
+#define EMMG_DEFAULT_KBPS 100
 #define EMMG_POLL_INTERVAL_MS 150
 #define EMMG_SEND_TIMEOUT_MS 3000
 #define EMMG_CONNECT_TIMEOUT_MS 3000
@@ -54,7 +55,7 @@ struct emmg_server {
   emmg_queued_datagram_t queue[EMMG_QUEUE_CAP];
   size_t queue_head;
   atomic_size_t queue_len; /* mutex-protected writes, lock-free read: dequeue pre-check, backpressure watermark */
-  atomic_uint granted_kbps[EMMG_MAX_CONNS_CEILING]; /* per slot, 0 = none, sum 0 = unthrottled */
+  atomic_uint granted_kbps[EMMG_MAX_CONNS_CEILING]; /* per slot, 0 = none */
   double tokens;
   double tokens_ts; /* monotonic S last refill, 0 = unset. queue_lock */
 

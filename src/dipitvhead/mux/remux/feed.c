@@ -151,14 +151,22 @@ static void scte_emit(void *c, unsigned char *pkt) {
   emit_out(e->r, e->pid, pkt, e->now, e->cb, e->ctx);
 }
 
-/* source cc kept (pids map 1:1) -> downstream sees upstream dups/gaps. after reconnect, flag first pkg */
-static void mark_discontinuity(unsigned char *pending, unsigned char out[188]) {
-  if (!*pending || !(out[3] & 0x20) || out[4] < 1) return;
-  out[5] |= 0x80;
-  *pending = 0;
+/* out cc = in cc + per-pid offset, so upstream dups/gaps show through. offset re-chosen after
+   reconnect: first pkt continues last one sent, no discontinuity flag needed */
+static void remap_cc(const remux_t *r, unsigned out_pid, unsigned char out[188]) {
+  cc_offsets_t *m = r->ccm;
+  unsigned i = out_pid - r->pids.video_pid;
+  unsigned in = out[3] & 0x0F;
+  int payload = (out[3] & 0x10) != 0;
+  unsigned cc;
+  if (!m || i >= OUT_PROGRAM_ES_CAP) return;
+  if ((m->last[i] & 0x30) == 0x30) m->off[i] = (unsigned char)((m->last[i] + payload - in) & 0x0F);
+  cc = (in + m->off[i]) & 0x0F;
+  out[3] = (unsigned char)((out[3] & 0xF0) | cc);
+  m->last[i] = (unsigned char)(0x10 | cc);
 }
 
-static void forward_packet(remux_t *r, const out_es_t *es, unsigned out_pid, unsigned char *disc_pending, const unsigned char *pkt188, double now, remux_packet_cb cb, void *ctx) {
+static void forward_packet(remux_t *r, const out_es_t *es, unsigned out_pid, const unsigned char *pkt188, double now, remux_packet_cb cb, void *ctx) {
   unsigned char out[188];
   memcpy(out, pkt188, 188);
   out[1] = (unsigned char)((out[1] & 0xE0) | ((out_pid >> 8) & 0x1F));
@@ -166,7 +174,7 @@ static void forward_packet(remux_t *r, const out_es_t *es, unsigned out_pid, uns
   if (r->tm && r->cfg.pcr_mode == PCR_MODE_REBASE) rebase_packet(r, es, out_pid, out, now);
   if (r->cfg.pcr_mode == PCR_MODE_REGENERATE) regen_stage(r, es, out, now);
   finish_stamps(r, out);
-  mark_discontinuity(disc_pending, out);
+  remap_cc(r, out_pid, out);
   if (es && r->scte[es - r->es] && r->tm) {
     scte_emit_t e = {r, out_pid, now, cb, ctx};
     unsigned long long before = r->scte[es - r->es]->patched;
@@ -176,6 +184,10 @@ static void forward_packet(remux_t *r, const out_es_t *es, unsigned out_pid, uns
   }
   if (hold_enqueue(r, es, out, now, cb, ctx)) return;
   emit_out(r, out_pid, out, now, cb, ctx);
+}
+
+void flush_hold_slot(remux_t *r, int idx, double now, remux_packet_cb cb, void *ctx) {
+  while (r->hold[idx] && releaseq_len(r->hold[idx])) release_head(r, idx, now, cb, ctx);
 }
 
 void remux_release(remux_t *r, double now_s, remux_packet_cb cb, void *ctx, int all, ts_metrics_t *tsm) {
@@ -290,6 +302,6 @@ void remux_feed(remux_t *r, double now_s, const unsigned char *pkt188, remux_pac
     if (tsm) tsm->remux_dropped_packets_total++;
     return; /* PAT/PMT/SDT/NIT/unrecognized: not carried, we build our own or drop */
   }
-  forward_packet(r, &r->es[idx], r->es[idx].out_pid, &r->disc_es[idx], pkt188, now_s, cb, ctx);
+  forward_packet(r, &r->es[idx], r->es[idx].out_pid, pkt188, now_s, cb, ctx);
   if (tsm) tsm->remux_packets_total++;
 }

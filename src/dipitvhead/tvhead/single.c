@@ -58,6 +58,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   input_metrics_t im;
   ts_metrics_t tsm;
   psi_versions_t psiv;
+  cc_offsets_t ccm;
   timemap_t tm;
   int metrics_on = metrics_exporter_enabled(mx);
   input_metrics_t *im_p = metrics_on ? &im : NULL;
@@ -70,6 +71,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
   memset(&im, 0, sizeof im);
   memset(&tsm, 0, sizeof tsm);
   memset(&psiv, 0, sizeof psiv);
+  memset(&ccm, 0, sizeof ccm);
   timemap_init(&tm);
   if (tvhead_output_open(cfg, &out)) {
     tvhead_output_close(&out);
@@ -129,6 +131,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
         log_line("remux setup failed");
       } else {
         remux_set_psi_versions(rx, &psiv);
+        remux_set_cc_offsets(rx, &ccm);
         run_single_input(cfg, src, psi, &out, rx, &tm, mx, im_p, tsm_p, insp_in);
       }
     } else if (r == 0) {

@@ -56,7 +56,8 @@ int playlist_resolve_relative(const http_url_t *base, const char *ref, char *out
 void playlist_resolve_uri(const http_url_t *base, const char *ref, char *out, size_t n) {
   if (!strncasecmp(ref, "http://", 7) || !strncasecmp(ref, "https://", 8)) bufcpy(out, n, ref);
   else if (ref[0] == '/' && ref[1] == '/') {
-    int len = base ? snprintf(out, n, "%s:%s", base->tls ? "https" : "http", ref) : 0;
+    const char *scheme = (base && base->tls) ? "https" : "http";
+    int len = base ? snprintf(out, n, "%s:%s", scheme, ref) : 0;
     if (len <= 0 || (size_t)len >= n) out[0] = '\0';
   }
   else if (!playlist_resolve_relative(base, ref, out, n)) out[0] = '\0';

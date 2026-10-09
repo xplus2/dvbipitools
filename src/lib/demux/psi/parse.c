@@ -98,6 +98,33 @@ void parse_pat(psi_t *c) {
   rebuild_class_table(c);
 }
 
+static int priority_desc(unsigned char tag) {
+  switch (tag) {
+    case 0x0A: case 0x56: case 0x59: case 0x6A: case 0x7A:
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+static void capture_es_desc(psi_es_t *e, const unsigned char *desc, size_t len) {
+  if (len <= sizeof e->desc) {
+    memcpy(e->desc, desc, len);
+    e->desc_len = len;
+    return;
+  }
+  for (int pass = 0; pass < 2; pass++) {
+    for (size_t i = 0; i + 2 <= len; i += 2 + (size_t)desc[i + 1]) {
+      size_t dl = 2 + (size_t)desc[i + 1];
+      if (i + dl > len) break;
+      if (desc[i] == 0x09 || priority_desc(desc[i]) != (pass == 0)) continue;
+      if (e->desc_len + dl > sizeof e->desc) continue;
+      memcpy(e->desc + e->desc_len, desc + i, dl);
+      e->desc_len += dl;
+    }
+  }
+}
+
 /* 1 if this candidate's section parsed into a valid, complete PMT */
 int parse_pmt(psi_t *c, pmt_cand_t *cand, const unsigned char *b, size_t n) {
   size_t i;
@@ -154,10 +181,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand, const unsigned char *b, size_t n) {
     e->stream_type = b[i];
     e->pid = (((unsigned)b[i + 1] & 0x1F) << 8) | b[i + 2];
     classify(e, desc, esil, hdmv);
-    if (esil <= sizeof e->desc) {
-      memcpy(e->desc, desc, esil);
-      e->desc_len = esil;
-    }
+    capture_es_desc(e, desc, esil);
     ca = find_desc(desc, esil, 0x09, &l);
     if (ca && l >= 4) {
       e->ca_pid = (((unsigned)ca[2] & 0x1F) << 8) | ca[3];

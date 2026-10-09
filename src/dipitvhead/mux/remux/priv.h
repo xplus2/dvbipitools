@@ -85,7 +85,7 @@ struct remux {
   unsigned char cc_eit;
   unsigned char cc_ecm[ARGS_MAX_CAS_VENDORS];
   unsigned char cc_emm[ARGS_MAX_CAS_VENDORS];
-  unsigned char disc_es[OUT_PROGRAM_ES_CAP]; /* 1: flag next AF packet, set at remux_new */
+  cc_offsets_t *ccm;
   int last_es_idx; /* MRU 1-entry cache: consecutive packets usually share a pid */
 
   double last_pat;
@@ -116,6 +116,8 @@ void capture_eit_section(remux_t *r, const unsigned char *pkt188, ts_metrics_t *
 
 /* source PAT/PMT packets to watch psi, remaps es[] at src PMT change */
 void watch_source_pmt(remux_t *r, double now, const unsigned char *pkt188, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm);
+
+void flush_hold_slot(remux_t *r, int idx, double now, remux_packet_cb cb, void *ctx);
 
 void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm);
 

@@ -279,38 +279,52 @@ START_TEST(remux_keeps_source_cc_including_duplicates_and_gaps) {
 }
 END_TEST
 
-START_TEST(remux_flags_discontinuity_on_first_adaptation_field_packet_after_new) {
+START_TEST(remux_cc_offsets_continue_counter_across_reconnect_without_flag) {
   psi_t *psi = build_discovery_psi();
   config_t cfg;
   dipitvhead_input_t input;
   remux_t *r;
   out_program_pids_t pids;
+  cc_offsets_t ccm;
   unsigned char pkt[188];
-  int idx;
 
   base_cfg(&cfg);
   base_input(&input);
   out_program_pids(0, &pids);
-  r = remux_new(&cfg, &input, psi, &pids, 1);
-  ck_assert_ptr_nonnull(r);
+  memset(&ccm, 0, sizeof ccm);
   memset(pkt, 0xAB, sizeof pkt);
   pkt[0] = 0x47;
-  pkt[1] = (unsigned char)((0x0101 >> 8) & 0x1F);
-  pkt[2] = (unsigned char)0x0101;
+  pkt[1] = 0x01;
+  pkt[2] = 0x01;
 
-  idx = feed_video_cc(r, pkt, 0x10); /* payload only: no room */
-  ck_assert_int_ge(idx, 0);
-  pkt[4] = 183;
-  pkt[5] = 0x00;
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  remux_set_cc_offsets(r, &ccm);
+  ck_assert_int_ge(feed_video_cc(r, pkt, 0x13), 0);
+  ck_assert_uint_eq(g_last_pkt[3] & 0x0F, 3u);
+  remux_free(r);
+
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  remux_set_cc_offsets(r, &ccm);
   g_count = 0;
-  pkt[3] = 0x31;
+  pkt[3] = 0x1A; /* payload only, no AF: nothing to carry a flag */
   remux_feed(r, 0.0, pkt, capture_cb, NULL, NULL);
   ck_assert_int_ge(g_count, 1);
-  ck_assert_uint_eq(g_last_pkt[5] & 0x80, 0x80u);
-  pkt[3] = 0x32;
+  ck_assert_uint_eq(g_last_pkt[3] & 0x0F, 4u);
+  pkt[3] = 0x1B; /* source dup/gap shows through */
+  remux_feed(r, 0.0, pkt, capture_cb, NULL, NULL);
+  ck_assert_uint_eq(g_last_pkt[3] & 0x0F, 5u);
+  pkt[3] = 0x1D;
+  remux_feed(r, 0.0, pkt, capture_cb, NULL, NULL);
+  ck_assert_uint_eq(g_last_pkt[3] & 0x0F, 7u);
+
+  pkt[3] = 0x2D; /* AF only: cc repeats */
+  pkt[4] = 183;
   pkt[5] = 0x00;
   remux_feed(r, 0.0, pkt, capture_cb, NULL, NULL);
-  ck_assert_uint_eq(g_last_pkt[5] & 0x80, 0u); /* once only */
+  ck_assert_uint_eq(g_last_pkt[3] & 0x0F, 7u);
+  ck_assert_uint_eq(g_last_pkt[5] & 0x80, 0u);
 
   remux_free(r);
   psi_free(psi);
@@ -1073,7 +1087,7 @@ START_TEST(remux_rebase_and_regenerate_clear_the_discontinuity_flag_and_shift_dt
     pkt[3] = 0x20;
     pkt[4] = 183;
     pkt[5] = 0x00;
-    remux_feed(r, 0.0, pkt, capture_last_cb, NULL, NULL); /* consumes the post-new discontinuity flag */
+    remux_feed(r, 0.0, pkt, capture_last_cb, NULL, NULL);
 
     write_splice_packet(pkt, 0x0101, 1, 5000000);
     memcpy(orig, pkt, sizeof pkt);
@@ -1571,6 +1585,66 @@ START_TEST(remux_psi_versions_start_at_zero_and_bump_only_on_content_change) {
   ck_assert_uint_eq(g_ver_pat, 0u);
   remux_feed(r, 0.7, pkt, version_cb, NULL, NULL);
   ck_assert_uint_eq(g_ver_pmt, 1u);
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
+START_TEST(remux_follows_a_source_pmt_pid_move) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  psi_versions_t pv;
+  unsigned char pkt[188];
+  unsigned char section[64];
+  size_t slen;
+  int count;
+
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  memset(&pv, 0, sizeof pv);
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  remux_set_psi_versions(r, &pv);
+  g_ver_pat = g_ver_pmt = 0xFF;
+
+  feed_src_pat(r, 0.0, version_cb);
+  slen = psi_build_pat(0x1234, 0, 101, 0x0200, section, sizeof section);
+  wrap_ts_packet(pkt, 0x0000, section, slen);
+  remux_feed(r, 0.1, pkt, version_cb, NULL, NULL);
+  remux_feed(r, 0.2, pkt, version_cb, NULL, NULL);
+  src_pmt_packet(pkt, 1, 0x0101, 3);
+  pkt[1] = (unsigned char)((pkt[1] & 0xE0) | 0x02);
+  pkt[2] = 0x00;
+  remux_feed(r, 0.3, pkt, version_cb, NULL, NULL);
+  remux_feed(r, 0.5, pkt, version_cb, NULL, NULL);
+  (void)remux_es(r, &count);
+  ck_assert_int_eq(count, 3);
+  ck_assert_uint_eq(g_ver_pmt, 1u);
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
+START_TEST(remux_pmt_change_releases_hold_queue_at_the_normal_pace) {
+  psi_t *psi;
+  unsigned char pkt[188];
+  const uint64_t pts = 9000000;
+  remux_t *r = hold_remux(&psi, pts - 90 * 1000, 1, 700);
+
+  write_pes_packet(pkt, 0x0101, 0, pts);
+  remux_feed(r, 0.0, pkt, capture_cb, NULL, NULL);
+  feed_src_pat(r, 0.1, capture_cb);
+  src_pmt_packet(pkt, 1, 0x0101, 3);
+  remux_feed(r, 0.2, pkt, capture_cb, NULL, NULL);
+  remux_feed(r, 0.3, pkt, capture_cb, NULL, NULL);
+  ck_assert_int_eq(es_seen(), 0);
+  g_clock27 = (pts - 90 * 600) * 300;
+  remux_release(r, 0.4, capture_cb, NULL, 0, NULL);
+  ck_assert_int_eq(es_seen(), 1);
   remux_free(r);
   psi_free(psi);
 }
@@ -2409,7 +2483,7 @@ static Suite *remux_suite(void) {
   tcase_add_test(tc, remux_forwards_mapped_es_and_sends_pat_pmt_on_first_feed);
   tcase_add_test(tc, remux_es_exposes_output_pid_mapping);
   tcase_add_test(tc, remux_keeps_source_cc_including_duplicates_and_gaps);
-  tcase_add_test(tc, remux_flags_discontinuity_on_first_adaptation_field_packet_after_new);
+  tcase_add_test(tc, remux_cc_offsets_continue_counter_across_reconnect_without_flag);
   tcase_add_test(tc, remux_feed_counts_ts_packets_and_sync_errors);
   tcase_add_test(tc, remux_feed_detects_continuity_gap_and_signaled_discontinuity);
   tcase_add_test(tc, remux_feed_detects_pcr_discontinuity_on_source_pcr_pid);
@@ -2445,6 +2519,8 @@ static Suite *remux_suite(void) {
   tcase_add_test(tc, remux_pmt_updates_total_only_counts_real_content_changes);
   tcase_add_test(tc, remux_psi_versions_start_at_zero_and_bump_only_on_content_change);
   tcase_add_test(tc, remux_psi_versions_survive_a_reconnect);
+  tcase_add_test(tc, remux_follows_a_source_pmt_pid_move);
+  tcase_add_test(tc, remux_pmt_change_releases_hold_queue_at_the_normal_pace);
   tcase_add_test(tc, remux_psi_versions_wrap_at_32);
   tcase_add_test(tc, remux_follows_a_track_added_to_the_source_pmt);
   tcase_add_test(tc, remux_follows_a_track_removed_from_the_source_pmt);

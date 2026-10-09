@@ -30,6 +30,12 @@ typedef struct {
   uint32_t sig[PSI_TABLE_COUNT];
 } psi_versions_t;
 
+/* caller-owned */
+typedef struct {
+  unsigned char off[OUT_PROGRAM_ES_CAP];
+  unsigned char last[OUT_PROGRAM_ES_CAP];
+} cc_offsets_t;
+
 /* cumulative, caller-owned. survives remux_t reconnects: fresh remux_t's
    per-pid CC/PCR tracking state does not, and should not. */
 typedef struct {
@@ -82,6 +88,8 @@ void remux_set_cas(remux_t *r, struct cas *cas);
 void remux_set_timemap(remux_t *r, timemap_t *tm);
 
 void remux_set_psi_versions(remux_t *r, psi_versions_t *pv);
+
+void remux_set_cc_offsets(remux_t *r, cc_offsets_t *m);
 
 int remux_reconnect_wanted(const remux_t *r);
 

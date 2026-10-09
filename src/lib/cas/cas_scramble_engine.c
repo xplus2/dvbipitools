@@ -45,7 +45,7 @@ static cas_pid_state_t *find_pid_state(cas_scramble_engine_t *e, unsigned pid) {
   return NULL;
 }
 
-static void queue_clear(cas_scramble_engine_t *e, unsigned out_pid, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx) {
+static void queue_clear(cas_scramble_engine_t *e, unsigned out_pid, const unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx) {
   scrambler_passthrough_queued(e->scr, pkt188, emit, ctx);
   if (out_pid == e->flush_pid)
     scrambler_flush(e->scr, emit, ctx);
