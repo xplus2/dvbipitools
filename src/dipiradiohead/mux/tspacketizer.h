@@ -34,7 +34,7 @@ tspacketizer_t *tspacketizer_new(const tspacketizer_cfg_t *cfg);
 void tspacketizer_free(tspacketizer_t *t);
 
 /* bumps EIT version, forces resend on next feed (standalone) or build_eit() (non-standalone) */
-void tspacketizer_set_metadata(tspacketizer_t *t, const char *artist, const char *title);
+int tspacketizer_set_metadata(tspacketizer_t *t, const char *artist, const char *title);
 
 void tspacketizer_mark_discontinuity(tspacketizer_t *t);
 

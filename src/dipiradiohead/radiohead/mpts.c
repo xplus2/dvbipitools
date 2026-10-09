@@ -112,9 +112,9 @@ int process_input_slot(mpts_tick_t *tk, unsigned i) {
     mpts_set_program(tk->mpts, i, tk->tsps[i]);
 
     if (tk->metas[i].dirty) {
-      tspacketizer_set_metadata(tk->tsps[i], tk->metas[i].artist, tk->metas[i].title);
+      int accepted = tspacketizer_set_metadata(tk->tsps[i], tk->metas[i].artist, tk->metas[i].title);
       tk->metas[i].dirty = 0;
-      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): now playing: \e[0;36m%s%s%s\e[0m", i, inputset_service_name(tk->is, i), tk->metas[i].artist, (tk->metas[i].artist[0] && tk->metas[i].title[0]) ? " - " : "", tk->metas[i].title);
+      if (accepted) log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): now playing: \e[0;36m%s%s%s\e[0m", i, inputset_service_name(tk->is, i), tk->metas[i].artist, (tk->metas[i].artist[0] && tk->metas[i].title[0]) ? " - " : "", tk->metas[i].title);
     }
     pts = timeline_pts(tk->timeline[i]);
     timeline_add(&tk->timeline[i], f.samples, f.sample_rate);

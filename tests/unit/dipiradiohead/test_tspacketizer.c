@@ -131,6 +131,45 @@ START_TEST(tspacketizer_set_metadata_forces_eit_resend) {
 }
 END_TEST
 
+START_TEST(tspacketizer_set_metadata_ignores_current_and_previous_title) {
+  tspacketizer_cfg_t cfg;
+  tspacketizer_t *t;
+  unsigned char sec[512];
+  unsigned ver, id;
+  memset(&cfg, 0, sizeof cfg);
+  cfg.standalone = 1;
+  cfg.tsid = 1;
+  cfg.sid = 101;
+  cfg.network_name = "";
+  cfg.service_name = "Test Service";
+  t = tspacketizer_new(&cfg);
+
+  tspacketizer_set_metadata(t, "", "Yassi");
+  ck_assert_uint_gt(tspacketizer_build_eit(t, sec, sizeof sec), 0u);
+  tspacketizer_set_metadata(t, "", "ENERGY");
+  ck_assert_int_eq(tspacketizer_eit_pending(t), 1);
+  ck_assert_uint_gt(tspacketizer_build_eit(t, sec, sizeof sec), 0u);
+  ver = (sec[5] >> 1) & 0x1Fu;
+  id = ((unsigned)sec[14] << 8) | sec[15];
+
+  tspacketizer_set_metadata(t, "", "Yassi");
+  ck_assert_int_eq(tspacketizer_eit_pending(t), 0);
+  tspacketizer_set_metadata(t, "", "ENERGY");
+  ck_assert_int_eq(tspacketizer_eit_pending(t), 0);
+  ck_assert_uint_gt(tspacketizer_build_eit(t, sec, sizeof sec), 0u);
+  ck_assert_uint_eq((sec[5] >> 1) & 0x1Fu, ver);
+  ck_assert_uint_eq(((unsigned)sec[14] << 8) | sec[15], id);
+
+  tspacketizer_set_metadata(t, "", "Other");
+  ck_assert_int_eq(tspacketizer_eit_pending(t), 1);
+  ck_assert_uint_gt(tspacketizer_build_eit(t, sec, sizeof sec), 0u);
+  ck_assert_uint_eq((sec[5] >> 1) & 0x1Fu, (ver + 1) & 0x1Fu);
+  ck_assert_uint_ne(((unsigned)sec[14] << 8) | sec[15], id);
+
+  tspacketizer_free(t);
+}
+END_TEST
+
 START_TEST(tspacketizer_idle_emits_only_pat_and_nit_on_wall_clock) {
   tspacketizer_cfg_t cfg;
   tspacketizer_t *t;
@@ -571,6 +610,7 @@ static Suite *tspacketizer_suite(void) {
   tcase_add_test(tc, tspacketizer_discontinuity_drops_queued_pcr_only_packets);
   tcase_add_test(tc, tspacketizer_second_feed_shortly_after_only_sends_audio);
   tcase_add_test(tc, tspacketizer_set_metadata_forces_eit_resend);
+  tcase_add_test(tc, tspacketizer_set_metadata_ignores_current_and_previous_title);
   tcase_add_test(tc, tspacketizer_non_standalone_emits_only_pmt_and_audio);
   tcase_add_test(tc, tspacketizer_get_sdt_info_and_build_eit_return_pullable_data);
   tcase_add_test(tc, tspacketizer_cas_first_feed_emits_cat_pmt_descriptor_ecm_emm_and_scrambles_audio);

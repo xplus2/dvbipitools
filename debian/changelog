@@ -39,6 +39,7 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + handle 8859-1 icy tags
     + fixed 5s shutdown delay
     * ID3v2.2 tag support
+    * stabilized generated EIT (+e2e)
   * dipidescramble
     + last cw and ecm/biss-ca keys were not properly wiped
   * dipiscan

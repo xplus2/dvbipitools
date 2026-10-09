@@ -63,7 +63,7 @@ unsigned char bcd(unsigned v) { return (unsigned char)((((v / 10) % 10) << 4) | 
    overhead, so event_name (psi_put_text's 0x15 prefix included) must be <=250 */
 #define EIT_MAX_EVENT_NAME 249
 
-size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, const char *artist, const char *title, unsigned duration_s, time_t start, unsigned char *out, size_t cap) {
+size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, unsigned event_id, const char *artist, const char *title, unsigned duration_s, time_t start, unsigned char *out, size_t cap) {
   size_t n = 0, dll_pos, desc_start, dlen_pos, enl_pos, enl;
   unsigned dll, h, m, sec;
   char combined[EIT_MAX_EVENT_NAME + 1];
@@ -87,7 +87,7 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   out[n++] = 0x00; /* segment_last_section_number */
   out[n++] = 0x4E; /* last_table_id */
 
-  psi_put16(out + n, 1); /* event_id */
+  psi_put16(out + n, event_id);
   n += 2;
   gmtime_r(&start, &tmv);
   psi_put16(out + n, mjd_from_tm(&tmv));
@@ -101,7 +101,6 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   out[n++] = bcd(h);
   out[n++] = bcd(m);
   out[n++] = bcd(sec);
-  out[n++] = 0xF8; /* reserved(4)=1111, running_status=running(4), free_CA=0 */
 
   dll_pos = n;
   n += 2;
@@ -134,7 +133,7 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   out[n++] = 0x00; /* text_length: no extended text */
   out[dlen_pos] = (unsigned char)(n - (dlen_pos + 1));
   dll = (unsigned)(n - desc_start);
-  out[dll_pos] = (unsigned char)(0xF0 | ((dll >> 8) & 0x0F));
+  out[dll_pos] = (unsigned char)(0x80 | ((dll >> 8) & 0x0F));
   out[dll_pos + 1] = (unsigned char)dll;
   return psi_finish_section(out, n, cap, 0xF0);
 }

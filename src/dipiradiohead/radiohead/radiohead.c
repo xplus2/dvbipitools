@@ -204,9 +204,9 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
     if (tspacketizer_set_codec(*tk->tsp, f.stream_type, f.aac_profile_level))
       log_line_ansi("codec detected: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", source_codec_name(f.codec), f.sample_rate);
     if (tk->meta->dirty) {
-      tspacketizer_set_metadata(*tk->tsp, tk->meta->artist, tk->meta->title);
+      int accepted = tspacketizer_set_metadata(*tk->tsp, tk->meta->artist, tk->meta->title);
       tk->meta->dirty = 0;
-      log_line_ansi("now playing: \e[0;36m%s%s%s\e[0m", tk->meta->artist, (tk->meta->artist[0] && tk->meta->title[0]) ? " - " : "", tk->meta->title);
+      if (accepted) log_line_ansi("now playing: \e[0;36m%s%s%s\e[0m", tk->meta->artist, (tk->meta->artist[0] && tk->meta->title[0]) ? " - " : "", tk->meta->title);
     }
 
     now = mono_seconds();

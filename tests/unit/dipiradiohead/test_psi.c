@@ -78,7 +78,7 @@ END_TEST
 
 START_TEST(psi_build_eit_has_valid_header_and_crc) {
   unsigned char section[512];
-  size_t slen = psi_build_eit(2, 101, 1, 2, "Some Artist", "Some Title", 180, 1700000000, section, sizeof section);
+  size_t slen = psi_build_eit(2, 101, 1, 2, 7, "Some Artist", "Some Title", 180, 1700000000, section, sizeof section);
 
   ck_assert_uint_ne(slen, 0u);
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
@@ -101,6 +101,12 @@ START_TEST(psi_build_eit_has_valid_header_and_crc) {
   ck_assert_uint_eq(section[18], 0x22u);
   ck_assert_uint_eq(section[19], 0x13u);
   ck_assert_uint_eq(section[20], 0x20u);
+
+  ck_assert_uint_eq(((unsigned)section[14] << 8) | section[15], 7u);
+  ck_assert_uint_eq(section[24] >> 5, 4u);
+  ck_assert_uint_eq(section[24] & 0x10u, 0u);
+  ck_assert_uint_eq((((unsigned)section[24] & 0x0Fu) << 8) | section[25], slen - 4 - 26);
+  ck_assert_uint_eq(section[26], 0x4Du);
 }
 END_TEST
 
@@ -119,7 +125,7 @@ END_TEST
 
 START_TEST(psi_build_eit_uses_title_only_when_no_artist) {
   unsigned char section[512];
-  size_t slen = psi_build_eit(0, 1, 1, 1, "", "Just A Title", 0, 0, section, sizeof section);
+  size_t slen = psi_build_eit(0, 1, 1, 1, 1, "", "Just A Title", 0, 0, section, sizeof section);
   ck_assert_uint_ne(slen, 0u);
   ck_assert_ptr_nonnull(memmem(section, slen, "Just A Title", strlen("Just A Title")));
 }
@@ -127,7 +133,7 @@ END_TEST
 
 START_TEST(psi_build_eit_rejects_small_cap) {
   unsigned char section[16];
-  ck_assert_uint_eq(psi_build_eit(0, 1, 1, 1, "a", "b", 0, 0, section, sizeof section), 0u);
+  ck_assert_uint_eq(psi_build_eit(0, 1, 1, 1, 1, "a", "b", 0, 0, section, sizeof section), 0u);
 }
 END_TEST
 
@@ -137,7 +143,7 @@ START_TEST(psi_build_eit_bounds_descriptor_length_for_long_metadata) {
   char artist[301], title[301];
   unsigned char section[2048];
   size_t slen;
-  const size_t desc_start = 27; /* fixed offset of the 0x4D tag, per psi_build_eit's header layout */
+  const size_t desc_start = 26; /* fixed offset of the 0x4D tag, per psi_build_eit's header layout */
   unsigned dlen;
 
   memset(artist, 'A', sizeof artist - 1);
@@ -145,7 +151,7 @@ START_TEST(psi_build_eit_bounds_descriptor_length_for_long_metadata) {
   memset(title, 'B', sizeof title - 1);
   title[sizeof title - 1] = '\0';
 
-  slen = psi_build_eit(0, 1, 1, 1, artist, title, 0, 0, section, sizeof section);
+  slen = psi_build_eit(0, 1, 1, 1, 1, artist, title, 0, 0, section, sizeof section);
   ck_assert_uint_ne(slen, 0u);
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
   ck_assert_uint_eq(section[desc_start], 0x4Du);

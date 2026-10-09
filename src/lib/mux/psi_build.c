@@ -203,7 +203,7 @@ size_t psi_sdt_section_count(const psi_sdt_entry_t *services, size_t n_services)
 
 size_t psi_build_sdt_section(unsigned version, unsigned tsid, unsigned onid, const psi_sdt_entry_t *services, size_t n_services, size_t section_number, unsigned char *out, size_t cap) {
   size_t count = psi_sdt_section_count(services, n_services);
-  size_t first;
+  size_t first = 0;
   size_t span;
   size_t n;
 

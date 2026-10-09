@@ -14,7 +14,7 @@ struct tm;
 /* prog_desc/prog_desc_len: program_info descriptors, before ES loop. NULL/0 = none. */
 size_t psi_build_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, unsigned stream_type, unsigned es_pid, unsigned aac_profile_level, const unsigned char *prog_desc, size_t prog_desc_len, unsigned char *out, size_t cap);
 /* present event only (no following); duration_s is a nominal placeholder, real remaining time is unknown */
-size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, const char *artist, const char *title, unsigned duration_s, time_t start, unsigned char *out, size_t cap);
+size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, unsigned event_id, const char *artist, const char *title, unsigned duration_s, time_t start, unsigned char *out, size_t cap);
 size_t psi_build_eit_following(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, unsigned char *out, size_t cap);
 
 unsigned mjd_from_tm(const struct tm *t);

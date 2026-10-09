@@ -31,6 +31,7 @@
 #define IDLE_INTERVAL_PAT_CAT_S 0.1
 #define IDLE_INTERVAL_NIT_S 10.0
 #define EIT_DURATION_S 180       /* nominal placeholder, real remaining time is unknown */
+#define EIT_DURATION_MAX_S 86400
 
 struct tspacketizer {
   tspacketizer_cfg_t cfg;
@@ -55,6 +56,10 @@ struct tspacketizer {
   char title[256];
   int meta_changed;
   time_t event_start;
+  char prev_artist[256];
+  char prev_title[256];
+  unsigned eit_event_id;
+  unsigned eit_duration_s;
   uint64_t last_pat;
   uint64_t last_sdt;
   uint64_t last_nit;
@@ -104,10 +109,19 @@ tspacketizer_t *tspacketizer_new(const tspacketizer_cfg_t *cfg) {
 
 void tspacketizer_free(tspacketizer_t *t) { free(t); }
 
-void tspacketizer_set_metadata(tspacketizer_t *t, const char *artist, const char *title) {
-  bufcpy(t->artist, sizeof t->artist, artist);
-  bufcpy(t->title, sizeof t->title, title);
+int tspacketizer_set_metadata(tspacketizer_t *t, const char *artist, const char *title) {
+  char a[sizeof t->artist], ti[sizeof t->title];
+
+  bufcpy(a, sizeof a, artist);
+  bufcpy(ti, sizeof ti, title);
+  if (!strcmp(a, t->artist) && !strcmp(ti, t->title)) return 0;
+  if (!strcmp(a, t->prev_artist) && !strcmp(ti, t->prev_title)) return 0;
+  memcpy(t->prev_artist, t->artist, sizeof t->prev_artist);
+  memcpy(t->prev_title, t->title, sizeof t->prev_title);
+  memcpy(t->artist, a, sizeof t->artist);
+  memcpy(t->title, ti, sizeof t->title);
   t->meta_changed = 1;
+  return 1;
 }
 
 void tspacketizer_mark_discontinuity(tspacketizer_t *t) {
@@ -286,16 +300,35 @@ int tspacketizer_get_sdt_info(tspacketizer_t *t, psi_sdt_entry_t *out) {
 size_t tspacketizer_build_eit(tspacketizer_t *t, unsigned char *out, size_t cap) {
   size_t n;
   size_t f;
+  time_t now = time(NULL);
+  int changed = 0;
 
-  if (t->meta_changed) {
-    t->ver_eit = (t->ver_eit + 1) & 0x1F;
-    t->meta_changed = 0;
-    t->event_start = time(NULL);
+  if (t->meta_changed || !t->event_start) {
+    t->event_start = now;
+    t->eit_event_id = t->eit_event_id % 0xFFFF + 1;
+    t->eit_duration_s = EIT_DURATION_S;
+    changed = 1;
+  } else {
+    time_t elapsed = now > t->event_start ? now - t->event_start : 0;
+    unsigned long steps = (unsigned long)elapsed / EIT_DURATION_S + 1;
+    unsigned duration = steps * EIT_DURATION_S > EIT_DURATION_MAX_S ? EIT_DURATION_MAX_S : (unsigned)(steps * EIT_DURATION_S);
+    if (duration != t->eit_duration_s) {
+      t->eit_duration_s = duration;
+      changed = 1;
+    }
   }
-  n = psi_build_eit(t->ver_eit, t->cfg.sid, t->cfg.tsid, t->cfg.onid, t->artist, t->title, EIT_DURATION_S, t->event_start, out, cap);
+  t->meta_changed = 0;
+  if (changed) t->ver_eit = (t->ver_eit + 1) & 0x1F;
+  n = psi_build_eit(t->ver_eit, t->cfg.sid, t->cfg.tsid, t->cfg.onid, t->eit_event_id, t->artist, t->title, t->eit_duration_s, t->event_start, out, cap);
   if (!n) return 0;
   f = psi_build_eit_following(t->ver_eit, t->cfg.sid, t->cfg.tsid, t->cfg.onid, out + n, cap - n);
-  return f ? n + f : 0;
+  if (!f) return 0;
+  n += f;
+  if (changed && 2 * n <= cap) {
+    memcpy(out + n, out, n);
+    n *= 2;
+  }
+  return n;
 }
 
 int tspacketizer_eit_pending(const tspacketizer_t *t) { return t->meta_changed; }
