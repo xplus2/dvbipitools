@@ -110,25 +110,40 @@ unsigned emmg_server_client_count(emmg_server_t *s) {
 
 unsigned long emmg_server_emm_total(emmg_server_t *s) { return atomic_load_explicit(&s->emm_total, memory_order_relaxed); }
 
-static int tcp_listen_dualstack(unsigned port) {
-  struct sockaddr_in6 addr;
+static int tcp_listen_any(unsigned port) {
+  struct sockaddr_storage ss;
+  socklen_t sslen;
   int fd;
   int on = 1;
   int off = 0;
   int flags;
+
+  memset(&ss, 0, sizeof ss);
   fd = socket(AF_INET6, SOCK_STREAM, 0);
-  if (fd < 0) {
+  if (fd >= 0) {
+    struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)&ss;
+    setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof off);
+    a6->sin6_family = AF_INET6;
+    a6->sin6_addr = in6addr_any;
+    a6->sin6_port = htons((unsigned short)port);
+    sslen = sizeof *a6;
+  } else if (errno == EAFNOSUPPORT) {
+    struct sockaddr_in *a4 = (struct sockaddr_in *)&ss;
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+      log_line("emmg: socket: %s", strerror(errno));
+      return -1;
+    }
+    a4->sin_family = AF_INET;
+    a4->sin_addr.s_addr = htonl(INADDR_ANY);
+    a4->sin_port = htons((unsigned short)port);
+    sslen = sizeof *a4;
+  } else {
     log_line("emmg: socket: %s", strerror(errno));
     return -1;
   }
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
-  setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof off);
-
-  memset(&addr, 0, sizeof addr);
-  addr.sin6_family = AF_INET6;
-  addr.sin6_addr = in6addr_any;
-  addr.sin6_port = htons((unsigned short)port);
-  if (bind(fd, (struct sockaddr *)&addr, sizeof addr) < 0) {
+  if (bind(fd, (struct sockaddr *)&ss, sslen) < 0) {
     log_line("emmg: bind :%u: %s", port, strerror(errno));
     close(fd);
     return -1;
@@ -163,7 +178,7 @@ emmg_server_t *emmg_server_start(const emmg_server_cfg_t *cfg) {
     s->max_conns = cfg->max_conns ? cfg->max_conns : 8;
     if (s->max_conns > EMMG_MAX_CONNS_CEILING)
       s->max_conns = EMMG_MAX_CONNS_CEILING;
-    s->listen_fd = tcp_listen_dualstack(cfg->port);
+    s->listen_fd = tcp_listen_any(cfg->port);
     if (s->listen_fd < 0) {
       free(s);
       return NULL;
@@ -183,10 +198,11 @@ emmg_server_t *emmg_server_start(const emmg_server_cfg_t *cfg) {
 
 /* useful when cfg.port was 0 (kernel-assigned ephemeral port) */
 unsigned emmg_server_port(emmg_server_t *s) {
-  struct sockaddr_in6 addr;
-  socklen_t alen = sizeof addr;
-  if (getsockname(s->listen_fd, (struct sockaddr *)&addr, &alen) < 0) return 0;
-  return ntohs(addr.sin6_port);
+  struct sockaddr_storage ss;
+  socklen_t alen = sizeof ss;
+  if (getsockname(s->listen_fd, (struct sockaddr *)&ss, &alen) < 0) return 0;
+  if (ss.ss_family == AF_INET6) return ntohs(((struct sockaddr_in6 *)&ss)->sin6_port);
+  return ntohs(((struct sockaddr_in *)&ss)->sin_port);
 }
 
 void emmg_server_stop(emmg_server_t *s) {
@@ -194,7 +210,7 @@ void emmg_server_stop(emmg_server_t *s) {
   atomic_store_explicit(&s->stop, 1, memory_order_relaxed);
   pthread_join(s->accept_thread, NULL);
   if (s->listen_fd >= 0) close(s->listen_fd);
-  for (unsigned i = 0; i < s->max_conns; i++) {
+  for (unsigned i = 0; i < EMMG_MAX_CONNS_CEILING; i++) {
     if (s->worker_thread_joinable[i]) {
       pthread_join(s->worker_thread[i], NULL);
       s->worker_thread_joinable[i] = 0;

@@ -332,6 +332,17 @@ START_TEST(emit_metrics_adds_one_labeled_block_per_cas_vendor) {
 }
 END_TEST
 
+START_TEST(timeline_stays_monotonic_across_a_sample_rate_change) {
+  uint64_t t = 0, before;
+
+  for (int i = 0; i < 100; i++) timeline_add(&t, 1152, 44100);
+  before = timeline_pts(t);
+  timeline_add(&t, 1024, 48000);
+  ck_assert_uint_gt(timeline_pts(t), before);
+  ck_assert_uint_le(llabs((long long)(timeline_pts(t) - before) - 1920), 1);
+}
+END_TEST
+
 START_TEST(emit_metrics_is_a_no_op_for_a_disabled_exporter) {
   metrics_exporter_t mx;
   out_ctx_t out;
@@ -549,7 +560,7 @@ typedef struct {
   input_metrics_t im;
   radio_metrics_t rm;
   metrics_exporter_t mx;
-  uint64_t samples_total;
+  uint64_t timeline;
   double pace_start;
   double pace_deadline;
   double last_stat;
@@ -601,7 +612,7 @@ static unsigned single_rig_open(single_rig_t *r, const unsigned char *body, size
   r->tk.rm = &r->rm;
   r->tk.metrics_on = 1;
   r->tk.mx = &r->mx;
-  r->tk.samples_total = &r->samples_total;
+  r->tk.timeline = &r->timeline;
   r->tk.pace_deadline = &r->pace_deadline;
   r->tk.last_stat = &r->last_stat;
   r->tk.last_synced_bytes = &r->last_synced;
@@ -642,7 +653,7 @@ START_TEST(single_frame_creates_the_standalone_program_and_paces_the_stream) {
   frames = r->rm.frames_total[SRC_MPEG_AUDIO];
   ck_assert_uint_ge(frames, 1u);
   ck_assert_uint_le(frames, 13u);
-  ck_assert_uint_eq(r->samples_total, frames * 1152u);
+  ck_assert_uint_le(llabs((long long)timeline_pts(r->timeline) - (long long)(frames * 1152u * 90000u / 44100u)), 1);
   ck_assert_double_eq_tol(r->pace_deadline - r->pace_start, (double)(frames * 1152u) / 44100.0, 1e-6);
   ck_assert_int_eq(r->meta.dirty, 0);
   ck_assert_int_eq(tspacketizer_eit_pending(r->tsp), 0);
@@ -760,6 +771,7 @@ static Suite *radiohead_suite(void) {
   tcase_add_test(tc, flush_batch_prefixes_rtp_header_when_rtp_enabled);
   tcase_add_test(tc, emit_metrics_reports_output_service_and_radio_counters);
   tcase_add_test(tc, emit_metrics_adds_one_labeled_block_per_cas_vendor);
+  tcase_add_test(tc, timeline_stays_monotonic_across_a_sample_rate_change);
   tcase_add_test(tc, emit_metrics_is_a_no_op_for_a_disabled_exporter);
   tcase_add_test(tc, mpts_cas_relay_helpers_forward_to_the_cas);
   tcase_add_test(tc, radiohead_mpts_set_cas_makes_the_mux_send_the_cas_cat);

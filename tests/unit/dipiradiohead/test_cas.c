@@ -168,6 +168,8 @@ START_TEST(clock_tick_is_safe_for_every_engine_and_clock_step) {
   cas_clock_tick(c, 90000);
   cas_clock_tick(c, 90000 + 2090);
   cas_clock_tick(c, 90000 + 2090);
+  cas_clock_tick(c, 0);
+  cas_clock_tick(c, 2090);
   ck_assert_int_eq(cas_failed(c), 0);
   cas_stop(c);
 

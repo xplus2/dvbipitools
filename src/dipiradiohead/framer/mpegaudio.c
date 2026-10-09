@@ -83,5 +83,6 @@ int mpegaudio_probe(const unsigned char *p, size_t avail, mpegaudio_info_t *info
   info->sample_rate = sample_rate;
   info->samples_per_frame = samples;
   info->frame_len = frame_len;
+  info->half_rate = version != 3;
   return 1;
 }

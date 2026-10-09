@@ -30,7 +30,7 @@ void scte35stamp_flush(scte35stamp_t *s, scte35_emit_fn emit, void *ctx) {
 }
 
 static void patch_and_emit(scte35stamp_t *s, int64_t delta90k, scte35_emit_fn emit, void *ctx) {
-  unsigned char sec[SECTION_MAX];
+  unsigned char sec[SECTION_MAX] = {0};
   unsigned pos = 0;
   uint64_t adj;
   uint64_t d;

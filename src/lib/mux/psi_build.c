@@ -9,6 +9,12 @@
 
 #include "psi_build.h"
 
+#define SDT_SECTION_MAX 1024
+#define SDT_ENTRIES_MAX (SDT_SECTION_MAX - 11 - 4)
+#define SDT_DESC_BODY_MAX 255
+#define SDT_PROVIDER_TEXT_MAX 126
+#define NIT_NAME_MAX 255
+
 void psi_put16(unsigned char *p, unsigned v) { be16_put(p, (uint16_t)v); }
 
 size_t psi_utf8_clamp(const char *s, size_t len, size_t max_bytes) {
@@ -101,42 +107,34 @@ size_t psi_build_cat(unsigned version, const unsigned char *desc, size_t desc_le
   return psi_finish_section(out, n, cap, 0xB0);
 }
 
+static size_t sdt_text_lens(const psi_sdt_entry_t *e, size_t *plen, size_t *slen) {
+  *plen = 1 + psi_utf8_clamp(e->provider, strlen(e->provider), SDT_PROVIDER_TEXT_MAX - 1);
+  *slen = 1 + psi_utf8_clamp(e->service_name, strlen(e->service_name), SDT_DESC_BODY_MAX - 3 - *plen - 1);
+  return 10 + *plen + *slen;
+}
+
 static size_t psi_put_sdt_entry(unsigned char *out, size_t n, size_t cap, const psi_sdt_entry_t *e) {
   size_t f16_pos;
-  size_t desc_start;
-  size_t dlen_pos;
-  size_t plen_pos;
-  size_t slen_pos;
   size_t plen;
   size_t slen;
-  unsigned dll;
+  size_t size = sdt_text_lens(e, &plen, &slen);
   unsigned field16;
 
-  if (n + 9 > cap) return 0;
+  if (n + size > cap) return 0;
   psi_put16(out + n, e->service_id);
   n += 2;
   out[n++] = 0xFD; /* reserved(6)=111111, EIT_schedule=0, EIT_present_following=1 */
   f16_pos = n;
   n += 2;
-  desc_start = n;
   out[n++] = 0x48; /* service_descriptor */
-  dlen_pos = n;
-  n++;
+  out[n++] = (unsigned char)(3 + plen + slen);
   out[n++] = (unsigned char)e->service_type;
-  plen_pos = n;
-  n++;
-  plen = psi_put_text(out + n, cap - n, e->provider);
-  n += plen;
-  out[plen_pos] = (unsigned char)plen;
-  slen_pos = n;
-  n++;
-  slen = psi_put_text(out + n, cap - n, e->service_name);
-  n += slen;
-  out[slen_pos] = (unsigned char)slen;
-  out[dlen_pos] = (unsigned char)(n - (dlen_pos + 1));
+  out[n++] = (unsigned char)plen;
+  n += psi_put_text(out + n, plen, e->provider);
+  out[n++] = (unsigned char)slen;
+  n += psi_put_text(out + n, slen, e->service_name);
 
-  dll = (unsigned)(n - desc_start);
-  field16 = ((4u & 0x7) << 13) | (0u << 12) | (dll & 0x0FFF); /* running_status=running, free_CA=0 */
+  field16 = ((4u & 0x7) << 13) | (0u << 12) | ((unsigned)(size - 5) & 0x0FFF); /* running_status=running, free_CA=0 */
   out[f16_pos] = (unsigned char)(field16 >> 8);
   out[f16_pos + 1] = (unsigned char)field16;
   return n;
@@ -168,16 +166,63 @@ size_t psi_build_sdt(unsigned version, unsigned tsid, unsigned onid, unsigned se
   return psi_finish_section(out, n, cap, 0xF0);
 }
 
-size_t psi_build_sdt_multi(unsigned version, unsigned tsid, unsigned onid, const psi_sdt_entry_t *services, size_t n_services, unsigned char *out, size_t cap) {
+/* greedy fill */
+static size_t sdt_section_span(const psi_sdt_entry_t *services, size_t n_services, size_t section_number, size_t *first) {
+  size_t start = 0;
+  size_t sec = 0;
+
+  for (;;) {
+    size_t used = 0;
+    size_t i = start;
+    while (i < n_services) {
+      size_t plen;
+      size_t slen;
+      size_t size = sdt_text_lens(&services[i], &plen, &slen);
+      if (used + size > SDT_ENTRIES_MAX) break;
+      used += size;
+      i++;
+    }
+    if (sec == section_number) {
+      *first = start;
+      return i - start;
+    }
+    if (i >= n_services) return 0;
+    start = i;
+    sec++;
+  }
+}
+
+size_t psi_sdt_section_count(const psi_sdt_entry_t *services, size_t n_services) {
+  size_t first;
+  size_t count = 0;
+
+  if (n_services == 0) return 0;
+  while (sdt_section_span(services, n_services, count, &first)) count++;
+  return count;
+}
+
+size_t psi_build_sdt_section(unsigned version, unsigned tsid, unsigned onid, const psi_sdt_entry_t *services, size_t n_services, size_t section_number, unsigned char *out, size_t cap) {
+  size_t count = psi_sdt_section_count(services, n_services);
+  size_t first;
+  size_t span;
   size_t n;
   size_t i;
-  if (cap < 12 || n_services == 0) return 0;
+
+  if (cap < 12 || count == 0 || count > 256 || section_number >= count) return 0;
+  span = sdt_section_span(services, n_services, section_number, &first);
   n = psi_put_sdt_header(out, version, tsid, onid);
-  for (i = 0; i < n_services; i++) {
+  out[6] = (unsigned char)section_number;
+  out[7] = (unsigned char)(count - 1);
+  for (i = first; i < first + span; i++) {
     n = psi_put_sdt_entry(out, n, cap, &services[i]);
     if (!n) return 0;
   }
   return psi_finish_section(out, n, cap, 0xF0);
+}
+
+size_t psi_build_sdt_multi(unsigned version, unsigned tsid, unsigned onid, const psi_sdt_entry_t *services, size_t n_services, unsigned char *out, size_t cap) {
+  if (psi_sdt_section_count(services, n_services) != 1) return 0;
+  return psi_build_sdt_section(version, tsid, onid, services, n_services, 0, out, cap);
 }
 
 size_t psi_build_nit(unsigned version, unsigned onid, unsigned tsid, const char *network_name, unsigned char *out, size_t cap) {
@@ -205,7 +250,7 @@ size_t psi_build_nit(unsigned version, unsigned onid, unsigned tsid, const char 
   out[n++] = 0x40; /* network_name_descriptor */
   dlen_pos = n;
   n++;
-  nlen = psi_put_text(out + n, cap - n, network_name);
+  nlen = psi_put_text(out + n, cap - n < NIT_NAME_MAX ? cap - n : NIT_NAME_MAX, network_name);
   n += nlen;
   out[dlen_pos] = (unsigned char)nlen;
   ndl = (unsigned)(n - nd_start);

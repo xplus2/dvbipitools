@@ -252,6 +252,18 @@ START_TEST(http_async_decodes_chunked_body) {
   buf[got] = '\0';
   ck_assert_str_eq(buf, "HELLO, WORLD");
 
+  {
+    net_err_reason_t why = NET_ERR_OTHER;
+    ssize_t n = 0;
+    for (int i = 0; i < 200 && n == 0; i++) {
+      n = http_read(h, buf, sizeof buf, &why);
+      if (n == 0) usleep(5000);
+    }
+    ck_assert_int_eq((int)n, -1);
+    ck_assert_int_eq(why, NET_ERR_EOF);
+    ck_assert_int_eq((int)http_read(h, buf, sizeof buf, &why), -1);
+  }
+
   http_close(h);
   pthread_join(th, NULL);
   close(listen_fd);

@@ -45,7 +45,10 @@ static ssize_t body_read_raw(struct http *h, void *buf, size_t cap, net_err_reas
 }
 
 static ssize_t http_read_chunked(struct http *h, void *buf, size_t cap, net_err_reason_t *reason_out) {
-  if (h->chunk_done) return 0;
+  if (h->chunk_done) {
+    if (reason_out) *reason_out = NET_ERR_EOF;
+    return -1;
+  }
   for (;;) {
     ssize_t n = body_read_raw(h, buf, cap, reason_out);
     size_t bufsz;

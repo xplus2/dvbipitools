@@ -94,6 +94,15 @@ START_TEST(http_get_rejects_a_malformed_response) {
 }
 END_TEST
 
+START_TEST(http_get_accepts_a_shoutcast_v1_status_line) {
+  unsigned port;
+  http_t *h = get_response("ICY 200 OK\r\nicy-name: Test\r\nConnection: close\r\n\r\n", &port);
+  ck_assert_int_eq(http_status(h), 200);
+  ck_assert_str_eq(http_header(h, "icy-name"), "Test");
+  http_close(h);
+}
+END_TEST
+
 START_TEST(http_get_reports_a_connection_closed_before_the_headers) {
   unsigned port;
   net_err_reason_t reason = NET_ERR_COUNT;
@@ -204,6 +213,7 @@ static Suite *httpclient_headers_suite(void) {
   Suite *s = suite_create("httpclient_headers");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, http_get_rejects_a_malformed_response);
+  tcase_add_test(tc, http_get_accepts_a_shoutcast_v1_status_line);
   tcase_add_test(tc, http_get_reports_a_connection_closed_before_the_headers);
   tcase_add_test(tc, http_get_keeps_only_the_headers_that_fit);
   tcase_add_test(tc, http_read_reports_the_end_of_the_body);

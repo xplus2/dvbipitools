@@ -129,25 +129,25 @@ size_t mpts_tick(mpts_t *m, double now_s, ts_packet_cb cb, void *ctx) {
       if (pctx && m->program_ops->get_sdt_info(pctx, &sdt_entries[n_sdt]) == 0) n_sdt++;
     }
     if (n_sdt) {
-      uint32_t sig;
-      n = psi_build_sdt_multi(0, m->tsid, m->onid, sdt_entries, n_sdt, sec, sizeof sec);
-      /* exclude trailing CRC32 itself. crc32_mpeg is self-verifying, hashing it in always gives 0 */
-      sig = n > 4 ? crc32_mpeg(sec, n - 4) : 0;
+      uint32_t sig = 0;
+      size_t n_sec = psi_sdt_section_count(sdt_entries, n_sdt);
+      for (size_t s = 0; s < n_sec; s++) {
+        n = psi_build_sdt_section(0, m->tsid, m->onid, sdt_entries, n_sdt, s, sec, sizeof sec);
+        sig = sig * 16777619u ^ (n > 4 ? crc32_mpeg(sec, n - 4) : 0); /* excl. trailing CRC32: hashing it in always gives 0 */
+      }
       if (m->sdt_primed && sig != m->sdt_sig) m->ver_sdt = (m->ver_sdt + 1) & 0x1F;
       m->sdt_sig = sig;
       m->sdt_primed = 1;
-      if (n > 4) {
-        sec[5] = (unsigned char)(0xC0 | ((m->ver_sdt & 0x1F) << 1) | 0x01);
-        be32_put(sec + n - 4, crc32_mpeg(sec, n - 4));
+      for (size_t s = 0; s < n_sec; s++) {
+        n = psi_build_sdt_section(m->ver_sdt, m->tsid, m->onid, sdt_entries, n_sdt, s, sec, sizeof sec);
+        if (n) count += ts_packet_emit(0x0011, &m->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
       }
-      if (n) count += ts_packet_emit(0x0011, &m->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
     }
   }
 
   for (unsigned i = 0; i < m->n_programs; i++) {
     void *pctx = m->program_ctx[i];
     int eit_due;
-
     if (!pctx) continue;
     eit_due = due_s(now_s, &m->last_eit[i], MPTS_INTERVAL_EIT);
     if (m->program_ops->eit_pending(pctx) || eit_due) {

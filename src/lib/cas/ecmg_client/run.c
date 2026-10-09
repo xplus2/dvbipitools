@@ -79,7 +79,7 @@ static int session_send(const ecmg_session_t *s, const unsigned char *msg, size_
 
 /* periodic channel_test, fails when too late */
 static int session_tick(ecmg_session_t *s) {
-  unsigned char msg[SIMULCRYPT_HDR_LEN + 16];
+  unsigned char msg[SIMULCRYPT_HDR_LEN + 16] = {0};
   int64_t now = now_ms();
   if (s->test_deadline) {
     if (now < s->test_deadline) return 0;
@@ -94,7 +94,7 @@ static int session_tick(ecmg_session_t *s) {
 
 /* 0 consumed, -1 fatal, 1 no session msg */
 static int session_handle(ecmg_session_t *s, const simulcrypt_hdr_t *hdr, const unsigned char *payload) {
-  unsigned char msg[SIMULCRYPT_HDR_LEN + 64];
+  unsigned char msg[SIMULCRYPT_HDR_LEN + 64] = {0};
   switch (hdr->type) {
     case ECMG_MSG_CHANNEL_TEST:
       return session_send(s, msg, ecmg_build_channel_status(msg, sizeof msg, s->version, s->lead_cw, s->cw_per_msg, s->max_comp_time_ms, atomic_load_explicit(&s->c->ecm_rep_period_ms, memory_order_relaxed)));

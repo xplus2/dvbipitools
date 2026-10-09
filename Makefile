@@ -600,6 +600,14 @@ dipiradiohead_SRCS := \
 	src/lib/hls/playlist.c \
 	src/lib/hls/live.c \
 	src/lib/hls/aes128cbc.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
 	src/dipiradiohead/input/icy.c \
 	src/dipiradiohead/input/id3.c \
 	src/dipiradiohead/input/source/open.c \

@@ -9,6 +9,7 @@
 #include "lib/demux/rawaudio.h"
 #include "lib/demux/tspack.h"
 #include "lib/hls/live.h"
+#include "lib/mux/esbuild/remux.h"
 
 #include "../../framer/aac_latm.h"
 #include "../framequeue.h"
@@ -19,6 +20,9 @@
 #define SRC_BUF_CAP 16384
 #define SRC_SNIFF_CAP 2048
 #define SRC_MAX_HOPS 5
+#define SRC_STALL_TIMEOUT_S 20.0
+#define SRC_OPEN_TIMEOUT_S 30.0
+#define SRC_REDETECT_FAILS 4
 
 struct source {
   unsigned idx;
@@ -27,16 +31,22 @@ struct source {
   hls_live_t *hls; /* NULL: plain stream via http */
   tspack_t hls_tspack;
   rawaudio_demux_t *hls_demux;
+  int hls_warned;
+  esbuild_remux_t *hls_remux; /* fMP4 segments, allocated on first init segment */
   icy_t *icy; /* NULL: no icy-metaint, ID3-only metadata */
   id3_t *id3;
 
   int codec_known;
   source_codec_t codec;
   aac_latm_t *latm;
+  unsigned resync_fails;   /* consecutive bad frames, codec re-detected at SRC_REDETECT_FAILS */
+  size_t detect_skipped;   /* bytes dropped without a confirmed sync */
   unsigned char buf[SRC_BUF_CAP];
   size_t buf_len;
+  size_t tag_skip; /* oversize ID3 tag bytes still to discard */
   size_t pending_consume; /* last returned frame's byte count, dropped next call */
   unsigned long long bytes_total;
+  double last_rx; /* mono_seconds() of last wire data */
 
   framequeue_t *fq; /* NULL: no de-jitter, frames go straight out */
   unsigned prefill_ms;

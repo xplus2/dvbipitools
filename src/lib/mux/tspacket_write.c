@@ -23,6 +23,7 @@ typedef struct {
   size_t payload_len;
   int with_pcr;
   uint64_t pcr_90k;
+  int disc;
   size_t pad;
 } ts_packet_desc_t;
 
@@ -38,7 +39,7 @@ static void write_packet(const ts_packet_desc_t *d, unsigned char *cc, ts_packet
     unsigned af_len = (unsigned)(7 + d->pad);
     pkt[3] = (unsigned char)(0x30 | *cc);
     pkt[4] = (unsigned char)af_len;
-    pkt[5] = 0x10; /* PCR_flag only */
+    pkt[5] = (unsigned char)(0x10 | (d->disc ? 0x80 : 0x00)); /* PCR_flag, discontinuity_indicator */
     put_pcr(pkt + 6, d->pcr_90k, 0);
     pos = 12;
     memset(pkt + pos, 0xFF, d->pad);
@@ -65,7 +66,7 @@ static void write_packet(const ts_packet_desc_t *d, unsigned char *cc, ts_packet
   cb(ctx, pkt);
 }
 
-size_t ts_packet_emit(unsigned pid, unsigned char *cc, const unsigned char *pointer_byte, const unsigned char *data, size_t len, int pcr_first, uint64_t pcr_90k, ts_packet_cb cb, void *ctx) {
+static size_t emit_core(unsigned pid, unsigned char *cc, const unsigned char *pointer_byte, const unsigned char *data, size_t len, int pcr_first, uint64_t pcr_90k, int disc, ts_packet_cb cb, void *ctx) {
   size_t sent = 0, count = 0;
   int first = 1;
   while (first || sent < len) {
@@ -76,12 +77,20 @@ size_t ts_packet_emit(unsigned pid, unsigned char *cc, const unsigned char *poin
     size_t space = 184 - ptr_overhead - af_fixed;
     size_t take = remaining < space ? remaining : space;
     size_t pad = space - take;
-    write_packet(&(ts_packet_desc_t){pid, first, first ? pointer_byte : NULL, data + sent, take, with_pcr, pcr_90k, pad}, cc, cb, ctx);
+    write_packet(&(ts_packet_desc_t){pid, first, first ? pointer_byte : NULL, data + sent, take, with_pcr, pcr_90k, with_pcr && disc, pad}, cc, cb, ctx);
     sent += take;
     first = 0;
     count++;
   }
   return count;
+}
+
+size_t ts_packet_emit(unsigned pid, unsigned char *cc, const unsigned char *pointer_byte, const unsigned char *data, size_t len, int pcr_first, uint64_t pcr_90k, ts_packet_cb cb, void *ctx) {
+  return emit_core(pid, cc, pointer_byte, data, len, pcr_first, pcr_90k, 0, cb, ctx);
+}
+
+size_t ts_packet_emit_pcr(unsigned pid, unsigned char *cc, const unsigned char *data, size_t len, uint64_t pcr_90k, int discontinuity, ts_packet_cb cb, void *ctx) {
+  return emit_core(pid, cc, NULL, data, len, 1, pcr_90k, discontinuity, cb, ctx);
 }
 
 size_t ts_packet_emit_partial(unsigned pid, unsigned char *cc, const unsigned char *pointer_byte, const unsigned char *data, size_t len, size_t *offset, size_t max_packets, ts_packet_cb cb, void *ctx) {
@@ -93,11 +102,24 @@ size_t ts_packet_emit_partial(unsigned pid, unsigned char *cc, const unsigned ch
     size_t space = 184 - ptr_overhead;
     size_t take = remaining < space ? remaining : space;
     size_t pad = space - take;
-    write_packet(&(ts_packet_desc_t){pid, first, first ? pointer_byte : NULL, data + sent, take, 0, 0, pad}, cc, cb, ctx);
+    write_packet(&(ts_packet_desc_t){pid, first, first ? pointer_byte : NULL, data + sent, take, 0, 0, 0, pad}, cc, cb, ctx);
     sent += take;
     first = 0;
     count++;
   }
   *offset = sent;
   return count;
+}
+
+void ts_packet_emit_pcr_only(unsigned pid, const unsigned char *cc, uint64_t pcr_90k, ts_packet_cb cb, void *ctx) {
+  unsigned char pkt[188];
+  pkt[0] = 0x47;
+  pkt[1] = (unsigned char)((pid >> 8) & 0x1F);
+  pkt[2] = (unsigned char)pid;
+  pkt[3] = (unsigned char)(0x20 | (*cc & 0x0F));
+  pkt[4] = 183;
+  pkt[5] = 0x10;
+  put_pcr(pkt + 6, pcr_90k, 0);
+  memset(pkt + 12, 0xFF, 176);
+  cb(ctx, pkt);
 }

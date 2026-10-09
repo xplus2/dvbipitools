@@ -24,6 +24,16 @@
 
 #define TS_PER_DGRAM 7
 
+#define TIMELINE_FRAC_BITS 20
+
+/* media clock: 90 kHz ticks, Q20 fixed point. rate-independent */
+static inline uint64_t timeline_pts(uint64_t t) {
+  return t >> TIMELINE_FRAC_BITS;
+}
+static inline void timeline_add(uint64_t *t, unsigned samples, unsigned rate) {
+  *t += ((uint64_t)samples * 90000ULL << TIMELINE_FRAC_BITS) / rate;
+}
+
 #define RADIOHEAD_POLL_MAX_MS 100
 #define RADIOHEAD_MAX_FRAMES_PER_TICK 32 /* per input, per tick. caps one input's backlog delaying others */
 #define RADIOHEAD_PACE_TOLERANCE_S 0.3
@@ -85,7 +95,7 @@ typedef struct {
   radio_metrics_t *rm;
   int metrics_on;
   metrics_exporter_t *mx;
-  uint64_t *samples_total;
+  uint64_t *timeline;
   double *pace_deadline;
   double start;
   double *last_stat;
@@ -109,7 +119,7 @@ typedef struct {
   const config_t *cfg;
   tspacketizer_t **tsps;
   meta_state_t *metas;
-  uint64_t *samples_total;
+  uint64_t *timeline;
   double *pace_deadline;
   int *was_connected;
   input_metrics_t *input_stats;

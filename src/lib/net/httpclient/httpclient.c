@@ -53,7 +53,13 @@ ssize_t raw_recv(struct http *h, void *buf, size_t cap, net_err_reason_t *reason
   for (;;) {
     n = recv(h->fd, buf, cap, 0);
     if (n < 0) {
-      if (errno == EINTR) continue; /* EINTR: not a real timeout, retry */
+      if (errno == EINTR) {
+        if (signal_stop_requested()) {
+          if (reason_out) *reason_out = NET_ERR_OTHER;
+          return -1;
+        }
+        continue;
+      }
       if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
       log_line("recv: %s", strerror(errno));
       if (reason_out) *reason_out = NET_ERR_READ;
@@ -93,7 +99,21 @@ static void hdr_lower(char *s) {
   for (; *s; s++) *s = (char)tolower((unsigned char)*s);
 }
 
-int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out) {
+static int icy_to_http(struct http *h, size_t *got) {
+  static const char icy[] = "ICY ";
+  static const char http10[] = "HTTP/1.0 ";
+  size_t n = *got < 4 ? *got : 4;
+  if (memcmp(h->hold, icy, n) != 0) return 0;
+  if (*got < 4) return -2;
+  if (*got + sizeof http10 - 1 - 4 > sizeof h->hold) return -1;
+  memmove(h->hold + sizeof http10 - 1, h->hold + 4, *got - 4);
+  memcpy(h->hold, http10, sizeof http10 - 1);
+  *got += sizeof http10 - 1 - 4;
+  return 1;
+}
+
+int try_parse_response(struct http *h, size_t *gotp, net_err_reason_t *reason_out) {
+  size_t got;
   const char *msg;
   size_t msg_len;
   int minor_version;
@@ -102,7 +122,15 @@ int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out)
   size_t num_headers = HTTP_PARSE_MAX_HEADERS;
   int pret;
   const char *cl;
+  int icy = icy_to_http(h, gotp);
 
+  if (icy == -2) return 0;
+  if (icy < 0) {
+    log_line("http: response headers too large");
+    if (reason_out) *reason_out = NET_ERR_FORMAT;
+    return -1;
+  }
+  got = *gotp;
   pret = phr_parse_response((const char *)h->hold, got, &minor_version, &status, &msg, &msg_len, headers, &num_headers, 0);
   (void)msg;
   (void)msg_len;
@@ -313,7 +341,7 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
       goto fail;
     }
     got += (size_t)n;
-    pr = try_parse_response(h, got, reason_out);
+    pr = try_parse_response(h, &got, reason_out);
     if (pr < 0) goto fail;
     if (pr > 0) {
       have = 1;

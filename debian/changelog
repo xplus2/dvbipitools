@@ -34,6 +34,11 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + teletext+subs descriptors passthrough fixed
   * dipiradiohead
     + PMT lost CA descriptors with 5+ CAS vendors
+    + shoutcast v1 support
+    + ADTS to TS conversion
+    + handle 8859-1 icy tags
+    + fixed 5s shutdown delay
+    * ID3v2.2 tag support
   * dipidescramble
     + last cw and ecm/biss-ca keys were not properly wiped
   * dipiscan

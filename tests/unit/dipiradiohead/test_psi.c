@@ -78,7 +78,7 @@ END_TEST
 
 START_TEST(psi_build_eit_has_valid_header_and_crc) {
   unsigned char section[512];
-  size_t slen = psi_build_eit(2, 101, 1, 2, "Some Artist", "Some Title", 180, section, sizeof section);
+  size_t slen = psi_build_eit(2, 101, 1, 2, "Some Artist", "Some Title", 180, 1700000000, section, sizeof section);
 
   ck_assert_uint_ne(slen, 0u);
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
@@ -93,12 +93,33 @@ START_TEST(psi_build_eit_has_valid_header_and_crc) {
   ck_assert_uint_eq(section[23], 0x00u);
 
   ck_assert_ptr_nonnull(memmem(section, slen, "Some Artist Some Title", strlen("Some Artist Some Title")));
+
+  ck_assert_uint_eq(section[6], 0u); /* section_number */
+  ck_assert_uint_eq(section[7], 1u); /* last_section_number */
+  /* fixed start 2023-11-14 22:13:20 UTC: MJD 60262, BCD 22:13:20 */
+  ck_assert_uint_eq(((unsigned)section[16] << 8) | section[17], 60262u);
+  ck_assert_uint_eq(section[18], 0x22u);
+  ck_assert_uint_eq(section[19], 0x13u);
+  ck_assert_uint_eq(section[20], 0x20u);
+}
+END_TEST
+
+START_TEST(psi_build_eit_following_is_empty_section_one) {
+  unsigned char section[64];
+  size_t slen = psi_build_eit_following(2, 101, 1, 2, section, sizeof section);
+
+  ck_assert_uint_ne(slen, 0u);
+  ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
+  ck_assert_uint_eq(section[0], 0x4Eu);
+  ck_assert_uint_eq(section[6], 1u);
+  ck_assert_uint_eq(section[7], 1u);
+  ck_assert_uint_eq(slen, 18u); /* header + CRC, no events */
 }
 END_TEST
 
 START_TEST(psi_build_eit_uses_title_only_when_no_artist) {
   unsigned char section[512];
-  size_t slen = psi_build_eit(0, 1, 1, 1, "", "Just A Title", 0, section, sizeof section);
+  size_t slen = psi_build_eit(0, 1, 1, 1, "", "Just A Title", 0, 0, section, sizeof section);
   ck_assert_uint_ne(slen, 0u);
   ck_assert_ptr_nonnull(memmem(section, slen, "Just A Title", strlen("Just A Title")));
 }
@@ -106,7 +127,7 @@ END_TEST
 
 START_TEST(psi_build_eit_rejects_small_cap) {
   unsigned char section[16];
-  ck_assert_uint_eq(psi_build_eit(0, 1, 1, 1, "a", "b", 0, section, sizeof section), 0u);
+  ck_assert_uint_eq(psi_build_eit(0, 1, 1, 1, "a", "b", 0, 0, section, sizeof section), 0u);
 }
 END_TEST
 
@@ -124,7 +145,7 @@ START_TEST(psi_build_eit_bounds_descriptor_length_for_long_metadata) {
   memset(title, 'B', sizeof title - 1);
   title[sizeof title - 1] = '\0';
 
-  slen = psi_build_eit(0, 1, 1, 1, artist, title, 0, section, sizeof section);
+  slen = psi_build_eit(0, 1, 1, 1, artist, title, 0, 0, section, sizeof section);
   ck_assert_uint_ne(slen, 0u);
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
   ck_assert_uint_eq(section[desc_start], 0x4Du);
@@ -213,6 +234,7 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_build_pmt_includes_aac_descriptor_when_profile_level_set);
   tcase_add_test(tc, psi_build_pmt_rejects_small_cap);
   tcase_add_test(tc, psi_build_eit_has_valid_header_and_crc);
+  tcase_add_test(tc, psi_build_eit_following_is_empty_section_one);
   tcase_add_test(tc, psi_build_eit_uses_title_only_when_no_artist);
   tcase_add_test(tc, psi_build_eit_rejects_small_cap);
   tcase_add_test(tc, psi_build_eit_bounds_descriptor_length_for_long_metadata);

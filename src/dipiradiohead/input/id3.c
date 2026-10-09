@@ -169,54 +169,115 @@ static void text_frame(const unsigned char *body, size_t len, char *out, size_t 
   out[o] = '\0';
 }
 
+/* drops the 0x00 after each 0xFF. returns new length */
+static size_t unsync_inplace(unsigned char *b, size_t len) {
+  size_t o = 0;
+  for (size_t i = 0; i < len; i++) {
+    b[o++] = b[i];
+    if (b[i] == 0xFF && i + 1 < len && b[i + 1] == 0x00)
+      i++;
+  }
+  return o;
+}
+
+static unsigned be24(const unsigned char *b) { return ((unsigned)b[0] << 16) | ((unsigned)b[1] << 8) | (unsigned)b[2]; }
+
+static void frame_text(const unsigned char *body, size_t len, unsigned fflags, char *out, size_t cap) {
+  unsigned char *tmp = NULL;
+  out[0] = '\0';
+  if (fflags & 0x0C)
+    return; /* compressed or encrypted */
+  if (fflags & 0x01) {
+    if (len < 4)
+      return;
+    body += 4;
+    len -= 4;
+  }
+  if (fflags & 0x02) {
+    tmp = malloc(len ? len : 1);
+    if (!tmp)
+      return;
+    memcpy(tmp, body, len);
+    len = unsync_inplace(tmp, len);
+    body = tmp;
+  }
+  text_frame(body, len, out, cap);
+  free(tmp);
+}
+
 void id3_consume(id3_t *c, const unsigned char *p, size_t taglen) {
   unsigned char version = (taglen > 3) ? p[3] : 0;
   unsigned char flags = (taglen > 5) ? p[5] : 0;
   size_t cursor = 10;
+  size_t hdr = (version == 2) ? 6 : 10;
   char artist[256] = "", title[256] = "";
   int found = 0;
+  unsigned char *copy = NULL;
 
   if (taglen < 10)
     return;
-  if (flags & 0x40) { /* extended header present, skip it */
-    if (cursor + 4 > taglen)
+  if (version < 2 || version > 4)
+    return;
+  if (version == 2 && (flags & 0x40))
+    return;
+  if ((flags & 0x80) && version < 4) { /* tag unsync */
+    copy = malloc(taglen);
+    if (!copy)
       return;
+    memcpy(copy, p, taglen);
+    taglen = 10 + unsync_inplace(copy + 10, taglen - 10);
+    p = copy;
+  }
+  if (version >= 3 && (flags & 0x40)) { /* extended header present, skip it */
+    if (cursor + 4 > taglen)
+      goto done;
     if (version >= 4)
       cursor += syncsafe32(p + cursor);
     else
       cursor += 4 + be32(p + cursor);
   }
 
-  while (cursor + 10 <= taglen) {
-    char id[5];
-    unsigned fsize;
+  while (cursor + hdr <= taglen) {
+    char id[5] = "";
+    unsigned fsize, fflags = 0;
     const unsigned char *fbody;
+    char *dst = NULL;
 
-    memcpy(id, p + cursor, 4);
-    id[4] = '\0';
+    memcpy(id, p + cursor, version == 2 ? 3 : 4);
     if (id[0] == '\0')
       break; /* padding */
-    fsize = (version >= 4) ? syncsafe32(p + cursor + 4) : be32(p + cursor + 4);
-    fbody = p + cursor + 10;
-    if (cursor + 10 + fsize > taglen)
+    if (version == 2)
+      fsize = be24(p + cursor + 3);
+    else
+      fsize = (version == 4) ? syncsafe32(p + cursor + 4) : be32(p + cursor + 4);
+    if (version == 4) {
+      fflags = p[cursor + 9];
+      if (flags & 0x80)
+        fflags |= 0x02;
+    }
+    fbody = p + cursor + hdr;
+    if (fsize > taglen - cursor - hdr)
       break;
 
-    if (!strcmp(id, "TIT2")) {
-      text_frame(fbody, fsize, title, sizeof title);
-      found = 1;
-    } else if (!strcmp(id, "TPE1")) {
-      text_frame(fbody, fsize, artist, sizeof artist);
+    if (!strcmp(id, version == 2 ? "TT2" : "TIT2"))
+      dst = title;
+    else if (!strcmp(id, version == 2 ? "TP1" : "TPE1"))
+      dst = artist;
+    if (dst) {
+      frame_text(fbody, fsize, fflags, dst, 256);
       found = 1;
     }
-    cursor += 10 + fsize;
+    cursor += hdr + fsize;
   }
   if (!found)
-    return;
+    goto done;
   if (!strcmp(artist, c->last_artist) && !strcmp(title, c->last_title))
-    return;
+    goto done;
 
   bufcpy(c->last_artist, sizeof c->last_artist, artist);
   bufcpy(c->last_title, sizeof c->last_title, title);
   if (c->cb)
     c->cb(c->ctx, artist, title);
+done:
+  free(copy);
 }

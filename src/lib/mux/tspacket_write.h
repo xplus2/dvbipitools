@@ -14,6 +14,10 @@ typedef void (*ts_packet_cb)(void *ctx, const unsigned char *pkt188);
    pcr_first: PCR adaptation field on the first packet only. returns packet count. */
 size_t ts_packet_emit(unsigned pid, unsigned char *cc, const unsigned char *pointer_byte, const unsigned char *data, size_t len, int pcr_first, uint64_t pcr_90k, ts_packet_cb cb, void *ctx);
 
+size_t ts_packet_emit_pcr(unsigned pid, unsigned char *cc, const unsigned char *data, size_t len, uint64_t pcr_90k, int discontinuity, ts_packet_cb cb, void *ctx);
+
+void ts_packet_emit_pcr_only(unsigned pid, const unsigned char *cc, uint64_t pcr_90k, ts_packet_cb cb, void *ctx);
+
 /* bounded, resumable ts_packet_emit. *offset: 0 to start, advanced here. len > 0, no PCR.
    spreads a large section across ticks instead of one burst. *offset==len when drained. */
 size_t ts_packet_emit_partial(unsigned pid, unsigned char *cc, const unsigned char *pointer_byte, const unsigned char *data, size_t len, size_t *offset, size_t max_packets, ts_packet_cb cb, void *ctx);

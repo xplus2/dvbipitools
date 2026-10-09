@@ -41,6 +41,8 @@ source_t *inputset_source(const inputset_t *is, unsigned idx);
 int inputset_poll_fd(const inputset_t *is, unsigned idx);
 short inputset_poll_events(const inputset_t *is, unsigned idx);
 
+int inputset_given_up(const inputset_t *is, unsigned idx);
+
 /* soonest retry deadline across down slots, for caller's poll() timeout. INPUTSET_NEVER if none due. */
 time_t inputset_next_deadline(const inputset_t *is);
 

@@ -6,6 +6,7 @@
 
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
+#include "lib/sys/signal.h"
 
 #include "../../version.h"
 #include "../playlist.h"
@@ -28,6 +29,7 @@ struct source_open {
   unsigned char sniff[SRC_SNIFF_CAP];
   size_t sniff_got;
   source_t *result; /* set on SOURCE_OPEN_DONE */
+  double started;
 };
 
 static int so_start_fetch(source_open_t *o, net_err_reason_t *reason_out) {
@@ -51,6 +53,7 @@ source_open_t *source_open_async_start(const char *uri, unsigned idx, const char
   o->insecure = insecure;
   o->idx = idx;
   o->label = label;
+  o->started = mono_seconds();
   o->cb = cb;
   o->ctx = ctx;
   if (si) o->si = *si;
@@ -76,6 +79,11 @@ short source_open_async_poll_events(const source_open_t *o) {
 source_open_state_t source_open_async_step(source_open_t *o, net_err_reason_t *reason_out) {
   char next[2048];
   http_t *h;
+  if (mono_seconds() - o->started > SRC_OPEN_TIMEOUT_S) {
+    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mopen timed out\e[0m after %.0fs", o->idx, o->label ? o->label : "?", SRC_OPEN_TIMEOUT_S);
+    if (reason_out) *reason_out = NET_ERR_TIMEOUT;
+    return SOURCE_OPEN_ERROR;
+  }
   if (o->phase == SO_FETCHING) {
     http_async_state_t st = http_async_step(o->ha, reason_out);
     if (st == HTTP_ASYNC_PENDING) return SOURCE_OPEN_PENDING;

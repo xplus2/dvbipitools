@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "lib/helper/log.h"
+#include "lib/sys/signal.h"
 
 #include "../../framer/aac_adts.h"
 #include "../../framer/mpegaudio.h"
@@ -28,34 +29,55 @@ static int refill(source_t *s, net_err_reason_t *reason_out) {
   unsigned char tmp[4096];
   ssize_t n;
   size_t clean_cap;
+  size_t want;
   size_t produced;
 
+  clean_cap = SRC_BUF_CAP - s->buf_len;
+  if (clean_cap == 0) {
+    if (reason_out) *reason_out = NET_ERR_FORMAT;
+    return -1;
+  }
   if (would_block(s)) return 0;
-  n = s->hls ? hls_live_read(s->hls, tmp, sizeof tmp, reason_out) : http_read(s->http, tmp, sizeof tmp, reason_out);
+  want = clean_cap < sizeof tmp ? clean_cap : sizeof tmp;
+  n = s->hls ? hls_live_read(s->hls, tmp, want, reason_out) : http_read(s->http, tmp, want, reason_out);
 
   if (n < 0) return -1;
   if (n == 0) return 0;
   s->bytes_total += (unsigned long long)n;
-  clean_cap = SRC_BUF_CAP - s->buf_len;
+  s->last_rx = mono_seconds();
   if (s->icy) {
     produced = icy_feed(s->icy, tmp, (size_t)n, s->buf + s->buf_len, clean_cap);
   } else {
-    produced = (size_t)n < clean_cap ? (size_t)n : clean_cap;
+    produced = (size_t)n;
     memcpy(s->buf + s->buf_len, tmp, produced);
   }
   s->buf_len += produced;
   return 1;
 }
 
-/* 0: not a tag, -1: hard error, 1: tag, need more bytes, 2: tag consumed */
+static void drop_front(source_t *s, size_t n) {
+  memmove(s->buf, s->buf + n, s->buf_len - n);
+  s->buf_len -= n;
+}
+
+/* 0: not a tag, 1: tag, need more bytes, 2: tag consumed or skipped */
 static int try_consume_tag(source_t *s) {
   size_t need;
+  if (s->tag_skip) {
+    size_t n = s->tag_skip < s->buf_len ? s->tag_skip : s->buf_len;
+    drop_front(s, n);
+    s->tag_skip -= n;
+    return s->tag_skip ? 1 : 2;
+  }
   if (!id3_is_tag(s->buf, s->buf_len)) return 0;
   if (s->buf_len < 10) return 1;
   need = id3_tag_size(s->buf, s->buf_len);
   if (need > SRC_BUF_CAP) {
-    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mID3 tag too large\e[0m (%zu bytes)", s->idx, s->label ? s->label : "?", need);
-    return -1;
+    if (s->buf_len < SRC_BUF_CAP) return 1;
+    id3_consume(s->id3, s->buf, s->buf_len);
+    s->tag_skip = need - s->buf_len;
+    s->buf_len = 0;
+    return 2;
   }
   if (s->buf_len < need) return 1;
   id3_consume(s->id3, s->buf, need);
@@ -64,88 +86,139 @@ static int try_consume_tag(source_t *s) {
   return 2;
 }
 
-static int is_sync_at(const source_t *s, const unsigned char *p, size_t avail) {
-  if (s->codec == SRC_MPEG_AUDIO) return mpegaudio_is_sync(p, avail);
-  if (s->codec == SRC_AAC_ADTS) return aac_adts_is_sync(p, avail);
+static int codec_is_sync(source_codec_t codec, const unsigned char *p, size_t avail) {
+  if (codec == SRC_MPEG_AUDIO) return mpegaudio_is_sync(p, avail);
+  if (codec == SRC_AAC_ADTS) return aac_adts_is_sync(p, avail);
   return aac_latm_is_sync(p, avail);
 }
 
 /* confirms a sync word at buf+frame_len too, since an 11/12-bit sync can appear by chance in compressed audio */
 static int next_sync_ok(const source_t *s, size_t frame_len) {
-  return is_sync_at(s, s->buf + frame_len, s->buf_len - frame_len);
+  return codec_is_sync(s->codec, s->buf + frame_len, s->buf_len - frame_len);
 }
 
-/* first accepted sync offset in buf[1..buf_len), cheap is_sync_at() per byte,
+/* first accepted sync offset in buf[1..buf_len), cheap codec_is_sync() per byte,
    no repeated probe() calls. buf_len if none: caller drops buffer, waits for more data */
 static size_t find_resync_offset(const source_t *s) {
   for (size_t i = 1; i < s->buf_len; i++) {
-    if (is_sync_at(s, s->buf + i, s->buf_len - i)) return i;
+    if (codec_is_sync(s->codec, s->buf + i, s->buf_len - i)) return i;
   }
   return s->buf_len;
 }
 
-/* checks s->buf+off for any codec's sync word, sets s->codec on match */
-static int codec_sync_at(source_t *s, size_t off) {
+static int probe_len(source_t *s, source_codec_t codec, const unsigned char *p, size_t avail, size_t *len) {
+  int r;
+  if (codec == SRC_MPEG_AUDIO) {
+    mpegaudio_info_t info;
+    r = mpegaudio_probe(p, avail, &info);
+    if (r == 1) *len = info.frame_len;
+  } else if (codec == SRC_AAC_ADTS) {
+    aac_adts_info_t info;
+    r = aac_adts_probe(p, avail, &info);
+    if (r == 1) *len = info.frame_len;
+  } else {
+    aac_latm_info_t info;
+    r = aac_latm_probe(s->latm, p, avail, &info);
+    if (r == 1) *len = info.frame_len;
+  }
+  return r;
+}
+
+/* 1: valid frame at off followed by another sync word, 0: need more bytes, -1: no */
+static int confirm_codec(source_t *s, source_codec_t codec, size_t off) {
   const unsigned char *p = s->buf + off;
   size_t avail = s->buf_len - off;
-  if (aac_latm_is_sync(p, avail)) {
-    s->codec = SRC_AAC_LATM;
-    return 1;
+  size_t len = 0;
+  int r;
+
+  if (!codec_is_sync(codec, p, avail)) return -1;
+  r = probe_len(s, codec, p, avail, &len);
+  if (r <= 0) return r;
+  if (off + len + 2 > SRC_BUF_CAP) return -1;
+  if (off + len + 2 > s->buf_len) return 0;
+  return codec_is_sync(codec, p + len, avail - len) ? 1 : -1;
+}
+
+static void reset_detect(source_t *s) {
+  if (s->latm) aac_latm_free(s->latm);
+  s->latm = NULL;
+  s->codec_known = 0;
+  s->resync_fails = 0;
+  s->detect_skipped = 0;
+}
+
+static void resync(source_t *s) {
+  drop_front(s, find_resync_offset(s));
+  if (++s->resync_fails >= SRC_REDETECT_FAILS) reset_detect(s);
+}
+
+static int detect_at(source_t *s, size_t off) {
+  static const source_codec_t order[3] = {SRC_AAC_LATM, SRC_AAC_ADTS, SRC_MPEG_AUDIO};
+  int pending = 0;
+
+  for (int i = 0; i < 3; i++) {
+    int r;
+    if (order[i] == SRC_AAC_LATM) {
+      if (!aac_latm_is_sync(s->buf + off, s->buf_len - off)) continue;
+      if (!s->latm && !(s->latm = aac_latm_new())) return -2;
+    }
+    r = confirm_codec(s, order[i], off);
+    if (r == 1) {
+      s->codec = order[i];
+      return 1;
+    }
+    if (r == 0) pending = 1;
+    else if (order[i] == SRC_AAC_LATM) {
+      aac_latm_free(s->latm); /* rejected probe may leave stale mux config */
+      s->latm = NULL;
+    }
   }
-  if (aac_adts_is_sync(p, avail)) {
-    s->codec = SRC_AAC_ADTS;
-    return 1;
-  }
-  if (mpegaudio_is_sync(p, avail)) {
-    s->codec = SRC_MPEG_AUDIO;
-    return 1;
-  }
-  return 0;
+  return pending ? 0 : -1;
 }
 
 /* 1: codec now known (just resolved or already was), caller proceeds this iteration.
    0: refilled, caller should continue its loop. -1: caller should return *ret */
 static int ensure_codec_known(source_t *s, net_err_reason_t *reason_out, int *ret) {
+  int pending = 0;
+  int rf;
+
   if (s->codec_known) return 1;
-  if (s->buf_len < 2) {
-    int rf = refill(s, reason_out);
-    if (rf <= 0) {
-      *ret = rf;
+  for (size_t off = 0; off + 1 < s->buf_len; off++) {
+    int r = detect_at(s, off);
+    if (r == -1) continue;
+    if (r == -2) {
+      if (reason_out) *reason_out = NET_ERR_OTHER;
+      *ret = -1;
       return -1;
     }
-    return 0;
-  }
-
-  for (size_t off = 0; off + 1 < s->buf_len; off++) {
-    if (!codec_sync_at(s, off)) continue;
-    if (off) {
-      memmove(s->buf, s->buf + off, s->buf_len - off);
-      s->buf_len -= off;
-    }
-    if (s->codec == SRC_AAC_LATM) {
-      s->latm = aac_latm_new();
-      if (!s->latm) {
-        if (reason_out) *reason_out = NET_ERR_OTHER;
-        *ret = -1;
-        return -1;
+    if (off) drop_front(s, off);
+    if (r == 1) {
+      if (s->codec != SRC_AAC_LATM && s->latm) {
+        aac_latm_free(s->latm);
+        s->latm = NULL;
       }
+      s->codec_known = 1;
+      s->resync_fails = 0;
+      s->detect_skipped = 0;
+      return 1;
     }
-    s->codec_known = 1;
-    return 1;
+    pending = 1;
+    break;
   }
-
-  if (s->buf_len >= SRC_BUF_CAP) {
-    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33munrecognized audio sync\e[0m (%02x %02x)", s->idx, s->label ? s->label : "?", s->buf[0], s->buf[1]);
+  if (!pending && s->buf_len > 1) {
+    s->detect_skipped += s->buf_len - 1;
+    drop_front(s, s->buf_len - 1);
+  }
+  if (s->detect_skipped >= SRC_BUF_CAP) {
+    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33munrecognized audio sync\e[0m", s->idx, s->label ? s->label : "?");
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     *ret = -1;
     return -1;
   }
-  {
-    int rf = refill(s, reason_out);
-    if (rf <= 0) {
-      *ret = rf;
-      return -1;
-    }
+  rf = refill(s, reason_out);
+  if (rf <= 0) {
+    *ret = rf;
+    return -1;
   }
   return 0;
 }
@@ -163,7 +236,6 @@ static int handle_probe_result(source_t *s, net_err_reason_t *reason_out, int r,
     return PROBE_STEP_CONTINUE;
   }
   if (r < 0) {
-    size_t off;
     if (s->buf_len == 0) {
       int rf = refill(s, reason_out);
       if (rf <= 0) {
@@ -172,9 +244,7 @@ static int handle_probe_result(source_t *s, net_err_reason_t *reason_out, int r,
       }
       return PROBE_STEP_CONTINUE;
     }
-    off = find_resync_offset(s);
-    memmove(s->buf, s->buf + off, s->buf_len - off);
-    s->buf_len -= off;
+    resync(s);
     return PROBE_STEP_CONTINUE;
   }
   if (frame_len > s->buf_len) {
@@ -205,10 +275,6 @@ static int pull_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
 
   for (;;) {
     int tr = try_consume_tag(s);
-    if (tr == -1) {
-      if (reason_out) *reason_out = NET_ERR_FORMAT;
-      return -1;
-    }
     if (tr == 1) {
       int rf = refill(s, reason_out);
       if (rf <= 0) return rf;
@@ -239,7 +305,7 @@ static int pull_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
           frame_len = info.frame_len;
           sample_rate = info.sample_rate;
           samples = info.samples_per_frame;
-          stream_type = 0x03;
+          stream_type = info.half_rate ? 0x04 : 0x03;
         }
       } else if (s->codec == SRC_AAC_ADTS) {
         aac_adts_info_t info;
@@ -266,11 +332,10 @@ static int pull_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
       if (step == PROBE_STEP_RETURN) return ret;
       if (step == PROBE_STEP_CONTINUE) continue;
       if (!next_sync_ok(s, frame_len)) {
-        size_t off = find_resync_offset(s);
-        memmove(s->buf, s->buf + off, s->buf_len - off);
-        s->buf_len -= off;
+        resync(s);
         continue;
       }
+      s->resync_fails = 0;
       out->codec = s->codec;
       out->stream_type = stream_type;
       out->sample_rate = sample_rate;
@@ -300,7 +365,7 @@ int source_take_resumed(source_t *s) {
   return r;
 }
 
-int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason_out) {
+static int next_frame_queued(source_t *s, source_frame_t *out, net_err_reason_t *reason_out) {
   if (!s->fq) return pull_frame(s, out, reason_out);
   while (framequeue_ms(s->fq) < 2 * s->prefill_ms && framequeue_count(s->fq) < FQ_MAX_FRAMES) {
     source_frame_t f;
@@ -325,6 +390,16 @@ int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
   return 1;
 }
 
+int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason_out) {
+  int r = next_frame_queued(s, out, reason_out);
+  if (r == 0 && mono_seconds() - s->last_rx > SRC_STALL_TIMEOUT_S) {
+    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mno data\e[0m for %.0fs", s->idx, s->label ? s->label : "?", SRC_STALL_TIMEOUT_S);
+    if (reason_out) *reason_out = NET_ERR_TIMEOUT;
+    return -1;
+  }
+  return r;
+}
+
 int source_fd(const source_t *s) { return s->hls ? hls_live_poll_fd(s->hls) : http_fd(s->http); }
 
 int source_has_buffered(const source_t *s) {
@@ -340,6 +415,7 @@ void source_close(source_t *s) {
   if (s->id3) id3_free(s->id3);
   if (s->hls) hls_live_free(s->hls);
   if (s->hls_demux) rawaudio_demux_free(s->hls_demux);
+  free(s->hls_remux);
   if (s->http) http_close(s->http);
   free(s);
 }

@@ -36,19 +36,29 @@ void tspacketizer_free(tspacketizer_t *t);
 /* bumps EIT version, forces resend on next feed (standalone) or build_eit() (non-standalone) */
 void tspacketizer_set_metadata(tspacketizer_t *t, const char *artist, const char *title);
 
+void tspacketizer_mark_discontinuity(tspacketizer_t *t);
+
 /* enables CAS: CAT sending, ECM/EMM injection (each vendor's own ecm_pid/emm_pid, queried off cas),
    scramble audio ES. CAS must outlive packetizer. ECM/EMM only sent in standalone mode. */
 void tspacketizer_set_cas(tspacketizer_t *t, cas_t *cas);
 
 /* packetizes one audio frame as PES, plus PSI due by schedule (standalone: all tables; always:
    PMT, audio PES). now: caller's mono_seconds(), for CAS ECM-repeat/parity-flip timing.
+   pts_90k: sample clock, used as PCR. may restart, see mark_discontinuity.
+   PES PTS is PCR plus fixed delay.
+   dur_90k: frame duration, PCR-only packets keep PCR interval under 40ms.
    ret: pkg count */
-size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, double now, const unsigned char *frame, size_t frame_len, ts_packet_cb cb, void *ctx);
+size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, uint32_t dur_90k, double now, const unsigned char *frame, size_t frame_len, ts_packet_cb cb, void *ctx);
+
+/* sets/changes codec after creation. PMT version bumps on change from a set codec. 1 if changed */
+int tspacketizer_set_codec(tspacketizer_t *t, unsigned stream_type, unsigned aac_profile_level);
+
+size_t tspacketizer_idle(tspacketizer_t *t, double now, ts_packet_cb cb, void *ctx);
 
 /* non-standalone only: fills *out with this program's current SDT service info, for a mux to
    fold into its composite SDT section. 0 on success. */
 int tspacketizer_get_sdt_info(tspacketizer_t *t, psi_sdt_entry_t *out);
-/* non-standalone only: pull this program's current EIT section, for a mux to packetize on its
+/* non-standalone only: pull this program's current EIT p/f sections (present, then empty following, back to back), for a mux to packetize on its
    own shared pid+cc. 0 on overflow. */
 size_t tspacketizer_build_eit(tspacketizer_t *t, unsigned char *out, size_t cap);
 

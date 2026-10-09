@@ -176,6 +176,7 @@ source_t *inputset_source(const inputset_t *is, unsigned idx) {
 
 int inputset_poll_fd(const inputset_t *is, unsigned idx) { return retryset_poll_fd(is->rs, idx); }
 short inputset_poll_events(const inputset_t *is, unsigned idx) { return retryset_poll_events(is->rs, idx); }
+int inputset_given_up(const inputset_t *is, unsigned idx) { return retryset_given_up(is->rs, idx); }
 time_t inputset_next_deadline(const inputset_t *is) { return retryset_next_deadline(is->rs); }
 void inputset_service(inputset_t *is, unsigned idx, time_t now) { retryset_service(is->rs, idx, now); }
 void inputset_mark_down(inputset_t *is, unsigned idx, time_t now) { retryset_mark_down(is->rs, idx, now); }

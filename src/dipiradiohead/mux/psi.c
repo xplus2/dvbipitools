@@ -63,11 +63,10 @@ unsigned char bcd(unsigned v) { return (unsigned char)((((v / 10) % 10) << 4) | 
    overhead, so event_name (psi_put_text's 0x15 prefix included) must be <=250 */
 #define EIT_MAX_EVENT_NAME 249
 
-size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, const char *artist, const char *title, unsigned duration_s, unsigned char *out, size_t cap) {
+size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, const char *artist, const char *title, unsigned duration_s, time_t start, unsigned char *out, size_t cap) {
   size_t n = 0, dll_pos, desc_start, dlen_pos, enl_pos, enl;
   unsigned dll, h, m, sec;
   char combined[EIT_MAX_EVENT_NAME + 1];
-  time_t now;
   struct tm tmv;
   size_t alen;
   size_t tlen;
@@ -80,7 +79,7 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   n += 2;
   out[n++] = (unsigned char)(0xC0 | ((version & 0x1F) << 1) | 0x01);
   out[n++] = 0x00; /* section_number: present event only */
-  out[n++] = 0x00; /* last_section_number */
+  out[n++] = 0x01; /* last_section_number: following section follows */
   psi_put16(out + n, tsid);
   n += 2;
   psi_put16(out + n, onid);
@@ -90,8 +89,7 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
 
   psi_put16(out + n, 1); /* event_id */
   n += 2;
-  now = time(NULL);
-  gmtime_r(&now, &tmv);
+  gmtime_r(&start, &tmv);
   psi_put16(out + n, mjd_from_tm(&tmv));
   n += 2;
   out[n++] = bcd((unsigned)tmv.tm_hour);
@@ -138,5 +136,25 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   dll = (unsigned)(n - desc_start);
   out[dll_pos] = (unsigned char)(0xF0 | ((dll >> 8) & 0x0F));
   out[dll_pos + 1] = (unsigned char)dll;
+  return psi_finish_section(out, n, cap, 0xF0);
+}
+
+size_t psi_build_eit_following(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, unsigned char *out, size_t cap) {
+  size_t n = 0;
+
+  if (cap < 20) return 0;
+  out[n++] = 0x4E;
+  n += 2;
+  psi_put16(out + n, service_id);
+  n += 2;
+  out[n++] = (unsigned char)(0xC0 | ((version & 0x1F) << 1) | 0x01);
+  out[n++] = 0x01; /* section_number: following, no event */
+  out[n++] = 0x01; /* last_section_number */
+  psi_put16(out + n, tsid);
+  n += 2;
+  psi_put16(out + n, onid);
+  n += 2;
+  out[n++] = 0x01; /* segment_last_section_number */
+  out[n++] = 0x4E; /* last_table_id */
   return psi_finish_section(out, n, cap, 0xF0);
 }

@@ -56,7 +56,8 @@ int process_input_slot(mpts_tick_t *tk, unsigned i) {
   src = inputset_source(tk->is, i);
   connected_now = src != NULL;
   if (connected_now && !tk->was_connected[i]) {
-    tk->samples_total[i] = 0;
+    tk->timeline[i] = 0;
+    if (tk->tsps[i]) tspacketizer_mark_discontinuity(tk->tsps[i]);
     tk->last_synced_bytes[i] = 0;
     tk->pace_deadline[i] = tk->now;
   }
@@ -105,6 +106,8 @@ int process_input_slot(mpts_tick_t *tk, unsigned i) {
       if (!tk->tsps[i]) return -1;
       if (tk->cas) tspacketizer_set_cas(tk->tsps[i], tk->cas);
       log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): codec detected: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", i, inputset_service_name(tk->is, i), source_codec_name(f.codec), f.sample_rate);
+    } else if (tspacketizer_set_codec(tk->tsps[i], f.stream_type, f.aac_profile_level)) {
+      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): codec changed: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", i, inputset_service_name(tk->is, i), source_codec_name(f.codec), f.sample_rate);
     }
     mpts_set_program(tk->mpts, i, tk->tsps[i]);
 
@@ -113,11 +116,10 @@ int process_input_slot(mpts_tick_t *tk, unsigned i) {
       tk->metas[i].dirty = 0;
       log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): now playing: \e[0;36m%s%s%s\e[0m", i, inputset_service_name(tk->is, i), tk->metas[i].artist, (tk->metas[i].artist[0] && tk->metas[i].title[0]) ? " - " : "", tk->metas[i].title);
     }
-    pts = tk->samples_total[i] * 90000ULL / f.sample_rate;
-    tk->samples_total[i] += f.samples;
+    pts = timeline_pts(tk->timeline[i]);
+    timeline_add(&tk->timeline[i], f.samples, f.sample_rate);
     tk->pace_deadline[i] += (double)f.samples / (double)f.sample_rate;
-    tk->out->cur_pts = pts;
-    tspacketizer_feed(tk->tsps[i], pts, tk->now, f.data, f.len, tk->out->insp ? &packet_cb_inspect : &packet_cb, tk->out);
+    tspacketizer_feed(tk->tsps[i], pts, (uint32_t)((uint64_t)f.samples * 90000ULL / f.sample_rate), tk->now, f.data, f.len, tk->out->insp ? &packet_cb_inspect : &packet_cb, tk->out);
   }
   sync_input_bytes(tk, src, i);
   return 0;
@@ -128,7 +130,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   meta_state_t metas[RADIOHEAD_MAX_INPUTS];
   void *meta_ctxs[RADIOHEAD_MAX_INPUTS] = {0};
   tspacketizer_t *tsps[RADIOHEAD_MAX_INPUTS];
-  uint64_t samples_total[RADIOHEAD_MAX_INPUTS];
+  uint64_t timeline[RADIOHEAD_MAX_INPUTS];
   double pace_deadline[RADIOHEAD_MAX_INPUTS];
   int was_connected[RADIOHEAD_MAX_INPUTS];
   psi_pat_entry_t entries[RADIOHEAD_MAX_INPUTS];
@@ -150,7 +152,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   memset(&out, 0, sizeof out);
   memset(metas, 0, sizeof metas);
   memset(tsps, 0, sizeof tsps);
-  memset(samples_total, 0, sizeof samples_total);
+  memset(timeline, 0, sizeof timeline);
   memset(pace_deadline, 0, sizeof pace_deadline);
   memset(was_connected, 0, sizeof was_connected);
   memset(input_stats, 0, sizeof input_stats);
@@ -248,7 +250,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     tk.cfg = cfg;
     tk.tsps = tsps;
     tk.metas = metas;
-    tk.samples_total = samples_total;
+    tk.timeline = timeline;
     tk.pace_deadline = pace_deadline;
     tk.was_connected = was_connected;
     tk.input_stats = input_stats;
@@ -261,6 +263,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     tk.pfd_slot = pfd_slot;
     tk.pfds = pfds;
     tk.npfd = npfd;
+    out.cur_pts = (uint64_t)(now * 90000.0);
     tk.ready_mask = compute_ready_mask(pfd_slot, pfds, npfd);
     for (unsigned k = 0; k < n; k++) {
       unsigned i = (rr_start + k) % n;

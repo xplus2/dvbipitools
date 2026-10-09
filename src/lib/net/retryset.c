@@ -90,6 +90,11 @@ short retryset_poll_events(const retryset_t *rs, unsigned idx) {
   return 0;
 }
 
+int retryset_given_up(const retryset_t *rs, unsigned idx) {
+  const retryset_slot_t *sl = &rs->slots[idx];
+  return sl->state == RETRYSET_DOWN && sl->retry_deadline == RETRYSET_NEVER;
+}
+
 time_t retryset_next_deadline(const retryset_t *rs) {
   time_t best = RETRYSET_NEVER;
   for (unsigned i = 0; i < rs->count; i++) {

@@ -28,6 +28,22 @@ START_TEST(mpegaudio_probe_mpeg1_layer1_128kbps_44100) {
 }
 END_TEST
 
+START_TEST(mpegaudio_probe_flags_half_rate_versions) {
+  static const unsigned char v1[4] = {0xFF, 0xFB, 0x90, 0x00};
+  static const unsigned char v2[4] = {0xFF, 0xF3, 0x80, 0x00};
+  static const unsigned char v25[4] = {0xFF, 0xE3, 0x80, 0x00};
+  mpegaudio_info_t info;
+
+  ck_assert_int_eq(mpegaudio_probe(v1, 4, &info), 1);
+  ck_assert_int_eq(info.half_rate, 0);
+  ck_assert_int_eq(mpegaudio_probe(v2, 4, &info), 1);
+  ck_assert_int_eq(info.half_rate, 1);
+  ck_assert_uint_eq(info.sample_rate, 22050u);
+  ck_assert_int_eq(mpegaudio_probe(v25, 4, &info), 1);
+  ck_assert_int_eq(info.half_rate, 1);
+}
+END_TEST
+
 START_TEST(mpegaudio_is_sync_checks_first_two_bytes) {
   unsigned char good[2] = {0xFF, 0xE0};
   unsigned char bad[2] = {0xFF, 0x00};
@@ -65,6 +81,7 @@ static Suite *mpegaudio_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, mpegaudio_probe_mpeg1_layer3_128kbps_44100);
   tcase_add_test(tc, mpegaudio_probe_mpeg1_layer1_128kbps_44100);
+  tcase_add_test(tc, mpegaudio_probe_flags_half_rate_versions);
   tcase_add_test(tc, mpegaudio_is_sync_checks_first_two_bytes);
   tcase_add_test(tc, mpegaudio_probe_needs_more_bytes);
   tcase_add_test(tc, mpegaudio_probe_rejects_reserved_version);

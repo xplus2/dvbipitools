@@ -16,6 +16,7 @@
 #define BODY_CAP 32768
 #define ADTS_FRAME_LEN 40
 #define ADTS_HEADER_LEN 7
+#define MP3_FRAME_LEN 417
 
 static int latm_new_fails;
 
@@ -101,12 +102,21 @@ static size_t put_adts(unsigned char *out, unsigned char marker) {
   return ADTS_FRAME_LEN;
 }
 
-START_TEST(id3_tag_larger_than_the_buffer_is_a_hard_error) {
-  static unsigned char body[256];
+static size_t put_mp3(unsigned char *out, unsigned char marker) {
+  memset(out, marker, MP3_FRAME_LEN);
+  out[0] = 0xFF;
+  out[1] = 0xFB;
+  out[2] = 0x90;
+  out[3] = 0x00;
+  return MP3_FRAME_LEN;
+}
+
+START_TEST(id3_tag_larger_than_the_buffer_is_skipped) {
+  static unsigned char body[BODY_CAP];
   rig_t *r = calloc(1, sizeof *r);
   source_frame_t f;
-  net_err_reason_t reason = NET_ERR_OTHER;
   unsigned size = 20000;
+  size_t n = 10 + size;
 
   if (!r) abort();
   memcpy(body, "ID3\x04\x00\x00", 6);
@@ -114,9 +124,13 @@ START_TEST(id3_tag_larger_than_the_buffer_is_a_hard_error) {
   body[7] = (unsigned char)((size >> 14) & 0x7F);
   body[8] = (unsigned char)((size >> 7) & 0x7F);
   body[9] = (unsigned char)(size & 0x7F);
-  rig_open(r, body, sizeof body);
-  ck_assert_int_eq(next_frame(r, &f, &reason), -1);
-  ck_assert_int_eq(reason, NET_ERR_FORMAT);
+  for (int i = 0; i < 4; i++) n += put_mp3(body + n, (unsigned char)(0x30 + i));
+  rig_open(r, body, n);
+  for (int i = 0; i < 3; i++) {
+    ck_assert_int_eq(next_frame(r, &f, NULL), 1);
+    ck_assert_int_eq(f.codec, SRC_MPEG_AUDIO);
+    ck_assert_uint_eq(f.data[4], (unsigned)(0x30 + i));
+  }
   rig_close(r);
   free(r);
 }
@@ -219,14 +233,60 @@ START_TEST(latm_state_allocation_failure_is_a_hard_error) {
 }
 END_TEST
 
+START_TEST(stray_sync_bytes_do_not_lock_the_wrong_codec) {
+  static unsigned char body[4096];
+  rig_t *r = calloc(1, sizeof *r);
+  source_frame_t f;
+  size_t n = 0;
+
+  if (!r) abort();
+  memset(body, 0x5A, 200);
+  body[100] = 0x56;
+  body[101] = 0xE5;
+  n = 200;
+  for (int i = 0; i < 4; i++) n += put_mp3(body + n, (unsigned char)(0x10 + i));
+  rig_open(r, body, n);
+  ck_assert_int_eq(next_frame(r, &f, NULL), 1);
+  ck_assert_int_eq(f.codec, SRC_MPEG_AUDIO);
+  ck_assert_uint_eq(f.data[4], 0x10u);
+  rig_close(r);
+  free(r);
+}
+END_TEST
+
+START_TEST(codec_is_redetected_after_repeated_bad_frames) {
+  static unsigned char body[BODY_CAP];
+  rig_t *r = calloc(1, sizeof *r);
+  source_frame_t f;
+  size_t n = 0;
+
+  if (!r) abort();
+  for (int i = 0; i < 3; i++) n += put_adts(body + n, 0x11);
+  n += 20000;
+  for (int i = 0; i < 4; i++) n += put_mp3(body + n, (unsigned char)(0x20 + i));
+  rig_open(r, body, n);
+  ck_assert_int_eq(next_frame(r, &f, NULL), 1);
+  ck_assert_int_eq(f.codec, SRC_AAC_ADTS);
+  ck_assert_int_eq(next_frame(r, &f, NULL), 1);
+  ck_assert_int_eq(f.codec, SRC_AAC_ADTS);
+  ck_assert_int_eq(next_frame(r, &f, NULL), 1);
+  ck_assert_int_eq(f.codec, SRC_MPEG_AUDIO);
+  ck_assert_uint_eq(f.data[4], 0x20u);
+  rig_close(r);
+  free(r);
+}
+END_TEST
+
 static Suite *frame_suite(void) {
   Suite *s = suite_create("frame");
   TCase *tc = tcase_create("core");
-  tcase_add_test(tc, id3_tag_larger_than_the_buffer_is_a_hard_error);
+  tcase_add_test(tc, id3_tag_larger_than_the_buffer_is_skipped);
   tcase_add_test(tc, stream_without_any_codec_sync_is_a_hard_error);
   tcase_add_loop_test(tc, damaged_stream_resyncs_to_the_next_good_frame, 0, (int)(sizeof resync_cases / sizeof resync_cases[0]));
   tcase_add_test(tc, clean_stream_delivers_every_frame_in_order);
   tcase_add_test(tc, latm_state_allocation_failure_is_a_hard_error);
+  tcase_add_test(tc, stray_sync_bytes_do_not_lock_the_wrong_codec);
+  tcase_add_test(tc, codec_is_redetected_after_repeated_bad_frames);
   suite_add_tcase(s, tc);
   return s;
 }

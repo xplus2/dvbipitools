@@ -22,7 +22,7 @@
 #define HLS_JOIN_BACK_SEGMENTS 3
 #define HLS_KEY_LEN 16
 
-typedef enum { HLS_LIVE_IDLE, HLS_LIVE_FETCHING_PLAYLIST, HLS_LIVE_FETCHING_SEGMENT, HLS_LIVE_FETCHING_KEY } hls_live_phase_t;
+typedef enum { HLS_LIVE_IDLE, HLS_LIVE_FETCHING_PLAYLIST, HLS_LIVE_FETCHING_SEGMENT, HLS_LIVE_FETCHING_KEY, HLS_LIVE_FETCHING_INIT } hls_live_phase_t;
 
 struct hls_live {
   http_url_t playlist_url;
@@ -33,6 +33,9 @@ struct hls_live {
   hls_insp_t si;
   hls_segment_cb cb;
   void *cb_ctx;
+  hls_init_cb init_cb;
+  void *init_ctx;
+  char init_url[2048];
 
   hls_live_phase_t phase;
   http_fetch_t *fetch;
@@ -88,6 +91,11 @@ hls_live_t *hls_live_new(const http_url_t *playlist_url, const char *user_agent,
   return h;
 }
 
+void hls_live_set_init_cb(hls_live_t *h, hls_init_cb cb, void *ctx) {
+  h->init_cb = cb;
+  h->init_ctx = ctx;
+}
+
 void hls_live_free(hls_live_t *h) {
   if (!h) return;
   if (h->fetch) http_fetch_free(h->fetch);
@@ -105,6 +113,16 @@ int hls_live_has_buffered(const hls_live_t *h) {
   if (h->fetch) return 0;
   if (h->pending_idx < h->pl.n_segments) return 1;
   return mono_seconds() >= h->next_poll_at;
+}
+
+hls_segment_kind_t hls_live_segment_kind(const unsigned char *d, size_t len) {
+  if (len && d[0] == 0x47) return HLS_SEG_TS;
+  if (len >= 3 && !memcmp(d, "ID3", 3)) return HLS_SEG_PACKED_AUDIO;
+  if (len >= 2 && ((d[0] == 0xFF && (d[1] & 0xE0) == 0xE0) || (d[0] == 0x0B && d[1] == 0x77))) return HLS_SEG_PACKED_AUDIO;
+  if (len >= 8 && (!memcmp(d + 4, "ftyp", 4) || !memcmp(d + 4, "styp", 4) || !memcmp(d + 4, "moof", 4))) return HLS_SEG_FMP4;
+  for (size_t i = 1; i < 188 && i + 2 * 188 < len; i++)
+    if (d[i] == 0x47 && d[i + 188] == 0x47 && d[i + 2 * 188] == 0x47) return HLS_SEG_TS;
+  return HLS_SEG_UNKNOWN;
 }
 
 int hls_live_uses_fmp4(const hls_live_t *h) { return h->pl.map_uri[0] != '\0'; }
@@ -141,6 +159,18 @@ static int start_key_fetch(hls_live_t *h, const char *url) {
   return h->fetch != NULL;
 }
 
+static int start_init_fetch(hls_live_t *h) {
+  http_url_t u;
+  http_t *reuse = http_take_reuse(&h->reuse, &h->reuse_established_at, HLS_MAX_REUSE_AGE_S);
+  if (http_url_parse(h->pl.map_uri, &u)) {
+    if (reuse) http_close(reuse);
+    return 0;
+  }
+  h->fetch = http_fetch_start(&u, h->user_agent, h->insecure, NULL, NULL, h->segment_buf, sizeof h->segment_buf, reuse, NULL);
+  h->phase = HLS_LIVE_FETCHING_INIT;
+  return h->fetch != NULL;
+}
+
 static double poll_interval(const hls_live_t *h) {
   double d = h->pl.target_duration ? h->pl.target_duration : HLS_DEFAULT_TARGET_DURATION;
   return d / 2;
@@ -168,6 +198,10 @@ static int handle_playlist_done(hls_live_t *h, net_err_reason_t *reason_out) {
   if (etag[0])
     bufcpy(h->etag, sizeof h->etag, etag);
   h->pl = *h->parse_scratch;
+  if (h->have_sequence && h->next_seq > h->pl.media_sequence + h->pl.n_segments) {
+    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS media sequence reset, rejoining\e[0m", h->idx, h->label ? h->label : "?");
+    h->have_sequence = 0;
+  }
   if (!h->have_sequence) {
     if (h->pl.n_segments) {
       unsigned back = h->pl.n_segments < HLS_JOIN_BACK_SEGMENTS ? h->pl.n_segments : HLS_JOIN_BACK_SEGMENTS;
@@ -200,6 +234,21 @@ static int handle_key_done(hls_live_t *h, net_err_reason_t *reason_out) {
   memcpy(h->key, h->key_buf, HLS_KEY_LEN);
   bufcpy(h->key_url, sizeof h->key_url, k->url);
   h->have_key = 1;
+  return 1;
+}
+
+static int handle_init_done(hls_live_t *h, net_err_reason_t *reason_out) {
+  size_t len;
+
+  http_fetch_take(h->fetch, &len, NULL, NULL, 0, NULL, &h->reuse);
+  h->fetch = NULL;
+  h->phase = HLS_LIVE_IDLE;
+  if (!len || !h->init_cb(h->init_ctx, h, h->segment_buf, len)) {
+    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mHLS init segment unusable\e[0m", h->idx, h->label ? h->label : "?");
+    if (reason_out) *reason_out = NET_ERR_FORMAT;
+    return -1;
+  }
+  bufcpy(h->init_url, sizeof h->init_url, h->pl.map_uri);
   return 1;
 }
 
@@ -244,7 +293,8 @@ ssize_t hls_live_read(hls_live_t *h, unsigned char *buf, size_t cap, net_err_rea
     if (sizeof h->out_buf - h->out_len >= HLS_OUT_BUF_PREFETCH_HEADROOM) {
       const hls_segment_t *seg = &h->pl.segments[h->pending_idx];
       const hls_key_t *k = seg->key ? &h->pl.keys[seg->key - 1] : NULL;
-      int ok = k && !(h->have_key && !strcmp(h->key_url, k->url)) ? start_key_fetch(h, k->url) : start_segment_fetch(h, seg->url);
+      int need_init = h->init_cb && h->pl.map_uri[0] && strcmp(h->init_url, h->pl.map_uri);
+      int ok = need_init ? start_init_fetch(h) : k && !(h->have_key && !strcmp(h->key_url, k->url)) ? start_key_fetch(h, k->url) : start_segment_fetch(h, seg->url);
       if (!ok) {
         if (reason_out) *reason_out = NET_ERR_OTHER;
         return -1;
@@ -265,6 +315,8 @@ ssize_t hls_live_read(hls_live_t *h, unsigned char *buf, size_t cap, net_err_rea
     if (st == HTTP_FETCH_DONE) {
       if (h->phase == HLS_LIVE_FETCHING_PLAYLIST) {
         if (handle_playlist_done(h, reason_out) < 0) return -1;
+      } else if (h->phase == HLS_LIVE_FETCHING_INIT) {
+        if (handle_init_done(h, reason_out) < 0) return -1;
       } else if (h->phase == HLS_LIVE_FETCHING_KEY) {
         if (handle_key_done(h, reason_out) < 0) return -1;
       } else {

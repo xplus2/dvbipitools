@@ -111,7 +111,9 @@ void cas_clock_tick(cas_t *c, uint64_t pts_90k) {
   } else {
     unsigned long delta_ms;
     uint64_t rem = c->rem_90k;
-    delta_ms = cas_90k_to_ms(pts_90k - c->last_pts90k, &rem);
+    uint64_t delta_90k = 0;
+    if (pts_90k >= c->last_pts90k) delta_90k = pts_90k - c->last_pts90k;
+    delta_ms = cas_90k_to_ms(delta_90k, &rem);
     if (c->core.biss_ca)
       biss_ca_engine_clock_tick(c->core.biss_ca, delta_ms);
     else

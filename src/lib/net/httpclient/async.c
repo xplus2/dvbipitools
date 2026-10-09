@@ -184,7 +184,7 @@ static int read_response_headers(struct http *h, http_async_t *a, net_err_reason
       return 1;
     }
     a->hdr_got += (size_t)n;
-    pr = try_parse_response(h, a->hdr_got, reason_out);
+    pr = try_parse_response(h, &a->hdr_got, reason_out);
     if (pr < 0) return -1;
     if (pr > 0) return 0;
   }

@@ -43,6 +43,9 @@ void *retryset_result(const retryset_t *rs, unsigned idx);
 int retryset_poll_fd(const retryset_t *rs, unsigned idx);
 short retryset_poll_events(const retryset_t *rs, unsigned idx);
 
+/* 1 if slot idx is down and will not be retried (RETRYSET_NEVER policy) */
+int retryset_given_up(const retryset_t *rs, unsigned idx);
+
 /* soonest retry deadline across down slots, RETRYSET_NEVER if none due */
 time_t retryset_next_deadline(const retryset_t *rs);
 

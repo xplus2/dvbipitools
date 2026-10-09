@@ -65,6 +65,6 @@ int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *
 int http_is_redirect_status(int status);
 void reset_http_for_reuse(struct http *h, const http_url_t *url);
 
-int try_parse_response(struct http *h, size_t got, net_err_reason_t *reason_out);
+int try_parse_response(struct http *h, size_t *got, net_err_reason_t *reason_out);
 
 #endif

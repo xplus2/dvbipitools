@@ -38,13 +38,48 @@ icy_t *icy_new(size_t metaint, icy_meta_cb cb, void *ctx) {
 
 void icy_free(icy_t *c) { free(c); }
 
+static int utf8_valid(const char *s) {
+  const unsigned char *p = (const unsigned char *)s;
+  while (*p) {
+    size_t n, i;
+    if (*p < 0x80) n = 0;
+    else if (*p >= 0xC2 && *p <= 0xDF) n = 1;
+    else if ((*p & 0xF0) == 0xE0) n = 2;
+    else if (*p >= 0xF0 && *p <= 0xF4) n = 3;
+    else return 0;
+    for (i = 1; i <= n; i++)
+      if ((p[i] & 0xC0) != 0x80) return 0;
+    p += n + 1;
+  }
+  return 1;
+}
+
+static void to_utf8(char *dst, size_t cap, const char *src) {
+  size_t o = 0;
+  if (utf8_valid(src)) {
+    bufcpy(dst, cap, src);
+    return;
+  }
+  for (; *src && o + 2 < cap; src++) {
+    unsigned char b = (unsigned char)*src;
+    if (b < 0x80) {
+      dst[o++] = (char)b;
+    } else {
+      dst[o++] = (char)(0xC0 | (b >> 6));
+      dst[o++] = (char)(0x80 | (b & 0x3F));
+    }
+  }
+  dst[o] = '\0';
+}
+
 /* "StreamTitle='...';" -> split on first " - " into artist/title */
 static void handle_meta_block(icy_t *c) {
   const char *tag = "StreamTitle='";
   char *start, *end;
   size_t len;
-  char artist[sizeof c->last_title];
-  char title[sizeof c->last_title];
+  char artist[2 * sizeof c->last_title];
+  char title[2 * sizeof c->last_title];
+  char raw[sizeof c->last_title];
   const char *sep;
 
   c->meta_buf[c->meta_have] = '\0';
@@ -63,16 +98,16 @@ static void handle_meta_block(icy_t *c) {
 
   if (!c->cb) return;
 
-  artist[0] = '\0';
   sep = strstr(c->last_title, " - ");
   if (sep) {
     size_t alen = (size_t)(sep - c->last_title);
-    if (alen >= sizeof artist) alen = sizeof artist - 1;
-    memcpy(artist, c->last_title, alen);
-    artist[alen] = '\0';
-    bufcpy(title, sizeof title, sep + 3);
+    memcpy(raw, c->last_title, alen);
+    raw[alen] = '\0';
+    to_utf8(artist, sizeof artist, raw);
+    to_utf8(title, sizeof title, sep + 3);
   } else {
-    bufcpy(title, sizeof title, c->last_title);
+    artist[0] = '\0';
+    to_utf8(title, sizeof title, c->last_title);
   }
   c->cb(c->ctx, artist, title);
 }

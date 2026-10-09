@@ -170,22 +170,36 @@ static void *worker_main(void *arg) {
 }
 
 int tcp_listen_dualstack(unsigned port) {
-  struct sockaddr_in6 addr;
+  struct sockaddr_storage ss;
+  socklen_t sslen;
   int fd, on = 1, off = 0, flags;
 
+  memset(&ss, 0, sizeof ss);
   fd = socket(AF_INET6, SOCK_STREAM, 0);
-  if (fd < 0) {
+  if (fd >= 0) {
+    struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)&ss;
+    setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof off);
+    a6->sin6_family = AF_INET6;
+    a6->sin6_addr = in6addr_any;
+    a6->sin6_port = htons((unsigned short)port);
+    sslen = sizeof *a6;
+  } else if (errno == EAFNOSUPPORT) {
+    struct sockaddr_in *a4 = (struct sockaddr_in *)&ss;
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+      log_line(TOOL_NAME ": socket: %s", strerror(errno));
+      return -1;
+    }
+    a4->sin_family = AF_INET;
+    a4->sin_addr.s_addr = htonl(INADDR_ANY);
+    a4->sin_port = htons((unsigned short)port);
+    sslen = sizeof *a4;
+  } else {
     log_line(TOOL_NAME ": socket: %s", strerror(errno));
     return -1;
   }
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
-  setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof off);
-
-  memset(&addr, 0, sizeof addr);
-  addr.sin6_family = AF_INET6;
-  addr.sin6_addr = in6addr_any;
-  addr.sin6_port = htons((unsigned short)port);
-  if (bind(fd, (struct sockaddr *)&addr, sizeof addr) < 0) {
+  if (bind(fd, (struct sockaddr *)&ss, sslen) < 0) {
     log_line(TOOL_NAME ": bind :%u: %s", port, strerror(errno));
     close(fd);
     return -1;

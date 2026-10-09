@@ -11,6 +11,7 @@
 #include "lib/net/send_result.h"
 #include "lib/sys/signal.h"
 
+#include "../input/inputset.h"
 #include "../input/source.h"
 #include "../mux/tspacketizer.h"
 #include "priv.h"
@@ -157,6 +158,22 @@ const char *source_codec_name(source_codec_t c) {
   return "?";
 }
 
+static int single_tsp_new(const config_t *cfg, cas_t *cas, tspacketizer_t **tsp) {
+  tspacketizer_cfg_t tc;
+  memset(&tc, 0, sizeof tc);
+  tc.tsid = cfg->tsid;
+  tc.onid = cfg->onid;
+  tc.sid = cfg->inputs[0].sid;
+  tc.network_name = cfg->nit_text;
+  tc.service_name = cfg->inputs[0].sdt_text;
+  tc.provider_name = cfg->inputs[0].provider_text[0] ? cfg->inputs[0].provider_text : cfg->default_provider_text;
+  tc.standalone = 1;
+  *tsp = tspacketizer_new(&tc);
+  if (!*tsp) return -1;
+  if (cas) tspacketizer_set_cas(*tsp, cas);
+  return 0;
+}
+
 /* drains up to RADIOHEAD_MAX_FRAMES_PER_TICK frames from src, paced to
    real time via pace_deadline (same scheme as mpts.c's process_input_slot).
    0: ok, keep looping. -1: r<0 (source error), caller should reconnect.
@@ -183,24 +200,9 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
       tk->im->last_data_time = (double)time(NULL);
       tk->rm->frames_total[f.codec]++;
     }
-    if (!*tk->tsp) {
-      tspacketizer_cfg_t tc;
-      tc.tsid = tk->cfg->tsid;
-      tc.onid = tk->cfg->onid;
-      tc.sid = tk->cfg->inputs[0].sid;
-      tc.stream_type = f.stream_type;
-      tc.aac_profile_level = f.aac_profile_level;
-      tc.network_name = tk->cfg->nit_text;
-      tc.service_name = tk->cfg->inputs[0].sdt_text;
-      tc.provider_name = tk->cfg->inputs[0].provider_text[0] ? tk->cfg->inputs[0].provider_text : tk->cfg->default_provider_text;
-      tc.pmt_pid = 0;
-      tc.audio_pid = 0;
-      tc.standalone = 1;
-      *tk->tsp = tspacketizer_new(&tc);
-      if (!*tk->tsp) return -2;
-      if (tk->cas) tspacketizer_set_cas(*tk->tsp, tk->cas);
+    if (!*tk->tsp && single_tsp_new(tk->cfg, tk->cas, tk->tsp)) return -2;
+    if (tspacketizer_set_codec(*tk->tsp, f.stream_type, f.aac_profile_level))
       log_line_ansi("codec detected: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", source_codec_name(f.codec), f.sample_rate);
-    }
     if (tk->meta->dirty) {
       tspacketizer_set_metadata(*tk->tsp, tk->meta->artist, tk->meta->title);
       tk->meta->dirty = 0;
@@ -208,19 +210,19 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
     }
 
     now = mono_seconds();
-    pts = *tk->samples_total * 90000ULL / f.sample_rate;
-    *tk->samples_total += f.samples;
+    tk->out->cur_pts = (uint64_t)(now * 90000.0);
+    pts = timeline_pts(*tk->timeline);
+    timeline_add(tk->timeline, f.samples, f.sample_rate);
     *tk->pace_deadline += (double)f.samples / (double)f.sample_rate;
-    tk->out->cur_pts = pts;
     if (tk->cas) {
-      cas_clock_tick(tk->cas, pts);
+      cas_clock_tick(tk->cas, (uint64_t)(now * 90000.0));
       if (cas_failed(tk->cas)) {
         log_line_ansi("cas: \e[0;31mfatal, stopping\e[0m");
         return -2;
       }
       if (signal_reload_requested()) cas_reload_receivers(tk->cas);
     }
-    tspacketizer_feed(*tk->tsp, pts, now, f.data, f.len, tk->out->insp ? &packet_cb_inspect : &packet_cb, tk->out);
+    tspacketizer_feed(*tk->tsp, pts, (uint32_t)((uint64_t)f.samples * 90000ULL / f.sample_rate), now, f.data, f.len, tk->out->insp ? &packet_cb_inspect : &packet_cb, tk->out);
     if (tk->cfg->verbose && now - *tk->last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - tk->start, tk->out->packets);
       fflush(stderr);
@@ -238,6 +240,34 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
   return 0;
 }
 
+static void single_wait(const inputset_t *is, double pace_deadline) {
+  struct pollfd pfd;
+  nfds_t npfd = 0;
+  int timeout_ms = RADIOHEAD_POLL_MAX_MS;
+  double now_pre = mono_seconds();
+  time_t deadline = inputset_next_deadline(is);
+  int fd = inputset_poll_fd(is, 0);
+
+  if (deadline != INPUTSET_NEVER) {
+    long remain_s = (long)(deadline - time(NULL));
+    int remain_ms = remain_s <= 0 ? 0 : (int)(remain_s * 1000);
+    if (remain_ms < timeout_ms) timeout_ms = remain_ms;
+  }
+  if (fd >= 0) {
+    if (inputset_source(is, 0) && pace_deadline > now_pre + RADIOHEAD_PACE_TOLERANCE_S) {
+      /* ceil, not trunc */
+      int wait_ms = 1 + (int)((pace_deadline - now_pre - RADIOHEAD_PACE_TOLERANCE_S) * 1000.0);
+      if (wait_ms < timeout_ms) timeout_ms = wait_ms;
+    } else {
+      pfd.fd = fd;
+      pfd.events = inputset_poll_events(is, 0);
+      pfd.revents = 0;
+      npfd = 1;
+    }
+  }
+  poll(npfd ? &pfd : NULL, npfd, timeout_ms);
+}
+
 int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   out_ctx_t out;
   meta_state_t meta;
@@ -248,7 +278,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   input_metrics_t im;
   radio_metrics_t rm;
   unsigned long long last_synced_bytes = 0;
-  uint64_t samples_total = 0;
+  uint64_t timeline = 0;
   double pace_deadline = 0;
   int metrics_on = metrics_exporter_enabled(mx);
   single_tick_t tk;
@@ -256,6 +286,9 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   source_insp_t sins = {&in_insp, cfg->metrics_inspect_ts, cfg->metrics_known_pids, cfg->metrics_n_known_pids};
   tsinspect_set_t set = {&in_insp, 1, &out.insp, 1};
   srtsink_queue_ctx_t qctx = {&out.srt, 1, metrics_queue_level(cfg->metrics_inspect_ts)};
+  inputset_t *is = NULL;
+  void *meta_ctxs[1] = {&meta};
+  int was_connected = 0;
 
   if (cfg->n_inputs > 1) return radiohead_run_mpts(cfg, mx);
   memset(&meta, 0, sizeof meta);
@@ -290,88 +323,75 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   tk.rm = &rm;
   tk.metrics_on = metrics_on;
   tk.mx = mx;
-  tk.samples_total = &samples_total;
+  tk.timeline = &timeline;
   tk.pace_deadline = &pace_deadline;
   tk.start = start;
   tk.last_stat = &last_stat;
   tk.last_synced_bytes = &last_synced_bytes;
 
-  while (!signal_stop_requested()) {
-    net_err_reason_t reason = NET_ERR_OTHER;
-    source_t *src = source_open(cfg->inputs[0].uri, 0, cfg->inputs[0].sdt_text, cfg->insecure_tls, meta_cb, &meta, &sins, &reason);
-    samples_total = 0;
-    pace_deadline = mono_seconds();
+  if (single_tsp_new(cfg, cas, &tsp)) {
+    rc = 1;
+    goto done;
+  }
+  is = inputset_new(cfg, meta_cb, meta_ctxs, metrics_on ? &im : NULL, &sins);
+  if (!is) {
+    rc = 1;
+    goto done;
+  }
 
-    if (src && source_set_prefill_ms(src, cfg->inputs[0].jitter_ms) < 0) {
-      source_close(src);
-      src = NULL;
-      reason = NET_ERR_OTHER;
-    }
-    if (!src) {
-      if (metrics_on) {
-        im.up = 0;
-        im.errors_total[reason]++;
-      }
-      if (cfg->error_retry_s <= 0) {
-        rc = 1;
-        break;
-      }
-      log_line("input error, retrying in %lds", cfg->error_retry_s);
-      sleep_interruptible(cfg->error_retry_s);
-      continue;
-    }
-    if (metrics_on) {
-      if (im.seen_open) im.reconnects_total++;
-      im.seen_open = 1;
-      im.up = 1;
+  while (!signal_stop_requested()) {
+    source_t *src;
+    double now;
+    time_t now_t;
+
+    single_wait(is, pace_deadline);
+    if (signal_stop_requested()) break;
+    radiohead_srt_service(&out);
+    now = mono_seconds();
+    now_t = time(NULL);
+    inputset_service(is, 0, now_t);
+    if (out.insp) tsinspect_tick(out.insp, now);
+
+    src = inputset_source(is, 0);
+    if (src && !was_connected) {
+      timeline = 0;
+      tspacketizer_mark_discontinuity(tsp);
+      pace_deadline = now;
       last_synced_bytes = 0;
     }
+    was_connected = src != NULL;
+    if (src) {
+      int step = process_single_frame(&tk, src);
 
-    while (!signal_stop_requested()) {
-      int step;
-      struct pollfd pfd;
-      nfds_t npfd = 1;
-      int timeout_ms = RADIOHEAD_POLL_MAX_MS;
-      double now_pre = mono_seconds();
-
-      /* sock readable, skip&sleep. avoid poll() spin. */
-      if (pace_deadline > now_pre + RADIOHEAD_PACE_TOLERANCE_S) {
-        /* ceil, not trunc */
-        int wait_ms = 1 + (int)((pace_deadline - now_pre - RADIOHEAD_PACE_TOLERANCE_S) * 1000.0);
-        if (wait_ms < 1) wait_ms = 1;
-        if (wait_ms < timeout_ms) timeout_ms = wait_ms;
-        npfd = 0;
-      } else {
-        pfd.fd = source_fd(src);
-        pfd.events = POLLIN;
-        pfd.revents = 0;
-      }
-      poll(npfd ? &pfd : NULL, npfd, timeout_ms);
-      if (signal_stop_requested()) break;
-      radiohead_srt_service(&out);
-      if (out.insp) tsinspect_tick(out.insp, mono_seconds());
-      step = process_single_frame(&tk, src);
       if (step == -2) {
         rc = 1;
         goto done;
       }
-      if (step == -1) break;
-    }
-    if (metrics_on) im.up = 0;
-    source_close(src);
-    if (signal_stop_requested()) break;
-    if (cfg->error_retry_s <= 0) {
+      if (step == -1) {
+        unsigned long long sb = source_bytes_total(src);
+
+        if (metrics_on) {
+          im.up = 0;
+          if (sb > last_synced_bytes) im.bytes_total += sb - last_synced_bytes;
+        }
+        inputset_mark_down(is, 0, now_t);
+      }
+    } else if (inputset_given_up(is, 0)) {
       rc = 1;
       break;
     }
-    log_line("input error, retrying in %lds", cfg->error_retry_s);
-    sleep_interruptible(cfg->error_retry_s);
+    if (!src || now > pace_deadline + RADIOHEAD_PACE_TOLERANCE_S) {
+      tspacketizer_idle(tsp, now, out.insp ? &packet_cb_inspect : &packet_cb, &out);
+      flush_batch(&out);
+      emit_metrics(mx, now, &out, 1, src ? 1 : 0, &im, 1, &rm, cas);
+    }
   }
 
 done:
   if (cas) cas_flush(cas, out.insp ? &packet_cb_inspect : &packet_cb, &out);
   flush_batch(&out);
   if (tsp) tspacketizer_free(tsp);
+  if (is) inputset_free(is);
   if (cas) cas_stop(cas);
   metrics_exporter_clear_extras(mx);
   radiohead_output_close(&out);

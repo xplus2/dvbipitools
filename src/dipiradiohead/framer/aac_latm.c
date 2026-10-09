@@ -12,6 +12,7 @@ struct aac_latm {
   unsigned sample_rate;
   unsigned channels;
   unsigned aac_profile_level;
+  unsigned num_sub_frames;
 };
 
 aac_latm_t *aac_latm_new(void) { return calloc(1, sizeof(struct aac_latm)); }
@@ -79,12 +80,12 @@ static int audio_specific_config(br_t *b, unsigned *sample_rate, unsigned *chann
 }
 
 /* StreamMuxConfig, audioMuxVersion 0/1 non-"A" path, single program/layer only */
-static int stream_mux_config(br_t *b, unsigned *sample_rate, unsigned *channels, unsigned *aac_profile_level) {
+static int stream_mux_config(br_t *b, unsigned *sample_rate, unsigned *channels, unsigned *aac_profile_level, unsigned *num_sub_frames) {
   unsigned version, num_program, num_layer;
   version = br_u(b, 1);
   if (version == 1) return -1; /* audioMuxVersionA / LATM v1 extensions not supported */
   br_u(b, 1);   /* allStreamsSameTimeFraming */
-  br_u(b, 6);   /* numSubFrames */
+  *num_sub_frames = br_u(b, 6);
   num_program = br_u(b, 4);
   num_layer = br_u(b, 3);
   if (b->err || num_program != 0 || num_layer != 0) return -1; /* only a single program/layer is supported */
@@ -106,14 +107,14 @@ int aac_latm_probe(aac_latm_t *c, const unsigned char *p, size_t avail, aac_latm
   b.bit = 0;
   b.err = 0;
   if (!br_u(&b, 1)) { /* !useSameStreamMux: fresh StreamMuxConfig follows */
-    if (stream_mux_config(&b, &c->sample_rate, &c->channels, &c->aac_profile_level) != 0) return -1;
+    if (stream_mux_config(&b, &c->sample_rate, &c->channels, &c->aac_profile_level, &c->num_sub_frames) != 0) return -1;
     c->have_config = 1;
   }
   if (!c->have_config) return -1;
   info->sample_rate = c->sample_rate;
   info->channels = c->channels;
   info->aac_profile_level = c->aac_profile_level;
-  info->samples_per_frame = 1024;
+  info->samples_per_frame = 1024 * (c->num_sub_frames + 1);
   info->frame_len = total;
   return 1;
 }

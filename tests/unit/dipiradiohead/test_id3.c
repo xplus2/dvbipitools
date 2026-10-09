@@ -430,6 +430,63 @@ START_TEST(id3_overlong_multibyte_text_is_cut_on_a_character_boundary) {
 }
 END_TEST
 
+START_TEST(id3_v22_three_byte_frames_are_parsed) {
+  static const unsigned char tag[] = {
+    'I', 'D', '3', 2, 0, 0, 0, 0, 0, 17,
+    'T', 'T', '2', 0, 0, 3, 0, 'A', 'b',
+    'T', 'P', '1', 0, 0, 2, 0, 'X',
+  };
+  capture_t cap;
+  id3_t *c;
+
+  memset(&cap, 0, sizeof cap);
+  c = id3_new(on_meta, &cap);
+  id3_consume(c, tag, sizeof tag);
+  ck_assert_int_eq(cap.calls, 1);
+  ck_assert_str_eq(cap.title, "Ab");
+  ck_assert_str_eq(cap.artist, "X");
+  id3_free(c);
+}
+END_TEST
+
+START_TEST(id3_v23_unsynchronised_tag_is_restored) {
+  static const unsigned char tag[] = {
+    'I', 'D', '3', 3, 0, 0x80, 0, 0, 0, 25,
+    'T', 'I', 'T', '2', 0, 0, 0, 2, 0, 0, 0x00, 0xFF, 0x00,
+    'T', 'P', 'E', '1', 0, 0, 0, 2, 0, 0, 0x00, 'X',
+  };
+  capture_t cap;
+  id3_t *c;
+
+  memset(&cap, 0, sizeof cap);
+  c = id3_new(on_meta, &cap);
+  id3_consume(c, tag, sizeof tag);
+  ck_assert_int_eq(cap.calls, 1);
+  ck_assert_str_eq(cap.title, "\xC3\xBF");
+  ck_assert_str_eq(cap.artist, "X");
+  id3_free(c);
+}
+END_TEST
+
+START_TEST(id3_v24_unsynchronised_frame_is_restored) {
+  static const unsigned char tag[] = {
+    'I', 'D', '3', 4, 0, 0, 0, 0, 0, 25,
+    'T', 'I', 'T', '2', 0, 0, 0, 3, 0, 0x02, 0x00, 0xFF, 0x00,
+    'T', 'P', 'E', '1', 0, 0, 0, 2, 0, 0, 0x00, 'X',
+  };
+  capture_t cap;
+  id3_t *c;
+
+  memset(&cap, 0, sizeof cap);
+  c = id3_new(on_meta, &cap);
+  id3_consume(c, tag, sizeof tag);
+  ck_assert_int_eq(cap.calls, 1);
+  ck_assert_str_eq(cap.title, "\xC3\xBF");
+  ck_assert_str_eq(cap.artist, "X");
+  id3_free(c);
+}
+END_TEST
+
 static Suite *id3_suite(void) {
   Suite *s = suite_create("id3");
   TCase *tc = tcase_create("core");
@@ -450,6 +507,9 @@ static Suite *id3_suite(void) {
   tcase_add_loop_test(tc, id3_lone_utf16_surrogate_becomes_replacement_character, 0, (int)(sizeof surrogate_cases / sizeof surrogate_cases[0]));
   tcase_add_test(tc, id3_overlong_text_is_truncated_to_the_stack_buffers);
   tcase_add_test(tc, id3_overlong_multibyte_text_is_cut_on_a_character_boundary);
+  tcase_add_test(tc, id3_v22_three_byte_frames_are_parsed);
+  tcase_add_test(tc, id3_v23_unsynchronised_tag_is_restored);
+  tcase_add_test(tc, id3_v24_unsynchronised_frame_is_restored);
   suite_add_tcase(s, tc);
   return s;
 }

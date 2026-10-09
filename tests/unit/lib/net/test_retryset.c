@@ -184,8 +184,26 @@ START_TEST(retryset_single_slot_never_retries_when_error_retry_s_is_zero) {
   ctxs[0] = &spec;
   rs = retryset_new(1, ctxs, NULL, &mock_ops, 0);
 
+  ck_assert_int_eq(retryset_given_up(rs, 0), 0);
   retryset_service(rs, 0, now);
   ck_assert_int_eq(retryset_next_deadline(rs), RETRYSET_NEVER);
+  ck_assert_int_eq(retryset_given_up(rs, 0), 1);
+
+  retryset_free(rs);
+}
+END_TEST
+
+START_TEST(retryset_given_up_stays_clear_while_retries_are_scheduled) {
+  mock_spec_t spec = {0};
+  void *ctxs[1];
+  retryset_t *rs;
+
+  spec.fail_immediately = 1;
+  ctxs[0] = &spec;
+  rs = retryset_new(1, ctxs, NULL, &mock_ops, 5);
+
+  retryset_service(rs, 0, 1000);
+  ck_assert_int_eq(retryset_given_up(rs, 0), 0);
 
   retryset_free(rs);
 }
@@ -258,6 +276,7 @@ static Suite *retryset_suite(void) {
   tcase_add_test(tc, retryset_poll_fd_and_events_reflect_state);
   tcase_add_test(tc, retryset_connect_failure_reschedules_and_reopens_after_deadline);
   tcase_add_test(tc, retryset_single_slot_never_retries_when_error_retry_s_is_zero);
+  tcase_add_test(tc, retryset_given_up_stays_clear_while_retries_are_scheduled);
   tcase_add_test(tc, retryset_defaults_retry_interval_for_multi_slot_when_zero);
   tcase_add_test(tc, retryset_mark_down_closes_result_and_reschedules);
   tcase_add_test(tc, retryset_free_closes_still_connected_slots);

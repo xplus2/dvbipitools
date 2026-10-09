@@ -41,9 +41,9 @@ typedef struct {
   const char *service_name;
 } psi_sdt_entry_t;
 
-/* MPTS SDT: one service_descriptor per entry, one section (same entry-count ceiling as psi_build_pat_multi).
-   do not call psi_build_sdt() per service into the same tsid/onid instead. same table_id/tsid/onid/version = one sub_table (EN 300 468 5.2.3/3.1), and per-service
-   "0/0" section_number/last_section_number collide, non-first ones dropped by parsers. 0 on overflow or n_services 0. */
+size_t psi_sdt_section_count(const psi_sdt_entry_t *services, size_t n_services);
+size_t psi_build_sdt_section(unsigned version, unsigned tsid, unsigned onid, const psi_sdt_entry_t *services, size_t n_services, size_t section_number, unsigned char *out, size_t cap);
+/* convenience: whole list when it fits one section, else 0 */
 size_t psi_build_sdt_multi(unsigned version, unsigned tsid, unsigned onid, const psi_sdt_entry_t *services, size_t n_services, unsigned char *out, size_t cap);
 size_t psi_build_nit(unsigned version, unsigned onid, unsigned tsid, const char *network_name, unsigned char *out, size_t cap);
 /* table_id 0x01, program-level descriptor loop only (CA_descriptor etc). desc/desc_len: NULL/0 if none */

@@ -250,6 +250,72 @@ START_TEST(psi_build_sdt_multi_rejects_zero_services) {
 }
 END_TEST
 
+START_TEST(psi_build_sdt_clamps_long_names_to_valid_lengths) {
+  unsigned char sec[1024];
+  char longname[400];
+  size_t slen, dll, dlen, plen;
+
+  memset(longname, 'x', sizeof longname - 1);
+  longname[sizeof longname - 1] = 0;
+  slen = psi_build_sdt(0, 1, 1, 1, 0x01, longname, longname, sec, sizeof sec);
+  ck_assert_uint_ne(slen, 0u);
+  ck_assert_uint_eq(crc32_mpeg(sec, slen), 0u);
+  dll = ((sec[14] & 0x0F) << 8) | sec[15];
+  dlen = sec[17];
+  plen = sec[19];
+  ck_assert_uint_eq(dll, dlen + 2);
+  ck_assert_uint_eq(slen, 11 + 5 + dll + 4);
+  ck_assert_uint_le(plen, 126u);
+  ck_assert_uint_eq(dlen, 3 + plen + sec[20 + plen]);
+}
+END_TEST
+
+START_TEST(psi_build_sdt_section_splits_large_lists) {
+  psi_sdt_entry_t services[32];
+  unsigned char sec[1024];
+  char longname[200];
+  size_t count, i, total = 0, slen;
+
+  memset(longname, 'n', sizeof longname - 1);
+  longname[sizeof longname - 1] = 0;
+  for (i = 0; i < 32; i++) {
+    services[i].service_id = (unsigned)(100 + i);
+    services[i].service_type = 0x01;
+    services[i].provider = "Prov";
+    services[i].service_name = longname;
+  }
+  count = psi_sdt_section_count(services, 32);
+  ck_assert_uint_gt(count, 1u);
+  ck_assert_uint_eq(psi_build_sdt_multi(0, 1, 1, services, 32, sec, sizeof sec), 0u);
+  for (i = 0; i < count; i++) {
+    slen = psi_build_sdt_section(3, 1, 1, services, 32, i, sec, sizeof sec);
+    ck_assert_uint_ne(slen, 0u);
+    ck_assert_uint_le(slen, 1024u);
+    ck_assert_uint_eq(crc32_mpeg(sec, slen), 0u);
+    ck_assert_uint_eq(sec[6], i);
+    ck_assert_uint_eq(sec[7], count - 1);
+    total += (slen - 11 - 4) / (10 + 5 + 1 + 199);
+  }
+  ck_assert_uint_eq(total, 32u);
+  ck_assert_uint_eq(psi_build_sdt_section(3, 1, 1, services, 32, count, sec, sizeof sec), 0u);
+}
+END_TEST
+
+START_TEST(psi_build_nit_clamps_long_network_name) {
+  unsigned char sec[600];
+  char longname[400];
+  size_t slen;
+
+  memset(longname, 'x', sizeof longname - 1);
+  longname[sizeof longname - 1] = 0;
+  slen = psi_build_nit(0, 1, 1, longname, sec, sizeof sec);
+  ck_assert_uint_ne(slen, 0u);
+  ck_assert_uint_eq(crc32_mpeg(sec, slen), 0u);
+  ck_assert_uint_eq(sec[11], 255u);
+  ck_assert_uint_eq(((sec[8] & 0x0F) << 8) | sec[9], 257u);
+}
+END_TEST
+
 START_TEST(psi_build_cat_builds_valid_section) {
   static const unsigned char desc[] = {0x09, 4, 0x4A, 0x75, 0xE0, 0x20};
   unsigned char section[32];
@@ -292,6 +358,9 @@ static Suite *psi_build_suite(void) {
   tcase_add_test(tc, psi_build_sdt_multi_round_trips_through_psi_feed);
   tcase_add_test(tc, psi_build_sdt_multi_rejects_small_cap);
   tcase_add_test(tc, psi_build_sdt_multi_rejects_zero_services);
+  tcase_add_test(tc, psi_build_sdt_clamps_long_names_to_valid_lengths);
+  tcase_add_test(tc, psi_build_sdt_section_splits_large_lists);
+  tcase_add_test(tc, psi_build_nit_clamps_long_network_name);
   tcase_add_test(tc, psi_build_cat_builds_valid_section);
   tcase_add_test(tc, psi_build_cat_rejects_small_cap);
   suite_add_tcase(s, tc);

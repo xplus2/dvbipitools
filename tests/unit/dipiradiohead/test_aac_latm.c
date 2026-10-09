@@ -135,6 +135,20 @@ START_TEST(aac_latm_probe_parses_full_stream_mux_config) {
 }
 END_TEST
 
+START_TEST(aac_latm_probe_scales_samples_by_num_sub_frames) {
+  aac_latm_t *c = aac_latm_new();
+  unsigned char frame[32];
+  size_t len = build_full_config_frame(frame, sizeof frame, 1);
+  aac_latm_info_t info;
+
+  frame[3] |= 0x01; /* numSubFrames = 2 */
+  ck_assert_int_eq(aac_latm_probe(c, frame, len, &info), 1);
+  ck_assert_uint_eq(info.samples_per_frame, 3072u);
+
+  aac_latm_free(c);
+}
+END_TEST
+
 START_TEST(aac_latm_probe_parses_hierarchical_sbr_config) {
   aac_latm_t *c = aac_latm_new();
   unsigned char frame[32];
@@ -255,6 +269,7 @@ static Suite *aac_latm_suite(void) {
   Suite *s = suite_create("aac_latm");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, aac_latm_probe_parses_full_stream_mux_config);
+  tcase_add_test(tc, aac_latm_probe_scales_samples_by_num_sub_frames);
   tcase_add_test(tc, aac_latm_probe_parses_hierarchical_sbr_config);
   tcase_add_test(tc, aac_latm_probe_parses_hierarchical_ps_config);
   tcase_add_test(tc, aac_latm_probe_ignores_trailing_bits_after_plain_config);

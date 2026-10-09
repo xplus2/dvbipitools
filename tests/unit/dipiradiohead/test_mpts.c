@@ -31,7 +31,7 @@ typedef struct {
   mpts_t *mpts;
   tspacketizer_t *tsps[1];
   meta_state_t metas[1];
-  uint64_t samples_total[1];
+  uint64_t timeline[1];
   double pace_deadline[1];
   int was_connected[1];
   input_metrics_t input_stats[1];
@@ -83,7 +83,7 @@ static void rig_init(rig_t *r, const char *uri_or_null, const unsigned char *bod
   r->tk.cfg = &r->cfg;
   r->tk.tsps = r->tsps;
   r->tk.metas = r->metas;
-  r->tk.samples_total = r->samples_total;
+  r->tk.timeline = r->timeline;
   r->tk.pace_deadline = r->pace_deadline;
   r->tk.was_connected = r->was_connected;
   r->tk.input_stats = r->input_stats;
@@ -185,13 +185,13 @@ START_TEST(first_sight_of_a_connected_source_resets_the_slot_clock) {
   if (!r) abort();
   rig_init(r, NULL, body, sizeof body);
   rig_connect(r);
-  r->samples_total[0] = 99;
+  r->timeline[0] = 99;
   r->last_synced_bytes[0] = 77;
   r->pace_deadline[0] = 5.0;
   r->tk.ready_mask = 0;
   ck_assert_int_eq(process_input_slot(&r->tk, 0), 0);
   ck_assert_int_eq(r->was_connected[0], 1);
-  ck_assert_uint_eq(r->samples_total[0], 0u);
+  ck_assert_uint_eq(r->timeline[0], 0u);
   ck_assert_uint_eq(r->last_synced_bytes[0], 0u);
   ck_assert_double_eq(r->pace_deadline[0], NOW);
   ck_assert_ptr_null(r->tsps[0]);
@@ -222,7 +222,7 @@ START_TEST(ready_slot_creates_the_program_and_feeds_paced_frames) {
   frames = r->rm.frames_total[SRC_MPEG_AUDIO];
   ck_assert_uint_ge(frames, 1u);
   ck_assert_uint_le(frames, 13u);
-  ck_assert_uint_eq(r->samples_total[0], frames * 1152u);
+  ck_assert_uint_le(llabs((long long)timeline_pts(r->timeline[0]) - (long long)(frames * 1152u * 90000u / 44100u)), 1);
   ck_assert_double_eq_tol(r->pace_deadline[0], NOW + (double)(frames * 1152u) / 44100.0, 1e-6);
   ck_assert_int_eq(r->metas[0].dirty, 0);
   ck_assert_int_eq(tspacketizer_eit_pending(r->tsps[0]), 1);
@@ -230,6 +230,35 @@ START_TEST(ready_slot_creates_the_program_and_feeds_paced_frames) {
   ck_assert_uint_gt(r->input_stats[0].bytes_total, 0u);
   ck_assert(r->input_stats[0].last_data_time > 0.0);
   ck_assert_uint_eq(r->rm.framing_errors_total, 0u);
+  rig_free(r);
+  free(r);
+}
+END_TEST
+
+START_TEST(codec_change_on_an_existing_program_updates_the_packetizer) {
+  static unsigned char body[MP3_FRAMES * MP3_FRAME_LEN];
+  rig_t *r = calloc(1, sizeof *r);
+  unsigned long long frames;
+
+  if (!r) abort();
+  fixture_mp3_frames(body, MP3_FRAMES);
+  rig_init(r, NULL, body, sizeof body);
+  rig_connect(r);
+  r->tk.ready_mask = 1;
+  for (int i = 0; i < 50 && !r->tsps[0]; i++) {
+    wait_readable(r);
+    ck_assert_int_eq(process_input_slot(&r->tk, 0), 0);
+  }
+  ck_assert_ptr_nonnull(r->tsps[0]);
+  ck_assert_int_eq(tspacketizer_set_codec(r->tsps[0], 0x0F, 0x29), 1);
+  frames = r->rm.frames_total[SRC_MPEG_AUDIO];
+  r->pace_deadline[0] = 0.0;
+  for (int i = 0; i < 50 && r->rm.frames_total[SRC_MPEG_AUDIO] == frames; i++) {
+    wait_readable(r);
+    ck_assert_int_eq(process_input_slot(&r->tk, 0), 0);
+  }
+  ck_assert_uint_gt(r->rm.frames_total[SRC_MPEG_AUDIO], frames);
+  ck_assert_int_eq(tspacketizer_set_codec(r->tsps[0], 0x0F, 0x29), 1);
   rig_free(r);
   free(r);
 }
@@ -287,6 +316,7 @@ static Suite *mpts_suite(void) {
   tcase_add_test(tc, slot_without_a_source_is_skipped);
   tcase_add_test(tc, first_sight_of_a_connected_source_resets_the_slot_clock);
   tcase_add_test(tc, ready_slot_creates_the_program_and_feeds_paced_frames);
+  tcase_add_test(tc, codec_change_on_an_existing_program_updates_the_packetizer);
   tcase_add_test(tc, pacing_deadline_ahead_of_the_clock_defers_all_frames);
   tcase_add_test(tc, framing_failure_marks_the_input_down_and_counts_the_error);
   suite_add_tcase(s, tc);

@@ -265,6 +265,35 @@ START_TEST(null_callback_still_strips_metadata) {
 }
 END_TEST
 
+START_TEST(latin1_title_is_converted_to_utf8) {
+  unsigned char out[16];
+  meta_capture_t m;
+  icy_t *c;
+
+  memset(&m, 0, sizeof m);
+  c = icy_new(2, meta_cb, &m);
+  feed_one_block(c, "StreamTitle='K\xE4se - M\xFCller';", out, sizeof out);
+  ck_assert_int_eq(m.calls, 1);
+  ck_assert_str_eq(m.artist, "K\xC3\xA4se");
+  ck_assert_str_eq(m.title, "M\xC3\xBCller");
+  icy_free(c);
+}
+END_TEST
+
+START_TEST(valid_utf8_title_is_kept) {
+  unsigned char out[16];
+  meta_capture_t m;
+  icy_t *c;
+
+  memset(&m, 0, sizeof m);
+  c = icy_new(2, meta_cb, &m);
+  feed_one_block(c, "StreamTitle='K\xC3\xA4se - Song';", out, sizeof out);
+  ck_assert_str_eq(m.artist, "K\xC3\xA4se");
+  ck_assert_str_eq(m.title, "Song");
+  icy_free(c);
+}
+END_TEST
+
 static Suite *icy_suite(void) {
   Suite *s = suite_create("dipiradiohead_icy");
   TCase *tc = tcase_create("core");
@@ -279,6 +308,8 @@ static Suite *icy_suite(void) {
   tcase_add_test(tc, oversized_title_is_truncated_to_the_title_buffer);
   tcase_add_loop_test(tc, unusable_metadata_fires_no_callback_and_keeps_audio, 0, (int)(sizeof no_title_cases / sizeof no_title_cases[0]));
   tcase_add_test(tc, null_callback_still_strips_metadata);
+  tcase_add_test(tc, latin1_title_is_converted_to_utf8);
+  tcase_add_test(tc, valid_utf8_title_is_kept);
   suite_add_tcase(s, tc);
   return s;
 }

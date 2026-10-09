@@ -10,6 +10,7 @@ typedef struct {
   unsigned sample_rate;
   unsigned samples_per_frame;
   size_t frame_len; /* header included, whole frame */
+  int half_rate;    /* MPEG-2/2.5 low sampling freqs */
 } mpegaudio_info_t;
 
 /* header sync (0xFF + top 3 bits set, layer bits != 0) at p[0..1] */

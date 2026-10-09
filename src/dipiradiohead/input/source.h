@@ -34,6 +34,7 @@ typedef void (*source_meta_cb)(void *ctx, const char *artist, const char *title)
 source_t *source_open(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, const source_insp_t *si, net_err_reason_t *reason_out);
 
 /* 1 + fills *out, 0 transient (retry), -1 hard error (caller should reconnect).
+   no wire data for 20s with nothing to deliver is -1 NET_ERR_TIMEOUT.
    reason_out: nullable, set only on -1 */
 int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason_out);
 
@@ -58,7 +59,7 @@ typedef enum { SOURCE_OPEN_PENDING, SOURCE_OPEN_DONE, SOURCE_OPEN_ERROR } source
 typedef struct source_open source_open_t;
 
 /* async source_open(): never blocks, caller polls.
-   no internal timeout, caller decides when to give up. NULL only on immediate setup failure (calloc logged).
+   step returns ERROR (NET_ERR_TIMEOUT) after 30s overall. NULL only on immediate setup failure (calloc logged).
    reason_out: nullable, set only on NULL return */
 source_open_t *source_open_async_start(const char *uri, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, const source_insp_t *si, net_err_reason_t *reason_out);
 

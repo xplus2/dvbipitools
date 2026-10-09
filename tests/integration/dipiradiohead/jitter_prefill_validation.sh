@@ -7,7 +7,7 @@ BIN=$1
 
 command -v python3 >/dev/null 2>&1 || fail "required tool 'python3' not found on PATH"
 
-# 1 s burst, then real time, one 2 s stall. longest output gap in first 8 s (EOF flush excluded)
+# 1 s burst, then real time, one 2 s stall. longest audio gap in first 8 s (EOF flush excluded). PSI keeps flowing during the stall, and idle flushes send partial datagrams, so only full datagrams carrying audio pid 0x0101 count
 cat >"$WORK/run.py" <<'EOF'
 import socket, struct, sys, threading, time
 
@@ -29,8 +29,9 @@ def listen():
     s.settimeout(0.2)
     while not stop.is_set():
         try:
-            s.recv(2048)
-            stamps.append(time.monotonic())
+            d = s.recv(2048)
+            if len(d) == 7 * 188 and any((((d[i + 1] & 0x1F) << 8) | d[i + 2]) == 0x0101 for i in range(0, len(d), 188)):
+                stamps.append(time.monotonic())
         except socket.timeout:
             pass
 
@@ -96,8 +97,8 @@ wait "$jit"
 read -r ctl_n ctl_gap <"$WORK/control.res"
 read -r jit_n jit_gap <"$WORK/jitter.res"
 
-[ "$ctl_n" -gt 100 ] || fail "control: only $ctl_n datagrams"
-[ "$jit_n" -gt 100 ] || fail "jitter: only $jit_n datagrams"
+[ "$ctl_n" -gt 50 ] || fail "control: only $ctl_n datagrams"
+[ "$jit_n" -gt 50 ] || fail "jitter: only $jit_n datagrams"
 
 python3 -c "import sys; sys.exit(0 if float('$ctl_gap') > 1.0 else 1)" || fail "control: expected stall gap > 1.0 s, got $ctl_gap s"
 python3 -c "import sys; sys.exit(0 if float('$jit_gap') < 0.5 else 1)" || fail "jitter: stall not bridged, longest gap $jit_gap s"

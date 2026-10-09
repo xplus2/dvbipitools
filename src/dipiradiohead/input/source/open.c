@@ -6,6 +6,7 @@
 
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
+#include "lib/sys/signal.h"
 #include "../../version.h"
 #include "../playlist.h"
 #include "priv.h"
@@ -37,6 +38,7 @@ source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigne
   }
   s->idx = idx;
   s->label = label;
+  s->last_rx = mono_seconds();
   s->http = h;
   s->id3 = id3_new(cb, ctx);
   if (!s->id3) {
@@ -75,11 +77,38 @@ static int hls_on_ts_packet(void *ctx, const unsigned char *pkt) {
   return 0;
 }
 
-static void hls_segment_feed(void *ctx, hls_live_t *h, const unsigned char *data, size_t len) {
+static void hls_ts_out(void *ctx, const unsigned char *pkt) { hls_on_ts_packet(ctx, pkt); }
+
+static int hls_init_feed(void *ctx, hls_live_t *h, const unsigned char *data, size_t len) {
   source_t *s = ctx;
   (void)h;
-  s->hls_tspack.acclen = 0;
-  tspack_feed(&s->hls_tspack, data, len, hls_on_ts_packet, s);
+  if (!s->hls_remux) {
+    s->hls_remux = malloc(sizeof *s->hls_remux);
+    if (!s->hls_remux) return 0;
+  }
+  return esbuild_remux_init(s->hls_remux, data, len);
+}
+
+static void hls_segment_feed(void *ctx, hls_live_t *h, const unsigned char *data, size_t len) {
+  source_t *s = ctx;
+  switch (hls_live_segment_kind(data, len)) {
+    case HLS_SEG_TS:
+      s->hls_tspack.acclen = 0;
+      tspack_feed(&s->hls_tspack, data, len, hls_on_ts_packet, s);
+      break;
+    case HLS_SEG_PACKED_AUDIO:
+      hls_live_emit(h, data, len);
+      break;
+    case HLS_SEG_FMP4:
+      if (s->hls_remux) esbuild_remux_feed(s->hls_remux, 0, data, len, hls_ts_out, s);
+      break;
+    case HLS_SEG_UNKNOWN:
+      if (!s->hls_warned) {
+        log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mHLS segment format not recognized, skipped\e[0m", s->idx, s->label ? s->label : "?");
+        s->hls_warned = 1;
+      }
+      break;
+  }
 }
 
 source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const char *label, int insecure, source_meta_cb cb, void *ctx, const source_insp_t *si) {
@@ -87,6 +116,7 @@ source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const c
   if (!s) return NULL;
   s->idx = idx;
   s->label = label;
+  s->last_rx = mono_seconds();
   s->insp_slot = si ? si->slot : NULL;
   s->id3 = id3_new(cb, ctx);
   if (!s->id3) {
@@ -106,6 +136,7 @@ source_t *build_hls_source(const http_url_t *playlist_url, unsigned idx, const c
     free(s);
     return NULL;
   }
+  hls_live_set_init_cb(s->hls, hls_init_feed, s);
   return s;
 }
 

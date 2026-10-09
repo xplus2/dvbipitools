@@ -297,12 +297,19 @@ free_port_block() {
         fpb_ok=1
         fpb_i=0
         while [ "$fpb_i" -lt "$fpb_n" ] && [ "$fpb_ok" = "1" ]; do
-            if port_open $((fpb_port + fpb_i)) || udp_port_busy $((fpb_port + fpb_i)); then
+            if port_open $((fpb_port + fpb_i)) || udp_port_busy $((fpb_port + fpb_i)) \
+                || ! port_claim $((fpb_port + fpb_i)); then
                 fpb_ok=0
+            else
+                fpb_i=$((fpb_i + 1))
             fi
-            fpb_i=$((fpb_i + 1))
         done
         [ "$fpb_ok" = "1" ] && break
+        fpb_j=0
+        while [ "$fpb_j" -lt "$fpb_i" ]; do
+            rm -f "$PORT_CLAIM_DIR/$((fpb_port + fpb_j))"
+            fpb_j=$((fpb_j + 1))
+        done
         fpb_port=$((fpb_port + 2))
     done
     echo "$fpb_port"

@@ -1813,6 +1813,16 @@ dvbipitools_add_unit_test(dipiradiohead_args_net
 dvbipitools_add_unit_test(dipiradiohead_source_async
     unit/dipiradiohead/input/test_source_async.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/esbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pes.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/tspacketize.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pmtbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open_async.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/frame.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/framequeue.c
@@ -1857,6 +1867,16 @@ dvbipitools_add_unit_test(dipiradiohead_source_async
 dvbipitools_add_unit_test(dipiradiohead_source_frame
     unit/dipiradiohead/input/test_frame.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/esbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pes.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/tspacketize.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pmtbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/frame.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/framequeue.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/playlist.c
@@ -1947,6 +1967,14 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristout_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/esbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pes.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/tspacketize.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pmtbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open_async.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/frame.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/framequeue.c
@@ -2037,6 +2065,11 @@ dvbipitools_add_unit_test(lib_hls_live
 dvbipitools_add_unit_test(lib_hls_tspassthrough
     unit/lib/hls/test_tspassthrough.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pes.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/tspacketize.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pmtbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
@@ -2109,6 +2142,16 @@ dvbipitools_add_unit_test(lib_dash_live
 dvbipitools_add_unit_test(dipiradiohead_source_hls
     unit/dipiradiohead/input/test_source_hls.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/esbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pes.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/tspacketize.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pmtbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open_async.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/frame.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/framequeue.c
@@ -2155,6 +2198,16 @@ dvbipitools_add_unit_test(dipiradiohead_inputset
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/inputset.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/retryset.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/esbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pes.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/tspacketize.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pmtbuild.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open_async.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/frame.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/framequeue.c

@@ -560,6 +560,14 @@ function(dipiradiohead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/live.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/esbuild.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pes.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/tspacketize.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pmtbuild.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/icy.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/id3.c
             ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c

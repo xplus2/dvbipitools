@@ -58,6 +58,7 @@ struct cas_group {
   pthread_mutex_t cw_lock;
   group_cw_hist_t hist[CAS_GROUP_CW_HIST];
   unsigned long cw_epoch_published;
+  int have_published;
 
   cas_group_vendor_t vendors[CAS_GROUP_MAX_VENDORS];
 };
@@ -272,11 +273,12 @@ static void refresh_group_cw(cas_group_t *g, int any_alive, scrambler_emit_cb em
   size_t cw_len;
   if (!any_alive) return;
   epoch = group_current_epoch(g);
-  if (epoch == g->cw_epoch_published) return;
+  if (g->have_published && epoch == g->cw_epoch_published) return;
   if (!group_ecm_ready(g, epoch)) return;
   cw_len = scrambler_cw_len(g->cfg.algo);
   if (group_cw_for_epoch(g, epoch, cw, cw_len) < 0) return;
   g->cw_epoch_published = epoch;
+  g->have_published = 1;
   cas_scramble_engine_set_cw(g->engine, (int)(epoch & 1), cw, cw_len, emit, ctx);
 }
 
