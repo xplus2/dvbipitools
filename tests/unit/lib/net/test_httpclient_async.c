@@ -11,6 +11,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "lib/net/httpclient/httpclient.h"
@@ -20,6 +21,11 @@ typedef struct {
   const char *response;
   size_t response_len;
 } server_arg_t;
+
+static void pause_5ms(void) {
+  struct timespec ts = {0, 5000000};
+  nanosleep(&ts, NULL);
+}
 
 static void *serve_once(void *arg) {
   server_arg_t *a = arg;
@@ -84,7 +90,7 @@ static size_t drain_body(http_t *h, char *buf, size_t cap, size_t want) {
     else if (n < 0)
       break;
     else
-      usleep(5000);
+      pause_5ms();
     tries++;
   }
   return got;
@@ -257,7 +263,7 @@ START_TEST(http_async_decodes_chunked_body) {
     ssize_t n = 0;
     for (int i = 0; i < 200 && n == 0; i++) {
       n = http_read(h, buf, sizeof buf, &why);
-      if (n == 0) usleep(5000);
+      if (n == 0) pause_5ms();
     }
     ck_assert_int_eq((int)n, -1);
     ck_assert_int_eq(why, NET_ERR_EOF);

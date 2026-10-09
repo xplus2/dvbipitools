@@ -482,8 +482,11 @@ END_TEST
 START_TEST(tspacketizer_pcr_leads_pts_and_long_frames_get_pcr_only_packets) {
   tspacketizer_cfg_t cfg;
   tspacketizer_t *t;
-  const unsigned char *first, *extra;
-  uint64_t pcr0, pcr1, pts;
+  const unsigned char *first;
+  const unsigned char *extra;
+  uint64_t pcr0;
+  uint64_t pcr1;
+  uint64_t pts;
   memset(&cfg, 0, sizeof cfg);
   cfg.tsid = 1;
   cfg.sid = 101;
@@ -494,8 +497,13 @@ START_TEST(tspacketizer_pcr_leads_pts_and_long_frames_get_pcr_only_packets) {
   g_npkts = 0;
   tspacketizer_feed(t, 90000, 5760, 0.0, g_frame, sizeof g_frame, store_cb, NULL);
   first = nth_pid(0x0101, 0);
-  extra = nth_pid(0x0101, 1);
   ck_assert_ptr_nonnull(first);
+  ck_assert_ptr_null(nth_pid(0x0101, 1));
+  ck_assert_double_eq_tol(tspacketizer_pcr_next_due(t), 0.032, 1e-9);
+  ck_assert_uint_eq((unsigned)tspacketizer_pcr_flush(t, 0.031, store_cb, NULL), 0u);
+  ck_assert_uint_eq((unsigned)tspacketizer_pcr_flush(t, 0.032, store_cb, NULL), 1u);
+  ck_assert_double_lt(tspacketizer_pcr_next_due(t), 0.0);
+  extra = nth_pid(0x0101, 1);
   ck_assert_ptr_nonnull(extra);
   ck_assert_ptr_null(nth_pid(0x0101, 2));
   pcr0 = ((uint64_t)first[6] << 25) | ((uint64_t)first[7] << 17) | ((uint64_t)first[8] << 9) | ((uint64_t)first[9] << 1) | (first[10] >> 7);
@@ -510,6 +518,46 @@ START_TEST(tspacketizer_pcr_leads_pts_and_long_frames_get_pcr_only_packets) {
 }
 END_TEST
 
+START_TEST(tspacketizer_next_feed_releases_unflushed_pcr_only_packets_first) {
+  tspacketizer_cfg_t cfg;
+  tspacketizer_t *t;
+  memset(&cfg, 0, sizeof cfg);
+  cfg.tsid = 1;
+  cfg.sid = 101;
+  cfg.network_name = "";
+  cfg.service_name = "Test Service";
+  t = tspacketizer_new(&cfg);
+
+  g_npkts = 0;
+  tspacketizer_feed(t, 0, 5760, 0.0, g_frame, sizeof g_frame, store_cb, NULL);
+  ck_assert_int_eq(count_pid(0x0101), 1);
+  tspacketizer_feed(t, 5760, 5760, 0.064, g_frame, sizeof g_frame, store_cb, NULL);
+  ck_assert_int_eq(count_pid(0x0101), 3);
+  ck_assert_uint_eq(nth_pid(0x0101, 1)[3] & 0x30, 0x20u);
+  ck_assert_double_eq_tol(tspacketizer_pcr_next_due(t), 0.064 + 0.032, 1e-9);
+  tspacketizer_free(t);
+}
+END_TEST
+
+START_TEST(tspacketizer_discontinuity_drops_queued_pcr_only_packets) {
+  tspacketizer_cfg_t cfg;
+  tspacketizer_t *t;
+  memset(&cfg, 0, sizeof cfg);
+  cfg.tsid = 1;
+  cfg.sid = 101;
+  cfg.network_name = "";
+  cfg.service_name = "Test Service";
+  t = tspacketizer_new(&cfg);
+
+  g_npkts = 0;
+  tspacketizer_feed(t, 0, 5760, 0.0, g_frame, sizeof g_frame, store_cb, NULL);
+  tspacketizer_mark_discontinuity(t);
+  ck_assert_double_lt(tspacketizer_pcr_next_due(t), 0.0);
+  ck_assert_uint_eq((unsigned)tspacketizer_pcr_flush(t, 1.0, store_cb, NULL), 0u);
+  tspacketizer_free(t);
+}
+END_TEST
+
 static Suite *tspacketizer_suite(void) {
   Suite *s = suite_create("tspacketizer");
   TCase *tc = tcase_create("core");
@@ -519,6 +567,8 @@ static Suite *tspacketizer_suite(void) {
   tcase_add_test(tc, tspacketizer_set_codec_reports_change_and_enables_pmt);
   tcase_add_test(tc, tspacketizer_omits_nit_when_no_network_name);
   tcase_add_test(tc, tspacketizer_pcr_leads_pts_and_long_frames_get_pcr_only_packets);
+  tcase_add_test(tc, tspacketizer_next_feed_releases_unflushed_pcr_only_packets_first);
+  tcase_add_test(tc, tspacketizer_discontinuity_drops_queued_pcr_only_packets);
   tcase_add_test(tc, tspacketizer_second_feed_shortly_after_only_sends_audio);
   tcase_add_test(tc, tspacketizer_set_metadata_forces_eit_resend);
   tcase_add_test(tc, tspacketizer_non_standalone_emits_only_pmt_and_audio);

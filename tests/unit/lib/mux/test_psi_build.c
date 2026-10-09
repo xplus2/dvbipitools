@@ -253,7 +253,10 @@ END_TEST
 START_TEST(psi_build_sdt_clamps_long_names_to_valid_lengths) {
   unsigned char sec[1024];
   char longname[400];
-  size_t slen, dll, dlen, plen;
+  size_t slen;
+  size_t dll;
+  size_t dlen;
+  size_t plen;
 
   memset(longname, 'x', sizeof longname - 1);
   longname[sizeof longname - 1] = 0;
@@ -274,7 +277,10 @@ START_TEST(psi_build_sdt_section_splits_large_lists) {
   psi_sdt_entry_t services[32];
   unsigned char sec[1024];
   char longname[200];
-  size_t count, i, total = 0, slen;
+  size_t count;
+  size_t i;
+  size_t total = 0;
+  size_t slen;
 
   memset(longname, 'n', sizeof longname - 1);
   longname[sizeof longname - 1] = 0;

@@ -206,14 +206,13 @@ size_t psi_build_sdt_section(unsigned version, unsigned tsid, unsigned onid, con
   size_t first;
   size_t span;
   size_t n;
-  size_t i;
 
   if (cap < 12 || count == 0 || count > 256 || section_number >= count) return 0;
   span = sdt_section_span(services, n_services, section_number, &first);
   n = psi_put_sdt_header(out, version, tsid, onid);
   out[6] = (unsigned char)section_number;
   out[7] = (unsigned char)(count - 1);
-  for (i = first; i < first + span; i++) {
+  for (size_t i = first; i < first + span; i++) {
     n = psi_put_sdt_entry(out, n, cap, &services[i]);
     if (!n) return 0;
   }

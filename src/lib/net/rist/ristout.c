@@ -3,21 +3,26 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <librist/librist.h>
 
 #include "lib/helper/log.h"
+#include "lib/sys/signal.h"
 #include "ristlog.h"
 #include "ristout.h"
 #include "ristpeer.h"
 
 #define RIST_CHUNK (7 * 188) /* librist caps a single data_block well under 64K (observed max ~9968B) */
 #define RIST_STATS_INTERVAL_MS 1000 /* metrics_exporter_due() gates actual push cadence */
+#define RIST_DRAIN_MS_DEFAULT 1000 /* librist default recovery length */
 
 struct ristout {
   struct rist_ctx *ctx;
   metrics_exporter_t *mx;
   const char *tool_version;
+  unsigned drain_ms;
+  int wrote;
 };
 
 static int add_peers(struct rist_ctx *ctx, const ristout_cfg_t *cfg) {
@@ -56,6 +61,7 @@ ristout_t *ristout_open(const ristout_cfg_t *cfg) {
   if (!r) return NULL;
   r->mx = cfg->mx;
   r->tool_version = cfg->tool_version;
+  r->drain_ms = cfg->buffer_ms ? cfg->buffer_ms : RIST_DRAIN_MS_DEFAULT;
   if (rist_sender_create(&r->ctx, profile, 0, ristlog_get(cfg->verbose)) != 0) {
     log_line("rist: sender create failed");
     free(r);
@@ -81,12 +87,17 @@ int ristout_write(ristout_t *r, const unsigned char *buf, size_t n) {
       log_line("rist: write failed");
       return -1;
     }
+    r->wrote = 1;
   }
   return 0;
 }
 
 void ristout_close(ristout_t *r) {
   if (!r) return;
+  if (r->wrote && !signal_stop_requested()) {
+    struct timespec ts = {(time_t)(r->drain_ms / 1000), (long)(r->drain_ms % 1000) * 1000000L};
+    nanosleep(&ts, NULL);
+  }
   rist_destroy(r->ctx);
   free(r);
 }

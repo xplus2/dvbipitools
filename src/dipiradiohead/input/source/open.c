@@ -79,7 +79,7 @@ static int hls_on_ts_packet(void *ctx, const unsigned char *pkt) {
 
 static void hls_ts_out(void *ctx, const unsigned char *pkt) { hls_on_ts_packet(ctx, pkt); }
 
-static int hls_init_feed(void *ctx, hls_live_t *h, const unsigned char *data, size_t len) {
+static int hls_init_feed(void *ctx, const hls_live_t *h, const unsigned char *data, size_t len) {
   source_t *s = ctx;
   (void)h;
   if (!s->hls_remux) {

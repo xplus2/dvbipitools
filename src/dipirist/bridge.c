@@ -2,7 +2,6 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <string.h>
-#include <time.h>
 
 #include <librist/librist.h>
 
@@ -20,7 +19,6 @@
 #include "version.h"
 
 #define RIST_READ_TIMEOUT_MS 200
-#define DIPIRIST_SENDER_DRAIN_MS_DEFAULT 1000 /* librist's own default recovery buffer length */
 
 enum rist_profile profile_of(rist_profile_sel_t p) {
   return p == RIST_PROF_MAIN ? RIST_PROFILE_MAIN : RIST_PROFILE_SIMPLE;
@@ -162,12 +160,6 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
       log_line("rist output: recovered");
       rist_had_error = 0;
     }
-  }
-  if (rc) {
-    /* eof/err, not live stop: drain arq retransmits before teardown */
-    unsigned drain_ms = cfg->buffer_ms ? cfg->buffer_ms : DIPIRIST_SENDER_DRAIN_MS_DEFAULT;
-    struct timespec ts = {(time_t)(drain_ms / 1000), (long)(drain_ms % 1000) * 1000000L};
-    nanosleep(&ts, NULL);
   }
   ristout_close(rist);
   if (insp) metrics_exporter_set_extra(mx, NULL, NULL);

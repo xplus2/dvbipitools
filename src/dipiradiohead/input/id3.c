@@ -239,7 +239,8 @@ void id3_consume(id3_t *c, const unsigned char *p, size_t taglen) {
 
   while (cursor + hdr <= taglen) {
     char id[5] = "";
-    unsigned fsize, fflags = 0;
+    unsigned fsize;
+    unsigned fflags = 0;
     const unsigned char *fbody;
     char *dst = NULL;
 

@@ -27,6 +27,7 @@
 #define INTERVAL_EIT 90000UL     /* 1s */
 #define PTS_DELAY_90K 27000UL    /* 300ms PTS lead over PCR */
 #define PCR_MAX_GAP_90K 3150UL   /* 35ms, DVB limit is 40ms */
+#define PCR_QUEUE_MAX 64
 #define IDLE_INTERVAL_PAT_CAT_S 0.1
 #define IDLE_INTERVAL_NIT_S 10.0
 #define EIT_DURATION_S 180       /* nominal placeholder, real remaining time is unknown */
@@ -65,6 +66,10 @@ struct tspacketizer {
   int disc_pending;
   uint64_t pts_base;
   uint64_t pts_end;
+  uint64_t pcr_q[PCR_QUEUE_MAX];
+  double pcr_due[PCR_QUEUE_MAX];
+  unsigned pcr_head;
+  unsigned pcr_n;
   cas_t *cas;
 };
 
@@ -87,8 +92,13 @@ tspacketizer_t *tspacketizer_new(const tspacketizer_cfg_t *cfg) {
   t->cfg = *cfg;
   t->pmt_pid = cfg->pmt_pid ? cfg->pmt_pid : 0x0100;
   t->audio_pid = cfg->audio_pid ? cfg->audio_pid : TSPACKETIZER_PID_AUDIO;
-  t->last_pat = t->last_sdt = t->last_nit = t->last_eit = UINT64_MAX;
-  t->idle_last_pat = t->idle_last_cat = t->idle_last_nit = -1.0;
+  t->last_pat = UINT64_MAX;
+  t->last_sdt = UINT64_MAX;
+  t->last_nit = UINT64_MAX;
+  t->last_eit = UINT64_MAX;
+  t->idle_last_pat = -1.0;
+  t->idle_last_cat = -1.0;
+  t->idle_last_nit = -1.0;
   return t;
 }
 
@@ -100,7 +110,27 @@ void tspacketizer_set_metadata(tspacketizer_t *t, const char *artist, const char
   t->meta_changed = 1;
 }
 
-void tspacketizer_mark_discontinuity(tspacketizer_t *t) { t->disc_pending = 1; }
+void tspacketizer_mark_discontinuity(tspacketizer_t *t) {
+  t->disc_pending = 1;
+  t->pcr_head = 0;
+  t->pcr_n = 0;
+}
+
+static size_t pcr_drain(tspacketizer_t *t, int all, double now, ts_packet_cb cb, void *ctx) {
+  size_t count = 0;
+  while (t->pcr_n && (all || t->pcr_due[t->pcr_head] <= now)) {
+    ts_packet_emit_pcr_only(t->audio_pid, &t->cc_audio, t->pcr_q[t->pcr_head], cb, ctx);
+    t->pcr_head++;
+    t->pcr_n--;
+    count++;
+  }
+  if (!t->pcr_n) t->pcr_head = 0;
+  return count;
+}
+
+size_t tspacketizer_pcr_flush(tspacketizer_t *t, double now, ts_packet_cb cb, void *ctx) { return pcr_drain(t, 0, now, cb, ctx); }
+
+double tspacketizer_pcr_next_due(const tspacketizer_t *t) { return t->pcr_n ? t->pcr_due[t->pcr_head] : -1.0; }
 
 void tspacketizer_set_cas(tspacketizer_t *t, cas_t *cas) {
   t->cas = cas;
@@ -143,6 +173,7 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, uint32_t dur_90k, 
   unsigned char ptr0 = 0x00;
   size_t n, count = 0, prog_desc_len = 0;
 
+  count += pcr_drain(t, 1, now, cb, ctx);
   if (t->disc_pending) t->pts_base = t->pts_end - pts_90k;
   pts_90k += t->pts_base;
   if (due(pts_90k, &t->last_pat, INTERVAL_PAT_PMT)) {
@@ -197,9 +228,12 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, uint32_t dur_90k, 
     t->pts_end = pts_90k + dur_90k;
     if (dur_90k > PCR_MAX_GAP_90K) {
       unsigned extra = (unsigned)((dur_90k + PCR_MAX_GAP_90K - 1) / PCR_MAX_GAP_90K) - 1;
+      if (extra > PCR_QUEUE_MAX) extra = PCR_QUEUE_MAX;
       for (unsigned i = 1; i <= extra; i++) {
-        ts_packet_emit_pcr_only(t->audio_pid, &t->cc_audio, pts_90k + (uint64_t)dur_90k * i / (extra + 1), cb, ctx);
-        count++;
+        uint64_t off = (uint64_t)dur_90k * i / (extra + 1);
+        t->pcr_q[t->pcr_n] = pts_90k + off;
+        t->pcr_due[t->pcr_n] = now + (double)off / 90000.0;
+        t->pcr_n++;
       }
     }
   }
@@ -218,7 +252,8 @@ int tspacketizer_set_codec(tspacketizer_t *t, unsigned stream_type, unsigned aac
 size_t tspacketizer_idle(tspacketizer_t *t, double now, ts_packet_cb cb, void *ctx) {
   unsigned char sec[4096];
   unsigned char ptr0 = 0x00;
-  size_t n, count = 0;
+  size_t n;
+  size_t count = 0;
 
   if (!t->cfg.standalone) return 0;
   if (due_s(now, &t->idle_last_pat, IDLE_INTERVAL_PAT_CAT_S)) {
@@ -249,7 +284,8 @@ int tspacketizer_get_sdt_info(tspacketizer_t *t, psi_sdt_entry_t *out) {
 }
 
 size_t tspacketizer_build_eit(tspacketizer_t *t, unsigned char *out, size_t cap) {
-  size_t n, f;
+  size_t n;
+  size_t f;
 
   if (t->meta_changed) {
     t->ver_eit = (t->ver_eit + 1) & 0x1F;

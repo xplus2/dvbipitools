@@ -41,13 +41,13 @@ void icy_free(icy_t *c) { free(c); }
 static int utf8_valid(const char *s) {
   const unsigned char *p = (const unsigned char *)s;
   while (*p) {
-    size_t n, i;
+    size_t n;
     if (*p < 0x80) n = 0;
     else if (*p >= 0xC2 && *p <= 0xDF) n = 1;
     else if ((*p & 0xF0) == 0xE0) n = 2;
     else if (*p >= 0xF0 && *p <= 0xF4) n = 3;
     else return 0;
-    for (i = 1; i <= n; i++)
+    for (size_t i = 1; i <= n; i++)
       if ((p[i] & 0xC0) != 0x80) return 0;
     p += n + 1;
   }

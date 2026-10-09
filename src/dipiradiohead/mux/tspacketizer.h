@@ -46,9 +46,16 @@ void tspacketizer_set_cas(tspacketizer_t *t, cas_t *cas);
    PMT, audio PES). now: caller's mono_seconds(), for CAS ECM-repeat/parity-flip timing.
    pts_90k: sample clock, used as PCR. may restart, see mark_discontinuity.
    PES PTS is PCR plus fixed delay.
-   dur_90k: frame duration, PCR-only packets keep PCR interval under 40ms.
+   dur_90k: frame duration, PCR-only packets keep PCR interval under 40ms. queued, released
+   by pcr_flush() at now + offset. still-queued of prev frame go out first.
    ret: pkg count */
 size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, uint32_t dur_90k, double now, const unsigned char *frame, size_t frame_len, ts_packet_cb cb, void *ctx);
+
+/* emits queued PCR due at now. ret: pkg count */
+size_t tspacketizer_pcr_flush(tspacketizer_t *t, double now, ts_packet_cb cb, void *ctx);
+
+/* due time (feed's now clock) of next PCR, < 0 if none */
+double tspacketizer_pcr_next_due(const tspacketizer_t *t);
 
 /* sets/changes codec after creation. PMT version bumps on change from a set codec. 1 if changed */
 int tspacketizer_set_codec(tspacketizer_t *t, unsigned stream_type, unsigned aac_profile_level);

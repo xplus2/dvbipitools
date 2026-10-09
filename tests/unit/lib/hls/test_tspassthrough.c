@@ -94,10 +94,12 @@ static int drive_until_len(hls_live_t *h, unsigned char *acc, size_t acc_cap, si
 }
 
 START_TEST(hls_ts_passthrough_forwards_segment_bytes_unchanged) {
-  unsigned pl_port, seg_port;
+  unsigned pl_port;
+  unsigned seg_port;
   int pl_fd = make_listener(&pl_port);
   int seg_fd = make_listener(&seg_port);
-  pthread_t pl_th, seg_th;
+  pthread_t pl_th;
+  pthread_t seg_th;
   char pl_body[512];
   char pl_uri[64];
   unsigned char seg_raw[188 * 3];
@@ -107,7 +109,8 @@ START_TEST(hls_ts_passthrough_forwards_segment_bytes_unchanged) {
   size_t pl_lens[1];
   const char *seg_responses[1];
   size_t seg_lens[1];
-  scripted_server_t pl_srv, seg_srv;
+  scripted_server_t pl_srv;
+  scripted_server_t seg_srv;
   http_url_t pl_url;
   hls_live_t *h;
   hls_ts_passthrough_t pt;
@@ -205,10 +208,12 @@ static uint64_t pes_pts(const unsigned char *pkt) {
 }
 
 START_TEST(hls_ts_passthrough_converts_packed_aac) {
-  unsigned pl_port, seg_port;
+  unsigned pl_port;
+  unsigned seg_port;
   int pl_fd = make_listener(&pl_port);
   int seg_fd = make_listener(&seg_port);
-  pthread_t pl_th, seg_th;
+  pthread_t pl_th;
+  pthread_t seg_th;
   char pl_body[512];
   char pl_uri[64];
   unsigned char seg_raw[256];
@@ -219,7 +224,8 @@ START_TEST(hls_ts_passthrough_converts_packed_aac) {
   size_t pl_lens[1];
   const char *seg_responses[1];
   size_t seg_lens[1];
-  scripted_server_t pl_srv, seg_srv;
+  scripted_server_t pl_srv;
+  scripted_server_t seg_srv;
   http_url_t pl_url;
   hls_live_t *h;
   hls_ts_passthrough_t pt;
@@ -268,19 +274,23 @@ START_TEST(hls_ts_passthrough_converts_packed_aac) {
 END_TEST
 
 START_TEST(hls_live_rejoins_after_media_sequence_reset) {
-  unsigned pl_port, seg_port;
+  unsigned pl_port;
+  unsigned seg_port;
   int pl_fd = make_listener(&pl_port);
   int seg_fd = make_listener(&seg_port);
-  pthread_t pl_th, seg_th;
+  pthread_t pl_th;
+  pthread_t seg_th;
   char pl_body[2][512];
   char pl_uri[64];
   unsigned char seg_raw[2][188];
   unsigned char seg_resp[2][512];
   unsigned char pl_resp[2][512];
-  size_t seg_lens[2], pl_lens[2];
+  size_t seg_lens[2];
+  size_t pl_lens[2];
   const char *pl_responses[2];
   const char *seg_responses[2];
-  scripted_server_t pl_srv, seg_srv;
+  scripted_server_t pl_srv;
+  scripted_server_t seg_srv;
   http_url_t pl_url;
   hls_live_t *h;
   hls_ts_passthrough_t pt;

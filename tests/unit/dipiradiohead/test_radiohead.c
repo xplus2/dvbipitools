@@ -333,7 +333,8 @@ START_TEST(emit_metrics_adds_one_labeled_block_per_cas_vendor) {
 END_TEST
 
 START_TEST(timeline_stays_monotonic_across_a_sample_rate_change) {
-  uint64_t t = 0, before;
+  uint64_t t = 0;
+  uint64_t before;
 
   for (int i = 0; i < 100; i++) timeline_add(&t, 1152, 44100);
   before = timeline_pts(t);

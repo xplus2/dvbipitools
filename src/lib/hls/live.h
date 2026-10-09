@@ -23,7 +23,7 @@ typedef enum { HLS_SEG_UNKNOWN, HLS_SEG_TS, HLS_SEG_PACKED_AUDIO, HLS_SEG_FMP4 }
 
 typedef void (*hls_segment_cb)(void *ctx, hls_live_t *h, const unsigned char *data, size_t len);
 
-typedef int (*hls_init_cb)(void *ctx, hls_live_t *h, const unsigned char *data, size_t len);
+typedef int (*hls_init_cb)(void *ctx, const hls_live_t *h, const unsigned char *data, size_t len);
 
 hls_live_t *hls_live_new(const http_url_t *playlist_url, const char *user_agent, int insecure, unsigned idx, const char *label, const hls_insp_t *si, hls_segment_cb cb, void *cb_ctx);
 

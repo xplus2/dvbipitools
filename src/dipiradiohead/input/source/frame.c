@@ -160,7 +160,10 @@ static int detect_at(source_t *s, size_t off) {
     int r;
     if (order[i] == SRC_AAC_LATM) {
       if (!aac_latm_is_sync(s->buf + off, s->buf_len - off)) continue;
-      if (!s->latm && !(s->latm = aac_latm_new())) return -2;
+      if (!s->latm) {
+        s->latm = aac_latm_new();
+        if (!s->latm) return -2;
+      }
     }
     r = confirm_codec(s, order[i], off);
     if (r == 1) {

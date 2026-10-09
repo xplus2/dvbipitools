@@ -240,7 +240,7 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
   return 0;
 }
 
-static void single_wait(const inputset_t *is, double pace_deadline) {
+static void single_wait(const inputset_t *is, double pace_deadline, double pcr_due) {
   struct pollfd pfd;
   nfds_t npfd = 0;
   int timeout_ms = RADIOHEAD_POLL_MAX_MS;
@@ -248,6 +248,10 @@ static void single_wait(const inputset_t *is, double pace_deadline) {
   time_t deadline = inputset_next_deadline(is);
   int fd = inputset_poll_fd(is, 0);
 
+  if (pcr_due >= 0.0) {
+    int wait_ms = pcr_due <= now_pre ? 0 : 1 + (int)((pcr_due - now_pre) * 1000.0);
+    if (wait_ms < timeout_ms) timeout_ms = wait_ms;
+  }
   if (deadline != INPUTSET_NEVER) {
     long remain_s = (long)(deadline - time(NULL));
     int remain_ms = remain_s <= 0 ? 0 : (int)(remain_s * 1000);
@@ -344,7 +348,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     double now;
     time_t now_t;
 
-    single_wait(is, pace_deadline);
+    single_wait(is, pace_deadline, tspacketizer_pcr_next_due(tsp));
     if (signal_stop_requested()) break;
     radiohead_srt_service(&out);
     now = mono_seconds();
@@ -369,7 +373,6 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
       }
       if (step == -1) {
         unsigned long long sb = source_bytes_total(src);
-
         if (metrics_on) {
           im.up = 0;
           if (sb > last_synced_bytes) im.bytes_total += sb - last_synced_bytes;
@@ -380,6 +383,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
       rc = 1;
       break;
     }
+    if (tspacketizer_pcr_flush(tsp, mono_seconds(), out.insp ? &packet_cb_inspect : &packet_cb, &out)) flush_batch(&out);
     if (!src || now > pace_deadline + RADIOHEAD_PACE_TOLERANCE_S) {
       tspacketizer_idle(tsp, now, out.insp ? &packet_cb_inspect : &packet_cb, &out);
       flush_batch(&out);

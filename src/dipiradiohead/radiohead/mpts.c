@@ -222,6 +222,11 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     now_pre = mono_seconds();
     for (unsigned i = 0; i < n; i++) {
       int fd = inputset_poll_fd(is, i);
+      double pcr_due = tsps[i] ? tspacketizer_pcr_next_due(tsps[i]) : -1.0;
+      if (pcr_due >= 0.0) {
+        int wait_ms = pcr_due <= now_pre ? 0 : 1 + (int)((pcr_due - now_pre) * 1000.0);
+        if (wait_ms < timeout_ms) timeout_ms = wait_ms;
+      }
       if (fd < 0) continue;
       /* sock readable, skip&sleep. avoid poll() spin. */
       if (inputset_source(is, i) && pace_deadline[i] > now_pre + RADIOHEAD_PACE_TOLERANCE_S) {
@@ -273,6 +278,14 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
       }
     }
     if (n) rr_start = (rr_start + 1) % n;
+    {
+      double now_pcr = mono_seconds();
+      size_t pcr_sent = 0;
+      for (unsigned i = 0; i < n; i++) {
+        if (tsps[i]) pcr_sent += tspacketizer_pcr_flush(tsps[i], now_pcr, out.insp ? &packet_cb_inspect : &packet_cb, &out);
+      }
+      if (pcr_sent) flush_batch(&out);
+    }
 
     if (out.insp) tsinspect_tick(out.insp, now);
     mpts_tick(mpts, now, out.insp ? &packet_cb_inspect : &packet_cb, &out);
